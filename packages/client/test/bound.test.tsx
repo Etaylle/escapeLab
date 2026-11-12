@@ -2,6 +2,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ClientMessage, MissionInfo, Seat } from '@escapelab/core';
 import { PASS_KEY } from '../src/pass.js';
+import { SNAPSHOT_KEY } from '../src/snapshots.js';
 import { CONFIRM_MS, giveUpPress } from '../src/screens/GiveUp.js';
 import { BoundCard, boundLine, doorAsks, JoinScreen } from '../src/screens/Join.js';
 import { buttonsOf, elementsOf, press } from './probe.js';
@@ -11,9 +12,12 @@ const noop = (): void => undefined;
 /** Ben's browser and its pass, his name kept with it. */
 const PASS = { id: 'b3'.repeat(16), secret: '7e'.repeat(32) };
 
-/** Ben's browser, opened on an invite to room ABCD: the code field filled. */
-function stubWindow(): void {
-  const kept = new Map([[PASS_KEY, JSON.stringify({ ...PASS, name: 'Ben' })]]);
+/**
+ * Ben's browser, opened on an invite to room ABCD: the code field filled; it keeps `more` beside
+ * his pass, by key.
+ */
+function stubWindow(more: [string, string][] = []): void {
+  const kept = new Map([[PASS_KEY, JSON.stringify({ ...PASS, name: 'Ben' })], ...more]);
   vi.stubGlobal('window', {
     location: { search: '?room=ABCD' },
     localStorage: {
@@ -133,6 +137,15 @@ describe('the join screen of a pass bound to a run', () => {
     const elements = elementsOf(() => joinScreen(RUN, (msg) => sent.push(msg)));
     press(buttonsOf(elements, 'bound-back')[0]);
     expect(sent).toEqual([{ kind: 'resume', code: 'QX7R', pass: PASS }]);
+  });
+
+  it('goes back with the snapshot the browser keeps of the room', () => {
+    const blob = 'v1.bm9uY2Vub25jZW5v.c2VhbGVk';
+    stubWindow([[`${SNAPSHOT_KEY}QX7R`, JSON.stringify({ blob, seq: 7, at: T0, seat: RUN })]]);
+    const sent: ClientMessage[] = [];
+    const elements = elementsOf(() => joinScreen(RUN, (msg) => sent.push(msg)));
+    press(buttonsOf(elements, 'bound-back')[0]);
+    expect(sent).toEqual([{ kind: 'resume', code: 'QX7R', pass: PASS, blob }]);
   });
 });
 

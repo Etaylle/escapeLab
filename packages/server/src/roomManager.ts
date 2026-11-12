@@ -6,7 +6,8 @@ import {
   type RoomSummary,
   type Seat,
 } from '@escapelab/core';
-import { Room, type RunListener } from './room.js';
+import { Room, type RunListener, type Sealer } from './room.js';
+import { seal } from './seal.js';
 
 /** Room codes avoid ambiguous characters (0/O, 1/I/L). */
 const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
@@ -51,13 +52,21 @@ export class RoomManager {
   /**
    * `onRunFinished` hears of every run that ends in any of these rooms;
    * `allowSeed` (`seedsAllowed`) lets a new room be pinned to a seed;
-   * `dailySalt` (dailySalt.ts) makes the Tagesschicht's seeds in every room.
+   * `dailySalt` (dailySalt.ts) makes the Tagesschicht's seeds in every room;
+   * `sealKey` (seal.ts `roomKey`) seals the snapshots every room sends its crew — none without.
    */
   constructor(
     private readonly onRunFinished: RunListener = () => undefined,
     private readonly allowSeed = false,
     private readonly dailySalt: string | null = null,
+    private readonly sealKey: Buffer | null = null,
   ) {}
+
+  /** What seals the snapshots of the room `code` for its crew; null without a key. */
+  private sealerFor(code: string): Sealer | null {
+    const key = this.sealKey;
+    return key === null ? null : (snapshot) => seal(snapshot, code, key);
+  }
 
   /**
    * A new room for `mission`, already scaled to `difficulty`, which it opens on. Where seeds
@@ -74,7 +83,15 @@ export class RoomManager {
     } else if (pinned !== null) {
       console.log(`[escapelab] room ${code}: pinned to seed ${pinned}, run n plays seed + n`);
     }
-    const room = new Room(code, mission, this.onRunFinished, pinned, difficulty, this.dailySalt);
+    const room = new Room(
+      code,
+      mission,
+      this.onRunFinished,
+      pinned,
+      difficulty,
+      this.dailySalt,
+      this.sealerFor(code),
+    );
     this.rooms.set(code, room);
     return room;
   }

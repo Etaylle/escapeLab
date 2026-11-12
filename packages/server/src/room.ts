@@ -27,6 +27,8 @@ import {
   runReport,
   runSeconds,
   sayPhrase,
+  SNAPSHOT_EVERY_MS,
+  SNAPSHOT_MAX,
   shutDoors,
   sightables,
   stationKey,
@@ -163,6 +165,9 @@ const CLAIM_REFUSED = 'Die Crew hat die Übernahme nicht bestätigt.';
  */
 export const ASK_AGAIN_MS = 60_000;
 
+/** Seals a snapshot of the room for its crew to keep (seal.ts): the blob it goes out as. */
+export type Sealer = (snapshot: RoomSnapshot) => string;
+
 /** A new device's ask for a seat by its name: the pass it brings, whom to tell, its timer. */
 interface Claim {
   pass: CrewPass;
@@ -296,13 +301,20 @@ export class Room {
   private opened = Date.now();
   /** the dispatches so far: a snapshot carries it, and the later of two has the higher */
   private seq = 0;
+  /** sends the crew a snapshot of the room, SNAPSHOT_EVERY_MS after the last at the soonest */
+  private snapshotTimer: NodeJS.Timeout | null = null;
+  /** epoch ms the crew was last sent a snapshot */
+  private snapshotSentAt = 0;
+  /** whether the log said a snapshot was too big to send: it says so once */
+  private tooBigSaid = false;
   /** epoch ms since the room has had no connected players, null while occupied */
   emptySince: number | null = null;
 
   /**
    * `seed` pins the room's runs for a repeatable test: run n plays seed + n. `mission` comes
    * scaled to `difficulty`, the one the room opens on. `dailySalt` (dailySalt.ts) makes the
-   * Tagesschicht's seeds; a room without one starts no run on it.
+   * Tagesschicht's seeds; a room without one starts no run on it. With a `sealer` the crew is
+   * sent the room's snapshot after its dispatches (`scheduleSnapshot`); without, none.
    */
   constructor(
     code: string,
@@ -311,6 +323,7 @@ export class Room {
     seed: number | null = null,
     difficulty: Difficulty = 'normal',
     private readonly dailySalt: string | null = null,
+    private readonly sealer: Sealer | null = null,
   ) {
     this.code = code;
     this.state = initialState(mission, seed, difficulty);
@@ -322,16 +335,25 @@ export class Room {
    * on without before FIRST_WAIT_MS from now (core `maintenance`) — every seat bound to its pass
    * again, and whatever the room kept beside the game. Its timers run again from the due times
    * the game and what it kept say: a run's once the pause is over, the lobby's seats' at once.
-   * Nobody is on the line yet: the room is empty from `now`.
+   * Nobody is on the line yet: the room is empty from `now`. `ties` are what the constructor
+   * takes besides the game.
    */
   static restore(
     snapshot: RoomSnapshot,
     now: number,
-    onRunFinished: RunListener = () => undefined,
-    dailySalt: string | null = null,
+    ties: { onRunFinished?: RunListener; dailySalt?: string | null; sealer?: Sealer | null } = {},
   ): Room {
     const { mission, roomSeed, difficulty } = snapshot.state;
-    const room = new Room(snapshot.code, mission, onRunFinished, roomSeed, difficulty, dailySalt);
+    const { onRunFinished, dailySalt = null, sealer = null } = ties;
+    const room = new Room(
+      snapshot.code,
+      mission,
+      onRunFinished,
+      roomSeed,
+      difficulty,
+      dailySalt,
+      sealer,
+    );
     room.load(snapshot, now);
     return room;
   }
@@ -407,6 +429,49 @@ export class Room {
   /** Epoch ms the room was opened: with its code, what tells it from another room of that code. */
   get createdAt(): number {
     return this.opened;
+  }
+
+  /**
+   * After a dispatch: the crew is sent the room's snapshot (`sendSnapshot`) once the burst it
+   * came in is over, and never sooner than SNAPSHOT_EVERY_MS after the last — what comes
+   * meanwhile goes with that one. Nothing without a sealer.
+   */
+  private scheduleSnapshot(): void {
+    if (this.sealer === null || this.snapshotTimer !== null) {
+      return;
+    }
+    const wait = Math.max(0, this.snapshotSentAt + SNAPSHOT_EVERY_MS - Date.now());
+    this.snapshotTimer = setTimeout(() => {
+      this.snapshotTimer = null;
+      this.sendSnapshot();
+    }, wait);
+  }
+
+  /**
+   * The room's snapshot, sealed (`snapshot {blob, seq, at}`), to every seat on the line: each
+   * page keeps the newest of its room. None for nobody on the line, none of a run that is over —
+   * an ended run is not taken up again — and none over SNAPSHOT_MAX, which the log says once.
+   */
+  private sendSnapshot(): void {
+    const { phase } = this.state;
+    if (this.sealer === null || this.listeners.size === 0 || phase === 'won' || phase === 'lost') {
+      return;
+    }
+    const at = Date.now();
+    const { seq } = this;
+    const blob = this.sealer(this.snapshot(at));
+    this.snapshotSentAt = at;
+    if (blob.length > SNAPSHOT_MAX) {
+      if (!this.tooBigSaid) {
+        this.tooBigSaid = true;
+        const kb = (blob.length / 1024).toFixed(0);
+        console.warn(`[escapelab] room ${this.code}: a snapshot of ${kb} kB is too big to send`);
+      }
+      return;
+    }
+    for (const listener of this.listeners.values()) {
+      listener({ kind: 'snapshot', blob, seq, at });
+    }
   }
 
   /**
@@ -1890,6 +1955,7 @@ export class Room {
       this.reconcilePresence();
     }
     this.reconcileLobbyAway();
+    this.scheduleSnapshot();
   }
 
   /**
@@ -1990,6 +2056,10 @@ export class Room {
     if (this.timer !== null) {
       clearTimeout(this.timer);
       this.timer = null;
+    }
+    if (this.snapshotTimer !== null) {
+      clearTimeout(this.snapshotTimer);
+      this.snapshotTimer = null;
     }
     if (this.lightsTimer !== null) {
       clearTimeout(this.lightsTimer);

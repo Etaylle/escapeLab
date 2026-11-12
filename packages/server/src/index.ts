@@ -56,7 +56,12 @@ const daily = dailySalt(process.env);
 // The key the rooms' snapshots are sealed with: ROOM_SECRET's, else one of this boot alone.
 const sealing = roomKey(process.env);
 // A room pinned to a seed repeats its runs: for the walkthrough and bug reports, not for play.
-const manager = new RoomManager(logRun(RUNS_LOG, stats), seedsAllowed(process.env), daily.salt);
+const manager = new RoomManager(
+  logRun(RUNS_LOG, stats),
+  seedsAllowed(process.env),
+  daily.salt,
+  sealing.key,
+);
 setInterval(() => manager.sweep(), 60_000).unref();
 // What /health says beside the missions: no code, no name.
 const health: Health = {

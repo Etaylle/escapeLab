@@ -13,6 +13,7 @@ import { askForTime, clock, localNow } from './clock.js';
 import { keepConnected, wipesBanner, type Line, type LineStatus, type Retry } from './line.js';
 import { forgetNotes, localStore } from './notes.js';
 import { crewPass } from './pass.js';
+import { dropSnapshot, keepSnapshot, resumeOf } from './snapshots.js';
 import { comebackOfTab, keepTab, leaveTab, roomOfTab, tabRoom } from './tab.js';
 import type { KnownPositions } from './world/movement.js';
 
@@ -126,12 +127,15 @@ export interface ServerListener {
 
 /**
  * Out of room `code` for good: the tab plays in it no more, and what `playerId` noted there
- * goes with it (where it is known).
+ * goes with it (where it is known), as does the snapshot kept of the room.
  */
 function forgetRoom(code: string | null, playerId: string | null): void {
   const store = localStore();
   if (code !== null && playerId !== null && store !== null) {
     forgetNotes(store, code, playerId);
+  }
+  if (code !== null) {
+    dropSnapshot(code, store);
   }
   leaveTab();
 }
@@ -153,8 +157,11 @@ export interface Page {
   refuse: (message: string, of: ClientMessage['kind'] | null) => void;
   /** a comeback is out (tab.ts): an error now means the room or seat the tab kept is gone */
   resuming: MutableRefObject<boolean>;
-  /** whose seat the latest view was, by player id: their notes go with the room */
-  you: MutableRefObject<string | null>;
+  /**
+   * the latest view of the seat the tab plays: its player's notes go with the room, and a
+   * snapshot of the room is kept with the card it shows (snapshots.ts)
+   */
+  seen: MutableRefObject<PlayerView | null>;
   positions: Connection['positions'];
   drones: Connection['drones'];
   pings: Connection['pings'];
@@ -187,14 +194,15 @@ function seatNews(msg: ServerMessage, page: Page): boolean {
       page.setTakeover(null);
       return true;
     case 'left':
-      leftRoom(msg.message, page);
+      leftRoom(msg, page);
       return true;
     case 'seated':
       page.setSeat(msg.seat);
       return true;
     case 'view':
       clock.stamped(msg.at);
-      page.you.current = msg.view.you.id;
+      page.seen.current = msg.view;
+      runOver(msg.view);
       page.setView(msg.view);
       return true;
     case 'spectator-view':
@@ -215,6 +223,9 @@ function lineNews(msg: ServerMessage, page: Page): void {
       break;
     case 'rooms':
       page.setRooms(msg.rooms);
+      break;
+    case 'snapshot':
+      kept(msg, page);
       break;
     case 'positions':
       page.positions.current = { run: msg.run, players: msg.players };
@@ -237,10 +248,34 @@ function lineNews(msg: ServerMessage, page: Page): void {
 }
 
 /**
- * The seat was given up, or plays on in another tab (`message` says so): this one plays in no
- * room now and keeps no comeback, so that two tabs never take the seat from each other.
+ * The snapshot of the tab's room, kept with the room's card as the latest view shows it: the
+ * newest, for a server that knows the room no more to take it up again from.
  */
-function leftRoom(message: string | null, page: Page): void {
+function kept(msg: Extract<ServerMessage, { kind: 'snapshot' }>, page: Page): void {
+  const code = roomOfTab();
+  const view = page.seen.current;
+  if (code !== null && view !== null) {
+    keepSnapshot(code, msg, view);
+  }
+}
+
+/** A run over, won or lost, is not taken up again: the snapshot kept of its room goes. */
+function runOver(view: PlayerView): void {
+  const code = roomOfTab();
+  if (code !== null && (view.phase === 'won' || view.phase === 'lost')) {
+    dropSnapshot(code);
+  }
+}
+
+/**
+ * The seat was given up — its snapshot goes with it — or plays on in another tab (`message`
+ * says so): this one plays in no room now and keeps no comeback, so that two tabs never take the
+ * seat from each other.
+ */
+function leftRoom({ code, message }: Extract<ServerMessage, { kind: 'left' }>, page: Page): void {
+  if (message === null) {
+    dropSnapshot(code);
+  }
   leaveTab();
   page.setRoomCode(null);
   page.setView(null);
@@ -257,7 +292,7 @@ function leftRoom(message: string | null, page: Page): void {
 function refused(msg: Extract<ServerMessage, { kind: 'error' }>, page: Page): void {
   if (page.resuming.current) {
     page.resuming.current = false;
-    forgetRoom(roomOfTab(), page.you.current);
+    forgetRoom(roomOfTab(), page.seen.current?.you.id ?? null);
     page.setRoomCode(null);
     page.setView(null);
     page.setSpectatorView(null);
@@ -289,9 +324,7 @@ function watching(code: string, page: Page): void {
  * name, this device's pass holds the seat now, and it resumes it.
  */
 export function replyTo(msg: ServerMessage): ClientMessage | null {
-  return msg.kind === 'takeover-allowed'
-    ? { kind: 'resume', code: msg.code, pass: crewPass() }
-    : null;
+  return msg.kind === 'takeover-allowed' ? resumeOf(msg.code) : null;
 }
 
 /** What `openLine` wires the page's line to: the page, its status, socket and listeners. */
@@ -474,7 +507,7 @@ export function useGameConnection(): Connection {
   const [refusal, setRefusal] = useState<Refusal | null>(null);
   const socketRef = useRef<WebSocket | null>(null);
   const resumingRef = useRef(false);
-  const youRef = useRef<string | null>(null);
+  const seenRef = useRef<PlayerView | null>(null);
   const live = useLiveRefs();
   const listenersRef = useRef(new Set<ServerListener>());
 
@@ -503,7 +536,7 @@ export function useGameConnection(): Connection {
       setError,
       refuse: (message, of) => setRefusal((last) => ({ seq: (last?.seq ?? 0) + 1, message, of })),
       resuming: resumingRef,
-      you: youRef,
+      seen: seenRef,
       ...live,
     },
     setStatus,
@@ -535,7 +568,7 @@ export function useGameConnection(): Connection {
     dismissError: () => setError(null),
     wake: () => lineRef.current?.wake(),
     giveUp: () => {
-      giveUpOffLine(lineRef.current, youRef.current);
+      giveUpOffLine(lineRef.current, seenRef.current?.you.id ?? null);
       setRoomCode(null);
       setView(null);
     },
@@ -546,7 +579,7 @@ export function useGameConnection(): Connection {
         location.reload();
         return;
       }
-      leaveSeat(code, youRef.current, listen, (msg) => lineRef.current?.send(msg));
+      leaveSeat(code, seenRef.current?.you.id ?? null, listen, (msg) => lineRef.current?.send(msg));
     },
   };
 }

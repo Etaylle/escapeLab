@@ -209,6 +209,8 @@ export {
   rtcSignalSchema,
   RTC_SIGNAL_MAX,
   SEED_MAX,
+  SNAPSHOT_EVERY_MS,
+  SNAPSHOT_MAX,
   isCustomMissionId,
   type RtcSignal,
   type ClientMessage,

@@ -14,6 +14,7 @@ import { FIRST_RUN_HINT, firstDifficulty, isTutorial, useWon } from '../firstRun
 import { useServerNow } from '../hooks.js';
 import { crewPass, keepName, lastName } from '../pass.js';
 import { recordLine } from '../runStats.js';
+import { resumeOf } from '../snapshots.js';
 import type { Takeover } from '../ws.js';
 import { crewSizeText } from './Crew.js';
 import { GiveUpButton } from './GiveUp.js';
@@ -437,7 +438,7 @@ export function BoundCard({ seat, send }: { seat: Seat; send: Props['send'] }) {
       <div className="bound-actions">
         <button
           className="primary bound-back"
-          onClick={() => send({ kind: 'resume', code: seat.code, pass: crewPass() })}
+          onClick={() => send(resumeOf(seat.code))}
         >
           {run ? 'Zurück zum Einsatz' : 'Zurück in den Raum'}
         </button>

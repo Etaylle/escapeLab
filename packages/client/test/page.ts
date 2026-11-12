@@ -34,7 +34,7 @@ export function page() {
     setError: nothing,
     refuse: nothing,
     resuming: { current: false },
-    you: { current: null },
+    seen: { current: null },
     positions: { current: { run: null, players: {} } },
     drones: { current: {} },
     pings: { current: [] },

@@ -1,5 +1,5 @@
 import type { Comeback } from './line.js';
-import { crewPass } from './pass.js';
+import { resumeOf } from './snapshots.js';
 
 /**
  * Where the tab keeps the room it is in, by its code: a reload or a new socket comes back to
@@ -46,14 +46,13 @@ export function leaveTab(): void {
 
 /**
  * What a socket of this tab says first as it opens (line.ts `Comeback`): its seat resumed on
- * the browser's pass, or the room watched again; null where the tab is in no room.
+ * the browser's pass, with the snapshot kept of the room (snapshots.ts), or the room watched
+ * again; null where the tab is in no room.
  */
 export function comebackOfTab(): Comeback | null {
   const room = tabRoom();
   if (room === null) {
     return null;
   }
-  return room.watching
-    ? { kind: 'spectate', code: room.code }
-    : { kind: 'resume', code: room.code, pass: crewPass() };
+  return room.watching ? { kind: 'spectate', code: room.code } : resumeOf(room.code);
 }

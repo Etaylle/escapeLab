@@ -43,6 +43,18 @@ export type RtcSignal = z.infer<typeof rtcSignalSchema>;
 export const SEED_MAX = 0xffff_ffff;
 
 /**
+ * The most a room's sealed snapshot may weigh, in characters (`snapshot`): Blackout's runs to
+ * some 30 kB. A room does not send one over it, and a resume carries none over it.
+ */
+export const SNAPSHOT_MAX = 256 * 1024;
+
+/**
+ * The most often a room sends its crew its snapshot, ms (`snapshot`): a server killed outright,
+ * with no word to the crew, loses no more of a run than this.
+ */
+export const SNAPSHOT_EVERY_MS = 2000;
+
+/**
  * A crew pass (Dienstausweis): what binds a seat to the browser profile that holds it — an id
  * and a secret the client mints once and keeps (client pass.ts), both hex. The server keeps the
  * id and a hash of the secret, never the secret itself; whoever shows both sits down on the
@@ -80,11 +92,16 @@ export const clientMessageSchema = z.discriminatedUnion('kind', [
   }),
   z.object({ kind: z.literal('spectate'), code: z.string().min(1).max(10) }),
   z.object({ kind: z.literal('list-rooms') }),
-  /** back onto the seat the pass holds in the room, from whatever socket this is */
+  /**
+   * back onto the seat the pass holds in the room, from whatever socket this is, with the newest
+   * snapshot of the room the page holds (`snapshot`): a server that knows the room no more takes
+   * it up again from it, one that knows it leaves it be
+   */
   z.object({
     kind: z.literal('resume'),
     code: z.string().min(1).max(10),
     pass: crewPassSchema,
+    blob: z.string().min(1).max(SNAPSHOT_MAX).optional(),
   }),
   /** where the pass sits, for the join screen: answered with `seated` */
   z.object({ kind: z.literal('whereami'), pass: crewPassSchema }),
@@ -338,6 +355,12 @@ export type ServerMessage =
   | { kind: 'tick' }
   /** E was taken: what it did is in the views that came before this */
   | { kind: 'interacted' }
+  /**
+   * the room as of `at`, sealed (server seal.ts) — `seq` its dispatches so far, the newer the
+   * higher: the page keeps the newest of its room and hands it back with every `resume`, so that a
+   * server that knows the room no more, after a deploy or a restart, takes it up again
+   */
+  | { kind: 'snapshot'; blob: string; seq: number; at: number }
   | { kind: 'rooms'; rooms: RoomSummary[] }
   | {
       kind: 'positions';
