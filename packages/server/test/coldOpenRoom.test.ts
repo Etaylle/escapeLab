@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { parseMission, type Mission, type ServerMessage } from '@escapelab/core';
 import { Room } from '../src/room.js';
 import { pressE, walkTo, type Walker } from './walk.js';
+import { passFor } from './passes.js';
 
 /**
  * A corridor that opens with the power on for three seconds: three stations
@@ -64,11 +65,11 @@ const INTRO_MS = 3000;
 const LIMIT_MS = 600_000;
 
 /** A player of the room, with how to let go of their connection, as its socket closing does. */
-type Player = Walker & { token: string; detach: () => void };
+type Player = Walker & { detach: () => void };
 
 function join(room: Room, name: string): Player {
   const messages: ServerMessage[] = [];
-  const player = { ...room.join(name), messages };
+  const player = { ...room.join(name, passFor(name)), messages };
   return { ...player, detach: room.attach(player.playerId, (m) => messages.push(m)) };
 }
 
@@ -176,7 +177,7 @@ describe('a room whose mission opens with the power on', () => {
     expect(lastView(anna).pausedFor).toEqual(['Ben']);
     vi.advanceTimersByTime(10_000);
     expect(lastView(anna).lights.out).toBe(false);
-    room.resume(ben.playerId, ben.token);
+    room.resume(passFor('Ben'));
     room.attach(ben.playerId, (m) => ben.messages.push(m));
     const resumedAt = Date.now();
     vi.advanceTimersByTime(INTRO_MS - 1000 - 1);

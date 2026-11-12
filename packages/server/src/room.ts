@@ -1,5 +1,6 @@
 import { randomInt, randomUUID } from 'node:crypto';
 import { DronePatrol } from './drones.js';
+import { SeatBook } from './seats.js';
 import {
   applyAction,
   armedStations,
@@ -33,6 +34,7 @@ import {
   viewForSpectator,
   type Action,
   type ClientMessage,
+  type CrewPass,
   type DailyStart,
   type Difficulty,
   type Findable,
@@ -117,6 +119,8 @@ const PANEL_RADIUS = 0.8;
 const ITEM_RADIUS = 0.95;
 /** A relay emergency's instructions are aged this often. */
 const RELAY_TICK_MS = 1000;
+/** What a connection hears once its seat plays on another one: a tab opened later, say. */
+const SEAT_MOVED = 'Dieser Platz spielt jetzt in einem anderen Fenster.';
 
 /** Who stands where and what they found and see, as the room reports it in `set-presence`. */
 type PresenceReport = Omit<Extract<Action, { type: 'set-presence' }>, 'type' | 'at'>;
@@ -140,8 +144,8 @@ function onlyFinders(
 }
 
 /**
- * One game room: owns the authoritative GameState, player sessions
- * (reconnect tokens), the mission timer and the live avatar positions.
+ * One game room: owns the authoritative GameState, its seats — each bound to the crew pass
+ * that sat down on it (seats.ts) — the mission timer and the live avatar positions.
  * Movement is client-authoritative within limits: the room takes only steps
  * an avatar can walk, turns positions into plate state and presence and
  * validates interaction distance. Every run that ends goes to
@@ -150,7 +154,7 @@ function onlyFinders(
 export class Room {
   readonly code: string;
   private state: GameState;
-  private readonly tokens = new Map<string, string>();
+  private readonly seats = new SeatBook();
   private readonly listeners = new Map<string, Listener>();
   /** audience connections, by the id each got on attaching */
   private readonly spectators = new Map<string, Listener>();
@@ -209,22 +213,35 @@ export class Room {
     this.state = initialState(mission, seed, difficulty);
   }
 
-  /** Add a new player (lobby only). Returns credentials for later resume. */
-  join(name: string): { playerId: string; token: string } {
+  /** A new seat for `name`, bound to `pass` (lobby only); its player id. */
+  join(name: string, pass: CrewPass): { playerId: string } {
     const playerId = randomUUID();
     this.dispatch({ type: 'player-join', playerId, name });
-    const token = randomUUID();
-    this.tokens.set(playerId, token);
-    return { playerId, token };
+    this.seats.bind(playerId, pass);
+    return { playerId };
   }
 
-  /** Re-authenticate a returning player. Throws on a bad token, or once the run left them out. */
-  resume(playerId: string, token: string): void {
-    if (this.tokens.get(playerId) !== token) {
+  /** The seat `pass` holds in this room, by player id; null for none. */
+  seatOf(pass: CrewPass): string | null {
+    return this.seats.seatOf(pass);
+  }
+
+  /** Whether `listener` is the connection the seat of `playerId` plays on right now. */
+  plays(playerId: string, listener: Listener): boolean {
+    return this.listeners.get(playerId) === listener;
+  }
+
+  /**
+   * The player whose seat `pass` holds is back, on whatever socket shows it; their player id.
+   * Throws for a pass that holds no seat here, or once the run left its seat out.
+   */
+  resume(pass: CrewPass): string {
+    const playerId = this.seats.seatOf(pass);
+    if (playerId === null) {
       throw new Error('Wiederverbinden fehlgeschlagen — Raum neu beitreten.');
     }
     if (!this.state.players.some((p) => p.id === playerId)) {
-      this.tokens.delete(playerId);
+      this.seats.free(playerId);
       throw new Error('Der Lauf hat ohne diese Verbindung begonnen — Raum neu beitreten.');
     }
     this.dispatch({ type: 'player-connected', playerId });
@@ -232,17 +249,23 @@ export class Room {
     this.reconcilePlates();
     this.reconcilePresence();
     this.checkEscape();
+    return playerId;
   }
 
   /**
    * Register the live connection for a player; push the current view and positions. Returns
    * how to let go of this very connection once it is lost. A connection the player has
-   * replaced since — they resumed on a new socket before the old one was found dead — lets
-   * go of nothing: the player stays connected on the new one.
+   * replaced since — they resumed on a new socket before the old one was found dead, or from
+   * another tab — lets go of nothing: the player stays connected on the new one, and the old
+   * one hears that the seat went elsewhere.
    */
   attach(playerId: string, listener: Listener): () => void {
+    const before = this.listeners.get(playerId);
     this.listeners.set(playerId, listener);
     this.emptySince = null;
+    if (before !== undefined && before !== listener) {
+      before({ kind: 'left', code: this.code, message: SEAT_MOVED });
+    }
     listener({ kind: 'view', view: viewFor(this.state, playerId), at: Date.now() });
     if (this.positions.size > 0) {
       listener(this.positionsMessage());

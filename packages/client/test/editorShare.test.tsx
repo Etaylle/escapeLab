@@ -17,7 +17,8 @@ import {
   type WorkStore,
 } from '../src/editor/session.js';
 import { readShared, SHARE_MAX_BYTES, sharedIn, shareLink } from '../src/editor/share.js';
-import { JoinScreen, keepName, lastName } from '../src/screens/Join.js';
+import { keepName, lastName } from '../src/pass.js';
+import { JoinScreen } from '../src/screens/Join.js';
 
 const noop = (): void => undefined;
 

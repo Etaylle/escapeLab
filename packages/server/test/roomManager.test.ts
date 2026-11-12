@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { parseMission, type Mission } from '@escapelab/core';
 import { RoomManager } from '../src/roomManager.js';
 import type { Room } from '../src/room.js';
+import { passFor } from './passes.js';
 
 /** The host's start now requires everyone else to have confirmed. */
 function ready(room: Room, ...players: { playerId: string }[]): void {
@@ -20,8 +21,8 @@ const blackout: Mission = parseMission(
 );
 
 /** Join a room and keep the connection open, like a real player would; `detach` lets go of it. */
-function seat(room: Room, name: string): { playerId: string; token: string; detach: () => void } {
-  const creds = room.join(name);
+function seat(room: Room, name: string): { playerId: string; detach: () => void } {
+  const creds = room.join(name, passFor(name));
   return { ...creds, detach: room.attach(creds.playerId, () => undefined) };
 }
 

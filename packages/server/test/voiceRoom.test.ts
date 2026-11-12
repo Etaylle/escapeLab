@@ -8,6 +8,7 @@ import {
   type ServerMessage,
 } from '@escapelab/core';
 import { Room } from '../src/room.js';
+import { passFor } from './passes.js';
 
 /** A crew of four: room enough for one player who only listens to the others. */
 const MISSION_FILE = new URL('../../../missions/doppelschicht.json', import.meta.url);
@@ -20,7 +21,7 @@ interface Member {
 }
 
 function player(room: Room, name: string): Member & { detach: () => void } {
-  const { playerId } = room.join(name);
+  const { playerId } = room.join(name, passFor(name));
   const messages: ServerMessage[] = [];
   const detach = room.attach(playerId, (m) => messages.push(m));
   return { id: playerId, messages, detach };

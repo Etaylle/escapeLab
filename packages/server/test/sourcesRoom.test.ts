@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { parseMission, type Mission, type ServerMessage } from '@escapelab/core';
 import { Room } from '../src/room.js';
 import { pressE, walkTo, type Walker } from './walk.js';
+import { passFor } from './passes.js';
 
 /**
  * A corridor for two or three: the wiring box at its west end beside the
@@ -155,8 +156,8 @@ describe('Room with sources to find and open', () => {
 
   function started(lab: Mission = mission) {
     const room = new Room('TEST', lab);
-    const anna = { ...room.join('Anna'), ...collector() };
-    const ben = { ...room.join('Ben'), ...collector() };
+    const anna = { ...room.join('Anna', passFor('Anna')), ...collector() };
+    const ben = { ...room.join('Ben', passFor('Ben')), ...collector() };
     room.attach(anna.playerId, anna.listen);
     room.attach(ben.playerId, ben.listen);
     room.setReady(ben.playerId, true);
@@ -318,9 +319,9 @@ describe('Room with sources to find and open', () => {
 
   it('starts with whoever is connected, and turns away a resume of whoever was left out', () => {
     const room = new Room('TEST', mission);
-    const anna = { ...room.join('Anna'), ...collector() };
-    const ben = { ...room.join('Ben'), ...collector() };
-    const cleo = room.join('Cleo');
+    const anna = { ...room.join('Anna', passFor('Anna')), ...collector() };
+    const ben = { ...room.join('Ben', passFor('Ben')), ...collector() };
+    const cleo = room.join('Cleo', passFor('Cleo'));
     room.attach(anna.playerId, anna.listen);
     room.attach(ben.playerId, ben.listen);
     const cleoGone = room.attach(cleo.playerId, () => undefined);
@@ -332,8 +333,8 @@ describe('Room with sources to find and open', () => {
     expect(view.phase).toBe('playing');
     expect(view.players.map((p) => p.name)).toEqual(['Anna', 'Ben']);
     expect(view.pausedFor).toBeNull();
-    expect(() => room.resume(cleo.playerId, cleo.token)).toThrow(/ohne diese Verbindung begonnen/);
-    expect(() => room.resume(cleo.playerId, cleo.token)).toThrow(/Wiederverbinden fehlgeschlagen/);
+    expect(() => room.resume(passFor('Cleo'))).toThrow(/ohne diese Verbindung begonnen/);
+    expect(() => room.resume(passFor('Cleo'))).toThrow(/Wiederverbinden fehlgeschlagen/);
     room.dispose();
   });
 });

@@ -9,6 +9,7 @@ import {
 } from '@escapelab/core';
 import { Room } from '../src/room.js';
 import { walkTo, type Walker } from './walk.js';
+import { passFor } from './passes.js';
 
 /**
  * A hall for two with the lights out from the start: the wiring box a few
@@ -62,11 +63,11 @@ const blackout: Mission = parseMission(
   JSON.parse(readFileSync(new URL('../../../missions/blackout.json', import.meta.url), 'utf8')),
 );
 
-type Player = Walker & { token: string; detach: () => void };
+type Player = Walker & { detach: () => void };
 
 function join(room: Room, name: string): Player {
   const messages: ServerMessage[] = [];
-  const player = { ...room.join(name), messages };
+  const player = { ...room.join(name, passFor(name)), messages };
   return { ...player, detach: room.attach(player.playerId, (m) => messages.push(m)) };
 }
 
@@ -154,7 +155,7 @@ describe('a room where the lamp finds what it rests on, close by', () => {
     vi.advanceTimersByTime(1000);
     expect(sourcesFound(anna)).toEqual([]);
     // The lamp rested on the locker all through the pause, but the pause froze the look.
-    room.resume(ben.playerId, ben.token);
+    room.resume(passFor('Ben'));
     vi.advanceTimersByTime(599);
     expect(sourcesFound(anna)).toEqual([]);
     vi.advanceTimersByTime(1);

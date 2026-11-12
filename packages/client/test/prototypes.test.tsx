@@ -5,6 +5,7 @@ import type { ClientMessage, MissionInfo, PlayerView } from '@escapelab/core';
 import { draftFromJson, draftToJson, newDraft, type Draft } from '../src/editor/draft.js';
 import { MissionForm } from '../src/editor/MissionForm.js';
 import { validateDraft } from '../src/editor/validate.js';
+import { PASS_KEY } from '../src/pass.js';
 import { crewSizeText } from '../src/screens/Crew.js';
 import { JoinScreen, Prototypes, PROTOTYPES_ROW } from '../src/screens/Join.js';
 import { LobbyScreen, PROTOTYPE_LINE } from '../src/screens/Lobby.js';
@@ -49,7 +50,8 @@ const doppel: MissionInfo = {
 
 /** The page's window as far as the join screen and the lobby read it: no address, a name kept. */
 function stubWindow(): void {
-  const kept = new Map([['escapelab-name', 'Anna']]);
+  const pass = { id: 'a1'.repeat(16), secret: '0f'.repeat(32), name: 'Anna' };
+  const kept = new Map([[PASS_KEY, JSON.stringify(pass)]]);
   vi.stubGlobal('window', {
     location: { search: '' },
     localStorage: {

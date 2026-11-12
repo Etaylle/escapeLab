@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { moduleFor, parseMission, type Mission, type ServerMessage } from '@escapelab/core';
 import { Room } from '../src/room.js';
 import { pressE, walkTo, type Walker } from './walk.js';
+import { passFor } from './passes.js';
 
 /**
  * A corridor for two: the keypad at the west end, its book further east,
@@ -59,7 +60,7 @@ describe('Room: nobody works a station alone', () => {
     const room = new Room('TEST', mission);
     const [anna, ben] = ['Anna', 'Ben'].map((name) => {
       const messages: ServerMessage[] = [];
-      const player = { ...room.join(name), messages };
+      const player = { ...room.join(name, passFor(name)), messages };
       room.attach(player.playerId, (m) => messages.push(m));
       return player;
     });

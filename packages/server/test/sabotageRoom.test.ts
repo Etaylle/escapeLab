@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { parseMission, type Mission, type ServerMessage } from '@escapelab/core';
 import { Room } from '../src/room.js';
 import { pressE, walkTo, type Walker } from './walk.js';
+import { passFor } from './passes.js';
 
 /** The host's start now requires everyone else to have confirmed. */
 function ready(room: Room, ...players: { playerId: string }[]): void {
@@ -79,8 +80,8 @@ describe('Room emergencies', () => {
   /** Lobby, mission start, and the two station solves that arm emergencies. */
   function midMission() {
     const room = new Room('TEST', mission);
-    const anna = { ...room.join('Anna'), ...collector() };
-    const ben = { ...room.join('Ben'), ...collector() };
+    const anna = { ...room.join('Anna', passFor('Anna')), ...collector() };
+    const ben = { ...room.join('Ben', passFor('Ben')), ...collector() };
     room.attach(anna.playerId, anna.listen);
     room.attach(ben.playerId, ben.listen);
     ready(room, ben);

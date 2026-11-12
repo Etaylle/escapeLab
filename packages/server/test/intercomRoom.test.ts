@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { canSee, parseMission, type Mission, type ServerMessage } from '@escapelab/core';
 import { Room } from '../src/room.js';
 import { walkTo, type Walker } from './walk.js';
+import { passFor } from './passes.js';
 
 /**
  * The Signalkette's two consoles 14 tiles apart, a wall between them and the way round it
@@ -70,7 +71,7 @@ describe('Room: the station’s intercom', () => {
     const room = new Room('TEST', mission);
     const [anna, ben] = ['Anna', 'Ben'].map((name) => {
       const messages: ServerMessage[] = [];
-      const player = { ...room.join(name), messages };
+      const player = { ...room.join(name, passFor(name)), messages };
       room.attach(player.playerId, (m) => messages.push(m));
       return player;
     });

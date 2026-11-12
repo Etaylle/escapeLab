@@ -5,6 +5,7 @@ import { Room } from '../src/room.js';
 import { RoomManager } from '../src/roomManager.js';
 import { serveSockets, type PlayerSocket } from '../src/sockets.js';
 import { walkTo, type Walker } from './walk.js';
+import { passFor } from './passes.js';
 
 /**
  * Blackout: the Notlicht's lever in the Flur, armed once the lights have gone out,
@@ -21,7 +22,7 @@ const FAR_OFF = { x: westEnd.x + 0.5, y: westEnd.y + 0.5 };
 
 function join(room: Room, name: string): Walker {
   const messages: ServerMessage[] = [];
-  const player = { ...room.join(name), messages };
+  const player = { ...room.join(name, passFor(name)), messages };
   room.attach(player.playerId, (m) => messages.push(m));
   return player;
 }
@@ -122,10 +123,10 @@ describe('E on the line', () => {
     for (const line of [anna, ben]) {
       connect[0]?.(line.socket);
     }
-    anna.say({ kind: 'create-room', name: 'Anna', missionId: blackout.id });
+    anna.say({ kind: 'create-room', name: 'Anna', pass: passFor('Anna'), missionId: blackout.id });
     const joined = anna.heard.find((m) => m.kind === 'joined');
     const code = joined?.kind === 'joined' ? joined.code : '';
-    ben.say({ kind: 'join-room', code, name: 'Ben' });
+    ben.say({ kind: 'join-room', code, name: 'Ben', pass: passFor('Ben') });
     ben.say({ kind: 'set-ready', ready: true });
     anna.say({ kind: 'start-mission' });
     vi.advanceTimersByTime((blackout.intro?.lightsSec ?? 0) * 1000 + 100);
@@ -133,8 +134,8 @@ describe('E on the line', () => {
     ben.say({ kind: 'interact', ...FAR_OFF, t: 1 });
     expect(ben.heard.at(-1)).toMatchObject({ kind: 'error', of: 'interact' });
     const room = manager.get(code);
-    const benJoined = ben.heard.find((m) => m.kind === 'joined');
-    const benId = benJoined?.kind === 'joined' ? benJoined.playerId : '';
+    const benView = ben.heard.find((m) => m.kind === 'view');
+    const benId = benView?.kind === 'view' ? benView.view.you.id : '';
     walkTo(room, { playerId: benId, messages: ben.heard }, LEVER.x - 1, LEVER.y);
     ben.say({ kind: 'interact', x: LEVER.x - 1, y: LEVER.y, t: 2 });
     const tail = ben.heard.slice(-2);

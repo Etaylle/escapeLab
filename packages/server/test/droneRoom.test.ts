@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { parseMission, type Mission, type ServerMessage } from '@escapelab/core';
 import { Room } from '../src/room.js';
 import { pressE, walkTo, type Walker } from './walk.js';
+import { passFor } from './passes.js';
 
 /**
  * Corridor with two stations and a patrol that sleeps until the first is done.
@@ -75,8 +76,8 @@ describe('Room with a sleeping drone', () => {
 
   it('keeps it hidden and harmless until the first station is done', () => {
     const room = new Room('TEST', mission);
-    const anna = { ...room.join('Anna'), ...collector() };
-    const ben = { ...room.join('Ben'), ...collector() };
+    const anna = { ...room.join('Anna', passFor('Anna')), ...collector() };
+    const ben = { ...room.join('Ben', passFor('Ben')), ...collector() };
     room.attach(anna.playerId, anna.listen);
     room.attach(ben.playerId, ben.listen);
     room.setReady(ben.playerId, true);
@@ -128,8 +129,8 @@ describe('Room with a drone that wakes held still', () => {
 
   it('shows it to the crew on the next tick, though a newcomer heard of it first', () => {
     const room = new Room('TEST', heldMission);
-    const anna = { ...room.join('Anna'), ...collector() };
-    const ben = { ...room.join('Ben'), ...collector() };
+    const anna = { ...room.join('Anna', passFor('Anna')), ...collector() };
+    const ben = { ...room.join('Ben', passFor('Ben')), ...collector() };
     room.attach(anna.playerId, anna.listen);
     room.attach(ben.playerId, ben.listen);
     room.setReady(ben.playerId, true);

@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { parseMission, type Mission, type ServerMessage } from '@escapelab/core';
 import { Room } from '../src/room.js';
+import { passFor } from './passes.js';
 
 /**
  * The quick chat in a room: a phrase named by its place in the mission's list, its slot
@@ -28,8 +29,8 @@ function placeOf(mission: Mission, text: string): number {
 function joined(mission: Mission) {
   const room = new Room('TEST', mission);
   const listen = (messages: ServerMessage[]) => (m: ServerMessage) => messages.push(m);
-  const anna = { ...room.join('Anna'), messages: [] as ServerMessage[] };
-  const ben = { ...room.join('Ben'), messages: [] as ServerMessage[] };
+  const anna = { ...room.join('Anna', passFor('Anna')), messages: [] as ServerMessage[] };
+  const ben = { ...room.join('Ben', passFor('Ben')), messages: [] as ServerMessage[] };
   room.attach(anna.playerId, listen(anna.messages));
   room.attach(ben.playerId, listen(ben.messages));
   return { room, anna, ben };

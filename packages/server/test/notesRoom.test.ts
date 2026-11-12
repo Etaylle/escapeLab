@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NOTE_READ, parseMission, type Mission, type ServerMessage } from '@escapelab/core';
 import { Room } from '../src/room.js';
 import { walkTo, type Walker } from './walk.js';
+import { passFor } from './passes.js';
 
 /**
  * Two rooms one above the other, a gap at the east end between them, and a
@@ -57,8 +58,8 @@ describe('Room with a note of the last shift', () => {
 
   function started() {
     const room = new Room('TEST', mission);
-    const anna = { ...room.join('Anna'), ...collector() };
-    const ben = { ...room.join('Ben'), ...collector() };
+    const anna = { ...room.join('Anna', passFor('Anna')), ...collector() };
+    const ben = { ...room.join('Ben', passFor('Ben')), ...collector() };
     room.attach(anna.playerId, anna.listen);
     room.attach(ben.playerId, ben.listen);
     room.setReady(ben.playerId, true);

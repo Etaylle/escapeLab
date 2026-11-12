@@ -10,6 +10,7 @@ import {
 import { Room } from '../src/room.js';
 import { RoomManager } from '../src/roomManager.js';
 import { pressE, walkTo, type Walker } from './walk.js';
+import { passFor } from './passes.js';
 
 /** The host's start now requires everyone else to have confirmed. */
 function ready(room: Room, ...players: { playerId: string }[]): void {
@@ -65,7 +66,7 @@ describe('Room', () => {
   /** Anna and Ben connected, each with how to let go of their connection (`detach`). */
   function fullLobby(room: Room) {
     const seat = (name: string) => {
-      const player = { ...room.join(name), ...collector() };
+      const player = { ...room.join(name, passFor(name)), ...collector() };
       return { ...player, detach: room.attach(player.playerId, player.listen) };
     };
     return { anna: seat('Anna'), ben: seat('Ben') };
@@ -268,7 +269,7 @@ describe('Room', () => {
         ? watched.view.players.find((p) => p.id === ben.playerId)?.presence
         : undefined;
     expect(gone).toEqual({ stationId: null, console: null, manualId: null, signSeen: true });
-    room.resume(ben.playerId, ben.token);
+    room.resume(passFor('Ben'));
     const back = collector();
     room.attach(ben.playerId, back.listen);
     expect(lastView(back.messages).presence).toEqual({
@@ -297,7 +298,7 @@ describe('Room', () => {
     expect(lastView(anna.messages).phase).toBe('playing');
 
     const benAgain = collector();
-    room.resume(ben.playerId, ben.token);
+    room.resume(passFor('Ben'));
     room.attach(ben.playerId, benAgain.listen);
     const resumed = lastView(anna.messages);
     expect(resumed.pausedFor).toBeNull();
@@ -571,7 +572,7 @@ describe('Room', () => {
     room.dispose();
   });
 
-  it('marks a detached player and lets them resume with their token', () => {
+  it('marks a detached player and lets them resume with their pass', () => {
     const room = new Room('TEST', mission);
     const { anna, ben } = fullLobby(room);
 
@@ -581,7 +582,7 @@ describe('Room', () => {
     ).toBe(false);
 
     const benAgain = collector();
-    room.resume(ben.playerId, ben.token);
+    room.resume(passFor('Ben'));
     room.attach(ben.playerId, benAgain.listen);
     expect(lastView(benAgain.messages).you.id).toBe(ben.playerId);
     expect(
@@ -593,7 +594,7 @@ describe('Room', () => {
   it('keeps a player who resumed on a new connection when the old one is found dead late', () => {
     const { room, anna, ben } = startedRoom();
     const benAgain = collector();
-    room.resume(ben.playerId, ben.token);
+    room.resume(passFor('Ben'));
     room.attach(ben.playerId, benAgain.listen);
     // The old socket's end comes only now: the heartbeat terminating it, say.
     ben.detach();
@@ -605,10 +606,16 @@ describe('Room', () => {
     room.dispose();
   });
 
-  it('rejects resume with a wrong token', () => {
+  it('binds each seat to its pass: a wrong secret or a stranger’s pass holds none', () => {
     const room = new Room('TEST', mission);
-    const anna = room.join('Anna');
-    expect(() => room.resume(anna.playerId, 'falsches-token')).toThrow(/Wiederverbinden/);
+    const anna = room.join('Anna', passFor('Anna'));
+    expect(room.seatOf(passFor('Anna'))).toBe(anna.playerId);
+    const forged = { ...passFor('Anna'), secret: passFor('Mallory').secret };
+    expect(room.seatOf(forged)).toBeNull();
+    expect(() => room.resume(forged)).toThrow(/Wiederverbinden/);
+    expect(room.seatOf(passFor('Mallory'))).toBeNull();
+    expect(() => room.resume(passFor('Mallory'))).toThrow(/Wiederverbinden/);
+    expect(room.resume(passFor('Anna'))).toBe(anna.playerId);
     room.dispose();
   });
 
@@ -643,7 +650,7 @@ describe('RoomManager', () => {
     const room = manager.create(mission);
     expect(manager.get(room.code.toLowerCase())).toBe(room);
 
-    const player = { ...room.join('Anna'), ...collector() };
+    const player = { ...room.join('Anna', passFor('Anna')), ...collector() };
     const detach = room.attach(player.playerId, player.listen);
     detach();
 

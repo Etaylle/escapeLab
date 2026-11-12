@@ -39,6 +39,7 @@
  * written down here.
  * Run with: pnpm --filter @escapelab/server smoke
  */
+import { randomBytes } from 'node:crypto';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -61,6 +62,7 @@ import {
   WALK_SPEED,
   walkable as floorFree,
   type ConsoleId,
+  type CrewPass,
   type Credits,
   type DronePosition,
   type Edgework,
@@ -246,14 +248,16 @@ class TestClient {
   positionsRun: number | null = null;
   drones: Record<string, DronePosition> = {};
   playerId: string | null = null;
-  /** what the server handed out on joining, for resuming after a drop */
-  joined: { code: string; playerId: string; token: string } | null = null;
+  /** the room the server seated this client in, for resuming there after a drop */
+  joined: { code: string } | null = null;
   /** client-authoritative avatar position (tile units) */
   self: { x: number; y: number } | null = null;
 
   constructor(
     readonly label: string,
     readonly raw: string[] = [],
+    /** the pass of the browser this client plays for; one resuming a dropped client shows it */
+    readonly pass: CrewPass = mintPass(),
   ) {
     this.socket = new WebSocket(`ws://localhost:${PORT}/ws`);
     this.socket.on('message', (data) => {
@@ -292,6 +296,18 @@ class TestClient {
 
   send(msg: object): void {
     this.socket.send(JSON.stringify(msg));
+  }
+
+  /**
+   * Seated once the server says so: the room this client sits in, and its own id as its first
+   * view of it names it.
+   */
+  async seated(): Promise<{ code: string; playerId: string }> {
+    const { code } = await this.expect('joined', isJoined);
+    const view = await this.until('a view of the room it sits in', () => true);
+    this.joined = { code };
+    this.playerId = view.you.id;
+    return { code, playerId: view.you.id };
   }
 
   /** Stream a position, stamped with the run this client plays. */
@@ -409,6 +425,11 @@ class TestClient {
       setTimeout(resolve, 100);
     });
   }
+}
+
+/** A crew pass as a browser mints it (client pass.ts): 16 bytes of id, 32 of secret, hex. */
+function mintPass(): CrewPass {
+  return { id: randomBytes(16).toString('hex'), secret: randomBytes(32).toString('hex') };
 }
 
 const isError = (m: ServerMessage): m is Extract<ServerMessage, { kind: 'error' }> =>
@@ -1437,12 +1458,11 @@ async function reconnect(
   client.close();
   await other.expectView(`sees ${name} disconnected`, (v) =>
     v.players.some((p) => p.name === name && !p.connected));
-  const back = new TestClient(`${client.label}2`, client.raw);
+  const back = new TestClient(`${client.label}2`, client.raw, client.pass);
   await back.open();
-  back.send({ kind: 'resume', code: joined.code, playerId: joined.playerId, token: joined.token });
-  await back.expect('re-joined', isJoined);
-  back.playerId = joined.playerId;
-  back.joined = joined;
+  back.send({ kind: 'resume', code: joined.code, pass: back.pass });
+  await back.seated();
+  assert(back.playerId === client.playerId, `${back.label}: back on the seat its pass holds`);
   const view = await back.expectView('resumed where it stood', resumed);
   assert(view.edgework !== null, 'the Laborkennung survived the reconnect');
   const seeded = await back.ensureSelf();
@@ -1677,10 +1697,8 @@ const empty = await anna.expect(
 );
 assert(empty.rooms.length === 0, 'lobby browser is empty before any room exists');
 
-anna.send({ kind: 'create-room', name: 'Anna', missionId: 'blackout' });
-const annaJoined = await anna.expect('joined', isJoined);
-anna.playerId = annaJoined.playerId;
-anna.joined = annaJoined;
+anna.send({ kind: 'create-room', name: 'Anna', pass: anna.pass, missionId: 'blackout' });
+const annaJoined = await anna.seated();
 await anna.expectView('sees the lobby', (v) => v.phase === 'lobby');
 
 const ben = new TestClient('ben');
@@ -1702,10 +1720,8 @@ assert(
   openRoom.players.length === 1 && openRoom.players[0]?.name === 'Anna',
   'lobby browser shows who is already waiting',
 );
-ben.send({ kind: 'join-room', code: openRoom.code, name: 'Ben' });
-const benJoined = await ben.expect('joined', isJoined);
-ben.playerId = benJoined.playerId;
-ben.joined = benJoined;
+ben.send({ kind: 'join-room', code: openRoom.code, name: 'Ben', pass: ben.pass });
+await ben.seated();
 await anna.expectView('sees a crew the mission takes', (v) =>
   v.players.length === 2 && v.crewSize.min <= 2 && v.crewSize.max >= 2);
 
@@ -1878,8 +1894,8 @@ for (const { from, to, signal } of exchange) {
 // Anna's room list is back, it has handled it.
 const dora = new TestClient('dora');
 await dora.open();
-dora.send({ kind: 'create-room', name: 'Dora', missionId: 'blackout' });
-const doraJoined = await dora.expect('joined', isJoined);
+dora.send({ kind: 'create-room', name: 'Dora', pass: dora.pass, missionId: 'blackout' });
+const doraJoined = await dora.seated();
 anna.send({ kind: 'rtc', to: doraJoined.playerId, signal: voiceOffer });
 anna.send({ kind: 'list-rooms' });
 await anna.expect('room list after the stray voice signal', isRooms);
@@ -2239,14 +2255,10 @@ async function openTutorial(): Promise<Lab> {
   const dan = new TestClient('dan');
   await cleo.open();
   await dan.open();
-  cleo.send({ kind: 'create-room', name: 'Cleo', missionId: tutorial.id });
-  const cleoJoined = await cleo.expect('joined', isJoined);
-  cleo.playerId = cleoJoined.playerId;
-  cleo.joined = cleoJoined;
-  dan.send({ kind: 'join-room', code: cleoJoined.code, name: 'Dan' });
-  const danJoined = await dan.expect('joined', isJoined);
-  dan.playerId = danJoined.playerId;
-  dan.joined = danJoined;
+  cleo.send({ kind: 'create-room', name: 'Cleo', pass: cleo.pass, missionId: tutorial.id });
+  const cleoJoined = await cleo.seated();
+  dan.send({ kind: 'join-room', code: cleoJoined.code, name: 'Dan', pass: dan.pass });
+  await dan.seated();
   dan.send({ kind: 'set-ready', ready: true });
   await cleo.until('Dan says yes', (v) => v.players.some((p) => p.name === 'Dan' && p.ready));
   cleo.send({ kind: 'start-mission' });

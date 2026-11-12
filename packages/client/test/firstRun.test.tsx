@@ -13,6 +13,9 @@ import {
 import { createRoomMessage, JoinScreen, MissionCard } from '../src/screens/Join.js';
 import { Levels, LobbyScreen } from '../src/screens/Lobby.js';
 
+/** A browser's crew pass, as minted (client pass.ts). */
+const PASS = { id: 'a1'.repeat(16), secret: '0f'.repeat(32) };
+
 const noop = (): void => undefined;
 
 /** The browser's storage as far as the flag goes, in memory. */
@@ -84,15 +87,17 @@ describe('a device’s first run', () => {
   it('opens its rooms on „entspannt" until then, on normal after', () => {
     expect(firstDifficulty(false)).toBe('entspannt');
     expect(firstDifficulty(true)).toBe('normal');
-    expect(createRoomMessage('Anna', 'blackout', '', 'entspannt')).toEqual({
+    expect(createRoomMessage(PASS, 'Anna', 'blackout', '', 'entspannt')).toEqual({
       kind: 'create-room',
       name: 'Anna',
+      pass: PASS,
       missionId: 'blackout',
       difficulty: 'entspannt',
     });
-    expect(createRoomMessage('Anna', null, '?seed=4', 'normal')).toEqual({
+    expect(createRoomMessage(PASS, 'Anna', null, '?seed=4', 'normal')).toEqual({
       kind: 'create-room',
       name: 'Anna',
+      pass: PASS,
       seed: 4,
       difficulty: 'normal',
     });

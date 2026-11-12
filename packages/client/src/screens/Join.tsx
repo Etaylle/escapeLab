@@ -2,13 +2,14 @@ import { useEffect, useState } from 'react';
 import {
   SEED_MAX,
   type ClientMessage,
+  type CrewPass,
   type Difficulty,
   type MissionInfo,
   type MissionStats,
   type RoomSummary,
 } from '@escapelab/core';
 import { FIRST_RUN_HINT, firstDifficulty, isTutorial, useWon } from '../firstRun.js';
-import { localStore } from '../notes.js';
+import { crewPass, keepName, lastName } from '../pass.js';
 import { recordLine } from '../runStats.js';
 import { crewSizeText } from './Crew.js';
 import { HttpsHint } from './HttpsHint.js';
@@ -32,38 +33,9 @@ interface Props {
 
 const REFRESH_MS = 2500;
 
-/** Where the browser keeps the name last typed on the join screen. */
-const NAME_KEY = 'escapelab-name';
-
-/**
- * The name last typed on the join screen, kept by the browser: the join
- * screen and the editor's test run start with it. '' where there is none.
- */
-export function lastName(): string {
-  try {
-    return localStore()?.getItem(NAME_KEY) ?? '';
-  } catch {
-    return '';
-  }
-}
-
-/** Keeps the name for next time; nothing is kept where the browser refuses. */
-export function keepName(name: string): void {
-  try {
-    const store = localStore();
-    if (name.trim() === '') {
-      store?.removeItem(NAME_KEY);
-    } else {
-      store?.setItem(NAME_KEY, name);
-    }
-  } catch (err) {
-    console.warn(`[escapelab] the name is not kept: ${String(err)}`);
-  }
-}
-
-/** The name field's text, starting with the name kept last and kept again as it is typed. */
+/** The name field's text, starting with the name the pass keeps and kept again as it is typed. */
 function useKeptName(): [string, (name: string) => void] {
-  const [name, setName] = useState(lastName);
+  const [name, setName] = useState(() => lastName());
   const type = (next: string): void => {
     setName(next);
     keepName(next);
@@ -74,12 +46,13 @@ function useKeptName(): [string, (name: string) => void] {
 /**
  * The message that opens a room for `missionId`, or for the server's first
  * mission where none is picked, on `difficulty` where one is given — a first
- * run's „entspannt" (firstRun.ts) — and on normal where not. A tester pins the
- * room to a seed with `?seed=<n>` in the page's address (`search`), so that
- * its runs repeat; a value that is no whole number from 0 to SEED_MAX is left
- * out, and the lobby then shows no seed.
+ * run's „entspannt" (firstRun.ts) — and on normal where not, its seat bound to
+ * `pass`. A tester pins the room to a seed with `?seed=<n>` in the page's
+ * address (`search`), so that its runs repeat; a value that is no whole number
+ * from 0 to SEED_MAX is left out, and the lobby then shows no seed.
  */
 export function createRoomMessage(
+  pass: CrewPass,
   name: string,
   missionId: string | null,
   search: string,
@@ -90,10 +63,16 @@ export function createRoomMessage(
   return {
     kind: 'create-room',
     name,
+    pass,
     ...(missionId === null ? {} : { missionId }),
     ...(seed === null ? {} : { seed }),
     ...(difficulty === null ? {} : { difficulty }),
   };
+}
+
+/** The message that joins room `code` as `name`, its seat bound to the browser's pass. */
+function joinMessage(code: string, name: string): ClientMessage {
+  return { kind: 'join-room', code, name, pass: crewPass() };
 }
 
 /** One open or running room in the browser. */
@@ -272,7 +251,15 @@ function NewRound({
   const current = missions.filter((m) => !isPrototype(m));
   const selected = missionId ?? current[0]?.id ?? missions[0]?.id ?? null;
   const open = (): void =>
-    send(createRoomMessage(name, selected, window.location.search, firstDifficulty(won)));
+    send(
+      createRoomMessage(
+        crewPass(),
+        name,
+        selected,
+        window.location.search,
+        firstDifficulty(won),
+      ),
+    );
   return (
     <section className="join-create">
       <h2>Neue Runde eröffnen</h2>
@@ -354,7 +341,7 @@ function WithCode({ send, connected, name }: SectionProps) {
         />
         <button
           disabled={!connected || name === '' || code.trim().length === 0}
-          onClick={() => send({ kind: 'join-room', code: code.trim(), name })}
+          onClick={() => send(joinMessage(code.trim(), name))}
         >
           Beitreten
         </button>
@@ -434,7 +421,7 @@ export function JoinScreen({
               room={room}
               tiles={missions.find((m) => m.id === room.missionId)?.tiles ?? []}
               canJoin={connected && nameOk}
-              onJoin={() => send({ kind: 'join-room', code: room.code, name: name.trim() })}
+              onJoin={() => send(joinMessage(room.code, name.trim()))}
               onWatch={() => send({ kind: 'spectate', code: room.code })}
             />
           ))}

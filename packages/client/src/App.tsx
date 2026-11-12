@@ -9,6 +9,7 @@ import {
 import { firstDifficulty, hasWon, useWonMark } from './firstRun.js';
 import { usePad } from './input/padRuntime.js';
 import { localStore } from './notes.js';
+import { crewPass, keepName } from './pass.js';
 import { STATS_PATH, useJson } from './runStats.js';
 import { useRunScreen } from './runScreen.js';
 import { useVoiceMesh, VoiceContext } from './voice/useVoice.js';
@@ -29,7 +30,7 @@ import { HandbookScreen } from './screens/Handbook.js';
 import { HistoryScreen } from './screens/History.js';
 import { Icon, type IconName } from './screens/Icon.js';
 import { UpdateNotice } from './screens/Install.js';
-import { createRoomMessage, JoinScreen, keepName } from './screens/Join.js';
+import { createRoomMessage, JoinScreen } from './screens/Join.js';
 import { LobbyScreen } from './screens/Lobby.js';
 import { GameScreen } from './screens/Game.js';
 import { EndScreen } from './screens/End.js';
@@ -241,7 +242,9 @@ function useTestRun(conn: Connection) {
       // The lobby's invite link is made from the address: the plain one, not the editor's.
       replacePath('/');
       const difficulty = firstDifficulty(hasWon(localStore()));
-      conn.send(createRoomMessage(name, missionId, window.location.search, difficulty));
+      conn.send(
+        createRoomMessage(crewPass(), name, missionId, window.location.search, difficulty),
+      );
     },
     back: (): void => {
       mirrorRun(sessionStore(), null);

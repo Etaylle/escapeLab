@@ -42,10 +42,24 @@ export type RtcSignal = z.infer<typeof rtcSignalSchema>;
 /** The largest seed a room can be pinned to: a seed is 32 bits wide, as the PRNG takes it. */
 export const SEED_MAX = 0xffff_ffff;
 
+/**
+ * A crew pass (Dienstausweis): what binds a seat to the browser profile that holds it — an id
+ * and a secret the client mints once and keeps (client pass.ts), both hex. The server keeps the
+ * id and a hash of the secret, never the secret itself; whoever shows both sits down on the
+ * seat again, from any socket.
+ */
+export const crewPassSchema = z.object({
+  id: z.string().regex(/^[0-9a-f]{32}$/),
+  secret: z.string().regex(/^[0-9a-f]{64}$/),
+});
+
+export type CrewPass = z.infer<typeof crewPassSchema>;
+
 export const clientMessageSchema = z.discriminatedUnion('kind', [
   z.object({
     kind: z.literal('create-room'),
     name: z.string().min(1).max(40),
+    pass: crewPassSchema,
     missionId: z.string().min(1).optional(),
     /**
      * pins the room for a repeatable test: its run n (from 0) plays seed + n;
@@ -62,14 +76,15 @@ export const clientMessageSchema = z.discriminatedUnion('kind', [
     kind: z.literal('join-room'),
     code: z.string().min(1).max(10),
     name: z.string().min(1).max(40),
+    pass: crewPassSchema,
   }),
   z.object({ kind: z.literal('spectate'), code: z.string().min(1).max(10) }),
   z.object({ kind: z.literal('list-rooms') }),
+  /** back onto the seat the pass holds in the room, from whatever socket this is */
   z.object({
     kind: z.literal('resume'),
     code: z.string().min(1).max(10),
-    playerId: z.string().min(1),
-    token: z.string().min(1),
+    pass: crewPassSchema,
   }),
   z.object({ kind: z.literal('select-color'), color: z.string().regex(/^#[0-9a-f]{6}$/i) }),
   /**
@@ -256,7 +271,13 @@ export interface DronePosition {
  * server's clock): every moment a view names is on that clock.
  */
 export type ServerMessage =
-  | { kind: 'joined'; code: string; playerId: string; token: string }
+  /** the socket sits on its seat in room `code`: its pass holds it, the views say whose it is */
+  | { kind: 'joined'; code: string }
+  /**
+   * the socket sits on its seat in room `code` no more: the seat plays on another socket that
+   * showed its pass, a tab opened later say — `message` says so
+   */
+  | { kind: 'left'; code: string; message: string }
   | { kind: 'view'; view: PlayerView; at: number }
   | { kind: 'spectator-view'; view: SpectatorView; code: string; at: number }
   /** the answer to a `clock` ask: the page's `sent` handed back, and the server's time (`at`) */

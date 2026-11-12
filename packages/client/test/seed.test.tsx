@@ -5,6 +5,9 @@ import { RoomCode } from '../src/App.js';
 import { EndScreen } from '../src/screens/End.js';
 import { createRoomMessage } from '../src/screens/Join.js';
 
+/** A browser's crew pass, as minted (client pass.ts). */
+const PASS = { id: 'a1'.repeat(16), secret: '0f'.repeat(32) };
+
 const noop = (): void => undefined;
 
 /** Anna's view of a lost run of a room for two. */
@@ -50,26 +53,31 @@ function lostRun(parts: Partial<PlayerView> = {}): PlayerView {
 
 describe('?seed= on the join screen', () => {
   it('pins the room it opens to the seed the address names', () => {
-    expect(createRoomMessage('Anna', 'blackout', '?seed=12')).toEqual({
+    expect(createRoomMessage(PASS, 'Anna', 'blackout', '?seed=12')).toEqual({
       kind: 'create-room',
       name: 'Anna',
+      pass: PASS,
       missionId: 'blackout',
       seed: 12,
     });
-    expect(createRoomMessage('Anna', null, '?trace=1&seed=007')).toEqual({
+    expect(createRoomMessage(PASS, 'Anna', null, '?trace=1&seed=007')).toEqual({
       kind: 'create-room',
       name: 'Anna',
+      pass: PASS,
       seed: 7,
     });
-    expect(createRoomMessage('Anna', null, `?seed=${SEED_MAX}`)).toMatchObject({ seed: SEED_MAX });
+    expect(createRoomMessage(PASS, 'Anna', null, `?seed=${SEED_MAX}`)).toMatchObject({
+      seed: SEED_MAX,
+    });
   });
 
   it('leaves the room to chance without a seed, or one no whole number up to the largest', () => {
     const asked = ['', '?seed=', '?seed=-1', '?seed=1.5', '?seed=abc', `?seed=${SEED_MAX + 1}`];
     for (const search of asked) {
-      expect(createRoomMessage('Anna', 'blackout', search)).toEqual({
+      expect(createRoomMessage(PASS, 'Anna', 'blackout', search)).toEqual({
         kind: 'create-room',
         name: 'Anna',
+        pass: PASS,
         missionId: 'blackout',
       });
     }

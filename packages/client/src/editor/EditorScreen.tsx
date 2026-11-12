@@ -7,7 +7,7 @@ import {
   type SetStateAction,
 } from 'react';
 import type { MissionInfo } from '@escapelab/core';
-import { lastName } from '../screens/Join.js';
+import { lastName } from '../pass.js';
 import { copyOf, draftFromJson, draftToJson, newDraft, type Draft, type Tile } from './draft.js';
 import { EditorCanvas } from './EditorCanvas.js';
 import {
@@ -346,7 +346,7 @@ function missionFiles({ json, reloadMissions, setBusy, say, markSaved, open, gua
  */
 function usePlay(save: () => Promise<boolean>, startRun: (name: string) => void) {
   const [open, setOpen] = useState(false);
-  const [name, setName] = useState(lastName);
+  const [name, setName] = useState(() => lastName());
   return {
     open,
     setOpen,

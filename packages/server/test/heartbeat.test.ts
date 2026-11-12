@@ -1,97 +1,16 @@
-import { EventEmitter } from 'node:events';
 import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import {
-  parseMission,
-  type ClientMessage,
-  type Mission,
-  type PlayerView,
-  type ServerMessage,
-} from '@escapelab/core';
+import { parseMission, type Mission, type ServerMessage } from '@escapelab/core';
 import { HEARTBEAT_MS, startHeartbeat } from '../src/heartbeat.js';
 import { RoomManager } from '../src/roomManager.js';
 import { serveSockets } from '../src/sockets.js';
-
-/** How long a pong takes to come back, ms: the line's round trip. */
-const ROUND_TRIP_MS = 40;
+import { FakeServer, joinedOf, ROUND_TRIP_MS, type FakeSocket } from './line.js';
+import { passFor } from './passes.js';
 
 /** The tutorial, for two. */
 const mission: Mission = parseMission(
   JSON.parse(readFileSync(new URL('../../../missions/systemcheck.json', import.meta.url), 'utf8')),
 );
-
-/**
- * A client's socket as the server sees it: it says what the client sends, answers a ping a
- * round trip later while `answering` — as a browser does on its own — and on `terminate`
- * leaves the server's clients and closes, as `ws` closes a socket it destroys.
- */
-class FakeSocket extends EventEmitter {
-  readonly heard: ServerMessage[] = [];
-  answering = true;
-  pings = 0;
-  terminated = false;
-
-  constructor(private readonly server: FakeServer) {
-    super();
-  }
-
-  send(data: string): void {
-    this.heard.push(JSON.parse(data) as ServerMessage);
-  }
-
-  ping(): void {
-    this.pings += 1;
-    setTimeout(() => {
-      if (this.answering) {
-        this.emit('pong');
-      }
-    }, ROUND_TRIP_MS);
-  }
-
-  terminate(): void {
-    this.terminated = true;
-    this.server.clients.delete(this);
-    this.emit('close');
-  }
-
-  /** The client sends `msg`. */
-  say(msg: ClientMessage): void {
-    this.emit('message', Buffer.from(JSON.stringify(msg)));
-  }
-
-  /** The latest view this socket was sent. */
-  get view(): PlayerView {
-    const last = this.heard.filter((m) => m.kind === 'view').at(-1);
-    if (last?.kind !== 'view') {
-      throw new Error('this socket was sent no view');
-    }
-    return last.view;
-  }
-}
-
-/** The WebSocket server and its open sockets, as `ws` keeps them. */
-class FakeServer extends EventEmitter {
-  readonly clients = new Set<FakeSocket>();
-
-  /** A client connects. */
-  connect(): FakeSocket {
-    const socket = new FakeSocket(this);
-    this.clients.add(socket);
-    this.emit('connection', socket);
-    return socket;
-  }
-}
-
-/** What the server handed a player on joining, for resuming. */
-type Joined = Extract<ServerMessage, { kind: 'joined' }>;
-
-function joinedOf(socket: FakeSocket): Joined {
-  const joined = socket.heard.find((m): m is Joined => m.kind === 'joined');
-  if (joined === undefined) {
-    throw new Error('this socket never joined a room');
-  }
-  return joined;
-}
 
 /**
  * Anna and Ben on a socket each, served as the server serves them, the heartbeat beating,
@@ -103,10 +22,10 @@ function startedRun() {
   serveSockets(server, { catalog: { get: () => mission, default: mission }, manager });
   const stop = startHeartbeat(server);
   const anna = server.connect();
-  anna.say({ kind: 'create-room', name: 'Anna', missionId: mission.id });
+  anna.say({ kind: 'create-room', name: 'Anna', pass: passFor('Anna'), missionId: mission.id });
   const { code } = joinedOf(anna);
   const ben = server.connect();
-  ben.say({ kind: 'join-room', code, name: 'Ben' });
+  ben.say({ kind: 'join-room', code, name: 'Ben', pass: passFor('Ben') });
   ben.say({ kind: 'set-ready', ready: true });
   anna.say({ kind: 'start-mission' });
   expect(anna.view.phase).toBe('playing');
@@ -117,11 +36,11 @@ function startedRun() {
   return { server, anna, ben, code, end };
 }
 
-/** A new socket of Ben's resuming his place, as his page does after reconnecting. */
+/** A new socket of Ben's resuming his place by his pass, as his page does after reconnecting. */
 function resumeBen(server: FakeServer, ben: FakeSocket): FakeSocket {
-  const { code, playerId, token } = joinedOf(ben);
+  const { code } = joinedOf(ben);
   const back = server.connect();
-  back.say({ kind: 'resume', code, playerId, token });
+  back.say({ kind: 'resume', code, pass: passFor('Ben') });
   return back;
 }
 
@@ -184,7 +103,8 @@ describe('the heartbeat', () => {
     expect(ben.terminated).toBe(true);
     expect(anna.view.pausedFor).toEqual(['Ben']);
     const back = resumeBen(server, ben);
-    expect(joinedOf(back).playerId).toBe(joinedOf(ben).playerId);
+    expect(joinedOf(back).code).toBe(joinedOf(ben).code);
+    expect(back.view.you.id).toBe(ben.view.you.id);
     expect(anna.view.pausedFor).toBeNull();
     expect(back.view.pausedFor).toBeNull();
     vi.advanceTimersByTime(5 * HEARTBEAT_MS);

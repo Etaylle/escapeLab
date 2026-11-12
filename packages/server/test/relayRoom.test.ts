@@ -4,6 +4,7 @@ import type { Action, GameState, MapDef, Mission, ServerMessage } from '@escapel
 import { DronePatrol } from '../src/drones.js';
 import { Room } from '../src/room.js';
 import { pressE, walkTo, type Walker } from './walk.js';
+import { passFor } from './passes.js';
 
 /**
  * Corridor with three stations along its top row; its emergencies run in
@@ -98,8 +99,8 @@ describe('Room relay emergencies', () => {
   /** Lobby, mission start, and the two station solves that arm emergencies. */
   function midMission() {
     const room = new Room('TEST', mission);
-    const anna = { ...room.join('Anna'), ...collector() };
-    const ben = { ...room.join('Ben'), ...collector() };
+    const anna = { ...room.join('Anna', passFor('Anna')), ...collector() };
+    const ben = { ...room.join('Ben', passFor('Ben')), ...collector() };
     room.attach(anna.playerId, anna.listen);
     room.attach(ben.playerId, ben.listen);
     room.setReady(ben.playerId, true);

@@ -34,6 +34,11 @@ interface Session {
   /** the player's id; for an audience connection, its spectator id */
   playerId: string;
   /**
+   * whether the session still holds: a player's seat may have gone to another socket that
+   * showed its pass since; an audience connection holds as long as it is open
+   */
+  holds: () => boolean;
+  /**
    * lets go of the room once the socket is gone: a player stays in the game and may resume,
    * the room pausing while they are away; an audience connection simply leaves
    */
@@ -72,6 +77,19 @@ function send(socket: PlayerSocket, msg: ServerMessage): void {
   socket.send(JSON.stringify(msg));
 }
 
+/** Each socket's one way to hear its room: the same for every seat it sits down on. */
+const listeners = new WeakMap<PlayerSocket, (msg: ServerMessage) => void>();
+
+function listenerOf(socket: PlayerSocket): (msg: ServerMessage) => void {
+  const known = listeners.get(socket);
+  if (known !== undefined) {
+    return known;
+  }
+  const listener = (msg: ServerMessage): void => send(socket, msg);
+  listeners.set(socket, listener);
+  return listener;
+}
+
 /** What a socket may send before it is in a room: to open, join, watch or resume one, or ask. */
 type AtTheDoor = Extract<
   ClientMessage,
@@ -92,8 +110,14 @@ function handleMessage(
     case 'spectate':
     case 'resume':
       return atTheDoor(lab, socket, session, msg);
-    default:
-      return inRoom(lab, socket, requireSession(session), msg);
+    default: {
+      // A seat that went to another socket takes nothing from this one any more.
+      const held = session !== null && session.holds() ? session : null;
+      // What the page streams supersedes itself: from no seat it goes nowhere, unanswered.
+      return held === null && msg.kind === 'pos'
+        ? null
+        : inRoom(lab, socket, requireSession(held), msg);
+    }
   }
 }
 
@@ -110,10 +134,12 @@ function atTheDoor(
       // A new room plays on the difficulty its host's device asked for — normal unless that
       // device has won no run yet — with its alarm limit: scaled from the start.
       const room = msg.kind === 'create-room' ? createRoom(lab, msg) : lab.manager.get(msg.code);
-      const { playerId, token } = room.join(msg.name);
-      send(socket, { kind: 'joined', code: room.code, playerId, token });
-      const detach = room.attach(playerId, (m) => send(socket, m));
-      return { room, playerId, detach };
+      // A pass that already holds a seat here sits down on it again: a second tab, say.
+      const playerId =
+        room.seatOf(msg.pass) === null
+          ? room.join(msg.name, msg.pass).playerId
+          : room.resume(msg.pass);
+      return seated(socket, session, room, playerId);
     }
     case 'list-rooms':
       send(socket, { kind: 'rooms', rooms: lab.manager.list() });
@@ -124,18 +150,35 @@ function atTheDoor(
       return session;
     case 'spectate': {
       const room = lab.manager.get(msg.code);
+      session?.detach();
       // An audience connection goes by its spectator id: voice signals reach it by that.
       const { spectatorId, detach } = room.attachSpectator((m) => send(socket, m));
-      return { room, playerId: spectatorId, detach };
+      return { room, playerId: spectatorId, holds: () => true, detach };
     }
     case 'resume': {
       const room = lab.manager.get(msg.code);
-      room.resume(msg.playerId, msg.token);
-      send(socket, { kind: 'joined', code: room.code, playerId: msg.playerId, token: msg.token });
-      const detach = room.attach(msg.playerId, (m) => send(socket, m));
-      return { room, playerId: msg.playerId, detach };
+      return seated(socket, session, room, room.resume(msg.pass));
     }
   }
+}
+
+/**
+ * The session of a socket that sat down on the seat of `playerId` in `room`: it is told so, and
+ * takes the room's views from now on. Whatever room it sat in before lets go of it first.
+ */
+function seated(
+  socket: PlayerSocket,
+  before: Session | null,
+  room: Room,
+  playerId: string,
+): Session {
+  if (before !== null && (before.room !== room || before.playerId !== playerId)) {
+    before.detach();
+  }
+  send(socket, { kind: 'joined', code: room.code });
+  const listener = listenerOf(socket);
+  const detach = room.attach(playerId, listener);
+  return { room, playerId, holds: () => room.plays(playerId, listener), detach };
 }
 
 /** A message of a player in the room of session `s`, carried out there. */

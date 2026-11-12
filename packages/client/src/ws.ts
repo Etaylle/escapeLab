@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 'react';
 import type {
   ClientMessage,
+  CrewPass,
   DronePosition,
   PlayerView,
   RoomSummary,
@@ -10,12 +11,13 @@ import type {
 } from '@escapelab/core';
 import { askForTime, clock, localNow } from './clock.js';
 import { forgetNotes, localStore } from './notes.js';
+import { crewPass } from './pass.js';
 import type { KnownPositions } from './world/movement.js';
 
-interface Credentials {
+/** What a socket resumes as it opens: the room this tab plays in, on the browser's pass. */
+export interface Resume {
   code: string;
-  playerId: string;
-  token: string;
+  pass: CrewPass;
 }
 
 /** A refusal of the server's: how many it has made so far, its words, what it refused. */
@@ -100,23 +102,38 @@ export interface ServerListener {
   closed: () => void;
 }
 
+/**
+ * Where the tab keeps the code of the room it plays in: a reload comes back to it on the
+ * browser's pass (pass.ts). The seat itself is the pass's, which every tab shares.
+ */
 const STORAGE_KEY = 'escapelab-session';
 
-function loadCredentials(): Credentials | null {
+/** The code of the room this tab plays in; null for none. */
+function roomOfTab(): string | null {
   try {
     const raw = sessionStorage.getItem(STORAGE_KEY);
-    return raw === null ? null : (JSON.parse(raw) as Credentials);
+    const code: unknown = raw === null ? null : (JSON.parse(raw) as { code?: unknown }).code;
+    return typeof code === 'string' ? code : null;
   } catch {
     return null;
   }
 }
 
-/** Out of the room for good: what this player noted there goes with it. */
-function forgetRoom(): void {
-  const creds = loadCredentials();
+/** What a socket of this tab resumes as it opens; null where the tab plays in no room. */
+function resumeOfTab(): Resume | null {
+  const code = roomOfTab();
+  return code === null ? null : { code, pass: crewPass() };
+}
+
+/**
+ * Out of the room for good: the tab plays in it no more, and what `playerId` noted there goes
+ * with it (where it is known).
+ */
+function forgetRoom(playerId: string | null): void {
+  const code = roomOfTab();
   const store = localStore();
-  if (creds !== null && store !== null) {
-    forgetNotes(store, creds.code, creds.playerId);
+  if (code !== null && playerId !== null && store !== null) {
+    forgetNotes(store, code, playerId);
   }
   sessionStorage.removeItem(STORAGE_KEY);
 }
@@ -143,8 +160,8 @@ export interface SocketEvents {
   /** a new socket was made: the one to send on from now */
   made: (socket: WebSocket) => void;
   status: (status: Connection['status']) => void;
-  /** the session a socket resumes as it opens; null where the page keeps none */
-  session: () => Credentials | null;
+  /** the seat a socket resumes as it opens; null where the tab plays in no room */
+  session: () => Resume | null;
   /** a resume went out: an error now means the stored session is dead */
   resuming: () => void;
   /** the line is ready: its socket open with the session back, or needing none (`Line.send`) */
@@ -320,6 +337,8 @@ interface Page {
   refuse: (message: string, of: ClientMessage['kind'] | null) => void;
   /** a resume is out: an error now means the stored session is dead */
   resuming: MutableRefObject<boolean>;
+  /** whose seat the latest view was, by player id: their notes go with the room */
+  you: MutableRefObject<string | null>;
   positions: Connection['positions'];
   drones: Connection['drones'];
   pings: Connection['pings'];
@@ -331,14 +350,20 @@ function takeIn(msg: ServerMessage, page: Page): void {
   switch (msg.kind) {
     case 'joined':
       page.resuming.current = false;
-      sessionStorage.setItem(
-        STORAGE_KEY,
-        JSON.stringify({ code: msg.code, playerId: msg.playerId, token: msg.token }),
-      );
+      sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ code: msg.code }));
       page.setRoomCode(msg.code);
+      break;
+    case 'left':
+      // The seat plays on in another tab: this one plays in no room now, and keeps no resume,
+      // so that the two never take the seat from each other on their own.
+      sessionStorage.removeItem(STORAGE_KEY);
+      page.setRoomCode(null);
+      page.setView(null);
+      page.setError(msg.message);
       break;
     case 'view':
       clock.stamped(msg.at);
+      page.you.current = msg.view.you.id;
       page.setView(msg.view);
       break;
     case 'spectator-view':
@@ -368,9 +393,9 @@ function takeIn(msg: ServerMessage, page: Page): void {
     }
     case 'error':
       if (page.resuming.current) {
-        // Stored session is dead (room swept / token invalid): back to join.
+        // The tab's room is gone, or its pass holds no seat there any more: back to join.
         page.resuming.current = false;
-        forgetRoom();
+        forgetRoom(page.you.current);
         page.setRoomCode(null);
         page.setView(null);
       }
@@ -410,7 +435,7 @@ function openLine(wiring: Wiring): { line: Line; close: () => void } {
         asking.close();
       }
     },
-    session: loadCredentials,
+    session: resumeOfTab,
     resuming: () => {
       page.resuming.current = true;
     },
@@ -438,20 +463,21 @@ function openLine(wiring: Wiring): { line: Line; close: () => void } {
 }
 
 /**
- * Owns the WebSocket for the whole app: connects, resumes a stored session
- * after reload or connection loss, and reconnects with backoff (`keepConnected`).
+ * Owns the WebSocket for the whole app: connects, resumes the tab's room on the browser's pass
+ * after a reload or a lost connection, and reconnects with backoff (`keepConnected`).
  */
 export function useGameConnection(): Connection {
   const [status, setStatus] = useState<Connection['status']>('connecting');
   const [view, setView] = useState<PlayerView | null>(null);
   const [spectatorView, setSpectatorView] = useState<SpectatorView | null>(null);
   const [rooms, setRooms] = useState<RoomSummary[]>([]);
-  const [roomCode, setRoomCode] = useState<string | null>(loadCredentials()?.code ?? null);
+  const [roomCode, setRoomCode] = useState<string | null>(roomOfTab);
   const [error, setError] = useState<string | null>(null);
   const [refusal, setRefusal] = useState<Refusal | null>(null);
   const socketRef = useRef<WebSocket | null>(null);
   const lineRef = useRef<Line | null>(null);
   const resumingRef = useRef(false);
+  const youRef = useRef<string | null>(null);
   const positionsRef = useRef<KnownPositions>({ run: null, players: {} });
   const dronesRef = useRef<Record<string, DronePosition>>({});
   const pingsRef = useRef<{ playerId: string; x: number; y: number; at: number }[]>([]);
@@ -483,6 +509,7 @@ export function useGameConnection(): Connection {
         refuse: (message, of) =>
           setRefusal((last) => ({ seq: (last?.seq ?? 0) + 1, message, of })),
         resuming: resumingRef,
+        you: youRef,
         positions: positionsRef,
         drones: dronesRef,
         pings: pingsRef,
@@ -518,7 +545,7 @@ export function useGameConnection(): Connection {
     signal,
     dismissError: () => setError(null),
     leaveRoom: () => {
-      forgetRoom();
+      forgetRoom(youRef.current);
       location.reload();
     },
   };

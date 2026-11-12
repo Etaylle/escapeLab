@@ -12,6 +12,7 @@ import {
 } from '@escapelab/core';
 import { Room } from '../src/room.js';
 import { walkTo, type Walker } from './walk.js';
+import { passFor } from './passes.js';
 
 /**
  * Blackout: the Serverschott in the Flur's north wall, into the Serverraum, opens
@@ -45,7 +46,6 @@ const flurplatte = blackout.map.plates.find((p) => p.id === 'flurplatte') ?? { x
 const ON_THE_PLATE = { x: flurplatte.x + 0.5, y: flurplatte.y + 0.5 };
 
 type Player = Walker & {
-  token: string;
   listen: (m: ServerMessage) => void;
   /** lets go of the connection, as its socket closing does */
   detach: () => void;
@@ -53,7 +53,11 @@ type Player = Walker & {
 
 function join(room: Room, name: string): Player {
   const messages: ServerMessage[] = [];
-  const player = { ...room.join(name), messages, listen: (m: ServerMessage) => messages.push(m) };
+  const player = {
+    ...room.join(name, passFor(name)),
+    messages,
+    listen: (m: ServerMessage) => messages.push(m),
+  };
   return { ...player, detach: room.attach(player.playerId, player.listen) };
 }
 
@@ -259,7 +263,7 @@ describe('Room movement', () => {
     expect(lastView(ben).pausedFor).toEqual(['Anna']);
 
     const back: Walker = { playerId: anna.playerId, messages: [] };
-    room.resume(anna.playerId, anna.token);
+    room.resume(passFor('Anna'));
     room.attach(anna.playerId, (m) => back.messages.push(m));
     expect(lastView(back).pausedFor).toBeNull();
     const kept = lastPositions(back);

@@ -53,9 +53,10 @@ class FakeSocket {
   }
 }
 
-const SESSION = { code: 'ABCD', playerId: 'p-ben', token: 't-ben' };
-/** The server has the session back. */
-const JOINED: ServerMessage = { kind: 'joined', ...SESSION };
+/** Ben's tab plays in room ABCD, on his browser's pass. */
+const SESSION = { code: 'ABCD', pass: { id: 'b3'.repeat(16), secret: '7e'.repeat(32) } };
+/** The server has the seat back. */
+const JOINED: ServerMessage = { kind: 'joined', code: SESSION.code };
 
 /** `keepConnected` over fake sockets, with what it told the page. */
 function connection(session: typeof SESSION | null = SESSION) {

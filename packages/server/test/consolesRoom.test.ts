@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { moduleFor, parseMission, type Mission, type ServerMessage } from '@escapelab/core';
 import { Room } from '../src/room.js';
 import { pressE, walkTo, type Walker } from './walk.js';
+import { passFor } from './passes.js';
 
 /**
  * A corridor for two or three with a station of two consoles: the
@@ -69,7 +70,7 @@ describe('Room with a station of two consoles', () => {
   function started() {
     const room = new Room('TEST', mission);
     const [anna, ben, cleo] = ['Anna', 'Ben', 'Cleo'].map((name) => {
-      const player = { ...room.join(name), ...collector() };
+      const player = { ...room.join(name, passFor(name)), ...collector() };
       room.attach(player.playerId, player.listen);
       return player;
     });

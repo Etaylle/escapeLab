@@ -9,6 +9,7 @@ import {
 } from '@escapelab/core';
 import { RoomManager, seedsAllowed } from '../src/roomManager.js';
 import { pressE, walkTo } from './walk.js';
+import { passFor } from './passes.js';
 
 /**
  * Blackout: spawns in the Archiv and at either end of the Flur; the lights go
@@ -49,8 +50,8 @@ function lastSpectatorView(messages: ServerMessage[]): SpectatorView {
 /** Anna (host) and Ben in a Blackout room `manager` opened with `seed`, the run started. */
 function startedIn(manager: RoomManager, seed: number | null) {
   const room = manager.create(blackout, seed);
-  const anna = { ...room.join('Anna'), ...collector() };
-  const ben = { ...room.join('Ben'), ...collector() };
+  const anna = { ...room.join('Anna', passFor('Anna')), ...collector() };
+  const ben = { ...room.join('Ben', passFor('Ben')), ...collector() };
   room.attach(anna.playerId, anna.listen);
   room.attach(ben.playerId, ben.listen);
   room.setReady(ben.playerId, true);

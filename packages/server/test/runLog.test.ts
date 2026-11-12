@@ -14,6 +14,7 @@ import { RoomManager } from '../src/roomManager.js';
 import { appendRun, parseRuns, readRuns } from '../src/runLog.js';
 import type { Room } from '../src/room.js';
 import { pressE, walkTo, type Walker } from './walk.js';
+import { passFor } from './passes.js';
 
 /**
  * Two presses for the whole crew along a corridor and the hatch between
@@ -148,7 +149,7 @@ describe('parseRuns', () => {
 /** `name` joins, and everything the room pushes to them is kept. */
 function seat(room: Room, name: string): Walker {
   const messages: ServerMessage[] = [];
-  const { playerId } = room.join(name);
+  const { playerId } = room.join(name, passFor(name));
   room.attach(playerId, (m) => messages.push(m));
   return { playerId, messages };
 }

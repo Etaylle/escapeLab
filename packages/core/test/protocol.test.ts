@@ -63,6 +63,48 @@ describe('voice signals', () => {
   });
 });
 
+/** A crew pass as a browser mints it: 16 bytes of id, 32 of secret, hex. */
+const PASS = { id: 'a1'.repeat(16), secret: '0f'.repeat(32) };
+
+describe('the crew pass', () => {
+  it('goes with every way onto a seat: opening a room, joining one, resuming', () => {
+    const doors = [
+      { kind: 'create-room', name: 'Anna', pass: PASS },
+      { kind: 'join-room', code: 'ABCD', name: 'Ben', pass: PASS },
+      { kind: 'resume', code: 'ABCD', pass: PASS },
+    ];
+    for (const msg of doors) {
+      expect(parseClientMessage(JSON.stringify(msg)), msg.kind).toEqual(msg);
+      const bare = { ...msg, pass: undefined };
+      expect(() => parseClientMessage(JSON.stringify(bare)), msg.kind).toThrow(
+        /Unbekanntes Nachrichtenformat/,
+      );
+    }
+  });
+
+  it('is hex of its full length, an id and a secret, nothing else', () => {
+    const bad = [
+      { id: PASS.id },
+      { secret: PASS.secret },
+      { id: PASS.id.slice(1), secret: PASS.secret },
+      { id: PASS.id, secret: `${PASS.secret}00` },
+      { id: PASS.id.toUpperCase(), secret: PASS.secret },
+      { id: 'zz'.repeat(16), secret: PASS.secret },
+    ];
+    for (const pass of bad) {
+      const msg = { kind: 'resume', code: 'ABCD', pass };
+      expect(() => parseClientMessage(JSON.stringify(msg)), JSON.stringify(pass)).toThrow(
+        /Unbekanntes Nachrichtenformat/,
+      );
+    }
+  });
+
+  it('replaces the old resume by player id and token', () => {
+    const old = { kind: 'resume', code: 'ABCD', playerId: 'p-ben', token: 't-ben' };
+    expect(() => parseClientMessage(JSON.stringify(old))).toThrow(/Unbekanntes Nachrichtenformat/);
+  });
+});
+
 describe('client messages', () => {
   it('pass a puzzle input on untouched — the open puzzle checks it', () => {
     const msg = { kind: 'puzzle-input', input: { wireId: 'w2' } };

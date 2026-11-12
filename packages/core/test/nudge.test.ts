@@ -183,14 +183,16 @@ describe('a first crew in the shipped missions', () => {
 
 describe('a room opened for a first crew', () => {
   it('may ask for its difficulty, one of the three', () => {
+    const pass = { id: 'a1'.repeat(16), secret: '0f'.repeat(32) };
     const create = (extra: object): string =>
-      JSON.stringify({ kind: 'create-room', name: 'Anna', ...extra });
+      JSON.stringify({ kind: 'create-room', name: 'Anna', pass, ...extra });
     expect(parseClientMessage(create({ difficulty: 'entspannt' }))).toEqual({
       kind: 'create-room',
       name: 'Anna',
+      pass,
       difficulty: 'entspannt',
     });
-    expect(parseClientMessage(create({}))).toEqual({ kind: 'create-room', name: 'Anna' });
+    expect(parseClientMessage(create({}))).toEqual({ kind: 'create-room', name: 'Anna', pass });
     expect(() => parseClientMessage(create({ difficulty: 'leicht' }))).toThrow();
   });
 });

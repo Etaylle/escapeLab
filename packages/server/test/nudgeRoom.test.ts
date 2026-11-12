@@ -3,6 +3,7 @@ import { parseMission, scaleMission, type Difficulty, type Mission } from '@esca
 import { Room } from '../src/room.js';
 import { RoomManager } from '../src/roomManager.js';
 import { pressE, walkTo, type Walker } from './walk.js';
+import { passFor } from './passes.js';
 
 /**
  * A corridor of two stations where the whole crew presses; mission control has two lines for
@@ -42,11 +43,11 @@ const mission: Mission = parseMission({
 const QUIET_MS = 90_000;
 
 /** A player of the room, with how to let go of their connection, as its socket closing does. */
-type Player = Walker & { token: string; detach: () => void };
+type Player = Walker & { detach: () => void };
 
 function join(room: Room, name: string): Player {
   const messages: Player['messages'] = [];
-  const player = { ...room.join(name), messages };
+  const player = { ...room.join(name, passFor(name)), messages };
   return { ...player, detach: room.attach(player.playerId, (m) => messages.push(m)) };
 }
 
@@ -109,7 +110,7 @@ describe('mission control watching from the room', () => {
     ben.detach();
     vi.advanceTimersByTime(120_000);
     expect(nudges(anna)).toEqual([]);
-    room.resume(ben.playerId, ben.token);
+    room.resume(passFor('Ben'));
     room.attach(ben.playerId, (m) => ben.messages.push(m));
     vi.advanceTimersByTime(QUIET_MS - 30_000 - 1);
     expect(nudges(anna)).toEqual([]);

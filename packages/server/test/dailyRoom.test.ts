@@ -18,6 +18,7 @@ import { statsResponse } from '../src/api.js';
 import { MissionCatalog } from '../src/missions.js';
 import { RoomManager, seedsAllowed } from '../src/roomManager.js';
 import { DAILY_DAYS, RunStats } from '../src/runStats.js';
+import { passFor } from './passes.js';
 
 const blackout: Mission = parseMission(
   JSON.parse(readFileSync(new URL('../../../missions/blackout.json', import.meta.url), 'utf8')),
@@ -64,8 +65,8 @@ function playedOut(manager: RoomManager, reports: RunReport[], daily: boolean, s
 /** Anna (host) and Ben in a new Blackout room of `manager`, pinned to `seed` where asked. */
 function lobbyOf(manager: RoomManager, seed = 7) {
   const room = manager.create(blackout, seed);
-  const anna = { ...room.join('Anna'), ...collector() };
-  const ben = { ...room.join('Ben'), ...collector() };
+  const anna = { ...room.join('Anna', passFor('Anna')), ...collector() };
+  const ben = { ...room.join('Ben', passFor('Ben')), ...collector() };
   room.attach(anna.playerId, anna.listen);
   room.attach(ben.playerId, ben.listen);
   return { room, anna, ben };
