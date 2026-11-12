@@ -351,7 +351,16 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   Zähler, sobald man drin ist), Exapunks (Regeln im gedruckten Heft).
 - Dritter Entwurf in Reserve: Datensicherung (Plattenarray, Backup-Katalog, Rotationsplan).
 
-### S-1 Titel wie ein Spiel — Status: bereit · Größe: M
+### S-1 Hauptmenü wie ein Spiel — Status: bereit (nächstes Paket nach R-2; Spec `spec-S-menu.md`) · Größe: L
+- Uros 2026-11-12 mit Screenshot: „Das soll besser werden wie echte Spiele, Main Menu." Befund
+  im Bild: eine Karte auf leerer Seite, Systemschrift, kein Ton, keine Figuren, ein nativer
+  Tooltip über den Missionskarten, der Aufkleber „Erster Einsatz?" über dem Tutorial-Titel,
+  Safaris Passwortmanager über dem Code-Feld.
+- Neu: lebende Szene (beleuchtetes Labor, langsame Fahrt, 30 fps im Leerlauf) hinter Titel und
+  senkrechtem Menü (Einsatz starten, Beitreten, Offene Runden, Handbuch, Bestenliste, Editor,
+  Einstellungen), per Tastatur und Controller; Profil-Chip oben rechts mit Name, Farbe und
+  eigener Figur (Platz für die Anmeldung aus K-1); gebundener Einsatz als erster Menüpunkt;
+  Titelthema und Anlagenbrummen als Katalog-Einträge zum Rendern; Tür-Wischblende in die Lobby.
 - Vorbilder: Half-Life 2 und Firewatch (Menü über einer lebenden Szene), Alien: Isolation
   (Titel mit Röhrenflimmern und Brummen), Among Us (Figuren sind von Anfang an da).
 - Hinter der Karte zieht das beleuchtete Labor aus dem Intro langsam vorbei; Titelthema aus
@@ -368,6 +377,21 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
 - Lobby als kleiner Raum im echten Renderer: Spinde in Crewfarben, Tafel mit Briefing, an der
   der Host die Mission wählt, Kaffeemaschine, Tür zu Trakt C geht auf, wenn alle bereit davor
   stehen; Bewegung, Anwesenheit, Näheklang wie im Spiel.
+
+### K-1 Konto wie bei Dota — Status: wartet (Entscheidung Uros: Anbieter) · Größe: L
+- Uros 2026-11-12: „Wieso nicht wie Dota Accounts?" Heute bindet ein Dienstausweis je Browser
+  (R-3); ein anderes Gerät kommt nur per Übernahme mit Bestätigung der Crew hinein. Ein Konto
+  macht die Identität geräteunabhängig: anmelden, und der laufende Einsatz holt einen zurück,
+  Übernahme und Bestätigung entfallen für Angemeldete, Bestenliste und „Meine Einsätze" hängen
+  am Konto.
+- Vorschlag ohne eigene Nutzerdatenbank (Render Free hat keine Platte): Anmeldung über einen
+  Identitätsanbieter (Google, dazu GitHub für Studierende), der Server prüft das ID-Token und
+  leitet daraus den Ausweis ab (`HMAC(sub)`); Gastmodus bleibt wie heute. Braucht: OAuth-Client
+  beim Anbieter (Uros), `GOOGLE_CLIENT_ID` in Render, eine Bibliothek zur Token-Prüfung (`jose`,
+  begründet), später eine kleine Datenbank (Neon oder Turso, kostenlos) für Verlauf und
+  Erfolge je Konto.
+- Alternative mit eigenen Konten (Name und Passwort, `crypto.scrypt`, Neon-Postgres,
+  Wiederherstellungscodes statt E-Mail): mehr Code, mehr Angriffsfläche, kein Dritter.
 
 ## Nur lokal
 
