@@ -151,6 +151,12 @@ export const LOBBY_AWAY_MS = 120_000;
 // voice: interface — the room's refusal, not the lab's, names the crew
 const CLAIM_REFUSED = 'Die Crew hat die Übernahme nicht bestätigt.';
 
+/**
+ * How long a device whose ask for a seat the crew turned away, or left unanswered, waits before
+ * it may ask for that seat again, ms: no card pops up again and again for the crew.
+ */
+export const ASK_AGAIN_MS = 60_000;
+
 /** A new device's ask for a seat by its name: the pass it brings, whom to tell, its timer. */
 interface Claim {
   pass: CrewPass;
@@ -163,6 +169,12 @@ interface Claim {
  * the seat back on its line, gone, or the run over — or withdrawn, its device gone.
  */
 type ClaimEnd = 'allowed' | 'refused' | 'unanswered' | 'back' | 'over' | 'withdrawn';
+
+/** How an ask ends that makes its device wait to ask again (ASK_AGAIN_MS): turned away. */
+const TURNED_AWAY: ReadonlySet<ClaimEnd> = new Set(['refused', 'unanswered']);
+
+/** The key a pass's wait to ask for a seat again goes by: the seat's player id and the pass's. */
+const askKey = (seatId: string, pass: CrewPass): string => `${seatId}:${pass.id}`;
 
 /** What the log says of a seat whose ask ended so (`ClaimEnd`). */
 const CLAIM_LOG: Record<ClaimEnd, string> = {
@@ -262,6 +274,8 @@ export class Room {
   private readonly freeing = new Map<string, NodeJS.Timeout>();
   /** the asks of new devices for seats whose line is down, by the seat's player id */
   private readonly claims = new Map<string, Claim>();
+  /** until when a pass may not ask for a seat again, by seat and pass (`askKey`), epoch ms */
+  private readonly askAgainAt = new Map<string, number>();
   /** epoch ms since the room has had no connected players, null while occupied */
   emptySince: number | null = null;
 
@@ -315,6 +329,7 @@ export class Room {
     if (this.claims.has(seat.id)) {
       throw new GameError(`Für ${seat.name} wartet schon eine Übernahme auf Antwort.`);
     }
+    this.checkAskAgain(seat, pass);
     this.seats.check(pass);
     const now = Date.now();
     this.dispatch({ type: 'takeover-claimed', playerId: seat.id, at: now });
@@ -328,6 +343,21 @@ export class Room {
         this.settleClaim(seat.id, 'withdrawn');
       }
     };
+  }
+
+  /**
+   * Refused, quietly — no card for the crew — while `pass` waits to ask for `seat` again after
+   * the crew turned its last ask away or left it unanswered (ASK_AGAIN_MS).
+   */
+  private checkAskAgain(seat: { id: string; name: string }, pass: CrewPass): void {
+    const key = askKey(seat.id, pass);
+    const left = (this.askAgainAt.get(key) ?? 0) - Date.now();
+    if (left <= 0) {
+      this.askAgainAt.delete(key);
+      return;
+    }
+    const wait = Math.ceil(left / 1000);
+    throw new GameError(`Für ${seat.name} geht eine neue Anfrage erst in ${wait} s.`);
   }
 
   /**
@@ -360,6 +390,9 @@ export class Room {
     clearTimeout(claim.timer);
     if (this.state.phase === 'playing' && this.state.away[seatId]?.claimUntil !== undefined) {
       this.dispatch({ type: 'takeover-settled', playerId: seatId });
+    }
+    if (TURNED_AWAY.has(how)) {
+      this.askAgainAt.set(askKey(seatId, claim.pass), Date.now() + ASK_AGAIN_MS);
     }
     this.answerClaim(seatId, claim, how);
     this.log(`${this.nameOf(seatId)}'s seat ${CLAIM_LOG[how]}${by === '' ? '' : ` by ${by}`}`);
@@ -1753,6 +1786,7 @@ export class Room {
     }
     this.freeing.clear();
     this.claims.clear();
+    this.askAgainAt.clear();
   }
 
   /** One line of the server's log about this room. */

@@ -7,7 +7,7 @@ import {
   type PlayerView,
   type ServerMessage,
 } from '@escapelab/core';
-import { Room } from '../src/room.js';
+import { ASK_AGAIN_MS, Room } from '../src/room.js';
 import { RoomManager } from '../src/roomManager.js';
 import { SeatBook } from '../src/seats.js';
 import { serveSockets } from '../src/sockets.js';
@@ -409,6 +409,7 @@ describe('a seat taken over by its name (Jackbox), let in by the crew', () => {
     anna.say({ kind: 'takeover-answer', seat, allow: false });
     expect(phone.heard.at(-1)).toEqual(refused);
     expect(anna.view).not.toHaveProperty('takeovers');
+    vi.advanceTimersByTime(ASK_AGAIN_MS);
     ask(phone, code);
     vi.advanceTimersByTime(TAKEOVER_WAIT_MS - 1);
     expect(phone.heard.at(-1)).toMatchObject({ kind: 'takeover-pending' });
@@ -493,6 +494,41 @@ describe('a seat taken over by its name (Jackbox), let in by the crew', () => {
     });
     expect(views['Anna']).not.toHaveProperty('takeovers');
     room.dispose();
+  });
+
+  it('lets a device turned away ask for that seat again a minute on only, quietly', () => {
+    const { server, manager, anna, phone, seat, code } = benAway();
+    ask(phone, code);
+    anna.say({ kind: 'takeover-answer', seat, allow: false });
+    ask(phone, code);
+    expect(phone.heard.at(-1)).toEqual({
+      kind: 'error',
+      of: 'join-room',
+      message: 'Für Ben geht eine neue Anfrage erst in 60 s.',
+    });
+    expect(anna.view).not.toHaveProperty('takeovers');
+    // It is the pass that waits: another device may ask meanwhile.
+    const tablet = server.connect();
+    tablet.say({ kind: 'join-room', code, name: 'Ben', pass: passFor('Bens Tablet') });
+    expect(tablet.heard.at(-1)).toMatchObject({ kind: 'takeover-pending' });
+    anna.say({ kind: 'takeover-answer', seat, allow: false });
+    vi.advanceTimersByTime(ASK_AGAIN_MS);
+    ask(phone, code);
+    expect(phone.heard.at(-1)).toMatchObject({ kind: 'takeover-pending' });
+    manager.get(code).dispose();
+  });
+
+  it('makes a device wait a minute after its ask went unanswered as well', () => {
+    const { manager, anna, phone, code } = benAway();
+    ask(phone, code);
+    vi.advanceTimersByTime(TAKEOVER_WAIT_MS);
+    ask(phone, code);
+    expect(phone.heard.at(-1)).toMatchObject({
+      kind: 'error',
+      message: 'Für Ben geht eine neue Anfrage erst in 60 s.',
+    });
+    expect(anna.view).not.toHaveProperty('takeovers');
+    manager.get(code).dispose();
   });
 
   it('refuses the name of a seat still on the line, and an ask nobody could answer', () => {

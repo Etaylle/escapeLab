@@ -392,10 +392,11 @@ card, or on a card of its own at the top where the run went on without Ben; the 
 decides. Let in, the device resumes the seat on its own pass, and the pass that held it is
 refused from then on („Der Platz wurde auf einem anderen Gerät übernommen."); turned away or
 left unanswered, the device is told „Die Crew hat die Übernahme nicht bestätigt.", and Ben's
-pass keeps the seat. Ben back first ends the ask („Ben ist wieder verbunden."), and with nobody
-of the crew on the line none is taken. The name of a seat still on the line is refused („Ben
-ist noch verbunden."); any other name gets the refusal of a join into a run, which says that a
-seat whose line is down can be taken over by its name.
+pass keeps the seat — that device may ask for it again only a minute later, refused quietly
+meanwhile, with no card for the crew. Ben back first ends the ask („Ben ist wieder
+verbunden."), and with nobody of the crew on the line none is taken. The name of a seat still
+on the line is refused („Ben ist noch verbunden."); any other name gets the refusal of a join
+into a run, which says that a seat whose line is down can be taken over by its name.
 
 **The line.** The page counts its line dead when an ask for the server's time stays unanswered
 for 5 s, after 20 s without a word from the server, or when a socket is not open 8 s after it

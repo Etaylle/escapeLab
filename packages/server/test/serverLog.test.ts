@@ -146,14 +146,14 @@ describe('the server’s log of seats, a line an event with its room and name', 
     const seat = idOf(anna, 'Ben');
     ben.close();
     vi.advanceTimersByTime(5000);
-    const phone = line.connect();
-    const pass = passFor('Bens Telefon');
-    phone.say({ kind: 'join-room', code, name: 'Ben', pass });
+    line.connect().say({ kind: 'join-room', code, name: 'Ben', pass: passFor('Bens Telefon') });
     vi.advanceTimersByTime(TAKEOVER_WAIT_MS);
-    phone.say({ kind: 'join-room', code, name: 'Ben', pass });
+    const tablet = line.connect();
+    const pass = passFor('Bens Tablet');
+    tablet.say({ kind: 'join-room', code, name: 'Ben', pass });
     anna.say({ kind: 'takeover-answer', seat, allow: true });
-    phone.say({ kind: 'resume', code, pass });
-    expect(phone.view.you.name).toBe('Ben');
+    tablet.say({ kind: 'resume', code, pass });
+    expect(tablet.view.you.name).toBe('Ben');
     expect(lines().slice(-5)).toEqual([
       `[escapelab] room ${code}: Ben's seat asked for by another device`,
       `[escapelab] room ${code}: Ben's seat kept from another device, unanswered for 30 s`,
