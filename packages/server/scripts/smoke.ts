@@ -2953,13 +2953,18 @@ function standsAt(seen: TestClient, client: TestClient, [x, y]: Tile): boolean {
   return stood !== undefined && Math.hypot(stood.x - (x + 0.5), stood.y - (y + 0.5)) < 0.05;
 }
 
+/** How long after the next server came up the crew is back on it, ms (`restartBySigkill`). */
+const BACK_LATER_MS = 5000;
+/** How much later than its wait a room may be back, the sockets' way included, ms. */
+const BACK_SLACK_MS = 1500;
+
 /**
  * The run goes on; then the server is killed outright (`goneBySigkill`): a new one takes the room
  * up again from the newest snapshot the crew kept — the run's beat of SNAPSHOT_LIVE_MS keeps
- * where everybody stands, a deed goes out SNAPSHOT_EVERY_MS after it — once it is HANDOVER_MS
- * old, the crew waiting meanwhile: a killed server hands no last snapshot over. Gus's walk, a beat
- * before the kill, is kept — the lever thrown long before with it; Finn's, just before the kill,
- * may be lost in part.
+ * where everybody stands, a deed goes out SNAPSHOT_EVERY_MS after it — HANDOVER_MS after the
+ * first of the crew came back, whenever the server came up: a killed server hands no last
+ * snapshot over, and the room waits for one meanwhile. Gus's walk, a beat before the kill, is
+ * kept — the lever thrown long before with it; Finn's, just before the kill, may be lost in part.
  */
 async function restartBySigkill(server: ServerProcess, crew: Trio3): Promise<void> {
   const [eva, finn, gus] = crew;
@@ -2974,17 +2979,18 @@ async function restartBySigkill(server: ServerProcess, crew: Trio3): Promise<voi
   const newest = await goneBySigkill(server, crew);
   const next = new ServerProcess('another server');
   await next.up();
-  const upAt = Date.now();
+  await sleep(BACK_LATER_MS);
+  const resumedAt = Date.now();
   const heardBefore = crew.map((client) => client.raw.length);
   const back = await allBack(crew, HANDOVER_MS + 5000);
-  const waited = Date.now() - upAt;
+  const waited = Date.now() - resumedAt;
   assert(back.every((client, i) => toldRestoring(client, heardBefore[i] ?? 0)),
     'the crew is told its room is on its way back while the new server waits');
   assert(next.logged(`is not the last of instance ${killed}, waiting up to `),
     'the new server\'s log says it waits for a newer snapshot than the killed one\'s');
-  assert(waited > HANDOVER_MS - 5000 && waited < HANDOVER_MS + 1000,
-    `the room back ${(waited / 1000).toFixed(1)} s after the new server came up`);
-  console.log(`  the room back ${(waited / 1000).toFixed(1)} s after the new server came up`);
+  const backAfter = `the room back ${(waited / 1000).toFixed(1)} s after the crew came back`;
+  assert(waited > HANDOVER_MS - 100 && waited < HANDOVER_MS + BACK_SLACK_MS, backAfter);
+  console.log(`  ${backAfter}, ${(BACK_LATER_MS / 1000).toFixed(0)} s after the server came up`);
   const gusBack = back[2];
   const on = await gusBack.expectView('the run on again after the kill, the lever still thrown',
     (v) => v.pausedFor === null && v.currentPuzzleIndex === NOTLICHT + 1);

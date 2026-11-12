@@ -15,17 +15,21 @@ const KEY = roomKey({ ROOM_SECRET: 'cafe'.repeat(16) }).key;
 const missions = new MissionCatalog(fileURLToPath(new URL('../../../missions', import.meta.url)));
 
 /**
- * A server as index.ts wires it, on fake sockets, sealing with KEY: an instance of its own, up
- * `upFor` ms already — by default long enough for no snapshot to wait for a newer one — every
- * run that ends reported to `onRunFinished`.
+ * A server as index.ts wires it, on fake sockets, sealing with KEY: an instance of its own,
+ * every run that ends reported to `onRunFinished`.
  */
-function server(upFor = HANDOVER_MS, onRunFinished: RunListener = () => undefined) {
+function server(onRunFinished: RunListener = () => undefined) {
   const line = new FakeServer();
-  const instance = { id: randomUUID(), bootedAt: Date.now() - upFor };
-  const manager = new RoomManager(onRunFinished, false, null, KEY, instance);
+  const manager = new RoomManager(onRunFinished, false, null, KEY, randomUUID());
   serveSockets(line, { catalog: missions, manager });
   return { line, manager };
 }
+
+/** What a socket that waits for its room has heard: that the room `code` is on its way back. */
+const restoring = (code: string) => [{ kind: 'restoring', code }];
+
+/** Three hours, ms: how long an instance has been up where that does not matter. */
+const HOURS = 3 * 60 * 60 * 1000;
 
 /** The newest snapshot `socket` was handed, as a `snapshot` or a `restart`. */
 function blobOf(socket: FakeSocket): { blob: string; seq: number; at: number } {
@@ -90,11 +94,15 @@ describe('a room taken up again from the snapshot a resume carries', () => {
   it('stands still for the crew until it is back, its clock moved on by the downtime', () => {
     const { code, anna, ben } = crewOn(server());
     const before = anna.view;
+    // The old server is gone without a word, its crew holding the snapshots they had: the new
+    // one knows no room, and waits for the old one's last snapshot of it, which never comes.
     const kept = blobOf(anna);
-    // The old server is gone without a word; the new one knows no room.
+    const bens = blobOf(ben);
     vi.advanceTimersByTime(20_000);
     const fresh = server();
     const annaBack = resume(fresh.line, 'Anna', code, kept.blob);
+    expect(annaBack.heard).toEqual(restoring(code));
+    vi.advanceTimersByTime(HANDOVER_MS);
     expect(joinedOf(annaBack).code).toBe(code);
     expect(annaBack.view).toMatchObject({
       phase: 'playing',
@@ -104,10 +112,11 @@ describe('a room taken up again from the snapshot a resume carries', () => {
     });
     const age = ((Date.now() - kept.at) / 1000).toFixed(1);
     expect(logged(log)).toContain(
-      `[escapelab] restored room ${code} from snapshot seq ${kept.seq} (2 seats, ${age} s old)`,
+      `[escapelab] restored room ${code} from snapshot seq ${kept.seq} ` +
+        `(2 seats, ${age} s old, after 90.0 s of waiting)`,
     );
     vi.advanceTimersByTime(4000);
-    const benBack = resume(fresh.line, 'Ben', code, blobOf(ben).blob);
+    const benBack = resume(fresh.line, 'Ben', code, bens.blob);
     for (const socket of [annaBack, benBack]) {
       expect(socket.view.pausedFor).toBeNull();
       expect(socket.view.deadlineAt).toBe((before.deadlineAt ?? 0) + (Date.now() - kept.at));
@@ -121,6 +130,7 @@ describe('a room taken up again from the snapshot a resume carries', () => {
     const unknown = `Raum "${code}" existiert nicht (mehr).`;
     expect(refusalOf(resume(fresh.line, 'Anna', code))).toBe(unknown);
     const stranger = resume(fresh.line, 'Dora', code, blobOf(anna).blob);
+    vi.advanceTimersByTime(HANDOVER_MS);
     expect(refusalOf(stranger)).toBe('Wiederverbinden fehlgeschlagen — Raum neu beitreten.');
     // The room is back all the same, for its crew.
     expect(joinedOf(resume(fresh.line, 'Anna', code, blobOf(anna).blob)).code).toBe(code);
@@ -198,6 +208,8 @@ describe('a snapshot refused, and the audience after a restore', () => {
     resume(fresh.line, 'Anna', code, blobOf(anna).blob);
     const later = fresh.line.connect();
     later.say({ kind: 'spectate', code });
+    expect(later.heard).toEqual(restoring(code));
+    vi.advanceTimersByTime(HANDOVER_MS);
     expect(later.heard.some((m) => m.kind === 'spectator-view')).toBe(true);
   });
 });
@@ -244,8 +256,9 @@ describe('the race of the crew’s snapshots after a restore', () => {
   it('takes the newer up within 10 s of the restore, whoever is back staying seated', () => {
     const { code, older, newer, takenFrom } = apart();
     const fresh = server();
+    // Ben's older snapshot alone in the wait: the room is taken up from it once the wait is over.
     const ben = resume(fresh.line, 'Ben', code, older.blob);
-    vi.advanceTimersByTime(RESTORE_WINDOW_MS - 1);
+    vi.advanceTimersByTime(HANDOVER_MS + RESTORE_WINDOW_MS - 1);
     const anna = resume(fresh.line, 'Anna', code, newer.blob);
     for (const socket of [ben, anna]) {
       expect(socket.view.pausedFor).toBeNull();
@@ -267,7 +280,7 @@ describe('the race of the crew’s snapshots after a restore', () => {
     const { code, older, newer, takenFrom } = apart();
     const fresh = server();
     resume(fresh.line, 'Ben', code, older.blob);
-    vi.advanceTimersByTime(RESTORE_WINDOW_MS);
+    vi.advanceTimersByTime(HANDOVER_MS + RESTORE_WINDOW_MS);
     expect(takenFrom(resume(fresh.line, 'Anna', code, newer.blob))).toBe('older');
     const late =
       `[escapelab] room ${code}: snapshot seq ${newer.seq} came too late, the room goes on ` +
@@ -276,6 +289,7 @@ describe('the race of the crew’s snapshots after a restore', () => {
     // The other way round: the newer first, the older ignored — and no race lost to log.
     const other = server();
     resume(other.line, 'Anna', code, newer.blob);
+    vi.advanceTimersByTime(HANDOVER_MS);
     expect(takenFrom(resume(other.line, 'Ben', code, older.blob))).toBe('newer');
     expect(said().filter((line) => line.includes('came too late'))).toEqual([late]);
   });
@@ -295,9 +309,10 @@ describe('the race of the crew’s snapshots after a restore', () => {
     const colourOf = (socket: FakeSocket): string | undefined =>
       socket.view.players.find((p) => p.name === 'Ben')?.color;
     const was = colourOf(anna);
-    // Ben, back first, picks another colour in the lobby: the crew's deed.
+    // Ben, back first, picks another colour in the lobby once it is back: the crew's deed.
     const fresh = server();
     const benBack = resume(fresh.line, 'Ben', code, older.blob);
+    vi.advanceTimersByTime(HANDOVER_MS);
     benBack.say({ kind: 'select-color', color: '#a78bfa' });
     const annaBack = resume(fresh.line, 'Anna', code, newer.blob);
     const replaced = (): string[] =>
@@ -311,15 +326,13 @@ describe('the race of the crew’s snapshots after a restore', () => {
     // Without the deed, the newer is taken up.
     const control = server();
     resume(control.line, 'Ben', code, older.blob);
+    vi.advanceTimersByTime(HANDOVER_MS);
     expect(colourOf(resume(control.line, 'Anna', code, newer.blob))).toBe(was);
     expect(replaced()).toEqual([
       `[escapelab] room ${code}: taken up again from snapshot seq ${newer.seq}`,
     ]);
   });
 });
-
-/** What a socket that waits for its room has heard: that the room `code` is on its way back. */
-const restoring = (code: string) => [{ kind: 'restoring', code }];
 
 describe('the handover: the new instance waits for the old one’s last snapshot', () => {
   beforeEach(() => {
@@ -332,11 +345,13 @@ describe('the handover: the new instance waits for the old one’s last snapshot
     vi.restoreAllMocks();
   });
 
-  it('keeps a resume that drops onto the new instance waiting for the old one’s last word', () => {
+  it('keeps a resume waiting for the old one’s last word, a final 61 s on taken up', () => {
+    // However long the new instance has been up: the wait runs from the room's own.
+    const fresh = server();
+    vi.advanceTimersByTime(HOURS);
     const { old, code, anna, older, takenFrom } = apart();
-    // Render has switched the traffic: Ben's page, its line dropped, comes back to the new
-    // instance with his older snapshot, while Anna plays on on the old one.
-    const fresh = server(0);
+    // Ben's page, its line dropped after the switch, comes back to the new instance with his
+    // older snapshot, while Anna plays on on the old one.
     const ben = resume(fresh.line, 'Ben', code, older.blob);
     expect(ben.heard).toEqual(restoring(code));
     expect(fresh.manager.counts().total).toBe(0);
@@ -345,7 +360,7 @@ describe('the handover: the new instance waits for the old one’s last snapshot
         `${old.manager.instanceId}, waiting up to 90.0 s for a newer one`,
     );
     // The old instance's minute is over: SIGTERM, and Anna is handed its last snapshot.
-    vi.advanceTimersByTime(60_000);
+    vi.advanceTimersByTime(61_000);
     old.manager.shutDown(Date.now());
     const last = blobOf(anna);
     expect(ben.heard).toEqual(restoring(code));
@@ -358,14 +373,15 @@ describe('the handover: the new instance waits for the old one’s last snapshot
     }
     expect(said()).toContain(
       `[escapelab] restored room ${code} from snapshot seq ${last.seq} ` +
-        '(2 seats, 0.0 s old, after 60.0 s of waiting)',
+        '(2 seats, 0.0 s old, after 61.0 s of waiting)',
     );
   });
 
-  it('takes the newest handed in up once the new instance is 90 s old, after a crash', () => {
+  it('takes the newest handed in up 90 s after the room began to wait, when none is final', () => {
+    // An instance up for hours; the old one gone without a word: no last snapshot ever comes.
+    const fresh = server();
+    vi.advanceTimersByTime(HOURS);
     const { code, older, newer, takenFrom } = apart();
-    // The old instance is gone without a word: no last snapshot of it will ever come.
-    const fresh = server(0);
     const ben = resume(fresh.line, 'Ben', code, older.blob);
     vi.advanceTimersByTime(30_000);
     const anna = resume(fresh.line, 'Anna', code, newer.blob);
@@ -388,7 +404,7 @@ describe('the handover: the new instance waits for the old one’s last snapshot
 
   it('lets a newer snapshot replace the room within 10 s of taking it up after the wait', () => {
     const { code, older, newer, takenFrom } = apart();
-    const fresh = server(0);
+    const fresh = server();
     const ben = resume(fresh.line, 'Ben', code, older.blob);
     vi.advanceTimersByTime(HANDOVER_MS + RESTORE_WINDOW_MS - 1);
     const anna = resume(fresh.line, 'Anna', code, newer.blob);
@@ -412,11 +428,12 @@ describe('the handover: who waits for the room, and who does not', () => {
     vi.restoreAllMocks();
   });
 
-  it('takes a last snapshot of the old instance up at once', () => {
+  it('takes a last snapshot of the old instance up at once, however long it has been up', () => {
+    const fresh = server();
+    vi.advanceTimersByTime(HOURS);
     const old = server();
     const { code, anna } = crewOn(old);
     old.manager.shutDown(Date.now());
-    const fresh = server(0);
     const back = resume(fresh.line, 'Anna', code, blobOf(anna).blob);
     expect(back.heard.some((m) => m.kind === 'restoring')).toBe(false);
     expect(joinedOf(back).code).toBe(code);
@@ -424,7 +441,7 @@ describe('the handover: who waits for the room, and who does not', () => {
 
   it('keeps the audience, and a resume with no snapshot, waiting with the crew', () => {
     const { old, code, anna, older } = apart();
-    const fresh = server(0);
+    const fresh = server();
     resume(fresh.line, 'Ben', code, older.blob);
     const audience = fresh.line.connect();
     audience.say({ kind: 'spectate', code });
@@ -441,7 +458,7 @@ describe('the handover: who waits for the room, and who does not', () => {
 
   it('seats a socket that waited once, and none that closed while it waited', () => {
     const { old, code, anna, older } = apart();
-    const fresh = server(0);
+    const fresh = server();
     // Ben's page asks twice on one socket; a tab of Anna's waits too, then is closed.
     const ben = resume(fresh.line, 'Ben', code, older.blob);
     ben.say({ kind: 'resume', code, pass: passFor('Ben'), blob: older.blob });
@@ -458,7 +475,7 @@ describe('the handover: who waits for the room, and who does not', () => {
     vi.spyOn(Math, 'random').mockReturnValue(0);
     const { code, anna } = crewOn(server());
     expect(code).toBe('AAAA');
-    const fresh = server(0);
+    const fresh = server();
     resume(fresh.line, 'Anna', code, blobOf(anna).blob);
     // Cem opens a room: the first code drawn is the one waited for, so his is the next.
     let draws = 0;
@@ -491,7 +508,7 @@ describe('the handover gone wrong', () => {
 
   it('lets nobody wait on for a room it could not take up after the wait', () => {
     const { code, older, newer, takenFrom } = apart();
-    const fresh = server(0);
+    const fresh = server();
     const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const ben = resume(fresh.line, 'Ben', code, older.blob);
     const anna = resume(fresh.line, 'Anna', code, newer.blob);
@@ -502,7 +519,11 @@ describe('the handover gone wrong', () => {
     expect(error.mock.calls).toEqual([
       [`[escapelab] room ${code}: not taken up again, Error: a broken snapshot`],
     ]);
-    // Each resume goes again, the instance old enough now: the room is back from what it kept.
+    // Each resume goes again and waits anew: 90 s on, the room is back from what they kept.
+    for (const socket of [ben, anna]) {
+      expect(socket.heard).toEqual([...restoring(code), ...restoring(code)]);
+    }
+    vi.advanceTimersByTime(HANDOVER_MS);
     for (const socket of [ben, anna]) {
       expect(joinedOf(socket).code).toBe(code);
       expect(takenFrom(socket)).toBe('newer');
@@ -566,6 +587,7 @@ describe('a room closed, and the ghosts its snapshots would bring back', () => {
     const { code, ben } = crewOn(server());
     const fresh = server();
     const anna = resume(fresh.line, 'Anna', code, blobOf(ben).blob);
+    vi.advanceTimersByTime(HANDOVER_MS);
     const where = (name: string) => {
       const socket = fresh.line.connect();
       socket.say({ kind: 'whereami', pass: passFor(name) });
@@ -591,9 +613,9 @@ describe('a room closed, and the ghosts its snapshots would bring back', () => {
     const { code, anna, ben } = crewOn(server());
     // Ben's stale page brings the run back alone, and calls it off once he may.
     const reported = vi.fn();
-    const ghost = server(HANDOVER_MS, reported);
+    const ghost = server(reported);
     const lone = resume(ghost.line, 'Ben', code, blobOf(ben).blob);
-    vi.advanceTimersByTime(FIRST_WAIT_MS);
+    vi.advanceTimersByTime(HANDOVER_MS + FIRST_WAIT_MS);
     lone.say({ kind: 'call-off' });
     expect(lone.view.phase).toBe('lost');
     expect(reported).not.toHaveBeenCalled();
@@ -602,9 +624,10 @@ describe('a room closed, and the ghosts its snapshots would bring back', () => {
         'after the restore',
     );
     // Both back, then Anna gives up: the run is the crew's, and reported.
-    const crew = server(HANDOVER_MS, reported);
+    const crew = server(reported);
     resume(crew.line, 'Anna', code, blobOf(anna).blob);
     resume(crew.line, 'Ben', code, blobOf(ben).blob);
+    vi.advanceTimersByTime(HANDOVER_MS);
     const annaAgain = crew.line.connect();
     annaAgain.say({ kind: 'abandon', code, pass: passFor('Anna') });
     expect(reported).toHaveBeenCalledTimes(1);

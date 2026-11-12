@@ -47,20 +47,16 @@ interface Closed {
 /** The key a closed room goes by: its code and when it was opened, as its snapshots name it. */
 const closedKey = (code: string, createdAt: number): string => `${code}@${createdAt}`;
 
-/** This server instance: its id, minted at boot, and when it booted, epoch ms (index.ts). */
-export interface Instance {
-  id: string;
-  bootedAt: number;
-}
-
 /**
- * How long after its boot an instance waits for the newest snapshot of a room it does not know
- * before it takes the room up again from an older one, ms (`roomFor`). Render switches the
- * traffic to a new instance and keeps the old one up 60 s longer, its sockets with it, before it
- * sends it SIGTERM: whoever's line drops in that minute comes back to the new instance with an
+ * How long a room this instance does not know waits for its newest snapshot, from the first
+ * resume that hands in one that may be behind (`mayBeBehind`), before it is taken up again from
+ * the newest it has, ms (`roomFor`). Render switches the traffic to a new instance once it is
+ * healthy and keeps the old one up 60 s longer, its sockets with it, before it sends it SIGTERM:
+ * whoever's line drops in that minute comes back to the new instance after the switch, with an
  * older snapshot than the run the crew still plays on the old one, whose last snapshots
- * (`final`) come with the SIGTERM. After a crash none ever comes: the room is back this long
- * after the boot.
+ * (`final`) come with the SIGTERM some 61 s after the switch at the latest — within the wait,
+ * however long the new instance has been up. After a crash none ever comes: the room is back
+ * this long after the first of its crew came back.
  */
 export const HANDOVER_MS = 90_000;
 
@@ -69,7 +65,7 @@ interface Parked {
   newest: SealedSnapshot;
   /** epoch ms the room began to wait */
   since: number;
-  /** takes the room up again from the newest once this instance is HANDOVER_MS old */
+  /** takes the room up again from the newest HANDOVER_MS after it began to wait */
   timer: NodeJS.Timeout;
   /** what each socket waiting for the room does once it is back (`awaitRoom`) */
   waiting: Set<() => void>;
@@ -119,20 +115,16 @@ export class RoomManager {
    * `allowSeed` (`seedsAllowed`) lets a new room be pinned to a seed;
    * `dailySalt` (dailySalt.ts) makes the Tagesschicht's seeds in every room;
    * `sealKey` (seal.ts `roomKey`) seals the snapshots every room sends its crew — none without;
-   * `instance` is the server instance the rooms live on, as every snapshot sealed names it.
+   * `instanceId` is the server instance the rooms live on, one id per boot (index.ts), as
+   * `joined`, every `tick` and every snapshot sealed name it.
    */
   constructor(
     private readonly onRunFinished: RunListener = () => undefined,
     private readonly allowSeed = false,
     private readonly dailySalt: string | null = null,
     private readonly sealKey: Buffer | null = null,
-    private readonly instance: Instance = { id: randomUUID(), bootedAt: Date.now() },
+    readonly instanceId: string = randomUUID(),
   ) {}
-
-  /** The id of the server instance the rooms live on, as `joined` and every `tick` name it. */
-  get instanceId(): string {
-    return this.instance.id;
-  }
 
   /**
    * What seals the snapshots of the room `code` for its crew, each naming this instance; null
@@ -140,7 +132,7 @@ export class RoomManager {
    */
   private sealerFor(code: string): Sealer | null {
     const key = this.sealKey;
-    const instance = this.instance.id;
+    const instance = this.instanceId;
     return key === null
       ? null
       : (snapshot, final) => seal({ ...snapshot, instance, final }, code, key);
@@ -234,14 +226,14 @@ export class RoomManager {
    * The room `snapshot` keeps, of a code this instance has no room of: taken up again at once
    * (`restore`) — unless it may be older than the run the instance that sealed it still has
    * (`mayBeBehind`): then the room waits (`park`) until that instance's last snapshot of it
-   * comes or this one is HANDOVER_MS old, and is taken up from the newest snapshot handed in
-   * meanwhile (`handOver`). Null while it waits; a snapshot of another room of the code than the
-   * one it waits for is refused.
+   * comes, HANDOVER_MS from the moment it began to at the most, and is taken up from the newest
+   * snapshot handed in meanwhile (`handOver`). Null while it waits; a snapshot of another room of
+   * the code than the one it waits for is refused.
    */
   private takeUp(snapshot: SealedSnapshot, now: number): Room | null {
     const { code } = snapshot;
     const parked = this.parked.get(code);
-    if (parked === undefined && this.mayBeBehind(snapshot, now)) {
+    if (parked === undefined && this.mayBeBehind(snapshot)) {
       this.park(snapshot, now);
       return null;
     }
@@ -255,35 +247,34 @@ export class RoomManager {
     if (snapshot.seq > parked.newest.seq) {
       parked.newest = snapshot;
     }
-    return this.mayBeBehind(snapshot, now) ? null : this.handOver(parked, now);
+    return this.mayBeBehind(snapshot) ? null : this.handOver(parked, now);
   }
 
   /**
-   * Whether `snapshot` may be older than the run the instance that sealed it still has at `now`:
-   * not that instance's last, and this one younger than HANDOVER_MS. It is another instance's:
-   * of a room this one had and closed, it would be refused (`closedFor`).
+   * Whether `snapshot` may be older than the run the instance that sealed it still has: not that
+   * instance's last (`final`), sealed as it went down. It is another instance's: of a room this
+   * one had and closed, it would be refused (`closedFor`).
    */
-  private mayBeBehind(snapshot: SealedSnapshot, now: number): boolean {
-    return !snapshot.final && now < this.instance.bootedAt + HANDOVER_MS;
+  private mayBeBehind(snapshot: SealedSnapshot): boolean {
+    return !snapshot.final;
   }
 
   /**
-   * The room `snapshot` keeps waits, from `now`, for a newer snapshot of it (`takeUp`): once this
-   * instance is HANDOVER_MS old it is taken up again from the newest handed in, at the latest.
+   * The room `snapshot` keeps waits, from `now`, for a newer snapshot of it (`takeUp`):
+   * HANDOVER_MS later it is taken up again from the newest handed in, at the latest.
    */
   private park(snapshot: SealedSnapshot, now: number): void {
-    const until = this.instance.bootedAt + HANDOVER_MS;
     const parked: Parked = {
       newest: snapshot,
       since: now,
-      timer: setTimeout(() => this.handOverLate(parked), until - now),
+      timer: setTimeout(() => this.handOverLate(parked), HANDOVER_MS),
       waiting: new Set(),
     };
     parked.timer.unref();
     this.parked.set(snapshot.code, parked);
     console.log(
       `[escapelab] room ${snapshot.code}: snapshot seq ${snapshot.seq} is not the last of ` +
-        `instance ${snapshot.instance}, waiting up to ${((until - now) / 1000).toFixed(1)} s ` +
+        `instance ${snapshot.instance}, waiting up to ${(HANDOVER_MS / 1000).toFixed(1)} s ` +
         'for a newer one',
     );
   }
@@ -303,7 +294,7 @@ export class RoomManager {
     }
   }
 
-  /** The room `parked` holds, taken up again as this instance is HANDOVER_MS old (`park`). */
+  /** The room `parked` holds, taken up again HANDOVER_MS after it began to wait (`park`). */
   private handOverLate(parked: Parked): void {
     try {
       this.handOver(parked, Date.now());

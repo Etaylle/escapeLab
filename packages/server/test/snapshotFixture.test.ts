@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SealedSnapshot } from '@escapelab/core';
 import { MissionCatalog } from '../src/missions.js';
-import { RoomManager } from '../src/roomManager.js';
+import { HANDOVER_MS, RoomManager } from '../src/roomManager.js';
 import { open, roomKey, seal } from '../src/seal.js';
 import { serveSockets } from '../src/sockets.js';
 import { FakeServer, joinedOf, type FakeSocket } from './line.js';
@@ -35,7 +35,7 @@ describe('a snapshot of the build before', () => {
 
   it('takes its room up again: the run goes on once the crew is back', () => {
     const line = new FakeServer();
-    const manager = new RoomManager(undefined, false, null, KEY, { id: 'later', bootedAt: 0 });
+    const manager = new RoomManager(undefined, false, null, KEY, 'later');
     serveSockets(line, { catalog: missions, manager });
     const blob = seal(BUILD_BEFORE, BUILD_BEFORE.code, KEY);
     const crew = ['Anna', 'Ben'].map((name): FakeSocket => {
@@ -43,6 +43,8 @@ describe('a snapshot of the build before', () => {
       socket.say({ kind: 'resume', code: BUILD_BEFORE.code, pass: passFor(name), blob });
       return socket;
     });
+    // Not its instance's last: the room waits for a newer one first, which never comes.
+    vi.advanceTimersByTime(HANDOVER_MS);
     for (const socket of crew) {
       expect(joinedOf(socket).code).toBe(BUILD_BEFORE.code);
       expect(socket.view).toMatchObject({ phase: 'playing', pausedFor: null });

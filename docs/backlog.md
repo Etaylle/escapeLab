@@ -299,11 +299,12 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   (höchstens 10 s der Wege verloren). Harness `restart-maintenance.png`, `restart-recovered.png`, wo
   er den Server selbst startet (`SHOTS_SERVER`, CI jetzt auch).
 - Die Minute dazwischen (Render hält die alte Instanz 60 s nach dem Umschalten): Jeder Schnappschuss
-  nennt seine Instanz, der beim SIGTERM ist `final`. Ein fremder, nicht letzter wartet auf einer
-  Instanz unter 90 s („EINSATZ WIRD WIEDERHERGESTELLT"), bis der letzte kommt oder die 90 s um sind;
-  ein zu später steht mit beiden Nummern im Log. Smoke: zwei Server nebeneinander, Finn wartet auf
-  dem neuen, bis Eva und Gus nach dem SIGTERM des alten kommen; nach SIGKILL ist der Raum 90 s nach
-  dem Start des nächsten zurück.
+  nennt seine Instanz, der beim SIGTERM ist `final`. Mit einem fremden, nicht letzten wartet der
+  Raum bis zu 90 s ab dem ersten, der so wiederkommt, wie lange die Instanz auch läuft („EINSATZ
+  WIRD WIEDERHERGESTELLT"), bis der letzte kommt; ein letzter wartet nie, ein zu später steht mit
+  beiden Nummern im Log. Smoke: zwei Server nebeneinander, Finn wartet auf dem neuen, bis Eva und
+  Gus nach dem SIGTERM des alten kommen; nach SIGKILL ist der Raum 90 s nach dem ersten
+  Wiederkommen zurück.
 - Schnappschüsse überdauern Deploys: Unbekannte Schlüssel gehen durch, Modulzustände werden nur nach
   ihrem Typ geprüft, und neue Felder im Spielzustand brauchen einen Vorgabewert — der Test zu
   `test/fixtures/blackout-snapshot.json` (Schnappschuss des Builds davor) wacht darüber.

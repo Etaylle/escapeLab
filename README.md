@@ -345,10 +345,10 @@ Betrieb:
 - **Der Free-Plan schläft und startet neu.** Nach 15 Minuten ohne HTTP-Anfrage oder
   WebSocket-Nachricht fährt die Instanz herunter, und Render darf Free-Instanzen jederzeit neu
   starten. Ein Neustart geht wie ein Deploy aus; endet die Instanz ohne SIGTERM, hart, verliert
-  die Partie höchstens die letzten 2 s einer Tat und 10 s der Wege, und der Raum ist erst zurück,
-  wenn die neue Instanz 90 s läuft — so lange wartet sie auf einen letzten Schnappschuss, der nach
-  einem Absturz nie kommt (siehe unten). Ein Schnappschuss gilt 24 Stunden und nie für einen
-  beendeten Einsatz.
+  die Partie höchstens die letzten 2 s einer Tat und 10 s der Wege, und der Raum ist erst 90 s
+  nach dem ersten aus der Crew zurück, der wiederkommt — so lange wartet er auf einen letzten
+  Schnappschuss, der nach einem Absturz nie kommt (siehe unten). Ein Schnappschuss gilt 24 Stunden
+  und nie für einen beendeten Einsatz.
 - **Vor dem Ersetzen schickt Render SIGTERM.** Bei einem Deploy schaltet Render die neuen
   Verbindungen auf die neue Instanz um und schickt der alten 60 s später SIGTERM; dann nimmt der
   Server keine Verbindung mehr an, friert jede Partie ein (Wartungspause), schickt jedem Platz
@@ -371,13 +371,16 @@ Betrieb:
   Instanz, die ihn versiegelt hat, und der beim SIGTERM ist ihr letzter (`final`). Aus einem
   Schnappschuss einer anderen Instanz, der nicht ihr letzter ist, stellt die neue den Raum
   deshalb erst her, wenn der letzte kommt — mit den anderen, nach dem SIGTERM der alten — oder
-  wenn sie selbst 90 s läuft, dann aus dem neuesten, den sie bis dahin bekommen hat
-  (`… is not the last of instance …, waiting up to …` im Log). So lange zeigt die Karte des
-  Spielers „EINSATZ WIRD WIEDERHERGESTELLT", und das Publikum wartet mit; ein noch neuerer Stand
-  ersetzt den Raum wie sonst in den ersten 10 s danach. Was später kommt, bleibt liegen, und das Log nennt
-  beide Stände (`snapshot seq … came too late, the room goes on from seq …`). Die 90 s laufen ab
-  dem Start der neuen Instanz: Braucht Render vom Start bis zum Umschalten mehr als 30 s, kommt
-  der letzte Schnappschuss zu spät. Deshalb bleibt es dabei: vor einem Push `/health` ansehen.
+  90 s nach dem ersten solchen Schnappschuss, dann aus dem neuesten, den sie bis dahin bekommen
+  hat (`… is not the last of instance …, waiting up to …` im Log). Die 90 s zählen ab da, wie
+  lange die neue Instanz auch schon läuft: Render schaltet erst um, wenn sie gesund ist, wer danach
+  abbricht, landet auf ihr, und der letzte Schnappschuss der alten kommt spätestens rund 61 s nach
+  dem Umschalten. So lange zeigt die Karte des Spielers „EINSATZ WIRD WIEDERHERGESTELLT", und das
+  Publikum wartet mit; ein noch neuerer Stand ersetzt den Raum wie sonst in den ersten 10 s
+  danach. Was später kommt, bleibt liegen, und das Log nennt beide Stände
+  (`snapshot seq … came too late, the room goes on from seq …`). Ein letzter Schnappschuss — beim
+  SIGTERM, auch beim Einschlafen des Free-Plans — wartet nie. Vor einem Push lohnt `/health`
+  trotzdem: Jeder Deploy hält laufende Partien für Sekunden an.
 
 | Wo | Name | Wirkung |
 | --- | --- | --- |

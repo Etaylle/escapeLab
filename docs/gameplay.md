@@ -431,16 +431,18 @@ was. For 10 s after the restore, until the crew does anything, a newer snapshot 
 the one the room was taken up from; an older one changes nothing, and a newer one that comes later
 only goes into the log, with both seqs. Every snapshot names the server instance that sealed it, one
 id per boot, and the one at SIGTERM is its last (`final`): a new instance takes a room up from a
-snapshot of another one that is not its last only once that last one comes, or once it has been up
-90 s, from the newest handed in meanwhile — whoever dropped in the minute a deploy keeps the old
-instance up comes back with an older snapshot than the crew still on it. Meanwhile the player's card
-says „EINSATZ WIRD WIEDERHERGESTELLT · Der letzte Stand trifft gleich ein", with only the reload to
-press, and the audience waits as well. A server killed outright, with no SIGTERM, loses at most the
-last 2 s of a deed and 10 s of a walk, and its rooms are back 90 s after the next one booted. A
-snapshot over a day old, of a run that is over, of another room or under another key is refused in
-one line, and so is one whose code another room holds meanwhile. A room the server closed for
-standing empty 10 minutes leaves a tombstone for a day that refuses its snapshots — „Dieser Einsatz
-ist beendet." where its run was over by then, else „Der Raum stand 10 Minuten leer und wurde
+snapshot of another one that is not its last only once that last one comes, or 90 s after the first
+such snapshot came, however long the instance has been up, from the newest handed in meanwhile —
+whoever dropped in the minute a deploy keeps the old instance up comes back after the switch with an
+older snapshot than the crew still on it, whose last ones come some 61 s after the switch at the
+latest; a last snapshot never waits. Meanwhile the player's card says „EINSATZ WIRD
+WIEDERHERGESTELLT · Der letzte Stand trifft gleich ein", with only the reload to press, and the
+audience waits as well. A server killed outright, with no SIGTERM, loses at most the last 2 s of a
+deed and 10 s of a walk, and its rooms are back 90 s after the first of their crew came back to the
+next one. A snapshot over a day old, of a run that is over, of another room or under another key is
+refused in one line, and so is one whose code another room holds meanwhile. A room the server closed
+for standing empty 10 minutes leaves a tombstone for a day that refuses its snapshots — „Dieser
+Einsatz ist beendet." where its run was over by then, else „Der Raum stand 10 Minuten leer und wurde
 geschlossen." — and the page drops the snapshot and its card: a seat that left mid-run brings back
 no ghost of the run. A room taken up again binds only whoever has come back to it: the join screen
 of anybody else shows its own card, and nothing keeps them from another room; a run given up by the

@@ -59,14 +59,14 @@ const daily = dailySalt(process.env);
 const sealing = roomKey(process.env);
 // This boot of the server, an instance of its own: every snapshot it seals names it, so that a
 // new instance tells a snapshot of the one before it from its own.
-const instance = { id: randomUUID(), bootedAt: Date.now() };
+const instanceId = randomUUID();
 // A room pinned to a seed repeats its runs: for the walkthrough and bug reports, not for play.
 const manager = new RoomManager(
   logRun(RUNS_LOG, stats),
   seedsAllowed(process.env),
   daily.salt,
   sealing.key,
-  instance,
+  instanceId,
 );
 setInterval(() => manager.sweep(), 60_000).unref();
 // What /health says beside the missions: no code, no name.
@@ -109,7 +109,7 @@ const wss = new WebSocketServer({ server: httpServer, path: '/ws' });
 const served = serveSockets(wss, { catalog, manager });
 // A socket gone silent is found out and closed, so that the room pauses for its player; the
 // log names the room and the seat of each socket it cuts.
-startHeartbeat(wss, instance.id, HEARTBEAT_MS, served.cut);
+startHeartbeat(wss, instanceId, HEARTBEAT_MS, served.cut);
 
 // Render's SIGTERM before it replaces the instance, or a Ctrl-C: the server goes down for a
 // restart (shutdown.ts), every run standing still and every seat handed its room's snapshot.
@@ -138,7 +138,7 @@ httpServer.listen(PORT, () => {
   console.log(`[escapelab] GET /stats ranks the ${stats.runs} runs logged so far`);
   console.log(`[escapelab] Tagesschicht: ${DAILY_SALT_FROM[daily.from]}`);
   console.log(`[escapelab] ${roomKeyLogLine(sealing)}`);
-  console.log(`[escapelab] this boot is instance ${instance.id}: its snapshots name it`);
+  console.log(`[escapelab] this boot is instance ${instanceId}: its snapshots name it`);
   if (voiceDesk !== null) {
     console.log(`[escapelab] ALLOW_RECORD=1: POST /voice/:id saves recordings to ${VOICE_DIR}`);
   }
