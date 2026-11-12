@@ -1,3 +1,4 @@
+import { RESTART_CLOSE } from '@escapelab/core';
 import type { RoomManager } from './roomManager.js';
 
 /**
@@ -6,9 +7,6 @@ import type { RoomManager } from './roomManager.js';
  * same. No room's run is lost to it: every run stands still and every seat on the line is handed
  * the room's last snapshot, sealed, which its page hands the next server back (seal.ts).
  */
-
-/** The code a socket is closed with as the server goes down for a restart: Service Restart. */
-export const RESTART_CLOSE = 1012;
 
 /** How long the server waits for its sockets to close before it exits all the same, ms. */
 export const CLOSING_MS = 3000;

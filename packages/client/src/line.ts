@@ -1,4 +1,4 @@
-import type { ClientMessage, ServerMessage } from '@escapelab/core';
+import { RESTART_CLOSE, type ClientMessage, type ServerMessage } from '@escapelab/core';
 
 /**
  * The page's line to the server: one socket at a time, kept open (`keepConnected`). A line
@@ -28,8 +28,6 @@ export const RETRY_FIRST_MS = 1000;
 export const RETRY_MAX_MS = 10_000;
 /** How many messages wait for a socket to open; any more are dropped. */
 export const OUTBOX_MAX = 32;
-/** The code a socket closes with as the server goes down for a restart: Service Restart. */
-export const RESTART_CLOSE = 1012;
 /**
  * How long after the server's restart a refused comeback to a room's audience is asked again,
  * ms: the room is back once a member of its crew resumes it from a snapshot.

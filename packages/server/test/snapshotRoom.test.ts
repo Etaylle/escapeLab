@@ -55,6 +55,8 @@ describe('a room’s snapshot', () => {
     const kept = room.snapshot(at);
     const { state, keeping } = kept;
     expect(keeping.refusedSteps).toBe(1);
+    // When the patrols last moved is no part of it: their timer starts that anew as they wake.
+    expect(keeping).not.toHaveProperty('lastDroneTick');
     for (const byMember of [keeping.lastPingAt, keeping.lastChatAt, keeping.signalAllowance]) {
       expect(Object.keys(byMember)).toEqual([ben.playerId]);
     }

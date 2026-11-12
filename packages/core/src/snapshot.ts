@@ -87,8 +87,6 @@ export interface RoomKeeping {
   positions: Record<string, RelayedPosition>;
   /** each patrolling drone on its loop, by drone id; null while none patrols */
   drones: Record<string, DroneRuntime> | null;
-  /** epoch ms the patrols last moved */
-  lastDroneTick: number;
   /** epoch ms each seat's line closed, by player id: every seat's line is closed in a snapshot */
   lostAt: Record<string, number>;
   /** the seats whose socket closed cleanly, a tab closed or reloaded, by player id */
@@ -253,7 +251,6 @@ const keepingSchema = z.looseObject({
     }),
   ),
   drones: z.record(z.string(), droneRuntimeSchema).nullable(),
-  lastDroneTick: z.number(),
   lostAt: timesBy,
   closedClean: ids,
   askAgainAt: timesBy,

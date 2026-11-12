@@ -434,7 +434,6 @@ export class Room {
       keeping: {
         positions: Object.fromEntries(this.positions),
         drones: this.drones?.runtimeOf() ?? null,
-        lastDroneTick: this.lastDroneTick,
         lostAt,
         closedClean: [...this.closedClean],
         askAgainAt: Object.fromEntries(this.askAgainAt),
@@ -472,7 +471,6 @@ export class Room {
     this.refusedSteps = keeping.refusedSteps;
     const { map } = this.state.mission;
     this.drones = keeping.drones === null ? null : DronePatrol.resume(map, keeping.drones);
-    this.lastDroneTick = keeping.lastDroneTick;
     this.emptySince = this.listeners.size === 0 ? now : null;
     this.reconcileClocks();
     this.reconcileLobbyAway();

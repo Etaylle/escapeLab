@@ -209,6 +209,7 @@ export {
   crewPassSchema,
   rtcSignalSchema,
   RTC_SIGNAL_MAX,
+  RESTART_CLOSE,
   SEED_MAX,
   SNAPSHOT_EVERY_MS,
   SNAPSHOT_LIVE_MS,

@@ -1,12 +1,12 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ServerMessage } from '@escapelab/core';
+import { RESTART_CLOSE, type ServerMessage } from '@escapelab/core';
 import { MissionCatalog } from '../src/missions.js';
 import { Room } from '../src/room.js';
 import { RoomManager } from '../src/roomManager.js';
 import { open, roomKey } from '../src/seal.js';
-import { CLOSING_MS, onSignal, RESTART_CLOSE, shutDown } from '../src/shutdown.js';
+import { CLOSING_MS, onSignal, shutDown } from '../src/shutdown.js';
 import { serveSockets } from '../src/sockets.js';
 import { FakeServer, joinedOf, type FakeSocket } from './line.js';
 import { passFor } from './passes.js';

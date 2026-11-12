@@ -43,10 +43,17 @@ export type RtcSignal = z.infer<typeof rtcSignalSchema>;
 export const SEED_MAX = 0xffff_ffff;
 
 /**
- * The most a room's sealed snapshot may weigh, in characters (`snapshot`): Blackout's runs to
- * some 30 kB. A room does not send one over it, and a resume carries none over it.
+ * The most a room's sealed snapshot may weigh, in characters (`snapshot`): Blackout's, packed,
+ * runs to 7.9 kB mid-way, a relay emergency on. A room does not send one over it, and a resume
+ * carries none over it.
  */
 export const SNAPSHOT_MAX = 256 * 1024;
+
+/**
+ * The close code of every socket as the server goes down for a restart (`restart`): Service
+ * Restart. The page that sees it knows the server restarts, told so or not (client line.ts).
+ */
+export const RESTART_CLOSE = 1012;
 
 /**
  * The most often a room sends its crew its snapshot after a dispatch, ms (`snapshot`): a server

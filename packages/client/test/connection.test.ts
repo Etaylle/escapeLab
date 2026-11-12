@@ -1,11 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ClientMessage, ServerMessage, SpectatorView } from '@escapelab/core';
+import {
+  RESTART_CLOSE,
+  type ClientMessage,
+  type ServerMessage,
+  type SpectatorView,
+} from '@escapelab/core';
 import {
   ANSWER_MS,
   keepConnected,
   OPENING_MS,
   OUTBOX_MAX,
-  RESTART_CLOSE,
   REWATCH_EVERY_MS,
   REWATCH_MS,
   SILENCE_MS,

@@ -372,9 +372,9 @@ Betrieb:
   Schnappschuss einer anderen Instanz, der nicht ihr letzter ist, stellt die neue den Raum
   deshalb erst her, wenn der letzte kommt — mit den anderen, nach dem SIGTERM der alten — oder
   wenn sie selbst 90 s läuft, dann aus dem neuesten, den sie bis dahin bekommen hat
-  (`… is not the last of instance …, waiting up to …` im Log). So lange zeigt die Seite
-  „EINSATZ WIRD WIEDERHERGESTELLT", auch dem Publikum; ein noch neuerer Stand ersetzt den Raum
-  wie sonst in den ersten 10 s danach. Was später kommt, bleibt liegen, und das Log nennt
+  (`… is not the last of instance …, waiting up to …` im Log). So lange zeigt die Karte des
+  Spielers „EINSATZ WIRD WIEDERHERGESTELLT", und das Publikum wartet mit; ein noch neuerer Stand
+  ersetzt den Raum wie sonst in den ersten 10 s danach. Was später kommt, bleibt liegen, und das Log nennt
   beide Stände (`snapshot seq … came too late, the room goes on from seq …`). Die 90 s laufen ab
   dem Start der neuen Instanz: Braucht Render vom Start bis zum Umschalten mehr als 30 s, kommt
   der letzte Schnappschuss zu spät. Deshalb bleibt es dabei: vor einem Push `/health` ansehen.
