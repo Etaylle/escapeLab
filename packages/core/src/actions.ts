@@ -261,7 +261,11 @@ export function applyAction(state: GameState, action: Action): GameState {
  * as they like: the host's part passes to whoever joined next, and since the crew changed,
  * everyone confirms anew. In a run they leave its crew (`leaveRun`): with fewer left than the
  * mission's smallest crew the run ends for everyone, lost and called off, its end card naming
- * who left; otherwise it goes on — and on at once, where it stood still for them.
+ * who left — decided before anything else, an emergency at the relay included, is worked out
+ * for a crew that small. Otherwise it goes on: at once where it stood still for them, but with
+ * fewer than the smallest crew on the line it waits again for whoever is away (`waitAgain`),
+ * rather than running on with too few. An emergency at the relay under way is rolled anew for
+ * the crew the run counts then (`relayForCrew`).
  */
 function abandon(
   state: GameState,
@@ -272,17 +276,32 @@ function abandon(
     return withoutPlayer(state, player.id);
   }
   const left = leaveRun(state, player, action);
-  if (left.players.length < state.mission.players.min) {
+  const { min } = state.mission.players;
+  if (left.players.length < min) {
     const line = `${player.name} hat den Einsatz verlassen.`;
     return lostNow({ ...left, paused: null, calledOff: line }, action.at, line);
   }
-  return holdForAway(left, action.at);
+  const counted = onTheLine(left) < min ? waitAgain(left, action.at) : left;
+  return holdForAway(relayForCrew(counted, action.at), action.at);
+}
+
+/**
+ * The run waits again for every crew member away it went on without, from `at` on: their
+ * wait starts anew (LATER_WAIT_MS), as for a later drop.
+ */
+function waitAgain(state: GameState, at: number): GameState {
+  const away = Object.fromEntries(
+    Object.entries(state.away).map(([playerId, gone]) => [
+      playerId,
+      gone.waived ? { since: at, waivableAt: at + LATER_WAIT_MS, waived: false } : gone,
+    ]),
+  );
+  return { ...state, away };
 }
 
 /**
  * The run without `player`: what they carried lies `where` they stood — on their spawn where
- * the room does not know it — they stand nowhere and nobody waits for them; an emergency at
- * the relay under way is rolled anew for the crew that is left (`relayForCrew`).
+ * the room does not know it — they stand nowhere and nobody waits for them.
  */
 function leaveRun(
   state: GameState,
@@ -298,7 +317,7 @@ function leaveRun(
     ]),
   );
   const away = Object.fromEntries(Object.entries(state.away).filter(([id]) => id !== player.id));
-  const out = withoutPlayer(
+  return withoutPlayer(
     {
       ...state,
       items,
@@ -308,7 +327,6 @@ function leaveRun(
     },
     player.id,
   );
-  return relayForCrew(out, action.at);
 }
 
 /** Where everybody stands, `playerId` nowhere: at no station, source or note, not on the hatch. */

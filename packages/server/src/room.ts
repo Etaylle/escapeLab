@@ -301,16 +301,18 @@ export class Room {
     if (playerId === null) {
       throw new Error('Dieser Ausweis hat in diesem Raum keinen Platz.');
     }
-    // Let go of its connection first: the views the leave sends out go to the rest alone.
+    const stood = this.positions.get(playerId);
+    const where = stood === undefined ? null : { x: stood.x, y: stood.y };
+    // Worked out before anything is let go of: a leave the core refuses leaves the seat be.
+    const next = applyAction(this.state, { type: 'abandon', playerId, at: Date.now(), where });
+    // Its connection let go of next: the views the leave sends out go to the rest alone.
     const listener = this.listeners.get(playerId);
     this.listeners.delete(playerId);
-    const stood = this.positions.get(playerId);
     this.positions.delete(playerId);
-    const where = stood === undefined ? null : { x: stood.x, y: stood.y };
     // Said first: a run it leaves short of its crew ends with it, and the log says so next.
     const left = this.state.phase === 'playing' ? 'gave the run up' : 'left the room';
     this.log(`${this.nameOf(playerId)} ${left}`);
-    this.dispatch({ type: 'abandon', playerId, at: Date.now(), where });
+    this.settle(next, 'abandon');
     this.seats.free(playerId);
     const kept = [this.signalAllowance, this.lastPingAt, this.lastChatAt, this.glances];
     for (const byPlayer of [...kept, this.lostAt]) {
@@ -1525,9 +1527,18 @@ export class Room {
    * members whose view it can change — then keeps the timers and the presence in step.
    */
   private dispatch(action: Action, reach: Reach = 'everybody'): void {
+    this.settle(applyAction(this.state, action), action.type, reach);
+  }
+
+  /**
+   * `next` — the room's state with an action of `type` applied — becomes the room's: the end of
+   * the run reported where it ended, the views it changes sent, the timers and the presence
+   * kept in step (`dispatch`).
+   */
+  private settle(next: GameState, type: Action['type'], reach: Reach = 'everybody'): void {
     const wasPlaying = this.state.phase === 'playing';
     const world = this.findingWorld();
-    this.state = applyAction(this.state, action);
+    this.state = next;
     // A run ends exactly once, won or lost; a rematch is a run of its own.
     if (wasPlaying && (this.state.phase === 'won' || this.state.phase === 'lost')) {
       this.runOver(runReport(this.state, this.code));
@@ -1545,7 +1556,7 @@ export class Room {
     this.reconcileRelayTick();
     this.broadcast(reach);
     // A door opened, a part put down, a station armed: whoever stands still sees it as well.
-    if (action.type !== 'set-presence' && this.findingWorld() !== world) {
+    if (type !== 'set-presence' && this.findingWorld() !== world) {
       this.reconcilePresence();
     }
   }

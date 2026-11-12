@@ -376,8 +376,11 @@ judged while the run stands paused, and a drop alone ends no run.
 the seat up for good: what they carried goes down where they stood (on their start where the
 server never had them), a plate they held lets go, and the pass is free again. Below the
 mission's least crew (`players.min`) the run ends lost for everyone, its end card naming who
-left („Ben hat den Einsatz verlassen."), and the rematch works as ever; otherwise the run goes
-on, its clock running again where it waited for them.
+left („Ben hat den Einsatz verlassen."), and the rematch works as ever — decided before an
+emergency at the relay is rolled anew for whoever is left. Otherwise the run goes on, its clock
+running again where it waited for them; but with fewer than the least crew left on the line it
+waits again for whoever it went on without, their wait starting anew (20 s), and the one left
+alone may call it off once that is over.
 
 **Taking a seat over.** As in Jackbox, a new device joins a running room by its code and the
 exact name of a seat whose line is down, and sits on it; the pass that held the seat is refused

@@ -3,6 +3,7 @@ import {
   applyAction,
   crewOf,
   initialState,
+  LATER_WAIT_MS,
   parseMission,
   runReport,
   viewFor,
@@ -185,6 +186,38 @@ describe('giving the seat up in a run', () => {
       ['p2', true],
       ['p3', false],
     ]);
+  });
+
+  it('ends the run below the smallest crew while an emergency runs at the relay', () => {
+    const alarmed = run([{ type: 'sabotage-start', at: T0 + 5000 }], crew(['Anna', 'Ben']));
+    expect(alarmed.sabotage?.emergency).toBeDefined();
+    const over = run([abandon('p2', T0 + 6000)], alarmed);
+    expect(over.phase).toBe('lost');
+    expect(over.calledOff).toBe('Ben hat den Einsatz verlassen.');
+    expect(over.players.map((p) => p.id)).toEqual(['p1']);
+  });
+
+  it('waits again for whoever it went on without, once too few are on the line', () => {
+    const gone = run(
+      [
+        lineDrops('p3', T0 + 1000),
+        { type: 'continue-without', playerId: 'p1', absentId: 'p3', at: T0 + 61_000 },
+      ],
+      three,
+    );
+    expect(gone.paused).toBeNull();
+    const left = run([abandon('p2', T0 + 70_000)], gone);
+    expect(left.phase).toBe('playing');
+    expect(left.paused).toEqual({ since: T0 + 70_000 });
+    expect(left.away).toEqual({
+      p3: { since: T0 + 70_000, waivableAt: T0 + 70_000 + LATER_WAIT_MS, waived: false },
+    });
+    expect(viewFor(left, 'p1').pausedFor?.map((away) => away.name)).toEqual(['Cem']);
+    // Anna, alone on the line, calls it off once the new wait is over.
+    const early = { type: 'call-off', playerId: 'p1', at: T0 + 75_000 } as const;
+    expect(() => run([early], left)).toThrow(/Wartezeit/);
+    const over = run([{ ...early, at: T0 + 70_000 + LATER_WAIT_MS }], left);
+    expect(over.calledOff).toBe('Abgebrochen ohne Cem.');
   });
 
   it('rolls an emergency at the relay anew for the crew that is left', () => {

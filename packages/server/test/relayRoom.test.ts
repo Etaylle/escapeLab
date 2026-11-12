@@ -168,6 +168,24 @@ describe('Room relay emergencies', () => {
     room.dispose();
   });
 
+  it('ends the run once Ben gives it up mid-emergency: his seat free, nobody left on it', () => {
+    const { room, anna, ben } = midMission();
+    vi.advanceTimersByTime(61_000);
+    expect(running(anna)).toBe(true);
+    expect(room.abandon(passFor('Ben'))).toBe(ben.playerId);
+    const view = lastView(anna.messages);
+    expect(view.phase).toBe('lost');
+    expect(view.calledOff).toBe('Ben hat den Einsatz verlassen.');
+    expect(view.players.map((p) => p.name)).toEqual(['Anna']);
+    expect(ben.messages.at(-1)).toEqual({ kind: 'left', code: 'TEST', message: null });
+    expect(room.seatOf(passFor('Ben'))).toBeNull();
+    // No ghost of Ben's left on the line: Anna alone, and her call-off finds the run over.
+    expect(room.playersOnTheLine).toBe(1);
+    const callOff = (): void => room.act(anna.playerId, { kind: 'call-off' });
+    expect(callOff).toThrow('Nur während des Einsatzes.');
+    room.dispose();
+  });
+
   it('is cleared by the crew calling out instructions, and then stops ticking', () => {
     const { room, anna, ben } = midMission();
     vi.advanceTimersByTime(61_000);
