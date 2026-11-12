@@ -6,6 +6,7 @@ import {
   type GameState,
   type ItemState,
   type Player,
+  type Presence,
   type RunEvent,
 } from './state.js';
 import type { DailyStart } from './daily.js';
@@ -131,10 +132,12 @@ export type Action =
   | { type: 'time-expired'; at: number }
   | { type: 'back-to-lobby'; playerId: string }
   /**
-   * a crew member gives their seat up for good — the client's „Raum verlassen": in the lobby
-   * and after a run they simply leave the room
+   * a crew member gives their seat up for good — the client's „Raum verlassen", „Einsatz
+   * aufgeben": in the lobby and after a run they simply leave the room; in a run they leave
+   * its crew, what they carried put down `where` they stood (where the room knows it), and
+   * below the mission's smallest crew the run ends for everyone
    */
-  | { type: 'abandon'; playerId: string; at: number }
+  | { type: 'abandon'; playerId: string; at: number; where: Spot | null }
   /** another run with the same crew: of `mission` where the host chose one, else the same again */
   | {
       type: 'rematch';
@@ -256,14 +259,90 @@ export function applyAction(state: GameState, action: Action): GameState {
 /**
  * A crew member gives their seat up for good. Before a run and after one, they leave the room
  * as they like: the host's part passes to whoever joined next, and since the crew changed,
- * everyone confirms anew.
+ * everyone confirms anew. In a run they leave its crew (`leaveRun`): with fewer left than the
+ * mission's smallest crew the run ends for everyone, lost and called off, its end card naming
+ * who left; otherwise it goes on — and on at once, where it stood still for them.
  */
-function abandon(state: GameState, action: { playerId: string; at: number }): GameState {
-  findPlayer(state, action.playerId);
-  if (state.phase === 'playing') {
-    fail('Ein laufender Einsatz lässt sich hier nicht verlassen.');
+function abandon(
+  state: GameState,
+  action: { playerId: string; at: number; where: Spot | null },
+): GameState {
+  const player = findPlayer(state, action.playerId);
+  if (state.phase !== 'playing') {
+    return withoutPlayer(state, player.id);
   }
-  return withoutPlayer(state, action.playerId);
+  const left = leaveRun(state, player, action);
+  if (left.players.length < state.mission.players.min) {
+    const line = `${player.name} hat den Einsatz verlassen.`;
+    return lostNow({ ...left, paused: null, calledOff: line }, action.at, line);
+  }
+  return holdForAway(left, action.at);
+}
+
+/**
+ * The run without `player`: what they carried lies `where` they stood — on their spawn where
+ * the room does not know it — they stand nowhere and nobody waits for them; an emergency at
+ * the relay under way is rolled anew for the crew that is left (`relayForCrew`).
+ */
+function leaveRun(
+  state: GameState,
+  player: Player,
+  action: { at: number; where: Spot | null },
+): GameState {
+  const spawn = player.spawn === null ? null : { x: player.spawn.x + 0.5, y: player.spawn.y + 0.5 };
+  const spot = action.where ?? spawn ?? { x: 0.5, y: 0.5 };
+  const items = Object.fromEntries(
+    Object.entries(state.items).map(([id, item]) => [
+      id,
+      item.carriedBy === player.id ? { ...item, carriedBy: null, x: spot.x, y: spot.y } : item,
+    ]),
+  );
+  const away = Object.fromEntries(Object.entries(state.away).filter(([id]) => id !== player.id));
+  const out = withoutPlayer(
+    {
+      ...state,
+      items,
+      away,
+      presence: presenceWithout(state.presence, player.id),
+      introDone: state.introDone.filter((id) => id !== player.id),
+    },
+    player.id,
+  );
+  return relayForCrew(out, action.at);
+}
+
+/** Where everybody stands, `playerId` nowhere: at no station, source or note, not on the hatch. */
+function presenceWithout(presence: Presence, playerId: string): Presence {
+  const off = (byId: Record<string, string[]>): Record<string, string[]> =>
+    Object.fromEntries(
+      Object.entries(byId)
+        .map(([id, players]) => [id, players.filter((p) => p !== playerId)] as const)
+        .filter(([, players]) => players.length > 0),
+    );
+  return {
+    stations: off(presence.stations),
+    manuals: off(presence.manuals),
+    notes: off(presence.notes),
+    signSeen: presence.signSeen.filter((p) => p !== playerId),
+    exit: presence.exit.filter((p) => p !== playerId),
+    sight: Object.fromEntries(Object.entries(presence.sight).filter(([id]) => id !== playerId)),
+  };
+}
+
+/**
+ * An emergency at the relay under way, rolled anew for the crew as it stands — a console each
+ * — once one of it has left: its deadline, and what it completed and missed, kept.
+ */
+function relayForCrew(state: GameState, at: number): GameState {
+  const sabotage = state.sabotage;
+  const emergency = sabotage?.emergency;
+  if (sabotage === null || emergency === undefined) {
+    return state;
+  }
+  const fresh = openEmergency(state, at);
+  const { endsAt, completed, missed } = emergency;
+  const rolled = { ...fresh, endsAt, completed, missed };
+  return { ...state, sabotage: { ...sabotage, emergency: rolled } };
 }
 
 /** The room without `playerId`: the host's part passed on where they held it, nobody ready. */

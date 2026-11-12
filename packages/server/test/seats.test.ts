@@ -261,6 +261,18 @@ describe('a seat given up', () => {
     manager.get(code).dispose();
   });
 
+  it('from another device in a run on: the crew below its size, the run ends for everyone', () => {
+    const { server, manager, anna, ben, code } = running();
+    const phone = server.connect();
+    phone.say({ kind: 'whereami', pass: passFor('Ben') });
+    phone.say({ kind: 'abandon', code, pass: passFor('Ben') });
+    expect(phone.heard.at(-1)).toEqual({ kind: 'left', code, message: null });
+    expect(ben.heard.at(-1)).toEqual({ kind: 'left', code, message: null });
+    expect(anna.view).toMatchObject({ phase: 'lost', calledOff: 'Ben hat den Einsatz verlassen.' });
+    expect(whereIsBen(phone)).toBeNull();
+    manager.get(code).dispose();
+  });
+
   it('is refused for a pass with no seat in the room', () => {
     const { server, manager, code } = lobby();
     const page = server.connect();

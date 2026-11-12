@@ -1,14 +1,27 @@
 import { describe, expect, it } from 'vitest';
-import { applyAction, initialState } from '../src/index.js';
-import type { Action, GameState } from '../src/index.js';
-import { consoleLab, started, T0 } from './lab.js';
+import {
+  applyAction,
+  crewOf,
+  initialState,
+  parseMission,
+  runReport,
+  viewFor,
+} from '../src/index.js';
+import type { Action, GameState, Mission } from '../src/index.js';
+import type { Spot } from '../src/reach.js';
+import { consoleLab, lineDrops, standing, started, T0 } from './lab.js';
 
 /** A lab for three: Anna hosts, Ben and Cem joined after her. */
 const mission = consoleLab(3);
 
 const join = (playerId: string): Action => ({ type: 'player-join', playerId, name: playerId });
 const ready = (playerId: string): Action => ({ type: 'set-ready', playerId, ready: true });
-const abandon = (playerId: string, at = T0): Action => ({ type: 'abandon', playerId, at });
+const abandon = (playerId: string, at = T0, where: Spot | null = null): Action => ({
+  type: 'abandon',
+  playerId,
+  at,
+  where,
+});
 
 function run(actions: Action[], from: GameState = initialState(mission)): GameState {
   return actions.reduce(applyAction, from);
@@ -46,8 +59,145 @@ describe('leaving a room after a run', () => {
   });
 });
 
-describe('leaving while a run is on', () => {
-  it('is no free leave', () => {
-    expect(() => run([abandon('p2')], started(mission))).toThrow(/laufender Einsatz/);
+/**
+ * A corridor lab for two or three: two stations where the whole crew presses, a fuse lying at
+ * (1,1) for the second, emergencies at the relay, the hatch at the east end.
+ *
+ *   0123456789
+ * 0 ##########
+ * 1 #F.1.2...#   spawns (1,1), (1,2), (2,2); the fuse (1,1); its slot (8,1)
+ * 2 #.......E#   the hatch (8,2)
+ * 3 ##########
+ */
+const corridor: Mission = parseMission({
+  id: 'korridor',
+  title: 'Korridor',
+  story: { intro: 'i', win: 'w', lose: 'l' },
+  timeLimitSec: 600,
+  players: { min: 2, max: 3 },
+  puzzles: [
+    { type: 'button-sync', id: 'eins', title: 'Eins' },
+    { type: 'button-sync', id: 'zwei', title: 'Zwei' },
+  ],
+  map: {
+    tiles: ['##########', '#........#', '#........#', '##########'],
+    spawns: [
+      { x: 1, y: 1 },
+      { x: 1, y: 2 },
+      { x: 2, y: 2 },
+    ],
+    stations: [
+      { puzzleId: 'eins', x: 3, y: 1 },
+      { puzzleId: 'zwei', x: 5, y: 1 },
+    ],
+    items: [
+      {
+        id: 'sicherung',
+        label: 'SICHERUNG',
+        x: 1,
+        y: 1,
+        deliverTo: { x: 8, y: 1 },
+        requiredFor: 'zwei',
+      },
+    ],
+    exit: { x: 8, y: 2 },
+    sabotage: {
+      mode: 'relay',
+      label: 'STEUERUNG SPINNT',
+      hint: 'Anweisungen laut vorlesen!',
+      durationSec: 45,
+      penaltySec: 60,
+    },
+  },
+});
+
+/** A run of the corridor for `names`, p1 … pn, the first the host. */
+function crew(names: string[]): GameState {
+  const ids = names.map((_, i) => `p${i + 1}`);
+  return run(
+    [
+      ...names.map((name, i): Action => ({ type: 'player-join', playerId: ids[i] ?? '', name })),
+      ...ids.slice(1).map((playerId) => ready(playerId)),
+      { type: 'start-mission', playerId: 'p1', at: T0, seed: 1 },
+    ],
+    initialState(corridor),
+  );
+}
+
+const three = crew(['Anna', 'Ben', 'Cem']);
+const pick = (playerId: string): Action => ({
+  type: 'pick-item',
+  playerId,
+  itemId: 'sicherung',
+  at: T0 + 500,
+});
+
+describe('giving the seat up in a run', () => {
+  it('leaves its crew, which goes on above the mission’s smallest', () => {
+    const atStation = standing(three, { stations: { eins: ['p1', 'p3'] }, signSeen: ['p3'] });
+    const left = run([abandon('p3', T0 + 1000, { x: 2.5, y: 1.5 })], atStation);
+    expect(left.phase).toBe('playing');
+    expect(left.players.map((p) => p.id)).toEqual(['p1', 'p2']);
+    expect(left.presence.stations).toEqual({ eins: ['p1'] });
+    expect(left.presence.signSeen).toEqual([]);
+    expect(crewOf(left).map((p) => p.id)).toEqual(['p1', 'p2']);
+    expect(viewFor(left, 'p1').players.map((p) => p.name)).toEqual(['Anna', 'Ben']);
+  });
+
+  it('puts down what they carried where they stood, on their spawn where unknown', () => {
+    const carrying = run([pick('p3')], three);
+    const there = run([abandon('p3', T0 + 1000, { x: 6.2, y: 2.4 })], carrying);
+    expect(there.items['sicherung']).toMatchObject({ carriedBy: null, x: 6.2, y: 2.4 });
+    const spawn = carrying.players.find((p) => p.id === 'p3')?.spawn;
+    const unknown = run([abandon('p3', T0 + 1000)], carrying);
+    expect(unknown.items['sicherung']).toMatchObject({
+      carriedBy: null,
+      x: (spawn?.x ?? 0) + 0.5,
+      y: (spawn?.y ?? 0) + 0.5,
+    });
+  });
+
+  it('ends the run for everyone below the smallest crew, its card naming who left', () => {
+    const two = crew(['Anna', 'Ben']);
+    const over = run([abandon('p2', T0 + 4000)], two);
+    expect(over.phase).toBe('lost');
+    expect(over.calledOff).toBe('Ben hat den Einsatz verlassen.');
+    expect(over.events.at(-1)).toMatchObject({
+      kind: 'finish',
+      label: 'Ben hat den Einsatz verlassen.',
+    });
+    expect(runReport(over, 'ABCD')).toMatchObject({ outcome: 'lost:abandoned', crew: ['Anna'] });
+    expect(viewFor(over, 'p1').calledOff).toBe('Ben hat den Einsatz verlassen.');
+  });
+
+  it('goes on at once where the run stood still for them', () => {
+    const waiting = run([lineDrops('p3', T0 + 2000)], three);
+    expect(waiting.paused).not.toBeNull();
+    const left = run([abandon('p3', T0 + 32_000)], waiting);
+    expect(left.paused).toBeNull();
+    expect(left.away).toEqual({});
+    expect(left.deadlineAt).toBe((three.deadlineAt ?? 0) + 30_000);
+  });
+
+  it('passes the host’s part on, in a run too', () => {
+    const left = run([abandon('p1', T0 + 1000)], three);
+    expect(left.players.map((p) => [p.id, p.isHost])).toEqual([
+      ['p2', true],
+      ['p3', false],
+    ]);
+  });
+
+  it('rolls an emergency at the relay anew for the crew that is left', () => {
+    const alarmed = run([{ type: 'sabotage-start', at: T0 + 5000 }], three);
+    const before = alarmed.sabotage?.emergency;
+    const left = run([abandon('p3', T0 + 6000)], alarmed);
+    const after = left.sabotage?.emergency;
+    expect(after?.endsAt).toBe(before?.endsAt);
+    expect(new Set(after?.controls.map((c) => c.ownerId))).toEqual(new Set(['p1', 'p2']));
+    expect(after?.instructions.map((i) => i.holderId)).toEqual(['p1', 'p2']);
+    for (const id of ['p1', 'p2']) {
+      const relay = viewFor(left, id).map?.sabotage?.relay;
+      expect(relay?.instruction?.playerName).toMatch(/^(Anna|Ben)$/);
+    }
   });
 });

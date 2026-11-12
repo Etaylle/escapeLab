@@ -2,6 +2,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ClientMessage, MissionInfo, Seat } from '@escapelab/core';
 import { PASS_KEY } from '../src/pass.js';
+import { CONFIRM_MS, giveUpPress } from '../src/screens/GiveUp.js';
 import { BoundCard, boundLine, doorAsks, JoinScreen } from '../src/screens/Join.js';
 import { buttonsOf, elementsOf, press } from './probe.js';
 
@@ -44,6 +45,8 @@ const RUN: Seat = {
 };
 
 const LOBBY: Seat = { ...RUN, phase: 'lobby', leftMs: null };
+
+const T0 = 1_700_000_000_000;
 
 function joinScreen(seat: Seat | null, send: (msg: ClientMessage) => void = noop) {
   return (
@@ -113,6 +116,15 @@ describe('the join screen of a pass bound to a run', () => {
       Beitreten: false,
       'Mit Code zuschauen': true,
     });
+  });
+
+  it('gives the run up only at a second press, the first asking', () => {
+    stubWindow();
+    const html = renderToStaticMarkup(joinScreen(RUN));
+    expect(html).toContain('<button class="danger give-up">Einsatz aufgeben</button>');
+    expect(giveUpPress(null, T0)).toBe('ask');
+    expect(giveUpPress(T0, T0 + CONFIRM_MS - 1)).toBe('confirm');
+    expect(giveUpPress(T0, T0 + CONFIRM_MS)).toBe('ask');
   });
 
   it('goes back to the run on the browser’s pass', () => {

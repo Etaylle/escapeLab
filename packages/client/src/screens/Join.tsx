@@ -14,6 +14,7 @@ import { FIRST_RUN_HINT, firstDifficulty, isTutorial, useWon } from '../firstRun
 import { crewPass, keepName, lastName } from '../pass.js';
 import { recordLine } from '../runStats.js';
 import { crewSizeText } from './Crew.js';
+import { GiveUpButton } from './GiveUp.js';
 import { HttpsHint } from './HttpsHint.js';
 import { Icon } from './Icon.js';
 import { InstallOffer } from './Install.js';
@@ -394,12 +395,13 @@ function kickerOf(seat: Seat): string {
 
 /**
  * Where the browser's pass sits, instead of the join form (`Seat`): the mission, the room's
- * code, the crew and the clock as the server showed it, and the way back; from a lobby the
- * way out as well, as free as leaving it always was.
+ * code, the crew and the clock as the server showed it, the way back and the way out — from a
+ * run on „Einsatz aufgeben" at a second press, from a lobby as free as leaving it always was.
  */
 export function BoundCard({ seat, send }: { seat: Seat; send: Props['send'] }) {
   const run = seat.phase === 'playing';
   const clock = seat.leftMs === null ? '' : ` · noch ${formatLeft(seat.leftMs)}`;
+  const leave = (): void => send({ kind: 'abandon', code: seat.code, pass: crewPass() });
   return (
     <section className={`bound${run ? ' bound--run' : ''}`}>
       <span className="kicker bound-kicker">{kickerOf(seat)}</span>
@@ -415,11 +417,10 @@ export function BoundCard({ seat, send }: { seat: Seat; send: Props['send'] }) {
         >
           {run ? 'Zurück zum Einsatz' : 'Zurück in den Raum'}
         </button>
-        {!run && (
-          <button
-            className="bound-leave"
-            onClick={() => send({ kind: 'abandon', code: seat.code, pass: crewPass() })}
-          >
+        {run ? (
+          <GiveUpButton onGiveUp={leave} />
+        ) : (
+          <button className="bound-leave" onClick={leave}>
             Raum verlassen
           </button>
         )}

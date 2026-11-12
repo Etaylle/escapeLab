@@ -265,8 +265,9 @@ export class Room {
 
   /**
    * The seat `pass` holds is given up for good (core `abandon`): its pass no longer binds it,
-   * and the connection it played on hears that it left. Returns its player id. Throws for a
-   * pass that holds no seat here, and as the reducer refuses.
+   * and the connection it played on hears that it left. In a run, what they carried goes down
+   * where the room had them, their avatar is gone, the plates they held let go and the hatch
+   * counts the crew that is left. Returns its player id. Throws for a pass with no seat here.
    */
   abandon(pass: CrewPass): string {
     const playerId = this.seatOf(pass);
@@ -276,20 +277,23 @@ export class Room {
     // Let go of its connection first: the views the leave sends out go to the rest alone.
     const listener = this.listeners.get(playerId);
     this.listeners.delete(playerId);
-    try {
-      this.dispatch({ type: 'abandon', playerId, at: Date.now() });
-    } catch (err) {
-      if (listener !== undefined) {
-        this.listeners.set(playerId, listener);
-      }
-      throw err;
-    }
+    const stood = this.positions.get(playerId);
+    this.positions.delete(playerId);
+    const where = stood === undefined ? null : { x: stood.x, y: stood.y };
+    this.dispatch({ type: 'abandon', playerId, at: Date.now(), where });
     this.seats.free(playerId);
-    this.signalAllowance.delete(playerId);
+    for (const kept of [this.signalAllowance, this.lastPingAt, this.lastChatAt, this.glances]) {
+      kept.delete(playerId);
+    }
     if (this.listeners.size === 0) {
       this.emptySince = Date.now();
     }
     listener?.({ kind: 'left', code: this.code, message: null });
+    this.reconcileCrew();
+    if (this.state.phase === 'playing') {
+      this.positionsDirty = true;
+      this.schedulePositionsBroadcast();
+    }
     return playerId;
   }
 

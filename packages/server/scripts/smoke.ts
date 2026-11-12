@@ -39,7 +39,8 @@
  * host's yes naming Blackout opens it, with the power on. Last a crew of
  * three plays Blackout: Finn's line drops for 70 s, the others go on without
  * him once the minute is over, and he is back on his pass, counted in at once
- * with no pause for it. No answer is written down here.
+ * with no pause for it; Gus gives his seat up and the two go on, then Finn
+ * gives his up and the run ends, called off. No answer is written down here.
  * Run with: pnpm --filter @escapelab/server smoke
  */
 import { randomBytes } from 'node:crypto';
@@ -440,6 +441,10 @@ const isError = (m: ServerMessage): m is Extract<ServerMessage, { kind: 'error' 
   m.kind === 'error';
 const isJoined = (m: ServerMessage): m is Extract<ServerMessage, { kind: 'joined' }> =>
   m.kind === 'joined';
+const isLeft = (m: ServerMessage): m is Extract<ServerMessage, { kind: 'left' }> =>
+  m.kind === 'left';
+const isSeated = (m: ServerMessage): m is Extract<ServerMessage, { kind: 'seated' }> =>
+  m.kind === 'seated';
 
 // --- map walking -----------------------------------------------------------
 
@@ -2508,8 +2513,33 @@ async function awayAndBack({ code, eva, finn }: Trio): Promise<TestClient> {
   return back;
 }
 
+/**
+ * Gus gives his seat up: the crew of two left goes on, Gus told he left and his pass sitting
+ * nowhere; then Finn gives his up — below the mission's smallest crew the run ends for
+ * everyone, called off, its end card naming him, and the run log keeps it so.
+ */
+async function giveUp({ code, eva, gus }: Trio, finn: TestClient): Promise<void> {
+  gus.send({ kind: 'abandon', code, pass: gus.pass });
+  await gus.expect('Gus told he left', isLeft);
+  await eva.expectView('the run goes on for Eva and Finn', (v) =>
+    v.phase === 'playing' && v.players.map((p) => p.name).join(',') === 'Eva,Finn');
+  gus.send({ kind: 'whereami', pass: gus.pass });
+  const nowhere = await gus.expect('where Gus sits', isSeated);
+  assert(nowhere.seat === null, 'the pass of who gave up sits nowhere');
+  finn.send({ kind: 'abandon', code, pass: finn.pass });
+  await finn.expect('Finn told he left', isLeft);
+  const over = await eva.expectView('the run over for Eva: called off, Finn named', (v) =>
+    v.phase === 'lost' && v.calledOff === 'Finn hat den Einsatz verlassen.');
+  assert(over.players.map((p) => p.name).join(',') === 'Eva', 'Eva alone on the end screen');
+  const lines = readFileSync(RUNS_LOG, 'utf8').trimEnd().split('\n');
+  const called = JSON.parse(lines.at(-1) ?? '{}') as Partial<RunReport>;
+  assert(called.outcome === 'lost:abandoned' && called.crew?.join(',') === 'Eva',
+    'the run log keeps the run called off, with the crew that was left');
+}
+
 const trio = await crewOfThree();
 const finnBack = await awayAndBack(trio);
+await giveUp(trio, finnBack);
 for (const client of [trio.eva, finnBack, trio.gus]) {
   client.close();
 }
@@ -2522,6 +2552,7 @@ console.log(
     'at two consoles, the locker, the key, the camera plate, reconnect, the hatch\'s ' +
     'checklist, a drop on the way out that ends nothing, penalties and credits; then ' +
     'the tutorial, its lever springing back on the clock, and on into Blackout; then a crew ' +
-    'of three going on without the one away, and his return. 🎉',
+    'of three going on without the one away, his return, and seats given up till the run ' +
+    'is called off. 🎉',
 );
 process.exit(0);
