@@ -273,10 +273,12 @@ Auslöser. Vorbild für das Verhalten: Dota 2 (das laufende Spiel bindet dich, R
 Verlassen nur ausdrücklich), Jackbox (Code plus Name setzt dich auf jedem Gerät wieder auf
 deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
 
-### R-1 Deploy nur, wenn niemand spielt — Status: bereit (braucht `RENDER_DEPLOY_HOOK_URL` als Secret) · Größe: S
-- Auto-Deploy bei Render aus. Ein Workflow `deploy.yml` läuft nach grünem CI auf main, fragt
-  `/health` ab und ruft den Deploy-Hook erst, wenn `rooms.running` 0 ist; sonst wartet er bis
-  zwei Stunden und meldet sich. Render-Abschaltfrist auf 120 s (`maxShutdownDelaySeconds`).
+### R-1 Deploy nur, wenn niemand spielt — Status: entfällt (Entscheidung Uros 2026-11-12) · Größe: –
+- Auto-Deploy bleibt an; Uros bestimmt, wann auf main gepusht wird, und damit den Deploy-
+  Zeitpunkt. Claude pusht nur auf Ansage. Vor einem Push zeigt `/health` (R-5), ob eine Partie
+  läuft. Ein Deploy-Gate per Workflow war gebaut und wurde wieder verworfen.
+- Offen bei Render: Abschaltfrist auf 120 s (`maxShutdownDelaySeconds`), sobald R-2 die Frist
+  für die Schnappschüsse braucht.
 
 ### R-2 Spielstand überlebt den Neustart — Status: bereit (nach R-3) · Größe: L
 - SIGTERM: Räume einfrieren (Wartungspause), jedem Client einen mit `ROOM_SECRET` (AES-GCM)

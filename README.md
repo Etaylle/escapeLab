@@ -145,7 +145,8 @@ durch Wände oder geschlossene Türen —, und bleibt Autorität über Rätsel, 
 (öffnen, solange jemand draufsteht — eine Tür mit `untilSolved` bleibt nach dem genannten
 Rätsel offen), Interaktionsdistanz und Timer. Rätsel sind leuchtende Stationen, ihr Pult öffnet
 per `E` als Modal über der Welt. Welt-Code: `packages/client/src/world/` (GameWorld =
-Simulation/Rendering, art = prozedurale Grafik, audio = prozedurale Sounds).
+Simulation/Rendering, art = prozedurale Grafik, audio = Mix mit Bussen; die Klänge selbst kommen
+aus `packages/client/audio/catalog.json`, siehe `docs/sound.md`).
 
 **Neue Missionen** sind reine JSON-Dateien in `missions/`. `packages/core/test/missionMaps.test.ts`
 prüft jede davon automatisch: gleiche Zeilenlängen, alles auf Bodenfeldern, eine Station pro
@@ -301,6 +302,30 @@ Die Tabelle zeigt je Mission und Schwierigkeit Läufe, Siegquote und mittlere Da
 je Station die mittleren Sekunden und Alarme und die drei langsamsten Stationen. Ohne
 Dateiangabe liest `runs` die Datei aus `RUNS_LOG` bzw. die Standarddatei.
 
+## Hosting auf Render
+
+Das öffentliche Spiel läuft als ein Web Service auf Render (Free-Plan): Build `corepack enable
+&& pnpm install --frozen-lockfile && pnpm run build`, Start `pnpm run start`, Umgebung
+`NODE_VERSION=22`, Health-Check-Pfad `/health`. Drei Eigenheiten von Render bestimmen den
+Betrieb:
+
+- **Jeder Deploy ersetzt die Instanz.** Offene WebSocket-Verbindungen brechen ab, und der Server
+  hält Räume nur im Speicher: ein Deploy während einer Partie wirft die ganze Crew hinaus.
+  Auto-Deploy bleibt an, also ist jeder Push auf `main` ein Deploy. Gepusht wird deshalb nur,
+  wenn niemand spielt; wer pusht, prüft vorher `/health` (meldet laufende Partien, sobald R-5
+  aus dem Backlog gebaut ist) und entscheidet den Zeitpunkt selbst.
+- **Der Free-Plan schläft und startet neu.** Nach 15 Minuten ohne HTTP-Anfrage oder
+  WebSocket-Nachricht fährt die Instanz herunter, und Render darf Free-Instanzen jederzeit neu
+  starten; beides löscht die Räume, bis die Schnappschüsse aus dem Backlog (R-2) gebaut sind.
+- **Vor dem Ersetzen schickt Render SIGTERM** und wartet 30 Sekunden, mit
+  `maxShutdownDelaySeconds` (Render-API) bis 300. Die Logs im Dashboard reichen 7 Tage zurück;
+  die Zeile `[escapelab] server on …` markiert jeden Neustart, der Reiter „Events" jeden Deploy.
+
+| Wo | Name | Wirkung |
+| --- | --- | --- |
+| Render-Umgebung | `RUNS_TOKEN` | Gibt das Laufprotokoll per `GET /runs.jsonl` frei (siehe oben). |
+| Render-Umgebung | `ROOM_SECRET` | Schlüssel für die Schnappschüsse der Räume, sobald R-2 gebaut ist; ohne ihn überlebt kein Raum einen Neustart. |
+
 ## Architektur in einem Satz
 
 `core` kennt weder Netzwerk noch Uhr (Zeit kommt als `at` in Aktionen) — der Server ist eine
@@ -308,9 +333,8 @@ dünne Schicht, die Aktionen mit Zeitstempeln versieht, und der Client rendert n
 die der Server nach seinem Standort gefiltert hat (was nur an einer Station oder an einem
 Handbuch zu sehen ist, geht nur an die Spielenden, die dort stehen).
 
-## Nächste Schritte (geplant)
+## Nächste Schritte
 
-- Playwright-E2E mit echten Browser-Kontexten (der WS-Smoke-Test deckt die Logik bereits ab:
-  `pnpm --filter @escapelab/server smoke`)
-- Produktions-Build (Server liefert statisches Client-Bundle aus) fürs Demo-Day-Deployment
-- Missionseditor (Missionen sind bereits reine, zod-validierte JSON-Daten)
+Was als Nächstes gebaut wird, steht mit Status, Größe und Vorbildern in `docs/backlog.md`;
+die Anforderungen nach MoSCoW in `docs/srs.md`, der technische Überblick für Vorträge in
+`docs/projektueberblick.md`.
