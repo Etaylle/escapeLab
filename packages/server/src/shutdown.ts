@@ -61,3 +61,22 @@ export function shutDown(going: Going): void {
   };
   look();
 }
+
+/**
+ * What the process does on SIGTERM or SIGINT (index.ts): it goes down for a restart
+ * (`shutDown`), the log naming the signal. A signal again meanwhile changes nothing — a Ctrl-C
+ * under `pnpm dev` comes twice, from the terminal and from tsx watch — and CLOSING_MS bounds the
+ * way down as ever.
+ */
+export function onSignal(going: Going): (signal: NodeJS.Signals) => void {
+  let down = false;
+  return (signal) => {
+    if (down) {
+      console.log(`[escapelab] ${signal} again: going down already`);
+      return;
+    }
+    down = true;
+    console.log(`[escapelab] ${signal}: going down for a restart`);
+    shutDown(going);
+  };
+}

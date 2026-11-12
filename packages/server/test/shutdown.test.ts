@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ServerMessage } from '@escapelab/core';
@@ -5,7 +6,7 @@ import { MissionCatalog } from '../src/missions.js';
 import { Room } from '../src/room.js';
 import { RoomManager } from '../src/roomManager.js';
 import { open, roomKey } from '../src/seal.js';
-import { CLOSING_MS, RESTART_CLOSE, shutDown } from '../src/shutdown.js';
+import { CLOSING_MS, onSignal, RESTART_CLOSE, shutDown } from '../src/shutdown.js';
 import { serveSockets } from '../src/sockets.js';
 import { FakeServer, joinedOf, type FakeSocket } from './line.js';
 import { passFor } from './passes.js';
@@ -129,5 +130,43 @@ describe('the server going down for a restart', () => {
     expect(cut).toHaveBeenCalled();
     expect(exit.mock.calls).toEqual([[0]]);
     expect(CLOSING_MS).toBeLessThan(10_000);
+  });
+
+  it('goes down once, whatever signals come: a Ctrl-C twice, then SIGTERM', () => {
+    const { line, manager, anna } = server();
+    vi.spyOn(anna, 'close').mockImplementation(() => undefined);
+    const stopTaking = vi.fn();
+    const exit = vi.fn();
+    const goDown = onSignal({ stopTaking, sockets: () => line.clients, manager, exit });
+    // Under `pnpm dev` a Ctrl-C comes from the terminal and again from tsx watch.
+    goDown('SIGINT');
+    goDown('SIGINT');
+    goDown('SIGTERM');
+    expect(stopTaking).toHaveBeenCalledTimes(1);
+    expect(exit).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(CLOSING_MS);
+    expect(exit.mock.calls).toEqual([[0]]);
+    const said = vi.mocked(console.log).mock.calls.map(([logged]) => String(logged));
+    expect(said.filter((logged) => logged.includes('going down'))).toEqual([
+      '[escapelab] SIGINT: going down for a restart',
+      expect.stringContaining('going down for a restart, snapshot seq'),
+      expect.stringContaining('going down for a restart, '),
+      '[escapelab] SIGINT again: going down already',
+      '[escapelab] SIGTERM again: going down already',
+    ]);
+  });
+});
+
+describe('the start script', () => {
+  const scripts = (file: string): Record<string, string> =>
+    (JSON.parse(readFileSync(new URL(file, import.meta.url), 'utf8')) as {
+      scripts: Record<string, string>;
+    }).scripts;
+
+  it('leaves no shell nor tsx CLI between pnpm and the server: SIGTERM reaches the server', () => {
+    expect(scripts('../package.json')['start']).toBe('exec node --import tsx src/index.ts');
+    expect(scripts('../../../package.json')['start']).toBe(
+      'exec pnpm --filter @escapelab/server start',
+    );
   });
 });

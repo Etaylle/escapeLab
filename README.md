@@ -352,9 +352,16 @@ Betrieb:
   den letzten Schnappschuss (`restart`), schließt alle Sockets mit 1012 und beendet sich in
   Sekunden mit 0. Render wartet darauf 30 s; die Frist gehört auf 120 s, damit auch ein
   langsamer Abschied Luft hat: `maxShutdownDelaySeconds: 120` per Render-API (Update service,
-  erlaubt bis 300). Die Logs im Dashboard reichen 7 Tage zurück; `[escapelab] server on …`
-  markiert jeden Neustart, `this boot is instance …` die Kennung der Instanz, `restored room …`
-  jeden wiederhergestellten Raum, der Reiter „Events" jeden Deploy.
+  erlaubt bis 300). Das Signal muss bis zum Server durchkommen: `pnpm run start` ersetzt sich
+  per `exec` durch `pnpm --filter @escapelab/server start`, und das durch
+  `node --import tsx src/index.ts`, also steht weder eine Shell noch die tsx-CLI dazwischen.
+  Wer pnpm ganz aus dem Weg haben will, trägt als Start Command direkt
+  `cd packages/server && exec node --import tsx src/index.ts` ein. Ob es ankommt, zeigt das Log
+  der alten Instanz beim ersten Deploy: Es muss `[escapelab] SIGTERM: going down for a restart`
+  enthalten, dann je Raum `going down for a restart, snapshot seq …` — fehlt die Zeile, hat
+  Render die Instanz ohne Wort beendet. Die Logs im Dashboard reichen 7 Tage zurück;
+  `[escapelab] server on …` markiert jeden Neustart, `this boot is instance …` die Kennung der
+  Instanz, `restored room …` jeden wiederhergestellten Raum, der Reiter „Events" jeden Deploy.
 - **Die Minute dazwischen.** Wer in den 60 s zwischen Umschalten und SIGTERM neu verbindet (Netz
   weg, Seite neu geladen), landet schon auf der neuen Instanz, mit einem älteren Schnappschuss
   als dem Stand, den die anderen auf der alten weiterspielen. Jeder Schnappschuss nennt die

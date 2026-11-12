@@ -45,7 +45,7 @@
  * down here.
  * Run with: pnpm --filter @escapelab/server smoke
  */
-import { spawn, type ChildProcess } from 'node:child_process';
+import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -2637,17 +2637,34 @@ const RESTART_PORT = Number(process.env['SMOKE_RESTART_PORT'] ?? PORT + 1);
 const HANDOVER_PORT = RESTART_PORT + 1;
 /** How long the old server stays up beside the new one: Render's minute, shortened, ms. */
 const OVERLAP_MS = 1500;
+/** The port the server the start script runs listens on (`startScript`). */
+const START_PORT = HANDOVER_PORT + 1;
 /** The key every server of the restarts seals with, as Render's environment holds one. */
 const ROOM_SECRET = randomBytes(32).toString('hex');
 /** The server's entry, run as a process of its own. */
 const SERVER_ENTRY = fileURLToPath(new URL('../src/index.ts', import.meta.url));
 const SERVER_DIR = fileURLToPath(new URL('..', import.meta.url));
+const REPO_DIR = fileURLToPath(new URL('../../..', import.meta.url));
+
+/**
+ * How a ServerProcess comes up: node on the server's entry, or the repo's start script under
+ * pnpm — in a process group of its own, so that none of it outlives the smoke.
+ */
+type Launch = 'entry' | 'start-script';
+const LAUNCH: Record<Launch, { file: string; args: string[]; cwd: string }> = {
+  entry: { file: process.execPath, args: ['--import', 'tsx', SERVER_ENTRY], cwd: SERVER_DIR },
+  'start-script': { file: 'pnpm', args: ['run', 'start'], cwd: REPO_DIR },
+};
 
 /** Every server process the smoke started: none outlives it, however it ends. */
 const servers = new Set<ChildProcess>();
 process.on('exit', () => {
   for (const child of servers) {
-    child.kill('SIGKILL');
+    try {
+      process.kill(-(child.pid ?? 0), 'SIGKILL');
+    } catch {
+      child.kill('SIGKILL');
+    }
   }
 });
 
@@ -2663,9 +2680,11 @@ class ServerProcess {
   constructor(
     readonly name: string,
     readonly port = RESTART_PORT,
+    launch: Launch = 'entry',
   ) {
-    this.child = spawn(process.execPath, ['--import', 'tsx', SERVER_ENTRY], {
-      cwd: SERVER_DIR,
+    const { file, args, cwd } = LAUNCH[launch];
+    this.child = spawn(file, args, {
+      cwd,
       env: {
         ...process.env,
         PORT: String(port),
@@ -2674,6 +2693,7 @@ class ServerProcess {
         RUNS_LOG: join(runsDir, 'logs', 'restarts.jsonl'),
       },
       stdio: ['ignore', 'pipe', 'pipe'],
+      detached: launch === 'start-script',
     });
     servers.add(this.child);
     for (const stream of [this.child.stdout, this.child.stderr]) {
@@ -2704,6 +2724,28 @@ class ServerProcess {
   /** Sends the process `signal`: Render's SIGTERM, or a SIGKILL that leaves it no word. */
   kill(signal: NodeJS.Signals): void {
     this.child.kill(signal);
+  }
+
+  /** The commands of every process this one started, and theirs, as `ps` names them. */
+  descendants(): string[] {
+    const rows = execFileSync('ps', ['-A', '-o', 'pid=,ppid=,command='], { encoding: 'utf8' })
+      .split('\n')
+      .map((row) => /^\s*(\d+)\s+(\d+)\s+(.*)$/.exec(row))
+      .filter((match): match is RegExpExecArray => match !== null)
+      .map(([, pid, ppid, command]) => ({ pid: Number(pid), ppid: Number(ppid), command }));
+    const under = new Set([this.child.pid]);
+    for (let grew = true; grew; ) {
+      grew = false;
+      for (const row of rows) {
+        if (under.has(row.ppid) && !under.has(row.pid)) {
+          under.add(row.pid);
+          grew = true;
+        }
+      }
+    }
+    return rows
+      .filter((row) => row.pid !== this.child.pid && under.has(row.pid))
+      .map((row) => row.command ?? '');
   }
 
   /** Whether the server logged a line holding `text`. */
@@ -3027,9 +3069,28 @@ async function handover(): Promise<void> {
   assert((await fresh.exited).code === 0, 'the new server goes down cleanly');
 }
 
+/**
+ * The server as Render starts it, `pnpm run start` at the repo's root: pnpm runs node on it
+ * straight — no shell and no tsx CLI between them — so SIGTERM for pnpm reaches the server; it
+ * says it goes down, and pnpm exits 0 with it.
+ */
+async function startScript(): Promise<void> {
+  const server = new ServerProcess('the start script', START_PORT, 'start-script');
+  await server.up();
+  const under = server.descendants();
+  const between = under.filter((command) => /tsx\/dist\/cli|(^|\/)(ba|da)?sh( |$)/.test(command));
+  assert(under.includes('node --import tsx src/index.ts') && between.length === 0,
+    `pnpm runs node on the server straight: ${under.join(' | ')}`);
+  server.kill('SIGTERM');
+  const ended = await server.exited;
+  await server.logs('SIGTERM: going down for a restart', 'SIGTERM for pnpm reached the server');
+  assert(ended.code === 0, `pnpm exits 0 with the server (${ended.code ?? ended.signal})`);
+}
+
 const restarted = await restartBySigterm();
 await restartBySigkill(restarted.server, restarted.crew);
 await handover();
+await startScript();
 
 rmSync(runsDir, { recursive: true, force: true });
 console.log(
@@ -3042,7 +3103,8 @@ console.log(
     'of three going on without the one away, his return, a seat taken over by its name once ' +
     'the crew let the phone in, and ' +
     'seats given up till the run is called off; then a server restarting mid-run, SIGTERM ' +
-    'and SIGKILL, the run taken up again from the crew\'s snapshots; and a deploy handing ' +
-    'over from an old server still up, the run going on from its last snapshot. 🎉',
+    'and SIGKILL, the run taken up again from the crew\'s snapshots; a deploy handing ' +
+    'over from an old server still up, the run going on from its last snapshot; and the ' +
+    'start script passing SIGTERM on to the server. 🎉',
 );
 process.exit(0);

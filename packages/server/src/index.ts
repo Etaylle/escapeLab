@@ -20,7 +20,7 @@ import { RoomManager, seedsAllowed } from './roomManager.js';
 import { DEFAULT_RUNS_LOG } from './runLog.js';
 import { loadRunStats, logRun } from './runStats.js';
 import { roomKey, roomKeyLogLine } from './seal.js';
-import { shutDown } from './shutdown.js';
+import { onSignal } from './shutdown.js';
 import { serveSockets } from './sockets.js';
 import { StaticSite } from './static.js';
 import { createWebServer, lanUrls, tlsLogLine, tlsSetup } from './tls.js';
@@ -111,30 +111,18 @@ const served = serveSockets(wss, { catalog, manager });
 // log names the room and the seat of each socket it cuts.
 startHeartbeat(wss, instance.id, HEARTBEAT_MS, served.cut);
 
-/** Whether the server is going down already: a second signal meanwhile ends it at once. */
-let goingDown = false;
-
-/**
- * Render's SIGTERM before it replaces the instance, or a Ctrl-C: the server goes down for a
- * restart (shutdown.ts), every run standing still and every seat handed its room's snapshot.
- */
-function goDown(signal: NodeJS.Signals): void {
-  if (goingDown) {
-    process.exit(1);
-  }
-  goingDown = true;
-  console.log(`[escapelab] ${signal}: going down for a restart`);
-  shutDown({
-    stopTaking: () => {
-      wss.close();
-      httpServer.close();
-      httpServer.closeIdleConnections();
-    },
-    sockets: () => wss.clients,
-    manager,
-    exit: (code) => process.exit(code),
-  });
-}
+// Render's SIGTERM before it replaces the instance, or a Ctrl-C: the server goes down for a
+// restart (shutdown.ts), every run standing still and every seat handed its room's snapshot.
+const goDown = onSignal({
+  stopTaking: () => {
+    wss.close();
+    httpServer.close();
+    httpServer.closeIdleConnections();
+  },
+  sockets: () => wss.clients,
+  manager,
+  exit: (code) => process.exit(code),
+});
 process.on('SIGTERM', goDown);
 process.on('SIGINT', goDown);
 
