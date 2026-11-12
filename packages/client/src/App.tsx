@@ -285,6 +285,7 @@ function OffRoom(props: ScreenProps) {
           connected={conn.status === 'open'}
           missions={missions}
           rooms={conn.rooms}
+          seat={conn.seat}
           stats={props.stats}
           openHandbook={props.setHandbook}
           openHistory={props.setHistory}

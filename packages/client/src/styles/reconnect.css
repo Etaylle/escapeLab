@@ -1,0 +1,52 @@
+/*
+ * The connection and the way back to a run (screens/Join.tsx BoundCard): where the browser's
+ * pass sits, over the join screen's form.
+ */
+
+.bound {
+  display: grid;
+  gap: 6px;
+  margin: 18px 0 6px;
+  padding: 16px 18px;
+  border: 1px solid var(--line-2);
+  border-left: 3px solid var(--accent);
+  border-radius: 12px;
+  background: var(--panel);
+}
+
+.bound--run {
+  border-left-color: var(--warn);
+  box-shadow: 0 0 0 1px rgba(251, 191, 36, 0.12), 0 10px 30px rgba(0, 0, 0, 0.35);
+}
+
+.bound--run .bound-kicker {
+  color: var(--warn);
+}
+
+.bound-title {
+  margin: 0;
+  font-size: 20px;
+  letter-spacing: 0.5px;
+}
+
+.bound-facts {
+  margin: 0;
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.bound-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.bound-line {
+  margin: 4px 0 0;
+  color: var(--warn);
+  font-family: var(--mono);
+  font-size: 13px;
+}

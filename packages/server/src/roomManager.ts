@@ -1,4 +1,11 @@
-import type { Difficulty, Mission, RoomSummary } from '@escapelab/core';
+import {
+  GameError,
+  type CrewPass,
+  type Difficulty,
+  type Mission,
+  type RoomSummary,
+  type Seat,
+} from '@escapelab/core';
 import { Room, type RunListener } from './room.js';
 
 /** Room codes avoid ambiguous characters (0/O, 1/I/L). */
@@ -79,6 +86,42 @@ export class RoomManager {
         const openness = Number(b.free > 0) - Number(a.free > 0);
         return openness !== 0 ? openness : a.code.localeCompare(b.code);
       });
+  }
+
+  /**
+   * Where `pass` sits, as its join screen shows it: in a run on — live or paused — before
+   * anything else, else in a lobby; null for neither.
+   */
+  whereIs(pass: CrewPass): Seat | null {
+    let lobby: Seat | null = null;
+    for (const room of this.rooms.values()) {
+      const seat = room.seatSummary(pass);
+      if (seat?.phase === 'playing') {
+        return seat;
+      }
+      lobby ??= seat;
+    }
+    return lobby;
+  }
+
+  /**
+   * Makes way for `pass` to sit down in another room than its own (`staying`, the room it sits
+   * down in where it exists already): a run on binds it, so that is refused, naming the run;
+   * a seat it holds in a lobby or after a run elsewhere it gives up.
+   */
+  makeWay(pass: CrewPass, staying: Room | null): void {
+    const elsewhere = [...this.rooms.values()].filter(
+      (room) => room !== staying && room.seatOf(pass) !== null,
+    );
+    const bound = elsewhere.find((room) => room.phase === 'playing');
+    if (bound !== undefined) {
+      throw new GameError(
+        `Gebunden an den Einsatz „${bound.missionTitle}" in Raum ${bound.code}.`,
+      );
+    }
+    for (const room of elsewhere) {
+      room.abandon(pass);
+    }
   }
 
   /** Drop rooms that have been empty for a while; call periodically. */

@@ -113,6 +113,11 @@ export type Action =
   | { type: 'escaped'; at: number }
   | { type: 'time-expired'; at: number }
   | { type: 'back-to-lobby'; playerId: string }
+  /**
+   * a crew member gives their seat up for good — the client's „Raum verlassen": in the lobby
+   * and after a run they simply leave the room
+   */
+  | { type: 'abandon'; playerId: string; at: number }
   /** another run with the same crew: of `mission` where the host chose one, else the same again */
   | {
       type: 'rematch';
@@ -222,9 +227,34 @@ export function applyAction(state: GameState, action: Action): GameState {
         : state;
     case 'back-to-lobby':
       return backToLobby(state, action);
+    case 'abandon':
+      return abandon(state, action);
     case 'rematch':
       return rematch(state, action);
   }
+}
+
+/**
+ * A crew member gives their seat up for good. Before a run and after one, they leave the room
+ * as they like: the host's part passes to whoever joined next, and since the crew changed,
+ * everyone confirms anew.
+ */
+function abandon(state: GameState, action: { playerId: string; at: number }): GameState {
+  findPlayer(state, action.playerId);
+  if (state.phase === 'playing') {
+    fail('Ein laufender Einsatz lässt sich hier nicht verlassen.');
+  }
+  return withoutPlayer(state, action.playerId);
+}
+
+/** The room without `playerId`: the host's part passed on where they held it, nobody ready. */
+function withoutPlayer(state: GameState, playerId: string): GameState {
+  const rest = unready(state.players.filter((p) => p.id !== playerId));
+  const hostless = !rest.some((p) => p.isHost);
+  return {
+    ...state,
+    players: rest.map((p, i) => (hostless && i === 0 ? { ...p, isHost: true } : p)),
+  };
 }
 
 function switchMission(

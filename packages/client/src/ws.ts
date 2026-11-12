@@ -6,6 +6,7 @@ import type {
   PlayerView,
   RoomSummary,
   RtcSignal,
+  Seat,
   ServerMessage,
   SpectatorView,
 } from '@escapelab/core';
@@ -57,6 +58,11 @@ export interface Connection {
   spectatorView: SpectatorView | null;
   /** open and running rooms, refreshed while sitting on the join screen */
   rooms: RoomSummary[];
+  /**
+   * where the browser's pass sits, as the server last answered the join screen's `whereami`:
+   * a run on binds it, a lobby holds it; null for neither, and before the first answer
+   */
+  seat: Seat | null;
   roomCode: string | null;
   /**
    * the banner's words: a refusal of what is answered nowhere else (`ANSWERED_IN_PLACE`), there
@@ -93,8 +99,15 @@ export interface Connection {
   /** Sends a voice signal to one member of the room; unlike `send`, it leaves a shown error be. */
   signal: (to: string, signal: RtcSignal) => void;
   dismissError: () => void;
+  /**
+   * Out of the room: a player's seat given up — once the server has freed it, or after
+   * LEAVE_WAIT_MS without a word — the audience simply goes; the page loads anew.
+   */
   leaveRoom: () => void;
 }
+
+/** How long leaving waits for the server to free the seat before the page loads anew, ms. */
+export const LEAVE_WAIT_MS = 2000;
 
 /** Hears the server: each message as it comes in, and the socket dropping. */
 export interface ServerListener {
@@ -125,17 +138,21 @@ function resumeOfTab(): Resume | null {
   return code === null ? null : { code, pass: crewPass() };
 }
 
+/** The tab plays in no room any more: no socket of it resumes one. */
+function leaveTab(): void {
+  sessionStorage.removeItem(STORAGE_KEY);
+}
+
 /**
- * Out of the room for good: the tab plays in it no more, and what `playerId` noted there goes
- * with it (where it is known).
+ * Out of room `code` for good: the tab plays in it no more, and what `playerId` noted there
+ * goes with it (where it is known).
  */
-function forgetRoom(playerId: string | null): void {
-  const code = roomOfTab();
+function forgetRoom(code: string | null, playerId: string | null): void {
   const store = localStore();
   if (code !== null && playerId !== null && store !== null) {
     forgetNotes(store, code, playerId);
   }
-  sessionStorage.removeItem(STORAGE_KEY);
+  leaveTab();
 }
 
 function wsUrl(): string {
@@ -333,6 +350,7 @@ interface Page {
   setView: (view: PlayerView | null) => void;
   setSpectatorView: (view: SpectatorView) => void;
   setRooms: (rooms: RoomSummary[]) => void;
+  setSeat: (seat: Seat | null) => void;
   setError: (message: string) => void;
   refuse: (message: string, of: ClientMessage['kind'] | null) => void;
   /** a resume is out: an error now means the stored session is dead */
@@ -354,12 +372,18 @@ function takeIn(msg: ServerMessage, page: Page): void {
       page.setRoomCode(msg.code);
       break;
     case 'left':
-      // The seat plays on in another tab: this one plays in no room now, and keeps no resume,
-      // so that the two never take the seat from each other on their own.
-      sessionStorage.removeItem(STORAGE_KEY);
+      // The seat was given up, or plays on in another tab: this one plays in no room now and
+      // keeps no resume, so that two tabs never take the seat from each other on their own.
+      leaveTab();
       page.setRoomCode(null);
       page.setView(null);
-      page.setError(msg.message);
+      page.setSeat(null);
+      if (msg.message !== null) {
+        page.setError(msg.message);
+      }
+      break;
+    case 'seated':
+      page.setSeat(msg.seat);
       break;
     case 'view':
       clock.stamped(msg.at);
@@ -395,7 +419,7 @@ function takeIn(msg: ServerMessage, page: Page): void {
       if (page.resuming.current) {
         // The tab's room is gone, or its pass holds no seat there any more: back to join.
         page.resuming.current = false;
-        forgetRoom(page.you.current);
+        forgetRoom(roomOfTab(), page.you.current);
         page.setRoomCode(null);
         page.setView(null);
       }
@@ -463,6 +487,35 @@ function openLine(wiring: Wiring): { line: Line; close: () => void } {
 }
 
 /**
+ * Gives the seat in room `code` up (`abandon`): once the server says it left — or after
+ * LEAVE_WAIT_MS without a word, the seat kept for the join screen to offer again — the page
+ * loads anew, the tab in no room; what `playerId` noted there goes once the seat is gone.
+ */
+export function leaveSeat(
+  code: string,
+  playerId: string | null,
+  listen: Connection['listen'],
+  send: (msg: ClientMessage) => void,
+): void {
+  const reload = (): void => location.reload();
+  const timer = setTimeout(() => {
+    leaveTab();
+    reload();
+  }, LEAVE_WAIT_MS);
+  listen({
+    message: (msg) => {
+      if (msg.kind === 'left' && msg.code === code) {
+        clearTimeout(timer);
+        forgetRoom(code, playerId);
+        reload();
+      }
+    },
+    closed: () => undefined,
+  });
+  send({ kind: 'abandon', code, pass: crewPass() });
+}
+
+/**
  * Owns the WebSocket for the whole app: connects, resumes the tab's room on the browser's pass
  * after a reload or a lost connection, and reconnects with backoff (`keepConnected`).
  */
@@ -471,6 +524,7 @@ export function useGameConnection(): Connection {
   const [view, setView] = useState<PlayerView | null>(null);
   const [spectatorView, setSpectatorView] = useState<SpectatorView | null>(null);
   const [rooms, setRooms] = useState<RoomSummary[]>([]);
+  const [seat, setSeat] = useState<Seat | null>(null);
   const [roomCode, setRoomCode] = useState<string | null>(roomOfTab);
   const [error, setError] = useState<string | null>(null);
   const [refusal, setRefusal] = useState<Refusal | null>(null);
@@ -505,6 +559,7 @@ export function useGameConnection(): Connection {
         setView,
         setSpectatorView,
         setRooms,
+        setSeat,
         setError,
         refuse: (message, of) =>
           setRefusal((last) => ({ seq: (last?.seq ?? 0) + 1, message, of })),
@@ -528,6 +583,7 @@ export function useGameConnection(): Connection {
     view,
     spectatorView,
     rooms,
+    seat,
     roomCode,
     error,
     refusal,
@@ -545,8 +601,13 @@ export function useGameConnection(): Connection {
     signal,
     dismissError: () => setError(null),
     leaveRoom: () => {
-      forgetRoom(youRef.current);
-      location.reload();
+      const code = roomOfTab();
+      if (code === null || spectatorView !== null) {
+        leaveTab();
+        location.reload();
+        return;
+      }
+      leaveSeat(code, youRef.current, listen, (msg) => lineRef.current?.send(msg));
     },
   };
 }

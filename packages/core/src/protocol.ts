@@ -86,6 +86,14 @@ export const clientMessageSchema = z.discriminatedUnion('kind', [
     code: z.string().min(1).max(10),
     pass: crewPassSchema,
   }),
+  /** where the pass sits, for the join screen: answered with `seated` */
+  z.object({ kind: z.literal('whereami'), pass: crewPassSchema }),
+  /** the seat the pass holds in the room given up for good, from whatever socket this is */
+  z.object({
+    kind: z.literal('abandon'),
+    code: z.string().min(1).max(10),
+    pass: crewPassSchema,
+  }),
   z.object({ kind: z.literal('select-color'), color: z.string().regex(/^#[0-9a-f]{6}$/i) }),
   /**
    * yes or no to the next run; between runs the host's yes may name the
@@ -171,6 +179,22 @@ export const clientMessageSchema = z.discriminatedUnion('kind', [
    */
   z.object({ kind: z.literal('clock'), sent: z.number().finite() }),
 ]);
+
+/**
+ * Where a crew pass sits, as its join screen shows it (`whereami`): the room by its code, the
+ * mission, whether the run is on — it binds the pass while it runs or stands paused — the crew
+ * by name in the order they joined, and what the mission's clock showed as the server answered.
+ */
+export interface Seat {
+  code: string;
+  missionTitle: string;
+  /** 'lobby' before the run; 'playing' while it runs or stands paused */
+  phase: 'lobby' | 'playing';
+  paused: boolean;
+  crew: string[];
+  /** ms left on the mission's clock as the server answered; null before the clock started */
+  leftMs: number | null;
+}
 
 /** One row in the lobby browser. */
 export interface RoomSummary {
@@ -274,10 +298,13 @@ export type ServerMessage =
   /** the socket sits on its seat in room `code`: its pass holds it, the views say whose it is */
   | { kind: 'joined'; code: string }
   /**
-   * the socket sits on its seat in room `code` no more: the seat plays on another socket that
-   * showed its pass, a tab opened later say — `message` says so
+   * the pass sits on its seat in room `code` no more, or this socket does not: the seat was
+   * given up (`abandon`; `message` null), or it plays on another socket that showed its pass,
+   * a tab opened later say — `message` says so
    */
-  | { kind: 'left'; code: string; message: string }
+  | { kind: 'left'; code: string; message: string | null }
+  /** the answer to `whereami`: where the pass sits; null where it sits nowhere it is bound to */
+  | { kind: 'seated'; seat: Seat | null }
   | { kind: 'view'; view: PlayerView; at: number }
   | { kind: 'spectator-view'; view: SpectatorView; code: string; at: number }
   /** the answer to a `clock` ask: the page's `sent` handed back, and the server's time (`at`) */

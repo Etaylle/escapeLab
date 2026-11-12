@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { parseMission, type Mission } from '@escapelab/core';
 import { RoomManager } from '../src/roomManager.js';
 import { serveSockets } from '../src/sockets.js';
-import { FakeServer, joinedOf } from './line.js';
+import { FakeServer, joinedOf, type FakeSocket } from './line.js';
 import { passFor } from './passes.js';
 
 /** The tutorial, for two. */
@@ -100,6 +100,174 @@ describe('the crew pass on the line', () => {
     const forged = { ...passFor('Ben'), secret: passFor('Mallory').secret };
     forger.say({ kind: 'resume', code, pass: forged });
     expect(forger.heard.at(-1)).toMatchObject({ kind: 'error', of: 'resume' });
+    manager.get(code).dispose();
+  });
+});
+
+/** The lobby's run started: Ben confirmed, Anna pressed start. */
+function running() {
+  const room = lobby();
+  room.ben.say({ kind: 'set-ready', ready: true });
+  room.anna.say({ kind: 'start-mission' });
+  expect(room.anna.view.phase).toBe('playing');
+  return room;
+}
+
+/** What `socket` was last told about where Ben's pass sits. */
+function whereIsBen(socket: FakeSocket) {
+  socket.say({ kind: 'whereami', pass: passFor('Ben') });
+  const last = socket.heard.at(-1);
+  if (last?.kind !== 'seated') {
+    throw new Error(`whereami answered ${JSON.stringify(last)}`);
+  }
+  return last.seat;
+}
+
+describe('where a pass sits', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('is nowhere for a pass that sits nowhere, or shows the wrong secret', () => {
+    const { server, manager, code } = lobby();
+    const page = server.connect();
+    page.say({ kind: 'whereami', pass: passFor('Mallory') });
+    expect(page.heard).toEqual([{ kind: 'seated', seat: null }]);
+    const forged = { ...passFor('Ben'), secret: passFor('Mallory').secret };
+    page.say({ kind: 'whereami', pass: forged });
+    expect(page.heard.at(-1)).toEqual({ kind: 'seated', seat: null });
+    manager.get(code).dispose();
+  });
+
+  it('is the lobby for a pass seated there: its mission and its crew, no clock yet', () => {
+    const { server, manager, code } = lobby();
+    expect(whereIsBen(server.connect())).toEqual({
+      code,
+      missionTitle: mission.title,
+      phase: 'lobby',
+      paused: false,
+      crew: ['Anna', 'Ben'],
+      leftMs: null,
+    });
+    manager.get(code).dispose();
+  });
+
+  it('is the run on, with its clock as it stands, paused or not', () => {
+    const { server, manager, ben, code } = running();
+    vi.advanceTimersByTime(20_000);
+    const page = server.connect();
+    expect(whereIsBen(page)).toMatchObject({
+      phase: 'playing',
+      paused: false,
+      leftMs: (mission.timeLimitSec - 20) * 1000,
+    });
+    ben.close();
+    vi.advanceTimersByTime(30_000);
+    expect(whereIsBen(page)).toMatchObject({
+      phase: 'playing',
+      paused: true,
+      leftMs: (mission.timeLimitSec - 20) * 1000,
+    });
+    manager.get(code).dispose();
+  });
+
+  it('binds nobody once the run is over', () => {
+    const { server, manager, code } = running();
+    vi.advanceTimersByTime(mission.timeLimitSec * 1000 + 100);
+    expect(manager.get(code).phase).toBe('lost');
+    expect(whereIsBen(server.connect())).toBeNull();
+    manager.get(code).dispose();
+  });
+});
+
+describe('a pass bound to a run on', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('opens no room and joins no other, a line naming the run', () => {
+    const { server, manager, code } = running();
+    const other = server.connect();
+    other.say({ kind: 'create-room', name: 'Cem', pass: passFor('Cem') });
+    const elsewhere = joinedOf(other).code;
+    const tab = server.connect();
+    const line = `Gebunden an den Einsatz „${mission.title}" in Raum ${code}.`;
+    tab.say({ kind: 'create-room', name: 'Ben', pass: passFor('Ben') });
+    expect(tab.heard).toEqual([{ kind: 'error', of: 'create-room', message: line }]);
+    tab.say({ kind: 'join-room', code: elsewhere, name: 'Ben', pass: passFor('Ben') });
+    expect(tab.heard.at(-1)).toEqual({ kind: 'error', of: 'join-room', message: line });
+    expect(manager.list().map((room) => room.code).sort()).toEqual([code, elsewhere].sort());
+    expect(manager.get(elsewhere).summary().players.map((p) => p.name)).toEqual(['Cem']);
+    manager.get(code).dispose();
+  });
+
+  it('gives a seat in a lobby up as it sits down elsewhere', () => {
+    const { server, manager, anna, code } = lobby();
+    const other = server.connect();
+    other.say({ kind: 'create-room', name: 'Cem', pass: passFor('Cem') });
+    const elsewhere = joinedOf(other).code;
+    const tab = server.connect();
+    tab.say({ kind: 'join-room', code: elsewhere, name: 'Ben', pass: passFor('Ben') });
+    expect(anna.view.players.map((p) => p.name)).toEqual(['Anna']);
+    expect(other.view.players.map((p) => p.name)).toEqual(['Cem', 'Ben']);
+    expect(whereIsBen(server.connect())?.code).toBe(elsewhere);
+    manager.get(code).dispose();
+  });
+});
+
+describe('a seat given up', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('from the join screen of another tab: freed, the pass unbound, both sockets told', () => {
+    const { server, manager, anna, ben, code } = lobby();
+    const tab = server.connect();
+    tab.say({ kind: 'abandon', code, pass: passFor('Ben') });
+    expect(tab.heard).toEqual([{ kind: 'left', code, message: null }]);
+    expect(ben.heard.at(-1)).toEqual({ kind: 'left', code, message: null });
+    expect(anna.view.players.map((p) => p.name)).toEqual(['Anna']);
+    expect(whereIsBen(tab)).toBeNull();
+    tab.say({ kind: 'resume', code, pass: passFor('Ben') });
+    expect(tab.heard.at(-1)).toMatchObject({ kind: 'error', of: 'resume' });
+    ben.say({ kind: 'set-ready', ready: true });
+    expect(ben.heard.at(-1)).toMatchObject({ kind: 'error', of: 'set-ready' });
+    manager.get(code).dispose();
+  });
+
+  it('from its own socket: told once, the socket in no room from then on', () => {
+    const { manager, anna, ben, code } = lobby();
+    ben.say({ kind: 'abandon', code, pass: passFor('Ben') });
+    expect(ben.heard.filter((m) => m.kind === 'left')).toEqual([
+      { kind: 'left', code, message: null },
+    ]);
+    ben.say({ kind: 'set-ready', ready: true });
+    expect(ben.heard.at(-1)).toEqual({
+      kind: 'error',
+      of: 'set-ready',
+      message: 'Noch in keinem Raum.',
+    });
+    ben.close();
+    expect(anna.view.players.map((p) => p.name)).toEqual(['Anna']);
+    manager.get(code).dispose();
+  });
+
+  it('is refused for a pass with no seat in the room', () => {
+    const { server, manager, code } = lobby();
+    const page = server.connect();
+    page.say({ kind: 'abandon', code, pass: passFor('Mallory') });
+    expect(page.heard).toEqual([
+      { kind: 'error', of: 'abandon', message: 'Dieser Ausweis hat in diesem Raum keinen Platz.' },
+    ]);
     manager.get(code).dispose();
   });
 });

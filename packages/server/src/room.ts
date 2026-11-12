@@ -46,9 +46,11 @@ import {
   type Mission,
   type PlayerPosition,
   type RelayedPosition,
+  type Phase,
   type RoomSummary,
   type RtcSignal,
   type RunReport,
+  type Seat,
   type ServerMessage,
 } from '@escapelab/core';
 
@@ -221,14 +223,71 @@ export class Room {
     return { playerId };
   }
 
-  /** The seat `pass` holds in this room, by player id; null for none. */
+  /**
+   * The seat `pass` holds in this room, by player id; null for none — a seat the run started
+   * without, its player away as it began, is none.
+   */
   seatOf(pass: CrewPass): string | null {
-    return this.seats.seatOf(pass);
+    const playerId = this.seats.seatOf(pass);
+    return playerId !== null && this.state.players.some((p) => p.id === playerId)
+      ? playerId
+      : null;
   }
 
   /** Whether `listener` is the connection the seat of `playerId` plays on right now. */
   plays(playerId: string, listener: Listener): boolean {
     return this.listeners.get(playerId) === listener;
+  }
+
+  /**
+   * Where `pass` sits in this room, as its join screen shows it (`whereami`), the mission's
+   * clock read at `now`; null for a pass with no seat here, and for one in a finished run —
+   * the end screen binds nobody.
+   */
+  seatSummary(pass: CrewPass, now = Date.now()): Seat | null {
+    const { state } = this;
+    if (this.seatOf(pass) === null || (state.phase !== 'lobby' && state.phase !== 'playing')) {
+      return null;
+    }
+    const clock = state.paused?.since ?? now;
+    return {
+      code: this.code,
+      missionTitle: state.mission.title,
+      phase: state.phase,
+      paused: state.paused !== null,
+      crew: state.players.map((p) => p.name),
+      leftMs: state.deadlineAt === null ? null : Math.max(0, state.deadlineAt - clock),
+    };
+  }
+
+  /**
+   * The seat `pass` holds is given up for good (core `abandon`): its pass no longer binds it,
+   * and the connection it played on hears that it left. Returns its player id. Throws for a
+   * pass that holds no seat here, and as the reducer refuses.
+   */
+  abandon(pass: CrewPass): string {
+    const playerId = this.seatOf(pass);
+    if (playerId === null) {
+      throw new Error('Dieser Ausweis hat in diesem Raum keinen Platz.');
+    }
+    // Let go of its connection first: the views the leave sends out go to the rest alone.
+    const listener = this.listeners.get(playerId);
+    this.listeners.delete(playerId);
+    try {
+      this.dispatch({ type: 'abandon', playerId, at: Date.now() });
+    } catch (err) {
+      if (listener !== undefined) {
+        this.listeners.set(playerId, listener);
+      }
+      throw err;
+    }
+    this.seats.free(playerId);
+    this.signalAllowance.delete(playerId);
+    if (this.listeners.size === 0) {
+      this.emptySince = Date.now();
+    }
+    listener?.({ kind: 'left', code: this.code, message: null });
+    return playerId;
   }
 
   /**
@@ -571,6 +630,16 @@ export class Room {
   /** Mission currently selected in this room, so callers can rescale it. */
   get missionId(): string {
     return this.state.mission.id;
+  }
+
+  /** The title of the mission selected in this room. */
+  get missionTitle(): string {
+    return this.state.mission.title;
+  }
+
+  /** Where the room stands: its lobby, a run on — paused or not — or the end of one. */
+  get phase(): Phase {
+    return this.state.phase;
   }
 
   get difficulty(): Difficulty {

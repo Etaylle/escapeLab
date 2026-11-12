@@ -90,10 +90,23 @@ function listenerOf(socket: PlayerSocket): (msg: ServerMessage) => void {
   return listener;
 }
 
-/** What a socket may send before it is in a room: to open, join, watch or resume one, or ask. */
+/**
+ * What a socket may send whether or not it is in a room: to open, join, watch, resume or give
+ * up a seat, or to ask where its pass sits, which rooms there are, what time it is.
+ */
 type AtTheDoor = Extract<
   ClientMessage,
-  { kind: 'create-room' | 'join-room' | 'list-rooms' | 'clock' | 'spectate' | 'resume' }
+  {
+    kind:
+      | 'create-room'
+      | 'join-room'
+      | 'list-rooms'
+      | 'clock'
+      | 'spectate'
+      | 'resume'
+      | 'whereami'
+      | 'abandon';
+  }
 >;
 
 function handleMessage(
@@ -109,6 +122,8 @@ function handleMessage(
     case 'clock':
     case 'spectate':
     case 'resume':
+    case 'whereami':
+    case 'abandon':
       return atTheDoor(lab, socket, session, msg);
     default: {
       // A seat that went to another socket takes nothing from this one any more.
@@ -130,17 +145,13 @@ function atTheDoor(
 ): Session | null {
   switch (msg.kind) {
     case 'create-room':
-    case 'join-room': {
-      // A new room plays on the difficulty its host's device asked for — normal unless that
-      // device has won no run yet — with its alarm limit: scaled from the start.
-      const room = msg.kind === 'create-room' ? createRoom(lab, msg) : lab.manager.get(msg.code);
-      // A pass that already holds a seat here sits down on it again: a second tab, say.
-      const playerId =
-        room.seatOf(msg.pass) === null
-          ? room.join(msg.name, msg.pass).playerId
-          : room.resume(msg.pass);
-      return seated(socket, session, room, playerId);
-    }
+    case 'join-room':
+      return sitDown(lab, socket, session, msg);
+    case 'whereami':
+      send(socket, { kind: 'seated', seat: lab.manager.whereIs(msg.pass) });
+      return session;
+    case 'abandon':
+      return giveUp(lab, socket, session, msg);
     case 'list-rooms':
       send(socket, { kind: 'rooms', rooms: lab.manager.list() });
       return session;
@@ -160,6 +171,52 @@ function atTheDoor(
       return seated(socket, session, room, room.resume(msg.pass));
     }
   }
+}
+
+/**
+ * A pass sits down in a room it opens or joins: on a seat of its own, or — where it holds one
+ * there already, a second tab say — on that one again. A run on elsewhere binds it, which
+ * refuses it, and a seat it holds in another lobby or after a run there it gives up.
+ */
+function sitDown(
+  lab: Lab,
+  socket: PlayerSocket,
+  session: Session | null,
+  msg: Extract<ClientMessage, { kind: 'create-room' | 'join-room' }>,
+): Session {
+  if (msg.kind === 'join-room') {
+    const room = lab.manager.get(msg.code);
+    lab.manager.makeWay(msg.pass, room);
+    const playerId =
+      room.seatOf(msg.pass) === null
+        ? room.join(msg.name, msg.pass).playerId
+        : room.resume(msg.pass);
+    return seated(socket, session, room, playerId);
+  }
+  lab.manager.makeWay(msg.pass, null);
+  // A new room plays on the difficulty its host's device asked for — normal unless that
+  // device has won no run yet — with its alarm limit: scaled from the start.
+  const room = createRoom(lab, msg);
+  return seated(socket, session, room, room.join(msg.name, msg.pass).playerId);
+}
+
+/**
+ * The seat a pass holds in a room is given up, asked for from whatever socket: the connection
+ * the seat played on hears that it left — this one, or another, which this one is told as well.
+ */
+function giveUp(
+  lab: Lab,
+  socket: PlayerSocket,
+  session: Session | null,
+  msg: Extract<ClientMessage, { kind: 'abandon' }>,
+): Session | null {
+  const room = lab.manager.get(msg.code);
+  const playerId = room.abandon(msg.pass);
+  const own = session !== null && session.room === room && session.playerId === playerId;
+  if (!own) {
+    send(socket, { kind: 'left', code: room.code, message: null });
+  }
+  return own ? null : session;
 }
 
 /**

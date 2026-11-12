@@ -202,6 +202,7 @@ export {
   type MissionManual,
   type MissionManualStation,
   type RoomSummary,
+  type Seat,
   type PlayerPosition,
   type RelayedPosition,
   type DronePosition,

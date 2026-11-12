@@ -7,7 +7,9 @@ import {
   type MissionInfo,
   type MissionStats,
   type RoomSummary,
+  type Seat,
 } from '@escapelab/core';
+import { formatLeft } from '../clock.js';
 import { FIRST_RUN_HINT, firstDifficulty, isTutorial, useWon } from '../firstRun.js';
 import { crewPass, keepName, lastName } from '../pass.js';
 import { recordLine } from '../runStats.js';
@@ -23,6 +25,11 @@ interface Props {
   connected: boolean;
   missions: MissionInfo[];
   rooms: RoomSummary[];
+  /**
+   * where the browser's pass sits (`whereami`): its card stands over the form, and a run on
+   * blocks every other room; null for nowhere
+   */
+  seat?: Seat | null;
   /** the Bestenliste's runs, by mission */
   stats: MissionStats[];
   openHandbook: (missionId: string) => void;
@@ -226,6 +233,8 @@ interface SectionProps {
   connected: boolean;
   /** the name as typed, trimmed: nothing goes out under an empty one */
   name: string;
+  /** a run on binds the pass: no room opens or takes it till it is over */
+  blocked: boolean;
 }
 
 /**
@@ -239,6 +248,7 @@ function NewRound({
   send,
   connected,
   name,
+  blocked,
   missions,
   stats,
   openHandbook,
@@ -287,7 +297,11 @@ function NewRound({
         <p className="muted">Lade Missionen …</p>
       )}
       <div className="join-create-actions">
-        <button className="primary" disabled={!connected || name === ''} onClick={open}>
+        <button
+          className="primary"
+          disabled={!connected || name === '' || blocked}
+          onClick={open}
+        >
           Runde eröffnen
         </button>
         {selected !== null && (
@@ -323,7 +337,7 @@ function NewRound({
  * „Mit Code": a room's code to join or watch it by. An invite link carries the room in
  * ?room=, so the field is already filled and all that is left to do is type a name.
  */
-function WithCode({ send, connected, name }: SectionProps) {
+function WithCode({ send, connected, name, blocked }: SectionProps) {
   const [code, setCode] = useState(
     () => new URLSearchParams(window.location.search).get('room')?.toUpperCase() ?? '',
   );
@@ -340,7 +354,7 @@ function WithCode({ send, connected, name }: SectionProps) {
           aria-label="Raumcode"
         />
         <button
-          disabled={!connected || name === '' || code.trim().length === 0}
+          disabled={!connected || name === '' || code.trim().length === 0 || blocked}
           onClick={() => send(joinMessage(code.trim(), name))}
         >
           Beitreten
@@ -357,57 +371,74 @@ function WithCode({ send, connected, name }: SectionProps) {
   );
 }
 
-export function JoinScreen({
+/**
+ * What the join screen asks as it comes up, and again whenever the line is back: the rooms
+ * there are, and where the browser's pass sits (`whereami`) — a run on binds it.
+ */
+export function doorAsks(pass: CrewPass): ClientMessage[] {
+  return [{ kind: 'list-rooms' }, { kind: 'whereami', pass }];
+}
+
+/** The one line that says a run on holds the pass: no other room until it is over. */
+export function boundLine(seat: Pick<Seat, 'missionTitle' | 'code'>): string {
+  return `Gebunden an „${seat.missionTitle}" in Raum ${seat.code} — neue Runden erst danach.`;
+}
+
+/** What the card says over where the pass sits: a run on, or standing paused, or a lobby. */
+function kickerOf(seat: Seat): string {
+  if (seat.phase === 'lobby') {
+    return 'IM RAUM';
+  }
+  return seat.paused ? 'EINSATZ PAUSIERT' : 'EINSATZ LÄUFT';
+}
+
+/**
+ * Where the browser's pass sits, instead of the join form (`Seat`): the mission, the room's
+ * code, the crew and the clock as the server showed it, and the way back; from a lobby the
+ * way out as well, as free as leaving it always was.
+ */
+export function BoundCard({ seat, send }: { seat: Seat; send: Props['send'] }) {
+  const run = seat.phase === 'playing';
+  const clock = seat.leftMs === null ? '' : ` · noch ${formatLeft(seat.leftMs)}`;
+  return (
+    <section className={`bound${run ? ' bound--run' : ''}`}>
+      <span className="kicker bound-kicker">{kickerOf(seat)}</span>
+      <h2 className="bound-title">{seat.missionTitle}</h2>
+      <p className="bound-facts">
+        Raum {seat.code}
+        {clock} · {seat.crew.join(', ')}
+      </p>
+      <div className="bound-actions">
+        <button
+          className="primary bound-back"
+          onClick={() => send({ kind: 'resume', code: seat.code, pass: crewPass() })}
+        >
+          {run ? 'Zurück zum Einsatz' : 'Zurück in den Raum'}
+        </button>
+        {!run && (
+          <button
+            className="bound-leave"
+            onClick={() => send({ kind: 'abandon', code: seat.code, pass: crewPass() })}
+          >
+            Raum verlassen
+          </button>
+        )}
+      </div>
+    </section>
+  );
+}
+
+/** „Offene Runden": every room somebody sits in, to join or to watch by a press. */
+function OpenRounds({
   send,
   connected,
-  missions,
+  name,
   rooms,
-  stats,
-  openHandbook,
-  openHistory,
-  openEditor,
-}: Props) {
-  const [name, setName] = useKeptName();
-  const nameOk = name.trim().length > 0;
-  const comesOn = useComesOn('start');
-
-  // Keep the room browser fresh while nobody has joined anything yet.
-  useEffect(() => {
-    if (!connected) {
-      return undefined;
-    }
-    send({ kind: 'list-rooms' });
-    const timer = setInterval(() => send({ kind: 'list-rooms' }), REFRESH_MS);
-    return () => clearInterval(timer);
-    // `send` is stable for the lifetime of the connection.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [connected]);
-
-  const section = { send, connected, name: name.trim() };
+  missions,
+}: SectionProps & Pick<Props, 'rooms' | 'missions'>) {
+  const nameOk = name.length > 0;
   return (
-    <div className="card join">
-      <h1 className={phosphorClass(comesOn)}>
-        <Icon name="hex" /> EscapeLab
-      </h1>
-      <p className="muted">
-        Kooperatives Escape-Spiel für den Browser: Die Maschine sieht, wer am Pult steht, die
-        Regeln, wer am Buch steht — lösen lässt es sich nur gemeinsam, per Stimme. Gerät pro
-        Person, Rücken an Rücken, los.
-      </p>
-      <InstallOffer />
-      <HttpsHint />
-
-      <label>
-        Name
-        <input
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          maxLength={40}
-          placeholder="z. B. Anna"
-          autoFocus
-        />
-      </label>
-
+    <>
       <h2>Offene Runden</h2>
       {rooms.length === 0 ? (
         <p className="muted">
@@ -421,7 +452,7 @@ export function JoinScreen({
               room={room}
               tiles={missions.find((m) => m.id === room.missionId)?.tiles ?? []}
               canJoin={connected && nameOk}
-              onJoin={() => send(joinMessage(room.code, name.trim()))}
+              onJoin={() => send(joinMessage(room.code, name))}
               onWatch={() => send({ kind: 'spectate', code: room.code })}
             />
           ))}
@@ -429,6 +460,73 @@ export function JoinScreen({
       )}
       {rooms.length > 0 && !nameOk && (
         <p className="muted">Zum Beitreten oben einen Namen eintragen.</p>
+      )}
+    </>
+  );
+}
+
+export function JoinScreen({
+  send,
+  connected,
+  missions,
+  rooms,
+  seat = null,
+  stats,
+  openHandbook,
+  openHistory,
+  openEditor,
+}: Props) {
+  const [name, setName] = useKeptName();
+  const comesOn = useComesOn('start');
+  // A run on binds the pass: the card stands in the form's place, no other room opens.
+  const bound = seat?.phase === 'playing';
+
+  // Keep the room browser fresh while nobody has joined anything yet; where the pass sits is
+  // asked as the screen comes up, and again whenever the line is back.
+  useEffect(() => {
+    if (!connected) {
+      return undefined;
+    }
+    for (const ask of doorAsks(crewPass())) {
+      send(ask);
+    }
+    const timer = setInterval(() => send({ kind: 'list-rooms' }), REFRESH_MS);
+    return () => clearInterval(timer);
+    // `send` is stable for the lifetime of the connection.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [connected]);
+
+  const section = { send, connected, name: name.trim(), blocked: bound };
+  return (
+    <div className="card join">
+      <h1 className={phosphorClass(comesOn)}>
+        <Icon name="hex" /> EscapeLab
+      </h1>
+      <p className="muted">
+        Kooperatives Escape-Spiel für den Browser: Die Maschine sieht, wer am Pult steht, die
+        Regeln, wer am Buch steht — lösen lässt es sich nur gemeinsam, per Stimme. Gerät pro
+        Person, Rücken an Rücken, los.
+      </p>
+      <InstallOffer />
+      <HttpsHint />
+
+      {seat !== null && <BoundCard seat={seat} send={send} />}
+      {bound ? (
+        <p className="bound-line">{boundLine(seat)}</p>
+      ) : (
+        <>
+          <label>
+            Name
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              maxLength={40}
+              placeholder="z. B. Anna"
+              autoFocus
+            />
+          </label>
+          <OpenRounds {...section} rooms={rooms} missions={missions} />
+        </>
       )}
 
       <div className="join-grid">

@@ -17,8 +17,16 @@ const hashOf = (secret: string): Buffer => createHash('sha256').update(secret).d
 export class SeatBook {
   private readonly bindings = new Map<string, Binding>();
 
-  /** Binds the seat of `playerId` to `pass`, in place of whatever pass held it. */
+  /**
+   * Binds the seat of `playerId` to `pass`, in place of whatever pass held it; a seat the pass
+   * held before lets go of it: a pass holds one seat at a time.
+   */
   bind(playerId: string, pass: CrewPass): void {
+    for (const [seat, binding] of this.bindings) {
+      if (binding.passId === pass.id) {
+        this.bindings.delete(seat);
+      }
+    }
     this.bindings.set(playerId, { passId: pass.id, hash: hashOf(pass.secret) });
   }
 
