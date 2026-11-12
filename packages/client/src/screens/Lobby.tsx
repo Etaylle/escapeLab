@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 
 import {
   dailyLabel,
   difficultyInfos,
+  linesDown,
   utcDay,
   type ClientMessage,
   type Difficulty,
@@ -35,12 +36,16 @@ interface Props {
 }
 
 /**
- * Why the host cannot start yet, or null: the connected crew must be a size
- * the mission takes and everyone but the host must have confirmed — the
- * server checks the same.
+ * Why the host cannot start yet, or null: every seat's line must be up — one down holds the
+ * start until it is back, or the room frees the seat — the crew must be a size the mission
+ * takes, and everyone but the host must have confirmed. The server checks the same.
  */
 export function startBlocker(view: Pick<PlayerView, 'crewSize' | 'players'>): string | null {
-  const crew = view.players.filter((p) => p.connected);
+  const down = view.players.filter((p) => !p.connected).map((p) => p.name);
+  if (down.length > 0) {
+    return linesDown(down);
+  }
+  const crew = view.players;
   const missing = view.crewSize.min - crew.length;
   if (missing > 0) {
     return `Noch ${missing} ${missing === 1 ? 'Person' : 'Personen'} nötig`;

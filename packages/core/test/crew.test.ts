@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { applyAction, initialState, NO_CREDITS, parseMission, viewFor } from '../src/index.js';
+import {
+  applyAction,
+  initialState,
+  linesDown,
+  NO_CREDITS,
+  parseMission,
+  viewFor,
+} from '../src/index.js';
 import type { Action, GameState, Mission } from '../src/index.js';
-import { lineDrops, T0 } from './lab.js';
+import { lineBack, lineDrops, T0 } from './lab.js';
 
 /**
  * Two rooms, west (x 1–3) and east (x 5–7), joined by a door at (4,2) that
@@ -85,18 +92,27 @@ describe('a crew without roles', () => {
     );
   });
 
-  it('leaves out whoever is gone from the room, and does not wait for them', () => {
-    const lobby = run([join('p1'), join('p2'), join('p3'), ready('p2')]);
-    const gone = applyAction(lobby, lineDrops('p3', T0));
-    const state = run([start()], gone);
-    expect(state.players.map((p) => p.id)).toEqual(['p1', 'p2']);
-    expect(state.credits).toEqual({ p1: NO_CREDITS, p2: NO_CREDITS });
-    expect(state.paused).toBeNull();
-    const short = applyAction(
-      run([join('p1'), join('p2'), ready('p2')]),
-      lineDrops('p2', T0),
-    );
-    expect(() => run([start()], short)).toThrow(/mindestens 2/);
+  it('holds the start back while a seat’s line is down, naming whose, until it is back', () => {
+    const named = (playerId: string, name: string): Action => ({
+      type: 'player-join',
+      playerId,
+      name,
+    });
+    const lobby = run([named('p1', 'Anna'), named('p2', 'Ben'), named('p3', 'Hans')]);
+    const gone = run([ready('p2'), ready('p3'), lineDrops('p3', T0)], lobby);
+    expect(() => run([start()], gone)).toThrow('Hans’ Leitung ist unterbrochen.');
+    const both = run([lineDrops('p2', T0)], gone);
+    expect(() => run([start()], both)).toThrow('Leitungen unterbrochen: Ben, Hans.');
+    const back = run([lineBack('p3', T0 + 1000), start()], gone);
+    expect(back.players.map((p) => p.id)).toEqual(['p1', 'p2', 'p3']);
+    expect(back.credits).toEqual({ p1: NO_CREDITS, p2: NO_CREDITS, p3: NO_CREDITS });
+  });
+
+  it('says whose line holds the start back, the genitive as German writes it', () => {
+    expect(linesDown(['Ben'])).toBe('Bens Leitung ist unterbrochen');
+    expect(linesDown(['Max'])).toBe('Max’ Leitung ist unterbrochen');
+    expect(linesDown(['Fritz'])).toBe('Fritz’ Leitung ist unterbrochen');
+    expect(linesDown(['Ben', 'Cem'])).toBe('Leitungen unterbrochen: Ben, Cem');
   });
 
   it('tells the lobby how many the mission takes', () => {

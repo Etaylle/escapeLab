@@ -811,12 +811,16 @@ function placeSources(manuals: readonly ManualDef[], seed: number): GameState['p
 }
 
 /**
- * The players connected right now are the crew — as many as the mission
- * takes — and everyone but the host has confirmed; whoever is gone from the
- * room is left out of the run.
+ * The room's players are the crew — as many as the mission takes — every one of them on the
+ * line, and everyone but the host has confirmed. A seat whose line is down holds the start
+ * back (`linesDown`) until it is back, or the room frees it.
  */
 function crewToStart(state: GameState): Player[] {
-  const crew = state.players.filter((p) => p.connected);
+  const down = state.players.filter((p) => !p.connected).map((p) => p.name);
+  if (down.length > 0) {
+    fail(`${linesDown(down)}.`);
+  }
+  const crew = state.players;
   const { min, max } = state.mission.players;
   if (crew.length < min) {
     // voice: interface
@@ -832,6 +836,19 @@ function crewToStart(state: GameState): Player[] {
     fail(`Noch nicht bereit: ${waiting.map((p) => p.name).join(', ')}.`);
   }
   return crew;
+}
+
+/**
+ * What holds a start back while seats of the room are off the line, by their names: „Bens
+ * Leitung ist unterbrochen", the s of the genitive an apostrophe after an s, ß, x or z.
+ */
+export function linesDown(names: readonly string[]): string {
+  const [only] = names;
+  if (names.length === 1 && only !== undefined) {
+    const whose = /[sßxz]$/i.test(only) ? `${only}’` : `${only}s`;
+    return `${whose} Leitung ist unterbrochen`;
+  }
+  return `Leitungen unterbrochen: ${names.join(', ')}`;
 }
 
 /**

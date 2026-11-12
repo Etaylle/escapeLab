@@ -108,9 +108,11 @@ describe('the server’s log of seats, a line an event with its room and name', 
   it('says which socket the heartbeat cut and why, then that its line closed', () => {
     const { line, manager, stop, lines } = server();
     const { code, anna, ben } = crew(line, 'systemcheck');
-    // A socket in no room is cut as well, and goes unnamed.
-    line.connect().talking = false;
-    ben.talking = false;
+    // A socket in no room is cut as well, and goes unnamed. Both pages are held offline.
+    for (const page of [line.connect(), ben]) {
+      page.asking = false;
+      page.listening = false;
+    }
     vi.advanceTimersByTime(SILENT_MS);
     anna.answering = false;
     vi.advanceTimersByTime(3 * HEARTBEAT_MS);

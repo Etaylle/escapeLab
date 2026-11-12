@@ -129,6 +129,9 @@ const SEAT_MOVED = 'Dieser Platz spielt jetzt in einem anderen Fenster.';
 /** What a pass is told once another device took its seat over by its name. */
 const SEAT_TAKEN = 'Der Platz wurde auf einem anderen Gerät übernommen.';
 
+/** How long a seat in the lobby may stay off the line before the room frees it, ms. */
+export const LOBBY_AWAY_MS = 120_000;
+
 /** A stretch of time in seconds, as the log says it: `12.3 s`. */
 const seconds = (ms: number): string => `${(ms / 1000).toFixed(1)} s`;
 
@@ -205,6 +208,8 @@ export class Room {
   private refusedSteps = 0;
   /** when each seat's line closed, by player id, for the log to say how long it was away */
   private readonly lostAt = new Map<string, number>();
+  /** frees each lobby seat whose line has been down LOBBY_AWAY_MS, by player id */
+  private readonly freeing = new Map<string, NodeJS.Timeout>();
   /** epoch ms since the room has had no connected players, null while occupied */
   emptySince: number | null = null;
 
@@ -301,6 +306,17 @@ export class Room {
     if (playerId === null) {
       throw new Error('Dieser Ausweis hat in diesem Raum keinen Platz.');
     }
+    const left = this.state.phase === 'playing' ? 'gave the run up' : 'left the room';
+    this.leave(playerId, `${this.nameOf(playerId)} ${left}`);
+    return playerId;
+  }
+
+  /**
+   * The seat of `playerId` given up for good (`abandon`), or freed in the lobby (`freeAway`);
+   * the log says `line` first: a run it leaves short of its crew ends with it, and the log
+   * says so next.
+   */
+  private leave(playerId: string, line: string): void {
     const stood = this.positions.get(playerId);
     const where = stood === undefined ? null : { x: stood.x, y: stood.y };
     // Worked out before anything is let go of: a leave the core refuses leaves the seat be.
@@ -309,9 +325,7 @@ export class Room {
     const listener = this.listeners.get(playerId);
     this.listeners.delete(playerId);
     this.positions.delete(playerId);
-    // Said first: a run it leaves short of its crew ends with it, and the log says so next.
-    const left = this.state.phase === 'playing' ? 'gave the run up' : 'left the room';
-    this.log(`${this.nameOf(playerId)} ${left}`);
+    this.log(line);
     this.settle(next, 'abandon');
     this.seats.free(playerId);
     const kept = [this.signalAllowance, this.lastPingAt, this.lastChatAt, this.glances];
@@ -327,25 +341,54 @@ export class Room {
       this.positionsDirty = true;
       this.schedulePositionsBroadcast();
     }
-    return playerId;
+  }
+
+  /**
+   * In the lobby, frees every seat whose line has been down LOBBY_AWAY_MS (`freeAway`) — at
+   * once, where the room comes back to its lobby later than that, or once the time is up —
+   * and lets go of the timer of every other seat: back on the line, gone, or in a run.
+   */
+  private reconcileLobbyAway(): void {
+    const due = new Map<string, number>();
+    for (const player of this.state.phase === 'lobby' ? this.state.players : []) {
+      const lost = this.lostAt.get(player.id);
+      if (!player.connected && lost !== undefined) {
+        due.set(player.id, lost);
+      }
+    }
+    for (const [playerId, timer] of this.freeing) {
+      if (!due.has(playerId)) {
+        clearTimeout(timer);
+        this.freeing.delete(playerId);
+      }
+    }
+    for (const [playerId, lost] of due) {
+      if (!this.freeing.has(playerId)) {
+        const wait = Math.max(0, lost + LOBBY_AWAY_MS - Date.now());
+        this.freeing.set(playerId, setTimeout(() => this.freeAway(playerId), wait));
+      }
+    }
+  }
+
+  /** The lobby seat of `playerId`, off the line LOBBY_AWAY_MS, freed: its pass binds it no more. */
+  private freeAway(playerId: string): void {
+    this.freeing.delete(playerId);
+    const away = seconds(Date.now() - (this.lostAt.get(playerId) ?? Date.now()));
+    this.leave(playerId, `${this.nameOf(playerId)}'s seat freed, ${away} after its line closed`);
   }
 
   /**
    * The player whose seat `pass` holds is back, on whatever socket shows it; their player id.
-   * Throws for a pass that holds no seat here, or once the run left its seat out.
+   * Throws for a pass that holds no seat here: never held one, gave it up, had it freed in the
+   * lobby, or lost it to another device (SEAT_TAKEN).
    */
   resume(pass: CrewPass): string {
-    const playerId = this.seats.seatOf(pass);
+    const playerId = this.seatOf(pass);
     if (playerId === null && this.seats.lostSeat(pass)) {
       throw new GameError(SEAT_TAKEN);
     }
     if (playerId === null) {
       throw new Error('Wiederverbinden fehlgeschlagen — Raum neu beitreten.');
-    }
-    if (!this.state.players.some((p) => p.id === playerId)) {
-      this.seats.free(playerId);
-      this.lostAt.delete(playerId);
-      throw new Error('Der Lauf hat ohne diese Verbindung begonnen — Raum neu beitreten.');
     }
     this.log(`${this.nameOf(playerId)} resumed, ${this.back(playerId)}`);
     return playerId;
@@ -1559,6 +1602,7 @@ export class Room {
     if (type !== 'set-presence' && this.findingWorld() !== world) {
       this.reconcilePresence();
     }
+    this.reconcileLobbyAway();
   }
 
   /** The run is over: the log says how, and its report goes to `onRunFinished`. */
@@ -1623,6 +1667,10 @@ export class Room {
   }
 
   dispose(): void {
+    for (const timer of this.freeing.values()) {
+      clearTimeout(timer);
+    }
+    this.freeing.clear();
     if (this.timer !== null) {
       clearTimeout(this.timer);
       this.timer = null;

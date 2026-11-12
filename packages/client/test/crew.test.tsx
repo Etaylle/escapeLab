@@ -143,13 +143,18 @@ describe('how many play', () => {
 });
 
 describe('starting from the lobby', () => {
-  it('needs as many as the mission takes, and only who is connected counts', () => {
+  it('needs as many as the mission takes', () => {
     expect(startBlocker(annaSees([anna]))).toBe('Noch 1 Person nötig');
     expect(startBlocker(annaSees([anna], { crewSize: { min: 3, max: 3 } }))).toBe(
       'Noch 2 Personen nötig',
     );
+  });
+
+  it('is held back by a seat whose line is down, naming whose', () => {
     const gone = { ...ben, ready: true, connected: false };
-    expect(startBlocker(annaSees([anna, gone]))).toBe('Noch 1 Person nötig');
+    expect(startBlocker(annaSees([anna, gone]))).toBe('Bens Leitung ist unterbrochen');
+    const both = [anna, gone, { ...carla, ready: true, connected: false }];
+    expect(startBlocker(annaSees(both))).toBe('Leitungen unterbrochen: Ben, Carla');
   });
 
   it('refuses a crew larger than the mission takes', () => {

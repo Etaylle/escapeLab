@@ -365,6 +365,20 @@ describe('keepConnected — a line that shows itself dead', () => {
     expect(told.statuses.slice(-2)).toEqual(['closed', 'connecting']);
   });
 
+  it('answers every tick at once, and lives on ticks alone while the page’s timers stall', () => {
+    const { sockets, told, last } = up();
+    // The tab is long hidden: the page asks nothing, its timers held back; the server beats.
+    for (let beat = 0; beat < 30; beat++) {
+      vi.advanceTimersByTime(10_000);
+      const before = last().sent.length;
+      last().say({ kind: 'tick' });
+      // Answered inside the message handler: no timer of the page's ran in between.
+      expect(last().sent.slice(before)).toEqual([{ kind: 'tock' }]);
+    }
+    expect(sockets).toHaveLength(1);
+    expect(told.heard.some((msg) => msg.kind === 'tick')).toBe(false);
+  });
+
   it('is dead after 20 s without a word from the server', () => {
     const { sockets, last } = up();
     vi.advanceTimersByTime(SILENCE_MS - 1000);

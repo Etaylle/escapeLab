@@ -8,14 +8,17 @@ export const ROUND_TRIP_MS = 40;
  * A client's socket as the server sees it: it says what the client sends, answers a ping a
  * round trip later while `answering` — as a browser does on its own — and on `terminate`
  * leaves the server's clients and closes, as `ws` closes a socket it destroys; `close` is the
- * page closing it. While `talking` it asks the server's time as each ping comes, as a page
- * asks every 10 s (client clock.ts); a page that stopped — frozen, or held offline while its
- * browser answers the pings — talks no more.
+ * page closing it. While `asking` its page's timers run: it asks the server's time as each
+ * ping comes, as a page asks every 10 s (client clock.ts). While `listening` its page's
+ * message handler runs: it answers each `tick` at once with a `tock`, as client line.ts does —
+ * a tab long hidden still listens, its timers held back. A page held offline while its browser
+ * answers the pings does neither.
  */
 export class FakeSocket extends EventEmitter {
   readonly heard: ServerMessage[] = [];
   answering = true;
-  talking = true;
+  asking = true;
+  listening = true;
   pings = 0;
   terminated = false;
 
@@ -24,7 +27,11 @@ export class FakeSocket extends EventEmitter {
   }
 
   send(data: string): void {
-    this.heard.push(JSON.parse(data) as ServerMessage);
+    const msg = JSON.parse(data) as ServerMessage;
+    this.heard.push(msg);
+    if (msg.kind === 'tick' && this.listening) {
+      this.say({ kind: 'tock' });
+    }
   }
 
   ping(): void {
@@ -34,7 +41,7 @@ export class FakeSocket extends EventEmitter {
         this.emit('pong');
       }
     }, ROUND_TRIP_MS);
-    if (this.talking) {
+    if (this.asking) {
       this.say({ kind: 'clock', sent: Date.now() });
     }
   }

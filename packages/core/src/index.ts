@@ -37,6 +37,7 @@ export {
   FIRST_WAIT_MS,
   inEscapePhase,
   LATER_WAIT_MS,
+  linesDown,
   missingItemsFor,
   NOTE_READ,
   NUDGE_QUIET_MS,

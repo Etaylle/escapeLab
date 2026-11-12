@@ -6,11 +6,15 @@
  * alike, is pinged every HEARTBEAT_MS, and one that leaves MISSED_PINGS pings in a row
  * unanswered is terminated: it closes like any other, and the room hears the player go
  * (`player-disconnected`, the pause while someone is missing) — within three beats of the
- * silence. Browsers answer a ping on their own, even for a page that has stopped — frozen in
- * the background, or its network held back as DevTools' offline mode does — so a socket that
- * sends nothing for SILENT_MS is terminated as well: a page asks the server's time every 10 s
- * (client clock.ts). A player back on a new socket resumes.
+ * silence. Browsers answer a ping on their own, even for a page that has stopped — its
+ * network held back as DevTools' offline mode does — so a socket that sends nothing for
+ * SILENT_MS is terminated as well. Each beat sends the socket a `tick` too, which the page
+ * answers at once with a `tock` from its message handler: that runs where the page's timers
+ * are held back, in a tab long hidden, so a page that lives is never silent that long. A
+ * player back on a new socket resumes.
  */
+import type { ServerMessage } from '@escapelab/core';
+
 
 /** How often every socket is pinged, ms. */
 export const HEARTBEAT_MS = 10_000;
@@ -27,9 +31,13 @@ export type CutReason = 'pongs' | 'silent';
 /** What the heartbeat needs of a socket: `ws`'s WebSocket has it. */
 export interface BeatingSocket {
   ping(): void;
+  send(data: string): void;
   terminate(): void;
   on(event: 'pong' | 'message' | 'close', listener: () => void): unknown;
 }
+
+/** The beat as it goes out to every socket (core protocol `tick`). */
+const TICK = JSON.stringify({ kind: 'tick' } satisfies ServerMessage);
 
 /** What the heartbeat needs of the server: `ws`'s WebSocketServer has it. */
 export interface BeatingServer {
@@ -38,10 +46,10 @@ export interface BeatingServer {
 }
 
 /**
- * Pings every socket of `server` every `everyMs` and terminates one whose last MISSED_PINGS
- * pings went unanswered, or that sent nothing for SILENT_MS; a pong at any time clears its
- * count. `onCut` hears of every socket terminated, and why, just before it closes. Returns how
- * to stop.
+ * Pings every socket of `server` every `everyMs`, sends it a `tick` with each ping, and
+ * terminates one whose last MISSED_PINGS pings went unanswered, or that sent nothing — its
+ * `tock`s included — for SILENT_MS; a pong at any time clears its count. `onCut` hears of every
+ * socket terminated, and why, just before it closes. Returns how to stop.
  */
 export function startHeartbeat(
   server: BeatingServer,
@@ -76,6 +84,7 @@ export function startHeartbeat(
       }
       unanswered.set(socket, missed + 1);
       socket.ping();
+      socket.send(TICK);
     }
   }, everyMs);
   timer.unref();

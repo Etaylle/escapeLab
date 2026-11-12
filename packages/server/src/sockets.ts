@@ -155,6 +155,7 @@ const DOOR_KINDS = [
   'resume',
   'whereami',
   'abandon',
+  'tock',
 ] as const satisfies readonly ClientMessage['kind'][];
 
 type AtTheDoor = Extract<ClientMessage, { kind: (typeof DOOR_KINDS)[number] }>;
@@ -206,11 +207,14 @@ function atTheDoor(
   }
 }
 
-/** Answers what a socket asks at the door: where its pass sits, which rooms there are, the time. */
+/**
+ * Answers what a socket asks at the door: where its pass sits, which rooms there are, the
+ * time. Its `tock` needs no answer: the heartbeat heard it (heartbeat.ts).
+ */
 function answer(
   lab: Lab,
   socket: PlayerSocket,
-  msg: Extract<AtTheDoor, { kind: 'whereami' | 'list-rooms' | 'clock' }>,
+  msg: Extract<AtTheDoor, { kind: 'whereami' | 'list-rooms' | 'clock' | 'tock' }>,
 ): void {
   switch (msg.kind) {
     case 'whereami':
@@ -222,6 +226,8 @@ function answer(
     case 'clock':
       // The page's own time comes back as it was sent: only the round trip is the page's.
       send(socket, { kind: 'clock', sent: msg.sent, at: Date.now() });
+      break;
+    case 'tock':
       break;
   }
 }

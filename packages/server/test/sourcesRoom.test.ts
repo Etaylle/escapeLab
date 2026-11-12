@@ -317,24 +317,4 @@ describe('Room with sources to find and open', () => {
     room.dispose();
   });
 
-  it('starts with whoever is connected, and turns away a resume of whoever was left out', () => {
-    const room = new Room('TEST', mission);
-    const anna = { ...room.join('Anna', passFor('Anna')), ...collector() };
-    const ben = { ...room.join('Ben', passFor('Ben')), ...collector() };
-    const cleo = room.join('Cleo', passFor('Cleo'));
-    room.attach(anna.playerId, anna.listen);
-    room.attach(ben.playerId, ben.listen);
-    const cleoGone = room.attach(cleo.playerId, () => undefined);
-    expect(room.summary()).toMatchObject({ capacity: 3, free: 0 });
-    cleoGone();
-    room.setReady(ben.playerId, true);
-    room.act(anna.playerId, { kind: 'start-mission' });
-    const view = lastView(anna.messages);
-    expect(view.phase).toBe('playing');
-    expect(view.players.map((p) => p.name)).toEqual(['Anna', 'Ben']);
-    expect(view.pausedFor).toBeNull();
-    expect(() => room.resume(passFor('Cleo'))).toThrow(/ohne diese Verbindung begonnen/);
-    expect(() => room.resume(passFor('Cleo'))).toThrow(/Wiederverbinden fehlgeschlagen/);
-    room.dispose();
-  });
 });

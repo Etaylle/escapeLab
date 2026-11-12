@@ -182,6 +182,11 @@ export const clientMessageSchema = z.discriminatedUnion('kind', [
    * with the answer — whatever the page's clock says, the server only echoes it
    */
   z.object({ kind: z.literal('clock'), sent: z.number().finite() }),
+  /**
+   * the answer to the server's `tick`, sent as it comes in: the page's message handler runs
+   * where its timers are held back (a tab long hidden), so the line counts as alive
+   */
+  z.object({ kind: z.literal('tock') }),
 ]);
 
 /**
@@ -313,6 +318,11 @@ export type ServerMessage =
   | { kind: 'spectator-view'; view: SpectatorView; code: string; at: number }
   /** the answer to a `clock` ask: the page's `sent` handed back, and the server's time (`at`) */
   | { kind: 'clock'; sent: number; at: number }
+  /**
+   * the server's beat, every 10 s on every socket, answered at once with a `tock`: each side
+   * hears the other while nothing else is said
+   */
+  | { kind: 'tick' }
   /** E was taken: what it did is in the views that came before this */
   | { kind: 'interacted' }
   | { kind: 'rooms'; rooms: RoomSummary[] }

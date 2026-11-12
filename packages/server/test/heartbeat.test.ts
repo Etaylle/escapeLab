@@ -66,6 +66,8 @@ describe('the heartbeat', () => {
     for (const socket of [anna, ben, browsing]) {
       expect(socket.pings).toBe(10);
       expect(socket.terminated).toBe(false);
+      // A tock is taken from a socket in no room, as from one on a seat: nothing refused.
+      expect(socket.heard.filter((msg) => msg.kind === 'error')).toEqual([]);
     }
     expect(anna.view.pausedFor).toBeNull();
     end();
@@ -150,8 +152,9 @@ describe('the heartbeat', () => {
 
   it('ends a socket that sends nothing for 20 s, though its browser answers every ping', () => {
     const { anna, ben, end, cuts } = startedRun();
-    // Ben's page stops — frozen, or held offline — while his browser still answers the pings.
-    ben.talking = false;
+    // Ben's page is held offline: his browser answers the pings, his page says nothing.
+    ben.asking = false;
+    ben.listening = false;
     vi.advanceTimersByTime(SILENT_MS - 1);
     expect(ben.terminated).toBe(false);
     expect(ben.pings).toBe(1);
@@ -160,6 +163,18 @@ describe('the heartbeat', () => {
     expect(anna.view.pausedFor?.map((away) => away.name)).toEqual(['Ben']);
     expect(cuts).toEqual([{ socket: ben, why: 'silent' }]);
     expect(anna.terminated).toBe(false);
+    end();
+  });
+
+  it('keeps a page whose timers stall on the line while it answers the ticks', () => {
+    const { anna, ben, end, cuts } = startedRun();
+    // Ben's tab is long hidden: its timers ask nothing, its message handler answers each tick.
+    ben.asking = false;
+    vi.advanceTimersByTime(10 * SILENT_MS);
+    expect(ben.terminated).toBe(false);
+    expect(cuts).toEqual([]);
+    expect(ben.heard.filter((msg) => msg.kind === 'tick')).toHaveLength(20);
+    expect(anna.view.pausedFor).toBeNull();
     end();
   });
 

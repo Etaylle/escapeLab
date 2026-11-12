@@ -397,7 +397,16 @@ once. While the line is down in a run the player's own card stands over the worl
 „VERBINDUNG VERLOREN", „Verbinde neu · Versuch 3 · in 4 s", „Jetzt versuchen", „Seite neu laden",
 „Einsatz aufgeben" — and what is pressed meanwhile goes nowhere. The server cuts a socket that
 left two pings unanswered or sent nothing for 20 s: a browser answers pings even for a page held
-offline. The voice links come up again after a return.
+offline. Every 10 s the server beats on every socket — the join screen's, the lobby's, a run's,
+the audience's — with a `tick`, which the page answers at once with a `tock` from its message
+handler: a tab long hidden, whose timers the browser runs only once a minute, still answers,
+so neither side's 20 s rule cuts a page that lives. The voice links come up again after a
+return.
+
+**The lobby.** The host cannot start while a seat's line is down: the lobby says whose („Bens
+Leitung ist unterbrochen"), as it says who has not confirmed yet. A seat whose line has been
+down for 120 s in the lobby is freed, its pass bound no more and the log saying so — at once
+where the room comes back to its lobby later than that — and the crew starts without it.
 
 **What the server says.** One log line per event, with the room and the name: a seat joining,
 its line closing, its return with how long it was away, a socket the heartbeat cut and why, a

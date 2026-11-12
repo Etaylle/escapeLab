@@ -3,12 +3,14 @@ import type { ClientMessage, CrewPass, ServerMessage } from '@escapelab/core';
 /**
  * The page's line to the server: one socket at a time, kept open (`keepConnected`). A line
  * counts as dead the moment it shows it: an ask for the server's time unanswered ANSWER_MS
- * after it went out, SILENCE_MS without a word from the server — which, while a run is on,
- * sends where everybody stands every second, and in any case answers an ask every 10 s
- * (clock.ts) — or a socket not open OPENING_MS after it was made. A dead socket is closed,
- * and a new one made at once. After a close the next try waits, 1 s doubling to 10 s; the page
- * coming back — the network back, the page shown again or in focus (`Line.wake`) — tries at
- * once, and a line that seems up is asked the time to see whether it lives.
+ * after it went out, SILENCE_MS without a word from the server — which beats every 10 s on
+ * every socket (`tick`), and while a run is on sends where everybody stands every second — or
+ * a socket not open OPENING_MS after it was made. A dead socket is closed, and a new one made
+ * at once. After a close the next try waits, 1 s doubling to 10 s; the page coming back — the
+ * network back, the page shown again or in focus (`Line.wake`) — tries at once, and a line
+ * that seems up is asked the time to see whether it lives. Each `tick` is answered at once
+ * with a `tock`, from the socket's message handler: that runs where the browser holds the
+ * page's timers back, in a tab long hidden, so the server hears a page that lives.
  */
 
 /** A socket's state, as the top bar's dot shows it. */
@@ -26,6 +28,9 @@ export const RETRY_FIRST_MS = 1000;
 export const RETRY_MAX_MS = 10_000;
 /** How many messages wait for a socket to open; any more are dropped. */
 export const OUTBOX_MAX = 32;
+
+/** The answer to the server's beat (`tick`), as it goes out. */
+const TOCK = JSON.stringify({ kind: 'tock' } satisfies ClientMessage);
 
 /**
  * What the page streams — positions, asks for the server's time — the next one supersedes it,
@@ -275,6 +280,11 @@ class Keeper {
   private heard(socket: WebSocket, data: string): void {
     this.silenceAlarm.set(SILENCE_MS, () => this.dead(socket));
     const msg = JSON.parse(data) as ServerMessage;
+    if (msg.kind === 'tick') {
+      // Answered here and now: no timer of the page's has to run for it.
+      socket.send(TOCK);
+      return;
+    }
     if (msg.kind === 'clock') {
       this.answered(socket);
     }
