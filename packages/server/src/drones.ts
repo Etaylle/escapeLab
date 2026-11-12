@@ -6,20 +6,10 @@ import {
   readersOf,
   shutDoors,
   type DronePosition,
+  type DroneRuntime,
   type GameState,
   type MapDef,
 } from '@escapelab/core';
-
-/** Runtime state of one patrolling drone; lives outside the pure game state. */
-interface DroneRuntime {
-  /** index of the waypoint it is heading towards */
-  target: number;
-  x: number;
-  y: number;
-  facing: number;
-  /** epoch ms until which it cannot trigger another alarm */
-  quietUntil: number;
-}
 
 const ALARM_COOLDOWN_MS = 5000;
 /** The cone is slightly blind right at the drone so you can slip past behind it. */
@@ -61,6 +51,25 @@ export class DronePatrol {
 
   constructor(private readonly map: MapDef) {
     this.reset();
+  }
+
+  /**
+   * The patrols of `map` where `runtime` has them, as a room's snapshot kept them (`runtime`):
+   * a drone the snapshot does not know starts its loop afresh.
+   */
+  static resume(map: MapDef, runtime: Readonly<Record<string, DroneRuntime>>): DronePatrol {
+    const patrol = new DronePatrol(map);
+    for (const [id, self] of Object.entries(runtime)) {
+      if (patrol.runtime.has(id)) {
+        patrol.runtime.set(id, { ...self });
+      }
+    }
+    return patrol;
+  }
+
+  /** Where every drone is on its loop, by drone id: what a room's snapshot keeps of it. */
+  runtimeOf(): Record<string, DroneRuntime> {
+    return Object.fromEntries([...this.runtime].map(([id, self]) => [id, { ...self }]));
   }
 
   get active(): boolean {

@@ -25,11 +25,18 @@ export {
   type Away,
   type GameState,
   type ItemState,
+  type PauseKind,
   type Player,
   type Phase,
   type Presence,
   type RunEvent,
 } from './state.js';
+export type {
+  DroneRuntime,
+  RoomKeeping,
+  RoomSnapshot,
+  SeatSnapshot,
+} from './snapshot.js';
 export {
   applyAction,
   crewOf,

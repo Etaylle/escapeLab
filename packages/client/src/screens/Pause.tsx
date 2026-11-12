@@ -159,7 +159,7 @@ export function PauseCard({
   const since = view.pausedAt ?? now;
   return (
     <div className="overlay pause" role="status">
-      <span className="kicker">MISSION PAUSIERT</span>
+      <span className="kicker">{view.maintenance === true ? 'WARTUNG' : 'MISSION PAUSIERT'}</span>
       <h1>
         <Icon name="pause" /> Warten auf {away.map((member) => member.name).join(', ')} ·{' '}
         <span className="pause-count">{pauseClock(now - since)}</span>

@@ -51,6 +51,7 @@ import {
   type RelayedPosition,
   type Phase,
   type RoomSummary,
+  type RoomSnapshot,
   type RtcSignal,
   type RunReport,
   type Seat,
@@ -208,6 +209,14 @@ type PresenceReport = Omit<Extract<Action, { type: 'set-presence' }>, 'type' | '
 /** Whose views a change reaches: every member's and the audience's, or only these members'. */
 type Reach = 'everybody' | readonly string[];
 
+/** `map` holding what `record` holds, and nothing else. */
+function refill<V>(map: Map<string, V>, record: Readonly<Record<string, V>>): void {
+  map.clear();
+  for (const [key, value] of Object.entries(record)) {
+    map.set(key, value);
+  }
+}
+
 /**
  * `byId` — who stands at each thing, by its id — with only the players `found(id)` lets count
  * there; a thing nobody counts at is left out.
@@ -283,6 +292,10 @@ export class Room {
   private readonly claims = new Map<string, Claim>();
   /** until when a pass may not ask for a seat again, by seat and pass (`askKey`), epoch ms */
   private readonly askAgainAt = new Map<string, number>();
+  /** epoch ms the room was opened; a room taken up again keeps its own (`restore`) */
+  private opened = Date.now();
+  /** the dispatches so far: a snapshot carries it, and the later of two has the higher */
+  private seq = 0;
   /** epoch ms since the room has had no connected players, null while occupied */
   emptySince: number | null = null;
 
@@ -301,6 +314,99 @@ export class Room {
   ) {
     this.code = code;
     this.state = initialState(mission, seed, difficulty);
+  }
+
+  /**
+   * The room `snapshot` keeps, taken up again at `now` (`snapshot`): the game as it stood — a
+   * run standing still for the whole crew, every seat off the line and the crew not to be gone
+   * on without before FIRST_WAIT_MS from now (core `maintenance`) — every seat bound to its pass
+   * again, and whatever the room kept beside the game. Its timers run again from the due times
+   * the game and what it kept say: a run's once the pause is over, the lobby's seats' at once.
+   * Nobody is on the line yet: the room is empty from `now`.
+   */
+  static restore(
+    snapshot: RoomSnapshot,
+    now: number,
+    onRunFinished: RunListener = () => undefined,
+    dailySalt: string | null = null,
+  ): Room {
+    const { mission, roomSeed, difficulty } = snapshot.state;
+    const room = new Room(snapshot.code, mission, onRunFinished, roomSeed, difficulty, dailySalt);
+    room.load(snapshot, now);
+    return room;
+  }
+
+  /**
+   * Everything a server needs to take this room up again (`restore`), as of `now` (core
+   * snapshot.ts): the room's facts, the game and its seats, and what the room keeps beside the
+   * game — every seat off the line from now, a run standing still for the whole crew. The room
+   * itself goes on as it was.
+   */
+  snapshot(now = Date.now()): RoomSnapshot {
+    const { state } = this;
+    const seats = this.seats.snapshot();
+    const lostAt = Object.fromEntries(this.lostAt);
+    for (const playerId of this.listeners.keys()) {
+      lostAt[playerId] = now;
+    }
+    return {
+      code: this.code,
+      missionId: state.mission.id,
+      seed: state.roomSeed,
+      difficulty: state.difficulty,
+      daily: state.dailyOn,
+      createdAt: this.opened,
+      state: applyAction(state, { type: 'maintenance', at: now, waitFrom: now }),
+      seats: seats.bound.map((seat) => ({ ...seat, name: this.nameOf(seat.playerId) })),
+      lostPasses: seats.lost,
+      keeping: {
+        positions: Object.fromEntries(this.positions),
+        drones: this.drones?.runtimeOf() ?? null,
+        lastDroneTick: this.lastDroneTick,
+        lostAt,
+        closedClean: [...this.closedClean],
+        askAgainAt: Object.fromEntries(this.askAgainAt),
+        lastPingAt: Object.fromEntries(this.lastPingAt),
+        lastChatAt: Object.fromEntries(this.lastChatAt),
+        signalAllowance: Object.fromEntries(this.signalAllowance),
+        refusedSteps: this.refusedSteps,
+      },
+      seq: this.seq,
+      at: now,
+    };
+  }
+
+  /** The room `snapshot` keeps, in place of this one's, taken up at `now` (`restore`). */
+  private load(snapshot: RoomSnapshot, now: number): void {
+    const { keeping } = snapshot;
+    this.opened = snapshot.createdAt;
+    this.seq = snapshot.seq;
+    this.state = applyAction(snapshot.state, {
+      type: 'maintenance',
+      at: snapshot.at,
+      waitFrom: now,
+    });
+    this.seats.restore(snapshot.seats, snapshot.lostPasses);
+    refill(this.positions, keeping.positions);
+    refill(this.lostAt, keeping.lostAt);
+    refill(this.askAgainAt, keeping.askAgainAt);
+    refill(this.lastPingAt, keeping.lastPingAt);
+    refill(this.lastChatAt, keeping.lastChatAt);
+    refill(this.signalAllowance, keeping.signalAllowance);
+    this.closedClean.clear();
+    keeping.closedClean.forEach((playerId) => this.closedClean.add(playerId));
+    this.refusedSteps = keeping.refusedSteps;
+    const { map } = this.state.mission;
+    this.drones = keeping.drones === null ? null : DronePatrol.resume(map, keeping.drones);
+    this.lastDroneTick = keeping.lastDroneTick;
+    this.emptySince = now;
+    this.reconcileClocks();
+    this.reconcileLobbyAway();
+  }
+
+  /** Epoch ms the room was opened: with its code, what tells it from another room of that code. */
+  get createdAt(): number {
+    return this.opened;
   }
 
   /**
@@ -1694,19 +1800,32 @@ export class Room {
     );
   }
 
-  /** Fixed-rate patrol simulation; only runs while a mission with drones is live in the dark. */
+  /**
+   * Fixed-rate patrol simulation: the patrols of a mission with drones are out while its run is
+   * in the dark, and move while it runs; a pause stands them still where they are, as it stands
+   * the clock still. With the lights on, or the run over, there are none.
+   */
   private reconcileDroneTimer(): void {
     const map = this.state.mission.map;
-    const live =
-      lightsAreOut(this.state) && this.state.paused === null && map.drones.length > 0;
-    if (live && this.droneTimer === null) {
-      this.drones = new DronePatrol(map);
+    if (!lightsAreOut(this.state) || map.drones.length === 0) {
+      this.stopDrones();
+      this.drones = null;
+      return;
+    }
+    this.drones ??= new DronePatrol(map);
+    if (this.state.paused !== null) {
+      this.stopDrones();
+    } else if (this.droneTimer === null) {
       this.lastDroneTick = Date.now();
       this.droneTimer = setInterval(() => this.tickDrones(), DRONE_TICK_MS);
-    } else if (!live && this.droneTimer !== null) {
+    }
+  }
+
+  /** The patrols move no more: their timer stops. */
+  private stopDrones(): void {
+    if (this.droneTimer !== null) {
       clearInterval(this.droneTimer);
       this.droneTimer = null;
-      this.drones = null;
     }
   }
 
@@ -1755,6 +1874,7 @@ export class Room {
     const wasPlaying = this.state.phase === 'playing';
     const world = this.findingWorld();
     this.state = next;
+    this.seq += 1;
     // A run ends exactly once, won or lost; a rematch is a run of its own.
     if (wasPlaying && (this.state.phase === 'won' || this.state.phase === 'lost')) {
       this.runOver(runReport(this.state, this.code));
@@ -1763,6 +1883,20 @@ export class Room {
     if (this.state.phase !== 'playing') {
       this.forgetGlances();
     }
+    this.reconcileClocks();
+    this.broadcast(reach);
+    // A door opened, a part put down, a station armed: whoever stands still sees it as well.
+    if (type !== 'set-presence' && this.findingWorld() !== world) {
+      this.reconcilePresence();
+    }
+    this.reconcileLobbyAway();
+  }
+
+  /**
+   * Every timer of the run armed afresh from the game as it stands — the deadline, the lights,
+   * the open puzzle's clock, mission control's nudge, the patrols, the emergencies — or let go.
+   */
+  private reconcileClocks(): void {
     this.reconcileTimer();
     this.reconcileLights();
     this.reconcilePuzzleClock();
@@ -1770,12 +1904,6 @@ export class Room {
     this.reconcileDroneTimer();
     this.reconcileSabotage();
     this.reconcileRelayTick();
-    this.broadcast(reach);
-    // A door opened, a part put down, a station armed: whoever stands still sees it as well.
-    if (type !== 'set-presence' && this.findingWorld() !== world) {
-      this.reconcilePresence();
-    }
-    this.reconcileLobbyAway();
   }
 
   /**
@@ -1884,11 +2012,8 @@ export class Room {
       clearTimeout(this.keepaliveTimer);
       this.keepaliveTimer = null;
     }
-    if (this.droneTimer !== null) {
-      clearInterval(this.droneTimer);
-      this.droneTimer = null;
-      this.drones = null;
-    }
+    this.stopDrones();
+    this.drones = null;
     if (this.sabotageTimer !== null) {
       clearTimeout(this.sabotageTimer);
       this.sabotageTimer = null;

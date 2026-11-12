@@ -2,6 +2,7 @@ import {
   CREW_COLORS,
   NO_CREDITS,
   NOBODY_PRESENT,
+  type Away,
   type Credits,
   type GameState,
   type ItemState,
@@ -73,6 +74,12 @@ export type Action =
   | { type: 'takeover-claimed'; playerId: string; at: number }
   /** the ask for the seat of `playerId` is over: let in, refused, or withdrawn */
   | { type: 'takeover-settled'; playerId: string }
+  /**
+   * the server goes down for maintenance at `at` — a deploy, a restart — or takes the room up
+   * again from a snapshot taken then, at `waitFrom`: every seat is off the line, and a run
+   * stands still for the whole crew (`wartung`) until it is back
+   */
+  | { type: 'maintenance'; at: number; waitFrom: number }
   | { type: 'select-color'; playerId: string; color: string }
   | { type: 'set-ready'; playerId: string; ready: boolean }
   | { type: 'switch-mission'; playerId: string; mission: Mission; difficulty: Difficulty }
@@ -190,6 +197,8 @@ export function applyAction(state: GameState, action: Action): GameState {
       return takeoverClaimed(state, action);
     case 'takeover-settled':
       return takeoverSettled(state, action);
+    case 'maintenance':
+      return maintenance(state, action);
     case 'select-color':
       return selectColor(state, action);
     case 'set-ready':
@@ -655,6 +664,40 @@ function takeoverSettled(state: GameState, action: { playerId: string }): GameSt
   }
   const settled = { since: away.since, waivableAt: away.waivableAt, waived: away.waived };
   return { ...state, away: { ...state.away, [action.playerId]: settled } };
+}
+
+/**
+ * The server down for maintenance at `at`, or taking the room up again at `waitFrom`: every
+ * seat is off the line. In a run each is away from `at` — whoever was away already keeps their
+ * drop, and whom the run went on without stays counted out — and the run stands still for the
+ * whole crew (`wartung`), its clock stopped from `at`, or from the pause it stood in already.
+ * Nobody may be left behind before FIRST_WAIT_MS after `waitFrom`, however long their own drop
+ * has lasted, and an ask for a seat lapses: its device went with the server. Said twice,
+ * nothing more changes.
+ */
+function maintenance(state: GameState, action: { at: number; waitFrom: number }): GameState {
+  const players = state.players.map((p) => (p.connected ? { ...p, connected: false } : p));
+  if (state.phase !== 'playing') {
+    return { ...state, players };
+  }
+  const waivableAt = action.waitFrom + FIRST_WAIT_MS;
+  const away = Object.fromEntries(
+    players.map((p) => [p.id, awayThroughMaintenance(state.away[p.id], action.at, waivableAt)]),
+  );
+  const since = state.paused?.since ?? action.at;
+  return { ...state, players, away, paused: { since, kind: 'wartung' } };
+}
+
+/**
+ * A seat away through maintenance: away from `at`, or since its own drop, its ask for a takeover
+ * lapsed; waited for until `waivableAt` at least, unless the run went on without it.
+ */
+function awayThroughMaintenance(was: Away | undefined, at: number, waivableAt: number): Away {
+  if (was === undefined) {
+    return { since: at, waivableAt, waived: false };
+  }
+  const kept = { since: was.since, waivableAt: was.waivableAt, waived: was.waived };
+  return kept.waived ? kept : { ...kept, waivableAt: Math.max(kept.waivableAt, waivableAt) };
 }
 
 /**
@@ -1349,7 +1392,7 @@ function setPaused(state: GameState, action: { paused: boolean; at: number }): G
     return state;
   }
   if (action.paused) {
-    return state.paused === null ? { ...state, paused: { since: action.at } } : state;
+    return state.paused === null ? { ...state, paused: { since: action.at, kind: 'away' } } : state;
   }
   if (state.paused === null) {
     return state;

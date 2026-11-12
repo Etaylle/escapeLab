@@ -104,6 +104,15 @@ describe('the pause card', () => {
     expect(html).not.toContain('pause-go-on');
   });
 
+  it('says it is the server’s maintenance that stands the run still, after a restart', () => {
+    vi.spyOn(clock, 'now').mockReturnValue(T0 + 8000);
+    const restarted = waiting({ maintenance: true });
+    const html = renderToStaticMarkup(<PauseCard view={restarted} send={() => undefined} />);
+    expect(html).toContain('<span class="kicker">WARTUNG</span>');
+    expect(html).not.toContain('MISSION PAUSIERT');
+    expect(html).toContain('Warten auf Cem · <span class="pause-count">0:08</span>');
+  });
+
   it('goes on without them at a press once the wait is over', () => {
     vi.spyOn(clock, 'now').mockReturnValue(T0 + 61_000);
     const sent: ClientMessage[] = [];

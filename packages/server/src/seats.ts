@@ -85,4 +85,32 @@ export class SeatBook {
   free(playerId: string): void {
     this.bindings.delete(playerId);
   }
+
+  /**
+   * Every seat's binding, as a room's snapshot keeps it: the pass's id and the hash of its
+   * secret (hex) by player id; and the passes whose seat another device took over.
+   */
+  snapshot(): { bound: { playerId: string; passId: string; hash: string }[]; lost: string[] } {
+    const bound = [...this.bindings].map(([playerId, { passId, hash }]) => ({
+      playerId,
+      passId,
+      hash: hash.toString('hex'),
+    }));
+    return { bound, lost: [...this.lost] };
+  }
+
+  /** The book as a snapshot kept it (`snapshot`), in place of whatever it held. */
+  restore(
+    bound: readonly { playerId: string; passId: string; hash: string }[],
+    lost: readonly string[],
+  ): void {
+    this.bindings.clear();
+    for (const { playerId, passId, hash } of bound) {
+      this.bindings.set(playerId, { passId, hash: Buffer.from(hash, 'hex') });
+    }
+    this.lost.clear();
+    for (const passId of lost) {
+      this.lost.add(passId);
+    }
+  }
 }
