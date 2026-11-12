@@ -8,8 +8,10 @@ import { Icon } from './Icon.js';
  * The own line down while a run is on (line.ts): the player's card over the world says so — or
  * that the server goes down for a restart, a deploy — and when the next try goes out, with the
  * ways on — try now, load the page anew, give the seat up (at a second press, GiveUp.tsx). While
- * it stands the world takes nothing: what is pressed meanwhile goes nowhere, and nothing throws
- * (`Line.send`).
+ * a new server waits for the newest snapshot of the room before it takes it up again
+ * (`Retry.restoring`), the card says that instead, and only the page loaded anew is a way on:
+ * the line is up, and the seat back in a moment. While it stands the world takes nothing: what
+ * is pressed meanwhile goes nowhere, and nothing throws (`Line.send`).
  */
 
 /** The line as the game screen hears of it, and what the card does with it. */
@@ -30,9 +32,24 @@ export const ON_THE_LINE: GameLine = {
   giveUp: () => undefined,
 };
 
-/** Whether the own line is down while the run of `view` is on: its card stands over the world. */
-export function lineLost(status: LineStatus, view: Pick<PlayerView, 'phase'> | null): boolean {
-  return status !== 'open' && view?.phase === 'playing';
+/**
+ * Whether the own line is down, or its comeback waits for the room (`Retry.restoring`), while
+ * the run of `view` is on: its card stands over the world.
+ */
+export function lineLost(
+  line: Pick<GameLine, 'status' | 'retry'>,
+  view: Pick<PlayerView, 'phase'> | null,
+): boolean {
+  const down = line.status !== 'open' || line.retry?.restoring === true;
+  return down && view?.phase === 'playing';
+}
+
+/** What the card's title says of the line: its room on the way back, a restart, or a drop. */
+export function lineTitle(retry: Retry | null): string {
+  if (retry?.restoring === true) {
+    return 'EINSATZ WIRD WIEDERHERGESTELLT';
+  }
+  return retry?.restart === true ? 'WARTUNG · Der Server startet neu' : 'VERBINDUNG VERLOREN';
 }
 
 /**
@@ -52,21 +69,25 @@ export function retryLine(retry: Retry | null, now: number): string {
 /** The card over the world of a player whose own line is down in a run. */
 export function LineLostCard({ line }: { line: GameLine }) {
   const now = useNow(250);
+  const restoring = line.retry?.restoring === true;
   return (
     <div className="overlay pause line-lost" role="alert">
       <h1>
-        <Icon name="warning" />{' '}
-        {line.retry?.restart === true ? 'WARTUNG · Der Server startet neu' : 'VERBINDUNG VERLOREN'}
+        <Icon name="warning" /> {lineTitle(line.retry)}
       </h1>
-      <p className="line-retry">{retryLine(line.retry, now)}</p>
+      <p className="line-retry">
+        {restoring ? 'Der letzte Stand trifft gleich ein' : retryLine(line.retry, now)}
+      </p>
       <div className="pause-ways">
-        <button className="primary line-try" onClick={line.wake}>
-          Jetzt versuchen
-        </button>
+        {!restoring && (
+          <button className="primary line-try" onClick={line.wake}>
+            Jetzt versuchen
+          </button>
+        )}
         <button className="line-reload" onClick={() => location.reload()}>
           Seite neu laden
         </button>
-        <GiveUpButton onGiveUp={line.giveUp} />
+        {!restoring && <GiveUpButton onGiveUp={line.giveUp} />}
       </div>
     </div>
   );

@@ -40,6 +40,20 @@ export interface RoomSnapshot {
   at: number;
 }
 
+/**
+ * A room's snapshot as a server seals it for the crew (server seal.ts): the room, the server
+ * instance that sealed it, and whether it was that instance's last of the room — sealed as the
+ * instance went down for a restart (`Room.goDown`). One sealed by another instance that is not
+ * its last may be older than what that instance still has: a new instance takes the room up
+ * again from it only once no newer one can come (server roomManager.ts `HANDOVER_MS`).
+ */
+export interface SealedSnapshot extends RoomSnapshot {
+  /** the server instance that sealed it: one id per boot (server index.ts) */
+  instance: string;
+  /** sealed as that instance went down for a restart, SIGTERM: its last snapshot of the room */
+  final: boolean;
+}
+
 /** A seat and the pass bound to it: its id and the SHA-256 of its secret, never the secret. */
 export interface SeatSnapshot {
   playerId: string;
@@ -266,11 +280,12 @@ function factsAgree(snapshot: Omit<RoomSnapshot, 'keeping' | 'lostPasses'>): boo
 }
 
 /**
- * A room's snapshot as it is read back from its seal (server seal.ts): every part of it of the
- * shape this build gives it, and its facts its game's. A module's own state — a puzzle's, the
- * relay's — is checked as far as the type it names.
+ * A room's snapshot as it is read back from its seal (server seal.ts), with what the seal says
+ * of it (`SealedSnapshot`): every part of it of the shape this build gives it, and its facts
+ * its game's. A module's own state — a puzzle's, the relay's — is checked as far as the type it
+ * names.
  */
-export const roomSnapshotSchema: z.ZodType<RoomSnapshot> = z
+export const sealedSnapshotSchema: z.ZodType<SealedSnapshot> = z
   .object({
     code: z.string().min(1).max(10),
     missionId: z.string().min(1),
@@ -284,5 +299,7 @@ export const roomSnapshotSchema: z.ZodType<RoomSnapshot> = z
     keeping: keepingSchema,
     seq: count,
     at: z.number(),
+    instance: z.string().min(1),
+    final: z.boolean(),
   })
   .refine(factsAgree, 'the snapshot’s facts are not its game’s');

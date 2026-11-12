@@ -85,7 +85,7 @@ describe('a device that asks for a seat by its name', () => {
     expect(replyTo(allowed)).toEqual({ kind: 'resume', code: 'QX7R', pass: PASS });
     takeIn(allowed, kept);
     expect(got.takeover).toBeNull();
-    expect(replyTo({ kind: 'joined', code: 'QX7R' })).toBeNull();
+    expect(replyTo({ kind: 'joined', code: 'QX7R', instanceId: 'boot-1' })).toBeNull();
   });
 
   it('forgets the ask once the crew turns it away', () => {

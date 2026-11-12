@@ -69,31 +69,37 @@ const CUT_WHY: Record<CutReason, string> = {
 
 /**
  * Serves every connection of `server`: each message the socket sends is carried out in the
- * room it joined, resumed or watches, a refusal answered with an `error` naming the kind of
- * message it refuses — and once the socket closes, for whatever reason, the room lets go of it.
+ * room it joined, resumed or watches — once more where it had to wait for the room (`hold`) — a
+ * refusal answered with an `error` naming the kind of message it refuses; and once the socket
+ * closes, for whatever reason, the room lets go of it.
  */
 export function serveSockets(server: SocketServer, lab: Lab): Served {
   const sessions = new WeakMap<object, () => Session | null>();
   server.on('connection', (socket) => {
     let session: Session | null = null;
     sessions.set(socket, () => session);
+    const take = (msg: ClientMessage): void => {
+      try {
+        session = handleMessage(lab, socket, session, msg, () => take(msg));
+      } catch (err) {
+        refuse(socket, session, msg, err);
+      }
+    };
 
     socket.on('message', (raw) => {
-      let msg: ClientMessage | null = null;
+      let msg: ClientMessage;
       try {
         msg = parseClientMessage(String(raw));
-        session = handleMessage(lab, socket, session, msg);
       } catch (err) {
-        const message =
-          err instanceof GameError || err instanceof Error ? err.message : 'Unbekannter Fehler.';
-        logRefusal(session, msg, message);
-        const refusal: Extract<ServerMessage, { kind: 'error' }> = { kind: 'error', message };
-        send(socket, msg === null ? refusal : { ...refusal, of: msg.kind });
+        refuse(socket, session, null, err);
+        return;
       }
+      take(msg);
     });
 
     socket.on('close', (code) => {
       asks.get(socket)?.();
+      holds.get(socket)?.();
       session?.detach(code !== undefined && CLEAN_CLOSE.has(code));
     });
   });
@@ -123,6 +129,20 @@ const LOGGED_REFUSALS: ReadonlySet<ClientMessage['kind']> = new Set([
   'takeover-answer',
 ]);
 
+/** `msg` refused on `socket` for `err`, null for one that could not be read: told, and logged. */
+function refuse(
+  socket: PlayerSocket,
+  session: Session | null,
+  msg: ClientMessage | null,
+  err: unknown,
+): void {
+  const message =
+    err instanceof GameError || err instanceof Error ? err.message : 'Unbekannter Fehler.';
+  logRefusal(session, msg, message);
+  const refusal: Extract<ServerMessage, { kind: 'error' }> = { kind: 'error', message };
+  send(socket, msg === null ? refusal : { ...refusal, of: msg.kind });
+}
+
 /** Logs the refusal of `msg` with its `reason`, where the log names it (`LOGGED_REFUSALS`). */
 function logRefusal(session: Session | null, msg: ClientMessage | null, reason: string): void {
   if (msg === null || !LOGGED_REFUSALS.has(msg.kind)) {
@@ -140,6 +160,9 @@ function send(socket: PlayerSocket, msg: ServerMessage): void {
 
 /** The ask for a seat each socket waits on (`Room.claim`), by how to withdraw it. */
 const asks = new WeakMap<PlayerSocket, () => void>();
+
+/** The room each socket waits for, the server about to take it up again (`hold`): how to stop. */
+const holds = new WeakMap<PlayerSocket, () => void>();
 
 /** Each socket's one way to hear its room: the same for every seat it sits down on. */
 const listeners = new WeakMap<PlayerSocket, (msg: ServerMessage) => void>();
@@ -177,14 +200,19 @@ const AT_THE_DOOR: ReadonlySet<ClientMessage['kind']> = new Set(DOOR_KINDS);
 /** Whether `msg` is one a socket may send in no room (`AtTheDoor`). */
 const fromTheDoor = (msg: ClientMessage): msg is AtTheDoor => AT_THE_DOOR.has(msg.kind);
 
+/**
+ * `msg` carried out on `socket`: the session it leaves the socket with. `again` carries it out
+ * once more, for a socket that waits for its room (`hold`).
+ */
 function handleMessage(
   lab: Lab,
   socket: PlayerSocket,
   session: Session | null,
   msg: ClientMessage,
+  again: () => void,
 ): Session | null {
   if (fromTheDoor(msg)) {
-    return atTheDoor(lab, socket, session, msg);
+    return atTheDoor(lab, socket, session, msg, again);
   }
   // A seat that went to another socket takes nothing from this one any more.
   const held = session !== null && session.holds() ? session : null;
@@ -200,6 +228,7 @@ function atTheDoor(
   socket: PlayerSocket,
   session: Session | null,
   msg: AtTheDoor,
+  again: () => void,
 ): Session | null {
   switch (msg.kind) {
     case 'create-room':
@@ -208,16 +237,52 @@ function atTheDoor(
     case 'abandon':
       return giveUp(lab, socket, session, msg);
     case 'spectate':
-      return watch(lab, socket, session, msg.code);
-    case 'resume': {
-      // A server that knows the room no more takes it up again from the snapshot the page keeps.
-      const room = lab.manager.roomFor(msg.code, msg.pass, msg.blob);
-      return seated(socket, session, room, room.resume(msg.pass));
-    }
+      return lab.manager.waitsFor(msg.code)
+        ? hold(lab, socket, session, msg.code, again)
+        : watch(lab, socket, session, msg.code);
+    case 'resume':
+      return comeBack(lab, socket, session, msg, again);
     default:
       answer(lab, socket, msg);
       return session;
   }
+}
+
+/**
+ * A pass back on its seat in room `msg.code`, with the snapshot its page keeps, which a server
+ * that knows the room no more takes it up again from (`RoomManager.roomFor`): at once, or once
+ * the newest snapshot of the crew's is in (`hold`).
+ */
+function comeBack(
+  lab: Lab,
+  socket: PlayerSocket,
+  session: Session | null,
+  msg: Extract<ClientMessage, { kind: 'resume' }>,
+  again: () => void,
+): Session | null {
+  const room = lab.manager.roomFor(msg.code, msg.pass, msg.blob);
+  return room === null
+    ? hold(lab, socket, session, msg.code, again)
+    : seated(lab, socket, session, room, room.resume(msg.pass));
+}
+
+/**
+ * `socket` waits for the room `code`, which the server takes up again once the newest snapshot
+ * of it is in (`RoomManager.awaitRoom`): it is told so (`restoring`), and what it asked for goes
+ * again (`again`) once the room is back — unless it closed, or waits for a room anew, first. Its
+ * session stays as it was meanwhile.
+ */
+function hold(
+  lab: Lab,
+  socket: PlayerSocket,
+  session: Session | null,
+  code: string,
+  again: () => void,
+): Session | null {
+  holds.get(socket)?.();
+  holds.set(socket, lab.manager.awaitRoom(code, again));
+  send(socket, { kind: 'restoring', code: code.toUpperCase() });
+  return session;
 }
 
 /**
@@ -277,7 +342,7 @@ function sitDown(
     }
     const playerId = seatFor(room, msg);
     lab.manager.leaveOthers(msg.pass, room);
-    return seated(socket, session, room, playerId);
+    return seated(lab, socket, session, room, playerId);
   }
   lab.manager.checkWay(msg.pass, null);
   // A new room plays on the difficulty its host's device asked for — normal unless that
@@ -285,7 +350,7 @@ function sitDown(
   const room = createRoom(lab, msg);
   const { playerId } = room.join(msg.name, msg.pass);
   lab.manager.leaveOthers(msg.pass, room);
-  return seated(socket, session, room, playerId);
+  return seated(lab, socket, session, room, playerId);
 }
 
 /**
@@ -323,10 +388,12 @@ function giveUp(
 }
 
 /**
- * The session of a socket that sat down on the seat of `playerId` in `room`: it is told so, and
- * takes the room's views from now on. Whatever room it sat in before lets go of it first.
+ * The session of a socket that sat down on the seat of `playerId` in `room`: it is told so — and
+ * on which server instance — and takes the room's views from now on. Whatever room it sat in
+ * before lets go of it first.
  */
 function seated(
+  lab: Lab,
   socket: PlayerSocket,
   before: Session | null,
   room: Room,
@@ -335,7 +402,7 @@ function seated(
   if (before !== null && (before.room !== room || before.playerId !== playerId)) {
     before.detach();
   }
-  send(socket, { kind: 'joined', code: room.code });
+  send(socket, { kind: 'joined', code: room.code, instanceId: lab.manager.instanceId });
   const listener = listenerOf(socket);
   const detach = room.attach(playerId, listener);
   const who = (): string => room.nameOf(playerId);

@@ -1,13 +1,14 @@
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto';
-import { roomSnapshotSchema, type RoomSnapshot } from '@escapelab/core';
+import { sealedSnapshotSchema, type SealedSnapshot } from '@escapelab/core';
 
 /**
  * The seal a room's snapshot travels in (core snapshot.ts): every client of the crew keeps the
  * newest of its room and hands it back once the server knows the room no more — after a deploy,
  * a restart — and only a server with the key reads it, or could have made it. A blob is
- * `v1.<nonce>.<ciphertext>`, both parts base64url: the snapshot as JSON, sealed with AES-256-GCM
- * under the SHA-256 of ROOM_SECRET, the room's code its additional data, the tag after the
- * ciphertext. A blob sealed for one room opens for no other.
+ * `v1.<nonce>.<ciphertext>`, both parts base64url: the snapshot as JSON — with the instance that
+ * sealed it, and whether it was that instance's last (`SealedSnapshot`) — sealed with
+ * AES-256-GCM under the SHA-256 of ROOM_SECRET, the room's code its additional data, the tag
+ * after the ciphertext. A blob sealed for one room opens for no other.
  */
 
 /** The seal's format, as the blob's first part says it. */
@@ -76,7 +77,7 @@ export class SealError extends Error {
 const aadOf = (code: string): Buffer => Buffer.from(code.toUpperCase(), 'utf8');
 
 /** `snapshot` sealed for the room `code` under `key`: `v1.<nonce>.<ciphertext>`. */
-export function seal(snapshot: RoomSnapshot, code: string, key: Buffer): string {
+export function seal(snapshot: SealedSnapshot, code: string, key: Buffer): string {
   const nonce = randomBytes(NONCE_BYTES);
   const cipher = createCipheriv(CIPHER, key, nonce);
   cipher.setAAD(aadOf(code));
@@ -92,7 +93,7 @@ export function seal(snapshot: RoomSnapshot, code: string, key: Buffer): string 
  * The snapshot `blob` holds, sealed for the room `code` under `key`: its seal verified, its
  * content checked for this build's shape. Throws a SealError saying why it is refused.
  */
-export function open(blob: string, code: string, key: Buffer): RoomSnapshot {
+export function open(blob: string, code: string, key: Buffer): SealedSnapshot {
   const { nonce, body } = partsOf(blob);
   const text = unsealed(nonce, body, code, key);
   let data: unknown;
@@ -101,7 +102,7 @@ export function open(blob: string, code: string, key: Buffer): RoomSnapshot {
   } catch {
     throw new SealError('invalid', 'its content is no JSON');
   }
-  const parsed = roomSnapshotSchema.safeParse(data);
+  const parsed = sealedSnapshotSchema.safeParse(data);
   if (!parsed.success) {
     const issue = parsed.error.issues[0];
     const where = issue === undefined ? '' : ` at ${issue.path.map(String).join('.') || '(root)'}`;

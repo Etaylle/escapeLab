@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
-import type { RoomSnapshot } from '@escapelab/core';
+import type { SealedSnapshot } from '@escapelab/core';
 import {
   open,
   ROOM_SECRET_MIN,
@@ -38,8 +38,8 @@ function changed(blob: string, part: 1 | 2, index: number): string {
   return parts.join('.');
 }
 
-/** Blackout mid-way for two, as its room snapshots it, and sealed under KEY. */
-let kept: RoomSnapshot;
+/** Blackout mid-way for two, as its room snapshots it, and sealed under KEY by an instance. */
+let kept: SealedSnapshot;
 let blob: string;
 
 beforeAll(() => {
@@ -47,14 +47,14 @@ beforeAll(() => {
   vi.setSystemTime(1_700_000_000_000);
   const { room } = blackoutMidway();
   vi.advanceTimersByTime(2000);
-  kept = room.snapshot();
+  kept = { ...room.snapshot(), instance: 'the-instance', final: false };
   room.dispose();
   vi.useRealTimers();
   blob = seal(kept, kept.code, KEY);
 });
 
 describe('a room’s sealed snapshot', () => {
-  it('opens to the snapshot it sealed, for its room under its key', () => {
+  it('opens to the snapshot it sealed, its instance named, for its room under its key', () => {
     expect(blob).toMatch(/^v1\.[A-Za-z0-9_-]{16}\.[A-Za-z0-9_-]+$/);
     expect(open(blob, kept.code, KEY)).toEqual(kept);
     // A room's code goes in capitals, however a resume spells it.
@@ -112,7 +112,10 @@ describe('a room’s sealed snapshot', () => {
       // Its facts not its game's: another mission, or a seat its game has nobody for.
       { ...kept, missionId: 'systemcheck' },
       { ...kept, seats: [...kept.seats, { ...kept.seats[0], playerId: 'nobody' }] },
-    ] as RoomSnapshot[];
+      // What the seal says of it: an instance with no id, or no word whether it was its last.
+      { ...kept, instance: '' },
+      { ...kept, final: 'yes' },
+    ] as SealedSnapshot[];
     for (const snapshot of invalid) {
       expect(refusalOf(seal(snapshot, kept.code, KEY), kept.code)).toBe('invalid');
     }

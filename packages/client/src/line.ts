@@ -82,6 +82,11 @@ export interface Retry {
    * (`restart`), or its socket closed with RESTART_CLOSE; left out for any other drop
    */
   restart?: true;
+  /**
+   * the socket is open, but its comeback waits: a new server instance takes the room up again
+   * once the newest snapshot of it is in (`restoring`), and the seat follows
+   */
+  restoring?: true;
 }
 
 /** What the socket `keepConnected` keeps open tells the app, and asks of it. */
@@ -318,6 +323,11 @@ class Keeper {
     }
     if (msg.kind === 'clock') {
       this.answered(socket);
+    }
+    if (msg.kind === 'restoring' && !this.ready) {
+      // The comeback waits for its room: the line stays unready until the seat is back.
+      this.on.retry({ attempt: this.tries, at: null, restoring: true, ...this.cause() });
+      return;
     }
     if (this.keptBack(socket, msg)) {
       return;

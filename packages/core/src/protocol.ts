@@ -330,8 +330,11 @@ export interface DronePosition {
  * server's clock): every moment a view names is on that clock.
  */
 export type ServerMessage =
-  /** the socket sits on its seat in room `code`: its pass holds it, the views say whose it is */
-  | { kind: 'joined'; code: string }
+  /**
+   * the socket sits on its seat in room `code`, on the server instance `instanceId` — one id per
+   * boot: its pass holds it, the views say whose it is
+   */
+  | { kind: 'joined'; code: string; instanceId: string }
   /**
    * the pass sits on its seat in room `code` no more, or this socket does not: the seat was
    * given up (`abandon`; `message` null), or it plays on another socket that showed its pass,
@@ -353,9 +356,9 @@ export type ServerMessage =
   | { kind: 'clock'; sent: number; at: number }
   /**
    * the server's beat, every 10 s on every socket, answered at once with a `tock`: each side
-   * hears the other while nothing else is said
+   * hears the other while nothing else is said; it names the server instance, as `joined` does
    */
-  | { kind: 'tick' }
+  | { kind: 'tick'; instanceId: string }
   /** E was taken: what it did is in the views that came before this */
   | { kind: 'interacted' }
   /**
@@ -371,6 +374,13 @@ export type ServerMessage =
    * server is up again
    */
   | { kind: 'restart'; blob: string; seq: number; at: number }
+  /**
+   * the answer to a resume, or to a watch, of room `code` while a new server instance waits for
+   * the newest snapshot of it — the last one of the instance before it, handed in by whoever of
+   * the crew was still there — before it takes the room up again: the seat, or the audience's
+   * view, follows once the room is back
+   */
+  | { kind: 'restoring'; code: string }
   | { kind: 'rooms'; rooms: RoomSummary[] }
   | {
       kind: 'positions';

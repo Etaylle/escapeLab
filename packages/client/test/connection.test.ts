@@ -71,7 +71,7 @@ const SESSION: Extract<Comeback, { kind: 'resume' }> = {
   pass: { id: 'b3'.repeat(16), secret: '7e'.repeat(32) },
 };
 /** The server has the seat back. */
-const JOINED: ServerMessage = { kind: 'joined', code: SESSION.code };
+const JOINED: ServerMessage = { kind: 'joined', code: SESSION.code, instanceId: 'boot-1' };
 
 /** `keepConnected` over fake sockets, with what it told the page. */
 function connection(session: Comeback | null = SESSION) {
@@ -323,6 +323,52 @@ describe('keepConnected — the server going down for a restart', () => {
   });
 });
 
+describe('keepConnected — a comeback the new server keeps waiting for its room', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('waits on a comeback the new server answers with restoring, till the seat is back', () => {
+    const waits: ServerMessage = { kind: 'restoring', code: SESSION.code };
+    const { told, last } = connection();
+    last().open();
+    last().say(JOINED);
+    last().end(RESTART_CLOSE);
+    vi.advanceTimersByTime(1000);
+    last().open();
+    last().say(waits);
+    // The line is up, the seat not yet: the card says the room is on its way, the line unready.
+    expect(told.retries.at(-1)).toEqual({ attempt: 1, at: null, restoring: true, restart: true });
+    expect(told.ready).toBe(1);
+    expect(told.heard).not.toContainEqual(waits);
+    // Its socket drops meanwhile: a try again, and the next comeback waits anew.
+    last().end();
+    expect(told.retries.at(-1)).toEqual({ attempt: 2, at: Date.now() + 1000, restart: true });
+    vi.advanceTimersByTime(1000);
+    last().open();
+    last().say(waits);
+    expect(told.retries.at(-1)).toMatchObject({ attempt: 2, restoring: true });
+    // The room is back, the seat with it: the line ready.
+    last().say(JOINED);
+    expect(told.ready).toBe(2);
+    expect(told.retries.at(-1)).toBeNull();
+  });
+
+  it('leaves a line that is up be when a resume the page sent waits for its room', () => {
+    // The join screen's card asks back into the room on a line up with no session to resume.
+    const { told, last, send } = connection(null);
+    last().open();
+    send(SESSION);
+    const waits: ServerMessage = { kind: 'restoring', code: SESSION.code };
+    last().say(waits);
+    expect(told.retries.at(-1)).toBeNull();
+    expect(told.heard).toContainEqual(waits);
+  });
+});
+
 describe('keepConnected — sending while the line is down never throws', () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -491,7 +537,7 @@ describe('keepConnected — a line that shows itself dead', () => {
     for (let beat = 0; beat < 30; beat++) {
       vi.advanceTimersByTime(10_000);
       const before = last().sent.length;
-      last().say({ kind: 'tick' });
+      last().say({ kind: 'tick', instanceId: 'boot-1' });
       // Answered inside the message handler: no timer of the page's ran in between.
       expect(last().sent.slice(before)).toEqual([{ kind: 'tock' }]);
     }

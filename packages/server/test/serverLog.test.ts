@@ -20,7 +20,7 @@ function server() {
   const line = new FakeServer();
   const manager = new RoomManager();
   const { cut } = serveSockets(line, { catalog: shipped, manager });
-  const stop = startHeartbeat(line, HEARTBEAT_MS, cut);
+  const stop = startHeartbeat(line, manager.instanceId, HEARTBEAT_MS, cut);
   const lines = (): string[] => log.mock.calls.map(([said]) => String(said));
   return { line, manager, stop, lines };
 }

@@ -43,7 +43,7 @@ const SNAPSHOT: Extract<ServerMessage, { kind: 'snapshot' }> = {
 /** The page of Ben's tab, seated in room QX7R, his latest view `view`. */
 function seated(view: PlayerView = running()) {
   const { kept } = page();
-  takeIn({ kind: 'joined', code: 'QX7R' }, kept);
+  takeIn({ kind: 'joined', code: 'QX7R', instanceId: 'boot-1' }, kept);
   takeIn({ kind: 'view', view, at: T0 }, kept);
   return kept;
 }
@@ -236,7 +236,7 @@ describe('the card of a kept snapshot whose seat the server will not have back',
     local.set(`${SNAPSHOT_KEY}QX7R`, JSON.stringify({ ...SNAPSHOT, seat }));
     const { kept } = page();
     kept.resumed.current = 'QX7R';
-    takeIn({ kind: 'joined', code: 'QX7R' }, kept);
+    takeIn({ kind: 'joined', code: 'QX7R', instanceId: 'boot-1' }, kept);
     expect(kept.resumed.current).toBeNull();
     takeIn({ kind: 'error', message: 'Gerade ist keine Station in Betrieb.', of: 'resume' }, kept);
     expect(keptSnapshot('QX7R')).not.toBeNull();

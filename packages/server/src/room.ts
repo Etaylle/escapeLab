@@ -165,8 +165,11 @@ const CLAIM_REFUSED = 'Die Crew hat die Übernahme nicht bestätigt.';
  */
 export const ASK_AGAIN_MS = 60_000;
 
-/** Seals a snapshot of the room for its crew to keep (seal.ts): the blob it goes out as. */
-export type Sealer = (snapshot: RoomSnapshot) => string;
+/**
+ * Seals a snapshot of the room for its crew to keep (seal.ts) — `final`, the room's last on this
+ * server instance, as it goes down for a restart (`goDown`): the blob it goes out as.
+ */
+export type Sealer = (snapshot: RoomSnapshot, final: boolean) => string;
 
 /**
  * How long after a room is taken up again from a snapshot a newer snapshot, handed in by a page
@@ -331,8 +334,8 @@ export class Room {
    * game (`replaceFrom`); null for a room never taken up, or once the crew did something in it
    */
   private restoredAt: number | null = null;
-  /** the seq of the snapshot the room was last taken up again from */
-  private restoredSeq = -1;
+  /** the seq of the snapshot the room was last taken up again from; null: never taken up */
+  private restoredSeq: number | null = null;
   /** epoch ms since the room has had no connected players, null while occupied */
   emptySince: number | null = null;
 
@@ -468,8 +471,16 @@ export class Room {
    * Whether a newer snapshot may still replace the room's game at `now` (`replaceFrom`): within
    * RESTORE_WINDOW_MS of its restore, and before the crew did anything in it.
    */
-  takesSnapshots(now: number): boolean {
+  private takesSnapshots(now: number): boolean {
     return this.restoredAt !== null && now < this.restoredAt + RESTORE_WINDOW_MS;
+  }
+
+  /**
+   * The seq of the snapshot the room was last taken up again from (`restore`, `replaceFrom`): a
+   * snapshot of a higher one holds more of the crew's run; null for a room never taken up.
+   */
+  get takenUpFrom(): number | null {
+    return this.restoredSeq;
   }
 
   /**
@@ -480,7 +491,8 @@ export class Room {
    * of this code, or one handed in too late changes nothing. Returns whether it replaced.
    */
   replaceFrom(snapshot: RoomSnapshot, now: number): boolean {
-    const newer = snapshot.seq > this.restoredSeq && snapshot.createdAt === this.opened;
+    const from = this.restoredSeq ?? Number.POSITIVE_INFINITY;
+    const newer = snapshot.seq > from && snapshot.createdAt === this.opened;
     if (!newer || !this.takesSnapshots(now)) {
       return false;
     }
@@ -528,7 +540,7 @@ export class Room {
 
   /** The room's snapshot, sealed (`snapshot {blob, seq, at}`), to every seat on the line. */
   private sendSnapshot(): void {
-    const sealed = this.sealedAt(Date.now());
+    const sealed = this.sealedAt(Date.now(), false);
     if (sealed !== null) {
       for (const listener of this.listeners.values()) {
         listener({ kind: 'snapshot', ...sealed });
@@ -537,17 +549,18 @@ export class Room {
   }
 
   /**
-   * The room's snapshot as of `now`, sealed for its crew, with its seq: none without a sealer,
-   * for nobody on the line, of a run that is over — an ended run is not taken up again — and
-   * none over SNAPSHOT_MAX, which the log says once.
+   * The room's snapshot as of `now`, sealed for its crew — `final` as the server goes down
+   * (`Sealer`) — with its seq: none without a sealer, for nobody on the line, of a run that is
+   * over — an ended run is not taken up again — and none over SNAPSHOT_MAX, which the log says
+   * once.
    */
-  private sealedAt(now: number): { blob: string; seq: number; at: number } | null {
+  private sealedAt(now: number, final: boolean): { blob: string; seq: number; at: number } | null {
     const { phase } = this.state;
     if (this.sealer === null || this.listeners.size === 0 || phase === 'won' || phase === 'lost') {
       return null;
     }
     const { seq } = this;
-    const blob = this.sealer(this.snapshot(now));
+    const blob = this.sealer(this.snapshot(now), final);
     this.snapshotSentAt = now;
     if (blob.length <= SNAPSHOT_MAX) {
       return { blob, seq, at: now };
@@ -563,9 +576,9 @@ export class Room {
   /**
    * The server goes down for a restart at `now` (shutdown.ts): a run on stands still for the
    * whole crew, every seat away (core `maintenance`) — the crew's views say so — and every seat
-   * on the line is sent the room's last snapshot, sealed, as `restart {blob, seq, at}`; none of a
-   * run that is over. No snapshot of the room goes out after it. Returns the snapshot's seq and
-   * the seats told; null where none was.
+   * on the line is sent the room's last snapshot, sealed as this instance's last of it (`final`),
+   * as `restart {blob, seq, at}`; none of a run that is over. No snapshot of the room goes out
+   * after it. Returns the snapshot's seq and the seats told; null where none was.
    */
   goDown(now: number): { seq: number; seats: number } | null {
     if (this.state.phase === 'playing') {
@@ -575,7 +588,7 @@ export class Room {
       clearTimeout(this.snapshotTimer);
       this.snapshotTimer = null;
     }
-    const sealed = this.sealedAt(now);
+    const sealed = this.sealedAt(now, true);
     if (sealed === null) {
       return null;
     }

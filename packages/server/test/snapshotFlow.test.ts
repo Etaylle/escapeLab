@@ -48,8 +48,11 @@ interface Seat {
   detach: (clean?: boolean) => void;
 }
 
-/** What seals the lab's snapshots under KEY, watched. */
-const sealing = () => vi.fn((snapshot: RoomSnapshot) => seal(snapshot, 'FLUR', KEY));
+/** What seals the lab's snapshots under KEY, as an instance's, watched. */
+const sealing = () =>
+  vi.fn((snapshot: RoomSnapshot, final: boolean) =>
+    seal({ ...snapshot, instance: 'flur-instance', final }, 'FLUR', KEY),
+  );
 
 /** Anna and Ben in a room of the lab sealed by `sealer` (none for null), each heard; audience. */
 function crewRoom(sealer: Sealer | null = sealing()) {
@@ -173,7 +176,13 @@ describe('the crew’s snapshots from the rooms of the manager', () => {
     vi.advanceTimersByTime(0);
     const { code } = joinedOf(anna);
     const [heard] = snapshotsOf(anna.heard);
-    expect(open(heard?.blob ?? '', code, KEY)).toMatchObject({ code, missionId: 'blackout' });
+    // Sealed as this instance's, and not its last of the room: the server goes on.
+    expect(open(heard?.blob ?? '', code, KEY)).toMatchObject({
+      code,
+      missionId: 'blackout',
+      instance: manager.instanceId,
+      final: false,
+    });
     manager.sweep(Number.POSITIVE_INFINITY);
     vi.restoreAllMocks();
   });

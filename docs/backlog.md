@@ -295,10 +295,13 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   Drohnen stehen in jeder Pause still, statt neu anzufangen. Smoke: SIGTERM (Frist um genau die
   Ausfallzeit verschoben) und SIGKILL (höchstens 2 s verloren). Harness `restart-maintenance.png`,
   `restart-recovered.png`, wo er den Server selbst startet (`SHOTS_SERVER`, CI jetzt auch).
-- Offen bei Render: `ROOM_SECRET` setzen, `maxShutdownDelaySeconds` auf 120. Bei einem Deploy
-  hält die alte Instanz ihre Verbindungen noch 60 s; wer in dieser Minute neu verbindet,
-  stellt den Raum auf der neuen aus einem älteren Stand her, und nach 10 s nimmt sie den
-  neueren nicht mehr an.
+- Die Minute dazwischen (Render hält die alte Instanz 60 s nach dem Umschalten): Jeder
+  Schnappschuss nennt seine Instanz, der beim SIGTERM ist `final`. Ein fremder, nicht letzter
+  wartet auf einer Instanz unter 90 s („EINSATZ WIRD WIEDERHERGESTELLT"), bis der letzte kommt
+  oder die 90 s um sind; ein zu später steht mit beiden Nummern im Log. Smoke: zwei Server
+  nebeneinander, Finn wartet auf dem neuen, bis Eva und Gus nach dem SIGTERM des alten kommen;
+  nach SIGKILL ist der Raum 90 s nach dem Start des nächsten zurück.
+- Offen bei Render: `ROOM_SECRET` setzen, `maxShutdownDelaySeconds` auf 120.
 
 ### R-3 Der Einsatz bindet die Crew — Status: erledigt (R-reconnect, Merge 2026-11-12; drei Review-Runden, Harness Blackout 147 Captures mit Abbruch-Übung) · Größe: L
 - Dienstausweis je Browser (localStorage) statt Token im Tab; Startseite zeigt bei laufendem

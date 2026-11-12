@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import {
   GameError,
   SNAPSHOT_MAX_AGE_MS,
@@ -8,6 +9,7 @@ import {
   type Mission,
   type RoomSnapshot,
   type RoomSummary,
+  type SealedSnapshot,
   type Seat,
 } from '@escapelab/core';
 import { Room, type RunListener, type Sealer } from './room.js';
@@ -20,6 +22,38 @@ const EMPTY_ROOM_TTL_MS = 10 * 60 * 1000;
 
 /** What a resume is told whose snapshot no room can be taken up again from. */
 const NOT_RESTORABLE = 'Der Spielstand dieses Raums lässt sich nicht wiederherstellen.';
+
+/** What a resume is told whose snapshot is of an older room of a code another room has now. */
+const codeTaken = (code: string): string =>
+  `Der Raumcode ${code} gehört inzwischen einem anderen Raum.`;
+
+/** This server instance: its id, minted at boot, and when it booted, epoch ms (index.ts). */
+export interface Instance {
+  id: string;
+  bootedAt: number;
+}
+
+/**
+ * How long after its boot an instance waits for the newest snapshot of a room it does not know
+ * before it takes the room up again from an older one, ms (`roomFor`). Render switches the
+ * traffic to a new instance and keeps the old one up 60 s longer, its sockets with it, before it
+ * sends it SIGTERM: whoever's line drops in that minute comes back to the new instance with an
+ * older snapshot than the run the crew still plays on the old one, whose last snapshots
+ * (`final`) come with the SIGTERM. After a crash none ever comes: the room is back this long
+ * after the boot.
+ */
+export const HANDOVER_MS = 90_000;
+
+/** A room this instance waits to take up again (`park`): its newest snapshot so far, who waits. */
+interface Parked {
+  newest: SealedSnapshot;
+  /** epoch ms the room began to wait */
+  since: number;
+  /** takes the room up again from the newest once this instance is HANDOVER_MS old */
+  timer: NodeJS.Timeout;
+  /** what each socket waiting for the room does once it is back (`awaitRoom`) */
+  waiting: Set<() => void>;
+}
 
 /** The rooms by count, as /health says them: no code and no name. */
 export interface RoomCounts {
@@ -55,24 +89,39 @@ export function seedsAllowed(env: NodeJS.ProcessEnv): boolean {
 
 export class RoomManager {
   private readonly rooms = new Map<string, Room>();
+  /** the rooms this instance waits to take up again, by code (`HANDOVER_MS`) */
+  private readonly parked = new Map<string, Parked>();
 
   /**
    * `onRunFinished` hears of every run that ends in any of these rooms;
    * `allowSeed` (`seedsAllowed`) lets a new room be pinned to a seed;
    * `dailySalt` (dailySalt.ts) makes the Tagesschicht's seeds in every room;
-   * `sealKey` (seal.ts `roomKey`) seals the snapshots every room sends its crew — none without.
+   * `sealKey` (seal.ts `roomKey`) seals the snapshots every room sends its crew — none without;
+   * `instance` is the server instance the rooms live on, as every snapshot sealed names it.
    */
   constructor(
     private readonly onRunFinished: RunListener = () => undefined,
     private readonly allowSeed = false,
     private readonly dailySalt: string | null = null,
     private readonly sealKey: Buffer | null = null,
+    private readonly instance: Instance = { id: randomUUID(), bootedAt: Date.now() },
   ) {}
 
-  /** What seals the snapshots of the room `code` for its crew; null without a key. */
+  /** The id of the server instance the rooms live on, as `joined` and every `tick` name it. */
+  get instanceId(): string {
+    return this.instance.id;
+  }
+
+  /**
+   * What seals the snapshots of the room `code` for its crew, each naming this instance; null
+   * without a key.
+   */
   private sealerFor(code: string): Sealer | null {
     const key = this.sealKey;
-    return key === null ? null : (snapshot) => seal(snapshot, code, key);
+    const instance = this.instance.id;
+    return key === null
+      ? null
+      : (snapshot, final) => seal({ ...snapshot, instance, final }, code, key);
   }
 
   /**
@@ -107,21 +156,23 @@ export class RoomManager {
    * The room a resume into `code` on `pass` comes back to, carrying the snapshot `blob` where its
    * page keeps one: the room the server has — a newer snapshot replacing the game of one taken
    * up again a moment ago (`Room.replaceFrom`) — or else the room the snapshot takes up again
-   * (`restore`). Throws for a code no room has and no snapshot brings back, for a snapshot that
-   * is refused, and for a code another room has taken meanwhile.
+   * (`takeUp`); null while this instance waits for a newer snapshot of it first (`awaitRoom`).
+   * Throws for a code no room has and no snapshot brings back, for a snapshot that is refused,
+   * and for a code another room has taken meanwhile.
    */
-  roomFor(code: string, pass: CrewPass, blob: string | undefined, now = Date.now()): Room {
+  roomFor(code: string, pass: CrewPass, blob: string | undefined, now = Date.now()): Room | null {
     const room = this.rooms.get(code.toUpperCase());
     const key = this.sealKey;
     if (blob === undefined || key === null) {
-      return this.get(code);
+      return this.waitsFor(code) ? null : this.get(code);
     }
     if (room === undefined) {
-      return this.restore(this.restorable(code, blob, key, now), now);
+      return this.takeUp(this.restorable(code, blob, key, now), now);
     }
-    // The blob is opened only where it may matter: the room still takes a newer snapshot, or the
-    // pass sits nowhere in it — the room's code may have gone to another room meanwhile.
-    if (room.takesSnapshots(now) || room.seatOf(pass) === null) {
+    // The blob is opened only where it may matter: the room was taken up again from a snapshot,
+    // which a newer one may still replace, or have come too late for; or the pass sits nowhere in
+    // it — the room's code may have gone to another room meanwhile.
+    if (room.takenUpFrom !== null || room.seatOf(pass) === null) {
       this.offer(room, blob, key, now);
     }
     return room;
@@ -129,8 +180,9 @@ export class RoomManager {
 
   /**
    * `blob` handed to `room`, which the server has: a newer snapshot of it replaces its game while
-   * it still takes one; one of another room of its code means the code went to that one
-   * meanwhile — refused. A blob that does not open changes nothing, the log saying why.
+   * it still takes one, and one that comes later is left be, the log saying so with both seqs —
+   * the race lost; one of another room of its code means the code went to that one meanwhile —
+   * refused. A blob that does not open changes nothing, the log saying why.
    */
   private offer(room: Room, blob: string, key: Buffer, now: number): void {
     let snapshot: RoomSnapshot;
@@ -141,21 +193,131 @@ export class RoomManager {
       console.log(`[escapelab] room ${room.code}: a snapshot handed in was left be, ${why}`);
       return;
     }
+    const { code, takenUpFrom } = room;
     if (snapshot.createdAt !== room.createdAt) {
-      console.log(`[escapelab] room ${room.code}: a snapshot of an older room of its code refused`);
-      throw new GameError(`Der Raumcode ${room.code} gehört inzwischen einem anderen Raum.`);
+      console.log(`[escapelab] room ${code}: a snapshot of an older room of its code refused`);
+      throw new GameError(codeTaken(code));
     }
     if (room.replaceFrom(snapshot, now)) {
-      const { code } = room;
       console.log(`[escapelab] room ${code}: taken up again from snapshot seq ${snapshot.seq}`);
+    } else if (takenUpFrom !== null && snapshot.seq > takenUpFrom) {
+      console.log(
+        `[escapelab] room ${code}: snapshot seq ${snapshot.seq} came too late, the room goes ` +
+          `on from seq ${takenUpFrom}`,
+      );
     }
   }
 
   /**
-   * The room `snapshot` keeps, taken up again at `now` (`Room.restore`) under its code: the log
-   * says so, from which snapshot, with how many seats and how old it was.
+   * The room `snapshot` keeps, of a code this instance has no room of: taken up again at once
+   * (`restore`) — unless it may be older than the run the instance that sealed it still has
+   * (`mayBeBehind`): then the room waits (`park`) until that instance's last snapshot of it
+   * comes or this one is HANDOVER_MS old, and is taken up from the newest snapshot handed in
+   * meanwhile (`handOver`). Null while it waits; a snapshot of another room of the code than the
+   * one it waits for is refused.
    */
-  private restore(snapshot: RoomSnapshot, now: number): Room {
+  private takeUp(snapshot: SealedSnapshot, now: number): Room | null {
+    const { code } = snapshot;
+    const parked = this.parked.get(code);
+    if (parked === undefined && this.mayBeBehind(snapshot, now)) {
+      this.park(snapshot, now);
+      return null;
+    }
+    if (parked === undefined) {
+      return this.restore(snapshot, now);
+    }
+    if (snapshot.createdAt !== parked.newest.createdAt) {
+      console.log(`[escapelab] room ${code}: a snapshot of another room of its code refused`);
+      throw new GameError(codeTaken(code));
+    }
+    if (snapshot.seq > parked.newest.seq) {
+      parked.newest = snapshot;
+    }
+    return this.mayBeBehind(snapshot, now) ? null : this.handOver(parked, now);
+  }
+
+  /**
+   * Whether `snapshot` may be older than the run the instance that sealed it still has at `now`:
+   * not that instance's last, of another instance than this one — which may still be up, a crew
+   * on it — and this one younger than HANDOVER_MS.
+   */
+  private mayBeBehind(snapshot: SealedSnapshot, now: number): boolean {
+    return (
+      !snapshot.final &&
+      snapshot.instance !== this.instance.id &&
+      now < this.instance.bootedAt + HANDOVER_MS
+    );
+  }
+
+  /**
+   * The room `snapshot` keeps waits, from `now`, for a newer snapshot of it (`takeUp`): once this
+   * instance is HANDOVER_MS old it is taken up again from the newest handed in, at the latest.
+   */
+  private park(snapshot: SealedSnapshot, now: number): void {
+    const until = this.instance.bootedAt + HANDOVER_MS;
+    const parked: Parked = {
+      newest: snapshot,
+      since: now,
+      timer: setTimeout(() => this.handOverLate(parked), until - now),
+      waiting: new Set(),
+    };
+    parked.timer.unref();
+    this.parked.set(snapshot.code, parked);
+    console.log(
+      `[escapelab] room ${snapshot.code}: snapshot seq ${snapshot.seq} is not the last of ` +
+        `instance ${snapshot.instance}, waiting up to ${((until - now) / 1000).toFixed(1)} s ` +
+        'for a newer one',
+    );
+  }
+
+  /**
+   * The room `parked` holds, taken up again at `now` from the newest snapshot handed in for it
+   * (`restore`), and every socket that waited for it told (`awaitRoom`) — even where it cannot be
+   * taken up, so that none waits on for nothing.
+   */
+  private handOver(parked: Parked, now: number): Room {
+    this.parked.delete(parked.newest.code);
+    clearTimeout(parked.timer);
+    try {
+      return this.restore(parked.newest, now, now - parked.since);
+    } finally {
+      parked.waiting.forEach((back) => back());
+    }
+  }
+
+  /** The room `parked` holds, taken up again as this instance is HANDOVER_MS old (`park`). */
+  private handOverLate(parked: Parked): void {
+    try {
+      this.handOver(parked, Date.now());
+    } catch (err) {
+      console.error(`[escapelab] room ${parked.newest.code}: not taken up again, ${String(err)}`);
+    }
+  }
+
+  /** Whether this instance waits to take the room `code` up again (`roomFor`). */
+  waitsFor(code: string): boolean {
+    return this.parked.has(code.toUpperCase());
+  }
+
+  /**
+   * `back` runs once the room `code`, which this instance waits to take up again (`waitsFor`), is
+   * back, or could not be taken up. Returns how to stop waiting. Throws for a room not waited for.
+   */
+  awaitRoom(code: string, back: () => void): () => void {
+    const parked = this.parked.get(code.toUpperCase());
+    if (parked === undefined) {
+      throw new Error(`room ${code.toUpperCase()} is not waited for`);
+    }
+    parked.waiting.add(back);
+    return () => parked.waiting.delete(back);
+  }
+
+  /**
+   * The room `snapshot` keeps, taken up again at `now` (`Room.restore`) under its code: the log
+   * says so, from which snapshot, with how many seats and how old it was — and, for a room that
+   * waited for it (`park`), how long.
+   */
+  private restore(snapshot: RoomSnapshot, now: number, waited: number | null = null): Room {
     const room = Room.restore(snapshot, now, {
       onRunFinished: this.onRunFinished,
       dailySalt: this.dailySalt,
@@ -164,9 +326,10 @@ export class RoomManager {
     this.rooms.set(snapshot.code, room);
     const age = ((now - snapshot.at) / 1000).toFixed(1);
     const seats = `${snapshot.seats.length} seat${snapshot.seats.length === 1 ? '' : 's'}`;
+    const after = waited === null ? '' : `, after ${(waited / 1000).toFixed(1)} s of waiting`;
     console.log(
       `[escapelab] restored room ${snapshot.code} from snapshot seq ${snapshot.seq} ` +
-        `(${seats}, ${age} s old)`,
+        `(${seats}, ${age} s old${after})`,
     );
     return room;
   }
@@ -177,12 +340,12 @@ export class RoomManager {
    * SNAPSHOT_MAX_AGE_MS, of no ended run, and its game showing every seat a view. Refused in one
    * line otherwise, the log saying why.
    */
-  private restorable(code: string, blob: string, key: Buffer, now: number): RoomSnapshot {
+  private restorable(code: string, blob: string, key: Buffer, now: number): SealedSnapshot {
     const refuse = (why: string, message = NOT_RESTORABLE): never => {
       console.log(`[escapelab] room ${code.toUpperCase()}: not taken up again, ${why}`);
       throw new GameError(message);
     };
-    let snapshot: RoomSnapshot | null = null;
+    let snapshot: SealedSnapshot | null = null;
     try {
       snapshot = open(blob, code, key);
     } catch (err) {
@@ -320,7 +483,7 @@ export class RoomManager {
       for (let i = 0; i < CODE_LENGTH; i++) {
         code += CODE_ALPHABET[Math.floor(Math.random() * CODE_ALPHABET.length)];
       }
-      if (!this.rooms.has(code)) {
+      if (!this.rooms.has(code) && !this.parked.has(code)) {
         return code;
       }
     }

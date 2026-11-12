@@ -425,8 +425,16 @@ pause: the pause card says „WARTUNG" over „Warten auf Ben", and the run goes
 moved on by exactly the downtime, once the crew is back — or goes on without whoever is not, as
 after any drop: „Ohne Ben weiter" a minute after the restore at the soonest, „Einsatz abbrechen"
 for one alone. For 10 s after the restore, until the crew does anything, a newer snapshot handed
-in replaces the one the room was taken up from; an older one changes nothing. A server killed
-outright, with no SIGTERM, loses at most the last 2 s. A snapshot over a day old, of a run that is
+in replaces the one the room was taken up from; an older one changes nothing, and a newer one
+that comes later only goes into the log, with both seqs. Every snapshot names the server
+instance that sealed it, one id per boot, and the one at SIGTERM is its last (`final`): a new
+instance takes a room up from a snapshot of another one that is not its last only once that
+last one comes, or once it has been up 90 s, from the newest handed in meanwhile — whoever
+dropped in the minute a deploy keeps the old instance up comes back with an older snapshot than
+the crew still on it. Meanwhile the player's card says „EINSATZ WIRD WIEDERHERGESTELLT · Der
+letzte Stand trifft gleich ein", with only the reload to press, and the audience waits as well.
+A server killed outright, with no SIGTERM, loses at most the last 2 s, and its rooms are back
+90 s after the next one booted. A snapshot over a day old, of a run that is
 over, of another room or under another key is refused in one line, and so is one whose code
 another room holds meanwhile. Where the server does not know the room yet, the join screen shows
 its card from the kept snapshot: „Zurück zum Einsatz" takes the room up again, and „Raum

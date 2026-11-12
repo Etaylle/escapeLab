@@ -339,8 +339,9 @@ Betrieb:
 - **Der Free-Plan schläft und startet neu.** Nach 15 Minuten ohne HTTP-Anfrage oder
   WebSocket-Nachricht fährt die Instanz herunter, und Render darf Free-Instanzen jederzeit neu
   starten. Ein Neustart geht wie ein Deploy aus; endet die Instanz ohne SIGTERM, hart, verliert
-  die Partie höchstens die letzten 2 s. Ein Schnappschuss gilt 24 Stunden und nie für einen
-  beendeten Einsatz.
+  die Partie höchstens die letzten 2 s, und der Raum ist erst zurück, wenn die neue Instanz 90 s
+  läuft — so lange wartet sie auf einen letzten Schnappschuss, der nach einem Absturz nie kommt
+  (siehe unten). Ein Schnappschuss gilt 24 Stunden und nie für einen beendeten Einsatz.
 - **Vor dem Ersetzen schickt Render SIGTERM.** Bei einem Deploy schaltet Render die neuen
   Verbindungen auf die neue Instanz um und schickt der alten 60 s später SIGTERM; dann nimmt der
   Server keine Verbindung mehr an, friert jede Partie ein (Wartungspause), schickt jedem Platz
@@ -348,14 +349,21 @@ Betrieb:
   Sekunden mit 0. Render wartet darauf 30 s; die Frist gehört auf 120 s, damit auch ein
   langsamer Abschied Luft hat: `maxShutdownDelaySeconds: 120` per Render-API (Update service,
   erlaubt bis 300). Die Logs im Dashboard reichen 7 Tage zurück; `[escapelab] server on …`
-  markiert jeden Neustart, `restored room …` jeden wiederhergestellten Raum, der Reiter
-  „Events" jeden Deploy.
+  markiert jeden Neustart, `this boot is instance …` die Kennung der Instanz, `restored room …`
+  jeden wiederhergestellten Raum, der Reiter „Events" jeden Deploy.
 - **Die Minute dazwischen.** Wer in den 60 s zwischen Umschalten und SIGTERM neu verbindet (Netz
-  weg, Seite neu geladen), landet schon auf der neuen Instanz und stellt den Raum dort aus seinem
-  älteren Schnappschuss her, während die anderen auf der alten weiterspielen. Den neueren Stand
-  nimmt der neue Server nur in den ersten 10 s nach dem Wiederherstellen an; danach gilt der
-  ältere, und die Crew verliert die Zeit seitdem. Deshalb bleibt es dabei: vor einem Push
-  `/health` ansehen.
+  weg, Seite neu geladen), landet schon auf der neuen Instanz, mit einem älteren Schnappschuss
+  als dem Stand, den die anderen auf der alten weiterspielen. Jeder Schnappschuss nennt die
+  Instanz, die ihn versiegelt hat, und der beim SIGTERM ist ihr letzter (`final`). Aus einem
+  Schnappschuss einer anderen Instanz, der nicht ihr letzter ist, stellt die neue den Raum
+  deshalb erst her, wenn der letzte kommt — mit den anderen, nach dem SIGTERM der alten — oder
+  wenn sie selbst 90 s läuft, dann aus dem neuesten, den sie bis dahin bekommen hat
+  (`… is not the last of instance …, waiting up to …` im Log). So lange zeigt die Seite
+  „EINSATZ WIRD WIEDERHERGESTELLT", auch dem Publikum; ein noch neuerer Stand ersetzt den Raum
+  wie sonst in den ersten 10 s danach. Was später kommt, bleibt liegen, und das Log nennt
+  beide Stände (`snapshot seq … came too late, the room goes on from seq …`). Die 90 s laufen ab
+  dem Start der neuen Instanz: Braucht Render vom Start bis zum Umschalten mehr als 30 s, kommt
+  der letzte Schnappschuss zu spät. Deshalb bleibt es dabei: vor einem Push `/health` ansehen.
 
 | Wo | Name | Wirkung |
 | --- | --- | --- |

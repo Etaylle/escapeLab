@@ -85,13 +85,18 @@ function screen(view: PlayerView, line: GameLine): string {
 }
 
 describe('the own line down in a run', () => {
-  it('is down while its socket is not open, and only while a run is on', () => {
-    expect(lineLost('closed', running())).toBe(true);
-    expect(lineLost('connecting', running())).toBe(true);
-    expect(lineLost('open', running())).toBe(false);
-    expect(lineLost('closed', running({ phase: 'lobby' }))).toBe(false);
-    expect(lineLost('closed', running({ phase: 'won' }))).toBe(false);
-    expect(lineLost('closed', null)).toBe(false);
+  it('is down while its socket is not open, or its room on the way back, in a run only', () => {
+    const up = { status: 'open', retry: null } as const;
+    expect(lineLost(lineOf(), running())).toBe(true);
+    expect(lineLost(lineOf({ status: 'connecting' }), running())).toBe(true);
+    expect(lineLost(up, running())).toBe(false);
+    expect(lineLost(lineOf(), running({ phase: 'lobby' }))).toBe(false);
+    expect(lineLost(lineOf(), running({ phase: 'won' }))).toBe(false);
+    expect(lineLost(lineOf(), null)).toBe(false);
+    // The socket open, its comeback waiting for the room: down for the world all the same.
+    const waiting = { status: 'open', retry: { attempt: 1, at: null, restoring: true } } as const;
+    expect(lineLost(waiting, running())).toBe(true);
+    expect(lineLost(waiting, running({ phase: 'lobby' }))).toBe(false);
   });
 
   it('says the next try: its number, and its wait while it waits', () => {
@@ -121,6 +126,22 @@ describe('the own line down in a run', () => {
     for (const way of ['Jetzt versuchen', 'Seite neu laden', 'Einsatz aufgeben']) {
       expect(html).toContain(way);
     }
+  });
+
+  it('says the room is on its way back while a new server waits for it, the reload the way', () => {
+    const retry = { attempt: 1, at: null, restoring: true } as const;
+    const html = screen(running(), lineOf({ status: 'open', retry }));
+    expect(html).toContain('EINSATZ WIRD WIEDERHERGESTELLT');
+    expect(html).toContain('<p class="line-retry">Der letzte Stand trifft gleich ein</p>');
+    expect(html).toContain('Seite neu laden');
+    // Nothing to try, and no seat to give up until the room is back.
+    for (const way of ['Jetzt versuchen', 'Einsatz aufgeben', 'VERBINDUNG VERLOREN', 'WARTUNG']) {
+      expect(html).not.toContain(way);
+    }
+    // Waiting after a restart, too: the room's way back is the news.
+    const restarted = lineOf({ status: 'open', retry: { ...retry, restart: true } });
+    expect(screen(running(), restarted)).toContain('EINSATZ WIRD WIEDERHERGESTELLT');
+    expect(worldHeld(null, lineOf({ status: 'open', retry }), running())).toBe(true);
   });
 
   it('stands instead of the pause card: the others’ pause is no news to whoever is cut off', () => {

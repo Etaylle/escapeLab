@@ -102,12 +102,14 @@ describe('the server going down for a restart', () => {
       expect(close.mock.calls[0]?.[0]).toBe(RESTART_CLOSE);
     }
     expect(line.clients.size).toBe(0);
-    // Each seat holds its room's last snapshot: the run standing still for the whole crew.
+    // Each seat holds its room's last snapshot: the run standing still for the whole crew, sealed
+    // as this instance's last of the room.
     for (const socket of [anna, ben]) {
       const last = socket.heard.filter((m) => m.kind === 'restart').at(-1);
       const kept = open(last?.kind === 'restart' ? last.blob : '', code, KEY);
       expect(kept.state).toMatchObject({ phase: 'playing', paused: { kind: 'wartung' } });
       expect(kept.seq).toBe(last?.kind === 'restart' ? last.seq : -1);
+      expect(kept).toMatchObject({ instance: manager.instanceId, final: true });
     }
     expect(cemSend.mock.calls.map(([data]) => said(data).kind)).toContain('restart');
     expect(audienceSend.mock.calls.map(([data]) => said(data).kind)).not.toContain('restart');

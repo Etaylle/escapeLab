@@ -32,10 +32,11 @@ export {
   type RunEvent,
 } from './state.js';
 export {
-  roomSnapshotSchema,
+  sealedSnapshotSchema,
   type DroneRuntime,
   type RoomKeeping,
   type RoomSnapshot,
+  type SealedSnapshot,
   type SeatSnapshot,
 } from './snapshot.js';
 export {
