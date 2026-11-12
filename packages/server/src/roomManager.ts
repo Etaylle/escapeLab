@@ -178,6 +178,21 @@ export class RoomManager {
     );
   }
 
+  /**
+   * The server goes down for a restart at `now` (shutdown.ts): every room stands its run still
+   * and tells every seat on the line its last snapshot (`Room.goDown`); the log says so of each.
+   */
+  shutDown(now: number): void {
+    for (const room of this.rooms.values()) {
+      const told = room.goDown(now);
+      const what =
+        told === null
+          ? 'no snapshot to send'
+          : `snapshot seq ${told.seq} sent to ${told.seats} seat${told.seats === 1 ? '' : 's'}`;
+      console.log(`[escapelab] room ${room.code}: going down for a restart, ${what}`);
+    }
+  }
+
   /** Drop rooms that have been empty for a while; call periodically. */
   sweep(now = Date.now()): void {
     for (const [code, room] of this.rooms) {

@@ -5,6 +5,7 @@ import {
   keepConnected,
   OPENING_MS,
   OUTBOX_MAX,
+  RESTART_CLOSE,
   SILENCE_MS,
   wipesBanner,
   type Comeback,
@@ -22,7 +23,7 @@ import { inBanner } from '../src/ws.js';
 class FakeSocket {
   onopen: (() => void) | null = null;
   onmessage: ((event: { data: string }) => void) | null = null;
-  onclose: (() => void) | null = null;
+  onclose: ((event?: { code: number }) => void) | null = null;
   readyState: number = WebSocket.CONNECTING;
   readonly sent: ClientMessage[] = [];
   closedByPage = false;
@@ -51,10 +52,13 @@ class FakeSocket {
     this.onmessage?.({ data: JSON.stringify(msg) });
   }
 
-  /** The socket ends: the server terminated it, or it never got through. */
-  end(): void {
+  /**
+   * The socket ends: the server terminated it, or it never got through — with close `code`
+   * where the server closed it with one.
+   */
+  end(code?: number): void {
     this.readyState = WebSocket.CLOSED;
-    this.onclose?.();
+    this.onclose?.(code === undefined ? undefined : { code });
   }
 }
 
@@ -141,6 +145,40 @@ describe('keepConnected — the page’s line to the server', () => {
     expect(told.resumes).toBe(1);
     last().say({ kind: 'rooms', rooms: [] });
     expect(told.heard).toEqual([{ kind: 'rooms', rooms: [] }]);
+  });
+
+  it('lets the socket go as the server goes down for a restart, a new one made at once', () => {
+    const { sockets, told, last } = connection();
+    last().open();
+    last().say(JOINED);
+    const restart: ServerMessage = { kind: 'restart', blob: 'v1.a.b', seq: 9, at: 1 };
+    last().say(restart);
+    expect(told.heard.at(-1)).toEqual(restart);
+    expect(sockets[0]?.closedByPage).toBe(true);
+    expect(told.statuses.slice(-2)).toEqual(['closed', 'connecting']);
+    expect(sockets).toHaveLength(2);
+    expect(told.retries.at(-1)).toEqual({ attempt: 1, at: null, restart: true });
+    // The server still down: the next try waits as ever, and is still the restart's.
+    last().end();
+    expect(told.retries.at(-1)).toEqual({ attempt: 2, at: Date.now() + 1000, restart: true });
+    vi.advanceTimersByTime(1000);
+    last().open();
+    last().say(JOINED);
+    expect(told.retries.at(-1)).toBeNull();
+    // A drop after that is a drop again.
+    last().end();
+    expect(told.retries.at(-1)).toEqual({ attempt: 1, at: Date.now() + 1000 });
+  });
+
+  it('takes a socket the server closed with 1012 for its restart, told so or not', () => {
+    const { told, last } = connection();
+    last().open();
+    last().say(JOINED);
+    last().end(RESTART_CLOSE);
+    expect(told.retries.at(-1)).toMatchObject({ attempt: 1, restart: true });
+    vi.advanceTimersByTime(1000);
+    last().end(1006);
+    expect(told.retries.at(-1)).toMatchObject({ attempt: 2, restart: true });
   });
 
   it('opens without resuming where the page keeps no session', () => {

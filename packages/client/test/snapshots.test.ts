@@ -80,6 +80,13 @@ describe('the snapshot a browser keeps of its room', () => {
     expect(keptSnapshot('qx7r')?.seq).toBe(42);
   });
 
+  it('is the room’s last as the server goes down for a restart', () => {
+    const kept = seated();
+    takeIn(SNAPSHOT, kept);
+    takeIn({ kind: 'restart', blob: 'v1.bGFzdA.bGFzdA', seq: 44, at: T0 + 3000 }, kept);
+    expect(keptSnapshot('QX7R')).toMatchObject({ blob: 'v1.bGFzdA.bGFzdA', seq: 44 });
+  });
+
   it('goes with every resume: the tab’s comeback, a takeover let in, the way back', () => {
     takeIn(SNAPSHOT, seated());
     const resume = { kind: 'resume', code: 'QX7R', pass: PASS, blob: SNAPSHOT.blob };

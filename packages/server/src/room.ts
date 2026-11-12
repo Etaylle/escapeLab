@@ -447,31 +447,63 @@ export class Room {
     }, wait);
   }
 
-  /**
-   * The room's snapshot, sealed (`snapshot {blob, seq, at}`), to every seat on the line: each
-   * page keeps the newest of its room. None for nobody on the line, none of a run that is over —
-   * an ended run is not taken up again — and none over SNAPSHOT_MAX, which the log says once.
-   */
+  /** The room's snapshot, sealed (`snapshot {blob, seq, at}`), to every seat on the line. */
   private sendSnapshot(): void {
+    const sealed = this.sealedAt(Date.now());
+    if (sealed !== null) {
+      for (const listener of this.listeners.values()) {
+        listener({ kind: 'snapshot', ...sealed });
+      }
+    }
+  }
+
+  /**
+   * The room's snapshot as of `now`, sealed for its crew, with its seq: none without a sealer,
+   * for nobody on the line, of a run that is over — an ended run is not taken up again — and
+   * none over SNAPSHOT_MAX, which the log says once.
+   */
+  private sealedAt(now: number): { blob: string; seq: number; at: number } | null {
     const { phase } = this.state;
     if (this.sealer === null || this.listeners.size === 0 || phase === 'won' || phase === 'lost') {
-      return;
+      return null;
     }
-    const at = Date.now();
     const { seq } = this;
-    const blob = this.sealer(this.snapshot(at));
-    this.snapshotSentAt = at;
-    if (blob.length > SNAPSHOT_MAX) {
-      if (!this.tooBigSaid) {
-        this.tooBigSaid = true;
-        const kb = (blob.length / 1024).toFixed(0);
-        console.warn(`[escapelab] room ${this.code}: a snapshot of ${kb} kB is too big to send`);
-      }
-      return;
+    const blob = this.sealer(this.snapshot(now));
+    this.snapshotSentAt = now;
+    if (blob.length <= SNAPSHOT_MAX) {
+      return { blob, seq, at: now };
+    }
+    if (!this.tooBigSaid) {
+      this.tooBigSaid = true;
+      const kb = (blob.length / 1024).toFixed(0);
+      console.warn(`[escapelab] room ${this.code}: a snapshot of ${kb} kB is too big to send`);
+    }
+    return null;
+  }
+
+  /**
+   * The server goes down for a restart at `now` (shutdown.ts): a run on stands still for the
+   * whole crew, every seat away (core `maintenance`) — the crew's views say so — and every seat
+   * on the line is sent the room's last snapshot, sealed, as `restart {blob, seq, at}`; none of a
+   * run that is over. No snapshot of the room goes out after it. Returns the snapshot's seq and
+   * the seats told; null where none was.
+   */
+  goDown(now: number): { seq: number; seats: number } | null {
+    if (this.state.phase === 'playing') {
+      this.dispatch({ type: 'maintenance', at: now, waitFrom: now });
+    }
+    if (this.snapshotTimer !== null) {
+      clearTimeout(this.snapshotTimer);
+      this.snapshotTimer = null;
+    }
+    const sealed = this.sealedAt(now);
+    if (sealed === null) {
+      return null;
     }
     for (const listener of this.listeners.values()) {
-      listener({ kind: 'snapshot', blob, seq, at });
+      listener({ kind: 'restart', ...sealed });
     }
+    return { seq: sealed.seq, seats: this.listeners.size };
   }
 
   /**

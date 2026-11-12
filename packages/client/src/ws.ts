@@ -215,7 +215,10 @@ function seatNews(msg: ServerMessage, page: Page): boolean {
   }
 }
 
-/** Takes in what the line carries besides: the time, the rooms, the live streams, refusals. */
+/**
+ * Takes in what the line carries besides: the time, the rooms, the room's snapshots, refusals,
+ * and the live streams (`streamNews`).
+ */
 function lineNews(msg: ServerMessage, page: Page): void {
   switch (msg.kind) {
     case 'clock':
@@ -225,8 +228,20 @@ function lineNews(msg: ServerMessage, page: Page): void {
       page.setRooms(msg.rooms);
       break;
     case 'snapshot':
+    case 'restart':
       kept(msg, page);
       break;
+    case 'error':
+      refused(msg, page);
+      break;
+    default:
+      streamNews(msg, page);
+  }
+}
+
+/** Takes in what the world streams past React: where everybody stands, the pings, the chat. */
+function streamNews(msg: ServerMessage, page: Page): void {
+  switch (msg.kind) {
     case 'positions':
       page.positions.current = { run: msg.run, players: msg.players };
       page.drones.current = msg.drones;
@@ -241,9 +256,6 @@ function lineNews(msg: ServerMessage, page: Page): void {
       page.chats.current.push({ playerId, text, at: performance.now() });
       break;
     }
-    case 'error':
-      refused(msg, page);
-      break;
   }
 }
 
@@ -251,7 +263,7 @@ function lineNews(msg: ServerMessage, page: Page): void {
  * The snapshot of the tab's room, kept with the room's card as the latest view shows it: the
  * newest, for a server that knows the room no more to take it up again from.
  */
-function kept(msg: Extract<ServerMessage, { kind: 'snapshot' }>, page: Page): void {
+function kept(msg: Extract<ServerMessage, { kind: 'snapshot' | 'restart' }>, page: Page): void {
   const code = roomOfTab();
   const view = page.seen.current;
   if (code !== null && view !== null) {

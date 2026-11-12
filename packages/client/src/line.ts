@@ -28,6 +28,8 @@ export const RETRY_FIRST_MS = 1000;
 export const RETRY_MAX_MS = 10_000;
 /** How many messages wait for a socket to open; any more are dropped. */
 export const OUTBOX_MAX = 32;
+/** The code a socket closes with as the server goes down for a restart: Service Restart. */
+export const RESTART_CLOSE = 1012;
 
 /** What answers a socket's comeback: its seat back, the audience's view again, or a refusal. */
 const ANSWERS: ReadonlySet<ServerMessage['kind']> = new Set(['joined', 'spectator-view', 'error']);
@@ -68,6 +70,11 @@ export interface Retry {
   attempt: number;
   /** epoch ms the try goes out; null while it is under way */
   at: number | null;
+  /**
+   * the line is down because the server goes down for a restart, a deploy: it said so
+   * (`restart`), or its socket closed with RESTART_CLOSE; left out for any other drop
+   */
+  restart?: true;
 }
 
 /** What the socket `keepConnected` keeps open tells the app, and asks of it. */
@@ -188,6 +195,8 @@ class Keeper {
   private ready = false;
   /** asks for the server's time out on `current` and not yet answered */
   private asked = 0;
+  /** the line is down for the server's restart (`Retry.restart`), until it is ready again */
+  private restarting = false;
   private first: ClientMessage | null = null;
   private readonly waiting = new Outbox();
   private readonly retryAlarm = new Alarm();
@@ -209,11 +218,16 @@ class Keeper {
     this.tries += 1;
     this.on.made(socket);
     this.on.status('connecting');
-    this.on.retry({ attempt: this.tries, at: null });
+    this.on.retry({ attempt: this.tries, at: null, ...this.cause() });
     this.openingAlarm.set(OPENING_MS, () => this.dead(socket));
     socket.onopen = () => this.opened(socket);
     socket.onmessage = (event) => this.heard(socket, String(event.data));
-    socket.onclose = () => this.closed(socket);
+    socket.onclose = (event: CloseEvent | undefined) => this.closed(socket, event?.code);
+  }
+
+  /** What a retry says of why the line is down: for the server's restart, or nothing. */
+  private cause(): Pick<Retry, 'restart'> {
+    return this.restarting ? { restart: true } : {};
   }
 
   send(msg: ClientMessage): void {
@@ -295,6 +309,13 @@ class Keeper {
       this.answered(socket);
     }
     this.on.message(msg);
+    // The server goes down for a restart: its socket is let go, and a new one made at once —
+    // where a deploy has the next server up already, the run is back in moments.
+    if (msg.kind === 'restart') {
+      this.restarting = true;
+      this.dead(socket);
+      return;
+    }
     // The server's answer to the comeback: the seat back, the room's audience again, or refused.
     if (!this.ready && ANSWERS.has(msg.kind)) {
       if (msg.kind === 'error') {
@@ -308,6 +329,7 @@ class Keeper {
   private flush(socket: WebSocket): void {
     this.ready = true;
     this.tries = 0;
+    this.restarting = false;
     this.on.retry(null);
     for (const data of this.waiting.release()) {
       socket.send(data);
@@ -333,13 +355,17 @@ class Keeper {
     }
   }
 
-  private closed(socket: WebSocket): void {
+  private closed(socket: WebSocket, code: number | undefined): void {
     if (this.stopped || socket !== this.current) {
       return;
     }
+    if (code === RESTART_CLOSE) {
+      this.restarting = true;
+    }
     this.lost();
     this.retryAlarm.set(this.retryDelay, () => this.connect());
-    this.on.retry({ attempt: this.tries + 1, at: Date.now() + this.retryDelay });
+    const at = Date.now() + this.retryDelay;
+    this.on.retry({ attempt: this.tries + 1, at, ...this.cause() });
     this.retryDelay = Math.min(this.retryDelay * 2, RETRY_MAX_MS);
   }
 

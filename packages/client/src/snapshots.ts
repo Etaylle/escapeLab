@@ -54,10 +54,13 @@ function write(store: NoteStore | null, key: string, value: string): void {
   }
 }
 
-/** Keeps `snapshot` of the room `code`, the newest, with its card as `view` shows the room. */
+/**
+ * Keeps `snapshot` of the room `code` — sent as the room goes on, or as the server goes down
+ * for a restart — the newest, with its card as `view` shows the room.
+ */
 export function keepSnapshot(
   code: string,
-  snapshot: SnapshotMessage,
+  snapshot: Pick<SnapshotMessage, 'blob' | 'seq' | 'at'>,
   view: PlayerView,
   store: NoteStore | null = localStore(),
 ): void {

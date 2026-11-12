@@ -361,6 +361,13 @@ export type ServerMessage =
    * server that knows the room no more, after a deploy or a restart, takes it up again
    */
   | { kind: 'snapshot'; blob: string; seq: number; at: number }
+  /**
+   * the server goes down for a restart — a deploy, Render's SIGTERM — and this is the room's
+   * last snapshot, its run standing still for the whole crew: the page keeps it as a
+   * `snapshot`, says so on the line's card, and comes back as for a line dropped once the
+   * server is up again
+   */
+  | { kind: 'restart'; blob: string; seq: number; at: number }
   | { kind: 'rooms'; rooms: RoomSummary[] }
   | {
       kind: 'positions';

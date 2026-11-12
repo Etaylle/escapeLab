@@ -5,10 +5,11 @@ import { GiveUpButton } from './GiveUp.js';
 import { Icon } from './Icon.js';
 
 /**
- * The own line down while a run is on (line.ts): the player's card over the world says so and
- * when the next try goes out, with the ways on — try now, load the page anew, give the seat up
- * (at a second press, GiveUp.tsx). While it stands the world takes nothing: what is pressed
- * meanwhile goes nowhere, and nothing throws (`Line.send`).
+ * The own line down while a run is on (line.ts): the player's card over the world says so — or
+ * that the server goes down for a restart, a deploy — and when the next try goes out, with the
+ * ways on — try now, load the page anew, give the seat up (at a second press, GiveUp.tsx). While
+ * it stands the world takes nothing: what is pressed meanwhile goes nowhere, and nothing throws
+ * (`Line.send`).
  */
 
 /** The line as the game screen hears of it, and what the card does with it. */
@@ -54,7 +55,8 @@ export function LineLostCard({ line }: { line: GameLine }) {
   return (
     <div className="overlay pause line-lost" role="alert">
       <h1>
-        <Icon name="warning" /> VERBINDUNG VERLOREN
+        <Icon name="warning" />{' '}
+        {line.retry?.restart === true ? 'WARTUNG · Der Server startet neu' : 'VERBINDUNG VERLOREN'}
       </h1>
       <p className="line-retry">{retryLine(line.retry, now)}</p>
       <div className="pause-ways">

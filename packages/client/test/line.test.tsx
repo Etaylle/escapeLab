@@ -113,6 +113,16 @@ describe('the own line down in a run', () => {
     expect(screen(running(), lineOf({ status: 'open', retry: null }))).not.toContain('line-lost');
   });
 
+  it('says the server goes down for a restart, with the usual counter and ways', () => {
+    const html = screen(running(), lineOf({ retry: { attempt: 2, at: null, restart: true } }));
+    expect(html).toContain('WARTUNG · Der Server startet neu');
+    expect(html).not.toContain('VERBINDUNG VERLOREN');
+    expect(html).toContain('<p class="line-retry">Verbinde neu · Versuch 2</p>');
+    for (const way of ['Jetzt versuchen', 'Seite neu laden', 'Einsatz aufgeben']) {
+      expect(html).toContain(way);
+    }
+  });
+
   it('stands instead of the pause card: the others’ pause is no news to whoever is cut off', () => {
     const away = [{ id: 'p2', name: 'Ben', since: T0, waivableAt: T0 + 60_000 }];
     const view = running({ pausedFor: away, pausedAt: T0 });
