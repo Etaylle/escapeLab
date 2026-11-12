@@ -3,8 +3,11 @@ import { applyAction, initialState, parseMission } from '@escapelab/core';
 import type { Action, GameState, MapDef, Mission, ServerMessage } from '@escapelab/core';
 import { DronePatrol } from '../src/drones.js';
 import { Room } from '../src/room.js';
+import { open, roomKey, seal } from '../src/seal.js';
 import { pressE, walkTo, type Walker } from './walk.js';
 import { passFor } from './passes.js';
+
+const KEY = roomKey({ ROOM_SECRET: 'feed'.repeat(16) }).key;
 
 /**
  * Corridor with three stations along its top row; its emergencies run in
@@ -88,32 +91,32 @@ function callOuts(crew: Member[]): { playerId: string; input: unknown }[] {
   });
 }
 
+function moveTo(room: Room, player: Walker, x: number, y: number): void {
+  walkTo(room, player, x + 0.5, y + 0.5);
+}
+
+/** Lobby, mission start, and the two station solves that arm emergencies. */
+function midMission() {
+  const room = new Room('TEST', mission);
+  const anna = { ...room.join('Anna', passFor('Anna')), ...collector() };
+  const ben = { ...room.join('Ben', passFor('Ben')), ...collector() };
+  room.attach(anna.playerId, anna.listen);
+  room.attach(ben.playerId, ben.listen);
+  room.setReady(ben.playerId, true);
+  room.act(anna.playerId, { kind: 'start-mission' });
+  for (const x of [2, 4]) {
+    moveTo(room, ben, x, 1);
+    moveTo(room, anna, x, 2);
+    pressE(room, ben);
+    room.act(anna.playerId, { kind: 'puzzle-input', input: { press: true } });
+    room.act(ben.playerId, { kind: 'puzzle-input', input: { press: true } });
+  }
+  return { room, anna, ben };
+}
+
 describe('Room relay emergencies', () => {
   beforeEach(() => vi.useFakeTimers());
   afterEach(() => vi.useRealTimers());
-
-  function moveTo(room: Room, player: Walker, x: number, y: number): void {
-    walkTo(room, player, x + 0.5, y + 0.5);
-  }
-
-  /** Lobby, mission start, and the two station solves that arm emergencies. */
-  function midMission() {
-    const room = new Room('TEST', mission);
-    const anna = { ...room.join('Anna', passFor('Anna')), ...collector() };
-    const ben = { ...room.join('Ben', passFor('Ben')), ...collector() };
-    room.attach(anna.playerId, anna.listen);
-    room.attach(ben.playerId, ben.listen);
-    room.setReady(ben.playerId, true);
-    room.act(anna.playerId, { kind: 'start-mission' });
-    for (const x of [2, 4]) {
-      moveTo(room, ben, x, 1);
-      moveTo(room, anna, x, 2);
-      pressE(room, ben);
-      room.act(anna.playerId, { kind: 'puzzle-input', input: { press: true } });
-      room.act(ben.playerId, { kind: 'puzzle-input', input: { press: true } });
-    }
-    return { room, anna, ben };
-  }
 
   it('fires with a console and an instruction for everyone, and no valves', () => {
     const { room, anna, ben } = midMission();
@@ -207,6 +210,86 @@ describe('Room relay emergencies', () => {
     const quiet = views();
     vi.advanceTimersByTime(5000);
     expect(views()).toBe(quiet);
+    room.dispose();
+  });
+});
+
+/** How long the server is down between the snapshot and the room taken up again, ms. */
+const DOWNTIME_MS = 30_000;
+
+/** `name`'s seat of `room` back on the line on a connection of its own, as its page resumes. */
+function rejoin(room: Room, name: string): Member {
+  const { messages, listen } = collector();
+  const playerId = room.resume(passFor(name));
+  room.attach(playerId, listen);
+  return { playerId, messages };
+}
+
+/**
+ * A relay emergency 5 s on, its room's snapshot sealed as the crew's lines drop with the server;
+ * DOWNTIME_MS later the room taken up again from the blob opened and the crew back on the line in
+ * it: the run goes on. Returns the room, its crew, and how long the emergency had left at the
+ * snapshot.
+ */
+function restoredMidEmergency() {
+  const { room, anna } = midMission();
+  vi.advanceTimersByTime(66_000);
+  expect(running(anna)).toBe(true);
+  const at = Date.now();
+  const blob = seal({ ...room.snapshot(at), instance: 'old', final: true }, room.code, KEY);
+  room.dispose();
+  const kept = open(blob, room.code, KEY);
+  expect(kept.state.sabotage?.emergency).toMatchObject({ type: 'relay' });
+  vi.advanceTimersByTime(DOWNTIME_MS);
+  const again = Room.restore(kept, Date.now());
+  const crew = [rejoin(again, 'Anna'), rejoin(again, 'Ben')] as const;
+  expect(lastView(crew[0].messages).pausedFor).toBeNull();
+  return { room: again, crew, left: (kept.state.sabotage?.endsAt ?? 0) - at };
+}
+
+/** When the instruction on `member`'s relay display runs out, epoch ms; 0 for none shown. */
+const instructionEnds = (member: Member): number =>
+  lastView(member.messages).map?.sabotage?.relay?.instruction?.expiresAt ?? 0;
+
+describe('a relay emergency taken up again from a snapshot', () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it('runs on once the crew is back: its instructions age, it runs out and is charged', () => {
+    const { room, crew, left } = restoredMidEmergency();
+    const [anna] = crew;
+    expect(running(anna)).toBe(true);
+    const first = instructionEnds(anna);
+    const deadline = lastView(anna.messages).deadlineAt ?? 0;
+    vi.advanceTimersByTime(13_000);
+    expect(instructionEnds(anna)).toBeGreaterThan(first);
+    // What the emergency had left at the snapshot, from the moment the crew was back: on a
+    // second before, over a second after, its expiry charged once.
+    vi.advanceTimersByTime(left - 13_000 - 1000);
+    expect(running(anna)).toBe(true);
+    expect(lastView(anna.messages).penaltySeq).toBe(0);
+    vi.advanceTimersByTime(2000);
+    expect(running(anna)).toBe(false);
+    expect(lastView(anna.messages)).toMatchObject({ penaltySeq: 1, deadlineAt: deadline - 60_000 });
+    room.dispose();
+  });
+
+  it('is cleared once the crew back calls its instructions out, uncharged', () => {
+    const { room, crew } = restoredMidEmergency();
+    const [anna] = crew;
+    let inputs = 0;
+    for (let round = 0; round < 10 && running(anna); round++) {
+      for (const { playerId, input } of callOuts([...crew])) {
+        if (running(anna)) {
+          inputs += 1;
+          room.act(playerId, { kind: 'puzzle-input', input });
+        }
+      }
+      vi.advanceTimersByTime(1000);
+    }
+    expect(running(anna)).toBe(false);
+    expect(inputs).toBe(4);
+    expect(lastView(anna.messages).penaltySeq).toBe(0);
     room.dispose();
   });
 });
