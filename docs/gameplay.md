@@ -366,11 +366,12 @@ emergencies — and the others' card counts: „Warten auf Ben · 0:12". 60 s in
 drop, and 20 s into every later one, everybody still on the line is offered „Ohne Ben weiter"
 (Overcooked 2: the crew chooses between waiting and going on). One press runs the clock again
 and waives Ben: the stations the whole crew presses, the hatch and the escape count the crew
-without him; a station with two consoles still takes two. With one member left on the line the
-way on is never offered; after the same wait the card offers „Einsatz abbrechen" instead, which
-ends the run lost (`lost:abandoned`, „EINSATZ ABGEBROCHEN"). A waived member who comes back
-counts again at once, without a pause, and the others read „Ben ist zurück". The escape is never
-judged while the run stands paused, and a drop alone ends no run.
+without him, and an emergency at the relay is rolled anew without his console (and with it
+again once he is back); a station with two consoles still takes two. With one member left on
+the line the way on is never offered; after the same wait the card offers „Einsatz abbrechen"
+instead, which ends the run lost (`lost:abandoned`, „EINSATZ ABGEBROCHEN"). A waived member who
+comes back counts again at once, without a pause, and the others read „Ben ist zurück". The
+escape is never judged while the run stands paused, and a drop alone ends no run.
 
 **Giving the run up.** „Einsatz aufgeben", on the run's card or on the card of a line lost, gives
 the seat up for good: what they carried goes down where they stood (on their start where the

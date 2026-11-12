@@ -348,8 +348,11 @@ function presenceWithout(presence: Presence, playerId: string): Presence {
 }
 
 /**
- * An emergency at the relay under way, rolled anew for the crew as it stands — a console each
- * — once one of it has left: its deadline, and what it completed and missed, kept.
+ * An emergency at the relay under way, rolled anew for the crew the run counts (`crewOf`) — a
+ * console each — once that crew changed: somebody left, the run went on without somebody, or
+ * somebody it went on without is back. Its deadline, and what it completed and missed, are
+ * kept. A run standing still rolls it as of the moment it stopped, so that its instructions'
+ * clocks start as it goes on (`setPaused`).
  */
 function relayForCrew(state: GameState, at: number): GameState {
   const sabotage = state.sabotage;
@@ -357,7 +360,7 @@ function relayForCrew(state: GameState, at: number): GameState {
   if (sabotage === null || emergency === undefined) {
     return state;
   }
-  const fresh = openEmergency(state, at);
+  const fresh = openEmergency(state, state.paused?.since ?? at);
   const { endsAt, completed, missed } = emergency;
   const rolled = { ...fresh, endsAt, completed, missed };
   return { ...state, sabotage: { ...sabotage, emergency: rolled } };
@@ -531,7 +534,8 @@ function lineDropped(state: GameState, action: { playerId: string; at: number })
 /**
  * A crew member's line is back at `at`. In a run they count again at once, whether the crew
  * went on without them or waited, and the run goes on once it waits for nobody: a return the
- * crew went on without pauses nothing.
+ * crew went on without pauses nothing, and rolls an emergency at the relay anew to give them a
+ * console (`relayForCrew`).
  */
 function lineBack(state: GameState, action: { playerId: string; at: number }): GameState {
   const back = setConnected(state, findPlayer(state, action.playerId).id, true);
@@ -541,7 +545,9 @@ function lineBack(state: GameState, action: { playerId: string; at: number }): G
   const away = Object.fromEntries(
     Object.entries(state.away).filter(([playerId]) => playerId !== action.playerId),
   );
-  return holdForAway({ ...back, away }, action.at);
+  const counted = { ...back, away };
+  const waived = state.away[action.playerId]?.waived === true;
+  return holdForAway(waived ? relayForCrew(counted, action.at) : counted, action.at);
 }
 
 /** Whom the run waits for: the crew members away it has not gone on without, by player id. */
@@ -575,8 +581,9 @@ function holdForAway(state: GameState, at: number): GameState {
 /**
  * `playerId`, on the line, goes on without `absentId`: away since a drop whose wait is over,
  * and two of the crew at least on the line — one alone could work no station with two
- * consoles. The absent keep their seat and are counted out until they are back (`crewOf`); the
- * run goes on once it waits for nobody else.
+ * consoles. The absent keep their seat and are counted out until they are back (`crewOf`),
+ * at the relay too: an emergency under way is rolled anew without their console
+ * (`relayForCrew`). The run goes on once it waits for nobody else.
  */
 function continueWithout(
   state: GameState,
@@ -597,7 +604,7 @@ function continueWithout(
     fail('Allein läuft kein Einsatz weiter.');
   }
   const away = { ...state.away, [action.absentId]: { ...absent, waived: true } };
-  return holdForAway({ ...state, away }, action.at);
+  return holdForAway(relayForCrew({ ...state, away }, action.at), action.at);
 }
 
 /**
@@ -1184,13 +1191,16 @@ function clearSabotage(state: GameState, at: number): GameState {
       );
 }
 
-/** The relay emergency's def; rebuilt from the game whenever needed, never stored. */
+/**
+ * The relay emergency's def, a console for each of the crew the run counts (`crewOf`): rebuilt
+ * from the game whenever needed, never stored.
+ */
 function emergencyDef(state: GameState): RelayDef {
   const sabotage = state.mission.map.sabotage;
   if (sabotage === undefined) {
     throw new Error(`mission "${state.mission.id}" has no sabotage to run a relay emergency`);
   }
-  return relayDefFor(state.players, sabotage);
+  return relayDefFor(crewOf(state), sabotage);
 }
 
 /** Emergencies roll on their own stream, salted with the moment they start. */

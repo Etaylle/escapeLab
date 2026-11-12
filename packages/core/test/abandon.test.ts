@@ -10,7 +10,7 @@ import {
 } from '../src/index.js';
 import type { Action, GameState, Mission } from '../src/index.js';
 import type { Spot } from '../src/reach.js';
-import { consoleLab, lineDrops, standing, started, T0 } from './lab.js';
+import { consoleLab, lineBack, lineDrops, standing, started, T0 } from './lab.js';
 
 /** A lab for three: Anna hosts, Ben and Cem joined after her. */
 const mission = consoleLab(3);
@@ -232,5 +232,75 @@ describe('giving the seat up in a run', () => {
       const relay = viewFor(left, id).map?.sabotage?.relay;
       expect(relay?.instruction?.playerName).toMatch(/^(Anna|Ben)$/);
     }
+  });
+});
+
+describe('the relay works on the crew the run counts', () => {
+  /** The corridor's crew of three in an emergency, Cem's line down since T0 + 6 s. */
+  const cemAway = run(
+    [{ type: 'sabotage-start', at: T0 + 5000 }, lineDrops('p3', T0 + 6000)],
+    three,
+  );
+  const without = run(
+    [{ type: 'continue-without', playerId: 'p1', absentId: 'p3', at: T0 + 66_000 }],
+    cemAway,
+  );
+  const consoles = (state: GameState): Set<string> =>
+    new Set(state.sabotage?.emergency?.controls.map((c) => c.ownerId));
+
+  it('rolls it anew without whom the run went on without: no console, no instruction', () => {
+    expect(consoles(cemAway)).toEqual(new Set(['p1', 'p2', 'p3']));
+    expect(consoles(without)).toEqual(new Set(['p1', 'p2']));
+    expect(without.sabotage?.emergency?.instructions.map((i) => i.holderId)).toEqual(['p1', 'p2']);
+    const cem = viewFor(without, 'p3').map?.sabotage?.relay;
+    expect(cem).toMatchObject({ controls: [], instruction: null });
+    for (const id of ['p1', 'p2']) {
+      const relay = viewFor(without, id).map?.sabotage?.relay;
+      expect(relay?.instruction?.playerName).toMatch(/^(Anna|Ben)$/);
+      // Three instructions a console of the crew it counts clear it, as the core counts them.
+      expect(relay?.required).toBe(6);
+    }
+  });
+
+  it('starts the fresh instructions’ clocks as the run goes on, not while it stood still', () => {
+    const window = 12_000;
+    for (const instruction of without.sabotage?.emergency?.instructions ?? []) {
+      expect(instruction.expiresAt).toBe(T0 + 66_000 + window);
+    }
+    expect(without.sabotage?.emergency?.endsAt).toBe(
+      (cemAway.sabotage?.emergency?.endsAt ?? 0) + 60_000,
+    );
+  });
+
+  it('rolls it anew with a console for Cem once he is back', () => {
+    const back = run([lineBack('p3', T0 + 70_000)], without);
+    expect(back.paused).toBeNull();
+    expect(consoles(back)).toEqual(new Set(['p1', 'p2', 'p3']));
+    expect(viewFor(back, 'p3').map?.sabotage?.relay?.controls).toHaveLength(4);
+    expect(back.sabotage?.emergency?.completed).toBe(without.sabotage?.emergency?.completed);
+  });
+
+  it('opens a later emergency with no console for whom the run went on without', () => {
+    const calm = run(
+      [
+        lineDrops('p3', T0 + 1000),
+        { type: 'continue-without', playerId: 'p1', absentId: 'p3', at: T0 + 61_000 },
+        { type: 'sabotage-start', at: T0 + 62_000 },
+      ],
+      three,
+    );
+    expect(consoles(calm)).toEqual(new Set(['p1', 'p2']));
+    expect(calm.sabotage?.emergency?.instructions.map((i) => i.holderId)).toEqual(['p1', 'p2']);
+  });
+
+  it('rolls it for the crew the run waits for again once a give-up leaves one on the line', () => {
+    const left = run([abandon('p2', T0 + 70_000)], without);
+    expect(left.paused).not.toBeNull();
+    expect(consoles(left)).toEqual(new Set(['p1', 'p3']));
+  });
+
+  it('leaves it be for a return the run waited for: the crew it counts is the same', () => {
+    const waited = run([lineBack('p3', T0 + 20_000)], cemAway);
+    expect(waited.sabotage?.emergency?.controls).toEqual(cemAway.sabotage?.emergency?.controls);
   });
 });
