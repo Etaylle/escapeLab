@@ -6,8 +6,9 @@ import {
   type Mission,
   type ServerMessage,
 } from '@escapelab/core';
+import { MISSED_PINGS, SILENT_MS, type CutReason } from './heartbeat.js';
 import type { MissionCatalog } from './missions.js';
-import type { Room } from './room.js';
+import { GAME_KINDS, type GameMessage, type Room } from './room.js';
 import type { RoomManager } from './roomManager.js';
 
 /** What a connection needs of its socket: `ws`'s WebSocket has it. */
@@ -33,6 +34,8 @@ interface Session {
   room: Room;
   /** the player's id; for an audience connection, its spectator id */
   playerId: string;
+  /** who plays on it, as the log names them: the player's name, or the audience */
+  who: () => string;
   /**
    * whether the session still holds: a player's seat may have gone to another socket that
    * showed its pass since; an audience connection holds as long as it is open
@@ -45,25 +48,40 @@ interface Session {
   detach: () => void;
 }
 
+/** What serving the sockets hands back: the log's line for a socket the heartbeat cuts. */
+export interface Served {
+  /** Logs that the heartbeat cut `socket`, and why, naming its room and seat: none in no room. */
+  cut: (socket: object, why: CutReason) => void;
+}
+
+/** Why the heartbeat cut a socket, as the log says it. */
+const CUT_WHY: Record<CutReason, string> = {
+  pongs: `${MISSED_PINGS} pings unanswered`,
+  silent: `nothing heard for ${SILENT_MS / 1000} s`,
+};
+
 /**
  * Serves every connection of `server`: each message the socket sends is carried out in the
  * room it joined, resumed or watches, a refusal answered with an `error` naming the kind of
  * message it refuses — and once the socket closes, for whatever reason, the room lets go of it.
  */
-export function serveSockets(server: SocketServer, lab: Lab): void {
+export function serveSockets(server: SocketServer, lab: Lab): Served {
+  const sessions = new WeakMap<object, () => Session | null>();
   server.on('connection', (socket) => {
     let session: Session | null = null;
+    sessions.set(socket, () => session);
 
     socket.on('message', (raw) => {
-      let of: ClientMessage['kind'] | null = null;
+      let msg: ClientMessage | null = null;
       try {
-        const msg = parseClientMessage(String(raw));
-        of = msg.kind;
+        msg = parseClientMessage(String(raw));
         session = handleMessage(lab, socket, session, msg);
       } catch (err) {
         const message =
           err instanceof GameError || err instanceof Error ? err.message : 'Unbekannter Fehler.';
-        send(socket, of === null ? { kind: 'error', message } : { kind: 'error', message, of });
+        logRefusal(session, msg, message);
+        const of = msg?.kind;
+        send(socket, of === undefined ? { kind: 'error', message } : { kind: 'error', message, of });
       }
     });
 
@@ -71,6 +89,40 @@ export function serveSockets(server: SocketServer, lab: Lab): void {
       session?.detach();
     });
   });
+  return {
+    cut: (socket, why) => {
+      const session = sessions.get(socket)?.() ?? null;
+      if (session !== null) {
+        const where = `room ${session.room.code}: ${session.who()}`;
+        console.log(`[escapelab] ${where} cut by the heartbeat, ${CUT_WHY[why]}`);
+      }
+    },
+  };
+}
+
+/**
+ * The refusals the log names: a door that stayed shut, a seat not given up, the way on or the
+ * call-off refused. The game's own refusals — a wrong input, a step too far — it leaves out.
+ */
+const LOGGED_REFUSALS: ReadonlySet<ClientMessage['kind']> = new Set([
+  'create-room',
+  'join-room',
+  'resume',
+  'spectate',
+  'abandon',
+  'continue-without',
+  'call-off',
+]);
+
+/** Logs the refusal of `msg` with its `reason`, where the log names it (`LOGGED_REFUSALS`). */
+function logRefusal(session: Session | null, msg: ClientMessage | null, reason: string): void {
+  if (msg === null || !LOGGED_REFUSALS.has(msg.kind)) {
+    return;
+  }
+  const code = 'code' in msg ? msg.code.toUpperCase() : session?.room.code;
+  const where = code === undefined ? 'no room' : `room ${code}`;
+  const by = 'name' in msg ? ` as ${msg.name}` : session === null ? '' : ` by ${session.who()}`;
+  console.log(`[escapelab] ${where}: ${msg.kind}${by} refused, ${reason}`);
 }
 
 function send(socket: PlayerSocket, msg: ServerMessage): void {
@@ -94,20 +146,23 @@ function listenerOf(socket: PlayerSocket): (msg: ServerMessage) => void {
  * What a socket may send whether or not it is in a room: to open, join, watch, resume or give
  * up a seat, or to ask where its pass sits, which rooms there are, what time it is.
  */
-type AtTheDoor = Extract<
-  ClientMessage,
-  {
-    kind:
-      | 'create-room'
-      | 'join-room'
-      | 'list-rooms'
-      | 'clock'
-      | 'spectate'
-      | 'resume'
-      | 'whereami'
-      | 'abandon';
-  }
->;
+const DOOR_KINDS = [
+  'create-room',
+  'join-room',
+  'list-rooms',
+  'clock',
+  'spectate',
+  'resume',
+  'whereami',
+  'abandon',
+] as const satisfies readonly ClientMessage['kind'][];
+
+type AtTheDoor = Extract<ClientMessage, { kind: (typeof DOOR_KINDS)[number] }>;
+
+const AT_THE_DOOR: ReadonlySet<ClientMessage['kind']> = new Set(DOOR_KINDS);
+
+/** Whether `msg` is one a socket may send in no room (`AtTheDoor`). */
+const fromTheDoor = (msg: ClientMessage): msg is AtTheDoor => AT_THE_DOOR.has(msg.kind);
 
 function handleMessage(
   lab: Lab,
@@ -115,25 +170,15 @@ function handleMessage(
   session: Session | null,
   msg: ClientMessage,
 ): Session | null {
-  switch (msg.kind) {
-    case 'create-room':
-    case 'join-room':
-    case 'list-rooms':
-    case 'clock':
-    case 'spectate':
-    case 'resume':
-    case 'whereami':
-    case 'abandon':
-      return atTheDoor(lab, socket, session, msg);
-    default: {
-      // A seat that went to another socket takes nothing from this one any more.
-      const held = session !== null && session.holds() ? session : null;
-      // What the page streams supersedes itself: from no seat it goes nowhere, unanswered.
-      return held === null && msg.kind === 'pos'
-        ? null
-        : inRoom(lab, socket, requireSession(held), msg);
-    }
+  if (fromTheDoor(msg)) {
+    return atTheDoor(lab, socket, session, msg);
   }
+  // A seat that went to another socket takes nothing from this one any more.
+  const held = session !== null && session.holds() ? session : null;
+  // What the page streams supersedes itself: from no seat it goes nowhere, unanswered.
+  return held === null && msg.kind === 'pos'
+    ? null
+    : inRoom(lab, socket, requireSession(held), msg);
 }
 
 /** A message a socket may send in no room: the session it opens, or the one it had. */
@@ -147,30 +192,47 @@ function atTheDoor(
     case 'create-room':
     case 'join-room':
       return sitDown(lab, socket, session, msg);
-    case 'whereami':
-      send(socket, { kind: 'seated', seat: lab.manager.whereIs(msg.pass) });
-      return session;
     case 'abandon':
       return giveUp(lab, socket, session, msg);
-    case 'list-rooms':
-      send(socket, { kind: 'rooms', rooms: lab.manager.list() });
-      return session;
-    case 'clock':
-      // The page's own time comes back as it was sent: only the round trip is the page's.
-      send(socket, { kind: 'clock', sent: msg.sent, at: Date.now() });
-      return session;
-    case 'spectate': {
-      const room = lab.manager.get(msg.code);
-      session?.detach();
-      // An audience connection goes by its spectator id: voice signals reach it by that.
-      const { spectatorId, detach } = room.attachSpectator((m) => send(socket, m));
-      return { room, playerId: spectatorId, holds: () => true, detach };
-    }
+    case 'spectate':
+      return watch(lab, socket, session, msg.code);
     case 'resume': {
       const room = lab.manager.get(msg.code);
       return seated(socket, session, room, room.resume(msg.pass));
     }
+    default:
+      answer(lab, socket, msg);
+      return session;
   }
+}
+
+/** Answers what a socket asks at the door: where its pass sits, which rooms there are, the time. */
+function answer(
+  lab: Lab,
+  socket: PlayerSocket,
+  msg: Extract<AtTheDoor, { kind: 'whereami' | 'list-rooms' | 'clock' }>,
+): void {
+  switch (msg.kind) {
+    case 'whereami':
+      send(socket, { kind: 'seated', seat: lab.manager.whereIs(msg.pass) });
+      break;
+    case 'list-rooms':
+      send(socket, { kind: 'rooms', rooms: lab.manager.list() });
+      break;
+    case 'clock':
+      // The page's own time comes back as it was sent: only the round trip is the page's.
+      send(socket, { kind: 'clock', sent: msg.sent, at: Date.now() });
+      break;
+  }
+}
+
+/** The audience connection a socket opens on the room `code`: the session it had let go of. */
+function watch(lab: Lab, socket: PlayerSocket, session: Session | null, code: string): Session {
+  const room = lab.manager.get(code);
+  session?.detach();
+  // An audience connection goes by its spectator id: voice signals reach it by that.
+  const { spectatorId, detach } = room.attachSpectator((m) => send(socket, m));
+  return { room, playerId: spectatorId, who: () => 'a spectator', holds: () => true, detach };
 }
 
 /**
@@ -245,8 +307,14 @@ function seated(
   send(socket, { kind: 'joined', code: room.code });
   const listener = listenerOf(socket);
   const detach = room.attach(playerId, listener);
-  return { room, playerId, holds: () => room.plays(playerId, listener), detach };
+  const who = (): string => room.nameOf(playerId);
+  return { room, playerId, who, holds: () => room.plays(playerId, listener), detach };
 }
+
+const FOR_THE_GAME: ReadonlySet<ClientMessage['kind']> = new Set(GAME_KINDS);
+
+/** Whether `msg` maps 1:1 onto a game action, which the room acts on (`Room.act`). */
+const forTheGame = (msg: ClientMessage): msg is GameMessage => FOR_THE_GAME.has(msg.kind);
 
 /** A message of a player in the room of session `s`, carried out there. */
 function inRoom(
@@ -255,6 +323,10 @@ function inRoom(
   s: Session,
   msg: Exclude<ClientMessage, AtTheDoor>,
 ): Session {
+  if (forTheGame(msg)) {
+    s.room.act(s.playerId, msg);
+    return s;
+  }
   switch (msg.kind) {
     case 'switch-mission': {
       const difficulty = s.room.difficulty;
@@ -295,21 +367,6 @@ function inRoom(
     }
     case 'set-ready':
       s.room.setReady(s.playerId, msg.ready, nextMission(lab, s.room, msg.missionId));
-      return s;
-    case 'select-color':
-    case 'set-daily':
-    case 'start-mission':
-    case 'intro-done':
-    case 'puzzle-input':
-    case 'request-hint':
-    case 'open-source':
-    case 'read-note':
-    case 'drop-item':
-    case 'rematch':
-    case 'back-to-lobby':
-    case 'continue-without':
-    case 'call-off':
-      s.room.act(s.playerId, msg);
       return s;
   }
 }

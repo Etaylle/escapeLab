@@ -25,6 +25,7 @@ import {
   phrasesOf,
   puzzleDueAt,
   runReport,
+  runSeconds,
   sayPhrase,
   shutDoors,
   sightables,
@@ -61,29 +62,28 @@ type Listener = (msg: ServerMessage) => void;
 export type RunListener = (report: RunReport) => void;
 
 /**
- * The subset of client messages that map 1:1 onto game actions. A yes to
+ * The kinds of client message that map 1:1 onto game actions (`act`). A yes to
  * the next run may name a mission from the catalog: that one goes through
  * `setReady`, which takes the mission already found.
  */
-export type GameMessage = Extract<
-  ClientMessage,
-  {
-    kind:
-      | 'select-color'
-      | 'set-daily'
-      | 'start-mission'
-      | 'intro-done'
-      | 'puzzle-input'
-      | 'request-hint'
-      | 'open-source'
-      | 'read-note'
-      | 'drop-item'
-      | 'back-to-lobby'
-      | 'rematch'
-      | 'continue-without'
-      | 'call-off';
-  }
->;
+export const GAME_KINDS = [
+  'select-color',
+  'set-daily',
+  'start-mission',
+  'intro-done',
+  'puzzle-input',
+  'request-hint',
+  'open-source',
+  'read-note',
+  'drop-item',
+  'back-to-lobby',
+  'rematch',
+  'continue-without',
+  'call-off',
+] as const satisfies readonly ClientMessage['kind'][];
+
+/** A client message that maps 1:1 onto a game action (`GAME_KINDS`). */
+export type GameMessage = Extract<ClientMessage, { kind: (typeof GAME_KINDS)[number] }>;
 
 /** A plate holds while someone is this close (in tiles); releases a bit wider. */
 const PLATE_PRESS_RADIUS = 0.55;
@@ -128,6 +128,9 @@ const RELAY_TICK_MS = 1000;
 const SEAT_MOVED = 'Dieser Platz spielt jetzt in einem anderen Fenster.';
 /** What a pass is told once another device took its seat over by its name. */
 const SEAT_TAKEN = 'Der Platz wurde auf einem anderen Gerät übernommen.';
+
+/** A stretch of time in seconds, as the log says it: `12.3 s`. */
+const seconds = (ms: number): string => `${(ms / 1000).toFixed(1)} s`;
 
 /** Who stands where and what they found and see, as the room reports it in `set-presence`. */
 type PresenceReport = Omit<Extract<Action, { type: 'set-presence' }>, 'type' | 'at'>;
@@ -200,6 +203,8 @@ export class Room {
   private dronesSent = '{}';
   /** steps refused in this room so far, for the log */
   private refusedSteps = 0;
+  /** when each seat's line closed, by player id, for the log to say how long it was away */
+  private readonly lostAt = new Map<string, number>();
   /** epoch ms since the room has had no connected players, null while occupied */
   emptySince: number | null = null;
 
@@ -225,6 +230,7 @@ export class Room {
     const playerId = randomUUID();
     this.dispatch({ type: 'player-join', playerId, name });
     this.seats.bind(playerId, pass);
+    this.log(`${this.nameOf(playerId)} joined`);
     return { playerId };
   }
 
@@ -243,7 +249,8 @@ export class Room {
       throw new GameError(`${seat.name} ist noch verbunden.`);
     }
     this.seats.takeOver(seat.id, pass);
-    return this.resume(pass);
+    this.log(`${seat.name}'s seat taken over by another device, ${this.back(seat.id)}`);
+    return seat.id;
   }
 
   /**
@@ -300,10 +307,14 @@ export class Room {
     const stood = this.positions.get(playerId);
     this.positions.delete(playerId);
     const where = stood === undefined ? null : { x: stood.x, y: stood.y };
+    // Said first: a run it leaves short of its crew ends with it, and the log says so next.
+    const left = this.state.phase === 'playing' ? 'gave the run up' : 'left the room';
+    this.log(`${this.nameOf(playerId)} ${left}`);
     this.dispatch({ type: 'abandon', playerId, at: Date.now(), where });
     this.seats.free(playerId);
-    for (const kept of [this.signalAllowance, this.lastPingAt, this.lastChatAt, this.glances]) {
-      kept.delete(playerId);
+    const kept = [this.signalAllowance, this.lastPingAt, this.lastChatAt, this.glances];
+    for (const byPlayer of [...kept, this.lostAt]) {
+      byPlayer.delete(playerId);
     }
     if (this.listeners.size === 0) {
       this.emptySince = Date.now();
@@ -331,13 +342,27 @@ export class Room {
     }
     if (!this.state.players.some((p) => p.id === playerId)) {
       this.seats.free(playerId);
+      this.lostAt.delete(playerId);
       throw new Error('Der Lauf hat ohne diese Verbindung begonnen — Raum neu beitreten.');
     }
-    // Back at once: the run goes on once it waits for nobody, a return it went on without
-    // pauses nothing (core `player-connected`).
-    this.dispatch({ type: 'player-connected', playerId, at: Date.now() });
-    this.reconcileCrew();
+    this.log(`${this.nameOf(playerId)} resumed, ${this.back(playerId)}`);
     return playerId;
+  }
+
+  /**
+   * The player of `playerId` back on the line, at once: the run goes on once it waits for
+   * nobody, and a return it went on without pauses nothing (core `player-connected`). Says for
+   * the log how long their line was away.
+   */
+  private back(playerId: string): string {
+    const lost = this.lostAt.get(playerId);
+    this.lostAt.delete(playerId);
+    const now = Date.now();
+    this.dispatch({ type: 'player-connected', playerId, at: now });
+    this.reconcileCrew();
+    return lost === undefined
+      ? 'its old line still open'
+      : `${seconds(now - lost)} after its line closed`;
   }
 
   /**
@@ -398,6 +423,8 @@ export class Room {
     if (this.listeners.size === 0) {
       this.emptySince = Date.now();
     }
+    this.lostAt.set(playerId, Date.now());
+    this.log(`${this.nameOf(playerId)}'s line closed`);
     this.dispatch({ type: 'player-disconnected', playerId, at: Date.now() });
     this.reconcileCrew();
   }
@@ -533,6 +560,7 @@ export class Room {
           absentId: msg.absentId,
           at: Date.now(),
         });
+        this.log(`${this.nameOf(playerId)} went on without ${this.nameOf(msg.absentId)}`);
         this.reconcileCrew();
         break;
       case 'call-off':
@@ -680,6 +708,26 @@ export class Room {
   /** Where the room stands: its lobby, a run on — paused or not — or the end of one. */
   get phase(): Phase {
     return this.state.phase;
+  }
+
+  /** Whether a run on stands paused, waiting for somebody away. */
+  get paused(): boolean {
+    return this.state.paused !== null;
+  }
+
+  /** How many players are on the line here: their seats each played on a connection. */
+  get playersOnTheLine(): number {
+    return this.listeners.size;
+  }
+
+  /** How many audience connections watch here. */
+  get watching(): number {
+    return this.spectators.size;
+  }
+
+  /** The name of the player of `playerId`, for the log; a seat given up meanwhile says so. */
+  nameOf(playerId: string): string {
+    return this.state.players.find((p) => p.id === playerId)?.name ?? 'a seat given up';
   }
 
   get difficulty(): Difficulty {
@@ -1482,7 +1530,7 @@ export class Room {
     this.state = applyAction(this.state, action);
     // A run ends exactly once, won or lost; a rematch is a run of its own.
     if (wasPlaying && (this.state.phase === 'won' || this.state.phase === 'lost')) {
-      this.onRunFinished(runReport(this.state, this.code));
+      this.runOver(runReport(this.state, this.code));
     }
     // A glance of one run finds nothing in the next.
     if (this.state.phase !== 'playing') {
@@ -1500,6 +1548,21 @@ export class Room {
     if (action.type !== 'set-presence' && this.findingWorld() !== world) {
       this.reconcilePresence();
     }
+  }
+
+  /** The run is over: the log says how, and its report goes to `onRunFinished`. */
+  private runOver(report: RunReport): void {
+    const why = this.state.calledOff === null ? '' : ` — ${this.state.calledOff}`;
+    this.log(
+      `run over, ${report.outcome} after ${runSeconds(report).toFixed(0)} s, ` +
+        `crew ${report.crew.join(', ')}${why}`,
+    );
+    this.onRunFinished(report);
+  }
+
+  /** One line of the server's log about this room. */
+  private log(line: string): void {
+    console.log(`[escapelab] room ${this.code}: ${line}`);
   }
 
   /**

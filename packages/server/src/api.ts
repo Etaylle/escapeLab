@@ -3,6 +3,7 @@ import { createReadStream, existsSync } from 'node:fs';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { isDailyDay, type MissionStanding, type MissionStats } from '@escapelab/core';
 import type { MissionCatalog } from './missions.js';
+import type { RoomCounts } from './roomManager.js';
 import type { RunStats } from './runStats.js';
 
 /** A JSON answer: the status code and the body to serialise. */
@@ -14,16 +15,54 @@ export interface ApiResponse {
 const MANUAL_PATH = /^\/missions\/([^/]+)\/manual$/;
 const MISSION_PATH = /^\/missions\/([^/]+)$/;
 
+/** What /health says of the server beside its missions. */
+export interface Health {
+  /** its rooms by count, naming nobody */
+  rooms: () => RoomCounts;
+  /** whole seconds since it started */
+  uptimeSec: () => number;
+  /** the build it runs (`versionOf`) */
+  version: string;
+}
+
+/** The build a server runs: the commit Render deployed (RENDER_GIT_COMMIT), else 'dev'. */
+export function versionOf(env: NodeJS.ProcessEnv): string {
+  // An empty RENDER_GIT_COMMIT counts as unset, like an empty RUNS_LOG.
+  return env['RENDER_GIT_COMMIT'] || 'dev';
+}
+
 /**
- * The JSON routes: health, the mission list for the picker, one mission
+ * GET /health: the server is up, its missions by id, its rooms by count — the runs on, those
+ * paused, the players and the audience on the line — how long it has run and the build it
+ * runs. It names nobody. Null for any other path.
+ */
+export function healthResponse(
+  catalog: MissionCatalog,
+  health: Health,
+  url: string,
+): ApiResponse | null {
+  if ((url.split('?')[0] ?? url) !== '/health') {
+    return null;
+  }
+  return {
+    status: 200,
+    body: {
+      ok: true,
+      missions: catalog.all.map((m) => m.id),
+      rooms: health.rooms(),
+      uptimeSec: health.uptimeSec(),
+      version: health.version,
+    },
+  };
+}
+
+/**
+ * The JSON routes of the missions: the list for the picker, one mission
  * whole (for the editor to start from) and one mission's printed manual.
- * Null for any other path, which is the static site's.
+ * Null for any other path: /health's, the Bestenliste's or the static site's.
  */
 export function apiResponse(catalog: MissionCatalog, url: string): ApiResponse | null {
   const path = url.split('?')[0] ?? url;
-  if (path === '/health') {
-    return { status: 200, body: { ok: true, missions: catalog.all.map((m) => m.id) } };
-  }
   if (path === '/missions') {
     return { status: 200, body: catalog.infos() };
   }

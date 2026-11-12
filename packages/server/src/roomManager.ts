@@ -13,6 +13,19 @@ const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 const CODE_LENGTH = 4;
 const EMPTY_ROOM_TTL_MS = 10 * 60 * 1000;
 
+/** The rooms by count, as /health says them: no code and no name. */
+export interface RoomCounts {
+  total: number;
+  /** runs on, paused or not */
+  running: number;
+  /** runs on that stand paused, waiting for somebody away */
+  paused: number;
+  /** players on the line: their seats each played on a connection */
+  players: number;
+  /** audience connections */
+  spectators: number;
+}
+
 /**
  * Whether a new room may be pinned to a seed, so that its runs repeat: with
  * ALLOW_SEED=1, as `pnpm dev` and CI set it; not with 0 or unset. Throws for
@@ -86,6 +99,19 @@ export class RoomManager {
         const openness = Number(b.free > 0) - Number(a.free > 0);
         return openness !== 0 ? openness : a.code.localeCompare(b.code);
       });
+  }
+
+  /** The rooms by count (`RoomCounts`): how many, the runs on and paused, who is on the line. */
+  counts(): RoomCounts {
+    const counts: RoomCounts = { total: 0, running: 0, paused: 0, players: 0, spectators: 0 };
+    for (const room of this.rooms.values()) {
+      counts.total += 1;
+      counts.running += Number(room.phase === 'playing');
+      counts.paused += Number(room.phase === 'playing' && room.paused);
+      counts.players += room.playersOnTheLine;
+      counts.spectators += room.watching;
+    }
+    return counts;
   }
 
   /**

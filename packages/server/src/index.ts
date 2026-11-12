@@ -1,10 +1,19 @@
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { WebSocketServer } from 'ws';
-import { apiResponse, serveRuns, statsResponse, type RunsExport } from './api.js';
+import {
+  apiResponse,
+  healthResponse,
+  serveRuns,
+  statsResponse,
+  versionOf,
+  type ApiResponse,
+  type Health,
+  type RunsExport,
+} from './api.js';
 import { customMissions, serveCustomMissions } from './customMissions.js';
 import { dailySalt } from './dailySalt.js';
-import { startHeartbeat } from './heartbeat.js';
+import { HEARTBEAT_MS, startHeartbeat } from './heartbeat.js';
 import { MissionCatalog } from './missions.js';
 import { RoomManager, seedsAllowed } from './roomManager.js';
 import { DEFAULT_RUNS_LOG } from './runLog.js';
@@ -46,6 +55,17 @@ const daily = dailySalt(process.env);
 // A room pinned to a seed repeats its runs: for the walkthrough and bug reports, not for play.
 const manager = new RoomManager(logRun(RUNS_LOG, stats), seedsAllowed(process.env), daily.salt);
 setInterval(() => manager.sweep(), 60_000).unref();
+// What /health says beside the missions: no code, no name.
+const health: Health = {
+  rooms: () => manager.counts(),
+  uptimeSec: () => Math.floor(process.uptime()),
+  version: versionOf(process.env),
+};
+/** The JSON routes: /health, the missions' and the Bestenliste's; null for any other path. */
+const jsonFor = (url: string): ApiResponse | null =>
+  healthResponse(catalog, health, url) ??
+  apiResponse(catalog, url) ??
+  statsResponse(stats, catalog, url);
 
 const httpServer = createWebServer(tls, (req, res) => {
   if (serveRuns(runs, req, res)) {
@@ -58,7 +78,7 @@ const httpServer = createWebServer(tls, (req, res) => {
     return;
   }
   const url = req.url ?? '/';
-  const api = apiResponse(catalog, url) ?? statsResponse(stats, catalog, url);
+  const api = jsonFor(url);
   if (api !== null) {
     res.writeHead(api.status, { 'content-type': 'application/json' });
     res.end(JSON.stringify(api.body));
@@ -72,9 +92,10 @@ const httpServer = createWebServer(tls, (req, res) => {
 });
 
 const wss = new WebSocketServer({ server: httpServer, path: '/ws' });
-serveSockets(wss, { catalog, manager });
-// A socket gone silent is found out and closed, so that the room pauses for its player.
-startHeartbeat(wss);
+const served = serveSockets(wss, { catalog, manager });
+// A socket gone silent is found out and closed, so that the room pauses for its player; the
+// log names the room and the seat of each socket it cuts.
+startHeartbeat(wss, HEARTBEAT_MS, served.cut);
 
 httpServer.listen(PORT, () => {
   const ids = catalog.all.map((m) => m.id).join(', ');
