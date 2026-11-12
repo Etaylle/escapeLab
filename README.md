@@ -375,8 +375,9 @@ Betrieb:
   hat (`… is not the last of instance …, waiting up to …` im Log). Die 90 s zählen ab da, wie
   lange die neue Instanz auch schon läuft: Render schaltet erst um, wenn sie gesund ist, wer danach
   abbricht, landet auf ihr, und der letzte Schnappschuss der alten kommt spätestens rund 61 s nach
-  dem Umschalten. So lange zeigt die Karte des Spielers „EINSATZ WIRD WIEDERHERGESTELLT", und das
-  Publikum wartet mit; ein noch neuerer Stand ersetzt den Raum wie sonst in den ersten 10 s
+  dem Umschalten. So lange zeigt die Karte des Spielers „EINSATZ WIRD WIEDERHERGESTELLT" — auf dem
+  Startbildschirm mit den Sekunden, die sie schon wartet, und nur „Einsatz aufgeben" offen —, und
+  das Publikum wartet mit; ein noch neuerer Stand ersetzt den Raum wie sonst in den ersten 10 s
   danach. Was später kommt, bleibt liegen, und das Log nennt beide Stände
   (`snapshot seq … came too late, the room goes on from seq …`). Ein letzter Schnappschuss — beim
   SIGTERM, auch beim Einschlafen des Free-Plans — wartet nie. Vor einem Push lohnt `/health`

@@ -3,7 +3,7 @@ import { SNAPSHOT_MAX_AGE_MS, type PlayerView, type ServerMessage } from '@escap
 import { PASS_KEY } from '../src/pass.js';
 import { keptSeat, keptSnapshot, resumeOf, seatOf, SNAPSHOT_KEY } from '../src/snapshots.js';
 import { comebackOfTab } from '../src/tab.js';
-import { noteOutgoing, replyTo, takeIn } from '../src/ws.js';
+import { lineDropped, noteOutgoing, replyTo, takeIn } from '../src/ws.js';
 import { page, storage } from './page.js';
 
 /** Ben's pass. */
@@ -230,11 +230,12 @@ describe('the card of a kept snapshot whose seat the server will not have back',
   });
 
   it('is the room of the resume the page sent last, nothing else noted', () => {
-    const resumed = { current: null as string | null };
-    noteOutgoing({ kind: 'resume', code: 'QX7R', pass: PASS }, resumed);
-    expect(resumed.current).toBe('QX7R');
-    noteOutgoing({ kind: 'whereami', pass: PASS }, resumed);
-    expect(resumed.current).toBe('QX7R');
+    const { kept } = page();
+    noteOutgoing({ kind: 'resume', code: 'QX7R', pass: PASS }, kept);
+    expect(kept.resumed.current).toBe('QX7R');
+    noteOutgoing({ kind: 'whereami', pass: PASS }, kept);
+    noteOutgoing({ kind: 'abandon', code: 'AB12', pass: PASS }, kept);
+    expect(kept.resumed.current).toBe('QX7R');
   });
 
   it('stays once the seat is back: the resume answered', () => {
@@ -246,6 +247,64 @@ describe('the card of a kept snapshot whose seat the server will not have back',
     expect(kept.resumed.current).toBeNull();
     takeIn({ kind: 'error', message: 'Gerade ist keine Station in Betrieb.', of: 'resume' }, kept);
     expect(keptSnapshot('QX7R')).not.toBeNull();
+  });
+});
+
+describe('the card whose way back waits while the server takes its room up again', () => {
+  beforeEach(() => {
+    const local = new Map([[PASS_KEY, JSON.stringify({ ...PASS, name: 'Ben' })]]);
+    vi.stubGlobal('sessionStorage', storage(new Map()));
+    vi.stubGlobal('window', { localStorage: storage(local) });
+    vi.useFakeTimers();
+    vi.setSystemTime(T0);
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  /** Ben's join screen, its card gone back to room QX7R. */
+  function wentBack() {
+    const { kept, got } = page();
+    noteOutgoing({ kind: 'resume', code: 'QX7R', pass: PASS }, kept);
+    return { kept, got };
+  }
+
+  it('waits from the server’s word, and goes into the run as the room is back', () => {
+    const { kept, got } = wentBack();
+    takeIn({ kind: 'restoring', code: 'QX7R' }, kept);
+    expect(got.restoring).toEqual({ code: 'QX7R', since: T0 });
+    vi.advanceTimersByTime(61_000);
+    // The newest snapshot is in: the server seats the page, whose views open the game.
+    takeIn({ kind: 'joined', code: 'QX7R', instanceId: 'boot-1' }, kept);
+    expect(got.restoring).toBeNull();
+    expect(got.code).toBe('QX7R');
+    expect(comebackOfTab()).toEqual({ kind: 'resume', code: 'QX7R', pass: PASS });
+  });
+
+  it('waits no more once its resume is refused, its seat given up, or its line gone', () => {
+    const { kept, got } = wentBack();
+    takeIn({ kind: 'restoring', code: 'QX7R' }, kept);
+    takeIn({ kind: 'error', message: 'Dieser Einsatz ist schon vorbei.', of: 'resume' }, kept);
+    expect(got.restoring).toBeNull();
+    // Given up while it waits: the server's word of the seat given up says no wait of the card's.
+    noteOutgoing({ kind: 'resume', code: 'QX7R', pass: PASS }, kept);
+    takeIn({ kind: 'restoring', code: 'QX7R' }, kept);
+    noteOutgoing({ kind: 'abandon', code: 'QX7R', pass: PASS }, kept);
+    expect(got.restoring).toBeNull();
+    takeIn({ kind: 'restoring', code: 'QX7R' }, kept);
+    expect(got.restoring).toBeNull();
+    // The line drops: the server waits on no socket of the page's any more.
+    noteOutgoing({ kind: 'resume', code: 'QX7R', pass: PASS }, kept);
+    takeIn({ kind: 'restoring', code: 'QX7R' }, kept);
+    lineDropped(kept);
+    expect(got.restoring).toBeNull();
+  });
+
+  it('is of the card’s room alone: another room awaited is none of its', () => {
+    const { kept, got } = wentBack();
+    takeIn({ kind: 'restoring', code: 'AB12' }, kept);
+    expect(got.restoring).toBeNull();
   });
 });
 

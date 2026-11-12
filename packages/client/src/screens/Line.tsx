@@ -44,10 +44,16 @@ export function lineLost(
   return down && view?.phase === 'playing';
 }
 
+/** What a card says over a room on its way back: here, and on the join screen's (Join.tsx). */
+export const RESTORING_TITLE = 'EINSATZ WIRD WIEDERHERGESTELLT';
+
+/** What a card says of a room on its way back, the newest snapshot of it awaited. */
+export const RESTORING_LINE = 'Der letzte Stand trifft gleich ein';
+
 /** What the card's title says of the line: its room on the way back, a restart, or a drop. */
 export function lineTitle(retry: Retry | null): string {
   if (retry?.restoring === true) {
-    return 'EINSATZ WIRD WIEDERHERGESTELLT';
+    return RESTORING_TITLE;
   }
   return retry?.restart === true ? 'WARTUNG · Der Server startet neu' : 'VERBINDUNG VERLOREN';
 }
@@ -76,7 +82,7 @@ export function LineLostCard({ line }: { line: GameLine }) {
         <Icon name="warning" /> {lineTitle(line.retry)}
       </h1>
       <p className="line-retry">
-        {restoring ? 'Der letzte Stand trifft gleich ein' : retryLine(line.retry, now)}
+        {restoring ? RESTORING_LINE : retryLine(line.retry, now)}
       </p>
       <div className="pause-ways">
         {!restoring && (

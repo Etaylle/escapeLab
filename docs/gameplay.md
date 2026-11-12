@@ -436,10 +436,12 @@ such snapshot came, however long the instance has been up, from the newest hande
 whoever dropped in the minute a deploy keeps the old instance up comes back after the switch with an
 older snapshot than the crew still on it, whose last ones come some 61 s after the switch at the
 latest; a last snapshot never waits. Meanwhile the player's card says „EINSATZ WIRD
-WIEDERHERGESTELLT · Der letzte Stand trifft gleich ein", with only the reload to press, and the
-audience waits as well. A server killed outright, with no SIGTERM, loses at most the last 2 s of a
-deed and 10 s of a walk, and its rooms are back 90 s after the first of their crew came back to the
-next one. A snapshot over a day old, of a run that is over, of another room or under another key is
+WIEDERHERGESTELLT · Der letzte Stand trifft gleich ein", with only the reload to press; the join
+screen's card, its way back pressed, says the same with the seconds it has waited, only „Einsatz
+aufgeben" open — carried out once the room is back — and the audience waits as well. A server killed
+outright, with no SIGTERM, loses at most the last 2 s of a deed and 10 s of a walk, and its rooms
+are back 90 s after the first of their crew came back to the next one. A snapshot over a day old,
+of a run that is over, of another room or under another key is
 refused in one line, and so is one whose code another room holds meanwhile. A room the server closed
 for standing empty 10 minutes leaves a tombstone for a day that refuses its snapshots — „Dieser
 Einsatz ist beendet." where its run was over by then, else „Der Raum stand 10 Minuten leer und wurde

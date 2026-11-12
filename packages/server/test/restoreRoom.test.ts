@@ -456,6 +456,20 @@ describe('the handover: who waits for the room, and who does not', () => {
     expect(joinedOf(tab).code).toBe(code);
   });
 
+  it('gives a seat up that waits for its room once the room is back, and seats it not', () => {
+    const { old, code, anna, older } = apart();
+    const fresh = server();
+    // The card on Ben's join screen goes back to the run, and gives it up while it waits.
+    const ben = resume(fresh.line, 'Ben', code, older.blob);
+    ben.say({ kind: 'abandon', code, pass: passFor('Ben') });
+    expect(ben.heard).toEqual([...restoring(code), ...restoring(code)]);
+    old.manager.shutDown(Date.now());
+    resume(fresh.line, 'Anna', code, blobOf(anna).blob);
+    expect(ben.heard.some((m) => m.kind === 'joined')).toBe(false);
+    expect(ben.heard.at(-1)).toEqual({ kind: 'left', code, message: null });
+    expect(fresh.manager.whereIs(passFor('Ben'))).toBeNull();
+  });
+
   it('seats a socket that waited once, and none that closed while it waited', () => {
     const { old, code, anna, older } = apart();
     const fresh = server();

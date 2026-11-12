@@ -49,6 +49,16 @@ export interface Takeover {
   until: number;
 }
 
+/**
+ * The way back of the join screen's card, waiting for its room: a new server instance takes the
+ * room up again once the newest snapshot of it is in (`restoring`), and seats the page then.
+ */
+export interface Restoring {
+  code: string;
+  /** epoch ms, by this device's clock, the server said the room is on its way back */
+  since: number;
+}
+
 export interface Connection {
   /** socket status; the game itself lives in `view` */
   status: LineStatus;
@@ -59,6 +69,8 @@ export interface Connection {
   spectatorView: SpectatorView | null;
   /** this device's ask for a seat by its name while the crew has not answered it; null for none */
   takeover: Takeover | null;
+  /** the room the join screen's card went back to, while the server waits to take it up again */
+  restoring: Restoring | null;
   /** open and running rooms, refreshed while sitting on the join screen */
   rooms: RoomSummary[];
   /**
@@ -153,6 +165,7 @@ export interface Page {
   setRooms: (rooms: RoomSummary[]) => void;
   setSeat: (seat: Seat | null) => void;
   setTakeover: (takeover: Takeover | null) => void;
+  setRestoring: (restoring: Restoring | null) => void;
   setError: (message: string) => void;
   refuse: (message: string, of: ClientMessage['kind'] | null) => void;
   /** a comeback is out (tab.ts): an error now means the room or seat the tab kept is gone */
@@ -191,6 +204,7 @@ function seatNews(msg: ServerMessage, page: Page): boolean {
       page.resumed.current = null;
       keepTab({ code: msg.code, watching: false });
       page.setTakeover(null);
+      page.setRestoring(null);
       page.setRoomCode(msg.code);
       return true;
     case 'takeover-pending':
@@ -224,8 +238,8 @@ function seatNews(msg: ServerMessage, page: Page): boolean {
 }
 
 /**
- * Takes in what the line carries besides: the time, the rooms, the room's snapshots, refusals,
- * and the live streams (`streamNews`).
+ * Takes in what the line carries besides: the time, the rooms, the room's snapshots, a room on
+ * its way back, refusals, and the live streams (`streamNews`).
  */
 function lineNews(msg: ServerMessage, page: Page): void {
   switch (msg.kind) {
@@ -238,6 +252,9 @@ function lineNews(msg: ServerMessage, page: Page): void {
     case 'snapshot':
     case 'restart':
       kept(msg, page);
+      break;
+    case 'restoring':
+      onItsWay(msg.code, page);
       break;
     case 'error':
       refused(msg, page);
@@ -277,6 +294,26 @@ function kept(msg: Extract<ServerMessage, { kind: 'snapshot' | 'restart' }>, pag
   if (code !== null && view !== null) {
     keepSnapshot(code, msg, view);
   }
+}
+
+/**
+ * The server waits for the newest snapshot of the room `code` before it takes it up again: where
+ * the join screen's card went back to that room, the card says so till the seat is back. A tab's
+ * own comeback waits on a line not ready yet, which tells of it as its retry (line.ts
+ * `Retry.restoring`).
+ */
+function onItsWay(code: string, page: Page): void {
+  if (page.resumed.current?.toUpperCase() === code) {
+    page.setRestoring({ code, since: Date.now() });
+  }
+}
+
+/**
+ * The line dropped: the server's wait for the card's room ended with the socket it held, and the
+ * card's way back is open again (`Restoring`).
+ */
+export function lineDropped(page: Pick<Page, 'setRestoring'>): void {
+  page.setRestoring(null);
 }
 
 /** A run over, won or lost, is not taken up again: the snapshot kept of its room goes. */
@@ -331,11 +368,19 @@ function refused(msg: Extract<ServerMessage, { kind: 'error' }>, page: Page): vo
 
 /**
  * What the page notes of `msg` as it goes out: a resume of its own — the join screen's card's way
- * back — names the room whose snapshot goes once the server refuses it (`resumeRefused`).
+ * back — names the room whose snapshot goes once the server refuses it (`resumeRefused`), and
+ * that the card waits for while the server takes it up again (`onItsWay`); the seat given up
+ * there, the card waits no more.
  */
-export function noteOutgoing(msg: ClientMessage, resumed: MutableRefObject<string | null>): void {
+export function noteOutgoing(
+  msg: ClientMessage,
+  page: Pick<Page, 'resumed' | 'setRestoring'>,
+): void {
   if (msg.kind === 'resume') {
-    resumed.current = msg.code;
+    page.resumed.current = msg.code;
+  } else if (msg.kind === 'abandon' && page.resumed.current === msg.code) {
+    page.resumed.current = null;
+    page.setRestoring(null);
   }
 }
 
@@ -348,6 +393,7 @@ function resumeRefused(page: Page): void {
   if (code !== null) {
     page.resumed.current = null;
     dropSnapshot(code);
+    page.setRestoring(null);
     page.setSeat(keptSeat());
   }
 }
@@ -419,6 +465,7 @@ function openLine(wiring: Wiring): { line: Line; close: () => void } {
       }
     },
     closed: () => {
+      lineDropped(page);
       for (const listener of listeners.current) {
         listener.closed();
       }
@@ -548,6 +595,7 @@ export function useGameConnection(): Connection {
   const [rooms, setRooms] = useState<RoomSummary[]>([]);
   const [seat, setSeat] = useState<Seat | null>(null);
   const [takeover, setTakeover] = useState<Takeover | null>(null);
+  const [restoring, setRestoring] = useState<Restoring | null>(null);
   const [roomCode, setRoomCode] = useState<string | null>(roomOfTab);
   const [error, setError] = useState<string | null>(null);
   const [refusal, setRefusal] = useState<Refusal | null>(null);
@@ -580,6 +628,7 @@ export function useGameConnection(): Connection {
       setRooms,
       setSeat,
       setTakeover,
+      setRestoring,
       setError,
       refuse: (message, of) => setRefusal((last) => ({ seq: (last?.seq ?? 0) + 1, message, of })),
       resuming: resumingRef,
@@ -599,6 +648,7 @@ export function useGameConnection(): Connection {
     view,
     spectatorView,
     takeover,
+    restoring,
     rooms,
     seat,
     roomCode,
@@ -609,7 +659,7 @@ export function useGameConnection(): Connection {
       if (wipesBanner(msg.kind)) {
         setError(null);
       }
-      noteOutgoing(msg, resumedRef);
+      noteOutgoing(msg, { resumed: resumedRef, setRestoring });
       lineRef.current?.send(msg);
     },
     listen,

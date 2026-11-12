@@ -1,10 +1,17 @@
 import { renderToStaticMarkup } from 'react-dom/server';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ClientMessage, MissionInfo, Seat } from '@escapelab/core';
 import { PASS_KEY } from '../src/pass.js';
 import { SNAPSHOT_KEY } from '../src/snapshots.js';
+import type { Restoring } from '../src/ws.js';
 import { CONFIRM_MS, giveUpPress } from '../src/screens/GiveUp.js';
-import { BoundCard, boundLine, doorAsks, JoinScreen } from '../src/screens/Join.js';
+import {
+  BoundCard,
+  boundLine,
+  doorAsks,
+  JoinScreen,
+  restoringLine,
+} from '../src/screens/Join.js';
 import { buttonsOf, elementsOf, press } from './probe.js';
 
 const noop = (): void => undefined;
@@ -53,7 +60,11 @@ const LOBBY: Seat = { ...RUN, phase: 'lobby', leftMs: null };
 
 const T0 = 1_700_000_000_000;
 
-function joinScreen(seat: Seat | null, send: (msg: ClientMessage) => void = noop) {
+function joinScreen(
+  seat: Seat | null,
+  send: (msg: ClientMessage) => void = noop,
+  restoring: Restoring | null = null,
+) {
   return (
     <JoinScreen
       send={send}
@@ -61,6 +72,7 @@ function joinScreen(seat: Seat | null, send: (msg: ClientMessage) => void = noop
       missions={[blackout]}
       rooms={[]}
       seat={seat}
+      restoring={restoring}
       stats={[]}
       openHandbook={noop}
       openHistory={noop}
@@ -195,6 +207,70 @@ describe('the join screen of a pass in a lobby', () => {
     const html = renderToStaticMarkup(joinScreen(null));
     expect(html).not.toContain('class="bound');
     expect(html).toContain('placeholder="z. B. Anna"');
+  });
+});
+
+describe('the join screen while its card’s way back waits for the room', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(T0);
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  /** The card gone back to its room 12 s ago, the server waiting for the newest snapshot. */
+  const WAITING: Restoring = { code: 'QX7R', since: T0 - 12_000 };
+
+  it('says the room is on its way back and since when, only the way out open', () => {
+    stubWindow();
+    const html = renderToStaticMarkup(joinScreen(RUN, noop, WAITING));
+    expect(html).toContain(
+      '<span class="kicker bound-kicker">EINSATZ WIRD WIEDERHERGESTELLT</span>',
+    );
+    expect(html).toContain(
+      '<p class="bound-restoring" role="status">Der letzte Stand trifft gleich ein · seit 12 s</p>',
+    );
+    const elements = elementsOf(() => joinScreen(RUN, noop, WAITING));
+    const card = ['Zurück zum Einsatz', 'Einsatz aufgeben'];
+    expect(pressable(elements, [...card, ...ROOM_BUTTONS])).toEqual({
+      'Zurück zum Einsatz': false,
+      'Einsatz aufgeben': true,
+      'Runde eröffnen': false,
+      Beitreten: false,
+      'Mit Code zuschauen': false,
+    });
+  });
+
+  it('binds the screen to a lobby on its way back as well, its way out open', () => {
+    stubWindow();
+    const html = renderToStaticMarkup(joinScreen(LOBBY, noop, WAITING));
+    expect(html).toContain('EINSATZ WIRD WIEDERHERGESTELLT');
+    expect(html).not.toContain('Offene Runden');
+    const elements = elementsOf(() => joinScreen(LOBBY, noop, WAITING));
+    expect(pressable(elements, ['Zurück in den Raum', 'Raum verlassen'])).toEqual({
+      'Zurück in den Raum': false,
+      'Raum verlassen': true,
+    });
+  });
+
+  it('counts the seconds up from the server’s word, never below none', () => {
+    expect(restoringLine(T0, T0)).toBe('Der letzte Stand trifft gleich ein · seit 0 s');
+    expect(restoringLine(T0, T0 + 61_999)).toBe('Der letzte Stand trifft gleich ein · seit 61 s');
+    expect(restoringLine(T0 + 500, T0)).toBe('Der letzte Stand trifft gleich ein · seit 0 s');
+  });
+
+  it('is the card as ever where another room is awaited', () => {
+    stubWindow();
+    const html = renderToStaticMarkup(joinScreen(RUN, noop, { code: 'AB12', since: T0 }));
+    expect(html).toContain('EINSATZ LÄUFT');
+    expect(html).not.toContain('bound-restoring');
+    const elements = elementsOf(() => joinScreen(RUN, noop, { code: 'AB12', since: T0 }));
+    expect(pressable(elements, ['Zurück zum Einsatz', 'Mit Code zuschauen'])).toEqual({
+      'Zurück zum Einsatz': true,
+      'Mit Code zuschauen': true,
+    });
   });
 });
 

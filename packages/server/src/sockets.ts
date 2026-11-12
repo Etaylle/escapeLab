@@ -222,7 +222,11 @@ function handleMessage(
     : inRoom(lab, socket, requireSession(held), msg);
 }
 
-/** A message a socket may send in no room: the session it opens, or the one it had. */
+/**
+ * A message a socket may send in no room: the session it opens, or the one it had. A seat given
+ * up, or the audience asked for, in a room the server is about to take up again waits for the
+ * room (`hold`).
+ */
 function atTheDoor(
   lab: Lab,
   socket: PlayerSocket,
@@ -235,7 +239,9 @@ function atTheDoor(
     case 'join-room':
       return sitDown(lab, socket, session, msg);
     case 'abandon':
-      return giveUp(lab, socket, session, msg);
+      return lab.manager.waitsFor(msg.code)
+        ? hold(lab, socket, session, msg.code, again)
+        : giveUp(lab, socket, session, msg);
     case 'spectate':
       return lab.manager.waitsFor(msg.code)
         ? hold(lab, socket, session, msg.code, again)
