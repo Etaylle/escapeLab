@@ -48,13 +48,17 @@ export class FakeSocket extends EventEmitter {
 
   terminate(): void {
     this.terminated = true;
-    this.close();
+    this.close(1006);
   }
 
-  /** The socket ends: it leaves the server's clients and closes. */
-  close(): void {
+  /**
+   * The socket ends with close `code`: it leaves the server's clients and closes. A page that
+   * closes its socket, or its tab, sends 1000 or 1001; a line that drops, or one cut, ends with
+   * no close frame, 1006 or none.
+   */
+  close(code?: number): void {
     this.server.clients.delete(this);
-    this.emit('close');
+    this.emit('close', code);
   }
 
   /** The client sends `msg`. */

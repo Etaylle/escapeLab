@@ -146,6 +146,11 @@ const SEAT_TAKEN = 'Der Platz wurde auf einem anderen Gerät übernommen.';
 
 /** How long a seat in the lobby may stay off the line before the room frees it, ms. */
 export const LOBBY_AWAY_MS = 120_000;
+/**
+ * How long a lobby seat whose socket closed cleanly — its tab closed, or reloaded — waits for
+ * its pass to be back before the room frees it, ms: a reload is back well within.
+ */
+export const LOBBY_GONE_MS = 10_000;
 
 /** What a device is told whose ask for a seat the crew did not let in. */
 // voice: interface — the room's refusal, not the lab's, names the crew
@@ -272,6 +277,8 @@ export class Room {
   private readonly lostAt = new Map<string, number>();
   /** frees each lobby seat whose line has been down LOBBY_AWAY_MS, by player id */
   private readonly freeing = new Map<string, NodeJS.Timeout>();
+  /** the seats whose socket closed cleanly, a tab closed or reloaded, by player id */
+  private readonly closedClean = new Set<string>();
   /** the asks of new devices for seats whose line is down, by the seat's player id */
   private readonly claims = new Map<string, Claim>();
   /** until when a pass may not ask for a seat again, by seat and pass (`askKey`), epoch ms */
@@ -482,7 +489,7 @@ export class Room {
     this.settle(next, 'abandon');
     this.seats.free(playerId);
     const kept = [this.signalAllowance, this.lastPingAt, this.lastChatAt, this.glances];
-    for (const byPlayer of [...kept, this.lostAt]) {
+    for (const byPlayer of [...kept, this.lostAt, this.closedClean]) {
       byPlayer.delete(playerId);
     }
     if (this.listeners.size === 0) {
@@ -497,9 +504,10 @@ export class Room {
   }
 
   /**
-   * In the lobby, frees every seat whose line has been down LOBBY_AWAY_MS (`freeAway`) — at
-   * once, where the room comes back to its lobby later than that, or once the time is up —
-   * and lets go of the timer of every other seat: back on the line, gone, or in a run.
+   * In the lobby, frees every seat whose line has been down LOBBY_AWAY_MS — LOBBY_GONE_MS where
+   * its socket closed cleanly — (`freeAway`): at once, where the room comes back to its lobby
+   * later than that, or once the time is up; and lets go of the timer of every other seat: back
+   * on the line, gone, or in a run.
    */
   private reconcileLobbyAway(): void {
     const due = this.awayInLobby();
@@ -511,7 +519,8 @@ export class Room {
     }
     for (const [playerId, lost] of due) {
       if (!this.freeing.has(playerId)) {
-        const wait = Math.max(0, lost + LOBBY_AWAY_MS - Date.now());
+        const held = this.closedClean.has(playerId) ? LOBBY_GONE_MS : LOBBY_AWAY_MS;
+        const wait = Math.max(0, lost + held - Date.now());
         this.freeing.set(playerId, setTimeout(() => this.freeAway(playerId), wait));
       }
     }
@@ -529,7 +538,7 @@ export class Room {
     return due;
   }
 
-  /** The lobby seat of `playerId`, off the line LOBBY_AWAY_MS, freed: its pass binds it no more. */
+  /** The lobby seat of `playerId`, off the line long enough, freed: its pass binds it no more. */
   private freeAway(playerId: string): void {
     this.freeing.delete(playerId);
     const away = seconds(Date.now() - (this.lostAt.get(playerId) ?? Date.now()));
@@ -578,7 +587,7 @@ export class Room {
    * another tab — lets go of nothing: the player stays connected on the new one, and the old
    * one hears that the seat went elsewhere.
    */
-  attach(playerId: string, listener: Listener): () => void {
+  attach(playerId: string, listener: Listener): (clean?: boolean) => void {
     const before = this.listeners.get(playerId);
     this.listeners.set(playerId, listener);
     this.emptySince = null;
@@ -589,9 +598,9 @@ export class Room {
     if (this.positions.size > 0) {
       listener(this.positionsMessage());
     }
-    return () => {
+    return (clean = false) => {
       if (this.listeners.get(playerId) === listener) {
-        this.detach(playerId);
+        this.detach(playerId, clean);
       }
     };
   }
@@ -621,8 +630,10 @@ export class Room {
   /**
    * Connection lost: keep the player (they may resume), notify the others. In a run the
    * reducer stands it still for them (core `player-disconnected`); a drop alone ends nothing.
+   * A socket that closed `clean` — a tab closed or reloaded — frees its seat sooner in the
+   * lobby (LOBBY_GONE_MS); in a run it is held as any other.
    */
-  private detach(playerId: string): void {
+  private detach(playerId: string, clean: boolean): void {
     if (!this.listeners.delete(playerId)) {
       return;
     }
@@ -630,7 +641,12 @@ export class Room {
       this.emptySince = Date.now();
     }
     this.lostAt.set(playerId, Date.now());
-    this.log(`${this.nameOf(playerId)}'s line closed`);
+    if (clean) {
+      this.closedClean.add(playerId);
+    } else {
+      this.closedClean.delete(playerId);
+    }
+    this.log(`${this.nameOf(playerId)}'s line closed${clean ? ', its tab gone' : ''}`);
     this.dispatch({ type: 'player-disconnected', playerId, at: Date.now() });
     this.reconcileCrew();
   }
@@ -1787,6 +1803,7 @@ export class Room {
     this.freeing.clear();
     this.claims.clear();
     this.askAgainAt.clear();
+    this.closedClean.clear();
   }
 
   /** One line of the server's log about this room. */

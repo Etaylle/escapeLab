@@ -15,7 +15,7 @@ import type { RoomManager } from './roomManager.js';
 export interface PlayerSocket {
   send(data: string): void;
   on(event: 'message', listener: (data: unknown) => void): unknown;
-  on(event: 'close', listener: () => void): unknown;
+  on(event: 'close', listener: (code?: number) => void): unknown;
 }
 
 /** What the connections need of the WebSocket server: `ws`'s WebSocketServer has it. */
@@ -42,10 +42,11 @@ interface Session {
    */
   holds: () => boolean;
   /**
-   * lets go of the room once the socket is gone: a player stays in the game and may resume,
-   * the room pausing while they are away; an audience connection simply leaves
+   * lets go of the room once the socket is gone — `clean`ly, a tab closed or reloaded, or not:
+   * a player stays in the game and may resume, the room pausing while they are away; an
+   * audience connection simply leaves
    */
-  detach: () => void;
+  detach: (clean?: boolean) => void;
 }
 
 /** What serving the sockets hands back: the log's line for a socket the heartbeat cuts. */
@@ -53,6 +54,12 @@ export interface Served {
   /** Logs that the heartbeat cut `socket`, and why, naming its room and seat: none in no room. */
   cut: (socket: object, why: CutReason) => void;
 }
+
+/**
+ * The close codes of a socket the page let go of: closed by the page itself (1000), or its tab
+ * going away (1001) — closed or reloaded. A line that dropped or was cut ends without one.
+ */
+const CLEAN_CLOSE: ReadonlySet<number> = new Set([1000, 1001]);
 
 /** Why the heartbeat cut a socket, as the log says it. */
 const CUT_WHY: Record<CutReason, string> = {
@@ -85,9 +92,9 @@ export function serveSockets(server: SocketServer, lab: Lab): Served {
       }
     });
 
-    socket.on('close', () => {
+    socket.on('close', (code) => {
       asks.get(socket)?.();
-      session?.detach();
+      session?.detach(code !== undefined && CLEAN_CLOSE.has(code));
     });
   });
   return {

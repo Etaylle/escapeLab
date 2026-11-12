@@ -415,7 +415,9 @@ return.
 **The lobby.** The host cannot start while a seat's line is down: the lobby says whose („Bens
 Leitung ist unterbrochen"), as it says who has not confirmed yet. A seat whose line has been
 down for 120 s in the lobby is freed, its pass bound no more and the log saying so — at once
-where the room comes back to its lobby later than that — and the crew starts without it.
+where the room comes back to its lobby later than that — and the crew starts without it. A
+tab closed for good, its socket closing cleanly (1000, 1001), frees its lobby seat after 10 s
+unless its pass is back by then, as a reload is; in a run the seat stays bound either way.
 
 **What the server says.** One log line per event, with the room and the name: a seat joining,
 its line closing, its return with how long it was away, a socket the heartbeat cut and why, a
