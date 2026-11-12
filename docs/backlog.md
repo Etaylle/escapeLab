@@ -264,6 +264,109 @@ die Entscheidung.
   (40–43 % von 900 s übrig, davon bis 35 s Warten auf Drohnenlücken); der Harness warnt ab unter
   40 %. Vorschlag: Normal 1000 s (Entspannt/Hart skalieren mit), Entscheidung nach dem Playtest.
 
+## Betrieb und Verbindung (2026-11-12)
+
+Anlass: Uros flog am 10.11. im Zug aus einer laufenden Partie. Der Server läuft auf Render
+(Free-Plan); jeder Deploy, jeder Spin-down nach 15 min Stille und jeder Neustart löscht alle
+Räume, die nur im Speicher liegen. Der Push `099bbcb` um 17:39 ist der wahrscheinlichste
+Auslöser. Vorbild für das Verhalten: Dota 2 (das laufende Spiel bindet dich, Rückkehr jederzeit,
+Verlassen nur ausdrücklich), Jackbox (Code plus Name setzt dich auf jedem Gerät wieder auf
+deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
+
+### R-1 Deploy nur, wenn niemand spielt — Status: bereit (braucht `RENDER_DEPLOY_HOOK_URL` als Secret) · Größe: S
+- Auto-Deploy bei Render aus. Ein Workflow `deploy.yml` läuft nach grünem CI auf main, fragt
+  `/health` ab und ruft den Deploy-Hook erst, wenn `rooms.running` 0 ist; sonst wartet er bis
+  zwei Stunden und meldet sich. Render-Abschaltfrist auf 120 s (`maxShutdownDelaySeconds`).
+
+### R-2 Spielstand überlebt den Neustart — Status: bereit (nach R-3) · Größe: L
+- SIGTERM: Räume einfrieren (Wartungspause), jedem Client einen mit `ROOM_SECRET` (AES-GCM)
+  verschlüsselten Schnappschuss schicken, geordnet schließen; dazu alle 5 s ein Schnappschuss,
+  wenn sich etwas geändert hat. `resume` trägt den Schnappschuss mit; kennt der neue Server den
+  Raum nicht, stellt er ihn daraus her, bleibt in der Pause, bis die Crew zurück ist, nimmt in
+  den ersten 10 s den neuesten Stand. Raumcode bleibt, Einladungslinks gelten weiter.
+- Beweis: Smoke tötet den Server mitten im Lauf (SIGTERM), startet ihn neu, die Partie geht ohne
+  Zeitverlust weiter; Harness `restart-recovered.png`; Fehlen von `ROOM_SECRET` steht im Log.
+
+### R-3 Der Einsatz bindet die Crew — Status: in Arbeit (R-reconnect) · Größe: L
+- Dienstausweis je Browser (localStorage) statt Token im Tab; Startseite zeigt bei laufendem
+  Einsatz die Karte „Zurück zum Einsatz / Einsatz aufgeben" und sperrt andere Räume; Pause bei
+  Abbruch mit Zähler, nach 60 s (später 20 s) „Ohne <Name> weiter", die Person bleibt gebunden
+  und kann jederzeit zurück; „Einsatz aufgeben" gibt den Platz frei, unter `players.min` endet
+  der Lauf „EINSATZ ABGEBROCHEN"; Platz übernehmen per Code und Namen von einem anderen Gerät;
+  der Getrennte sieht eine eigene Karte mit Zähler und Versuch; Leitung gilt nach 5 s ohne
+  Uhrantwort oder 20 s Stille als tot, Wiederverbinden sofort bei Netz- und Tab-Rückkehr.
+- Fehler aus dem Audit: ein Abbruch konnte eine pausierte Partie durch die Flucht beenden.
+- Beweis: Core-, Server-, Client-Tests; Smoke mit 70-s-Abbruch, Aufgeben, Übernahme; Harness
+  `pause-waiting`, `continue-without`, `reconnect-overlay`, `rejoin-card`, `takeover`.
+
+### R-4 Funk zwischen Mobilnetzen — Status: wartet (Entscheidung Uros) · Größe: M
+- Ohne TURN-Server verbinden sich zwei Handys in verschiedenen Mobilnetzen meist nicht; STUN ist
+  nur mit `?stun=1` an. Optionen: STUN standardmäßig, TURN über einen kostenlosen Dienst oder
+  den Render-Server selbst (Datenvolumen). Erst entscheiden, wenn R-3 steht.
+
+### R-5 Sichtbarkeit — Status: in Arbeit (R-reconnect) · Größe: S
+- Server loggt Beitritt, Wiederverbinden, Abbruch, Abweisung, Weiter-ohne, Aufgeben, Übernahme,
+  Laufende je eine Zeile; `/health` zählt Räume, laufende Partien, Spieler, Zuschauer, nennt
+  Laufzeit und Commit (`RENDER_GIT_COMMIT`).
+
+## Geplant (2026-11-12, Vorbilder je Punkt)
+
+### V-1 Zwei Stimmen und eine Leitstelle, die reagiert — Status: bereit (nur lokal: Render der Zeilen) · Größe: M
+- Vorbilder: Payday 2 (Bain koordiniert, reagiert auf Alarme, warnt vor der Zeit, viele
+  Varianten je Ansage), Hitman (Diana: ruhig, kommentiert, bewertet am Ende), Portal 2
+  (Anlagen-Durchsage und Person sind zwei Stimmen), Alien: Isolation (Durchsagen folgen dem
+  Zustand der Station), Left 4 Dead (Varianten, damit sich nichts wiederholt).
+- Zweite Stimme für die Durchsage der Anlage im Intro, Helmut bleibt Operator am Funk. Der
+  Operator reagiert auf den ersten Alarm, auf 5, 2 und 1 Minute Restzeit, auf den Notfall, und
+  spricht ein Debriefing für Sieg und Niederlage; zwei bis drei Varianten je Hinweis und Lösung,
+  pro Lauf per Seed gewählt; Funkprobe in der Lobby, wenn alle bereit sind. Grob 8 000 Credits.
+- Beweis: Manifest-Tests je Zeile, Varianten-Wahl deterministisch je Seed, Harness hört die
+  neuen Momente (Audio-Probe), `docs/sound.md` aktualisiert (nennt heute noch 47 Zeilen und
+  Thorsten).
+
+### M-1 Drei Spielende: Beweis und Sichtbarkeit — Status: bereit · Größe: M
+- Befund: mechanisch trägt die dritte Person (Leserin mit Regeln, Notizen und Funk an Zwei-Pult-
+  Stationen; Platten, Sicherung, Schlüssel, Kameraplatte sonst), aber Modultests spielen Blackout
+  nur zu zweit, der Harness auch; die Validierung beweist nur Erreichbarkeit.
+- Vorbilder: Keep Talking (Needy-Module, die alle 30–60 s eine Hand brauchen), Lovers in a
+  Dangerous Spacetime (gleiche Stationen, mit mehr Leuten parallel besetzt), Spaceteam (Befehle
+  an bestimmte Pulte), Overcooked (verkettete Aufgaben, niemand steht herum).
+- Modultests über alle Crewgrößen min..max; Harness mit dritter Spielerin (Cleo) in Blackout mit
+  Captures; Zielzeile nennt der dritten Person ihre Aufgabe („Cleo: Platte halten"). Eine echte
+  Drei-Pulte-Station oder ein Needy-Objekt nur bei drei Spielenden erst nach Playtest-Daten.
+
+### I-1 Zugangskontrolle mit Zwei-Faktor — Status: wartet (Entscheidung Uros: Modul zuerst, Platz in Blackout nach dem Playtest) · Größe: L
+- Pult A Login-Terminal, Pult B Token-Generator mit Code, der mit der Serveruhr alle 30 s
+  wechselt (Restsekunden sichtbar), Quelle Benutzerliste mit Rollen. Vorbilder: Quadrilateral
+  Cowboy (`door.open(3)`: das Terminal gibt die Tür drei Sekunden frei, jemand muss durch),
+  Among Us (ID-Code ablesen und eintippen; Reaktor mit zwei Händen an zwei Panels).
+- Dazu als eigenes Spielelement: eine Schleuse, die das Terminal fünf Sekunden öffnet, während
+  die andere Person läuft (nutzt die vorhandene Bewegung).
+
+### I-2 Firewall-Regelwerk — Status: wartet (Entscheidung Uros) · Größe: L
+- Pult A zeigt laufende Pakete (Quelle, Ziel, Port), Pult B bearbeitet die Regelliste, erste
+  passende Regel gewinnt, Quelle Sicherheitsrichtlinie. Vorbilder: Hacknet und Uplink (Trace-
+  Zähler, sobald man drin ist), Exapunks (Regeln im gedruckten Heft).
+- Dritter Entwurf in Reserve: Datensicherung (Plattenarray, Backup-Katalog, Rotationsplan).
+
+### S-1 Titel wie ein Spiel — Status: bereit · Größe: M
+- Vorbilder: Half-Life 2 und Firewatch (Menü über einer lebenden Szene), Alien: Isolation
+  (Titel mit Röhrenflimmern und Brummen), Among Us (Figuren sind von Anfang an da).
+- Hinter der Karte zieht das beleuchtete Labor aus dem Intro langsam vorbei; Titelthema aus
+  ElevenLabs Music (60 s Schleife) und Anlagenbrummen; eigene Displayschrift (OFL, lokal); Klänge
+  für Klick, Bereit, Beitritt; die eigene Figur erscheint neben dem Namensfeld und winkt; offene
+  Runden zeigen die Figuren der Crew statt Punkten; Übergang in die Lobby als aufgehende Tür.
+- Beweis: Captures join/lobby an allen Größen, Pixelchecks der anderen Bildschirme, Frame-Fenster
+  der Startseite ≤ 16,7 ms p95 bei Software-GL.
+
+### S-2 Begehbarer Pausenraum — Status: wartet (nach S-1 und R-3) · Größe: XL
+- Vorbilder: Phasmophobia (begehbarer Raum, Tafel mit Auftragswahl, Tür öffnet beim Start),
+  Deep Rock Galactic (Countdown erst, wenn alle in der Kapsel stehen), Lethal Company (Hebel
+  startet), Among Us (frei herumlaufen und reden).
+- Lobby als kleiner Raum im echten Renderer: Spinde in Crewfarben, Tafel mit Briefing, an der
+  der Host die Mission wählt, Kaffeemaschine, Tür zu Trakt C geht auf, wenn alle bereit davor
+  stehen; Bewegung, Anwesenheit, Näheklang wie im Spiel.
+
 ## Nur lokal
 
 ### L-1 Aufnahmen rendern — Status: erledigt (2026-11-04, ec0ef9c + 031cb7a)
