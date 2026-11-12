@@ -336,6 +336,11 @@ export class Room {
   private restoredAt: number | null = null;
   /** the seq of the snapshot the room was last taken up again from; null: never taken up */
   private restoredSeq: number | null = null;
+  /**
+   * the seats whose line has been up since the room was opened, or taken up again from a
+   * snapshot (`restore`), by player id: only these bind their pass to the room (`binds`)
+   */
+  private readonly seenOnLine = new Set<string>();
   /** epoch ms since the room has had no connected players, null while occupied */
   emptySince: number | null = null;
 
@@ -729,13 +734,23 @@ export class Room {
   }
 
   /**
+   * Whether `pass` is bound to this room: it holds a seat here whose line has been up since the
+   * room was opened, or taken up again from a snapshot. A room taken up again binds only whoever
+   * came back to it: a crew that never did is free to go elsewhere.
+   */
+  binds(pass: CrewPass): boolean {
+    const playerId = this.seatOf(pass);
+    return playerId !== null && this.seenOnLine.has(playerId);
+  }
+
+  /**
    * Where `pass` sits in this room, as its join screen shows it (`whereami`), the mission's
-   * clock read at `now`; null for a pass with no seat here, and for one in a finished run —
-   * the end screen binds nobody.
+   * clock read at `now`; null for a pass the room does not bind (`binds`), and for one in a
+   * finished run — the end screen binds nobody.
    */
   seatSummary(pass: CrewPass, now = Date.now()): Seat | null {
     const { state } = this;
-    if (this.seatOf(pass) === null || (state.phase !== 'lobby' && state.phase !== 'playing')) {
+    if (!this.binds(pass) || (state.phase !== 'lobby' && state.phase !== 'playing')) {
       return null;
     }
     const clock = state.paused?.since ?? now;
@@ -885,6 +900,7 @@ export class Room {
   attach(playerId: string, listener: Listener): (clean?: boolean) => void {
     const before = this.listeners.get(playerId);
     this.listeners.set(playerId, listener);
+    this.seenOnLine.add(playerId);
     this.emptySince = null;
     if (before !== undefined && before !== listener) {
       before({ kind: 'left', code: this.code, message: PLAYS_IN_ANOTHER_TAB });
@@ -2098,8 +2114,8 @@ export class Room {
   }
 
   /**
-   * The run is over: the log says how, its report goes to `onRunFinished`, and no seat of it is
-   * to be taken over any more.
+   * The run is over: the log says how, its report goes to `onRunFinished` — but that of a ghost
+   * (`ghostEnd`) — and no seat of it is to be taken over any more.
    */
   private runOver(report: RunReport): void {
     for (const seatId of [...this.claims.keys()]) {
@@ -2110,7 +2126,21 @@ export class Room {
       `run over, ${report.outcome} after ${runSeconds(report).toFixed(0)} s, ` +
         `crew ${report.crew.join(', ')}${why}`,
     );
+    if (this.ghostEnd(report)) {
+      this.log('not counted: none of its crew but who gave it up came back after the restore');
+      return;
+    }
     this.onRunFinished(report);
+  }
+
+  /**
+   * Whether the run `report` ends is a ghost's: given up, none of its crew but who gave it up on
+   * the line since the room was opened or taken up again. A run starts with its whole crew on
+   * the line, so only a room taken up again from a snapshot holds one — a page that kept a
+   * snapshot of a run over elsewhere, or that its crew left. No run of the crew's: not reported.
+   */
+  private ghostEnd(report: RunReport): boolean {
+    return report.outcome === 'lost:abandoned' && this.seenOnLine.size <= 1;
   }
 
   /** The seats waiting to be freed in the lobby, and the asks for seats: none any more. */

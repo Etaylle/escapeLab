@@ -1,9 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { SNAPSHOT_EVERY_MS, SNAPSHOT_MAX_AGE_MS } from '@escapelab/core';
+import { FIRST_WAIT_MS, SNAPSHOT_EVERY_MS, SNAPSHOT_MAX_AGE_MS } from '@escapelab/core';
 import { MissionCatalog } from '../src/missions.js';
-import { RESTORE_WINDOW_MS, Room } from '../src/room.js';
+import { RESTORE_WINDOW_MS, Room, type RunListener } from '../src/room.js';
 import { HANDOVER_MS, RoomManager } from '../src/roomManager.js';
 import { roomKey, seal } from '../src/seal.js';
 import { serveSockets } from '../src/sockets.js';
@@ -16,12 +16,13 @@ const missions = new MissionCatalog(fileURLToPath(new URL('../../../missions', i
 
 /**
  * A server as index.ts wires it, on fake sockets, sealing with KEY: an instance of its own, up
- * `upFor` ms already — by default long enough for no snapshot to wait for a newer one.
+ * `upFor` ms already — by default long enough for no snapshot to wait for a newer one — every
+ * run that ends reported to `onRunFinished`.
  */
-function server(upFor = HANDOVER_MS) {
+function server(upFor = HANDOVER_MS, onRunFinished: RunListener = () => undefined) {
   const line = new FakeServer();
   const instance = { id: randomUUID(), bootedAt: Date.now() - upFor };
-  const manager = new RoomManager(undefined, false, null, KEY, instance);
+  const manager = new RoomManager(onRunFinished, false, null, KEY, instance);
   serveSockets(line, { catalog: missions, manager });
   return { line, manager };
 }
@@ -398,7 +399,6 @@ describe('the handover: the new instance waits for the old one’s last snapshot
       `[escapelab] room ${code}: taken up again from snapshot seq ${newer.seq}`,
     );
   });
-
 });
 
 describe('the handover: who waits for the room, and who does not', () => {
@@ -412,22 +412,14 @@ describe('the handover: who waits for the room, and who does not', () => {
     vi.restoreAllMocks();
   });
 
-  it('takes a last snapshot up at once, as one it sealed itself', () => {
+  it('takes a last snapshot of the old instance up at once', () => {
     const old = server();
     const { code, anna } = crewOn(old);
     old.manager.shutDown(Date.now());
     const fresh = server(0);
-    expect(joinedOf(resume(fresh.line, 'Anna', code, blobOf(anna).blob)).code).toBe(code);
-    // A snapshot of its own, of a room it has no more — swept, its crew gone: no wait either.
-    const cem = fresh.line.connect();
-    cem.say({ kind: 'create-room', name: 'Cem', pass: passFor('Cem'), missionId: 'blackout' });
-    const own = joinedOf(cem).code;
-    vi.advanceTimersByTime(0);
-    const kept = blobOf(cem);
-    cem.close();
-    fresh.manager.sweep(Number.POSITIVE_INFINITY);
-    expect(fresh.manager.counts().total).toBe(1);
-    expect(joinedOf(resume(fresh.line, 'Cem', own, kept.blob)).code).toBe(own);
+    const back = resume(fresh.line, 'Anna', code, blobOf(anna).blob);
+    expect(back.heard.some((m) => m.kind === 'restoring')).toBe(false);
+    expect(joinedOf(back).code).toBe(code);
   });
 
   it('keeps the audience, and a resume with no snapshot, waiting with the crew', () => {
@@ -484,7 +476,6 @@ describe('the handover: who waits for the room, and who does not', () => {
     expect(fresh.manager.waitsFor(code)).toBe(true);
     other.dispose();
   });
-
 });
 
 describe('the handover gone wrong', () => {
@@ -516,5 +507,107 @@ describe('the handover gone wrong', () => {
       expect(joinedOf(socket).code).toBe(code);
       expect(takenFrom(socket)).toBe('newer');
     }
+  });
+});
+
+/** Long enough for an empty room to be closed (roomManager.ts EMPTY_ROOM_TTL_MS), ms. */
+const EMPTY_LONG_ENOUGH = 10 * 60_000 + 1;
+
+describe('a room closed, and the ghosts its snapshots would bring back', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(T0);
+    vi.spyOn(console, 'log').mockImplementation(() => undefined);
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  it('refuses the snapshot of a run that was over when its room was closed', () => {
+    const old = server();
+    const { code, anna, ben } = crewOn(old);
+    // Ben's line drops, his page keeping its snapshot; Anna calls the run off once she may.
+    const kept = blobOf(ben);
+    ben.close();
+    vi.advanceTimersByTime(FIRST_WAIT_MS);
+    anna.say({ kind: 'call-off' });
+    expect(anna.view.phase).toBe('lost');
+    anna.close();
+    old.manager.sweep(Date.now() + EMPTY_LONG_ENOUGH);
+    expect(old.manager.counts().total).toBe(0);
+    expect(refusalOf(resume(old.line, 'Ben', code, kept.blob))).toBe('Dieser Einsatz ist beendet.');
+    expect(said()).toContain(
+      `[escapelab] room ${code}: not taken up again, its run was over when its room was closed`,
+    );
+    expect(old.manager.counts().total).toBe(0);
+  });
+
+  it('refuses the snapshot of a room closed standing empty, until a day after', () => {
+    const old = server();
+    const { code, anna, ben } = crewOn(old);
+    const kept = blobOf(anna);
+    anna.close();
+    ben.close();
+    const closedAt = Date.now() + EMPTY_LONG_ENOUGH;
+    old.manager.sweep(closedAt);
+    expect(refusalOf(resume(old.line, 'Anna', code, kept.blob))).toBe(
+      'Der Raum stand 10 Minuten leer und wurde geschlossen.',
+    );
+    // A day on its tombstone goes, and its snapshots are refused for their age alone.
+    old.manager.sweep(closedAt + SNAPSHOT_MAX_AGE_MS + 1);
+    vi.setSystemTime(closedAt + SNAPSHOT_MAX_AGE_MS + 1);
+    expect(refusalOf(resume(old.line, 'Anna', code, kept.blob))).toBe(
+      'Der Spielstand ist älter als einen Tag.',
+    );
+  });
+
+  it('binds no pass to a room taken up again that it has not come back to', () => {
+    const { code, ben } = crewOn(server());
+    const fresh = server();
+    const anna = resume(fresh.line, 'Anna', code, blobOf(ben).blob);
+    const where = (name: string) => {
+      const socket = fresh.line.connect();
+      socket.say({ kind: 'whereami', pass: passFor(name) });
+      return socket.heard.find((m) => m.kind === 'seated');
+    };
+    expect(where('Ben')).toEqual({ kind: 'seated', seat: null });
+    // Ben opens a room of his own: nothing keeps him, and his seat in the run stays.
+    const own = fresh.line.connect();
+    own.say({ kind: 'create-room', name: 'Ben', pass: passFor('Ben'), missionId: 'blackout' });
+    expect(joinedOf(own).code).not.toBe(code);
+    expect(anna.view.players.map((p) => p.name)).toEqual(['Anna', 'Ben']);
+    // Anna came back to it: the run binds her, and keeps her from another room.
+    expect(where('Anna')).toMatchObject({ seat: { code, phase: 'playing' } });
+    const away = fresh.line.connect();
+    away.say({ kind: 'create-room', name: 'Anna', pass: passFor('Anna'), missionId: 'blackout' });
+    expect(refusalOf(away)).toBe(`Gebunden an den Einsatz „Blackout im Labor“ in Raum ${code}.`);
+    // Once Ben is back, it binds him as well.
+    resume(fresh.line, 'Ben', code, blobOf(ben).blob);
+    expect(where('Ben')).toMatchObject({ seat: { code, phase: 'playing' } });
+  });
+
+  it('reports no run a ghost calls off, but one its crew came back to', () => {
+    const { code, anna, ben } = crewOn(server());
+    // Ben's stale page brings the run back alone, and calls it off once he may.
+    const reported = vi.fn();
+    const ghost = server(HANDOVER_MS, reported);
+    const lone = resume(ghost.line, 'Ben', code, blobOf(ben).blob);
+    vi.advanceTimersByTime(FIRST_WAIT_MS);
+    lone.say({ kind: 'call-off' });
+    expect(lone.view.phase).toBe('lost');
+    expect(reported).not.toHaveBeenCalled();
+    expect(said()).toContain(
+      `[escapelab] room ${code}: not counted: none of its crew but who gave it up came back ` +
+        'after the restore',
+    );
+    // Both back, then Anna gives up: the run is the crew's, and reported.
+    const crew = server(HANDOVER_MS, reported);
+    resume(crew.line, 'Anna', code, blobOf(anna).blob);
+    resume(crew.line, 'Ben', code, blobOf(ben).blob);
+    const annaAgain = crew.line.connect();
+    annaAgain.say({ kind: 'abandon', code, pass: passFor('Anna') });
+    expect(reported).toHaveBeenCalledTimes(1);
+    expect(reported.mock.calls[0]?.[0]).toMatchObject({ outcome: 'lost:abandoned' });
   });
 });

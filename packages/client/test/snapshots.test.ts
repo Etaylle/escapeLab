@@ -211,16 +211,22 @@ describe('the card of a kept snapshot whose seat the server will not have back',
 
   it('goes, the snapshot with it, once the resume its way back sent is refused', () => {
     const seat = seatOf('QX7R', running(), T0);
-    local.set(`${SNAPSHOT_KEY}QX7R`, JSON.stringify({ ...SNAPSHOT, seat }));
-    const { kept, got } = page();
-    takeIn({ kind: 'seated', seat: null }, kept);
-    expect(got.seat).toEqual(seat);
-    kept.resumed.current = 'QX7R';
-    const message = 'Der Spielstand dieses Raums lässt sich nicht wiederherstellen.';
-    takeIn({ kind: 'error', message, of: 'resume' }, kept);
-    expect(keptSnapshot('QX7R')).toBeNull();
-    expect(got.seat).toBeNull();
-    expect(kept.resumed.current).toBeNull();
+    // Not to be taken up, its run over, or its room closed for standing empty (server sweep).
+    for (const message of [
+      'Der Spielstand dieses Raums lässt sich nicht wiederherstellen.',
+      'Dieser Einsatz ist beendet.',
+      'Der Raum stand 10 Minuten leer und wurde geschlossen.',
+    ]) {
+      local.set(`${SNAPSHOT_KEY}QX7R`, JSON.stringify({ ...SNAPSHOT, seat }));
+      const { kept, got } = page();
+      takeIn({ kind: 'seated', seat: null }, kept);
+      expect(got.seat).toEqual(seat);
+      kept.resumed.current = 'QX7R';
+      takeIn({ kind: 'error', message, of: 'resume' }, kept);
+      expect(keptSnapshot('QX7R')).toBeNull();
+      expect(got.seat).toBeNull();
+      expect(kept.resumed.current).toBeNull();
+    }
   });
 
   it('is the room of the resume the page sent last, nothing else noted', () => {

@@ -27,6 +27,26 @@ const NOT_RESTORABLE = 'Der Spielstand dieses Raums lässt sich nicht wiederhers
 const codeTaken = (code: string): string =>
   `Der Raumcode ${code} gehört inzwischen einem anderen Raum.`;
 
+/** What a resume is told whose snapshot is of a room whose run was over when it was closed. */
+const RUN_ENDED = 'Dieser Einsatz ist beendet.';
+
+/** What a resume is told whose snapshot is of a room closed for standing empty (`sweep`). */
+const ROOM_CLOSED =
+  `Der Raum stand ${EMPTY_ROOM_TTL_MS / 60_000} Minuten leer und wurde geschlossen.`;
+
+/**
+ * A room the server closed for standing empty (`sweep`): when, and whether its run was over by
+ * then. Its snapshots are refused for as long as one of them could be taken up at all,
+ * SNAPSHOT_MAX_AGE_MS: a page that kept one brings back no ghost of the room.
+ */
+interface Closed {
+  at: number;
+  over: boolean;
+}
+
+/** The key a closed room goes by: its code and when it was opened, as its snapshots name it. */
+const closedKey = (code: string, createdAt: number): string => `${code}@${createdAt}`;
+
 /** This server instance: its id, minted at boot, and when it booted, epoch ms (index.ts). */
 export interface Instance {
   id: string;
@@ -91,6 +111,8 @@ export class RoomManager {
   private readonly rooms = new Map<string, Room>();
   /** the rooms this instance waits to take up again, by code (`HANDOVER_MS`) */
   private readonly parked = new Map<string, Parked>();
+  /** the rooms this instance closed for standing empty, by `closedKey` (`sweep`) */
+  private readonly closed = new Map<string, Closed>();
 
   /**
    * `onRunFinished` hears of every run that ends in any of these rooms;
@@ -238,15 +260,11 @@ export class RoomManager {
 
   /**
    * Whether `snapshot` may be older than the run the instance that sealed it still has at `now`:
-   * not that instance's last, of another instance than this one — which may still be up, a crew
-   * on it — and this one younger than HANDOVER_MS.
+   * not that instance's last, and this one younger than HANDOVER_MS. It is another instance's:
+   * of a room this one had and closed, it would be refused (`closedFor`).
    */
   private mayBeBehind(snapshot: SealedSnapshot, now: number): boolean {
-    return (
-      !snapshot.final &&
-      snapshot.instance !== this.instance.id &&
-      now < this.instance.bootedAt + HANDOVER_MS
-    );
+    return !snapshot.final && now < this.instance.bootedAt + HANDOVER_MS;
   }
 
   /**
@@ -336,9 +354,9 @@ export class RoomManager {
 
   /**
    * The snapshot `blob` keeps of the room `code`, fit to be taken up again at `now`: its seal
-   * verified under `key` and its content this build's, of that very room, no older than
-   * SNAPSHOT_MAX_AGE_MS, of no ended run, and its game showing every seat a view. Refused in one
-   * line otherwise, the log saying why.
+   * verified under `key` and its content this build's, of that very room — not one this instance
+   * closed (`closedFor`) — no older than SNAPSHOT_MAX_AGE_MS, of no ended run, and its game
+   * showing every seat a view. Refused in one line otherwise, the log saying why.
    */
   private restorable(code: string, blob: string, key: Buffer, now: number): SealedSnapshot {
     const refuse = (why: string, message = NOT_RESTORABLE): never => {
@@ -355,6 +373,10 @@ export class RoomManager {
     if (snapshot.code !== code.toUpperCase()) {
       return refuse(`its snapshot is of room ${snapshot.code}`);
     }
+    const closed = this.closedFor(snapshot);
+    if (closed !== null) {
+      return refuse(closed.why, closed.message);
+    }
     if (now - snapshot.at > SNAPSHOT_MAX_AGE_MS) {
       return refuse('its snapshot is over a day old', 'Der Spielstand ist älter als einen Tag.');
     }
@@ -368,6 +390,20 @@ export class RoomManager {
       return refuse(`its game shows no views: ${String(err)}`);
     }
     return snapshot;
+  }
+
+  /**
+   * Why `snapshot` is of a room this instance closed (`sweep`), for the log and for its resume —
+   * the run over by then, or not; null for one of a room it never closed.
+   */
+  private closedFor(snapshot: RoomSnapshot): { why: string; message: string } | null {
+    const closed = this.closed.get(closedKey(snapshot.code, snapshot.createdAt));
+    if (closed === undefined) {
+      return null;
+    }
+    return closed.over
+      ? { why: 'its run was over when its room was closed', message: RUN_ENDED }
+      : { why: 'its room was closed, standing empty', message: ROOM_CLOSED };
   }
 
   get(code: string): Room {
@@ -407,7 +443,8 @@ export class RoomManager {
 
   /**
    * Where `pass` sits, as its join screen shows it: in a run on — live or paused — before
-   * anything else, else in a lobby; null for neither.
+   * anything else, else in a lobby; null for neither. Only a room that binds the pass counts
+   * (`Room.binds`): one taken up again that the pass has not come back to does not.
    */
   whereIs(pass: CrewPass): Seat | null {
     let lobby: Seat | null = null;
@@ -445,11 +482,12 @@ export class RoomManager {
     }
   }
 
-  /** The rooms but `staying` where `pass` holds a seat. */
+  /**
+   * The rooms but `staying` that bind `pass` (`Room.binds`): one taken up again that the pass
+   * has not come back to neither keeps it from another room nor loses its seat to one.
+   */
   private elsewhere(pass: CrewPass, staying: Room | null): Room[] {
-    return [...this.rooms.values()].filter(
-      (room) => room !== staying && room.seatOf(pass) !== null,
-    );
+    return [...this.rooms.values()].filter((room) => room !== staying && room.binds(pass));
   }
 
   /**
@@ -467,12 +505,23 @@ export class RoomManager {
     }
   }
 
-  /** Drop rooms that have been empty for a while; call periodically. */
+  /**
+   * Closes the rooms that have stood empty for EMPTY_ROOM_TTL_MS at `now`, each leaving a
+   * tombstone that refuses its snapshots from then on (`closedFor`), and lets go of the
+   * tombstones SNAPSHOT_MAX_AGE_MS old; call periodically.
+   */
   sweep(now = Date.now()): void {
     for (const [code, room] of this.rooms) {
       if (room.emptySince !== null && now - room.emptySince > EMPTY_ROOM_TTL_MS) {
         room.dispose();
         this.rooms.delete(code);
+        const over = room.phase === 'won' || room.phase === 'lost';
+        this.closed.set(closedKey(code, room.createdAt), { at: now, over });
+      }
+    }
+    for (const [key, closed] of this.closed) {
+      if (now - closed.at > SNAPSHOT_MAX_AGE_MS) {
+        this.closed.delete(key);
       }
     }
   }

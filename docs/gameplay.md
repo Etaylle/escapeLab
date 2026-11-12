@@ -436,7 +436,13 @@ letzte Stand trifft gleich ein", with only the reload to press, and the audience
 A server killed outright, with no SIGTERM, loses at most the last 2 s, and its rooms are back
 90 s after the next one booted. A snapshot over a day old, of a run that is
 over, of another room or under another key is refused in one line, and so is one whose code
-another room holds meanwhile. Where the server does not know the room yet, the join screen shows
+another room holds meanwhile. A room the server closed for standing empty 10 minutes leaves a
+tombstone for a day that refuses its snapshots — „Dieser Einsatz ist beendet." where its run was
+over by then, else „Der Raum stand 10 Minuten leer und wurde geschlossen." — and the page drops
+the snapshot and its card: a seat that left mid-run brings back no ghost of the run. A room taken
+up again binds only whoever has come back to it: the join screen of anybody else shows its own
+card, and nothing keeps them from another room; a run given up by the only one of its crew who
+came back is not counted. Where the server does not know the room yet, the join screen shows
 its card from the kept snapshot: „Zurück zum Einsatz" takes the room up again, and „Raum
 verlassen" or „Einsatz aufgeben" there drops it. A tab that watched the room asks for it again for
 30 s after a restart, until the room is back. Patrols stand still through a pause, where they are;
