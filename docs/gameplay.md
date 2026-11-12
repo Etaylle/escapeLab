@@ -352,7 +352,8 @@ a secret minted once and kept in `localStorage` (`escapelab-pass`) with the name
 under. Every seat is bound to the pass that sat down on it — the server keeps the pass's id and a
 SHA-256 of its secret, never the secret — and any socket that shows the pass has the seat back
 (`resume {code, pass}`), from any tab or window of that browser. A tab keeps only the room's
-code (`sessionStorage`), so a reload is back in the run at once.
+code (`sessionStorage`) and whether it just watches, so a reload or a new socket is back in the
+run, or back in its audience (`spectate`), at once.
 
 **Bound to the run.** While the pass sits in a run that is on, live or paused, the join screen
 opens on the run's card instead of the form (`whereami`, asked as the screen comes up): the

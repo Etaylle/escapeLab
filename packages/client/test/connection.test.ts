@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ClientMessage, ServerMessage } from '@escapelab/core';
+import type { ClientMessage, ServerMessage, SpectatorView } from '@escapelab/core';
 import {
   ANSWER_MS,
   keepConnected,
@@ -7,6 +7,7 @@ import {
   OUTBOX_MAX,
   SILENCE_MS,
   wipesBanner,
+  type Comeback,
   type Retry,
   type SocketEvents,
 } from '../src/line.js';
@@ -57,13 +58,17 @@ class FakeSocket {
   }
 }
 
-/** Ben's tab plays in room ABCD, on his browser's pass. */
-const SESSION = { code: 'ABCD', pass: { id: 'b3'.repeat(16), secret: '7e'.repeat(32) } };
+/** Ben's tab plays in room ABCD, on his browser's pass: its sockets come back there. */
+const SESSION: Extract<Comeback, { kind: 'resume' }> = {
+  kind: 'resume',
+  code: 'ABCD',
+  pass: { id: 'b3'.repeat(16), secret: '7e'.repeat(32) },
+};
 /** The server has the seat back. */
 const JOINED: ServerMessage = { kind: 'joined', code: SESSION.code };
 
 /** `keepConnected` over fake sockets, with what it told the page. */
-function connection(session: typeof SESSION | null = SESSION) {
+function connection(session: Comeback | null = SESSION) {
   const sockets: FakeSocket[] = [];
   const told = {
     statuses: [] as string[],
@@ -132,7 +137,7 @@ describe('keepConnected — the page’s line to the server', () => {
     expect(told.statuses).toEqual(['connecting']);
     last().open();
     expect(told.statuses).toEqual(['connecting', 'open']);
-    expect(last().sent).toEqual([{ kind: 'resume', ...SESSION }]);
+    expect(last().sent).toEqual([SESSION]);
     expect(told.resumes).toBe(1);
     last().say({ kind: 'rooms', rooms: [] });
     expect(told.heard).toEqual([{ kind: 'rooms', rooms: [] }]);
@@ -167,8 +172,27 @@ describe('keepConnected — the page’s line to the server', () => {
     vi.advanceTimersByTime(1);
     expect(sockets).toHaveLength(2);
     last().open();
-    expect(last().sent).toEqual([{ kind: 'resume', ...SESSION }]);
+    expect(last().sent).toEqual([SESSION]);
     expect(told.statuses.slice(-3)).toEqual(['closed', 'connecting', 'open']);
+  });
+
+  it('brings a watching tab back to the audience on every socket, ready once it sees again', () => {
+    const WATCH: Comeback = { kind: 'spectate', code: 'ABCD' };
+    const AUDIENCE = { kind: 'spectator-view', code: 'ABCD', at: 1 } as const;
+    const seen = { ...AUDIENCE, view: {} as SpectatorView };
+    const { sockets, told, send, last } = connection(WATCH);
+    last().open();
+    send({ kind: 'list-rooms' });
+    expect(last().sent).toEqual([WATCH]);
+    expect(told.resumes).toBe(1);
+    last().say(seen);
+    expect(told.ready).toBe(1);
+    expect(last().sent).toEqual([WATCH, { kind: 'list-rooms' }]);
+    last().end();
+    vi.advanceTimersByTime(1000);
+    expect(sockets).toHaveLength(2);
+    last().open();
+    expect(last().sent).toEqual([WATCH]);
   });
 
   it('backs off while the server stays away, 1 s doubling to 10 s, and starts over once in', () => {
@@ -218,7 +242,7 @@ describe('keepConnected — sending while the line is down never throws', () => 
     last().open();
     last().say(JOINED);
     send(E);
-    expect(last().sent).toEqual([{ kind: 'resume', ...SESSION }, E]);
+    expect(last().sent).toEqual([SESSION, E]);
     const fresh = connection(null);
     fresh.last().open();
     fresh.send(E);
@@ -231,9 +255,9 @@ describe('keepConnected — sending while the line is down never throws', () => 
     expect(last().sent).toEqual([]);
     last().open();
     send({ kind: 'drop-item' });
-    expect(last().sent).toEqual([{ kind: 'resume', ...SESSION }]);
+    expect(last().sent).toEqual([SESSION]);
     last().say(JOINED);
-    expect(last().sent).toEqual([{ kind: 'resume', ...SESSION }, E, { kind: 'drop-item' }]);
+    expect(last().sent).toEqual([SESSION, E, { kind: 'drop-item' }]);
   });
 
   it('drops what waited where the server refuses the session: none of it draws a refusal', () => {
@@ -241,7 +265,7 @@ describe('keepConnected — sending while the line is down never throws', () => 
     send(E);
     last().open();
     last().say({ kind: 'error', message: 'Wiederverbinden fehlgeschlagen.', of: 'resume' });
-    expect(last().sent).toEqual([{ kind: 'resume', ...SESSION }]);
+    expect(last().sent).toEqual([SESSION]);
     expect(console.warn).toHaveBeenCalledTimes(1);
     // the line is the page's again, for joining anew
     send({ kind: 'list-rooms' });
@@ -255,7 +279,7 @@ describe('keepConnected — sending while the line is down never throws', () => 
     vi.advanceTimersByTime(1000);
     last().open();
     last().say(JOINED);
-    expect(last().sent).toEqual([{ kind: 'resume', ...SESSION }]);
+    expect(last().sent).toEqual([SESSION]);
     expect(console.warn).toHaveBeenCalledTimes(1);
   });
 
@@ -270,7 +294,7 @@ describe('keepConnected — sending while the line is down never throws', () => 
     vi.advanceTimersByTime(1000);
     last().open();
     last().say(JOINED);
-    expect(last().sent).toEqual([{ kind: 'resume', ...SESSION }]);
+    expect(last().sent).toEqual([SESSION]);
   });
 
   it('drops a position sent while the socket connects: the next one goes out anyway', () => {
@@ -278,7 +302,7 @@ describe('keepConnected — sending while the line is down never throws', () => 
     send(POS);
     last().open();
     last().say(JOINED);
-    expect(last().sent).toEqual([{ kind: 'resume', ...SESSION }]);
+    expect(last().sent).toEqual([SESSION]);
     send(POS);
     expect(last().sent.at(-1)).toEqual(POS);
   });
@@ -304,7 +328,7 @@ describe('keepConnected — sending while the line is down never throws', () => 
     send(E);
     stop();
     last().open();
-    expect(last().sent).toEqual([{ kind: 'resume', ...SESSION }]);
+    expect(last().sent).toEqual([SESSION]);
   });
 });
 
@@ -456,7 +480,7 @@ describe('keepConnected — a line that shows itself dead', () => {
     vi.advanceTimersByTime(1000);
     last().open();
     last().say(JOINED);
-    expect(last().sent).toEqual([{ kind: 'resume', ...SESSION }]);
+    expect(last().sent).toEqual([SESSION]);
     vi.restoreAllMocks();
   });
 });

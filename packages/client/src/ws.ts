@@ -10,16 +10,10 @@ import type {
   SpectatorView,
 } from '@escapelab/core';
 import { askForTime, clock, localNow } from './clock.js';
-import {
-  keepConnected,
-  wipesBanner,
-  type Line,
-  type LineStatus,
-  type Resume,
-  type Retry,
-} from './line.js';
+import { keepConnected, wipesBanner, type Line, type LineStatus, type Retry } from './line.js';
 import { forgetNotes, localStore } from './notes.js';
 import { crewPass } from './pass.js';
+import { comebackOfTab, keepTab, leaveTab, roomOfTab, tabRoom } from './tab.js';
 import type { KnownPositions } from './world/movement.js';
 
 /** A refusal of the server's: how many it has made so far, its words, what it refused. */
@@ -121,34 +115,6 @@ export interface ServerListener {
 }
 
 /**
- * Where the tab keeps the code of the room it plays in: a reload comes back to it on the
- * browser's pass (pass.ts). The seat itself is the pass's, which every tab shares.
- */
-const STORAGE_KEY = 'escapelab-session';
-
-/** The code of the room this tab plays in; null for none. */
-function roomOfTab(): string | null {
-  try {
-    const raw = sessionStorage.getItem(STORAGE_KEY);
-    const code: unknown = raw === null ? null : (JSON.parse(raw) as { code?: unknown }).code;
-    return typeof code === 'string' ? code : null;
-  } catch {
-    return null;
-  }
-}
-
-/** What a socket of this tab resumes as it opens; null where the tab plays in no room. */
-function resumeOfTab(): Resume | null {
-  const code = roomOfTab();
-  return code === null ? null : { code, pass: crewPass() };
-}
-
-/** The tab plays in no room any more: no socket of it resumes one. */
-function leaveTab(): void {
-  sessionStorage.removeItem(STORAGE_KEY);
-}
-
-/**
  * Out of room `code` for good: the tab plays in it no more, and what `playerId` noted there
  * goes with it (where it is known).
  */
@@ -166,15 +132,15 @@ function wsUrl(): string {
 }
 
 /** What the page keeps of what the server says: its state's setters, and the refs read live. */
-interface Page {
+export interface Page {
   setRoomCode: (code: string | null) => void;
   setView: (view: PlayerView | null) => void;
-  setSpectatorView: (view: SpectatorView) => void;
+  setSpectatorView: (view: SpectatorView | null) => void;
   setRooms: (rooms: RoomSummary[]) => void;
   setSeat: (seat: Seat | null) => void;
   setError: (message: string) => void;
   refuse: (message: string, of: ClientMessage['kind'] | null) => void;
-  /** a resume is out: an error now means the stored session is dead */
+  /** a comeback is out (tab.ts): an error now means the room or seat the tab kept is gone */
   resuming: MutableRefObject<boolean>;
   /** whose seat the latest view was, by player id: their notes go with the room */
   you: MutableRefObject<string | null>;
@@ -184,12 +150,12 @@ interface Page {
   chats: Connection['chats'];
 }
 
-/** Takes a server message in: the page's state, the session it stores, the live refs. */
-function takeIn(msg: ServerMessage, page: Page): void {
+/** Takes a server message in: the page's state, the room the tab keeps, the live refs. */
+export function takeIn(msg: ServerMessage, page: Page): void {
   switch (msg.kind) {
     case 'joined':
       page.resuming.current = false;
-      sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ code: msg.code }));
+      keepTab({ code: msg.code, watching: false });
       page.setRoomCode(msg.code);
       break;
     case 'left':
@@ -213,8 +179,8 @@ function takeIn(msg: ServerMessage, page: Page): void {
       break;
     case 'spectator-view':
       clock.stamped(msg.at);
+      watching(msg.code, page);
       page.setSpectatorView(msg.view);
-      page.setRoomCode(msg.code);
       break;
     case 'clock':
       clock.heard(msg.sent, msg.at);
@@ -243,6 +209,7 @@ function takeIn(msg: ServerMessage, page: Page): void {
         forgetRoom(roomOfTab(), page.you.current);
         page.setRoomCode(null);
         page.setView(null);
+        page.setSpectatorView(null);
       }
       if (inBanner(msg.of)) {
         page.setError(msg.message);
@@ -250,6 +217,19 @@ function takeIn(msg: ServerMessage, page: Page): void {
       page.refuse(msg.message, msg.of ?? null);
       break;
   }
+}
+
+/**
+ * The tab watches room `code`: a socket of it comes back to the room's audience (tab.ts),
+ * and the comeback it sent is answered.
+ */
+function watching(code: string, page: Page): void {
+  page.resuming.current = false;
+  const kept = tabRoom();
+  if (kept?.code !== code || !kept.watching) {
+    keepTab({ code, watching: true });
+  }
+  page.setRoomCode(code);
 }
 
 /** What `openLine` wires the page's line to: the page, its status, socket and listeners. */
@@ -282,7 +262,7 @@ function openLine(wiring: Wiring): { line: Line; close: () => void } {
         asking.close();
       }
     },
-    session: resumeOfTab,
+    session: comebackOfTab,
     resuming: () => {
       page.resuming.current = true;
     },

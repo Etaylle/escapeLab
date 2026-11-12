@@ -1,4 +1,4 @@
-import type { ClientMessage, CrewPass, ServerMessage } from '@escapelab/core';
+import type { ClientMessage, ServerMessage } from '@escapelab/core';
 
 /**
  * The page's line to the server: one socket at a time, kept open (`keepConnected`). A line
@@ -29,6 +29,9 @@ export const RETRY_MAX_MS = 10_000;
 /** How many messages wait for a socket to open; any more are dropped. */
 export const OUTBOX_MAX = 32;
 
+/** What answers a socket's comeback: its seat back, the audience's view again, or a refusal. */
+const ANSWERS: ReadonlySet<ServerMessage['kind']> = new Set(['joined', 'spectator-view', 'error']);
+
 /** The answer to the server's beat (`tick`), as it goes out. */
 const TOCK = JSON.stringify({ kind: 'tock' } satisfies ClientMessage);
 
@@ -53,11 +56,11 @@ export function wipesBanner(kind: ClientMessage['kind']): boolean {
   return !UNBIDDEN.has(kind);
 }
 
-/** What a socket resumes as it opens: the room this tab plays in, on the browser's pass. */
-export interface Resume {
-  code: string;
-  pass: CrewPass;
-}
+/**
+ * What a socket says first as it opens, to put the tab back where it was: on its seat
+ * (`resume`, on the browser's pass) or in the audience of its room (`spectate`).
+ */
+export type Comeback = Extract<ClientMessage, { kind: 'resume' | 'spectate' }>;
 
 /** The next try while the line is down: its number since the line was last up, and when. */
 export interface Retry {
@@ -72,9 +75,9 @@ export interface SocketEvents {
   /** a new socket was made: the one to send on from now */
   made: (socket: WebSocket) => void;
   status: (status: LineStatus) => void;
-  /** the seat a socket resumes as it opens; null where the tab plays in no room */
-  session: () => Resume | null;
-  /** a resume went out: an error now means the stored session is dead */
+  /** where a socket puts the tab back as it opens (`Comeback`); null where it is in no room */
+  session: () => Comeback | null;
+  /** a comeback went out: an error now means the room, or the seat, the tab kept is gone */
   resuming: () => void;
   /** the line is ready: its socket open with the session back, or needing none (`Line.send`) */
   ready: () => void;
@@ -268,13 +271,13 @@ class Keeper {
       socket.send(JSON.stringify(this.first));
       this.first = null;
     }
-    const creds = this.on.session();
-    if (creds === null) {
+    const comeback = this.on.session();
+    if (comeback === null) {
       this.flush(socket);
       return;
     }
     this.on.resuming();
-    socket.send(JSON.stringify({ kind: 'resume', ...creds } satisfies ClientMessage));
+    socket.send(JSON.stringify(comeback));
   }
 
   private heard(socket: WebSocket, data: string): void {
@@ -289,8 +292,8 @@ class Keeper {
       this.answered(socket);
     }
     this.on.message(msg);
-    // The server's answer to the resume: the session back, or refused.
-    if (!this.ready && (msg.kind === 'joined' || msg.kind === 'error')) {
+    // The server's answer to the comeback: the seat back, the room's audience again, or refused.
+    if (!this.ready && ANSWERS.has(msg.kind)) {
       if (msg.kind === 'error') {
         this.waiting.forget();
       }
