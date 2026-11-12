@@ -1,18 +1,25 @@
 import {
   GameError,
+  SNAPSHOT_MAX_AGE_MS,
+  viewFor,
+  viewForSpectator,
   type CrewPass,
   type Difficulty,
   type Mission,
+  type RoomSnapshot,
   type RoomSummary,
   type Seat,
 } from '@escapelab/core';
 import { Room, type RunListener, type Sealer } from './room.js';
-import { seal } from './seal.js';
+import { open, seal } from './seal.js';
 
 /** Room codes avoid ambiguous characters (0/O, 1/I/L). */
 const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 const CODE_LENGTH = 4;
 const EMPTY_ROOM_TTL_MS = 10 * 60 * 1000;
+
+/** What a resume is told whose snapshot no room can be taken up again from. */
+const NOT_RESTORABLE = 'Der Spielstand dieses Raums lässt sich nicht wiederherstellen.';
 
 /** The rooms by count, as /health says them: no code and no name. */
 export interface RoomCounts {
@@ -94,6 +101,110 @@ export class RoomManager {
     );
     this.rooms.set(code, room);
     return room;
+  }
+
+  /**
+   * The room a resume into `code` on `pass` comes back to, carrying the snapshot `blob` where its
+   * page keeps one: the room the server has — a newer snapshot replacing the game of one taken
+   * up again a moment ago (`Room.replaceFrom`) — or else the room the snapshot takes up again
+   * (`restore`). Throws for a code no room has and no snapshot brings back, for a snapshot that
+   * is refused, and for a code another room has taken meanwhile.
+   */
+  roomFor(code: string, pass: CrewPass, blob: string | undefined, now = Date.now()): Room {
+    const room = this.rooms.get(code.toUpperCase());
+    const key = this.sealKey;
+    if (blob === undefined || key === null) {
+      return this.get(code);
+    }
+    if (room === undefined) {
+      return this.restore(this.restorable(code, blob, key, now), now);
+    }
+    // The blob is opened only where it may matter: the room still takes a newer snapshot, or the
+    // pass sits nowhere in it — the room's code may have gone to another room meanwhile.
+    if (room.takesSnapshots(now) || room.seatOf(pass) === null) {
+      this.offer(room, blob, key, now);
+    }
+    return room;
+  }
+
+  /**
+   * `blob` handed to `room`, which the server has: a newer snapshot of it replaces its game while
+   * it still takes one; one of another room of its code means the code went to that one
+   * meanwhile — refused. A blob that does not open changes nothing, the log saying why.
+   */
+  private offer(room: Room, blob: string, key: Buffer, now: number): void {
+    let snapshot: RoomSnapshot;
+    try {
+      snapshot = open(blob, room.code, key);
+    } catch (err) {
+      const why = String(err);
+      console.log(`[escapelab] room ${room.code}: a snapshot handed in was left be, ${why}`);
+      return;
+    }
+    if (snapshot.createdAt !== room.createdAt) {
+      console.log(`[escapelab] room ${room.code}: a snapshot of an older room of its code refused`);
+      throw new GameError(`Der Raumcode ${room.code} gehört inzwischen einem anderen Raum.`);
+    }
+    if (room.replaceFrom(snapshot, now)) {
+      const { code } = room;
+      console.log(`[escapelab] room ${code}: taken up again from snapshot seq ${snapshot.seq}`);
+    }
+  }
+
+  /**
+   * The room `snapshot` keeps, taken up again at `now` (`Room.restore`) under its code: the log
+   * says so, from which snapshot, with how many seats and how old it was.
+   */
+  private restore(snapshot: RoomSnapshot, now: number): Room {
+    const room = Room.restore(snapshot, now, {
+      onRunFinished: this.onRunFinished,
+      dailySalt: this.dailySalt,
+      sealer: this.sealerFor(snapshot.code),
+    });
+    this.rooms.set(snapshot.code, room);
+    const age = ((now - snapshot.at) / 1000).toFixed(1);
+    const seats = `${snapshot.seats.length} seat${snapshot.seats.length === 1 ? '' : 's'}`;
+    console.log(
+      `[escapelab] restored room ${snapshot.code} from snapshot seq ${snapshot.seq} ` +
+        `(${seats}, ${age} s old)`,
+    );
+    return room;
+  }
+
+  /**
+   * The snapshot `blob` keeps of the room `code`, fit to be taken up again at `now`: its seal
+   * verified under `key` and its content this build's, of that very room, no older than
+   * SNAPSHOT_MAX_AGE_MS, of no ended run, and its game showing every seat a view. Refused in one
+   * line otherwise, the log saying why.
+   */
+  private restorable(code: string, blob: string, key: Buffer, now: number): RoomSnapshot {
+    const refuse = (why: string, message = NOT_RESTORABLE): never => {
+      console.log(`[escapelab] room ${code.toUpperCase()}: not taken up again, ${why}`);
+      throw new GameError(message);
+    };
+    let snapshot: RoomSnapshot | null = null;
+    try {
+      snapshot = open(blob, code, key);
+    } catch (err) {
+      return refuse(String(err));
+    }
+    const { state } = snapshot;
+    if (snapshot.code !== code.toUpperCase()) {
+      return refuse(`its snapshot is of room ${snapshot.code}`);
+    }
+    if (now - snapshot.at > SNAPSHOT_MAX_AGE_MS) {
+      return refuse('its snapshot is over a day old', 'Der Spielstand ist älter als einen Tag.');
+    }
+    if (state.phase === 'won' || state.phase === 'lost') {
+      return refuse('its run is over', 'Dieser Einsatz ist schon vorbei.');
+    }
+    try {
+      viewForSpectator(state);
+      state.players.forEach((player) => viewFor(state, player.id));
+    } catch (err) {
+      return refuse(`its game shows no views: ${String(err)}`);
+    }
+    return snapshot;
   }
 
   get(code: string): Room {

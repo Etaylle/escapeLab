@@ -1,4 +1,10 @@
-import type { ClientMessage, PlayerView, Seat, ServerMessage } from '@escapelab/core';
+import {
+  SNAPSHOT_MAX_AGE_MS,
+  type ClientMessage,
+  type PlayerView,
+  type Seat,
+  type ServerMessage,
+} from '@escapelab/core';
 import { localStore, type NoteStore } from './notes.js';
 import { crewPass } from './pass.js';
 
@@ -123,6 +129,57 @@ export function keptSnapshot(
   } catch {
     return null;
   }
+}
+
+/** What looking through every snapshot the browser keeps needs of its storage. */
+export type KeptStore = Pick<Storage, 'length' | 'key' | 'getItem' | 'removeItem'>;
+
+/**
+ * Every snapshot `store` keeps, of whatever room, taken no more than SNAPSHOT_MAX_AGE_MS before
+ * `now`. One older than that the server takes up again no more, and one that cannot be read
+ * back is none: both go, so that the rooms a browser left without seeing their end never fill
+ * its storage.
+ */
+function freshKept(store: KeptStore, now: number): KeptSnapshot[] {
+  const keys: string[] = [];
+  for (let i = 0; i < store.length; i++) {
+    const key = store.key(i);
+    if (key?.startsWith(SNAPSHOT_KEY) === true) {
+      keys.push(key);
+    }
+  }
+  const fresh: KeptSnapshot[] = [];
+  for (const key of keys) {
+    const kept = keptOf(store.getItem(key));
+    if (kept !== null && now - kept.at <= SNAPSHOT_MAX_AGE_MS) {
+      fresh.push(kept);
+    } else {
+      store.removeItem(key);
+    }
+  }
+  return fresh;
+}
+
+/**
+ * The card of the newest snapshot the browser keeps, taken no more than SNAPSHOT_MAX_AGE_MS
+ * before `now` (`freshKept`): the room the join screen offers the way back to while the server
+ * has none for the pass — after a deploy or a restart, before anybody of its crew is back; null
+ * for none.
+ */
+export function keptSeat(
+  store: KeptStore | null = localStore(),
+  now: number = Date.now(),
+): Seat | null {
+  const fresh = store === null ? [] : freshKept(store, now);
+  return fresh.sort((a, b) => b.at - a.at)[0]?.seat ?? null;
+}
+
+/**
+ * Where the pass sits, as the join screen shows it: where the server says, and where it says
+ * nowhere, the room of the newest snapshot the browser keeps (`keptSeat`).
+ */
+export function seatShown(seat: Seat | null): Seat | null {
+  return seat ?? keptSeat();
 }
 
 /** The snapshot of the room `code` goes: the run is over, or the seat is no more the pass's. */

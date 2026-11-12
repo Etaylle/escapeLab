@@ -6,7 +6,8 @@
  *   PLAYWRIGHT_BROWSERS_PATH=$PWD/.playwright-browsers \
  *     [SHOTS_MISSION=Systemcheck] [SHOTS_FRAME_P95_MS=40] [SHOTS_CPU_SLOWDOWN=4] \
  *     [SHOTS_SOFTWARE_GL=1] [SHOTS_WEBGL=1] [SHOTS_HEADED=1] [SHOTS_AUDIO_OFF=beds,music] \
- *     [SHOTS_PROFILE=1] node tools/shots.mjs [baseUrl] [outDir]
+ *     [SHOTS_PROFILE=1] [SHOTS_SERVER=packages/server/src/index.ts] \
+ *     node tools/shots.mjs [baseUrl] [outDir]
  *
  * SHOTS_MISSION names the mission card to start (default Blackout); the
  * crew is two players. Where the first station is a sync station, both
@@ -448,6 +449,13 @@
  * in; it has to sit down, and his browser, back, has to be refused (takeover.png). Any
  * step that fails, fails the run; the log says how long the drill took.
  *
+ * Restart (a Blackout run that owns its server, SHOTS_SERVER): after the reconnect drill, the
+ * same crew of three in a room of its own; the server gets SIGTERM, as Render sends it before a
+ * deploy, and has to exit 0, every page's own card saying „WARTUNG · Der Server startet neu"
+ * (restart-maintenance.png); started again on the same port with the same ROOM_SECRET, every
+ * page has to be back in the run within 15 s (restart-recovered.png), the clock where it
+ * stood. Where the run does not own its server, the drill is skipped, the reason logged.
+ *
  * Figures: the crew stands as client world/figure.ts poses it, and four shots
  * at 1440×1000 show it. lobby-idle.png catches a lobby figure turned in a
  * glance round the room, when the figures' probe (`?trace=1`,
@@ -468,8 +476,10 @@
  * walkthrough does not take that far skips what it leaves out.
  */
 import { Buffer } from 'node:buffer';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { spawn } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
+import { createWriteStream, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 import { fileURLToPath, URL } from 'node:url';
 import { chromium, request } from 'playwright';
 import { AGAIN_AFTER_MS, allowanceOf, gateWindow, p95Text, paceOf } from './framegate.mjs';
@@ -553,6 +563,20 @@ const PROFILE = switchedOn('SHOTS_PROFILE', process.env.SHOTS_PROFILE);
  * the sound checks fail for a system switched off.
  */
 const AUDIO_OFF = audioOff(process.env.SHOTS_AUDIO_OFF);
+/**
+ * The server the run starts and owns, SHOTS_SERVER=<entry>: node runs the entry — one in
+ * TypeScript with the tsx loader — from packages/server, on BASE's port with ALLOW_SEED=1 and TLS
+ * off, its rooms' snapshots sealed with a ROOM_SECRET of this run's own; its log goes to
+ * server.log under OUT, and the run stops it at its end. Only a server the run owns can the
+ * restart drill take down and bring back; without one the run talks to whatever answers at BASE,
+ * and the drill is skipped.
+ */
+const SERVER_ENTRY = process.env.SHOTS_SERVER ? resolve(process.env.SHOTS_SERVER) : null;
+const SERVER_DIR = fileURLToPath(new URL('../packages/server/', import.meta.url));
+/** The key every start of the owned server seals with: a restart opens what the last sealed. */
+const ROOM_SECRET = randomBytes(32).toString('hex');
+/** How long the owned server may take to answer /health once started, ms. */
+const SERVER_UP_MS = 60_000;
 /** How far a frame's mean luma on the light layer may lie from the Canvas pass's, as a share. */
 const LUMA_TOLERANCE = 0.1;
 /**
@@ -10676,6 +10700,199 @@ async function captureReconnect() {
   }
 }
 
+// ── the server the run owns, and the restart drill ────────────────────────────────────────────
+//
+// Where the run owns its server (SHOTS_SERVER), a room of its own after the reconnect drill:
+// Anna, Ben and Cem in Blackout's dark. The server gets SIGTERM, as Render sends it before a
+// deploy replaces the instance: it stands the run still, hands every page the room's last
+// snapshot and closes its socket with 1012, and exits 0. Every page's own card says the server
+// restarts (restart-maintenance.png). Started again on the same port with the same ROOM_SECRET,
+// the server knows no room: the pages resume with their snapshots, the room is taken up again,
+// and every page is back in the run within RESTART_BACK_MS (restart-recovered.png), the clock
+// where it stood. Skipped, the reason logged, where the run does not own its server or plays
+// another mission.
+
+/** The server the run started (`startServer`), and how it ended; null while it owns none. */
+let owned = null;
+
+/** How long every page may take to be back in the run once the server is up again, ms. */
+const RESTART_BACK_MS = 15_000;
+
+/** Whether the server at BASE answers /health, asked over `api`. */
+async function healthy(api) {
+  try {
+    return (await api.get('/health', { timeout: 2000 })).ok();
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Starts the server the run owns (SHOTS_SERVER) on BASE's port, its log appended to server.log
+ * under OUT; resolves once it answers /health, and throws where it has not within SERVER_UP_MS
+ * or ended meanwhile — or where another server answers there already, one the run would only
+ * think it owns.
+ */
+async function startServer() {
+  mkdirSync(OUT, { recursive: true });
+  if (await healthyAtBase()) {
+    throw new Error(`${BASE} answers already: the run cannot own a server there`);
+  }
+  const port = new URL(BASE).port || '80';
+  const args = SERVER_ENTRY.endsWith('.ts') ? ['--import', 'tsx', SERVER_ENTRY] : [SERVER_ENTRY];
+  const log = createWriteStream(join(OUT, 'server.log'), { flags: 'a' });
+  const child = spawn(process.execPath, args, {
+    cwd: SERVER_DIR,
+    env: { ...process.env, PORT: port, ALLOW_SEED: '1', TLS: 'off', ROOM_SECRET },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  child.stdout.pipe(log, { end: false });
+  child.stderr.pipe(log, { end: false });
+  const exited = new Promise((done) => {
+    child.once('exit', (code, signal) => done({ code, signal }));
+  });
+  const server = { child, exited, ended: null };
+  exited.then((end) => {
+    server.ended = end;
+  });
+  owned = server;
+  const from = Date.now();
+  const api = await request.newContext({ baseURL: BASE });
+  try {
+    while (!(await healthy(api))) {
+      if (server.ended !== null || Date.now() - from > SERVER_UP_MS) {
+        throw new Error(`the server at ${BASE} did not come up (${JSON.stringify(server.ended)})`);
+      }
+      await sleep(200);
+    }
+  } finally {
+    await api.dispose();
+  }
+  console.log(`server             ${SERVER_ENTRY} up on ${port} in ${seconds(Date.now() - from)}`);
+}
+
+/** Whether a server answers /health at BASE right now. */
+async function healthyAtBase() {
+  const api = await request.newContext({ baseURL: BASE });
+  try {
+    return await healthy(api);
+  } finally {
+    await api.dispose();
+  }
+}
+
+/** Ends the server the run owns with `signal`; how it ended — null where it owns none. */
+async function stopServer(signal = 'SIGTERM') {
+  if (owned === null) {
+    return null;
+  }
+  const { child, exited } = owned;
+  owned = null;
+  child.kill(signal);
+  return exited;
+}
+
+/** Whether `player`'s page shows its line's card saying the server restarts. */
+const restartCard = (player) =>
+  player.page
+    .locator('.line-lost h1', { hasText: 'WARTUNG · Der Server startet neu' })
+    .isVisible();
+
+/** Whether `player`'s page is back in the run: no card of its line, the run on and not waiting. */
+async function backInTheRun(player) {
+  const view = player.seen.view;
+  const card = await player.page.locator('.line-lost').count();
+  return card === 0 && view?.phase === 'playing' && view.pausedFor === null;
+}
+
+/**
+ * SIGTERM for the server the run owns: it exits 0, and every page's own card says the server
+ * restarts (restart-maintenance.png). Returns when the server went down.
+ */
+async function serverDown({ anna, crew }) {
+  const clock = await textOf(anna.page.locator('.countdown'));
+  const sent = Date.now();
+  const end = await stopServer('SIGTERM');
+  const took = Date.now() - sent;
+  if (end?.code !== 0) {
+    fail(`restart: the server ended ${JSON.stringify(end)} on SIGTERM, not exit 0`);
+  }
+  const shown = await untilAsync(
+    async () => (await Promise.all(crew.map(restartCard))).every(Boolean),
+    DRILL_STEP_MS,
+  );
+  const retry = await textOf(anna.page.locator('.line-lost .line-retry'));
+  await capture(anna.page, 'restart-maintenance.png');
+  console.log(
+    `restart-maintenance.png SIGTERM: the server exits ${end?.code} in ${seconds(took)}, the ` +
+      `clock at ${clock}; ` +
+      (shown ? `every page: „WARTUNG · Der Server startet neu", „${retry}"` : '!! not all'),
+  );
+  if (!shown) {
+    fail('restart-maintenance.png: not every page says the server restarts');
+  }
+  return { clock };
+}
+
+/**
+ * The server started again on the same port, the same ROOM_SECRET: every page back in the run
+ * within RESTART_BACK_MS (restart-recovered.png), the clock going again where it stood.
+ */
+async function serverBack({ anna, crew }, { clock }) {
+  await startServer();
+  const up = Date.now();
+  const back = await untilAsync(
+    async () => (await Promise.all(crew.map(backInTheRun))).every(Boolean),
+    RESTART_BACK_MS,
+  );
+  const took = Date.now() - up;
+  await sleep(1200);
+  const after = await textOf(anna.page.locator('.countdown'));
+  await capture(anna.page, 'restart-recovered.png');
+  console.log(
+    `restart-recovered.png ` +
+      (back ? `every page back in the run ${seconds(took)} after the server was up` : '!! not') +
+      `; the clock ${clock} → ${after}`,
+  );
+  if (!back) {
+    fail(`restart-recovered.png: not every page back in the run within ${seconds(took)}`);
+  }
+}
+
+/**
+ * The restart drill (see above): skipped where the run does not own its server or plays another
+ * mission; the contexts closed, and the server running again, whatever happened.
+ */
+async function captureRestart() {
+  if (MISSION.toLowerCase() !== 'blackout') {
+    skip('restart', `the restart drill plays Blackout for three; this run plays ${MISSION}`);
+    return;
+  }
+  if (owned === null) {
+    skip('restart', 'the run does not own its server (SHOTS_SERVER unset): none to restart');
+    return;
+  }
+  const from = Date.now();
+  const contexts = [];
+  try {
+    const drill = await drillCrew();
+    contexts.push(...drill.crew.map(({ context }) => context));
+    const before = await serverDown(drill);
+    await serverBack(drill, before);
+  } catch (err) {
+    console.log(`restart            !! ${firstLine(err)}`);
+    fail(`restart: ${firstLine(err)}`);
+  } finally {
+    for (const context of contexts) {
+      await context.close();
+    }
+    if (owned === null) {
+      await startServer();
+    }
+    console.log(`restart            the drill took ${seconds(Date.now() - from)}`);
+  }
+}
+
 async function run() {
   mkdirSync(OUT, { recursive: true });
   if (CPU_SLOWDOWN > 1) {
@@ -10691,6 +10908,7 @@ async function run() {
   await captureArtTour();
   await captureDangerSense();
   await captureReconnect();
+  await captureRestart();
 
   // --- host: create a room and grab the code ---------------------------
   const hostCtx = await browser.newContext({ viewport: SIZES[0] });
@@ -11531,6 +11749,9 @@ async function keySceneAtTwo(player, when, quiet, shot) {
  */
 async function main() {
   try {
+    if (SERVER_ENTRY !== null) {
+      await startServer();
+    }
     await run();
   } catch (err) {
     console.error(err);
@@ -11541,6 +11762,7 @@ async function main() {
   if (browser?.isConnected()) {
     await browser.close();
   }
+  await stopServer();
   summarize();
   process.exitCode = tally.failures.length === 0 ? 0 : 1;
 }

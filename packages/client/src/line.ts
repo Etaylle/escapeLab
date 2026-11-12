@@ -30,6 +30,13 @@ export const RETRY_MAX_MS = 10_000;
 export const OUTBOX_MAX = 32;
 /** The code a socket closes with as the server goes down for a restart: Service Restart. */
 export const RESTART_CLOSE = 1012;
+/**
+ * How long after the server's restart a refused comeback to a room's audience is asked again,
+ * ms: the room is back once a member of its crew resumes it from a snapshot.
+ */
+export const REWATCH_MS = 30_000;
+/** How often it is asked again meanwhile, ms. */
+export const REWATCH_EVERY_MS = 1000;
 
 /** What answers a socket's comeback: its seat back, the audience's view again, or a refusal. */
 const ANSWERS: ReadonlySet<ServerMessage['kind']> = new Set(['joined', 'spectator-view', 'error']);
@@ -197,12 +204,15 @@ class Keeper {
   private asked = 0;
   /** the line is down for the server's restart (`Retry.restart`), until it is ready again */
   private restarting = false;
+  /** epoch ms until which a refused comeback to a room's audience is asked again (REWATCH_MS) */
+  private rewatchUntil = 0;
   private first: ClientMessage | null = null;
   private readonly waiting = new Outbox();
   private readonly retryAlarm = new Alarm();
   private readonly openingAlarm = new Alarm();
   private readonly silenceAlarm = new Alarm();
   private readonly answerAlarm = new Alarm();
+  private readonly rewatchAlarm = new Alarm();
 
   constructor(
     private readonly open: () => WebSocket,
@@ -275,6 +285,7 @@ class Keeper {
     for (const alarm of [this.retryAlarm, this.openingAlarm, this.silenceAlarm, this.answerAlarm]) {
       alarm.clear();
     }
+    this.rewatchAlarm.clear();
     this.waiting.release();
     this.current?.close();
   }
@@ -308,21 +319,62 @@ class Keeper {
     if (msg.kind === 'clock') {
       this.answered(socket);
     }
+    if (this.keptBack(socket, msg)) {
+      return;
+    }
     this.on.message(msg);
     // The server goes down for a restart: its socket is let go, and a new one made at once —
     // where a deploy has the next server up already, the run is back in moments.
     if (msg.kind === 'restart') {
-      this.restarting = true;
+      this.restartSeen();
       this.dead(socket);
       return;
     }
-    // The server's answer to the comeback: the seat back, the room's audience again, or refused.
-    if (!this.ready && ANSWERS.has(msg.kind)) {
-      if (msg.kind === 'error') {
-        this.waiting.forget();
-      }
-      this.flush(socket);
+    this.comebackAnswered(socket, msg);
+  }
+
+  /** Whether `msg` is a refused comeback the page is not told of: it goes again (`rewatch`). */
+  private keptBack(socket: WebSocket, msg: ServerMessage): boolean {
+    return msg.kind === 'error' && !this.ready && this.rewatch(socket);
+  }
+
+  /**
+   * `msg` heard on `socket` before the line is ready: the server's answer to the comeback — the
+   * seat back, the room's audience again, or refused — makes it ready; anything else changes
+   * nothing.
+   */
+  private comebackAnswered(socket: WebSocket, msg: ServerMessage): void {
+    if (this.ready || !ANSWERS.has(msg.kind)) {
+      return;
     }
+    if (msg.kind === 'error') {
+      this.waiting.forget();
+    }
+    this.flush(socket);
+  }
+
+  /** The server goes down for a restart: the line says so till it is back; an audience waits. */
+  private restartSeen(): void {
+    this.restarting = true;
+    this.rewatchUntil = Date.now() + REWATCH_MS;
+  }
+
+  /**
+   * A comeback to a room's audience refused on `socket` within REWATCH_MS of the server's
+   * restart: the room is back once its crew resumes it, so the comeback goes again
+   * REWATCH_EVERY_MS on, the refusal kept from the page. Whether it goes again.
+   */
+  private rewatch(socket: WebSocket): boolean {
+    const comeback = this.on.session();
+    if (comeback?.kind !== 'spectate' || Date.now() >= this.rewatchUntil) {
+      return false;
+    }
+    this.rewatchAlarm.set(REWATCH_EVERY_MS, () => {
+      if (socket === this.current && socket.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify(comeback));
+      }
+    });
+    return true;
   }
 
   /** The line is ready on `socket`: what waited goes out on it, in order. */
@@ -360,7 +412,7 @@ class Keeper {
       return;
     }
     if (code === RESTART_CLOSE) {
-      this.restarting = true;
+      this.restartSeen();
     }
     this.lost();
     this.retryAlarm.set(this.retryDelay, () => this.connect());
@@ -390,7 +442,8 @@ class Keeper {
   private lost(): void {
     this.ready = false;
     this.current = null;
-    for (const alarm of [this.openingAlarm, this.silenceAlarm, this.answerAlarm]) {
+    const alarms = [this.openingAlarm, this.silenceAlarm, this.answerAlarm, this.rewatchAlarm];
+    for (const alarm of alarms) {
       alarm.clear();
     }
     this.waiting.forget();

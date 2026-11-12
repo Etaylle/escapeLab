@@ -13,7 +13,7 @@ import { askForTime, clock, localNow } from './clock.js';
 import { keepConnected, wipesBanner, type Line, type LineStatus, type Retry } from './line.js';
 import { forgetNotes, localStore } from './notes.js';
 import { crewPass } from './pass.js';
-import { dropSnapshot, keepSnapshot, resumeOf } from './snapshots.js';
+import { dropSnapshot, keepSnapshot, keptSeat, resumeOf, seatShown } from './snapshots.js';
 import { comebackOfTab, keepTab, leaveTab, roomOfTab, tabRoom } from './tab.js';
 import type { KnownPositions } from './world/movement.js';
 
@@ -158,6 +158,11 @@ export interface Page {
   /** a comeback is out (tab.ts): an error now means the room or seat the tab kept is gone */
   resuming: MutableRefObject<boolean>;
   /**
+   * the room the page last asked back into with a resume of its own — the join screen's card's
+   * way back — by its code; null once the seat is back
+   */
+  resumed: MutableRefObject<string | null>;
+  /**
    * the latest view of the seat the tab plays: its player's notes go with the room, and a
    * snapshot of the room is kept with the card it shows (snapshots.ts)
    */
@@ -183,6 +188,7 @@ function seatNews(msg: ServerMessage, page: Page): boolean {
   switch (msg.kind) {
     case 'joined':
       page.resuming.current = false;
+      page.resumed.current = null;
       keepTab({ code: msg.code, watching: false });
       page.setTakeover(null);
       page.setRoomCode(msg.code);
@@ -197,7 +203,9 @@ function seatNews(msg: ServerMessage, page: Page): boolean {
       leftRoom(msg, page);
       return true;
     case 'seated':
-      page.setSeat(msg.seat);
+      // Where the server has no room for the pass, it may be one a restart took down: its card
+      // from the snapshot the browser keeps, whose way back takes the room up again.
+      page.setSeat(seatShown(msg.seat));
       return true;
     case 'view':
       clock.stamped(msg.at);
@@ -312,10 +320,36 @@ function refused(msg: Extract<ServerMessage, { kind: 'error' }>, page: Page): vo
   if (msg.of === 'join-room') {
     page.setTakeover(null);
   }
+  if (msg.of === 'resume') {
+    resumeRefused(page);
+  }
   if (inBanner(msg.of)) {
     page.setError(msg.message);
   }
   page.refuse(msg.message, msg.of ?? null);
+}
+
+/**
+ * What the page notes of `msg` as it goes out: a resume of its own — the join screen's card's way
+ * back — names the room whose snapshot goes once the server refuses it (`resumeRefused`).
+ */
+export function noteOutgoing(msg: ClientMessage, resumed: MutableRefObject<string | null>): void {
+  if (msg.kind === 'resume') {
+    resumed.current = msg.code;
+  }
+}
+
+/**
+ * The server will not have the seat of the join screen's card back — the room gone for good, its
+ * snapshot refused: the snapshot kept of the room goes, and the card with it.
+ */
+function resumeRefused(page: Page): void {
+  const code = page.resumed.current;
+  if (code !== null) {
+    page.resumed.current = null;
+    dropSnapshot(code);
+    page.setSeat(keptSeat());
+  }
 }
 
 /**
@@ -519,6 +553,7 @@ export function useGameConnection(): Connection {
   const [refusal, setRefusal] = useState<Refusal | null>(null);
   const socketRef = useRef<WebSocket | null>(null);
   const resumingRef = useRef(false);
+  const resumedRef = useRef<string | null>(null);
   const seenRef = useRef<PlayerView | null>(null);
   const live = useLiveRefs();
   const listenersRef = useRef(new Set<ServerListener>());
@@ -548,6 +583,7 @@ export function useGameConnection(): Connection {
       setError,
       refuse: (message, of) => setRefusal((last) => ({ seq: (last?.seq ?? 0) + 1, message, of })),
       resuming: resumingRef,
+      resumed: resumedRef,
       seen: seenRef,
       ...live,
     },
@@ -573,6 +609,7 @@ export function useGameConnection(): Connection {
       if (wipesBanner(msg.kind)) {
         setError(null);
       }
+      noteOutgoing(msg, resumedRef);
       lineRef.current?.send(msg);
     },
     listen,

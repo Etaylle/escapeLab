@@ -6,6 +6,8 @@ import {
   OPENING_MS,
   OUTBOX_MAX,
   RESTART_CLOSE,
+  REWATCH_EVERY_MS,
+  REWATCH_MS,
   SILENCE_MS,
   wipesBanner,
   type Comeback,
@@ -147,40 +149,6 @@ describe('keepConnected — the page’s line to the server', () => {
     expect(told.heard).toEqual([{ kind: 'rooms', rooms: [] }]);
   });
 
-  it('lets the socket go as the server goes down for a restart, a new one made at once', () => {
-    const { sockets, told, last } = connection();
-    last().open();
-    last().say(JOINED);
-    const restart: ServerMessage = { kind: 'restart', blob: 'v1.a.b', seq: 9, at: 1 };
-    last().say(restart);
-    expect(told.heard.at(-1)).toEqual(restart);
-    expect(sockets[0]?.closedByPage).toBe(true);
-    expect(told.statuses.slice(-2)).toEqual(['closed', 'connecting']);
-    expect(sockets).toHaveLength(2);
-    expect(told.retries.at(-1)).toEqual({ attempt: 1, at: null, restart: true });
-    // The server still down: the next try waits as ever, and is still the restart's.
-    last().end();
-    expect(told.retries.at(-1)).toEqual({ attempt: 2, at: Date.now() + 1000, restart: true });
-    vi.advanceTimersByTime(1000);
-    last().open();
-    last().say(JOINED);
-    expect(told.retries.at(-1)).toBeNull();
-    // A drop after that is a drop again.
-    last().end();
-    expect(told.retries.at(-1)).toEqual({ attempt: 1, at: Date.now() + 1000 });
-  });
-
-  it('takes a socket the server closed with 1012 for its restart, told so or not', () => {
-    const { told, last } = connection();
-    last().open();
-    last().say(JOINED);
-    last().end(RESTART_CLOSE);
-    expect(told.retries.at(-1)).toMatchObject({ attempt: 1, restart: true });
-    vi.advanceTimersByTime(1000);
-    last().end(1006);
-    expect(told.retries.at(-1)).toMatchObject({ attempt: 2, restart: true });
-  });
-
   it('opens without resuming where the page keeps no session', () => {
     const { told, last } = connection(null);
     last().open();
@@ -262,6 +230,96 @@ describe('keepConnected — the page’s line to the server', () => {
     vi.advanceTimersByTime(60_000);
     expect(sockets).toHaveLength(1);
     expect(told.closed).toBe(0);
+  });
+});
+
+describe('keepConnected — the server going down for a restart', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('lets the socket go as the server goes down for a restart, a new one made at once', () => {
+    const { sockets, told, last } = connection();
+    last().open();
+    last().say(JOINED);
+    const restart: ServerMessage = { kind: 'restart', blob: 'v1.a.b', seq: 9, at: 1 };
+    last().say(restart);
+    expect(told.heard.at(-1)).toEqual(restart);
+    expect(sockets[0]?.closedByPage).toBe(true);
+    expect(told.statuses.slice(-2)).toEqual(['closed', 'connecting']);
+    expect(sockets).toHaveLength(2);
+    expect(told.retries.at(-1)).toEqual({ attempt: 1, at: null, restart: true });
+    // The server still down: the next try waits as ever, and is still the restart's.
+    last().end();
+    expect(told.retries.at(-1)).toEqual({ attempt: 2, at: Date.now() + 1000, restart: true });
+    vi.advanceTimersByTime(1000);
+    last().open();
+    last().say(JOINED);
+    expect(told.retries.at(-1)).toBeNull();
+    // A drop after that is a drop again.
+    last().end();
+    expect(told.retries.at(-1)).toEqual({ attempt: 1, at: Date.now() + 1000 });
+  });
+
+  it('takes a socket the server closed with 1012 for its restart, told so or not', () => {
+    const { told, last } = connection();
+    last().open();
+    last().say(JOINED);
+    last().end(RESTART_CLOSE);
+    expect(told.retries.at(-1)).toMatchObject({ attempt: 1, restart: true });
+    vi.advanceTimersByTime(1000);
+    last().end(1006);
+    expect(told.retries.at(-1)).toMatchObject({ attempt: 2, restart: true });
+  });
+
+  it('asks again for the audience of a room a restart took down, the refusal kept back', () => {
+    const WATCH: Comeback = { kind: 'spectate', code: 'ABCD' };
+    const seen: ServerMessage = { kind: 'spectator-view', code: 'ABCD', at: 1, view: {} as never };
+    const gone: ServerMessage = {
+      kind: 'error',
+      message: 'Raum "ABCD" existiert nicht (mehr).',
+      of: 'spectate',
+    };
+    const { told, last } = connection(WATCH);
+    last().open();
+    last().say(seen);
+    last().end(RESTART_CLOSE);
+    vi.advanceTimersByTime(1000);
+    last().open();
+    last().say(gone);
+    expect(told.heard).not.toContainEqual(gone);
+    expect(told.ready).toBe(1);
+    vi.advanceTimersByTime(REWATCH_EVERY_MS);
+    expect(last().sent).toEqual([WATCH, WATCH]);
+    // The crew is back, and the room with it: the audience sees again.
+    last().say(seen);
+    expect(told.ready).toBe(2);
+  });
+
+  it('lets the page hear the refusal once REWATCH_MS are over, and a seat’s at once', () => {
+    const WATCH: Comeback = { kind: 'spectate', code: 'ABCD' };
+    const gone: ServerMessage = { kind: 'error', message: 'weg', of: 'spectate' };
+    const audience = connection(WATCH);
+    audience.last().open();
+    audience.last().say({ kind: 'spectator-view', code: 'ABCD', at: 1, view: {} as never });
+    audience.last().end(RESTART_CLOSE);
+    vi.advanceTimersByTime(REWATCH_MS);
+    audience.last().open();
+    audience.last().say(gone);
+    expect(audience.told.heard).toContainEqual(gone);
+    // A seat's resume refused after a restart is the page's to hear, as ever.
+    const seat = connection();
+    seat.last().open();
+    seat.last().say(JOINED);
+    seat.last().end(RESTART_CLOSE);
+    vi.advanceTimersByTime(1000);
+    seat.last().open();
+    const refused: ServerMessage = { kind: 'error', message: 'nein', of: 'resume' };
+    seat.last().say(refused);
+    expect(seat.told.heard).toContainEqual(refused);
   });
 });
 

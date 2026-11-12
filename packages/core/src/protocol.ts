@@ -54,6 +54,9 @@ export const SNAPSHOT_MAX = 256 * 1024;
  */
 export const SNAPSHOT_EVERY_MS = 2000;
 
+/** The oldest snapshot a server takes a room up again from, ms: a day. */
+export const SNAPSHOT_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+
 /**
  * A crew pass (Dienstausweis): what binds a seat to the browser profile that holds it — an id
  * and a secret the client mints once and keeps (client pass.ts), both hex. The server keeps the

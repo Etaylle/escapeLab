@@ -14,18 +14,19 @@ const PASS = { id: 'b3'.repeat(16), secret: '7e'.repeat(32) };
 
 /**
  * Ben's browser, opened on an invite to room ABCD: the code field filled; it keeps `more` beside
- * his pass, by key.
+ * his pass, by key, and what it keeps is handed back.
  */
-function stubWindow(more: [string, string][] = []): void {
+function stubWindow(more: [string, string][] = []): Map<string, string> {
   const kept = new Map([[PASS_KEY, JSON.stringify({ ...PASS, name: 'Ben' })], ...more]);
   vi.stubGlobal('window', {
     location: { search: '?room=ABCD' },
     localStorage: {
       getItem: (key: string) => kept.get(key) ?? null,
       setItem: noop,
-      removeItem: noop,
+      removeItem: (key: string) => void kept.delete(key),
     },
   });
+  return kept;
 }
 
 const blackout: MissionInfo = {
@@ -173,8 +174,20 @@ describe('the join screen of a pass in a lobby', () => {
     press(buttonsOf(elements, 'bound-back')[0]);
     expect(sent).toEqual([
       { kind: 'abandon', code: 'QX7R', pass: PASS },
+      { kind: 'whereami', pass: PASS },
       { kind: 'resume', code: 'QX7R', pass: PASS },
     ]);
+  });
+
+  it('lets go of the snapshot kept of the room as it is left, and asks where the pass sits', () => {
+    const key = `${SNAPSHOT_KEY}QX7R`;
+    const snapshot = { blob: 'v1.a.b', seq: 3, at: T0, seat: LOBBY };
+    const kept = stubWindow([[key, JSON.stringify(snapshot)]]);
+    const sent: ClientMessage[] = [];
+    const elements = elementsOf(() => joinScreen(LOBBY, (msg) => sent.push(msg)));
+    press(buttonsOf(elements, 'bound-leave')[0]);
+    expect(kept.has(key)).toBe(false);
+    expect(sent.map((msg) => msg.kind)).toEqual(['abandon', 'whereami']);
   });
 
   it('is the plain form where the pass sits nowhere', () => {

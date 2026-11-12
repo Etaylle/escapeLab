@@ -1,9 +1,13 @@
-import type { SpectatorView } from '@escapelab/core';
+import type { Seat, SpectatorView } from '@escapelab/core';
 import type { Page, Takeover } from '../src/ws.js';
 
 /** A storage kept in a map, as the browser's local and session storage are. */
 export function storage(items: Map<string, string>) {
   return {
+    get length(): number {
+      return items.size;
+    },
+    key: (index: number) => [...items.keys()][index] ?? null,
     getItem: (key: string) => items.get(key) ?? null,
     setItem: (key: string, value: string) => void items.set(key, value),
     removeItem: (key: string) => void items.delete(key),
@@ -16,6 +20,7 @@ export function page() {
     code: null as string | null,
     audience: null as SpectatorView | null,
     takeover: null as Takeover | null,
+    seat: null as Seat | null,
   };
   const nothing = (): void => undefined;
   const kept: Page = {
@@ -27,13 +32,16 @@ export function page() {
       got.audience = view;
     },
     setRooms: nothing,
-    setSeat: nothing,
+    setSeat: (seat) => {
+      got.seat = seat;
+    },
     setTakeover: (takeover) => {
       got.takeover = takeover;
     },
     setError: nothing,
     refuse: nothing,
     resuming: { current: false },
+    resumed: { current: null },
     seen: { current: null },
     positions: { current: { run: null, players: {} } },
     drones: { current: {} },

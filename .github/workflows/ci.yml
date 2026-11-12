@@ -27,8 +27,9 @@ jobs:
     runs-on: ubuntu-latest
     # Setup takes 4 to 11 minutes by runner; Blackout runs 7 minutes locally and up to 12
     # on a slow runner since the opening and the gameplay captures, 2 more since the
-    # reconnect drill (a crew of three, one away 80 s), Systemcheck up to 8.
-    timeout-minutes: 42
+    # reconnect drill (a crew of three, one away 80 s), 1 more since the restart drill,
+    # Systemcheck up to 8.
+    timeout-minutes: 43
     defaults:
       run:
         # Named, bash runs with -o pipefail: a walkthrough piped through tee
@@ -43,31 +44,24 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: npx playwright install --with-deps chromium
       - run: pnpm build
-      - name: Start the production server
-        id: server
-        # ALLOW_SEED=1: the walkthrough pins its room to a seed (?seed=), so every run draws alike.
-        run: |
-          PORT=3001 ALLOW_SEED=1 pnpm start > server.log 2>&1 &
-          for _ in $(seq 60); do
-            if curl -fsS http://localhost:3001/health; then
-              exit 0
-            fi
-            sleep 1
-          done
-          echo "::error::The server did not answer /health within 60 s."
-          cat server.log
-          exit 1
+      # Each walkthrough starts the production server itself and owns it (SHOTS_SERVER), with
+      # ALLOW_SEED=1 — it pins its room to a seed (?seed=), so every run draws alike — and a
+      # ROOM_SECRET of its own: its restart drill takes the server down and brings it back.
+      # The server's log is server.log in each walkthrough's folder.
       - name: Walkthrough (Blackout)
-        timeout-minutes: 16
+        timeout-minutes: 17
+        env:
+          SHOTS_SERVER: packages/server/src/index.ts
         run: >-
           node tools/shots.mjs http://localhost:3001 shots-blackout 2>&1
           | tee shots-blackout.log
       - name: Walkthrough (Systemcheck)
         # Runs after a failed Blackout run too: both sets of screenshots are wanted.
-        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        if: ${{ !cancelled() }}
         timeout-minutes: 10
         env:
           SHOTS_MISSION: Systemcheck
+          SHOTS_SERVER: packages/server/src/index.ts
         run: >-
           node tools/shots.mjs http://localhost:3001 shots-systemcheck 2>&1
           | tee shots-systemcheck.log
@@ -81,5 +75,4 @@ jobs:
             shots-systemcheck/
             shots-blackout.log
             shots-systemcheck.log
-            server.log
           retention-days: 14

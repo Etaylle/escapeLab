@@ -211,6 +211,7 @@ export {
   SEED_MAX,
   SNAPSHOT_EVERY_MS,
   SNAPSHOT_MAX,
+  SNAPSHOT_MAX_AGE_MS,
   isCustomMissionId,
   type RtcSignal,
   type ClientMessage,

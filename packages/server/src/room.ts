@@ -168,6 +168,25 @@ export const ASK_AGAIN_MS = 60_000;
 /** Seals a snapshot of the room for its crew to keep (seal.ts): the blob it goes out as. */
 export type Sealer = (snapshot: RoomSnapshot) => string;
 
+/**
+ * How long after a room is taken up again from a snapshot a newer snapshot, handed in by a page
+ * coming back, still replaces its game, ms (`replaceFrom`) — unless the crew did something first.
+ */
+export const RESTORE_WINDOW_MS = 10_000;
+
+/**
+ * What the room dispatches of its own as lines come and go — the seats on and off the line, who
+ * stands where, the maintenance pause: none of it is the crew's deed, so none of it ends the
+ * window in which a newer snapshot replaces a room just taken up again.
+ */
+const LINE_ACTIONS: ReadonlySet<Action['type']> = new Set([
+  'player-connected',
+  'player-disconnected',
+  'set-presence',
+  'set-occupancy',
+  'maintenance',
+]);
+
 /** A new device's ask for a seat by its name: the pass it brings, whom to tell, its timer. */
 interface Claim {
   pass: CrewPass;
@@ -307,6 +326,13 @@ export class Room {
   private snapshotSentAt = 0;
   /** whether the log said a snapshot was too big to send: it says so once */
   private tooBigSaid = false;
+  /**
+   * epoch ms the room was taken up again from a snapshot, while a newer one may still replace its
+   * game (`replaceFrom`); null for a room never taken up, or once the crew did something in it
+   */
+  private restoredAt: number | null = null;
+  /** the seq of the snapshot the room was last taken up again from */
+  private restoredSeq = -1;
   /** epoch ms since the room has had no connected players, null while occupied */
   emptySince: number | null = null;
 
@@ -355,6 +381,8 @@ export class Room {
       sealer,
     );
     room.load(snapshot, now);
+    room.restoredAt = now;
+    room.restoredSeq = snapshot.seq;
     return room;
   }
 
@@ -421,9 +449,60 @@ export class Room {
     const { map } = this.state.mission;
     this.drones = keeping.drones === null ? null : DronePatrol.resume(map, keeping.drones);
     this.lastDroneTick = keeping.lastDroneTick;
-    this.emptySince = now;
+    this.emptySince = this.listeners.size === 0 ? now : null;
     this.reconcileClocks();
     this.reconcileLobbyAway();
+  }
+
+  /**
+   * An action of `type` dispatched: one the crew did — not a line coming or going, nor where it
+   * stands (LINE_ACTIONS) — and a newer snapshot no longer replaces the room's game.
+   */
+  private noteDeed(type: Action['type']): void {
+    if (!LINE_ACTIONS.has(type)) {
+      this.restoredAt = null;
+    }
+  }
+
+  /**
+   * Whether a newer snapshot may still replace the room's game at `now` (`replaceFrom`): within
+   * RESTORE_WINDOW_MS of its restore, and before the crew did anything in it.
+   */
+  takesSnapshots(now: number): boolean {
+    return this.restoredAt !== null && now < this.restoredAt + RESTORE_WINDOW_MS;
+  }
+
+  /**
+   * A newer snapshot of this very room, handed in at `now` by a page coming back while the room
+   * still takes one (`takesSnapshots`): the room is taken up again from it in place of the older
+   * one — whoever is back on the line already stays, back on their seat in it, and their views
+   * say so; a seat it does not have is told it left. An older or equal one, one of another room
+   * of this code, or one handed in too late changes nothing. Returns whether it replaced.
+   */
+  replaceFrom(snapshot: RoomSnapshot, now: number): boolean {
+    const newer = snapshot.seq > this.restoredSeq && snapshot.createdAt === this.opened;
+    if (!newer || !this.takesSnapshots(now)) {
+      return false;
+    }
+    const attached = [...this.listeners];
+    this.stopTimers();
+    this.forgetWaits();
+    this.load(snapshot, now);
+    this.restoredSeq = snapshot.seq;
+    for (const [playerId, listener] of attached) {
+      if (this.state.players.some((player) => player.id === playerId)) {
+        this.back(playerId);
+      } else {
+        this.listeners.delete(playerId);
+        listener({ kind: 'left', code: this.code, message: null });
+      }
+    }
+    this.broadcast('everybody');
+    if (this.state.phase === 'playing') {
+      this.positionsDirty = true;
+      this.schedulePositionsBroadcast();
+    }
+    return true;
   }
 
   /** Epoch ms the room was opened: with its code, what tells it from another room of that code. */
@@ -1972,6 +2051,7 @@ export class Room {
     const world = this.findingWorld();
     this.state = next;
     this.seq += 1;
+    this.noteDeed(type);
     // A run ends exactly once, won or lost; a rematch is a run of its own.
     if (wasPlaying && (this.state.phase === 'won' || this.state.phase === 'lost')) {
       this.runOver(runReport(this.state, this.code));
@@ -2085,44 +2165,39 @@ export class Room {
 
   dispose(): void {
     this.forgetWaits();
-    if (this.timer !== null) {
-      clearTimeout(this.timer);
-      this.timer = null;
+    this.stopTimers();
+  }
+
+  /**
+   * Every timer of the room let go — the run's, the stream of positions', the snapshots', the
+   * glances' and the patrols' — and the patrols with them.
+   */
+  private stopTimers(): void {
+    const timers = [
+      this.timer,
+      this.snapshotTimer,
+      this.lightsTimer,
+      this.puzzleTimer,
+      this.nudgeTimer,
+      this.positionsTimer,
+      this.keepaliveTimer,
+      this.sabotageTimer,
+    ];
+    for (const timer of timers) {
+      clearTimeout(timer ?? undefined);
     }
-    if (this.snapshotTimer !== null) {
-      clearTimeout(this.snapshotTimer);
-      this.snapshotTimer = null;
-    }
-    if (this.lightsTimer !== null) {
-      clearTimeout(this.lightsTimer);
-      this.lightsTimer = null;
-    }
-    if (this.puzzleTimer !== null) {
-      clearTimeout(this.puzzleTimer);
-      this.puzzleTimer = null;
-    }
-    if (this.nudgeTimer !== null) {
-      clearTimeout(this.nudgeTimer);
-      this.nudgeTimer = null;
-    }
+    this.timer = null;
+    this.snapshotTimer = null;
+    this.lightsTimer = null;
+    this.puzzleTimer = null;
+    this.nudgeTimer = null;
+    this.positionsTimer = null;
+    this.keepaliveTimer = null;
+    this.sabotageTimer = null;
+    clearInterval(this.relayTimer ?? undefined);
+    this.relayTimer = null;
     this.forgetGlances();
-    if (this.positionsTimer !== null) {
-      clearTimeout(this.positionsTimer);
-      this.positionsTimer = null;
-    }
-    if (this.keepaliveTimer !== null) {
-      clearTimeout(this.keepaliveTimer);
-      this.keepaliveTimer = null;
-    }
     this.stopDrones();
     this.drones = null;
-    if (this.sabotageTimer !== null) {
-      clearTimeout(this.sabotageTimer);
-      this.sabotageTimer = null;
-    }
-    if (this.relayTimer !== null) {
-      clearInterval(this.relayTimer);
-      this.relayTimer = null;
-    }
   }
 }

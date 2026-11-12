@@ -45,10 +45,13 @@
  * down here.
  * Run with: pnpm --filter @escapelab/server smoke
  */
+import { spawn, type ChildProcess } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { createInterface } from 'node:readline';
+import { fileURLToPath } from 'node:url';
 import WebSocket from 'ws';
 import {
   canSee,
@@ -62,6 +65,7 @@ import {
   noteSpot,
   parseMission,
   POWER_OUT,
+  SNAPSHOT_EVERY_MS,
   SPRINT_FACTOR,
   STEP_MARGIN,
   TOKENS,
@@ -259,14 +263,25 @@ class TestClient {
   joined: { code: string } | null = null;
   /** client-authoritative avatar position (tile units) */
   self: { x: number; y: number } | null = null;
+  /** the newest snapshot of its room this client was handed, as the page keeps it */
+  kept: Kept | null = null;
+  /** the room's last snapshot as the server went down for a restart; null before */
+  restartedWith: Kept | null = null;
+  /** the code the socket closed with; null while it is open */
+  closedWith: number | null = null;
 
   constructor(
     readonly label: string,
     readonly raw: string[] = [],
     /** the pass of the browser this client plays for; one resuming a dropped client shows it */
     readonly pass: CrewPass = mintPass(),
+    /** the port of the server it talks to */
+    port: number = PORT,
   ) {
-    this.socket = new WebSocket(`ws://localhost:${PORT}/ws`);
+    this.socket = new WebSocket(`ws://localhost:${port}/ws`);
+    this.socket.on('close', (code) => {
+      this.closedWith = code;
+    });
     this.socket.on('message', (data) => {
       this.raw.push(String(data));
       const msg = JSON.parse(String(data)) as ServerMessage;
@@ -283,6 +298,7 @@ class TestClient {
         this.view = msg.view;
         this.viewCount += 1;
       }
+      this.keep(msg);
       if (msg.kind === 'spectator-view') {
         this.spectatorView = msg.view;
       }
@@ -294,6 +310,17 @@ class TestClient {
       this.queue.push(msg);
       this.waiter?.();
     });
+  }
+
+  /** Keeps the room's newest snapshot `msg` hands this client, as its page keeps it. */
+  private keep(msg: ServerMessage): void {
+    if (msg.kind !== 'snapshot' && msg.kind !== 'restart') {
+      return;
+    }
+    this.kept = { blob: msg.blob, seq: msg.seq, at: msg.at };
+    if (msg.kind === 'restart') {
+      this.restartedWith = this.kept;
+    }
   }
 
   /** Resolves once the socket is open: at once where it opened before anybody asked. */
@@ -438,6 +465,13 @@ class TestClient {
       setTimeout(resolve, 100);
     });
   }
+}
+
+/** A room's snapshot as a client keeps it: the sealed blob, its seq, and when it was taken. */
+interface Kept {
+  blob: string;
+  seq: number;
+  at: number;
 }
 
 /** A crew pass as a browser mints it (client pass.ts): 16 bytes of id, 32 of secret, hex. */
@@ -2454,15 +2488,13 @@ interface Trio {
 }
 
 /**
- * Blackout for three: Eva opens it, Finn and Gus join and say yes, Eva starts, and all three
- * skip the opening — the lights go out at the third skip.
+ * Blackout for three on the server at `port`: Eva opens it, Finn and Gus join and say yes, Eva
+ * starts, and all three skip the opening — the lights go out at the third skip.
  */
-async function crewOfThree(): Promise<Trio> {
-  const [eva, finn, gus] = ['eva', 'finn', 'gus'].map((label) => new TestClient(label)) as [
-    TestClient,
-    TestClient,
-    TestClient,
-  ];
+async function crewOfThree(port: number = PORT): Promise<Trio> {
+  const [eva, finn, gus] = ['eva', 'finn', 'gus'].map(
+    (label) => new TestClient(label, [], mintPass(), port),
+  ) as [TestClient, TestClient, TestClient];
   for (const client of [eva, finn, gus]) {
     await client.open();
   }
@@ -2593,6 +2625,268 @@ for (const client of [trio.eva, finnBack, gusPhone]) {
   client.close();
 }
 
+// --- the server restarts mid-run: SIGTERM, then SIGKILL -----------------------------------
+
+/** The port the restarting server listens on: its own, beside the smoke's in-process one. */
+const RESTART_PORT = Number(process.env['SMOKE_RESTART_PORT'] ?? PORT + 1);
+/** The key every server of the restarts seals with, as Render's environment holds one. */
+const ROOM_SECRET = randomBytes(32).toString('hex');
+/** The server's entry, run as a process of its own. */
+const SERVER_ENTRY = fileURLToPath(new URL('../src/index.ts', import.meta.url));
+const SERVER_DIR = fileURLToPath(new URL('..', import.meta.url));
+
+/** Every server process the smoke started: none outlives it, however it ends. */
+const servers = new Set<ChildProcess>();
+process.on('exit', () => {
+  for (const child of servers) {
+    child.kill('SIGKILL');
+  }
+});
+
+/**
+ * The server as a process of its own on RESTART_PORT, sealing with ROOM_SECRET, as Render runs
+ * it: what it logs, line by line, and how it ended.
+ */
+class ServerProcess {
+  readonly lines: string[] = [];
+  readonly exited: Promise<{ code: number | null; signal: NodeJS.Signals | null }>;
+  private readonly child: ChildProcess;
+
+  constructor(readonly name: string) {
+    this.child = spawn(process.execPath, ['--import', 'tsx', SERVER_ENTRY], {
+      cwd: SERVER_DIR,
+      env: {
+        ...process.env,
+        PORT: String(RESTART_PORT),
+        TLS: 'off',
+        ROOM_SECRET,
+        RUNS_LOG: join(runsDir, 'logs', 'restarts.jsonl'),
+      },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    servers.add(this.child);
+    for (const stream of [this.child.stdout, this.child.stderr]) {
+      if (stream !== null) {
+        createInterface({ input: stream }).on('line', (line) => this.lines.push(line));
+      }
+    }
+    this.exited = new Promise((resolve) => {
+      this.child.once('exit', (code, signal) => {
+        servers.delete(this.child);
+        resolve({ code, signal });
+      });
+    });
+  }
+
+  /** Resolves once the server listens; fails the smoke after 30 s, its log shown. */
+  async up(): Promise<void> {
+    const deadline = Date.now() + 30_000;
+    while (!this.lines.some((line) => line.includes('[escapelab] server on'))) {
+      if (Date.now() > deadline) {
+        fail(`${this.name} did not come up within 30 s:\n${this.lines.join('\n')}`);
+      }
+      await sleep(50);
+    }
+    console.log(`✓ ${this.name} listens on ${RESTART_PORT}`);
+  }
+
+  /** Sends the process `signal`: Render's SIGTERM, or a SIGKILL that leaves it no word. */
+  kill(signal: NodeJS.Signals): void {
+    this.child.kill(signal);
+  }
+
+  /** Whether the server logged a line holding `text`. */
+  logged(text: string): boolean {
+    return this.lines.some((line) => line.includes(text));
+  }
+}
+
+/**
+ * `client`'s browser back on a socket to the new server, resuming its seat with the snapshot it
+ * kept; its seat, its spot and what it kept go with it.
+ */
+async function comeBack(client: TestClient): Promise<TestClient> {
+  const kept = client.kept ?? fail(`${client.label}: no snapshot kept`);
+  const code = client.joined?.code ?? fail(`${client.label}: in no room`);
+  const back = new TestClient(`${client.label}'`, client.raw, client.pass, RESTART_PORT);
+  await back.open();
+  back.send({ kind: 'resume', code, pass: client.pass, blob: kept.blob });
+  await back.seated();
+  back.self = client.self;
+  back.kept = kept;
+  return back;
+}
+
+/** The whole crew at the lever: E pressed by the first, then all three throw it together. */
+async function throwTheLever(clients: TestClient[]): Promise<void> {
+  const [first] = clients;
+  await switchOn(first ?? fail('nobody at the lever'), NOTLICHT);
+  for (const client of clients) {
+    client.send({ kind: 'puzzle-input', input: { press: true } });
+  }
+  for (const client of clients) {
+    await client.expectView('the Notlicht thrown', (v) => v.currentPuzzleIndex === NOTLICHT + 1);
+  }
+}
+
+/**
+ * SIGTERM for `server`, as Render sends it: it exits 0 within 10 s, every one of `clients` handed
+ * the room's last snapshot (`restart`) and its socket closed with 1012, the run standing still
+ * for the whole crew. Returns the last snapshot.
+ */
+async function goneBySigterm(
+  server: ServerProcess,
+  clients: [TestClient, ...TestClient[]],
+): Promise<Kept> {
+  const sentAt = Date.now();
+  server.kill('SIGTERM');
+  const ended = await server.exited;
+  const took = Date.now() - sentAt;
+  assert(ended.code === 0 && took < 10_000, `SIGTERM: the server exits 0, in ${took} ms`);
+  for (const client of clients) {
+    assert(client.restartedWith !== null && client.closedWith === 1012,
+      `${client.label} handed the room's last snapshot, its socket closed with 1012`);
+  }
+  const [first] = clients;
+  const last = first.restartedWith ?? fail(`${first.label}: not handed the last snapshot`);
+  const view = first.view ?? fail(`${first.label}: no view`);
+  assert(view.maintenance === true && view.pausedAt === last.at,
+    'the run stood still for the whole crew as the server went down');
+  const kb = (last.blob.length / 1024).toFixed(1);
+  console.log(`  the last snapshot: seq ${last.seq}, ${kb} kB sealed`);
+  return last;
+}
+
+/** The three of `crew` back on the new server (`comeBack`), in turn. */
+async function allBack(crew: Trio3): Promise<Trio3> {
+  const [eva, finn, gus] = crew;
+  return [await comeBack(eva), await comeBack(finn), await comeBack(gus)];
+}
+
+/** A crew of three, Eva, Finn and Gus, in that order. */
+type Trio3 = [TestClient, TestClient, TestClient];
+
+/**
+ * The deadline `on` shows, moved on from `deadline` by exactly the downtime: from `last`, the
+ * snapshot the run stood still at, to the moment the last of the crew was back (`on.at`).
+ */
+function assertShifted(on: { view: PlayerView; at: number }, deadline: number, last: Kept): void {
+  const shift = (on.view.deadlineAt ?? 0) - deadline;
+  const downtime = on.at - last.at;
+  const late = downtime - shift;
+  assert(shift > 0 && late >= 0 && late <= 5,
+    `the deadline moved on by ${shift} ms, the downtime ${downtime} ms`);
+}
+
+/**
+ * The view `client` heard the run go on in, the first since its log ran to `from`, and when the
+ * server sent it: the moment the last of the crew was back.
+ */
+function goingOn(client: TestClient, from: number): { view: PlayerView; at: number } {
+  const going = client.raw
+    .slice(from)
+    .map((data) => JSON.parse(data) as ServerMessage)
+    .find((msg) => msg.kind === 'view' && msg.view.pausedFor === null);
+  return going?.kind === 'view' ? going : fail(`${client.label}: no view of the run going on`);
+}
+
+/**
+ * Three in Blackout on a server of its own; mid-run Render sends SIGTERM (`goneBySigterm`). A new
+ * server on the same port with the same ROOM_SECRET knows no room; the three resume with their
+ * snapshots, the first takes the room up again — the log says so — and the run goes on once all
+ * three are back, its deadline moved on by exactly the downtime. Then they throw the Notlicht's
+ * lever together: inputs work.
+ */
+async function restartBySigterm(): Promise<{ server: ServerProcess; crew: Trio3 }> {
+  const first = new ServerProcess('the server');
+  await first.up();
+  const { code, eva, finn, gus } = await crewOfThree(RESTART_PORT);
+  const lever = STAND[NOTLICHT] ?? fail('no spot at the lever');
+  for (const client of [eva, finn, gus]) {
+    await walkTo(client, lever);
+  }
+  const deadline = eva.view?.deadlineAt ?? fail('eva: no clock running');
+  const last = await goneBySigterm(first, [eva, finn, gus]);
+  const server = new ServerProcess('a new server');
+  await server.up();
+  const heardBefore = eva.raw.length;
+  const crew = await allBack([eva, finn, gus]);
+  await crew[0].expectView('the run on again, the whole crew back',
+    (v) => v.phase === 'playing' && v.pausedFor === null);
+  assertShifted(goingOn(crew[0], heardBefore), deadline, last);
+  assert(server.logged(`restored room ${code} from snapshot seq ${last.seq} (3 seats, `),
+    'the new server\'s log says it restored the room from the last snapshot');
+  await throwTheLever(crew);
+  return { server, crew };
+}
+
+/**
+ * `server` killed outright, with no word to `crew`: the newest snapshot the crew kept is
+ * SNAPSHOT_EVERY_MS old at most. Returns it.
+ */
+async function goneBySigkill(server: ServerProcess, crew: TestClient[]): Promise<Kept> {
+  const killedAt = Date.now();
+  server.kill('SIGKILL');
+  const ended = await server.exited;
+  assert(ended.signal === 'SIGKILL', 'SIGKILL: the server is gone without a word');
+  const kept = crew.map((client) => client.kept ?? fail(`${client.label}: no snapshot kept`));
+  const newest = kept.reduce((a, b) => (b.seq > a.seq ? b : a));
+  const lost = killedAt - newest.at;
+  assert(lost <= SNAPSHOT_EVERY_MS, `the newest snapshot the crew kept was ${lost} ms old`);
+  return newest;
+}
+
+/** Where the positions `seen` heard last have `client`, as the log says it: „15.5,9.5". */
+function spotOf(seen: TestClient, client: TestClient): string {
+  const stood = seen.positions[client.playerId ?? ''];
+  return stood === undefined ? 'nowhere' : `${stood.x.toFixed(1)},${stood.y.toFixed(1)}`;
+}
+
+/** Whether the latest positions `seen` heard have `client` in the middle of tile (x, y). */
+function standsAt(seen: TestClient, client: TestClient, [x, y]: Tile): boolean {
+  const stood = seen.positions[client.playerId ?? ''];
+  return stood !== undefined && Math.hypot(stood.x - (x + 0.5), stood.y - (y + 0.5)) < 0.05;
+}
+
+/**
+ * The run goes on; then the server is killed outright (`goneBySigkill`): a new one takes the room
+ * up again from the newest periodic snapshot the crew kept, which loses at most SNAPSHOT_EVERY_MS
+ * of what the crew did. Gus's walk, a snapshot's time before the kill, is kept — the lever thrown
+ * long before with it; Finn's, just before the kill, may be lost in part.
+ */
+async function restartBySigkill(server: ServerProcess, crew: Trio3): Promise<void> {
+  const [eva, finn, gus] = crew;
+  await sleep(SNAPSHOT_EVERY_MS + 500);
+  const gusTo = besides(consoleOf(NOTLICHT), 3, 0, 'east of the lever');
+  await walkTo(gus, gusTo);
+  await sleep(SNAPSHOT_EVERY_MS + 500);
+  const finnTo = besides(consoleOf(NOTLICHT), -3, 0, 'west of the lever');
+  await walkTo(finn, finnTo);
+  await sleep(300);
+  const newest = await goneBySigkill(server, crew);
+  const next = new ServerProcess('another server');
+  await next.up();
+  const back = await allBack(crew);
+  const gusBack = back[2];
+  const on = await gusBack.expectView('the run on again after the kill, the lever still thrown',
+    (v) => v.pausedFor === null && v.currentPuzzleIndex === NOTLICHT + 1);
+  assert(on.phase === 'playing', 'the run goes on');
+  await gusBack.untilPositions('Gus where his walk before the kill took him',
+    () => standsAt(gusBack, gus, gusTo));
+  const finnEnd = standsAt(gusBack, finn, finnTo) ? 'its end kept' : 'its end lost';
+  console.log(`  Finn's walk just before the kill: back at ${spotOf(gusBack, finn)}, ${finnEnd}`);
+  assert(next.logged(`restored room ${eva.joined?.code} from snapshot seq ${newest.seq}`),
+    'the log says the room was restored from the newest periodic snapshot');
+  for (const client of back) {
+    client.close();
+  }
+  next.kill('SIGTERM');
+  assert((await next.exited).code === 0, 'the last server goes down cleanly');
+}
+
+const restarted = await restartBySigterm();
+await restartBySigkill(restarted.server, restarted.crew);
+
 rmSync(runsDir, { recursive: true, force: true });
 console.log(
   '\nSmoke test passed: Blackout with its power on until the lights went out, the ' +
@@ -2603,6 +2897,7 @@ console.log(
     'the tutorial, its lever springing back on the clock, and on into Blackout; then a crew ' +
     'of three going on without the one away, his return, a seat taken over by its name once ' +
     'the crew let the phone in, and ' +
-    'seats given up till the run is called off. 🎉',
+    'seats given up till the run is called off; then a server restarting mid-run, SIGTERM ' +
+    'and SIGKILL, the run taken up again from the crew\'s snapshots. 🎉',
 );
 process.exit(0);

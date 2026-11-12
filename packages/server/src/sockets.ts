@@ -210,7 +210,8 @@ function atTheDoor(
     case 'spectate':
       return watch(lab, socket, session, msg.code);
     case 'resume': {
-      const room = lab.manager.get(msg.code);
+      // A server that knows the room no more takes it up again from the snapshot the page keeps.
+      const room = lab.manager.roomFor(msg.code, msg.pass, msg.blob);
       return seated(socket, session, room, room.resume(msg.pass));
     }
     default:

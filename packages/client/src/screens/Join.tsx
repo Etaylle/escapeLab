@@ -14,7 +14,7 @@ import { FIRST_RUN_HINT, firstDifficulty, isTutorial, useWon } from '../firstRun
 import { useServerNow } from '../hooks.js';
 import { crewPass, keepName, lastName } from '../pass.js';
 import { recordLine } from '../runStats.js';
-import { resumeOf } from '../snapshots.js';
+import { dropSnapshot, resumeOf } from '../snapshots.js';
 import type { Takeover } from '../ws.js';
 import { crewSizeText } from './Crew.js';
 import { GiveUpButton } from './GiveUp.js';
@@ -426,7 +426,12 @@ function kickerOf(seat: Seat): string {
 export function BoundCard({ seat, send }: { seat: Seat; send: Props['send'] }) {
   const run = seat.phase === 'playing';
   const clock = seat.leftMs === null ? '' : ` · noch ${formatLeft(seat.leftMs)}`;
-  const leave = (): void => send({ kind: 'abandon', code: seat.code, pass: crewPass() });
+  // The snapshot kept of the room goes with the seat — and a card the server's word replaces.
+  const leave = (): void => {
+    dropSnapshot(seat.code);
+    send({ kind: 'abandon', code: seat.code, pass: crewPass() });
+    send({ kind: 'whereami', pass: crewPass() });
+  };
   return (
     <section className={`bound${run ? ' bound--run' : ''}`}>
       <span className="kicker bound-kicker">{kickerOf(seat)}</span>

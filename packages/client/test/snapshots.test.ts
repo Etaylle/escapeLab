@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { PlayerView, ServerMessage } from '@escapelab/core';
+import { SNAPSHOT_MAX_AGE_MS, type PlayerView, type ServerMessage } from '@escapelab/core';
 import { PASS_KEY } from '../src/pass.js';
-import { keptSnapshot, resumeOf, seatOf, SNAPSHOT_KEY } from '../src/snapshots.js';
+import { keptSeat, keptSnapshot, resumeOf, seatOf, SNAPSHOT_KEY } from '../src/snapshots.js';
 import { comebackOfTab } from '../src/tab.js';
-import { replyTo, takeIn } from '../src/ws.js';
+import { noteOutgoing, replyTo, takeIn } from '../src/ws.js';
 import { page, storage } from './page.js';
 
 /** Ben's pass. */
@@ -136,6 +136,110 @@ describe('the snapshot a browser keeps of its room', () => {
       expect(keptSnapshot('QX7R')).toBeNull();
     }
     expect(resumeOf('QX7R')).toEqual({ kind: 'resume', code: 'QX7R', pass: PASS });
+  });
+});
+
+describe('the join screen where the server has no room for the pass', () => {
+  let local: Map<string, string>;
+  beforeEach(() => {
+    local = new Map([[PASS_KEY, JSON.stringify({ ...PASS, name: 'Ben' })]]);
+    vi.stubGlobal('sessionStorage', storage(new Map()));
+    vi.stubGlobal('window', { localStorage: storage(local) });
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  /** A snapshot of room `code` taken at `at`, kept as the browser keeps one. */
+  const keep = (code: string, at: number): void => {
+    const seat = seatOf(code, running(), at);
+    local.set(`${SNAPSHOT_KEY}${code}`, JSON.stringify({ ...SNAPSHOT, at, seat }));
+  };
+
+  it('shows the card of the newest snapshot the browser keeps, a day old at most', () => {
+    keep('QX7R', T0);
+    keep('AB12', T0 + 60_000);
+    keep('ZZ99', T0 - SNAPSHOT_MAX_AGE_MS);
+    local.set('escapelab-notes:QX7R:p2', '{"text":"","captures":[]}');
+    // Something of the snapshot's shape, kept under another key: no snapshot of the browser's.
+    const lookalike = { ...SNAPSHOT, at: T0 + 60_500, seat: seatOf('NOPE', running(), T0) };
+    local.set('escapelab-elsewhere', JSON.stringify(lookalike));
+    local.set(`${SNAPSHOT_KEY}KAPUTT`, 'kein Schnappschuss');
+    expect(keptSeat(storage(local), T0 + 60_000)?.code).toBe('AB12');
+    // What is too old, or no snapshot, goes; nothing else the browser keeps does.
+    const kept = (): string[] => [...local.keys()].sort();
+    expect(kept()).toEqual([
+      'escapelab-elsewhere',
+      'escapelab-notes:QX7R:p2',
+      PASS_KEY,
+      `${SNAPSHOT_KEY}AB12`,
+      `${SNAPSHOT_KEY}QX7R`,
+    ]);
+    expect(keptSeat(storage(local), T0 + SNAPSHOT_MAX_AGE_MS)?.code).toBe('AB12');
+    expect(keptSeat(storage(local), T0 + 60_001 + SNAPSHOT_MAX_AGE_MS)).toBeNull();
+    expect(kept()).toEqual(['escapelab-elsewhere', 'escapelab-notes:QX7R:p2', PASS_KEY]);
+    expect(keptSeat(null)).toBeNull();
+  });
+
+  it('stands where the server says the pass sits nowhere, and gives way to what it says', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(T0 + 5000);
+    keep('QX7R', T0);
+    const { kept, got } = page();
+    takeIn({ kind: 'seated', seat: null }, kept);
+    expect(got.seat).toEqual(seatOf('QX7R', running(), T0));
+    const lobby = { ...seatOf('AB12', running(), T0), phase: 'lobby' as const };
+    takeIn({ kind: 'seated', seat: lobby }, kept);
+    expect(got.seat).toEqual(lobby);
+    vi.useRealTimers();
+  });
+});
+
+describe('the card of a kept snapshot whose seat the server will not have back', () => {
+  let local: Map<string, string>;
+  beforeEach(() => {
+    local = new Map([[PASS_KEY, JSON.stringify({ ...PASS, name: 'Ben' })]]);
+    vi.stubGlobal('sessionStorage', storage(new Map()));
+    vi.stubGlobal('window', { localStorage: storage(local) });
+    vi.useFakeTimers();
+    vi.setSystemTime(T0 + 5000);
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  it('goes, the snapshot with it, once the resume its way back sent is refused', () => {
+    const seat = seatOf('QX7R', running(), T0);
+    local.set(`${SNAPSHOT_KEY}QX7R`, JSON.stringify({ ...SNAPSHOT, seat }));
+    const { kept, got } = page();
+    takeIn({ kind: 'seated', seat: null }, kept);
+    expect(got.seat).toEqual(seat);
+    kept.resumed.current = 'QX7R';
+    const message = 'Der Spielstand dieses Raums lässt sich nicht wiederherstellen.';
+    takeIn({ kind: 'error', message, of: 'resume' }, kept);
+    expect(keptSnapshot('QX7R')).toBeNull();
+    expect(got.seat).toBeNull();
+    expect(kept.resumed.current).toBeNull();
+  });
+
+  it('is the room of the resume the page sent last, nothing else noted', () => {
+    const resumed = { current: null as string | null };
+    noteOutgoing({ kind: 'resume', code: 'QX7R', pass: PASS }, resumed);
+    expect(resumed.current).toBe('QX7R');
+    noteOutgoing({ kind: 'whereami', pass: PASS }, resumed);
+    expect(resumed.current).toBe('QX7R');
+  });
+
+  it('stays once the seat is back: the resume answered', () => {
+    const seat = seatOf('QX7R', running(), T0);
+    local.set(`${SNAPSHOT_KEY}QX7R`, JSON.stringify({ ...SNAPSHOT, seat }));
+    const { kept } = page();
+    kept.resumed.current = 'QX7R';
+    takeIn({ kind: 'joined', code: 'QX7R' }, kept);
+    expect(kept.resumed.current).toBeNull();
+    takeIn({ kind: 'error', message: 'Gerade ist keine Station in Betrieb.', of: 'resume' }, kept);
+    expect(keptSnapshot('QX7R')).not.toBeNull();
   });
 });
 
