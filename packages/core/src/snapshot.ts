@@ -1,6 +1,11 @@
-import type { Difficulty } from './difficulty.js';
+import { z } from 'zod';
+import { DIFFICULTIES, type Difficulty } from './difficulty.js';
+import { INDICATOR_IDS } from './edgework.js';
+import { missionSchema } from './mission.js';
 import type { RelayedPosition } from './protocol.js';
-import type { GameState } from './state.js';
+import type { PuzzleState } from './puzzles/index.js';
+import type { RelayState } from './puzzles/relay.js';
+import type { GameState, RunEvent } from './state.js';
 
 /**
  * A room as the server hands it to its crew to keep (server room.ts `snapshot`), sealed so that
@@ -85,3 +90,199 @@ export interface RoomKeeping {
   /** the steps refused in the room so far, for the log */
   refusedSteps: number;
 }
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+/** What a module keeps its own way — a puzzle's state, the relay's: it names its type. */
+const typed = <T>() =>
+  z.custom<T>((value) => isRecord(value) && typeof value['type'] === 'string');
+
+const spot = z.object({ x: z.number(), y: z.number() });
+const ids = z.array(z.string());
+const idsBy = z.record(z.string(), ids);
+const timesBy = z.record(z.string(), z.number());
+const count = z.number().int().nonnegative();
+const moment = z.number().nullable();
+
+const playerSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  color: z.string(),
+  ready: z.boolean(),
+  connected: z.boolean(),
+  isHost: z.boolean(),
+  spawn: spot.nullable(),
+});
+
+const creditsSchema = z.object({
+  operated: count,
+  read: count,
+  found: count,
+  delivered: count,
+  alarms: count,
+  hints: count,
+});
+
+const awaySchema = z.object({
+  since: z.number(),
+  waivableAt: z.number(),
+  waived: z.boolean(),
+  claimUntil: z.number().exactOptional(),
+});
+
+const runEventSchema = z.object({
+  at: z.number(),
+  kind: z.custom<RunEvent['kind']>((value) => typeof value === 'string'),
+  label: z.string(),
+  seconds: z.number().nullable(),
+});
+
+const edgeworkSchema = z.object({
+  serial: z.string(),
+  indicators: z.array(z.object({ id: z.enum(INDICATOR_IDS), lit: z.boolean() })),
+  cells: z.number(),
+});
+
+const presenceSchema = z.object({
+  stations: idsBy,
+  manuals: idsBy,
+  notes: idsBy,
+  signSeen: ids,
+  exit: ids,
+  sight: idsBy,
+});
+
+const itemSchema = z.object({
+  x: z.number(),
+  y: z.number(),
+  carriedBy: z.string().nullable(),
+  delivered: z.boolean(),
+});
+
+/** The game as a snapshot carries it (state.ts `GameState`): its mission checked as a file is. */
+const gameStateSchema = z.object({
+  phase: z.enum(['lobby', 'playing', 'won', 'lost']),
+  mission: missionSchema,
+  difficulty: z.enum(DIFFICULTIES),
+  players: z.array(playerSchema),
+  currentPuzzleIndex: count,
+  puzzleState: typed<PuzzleState>().nullable(),
+  seed: z.number().nullable(),
+  roomSeed: z.number().nullable(),
+  dailyOn: z.boolean(),
+  daily: z.string().nullable(),
+  runs: count,
+  edgework: edgeworkSchema.nullable(),
+  pressedPlates: ids,
+  occupiedPanels: ids,
+  presence: presenceSchema,
+  places: z.record(z.string(), spot),
+  opened: ids,
+  found: idsBy,
+  discoveries: z.record(
+    z.string(),
+    z.array(z.object({ key: z.string(), at: z.number(), chime: z.boolean() })),
+  ),
+  notesRead: z.array(z.number()),
+  credits: z.record(z.string(), creditsSchema),
+  readersCredited: ids,
+  sabotage: z
+    .object({ endsAt: z.number(), emergency: typed<RelayState>().exactOptional() })
+    .nullable(),
+  paused: z.object({ since: z.number(), kind: z.enum(['away', 'wartung']) }).nullable(),
+  away: z.record(z.string(), awaySchema),
+  drops: count,
+  calledOff: z.string().nullable(),
+  items: z.record(z.string(), itemSchema),
+  events: z.array(runEventSchema),
+  startedAt: moment,
+  introDone: ids,
+  lightsOutAt: moment,
+  lightsDueAt: moment,
+  deadlineAt: moment,
+  finishedAt: moment,
+  penaltySeq: count,
+  lastPenaltySec: z.number().nullable(),
+  hintsUsed: count,
+  hintsRevealed: count,
+  hintReadyAt: moment,
+  quietSince: moment,
+  nudgesGiven: count,
+}) satisfies z.ZodType<GameState>;
+
+const seatSchema = z.object({
+  playerId: z.string(),
+  passId: z.string().regex(/^[0-9a-f]{32}$/),
+  hash: z.string().regex(/^[0-9a-f]{64}$/),
+  name: z.string(),
+}) satisfies z.ZodType<SeatSnapshot>;
+
+const droneRuntimeSchema = z.object({
+  target: count,
+  x: z.number(),
+  y: z.number(),
+  facing: z.number(),
+  quietUntil: z.number(),
+}) satisfies z.ZodType<DroneRuntime>;
+
+const keepingSchema = z.object({
+  positions: z.record(
+    z.string(),
+    z.object({
+      x: z.number(),
+      y: z.number(),
+      facing: z.number(),
+      moving: z.boolean(),
+      t: z.number().nullable(),
+      rt: z.number(),
+    }),
+  ),
+  drones: z.record(z.string(), droneRuntimeSchema).nullable(),
+  lastDroneTick: z.number(),
+  lostAt: timesBy,
+  closedClean: ids,
+  askAgainAt: timesBy,
+  lastPingAt: timesBy,
+  lastChatAt: timesBy,
+  signalAllowance: z.record(z.string(), z.object({ left: z.number(), at: z.number() })),
+  refusedSteps: count,
+}) satisfies z.ZodType<RoomKeeping>;
+
+/**
+ * Whether a snapshot's facts are its game's — the mission, the seed, the difficulty, the
+ * Tagesschicht — and every seat it binds is a player of it, under the player's name.
+ */
+function factsAgree(snapshot: Omit<RoomSnapshot, 'keeping' | 'lostPasses'>): boolean {
+  const { state } = snapshot;
+  const names = new Map(state.players.map((player) => [player.id, player.name]));
+  return (
+    snapshot.missionId === state.mission.id &&
+    snapshot.seed === state.roomSeed &&
+    snapshot.difficulty === state.difficulty &&
+    snapshot.daily === state.dailyOn &&
+    snapshot.seats.every((seat) => names.get(seat.playerId) === seat.name)
+  );
+}
+
+/**
+ * A room's snapshot as it is read back from its seal (server seal.ts): every part of it of the
+ * shape this build gives it, and its facts its game's. A module's own state — a puzzle's, the
+ * relay's — is checked as far as the type it names.
+ */
+export const roomSnapshotSchema: z.ZodType<RoomSnapshot> = z
+  .object({
+    code: z.string().min(1).max(10),
+    missionId: z.string().min(1),
+    seed: z.number().nullable(),
+    difficulty: z.enum(DIFFICULTIES),
+    daily: z.boolean(),
+    createdAt: z.number(),
+    state: gameStateSchema,
+    seats: z.array(seatSchema),
+    lostPasses: ids,
+    keeping: keepingSchema,
+    seq: count,
+    at: z.number(),
+  })
+  .refine(factsAgree, 'the snapshot’s facts are not its game’s');

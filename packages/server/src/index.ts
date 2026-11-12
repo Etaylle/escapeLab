@@ -18,6 +18,7 @@ import { MissionCatalog } from './missions.js';
 import { RoomManager, seedsAllowed } from './roomManager.js';
 import { DEFAULT_RUNS_LOG } from './runLog.js';
 import { loadRunStats, logRun } from './runStats.js';
+import { roomKey, roomKeyLogLine } from './seal.js';
 import { serveSockets } from './sockets.js';
 import { StaticSite } from './static.js';
 import { createWebServer, lanUrls, tlsLogLine, tlsSetup } from './tls.js';
@@ -52,6 +53,8 @@ const voiceDesk = recordingAllowed(process.env)
 const stats = loadRunStats(RUNS_LOG);
 // The Tagesschicht's salt: DAILY_SALT, else packages/server/data/daily-salt, made once and kept.
 const daily = dailySalt(process.env);
+// The key the rooms' snapshots are sealed with: ROOM_SECRET's, else one of this boot alone.
+const sealing = roomKey(process.env);
 // A room pinned to a seed repeats its runs: for the walkthrough and bug reports, not for play.
 const manager = new RoomManager(logRun(RUNS_LOG, stats), seedsAllowed(process.env), daily.salt);
 setInterval(() => manager.sweep(), 60_000).unref();
@@ -108,6 +111,7 @@ httpServer.listen(PORT, () => {
   console.log(`[escapelab] finished runs go to ${RUNS_LOG} (${download})`);
   console.log(`[escapelab] GET /stats ranks the ${stats.runs} runs logged so far`);
   console.log(`[escapelab] Tagesschicht: ${DAILY_SALT_FROM[daily.from]}`);
+  console.log(`[escapelab] ${roomKeyLogLine(sealing)}`);
   if (voiceDesk !== null) {
     console.log(`[escapelab] ALLOW_RECORD=1: POST /voice/:id saves recordings to ${VOICE_DIR}`);
   }

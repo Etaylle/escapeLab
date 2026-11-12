@@ -31,11 +31,12 @@ export {
   type Presence,
   type RunEvent,
 } from './state.js';
-export type {
-  DroneRuntime,
-  RoomKeeping,
-  RoomSnapshot,
-  SeatSnapshot,
+export {
+  roomSnapshotSchema,
+  type DroneRuntime,
+  type RoomKeeping,
+  type RoomSnapshot,
+  type SeatSnapshot,
 } from './snapshot.js';
 export {
   applyAction,
