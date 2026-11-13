@@ -34,6 +34,7 @@ import './styles/settings.css';
 import './styles/intro.css';
 import './styles/sounds.css';
 import './styles/reconnect.css';
+import './styles/menu.css';
 import './styles/interaction.css';
 
 // The player's volumes, text size and motion apply before the first frame (settings.ts).

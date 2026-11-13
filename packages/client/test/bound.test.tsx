@@ -77,6 +77,8 @@ function joinScreen(
       restoring={restoring}
       {...(giveUp === undefined ? {} : { giveUp })}
       stats={[]}
+      picked={null}
+      onPick={noop}
       openHandbook={noop}
       openHistory={noop}
     />

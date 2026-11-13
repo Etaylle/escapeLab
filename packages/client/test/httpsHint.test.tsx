@@ -45,6 +45,8 @@ describe('a page without https', () => {
           missions={[]}
           rooms={[]}
           stats={[]}
+          picked={null}
+          onPick={noop}
           openHandbook={noop}
           openHistory={noop}
         />,

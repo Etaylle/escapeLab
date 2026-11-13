@@ -70,6 +70,8 @@ function joinScreen(missions: MissionInfo[], send: (msg: ClientMessage) => void 
       missions={missions}
       rooms={[]}
       stats={[]}
+      picked={null}
+      onPick={noop}
       openHandbook={noop}
       openHistory={noop}
     />

@@ -131,6 +131,8 @@ describe('the join screen', () => {
           missions={[blackout, tutorial]}
           rooms={[]}
           stats={stats}
+          picked={null}
+          onPick={noop}
           openHandbook={noop}
           openHistory={noop}
         />,

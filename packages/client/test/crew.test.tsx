@@ -518,6 +518,8 @@ describe('the join screen', () => {
         missions={missions}
         rooms={rooms}
         stats={[]}
+        picked={null}
+        onPick={noop}
         openHandbook={noop}
         openHistory={noop}
       />,

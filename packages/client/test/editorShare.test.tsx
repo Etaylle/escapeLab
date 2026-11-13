@@ -244,6 +244,8 @@ describe('a test run', () => {
         missions={[]}
         rooms={[]}
         stats={[]}
+        picked={null}
+        onPick={noop}
         openHandbook={noop}
         openHistory={noop}
       />,

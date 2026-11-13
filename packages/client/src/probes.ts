@@ -8,6 +8,7 @@ import type { SoundSystem } from './world/audio.js';
 import type { GraphCensus } from './world/audioCount.js';
 import type { LightProbe } from './world/gl/path.js';
 import type { IntroProbe } from './world/intro/useIntro.js';
+import type { SceneProbe } from './world/menu/stage.js';
 import type { MusicProbe } from './world/music.js';
 import type { SoundProbe } from './world/soundProbe.js';
 import type { RadioRender, VoiceProbe as RadioProbe } from './world/radioVoice.js';
@@ -151,6 +152,11 @@ export interface Probes {
   readonly danger?: DangerProbe;
   /** the server's clock and the mission's on it, while a world is up (clock.ts) */
   readonly clock?: ClockProbe;
+  /**
+   * the menu's scene while it is up: the lab it shows, what it baked and how long that took, the
+   * drift and the frames drawn (world/menu/stage.ts)
+   */
+  readonly scene?: SceneProbe;
 }
 
 declare global {

@@ -50,6 +50,10 @@ interface Props {
   giveUp?: () => void;
   /** the Bestenliste's runs, by mission */
   stats: MissionStats[];
+  /** the mission picked to open a round for; null for none picked yet (`pickedMission`) */
+  picked: string | null;
+  /** picks a mission: its card is marked, and the scene behind the screen shows its lab */
+  onPick: (missionId: string) => void;
   openHandbook: (missionId: string) => void;
   openHistory: (missionId: string) => void;
   /** opens the mission editor; without it the join screen offers none */
@@ -204,6 +208,17 @@ function isPrototype(mission: Pick<MissionInfo, 'stage'>): boolean {
 }
 
 /**
+ * The mission a round opens for: the one `picked`, else the first current mission — the
+ * picker's first card — else the first of all; null while there are none.
+ */
+export function pickedMission(
+  missions: readonly Pick<MissionInfo, 'id' | 'stage'>[],
+  picked: string | null,
+): string | null {
+  return picked ?? missions.find((m) => !isPrototype(m))?.id ?? missions[0]?.id ?? null;
+}
+
+/**
  * The older maps kept on, behind a row of their own after the mission cards, collapsed: one
  * muted line each — its name and its facts — the picked one marked. Nothing without any.
  */
@@ -270,17 +285,21 @@ function sitsDown({ connected, name, blocked }: SectionProps): boolean {
 function NewRound({
   missions,
   stats,
+  picked,
+  onPick,
   openHandbook,
   openHistory,
   openEditor,
   ...section
 }: SectionProps &
-  Pick<Props, 'missions' | 'stats' | 'openHandbook' | 'openHistory' | 'openEditor'>) {
+  Pick<
+    Props,
+    'missions' | 'stats' | 'picked' | 'onPick' | 'openHandbook' | 'openHistory' | 'openEditor'
+  >) {
   const { send, name } = section;
-  const [missionId, setMissionId] = useState<string | null>(null);
   const won = useWon();
   const current = missions.filter((m) => !isPrototype(m));
-  const selected = missionId ?? current[0]?.id ?? missions[0]?.id ?? null;
+  const selected = pickedMission(missions, picked);
   const open = (): void =>
     send(
       createRoomMessage(
@@ -304,15 +323,11 @@ function NewRound({
                 stats={stats.find((s) => s.missionId === m.id)}
                 selected={selected === m.id}
                 first={!won && isTutorial(m)}
-                onSelect={() => setMissionId(m.id)}
+                onSelect={() => onPick(m.id)}
               />
             ))}
           </div>
-          <Prototypes
-            missions={missions.filter(isPrototype)}
-            selected={selected}
-            onSelect={setMissionId}
-          />
+          <Prototypes missions={missions.filter(isPrototype)} selected={selected} onSelect={onPick} />
         </>
       ) : (
         <p className="muted">Lade Missionen …</p>
@@ -594,6 +609,8 @@ export function JoinScreen({
   restoring = null,
   giveUp,
   stats,
+  picked,
+  onPick,
   openHandbook,
   openHistory,
   openEditor,
@@ -658,6 +675,8 @@ export function JoinScreen({
           {...section}
           missions={missions}
           stats={stats}
+          picked={picked}
+          onPick={onPick}
           openHandbook={openHandbook}
           openHistory={openHistory}
           {...(openEditor === undefined ? {} : { openEditor })}

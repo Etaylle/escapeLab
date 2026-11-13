@@ -81,6 +81,12 @@ export interface FrameSource {
    * changes often
    */
   texts: { s: number; dpr: number; scale: number; styles: WorldText };
+  /**
+   * the menu's scene (world/menu/scene.ts): the camera put at this point, in tiles, at this
+   * zoom, device pixels a tile — instead of following an avatar, the audience's whole lab or the
+   * opening's shot; left out for every world of a room
+   */
+  scene?: { x: number; y: number; scale: number };
 }
 
 /**
@@ -163,7 +169,7 @@ function wholeZoom(map: WorldMap, w: number, h: number): number {
 }
 
 /** Device pixels per tile with the lab covering the canvas: no black beside it. */
-function coverZoom(map: WorldMap, w: number, h: number): number {
+export function coverZoom(map: Pick<WorldMap, 'width' | 'height'>, w: number, h: number): number {
   return Math.max(w / map.width, h / map.height);
 }
 
@@ -211,13 +217,18 @@ function pulledBack(sim: Sim, map: WorldMap, pull: number): { x: number; y: numb
 }
 
 /**
- * Points the camera for this frame — along the opening's shot, a little wider than play, with
- * nothing of the HUD to keep clear of; at your avatar, pulling back over the whole lab as a run
- * won ends (`pull`, 0 to 1) — and keeps it in the simulation, where a click and the trace read
- * it. Returns the zoom.
+ * Points the camera for this frame — where the menu's scene puts it (`FrameSource.scene`);
+ * along the opening's shot, a little wider than play, with nothing of the HUD to keep clear of;
+ * at your avatar, pulling back over the whole lab as a run won ends (`pull`, 0 to 1) — and
+ * keeps it in the simulation, where a click and the trace read it. Returns the zoom.
  */
 function aim(source: FrameSource, map: WorldMap, dpr: number, pull: number, now: number): number {
-  const { sim, canvas, spectator } = source;
+  const { sim, canvas, spectator, scene } = source;
+  if (scene !== undefined) {
+    sim.draw = { x: scene.x, y: scene.y };
+    sim.scale = scene.scale;
+    return scene.scale;
+  }
   const w = canvas.width;
   const h = canvas.height;
   const near = zoomFor(source, map, dpr);

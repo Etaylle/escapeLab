@@ -106,6 +106,8 @@ describe('a device that asks for a seat by its name', () => {
           rooms={[]}
           takeover={{ code: 'QX7R', name: 'Ben', until: ASK.until }}
           stats={[]}
+          picked={null}
+          onPick={() => undefined}
           openHandbook={() => undefined}
           openHistory={() => undefined}
         />,

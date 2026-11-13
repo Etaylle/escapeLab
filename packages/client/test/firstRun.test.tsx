@@ -190,6 +190,8 @@ describe('the join screen for a first crew', () => {
         missions={[blackout, tutorial]}
         rooms={[]}
         stats={[]}
+        picked={null}
+        onPick={noop}
         openHandbook={noop}
         openHistory={noop}
       />,

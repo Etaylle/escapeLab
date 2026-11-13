@@ -30,8 +30,9 @@ import { HandbookScreen } from './screens/Handbook.js';
 import { HistoryScreen } from './screens/History.js';
 import { Icon, type IconName } from './screens/Icon.js';
 import { UpdateNotice } from './screens/Install.js';
-import { createRoomMessage, JoinScreen } from './screens/Join.js';
+import { createRoomMessage, JoinScreen, pickedMission } from './screens/Join.js';
 import { LobbyScreen } from './screens/Lobby.js';
+import { MenuScene } from './screens/MenuScene.js';
 import { GameScreen } from './screens/Game.js';
 import type { GameLine } from './screens/Line.js';
 import { EndScreen } from './screens/End.js';
@@ -268,6 +269,9 @@ interface ScreenProps {
   startTestRun: (name: string, missionId: string) => void;
   /** the end of the run on this screen: while the world plays it, the end screen waits */
   finale: Finale | null;
+  /** the mission picked on the join screen; null for none yet (Join.tsx `pickedMission`) */
+  picked: string | null;
+  setPicked: (missionId: string) => void;
 }
 
 /**
@@ -291,6 +295,8 @@ function OffRoom(props: ScreenProps) {
           restoring={conn.restoring}
           giveUp={conn.giveUp}
           stats={props.stats}
+          picked={props.picked}
+          onPick={props.setPicked}
           openHandbook={props.setHandbook}
           openHistory={props.setHistory}
           openEditor={editor.show}
@@ -434,6 +440,52 @@ function useStage(conn: Connection, finale: Finale | null): boolean {
   );
 }
 
+/** The missions on the server: fetched at the start, and again whenever `load` is called. */
+function useMissions(): [MissionInfo[], () => void] {
+  const [missions, setMissions] = useState<MissionInfo[]>([]);
+  const load = useCallback(() => {
+    fetch('/missions')
+      .then((res) => (res.ok ? res.json() : []))
+      .then((list: MissionInfo[]) => setMissions(list))
+      .catch(() => setMissions([]));
+  }, []);
+  useEffect(() => {
+    load();
+  }, [load]);
+  return [missions, load];
+}
+
+/** The pages over the join screen: the booklet's and the Bestenliste's missions, the editor. */
+interface Pages {
+  handbook: string | null;
+  history: string | null;
+  editor: boolean;
+}
+
+/**
+ * What shows off any room (`offRoom`): the editor, where nothing lies over it — it fills the
+ * window as a run does —, and the menu over its living scene, where no page lies over it.
+ */
+function offRoomOf(offRoom: boolean, pages: Pages): { editing: boolean; menu: boolean } {
+  const editing = offRoom && pages.editor && pages.handbook === null;
+  const menu = offRoom && !pages.editor && pages.handbook === null && pages.history === null;
+  return { editing, menu };
+}
+
+/**
+ * The layout of the screens' area: a stage for a room's window, the editor's, the menu's over
+ * its scene (styles/menu.css), or the plain page.
+ */
+function layoutOf(immersive: boolean, editing: boolean, menu: boolean): string {
+  if (immersive) {
+    return 'content--stage';
+  }
+  if (editing) {
+    return 'content--editor';
+  }
+  return menu ? 'content--menu' : '';
+}
+
 /**
  * The app. `boot` is what the address asked for on load: the editor at
  * /editor, with a shared mission or the draft the tab kept.
@@ -442,12 +494,15 @@ export function App({ boot }: { boot: EditorBoot }) {
   const conn = useGameConnection();
   // The crew's voice lives as long as the page: lobby, run and end screen alike.
   const voice = useVoiceMesh(conn);
-  const [missions, setMissions] = useState<MissionInfo[]>([]);
+  // Fetched at the start, and again whenever the editor saves or deletes a mission.
+  const [missions, loadMissions] = useMissions();
   // The handbook is a page of its own off the join screen: the mission whose
   // booklet is open, or null.
   const [handbook, setHandbook] = useState<string | null>(null);
   // So is the Bestenliste: the mission whose tab is open, or null.
   const [history, setHistory] = useState<string | null>(null);
+  // The mission picked on the join screen: its card marked, its lab in the scene behind.
+  const [picked, setPicked] = useState<string | null>(null);
   // The join screen's cards and the host's mission strip in the lobby say each
   // mission's record; without it they say nothing.
   const stats = useJson<MissionStats[]>(STATS_PATH);
@@ -471,20 +526,10 @@ export function App({ boot }: { boot: EditorBoot }) {
   const pinnedTo = conn.view?.phase === 'lobby' ? (conn.view.seed?.room ?? null) : null;
   const fromEditor = returnsToEditor(testRun.run, conn.roomCode, conn.view?.you.isHost === true);
 
-  // Fetched at the start, and again whenever the editor saves or deletes a mission.
-  const loadMissions = useCallback(() => {
-    fetch('/missions')
-      .then((res) => (res.ok ? res.json() : []))
-      .then((list: MissionInfo[]) => setMissions(list))
-      .catch(() => setMissions([]));
-  }, []);
-  useEffect(() => {
-    loadMissions();
-  }, [loadMissions]);
-  // The editor fills the window as a run does, but it scrolls on a phone (styles/editor.css).
-  const editing =
-    editor.open && handbook === null && conn.view === null && conn.spectatorView === null;
-  const layout = immersive ? 'content--stage' : editing ? 'content--editor' : '';
+  const offRoom = conn.view === null && conn.spectatorView === null;
+  // The editor scrolls on a phone (styles/editor.css); the menu lies over its living scene.
+  const { editing, menu } = offRoomOf(offRoom, { handbook, history, editor: editor.open });
+  const layout = layoutOf(immersive, editing, menu);
   useEffect(() => keepPath(editing), [editing]);
 
   // Every screen shares one scrolling area, the booklet too; each opens at its
@@ -518,6 +563,7 @@ export function App({ boot }: { boot: EditorBoot }) {
       <UpdateNotice />
 
       <main ref={contentRef} className={`content ${layout}`}>
+        {offRoom && <MenuScene missionId={pickedMission(missions, picked)} shown={menu} />}
         <VoiceContext value={voice}>
           <Screens
             conn={conn}
@@ -531,6 +577,8 @@ export function App({ boot }: { boot: EditorBoot }) {
             editor={editor}
             startTestRun={testRun.start}
             finale={finale}
+            picked={picked}
+            setPicked={setPicked}
           />
         </VoiceContext>
       </main>
