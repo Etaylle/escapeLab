@@ -233,6 +233,16 @@
   margin: 0;
 }
 
+/* How the game is played, one quiet line under the items. */
+.menu-lead {
+  margin: 0;
+  max-width: 44ch;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+  text-shadow: 0 1px 2px #000;
+}
+
 /* The install offer and the HTTPS hint, quiet under the menu. */
 .menu-quiet {
   display: flex;

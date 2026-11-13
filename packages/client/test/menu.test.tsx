@@ -6,7 +6,7 @@ import { WORLD, offVoice } from '../../core/test/voice.js';
 import { startPad, type PadProbe } from '../src/input/padRuntime.js';
 import { keepColor, lastColor, PASS_KEY } from '../src/pass.js';
 import { wavesAnew } from '../src/screens/CrewFigure.js';
-import { JoinScreen, MENU_SUBTITLE, panelOnArrival } from '../src/screens/Join.js';
+import { JoinScreen, MENU_LEAD, MENU_SUBTITLE, panelOnArrival } from '../src/screens/Join.js';
 import { MENU_LABELS, menuItems, menuStep } from '../src/screens/MainMenu.js';
 import { codeOf, escapeHandler, inviteUsed, JoinPanel } from '../src/screens/MenuPanels.js';
 import { FIRST_COLOR, ProfileChip } from '../src/screens/ProfileChip.js';
@@ -105,6 +105,16 @@ describe('the menu', () => {
     expect(menuStep(3, 'End', 7)).toBe(6);
     expect(menuStep(3, 'Enter', 7)).toBeNull();
     expect(menuStep(0, 'ArrowDown', 0)).toBeNull();
+  });
+
+  it('says under its items how the game is played: at the console and the book, by voice', () => {
+    stubWindow();
+    const html = menu();
+    const items = html.indexOf('</nav>');
+    expect(html.indexOf(`<p class="menu-lead">${MENU_LEAD}</p>`)).toBeGreaterThan(items);
+    expect(MENU_LEAD).toMatch(/per Stimme/);
+    expect(MENU_LEAD).toMatch(/Rücken an Rücken/);
+    expect(offVoice([MENU_LEAD], WORLD)).toEqual([]);
   });
 
   it('carries the game’s title and a line of the world under it', () => {

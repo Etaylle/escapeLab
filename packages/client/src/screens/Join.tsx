@@ -69,6 +69,13 @@ const REFRESH_MS = 2500;
 
 /** The line under the game's title, in the world's voice: the sign at the plant's gate. */
 export const MENU_SUBTITLE = 'Forschungsanlage Kaltenbrunn · Zutritt nur mit Dienstausweis';
+/**
+ * The line under the menu's items: how the game is played, in the plant's words — the machine
+ * at the console, the rules in the book, and nothing solved but together, by voice.
+ */
+export const MENU_LEAD =
+  'Am Pult die Maschine, im Buch die Regeln — gelöst wird nur gemeinsam, per Stimme, ' +
+  'ein Gerät je Kopf, Rücken an Rücken.';
 
 /** The name field's text, starting with the name the pass keeps and kept again as it is typed. */
 function useKeptName(): [string, (name: string) => void] {
@@ -366,6 +373,7 @@ export function JoinScreen(props: Props) {
             pages[item]?.();
           }}
         />
+        <p className="menu-lead">{MENU_LEAD}</p>
         {bound !== null && <p className="bound-line">{boundLine(bound)}</p>}
         <div className="menu-quiet">
           <InstallOffer />

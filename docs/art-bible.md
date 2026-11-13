@@ -513,9 +513,11 @@ next in the title's face, upper case: Einsatz starten, Beitreten, Offene Runden,
 Bestenliste, Editor, Einstellungen. The item lit — under the pointer, by the arrows or a
 controller's D-pad — is the focus itself: a teal bar on its left, a teal light behind it, its label
 a step to the right; the ring of every other control (Interface) would only box it in, so it draws
-none. A run that binds the pass stands first and lit, the items under it dimmed. The profile stands
-at the top right: the player's own figure idling in their colour, waving once a new name has
-settled, the name to type, the colour's name, and a slot where a sign-in will sit.
+none. Under the items one quiet line says how the game is played: „Am Pult die Maschine, im Buch die
+Regeln — gelöst wird nur gemeinsam, per Stimme, ein Gerät je Kopf, Rücken an Rücken." A run that
+binds the pass stands first and lit, the items under it dimmed. The profile stands at the top right:
+the player's own figure idling in their colour, waving once a new name has settled, the name to
+type, the colour's name, and a slot where a sign-in will sit.
 
 A panel slides in over the menu from its side in 200 ms, fading up, the menu dimmed under it; under
 reduced motion it only fades. Into the lobby and back out, the lab's sliding doors close over the
