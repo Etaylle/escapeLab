@@ -12,7 +12,7 @@ import {
   noisyTakes,
   offLength,
   readCatalog,
-  remakeArgs,
+  remakeCommands,
   SFX_FORMAT,
   upToDate,
   type CatalogEntry,
@@ -27,8 +27,12 @@ import { MUSIC_IDS, SFX_IDS } from '../src/world/samples.js';
  * measured, in the manifest the game loads.
  */
 
-/** What to do when a recording is missing or stale. */
-const REMEDY = 'render it on a Mac: pnpm --filter client sfx (docs/sound.md)';
+/**
+ * What makes the recordings `ids` again on a Mac, as the sound script says it: a command for
+ * each group — five candidates of an effect, three takes of a piece of music for the ear.
+ */
+const remedyFor = (ids: readonly string[]): string =>
+  `render them on a Mac: ${remakeCommands(catalog, ids).join('; ')} (docs/sound.md)`;
 
 /**
  * The entries whose recordings the user still has to render (they cost credits, which no agent
@@ -83,7 +87,7 @@ describe('the entries awaiting the user’s render', () => {
 
   it(`are ${pending.map((entry) => entry.id).join(', ') || 'none'}`, () => {
     const unexpected = pending.filter((entry) => !awaiting.has(entry.id)).map((e) => e.id);
-    expect(unexpected, `no recording, or a stale one — ${REMEDY}`).toEqual([]);
+    expect(unexpected, `no recording, or a stale one — ${remedyFor(unexpected)}`).toEqual([]);
   });
 
   it('play a recording of the catalog meanwhile where they name one, none of their own', () => {
@@ -109,14 +113,14 @@ describe.each(['sfx', 'music'] as const)('the recordings in public/%s', (group) 
     const filed = (id: string): boolean =>
       existsSync(join(DIRS[group], manifest[id]?.file ?? `${id}.missing`));
     const missing = rendered.filter((entry) => !filed(entry.id)).map((entry) => entry.id);
-    expect(missing, `no recording — ${REMEDY}`).toEqual([]);
+    expect(missing, `no recording — ${remedyFor(missing)}`).toEqual([]);
     const stale = rendered
       .filter((entry) => {
         const kept = manifest[entry.id];
         return kept === undefined || !upToDate(entry, kept);
       })
       .map((entry) => entry.id);
-    expect(stale, `made from another request — ${REMEDY}`).toEqual([]);
+    expect(stale, `made from another request — ${remedyFor(stale)}`).toEqual([]);
     for (const entry of rendered) {
       expect([manifest[entry.id]?.source, manifest[entry.id]?.loop]).toEqual([
         'elevenlabs',
@@ -136,8 +140,7 @@ describe.each(['sfx', 'music'] as const)('the recordings in public/%s', (group) 
   it('last as long as asked for, start within themselves, and came back unclipped', () => {
     const off = offLength(entries, { sfx: {}, music: {}, [group]: manifest });
     const said = off.map(({ id, ms, asked }) => `${id} ${ms} ms, asked for ${asked}`);
-    const again = remakeArgs(group, off.map(({ id }) => id));
-    const remedy = `render them again: pnpm --filter client sfx -- ${again} (docs/sound.md)`;
+    const remedy = remedyFor(off.map(({ id }) => id));
     expect(said, `more than a fifth off their length — ${remedy}`).toEqual([]);
     for (const entry of rendered) {
       const kept = manifest[entry.id];
@@ -159,8 +162,7 @@ describe.each(['sfx', 'music'] as const)('the recordings in public/%s', (group) 
     }
     const takes = noisyTakes(entries, { sfx: {}, music: {}, [group]: manifest });
     const heard = takes.map(({ id, gain, heardDbfs }) => `${id} gain ${gain}, ${heardDbfs} dBFS`);
-    const again = remakeArgs(group, takes.map(({ id }) => id));
-    const remedy = `render them again: pnpm --filter client sfx -- ${again} (docs/sound.md)`;
+    const remedy = remedyFor(takes.map(({ id }) => id));
     expect(heard, `floors over ${AUDIBLE_FLOOR_DBFS} dBFS — ${remedy}`).toEqual([]);
   });
 

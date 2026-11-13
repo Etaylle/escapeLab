@@ -167,7 +167,12 @@ the rules of `PICK` it misses, said and never used. A later run adds its takes, 
 nothing of them goes into `public/music`, and the recording the game plays keeps its file and its
 manifest entry until one is kept. The run says where the takes lie and the command that keeps
 one of each. A run asking for one take (no `--candidates`) makes a piece once, straight into
-`public/music`, as before. An effect keeps its candidates and its pick.
+`public/music`, as before — but never one whose takes wait: it leaves that piece as it is, so that
+no recording goes into the game past takes nobody has heard, and says so in a line
+(`--keep <id>=<n>` keeps one, `--candidates 3 --only <id>` makes more); its recording is not
+measured anew either, so that a stale one stays stale in the manifest. An effect keeps its
+candidates and its pick. The run itself is `runWith`, its account opened only where something is
+to be made; a test runs it end to end.
 
 The menu's theme and the end cards' two themes in three takes each, then one of each kept:
 

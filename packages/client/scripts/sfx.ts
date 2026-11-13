@@ -590,24 +590,54 @@ export function optionsOf(args: readonly string[]): Options {
   return settled(said);
 }
 
-/** An entry as a run sees it: its group, and whether it has to be made. */
+/** An entry as a run sees it: its group, whether it has to be made, whether its takes wait. */
 export interface Job {
   readonly entry: CatalogEntry;
   readonly group: Group;
-  /** new, changed, its file gone, or asked for by --only */
+  /** new, changed, its file gone, or asked for by --only — and not left for its takes */
   readonly make: boolean;
+  /**
+   * a piece of music the run would make once, straight into the project, while takes of it
+   * wait for the ear: it is left as it is, for --keep or for new takes
+   */
+  readonly waiting: boolean;
+}
+
+/** Whether a group's folder holds a file, and whether takes of an entry wait for the ear. */
+type Filed = (group: Group, file: string) => boolean;
+type Waits = (id: string) => boolean;
+
+/**
+ * The job of `entry`: made where it is new, changed, gone or named by --only — but a piece of
+ * music made once while takes of it wait (`waits`), which waits with them.
+ */
+function jobOf(
+  entry: CatalogEntry,
+  manifests: Readonly<Record<Group, Manifest>>,
+  options: Options,
+  disk: { readonly filed: Filed; readonly waits: Waits },
+): Job {
+  const group = groupOf(entry);
+  const kept = manifests[group][entry.id];
+  const fresh = kept !== undefined && upToDate(entry, kept) && disk.filed(group, kept.file);
+  const due = options.only !== null || !fresh;
+  const once = group === 'music' && !asTakes({ group }, options.candidates);
+  const waiting = due && once && disk.waits(entry.id);
+  return { entry, group, make: due && !waiting, waiting };
 }
 
 /**
  * The entries a run takes — those of the groups asked for, or those --only names — each with
- * what its group's manifest kept and whether its file is there (`filed`). Fails where it would
- * make a piece of music in more than MAX_MUSIC_TAKES takes.
+ * what its group's manifest kept, whether its file is there (`filed`) and whether takes of it
+ * wait (`waits`; none, unless told). Fails where it would make a piece of music in more than
+ * MAX_MUSIC_TAKES takes.
  */
 export function planOf(
   catalog: readonly CatalogEntry[],
   manifests: Readonly<Record<Group, Manifest>>,
-  filed: (group: Group, file: string) => boolean,
+  filed: Filed,
   options: Options,
+  waits: Waits = () => false,
 ): Job[] {
   const { only } = options;
   const unknown = (only ?? []).filter((id) => !catalog.some((entry) => entry.id === id));
@@ -618,12 +648,7 @@ export function planOf(
     only === null
       ? catalog.filter((entry) => options.groups.includes(groupOf(entry)))
       : catalog.filter((entry) => only.includes(entry.id));
-  const jobs = chosen.map((entry) => {
-    const group = groupOf(entry);
-    const kept = manifests[group][entry.id];
-    const fresh = kept !== undefined && upToDate(entry, kept) && filed(group, kept.file);
-    return { entry, group, make: only !== null || !fresh };
-  });
+  const jobs = chosen.map((entry) => jobOf(entry, manifests, options, { filed, waits }));
   const music = jobs.filter((job) => job.make && job.group === 'music').map((job) => job.entry.id);
   if (options.candidates > MAX_MUSIC_TAKES && music.length > 0) {
     const fewer = `--candidates ${MAX_MUSIC_TAKES} --only ${music.join(',')}`;
@@ -1099,9 +1124,18 @@ function takesSaid(group: Group, candidates: number): string {
   return `, ${candidates} takes each, ${kept}`;
 }
 
+/** What a plan says of a piece it leaves as it is while its takes wait, and the two ways on. */
+function waitingLine(id: string): string {
+  return (
+    `sfx: ${id} is left as it is, its takes waiting: --keep ${id}=<n> keeps one, ` +
+    `${remakeArgs('music', [id])} makes new ones`
+  );
+}
+
 /**
  * What the run will make, group by group, and what that costs at the rates measured, every take
- * counted: a line for each group and one for each entry it makes.
+ * counted: a line for each group, one for each entry it makes and one for each piece it leaves
+ * for its takes.
  */
 export function planLines(jobs: readonly Job[], candidates: number): string[] {
   return GROUPS.flatMap((group) => {
@@ -1115,6 +1149,7 @@ export function planLines(jobs: readonly Job[], candidates: number): string[] {
       `sfx: ${group} — ${todo.length} of ${mine.length} to make${takesSaid(group, candidates)}, ` +
         `${seconds.toFixed(1)} s${each}, about ${credits} credits (cap ${CAPS[group]})`,
       ...todo.map((entry) => `  ${entry.id}  ${entry.durationSeconds} s  ${entry.kind}`),
+      ...mine.filter((job) => job.waiting).map((job) => waitingLine(job.entry.id)),
     ];
   });
 }
@@ -1304,17 +1339,10 @@ export async function renderWith(
   console.log(`sfx: ${await creditsLeft(bench.client)} credits left`);
 }
 
-/** Makes every job of `todo` with the account the environment's key opens. */
-async function renderAll(
-  todo: readonly Job[],
-  manifests: Record<Group, Manifest>,
-  making: Making,
-  decode: Decode,
-): Promise<void> {
+/** The account the environment's key opens; fails, saying how to run the script, without one. */
+async function openAccount(): Promise<SoundClient> {
   requireKey();
-  const client = await elevenClient();
-  const bench = { client, places: PLACES, decode, now: () => new Date(), wait: pause };
-  await renderWith(todo, manifests, making, bench);
+  return elevenClient();
 }
 
 // --- keeping a take ---------------------------------------------------------------------------
@@ -1382,22 +1410,12 @@ export function keepTake(
   return { group, kept };
 }
 
-/** Keeps the take `keep` names, measured with afconvert, and says what the folders hold now. */
-function keepRun(keep: Keep, catalog: readonly CatalogEntry[]): void {
-  requireTools();
-  const scratch = mkdtempSync(join(tmpdir(), 'escapelab-sfx-'));
-  try {
-    const { group, kept } = keepTake(keep, catalog, PLACES, afconvertIn(scratch));
-    console.log(
-      `sfx: take ${keep.n} of ${keep.id} is public/${group}/${kept.file} now, ` +
-        `${(kept.ms / 1000).toFixed(1)} s, gain ${kept.gain}; its other takes are deleted`,
-    );
-  } finally {
-    rmSync(scratch, { recursive: true, force: true });
-  }
-  const manifests = { sfx: readManifest(PLACES, 'sfx'), music: readManifest(PLACES, 'music') };
-  report(manifests, PLACES);
-  warnTakes(catalog, manifests);
+/** What a run says of the take `keep` it kept, as `keepTake` put it into the project. */
+function keptLine(keep: Keep, { group, kept }: { group: Group; kept: ManifestEntry }): string {
+  return (
+    `sfx: take ${keep.n} of ${keep.id} is public/${group}/${kept.file} now, ` +
+    `${(kept.ms / 1000).toFixed(1)} s, gain ${kept.gain}; its other takes are deleted`
+  );
 }
 
 /**
@@ -1450,6 +1468,17 @@ export function remakeArgs(group: Group, ids: readonly string[]): string {
   return `--candidates ${takes} --only ${ids.join(',')}`;
 }
 
+/**
+ * The commands that make the recordings `ids` of `catalog` again, one for each group they fall
+ * in, in the catalog's order: the script told `remakeArgs`.
+ */
+export function remakeCommands(catalog: readonly CatalogEntry[], ids: readonly string[]): string[] {
+  return GROUPS.flatMap((group) => {
+    const mine = catalog.filter((e) => ids.includes(e.id) && groupOf(e) === group).map((e) => e.id);
+    return mine.length === 0 ? [] : [`pnpm --filter client sfx -- ${remakeArgs(group, mine)}`];
+  });
+}
+
 /** Says what each folder holds against its cap, and any file no entry names; over a cap fails. */
 function report(manifests: Readonly<Record<Group, Manifest>>, places: Places): void {
   for (const group of GROUPS) {
@@ -1472,10 +1501,11 @@ function report(manifests: Readonly<Record<Group, Manifest>>, places: Places): v
 
 /**
  * The jobs whose files a run measures anew: every one it took, but a piece of music it made in
- * takes, whose file in the project — and its manifest's entry with it — stays as it was.
+ * takes or left for the takes that wait, whose file in the project — and its manifest's entry
+ * with it, made perhaps from an older request — stays as it was.
  */
 export function measuredAnew(jobs: readonly Job[], count: number): Job[] {
-  return jobs.filter((job) => !(job.make && asTakes(job, count)));
+  return jobs.filter((job) => !job.waiting && !(job.make && asTakes(job, count)));
 }
 
 /** Measures every file the run took anew, its entry kept at the influence it was made at. */
@@ -1518,47 +1548,94 @@ export function takesLines(ids: readonly string[], places: Places): string[] {
 }
 
 /**
- * Makes what `jobs` ask for, `count` takes of each, measures what the run took anew
- * (`measuredAnew`) and says where the takes lie.
+ * What a run works in and with besides the account's client: the folders, how it decodes a
+ * recording, the clock and the pause between requests (as a `Bench`), a folder for an effect's
+ * candidates, made as it is wanted, and the account — opened only once the run has something to
+ * make, so that a plan, a keep or a run that makes nothing needs no key.
  */
-async function renderRun(
+export interface Studio extends Omit<Bench, 'client'> {
+  readonly candidates: () => string;
+  readonly account: () => Promise<SoundClient>;
+}
+
+/** Both manifests in `places`, as they stand. */
+const manifestsIn = (places: Places): Record<Group, Manifest> => ({
+  sfx: readManifest(places, 'sfx'),
+  music: readManifest(places, 'music'),
+});
+
+/** Whether takes of the entry `id` wait in `places` for the ear. */
+const takesWaitIn =
+  (places: Places) =>
+  (id: string): boolean =>
+    (readTakes(places.takes, id)?.takes.length ?? 0) > 0;
+
+/**
+ * Makes what `jobs` ask for, `count` takes of each — the account opened only where there is
+ * something to make — measures anew what the run took (`measuredAnew`) and says where an effect's
+ * candidates and the music's takes lie.
+ */
+async function makePlan(
   jobs: readonly Job[],
   manifests: Record<Group, Manifest>,
   count: number,
+  studio: Studio,
 ): Promise<void> {
-  requireTools();
-  const scratch = mkdtempSync(join(tmpdir(), 'escapelab-sfx-'));
+  const { places, decode, now, wait } = studio;
   const todo = jobs.filter((job) => job.make);
   const inTakes = todo.filter((job) => asTakes(job, count));
   const many = count > 1 && todo.length > inTakes.length;
-  const candidates = many ? mkdtempSync(join(tmpdir(), 'escapelab-sfx-candidates-')) : scratch;
-  const decode = afconvertIn(scratch);
-  try {
-    if (todo.length > 0) await renderAll(todo, manifests, { count, candidates }, decode);
-    remeasure(measuredAnew(jobs, count), manifests, PLACES, decode);
-  } finally {
-    rmSync(scratch, { recursive: true, force: true });
+  if (todo.length > 0) {
+    const candidates = many ? studio.candidates() : '';
+    const bench = { client: await studio.account(), places, decode, now, wait };
+    await renderWith(todo, manifests, { count, candidates }, bench);
+    if (many) console.log(`sfx: every candidate lies in ${candidates}`);
   }
-  if (many) console.log(`sfx: every candidate lies in ${candidates}`);
-  for (const line of takesLines(inTakes.map((job) => job.entry.id), PLACES)) console.log(line);
+  remeasure(measuredAnew(jobs, count), manifests, places, decode);
+  for (const line of takesLines(inTakes.map((job) => job.entry.id), places)) console.log(line);
+}
+
+/**
+ * Runs the script as `options` ask, in and with `studio`: keeps the take `--keep` names, or plans
+ * what to make — a piece of music whose takes wait left as it is — says the plan and, but for a
+ * dry run, makes it (`makePlan`); then says what the folders hold and names every recording that
+ * would fail the game's.
+ */
+export async function runWith(
+  options: Options,
+  catalog: readonly CatalogEntry[],
+  studio: Studio,
+): Promise<void> {
+  const { places } = studio;
+  if (options.keep === null) {
+    const manifests = manifestsIn(places);
+    const jobs = planOf(catalog, manifests, filedIn(places), options, takesWaitIn(places));
+    for (const line of planLines(jobs, options.candidates)) console.log(line);
+    if (!options.dryRun) await makePlan(jobs, manifests, options.candidates, studio);
+  } else {
+    console.log(keptLine(options.keep, keepTake(options.keep, catalog, places, studio.decode)));
+  }
+  const manifests = manifestsIn(places);
+  if (!options.dryRun) report(manifests, places);
+  warnTakes(catalog, manifests);
 }
 
 async function main(options: Options): Promise<void> {
   const catalog = checkCatalog(readCatalog());
-  if (options.keep !== null) {
-    keepRun(options.keep, catalog);
-    return;
+  if (!options.dryRun) requireTools();
+  const scratch = mkdtempSync(join(tmpdir(), 'escapelab-sfx-'));
+  try {
+    await runWith(options, catalog, {
+      places: PLACES,
+      decode: afconvertIn(scratch),
+      now: () => new Date(),
+      wait: pause,
+      candidates: () => mkdtempSync(join(tmpdir(), 'escapelab-sfx-candidates-')),
+      account: openAccount,
+    });
+  } finally {
+    rmSync(scratch, { recursive: true, force: true });
   }
-  const manifests = { sfx: readManifest(PLACES, 'sfx'), music: readManifest(PLACES, 'music') };
-  const jobs = planOf(catalog, manifests, filedIn(PLACES), options);
-  for (const line of planLines(jobs, options.candidates)) console.log(line);
-  if (options.dryRun) {
-    warnTakes(catalog, manifests);
-    return;
-  }
-  await renderRun(jobs, manifests, options.candidates);
-  report(manifests, PLACES);
-  warnTakes(catalog, manifests);
 }
 
 if (process.argv[1] !== undefined && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

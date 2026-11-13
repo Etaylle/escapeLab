@@ -1,5 +1,13 @@
 import { createHash } from 'node:crypto';
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
@@ -48,7 +56,9 @@ import {
   readTakes,
   refuseBelow,
   remakeArgs,
+  remakeCommands,
   renderWith,
+  runWith,
   settingsOf,
   silenceOf,
   startMsOf,
@@ -64,6 +74,7 @@ import {
   type ManifestEntry,
   type Pcm,
   type Places,
+  type Studio,
   type Take,
 } from '../scripts/sfx.js';
 
@@ -995,5 +1006,120 @@ describe('keeping a take', () => {
       '  node scripts/sfx.ts --keep test-sting=<n>',
       '  node scripts/sfx.ts --keep test-calm=<n>',
     ]);
+  });
+});
+
+/** A studio over `places` whose account is `client`, and how often the run opened it. */
+function studioOf(client: SoundClient, places: Places): { studio: Studio; opened: () => number } {
+  let opened = 0;
+  const { decode, now, wait } = benchOf(client, places);
+  const studio: Studio = {
+    places,
+    decode,
+    now,
+    wait,
+    candidates: () => mkdtempSync(join(tmpdir(), 'escapelab-sfx-candidates-test-')),
+    account: () => {
+      opened += 1;
+      return Promise.resolve(client);
+    },
+  };
+  return { studio, opened: () => opened };
+}
+
+/** The sting as an older prompt made it: its file in the project, its entry that request's. */
+const OLDER: CatalogEntry = { ...STING, prompt: `${STING.prompt} Softer.` };
+
+/** Puts the older sting into `places`: piece(10, 0.5), listed as OLDER's. */
+function olderIn(places: Places): void {
+  mkdirSync(places.dirs.music, { recursive: true });
+  writeFileSync(join(places.dirs.music, 'test-sting.mp3'), piece(10, 0.5));
+  const manifest = { [STING.id]: manifestOf(OLDER) };
+  writeFileSync(join(places.dirs.music, 'manifest.json'), JSON.stringify(manifest));
+}
+
+/**
+ * Runs the script with `args` over the sting in `studio`, quietly; returns what it said, and
+ * fails where it named a recording that fails the game's or set the exit code.
+ */
+async function runOver(args: readonly string[], studio: Studio): Promise<string[]> {
+  const said: string[] = [];
+  const exit = process.exitCode;
+  const log = vi.spyOn(console, 'log').mockImplementation((line: string) => void said.push(line));
+  const error = vi.spyOn(console, 'error');
+  try {
+    await runWith(optionsOf(args), [STING], studio);
+    expect([error.mock.calls, process.exitCode]).toEqual([[], exit]);
+  } finally {
+    log.mockRestore();
+    error.mockRestore();
+    process.exitCode = exit;
+  }
+  return said;
+}
+
+describe('a run as the command line asks', () => {
+  it('makes takes, the old recording left as made; a keep asks the account nothing', async () => {
+    const places = placesIn();
+    olderIn(places);
+    const { client, pieces } = answering({ music: [0.6, 0.8, 0.7].map((a) => piece(10, a)) });
+    const { studio, opened } = studioOf(client, places);
+    await runOver(['--candidates', '3', '--only', 'test-sting'], studio);
+    expect([pieces.length, opened()]).toEqual([3, 1]);
+    // Not measured anew: the recording the game plays keeps the older request's hash.
+    expect(readManifest(places, 'music')[STING.id]).toEqual(manifestOf(OLDER));
+    await runOver(['--keep', 'test-sting=2'], studio);
+    expect([pieces.length, opened()]).toEqual([3, 1]);
+    expect(readManifest(places, 'music')[STING.id]?.hash).toBe(hashOf(STING));
+    const kept = readFileSync(join(places.dirs.music, 'test-sting.mp3'));
+    expect(digest(kept)).toBe(digest(piece(10, 0.8)));
+    expect(existsSync(join(places.takes, STING.id))).toBe(false);
+  });
+
+  it('leaves a piece whose takes wait as it is, unless new takes are asked for', async () => {
+    const places = placesIn();
+    olderIn(places);
+    const { client, pieces } = answering({ music: [piece(10, 0.7)] });
+    const { studio } = studioOf(client, places);
+    await runOver(['--candidates', '2', '--only', 'test-sting'], studio);
+    for (const args of [['--only', 'test-sting'], ['music'], []]) {
+      const said = await runOver(args, studio);
+      expect(said, args.join(' ')).toContain(
+        'sfx: test-sting is left as it is, its takes waiting: --keep test-sting=<n> keeps ' +
+          'one, --candidates 3 --only test-sting makes new ones',
+      );
+    }
+    expect(pieces).toHaveLength(2);
+    expect(readManifest(places, 'music')[STING.id]).toEqual(manifestOf(OLDER));
+    const old = readFileSync(join(places.dirs.music, 'test-sting.mp3'));
+    expect(digest(old)).toBe(digest(piece(10, 0.5)));
+    await runOver(['--candidates', '2', '--only', 'test-sting'], studio);
+    expect(readTakes(places.takes, STING.id)?.takes.map((take) => take.n)).toEqual([1, 2, 3, 4]);
+  });
+
+  it('plans a piece whose takes wait to be left, and measures it not anew', () => {
+    const made = { sfx: {}, music: { [CALM.id]: { ...manifestOf(CALM), hash: hashOf(OLDER) } } };
+    const waits = (id: string): boolean => id === CALM.id;
+    const always = (): boolean => true;
+    const once = planOf([CLACK, CALM], made, always, optionsOf([]), waits);
+    expect(once.map((job) => [job.entry.id, job.make, job.waiting])).toEqual([
+      ['test-clack', true, false],
+      ['test-calm', false, true],
+    ]);
+    expect(measuredAnew(once, 1).map((job) => job.entry.id)).toEqual(['test-clack']);
+    const takes = planOf([CALM], made, always, optionsOf(['--candidates', '3']), waits);
+    expect(takes.map((job) => [job.make, job.waiting])).toEqual([[true, false]]);
+    // A piece made from the request as it stands is not due: nothing waits for it.
+    const current = { sfx: {}, music: { [CALM.id]: manifestOf(CALM) } };
+    const fresh = planOf([CALM], current, always, optionsOf([]), waits);
+    expect(fresh.map((job) => [job.make, job.waiting])).toEqual([[false, false]]);
+  });
+
+  it('names what makes a recording again: a command for each group, in the catalog’s order', () => {
+    expect(remakeCommands([CLACK, CALM, STING], ['test-sting', 'test-clack', 'nope'])).toEqual([
+      'pnpm --filter client sfx -- --candidates 5 --only test-clack',
+      'pnpm --filter client sfx -- --candidates 3 --only test-sting',
+    ]);
+    expect(remakeCommands([CLACK, CALM], [])).toEqual([]);
   });
 });
