@@ -98,6 +98,11 @@ export interface PlayerView {
    */
   pausedAt: number | null;
   /**
+   * the run stands frozen for the server's maintenance (pause kind `wartung`): a deploy or a
+   * restart put every seat away; left out while it runs, or stands frozen for a line dropped
+   */
+  maintenance?: true;
+  /**
    * seats of the crew a new device asks to take over, each until when the ask waits for the
    * crew on the line to let it in (`takeover-answer`); left out while nobody asks
    */
@@ -1086,6 +1091,11 @@ function pausedFor(state: GameState): AwayView[] | null {
     .sort((a, b) => a.since - b.since);
 }
 
+/** That the run stands still for the server's maintenance; nothing while it runs or waits else. */
+function maintenanceOf(state: GameState): { maintenance?: true } {
+  return state.paused?.kind === 'wartung' ? { maintenance: true } : {};
+}
+
 /** The seats a new device asks to take over in the run on, for its crew; nothing while none. */
 function takeoversOf(state: GameState): { takeovers?: TakeoverView[] } {
   const takeovers = Object.entries(state.away).flatMap(([id, away]) => {
@@ -1195,6 +1205,7 @@ export function viewFor(state: GameState, playerId: string): PlayerView {
     puzzleCount: state.mission.puzzles.length,
     pausedFor: pausedFor(state),
     pausedAt: state.paused?.since ?? null,
+    ...maintenanceOf(state),
     ...takeoversOf(state),
     events: [...state.events],
     ...calledOffOf(state),

@@ -238,7 +238,9 @@ festhält, an den Drohnen vorbei und durch die Notfälle; weicht eine Station vo
 der Lauf mit dem Seed fehl. An den Drohnen vorbei läuft er von Versteck zu Versteck — Feldern,
 auf die keine Drohne je blickt —, jede Strecke erst, wenn kein Kegel sie trifft: Die Flüge sagt
 `tools/patrol.mjs` aus dem Positionsstrom voraus, wie der Server sie fliegt; jede Entdeckung
-steht im Log.
+steht im Log. Mit `SHOTS_SERVER=packages/server/src/index.ts` startet der Rundgang den Server
+selbst, wie die CI, und probt mitten in einem Einsatz den Neustart: SIGTERM, die Karte
+„WARTUNG · Der Server startet neu" auf jeder Seite, und nach dem Neustart alle zurück im Einsatz.
 
 **Ton und Funkstimme:** Jeder Raum klingt nach seiner Art, die Schritte des Partners kommen von
 dort, wo er steht, und die Musik zieht mit dem Druck an — alles zur Laufzeit erzeugt
@@ -321,25 +323,71 @@ Dateiangabe liest `runs` die Datei aus `RUNS_LOG` bzw. die Standarddatei.
 
 Das öffentliche Spiel läuft als ein Web Service auf Render (Free-Plan): Build `corepack enable
 && pnpm install --frozen-lockfile && pnpm run build`, Start `pnpm run start`, Umgebung
-`NODE_VERSION=22`, Health-Check-Pfad `/health`. Drei Eigenheiten von Render bestimmen den
+`NODE_VERSION=22`, Health-Check-Pfad `/health`. Vier Eigenheiten von Render bestimmen den
 Betrieb:
 
 - **Jeder Deploy ersetzt die Instanz.** Offene WebSocket-Verbindungen brechen ab, und der Server
-  hält Räume nur im Speicher: ein Deploy während einer Partie wirft die ganze Crew hinaus.
-  Auto-Deploy bleibt an, also ist jeder Push auf `main` ein Deploy. Gepusht wird deshalb nur,
-  wenn niemand spielt; wer pusht, prüft vorher `/health` (`rooms.running` zählt die laufenden
-  Partien, `rooms.players` die verbundenen Spielenden) und entscheidet den Zeitpunkt selbst.
+  hält Räume nur im Speicher — aber jede Crew trägt den Stand ihres Raums mit: 2 s nach einer Tat
+  der Crew und, solange die Uhr eines Einsatzes läuft, spätestens alle 10 s samt den Standorten
+  bekommt jeder Platz einen gepackten, mit `ROOM_SECRET` versiegelten Schnappschuss (Deflate,
+  AES-256-GCM; Blackout mitten im Lauf rund 8 kB, beim Laufen 44 kB je Platz und Minute), und der
+  Browser hält den neuesten in `localStorage` (`escapelab-snapshot:<Code>`). Ein Raum, dessen Uhr
+  steht, schickt nur, was sich geändert hat. Für eine laufende Partie heißt ein Deploy deshalb eine
+  Wartungspause von Sekunden: Die Uhr steht, die Karte sagt „WARTUNG · Der Server startet neu", die
+  Seiten verbinden sich wie nach einem Abbruch neu, der neue Server stellt den Raum aus dem
+  mitgebrachten Schnappschuss wieder her, und sobald die Crew zurück ist, läuft die Uhr dort weiter,
+  wo sie stand. Auto-Deploy bleibt an, also ist jeder Push auf `main` ein Deploy; wer pusht, sieht
+  in `/health` (`rooms.running`, `rooms.players`), ob gerade gespielt wird. Ein neues Feld im
+  Spielzustand braucht im Schnappschuss-Schema (`packages/core/src/snapshot.ts`) einen Vorgabewert,
+  sonst verwirft der neue Build die Schnappschüsse des alten, und der Deploy beendet jeden laufenden
+  Einsatz; dann schlägt der Test fehl, der einen Schnappschuss des Builds davor öffnet
+  (`packages/server/test/fixtures/blackout-snapshot.json`).
 - **Der Free-Plan schläft und startet neu.** Nach 15 Minuten ohne HTTP-Anfrage oder
   WebSocket-Nachricht fährt die Instanz herunter, und Render darf Free-Instanzen jederzeit neu
-  starten; beides löscht die Räume, bis die Schnappschüsse aus dem Backlog (R-2) gebaut sind.
-- **Vor dem Ersetzen schickt Render SIGTERM** und wartet 30 Sekunden, mit
-  `maxShutdownDelaySeconds` (Render-API) bis 300. Die Logs im Dashboard reichen 7 Tage zurück;
-  die Zeile `[escapelab] server on …` markiert jeden Neustart, der Reiter „Events" jeden Deploy.
+  starten. Ein Neustart geht wie ein Deploy aus; endet die Instanz ohne SIGTERM, hart, verliert
+  die Partie höchstens die letzten 2 s einer Tat und 10 s der Wege, und der Raum ist erst 90 s
+  nach dem ersten aus der Crew zurück, der wiederkommt — so lange wartet er auf einen letzten
+  Schnappschuss, der nach einem Absturz nie kommt (siehe unten). Ein Schnappschuss gilt 24 Stunden
+  und nie für einen beendeten Einsatz.
+- **Vor dem Ersetzen schickt Render SIGTERM.** Bei einem Deploy schaltet Render die neuen
+  Verbindungen auf die neue Instanz um und schickt der alten 60 s später SIGTERM; dann nimmt der
+  Server keine Verbindung mehr an, friert jede Partie ein (Wartungspause), schickt jedem Platz
+  den letzten Schnappschuss (`restart`), schließt alle Sockets mit 1012 und beendet sich in
+  Sekunden mit 0. Render wartet darauf 30 s; die Frist gehört auf 120 s, damit auch ein
+  langsamer Abschied Luft hat: `maxShutdownDelaySeconds: 120` per Render-API (Update service,
+  erlaubt bis 300). Das Signal muss bis zum Server durchkommen: `pnpm run start` ersetzt sich
+  per `exec` durch `pnpm --filter @escapelab/server start`, und das durch
+  `node --import tsx src/index.ts`, also steht weder eine Shell noch die tsx-CLI dazwischen.
+  Wer pnpm ganz aus dem Weg haben will, trägt als Start Command direkt
+  `cd packages/server && exec node --import tsx src/index.ts` ein. Ob es ankommt, zeigt das Log
+  der alten Instanz beim ersten Deploy: Es muss `[escapelab] SIGTERM: going down for a restart`
+  enthalten, dann je Raum `going down for a restart, snapshot seq …` — fehlt die Zeile, hat
+  Render die Instanz ohne Wort beendet. Die Logs im Dashboard reichen 7 Tage zurück;
+  `[escapelab] server on …` markiert jeden Neustart, `this boot is instance …` die Kennung der
+  Instanz, `restored room …` jeden wiederhergestellten Raum, der Reiter „Events" jeden Deploy.
+- **Die Minute dazwischen.** Wer in den 60 s zwischen Umschalten und SIGTERM neu verbindet (Netz
+  weg, Seite neu geladen), landet schon auf der neuen Instanz, mit einem älteren Schnappschuss
+  als dem Stand, den die anderen auf der alten weiterspielen. Jeder Schnappschuss nennt die
+  Instanz, die ihn versiegelt hat, und der beim SIGTERM ist ihr letzter (`final`). Aus einem
+  Schnappschuss einer anderen Instanz, der nicht ihr letzter ist, stellt die neue den Raum
+  deshalb erst her, wenn der letzte kommt — mit den anderen, nach dem SIGTERM der alten — oder
+  90 s nach dem ersten solchen Schnappschuss, dann aus dem neuesten, den sie bis dahin bekommen
+  hat (`… is not the last of instance …, waiting up to …` im Log). Die 90 s zählen ab da, wie
+  lange die neue Instanz auch schon läuft: Render schaltet erst um, wenn sie gesund ist, wer danach
+  abbricht, landet auf ihr, und der letzte Schnappschuss der alten kommt spätestens rund 61 s nach
+  dem Umschalten. So lange zeigt die Karte des Spielers „EINSATZ WIRD WIEDERHERGESTELLT" — auf dem
+  Startbildschirm, auch nach dem Neuladen der Seite, mit den Sekunden, die sie schon wartet, und
+  nur „Einsatz aufgeben" offen —, und das Publikum wartet mit; ein noch neuerer Stand ersetzt den
+  Raum wie sonst in den ersten 10 s
+  danach. Was später kommt, bleibt liegen, und das Log nennt beide Stände
+  (`snapshot seq … came too late, the room goes on from seq …`). Ein letzter Schnappschuss — beim
+  SIGTERM, auch beim Einschlafen des Free-Plans — wartet nie. Vor einem Push lohnt `/health`
+  trotzdem: Jeder Deploy hält laufende Partien für Sekunden an.
 
 | Wo | Name | Wirkung |
 | --- | --- | --- |
 | Render-Umgebung | `RUNS_TOKEN` | Gibt das Laufprotokoll per `GET /runs.jsonl` frei (siehe oben). |
-| Render-Umgebung | `ROOM_SECRET` | Schlüssel für die Schnappschüsse der Räume, sobald R-2 gebaut ist; ohne ihn überlebt kein Raum einen Neustart. |
+| Render-Umgebung | `ROOM_SECRET` | Schlüssel der Schnappschüsse (SHA-256 davon für AES-256-GCM): im Dashboard unter „Environment" als Variable anlegen, 32 oder mehr zufällige Zeichen, etwa `openssl rand -hex 32`, und nie ändern — ein neuer Schlüssel öffnet die alten Schnappschüsse nicht. Ohne ihn macht der Server bei jedem Start einen eigenen Schlüssel, das Start-Log sagt `ROOM_SECRET unset … rooms will not survive a restart`, und kein Raum überlebt einen Neustart; mit weniger als 32 Zeichen startet er nicht. Der Deploy, mit dem er dazukommt, trägt die laufenden Räume noch nicht hinüber. |
 
 ## Architektur in einem Satz
 

@@ -28,6 +28,50 @@ function seated(room: Room, name: string) {
   return { playerId, detach, view, names: () => view().players.map((p) => p.name) };
 }
 
+/** `name`'s seat of `room` back on a connection of its own, as their page resumes it. */
+function resumed(room: Room, name: string) {
+  const messages: ServerMessage[] = [];
+  room.attach(room.resume(passFor(name)), (msg) => messages.push(msg));
+  return () => {
+    const last = messages.filter((msg) => msg.kind === 'view').at(-1);
+    return last?.kind === 'view' ? last.view.players.map((p) => p.name) : [];
+  };
+}
+
+describe('a lobby taken up again from its snapshot', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.spyOn(console, 'log').mockImplementation(() => undefined);
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  it('waits for every seat from the restore, however long the lobby stood quiet before', () => {
+    const room = new Room('STIL', shipped('blackout.json'));
+    for (const name of ['Anna', 'Ben', 'Cem']) {
+      seated(room, name);
+    }
+    // The lobby's last snapshot; then five quiet minutes, the server killed, half a minute down.
+    const kept = room.snapshot();
+    room.dispose();
+    vi.advanceTimersByTime(5 * 60_000 + 30_000);
+    const restored = Room.restore(kept, Date.now());
+    const names = resumed(restored, 'Anna');
+    vi.advanceTimersByTime(1000);
+    expect(names()).toEqual(['Anna', 'Ben', 'Cem']);
+    // Ben back in time, Cem never: his seat freed LOBBY_AWAY_MS after the restore.
+    vi.advanceTimersByTime(60_000);
+    resumed(restored, 'Ben');
+    vi.advanceTimersByTime(LOBBY_AWAY_MS - 61_000 - 1);
+    expect(names()).toEqual(['Anna', 'Ben', 'Cem']);
+    vi.advanceTimersByTime(1);
+    expect(names()).toEqual(['Anna', 'Ben']);
+    restored.dispose();
+  });
+});
+
 describe('a lobby seat whose line is down', () => {
   beforeEach(() => {
     vi.useFakeTimers();

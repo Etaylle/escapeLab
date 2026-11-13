@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "pnpm -r --parallel dev",
     "build": "pnpm --filter @escapelab/client build",
-    "start": "pnpm --filter @escapelab/server start",
+    "start": "exec pnpm --filter @escapelab/server start",
     "cert": "pnpm --filter @escapelab/server cert",
     "test": "pnpm -r test && node --test tools/*.test.mjs",
     "typecheck": "pnpm -r typecheck",

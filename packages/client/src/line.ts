@@ -1,4 +1,4 @@
-import type { ClientMessage, ServerMessage } from '@escapelab/core';
+import { RESTART_CLOSE, type ClientMessage, type ServerMessage } from '@escapelab/core';
 
 /**
  * The page's line to the server: one socket at a time, kept open (`keepConnected`). A line
@@ -28,6 +28,13 @@ export const RETRY_FIRST_MS = 1000;
 export const RETRY_MAX_MS = 10_000;
 /** How many messages wait for a socket to open; any more are dropped. */
 export const OUTBOX_MAX = 32;
+/**
+ * How long after the server's restart a refused comeback to a room's audience is asked again,
+ * ms: the room is back once a member of its crew resumes it from a snapshot.
+ */
+export const REWATCH_MS = 30_000;
+/** How often it is asked again meanwhile, ms. */
+export const REWATCH_EVERY_MS = 1000;
 
 /** What answers a socket's comeback: its seat back, the audience's view again, or a refusal. */
 const ANSWERS: ReadonlySet<ServerMessage['kind']> = new Set(['joined', 'spectator-view', 'error']);
@@ -68,6 +75,16 @@ export interface Retry {
   attempt: number;
   /** epoch ms the try goes out; null while it is under way */
   at: number | null;
+  /**
+   * the line is down because the server goes down for a restart, a deploy: it said so
+   * (`restart`), or its socket closed with RESTART_CLOSE; left out for any other drop
+   */
+  restart?: true;
+  /**
+   * the socket is open, but its comeback waits: a new server instance takes the room up again
+   * once the newest snapshot of it is in (`restoring`), and the seat follows
+   */
+  restoring?: true;
 }
 
 /** What the socket `keepConnected` keeps open tells the app, and asks of it. */
@@ -105,7 +122,8 @@ export interface Line {
   /**
    * Sends `msg` first on the next socket that opens — before any resume — or at once on a line
    * that is up: a deed that has to reach the server whenever the line is back, the seat given
-   * up while it was down. The last one given is the one sent.
+   * up while it was down. A socket whose comeback waits for its room (`Retry.restoring`) is let
+   * go for it, so that it goes out at once on the next. The last one given is the one sent.
    */
   sendFirst: (msg: ClientMessage) => void;
   /** The page is back, or the player asks: a line down tries at once, one up is asked the time. */
@@ -186,14 +204,21 @@ class Keeper {
   private current: WebSocket | null = null;
   /** `current` is open with its session back, or needs none: what is sent goes straight out */
   private ready = false;
+  /** the comeback on `current` waits for its room on the server (`Retry.restoring`) */
+  private awaitingRoom = false;
   /** asks for the server's time out on `current` and not yet answered */
   private asked = 0;
+  /** the line is down for the server's restart (`Retry.restart`), until it is ready again */
+  private restarting = false;
+  /** epoch ms until which a refused comeback to a room's audience is asked again (REWATCH_MS) */
+  private rewatchUntil = 0;
   private first: ClientMessage | null = null;
   private readonly waiting = new Outbox();
   private readonly retryAlarm = new Alarm();
   private readonly openingAlarm = new Alarm();
   private readonly silenceAlarm = new Alarm();
   private readonly answerAlarm = new Alarm();
+  private readonly rewatchAlarm = new Alarm();
 
   constructor(
     private readonly open: () => WebSocket,
@@ -205,15 +230,21 @@ class Keeper {
     const socket = this.open();
     this.current = socket;
     this.ready = false;
+    this.awaitingRoom = false;
     this.asked = 0;
     this.tries += 1;
     this.on.made(socket);
     this.on.status('connecting');
-    this.on.retry({ attempt: this.tries, at: null });
+    this.on.retry({ attempt: this.tries, at: null, ...this.cause() });
     this.openingAlarm.set(OPENING_MS, () => this.dead(socket));
     socket.onopen = () => this.opened(socket);
     socket.onmessage = (event) => this.heard(socket, String(event.data));
-    socket.onclose = () => this.closed(socket);
+    socket.onclose = (event: CloseEvent | undefined) => this.closed(socket, event?.code);
+  }
+
+  /** What a retry says of why the line is down: for the server's restart, or nothing. */
+  private cause(): Pick<Retry, 'restart'> {
+    return this.restarting ? { restart: true } : {};
   }
 
   send(msg: ClientMessage): void {
@@ -237,11 +268,17 @@ class Keeper {
   }
 
   sendFirst(msg: ClientMessage): void {
-    if (this.ready && this.current?.readyState === WebSocket.OPEN) {
-      this.current.send(JSON.stringify(msg));
+    const socket = this.current;
+    if (this.ready && socket?.readyState === WebSocket.OPEN) {
+      socket.send(JSON.stringify(msg));
       return;
     }
     this.first = msg;
+    // The server holds this socket's comeback till its room is back: the socket is let go, its
+    // comeback with it, and the next one carries `msg` at once.
+    if (this.awaitingRoom && socket !== null) {
+      this.dead(socket);
+    }
   }
 
   wake(): void {
@@ -261,6 +298,7 @@ class Keeper {
     for (const alarm of [this.retryAlarm, this.openingAlarm, this.silenceAlarm, this.answerAlarm]) {
       alarm.clear();
     }
+    this.rewatchAlarm.clear();
     this.waiting.release();
     this.current?.close();
   }
@@ -294,20 +332,75 @@ class Keeper {
     if (msg.kind === 'clock') {
       this.answered(socket);
     }
-    this.on.message(msg);
-    // The server's answer to the comeback: the seat back, the room's audience again, or refused.
-    if (!this.ready && ANSWERS.has(msg.kind)) {
-      if (msg.kind === 'error') {
-        this.waiting.forget();
-      }
-      this.flush(socket);
+    if (msg.kind === 'restoring' && !this.ready) {
+      // The comeback waits for its room: the line stays unready until the seat is back.
+      this.awaitingRoom = true;
+      this.on.retry({ attempt: this.tries, at: null, restoring: true, ...this.cause() });
+      return;
     }
+    if (this.keptBack(socket, msg)) {
+      return;
+    }
+    this.on.message(msg);
+    // The server goes down for a restart: its socket is let go, and a new one made at once —
+    // where a deploy has the next server up already, the run is back in moments.
+    if (msg.kind === 'restart') {
+      this.restartSeen();
+      this.dead(socket);
+      return;
+    }
+    this.comebackAnswered(socket, msg);
+  }
+
+  /** Whether `msg` is a refused comeback the page is not told of: it goes again (`rewatch`). */
+  private keptBack(socket: WebSocket, msg: ServerMessage): boolean {
+    return msg.kind === 'error' && !this.ready && this.rewatch(socket);
+  }
+
+  /**
+   * `msg` heard on `socket` before the line is ready: the server's answer to the comeback — the
+   * seat back, the room's audience again, or refused — makes it ready; anything else changes
+   * nothing.
+   */
+  private comebackAnswered(socket: WebSocket, msg: ServerMessage): void {
+    if (this.ready || !ANSWERS.has(msg.kind)) {
+      return;
+    }
+    if (msg.kind === 'error') {
+      this.waiting.forget();
+    }
+    this.flush(socket);
+  }
+
+  /** The server goes down for a restart: the line says so till it is back; an audience waits. */
+  private restartSeen(): void {
+    this.restarting = true;
+    this.rewatchUntil = Date.now() + REWATCH_MS;
+  }
+
+  /**
+   * A comeback to a room's audience refused on `socket` within REWATCH_MS of the server's
+   * restart: the room is back once its crew resumes it, so the comeback goes again
+   * REWATCH_EVERY_MS on, the refusal kept from the page. Whether it goes again.
+   */
+  private rewatch(socket: WebSocket): boolean {
+    const comeback = this.on.session();
+    if (comeback?.kind !== 'spectate' || Date.now() >= this.rewatchUntil) {
+      return false;
+    }
+    this.rewatchAlarm.set(REWATCH_EVERY_MS, () => {
+      if (socket === this.current && socket.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify(comeback));
+      }
+    });
+    return true;
   }
 
   /** The line is ready on `socket`: what waited goes out on it, in order. */
   private flush(socket: WebSocket): void {
     this.ready = true;
     this.tries = 0;
+    this.restarting = false;
     this.on.retry(null);
     for (const data of this.waiting.release()) {
       socket.send(data);
@@ -333,13 +426,17 @@ class Keeper {
     }
   }
 
-  private closed(socket: WebSocket): void {
+  private closed(socket: WebSocket, code: number | undefined): void {
     if (this.stopped || socket !== this.current) {
       return;
     }
+    if (code === RESTART_CLOSE) {
+      this.restartSeen();
+    }
     this.lost();
     this.retryAlarm.set(this.retryDelay, () => this.connect());
-    this.on.retry({ attempt: this.tries + 1, at: Date.now() + this.retryDelay });
+    const at = Date.now() + this.retryDelay;
+    this.on.retry({ attempt: this.tries + 1, at, ...this.cause() });
     this.retryDelay = Math.min(this.retryDelay * 2, RETRY_MAX_MS);
   }
 
@@ -364,7 +461,8 @@ class Keeper {
   private lost(): void {
     this.ready = false;
     this.current = null;
-    for (const alarm of [this.openingAlarm, this.silenceAlarm, this.answerAlarm]) {
+    const alarms = [this.openingAlarm, this.silenceAlarm, this.answerAlarm, this.rewatchAlarm];
+    for (const alarm of alarms) {
       alarm.clear();
     }
     this.waiting.forget();

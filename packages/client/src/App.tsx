@@ -288,6 +288,8 @@ function OffRoom(props: ScreenProps) {
           rooms={conn.rooms}
           seat={conn.seat}
           takeover={conn.takeover}
+          restoring={conn.restoring}
+          giveUp={conn.giveUp}
           stats={props.stats}
           openHandbook={props.setHandbook}
           openHistory={props.setHistory}

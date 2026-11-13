@@ -78,6 +78,20 @@ function standingOf(room: Room, walker: Walker): Spot {
   return { x: spawn.x + 0.5, y: spawn.y + 0.5 };
 }
 
+/**
+ * `walker` stands where it stood in `from`, in `room` as well: a room taken up again from a
+ * snapshot of `from` has its crew where they stood, and the next walk there sets out from it.
+ */
+export function standAsIn(room: Room, from: Room, walker: Walker): void {
+  const stood = walked.get(from)?.get(walker.playerId);
+  if (stood === undefined) {
+    throw new Error('the walker never walked in the room it is to stand as in');
+  }
+  const inRoom = walked.get(room) ?? new Map<string, { run: number; at: Spot }>();
+  walked.set(room, inRoom);
+  inRoom.set(walker.playerId, stood);
+}
+
 /** E pressed by `walker` where its walks left it, as a client sends it with the press. */
 export function pressE(room: Room, walker: Walker): void {
   room.interact(walker.playerId, standingOf(room, walker), Date.now());

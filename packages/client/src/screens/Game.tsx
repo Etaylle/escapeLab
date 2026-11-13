@@ -1060,7 +1060,7 @@ function Standstill({
   send: Props['send'];
   line: GameLine;
 }) {
-  if (lineLost(line.status, view)) {
+  if (lineLost(line, view)) {
     return <LineLostCard line={line} />;
   }
   if (view.pausedFor !== null) {
@@ -1274,7 +1274,7 @@ export function gameClass(
 
 /** Whether the world is held for this player, whatever else: the end plays, or the line is down. */
 export function worldHeld(finale: Finale | null, line: GameLine, view: PlayerView): boolean {
-  return finale !== null || lineLost(line.status, view);
+  return finale !== null || lineLost(line, view);
 }
 
 /**

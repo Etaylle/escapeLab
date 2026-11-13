@@ -25,11 +25,20 @@ export {
   type Away,
   type GameState,
   type ItemState,
+  type PauseKind,
   type Player,
   type Phase,
   type Presence,
   type RunEvent,
 } from './state.js';
+export {
+  sealedSnapshotSchema,
+  type DroneRuntime,
+  type RoomKeeping,
+  type RoomSnapshot,
+  type SealedSnapshot,
+  type SeatSnapshot,
+} from './snapshot.js';
 export {
   applyAction,
   crewOf,
@@ -200,7 +209,12 @@ export {
   crewPassSchema,
   rtcSignalSchema,
   RTC_SIGNAL_MAX,
+  RESTART_CLOSE,
   SEED_MAX,
+  SNAPSHOT_EVERY_MS,
+  SNAPSHOT_LIVE_MS,
+  SNAPSHOT_MAX,
+  SNAPSHOT_MAX_AGE_MS,
   isCustomMissionId,
   type RtcSignal,
   type ClientMessage,

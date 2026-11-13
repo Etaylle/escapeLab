@@ -13,6 +13,14 @@ import { askForTime, clock, localNow } from './clock.js';
 import { keepConnected, wipesBanner, type Line, type LineStatus, type Retry } from './line.js';
 import { forgetNotes, localStore } from './notes.js';
 import { crewPass } from './pass.js';
+import {
+  dropSnapshot,
+  keepSnapshot,
+  keptSeat,
+  keptSnapshot,
+  resumeOf,
+  seatShown,
+} from './snapshots.js';
 import { comebackOfTab, keepTab, leaveTab, roomOfTab, tabRoom } from './tab.js';
 import type { KnownPositions } from './world/movement.js';
 
@@ -48,6 +56,21 @@ export interface Takeover {
   until: number;
 }
 
+/**
+ * The way back of the join screen's card, waiting for its room: a new server instance takes the
+ * room up again once the newest snapshot of it is in (`restoring`), and seats the page then.
+ */
+export interface Restoring {
+  code: string;
+  /** epoch ms, by this device's clock, the server said the room is on its way back */
+  since: number;
+  /**
+   * it is the tab's own comeback that waits, on a page loaded anew (`comebackWaits`): its line is
+   * not ready, so the seat is given up on a socket of its own (`Connection.giveUp`)
+   */
+  comeback?: true;
+}
+
 export interface Connection {
   /** socket status; the game itself lives in `view` */
   status: LineStatus;
@@ -58,6 +81,8 @@ export interface Connection {
   spectatorView: SpectatorView | null;
   /** this device's ask for a seat by its name while the crew has not answered it; null for none */
   takeover: Takeover | null;
+  /** the room the join screen's card went back to, while the server waits to take it up again */
+  restoring: Restoring | null;
   /** open and running rooms, refreshed while sitting on the join screen */
   rooms: RoomSummary[];
   /**
@@ -104,8 +129,9 @@ export interface Connection {
   /** Tries the line again now (line.ts `Line.wake`): „Jetzt versuchen". */
   wake: () => void;
   /**
-   * The seat given up while the line is down, „Einsatz aufgeben" on the card of a line lost:
-   * sent once the line is back, the tab in no room from now.
+   * The seat given up while the line is down, „Einsatz aufgeben" on the card of a line lost —
+   * sent once the line is back — or while the tab's own comeback waits for its room, on the join
+   * screen's card (`Restoring.comeback`) — sent at once; the tab in no room from now.
    */
   giveUp: () => void;
   /**
@@ -126,12 +152,15 @@ export interface ServerListener {
 
 /**
  * Out of room `code` for good: the tab plays in it no more, and what `playerId` noted there
- * goes with it (where it is known).
+ * goes with it (where it is known), as does the snapshot kept of the room.
  */
 function forgetRoom(code: string | null, playerId: string | null): void {
   const store = localStore();
   if (code !== null && playerId !== null && store !== null) {
     forgetNotes(store, code, playerId);
+  }
+  if (code !== null) {
+    dropSnapshot(code, store);
   }
   leaveTab();
 }
@@ -149,12 +178,21 @@ export interface Page {
   setRooms: (rooms: RoomSummary[]) => void;
   setSeat: (seat: Seat | null) => void;
   setTakeover: (takeover: Takeover | null) => void;
+  setRestoring: (restoring: Restoring | null) => void;
   setError: (message: string) => void;
   refuse: (message: string, of: ClientMessage['kind'] | null) => void;
   /** a comeback is out (tab.ts): an error now means the room or seat the tab kept is gone */
   resuming: MutableRefObject<boolean>;
-  /** whose seat the latest view was, by player id: their notes go with the room */
-  you: MutableRefObject<string | null>;
+  /**
+   * the room the page last asked back into with a resume of its own — the join screen's card's
+   * way back — by its code; null once the seat is back
+   */
+  resumed: MutableRefObject<string | null>;
+  /**
+   * the latest view of the seat the tab plays: its player's notes go with the room, and a
+   * snapshot of the room is kept with the card it shows (snapshots.ts)
+   */
+  seen: MutableRefObject<PlayerView | null>;
   positions: Connection['positions'];
   drones: Connection['drones'];
   pings: Connection['pings'];
@@ -176,8 +214,10 @@ function seatNews(msg: ServerMessage, page: Page): boolean {
   switch (msg.kind) {
     case 'joined':
       page.resuming.current = false;
+      page.resumed.current = null;
       keepTab({ code: msg.code, watching: false });
       page.setTakeover(null);
+      page.setRestoring(null);
       page.setRoomCode(msg.code);
       return true;
     case 'takeover-pending':
@@ -187,14 +227,17 @@ function seatNews(msg: ServerMessage, page: Page): boolean {
       page.setTakeover(null);
       return true;
     case 'left':
-      leftRoom(msg.message, page);
+      leftRoom(msg, page);
       return true;
     case 'seated':
-      page.setSeat(msg.seat);
+      // Where the server has no room for the pass, it may be one a restart took down: its card
+      // from the snapshot the browser keeps, whose way back takes the room up again.
+      page.setSeat(seatShown(msg.seat));
       return true;
     case 'view':
       clock.stamped(msg.at);
-      page.you.current = msg.view.you.id;
+      page.seen.current = msg.view;
+      runOver(msg.view);
       page.setView(msg.view);
       return true;
     case 'spectator-view':
@@ -207,7 +250,10 @@ function seatNews(msg: ServerMessage, page: Page): boolean {
   }
 }
 
-/** Takes in what the line carries besides: the time, the rooms, the live streams, refusals. */
+/**
+ * Takes in what the line carries besides: the time, the rooms, the room's snapshots, a room on
+ * its way back, refusals, and the live streams (`streamNews`).
+ */
 function lineNews(msg: ServerMessage, page: Page): void {
   switch (msg.kind) {
     case 'clock':
@@ -216,6 +262,24 @@ function lineNews(msg: ServerMessage, page: Page): void {
     case 'rooms':
       page.setRooms(msg.rooms);
       break;
+    case 'snapshot':
+    case 'restart':
+      kept(msg, page);
+      break;
+    case 'restoring':
+      onItsWay(msg.code, page);
+      break;
+    case 'error':
+      refused(msg, page);
+      break;
+    default:
+      streamNews(msg, page);
+  }
+}
+
+/** Takes in what the world streams past React: where everybody stands, the pings, the chat. */
+function streamNews(msg: ServerMessage, page: Page): void {
+  switch (msg.kind) {
     case 'positions':
       page.positions.current = { run: msg.run, players: msg.players };
       page.drones.current = msg.drones;
@@ -230,17 +294,76 @@ function lineNews(msg: ServerMessage, page: Page): void {
       page.chats.current.push({ playerId, text, at: performance.now() });
       break;
     }
-    case 'error':
-      refused(msg, page);
-      break;
   }
 }
 
 /**
- * The seat was given up, or plays on in another tab (`message` says so): this one plays in no
- * room now and keeps no comeback, so that two tabs never take the seat from each other.
+ * The snapshot of the tab's room, kept with the room's card as the latest view shows it: the
+ * newest, for a server that knows the room no more to take it up again from.
  */
-function leftRoom(message: string | null, page: Page): void {
+function kept(msg: Extract<ServerMessage, { kind: 'snapshot' | 'restart' }>, page: Page): void {
+  const code = roomOfTab();
+  const view = page.seen.current;
+  if (code !== null && view !== null) {
+    keepSnapshot(code, msg, view);
+  }
+}
+
+/**
+ * The server waits for the newest snapshot of the room `code` before it takes it up again: where
+ * the join screen's card went back to that room, the card says so till the seat is back. A tab's
+ * own comeback waits on a line not ready yet, which tells of it as its retry (line.ts
+ * `Retry.restoring`).
+ */
+function onItsWay(code: string, page: Page): void {
+  if (page.resumed.current?.toUpperCase() === code) {
+    page.setRestoring({ code, since: Date.now() });
+  }
+}
+
+/**
+ * The line's next try (`retry`): where the tab's own comeback waits for its room (line.ts
+ * `Retry.restoring`) — a page loaded anew while the server is about to take the room up again
+ * — the join screen shows the card the browser keeps of the room, waiting as for the card's own
+ * way back (`onItsWay`), never the plain form. The game opens once the seat is back.
+ */
+export function comebackWaits(
+  retry: Retry | null,
+  page: Pick<Page, 'setSeat' | 'setRestoring'>,
+): void {
+  const room = tabRoom();
+  const kept = room === null || room.watching ? null : keptSnapshot(room.code);
+  if (retry?.restoring === true && kept !== null) {
+    page.setSeat(kept.seat);
+    page.setRestoring({ code: kept.seat.code, since: Date.now(), comeback: true });
+  }
+}
+
+/**
+ * The line dropped: the server's wait for the card's room ended with the socket it held, and the
+ * card's way back is open again (`Restoring`).
+ */
+export function lineDropped(page: Pick<Page, 'setRestoring'>): void {
+  page.setRestoring(null);
+}
+
+/** A run over, won or lost, is not taken up again: the snapshot kept of its room goes. */
+function runOver(view: PlayerView): void {
+  const code = roomOfTab();
+  if (code !== null && (view.phase === 'won' || view.phase === 'lost')) {
+    dropSnapshot(code);
+  }
+}
+
+/**
+ * The seat was given up — its snapshot goes with it — or plays on in another tab (`message`
+ * says so): this one plays in no room now and keeps no comeback, so that two tabs never take the
+ * seat from each other.
+ */
+function leftRoom({ code, message }: Extract<ServerMessage, { kind: 'left' }>, page: Page): void {
+  if (message === null) {
+    dropSnapshot(code);
+  }
   leaveTab();
   page.setRoomCode(null);
   page.setView(null);
@@ -257,18 +380,54 @@ function leftRoom(message: string | null, page: Page): void {
 function refused(msg: Extract<ServerMessage, { kind: 'error' }>, page: Page): void {
   if (page.resuming.current) {
     page.resuming.current = false;
-    forgetRoom(roomOfTab(), page.you.current);
+    forgetRoom(roomOfTab(), page.seen.current?.you.id ?? null);
     page.setRoomCode(null);
     page.setView(null);
     page.setSpectatorView(null);
+    page.setRestoring(null);
   }
   if (msg.of === 'join-room') {
     page.setTakeover(null);
+  }
+  if (msg.of === 'resume') {
+    resumeRefused(page);
   }
   if (inBanner(msg.of)) {
     page.setError(msg.message);
   }
   page.refuse(msg.message, msg.of ?? null);
+}
+
+/**
+ * What the page notes of `msg` as it goes out: a resume of its own — the join screen's card's way
+ * back — names the room whose snapshot goes once the server refuses it (`resumeRefused`), and
+ * that the card waits for while the server takes it up again (`onItsWay`); the seat given up
+ * there, the card waits no more.
+ */
+export function noteOutgoing(
+  msg: ClientMessage,
+  page: Pick<Page, 'resumed' | 'setRestoring'>,
+): void {
+  if (msg.kind === 'resume') {
+    page.resumed.current = msg.code;
+  } else if (msg.kind === 'abandon' && page.resumed.current === msg.code) {
+    page.resumed.current = null;
+    page.setRestoring(null);
+  }
+}
+
+/**
+ * The server will not have the seat of the join screen's card back — the room gone for good, its
+ * snapshot refused: the snapshot kept of the room goes, and the card with it.
+ */
+function resumeRefused(page: Page): void {
+  const code = page.resumed.current;
+  if (code !== null) {
+    page.resumed.current = null;
+    dropSnapshot(code);
+    page.setRestoring(null);
+    page.setSeat(keptSeat());
+  }
 }
 
 /**
@@ -289,9 +448,7 @@ function watching(code: string, page: Page): void {
  * name, this device's pass holds the seat now, and it resumes it.
  */
 export function replyTo(msg: ServerMessage): ClientMessage | null {
-  return msg.kind === 'takeover-allowed'
-    ? { kind: 'resume', code: msg.code, pass: crewPass() }
-    : null;
+  return msg.kind === 'takeover-allowed' ? resumeOf(msg.code) : null;
 }
 
 /** What `openLine` wires the page's line to: the page, its status, socket and listeners. */
@@ -340,11 +497,15 @@ function openLine(wiring: Wiring): { line: Line; close: () => void } {
       }
     },
     closed: () => {
+      lineDropped(page);
       for (const listener of listeners.current) {
         listener.closed();
       }
     },
-    retry: wiring.setRetry,
+    retry: (next) => {
+      wiring.setRetry(next);
+      comebackWaits(next, page);
+    },
     probe: ask,
   });
   line = opened;
@@ -414,8 +575,10 @@ export function wakeOnReturn(
 }
 
 /**
- * The seat given up while the line is down (the card of a line lost): it goes first on the
- * next socket that opens; from now the tab plays in no room, what `playerId` noted there gone.
+ * The seat given up while the line is down (the card of a line lost), or while the tab's own
+ * comeback waits for its room: it goes first on the next socket that opens — at once where the
+ * comeback waits (line.ts `Line.sendFirst`); from now the tab plays in no room, what `playerId`
+ * noted there gone.
  */
 function giveUpOffLine(line: Line | null, playerId: string | null): void {
   const code = roomOfTab();
@@ -467,14 +630,17 @@ export function useGameConnection(): Connection {
   const [view, setView] = useState<PlayerView | null>(null);
   const [spectatorView, setSpectatorView] = useState<SpectatorView | null>(null);
   const [rooms, setRooms] = useState<RoomSummary[]>([]);
-  const [seat, setSeat] = useState<Seat | null>(null);
+  // The card of the newest snapshot kept stands from the start, till the server says otherwise.
+  const [seat, setSeat] = useState<Seat | null>(keptSeat);
   const [takeover, setTakeover] = useState<Takeover | null>(null);
+  const [restoring, setRestoring] = useState<Restoring | null>(null);
   const [roomCode, setRoomCode] = useState<string | null>(roomOfTab);
   const [error, setError] = useState<string | null>(null);
   const [refusal, setRefusal] = useState<Refusal | null>(null);
   const socketRef = useRef<WebSocket | null>(null);
   const resumingRef = useRef(false);
-  const youRef = useRef<string | null>(null);
+  const resumedRef = useRef<string | null>(null);
+  const seenRef = useRef<PlayerView | null>(null);
   const live = useLiveRefs();
   const listenersRef = useRef(new Set<ServerListener>());
 
@@ -500,10 +666,12 @@ export function useGameConnection(): Connection {
       setRooms,
       setSeat,
       setTakeover,
+      setRestoring,
       setError,
       refuse: (message, of) => setRefusal((last) => ({ seq: (last?.seq ?? 0) + 1, message, of })),
       resuming: resumingRef,
-      you: youRef,
+      resumed: resumedRef,
+      seen: seenRef,
       ...live,
     },
     setStatus,
@@ -518,6 +686,7 @@ export function useGameConnection(): Connection {
     view,
     spectatorView,
     takeover,
+    restoring,
     rooms,
     seat,
     roomCode,
@@ -528,6 +697,7 @@ export function useGameConnection(): Connection {
       if (wipesBanner(msg.kind)) {
         setError(null);
       }
+      noteOutgoing(msg, { resumed: resumedRef, setRestoring });
       lineRef.current?.send(msg);
     },
     listen,
@@ -535,9 +705,10 @@ export function useGameConnection(): Connection {
     dismissError: () => setError(null),
     wake: () => lineRef.current?.wake(),
     giveUp: () => {
-      giveUpOffLine(lineRef.current, youRef.current);
+      giveUpOffLine(lineRef.current, seenRef.current?.you.id ?? null);
       setRoomCode(null);
       setView(null);
+      setSeat(keptSeat());
     },
     leaveRoom: () => {
       const code = roomOfTab();
@@ -546,7 +717,7 @@ export function useGameConnection(): Connection {
         location.reload();
         return;
       }
-      leaveSeat(code, youRef.current, listen, (msg) => lineRef.current?.send(msg));
+      leaveSeat(code, seenRef.current?.you.id ?? null, listen, (msg) => lineRef.current?.send(msg));
     },
   };
 }

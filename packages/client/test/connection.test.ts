@@ -1,10 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ClientMessage, ServerMessage, SpectatorView } from '@escapelab/core';
+import {
+  RESTART_CLOSE,
+  type ClientMessage,
+  type ServerMessage,
+  type SpectatorView,
+} from '@escapelab/core';
 import {
   ANSWER_MS,
   keepConnected,
   OPENING_MS,
   OUTBOX_MAX,
+  REWATCH_EVERY_MS,
+  REWATCH_MS,
   SILENCE_MS,
   wipesBanner,
   type Comeback,
@@ -22,7 +29,7 @@ import { inBanner } from '../src/ws.js';
 class FakeSocket {
   onopen: (() => void) | null = null;
   onmessage: ((event: { data: string }) => void) | null = null;
-  onclose: (() => void) | null = null;
+  onclose: ((event?: { code: number }) => void) | null = null;
   readyState: number = WebSocket.CONNECTING;
   readonly sent: ClientMessage[] = [];
   closedByPage = false;
@@ -51,10 +58,13 @@ class FakeSocket {
     this.onmessage?.({ data: JSON.stringify(msg) });
   }
 
-  /** The socket ends: the server terminated it, or it never got through. */
-  end(): void {
+  /**
+   * The socket ends: the server terminated it, or it never got through — with close `code`
+   * where the server closed it with one.
+   */
+  end(code?: number): void {
     this.readyState = WebSocket.CLOSED;
-    this.onclose?.();
+    this.onclose?.(code === undefined ? undefined : { code });
   }
 }
 
@@ -67,8 +77,12 @@ const SESSION: Extract<Comeback, { kind: 'resume' }> = {
 /** The server has the seat back. */
 const JOINED: ServerMessage = { kind: 'joined', code: SESSION.code };
 
-/** `keepConnected` over fake sockets, with what it told the page. */
+/**
+ * `keepConnected` over fake sockets, with what it told the page; `leave` has the tab leave the
+ * room `session` comes back to.
+ */
 function connection(session: Comeback | null = SESSION) {
+  let comeback = session;
   const sockets: FakeSocket[] = [];
   const told = {
     statuses: [] as string[],
@@ -82,7 +96,7 @@ function connection(session: Comeback | null = SESSION) {
   const events: SocketEvents = {
     made: () => undefined,
     status: (status) => told.statuses.push(status),
-    session: () => session,
+    session: () => comeback,
     resuming: () => {
       told.resumes += 1;
     },
@@ -110,7 +124,10 @@ function connection(session: Comeback | null = SESSION) {
     }
     return socket;
   };
-  return { sockets, told, line, stop: line.stop, send: line.send, last };
+  const leave = (): void => {
+    comeback = null;
+  };
+  return { sockets, told, line, stop: line.stop, send: line.send, last, leave };
 }
 
 const E: ClientMessage = { kind: 'request-hint' };
@@ -224,6 +241,142 @@ describe('keepConnected — the page’s line to the server', () => {
     vi.advanceTimersByTime(60_000);
     expect(sockets).toHaveLength(1);
     expect(told.closed).toBe(0);
+  });
+});
+
+describe('keepConnected — the server going down for a restart', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('lets the socket go as the server goes down for a restart, a new one made at once', () => {
+    const { sockets, told, last } = connection();
+    last().open();
+    last().say(JOINED);
+    const restart: ServerMessage = { kind: 'restart', blob: 'v1.a.b', seq: 9, at: 1 };
+    last().say(restart);
+    expect(told.heard.at(-1)).toEqual(restart);
+    expect(sockets[0]?.closedByPage).toBe(true);
+    expect(told.statuses.slice(-2)).toEqual(['closed', 'connecting']);
+    expect(sockets).toHaveLength(2);
+    expect(told.retries.at(-1)).toEqual({ attempt: 1, at: null, restart: true });
+    // The server still down: the next try waits as ever, and is still the restart's.
+    last().end();
+    expect(told.retries.at(-1)).toEqual({ attempt: 2, at: Date.now() + 1000, restart: true });
+    vi.advanceTimersByTime(1000);
+    last().open();
+    last().say(JOINED);
+    expect(told.retries.at(-1)).toBeNull();
+    // A drop after that is a drop again.
+    last().end();
+    expect(told.retries.at(-1)).toEqual({ attempt: 1, at: Date.now() + 1000 });
+  });
+
+  it('takes a socket the server closed with 1012 for its restart, told so or not', () => {
+    const { told, last } = connection();
+    last().open();
+    last().say(JOINED);
+    last().end(RESTART_CLOSE);
+    expect(told.retries.at(-1)).toMatchObject({ attempt: 1, restart: true });
+    vi.advanceTimersByTime(1000);
+    last().end(1006);
+    expect(told.retries.at(-1)).toMatchObject({ attempt: 2, restart: true });
+  });
+
+  it('asks again for the audience of a room a restart took down, the refusal kept back', () => {
+    const WATCH: Comeback = { kind: 'spectate', code: 'ABCD' };
+    const seen: ServerMessage = { kind: 'spectator-view', code: 'ABCD', at: 1, view: {} as never };
+    const gone: ServerMessage = {
+      kind: 'error',
+      message: 'Raum "ABCD" existiert nicht (mehr).',
+      of: 'spectate',
+    };
+    const { told, last } = connection(WATCH);
+    last().open();
+    last().say(seen);
+    last().end(RESTART_CLOSE);
+    vi.advanceTimersByTime(1000);
+    last().open();
+    last().say(gone);
+    expect(told.heard).not.toContainEqual(gone);
+    expect(told.ready).toBe(1);
+    vi.advanceTimersByTime(REWATCH_EVERY_MS);
+    expect(last().sent).toEqual([WATCH, WATCH]);
+    // The crew is back, and the room with it: the audience sees again.
+    last().say(seen);
+    expect(told.ready).toBe(2);
+  });
+
+  it('lets the page hear the refusal once REWATCH_MS are over, and a seat’s at once', () => {
+    const WATCH: Comeback = { kind: 'spectate', code: 'ABCD' };
+    const gone: ServerMessage = { kind: 'error', message: 'weg', of: 'spectate' };
+    const audience = connection(WATCH);
+    audience.last().open();
+    audience.last().say({ kind: 'spectator-view', code: 'ABCD', at: 1, view: {} as never });
+    audience.last().end(RESTART_CLOSE);
+    vi.advanceTimersByTime(REWATCH_MS);
+    audience.last().open();
+    audience.last().say(gone);
+    expect(audience.told.heard).toContainEqual(gone);
+    // A seat's resume refused after a restart is the page's to hear, as ever.
+    const seat = connection();
+    seat.last().open();
+    seat.last().say(JOINED);
+    seat.last().end(RESTART_CLOSE);
+    vi.advanceTimersByTime(1000);
+    seat.last().open();
+    const refused: ServerMessage = { kind: 'error', message: 'nein', of: 'resume' };
+    seat.last().say(refused);
+    expect(seat.told.heard).toContainEqual(refused);
+  });
+});
+
+describe('keepConnected — a comeback the new server keeps waiting for its room', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('waits on a comeback the new server answers with restoring, till the seat is back', () => {
+    const waits: ServerMessage = { kind: 'restoring', code: SESSION.code };
+    const { told, last } = connection();
+    last().open();
+    last().say(JOINED);
+    last().end(RESTART_CLOSE);
+    vi.advanceTimersByTime(1000);
+    last().open();
+    last().say(waits);
+    // The line is up, the seat not yet: the card says the room is on its way, the line unready.
+    expect(told.retries.at(-1)).toEqual({ attempt: 1, at: null, restoring: true, restart: true });
+    expect(told.ready).toBe(1);
+    expect(told.heard).not.toContainEqual(waits);
+    // Its socket drops meanwhile: a try again, and the next comeback waits anew.
+    last().end();
+    expect(told.retries.at(-1)).toEqual({ attempt: 2, at: Date.now() + 1000, restart: true });
+    vi.advanceTimersByTime(1000);
+    last().open();
+    last().say(waits);
+    expect(told.retries.at(-1)).toMatchObject({ attempt: 2, restoring: true });
+    // The room is back, the seat with it: the line ready.
+    last().say(JOINED);
+    expect(told.ready).toBe(2);
+    expect(told.retries.at(-1)).toBeNull();
+  });
+
+  it('leaves a line that is up be when a resume the page sent waits for its room', () => {
+    // The join screen's card asks back into the room on a line up with no session to resume.
+    const { told, last, send } = connection(null);
+    last().open();
+    send(SESSION);
+    const waits: ServerMessage = { kind: 'restoring', code: SESSION.code };
+    last().say(waits);
+    expect(told.retries.at(-1)).toBeNull();
+    expect(told.heard).toContainEqual(waits);
   });
 });
 
@@ -548,5 +701,33 @@ describe('keepConnected — a deed that has to reach the server once the line is
     last().open();
     line.sendFirst(GIVE_UP);
     expect(last().sent).toEqual([GIVE_UP]);
+  });
+
+  it('goes at once while the comeback waits for its room, on a socket of its own', () => {
+    // A page loaded anew while its room waits on the server; the seat given up meanwhile.
+    const { line, last, sockets, told, leave } = connection();
+    last().open();
+    last().say({ kind: 'restoring', code: SESSION.code });
+    leave();
+    line.sendFirst(GIVE_UP);
+    // The socket the server holds the comeback on is let go, and the next carries the give-up.
+    expect(sockets[0]?.closedByPage).toBe(true);
+    expect(sockets).toHaveLength(2);
+    last().open();
+    expect(last().sent).toEqual([GIVE_UP]);
+    expect(told.ready).toBe(1);
+    // A comeback that is not waiting lets its socket be: the give-up goes on the next one. Nor
+    // does the socket after one that waited and dropped, still on its way.
+    const other = connection();
+    other.last().open();
+    other.line.sendFirst(GIVE_UP);
+    expect(other.sockets).toHaveLength(1);
+    expect(other.last().closedByPage).toBe(false);
+    other.last().say({ kind: 'restoring', code: SESSION.code });
+    other.last().end();
+    vi.advanceTimersByTime(1000);
+    other.line.sendFirst(GIVE_UP);
+    expect(other.sockets).toHaveLength(2);
+    expect(other.last().closedByPage).toBe(false);
   });
 });

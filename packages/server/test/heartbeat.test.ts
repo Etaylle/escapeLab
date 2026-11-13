@@ -51,6 +51,27 @@ function resumeBen(server: FakeServer, ben: FakeSocket): FakeSocket {
   return back;
 }
 
+describe('the beat of the server', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('says on every socket that the server beats and no more, as `joined` names the room', () => {
+    const { server, anna, code, end } = startedRun();
+    const browsing = server.connect();
+    vi.advanceTimersByTime(3 * HEARTBEAT_MS);
+    const tick = { kind: 'tick' };
+    for (const socket of [anna, browsing]) {
+      expect(socket.heard.filter((msg) => msg.kind === 'tick')).toEqual([tick, tick, tick]);
+    }
+    expect(joinedOf(anna)).toEqual({ kind: 'joined', code });
+    end();
+  });
+});
+
 describe('the heartbeat', () => {
   beforeEach(() => {
     vi.useFakeTimers();

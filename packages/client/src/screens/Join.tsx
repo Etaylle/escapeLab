@@ -11,15 +11,17 @@ import {
 } from '@escapelab/core';
 import { formatLeft } from '../clock.js';
 import { FIRST_RUN_HINT, firstDifficulty, isTutorial, useWon } from '../firstRun.js';
-import { useServerNow } from '../hooks.js';
+import { useNow, useServerNow } from '../hooks.js';
 import { crewPass, keepName, lastName } from '../pass.js';
 import { recordLine } from '../runStats.js';
-import type { Takeover } from '../ws.js';
+import { dropSnapshot, resumeOf } from '../snapshots.js';
+import type { Restoring, Takeover } from '../ws.js';
 import { crewSizeText } from './Crew.js';
 import { GiveUpButton } from './GiveUp.js';
 import { HttpsHint } from './HttpsHint.js';
 import { Icon } from './Icon.js';
 import { InstallOffer } from './Install.js';
+import { RESTORING_LINE, RESTORING_TITLE } from './Line.js';
 import { pauseClock } from './Pause.js';
 import { MapThumb } from './MapThumb.js';
 import { phosphorClass, useComesOn } from './phosphor.js';
@@ -36,6 +38,16 @@ interface Props {
   seat?: Seat | null;
   /** this device's ask for a seat by its name, waiting for the crew; null or left out for none */
   takeover?: Takeover | null;
+  /**
+   * the room the card went back to, while the server waits to take it up again (ws.ts
+   * `Restoring`); null or left out for none
+   */
+  restoring?: Restoring | null;
+  /**
+   * gives the seat up while the tab's own comeback waits for its room (`Restoring.comeback`), on
+   * a socket of its own (ws.ts `Connection.giveUp`); the card gives it up on the line otherwise
+   */
+  giveUp?: () => void;
   /** the Bestenliste's runs, by mission */
   stats: MissionStats[];
   openHandbook: (missionId: string) => void;
@@ -358,9 +370,15 @@ function TakeoverWait({ takeover }: { takeover: Takeover }) {
 /**
  * „Mit Code": a room's code to join or watch it by. An invite link carries the room in
  * ?room=, so the field is already filled and all that is left to do is type a name. A join by
- * the name of a seat in a run on waits for the crew to let this device in (`takeover`).
+ * the name of a seat in a run on waits for the crew to let this device in (`takeover`). While
+ * the card's way back waits for its room (`waiting`), no other room is watched either: the
+ * server seats the page once the room is back.
  */
-function WithCode({ takeover, ...section }: SectionProps & { takeover: Takeover | null }) {
+function WithCode({
+  takeover,
+  waiting,
+  ...section
+}: SectionProps & { takeover: Takeover | null; waiting: boolean }) {
   const { send, connected, name } = section;
   const [code, setCode] = useState(
     () => new URLSearchParams(window.location.search).get('room')?.toUpperCase() ?? '',
@@ -387,7 +405,7 @@ function WithCode({ takeover, ...section }: SectionProps & { takeover: Takeover 
       {takeover !== null && <TakeoverWait takeover={takeover} />}
       <button
         className="link"
-        disabled={!connected || code.trim().length === 0}
+        disabled={!connected || waiting || code.trim().length === 0}
         onClick={() => send({ kind: 'spectate', code: code.trim() })}
       >
         <Icon name="eye" /> Mit Code zuschauen
@@ -409,35 +427,86 @@ export function boundLine(seat: Pick<Seat, 'missionTitle' | 'code'>): string {
   return `Gebunden an „${seat.missionTitle}“ in Raum ${seat.code} — neue Runden erst danach.`;
 }
 
-/** What the card says over where the pass sits: a run on, or standing paused, or a lobby. */
-function kickerOf(seat: Seat): string {
+/**
+ * What the card says over where the pass sits: its room on the way back (`onItsWay`), a run on,
+ * or standing paused, or a lobby.
+ */
+function kickerOf(seat: Seat, onItsWay: boolean): string {
+  if (onItsWay) {
+    return RESTORING_TITLE;
+  }
   if (seat.phase === 'lobby') {
     return 'IM RAUM';
   }
   return seat.paused ? 'EINSATZ PAUSIERT' : 'EINSATZ LÄUFT';
 }
 
+/** What the card says at `now` while its way back has waited for the room since `since`, ms. */
+export function restoringLine(since: number, now: number): string {
+  const waited = Math.max(0, Math.floor((now - since) / 1000));
+  return `${RESTORING_LINE} · seit ${waited} s`;
+}
+
+/** The card's line while its way back waits for the room, the seconds counting up. */
+function RestoringLine({ since }: { since: number }) {
+  const now = useNow(250);
+  return (
+    <p className="bound-restoring" role="status">
+      {restoringLine(since, now)}
+    </p>
+  );
+}
+
+/**
+ * How the card gives its seat up: on the line, the snapshot kept of the room going with it — and
+ * a card the server's word replaces — or as `instead` gives it up, where it is given.
+ */
+function wayOut(seat: Seat, send: Props['send'], instead: (() => void) | null): () => void {
+  if (instead !== null) {
+    return instead;
+  }
+  return () => {
+    dropSnapshot(seat.code);
+    send({ kind: 'abandon', code: seat.code, pass: crewPass() });
+    send({ kind: 'whereami', pass: crewPass() });
+  };
+}
+
 /**
  * Where the browser's pass sits, instead of the join form (`Seat`): the mission, the room's
  * code, the crew and the clock as the server showed it, the way back and the way out — from a
  * run on „Einsatz aufgeben" at a second press, from a lobby as free as leaving it always was.
+ * While the way back waits for the room (`waiting`), the card says for how long, and only the
+ * way out is open — `giveUp`, where it is given; the game opens once the room is back.
  */
-export function BoundCard({ seat, send }: { seat: Seat; send: Props['send'] }) {
+export function BoundCard({
+  seat,
+  send,
+  waiting = null,
+  giveUp = null,
+}: {
+  seat: Seat;
+  send: Props['send'];
+  waiting?: Restoring | null;
+  giveUp?: (() => void) | null;
+}) {
   const run = seat.phase === 'playing';
   const clock = seat.leftMs === null ? '' : ` · noch ${formatLeft(seat.leftMs)}`;
-  const leave = (): void => send({ kind: 'abandon', code: seat.code, pass: crewPass() });
+  const leave = wayOut(seat, send, giveUp);
   return (
     <section className={`bound${run ? ' bound--run' : ''}`}>
-      <span className="kicker bound-kicker">{kickerOf(seat)}</span>
+      <span className="kicker bound-kicker">{kickerOf(seat, waiting !== null)}</span>
       <h2 className="bound-title">{seat.missionTitle}</h2>
       <p className="bound-facts">
         Raum {seat.code}
         {clock} · {seat.crew.join(', ')}
       </p>
+      {waiting !== null && <RestoringLine since={waiting.since} />}
       <div className="bound-actions">
         <button
           className="primary bound-back"
-          onClick={() => send({ kind: 'resume', code: seat.code, pass: crewPass() })}
+          disabled={waiting !== null}
+          onClick={() => send(resumeOf(seat.code))}
         >
           {run ? 'Zurück zum Einsatz' : 'Zurück in den Raum'}
         </button>
@@ -490,6 +559,31 @@ function OpenRounds({
   );
 }
 
+/** The card's way back waiting for its room: `restoring`, where it is of the card's room. */
+function waitingOf(seat: Seat | null, restoring: Restoring | null): Restoring | null {
+  return seat !== null && restoring?.code === seat.code ? restoring : null;
+}
+
+/**
+ * The room the join screen is bound to: a run on binds the pass, and so does a room on its way
+ * back to the card (`waiting`) — the card stands in the form's place, no other room opens; null
+ * for neither.
+ */
+function boundTo(seat: Seat | null, waiting: Restoring | null): Seat | null {
+  return seat?.phase === 'playing' || waiting !== null ? seat : null;
+}
+
+/**
+ * How the card's seat is given up while the tab's own comeback waits for its room
+ * (`Restoring.comeback`): by `giveUp`, on a socket of its own; null for the line as it is.
+ */
+function giveUpOf(
+  waiting: Restoring | null,
+  giveUp: (() => void) | undefined,
+): (() => void) | null {
+  return waiting?.comeback === true && giveUp !== undefined ? giveUp : null;
+}
+
 export function JoinScreen({
   send,
   connected,
@@ -497,6 +591,8 @@ export function JoinScreen({
   rooms,
   seat = null,
   takeover = null,
+  restoring = null,
+  giveUp,
   stats,
   openHandbook,
   openHistory,
@@ -504,8 +600,8 @@ export function JoinScreen({
 }: Props) {
   const [name, setName] = useKeptName();
   const comesOn = useComesOn('start');
-  // A run on binds the pass: the card stands in the form's place, no other room opens.
-  const bound = seat?.phase === 'playing';
+  const waiting = waitingOf(seat, restoring);
+  const bound = boundTo(seat, waiting);
 
   // Keep the room browser fresh while nobody has joined anything yet; where the pass sits is
   // asked as the screen comes up, and again whenever the line is back.
@@ -522,7 +618,7 @@ export function JoinScreen({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [connected]);
 
-  const section = { send, connected, name: name.trim(), blocked: bound };
+  const section = { send, connected, name: name.trim(), blocked: bound !== null };
   return (
     <div className="card join">
       <h1 className={phosphorClass(comesOn)}>
@@ -536,9 +632,11 @@ export function JoinScreen({
       <InstallOffer />
       <HttpsHint />
 
-      {seat !== null && <BoundCard seat={seat} send={send} />}
-      {bound ? (
-        <p className="bound-line">{boundLine(seat)}</p>
+      {seat !== null && (
+        <BoundCard seat={seat} send={send} waiting={waiting} giveUp={giveUpOf(waiting, giveUp)} />
+      )}
+      {bound !== null ? (
+        <p className="bound-line">{boundLine(bound)}</p>
       ) : (
         <>
           <label>
@@ -564,7 +662,7 @@ export function JoinScreen({
           openHistory={openHistory}
           {...(openEditor === undefined ? {} : { openEditor })}
         />
-        <WithCode {...section} takeover={takeover ?? null} />
+        <WithCode {...section} takeover={takeover ?? null} waiting={waiting !== null} />
       </div>
     </div>
   );

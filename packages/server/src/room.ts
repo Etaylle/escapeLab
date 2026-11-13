@@ -27,6 +27,9 @@ import {
   runReport,
   runSeconds,
   sayPhrase,
+  SNAPSHOT_EVERY_MS,
+  SNAPSHOT_LIVE_MS,
+  SNAPSHOT_MAX,
   shutDoors,
   sightables,
   stationKey,
@@ -51,6 +54,7 @@ import {
   type RelayedPosition,
   type Phase,
   type RoomSummary,
+  type RoomSnapshot,
   type RtcSignal,
   type RunReport,
   type Seat,
@@ -162,6 +166,38 @@ const CLAIM_REFUSED = 'Die Crew hat die Übernahme nicht bestätigt.';
  */
 export const ASK_AGAIN_MS = 60_000;
 
+/**
+ * Seals a snapshot of the room for its crew to keep (seal.ts) — `final`, the room's last on this
+ * server instance, as it goes down for a restart (`goDown`): the blob it goes out as.
+ */
+export type Sealer = (snapshot: RoomSnapshot, final: boolean) => string;
+
+/**
+ * How long after a room is taken up again from a snapshot a newer snapshot, handed in by a page
+ * coming back, still replaces its game, ms (`replaceFrom`) — unless the crew did something first.
+ */
+export const RESTORE_WINDOW_MS = 10_000;
+
+/**
+ * What the room dispatches of its own as lines come and go — the seats on and off the line, who
+ * stands where, the maintenance pause: none of it is the crew's deed, so none of it ends the
+ * window in which a newer snapshot replaces a room just taken up again.
+ */
+const LINE_ACTIONS: ReadonlySet<Action['type']> = new Set([
+  'player-connected',
+  'player-disconnected',
+  'set-presence',
+  'set-occupancy',
+  'maintenance',
+]);
+
+/**
+ * What the room dispatches of where the crew stands, as it walks: no snapshot goes out for it on
+ * its own — a run whose clock runs sends one every SNAPSHOT_LIVE_MS, where everybody stands with
+ * it.
+ */
+const PRESENCE_ACTIONS: ReadonlySet<Action['type']> = new Set(['set-presence', 'set-occupancy']);
+
 /** A new device's ask for a seat by its name: the pass it brings, whom to tell, its timer. */
 interface Claim {
   pass: CrewPass;
@@ -207,6 +243,14 @@ type PresenceReport = Omit<Extract<Action, { type: 'set-presence' }>, 'type' | '
 
 /** Whose views a change reaches: every member's and the audience's, or only these members'. */
 type Reach = 'everybody' | readonly string[];
+
+/** `map` holding what `record` holds, and nothing else. */
+function refill<V>(map: Map<string, V>, record: Readonly<Record<string, V>>): void {
+  map.clear();
+  for (const [key, value] of Object.entries(record)) {
+    map.set(key, value);
+  }
+}
 
 /**
  * `byId` — who stands at each thing, by its id — with only the players `found(id)` lets count
@@ -283,13 +327,42 @@ export class Room {
   private readonly claims = new Map<string, Claim>();
   /** until when a pass may not ask for a seat again, by seat and pass (`askKey`), epoch ms */
   private readonly askAgainAt = new Map<string, number>();
+  /** epoch ms the room was opened; a room taken up again keeps its own (`restore`) */
+  private opened = Date.now();
+  /** the dispatches so far: a snapshot carries it, and the later of two has the higher */
+  private seq = 0;
+  /** sends the crew a snapshot after a dispatch, SNAPSHOT_EVERY_MS after the last at the soonest */
+  private snapshotTimer: NodeJS.Timeout | null = null;
+  /** sends the crew a snapshot of a run whose clock runs, SNAPSHOT_LIVE_MS after the last */
+  private liveTimer: NodeJS.Timeout | null = null;
+  /** epoch ms the crew was last sent a snapshot */
+  private snapshotSentAt = 0;
+  /** what the last snapshot sent held, its moment apart (`changedSinceSent`); null for none */
+  private sentContent: string | null = null;
+  /** the server goes down (`goDown`): its last snapshot of the room sent, no other goes out */
+  private goneDown = false;
+  /** whether the log said a snapshot was too big to send: it says so once */
+  private tooBigSaid = false;
+  /**
+   * epoch ms the room was taken up again from a snapshot, while a newer one may still replace its
+   * game (`replaceFrom`); null for a room never taken up, or once the crew did something in it
+   */
+  private restoredAt: number | null = null;
+  /** the seq of the snapshot the room was last taken up again from; null: never taken up */
+  private restoredSeq: number | null = null;
+  /**
+   * the seats whose line has been up since the room was opened, or taken up again from a
+   * snapshot (`restore`), by player id: only these bind their pass to the room (`binds`)
+   */
+  private readonly seenOnLine = new Set<string>();
   /** epoch ms since the room has had no connected players, null while occupied */
   emptySince: number | null = null;
 
   /**
    * `seed` pins the room's runs for a repeatable test: run n plays seed + n. `mission` comes
    * scaled to `difficulty`, the one the room opens on. `dailySalt` (dailySalt.ts) makes the
-   * Tagesschicht's seeds; a room without one starts no run on it.
+   * Tagesschicht's seeds; a room without one starts no run on it. With a `sealer` the crew is
+   * sent the room's snapshot after its dispatches (`scheduleSnapshot`); without, none.
    */
   constructor(
     code: string,
@@ -298,9 +371,288 @@ export class Room {
     seed: number | null = null,
     difficulty: Difficulty = 'normal',
     private readonly dailySalt: string | null = null,
+    private readonly sealer: Sealer | null = null,
   ) {
     this.code = code;
     this.state = initialState(mission, seed, difficulty);
+  }
+
+  /**
+   * The room `snapshot` keeps, taken up again at `now` (`snapshot`): the game as it stood — a
+   * run standing still for the whole crew, every seat off the line and the crew not to be gone
+   * on without before FIRST_WAIT_MS from now (core `maintenance`) — every seat bound to its pass
+   * again, and whatever the room kept beside the game. Its timers run again from the due times
+   * the game and what it kept say: a run's once the pause is over, the lobby's seats' at once.
+   * Nobody is on the line yet: the room is empty from `now`. `ties` are what the constructor
+   * takes besides the game.
+   */
+  static restore(
+    snapshot: RoomSnapshot,
+    now: number,
+    ties: { onRunFinished?: RunListener; dailySalt?: string | null; sealer?: Sealer | null } = {},
+  ): Room {
+    const { mission, roomSeed, difficulty } = snapshot.state;
+    const { onRunFinished, dailySalt = null, sealer = null } = ties;
+    const room = new Room(
+      snapshot.code,
+      mission,
+      onRunFinished,
+      roomSeed,
+      difficulty,
+      dailySalt,
+      sealer,
+    );
+    room.load(snapshot, now);
+    room.restoredAt = now;
+    room.restoredSeq = snapshot.seq;
+    return room;
+  }
+
+  /**
+   * Everything a server needs to take this room up again (`restore`), as of `now` (core
+   * snapshot.ts): the room's facts, the game — a run standing still for the whole crew from now
+   * — and its seats, and what the room keeps beside the game. The room itself goes on as it was.
+   */
+  snapshot(now = Date.now()): RoomSnapshot {
+    const { state } = this;
+    const seats = this.seats.snapshot();
+    return {
+      code: this.code,
+      missionId: state.mission.id,
+      seed: state.roomSeed,
+      difficulty: state.difficulty,
+      daily: state.dailyOn,
+      createdAt: this.opened,
+      state: applyAction(state, { type: 'maintenance', at: now, waitFrom: now }),
+      seats: seats.bound.map((seat) => ({ ...seat, name: this.nameOf(seat.playerId) })),
+      lostPasses: seats.lost,
+      keeping: {
+        positions: Object.fromEntries(this.positions),
+        drones: this.drones?.runtimeOf() ?? null,
+        closedClean: [...this.closedClean],
+        askAgainAt: Object.fromEntries(this.askAgainAt),
+        lastPingAt: Object.fromEntries(this.lastPingAt),
+        lastChatAt: Object.fromEntries(this.lastChatAt),
+        signalAllowance: Object.fromEntries(this.signalAllowance),
+        refusedSteps: this.refusedSteps,
+      },
+      seq: this.seq,
+      at: now,
+    };
+  }
+
+  /** The room `snapshot` keeps, in place of this one's, taken up at `now` (`restore`). */
+  private load(snapshot: RoomSnapshot, now: number): void {
+    const { keeping } = snapshot;
+    this.opened = snapshot.createdAt;
+    this.seq = snapshot.seq;
+    this.state = applyAction(snapshot.state, {
+      type: 'maintenance',
+      at: snapshot.at,
+      waitFrom: now,
+    });
+    this.seats.restore(snapshot.seats, snapshot.lostPasses);
+    refill(this.positions, keeping.positions);
+    // Every seat off the line from now, as the run waits for it from now (core `maintenance`): a
+    // lobby seat's wait counts neither the downtime nor how long the lobby stood quiet before.
+    refill(this.lostAt, Object.fromEntries(this.state.players.map((p) => [p.id, now])));
+    refill(this.askAgainAt, keeping.askAgainAt);
+    refill(this.lastPingAt, keeping.lastPingAt);
+    refill(this.lastChatAt, keeping.lastChatAt);
+    refill(this.signalAllowance, keeping.signalAllowance);
+    this.closedClean.clear();
+    keeping.closedClean.forEach((playerId) => this.closedClean.add(playerId));
+    this.refusedSteps = keeping.refusedSteps;
+    const { map } = this.state.mission;
+    this.drones = keeping.drones === null ? null : DronePatrol.resume(map, keeping.drones);
+    this.emptySince = this.listeners.size === 0 ? now : null;
+    this.reconcileClocks();
+    this.reconcileLobbyAway();
+  }
+
+  /**
+   * An action of `type` dispatched: one the crew did — not a line coming or going, nor where it
+   * stands (LINE_ACTIONS) — and a newer snapshot no longer replaces the room's game.
+   */
+  private noteDeed(type: Action['type']): void {
+    if (!LINE_ACTIONS.has(type)) {
+      this.restoredAt = null;
+    }
+  }
+
+  /**
+   * Whether a newer snapshot may still replace the room's game at `now` (`replaceFrom`): within
+   * RESTORE_WINDOW_MS of its restore, and before the crew did anything in it.
+   */
+  private takesSnapshots(now: number): boolean {
+    return this.restoredAt !== null && now < this.restoredAt + RESTORE_WINDOW_MS;
+  }
+
+  /**
+   * The seq of the snapshot the room was last taken up again from (`restore`, `replaceFrom`): a
+   * snapshot of a higher one holds more of the crew's run; null for a room never taken up.
+   */
+  get takenUpFrom(): number | null {
+    return this.restoredSeq;
+  }
+
+  /**
+   * A newer snapshot of this very room, handed in at `now` by a page coming back while the room
+   * still takes one (`takesSnapshots`): the room is taken up again from it in place of the older
+   * one — whoever is back on the line already stays, back on their seat in it, and their views
+   * say so; a seat it does not have is told it left. An older or equal one, one of another room
+   * of this code, or one handed in too late changes nothing. Returns whether it replaced.
+   */
+  replaceFrom(snapshot: RoomSnapshot, now: number): boolean {
+    const from = this.restoredSeq ?? Number.POSITIVE_INFINITY;
+    const newer = snapshot.seq > from && snapshot.createdAt === this.opened;
+    if (!newer || !this.takesSnapshots(now)) {
+      return false;
+    }
+    const attached = [...this.listeners];
+    this.stopTimers();
+    this.forgetWaits();
+    this.load(snapshot, now);
+    this.restoredSeq = snapshot.seq;
+    for (const [playerId, listener] of attached) {
+      if (this.state.players.some((player) => player.id === playerId)) {
+        this.back(playerId);
+      } else {
+        this.listeners.delete(playerId);
+        listener({ kind: 'left', code: this.code, message: null });
+      }
+    }
+    this.broadcast('everybody');
+    if (this.state.phase === 'playing') {
+      this.positionsDirty = true;
+      this.schedulePositionsBroadcast();
+    }
+    return true;
+  }
+
+  /** Epoch ms the room was opened: with its code, what tells it from another room of that code. */
+  get createdAt(): number {
+    return this.opened;
+  }
+
+  /**
+   * After a dispatch of `type`: the crew is sent the room's snapshot (`sendSnapshot`) once the
+   * burst it came in is over, and never sooner than SNAPSHOT_EVERY_MS after the last — what comes
+   * meanwhile goes with that one. None for where the crew stands as it walks (PRESENCE_ACTIONS):
+   * a run whose clock runs sends one every SNAPSHOT_LIVE_MS anyway (`armLiveSnapshot`). Nothing
+   * without a sealer.
+   */
+  private scheduleSnapshot(type: Action['type']): void {
+    if (this.sealer === null || this.snapshotTimer !== null || PRESENCE_ACTIONS.has(type)) {
+      return;
+    }
+    const wait = Math.max(0, this.snapshotSentAt + SNAPSHOT_EVERY_MS - Date.now());
+    this.snapshotTimer = setTimeout(() => {
+      this.snapshotTimer = null;
+      this.sendSnapshot();
+    }, wait);
+  }
+
+  /**
+   * The room's snapshot, sealed (`snapshot {blob, seq, at}`), to every seat on the line, where it
+   * holds something new; the next one of a run whose clock runs armed (`armLiveSnapshot`). None
+   * once the server goes down: its last one went out.
+   */
+  private sendSnapshot(): void {
+    if (this.goneDown) {
+      return;
+    }
+    const sealed = this.sealedAt(Date.now(), false);
+    if (sealed !== null) {
+      for (const listener of this.listeners.values()) {
+        listener({ kind: 'snapshot', ...sealed });
+      }
+    }
+    this.armLiveSnapshot();
+  }
+
+  /**
+   * While the run's clock runs, the crew is sent a snapshot SNAPSHOT_LIVE_MS after the last, what
+   * ever happened meanwhile: the clock moves on, and so does where everybody stands, with no
+   * dispatch to say so. Let go of where the clock stands.
+   */
+  private armLiveSnapshot(): void {
+    clearTimeout(this.liveTimer ?? undefined);
+    this.liveTimer = null;
+    if (this.sealer !== null && this.clockRuns) {
+      this.liveTimer = setTimeout(() => {
+        this.liveTimer = null;
+        this.sendSnapshot();
+      }, SNAPSHOT_LIVE_MS);
+    }
+  }
+
+  /** Whether the run's clock runs: a run on, and standing still for nobody. */
+  private get clockRuns(): boolean {
+    return this.state.phase === 'playing' && this.state.paused === null;
+  }
+
+  /**
+   * Whether a snapshot now holds something the last one sent did not — its moment and its count of
+   * dispatches apart — and so goes out: the last one as the server goes down always does, and one
+   * of a run whose clock runs, whose clock moved on; one of a room whose clock stands only where
+   * what it holds changed. Notes what it holds, for the next.
+   */
+  private changedSinceSent(final: boolean): boolean {
+    const content = this.clockRuns ? null : JSON.stringify({ ...this.snapshot(0), seq: 0 });
+    const changed = final || content === null || content !== this.sentContent;
+    this.sentContent = content;
+    return changed;
+  }
+
+  /**
+   * The room's snapshot as of `now`, sealed for its crew — `final` as the server goes down
+   * (`Sealer`) — with its seq: none without a sealer, for nobody on the line, of a run that is
+   * over — an ended run is not taken up again — none where it holds nothing new
+   * (`changedSinceSent`), and none over SNAPSHOT_MAX, which the log says once.
+   */
+  private sealedAt(now: number, final: boolean): { blob: string; seq: number; at: number } | null {
+    const { phase } = this.state;
+    if (this.sealer === null || this.listeners.size === 0 || phase === 'won' || phase === 'lost') {
+      return null;
+    }
+    if (!this.changedSinceSent(final)) {
+      return null;
+    }
+    const { seq } = this;
+    const blob = this.sealer(this.snapshot(now), final);
+    this.snapshotSentAt = now;
+    if (blob.length <= SNAPSHOT_MAX) {
+      return { blob, seq, at: now };
+    }
+    if (!this.tooBigSaid) {
+      this.tooBigSaid = true;
+      const kb = (blob.length / 1024).toFixed(0);
+      console.warn(`[escapelab] room ${this.code}: a snapshot of ${kb} kB is too big to send`);
+    }
+    return null;
+  }
+
+  /**
+   * The server goes down for a restart at `now` (shutdown.ts): a run on stands still for the
+   * whole crew, every seat away (core `maintenance`) — the crew's views say so — and every seat
+   * on the line is sent the room's last snapshot, sealed as this instance's last of it (`final`),
+   * as `restart {blob, seq, at}`; none of a run that is over. No snapshot of the room goes out
+   * after it. Returns the snapshot's seq and the seats told; null where none was.
+   */
+  goDown(now: number): { seq: number; seats: number } | null {
+    this.goneDown = true;
+    if (this.state.phase === 'playing') {
+      this.dispatch({ type: 'maintenance', at: now, waitFrom: now });
+    }
+    const sealed = this.sealedAt(now, true);
+    if (sealed === null) {
+      return null;
+    }
+    for (const listener of this.listeners.values()) {
+      listener({ kind: 'restart', ...sealed });
+    }
+    return { seq: sealed.seq, seats: this.listeners.size };
   }
 
   /**
@@ -434,13 +786,23 @@ export class Room {
   }
 
   /**
+   * Whether `pass` is bound to this room: it holds a seat here whose line has been up since the
+   * room was opened, or taken up again from a snapshot. A room taken up again binds only whoever
+   * came back to it: a crew that never did is free to go elsewhere.
+   */
+  binds(pass: CrewPass): boolean {
+    const playerId = this.seatOf(pass);
+    return playerId !== null && this.seenOnLine.has(playerId);
+  }
+
+  /**
    * Where `pass` sits in this room, as its join screen shows it (`whereami`), the mission's
-   * clock read at `now`; null for a pass with no seat here, and for one in a finished run —
-   * the end screen binds nobody.
+   * clock read at `now`; null for a pass the room does not bind (`binds`), and for one in a
+   * finished run — the end screen binds nobody.
    */
   seatSummary(pass: CrewPass, now = Date.now()): Seat | null {
     const { state } = this;
-    if (this.seatOf(pass) === null || (state.phase !== 'lobby' && state.phase !== 'playing')) {
+    if (!this.binds(pass) || (state.phase !== 'lobby' && state.phase !== 'playing')) {
       return null;
     }
     const clock = state.paused?.since ?? now;
@@ -590,6 +952,7 @@ export class Room {
   attach(playerId: string, listener: Listener): (clean?: boolean) => void {
     const before = this.listeners.get(playerId);
     this.listeners.set(playerId, listener);
+    this.seenOnLine.add(playerId);
     this.emptySince = null;
     if (before !== undefined && before !== listener) {
       before({ kind: 'left', code: this.code, message: PLAYS_IN_ANOTHER_TAB });
@@ -1694,19 +2057,32 @@ export class Room {
     );
   }
 
-  /** Fixed-rate patrol simulation; only runs while a mission with drones is live in the dark. */
+  /**
+   * Fixed-rate patrol simulation: the patrols of a mission with drones are out while its run is
+   * in the dark, and move while it runs; a pause stands them still where they are, as it stands
+   * the clock still. With the lights on, or the run over, there are none.
+   */
   private reconcileDroneTimer(): void {
     const map = this.state.mission.map;
-    const live =
-      lightsAreOut(this.state) && this.state.paused === null && map.drones.length > 0;
-    if (live && this.droneTimer === null) {
-      this.drones = new DronePatrol(map);
+    if (!lightsAreOut(this.state) || map.drones.length === 0) {
+      this.stopDrones();
+      this.drones = null;
+      return;
+    }
+    this.drones ??= new DronePatrol(map);
+    if (this.state.paused !== null) {
+      this.stopDrones();
+    } else if (this.droneTimer === null) {
       this.lastDroneTick = Date.now();
       this.droneTimer = setInterval(() => this.tickDrones(), DRONE_TICK_MS);
-    } else if (!live && this.droneTimer !== null) {
+    }
+  }
+
+  /** The patrols move no more: their timer stops. */
+  private stopDrones(): void {
+    if (this.droneTimer !== null) {
       clearInterval(this.droneTimer);
       this.droneTimer = null;
-      this.drones = null;
     }
   }
 
@@ -1755,6 +2131,8 @@ export class Room {
     const wasPlaying = this.state.phase === 'playing';
     const world = this.findingWorld();
     this.state = next;
+    this.seq += 1;
+    this.noteDeed(type);
     // A run ends exactly once, won or lost; a rematch is a run of its own.
     if (wasPlaying && (this.state.phase === 'won' || this.state.phase === 'lost')) {
       this.runOver(runReport(this.state, this.code));
@@ -1763,6 +2141,21 @@ export class Room {
     if (this.state.phase !== 'playing') {
       this.forgetGlances();
     }
+    this.reconcileClocks();
+    this.broadcast(reach);
+    // A door opened, a part put down, a station armed: whoever stands still sees it as well.
+    if (type !== 'set-presence' && this.findingWorld() !== world) {
+      this.reconcilePresence();
+    }
+    this.reconcileLobbyAway();
+    this.scheduleSnapshot(type);
+  }
+
+  /**
+   * Every timer of the run armed afresh from the game as it stands — the deadline, the lights,
+   * the open puzzle's clock, mission control's nudge, the patrols, the emergencies — or let go.
+   */
+  private reconcileClocks(): void {
     this.reconcileTimer();
     this.reconcileLights();
     this.reconcilePuzzleClock();
@@ -1770,17 +2163,11 @@ export class Room {
     this.reconcileDroneTimer();
     this.reconcileSabotage();
     this.reconcileRelayTick();
-    this.broadcast(reach);
-    // A door opened, a part put down, a station armed: whoever stands still sees it as well.
-    if (type !== 'set-presence' && this.findingWorld() !== world) {
-      this.reconcilePresence();
-    }
-    this.reconcileLobbyAway();
   }
 
   /**
-   * The run is over: the log says how, its report goes to `onRunFinished`, and no seat of it is
-   * to be taken over any more.
+   * The run is over: the log says how, its report goes to `onRunFinished` — but that of a ghost
+   * (`ghostEnd`) — and no seat of it is to be taken over any more.
    */
   private runOver(report: RunReport): void {
     for (const seatId of [...this.claims.keys()]) {
@@ -1791,7 +2178,21 @@ export class Room {
       `run over, ${report.outcome} after ${runSeconds(report).toFixed(0)} s, ` +
         `crew ${report.crew.join(', ')}${why}`,
     );
+    if (this.ghostEnd(report)) {
+      this.log('not counted: none of its crew but who gave it up came back after the restore');
+      return;
+    }
     this.onRunFinished(report);
+  }
+
+  /**
+   * Whether the run `report` ends is a ghost's: given up, none of its crew but who gave it up on
+   * the line since the room was opened or taken up again. A run starts with its whole crew on
+   * the line, so only a room taken up again from a snapshot holds one — a page that kept a
+   * snapshot of a run over elsewhere, or that its crew left. No run of the crew's: not reported.
+   */
+  private ghostEnd(report: RunReport): boolean {
+    return report.outcome === 'lost:abandoned' && this.seenOnLine.size <= 1;
   }
 
   /** The seats waiting to be freed in the lobby, and the asks for seats: none any more. */
@@ -1859,43 +2260,41 @@ export class Room {
 
   dispose(): void {
     this.forgetWaits();
-    if (this.timer !== null) {
-      clearTimeout(this.timer);
-      this.timer = null;
+    this.stopTimers();
+  }
+
+  /**
+   * Every timer of the room let go — the run's, the stream of positions', the snapshots', the
+   * glances' and the patrols' — and the patrols with them.
+   */
+  private stopTimers(): void {
+    const timers = [
+      this.timer,
+      this.snapshotTimer,
+      this.liveTimer,
+      this.lightsTimer,
+      this.puzzleTimer,
+      this.nudgeTimer,
+      this.positionsTimer,
+      this.keepaliveTimer,
+      this.sabotageTimer,
+    ];
+    for (const timer of timers) {
+      clearTimeout(timer ?? undefined);
     }
-    if (this.lightsTimer !== null) {
-      clearTimeout(this.lightsTimer);
-      this.lightsTimer = null;
-    }
-    if (this.puzzleTimer !== null) {
-      clearTimeout(this.puzzleTimer);
-      this.puzzleTimer = null;
-    }
-    if (this.nudgeTimer !== null) {
-      clearTimeout(this.nudgeTimer);
-      this.nudgeTimer = null;
-    }
+    this.timer = null;
+    this.snapshotTimer = null;
+    this.liveTimer = null;
+    this.lightsTimer = null;
+    this.puzzleTimer = null;
+    this.nudgeTimer = null;
+    this.positionsTimer = null;
+    this.keepaliveTimer = null;
+    this.sabotageTimer = null;
+    clearInterval(this.relayTimer ?? undefined);
+    this.relayTimer = null;
     this.forgetGlances();
-    if (this.positionsTimer !== null) {
-      clearTimeout(this.positionsTimer);
-      this.positionsTimer = null;
-    }
-    if (this.keepaliveTimer !== null) {
-      clearTimeout(this.keepaliveTimer);
-      this.keepaliveTimer = null;
-    }
-    if (this.droneTimer !== null) {
-      clearInterval(this.droneTimer);
-      this.droneTimer = null;
-      this.drones = null;
-    }
-    if (this.sabotageTimer !== null) {
-      clearTimeout(this.sabotageTimer);
-      this.sabotageTimer = null;
-    }
-    if (this.relayTimer !== null) {
-      clearInterval(this.relayTimer);
-      this.relayTimer = null;
-    }
+    this.stopDrones();
+    this.drones = null;
   }
 }

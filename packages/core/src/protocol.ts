@@ -43,6 +43,36 @@ export type RtcSignal = z.infer<typeof rtcSignalSchema>;
 export const SEED_MAX = 0xffff_ffff;
 
 /**
+ * The most a room's sealed snapshot may weigh, in characters (`snapshot`): Blackout's, packed,
+ * runs to 7.9 kB mid-way, a relay emergency on. A room does not send one over it, and a resume
+ * carries none over it.
+ */
+export const SNAPSHOT_MAX = 256 * 1024;
+
+/**
+ * The close code of every socket as the server goes down for a restart (`restart`): Service
+ * Restart. The page that sees it knows the server restarts, told so or not (client line.ts).
+ */
+export const RESTART_CLOSE = 1012;
+
+/**
+ * The most often a room sends its crew its snapshot after a dispatch, ms (`snapshot`): a server
+ * killed outright, with no word to the crew, loses no more of what the crew did than this. Where
+ * the crew stands as it walks sends none of its own (SNAPSHOT_LIVE_MS).
+ */
+export const SNAPSHOT_EVERY_MS = 2000;
+
+/**
+ * The longest a run whose clock runs goes without its crew sent a snapshot, ms: its clock moves
+ * on, and so does where everybody stands, with no dispatch to send one — a server killed
+ * outright rolls neither back by more than this.
+ */
+export const SNAPSHOT_LIVE_MS = 10_000;
+
+/** The oldest snapshot a server takes a room up again from, ms: a day. */
+export const SNAPSHOT_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+
+/**
  * A crew pass (Dienstausweis): what binds a seat to the browser profile that holds it — an id
  * and a secret the client mints once and keeps (client pass.ts), both hex. The server keeps the
  * id and a hash of the secret, never the secret itself; whoever shows both sits down on the
@@ -80,11 +110,16 @@ export const clientMessageSchema = z.discriminatedUnion('kind', [
   }),
   z.object({ kind: z.literal('spectate'), code: z.string().min(1).max(10) }),
   z.object({ kind: z.literal('list-rooms') }),
-  /** back onto the seat the pass holds in the room, from whatever socket this is */
+  /**
+   * back onto the seat the pass holds in the room, from whatever socket this is, with the newest
+   * snapshot of the room the page holds (`snapshot`): a server that knows the room no more takes
+   * it up again from it, one that knows it leaves it be
+   */
   z.object({
     kind: z.literal('resume'),
     code: z.string().min(1).max(10),
     pass: crewPassSchema,
+    blob: z.string().min(1).max(SNAPSHOT_MAX).optional(),
   }),
   /** where the pass sits, for the join screen: answered with `seated` */
   z.object({ kind: z.literal('whereami'), pass: crewPassSchema }),
@@ -338,6 +373,26 @@ export type ServerMessage =
   | { kind: 'tick' }
   /** E was taken: what it did is in the views that came before this */
   | { kind: 'interacted' }
+  /**
+   * the room as of `at`, sealed (server seal.ts) — `seq` its dispatches so far, the newer the
+   * higher: the page keeps the newest of its room and hands it back with every `resume`, so that a
+   * server that knows the room no more, after a deploy or a restart, takes it up again
+   */
+  | { kind: 'snapshot'; blob: string; seq: number; at: number }
+  /**
+   * the server goes down for a restart — a deploy, Render's SIGTERM — and this is the room's
+   * last snapshot, its run standing still for the whole crew: the page keeps it as a
+   * `snapshot`, says so on the line's card, and comes back as for a line dropped once the
+   * server is up again
+   */
+  | { kind: 'restart'; blob: string; seq: number; at: number }
+  /**
+   * the answer to a resume, or to a watch, of room `code` while a new server instance waits for
+   * the newest snapshot of it — the last one of the instance before it, handed in by whoever of
+   * the crew was still there — before it takes the room up again: the seat, or the audience's
+   * view, follows once the room is back
+   */
+  | { kind: 'restoring'; code: string }
   | { kind: 'rooms'; rooms: RoomSummary[] }
   | {
       kind: 'positions';

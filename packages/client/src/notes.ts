@@ -68,7 +68,7 @@ export function notesKey(roomCode: string, playerId: string): string {
 }
 
 /** The browser's local storage; null where the browser does not let the page have it. */
-export function localStore(): NoteStore | null {
+export function localStore(): Storage | null {
   try {
     return window.localStorage ?? null;
   } catch {

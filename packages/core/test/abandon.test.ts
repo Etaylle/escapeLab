@@ -210,7 +210,7 @@ describe('giving the seat up in a run', () => {
     expect(gone.paused).toBeNull();
     const left = run([abandon('p2', T0 + 70_000)], gone);
     expect(left.phase).toBe('playing');
-    expect(left.paused).toEqual({ since: T0 + 70_000 });
+    expect(left.paused).toEqual({ since: T0 + 70_000, kind: 'away' });
     expect(left.away).toEqual({
       p3: { since: T0 + 70_000, waivableAt: T0 + 70_000 + LATER_WAIT_MS, waived: false },
     });

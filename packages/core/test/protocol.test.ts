@@ -1,5 +1,8 @@
+import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { parseClientMessage, RTC_SIGNAL_MAX } from '../src/index.js';
+import { parseClientMessage, RESTART_CLOSE, RTC_SIGNAL_MAX } from '../src/index.js';
 
 /** A voice signal for Ben, as a client sends it. */
 const toBen = (signal: object): string => JSON.stringify({ kind: 'rtc', to: 'ben', signal });
@@ -148,5 +151,27 @@ describe('client messages', () => {
         /Unbekanntes Nachrichtenformat/,
       );
     }
+  });
+});
+
+/** Every TypeScript source under `dir`, by its path. */
+function sourcesUnder(dir: string): string[] {
+  return readdirSync(dir).flatMap((name) => {
+    const path = join(dir, name);
+    if (statSync(path).isDirectory()) {
+      return sourcesUnder(path);
+    }
+    return /\.tsx?$/.test(name) ? [path] : [];
+  });
+}
+
+describe('the close code of a restart', () => {
+  it('is Service Restart, the protocol’s alone: no client or server module writes it', () => {
+    expect(RESTART_CLOSE).toBe(1012);
+    const packages = fileURLToPath(new URL('../../', import.meta.url));
+    const own = ['client/src', 'server/src']
+      .flatMap((root) => sourcesUnder(join(packages, root)))
+      .filter((path) => /\b1012\b/.test(readFileSync(path, 'utf8')));
+    expect(own).toEqual([]);
   });
 });

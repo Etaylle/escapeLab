@@ -8,6 +8,12 @@ import type { RelayState } from './puzzles/relay.js';
 
 export type Phase = 'lobby' | 'playing' | 'won' | 'lost';
 
+/**
+ * Why a run stands still: a crew member's line dropped ('away'), or the server went down for
+ * maintenance — a deploy, a restart — and every seat is away until it is back ('wartung').
+ */
+export type PauseKind = 'away' | 'wartung';
+
 /** One line of the run report, recorded as the mission unfolds. */
 export interface RunEvent {
   /** epoch ms, turned into mm:ss against startedAt for display */
@@ -221,9 +227,10 @@ export interface GameState {
   sabotage: { endsAt: number; emergency?: RelayState } | null;
   /**
    * Set while the run waits for somebody away (`away`, not waived): the clock, patrols and
-   * emergencies all stand still, because the crew cannot finish a mission short-handed.
+   * emergencies all stand still, because the crew cannot finish a mission short-handed. Its
+   * kind says why: a line dropped, or the server's maintenance put every seat away.
    */
-  paused: { since: number } | null;
+  paused: { since: number; kind: PauseKind } | null;
   /**
    * the crew members whose line dropped in this run and who are not back, by player id
    * (actions.ts `player-disconnected`): the run waits for them, or has gone on without them

@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { WebSocketServer } from 'ws';
@@ -18,6 +19,8 @@ import { MissionCatalog } from './missions.js';
 import { RoomManager, seedsAllowed } from './roomManager.js';
 import { DEFAULT_RUNS_LOG } from './runLog.js';
 import { loadRunStats, logRun } from './runStats.js';
+import { roomKey, roomKeyLogLine } from './seal.js';
+import { onSignal } from './shutdown.js';
 import { serveSockets } from './sockets.js';
 import { StaticSite } from './static.js';
 import { createWebServer, lanUrls, tlsLogLine, tlsSetup } from './tls.js';
@@ -52,8 +55,19 @@ const voiceDesk = recordingAllowed(process.env)
 const stats = loadRunStats(RUNS_LOG);
 // The Tagesschicht's salt: DAILY_SALT, else packages/server/data/daily-salt, made once and kept.
 const daily = dailySalt(process.env);
+// The key the rooms' snapshots are sealed with: ROOM_SECRET's, else one of this boot alone.
+const sealing = roomKey(process.env);
+// This boot of the server, an instance of its own: every snapshot it seals names it, so that a
+// new instance tells a snapshot of the one before it from its own.
+const instanceId = randomUUID();
 // A room pinned to a seed repeats its runs: for the walkthrough and bug reports, not for play.
-const manager = new RoomManager(logRun(RUNS_LOG, stats), seedsAllowed(process.env), daily.salt);
+const manager = new RoomManager(
+  logRun(RUNS_LOG, stats),
+  seedsAllowed(process.env),
+  daily.salt,
+  sealing.key,
+  instanceId,
+);
 setInterval(() => manager.sweep(), 60_000).unref();
 // What /health says beside the missions: no code, no name.
 const health: Health = {
@@ -97,6 +111,21 @@ const served = serveSockets(wss, { catalog, manager });
 // log names the room and the seat of each socket it cuts.
 startHeartbeat(wss, HEARTBEAT_MS, served.cut);
 
+// Render's SIGTERM before it replaces the instance, or a Ctrl-C: the server goes down for a
+// restart (shutdown.ts), every run standing still and every seat handed its room's snapshot.
+const goDown = onSignal({
+  stopTaking: () => {
+    wss.close();
+    httpServer.close();
+    httpServer.closeIdleConnections();
+  },
+  sockets: () => wss.clients,
+  manager,
+  exit: (code) => process.exit(code),
+});
+process.on('SIGTERM', goDown);
+process.on('SIGINT', goDown);
+
 httpServer.listen(PORT, () => {
   const ids = catalog.all.map((m) => m.id).join(', ');
   const scheme = tls.on ? 'https' : 'http';
@@ -108,6 +137,8 @@ httpServer.listen(PORT, () => {
   console.log(`[escapelab] finished runs go to ${RUNS_LOG} (${download})`);
   console.log(`[escapelab] GET /stats ranks the ${stats.runs} runs logged so far`);
   console.log(`[escapelab] Tagesschicht: ${DAILY_SALT_FROM[daily.from]}`);
+  console.log(`[escapelab] ${roomKeyLogLine(sealing)}`);
+  console.log(`[escapelab] this boot is instance ${instanceId}: its snapshots name it`);
   if (voiceDesk !== null) {
     console.log(`[escapelab] ALLOW_RECORD=1: POST /voice/:id saves recordings to ${VOICE_DIR}`);
   }

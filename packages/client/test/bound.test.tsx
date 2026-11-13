@@ -1,9 +1,18 @@
 import { renderToStaticMarkup } from 'react-dom/server';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ClientMessage, MissionInfo, Seat } from '@escapelab/core';
 import { PASS_KEY } from '../src/pass.js';
+import { SNAPSHOT_KEY } from '../src/snapshots.js';
+import { useGameConnection, type Restoring } from '../src/ws.js';
 import { CONFIRM_MS, giveUpPress } from '../src/screens/GiveUp.js';
-import { BoundCard, boundLine, doorAsks, JoinScreen } from '../src/screens/Join.js';
+import {
+  BoundCard,
+  boundLine,
+  doorAsks,
+  JoinScreen,
+  restoringLine,
+} from '../src/screens/Join.js';
+import { storage } from './page.js';
 import { buttonsOf, elementsOf, press } from './probe.js';
 
 const noop = (): void => undefined;
@@ -11,17 +20,21 @@ const noop = (): void => undefined;
 /** Ben's browser and its pass, his name kept with it. */
 const PASS = { id: 'b3'.repeat(16), secret: '7e'.repeat(32) };
 
-/** Ben's browser, opened on an invite to room ABCD: the code field filled. */
-function stubWindow(): void {
-  const kept = new Map([[PASS_KEY, JSON.stringify({ ...PASS, name: 'Ben' })]]);
+/**
+ * Ben's browser, opened on an invite to room ABCD: the code field filled; it keeps `more` beside
+ * his pass, by key, and what it keeps is handed back.
+ */
+function stubWindow(more: [string, string][] = []): Map<string, string> {
+  const kept = new Map([[PASS_KEY, JSON.stringify({ ...PASS, name: 'Ben' })], ...more]);
   vi.stubGlobal('window', {
     location: { search: '?room=ABCD' },
     localStorage: {
       getItem: (key: string) => kept.get(key) ?? null,
       setItem: noop,
-      removeItem: noop,
+      removeItem: (key: string) => void kept.delete(key),
     },
   });
+  return kept;
 }
 
 const blackout: MissionInfo = {
@@ -48,7 +61,12 @@ const LOBBY: Seat = { ...RUN, phase: 'lobby', leftMs: null };
 
 const T0 = 1_700_000_000_000;
 
-function joinScreen(seat: Seat | null, send: (msg: ClientMessage) => void = noop) {
+function joinScreen(
+  seat: Seat | null,
+  send: (msg: ClientMessage) => void = noop,
+  restoring: Restoring | null = null,
+  giveUp?: () => void,
+) {
   return (
     <JoinScreen
       send={send}
@@ -56,6 +74,8 @@ function joinScreen(seat: Seat | null, send: (msg: ClientMessage) => void = noop
       missions={[blackout]}
       rooms={[]}
       seat={seat}
+      restoring={restoring}
+      {...(giveUp === undefined ? {} : { giveUp })}
       stats={[]}
       openHandbook={noop}
       openHistory={noop}
@@ -134,6 +154,15 @@ describe('the join screen of a pass bound to a run', () => {
     press(buttonsOf(elements, 'bound-back')[0]);
     expect(sent).toEqual([{ kind: 'resume', code: 'QX7R', pass: PASS }]);
   });
+
+  it('goes back with the snapshot the browser keeps of the room', () => {
+    const blob = 'v1.bm9uY2Vub25jZW5v.c2VhbGVk';
+    stubWindow([[`${SNAPSHOT_KEY}QX7R`, JSON.stringify({ blob, seq: 7, at: T0, seat: RUN })]]);
+    const sent: ClientMessage[] = [];
+    const elements = elementsOf(() => joinScreen(RUN, (msg) => sent.push(msg)));
+    press(buttonsOf(elements, 'bound-back')[0]);
+    expect(sent).toEqual([{ kind: 'resume', code: 'QX7R', pass: PASS, blob }]);
+  });
 });
 
 describe('the join screen of a pass in a lobby', () => {
@@ -160,8 +189,20 @@ describe('the join screen of a pass in a lobby', () => {
     press(buttonsOf(elements, 'bound-back')[0]);
     expect(sent).toEqual([
       { kind: 'abandon', code: 'QX7R', pass: PASS },
+      { kind: 'whereami', pass: PASS },
       { kind: 'resume', code: 'QX7R', pass: PASS },
     ]);
+  });
+
+  it('lets go of the snapshot kept of the room as it is left, and asks where the pass sits', () => {
+    const key = `${SNAPSHOT_KEY}QX7R`;
+    const snapshot = { blob: 'v1.a.b', seq: 3, at: T0, seat: LOBBY };
+    const kept = stubWindow([[key, JSON.stringify(snapshot)]]);
+    const sent: ClientMessage[] = [];
+    const elements = elementsOf(() => joinScreen(LOBBY, (msg) => sent.push(msg)));
+    press(buttonsOf(elements, 'bound-leave')[0]);
+    expect(kept.has(key)).toBe(false);
+    expect(sent.map((msg) => msg.kind)).toEqual(['abandon', 'whereami']);
   });
 
   it('is the plain form where the pass sits nowhere', () => {
@@ -172,7 +213,108 @@ describe('the join screen of a pass in a lobby', () => {
   });
 });
 
+describe('the join screen while its card’s way back waits for the room', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(T0);
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  /** The card gone back to its room 12 s ago, the server waiting for the newest snapshot. */
+  const WAITING: Restoring = { code: 'QX7R', since: T0 - 12_000 };
+
+  it('says the room is on its way back and since when, only the way out open', () => {
+    stubWindow();
+    const html = renderToStaticMarkup(joinScreen(RUN, noop, WAITING));
+    expect(html).toContain(
+      '<span class="kicker bound-kicker">EINSATZ WIRD WIEDERHERGESTELLT</span>',
+    );
+    expect(html).toContain(
+      '<p class="bound-restoring" role="status">Der letzte Stand trifft gleich ein · seit 12 s</p>',
+    );
+    const elements = elementsOf(() => joinScreen(RUN, noop, WAITING));
+    const card = ['Zurück zum Einsatz', 'Einsatz aufgeben'];
+    expect(pressable(elements, [...card, ...ROOM_BUTTONS])).toEqual({
+      'Zurück zum Einsatz': false,
+      'Einsatz aufgeben': true,
+      'Runde eröffnen': false,
+      Beitreten: false,
+      'Mit Code zuschauen': false,
+    });
+  });
+
+  it('binds the screen to a lobby on its way back as well, its way out open', () => {
+    stubWindow();
+    const html = renderToStaticMarkup(joinScreen(LOBBY, noop, WAITING));
+    expect(html).toContain('EINSATZ WIRD WIEDERHERGESTELLT');
+    expect(html).not.toContain('Offene Runden');
+    const elements = elementsOf(() => joinScreen(LOBBY, noop, WAITING));
+    expect(pressable(elements, ['Zurück in den Raum', 'Raum verlassen'])).toEqual({
+      'Zurück in den Raum': false,
+      'Raum verlassen': true,
+    });
+  });
+
+  it('counts the seconds up from the server’s word, never below none', () => {
+    expect(restoringLine(T0, T0)).toBe('Der letzte Stand trifft gleich ein · seit 0 s');
+    expect(restoringLine(T0, T0 + 61_999)).toBe('Der letzte Stand trifft gleich ein · seit 61 s');
+    expect(restoringLine(T0 + 500, T0)).toBe('Der letzte Stand trifft gleich ein · seit 0 s');
+  });
+
+  it('says the same of the tab’s own comeback, its seat given up on a socket of its own', () => {
+    stubWindow();
+    const held: Restoring = { ...WAITING, comeback: true };
+    const html = renderToStaticMarkup(joinScreen(RUN, noop, held, noop));
+    expect(html).toContain('EINSATZ WIRD WIEDERHERGESTELLT');
+    expect(html).toContain('Der letzte Stand trifft gleich ein · seit 12 s');
+    expect(html).toContain('Einsatz aufgeben');
+    const sent: ClientMessage[] = [];
+    const gaveUp = vi.fn();
+    const tab = elementsOf(() => joinScreen(LOBBY, (msg) => sent.push(msg), held, gaveUp));
+    press(buttonsOf(tab, 'bound-leave')[0]);
+    expect(gaveUp).toHaveBeenCalledTimes(1);
+    expect(sent).toEqual([]);
+    // The card's own way back waits on a line that is up: the seat goes on the line as ever.
+    const card = elementsOf(() => joinScreen(LOBBY, (msg) => sent.push(msg), WAITING, gaveUp));
+    press(buttonsOf(card, 'bound-leave')[0]);
+    expect(gaveUp).toHaveBeenCalledTimes(1);
+    expect(sent.map((msg) => msg.kind)).toEqual(['abandon', 'whereami']);
+  });
+
+  it('is the card as ever where another room is awaited', () => {
+    stubWindow();
+    const html = renderToStaticMarkup(joinScreen(RUN, noop, { code: 'AB12', since: T0 }));
+    expect(html).toContain('EINSATZ LÄUFT');
+    expect(html).not.toContain('bound-restoring');
+    const elements = elementsOf(() => joinScreen(RUN, noop, { code: 'AB12', since: T0 }));
+    expect(pressable(elements, ['Zurück zum Einsatz', 'Mit Code zuschauen'])).toEqual({
+      'Zurück zum Einsatz': true,
+      'Mit Code zuschauen': true,
+    });
+  });
+});
+
 describe('what the join screen asks as it comes up', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('stands on the card of the newest snapshot kept from the start, not on the plain form', () => {
+    const fresh = { blob: 'v1.a.b', seq: 7, at: Date.now(), seat: RUN };
+    const local = new Map([[`${SNAPSHOT_KEY}QX7R`, JSON.stringify(fresh)]]);
+    vi.stubGlobal('window', { localStorage: storage(local) });
+    let seat: Seat | null = null;
+    function Probe() {
+      seat = useGameConnection().seat;
+      return null;
+    }
+    renderToStaticMarkup(<Probe />);
+    expect(seat).toEqual(RUN);
+  });
+
   it('asks for the rooms and where the pass sits', () => {
     expect(doorAsks(PASS)).toEqual([
       { kind: 'list-rooms' },
