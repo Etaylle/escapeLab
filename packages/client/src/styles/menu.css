@@ -151,9 +151,9 @@
   list-style: none;
 }
 
-/* A lit item stands out by its bar, its light and its step to the right: that is its focus as
-   well, for the keyboard and a controller alike — the ring of every other control
-   (interaction.css) would only box it in. */
+/* The focused item stands lit — its bar, its light, its step to the right — for the keyboard and
+   a controller alike: the ring of every other control (interaction.css) would only box it in.
+   The pointer only glows the item it is over, and moves no focus (MainMenu.tsx). */
 .menu-list .menu-item {
   display: flex;
   align-items: center;
@@ -179,7 +179,16 @@
     border-color 0.12s;
 }
 
-.menu-list .menu-item:hover:not(:disabled),
+.menu-list .menu-item:hover:not(:disabled) {
+  background: linear-gradient(
+    90deg,
+    rgba(45, 212, 191, 0.16),
+    rgba(45, 212, 191, 0.04) 72%,
+    transparent
+  );
+  color: #f2fffc;
+}
+
 .menu-list .menu-item:focus {
   border-left-color: var(--accent);
   background: linear-gradient(
@@ -200,7 +209,6 @@
   transition: transform 0.12s ease-out;
 }
 
-.menu-list .menu-item:hover .menu-label,
 .menu-list .menu-item:focus .menu-label {
   transform: translateX(8px);
 }
@@ -699,7 +707,6 @@
     animation-name: menu-panel-fade;
   }
 
-  .menu-list .menu-item:hover .menu-label,
   .menu-list .menu-item:focus .menu-label {
     transform: none;
   }

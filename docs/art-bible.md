@@ -510,10 +510,11 @@ stands in the phosphor's white with a green glow and comes on as a phosphor scre
 load (intro.css `phosphor-title`); under it one line of the world, in the mono and spaced:
 „Forschungsanlage Kaltenbrunn · Zutritt nur mit Dienstausweis". The menu stands one item under the
 next in the title's face, upper case: Einsatz starten, Beitreten, Offene Runden, Handbuch,
-Bestenliste, Editor, Einstellungen. The item lit — under the pointer, by the arrows or a
-controller's D-pad — is the focus itself: a teal bar on its left, a teal light behind it, its label
-a step to the right; the ring of every other control (Interface) would only box it in, so it draws
-none. Under the items one quiet line says how the game is played: „Am Pult die Maschine, im Buch die
+Bestenliste, Editor, Einstellungen. The item lit — moved to by the arrows, a controller's D-pad or a
+click — is the focus itself: a teal bar on its left, a teal light behind it, its label a step to the
+right; the ring of every other control (Interface) would only box it in, so it draws none. The
+pointer only glows the item it is over and moves no focus, so that a name being typed keeps it.
+Under the items one quiet line says how the game is played: „Am Pult die Maschine, im Buch die
 Regeln — gelöst wird nur gemeinsam, per Stimme, ein Gerät je Kopf, Rücken an Rücken." A run that
 binds the pass stands first and lit, the items under it dimmed. The profile stands at the top right:
 the player's own figure idling in their colour, waving once a new name has settled, the name to

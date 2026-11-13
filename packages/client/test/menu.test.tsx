@@ -1,4 +1,5 @@
 import { readFileSync, statSync } from 'node:fs';
+import { isValidElement, type ReactElement, type ReactNode } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { MissionInfo, Seat } from '@escapelab/core';
@@ -7,7 +8,7 @@ import { startPad, type PadProbe } from '../src/input/padRuntime.js';
 import { keepColor, lastColor, PASS_KEY } from '../src/pass.js';
 import { wavesAnew } from '../src/screens/CrewFigure.js';
 import { JoinScreen, MENU_LEAD, MENU_SUBTITLE, panelOnArrival } from '../src/screens/Join.js';
-import { MENU_LABELS, menuItems, menuStep } from '../src/screens/MainMenu.js';
+import { MainMenu, MENU_LABELS, menuItems, menuStep } from '../src/screens/MainMenu.js';
 import { codeOf, escapeHandler, inviteUsed, JoinPanel } from '../src/screens/MenuPanels.js';
 import { FIRST_COLOR, ProfileChip } from '../src/screens/ProfileChip.js';
 import { storage } from './page.js';
@@ -170,6 +171,39 @@ describe('the menu', () => {
     stubWindow('?trace=1');
     expect(panelOnArrival()).toBeNull();
     expect(replaced).toEqual([]);
+  });
+});
+
+/** Every element of a tree as written, the elements in its children's too. */
+function elementsIn(node: ReactNode): ReactElement[] {
+  if (Array.isArray(node)) {
+    return node.flatMap((child: ReactNode) => elementsIn(child));
+  }
+  if (!isValidElement(node)) {
+    return [];
+  }
+  return [node, ...elementsIn((node.props as { children?: ReactNode }).children)];
+}
+
+/** What a pointer coming over an item hands its handler: the item, to focus or not. */
+type PointerOver = (event: { currentTarget: { focus: () => void } }) => void;
+
+describe('the menu under the pointer', () => {
+  it('glows the item it points at and leaves the focus where it is, in the name typed', () => {
+    const items = menuItems(true);
+    const nav = MainMenu({ items, card: null, dimmed: false, rooms: 0, onPick: noop });
+    const buttons = elementsIn(nav).filter((element) => element.type === 'button');
+    expect(buttons).toHaveLength(items.length);
+    const focus = vi.fn();
+    for (const button of buttons) {
+      const { onPointerEnter } = button.props as { onPointerEnter?: PointerOver };
+      onPointerEnter?.({ currentTarget: { focus } });
+    }
+    expect(focus).not.toHaveBeenCalled();
+    // It glows all the same: the item under the pointer lights a little, the focused one fully.
+    const sheet = readFileSync(new URL('src/styles/menu.css', CLIENT), 'utf8');
+    expect(sheet).toMatch(/\.menu-list \.menu-item:hover:not\(:disabled\) \{\s+background:/);
+    expect(sheet).toMatch(/\.menu-list \.menu-item:focus \{\s+border-left-color: var\(--accent\);/);
   });
 });
 

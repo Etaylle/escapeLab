@@ -83,10 +83,11 @@ interface MenuProps {
 
 /**
  * The game's menu, one item under the next as a game's main menu stands: the card of a run that
- * binds the pass first, then every way on from here. The arrow keys move between them — a
- * controller's D-pad does through the page (input/focus.ts) —, Enter or A takes one. A pointer
- * over an item takes the focus with it, so that one item stands lit at a time; an item lit ticks,
- * one taken clacks (world/menuSound.ts).
+ * binds the pass first, then every way on from here. The arrow keys move the focus between them
+ * — a controller's D-pad does through the page (input/focus.ts) —, Enter, A or a click takes one.
+ * A pointer over an item only glows it and ticks: the focus stays where it is, in the name being
+ * typed as well, so that no Space or Enter meant for the name takes an item. An item focused
+ * ticks, one taken clacks (world/menuSound.ts).
  */
 export function MainMenu({ items, card, dimmed, rooms, onPick }: MenuProps) {
   return (
@@ -107,7 +108,7 @@ export function MainMenu({ items, card, dimmed, rooms, onPick }: MenuProps) {
                 onPick(id);
               }}
               onFocus={() => uiSound('hover')}
-              onPointerEnter={(e) => e.currentTarget.focus({ preventScroll: true })}
+              onPointerEnter={() => uiSound('hover')}
             >
               <span className="menu-label">{MENU_LABELS[id]}</span>
               {id === 'rounds' && rooms > 0 && <span className="menu-count">{rooms}</span>}
