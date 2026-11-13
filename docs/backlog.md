@@ -408,6 +408,17 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   der Host die Mission wählt, Kaffeemaschine, Tür zu Trakt C geht auf, wenn alle bereit davor
   stehen; Bewegung, Anwesenheit, Näheklang wie im Spiel.
 
+### S-3 Hauptfigur im Menü — Status: bereit (Spec `spec-S-hero.md`, nach S-audition) · Größe: M
+- Uros 2026-11-13 mit dem Titelbild von God of War III: „Eine coole Hauptfigur-Animation noch vor
+  der Karte, die Karte kann bleiben." Nicht dasselbe, aber das Prinzip: die Figur groß und
+  lebendig im Vordergrund rechts, die Welt dahinter, das Menü links.
+- Die eigene Figur in der eigenen Farbe, etwa 5 Kacheln hoch, mit Atmen, Umschauen,
+  Visier-Schimmer bei Mikro, Winken bei Namenswechsel; die Handlampe wirft ihren Kegel mit
+  Staub auf das ziehende Labor und hält kurz auf dem Menüpunkt unter der Maus; Auftritt beim
+  ersten Menü: Hereinlaufen von rechts, Klick, Lampe an; Kopf dreht sich zum Menüpunkt, Figur
+  tritt beiseite, wenn ein Panel aufgeht; ab 900 px Breite, am Handy bleibt der Chip. Kosten
+  ≤ 1 ms je Frame zusammen.
+
 ### K-1 Konto wie bei Dota — Status: bereit (Entscheidung Uros 2026-11-12: eigene Konten, Google zuletzt; nach S-1) · Größe: L
 - Reihenfolge: **K-1a** Datenbank (Neon-Postgres, Prisma) mit Konto je Dienstausweis (Kennung,
   Anzeigename, Farbe, Erfolge), Läufe und Bestenliste in der Datenbank statt der Datei, die
