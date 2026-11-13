@@ -9,7 +9,7 @@ import type {
 } from '@escapelab/core';
 import { formatLeft } from '../clock.js';
 import { useNow } from '../hooks.js';
-import { crewPass, keepName, lastName } from '../pass.js';
+import { crewPass, keepName, lastColor, lastName } from '../pass.js';
 import { dropSnapshot, resumeOf } from '../snapshots.js';
 import type { Restoring, Takeover } from '../ws.js';
 import { GiveUpButton } from './GiveUp.js';
@@ -26,8 +26,9 @@ import {
   RoundsPanel,
   type SectionProps,
 } from './MenuPanels.js';
+import { MenuHero } from './MenuHero.js';
 import { useComesOn } from './phosphor.js';
-import { ProfileChip } from './ProfileChip.js';
+import { FIRST_COLOR, ProfileChip } from './ProfileChip.js';
 
 interface Props {
   send: (msg: ClientMessage) => void;
@@ -340,7 +341,8 @@ function Panels({
 /**
  * The start screen as a game's main menu: the game's title over the living scene of the
  * mission picked (screens/MenuScene.tsx) and a line of the world under it, the profile at the
- * top right, and the menu — the card of where the pass sits first, then „Einsatz starten",
+ * top right, the player's own figure standing large at the right (screens/MenuHero.tsx), and
+ * the menu — the card of where the pass sits first, then „Einsatz starten",
  * „Beitreten", „Offene Runden", the booklet, the Bestenliste, the editor and the settings — the
  * install offer and the HTTPS hint as quiet lines under it. An item with a panel opens it over
  * the menu (MenuPanels.tsx), the rest open their page. A run that binds the pass dims every
@@ -372,6 +374,7 @@ export function JoinScreen(props: Props) {
         <p className="menu-sub">{MENU_SUBTITLE}</p>
       </header>
       <ProfileChip name={name} onName={setName} />
+      <MenuHero name={name} color={lastColor() ?? FIRST_COLOR} />
       <div className="menu-body" inert={panel !== null}>
         <MainMenu
           items={menuItems(props.openEditor !== undefined)}

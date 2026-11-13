@@ -99,7 +99,10 @@
  * asking more than 400 ms. The audience types the room's code in small letters into „Beitreten"
  * (menu-join.png): it has to stand in capitals, in a field no browser fills from its passwords. In
  * the reconnect drill a new tab of Anna's browser, her run standing paused, opens the menu on the
- * run's card, first and lit, every other item dimmed (menu-bound.png). The menu's sound waits for
+ * run's card, first and lit, every other item dimmed (menu-bound.png). The hero — the player's own
+ * figure standing large at the stage's right (client screens/MenuHero.tsx) — has to stand there at
+ * 1440×820 and at 1280×720 about five of the scene's tiles tall, its canvas clear of the menu's
+ * column, its lead line and the profile, or the run fails. The menu's sound waits for
  * the first key, the speaker's lamp lit, and plays after it; the lobby keeps it at its weight,
  * chimes as the round comes up and chirps as Ben says ready; the run's start ends it. The won card
  * asks for its sting and its theme (end music), which go as the next run opens.
@@ -6262,6 +6265,93 @@ const endThemeOf = (page) =>
 /** The menu's quiet window holds the screen's pace under SHOTS_SOFTWARE_GL, ms p95. */
 const MENU_P95_MS = 16.8;
 
+/** The hero off the page's probe (client screens/MenuHero.tsx); null without one. */
+const heroOf = (page) => page.evaluate(() => globalThis.__escapelab?.hero ?? null);
+
+/**
+ * In the page: the hero's canvas, where it shows, and what it has to keep clear of — the menu's
+ * column, its lead line, the profile and a panel open over the menu — each a box in the window's
+ * CSS px; null for what is not there.
+ */
+function heroRoom() {
+  const box = (selector) => {
+    const el = document.querySelector(selector);
+    if (el === null) {
+      return null;
+    }
+    const { left, top, right, bottom } = el.getBoundingClientRect();
+    return { left, top, right, bottom };
+  };
+  return {
+    hero: box('.menu-hero:not([hidden])'),
+    clear: {
+      menu: box('.menu-body'),
+      lead: box('.menu-lead'),
+      profile: box('.profile-chip'),
+      panel: box('.menu-panel'),
+    },
+  };
+}
+
+/** Whether the boxes `a` and `b` overlap. */
+const overlap = (a, b) =>
+  a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+
+/** What the hero's canvas covers of `clear` (heroRoom): their names, none where it covers none. */
+const heroCovers = (hero, clear) =>
+  Object.entries(clear).flatMap(([name, box]) =>
+    box !== null && overlap(hero, box) ? [name] : [],
+  );
+
+/** How far from five scene tiles the hero may stand at 1440×820 and 1280×720. */
+const HERO_TILES_AROUND = 0.25;
+
+/** What the log says of the hero's canvas `box` and of what it covers. */
+function heroText(hero, box, covers) {
+  const [left, top, right, bottom] = [box.left, box.top, box.right, box.bottom].map(Math.round);
+  const where = `${left}–${right} × ${top}–${bottom}`;
+  const clear = covers.length === 0 ? 'clear of the menu, its lead line and the profile' : '';
+  return (
+    `${hero.tiles.toFixed(2)} scene tiles tall, its canvas ${where} px, ` +
+    (clear === '' ? `!! over ${covers.join(', ')}` : clear)
+  );
+}
+
+/**
+ * The hero on `page` with what it has to keep clear of (heroRoom), where it stands on the stage;
+ * null, logged as `label` and the run failed, where it does not.
+ */
+async function heroStanding(page, label) {
+  const hero = await heroOf(page);
+  const room = await page.evaluate(heroRoom);
+  if (hero?.shown === true && room.hero !== null) {
+    return { hero, room };
+  }
+  console.log(`hero               ${label}: !! not standing (${JSON.stringify(hero)})`);
+  fail(`hero @ ${label}: not standing on the stage`);
+  return null;
+}
+
+/**
+ * The hero on `page` (`label`, the window's size): it has to stand there — about five of the
+ * scene's tiles tall where `tall` asks it (HERO_TILES_AROUND) — its canvas covering nothing of
+ * the menu, its lead line, the profile or a panel open; else the run fails.
+ */
+async function checkHero(page, label, tall = false) {
+  const standing = await heroStanding(page, label);
+  if (standing === null) {
+    return null;
+  }
+  const { hero, room } = standing;
+  const covers = heroCovers(room.hero, room.clear);
+  console.log(`hero               ${label}: ${heroText(hero, room.hero, covers)}`);
+  const off = tall && Math.abs(hero.tiles - 5) > HERO_TILES_AROUND;
+  if (covers.length > 0 || off) {
+    fail(`hero @ ${label}: ${hero.tiles.toFixed(2)} tiles, over [${covers.join(', ')}]`);
+  }
+  return hero;
+}
+
 /**
  * menu.png: the start screen as a game's menu over its living scene — the lit lab of the first
  * mission baked for the window and drifting, the title, the menu, the profile — walked by the
@@ -6273,6 +6363,7 @@ async function captureMenu(page) {
   const scene = await sceneBaked(page, { w: SIZES[0].width, h: SIZES[0].height });
   await capture(page, 'menu.png');
   console.log(`menu.png           ${sceneText(scene)}`);
+  await checkHero(page, '1440x820', true);
   await menuSoundAtFirstKey(page, () => walkMenuKeys(page));
   const look = await sampleFrames(page, 'on the menu, its scene drifting', () => sleep(SAMPLE_MS));
   if (SOFTWARE_GL && look !== null && look.p95 > MENU_P95_MS) {
@@ -6283,6 +6374,7 @@ async function captureMenu(page) {
   await sceneBaked(page, { w: 1280, h: 720 });
   await overflow(page, 'menu @ 1280x720');
   await capture(page, 'menu-1280.png');
+  await checkHero(page, '1280x720', true);
   await page.setViewportSize(SIZES[0]);
   await sceneBaked(page, { w: SIZES[0].width, h: SIZES[0].height });
 }
