@@ -210,14 +210,15 @@ Seven plaques a crew earns in a run it wins, read off the run's report alone
 | Jede Station im ersten Versuch | no station reported a wrong move (a drone's alarm is none) |
 | Ungesehen | no drone caught anybody, on a map where drones patrol |
 | Stiller Serverraum | no command at the Serverraum failed (an alarm there); none without one |
-| Erste Schicht | every won run — that it is the first is the device's to tell |
+| Erste Schicht | every won run — that it is the first is the account's to tell |
 
-The view of a finished run carries them (`PlayerView.achievements`). The device keeps each with
-the moment of the run that first earned it (`escapelab.achievements`, by mission). The won card
-shows them as brass plates under its facts — title, line, the day first earned — the ones new
-to this device coming in one after the other, 300 ms apart; under reduced motion they are
-simply there. The lobby counts the mission's: „Erfolge 3/7". The plates praise nobody: they say
-what happened.
+The view of a finished run carries them (`PlayerView.achievements`). The account of each crew
+member's pass keeps each with the end of the run that first earned it, unlocked as the run is
+stored (docs/accounts.md); the browser keeps a cache of them (`escapelab.achievements`, by
+mission), which the server fills with every account message. The won card shows them as brass
+plates under its facts — title, line, the day first earned — the ones new to the account coming in
+one after the other, 300 ms apart; under reduced motion they are simply there. The lobby counts
+the mission's: „Erfolge 3/7". The plates praise nobody: they say what happened.
 
 ## Tagesschicht
 

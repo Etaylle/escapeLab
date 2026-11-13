@@ -440,12 +440,18 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   tritt beiseite, wenn ein Panel aufgeht; ab 900 px Breite, am Handy bleibt der Chip. Kosten
   ≤ 1 ms je Frame zusammen.
 
-### K-1 Konto wie bei Dota — Status: bereit (Entscheidung Uros 2026-11-12: eigene Konten, Google zuletzt; nach S-1) · Größe: L
+### K-1 Konto wie bei Dota — Status: K-1a im PR (K-accounts); K-1b bereit danach (Entscheidung Uros 2026-11-12: eigene Konten, Google zuletzt) · Größe: L
 - Reihenfolge: **K-1a** Datenbank (Neon-Postgres, Prisma) mit Konto je Dienstausweis (Kennung,
   Anzeigename, Farbe, Erfolge), Läufe und Bestenliste in der Datenbank statt der Datei, die
   Render bei jedem Deploy löscht, „Meine Einsätze"; ohne `DATABASE_URL` weiter Datei und Gast
   (Entwicklung, CI). **K-1b** Anmeldung mit Google (Identity Services, `jose`), die ein Konto
   geräteunabhängig macht; Übernahme und Bestätigung entfallen für Angemeldete.
+- K-1a im PR (K-accounts): Prisma 6 (Prisma 7 verlangt einen Treiber-Adapter samt `pg`),
+  Tabellen accounts, identities, runs, run_members, achievements; Speicher hinter einer
+  Schnittstelle (Datei oder Postgres, eine Zeile im Start-Log), Konto je Dienstausweis mit Name
+  und Farbe, „Konto löschen" in den Einstellungen, Läufe je Sitz nach Konto in einer Transaktion,
+  Erfolge je Konto, „Meine Einsätze" neben der Bestenliste; CI mit Postgres-16-Dienst, Smoke mit
+  `TEST_DATABASE_URL`, `docs/accounts.md`. Offen bei Render: `DATABASE_URL` (Neon) setzen.
 - Uros 2026-11-12: „Wieso nicht wie Dota Accounts?" Heute bindet ein Dienstausweis je Browser
   (R-3); ein anderes Gerät kommt nur per Übernahme mit Bestätigung der Crew hinein. Ein Konto
   macht die Identität geräteunabhängig: anmelden, und der laufende Einsatz holt einen zurück,
