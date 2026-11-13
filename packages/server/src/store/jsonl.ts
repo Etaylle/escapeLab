@@ -7,6 +7,7 @@ import { RunStats } from '../runStats.js';
 import {
   checkSecret,
   isLoggedRun,
+  unlockedBy,
   type Account,
   type FinishedRun,
   type LoggedRun,
@@ -145,13 +146,26 @@ export class JsonlStore implements Store {
   async appendRun({ report, passes }: FinishedRun): Promise<void> {
     appendLine(this.file, report);
     this.index.add(report);
+    const unlocked = unlockedBy(report);
     passes.forEach((passId, seat) => {
       const known = passId === null ? undefined : this.identities.get(`pass:${passId}`);
       if (known !== undefined) {
         const seats = this.seated.get(known.accountId) ?? [];
         this.seated.set(known.accountId, [...seats, { run: report, seat }]);
+        this.unlock(known.accountId, unlocked);
       }
     });
+  }
+
+  /** `unlocked` earned by `accountId`: each Erfolg it had already keeps its first date. */
+  private unlock(accountId: string, unlocked: readonly Unlocked[]): void {
+    const earned = this.earned.get(accountId) ?? new Map<string, number>();
+    for (const { key, unlockedAt } of unlocked) {
+      if (!earned.has(key)) {
+        earned.set(key, unlockedAt);
+      }
+    }
+    this.earned.set(accountId, earned);
   }
 
   async runs(missionId?: string): Promise<LoggedRun[]> {

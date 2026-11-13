@@ -1,5 +1,6 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
 import {
+  achievementsOf,
   DIFFICULTIES,
   GameError,
   type RunOutcome,
@@ -65,7 +66,9 @@ export interface Store {
   readonly description: string;
   /**
    * Keeps a finished run with a seat for each of its crew — the account of each pass that has
-   * one — and counts it into the stats. Rejects, naming what to fix, where it could not.
+   * one — and the Erfolge it earned for each of those accounts (`unlockedBy`), at once: each
+   * Erfolg once, dated by the first run that earned it. Counts the run into the stats. Rejects,
+   * naming what to fix, where it could not, and keeps nothing of the run then.
    */
   appendRun(run: FinishedRun): Promise<void>;
   /** Every run kept, the oldest first; only those of `missionId` where it is given. */
@@ -95,6 +98,17 @@ export interface Store {
   deleteAccount(accountId: string): Promise<void>;
   /** Lets go of what the store holds open; first wait for the runs handed over (`Recorder`). */
   close(): Promise<void>;
+}
+
+/**
+ * The Erfolge a finished run earns each account of its crew (core achievements.ts): „mission:
+ * plaque", dated by the run's end; none for a run lost.
+ */
+export function unlockedBy(report: RunReport): Unlocked[] {
+  return achievementsOf(report).map((id) => ({
+    key: `${report.missionId}:${id}`,
+    unlockedAt: report.finishedAt,
+  }));
 }
 
 /** The hash an identity keeps of a pass's secret: sha256, hex. */

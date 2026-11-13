@@ -14,6 +14,7 @@ import { serveSockets } from '../src/sockets.js';
 import { JsonlStore } from '../src/store/jsonl.js';
 import { FakeServer, joinedOf, type FakeSocket } from './line.js';
 import { passFor } from './passes.js';
+import { DAY, finished } from './storeContract.js';
 
 /** The tutorial, for two. */
 const mission: Mission = parseMission(
@@ -54,7 +55,7 @@ afterEach(() => {
 });
 
 describe('an account per crew pass', () => {
-  it('makes the account at the pass’s first question, as the device kept it, and finds it after', async () => {
+  it('makes the account as the device kept it at its first question, finds it after', async () => {
     const { server } = lab();
     const anna = server.connect();
     anna.say({ kind: 'whereami', pass: passFor('Anna'), name: ' Anna ', color: '#a78bfa' });
@@ -75,7 +76,7 @@ describe('an account per crew pass', () => {
     expect(accountOf(tab)).toEqual(made);
   });
 
-  it('goes by the name its pass sits down under, the seat in its colour where that is free', async () => {
+  it('goes by the name its pass sits down under, the seat in its colour where free', async () => {
     const { server } = lab();
     const anna = server.connect();
     anna.say({ kind: 'whereami', pass: passFor('Anna'), name: 'Anna', color: '#a78bfa' });
@@ -92,7 +93,7 @@ describe('an account per crew pass', () => {
     expect(accountOf(ben)).toMatchObject({ name: 'Ben', color: '#a78bfa' });
   });
 
-  it('keeps the colour chosen in a lobby with the account, and the name typed in the menu', async () => {
+  it('keeps the colour chosen in a lobby with the account, and the name typed', async () => {
     const { server } = lab();
     const anna = server.connect();
     anna.say({ kind: 'create-room', name: 'Anna', pass: passFor('Anna') });
@@ -111,7 +112,7 @@ describe('an account per crew pass', () => {
     expect(accounts(ben).map((account) => account?.color)).toEqual([null]);
   });
 
-  it('starts the account of a pass that comes back to a seat before it had one with the seat', async () => {
+  it('starts the account of a pass back on a seat before it had one with the seat', async () => {
     // The seat is taken where no account is kept, and come back to where accounts are.
     const manager = new RoomManager();
     const before = new FakeServer();
@@ -126,7 +127,7 @@ describe('an account per crew pass', () => {
     expect(accountOf(back)).toMatchObject({ name: 'Anna', color: '#fbbf24' });
   });
 
-  it('makes no account for a seat it refuses, nor for a pass shown with another’s secret', async () => {
+  it('makes no account for a seat refused, nor for a pass with another’s secret', async () => {
     const { server } = lab();
     const anna = server.connect();
     anna.say({ kind: 'join-room', code: 'ZZZZ', name: 'Anna', pass: passFor('Anna') });
@@ -147,7 +148,7 @@ describe('an account per crew pass', () => {
     );
   });
 
-  it('deletes the account at its pass’s word, and a new one comes at the next question', async () => {
+  it('deletes the account at its pass’s word, a new one at the next question', async () => {
     const { server } = lab();
     const anna = server.connect();
     anna.say({ kind: 'whereami', pass: passFor('Anna'), name: 'Anna', color: '#a78bfa' });
@@ -178,8 +179,38 @@ describe('an account per crew pass', () => {
     const anna = server.connect();
     anna.say({ kind: 'whereami', pass: passFor('Anna') });
     anna.say({ kind: 'delete-account', pass: passFor('Anna') });
+    anna.say({ kind: 'my-runs', pass: passFor('Anna') });
     await settled();
-    expect(anna.heard.map((m) => m.kind)).toEqual(['seated', 'error']);
-    expect(refusals(anna)).toEqual([['Konten führt dieser Server nicht.', 'delete-account']]);
+    expect(anna.heard.map((m) => m.kind)).toEqual(['seated', 'error', 'error']);
+    expect(refusals(anna)).toEqual([
+      ['Konten führt dieser Server nicht.', 'delete-account'],
+      ['Konten führt dieser Server nicht.', 'my-runs'],
+    ]);
+  });
+
+  it('lists the runs an account played, the newest first; none without one', async () => {
+    const { server, store } = lab();
+    const anna = server.connect();
+    anna.say({ kind: 'my-runs', pass: passFor('Anna') });
+    await settled();
+    expect(anna.heard.at(-1)).toEqual({ kind: 'my-runs', runs: [], total: 0 });
+    anna.say({ kind: 'whereami', pass: passFor('Anna'), name: 'Anna' });
+    await settled();
+    await store.appendRun(finished({ at: DAY, outcome: 'lost:time' }, ['Anna', null]));
+    await store.appendRun(finished({ at: DAY + 1, crew: ['Cleo', 'Anna'] }, [null, 'Anna']));
+    anna.say({ kind: 'my-runs', pass: passFor('Anna') });
+    await settled();
+    const answer = anna.heard.at(-1);
+    expect(answer?.kind === 'my-runs' ? answer.total : null).toBe(2);
+    const listed = answer?.kind === 'my-runs' ? answer.runs : [];
+    expect(listed.map((run) => [run.finishedAt, run.seat])).toEqual([
+      [DAY + 1, 1],
+      [DAY, 0],
+    ]);
+    // A pass shown with another's secret hears of no runs.
+    const forged = { ...passFor('Anna'), secret: passFor('Mallory').secret };
+    anna.say({ kind: 'my-runs', pass: forged });
+    await settled();
+    expect(refusals(anna)).toEqual([['Dieser Ausweis gilt hier nicht.', 'my-runs']]);
   });
 });

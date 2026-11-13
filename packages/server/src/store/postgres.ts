@@ -4,6 +4,7 @@ import { RunStats } from '../runStats.js';
 import {
   checkSecret,
   isLoggedRun,
+  unlockedBy,
   type Account,
   type FinishedRun,
   type LoggedRun,
@@ -140,12 +141,24 @@ export class PostgresStore implements Store {
 
   async appendRun(run: FinishedRun): Promise<void> {
     const subjects = run.passes.filter((passId): passId is string => passId !== null);
+    const unlocked = unlockedBy(run.report);
     await this.db.$transaction(async (tx) => {
       const identities = await tx.identity.findMany({
         where: { provider: 'pass', subject: { in: subjects } },
       });
-      const accounts = new Map(identities.map((identity) => [identity.subject, identity.accountId]));
+      const accounts = new Map(identities.map(({ subject, accountId }) => [subject, accountId]));
       await tx.run.create({ data: runRowOf(run, accounts) });
+      // Each Erfolg once: one an account earned before keeps the date it was first earned.
+      await tx.achievement.createMany({
+        data: [...new Set(accounts.values())].flatMap((accountId) =>
+          unlocked.map(({ key, unlockedAt }) => ({
+            accountId,
+            key,
+            unlockedAt: new Date(unlockedAt),
+          })),
+        ),
+        skipDuplicates: true,
+      });
     });
     this.index.add(run.report);
   }
@@ -176,7 +189,9 @@ export class PostgresStore implements Store {
         take: limit,
       }),
     ]);
-    const runs = seats.flatMap((seat) => this.checked(seat.run).map((run) => ({ run, seat: seat.seat })));
+    const runs = seats.flatMap(({ run: row, seat }) =>
+      this.checked(row).map((run) => ({ run, seat })),
+    );
     return { total, runs };
   }
 

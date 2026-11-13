@@ -137,7 +137,12 @@
  * The won tutorial leads on to Blackout: next-mission.png shows the end
  * screen's „Weiter: Blackout im Labor" beside „Nochmal", both click it — the
  * guest first, the host's click naming the mission — and the run fails
- * unless Blackout opens on both pages with the power on.
+ * unless Blackout opens on both pages with the power on. Then a second tab of
+ * the host's browser opens „Meine Einsätze" off the menu (my-runs.png): the
+ * Systemcheck just won leads the list with its crew and a rank, the page fits
+ * a phone sideways. Its settings delete the account at the second word
+ * (account-delete.png the first answered), the profile says „Gast" with no
+ * name, and „Meine Einsätze" lists nothing more — or the run fails.
  *
  * Blackout on its pinned seed is played to the won card too, with the
  * answers tools/fixtures/blackout-plan.json carries (core's
@@ -10138,6 +10143,102 @@ async function playToTheEnd(host, guest, watcher, pinned) {
   await captureEnd(host, watcher);
   await capturePhoneCard(guest);
   await captureNextMission(host, guest);
+  await captureAccount(host);
+}
+
+/** What the first row of „Meine Einsätze" has to say of the Systemcheck just won. */
+const WON_ROW = [/Systemcheck/, /Geschafft/, /Anna/, /Ben/];
+
+/**
+ * my-runs.png and account-delete.png, after the won Systemcheck: a second tab of the host's
+ * browser — its pass, its account — opens „Meine Einsätze" off the menu, the run just won leading
+ * the list with the crew and a rank, and fitting a phone sideways; then the settings delete the
+ * account at the second word, „Konto löschen" and „Endgültig löschen" (account-delete.png shows
+ * the first answered), the profile says „Gast" with no name, and „Meine Einsätze" lists nothing
+ * any more. The run fails wherever that does not hold.
+ */
+async function captureAccount(host) {
+  const page = await openPage(host.page.context(), 'host tab');
+  try {
+    await page.goto(paged(BASE));
+    const row = await captureMyRuns(page);
+    await page.locator('.history-back').click();
+    await deleteAccount(page);
+    // The slot's text as written: the chip sets it in capitals.
+    const slot = (await page.locator('.profile-slot').textContent())?.trim() ?? null;
+    const name = await page.locator('.profile-name').inputValue();
+    await page.locator('.menu-item', { hasText: 'Meine Einsätze' }).click();
+    const empty = await attached(page.getByText('Noch kein Einsatz mit diesem Konto.'), 10_000);
+    console.log(
+      `account-delete.png ${host.name}'s account deleted: profile "${slot}"` +
+        `${name === '' ? ', no name' : ` !! still "${name}"`}` +
+        (empty ? ', „Meine Einsätze" empty' : ', !! „Meine Einsätze" still lists runs'),
+    );
+    if (slot !== 'Gast' || name !== '' || !empty) {
+      fail(`account-delete: profile "${slot}", name "${name}", runs listed ${!empty} (row ${row})`);
+    }
+  } finally {
+    await page.close();
+  }
+}
+
+/**
+ * my-runs.png: „Meine Einsätze" off the menu of `page`, its first row the run just won (WON_ROW)
+ * with a rank, the page fitting both the window and a phone; the row's text, for the log.
+ */
+async function captureMyRuns(page) {
+  await page.locator('.menu-item', { hasText: 'Meine Einsätze' }).click();
+  const first = page.locator('.my-runs-table tbody tr').first();
+  if (!(await attached(first, 10_000))) {
+    fail('my-runs: „Meine Einsätze" lists no run after the won Systemcheck');
+    return null;
+  }
+  await sleep(300);
+  await capture(page, 'my-runs.png');
+  const row = (await first.innerText()).replace(/\s+/g, ' ').trim();
+  const ranked = (await first.locator('.my-runs-rank').count()) === 1;
+  const { width, height } = page.viewportSize();
+  await overflow(page, `my-runs @ ${width}x${height}`);
+  await page.setViewportSize({ width: SIZES[2].width, height: SIZES[2].height });
+  await sleep(300);
+  const over = await sideways(page, '.content');
+  await page.setViewportSize({ width, height });
+  const holds = WON_ROW.every((part) => part.test(row)) && ranked;
+  console.log(
+    `my-runs.png        first row "${row}"${ranked ? '' : ' !! no rank'}; ` +
+      (over > 0 ? `!! +${over}px sideways on a phone` : 'fits a phone sideways'),
+  );
+  if (!holds || over > 0) {
+    fail(`my-runs: first row "${row}", ranked ${ranked}, ${over}px sideways on a phone`);
+  }
+  return row;
+}
+
+/**
+ * The account of `page`'s pass deleted in the settings: „Konto löschen" asks first, saying what
+ * goes (account-delete.png), „Endgültig löschen" sends it off, the settings say it is gone, and
+ * Esc closes them.
+ */
+async function deleteAccount(page) {
+  await page.locator('.menu-item', { hasText: 'Einstellungen' }).click();
+  await page.locator('.settings-account-delete').click();
+  await page.locator('.settings-account-ask').waitFor({ timeout: 5000 });
+  await sleep(400);
+  const inSight = await page.locator('.settings-account-actions').evaluate((actions) => {
+    const card = actions.closest('.settings-card').getBoundingClientRect();
+    return actions.getBoundingClientRect().bottom <= card.bottom + 0.5;
+  });
+  await capture(page, 'account-delete.png');
+  if (!inSight) {
+    fail('account-delete: „Endgültig löschen" asked below the settings’ fold');
+  }
+  await clickText(page, 'Endgültig löschen');
+  const gone = await attached(page.getByText('Konto gelöscht.', { exact: false }), 10_000);
+  if (!gone) {
+    fail('account-delete: the settings never said the account is gone');
+  }
+  await page.keyboard.press('Escape');
+  await page.locator('.settings-card').waitFor({ state: 'hidden', timeout: 3000 });
 }
 
 /**
@@ -10158,6 +10259,7 @@ async function playPinnedOut(anna, ben, watcher) {
     } else if (mission === 'blackout' && SEED === BLACKOUT_PLAN.seed) {
       await playBlackoutToTheEnd(anna, ben, watcher);
       skip('next-mission.png', 'Blackout leads on to no other mission');
+      skip('my-runs.png', 'taken after the won Systemcheck, with account-delete.png');
     } else if (mission === 'blackout') {
       skip('escape.png', `seed ${SEED} is not the one tools/fixtures/blackout-plan.json pins`);
     }

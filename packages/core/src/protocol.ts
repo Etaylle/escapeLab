@@ -2,8 +2,10 @@ import { z } from 'zod';
 import type { AchievementId } from './achievements.js';
 import { CHAT_PHRASE_COUNT } from './chat.js';
 import { DIFFICULTIES, type Difficulty } from './difficulty.js';
+import type { Grade } from './grade.js';
 import { MAX_NOTES } from './notes.js';
 import type { ManualSection } from './puzzles/module.js';
+import type { RunOutcome } from './report.js';
 import type { Phase } from './state.js';
 import type { PlayerView, SpectatorView } from './view.js';
 
@@ -149,6 +151,8 @@ export const clientMessageSchema = z.discriminatedUnion('kind', [
    * without its name: answered `account` with none; the pass stays this device's key
    */
   z.object({ kind: z.literal('delete-account'), pass: crewPassSchema }),
+  /** the runs the pass's account played, the newest first, for „Meine Einsätze": `my-runs` */
+  z.object({ kind: z.literal('my-runs'), pass: crewPassSchema }),
   /** the seat the pass holds in the room given up for good, from whatever socket this is */
   z.object({
     kind: z.literal('abandon'),
@@ -289,6 +293,25 @@ export interface AccountView {
   achievements: Record<string, Partial<Record<AchievementId, number>>>;
 }
 
+/** A run of an account's, as „Meine Einsätze" lists it (`my-runs`). */
+export interface AccountRun {
+  missionId: string;
+  difficulty: Difficulty;
+  /** the Tagesschicht's day the run played (daily.ts), „2026-11-13"; null for any other run */
+  daily: string | null;
+  outcome: RunOutcome;
+  /** epoch ms the run ended */
+  finishedAt: number;
+  /** its time on the clock, from the lights going out (report.ts `runSeconds`) */
+  seconds: number;
+  /** the crew by the names they played under, in the order they joined; '' for a seat deleted */
+  crew: string[];
+  /** the account's own seat in `crew` */
+  seat: number;
+  /** the grade of a run won (grade.ts); null for a run lost */
+  rank: Grade['rank'] | null;
+}
+
 /** One row in the lobby browser. */
 export interface RoomSummary {
   code: string;
@@ -403,6 +426,8 @@ export type ServerMessage =
    * a lobby — or none, once `delete-account` deleted it
    */
   | { kind: 'account'; account: AccountView | null }
+  /** the runs the pass's account played, the newest first, and how many in all */
+  | { kind: 'my-runs'; runs: AccountRun[]; total: number }
   /**
    * a join by the name of a seat whose line is down waits for the crew on the line to let this
    * device in, until `until` (epoch ms): answered by `takeover-allowed`, or a refusal

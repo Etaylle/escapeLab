@@ -1,5 +1,6 @@
 import type { AccountView, Seat, SpectatorView } from '@escapelab/core';
-import type { Page, Restoring, Takeover } from '../src/ws.js';
+import type { Loaded } from '../src/runStats.js';
+import type { MyRuns, Page, Restoring, Takeover } from '../src/ws.js';
 
 /** A storage kept in a map, as the browser's local and session storage are. */
 export function storage(items: Map<string, string>) {
@@ -23,6 +24,7 @@ export function page() {
     restoring: null as Restoring | null,
     seat: null as Seat | null,
     account: undefined as AccountView | null | undefined,
+    myRuns: null as Loaded<MyRuns> | null,
   };
   const nothing = (): void => undefined;
   const kept: Page = {
@@ -39,6 +41,9 @@ export function page() {
     },
     setAccount: (account) => {
       got.account = account;
+    },
+    setMyRuns: (runs) => {
+      got.myRuns = runs;
     },
     setTakeover: (takeover) => {
       got.takeover = takeover;

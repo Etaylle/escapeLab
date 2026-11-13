@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  achievementsOf,
   NO_CREDITS,
   type Difficulty,
   type RunOutcome,
@@ -98,7 +99,7 @@ const anna = { displayName: 'Anna', colour: '#2dd4bf' };
 /** Runs the contract against the store `open` opens, under `name`. */
 export function storeContract(name: string, open: () => Promise<Opened>): void {
   describe(`${name}: the runs`, () => {
-    it('hands a run back whole, the oldest first, and the runs of one mission where asked', async () => {
+    it('hands a run back whole, the oldest first, those of one mission where asked', async () => {
       const { store } = await open();
       const first = finished({ at: DAY, crew: ['Anna', 'Ben', 'Cleo'] }, [null, null, null]);
       const second = finished({ mission: 'systemcheck', at: DAY + 1 }, [null, null]);
@@ -109,7 +110,7 @@ export function storeContract(name: string, open: () => Promise<Opened>): void {
       expect(await store.runs('nirgends')).toEqual([]);
     });
 
-    it('counts what it keeps into the Bestenliste, and counts it again when opened anew', async () => {
+    it('counts what it keeps into the Bestenliste, and again when opened anew', async () => {
       const { store, reopen } = await open();
       expect(store.stats().runs).toBe(0);
       await store.appendRun(finished({ seconds: 300 }, [null, null]));
@@ -151,7 +152,8 @@ export function storeContract(name: string, open: () => Promise<Opened>): void {
       expect(await store.findByIdentity(identityOf('Anna'))).toBeNull();
       expect(await store.findByIdentity(identityOf('Anna'))).toBeNull();
       const made = await store.getOrCreateByIdentity(identityOf('Anna'), anna);
-      expect(await store.findByIdentity(identityOf('Anna'))).toMatchObject({ id: made.id, ...anna });
+      const found = await store.findByIdentity(identityOf('Anna'));
+      expect(found).toMatchObject({ id: made.id, ...anna });
     });
 
     it('changes a profile part by part', async () => {
@@ -175,7 +177,8 @@ export function storeContract(name: string, open: () => Promise<Opened>): void {
       const bens = await store.getOrCreateByIdentity(identityOf('Ben'), anna);
       const crew = ['Anna', 'Cleo', 'Ben'];
       await store.appendRun(finished({ crew, at: DAY }, ['Anna', null, 'Ben']));
-      await store.appendRun(finished({ crew, at: DAY + 1, outcome: 'lost:time' }, ['Anna', null, 'Ben']));
+      const lost = { crew, at: DAY + 1, outcome: 'lost:time' as const };
+      await store.appendRun(finished(lost, ['Anna', null, 'Ben']));
       await store.appendRun(finished({ crew: ['Cleo', 'Dan'], at: DAY + 2 }, ['Cleo', 'Dan']));
       const of = await store.runsOfAccount(annas.id, 10);
       expect(of.total).toBe(2);
@@ -199,6 +202,25 @@ export function storeContract(name: string, open: () => Promise<Opened>): void {
       const { store } = await open();
       const { id } = await store.getOrCreateByIdentity(identityOf('Anna'), anna);
       expect(await store.achievements(id)).toEqual([]);
+    });
+
+    it('unlocks what a won run earns for each account of its crew, each once', async () => {
+      const { store } = await open();
+      const annas = await store.getOrCreateByIdentity(identityOf('Anna'), anna);
+      const bens = await store.getOrCreateByIdentity(identityOf('Ben'), anna);
+      const earned = achievementsOf(reportOf()).map((id) => `blackout:${id}`);
+      expect(earned.length).toBeGreaterThan(0);
+      await store.appendRun(finished({ at: DAY, outcome: 'lost:time' }, ['Anna', null]));
+      expect(await store.achievements(annas.id)).toEqual([]);
+      await store.appendRun(finished({ at: DAY + 1 }, ['Anna', null]));
+      await store.appendRun(finished({ at: DAY + 2, crew: ['Anna'] }, ['Anna']));
+      const kept = await store.achievements(annas.id);
+      const dated = kept.map(({ key, unlockedAt }) => [key, unlockedAt]);
+      expect(dated.sort()).toEqual(earned.map((key) => [key, DAY + 1]).sort());
+      // Ben sat in no run, his account earned nothing; the seat no account held, nobody.
+      expect(await store.achievements(bens.id)).toEqual([]);
+      await store.deleteAccount(annas.id);
+      expect(await store.achievements(annas.id)).toEqual([]);
     });
 
     it('deletes an account with its identity and its seats, and keeps the runs', async () => {

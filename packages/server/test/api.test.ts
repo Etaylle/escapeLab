@@ -297,12 +297,14 @@ describe('GET /runs.jsonl', () => {
 
   it('hands out the runs of one mission where asked', async () => {
     const answer = await ask(withToken, get('/runs.jsonl?mission=systemcheck', 'Bearer geheim-42'));
-    expect(answer.body).toBe(`${JSON.stringify(reportOf({ mission: 'systemcheck', at: DAY + 1 }))}\n`);
+    const systemcheck = reportOf({ mission: 'systemcheck', at: DAY + 1 });
+    expect(answer.body).toBe(`${JSON.stringify(systemcheck)}\n`);
   });
 
   it('hands out nothing until the first run has finished', async () => {
     const empty = JsonlStore.open(join(dir, 'noch-leer', 'runs.jsonl'));
-    const answer = await ask({ store: empty, token: 'geheim-42' }, get('/runs.jsonl', 'Bearer geheim-42'));
+    const asked = get('/runs.jsonl', 'Bearer geheim-42');
+    const answer = await ask({ store: empty, token: 'geheim-42' }, asked);
     expect(answer).toMatchObject({ status: 200, body: '' });
   });
 

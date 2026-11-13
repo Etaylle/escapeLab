@@ -201,6 +201,7 @@ const DOOR_KINDS = [
   'abandon',
   'profile',
   'delete-account',
+  'my-runs',
   'tock',
 ] as const satisfies readonly ClientMessage['kind'][];
 
@@ -261,6 +262,7 @@ function atTheDoor(
       return comeBack(lab, socket, session, msg, again);
     case 'profile':
     case 'delete-account':
+    case 'my-runs':
       answerAccount(lab, socket, msg);
       return session;
     default:
@@ -291,30 +293,23 @@ function tellAccount(socket: PlayerSocket, job: Promise<AccountView> | undefined
   );
 }
 
+/** What a pass asks of its account: its name, that it go, the runs it played. */
+type AccountAsk = Extract<ClientMessage, { kind: 'profile' | 'delete-account' | 'my-runs' }>;
+
 /**
- * What a pass asked of its account — its name (`profile`), or that it go (`delete-account`) —
- * done, and the account as it stands told the socket, or none once deleted; refused where it
- * cannot be done, saying why: a store out of reach in the lab's words, the log saying more.
+ * What a pass asked of its account — its name (`profile`), that it go (`delete-account`), the
+ * runs it played (`my-runs`) — done, and answered once it is: the account as it stands, none
+ * once deleted, the runs; refused where it cannot be done, saying why: a store out of reach in
+ * the lab's words, the log saying more.
  */
-function answerAccount(
-  lab: Lab,
-  socket: PlayerSocket,
-  msg: Extract<ClientMessage, { kind: 'profile' | 'delete-account' }>,
-): void {
+function answerAccount(lab: Lab, socket: PlayerSocket, msg: AccountAsk): void {
   const desk = lab.accounts;
   if (desk === undefined) {
     refuse(socket, null, msg, new GameError(NO_ACCOUNTS));
     return;
   }
-  const job =
-    msg.kind === 'profile'
-      ? desk.rename(msg.pass, msg.name.trim())
-      : desk.delete(msg.pass).then(() => {
-          console.log('[escapelab] an account was deleted, as its pass asked');
-          return null;
-        });
-  job.then(
-    (account) => send(socket, { kind: 'account', account }),
+  answerOf(desk, msg).then(
+    (answer) => send(socket, answer),
     (err: unknown) => {
       if (!(err instanceof GameError)) {
         console.error(`[escapelab] ${msg.kind} not done: ${whyOf(err)}`);
@@ -322,6 +317,23 @@ function answerAccount(
       refuse(socket, null, msg, err instanceof GameError ? err : new GameError(ACCOUNT_AWAY));
     },
   );
+}
+
+/** What `desk` answers `msg` with, once it has done it (`answerAccount`). */
+function answerOf(desk: AccountDesk, msg: AccountAsk): Promise<ServerMessage> {
+  switch (msg.kind) {
+    case 'profile':
+      return desk
+        .rename(msg.pass, msg.name.trim())
+        .then((account) => ({ kind: 'account', account }));
+    case 'delete-account':
+      return desk.delete(msg.pass).then(() => {
+        console.log('[escapelab] an account was deleted, as its pass asked');
+        return { kind: 'account', account: null };
+      });
+    case 'my-runs':
+      return desk.runsOf(msg.pass).then(({ runs, total }) => ({ kind: 'my-runs', runs, total }));
+  }
 }
 
 /**

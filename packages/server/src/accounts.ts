@@ -1,5 +1,9 @@
 import {
   ACHIEVEMENT_IDS,
+  reportGrade,
+  runSeconds,
+  utcDay,
+  type AccountRun,
   type AccountView,
   type AchievementId,
   type CrewPass,
@@ -9,6 +13,7 @@ import {
   type Account,
   type PassIdentity,
   type Profile,
+  type SeatedRun,
   type Store,
   type Unlocked,
 } from './store/store.js';
@@ -17,10 +22,14 @@ import {
  * The accounts as the sockets reach them (sockets.ts): the account of a crew pass — found, or
  * made the first time the pass asks where it sits, takes a seat or comes back to one — and what
  * its player changes of it: the name typed in the menu's profile, the colour chosen in a lobby,
- * the account deleted. The pass stays the key on its device. Each pass's requests are carried
+ * the account deleted — and the runs it played („Meine Einsätze"). The pass stays the key on its
+ * device. Each pass's requests are carried
  * out one after the other, in the order they came: an account is made once, and no answer
  * overtakes the one before it.
  */
+
+/** How many of an account's runs „Meine Einsätze" lists: the newest. */
+export const MY_RUNS = 50;
 
 /** The identity a crew pass shows a store: its id, and the hash of its secret. */
 export function identityOf(pass: CrewPass): PassIdentity {
@@ -29,7 +38,26 @@ export function identityOf(pass: CrewPass): PassIdentity {
 
 const isAchievement = (id: string): id is AchievementId => ACHIEVEMENT_IDS.some((a) => a === id);
 
-/** The Erfolge `unlocked` by mission, as an account's view hands them out („blackout:ohne-alarm"). */
+/**
+ * A run of an account's as „Meine Einsätze" lists it: the account's seat in it, its time on the
+ * clock and its grade, both reckoned from its report as the end screen did from the run.
+ */
+export function accountRunOf({ run, seat }: SeatedRun): AccountRun {
+  const daily = run.version === 2 && run.daily === true;
+  return {
+    missionId: run.missionId,
+    difficulty: run.difficulty,
+    daily: daily ? utcDay(run.startedAt) : null,
+    outcome: run.outcome,
+    finishedAt: run.finishedAt,
+    seconds: runSeconds(run),
+    crew: run.version === 1 ? [] : [...run.crew],
+    seat,
+    rank: reportGrade(run)?.rank ?? null,
+  };
+}
+
+/** The Erfolge `unlocked` by mission, as an account's view has them („blackout:ohne-alarm"). */
 export function byMission(unlocked: readonly Unlocked[]): AccountView['achievements'] {
   const missions: AccountView['achievements'] = {};
   for (const { key, unlockedAt } of unlocked) {
@@ -83,6 +111,21 @@ export class AccountDesk {
       if (account !== null) {
         await this.store.deleteAccount(account.id);
       }
+    });
+  }
+
+  /**
+   * The runs the account of `pass` played, the newest MY_RUNS of them, and how many in all; none
+   * where the pass has no account. Throws GameError for a pass shown with the wrong secret.
+   */
+  runsOf(pass: CrewPass): Promise<{ runs: AccountRun[]; total: number }> {
+    return this.serial(pass, async () => {
+      const account = await this.store.findByIdentity(identityOf(pass));
+      if (account === null) {
+        return { runs: [], total: 0 };
+      }
+      const { total, runs } = await this.store.runsOfAccount(account.id, MY_RUNS);
+      return { runs: runs.map(accountRunOf), total };
     });
   }
 

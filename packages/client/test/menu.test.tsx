@@ -16,7 +16,13 @@ import {
   pagesOf,
   panelOnArrival,
 } from '../src/screens/Join.js';
-import { MainMenu, MENU_LABELS, menuItems, menuStep } from '../src/screens/MainMenu.js';
+import {
+  controlsIn,
+  MainMenu,
+  MENU_LABELS,
+  menuItems,
+  menuStep,
+} from '../src/screens/MainMenu.js';
 import {
   codeOf,
   escapeHandler,
@@ -132,6 +138,7 @@ describe('the menu', () => {
       'Offene Runden',
       'Handbuch',
       'Bestenliste',
+      'Meine Einsätze',
       'Editor',
       'Einstellungen',
     ]);
@@ -255,6 +262,22 @@ function elementsIn(node: ReactNode): ReactElement[] {
 
 /** What a pointer coming over an item hands its handler: the item, to focus or not. */
 type PointerOver = (event: { currentTarget: { focus: () => void } }) => void;
+
+describe('the menu’s arrow keys', () => {
+  it('step over an item the layout hides, as a phone held sideways hides the settings', () => {
+    const button = (label: string, shown: boolean) =>
+      ({ label, getClientRects: () => (shown ? [{}] : []) }) as unknown as HTMLButtonElement;
+    const buttons = [button('Editor', true), button('Einstellungen', false), button('Karte', true)];
+    const nav = { querySelectorAll: () => buttons } as unknown as Pick<
+      HTMLElement,
+      'querySelectorAll'
+    >;
+    expect(controlsIn(nav).map((el) => (el as unknown as { label: string }).label)).toEqual([
+      'Editor',
+      'Karte',
+    ]);
+  });
+});
 
 describe('the menu’s ways off it', () => {
   it('opens the booklet and the Bestenliste of the mission picked, each its own', () => {
@@ -404,7 +427,7 @@ describe('the profile', () => {
     expect(html).toContain('Türkis</span>');
   });
 
-  it('keeps the account’s name and colour with the pass, and nothing that is no crew colour', () => {
+  it('keeps the account’s name and colour with the pass, no colour but a crew colour', () => {
     const kept = stubWindow();
     expect(lastColor()).toBeNull();
     keepProfile({ name: 'Anna B.', color: '#60a5fa' });

@@ -161,7 +161,11 @@ export function AccountSection(props: {
       <legend>Konto</legend>
       <p className="settings-account-facts">{accountFacts(account)}</p>
       {step === 'idle' ? (
-        <button type="button" className="danger settings-account-delete" onClick={() => onStep('asked')}>
+        <button
+          type="button"
+          className="danger settings-account-delete"
+          onClick={() => onStep('asked')}
+        >
           Konto löschen
         </button>
       ) : (

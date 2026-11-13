@@ -557,6 +557,14 @@
     padding-block: 6px;
   }
 
+  /*
+   * Eight items a fingertip high each run past a window 390 px high: the settings go from the
+   * column, as the gear in the bar right over it opens them.
+   */
+  .menu-list li:has(> .menu-item[data-item='settings']) {
+    display: none;
+  }
+
   .menu-panel {
     grid-area: 1 / 1 / -1 / -1;
   }

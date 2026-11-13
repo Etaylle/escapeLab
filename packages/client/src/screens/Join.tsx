@@ -62,6 +62,8 @@ interface Props {
   onPick: (missionId: string) => void;
   openHandbook: (missionId: string) => void;
   openHistory: (missionId: string) => void;
+  /** opens „Meine Einsätze"; without it the menu's item leads nowhere */
+  openMyRuns?: () => void;
   /** opens the mission editor; without it the menu offers none */
   openEditor?: () => void;
   /** opens the settings, as the gear in the top bar does; without it the menu offers none */
@@ -359,17 +361,21 @@ function usePanel(root: RefObject<HTMLElement | null>, named: boolean) {
 
 /**
  * The ways the menu's items lead off it to a page of its own: the booklet and the Bestenliste of
- * the mission `selected`, the editor, the settings.
+ * the mission `selected`, the account's runs, the editor, the settings.
  */
 export function pagesOf(
-  props: Pick<Props, 'openHandbook' | 'openHistory' | 'openEditor' | 'openSettings'>,
+  props: Pick<
+    Props,
+    'openHandbook' | 'openHistory' | 'openMyRuns' | 'openEditor' | 'openSettings'
+  >,
   selected: string | null,
 ): Partial<Record<MenuItemId, () => void>> {
-  const { openHandbook, openHistory, openEditor, openSettings } = props;
+  const { openHandbook, openHistory, openMyRuns, openEditor, openSettings } = props;
   return {
     ...(selected === null
       ? {}
       : { handbook: () => openHandbook(selected), history: () => openHistory(selected) }),
+    ...(openMyRuns === undefined ? {} : { myruns: openMyRuns }),
     ...(openEditor === undefined ? {} : { editor: openEditor }),
     ...(openSettings === undefined ? {} : { settings: openSettings }),
   };
@@ -410,7 +416,8 @@ function Panels({
  * The start screen as a game's main menu: the game's title over the living scene of the
  * mission picked (screens/MenuScene.tsx) and a line of the world under it, the profile at the
  * top right, and the menu — the card of where the pass sits first, then „Einsatz starten",
- * „Beitreten", „Offene Runden", the booklet, the Bestenliste, the editor and the settings — the
+ * „Beitreten", „Offene Runden", the booklet, the Bestenliste, „Meine Einsätze", the editor and
+ * the settings — the
  * install offer and the HTTPS hint as quiet lines under it. An item with a panel opens it over
  * the menu (MenuPanels.tsx), the rest open their page. A run that binds the pass dims every
  * item but its card, and one line says why no other room opens.

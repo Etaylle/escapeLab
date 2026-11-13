@@ -200,7 +200,7 @@ describe('the start script', () => {
     expect(status).toBe(0);
   });
 
-  it('applies the migrations first where DATABASE_URL is set, and starts nothing if they fail', () => {
+  it('applies the migrations first where DATABASE_URL is set, and stops where they fail', () => {
     const migrated = startWith({ DATABASE_URL: 'set' });
     const shell = migrated.calls[0]?.split(' ')[1];
     const migration = migrated.calls[1]?.split(' ');

@@ -149,7 +149,8 @@ httpServer.listen(PORT, () => {
     ? 'GET /runs.jsonl takes RUNS_TOKEN'
     : 'RUNS_TOKEN unset: no download';
   console.log(`[escapelab] store: ${store.description}`);
-  console.log(`[escapelab] GET /stats ranks the ${store.stats().runs} runs kept so far (${download})`);
+  const kept = store.stats().runs;
+  console.log(`[escapelab] GET /stats ranks the ${kept} runs kept so far (${download})`);
   console.log(`[escapelab] Tagesschicht: ${DAILY_SALT_FROM[daily.from]}`);
   console.log(`[escapelab] ${roomKeyLogLine(sealing)}`);
   console.log(`[escapelab] this boot is instance ${instanceId}: its snapshots name it`);

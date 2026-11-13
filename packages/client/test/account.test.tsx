@@ -100,7 +100,7 @@ describe('the profile, as the account', () => {
 });
 
 describe('the account on the line', () => {
-  it('keeps the account’s name, colour and Erfolge with the pass, and forgets them as it goes', () => {
+  it('keeps the account’s name, colour and Erfolge with the pass, forgets them as it goes', () => {
     const local = browser({ name: 'Ann', color: '#f472b6' });
     local.set(ACHIEVEMENTS_KEY, JSON.stringify({ systemcheck: { 'erste-schicht': 50 } }));
     const { kept, got } = page();

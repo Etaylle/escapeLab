@@ -14,6 +14,7 @@ import { fillEarned, forgetEarned } from './achievements.js';
 import { askForTime, clock, localNow } from './clock.js';
 import { keepConnected, wipesBanner, type Line, type LineStatus, type Retry } from './line.js';
 import { forgetNotes, localStore } from './notes.js';
+import type { Loaded } from './runStats.js';
 import { crewPass, forgetProfile, keepProfile } from './pass.js';
 import {
   dropSnapshot,
@@ -49,6 +50,9 @@ const ANSWERED_IN_PLACE: ReadonlySet<ClientMessage['kind']> = new Set([
 export function inBanner(of: ClientMessage['kind'] | undefined): boolean {
   return of === undefined || !ANSWERED_IN_PLACE.has(of);
 }
+
+/** The runs of the pass's account as the server sent them (`my-runs`): the newest, the count. */
+export type MyRuns = Omit<Extract<ServerMessage, { kind: 'my-runs' }>, 'kind'>;
 
 /** This device's ask for a seat by its name, waiting for the crew to let it in. */
 export interface Takeover {
@@ -94,6 +98,10 @@ export interface Connection {
   seat: Seat | null;
   /** the pass's account as the server last told it; null before it did, and once deleted */
   account: AccountView | null;
+  /** the runs of the pass's account, as the server last answered `askMyRuns`, or why it did not */
+  myRuns: Loaded<MyRuns>;
+  /** asks the server for the runs of the pass's account (`my-runs`); stable for the page's life */
+  askMyRuns: () => void;
   roomCode: string | null;
   /**
    * the banner's words: a refusal of what is answered nowhere else (`ANSWERED_IN_PLACE`), there
@@ -182,6 +190,7 @@ export interface Page {
   setRooms: (rooms: RoomSummary[]) => void;
   setSeat: (seat: Seat | null) => void;
   setAccount: (account: AccountView | null) => void;
+  setMyRuns: (runs: Loaded<MyRuns>) => void;
   setTakeover: (takeover: Takeover | null) => void;
   setRestoring: (restoring: Restoring | null) => void;
   setError: (message: string) => void;
@@ -277,6 +286,9 @@ function lineNews(msg: ServerMessage, page: Page): void {
       break;
     case 'account':
       accountNews(msg.account, page);
+      break;
+    case 'my-runs':
+      page.setMyRuns({ status: 'ready', value: { runs: msg.runs, total: msg.total } });
       break;
     case 'error':
       refused(msg, page);
@@ -417,6 +429,9 @@ function refused(msg: Extract<ServerMessage, { kind: 'error' }>, page: Page): vo
   }
   if (msg.of === 'resume') {
     resumeRefused(page);
+  }
+  if (msg.of === 'my-runs') {
+    page.setMyRuns({ status: 'failed', reason: msg.message });
   }
   if (inBanner(msg.of)) {
     page.setError(msg.message);
@@ -659,6 +674,7 @@ export function useGameConnection(): Connection {
   // The card of the newest snapshot kept stands from the start, till the server says otherwise.
   const [seat, setSeat] = useState<Seat | null>(keptSeat);
   const [account, setAccount] = useState<AccountView | null>(null);
+  const [myRuns, setMyRuns] = useState<Loaded<MyRuns>>({ status: 'loading' });
   const [takeover, setTakeover] = useState<Takeover | null>(null);
   const [restoring, setRestoring] = useState<Restoring | null>(null);
   const [roomCode, setRoomCode] = useState<string | null>(roomOfTab);
@@ -693,6 +709,7 @@ export function useGameConnection(): Connection {
       setRooms,
       setSeat,
       setAccount,
+      setMyRuns,
       setTakeover,
       setRestoring,
       setError,
@@ -708,6 +725,11 @@ export function useGameConnection(): Connection {
     listeners: listenersRef,
   });
 
+  const askMyRuns = useCallback(() => {
+    setMyRuns({ status: 'loading' });
+    lineRef.current?.send({ kind: 'my-runs', pass: crewPass() });
+  }, [lineRef]);
+
   return {
     status,
     retry,
@@ -718,6 +740,8 @@ export function useGameConnection(): Connection {
     rooms,
     seat,
     account,
+    myRuns,
+    askMyRuns,
     roomCode,
     error,
     refusal,
