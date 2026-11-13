@@ -1,4 +1,4 @@
-import { figurePose, type FigurePose } from '../figure.js';
+import { figurePose, HOLD, type FigurePose } from '../figure.js';
 import { SHOT_WIDE } from '../intro/shot.js';
 import { tileCss } from '../viewport.js';
 
@@ -20,11 +20,12 @@ export const HERO_TILES = { least: 4, most: 6 } as const;
 export const FIGURE_TALL = 0.855;
 /**
  * The box round the feet that every pose of the hero stays within, figure units: its front —
- * the menu's side, on the left, where a waving hand swings out — its back with the pack and its
- * drop shadow (heroArt.ts), the waving hand over its dome with a breath to spare, and the
- * shadow under its feet. Measured off the poses drawn: 0.52, 0.38, 0.98 and 0.11.
+ * the menu's side, on the left, where the lamp in its hands points and its lens glints — its
+ * back with the pack and its drop shadow (heroArt.ts), its dome with a breath to spare, and the
+ * shadow under its feet. Measured off the poses drawn, the lamp turned across its whole sweep:
+ * 0.64, 0.38, 0.89 and 0.11.
  */
-export const HERO_BOX = { front: 0.53, back: 0.4, top: 0.99, bottom: 0.12 } as const;
+export const HERO_BOX = { front: 0.65, back: 0.39, top: 0.9, bottom: 0.12 } as const;
 /** Where the hero faces: toward the menu on its left, three quarters to the viewer. */
 export const HERO_FACING = Math.PI - 0.55;
 /**
@@ -32,6 +33,12 @@ export const HERO_FACING = Math.PI - 0.55;
  * the picture's up-and-down line, and the hero's glances stay on the menu's side of it.
  */
 export const GLANCE_SHARE = 0.45;
+/**
+ * The steps a glance turns in, radians: five out and five back, as the art turns a figure round
+ * in steps (figure.ts TURN_STEPS) — each step draws the hero anew, a turn moving smoothly would
+ * draw it on every frame.
+ */
+export const GLANCE_STEP = 0.1;
 /** What the hero keeps clear of the menu's column, the profile and the stage's edge, CSS px. */
 export const CLEAR = 12;
 /** Where along the stage the hero's feet stand where it has the room: the right third's middle. */
@@ -72,6 +79,11 @@ export interface HeroPlace {
   box: StageBox;
   /** how tall it stands in scene tiles */
   tiles: number;
+}
+
+/** `value` as the nearest of the steps `step` apart. */
+export function stepped(value: number, step: number): number {
+  return Math.round(value / step) * step;
 }
 
 /** A scene tile in CSS px for a window `windowH` tall, as the menu's lab is framed (drift.ts). */
@@ -139,7 +151,8 @@ export interface HeroCues {
  * How the hero stands at `now`, up since `since` (ms, the page's clock): as a figure standing
  * in the lobby does (figure.ts) — breathing, glancing round once it has stood a while, its visor
  * lit while it speaks, waving as a name settles — facing the menu, its glances kept to the
- * menu's side. Under reduced motion it holds one still pose.
+ * menu's side, the hand lamp (menu/lamp.ts) held before its chest in both hands, the front one
+ * raised from it to wave. Under reduced motion it holds one still pose.
  */
 export function heroPose(cues: HeroCues, now: number, since: number): FigurePose {
   const pose = figurePose({
@@ -157,5 +170,11 @@ export function heroPose(cues: HeroCues, now: number, since: number): FigurePose
     task: null,
     reduced: cues.reduced,
   });
-  return { ...pose, look: HERO_FACING + (pose.look - HERO_FACING) * GLANCE_SHARE };
+  const waving = pose.arms?.front ?? 0;
+  return {
+    ...pose,
+    look: HERO_FACING + stepped((pose.look - HERO_FACING) * GLANCE_SHARE, GLANCE_STEP),
+    arms: { front: Math.max(HOLD.front, waving), back: HOLD.back },
+    holding: true,
+  };
 }

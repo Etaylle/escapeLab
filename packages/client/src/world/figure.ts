@@ -166,7 +166,7 @@ const WAVE_RAISE_MS = 400;
 const WAG_MS = 500;
 
 /** The arms' poses: holding before the chest, raised in a cheer, waving, flung out in a flinch. */
-const HOLD: Arms = { front: 1.35, back: 1.45 };
+export const HOLD: Arms = { front: 1.35, back: 1.45 };
 /** How far the arms swing either way of hanging as the figure walks, radians. */
 export const ARM_SWING = 0.5;
 /** Both hands up on a console's panel, and how far they tap at it, at TAP_MS a tap. */

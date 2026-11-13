@@ -2,7 +2,7 @@ import type { PadProbe } from './input/padRuntime.js';
 import type { DangerProbe } from './world/danger.js';
 import type { Heard } from './world/finds.js';
 import type { FigureProbe } from './screens/CrewFigure.js';
-import type { HeroProbe } from './screens/MenuHero.js';
+import type { HeroProbe } from './world/menu/heroStage.js';
 import type { VoiceProbe } from './voice/mesh.js';
 import type { BedProbe } from './world/ambience.js';
 import type { SoundSystem } from './world/audio.js';
@@ -160,7 +160,7 @@ export interface Probes {
    * drift and the frames drawn (world/menu/stage.ts)
    */
   readonly scene?: SceneProbe;
-  /** the hero on the menu's stage: where it stands, how large, its pose (screens/MenuHero.tsx) */
+  /** the hero on the menu's stage: where it stands, its pose, its lamp (world/menu/heroStage.ts) */
   readonly hero?: HeroProbe;
   /** the menu's sound: waiting for a gesture or playing, its theme, its hum, the crew's duck */
   readonly menuSound?: MenuSoundProbe;

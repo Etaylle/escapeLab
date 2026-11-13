@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { heroPainter, type HeroPainting, type HeroProbe } from '../src/screens/MenuHero.js';
 import { drawScientist } from '../src/world/art.js';
 import { figurePhase, type FigurePose } from '../src/world/figure.js';
 import {
   CLEAR,
   FIGURE_TALL,
+  GLANCE_STEP,
   HERO_BOX,
   HERO_FACING,
   heroPlace,
@@ -16,6 +16,8 @@ import {
   type StageFacts,
 } from '../src/world/menu/hero.js';
 import { heroCanvas, paintHero, type HeroCanvas } from '../src/world/menu/heroArt.js';
+import { heroPainter, type HeroPainting, type HeroProbe } from '../src/world/menu/heroStage.js';
+import { holdLamp, newSweep } from '../src/world/menu/lamp.js';
 import { runScene, type SceneHost } from '../src/world/menu/loop.js';
 import { callEntries, callsOf, fakeCanvas, FakePath2D, type Entry } from './fakeCanvas.js';
 
@@ -111,13 +113,26 @@ describe('heroPose — alive, but for reduced motion', () => {
     expect(Math.max(...glances.map(Math.abs))).toBeGreaterThan(0.3);
     // Its look never crosses the picture's up-and-down line: the hero never turns round.
     expect(poses.every((pose) => Math.cos(pose.look) < 0)).toBe(true);
+    // It glances in steps, each drawing it anew: never between them.
+    const steps = glances.map((glance) => glance / GLANCE_STEP);
+    expect(steps.every((step) => Math.abs(step - Math.round(step)) < 1e-9)).toBe(true);
   });
 
   it('lights its visor while the microphone sends, and waves as a name settles', () => {
     expect(heroPose({ ...ANNA, speaking: true }, 5000, 0).shimmer).not.toBeNull();
     expect(heroPose(ANNA, 5000, 0).shimmer).toBeNull();
     expect(heroPose({ ...ANNA, waveAt: 4400 }, 5000, 0).arms?.front).toBeGreaterThan(1.5);
-    expect(heroPose({ ...ANNA, waveAt: 1000 }, 5000, 0).arms).toBeNull();
+    expect(heroPose({ ...ANNA, waveAt: 1000 }, 5000, 0).arms?.front).toBe(1.35);
+  });
+
+  it('holds the lamp before its chest in both hands, the front one raised from it to wave', () => {
+    const standing = heroPose(ANNA, 5000, 0);
+    expect(standing.holding).toBe(true);
+    expect(standing.arms).toEqual({ front: 1.35, back: 1.45 });
+    const waving = heroPose({ ...ANNA, waveAt: 4400 }, 5000, 0);
+    expect(waving.holding).toBe(true);
+    expect(waving.arms?.front).toBeGreaterThan(2);
+    expect(waving.arms?.back).toBe(1.45);
   });
 
   it('holds one still pose under reduced motion, whatever happens', () => {
@@ -142,6 +157,9 @@ function fakeHero(): { hero: HeroCanvas; log: Entry[] } {
 /** A pose of the hero standing, `bob` tiles up. */
 const posed = (bob: number): FigurePose => ({ ...heroPose(ANNA, 0, 0), bob });
 
+/** The lamp in the hero's hands, straight ahead and alight. */
+const LAMP = { tilt: 0, on: 1 };
+
 describe('paintHero — laid from two layers, the breath drawing no figure anew', () => {
   beforeEach(() => {
     vi.stubGlobal('Path2D', FakePath2D);
@@ -153,7 +171,7 @@ describe('paintHero — laid from two layers, the breath drawing no figure anew'
   it('draws each layer once, then only copies them as the breath lifts the body', () => {
     const { hero, log } = fakeHero();
     const place = placed(DESKTOP);
-    const frame = { place, pose: posed(0), color: '#2dd4bf', dpr: 1 };
+    const frame = { place, pose: posed(0), color: '#2dd4bf', dpr: 1, lamp: LAMP };
     expect(paintHero(hero, frame)).toBe(true);
     expect(hero.drawn).toEqual({ legs: 1, upper: 1 });
     const lift = 1 / place.scale;
@@ -162,23 +180,29 @@ describe('paintHero — laid from two layers, the breath drawing no figure anew'
     expect(hero.drawn).toEqual({ legs: 1, upper: 1 });
     const copies = callsOf(log, 'drawImage');
     expect(copies.at(-1)?.slice(1)).toEqual([0, -3]);
-    expect(copies.at(-2)?.slice(1)).toEqual([0, 0]);
+    // The legs cover their band of the canvas only, from over their tops to its foot.
+    expect(copies.at(-2)?.slice(1)).toEqual([0, hero.legs.top]);
+    expect(hero.legs.top).toBeGreaterThan(hero.canvas.height / 2);
+    expect(hero.legs.top + hero.legs.canvas.height).toBe(hero.canvas.height);
+    expect(hero.upper.canvas.height).toBeLessThan(hero.canvas.height);
   });
 
   it('draws the upper layer anew as the look turns, and both as the colour changes', () => {
     const { hero } = fakeHero();
-    const frame = { place: placed(DESKTOP), pose: posed(0), color: '#2dd4bf', dpr: 1 };
+    const frame = { place: placed(DESKTOP), pose: posed(0), color: '#2dd4bf', dpr: 1, lamp: LAMP };
     paintHero(hero, frame);
     paintHero(hero, { ...frame, pose: { ...posed(0), look: HERO_FACING + 0.2 } });
     expect(hero.drawn).toEqual({ legs: 1, upper: 2 });
     paintHero(hero, { ...frame, color: '#f472b6' });
     expect(hero.drawn).toEqual({ legs: 2, upper: 3 });
+    paintHero(hero, { ...frame, color: '#f472b6', lamp: { tilt: 0.1, on: 1 } });
+    expect(hero.drawn).toEqual({ legs: 2, upper: 4 });
   });
 
   it('sizes its canvas to its box at the stage’s density', () => {
     const { hero } = fakeHero();
     const place = placed(LAPTOP);
-    paintHero(hero, { place, pose: posed(0), color: '#2dd4bf', dpr: 2 });
+    paintHero(hero, { place, pose: posed(0), color: '#2dd4bf', dpr: 2, lamp: LAMP });
     expect(hero.canvas.width).toBe(place.box.width * 2);
     expect(hero.canvas.height).toBe(place.box.height * 2);
   });
@@ -257,8 +281,10 @@ function painting(reduced: boolean): HeroPainting {
   const probe = { laid: 0, drawn: { legs: 0, upper: 0 } } as HeroProbe;
   return {
     hero,
-    standing: { place: placed(DESKTOP), at: { x: 0, y: 60 } },
+    standing: { place: placed(DESKTOP), at: { x: 0, y: 60 }, menuRight: DESKTOP.menuRight },
     look: { current: { color: '#2dd4bf', speaking: false, waveAt: null } },
+    attends: { current: null },
+    sweep: newSweep(),
     probe,
     phase: ANNA.phase,
     reduced: () => reduced,
@@ -272,6 +298,7 @@ describe('heroPainter — the hero’s loop', () => {
   });
   afterEach(() => {
     vi.unstubAllGlobals();
+    holdLamp(null);
   });
 
   it('asks no frames while its canvas is hidden, and paints once it shows', () => {
@@ -311,7 +338,7 @@ describe('heroPainter — the hero’s loop', () => {
   });
 
   it('stops asking frames where the stage leaves the hero no room', () => {
-    const on = { ...painting(false), standing: { place: null, at: { x: 0, y: 0 } } };
+    const on = { ...painting(false), standing: { place: null, at: { x: 0, y: 0 }, menuRight: 0 } };
     expect(heroPainter(on, 0)(100)).toBe(false);
     expect(on.probe.laid).toBe(0);
   });

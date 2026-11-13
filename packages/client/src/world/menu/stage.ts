@@ -2,6 +2,9 @@ import { addProbes } from '../../probes.js';
 import { frameTrace, traceRequested } from '../frameTrace.js';
 import { censusTrace, lightCensus, type LightCensus } from '../render/census.js';
 import { driftAt } from './drift.js';
+import { heroTile } from './hero.js';
+import { heroLamp, lampKey, watchLamp } from './lamp.js';
+import { freeBeam, layBeam, sceneBeam } from './lampArt.js';
 import { browserSceneHost, runScene } from './loop.js';
 import {
   bakeScene,
@@ -21,11 +24,12 @@ import {
  * The menu's scene on its canvas (screens/MenuScene.tsx): the lab of the mission asked for,
  * fetched and baked (scene.ts), drawn by the scene's loop (loop.ts) as the drift goes —
  * coming in over the lab before — and baked anew once the canvas has held a new size for a
- * moment. Under reduced motion the loop stops once the still is drawn, until a lab is baked
- * anew or the motion changes. Under `?trace=1` the walkthrough reads the frames off the page
- * as it does a run's (frameTrace.ts), what the scene shows (`SceneProbe`), and what its light
- * worked out a frame (render/census.ts): no sight ever — a frame copies its bake — and a bake
- * only as one is made.
+ * moment; over it the beam of the lamp the menu's hero holds, where one does (lamp.ts,
+ * lampArt.ts). Under reduced motion the loop stops once the still is drawn, until a lab is baked
+ * anew, the hero's lamp moves or the motion changes. Under `?trace=1` the walkthrough reads the
+ * frames off the page as it does a run's (frameTrace.ts), what the scene shows (`SceneProbe`),
+ * and what its light worked out a frame (render/census.ts): no sight ever — a frame copies its
+ * bake — and a bake only as one is made.
  */
 
 /** How long the canvas's box holds still before the scene is baked anew for it, ms. */
@@ -50,6 +54,16 @@ export interface SceneProbe {
   progress: number;
   /** the frames drawn so far */
   paints: number;
+  /** the hero's beam: laid on the last frame drawn, and turned anew so often so far */
+  beam: { laid: boolean; turns: number };
+}
+
+/** A canvas `width` × `height` of the page's own: the beam's. */
+function makeCanvas(width: number, height: number): HTMLCanvasElement {
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  return canvas;
 }
 
 /** The canvas's size changes: the scene is baked anew once it has held still SETTLE_MS. */
@@ -144,18 +158,39 @@ export function openStage(canvas: HTMLCanvasElement, motion: StageMotion): Scene
     return { show: () => undefined, close: () => undefined };
   }
   const show: SceneShow = { bake: null, from: null, since: 0, drawn: null };
-  const probe: SceneProbe = { missionId: null, baked: null, bakeMs: null, progress: 0, paints: 0 };
+  const probe: SceneProbe = {
+    missionId: null,
+    baked: null,
+    bakeMs: null,
+    progress: 0,
+    paints: 0,
+    beam: { laid: false, turns: 0 },
+  };
   const census = lightCensus();
+  const beam = sceneBeam(makeCanvas);
   let lab: SceneLab | null = null;
   let wanted: string | null = null;
   let closed = false;
   let driftFrom = 0;
+  let laidBeam: string | null = null;
+
+  // Lays the hero's beam over the lab just drawn, as its lamp is now.
+  const lay = (now: number, still: boolean): void => {
+    const lamp = heroLamp();
+    const dpr = canvas.clientWidth > 0 ? canvas.width / canvas.clientWidth : 1;
+    const tile = heroTile(canvas.clientHeight);
+    layBeam(ctx, beam, lamp, { dpr, tile, now, reduced: still });
+    laidBeam = lampKey(lamp);
+    probe.beam = { laid: lamp !== null && lamp.on > 0, turns: beam.turns };
+  };
 
   // Draws a frame where one is due; says whether the next would draw anything.
   const paint = (now: number): boolean => {
     const still = motion.reduced();
-    if (needsPaint(show, now, still)) {
+    const relit = show.bake !== null && lampKey(heroLamp()) !== laidBeam;
+    if (needsPaint(show, now, still) || relit) {
       paintShow(ctx, show, now, now - driftFrom, still);
+      lay(now, still);
       probe.paints += 1;
       probe.progress = driftAt(now - driftFrom, still);
       traced.drawn();
@@ -186,6 +221,7 @@ export function openStage(canvas: HTMLCanvasElement, motion: StageMotion): Scene
 
   const unwatch = onSettledResize(canvas, () => rebake(false));
   const unwatchMotion = motion.watch(() => loop.wake());
+  const unwatchLamp = watchLamp(() => loop.wake());
   return {
     show(missionId) {
       wanted = missionId;
@@ -201,8 +237,10 @@ export function openStage(canvas: HTMLCanvasElement, motion: StageMotion): Scene
       loop.stop();
       unwatch();
       unwatchMotion();
+      unwatchLamp();
       traced.drop();
       clearShow(show);
+      freeBeam(beam);
       freeCanvas(canvas);
     },
   };
