@@ -39,7 +39,9 @@ store: the account comes to the socket a moment later (`account`).
   Cloudflare's `cf-connecting-ip`, else `true-client-ip`, else the last `X-Forwarded-For` entry,
   the one the proxy appended. Without Render nobody's header is trusted: the socket's own
   address, so a machine on the LAN counts as itself whatever it claims. Only a valid IP address
-  is counted by; a request without one counts as `unknown`, together with every other such.
+  is counted by; a request without one counts as `unknown`, together with every other such. A
+  limiter forgets an address once its minute has passed — at the next check, or by its timer —
+  and keeps no key longer than 64 characters.
 
 ## What is kept
 

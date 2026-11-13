@@ -6,32 +6,65 @@ import { isIP } from 'node:net';
  * (sockets.ts) each count the writes of an address in a sliding window.
  */
 
+/** The longest key a limiter keeps, cut there: an IP address is at most 45 characters. */
+export const MAX_KEY_LENGTH = 64;
+
 /**
- * Counts writes per address in a sliding window: `take` says whether one
- * more is allowed now, and counts it if so.
+ * Counts writes per address in a sliding window: `take` says whether one more is allowed now, and
+ * counts it if so. A key with no write left in its window is let go of (`sweep`) — by the next
+ * check once a window has passed since the last sweep, or by the timer of `sweepEveryWindow` —
+ * so that addresses seen once are not held for the server's life.
  */
 export class RateLimiter {
   private readonly seen = new Map<string, number[]>();
+  /** when the keys were last swept */
+  private swept: number;
 
   constructor(
     private readonly limit: number,
     private readonly windowMs: number,
     private readonly now: () => number = Date.now,
-  ) {}
+  ) {
+    this.swept = now();
+  }
 
-  take(key: string): boolean {
+  /** How many keys it holds now. */
+  get size(): number {
+    return this.seen.size;
+  }
+
+  take(address: string): boolean {
     const now = this.now();
+    if (now - this.swept >= this.windowMs) {
+      this.sweep();
+    }
+    const key = address.slice(0, MAX_KEY_LENGTH);
     const recent = (this.seen.get(key) ?? []).filter((at) => now - at < this.windowMs);
     const allowed = recent.length < this.limit;
     if (allowed) {
       recent.push(now);
     }
-    if (recent.length === 0) {
-      this.seen.delete(key);
-    } else {
-      this.seen.set(key, recent);
-    }
+    this.seen.set(key, recent);
     return allowed;
+  }
+
+  /** Lets go of every key with no write left in the window. */
+  sweep(): void {
+    const now = this.now();
+    this.swept = now;
+    for (const [key, writes] of this.seen) {
+      const last = writes.at(-1);
+      if (last === undefined || now - last >= this.windowMs) {
+        this.seen.delete(key);
+      }
+    }
+  }
+
+  /** Sweeps once a window from now, never keeping the process up for it; returns how to stop. */
+  sweepEveryWindow(): () => void {
+    const timer = setInterval(() => this.sweep(), this.windowMs);
+    timer.unref();
+    return () => clearInterval(timer);
   }
 }
 

@@ -49,6 +49,8 @@ const tls = tlsSetup(process.env);
 const CUSTOM_MISSIONS_DIR = process.env['CUSTOM_MISSIONS_DIR'] || join(MISSIONS_DIR, 'custom');
 const catalog = new MissionCatalog(MISSIONS_DIR, CUSTOM_MISSIONS_DIR);
 const editing = customMissions(catalog);
+// Every limiter lets go of the addresses its window has passed, written to or not since.
+editing.limiter.sweepEveryWindow();
 const site = new StaticSite(fileURLToPath(new URL('../../client/dist', import.meta.url)));
 // A person's recordings of the radio lines (the client's /record page): with ALLOW_RECORD=1 only.
 const VOICE_DIR = fileURLToPath(new URL('../../client/public/voice', import.meta.url));
@@ -122,11 +124,13 @@ const httpServer = createWebServer(tls, (req, res) => {
 const wss = new WebSocketServer({ server: httpServer, path: '/ws' });
 // Every pass has its account in the store, found or made as it comes to the door: one pass a
 // socket, and only so many writes to the accounts a minute from an address.
+const accountWrites = new RateLimiter(ACCOUNT_WRITES_PER_MINUTE, 60_000);
+accountWrites.sweepEveryWindow();
 const served = serveSockets(wss, {
   catalog,
   manager,
   accounts: new AccountDesk(store),
-  accountWrites: new RateLimiter(ACCOUNT_WRITES_PER_MINUTE, 60_000),
+  accountWrites,
   front: frontOf(process.env),
 });
 // A socket gone silent is found out and closed, so that the room pauses for its player; the

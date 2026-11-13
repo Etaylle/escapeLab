@@ -1,6 +1,54 @@
 import type { IncomingHttpHeaders } from 'node:http';
-import { describe, expect, it } from 'vitest';
-import { clientAddress, frontOf, type Sender } from '../src/rateLimiter.js';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import {
+  clientAddress,
+  frontOf,
+  MAX_KEY_LENGTH,
+  RateLimiter,
+  type Sender,
+} from '../src/rateLimiter.js';
+
+afterEach(() => {
+  vi.useRealTimers();
+});
+
+describe('the limiter’s memory', () => {
+  it('lets go of every address whose window has passed, at the next check', () => {
+    let now = 0;
+    const limiter = new RateLimiter(2, 60_000, () => now);
+    for (let i = 0; i < 10_000; i += 1) {
+      limiter.take(`2001:db8::${i.toString(16)}`);
+    }
+    now = 59_999;
+    limiter.take('198.51.100.4');
+    expect(limiter.size).toBe(10_001);
+    // A window since the last sweep: the ten thousand are gone, the one written since stays.
+    now = 60_000;
+    expect(limiter.take('198.51.100.4')).toBe(true);
+    expect(limiter.size).toBe(1);
+    expect(limiter.take('198.51.100.4')).toBe(false);
+  });
+
+  it('lets go of them on its timer, though nobody writes any more', () => {
+    vi.useFakeTimers();
+    const limiter = new RateLimiter(2, 60_000);
+    const stop = limiter.sweepEveryWindow();
+    limiter.take('203.0.113.7');
+    vi.advanceTimersByTime(59_999);
+    expect(limiter.size).toBe(1);
+    vi.advanceTimersByTime(60_000);
+    expect(limiter.size).toBe(0);
+    stop();
+  });
+
+  it('keeps no key longer than its cap: a longer one counts by its beginning', () => {
+    const limiter = new RateLimiter(1, 60_000, () => 0);
+    const long = 'a'.repeat(MAX_KEY_LENGTH);
+    expect(limiter.take(`${long}x`)).toBe(true);
+    expect(limiter.take(`${long}${'y'.repeat(10_000)}`)).toBe(false);
+    expect(limiter.size).toBe(1);
+  });
+});
 
 /** Who a request comes from, as the limits on writes count it. */
 
