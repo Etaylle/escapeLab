@@ -4,15 +4,17 @@ import { softEllipse } from '../brush.js';
 import type { FigurePose } from '../figure.js';
 import { BLACK } from '../palette.js';
 import { HERO_FACING, type HeroPlace } from './hero.js';
+import { drawHandLamp } from './lampArt.js';
 
 /**
- * The hero drawn (menu/hero.ts, screens/MenuHero.tsx): the crew figure as art.ts draws it, on a
- * canvas of its own at the stage's density. It is laid from two layers kept between frames —
- * its legs with the shadow under them, and everything over its legs drawn with the breath taken
- * out (art.ts FigureLayer) — the upper laid as far up as the breath has it, in whole pixels. A
- * frame that changes no more than the breath draws no figure anew: two copies, and only where
- * the breath has come to another pixel. A layer is drawn again only where what it shows has
- * changed — a glance, the visor's light, a wave, the colour, the size.
+ * The hero drawn (menu/hero.ts, screens/MenuHero.tsx): the crew figure as art.ts draws it, the
+ * hand lamp in its hands (lampArt.ts), on a canvas of its own at the stage's density. It is laid
+ * from two layers kept between frames — its legs with the shadow under them, and everything over
+ * its legs drawn with the breath taken out (art.ts FigureLayer) — the upper laid as far up as the
+ * breath has it, in whole pixels. A frame that changes no more than the breath draws no figure
+ * anew: two copies, and only where the breath has come to another pixel. A layer is drawn again
+ * only where what it shows has changed — a glance, the visor's light, a wave, the lamp turned
+ * another step, the colour, the size.
  */
 
 /**
@@ -21,11 +23,20 @@ import { HERO_FACING, type HeroPlace } from './hero.js';
  */
 export const DROP_SHADOW = { dx: 0.03, dy: 0.03, rx: 0.36, ry: 0.085, alpha: 0.45 } as const;
 
+/**
+ * The bands of the hero's canvas its layers cover, figure units from its feet: the legs from
+ * over their tops down to the canvas's foot, the rest from the canvas's top down to under the
+ * body — a copy of a layer costs the pixels it covers, the clear ones as well.
+ */
+export const LAYER_BANDS = { legsTop: 0.3, upperFoot: 0.08 } as const;
+
 /** A layer of the hero kept between frames: its canvas, and what it was last drawn as. */
 interface Layer {
   canvas: HTMLCanvasElement;
   /** what it shows (`layerKey`); null before it was drawn */
   key: string | null;
+  /** where its canvas lies on the hero's, device px down */
+  top: number;
 }
 
 /** The hero's canvas, its two layers, and what it shows. */
@@ -47,6 +58,8 @@ export interface HeroFrame {
   color: string;
   /** the stage's density, device px a CSS px */
   dpr: number;
+  /** the lamp in its hands: turned `tilt` from straight ahead, its lens alight `on`, 0 to 1 */
+  lamp: { tilt: number; on: number };
 }
 
 /** The hero's canvas `canvas`, its layers made by `make`; null where the browser gives no 2D. */
@@ -58,8 +71,8 @@ export function heroCanvas(canvas: HTMLCanvasElement, make: CanvasMaker): HeroCa
   return {
     canvas,
     ctx,
-    legs: { canvas: make(1, 1), key: null },
-    upper: { canvas: make(1, 1), key: null },
+    legs: { canvas: make(1, 1), key: null, top: 0 },
+    upper: { canvas: make(1, 1), key: null, top: 0 },
     laid: null,
     drawn: { legs: 0, upper: 0 },
   };
@@ -92,10 +105,22 @@ function layerKey(which: FigureLayer, frame: HeroFrame, size: string): string {
   }
   const arms = pose.arms === null ? '-' : `${pose.arms.front},${pose.arms.back}`;
   const parts = [pose.look, pose.shimmer, arms, pose.holding, pose.dim, pose.bow];
-  return `${size} ${frame.color} ${parts.join(' ')}`;
+  return `${size} ${frame.color} ${parts.join(' ')} ${frame.lamp.tilt} ${frame.lamp.on}`;
 }
 
-/** Draws layer `which` of `frame` on `layer`'s canvas, `w` × `h` device px, anchored at `at`. */
+/** The band of a hero's canvas `h` device px tall that layer `which` covers, anchored at `at`. */
+function bandOf(which: FigureLayer, h: number, at: Anchor): { top: number; height: number } {
+  if (which === 'legs') {
+    const top = Math.max(0, Math.floor(at.y - LAYER_BANDS.legsTop * at.s));
+    return { top, height: h - top };
+  }
+  return { top: 0, height: Math.min(h, Math.ceil(at.y - LAYER_BANDS.upperFoot * at.s)) };
+}
+
+/**
+ * Draws layer `which` of `frame` on `layer`'s canvas: as wide as the hero's, `w` device px, and
+ * covering its band of the hero's `h`, the feet anchored at `at`.
+ */
 function drawLayer(
   layer: Layer,
   which: FigureLayer,
@@ -103,21 +128,24 @@ function drawLayer(
   [w, h, at]: readonly [number, number, Anchor],
 ): void {
   const { canvas } = layer;
-  if (canvas.width !== w || canvas.height !== h) {
+  const band = bandOf(which, h, at);
+  if (canvas.width !== w || canvas.height !== band.height) {
     canvas.width = w;
-    canvas.height = h;
+    canvas.height = band.height;
   }
+  layer.top = band.top;
   const ctx = canvas.getContext('2d');
   if (ctx === null) {
     return;
   }
   ctx.setTransform(1, 0, 0, 1, 0, 0);
-  ctx.clearRect(0, 0, w, h);
-  ctx.setTransform(at.s, 0, 0, at.s, at.x, at.y);
+  ctx.clearRect(0, 0, w, band.height);
+  ctx.setTransform(at.s, 0, 0, at.s, at.x, at.y - band.top);
   if (which === 'legs') {
     const { dx, dy, rx, ry, alpha } = DROP_SHADOW;
     softEllipse(ctx, dx, dy, rx, ry, BLACK, alpha, 'source-over');
   }
+  const { tilt, on } = frame.lamp;
   drawScientist(ctx, {
     color: frame.color,
     name: '',
@@ -130,6 +158,7 @@ function drawLayer(
     ground: 'lit',
     named: false,
     layer: which,
+    held: (held) => drawHandLamp(held, tilt, on),
   });
 }
 
@@ -165,8 +194,8 @@ export function paintHero(hero: HeroCanvas, frame: HeroFrame): boolean {
   hero.laid = laid;
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.clearRect(0, 0, w, h);
-  ctx.drawImage(hero.legs.canvas, 0, 0);
-  ctx.drawImage(hero.upper.canvas, 0, -lift);
+  ctx.drawImage(hero.legs.canvas, 0, hero.legs.top);
+  ctx.drawImage(hero.upper.canvas, 0, hero.upper.top - lift);
   return true;
 }
 

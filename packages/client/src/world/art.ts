@@ -332,8 +332,8 @@ const BACK_SHOULDER: readonly [number, number] = [-0.15, -0.62];
 const HOLD_FRONT: readonly [number, number] = [0.12, -0.44];
 const HOLD_BACK: readonly [number, number] = [0.06, -0.5];
 /** Where a held item sits, before the chest in the hands, and its share of its floor size. */
-const HELD_X = 0.43;
-const HELD_Y = -0.44;
+export const HELD_X = 0.43;
+export const HELD_Y = -0.44;
 export const HELD_SCALE = 0.6;
 const DISCONNECTED_ALPHA = 0.45;
 /** Visor glass: steel with a cold sheen. */
