@@ -11,7 +11,7 @@ import {
 import type { AccountDesk, Gate } from './accounts.js';
 import { MISSED_PINGS, SILENT_MS, type CutReason } from './heartbeat.js';
 import type { MissionCatalog } from './missions.js';
-import { clientAddress, type Front, type Sender } from './rateLimiter.js';
+import { readAddress, type Front, type Sender } from './rateLimiter.js';
 import { GAME_KINDS, type GameMessage, type Room } from './room.js';
 import type { RoomManager } from './roomManager.js';
 
@@ -89,6 +89,29 @@ interface Door {
 
 /** Each socket's door (`Door`), from the request that opened it. */
 const doors = new WeakMap<PlayerSocket, Door>();
+
+/**
+ * What the log says the first time a socket's address is read off the last X-Forwarded-For behind
+ * Render: Cloudflare named none, so its own headers are not there, or not as expected.
+ */
+export const FORWARDED_NOTE =
+  '[escapelab] behind Render a socket came without cf-connecting-ip or true-client-ip: ' +
+  'its address read off the last X-Forwarded-For';
+
+/**
+ * The address `request` comes from (rateLimiter.ts `readAddress`), `unknown` for none; `noted` is
+ * told where it was read off the last X-Forwarded-For.
+ */
+function addressOf(lab: Lab, request: Sender | undefined, noted: () => void): string {
+  if (request === undefined) {
+    return 'unknown';
+  }
+  const { address, from } = readAddress(request, lab.front ?? 'none');
+  if (from === 'forwarded') {
+    noted();
+  }
+  return address;
+}
 
 /**
  * Throws GameError(ONE_PASS) where `msg` shows a pass other than the first its socket showed: a
@@ -200,10 +223,17 @@ const CUT_WHY: Record<CutReason, string> = {
  */
 export function serveSockets(server: SocketServer, lab: Lab): Served {
   const sessions = new WeakMap<object, () => Session | null>();
+  let forwardedNoted = false;
+  const noteForwarded = (): void => {
+    if (!forwardedNoted) {
+      forwardedNoted = true;
+      console.log(FORWARDED_NOTE);
+    }
+  };
   server.on('connection', (socket, request) => {
     let session: Session | null = null;
     sessions.set(socket, () => session);
-    const address = request === undefined ? 'unknown' : clientAddress(request, lab.front ?? 'none');
+    const address = addressOf(lab, request, noteForwarded);
     doors.set(socket, { address, pass: null, changes: [], colour: null });
     const take = (msg: ClientMessage): void => {
       try {

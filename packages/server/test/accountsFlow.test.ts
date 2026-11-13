@@ -15,6 +15,7 @@ import {
   ACCOUNT_CHANGES_PER_SOCKET,
   ACCOUNTS_MADE_PER_MINUTE,
   COLOUR_SETTLE_MS,
+  FORWARDED_NOTE,
   ONE_PASS,
   serveSockets,
 } from '../src/sockets.js';
@@ -406,6 +407,20 @@ describe('the accounts’ door', () => {
     await settled();
     expect(students.flatMap(({ socket }) => refusals(socket))).toEqual([]);
     expect(students.every(({ name, socket }) => accountOf(socket).name === name)).toBe(true);
+  });
+
+  it('says once in the log where Render’s proxy named nobody and X-Forwarded-For counts', () => {
+    const said = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const { server } = lab(new RoomManager(), {}, 'render');
+    const forwardedOnly = (client: string): Sender => ({
+      headers: { 'x-forwarded-for': `192.0.2.1, ${client}` },
+      socket: { remoteAddress: '10.226.90.65' },
+    });
+    server.connect(throughRender('203.0.113.9'));
+    expect(said).not.toHaveBeenCalledWith(FORWARDED_NOTE);
+    server.connect(forwardedOnly('203.0.113.7'));
+    server.connect(forwardedOnly('198.51.100.4'));
+    expect(said.mock.calls.filter(([line]) => line === FORWARDED_NOTE)).toHaveLength(1);
   });
 
   it('counts a machine by its own address, whatever its headers claim', async () => {

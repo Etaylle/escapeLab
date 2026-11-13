@@ -279,6 +279,24 @@ describe.skipIf(url === '')('the store in Postgres', () => {
       expect(top?.map((entry) => entry.crew)).toEqual([['Anna', 'Ben']]);
     });
 
+    it('counts at a read of its Bestenliste the runs the old instance kept meanwhile', async () => {
+      // The new instance opened and counted; the old one goes on a minute, a run ending on it.
+      const fresh = await open();
+      const old = await open();
+      await withAccounts(old, ['Anna', 'Ben']);
+      const now = Date.now();
+      await old.appendRun(finished({ at: now }, ['Anna', 'Ben']));
+      expect(fresh.stats().runs).toBe(0);
+      await vi.waitFor(() => {
+        expect(fresh.stats().runs).toBe(1);
+      });
+      const top = fresh.stats().mission('blackout')?.difficulties[0]?.top;
+      expect(top?.map((entry) => entry.crew)).toEqual([['Anna', 'Ben']]);
+      // Kept once and counted once, however often it is read and whoever ends it again.
+      await fresh.appendRun(finished({ at: now }, ['Anna', 'Ben']));
+      expect(fresh.stats().runs).toBe(1);
+    });
+
     it('waits for a database that takes seconds to open a connection, as Neon wakes', async () => {
       const front = await slowFront(3000);
       try {

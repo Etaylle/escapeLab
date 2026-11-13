@@ -231,6 +231,17 @@ export async function onceMore<T>(work: () => Promise<T>): Promise<T> {
  */
 const RUN_TRANSACTION = { maxWait: 15_000, timeout: 15_000 };
 
+/**
+ * How long another instance may go on keeping runs around this one's opening, ms: Render
+ * switches to a new instance once it is healthy and sends the old one SIGTERM a minute later,
+ * and a run that ended just before the opening may be written just after — five minutes leave
+ * room for both.
+ */
+const OVERLAP_MS = 5 * 60_000;
+
+/** How often a read of the Bestenliste looks for runs another instance kept, at most, ms. */
+const LOOK_EVERY_MS = 5_000;
+
 /** A run's key, as the database keeps each run once: its room and its start (`runs_once`). */
 const runKeyOf = (roomCode: string, startedAt: number): string => `${roomCode}|${startedAt}`;
 
@@ -253,6 +264,10 @@ export class PostgresStore implements Store {
   private index = new RunStats();
   /** every run the Bestenliste counts, by `runKeyOf` */
   private counted = new Set<string>();
+  /** when the store opened, which runs kept elsewhere around it are looked for (`lookAround`) */
+  private readonly openedAt = Date.now();
+  /** when the runs kept elsewhere were last looked for; whether a look is under way, or the last */
+  private looked = { at: 0, busy: false, done: false };
 
   private constructor(private readonly db: PrismaClient) {}
 
@@ -292,12 +307,19 @@ export class PostgresStore implements Store {
     }
   }
 
-  /** `run` counted into the Bestenliste, its key noted (`counted`). */
+  /**
+   * `run` counted into the Bestenliste, its key noted (`counted`) — once: a look for runs kept
+   * elsewhere (`lookAround`) may come upon a run this store is just counting itself.
+   */
   private count(run: LoggedRun): void {
-    this.index.add(run);
     if (run.version === 2) {
-      this.counted.add(runKeyOf(run.roomCode, run.startedAt));
+      const key = runKeyOf(run.roomCode, run.startedAt);
+      if (this.counted.has(key)) {
+        return;
+      }
+      this.counted.add(key);
     }
+    this.index.add(run);
   }
 
   async appendRun(run: FinishedRun): Promise<void> {
@@ -350,7 +372,54 @@ export class PostgresStore implements Store {
   }
 
   stats(): RunStats {
+    this.lookAround();
     return this.index;
+  }
+
+  /**
+   * Runs another instance kept around this one's opening — the old instance of a deploy, ending
+   * its runs while this one already counted them all — looked for in the background as the
+   * Bestenliste is read, at most every LOOK_EVERY_MS, and counted from the next read on. Once a
+   * look began after the overlap was over (`OVERLAP_MS`), none is needed any more.
+   */
+  private lookAround(): void {
+    const now = Date.now();
+    const { at, busy, done } = this.looked;
+    if (done || busy || now - at < LOOK_EVERY_MS) {
+      return;
+    }
+    const last = now - this.openedAt > OVERLAP_MS;
+    this.looked = { at: now, busy: true, done: false };
+    this.countAround().then(
+      () => {
+        this.looked = { at: now, busy: false, done: last };
+      },
+      (err: unknown) => {
+        this.looked = { at: now, busy: false, done: false };
+        console.error(`[escapelab] runs kept by another instance not read: ${oneLine(err)}`);
+      },
+    );
+  }
+
+  /** Every run that ended around this store's opening (`OVERLAP_MS`), not counted yet, counted. */
+  private async countAround(): Promise<void> {
+    const rows = await onceMore(() =>
+      this.db.run.findMany({
+        where: {
+          endedAt: {
+            gte: new Date(this.openedAt - OVERLAP_MS),
+            lte: new Date(this.openedAt + OVERLAP_MS),
+          },
+        },
+        include: { members: true },
+        orderBy: [{ endedAt: 'asc' }, { id: 'asc' }],
+      }),
+    );
+    for (const row of rows) {
+      if (!this.counted.has(runKeyOf(row.roomCode, row.startedAt.getTime()))) {
+        this.checked(row).forEach((run) => this.count(run));
+      }
+    }
   }
 
   async runsOfAccount(

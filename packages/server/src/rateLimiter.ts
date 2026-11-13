@@ -96,21 +96,33 @@ function lastForwarded(value: string | readonly string[] | undefined): string | 
   return typeof joined === 'string' ? joined.split(',').at(-1) : undefined;
 }
 
+/** Where a request's address was read: Cloudflare, the last X-Forwarded-For, the socket. */
+export type AddressFrom = 'cloudflare' | 'forwarded' | 'socket';
+
 /**
- * The address a request comes from, as a limit counts it: only ever a valid IP address, and
- * `unknown` — every such request counted together — where none is to be had. Behind Render
- * (`front`) the socket's own address is the proxy's, the same for everybody, and a client may
- * send any X-Forwarded-For it likes, which Cloudflare appends to: so Cloudflare's
- * `cf-connecting-ip`, else `true-client-ip`, else the last X-Forwarded-For entry, the one the
- * proxy put there. With nobody in front no header is to be trusted: the socket's own address.
+ * The address a request comes from, as a limit counts it, and where it was read: only ever a
+ * valid IP address, and `unknown` — every such request counted together — where none is to be
+ * had. Behind Render (`front`) the socket's own address is the proxy's, the same for everybody,
+ * and a client may send any X-Forwarded-For it likes, which Cloudflare appends to: so
+ * Cloudflare's `cf-connecting-ip`, else `true-client-ip`, else the last X-Forwarded-For entry,
+ * the one the proxy put there. With nobody in front no header is to be trusted: the socket's own.
  */
-export function clientAddress(sender: Sender, front: Front): string {
+export function readAddress(sender: Sender, front: Front): { address: string; from: AddressFrom } {
   const { headers, socket } = sender;
-  const proxied =
-    front === 'render'
-      ? (ipOf(headers['cf-connecting-ip']) ??
-        ipOf(headers['true-client-ip']) ??
-        ipOf(lastForwarded(headers['x-forwarded-for'])))
-      : undefined;
-  return proxied ?? ipOf(socket.remoteAddress) ?? 'unknown';
+  if (front === 'render') {
+    const cloudflare = ipOf(headers['cf-connecting-ip']) ?? ipOf(headers['true-client-ip']);
+    if (cloudflare !== undefined) {
+      return { address: cloudflare, from: 'cloudflare' };
+    }
+    const forwarded = ipOf(lastForwarded(headers['x-forwarded-for']));
+    if (forwarded !== undefined) {
+      return { address: forwarded, from: 'forwarded' };
+    }
+  }
+  return { address: ipOf(socket.remoteAddress) ?? 'unknown', from: 'socket' };
+}
+
+/** The address a request comes from, as a limit counts it (`readAddress`). */
+export function clientAddress(sender: Sender, front: Front): string {
+  return readAddress(sender, front).address;
 }

@@ -45,11 +45,12 @@ store: the account comes to the socket a moment later (`account`).
 - **Whose address.** Behind Render (`RENDER` set) the socket's address is the proxy's, the same
   for everybody, and a client may send any `X-Forwarded-For` it likes: the address is
   Cloudflare's `cf-connecting-ip`, else `true-client-ip`, else the last `X-Forwarded-For` entry,
-  the one the proxy appended. Without Render nobody's header is trusted: the socket's own
-  address, so a machine on the LAN counts as itself whatever it claims. Only a valid IP address
-  is counted by; a request without one counts as `unknown`, together with every other such. A
-  limiter forgets an address once its minute has passed — at the next check, or by its timer —
-  and keeps no key longer than 64 characters.
+  the one the proxy appended — the first socket read that way puts one line in the log, as
+  Cloudflare names every client on Render. Without Render nobody's header is trusted: the
+  socket's own address, so a machine on the LAN counts as itself whatever it claims. Only a
+  valid IP address is counted by; a request without one counts as `unknown`, together with
+  every other such. A limiter forgets an address once its minute has passed — at the next
+  check, or by its timer — and keeps no key longer than 64 characters.
 
 ## What is kept
 
@@ -80,7 +81,9 @@ take the name off again. A run is kept once: a room taken up again from a snapsh
 its end may finish it a second time, and the log says `run of … in room … kept already` — the
 unique key on room and start, no other (`runs_once`). Where this server's Bestenliste did not
 count that run yet — another instance kept it during a deploy, or the write landed while its
-answer was lost with the connection — it reads the run back and counts it then. A run
+answer was lost with the connection — it reads the run back and counts it then. A new instance
+also looks for the runs the old one kept around its opening as its Bestenliste is read (at most
+every 5 s, for five minutes) and counts them from the next read on. A run
 the store cannot take is logged and dropped; the room plays on. The Bestenliste and the mission
 cards' records count
 every run once as the server starts, then run by run. „Meine Einsätze", the menu's item beside
