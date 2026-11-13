@@ -280,7 +280,7 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
 - Offen bei Render: Abschaltfrist auf 120 s (`maxShutdownDelaySeconds`), sobald R-2 die Frist
   für die Schnappschüsse braucht.
 
-### R-2 Spielstand überlebt den Neustart — Status: im PR (R-snapshot) · Größe: L
+### R-2 Spielstand überlebt den Neustart — Status: erledigt (R-snapshot, Merge 2026-11-13; drei Review-Runden; Harness-Übung: SIGTERM 0,1 s, alle Seiten 0,6 s nach dem Hochfahren zurück, Schnappschuss 7,9 kB) · Größe: L
 - SIGTERM: Räume einfrieren (Wartungspause), jedem Client einen mit `ROOM_SECRET` (AES-GCM)
   verschlüsselten Schnappschuss schicken, geordnet schließen; dazu 2 s nach jeder Tat und alle 10 s,
   solange die Uhr läuft, ein Schnappschuss, wenn sich etwas geändert hat. `resume` trägt den
