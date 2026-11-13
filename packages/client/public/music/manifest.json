@@ -23,6 +23,28 @@
     "bpm": 90,
     "source": "elevenlabs"
   },
+  "end-lost": {
+    "file": "end-lost.mp3",
+    "ms": 32026,
+    "gain": 1.1989,
+    "startMs": 0,
+    "floor": 0.0000191,
+    "rms": 0.0834,
+    "loop": false,
+    "hash": "70ceef216a78",
+    "source": "elevenlabs"
+  },
+  "end-won": {
+    "file": "end-won.mp3",
+    "ms": 32026,
+    "gain": 1.9193,
+    "startMs": 553,
+    "floor": 0,
+    "rms": 0.0521,
+    "loop": false,
+    "hash": "845f9ea2e924",
+    "source": "elevenlabs"
+  },
   "lost": {
     "file": "lost.mp3",
     "ms": 11050,
@@ -32,6 +54,18 @@
     "rms": 0.173,
     "loop": false,
     "hash": "3c5252831169",
+    "source": "elevenlabs"
+  },
+  "menu-theme": {
+    "file": "menu-theme.mp3",
+    "ms": 60029,
+    "gain": 0.5303,
+    "startMs": 0,
+    "floor": 0.104,
+    "rms": 0.189,
+    "loop": true,
+    "hash": "7376acdcf4c7",
+    "bpm": 90,
     "source": "elevenlabs"
   },
   "tense": {

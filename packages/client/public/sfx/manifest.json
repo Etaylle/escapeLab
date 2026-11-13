@@ -47,6 +47,18 @@
     "influence": 0.5,
     "source": "elevenlabs"
   },
+  "bed-facility": {
+    "file": "bed-facility.mp3",
+    "ms": 10000,
+    "gain": 36.8138,
+    "startMs": 0,
+    "floor": 0.0018,
+    "rms": 0.00272,
+    "loop": true,
+    "hash": "5ec1467e2bbf",
+    "influence": 0.6,
+    "source": "elevenlabs"
+  },
   "bed-lab": {
     "file": "bed-lab.mp3",
     "ms": 10000,
