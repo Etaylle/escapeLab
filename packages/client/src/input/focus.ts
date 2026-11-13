@@ -68,12 +68,18 @@ export function focusables(scope: Element): HTMLElement[] {
 }
 
 /**
+ * What holds a controller inside it while it is open: anything modal, and a dialog that is not —
+ * a panel over the menu, which leaves the profile's name beside it within reach.
+ */
+export const DIALOGS = '[aria-modal="true"], [role="dialog"]';
+
+/**
  * The part of the page a controller moves in: the settings over everything, else the topmost
  * dialog (the last open one), else the quick chat's wheel open over the world, else the page;
  * null while the world takes the controller.
  */
 export function menuScope(doc: Document): Element | null {
-  const dialogs = [...doc.querySelectorAll('[aria-modal="true"]')].filter(
+  const dialogs = [...doc.querySelectorAll(DIALOGS)].filter(
     (el) => el.closest('[inert]') === null && el.getClientRects().length > 0,
   );
   const settings = dialogs.find((el) => el.classList.contains('settings'));

@@ -7,7 +7,15 @@ import { WORLD, offVoice } from '../../core/test/voice.js';
 import { startPad, type PadProbe } from '../src/input/padRuntime.js';
 import { keepColor, lastColor, PASS_KEY } from '../src/pass.js';
 import { wavesAnew } from '../src/screens/CrewFigure.js';
-import { JoinScreen, MENU_LEAD, MENU_SUBTITLE, panelOnArrival } from '../src/screens/Join.js';
+import { DIALOGS } from '../src/input/focus.js';
+import {
+  focusMenu,
+  JoinScreen,
+  MENU_LEAD,
+  MENU_SUBTITLE,
+  pagesOf,
+  panelOnArrival,
+} from '../src/screens/Join.js';
 import { MainMenu, MENU_LABELS, menuItems, menuStep } from '../src/screens/MainMenu.js';
 import {
   codeOf,
@@ -169,10 +177,15 @@ describe('the menu', () => {
     // The address loses the code at once, the rest of its query kept: no reload brings it back.
     expect(replaced).toEqual(['/?trace=1']);
     const html = menu();
-    expect(html).toContain('role="dialog" aria-modal="true"');
+    expect(html).toContain('<section class="menu-panel menu-panel--join" role="dialog"');
     expect(html).toContain('value="QX7R"');
     // The menu waits under its panel: neither the keys nor a controller reach it.
     expect(html).toContain('<div class="menu-body" inert="">');
+    // The profile's name stays within reach beside it: the panel is no modal, the name not inert.
+    expect(html).not.toContain('aria-modal');
+    expect(html.indexOf('class="profile-name"')).toBeLessThan(html.indexOf('class="menu-body"'));
+    // A controller is held in the panel all the same.
+    expect(DIALOGS.split(', ')).toContain('[role="dialog"]');
     // A menu has opened on it: the next this page shows — after a room closed — opens on nothing.
     inviteUsed();
     expect(panelOnArrival()).toBeNull();
@@ -196,6 +209,46 @@ function elementsIn(node: ReactNode): ReactElement[] {
 
 /** What a pointer coming over an item hands its handler: the item, to focus or not. */
 type PointerOver = (event: { currentTarget: { focus: () => void } }) => void;
+
+describe('the menu’s ways off it', () => {
+  it('opens the booklet and the Bestenliste of the mission picked, each its own', () => {
+    const opened: string[] = [];
+    const pages = pagesOf(
+      {
+        openHandbook: (missionId) => opened.push(`Handbuch ${missionId}`),
+        openHistory: (missionId) => opened.push(`Bestenliste ${missionId}`),
+        openEditor: () => opened.push('Editor'),
+      },
+      'notstrom',
+    );
+    pages.handbook?.();
+    pages.history?.();
+    pages.editor?.();
+    expect(opened).toEqual(['Handbuch notstrom', 'Bestenliste notstrom', 'Editor']);
+    // Without a mission there is no booklet and no Bestenliste to open; without a way, no page.
+    const none = pagesOf({ openHandbook: noop, openHistory: noop }, null);
+    expect(Object.keys(none)).toEqual([]);
+  });
+
+  it('stands the focus in the name as the menu comes up without one, else on its item', () => {
+    const focused: string[] = [];
+    const root = {
+      querySelector: (selector: string) => ({
+        focus: ({ preventScroll }: FocusOptions) => focused.push(`${selector} ${preventScroll}`),
+      }),
+    } as unknown as Pick<HTMLElement, 'querySelector'>;
+    focusMenu(root, null, false);
+    focusMenu(root, 'history', false);
+    focusMenu(root, null, true);
+    focusMenu(root, 'history', true);
+    expect(focused).toEqual([
+      '.profile-name true',
+      '.profile-name true',
+      '.bound-back:not([disabled]), .menu-item true',
+      '[data-item="history"] true',
+    ]);
+  });
+});
 
 describe('the menu under the pointer', () => {
   it('glows the item it points at and leaves the focus where it is, in the name typed', () => {
@@ -441,8 +494,7 @@ describe('a controller over the menu', () => {
       },
       body: control('body', 99),
       documentElement: { dataset: {}, style: { setProperty: noop } },
-      querySelectorAll: (selector: string) =>
-        selector === '[aria-modal="true"]' ? page.dialogs : [],
+      querySelectorAll: (selector: string) => (selector === DIALOGS ? page.dialogs : []),
       // No world on the page: the app is the scope, the menu's items its controls.
       querySelector: (selector: string) => (selector === '.app' ? app : null),
     };

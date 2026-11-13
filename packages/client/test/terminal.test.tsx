@@ -5,6 +5,7 @@ import type { PuzzleView } from '@escapelab/core';
 import { keysClaimed } from '../src/hooks.js';
 import { DEFAULT_KEYS, DEFAULT_PAD } from '../src/input/bindings.js';
 import { noteDevice } from '../src/input/device.js';
+import { DIALOGS } from '../src/input/focus.js';
 import { holdKeys, printable, strayKey, type PromptKey } from '../src/puzzles/prompt.js';
 import {
   completed,
@@ -105,8 +106,7 @@ function stubPage(): void {
       return page.focus;
     },
     documentElement: { dataset: {} },
-    querySelectorAll: (selector: string) =>
-      selector === '[aria-modal="true"]' ? page.dialogs : [],
+    querySelectorAll: (selector: string) => (selector === DIALOGS ? page.dialogs : []),
     querySelector: () => null,
   });
 }

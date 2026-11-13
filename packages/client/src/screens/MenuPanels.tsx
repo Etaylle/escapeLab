@@ -190,7 +190,6 @@ export function MenuPanel({
       ref={panel}
       className={`menu-panel ${className}`}
       role="dialog"
-      aria-modal="true"
       aria-labelledby={heading}
     >
       <header className="menu-panel-head">

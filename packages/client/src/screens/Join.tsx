@@ -250,7 +250,11 @@ export function panelOnArrival(): PanelId | null {
  * Where the focus goes in the menu: on the name while there is none to sit down under; else on
  * the item last taken — the run's way back or the first item where none was.
  */
-function focusMenu(root: HTMLElement | null, item: MenuItemId | null, named: boolean): void {
+export function focusMenu(
+  root: Pick<HTMLElement, 'querySelector'> | null,
+  item: MenuItemId | null,
+  named: boolean,
+): void {
   const at = item === null ? '.bound-back:not([disabled]), .menu-item' : `[data-item="${item}"]`;
   root?.querySelector<HTMLElement>(named ? at : '.profile-name')?.focus({ preventScroll: true });
 }
@@ -284,8 +288,14 @@ function usePanel(root: RefObject<HTMLElement | null>, named: boolean) {
   };
 }
 
-/** The ways the menu's items lead off it to a page of its own: the booklet, the Bestenliste … */
-function pagesOf(props: Props, selected: string | null): Partial<Record<MenuItemId, () => void>> {
+/**
+ * The ways the menu's items lead off it to a page of its own: the booklet and the Bestenliste of
+ * the mission `selected`, the editor, the settings.
+ */
+export function pagesOf(
+  props: Pick<Props, 'openHandbook' | 'openHistory' | 'openEditor' | 'openSettings'>,
+  selected: string | null,
+): Partial<Record<MenuItemId, () => void>> {
   const { openHandbook, openHistory, openEditor, openSettings } = props;
   return {
     ...(selected === null

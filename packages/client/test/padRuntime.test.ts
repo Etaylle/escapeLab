@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_PAD } from '../src/input/bindings.js';
 import { inputDevice, noteDevice } from '../src/input/device.js';
+import { DIALOGS } from '../src/input/focus.js';
 import { STANDARD_BUTTONS } from '../src/input/pad.js';
 import {
   capturePadButton,
@@ -54,8 +55,7 @@ function stubPage(): void {
     },
     body,
     documentElement: { dataset: {}, style: { setProperty: () => undefined } },
-    querySelectorAll: (selector: string) =>
-      selector === '[aria-modal="true"]' ? page.dialogs : [],
+    querySelectorAll: (selector: string) => (selector === DIALOGS ? page.dialogs : []),
     querySelector: (selector: string) => {
       if (selector === '.chat-wheel') {
         return page.wheel;
