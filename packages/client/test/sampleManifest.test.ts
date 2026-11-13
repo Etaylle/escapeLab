@@ -31,21 +31,12 @@ const REMEDY = 'render it on a Mac: pnpm --filter client sfx (docs/sound.md)';
 
 /**
  * The entries whose recordings the user still has to render (they cost credits, which no agent
- * may spend): until then each plays another's recording (`standIn`) or none — the menu's hum
- * and theme (world/menuSound.ts) and the end cards' themes (world/endTheme.ts) none. Render them
- * in packages/client, then empty this list:
- *
- *   node --env-file=/Users/uros/Documents/Req.Eng./escapelab/.env.local scripts/sfx.ts \
- *     --candidates 3 --only bed-facility
- *   node --env-file=/Users/uros/Documents/Req.Eng./escapelab/.env.local scripts/sfx.ts \
- *     --only menu-theme,end-won,end-lost
+ * may spend): until then each plays another's recording (`standIn`) or none. Empty since the
+ * menu's hum and theme and the end cards' themes were rendered on 2026-11-13; an entry added
+ * without its recording goes here with the render command in docs/sound.md, and leaves once
+ * the user has made it.
  */
-const AWAITING_RENDER: readonly string[] = [
-  'bed-facility',
-  'menu-theme',
-  'end-won',
-  'end-lost',
-];
+const AWAITING_RENDER: readonly string[] = [];
 const awaiting = new Set(AWAITING_RENDER);
 
 const catalog = readCatalog();
