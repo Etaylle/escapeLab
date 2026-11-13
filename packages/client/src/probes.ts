@@ -9,6 +9,7 @@ import type { GraphCensus } from './world/audioCount.js';
 import type { LightProbe } from './world/gl/path.js';
 import type { IntroProbe } from './world/intro/useIntro.js';
 import type { SceneProbe } from './world/menu/stage.js';
+import type { MenuSoundProbe } from './world/menuSound.js';
 import type { MusicProbe } from './world/music.js';
 import type { SoundProbe } from './world/soundProbe.js';
 import type { RadioRender, VoiceProbe as RadioProbe } from './world/radioVoice.js';
@@ -157,6 +158,8 @@ export interface Probes {
    * drift and the frames drawn (world/menu/stage.ts)
    */
   readonly scene?: SceneProbe;
+  /** the menu's sound: waiting for a gesture or playing, its theme, its hum, the crew's duck */
+  readonly menuSound?: MenuSoundProbe;
 }
 
 declare global {

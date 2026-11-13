@@ -311,7 +311,7 @@
     "durationSeconds": 0.6,
     "loop": false,
     "target": { "measure": "peak", "dbfs": -3 },
-    "usedBy": ["src/world/audio.ts#stationChirp"]
+    "usedBy": ["src/world/audio.ts#stationChirp", "src/world/menuSound.ts#UI"]
   },
   {
     "id": "ping",
@@ -450,7 +450,7 @@
     "durationSeconds": 0.5,
     "loop": false,
     "target": { "measure": "peak", "dbfs": -3 },
-    "usedBy": ["src/puzzles/sounds.ts#toggleClack"]
+    "usedBy": ["src/puzzles/sounds.ts#toggleClack", "src/world/menuSound.ts#UI"]
   },
   {
     "id": "button-thunk",
@@ -486,7 +486,7 @@
     "durationSeconds": 0.8,
     "loop": false,
     "target": { "measure": "peak", "dbfs": -3 },
-    "usedBy": ["src/puzzles/sounds.ts#stageChime", "src/world/audio.ts#emergencyOver"]
+    "usedBy": ["src/puzzles/sounds.ts#stageChime", "src/world/audio.ts#emergencyOver", "src/world/menuSound.ts#UI"]
   },
   {
     "id": "dial-detent",
@@ -495,7 +495,7 @@
     "durationSeconds": 0.5,
     "loop": false,
     "target": { "measure": "peak", "dbfs": -3 },
-    "usedBy": ["src/puzzles/sounds.ts#dialDetent"]
+    "usedBy": ["src/puzzles/sounds.ts#dialDetent", "src/world/menuSound.ts#UI"]
   },
   {
     "id": "step-tick",
@@ -567,7 +567,7 @@
     "durationSeconds": 0.5,
     "loop": false,
     "target": { "measure": "peak", "dbfs": -3 },
-    "usedBy": ["src/world/audio.ts#volumeTick"]
+    "usedBy": ["src/world/audio.ts#volumeTick", "src/world/menuSound.ts#UI"]
   },
   {
     "id": "creak",
@@ -750,6 +750,15 @@
     "usedBy": ["src/world/ambience.ts#IDLE"]
   },
   {
+    "id": "bed-facility",
+    "kind": "bed",
+    "prompt": "Room tone of a large research facility at night, heard from its entrance hall: the deep, even hum of distant transformers and heavy ventilation far down the concrete corridors, recorded at full level, clearly audible, constant.",
+    "durationSeconds": 10,
+    "loop": true,
+    "target": { "measure": "rms", "dbfs": -20 },
+    "usedBy": ["src/world/menuSound.ts#HUM"]
+  },
+  {
     "id": "calm",
     "kind": "stem",
     "prompt": "Instrumental underscore for a cooperative escape game set in a dark research lab at night. A minor, 90 BPM. Calm but uneasy: a slow evolving synth pad, a soft low drone, sparse muted piano notes and a gentle pulsing texture, no drums. Steady intensity from start to finish, no intro, no ending, made to loop.",
@@ -796,5 +805,15 @@
     "loop": false,
     "target": { "measure": "rms", "dbfs": -14 },
     "usedBy": ["src/world/music.ts#playSting", "src/screens/End.tsx#TitleCard"]
+  },
+  {
+    "id": "menu-theme",
+    "kind": "stem",
+    "prompt": "Instrumental title theme for the main menu of a cooperative escape game set in a 1980s research facility at night. A minor, 90 BPM. Dark and quiet: a slow analog synth pad over a deep low drone, a lonely four-note motif on a soft electric piano, the faint far-off hum of machinery, no drums, no vocals. Steady intensity from start to finish, no intro, no ending, made to loop.",
+    "durationSeconds": 72,
+    "loop": true,
+    "bpm": 90,
+    "target": { "measure": "rms", "dbfs": -20 },
+    "usedBy": ["src/world/menuSound.ts#THEME"]
   }
 ]

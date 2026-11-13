@@ -92,7 +92,9 @@
  * (menu-open-rounds.png). The audience types the room's code in small letters into
  * „Beitreten" (menu-join.png): it has to stand in capitals, in a field no browser fills from its
  * passwords. In the reconnect drill a new tab of Anna's browser, her run standing paused, opens
- * the menu on the run's card, first and lit, every other item dimmed (menu-bound.png).
+ * the menu on the run's card, first and lit, every other item dimmed (menu-bound.png). The
+ * menu's sound waits for the first key, the speaker's lamp lit, and plays after it; the lobby
+ * chimes as the round comes up and chirps as Ben says ready; the run's start ends it.
  *
  * On the way, both open the Bestenliste from the menu (history.png,
  * history-phone.png): measured like the menu, at 1280×720 too, and on
@@ -6184,6 +6186,57 @@ async function walkMenuKeys(page) {
   }
 }
 
+/** The menu's sound off the page's probe (client world/menuSound.ts): its state, what played. */
+const menuSoundOf = (page) =>
+  page.evaluate(
+    () => globalThis.__escapelab?.menuSound ?? { state: '!! no probe', theme: false, played: {} },
+  );
+
+/** What the log says of the menu's sound: its state, its theme and its hum. */
+function menuSoundText({ state, theme, hum }) {
+  const music = theme ? 'the theme playing' : 'no theme (awaiting its render?)';
+  return `${state}, ${music}, ${hum ? 'the hum' : 'no hum (awaiting its render?)'}`;
+}
+
+/** Whether the speaker's lamp is lit on `page`: the menu's sound waits for a gesture. */
+const lampLit = async (page) => (await page.locator('.sound-toggle--waiting').count()) === 1;
+
+/**
+ * The menu's sound before the first key and after it: waiting, the speaker's lamp lit, until a
+ * key lets the browser's sound start — then playing, the lamp out; or the run fails.
+ */
+async function menuSoundAtFirstKey(page, press) {
+  const before = await menuSoundOf(page);
+  const litBefore = await lampLit(page);
+  await press();
+  const after = await menuSoundOf(page);
+  const litAfter = await lampLit(page);
+  console.log(
+    `menu sound         before a key: ${before.state}, the speaker’s lamp ` +
+      `${litBefore ? 'lit' : '!! out'}; after it: ${menuSoundText(after)}, the lamp ` +
+      (litAfter ? '!! still lit' : 'out'),
+  );
+  if (before.state !== 'waiting' || !litBefore || after.state !== 'playing' || litAfter) {
+    fail(`menu sound: ${before.state} before the first key, ${after.state} after it`);
+  }
+}
+
+/**
+ * The lobby's sounds on the host's page — the round's chime as it came up, the ready chirp as
+ * the guest said ready — and the menu's sound gone once the run has started; or the run fails.
+ */
+async function menuSoundAfterStart(page) {
+  const { state, played } = await menuSoundOf(page);
+  const { opened = 0, ready = 0 } = played;
+  console.log(
+    `menu sound         the run started: ${state}; in the lobby the round's chime ` +
+      `${opened}×, the ready chirp ${ready}×`,
+  );
+  if (state !== 'off' || opened < 1 || ready < 1) {
+    fail(`menu sound: ${state} in the run, chime ${opened}×, chirp ${ready}×`);
+  }
+}
+
 /** The menu's quiet window holds the screen's pace under SHOTS_SOFTWARE_GL, ms p95. */
 const MENU_P95_MS = 16.8;
 
@@ -6198,7 +6251,7 @@ async function captureMenu(page) {
   const scene = await sceneBaked(page, { w: SIZES[0].width, h: SIZES[0].height });
   await capture(page, 'menu.png');
   console.log(`menu.png           ${sceneText(scene)}`);
-  await walkMenuKeys(page);
+  await menuSoundAtFirstKey(page, () => walkMenuKeys(page));
   const look = await sampleFrames(page, 'on the menu, its scene drifting', () => sleep(SAMPLE_MS));
   if (SOFTWARE_GL && look !== null && look.p95 > MENU_P95_MS) {
     fail(`menu: its window reached ${look.p95.toFixed(1)} ms p95, over ${MENU_P95_MS}`);
@@ -11282,6 +11335,7 @@ async function run() {
     { name: 'Ben', page: guest, seen: guestSeen },
   );
   await opening;
+  await menuSoundAfterStart(host);
   await sleep(500); // presence follows the start within a tick
   if (guestSeen.view?.map == null || hostSeen.view?.map == null) {
     throw new Error('no running view on the sockets — does the client still talk on /ws?');

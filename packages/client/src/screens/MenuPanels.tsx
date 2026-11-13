@@ -13,6 +13,7 @@ import { useServerNow } from '../hooks.js';
 import { crewPass } from '../pass.js';
 import { recordLine } from '../runStats.js';
 import type { Takeover } from '../ws.js';
+import { uiSound } from '../world/menuSound.js';
 import { crewSizeText } from './Crew.js';
 import { CrewFigure } from './CrewFigure.js';
 import { Icon } from './Icon.js';
@@ -120,8 +121,9 @@ function useEscape(close: () => void): void {
 }
 
 /**
- * A panel over the menu: a dialog with its title and the way back — Esc, B or „Zurück". It
- * takes the focus as it comes up: what it marks `data-focus`, else the way back.
+ * A panel over the menu: a dialog with its title and the way back — Esc, B or „Zurück", a
+ * detent's click as it goes (world/menuSound.ts). It takes the focus as it comes up: what it
+ * marks `data-focus`, else the way back.
  */
 export function MenuPanel({
   title,
@@ -136,7 +138,11 @@ export function MenuPanel({
 }) {
   const heading = useId();
   const panel = useRef<HTMLElement>(null);
-  useEscape(onClose);
+  const back = (): void => {
+    uiSound('back');
+    onClose();
+  };
+  useEscape(back);
   useEffect(() => {
     const marked = panel.current?.querySelector<HTMLElement>('[data-focus]');
     (marked ?? panel.current?.querySelector<HTMLElement>('.menu-back'))?.focus({
@@ -153,7 +159,7 @@ export function MenuPanel({
     >
       <header className="menu-panel-head">
         <h2 id={heading}>{title}</h2>
-        <button className="menu-back" onClick={onClose}>
+        <button className="menu-back" onClick={back}>
           Zurück
         </button>
       </header>

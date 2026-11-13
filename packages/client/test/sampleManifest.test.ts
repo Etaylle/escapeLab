@@ -28,14 +28,15 @@ const REMEDY = 'render it on a Mac: pnpm --filter client sfx (docs/sound.md)';
 
 /**
  * The entries whose recordings the user still has to render (they cost credits, which no agent
- * may spend): until then each plays another's recording (`standIn`) or none. Render them in
- * packages/client, then empty this list:
+ * may spend): until then each plays another's recording (`standIn`) or none — the menu's hum
+ * and theme (world/menuSound.ts) none. Render them in packages/client, then empty this list:
  *
  *   node --env-file=/Users/uros/Documents/Req.Eng./escapelab/.env.local scripts/sfx.ts \
- *     --candidates 3 --only step-lino-1,step-lino-2,step-lino-3,step-steel-1,step-steel-2,\
- *     step-steel-3,alarm-sting,door-close-1,door-close-2,drone-pass,hatch-open-done,ui-tick
+ *     --candidates 3 --only bed-facility
+ *   node --env-file=/Users/uros/Documents/Req.Eng./escapelab/.env.local scripts/sfx.ts \
+ *     --only menu-theme
  */
-const AWAITING_RENDER: readonly string[] = [];
+const AWAITING_RENDER: readonly string[] = ['bed-facility', 'menu-theme'];
 const awaiting = new Set(AWAITING_RENDER);
 
 const catalog = readCatalog();
@@ -126,7 +127,7 @@ describe.each(['sfx', 'music'] as const)('the recordings in public/%s', (group) 
   });
 
   it('name each stem’s tempo as the catalog has it, the bars the music is counted in', () => {
-    for (const entry of entries) {
+    for (const entry of rendered) {
       expect(manifest[entry.id]?.bpm, entry.id).toBe(entry.bpm);
     }
   });

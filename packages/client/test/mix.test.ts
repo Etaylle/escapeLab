@@ -56,10 +56,11 @@ describe('a bus pulled down', () => {
   const dips = (entries: [DuckSource, Dip][]): Map<DuckSource, Dip> => new Map(entries);
   const music = (source: DuckSource): number => 10 ** ((DUCK_DB.music[source] ?? 0) / 20);
 
-  it('pulls the music 8 dB under the voice, 6 under the klaxon and the siren, the beds 4', () => {
+  it('pulls the music 8 dB under a voice, 6 under the klaxon and the siren, the beds 4', () => {
+    // A voice: mission control's on the radio, and the crew's in the lobby over the menu's sound.
     expect(DUCK_DB).toEqual({
-      music: { voice: -8, alarm: -6, siren: -6 },
-      ambience: { voice: -4 },
+      music: { voice: -8, alarm: -6, siren: -6, crew: -8 },
+      ambience: { voice: -4, crew: -4 },
     });
     expect([DUCK_ATTACK_S, DUCK_RELEASE_S]).toEqual([0.05, 0.4]);
   });

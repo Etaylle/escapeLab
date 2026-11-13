@@ -139,16 +139,19 @@ export function setBusVolumes(mix: Mix, volumes: BusVolumes, now: number): void 
 
 // --- ducking ---------------------------------------------------------------------------------
 
-/** What pulls a bus down: mission control's voice, the klaxon, the siren. */
-export type DuckSource = 'voice' | 'alarm' | 'siren';
+/**
+ * What pulls a bus down: mission control's voice, the klaxon, the siren — and the crew's own voice
+ * in the lobby, over the menu's theme and hum (menuSound.ts).
+ */
+export type DuckSource = 'voice' | 'alarm' | 'siren' | 'crew';
 
 /** How far each source pulls a bus down, dB; a source with none for the bus leaves it be. */
 export type Depths = Readonly<Partial<Record<DuckSource, number>>>;
 
 /** How far the sources pull the music and the beds down, dB. */
 export const DUCK_DB: Readonly<Record<'music' | 'ambience', Depths>> = {
-  music: { voice: -8, alarm: -6, siren: -6 },
-  ambience: { voice: -4 },
+  music: { voice: -8, alarm: -6, siren: -6, crew: -8 },
+  ambience: { voice: -4, crew: -4 },
 };
 /** A bus goes down over this long, s… */
 export const DUCK_ATTACK_S = 0.05;

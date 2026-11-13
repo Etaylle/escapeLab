@@ -92,9 +92,9 @@ describe('the catalog', () => {
     for (const entry of catalog) expect(entry.target, entry.id).toEqual(TARGETS[entry.kind]);
   });
 
-  it('has the three stems in one key and tempo, 60 to 90 s, and the stings 8 to 12 s', () => {
+  it('has the stems, the menu’s theme too, in one key and tempo, 60–90 s, stings 8–12 s', () => {
     const stems = catalog.filter((entry) => entry.kind === 'stem');
-    expect(stems.map((entry) => entry.id)).toEqual(['calm', 'tense', 'critical']);
+    expect(stems.map((entry) => entry.id)).toEqual(['calm', 'tense', 'critical', 'menu-theme']);
     for (const stem of stems) {
       expect(stem.prompt, stem.id).toMatch(/A minor, 90 BPM/);
       expect(stem.durationSeconds).toBeGreaterThanOrEqual(60);

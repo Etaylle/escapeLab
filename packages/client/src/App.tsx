@@ -1,5 +1,6 @@
 import { Activity, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { isMuted, setMuted } from './world/audio.js';
+import { traceRequested } from './world/frameTrace.js';
+import { menuSoundProbe, wantMenuSound } from './world/menuSound.js';
 import {
   difficultyInfos,
   type Difficulty,
@@ -10,6 +11,7 @@ import { firstDifficulty, hasWon, useWonMark } from './firstRun.js';
 import { usePad } from './input/padRuntime.js';
 import { localStore } from './notes.js';
 import { crewPass, keepName } from './pass.js';
+import { addProbes } from './probes.js';
 import { STATS_PATH, useJson } from './runStats.js';
 import { useRunScreen } from './runScreen.js';
 import { useVoiceMesh, VoiceContext } from './voice/useVoice.js';
@@ -38,6 +40,7 @@ import { GameScreen } from './screens/Game.js';
 import type { GameLine } from './screens/Line.js';
 import { EndScreen } from './screens/End.js';
 import { SettingsPanel } from './screens/Settings.js';
+import { SoundSwitch } from './screens/SoundSwitch.js';
 import { SpectateScreen } from './screens/Spectate.js';
 
 function difficultyLabel(id: Difficulty): string {
@@ -109,6 +112,8 @@ interface TopBarProps {
   toEditor: (() => void) | null;
   /** opens the settings (screens/Settings.tsx) */
   onSettings: () => void;
+  /** the menu is up: its sound switch shows while the menu's sound waits for a gesture */
+  menu?: boolean;
 }
 
 /**
@@ -116,8 +121,8 @@ interface TopBarProps {
  * editor for the host of a test run, the running mission, the sound — the
  * quick switch — and the gear for the settings, and the connection.
  */
-export function TopBar({ roomCode, seed, running, status, toEditor, onSettings }: TopBarProps) {
-  const [sound, setSound] = useState(() => !isMuted());
+export function TopBar(props: TopBarProps) {
+  const { roomCode, seed, running, status, toEditor, onSettings } = props;
   return (
     <header className="topbar">
       <span className="logo">
@@ -135,18 +140,7 @@ export function TopBar({ roomCode, seed, running, status, toEditor, onSettings }
           <span className="muted"> · {difficultyLabel(running.difficulty)}</span>
         </span>
       )}
-      <button
-        className="sound-toggle"
-        title={sound ? 'Ton ausschalten' : 'Ton einschalten'}
-        aria-label="Ton"
-        aria-pressed={sound}
-        onClick={() => {
-          setMuted(sound);
-          setSound(!sound);
-        }}
-      >
-        <Icon name={sound ? 'speaker' : 'speaker-off'} />
-      </button>
+      <SoundSwitch menu={props.menu === true} />
       <button
         className="settings-toggle"
         title="Einstellungen"
@@ -444,6 +438,25 @@ function useStage(conn: Connection, finale: Finale | null): boolean {
   );
 }
 
+/**
+ * The menu's sound (world/menuSound.ts): wanted off any room (`offRoom`) and in the lobby, gone
+ * with a run; its probe on the page under `?trace=1`.
+ */
+function useMenuSound(conn: Connection, offRoom: boolean): void {
+  const on = offRoom || conn.view?.phase === 'lobby';
+  useEffect(() => wantMenuSound(on), [on]);
+  useEffect(() => {
+    if (!traceRequested(location.search)) {
+      return undefined;
+    }
+    return addProbes({
+      get menuSound() {
+        return menuSoundProbe();
+      },
+    });
+  }, []);
+}
+
 /** The missions on the server: fetched at the start, and again whenever `load` is called. */
 function useMissions(): [MissionInfo[], () => void] {
   const [missions, setMissions] = useState<MissionInfo[]>([]);
@@ -531,6 +544,7 @@ export function App({ boot }: { boot: EditorBoot }) {
   const fromEditor = returnsToEditor(testRun.run, conn.roomCode, conn.view?.you.isHost === true);
 
   const offRoom = conn.view === null && conn.spectatorView === null;
+  useMenuSound(conn, offRoom);
   // The editor scrolls on a phone (styles/editor.css); the menu lies over its living scene.
   const { editing, menu } = offRoomOf(offRoom, { handbook, history, editor: editor.open });
   const layout = layoutOf(immersive, editing, menu);
@@ -554,6 +568,7 @@ export function App({ boot }: { boot: EditorBoot }) {
         status={conn.status}
         toEditor={fromEditor ? testRun.back : null}
         onSettings={() => setSettingsOpen(true)}
+        menu={menu}
       />
       {settingsOpen && <SettingsPanel onClose={() => setSettingsOpen(false)} />}
       {conn.error !== null && (

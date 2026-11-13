@@ -16,6 +16,8 @@ import { useNow } from '../hooks.js';
 import { keepColor } from '../pass.js';
 import { fullscreenForRun } from '../runScreen.js';
 import { recordParts } from '../runStats.js';
+import { useVoice } from '../voice/useVoice.js';
+import { crewSpeaks, uiSound } from '../world/menuSound.js';
 import { preloadSamples } from '../world/samples.js';
 import { crewSizeText } from './Crew.js';
 import { CrewRoom } from './CrewRoom.js';
@@ -445,6 +447,28 @@ function StartArea({ view, send }: { view: PlayerView; send: Send }) {
 }
 
 /**
+ * The lobby's sounds (world/menuSound.ts): the stage's chime as the round comes up — opened or
+ * joined — a console's chirp as somebody of the crew says ready, and the menu's theme and hum
+ * pulled down while anybody speaks.
+ */
+function useLobbySound(view: PlayerView): void {
+  const talking = (useVoice()?.state.speaking.size ?? 0) > 0;
+  const ready = view.players.filter((player) => player.ready).length;
+  const was = useRef(ready);
+  useEffect(() => uiSound('opened'), []);
+  useEffect(() => {
+    if (ready > was.current) {
+      uiSound('ready');
+    }
+    was.current = ready;
+  }, [ready]);
+  useEffect(() => {
+    crewSpeaks(talking);
+    return () => crewSpeaks(false);
+  }, [talking]);
+}
+
+/**
  * The lobby as the crew's room: everybody on stage, the colours at your feet,
  * the mission beside them with its settings, the microphone and the start.
  * The room's code stands once, in the header, where the free places point.
@@ -463,6 +487,7 @@ export function LobbyScreen({ view, send, leaveRoom, missions, stats }: Props) {
   }, []);
   // The colour worn here is the menu's profile's next time (pass.ts).
   useEffect(() => keepColor(view.you.color), [view.you.color]);
+  useLobbySound(view);
   // The host picks among the missions where everyone else sees the map.
   const picker =
     host && missions.length > 1 ? (

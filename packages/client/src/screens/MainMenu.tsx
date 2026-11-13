@@ -1,4 +1,5 @@
 import type { KeyboardEvent, ReactNode } from 'react';
+import { uiSound } from '../world/menuSound.js';
 import { stepTo } from './Lobby.js';
 
 /** What the menu offers, item by item. */
@@ -84,7 +85,8 @@ interface MenuProps {
  * The game's menu, one item under the next as a game's main menu stands: the card of a run that
  * binds the pass first, then every way on from here. The arrow keys move between them — a
  * controller's D-pad does through the page (input/focus.ts) —, Enter or A takes one. A pointer
- * over an item takes the focus with it, so that one item stands lit at a time.
+ * over an item takes the focus with it, so that one item stands lit at a time; an item lit ticks,
+ * one taken clacks (world/menuSound.ts).
  */
 export function MainMenu({ items, card, dimmed, rooms, onPick }: MenuProps) {
   return (
@@ -100,7 +102,11 @@ export function MainMenu({ items, card, dimmed, rooms, onPick }: MenuProps) {
             <button
               className="menu-item"
               data-item={id}
-              onClick={() => onPick(id)}
+              onClick={() => {
+                uiSound('select');
+                onPick(id);
+              }}
+              onFocus={() => uiSound('hover')}
               onPointerEnter={(e) => e.currentTarget.focus({ preventScroll: true })}
             >
               <span className="menu-label">{MENU_LABELS[id]}</span>

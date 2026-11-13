@@ -256,10 +256,10 @@ interface Music {
 const NO_LAYERS: Layers = { calm: false, pressure: false, last: false };
 /** The seam's curves: in, a quarter sine, and out, its mirror — equal in power throughout. */
 const SEAM_POINTS = 32;
-const SEAM_IN = Float32Array.from({ length: SEAM_POINTS }, (_, i) =>
+export const SEAM_IN = Float32Array.from({ length: SEAM_POINTS }, (_, i) =>
   Math.sin((Math.PI / 2) * (i / (SEAM_POINTS - 1))),
 );
-const SEAM_OUT = Float32Array.from(SEAM_IN).reverse();
+export const SEAM_OUT = Float32Array.from(SEAM_IN).reverse();
 
 let music: Music | null = null;
 

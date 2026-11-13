@@ -103,10 +103,14 @@ export const SFX_IDS = [
   'bed-plain',
   'bed-machine-idle',
   'bed-reactor-idle',
+  'bed-facility',
 ] as const;
 
-/** Every piece of music: the three stems and the two stings, in public/music/manifest.json. */
-export const MUSIC_IDS = ['calm', 'tense', 'critical', 'won', 'lost'] as const;
+/**
+ * Every piece of music: the run's three stems, the two stings and the menu's theme, in
+ * public/music/manifest.json.
+ */
+export const MUSIC_IDS = ['calm', 'tense', 'critical', 'won', 'lost', 'menu-theme'] as const;
 
 export type SfxId = (typeof SFX_IDS)[number];
 export type MusicId = (typeof MUSIC_IDS)[number];

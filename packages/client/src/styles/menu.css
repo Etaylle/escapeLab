@@ -419,3 +419,23 @@
     transform: none;
   }
 }
+
+/* ── the sound switch while the menu's sound waits for a gesture ────────── */
+
+/* A lamp lit on the speaker until the first click, tap or key lets the sound start
+   (screens/SoundSwitch.tsx). */
+.sound-toggle--waiting {
+  position: relative;
+}
+
+.sound-toggle--waiting::after {
+  content: '';
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--warn);
+  box-shadow: 0 0 6px rgba(251, 191, 36, 0.7);
+}

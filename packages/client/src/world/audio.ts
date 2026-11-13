@@ -233,6 +233,17 @@ export function isMuted(): boolean {
   return muted;
 }
 
+/** Who wants to hear of the sound switch (menuSound.ts): told after every change. */
+const muteListeners = new Set<() => void>();
+
+/** Tells `listener` of every change to the sound switch; returns what stops telling it. */
+export function subscribeMuted(listener: () => void): () => void {
+  muteListeners.add(listener);
+  return () => {
+    muteListeners.delete(listener);
+  };
+}
+
 /**
  * Silences or restores everything at the single master gain the whole module
  * already routes through. Works before any sound has been created.
@@ -251,6 +262,7 @@ export function setMuted(next: boolean): void {
   } catch {
     // Deliberately silent: muting must never break the game.
   }
+  for (const listener of [...muteListeners]) listener();
 }
 
 /**
