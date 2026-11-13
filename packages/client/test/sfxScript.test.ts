@@ -1,4 +1,5 @@
-import { existsSync, mkdtempSync, readdirSync, readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
@@ -21,6 +22,7 @@ import {
   hashOf,
   heardDbfs,
   influencesFor,
+  keepTake,
   LEAD_MS,
   LENGTHS,
   lengthOff,
@@ -57,6 +59,7 @@ import {
   type Bench,
   type CatalogEntry,
   type Floor,
+  type Keep,
   type Manifest,
   type ManifestEntry,
   type Pcm,
@@ -410,7 +413,7 @@ describe('a run', () => {
   });
 
   it('reads the command line, pnpm’s -- and all, and refuses anything else', () => {
-    const none = { groups: ['sfx', 'music'], dryRun: false, only: null, candidates: 1 };
+    const none = { groups: ['sfx', 'music'], dryRun: false, only: null, candidates: 1, keep: null };
     expect(optionsOf([])).toEqual(none);
     expect(optionsOf(['--', '--dry-run'])).toEqual({ ...none, dryRun: true });
     expect(optionsOf(['sfx', '--only', 'klaxon'])).toEqual({
@@ -622,6 +625,9 @@ describe('picking a candidate', () => {
   });
 });
 
+/** What a file holds, in a word: the SHA-1 of its bytes, which a failure says in a line. */
+const digest = (bytes: Uint8Array): string => createHash('sha1').update(bytes).digest('hex');
+
 /** A piece `seconds` long, a 441 Hz tone at `amplitude` throughout, as a WAV at 2 kHz. */
 const piece = (seconds: number, amplitude: number): Uint8Array<ArrayBuffer> =>
   wavOf(2000, [toneAfter(2000, 0, amplitude, seconds * 1000)]);
@@ -803,7 +809,7 @@ describe('the music’s takes', () => {
     expect(second?.floor).toBeCloseTo(0.8 / Math.SQRT2, 2);
     expect(second?.peak).toBeCloseTo(0.8, 3);
     expect(second?.gain).toBeCloseTo(10 ** (-14 / 20) / (0.8 / Math.SQRT2), 3);
-    expect(readFileSync(join(folder, '2.mp3'))).toEqual(Buffer.from(piece(10, 0.8)));
+    expect(digest(readFileSync(join(folder, '2.mp3')))).toBe(digest(piece(10, 0.8)));
   });
 
   it('number on from the takes there, and leave the effects as they were made', async () => {
@@ -859,5 +865,135 @@ describe('the music’s takes', () => {
   it('are made again, for a recording that fails, in three takes; an effect in five', () => {
     expect(remakeArgs('sfx', ['ping', 'drip'])).toBe('--candidates 5 --only ping,drip');
     expect(remakeArgs('music', ['lost'])).toBe('--candidates 3 --only lost');
+  });
+});
+
+describe('keeping a take', () => {
+  /** Three takes of the sting, at 0.6, 0.8 and 0.7, and two of the calm stem, in `places`. */
+  async function takesIn(places: Places): Promise<Bench> {
+    const sting = answering({ music: [0.6, 0.8, 0.7].map((a) => piece(10, a)) });
+    await runOf([STING], 3, benchOf(sting.client, places));
+    const calm = answering({ music: [piece(72, 0.5), piece(72, 0.9)] });
+    const bench = benchOf(calm.client, places);
+    await runOf([CALM], 2, bench);
+    return bench;
+  }
+  const keep = (id: string, n: number): Keep => ({ id, n });
+
+  it('is asked for as --keep <id>=<n>, alone, one take a run', () => {
+    const none = { groups: ['sfx', 'music'], dryRun: false, only: null, candidates: 1 };
+    expect(optionsOf(['--', '--keep', 'menu-theme=2'])).toEqual({
+      ...none,
+      keep: { id: 'menu-theme', n: 2 },
+    });
+    expect(optionsOf(['--keep', 'end-won=12']).keep).toEqual({ id: 'end-won', n: 12 });
+    const malformed =
+      /^sfx: --keep \S* — it takes an entry's id and a take's number: --keep menu-theme=2$/;
+    for (const bad of ['menu-theme', 'menu-theme=0', 'menu-theme=2.5', 'Menu=1', '=1', 'a=b']) {
+      expect(() => optionsOf(['--keep', bad]), bad).toThrow(malformed);
+    }
+    expect(() => optionsOf(['--keep'])).toThrow(/^sfx: --keep — it takes an entry's id/);
+    const twice = ['--keep', 'a=1', '--keep', 'b=2'];
+    expect(() => optionsOf(twice)).toThrow(/^sfx: --keep twice — a run keeps one take$/);
+    for (const more of [['music'], ['--dry-run'], ['--only', 'a'], ['--candidates', '3']]) {
+      expect(() => optionsOf(['--keep', 'a=1', ...more]), more.join(' ')).toThrow(
+        /^sfx: --keep keeps a take and makes nothing: it comes alone$/,
+      );
+    }
+  });
+
+  it('moves it into the music, writes its entry as a render would, deletes the rest', async () => {
+    const places = placesIn();
+    const bench = await takesIn(places);
+    const before = readManifest(places, 'music');
+    const { group, kept } = keepTake(keep(STING.id, 2), [STING, CALM], places, bench.decode);
+    expect(group).toBe('music');
+    const file = join(places.dirs.music, 'test-sting.mp3');
+    expect(digest(readFileSync(file))).toBe(digest(piece(10, 0.8)));
+    expect(existsSync(join(places.takes, STING.id))).toBe(false);
+    expect(readTakes(places.takes, CALM.id)?.takes).toHaveLength(2); // another's takes stay
+    const manifest = readManifest(places, 'music');
+    expect(manifest).toEqual({ ...before, [STING.id]: kept });
+    expect(kept).toEqual({
+      file: 'test-sting.mp3',
+      ms: 10_000,
+      gain: expect.closeTo(10 ** (-14 / 20) / (0.8 / Math.SQRT2), 3),
+      startMs: 0,
+      floor: expect.closeTo(0.8 / Math.SQRT2, 2),
+      rms: expect.closeTo(0.8 / Math.SQRT2, 2),
+      loop: false,
+      hash: hashOf(STING),
+      source: 'elevenlabs',
+    });
+    // As sampleManifest.test.ts holds the game's recordings: made from the request as it stands,
+    // as long as asked, starting within itself, unclipped, its floor not heard.
+    const music = { sfx: {}, music: manifest };
+    expect(upToDate(STING, kept)).toBe(true);
+    expect([offLength([STING], music), noisyTakes([STING], music)]).toEqual([[], []]);
+    expect(kept.gain).toBeGreaterThan(0.1);
+    expect(kept.startMs).toBeLessThan(kept.ms / 4);
+  });
+
+  it('keeps a stem round and round at its tempo, beside the music kept before', async () => {
+    const places = placesIn();
+    const bench = await takesIn(places);
+    keepTake(keep(STING.id, 1), [STING, CALM], places, bench.decode);
+    const { kept } = keepTake(keep(CALM.id, 2), [STING, CALM], places, bench.decode);
+    expect(kept).toMatchObject({ file: 'test-calm.mp3', loop: true, bpm: 90, hash: hashOf(CALM) });
+    expect(Object.keys(readManifest(places, 'music'))).toEqual(['test-calm', 'test-sting']);
+    expect(readdirSync(places.takes)).toEqual([]);
+    const calm = readFileSync(join(places.dirs.music, 'test-calm.mp3'));
+    expect(digest(calm)).toBe(digest(piece(72, 0.9)));
+  });
+
+  it('refuses, in one line and moving nothing, an id or a take it cannot keep', async () => {
+    const places = placesIn();
+    const bench = await takesIn(places);
+    const refusal = (asked: Keep, catalog: readonly CatalogEntry[] = [STING, CALM, CLACK]) => {
+      try {
+        keepTake(asked, catalog, places, bench.decode);
+      } catch (error) {
+        return (error as Error).message;
+      }
+      return 'kept';
+    };
+    const unknown = 'sfx: --keep nope=1 — audio/catalog.json has no such entry';
+    expect(refusal(keep('nope', 1))).toBe(unknown);
+    const lost = { ...STING, id: 'test-lost' };
+    expect(refusal(keep('test-lost', 1), [lost])).toBe(
+      'sfx: --keep test-lost=1 — test-lost has no takes; make some: ' +
+        '--candidates 3 --only test-lost',
+    );
+    expect(refusal(keep(CLACK.id, 1))).toBe(
+      'sfx: --keep test-clack=1 — test-clack is an effect, whose best take a run keeps itself: ' +
+        'none waits for the ear',
+    );
+    expect(refusal(keep(STING.id, 4))).toBe(
+      'sfx: --keep test-sting=4 — test-sting has takes 1, 2, 3, and no take 4',
+    );
+    const changed = { ...STING, prompt: `${STING.prompt} Louder.` };
+    expect(refusal(keep(STING.id, 2), [changed])).toBe(
+      "sfx: --keep test-sting=2 — it was made from another request than the catalog's: " +
+        '--candidates 3 --only test-sting',
+    );
+    rmSync(join(places.takes, STING.id, '3.mp3'));
+    expect(refusal(keep(STING.id, 3))).toBe(
+      `sfx: --keep test-sting=3 — its file test-sting/3.mp3 is gone from ${places.takes}`,
+    );
+    expect(existsSync(places.dirs.music)).toBe(false);
+    const left = readdirSync(join(places.takes, STING.id)).sort();
+    expect(left).toEqual(['1.mp3', '2.mp3', 'index.json']);
+  });
+
+  it('is said after a run that made takes, a command for each entry', async () => {
+    const places = placesIn();
+    await takesIn(places);
+    const lines = takesLines([STING.id, CALM.id], places);
+    expect(lines.slice(-3)).toEqual([
+      'sfx: the ear chooses (afplay <file> plays a take); in packages/client, ' +
+        'this keeps take <n> and deletes the others:',
+      '  node scripts/sfx.ts --keep test-sting=<n>',
+      '  node scripts/sfx.ts --keep test-calm=<n>',
+    ]);
   });
 });

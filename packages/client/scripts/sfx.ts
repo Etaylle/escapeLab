@@ -7,6 +7,8 @@
  *   pnpm --filter client sfx -- --only a,b,c    those entries, made anew
  *   pnpm --filter client sfx -- --candidates 3  each made three times: an effect's best take
  *                                               kept, a piece of music's takes left to the ear
+ *   pnpm --filter client sfx -- --keep calm=2   take 2 of the music's calm stem kept, the rest
+ *                                               of its takes deleted
  *
  * audio/catalog.json lists every sound the game plays: its id, its kind — a one-shot, a bed that
  * loops seamlessly, a stem of the music, a sting or a theme played once — what ElevenLabs is
@@ -32,6 +34,9 @@
  * takes/<id>/<n>.mp3, which git ignores, numbered on from the takes already there and listed in
  * takes/<id>/index.json with the request it was made from, when, and how it measures
  * (`TakesList`); nothing of it goes into public/music, and the run says where the takes lie.
+ * `--keep <id>=<n>` keeps take n — measured as a run measures what it makes, moved into
+ * public/music as the entry's file, its manifest entry written — and deletes the entry's other
+ * takes; it asks ElevenLabs for nothing and needs no key.
  *
  * The files stay as ElevenLabs made them. afconvert decodes each into a temporary folder, its
  * peak and RMS are measured there, and `gain` is what brings it to its target — a one-shot's peak
@@ -62,6 +67,7 @@ import {
   mkdtempSync,
   readdirSync,
   readFileSync,
+  renameSync,
   rmSync,
   statSync,
   writeFileSync,
@@ -463,12 +469,22 @@ export function priced(
 
 // --- what a run makes -------------------------------------------------------------------------
 
-/** What the command line asks for: the groups, a plan alone, a list of entries, candidates. */
+/** A take to keep, as `--keep <id>=<n>` names it: its entry's id and its number. */
+export interface Keep {
+  readonly id: string;
+  readonly n: number;
+}
+
+/**
+ * What the command line asks for: the groups, a plan alone, a list of entries, candidates — or a
+ * take to keep, which a run keeps and makes nothing besides.
+ */
 export interface Options {
   readonly groups: readonly Group[];
   readonly dryRun: boolean;
   readonly only: readonly string[] | null;
   readonly candidates: number;
+  readonly keep: Keep | null;
 }
 
 /** The value given after the flag at `i` of `args`; fails saying what the flag takes. */
@@ -489,33 +505,89 @@ function candidatesOf(value: string): number {
   return count;
 }
 
+/** The take `value` names: an entry's id, `=`, the take's number, a whole one from 1. */
+function keepOf(value: string): Keep {
+  const [, id, n] = /^([a-z0-9]+(?:-[a-z0-9]+)*)=([1-9]\d*)$/.exec(value) ?? [];
+  if (id === undefined || n === undefined) {
+    throw new Error(
+      `sfx: --keep ${value} — it takes an entry's id and a take's number: --keep menu-theme=2`,
+    );
+  }
+  return { id, n: Number(n) };
+}
+
+/** What the command line has said so far: `null` for a flag it has not given. */
+interface Said {
+  readonly groups: Group[];
+  dryRun: boolean;
+  only: string[] | null;
+  candidates: number | null;
+  keep: Keep | null;
+}
+
+/** The flags that take a value: what each takes, as a refusal says it, and what it sets. */
+const VALUED = new Map<string, readonly [string, (said: Said, value: string) => void]>([
+  [
+    '--only',
+    [
+      'a list of ids: --only a,b,c',
+      (said, list) => {
+        said.only = list.split(',').map((id) => id.trim()).filter((id) => id !== '');
+      },
+    ],
+  ],
+  [
+    '--candidates',
+    ['a number: --candidates 3', (said, value) => (said.candidates = candidatesOf(value))],
+  ],
+  [
+    '--keep',
+    [
+      "an entry's id and a take's number: --keep menu-theme=2",
+      (said, value) => {
+        if (said.keep !== null) throw new Error('sfx: --keep twice — a run keeps one take');
+        said.keep = keepOf(value);
+      },
+    ],
+  ],
+]);
+
+/** Whether `said` asks for anything but a take to keep. */
+const asksMore = (said: Said): boolean =>
+  said.groups.length > 0 || said.dryRun || said.only !== null || said.candidates !== null;
+
 /**
- * Reads `sfx`, `music`, `--dry-run`, `--only a,b,c` and `--candidates N`: both groups where
- * neither is named, one candidate where none is asked for.
+ * The options `said` comes to: both groups where neither is named, one candidate where none is
+ * asked for. Fails where `--keep` comes with anything else.
  */
+function settled(said: Said): Options {
+  if (said.keep !== null && asksMore(said)) {
+    throw new Error('sfx: --keep keeps a take and makes nothing: it comes alone');
+  }
+  const { groups, dryRun, only, candidates, keep } = said;
+  const asked = groups.length > 0 ? groups : GROUPS;
+  return { groups: asked, dryRun, only, candidates: candidates ?? 1, keep };
+}
+
+/** Reads `sfx`, `music`, `--dry-run`, `--only a,b,c`, `--candidates N` and `--keep <id>=<n>`. */
 export function optionsOf(args: readonly string[]): Options {
-  const groups: Group[] = [];
-  const options = { dryRun: false, only: null as string[] | null, candidates: 1 };
+  const said: Said = { groups: [], dryRun: false, only: null, candidates: null, keep: null };
   for (let i = 0; i < args.length; i++) {
     const arg = args[i] ?? '';
+    const valued = VALUED.get(arg);
     if (arg === 'sfx' || arg === 'music') {
-      groups.push(arg);
+      said.groups.push(arg);
     } else if (arg === '--dry-run') {
-      options.dryRun = true;
-    } else if (arg === '--only') {
-      const list = valueAfter(args, i, 'a list of ids: --only a,b,c');
-      options.only = list.split(',').map((id) => id.trim()).filter((id) => id !== '');
-      i += 1;
-    } else if (arg === '--candidates') {
-      options.candidates = candidatesOf(valueAfter(args, i, 'a number: --candidates 3'));
+      said.dryRun = true;
+    } else if (valued !== undefined) {
+      valued[1](said, valueAfter(args, i, valued[0]));
       i += 1;
     } else if (arg !== '--') {
-      throw new Error(
-        `sfx: ${arg} — it takes sfx, music, --dry-run, --only a,b,c and --candidates N`,
-      );
+      const flags = 'sfx, music, --dry-run, --only a,b,c, --candidates N and --keep <id>=<n>';
+      throw new Error(`sfx: ${arg} — it takes ${flags}`);
     }
   }
-  return { groups: groups.length > 0 ? groups : GROUPS, ...options };
+  return settled(said);
 }
 
 /** An entry as a run sees it: its group, and whether it has to be made. */
@@ -1245,6 +1317,89 @@ async function renderAll(
   await renderWith(todo, manifests, making, bench);
 }
 
+// --- keeping a take ---------------------------------------------------------------------------
+
+/** Why `entry` has no takes to keep, and what makes some. */
+function noTakes(entry: CatalogEntry): string {
+  return groupOf(entry) === 'music'
+    ? `${entry.id} has no takes; make some: ${remakeArgs('music', [entry.id])}`
+    : `${entry.id} is an effect, whose best take a run keeps itself: none waits for the ear`;
+}
+
+/** The entry and the take `keep` names, its file in `takes`; fails, in one line, for none. */
+function takeToKeep(
+  keep: Keep,
+  catalog: readonly CatalogEntry[],
+  takes: string,
+): { entry: CatalogEntry; record: TakeRecord } {
+  const asked = `sfx: --keep ${keep.id}=${keep.n}`;
+  const entry = catalog.find((each) => each.id === keep.id);
+  if (entry === undefined) throw new Error(`${asked} — audio/catalog.json has no such entry`);
+  const made = readTakes(takes, keep.id)?.takes ?? [];
+  if (made.length === 0) throw new Error(`${asked} — ${noTakes(entry)}`);
+  const record = made.find((take) => take.n === keep.n);
+  if (record === undefined) {
+    const numbers = made.map((take) => take.n).join(', ');
+    throw new Error(`${asked} — ${keep.id} has takes ${numbers}, and no take ${keep.n}`);
+  }
+  if (record.hash !== hashOf(entry)) {
+    const again = remakeArgs(groupOf(entry), [entry.id]);
+    throw new Error(`${asked} — it was made from another request than the catalog's: ${again}`);
+  }
+  if (!existsSync(join(takes, keep.id, record.file))) {
+    throw new Error(`${asked} — its file ${keep.id}/${record.file} is gone from ${takes}`);
+  }
+  return { entry, record };
+}
+
+/**
+ * Keeps take `keep.n` of `keep.id`, as `--keep <id>=<n>` asks: measures it as a run measures
+ * what it makes, puts it into its group's folder as the entry's file, writes the entry into the
+ * group's manifest and deletes the entry's folder of takes, the other takes and their list with
+ * it. Fails in one line, before anything moves, where the catalog has no such entry, it has no
+ * takes or no take of that number, or the take was made from a request other than the catalog's.
+ * Returns the group and the manifest's entry it wrote.
+ */
+export function keepTake(
+  keep: Keep,
+  catalog: readonly CatalogEntry[],
+  places: Places,
+  decode: Decode,
+): { group: Group; kept: ManifestEntry } {
+  const { entry, record } = takeToKeep(keep, catalog, places.takes);
+  const from = join(places.takes, entry.id, record.file);
+  const take = takeAt(entry, from, PROMPT_INFLUENCE, decode);
+  const group = groupOf(entry);
+  const target = join(places.dirs[group], fileOf(entry.id));
+  mkdirSync(places.dirs[group], { recursive: true });
+  copyFileSync(from, `${target}.part`);
+  renameSync(`${target}.part`, target);
+  const manifest = readManifest(places, group);
+  const kept = entryOf(entry, { ...take, path: target });
+  manifest[entry.id] = kept;
+  writeManifest(places, group, manifest);
+  rmSync(join(places.takes, entry.id), { recursive: true, force: true });
+  return { group, kept };
+}
+
+/** Keeps the take `keep` names, measured with afconvert, and says what the folders hold now. */
+function keepRun(keep: Keep, catalog: readonly CatalogEntry[]): void {
+  requireTools();
+  const scratch = mkdtempSync(join(tmpdir(), 'escapelab-sfx-'));
+  try {
+    const { group, kept } = keepTake(keep, catalog, PLACES, afconvertIn(scratch));
+    console.log(
+      `sfx: take ${keep.n} of ${keep.id} is public/${group}/${kept.file} now, ` +
+        `${(kept.ms / 1000).toFixed(1)} s, gain ${kept.gain}; its other takes are deleted`,
+    );
+  } finally {
+    rmSync(scratch, { recursive: true, force: true });
+  }
+  const manifests = { sfx: readManifest(PLACES, 'sfx'), music: readManifest(PLACES, 'music') };
+  report(manifests, PLACES);
+  warnTakes(catalog, manifests);
+}
+
 /**
  * Says which recordings play a floor that is heard (`noisyTakes`), each with its gain and its
  * floor, and which run off their length (`offLength`), and the command that makes them again;
@@ -1280,7 +1435,8 @@ function sayRemedy(catalog: readonly CatalogEntry[], ids: ReadonlySet<string>): 
   for (const group of GROUPS) {
     const mine = catalog.filter((e) => ids.has(e.id) && groupOf(e) === group).map((e) => e.id);
     if (mine.length === 0) continue;
-    const what = group === 'sfx' ? 'the best take kept' : 'their takes left to the ear';
+    const what =
+      group === 'sfx' ? 'the best take kept' : 'their takes left to the ear, one kept by --keep';
     console.error(`sfx: make them again, ${what}: ${remakeArgs(group, mine)}`);
   }
 }
@@ -1343,8 +1499,9 @@ function remeasure(
 }
 
 /**
- * Where the takes of `ids` lie in `places`, the music a run made in takes, and that none of it is
- * kept: a line for the folder, and one for each entry with its takes.
+ * Where the takes of `ids` lie in `places`, the music a run made in takes, that none of it is
+ * kept, and how one is: a line for the folder, one for each entry with its takes, and the command
+ * that keeps a take of each.
  */
 export function takesLines(ids: readonly string[], places: Places): string[] {
   if (ids.length === 0) return [];
@@ -1354,7 +1511,9 @@ export function takesLines(ids: readonly string[], places: Places): string[] {
       const files = (readTakes(places.takes, id)?.takes ?? []).map((take) => take.file);
       return `  ${id}/  ${files.join(', ')}, listed in ${id}/${TAKES_LIST}`;
     }),
-    'sfx: the ear chooses: each take plays with afplay <file>, and none goes into the game yet',
+    'sfx: the ear chooses (afplay <file> plays a take); in packages/client, this keeps take <n> ' +
+      'and deletes the others:',
+    ...ids.map((id) => `  node scripts/sfx.ts --keep ${id}=<n>`),
   ];
 }
 
@@ -1386,6 +1545,10 @@ async function renderRun(
 
 async function main(options: Options): Promise<void> {
   const catalog = checkCatalog(readCatalog());
+  if (options.keep !== null) {
+    keepRun(options.keep, catalog);
+    return;
+  }
   const manifests = { sfx: readManifest(PLACES, 'sfx'), music: readManifest(PLACES, 'music') };
   const jobs = planOf(catalog, manifests, filedIn(PLACES), options);
   for (const line of planLines(jobs, options.candidates)) console.log(line);
