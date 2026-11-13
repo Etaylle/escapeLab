@@ -61,7 +61,7 @@ import {
  * it never plays over the end card's theme, the opening's cue or the run's stems. With the
  * sound switched off nothing streams. The crew's voice in the lobby pulls both down as mission
  * control's pulls the run's music; the run's start ends them. An entry not rendered yet plays
- * nothing. Nothing here throws.
+ * nothing, and no timer runs for it. Nothing here throws.
  */
 
 /** The title theme, by its id in the catalog and the music's manifest. */
@@ -132,14 +132,15 @@ interface Theme {
 }
 
 /**
- * The menu's sound playing: the engine, the theme, the hum once loaded, the tending timer, and
- * whether the budget gave its two loops (audio.ts `claim`).
+ * The menu's sound playing: the engine, the theme, the hum once loaded, the timer tending the
+ * theme's passes once its file is here — none for a theme not rendered — and whether the budget
+ * gave its two loops (audio.ts `claim`).
  */
 interface Playing {
   readonly engine: Engine;
   readonly theme: Theme;
   hum: { source: AudioBufferSourceNode; level: GainNode; out: GainNode } | null;
-  readonly timer: ReturnType<typeof setInterval>;
+  timer: ReturnType<typeof setInterval> | null;
   readonly loops: boolean;
 }
 
@@ -276,8 +277,7 @@ function start(engine: Engine): void {
   const fade = fadeTo(out.gain, still(0), now, [from, from + FADE_IN_S], levelOf(place));
   const none = { entry: null, file: null, decks: [], passes: [], next: null };
   const theme: Theme = { out, level, fade, ...none };
-  const timer = setInterval(() => tendTheme(), TEND_MS);
-  playing = { engine, theme, hum: null, timer, loops: claim({ loop: 2 }) };
+  playing = { engine, theme, hum: null, timer: null, loops: claim({ loop: 2 }) };
   setState('playing');
   void fetchTheme(playing);
   void startHum(playing);
@@ -286,7 +286,10 @@ function start(engine: Engine): void {
   }
 }
 
-/** The theme's file fetched into memory and named by a blob address; nothing where none is. */
+/**
+ * The theme's file fetched into memory and named by a blob address, and its passes tended from
+ * then on; nothing where none is.
+ */
 async function fetchTheme(p: Playing): Promise<void> {
   await musicListed();
   const entry = musicEntry(THEME);
@@ -297,6 +300,7 @@ async function fetchTheme(p: Playing): Promise<void> {
   p.theme.entry = entry;
   p.theme.file = URL.createObjectURL(blob);
   p.theme.level.gain.value = entry.gain;
+  p.timer = setInterval(() => tendTheme(), TEND_MS);
 }
 
 /** The hum looped on the rooms' bus, coming in over FADE_IN_S once its recording is here. */
@@ -367,7 +371,7 @@ function end(): void {
   const p = playing;
   if (p === null) return;
   playing = null;
-  clearInterval(p.timer);
+  if (p.timer !== null) clearInterval(p.timer);
   crewSpeaks(false, p);
   const { ctx } = p.engine;
   const now = ctx.currentTime;

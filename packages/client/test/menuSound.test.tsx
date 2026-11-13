@@ -136,6 +136,38 @@ describe('the menu’s sound', () => {
     sound.uiSound('select');
     expect(sourcesOf('toggle-clack')).toHaveLength(0);
   });
+
+  it('comes back at once as the sound is switched on again, its context running', async () => {
+    const page = fakeWindow();
+    const { sound, audio } = await fresh();
+    sound.wantMenuSound('menu');
+    page.fire('keydown');
+    await vi.advanceTimersByTimeAsync(600);
+    audio.setMuted(true);
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(streaming()).toHaveLength(0);
+    audio.setMuted(false);
+    // No key waited for: the context the first one made runs on.
+    expect(sound.menuSoundState()).toBe('playing');
+    expect(page.count('keydown') + page.count('pointerdown')).toBe(0);
+    // Its first pass waits out the 0.6 s the theme before held the music's bus to fade.
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(streaming()).toHaveLength(1);
+    expect(FakeContext.made).toHaveLength(1);
+  });
+
+  it('tends no theme that is not rendered yet: no timer runs for it, the hum plays alone', async () => {
+    const page = fakeWindow();
+    vi.resetModules();
+    serveSamples({ 'menu-theme': { listed: false } });
+    const sound = await import('../src/world/menuSound.js');
+    const tending = vi.spyOn(globalThis, 'setInterval');
+    sound.wantMenuSound('menu');
+    page.fire('keydown');
+    await vi.advanceTimersByTimeAsync(600);
+    expect(sound.menuSoundProbe()).toMatchObject({ state: 'playing', theme: false, hum: true });
+    expect(tending).not.toHaveBeenCalled();
+  });
 });
 
 describe('the menu’s sound in the lobby and at the run’s start', () => {
@@ -183,6 +215,8 @@ describe('the menu’s sound in the lobby and at the run’s start', () => {
     expect(streaming()).toHaveLength(0);
     expect(audio.inUse().loop).toBe(0);
     expect(sound.menuSoundProbe()).toMatchObject({ theme: false, hum: false });
+    // Nothing tends the theme any more.
+    expect(vi.getTimerCount()).toBe(0);
   });
 
   it('stands pulled down while the crew speaks in the lobby, and comes back after', async () => {

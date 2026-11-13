@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { PlayerView, SpectatorView } from '@escapelab/core';
-import { backdropOf, placeOf } from '../src/App.js';
+import { backdropOf, menuPlaceOf, placeOf } from '../src/App.js';
 import {
   bootWipe,
   CLOSE_MS,
@@ -213,6 +213,17 @@ describe('the scene behind the lobby', () => {
     expect(backdropOf({ view: running, spectatorView: null }, false, 'blackout')).toBeNull();
     const watching = { phase: 'lobby' } as SpectatorView;
     expect(backdropOf({ view: null, spectatorView: watching }, false, 'blackout')).toBeNull();
+  });
+
+  it('wants the menu’s sound under the booklet and the Bestenliste, not in the editor', () => {
+    const offRoom = { view: null, spectatorView: null };
+    expect(menuPlaceOf(offRoom, false)).toBe('menu');
+    expect(menuPlaceOf(offRoom, true)).toBeNull();
+    // A test run's lobby is a lobby, its editor kept open behind it.
+    expect(menuPlaceOf({ view: lobby, spectatorView: null }, true)).toBe('lobby');
+    expect(menuPlaceOf({ view: running, spectatorView: null }, false)).toBeNull();
+    const watching = { phase: 'lobby' } as SpectatorView;
+    expect(menuPlaceOf({ view: null, spectatorView: watching }, false)).toBeNull();
   });
 
   it('tells the door wipe where the window is', () => {

@@ -1,7 +1,7 @@
 import { Activity, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { traceRequested } from './world/frameTrace.js';
 import { endThemeProbe } from './world/endTheme.js';
-import { menuSoundProbe, wantMenuSound } from './world/menuSound.js';
+import { menuSoundProbe, wantMenuSound, type MenuPlace } from './world/menuSound.js';
 import {
   difficultyInfos,
   type Difficulty,
@@ -442,13 +442,27 @@ function useStage(conn: Connection, finale: Finale | null): boolean {
 }
 
 /**
- * The menu's sound (world/menuSound.ts): wanted off any room (`offRoom`), in the lobby at the
- * lobby's weight, gone with a run; its probe on the page under `?trace=1`, and the end card's
- * music's beside it (world/endTheme.ts).
+ * Where the menu's sound is wanted (world/menuSound.ts): off any room — under the booklet and the
+ * Bestenliste too — but not while the editor is open (`editorOpen`), a workshop of its own; in
+ * the lobby at the lobby's weight; nowhere in a run or for the audience.
  */
-function useMenuSound(conn: Connection, offRoom: boolean): void {
-  const lobby = conn.view?.phase === 'lobby' ? 'lobby' : null;
-  const where = offRoom ? 'menu' : lobby;
+export function menuPlaceOf(
+  conn: Pick<Connection, 'view' | 'spectatorView'>,
+  editorOpen: boolean,
+): MenuPlace | null {
+  const place = placeOf(conn);
+  if (place === 'menu') {
+    return editorOpen ? null : 'menu';
+  }
+  return place === 'lobby' ? 'lobby' : null;
+}
+
+/**
+ * The menu's sound where it is wanted (`menuPlaceOf`), gone with a run; its probe on the page
+ * under `?trace=1`, and the end card's music's beside it (world/endTheme.ts).
+ */
+function useMenuSound(conn: Connection, editorOpen: boolean): void {
+  const where = menuPlaceOf(conn, editorOpen);
   useEffect(() => wantMenuSound(where), [where]);
   useEffect(() => {
     if (!traceRequested(location.search)) {
@@ -618,7 +632,7 @@ export function App({ boot }: { boot: EditorBoot }) {
   const fromEditor = returnsToEditor(testRun.run, conn.roomCode, conn.view?.you.isHost === true);
 
   const offRoom = conn.view === null && conn.spectatorView === null;
-  useMenuSound(conn, offRoom);
+  useMenuSound(conn, editor.open);
   // The editor scrolls on a phone (styles/editor.css); the menu lies over its living scene.
   const { editing, menu } = offRoomOf(offRoom, { handbook, history, editor: editor.open });
   const layout = layoutOf(immersive, editing, menu);

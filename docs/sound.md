@@ -853,7 +853,9 @@ says so: an amber lamp on its corner, its title „Ton kommt mit dem ersten Klic
 on the menu alone, never over a run or the editor. A lobby after a run needs no gesture: the run
 woke the context, and the sound comes in at once. With the sound switched off nothing streams and
 nothing waits; switched on again it waits for the next gesture or comes in at once where the context
-already runs.
+already runs. It plays on under the menu's booklet and Bestenliste, but not in the editor, a
+workshop of its own: opening the editor fades it out over 0.6 s, and leaving it brings the sound
+back at once (App.tsx `menuPlaceOf`).
 
 **The theme** (`menu-theme`) is a stem of the music's, 60 s in A minor at 90 BPM like the run's
 three — dark and quiet, a slow analog pad over a low drone, a lonely four-note motif on a soft
@@ -927,9 +929,11 @@ node --env-file=/Users/uros/Documents/Req.Eng./escapelab/.env.local scripts/sfx.
 
 Then empty the four from `AWAITING_RENDER`. `test/menuSound.test.tsx` holds the gesture — no context
 made before it —, the buses and the 2 s fades, the lobby's weight, the start without a gesture after
-a run, the switch, the end with the run, the crew's duck, the bus held and waited for, and the
-interface's sounds; `test/endTheme.test.ts` the sting and the theme after it, its level and voice,
-its fade with the card and the bus held, no theme for a card gone or a theme not made;
+a run, the switch and the sound back at once as it is switched on again, a theme not rendered
+tended by no timer, the end with the run, the crew's duck, the bus held and waited for, and the
+interface's sounds; `test/doorWipe.test.tsx` the places it is wanted, the editor none of them;
+`test/endTheme.test.ts` the sting and the theme after it, its level and voice, its fade with the
+card and the bus held, no theme for a card gone or a theme not made;
 `test/music.test.ts` and `test/introCue.test.ts` the stems and the cue waiting for the bus. The
 walkthrough checks the lamp lit before the first key, the sound playing after it, the lobby's
 weight, chime and chirp, all of it gone in the run, the won card asking for its music and its music
