@@ -10,7 +10,7 @@ import {
   markWon,
   WON_KEY,
 } from '../src/firstRun.js';
-import { createRoomMessage, JoinScreen, MissionCard } from '../src/screens/Join.js';
+import { createRoomMessage, MissionCard, MissionPanel } from '../src/screens/MenuPanels.js';
 import { Levels, LobbyScreen } from '../src/screens/Lobby.js';
 
 /** A browser's crew pass, as minted (client pass.ts). */
@@ -159,12 +159,12 @@ describe('the lobby’s difficulty for a first crew', () => {
   });
 });
 
-describe('the join screen for a first crew', () => {
+describe('the mission panel for a first crew', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
   });
 
-  it('sticks „Erster Einsatz? Hier starten" on a card that asks for it', () => {
+  it('says „Erster Einsatz? Hier starten" over the title of a card that asks for it', () => {
     const card = (first: boolean): string =>
       renderToStaticMarkup(
         <MissionCard
@@ -176,24 +176,29 @@ describe('the join screen for a first crew', () => {
         />,
       );
     expect(FIRST_RUN_HINT).toBe('Erster Einsatz? Hier starten');
-    expect(card(true)).toContain(`<span class="mission-first">${FIRST_RUN_HINT}</span>`);
+    expect(card(true)).toContain(
+      `<span class="mission-text"><span class="mission-first">${FIRST_RUN_HINT}</span>` +
+        '<span class="mission-title">Tutorial: Systemcheck</span>',
+    );
     expect(card(false)).not.toContain('mission-first');
+    // Nothing of the browser's own: no tooltip over the cards.
+    expect(card(true)).not.toContain('title=');
   });
 
-  /** The join screen with the missions, on a device whose storage holds `entries`. */
+  /** The menu's mission panel, on a device whose storage holds `entries`. */
   function join(entries: Record<string, string>): string {
     vi.stubGlobal('window', { location: { search: '' }, localStorage: memory(entries) });
     return renderToStaticMarkup(
-      <JoinScreen
+      <MissionPanel
         send={noop}
         connected
+        name="Anna"
+        blocked={false}
         missions={[blackout, tutorial]}
-        rooms={[]}
         stats={[]}
         picked={null}
         onPick={noop}
-        openHandbook={noop}
-        openHistory={noop}
+        onClose={noop}
       />,
     );
   }

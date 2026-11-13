@@ -27,6 +27,8 @@ interface Props {
   speaking?: boolean;
   /** they have said they are ready: the figure waves as it turns true */
   ready?: boolean;
+  /** the figure waves whenever this changes — the menu's profile, its name typed anew */
+  wave?: string;
 }
 
 /**
@@ -219,26 +221,42 @@ function paintFigure(
   });
 }
 
+/** What a figure waves at: its player saying ready, and the key the profile hands it. */
+export interface WaveCue {
+  ready: boolean;
+  wave: string | undefined;
+}
+
+/** Whether a figure begins to wave as its cue goes from `was` to `now`: ready, or a new key. */
+export function wavesAnew(was: WaveCue, now: WaveCue): boolean {
+  return (now.ready && !was.ready) || now.wave !== was.wave;
+}
+
 /**
- * When its player last said ready, by the page's clock: as `ready` turns
- * true while the figure is up — not when it came up ready.
+ * When the figure last began to wave, by the page's clock: as `ready` turns true while it is
+ * up — not when it came up ready — and as `wave` changes.
  */
-function useReadyAt(ready: boolean): React.MutableRefObject<number | null> {
+function useWaveAt(
+  ready: boolean,
+  wave: string | undefined,
+): React.MutableRefObject<number | null> {
   const at = useRef<number | null>(null);
-  const was = useRef(ready);
+  const was = useRef<WaveCue>({ ready, wave });
   useEffect(() => {
-    if (ready && !was.current) {
+    const now = { ready, wave };
+    if (wavesAnew(was.current, now)) {
       at.current = performance.now();
     }
-    was.current = ready;
-  }, [ready]);
+    was.current = now;
+  }, [ready, wave]);
   return at;
 }
 
 /**
  * A crew member standing in the lobby or on a title card, drawn with the
  * in-game art at the size the stylesheet gives the canvas, as figure.ts poses
- * it: breathing and looking round in the lobby, waving as they say ready, a
+ * it: breathing and looking round in the lobby and the menu's profile, waving as they say
+ * ready — in the profile as its name is typed anew —, a
  * light across the visor while they speak; jumping on a won card, slumped on
  * a lost one. It moves only while it shows on screen, 30 times a second at
  * most; under reduced motion it holds still. The name is not drawn: the room
@@ -247,7 +265,7 @@ function useReadyAt(ready: boolean): React.MutableRefObject<number | null> {
 export function CrewFigure(props: Props) {
   const { id, color, facing, isYou, connected, mood, speaking = false, ready = false } = props;
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const readyAt = useReadyAt(ready);
+  const readyAt = useWaveAt(ready, props.wave);
   const look = useRef<FigureLook>({ color, facing, isYou, connected, mood, speaking, phase: 0 });
   look.current = { color, facing, isYou, connected, mood, speaking, phase: figurePhase(id) };
 

@@ -7,7 +7,7 @@ import { MissionForm } from '../src/editor/MissionForm.js';
 import { validateDraft } from '../src/editor/validate.js';
 import { PASS_KEY } from '../src/pass.js';
 import { crewSizeText } from '../src/screens/Crew.js';
-import { JoinScreen, Prototypes, PROTOTYPES_ROW } from '../src/screens/Join.js';
+import { MissionPanel, Prototypes, PROTOTYPES_ROW } from '../src/screens/MenuPanels.js';
 import { LobbyScreen, PROTOTYPE_LINE } from '../src/screens/Lobby.js';
 import { buttonsOf, elementsOf, press } from './probe.js';
 
@@ -62,18 +62,19 @@ function stubWindow(): void {
   });
 }
 
-function joinScreen(missions: MissionInfo[], send: (msg: ClientMessage) => void = noop) {
+/** The menu's „Einsatz starten" panel with `missions`, Anna's name typed. */
+function missionPanel(missions: MissionInfo[], send: (msg: ClientMessage) => void = noop) {
   return (
-    <JoinScreen
+    <MissionPanel
       send={send}
       connected
+      name="Anna"
+      blocked={false}
       missions={missions}
-      rooms={[]}
       stats={[]}
       picked={null}
       onPick={noop}
-      openHandbook={noop}
-      openHistory={noop}
+      onClose={noop}
     />
   );
 }
@@ -81,14 +82,14 @@ function joinScreen(missions: MissionInfo[], send: (msg: ClientMessage) => void 
 /** The text of an element's markup, its tags left out. */
 const textOf = (html: string): string => html.replace(/<[^>]+>/g, '');
 
-describe('the join screen and its prototypes', () => {
+describe('the mission panel and its prototypes', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
   });
 
   it('lists the current missions as cards, the prototypes behind a collapsed row last', () => {
     stubWindow();
-    const html = renderToStaticMarkup(joinScreen([blackout, ketten, tutorial, doppel]));
+    const html = renderToStaticMarkup(missionPanel([blackout, ketten, tutorial, doppel]));
     const cards = [...html.matchAll(/<span class="mission-title">([^<]*)<\/span>/g)];
     expect(cards.map((card) => card[1])).toEqual(['Blackout im Labor', 'Tutorial: Systemcheck']);
     const row = html.slice(html.indexOf('<details'), html.indexOf('</details>'));
@@ -105,7 +106,7 @@ describe('the join screen and its prototypes', () => {
 
   it('shows no such row where no mission is a prototype', () => {
     stubWindow();
-    const html = renderToStaticMarkup(joinScreen([blackout, tutorial]));
+    const html = renderToStaticMarkup(missionPanel([blackout, tutorial]));
     expect(html).not.toContain('mission-prototypes');
     expect(html).not.toContain(PROTOTYPES_ROW);
   });
@@ -113,7 +114,7 @@ describe('the join screen and its prototypes', () => {
   it('opens a room for the first card, not for a prototype listed before it', () => {
     stubWindow();
     const sent: ClientMessage[] = [];
-    const elements = elementsOf(() => joinScreen([ketten, blackout], (msg) => sent.push(msg)));
+    const elements = elementsOf(() => missionPanel([ketten, blackout], (msg) => sent.push(msg)));
     const primary = buttonsOf(elements, 'primary');
     press(primary.find((button) => button.props['children'] === 'Runde eröffnen'));
     expect(sent).toEqual([expect.objectContaining({ kind: 'create-room', missionId: 'blackout' })]);
@@ -124,9 +125,11 @@ describe('the join screen and its prototypes', () => {
       <Prototypes missions={[ketten, doppel]} selected="doppelschicht" onSelect={noop} />,
     );
     expect(html).toContain('<button class="mission-proto" aria-pressed="false"');
+    // The picked one marked; none carries the browser's own tooltip over the cards.
     expect(html).toContain(
-      '<button class="mission-proto mission-proto-selected" aria-pressed="true" title="Für vier.">',
+      '<button class="mission-proto mission-proto-selected" aria-pressed="true">',
     );
+    expect(html).not.toContain('title=');
     const picked: string[] = [];
     const pick = (id: string): void => {
       picked.push(id);

@@ -11,6 +11,7 @@ import type {
 import { clock, recordLine, recordParts, winShare } from '../src/runStats.js';
 import { HistoryBoard, HistoryScreen, scrollToShow } from '../src/screens/History.js';
 import { JoinScreen } from '../src/screens/Join.js';
+import { MissionPanel } from '../src/screens/MenuPanels.js';
 import { Standing, type FinishedRun } from '../src/screens/Standing.js';
 import { iconsAsWords, PICTOGRAPH } from './fixtures.js';
 
@@ -116,25 +117,26 @@ describe('the Bestenliste in words and numbers', () => {
   });
 });
 
-describe('the join screen', () => {
+describe('the menu and its missions', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
   });
 
-  function joinScreen(stats: MissionStats[]): string {
+  /** The mission panel, the Bestenliste's `stats` read. */
+  function missionPanel(stats: MissionStats[]): string {
     vi.stubGlobal('window', { location: { search: '' } });
     return iconsAsWords(
       renderToStaticMarkup(
-        <JoinScreen
+        <MissionPanel
           send={noop}
           connected
+          name="Anna"
+          blocked={false}
           missions={[blackout, tutorial]}
-          rooms={[]}
           stats={stats}
           picked={null}
           onPick={noop}
-          openHandbook={noop}
-          openHistory={noop}
+          onClose={noop}
         />,
       ),
     );
@@ -145,7 +147,8 @@ describe('the join screen', () => {
 
   it('gives a mission that has been played one more line on its card, the others none', () => {
     const played8 = level({ runs: 8, wins: 5, bestSeconds: 462 });
-    const [played, fresh] = cards(joinScreen([{ missionId: 'blackout', difficulties: [played8] }]));
+    const html = missionPanel([{ missionId: 'blackout', difficulties: [played8] }]);
+    const [played, fresh] = cards(html);
     expect(played).toContain(
       `<span class="mission-sub">Für zwei oder drei.</span>` +
         `<span class="mission-record">Beste Zeit 7:42 · 63${NBSP}% gewonnen</span></span>`,
@@ -154,8 +157,22 @@ describe('the join screen', () => {
   });
 
   it('leads to the Bestenliste beside the handbook', () => {
-    const html = joinScreen([]);
-    expect(html).toMatch(/\[book\] Handbuch<\/button><button title="[^"]+">\[podium\] Bestenliste/);
+    vi.stubGlobal('window', { location: { search: '' } });
+    const html = renderToStaticMarkup(
+      <JoinScreen
+        send={noop}
+        connected
+        missions={[blackout, tutorial]}
+        rooms={[]}
+        stats={[]}
+        picked={null}
+        onPick={noop}
+        openHandbook={noop}
+        openHistory={noop}
+      />,
+    );
+    const items = [...html.matchAll(/<span class="menu-label">([^<]*)<\/span>/g)].map((m) => m[1]);
+    expect(items.indexOf('Bestenliste')).toBe(items.indexOf('Handbuch') + 1);
   });
 });
 

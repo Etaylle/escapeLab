@@ -17,7 +17,7 @@ import { crewSizeText, crewTags } from '../src/screens/Crew.js';
 import { presenceNear } from '../src/world/presence.js';
 import { lineup, type Place } from '../src/screens/CrewRoom.js';
 import { EndScreen } from '../src/screens/End.js';
-import { JoinScreen } from '../src/screens/Join.js';
+import { MissionPanel, RoundsPanel } from '../src/screens/MenuPanels.js';
 import { LobbyScreen, MissionStrip, startBlocker, stepTo } from '../src/screens/Lobby.js';
 import { MissionHud } from '../src/screens/MissionHud.js';
 import { audienceTags, SpectateScreen } from '../src/screens/Spectate.js';
@@ -503,26 +503,30 @@ describe('the room code in the header', () => {
   });
 });
 
-describe('the join screen', () => {
+describe('the menu’s missions and rounds', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
   });
 
-  /** The join screen's markup as drawn: its icons by name, or as they are with `raw`. */
+  /**
+   * The menu's panels „Einsatz starten" and „Offene Runden" as drawn: their icons by name, or as
+   * they are with `raw`.
+   */
   function joinScreen(missions: MissionInfo[], rooms: RoomSummary[] = [], raw = false): string {
     vi.stubGlobal('window', { location: { search: '' } });
+    const section = { send: noop, connected: true, name: 'Anna', blocked: false };
     const html = renderToStaticMarkup(
-      <JoinScreen
-        send={noop}
-        connected
-        missions={missions}
-        rooms={rooms}
-        stats={[]}
-        picked={null}
-        onPick={noop}
-        openHandbook={noop}
-        openHistory={noop}
-      />,
+      <>
+        <MissionPanel
+          {...section}
+          missions={missions}
+          stats={[]}
+          picked={null}
+          onPick={noop}
+          onClose={noop}
+        />
+        <RoundsPanel {...section} rooms={rooms} missions={missions} onClose={noop} />
+      </>,
     );
     return raw ? html : iconsAsWords(html);
   }
@@ -558,14 +562,25 @@ describe('the join screen', () => {
     expect(joinScreen([blackout, tutorial], [room()])).not.toContain('Rätsel');
   });
 
-  it('spells out the subtitle on the picked card only, the others carry it as a tooltip', () => {
+  it('spells out the subtitle on the picked card only, and no card carries a tooltip', () => {
     // Nobody has picked yet, so the first mission is.
     const [picked, other] = cards(joinScreen([blackout, tutorial]));
     expect(picked).toContain('aria-pressed="true"');
     expect(picked).toContain('<span class="mission-sub">Für zwei oder drei.</span>');
     expect(other).toContain('aria-pressed="false"');
-    expect(other).toContain('title="Zum Warmwerden."');
     expect(other).not.toContain('mission-sub');
+    // The browser's own tooltip stood over the cards next to it: none any more.
+    expect(`${picked}${other}`).not.toContain('title=');
+  });
+
+  it('draws each room’s crew as figures in their colours, their names under them', () => {
+    const html = joinScreen([blackout], [room()], true);
+    const members = [...html.matchAll(/<span class="room-member">(.*?)<\/span><\/span>/g)];
+    expect(members.map((m) => m[1])).toEqual([
+      '<canvas class="seat-figure" aria-hidden="true"></canvas><span class="room-member-name">Anna',
+      '<canvas class="seat-figure" aria-hidden="true"></canvas><span class="room-member-name">Ben',
+    ]);
+    expect(html).not.toContain('crew-dot');
   });
 
   it('says how many play each mission and how full each room is', () => {

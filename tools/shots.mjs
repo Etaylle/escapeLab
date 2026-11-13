@@ -1,5 +1,5 @@
 /**
- * Visual check: drives two real browsers through join → lobby → running
+ * Visual check: drives two real browsers through menu → lobby → running
  * mission and captures the result at several window sizes, so layout work
  * can be looked at instead of guessed.
  *
@@ -78,8 +78,24 @@
  * the lever took from the blackout. A mission without an intro skips all of
  * this.
  *
- * On the way, both open the Bestenliste from the join screen (history.png,
- * history-phone.png): measured like the join screen, at 1280×720 too, and on
+ * The menu: the host's page opens on the start screen as a game's menu over its living scene —
+ * the lit lab of the first mission baked for the window and drifting (client world/menu/) —
+ * menu.png, walked by the keys: an arrow down and up the items, Enter opening „Einsatz
+ * starten" with the picked mission's card in the focus, Esc back on the item. Its quiet window,
+ * the scene drifting, is gated like every other and under SHOTS_SOFTWARE_GL has to keep the
+ * screen's pace (16.8 ms p95). At 1280×720 it has to fit as at 1440×820 (menu-1280.png), the
+ * scene baked anew for each size. menu-missions.png shows „Einsatz starten" open, the
+ * tutorial's card saying „Erster Einsatz? Hier starten" in a line of its own and no tooltip over
+ * the cards; the mission picked comes in as the scene behind. The guest's phone shows the menu
+ * upright (menu-phone.png). A second crew's room — Cem's, of the other mission — and the
+ * host's stand in a fourth page's „Offene Runden", every crew member as a figure, painted
+ * (menu-open-rounds.png). The audience types the room's code in small letters into
+ * „Beitreten" (menu-join.png): it has to stand in capitals, in a field no browser fills from its
+ * passwords. In the reconnect drill a new tab of Anna's browser, her run standing paused, opens
+ * the menu on the run's card, first and lit, every other item dimmed (menu-bound.png).
+ *
+ * On the way, both open the Bestenliste from the menu (history.png,
+ * history-phone.png): measured like the menu, at 1280×720 too, and on
  * the phone for running out sideways. The host's lobby, with its strip of
  * mission cards, is captured on a phone held sideways as well
  * (lobby-landscape.png). Once the sign is read, the guest's phone is turned
@@ -163,7 +179,7 @@
  * notepad word for word under „… · Notizen der letzten Schicht", or the run
  * fails.
  *
- * A first crew: the host's device has won no run, so the join screen labels
+ * A first crew: the host's device has won no run, so the mission panel labels
  * the tutorial's card „Erster Einsatz? Hier starten" and the room it opens
  * stands on „entspannt", the lobby saying why (lobby-first.png); the host
  * picks „Normal", which the walkthrough plays. The editor's, the Serverraum's
@@ -393,12 +409,12 @@
  * and the brickwall's hold. A page over 30 MB, or a budget over its caps, fails the run.
  *
  * Editor: before the walkthrough a page of its own opens the editor from the
- * join screen, paints a 7 × 5 room, places a start and a station and
+ * menu, paints a 7 × 5 room, places a start and a station and
  * captures what the validator says (editor.png, and the layout at
  * 1280×720 and on a phone); the „Notiz" tool is refused deep in the rock,
  * with the status line's word why, and pins a note to the wall over the room;
  * a second start and a book make the mission sound, it is saved as
- * custom-probe and has to show on the join screen.
+ * custom-probe and has to show among the menu's missions.
  * Then the editor, opened at /editor, imports tools/fixtures/probe-mission.json
  * („Probe", custom-probe) and starts a test run from it: the lobby has to
  * show the probe (editor-play.png), „Zurück zum Editor" in the top bar has
@@ -1115,7 +1131,8 @@ let runPace = null;
  * run only where both looks are over; the line logs both, with the allowance and why. A window
  * for information only (`gating` false) is looked at once and logged alone. A page without a
  * trace or a window without frames fails the run. The machine's, the pages' and the sound's
- * lines are the first look's.
+ * lines are the first look's. Returns that first look — its p50, p95 and count — or null
+ * where there was none.
  */
 async function sampleFrames(
   page,
@@ -1125,7 +1142,7 @@ async function sampleFrames(
 ) {
   const first = await lookAt(page, when, quiet);
   if (first === null) {
-    return;
+    return null;
   }
   const allowed = allowanceOf(FRAME_P95_MS, runPace);
   const gate = gating
@@ -1158,6 +1175,7 @@ async function sampleFrames(
   if (gate.over && gate.again !== null) {
     fail(`frame ${p95s} ${when}, over the allowance both times`);
   }
+  return first;
 }
 
 /** The run's pace as the log names it, and what it lets the windows after it reach. */
@@ -1258,12 +1276,12 @@ async function sideways(page, selector) {
 }
 
 /**
- * The Bestenliste off the join screen, captured as `name` once it is loaded:
- * measured like the join screen — at 1280×720 too where the window is a
+ * The Bestenliste off the menu, captured as `name` once it is loaded:
+ * measured like the menu — at 1280×720 too where the window is a
  * laptop's, sideways on a phone — and left the way a player goes back.
  */
 async function captureHistory(page, name) {
-  await clickText(page, 'Bestenliste');
+  await page.locator('.menu-item', { hasText: 'Bestenliste' }).click();
   const loaded = page.locator('.history-board, .history [role="alert"]').first();
   await loaded.waitFor({ timeout: 10_000 });
   await sleep(300);
@@ -1281,7 +1299,7 @@ async function captureHistory(page, name) {
     console.log(`${name}.png`.padEnd(19) + (over > 0 ? `!! +${over}px sideways` : 'fits sideways'));
   }
   await clickText(page, 'Zurück');
-  await page.locator('.mission').first().waitFor({ timeout: 10_000 });
+  await page.locator('.menu-item').first().waitFor({ timeout: 10_000 });
 }
 
 /** Click a button whose visible text contains `text`. */
@@ -1289,6 +1307,36 @@ async function clickText(page, text) {
   const button = page.locator('button', { hasText: text }).first();
   await button.waitFor({ state: 'visible', timeout: 10_000 });
   await button.click();
+}
+
+/**
+ * The menu (client screens/Join.tsx): opens the panel behind the item `label` — „Einsatz
+ * starten", „Beitreten", „Offene Runden" — and waits for it.
+ */
+async function openMenuPanel(page, label) {
+  await page.locator('.menu-item', { hasText: label }).click();
+  await page.locator('.menu-panel').waitFor({ timeout: 10_000 });
+}
+
+/** Steps back out of the menu's panel with Esc, as a player does. */
+async function closeMenuPanel(page) {
+  await page.keyboard.press('Escape');
+  await page.locator('.menu-panel').waitFor({ state: 'detached', timeout: 5000 });
+}
+
+/** Opens a round of the mission whose card reads `title`: its card picked, „Runde eröffnen". */
+async function openRound(page, title) {
+  await openMenuPanel(page, 'Einsatz starten');
+  await page.locator('.mission', { hasText: title }).first().click();
+  await page.locator('.menu-panel button', { hasText: 'Runde eröffnen' }).click();
+}
+
+/** Joins room `code` by the menu's „Beitreten" — or watches it, `watch`. */
+async function byCode(page, code, watch = false) {
+  await openMenuPanel(page, 'Beitreten');
+  await page.getByLabel('Raumcode').fill(code);
+  const way = watch ? 'Zuschauen' : 'Beitreten';
+  await page.locator('.join-with-code button', { hasText: way }).click();
 }
 
 /**
@@ -6030,20 +6078,262 @@ async function captureSign(page, who) {
 }
 
 /**
- * join.png on a device that has won no run: the tutorial's card — and no other — carries the
- * label „Erster Einsatz? Hier starten", or the run fails.
+ * menu-missions.png on a device that has won no run: the tutorial's card — and no other —
+ * says „Erster Einsatz? Hier starten" in a line of its own over its title, nothing stuck over
+ * it, and no card carries the browser's own tooltip; or the run fails.
  */
 async function checkFirstRunCard(page) {
-  const label = await textOf(
-    page.locator('.mission', { hasText: 'Tutorial' }).locator('.mission-first'),
-  );
+  const card = page.locator('.mission', { hasText: 'Tutorial' });
+  const label = await textOf(card.locator('.mission-text > .mission-first'));
   const labels = await page.locator('.mission-first').count();
+  const tooltips = await page.locator('.menu-panel [title]').count();
+  const said = label === null ? '!! no line on the tutorial' : `„${label}" on the tutorial`;
   console.log(
-    `join.png           a first run: ${label === null ? '!! no label on the tutorial' : `„${label}" on the tutorial`}` +
-      (labels === 1 ? '' : `, !! ${labels} labels in all`),
+    `menu-missions.png  a first run: ${said}` +
+      (labels === 1 ? '' : `, !! ${labels} lines in all`) +
+      (tooltips === 0 ? ', no tooltips' : `, !! ${tooltips} tooltips`),
   );
-  if (label === null || labels !== 1) {
-    fail('join.png: the tutorial\'s card does not say „Erster Einsatz? Hier starten" alone');
+  if (label === null || labels !== 1 || tooltips !== 0) {
+    fail('menu-missions.png: the tutorial’s card does not say „Erster Einsatz?" alone');
+  }
+}
+
+/** The menu's scene off the page's probe (client world/menu/stage.ts); null without one. */
+const sceneOf = (page) =>
+  page.evaluate(() => {
+    const scene = globalThis.__escapelab?.scene;
+    return scene === undefined ? null : { ...scene };
+  });
+
+/** How long a mission picked anew takes to come in over the scene before (client drift.ts). */
+const SCENE_FADE_MS = 600;
+
+/**
+ * The menu's scene once it is baked for the window's `w` × `h` device pixels (any size where
+ * none is given) — of mission `missionId` where one is given — and has come in; null, and the
+ * run failed, where it never is.
+ */
+async function sceneBaked(page, { w = null, h = null, missionId = null } = {}) {
+  const want = { w, h, missionId };
+  const baked = await page
+    .waitForFunction(
+      (asked) => {
+        const scene = globalThis.__escapelab?.scene;
+        const bake = scene?.baked;
+        const fits = (b) => asked.w === null || (b.w === asked.w && b.h === asked.h);
+        const sized = bake != null && fits(bake);
+        return sized && (asked.missionId === null || scene.missionId === asked.missionId);
+      },
+      want,
+      { timeout: 15_000 },
+    )
+    .then(
+      () => true,
+      () => false,
+    );
+  await sleep(SCENE_FADE_MS + 200);
+  const scene = await sceneOf(page);
+  if (!baked) {
+    fail(`menu: no scene baked for ${JSON.stringify(want)}: ${JSON.stringify(scene)}`);
+  }
+  return baked ? scene : null;
+}
+
+/** What the log says of the menu's scene. */
+function sceneText(scene) {
+  if (scene === null || scene.baked === null) {
+    return '!! no scene';
+  }
+  const { baked } = scene;
+  return (
+    `the scene: ${scene.missionId}'s lab baked for ${baked.w}×${baked.h} ` +
+    `(box ${baked.boxW}×${baked.boxH}) in ${Math.round(scene.bakeMs ?? 0)} ms, ` +
+    `${scene.paints} frames drawn, the drift at ${scene.progress.toFixed(2)}`
+  );
+}
+
+/** The text of the control in the focus on `page`. */
+const focusedText = (page) =>
+  page.evaluate(() => document.activeElement?.textContent?.trim() ?? '');
+
+/**
+ * The menu walked by the keys as a player walks it: an arrow down and up the items, Enter
+ * opening „Einsatz starten" with the picked mission's card in the focus, Esc back out of it
+ * with the focus on the item again — or the run fails.
+ */
+async function walkMenuKeys(page) {
+  await page.locator('.menu-item').first().focus();
+  await page.keyboard.press('ArrowDown');
+  const down = await focusedText(page);
+  await page.keyboard.press('ArrowUp');
+  const up = await focusedText(page);
+  await page.keyboard.press('Enter');
+  await page.locator('.menu-panel').waitFor({ timeout: 5000 });
+  const card = await page.evaluate(
+    () => document.activeElement?.matches('.menu-panel .mission-selected') === true,
+  );
+  await closeMenuPanel(page);
+  const back = await focusedText(page);
+  const walked = down === 'Beitreten' && up === 'Einsatz starten' && card;
+  console.log(
+    `menu keys          ↓ ${down} · ↑ ${up} · Enter: the picked card ` +
+      `${card ? 'in the focus' : '!! not in the focus'} · Esc: back on ${back}`,
+  );
+  if (!walked || back !== 'Einsatz starten') {
+    fail(`menu keys: ↓ ${down}, ↑ ${up}, the card focused ${card}, Esc back on ${back}`);
+  }
+}
+
+/** The menu's quiet window holds the screen's pace under SHOTS_SOFTWARE_GL, ms p95. */
+const MENU_P95_MS = 16.8;
+
+/**
+ * menu.png: the start screen as a game's menu over its living scene — the lit lab of the first
+ * mission baked for the window and drifting, the title, the menu, the profile — walked by the
+ * keys (`walkMenuKeys`); its quiet window, the scene drifting, has to keep the screen's pace
+ * under SHOTS_SOFTWARE_GL (MENU_P95_MS) and the gate's allowance anyway; at 1280×720 it has to
+ * fit as at 1440×820 (menu-1280.png), the scene baked anew for each.
+ */
+async function captureMenu(page) {
+  const scene = await sceneBaked(page, { w: SIZES[0].width, h: SIZES[0].height });
+  await capture(page, 'menu.png');
+  console.log(`menu.png           ${sceneText(scene)}`);
+  await walkMenuKeys(page);
+  const look = await sampleFrames(page, 'on the menu, its scene drifting', () => sleep(SAMPLE_MS));
+  if (SOFTWARE_GL && look !== null && look.p95 > MENU_P95_MS) {
+    fail(`menu: its window reached ${look.p95.toFixed(1)} ms p95, over ${MENU_P95_MS}`);
+  }
+  await overflow(page, 'menu @ 1440x820');
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await sceneBaked(page, { w: 1280, h: 720 });
+  await overflow(page, 'menu @ 1280x720');
+  await capture(page, 'menu-1280.png');
+  await page.setViewportSize(SIZES[0]);
+  await sceneBaked(page, { w: SIZES[0].width, h: SIZES[0].height });
+}
+
+/**
+ * menu-missions.png: „Einsatz starten" open over the menu, the mission cards in it
+ * (`checkFirstRunCard`); the walkthrough's mission is picked — its lab comes in as the scene
+ * behind — and „Runde eröffnen" opens its room.
+ */
+async function openMissionRound(page) {
+  await openMenuPanel(page, 'Einsatz starten');
+  await sleep(300);
+  await capture(page, 'menu-missions.png');
+  await checkFirstRunCard(page);
+  const card = page.locator('.mission', { hasText: MISSION }).first();
+  if ((await card.count()) === 0) {
+    throw new Error(`no mission card reads "${MISSION}" — SHOTS_MISSION has to name one`);
+  }
+  await card.click();
+  const picked = MISSION.toLowerCase();
+  const scene = await sceneBaked(page, { missionId: picked });
+  console.log(`menu-missions.png  ${MISSION} picked: ${sceneText(scene)}`);
+  await page.locator('.menu-panel button', { hasText: 'Runde eröffnen' }).click();
+}
+
+/** A side page at the laptop's size for a capture of the menu, named `name`. */
+async function sidePage(name, contexts) {
+  const context = await browser.newContext({ viewport: SIZES[0] });
+  contexts.push(context);
+  const page = await openPage(context, name);
+  page.on('pageerror', (e) => console.log(`[${name} error]`, e.message));
+  await page.goto(traced(BASE));
+  await page.getByPlaceholder('z. B. Anna').fill(name);
+  return page;
+}
+
+/**
+ * menu-open-rounds.png: a second crew opens a round of the other mission — Cem, in a window of
+ * his own — and a fourth page's „Offene Runden" lists both rooms, each of their crew standing
+ * there as a figure in their colour, painted; or the run fails.
+ */
+async function captureOpenRounds() {
+  const other = MISSION === 'Blackout' ? 'Systemcheck' : 'Blackout';
+  const contexts = [];
+  try {
+    const cem = await sidePage('Cem', contexts);
+    await openRound(cem, other);
+    await cem.locator('.room-code strong').waitFor({ timeout: 10_000 });
+    const dora = await sidePage('Dora', contexts);
+    await openMenuPanel(dora, 'Offene Runden');
+    await dora.locator('.menu-panel .room').nth(1).waitFor({ timeout: 10_000 });
+    await sleep(800);
+    const rooms = await dora.locator('.menu-panel .room').count();
+    const figures = await dora.locator('.menu-panel .room-member canvas').count();
+    const painted = await dora.evaluate(() => globalThis.__escapelab?.figures?.length ?? 0);
+    await capture(dora, 'menu-open-rounds.png');
+    console.log(
+      `menu-open-rounds.png ${rooms} rooms, ${figures} of their crew standing as figures, ` +
+        `${painted} figures painted on the page`,
+    );
+    if (rooms < 2 || figures < 3 || painted < figures) {
+      fail(`menu-open-rounds.png: ${rooms} rooms, ${figures} figures, ${painted} painted`);
+    }
+  } finally {
+    for (const context of contexts) {
+      await context.close();
+    }
+  }
+}
+
+/**
+ * menu-join.png: the audience's „Beitreten" with the room's code typed in small letters; the field
+ * has to show it in capitals and be no field a browser fills from its passwords — or the run
+ * fails. Then „Zuschauen" beside it.
+ */
+async function watchFromMenu(page, code) {
+  await openMenuPanel(page, 'Beitreten');
+  const field = page.getByLabel('Raumcode');
+  await field.fill(code.toLowerCase());
+  const look = await field.evaluate((input) => ({
+    value: input.value,
+    autocomplete: input.getAttribute('autocomplete'),
+    name: input.getAttribute('name'),
+    type: input.getAttribute('type'),
+  }));
+  await capture(page, 'menu-join.png');
+  const named = look.type === 'text' && look.name === 'room';
+  const plain = look.value === code && look.autocomplete === 'off' && named;
+  console.log(
+    `menu-join.png      the code typed in small letters stands as „${look.value}"; ` +
+      `autocomplete ${look.autocomplete}, name ${look.name}, type ${look.type}`,
+  );
+  if (!plain) {
+    fail(`menu-join.png: the code field shows ${JSON.stringify(look)}`);
+  }
+  await page.locator('.join-with-code button', { hasText: 'Zuschauen' }).click();
+}
+
+/**
+ * menu-bound.png: a new tab of Anna's browser while her run stands paused for Ben — the menu
+ * opens on the run's card, „EINSATZ PAUSIERT", first and lit, every other item dimmed, the line
+ * that no other room opens under it; or the run fails. The tab is closed again.
+ */
+async function captureBound(anna) {
+  const page = await openPage(anna.context, 'drill Anna tab');
+  try {
+    await page.goto(traced(BASE));
+    const card = page.locator('.menu-list .bound--run');
+    await card.waitFor({ state: 'visible', timeout: 10_000 });
+    await sleep(800);
+    const kicker = await textOf(card.locator('.bound-kicker'));
+    const dimmed = (await page.locator('.menu-list--bound').count()) === 1;
+    const first = await page.evaluate(
+      () => document.querySelector('.menu-list')?.firstElementChild?.matches('.bound') === true,
+    );
+    const line = await textOf(page.locator('.bound-line'));
+    await capture(page, 'menu-bound.png');
+    console.log(
+      `menu-bound.png     Anna's new tab: „${kicker}" ${first ? 'first' : '!! not first'}, ` +
+        `the rest ${dimmed ? 'dimmed' : '!! lit'}; „${line}"`,
+    );
+    if (kicker !== 'EINSATZ PAUSIERT' || !first || !dimmed || line === null) {
+      fail(`menu-bound.png: „${kicker}", first ${first}, dimmed ${dimmed}, line „${line}"`);
+    }
+  } finally {
+    await page.close();
   }
 }
 
@@ -6950,8 +7240,7 @@ const firstLine = (err) => String(err instanceof Error ? err.message : err).spli
  */
 async function paintProbe(page) {
   await page.goto(paged(BASE));
-  await page.locator('.mission').first().waitFor({ timeout: 10_000 });
-  await clickText(page, 'Editor');
+  await page.locator('.menu-item', { hasText: 'Editor' }).click();
   await page.locator('.editor-canvas').waitFor({ timeout: 5000 });
   await page.locator('.editor-tab', { hasText: 'Mission' }).click();
   await page.getByLabel('Titel', { exact: true }).fill('Probe');
@@ -7043,8 +7332,10 @@ async function saveProbe(page) {
   await save.click();
   await page.locator('.editor-status-ok').waitFor({ timeout: 5000 });
   await clickText(page, 'Zurück');
+  await openMenuPanel(page, 'Einsatz starten');
   await page.locator('.mission', { hasText: 'Probe' }).waitFor({ timeout: 5000 });
-  console.log('editor             saved as custom-probe, and its card is on the join screen');
+  await closeMenuPanel(page);
+  console.log('editor             saved as custom-probe, and its card is on the menu’s missions');
 }
 
 /** The mission the editor imports for its test run and its link: „Probe", custom-probe. */
@@ -7253,20 +7544,17 @@ async function artLobby() {
   const host = await artPage('art host');
   await host.page.goto(traced(BASE));
   await host.page.getByPlaceholder('z. B. Anna').fill('Anna');
-  await host.page.locator('.mission', { hasText: ART_MISSION.title }).first().click();
-  await clickText(host.page, 'Runde eröffnen');
+  await openRound(host.page, ART_MISSION.title);
   await host.page.locator('.room-code strong').waitFor({ timeout: 10_000 });
   const code = (await host.page.locator('.room-code strong').innerText()).trim();
   const guest = await artPage('art guest');
   await guest.page.goto(traced(BASE));
   await guest.page.getByPlaceholder('z. B. Anna').fill('Ben');
-  await guest.page.getByLabel('Raumcode').fill(code);
-  await clickText(guest.page, 'Beitreten');
+  await byCode(guest.page, code);
   await guest.page.locator('.lobby').waitFor({ timeout: 10_000 });
   const watcher = await artPage('art audience');
   await watcher.page.goto(paged(BASE));
-  await watcher.page.getByLabel('Raumcode').fill(code);
-  await clickText(watcher.page, 'Mit Code zuschauen');
+  await byCode(watcher.page, code, true);
   await watcher.page.locator('.spectate').waitFor({ timeout: 10_000 });
   return { host, guest, watcher };
 }
@@ -7495,12 +7783,11 @@ async function openServersRoom(host) {
   return code;
 }
 
-/** `guest` joins the room `code` from the join screen. */
+/** `guest` joins the room `code` from the menu. */
 async function joinServersRoom(guest, code) {
   await guest.page.goto(paged(BASE));
   await guest.page.getByPlaceholder('z. B. Anna').fill(guest.name);
-  await guest.page.getByLabel('Raumcode').fill(code);
-  await clickText(guest.page, 'Beitreten');
+  await byCode(guest.page, code);
   await guest.page.locator('.lobby').waitFor({ timeout: 10_000 });
 }
 
@@ -10296,16 +10583,14 @@ async function captureDangerSense() {
     pages.push(host);
     await host.page.goto(traced(BASE));
     await host.page.getByPlaceholder('z. B. Anna').fill('Anna');
-    await host.page.locator('.mission', { hasText: DANGER_MISSION.title }).first().click();
-    await clickText(host.page, 'Runde eröffnen');
+    await openRound(host.page, DANGER_MISSION.title);
     await host.page.locator('.room-code strong').waitFor({ timeout: 10_000 });
     const code = (await host.page.locator('.room-code strong').innerText()).trim();
     const guest = await artPage('Ben', SIZES[0]);
     pages.push(guest);
     await guest.page.goto(traced(BASE));
     await guest.page.getByPlaceholder('z. B. Anna').fill('Ben');
-    await guest.page.getByLabel('Raumcode').fill(code);
-    await clickText(guest.page, 'Beitreten');
+    await byCode(guest.page, code);
     await guest.page.locator('.lobby').waitFor({ timeout: 10_000 });
     await startRun(host, guest);
     const { x, y } = UNDER_THE_PATROL;
@@ -10431,12 +10716,11 @@ async function drillPlayer(name) {
   return { name, context, page, seen: eavesdrop(page) };
 }
 
-/** `player` joins room `code` from the join screen, by the code's own field. */
+/** `player` joins room `code` from the menu, by the code's own field. */
 async function joinByCode(player, code) {
   await player.page.goto(traced(BASE));
   await player.page.getByPlaceholder('z. B. Anna').fill(player.name);
-  await player.page.getByLabel('Raumcode').fill(code);
-  await player.page.locator('.join-with-code button', { hasText: 'Beitreten' }).click();
+  await byCode(player.page, code);
 }
 
 /**
@@ -10450,8 +10734,7 @@ async function drillCrew() {
   const crew = [anna, ben, cem];
   await anna.page.goto(traced(BASE));
   await anna.page.getByPlaceholder('z. B. Anna').fill('Anna');
-  await anna.page.locator('.mission', { hasText: MISSION }).first().click();
-  await clickText(anna.page, 'Runde eröffnen');
+  await openRound(anna.page, MISSION);
   await anna.page.locator('.room-code strong').waitFor({ timeout: 10_000 });
   const code = (await anna.page.locator('.room-code strong').innerText()).trim();
   for (const player of [ben, cem]) {
@@ -10523,6 +10806,7 @@ async function benAway({ anna, ben }) {
   await sleep(2500);
   const count = await textOf(anna.page.locator('.pause-count'));
   await capture(anna.page, 'pause-waiting.png');
+  await captureBound(anna);
   const button = anna.page.locator('.pause-go-on', { hasText: 'Ohne Ben weiter' });
   await button.waitFor({ state: 'visible', timeout: DRILL_WAIT_MS + DRILL_STEP_MS });
   const offeredAfter = Date.now() - pausedAt;
@@ -10921,26 +11205,13 @@ async function run() {
   // Only the host's page keeps a frame trace: every frame sample reads it.
   await host.goto(padded(seeded(traced(BASE))));
   // The game's title comes on as a phosphor screen does as the page loads (lobby-title.png).
-  const titleCameOn = (await host.locator('.join h1.phosphor-title').count()) === 1;
+  const titleCameOn = (await host.locator('.menu h1.phosphor-title').count()) === 1;
   await host.getByPlaceholder('z. B. Anna').fill('Anna');
-  await host.locator('.mission').first().waitFor({ timeout: 10_000 });
-  // The join screen, every mission in view, has to fit a laptop window too.
-  await capture(host, 'join.png');
-  await checkFirstRunCard(host);
-  await overflow(host, 'join @ 1440x820');
-  await host.setViewportSize({ width: 1280, height: 720 });
-  await sleep(400);
-  await overflow(host, 'join @ 1280x720');
-  await capture(host, 'join-1280.png');
-  await host.setViewportSize(SIZES[0]);
-  await sleep(300);
+  await host.locator('.menu-item').first().waitFor({ timeout: 10_000 });
+  // The menu over its scene, walked by the keys, its frames, at a laptop's sizes.
+  await captureMenu(host);
   await captureHistory(host, 'history');
-  const card = host.locator('.mission', { hasText: MISSION }).first();
-  if ((await card.count()) === 0) {
-    throw new Error(`no mission card reads "${MISSION}" — SHOTS_MISSION has to name one`);
-  }
-  await card.click();
-  await clickText(host, 'Runde eröffnen');
+  await openMissionRound(host);
   await host.locator('.room-code strong').waitFor({ timeout: 10_000 });
   const code = (await host.locator('.room-code strong').innerText()).trim();
   console.log('room code:', code, `(${MISSION})`);
@@ -10971,18 +11242,18 @@ async function run() {
   // Traced for its voice links; its frames are never sampled.
   await guest.goto(traced(BASE));
   await guest.getByPlaceholder('z. B. Anna').fill('Ben');
-  // On a phone the join screen stacks and scrolls; this shows its top.
-  await guest.locator('.mission').first().waitFor({ timeout: 10_000 });
-  await capture(guest, 'join-phone.png');
+  await guest.locator('.menu-item').first().waitFor({ timeout: 10_000 });
+  await sceneBaked(guest);
+  await capture(guest, 'menu-phone.png');
   await captureHistory(guest, 'history-phone');
-  await guest.getByLabel('Raumcode').fill(code);
-  await clickText(guest, 'Beitreten');
+  await byCode(guest, code);
   await guest.locator('.lobby').waitFor({ timeout: 10_000 });
 
   // crew, ready, start — nothing to pick: the start draws who begins where
   await host.locator('.seat .seat-name', { hasText: /^Ben$/ }).waitFor({ timeout: 10_000 });
   await sleep(300);
   await capture(host, 'lobby-filled.png');
+  await captureOpenRounds();
   await captureLobbyIdle(host);
   await capture(guest, 'lobby-phone.png');
   // A phone scrolls the lobby down and the crew's row sideways, but nothing
@@ -11079,8 +11350,7 @@ async function run() {
   const watcherSeen = eavesdrop(watcher);
   // Traced for its voice links; its frames are never sampled.
   await watcher.goto(traced(BASE));
-  await watcher.getByLabel('Raumcode').fill(code);
-  await clickText(watcher, 'Mit Code zuschauen');
+  await watchFromMenu(watcher, code);
   await watcher.locator('.spectate').waitFor({ timeout: 10_000 });
   await sleep(1200);
   await capture(watcher, 'spectate.png');
@@ -11516,8 +11786,7 @@ async function captureDpr2(code) {
   try {
     const page = await context.newPage();
     await page.goto(traced(BASE));
-    await page.getByLabel('Raumcode').fill(code);
-    await clickText(page, 'Mit Code zuschauen');
+    await byCode(page, code, true);
     await page.locator('.spectate').waitFor({ timeout: 10_000 });
     const sized = await graphicsWhen(page, ({ backing }) => timesItsBox(backing, 2), DPR2_MS);
     const backing = (sized ?? (await graphicsOf(page)))?.backing ?? null;

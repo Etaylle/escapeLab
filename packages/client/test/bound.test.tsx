@@ -8,10 +8,12 @@ import { CONFIRM_MS, giveUpPress } from '../src/screens/GiveUp.js';
 import {
   BoundCard,
   boundLine,
+  boundTo,
   doorAsks,
   JoinScreen,
   restoringLine,
 } from '../src/screens/Join.js';
+import { MissionPanel } from '../src/screens/MenuPanels.js';
 import { storage } from './page.js';
 import { buttonsOf, elementsOf, press } from './probe.js';
 
@@ -99,23 +101,46 @@ function pressable(elements: ReturnType<typeof elementsOf>, labels: string[]) {
   );
 }
 
-const ROOM_BUTTONS = ['Runde eröffnen', 'Beitreten', 'Mit Code zuschauen'];
+/** The ways into a room of the menu's „Beitreten", open on the invite's code. */
+const ROOM_BUTTONS = ['Beitreten', 'Zuschauen'];
+
+/** Whether „Runde eröffnen" can be pressed in the mission panel for the pass as `seat` binds it. */
+function opensRound(seat: Seat | null, restoring: Restoring | null = null): boolean {
+  const blocked = boundTo(seat, seat !== null && restoring?.code === seat.code ? restoring : null);
+  const elements = elementsOf(() => (
+    <MissionPanel
+      send={noop}
+      connected
+      name="Ben"
+      blocked={blocked !== null}
+      missions={[blackout]}
+      stats={[]}
+      picked={null}
+      onPick={noop}
+      onClose={noop}
+    />
+  ));
+  return pressable(elements, ['Runde eröffnen'])['Runde eröffnen'] === true;
+}
 
 describe('the join screen of a pass bound to a run', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
   });
 
-  it('opens on the run’s card instead of the form: mission, room, clock and crew', () => {
+  it('opens on the run’s card as the menu’s first item, every other item dimmed', () => {
     stubWindow();
     const html = renderToStaticMarkup(joinScreen(RUN));
     expect(html).toContain('<span class="kicker bound-kicker">EINSATZ LÄUFT</span>');
     expect(html).toContain('<h2 class="bound-title">Blackout im Labor</h2>');
     expect(html).toContain('Raum QX7R · noch 12:34 · Anna, Ben, Cem');
     expect(html).toContain('Zurück zum Einsatz');
-    expect(html).not.toContain('placeholder="z. B. Anna"');
-    expect(html).not.toContain('Offene Runden');
     expect(html).not.toContain('Raum verlassen');
+    const menu = html.slice(html.indexOf('<nav'), html.indexOf('</nav>'));
+    expect(menu).toMatch(/^<nav class="menu-list menu-list--bound" aria-label="Hauptmenü">/);
+    expect(menu.indexOf('class="bound bound--run"')).toBeGreaterThan(-1);
+    const firstItem = menu.indexOf('class="menu-item"');
+    expect(menu.indexOf('class="bound bound--run"')).toBeLessThan(firstItem);
   });
 
   it('says a paused run is paused, and its clock as it stood', () => {
@@ -133,11 +158,8 @@ describe('the join screen of a pass bound to a run', () => {
     expect(html.split('class="bound-line"')).toHaveLength(2);
     expect(html).toContain('Gebunden an „Blackout im Labor“ in Raum QX7R');
     const elements = elementsOf(() => joinScreen(RUN));
-    expect(pressable(elements, ROOM_BUTTONS)).toEqual({
-      'Runde eröffnen': false,
-      Beitreten: false,
-      'Mit Code zuschauen': true,
-    });
+    expect(pressable(elements, ROOM_BUTTONS)).toEqual({ Beitreten: false, Zuschauen: true });
+    expect(opensRound(RUN)).toBe(false);
   });
 
   it('gives the run up only at a second press, the first asking', () => {
@@ -172,7 +194,7 @@ describe('the join screen of a pass in a lobby', () => {
     vi.unstubAllGlobals();
   });
 
-  it('shows the lobby’s card over the form, which stays open, and leaves it at a press', () => {
+  it('shows the lobby’s card first, the menu open as ever, and leaves it at a press', () => {
     stubWindow();
     const html = renderToStaticMarkup(joinScreen(LOBBY));
     expect(html).toContain('IM RAUM');
@@ -180,13 +202,11 @@ describe('the join screen of a pass in a lobby', () => {
     expect(html).toContain('Raum QX7R · Anna, Ben, Cem');
     expect(html).toContain('placeholder="z. B. Anna"');
     expect(html).not.toContain('bound-line');
+    expect(html).toContain('<nav class="menu-list" aria-label="Hauptmenü">');
     const sent: ClientMessage[] = [];
     const elements = elementsOf(() => joinScreen(LOBBY, (msg) => sent.push(msg)));
-    expect(pressable(elements, ROOM_BUTTONS)).toEqual({
-      'Runde eröffnen': true,
-      Beitreten: true,
-      'Mit Code zuschauen': true,
-    });
+    expect(pressable(elements, ROOM_BUTTONS)).toEqual({ Beitreten: true, Zuschauen: true });
+    expect(opensRound(LOBBY)).toBe(true);
     press(buttonsOf(elements, 'bound-leave')[0]);
     press(buttonsOf(elements, 'bound-back')[0]);
     expect(sent).toEqual([
@@ -207,11 +227,12 @@ describe('the join screen of a pass in a lobby', () => {
     expect(sent.map((msg) => msg.kind)).toEqual(['abandon', 'whereami']);
   });
 
-  it('is the plain form where the pass sits nowhere', () => {
+  it('is the plain menu where the pass sits nowhere', () => {
     stubWindow();
     const html = renderToStaticMarkup(joinScreen(null));
     expect(html).not.toContain('class="bound');
     expect(html).toContain('placeholder="z. B. Anna"');
+    expect(opensRound(null)).toBe(true);
   });
 });
 
@@ -242,17 +263,18 @@ describe('the join screen while its card’s way back waits for the room', () =>
     expect(pressable(elements, [...card, ...ROOM_BUTTONS])).toEqual({
       'Zurück zum Einsatz': false,
       'Einsatz aufgeben': true,
-      'Runde eröffnen': false,
       Beitreten: false,
-      'Mit Code zuschauen': false,
+      Zuschauen: false,
     });
+    expect(opensRound(RUN, WAITING)).toBe(false);
   });
 
   it('binds the screen to a lobby on its way back as well, its way out open', () => {
     stubWindow();
     const html = renderToStaticMarkup(joinScreen(LOBBY, noop, WAITING));
     expect(html).toContain('EINSATZ WIRD WIEDERHERGESTELLT');
-    expect(html).not.toContain('Offene Runden');
+    expect(html).toContain('<nav class="menu-list menu-list--bound"');
+    expect(opensRound(LOBBY, WAITING)).toBe(false);
     const elements = elementsOf(() => joinScreen(LOBBY, noop, WAITING));
     expect(pressable(elements, ['Zurück in den Raum', 'Raum verlassen'])).toEqual({
       'Zurück in den Raum': false,
@@ -292,9 +314,9 @@ describe('the join screen while its card’s way back waits for the room', () =>
     expect(html).toContain('EINSATZ LÄUFT');
     expect(html).not.toContain('bound-restoring');
     const elements = elementsOf(() => joinScreen(RUN, noop, { code: 'AB12', since: T0 }));
-    expect(pressable(elements, ['Zurück zum Einsatz', 'Mit Code zuschauen'])).toEqual({
+    expect(pressable(elements, ['Zurück zum Einsatz', 'Zuschauen'])).toEqual({
       'Zurück zum Einsatz': true,
-      'Mit Code zuschauen': true,
+      Zuschauen: true,
     });
   });
 });

@@ -1,5 +1,5 @@
 import { crewSizeText } from '../screens/Crew.js';
-import { PROTOTYPES_ROW } from '../screens/Join.js';
+import { PROTOTYPES_ROW } from '../screens/MenuPanels.js';
 import { MapThumb } from '../screens/MapThumb.js';
 import { customIdOf, type Draft } from './draft.js';
 import { AreaField, CheckField, FormHead, NumberField, TextField } from './fields.js';

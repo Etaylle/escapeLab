@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ClientMessage, PlayerView } from '@escapelab/core';
 import { clock } from '../src/clock.js';
 import { PASS_KEY } from '../src/pass.js';
-import { JoinScreen } from '../src/screens/Join.js';
+import { JoinPanel } from '../src/screens/MenuPanels.js';
 import { PauseCard, TakeoverCard } from '../src/screens/Pause.js';
 import { replyTo, takeIn } from '../src/ws.js';
 import { page, storage } from './page.js';
@@ -96,20 +96,17 @@ describe('a device that asks for a seat by its name', () => {
     expect(got.takeover).toBeNull();
   });
 
-  it('says on the join screen that it waits, on the clock, and no more once its time is up', () => {
+  it('says in „Beitreten" that it waits, on the clock, and no more once its time is up', () => {
     const join = (): string =>
       renderToStaticMarkup(
-        <JoinScreen
+        <JoinPanel
           send={() => undefined}
           connected
-          missions={[]}
-          rooms={[]}
+          name="Ben"
+          blocked={false}
           takeover={{ code: 'QX7R', name: 'Ben', until: ASK.until }}
-          stats={[]}
-          picked={null}
-          onPick={() => undefined}
-          openHandbook={() => undefined}
-          openHistory={() => undefined}
+          waiting={false}
+          onClose={() => undefined}
         />,
       );
     const now = vi.spyOn(clock, 'now').mockReturnValue(T0 + 2000);

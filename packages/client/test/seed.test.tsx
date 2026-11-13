@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { SEED_MAX, type PlayerView } from '@escapelab/core';
 import { RoomCode } from '../src/App.js';
 import { EndScreen } from '../src/screens/End.js';
-import { createRoomMessage } from '../src/screens/Join.js';
+import { createRoomMessage } from '../src/screens/MenuPanels.js';
 
 /** A browser's crew pass, as minted (client pass.ts). */
 const PASS = { id: 'a1'.repeat(16), secret: '0f'.repeat(32) };

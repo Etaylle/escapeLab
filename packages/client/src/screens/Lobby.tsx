@@ -13,6 +13,7 @@ import {
 import { earnedCount, useEarned } from '../achievements.js';
 import { FIRST_RUN_LINE, useWon } from '../firstRun.js';
 import { useNow } from '../hooks.js';
+import { keepColor } from '../pass.js';
 import { fullscreenForRun } from '../runScreen.js';
 import { recordParts } from '../runStats.js';
 import { preloadSamples } from '../world/samples.js';
@@ -460,6 +461,8 @@ export function LobbyScreen({ view, send, leaveRoom, missions, stats }: Props) {
   useEffect(() => {
     void preloadSamples();
   }, []);
+  // The colour worn here is the menu's profile's next time (pass.ts).
+  useEffect(() => keepColor(view.you.color), [view.you.color]);
   // The host picks among the missions where everyone else sees the map.
   const picker =
     host && missions.length > 1 ? (

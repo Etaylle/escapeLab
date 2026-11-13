@@ -35,7 +35,7 @@ describe('a page without https', () => {
     expect(renderToStaticMarkup(<HttpsHint />)).toBe('');
   });
 
-  it('shows the line on the join screen, between the introduction and the name', () => {
+  it('shows the line on the start screen, a quiet line under the menu', () => {
     const join = (isSecureContext: boolean): string => {
       vi.stubGlobal('window', { location: { search: '' }, isSecureContext });
       return renderToStaticMarkup(
@@ -52,7 +52,7 @@ describe('a page without https', () => {
         />,
       );
     };
-    expect(join(false)).toContain(`Rücken an Rücken, los.</p>${LINE}<label>Name`);
+    expect(join(false)).toContain(`<div class="menu-quiet">${LINE}</div>`);
     expect(join(true)).not.toContain('https-hint');
   });
 });

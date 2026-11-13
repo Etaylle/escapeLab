@@ -1971,12 +1971,6 @@ button.link:hover {
 
 /* ── handbook: the printable booklet ────────────────────────────────────── */
 
-.join-create-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
 /* A reading column: wider than the other cards, with roomier lines. */
 .card.handbook {
   max-width: 860px;
@@ -2595,43 +2589,12 @@ button.link:hover {
   color: var(--muted);
 }
 
-/* ══ the join screen: missions as a compact grid ═══════════════════════════
- * Join.tsx. The card gets more room than the default 680px, so that two
- * columns of missions fit beside „Mit Code" and four missions take two
- * rows: with no round open, the screen fits a 1280×720 window. A mission
- * card is as tall as its map frame plus padding, 90px: the map on the left,
- * the title and one line of facts beside it, the subtitle only on the
- * picked card. Narrow, the cards go into one column; under 640px „Mit Code"
- * moves below them.
+/* ══ the missions as a compact grid ════════════════════════════════════════
+ * screens/MenuPanels.tsx, the menu's „Einsatz starten" (its panel the `missions` container,
+ * styles/menu.css). A mission card is as tall as its map frame plus padding, 90px: the map on
+ * the left, the title and one line of facts beside it, the subtitle only on the picked card.
+ * Narrow, the cards go into one column.
  */
-
-.card.join {
-  max-width: 1040px;
-  padding: 22px 26px;
-}
-
-/* A grid item's first margin does not collapse, so the grid carries the
-   space above both headings. */
-.join-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 3fr) minmax(220px, 1fr);
-  gap: 24px;
-  margin-top: 20px;
-}
-
-.join-grid h2 {
-  margin-top: 0;
-}
-
-@media (max-width: 640px) {
-  .join-grid {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-
-.join-create {
-  container: missions / inline-size;
-}
 
 .mission-grid {
   display: grid;

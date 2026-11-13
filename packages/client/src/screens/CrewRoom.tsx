@@ -140,6 +140,11 @@ const COLOR_NAMES: Readonly<Record<string, string>> = {
   '#f87171': 'Rot',
 };
 
+/** A crew colour by its name, as the chips and the menu's profile say it; else by its code. */
+export function colorName(color: string): string {
+  return COLOR_NAMES[color] ?? color;
+}
+
 function initialOf(name: string): string {
   return Array.from(name.trim())[0]?.toUpperCase() ?? '?';
 }
@@ -153,7 +158,7 @@ interface ChipProps {
 }
 
 function chipLabel({ color, owner, mine }: Omit<ChipProps, 'pick'>): string {
-  const name = COLOR_NAMES[color] ?? color;
+  const name = colorName(color);
   if (mine) {
     return `${name} — eigene Farbe`;
   }

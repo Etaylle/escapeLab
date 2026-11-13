@@ -30,8 +30,9 @@ import { HandbookScreen } from './screens/Handbook.js';
 import { HistoryScreen } from './screens/History.js';
 import { Icon, type IconName } from './screens/Icon.js';
 import { UpdateNotice } from './screens/Install.js';
-import { createRoomMessage, JoinScreen, pickedMission } from './screens/Join.js';
+import { JoinScreen } from './screens/Join.js';
 import { LobbyScreen } from './screens/Lobby.js';
+import { createRoomMessage, pickedMission } from './screens/MenuPanels.js';
 import { MenuScene } from './screens/MenuScene.js';
 import { GameScreen } from './screens/Game.js';
 import type { GameLine } from './screens/Line.js';
@@ -269,9 +270,11 @@ interface ScreenProps {
   startTestRun: (name: string, missionId: string) => void;
   /** the end of the run on this screen: while the world plays it, the end screen waits */
   finale: Finale | null;
-  /** the mission picked on the join screen; null for none yet (Join.tsx `pickedMission`) */
+  /** the mission picked on the join screen; null for none yet (MenuPanels.tsx `pickedMission`) */
   picked: string | null;
   setPicked: (missionId: string) => void;
+  /** opens the settings, as the gear in the top bar does */
+  openSettings: () => void;
 }
 
 /**
@@ -300,6 +303,7 @@ function OffRoom(props: ScreenProps) {
           openHandbook={props.setHandbook}
           openHistory={props.setHistory}
           openEditor={editor.show}
+          openSettings={props.openSettings}
         />
       </Activity>
       {editor.open && (
@@ -579,6 +583,7 @@ export function App({ boot }: { boot: EditorBoot }) {
             finale={finale}
             picked={picked}
             setPicked={setPicked}
+            openSettings={() => setSettingsOpen(true)}
           />
         </VoiceContext>
       </main>

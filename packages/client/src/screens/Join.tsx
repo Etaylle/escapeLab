@@ -1,30 +1,31 @@
-import { useEffect, useState } from 'react';
-import {
-  SEED_MAX,
-  type ClientMessage,
-  type CrewPass,
-  type Difficulty,
-  type MissionInfo,
-  type MissionStats,
-  type RoomSummary,
-  type Seat,
+import { useEffect, useRef, useState, type RefObject } from 'react';
+import type {
+  ClientMessage,
+  CrewPass,
+  MissionInfo,
+  MissionStats,
+  RoomSummary,
+  Seat,
 } from '@escapelab/core';
 import { formatLeft } from '../clock.js';
-import { FIRST_RUN_HINT, firstDifficulty, isTutorial, useWon } from '../firstRun.js';
-import { useNow, useServerNow } from '../hooks.js';
+import { useNow } from '../hooks.js';
 import { crewPass, keepName, lastName } from '../pass.js';
-import { recordLine } from '../runStats.js';
 import { dropSnapshot, resumeOf } from '../snapshots.js';
 import type { Restoring, Takeover } from '../ws.js';
-import { crewSizeText } from './Crew.js';
 import { GiveUpButton } from './GiveUp.js';
 import { HttpsHint } from './HttpsHint.js';
-import { Icon } from './Icon.js';
 import { InstallOffer } from './Install.js';
 import { RESTORING_LINE, RESTORING_TITLE } from './Line.js';
-import { pauseClock } from './Pause.js';
-import { MapThumb } from './MapThumb.js';
-import { phosphorClass, useComesOn } from './phosphor.js';
+import { MainMenu, menuItems, opensPanel, type MenuItemId, type PanelId } from './MainMenu.js';
+import {
+  JoinPanel,
+  MissionPanel,
+  pickedMission,
+  RoundsPanel,
+  type SectionProps,
+} from './MenuPanels.js';
+import { useComesOn } from './phosphor.js';
+import { ProfileChip } from './ProfileChip.js';
 
 interface Props {
   send: (msg: ClientMessage) => void;
@@ -32,7 +33,7 @@ interface Props {
   missions: MissionInfo[];
   rooms: RoomSummary[];
   /**
-   * where the browser's pass sits (`whereami`): its card stands over the form, and a run on
+   * where the browser's pass sits (`whereami`): its card stands first in the menu, and a run on
    * blocks every other room; null for nowhere
    */
   seat?: Seat | null;
@@ -56,11 +57,16 @@ interface Props {
   onPick: (missionId: string) => void;
   openHandbook: (missionId: string) => void;
   openHistory: (missionId: string) => void;
-  /** opens the mission editor; without it the join screen offers none */
+  /** opens the mission editor; without it the menu offers none */
   openEditor?: () => void;
+  /** opens the settings, as the gear in the top bar does; without it the menu offers none */
+  openSettings?: () => void;
 }
 
 const REFRESH_MS = 2500;
+
+/** The line under the game's title, in the world's voice: the sign at the plant's gate. */
+export const MENU_SUBTITLE = 'Forschungsanlage Kaltenbrunn · Zutritt nur mit Dienstausweis';
 
 /** The name field's text, starting with the name the pass keeps and kept again as it is typed. */
 function useKeptName(): [string, (name: string) => void] {
@@ -70,363 +76,6 @@ function useKeptName(): [string, (name: string) => void] {
     keepName(next);
   };
   return [name, type];
-}
-
-/**
- * The message that opens a room for `missionId`, or for the server's first
- * mission where none is picked, on `difficulty` where one is given — a first
- * run's „entspannt" (firstRun.ts) — and on normal where not, its seat bound to
- * `pass`. A tester pins the room to a seed with `?seed=<n>` in the page's
- * address (`search`), so that its runs repeat; a value that is no whole number
- * from 0 to SEED_MAX is left out, and the lobby then shows no seed.
- */
-export function createRoomMessage(
-  pass: CrewPass,
-  name: string,
-  missionId: string | null,
-  search: string,
-  difficulty: Difficulty | null = null,
-): ClientMessage {
-  const asked = new URLSearchParams(search).get('seed') ?? '';
-  const seed = /^\d{1,10}$/.test(asked) && Number(asked) <= SEED_MAX ? Number(asked) : null;
-  return {
-    kind: 'create-room',
-    name,
-    pass,
-    ...(missionId === null ? {} : { missionId }),
-    ...(seed === null ? {} : { seed }),
-    ...(difficulty === null ? {} : { difficulty }),
-  };
-}
-
-/** The message that joins room `code` as `name`, its seat bound to the browser's pass. */
-function joinMessage(code: string, name: string): ClientMessage {
-  return { kind: 'join-room', code, name, pass: crewPass() };
-}
-
-/** One open or running room in the browser. */
-function RoomRow({
-  room,
-  tiles,
-  canJoin,
-  onJoin,
-  onWatch,
-}: {
-  room: RoomSummary;
-  tiles: string[];
-  canJoin: boolean;
-  onJoin: () => void;
-  onWatch: () => void;
-}) {
-  const running = room.phase !== 'lobby';
-  return (
-    <li className={`room ${running ? 'room-running' : ''}`}>
-      <MapThumb tiles={tiles} height={48} />
-      <div className="room-main">
-        <span className="room-title">{room.missionTitle}</span>
-        <span className="room-meta">
-          <Icon name="crew" /> {room.players.length}/{room.capacity} ·{' '}
-          {running && (
-            <>
-              <Icon name="play" /> läuft gerade ·{' '}
-            </>
-          )}
-          {room.difficulty} · Code {room.code}
-        </span>
-        <span className="room-crew">
-          {room.players.map((p) => (
-            <span key={p.name} className={p.connected ? '' : 'offline'}>
-              <span className="crew-dot" style={{ background: p.color }} aria-hidden="true" />
-              {p.name}
-            </span>
-          ))}
-          {room.players.length === 0 && <span className="muted">noch niemand da</span>}
-        </span>
-      </div>
-      {running || room.free === 0 ? (
-        <button onClick={onWatch} disabled={!running}>
-          <Icon name="eye" /> Zuschauen
-        </button>
-      ) : (
-        <button className="primary" onClick={onJoin} disabled={!canJoin}>
-          Beitreten
-        </button>
-      )}
-    </li>
-  );
-}
-
-/**
- * One mission to pick: its map, its name and one line of facts. The picked
- * one also spells out its subtitle; on the others it is the tooltip. Once
- * the mission has been played, a line says its best time and win rate. The
- * tutorial's card carries a label stuck on its edge while this device has
- * seen no run won (`first`): „Erster Einsatz? Hier starten".
- */
-export function MissionCard({
-  mission,
-  stats,
-  selected,
-  first = false,
-  onSelect,
-}: {
-  mission: MissionInfo;
-  stats: MissionStats | undefined;
-  selected: boolean;
-  first?: boolean;
-  onSelect: () => void;
-}) {
-  const record = recordLine(stats?.difficulties ?? []);
-  return (
-    <button
-      className={`mission ${selected ? 'mission-selected' : ''}`}
-      aria-pressed={selected}
-      title={mission.subtitle}
-      onClick={onSelect}
-    >
-      {first && <span className="mission-first">{FIRST_RUN_HINT}</span>}
-      <MapThumb tiles={mission.tiles} height={64} />
-      <span className="mission-text">
-        <span className="mission-title">{mission.title}</span>
-        <span className="mission-meta">
-          {crewSizeText(mission.players)} · {Math.round(mission.timeLimitSec / 60)} min ·{' '}
-          {mission.puzzleCount} Stationen
-        </span>
-        {selected && <span className="mission-sub">{mission.subtitle}</span>}
-        {record !== null && <span className="mission-record">{record}</span>}
-      </span>
-    </button>
-  );
-}
-
-/** The row the older maps wait behind on the join screen. */
-export const PROTOTYPES_ROW = 'Prototypen (ältere Karten)';
-
-/** Whether a mission is an older map kept on (`Mission['stage']`). */
-function isPrototype(mission: Pick<MissionInfo, 'stage'>): boolean {
-  return mission.stage === 'prototype';
-}
-
-/**
- * The mission a round opens for: the one `picked`, else the first current mission — the
- * picker's first card — else the first of all; null while there are none.
- */
-export function pickedMission(
-  missions: readonly Pick<MissionInfo, 'id' | 'stage'>[],
-  picked: string | null,
-): string | null {
-  return picked ?? missions.find((m) => !isPrototype(m))?.id ?? missions[0]?.id ?? null;
-}
-
-/**
- * The older maps kept on, behind a row of their own after the mission cards, collapsed: one
- * muted line each — its name and its facts — the picked one marked. Nothing without any.
- */
-export function Prototypes({
-  missions,
-  selected,
-  onSelect,
-}: {
-  missions: MissionInfo[];
-  selected: string | null;
-  onSelect: (missionId: string) => void;
-}) {
-  if (missions.length === 0) {
-    return null;
-  }
-  return (
-    <details className="mission-prototypes">
-      <summary>{PROTOTYPES_ROW}</summary>
-      <ul>
-        {missions.map((m) => {
-          const picked = m.id === selected;
-          return (
-            <li key={m.id}>
-              <button
-                className={picked ? 'mission-proto mission-proto-selected' : 'mission-proto'}
-                aria-pressed={picked}
-                title={m.subtitle}
-                onClick={() => onSelect(m.id)}
-              >
-                <span className="mission-proto-title">{m.title}</span> ·{' '}
-                {crewSizeText(m.players)} · {Math.round(m.timeLimitSec / 60)} min ·{' '}
-                {m.puzzleCount} Stationen
-              </button>
-            </li>
-          );
-        })}
-      </ul>
-    </details>
-  );
-}
-
-/** What the two sections under the room list need of the join screen. */
-interface SectionProps {
-  send: Props['send'];
-  connected: boolean;
-  /** the name as typed, trimmed: nothing goes out under an empty one */
-  name: string;
-  /** a run on binds the pass: no room opens or takes it till it is over */
-  blocked: boolean;
-}
-
-/** Whether a section may sit the pass down: on the line, a name typed, no run binding it. */
-function sitsDown({ connected, name, blocked }: SectionProps): boolean {
-  return connected && name !== '' && !blocked;
-}
-
-/**
- * „Neue Runde eröffnen": every current mission as a card — the tutorial's pointing a first
- * crew at it — the prototypes in a collapsed row after them, the button that opens a room for
- * the picked one (the first card until another is picked), on the first-run difficulty where
- * this device has won no run yet (firstRun.ts), and the ways to its booklet, its Bestenliste
- * and the editor.
- */
-function NewRound({
-  missions,
-  stats,
-  picked,
-  onPick,
-  openHandbook,
-  openHistory,
-  openEditor,
-  ...section
-}: SectionProps &
-  Pick<
-    Props,
-    'missions' | 'stats' | 'picked' | 'onPick' | 'openHandbook' | 'openHistory' | 'openEditor'
-  >) {
-  const { send, name } = section;
-  const won = useWon();
-  const current = missions.filter((m) => !isPrototype(m));
-  const selected = pickedMission(missions, picked);
-  const open = (): void =>
-    send(
-      createRoomMessage(
-        crewPass(),
-        name,
-        selected,
-        window.location.search,
-        firstDifficulty(won),
-      ),
-    );
-  return (
-    <section className="join-create">
-      <h2>Neue Runde eröffnen</h2>
-      {missions.length > 0 ? (
-        <>
-          <div className="mission-grid">
-            {current.map((m) => (
-              <MissionCard
-                key={m.id}
-                mission={m}
-                stats={stats.find((s) => s.missionId === m.id)}
-                selected={selected === m.id}
-                first={!won && isTutorial(m)}
-                onSelect={() => onPick(m.id)}
-              />
-            ))}
-          </div>
-          <Prototypes missions={missions.filter(isPrototype)} selected={selected} onSelect={onPick} />
-        </>
-      ) : (
-        <p className="muted">Lade Missionen …</p>
-      )}
-      <div className="join-create-actions">
-        <button className="primary" disabled={!sitsDown(section)} onClick={open}>
-          Runde eröffnen
-        </button>
-        {selected !== null && (
-          <button
-            title="Die Regeln dieser Mission lesen und ausdrucken"
-            onClick={() => openHandbook(selected)}
-          >
-            <Icon name="book" /> Handbuch
-          </button>
-        )}
-        {selected !== null && (
-          <button
-            title="Die schnellsten Crews jeder Mission, zum Ansehen und Ausdrucken"
-            onClick={() => openHistory(selected)}
-          >
-            <Icon name="podium" /> Bestenliste
-          </button>
-        )}
-        {openEditor !== undefined && (
-          <button
-            title="Eine eigene Mission bauen oder eine vorhandene abwandeln"
-            onClick={openEditor}
-          >
-            <Icon name="pencil" /> Editor
-          </button>
-        )}
-      </div>
-    </section>
-  );
-}
-
-/**
- * This device's ask for a seat, waiting for the crew on the line to let it in: on the clock,
- * and gone once its time is up — an ask whose answer never came, its line dropped, says no more.
- */
-function TakeoverWait({ takeover }: { takeover: Takeover }) {
-  const now = useServerNow(250);
-  if (now > takeover.until) {
-    return null;
-  }
-  return (
-    <p className="takeover-wait" role="status">
-      Warten, bis die Crew die Übernahme von {takeover.name} bestätigt ·{' '}
-      <span className="pause-count">{pauseClock(takeover.until - now)}</span>
-    </p>
-  );
-}
-
-/**
- * „Mit Code": a room's code to join or watch it by. An invite link carries the room in
- * ?room=, so the field is already filled and all that is left to do is type a name. A join by
- * the name of a seat in a run on waits for the crew to let this device in (`takeover`). While
- * the card's way back waits for its room (`waiting`), no other room is watched either: the
- * server seats the page once the room is back.
- */
-function WithCode({
-  takeover,
-  waiting,
-  ...section
-}: SectionProps & { takeover: Takeover | null; waiting: boolean }) {
-  const { send, connected, name } = section;
-  const [code, setCode] = useState(
-    () => new URLSearchParams(window.location.search).get('room')?.toUpperCase() ?? '',
-  );
-  return (
-    <section className="join-join">
-      <h2>Mit Code</h2>
-      <p className="muted">Für eine verabredete Runde:</p>
-      <div className="join-with-code">
-        <input
-          value={code}
-          onChange={(e) => setCode(e.target.value.toUpperCase())}
-          maxLength={10}
-          placeholder="CODE"
-          aria-label="Raumcode"
-        />
-        <button
-          disabled={!sitsDown(section) || code.trim().length === 0}
-          onClick={() => send(joinMessage(code.trim(), name))}
-        >
-          Beitreten
-        </button>
-      </div>
-      {takeover !== null && <TakeoverWait takeover={takeover} />}
-      <button
-        className="link"
-        disabled={!connected || waiting || code.trim().length === 0}
-        onClick={() => send({ kind: 'spectate', code: code.trim() })}
-      >
-        <Icon name="eye" /> Mit Code zuschauen
-      </button>
-    </section>
-  );
 }
 
 /**
@@ -488,7 +137,7 @@ function wayOut(seat: Seat, send: Props['send'], instead: (() => void) | null): 
 }
 
 /**
- * Where the browser's pass sits, instead of the join form (`Seat`): the mission, the room's
+ * Where the browser's pass sits, the menu's first item and lit (`Seat`): the mission, the room's
  * code, the crew and the clock as the server showed it, the way back and the way out — from a
  * run on „Einsatz aufgeben" at a second press, from a lobby as free as leaving it always was.
  * While the way back waits for the room (`waiting`), the card says for how long, and only the
@@ -537,43 +186,6 @@ export function BoundCard({
   );
 }
 
-/** „Offene Runden": every room somebody sits in, to join or to watch by a press. */
-function OpenRounds({
-  send,
-  connected,
-  name,
-  rooms,
-  missions,
-}: SectionProps & Pick<Props, 'rooms' | 'missions'>) {
-  const nameOk = name.length > 0;
-  return (
-    <>
-      <h2>Offene Runden</h2>
-      {rooms.length === 0 ? (
-        <p className="muted">
-          Gerade läuft nichts — eine Runde, die unten eröffnet wird, taucht hier für alle auf.
-        </p>
-      ) : (
-        <ul className="rooms">
-          {rooms.map((room) => (
-            <RoomRow
-              key={room.code}
-              room={room}
-              tiles={missions.find((m) => m.id === room.missionId)?.tiles ?? []}
-              canJoin={connected && nameOk}
-              onJoin={() => send(joinMessage(room.code, name))}
-              onWatch={() => send({ kind: 'spectate', code: room.code })}
-            />
-          ))}
-        </ul>
-      )}
-      {rooms.length > 0 && !nameOk && (
-        <p className="muted">Zum Beitreten oben einen Namen eintragen.</p>
-      )}
-    </>
-  );
-}
-
 /** The card's way back waiting for its room: `restoring`, where it is of the card's room. */
 function waitingOf(seat: Seat | null, restoring: Restoring | null): Restoring | null {
   return seat !== null && restoring?.code === seat.code ? restoring : null;
@@ -581,10 +193,9 @@ function waitingOf(seat: Seat | null, restoring: Restoring | null): Restoring | 
 
 /**
  * The room the join screen is bound to: a run on binds the pass, and so does a room on its way
- * back to the card (`waiting`) — the card stands in the form's place, no other room opens; null
- * for neither.
+ * back to the card (`waiting`) — the card stands first, no other room opens; null for neither.
  */
-function boundTo(seat: Seat | null, waiting: Restoring | null): Seat | null {
+export function boundTo(seat: Seat | null, waiting: Restoring | null): Seat | null {
   return seat?.phase === 'playing' || waiting !== null ? seat : null;
 }
 
@@ -599,29 +210,11 @@ function giveUpOf(
   return waiting?.comeback === true && giveUp !== undefined ? giveUp : null;
 }
 
-export function JoinScreen({
-  send,
-  connected,
-  missions,
-  rooms,
-  seat = null,
-  takeover = null,
-  restoring = null,
-  giveUp,
-  stats,
-  picked,
-  onPick,
-  openHandbook,
-  openHistory,
-  openEditor,
-}: Props) {
-  const [name, setName] = useKeptName();
-  const comesOn = useComesOn('start');
-  const waiting = waitingOf(seat, restoring);
-  const bound = boundTo(seat, waiting);
-
-  // Keep the room browser fresh while nobody has joined anything yet; where the pass sits is
-  // asked as the screen comes up, and again whenever the line is back.
+/**
+ * Keeps the room browser fresh while nobody has joined anything yet; where the pass sits is
+ * asked as the screen comes up, and again whenever the line is back.
+ */
+function useDoor(send: Props['send'], connected: boolean): void {
   useEffect(() => {
     if (!connected) {
       return undefined;
@@ -634,55 +227,153 @@ export function JoinScreen({
     // `send` is stable for the lifetime of the connection.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [connected]);
+}
 
+/** The panel an address opens the menu on: „Beitreten" for an invite link, its code filled in. */
+export function panelOnArrival(search: string): PanelId | null {
+  return new URLSearchParams(search).get('room') === null ? null : 'join';
+}
+
+/**
+ * Where the focus goes in the menu: on the name while there is none to sit down under; else on
+ * the item last taken — the run's way back or the first item where none was.
+ */
+function focusMenu(root: HTMLElement | null, item: MenuItemId | null, named: boolean): void {
+  const at = item === null ? '.bound-back:not([disabled]), .menu-item' : `[data-item="${item}"]`;
+  root?.querySelector<HTMLElement>(named ? at : '.profile-name')?.focus({ preventScroll: true });
+}
+
+/**
+ * The menu's panel (screens/MenuPanels.tsx): the one open, opened from its item, and closed
+ * again with the focus back on that item. As the menu comes up — the page loaded, the
+ * Bestenliste or the booklet put away — the focus stands where `focusMenu` says.
+ */
+function usePanel(root: RefObject<HTMLElement | null>, named: boolean) {
+  const [panel, setPanel] = useState<PanelId | null>(() =>
+    panelOnArrival(window.location.search),
+  );
+  const last = useRef<MenuItemId | null>(null);
+  const isNamed = useRef(named);
+  isNamed.current = named;
+  useEffect(() => {
+    if (panel === null) {
+      focusMenu(root.current, last.current, isNamed.current);
+    }
+  }, [panel, root]);
+  return {
+    panel,
+    take: (item: MenuItemId): void => {
+      last.current = item;
+      if (opensPanel(item)) {
+        setPanel(item);
+      }
+    },
+    close: (): void => setPanel(null),
+  };
+}
+
+/** The ways the menu's items lead off it to a page of its own: the booklet, the Bestenliste … */
+function pagesOf(props: Props, selected: string | null): Partial<Record<MenuItemId, () => void>> {
+  const { openHandbook, openHistory, openEditor, openSettings } = props;
+  return {
+    ...(selected === null
+      ? {}
+      : { handbook: () => openHandbook(selected), history: () => openHistory(selected) }),
+    ...(openEditor === undefined ? {} : { editor: openEditor }),
+    ...(openSettings === undefined ? {} : { settings: openSettings }),
+  };
+}
+
+/** The panel open over the menu, if any. */
+function Panels({
+  panel,
+  close,
+  section,
+  props,
+  waiting,
+}: {
+  panel: PanelId | null;
+  close: () => void;
+  section: SectionProps;
+  props: Props;
+  waiting: boolean;
+}) {
+  if (panel === 'missions') {
+    const { missions, stats, picked, onPick } = props;
+    const missionProps = { missions, stats, picked, onPick };
+    return <MissionPanel {...section} {...missionProps} onClose={close} />;
+  }
+  if (panel === 'join') {
+    const takeover = props.takeover ?? null;
+    return <JoinPanel {...section} takeover={takeover} waiting={waiting} onClose={close} />;
+  }
+  if (panel === 'rounds') {
+    return (
+      <RoundsPanel {...section} rooms={props.rooms} missions={props.missions} onClose={close} />
+    );
+  }
+  return null;
+}
+
+/**
+ * The start screen as a game's main menu: the game's title over the living scene of the
+ * mission picked (screens/MenuScene.tsx) and a line of the world under it, the profile at the
+ * top right, and the menu — the card of where the pass sits first, then „Einsatz starten",
+ * „Beitreten", „Offene Runden", the booklet, the Bestenliste, the editor and the settings — the
+ * install offer and the HTTPS hint as quiet lines under it. An item with a panel opens it over
+ * the menu (MenuPanels.tsx), the rest open their page. A run that binds the pass dims every
+ * item but its card, and one line says why no other room opens.
+ */
+export function JoinScreen(props: Props) {
+  const { send, connected, missions, rooms, seat = null, restoring = null } = props;
+  const [name, setName] = useKeptName();
+  const root = useRef<HTMLDivElement>(null);
+  const { panel, take, close } = usePanel(root, name.trim() !== '');
+  const comesOn = useComesOn('start');
+  const waiting = waitingOf(seat, restoring);
+  const bound = boundTo(seat, waiting);
+  useDoor(send, connected);
   const section = { send, connected, name: name.trim(), blocked: bound !== null };
+  const pages = pagesOf(props, pickedMission(missions, props.picked));
+  const card = seat !== null && (
+    <BoundCard
+      seat={seat}
+      send={send}
+      waiting={waiting}
+      giveUp={giveUpOf(waiting, props.giveUp)}
+    />
+  );
   return (
-    <div className="card join">
-      <h1 className={phosphorClass(comesOn)}>
-        <Icon name="hex" /> EscapeLab
-      </h1>
-      <p className="muted">
-        Kooperatives Escape-Spiel für den Browser: Die Maschine sieht, wer am Pult steht, die
-        Regeln, wer am Buch steht — lösen lässt es sich nur gemeinsam, per Stimme. Gerät pro
-        Person, Rücken an Rücken, los.
-      </p>
-      <InstallOffer />
-      <HttpsHint />
-
-      {seat !== null && (
-        <BoundCard seat={seat} send={send} waiting={waiting} giveUp={giveUpOf(waiting, giveUp)} />
-      )}
-      {bound !== null ? (
-        <p className="bound-line">{boundLine(bound)}</p>
-      ) : (
-        <>
-          <label>
-            Name
-            <input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              maxLength={40}
-              placeholder="z. B. Anna"
-              autoFocus
-            />
-          </label>
-          <OpenRounds {...section} rooms={rooms} missions={missions} />
-        </>
-      )}
-
-      <div className="join-grid">
-        <NewRound
-          {...section}
-          missions={missions}
-          stats={stats}
-          picked={picked}
-          onPick={onPick}
-          openHandbook={openHandbook}
-          openHistory={openHistory}
-          {...(openEditor === undefined ? {} : { openEditor })}
+    <div className="menu" ref={root}>
+      <header className="menu-head">
+        <h1 className={comesOn ? 'menu-title phosphor-title' : 'menu-title'}>ESCAPELAB</h1>
+        <p className="menu-sub">{MENU_SUBTITLE}</p>
+      </header>
+      <ProfileChip name={name} onName={setName} />
+      <div className="menu-body" inert={panel !== null}>
+        <MainMenu
+          items={menuItems(props.openEditor !== undefined)}
+          card={card}
+          dimmed={bound !== null}
+          rooms={rooms.length}
+          onPick={(item) => {
+            take(item);
+            pages[item]?.();
+          }}
         />
-        <WithCode {...section} takeover={takeover ?? null} waiting={waiting !== null} />
+        {bound !== null && <p className="bound-line">{boundLine(bound)}</p>}
+        <div className="menu-quiet">
+          <InstallOffer />
+          <HttpsHint />
+        </div>
       </div>
+      <Panels
+        panel={panel}
+        close={close}
+        section={section}
+        props={props}
+        waiting={waiting !== null}
+      />
     </div>
   );
 }
