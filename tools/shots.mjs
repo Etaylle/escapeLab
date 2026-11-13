@@ -132,7 +132,10 @@
  * run's card, first and lit, every other item dimmed (menu-bound.png). The hero — the player's own
  * figure standing large at the stage's right (client screens/MenuHero.tsx) — has to stand there at
  * 1440×820 and at 1280×720 about five of the scene's tiles tall, its canvas clear of the menu's
- * column, its lead line and the profile, or the run fails. The menu's sound waits for
+ * column, its lead line and the profile, or the run fails. menu-hero.png shows it with its hand
+ * lamp on, the beam laid over the scene and ending short of the menu's column; with „Beitreten"
+ * hovered the beam has to hold a beat pointing at it within two passes of its sweep. The menu's
+ * sound waits for
  * the first key, the speaker's lamp lit, and plays after it; the lobby keeps it at its weight,
  * chimes as the round comes up and chirps as Ben says ready; the run's start ends it. The won card
  * asks for its sting and its theme (end music), which go as the next run opens.
@@ -6632,6 +6635,8 @@ async function captureMenu(page) {
   if (SOFTWARE_GL && look !== null && look.p95 > MENU_P95_MS) {
     fail(`menu: its window reached ${look.p95.toFixed(1)} ms p95, over ${MENU_P95_MS}`);
   }
+  await heroLampShot(page);
+  await heroBeamBeat(page);
   await overflow(page, 'menu @ 1440x820');
   await page.setViewportSize({ width: 1280, height: 720 });
   await sceneBaked(page, { w: 1280, h: 720 });
@@ -6640,6 +6645,70 @@ async function captureMenu(page) {
   await checkHero(page, '1280x720', true);
   await page.setViewportSize(SIZES[0]);
   await sceneBaked(page, { w: SIZES[0].width, h: SIZES[0].height });
+}
+
+/** The scene's probe says the hero's beam lies on it, and the hero's that its lamp is on. */
+const lampOn = () =>
+  globalThis.__escapelab?.scene?.beam?.laid === true &&
+  globalThis.__escapelab?.hero?.beam?.on === 1;
+
+/** How long the beam may take to come to an item hovered, ms: two passes and a beat. */
+const BEAM_BEAT_WITHIN_MS = 26_000;
+
+/** What the log says of the hero's beam (`beam`, its probe) and the menu's column (`menu`). */
+function beamText(beam, menu) {
+  const [x, y, reach] = [beam.lens.x, beam.lens.y, beam.reach].map(Math.round);
+  const gap = menu === null ? null : Math.round(beam.lens.x - beam.reach - menu.right);
+  const short = gap === null ? '!! no menu' : `${gap} px short of the menu`;
+  return `its beam ${reach} px long from (${x}, ${y}), ${short}`;
+}
+
+/**
+ * menu-hero.png: the hero at 1440×820 with its hand lamp on, the beam laid over the scene and
+ * ending short of the menu's column — or the run fails.
+ */
+async function heroLampShot(page) {
+  const lit = await page.waitForFunction(lampOn, null, { timeout: 10_000 }).then(
+    () => true,
+    () => false,
+  );
+  await capture(page, 'menu-hero.png');
+  const beam = (await heroOf(page))?.beam ?? null;
+  const { clear } = await page.evaluate(heroRoom);
+  const shown = lit && beam !== null;
+  console.log(`menu-hero.png      ${shown ? beamText(beam, clear.menu) : '!! no lamp on'}`);
+  const over = !shown || clear.menu === null || beam.lens.x - beam.reach < clear.menu.right;
+  if (over) {
+    fail('menu-hero.png: no lamp on, or its beam reaching over the menu');
+  }
+}
+
+/** In the page: whether the hero's beam holds a beat on „Beitreten", hovered. */
+const beatOnJoin = () => {
+  const probe = globalThis.__escapelab?.hero;
+  return probe?.attends === 'join' && probe.beam?.holding === true;
+};
+
+/**
+ * „Beitreten" hovered: the hero's beam has to hold a beat on it within two passes of its sweep
+ * (BEAM_BEAT_WITHIN_MS), or the run fails; the pointer goes off the menu after.
+ */
+async function heroBeamBeat(page) {
+  const started = Date.now();
+  await page.locator('.menu-item', { hasText: 'Beitreten' }).hover();
+  const beat = await page
+    .waitForFunction(beatOnJoin, null, { timeout: BEAM_BEAT_WITHIN_MS, polling: 50 })
+    .then(
+      () => true,
+      () => false,
+    );
+  const after = ((Date.now() - started) / 1000).toFixed(1);
+  const said = beat ? `held a beat on BEITRETEN ${after} s after the hover` : '!! no beat';
+  console.log(`hero beam          ${said}`);
+  await page.mouse.move(2, 2);
+  if (!beat) {
+    fail('hero beam: it never held a beat on the item hovered');
+  }
 }
 
 /**
