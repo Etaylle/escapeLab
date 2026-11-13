@@ -43,9 +43,14 @@ import { painting } from './heroPage.js';
 const DESKTOP: StageFacts = {
   w: 1440,
   h: 760,
+  windowW: 1440,
   windowH: 820,
+  phone: false,
   padBottom: 32.8,
+  safeRight: 0,
+  safeBottom: 0,
   menuRight: 512,
+  panelRight: 832,
   chipBottom: 115,
 };
 
