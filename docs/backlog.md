@@ -440,6 +440,29 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   tritt beiseite, wenn ein Panel aufgeht; ab 900 px Breite, am Handy bleibt der Chip. Kosten
   ≤ 1 ms je Frame zusammen.
 
+### U-1 Pausenmenü, Verlassen wie Dota 2, Einstellungen und Chrome — Status: bereit (Spec `spec-U-pause.md`) · Größe: L
+- Uros 2026-11-14: „Spielabbruch richtig: Der Spieler kann das Spiel nicht verlassen, wann er
+  will, und ins Hauptmenü zurück. Wie Dota 2: joinen, nach Disconnect reconnecten, verlassen."
+  Und: „Einstellungen im Spiel haben kein gutes UI; alles, was nicht direkt Spiel ist, Leisten,
+  Menüs, soll besser werden wie echte Spiele." Heute führt aus `Game.tsx` kein Weg ins Menü.
+- Pausenmenü per Esc, Zahnrad, Controller-Start (Weiter, Einstellungen, Handbuch, Zum Hauptmenü,
+  Einsatz aufgeben, Raum verlassen, Zuschauen beenden), ohne die Uhr der Crew anzuhalten; „Zum
+  Hauptmenü" schließt die Leitung sauber und lässt den Platz gebunden (Menükarte „Zurück zum
+  Einsatz"); Host-Übergabe in der Lobby; Zurück-Taste des Browsers öffnet das Menü; Einstellungen
+  in Reitern Ton, Bild, Steuerung, Zugang, Konto mit Live-Vorschau und Zurücksetzen je Reiter;
+  Leisten und Panels im Stil des Hauptmenüs. Vorbilder: Dota 2, Hades, Celeste, Deep Rock,
+  Helldivers 2, Overcooked 2.
+
+### G-2 Vorbilder-Studie und Übungshalle — Status: bereit (Spec `spec-G-testground.md`) · Größe: L
+- Uros 2026-11-14: „Minispiele und Gameplay-Elemente von wo abschauen; im Tutorial ein Testground,
+  wo alle Minispiele testbar und spielbar sind; Gameplay-Verbesserung ist ein anderes Ticket."
+- `docs/gameplay-models.md`: je Vorbild (Keep Talking, Among Us, Spaceteam, We Were Here,
+  Operation: Tango, Portal 2 Co-op, Escape Simulator/Academy, Overcooked 2, Lovers in a Dangerous
+  Spacetime, Phasmophobia, Lethal Company) zwei bis drei entlehnbare Mechaniken, gemappt auf
+  unsere Invarianten, mit einer Rangliste von 8–10 Übernahmen als Backlog-Zeilen. Dazu Missionen
+  mit freier Stationsreihenfolge und ohne Uhr, und die Mission „Übungshalle": jede Station einmal,
+  Regeln daneben, aus der Modulliste erzeugt, im Harness bis zum Ende gespielt.
+
 ### K-1 Konto wie bei Dota — Status: bereit (Entscheidung Uros 2026-11-12: eigene Konten, Google zuletzt; nach S-1) · Größe: L
 - Reihenfolge: **K-1a** Datenbank (Neon-Postgres, Prisma) mit Konto je Dienstausweis (Kennung,
   Anzeigename, Farbe, Erfolge), Läufe und Bestenliste in der Datenbank statt der Datei, die
