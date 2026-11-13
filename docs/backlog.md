@@ -390,9 +390,15 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   Runden zeigen die Figuren der Crew statt Punkten; Übergang in die Lobby als aufgehende Tür.
 - Beweis: Captures join/lobby an allen Größen, Pixelchecks der anderen Bildschirme, Frame-Fenster
   der Startseite ≤ 16,7 ms p95 bei Software-GL.
-- Offen nach dem PR: Titelthema (`menu-theme`, 72 s) und Anlagenbrummen (`bed-facility`, 10 s —
-  ein Bett darf höchstens 30 s lang sein) rendert Uros; die Befehle stehen in `docs/sound.md`
-  unter „The menu", bis dahin klingen nur die Bedienlaute.
+- Nachtrag Uros (Musik wie in Profispielen, kommerziell nutzbar): die Lobby behält das Titelthema
+  6 dB leiser samt Brummen; die Endkarte spielt nach ihrem Stinger ein eigenes Thema
+  (`end-won`, `end-lost`, je 32 s, einmal); immer nur ein Musikstück zugleich; `docs/sound.md`
+  hat einen Abschnitt „Lizenz".
+- Offen nach dem PR: Titelthema (`menu-theme`, 60 s), die zwei Endthemen und das Anlagenbrummen
+  (`bed-facility`, 10 s wie jedes Raumbett) rendert Uros, etwa 2.352 Credits; die Befehle stehen
+  in `docs/sound.md` unter „The end cards", bis dahin klingen nur die Bedienlaute und die
+  Stinger. Die 47 Leitstellen-Zeilen vom 2026-10-25 sind vielleicht vor dem bezahlten Plan
+  entstanden: neu aufnehmen (Befehl unter „Lizenz"), dann ist alles kommerziell nutzbar.
 
 ### S-2 Begehbarer Pausenraum — Status: wartet (nach S-1 und R-3) · Größe: XL
 - Vorbilder: Phasmophobia (begehbarer Raum, Tafel mit Auftragswahl, Tür öffnet beim Start),

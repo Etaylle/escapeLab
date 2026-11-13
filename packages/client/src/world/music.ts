@@ -22,6 +22,7 @@ import {
   steer,
   type Stream,
 } from './audioStream.js';
+import { holdMusic, musicFrom } from './musicTurn.js';
 import {
   MUSIC_BASE,
   musicEntry,
@@ -53,8 +54,9 @@ import {
  * the music starts; an element that came in late is caught up by playing it a little faster.
  * While a stem is heard it takes one loop of the budget of audio.ts (`CAPS`), and it stops once
  * it has faded out. A run won fades the music out before the end card's sting (`playSting`); a
- * run lost drains it, its lowpass closing and the stems slowing, with the power. `setTension` is
- * its one input, ten times a second. Pure up to `setTension`.
+ * run lost drains it, its lowpass closing and the stems slowing, with the power. Like every piece
+ * of music it waits for the bus — the menu's theme fading out (musicTurn.ts) — and holds it while
+ * it fades. `setTension` is its one input, ten times a second. Pure up to `setTension`.
  */
 
 /** A stem's loudness and a sting's, after the gain of each (scripts/sfx.ts), RMS. */
@@ -299,7 +301,7 @@ function startMusic(input: Tension, startAt: number): Music | null {
   const engine = audioEngine();
   if (engine === null) return null;
   const { ctx } = engine;
-  const at = ctx.currentTime + LOOKAHEAD + Math.max(0, (startAt - Date.now()) / 1000);
+  const at = musicFrom(ctx.currentTime + LOOKAHEAD + Math.max(0, (startAt - Date.now()) / 1000));
   const out = outlet(ctx, engine.music, MUSIC_LEVEL);
   const drain = biquad(ctx, 'lowpass', OPEN_HZ, 0);
   drain.connect(out);
@@ -499,6 +501,7 @@ function endMusic(m: Music, ending: 'won' | 'lost'): void {
   const now = m.engine.ctx.currentTime;
   const end = now + END_S;
   m.outFade = fadeTo(m.out.gain, m.outFade, now, [now, end], 0);
+  holdMusic(end);
   if (ending === 'lost') {
     m.drain.frequency.setValueAtTime(OPEN_HZ, now);
     m.drain.frequency.exponentialRampToValueAtTime(120, end);
@@ -534,6 +537,7 @@ export function stopMusic(): void {
     m.ended = true;
     const now = m.engine.ctx.currentTime;
     m.outFade = fadeTo(m.out.gain, m.outFade, now, [now, now + 0.3], 0);
+    holdMusic(now + 0.3);
     letGo(m, now + 0.35);
   } catch {
     // Deliberately silent: the music's nodes are released with the context at the latest.
@@ -542,28 +546,34 @@ export function stopMusic(): void {
 
 /**
  * The end card's sting for a run won or lost, once, streamed on the music's bus at STING_LEVEL
- * and let go once it has played. Nothing while the context is held back, or where its manifest
- * names none.
+ * as soon as the bus is free, and let go once it has played. Resolves to the audio time it will
+ * have ended at — when the end card's theme may follow (endTheme.ts); to the time it would have
+ * started where its manifest names none; to null while the context is held back.
  */
-export function playSting(ending: 'won' | 'lost'): void {
+export function playSting(ending: 'won' | 'lost'): Promise<number | null> {
   try {
     const engine = playingEngine();
-    if (engine === null) return;
-    void musicListed().then(() => stingOnce(engine, ending));
+    if (engine === null) return Promise.resolve(null);
+    return musicListed()
+      .then(() => stingOnce(engine, ending))
+      .catch(() => null);
   } catch {
     // Deliberately silent: the card says it as well.
+    return Promise.resolve(null);
   }
 }
 
-/** The sting `id` streamed once from now, its element let go as it ends. */
-function stingOnce(engine: Engine, id: MusicId): void {
-  const entry = musicEntry(id);
-  if (entry === null) return;
+/** The sting `id` streamed once from when the bus is free, its element let go as it ends. */
+function stingOnce(engine: Engine, id: MusicId): number {
   const { ctx } = engine;
+  const at = musicFrom(ctx.currentTime + LOOKAHEAD);
+  const entry = musicEntry(id);
+  if (entry === null) return at;
   const file = `${MUSIC_BASE}${entry.file}`;
   const sting = openStream(ctx, file, engine.music, STING_LEVEL * entry.gain);
   sting.element.addEventListener('ended', () => closeStream(sting), { once: true });
-  startStream(sting, ctx, ctx.currentTime + LOOKAHEAD);
+  startStream(sting, ctx, at);
+  return at + entry.ms / 1000;
 }
 
 /**

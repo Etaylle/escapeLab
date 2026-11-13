@@ -61,7 +61,10 @@ weitergeben. Laufende Runden erscheinen ebenfalls, dort führt der Knopf zum Zus
 *Beitreten* bleibt ein Code-Feld für direkte Verabredungen, daneben *Zuschauen*. Bindet ein
 laufender Einsatz den Dienstausweis, steht seine Karte als erster Menüpunkt da. In die Lobby
 und zurück geht es durch die Schiebetüren des Labors; ab dem ersten Klick oder Tastendruck
-spielen Titelthema und Anlagenbrummen.
+spielen Titelthema und Anlagenbrummen, in der Lobby leiser weiter. Die Endkarte spielt nach
+ihrem Stinger ein eigenes Thema: hell für einen gewonnenen, ein tiefes Dröhnen für einen
+verlorenen Einsatz. Alle Musik und alle Geräusche sind mit ElevenLabs erzeugt, keine
+Archivmusik (`docs/sound.md`, Abschnitt „Lizenz“).
 
 **Ablauf einer Partie:** Lobby (Farbe wählen, **bereitmelden** — der Host kann erst starten,
 wenn so viele da sind, wie die Mission braucht, und alle bestätigt haben; jede Änderung an

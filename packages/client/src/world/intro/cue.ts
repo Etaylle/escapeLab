@@ -1,5 +1,6 @@
 import { claim, EFFECTS_LEVEL, LOOKAHEAD, playingEngine, release } from '../audio.js';
 import { closeStream, openStream, startStream, type Stream } from '../audioStream.js';
+import { holdMusic, musicFrom } from '../musicTurn.js';
 
 /**
  * The opening's music: one instrumental bed of some 40 s — dark, low, industrial, slowly
@@ -7,9 +8,11 @@ import { closeStream, openStream, startStream, type Stream } from '../audioStrea
  * plays from the card on under the announcement, low, into the music's bus at the Musik volume,
  * and counts as one voice of the lab's budget (audio.ts `claim`). It streams from its file
  * (audioStream.ts) rather than being decoded — 40 s in two channels would hold some 15 MB — its
- * level set by the peak its list names. Skipping the opening fades it out; the blackout cuts it
- * off. Where there is no cue — none composed, or the file not to be had — the opening plays
- * without it. Nothing here throws.
+ * level set by the peak its list names. It waits for the bus as all music does — the menu's
+ * theme fading out as the run starts (musicTurn.ts) — and comes in where the opening then stands.
+ * Skipping the opening fades it out, holding the bus meanwhile; the blackout cuts it off. Where
+ * there is no cue — none composed, or the file not to be had — the opening plays without it.
+ * Nothing here throws.
  */
 
 /** Where the cue lies, and its list: { file, ms, peak, hash } (scripts/introCue.ts). */
@@ -73,19 +76,25 @@ function letGo(cue: Playing): void {
   release({ voice: 1 });
 }
 
-/** Streams `cue` from where the opening that began at `since` stands, as one voice. */
+/**
+ * Streams `cue` as one voice, as soon as the music's bus is free, from where the opening that
+ * began at `since` stands then.
+ */
 function begin(cue: CueManifest, since: number): void {
   try {
     const engine = playingEngine();
-    const from = Math.max(0, (Date.now() - since) / 1000);
-    if (engine === null || playing !== null || from >= cue.ms / 1000) return;
-    if (!claim({ voice: 1 })) return;
+    if (engine === null || playing !== null) return;
     const { ctx } = engine;
+    const soonest = ctx.currentTime + LOOKAHEAD;
+    // Where the opening's first moment lies on the audio clock: the cue keeps to it.
+    const zero = soonest - Math.max(0, (Date.now() - since) / 1000);
+    const at = musicFrom(soonest);
+    const from = at - zero;
+    if (from >= cue.ms / 1000 || !claim({ voice: 1 })) return;
     const level = CUE_PEAK / (cue.peak > 0 ? cue.peak : 1);
     const stream = openStream(ctx, `${CUE_BASE}${cue.file}`, engine.music, level);
-    const at = ctx.currentTime + LOOKAHEAD;
-    startStream(stream, ctx, at - from, from);
-    const now: Playing = { stream, end: at + cue.ms / 1000 - from, gone: false };
+    startStream(stream, ctx, zero, from);
+    const now: Playing = { stream, end: zero + cue.ms / 1000, gone: false };
     playing = now;
     stream.element.addEventListener(
       'ended',
@@ -113,6 +122,7 @@ export function stopCue(fadeS: number): void {
     param.cancelScheduledValues(now);
     param.setValueAtTime(param.value, now);
     param.linearRampToValueAtTime(0, now + fade);
+    holdMusic(now + fade);
     setTimeout(() => letGo(cue), (fade + 0.05) * 1000);
   } catch {
     // Deliberately silent: the cue ends on its own.

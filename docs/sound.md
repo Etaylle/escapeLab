@@ -17,20 +17,21 @@ the brickwall, the ducking), `samples.ts` (the recordings, loaded as they are wa
 `reverb.ts`, `footsteps.ts`, `ambience.ts`, `spatial.ts`, `radioVoice.ts`, `pa.ts`, `music.ts`,
 and `audioCount.ts` and `soundProbe.ts` for the walkthrough's census.
 
-**The catalog.** Each entry names one sound: its `id`, its `kind` — a one-shot, a bed that
-loops seamlessly, a stem of the music or a sting — the English prompt ElevenLabs is given
-(material, mechanism, room, distance), how long it lasts, whether it loops, the loudness it is
-brought to (`target`), a stem's tempo (`bpm`, the one its prompt states: the script holds the
-two to each other, and the three stems to one tempo) and where the game plays it (`usedBy`,
-`src/<file>#<symbol>`). There are 81 effects — 69 one-shots, three loops (the mains hum, the
-siren, the drone's rotor) and nine room beds — and five pieces of music: the stems `calm`,
-`tense` and `critical`, 72 s each, all three in A minor at 90 bpm, and the stings `won` and
-`lost`, 10 s each. A step is one of three takes of the same work boot on the floor it lands on —
-`step-concrete-1`–`3`, `step-lino-1`–`3`, `step-steel-1`–`3` — a door that slides open has its
-pneumatic slide and one that shuts one of two closes (`door-close-1`, `-2`), the hatch strikes
-its stops as it does on screen (`hatch-open-done`), a drone that comes close whooshes by
-(`drone-pass`), every alarm brings a two-second stinger with it (`alarm-sting`) and a volume
-set in the settings ticks through the bus it sets (`ui-tick`).
+**The catalog.** Each entry names one sound: its `id`, its `kind` — a one-shot, a bed that loops
+seamlessly, a stem of the music, a sting or a theme played once through — the English prompt
+ElevenLabs is given (material, mechanism, room, distance), how long it lasts, whether it loops, the
+loudness it is brought to (`target`), a stem's tempo (`bpm`, the one its prompt states: the script
+holds the two to each other, and the stems to one tempo) and where the game plays it (`usedBy`,
+`src/<file>#<symbol>`). There are 83 effects — 70 one-shots, three loops (the mains hum, the siren,
+the drone's rotor) and ten room beds, the facility's hum under the menu among them — and eight
+pieces of music: the stems `calm`, `tense` and `critical`, 72 s each, and the menu's theme
+`menu-theme`, 60 s, all four in A minor at 90 bpm; the stings `won` and `lost`, 10 s each; and the
+end cards' themes `end-won` and `end-lost`, 32 s each. A step is one of three takes of the same
+work boot on the floor it lands on — `step-concrete-1`–`3`, `step-lino-1`–`3`, `step-steel-1`–`3` —
+a door that slides open has its pneumatic slide and one that shuts one of two closes
+(`door-close-1`, `-2`), the hatch strikes its stops as it does on screen (`hatch-open-done`), a
+drone that comes close whooshes by (`drone-pass`), every alarm brings a two-second stinger with it
+(`alarm-sting`) and a volume set in the settings ticks through the bus it sets (`ui-tick`).
 
 ```sh
 pnpm --filter client sfx -- --dry-run                    # the plan and its cost; nothing asked
@@ -843,17 +844,18 @@ the script against a client of its own and the cue in the game.
 
 ## The menu (`menuSound.ts`)
 
-The main menu has a sound of its own, and keeps it through the lobby: a title theme, the
-facility's hum under it, and the interface's sounds — all of it silent until the player's first
-click, tap or key, as a browser wants (`pointerdown`, `keydown`, `touchend`, caught on the
-window). That gesture makes the audio context — within it, so that it may run — and brings the
-theme and the hum in from nothing over 2 s (`FADE_IN_S`). Until then the menu's sound waits,
-and the speaker in the top bar says so: an amber lamp on its corner, its title „Ton kommt mit dem
-ersten Klick oder Tastendruck" — on the menu alone, never over a run or the editor. With the
-sound switched off nothing streams and nothing waits; switched on again it waits for the next
-gesture or comes in at once where the context already runs.
+The main menu has a sound of its own, and keeps it through the lobby: a title theme, the facility's
+hum under it, and the interface's sounds — all of it silent until the player's first click, tap or
+key, as a browser wants (`pointerdown`, `keydown`, `touchend`, caught on the window). That gesture
+makes the audio context — within it, so that it may run — and brings the theme and the hum in from
+nothing over 2 s (`FADE_IN_S`). Until then the menu's sound waits, and the speaker in the top bar
+says so: an amber lamp on its corner, its title „Ton kommt mit dem ersten Klick oder Tastendruck" —
+on the menu alone, never over a run or the editor. A lobby after a run needs no gesture: the run
+woke the context, and the sound comes in at once. With the sound switched off nothing streams and
+nothing waits; switched on again it waits for the next gesture or comes in at once where the context
+already runs.
 
-**The theme** (`menu-theme`) is a stem of the music's, 72 s in A minor at 90 BPM like the run's
+**The theme** (`menu-theme`) is a stem of the music's, 60 s in A minor at 90 BPM like the run's
 three — dark and quiet, a slow analog pad over a low drone, a lonely four-note motif on a soft
 electric piano, no drums. It streams from its file on two elements as the stems do
 (`audioStream.ts`), into the music's bus at the stems' level, and loops on whole bars: each next
@@ -861,50 +863,131 @@ pass starts a bar before it is heard, caught up meanwhile, and comes in over the
 last goes out under it, equal in power (music.ts `passPeriod`, `SEAM_IN`, `SEAM_OUT`). **The hum**
 (`bed-facility`) is a bed: the facility at night heard from its entrance hall, transformers and
 ventilation far down the corridors, looped on the rooms' bus at 0.02 — a little under a room's bed.
-It is 10 s long, not a minute: a bed lasts 30 s at most in the catalog, and the effects' folder,
-held to 3 MB, had some 180 kB left, which a 10 s bed at 128 kbit/s (160 kB) fits. The theme, 72 s at
-192 kbit/s, takes the music's folder from 5.4 to some 7.1 MB of its 8. The two claim two loops of
-the budget (`claim({ loop: 2 })`) and give them back as they go.
+It is a 10 s seamless loop, as every room bed of the lab is: a bed lasts 30 s at most in the
+catalog, and a 30 s bed at 128 kbit/s (480 kB) would not fit the effects' folder, held to 3 MB,
+whose recordings left it 428 kB. The two claim two loops of the budget (`claim({ loop: 2 })`) and
+give them back as they go.
 
-**In the lobby** the crew's own voices pull both down while anybody speaks — the theme 8 dB,
-the hum 4 dB, as the Leitstelle's voice pulls the run's music down (mix.ts `DUCK_DB`, the source
-`crew`) — and let them back up after. **The run's start** fades both out over 0.6 s and lets
-everything go: their elements, the theme's blob, the hum's recording, the loops.
+**The lobby** keeps both: the same theme plays on, only 6 dB down (`LOBBY_WEIGHT`), moving there
+over 1.5 s (`WEIGHT_S`) as the doors close and open on the crew room, and back up should the window
+return to the menu — from the menu to the lobby the music changes its weight, never its piece, and
+no seam is heard. The crew's own voices pull both down while anybody speaks — the theme 8 dB, the
+hum 4 dB, as the Leitstelle's voice pulls the run's music down (mix.ts `DUCK_DB`, the source `crew`)
+— and let them back up after. **The run's start** fades both out over 0.6 s and lets everything go:
+their elements, the theme's blob, the hum's recording, the loops.
 
-**The interface's sounds** are recordings the lab already has, each played once into the
-effects' bus under the theme: a tick as an item lights (`ui-tick`, 0.012 at the master gain —
-no oftener than every 50 ms, so that a held arrow ticks along and never buzzes), a toggle's
-clack as one is taken (`toggle-clack`, 0.03), a dial's detent as a panel is stepped out of
-(`dial-detent`, 0.024), the stage's two-note chime as a round comes up on the screen — opened
-or joined (`stage-chime`, 0.035) — and a console's ready chirp as somebody of the crew says
-ready (`console-ready`, 0.03). None plays before the gesture or with the sound switched off.
+**One piece of music at a time** (`musicTurn.ts`): the menu's theme, the end card's sting and theme,
+the opening's cue and the run's stems never play over each other on the music's bus. A piece that
+goes holds the bus until its fade has died — the menu's theme 0.6 s as the run starts, the end
+card's theme 1 s as its card goes, the run's stems 1.5 s at its end, the cue its skip's 1.5 s — and
+a piece that comes starts no sooner: the opening's cue comes in where the opening then stands, the
+stems on their first bar after it, the menu's theme in a lobby after the end card's has gone. The
+hum and the interface's sounds are no music and wait for nothing.
 
-**Awaiting their render.** The theme and the hum are written into the catalog
-(`audio/catalog.json`) and listed in `AWAITING_RENDER` (`test/sampleManifest.test.ts`); until
-they are made the menu plays the interface's sounds alone, and the walkthrough logs „no theme
-(awaiting its render?)". In `packages/client`, the hum in three takes and the theme in one —
-some 120 and 1,296 credits:
+**The interface's sounds** are recordings the lab already has, each played once into the effects'
+bus under the theme: a tick as an item lights (`ui-tick`, 0.012 at the master gain — no oftener than
+every 50 ms, so that a held arrow ticks along and never buzzes), a toggle's clack as one is taken
+(`toggle-clack`, 0.03), a dial's detent as a panel is stepped out of (`dial-detent`, 0.024), the
+stage's two-note chime as a round comes up on the screen — opened or joined (`stage-chime`, 0.035) —
+and a console's ready chirp as somebody of the crew says ready (`console-ready`, 0.03). None plays
+before the gesture or with the sound switched off.
+
+## The end cards (`endTheme.ts`)
+
+The card a run ends on keeps its sting (`playSting`, Music that breathes) and has a theme after it,
+as a film's end does: half a second after the sting has ended (`THEME_GAP_S`), `end-won` — the
+four-note motif resolved into C major on soft electric piano and warm strings, coming to rest on a
+long held chord — or `end-lost` — a low, slow drone of bowed bass and dark synth, a few low piano
+notes far apart, sinking into silence. Each lasts 32 s and plays once through, not looped (the
+catalog's kind `theme`, 30 to 40 s). It streams on the music's bus at the stems' level, so the
+Leitstelle's voice pulls it 8 dB down as it does the run's music, and takes one voice of the budget
+while it plays. It goes with its card — the crew on to another run, back to the lobby or out —
+fading over 1 s and holding the bus until then, so the lobby's theme comes in only after it. The
+sting waits for the bus as well: the run's music has faded by the time the card comes.
+
+A theme is made at 128 kbit/s, not the music's 192 (scripts/sfx.ts `THEME_FORMAT`): the music's
+folder is held to 8 MB, its five recordings take 5.4, and the menu's theme at 192 kbit/s, 60 s,
+takes 1.4 more; the two themes at 128 take 1.0, which leaves the folder 0.2 MB. A test holds the
+plan to the caps before anything is made (`test/sampleManifest.test.ts`: each folder's files and its
+entries awaiting their render, at their rates, within its cap).
+
+**Awaiting their render.** The menu's theme, the hum and the two end themes are written into the
+catalog (`audio/catalog.json`) and listed in `AWAITING_RENDER`; until they are made the menu plays
+the interface's sounds alone, the end card its sting alone, and the walkthrough logs „no theme
+(awaiting its render?)". In `packages/client`, the hum in three takes and the three pieces of music
+in one each — some 120 credits for the hum, 1,080 for the menu's theme and 576 for each end theme,
+2,352 in all:
 
 ```sh
 node --env-file=/Users/uros/Documents/Req.Eng./escapelab/.env.local scripts/sfx.ts \
   --candidates 3 --only bed-facility
 node --env-file=/Users/uros/Documents/Req.Eng./escapelab/.env.local scripts/sfx.ts \
-  --only menu-theme
+  --only menu-theme,end-won,end-lost
 ```
 
-Then empty both from `AWAITING_RENDER`. `test/menuSound.test.tsx` holds the gesture — no
-context made before it —, the buses and the 2 s fades, the switch, the end with the run, the
-crew's duck and the interface's sounds; the walkthrough checks the lamp lit before the first
-key, the sound playing after it, the lobby's chime and chirp heard, and all of it gone in the
-run (tools/shots.mjs `menuSoundAtFirstKey`, `menuSoundAfterStart`).
+Then empty the four from `AWAITING_RENDER`. `test/menuSound.test.tsx` holds the gesture — no context
+made before it —, the buses and the 2 s fades, the lobby's weight, the start without a gesture after
+a run, the switch, the end with the run, the crew's duck, the bus held and waited for, and the
+interface's sounds; `test/endTheme.test.ts` the sting and the theme after it, its level and voice,
+its fade with the card and the bus held, no theme for a card gone or a theme not made;
+`test/music.test.ts` and `test/introCue.test.ts` the stems and the cue waiting for the bus. The
+walkthrough checks the lamp lit before the first key, the sound playing after it, the lobby's
+weight, chime and chirp, all of it gone in the run, the won card asking for its music and its music
+gone as the next run opens (tools/shots.mjs `menuSoundAtFirstKey`, `menuSoundAfterStart`,
+`checkEndMusic`, `checkEndMusicGone`).
+
+## Lizenz
+
+Every sound the game ships, where it comes from and on what terms, as of 2026-11-13. No stock music,
+no sample library and no third-party recording is used: every recording was generated from this
+repo's catalog and mission lines, under the account's own ElevenLabs plan, and the rest is
+synthesised by the game as it plays.
+
+| What | Where | Made by | When | Terms |
+| --- | --- | --- | --- | --- |
+| 82 effects and beds | `public/sfx/` | ElevenLabs text to sound effects | 2026-10-26 to 2026-11-04 | paid Creator plan: commercial use, no credit |
+| 5 pieces of music: 3 stems, 2 stings | `public/music/` | Eleven Music | 2026-10-26 | paid Creator plan, Eleven Music's terms (below) |
+| The opening's cue | `public/intro/title.mp3` | Eleven Music | 2026-10-26 | as the music |
+| 52 lines of the Leitstelle | `public/voice/` | ElevenLabs text to speech, the library voice „Helmut" | 47 on 2026-10-25, 5 on 2026-10-26 | see below |
+| Kalam, the notepad's hand | `public/fonts/` | Indian Type Foundry, 2014 | shipped since 2026-11-01 | SIL Open Font License 1.1, its text beside it |
+| Michroma, the title's face | `public/fonts/` | Vernon Adams, 2011 | shipped since 2026-11-13 | SIL Open Font License 1.1, its text beside it |
+| Caveat, the last shift's hand | Google Fonts, loaded by the page | Pablo Impallari | not shipped | SIL Open Font License 1.1 |
+
+**ElevenLabs' terms.** Whatever the account makes while it holds a paid plan it may use
+commercially, for good — also after the plan ends — and without naming ElevenLabs; whatever it makes
+outside a paid plan needs the credit „elevenlabs.io" wherever it is shown and may not be used
+commercially, even after an upgrade (ElevenLabs help centre, „What happens to my content after my
+subscription ends?"). Eleven Music's own terms (last updated 2026-10-09) allow commercial use on
+every paid plan except in film, TV, radio and „Studio Games": commercial games that are no Indie
+Game, an Indie Game having earned under 500,000 USD since its first release and coming from a maker
+that earned under 1,000,000 USD from all its games. So EscapeLab may use its music commercially as
+long as it stays an Indie Game; beyond that, Eleven Music's Enterprise terms would be needed. The
+paid Creator plan is on record from 2026-10-26: the render script that guards 40,000 credits and the
+first render of the effects and music, which spent 4,678 credits that day.
+
+**The Leitstelle's 47 lines of 2026-10-25** were recorded the evening before that record, when the
+voice section of this document still reckoned with the free plan and its credit. The repo does not
+say which plan the account held then. Recorded on the free plan, they need the credit
+„elevenlabs.io" and may not be used commercially; recorded on the paid plan, they are as free as the
+rest. Recording them again settles it, some 4,000 characters, every line by the same voice:
+`VOICE_ENGINE=elevenlabs pnpm --filter @escapelab/client voice --fresh`. A library voice can carry
+conditions of its own, which its page in the Voice Library names.
+
+**Made as the game plays.** The radio's chain and the static under its voice, the rooms' answers
+(their impulse responses, `reverb.ts`), the meter's hum and the colour game's tones are synthesised
+by the game's own code and carry no one else's rights. Piper and its voices, which recorded the
+lines before Helmut did, are build tools that never ship.
 
 ## Open
 
 What the sound packages left for later, one line each, the newest first:
 
-- **The menu's theme and the facility's hum await a render** (S-menu): written into the catalog,
-  listed in `AWAITING_RENDER`; the commands are under „The menu" (some 1,416 credits). Until
-  they run the menu sounds its interface alone.
+- **The menu's theme, the end cards' two themes and the facility's hum await a render** (S-menu):
+  written into the catalog, listed in `AWAITING_RENDER`; the commands are under „The end cards"
+  (some 2,352 credits). Until they run the menu sounds its interface alone and an end card its
+  sting.
+- **The Leitstelle's 47 lines of 2026-10-25** (S-menu, „Lizenz"): the repo does not record the
+  plan they were made on; recorded again on the paid plan, they are licensed as the rest.
 
 - **Twelve recordings await a render** (L-sound): the linoleum and steel steps, both door
   closes, the alarm's sting, the drone's fly-by, the hatch's landing and the settings' tick.

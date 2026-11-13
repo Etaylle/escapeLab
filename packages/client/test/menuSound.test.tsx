@@ -33,15 +33,22 @@ function fakeWindow() {
   };
 }
 
-/** The sound's modules afresh, the theme 72 s and the hum, both rendered, served. */
+/** The sound's modules afresh, the theme 60 s and the hum, both rendered, served. */
 async function fresh() {
   vi.resetModules();
-  serveSamples({ 'menu-theme': { seconds: 72 } });
+  serveSamples({ 'menu-theme': { seconds: 60 } });
   const sound = await import('../src/world/menuSound.js');
   const audio = await import('../src/world/audio.js');
   const mix = await import('../src/world/mix.js');
-  return { sound, audio, mix };
+  const turn = await import('../src/world/musicTurn.js');
+  return { sound, audio, mix, turn };
 }
+
+/** The theme's out on the music's bus: the gain its fades move. */
+const themeOut = (music: FakeNode): FakeGain | undefined =>
+  lastContext()
+    .all<FakeGain>('gain')
+    .find((node) => node.outputs.includes(music));
 
 /** The sources started of the recording `id`. */
 const sourcesOf = (id: string): FakeBufferSource[] =>
@@ -67,7 +74,7 @@ describe('the menu’s sound', () => {
   it('waits for the first click or key — no context made before — and comes in at it', async () => {
     const page = fakeWindow();
     const { sound } = await fresh();
-    sound.wantMenuSound(true);
+    sound.wantMenuSound('menu');
     expect(sound.menuSoundState()).toBe('waiting');
     sound.uiSound('select');
     expect(FakeContext.made).toHaveLength(0);
@@ -90,7 +97,7 @@ describe('the menu’s sound', () => {
   it('brings the theme in on the music’s bus, the hum on the rooms’, over 2 s each', async () => {
     const page = fakeWindow();
     const { sound, audio } = await fresh();
-    sound.wantMenuSound(true);
+    sound.wantMenuSound('menu');
     page.fire('keydown');
     await vi.advanceTimersByTimeAsync(600);
     const engine = audio.audioEngine() as unknown as { music: FakeNode; ambience: FakeNode };
@@ -112,7 +119,7 @@ describe('the menu’s sound', () => {
     const page = fakeWindow();
     const { sound, audio } = await fresh();
     audio.setMuted(true);
-    sound.wantMenuSound(true);
+    sound.wantMenuSound('menu');
     expect(sound.menuSoundState()).toBe('muted');
     page.fire('keydown');
     expect(FakeContext.made).toHaveLength(0);
@@ -132,14 +139,45 @@ describe('the menu’s sound', () => {
 });
 
 describe('the menu’s sound in the lobby and at the run’s start', () => {
+  it('keeps the theme into the lobby 6 dB down over 1.5 s, and brings it back up', async () => {
+    const page = fakeWindow();
+    const { sound, audio } = await fresh();
+    sound.wantMenuSound('menu');
+    page.fire('keydown');
+    await vi.advanceTimersByTimeAsync(600);
+    const engine = audio.audioEngine() as unknown as { music: FakeNode };
+    const out = themeOut(engine.music);
+    lastContext().currentTime = 20;
+    sound.wantMenuSound('lobby');
+    expect(sound.LOBBY_WEIGHT).toBe(0.5);
+    expect(out?.gain.ramps().at(-1)).toEqual([MUSIC_LEVEL * 0.5, 20 + sound.WEIGHT_S]);
+    expect(sound.menuSoundProbe()).toMatchObject({ state: 'playing', place: 'lobby' });
+    // The same theme plays on: nothing starts anew.
+    expect(streaming()).toHaveLength(1);
+    lastContext().currentTime = 30;
+    sound.wantMenuSound('menu');
+    expect(out?.gain.ramps().at(-1)).toEqual([MUSIC_LEVEL, 30 + sound.WEIGHT_S]);
+  });
+
+  it('comes in at once in a lobby after a run, the context awake, no gesture waited', async () => {
+    fakeWindow();
+    const { sound, audio } = await fresh();
+    // The run before made the context and woke it.
+    const engine = audio.audioEngine() as unknown as { music: FakeNode };
+    sound.wantMenuSound('lobby');
+    expect(sound.menuSoundState()).toBe('playing');
+    const now = lastContext().currentTime;
+    expect(themeOut(engine.music)?.gain.ramps()).toEqual([[MUSIC_LEVEL * 0.5, now + 2]]);
+  });
+
   it('fades out and lets everything go as the run starts, its loops given back', async () => {
     const page = fakeWindow();
     const { sound, audio } = await fresh();
-    sound.wantMenuSound(true);
+    sound.wantMenuSound('menu');
     page.fire('pointerdown');
     await vi.advanceTimersByTimeAsync(600);
     expect(audio.inUse().loop).toBe(2);
-    sound.wantMenuSound(false);
+    sound.wantMenuSound(null);
     expect(sound.menuSoundState()).toBe('off');
     await vi.advanceTimersByTimeAsync(1000);
     expect(streaming()).toHaveLength(0);
@@ -150,7 +188,7 @@ describe('the menu’s sound in the lobby and at the run’s start', () => {
   it('stands pulled down while the crew speaks in the lobby, and comes back after', async () => {
     const page = fakeWindow();
     const { sound, audio, mix } = await fresh();
-    sound.wantMenuSound(true);
+    sound.wantMenuSound('menu');
     page.fire('pointerdown');
     await vi.advanceTimersByTimeAsync(600);
     const engine = audio.audioEngine();
@@ -167,7 +205,7 @@ describe('the menu’s sound in the lobby and at the run’s start', () => {
   it('ticks, clacks and chimes only while it plays, a tick no oftener than 50 ms', async () => {
     const page = fakeWindow();
     const { sound } = await fresh();
-    sound.wantMenuSound(true);
+    sound.wantMenuSound('menu');
     page.fire('pointerdown');
     await vi.advanceTimersByTimeAsync(600);
     sound.uiSound('select');
@@ -196,7 +234,7 @@ describe('the sound switch on the menu', () => {
     // The switch as the top bar draws it (App.tsx `TopBar`), off the modules just made afresh.
     const { SoundSwitch, SOUND_WAITS } = await import('../src/screens/SoundSwitch.js');
     const bar = (menu: boolean): string => renderToStaticMarkup(<SoundSwitch menu={menu} />);
-    sound.wantMenuSound(true);
+    sound.wantMenuSound('menu');
     expect(bar(true)).toContain(
       `<button class="sound-toggle sound-toggle--waiting" title="${SOUND_WAITS}"`,
     );

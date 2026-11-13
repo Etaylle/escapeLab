@@ -4,6 +4,7 @@ import {
   fadeTo,
   gain,
   isMuted,
+  liveEngine,
   LOOKAHEAD,
   outlet,
   playLoop,
@@ -23,6 +24,7 @@ import {
   type Stream,
 } from './audioStream.js';
 import { duck, unduck } from './mix.js';
+import { holdMusic, musicFrom } from './musicTurn.js';
 import {
   barOf,
   MUSIC_LEVEL,
@@ -50,12 +52,16 @@ import {
  * hum under it, a bed of its own (`bed-facility`) on the rooms' bus; and the interface's sounds,
  * recordings the lab has already: a tick as an item lights, a clack as one is taken, a detent as
  * a panel is stepped out of, the stage's chime as a round opens, a console's chirp as somebody
- * of the crew says ready. No sound may start before a gesture: the first click, tap or key makes
- * the context and brings the theme and the hum in over FADE_IN_S; until then the menu says it
- * waits (`menuSoundState`), which the top bar's speaker shows. With the sound switched off
- * nothing streams. The crew's voice in the lobby pulls both down as mission control's pulls the
- * run's music; the run's start ends them. An entry not rendered yet plays nothing. Nothing here
- * throws.
+ * of the crew says ready. The lobby keeps the theme and the hum, the theme LOBBY_WEIGHT down
+ * over WEIGHT_S: from the menu to the lobby the music only changes its weight. No sound may
+ * start before a gesture: the first click, tap or key makes the context and brings the theme and
+ * the hum in over FADE_IN_S — at once where a run before has woken the context — and until then
+ * the menu says it waits (`menuSoundState`), which the top bar's speaker shows. The theme waits
+ * for the music's bus, as every piece of music does, and holds it while it goes (musicTurn.ts):
+ * it never plays over the end card's theme, the opening's cue or the run's stems. With the
+ * sound switched off nothing streams. The crew's voice in the lobby pulls both down as mission
+ * control's pulls the run's music; the run's start ends them. An entry not rendered yet plays
+ * nothing. Nothing here throws.
  */
 
 /** The title theme, by its id in the catalog and the music's manifest. */
@@ -91,7 +97,11 @@ const THEME_LEVEL = MUSIC_LEVEL;
 const HUM_LEVEL = 0.02;
 /** How long the theme and the hum take to come in, and to go, s. */
 export const FADE_IN_S = 2;
-const FADE_OUT_S = 0.6;
+export const FADE_OUT_S = 0.6;
+/** The theme's weight in the lobby against the menu's: 6 dB down. */
+export const LOBBY_WEIGHT = 0.5;
+/** How long the theme takes to change its weight between the menu and the lobby, s. */
+export const WEIGHT_S = 1.5;
 /** How often the theme's passes are tended, ms; how far ahead a pass is told to start, s. */
 const TEND_MS = 100;
 const READY_S = 1;
@@ -104,6 +114,9 @@ const GESTURES = ['pointerdown', 'keydown', 'touchend'] as const;
 
 /** Where the menu's sound stands: not wanted, waiting for a gesture, playing, or switched off. */
 export type MenuSoundState = 'off' | 'waiting' | 'playing' | 'muted';
+
+/** Where the menu's sound is wanted: on the menu, or in the lobby at the lobby's weight. */
+export type MenuPlace = 'menu' | 'lobby';
 
 /** The theme as it plays: its level, its file once fetched, its two elements and their passes. */
 interface Theme {
@@ -130,7 +143,8 @@ interface Playing {
   readonly loops: boolean;
 }
 
-let wanted = false;
+/** Where the sound is wanted; null where it is not. */
+let place: MenuPlace | null = null;
 let state: MenuSoundState = 'off';
 let playing: Playing | null = null;
 let armed = false;
@@ -163,39 +177,61 @@ export function subscribeMenuSound(listener: () => void): () => void {
 }
 
 /**
- * The menu's sound is wanted (`on`: the menu or the lobby is up) or not (a run, the audience):
- * it waits for a gesture, plays, or fades out and lets everything go.
+ * The menu's sound is wanted where `where` says — on the menu, or in the lobby at its weight —
+ * or nowhere (null: a run, the audience): it waits for a gesture, plays, moves its weight, or
+ * fades out and lets everything go.
  */
-export function wantMenuSound(on: boolean): void {
+export function wantMenuSound(where: MenuPlace | null): void {
   try {
     unmute ??= subscribeMuted(muteChanged);
-    wanted = on;
-    if (on) {
-      begin();
-    } else {
+    const was = place;
+    place = where;
+    if (where === null) {
       end();
       setState('off');
+      return;
     }
+    if (playing !== null && was !== where) weigh(playing, where);
+    begin();
   } catch {
     // Deliberately silent: the menu's sound is flavour.
   }
+}
+
+/** The theme's level where the sound is wanted at `where`. */
+function levelOf(where: MenuPlace | null): number {
+  return where === 'lobby' ? THEME_LEVEL * LOBBY_WEIGHT : THEME_LEVEL;
+}
+
+/** The theme moves to the weight of `where` over WEIGHT_S — after its coming in, if still due. */
+function weigh(p: Playing, where: MenuPlace): void {
+  const { theme } = p;
+  const now = p.engine.ctx.currentTime;
+  const start = Math.max(now, theme.fade.start);
+  const end = Math.max(start + WEIGHT_S, theme.fade.end);
+  theme.fade = fadeTo(theme.out.gain, theme.fade, now, [start, end], levelOf(where));
 }
 
 /** The sound switch moved: off ends the sound, on brings it back where it is wanted. */
 function muteChanged(): void {
   if (isMuted()) {
     end();
-    if (wanted) setState('muted');
-  } else if (wanted) {
+    if (place !== null) setState('muted');
+  } else if (place !== null) {
     begin();
   }
 }
 
-/** Starts the sound where the context runs; else waits for the first gesture. */
+/** Starts the sound where the context runs already — a run woke it; else waits for a gesture. */
 function begin(): void {
   if (playing !== null) return;
   if (isMuted()) {
     setState('muted');
+    return;
+  }
+  const live = liveEngine();
+  if (live !== null) {
+    start(live);
     return;
   }
   setState('waiting');
@@ -215,24 +251,29 @@ function armGestures(on: boolean): void {
 /** The first gesture: the context made — within it, so that it may run — and the sound started. */
 function onGesture(): void {
   armGestures(false);
-  if (!wanted || isMuted() || playing !== null) return;
+  if (place === null || isMuted() || playing !== null) return;
   const engine = audioEngine();
   if (engine === null) return;
   const go = (): void => {
-    if (wanted && !isMuted() && playing === null) start(engine);
+    if (place !== null && !isMuted() && playing === null) start(engine);
   };
   if (engine.ctx.state === 'running') go();
   else void engine.ctx.resume().then(go, () => undefined);
 }
 
-/** The theme and the hum coming in on `engine`, and the interface's recordings asked for. */
+/**
+ * The theme and the hum coming in on `engine` — the theme once the music's bus is free — and the
+ * interface's recordings asked for.
+ */
 function start(engine: Engine): void {
+  armGestures(false);
   const { ctx } = engine;
   const level = gain(ctx, 1);
   const out = outlet(ctx, engine.music, 0);
   level.connect(out);
   const now = ctx.currentTime;
-  const fade = fadeTo(out.gain, still(0), now, [now, now + FADE_IN_S], THEME_LEVEL);
+  const from = musicFrom(now);
+  const fade = fadeTo(out.gain, still(0), now, [from, from + FADE_IN_S], levelOf(place));
   const none = { entry: null, file: null, decks: [], passes: [], next: null };
   const theme: Theme = { out, level, fade, ...none };
   const timer = setInterval(() => tendTheme(), TEND_MS);
@@ -287,7 +328,7 @@ function tendTheme(): void {
   if (theme.file === null || theme.entry === null || ctx.state !== 'running') return;
   openDecks(theme, ctx, theme.file);
   const now = ctx.currentTime;
-  theme.next ??= now + PREPARE_S;
+  theme.next ??= musicFrom(now + PREPARE_S);
   if (theme.next - now < READY_S) startPass(p, theme.entry);
   for (const pass of theme.passes) steer(pass.stream, ctx);
 }
@@ -331,6 +372,7 @@ function end(): void {
   const { ctx } = p.engine;
   const now = ctx.currentTime;
   p.theme.fade = fadeTo(p.theme.out.gain, p.theme.fade, now, [now, now + FADE_OUT_S], 0);
+  holdMusic(now + FADE_OUT_S);
   p.hum?.level.gain.cancelScheduledValues(now);
   p.hum?.level.gain.setTargetAtTime(0, now, FADE_OUT_S / 4);
   p.hum?.source.stop(now + FADE_OUT_S + 0.05);
@@ -385,6 +427,8 @@ export function uiSound(kind: UiSound): void {
 /** What the walkthrough reads of the menu's sound (`window.__escapelab.menuSound`). */
 export interface MenuSoundProbe {
   state: MenuSoundState;
+  /** where it is wanted: the menu, the lobby at its weight; null where it is not */
+  place: MenuPlace | null;
   /** a pass of the theme plays; false while it is not rendered, or not yet in */
   theme: boolean;
   hum: boolean;
@@ -397,6 +441,7 @@ export interface MenuSoundProbe {
 export function menuSoundProbe(): MenuSoundProbe {
   return {
     state,
+    place,
     theme: (playing?.theme.passes.length ?? 0) > 0,
     hum: playing?.hum != null,
     ducked,

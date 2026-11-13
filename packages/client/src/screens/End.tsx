@@ -12,7 +12,7 @@ import { useRunPlaques } from '../achievements.js';
 import { reportLine } from '../radio.js';
 import { clock } from '../runStats.js';
 import { endingOf, type Ending } from '../world/finale.js';
-import { playSting } from '../world/music.js';
+import { playEnding, stopEnding } from '../world/endTheme.js';
 import { CreditsTable } from './Crew.js';
 import { CrewFigure } from './CrewFigure.js';
 import { Icon, type IconName } from './Icon.js';
@@ -94,15 +94,18 @@ export interface TitleCardProps {
  * side by side outside on the pavement, the open door behind them, and the
  * won sting swells; lost, it stands in the dark lab under the red of an
  * emergency lamp, and the lost sting sinks (music.ts `playSting`). Where this
- * screen played the end, the card comes up out of its fade with its sting.
+ * screen played the end, the card comes up out of its fade with its sting and
+ * the ending's theme after it, which goes with the card (world/endTheme.ts).
  */
 export function TitleCard(props: TitleCardProps) {
   const { ending, fresh } = props;
   const won = ending === 'won';
   useEffect(() => {
-    if (fresh) {
-      playSting(won ? 'won' : 'lost');
+    if (!fresh) {
+      return undefined;
     }
+    playEnding(won ? 'won' : 'lost');
+    return () => stopEnding();
   }, [fresh, won]);
   const title = ENDING_TITLES[ending];
   const tone = won ? 'won' : ending === 'lost:alarms' ? 'alarms' : 'time';

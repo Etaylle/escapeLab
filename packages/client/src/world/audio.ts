@@ -220,6 +220,14 @@ export function playingEngine(): Engine | null {
   }
 }
 
+/**
+ * The engine where its context runs already — a run before has woken it — and null otherwise:
+ * never made or nudged here, so that no context comes before a gesture (menuSound.ts).
+ */
+export function liveEngine(): Engine | null {
+  return engine !== null && engine.ctx.state === 'running' ? engine : null;
+}
+
 function readStoredMute(): boolean {
   try {
     return localStorage.getItem(MUTE_STORAGE_KEY) === '1';

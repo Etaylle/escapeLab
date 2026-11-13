@@ -112,6 +112,7 @@ describe('the listing', () => {
       'Räume und Schleifen',
       'Musik',
       'Endkarte',
+      'Nach der Endkarte',
     ]);
     const listed = sections.flatMap((section) => section.rows.map((row) => row.sound.id));
     expect(listed.sort()).toEqual(catalog.map((sound) => sound.id).sort());
@@ -119,7 +120,13 @@ describe('the listing', () => {
     for (const section of sections) {
       expect(section.rows.every((row) => row.sound.kind === section.kind)).toBe(true);
     }
-    expect(SECTIONS.map((section) => section.kind)).toEqual(['oneshot', 'bed', 'stem', 'sting']);
+    expect(SECTIONS.map((section) => section.kind)).toEqual([
+      'oneshot',
+      'bed',
+      'stem',
+      'sting',
+      'theme',
+    ]);
   });
 
   it('gives each sound its recording, and hears its floor as the sound script does', () => {

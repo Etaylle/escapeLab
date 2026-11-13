@@ -8,11 +8,12 @@
  *   pnpm --filter client sfx -- --candidates 3  each made three times, the best take kept
  *
  * audio/catalog.json lists every sound the game plays: its id, its kind — a one-shot, a bed that
- * loops seamlessly, a stem of the music or a sting — what ElevenLabs is asked for (an English
- * prompt and a length), whether it loops, the loudness it is brought to and where the game plays
- * it. An effect comes from text-to-sound-effects (`eleven_text_to_sound_v2`, a bed as a seamless
- * loop) as MP3 at 44.1 kHz and 128 kbit/s, a piece of music from Eleven Music, instrumental, at
- * 192 kbit/s; each into public/sfx/<id>.mp3 or public/music/<id>.mp3. public/sfx/manifest.json
+ * loops seamlessly, a stem of the music, a sting or a theme played once — what ElevenLabs is
+ * asked for (an English prompt and a length), whether it loops, the loudness it is brought to and
+ * where the game plays it. An effect comes from text-to-sound-effects (`eleven_text_to_sound_v2`,
+ * a bed as a seamless loop) as MP3 at 44.1 kHz and 128 kbit/s, a piece of music from Eleven
+ * Music, instrumental, at 192 kbit/s — a theme at 128, for the music's folder to hold it; each
+ * into public/sfx/<id>.mp3 or public/music/<id>.mp3. public/sfx/manifest.json
  * and public/music/manifest.json list each as { file, ms, gain, startMs, floor, rms, loop, hash,
  * influence, bpm, source }: `hash` names the request that made it — `influence` how closely an
  * effect followed its prompt, `bpm` a stem's tempo as its prompt states it — so an entry whose
@@ -28,7 +29,8 @@
  *
  * The files stay as ElevenLabs made them. afconvert decodes each into a temporary folder, its
  * peak and RMS are measured there, and `gain` is what brings it to its target — a one-shot's peak
- * to −3 dBFS, a bed's or a stem's RMS to −20 dBFS, a sting's to −14 dBFS — for the game to apply;
+ * to −3 dBFS, a bed's, a stem's or a theme's RMS to −20 dBFS, a sting's to −14 dBFS — for the game
+ * to apply;
  * more than 30 ms of silence at the start becomes `startMs`, except in a bed, whose loop keeps its
  * start. `floor` is the RMS of its quietest 100 ms: where that is a gap in the sound and comes out
  * louder than −50 dBFS once the gain is applied, the take plays its noise floor where it is heard
@@ -70,8 +72,11 @@ import {
   type SoundClient,
 } from './elevenlabs.ts';
 
-/** What a sound is: a one-shot, a bed that loops seamlessly, a stem of the music, a sting. */
-export type Kind = 'oneshot' | 'bed' | 'stem' | 'sting';
+/**
+ * What a sound is: a one-shot, a bed that loops seamlessly, a stem of the music, a sting, or a
+ * theme — a piece of music played once through, as an end card's.
+ */
+export type Kind = 'oneshot' | 'bed' | 'stem' | 'sting' | 'theme';
 /** Where a sound is made and kept: the effects (public/sfx/) or the music (public/music/). */
 export type Group = 'sfx' | 'music';
 export const GROUPS: readonly Group[] = ['sfx', 'music'];
@@ -141,6 +146,11 @@ export const MANIFEST = 'manifest.json';
 export const SFX_FORMAT = 'mp3_44100_128';
 /** Music as MP3 at 44.1 kHz and 192 kbit/s, as the Creator plan gives it: 24 kB a second. */
 export const MUSIC_FORMAT = 'mp3_44100_192';
+/**
+ * A theme played once, at the effects' 128 kbit/s, 16 kB a second: the music's folder holds
+ * 8 MB (FOLDER_CAPS), which the looped stems at 192 take the most of.
+ */
+export const THEME_FORMAT = 'mp3_44100_128';
 /** The effects' model, the one that makes a seamless loop. */
 export const SFX_MODEL = 'eleven_text_to_sound_v2';
 /** The music's model: Eleven Music's newest. */
@@ -194,6 +204,7 @@ export const TARGETS: Readonly<Record<Kind, Target>> = {
   bed: { measure: 'rms', dbfs: -20 },
   stem: { measure: 'rms', dbfs: -20 },
   sting: { measure: 'rms', dbfs: -14 },
+  theme: { measure: 'rms', dbfs: -20 },
 };
 /** How long each kind may last, s: ElevenLabs' bounds for an effect; the music's own. */
 export const LENGTHS: Readonly<Record<Kind, readonly [number, number]>> = {
@@ -201,6 +212,7 @@ export const LENGTHS: Readonly<Record<Kind, readonly [number, number]>> = {
   bed: [0.5, 30],
   stem: [60, 90],
   sting: [8, 12],
+  theme: [30, 40],
 };
 
 // --- the catalog ----------------------------------------------------------------------------
@@ -291,9 +303,17 @@ export function checkCatalog(catalog: readonly CatalogEntry[]): readonly Catalog
   return catalog;
 }
 
-/** Where an entry is made and kept: a stem or a sting with the music, the rest with the effects. */
+/** Where an entry is made and kept: a stem, a sting or a theme with the music, the rest apart. */
 export function groupOf(entry: Pick<CatalogEntry, 'kind'>): Group {
-  return entry.kind === 'stem' || entry.kind === 'sting' ? 'music' : 'sfx';
+  const music: readonly Kind[] = ['stem', 'sting', 'theme'];
+  return music.includes(entry.kind) ? 'music' : 'sfx';
+}
+
+/** The format a piece of music is made in: the music's, or a theme's (THEME_FORMAT). */
+export function musicFormatOf(
+  entry: Pick<CatalogEntry, 'kind'>,
+): typeof MUSIC_FORMAT | typeof THEME_FORMAT {
+  return entry.kind === 'theme' ? THEME_FORMAT : MUSIC_FORMAT;
 }
 
 /** The file an entry is kept in, in its group's folder. */
@@ -325,7 +345,7 @@ export function musicRequest(entry: CatalogEntry): ElevenLabs.BodyComposeMusicV1
     musicLengthMs: Math.round(entry.durationSeconds * 1000),
     forceInstrumental: true,
     modelId: MUSIC_MODEL,
-    outputFormat: MUSIC_FORMAT,
+    outputFormat: musicFormatOf(entry),
   };
 }
 

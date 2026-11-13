@@ -8,6 +8,7 @@ import type { SoundSystem } from './world/audio.js';
 import type { GraphCensus } from './world/audioCount.js';
 import type { LightProbe } from './world/gl/path.js';
 import type { IntroProbe } from './world/intro/useIntro.js';
+import type { EndThemeProbe } from './world/endTheme.js';
 import type { SceneProbe } from './world/menu/stage.js';
 import type { MenuSoundProbe } from './world/menuSound.js';
 import type { MusicProbe } from './world/music.js';
@@ -160,6 +161,8 @@ export interface Probes {
   readonly scene?: SceneProbe;
   /** the menu's sound: waiting for a gesture or playing, its theme, its hum, the crew's duck */
   readonly menuSound?: MenuSoundProbe;
+  /** the end card's music: the ending its card asked for, the theme playing (world/endTheme.ts) */
+  readonly endTheme?: EndThemeProbe;
 }
 
 declare global {

@@ -100,8 +100,9 @@
  * (menu-join.png): it has to stand in capitals, in a field no browser fills from its passwords. In
  * the reconnect drill a new tab of Anna's browser, her run standing paused, opens the menu on the
  * run's card, first and lit, every other item dimmed (menu-bound.png). The menu's sound waits for
- * the first key, the speaker's lamp lit, and plays after it; the lobby chimes as the round comes up
- * and chirps as Ben says ready; the run's start ends it.
+ * the first key, the speaker's lamp lit, and plays after it; the lobby keeps it at its weight,
+ * chimes as the round comes up and chirps as Ben says ready; the run's start ends it. The won card
+ * asks for its sting and its theme (end music), which go as the next run opens.
  *
  * On the way, both open the Bestenliste from the menu (history.png,
  * history-phone.png): measured like the menu, at 1280×720 too, and on
@@ -6234,20 +6235,29 @@ async function menuSoundAtFirstKey(page, press) {
 }
 
 /**
- * The lobby's sounds on the host's page — the round's chime as it came up, the ready chirp as
- * the guest said ready — and the menu's sound gone once the run has started; or the run fails.
+ * The lobby's sounds on the host's page — the theme kept at the lobby's weight (`lobby`, the
+ * probe read there), the round's chime as it came up, the ready chirp as the guest said ready —
+ * and the menu's sound gone once the run has started; or the run fails.
  */
-async function menuSoundAfterStart(page) {
+async function menuSoundAfterStart(page, lobby) {
   const { state, played } = await menuSoundOf(page);
   const { opened = 0, ready = 0 } = played;
+  const kept = keptInLobby(lobby);
   console.log(
-    `menu sound         the run started: ${state}; in the lobby the round's chime ` +
-      `${opened}×, the ready chirp ${ready}×`,
+    `menu sound         in the lobby ${kept ? 'playing on at the lobby’s weight' : '!! not kept'}` +
+      `, the round's chime ${opened}×, the ready chirp ${ready}×; the run started: ${state}`,
   );
-  if (state !== 'off' || opened < 1 || ready < 1) {
-    fail(`menu sound: ${state} in the run, chime ${opened}×, chirp ${ready}×`);
+  if (!kept || state !== 'off' || opened < 1 || ready < 1) {
+    fail(`menu sound: ${lobby.state} in the lobby, ${state} in the run, ${opened}×, ${ready}×`);
   }
 }
+
+/** Whether the menu's sound played on in the lobby at its weight (`lobby`: the probe there). */
+const keptInLobby = (lobby) => lobby.state === 'playing' && lobby.place === 'lobby';
+
+/** The end card's music off the page's probe (client world/endTheme.ts). */
+const endThemeOf = (page) =>
+  page.evaluate(() => globalThis.__escapelab?.endTheme ?? { asked: '!! no probe', playing: null });
 
 /** The menu's quiet window holds the screen's pace under SHOTS_SOFTWARE_GL, ms p95. */
 const MENU_P95_MS = 16.8;
@@ -10048,6 +10058,20 @@ async function captureEnd(host, watcher) {
   if (says !== 'GESCHAFFT' || figures !== 2 || audience !== 'GESCHAFFT' || crowd !== 2) {
     fail(`won.png: "${says}", ${figures} figures, the audience's card "${audience}" (${crowd})`);
   }
+  await checkEndMusic(host.page);
+}
+
+/**
+ * The won card's music on the host's page: its card asked for the won sting and theme — the
+ * theme playing, or none while it awaits its render — or the run fails.
+ */
+async function checkEndMusic(page) {
+  const { asked, playing } = await endThemeOf(page);
+  const theme = playing ?? 'no theme (awaiting its render?)';
+  console.log(`end music          the card asked for its ${asked} sting, then ${theme}`);
+  if (asked !== 'won') {
+    fail(`end music: the won card asked for ${asked}`);
+  }
 }
 
 /**
@@ -10087,6 +10111,16 @@ async function captureNextMission(host, guest) {
   );
   if (!label?.startsWith('Weiter: ') || beside !== 'Nochmal' || !confirmed || !opened || !lit) {
     fail(`next-mission.png: "${label}" beside "${beside}", ${next} opened ${opened}, lit ${lit}`);
+  }
+  await checkEndMusicGone(host.page);
+}
+
+/** The end card's music gone with its card once the next run is up; or the run fails. */
+async function checkEndMusicGone(page) {
+  const { asked } = await endThemeOf(page);
+  console.log(`end music          ${asked === null ? 'gone with its card' : `!! still ${asked}`}`);
+  if (asked !== null) {
+    fail(`end music: the next run still holds the ${asked} card's music`);
   }
 }
 
@@ -11570,6 +11604,8 @@ async function run() {
   await captureMenu(host);
   await captureHistory(host, 'history');
   await openMissionRound(host);
+  // The lobby keeps the menu's sound at its own weight (checked as the run starts).
+  const lobbySound = await menuSoundOf(host);
   await host.locator('.room-code strong').waitFor({ timeout: 10_000 });
   const code = (await host.locator('.room-code strong').innerText()).trim();
   console.log('room code:', code, `(${MISSION})`);
@@ -11641,7 +11677,7 @@ async function run() {
     { name: 'Ben', page: guest, seen: guestSeen },
   );
   await opening;
-  await menuSoundAfterStart(host);
+  await menuSoundAfterStart(host, lobbySound);
   await sleep(500); // presence follows the start within a tick
   if (guestSeen.view?.map == null || hostSeen.view?.map == null) {
     throw new Error('no running view on the sockets — does the client still talk on /ws?');

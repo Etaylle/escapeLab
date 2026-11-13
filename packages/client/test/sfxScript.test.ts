@@ -18,12 +18,14 @@ import {
   heardDbfs,
   influencesFor,
   LEAD_MS,
+  LENGTHS,
   lengthOff,
   loudnessOf,
   make,
   MASKED_WITHIN_DB,
   MIN_CREDITS,
   missesOf,
+  musicFormatOf,
   musicRequest,
   noisyTakes,
   offLength,
@@ -82,12 +84,13 @@ describe('the catalog', () => {
     expect(new Set(catalog.map((entry) => entry.id)).size).toBe(catalog.length);
   });
 
-  it('brings one-shots to a −3 dBFS peak, beds and stems to −20 dBFS RMS, stings to −14', () => {
+  it('brings one-shots to a −3 dBFS peak, the rest to −20 dBFS RMS, stings to −14', () => {
     expect(TARGETS).toEqual({
       oneshot: { measure: 'peak', dbfs: -3 },
       bed: { measure: 'rms', dbfs: -20 },
       stem: { measure: 'rms', dbfs: -20 },
       sting: { measure: 'rms', dbfs: -14 },
+      theme: { measure: 'rms', dbfs: -20 },
     });
     for (const entry of catalog) expect(entry.target, entry.id).toEqual(TARGETS[entry.kind]);
   });
@@ -102,6 +105,24 @@ describe('the catalog', () => {
     }
     const stings = catalog.filter((entry) => entry.kind === 'sting').map((entry) => entry.id);
     expect(stings).toEqual(['won', 'lost']);
+  });
+
+  it('has the end cards’ two themes: 30–40 s, played once, made at 128 kbit/s', () => {
+    const themes = catalog.filter((entry) => entry.kind === 'theme');
+    expect(themes.map((entry) => entry.id)).toEqual(['end-won', 'end-lost']);
+    expect(LENGTHS.theme).toEqual([30, 40]);
+    for (const theme of themes) {
+      expect([theme.loop, groupOf(theme)], theme.id).toEqual([false, 'music']);
+      expect(theme.durationSeconds).toBeGreaterThanOrEqual(30);
+      expect(theme.durationSeconds).toBeLessThanOrEqual(40);
+      expect(musicRequest(theme).outputFormat).toBe('mp3_44100_128');
+      expect(flawsOf({ ...theme, loop: true })).toEqual([
+        'loop has to be true for a bed or a stem, and false for the rest',
+      ]);
+    }
+    // The stems and stings keep 192 kbit/s, and with it the requests they were made from.
+    expect(musicFormatOf(CALM)).toBe('mp3_44100_192');
+    expect(musicFormatOf({ kind: 'sting' })).toBe('mp3_44100_192');
   });
 
   it('finds every flaw of an entry, and a twice-named id', () => {

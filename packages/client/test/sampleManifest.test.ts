@@ -8,10 +8,13 @@ import {
   FOLDER_CAPS,
   groupOf,
   MANIFEST,
+  musicFormatOf,
   noisyTakes,
   offLength,
   readCatalog,
+  SFX_FORMAT,
   upToDate,
+  type CatalogEntry,
   type Group,
   type Manifest,
 } from '../scripts/sfx.js';
@@ -29,14 +32,20 @@ const REMEDY = 'render it on a Mac: pnpm --filter client sfx (docs/sound.md)';
 /**
  * The entries whose recordings the user still has to render (they cost credits, which no agent
  * may spend): until then each plays another's recording (`standIn`) or none — the menu's hum
- * and theme (world/menuSound.ts) none. Render them in packages/client, then empty this list:
+ * and theme (world/menuSound.ts) and the end cards' themes (world/endTheme.ts) none. Render them
+ * in packages/client, then empty this list:
  *
  *   node --env-file=/Users/uros/Documents/Req.Eng./escapelab/.env.local scripts/sfx.ts \
  *     --candidates 3 --only bed-facility
  *   node --env-file=/Users/uros/Documents/Req.Eng./escapelab/.env.local scripts/sfx.ts \
- *     --only menu-theme
+ *     --only menu-theme,end-won,end-lost
  */
-const AWAITING_RENDER: readonly string[] = ['bed-facility', 'menu-theme'];
+const AWAITING_RENDER: readonly string[] = [
+  'bed-facility',
+  'menu-theme',
+  'end-won',
+  'end-lost',
+];
 const awaiting = new Set(AWAITING_RENDER);
 
 const catalog = readCatalog();
@@ -165,14 +174,33 @@ describe.each(['sfx', 'music'] as const)('the recordings in public/%s', (group) 
     expect(heard, `floors over ${AUDIBLE_FLOOR_DBFS} dBFS — ${remedy}`).toEqual([]);
   });
 
+  /** The bytes the folder's recordings take now. */
+  const filedBytes = (): number => {
+    const files = existsSync(DIRS[group])
+      ? readdirSync(DIRS[group]).filter((name) => name.endsWith('.mp3'))
+      : [];
+    return files.reduce((sum, file) => sum + statSync(join(DIRS[group], file)).size, 0);
+  };
+
   it('keep within the folder’s cap, and no file the manifest does not name', () => {
     const files = existsSync(DIRS[group])
       ? readdirSync(DIRS[group]).filter((name) => name.endsWith('.mp3'))
       : [];
     const named = new Set(Object.values(manifest).map((entry) => entry.file));
     expect(files.filter((file) => !named.has(file))).toEqual([]);
-    const bytes = files.reduce((sum, file) => sum + statSync(join(DIRS[group], file)).size, 0);
-    expect(bytes).toBeLessThanOrEqual(FOLDER_CAPS[group]);
+    expect(filedBytes()).toBeLessThanOrEqual(FOLDER_CAPS[group]);
     expect(FOLDER_CAPS).toEqual({ sfx: 3 * 1024 * 1024, music: 8 * 1024 * 1024 });
+  });
+
+  it('keep within it once the entries awaiting their render are made, each at its rate', () => {
+    // A format's kbit/s are 125 bytes a second each: an MP3 at a constant rate.
+    const rate = (entry: CatalogEntry): number => {
+      const format = group === 'sfx' ? SFX_FORMAT : musicFormatOf(entry);
+      return Number(format.split('_')[2]) * 125;
+    };
+    const planned = entries
+      .filter((entry) => awaiting.has(entry.id))
+      .reduce((sum, entry) => sum + entry.durationSeconds * rate(entry), 0);
+    expect(filedBytes() + planned).toBeLessThanOrEqual(FOLDER_CAPS[group]);
   });
 });

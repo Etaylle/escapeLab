@@ -1,5 +1,6 @@
 import { Activity, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { traceRequested } from './world/frameTrace.js';
+import { endThemeProbe } from './world/endTheme.js';
 import { menuSoundProbe, wantMenuSound } from './world/menuSound.js';
 import {
   difficultyInfos,
@@ -441,12 +442,14 @@ function useStage(conn: Connection, finale: Finale | null): boolean {
 }
 
 /**
- * The menu's sound (world/menuSound.ts): wanted off any room (`offRoom`) and in the lobby, gone
- * with a run; its probe on the page under `?trace=1`.
+ * The menu's sound (world/menuSound.ts): wanted off any room (`offRoom`), in the lobby at the
+ * lobby's weight, gone with a run; its probe on the page under `?trace=1`, and the end card's
+ * music's beside it (world/endTheme.ts).
  */
 function useMenuSound(conn: Connection, offRoom: boolean): void {
-  const on = offRoom || conn.view?.phase === 'lobby';
-  useEffect(() => wantMenuSound(on), [on]);
+  const lobby = conn.view?.phase === 'lobby' ? 'lobby' : null;
+  const where = offRoom ? 'menu' : lobby;
+  useEffect(() => wantMenuSound(where), [where]);
   useEffect(() => {
     if (!traceRequested(location.search)) {
       return undefined;
@@ -454,6 +457,9 @@ function useMenuSound(conn: Connection, offRoom: boolean): void {
     return addProbes({
       get menuSound() {
         return menuSoundProbe();
+      },
+      get endTheme() {
+        return endThemeProbe();
       },
     });
   }, []);
