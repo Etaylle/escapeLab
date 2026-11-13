@@ -3,6 +3,7 @@ import {
   applyAction,
   GameError,
   generateEdgework,
+  greySignLabel,
   stationKey,
   TOKENS,
   tokenLabel,
@@ -13,9 +14,12 @@ import type {
   Action,
   ConsoleId,
   GameState,
+  GreySign,
   ManualBlock,
   Mission,
   PuzzleContext,
+  PuzzleView,
+  ShownSign,
   SignalToken,
   Viewer,
 } from '../src/index.js';
@@ -120,7 +124,7 @@ const viewsOf = (def: SignalDef, state: SignalState) => ({
 });
 
 /** The sequence the receiving console has to press now, as the sending console shows it. */
-function shownSequence(def: SignalDef, state: SignalState): SignalToken[] {
+function shownSequence(def: SignalDef, state: SignalState): ShownSign[] {
   const sender = [AT_STATION, AT_CONSOLE_B]
     .map((viewer) => seenFrom(def, state, viewer))
     .find((view) => view.role === 'sender');
@@ -128,6 +132,16 @@ function shownSequence(def: SignalDef, state: SignalState): SignalToken[] {
     throw new Error('expected the sending console to show the sequence');
   }
   return sender.sequence;
+}
+
+/** Signs a display shows in their colours; throws at a grey one. */
+function inColour(signs: readonly ShownSign[] | null): SignalToken[] {
+  return (signs ?? []).map((sign) => {
+    if (typeof sign !== 'string') {
+      throw new Error(`expected a sign in its colour, not ${JSON.stringify(sign)}`);
+    }
+    return sign;
+  });
 }
 
 /** The coloured keys of both consoles, as a def without the legend deals them. */
@@ -168,6 +182,27 @@ function keyAt(token: SignalToken, side: ConsoleId): SignalKey {
   return { row, shape };
 }
 
+/** `token` as a display without colour shows it: its form, and the pattern its colour carries. */
+function greyOf(token: SignalToken): GreySign {
+  const [colour, shape] = partsOf(token);
+  return { shape, pattern: SIGNAL_PATTERNS[colour as keyof typeof SIGNAL_PATTERNS] };
+}
+
+/**
+ * The key for a sign as a display shows it at console `side`: a grey sign's row is the one
+ * whose colour carries its pattern, as the legend prints them side by side.
+ */
+function keyOf(sign: ShownSign, side: ConsoleId): SignalKey {
+  if (typeof sign === 'string') {
+    return keyAt(sign, side);
+  }
+  const row = ROWS.find((r) => SIGNAL_PATTERNS[LEGEND[side][r]] === sign.pattern);
+  if (row === undefined) {
+    throw new Error(`no row of console ${side} carries the pattern ${sign.pattern}`);
+  }
+  return { row, shape: sign.shape };
+}
+
 /** The stage under way, pressed in full at the receiving console as the solver says. */
 function stageThrough(def: SignalDef, state: SignalState): SignalState {
   let now = state;
@@ -194,6 +229,17 @@ describe('the signs', () => {
     expect(tokenLabel('gruen-quadrat')).toBe('grünes Quadrat');
     expect(tokenLabel('gelb-kreis')).toBe('gelber Kreis');
     expect(new Set(TOKENS.map(tokenLabel)).size).toBe(12);
+  });
+
+  it('are said without their colour by form and pattern, in the legend’s words', () => {
+    expect(greySignLabel({ shape: 'kreis', pattern: 'ring' })).toBe('Kreis, Ring');
+    expect(greySignLabel({ shape: 'dreieck', pattern: 'stripes' })).toBe('Dreieck, Streifen');
+    expect(greySignLabel({ shape: 'quadrat', pattern: 'dots' })).toBe('Quadrat, Punkte');
+    expect(greySignLabel({ shape: 'kreis', pattern: 'plain' })).toBe('Kreis, glatt');
+    // Twelve signs, twelve sayings, none naming a colour.
+    const said = TOKENS.map((token) => greySignLabel(greyOf(token)));
+    expect(new Set(said).size).toBe(12);
+    expect(said.join(' ')).not.toMatch(COLOUR_WORD);
   });
 });
 
@@ -257,6 +303,47 @@ describe('signal setup', () => {
     ]);
   });
 
+  it('leaves the stage the display goes grey from to the legend, unless the def names one', () => {
+    expect(defOf().greyFrom).toBeUndefined();
+    expect(defOf({ legend: true }).greyFrom).toBeUndefined();
+    for (const greyFrom of [0, 1, 4]) {
+      expect(defOf({ legend: true, greyFrom }).greyFrom).toBe(greyFrom);
+    }
+    // Never without the legend: 0 is taken there, as it says nothing.
+    expect(defOf({ greyFrom: 0 }).greyFrom).toBe(0);
+    expect(defOf({ stages: 6, legend: true, greyFrom: 6 }).greyFrom).toBe(6);
+  });
+
+  it('turns a grey display down without the legend, past the last stage, or out of bounds', () => {
+    const parsed = (fields: object) =>
+      signalModule.defSchema.safeParse({ type: 'signal', id: 'kette', title: 'T', ...fields });
+    const said = (fields: object) =>
+      parsed(fields).error?.issues.map((issue) => [issue.path, issue.message]);
+    for (const fields of [
+      { legend: true, greyFrom: -1 },
+      { legend: true, greyFrom: 7 },
+      { legend: true, greyFrom: 1.5 },
+      { legend: true, greyFrom: '2' },
+      { legend: true, greyFrom: null },
+    ]) {
+      expect(parsed(fields).success, JSON.stringify(fields)).toBe(false);
+    }
+    expect(said({ greyFrom: 2 })).toEqual([
+      [
+        ['greyFrom'],
+        'puzzle "kette": greyFrom (2) needs the legend — only its Muster column turns a grey ' +
+          'sign back into a colour; set legend to true, or greyFrom to 0',
+      ],
+    ]);
+    expect(said({ legend: true, stages: 3, greyFrom: 4 })).toEqual([
+      [
+        ['greyFrom'],
+        'puzzle "kette": greyFrom (4) is past the last stage (3), so no stage would show its ' +
+          'signs without colour — lower it, or set it to 0',
+      ],
+    ]);
+  });
+
   it('lays all twelve keys out at each console, no sign in the same place at both', () => {
     const sorted = [...TOKENS].sort();
     for (let seed = 0; seed < SEEDS; seed++) {
@@ -304,6 +391,7 @@ describe('signal setup', () => {
       role: 'sender',
       sends: 'a',
       fleeting: false,
+      grey: false,
     });
   });
 });
@@ -376,10 +464,11 @@ describe('signal views', () => {
           keys: ROW_KEYS,
         });
         expect(JSON.stringify(taking), `seed ${seed}, stage ${stage}`).not.toMatch(COLOUR_WORD);
-        // The sending console still shows coloured signs.
+        // The sending console shows coloured signs, and in the last stage grey ones.
+        const dealt = state.sequences[stage - 1] ?? [];
         expect(seenFrom(def, state, sender)).toMatchObject({
           role: 'sender',
-          sequence: state.sequences[stage - 1],
+          sequence: stage < def.stages ? dealt : dealt.map(greyOf),
           grid: null,
           grids: null,
           keys: ROW_KEYS,
@@ -436,7 +525,7 @@ describe('signal views', () => {
       expect(atB).toMatchObject({ stage, sends });
       expect(atA.role).toBe(sends === 'a' ? 'sender' : 'receiver');
       expect(atB.role).toBe(sends === 'b' ? 'sender' : 'receiver');
-      const sequence = shownSequence(def, state);
+      const sequence = inColour(shownSequence(def, state));
       expect(sequence).toEqual(state.sequences[stage - 1]);
       for (const [i, token] of sequence.entries()) {
         const result = press(def, state, token, across(sends));
@@ -445,6 +534,81 @@ describe('signal views', () => {
         state = result.state;
       }
     }
+  });
+});
+
+/** Every place a view of the station is had from: both consoles, the book, away, the audience. */
+const EVERY_VIEWER = [AT_STATION, AT_CONSOLE_B, AT_BOOK, ELSEWHERE, AUDIENCE];
+
+describe('a display without colour', () => {
+  it('goes grey in the last stage with the legend, from greyFrom where named, else never', () => {
+    const cases: [Partial<SignalDef>, number | null][] = [
+      [{ legend: true }, 4],
+      [{ legend: true, stages: 2 }, 2],
+      [{ legend: true, stages: 6 }, 6],
+      [{ legend: true, greyFrom: 1 }, 1],
+      [{ legend: true, greyFrom: 3 }, 3],
+      [{ legend: true, greyFrom: 0 }, null],
+      [{}, null],
+      [{ greyFrom: 0 }, null],
+    ];
+    for (const [fields, from] of cases) {
+      const def = defOf({ length: 3, ...fields });
+      let state = deal(def, 3);
+      for (let stage = 1; stage <= def.stages; stage++) {
+        const grey = from !== null && stage >= from;
+        for (const viewer of EVERY_VIEWER) {
+          const view = seenFrom(def, state, viewer);
+          expect(view, `${JSON.stringify(fields)}, stage ${stage}`).toMatchObject({ stage, grey });
+        }
+        state = stageThrough(def, state);
+      }
+    }
+  });
+
+  it('carries each sign as form and pattern alone, and not one colour to any view', () => {
+    for (let seed = 0; seed < 40; seed++) {
+      const stages = 2 + (seed % 5);
+      const greyFrom = 1 + (seed % stages);
+      const fleetingFrom = seed % 3 === 0 ? null : 1 + ((seed * 7) % stages);
+      const def = defOf({ stages, length: 3 + (seed % 4), legend: true, greyFrom, fleetingFrom });
+      let state = deal(def, seed);
+      for (let stage = 1; stage <= def.stages; stage++) {
+        const dealt = state.sequences[stage - 1] ?? [];
+        const grey = stage >= greyFrom;
+        const sending = stage % 2 === 1 ? AT_STATION : AT_CONSOLE_B;
+        for (const viewer of [sending, AUDIENCE]) {
+          const shown = seenFrom(def, state, viewer).sequence;
+          expect(shown, `seed ${seed}, stage ${stage}`).toEqual(grey ? dealt.map(greyOf) : dealt);
+        }
+        for (const viewer of EVERY_VIEWER) {
+          const wire = JSON.stringify(seenFrom(def, state, viewer));
+          if (grey) {
+            expect(wire, `seed ${seed}, stage ${stage}`).not.toMatch(COLOUR_WORD);
+          }
+        }
+        state = stageThrough(def, state);
+      }
+    }
+  });
+
+  it('shows a fleeting stage one grey sign at a time: the two compose', () => {
+    const def = defOf({ stages: 5, length: 3, legend: true, fleetingFrom: 2, greyFrom: 4 });
+    let state = deal(def, 6);
+    const seen: [boolean, boolean][] = [];
+    for (let stage = 1; stage <= def.stages; stage++) {
+      const { fleeting, grey, sequence } = seenFrom(def, state, AUDIENCE);
+      seen.push([fleeting, grey]);
+      expect(sequence?.every((sign) => typeof sign !== 'string')).toBe(grey);
+      state = stageThrough(def, state);
+    }
+    expect(seen).toEqual([
+      [false, false],
+      [true, false],
+      [true, false],
+      [true, true],
+      [true, true],
+    ]);
   });
 });
 
@@ -627,23 +791,52 @@ describe('signal presses', () => {
 
 describe('signal solver', () => {
   it.each([
-    { legend: false, fleeting: false },
-    { legend: true, fleeting: false },
-    { legend: false, fleeting: true },
-    { legend: true, fleeting: true },
+    { legend: false, fleeting: false, grey: false },
+    { legend: true, fleeting: false, grey: false },
+    { legend: false, fleeting: true, grey: false },
+    { legend: true, fleeting: true, grey: false },
+    { legend: true, fleeting: false, grey: true },
+    { legend: true, fleeting: true, grey: true },
   ])(
-    `solves ${SEEDS} instances from the consoles' views, legend $legend, fleeting $fleeting`,
-    ({ legend, fleeting }) => {
+    `solves ${SEEDS} instances from the consoles' views, legend $legend, fleeting $fleeting, ` +
+      'grey $grey',
+    ({ legend, fleeting, grey }) => {
       // The harness hands the edgework only to modules that read it.
       expect(signalModule.usesEdgework).toBe(false);
       for (let seed = 0; seed < SEEDS; seed++) {
         const stages = 2 + (seed % 5);
         const fleetingFrom = fleeting ? 1 + (seed % stages) : null;
-        const def = defOf({ stages, length: 3 + (seed % 4), legend, fleetingFrom });
+        // With the legend and no grey asked for, never grey; asked for, from any stage.
+        const greyFrom = legend ? (grey ? 1 + ((seed * 3) % stages) : 0) : undefined;
+        const def = defOf({ stages, length: 3 + (seed % 4), legend, fleetingFrom, greyFrom });
         expect(playInstance(def, seed), `seed ${seed}`).toBe(def.stages * def.length);
       }
     },
   );
+
+  it('presses for a grey sign the key of the row whose colour carries its pattern', () => {
+    const def = defOf({ legend: true, greyFrom: 1 });
+    for (let seed = 0; seed < 30; seed++) {
+      const state = deal(def, seed);
+      const views = viewsOf(def, state);
+      const shown = views.operator.sequence ?? [];
+      expect(shown.every((sign) => typeof sign !== 'string')).toBe(true);
+      expect(signalModule.solve(def, views, null)).toEqual(
+        (state.sequences[0] ?? []).map((token) => ({
+          by: 'partner',
+          input: { key: keyAt(token, 'b') },
+        })),
+      );
+      // Stage 2, sent from console b and taken at console a, by console a's column.
+      const second = { ...state, stage: 1 };
+      expect(signalModule.solve(def, viewsOf(def, second), null)).toEqual(
+        (second.sequences[1] ?? []).map((token) => ({
+          by: 'operator',
+          input: { key: keyAt(token, 'a') },
+        })),
+      );
+    }
+  });
 
   it('presses at the receiving console what is left of the stage', () => {
     const def = defOf();
@@ -1084,7 +1277,7 @@ describe('signal in a run', () => {
 
   it('takes the receiving console, turns away the sending one and anybody else', () => {
     const state = signalRun();
-    const [first] = signalOf(state, 'p1').sequence ?? [];
+    const [first] = inColour(signalOf(state, 'p1').sequence);
     if (first === undefined) {
       throw new Error('expected a sequence at console a');
     }
@@ -1101,7 +1294,7 @@ describe('signal in a run', () => {
 
   it('refuses the solo walk without an alarm, and takes the press once a partner sends', () => {
     const state = signalRun();
-    const [first] = signalOf(state, 'p1').sequence ?? [];
+    const [first] = inColour(signalOf(state, 'p1').sequence);
     if (first === undefined) {
       throw new Error('expected a sequence at console a');
     }
@@ -1129,7 +1322,7 @@ describe('signal in a run', () => {
 
   it('charges a wrong sign once, to whoever pressed it', () => {
     const state = signalRun();
-    const [first] = signalOf(state, 'p1').sequence ?? [];
+    const [first] = inColour(signalOf(state, 'p1').sequence);
     const slipped = applyAction(state, pressBy('p2', besides(first)));
     expect(slipped.penaltySeq).toBe(1);
     expect(slipped.deadlineAt).toBe((state.deadlineAt ?? 0) - 20_000);
@@ -1147,7 +1340,7 @@ describe('signal in a run', () => {
     for (let stage = 1; stage <= 4; stage++) {
       const sender = stage % 2 === 1 ? 'p1' : 'p2';
       const receiver = stage % 2 === 1 ? 'p2' : 'p1';
-      const sequence = signalOf(state, sender).sequence ?? [];
+      const sequence = inColour(signalOf(state, sender).sequence);
       expect(signalOf(state, receiver).sequence).toBeNull();
       state = sequence.reduce(
         (s, token) => applyAction(s, pressBy(receiver, token, T0 + stage * 1000)),
@@ -1178,20 +1371,56 @@ describe('signal in a run', () => {
 
   it('with the legend: takes the keys through it, and turns a sign’s own key away', () => {
     let state = signalRun(labWith({ legend: true }));
-    const [first = 'rot-kreis'] = signalOf(state, 'p1').sequence ?? [];
+    const [first = 'rot-kreis'] = inColour(signalOf(state, 'p1').sequence);
     expect(() => applyAction(state, pressBy('p2', first))).toThrow(
       'Diese Taste gibt es an diesem Pult nicht.',
     );
     for (let stage = 1; stage <= 4; stage++) {
-      const [sender, receiver, side] =
-        stage % 2 === 1 ? (['p1', 'p2', 'b'] as const) : (['p2', 'p1', 'a'] as const);
-      const sequence = signalOf(state, sender).sequence ?? [];
-      state = sequence.reduce(
-        (s, token) => applyAction(s, keyBy(receiver, keyAt(token, side), T0 + stage * 1000)),
-        state,
-      );
+      state = stagePressed(state, stage);
     }
     expect(state.currentPuzzleIndex).toBe(1);
     expect(state.penaltySeq).toBe(0);
   });
 });
+
+describe('signal in a run, the display without colour', () => {
+  it('with the legend: the last stage reaches no view in colour, pressed by the patterns', () => {
+    let state = signalRun(labWith({ legend: true }));
+    for (let stage = 1; stage <= 3; stage++) {
+      state = stagePressed(state, stage);
+    }
+    // Stage 4, sent from console b: the display has lost its colour.
+    const dealt = state.puzzleState?.type === 'signal' ? state.puzzleState.sequences[3] : [];
+    const sending = signalOf(state, 'p2');
+    expect(sending).toMatchObject({ stage: 4, role: 'sender', grey: true });
+    expect(sending.sequence).toEqual((dealt ?? []).map(greyOf));
+    const audience = viewForSpectator(state).puzzle;
+    expect(audience).toMatchObject({ sequence: sending.sequence, grey: true });
+    // What the consoles and the audience's device show, over the wire; the audience's printed
+    // page, like the book's, keeps the legend's colours.
+    const shown: PuzzleView[] = [signalOf(state, 'p1'), sending, ...(audience ? [audience] : [])];
+    for (const view of shown) {
+      expect(JSON.stringify({ ...view, manual: null }), view.console ?? 'audience').not.toMatch(
+        COLOUR_WORD,
+      );
+    }
+    expect(audience?.manual).toEqual(signalModule.manual(defOf({ legend: true })));
+    state = stagePressed(state, 4);
+    expect(state.currentPuzzleIndex).toBe(1);
+    expect(state.penaltySeq).toBe(0);
+  });
+});
+
+/**
+ * Stage `stage` of the lab's Signalkette with the legend, pressed in full at its receiving
+ * console: every sign the sending console shows as the key the legend gives it there.
+ */
+function stagePressed(state: GameState, stage: number): GameState {
+  const [sender, receiver, side] =
+    stage % 2 === 1 ? (['p1', 'p2', 'b'] as const) : (['p2', 'p1', 'a'] as const);
+  const sequence = signalOf(state, sender).sequence ?? [];
+  return sequence.reduce(
+    (s, sign) => applyAction(s, keyBy(receiver, keyOf(sign, side), T0 + stage * 1000)),
+    state,
+  );
+}

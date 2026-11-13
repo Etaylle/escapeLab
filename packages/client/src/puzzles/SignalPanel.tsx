@@ -1,5 +1,12 @@
 import { Fragment, useEffect, useState, type ReactNode } from 'react';
-import { SIGNAL_PATTERNS, tokenLabel, type SignalPattern, type SignalToken } from '@escapelab/core';
+import {
+  greySignLabel,
+  SIGNAL_PATTERNS,
+  tokenLabel,
+  type ShownSign,
+  type SignalPattern,
+  type SignalToken,
+} from '@escapelab/core';
 import { Icon } from '../screens/Icon.js';
 import { consoleName } from '../world/consoles.js';
 import { DeviceLamp, type LampTone } from './Device.js';
@@ -225,25 +232,48 @@ function partsOf(token: SignalToken): [Colour, Form] {
   return token.split('-') as [Colour, Form];
 }
 
+/** The grey of a sign on a display that has lost its colour. */
+const GREY = '#a3a3a3';
+
+/** A sign's drawing as it lights on the display, in `fill`, its texture over it. */
+interface Drawing {
+  form: Form;
+  fill: string;
+  texture: SignalPattern;
+  /** what a screen reader hears it as */
+  label: string;
+}
+
+/** How the display draws a sign: in its colour, or without it, grey, its pattern alone. */
+function drawingOf(sign: ShownSign): Drawing {
+  if (typeof sign !== 'string') {
+    return { form: sign.shape, fill: GREY, texture: sign.pattern, label: greySignLabel(sign) };
+  }
+  const [colour, form] = partsOf(sign);
+  return { form, fill: COLOURS[colour], texture: textureOf(sign), label: tokenLabel(sign) };
+}
+
 /**
  * A sign as both consoles show it: its form in its colour, glowing in it
  * like a lamp as it comes on (CSS), its colour's texture printed over it —
+ * or, on a display that has lost its colour, grey with the texture alone —
  * and no word: what it is, the players say. A screen reader gets the words,
- * „rotes Dreieck" — none for a sign `fading` out of a fleeting strip.
+ * „rotes Dreieck", „Kreis, Ring" — none for a sign `fading` out of a
+ * fleeting strip.
  */
-function Sign({ token, fading = false }: { token: SignalToken; fading?: boolean }) {
-  const [colour, form] = partsOf(token);
+function Sign({ sign, fading = false }: { sign: ShownSign; fading?: boolean }) {
+  const { form, fill, texture, label } = drawingOf(sign);
   return (
     <svg
       className={fading ? 'signal-glyph signal-glyph--fading' : 'signal-glyph'}
       viewBox="0 0 24 24"
-      style={{ color: COLOURS[colour] }}
+      style={{ color: fill }}
       role={fading ? undefined : 'img'}
-      aria-label={fading ? undefined : tokenLabel(token)}
+      aria-label={fading ? undefined : label}
       aria-hidden={fading ? true : undefined}
     >
-      {FORMS[form](COLOURS[colour])}
-      <TextureOver texture={SIGNAL_PATTERNS[colour]} form={form} />
+      {FORMS[form](fill)}
+      <TextureOver texture={texture} form={form} />
     </svg>
   );
 }
@@ -287,7 +317,7 @@ export function signalSounds(change: SignalChange): void {
 
 /** A strip's signs and lamps: the stage's sequence, the signs in, the lamp just lit. */
 interface StripProps {
-  sequence: SignalToken[];
+  sequence: ShownSign[];
   done: number;
   fresh: number | null;
 }
@@ -299,9 +329,9 @@ interface StripProps {
 function Strip({ sequence, done, fresh }: StripProps) {
   return (
     <ol className="signal-strip" aria-label={`Folge, ${done} von ${sequence.length} gedrückt`}>
-      {sequence.map((token, i) => (
+      {sequence.map((sign, i) => (
         <li key={i} className="signal-sign">
-          <Sign token={token} />
+          <Sign sign={sign} />
           <Lamp lit={i < done} fresh={i === fresh} />
         </li>
       ))}
@@ -310,17 +340,17 @@ function Strip({ sequence, done, fresh }: StripProps) {
 }
 
 /** A place of a fleeting strip: its sign shown, fading out over the dark glass, or dark. */
-function FleetingPlace({ token, at }: { token: SignalToken; at: 'shown' | 'gone' | 'dark' }) {
+function FleetingPlace({ sign, at }: { sign: ShownSign; at: 'shown' | 'gone' | 'dark' }) {
   const dark = <span className="signal-glyph signal-glyph--dark" aria-hidden="true" />;
   if (at === 'shown') {
-    return <Sign token={token} />;
+    return <Sign sign={sign} />;
   }
   return at === 'dark' ? (
     dark
   ) : (
     <span className="signal-glyph-stack">
       {dark}
-      <Sign token={token} fading />
+      <Sign sign={sign} fading />
     </span>
   );
 }
@@ -339,9 +369,9 @@ function FleetingStrip({ sequence, done, fresh }: StripProps) {
       className="signal-strip signal-strip--fleeting"
       aria-label={`Folge, ${done} von ${sequence.length} gedrückt`}
     >
-      {sequence.map((token, i) => (
+      {sequence.map((sign, i) => (
         <li key={i} className={i === shown ? 'signal-sign signal-sign--shown' : 'signal-sign'}>
-          <FleetingPlace token={token} at={at(i)} />
+          <FleetingPlace sign={sign} at={at(i)} />
           <Lamp lit={i < done} fresh={i === fresh} />
         </li>
       ))}
@@ -375,7 +405,7 @@ function Keys({ grid, send }: { grid: SignalToken[]; send: SignalSend }) {
           data-token={token}
           onClick={() => send({ press: token })}
         >
-          <Sign token={token} />
+          <Sign sign={token} />
         </button>
       ))}
     </div>
@@ -388,7 +418,7 @@ function Layout({ grid }: { grid: SignalToken[] }) {
     <div className="signal-grid">
       {grid.map((token) => (
         <span key={token} className="signal-key" data-token={token}>
-          <Sign token={token} />
+          <Sign sign={token} />
         </span>
       ))}
     </div>
@@ -553,7 +583,7 @@ function Status({ puzzle, lit, mode }: { puzzle: SignalPuzzle; lit: Lit; mode: R
 interface SideProps {
   puzzle: SignalPuzzle;
   lit: Lit;
-  sequence: SignalToken[];
+  sequence: ShownSign[];
 }
 
 /**

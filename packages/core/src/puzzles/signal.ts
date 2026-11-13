@@ -71,6 +71,41 @@ function partsOf(token: SignalToken): { colour: Colour; shape: Shape } {
   return { colour, shape };
 }
 
+/** A sign as a display without colour shows it: its form, and the pattern its colour carries. */
+export interface GreySign {
+  shape: Shape;
+  pattern: SignalPattern;
+}
+
+/** A sign as the display shows it: in its colour, or grey with its colour's pattern. */
+export type ShownSign = SignalToken | GreySign;
+
+/** A grey sign as it is said: its form, and its pattern as the legend names it: „Kreis, Ring". */
+export function greySignLabel({ shape, pattern }: GreySign): string {
+  return `${SHAPE_WORDS[shape].noun}, ${PATTERN_WORDS[pattern]}`;
+}
+
+/** `token` without its colour: its form, and its colour's pattern. */
+function greyed(token: SignalToken): GreySign {
+  const { colour, shape } = partsOf(token);
+  return { shape, pattern: SIGNAL_PATTERNS[colour] };
+}
+
+/**
+ * The sign a display shows, read back into its colour and form: a grey sign's colour is the
+ * one the legend prints beside its pattern.
+ */
+function tokenOf(sign: ShownSign): SignalToken {
+  if (typeof sign === 'string') {
+    return sign;
+  }
+  const colour = COLOURS.find((c) => SIGNAL_PATTERNS[c] === sign.pattern);
+  if (colour === undefined) {
+    throw new Error(`signal: no colour carries the pattern "${sign.pattern}"`);
+  }
+  return `${colour}-${sign.shape}`;
+}
+
 /** A sign as it is said: „rotes Dreieck", „blauer Kreis", „grünes Quadrat". */
 export function tokenLabel(token: SignalToken): string {
   const { colour, shape } = partsOf(token);
@@ -126,10 +161,14 @@ const keyLabel = ({ row, shape }: SignalKey): string =>
  * which console, each colour with the pattern its signs carry, so that a
  * row is found by the pattern too. From stage `fleetingFrom` on, the
  * sending console shows the signs one at a time — the view says so, the
- * client cycles them. A wrong sign costs time and starts the stage's input
- * again; a key pressed at the sending console is turned away, without an
- * alarm, and so is one pressed at the receiving console while nobody else
- * stands at the sending one: a single player cannot read there and press here.
+ * client cycles them. With the legend, from stage `greyFrom` on — the last
+ * stage unless the def says otherwise — the display loses its colour: every
+ * view carries each sign as its form and pattern alone, and only the
+ * legend's Muster column gives it its colour back. A wrong sign costs time
+ * and starts the stage's input again; a key pressed at the sending console
+ * is turned away, without an alarm, and so is one pressed at the receiving
+ * console while nobody else stands at the sending one: a single player
+ * cannot read there and press here.
  */
 const defSchema = z
   .strictObject({
@@ -143,6 +182,12 @@ const defSchema = z
     legend: z.boolean().default(false),
     /** from this stage on (1-based) the sending console shows one sign at a time; null: never */
     fleetingFrom: z.number().int().min(1).nullable().default(null),
+    /**
+     * from this stage on (1-based) the display shows the signs without colour, each by its
+     * pattern, which only the legend turns into a colour; 0: never. Left out, the last stage
+     * with the legend (`greyFromOf`); a positive stage needs the legend.
+     */
+    greyFrom: z.number().int().min(0).max(6).optional(),
     penaltySec: z.number().int().positive().default(20),
   })
   .superRefine((def, ctx) => {
@@ -156,8 +201,39 @@ const defSchema = z
           'or set it to null',
       });
     }
+    const grey = greyIssue(def);
+    if (grey !== null) {
+      ctx.addIssue({ code: 'custom', path: ['greyFrom'], message: grey });
+    }
   });
 export type SignalDef = z.infer<typeof defSchema>;
+
+/**
+ * What is wrong with a def's `greyFrom`, in words for whoever wrote the mission; null where
+ * nothing is: a stage past the last one, or a grey display without the legend, whose Muster
+ * column alone gives a grey sign its colour.
+ */
+function greyIssue(def: {
+  id: string;
+  stages: number;
+  legend: boolean;
+  greyFrom?: number | undefined;
+}): string | null {
+  const greyFrom = def.greyFrom ?? 0;
+  if (greyFrom > def.stages) {
+    return (
+      `puzzle "${def.id}": greyFrom (${greyFrom}) is past the last stage (${def.stages}), so ` +
+      'no stage would show its signs without colour — lower it, or set it to 0'
+    );
+  }
+  if (greyFrom > 0 && !def.legend) {
+    return (
+      `puzzle "${def.id}": greyFrom (${greyFrom}) needs the legend — only its Muster column ` +
+      'turns a grey sign back into a colour; set legend to true, or greyFrom to 0'
+    );
+  }
+  return null;
+}
 
 export interface SignalState {
   type: 'signal';
@@ -200,8 +276,13 @@ export interface SignalView {
   sends: ConsoleId;
   /** the sending console shows this stage's signs one at a time; the client cycles them */
   fleeting: boolean;
-  /** this stage's sequence — only at the sending console, and for the audience */
-  sequence: SignalToken[] | null;
+  /** the display shows this stage's signs without colour: each sign of `sequence` is grey */
+  grey: boolean;
+  /**
+   * this stage's sequence as the display shows it — only at the sending console, and for the
+   * audience: the signs in their colours, or in a grey stage each by its form and pattern alone
+   */
+  sequence: ShownSign[] | null;
   /** without the legend: the keys of the viewer's own console, row by row — only at a console */
   grid: SignalToken[] | null;
   /** without the legend: the keys of both consoles — only for the audience */
@@ -222,6 +303,20 @@ const across = (side: ConsoleId): ConsoleId => (side === 'a' ? 'b' : 'a');
 /** From stage `fleetingFrom` on, the sending console shows the signs one at a time. */
 const fleetingIn = (def: SignalDef, stage: number): boolean =>
   def.fleetingFrom !== null && stage + 1 >= def.fleetingFrom;
+
+/**
+ * The stage (1-based) from which the display shows its signs without colour: the def's
+ * `greyFrom`, else the last stage with the legend; 0, never, without it.
+ */
+function greyFromOf(def: SignalDef): number {
+  return def.greyFrom ?? (def.legend ? def.stages : 0);
+}
+
+/** From stage `greyFrom` on, the display shows its signs without colour. */
+function greyIn(def: SignalDef, stage: number): boolean {
+  const from = greyFromOf(def);
+  return from > 0 && stage + 1 >= from;
+}
 
 /** The sequence of the stage under way; `init` deals one for every stage. */
 function sequenceNow(state: SignalState): SignalToken[] {
@@ -468,6 +563,18 @@ export const signalModule: PuzzleModule<SignalDef, SignalState, SignalInput, Sig
       default: 3,
       off: 'null',
     },
+    {
+      key: 'greyFrom',
+      label: 'Farblos ab Stufe',
+      help:
+        'Ab dieser Stufe zeigt die Anzeige die Zeichen ohne Farbe, nur mit dem Muster aus der ' +
+        'Legende; 0 = nie, leer = letzte Stufe mit Legende.',
+      kind: 'int',
+      min: 0,
+      max: 6,
+      default: 0,
+      off: 'omit',
+    },
   ],
   defSchema,
   inputSchema,
@@ -529,6 +636,8 @@ export const signalModule: PuzzleModule<SignalDef, SignalState, SignalInput, Sig
     const at = viewer.operating ? viewer.console : null;
     const role = roleOf(at, sends);
     const audience = viewer.playerId === null;
+    const grey = greyIn(def, state.stage);
+    const shown = grey ? sequence.map(greyed) : [...sequence];
     return {
       kind: 'signal',
       stage: state.stage + 1,
@@ -539,7 +648,8 @@ export const signalModule: PuzzleModule<SignalDef, SignalState, SignalInput, Sig
       role,
       sends,
       fleeting: fleetingIn(def, state.stage),
-      sequence: role === 'sender' || audience ? [...sequence] : null,
+      grey,
+      sequence: role === 'sender' || audience ? shown : null,
       ...keysSeen(state, at, audience),
     };
   },
@@ -568,7 +678,8 @@ export const signalModule: PuzzleModule<SignalDef, SignalState, SignalInput, Sig
    * The sending console's view holds the sequence: the rest of it, from the
    * presses done so far, is pressed at the other console — by the operator
    * when console a receives, by the partner when console b does; with the
-   * legend each sign as the key the printed legend gives it there.
+   * legend each sign as the key the printed legend gives it there, a grey
+   * sign's colour read off the legend's patterns first.
    */
   solve(def, { operator, partner }) {
     const sending = [operator, partner].find((view) => view?.role === 'sender');
@@ -577,9 +688,9 @@ export const signalModule: PuzzleModule<SignalDef, SignalState, SignalInput, Sig
     }
     const receives = across(sending.sends);
     const by: Move<SignalInput>['by'] = receives === 'b' ? 'partner' : 'operator';
-    return sending.sequence.slice(sending.done).map((token) => ({
-      by,
-      input: def.legend ? { key: keyFor(token, receives) } : { press: token },
-    }));
+    return sending.sequence.slice(sending.done).map((sign) => {
+      const token = tokenOf(sign);
+      return { by, input: def.legend ? { key: keyFor(token, receives) } : { press: token } };
+    });
   },
 };
