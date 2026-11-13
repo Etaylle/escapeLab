@@ -167,6 +167,12 @@ die Entscheidung.
   nennt beide Werte. Tests in tools/framegate; Header-Kommentar und art-bible ergänzen.
 - Langfristig: Flucht-Main-Thread billiger (Licht/Dunkel-Pässe, halbe Frame), siehe Audit-Addenda.
 
+### T-9 Tests an der Wanduhr — Status: erledigt (2026-11-13) · Größe: S
+- Zwei Tests lasen die echte Uhr und wurden unter Last rot: `certificate.test.ts` (openssl liest
+  seine Uhr zweimal, ein Lauf über eine Sekundengrenze machte aus 825 Tagen 825,00001; jetzt
+  gerundet) und `coldOpen.test.tsx` (Zielleiste und Briefing rendern nach `Date.now()`, bei Last
+  über 15 wurde aus „10:59" „10:58"; jetzt eingefrorene Uhr). Regel: Tests fälschen die Zeit.
+
 ### T-8 Signalkette: das Muster zählt — Status: bereit (Entscheidung Uros 2026-11-13, Spec `spec-T-signal-grey.md`) · Größe: S
 - Uros beim Spielen: „Ist das Muster ganz ohne Nutzen?" Mit Legende ja: Die Pulte zeichnen je
   Farbe ein Muster und die Legende nennt es, aber die Lösung braucht nur die Farbe; die Spalte

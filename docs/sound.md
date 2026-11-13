@@ -1006,21 +1006,12 @@ takes 1.4 more; the two themes at 128 take 1.0, which leaves the folder 0.2 MB. 
 plan to the caps before anything is made (`test/sampleManifest.test.ts`: each folder's files and its
 entries awaiting their render, at their rates, within its cap).
 
-**Awaiting their render.** The menu's theme, the hum and the two end themes are written into the
-catalog (`audio/catalog.json`) and listed in `AWAITING_RENDER`; until they are made the menu plays
-the interface's sounds alone, the end card its sting alone, and the walkthrough logs „no theme
-(awaiting its render?)". In `packages/client`, the hum in three takes and the three pieces of music
-in one each — some 120 credits for the hum, 1,080 for the menu's theme and 576 for each end theme,
-2,352 in all:
-
-```sh
-node --env-file=/Users/uros/Documents/Req.Eng./escapelab/.env.local scripts/sfx.ts \
-  --candidates 3 --only bed-facility
-node --env-file=/Users/uros/Documents/Req.Eng./escapelab/.env.local scripts/sfx.ts \
-  --only menu-theme,end-won,end-lost
-```
-
-Then empty the four from `AWAITING_RENDER`. `test/menuSound.test.tsx` holds the gesture — no context
+**Rendered.** The menu's theme, the hum and the two end themes were made on 2026-11-13 on the
+Creator plan: the hum as the best of three takes, the three pieces of music as one take each
+(some 2,352 credits in all); `AWAITING_RENDER` is empty again. Until an entry has its file the
+menu plays the interface's sounds alone, the end card its sting alone, and the walkthrough logs
+„no theme (awaiting its render?)". The three pieces of music are made in three takes and chosen by
+ear with S-audition (see „Takes und Auswahl"). `test/menuSound.test.tsx` holds the gesture — no context
 made before it —, the buses and the 2 s fades, the lobby's weight, the start without a gesture after
 a run, the switch and the sound back at once as it is switched on again, a theme not rendered
 tended by no timer, the end with the run, the crew's duck, the bus held and waited for, and the
@@ -1081,10 +1072,6 @@ What the sound packages left for later, one line each, the newest first:
 
 - **Three takes of the menu's theme and the end cards' themes, one kept by ear** (S-audition): the
   user's render and choice, some 6,696 credits; the commands are under „Takes und Auswahl".
-- **The menu's theme, the end cards' two themes and the facility's hum await a render** (S-menu):
-  written into the catalog, listed in `AWAITING_RENDER`; the commands are under „The end cards"
-  (some 2,352 credits). Until they run the menu sounds its interface alone and an end card its
-  sting.
 - **The Leitstelle's 47 lines of 2026-10-25** (S-menu, „Lizenz"): the repo does not record the
   plan they were made on; recorded again on the paid plan, they are licensed as the rest.
 

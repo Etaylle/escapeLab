@@ -204,6 +204,11 @@ function bar(view: PlayerView, coldOpen: Partial<ColdOpen>): string {
 }
 
 describe('the objective bar in the cold open', () => {
+  // The bar reads the clock as it renders: a frozen clock keeps „10:59" from becoming „10:58"
+  // when a loaded machine takes a second between the view and the render.
+  beforeEach(() => vi.useFakeTimers({ now: START }));
+  afterEach(() => vi.useRealTimers());
+
   it('shows NORMALBETRIEB where the clock will be while the power is on, and no goal yet', () => {
     const html = bar(viewOf(), {});
     expect(html).toContain(
@@ -269,6 +274,11 @@ describe('the objective bar in the cold open', () => {
 });
 
 describe('the start of a run with the power on', () => {
+  // The briefing covers the first seconds after launch by the clock: frozen, so that a render
+  // delayed by a loaded machine cannot land after the briefing has gone.
+  beforeEach(() => vi.useFakeTimers({ now: START }));
+  afterEach(() => vi.useRealTimers());
+
   function game(view: PlayerView): string {
     return renderToStaticMarkup(
       <GameScreen

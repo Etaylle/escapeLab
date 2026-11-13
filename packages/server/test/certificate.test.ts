@@ -76,8 +76,10 @@ describe('making a certificate', () => {
       expect(cert.subjectAltName).toBe(
         'DNS:localhost, IP Address:127.0.0.1, IP Address:10.0.0.184',
       );
+      // openssl stamps notBefore and notAfter from two readings of its clock: a run that
+      // straddles a second adds one to the span, so the days are rounded.
       const days = (Date.parse(cert.validTo) - Date.parse(cert.validFrom)) / 86_400_000;
-      expect(days).toBe(CERT_DAYS);
+      expect(Math.round(days)).toBe(CERT_DAYS);
       // Extended key usage: TLS server authentication, which iOS asks for.
       expect(cert.keyUsage).toEqual(['1.3.6.1.5.5.7.3.1']);
       expect(cert.checkPrivateKey(createPrivateKey(readFileSync(files.key)))).toBe(true);
