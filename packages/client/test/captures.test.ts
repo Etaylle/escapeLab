@@ -261,6 +261,8 @@ describe('captures of the notes of the last shift', () => {
         'gibt es Alarm.',
       'Haller: Ab Stufe 3 zeigt die Anzeige jedes Zeichen nur kurz. Erst mitschreiben, dann ' +
         'quittieren.',
+      'Frühschicht: In der letzten Stufe ist die Anzeige farblos, nur das Muster bleibt. Die ' +
+        'Farbe dazu steht in der Legende.',
     ]);
     expect(capture.form).toBe('text');
   });
