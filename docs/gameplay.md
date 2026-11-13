@@ -263,6 +263,27 @@ nearer. The screen's edge glows red toward it through the marker system — a ma
 instead of an arrow, on the screen's edge where the line toward the drone leaves it — as strong
 as it is near. At every difficulty; a drone held still by its plate, or one flying off, is quiet.
 
+## The Signalkette's last stage without colour
+
+Every colour of the Signalkette carries a pattern — rot glatt, blau Punkte, grün Streifen, gelb
+Ring — which the consoles draw over the sign and the legend's two „Muster" columns name beside
+the colours. With the legend the pattern carries a rule as well: from stage `greyFrom` on (core
+`puzzles/signal.ts`; left out, the last stage; 0, never; a positive stage only with the legend,
+as the validation says) the display loses its colour. No view of the station names a colour
+then: the sending console's and the audience's carry each sign as its form and its pattern
+alone, the receiving console's, as in every stage, no sign at all. The legend's Muster column is
+the one way back to the colour, and so to the row to press; a player who cannot tell the colours
+apart reads exactly what everyone else reads. The sending console lights a third legend, ANZEIGE ·
+FARBLOS, and draws the signs grey at 64 px, their patterns bold and near black: every cell of a
+pattern 18 px or more, its ink 9.4:1 against the grey (`SignalPanel.tsx`; the art bible's „Type
+and targets"). A fleeting stage stays fleeting, one grey sign at a time; the receiving console's
+keys stay as they are. The printed Betrieb says from which stage the display shows no colour and
+that the legend names each pattern's colour, and the workshop's note on the display's capacitor
+names the colour fading; in Blackout (`greyFrom` 4) the Frühschicht's third note in the margin
+says it too. The solver reads a grey sign's colour back through the patterns the legend prints
+beside the colours, and the walkthrough plays the last stage from the plan with grey signs and
+shoots it (signal-grey.png in the host's window, signal-grey-phone-932.png on a large phone).
+
 ## The Serverraum's cabling diagram
 
 The rack (console B) shows the Netzplan as a cabling diagram derived from `DEPENDS_ON`

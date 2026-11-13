@@ -580,6 +580,17 @@ device's one figure keep their own size: the radio's frequency 32 px, the relay'
 names stand 11 units high (12 at most at the large text size, as much as their box holds right
 of its LED), the meter's scale 11 units, 13 on a phone, where its dial is drawn smaller.
 
+The Signalkette's signs say no word, but where its display has lost its colour (core
+`greyFrom`) the pattern is all a sign has left, and it is read as a readout is: the signs come up
+grey (#b8b8b8) at 64 px on every screen — 44 and 36 px in colour — their pattern bold and near
+black over them, 9.4:1 against the grey, so that every cell of it measures a readout's 18 px or
+more: dot to dot, stripe to stripe and the ring across, 6.9, 6.9 and 9.6 of the glyph's 24 units
+(SignalPanel.tsx `BOLD`; client test/signalGrey.test.tsx measures them through the stylesheets at
+1280×720, 1440×820 and on phones at 932×430, 844×390 and 420×760). The dots stand as a hexagon
+on the circle, a five on the square, four on the triangle; the stripes rise to the right as
+Abb. 2 draws them; every mark keeps clear of its form's edge. The status strip lights ANZEIGE ·
+FARBLOS beside BETRIEB (signal-grey.png, and signal-grey-phone-932.png on a large phone).
+
 Under the label plate and its LED every device engraves, in a row of its own, what the machine
 at that console does — „DAS PRÜFPULT MISST DIE SPANNUNG DES GEWÄHLTEN KABELS", „DER KASTEN TRENNT
 KABEL DER NOTSTROMVERSORGUNG" — one line of 56 characters at most, which a narrow window wraps

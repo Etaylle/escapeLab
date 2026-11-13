@@ -173,7 +173,7 @@ die Entscheidung.
   gerundet) und `coldOpen.test.tsx` (Zielleiste und Briefing rendern nach `Date.now()`, bei Last
   über 15 wurde aus „10:59" „10:58"; jetzt eingefrorene Uhr). Regel: Tests fälschen die Zeit.
 
-### T-8 Signalkette: das Muster zählt — Status: bereit (Entscheidung Uros 2026-11-13, Spec `spec-T-signal-grey.md`) · Größe: S
+### T-8 Signalkette: das Muster zählt — Status: im PR (T-signal-grey) · Größe: S
 - Uros beim Spielen: „Ist das Muster ganz ohne Nutzen?" Mit Legende ja: Die Pulte zeichnen je
   Farbe ein Muster und die Legende nennt es, aber die Lösung braucht nur die Farbe; die Spalte
   ist Dekoration, die wie eine Regel aussieht.
@@ -181,6 +181,17 @@ die Entscheidung.
   ihrem Muster; die Muster-Spalte der Legende ist dann der einzige Weg zur Farbe. Feld
   `greyFrom` (Standard letzte Stufe), Sichten ohne Farbwort in diesen Stufen, Löser über die
   Legende, Frühschicht-Hinweis, Panel mit kontrastreichem Muster, Plan neu erzeugt.
+- Umgesetzt: `greyFrom` (leer = letzte Stufe mit Legende, 0 = nie, ohne Legende abgelehnt; im
+  Editor „Farblos ab Stufe"). Ab dieser Stufe trägt jede Sicht ein Zeichen nur als Form und
+  Muster, kein Farbwort (Negativ-Assertions über jede Sicht, im Smoke über den Draht); der Löser
+  liest die Farbe über die Muster der Legende. Betrieb nennt die Stufe und dass die Legende
+  jedem Muster seine Farbe gibt, die Werkstatt die verblassende Farbe; Blackouts Seite hat damit
+  194 Wörter Fließtext, die Grenze steigt von 170 auf 195. Das Panel zeichnet die Zeichen grau
+  mit 64 px, das Muster fett (jede Musterzelle ≥ 18 px, Tinte 9,4:1), dazu ANZEIGE · FARBLOS.
+  Blackout: `greyFrom` 4, dritte Frühschicht-Notiz (mit Uros' zweitem Satz 132 Zeichen, Grenze
+  120: „Die Farbe dazu steht in der Legende."), Plan mit vier grauen Ringen in Stufe 4. Der
+  Walkthrough spielt die Stufe nach Plan (signal-grey.png, signal-grey-phone-932.png); Sieg
+  548,8 s nach dem Lichtausfall, main 553,9 s (je ein Lauf unter Last 8–11).
 
 ### T-4 Leerlauf zu zweit — Status: wartet (Entscheidung Uros) · Größe: M
 - Audit: Ben wartet 7,7 s am Reaktor auf die Sicherung, Anna 5 s vor der Notstrom-Tür. Optionen:
