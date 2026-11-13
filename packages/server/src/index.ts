@@ -19,8 +19,9 @@ import { HEARTBEAT_MS, startHeartbeat } from './heartbeat.js';
 import { MissionCatalog } from './missions.js';
 import { RoomManager, seedsAllowed } from './roomManager.js';
 import { roomKey, roomKeyLogLine } from './seal.js';
+import { RateLimiter } from './rateLimiter.js';
 import { onSignal } from './shutdown.js';
-import { serveSockets } from './sockets.js';
+import { ACCOUNT_WRITES_PER_MINUTE, serveSockets } from './sockets.js';
 import { StaticSite } from './static.js';
 import { DEFAULT_RUNS_LOG } from './store/jsonl.js';
 import { openStore, recordRuns, type Store } from './store/store.js';
@@ -119,8 +120,14 @@ const httpServer = createWebServer(tls, (req, res) => {
 });
 
 const wss = new WebSocketServer({ server: httpServer, path: '/ws' });
-// Every pass has its account in the store, found or made as it comes to the door.
-const served = serveSockets(wss, { catalog, manager, accounts: new AccountDesk(store) });
+// Every pass has its account in the store, found or made as it comes to the door: one pass a
+// socket, and only so many writes to the accounts a minute from an address.
+const served = serveSockets(wss, {
+  catalog,
+  manager,
+  accounts: new AccountDesk(store),
+  accountWrites: new RateLimiter(ACCOUNT_WRITES_PER_MINUTE, 60_000),
+});
 // A socket gone silent is found out and closed, so that the room pauses for its player; the
 // log names the room and the seat of each socket it cuts.
 startHeartbeat(wss, HEARTBEAT_MS, served.cut);

@@ -9,8 +9,9 @@ import {
   type ServerMessage,
 } from '@escapelab/core';
 import { AccountDesk } from '../src/accounts.js';
+import { RateLimiter, type Sender } from '../src/rateLimiter.js';
 import { RoomManager } from '../src/roomManager.js';
-import { serveSockets } from '../src/sockets.js';
+import { ONE_PASS, serveSockets, TOO_MANY_WRITES } from '../src/sockets.js';
 import { JsonlStore } from '../src/store/jsonl.js';
 import { FakeServer, joinedOf, type FakeSocket } from './line.js';
 import { passFor } from './passes.js';
@@ -22,13 +23,23 @@ const mission: Mission = parseMission(
 );
 const catalog = { get: () => mission, default: mission };
 
-/** The server's sockets over a manager of rooms, with the accounts in a store of their own. */
-function lab(manager = new RoomManager()) {
+/**
+ * The server's sockets over a manager of rooms, with the accounts in a store of their own and,
+ * where given, a limit on the writes to them by address.
+ */
+function lab(manager = new RoomManager(), accountWrites?: RateLimiter) {
   const server = new FakeServer();
   const store = JsonlStore.open(join(mkdtempSync(join(tmpdir(), 'escapelab-acc-')), 'runs.jsonl'));
-  serveSockets(server, { catalog, manager, accounts: new AccountDesk(store) });
+  const accounts = new AccountDesk(store);
+  serveSockets(server, { catalog, manager, accounts, ...(accountWrites && { accountWrites }) });
   return { server, manager, store };
 }
+
+/** A request that came through a proxy: its socket the proxy's, the client first in line. */
+const through = (client: string): Sender => ({
+  headers: { 'x-forwarded-for': `${client}, 10.0.0.1` },
+  socket: { remoteAddress: '10.0.0.1' },
+});
 
 /** Every account the socket heard of, in order: none for a deleted one. */
 const accounts = (socket: FakeSocket): (AccountView | null)[] =>
@@ -213,5 +224,47 @@ describe('an account per crew pass', () => {
     anna.say({ kind: 'my-runs', pass: forged });
     await settled();
     expect(refusals(anna)).toEqual([['Dieser Ausweis gilt hier nicht.', 'my-runs']]);
+  });
+});
+
+describe('the accounts’ door', () => {
+  it('lets a socket speak for one pass: another is refused there, welcome on its own', async () => {
+    const { server } = lab();
+    const anna = server.connect();
+    anna.say({ kind: 'whereami', pass: passFor('Anna') });
+    anna.say({ kind: 'whereami', pass: passFor('Ben') });
+    anna.say({ kind: 'profile', pass: passFor('Ben'), name: 'Ben' });
+    await settled();
+    expect(refusals(anna)).toEqual([
+      [ONE_PASS, 'whereami'],
+      [ONE_PASS, 'profile'],
+    ]);
+    expect(accounts(anna)).toHaveLength(1);
+    const ben = server.connect();
+    ben.say({ kind: 'whereami', pass: passFor('Ben') });
+    await settled();
+    expect([refusals(ben), accounts(ben).length]).toEqual([[], 1]);
+  });
+
+  it('holds back the account writes of an address past its limit, no other’s', async () => {
+    const { server } = lab(new RoomManager(), new RateLimiter(2, 60_000));
+    const anna = server.connect(through('203.0.113.7'));
+    anna.say({ kind: 'whereami', pass: passFor('Anna'), name: 'Anna' });
+    anna.say({ kind: 'profile', pass: passFor('Anna'), name: 'Anna K.' });
+    anna.say({ kind: 'profile', pass: passFor('Anna'), name: 'Anna Berg' });
+    // Another device behind the same address: its seat is answered, its account waits.
+    const ben = server.connect(through('203.0.113.7'));
+    ben.say({ kind: 'whereami', pass: passFor('Ben') });
+    await settled();
+    expect(refusals(anna)).toEqual([[TOO_MANY_WRITES, 'profile']]);
+    expect(accountOf(anna)).toMatchObject({ name: 'Anna K.' });
+    expect(ben.heard.map((m) => m.kind)).toEqual(['seated']);
+    // Reading the runs writes nothing; another address behind the same proxy writes on.
+    anna.say({ kind: 'my-runs', pass: passFor('Anna') });
+    const cleo = server.connect(through('198.51.100.4'));
+    cleo.say({ kind: 'whereami', pass: passFor('Cleo') });
+    await settled();
+    expect(anna.heard.at(-1)).toMatchObject({ kind: 'my-runs', total: 0 });
+    expect(accounts(cleo)).toHaveLength(1);
   });
 });

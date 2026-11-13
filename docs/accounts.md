@@ -28,6 +28,13 @@ store: the account comes to the socket a moment later (`account`).
 - **The key stays on the device.** No sign-in, no password, no e-mail: the pass is the key. A
   browser whose storage is cleared mints a new pass and with it gets a new account; the old one
   stays where it was, out of reach.
+- **One pass a socket, so many writes an address.** A socket speaks for the first pass it shows;
+  another is refused there („Diese Verbindung gehört schon einem anderen Dienstausweis."). Each
+  address gets 120 writes to the accounts a minute — an account made or visited as its pass
+  arrives, a name, a colour, a deletion — counted by the first address of `X-Forwarded-For`
+  behind Render's proxy, else the socket's. Past it a seat is still taken and its account waits;
+  a name or a deletion is refused („Zu viele Kontoänderungen von dieser Adresse in einer
+  Minute."). „Meine Einsätze" only reads, and is never held back.
 
 ## What is kept
 
@@ -66,7 +73,8 @@ cache did not know it, or knows it first from this very run.
 In the settings, „Konto löschen" asks first, saying what goes and what stays; „Endgültig löschen"
 sends `delete-account`. The server deletes the account, its identities, its Erfolge and its seats
 in the runs. The runs stay — the Bestenliste keeps their times and counts — without its name: its
-seat is gone, the crew shows the others, and the Bestenliste is counted anew. The device forgets
+seat is gone, the crew shows the others, and the Bestenliste takes the name off the runs the
+account held, reading no other. The device forgets
 the name, the colour and the Erfolge it kept; the pass stays, and the next visit to the menu
 starts a new, empty account. The server's log says „an account was deleted, as its pass asked",
 naming nobody.

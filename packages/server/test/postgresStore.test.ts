@@ -85,6 +85,23 @@ describe.skipIf(url === '')('the store in Postgres', () => {
       ]);
     });
 
+    it('deletes an account reading no run but its own, the Bestenliste counting on', async () => {
+      const store = await open();
+      const gone = await store.getOrCreateByIdentity(identityOf('Anna'), {
+        displayName: 'Anna',
+        colour: null,
+      });
+      await withAccounts(store, ['Ben', 'Cleo']);
+      await store.appendRun(finished({ at: DAY }, ['Anna', 'Ben']));
+      await store.appendRun(finished({ at: DAY + 1, crew: ['Cleo'] }, ['Cleo']));
+      const read = vi.spyOn(store, 'runs');
+      await store.deleteAccount(gone.id);
+      expect(read).not.toHaveBeenCalled();
+      const blackout = store.stats().mission('blackout')?.difficulties[0];
+      expect([store.stats().runs, blackout?.runs, blackout?.wins]).toEqual([2, 2, 2]);
+      expect(blackout?.top.map((entry) => entry.crew)).toEqual([['Ben'], ['Cleo']]);
+    });
+
     it('keeps no name of a seat without an account: one deleted meanwhile, or none', async () => {
       const store = await open();
       const anna = { displayName: 'Anna', colour: null };

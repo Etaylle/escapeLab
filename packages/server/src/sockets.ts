@@ -11,6 +11,7 @@ import {
 import type { AccountDesk } from './accounts.js';
 import { MISSED_PINGS, SILENT_MS, type CutReason } from './heartbeat.js';
 import type { MissionCatalog } from './missions.js';
+import { clientAddress, type Sender } from './rateLimiter.js';
 import { GAME_KINDS, type GameMessage, type Room } from './room.js';
 import type { RoomManager } from './roomManager.js';
 
@@ -21,9 +22,12 @@ export interface PlayerSocket {
   on(event: 'close', listener: (code?: number) => void): unknown;
 }
 
-/** What the connections need of the WebSocket server: `ws`'s WebSocketServer has it. */
+/**
+ * What the connections need of the WebSocket server: `ws`'s WebSocketServer has it, handing each
+ * socket over with the request that opened it.
+ */
 export interface SocketServer {
-  on(event: 'connection', listener: (socket: PlayerSocket) => void): unknown;
+  on(event: 'connection', listener: (socket: PlayerSocket, request?: Sender) => void): unknown;
 }
 
 /** What a connection's messages reach: the missions rooms open with, the rooms, the accounts. */
@@ -32,6 +36,58 @@ export interface Lab {
   manager: RoomManager;
   /** the accounts of the passes (accounts.ts); without, no pass hears of an account */
   accounts?: AccountDesk;
+  /**
+   * how many writes to the accounts each address gets (rateLimiter.ts, by `clientAddress`): an
+   * account made, visited, renamed, recoloured or deleted counts one; none where unset
+   */
+  accountWrites?: { take: (address: string) => boolean };
+}
+
+/**
+ * Writes to the accounts a minute an address gets (`Lab.accountWrites`): a classroom behind one
+ * address, every device arriving at once, stays under it; a script making accounts gets two a
+ * second.
+ */
+export const ACCOUNT_WRITES_PER_MINUTE = 120;
+
+/** What a socket is told that shows a second pass: one socket speaks for one pass. */
+export const ONE_PASS = 'Diese Verbindung gehört schon einem anderen Dienstausweis.';
+
+/** What a socket is told whose address wrote to the accounts too often this minute. */
+export const TOO_MANY_WRITES = 'Zu viele Kontoänderungen von dieser Adresse in einer Minute.';
+
+/** What a socket came in as: the address its writes count against, the pass it showed first. */
+interface Door {
+  address: string;
+  pass: string | null;
+}
+
+/** Each socket's door (`Door`), from the request that opened it. */
+const doors = new WeakMap<PlayerSocket, Door>();
+
+/**
+ * Throws GameError(ONE_PASS) where `msg` shows a pass other than the first its socket showed: a
+ * socket that may speak for any pass could make an account per message.
+ */
+function checkPass(socket: PlayerSocket, msg: ClientMessage): void {
+  const door = doors.get(socket);
+  if (door === undefined || !('pass' in msg)) {
+    return;
+  }
+  door.pass ??= msg.pass.id;
+  if (door.pass !== msg.pass.id) {
+    throw new GameError(ONE_PASS);
+  }
+}
+
+/**
+ * The accounts where the address of `socket` may write to them once more now
+ * (`Lab.accountWrites`), the write counted; undefined where it may not, or there are none.
+ */
+function writable(lab: Lab, socket: PlayerSocket): AccountDesk | undefined {
+  const address = doors.get(socket)?.address ?? 'unknown';
+  const allowed = lab.accountWrites?.take(address) ?? true;
+  return allowed ? lab.accounts : undefined;
 }
 
 /** Per-connection session, set once the socket joins, resumes or watches a room. */
@@ -82,11 +138,14 @@ const CUT_WHY: Record<CutReason, string> = {
  */
 export function serveSockets(server: SocketServer, lab: Lab): Served {
   const sessions = new WeakMap<object, () => Session | null>();
-  server.on('connection', (socket) => {
+  server.on('connection', (socket, request) => {
     let session: Session | null = null;
     sessions.set(socket, () => session);
+    const address = request === undefined ? 'unknown' : clientAddress(request);
+    doors.set(socket, { address, pass: null });
     const take = (msg: ClientMessage): void => {
       try {
+        checkPass(socket, msg);
         session = handleMessage(lab, socket, session, msg, () => take(msg));
       } catch (err) {
         refuse(socket, session, msg, err);
@@ -303,9 +362,14 @@ type AccountAsk = Extract<ClientMessage, { kind: 'profile' | 'delete-account' | 
  * the lab's words, the log saying more.
  */
 function answerAccount(lab: Lab, socket: PlayerSocket, msg: AccountAsk): void {
-  const desk = lab.accounts;
-  if (desk === undefined) {
+  if (lab.accounts === undefined) {
     refuse(socket, null, msg, new GameError(NO_ACCOUNTS));
+    return;
+  }
+  // Reading the runs writes nothing; a name or a deletion counts against the address.
+  const desk = msg.kind === 'my-runs' ? lab.accounts : writable(lab, socket);
+  if (desk === undefined) {
+    refuse(socket, null, msg, new GameError(TOO_MANY_WRITES));
     return;
   }
   answerOf(desk, msg).then(
@@ -356,7 +420,7 @@ function comeBack(
   // A pass that comes back to a seat before it has an account starts one with the seat's name.
   const seat = room.playerOf(back.playerId);
   const profile = { displayName: seat?.name ?? '', colour: seat?.color ?? null };
-  tellAccount(socket, lab.accounts?.arrive(msg.pass, profile));
+  tellAccount(socket, writable(lab, socket)?.arrive(msg.pass, profile));
   return back;
 }
 
@@ -393,7 +457,7 @@ function answer(
       send(socket, { kind: 'seated', seat: lab.manager.whereIs(msg.pass) });
       // The account the device knew it by starts with the name and the colour it kept.
       const kept = { displayName: msg.name?.trim() ?? '', colour: msg.color ?? null };
-      tellAccount(socket, lab.accounts?.arrive(msg.pass, kept));
+      tellAccount(socket, writable(lab, socket)?.arrive(msg.pass, kept));
       break;
     }
     case 'list-rooms':
@@ -434,7 +498,7 @@ function sitDown(
 ): Session | null {
   const next = takeSeat(lab, socket, session, msg);
   const profile = { displayName: msg.name.trim(), colour: msg.color ?? null };
-  tellAccount(socket, lab.accounts?.arrive(msg.pass, profile, profile.displayName));
+  tellAccount(socket, writable(lab, socket)?.arrive(msg.pass, profile, profile.displayName));
   return next;
 }
 
@@ -538,7 +602,7 @@ function inRoom(
     s.room.act(s.playerId, msg);
     // A colour chosen in a lobby is the account's from now on: the next lobby starts in it.
     if (msg.kind === 'select-color' && s.pass !== null) {
-      tellAccount(socket, lab.accounts?.recolour(s.pass, msg.color));
+      tellAccount(socket, writable(lab, socket)?.recolour(s.pass, msg.color));
     }
     return s;
   }

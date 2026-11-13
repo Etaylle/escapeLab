@@ -158,7 +158,7 @@ const isDaily = (run: LoggedRun): boolean => run.version === 2 && run.daily === 
 /**
  * The Bestenliste's numbers by mission and difficulty: counted from the store's runs as the
  * server starts, then kept up to date run by run, a deleted account's name taken off the runs
- * it is listed with (`unname`) — the run log's store does that, Postgres counts anew. It keeps
+ * it is listed with (`unname`) — never counted anew while the server runs. It keeps
  * the time of every won run, for the median and the places, and names only for the TOP_RUNS
  * fastest. The runs of the Tagesschicht rank apart, a board for each UTC day they started on:
  * every crew that day played the same instance.

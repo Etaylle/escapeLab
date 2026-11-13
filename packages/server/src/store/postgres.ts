@@ -358,9 +358,23 @@ export class PostgresStore implements Store {
   }
 
   async deleteAccount(accountId: string): Promise<void> {
-    // Its identities, Erfolge and seats go with it (onDelete: Cascade); the runs stay.
-    await onceMore(() => this.db.account.deleteMany({ where: { id: accountId } }));
-    await this.recount();
+    // Its identities, Erfolge and seats go with it (onDelete: Cascade); the runs stay. The seats
+    // it held, read in the same transaction, take its name off the Bestenliste: no run is read
+    // but its own, and none appended meanwhile can be left out of the count.
+    const [held] = await onceMore(() =>
+      this.db.$transaction([
+        this.db.runMember.findMany({
+          where: { accountId },
+          include: { run: { include: { members: true } } },
+        }),
+        this.db.account.deleteMany({ where: { id: accountId } }),
+      ]),
+    );
+    for (const { run: row, seatName } of held) {
+      for (const run of this.checked(row)) {
+        this.index.unname(run, seatName);
+      }
+    }
   }
 
   async close(): Promise<void> {
