@@ -86,15 +86,20 @@
  * screen's pace (16.8 ms p95). At 1280×720 it has to fit as at 1440×820 (menu-1280.png), the
  * scene baked anew for each size. menu-missions.png shows „Einsatz starten" open, the
  * tutorial's card saying „Erster Einsatz? Hier starten" in a line of its own and no tooltip over
- * the cards; the mission picked comes in as the scene behind. The guest's phone shows the menu
- * upright (menu-phone.png). A second crew's room — Cem's, of the other mission — and the
- * host's stand in a fourth page's „Offene Runden", every crew member as a figure, painted
- * (menu-open-rounds.png). The audience types the room's code in small letters into
- * „Beitreten" (menu-join.png): it has to stand in capitals, in a field no browser fills from its
- * passwords. In the reconnect drill a new tab of Anna's browser, her run standing paused, opens
- * the menu on the run's card, first and lit, every other item dimmed (menu-bound.png). The
- * menu's sound waits for the first key, the speaker's lamp lit, and plays after it; the lobby
- * chimes as the round comes up and chirps as Ben says ready; the run's start ends it.
+ * the cards; the mission picked comes in as the scene behind. „Runde eröffnen" closes the lab's
+ * doors over the menu and opens them on the lobby: menu-to-lobby.png holds them two thirds shut,
+ * the menu between them (the pause trick of the device's fade); the lobby has to stand over the
+ * menu's scene drifting on. The guest's phone shows the menu upright (menu-phone.png). A second
+ * crew's room — Cem's, of the other mission — and the host's stand in a fourth page's „Offene
+ * Runden", every crew member as a figure, painted (menu-open-rounds.png); Cem's door wipes are
+ * timed as his page draws them, into the lobby and, „Raum verlassen", out of it — shut over the
+ * lobby, the page loaded anew, open on the menu — none asking more than 400 ms. The audience
+ * types the room's code in small letters into „Beitreten" (menu-join.png): it has to stand in
+ * capitals, in a field no browser fills from its passwords. In the reconnect drill a new tab of
+ * Anna's browser, her run standing paused, opens the menu on the run's card, first and lit,
+ * every other item dimmed (menu-bound.png). The menu's sound waits for the first key, the
+ * speaker's lamp lit, and plays after it; the lobby chimes as the round comes up and chirps as
+ * Ben says ready; the run's start ends it.
  *
  * On the way, both open the Bestenliste from the menu (history.png,
  * history-phone.png): measured like the menu, at 1280×720 too, and on
@@ -1317,7 +1322,12 @@ async function clickText(page, text) {
  */
 async function openMenuPanel(page, label) {
   await page.locator('.menu-item', { hasText: label }).click();
-  await page.locator('.menu-panel').waitFor({ timeout: 10_000 });
+  const panel = page.locator('.menu-panel');
+  await panel.waitFor({ timeout: 10_000 });
+  // It slides in: what follows reads it where it comes to rest.
+  await panel.evaluate((el) =>
+    Promise.all(el.getAnimations().map((slide) => slide.finished.catch(() => undefined))),
+  );
 }
 
 /** Steps back out of the menu's panel with Esc, as a player does. */
@@ -6283,7 +6293,201 @@ async function openMissionRound(page) {
   const picked = MISSION.toLowerCase();
   const scene = await sceneBaked(page, { missionId: picked });
   console.log(`menu-missions.png  ${MISSION} picked: ${sceneText(scene)}`);
-  await page.locator('.menu-panel button', { hasText: 'Runde eröffnen' }).click();
+  await captureDoors(page, () =>
+    page.locator('.menu-panel button', { hasText: 'Runde eröffnen' }).click(),
+  );
+}
+
+/** The door wipe's close, ms (client screens/DoorWipe.tsx `CLOSE_MS`). */
+const DOOR_CLOSE_MS = 170;
+/** How far into their close menu-to-lobby.png holds the doors, ms: about two thirds shut. */
+const DOOR_SHOT_MS = 130;
+
+/**
+ * In the page: holds the door wipe `ms` into its close, its leaves paused there, and keeps back
+ * the timer that would open them (`close` ms) — holdPanelFade's way with a device's fade.
+ */
+function holdDoors({ ms, close }) {
+  const style = document.createElement('style');
+  style.id = 'shots-door-hold';
+  style.textContent =
+    '.door-wipe--closing .door-leaf ' +
+    `{ animation-delay: -${ms}ms !important; animation-play-state: paused !important; }`;
+  document.head.append(style);
+  // The browser's own setTimeout throws unless it is called on the window.
+  const plain = globalThis.setTimeout;
+  const kept = [];
+  globalThis.__doorHold = { plain, kept };
+  globalThis.setTimeout = (run, delay, ...args) => {
+    if (delay !== close) {
+      return plain.call(globalThis, run, delay, ...args);
+    }
+    kept.push(() => run(...args));
+    return plain.call(globalThis, () => undefined, 0);
+  };
+}
+
+/** In the page: lets the doors held by holdDoors go — their timer runs now, they open. */
+function releaseDoors() {
+  const hold = globalThis.__doorHold;
+  document.getElementById('shots-door-hold')?.remove();
+  if (hold !== undefined) {
+    globalThis.setTimeout = hold.plain;
+    delete globalThis.__doorHold;
+    for (const run of hold.kept) {
+      hold.plain.call(globalThis, run, 0);
+    }
+  }
+}
+
+/** How far the left leaf has shut its half of the window, 0 to 1; null without doors. */
+const doorShut = (page) =>
+  page.evaluate(() => {
+    const leaf = document.querySelector('.door-leaf--left');
+    return leaf === null ? null : leaf.getBoundingClientRect().right / (globalThis.innerWidth / 2);
+  });
+
+/**
+ * „Runde eröffnen" pressed (`open`) with the door wipe held DOOR_SHOT_MS into its close over the
+ * menu (holdDoors), shot as menu-to-lobby.png, then let go until the lobby stands behind them and
+ * they have gone: whether the doors came, how far they had shut, 0 to 1, and whether the menu
+ * still stood under them, the lobby not yet there, while they closed.
+ */
+async function shootHeldDoors(page, open) {
+  await page.evaluate(holdDoors, { ms: DOOR_SHOT_MS, close: DOOR_CLOSE_MS });
+  await open();
+  const came = await page
+    .locator('.door-wipe--closing')
+    .waitFor({ timeout: 10_000 })
+    .then(
+      () => true,
+      () => false,
+    );
+  await sleep(150);
+  const shut = (await doorShut(page)) ?? 0;
+  const menu = await page.locator('.menu').count();
+  const lobby = await page.locator('.lobby').count();
+  await capture(page, 'menu-to-lobby.png');
+  await page.evaluate(releaseDoors);
+  await page.locator('.lobby').waitFor({ timeout: 10_000 });
+  await page.locator('.door-wipe').waitFor({ state: 'detached', timeout: 5000 });
+  return { came, shut, held: menu === 1 && lobby === 0 };
+}
+
+/** Whether the scene `after` is the scene `before` drifting on: the same lab, more frames drawn. */
+const driftsOn = (before, after) =>
+  before !== null &&
+  after !== null &&
+  after.missionId === before.missionId &&
+  after.paints > before.paints;
+
+/** What the log says of the held doors and of the scene behind the lobby once they have gone. */
+function doorShotText({ came, shut, held }, before, after, behind) {
+  const over = held ? 'the menu' : '!! the lobby';
+  const doors = came ? `${Math.round(shut * 100)} % shut over ${over}` : '!! no doors';
+  const scene = driftsOn(before, after)
+    ? `${after.missionId}'s lab drifting on (${before.paints} → ${after.paints} frames)`
+    : '!! a scene anew';
+  return (
+    `the doors held ${DOOR_SHOT_MS} of their ${DOOR_CLOSE_MS} ms close: ${doors}; the lobby ` +
+    `over ${scene}${behind ? '' : ' !! not behind it'}`
+  );
+}
+
+/**
+ * menu-to-lobby.png: the door wipe from the menu to the lobby caught mid-close, the menu between
+ * its leaves (shootHeldDoors); then the lobby has to stand over the menu's scene, drifting on —
+ * not one made anew — or the run fails.
+ */
+async function captureDoors(page, open) {
+  const before = await sceneOf(page);
+  const held = await shootHeldDoors(page, open);
+  const after = await sceneOf(page);
+  const behind = (await page.locator('.menu-backdrop--lobby:visible').count()) === 1;
+  console.log(`menu-to-lobby.png  ${doorShotText(held, before, after, behind)}`);
+  if (!held.came || !held.held || !driftsOn(before, after) || !behind) {
+    fail('menu-to-lobby.png: no doors over the menu, or no scene drifting on behind the lobby');
+  }
+}
+
+/**
+ * In the page — from its first moment as well, as an init script: tells the walkthrough of the
+ * door wipe as it goes (`__doorsNote`, noteDoorsOn) — its doors closing, shut, opening, gone —
+ * when, and how long its leaves' animations ask for.
+ */
+function watchDoors() {
+  let was = 'gone';
+  const note = () => {
+    const doors = document.querySelector('.door-wipe');
+    const stages = ['closing', 'shut', 'opening'];
+    const state = stages.find((each) => doors?.classList.contains(`door-wipe--${each}`)) ?? 'gone';
+    if (state === was) {
+      return;
+    }
+    was = state;
+    const leaves = [...(doors?.querySelectorAll('.door-leaf') ?? [])];
+    const lengths = leaves.flatMap((leaf) =>
+      leaf.getAnimations().map((move) => move.effect.getTiming().duration),
+    );
+    globalThis.__doorsNote({ state, at: Date.now(), lengths });
+  };
+  const observer = new globalThis.MutationObserver(note);
+  observer.observe(document, { subtree: true, childList: true, attributes: true });
+}
+
+/**
+ * The door wipes on `page` from now on, as the page tells of them (watchDoors) — on every page it
+ * loads as well: the stages as they come, `{ state, at, lengths }`.
+ */
+async function noteDoorsOn(page) {
+  const marks = [];
+  await page.exposeFunction('__doorsNote', (mark) => marks.push(mark));
+  await page.addInitScript(watchDoors);
+  await page.evaluate(watchDoors);
+  return marks;
+}
+
+/** The stages of the wipe noted in `marks` once its doors have gone — taken out of the list. */
+async function doorsGone(marks) {
+  for (let waited = 0; waited < 10_000; waited += 50) {
+    if (marks.length > 1 && marks.at(-1).state === 'gone') {
+      break;
+    }
+    await sleep(50);
+  }
+  return marks.splice(0);
+}
+
+/** How long the wipe in `marks` stood from stage `from` to stage `to`, ms; null without both. */
+function doorSpan(marks, from, to) {
+  const start = marks.find((mark) => mark.state === from);
+  const end = marks.find((mark) => mark.state === to && mark.at >= (start?.at ?? Infinity));
+  return start === undefined || end === undefined ? null : end.at - start.at;
+}
+
+/** The lengths the wipe in `marks` asked of its leaves' animations, ms, each once. */
+const doorLengths = (marks) => [...new Set(marks.flatMap((mark) => mark.lengths))];
+
+/**
+ * Logs Cem's door wipes — into the lobby (`there`): closed and opened; out of it (`back`): shut
+ * over the lobby, the page loaded anew, opened on the menu — or fails the run where one did not
+ * come or go, or its leaves ask for more than 400 ms.
+ */
+function timeDoors(there, back) {
+  const close = doorSpan(there, 'closing', 'opening');
+  const open = doorSpan(there, 'opening', 'gone');
+  const shut = doorSpan(back, 'closing', 'shut');
+  const reopen = doorSpan(back, 'opening', 'gone');
+  const asked = [...doorLengths(there), ...doorLengths(back)];
+  const into = close === null || open === null ? '!! no doors' : `${close} + ${open} ms`;
+  const out = shut === null || reopen === null ? '!! no doors' : `${shut} ms to shut, ${reopen} ms`;
+  console.log(
+    `door wipe          into the lobby ${into}; back to the menu ${out} to open on the page ` +
+      `loaded anew (the sheet's ${doorLengths(there).join(' + ')} ms)`,
+  );
+  if ([close, open, shut, reopen].includes(null) || asked.some((ms) => ms > 400)) {
+    fail(`door wipe: into the lobby ${into}; back to the menu ${out}`);
+  }
 }
 
 /** A side page at the laptop's size for a capture of the menu, named `name`. */
@@ -6307,7 +6511,9 @@ async function captureOpenRounds() {
   const contexts = [];
   try {
     const cem = await sidePage('Cem', contexts);
+    const marks = await noteDoorsOn(cem);
     await openRound(cem, other);
+    const there = await doorsGone(marks);
     await cem.locator('.room-code strong').waitFor({ timeout: 10_000 });
     const dora = await sidePage('Dora', contexts);
     await openMenuPanel(dora, 'Offene Runden');
@@ -6324,6 +6530,10 @@ async function captureOpenRounds() {
     if (rooms < 2 || figures < 3 || painted < figures) {
       fail(`menu-open-rounds.png: ${rooms} rooms, ${figures} figures, ${painted} painted`);
     }
+    await cem.locator('.lobby button', { hasText: 'Raum verlassen' }).click();
+    const back = await doorsGone(marks);
+    await cem.locator('.menu-item').first().waitFor({ timeout: 10_000 });
+    timeDoors(there, back);
   } finally {
     for (const context of contexts) {
       await context.close();

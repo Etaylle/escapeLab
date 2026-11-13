@@ -7,9 +7,17 @@ import { openStage, type SceneStage } from '../world/menu/stage.js';
  * the opening's shot, a vignette over it and the page's scanlines over all (styles/menu.css).
  * It lies behind the screen's content, over the whole window; hidden (`shown` false) — under
  * the Bestenliste, the booklet, the editor — it draws nothing. A mission picked anew comes in
- * over the lab before.
+ * over the lab before. Behind the lobby (`lobby`) it drifts on, its vignette even all round.
  */
-export function MenuScene({ missionId, shown }: { missionId: string | null; shown: boolean }) {
+export function MenuScene({
+  missionId,
+  shown,
+  lobby,
+}: {
+  missionId: string | null;
+  shown: boolean;
+  lobby: boolean;
+}) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const stage = useRef<SceneStage | null>(null);
   useEffect(() => {
@@ -28,7 +36,11 @@ export function MenuScene({ missionId, shown }: { missionId: string | null; show
     stage.current?.show(missionId);
   }, [missionId]);
   return (
-    <div className="menu-backdrop" hidden={!shown} aria-hidden="true">
+    <div
+      className={lobby ? 'menu-backdrop menu-backdrop--lobby' : 'menu-backdrop'}
+      hidden={!shown}
+      aria-hidden="true"
+    >
       <canvas ref={canvasRef} className="menu-scene" />
     </div>
   );

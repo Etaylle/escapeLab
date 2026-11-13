@@ -14,6 +14,7 @@ import { crewPass, keepName } from './pass.js';
 import { addProbes } from './probes.js';
 import { STATS_PATH, useJson } from './runStats.js';
 import { useRunScreen } from './runScreen.js';
+import { useReducedMotion } from './settings.js';
 import { useVoiceMesh, VoiceContext } from './voice/useVoice.js';
 import { useGameConnection, type Connection } from './ws.js';
 import { useFinale, type Finale } from './world/finale.js';
@@ -34,6 +35,7 @@ import { Icon, type IconName } from './screens/Icon.js';
 import { UpdateNotice } from './screens/Install.js';
 import { JoinScreen } from './screens/Join.js';
 import { LobbyScreen } from './screens/Lobby.js';
+import { DoorWipe, useDoorWipe, type Doors, type Place } from './screens/DoorWipe.js';
 import { createRoomMessage, pickedMission } from './screens/MenuPanels.js';
 import { MenuScene } from './screens/MenuScene.js';
 import { GameScreen } from './screens/Game.js';
@@ -472,6 +474,70 @@ function useMissions(): [MissionInfo[], () => void] {
   return [missions, load];
 }
 
+/** Where the window is, as the door wipe tells the screens apart (screens/DoorWipe.tsx). */
+export function placeOf(conn: Pick<Connection, 'view' | 'spectatorView'>): Place {
+  if (conn.spectatorView !== null) {
+    return 'elsewhere';
+  }
+  if (conn.view === null) {
+    return 'menu';
+  }
+  return conn.view.phase === 'lobby' ? 'lobby' : 'elsewhere';
+}
+
+/**
+ * The connection as the screens draw it: between the menu and the lobby as it was before the
+ * door wipe's doors began to close, until they have (screens/DoorWipe.tsx); and the doors.
+ */
+function useWiped(live: Connection): { conn: Connection; doors: Doors } {
+  const reduced = useReducedMotion();
+  const wipe = useDoorWipe(live, placeOf(live), reduced);
+  return { conn: wipe.value, doors: wipe.doors };
+}
+
+/** The connection's error over every screen, until it is dismissed. */
+function ErrorBanner({ conn }: { conn: Connection }) {
+  if (conn.error === null) {
+    return null;
+  }
+  return (
+    <div className="banner error" role="alert">
+      {conn.error}
+      <button className="link" onClick={conn.dismissError}>
+        schließen
+      </button>
+    </div>
+  );
+}
+
+/** The living scene behind the screens, as screens/MenuScene.tsx takes it. */
+export interface Backdrop {
+  missionId: string | null;
+  shown: boolean;
+  lobby: boolean;
+}
+
+/**
+ * The living scene behind the screens: off any room the lab of the mission picked (`picked`),
+ * shown on the menu (`menu`) and hidden under the pages over it; in the lobby the room's, behind
+ * the crew room — the same scene, so that it drifts on; none in a run or for the audience.
+ */
+export function backdropOf(
+  conn: Pick<Connection, 'view' | 'spectatorView'>,
+  menu: boolean,
+  picked: string | null,
+): Backdrop | null {
+  if (conn.spectatorView !== null) {
+    return null;
+  }
+  if (conn.view === null) {
+    return { missionId: picked, shown: menu, lobby: false };
+  }
+  return conn.view.phase === 'lobby'
+    ? { missionId: conn.view.missionId, shown: true, lobby: true }
+    : null;
+}
+
 /** The pages over the join screen: the booklet's and the Bestenliste's missions, the editor. */
 interface Pages {
   handbook: string | null;
@@ -508,9 +574,11 @@ function layoutOf(immersive: boolean, editing: boolean, menu: boolean): string {
  * /editor, with a shared mission or the draft the tab kept.
  */
 export function App({ boot }: { boot: EditorBoot }) {
-  const conn = useGameConnection();
+  const live = useGameConnection();
+  // The screens draw the connection as the door wipe shows it; the rest hears it live.
+  const { conn, doors } = useWiped(live);
   // The crew's voice lives as long as the page: lobby, run and end screen alike.
-  const voice = useVoiceMesh(conn);
+  const voice = useVoiceMesh(live);
   // Fetched at the start, and again whenever the editor saves or deletes a mission.
   const [missions, loadMissions] = useMissions();
   // The handbook is a page of its own off the join screen: the mission whose
@@ -525,15 +593,15 @@ export function App({ boot }: { boot: EditorBoot }) {
   const stats = useJson<MissionStats[]>(STATS_PATH);
   // The mission editor, another page off the join screen; the booklet opens over it.
   const editor = useEditorPage(boot);
-  const testRun = useTestRun(conn);
+  const testRun = useTestRun(live);
   // The settings, over whatever screen is up (a controller's Start too); nothing pauses.
   const [settingsOpen, setSettingsOpen] = useState(false);
   usePad(() => setSettingsOpen((open) => !open));
   const contentRef = useRef<HTMLElement>(null);
   // How the run ended, on this screen: the world plays it before the end screen opens.
-  const finale = useFinale(conn.view ?? conn.spectatorView);
+  const finale = useFinale(live.view ?? live.spectatorView);
   // A run won on this device ends its first-run default (firstRun.ts).
-  useWonMark(conn.view?.phase ?? null);
+  useWonMark(live.view?.phase ?? null);
   const immersive = useStage(conn, finale);
   // Which mission is running, for the header. The lobby already has it as its
   // headline, so naming it twice there would be noise.
@@ -548,6 +616,7 @@ export function App({ boot }: { boot: EditorBoot }) {
   // The editor scrolls on a phone (styles/editor.css); the menu lies over its living scene.
   const { editing, menu } = offRoomOf(offRoom, { handbook, history, editor: editor.open });
   const layout = layoutOf(immersive, editing, menu);
+  const backdrop = backdropOf(conn, menu, pickedMission(missions, picked));
   useEffect(() => keepPath(editing), [editing]);
 
   // Every screen shares one scrolling area, the booklet too; each opens at its
@@ -561,6 +630,7 @@ export function App({ boot }: { boot: EditorBoot }) {
   return (
     <div className="app">
       <div className="scanlines" aria-hidden="true" />
+      <DoorWipe doors={doors} />
       <TopBar
         roomCode={conn.roomCode}
         seed={pinnedTo}
@@ -571,18 +641,11 @@ export function App({ boot }: { boot: EditorBoot }) {
         menu={menu}
       />
       {settingsOpen && <SettingsPanel onClose={() => setSettingsOpen(false)} />}
-      {conn.error !== null && (
-        <div className="banner error" role="alert">
-          {conn.error}
-          <button className="link" onClick={conn.dismissError}>
-            schließen
-          </button>
-        </div>
-      )}
+      <ErrorBanner conn={live} />
       <UpdateNotice />
 
       <main ref={contentRef} className={`content ${layout}`}>
-        {offRoom && <MenuScene missionId={pickedMission(missions, picked)} shown={menu} />}
+        {backdrop !== null && <MenuScene {...backdrop} />}
         <VoiceContext value={voice}>
           <Screens
             conn={conn}

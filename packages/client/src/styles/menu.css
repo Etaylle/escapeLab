@@ -126,6 +126,7 @@
   display: flex;
   flex-direction: column;
   gap: 14px;
+  transition: opacity 0.2s ease-out;
 }
 
 /* Under a panel the menu waits, dark: the panel is what reads. */
@@ -314,6 +315,8 @@
 
 /* ── a panel over the menu ──────────────────────────────────────────────── */
 
+/* It slides in over the menu from the menu's side, fading up as it comes; under reduced motion
+   it only fades. */
 .menu-panel {
   grid-area: body;
   z-index: 2;
@@ -326,6 +329,20 @@
   border-radius: 14px;
   background: rgba(9, 14, 19, 0.97);
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+  animation: menu-panel-in 200ms cubic-bezier(0.2, 0.7, 0.3, 1) both;
+}
+
+@keyframes menu-panel-in {
+  from {
+    opacity: 0;
+    transform: translateX(-32px);
+  }
+}
+
+@keyframes menu-panel-fade {
+  from {
+    opacity: 0;
+  }
 }
 
 .menu-panel-head {
@@ -406,12 +423,149 @@
   color: var(--warn);
 }
 
-/* ── less motion: nothing steps aside ───────────────────────────────────── */
+/* ── the lobby over the scene ───────────────────────────────────────────── */
+
+/* The lobby keeps its layout; its stage is a stacking context of its own, as the menu's is, so
+   that the scene drifting on from the menu lies behind the crew room, evenly dimmed. */
+.content--stage:has(> .lobby) {
+  isolation: isolate;
+}
+
+.menu-backdrop--lobby::after {
+  background: rgba(5, 8, 12, 0.5);
+}
+
+/* ── the door wipe between the menu and the lobby ───────────────────────── */
+
+/*
+ * screens/DoorWipe.tsx: the lab's sliding doors over the whole window, under the scanlines — two
+ * steel leaves lit from the top, the ink edge where they meet, an amber light strip and two
+ * chevrons at the seam, as the world draws a door (world/art.ts `drawDoor`). They close in 170 ms,
+ * gathering speed as a heavy door does, and open in 210 ms, slowing to a stop: 380 ms in all
+ * (`CLOSE_MS`, `OPEN_MS`). Under reduced motion they never come: the screens cut.
+ */
+.door-wipe {
+  position: fixed;
+  inset: 0;
+  z-index: 45;
+  display: flex;
+  overflow: hidden;
+}
+
+.door-leaf {
+  position: relative;
+  flex: 1 0 50%;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0) 4px),
+    repeating-linear-gradient(
+      180deg,
+      transparent 0 94px,
+      rgba(5, 8, 11, 0.6) 94px 96px,
+      rgba(255, 255, 255, 0.04) 96px 97px
+    ),
+    linear-gradient(180deg, #333940 0%, #23282c 12%, #121517 100%);
+}
+
+.door-leaf--left {
+  box-shadow: inset -2px 0 0 #05080b;
+}
+
+.door-leaf--right {
+  box-shadow: inset 2px 0 0 #05080b;
+}
+
+/* The amber light strip along each leaf's leading edge, its halo round it. */
+.door-leaf::after {
+  content: '';
+  position: absolute;
+  top: 22%;
+  bottom: 22%;
+  width: 6px;
+  border-radius: 3px;
+  background: #fbbf24;
+  box-shadow: 0 0 18px 5px rgba(251, 191, 36, 0.3);
+}
+
+.door-leaf--left::after {
+  right: 16px;
+}
+
+.door-leaf--right::after {
+  left: 16px;
+}
+
+.door-chevrons {
+  position: absolute;
+  top: calc(50% - 28px);
+  width: 64px;
+  height: 56px;
+  fill: none;
+  stroke: rgba(251, 191, 36, 0.5);
+  stroke-width: 6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.door-leaf--left .door-chevrons {
+  right: 44px;
+}
+
+/* The right leaf's chevrons point left, to the seam. */
+.door-leaf--right .door-chevrons {
+  left: 44px;
+  transform: scaleX(-1);
+}
+
+.door-wipe--closing .door-leaf--left {
+  animation: door-close-left 170ms cubic-bezier(0.4, 0, 1, 1) both;
+}
+
+.door-wipe--closing .door-leaf--right {
+  animation: door-close-right 170ms cubic-bezier(0.4, 0, 1, 1) both;
+}
+
+.door-wipe--opening .door-leaf--left {
+  animation: door-open-left 210ms cubic-bezier(0, 0, 0.2, 1) both;
+}
+
+.door-wipe--opening .door-leaf--right {
+  animation: door-open-right 210ms cubic-bezier(0, 0, 0.2, 1) both;
+}
+
+@keyframes door-close-left {
+  from {
+    transform: translateX(-100%);
+  }
+}
+
+@keyframes door-close-right {
+  from {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes door-open-left {
+  to {
+    transform: translateX(-100%);
+  }
+}
+
+@keyframes door-open-right {
+  to {
+    transform: translateX(100%);
+  }
+}
+
+/* ── less motion: nothing steps aside or slides ─────────────────────────── */
 
 :where([data-motion='reduce']) {
   .menu-label,
   .menu-list .menu-item {
     transition: none;
+  }
+
+  .menu-panel {
+    animation-name: menu-panel-fade;
   }
 
   .menu-list .menu-item:hover .menu-label,

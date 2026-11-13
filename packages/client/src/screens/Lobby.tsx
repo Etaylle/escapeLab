@@ -21,6 +21,7 @@ import { crewSpeaks, uiSound } from '../world/menuSound.js';
 import { preloadSamples } from '../world/samples.js';
 import { crewSizeText } from './Crew.js';
 import { CrewRoom } from './CrewRoom.js';
+import { closeDoorsThen } from './DoorWipe.js';
 import { Icon } from './Icon.js';
 import { MapThumb } from './MapThumb.js';
 import { phosphorClass, useComesOn } from './phosphor.js';
@@ -529,7 +530,7 @@ export function LobbyScreen({ view, send, leaveRoom, missions, stats }: Props) {
         <MicSetup />
         <StartArea view={view} send={send} />
         <div className="lobby-foot">
-          <button className="link" onClick={leaveRoom}>
+          <button className="link" onClick={() => closeDoorsThen(leaveRoom)}>
             Raum verlassen
           </button>
         </div>
