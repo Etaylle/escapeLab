@@ -72,8 +72,8 @@ describe('the desk', () => {
     await store.appendRun(finished({ at: DAY }, ['Anna', null]));
     const view = await accounts.arrive(pass, { displayName: 'Andere', colour: null });
     const earned = achievementsOf(reportOf());
-    expect(view.runs).toBe(1);
-    expect(view.achievements).toEqual({
+    expect(view?.runs).toBe(1);
+    expect(view?.achievements).toEqual({
       blackout: Object.fromEntries(earned.map((id) => [id, DAY])),
     });
     expect((await accounts.runsOf(pass)).runs.map((run) => run.finishedAt)).toEqual([DAY]);

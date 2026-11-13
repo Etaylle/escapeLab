@@ -28,12 +28,16 @@ store: the account comes to the socket a moment later (`account`).
 - **The key stays on the device.** No sign-in, no password, no e-mail: the pass is the key. A
   browser whose storage is cleared mints a new pass and with it gets a new account; the old one
   stays where it was, out of reach.
-- **One pass a socket, so many writes an address.** A socket speaks for the first pass it shows;
-  another is refused there („Diese Verbindung gehört schon einem anderen Dienstausweis."). Each
-  address gets 120 writes to the accounts a minute — an account made or visited as its pass
-  arrives, a name, a colour, a deletion. Past it a seat is still taken and its account waits; a
-  name or a deletion is refused („Zu viele Kontoänderungen von dieser Adresse in einer
-  Minute."). „Meine Einsätze" only reads, and is never held back.
+- **One pass a socket, so many new accounts an address.** A socket speaks for the first pass it
+  shows; another is refused there („Diese Verbindung gehört schon einem anderen
+  Dienstausweis."). An address may make 60 new accounts a minute; past that a pass without one
+  still takes its seat, its account waits, and asked for by its name it is refused („Von dieser
+  Adresse kommen in dieser Minute zu viele neue Konten."). A pass with an account always
+  arrives in it. Every other write to the accounts — an account visited as its pass arrives, a
+  name, a colour, a deletion — counts against its socket, 10 a minute; past that a name or a
+  deletion is refused („Zu viele Kontoänderungen über diese Verbindung in einer Minute."). A
+  lecture behind one address, thirty new students writing five times each, stays under both.
+  „Meine Einsätze" only reads, and is never held back.
 - **Whose address.** Behind Render (`RENDER` set) the socket's address is the proxy's, the same
   for everybody, and a client may send any `X-Forwarded-For` it likes: the address is
   Cloudflare's `cf-connecting-ip`, else `true-client-ip`, else the last `X-Forwarded-For` entry,

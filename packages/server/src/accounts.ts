@@ -1,5 +1,6 @@
 import {
   ACHIEVEMENT_IDS,
+  GameError,
   reportGrade,
   runSeconds,
   utcDay,
@@ -27,6 +28,15 @@ import {
  * out one after the other, in the order they came: an account is made once, and no answer
  * overtakes the one before it.
  */
+
+/** Whether one more account may be made now: asked only where a pass has none yet. */
+export type MayMake = () => boolean;
+
+/** Any account may be made: where nothing limits them. */
+const always: MayMake = () => true;
+
+/** What a pass is told that has no account, where its address made too many this minute. */
+export const TOO_MANY_NEW = 'Von dieser Adresse kommen in dieser Minute zu viele neue Konten.';
 
 /** How many of an account's runs „Meine Einsätze" lists: the newest. */
 export const MY_RUNS = 50;
@@ -77,12 +87,21 @@ export class AccountDesk {
   constructor(private readonly store: Store) {}
 
   /**
-   * The account of `pass`, found — or made, starting with `profile` — as its owner sees it; where
-   * a seat is taken under the name `sitting`, the account goes by that name from now on.
+   * The account of `pass`, found — or made, starting with `profile`, where `mayMake` lets one be
+   * made — as its owner sees it; null where none may be made. Where a seat is taken under the
+   * name `sitting`, the account goes by that name from now on.
    */
-  arrive(pass: CrewPass, profile: Profile, sitting: string | null = null): Promise<AccountView> {
+  arrive(
+    pass: CrewPass,
+    profile: Profile,
+    sitting: string | null = null,
+    mayMake: MayMake = always,
+  ): Promise<AccountView | null> {
     return this.serial(pass, async () => {
-      const account = await this.store.getOrCreateByIdentity(identityOf(pass), profile);
+      const account = await this.accountOf(pass, profile, mayMake);
+      if (account === null) {
+        return null;
+      }
       const changed =
         sitting === null || sitting === account.displayName
           ? account
@@ -91,14 +110,24 @@ export class AccountDesk {
     });
   }
 
-  /** The account of `pass` goes by `name` from now on; made with it where there was none. */
-  rename(pass: CrewPass, name: string): Promise<AccountView> {
-    return this.change(pass, { displayName: name });
+  /**
+   * The account of `pass` goes by `name` from now on; made with it where there was none and
+   * `mayMake` lets it be — else refused, saying so (`TOO_MANY_NEW`).
+   */
+  async rename(pass: CrewPass, name: string, mayMake: MayMake = always): Promise<AccountView> {
+    const account = await this.change(pass, { displayName: name }, mayMake);
+    if (account === null) {
+      throw new GameError(TOO_MANY_NEW);
+    }
+    return account;
   }
 
-  /** The account of `pass` wears `color` from now on; made with it where there was none. */
-  recolour(pass: CrewPass, color: string): Promise<AccountView> {
-    return this.change(pass, { colour: color.toLowerCase() });
+  /**
+   * The account of `pass` wears `color` from now on; made with it where there was none and
+   * `mayMake` lets it be; null where none may be made.
+   */
+  recolour(pass: CrewPass, color: string, mayMake: MayMake = always): Promise<AccountView | null> {
+    return this.change(pass, { colour: color.toLowerCase() }, mayMake);
   }
 
   /**
@@ -129,16 +158,43 @@ export class AccountDesk {
     });
   }
 
-  /** The account of `pass` with `change` made to its profile. */
-  private change(pass: CrewPass, change: Partial<Profile>): Promise<AccountView> {
+  /**
+   * The account of `pass` with `change` made to its profile; made with it where there was none
+   * and `mayMake` lets it be, null where it may not.
+   */
+  private change(
+    pass: CrewPass,
+    change: Partial<Profile>,
+    mayMake: MayMake,
+  ): Promise<AccountView | null> {
     return this.serial(pass, async () => {
       const start = { displayName: '', colour: null, ...change };
-      const account = await this.store.getOrCreateByIdentity(identityOf(pass), start);
+      const account = await this.accountOf(pass, start, mayMake);
+      if (account === null) {
+        return null;
+      }
       const same = Object.entries(change).every(
         ([field, value]) => account[field as keyof Profile] === value,
       );
       return this.viewOf(same ? account : await this.store.updateProfile(account.id, change));
     });
+  }
+
+  /**
+   * The account of `pass`, its visit noted — or a new one, starting with `profile`, where it has
+   * none yet and `mayMake` lets one be made (asked only then); null where none may be. Throws
+   * GameError for a pass shown with the wrong secret.
+   */
+  private async accountOf(
+    pass: CrewPass,
+    profile: Profile,
+    mayMake: MayMake,
+  ): Promise<Account | null> {
+    const identity = identityOf(pass);
+    if ((await this.store.findByIdentity(identity)) === null && !mayMake()) {
+      return null;
+    }
+    return this.store.getOrCreateByIdentity(identity, profile);
   }
 
   /** `account` as its owner sees it: with its runs counted and its Erfolge by mission. */

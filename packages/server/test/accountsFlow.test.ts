@@ -8,10 +8,16 @@ import {
   type Mission,
   type ServerMessage,
 } from '@escapelab/core';
-import { AccountDesk } from '../src/accounts.js';
+import { AccountDesk, TOO_MANY_NEW } from '../src/accounts.js';
 import { RateLimiter, type Front, type Sender } from '../src/rateLimiter.js';
 import { RoomManager } from '../src/roomManager.js';
-import { ONE_PASS, serveSockets, TOO_MANY_WRITES } from '../src/sockets.js';
+import {
+  ACCOUNT_WRITES_PER_SOCKET,
+  ACCOUNTS_MADE_PER_MINUTE,
+  ONE_PASS,
+  serveSockets,
+  TOO_MANY_WRITES,
+} from '../src/sockets.js';
 import { JsonlStore } from '../src/store/jsonl.js';
 import { FakeServer, joinedOf, type FakeSocket } from './line.js';
 import { passFor } from './passes.js';
@@ -23,16 +29,21 @@ const mission: Mission = parseMission(
 );
 const catalog = { get: () => mission, default: mission };
 
+/** What a lab limits: the new accounts of an address, the writes of a socket. */
+interface Limits {
+  accountsMade?: RateLimiter;
+  writesPerSocket?: number;
+}
+
 /**
  * The server's sockets over a manager of rooms, with the accounts in a store of their own and,
- * where given, a limit on the writes to them by address.
+ * where given, limits on the writes to them.
  */
-function lab(manager = new RoomManager(), accountWrites?: RateLimiter, front: Front = 'none') {
+function lab(manager = new RoomManager(), limits: Limits = {}, front: Front = 'none') {
   const server = new FakeServer();
   const store = JsonlStore.open(join(mkdtempSync(join(tmpdir(), 'escapelab-acc-')), 'runs.jsonl'));
   const accounts = new AccountDesk(store);
-  const limited = accountWrites === undefined ? {} : { accountWrites };
-  serveSockets(server, { catalog, manager, accounts, ...limited, front });
+  serveSockets(server, { catalog, manager, accounts, ...limits, front });
   return { server, manager, store };
 }
 
@@ -256,30 +267,79 @@ describe('the accounts’ door', () => {
     expect([refusals(ben), accounts(ben).length]).toEqual([[], 1]);
   });
 
-  it('holds back the account writes of an address past its limit, no other’s', async () => {
-    const { server } = lab(new RoomManager(), new RateLimiter(2, 60_000), 'render');
-    const anna = server.connect(throughRender('203.0.113.7'));
+  it('makes so many new accounts an address a minute; a known one always arrives', async () => {
+    const limits = { accountsMade: new RateLimiter(2, 60_000) };
+    const { server } = lab(new RoomManager(), limits, 'render');
+    const arrive = (name: string, client = '203.0.113.7'): FakeSocket => {
+      const socket = server.connect(throughRender(client));
+      socket.say({ kind: 'whereami', pass: passFor(name), name });
+      return socket;
+    };
+    // Anna's page, loaded anew twice: her account is made once, then only visited.
+    const annas = [arrive('Anna')];
+    await settled();
+    annas.push(arrive('Anna'), arrive('Anna'));
+    await settled();
+    const ben = arrive('Ben');
+    await settled();
+    const cleo = arrive('Cleo');
+    const dan = arrive('Dan', '198.51.100.4');
+    await settled();
+    expect([...annas, ben, dan].map((socket) => accountOf(socket).name)).toEqual([
+      'Anna',
+      'Anna',
+      'Anna',
+      'Ben',
+      'Dan',
+    ]);
+    // Cleo's seat is answered, her account waits; asked for by its name, it is refused.
+    expect(cleo.heard.map((m) => m.kind)).toEqual(['seated']);
+    cleo.say({ kind: 'profile', pass: passFor('Cleo'), name: 'Cleo' });
+    await settled();
+    expect(refusals(cleo)).toEqual([[TOO_MANY_NEW, 'profile']]);
+  });
+
+  it('bounds the writes of a socket, and no other socket’s behind the same address', async () => {
+    const { server } = lab(new RoomManager(), { writesPerSocket: 3 });
+    const anna = server.connect(onTheLan('192.168.1.20'));
     anna.say({ kind: 'whereami', pass: passFor('Anna'), name: 'Anna' });
     anna.say({ kind: 'profile', pass: passFor('Anna'), name: 'Anna K.' });
     anna.say({ kind: 'profile', pass: passFor('Anna'), name: 'Anna Berg' });
-    // Another device behind the same address: its seat is answered, its account waits.
-    const ben = server.connect(throughRender('203.0.113.7'));
-    ben.say({ kind: 'whereami', pass: passFor('Ben') });
+    anna.say({ kind: 'profile', pass: passFor('Anna'), name: 'Anna Bergmann' });
+    // Reading the runs writes nothing.
+    anna.say({ kind: 'my-runs', pass: passFor('Anna') });
+    const ben = server.connect(onTheLan('192.168.1.20'));
+    ben.say({ kind: 'whereami', pass: passFor('Ben'), name: 'Ben' });
     await settled();
     expect(refusals(anna)).toEqual([[TOO_MANY_WRITES, 'profile']]);
-    expect(accountOf(anna)).toMatchObject({ name: 'Anna K.' });
-    expect(ben.heard.map((m) => m.kind)).toEqual(['seated']);
-    // Reading the runs writes nothing; another address behind the same proxy writes on.
-    anna.say({ kind: 'my-runs', pass: passFor('Anna') });
-    const cleo = server.connect(throughRender('198.51.100.4'));
-    cleo.say({ kind: 'whereami', pass: passFor('Cleo') });
-    await settled();
+    expect(accountOf(anna)).toMatchObject({ name: 'Anna Berg' });
     expect(anna.heard.at(-1)).toMatchObject({ kind: 'my-runs', total: 0 });
-    expect(accounts(cleo)).toHaveLength(1);
+    expect(accountOf(ben)).toMatchObject({ name: 'Ben' });
+  });
+
+  it('lets a lecture behind one address in: thirty new students, five writes each', async () => {
+    const limits = {
+      accountsMade: new RateLimiter(ACCOUNTS_MADE_PER_MINUTE, 60_000),
+      writesPerSocket: ACCOUNT_WRITES_PER_SOCKET,
+    };
+    const { server } = lab(new RoomManager(), limits, 'render');
+    const students = Array.from({ length: 30 }, (_, i) => {
+      const name = `Student ${i + 1}`;
+      const socket = server.connect(throughRender('203.0.113.7'));
+      socket.say({ kind: 'whereami', pass: passFor(name), name });
+      socket.say({ kind: 'profile', pass: passFor(name), name: `${name}a` });
+      socket.say({ kind: 'profile', pass: passFor(name), name: `${name}b` });
+      socket.say({ kind: 'whereami', pass: passFor(name) });
+      socket.say({ kind: 'profile', pass: passFor(name), name });
+      return { name, socket };
+    });
+    await settled();
+    expect(students.flatMap(({ socket }) => refusals(socket))).toEqual([]);
+    expect(students.every(({ name, socket }) => accountOf(socket).name === name)).toBe(true);
   });
 
   it('counts a machine by its own address, whatever its headers claim', async () => {
-    const { server } = lab(new RoomManager(), new RateLimiter(2, 60_000));
+    const { server } = lab(new RoomManager(), { accountsMade: new RateLimiter(2, 60_000) });
     // One machine on the LAN, five sockets, each claiming an address of its own.
     const names = ['Anna', 'Ben', 'Cleo', 'Dan', 'Eva'];
     const sockets = names.map((name, i) => {
