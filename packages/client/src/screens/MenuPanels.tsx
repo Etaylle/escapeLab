@@ -13,6 +13,7 @@ import { FIRST_RUN_HINT, firstDifficulty, isTutorial, useWon } from '../firstRun
 import { useServerNow } from '../hooks.js';
 import { crewPass } from '../pass.js';
 import { recordLine } from '../runStats.js';
+import { keepInvite, tabInvite } from '../tab.js';
 import type { Takeover } from '../ws.js';
 import { uiSound } from '../world/menuSound.js';
 import { crewSizeText } from './Crew.js';
@@ -381,31 +382,40 @@ export function codeOf(typed: string): string {
   return typed.toUpperCase().replace(/[^A-Z0-9]/g, '');
 }
 
-/** An invite link's code as the page took it, and whether a menu has opened on it already. */
+/** An invite's code as the page took it, and whether a menu has come up on it already. */
 interface Invite {
   readonly code: string;
-  used: boolean;
+  arrived: boolean;
 }
 
 /** The invite each address was read for — one a page, its `location` the key. */
 const invites = new WeakMap<object, Invite>();
 
+/** Takes `?room=` off the address at once (history.replaceState), the rest of the query kept. */
+function stripRoom(params: URLSearchParams): void {
+  const { pathname, hash } = window.location;
+  params.delete('room');
+  const rest = params.toString();
+  const address = `${pathname}${rest === '' ? '' : `?${rest}`}${hash}`;
+  window.history.replaceState(window.history.state, '', address);
+}
+
 /**
- * The invite link's `?room=` read off the address and taken off it at once (history
- * .replaceState, the rest of the query kept), so that no reload — after leaving a lobby or a
- * finished run — opens „Beitreten" on it again.
+ * The page's invite: the room an invite link names in `?room=`, taken off the address at once —
+ * no address the page shows or is copied from carries it on — and kept in the tab until it has
+ * joined a room (tab.ts `keepInvite`), so that a reload before joining finds it again; else the
+ * one the tab kept. Once joined, a reload — leaving a lobby, a finished run — finds none.
  */
 function readInvite(): Invite {
-  const { pathname, search, hash } = window.location;
-  const params = new URLSearchParams(search);
-  const code = params.get('room');
-  if (code !== null) {
-    params.delete('room');
-    const rest = params.toString();
-    const address = `${pathname}${rest === '' ? '' : `?${rest}`}${hash}`;
-    window.history.replaceState(window.history.state, '', address);
+  const params = new URLSearchParams(window.location.search);
+  const named = codeOf(params.get('room') ?? '');
+  if (params.has('room')) {
+    stripRoom(params);
   }
-  return { code: codeOf(code ?? ''), used: false };
+  if (named !== '') {
+    keepInvite(named);
+  }
+  return { code: named === '' ? (tabInvite() ?? '') : named, arrived: false };
 }
 
 /** The invite this page came with: read once, the address cleaned as it is. */
@@ -415,15 +425,20 @@ function inviteOfPage(): Invite {
   return known;
 }
 
-/** The code the page's invite link brought, as typed; '' for none, or once a menu used it. */
-export function invitedCode(): string {
-  const invite = inviteOfPage();
-  return invite.used ? '' : invite.code;
+/** The code of the page's invite, as typed, for as long as the page lives; '' for none. */
+function invitedCode(): string {
+  return inviteOfPage().code;
 }
 
-/** A menu has opened on the invite: none opens on it again while the page lives. */
-export function inviteUsed(): void {
-  inviteOfPage().used = true;
+/** Whether the menu comes up on the invite: the page has one, and no menu came up on it yet. */
+export function arrivesOnInvite(): boolean {
+  const invite = inviteOfPage();
+  return invite.code !== '' && !invite.arrived;
+}
+
+/** A menu has come up on the invite: none does so again while the page lives. */
+export function inviteArrived(): void {
+  inviteOfPage().arrived = true;
 }
 
 /**
@@ -466,10 +481,10 @@ interface JoinPanelProps extends SectionProps {
 
 /**
  * „Beitreten": a room's code to join or to watch it by. An invite link carries the room in
- * ?room=, so the field is already filled and all that is left to do is the name. A join by the
- * name of a seat in a run on waits for the crew to let this device in (`takeover`). While the
- * card's way back waits for its room (`waiting`), no other room is watched either: the server
- * seats the page once the room is back.
+ * ?room=, so the field is already filled — each time the panel opens while the page lives — and
+ * all that is left to do is the name. A join by the name of a seat in a run on waits for the
+ * crew to let this device in (`takeover`). While the card's way back waits for its room
+ * (`waiting`), no other room is watched either: the server seats the page once the room is back.
  */
 export function JoinPanel({ takeover, waiting, onClose, ...section }: JoinPanelProps) {
   const { send, connected, name } = section;

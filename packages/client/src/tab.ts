@@ -44,6 +44,36 @@ export function leaveTab(): void {
   sessionStorage.removeItem(STORAGE_KEY);
 }
 
+/** Where the tab keeps the code of the room an invite link named, until it has joined a room. */
+const INVITE_KEY = 'escapelab-invite';
+
+/** The code an invite link brought this tab and no join has spent yet; null for none. */
+export function tabInvite(): string | null {
+  try {
+    return sessionStorage.getItem(INVITE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+/** Keeps `code`, an invite link's, in the tab: a reload before joining finds it again. */
+export function keepInvite(code: string): void {
+  try {
+    sessionStorage.setItem(INVITE_KEY, code);
+  } catch {
+    // Deliberately silent: without it only a reload before joining loses the code.
+  }
+}
+
+/** The tab has joined a room: the invite it kept is spent. */
+export function spendInvite(): void {
+  try {
+    sessionStorage.removeItem(INVITE_KEY);
+  } catch {
+    // Deliberately silent: a tab that keeps nothing has nothing to spend.
+  }
+}
+
 /**
  * What a socket of this tab says first as it opens (line.ts `Comeback`): its seat resumed on
  * the browser's pass, with the snapshot kept of the room (snapshots.ts), or the room watched

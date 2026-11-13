@@ -20,7 +20,7 @@ import { MainMenu, MENU_LABELS, menuItems, menuStep } from '../src/screens/MainM
 import {
   codeOf,
   escapeHandler,
-  inviteUsed,
+  inviteArrived,
   JoinPanel,
   keptPick,
   PICKED_KEY,
@@ -28,7 +28,8 @@ import {
   usePicked,
 } from '../src/screens/MenuPanels.js';
 import { FIRST_COLOR, ProfileChip } from '../src/screens/ProfileChip.js';
-import { storage } from './page.js';
+import { takeIn } from '../src/ws.js';
+import { page as connectionPage, storage } from './page.js';
 
 const noop = (): void => undefined;
 const CLIENT = new URL('../', import.meta.url);
@@ -46,6 +47,13 @@ const blackout: MissionInfo = {
 /** The addresses the page put in place of its own (history.replaceState), in order. */
 let replaced: string[] = [];
 
+/** The tab's own storage (sessionStorage): it outlasts the pages a test loads in it. */
+let tab = new Map<string, string>();
+
+beforeEach(() => {
+  tab = new Map();
+});
+
 /**
  * Anna's browser at `search`: her pass and name kept, the colour she wore last where `color` is
  * given; the addresses it is told to stand at noted in `replaced`.
@@ -60,7 +68,24 @@ function stubWindow(search = '', color: string | null = null): Map<string, strin
   };
   const location = { search, pathname: '/', hash: '' };
   vi.stubGlobal('window', { location, history, localStorage: storage(kept) });
+  vi.stubGlobal('sessionStorage', storage(tab));
   return kept;
+}
+
+/** The code field of „Beitreten" as the panel opens now. */
+function joinField(): string {
+  const html = renderToStaticMarkup(
+    <JoinPanel
+      send={noop}
+      connected
+      name="Anna"
+      blocked={false}
+      takeover={null}
+      waiting={false}
+      onClose={noop}
+    />,
+  );
+  return html.match(/<input class="join-code"[^>]*>/)?.[0] ?? '';
 }
 
 /** The start screen as the app shows it, the pass sitting as `seat` says. */
@@ -171,10 +196,10 @@ describe('the menu', () => {
     expect(lobby).toContain(`${open}<section class="bound">`);
   });
 
-  it('opens on „Beitreten" for an invite link once, its code filled in and taken off', () => {
+  it('opens on „Beitreten" for an invite link, its code filled in and off the address', () => {
     stubWindow('?room=qx7r&trace=1');
     expect(panelOnArrival()).toBe('join');
-    // The address loses the code at once, the rest of its query kept: no reload brings it back.
+    // The address loses the code at once, the rest of its query kept.
     expect(replaced).toEqual(['/?trace=1']);
     const html = menu();
     expect(html).toContain('<section class="menu-panel menu-panel--join" role="dialog"');
@@ -186,13 +211,34 @@ describe('the menu', () => {
     expect(html.indexOf('class="profile-name"')).toBeLessThan(html.indexOf('class="menu-body"'));
     // A controller is held in the panel all the same.
     expect(DIALOGS.split(', ')).toContain('[role="dialog"]');
-    // A menu has opened on it: the next this page shows — after a room closed — opens on nothing.
-    inviteUsed();
+    // A menu has come up on it: the next this page shows — after a room closed — opens on nothing.
+    inviteArrived();
     expect(panelOnArrival()).toBeNull();
     expect(menu()).not.toContain('QX7R');
-    stubWindow('?trace=1');
-    expect(panelOnArrival()).toBeNull();
+  });
+
+  it('fills the invite’s code in each time „Beitreten" opens while the page lives', () => {
+    stubWindow('?room=qx7r');
+    expect(panelOnArrival()).toBe('join');
+    // The panel the menu came up on is closed, and „Beitreten" opened anew, twice.
+    inviteArrived();
+    expect(joinField()).toContain('value="QX7R"');
+    expect(joinField()).toContain('value="QX7R"');
+  });
+
+  it('finds the invite again on a reload before joining, and none once the tab has joined', () => {
+    stubWindow('?room=qx7r');
+    inviteArrived();
+    // The page loaded anew, its address clean: the tab kept the code.
+    stubWindow();
+    expect(panelOnArrival()).toBe('join');
+    expect(joinField()).toContain('value="QX7R"');
     expect(replaced).toEqual([]);
+    takeIn({ kind: 'joined', code: 'QX7R' }, connectionPage().kept);
+    // Leaving the lobby loads the page anew: the invite is spent.
+    stubWindow();
+    expect(panelOnArrival()).toBeNull();
+    expect(joinField()).toContain('value=""');
   });
 });
 

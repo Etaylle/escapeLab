@@ -18,8 +18,8 @@ import { InstallOffer } from './Install.js';
 import { RESTORING_LINE, RESTORING_TITLE } from './Line.js';
 import { MainMenu, menuItems, opensPanel, type MenuItemId, type PanelId } from './MainMenu.js';
 import {
-  invitedCode,
-  inviteUsed,
+  arrivesOnInvite,
+  inviteArrived,
   JoinPanel,
   MissionPanel,
   pickedMission,
@@ -239,11 +239,11 @@ function useDoor(send: Props['send'], connected: boolean): void {
 }
 
 /**
- * The panel the menu opens on as it comes up: „Beitreten" for the page's invite link, its code
- * filled in — once (MenuPanels.tsx `invitedCode`).
+ * The panel the menu opens on as it comes up: „Beitreten" for the page's invite, its code
+ * filled in — the first menu of the page alone (MenuPanels.tsx `arrivesOnInvite`).
  */
 export function panelOnArrival(): PanelId | null {
-  return invitedCode() === '' ? null : 'join';
+  return arrivesOnInvite() ? 'join' : null;
 }
 
 /**
@@ -266,8 +266,8 @@ export function focusMenu(
  */
 function usePanel(root: RefObject<HTMLElement | null>, named: boolean) {
   const [panel, setPanel] = useState<PanelId | null>(panelOnArrival);
-  // The menu has opened on the invite: no other menu of this page does so again.
-  useEffect(() => inviteUsed(), []);
+  // The menu has come up on the invite: no other menu of this page opens on it again.
+  useEffect(() => inviteArrived(), []);
   const last = useRef<MenuItemId | null>(null);
   const isNamed = useRef(named);
   isNamed.current = named;

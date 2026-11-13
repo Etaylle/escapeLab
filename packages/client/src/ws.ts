@@ -21,7 +21,7 @@ import {
   resumeOf,
   seatShown,
 } from './snapshots.js';
-import { comebackOfTab, keepTab, leaveTab, roomOfTab, tabRoom } from './tab.js';
+import { comebackOfTab, keepTab, leaveTab, roomOfTab, spendInvite, tabRoom } from './tab.js';
 import type { KnownPositions } from './world/movement.js';
 
 /** A refusal of the server's: how many it has made so far, its words, what it refused. */
@@ -216,6 +216,7 @@ function seatNews(msg: ServerMessage, page: Page): boolean {
       page.resuming.current = false;
       page.resumed.current = null;
       keepTab({ code: msg.code, watching: false });
+      spendInvite();
       page.setTakeover(null);
       page.setRestoring(null);
       page.setRoomCode(msg.code);
