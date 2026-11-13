@@ -1,11 +1,17 @@
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PassThrough } from 'node:stream';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { StaticSite } from '../src/static.js';
-import { rangeOf, serveTakes, takesAllowed, TakesShelf } from '../src/takes.js';
+import {
+  rangeOf,
+  serveTakes,
+  takesAllowed,
+  TakesShelf,
+  type TakeFile,
+} from '../src/takes.js';
 
 /**
  * The music's takes on the dev server (GET /takes/, /takes/<id>/<n>.mp3) and their switch: a
@@ -190,11 +196,18 @@ describe('the dev server, with ALLOW_TAKES=1', () => {
 });
 
 describe('a take in spans, with ALLOW_TAKES=1', () => {
-  it('sends the span a Range asks for, as Safari and a loop on its way round do', async () => {
+  const size = TAKE.length;
+
+  /** What the route sends for the take, asked with the Range `range`; it has to answer. */
+  async function ranged(range: string, method = 'GET'): Promise<Sent> {
     const shelf = shelfIn();
-    const ranged = (range: string, method = 'GET') =>
-      ask((req, res) => serveTakes(shelf, req, res), request(TAKE_URL, method, { range }));
-    const size = TAKE.length;
+    const req = request(TAKE_URL, method, { range });
+    const sent = await ask((asked, res) => serveTakes(shelf, asked, res), req);
+    if (sent === null) throw new Error(`the route left ${method} ${range} alone`);
+    return sent;
+  }
+
+  it('sends the span a Range asks for with 206, where it lies and how long it is', async () => {
     const spans: [string, number, number][] = [
       ['bytes=0-3', 0, 3],
       ['bytes=4-', 4, size - 1],
@@ -204,31 +217,70 @@ describe('a take in spans, with ALLOW_TAKES=1', () => {
     ];
     for (const [range, start, end] of spans) {
       const sent = await ranged(range);
-      expect([sent?.status, sent?.headers['content-range']], range).toEqual([
-        206,
-        `bytes ${start}-${end}/${size}`,
-      ]);
-      expect(sent?.headers['content-length'], range).toBe(String(end - start + 1));
-      expect(sent?.body.equals(TAKE.subarray(start, end + 1)), range).toBe(true);
+      const told = [sent.status, sent.headers['content-range'], sent.headers['content-length']];
+      expect(told, range).toEqual([206, `bytes ${start}-${end}/${size}`, String(end - start + 1)]);
+      expect(sent.body.equals(TAKE.subarray(start, end + 1)), range).toBe(true);
     }
-    for (const range of [`bytes=${size}-`, 'bytes=9-3', 'bytes=-0']) {
-      const past = await ranged(range);
-      expect([past?.status, past?.headers['content-range'], past?.body.length], range).toEqual([
-        416,
-        `bytes */${size}`,
-        0,
-      ]);
+  });
+
+  it('answers 416 to a span past the end, telling the take’s length', async () => {
+    for (const range of [`bytes=${size}-`, `bytes=${size + 3}-${size + 9}`, 'bytes=-0']) {
+      const sent = await ranged(range);
+      const told = [sent.status, sent.headers['content-range'], sent.body.length];
+      expect(told, range).toEqual([416, `bytes */${size}`, 0]);
     }
-    // Several spans, or another unit, a server may answer whole.
-    for (const range of ['bytes=0-1,4-5', 'items=0-1', 'bytes=-']) {
-      expect((await ranged(range))?.status, range).toBe(200);
+  });
+
+  it('sends the whole take for an invalid span, several spans or another unit', async () => {
+    // bytes=9-3 ends before it starts: invalid rather than unsatisfiable, so ignored (RFC 9110).
+    for (const range of ['bytes=9-3', 'bytes=0-1,4-5', 'items=0-1', 'bytes=-']) {
+      const sent = await ranged(range);
+      expect([sent.status, sent.headers['content-length']], range).toEqual([200, String(size)]);
+      expect(sent.body.equals(TAKE), range).toBe(true);
     }
+    const read = [rangeOf(undefined, size), rangeOf('bytes=9-3', size), rangeOf('bytes=0-0', 0)];
+    expect(read).toEqual([null, null, 'unsatisfiable']);
+  });
+
+  it('answers HEAD with the span’s headers alone', async () => {
     const head = await ranged('bytes=0-3', 'HEAD');
-    expect([head?.status, head?.headers['content-length'], head?.body.length]).toEqual([
-      206,
-      '4',
-      0,
-    ]);
-    expect([rangeOf(undefined, size), rangeOf('bytes=0-0', 0)]).toEqual([null, 'unsatisfiable']);
+    expect([head.status, head.headers['content-length'], head.body.length]).toEqual([206, '4', 0]);
+  });
+});
+
+describe('a take gone between a look and its sending', () => {
+  /** A shelf whose takes a keep deletes right after each look at them. */
+  class Vanishing extends TakesShelf {
+    override take(id: string, name: string): TakeFile | null {
+      const found = super.take(id, name);
+      if (found !== null) rmSync(found.file);
+      return found;
+    }
+  }
+
+  it('cuts its answer and says so, throwing nothing at the dev server', async () => {
+    const shelf = new Vanishing(shelfIn().dir);
+    const said = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const res = Object.assign(new PassThrough(), { writeHead: () => res });
+    res.on('error', () => undefined);
+    const closed = new Promise((done) => res.on('close', done));
+    const answer = res as unknown as ServerResponse;
+    expect(() => serveTakes(shelf, request(TAKE_URL), answer)).not.toThrow();
+    await closed;
+    const cut = /^\[escapelab\] the take \S+2\.mp3 could not be sent: ENOENT/;
+    expect(said).toHaveBeenCalledWith(expect.stringMatching(cut));
+  });
+
+  it('is found by one look, its size with it; a look that fails else is said, a 404', async () => {
+    const shelf = shelfIn();
+    const file = join(shelf.dir, 'menu-theme', '2.mp3');
+    expect(shelf.take('menu-theme', '2.mp3')).toEqual({ file, size: TAKE.length });
+    const said = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    expect(shelf.take('menu-theme', '9.mp3')).toBeNull(); // not there: no news
+    expect(said).not.toHaveBeenCalled();
+    writeFileSync(join(shelf.dir, 'flat'), 'a file where a folder of takes belongs');
+    const sent = await ask((req, res) => serveTakes(shelf, req, res), request('/takes/flat/1.mp3'));
+    expect(sent?.status).toBe(404);
+    expect(said).toHaveBeenCalledWith(expect.stringMatching(/could not be looked at: ENOTDIR/));
   });
 });

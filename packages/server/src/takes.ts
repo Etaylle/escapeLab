@@ -53,11 +53,30 @@ export class TakesShelf {
     return lists;
   }
 
-  /** The file `name` of the entry `id`'s takes; null where there is none. */
-  take(id: string, name: string): string | null {
+  /**
+   * The take `name` of the entry `id` and its size, from one look at it — so that a keep deleting
+   * it mid-request leaves nothing to throw later; null where there is none. A look that fails for
+   * another reason than its absence is said on the console.
+   */
+  take(id: string, name: string): TakeFile | null {
     const file = join(this.dir, id, name);
-    return existsSync(file) && statSync(file).isFile() ? file : null;
+    try {
+      const stats = statSync(file);
+      return stats.isFile() ? { file, size: stats.size } : null;
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
+        const reason = err instanceof Error ? err.message : String(err);
+        console.error(`[escapelab] the take ${file} could not be looked at: ${reason}`);
+      }
+      return null;
+    }
   }
+}
+
+/** A take as one look found it: its file, and its size in bytes. */
+export interface TakeFile {
+  readonly file: string;
+  readonly size: number;
 }
 
 function send(res: ServerResponse, reply: ApiResponse): void {
@@ -78,17 +97,24 @@ function lastBytes(count: number, size: number): Span | 'unsatisfiable' {
     : 'unsatisfiable';
 }
 
-/** The bytes from `start` to `to` — to its end where `to` is empty — of a file `size` long. */
-function bytesFrom(start: number, to: string, size: number): Span | 'unsatisfiable' {
+/**
+ * The bytes from `start` to `to` — to its end where `to` is empty — of a file `size` long; null
+ * where `to` lies before `start`, a span that is invalid rather than unsatisfiable, which the
+ * server ignores, sending the whole file (RFC 9110).
+ */
+function bytesFrom(start: number, to: string, size: number): Span | 'unsatisfiable' | null {
+  if (to !== '' && Number(to) < start) {
+    return null;
+  }
   const end = to === '' ? size - 1 : Math.min(Number(to), size - 1);
-  return start < size && start <= end ? { start, end } : 'unsatisfiable';
+  return start < size ? { start, end } : 'unsatisfiable';
 }
 
 /**
  * The bytes the Range header `header` asks of a file `size` long: one span — `bytes=a-b`,
  * `bytes=a-` or the last n, `bytes=-n` — or 'unsatisfiable' where it starts past the end; null
- * for the whole file, where there is no Range, or one of several spans or of another unit, which
- * a server may answer whole.
+ * for the whole file, where there is no Range, an invalid one (`bytes=9-3`), or one of several
+ * spans or of another unit, which a server may answer whole.
  */
 export function rangeOf(header: string | undefined, size: number): Span | 'unsatisfiable' | null {
   const [, from = '', to = ''] = /^bytes=(\d*)-(\d*)$/.exec(header ?? '') ?? [];
@@ -103,8 +129,7 @@ export function rangeOf(header: string | undefined, size: number): Span | 'unsat
  * for (206) — as Safari asks for every audio file, and a loop on its way round — each with its
  * length; a span past its end answers 416.
  */
-function sendTake(file: string, req: IncomingMessage, res: ServerResponse): void {
-  const size = statSync(file).size;
+function sendTake({ file, size }: TakeFile, req: IncomingMessage, res: ServerResponse): void {
   const range = rangeOf(req.headers.range, size);
   const kind = {
     'content-type': 'audio/mpeg',
@@ -142,8 +167,8 @@ function askedUnderTakes(req: IncomingMessage): string | null {
   return under && (req.method === 'GET' || req.method === 'HEAD') ? path : null;
 }
 
-/** The file of the take the address `path` names on `shelf`; null where there is none. */
-function takeFileAt(shelf: TakesShelf, path: string): string | null {
+/** The take the address `path` names on `shelf`; null where there is none. */
+function takeFileAt(shelf: TakesShelf, path: string): TakeFile | null {
   const [, id, name] = TAKE_PATH.exec(path) ?? [];
   return id === undefined || name === undefined ? null : shelf.take(id, name);
 }
@@ -166,11 +191,11 @@ export function serveTakes(
   } else if (path === '/takes' || path === '/takes/') {
     send(res, { status: 200, body: shelf.lists() });
   } else {
-    const file = takeFileAt(shelf, path);
-    if (file === null) {
+    const take = takeFileAt(shelf, path);
+    if (take === null) {
       send(res, { status: 404, body: { error: `Unter ${path} liegt kein Take.` } });
     } else {
-      sendTake(file, req, res);
+      sendTake(take, req, res);
     }
   }
   return true;
