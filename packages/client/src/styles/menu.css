@@ -423,6 +423,127 @@
   color: var(--warn);
 }
 
+/* ── targets ────────────────────────────────────────────────────────────── */
+
+/* Every control on the menu and its panels is a target (devices.css `--target`): 36 px under a
+   pointer, a fingertip's 44 under a finger; the older maps' row stands a line that tall. */
+.menu button,
+.menu input {
+  min-height: var(--target);
+}
+
+.menu summary {
+  line-height: var(--target);
+}
+
+/* ── a phone held upright ───────────────────────────────────────────────── */
+
+/* One column: the title, the profile under it, the menu under that, a panel over the menu. */
+@media (max-width: 560px) {
+  .menu {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto minmax(0, 1fr);
+    grid-template-areas:
+      'head'
+      'chip'
+      'body';
+    row-gap: 18px;
+    padding: 24px max(18px, env(safe-area-inset-right)) max(18px, env(safe-area-inset-bottom))
+      max(18px, env(safe-area-inset-left));
+  }
+
+  .menu-title {
+    font-size: min(8.6vw, 40px);
+  }
+
+  .menu-sub {
+    margin-top: 8px;
+    font-size: 11px;
+    line-height: 1.5;
+    letter-spacing: 0.16em;
+  }
+
+  .profile-chip {
+    justify-self: start;
+  }
+
+  .menu-body {
+    width: 100%;
+  }
+}
+
+/* ── a phone held sideways ──────────────────────────────────────────────── */
+
+/*
+ * The menu takes the left column whole, one item a fingertip's height under the next; the title
+ * and the profile stand at the right over the scene, which shows beside the menu. A panel takes
+ * the stage whole. What the column cannot hold — the card of a run that binds the pass, the
+ * quiet lines — scrolls in it.
+ */
+@media (orientation: landscape) and (max-height: 500px) {
+  .menu {
+    grid-template-columns: minmax(0, 330px) minmax(0, 1fr);
+    grid-template-rows: auto auto minmax(0, 1fr);
+    grid-template-areas:
+      'body head'
+      'body chip'
+      'body .';
+    column-gap: 24px;
+    row-gap: 10px;
+    padding: 4px max(16px, env(safe-area-inset-right)) max(4px, env(safe-area-inset-bottom))
+      max(16px, env(safe-area-inset-left));
+  }
+
+  .menu-head {
+    justify-self: end;
+    text-align: right;
+  }
+
+  .menu-title {
+    font-size: 26px;
+  }
+
+  .menu-sub {
+    margin-top: 6px;
+    font-size: 11px;
+    line-height: 1.5;
+    letter-spacing: 0.14em;
+  }
+
+  /* The profile keeps to its column: the name's field gives way where the window is narrow. */
+  .profile-chip {
+    justify-self: end;
+    max-width: 100%;
+  }
+
+  .profile-who {
+    flex: 1 1 auto;
+  }
+
+  .profile-name {
+    width: 100%;
+    max-width: 168px;
+  }
+
+  .menu-body {
+    width: 100%;
+    overflow-y: auto;
+  }
+
+  .menu-list ul {
+    gap: 0;
+  }
+
+  .menu-list .menu-item {
+    min-height: 44px;
+    padding-block: 6px;
+  }
+
+  .menu-panel {
+    grid-area: 1 / 1 / -1 / -1;
+  }
+}
+
 /* ── the lobby over the scene ───────────────────────────────────────────── */
 
 /* The lobby keeps its layout; its stage is a stacking context of its own, as the menu's is, so

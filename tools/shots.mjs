@@ -78,28 +78,30 @@
  * the lever took from the blackout. A mission without an intro skips all of
  * this.
  *
- * The menu: the host's page opens on the start screen as a game's menu over its living scene —
- * the lit lab of the first mission baked for the window and drifting (client world/menu/) —
- * menu.png, walked by the keys: an arrow down and up the items, Enter opening „Einsatz
- * starten" with the picked mission's card in the focus, Esc back on the item. Its quiet window,
- * the scene drifting, is gated like every other and under SHOTS_SOFTWARE_GL has to keep the
- * screen's pace (16.8 ms p95). At 1280×720 it has to fit as at 1440×820 (menu-1280.png), the
- * scene baked anew for each size. menu-missions.png shows „Einsatz starten" open, the
- * tutorial's card saying „Erster Einsatz? Hier starten" in a line of its own and no tooltip over
- * the cards; the mission picked comes in as the scene behind. „Runde eröffnen" closes the lab's
- * doors over the menu and opens them on the lobby: menu-to-lobby.png holds them two thirds shut,
- * the menu between them (the pause trick of the device's fade); the lobby has to stand over the
- * menu's scene drifting on. The guest's phone shows the menu upright (menu-phone.png). A second
- * crew's room — Cem's, of the other mission — and the host's stand in a fourth page's „Offene
- * Runden", every crew member as a figure, painted (menu-open-rounds.png); Cem's door wipes are
- * timed as his page draws them, into the lobby and, „Raum verlassen", out of it — shut over the
- * lobby, the page loaded anew, open on the menu — none asking more than 400 ms. The audience
- * types the room's code in small letters into „Beitreten" (menu-join.png): it has to stand in
- * capitals, in a field no browser fills from its passwords. In the reconnect drill a new tab of
- * Anna's browser, her run standing paused, opens the menu on the run's card, first and lit,
- * every other item dimmed (menu-bound.png). The menu's sound waits for the first key, the
- * speaker's lamp lit, and plays after it; the lobby chimes as the round comes up and chirps as
- * Ben says ready; the run's start ends it.
+ * The menu: the host's page opens on the start screen as a game's menu over its living scene — the
+ * lit lab of the first mission baked for the window and drifting (client world/menu/) — menu.png,
+ * walked by the keys: an arrow down and up the items, Enter opening „Einsatz starten" with the
+ * picked mission's card in the focus, Esc back on the item. Its quiet window, the scene drifting,
+ * is gated like every other and under SHOTS_SOFTWARE_GL has to keep the screen's pace (16.8 ms
+ * p95). At 1280×720 it has to fit as at 1440×820 (menu-1280.png), the scene baked anew for each
+ * size. menu-missions.png shows „Einsatz starten" open, the tutorial's card saying „Erster Einsatz?
+ * Hier starten" in a line of its own and no tooltip over the cards; the mission picked comes in as
+ * the scene behind. „Runde eröffnen" closes the lab's doors over the menu and opens them on the
+ * lobby: menu-to-lobby.png holds them two thirds shut, the menu between them (the pause trick of
+ * the device's fade); the lobby has to stand over the menu's scene drifting on. The guest's phone
+ * shows the menu upright (menu-phone.png), the profile under the title, and turned sideways —
+ * 932×430 (menu-phone-932.png), 844×390, and what an iPhone's notch leaves, 750×369 and 667×375 —
+ * the menu left whole beside the scene, the title and the profile right; every target a fingertip's
+ * 44 px at least, nothing cut off. A second crew's room — Cem's, of the other mission — and the
+ * host's stand in a fourth page's „Offene Runden", every crew member as a figure, painted
+ * (menu-open-rounds.png); Cem's door wipes are timed as his page draws them, into the lobby and,
+ * „Raum verlassen", out of it — shut over the lobby, the page loaded anew, open on the menu — none
+ * asking more than 400 ms. The audience types the room's code in small letters into „Beitreten"
+ * (menu-join.png): it has to stand in capitals, in a field no browser fills from its passwords. In
+ * the reconnect drill a new tab of Anna's browser, her run standing paused, opens the menu on the
+ * run's card, first and lit, every other item dimmed (menu-bound.png). The menu's sound waits for
+ * the first key, the speaker's lamp lit, and plays after it; the lobby chimes as the round comes up
+ * and chirps as Ben says ready; the run's start ends it.
  *
  * On the way, both open the Bestenliste from the menu (history.png,
  * history-phone.png): measured like the menu, at 1280×720 too, and on
@@ -6490,6 +6492,99 @@ function timeDoors(there, back) {
   }
 }
 
+/**
+ * The menu's windows on a phone held sideways: today's largest phones and a common one, then
+ * what an iPhone's notch leaves of 844 and 667 px (memory: phone-safe-area-insets).
+ */
+const MENU_SIDEWAYS = [
+  { width: 932, height: 430, shot: 'menu-phone-932.png' },
+  { width: 844, height: 390 },
+  { width: 750, height: 369 },
+  { width: 667, height: 375 },
+];
+
+/**
+ * In the page: how the menu stands in its window — the controls under a fingertip's 44 px, the
+ * items running out of the menu's column or the window, where the menu, the title and the
+ * profile stand, and how far the page runs out sideways.
+ */
+function menuLayout() {
+  const box = (selector) => document.querySelector(selector).getBoundingClientRect();
+  const body = box('.menu-body');
+  const floor = Math.min(body.bottom, globalThis.innerHeight) + 0.5;
+  const controls = [...document.querySelectorAll('.menu button, .menu input, .menu summary')];
+  const shown = controls.filter((el) => el.getBoundingClientRect().height > 0);
+  const short = shown
+    .filter((el) => el.getBoundingClientRect().height < 43.5)
+    .map((el) => el.textContent.trim() || el.className);
+  const clipped = [...document.querySelectorAll('.menu-item')]
+    .filter((el) => el.getBoundingClientRect().bottom > floor)
+    .map((el) => el.textContent.trim());
+  return {
+    width: globalThis.innerWidth,
+    targets: shown.length,
+    short,
+    clipped,
+    navRight: box('.menu-list').right,
+    headLeft: box('.menu-head').left,
+    headBottom: box('.menu-head').bottom,
+    chipLeft: box('.profile-chip').left,
+    chipTop: box('.profile-chip').top,
+    sideways: document.documentElement.scrollWidth - globalThis.innerWidth,
+  };
+}
+
+/** What the log says of `look` (menuLayout) — and what falls short, '' where nothing does. */
+function menuLayoutText(look, upright) {
+  // Sideways the menu stands left of the title and the profile, the scene beside it 40 % wide.
+  const right = Math.min(look.headLeft, look.chipLeft);
+  const placed = upright
+    ? look.chipTop >= look.headBottom - 1
+    : look.navRight <= right && look.width - look.navRight >= look.width * 0.4;
+  const where = upright
+    ? 'the profile under the title'
+    : `the menu left (to ${Math.round(look.navRight)} px), the title and the profile right`;
+  const faults = [
+    placed ? '' : `!! not laid out so: ${JSON.stringify(look)}`,
+    look.short.length === 0 ? '' : `!! under 44 px: ${look.short.join(', ')}`,
+    look.clipped.length === 0 ? '' : `!! cut off: ${look.clipped.join(', ')}`,
+    look.sideways <= 0 ? '' : `!! +${look.sideways}px sideways`,
+  ].filter((fault) => fault !== '');
+  return { text: `${where}, ${look.targets} targets ≥ 44 px`, faults: faults.join('; ') };
+}
+
+/** Logs the menu's layout on `page` (menuLayoutText); fails the run where it falls short. */
+async function judgeMenuLayout(page, label, upright) {
+  const { text, faults } = menuLayoutText(await page.evaluate(menuLayout), upright);
+  console.log(`${label.padEnd(19)}${text}${faults === '' ? '' : `; ${faults}`}`);
+  if (faults !== '') {
+    fail(`${label}: ${faults}`);
+  }
+}
+
+/**
+ * The menu on the guest's phone: upright, the profile under the title (menu-phone.png, shot
+ * before); then turned, in every window of MENU_SIDEWAYS, the menu left in its column whole and
+ * the scene beside it, the title and the profile over it (menu-phone-932.png) — every target a
+ * fingertip's at least, nothing cut off, nothing out sideways; then upright again.
+ */
+async function checkMenuPhones(page) {
+  await judgeMenuLayout(page, 'menu-phone.png', true);
+  for (const { width, height, shot } of MENU_SIDEWAYS) {
+    await page.setViewportSize({ width, height });
+    const scene = await sceneBaked(page, { w: width, h: height });
+    if (shot !== undefined) {
+      await capture(page, shot);
+    }
+    await judgeMenuLayout(page, shot ?? `menu @ ${width}x${height}`, false);
+    if (scene?.baked?.w !== width) {
+      fail(`menu @ ${width}x${height}: no scene beside the menu (${sceneText(scene)})`);
+    }
+  }
+  await page.setViewportSize(SIZES[2]);
+  await sceneBaked(page, { w: SIZES[2].width, h: SIZES[2].height });
+}
+
 /** A side page at the laptop's size for a capture of the menu, named `name`. */
 async function sidePage(name, contexts) {
   const context = await browser.newContext({ viewport: SIZES[0] });
@@ -11508,6 +11603,7 @@ async function run() {
   await guest.locator('.menu-item').first().waitFor({ timeout: 10_000 });
   await sceneBaked(guest);
   await capture(guest, 'menu-phone.png');
+  await checkMenuPhones(guest);
   await captureHistory(guest, 'history-phone');
   await byCode(guest, code);
   await guest.locator('.lobby').waitFor({ timeout: 10_000 });
