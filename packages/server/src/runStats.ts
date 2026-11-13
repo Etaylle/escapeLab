@@ -1,4 +1,3 @@
-import { existsSync, readFileSync } from 'node:fs';
 import {
   DIFFICULTIES,
   runSeconds,
@@ -10,9 +9,8 @@ import {
   type MissionStats,
   type RunPlace,
 } from '@escapelab/core';
-import type { RunListener } from './room.js';
-import { appendRun, readRuns, type LoggedRun } from './runLog.js';
 import { median } from './runSummary.js';
+import type { LoggedRun } from './store/store.js';
 
 /** How many of the fastest won runs each mission keeps by name at each difficulty. */
 export const TOP_RUNS = 10;
@@ -43,10 +41,13 @@ function slotOf(ranks: readonly Rank[], rank: Rank): number {
   return low;
 }
 
-/** A won run as the list shows it. A version 1 report has no names to show. */
+/**
+ * A won run as the list shows it, by the names its crew played under: none for a version 1
+ * report, and none for a seat whose account was deleted since (named '' in its report).
+ */
 function entryOf(run: LoggedRun): LeaderEntry {
   return {
-    crew: run.version === 1 ? [] : [...run.crew],
+    crew: run.version === 1 ? [] : run.crew.filter((name) => name !== ''),
     crewSize: run.crewSize,
     seconds: runSeconds(run),
     alarms: run.penalties.reduce((sum, penalty) => sum + penalty.count, 0),
@@ -141,10 +142,11 @@ class Board {
 const isDaily = (run: LoggedRun): boolean => run.version === 2 && run.daily === true;
 
 /**
- * The Bestenliste's numbers by mission and difficulty: built from the run log
- * once, when the server starts, then kept up to date run by run — the log is
- * never read again. It keeps the time of every won run, for the median and
- * the places, and names only for the TOP_RUNS fastest. The runs of the
+ * The Bestenliste's numbers by mission and difficulty: counted from the store's runs
+ * as the server starts, then kept up to date run by run — counted anew only where a
+ * deleted account takes its name off runs (store/postgres.ts). It keeps the time of
+ * every won run, for the median and the places, and names only for the TOP_RUNS
+ * fastest. The runs of the
  * Tagesschicht rank apart, a board for each UTC day they started on: every
  * crew that day played the same instance.
  */
@@ -212,44 +214,4 @@ export class RunStats {
   dailyPlaceOf(day: string, missionId: string, finishedAt: number): RunPlace | null {
     return this.days.get(day)?.placeOf(missionId, finishedAt) ?? null;
   }
-}
-
-/**
- * The stats of the run log at `file`, read once: none yet where there is no
- * log. A line that holds no run is reported and left out, and so is a log
- * that cannot be read — the Bestenliste must never keep the server from
- * starting.
- */
-export function loadRunStats(file: string): RunStats {
-  if (!existsSync(file)) {
-    return new RunStats();
-  }
-  let text: string;
-  try {
-    text = readFileSync(file, 'utf8');
-  } catch (err) {
-    const why = err instanceof Error ? err.message : String(err);
-    console.error(
-      `[escapelab] run log ${file} not read: ${why} — the Bestenliste starts empty; ` +
-        'point RUNS_LOG at a readable file',
-    );
-    return new RunStats();
-  }
-  const { runs, problems } = readRuns(text, file);
-  for (const problem of problems) {
-    console.error(`[escapelab] ${problem} (the Bestenliste leaves it out)`);
-  }
-  return new RunStats(runs);
-}
-
-/**
- * What becomes of a finished run: a line at the end of the log at `file` and,
- * once that is written, a run in `stats` — they count the same runs.
- */
-export function logRun(file: string, stats: RunStats): RunListener {
-  return (report) => {
-    if (appendRun(file, report)) {
-      stats.add(report);
-    }
-  };
 }

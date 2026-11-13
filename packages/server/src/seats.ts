@@ -81,6 +81,11 @@ export class SeatBook {
     return null;
   }
 
+  /** The id of the pass the seat of `playerId` is bound to; null for a seat bound to none. */
+  passOf(playerId: string): string | null {
+    return this.bindings.get(playerId)?.passId ?? null;
+  }
+
   /** Lets go of the seat of `playerId`: no pass holds it any more. */
   free(playerId: string): void {
     this.bindings.delete(playerId);

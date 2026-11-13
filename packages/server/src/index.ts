@@ -17,12 +17,12 @@ import { dailySalt } from './dailySalt.js';
 import { HEARTBEAT_MS, startHeartbeat } from './heartbeat.js';
 import { MissionCatalog } from './missions.js';
 import { RoomManager, seedsAllowed } from './roomManager.js';
-import { DEFAULT_RUNS_LOG } from './runLog.js';
-import { loadRunStats, logRun } from './runStats.js';
 import { roomKey, roomKeyLogLine } from './seal.js';
 import { onSignal } from './shutdown.js';
 import { serveSockets } from './sockets.js';
 import { StaticSite } from './static.js';
+import { DEFAULT_RUNS_LOG } from './store/jsonl.js';
+import { openStore, recordRuns, type Store } from './store/store.js';
 import { serveTakes, takesAllowed, TakesShelf } from './takes.js';
 import { createWebServer, lanUrls, tlsLogLine, tlsSetup } from './tls.js';
 import { recordingAllowed, serveVoiceRecording, VoiceDesk } from './voiceRecording.js';
@@ -38,7 +38,8 @@ const MISSIONS_DIR =
   process.env['MISSIONS_DIR'] ?? fileURLToPath(new URL('../../../missions', import.meta.url));
 // An empty RUNS_LOG counts as unset, like an empty RUNS_TOKEN.
 const RUNS_LOG = process.env['RUNS_LOG'] || DEFAULT_RUNS_LOG;
-const runs: RunsExport = { file: RUNS_LOG, token: process.env['RUNS_TOKEN'] };
+/** How long the server waits for the runs still being kept before it exits all the same, ms. */
+const KEEPING_MS = 5000;
 // https where packages/server/cert/ (or TLS_CERT and TLS_KEY) holds a pair, else http.
 const tls = tlsSetup(process.env);
 
@@ -55,8 +56,11 @@ const voiceDesk = recordingAllowed(process.env)
 // The music's takes, for the client's /sounds page to play before one is kept: ALLOW_TAKES=1 only.
 const TAKES_DIR = fileURLToPath(new URL('../../client/takes', import.meta.url));
 const takes = takesAllowed(process.env) ? new TakesShelf(TAKES_DIR) : null;
-// The Bestenliste: read from the log once, then counted run by run as they are logged.
-const stats = loadRunStats(RUNS_LOG);
+// Where finished runs and the accounts are kept: Postgres at DATABASE_URL, else the run log
+// file and the accounts in memory. The Bestenliste is counted from it once, then run by run.
+const store = await storeOrExit();
+const recorder = recordRuns(store);
+const runs: RunsExport = { store, token: process.env['RUNS_TOKEN'] };
 // The Tagesschicht's salt: DAILY_SALT, else packages/server/data/daily-salt, made once and kept.
 const daily = dailySalt(process.env);
 // The key the rooms' snapshots are sealed with: ROOM_SECRET's, else one of this boot alone.
@@ -66,7 +70,7 @@ const sealing = roomKey(process.env);
 const instanceId = randomUUID();
 // A room pinned to a seed repeats its runs: for the walkthrough and bug reports, not for play.
 const manager = new RoomManager(
-  logRun(RUNS_LOG, stats),
+  recorder.record,
   seedsAllowed(process.env),
   daily.salt,
   sealing.key,
@@ -83,7 +87,7 @@ const health: Health = {
 const jsonFor = (url: string): ApiResponse | null =>
   healthResponse(catalog, health, url) ??
   apiResponse(catalog, url) ??
-  statsResponse(stats, catalog, url);
+  statsResponse(store.stats(), catalog, url);
 
 const httpServer = createWebServer(tls, (req, res) => {
   if (serveRuns(runs, req, res)) {
@@ -129,7 +133,7 @@ const goDown = onSignal({
   },
   sockets: () => wss.clients,
   manager,
-  exit: (code) => process.exit(code),
+  exit: (code) => void keepThenExit(code),
 });
 process.on('SIGTERM', goDown);
 process.on('SIGINT', goDown);
@@ -142,8 +146,8 @@ httpServer.listen(PORT, () => {
   const download = runs.token
     ? 'GET /runs.jsonl takes RUNS_TOKEN'
     : 'RUNS_TOKEN unset: no download';
-  console.log(`[escapelab] finished runs go to ${RUNS_LOG} (${download})`);
-  console.log(`[escapelab] GET /stats ranks the ${stats.runs} runs logged so far`);
+  console.log(`[escapelab] store: ${store.description}`);
+  console.log(`[escapelab] GET /stats ranks the ${store.stats().runs} runs kept so far (${download})`);
   console.log(`[escapelab] Tagesschicht: ${DAILY_SALT_FROM[daily.from]}`);
   console.log(`[escapelab] ${roomKeyLogLine(sealing)}`);
   console.log(`[escapelab] this boot is instance ${instanceId}: its snapshots name it`);
@@ -161,3 +165,31 @@ httpServer.listen(PORT, () => {
     console.log('[escapelab] kein Client-Build gefunden — im Dev-Modus läuft Vite auf 5173');
   }
 });
+
+/**
+ * The store the environment names (store/store.ts `openStore`); the process exits 1, saying why,
+ * where it cannot be opened.
+ */
+async function storeOrExit(): Promise<Store> {
+  try {
+    return await openStore(process.env, RUNS_LOG);
+  } catch (err) {
+    const why = err instanceof Error ? err.message : String(err);
+    console.error(`[escapelab] not started: ${why}`);
+    process.exit(1);
+  }
+}
+
+/**
+ * The process exits with `code` once the runs still being kept are, and the store has let go —
+ * KEEPING_MS at the latest: a database that does not answer keeps no deploy waiting.
+ */
+async function keepThenExit(code: number): Promise<void> {
+  const late = new Promise<void>((resolve) => setTimeout(resolve, KEEPING_MS).unref());
+  try {
+    await Promise.race([recorder.settled().then(() => store.close()), late]);
+  } catch (err) {
+    console.error(`[escapelab] the store did not close cleanly: ${String(err)}`);
+  }
+  process.exit(code);
+}

@@ -1,10 +1,10 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
-import { createReadStream, existsSync } from 'node:fs';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { isDailyDay, type MissionStanding, type MissionStats } from '@escapelab/core';
 import type { MissionCatalog } from './missions.js';
 import type { RoomCounts } from './roomManager.js';
 import type { RunStats } from './runStats.js';
+import type { Store } from './store/store.js';
 
 /** A JSON answer: the status code and the body to serialise. */
 export interface ApiResponse {
@@ -182,19 +182,20 @@ function decodeSegment(segment: string): string | null {
   }
 }
 
-/** The run log and the token its download takes. */
+/** The runs the server kept and the token their download takes. */
 export interface RunsExport {
-  /** where the server appends a line per finished run: RUNS_LOG */
-  file: string;
+  /** the store the runs are kept in (store/store.ts) */
+  store: Pick<Store, 'runs'>;
   /** RUNS_TOKEN; unset or empty, there is no download at all */
   token: string | undefined;
 }
 
 /**
- * GET /runs.jsonl: the run log, for a request that carries `Authorization:
- * Bearer <RUNS_TOKEN>`. Without a token configured the route answers 404,
- * so a server set up without one gives nothing away; before the first run
- * has finished the log is empty. Returns true when the request was answered.
+ * GET /runs.jsonl: every run the store keeps, the oldest first, one report of JSON a line — of
+ * one mission with `?mission=<id>` — for a request that carries `Authorization: Bearer
+ * <RUNS_TOKEN>`. Without a token configured the route answers 404, so a server set up without
+ * one gives nothing away; before the first run has finished the answer is empty. Returns true
+ * when the request was answered.
  */
 export function serveRuns(runs: RunsExport, req: IncomingMessage, res: ServerResponse): boolean {
   if (!asksForRuns(req)) {
@@ -210,16 +211,19 @@ export function serveRuns(runs: RunsExport, req: IncomingMessage, res: ServerRes
     'content-type': 'application/x-ndjson; charset=utf-8',
     'cache-control': 'no-store',
   });
-  if (req.method === 'HEAD' || !existsSync(runs.file)) {
+  if (req.method === 'HEAD') {
     res.end();
     return true;
   }
-  createReadStream(runs.file)
-    .on('error', (err) => {
-      console.error(`[escapelab] run log ${runs.file} could not be sent: ${err.message}`);
-      res.destroy(err);
-    })
-    .pipe(res);
+  const mission = new URLSearchParams((req.url ?? '').split('?')[1] ?? '').get('mission');
+  runs.store.runs(mission ?? undefined).then(
+    (kept) => res.end(kept.map((run) => `${JSON.stringify(run)}\n`).join('')),
+    (err: unknown) => {
+      const why = err instanceof Error ? err.message : String(err);
+      console.error(`[escapelab] the runs could not be sent: ${why}`);
+      res.destroy(err instanceof Error ? err : new Error(why));
+    },
+  );
   return true;
 }
 
