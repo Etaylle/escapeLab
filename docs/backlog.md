@@ -167,6 +167,15 @@ die Entscheidung.
   nennt beide Werte. Tests in tools/framegate; Header-Kommentar und art-bible ergänzen.
 - Langfristig: Flucht-Main-Thread billiger (Licht/Dunkel-Pässe, halbe Frame), siehe Audit-Addenda.
 
+### T-8 Signalkette: das Muster zählt — Status: bereit (Entscheidung Uros 2026-11-13, Spec `spec-T-signal-grey.md`) · Größe: S
+- Uros beim Spielen: „Ist das Muster ganz ohne Nutzen?" Mit Legende ja: Die Pulte zeichnen je
+  Farbe ein Muster und die Legende nennt es, aber die Lösung braucht nur die Farbe; die Spalte
+  ist Dekoration, die wie eine Regel aussieht.
+- Neu: In der letzten Stufe verliert die Anzeige ihre Farbe, die Zeichen erscheinen grau nur mit
+  ihrem Muster; die Muster-Spalte der Legende ist dann der einzige Weg zur Farbe. Feld
+  `greyFrom` (Standard letzte Stufe), Sichten ohne Farbwort in diesen Stufen, Löser über die
+  Legende, Frühschicht-Hinweis, Panel mit kontrastreichem Muster, Plan neu erzeugt.
+
 ### T-4 Leerlauf zu zweit — Status: wartet (Entscheidung Uros) · Größe: M
 - Audit: Ben wartet 7,7 s am Reaktor auf die Sicherung, Anna 5 s vor der Notstrom-Tür. Optionen:
   Wartende lesen die nächste Quelle vor, oder eine kleine Nebenaufgabe (Ventil halten). Erst
