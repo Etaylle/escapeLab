@@ -9,7 +9,7 @@ import {
   type ServerMessage,
 } from '@escapelab/core';
 import { AccountDesk } from '../src/accounts.js';
-import { RateLimiter, type Sender } from '../src/rateLimiter.js';
+import { RateLimiter, type Front, type Sender } from '../src/rateLimiter.js';
 import { RoomManager } from '../src/roomManager.js';
 import { ONE_PASS, serveSockets, TOO_MANY_WRITES } from '../src/sockets.js';
 import { JsonlStore } from '../src/store/jsonl.js';
@@ -27,18 +27,28 @@ const catalog = { get: () => mission, default: mission };
  * The server's sockets over a manager of rooms, with the accounts in a store of their own and,
  * where given, a limit on the writes to them by address.
  */
-function lab(manager = new RoomManager(), accountWrites?: RateLimiter) {
+function lab(manager = new RoomManager(), accountWrites?: RateLimiter, front: Front = 'none') {
   const server = new FakeServer();
   const store = JsonlStore.open(join(mkdtempSync(join(tmpdir(), 'escapelab-acc-')), 'runs.jsonl'));
   const accounts = new AccountDesk(store);
-  serveSockets(server, { catalog, manager, accounts, ...(accountWrites && { accountWrites }) });
+  const limited = accountWrites === undefined ? {} : { accountWrites };
+  serveSockets(server, { catalog, manager, accounts, ...limited, front });
   return { server, manager, store };
 }
 
-/** A request that came through a proxy: its socket the proxy's, the client first in line. */
-const through = (client: string): Sender => ({
-  headers: { 'x-forwarded-for': `${client}, 10.0.0.1` },
-  socket: { remoteAddress: '10.0.0.1' },
+/** A request from `machine` on the LAN, its X-Forwarded-For naming `claimed` where given. */
+const onTheLan = (machine: string, claimed?: string): Sender => ({
+  headers: claimed === undefined ? {} : { 'x-forwarded-for': claimed },
+  socket: { remoteAddress: machine },
+});
+
+/**
+ * A request from `client` through Render's proxy, the socket the balancer's: Cloudflare names the
+ * client, and appends it to whatever X-Forwarded-For the client sent (`claimed`).
+ */
+const throughRender = (client: string, claimed = '192.0.2.1'): Sender => ({
+  headers: { 'cf-connecting-ip': client, 'x-forwarded-for': `${claimed}, ${client}` },
+  socket: { remoteAddress: '10.226.90.65' },
 });
 
 /** Every account the socket heard of, in order: none for a deleted one. */
@@ -247,13 +257,13 @@ describe('the accounts’ door', () => {
   });
 
   it('holds back the account writes of an address past its limit, no other’s', async () => {
-    const { server } = lab(new RoomManager(), new RateLimiter(2, 60_000));
-    const anna = server.connect(through('203.0.113.7'));
+    const { server } = lab(new RoomManager(), new RateLimiter(2, 60_000), 'render');
+    const anna = server.connect(throughRender('203.0.113.7'));
     anna.say({ kind: 'whereami', pass: passFor('Anna'), name: 'Anna' });
     anna.say({ kind: 'profile', pass: passFor('Anna'), name: 'Anna K.' });
     anna.say({ kind: 'profile', pass: passFor('Anna'), name: 'Anna Berg' });
     // Another device behind the same address: its seat is answered, its account waits.
-    const ben = server.connect(through('203.0.113.7'));
+    const ben = server.connect(throughRender('203.0.113.7'));
     ben.say({ kind: 'whereami', pass: passFor('Ben') });
     await settled();
     expect(refusals(anna)).toEqual([[TOO_MANY_WRITES, 'profile']]);
@@ -261,10 +271,27 @@ describe('the accounts’ door', () => {
     expect(ben.heard.map((m) => m.kind)).toEqual(['seated']);
     // Reading the runs writes nothing; another address behind the same proxy writes on.
     anna.say({ kind: 'my-runs', pass: passFor('Anna') });
-    const cleo = server.connect(through('198.51.100.4'));
+    const cleo = server.connect(throughRender('198.51.100.4'));
     cleo.say({ kind: 'whereami', pass: passFor('Cleo') });
     await settled();
     expect(anna.heard.at(-1)).toMatchObject({ kind: 'my-runs', total: 0 });
     expect(accounts(cleo)).toHaveLength(1);
+  });
+
+  it('counts a machine by its own address, whatever its headers claim', async () => {
+    const { server } = lab(new RoomManager(), new RateLimiter(2, 60_000));
+    // One machine on the LAN, five sockets, each claiming an address of its own.
+    const names = ['Anna', 'Ben', 'Cleo', 'Dan', 'Eva'];
+    const sockets = names.map((name, i) => {
+      const socket = server.connect(onTheLan('192.168.1.20', `192.0.2.${i + 1}`));
+      socket.say({ kind: 'whereami', pass: passFor(name) });
+      return socket;
+    });
+    // A classmate whose address the machine claimed writes on all the same.
+    const finn = server.connect(onTheLan('192.0.2.1'));
+    finn.say({ kind: 'whereami', pass: passFor('Finn') });
+    await settled();
+    expect(sockets.map((socket) => accounts(socket).length)).toEqual([1, 1, 0, 0, 0]);
+    expect(accounts(finn)).toHaveLength(1);
   });
 });

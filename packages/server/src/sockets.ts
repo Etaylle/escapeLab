@@ -11,7 +11,7 @@ import {
 import type { AccountDesk } from './accounts.js';
 import { MISSED_PINGS, SILENT_MS, type CutReason } from './heartbeat.js';
 import type { MissionCatalog } from './missions.js';
-import { clientAddress, type Sender } from './rateLimiter.js';
+import { clientAddress, type Front, type Sender } from './rateLimiter.js';
 import { GAME_KINDS, type GameMessage, type Room } from './room.js';
 import type { RoomManager } from './roomManager.js';
 
@@ -41,6 +41,8 @@ export interface Lab {
    * account made, visited, renamed, recoloured or deleted counts one; none where unset
    */
   accountWrites?: { take: (address: string) => boolean };
+  /** who stands in front of the server, which says where a socket's address is read; none unset */
+  front?: Front;
 }
 
 /**
@@ -141,7 +143,7 @@ export function serveSockets(server: SocketServer, lab: Lab): Served {
   server.on('connection', (socket, request) => {
     let session: Session | null = null;
     sessions.set(socket, () => session);
-    const address = request === undefined ? 'unknown' : clientAddress(request);
+    const address = request === undefined ? 'unknown' : clientAddress(request, lab.front ?? 'none');
     doors.set(socket, { address, pass: null });
     const take = (msg: ClientMessage): void => {
       try {

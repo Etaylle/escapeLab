@@ -19,7 +19,7 @@ import { HEARTBEAT_MS, startHeartbeat } from './heartbeat.js';
 import { MissionCatalog } from './missions.js';
 import { RoomManager, seedsAllowed } from './roomManager.js';
 import { roomKey, roomKeyLogLine } from './seal.js';
-import { RateLimiter } from './rateLimiter.js';
+import { frontOf, RateLimiter } from './rateLimiter.js';
 import { onSignal } from './shutdown.js';
 import { ACCOUNT_WRITES_PER_MINUTE, serveSockets } from './sockets.js';
 import { StaticSite } from './static.js';
@@ -127,6 +127,7 @@ const served = serveSockets(wss, {
   manager,
   accounts: new AccountDesk(store),
   accountWrites: new RateLimiter(ACCOUNT_WRITES_PER_MINUTE, 60_000),
+  front: frontOf(process.env),
 });
 // A socket gone silent is found out and closed, so that the room pauses for its player; the
 // log names the room and the seat of each socket it cuts.

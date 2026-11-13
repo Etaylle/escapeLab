@@ -31,10 +31,15 @@ store: the account comes to the socket a moment later (`account`).
 - **One pass a socket, so many writes an address.** A socket speaks for the first pass it shows;
   another is refused there („Diese Verbindung gehört schon einem anderen Dienstausweis."). Each
   address gets 120 writes to the accounts a minute — an account made or visited as its pass
-  arrives, a name, a colour, a deletion — counted by the first address of `X-Forwarded-For`
-  behind Render's proxy, else the socket's. Past it a seat is still taken and its account waits;
-  a name or a deletion is refused („Zu viele Kontoänderungen von dieser Adresse in einer
+  arrives, a name, a colour, a deletion. Past it a seat is still taken and its account waits; a
+  name or a deletion is refused („Zu viele Kontoänderungen von dieser Adresse in einer
   Minute."). „Meine Einsätze" only reads, and is never held back.
+- **Whose address.** Behind Render (`RENDER` set) the socket's address is the proxy's, the same
+  for everybody, and a client may send any `X-Forwarded-For` it likes: the address is
+  Cloudflare's `cf-connecting-ip`, else `true-client-ip`, else the last `X-Forwarded-For` entry,
+  the one the proxy appended. Without Render nobody's header is trusted: the socket's own
+  address, so a machine on the LAN counts as itself whatever it claims. Only a valid IP address
+  is counted by; a request without one counts as `unknown`, together with every other such.
 
 ## What is kept
 
