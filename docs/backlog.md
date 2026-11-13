@@ -409,6 +409,12 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   Stinger. Die 47 Leitstellen-Zeilen vom 2026-10-25 sind vielleicht vor dem bezahlten Plan
   entstanden: neu aufnehmen (Befehl unter „Lizenz"), dann ist alles kommerziell nutzbar.
 
+### S-audition Musik nach Gehör wählen — Status: erledigt (S-audition, 2026-11-13) · Größe: S
+- `--candidates 3` macht von jedem Musikstück drei Takes nach `packages/client/takes/`, die
+  Seite `/sounds` spielt sie unter ihrem Stück (nur mit `pnpm dev`), und
+  `node scripts/sfx.ts --keep <id>=<n>` übernimmt den gewählten Take samt Manifest; Befehle und
+  Kosten je Take stehen in `docs/sound.md` unter „Takes und Auswahl".
+
 ### S-2 Begehbarer Pausenraum — Status: wartet (nach S-1 und R-3) · Größe: XL
 - Vorbilder: Phasmophobia (begehbarer Raum, Tafel mit Auftragswahl, Tür öffnet beim Start),
   Deep Rock Galactic (Countdown erst, wenn alle in der Kapsel stehen), Lethal Company (Hebel

@@ -39,6 +39,8 @@ pnpm --filter client sfx                                 # everything not made y
 pnpm --filter client sfx -- sfx                          # the effects alone (`music`: the music)
 pnpm --filter client sfx -- --only klaxon,ping           # those entries, made anew
 pnpm --filter client sfx -- --candidates 3 --only ping   # three takes, the best one kept
+pnpm --filter client sfx -- --candidates 3 --only calm   # three takes of a piece, for the ear
+pnpm --filter client sfx -- --keep calm=2                # its take 2 kept, the others deleted
 ```
 
 **Awaiting a render.** Twelve entries were written before the user could render them — the
@@ -71,17 +73,18 @@ are measured before the gain (below), `hash` names the request that made it, `in
 closely an effect followed its prompt, so a run makes only what is new, changed or missing, and
 one cut short goes on where it stopped.
 
-**Candidates.** With `--candidates N` (up to 5; 1 unless told) every entry the run makes is
+**Candidates.** With `--candidates N` (up to 5; 1 unless told) every effect the run makes is
 made N times, each take into a folder of its own in the system's temp (the run names it; nothing
-of it goes into the project): an effect with its prompt followed ever more closely — 0.3, 0.6
-and 0.9 for three — a piece of music by the same request again. The script prints each take's
-peak, RMS, start, silence, length, gain and floor and keeps the one that misses the fewest of
-five rules — its peak at −6 dBFS or more before any gain; its sound starts within 50 ms; at most
-a tenth of it is silence, 10 ms frames under −60 dBFS; its length lies within a fifth of the
-catalog's; its floor is not heard (below) — and of those the one with the loudest RMS. Only that
-one goes into `public/sfx` or `public/music`, and the checks below are made on it. A short click
-misses the silence rule whatever it does, its tail silent long before its half second is over,
-so for it the RMS decides.
+of it goes into the project), its prompt followed ever more closely — 0.3, 0.6 and 0.9 for
+three. The script prints each take's peak, RMS, start, silence, length, gain and floor and keeps
+the one that misses the fewest of five rules (`PICK`) — its peak at −6 dBFS or more before any
+gain; its sound starts within 50 ms; at most a tenth of it is silence, 10 ms frames under
+−60 dBFS; its length lies within a fifth of the catalog's; its floor is not heard (below) — and
+of those the one with the loudest RMS. Only that one goes into `public/sfx`, and the checks
+below are made on it. A short click misses the silence rule whatever it does, its tail silent
+long before its half second is over, so for it the RMS decides. A piece of music is made in
+takes as well, three at most, but no rule picks among them: they wait for the ear (Takes und
+Auswahl, below).
 
 The key comes from the environment: the package script hands node the repo's `.env.local`
 (`--env-file-if-exists`), and from a worktree it is `node --env-file=<repo>/.env.local
@@ -98,14 +101,16 @@ length, its gain and its floor once the gain is applied („Grundrauschen −45,
 where it is heard, „vom Klang verdeckt" where the sound fills its quietest 100 ms), a button
 that plays it through the game's own loader at the loudness the game brings it to (a loop — a
 room's bed, a stem — round and round until it is stopped) and a box „neu rendern"; below, it
-puts together the command for what is ticked, to be run in `packages/client`:
+puts together the command for what is ticked, to be run in `packages/client` — an effect ticked
+comes back as the best of three candidates, a piece of music as three takes under its row:
 
 ```sh
 node --env-file=/Users/uros/Documents/Req.Eng./escapelab/.env.local scripts/sfx.ts --candidates 3 --only a,b,c
 ```
 
 The key file is the main checkout's unless the page is told another path, which it remembers
-for the next visit. The page asks no service for anything: the user runs the command.
+for the next visit. The page asks no service for anything: the user runs the command. Under a
+piece of music stand its takes, where the dev server has any (Takes und Auswahl, below).
 
 **Loudness without re-encoding.** The files stay as ElevenLabs made them. The script decodes
 each with `afconvert` into a temporary folder, measures its peak and its RMS and writes the gain
@@ -117,8 +122,10 @@ is applied, and lies 20 dB or more under the take's RMS — closer, the quietest
 sound itself, a bed, a stem, a hiss, a ringing tone that fills its file, and the sound masks
 whatever noise lies under it (`floorHeard`). A take more than a fifth off its length is named as
 well. The script names each such take, with its gain, its floor or its length, and fails with
-the command that makes them again, `--candidates 5 --only …`; `test/sampleManifest.test.ts`
-lists them. Nothing is capped. More than 30 ms of silence at a recording's start becomes
+the command that makes them again — `--candidates 5 --only …` for an effect,
+`--candidates 3 --only …` for a piece of music, whose takes then wait for the ear
+(`remakeArgs`); `test/sampleManifest.test.ts` lists them with the same command. Nothing is
+capped. More than 30 ms of silence at a recording's start becomes
 `startMs`, where its sound starts; a bed keeps its start, so that its loop stays seamless. A run
 that makes nothing measures every file anew, so a rule changed costs nothing. The game applies
 the gain as it decodes a recording (`samples.ts`), multiplying its samples once, and plays it
@@ -143,6 +150,76 @@ their file, such as the ping, the steam's hiss and the radio's static. With it, 
 played at a gain of about 0.7: the door's slide, which settles on a floor of −42.7 dBFS after
 the slide, and the power going down, whose whine still falls at −43.5 dBFS where its file ends.
 The `lost` sting came back 19.0 s long for the 10 s asked, its chord struck three times.
+
+## Takes und Auswahl
+
+No measurement says whether a piece of music sounds right, so the script picks none. With
+`--candidates N` every piece the run makes — a stem, a sting, a theme — is made N times by the
+same request, three times at most (`MAX_MUSIC_TAKES`: its cost runs by the second, and a fourth
+is refused before anything is asked), and every take goes into
+`packages/client/takes/<id>/<n>.mp3`, a folder git ignores beside `public/`, which no build
+copies. Each entry's `takes/<id>/index.json` lists its takes as they come in: the number and
+file, the hash of the request it was made from — its prompt and its settings, the hash its
+manifest entry will carry — the settings themselves (model, format, length, instrumental; Eleven
+Music takes no seed beside a prompt), when it was made, and how it measures: its length, its
+gain, where its sound starts, its peak, RMS and floor before the gain, its share of silence and
+the rules of `PICK` it misses, said and never used. A later run adds its takes, numbered on;
+nothing of them goes into `public/music`, and the recording the game plays keeps its file and its
+manifest entry until one is kept. The run says where the takes lie and the command that keeps
+one of each. A run asking for one take (no `--candidates`) makes a piece once, straight into
+`public/music`, as before. An effect keeps its candidates and its pick.
+
+The menu's theme and the end cards' two themes in three takes each, then one of each kept:
+
+```sh
+# in packages/client of the main checkout
+node --env-file=/Users/uros/Documents/Req.Eng./escapelab/.env.local scripts/sfx.ts \
+  --candidates 3 --only menu-theme,end-won,end-lost --dry-run   # the plan: about 6,696 credits
+node --env-file=/Users/uros/Documents/Req.Eng./escapelab/.env.local scripts/sfx.ts \
+  --candidates 3 --only menu-theme,end-won,end-lost             # nine takes into takes/
+# at the repo's root, in a terminal of its own: the server and the client
+pnpm dev                                    # then http://localhost:5173/sounds, and listen
+# back in packages/client: the take chosen of each, by its number on the page
+node scripts/sfx.ts --keep menu-theme=2
+node scripts/sfx.ts --keep end-won=1
+node scripts/sfx.ts --keep end-lost=3
+```
+
+**Listening.** On `/sounds` the takes stand under their piece, below the recording the game plays
+now: a button streams each at the gain the game would give it, so that loudness decides nothing
+between them; one line says its length, gain, peak, RMS, floor, silence, where its sound starts
+and the rules it misses — amber where it runs more than a fifth off its length or plays a floor
+that is heard: kept, it would fail `test/sampleManifest.test.ts` — and „Diesen Take behalten"
+shows the command that keeps it. The page runs nothing and asks for its lists alone. The takes
+come from the dev server: `GET /takes/` lists every entry's, `GET /takes/<id>/<n>.mp3` plays one,
+both only with `ALLOW_TAKES=1`, which `pnpm dev` sets (`packages/server/src/takes.ts`; Vite passes
+`/takes` on to it). Without it every address under `/takes` answers 404 ahead of the built site,
+never the page in a take's place, and `/sounds` says „Takes liefert nur der Entwicklungsserver
+(pnpm dev)."
+
+**Keeping.** `--keep <id>=<n>` measures the take as a render is measured, moves it into
+`public/music` as the entry's file, writes its manifest entry — the request's hash, the gain,
+the floor, a stem's tempo — and deletes the entry's other takes and their list. It asks
+ElevenLabs for nothing and needs no key, only afconvert. It refuses, in one line and before
+anything moves, an id the catalog does not know, an entry without takes, a number it has no take
+of, a take made from another request than the catalog's now (the prompt changed since: new
+takes, then) and a take whose file is gone; and it comes alone. A kept take passes
+`test/sampleManifest.test.ts` as a render does, and the script reports the folders and any
+floor heard or length off afterwards, as after a render. Keeping the game's own `won.mp3` as a
+take, on a copy of the client, wrote its manifest entry to the digit as the render had.
+
+**What a take costs**, at the dry run's 18 credits a second of music:
+
+| Entry | Kind | Length | A take | Three takes |
+| --- | --- | --- | --- | --- |
+| `calm`, `tense`, `critical` | stem | 72 s | 1,296 credits | 3,888 credits |
+| `menu-theme` | stem | 60 s | 1,080 credits | 3,240 credits |
+| `end-won`, `end-lost` | theme | 32 s | 576 credits | 1,728 credits |
+| `won`, `lost` | sting | 10 s | 180 credits | 540 credits |
+
+Three takes of all eight come to 19,440 credits, over the 18,000 the music may spend in one run:
+they go in two runs, `--only` splitting them, and `--dry-run` says each run's sum before anything
+is asked.
 
 ## The mix (`mix.ts`)
 
@@ -712,9 +789,16 @@ stems' tempo in the manifest, the folders' caps), `test/sfxScript.test.ts` (the 
 and their hash, the tempo asking nothing anew, what a run makes, the command line, the
 candidates' influences and the rules a take is picked by, the credits' guard and the pricing at
 the first entry's rate, a WAV read, the gain, the start, the silence and the floor worked out
-from PCM of known loudness, the floor heard or masked, a length off), `test/soundsPage.test.tsx`
-(the audition page's address, its listing by kind, its floors flagged as the script flags them,
-what it says of each recording, the command it puts together), `test/ambience.test.ts` (rooms,
+from PCM of known loudness, the floor heard or masked, a length off; the music's takes against
+a client of the test's own — three at most, each into `takes/<id>/` with its list and nothing
+public, numbered on, the recording the game plays left as it was, every take priced in the plan
+— and `--keep`: the take moved, its manifest entry as a render writes it, the rest deleted, each
+refusal in a line), `test/soundsPage.test.tsx` (the audition page's address, its listing by kind,
+its floors flagged as the script flags them, what it says of each recording, the command it puts
+together, the takes read from the script's lists and asked of the dev server with a plain GET,
+each under its piece in one line, the keep command the script reads, no other request in its
+sources), `server/test/takes.test.ts` (the switch, 404 under `/takes` ahead of the built site
+without it, the lists and a take with it), `test/ambience.test.ts` (rooms,
 levels, power, the beds' recorded loops, dead and alive variants, crossfades, the sporadic
 sounds, sounds let go, the rooms one way near, the beds wanted by power, a bed loaded as its
 room comes near and let go 4 s after, the rest brought in as the lights fail, the room's
@@ -986,6 +1070,8 @@ lines before Helmut did, are build tools that never ship.
 
 What the sound packages left for later, one line each, the newest first:
 
+- **Three takes of the menu's theme and the end cards' themes, one kept by ear** (S-audition): the
+  user's render and choice, some 6,696 credits; the commands are under „Takes und Auswahl".
 - **The menu's theme, the end cards' two themes and the facility's hum await a render** (S-menu):
   written into the catalog, listed in `AWAITING_RENDER`; the commands are under „The end cards"
   (some 2,352 credits). Until they run the menu sounds its interface alone and an end card its
