@@ -182,13 +182,38 @@ function localSettings(): SettingsStore | null {
   }
 }
 
+/** The browser's ask for less motion: its query, and what it last answered. */
+interface SystemMotion {
+  query: MediaQueryList;
+  reduce: boolean;
+}
+
+/** The query, asked once a page; null until a window was there to ask. */
+let systemMotion: SystemMotion | null = null;
+
+/**
+ * The browser's motion query, asked once a page and its answer kept as it changes — the
+ * scene's loop asks after the motion each frame; null without a window to ask.
+ */
+function motionQuery(): SystemMotion | null {
+  if (
+    systemMotion === null &&
+    typeof window !== 'undefined' &&
+    typeof window.matchMedia === 'function'
+  ) {
+    const query = window.matchMedia(REDUCED_MOTION);
+    const asked: SystemMotion = { query, reduce: query.matches };
+    query.addEventListener('change', (e) => {
+      asked.reduce = e.matches;
+    });
+    systemMotion = asked;
+  }
+  return systemMotion;
+}
+
 /** Whether the browser asks for less motion; without a window, nothing asks. */
 function systemReduced(): boolean {
-  return (
-    typeof window !== 'undefined' &&
-    typeof window.matchMedia === 'function' &&
-    window.matchMedia(REDUCED_MOTION).matches
-  );
+  return motionQuery()?.reduce === true;
 }
 
 let current: Settings = DEFAULT_SETTINGS;
@@ -227,7 +252,7 @@ function apply(settings: Settings): void {
 export function startSettings(): void {
   current = readSettings(localSettings());
   apply(current);
-  window.matchMedia(REDUCED_MOTION).addEventListener('change', () => apply(current));
+  motionQuery()?.query.addEventListener('change', () => apply(current));
 }
 
 /** Changes the settings by `patch`: kept on this device, applied, and every screen told. */
@@ -248,6 +273,20 @@ export function useSettings(): Settings {
 /** Whether things move less now, by the settings and the browser. */
 export function reducedMotion(): boolean {
   return motionReduced(current.motion, systemReduced());
+}
+
+/**
+ * Calls `changed` whenever `reducedMotion` may have turned — the settings changed, or what the
+ * browser asks — as a loop standing still under reduced motion needs to hear; returns the stop.
+ */
+export function watchMotion(changed: () => void): () => void {
+  const unwatch = watchSettings(changed);
+  const query = motionQuery()?.query;
+  query?.addEventListener('change', changed);
+  return () => {
+    unwatch();
+    query?.removeEventListener('change', changed);
+  };
 }
 
 /** Whether things move less, kept up to date with the settings and the browser. */

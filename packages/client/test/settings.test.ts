@@ -336,6 +336,60 @@ describe('the look on the page’s root', () => {
   });
 });
 
+/** A window whose motion query the test answers, and which counts how often it is made. */
+function windowAsking() {
+  const made: string[] = [];
+  const heard = new Set<(e: { matches: boolean }) => void>();
+  const query = {
+    matches: false,
+    addEventListener: (_: string, listener: (e: { matches: boolean }) => void) => heard.add(listener),
+    removeEventListener: (_: string, listener: (e: { matches: boolean }) => void) =>
+      heard.delete(listener),
+  };
+  const matchMedia = (asked: string) => {
+    made.push(asked);
+    return query;
+  };
+  vi.stubGlobal('window', { localStorage: memory(), matchMedia });
+  return {
+    made,
+    /** The browser comes to ask for less motion, or no longer. */
+    turn: (matches: boolean) => {
+      query.matches = matches;
+      heard.forEach((listener) => listener({ matches }));
+    },
+  };
+}
+
+describe('the browser’s ask for less motion', () => {
+  it('is asked once a page, and followed as it changes', async () => {
+    const page = windowAsking();
+    const { settings } = await fresh();
+    for (let frame = 0; frame < 5; frame += 1) {
+      expect(settings.reducedMotion()).toBe(false);
+    }
+    page.turn(true);
+    expect(settings.reducedMotion()).toBe(true);
+    expect(page.made).toEqual(['(prefers-reduced-motion: reduce)']);
+  });
+
+  it('tells whoever watches the motion of each change, the settings’ and the browser’s', async () => {
+    const page = windowAsking();
+    const { settings } = await fresh();
+    let told = 0;
+    const stop = settings.watchMotion(() => {
+      told += 1;
+    });
+    settings.changeSettings({ motion: 'on' });
+    page.turn(true);
+    expect(told).toBe(2);
+    stop();
+    settings.changeSettings({ motion: 'off' });
+    page.turn(false);
+    expect(told).toBe(2);
+  });
+});
+
 describe('the stylesheets under the settings', () => {
   const SRC = new URL('../src/', import.meta.url);
   const read = (path: string): string =>

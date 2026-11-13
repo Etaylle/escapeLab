@@ -1,8 +1,9 @@
 /**
  * The menu's scene at work (world/menu/scene.ts): an animation loop that draws it no more than
- * 30 times a second while it shows, and not at all while it does not — its tab hidden, or its
- * canvas out of the window, as under the Bestenliste. Every animation frame's length is told
- * to `record`, for the walkthrough's frame window (frameTrace.ts), a frame drawn or not.
+ * 30 times a second while it shows and moves, and not at all while it does not show — its tab
+ * hidden, or its canvas out of the window, as under the Bestenliste — or stands still, its
+ * still drawn under reduced motion. Every animation frame's length is told to `record`, for
+ * the walkthrough's frame window (frameTrace.ts), a frame drawn or not.
  */
 
 /** The shortest the scene goes between two drawings, ms: no more than 30 a second. */
@@ -22,29 +23,49 @@ export interface SceneHost {
   watch: (seen: (shown: boolean) => void) => () => void;
 }
 
+/** The scene's loop at work: what starts it again once it has stood still, and its end. */
+export interface SceneLoop {
+  /** asks for frames again — a lab baked, the motion changed — wherever the scene shows */
+  wake(): void;
+  stop(): void;
+}
+
 /**
  * Runs the scene: while it shows, an animation loop calls `paint` no more than 30 times a
- * second and tells `record` how long each frame took; hidden, the loop stops, and it starts
- * again when the scene shows, the time hidden not counted as a frame. Returns what stops it
- * for good.
+ * second and tells `record` how long each frame took. `paint` says whether anything still
+ * moves: once nothing does — no lab yet, or its still drawn under reduced motion — the loop
+ * asks no more frames until it is woken. Hidden, the loop stops too, and starts again when
+ * the scene shows; the time hidden or still is not counted as a frame.
  */
 export function runScene(
-  paint: (now: number) => void,
+  paint: (now: number) => boolean,
   host: SceneHost,
   record: (ms: number) => void = () => undefined,
-): () => void {
+): SceneLoop {
   let handle: number | null = null;
+  let shown = false;
   let last = Number.NEGATIVE_INFINITY;
   let prev: number | null = null;
+  const start = (): void => {
+    if (shown && handle === null) {
+      handle = host.frame(tick);
+    }
+  };
   const tick = (now: number): void => {
-    handle = host.frame(tick);
+    handle = null;
     if (prev !== null) {
       record(now - prev);
     }
     prev = now;
-    if (now - last >= SCENE_FRAME_MS - FRAME_SLACK_MS) {
+    const due = now - last >= SCENE_FRAME_MS - FRAME_SLACK_MS;
+    if (due) {
       last = now;
-      paint(now);
+    }
+    if (!due || paint(now)) {
+      start();
+    }
+    if (handle === null) {
+      prev = null;
     }
   };
   const halt = (): void => {
@@ -54,16 +75,21 @@ export function runScene(
     }
     prev = null;
   };
-  const unwatch = host.watch((shown) => {
-    if (!shown) {
+  const unwatch = host.watch((seen) => {
+    shown = seen;
+    if (seen) {
+      start();
+    } else {
       halt();
-    } else if (handle === null) {
-      handle = host.frame(tick);
     }
   });
-  return () => {
-    unwatch();
-    halt();
+  return {
+    wake: start,
+    stop: () => {
+      unwatch();
+      shown = false;
+      halt();
+    },
   };
 }
 

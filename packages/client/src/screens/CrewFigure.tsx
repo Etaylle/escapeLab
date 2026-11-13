@@ -103,19 +103,37 @@ export interface FigureHost {
   watch: (seen: (shown: boolean) => void) => () => void;
 }
 
+/** A figure's loop at work: what starts it again once the figure has held still, and its end. */
+export interface FigureLoop {
+  /** asks for frames again — what the figure shows may have changed — wherever it shows */
+  wake(): void;
+  stop(): void;
+}
+
 /**
  * Runs a figure's canvas: while it shows on screen an animation loop paints
- * it, no more than 30 times a second; hidden, the loop stops, and it starts
- * again when the canvas shows. Returns what stops it for good.
+ * it, no more than 30 times a second. `paint` says whether the figure moves
+ * on: once it holds still, under reduced motion, the loop asks no more frames
+ * until it is woken. Hidden, the loop stops too, and it starts again when the
+ * canvas shows.
  */
-export function runFigure(paint: (now: number) => void, host: FigureHost): () => void {
+export function runFigure(paint: (now: number) => boolean, host: FigureHost): FigureLoop {
   let handle: number | null = null;
+  let shown = false;
   let last = Number.NEGATIVE_INFINITY;
+  const start = (): void => {
+    if (shown && handle === null) {
+      handle = host.frame(tick);
+    }
+  };
   const tick = (now: number): void => {
-    handle = host.frame(tick);
-    if (now - last >= FIGURE_FRAME_MS - FRAME_SLACK_MS) {
+    handle = null;
+    const due = now - last >= FIGURE_FRAME_MS - FRAME_SLACK_MS;
+    if (due) {
       last = now;
-      paint(now);
+    }
+    if (!due || paint(now)) {
+      start();
     }
   };
   const halt = (): void => {
@@ -124,16 +142,21 @@ export function runFigure(paint: (now: number) => void, host: FigureHost): () =>
       handle = null;
     }
   };
-  const unwatch = host.watch((shown) => {
-    if (!shown) {
+  const unwatch = host.watch((seen) => {
+    shown = seen;
+    if (seen) {
+      start();
+    } else {
       halt();
-    } else if (handle === null) {
-      handle = host.frame(tick);
     }
   });
-  return () => {
-    unwatch();
-    halt();
+  return {
+    wake: start,
+    stop: () => {
+      unwatch();
+      shown = false;
+      halt();
+    },
   };
 }
 
@@ -221,6 +244,48 @@ function paintFigure(
   });
 }
 
+/** What a figure's painter draws on and reads: its canvas, its look and wave as they stand. */
+export interface FigureCanvas {
+  canvas: HTMLCanvasElement;
+  ctx: CanvasRenderingContext2D;
+  look: { readonly current: FigureLook };
+  /** when the figure last began to wave, by the page's clock; null for never */
+  waveAt: { readonly current: number | null };
+  probe: FigureProbe;
+}
+
+/**
+ * What paints a figure on each frame of its loop, `since` it came up: its pose as it stands —
+ * under reduced motion only where what it shows has changed, its look or its canvas's size.
+ * Says whether the figure moves on: never under reduced motion, which holds it still.
+ */
+export function figurePainter(
+  on: FigureCanvas,
+  since: number,
+  reduced: boolean,
+): (now: number) => boolean {
+  let drawn = '';
+  return (now) => {
+    const o = on.look.current;
+    if (reduced) {
+      const size = `${on.canvas.clientWidth}x${on.canvas.clientHeight}`;
+      const key = `${o.color} ${o.facing} ${o.isYou} ${o.connected} ${o.mood} ${size}`;
+      if (key === drawn) {
+        return false;
+      }
+      drawn = key;
+    }
+    const waved = on.waveAt.current === null ? null : now - on.waveAt.current;
+    const pose = figurePose(figureStateOf(o, now - since, waved, reduced));
+    paintFigure(on.canvas, on.ctx, o, pose);
+    on.probe.color = o.color;
+    on.probe.mood = o.mood;
+    on.probe.rise = pose.rise;
+    on.probe.glance = pose.look - FACING[o.facing];
+    return !reduced;
+  };
+}
+
 /** What a figure waves at: its player saying ready, and the key the profile hands it. */
 export interface WaveCue {
   ready: boolean;
@@ -259,12 +324,14 @@ function useWaveAt(
  * ready — in the profile as its name is typed anew —, a
  * light across the visor while they speak; jumping on a won card, slumped on
  * a lost one. It moves only while it shows on screen, 30 times a second at
- * most; under reduced motion it holds still. The name is not drawn: the room
- * shows it as a tag above.
+ * most; under reduced motion it holds still, its loop asleep until a render
+ * or a new size of its canvas may have changed what it shows. The name is not
+ * drawn: the room shows it as a tag above.
  */
 export function CrewFigure(props: Props) {
   const { id, color, facing, isYou, connected, mood, speaking = false, ready = false } = props;
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const wake = useRef<(() => void) | null>(null);
   const readyAt = useWaveAt(ready, props.wave);
   const look = useRef<FigureLook>({ color, facing, isYou, connected, mood, speaking, phase: 0 });
   look.current = { color, facing, isYou, connected, mood, speaking, phase: figurePhase(id) };
@@ -275,36 +342,26 @@ export function CrewFigure(props: Props) {
     if (canvas == null || ctx == null) {
       return undefined;
     }
-    const reduced = reducedMotion();
-    const since = performance.now();
     const probe: FigureProbe = { color: '', mood: 'play', rise: 0, glance: 0 };
     const unprobe = probed(probe);
-    let drawn = '';
-    const paint = (now: number): void => {
-      const o = look.current;
-      if (reduced) {
-        // Holding still, the figure is painted again only when what it shows changes.
-        const size = `${canvas.clientWidth}x${canvas.clientHeight}`;
-        const key = `${o.color} ${o.facing} ${o.isYou} ${o.connected} ${o.mood} ${size}`;
-        if (key === drawn) {
-          return;
-        }
-        drawn = key;
-      }
-      const waved = readyAt.current === null ? null : now - readyAt.current;
-      const pose = figurePose(figureStateOf(o, now - since, waved, reduced));
-      paintFigure(canvas, ctx, o, pose);
-      probe.color = o.color;
-      probe.mood = o.mood;
-      probe.rise = pose.rise;
-      probe.glance = pose.look - FACING[o.facing];
-    };
-    const stop = runFigure(paint, browserHost(canvas));
+    const on = { canvas, ctx, look, waveAt: readyAt, probe };
+    const paint = figurePainter(on, performance.now(), reducedMotion());
+    const loop = runFigure(paint, browserHost(canvas));
+    const resized = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(loop.wake);
+    resized?.observe(canvas);
+    wake.current = loop.wake;
     return () => {
-      stop();
+      wake.current = null;
+      resized?.disconnect();
+      loop.stop();
       unprobe();
     };
   }, [readyAt]);
+
+  // A render may change what a figure holding still shows: it looks again.
+  useEffect(() => {
+    wake.current?.();
+  });
 
   return <canvas ref={canvasRef} className="seat-figure" aria-hidden="true" />;
 }

@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { reducedMotion } from '../settings.js';
+import { reducedMotion, watchMotion } from '../settings.js';
 import { openStage, type SceneStage } from '../world/menu/stage.js';
 
 /**
@@ -25,7 +25,7 @@ export function MenuScene({
     if (canvas === null) {
       return undefined;
     }
-    const opened = openStage(canvas, reducedMotion);
+    const opened = openStage(canvas, { reduced: reducedMotion, watch: watchMotion });
     stage.current = opened;
     return () => {
       opened.close();

@@ -298,7 +298,10 @@ describe('reduced motion', () => {
 
   it('is asked of the window under the settings’ „System", and of nothing without one', () => {
     expect(reducedMotion()).toBe(false);
-    const asks = (query: string) => ({ matches: query === '(prefers-reduced-motion: reduce)' });
+    const asks = (query: string) => ({
+      matches: query === '(prefers-reduced-motion: reduce)',
+      addEventListener: () => undefined,
+    });
     vi.stubGlobal('window', { matchMedia: asks });
     expect(reducedMotion()).toBe(true);
     expect(motionMs(600)).toBe(CALM_MS);

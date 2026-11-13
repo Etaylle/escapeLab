@@ -19,6 +19,7 @@ import {
   type SceneHost,
 } from '../src/world/menu/loop.js';
 import {
+  clearShow,
   needsPaint,
   paintShow,
   showBake,
@@ -160,6 +161,8 @@ function fakeHost(): {
   host: SceneHost;
   run: (ms: number) => void;
   show: (shown: boolean) => void;
+  /** how many animation frames the loop has asked for and not had yet */
+  pending: () => number;
 } {
   let queued: ((now: number) => void)[] = [];
   let seen: ((shown: boolean) => void) | null = null;
@@ -192,6 +195,7 @@ function fakeHost(): {
       }
     },
     show: (shown) => seen?.(shown),
+    pending: () => queued.length,
   };
 }
 
@@ -200,21 +204,22 @@ describe('the scene’s loop', () => {
     const page = fakeHost();
     const painted: number[] = [];
     const frames: number[] = [];
-    const stop = runScene((now) => painted.push(now), page.host, (ms) => frames.push(ms));
+    const paint = (now: number): boolean => painted.push(now) > 0;
+    const loop = runScene(paint, page.host, (ms) => frames.push(ms));
     page.run(1000);
     expect(painted).toHaveLength(30);
     expect(frames).toHaveLength(59);
     for (const [i, at] of painted.entries()) {
       if (i > 0) expect(at - (painted[i - 1] ?? 0)).toBeGreaterThanOrEqual(SCENE_FRAME_MS - 1);
     }
-    stop();
+    loop.stop();
   });
 
   it('draws nothing while it does not show, and goes on once it does again', () => {
     const page = fakeHost();
     let painted = 0;
     const frames: number[] = [];
-    const stop = runScene(() => (painted += 1), page.host, (ms) => frames.push(ms));
+    const loop = runScene(() => (painted += 1) > 0, page.host, (ms) => frames.push(ms));
     page.run(500);
     const before = painted;
     page.show(false);
@@ -225,10 +230,52 @@ describe('the scene’s loop', () => {
     expect(painted).toBeGreaterThan(before + 10);
     // The time hidden is no frame of the scene's.
     expect(Math.max(...frames)).toBeLessThan(20);
-    stop();
+    loop.stop();
     const after = painted;
     page.run(500);
     expect(painted).toBe(after);
+  });
+
+  it('asks no frames once nothing moves, and one loop again when woken', () => {
+    const page = fakeHost();
+    let moving = true;
+    let painted = 0;
+    const frames: number[] = [];
+    const paint = (): boolean => {
+      painted += 1;
+      return moving;
+    };
+    const loop = runScene(paint, page.host, (ms) => frames.push(ms));
+    page.run(500);
+    moving = false;
+    page.run(100);
+    const still = painted;
+    expect(page.pending()).toBe(0);
+    page.run(2000);
+    expect(painted).toBe(still);
+    moving = true;
+    loop.wake();
+    loop.wake();
+    expect(page.pending()).toBe(1);
+    page.run(500);
+    expect(painted).toBeGreaterThan(still + 10);
+    // The time it stood still is no frame of the scene's.
+    expect(Math.max(...frames)).toBeLessThan(20);
+    loop.stop();
+  });
+
+  it('wakes into nothing while it does not show, or once it has stopped', () => {
+    const page = fakeHost();
+    const loop = runScene(() => false, page.host);
+    page.run(100);
+    page.show(false);
+    loop.wake();
+    expect(page.pending()).toBe(0);
+    page.show(true);
+    expect(page.pending()).toBe(1);
+    loop.stop();
+    loop.wake();
+    expect(page.pending()).toBe(0);
   });
 });
 
@@ -334,5 +381,66 @@ describe('what the scene draws', () => {
     const larger = { ...bakeOf('large'), w: 120 };
     showBake(show, larger, 10, true);
     expect(show.from).toBeNull();
+  });
+});
+
+/** The size of `bake`'s canvas: 0 × 0 once it is freed. */
+const sizeOf = (bake: SceneBake): [number, number] => [bake.canvas.width, bake.canvas.height];
+
+describe('what the scene lets go', () => {
+  it('frees the lab before once the one picked anew has come in over it', () => {
+    const show = noShow();
+    const before = bakeOf('before');
+    const next = bakeOf('next');
+    showBake(show, before, 0, false);
+    showBake(show, next, 1000, true);
+    paintShow(fakeCanvas(100, 50).ctx, show, 1000 + SCENE_FADE_MS / 2, 0, false);
+    expect(sizeOf(before)).toEqual([200, 50]);
+    paintShow(fakeCanvas(100, 50).ctx, show, 1000 + SCENE_FADE_MS, 0, false);
+    expect([sizeOf(before), sizeOf(next)]).toEqual([
+      [0, 0],
+      [200, 50],
+    ]);
+  });
+
+  it('frees at once what a bake anew does not come in over', () => {
+    const show = noShow();
+    const [first, second, third] = [bakeOf('first'), bakeOf('second'), bakeOf('third')];
+    showBake(show, first, 0, false);
+    showBake(show, second, 10, true);
+    // A third pick while the second still comes in: it comes in over the second alone.
+    showBake(show, third, 20, true);
+    expect([sizeOf(first), sizeOf(second)]).toEqual([
+      [0, 0],
+      [200, 50],
+    ]);
+    // Baked for another size, the lab comes in over nothing: both before it go.
+    const larger = { ...bakeOf('larger'), w: 120 };
+    showBake(show, larger, 30, true);
+    expect([sizeOf(second), sizeOf(third)]).toEqual([
+      [0, 0],
+      [0, 0],
+    ]);
+    // Brought in at once, it takes the place of the one before.
+    const again = bakeOf('again');
+    showBake(show, again, 40, false);
+    expect([sizeOf(larger), sizeOf(again)]).toEqual([
+      [0, 0],
+      [200, 50],
+    ]);
+  });
+
+  it('frees both its bakes as it closes, and draws nothing after', () => {
+    const show = noShow();
+    const before = bakeOf('before');
+    const next = bakeOf('next');
+    showBake(show, before, 0, false);
+    showBake(show, next, 10, true);
+    clearShow(show);
+    expect([sizeOf(before), sizeOf(next)]).toEqual([
+      [0, 0],
+      [0, 0],
+    ]);
+    expect(needsPaint(show, 20, false)).toBe(false);
   });
 });

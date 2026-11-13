@@ -2,6 +2,7 @@ import type { DronePosition, Find, PartKind, PlayerView } from '@escapelab/core'
 import type { Alarm } from '../alarm.js';
 import type { WorldText } from '../art.js';
 import { artKit, type ArtKit } from '../artKit.js';
+import type { CanvasMaker } from '../atlas.js';
 import type { ColdOpenFrame } from '../coldOpen.js';
 import type { DoorMotion } from '../doors.js';
 import type { FigureMood, FigureTask, Turn } from '../figure.js';
@@ -193,9 +194,12 @@ export interface RenderKit {
   census: LightCensus;
 }
 
-/** A fresh kit drawing the darkness into `overlay`: nothing baked yet, nothing timed. */
-export function renderKit(overlay: CanvasRenderingContext2D): RenderKit {
-  const art = artKit();
+/**
+ * A fresh kit drawing the darkness into `overlay`, its sprites, glows and map baked on
+ * canvases from `make` (the DOM's by default): nothing baked yet, nothing timed.
+ */
+export function renderKit(overlay: CanvasRenderingContext2D, make?: CanvasMaker): RenderKit {
+  const art = artKit(make);
   return {
     overlay,
     ceiling: null,

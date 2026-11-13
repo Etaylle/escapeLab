@@ -1,12 +1,15 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   FIGURE_FRAME_MS,
+  figurePainter,
   figureStateOf,
   runFigure,
   type FigureHost,
   type FigureLook,
+  type FigureProbe,
 } from '../src/screens/CrewFigure.js';
 import { figurePhase, figurePose, IDLE_LOOK_MS } from '../src/world/figure.js';
+import { fakeCanvas, FakePath2D } from './fakeCanvas.js';
 
 /**
  * A page for a figure's loop: frames that run when the test says, and a
@@ -68,7 +71,7 @@ describe('runFigure — a figure moves only while it shows', () => {
   it('paints nothing until the canvas shows, then no more than 30 times a second', () => {
     const p = page();
     const painted: number[] = [];
-    runFigure((now) => painted.push(now), p.host);
+    runFigure((now) => painted.push(now) > 0, p.host);
     sixtyHz(p, 0, 500);
     expect(painted).toEqual([]);
     p.show(true);
@@ -83,7 +86,7 @@ describe('runFigure — a figure moves only while it shows', () => {
   it('stops its loop while the canvas is hidden and starts it again when it shows', () => {
     const p = page();
     let painted = 0;
-    runFigure(() => (painted += 1), p.host);
+    runFigure(() => (painted += 1) > 0, p.host);
     p.show(true);
     sixtyHz(p, 0, 500);
     const before = painted;
@@ -98,13 +101,79 @@ describe('runFigure — a figure moves only while it shows', () => {
 
   it('keeps one loop when told twice it shows, and stops for good when the figure goes', () => {
     const p = page();
-    const stop = runFigure(() => undefined, p.host);
+    const loop = runFigure(() => true, p.host);
     p.show(true);
     p.show(true);
     expect(p.waiting.size).toBe(1);
-    stop();
+    loop.stop();
     expect(p.waiting.size).toBe(0);
     expect(p.watched()).toBe(false);
+    loop.wake();
+    expect(p.waiting.size).toBe(0);
+  });
+
+  it('asks no frames once the figure holds still, and one loop again when woken', () => {
+    const p = page();
+    let painted = 0;
+    const loop = runFigure(() => (painted += 1) < 0, p.host);
+    p.show(true);
+    sixtyHz(p, 0, 500);
+    expect(painted).toBe(1);
+    expect(p.waiting.size).toBe(0);
+    loop.wake();
+    loop.wake();
+    expect(p.waiting.size).toBe(1);
+    sixtyHz(p, 500, 500);
+    expect(painted).toBe(2);
+    p.show(false);
+    loop.wake();
+    expect(p.waiting.size).toBe(0);
+  });
+});
+
+/** A figure's canvas 60 × 70 CSS pixels, and what its painter reads. */
+function figureCanvas() {
+  const { canvas, ctx, log } = fakeCanvas(0, 0, 'figure');
+  Object.assign(canvas, { clientWidth: 60, clientHeight: 70 });
+  const look = { current: ANNA };
+  const probe: FigureProbe = { color: '', mood: 'play', rise: 0, glance: 0 };
+  return { on: { canvas, ctx, look, waveAt: { current: null }, probe }, log };
+}
+
+describe('figurePainter — what a figure’s loop paints', () => {
+  beforeEach(() => {
+    vi.stubGlobal('window', { devicePixelRatio: 1 });
+    vi.stubGlobal('Path2D', FakePath2D);
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('paints a figure under reduced motion once, and again only as what it shows changes', () => {
+    const { on, log } = figureCanvas();
+    const paint = figurePainter(on, 0, true);
+    expect(paint(0)).toBe(false);
+    const once = log.length;
+    expect(once).toBeGreaterThan(0);
+    expect(paint(1000)).toBe(false);
+    expect(log.length).toBe(once);
+    on.look.current = { ...ANNA, connected: false };
+    expect(paint(2000)).toBe(false);
+    const twice = log.length;
+    expect(twice).toBeGreaterThan(once);
+    Object.assign(on.canvas, { clientWidth: 80 });
+    paint(3000);
+    expect(log.length).toBeGreaterThan(twice);
+  });
+
+  it('paints a figure frame after frame under full motion, and says it moves on', () => {
+    const { on, log } = figureCanvas();
+    const paint = figurePainter(on, 0, false);
+    expect(paint(0)).toBe(true);
+    const once = log.length;
+    expect(paint(FIGURE_FRAME_MS)).toBe(true);
+    expect(log.length).toBeGreaterThan(once);
+    expect(on.probe.color).toBe(ANNA.color);
   });
 });
 

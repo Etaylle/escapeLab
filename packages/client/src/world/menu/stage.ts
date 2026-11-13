@@ -5,6 +5,8 @@ import { driftAt } from './drift.js';
 import { browserSceneHost, runScene } from './loop.js';
 import {
   bakeScene,
+  clearShow,
+  freeCanvas,
   needsPaint,
   paintShow,
   sceneBacking,
@@ -19,9 +21,11 @@ import {
  * The menu's scene on its canvas (screens/MenuScene.tsx): the lab of the mission asked for,
  * fetched and baked (scene.ts), drawn by the scene's loop (loop.ts) as the drift goes —
  * coming in over the lab before — and baked anew once the canvas has held a new size for a
- * moment. Under `?trace=1` the walkthrough reads the frames off the page as it does a run's
- * (frameTrace.ts), what the scene shows (`SceneProbe`), and what its light worked out a frame
- * (render/census.ts): no sight ever — a frame copies its bake — and a bake only as one is made.
+ * moment. Under reduced motion the loop stops once the still is drawn, until a lab is baked
+ * anew or the motion changes. Under `?trace=1` the walkthrough reads the frames off the page
+ * as it does a run's (frameTrace.ts), what the scene shows (`SceneProbe`), and what its light
+ * worked out a frame (render/census.ts): no sight ever — a frame copies its bake — and a bake
+ * only as one is made.
  */
 
 /** How long the canvas's box holds still before the scene is baked anew for it, ms. */
@@ -122,11 +126,19 @@ function traceScene(probe: SceneProbe, census: LightCensus): SceneTrace {
   return { record: (ms) => trace.record(ms), drawn: () => work.record(census), drop };
 }
 
+/** Whether the player asks for less motion (settings.ts), and its changes. */
+export interface StageMotion {
+  /** whether things move less now: asked frame by frame, so cheap to ask */
+  reduced: () => boolean;
+  /** calls `changed` whenever that may have turned; returns the stop */
+  watch: (changed: () => void) => () => void;
+}
+
 /**
- * Opens the scene on `canvas`: nothing shows until a mission is asked for; `reduced` says,
+ * Opens the scene on `canvas`: nothing shows until a mission is asked for; `motion` says,
  * frame by frame, whether the player asked for less motion — the drift then stands still.
  */
-export function openStage(canvas: HTMLCanvasElement, reduced: () => boolean): SceneStage {
+export function openStage(canvas: HTMLCanvasElement, motion: StageMotion): SceneStage {
   const ctx = canvas.getContext('2d');
   if (ctx === null) {
     return { show: () => undefined, close: () => undefined };
@@ -138,6 +150,21 @@ export function openStage(canvas: HTMLCanvasElement, reduced: () => boolean): Sc
   let wanted: string | null = null;
   let closed = false;
   let driftFrom = 0;
+
+  // Draws a frame where one is due; says whether the next would draw anything.
+  const paint = (now: number): boolean => {
+    const still = motion.reduced();
+    if (needsPaint(show, now, still)) {
+      paintShow(ctx, show, now, now - driftFrom, still);
+      probe.paints += 1;
+      probe.progress = driftAt(now - driftFrom, still);
+      traced.drawn();
+    }
+    return needsPaint(show, now, still);
+  };
+
+  const traced = traceScene(probe, census);
+  const loop = runScene(paint, browserSceneHost(canvas), traced.record);
 
   // Bakes the lab for the canvas's box as it stands: coming in over what shows, or at once.
   const rebake = (fade: boolean): void => {
@@ -154,20 +181,11 @@ export function openStage(canvas: HTMLCanvasElement, reduced: () => boolean): Sc
     showBake(show, bake, now, fade);
     probe.missionId = lab.missionId;
     probe.baked = { w: bake.w, h: bake.h, boxW: bake.box.width, boxH: bake.box.height };
+    loop.wake();
   };
 
-  const paint = (now: number): void => {
-    const still = reduced();
-    if (!needsPaint(show, now, still)) return;
-    paintShow(ctx, show, now, now - driftFrom, still);
-    probe.paints += 1;
-    probe.progress = driftAt(now - driftFrom, still);
-    traced.drawn();
-  };
-
-  const traced = traceScene(probe, census);
-  const stop = runScene(paint, browserSceneHost(canvas), traced.record);
   const unwatch = onSettledResize(canvas, () => rebake(false));
+  const unwatchMotion = motion.watch(() => loop.wake());
   return {
     show(missionId) {
       wanted = missionId;
@@ -180,12 +198,12 @@ export function openStage(canvas: HTMLCanvasElement, reduced: () => boolean): Sc
     },
     close() {
       closed = true;
-      stop();
+      loop.stop();
       unwatch();
+      unwatchMotion();
       traced.drop();
-      show.bake = null;
-      show.from = null;
-      show.drawn = null;
+      clearShow(show);
+      freeCanvas(canvas);
     },
   };
 }

@@ -1,6 +1,7 @@
 import { checkMission, type DronePosition, type PlayerView } from '@escapelab/core';
 import { assembleFrame, type FrameSource, type Latest } from '../assemble.js';
 import { worldText } from '../art.js';
+import type { CanvasMaker } from '../atlas.js';
 import { bakeable } from '../baked.js';
 import { openLightPath } from '../gl/path.js';
 import * as actors from '../render/actors.js';
@@ -60,14 +61,18 @@ export interface SceneBake {
   h: number;
 }
 
-/** A world of the lab's own for the bake: the audience's lab lit whole, the camera at `at`. */
+/**
+ * A world of the lab's own for the bake: the audience's lab lit whole, the camera at `at`, its
+ * kit baking on canvases from `make`.
+ */
 function sourceFor(
   lab: SceneLab,
   canvas: HTMLCanvasElement,
   overlay: CanvasRenderingContext2D,
   at: NonNullable<FrameSource['scene']>,
+  make: CanvasMaker,
 ): FrameSource {
-  const kit = renderKit(overlay);
+  const kit = renderKit(overlay, make);
   kit.light = openLightPath(canvas, '?gl=0');
   const latest: Latest = {
     view: lab.view,
@@ -107,6 +112,26 @@ function canvasOf(width: number, height: number): CanvasRenderingContext2D | nul
 }
 
 /**
+ * Lets `canvas`'s pixels go at once rather than whenever it is collected, as frameCache.ts
+ * does: a bake of a large window at twice its density holds tens of megabytes.
+ */
+export function freeCanvas(canvas: HTMLCanvasElement): void {
+  canvas.width = 0;
+  canvas.height = 0;
+}
+
+/** Canvases from the document, each kept in `made` too: to be freed once the bake is done. */
+function keptIn(made: HTMLCanvasElement[]): CanvasMaker {
+  return (width, height) => {
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    made.push(canvas);
+    return canvas;
+  };
+}
+
+/**
  * The bake's canvas, as large as `box`, and one for the darkness the light pass keeps (none
  * falls on a lab lit whole); null where the box is too large to bake or the browser gives none.
  */
@@ -115,13 +140,21 @@ function canvasesFor(
 ): { ctx: CanvasRenderingContext2D; overlay: CanvasRenderingContext2D } | null {
   const ctx = bakeable(box.width, box.height) ? canvasOf(box.width, box.height) : null;
   const overlay = canvasOf(1, 1);
-  return ctx === null || overlay === null ? null : { ctx, overlay };
+  if (ctx !== null && overlay !== null) {
+    return { ctx, overlay };
+  }
+  for (const made of [ctx, overlay]) {
+    if (made !== null) freeCanvas(made.canvas);
+  }
+  return null;
 }
 
 /**
  * Bakes `lab` for a canvas `w` × `h` at `dpr` device pixels a CSS pixel: the passes run once
- * over the box the drift shows, the camera at its middle. Null where the view has no map or
- * the box would be too large to bake (baked.ts `bakeable`).
+ * over the box the drift shows, the camera at its middle. What the bake's kit made on the way
+ * — the map baked whole, more pixels than the bake itself, and the sprites — is freed once it
+ * is done. Null where the view has no map or the box would be too large to bake (baked.ts
+ * `bakeable`).
  */
 export function bakeScene(lab: SceneLab, w: number, h: number, dpr: number): SceneBake | null {
   const map = lab.view.map;
@@ -137,12 +170,14 @@ export function bakeScene(lab: SceneLab, w: number, h: number, dpr: number): Sce
   const { ctx, overlay } = canvases;
   const middle = { x: box.left + box.width / 2, y: box.top + box.height / 2 };
   const at = { x: middle.x / shot.scale, y: middle.y / shot.scale, scale: shot.scale };
-  const source = sourceFor(lab, ctx.canvas, overlay, at);
+  const made = [overlay.canvas];
+  const source = sourceFor(lab, ctx.canvas, overlay, at, keptIn(made));
   const frame = assembleFrame(source, map, dpr, performance.now(), []);
   for (const pass of PASSES) {
     pass(ctx, frame);
   }
   source.kit.light?.dispose();
+  made.forEach(freeCanvas);
   return { canvas: ctx.canvas, shot, box, w, h };
 }
 
@@ -183,7 +218,7 @@ export function needsPaint(show: SceneShow, now: number, reduced: boolean): bool
 /**
  * One frame of the scene at `now`, the drift `driftMs` in: the lab coming in over the one
  * before, `fadeAt` of the way — over nothing, the canvas cleared, for the first — or the lab
- * alone once it has come.
+ * alone once it has come, the one before then freed.
  */
 export function paintShow(
   ctx: CanvasRenderingContext2D,
@@ -199,7 +234,9 @@ export function paintShow(
   const t = fadeAt(show.since, now);
   const progress = driftAt(driftMs, reduced);
   if (t >= 1) {
+    const gone = show.from;
     show.from = null;
+    freeDropped(show, [gone]);
   } else if (show.from === null) {
     ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
   } else {
@@ -209,21 +246,44 @@ export function paintShow(
   show.drawn = t >= 1 ? bake : null;
 }
 
+/** Frees the canvas of each of `dropped` that `show` no longer holds. */
+function freeDropped(show: SceneShow, dropped: readonly (SceneBake | null)[]): void {
+  for (const bake of dropped) {
+    if (bake !== null && bake !== show.bake && bake !== show.from) {
+      freeCanvas(bake.canvas);
+    }
+  }
+}
+
 /**
  * `show` with `bake` in it: coming in over what showed (`fade`) — over nothing where nothing
- * did, or where that was baked for another size of canvas — or at once.
+ * did, or where that was baked for another size of canvas — or at once. What it no longer
+ * holds is freed: the lab before, unless the new one comes in over it, and the one that was
+ * still coming in.
  */
 export function showBake(show: SceneShow, bake: SceneBake, now: number, fade: boolean): void {
   const before = show.bake;
+  const dropped = [before, show.from];
   const sameSize = before !== null && before.w === bake.w && before.h === bake.h;
   show.from = fade && sameSize ? before : null;
   show.bake = bake;
   show.since = fade ? now : now - SCENE_FADE_MS;
   show.drawn = null;
+  freeDropped(show, dropped);
+}
+
+/** `show` emptied, its bakes freed: the scene closes. */
+export function clearShow(show: SceneShow): void {
+  const dropped = [show.bake, show.from];
+  show.bake = null;
+  show.from = null;
+  show.drawn = null;
+  freeDropped(show, dropped);
 }
 
 /**
- * The labs fetched so far, by mission id: each asked for once a page; null for one not to be had.
+ * The labs asked for so far, by mission id: each fetched once a page — but one not to be had
+ * is forgotten, and asked for anew the next time.
  */
 const labs = new Map<string, Promise<SceneLab | null>>();
 
@@ -243,7 +303,8 @@ function labOf(missionId: string, json: unknown): SceneLab | null {
 
 /**
  * The lab of mission `missionId` (GET /missions/:id), fetched once a page; null where it is
- * not to be had — the scene then keeps the lab it shows.
+ * not to be had — the scene then keeps the lab it shows, and the next pick of the mission asks
+ * again, as the server may be back by then.
  */
 export function sceneLab(missionId: string): Promise<SceneLab | null> {
   const known = labs.get(missionId);
@@ -253,7 +314,13 @@ export function sceneLab(missionId: string): Promise<SceneLab | null> {
   const asked = fetch(`/missions/${encodeURIComponent(missionId)}`)
     .then((res) => (res.ok ? res.json() : null))
     .then((json: unknown) => (json === null ? null : labOf(missionId, json)))
-    .catch(() => null);
+    .catch(() => null)
+    .then((lab) => {
+      if (lab === null) {
+        labs.delete(missionId);
+      }
+      return lab;
+    });
   labs.set(missionId, asked);
   return asked;
 }
