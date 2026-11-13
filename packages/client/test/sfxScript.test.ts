@@ -1,7 +1,11 @@
+import { existsSync, mkdtempSync, readdirSync, readFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import type { ElevenLabs } from '@elevenlabs/elevenlabs-js';
 import type { SoundClient } from '../scripts/elevenlabs.js';
 import {
+  asTakes,
   AUDIBLE_FLOOR_DBFS,
   CAPS,
   checkCatalog,
@@ -23,6 +27,8 @@ import {
   loudnessOf,
   make,
   MASKED_WITHIN_DB,
+  MAX_MUSIC_TAKES,
+  measuredAnew,
   MIN_CREDITS,
   missesOf,
   musicFormatOf,
@@ -32,20 +38,29 @@ import {
   optionsOf,
   parseWav,
   pickTake,
+  planLines,
   planOf,
   priced,
   readCatalog,
+  readManifest,
+  readTakes,
   refuseBelow,
+  remakeArgs,
+  renderWith,
+  settingsOf,
   silenceOf,
   startMsOf,
+  takesLines,
   TARGETS,
   tempoOf,
   upToDate,
+  type Bench,
   type CatalogEntry,
   type Floor,
   type Manifest,
   type ManifestEntry,
   type Pcm,
+  type Places,
   type Take,
 } from '../scripts/sfx.js';
 
@@ -416,7 +431,7 @@ describe('a run', () => {
 });
 
 /** A WAV file as afconvert writes one: 16-bit PCM, interleaved, a chunk before the data. */
-function wavOf(rate: number, channels: readonly number[][]): Uint8Array {
+function wavOf(rate: number, channels: readonly number[][]): Uint8Array<ArrayBuffer> {
   const frames = channels[0]?.length ?? 0;
   const data = frames * channels.length * 2;
   const bytes = new Uint8Array(12 + 24 + 12 + 8 + data);
@@ -604,5 +619,245 @@ describe('picking a candidate', () => {
     const full = take({ silence: 0.6, rmsDbfs: -26 });
     expect(pickTake([soft, full])).toBe(full);
     expect(() => pickTake([])).toThrow(/no take/);
+  });
+});
+
+/** A piece `seconds` long, a 441 Hz tone at `amplitude` throughout, as a WAV at 2 kHz. */
+const piece = (seconds: number, amplitude: number): Uint8Array<ArrayBuffer> =>
+  wavOf(2000, [toneAfter(2000, 0, amplitude, seconds * 1000)]);
+
+/** The answers of a client of the tests' own: WAVs, which the tests decode as they are. */
+interface Answers {
+  readonly effects?: readonly Uint8Array<ArrayBuffer>[];
+  readonly music?: readonly Uint8Array<ArrayBuffer>[];
+}
+
+/**
+ * A client of the tests' own that answers each effect and each piece of music with the next of
+ * its answers, round and round, and keeps the requests; the account has 50 000 credits left.
+ */
+function answering(answers: Answers) {
+  const effects: ElevenLabs.CreateSoundEffectRequest[] = [];
+  const pieces: ElevenLabs.BodyComposeMusicV1MusicPost[] = [];
+  const nth = (list: Answers['music'] = [], i: number): ReadableStream<Uint8Array> =>
+    new Blob([list[i % list.length] ?? new Uint8Array(0)]).stream();
+  const credits = { characterCount: 81_000, characterLimit: 131_000 };
+  const client: SoundClient = {
+    user: { subscription: { get: () => Promise.resolve(credits) } },
+    textToSoundEffects: {
+      convert: (request) => Promise.resolve(nth(answers.effects, effects.push(request) - 1)),
+    },
+    music: {
+      compose: (request) => Promise.resolve(nth(answers.music, pieces.push(request) - 1)),
+    },
+  };
+  return { client, effects, pieces };
+}
+
+/** Folders of a run's own: each group's and the takes', in a temporary folder. */
+function placesIn(): Places {
+  const root = mkdtempSync(join(tmpdir(), 'escapelab-sfx-test-'));
+  const dirs = { sfx: join(root, 'sfx'), music: join(root, 'music') };
+  return { dirs, takes: join(root, 'takes') };
+}
+
+/** A run's bench in `places`: no pause between requests, every take made at `madeAt`. */
+function benchOf(client: SoundClient, places: Places, madeAt = '2026-11-13T17:40:00.000Z'): Bench {
+  return {
+    client,
+    places,
+    decode: (path) => parseWav(readFileSync(path)),
+    now: () => new Date(madeAt),
+    wait: () => Promise.resolve(),
+  };
+}
+
+/** A quiet run of `entries` through `bench`, `count` takes of each; returns its manifests. */
+async function runOf(
+  entries: readonly CatalogEntry[],
+  count: number,
+  bench: Bench,
+): Promise<Record<'sfx' | 'music', Manifest>> {
+  const { places } = bench;
+  const manifests = { sfx: readManifest(places, 'sfx'), music: readManifest(places, 'music') };
+  const jobs = planOf(entries, manifests, () => false, optionsOf(['--candidates', `${count}`]));
+  const candidates = mkdtempSync(join(tmpdir(), 'escapelab-sfx-candidates-test-'));
+  const quiet = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+  try {
+    await renderWith(jobs, manifests, { count, candidates }, bench);
+  } finally {
+    quiet.mockRestore();
+  }
+  return manifests;
+}
+
+/** A manifest entry of `entry`, as a run would write it for a recording made from its request. */
+function manifestOf(entry: CatalogEntry): ManifestEntry {
+  return {
+    file: `${entry.id}.mp3`,
+    ms: entry.durationSeconds * 1000,
+    gain: 1,
+    startMs: 0,
+    floor: 0.0001,
+    rms: 0.1,
+    loop: entry.loop,
+    hash: hashOf(entry),
+    source: 'elevenlabs',
+  };
+}
+
+const STING: CatalogEntry = {
+  id: 'test-sting',
+  kind: 'sting',
+  prompt: 'A short orchestral sting, strings and soft brass rising to a C major chord, 10 s.',
+  durationSeconds: 10,
+  loop: false,
+  target: { measure: 'rms', dbfs: -14 },
+  usedBy: ['src/world/music.ts#playSting'],
+};
+
+describe('the music’s takes', () => {
+  const none = { sfx: {}, music: {} };
+  const always = (): boolean => true;
+
+  it('are three of a piece at most, its cost running by the second; an effect keeps five', () => {
+    expect(MAX_MUSIC_TAKES).toBe(3);
+    const four = optionsOf(['--candidates', '4', '--only', 'test-calm,test-sting']);
+    const refusal =
+      'sfx: --candidates 4 — music is made in 3 takes at most, its cost runs by the second: ' +
+      '--candidates 3 --only test-calm,test-sting';
+    expect(() => planOf([CLACK, CALM, STING], none, always, four)).toThrow(refusal);
+    expect(planOf([CLACK], none, always, optionsOf(['--candidates', '5']))).toHaveLength(1);
+    // Music already made, and so not asked for, does not stop the effects' five candidates.
+    const made = { ...none, music: { [CALM.id]: manifestOf(CALM) } };
+    const five = planOf([CLACK, CALM], made, always, optionsOf(['--candidates', '5']));
+    expect(five.map((job) => [job.entry.id, job.make])).toEqual([
+      ['test-clack', true],
+      ['test-calm', false],
+    ]);
+    const music = { group: 'music' } as const;
+    expect([asTakes(music, 3), asTakes(music, 2), asTakes(music, 1)]).toEqual([true, true, false]);
+    expect(asTakes({ group: 'sfx' }, 3)).toBe(false);
+  });
+
+  it('are asked for with the piece’s request, its settings listed beside the prompt', () => {
+    expect(settingsOf(CALM)).toEqual({
+      musicLengthMs: 72_000,
+      forceInstrumental: true,
+      modelId: 'music_v2_5',
+      outputFormat: 'mp3_44100_192',
+    });
+    expect(musicRequest(CALM)).toEqual({ prompt: CALM.prompt, ...settingsOf(CALM) });
+    // In this order: the request's JSON is what every recording's hash is taken of.
+    const order = ['prompt', 'musicLengthMs', 'forceInstrumental', 'modelId', 'outputFormat'];
+    expect(Object.keys(musicRequest(CALM))).toEqual(order);
+  });
+
+  it('are priced in the plan, every take counted at 18 credits a second', () => {
+    const ids = 'menu-theme,end-won,end-lost';
+    const music = planOf(catalog, none, always, optionsOf(['--only', ids]));
+    expect(planLines(music, 3)).toEqual([
+      'sfx: music — 3 of 3 to make, 3 takes each, into takes/ for the ear, 124.0 s a take, ' +
+        'about 6696 credits (cap 18000)',
+      '  menu-theme  60 s  stem',
+      '  end-won  32 s  theme',
+      '  end-lost  32 s  theme',
+    ]);
+    const once = 'sfx: music — 3 of 3 to make, 124.0 s, about 2232 credits (cap 18000)';
+    expect(planLines(music, 1)[0]).toBe(once);
+    const effect = planOf([CLACK], none, always, optionsOf([]));
+    expect(planLines(effect, 3)[0]).toBe(
+      'sfx: sfx — 1 of 1 to make, 3 takes each, the best one kept, 0.6 s a take, ' +
+        'about 8 credits (cap 12000)',
+    );
+  });
+
+  it('land in takes/<id>/, none of them kept and nothing public, each listed as made', async () => {
+    const places = placesIn();
+    const { client, pieces } = answering({ music: [0.6, 0.8, 0.7].map((a) => piece(10, a)) });
+    const manifests = await runOf([STING], 3, benchOf(client, places));
+    expect(pieces).toEqual([musicRequest(STING), musicRequest(STING), musicRequest(STING)]);
+    const folder = join(places.takes, STING.id);
+    expect(readdirSync(folder).sort()).toEqual(['1.mp3', '2.mp3', '3.mp3', 'index.json']);
+    expect(existsSync(places.dirs.music)).toBe(false);
+    expect(manifests.music).toEqual({});
+    const list = readTakes(places.takes, STING.id);
+    expect(list?.id).toBe(STING.id);
+    expect(list?.takes.map((take) => [take.n, take.file])).toEqual([
+      [1, '1.mp3'],
+      [2, '2.mp3'],
+      [3, '3.mp3'],
+    ]);
+    const second = list?.takes[1];
+    expect(second).toMatchObject({
+      hash: hashOf(STING),
+      settings: settingsOf(STING),
+      madeAt: '2026-11-13T17:40:00.000Z',
+      ms: 10_000,
+      startMs: 0,
+      silence: 0,
+      misses: [],
+    });
+    // A steady tone: its quietest 100 ms is the tone itself.
+    expect(second?.rms).toBeCloseTo(0.8 / Math.SQRT2, 2);
+    expect(second?.floor).toBeCloseTo(0.8 / Math.SQRT2, 2);
+    expect(second?.peak).toBeCloseTo(0.8, 3);
+    expect(second?.gain).toBeCloseTo(10 ** (-14 / 20) / (0.8 / Math.SQRT2), 3);
+    expect(readFileSync(join(folder, '2.mp3'))).toEqual(Buffer.from(piece(10, 0.8)));
+  });
+
+  it('number on from the takes there, and leave the effects as they were made', async () => {
+    const places = placesIn();
+    const { client, effects } = answering({ music: [piece(10, 0.7)], effects: [piece(0.6, 0.9)] });
+    const bench = benchOf(client, places);
+    await runOf([STING], 2, bench);
+    const manifests = await runOf([STING, CLACK], 2, bench);
+    expect(readTakes(places.takes, STING.id)?.takes.map((take) => take.n)).toEqual([1, 2, 3, 4]);
+    // The effect: two candidates, the first of two alike kept in the project and its manifest.
+    expect(effects.map((request) => request.promptInfluence)).toEqual([0.3, 0.9]);
+    expect(existsSync(join(places.takes, CLACK.id))).toBe(false);
+    expect(readdirSync(places.dirs.sfx).sort()).toEqual(['manifest.json', 'test-clack.mp3']);
+    const clack = { file: 'test-clack.mp3', hash: hashOf(CLACK, 0.3), influence: 0.3 };
+    expect(manifests.sfx[CLACK.id]).toMatchObject(clack);
+    expect(readManifest(places, 'sfx')).toEqual(manifests.sfx);
+    expect(existsSync(places.dirs.music)).toBe(false);
+  });
+
+  it('are made once into the project where a run asks for one take, as before', async () => {
+    const places = placesIn();
+    const { client } = answering({ music: [piece(10, 0.7)] });
+    const manifests = await runOf([STING], 1, benchOf(client, places));
+    expect(existsSync(places.takes)).toBe(false);
+    expect(readdirSync(places.dirs.music).sort()).toEqual(['manifest.json', 'test-sting.mp3']);
+    const sting = { file: 'test-sting.mp3', hash: hashOf(STING) };
+    expect(manifests.music[STING.id]).toMatchObject(sting);
+  });
+
+  it('leave the recording the game plays, and its entry, as they were', () => {
+    const made = { sfx: { [CLACK.id]: manifestOf(CLACK) }, music: { [CALM.id]: manifestOf(CALM) } };
+    const jobs = planOf([CLACK, CALM, STING], made, always, optionsOf(['--only', 'test-calm']));
+    const ids = (count: number): string[] => measuredAnew(jobs, count).map((job) => job.entry.id);
+    expect(ids(3)).toEqual([]); // the stem goes into takes: its old recording is not measured
+    expect(ids(1)).toEqual(['test-calm']); // made once, into the project: measured as made
+    const all = planOf([CLACK, CALM], made, always, optionsOf(['--candidates', '3']));
+    expect(measuredAnew(all, 3).map((job) => [job.entry.id, job.make])).toEqual([
+      ['test-clack', false],
+      ['test-calm', false],
+    ]);
+  });
+
+  it('are said where they lie, and that none of them is kept', async () => {
+    const places = placesIn();
+    const { client } = answering({ music: [piece(10, 0.7)] });
+    await runOf([STING], 3, benchOf(client, places));
+    expect(takesLines([], places)).toEqual([]);
+    const [folder, files] = takesLines([STING.id], places);
+    expect(folder).toBe(`sfx: none of this music is kept yet; its takes wait in ${places.takes}:`);
+    expect(files).toBe('  test-sting/  1.mp3, 2.mp3, 3.mp3, listed in test-sting/index.json');
+  });
+
+  it('are made again, for a recording that fails, in three takes; an effect in five', () => {
+    expect(remakeArgs('sfx', ['ping', 'drip'])).toBe('--candidates 5 --only ping,drip');
+    expect(remakeArgs('music', ['lost'])).toBe('--candidates 3 --only lost');
   });
 });

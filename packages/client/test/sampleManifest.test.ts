@@ -12,6 +12,7 @@ import {
   noisyTakes,
   offLength,
   readCatalog,
+  remakeArgs,
   SFX_FORMAT,
   upToDate,
   type CatalogEntry,
@@ -135,8 +136,8 @@ describe.each(['sfx', 'music'] as const)('the recordings in public/%s', (group) 
   it('last as long as asked for, start within themselves, and came back unclipped', () => {
     const off = offLength(entries, { sfx: {}, music: {}, [group]: manifest });
     const said = off.map(({ id, ms, asked }) => `${id} ${ms} ms, asked for ${asked}`);
-    const only = off.map(({ id }) => id).join(',');
-    const remedy = `render them again: pnpm --filter client sfx -- --candidates 5 --only ${only}`;
+    const again = remakeArgs(group, off.map(({ id }) => id));
+    const remedy = `render them again: pnpm --filter client sfx -- ${again} (docs/sound.md)`;
     expect(said, `more than a fifth off their length — ${remedy}`).toEqual([]);
     for (const entry of rendered) {
       const kept = manifest[entry.id];
@@ -158,10 +159,8 @@ describe.each(['sfx', 'music'] as const)('the recordings in public/%s', (group) 
     }
     const takes = noisyTakes(entries, { sfx: {}, music: {}, [group]: manifest });
     const heard = takes.map(({ id, gain, heardDbfs }) => `${id} gain ${gain}, ${heardDbfs} dBFS`);
-    const only = takes.map(({ id }) => id).join(',');
-    const remedy =
-      'render five takes of each on a Mac, one whose floor is not heard kept: ' +
-      `pnpm --filter client sfx -- --candidates 5 --only ${only} (docs/sound.md)`;
+    const again = remakeArgs(group, takes.map(({ id }) => id));
+    const remedy = `render them again: pnpm --filter client sfx -- ${again} (docs/sound.md)`;
     expect(heard, `floors over ${AUDIBLE_FLOOR_DBFS} dBFS — ${remedy}`).toEqual([]);
   });
 

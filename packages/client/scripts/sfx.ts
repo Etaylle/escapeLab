@@ -5,7 +5,8 @@
  *   pnpm --filter client sfx -- sfx             the effects alone; `music`, the music alone
  *   pnpm --filter client sfx -- --dry-run       the plan and what it would cost; nothing is asked
  *   pnpm --filter client sfx -- --only a,b,c    those entries, made anew
- *   pnpm --filter client sfx -- --candidates 3  each made three times, the best take kept
+ *   pnpm --filter client sfx -- --candidates 3  each made three times: an effect's best take
+ *                                               kept, a piece of music's takes left to the ear
  *
  * audio/catalog.json lists every sound the game plays: its id, its kind — a one-shot, a bed that
  * loops seamlessly, a stem of the music, a sting or a theme played once — what ElevenLabs is
@@ -21,11 +22,16 @@
  * where it stopped. An entry not made yet may play another's recording meanwhile (`standIn`): it
  * counts as made from another request, and the next run makes it.
  *
- * With `--candidates N` every entry the run makes is made N times — an effect with its prompt
- * followed more or less closely each time (INFLUENCE_SPAN), a piece of music by the same request
- * again — each take into a folder of its own in the system's temp, never into the project, and
- * measured, each take's measurements said; the one `pickTake` picks — by its peak, where its
- * sound starts, its silence, its length and its floor (PICK), then its RMS — is the one kept.
+ * With `--candidates N` every entry the run makes is made N times. An effect follows its prompt
+ * more or less closely each time (INFLUENCE_SPAN), each take into a folder of its own in the
+ * system's temp, never into the project, and measured, each take's measurements said; the one
+ * `pickTake` picks — by its peak, where its sound starts, its silence, its length and its floor
+ * (PICK), then its RMS — is the one kept. A piece of music is made by the same request again,
+ * MAX_MUSIC_TAKES times at most, its cost running by the second, and no rule picks among its
+ * takes: no measurement says whether a piece sounds right. Every take goes into
+ * takes/<id>/<n>.mp3, which git ignores, numbered on from the takes already there and listed in
+ * takes/<id>/index.json with the request it was made from, when, and how it measures
+ * (`TakesList`); nothing of it goes into public/music, and the run says where the takes lie.
  *
  * The files stay as ElevenLabs made them. afconvert decodes each into a temporary folder, its
  * peak and RMS are measured there, and `gain` is what brings it to its target — a one-shot's peak
@@ -161,6 +167,22 @@ export const PROMPT_INFLUENCE = 0.5;
 export const INFLUENCE_SPAN: readonly [number, number] = [0.3, 0.9];
 /** The most candidates a run makes of an effect. */
 export const MAX_CANDIDATES = 5;
+/** The most takes a run makes of a piece of music: it costs by the second, 18 credits each. */
+export const MAX_MUSIC_TAKES = 3;
+/**
+ * Where the music's takes wait for the ear: takes/<id>/<n>.mp3 and their list, TAKES_LIST. Git
+ * ignores the folder; nothing of it ships.
+ */
+export const TAKES_DIR = resolve(HERE, '../takes');
+/** An entry's list of its takes, in its folder under TAKES_DIR. */
+export const TAKES_LIST = 'index.json';
+
+/** Where a run reads and writes: each group's folder, and the folder the takes wait in. */
+export interface Places {
+  readonly dirs: Readonly<Record<Group, string>>;
+  readonly takes: string;
+}
+export const PLACES: Places = { dirs: DIRS, takes: TAKES_DIR };
 /**
  * What a second costs, credits, as the first full render measured it (2026-10-26: 542 credits
  * for 154 s of effects, 4,136 for 236 s of music), rounded up. The first entry of every run
@@ -338,15 +360,29 @@ export function effectRequest(
   };
 }
 
-/** What Eleven Music is asked for a piece: instrumental, as long as the catalog says. */
-export function musicRequest(entry: CatalogEntry): ElevenLabs.BodyComposeMusicV1MusicPost {
+/** What Eleven Music is asked for a piece beside its prompt: its length, instrumental, a model. */
+export interface MusicSettings {
+  readonly musicLengthMs: number;
+  readonly forceInstrumental: true;
+  readonly modelId: typeof MUSIC_MODEL;
+  readonly outputFormat: typeof MUSIC_FORMAT | typeof THEME_FORMAT;
+}
+
+/** The settings a piece of music is asked for with: as long as the catalog says, instrumental. */
+export function settingsOf(entry: CatalogEntry): MusicSettings {
   return {
-    prompt: entry.prompt,
     musicLengthMs: Math.round(entry.durationSeconds * 1000),
     forceInstrumental: true,
     modelId: MUSIC_MODEL,
     outputFormat: musicFormatOf(entry),
   };
+}
+
+/** What Eleven Music is asked for a piece: its prompt, with its settings (`settingsOf`). */
+export function musicRequest(entry: CatalogEntry): ElevenLabs.BodyComposeMusicV1MusicPost {
+  // In this order: the request's JSON is what its hash is taken of.
+  const { musicLengthMs, forceInstrumental, modelId, outputFormat } = settingsOf(entry);
+  return { prompt: entry.prompt, musicLengthMs, forceInstrumental, modelId, outputFormat };
 }
 
 /**
@@ -492,7 +528,8 @@ export interface Job {
 
 /**
  * The entries a run takes — those of the groups asked for, or those --only names — each with
- * what its group's manifest kept and whether its file is there (`filed`).
+ * what its group's manifest kept and whether its file is there (`filed`). Fails where it would
+ * make a piece of music in more than MAX_MUSIC_TAKES takes.
  */
 export function planOf(
   catalog: readonly CatalogEntry[],
@@ -509,12 +546,26 @@ export function planOf(
     only === null
       ? catalog.filter((entry) => options.groups.includes(groupOf(entry)))
       : catalog.filter((entry) => only.includes(entry.id));
-  return chosen.map((entry) => {
+  const jobs = chosen.map((entry) => {
     const group = groupOf(entry);
     const kept = manifests[group][entry.id];
     const fresh = kept !== undefined && upToDate(entry, kept) && filed(group, kept.file);
     return { entry, group, make: only !== null || !fresh };
   });
+  const music = jobs.filter((job) => job.make && job.group === 'music').map((job) => job.entry.id);
+  if (options.candidates > MAX_MUSIC_TAKES && music.length > 0) {
+    const fewer = `--candidates ${MAX_MUSIC_TAKES} --only ${music.join(',')}`;
+    throw new Error(
+      `sfx: --candidates ${options.candidates} — music is made in ${MAX_MUSIC_TAKES} takes at ` +
+        `most, its cost runs by the second: ${fewer}`,
+    );
+  }
+  return jobs;
+}
+
+/** Whether a run makes `job` in takes for the ear: a piece of music, made more than once. */
+export function asTakes(job: Pick<Job, 'group'>, count: number): boolean {
+  return job.group === 'music' && count > 1;
 }
 
 // --- loudness ---------------------------------------------------------------------------------
@@ -810,20 +861,25 @@ export function pickTake(takes: readonly Take[]): Take {
   return best;
 }
 
-/** The recording at `path`, decoded by afconvert into `scratch` and read back as PCM. */
-function decode(path: string, scratch: string): Pcm {
-  const wav = join(scratch, 'decoded.wav');
-  execFileSync('afconvert', ['-f', 'WAVE', '-d', 'LEI16', path, wav]);
-  try {
-    return parseWav(readFileSync(wav));
-  } finally {
-    rmSync(wav, { force: true });
-  }
+/** Decodes the recording at a path into PCM. */
+export type Decode = (path: string) => Pcm;
+
+/** Decodes a recording with afconvert into `scratch` and reads it back as PCM. */
+function afconvertIn(scratch: string): Decode {
+  return (path) => {
+    const wav = join(scratch, 'decoded.wav');
+    execFileSync('afconvert', ['-f', 'WAVE', '-d', 'LEI16', path, wav]);
+    try {
+      return parseWav(readFileSync(wav));
+    } finally {
+      rmSync(wav, { force: true });
+    }
+  };
 }
 
 /** The take of `entry` at `path`, made at `influence`, measured. */
-function takeAt(entry: CatalogEntry, path: string, influence: number, scratch: string): Take {
-  const pcm = decode(path, scratch);
+function takeAt(entry: CatalogEntry, path: string, influence: number, decode: Decode): Take {
+  const pcm = decode(path);
   const loudness = loudnessOf(pcm);
   return {
     path,
@@ -853,59 +909,142 @@ function entryOf(entry: CatalogEntry, take: Take): ManifestEntry {
   };
 }
 
+/** How take `n` of `entry` measured, in a line — an effect's with its influence. */
+function takeLine(entry: CatalogEntry, take: Take, n: number): string {
+  const how = groupOf(entry) === 'sfx' ? ` (influence ${take.influence})` : '';
+  const { peak, rms, leadMs, ms } = take.loudness;
+  const misses = missesOf(take);
+  const measured = floorAt(take);
+  const masked = floorMasked(measured) ? ' (masked)' : '';
+  const floor = `${heardDbfs(measured).toFixed(1)} dBFS${masked}`;
+  return (
+    `  ${entry.id} take ${n}${how}: peak ${dbfs(peak).toFixed(1)} dBFS, RMS ` +
+    `${dbfs(rms).toFixed(1)} dBFS, starts ${leadMs.toFixed(0)} ms, silence ` +
+    `${(take.silence * 100).toFixed(0)} %, ${ms} ms, gain ${take.gain}, floor ${floor}` +
+    `${misses.length > 0 ? ` — misses ${misses.join(', ')}` : ''}`
+  );
+}
+
 /** Says how each take of `entry` measured — an effect's with its influence — and which is kept. */
 function sayTakes(entry: CatalogEntry, takes: readonly Take[], kept: Take): void {
   takes.forEach((take, i) => {
-    const how = groupOf(entry) === 'sfx' ? ` (influence ${take.influence})` : '';
-    const { peak, rms, leadMs, ms } = take.loudness;
-    const misses = missesOf(take);
-    const measured = floorAt(take);
-    const masked = floorMasked(measured) ? ' (masked)' : '';
-    const floor = `${heardDbfs(measured).toFixed(1)} dBFS${masked}`;
-    console.log(
-      `  ${entry.id} take ${i + 1}${how}: peak ${dbfs(peak).toFixed(1)} dBFS, RMS ` +
-        `${dbfs(rms).toFixed(1)} dBFS, starts ${leadMs.toFixed(0)} ms, silence ` +
-        `${(take.silence * 100).toFixed(0)} %, ${ms} ms, gain ${take.gain}, floor ${floor}` +
-        `${misses.length > 0 ? ` — misses ${misses.join(', ')}` : ''}` +
-        `${take === kept ? '  ← kept' : ''}`,
-    );
+    console.log(`${takeLine(entry, take, i + 1)}${take === kept ? '  ← kept' : ''}`);
   });
+}
+
+// --- the music's takes ------------------------------------------------------------------------
+
+/**
+ * One take of a piece of music, as its list keeps it until the ear has chosen: its number and
+ * file, the hash of the request it was made from (its prompt and its settings), the settings,
+ * when it was made, and how it measures — its length, the gain that brings it to its target, the
+ * silence its sound starts after, its peak, RMS and floor before the gain, its share of silence
+ * — and the rules of PICK it misses, said and never used to pick.
+ */
+export interface TakeRecord {
+  readonly n: number;
+  readonly file: string;
+  readonly hash: string;
+  readonly settings: MusicSettings;
+  /** ISO 8601 */
+  readonly madeAt: string;
+  readonly ms: number;
+  readonly gain: number;
+  readonly startMs: number;
+  readonly peak: number;
+  readonly rms: number;
+  readonly floor: number;
+  readonly silence: number;
+  readonly misses: readonly string[];
+}
+
+/** An entry's takes, as takes/<id>/index.json lists them, in the order they were made. */
+export interface TakesList {
+  readonly id: string;
+  readonly takes: readonly TakeRecord[];
+}
+
+/** The file of take `n` in its entry's folder of takes. */
+export function takeFile(n: number): string {
+  return `${n}.mp3`;
+}
+
+/** The list of `id`'s takes in `dir`, the folder the takes wait in; null where it has none. */
+export function readTakes(dir: string, id: string): TakesList | null {
+  const file = join(dir, id, TAKES_LIST);
+  return existsSync(file) ? (JSON.parse(readFileSync(file, 'utf8')) as TakesList) : null;
+}
+
+function writeTakes(dir: string, list: TakesList): void {
+  writeFileSync(join(dir, list.id, TAKES_LIST), `${JSON.stringify(list, null, 2)}\n`);
+}
+
+/** Take `n` of `entry`, made at `madeAt`, as its list keeps it: `take` measured it. */
+function recordOf(entry: CatalogEntry, n: number, take: Take, madeAt: Date): TakeRecord {
+  return {
+    n,
+    file: takeFile(n),
+    hash: hashOf(entry),
+    settings: settingsOf(entry),
+    madeAt: madeAt.toISOString(),
+    ms: take.loudness.ms,
+    gain: take.gain,
+    startMs: startMsOf(entry.kind, take.loudness),
+    peak: Number(take.loudness.peak.toPrecision(3)),
+    rms: Number(take.loudness.rms.toPrecision(3)),
+    floor: Number(take.floor.toPrecision(3)),
+    silence: Number(take.silence.toFixed(3)),
+    misses: missesOf(take),
+  };
 }
 
 // --- the run ----------------------------------------------------------------------------------
 
-function readManifest(group: Group): Manifest {
-  const file = join(DIRS[group], MANIFEST);
+/** A group's manifest in `places`; empty where there is none. */
+export function readManifest(places: Places, group: Group): Manifest {
+  const file = join(places.dirs[group], MANIFEST);
   return existsSync(file) ? (JSON.parse(readFileSync(file, 'utf8')) as Manifest) : {};
 }
 
 /** Writes a group's manifest, its entries in the order of their ids. */
-function writeManifest(group: Group, manifest: Manifest): void {
-  mkdirSync(DIRS[group], { recursive: true });
+function writeManifest(places: Places, group: Group, manifest: Manifest): void {
+  mkdirSync(places.dirs[group], { recursive: true });
   const sorted = Object.entries(manifest).sort(([a], [b]) => (a < b ? -1 : 1));
   const text = `${JSON.stringify(Object.fromEntries(sorted), null, 2)}\n`;
-  writeFileSync(join(DIRS[group], MANIFEST), text);
+  writeFileSync(join(places.dirs[group], MANIFEST), text);
 }
 
-const filedIn = (group: Group, file: string): boolean => existsSync(join(DIRS[group], file));
+/** Whether a group's folder in `places` holds a file. */
+const filedIn =
+  (places: Places) =>
+  (group: Group, file: string): boolean =>
+    existsSync(join(places.dirs[group], file));
 
-/** Says what the run will make, group by group, and what that costs at the rates measured. */
-function printPlan(jobs: readonly Job[], candidates: number): void {
-  for (const group of GROUPS) {
+/** How a plan says the takes it makes of each entry of `group`, and what becomes of them. */
+function takesSaid(group: Group, candidates: number): string {
+  if (candidates <= 1) return '';
+  const kept = asTakes({ group }, candidates) ? 'into takes/ for the ear' : 'the best one kept';
+  return `, ${candidates} takes each, ${kept}`;
+}
+
+/**
+ * What the run will make, group by group, and what that costs at the rates measured, every take
+ * counted: a line for each group and one for each entry it makes.
+ */
+export function planLines(jobs: readonly Job[], candidates: number): string[] {
+  return GROUPS.flatMap((group) => {
     const mine = jobs.filter((job) => job.group === group);
     const todo = mine.filter((job) => job.make).map((job) => job.entry);
-    if (mine.length === 0) continue;
+    if (mine.length === 0) return [];
     const seconds = todo.reduce((sum, entry) => sum + entry.durationSeconds, 0);
     const credits = todo.reduce((sum, entry) => sum + costOf(entry, candidates), 0);
-    const takes = candidates > 1 ? `, ${candidates} takes each` : '';
-    console.log(
-      `sfx: ${group} — ${todo.length} of ${mine.length} to make${takes}, ` +
-        `${seconds.toFixed(1)} s, about ${credits} credits (cap ${CAPS[group]})`,
-    );
-    for (const entry of todo) {
-      console.log(`  ${entry.id}  ${entry.durationSeconds} s  ${entry.kind}`);
-    }
-  }
+    const each = candidates > 1 ? ' a take' : '';
+    return [
+      `sfx: ${group} — ${todo.length} of ${mine.length} to make${takesSaid(group, candidates)}, ` +
+        `${seconds.toFixed(1)} s${each}, about ${credits} credits (cap ${CAPS[group]})`,
+      ...todo.map((entry) => `  ${entry.id}  ${entry.durationSeconds} s  ${entry.kind}`),
+    ];
+  });
 }
 
 /** Fails, saying how to run it, where the environment holds no key. The script reads no file. */
@@ -926,39 +1065,48 @@ function requireTools(): void {
   }
 }
 
-/** Where a run works: the folder it decodes in, and the one its candidates go to. */
-interface Folders {
-  readonly scratch: string;
+/** How a run makes what it makes: how many takes of each, and where an effect's candidates go. */
+export interface Making {
+  readonly count: number;
+  /** a folder in the system's temp: an effect's candidates, each a file in it */
   readonly candidates: string;
 }
 
 /**
- * Makes `job`: once into the project, or as `count` takes into the candidates' folder — an
- * effect's each at its influence, a piece of music's by the same request again — each measured
- * and said, the one `pickTake` picks copied into the project. Returns the manifest's entry for
- * what it kept.
+ * What a run works with: the account's client, the folders it reads and writes, how it decodes
+ * a recording to measure it, the clock its takes are dated by, and how it waits between
+ * requests.
  */
-async function renderJob(
-  client: SoundClient,
-  job: Job,
-  count: number,
-  folders: Folders,
-): Promise<ManifestEntry> {
+export interface Bench {
+  readonly client: SoundClient;
+  readonly places: Places;
+  readonly decode: Decode;
+  readonly now: () => Date;
+  readonly wait: (ms: number) => Promise<void>;
+}
+
+const pause = (ms: number): Promise<void> => new Promise((done) => setTimeout(done, ms));
+
+/**
+ * Makes `job` into the project: once, or as `count` takes into the candidates' folder, an
+ * effect's each at its influence, each measured and said, the one `pickTake` picks copied into
+ * the project. Returns the manifest's entry for what it kept.
+ */
+async function renderJob(job: Job, making: Making, bench: Bench): Promise<ManifestEntry> {
   const { entry, group } = job;
-  const target = join(DIRS[group], fileOf(entry.id));
-  const again = (): number[] => Array.from({ length: count }, () => PROMPT_INFLUENCE);
-  const influences = group === 'music' ? again() : influencesFor(count);
+  const target = join(bench.places.dirs[group], fileOf(entry.id));
+  const influences = influencesFor(group === 'music' ? 1 : making.count);
   const [only] = influences;
   if (influences.length === 1 && only !== undefined) {
-    writeFileSync(target, await make(client, entry, { influence: only }));
-    return entryOf(entry, takeAt(entry, target, only, folders.scratch));
+    writeFileSync(target, await make(bench.client, entry, { influence: only, wait: bench.wait }));
+    return entryOf(entry, takeAt(entry, target, only, bench.decode));
   }
   const makeTake = (influence: number, i: number) => async (): Promise<Take> => {
-    const path = join(folders.candidates, `${entry.id}-${i + 1}.mp3`);
-    writeFileSync(path, await make(client, entry, { influence }));
-    return takeAt(entry, path, influence, folders.scratch);
+    const path = join(making.candidates, `${entry.id}-${i + 1}.mp3`);
+    writeFileSync(path, await make(bench.client, entry, { influence, wait: bench.wait }));
+    return takeAt(entry, path, influence, bench.decode);
   };
-  const takes = await oneByOne(influences.map(makeTake), ELEVEN_GAP_MS);
+  const takes = await oneByOne(influences.map(makeTake), ELEVEN_GAP_MS, bench.wait);
   const kept = pickTake(takes);
   sayTakes(entry, takes, kept);
   copyFileSync(kept.path, target);
@@ -966,56 +1114,111 @@ async function renderJob(
 }
 
 /**
- * Makes a group's `jobs` one after the other, each written with its entry as it comes; after
- * the first, its cost is read off the account and the rest priced at that rate — over the
- * group's cap, the run stops there. Returns what the group spent.
+ * Makes `count` takes of the piece of music `entry` into its folder under the takes' — each by
+ * the same request, numbered on from those already there, measured, said and listed as it comes,
+ * so that a run cut short keeps every take it paid for — and keeps none of them in the project:
+ * the ear chooses. Returns its list, the takes made before included.
  */
-async function renderGroup(
-  client: SoundClient,
-  jobs: readonly Job[],
-  manifest: Manifest,
-  how: { readonly count: number; readonly folders: Folders },
-): Promise<number> {
-  const before = await creditsLeft(client);
-  const secondsOf = (job: Job): number => job.entry.durationSeconds * how.count;
-  const tasks = jobs.map((job, i) => async () => {
-    mkdirSync(DIRS[job.group], { recursive: true });
-    const entry = await renderJob(client, job, how.count, how.folders);
-    manifest[job.entry.id] = entry;
-    writeManifest(job.group, manifest);
-    console.log(`sfx: ${job.entry.id} ${(entry.ms / 1000).toFixed(1)} s, gain ${entry.gain}`);
-    if (i === 0) {
-      const spent = before - (await creditsLeft(client));
-      const rest = jobs.slice(1).reduce((sum, other) => sum + secondsOf(other), 0);
-      const price = priced(spent, secondsOf(job), rest, job.group);
-      const expected = costOf(job.entry, how.count);
-      console.log(
-        `sfx: ${job.entry.id} cost ${spent} credits (${price.perSecond.toFixed(1)} a second, ` +
-          `${expected} expected); the ${job.group} come to about ${price.total}`,
-      );
-      if (price.over) {
-        throw new Error(`sfx: that is over the ${CAPS[job.group]} the ${job.group} may spend`);
-      }
-    }
-  });
-  await oneByOne(tasks, ELEVEN_GAP_MS);
-  return before - (await creditsLeft(client));
+export async function makeTakes(
+  entry: CatalogEntry,
+  count: number,
+  bench: Bench,
+): Promise<TakesList> {
+  const dir = join(bench.places.takes, entry.id);
+  mkdirSync(dir, { recursive: true });
+  let list: TakesList = readTakes(bench.places.takes, entry.id) ?? { id: entry.id, takes: [] };
+  const first = Math.max(0, ...list.takes.map((take) => take.n)) + 1;
+  const makeOne = (n: number) => async (): Promise<void> => {
+    const path = join(dir, takeFile(n));
+    writeFileSync(path, await make(bench.client, entry, { wait: bench.wait }));
+    const take = takeAt(entry, path, PROMPT_INFLUENCE, bench.decode);
+    console.log(takeLine(entry, take, n));
+    list = { id: entry.id, takes: [...list.takes, recordOf(entry, n, take, bench.now())] };
+    writeTakes(bench.places.takes, list);
+  };
+  const numbers = Array.from({ length: count }, (_, i) => first + i);
+  await oneByOne(numbers.map(makeOne), ELEVEN_GAP_MS, bench.wait);
+  return list;
 }
 
-/** Makes every job of `todo`, group by group, within the credits and the caps. */
-async function renderAll(
+/**
+ * Makes `job`: a piece of music in takes for the ear where the run makes more than one
+ * (`asTakes`); anything else into the project, its entry written into its group's manifest as it
+ * comes.
+ */
+async function makeJob(job: Job, manifest: Manifest, making: Making, bench: Bench): Promise<void> {
+  if (asTakes(job, making.count)) {
+    await makeTakes(job.entry, making.count, bench);
+    return;
+  }
+  mkdirSync(bench.places.dirs[job.group], { recursive: true });
+  const entry = await renderJob(job, making, bench);
+  manifest[job.entry.id] = entry;
+  writeManifest(bench.places, job.group, manifest);
+  console.log(`sfx: ${job.entry.id} ${(entry.ms / 1000).toFixed(1)} s, gain ${entry.gain}`);
+}
+
+/**
+ * Reads what a group's first job cost off the account, `before` it the credits left, and prices
+ * the `rest` at that rate; over the group's cap, the run stops there.
+ */
+async function priceTheRest(
+  first: Job,
+  rest: readonly Job[],
+  before: number,
+  making: Making,
+  client: SoundClient,
+): Promise<void> {
+  const spent = before - (await creditsLeft(client));
+  const secondsOf = (job: Job): number => job.entry.durationSeconds * making.count;
+  const later = rest.reduce((sum, job) => sum + secondsOf(job), 0);
+  const price = priced(spent, secondsOf(first), later, first.group);
+  const expected = costOf(first.entry, making.count);
+  console.log(
+    `sfx: ${first.entry.id} cost ${spent} credits (${price.perSecond.toFixed(1)} a second, ` +
+      `${expected} expected); the ${first.group} come to about ${price.total}`,
+  );
+  if (price.over) {
+    throw new Error(`sfx: that is over the ${CAPS[first.group]} the ${first.group} may spend`);
+  }
+}
+
+/**
+ * Makes a group's `jobs` one after the other; after the first, its cost is read off the account
+ * and the rest priced at that rate (`priceTheRest`). Returns what the group spent.
+ */
+async function renderGroup(
+  jobs: readonly Job[],
+  manifest: Manifest,
+  making: Making,
+  bench: Bench,
+): Promise<number> {
+  const before = await creditsLeft(bench.client);
+  const tasks = jobs.map((job, i) => async () => {
+    await makeJob(job, manifest, making, bench);
+    if (i === 0) await priceTheRest(job, jobs.slice(1), before, making, bench.client);
+  });
+  await oneByOne(tasks, ELEVEN_GAP_MS, bench.wait);
+  return before - (await creditsLeft(bench.client));
+}
+
+/**
+ * Makes every job of `todo` through `bench`, group by group, within the credits and the caps:
+ * an effect, or a piece of music made once, into the project; a piece of music made in takes into
+ * the takes' folder.
+ */
+export async function renderWith(
   todo: readonly Job[],
   manifests: Record<Group, Manifest>,
-  how: { readonly count: number; readonly folders: Folders },
+  making: Making,
+  bench: Bench,
 ): Promise<void> {
-  requireKey();
-  const client = await elevenClient();
-  const left = await creditsLeft(client);
+  const left = await creditsLeft(bench.client);
   console.log(`sfx: ${left} credits left`);
   refuseBelow(left);
   for (const group of GROUPS) {
     const jobs = todo.filter((job) => job.group === group);
-    const cost = jobs.reduce((sum, job) => sum + costOf(job.entry, how.count), 0);
+    const cost = jobs.reduce((sum, job) => sum + costOf(job.entry, making.count), 0);
     if (cost > CAPS[group]) {
       throw new Error(`sfx: the ${group} would cost about ${cost} credits, over ${CAPS[group]}`);
     }
@@ -1023,10 +1226,23 @@ async function renderAll(
   for (const group of GROUPS) {
     const jobs = todo.filter((job) => job.group === group);
     if (jobs.length === 0) continue;
-    const spent = await renderGroup(client, jobs, manifests[group], how);
+    const spent = await renderGroup(jobs, manifests[group], making, bench);
     console.log(`sfx: the ${group} spent ${spent} credits`);
   }
-  console.log(`sfx: ${await creditsLeft(client)} credits left`);
+  console.log(`sfx: ${await creditsLeft(bench.client)} credits left`);
+}
+
+/** Makes every job of `todo` with the account the environment's key opens. */
+async function renderAll(
+  todo: readonly Job[],
+  manifests: Record<Group, Manifest>,
+  making: Making,
+  decode: Decode,
+): Promise<void> {
+  requireKey();
+  const client = await elevenClient();
+  const bench = { client, places: PLACES, decode, now: () => new Date(), wait: pause };
+  await renderWith(todo, manifests, making, bench);
 }
 
 /**
@@ -1053,19 +1269,39 @@ function warnTakes(
     console.error(`sfx: ${off.length} recordings run more than a fifth off their length:`);
     for (const { id, ms, asked } of off) console.error(`  ${id}  ${ms} ms, asked for ${asked}`);
   }
-  const ids = [...new Set([...noisy, ...off].map(({ id }) => id))];
-  if (ids.length === 0) return;
-  console.error(`sfx: make them again, the best take kept: --candidates 5 --only ${ids.join(',')}`);
+  const ids = new Set([...noisy, ...off].map(({ id }) => id));
+  if (ids.size === 0) return;
+  sayRemedy(catalog, ids);
   process.exitCode = 1;
 }
 
-/** Says what each folder holds against its cap, and any file no entry names; over a cap fails. */
-function report(manifests: Readonly<Record<Group, Manifest>>): void {
+/** Says, group by group, what makes the recordings `ids` again. */
+function sayRemedy(catalog: readonly CatalogEntry[], ids: ReadonlySet<string>): void {
   for (const group of GROUPS) {
-    if (!existsSync(DIRS[group])) continue;
+    const mine = catalog.filter((e) => ids.has(e.id) && groupOf(e) === group).map((e) => e.id);
+    if (mine.length === 0) continue;
+    const what = group === 'sfx' ? 'the best take kept' : 'their takes left to the ear';
+    console.error(`sfx: make them again, ${what}: ${remakeArgs(group, mine)}`);
+  }
+}
+
+/**
+ * What the script is told to make `ids` of `group` again: an effect in MAX_CANDIDATES candidates,
+ * the best kept; a piece of music in MAX_MUSIC_TAKES takes, which wait for the ear.
+ */
+export function remakeArgs(group: Group, ids: readonly string[]): string {
+  const takes = group === 'sfx' ? MAX_CANDIDATES : MAX_MUSIC_TAKES;
+  return `--candidates ${takes} --only ${ids.join(',')}`;
+}
+
+/** Says what each folder holds against its cap, and any file no entry names; over a cap fails. */
+function report(manifests: Readonly<Record<Group, Manifest>>, places: Places): void {
+  for (const group of GROUPS) {
+    const dir = places.dirs[group];
+    if (!existsSync(dir)) continue;
     const named = new Set(Object.values(manifests[group]).map((entry) => entry.file));
-    const files = readdirSync(DIRS[group]).filter((name) => name.endsWith('.mp3'));
-    const bytes = files.reduce((sum, name) => sum + statSync(join(DIRS[group], name)).size, 0);
+    const files = readdirSync(dir).filter((name) => name.endsWith('.mp3'));
+    const bytes = files.reduce((sum, name) => sum + statSync(join(dir, name)).size, 0);
     const kb = (bytes / 1024).toFixed(0);
     console.log(`sfx: public/${group} holds ${files.length} files, ${kb} kB`);
     for (const name of files.filter((file) => !named.has(file))) {
@@ -1078,49 +1314,87 @@ function report(manifests: Readonly<Record<Group, Manifest>>): void {
   }
 }
 
+/**
+ * The jobs whose files a run measures anew: every one it took, but a piece of music it made in
+ * takes, whose file in the project — and its manifest's entry with it — stays as it was.
+ */
+export function measuredAnew(jobs: readonly Job[], count: number): Job[] {
+  return jobs.filter((job) => !(job.make && asTakes(job, count)));
+}
+
 /** Measures every file the run took anew, its entry kept at the influence it was made at. */
 function remeasure(
   jobs: readonly Job[],
   manifests: Record<Group, Manifest>,
-  scratch: string,
+  places: Places,
+  decode: Decode,
 ): void {
-  for (const job of jobs.filter((each) => filedIn(each.group, fileOf(each.entry.id)))) {
+  const filed = filedIn(places);
+  for (const job of jobs.filter((each) => filed(each.group, fileOf(each.entry.id)))) {
     const kept = manifests[job.group][job.entry.id];
     const influence = kept?.influence ?? PROMPT_INFLUENCE;
-    const path = join(DIRS[job.group], fileOf(job.entry.id));
-    const take = takeAt(job.entry, path, influence, scratch);
+    const path = join(places.dirs[job.group], fileOf(job.entry.id));
+    const take = takeAt(job.entry, path, influence, decode);
     manifests[job.group][job.entry.id] = entryOf(job.entry, take);
   }
   for (const group of GROUPS) {
-    if (jobs.some((job) => job.group === group)) writeManifest(group, manifests[group]);
+    if (jobs.some((job) => job.group === group)) writeManifest(places, group, manifests[group]);
   }
 }
 
-async function main(options: Options): Promise<void> {
-  const catalog = checkCatalog(readCatalog());
-  const manifests = { sfx: readManifest('sfx'), music: readManifest('music') };
-  const jobs = planOf(catalog, manifests, filedIn, options);
-  printPlan(jobs, options.candidates);
-  if (options.dryRun) {
-    warnTakes(catalog, manifests);
-    return;
-  }
+/**
+ * Where the takes of `ids` lie in `places`, the music a run made in takes, and that none of it is
+ * kept: a line for the folder, and one for each entry with its takes.
+ */
+export function takesLines(ids: readonly string[], places: Places): string[] {
+  if (ids.length === 0) return [];
+  return [
+    `sfx: none of this music is kept yet; its takes wait in ${places.takes}:`,
+    ...ids.map((id) => {
+      const files = (readTakes(places.takes, id)?.takes ?? []).map((take) => take.file);
+      return `  ${id}/  ${files.join(', ')}, listed in ${id}/${TAKES_LIST}`;
+    }),
+    'sfx: the ear chooses: each take plays with afplay <file>, and none goes into the game yet',
+  ];
+}
+
+/**
+ * Makes what `jobs` ask for, `count` takes of each, measures what the run took anew
+ * (`measuredAnew`) and says where the takes lie.
+ */
+async function renderRun(
+  jobs: readonly Job[],
+  manifests: Record<Group, Manifest>,
+  count: number,
+): Promise<void> {
   requireTools();
   const scratch = mkdtempSync(join(tmpdir(), 'escapelab-sfx-'));
   const todo = jobs.filter((job) => job.make);
-  const many = options.candidates > 1 && todo.length > 0;
+  const inTakes = todo.filter((job) => asTakes(job, count));
+  const many = count > 1 && todo.length > inTakes.length;
   const candidates = many ? mkdtempSync(join(tmpdir(), 'escapelab-sfx-candidates-')) : scratch;
+  const decode = afconvertIn(scratch);
   try {
-    if (todo.length > 0) {
-      const folders = { scratch, candidates };
-      await renderAll(todo, manifests, { count: options.candidates, folders });
-    }
-    remeasure(jobs, manifests, scratch);
+    if (todo.length > 0) await renderAll(todo, manifests, { count, candidates }, decode);
+    remeasure(measuredAnew(jobs, count), manifests, PLACES, decode);
   } finally {
     rmSync(scratch, { recursive: true, force: true });
   }
   if (many) console.log(`sfx: every candidate lies in ${candidates}`);
-  report(manifests);
+  for (const line of takesLines(inTakes.map((job) => job.entry.id), PLACES)) console.log(line);
+}
+
+async function main(options: Options): Promise<void> {
+  const catalog = checkCatalog(readCatalog());
+  const manifests = { sfx: readManifest(PLACES, 'sfx'), music: readManifest(PLACES, 'music') };
+  const jobs = planOf(catalog, manifests, filedIn(PLACES), options);
+  for (const line of planLines(jobs, options.candidates)) console.log(line);
+  if (options.dryRun) {
+    warnTakes(catalog, manifests);
+    return;
+  }
+  await renderRun(jobs, manifests, options.candidates);
+  report(manifests, PLACES);
   warnTakes(catalog, manifests);
 }
 
