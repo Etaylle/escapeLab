@@ -372,7 +372,7 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   Zähler, sobald man drin ist), Exapunks (Regeln im gedruckten Heft).
 - Dritter Entwurf in Reserve: Datensicherung (Plattenarray, Backup-Katalog, Rotationsplan).
 
-### S-1 Hauptmenü wie ein Spiel — Status: bereit (nächstes Paket nach R-2; Spec `spec-S-menu.md`) · Größe: L
+### S-1 Hauptmenü wie ein Spiel — Status: im PR (S-menu) · Größe: L
 - Uros 2026-11-12 mit Screenshot: „Das soll besser werden wie echte Spiele, Main Menu." Befund
   im Bild: eine Karte auf leerer Seite, Systemschrift, kein Ton, keine Figuren, ein nativer
   Tooltip über den Missionskarten, der Aufkleber „Erster Einsatz?" über dem Tutorial-Titel,
@@ -390,6 +390,9 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   Runden zeigen die Figuren der Crew statt Punkten; Übergang in die Lobby als aufgehende Tür.
 - Beweis: Captures join/lobby an allen Größen, Pixelchecks der anderen Bildschirme, Frame-Fenster
   der Startseite ≤ 16,7 ms p95 bei Software-GL.
+- Offen nach dem PR: Titelthema (`menu-theme`, 72 s) und Anlagenbrummen (`bed-facility`, 10 s —
+  ein Bett darf höchstens 30 s lang sein) rendert Uros; die Befehle stehen in `docs/sound.md`
+  unter „The menu", bis dahin klingen nur die Bedienlaute.
 
 ### S-2 Begehbarer Pausenraum — Status: wartet (nach S-1 und R-3) · Größe: XL
 - Vorbilder: Phasmophobia (begehbarer Raum, Tafel mit Auftragswahl, Tür öffnet beim Start),

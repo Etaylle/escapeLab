@@ -492,6 +492,71 @@ size 1 and grows with it; the strip beside a page keeps its width (`--note-strip
 narrow window at the large text size a table may scroll sideways in its own box.
 notepad-captured.png and notepad-captured-phone.png show the legend and the Laborkennung in it.
 
+## The menu (screens/Join.tsx, MainMenu.tsx, MenuPanels.tsx, world/menu/, styles/menu.css)
+
+The start screen is the game's main menu over a living scene from the world, as Half-Life 2's and
+Firewatch's are. Behind it the lab of the mission picked — lit, the power on, as the opening shows
+it before the blackout — drifts along the opening's shot, from where the shot starts to the crew's
+spawn and back in 30 s, slowing at both ends, the drones parked on their first waypoints and nobody
+in it; a mission picked anew comes in over the lab before in 600 ms. A vignette lies over it —
+darkest behind the menu, the edges sinking into the dark — and the page's scanlines over all;
+nothing blurs what lies behind it. Under reduced motion the scene stands still at the shot's start.
+
+The title, ESCAPELAB, is set in **Michroma** (Vernon Adams, 2011), under the **SIL Open Font License
+1.1**, which reserves no font name: its Latin subset as Google Fonts cuts it ships with the game as
+`client/public/fonts/michroma-latin.woff2` (12 kB), its licence beside it as `michroma-OFL.txt`, and
+the page preloads it; Eurostile, Microgramma and the system's sans stand in where it cannot load. It
+stands in the phosphor's white with a green glow and comes on as a phosphor screen does, once a page
+load (intro.css `phosphor-title`); under it one line of the world, in the mono and spaced:
+„Forschungsanlage Kaltenbrunn · Zutritt nur mit Dienstausweis". The menu stands one item under the
+next in the title's face, upper case: Einsatz starten, Beitreten, Offene Runden, Handbuch,
+Bestenliste, Editor, Einstellungen. The item lit — under the pointer, by the arrows or a
+controller's D-pad — is the focus itself: a teal bar on its left, a teal light behind it, its label
+a step to the right; the ring of every other control (Interface) would only box it in, so it draws
+none. A run that binds the pass stands first and lit, the items under it dimmed. The profile stands
+at the top right: the player's own figure idling in their colour, waving once a new name has
+settled, the name to type, the colour's name, and a slot where a sign-in will sit.
+
+A panel slides in over the menu from its side in 200 ms, fading up, the menu dimmed under it; under
+reduced motion it only fades. Into the lobby and back out, the lab's sliding doors close over the
+screen in 170 ms, speeding up as a heavy door does, and open on the next in 210 ms, slowing to a
+stop: two steel leaves lit from the top, the ink edge where they meet, the amber light strip and the
+two chevrons of the world's doors at the seam (world/art.ts `drawDoor`, screens/DoorWipe.tsx).
+Leaving a lobby loads the page anew; the doors stay shut over it until the page loaded opens them.
+Under reduced motion the screens cut. The lobby keeps its layout and stands over the same scene,
+drifting on, evenly dimmed.
+
+Upright on a phone, 560 px across or less, the menu takes one column, the profile under the title.
+Held sideways, 500 px tall or less, the items fill the left column whole, 44 px each, the title and
+the profile stand at the right over the scene, and a panel takes the stage. Every control on the
+menu and its panels is a target, 36 px under a pointer and 44 under a finger, and a phone's notch
+and home bar stay clear (`test/menuLayout.test.tsx`); the walkthrough measures the guest's phone
+upright and sideways at 932 × 430, 844 × 390, 750 × 369 and 667 × 375 (menu-phone.png,
+menu-phone-932.png).
+
+**What it costs.** The scene never runs the world's passes for a frame. Once for each size of its
+canvas it bakes the lit lab through the game's own passes — the tiles, the objects, the figures'
+pass with nobody in it, the glows, the light, on the Canvas path without a WebGL context — into one
+canvas the size of the shot's box at the shot's zoom; each frame then copies that canvas whole, at
+whole pixels, as far along as the drift has come: the copy without a source rectangle (Cost). It
+draws 30 frames a second at most, none while the tab or the canvas is hidden, and under reduced
+motion none after its still; a window resized bakes anew once it has held its size for 150 ms. On
+the Cost section's bench — this M4, the page's main thread slowed four times, the software Canvas
+path of `SHOTS_SOFTWARE_GL`, 1440 × 820 CSS pixels at density 1, Blackout's lab, the scene's way
+against every pass run each frame six rounds each, every round starting at the other — medians, ms:
+
+| Way | Work a frame, mean | p95 | Frames p95 |
+| --- | --- | --- | --- |
+| The bake copied (the menu's) | 1.07 | 1.50 | 16.7 |
+| Every pass run each frame | 17.42 | 20.60 | 16.8 |
+
+The bake itself took 259 ms there, slowed four times, once for the size, and 44 to 73 ms in the
+walkthrough's browser at its own speed. Every pass run each frame drew at the screen's pace in four
+rounds of six and fell to 33.3 ms p95 in the other two. The walkthrough's quiet window on the menu,
+the scene drifting, held the screen's pace in Blackout and Systemcheck, with `SHOTS_SOFTWARE_GL` and
+without: 16.7 ms p50 and 16.7 to 16.8 p95, the light working out no sight a frame there
+(`lightWork`).
+
 ## Type and targets (styles/devices.css, test/deviceTargets.test.tsx)
 
 Every word on a device is set by its role, at the normal text size and in a laptop's 720 px of

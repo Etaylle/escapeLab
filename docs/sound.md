@@ -841,9 +841,70 @@ other line keeps its recording — after which the voice test names the `lightsS
 reduced-motion path, the title on the lights-out, the crew held still; `test/introCue.test.ts`
 the script against a client of its own and the cue in the game.
 
+## The menu (`menuSound.ts`)
+
+The main menu has a sound of its own, and keeps it through the lobby: a title theme, the
+facility's hum under it, and the interface's sounds — all of it silent until the player's first
+click, tap or key, as a browser wants (`pointerdown`, `keydown`, `touchend`, caught on the
+window). That gesture makes the audio context — within it, so that it may run — and brings the
+theme and the hum in from nothing over 2 s (`FADE_IN_S`). Until then the menu's sound waits,
+and the speaker in the top bar says so: an amber lamp on its corner, its title „Ton kommt mit dem
+ersten Klick oder Tastendruck" — on the menu alone, never over a run or the editor. With the
+sound switched off nothing streams and nothing waits; switched on again it waits for the next
+gesture or comes in at once where the context already runs.
+
+**The theme** (`menu-theme`) is a stem of the music's, 72 s in A minor at 90 BPM like the run's
+three — dark and quiet, a slow analog pad over a low drone, a lonely four-note motif on a soft
+electric piano, no drums. It streams from its file on two elements as the stems do
+(`audioStream.ts`), into the music's bus at the stems' level, and loops on whole bars: each next
+pass starts a bar before it is heard, caught up meanwhile, and comes in over the seam's 3 s as the
+last goes out under it, equal in power (music.ts `passPeriod`, `SEAM_IN`, `SEAM_OUT`). **The hum**
+(`bed-facility`) is a bed: the facility at night heard from its entrance hall, transformers and
+ventilation far down the corridors, looped on the rooms' bus at 0.02 — a little under a room's bed.
+It is 10 s long, not a minute: a bed lasts 30 s at most in the catalog, and the effects' folder,
+held to 3 MB, had some 180 kB left, which a 10 s bed at 128 kbit/s (160 kB) fits. The theme, 72 s at
+192 kbit/s, takes the music's folder from 5.4 to some 7.1 MB of its 8. The two claim two loops of
+the budget (`claim({ loop: 2 })`) and give them back as they go.
+
+**In the lobby** the crew's own voices pull both down while anybody speaks — the theme 8 dB,
+the hum 4 dB, as the Leitstelle's voice pulls the run's music down (mix.ts `DUCK_DB`, the source
+`crew`) — and let them back up after. **The run's start** fades both out over 0.6 s and lets
+everything go: their elements, the theme's blob, the hum's recording, the loops.
+
+**The interface's sounds** are recordings the lab already has, each played once into the
+effects' bus under the theme: a tick as an item lights (`ui-tick`, 0.012 at the master gain —
+no oftener than every 50 ms, so that a held arrow ticks along and never buzzes), a toggle's
+clack as one is taken (`toggle-clack`, 0.03), a dial's detent as a panel is stepped out of
+(`dial-detent`, 0.024), the stage's two-note chime as a round comes up on the screen — opened
+or joined (`stage-chime`, 0.035) — and a console's ready chirp as somebody of the crew says
+ready (`console-ready`, 0.03). None plays before the gesture or with the sound switched off.
+
+**Awaiting their render.** The theme and the hum are written into the catalog
+(`audio/catalog.json`) and listed in `AWAITING_RENDER` (`test/sampleManifest.test.ts`); until
+they are made the menu plays the interface's sounds alone, and the walkthrough logs „no theme
+(awaiting its render?)". In `packages/client`, the hum in three takes and the theme in one —
+some 120 and 1,296 credits:
+
+```sh
+node --env-file=/Users/uros/Documents/Req.Eng./escapelab/.env.local scripts/sfx.ts \
+  --candidates 3 --only bed-facility
+node --env-file=/Users/uros/Documents/Req.Eng./escapelab/.env.local scripts/sfx.ts \
+  --only menu-theme
+```
+
+Then empty both from `AWAITING_RENDER`. `test/menuSound.test.tsx` holds the gesture — no
+context made before it —, the buses and the 2 s fades, the switch, the end with the run, the
+crew's duck and the interface's sounds; the walkthrough checks the lamp lit before the first
+key, the sound playing after it, the lobby's chime and chirp heard, and all of it gone in the
+run (tools/shots.mjs `menuSoundAtFirstKey`, `menuSoundAfterStart`).
+
 ## Open
 
 What the sound packages left for later, one line each, the newest first:
+
+- **The menu's theme and the facility's hum await a render** (S-menu): written into the catalog,
+  listed in `AWAITING_RENDER`; the commands are under „The menu" (some 1,416 credits). Until
+  they run the menu sounds its interface alone.
 
 - **Twelve recordings await a render** (L-sound): the linoleum and steel steps, both door
   closes, the alarm's sting, the drone's fly-by, the hatch's landing and the settings' tick.

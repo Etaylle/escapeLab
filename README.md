@@ -50,10 +50,18 @@ importiert und bis zur Lösung spielt.
 Keine Station lässt sich allein bedienen (siehe *Nie allein*), und auf *Normal* beendet der
 fünfte Alarm den Lauf — auf *Hart* der dritte, auf *Entspannt* gibt es keine Grenze.
 
-**Beitreten:** Auf der Startseite steht eine Liste aller **offenen Runden** mit Kartenvorschau,
-Mission, Schwierigkeit, wer schon wartet und wie viele Plätze frei sind — ein Klick auf *Beitreten*
-genügt, niemand muss einen Code weitergeben. Laufende Runden erscheinen ebenfalls, dort führt
-der Knopf zum Zuschauen. Ein Code-Feld bleibt für direkte Verabredungen.
+**Startseite:** Ein Hauptmenü wie in einem Spiel, über dem beleuchteten Labor der gewählten
+Mission, das langsam vorbeizieht: *Einsatz starten* (die Missionskarten, „Runde eröffnen"),
+*Beitreten*, *Offene Runden*, *Handbuch*, *Bestenliste*, *Editor* und *Einstellungen* — mit der
+Maus, der Tastatur (Pfeile, Enter, Esc) oder dem Controller (Steuerkreuz, A, B). Oben rechts
+steht das Profil: Name, Farbe und die eigene Figur, die winkt, sobald der Name sich ändert.
+*Offene Runden* listet jede Runde mit Kartenvorschau, Mission, Schwierigkeit, ihrer Crew als
+Figuren und den freien Plätzen — ein Klick auf *Beitreten* genügt, niemand muss einen Code
+weitergeben. Laufende Runden erscheinen ebenfalls, dort führt der Knopf zum Zuschauen. Unter
+*Beitreten* bleibt ein Code-Feld für direkte Verabredungen, daneben *Zuschauen*. Bindet ein
+laufender Einsatz den Dienstausweis, steht seine Karte als erster Menüpunkt da. In die Lobby
+und zurück geht es durch die Schiebetüren des Labors; ab dem ersten Klick oder Tastendruck
+spielen Titelthema und Anlagenbrummen.
 
 **Ablauf einer Partie:** Lobby (Farbe wählen, **bereitmelden** — der Host kann erst starten,
 wenn so viele da sind, wie die Mission braucht, und alle bestätigt haben; jede Änderung an
@@ -125,8 +133,9 @@ Einsatz. Reißt eine Leitung ab, pausiert die Mission für alle (Uhr, Patrouille
 die anderen sehen „Warten auf Ben · 0:12“. Nach 60 Sekunden, bei jedem weiteren Abbruch desselben
 Laufs nach 20, bietet die Karte „Ohne Ben weiter“: Die Uhr läuft wieder, und Stationen der ganzen
 Crew, Luke und Flucht zählen Ben nicht mit, bis er zurück ist. Ist nur noch eine Person verbunden,
-bietet die Karte stattdessen „Einsatz abbrechen“. Die Startseite öffnet bei einem laufenden
-Einsatz auf seiner Karte („Zurück zum Einsatz“, „Einsatz aufgeben“) und sperrt andere Räume;
+bietet die Karte stattdessen „Einsatz abbrechen“. Das Hauptmenü stellt einen laufenden Einsatz
+als hellen ersten Menüpunkt voran, die übrigen gedimmt („Zurück zum Einsatz“, „Einsatz
+aufgeben“), und sperrt andere Räume;
 aufgeben gibt den Platz frei, unter der Mindestzahl der Crew endet der Lauf für alle („EINSATZ
 ABGEBROCHEN“). Ein anderes Gerät übernimmt einen getrennten Platz mit Raumcode und genau dessen
 Namen (wie bei Jackbox), sobald jemand aus der Crew es zulässt. Die eigene Seite erkennt eine
@@ -191,7 +200,7 @@ Vorlage (eine mitgelieferte als Kopie), Missionsdateien gehen per Export und Imp
 | --- | --- |
 | `packages/core` | Spiellogik als pure State-Machine (`applyAction`), Missionsformat (zod), nach Standort gefilterte Views, WebSocket-Protokoll. Keine I/O — vollständig deterministisch und testbar. |
 | `packages/server` | Autoritativer Node-Server: Räume, an Dienstausweise gebundene Plätze, Missionstimer, WebSocket (`ws`). Clients schicken Intents; der Server validiert und broadcastet gefilterte Views. |
-| `packages/client` | React + Vite UI: Join → Lobby → Spiel → Ende, Auto-Reconnect mit dem Dienstausweis des Browsers. |
+| `packages/client` | React + Vite UI: Hauptmenü → Lobby → Spiel → Ende, Auto-Reconnect mit dem Dienstausweis des Browsers. |
 
 ## Entwicklung
 
