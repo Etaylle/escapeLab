@@ -107,8 +107,11 @@
  * hovered the beam has to hold a beat pointing at it within two passes of its sweep. On the first
  * menu of a page it walks in: a page of its own holds it 600 ms into its walk, as the pause trick
  * holds a device's fade (menu-hero-entrance.png), its lamp off; a key wakes the menu's sound, and
- * let go, the hero has to stop, click the cold open's click and switch its lamp on. The menu's
- * sound waits for
+ * let go, the hero has to stop, click the cold open's click and switch its lamp on. Hovered, an
+ * item turns the hero's head to it (menu-hero-hover.png, the beam holding its beat on
+ * „Beitreten"); „Einsatz starten" open, the hero stands half a tile aside, clear of the panel
+ * (menu-hero-missions.png); as the doors close for the lobby it has turned away to the lab; and in
+ * the reconnect drill's tab it looks at the run's card. The menu's sound waits for
  * the first key, the speaker's lamp lit, and plays after it; the lobby keeps it at its weight,
  * chimes as the round comes up and chirps as Ben says ready; the run's start ends it. The won card
  * asks for its sting and its theme (end music), which go as the next run opens.
@@ -6275,9 +6278,9 @@ const MENU_P95_MS = 16.8;
 const heroOf = (page) => page.evaluate(() => globalThis.__escapelab?.hero ?? null);
 
 /**
- * In the page: the hero's canvas, where it shows, and what it has to keep clear of — the menu's
- * column, its lead line, the profile and a panel open over the menu — each a box in the window's
- * CSS px; null for what is not there.
+ * In the page: the hero's canvas, where it shows, and what the hero has to keep clear of — the
+ * menu's column, its lead line, the profile and a panel open over the menu — each a box in the
+ * window's CSS px; null for what is not there.
  */
 function heroRoom() {
   const box = (selector) => {
@@ -6289,7 +6292,7 @@ function heroRoom() {
     return { left, top, right, bottom };
   };
   return {
-    hero: box('.menu-hero:not([hidden])'),
+    canvas: box('.menu-hero:not([hidden])'),
     clear: {
       menu: box('.menu-body'),
       lead: box('.menu-lead'),
@@ -6312,13 +6315,13 @@ const heroCovers = (hero, clear) =>
 /** How far from five scene tiles the hero may stand at 1440×820 and 1280×720. */
 const HERO_TILES_AROUND = 0.25;
 
-/** What the log says of the hero's canvas `box` and of what it covers. */
+/** What the log says of the hero's box as it stands (`box`) and of what it covers. */
 function heroText(hero, box, covers) {
   const [left, top, right, bottom] = [box.left, box.top, box.right, box.bottom].map(Math.round);
   const where = `${left}–${right} × ${top}–${bottom}`;
   const clear = covers.length === 0 ? 'clear of the menu, its lead line and the profile' : '';
   return (
-    `${hero.tiles.toFixed(2)} scene tiles tall, its canvas ${where} px, ` +
+    `${hero.tiles.toFixed(2)} scene tiles tall, standing ${where} px, ` +
     (clear === '' ? `!! over ${covers.join(', ')}` : clear)
   );
 }
@@ -6330,8 +6333,10 @@ function heroText(hero, box, covers) {
 async function heroStanding(page, label) {
   const hero = await heroOf(page);
   const room = await page.evaluate(heroRoom);
-  if (hero?.shown === true && room.hero !== null) {
-    return { hero, room };
+  if (hero?.shown === true && room.canvas !== null && hero.box !== null) {
+    const { left, top, width, height } = hero.box;
+    const drawn = { left, top, right: left + width, bottom: top + height };
+    return { hero, room: { ...room, hero: drawn } };
   }
   console.log(`hero               ${label}: !! not standing (${JSON.stringify(hero)})`);
   fail(`hero @ ${label}: not standing on the stage`);
@@ -6512,15 +6517,16 @@ async function heroLampShot(page) {
   }
 }
 
-/** In the page: whether the hero's beam holds a beat on „Beitreten", hovered. */
+/** In the page: whether the hero looks at „Beitreten", hovered, its beam holding a beat on it. */
 const beatOnJoin = () => {
   const probe = globalThis.__escapelab?.hero;
-  return probe?.attends === 'join' && probe.beam?.holding === true;
+  return probe?.look?.at === 'join' && probe.beam?.holding === true;
 };
 
 /**
- * „Beitreten" hovered: the hero's beam has to hold a beat on it within two passes of its sweep
- * (BEAM_BEAT_WITHIN_MS), or the run fails; the pointer goes off the menu after.
+ * menu-hero-hover.png: „Beitreten" hovered, the hero's head turned to it and its beam holding a
+ * beat on it within two passes of its sweep (BEAM_BEAT_WITHIN_MS), or the run fails; the pointer
+ * goes off the menu after.
  */
 async function heroBeamBeat(page) {
   const started = Date.now();
@@ -6531,9 +6537,11 @@ async function heroBeamBeat(page) {
       () => true,
       () => false,
     );
+  await capture(page, 'menu-hero-hover.png');
+  const turned = (await heroOf(page))?.look?.turned ?? 0;
   const after = ((Date.now() - started) / 1000).toFixed(1);
   const said = beat ? `held a beat on BEITRETEN ${after} s after the hover` : '!! no beat';
-  console.log(`hero beam          ${said}`);
+  console.log(`menu-hero-hover.png its head turned ${turned.toFixed(2)} rad, its beam ${said}`);
   await page.mouse.move(2, 2);
   if (!beat) {
     fail('hero beam: it never held a beat on the item hovered');
@@ -6549,6 +6557,7 @@ async function openMissionRound(page) {
   await openMenuPanel(page, 'Einsatz starten');
   await sleep(300);
   await capture(page, 'menu-missions.png');
+  await heroStepShot(page);
   await checkFirstRunCard(page);
   const card = page.locator('.mission', { hasText: MISSION }).first();
   if ((await card.count()) === 0) {
@@ -6561,6 +6570,25 @@ async function openMissionRound(page) {
   await captureDoors(page, () =>
     page.locator('.menu-panel button', { hasText: 'Runde eröffnen' }).click(),
   );
+}
+
+/**
+ * menu-hero-missions.png: with „Einsatz starten" open the hero has to stand half a tile aside,
+ * nothing of it under the panel — or the run fails.
+ */
+async function heroStepShot(page) {
+  const stepped = await page
+    .waitForFunction(() => globalThis.__escapelab?.hero?.step === 1, null, { timeout: 5000 })
+    .then(
+      () => true,
+      () => false,
+    );
+  await capture(page, 'menu-hero-missions.png');
+  const hero = await checkHero(page, '1440x820, its panel open');
+  console.log(`menu-hero-missions.png ${stepped ? 'stepped half a tile aside' : '!! not aside'}`);
+  if (!stepped || hero === null) {
+    fail('menu-hero-missions.png: the hero did not step aside for the panel');
+  }
 }
 
 /** The door wipe's close, ms (client screens/DoorWipe.tsx `CLOSE_MS`). */
@@ -6632,11 +6660,13 @@ async function shootHeldDoors(page, open) {
   const shut = (await doorShut(page)) ?? 0;
   const menu = await page.locator('.menu').count();
   const lobby = await page.locator('.lobby').count();
+  const hero = await heroOf(page);
   await capture(page, 'menu-to-lobby.png');
   await page.evaluate(releaseDoors);
   await page.locator('.lobby').waitFor({ timeout: 10_000 });
   await page.locator('.door-wipe').waitFor({ state: 'detached', timeout: 5000 });
-  return { came, shut, held: menu === 1 && lobby === 0 };
+  const away = hero?.leaving === true && Math.sin(hero.facing) < 0;
+  return { came, shut, held: menu === 1 && lobby === 0, away };
 }
 
 /** Whether the scene `after` is the scene `before` drifting on: the same lab, more frames drawn. */
@@ -6647,9 +6677,10 @@ const driftsOn = (before, after) =>
   after.paints > before.paints;
 
 /** What the log says of the held doors and of the scene behind the lobby once they have gone. */
-function doorShotText({ came, shut, held }, before, after, behind) {
+function doorShotText({ came, shut, held, away }, before, after, behind) {
   const over = held ? 'the menu' : '!! the lobby';
-  const doors = came ? `${Math.round(shut * 100)} % shut over ${over}` : '!! no doors';
+  const hero = away ? ', its hero turned away to the lab' : ', !! its hero not turned away';
+  const doors = came ? `${Math.round(shut * 100)} % shut over ${over}${hero}` : '!! no doors';
   const scene = driftsOn(before, after)
     ? `${after.missionId}'s lab drifting on (${before.paints} → ${after.paints} frames)`
     : '!! a scene anew';
@@ -6670,8 +6701,8 @@ async function captureDoors(page, open) {
   const after = await sceneOf(page);
   const behind = (await page.locator('.menu-backdrop--lobby:visible').count()) === 1;
   console.log(`menu-to-lobby.png  ${doorShotText(held, before, after, behind)}`);
-  if (!held.came || !held.held || !driftsOn(before, after) || !behind) {
-    fail('menu-to-lobby.png: no doors over the menu, or no scene drifting on behind the lobby');
+  if (!held.came || !held.held || !held.away || !driftsOn(before, after) || !behind) {
+    fail('menu-to-lobby.png: no doors over the menu, no hero turned, or no scene drifting on');
   }
 }
 
@@ -6927,6 +6958,28 @@ async function watchFromMenu(page, code) {
   await page.locator('.join-with-code button', { hasText: 'Zuschauen' }).click();
 }
 
+/** Whether the hero on `page`, once it has walked in, looks at the run's card first in the menu. */
+async function heroLooksAtCard(page) {
+  await heroArrived(page);
+  return page
+    .waitForFunction(() => globalThis.__escapelab?.hero?.look?.at === 'card', null, {
+      timeout: 3000,
+    })
+    .then(
+      () => true,
+      () => false,
+    );
+}
+
+/** Logs whether the hero in the drill's tab looks at the run's card (`looks`); fails where not. */
+function sayHeroAtCard(looks) {
+  const said = looks ? 'looks at the run’s card' : '!! does not look at the run’s card';
+  console.log(`hero               in the drill's tab ${said}`);
+  if (!looks) {
+    fail('menu-bound.png: the hero does not look at the run’s card');
+  }
+}
+
 /**
  * menu-bound.png: a new tab of Anna's browser while her run stands paused for Ben — the menu
  * opens on the run's card, „EINSATZ PAUSIERT", first and lit, every other item dimmed, the line
@@ -6945,6 +6998,7 @@ async function captureBound(anna) {
       () => document.querySelector('.menu-list')?.firstElementChild?.matches('.bound') === true,
     );
     const line = await textOf(page.locator('.bound-line'));
+    const looks = await heroLooksAtCard(page);
     await capture(page, 'menu-bound.png');
     console.log(
       `menu-bound.png     Anna's new tab: „${kicker}" ${first ? 'first' : '!! not first'}, ` +
@@ -6953,6 +7007,7 @@ async function captureBound(anna) {
     if (kicker !== 'EINSATZ PAUSIERT' || !first || !dimmed || line === null) {
       fail(`menu-bound.png: „${kicker}", first ${first}, dimmed ${dimmed}, line „${line}"`);
     }
+    sayHeroAtCard(looks);
   } finally {
     await page.close();
   }

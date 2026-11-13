@@ -36,7 +36,7 @@ import { Icon, type IconName } from './screens/Icon.js';
 import { UpdateNotice } from './screens/Install.js';
 import { JoinScreen } from './screens/Join.js';
 import { LobbyScreen } from './screens/Lobby.js';
-import { DoorWipe, useDoorWipe, type Doors, type Place } from './screens/DoorWipe.js';
+import { DoorWipe, doorsGoing, useDoorWipe, type Doors, type Place } from './screens/DoorWipe.js';
 import { createRoomMessage, pickedMission, usePicked } from './screens/MenuPanels.js';
 import { MenuScene } from './screens/MenuScene.js';
 import { GameScreen } from './screens/Game.js';
@@ -272,6 +272,8 @@ interface ScreenProps {
   setPicked: (missionId: string) => void;
   /** opens the settings, as the gear in the top bar does */
   openSettings: () => void;
+  /** the doors close over the screen for the next, or stand shut: the menu's hero turns away */
+  leaving: boolean;
 }
 
 /**
@@ -301,6 +303,7 @@ function OffRoom(props: ScreenProps) {
           openHistory={props.setHistory}
           openEditor={editor.show}
           openSettings={props.openSettings}
+          leaving={props.leaving}
         />
       </Activity>
       {editor.open && (
@@ -683,6 +686,7 @@ export function App({ boot }: { boot: EditorBoot }) {
             picked={picked}
             setPicked={setPicked}
             openSettings={() => setSettingsOpen(true)}
+            leaving={doorsGoing(doors)}
           />
         </VoiceContext>
       </main>

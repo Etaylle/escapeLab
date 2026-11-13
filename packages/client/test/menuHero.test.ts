@@ -17,15 +17,11 @@ import {
   type StageFacts,
 } from '../src/world/menu/hero.js';
 import { heroCanvas, paintHero, type HeroCanvas } from '../src/world/menu/heroArt.js';
-import {
-  entranceRun,
-  heroPainter,
-  type HeroPainting,
-  type HeroProbe,
-} from '../src/world/menu/heroStage.js';
-import { holdLamp, newSweep } from '../src/world/menu/lamp.js';
+import { heroPainter, type HeroPainting } from '../src/world/menu/heroStage.js';
+import { holdLamp } from '../src/world/menu/lamp.js';
 import { runScene, type SceneHost } from '../src/world/menu/loop.js';
 import { callEntries, callsOf, fakeCanvas, FakePath2D, type Entry } from './fakeCanvas.js';
+import { painting } from './heroPage.js';
 
 /**
  * The hero on the menu's stage (world/menu/hero.ts, heroArt.ts, screens/MenuHero.tsx): as tall
@@ -285,28 +281,8 @@ function page(): { host: SceneHost; show: (shown: boolean) => void; tick: (now: 
   };
 }
 
-/** What the hero's painter needs, on a fake canvas, standing at 1440 × 820. */
-function painting(reduced: boolean): HeroPainting {
-  const { hero } = fakeHero();
-  const probe = { laid: 0, drawn: { legs: 0, upper: 0 } } as HeroProbe;
-  return {
-    hero,
-    standing: {
-      place: placed(DESKTOP),
-      at: { x: 0, y: 60 },
-      menuRight: DESKTOP.menuRight,
-      stageW: DESKTOP.w,
-    },
-    look: { current: { color: '#2dd4bf', speaking: false, waveAt: null } },
-    attends: { current: null },
-    sweep: newSweep(),
-    probe,
-    entrance: entranceRun(false, () => null),
-    phase: ANNA.phase,
-    reduced: () => reduced,
-    canvas: null,
-  };
-}
+/** What the hero's painter needs, on a fake page, standing at 1440 × 820. */
+const paintingOf = (reduced: boolean): HeroPainting => painting({ reduced });
 
 describe('heroPainter — the hero’s loop', () => {
   beforeEach(() => {
@@ -320,7 +296,7 @@ describe('heroPainter — the hero’s loop', () => {
 
   it('asks no frames while its canvas is hidden, and paints once it shows', () => {
     const p = page();
-    const on = painting(false);
+    const on = paintingOf(false);
     const paint = heroPainter(on, 0);
     let painted = 0;
     runScene((now) => {
@@ -341,7 +317,7 @@ describe('heroPainter — the hero’s loop', () => {
 
   it('holds still under reduced motion: one picture, then no more frames asked', () => {
     const p = page();
-    const on = painting(true);
+    const on = paintingOf(true);
     let painted = 0;
     const paint = heroPainter(on, 0);
     runScene((now) => {
@@ -355,8 +331,8 @@ describe('heroPainter — the hero’s loop', () => {
   });
 
   it('stops asking frames where the stage leaves the hero no room', () => {
-    const nowhere = { place: null, at: { x: 0, y: 0 }, menuRight: 0, stageW: 0 };
-    const on = { ...painting(false), standing: nowhere };
+    const on = paintingOf(false);
+    on.standing.place = null;
     expect(heroPainter(on, 0)(100)).toBe(false);
     expect(on.probe.laid).toBe(0);
   });

@@ -7,14 +7,14 @@ import {
   HERO_FACING,
   heroPlace,
   heroPose,
+  heroTile,
   LAMP_ON_MS,
+  STEP_TILES,
   WALK_IN_MS,
   type StageFacts,
 } from '../src/world/menu/hero.js';
-import { heroCanvas } from '../src/world/menu/heroArt.js';
-import type { HeroPainting, HeroProbe } from '../src/world/menu/heroStage.js';
-import { newSweep } from '../src/world/menu/lamp.js';
-import { fakeCanvas, FakePath2D } from './fakeCanvas.js';
+import { FakePath2D } from './fakeCanvas.js';
+import { painting } from './heroPage.js';
 
 /**
  * The hero's entrance (world/menu/hero.ts `entranceAt`, heroStage.ts): on the first menu of a
@@ -100,24 +100,11 @@ function stageCanvas(): HTMLCanvasElement & { style: Record<string, string> } {
 async function stage(walks: boolean, reduced = false, held: () => number | null = () => null) {
   const { entranceRun, heroPainter } = await import('../src/world/menu/heroStage.js');
   const lamps = await import('../src/world/menu/lamp.js');
-  const hero = heroCanvas(fakeCanvas(0, 0, 'hero').canvas, (w, h) => fakeCanvas(w, h).canvas);
-  if (hero === null) throw new Error('no hero');
   const canvas = stageCanvas();
   const entrance = entranceRun(walks, held);
   let clicks = 0;
   entrance.click = () => (clicks += 1);
-  const on: HeroPainting = {
-    hero,
-    standing: { place: PLACE, at: { x: 0, y: 60 }, menuRight: 512, stageW: DESKTOP.w },
-    look: { current: { color: '#2dd4bf', speaking: false, waveAt: null } },
-    attends: { current: null },
-    sweep: newSweep(),
-    probe: { laid: 0, drawn: { legs: 0, upper: 0 } } as HeroProbe,
-    entrance,
-    phase: 0.3,
-    reduced: () => reduced,
-    canvas,
-  };
+  const on = painting({ reduced, entrance, canvas });
   const paint = heroPainter(on, 0);
   return { on, paint, canvas, clicks: () => clicks, lamp: () => lamps.heroLamp() };
 }
@@ -142,7 +129,9 @@ describe('the hero’s entrance on the stage', () => {
     for (let now = 1000; now < 1000 + WALK_IN_MS; now += 1000 / 30) paint(now);
     expect(on.hero.drawn).toEqual({ legs: 0, upper: 0 });
     paint(1000 + WALK_IN_MS + 50);
-    expect(canvas.style['width']).toBe(`${PLACE.box.width}px`);
+    // Standing, it covers its box and the room to step aside into: half a scene tile.
+    const room = Math.ceil(STEP_TILES * heroTile(DESKTOP.windowH));
+    expect(canvas.style['width']).toBe(`${PLACE.box.width + room}px`);
     expect(on.hero.drawn).toEqual({ legs: 1, upper: 1 });
   });
 
