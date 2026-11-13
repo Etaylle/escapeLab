@@ -1066,10 +1066,21 @@ export function takeFile(n: number): string {
   return `${n}.mp3`;
 }
 
-/** The list of `id`'s takes in `dir`, the folder the takes wait in; null where it has none. */
+/**
+ * The list of `id`'s takes in `dir`, the folder the takes wait in; null where it has none. A list
+ * that does not read as JSON fails, naming its file.
+ */
 export function readTakes(dir: string, id: string): TakesList | null {
   const file = join(dir, id, TAKES_LIST);
-  return existsSync(file) ? (JSON.parse(readFileSync(file, 'utf8')) as TakesList) : null;
+  if (!existsSync(file)) {
+    return null;
+  }
+  try {
+    return JSON.parse(readFileSync(file, 'utf8')) as TakesList;
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    throw new Error(`sfx: ${file} does not read as a list of takes: ${reason}`);
+  }
 }
 
 function writeTakes(dir: string, list: TakesList): void {
@@ -1347,24 +1358,33 @@ async function openAccount(): Promise<SoundClient> {
 
 // --- keeping a take ---------------------------------------------------------------------------
 
-/** Why `entry` has no takes to keep, and what makes some. */
-function noTakes(entry: CatalogEntry): string {
-  return groupOf(entry) === 'music'
+/**
+ * Why `entry` has no takes to keep in `places`: its recording is kept already — the request as
+ * it stands made it, a keep or a render — it is an effect, or none was made; and what makes some.
+ */
+function noTakes(entry: CatalogEntry, places: Places): string {
+  const group = groupOf(entry);
+  const kept = readManifest(places, group)[entry.id];
+  if (kept !== undefined && upToDate(entry, kept) && filedIn(places)(group, kept.file)) {
+    return `${entry.id} is kept already, as public/${group}/${kept.file}, and no takes of it wait`;
+  }
+  return group === 'music'
     ? `${entry.id} has no takes; make some: ${remakeArgs('music', [entry.id])}`
     : `${entry.id} is an effect, whose best take a run keeps itself: none waits for the ear`;
 }
 
-/** The entry and the take `keep` names, its file in `takes`; fails, in one line, for none. */
+/** The entry and the take `keep` names in `places`; fails, in one line, where there is none. */
 function takeToKeep(
   keep: Keep,
   catalog: readonly CatalogEntry[],
-  takes: string,
+  places: Places,
 ): { entry: CatalogEntry; record: TakeRecord } {
+  const { takes } = places;
   const asked = `sfx: --keep ${keep.id}=${keep.n}`;
   const entry = catalog.find((each) => each.id === keep.id);
   if (entry === undefined) throw new Error(`${asked} — audio/catalog.json has no such entry`);
   const made = readTakes(takes, keep.id)?.takes ?? [];
-  if (made.length === 0) throw new Error(`${asked} — ${noTakes(entry)}`);
+  if (made.length === 0) throw new Error(`${asked} — ${noTakes(entry, places)}`);
   const record = made.find((take) => take.n === keep.n);
   if (record === undefined) {
     const numbers = made.map((take) => take.n).join(', ');
@@ -1394,7 +1414,7 @@ export function keepTake(
   places: Places,
   decode: Decode,
 ): { group: Group; kept: ManifestEntry } {
-  const { entry, record } = takeToKeep(keep, catalog, places.takes);
+  const { entry, record } = takeToKeep(keep, catalog, places);
   const from = join(places.takes, entry.id, record.file);
   const take = takeAt(entry, from, PROMPT_INFLUENCE, decode);
   const group = groupOf(entry);
@@ -1414,7 +1434,8 @@ export function keepTake(
 function keptLine(keep: Keep, { group, kept }: { group: Group; kept: ManifestEntry }): string {
   return (
     `sfx: take ${keep.n} of ${keep.id} is public/${group}/${kept.file} now, ` +
-    `${(kept.ms / 1000).toFixed(1)} s, gain ${kept.gain}; its other takes are deleted`
+    `${(kept.ms / 1000).toFixed(1)} s, gain ${kept.gain}; its other takes are deleted — ` +
+    'reload /sounds to hear it as the game plays it'
   );
 }
 

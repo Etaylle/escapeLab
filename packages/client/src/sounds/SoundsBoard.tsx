@@ -129,13 +129,16 @@ function TakeRow({ id, take, props }: { id: string; take: TakeInfo; props: Board
         aria-pressed={chosen}
         onClick={() => props.on.keep(id, take.n)}
       >
-        Diesen Take behalten
+        Diesen Take wählen
       </button>
     </li>
   );
 }
 
-/** The command that keeps take `n` of the entry `id`, and what it does. */
+/**
+ * The command that keeps take `n` of the entry `id`, what it does, and that the page shows the
+ * take as the game's recording only once it is loaded anew.
+ */
 function KeepCommand({ id, n }: { id: string; n: number }) {
   return (
     <div className="sounds-keep-command">
@@ -143,6 +146,9 @@ function KeepCommand({ id, n }: { id: string; n: number }) {
         {`Im Ordner packages/client behält dieser Befehl Take ${n} und löscht die übrigen:`}
       </p>
       <pre className="sounds-cli">{keepCommandFor(id, n)}</pre>
+      <p className="muted">
+        Danach die Seite neu laden: Der Take spielt dann als Aufnahme des Spiels.
+      </p>
     </div>
   );
 }

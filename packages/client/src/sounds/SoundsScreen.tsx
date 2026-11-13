@@ -43,7 +43,7 @@ const MUSIC = new Set<string>(MUSIC_IDS);
 const isEffect = (id: string): id is SfxId => EFFECTS.has(id);
 const isMusic = (id: string): id is MusicId => MUSIC.has(id);
 /** How loud the page plays a recording at its loudness: half way down, for headroom. */
-const AUDITION_LEVEL = 0.5;
+export const AUDITION_LEVEL = 0.5;
 /** Where the page keeps the key file the command names, for the next visit. */
 const ENV_KEY = 'escapelab-sounds-env-file';
 
@@ -151,7 +151,7 @@ function audition(
  * says — at the gain the game would give it, and calls `ended` once it has stopped; null where
  * there is no Web Audio.
  */
-function auditionTake(
+export function auditionTake(
   id: string,
   take: TakeInfo,
   loop: boolean,

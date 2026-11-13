@@ -733,7 +733,7 @@ const STING: CatalogEntry = {
   usedBy: ['src/world/music.ts#playSting'],
 };
 
-describe('the music’s takes', () => {
+describe('the music’s takes, asked for and priced', () => {
   const none = { sfx: {}, music: {} };
   const always = (): boolean => true;
 
@@ -788,6 +788,15 @@ describe('the music’s takes', () => {
         'about 8 credits (cap 12000)',
     );
   });
+
+  it('are made again, for a recording that fails, in three takes; an effect in five', () => {
+    expect(remakeArgs('sfx', ['ping', 'drip'])).toBe('--candidates 5 --only ping,drip');
+    expect(remakeArgs('music', ['lost'])).toBe('--candidates 3 --only lost');
+  });
+});
+
+describe('the music’s takes on disk', () => {
+  const always = (): boolean => true;
 
   it('land in takes/<id>/, none of them kept and nothing public, each listed as made', async () => {
     const places = placesIn();
@@ -872,25 +881,36 @@ describe('the music’s takes', () => {
     expect(folder).toBe(`sfx: none of this music is kept yet; its takes wait in ${places.takes}:`);
     expect(files).toBe('  test-sting/  1.mp3, 2.mp3, 3.mp3, listed in test-sting/index.json');
   });
-
-  it('are made again, for a recording that fails, in three takes; an effect in five', () => {
-    expect(remakeArgs('sfx', ['ping', 'drip'])).toBe('--candidates 5 --only ping,drip');
-    expect(remakeArgs('music', ['lost'])).toBe('--candidates 3 --only lost');
-  });
 });
 
-describe('keeping a take', () => {
-  /** Three takes of the sting, at 0.6, 0.8 and 0.7, and two of the calm stem, in `places`. */
-  async function takesIn(places: Places): Promise<Bench> {
-    const sting = answering({ music: [0.6, 0.8, 0.7].map((a) => piece(10, a)) });
-    await runOf([STING], 3, benchOf(sting.client, places));
-    const calm = answering({ music: [piece(72, 0.5), piece(72, 0.9)] });
-    const bench = benchOf(calm.client, places);
-    await runOf([CALM], 2, bench);
-    return bench;
-  }
-  const keep = (id: string, n: number): Keep => ({ id, n });
+/** Three takes of the sting, at 0.6, 0.8 and 0.7, and two of the calm stem, in `places`. */
+async function takesIn(places: Places): Promise<Bench> {
+  const sting = answering({ music: [0.6, 0.8, 0.7].map((a) => piece(10, a)) });
+  await runOf([STING], 3, benchOf(sting.client, places));
+  const calm = answering({ music: [piece(72, 0.5), piece(72, 0.9)] });
+  const bench = benchOf(calm.client, places);
+  await runOf([CALM], 2, bench);
+  return bench;
+}
 
+const keep = (id: string, n: number): Keep => ({ id, n });
+
+/** Why keeping `asked` out of `places` is refused, in its one line; „kept" where it is not. */
+function refusalOf(
+  asked: Keep,
+  places: Places,
+  decode: Bench['decode'],
+  catalog: readonly CatalogEntry[] = [STING, CALM, CLACK],
+): string {
+  try {
+    keepTake(asked, catalog, places, decode);
+  } catch (error) {
+    return (error as Error).message;
+  }
+  return 'kept';
+}
+
+describe('keeping a take, as asked', () => {
   it('is asked for as --keep <id>=<n>, alone, one take a run', () => {
     const none = { groups: ['sfx', 'music'], dryRun: false, only: null, candidates: 1 };
     expect(optionsOf(['--', '--keep', 'menu-theme=2'])).toEqual({
@@ -913,6 +933,20 @@ describe('keeping a take', () => {
     }
   });
 
+  it('is said after a run that made takes, a command for each entry', async () => {
+    const places = placesIn();
+    await takesIn(places);
+    const lines = takesLines([STING.id, CALM.id], places);
+    expect(lines.slice(-3)).toEqual([
+      'sfx: the ear chooses: with pnpm dev, http://localhost:5173/sounds plays each take ' +
+        'under its piece; in packages/client, this keeps take <n> and deletes the others:',
+      '  node scripts/sfx.ts --keep test-sting=<n>',
+      '  node scripts/sfx.ts --keep test-calm=<n>',
+    ]);
+  });
+});
+
+describe('keeping a take, on disk', () => {
   it('moves it into the music, writes its entry as a render would, deletes the rest', async () => {
     const places = placesIn();
     const bench = await takesIn(places);
@@ -957,17 +991,14 @@ describe('keeping a take', () => {
     expect(digest(calm)).toBe(digest(piece(72, 0.9)));
   });
 
+});
+
+describe('keeping a take, refused', () => {
   it('refuses, in one line and moving nothing, an id or a take it cannot keep', async () => {
     const places = placesIn();
     const bench = await takesIn(places);
-    const refusal = (asked: Keep, catalog: readonly CatalogEntry[] = [STING, CALM, CLACK]) => {
-      try {
-        keepTake(asked, catalog, places, bench.decode);
-      } catch (error) {
-        return (error as Error).message;
-      }
-      return 'kept';
-    };
+    const refusal = (asked: Keep, catalog?: readonly CatalogEntry[]): string =>
+      refusalOf(asked, places, bench.decode, catalog);
     const unknown = 'sfx: --keep nope=1 — audio/catalog.json has no such entry';
     expect(refusal(keep('nope', 1))).toBe(unknown);
     const lost = { ...STING, id: 'test-lost' };
@@ -996,16 +1027,32 @@ describe('keeping a take', () => {
     expect(left).toEqual(['1.mp3', '2.mp3', 'index.json']);
   });
 
-  it('is said after a run that made takes, a command for each entry', async () => {
+  it('says a piece is kept already where a second keep asks for it', async () => {
     const places = placesIn();
-    await takesIn(places);
-    const lines = takesLines([STING.id, CALM.id], places);
-    expect(lines.slice(-3)).toEqual([
-      'sfx: the ear chooses: with pnpm dev, http://localhost:5173/sounds plays each take ' +
-        'under its piece; in packages/client, this keeps take <n> and deletes the others:',
-      '  node scripts/sfx.ts --keep test-sting=<n>',
-      '  node scripts/sfx.ts --keep test-calm=<n>',
-    ]);
+    const bench = await takesIn(places);
+    keepTake(keep(STING.id, 2), [STING, CALM], places, bench.decode);
+    expect(refusalOf(keep(STING.id, 2), places, bench.decode)).toBe(
+      'sfx: --keep test-sting=2 — test-sting is kept already, as public/music/test-sting.mp3, ' +
+        'and no takes of it wait',
+    );
+    // An older recording is no keep: the catalog's request has changed since it was made.
+    const changed = { ...STING, prompt: `${STING.prompt} Louder.` };
+    expect(refusalOf(keep(STING.id, 2), places, bench.decode, [changed])).toBe(
+      'sfx: --keep test-sting=2 — test-sting has no takes; make some: ' +
+        '--candidates 3 --only test-sting',
+    );
+  });
+
+  it('names a list of takes that does not read, as the plan and a keep come to it', async () => {
+    const places = placesIn();
+    const bench = await takesIn(places);
+    const list = join(places.takes, STING.id, 'index.json');
+    writeFileSync(list, '{ "id": "test-sting", "takes": [');
+    const named = `sfx: ${list} does not read as a list of takes: `;
+    expect(() => readTakes(places.takes, STING.id)).toThrow(named);
+    expect(refusalOf(keep(STING.id, 1), places, bench.decode)).toMatch(/^sfx: \S+index\.json does/);
+    const { studio } = studioOf(answering({}).client, places);
+    await expect(runWith(optionsOf(['music']), [STING], studio)).rejects.toThrow(named);
   });
 });
 
@@ -1068,7 +1115,9 @@ describe('a run as the command line asks', () => {
     expect([pieces.length, opened()]).toEqual([3, 1]);
     // Not measured anew: the recording the game plays keeps the older request's hash.
     expect(readManifest(places, 'music')[STING.id]).toEqual(manifestOf(OLDER));
-    await runOver(['--keep', 'test-sting=2'], studio);
+    const [keptSaid] = await runOver(['--keep', 'test-sting=2'], studio);
+    expect(keptSaid).toMatch(/^sfx: take 2 of test-sting is public\/music\/test-sting\.mp3 now, /);
+    expect(keptSaid).toMatch(/ — reload \/sounds to hear it as the game plays it$/);
     expect([pieces.length, opened()]).toEqual([3, 1]);
     expect(readManifest(places, 'music')[STING.id]?.hash).toBe(hashOf(STING));
     const kept = readFileSync(join(places.dirs.music, 'test-sting.mp3'));

@@ -194,12 +194,15 @@ node scripts/sfx.ts --keep end-lost=3
 now: a button streams each at the gain the game would give it, so that loudness decides nothing
 between them; one line says its length, gain, peak, RMS, floor, silence, where its sound starts
 and the rules it misses — amber where it runs more than a fifth off its length or plays a floor
-that is heard: kept, it would fail `test/sampleManifest.test.ts` — and „Diesen Take behalten"
-shows the command that keeps it. The page runs nothing and asks for its lists alone. The takes
-come from the dev server: `GET /takes/` lists every entry's, `GET /takes/<id>/<n>.mp3` plays one,
-both only with `ALLOW_TAKES=1`, which `pnpm dev` sets (`packages/server/src/takes.ts`; Vite passes
-`/takes` on to it). Without it every address under `/takes` answers 404 ahead of the built site,
-never the page in a take's place, and `/sounds` says „Takes liefert nur der Entwicklungsserver
+that is heard: kept, it would fail `test/sampleManifest.test.ts` — and „Diesen Take wählen"
+shows the command that keeps it, and that the page plays the take as the game's recording once
+it is loaded anew after the command; the script's own line after a keep says so too. The page
+runs nothing and asks for its lists alone. The takes come from the dev server: `GET /takes/`
+lists every entry's, `GET /takes/<id>/<n>.mp3` plays one — whole with its length, or the span a
+Range asks for (206), as Safari and a loop on its way round ask — both only with
+`ALLOW_TAKES=1`, which `pnpm dev` sets (`packages/server/src/takes.ts`; Vite passes `/takes` on
+to it). Without it every address under `/takes` answers 404 ahead of the built site, never the
+page in a take's place, and `/sounds` says „Takes liefert nur der Entwicklungsserver
 (pnpm dev)."
 
 **Keeping.** `--keep <id>=<n>` measures the take as a render is measured, moves it into
@@ -801,9 +804,10 @@ public, numbered on, the recording the game plays left as it was, every take pri
 refusal in a line), `test/soundsPage.test.tsx` (the audition page's address, its listing by kind,
 its floors flagged as the script flags them, what it says of each recording, the command it puts
 together, the takes read from the script's lists and asked of the dev server with a plain GET,
-each under its piece in one line, the keep command the script reads, no other request in its
-sources), `server/test/takes.test.ts` (the switch, 404 under `/takes` ahead of the built site
-without it, the lists and a take with it), `test/ambience.test.ts` (rooms,
+each under its piece in one line, the keep command the script reads, a take played at the gain
+the game would give it, no other request in its sources), `server/test/takes.test.ts` (the
+switch, 404 under `/takes` ahead of the built site without it, the lists and a take with it, a
+span a Range asks for and 416 past the end), `test/ambience.test.ts` (rooms,
 levels, power, the beds' recorded loops, dead and alive variants, crossfades, the sporadic
 sounds, sounds let go, the rooms one way near, the beds wanted by power, a bed loaded as its
 room comes near and let go 4 s after, the rest brought in as the lights fail, the room's

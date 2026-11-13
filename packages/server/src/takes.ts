@@ -2,6 +2,7 @@ import { createReadStream, existsSync, readdirSync, readFileSync, statSync } fro
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { join } from 'node:path';
 import type { ApiResponse } from './api.js';
+import { switchOn } from './switches.js';
 
 /**
  * The music's takes, for the client's /sounds page to play before one is kept: the client's
@@ -24,17 +25,8 @@ const LIST = 'index.json';
  * unset. Throws for anything else, so that a misspelt switch is not mistaken for either.
  */
 export function takesAllowed(env: NodeJS.ProcessEnv): boolean {
-  const flag = env['ALLOW_TAKES'] ?? '';
-  if (flag === '1') {
-    return true;
-  }
-  if (flag === '' || flag === '0') {
-    return false;
-  }
-  throw new Error(
-    `ALLOW_TAKES=${flag} versteht der Server nicht — ALLOW_TAKES=1 liefert die Takes der Musik ` +
-      'an die Seite /sounds, ohne bleibt /takes leer',
-  );
+  const does = 'liefert die Takes der Musik an die Seite /sounds, ohne bleibt /takes leer';
+  return switchOn(env, 'ALLOW_TAKES', does);
 }
 
 /** The folder the takes wait in, read as the page asks for it. */
@@ -73,14 +65,69 @@ function send(res: ServerResponse, reply: ApiResponse): void {
   res.end(JSON.stringify(reply.body));
 }
 
-/** Sends the take at `file`, an MP3, to be streamed by the page's audio element. */
+/** A span of a file's bytes, both ends counted. */
+export interface Span {
+  readonly start: number;
+  readonly end: number;
+}
+
+/** The last `count` bytes of a file `size` long; none, where it asks for none or has none. */
+function lastBytes(count: number, size: number): Span | 'unsatisfiable' {
+  return count > 0 && size > 0
+    ? { start: Math.max(0, size - count), end: size - 1 }
+    : 'unsatisfiable';
+}
+
+/** The bytes from `start` to `to` — to its end where `to` is empty — of a file `size` long. */
+function bytesFrom(start: number, to: string, size: number): Span | 'unsatisfiable' {
+  const end = to === '' ? size - 1 : Math.min(Number(to), size - 1);
+  return start < size && start <= end ? { start, end } : 'unsatisfiable';
+}
+
+/**
+ * The bytes the Range header `header` asks of a file `size` long: one span — `bytes=a-b`,
+ * `bytes=a-` or the last n, `bytes=-n` — or 'unsatisfiable' where it starts past the end; null
+ * for the whole file, where there is no Range, or one of several spans or of another unit, which
+ * a server may answer whole.
+ */
+export function rangeOf(header: string | undefined, size: number): Span | 'unsatisfiable' | null {
+  const [, from = '', to = ''] = /^bytes=(\d*)-(\d*)$/.exec(header ?? '') ?? [];
+  if (from === '' && to === '') {
+    return null;
+  }
+  return from === '' ? lastBytes(Number(to), size) : bytesFrom(Number(from), to, size);
+}
+
+/**
+ * Sends the take at `file`, an MP3, to the page's audio element: whole, or the span a Range asks
+ * for (206) — as Safari asks for every audio file, and a loop on its way round — each with its
+ * length; a span past its end answers 416.
+ */
 function sendTake(file: string, req: IncomingMessage, res: ServerResponse): void {
-  res.writeHead(200, { 'content-type': 'audio/mpeg', 'cache-control': 'no-store' });
-  if (req.method === 'HEAD') {
+  const size = statSync(file).size;
+  const range = rangeOf(req.headers.range, size);
+  const kind = {
+    'content-type': 'audio/mpeg',
+    'cache-control': 'no-store',
+    'accept-ranges': 'bytes',
+  };
+  if (range === 'unsatisfiable') {
+    res.writeHead(416, { ...kind, 'content-range': `bytes */${size}` });
     res.end();
     return;
   }
-  createReadStream(file)
+  const { start, end } = range ?? { start: 0, end: size - 1 };
+  const length = { ...kind, 'content-length': String(end - start + 1) };
+  if (range === null) {
+    res.writeHead(200, length);
+  } else {
+    res.writeHead(206, { ...length, 'content-range': `bytes ${start}-${end}/${size}` });
+  }
+  if (req.method === 'HEAD' || end < start) {
+    res.end();
+    return;
+  }
+  createReadStream(file, { start, end })
     .on('error', (err) => {
       console.error(`[escapelab] the take ${file} could not be sent: ${err.message}`);
       res.destroy(err);

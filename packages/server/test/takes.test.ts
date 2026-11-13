@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { PassThrough } from 'node:stream';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { StaticSite } from '../src/static.js';
-import { serveTakes, takesAllowed, TakesShelf } from '../src/takes.js';
+import { rangeOf, serveTakes, takesAllowed, TakesShelf } from '../src/takes.js';
 
 /**
  * The music's takes on the dev server (GET /takes/, /takes/<id>/<n>.mp3) and their switch: a
@@ -14,6 +14,8 @@ import { serveTakes, takesAllowed, TakesShelf } from '../src/takes.js';
 
 /** A take's bytes, as an MP3 starts: an ID3 tag. */
 const TAKE = Buffer.from('ID3\u0004take two');
+/** Where the dev server serves it: menu-theme's take 2. */
+const TAKE_URL = '/takes/menu-theme/2.mp3';
 
 /** The lists the sound script writes, a take each: menu-theme's and end-won's. */
 const listOf = (id: string, n: number) => ({
@@ -46,8 +48,9 @@ interface Sent {
   body: Buffer;
 }
 
-function request(url: string, method = 'GET'): IncomingMessage {
-  return { url, method } as IncomingMessage;
+/** A request as the route reads one: its address, its method, its headers. */
+function request(url: string, method = 'GET', headers: Record<string, string> = {}) {
+  return { url, method, headers } as IncomingMessage;
 }
 
 /** Sends `req` to `route` and waits for all it sends; null where the route leaves it alone. */
@@ -147,13 +150,17 @@ describe('the dev server, with ALLOW_TAKES=1', () => {
     );
   });
 
-  it('sends a take as audio, and HEAD its headers alone', async () => {
+  it('sends a take as audio, its length said, and HEAD its headers alone', async () => {
     const shelf = shelfIn();
     const route = (req: IncomingMessage, res: ServerResponse): boolean =>
       serveTakes(shelf, req, res);
     const sent = await ask(route, request('/takes/menu-theme/2.mp3'));
     expect([sent?.status, sent?.headers['content-type']]).toEqual([200, 'audio/mpeg']);
-    expect(sent?.headers['cache-control']).toBe('no-store');
+    expect(sent?.headers).toMatchObject({
+      'cache-control': 'no-store',
+      'accept-ranges': 'bytes',
+      'content-length': String(TAKE.length),
+    });
     expect(sent?.body.equals(TAKE)).toBe(true);
     const head = await ask(route, request('/takes/menu-theme/2.mp3', 'HEAD'));
     expect([head?.status, head?.body.length]).toEqual([200, 0]);
@@ -179,5 +186,49 @@ describe('the dev server, with ALLOW_TAKES=1', () => {
       expect(await ask(route, request(url)), url).toBeNull();
     }
     expect(await ask(route, request('/takes/', 'POST'))).toBeNull();
+  });
+});
+
+describe('a take in spans, with ALLOW_TAKES=1', () => {
+  it('sends the span a Range asks for, as Safari and a loop on its way round do', async () => {
+    const shelf = shelfIn();
+    const ranged = (range: string, method = 'GET') =>
+      ask((req, res) => serveTakes(shelf, req, res), request(TAKE_URL, method, { range }));
+    const size = TAKE.length;
+    const spans: [string, number, number][] = [
+      ['bytes=0-3', 0, 3],
+      ['bytes=4-', 4, size - 1],
+      ['bytes=-4', size - 4, size - 1],
+      ['bytes=2-999', 2, size - 1],
+      [`bytes=-${size + 5}`, 0, size - 1],
+    ];
+    for (const [range, start, end] of spans) {
+      const sent = await ranged(range);
+      expect([sent?.status, sent?.headers['content-range']], range).toEqual([
+        206,
+        `bytes ${start}-${end}/${size}`,
+      ]);
+      expect(sent?.headers['content-length'], range).toBe(String(end - start + 1));
+      expect(sent?.body.equals(TAKE.subarray(start, end + 1)), range).toBe(true);
+    }
+    for (const range of [`bytes=${size}-`, 'bytes=9-3', 'bytes=-0']) {
+      const past = await ranged(range);
+      expect([past?.status, past?.headers['content-range'], past?.body.length], range).toEqual([
+        416,
+        `bytes */${size}`,
+        0,
+      ]);
+    }
+    // Several spans, or another unit, a server may answer whole.
+    for (const range of ['bytes=0-1,4-5', 'items=0-1', 'bytes=-']) {
+      expect((await ranged(range))?.status, range).toBe(200);
+    }
+    const head = await ranged('bytes=0-3', 'HEAD');
+    expect([head?.status, head?.headers['content-length'], head?.body.length]).toEqual([
+      206,
+      '4',
+      0,
+    ]);
+    expect([rangeOf(undefined, size), rangeOf('bytes=0-0', 0)]).toEqual([null, 'unsatisfiable']);
   });
 });

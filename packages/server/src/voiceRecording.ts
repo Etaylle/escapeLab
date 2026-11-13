@@ -16,6 +16,7 @@ import { promisify } from 'node:util';
 import { radioLines, type Mission } from '@escapelab/core';
 import type { ApiResponse } from './api.js';
 import { readBody } from './body.js';
+import { switchOn } from './switches.js';
 
 /**
  * A person's voice for mission control (the client's /record page): POST /voice/:id takes a
@@ -37,17 +38,8 @@ export const MAX_RECORDING_BYTES = 8 * 1024 * 1024;
  * or unset. Throws for anything else, so that a misspelt switch is not mistaken for either.
  */
 export function recordingAllowed(env: NodeJS.ProcessEnv): boolean {
-  const flag = env['ALLOW_RECORD'] ?? '';
-  if (flag === '1') {
-    return true;
-  }
-  if (flag === '' || flag === '0') {
-    return false;
-  }
-  throw new Error(
-    `ALLOW_RECORD=${flag} versteht der Server nicht — ALLOW_RECORD=1 nimmt Aufnahmen der ` +
-      'Funksprüche an, ohne bleibt es bei den gespeicherten',
-  );
+  const does = 'nimmt Aufnahmen der Funksprüche an, ohne bleibt es bei den gespeicherten';
+  return switchOn(env, 'ALLOW_RECORD', does);
 }
 
 /** The id of a line's recording: the first 12 hex digits of the SHA-1 of what it says. */

@@ -14,6 +14,7 @@ import {
 } from '@escapelab/core';
 import { Room, type RunListener, type Sealer } from './room.js';
 import { open, seal } from './seal.js';
+import { switchOn } from './switches.js';
 
 /** Room codes avoid ambiguous characters (0/O, 1/I/L). */
 const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
@@ -93,17 +94,8 @@ export interface RoomCounts {
  * anything else, so that a misspelt switch cannot leave a test run to chance.
  */
 export function seedsAllowed(env: NodeJS.ProcessEnv): boolean {
-  const flag = env['ALLOW_SEED'] ?? '';
-  if (flag === '1') {
-    return true;
-  }
-  if (flag === '' || flag === '0') {
-    return false;
-  }
-  throw new Error(
-    `ALLOW_SEED=${flag} versteht der Server nicht — ALLOW_SEED=1 lässt Räume einen festen ` +
-      'Seed tragen, ohne bleibt es beim Zufall',
-  );
+  const does = 'lässt Räume einen festen Seed tragen, ohne bleibt es beim Zufall';
+  return switchOn(env, 'ALLOW_SEED', does);
 }
 
 export class RoomManager {

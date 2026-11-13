@@ -43,6 +43,8 @@ import {
   type TakeInfo,
 } from '../src/sounds/takes.js';
 import type { SampleEntry } from '../src/world/samples.js';
+import { fakeGraph, lastContext, type FakeGain, type FakeNode } from './fakeGraph.js';
+import { elements, fakeMedia } from './fakeMedia.js';
 
 /**
  * The audition page (/sounds): what it lists, what it says of each recording, and the command it
@@ -404,7 +406,7 @@ describe('the board’s takes', () => {
   it('lists each take under its piece: a play button, its measurements, a choice to keep', () => {
     const html = renderToStaticMarkup(<SoundsBoard {...props()} />);
     expect(html.match(/>Abspielen</g)).toHaveLength(4); // two recordings, two takes
-    expect(html.match(/>Diesen Take behalten</g)).toHaveLength(2);
+    expect(html.match(/>Diesen Take wählen</g)).toHaveLength(2);
     const calm = html.slice(html.indexOf('<code class="sounds-id">calm</code>'));
     expect(calm).toContain('<ol class="sounds-take-list" aria-label="Takes von calm">');
     expect(calm).toContain('<span class="sounds-take-name">Take 1</span>');
@@ -422,6 +424,9 @@ describe('the board’s takes', () => {
     const html = renderToStaticMarkup(<SoundsBoard {...chosen} />);
     expect(html).toContain('Im Ordner packages/client behält dieser Befehl Take 2');
     expect(html).toContain('<pre class="sounds-cli">node scripts/sfx.ts --keep calm=2</pre>');
+    // The page reads its lists as it opens: the take kept plays as the game's once it reloads.
+    const reload = 'Danach die Seite neu laden: Der Take spielt dann als Aufnahme des Spiels.';
+    expect(html).toContain(`</pre><p class="muted">${reload}</p>`);
     const keeps = [...html.matchAll(/class="sounds-keep" aria-pressed="(\w+)"/g)];
     expect(keeps.map((match) => match[1])).toEqual(['false', 'true']);
     const plays = [...html.matchAll(/class="sounds-play" aria-pressed="(\w+)"[^>]*>(\w+)</g)];
@@ -453,5 +458,33 @@ describe('the page and the network', () => {
     expect(asked).toEqual(['TAKES_BASE', '`${base}manifest.json`']);
     const asking = /\bmethod\s*:|\bPOST\b|sendBeacon|XMLHttpRequest|WebSocket|EventSource/;
     expect(sources.filter((code) => asking.test(code))).toEqual([]);
+  });
+});
+
+describe('a take played', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('streams from the dev server at the gain the game would give it, a stem looped', async () => {
+    fakeGraph();
+    fakeMedia();
+    vi.resetModules();
+    const { auditionTake, AUDITION_LEVEL } = await import('../src/sounds/SoundsScreen.js');
+    const ended = vi.fn();
+    const played = auditionTake('menu-theme', takeOf(2, { gain: 0.53 }), true, ended);
+    const element = elements.find((each) => each.src === '/takes/menu-theme/2.mp3');
+    expect(element?.loop).toBe(true);
+    const source = lastContext()
+      .all<FakeNode & { mediaElement: unknown }>('media')
+      .find((node) => node.mediaElement === element);
+    // As the recordings: half way down for headroom, times the gain that brings it to its level.
+    expect(AUDITION_LEVEL).toBe(0.5);
+    expect((source?.outputs[0] as FakeGain | undefined)?.gain.value).toBeCloseTo(0.5 * 0.53, 9);
+    played?.stop();
+    expect(ended).toHaveBeenCalledTimes(1);
+    const once = auditionTake('end-won', takeOf(1, { gain: 1.92 }), false, () => undefined);
+    expect(elements.find((each) => each.src === '/takes/end-won/1.mp3')?.loop).toBe(false);
+    once?.stop();
   });
 });
