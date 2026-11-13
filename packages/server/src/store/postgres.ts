@@ -54,11 +54,28 @@ function loggedOf(row: RunRow): unknown {
   return { ...(row.report as object), crew, credits };
 }
 
-/** The row a finished run goes in as, its seats with it: the account of each pass that has one. */
-function runRowOf(
-  { report, passes }: FinishedRun,
-  accounts: ReadonlyMap<string, string>,
-): Prisma.RunCreateInput {
+/** The account that held each seat of `run`, by the pass on it: null for a seat without one. */
+function ownersOf(run: FinishedRun, accounts: ReadonlyMap<string, string>): (string | null)[] {
+  return run.report.crew.map((_, seat) => {
+    const passId = run.passes[seat] ?? null;
+    return passId === null ? null : (accounts.get(passId) ?? null);
+  });
+}
+
+/**
+ * `report` as the database keeps it: the name of a seat without an account — one deleted while
+ * the run went on, or none made — is kept nowhere, for no account could take it off again.
+ */
+function asKept(report: RunReport, owners: readonly (string | null)[]): RunReport {
+  const owned = (seat: number): boolean => (owners[seat] ?? null) !== null;
+  return { ...report, crew: report.crew.map((name, seat) => (owned(seat) ? name : '')) };
+}
+
+/**
+ * The row a finished run goes in as, `report` as the database keeps it (`asKept`), its seats with
+ * it: on each, the account that held it (`owners`).
+ */
+function runRowOf(report: RunReport, owners: readonly (string | null)[]): Prisma.RunCreateInput {
   const { crew, credits, ...stored } = report;
   const kept: StoredReport = stored;
   return {
@@ -76,13 +93,12 @@ function runRowOf(
     report: kept as unknown as Prisma.InputJsonObject,
     members: {
       create: crew.map((seatName, seat) => {
-        const passId = passes[seat] ?? null;
         const contributions: Credits = credits[aliasOf(seat)] ?? NO_CREDITS;
         return {
           seat,
           seatName,
           contributions: { ...contributions } as unknown as Prisma.InputJsonObject,
-          accountId: passId === null ? null : (accounts.get(passId) ?? null),
+          accountId: owners[seat] ?? null,
         };
       }),
     },
@@ -204,13 +220,14 @@ export class PostgresStore implements Store {
     const unlocked = unlockedBy(run.report);
     // A run usually ends after minutes without a word to the database: its write is the one most
     // likely to find the connection lost (`onceMore`).
-    await onceMore(() =>
+    const owners = await onceMore(() =>
       this.db.$transaction(async (tx) => {
         const identities = await tx.identity.findMany({
           where: { provider: 'pass', subject: { in: subjects } },
         });
         const accounts = new Map(identities.map(({ subject, accountId }) => [subject, accountId]));
-        await tx.run.create({ data: runRowOf(run, accounts) });
+        const held = ownersOf(run, accounts);
+        await tx.run.create({ data: runRowOf(asKept(run.report, held), held) });
         // Each Erfolg once: one an account earned before keeps the date it was first earned.
         await tx.achievement.createMany({
           data: [...new Set(accounts.values())].flatMap((accountId) =>
@@ -222,9 +239,10 @@ export class PostgresStore implements Store {
           ),
           skipDuplicates: true,
         });
+        return held;
       }),
     );
-    this.index.add(run.report);
+    this.index.add(asKept(run.report, owners));
   }
 
   async runs(missionId?: string): Promise<LoggedRun[]> {

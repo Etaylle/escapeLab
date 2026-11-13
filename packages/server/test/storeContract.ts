@@ -96,13 +96,24 @@ export interface Opened {
 
 const anna = { displayName: 'Anna', colour: '#2dd4bf' };
 
+/**
+ * An account for the pass of each of `names`: a seat keeps its name in every store only where an
+ * account held it (Postgres keeps none of a seat without one).
+ */
+export async function withAccounts(store: Store, names: readonly string[]): Promise<void> {
+  for (const name of names) {
+    await store.getOrCreateByIdentity(identityOf(name), { displayName: name, colour: null });
+  }
+}
+
 /** Runs the contract against the store `open` opens, under `name`. */
 export function storeContract(name: string, open: () => Promise<Opened>): void {
   describe(`${name}: the runs`, () => {
     it('hands a run back whole, the oldest first, those of one mission where asked', async () => {
       const { store } = await open();
-      const first = finished({ at: DAY, crew: ['Anna', 'Ben', 'Cleo'] }, [null, null, null]);
-      const second = finished({ mission: 'systemcheck', at: DAY + 1 }, [null, null]);
+      await withAccounts(store, ['Anna', 'Ben', 'Cleo']);
+      const first = finished({ at: DAY, crew: ['Anna', 'Ben', 'Cleo'] }, ['Anna', 'Ben', 'Cleo']);
+      const second = finished({ mission: 'systemcheck', at: DAY + 1 }, ['Anna', 'Ben']);
       await store.appendRun(first);
       await store.appendRun(second);
       expect(await store.runs()).toEqual([first.report, second.report]);
@@ -113,9 +124,10 @@ export function storeContract(name: string, open: () => Promise<Opened>): void {
     it('counts what it keeps into the Bestenliste, and again when opened anew', async () => {
       const { store, reopen } = await open();
       expect(store.stats().runs).toBe(0);
-      await store.appendRun(finished({ seconds: 300 }, [null, null]));
-      await store.appendRun(finished({ seconds: 280, at: DAY + 1, crew: ['Cleo'] }, [null]));
-      await store.appendRun(finished({ outcome: 'lost:time', at: DAY + 2 }, [null, null]));
+      await withAccounts(store, ['Anna', 'Ben', 'Cleo']);
+      await store.appendRun(finished({ seconds: 300 }, ['Anna', 'Ben']));
+      await store.appendRun(finished({ seconds: 280, at: DAY + 1, crew: ['Cleo'] }, ['Cleo']));
+      await store.appendRun(finished({ outcome: 'lost:time', at: DAY + 2 }, ['Anna', 'Ben']));
       const counted = (opened: Store) =>
         opened.stats().mission('blackout')?.difficulties.find((d) => d.difficulty === 'normal');
       expect(counted(store)).toMatchObject({ runs: 3, wins: 2, bestSeconds: 280 });
@@ -175,10 +187,11 @@ export function storeContract(name: string, open: () => Promise<Opened>): void {
       const { store } = await open();
       const annas = await store.getOrCreateByIdentity(identityOf('Anna'), anna);
       const bens = await store.getOrCreateByIdentity(identityOf('Ben'), anna);
+      await withAccounts(store, ['Cleo']);
       const crew = ['Anna', 'Cleo', 'Ben'];
-      await store.appendRun(finished({ crew, at: DAY }, ['Anna', null, 'Ben']));
+      await store.appendRun(finished({ crew, at: DAY }, ['Anna', 'Cleo', 'Ben']));
       const lost = { crew, at: DAY + 1, outcome: 'lost:time' as const };
-      await store.appendRun(finished(lost, ['Anna', null, 'Ben']));
+      await store.appendRun(finished(lost, ['Anna', 'Cleo', 'Ben']));
       await store.appendRun(finished({ crew: ['Cleo', 'Dan'], at: DAY + 2 }, ['Cleo', 'Dan']));
       const of = await store.runsOfAccount(annas.id, 10);
       expect(of.total).toBe(2);

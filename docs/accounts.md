@@ -39,7 +39,7 @@ schema.prisma`, tables in snake_case):
 | `accounts` | the display name, the colour, when the account was made and last seen |
 | `identities` | provider `pass`, the pass's id, the hash of its secret, the account |
 | `runs` | the report of each finished run (core `report.ts`) without names, and the columns the Bestenliste ranks by: mission, difficulty, outcome, duration, alarms, crew size, Tagesschicht, seed, room code, start and end |
-| `run_members` | a seat of each run: its place in the crew, the name played under, what it did, and the account of the pass that held it where it had one |
+| `run_members` | a seat of each run: its place in the crew, what it did, the account of the pass that held it where it had one, and only then the name played under |
 | `achievements` | an account, the plaque by mission („blackout:ohne-alarm"), the end of the run that first earned it |
 
 No e-mail address, no password, no IP address, nothing from Google.
@@ -48,7 +48,9 @@ No e-mail address, no password, no IP address, nothing from Google.
 
 Every finished run is written in one transaction: the run, a seat for each of its crew — by the
 account of their pass where it has one — and the Erfolge the run earned for each of those
-accounts, each once, dated by the first run that earned it. A run the store cannot take is
+accounts, each once, dated by the first run that earned it. A seat without an account keeps no
+name: its account was deleted while the run went on, or none was made, and no account could take
+the name off again. A run the store cannot take is
 logged and dropped; the room plays on. The Bestenliste and the mission cards' records count
 every run once as the server starts, then run by run. „Meine Einsätze", the menu's item beside
 the Bestenliste, lists the account's newest 50 runs (`my-runs`): mission, day, outcome, the time

@@ -2,7 +2,14 @@ import { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, inject, it, vi } from 'vitest';
 import { PostgresStore } from '../src/store/postgres.js';
 import type { Store } from '../src/store/store.js';
-import { DAY, finished, identityOf, reportOf, storeContract } from './storeContract.js';
+import {
+  DAY,
+  finished,
+  identityOf,
+  reportOf,
+  storeContract,
+  withAccounts,
+} from './storeContract.js';
 
 /**
  * The store in Postgres, in the schema the run migrated in TEST_DATABASE_URL's database
@@ -65,7 +72,8 @@ describe.skipIf(url === '')('the store in Postgres', () => {
         displayName: 'Anna',
         colour: null,
       });
-      await store.appendRun(finished({ crew: ['Anna', 'Ben'] }, ['Anna', null]));
+      await withAccounts(store, ['Ben']);
+      await store.appendRun(finished({ crew: ['Anna', 'Ben'] }, ['Anna', 'Ben']));
       await store.deleteAccount(gone.id);
       const [run] = await store.runs();
       expect(run).toMatchObject({ crew: ['', 'Ben'], crewSize: 2 });
@@ -77,13 +85,34 @@ describe.skipIf(url === '')('the store in Postgres', () => {
       ]);
     });
 
+    it('keeps no name of a seat without an account: one deleted meanwhile, or none', async () => {
+      const store = await open();
+      const anna = { displayName: 'Anna', colour: null };
+      const gone = await store.getOrCreateByIdentity(identityOf('Anna'), anna);
+      await withAccounts(store, ['Ben']);
+      // Anna's account went while the run was on; Cleo's pass never had one.
+      await store.deleteAccount(gone.id);
+      await store.appendRun(finished({ crew: ['Anna', 'Ben', 'Cleo'] }, ['Anna', 'Ben', null]));
+      const seats = await db.runMember.findMany({ orderBy: { seat: 'asc' } });
+      expect(seats.map((s) => [s.seat, s.seatName, s.accountId === null])).toEqual([
+        [0, '', true],
+        [1, 'Ben', false],
+        [2, '', true],
+      ]);
+      expect(await store.runs()).toMatchObject([{ crew: ['', 'Ben', ''] }]);
+      const top = (opened: Store) => opened.stats().mission('blackout')?.difficulties[0]?.top;
+      expect(top(store)?.map((entry) => entry.crew)).toEqual([['Ben']]);
+      expect(top(await open())?.map((entry) => entry.crew)).toEqual([['Ben']]);
+    });
+
     it('keeps the accounts over a restart', async () => {
       const store = await open();
       const made = await store.getOrCreateByIdentity(identityOf('Anna'), {
         displayName: 'Anna',
         colour: '#2dd4bf',
       });
-      await store.appendRun(finished({ at: DAY }, ['Anna', null]));
+      await withAccounts(store, ['Ben']);
+      await store.appendRun(finished({ at: DAY }, ['Anna', 'Ben']));
       const again = await open();
       const found = await again.getOrCreateByIdentity(identityOf('Anna'), {
         displayName: 'Andere',
