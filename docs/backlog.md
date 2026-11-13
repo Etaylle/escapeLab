@@ -372,7 +372,7 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   Zähler, sobald man drin ist), Exapunks (Regeln im gedruckten Heft).
 - Dritter Entwurf in Reserve: Datensicherung (Plattenarray, Backup-Katalog, Rotationsplan).
 
-### S-1 Hauptmenü wie ein Spiel — Status: im PR (S-menu) · Größe: L
+### S-1 Hauptmenü wie ein Spiel — Status: erledigt (S-menu, Merge 2026-11-13; zwei Review-Runden; Szene 1,07 ms je Frame, Menü-Fenster 16,7 ms p95; vier Musik-Einträge warten auf den Render) · Größe: L
 - Uros 2026-11-12 mit Screenshot: „Das soll besser werden wie echte Spiele, Main Menu." Befund
   im Bild: eine Karte auf leerer Seite, Systemschrift, kein Ton, keine Figuren, ein nativer
   Tooltip über den Missionskarten, der Aufkleber „Erster Einsatz?" über dem Tutorial-Titel,
