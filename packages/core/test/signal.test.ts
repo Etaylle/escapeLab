@@ -1091,15 +1091,56 @@ describe('signal manual: the workshop and the def', () => {
     for (const fleetingFrom of [1, 3, 5]) {
       for (const legend of [false, true]) {
         const [display] = paragraphsUnder(defOf({ stages: 5, fleetingFrom, legend }), WORKSHOP);
+        // With the legend the display loses its colour in the last stage, too.
+        const pale = legend ? ', ab Stufe 5 verblasst ihre Farbe' : '';
         expect(display).toBe(
           `Seit dem Umbau zeigt die Anzeige ab Stufe ${fleetingFrom} die Zeichen nur einzeln ` +
-            'und kurz (Kondensator, nie ersetzt): merken oder notieren.',
+            `und kurz${pale} (Kondensator, nie ersetzt): merken oder notieren.`,
         );
       }
     }
     const [steady] = paragraphsUnder(defOf({ stages: 5 }), WORKSHOP);
     expect(steady).toBe(
       'Kondensator 1994 erneuert: Die Anzeige hält die Folge, bis die Stufe quittiert ist.',
+    );
+  });
+
+  it('names the colour fading in the note on the display’s capacitor, from its stage on', () => {
+    const noteOf = (fields: Partial<SignalDef>) => paragraphsUnder(defOf(fields), WORKSHOP)[0];
+    expect(noteOf({ legend: true, greyFrom: 2 })).toBe(
+      'Kondensator 1994 erneuert: Die Anzeige hält die Folge, bis die Stufe quittiert ist; ab ' +
+        'Stufe 2 verblasst ihre Farbe.',
+    );
+    expect(noteOf({ legend: true, fleetingFrom: 3 })).toBe(
+      'Seit dem Umbau zeigt die Anzeige ab Stufe 3 die Zeichen nur einzeln und kurz, ab Stufe 4 ' +
+        'verblasst ihre Farbe (Kondensator, nie ersetzt): merken oder notieren.',
+    );
+    // Never grey: the note keeps to what the display does besides.
+    for (const fields of [{ legend: true, greyFrom: 0 }, {}, { greyFrom: 0 }]) {
+      expect(noteOf(fields), JSON.stringify(fields)).not.toMatch(/Farbe/);
+    }
+  });
+
+  it('says in Betrieb from which stage the display shows no colour, the legend naming it', () => {
+    const grey = (stage: number) =>
+      `Ab Stufe ${stage} zeigt die Anzeige die Zeichen ohne Farbe, nur mit ihrem Muster; ` +
+      'seine Farbe nennt die Legende.';
+    const operationOf = (fields: Partial<SignalDef>) => paragraphsUnder(defOf(fields), 'Betrieb');
+    const [lastStage] = operationOf({ legend: true });
+    expect(lastStage).toContain(grey(4));
+    // Between what the receiving console presses and what a wrong key costs.
+    expect(lastStage?.indexOf(grey(4))).toBeGreaterThan(lastStage?.indexOf('quittiert') ?? 0);
+    expect(lastStage?.indexOf(grey(4))).toBeLessThan(lastStage?.indexOf('Fehlquittierung') ?? 0);
+    expect(operationOf({ legend: true, stages: 6, greyFrom: 2 })[0]).toContain(grey(2));
+    for (const fields of [{ legend: true, greyFrom: 0 }, {}, { fleetingFrom: 2 }]) {
+      expect(operationOf(fields)[0], JSON.stringify(fields)).not.toContain('ohne Farbe');
+    }
+    // The legend keeps its Muster columns, Abb. 2 its drawing of the four patterns.
+    const def = defOf({ legend: true, greyFrom: 1 });
+    expect(legendOf(def).head).toEqual(['Zeile', 'Pult A', 'Muster', 'Pult B', 'Muster']);
+    const figures = signalModule.manual(def).flatMap((section) => section.blocks);
+    expect(figures.some((block) => block.kind === 'figure' && block.of === PATTERN_FIGURE)).toBe(
+      true,
     );
   });
 
@@ -1121,6 +1162,11 @@ describe('signal manual: the workshop and the def', () => {
         signalModule.manual(def),
       );
     }
+    // With the legend, the stage the display goes grey from changes the page, never the run.
+    const pages = [{}, { greyFrom: 0 }, { greyFrom: 2 }].map((other) =>
+      JSON.stringify(signalModule.manual(defOf({ legend: true, ...other }))),
+    );
+    expect(new Set(pages).size).toBe(3);
   });
 
 });

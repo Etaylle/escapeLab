@@ -430,16 +430,26 @@ function buildText(def: SignalDef): string {
   );
 }
 
-/** Betrieb: the stages and their direction, the acknowledgement, the fault and its cost. */
+/**
+ * Betrieb: the stages and their direction, the acknowledgement — with a display that loses its
+ * colour, from which stage, and that the legend gives each pattern its colour — the fault and
+ * its cost.
+ */
 function operationText(def: SignalDef): string {
   const acknowledged = def.legend
     ? 'jedes mit der Taste gleicher Form in der Zeile, die seine Legende der Farbe gibt'
     : 'jedes auf seiner Taste';
+  const greyFrom = greyFromOf(def);
+  const grey =
+    greyFrom === 0
+      ? ''
+      : ` Ab Stufe ${greyFrom} zeigt die Anzeige die Zeichen ohne Farbe, nur mit ihrem Muster; ` +
+        'seine Farbe nennt die Legende.';
   return (
     `Die Kette hat ${spelled(def.stages)} Stufen; in den ungeraden zeigt Pult A eine Folge von ` +
     `${spelled(def.length)} Zeichen, in den geraden Pult B. Das Gegenpult quittiert sie Zeichen ` +
-    `für Zeichen, ${acknowledged}. Eine falsche Taste ist eine Fehlquittierung: Die Stufe ` +
-    'fällt in die Grundstellung, ihre Folge bleibt, und die Überwachung meldet Alarm und ' +
+    `für Zeichen, ${acknowledged}.${grey} Eine falsche Taste ist eine Fehlquittierung: Die ` +
+    'Stufe fällt in die Grundstellung, ihre Folge bleibt, und die Überwachung meldet Alarm und ' +
     `zieht ${costOf(def.penaltySec)} ab.`
   );
 }
@@ -503,13 +513,27 @@ function logLines(def: SignalDef): string[] {
   ];
 }
 
+/**
+ * The workshop's note on the display's capacitor: renewed, the display holds the sequence;
+ * never replaced, it shows the signs one at a time from stage `fleetingFrom` on. Either way,
+ * from stage `greyFrom` on its colours fade (0: never).
+ */
+function displayNote(fleetingFrom: number | null, greyFrom: number): string {
+  if (fleetingFrom === null) {
+    const steady =
+      'Kondensator 1994 erneuert: Die Anzeige hält die Folge, bis die Stufe quittiert ist';
+    return greyFrom === 0 ? `${steady}.` : `${steady}; ab Stufe ${greyFrom} verblasst ihre Farbe.`;
+  }
+  const pale = greyFrom === 0 ? '' : `, ab Stufe ${greyFrom} verblasst ihre Farbe`;
+  return (
+    `Seit dem Umbau zeigt die Anzeige ab Stufe ${fleetingFrom} die Zeichen nur einzeln und ` +
+    `kurz${pale} (Kondensator, nie ersetzt): merken oder notieren.`
+  );
+}
+
 /** Aus der Werkstatt: the display's capacitor, and without the legend the keys' places. */
 function workshopNotes(def: SignalDef): string[] {
-  const display =
-    def.fleetingFrom === null
-      ? 'Kondensator 1994 erneuert: Die Anzeige hält die Folge, bis die Stufe quittiert ist.'
-      : `Seit dem Umbau zeigt die Anzeige ab Stufe ${def.fleetingFrom} die Zeichen nur ` +
-        'einzeln und kurz (Kondensator, nie ersetzt): merken oder notieren.';
+  const display = displayNote(def.fleetingFrom, greyFromOf(def));
   if (def.legend) {
     return [display];
   }
