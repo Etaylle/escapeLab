@@ -1,11 +1,11 @@
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { achievementsOf, utcDay } from '@escapelab/core';
 import { AccountDesk, accountRunOf, byMission, MY_RUNS } from '../src/accounts.js';
 import { JsonlStore } from '../src/store/jsonl.js';
-import type { RunReportV1 } from '../src/store/store.js';
+import type { Profile, RunReportV1 } from '../src/store/store.js';
 import { passFor } from './passes.js';
 import { DAY, finished, reportOf } from './storeContract.js';
 
@@ -14,6 +14,10 @@ function desk(): { desk: AccountDesk; store: JsonlStore } {
   const store = JsonlStore.open(join(mkdtempSync(join(tmpdir(), 'escapelab-desk-')), 'runs.jsonl'));
   return { desk: new AccountDesk(store), store };
 }
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 describe('a run as „Meine Einsätze" lists it', () => {
   it('has the seat, the time on the clock and the grade the end screen gave', () => {
@@ -90,5 +94,37 @@ describe('the desk', () => {
     expect(total).toBe(MY_RUNS + 1);
     expect(runs).toHaveLength(MY_RUNS);
     expect(runs[0]?.finishedAt).toBe(DAY + MY_RUNS);
+  });
+
+  it('settles once every request under way has: a slow one, one behind it', async () => {
+    const { desk: accounts, store } = desk();
+    // Nothing under way: settled at once.
+    await accounts.settled();
+    const pass = passFor('Anna');
+    await accounts.arrive(pass, { displayName: 'Anna', colour: null });
+    // The store takes its time with Anna's colour; her new name waits behind it.
+    let answer = (): void => undefined;
+    const slow = new Promise<void>((resolve) => {
+      answer = resolve;
+    });
+    const update = store.updateProfile.bind(store);
+    const written: Partial<Profile>[] = [];
+    vi.spyOn(store, 'updateProfile').mockImplementation(async (id, change) => {
+      await slow;
+      const account = await update(id, change);
+      written.push(change);
+      return account;
+    });
+    void accounts.recolour(pass, '#60a5fa');
+    void accounts.rename(pass, 'Anna Berg');
+    let settled = false;
+    const waited = accounts.settled().then(() => {
+      settled = true;
+    });
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(settled).toBe(false);
+    answer();
+    await waited;
+    expect(written).toEqual([{ colour: '#60a5fa' }, { displayName: 'Anna Berg' }]);
   });
 });

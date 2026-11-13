@@ -126,10 +126,11 @@ const wss = new WebSocketServer({ server: httpServer, path: '/ws' });
 // socket, so many new accounts a minute from an address, so many changes a minute on a socket.
 const accountsMade = new RateLimiter(ACCOUNTS_MADE_PER_MINUTE, 60_000);
 accountsMade.sweepEveryWindow();
+const desk = new AccountDesk(store);
 const served = serveSockets(wss, {
   catalog,
   manager,
-  accounts: new AccountDesk(store),
+  accounts: desk,
   accountsMade,
   changesPerSocket: ACCOUNT_CHANGES_PER_SOCKET,
   front: frontOf(process.env),
@@ -197,13 +198,16 @@ async function storeOrExit(): Promise<Store> {
 }
 
 /**
- * The process exits with `code` once the runs still being kept are, and the store has let go —
- * KEEPING_MS at the latest: a database that does not answer keeps no deploy waiting.
+ * The process exits with `code` once the runs and the changes to the accounts still being kept
+ * are — a colour still settling kept at once — and the store has let go: KEEPING_MS at the
+ * latest, for a database that does not answer keeps no deploy waiting.
  */
 async function keepThenExit(code: number): Promise<void> {
   const late = new Promise<void>((resolve) => setTimeout(resolve, KEEPING_MS).unref());
+  served.keepColours();
   try {
-    await Promise.race([recorder.settled().then(() => store.close()), late]);
+    const kept = Promise.all([recorder.settled(), desk.settled()]);
+    await Promise.race([kept.then(() => store.close()), late]);
   } catch (err) {
     console.error(`[escapelab] the store did not close cleanly: ${String(err)}`);
   }

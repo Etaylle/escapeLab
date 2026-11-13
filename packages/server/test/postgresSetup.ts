@@ -33,11 +33,14 @@ export function inSchema(base: string, schema: string): string {
   return url.toString();
 }
 
-/** The Prisma CLI run in the server package against `url`: its exit code and what it said. */
+/**
+ * The Prisma CLI run in the server package against `url`, the pooled and the direct URL both —
+ * one the shell holds steers it nowhere else: its exit code and what it said.
+ */
 export function prisma(args: string[], url: string): { status: number | null; output: string } {
   const run = spawnSync(PRISMA, args, {
     cwd: SERVER,
-    env: { ...process.env, DATABASE_URL: url, CHECKPOINT_DISABLE: '1' },
+    env: { ...process.env, DATABASE_URL: url, DATABASE_URL_UNPOOLED: url, CHECKPOINT_DISABLE: '1' },
     encoding: 'utf8',
   });
   return { status: run.status, output: `${run.stdout}${run.stderr}` };

@@ -111,6 +111,20 @@ describe("the pool's idle lifetime", () => {
     expect(new URL(url).searchParams.getAll('max_idle_connection_lifetime')).toEqual(['5']);
   });
 
+  it("is all a Neon pooled URL gets: its pooler's PgBouncer keeps prepared statements", () => {
+    // PgBouncer 1.21 and later keep them in transaction mode, and Prisma advises against
+    // `pgbouncer=true` there; Neon's pooler runs 1.24. The URL's own flags stay as Neon gave them.
+    const host = 'ep-quiet-lab-123456-pooler.eu-central-1.aws.neon.tech';
+    const neon = `postgresql://someone@${host}/lab?sslmode=require&channel_binding=require`;
+    const url = new URL(pooledUrl(neon));
+    expect(url.host).toBe(host);
+    expect([...url.searchParams]).toEqual([
+      ['sslmode', 'require'],
+      ['channel_binding', 'require'],
+      ['max_idle_connection_lifetime', String(IDLE_LIFETIME_S)],
+    ]);
+  });
+
   it('refuses a variable that is no URL, naming the variable and not its value', () => {
     expect(() => pooledUrl('not a url')).toThrow(
       'DATABASE_URL is no connection URL — check the variable',

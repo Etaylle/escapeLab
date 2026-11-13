@@ -44,8 +44,8 @@ function lab(manager = new RoomManager(), limits: Limits = {}, front: Front = 'n
   const server = new FakeServer();
   const store = JsonlStore.open(join(mkdtempSync(join(tmpdir(), 'escapelab-acc-')), 'runs.jsonl'));
   const accounts = new AccountDesk(store);
-  serveSockets(server, { catalog, manager, accounts, ...limits, front });
-  return { server, manager, store };
+  const served = serveSockets(server, { catalog, manager, accounts, ...limits, front });
+  return { server, manager, store, served };
 }
 
 /** A request from `machine` on the LAN, its X-Forwarded-For naming `claimed` where given. */
@@ -354,6 +354,32 @@ describe('the accounts’ door', () => {
     await coloursKept();
     expect(refusals(anna)).toEqual([]);
     expect(accounts(anna).map((account) => account?.color)).toEqual([null, '#2dd4bf']);
+  });
+
+  it('keeps every colour still settling at once where the server goes down, and once', async () => {
+    fakeTheClock();
+    const { server, served } = lab();
+    const anna = server.connect();
+    anna.say({ kind: 'create-room', name: 'Anna', pass: passFor('Anna') });
+    const ben = server.connect();
+    ben.say({ kind: 'join-room', code: joinedOf(anna).code, name: 'Ben', pass: passFor('Ben') });
+    await settled();
+    anna.say({ kind: 'select-color', color: '#60a5fa' });
+    ben.say({ kind: 'select-color', color: '#fbbf24' });
+    vi.advanceTimersByTime(COLOUR_SETTLE_MS / 2);
+    served.keepColours();
+    await settled();
+    const colours = () => [anna, ben].map((socket) => accounts(socket).map((a) => a?.color));
+    expect(colours()).toEqual([
+      [null, '#60a5fa'],
+      [null, '#fbbf24'],
+    ]);
+    // Their timers let go of them: nothing is kept a second time.
+    await coloursKept();
+    expect(colours()).toEqual([
+      [null, '#60a5fa'],
+      [null, '#fbbf24'],
+    ]);
   });
 
   it('takes a player’s first minute in its stride, with changes to spare', async () => {

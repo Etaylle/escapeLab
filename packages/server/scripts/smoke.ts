@@ -3158,11 +3158,39 @@ async function checkLanded(db: PrismaClient, lab: Lab): Promise<void> {
   console.log(`✓ the won tutorial is in Postgres: 2 seats by account, Erfolge ${named}`);
 }
 
+/** The colour Ida clicks just before the server goes down (`colourAtTheEnd`). */
+const LAST_COLOUR = '#f472b6';
+
+/**
+ * A colour clicked in a lobby just before Render's SIGTERM: the server going down keeps it with
+ * the account all the same, before it lets go of the store — the clicks settle for a second.
+ */
+async function colourAtTheEnd(server: ServerProcess, db: PrismaClient): Promise<void> {
+  const ida = new TestClient('ida', [], mintPass(), DATABASE_PORT);
+  await ida.open();
+  ida.send({ kind: 'create-room', name: 'Ida', pass: ida.pass, missionId: tutorial.id });
+  await ida.seated();
+  ida.send({ kind: 'select-color', color: LAST_COLOUR });
+  await ida.until('her seat in the colour she clicked', (v) => v.you.color === LAST_COLOUR);
+  server.kill('SIGTERM');
+  const ended = await server.exited;
+  const kept = await db.identity.findUnique({
+    where: { provider_subject: { provider: 'pass', subject: ida.pass.id } },
+    include: { account: true },
+  });
+  const colour = kept?.account.colour ?? 'none';
+  assert(
+    ended.code === 0 && colour === LAST_COLOUR,
+    `a colour clicked just before SIGTERM kept with its account (${colour}, exit ${ended.code})`,
+  );
+}
+
 /**
  * Where TEST_DATABASE_URL names a Postgres the smoke may write to: the start script, as Render
- * runs it, on a schema of the smoke's own — the migrations applied before the server starts — and
- * a crew winning the tutorial there (`checkLanded`); the schema is dropped after. Skipped, saying
- * so, without.
+ * runs it with a single direct DATABASE_URL, on a schema of the smoke's own — the migrations
+ * applied before the server starts — a crew winning the tutorial there (`checkLanded`), and a
+ * colour clicked as the server goes down (`colourAtTheEnd`); the schema is dropped after.
+ * Skipped, saying so, without.
  */
 async function runOnPostgres(): Promise<void> {
   const base = process.env['TEST_DATABASE_URL'];
@@ -3175,8 +3203,11 @@ async function runOnPostgres(): Promise<void> {
   at.searchParams.set('schema', schema);
   const url = at.toString();
   const db = new PrismaClient({ datasourceUrl: url });
+  // DATABASE_URL alone, as Render sets it without Neon's integration: the migrations take it too.
+  // An unpooled URL the shell holds steers them nowhere else.
   const server = new ServerProcess('the start script on Postgres', DATABASE_PORT, 'start-script', {
     DATABASE_URL: url,
+    DATABASE_URL_UNPOOLED: '',
   });
   try {
     await server.up();
@@ -3191,6 +3222,7 @@ async function runOnPostgres(): Promise<void> {
     for (const client of lab.crew) {
       client.close();
     }
+    await colourAtTheEnd(server, db);
   } finally {
     server.kill('SIGTERM');
     await server.exited;
@@ -3219,6 +3251,7 @@ console.log(
     'and SIGKILL, the run taken up again from the crew\'s snapshots; a deploy handing ' +
     'over from an old server still up, the run going on from its last snapshot; the ' +
     'start script passing SIGTERM on to the server; and, where TEST_DATABASE_URL names a ' +
-    'Postgres, the start script migrating it and a won tutorial landing there by account. 🎉',
+    'Postgres, the start script migrating it over a single URL, a won tutorial landing there ' +
+    'by account, and a colour clicked just before SIGTERM kept. 🎉',
 );
 process.exit(0);

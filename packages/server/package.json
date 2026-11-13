@@ -7,7 +7,7 @@
     "dev": "TLS=off ALLOW_SEED=1 ALLOW_RECORD=1 ALLOW_TAKES=1 tsx watch src/index.ts",
     "start": "exec node --import tsx src/index.ts",
     "postinstall": "CHECKPOINT_DISABLE=1 prisma generate --no-hints",
-    "prisma": "CHECKPOINT_DISABLE=1 prisma",
+    "prisma": "DATABASE_URL_UNPOOLED=\"${DATABASE_URL_UNPOOLED:-$DATABASE_URL}\" CHECKPOINT_DISABLE=1 prisma",
     "smoke": "tsx scripts/smoke.ts",
     "runs": "tsx scripts/runs.ts",
     "cert": "tsx scripts/cert.ts",

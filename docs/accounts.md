@@ -37,7 +37,8 @@ store: the account comes to the socket a moment later (`account`).
   against its socket, 30 a minute; past that a name or a deletion is refused („Zu viele
   Kontoänderungen über diese Verbindung in einer Minute."). An arrival, the menu come back to,
   or a name or colour the account has already changes nothing and counts nothing, and colours
-  clicked through within a second are kept as one, the last. A player's first minute — the
+  clicked through within a second are kept as one, the last — at once where the server goes
+  down before the second is over, and the store closes only after. A player's first minute — the
   menu loaded and come back to three times, a name typed in two goes, a room opened, four
   colours tried — leaves most of the minute's changes; a lecture behind one address, thirty new
   students, stays under the address's new accounts. „Meine Einsätze" only reads, and is never
@@ -119,9 +120,16 @@ store in one line either way.
 
 ## Operating it
 
-- **Render:** `DATABASE_URL` in the environment (Neon's direct connection), the start script
-  applies the migrations first: README, „Hosting auf Render" — there too what a start does with
-  Neon away (P1001) or after a migration that broke off (P3009, `prisma migrate resolve`).
+- **Render:** either the two variables Neon's integration sets — `DATABASE_URL` through Neon's
+  pooler for the server's queries, `DATABASE_URL_UNPOOLED` direct for the migrations, as Prisma's
+  schema engine does not go through PgBouncer — or `DATABASE_URL` alone, Neon's direct connection,
+  which then does for both: the schema's `directUrl` is `DATABASE_URL_UNPOOLED`, and the server
+  package's `prisma` script, through which the start script migrates, hands the CLI
+  `DATABASE_URL` for it where it is unset or empty. The pooled URL takes no flag: Neon's pooler
+  runs PgBouncer 1.24, which keeps prepared statements in transaction mode, and Prisma advises
+  against `pgbouncer=true` from 1.21 on. The start script applies the migrations first: README,
+  „Hosting auf Render" — there too what a start does with Neon away (P1001) or after a migration
+  that broke off (P3009, `prisma migrate resolve`).
 - **A connection lost:** Neon closes a connection that stood idle for five minutes. The pool
   hands out none idle for more than a minute (`max_idle_connection_lifetime=60`, unless
   `DATABASE_URL` sets its own), and a request whose connection was lost all the same is asked

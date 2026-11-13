@@ -181,6 +181,14 @@ export class AccountDesk {
   }
 
   /**
+   * Resolves once every request under way has settled, however it went: the server going down
+   * lets the store go only after (index.ts).
+   */
+  async settled(): Promise<void> {
+    await Promise.all(this.queues.values());
+  }
+
+  /**
    * The account of `pass` with `change` made to its profile — made with it where there was none —
    * as its owner sees it; held back where the gate lets no account be made, or none change.
    */

@@ -417,12 +417,22 @@ Neustart — ohne Datenbank fangen Laufprotokoll, Bestenliste, „Meine Einsätz
 dann von vorn an, und die Konten leben nur im Speicher, bis der Server stoppt. Mit
 `DATABASE_URL` hält der Server Konten, Läufe und Erfolge in Postgres
 ([`docs/accounts.md`](docs/accounts.md)); eine kostenlose Datenbank gibt es bei Neon
-(neon.tech): Projekt anlegen, im Dialog „Connect" die direkte Verbindung (nicht „pooled") für
-Prisma wählen und die Zeichenkette in Render unter „Environment" als `DATABASE_URL` eintragen —
-sie gehört nirgends sonst hin, auch nicht ins Repo. Der Start (`pnpm run start`) wendet dann
-zuerst die Migrationen an (`pnpm --filter @escapelab/server prisma migrate deploy`, aus
-`packages/server/prisma/migrations/`) und startet den Server erst danach; scheitert die
-Migration, startet er nicht. Den Prisma-Client erzeugt `pnpm install`, einmal, über die
+(neon.tech). Render kennt sie auf einem von zwei Wegen, beide unter „Environment" und nirgends
+sonst, auch nicht im Repo:
+
+- **Neons Integration** setzt zwei Variablen: `DATABASE_URL`, die gepoolte Verbindung über Neons
+  Pooler (Host mit `-pooler`), für die Abfragen des Servers, und `DATABASE_URL_UNPOOLED`, die
+  direkte, für die Migrationen, denn Prismas Schema-Engine geht nicht über PgBouncer. Ein Zusatz
+  wie `pgbouncer=true` gehört nicht in die gepoolte: Neons Pooler (PgBouncer 1.24) hält Prepared
+  Statements, und Prisma rät ab PgBouncer 1.21 davon ab.
+- **Von Hand** reicht `DATABASE_URL` allein: Projekt anlegen, im Dialog „Connect" die direkte
+  Verbindung (nicht „pooled") für Prisma wählen und die Zeichenkette als `DATABASE_URL`
+  eintragen. Ohne `DATABASE_URL_UNPOOLED` nehmen auch die Migrationen sie.
+
+Der Start (`pnpm run start`) wendet dann zuerst die Migrationen an (`pnpm --filter
+@escapelab/server prisma migrate deploy`, aus `packages/server/prisma/migrations/`, über
+`DATABASE_URL_UNPOOLED`, sonst über `DATABASE_URL`) und startet den Server erst danach; scheitert
+die Migration, startet er nicht. Den Prisma-Client erzeugt `pnpm install`, einmal, über die
 postinstall des Servers (das Build Command bleibt, wie es ist). Welcher Speicher läuft, sagt das
 Start-Log in einer Zeile:
 `store: Postgres at DATABASE_URL: …` oder `store: run log …, accounts in memory until the server
@@ -439,8 +449,9 @@ stops (no DATABASE_URL)`.
   Postgres nimmt ihre Änderungen zurück, denn Prisma führt jede Migration in einer Transaktion
   aus. Prisma vermerkt sie aber als gescheitert, und jeder weitere Start bricht ab mit `Error:
   P3009 … migrate found failed migrations in the target database`, der Server startet nicht.
-  Lösen lässt sich das nur von einem eigenen Rechner aus, mit der Neon-Zeichenkette allein in
-  dieser Shell und dem Namen der Migration aus der Meldung:
+  Lösen lässt sich das nur von einem eigenen Rechner aus, mit der direkten Neon-Zeichenkette
+  (dem Wert von `DATABASE_URL_UNPOOLED`, wo Render beide hat) allein in dieser Shell und dem
+  Namen der Migration aus der Meldung:
 
   ```sh
   DATABASE_URL='…' pnpm --filter @escapelab/server prisma migrate resolve \
@@ -451,7 +462,8 @@ stops (no DATABASE_URL)`.
 
 | Wo | Name | Wirkung |
 | --- | --- | --- |
-| Render-Umgebung | `DATABASE_URL` | Die Postgres-Datenbank (Neon) für Konten, Läufe und Erfolge; ohne: Datei und Konten im Speicher (siehe oben). |
+| Render-Umgebung | `DATABASE_URL` | Die Postgres-Datenbank (Neon) für Konten, Läufe und Erfolge, gepoolt oder direkt; ohne: Datei und Konten im Speicher (siehe oben). |
+| Render-Umgebung | `DATABASE_URL_UNPOOLED` | Die direkte Verbindung derselben Datenbank für die Migrationen, von Neons Integration neben die gepoolte `DATABASE_URL` gesetzt; ohne: Die Migrationen nehmen `DATABASE_URL`. |
 | Render-Umgebung | `RUNS_TOKEN` | Gibt das Laufprotokoll per `GET /runs.jsonl` frei (siehe oben). |
 | Render-Umgebung | `ROOM_SECRET` | Schlüssel der Schnappschüsse (SHA-256 davon für AES-256-GCM): im Dashboard unter „Environment" als Variable anlegen, 32 oder mehr zufällige Zeichen, etwa `openssl rand -hex 32`, und nie ändern — ein neuer Schlüssel öffnet die alten Schnappschüsse nicht. Ohne ihn macht der Server bei jedem Start einen eigenen Schlüssel, das Start-Log sagt `ROOM_SECRET unset … rooms will not survive a restart`, und kein Raum überlebt einen Neustart; mit weniger als 32 Zeichen startet er nicht. Der Deploy, mit dem er dazukommt, trägt die laufenden Räume noch nicht hinüber. |
 

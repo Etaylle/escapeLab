@@ -11,9 +11,15 @@ generator client {
   provider = "prisma-client-js"
 }
 
+// The server's queries go through DATABASE_URL, which may be Neon's pooled connection; the
+// migrations take DATABASE_URL_UNPOOLED, the direct one Neon's integration sets beside it, for
+// Prisma's schema engine does not go through PgBouncer. Where it is unset, the package's `prisma`
+// script — the start script's way to migrate, and everyone's — hands the CLI DATABASE_URL for
+// both: a single direct URL does for everything.
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DATABASE_URL_UNPOOLED")
 }
 
 /// What the game keeps of a player: the name and the colour they chose, the runs they played

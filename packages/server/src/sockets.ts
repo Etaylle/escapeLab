@@ -77,18 +77,39 @@ export const ONE_PASS = 'Diese Verbindung gehört schon einem anderen Dienstausw
 
 /**
  * What a socket came in as: the address its new accounts count against, the pass it showed
- * first, when it changed the accounts in the last minute, and the colour it clicked last, while
- * that waits to be kept (`COLOUR_SETTLE_MS`).
+ * first, and when it changed the accounts in the last minute.
  */
 interface Door {
   address: string;
   pass: string | null;
   changes: number[];
-  colour: ReturnType<typeof setTimeout> | null;
 }
 
 /** Each socket's door (`Door`), from the request that opened it. */
 const doors = new WeakMap<PlayerSocket, Door>();
+
+/**
+ * The colour a socket clicked last, while it settles (`COLOUR_SETTLE_MS`): the timer that keeps
+ * it then, and how to keep it at once.
+ */
+interface Settling {
+  timer: ReturnType<typeof setTimeout>;
+  keep: () => void;
+}
+
+/** Each server's colours still settling, by socket: a server is known by the lab it serves. */
+const settling = new WeakMap<Lab, Map<PlayerSocket, Settling>>();
+
+/** The colours settling on the server of `lab`, by socket. */
+function settlingOn(lab: Lab): Map<PlayerSocket, Settling> {
+  const known = settling.get(lab);
+  if (known !== undefined) {
+    return known;
+  }
+  const colours = new Map<PlayerSocket, Settling>();
+  settling.set(lab, colours);
+  return colours;
+}
 
 /**
  * What the log says the first time a socket's address is read off the last X-Forwarded-For behind
@@ -157,22 +178,26 @@ function gateOf(lab: Lab, socket: PlayerSocket): Gate {
 
 /**
  * A colour `socket` clicked for the account of `pass`: kept once the clicks have settled
- * (`COLOUR_SETTLE_MS`), the last of them — and its socket told the account then.
+ * (`COLOUR_SETTLE_MS`), the last of them — or at once where the server goes down before
+ * (`Served.keepColours`) — and its socket told the account then.
  */
 function keepColour(lab: Lab, socket: PlayerSocket, pass: CrewPass, color: string): void {
-  const door = doors.get(socket);
   const desk = lab.accounts;
-  if (door === undefined || desk === undefined) {
+  if (desk === undefined) {
     return;
   }
-  if (door.colour !== null) {
-    clearTimeout(door.colour);
+  const colours = settlingOn(lab);
+  const before = colours.get(socket);
+  if (before !== undefined) {
+    clearTimeout(before.timer);
   }
-  door.colour = setTimeout(() => {
-    door.colour = null;
+  const keep = (): void => {
+    colours.delete(socket);
     tellAccount(socket, desk.recolour(pass, color, gateOf(lab, socket)));
-  }, COLOUR_SETTLE_MS);
-  door.colour.unref();
+  };
+  const timer = setTimeout(keep, COLOUR_SETTLE_MS);
+  timer.unref();
+  colours.set(socket, { timer, keep });
 }
 
 /** Per-connection session, set once the socket joins, resumes or watches a room. */
@@ -197,10 +222,18 @@ interface Session {
   detach: (clean?: boolean) => void;
 }
 
-/** What serving the sockets hands back: the log's line for a socket the heartbeat cuts. */
+/**
+ * What serving the sockets hands back: the log's line for a socket the heartbeat cuts, and the
+ * colours still settling, kept as the server goes down.
+ */
 export interface Served {
   /** Logs that the heartbeat cut `socket`, and why, naming its room and seat: none in no room. */
   cut: (socket: object, why: CutReason) => void;
+  /**
+   * Keeps at once every colour still settling (`COLOUR_SETTLE_MS`): one clicked in the last
+   * second before the server goes down goes to the account all the same (AccountDesk `settled`).
+   */
+  keepColours: () => void;
 }
 
 /**
@@ -234,7 +267,7 @@ export function serveSockets(server: SocketServer, lab: Lab): Served {
     let session: Session | null = null;
     sessions.set(socket, () => session);
     const address = addressOf(lab, request, noteForwarded);
-    doors.set(socket, { address, pass: null, changes: [], colour: null });
+    doors.set(socket, { address, pass: null, changes: [] });
     const take = (msg: ClientMessage): void => {
       try {
         checkPass(socket, msg);
@@ -267,6 +300,12 @@ export function serveSockets(server: SocketServer, lab: Lab): Served {
       if (session !== null) {
         const where = `room ${session.room.code}: ${session.who()}`;
         console.log(`[escapelab] ${where} cut by the heartbeat, ${CUT_WHY[why]}`);
+      }
+    },
+    keepColours: () => {
+      for (const { timer, keep } of [...settlingOn(lab).values()]) {
+        clearTimeout(timer);
+        keep();
       }
     },
   };
