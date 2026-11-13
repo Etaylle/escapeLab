@@ -331,6 +331,15 @@
   text-transform: uppercase;
 }
 
+/* ── the hero, standing large at the stage's right ──────────────────────── */
+
+/* screens/MenuHero.tsx places and sizes its canvas on the stage, clear of the menu's column and
+   the profile; it lies under every panel and catches no pointer. */
+.menu-hero {
+  position: absolute;
+  pointer-events: none;
+}
+
 /* ── a panel over the menu ──────────────────────────────────────────────── */
 
 /* It slides in over the menu from the menu's side, fading up as it comes; under reduced motion
