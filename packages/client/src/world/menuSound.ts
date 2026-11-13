@@ -69,13 +69,17 @@ export const THEME = 'menu-theme';
 /** The facility's hum under the menu, by its id. */
 export const HUM: SfxId = 'bed-facility';
 
-/** The interface's sounds: the lab's own recordings. */
+/**
+ * The interface's sounds: the lab's own recordings — and the cold open's click as the menu's hero
+ * switches its lamp on (world/menu/heroStage.ts), the relay the run's flashlights come on with.
+ */
 export const UI = {
   hover: 'ui-tick',
   select: 'toggle-clack',
   back: 'dial-detent',
   opened: 'stage-chime',
   ready: 'console-ready',
+  lamp: 'relay-click',
 } as const satisfies Readonly<Record<string, SfxId>>;
 
 /** What the interface sounds as. */
@@ -88,6 +92,7 @@ const UI_LEVEL: Readonly<Record<UiSound, number>> = {
   back: 0.024,
   opened: 0.035,
   ready: 0.03,
+  lamp: 0.04,
 };
 /** A tick sounds no oftener than this, s: an arrow held down ticks along, never buzzes. */
 const TICK_GAP_S = 0.05;
@@ -156,7 +161,14 @@ const listeners = new Set<() => void>();
 /** The interface's recordings, once loaded. */
 const uiSamples = new Map<SfxId, Sample>();
 /** How often each of the interface's sounds has played on this page, for the walkthrough. */
-const played: Record<UiSound, number> = { hover: 0, select: 0, back: 0, opened: 0, ready: 0 };
+const played: Record<UiSound, number> = {
+  hover: 0,
+  select: 0,
+  back: 0,
+  opened: 0,
+  ready: 0,
+  lamp: 0,
+};
 
 function setState(next: MenuSoundState): void {
   if (next === state) return;

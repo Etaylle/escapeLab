@@ -104,7 +104,10 @@
  * 1440×820 and at 1280×720 about five of the scene's tiles tall, its canvas clear of the menu's
  * column, its lead line and the profile, or the run fails. menu-hero.png shows it with its hand
  * lamp on, the beam laid over the scene and ending short of the menu's column; with „Beitreten"
- * hovered the beam has to hold a beat pointing at it within two passes of its sweep. The menu's
+ * hovered the beam has to hold a beat pointing at it within two passes of its sweep. On the first
+ * menu of a page it walks in: a page of its own holds it 600 ms into its walk, as the pause trick
+ * holds a device's fade (menu-hero-entrance.png), its lamp off; a key wakes the menu's sound, and
+ * let go, the hero has to stop, click the cold open's click and switch its lamp on. The menu's
  * sound waits for
  * the first key, the speaker's lamp lit, and plays after it; the lobby keeps it at its weight,
  * chimes as the round comes up and chirps as Ben says ready; the run's start ends it. The won card
@@ -6369,6 +6372,7 @@ async function checkHero(page, label, tall = false) {
  */
 async function captureMenu(page) {
   const scene = await sceneBaked(page, { w: SIZES[0].width, h: SIZES[0].height });
+  await heroArrived(page);
   await capture(page, 'menu.png');
   console.log(`menu.png           ${sceneText(scene)}`);
   await checkHero(page, '1440x820', true);
@@ -6387,6 +6391,94 @@ async function captureMenu(page) {
   await checkHero(page, '1280x720', true);
   await page.setViewportSize(SIZES[0]);
   await sceneBaked(page, { w: SIZES[0].width, h: SIZES[0].height });
+  await captureHeroEntrance();
+}
+
+/** How long the hero's entrance takes at most: its walk, the click and the lamp, and a margin. */
+const HERO_ENTRANCE_MS = 1850 + 3000;
+
+/** In the page: whether the hero's entrance is over — its lamp on — or there was none. */
+const entranceOver = () => globalThis.__escapelab?.hero?.entrance?.done !== false;
+
+/** Waits for the hero on `page` to have walked in and switched its lamp on; logs where not. */
+async function heroArrived(page) {
+  const over = await page.waitForFunction(entranceOver, null, { timeout: HERO_ENTRANCE_MS }).then(
+    () => true,
+    () => false,
+  );
+  if (!over) {
+    const entrance = JSON.stringify((await heroOf(page))?.entrance);
+    console.log(`hero               !! still entering: ${entrance}`);
+  }
+}
+
+/** How far into its walk menu-hero-entrance.png holds the hero, ms: half way. */
+const HERO_HOLD_MS = 600;
+
+/** In the page, from its first moment: holds the hero's entrance `ms` into it (heroStage.ts). */
+function holdHero(ms) {
+  globalThis.__heroHold = ms;
+}
+
+/** In the page: lets the hero's entrance go on from where it was held. */
+function releaseHero() {
+  delete globalThis.__heroHold;
+}
+
+/** In the page: the hero held in its walk — its entrance where it is held, its lamp off. */
+const heroHeld = (ms) => {
+  const hero = globalThis.__escapelab?.hero;
+  return hero?.entrance?.ms === ms && hero.beam?.on === 0 && hero.shown === true;
+};
+
+/** Whether the hero `hero` (its probe) has walked in and switched its lamp on. */
+const heroLit = (hero) => hero?.entrance?.done === true && hero.beam?.on === 1;
+
+/** Whether the menu's sound (`sound`, its probe) has clicked the cold open's click. */
+const lampClicked = (sound) => (sound.played?.lamp ?? 0) > 0;
+
+/** What the log says of the hero let go: its entrance over, the click heard as the lamp came on. */
+function arrivalText(hero, sound, ms) {
+  const lamp = heroLit(hero) ? `its lamp on ${ms} ms later` : '!! its lamp never on';
+  const click = lampClicked(sound) ? 'the cold open’s click heard' : '!! no click heard';
+  return `held ${HERO_HOLD_MS} ms into its walk, its lamp off; let go, ${lamp}, ${click}`;
+}
+
+/**
+ * menu-hero-entrance.png: a page of its own, its hero held HERO_HOLD_MS into its walk in from the
+ * stage's right edge (holdHero, as the pause trick holds a device's fade), its lamp off; a key
+ * wakes the menu's sound, and let go the hero has to stop, click the cold open's click and switch
+ * its lamp on — or the run fails.
+ */
+async function captureHeroEntrance() {
+  const context = await browser.newContext({ viewport: SIZES[0] });
+  try {
+    await context.addInitScript(holdHero, HERO_HOLD_MS);
+    const page = await openPage(context, 'entrance');
+    page.on('pageerror', (e) => console.log('[entrance error]', e.message));
+    await page.goto(traced(BASE));
+    await sceneBaked(page, { w: SIZES[0].width, h: SIZES[0].height });
+    const held = await page
+      .waitForFunction(heroHeld, HERO_HOLD_MS, { timeout: 10_000 })
+      .then(
+        () => true,
+        () => false,
+      );
+    await capture(page, 'menu-hero-entrance.png');
+    await page.keyboard.press('Shift');
+    await page.waitForFunction(() => globalThis.__escapelab?.menuSound?.state === 'playing');
+    await sleep(1000);
+    const letGo = Date.now();
+    await page.evaluate(releaseHero);
+    await heroArrived(page);
+    const [hero, sound] = [await heroOf(page), await menuSoundOf(page)];
+    console.log(`menu-hero-entrance.png ${arrivalText(hero, sound, Date.now() - letGo)}`);
+    if (!held || !heroLit(hero) || !lampClicked(sound)) {
+      fail('menu-hero-entrance.png: not held in its walk, no lamp on, or no click');
+    }
+  } finally {
+    await context.close();
+  }
 }
 
 /** The scene's probe says the hero's beam lies on it, and the hero's that its lamp is on. */

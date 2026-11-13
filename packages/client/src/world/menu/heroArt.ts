@@ -3,7 +3,7 @@ import type { CanvasMaker } from '../atlas.js';
 import { softEllipse } from '../brush.js';
 import type { FigurePose } from '../figure.js';
 import { BLACK } from '../palette.js';
-import { HERO_FACING, type HeroPlace } from './hero.js';
+import type { HeroMotion, HeroPlace, StageBox } from './hero.js';
 import { drawHandLamp } from './lampArt.js';
 
 /**
@@ -54,7 +54,11 @@ export interface HeroCanvas {
 /** What one frame of the hero shows. */
 export interface HeroFrame {
   place: HeroPlace;
+  /** its canvas's box in the stage, CSS px: its place's, wider while it walks in */
+  box: StageBox;
   pose: FigurePose;
+  /** where it stands right of its place, whether it walks, where it faces */
+  motion: HeroMotion;
   color: string;
   /** the stage's density, device px a CSS px */
   dpr: number;
@@ -85,11 +89,11 @@ interface Anchor {
   s: number;
 }
 
-/** The anchor of `frame`'s place on a canvas at its density. */
-function anchorOf({ place, dpr }: HeroFrame): Anchor {
+/** The anchor of `frame`'s feet on its canvas at its density: its place, as far right as it is. */
+function anchorOf({ place, box, motion, dpr }: HeroFrame): Anchor {
   return {
-    x: Math.round((place.feet.x - place.box.left) * dpr),
-    y: Math.round((place.feet.y - place.box.top) * dpr),
+    x: Math.round((place.feet.x + motion.offset * place.scale - box.left) * dpr),
+    y: Math.round((place.feet.y - box.top) * dpr),
     s: place.scale * dpr,
   };
 }
@@ -101,11 +105,38 @@ function anchorOf({ place, dpr }: HeroFrame): Anchor {
 function layerKey(which: FigureLayer, frame: HeroFrame, size: string): string {
   const { pose } = frame;
   if (which === 'legs') {
-    return `${size} ${frame.color} ${pose.shadow}`;
+    return `${size} ${frame.color} ${frame.motion.facing} ${pose.shadow}`;
   }
   const arms = pose.arms === null ? '-' : `${pose.arms.front},${pose.arms.back}`;
   const parts = [pose.look, pose.shimmer, arms, pose.holding, pose.dim, pose.bow];
-  return `${size} ${frame.color} ${parts.join(' ')} ${frame.lamp.tilt} ${frame.lamp.on}`;
+  const { tilt, on } = frame.lamp;
+  return `${size} ${frame.color} ${frame.motion.facing} ${parts.join(' ')} ${tilt} ${on}`;
+}
+
+/** The figure as `frame` has it, drawn on `ctx` whole or as `layer` says, its feet at `at`. */
+function drawFigure(ctx: CanvasRenderingContext2D, frame: HeroFrame, layer: FigureLayer): void {
+  const { tilt, on } = frame.lamp;
+  const { motion } = frame;
+  drawScientist(ctx, {
+    color: frame.color,
+    name: '',
+    facing: motion.facing,
+    moving: motion.moving,
+    walkPhase: motion.walk,
+    isYou: false,
+    connected: true,
+    pose: layer === 'all' ? frame.pose : { ...frame.pose, bob: 0 },
+    ground: 'lit',
+    named: false,
+    layer,
+    held: (held) => drawHandLamp(held, tilt, on),
+  });
+}
+
+/** The hero's drop shadow under its feet, at the figure's own scale. */
+function dropShadow(ctx: CanvasRenderingContext2D): void {
+  const { dx, dy, rx, ry, alpha } = DROP_SHADOW;
+  softEllipse(ctx, dx, dy, rx, ry, BLACK, alpha, 'source-over');
 }
 
 /** The band of a hero's canvas `h` device px tall that layer `which` covers, anchored at `at`. */
@@ -142,41 +173,45 @@ function drawLayer(
   ctx.clearRect(0, 0, w, band.height);
   ctx.setTransform(at.s, 0, 0, at.s, at.x, at.y - band.top);
   if (which === 'legs') {
-    const { dx, dy, rx, ry, alpha } = DROP_SHADOW;
-    softEllipse(ctx, dx, dy, rx, ry, BLACK, alpha, 'source-over');
+    dropShadow(ctx);
   }
-  const { tilt, on } = frame.lamp;
-  drawScientist(ctx, {
-    color: frame.color,
-    name: '',
-    facing: HERO_FACING,
-    moving: false,
-    walkPhase: 0,
-    isYou: false,
-    connected: true,
-    pose: { ...frame.pose, bob: 0 },
-    ground: 'lit',
-    named: false,
-    layer: which,
-    held: (held) => drawHandLamp(held, tilt, on),
-  });
+  drawFigure(ctx, frame, which);
 }
 
 /**
- * Lays one frame of the hero on its canvas: sized to its box at the stage's density, each layer
- * drawn anew where what it shows has changed, and the two laid over each other where anything
- * has — the upper lifted by the breath, in whole pixels. Says whether the canvas changed.
+ * The hero walking: drawn whole on its canvas, frame after frame — legs, body and breath all
+ * move — its layers left to be laid again once it stands.
+ */
+function drawWalking(hero: HeroCanvas, frame: HeroFrame, at: Anchor): void {
+  const { canvas, ctx } = hero;
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.setTransform(at.s, 0, 0, at.s, at.x, at.y);
+  dropShadow(ctx);
+  drawFigure(ctx, frame, 'all');
+  hero.laid = null;
+}
+
+/**
+ * Lays one frame of the hero on its canvas: sized to its box at the stage's density; walking,
+ * drawn whole; standing, each layer drawn anew where what it shows has changed, and the two laid
+ * over each other where anything has — the upper lifted by the breath, in whole pixels. Says
+ * whether the canvas changed.
  */
 export function paintHero(hero: HeroCanvas, frame: HeroFrame): boolean {
   const { canvas, ctx } = hero;
-  const w = Math.max(1, Math.round(frame.place.box.width * frame.dpr));
-  const h = Math.max(1, Math.round(frame.place.box.height * frame.dpr));
+  const w = Math.max(1, Math.round(frame.box.width * frame.dpr));
+  const h = Math.max(1, Math.round(frame.box.height * frame.dpr));
   if (canvas.width !== w || canvas.height !== h) {
     canvas.width = w;
     canvas.height = h;
     hero.laid = null;
   }
   const at = anchorOf(frame);
+  if (frame.motion.moving) {
+    drawWalking(hero, frame, at);
+    return true;
+  }
   const size = `${w}x${h}@${at.x},${at.y},${at.s}`;
   for (const which of ['legs', 'upper'] as const) {
     const key = layerKey(which, frame, size);
