@@ -1,57 +1,30 @@
-import { spawnSync } from 'node:child_process';
-import { randomBytes } from 'node:crypto';
-import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { PrismaClient } from '@prisma/client';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
+import { prisma } from './postgresSetup.js';
 
 /**
- * The database's schema as the committed migrations make it, against a Postgres the tests may
- * write to (TEST_DATABASE_URL): the migrations go into a schema of this run's own, which is
- * dropped after. Without the variable there is nothing to run against.
+ * The database's schema as the committed migrations make it, in the schema the run migrated in
+ * TEST_DATABASE_URL's database (postgresSetup.ts). Without the variable there is nothing to run
+ * against.
  */
 
-const SERVER = fileURLToPath(new URL('..', import.meta.url));
-const PRISMA = join(SERVER, 'node_modules', '.bin', 'prisma');
-const BASE = process.env['TEST_DATABASE_URL'];
+const url = inject('postgresUrl');
 
-/** `base` with its Postgres schema set to `schema`, as Prisma takes it (`?schema=`). */
-function inSchema(base: string, schema: string): string {
-  const url = new URL(base);
-  url.searchParams.set('schema', schema);
-  return url.toString();
-}
-
-/** The Prisma CLI run in the server package on the database at `url`: its exit code and output. */
-function prisma(args: string[], url: string): { status: number | null; output: string } {
-  const run = spawnSync(PRISMA, args, {
-    cwd: SERVER,
-    env: { ...process.env, DATABASE_URL: url, CHECKPOINT_DISABLE: '1' },
-    encoding: 'utf8',
-  });
-  return { status: run.status, output: `${run.stdout}${run.stderr}` };
-}
-
-describe.skipIf(BASE === undefined)('the migrations', () => {
-  const schema = `test_schema_${randomBytes(4).toString('hex')}`;
-  let url = '';
+describe.skipIf(url === null)('the migrations', () => {
+  const schema = url === null ? '' : (new URL(url).searchParams.get('schema') ?? '');
   let db: PrismaClient;
 
   beforeAll(() => {
-    url = inSchema(BASE ?? '', schema);
-    db = new PrismaClient({ datasourceUrl: url });
-    const deployed = prisma(['migrate', 'deploy'], url);
-    expect(deployed.status, deployed.output).toBe(0);
+    db = new PrismaClient({ datasourceUrl: url ?? '' });
   });
 
   afterAll(async () => {
-    await db.$executeRawUnsafe(`DROP SCHEMA IF EXISTS "${schema}" CASCADE`);
     await db.$disconnect();
   });
 
   it('make exactly the schema prisma/schema.prisma describes', () => {
-    const args = ['migrate', 'diff', '--from-url', url];
-    const diff = prisma([...args, '--to-schema-datamodel', 'prisma/schema.prisma', '--exit-code'], url);
+    const args = ['migrate', 'diff', '--from-url', url ?? '', '--to-schema-datamodel'];
+    const diff = prisma([...args, 'prisma/schema.prisma', '--exit-code'], url ?? '');
     // 0: no difference; 2: the schema says more or other than the migrations make.
     expect(diff.status, diff.output).toBe(0);
   });
