@@ -2022,8 +2022,10 @@ th d='M12 11 12.8 13.6' stroke='%23cfd6dc' stroke-width='1.6'/%3E%3Cpath d='M12.
  * grey engraved buttons in four rows numbered on plates. A wrong key shakes,
  * as the device rejects it. The signs flare on as a stage starts; a fleeting
  * strip shows one sign at a time, each fading as the next comes, the other
- * lamps dark; a done lamp pops on with every sign in. The audience gets the
- * strip and, under it, the keys of both consoles, which nobody can press there.
+ * lamps dark; a done lamp pops on with every sign in. Where the display has
+ * lost its colour, a third legend burns, ANZEIGE · FARBLOS, and the signs
+ * come up larger, grey, their patterns bold. The audience gets the strip
+ * and, under it, the keys of both consoles, which nobody can press there.
  */
 
 .signal {
@@ -2146,6 +2148,18 @@ th d='M12 11 12.8 13.6' stroke='%23cfd6dc' stroke-width='1.6'/%3E%3Cpath d='M12.
   width: 44px;
   height: 44px;
   filter: drop-shadow(0 0 6px currentColor);
+}
+
+/* Without colour the display draws its signs larger, on every screen: 64 px, so that every
+   cell of a grey sign's bold pattern stands at 18 px or more, a readout's least size
+   (SignalPanel.tsx BOLD). Its dark places in a fleeting strip take the same size. */
+.signal-strip--grey .signal-sign {
+  width: 80px;
+}
+
+.signal-strip--grey .signal-glyph {
+  width: 64px;
+  height: 64px;
 }
 
 /* The done lamps, one per sign: dark rings that light as the signs go in. */

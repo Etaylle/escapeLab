@@ -134,27 +134,138 @@ const STRIPES: Record<Form, [Point, Point][]> = {
   quadrat: stripesIn('quadrat'),
 };
 
-/** The texture's ink: the sign's own colour, darkened. */
-const INK = 'rgba(6, 9, 12, 0.42)';
+/**
+ * How a pattern's marks are drawn over a sign, in its 24 units: their ink, where the dots and
+ * the stripes lie in each form, how big a dot, a stripe and the ring are, and their class.
+ */
+interface MarkStyle {
+  name: string;
+  ink: string;
+  dots: Readonly<Record<Form, readonly Point[]>>;
+  dot: number;
+  stripes: Readonly<Record<Form, readonly (readonly [Point, Point])[]>>;
+  stripe: number;
+  ring: number;
+  ringWidth: number;
+}
 
-/** A sign's texture over its form, by the texture its colour carries. */
-function TextureOver({ texture, form }: { texture: SignalPattern; form: Form }) {
-  const className = `signal-texture signal-texture--${texture}`;
-  switch (texture) {
+/** A coloured sign's texture: fine, in the sign's own colour darkened. */
+const TEXTURE: MarkStyle = {
+  name: 'signal-texture',
+  ink: 'rgba(6, 9, 12, 0.42)',
+  dots: DOTS,
+  dot: 0.9,
+  stripes: STRIPES,
+  stripe: 1.3,
+  ring: 3.4,
+  ringWidth: 1.7,
+};
+
+/**
+ * A grey sign's pattern: with no colour left to help, the one thing that tells it, so bold and
+ * near black on the grey. On the display's 64 px every cell of it measures 18 px or more, the
+ * art bible's readout — dot to dot 6.9 units at least, stripe to stripe 6.9, the ring 9.6
+ * across — and every mark keeps clear of its form's edge. The dots stand as a hexagon round the
+ * circle's middle, a five on the square, one in each corner of the triangle and one in its
+ * middle; the stripes rise to the right as Abb. 2 draws them, three over the circle and the
+ * square, two over the narrower triangle.
+ */
+const BOLD: MarkStyle = {
+  name: 'signal-marks',
+  ink: '#121212',
+  dots: {
+    kreis: [
+      [12, 12],
+      [12, 5.1],
+      [17.98, 8.55],
+      [17.98, 15.45],
+      [12, 18.9],
+      [6.02, 15.45],
+      [6.02, 8.55],
+    ],
+    dreieck: [
+      [12, 14.2],
+      [12, 6.93],
+      [18.21, 17.8],
+      [5.79, 17.8],
+    ],
+    quadrat: [
+      [12, 12],
+      [6.5, 6.5],
+      [17.5, 6.5],
+      [17.5, 17.5],
+      [6.5, 17.5],
+    ],
+  },
+  dot: 1.4,
+  stripes: {
+    kreis: [
+      [
+        [4.9, 9.34],
+        [9.3, 4.94],
+      ],
+      [
+        [6.7, 17.3],
+        [17.3, 6.7],
+      ],
+      [
+        [14.7, 19.06],
+        [19.1, 14.66],
+      ],
+    ],
+    dreieck: [
+      [
+        [8, 12.35],
+        [13.1, 7.25],
+      ],
+      [
+        [11.6, 18.51],
+        [16.6, 13.51],
+      ],
+    ],
+    quadrat: [
+      [
+        [4.9, 9.34],
+        [9.3, 4.94],
+      ],
+      [
+        [5, 19],
+        [19, 5],
+      ],
+      [
+        [14.7, 19.06],
+        [19, 14.76],
+      ],
+    ],
+  },
+  stripe: 1.6,
+  ring: 4,
+  ringWidth: 1.6,
+};
+
+/** A pattern's marks over a sign of `form`, drawn in `style`; a plain sign has none. */
+function Marks({ pattern, form, style }: { pattern: SignalPattern; form: Form; style: MarkStyle }) {
+  const className = `${style.name} ${style.name}--${pattern}`;
+  switch (pattern) {
     case 'plain':
       return null;
     case 'dots':
       return (
-        <g className={className} fill={INK}>
-          {DOTS[form].map(([x, y]) => (
-            <circle key={`${x} ${y}`} cx={x} cy={y} r={0.9} />
+        <g className={className} fill={style.ink}>
+          {style.dots[form].map(([x, y]) => (
+            <circle key={`${x} ${y}`} cx={x} cy={y} r={style.dot} />
           ))}
         </g>
       );
     case 'stripes':
       return (
-        <g className={className} stroke={INK} strokeWidth={1.3} strokeLinecap="round">
-          {STRIPES[form].map(([[x1, y1], [x2, y2]]) => (
+        <g
+          className={className}
+          stroke={style.ink}
+          strokeWidth={style.stripe}
+          strokeLinecap="round"
+        >
+          {style.stripes[form].map(([[x1, y1], [x2, y2]]) => (
             <line key={`${x1} ${y1}`} x1={x1} y1={y1} x2={x2} y2={y2} />
           ))}
         </g>
@@ -166,10 +277,10 @@ function TextureOver({ texture, form }: { texture: SignalPattern; form: Form }) 
           className={className}
           cx={cx}
           cy={cy}
-          r={3.4}
+          r={style.ring}
           fill="none"
-          stroke={INK}
-          strokeWidth={1.7}
+          stroke={style.ink}
+          strokeWidth={style.ringWidth}
         />
       );
     }
@@ -232,40 +343,60 @@ function partsOf(token: SignalToken): [Colour, Form] {
   return token.split('-') as [Colour, Form];
 }
 
-/** The grey of a sign on a display that has lost its colour. */
-const GREY = '#a3a3a3';
+/**
+ * The grey of a sign on a display that has lost its colour: a lamp lit without a hue, about as
+ * light as the four colours, its pattern's ink (BOLD) standing out of it at 9.4:1.
+ */
+const GREY = '#b8b8b8';
 
-/** A sign's drawing as it lights on the display, in `fill`, its texture over it. */
+/** A sign as the display draws it: its form, what it lights in, its pattern's marks, its words. */
 interface Drawing {
+  glyph: string;
   form: Form;
   fill: string;
-  texture: SignalPattern;
+  marks: ReactNode;
   /** what a screen reader hears it as */
   label: string;
 }
 
-/** How the display draws a sign: in its colour, or without it, grey, its pattern alone. */
+/**
+ * How the display draws a sign: in its colour with its colour's fine texture, or, where the
+ * display has lost its colour, grey with its pattern bold and nothing of the colour left.
+ */
 function drawingOf(sign: ShownSign): Drawing {
   if (typeof sign !== 'string') {
-    return { form: sign.shape, fill: GREY, texture: sign.pattern, label: greySignLabel(sign) };
+    const { shape: form, pattern } = sign;
+    return {
+      glyph: 'signal-glyph signal-glyph--grey',
+      form,
+      fill: GREY,
+      marks: <Marks pattern={pattern} form={form} style={BOLD} />,
+      label: greySignLabel(sign),
+    };
   }
   const [colour, form] = partsOf(sign);
-  return { form, fill: COLOURS[colour], texture: textureOf(sign), label: tokenLabel(sign) };
+  return {
+    glyph: 'signal-glyph',
+    form,
+    fill: COLOURS[colour],
+    marks: <Marks pattern={SIGNAL_PATTERNS[colour]} form={form} style={TEXTURE} />,
+    label: tokenLabel(sign),
+  };
 }
 
 /**
  * A sign as both consoles show it: its form in its colour, glowing in it
  * like a lamp as it comes on (CSS), its colour's texture printed over it —
- * or, on a display that has lost its colour, grey with the texture alone —
+ * or, on a display that has lost its colour, grey with its pattern bold —
  * and no word: what it is, the players say. A screen reader gets the words,
  * „rotes Dreieck", „Kreis, Ring" — none for a sign `fading` out of a
  * fleeting strip.
  */
 function Sign({ sign, fading = false }: { sign: ShownSign; fading?: boolean }) {
-  const { form, fill, texture, label } = drawingOf(sign);
+  const { glyph, form, fill, marks, label } = drawingOf(sign);
   return (
     <svg
-      className={fading ? 'signal-glyph signal-glyph--fading' : 'signal-glyph'}
+      className={fading ? `${glyph} signal-glyph--fading` : glyph}
       viewBox="0 0 24 24"
       style={{ color: fill }}
       role={fading ? undefined : 'img'}
@@ -273,7 +404,7 @@ function Sign({ sign, fading = false }: { sign: ShownSign; fading?: boolean }) {
       aria-hidden={fading ? true : undefined}
     >
       {FORMS[form](fill)}
-      <TextureOver texture={texture} form={form} />
+      {marks}
     </svg>
   );
 }
@@ -315,20 +446,31 @@ export function signalSounds(change: SignalChange): void {
   }
 }
 
-/** A strip's signs and lamps: the stage's sequence, the signs in, the lamp just lit. */
+/**
+ * A strip's signs and lamps: the stage's sequence, the signs in, the lamp just lit, and
+ * whether the display has lost its colour.
+ */
 interface StripProps {
   sequence: ShownSign[];
   done: number;
   fresh: number | null;
+  grey: boolean;
 }
+
+/** A strip's class: grey, its signs drawn larger, where the display has lost its colour. */
+const stripClass = (kind: string, grey: boolean): string =>
+  grey ? `${kind} signal-strip--grey` : kind;
 
 /**
  * The stage's sequence from the left, each sign over its lamp, glowing on one after the
  * other as the stage starts (CSS); lit as far as it is pressed.
  */
-function Strip({ sequence, done, fresh }: StripProps) {
+function Strip({ sequence, done, fresh, grey }: StripProps) {
   return (
-    <ol className="signal-strip" aria-label={`Folge, ${done} von ${sequence.length} gedrückt`}>
+    <ol
+      className={stripClass('signal-strip', grey)}
+      aria-label={`Folge, ${done} von ${sequence.length} gedrückt`}
+    >
       {sequence.map((sign, i) => (
         <li key={i} className="signal-sign">
           <Sign sign={sign} />
@@ -361,12 +503,12 @@ function FleetingPlace({ sign, at }: { sign: ShownSign; at: 'shown' | 'gone' | '
  * comes, then the strip goes dark and starts over. The lamps stay, lit as
  * far as the signs are pressed.
  */
-function FleetingStrip({ sequence, done, fresh }: StripProps) {
+function FleetingStrip({ sequence, done, fresh, grey }: StripProps) {
   const { shown, gone } = useFleeting(sequence.length);
   const at = (i: number) => (i === shown ? 'shown' : i === gone ? 'gone' : 'dark');
   return (
     <ol
-      className="signal-strip signal-strip--fleeting"
+      className={stripClass('signal-strip signal-strip--fleeting', grey)}
       aria-label={`Folge, ${done} von ${sequence.length} gedrückt`}
     >
       {sequence.map((sign, i) => (
@@ -563,6 +705,11 @@ function ConsoleMode({ sending }: { sending: boolean }) {
   return <Mode label="BETRIEB" legends={['SENDEN', 'EINGABE']} lit={lit} />;
 }
 
+/** The display's own legend, lit while it shows its signs without colour; none before. */
+function DisplayMode({ puzzle }: { puzzle: SignalPuzzle }) {
+  return puzzle.grey ? <Mode label="ANZEIGE" legends={['FARBLOS']} lit="FARBLOS" /> : null;
+}
+
 /** What a console shows of the latest change: the lamp it lit, and whether it ended a stage. */
 interface Lit {
   fresh: number | null;
@@ -595,11 +742,16 @@ function Audience({ puzzle, lit, sequence }: SideProps) {
   const both = `${consoleName('a')} und ${consoleName('b')}`;
   const sides = (['a', 'b'] as const).map((side) => consoleName(side).toUpperCase());
   const sender = consoleName(puzzle.sends).toUpperCase();
-  const mode = <Mode label="SENDET" legends={sides} lit={sender} />;
+  const mode = (
+    <>
+      <Mode label="SENDET" legends={sides} lit={sender} />
+      <DisplayMode puzzle={puzzle} />
+    </>
+  );
   return (
     <div className="signal">
       <Status puzzle={puzzle} lit={lit} mode={mode} />
-      <Strip sequence={sequence} done={puzzle.done} fresh={lit.fresh} />
+      <Strip sequence={sequence} done={puzzle.done} fresh={lit.fresh} grey={puzzle.grey} />
       <Warning puzzle={puzzle} />
       {grids !== null &&
         (['a', 'b'] as const).map((side) => (
@@ -650,10 +802,16 @@ function receivingKeys(puzzle: SignalPuzzle, send: SignalSend): ReactNode {
  * that the rules call fleeting.
  */
 function Sender({ puzzle, lit, sequence }: SideProps) {
-  const strip = { sequence, done: puzzle.done, fresh: lit.fresh };
+  const strip = { sequence, done: puzzle.done, fresh: lit.fresh, grey: puzzle.grey };
+  const mode = (
+    <>
+      <ConsoleMode sending />
+      <DisplayMode puzzle={puzzle} />
+    </>
+  );
   return (
     <div className="signal">
-      <Status puzzle={puzzle} lit={lit} mode={<ConsoleMode sending />} />
+      <Status puzzle={puzzle} lit={lit} mode={mode} />
       {puzzle.fleeting ? <FleetingStrip key={puzzle.stage} {...strip} /> : <Strip {...strip} />}
       <Warning puzzle={puzzle} />
     </div>
@@ -666,7 +824,9 @@ function Sender({ puzzle, lit, sequence }: SideProps) {
  * is fleeting; the receiving one has twelve keys and presses the sequence
  * in its order: the signs themselves, or with the legend rows of grey
  * shapes. Both light a lamp per sign pressed, and the direction swaps with
- * every stage. The audience sees what is sent and the keys.
+ * every stage. Where the display has lost its colour (`grey`), it says so
+ * on its status strip and shows each sign grey and larger, by its pattern
+ * alone. The audience sees what is sent and the keys.
  */
 export function SignalPanel({ puzzle, change, send }: PanelProps<'signal'>) {
   const { role, sequence } = puzzle;
