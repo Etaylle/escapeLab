@@ -4,6 +4,7 @@ import { FIGURE_TALL, heroPlace, type StageFacts } from '../src/world/menu/hero.
 import { heroCanvas } from '../src/world/menu/heroArt.js';
 import {
   attendedOf,
+  entranceRun,
   heroPainter,
   type HeroPainting,
   type HeroProbe,
@@ -304,13 +305,15 @@ function painting(reduced: boolean): HeroPainting {
   if (hero === null) throw new Error('no hero');
   return {
     hero,
-    standing: { place: PLACE, at: { x: 0, y: 60 }, menuRight: DESKTOP.menuRight },
+    standing: { place: PLACE, at: { x: 0, y: 60 }, menuRight: DESKTOP.menuRight, stageW: 1440 },
     look: { current: { color: '#2dd4bf', speaking: false, waveAt: null } },
     attends: { current: null },
     sweep: newSweep(),
     probe: { laid: 0, drawn: { legs: 0, upper: 0 } } as HeroProbe,
+    entrance: entranceRun(false, () => null),
     phase: 0.3,
     reduced: () => reduced,
+    canvas: null,
   };
 }
 

@@ -1,4 +1,12 @@
-import { figurePose, HOLD, type FigurePose } from '../figure.js';
+import { BEAM_MS } from '../coldOpen.js';
+import {
+  figurePose,
+  gaitStep,
+  HOLD,
+  shownFacing,
+  TURN_MS,
+  type FigurePose,
+} from '../figure.js';
 import { SHOT_WIDE } from '../intro/shot.js';
 import { tileCss } from '../viewport.js';
 
@@ -135,6 +143,68 @@ export function heroPlace(f: StageFacts): HeroPlace | null {
   return { scale, feet: { x, y }, box, tiles };
 }
 
+/** How long the hero takes to walk in from the stage's right edge on the first menu of a page. */
+export const WALK_IN_MS = 1200;
+/** How long after it has stopped the click comes and its lamp comes on, ms. */
+export const CLICK_AFTER_MS = 350;
+/** How long its lamp takes to come on after the click: as the cold open's lamps (coldOpen.ts). */
+export const LAMP_ON_MS = BEAM_MS;
+/** The whole entrance, from the first step to the lamp on, ms. */
+export const ENTRANCE_MS = WALK_IN_MS + CLICK_AFTER_MS + LAMP_ON_MS;
+/** Where a hero walking in faces: straight along its way, to the menu's side. */
+const WALKING_FACING = Math.PI;
+
+/** How the hero moves at a moment: where it stands, whether it walks, where it faces. */
+export interface HeroMotion {
+  /** how far right of its place it stands, figure units */
+  offset: number;
+  moving: boolean;
+  /** how far into the walk cycle its legs are, 0 to 1 (figure.ts gaitStep) */
+  walk: number;
+  facing: number;
+}
+
+/** The hero standing in its place, facing the menu. */
+export const STANDING_STILL: HeroMotion = {
+  offset: 0,
+  moving: false,
+  walk: 0,
+  facing: HERO_FACING,
+};
+
+/** The hero `ms` into its entrance: how it moves, whether the click has come, its lamp. */
+export interface Entrance {
+  motion: HeroMotion;
+  /** the click of the cold open has come: its lamp comes on */
+  clicked: boolean;
+  /** how far its lamp is on, 0 to 1 */
+  lamp: number;
+  /** the entrance is over: the hero stands in its place, its lamp on */
+  done: boolean;
+}
+
+/**
+ * The hero `ms` into its entrance on the first menu of a page, walking in from `from` figure
+ * units right of its place — beyond the stage's right edge — over WALK_IN_MS: at a walk as it
+ * comes in, slowing to a stop, its legs' cycle tied to the ground covered (figure.ts gaitStep),
+ * facing along its way and turning to the menu in the art's steps as it stops (shownFacing).
+ * CLICK_AFTER_MS after the stop the cold open's click comes, and the lamp comes on over
+ * LAMP_ON_MS.
+ */
+export function entranceAt(ms: number, from: number): Entrance {
+  if (ms < WALK_IN_MS) {
+    const u = Math.max(0, ms) / WALK_IN_MS;
+    const covered = from * (1 - (1 - u) * (1 - u));
+    const turning = { from: WALKING_FACING, to: HERO_FACING, since: WALK_IN_MS - TURN_MS };
+    const facing = ms < turning.since ? WALKING_FACING : shownFacing(turning, ms);
+    const motion = { offset: from - covered, moving: true, walk: gaitStep(0, covered), facing };
+    return { motion, clicked: false, lamp: 0, done: false };
+  }
+  const lit = (ms - WALK_IN_MS - CLICK_AFTER_MS) / LAMP_ON_MS;
+  const lamp = Math.min(1, Math.max(0, lit));
+  return { motion: STANDING_STILL, clicked: lit >= 0, lamp, done: lamp >= 1 };
+}
+
 /** What the hero's pose follows besides the clock. */
 export interface HeroCues {
   /** its own offset into its loops (figure.ts figurePhase of the pass's id) */
@@ -148,16 +218,21 @@ export interface HeroCues {
 }
 
 /**
- * How the hero stands at `now`, up since `since` (ms, the page's clock): as a figure standing
- * in the lobby does (figure.ts) — breathing, glancing round once it has stood a while, its visor
- * lit while it speaks, waving as a name settles — facing the menu, its glances kept to the
- * menu's side, the hand lamp (menu/lamp.ts) held before its chest in both hands, the front one
- * raised from it to wave. Under reduced motion it holds one still pose.
+ * How the hero stands at `now`, up since `since` (ms, the page's clock), moving as `motion` says:
+ * as a figure standing in the lobby does (figure.ts) — breathing, glancing round once it has stood
+ * a while, its visor lit while it speaks, waving as a name settles — facing the menu, its glances
+ * kept to the menu's side, the hand lamp (menu/lamp.ts) held before its chest in both hands, the
+ * front one raised from it to wave; walking, its legs in their cycle, the lamp held still. Under
+ * reduced motion it holds one still pose.
  */
-export function heroPose(cues: HeroCues, now: number, since: number): FigurePose {
+export function heroPose(
+  cues: HeroCues,
+  [now, since]: readonly [number, number],
+  motion: HeroMotion = STANDING_STILL,
+): FigurePose {
   const pose = figurePose({
-    moving: false,
-    facing: HERO_FACING,
+    moving: motion.moving,
+    facing: motion.facing,
     carrying: null,
     speaking: cues.speaking,
     alarmAgoMs: null,
@@ -166,14 +241,14 @@ export function heroPose(cues: HeroCues, now: number, since: number): FigurePose
     t: now - since,
     idleMs: now - since,
     phase: cues.phase,
-    walk: 0,
+    walk: motion.walk,
     task: null,
     reduced: cues.reduced,
   });
-  const waving = pose.arms?.front ?? 0;
+  const waving = motion.moving ? 0 : (pose.arms?.front ?? 0);
   return {
     ...pose,
-    look: HERO_FACING + stepped((pose.look - HERO_FACING) * GLANCE_SHARE, GLANCE_STEP),
+    look: motion.facing + stepped((pose.look - motion.facing) * GLANCE_SHARE, GLANCE_STEP),
     arms: { front: Math.max(HOLD.front, waving), back: HOLD.back },
     holding: true,
   };

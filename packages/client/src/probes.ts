@@ -172,6 +172,11 @@ declare global {
   interface Window {
     /** Probes for the walkthrough harness, only there when the URL asks for them. */
     __escapelab?: Probes;
+    /**
+     * Where the walkthrough holds the menu's hero in its entrance, ms into it, as the pause trick
+     * holds a device's fade (world/menu/heroStage.ts): read under `?trace=1` only, while set.
+     */
+    __heroHold?: number;
   }
 }
 
