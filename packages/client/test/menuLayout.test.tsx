@@ -82,7 +82,9 @@ const BOUND: Seat = {
 function stubWindow(search = ''): void {
   const pass = { id: 'a1'.repeat(16), secret: '0f'.repeat(32), name: 'Anna', color: null };
   const kept = new Map([[PASS_KEY, JSON.stringify(pass)]]);
-  vi.stubGlobal('window', { location: { search }, localStorage: storage(kept) });
+  const location = { search, pathname: '/', hash: '' };
+  const history = { state: null, replaceState: noop };
+  vi.stubGlobal('window', { location, history, localStorage: storage(kept) });
 }
 
 /** The start screen, the pass sitting as `seat` says, the join panel open for `?room=`. */

@@ -8,7 +8,7 @@ import { keepColor, lastColor, PASS_KEY } from '../src/pass.js';
 import { wavesAnew } from '../src/screens/CrewFigure.js';
 import { JoinScreen, MENU_SUBTITLE, panelOnArrival } from '../src/screens/Join.js';
 import { MENU_LABELS, menuItems, menuStep } from '../src/screens/MainMenu.js';
-import { codeOf, escapeHandler, JoinPanel } from '../src/screens/MenuPanels.js';
+import { codeOf, escapeHandler, inviteUsed, JoinPanel } from '../src/screens/MenuPanels.js';
 import { FIRST_COLOR, ProfileChip } from '../src/screens/ProfileChip.js';
 import { storage } from './page.js';
 
@@ -25,11 +25,23 @@ const blackout: MissionInfo = {
   tiles: [],
 };
 
-/** Anna's browser: her pass and name kept, the colour she wore last where `color` is given. */
+/** The addresses the page put in place of its own (history.replaceState), in order. */
+let replaced: string[] = [];
+
+/**
+ * Anna's browser at `search`: her pass and name kept, the colour she wore last where `color` is
+ * given; the addresses it is told to stand at noted in `replaced`.
+ */
 function stubWindow(search = '', color: string | null = null): Map<string, string> {
   const pass = { id: 'a1'.repeat(16), secret: '0f'.repeat(32), name: 'Anna', color };
   const kept = new Map([[PASS_KEY, JSON.stringify(pass)]]);
-  vi.stubGlobal('window', { location: { search }, localStorage: storage(kept) });
+  replaced = [];
+  const history = {
+    state: null,
+    replaceState: (_state: unknown, _title: string, url: string) => void replaced.push(url),
+  };
+  const location = { search, pathname: '/', hash: '' };
+  vi.stubGlobal('window', { location, history, localStorage: storage(kept) });
   return kept;
 }
 
@@ -131,15 +143,23 @@ describe('the menu', () => {
     expect(lobby).toContain(`${open}<section class="bound">`);
   });
 
-  it('opens on „Beitreten" for an invite link, its code filled in', () => {
-    expect(panelOnArrival('?room=QX7R')).toBe('join');
-    expect(panelOnArrival('?trace=1')).toBeNull();
-    stubWindow('?room=qx7r');
+  it('opens on „Beitreten" for an invite link once, its code filled in and taken off', () => {
+    stubWindow('?room=qx7r&trace=1');
+    expect(panelOnArrival()).toBe('join');
+    // The address loses the code at once, the rest of its query kept: no reload brings it back.
+    expect(replaced).toEqual(['/?trace=1']);
     const html = menu();
     expect(html).toContain('role="dialog" aria-modal="true"');
     expect(html).toContain('value="QX7R"');
     // The menu waits under its panel: neither the keys nor a controller reach it.
     expect(html).toContain('<div class="menu-body" inert="">');
+    // A menu has opened on it: the next this page shows — after a room closed — opens on nothing.
+    inviteUsed();
+    expect(panelOnArrival()).toBeNull();
+    expect(menu()).not.toContain('QX7R');
+    stubWindow('?trace=1');
+    expect(panelOnArrival()).toBeNull();
+    expect(replaced).toEqual([]);
   });
 });
 

@@ -29,7 +29,9 @@ const PASS = { id: 'b3'.repeat(16), secret: '7e'.repeat(32) };
 function stubWindow(more: [string, string][] = []): Map<string, string> {
   const kept = new Map([[PASS_KEY, JSON.stringify({ ...PASS, name: 'Ben' })], ...more]);
   vi.stubGlobal('window', {
-    location: { search: '?room=ABCD' },
+    location: { search: '?room=ABCD', pathname: '/', hash: '' },
+    // The invite is taken off the address as the menu reads it.
+    history: { state: null, replaceState: noop },
     localStorage: {
       getItem: (key: string) => kept.get(key) ?? null,
       setItem: noop,

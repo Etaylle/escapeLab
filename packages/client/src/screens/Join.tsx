@@ -18,6 +18,8 @@ import { InstallOffer } from './Install.js';
 import { RESTORING_LINE, RESTORING_TITLE } from './Line.js';
 import { MainMenu, menuItems, opensPanel, type MenuItemId, type PanelId } from './MainMenu.js';
 import {
+  invitedCode,
+  inviteUsed,
   JoinPanel,
   MissionPanel,
   pickedMission,
@@ -229,9 +231,12 @@ function useDoor(send: Props['send'], connected: boolean): void {
   }, [connected]);
 }
 
-/** The panel an address opens the menu on: „Beitreten" for an invite link, its code filled in. */
-export function panelOnArrival(search: string): PanelId | null {
-  return new URLSearchParams(search).get('room') === null ? null : 'join';
+/**
+ * The panel the menu opens on as it comes up: „Beitreten" for the page's invite link, its code
+ * filled in — once (MenuPanels.tsx `invitedCode`).
+ */
+export function panelOnArrival(): PanelId | null {
+  return invitedCode() === '' ? null : 'join';
 }
 
 /**
@@ -249,9 +254,9 @@ function focusMenu(root: HTMLElement | null, item: MenuItemId | null, named: boo
  * Bestenliste or the booklet put away — the focus stands where `focusMenu` says.
  */
 function usePanel(root: RefObject<HTMLElement | null>, named: boolean) {
-  const [panel, setPanel] = useState<PanelId | null>(() =>
-    panelOnArrival(window.location.search),
-  );
+  const [panel, setPanel] = useState<PanelId | null>(panelOnArrival);
+  // The menu has opened on the invite: no other menu of this page does so again.
+  useEffect(() => inviteUsed(), []);
   const last = useRef<MenuItemId | null>(null);
   const isNamed = useRef(named);
   isNamed.current = named;

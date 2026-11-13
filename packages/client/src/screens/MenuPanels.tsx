@@ -346,9 +346,49 @@ export function codeOf(typed: string): string {
   return typed.toUpperCase().replace(/[^A-Z0-9]/g, '');
 }
 
-/** The code an invite link carries in `?room=`, as typed; '' for none. */
-function invitedCode(): string {
-  return codeOf(new URLSearchParams(window.location.search).get('room') ?? '');
+/** An invite link's code as the page took it, and whether a menu has opened on it already. */
+interface Invite {
+  readonly code: string;
+  used: boolean;
+}
+
+/** The invite each address was read for — one a page, its `location` the key. */
+const invites = new WeakMap<object, Invite>();
+
+/**
+ * The invite link's `?room=` read off the address and taken off it at once (history
+ * .replaceState, the rest of the query kept), so that no reload — after leaving a lobby or a
+ * finished run — opens „Beitreten" on it again.
+ */
+function readInvite(): Invite {
+  const { pathname, search, hash } = window.location;
+  const params = new URLSearchParams(search);
+  const code = params.get('room');
+  if (code !== null) {
+    params.delete('room');
+    const rest = params.toString();
+    const address = `${pathname}${rest === '' ? '' : `?${rest}`}${hash}`;
+    window.history.replaceState(window.history.state, '', address);
+  }
+  return { code: codeOf(code ?? ''), used: false };
+}
+
+/** The invite this page came with: read once, the address cleaned as it is. */
+function inviteOfPage(): Invite {
+  const known = invites.get(window.location) ?? readInvite();
+  invites.set(window.location, known);
+  return known;
+}
+
+/** The code the page's invite link brought, as typed; '' for none, or once a menu used it. */
+export function invitedCode(): string {
+  const invite = inviteOfPage();
+  return invite.used ? '' : invite.code;
+}
+
+/** A menu has opened on the invite: none opens on it again while the page lives. */
+export function inviteUsed(): void {
+  inviteOfPage().used = true;
 }
 
 /**
