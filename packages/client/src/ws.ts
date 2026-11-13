@@ -660,14 +660,28 @@ function useLine(wiring: Wiring): MutableRefObject<Line | null> {
   return lineRef;
 }
 
+/** What the page shows of what the server said: the connection's state, as it hands it out. */
+type Shown = Pick<
+  Connection,
+  | 'view'
+  | 'spectatorView'
+  | 'takeover'
+  | 'restoring'
+  | 'rooms'
+  | 'seat'
+  | 'account'
+  | 'myRuns'
+  | 'roomCode'
+  | 'error'
+  | 'refusal'
+>;
+
 /**
- * Owns the WebSocket for the whole app: connects, resumes the tab's room on the browser's pass
- * after a reload or a lost connection, and reconnects with backoff (`keepConnected`) — at once
- * where the page comes back (`wakeOnReturn`).
+ * The page's state, as the server's messages set it (`Shown`), and the page they are taken in by
+ * (`Page`): its setters and the refs read live, the same for the page's life — and how to clear
+ * the banner's words.
  */
-export function useGameConnection(): Connection {
-  const [status, setStatus] = useState<Connection['status']>('connecting');
-  const [retry, setRetry] = useState<Retry | null>(null);
+function usePage(): { shown: Shown; page: Page; clearError: () => void } {
   const [view, setView] = useState<PlayerView | null>(null);
   const [spectatorView, setSpectatorView] = useState<SpectatorView | null>(null);
   const [rooms, setRooms] = useState<RoomSummary[]>([]);
@@ -680,11 +694,45 @@ export function useGameConnection(): Connection {
   const [roomCode, setRoomCode] = useState<string | null>(roomOfTab);
   const [error, setError] = useState<string | null>(null);
   const [refusal, setRefusal] = useState<Refusal | null>(null);
-  const socketRef = useRef<WebSocket | null>(null);
-  const resumingRef = useRef(false);
-  const resumedRef = useRef<string | null>(null);
-  const seenRef = useRef<PlayerView | null>(null);
+  const resuming = useRef(false);
+  const resumed = useRef<string | null>(null);
+  const seen = useRef<PlayerView | null>(null);
   const live = useLiveRefs();
+  const page: Page = {
+    setRoomCode,
+    setView,
+    setSpectatorView,
+    setRooms,
+    setSeat,
+    setAccount,
+    setMyRuns,
+    setTakeover,
+    setRestoring,
+    setError,
+    refuse: (message, of) => setRefusal((last) => ({ seq: (last?.seq ?? 0) + 1, message, of })),
+    resuming,
+    resumed,
+    seen,
+    ...live,
+  };
+  const shown = { view, spectatorView, takeover, restoring, rooms, seat, account, myRuns };
+  return {
+    shown: { ...shown, roomCode, error, refusal },
+    page,
+    clearError: () => setError(null),
+  };
+}
+
+/**
+ * Owns the WebSocket for the whole app: connects, resumes the tab's room on the browser's pass
+ * after a reload or a lost connection, and reconnects with backoff (`keepConnected`) — at once
+ * where the page comes back (`wakeOnReturn`).
+ */
+export function useGameConnection(): Connection {
+  const [status, setStatus] = useState<Connection['status']>('connecting');
+  const [retry, setRetry] = useState<Retry | null>(null);
+  const { shown, page, clearError } = usePage();
+  const socketRef = useRef<WebSocket | null>(null);
   const listenersRef = useRef(new Set<ServerListener>());
 
   const listen = useCallback((listener: ServerListener) => {
@@ -702,75 +750,55 @@ export function useGameConnection(): Connection {
   }, []);
 
   const lineRef = useLine({
-    page: {
-      setRoomCode,
-      setView,
-      setSpectatorView,
-      setRooms,
-      setSeat,
-      setAccount,
-      setMyRuns,
-      setTakeover,
-      setRestoring,
-      setError,
-      refuse: (message, of) => setRefusal((last) => ({ seq: (last?.seq ?? 0) + 1, message, of })),
-      resuming: resumingRef,
-      resumed: resumedRef,
-      seen: seenRef,
-      ...live,
-    },
+    page,
     setStatus,
     setRetry,
     socket: socketRef,
     listeners: listenersRef,
   });
 
+  const { setMyRuns } = page;
   const askMyRuns = useCallback(() => {
     setMyRuns({ status: 'loading' });
     lineRef.current?.send({ kind: 'my-runs', pass: crewPass() });
-  }, [lineRef]);
+  }, [lineRef, setMyRuns]);
 
+  const { positions, drones, pings, chats } = page;
   return {
     status,
     retry,
-    view,
-    spectatorView,
-    takeover,
-    restoring,
-    rooms,
-    seat,
-    account,
-    myRuns,
+    ...shown,
     askMyRuns,
-    roomCode,
-    error,
-    refusal,
-    ...live,
+    positions,
+    drones,
+    pings,
+    chats,
     send: (msg) => {
       if (wipesBanner(msg.kind)) {
-        setError(null);
+        clearError();
       }
-      noteOutgoing(msg, { resumed: resumedRef, setRestoring });
+      noteOutgoing(msg, page);
       lineRef.current?.send(msg);
     },
     listen,
     signal,
-    dismissError: () => setError(null),
+    dismissError: clearError,
     wake: () => lineRef.current?.wake(),
     giveUp: () => {
-      giveUpOffLine(lineRef.current, seenRef.current?.you.id ?? null);
-      setRoomCode(null);
-      setView(null);
-      setSeat(keptSeat());
+      giveUpOffLine(lineRef.current, page.seen.current?.you.id ?? null);
+      page.setRoomCode(null);
+      page.setView(null);
+      page.setSeat(keptSeat());
     },
     leaveRoom: () => {
       const code = roomOfTab();
-      if (code === null || spectatorView !== null) {
+      if (code === null || shown.spectatorView !== null) {
         leaveTab();
         location.reload();
         return;
       }
-      leaveSeat(code, seenRef.current?.you.id ?? null, listen, (msg) => lineRef.current?.send(msg));
+      const playerId = page.seen.current?.you.id ?? null;
+      leaveSeat(code, playerId, listen, (msg) => lineRef.current?.send(msg));
     },
   };
 }
