@@ -422,11 +422,31 @@ Prisma wählen und die Zeichenkette in Render unter „Environment" als `DATABAS
 sie gehört nirgends sonst hin, auch nicht ins Repo. Der Start (`pnpm run start`) wendet dann
 zuerst die Migrationen an (`pnpm --filter @escapelab/server prisma migrate deploy`, aus
 `packages/server/prisma/migrations/`) und startet den Server erst danach; scheitert die
-Migration, startet er nicht, und Render lässt die alte Instanz laufen. Den Prisma-Client erzeugen
-`pnpm install` und `pnpm build` (das Build Command bleibt, wie es ist). Welcher Speicher läuft,
-sagt das Start-Log in einer Zeile: `store: Postgres at DATABASE_URL: …` oder `store: run log …,
-accounts in memory until the server stops (no DATABASE_URL)`. Ist die Datenbank beim Start nicht
-erreichbar, beendet sich der Server mit `not started: …` — auch dann bleibt die alte Instanz.
+Migration, startet er nicht. Den Prisma-Client erzeugen `pnpm install` und `pnpm build` (das
+Build Command bleibt, wie es ist). Welcher Speicher läuft, sagt das Start-Log in einer Zeile:
+`store: Postgres at DATABASE_URL: …` oder `store: run log …, accounts in memory until the server
+stops (no DATABASE_URL)`.
+
+- **Neon nicht erreichbar.** Dann scheitert schon die Migration, mit `Error: P1001: Can't reach
+  database server at …`, und der Server startet nicht. Sein eigenes `not started: …` steht nur im
+  Log, wo er die Datenbank nach der Migration nicht öffnen kann oder ohne sie gestartet wurde
+  (Start Command ohne pnpm, siehe oben). Eine alte Instanz, die weiterspielt, gibt es nur bei
+  einem Deploy, weil Render erst auf eine gesunde neue umschaltet. Bei einem Neustart oder wenn
+  der Free-Plan aus dem Schlaf aufwacht, gibt es keine: Dann ist das Spiel weg, bis Neon wieder
+  antwortet und ein Start gelingt.
+- **Eine Migration bricht mittendrin ab** (Deploy abgebrochen, Instanz beendet, Fehler im SQL).
+  Postgres nimmt ihre Änderungen zurück, denn Prisma führt jede Migration in einer Transaktion
+  aus. Prisma vermerkt sie aber als gescheitert, und jeder weitere Start bricht ab mit `Error:
+  P3009 … migrate found failed migrations in the target database`, der Server startet nicht.
+  Lösen lässt sich das nur von einem eigenen Rechner aus, mit der Neon-Zeichenkette allein in
+  dieser Shell und dem Namen der Migration aus der Meldung:
+
+  ```sh
+  DATABASE_URL='…' pnpm --filter @escapelab/server prisma migrate resolve \
+    --rolled-back 20261113135816_accounts
+  ```
+
+  Danach die Ursache beheben und neu deployen: Der nächste Start wendet die Migration erneut an.
 
 | Wo | Name | Wirkung |
 | --- | --- | --- |

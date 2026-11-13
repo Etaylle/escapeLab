@@ -93,7 +93,8 @@ store in one line either way.
 ## Operating it
 
 - **Render:** `DATABASE_URL` in the environment (Neon's direct connection), the start script
-  applies the migrations first: README, „Hosting auf Render".
+  applies the migrations first: README, „Hosting auf Render" — there too what a start does with
+  Neon away (P1001) or after a migration that broke off (P3009, `prisma migrate resolve`).
 - **A connection lost:** Neon closes a connection that stood idle for five minutes. The pool
   hands out none idle for more than a minute (`max_idle_connection_lifetime=60`, unless
   `DATABASE_URL` sets its own), and a request whose connection was lost all the same is asked
