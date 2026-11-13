@@ -215,8 +215,25 @@ export interface Page {
 
 /** Takes a server message in: the page's state, the room the tab keeps, the live refs. */
 export function takeIn(msg: ServerMessage, page: Page): void {
-  if (!seatNews(msg, page)) {
+  if (!seatNews(msg, page) && !accountNewsOf(msg, page)) {
     lineNews(msg, page);
+  }
+}
+
+/**
+ * Takes in what the server says of the pass's account — the account (`accountNews`), its runs —
+ * and says whether `msg` was such news.
+ */
+function accountNewsOf(msg: ServerMessage, page: Page): boolean {
+  switch (msg.kind) {
+    case 'account':
+      accountNews(msg.account, page);
+      return true;
+    case 'my-runs':
+      page.setMyRuns({ status: 'ready', value: { runs: msg.runs, total: msg.total } });
+      return true;
+    default:
+      return false;
   }
 }
 
@@ -283,12 +300,6 @@ function lineNews(msg: ServerMessage, page: Page): void {
       break;
     case 'restoring':
       onItsWay(msg.code, page);
-      break;
-    case 'account':
-      accountNews(msg.account, page);
-      break;
-    case 'my-runs':
-      page.setMyRuns({ status: 'ready', value: { runs: msg.runs, total: msg.total } });
       break;
     case 'error':
       refused(msg, page);
@@ -417,12 +428,7 @@ function leftRoom({ code, message }: Extract<ServerMessage, { kind: 'left' }>, p
  */
 function refused(msg: Extract<ServerMessage, { kind: 'error' }>, page: Page): void {
   if (page.resuming.current) {
-    page.resuming.current = false;
-    forgetRoom(roomOfTab(), page.seen.current?.you.id ?? null);
-    page.setRoomCode(null);
-    page.setView(null);
-    page.setSpectatorView(null);
-    page.setRestoring(null);
+    comebackRefused(page);
   }
   if (msg.of === 'join-room') {
     page.setTakeover(null);
@@ -437,6 +443,19 @@ function refused(msg: Extract<ServerMessage, { kind: 'error' }>, page: Page): vo
     page.setError(msg.message);
   }
   page.refuse(msg.message, msg.of ?? null);
+}
+
+/**
+ * The tab's own comeback refused: its room is gone, or its pass holds no seat there any more. The
+ * tab plays in no room from now, what it noted there gone, and the join screen comes up.
+ */
+function comebackRefused(page: Page): void {
+  page.resuming.current = false;
+  forgetRoom(roomOfTab(), page.seen.current?.you.id ?? null);
+  page.setRoomCode(null);
+  page.setView(null);
+  page.setSpectatorView(null);
+  page.setRestoring(null);
 }
 
 /**

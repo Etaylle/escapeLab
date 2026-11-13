@@ -300,6 +300,11 @@ interface ScreenProps {
   openSettings: () => void;
 }
 
+/** Whether a page lies over the join screen: booklet, Bestenliste, „Meine Einsätze", editor. */
+function joinCovered(pages: PageState, editor: EditorPage): boolean {
+  return pages.handbook !== null || pages.history !== null || pages.myRuns || editor.open;
+}
+
 /**
  * Off any room: the join screen, and over it the editor, the booklet, the
  * Bestenliste and „Meine Einsätze". The join screen stays mounted behind them,
@@ -309,7 +314,7 @@ interface ScreenProps {
 function OffRoom(props: ScreenProps) {
   const { conn, missions, pages, editor } = props;
   const { handbook, history } = pages;
-  const over = handbook !== null || history !== null || pages.myRuns || editor.open;
+  const over = joinCovered(pages, editor);
   return (
     <>
       <Activity mode={over ? 'hidden' : 'visible'}>

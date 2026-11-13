@@ -305,29 +305,37 @@ function atTheDoor(
   msg: AtTheDoor,
   again: () => void,
 ): Session | null {
+  if (askOfAccount(msg)) {
+    answerAccount(lab, socket, msg);
+    return session;
+  }
   switch (msg.kind) {
     case 'create-room':
     case 'join-room':
       return sitDown(lab, socket, session, msg);
     case 'abandon':
-      return lab.manager.waitsFor(msg.code)
-        ? hold(lab, socket, session, msg.code, again)
-        : giveUp(lab, socket, session, msg);
     case 'spectate':
       return lab.manager.waitsFor(msg.code)
         ? hold(lab, socket, session, msg.code, again)
-        : watch(lab, socket, session, msg.code);
+        : leaveOrWatch(lab, socket, session, msg);
     case 'resume':
       return comeBack(lab, socket, session, msg, again);
-    case 'profile':
-    case 'delete-account':
-    case 'my-runs':
-      answerAccount(lab, socket, msg);
-      return session;
     default:
       answer(lab, socket, msg);
       return session;
   }
+}
+
+/** A seat given up (`giveUp`), or the audience joined (`watch`), in a room that is there. */
+function leaveOrWatch(
+  lab: Lab,
+  socket: PlayerSocket,
+  session: Session | null,
+  msg: Extract<ClientMessage, { kind: 'abandon' | 'spectate' }>,
+): Session | null {
+  return msg.kind === 'abandon'
+    ? giveUp(lab, socket, session, msg)
+    : watch(lab, socket, session, msg.code);
 }
 
 /** What a socket is told of an account that is gone, or that a store could not reach. */
@@ -354,6 +362,15 @@ function tellAccount(socket: PlayerSocket, job: Promise<AccountView> | undefined
 
 /** What a pass asks of its account: its name, that it go, the runs it played. */
 type AccountAsk = Extract<ClientMessage, { kind: 'profile' | 'delete-account' | 'my-runs' }>;
+
+const ACCOUNT_ASKS: ReadonlySet<ClientMessage['kind']> = new Set([
+  'profile',
+  'delete-account',
+  'my-runs',
+] satisfies AccountAsk['kind'][]);
+
+/** Whether `msg` asks something of its pass's account (`AccountAsk`). */
+const askOfAccount = (msg: ClientMessage): msg is AccountAsk => ACCOUNT_ASKS.has(msg.kind);
 
 /**
  * What a pass asked of its account — its name (`profile`), that it go (`delete-account`), the
@@ -453,13 +470,9 @@ function answer(
   msg: Extract<AtTheDoor, { kind: 'whereami' | 'list-rooms' | 'clock' | 'tock' }>,
 ): void {
   switch (msg.kind) {
-    case 'whereami': {
-      send(socket, { kind: 'seated', seat: lab.manager.whereIs(msg.pass) });
-      // The account the device knew it by starts with the name and the colour it kept.
-      const kept = { displayName: msg.name?.trim() ?? '', colour: msg.color ?? null };
-      tellAccount(socket, writable(lab, socket)?.arrive(msg.pass, kept));
+    case 'whereami':
+      whereAmI(lab, socket, msg);
       break;
-    }
     case 'list-rooms':
       send(socket, { kind: 'rooms', rooms: lab.manager.list() });
       break;
@@ -470,6 +483,20 @@ function answer(
     case 'tock':
       break;
   }
+}
+
+/**
+ * Where the pass of `msg` sits, answered at once, and its account told once it is there: found,
+ * or made with the name and the colour the device kept.
+ */
+function whereAmI(
+  lab: Lab,
+  socket: PlayerSocket,
+  msg: Extract<ClientMessage, { kind: 'whereami' }>,
+): void {
+  send(socket, { kind: 'seated', seat: lab.manager.whereIs(msg.pass) });
+  const kept = { displayName: msg.name?.trim() ?? '', colour: msg.color ?? null };
+  tellAccount(socket, writable(lab, socket)?.arrive(msg.pass, kept));
 }
 
 /** The audience connection a socket opens on the room `code`: the session it had let go of. */
@@ -599,13 +626,42 @@ function inRoom(
   msg: Exclude<ClientMessage, AtTheDoor>,
 ): Session {
   if (forTheGame(msg)) {
-    s.room.act(s.playerId, msg);
-    // A colour chosen in a lobby is the account's from now on: the next lobby starts in it.
-    if (msg.kind === 'select-color' && s.pass !== null) {
-      tellAccount(socket, writable(lab, socket)?.recolour(s.pass, msg.color));
-    }
+    act(lab, socket, s, msg);
     return s;
   }
+  switch (msg.kind) {
+    case 'switch-mission':
+    case 'select-difficulty':
+    case 'set-ready':
+      chooseMission(lab, s, msg);
+      return s;
+    case 'interact':
+    case 'pos':
+      step(socket, s, msg);
+      return s;
+    default:
+      toTheOthers(s, msg);
+      return s;
+  }
+}
+
+/**
+ * A game action of the player of `s`, which the room acts on. A colour chosen in a lobby is the
+ * account's from now on: the next lobby starts in it.
+ */
+function act(lab: Lab, socket: PlayerSocket, s: Session, msg: GameMessage): void {
+  s.room.act(s.playerId, msg);
+  if (msg.kind === 'select-color' && s.pass !== null) {
+    tellAccount(socket, writable(lab, socket)?.recolour(s.pass, msg.color));
+  }
+}
+
+/** The mission the room plays, picked in the lobby — or the next run's, the host's yes to it. */
+function chooseMission(
+  lab: Lab,
+  s: Session,
+  msg: Extract<ClientMessage, { kind: 'switch-mission' | 'select-difficulty' | 'set-ready' }>,
+): void {
   switch (msg.kind) {
     case 'switch-mission': {
       const difficulty = s.room.difficulty;
@@ -614,7 +670,7 @@ function inRoom(
         scaleMission(lab.catalog.get(msg.missionId), difficulty),
         difficulty,
       );
-      return s;
+      return;
     }
     case 'select-difficulty':
       // Rescale from the pristine mission, never from an already scaled one.
@@ -623,33 +679,48 @@ function inRoom(
         scaleMission(lab.catalog.get(s.room.missionId), msg.difficulty),
         msg.difficulty,
       );
-      return s;
-    case 'ping':
-      s.room.ping(s.playerId, msg.x, msg.y);
-      return s;
-    case 'chat':
-      s.room.chat(s.playerId, msg.phrase, msg.value);
-      return s;
-    case 'rtc':
-      s.room.relaySignal(s.playerId, msg.to, msg.signal);
-      return s;
-    case 'interact':
-      // The press is taken where the player stood as they pressed; the views it changed go
-      // out first, then the word that E was taken.
-      s.room.interact(s.playerId, { x: msg.x, y: msg.y }, msg.t);
-      send(socket, { kind: 'interacted' });
-      return s;
-    case 'pos': {
-      const { x, y, facing, moving } = msg;
-      s.room.updatePosition(s.playerId, msg.run, { x, y, facing, moving }, msg.t);
-      return s;
-    }
+      return;
     case 'set-ready':
       s.room.setReady(s.playerId, msg.ready, nextMission(lab, s.room, msg.missionId));
-      return s;
+      return;
+  }
+}
+
+/** Where the player of `s` stands, as the page streams it, or what they pressed E on there. */
+function step(
+  socket: PlayerSocket,
+  s: Session,
+  msg: Extract<ClientMessage, { kind: 'interact' | 'pos' }>,
+): void {
+  if (msg.kind === 'interact') {
+    // The press is taken where the player stood as they pressed; the views it changed go out
+    // first, then the word that E was taken.
+    s.room.interact(s.playerId, { x: msg.x, y: msg.y }, msg.t);
+    send(socket, { kind: 'interacted' });
+    return;
+  }
+  const { x, y, facing, moving } = msg;
+  s.room.updatePosition(s.playerId, msg.run, { x, y, facing, moving }, msg.t);
+}
+
+/** What the player of `s` says to the rest of the room: a ping, a chat, a voice signal, a yes. */
+function toTheOthers(
+  s: Session,
+  msg: Extract<ClientMessage, { kind: 'ping' | 'chat' | 'rtc' | 'takeover-answer' }>,
+): void {
+  switch (msg.kind) {
+    case 'ping':
+      s.room.ping(s.playerId, msg.x, msg.y);
+      return;
+    case 'chat':
+      s.room.chat(s.playerId, msg.phrase, msg.value);
+      return;
+    case 'rtc':
+      s.room.relaySignal(s.playerId, msg.to, msg.signal);
+      return;
     case 'takeover-answer':
       s.room.answerTakeover(s.playerId, msg.seat, msg.allow);
-      return s;
+      return;
   }
 }
 

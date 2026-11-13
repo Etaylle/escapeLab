@@ -32,6 +32,12 @@ import { pauseClock } from './Pause.js';
 /** The colour a seat is asked to wear: the account's, as the pass keeps it; none before one. */
 const wearing = (color: string | null): { color?: string } => (color === null ? {} : { color });
 
+/** The seed `?seed=<n>` in the page's address (`search`) pins: a whole number to SEED_MAX. */
+function seedOf(search: string): number | null {
+  const asked = new URLSearchParams(search).get('seed') ?? '';
+  return /^\d{1,10}$/.test(asked) && Number(asked) <= SEED_MAX ? Number(asked) : null;
+}
+
 /**
  * The message that opens a room for `missionId`, or for the server's first
  * mission where none is picked, on `difficulty` where one is given — a first
@@ -49,8 +55,7 @@ export function createRoomMessage(
   difficulty: Difficulty | null = null,
   color: string | null = null,
 ): ClientMessage {
-  const asked = new URLSearchParams(search).get('seed') ?? '';
-  const seed = /^\d{1,10}$/.test(asked) && Number(asked) <= SEED_MAX ? Number(asked) : null;
+  const seed = seedOf(search);
   return {
     kind: 'create-room',
     name,
