@@ -1,0 +1,110 @@
+// The game's database (docs/accounts.md): an account per crew pass, the runs the crews played
+// and the Erfolge each account earned. DATABASE_URL picks it (src/store/postgres.ts); without,
+// the server keeps its run log file and its accounts in memory (src/store/jsonl.ts).
+//
+// The schema is the source of truth: change it here, then make the migration with
+// `pnpm --filter @escapelab/server prisma migrate dev --name <what>` against a database of your
+// own. The start script applies the migrations (`prisma migrate deploy`) where DATABASE_URL is
+// set; `pnpm install` and `pnpm build` generate the client.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/// What the game keeps of a player: the name and the colour they chose, the runs they played
+/// and the Erfolge they earned. No e-mail and no password: an identity — the crew pass a
+/// browser keeps — is the way in.
+model Account {
+  id           String        @id @default(uuid()) @db.Uuid
+  displayName  String        @default("") @map("display_name")
+  /// a crew colour, '#rrggbb'; null until the player chose one in a lobby
+  colour       String?
+  createdAt    DateTime      @default(now()) @map("created_at")
+  lastSeenAt   DateTime      @default(now()) @map("last_seen_at")
+  identities   Identity[]
+  memberships  RunMember[]
+  achievements Achievement[]
+
+  @@map("accounts")
+}
+
+/// A way into an account: a browser's crew pass (provider `pass`, the pass's id as the subject)
+/// for now; Google sign-in (`google`) is to come. Deleting the account deletes its identities.
+model Identity {
+  provider   String
+  subject    String
+  /// sha256 of the pass's secret, hex — the secret itself is never kept
+  secretHash String?  @map("secret_hash")
+  accountId  String   @map("account_id") @db.Uuid
+  createdAt  DateTime @default(now()) @map("created_at")
+  account    Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@id([provider, subject])
+  @@index([accountId])
+  @@map("identities")
+}
+
+/// A finished run, won or lost: the columns the Bestenliste ranks by, and the run's report
+/// (core report.ts) without what names a person — the crew's names and what each of them did
+/// stand in its members.
+model Run {
+  id          String      @id @default(uuid()) @db.Uuid
+  missionId   String      @map("mission_id")
+  /// 'entspannt', 'normal' or 'hart'
+  difficulty  String
+  /// the seed the run played, where a tester pinned the room or it played the Tagesschicht
+  seed        BigInt?
+  roomCode    String      @map("room_code")
+  /// 'won', 'lost:time', 'lost:alarms' or 'lost:abandoned'
+  outcome     String
+  startedAt   DateTime    @map("started_at")
+  endedAt     DateTime    @map("ended_at")
+  /// the run's time: from the lights going out to its end (core `runSeconds`)
+  durationSec Float       @map("duration_sec")
+  crewSize    Int         @map("crew_size")
+  /// every alarm of the run, whatever set it off
+  alarms      Int
+  /// the run played the Tagesschicht and ranks among that day's runs alone
+  daily       Boolean     @default(false)
+  report      Json
+  members     RunMember[]
+
+  @@index([missionId, difficulty, outcome])
+  @@map("runs")
+}
+
+/// A seat of a run, one per crew member in the order they joined: the name they played under,
+/// what they did, and the account of the pass that held the seat where it had one. Deleting the
+/// account deletes its seats: the run stays, without their name.
+model RunMember {
+  runId         String   @map("run_id") @db.Uuid
+  /// 0 for the crew's first (the report's p1), 1 for the second, …
+  seat          Int
+  accountId     String?  @map("account_id") @db.Uuid
+  seatName      String   @map("seat_name")
+  /// what the seat did (core state.ts `Credits`)
+  contributions Json
+  run           Run      @relation(fields: [runId], references: [id], onDelete: Cascade)
+  account       Account? @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@id([runId, seat])
+  @@index([accountId])
+  @@map("run_members")
+}
+
+/// An Erfolg an account earned, once: `key` names the mission and the plaque,
+/// „blackout:ohne-alarm"; `unlockedAt` is the end of the run that first earned it.
+model Achievement {
+  accountId  String   @map("account_id") @db.Uuid
+  key        String
+  unlockedAt DateTime @map("unlocked_at")
+  account    Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@id([accountId, key])
+  @@map("achievements")
+}

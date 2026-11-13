@@ -1,5 +1,11 @@
 packages:
   - packages/*
 
+# Prisma's install scripts fetch its engines and generate the client from the schema that
+# prisma.config.ts names; where pnpm restores them from its cache instead of running them, the
+# server's postinstall generates the client all the same.
 onlyBuiltDependencies:
+  - '@prisma/client'
+  - '@prisma/engines'
   - esbuild
+  - prisma

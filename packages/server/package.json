@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "TLS=off ALLOW_SEED=1 ALLOW_RECORD=1 ALLOW_TAKES=1 tsx watch src/index.ts",
     "start": "exec node --import tsx src/index.ts",
+    "postinstall": "CHECKPOINT_DISABLE=1 prisma generate --no-hints",
+    "prisma": "CHECKPOINT_DISABLE=1 prisma",
     "smoke": "tsx scripts/smoke.ts",
     "runs": "tsx scripts/runs.ts",
     "cert": "tsx scripts/cert.ts",
@@ -14,11 +16,13 @@
   },
   "dependencies": {
     "@escapelab/core": "workspace:*",
+    "@prisma/client": "^6.19.3",
     "ws": "^8.18.3"
   },
   "devDependencies": {
     "@types/node": "^24.7.2",
     "@types/ws": "^8.18.1",
+    "prisma": "^6.19.3",
     "tsx": "^4.20.6",
     "typescript": "^5.9.3",
     "vitest": "^3.2.4"
