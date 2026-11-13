@@ -210,17 +210,26 @@ export class PostgresStore implements Store {
     }
   }
 
-  /** The account `identity` leads into, its visit noted; null where it leads nowhere yet. */
-  private async visit(identity: PassIdentity): Promise<Account | null> {
+  async findByIdentity(identity: PassIdentity): Promise<Account | null> {
     const found = await this.db.identity.findUnique({
       where: { provider_subject: { provider: identity.provider, subject: identity.subject } },
+      include: { account: true },
     });
     if (found === null) {
       return null;
     }
     checkSecret(found.secretHash, identity.secretHash);
+    return accountOf(found.account);
+  }
+
+  /** The account `identity` leads into, its visit noted; null where it leads nowhere yet. */
+  private async visit(identity: PassIdentity): Promise<Account | null> {
+    const found = await this.findByIdentity(identity);
+    if (found === null) {
+      return null;
+    }
     const account = await this.db.account.update({
-      where: { id: found.accountId },
+      where: { id: found.id },
       data: { lastSeenAt: new Date() },
     });
     return accountOf(account);

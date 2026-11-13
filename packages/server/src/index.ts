@@ -12,6 +12,7 @@ import {
   type Health,
   type RunsExport,
 } from './api.js';
+import { AccountDesk } from './accounts.js';
 import { customMissions, serveCustomMissions } from './customMissions.js';
 import { dailySalt } from './dailySalt.js';
 import { HEARTBEAT_MS, startHeartbeat } from './heartbeat.js';
@@ -118,7 +119,8 @@ const httpServer = createWebServer(tls, (req, res) => {
 });
 
 const wss = new WebSocketServer({ server: httpServer, path: '/ws' });
-const served = serveSockets(wss, { catalog, manager });
+// Every pass has its account in the store, found or made as it comes to the door.
+const served = serveSockets(wss, { catalog, manager, accounts: new AccountDesk(store) });
 // A socket gone silent is found out and closed, so that the room pauses for its player; the
 // log names the room and the seat of each socket it cuts.
 startHeartbeat(wss, HEARTBEAT_MS, served.cut);

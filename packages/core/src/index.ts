@@ -216,6 +216,7 @@ export {
   SNAPSHOT_MAX,
   SNAPSHOT_MAX_AGE_MS,
   isCustomMissionId,
+  type AccountView,
   type RtcSignal,
   type ClientMessage,
   type CrewPass,

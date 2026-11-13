@@ -1,6 +1,9 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import type { AccountView } from '@escapelab/core';
 import { useGlyph } from '../input/glyphs.js';
+import { dateText } from '../runStats.js';
 import { ControlSettings } from './ControlSettings.js';
+import { runsText } from './ProfileChip.js';
 import {
   changeSettings,
   isRebinding,
@@ -99,13 +102,108 @@ function useEscapeCloses(onClose: () => void): void {
   }, []);
 }
 
+/** Where „Konto löschen" stands: not asked yet, asked — what it deletes said — or sent off. */
+export type DeleteStep = 'idle' | 'asked' | 'sent';
+
+/** What the account holds, on one line: its name, since when it is kept, its runs. */
+export function accountFacts(account: AccountView): string {
+  const name = account.name === '' ? 'Ohne Namen' : account.name;
+  return `${name} · seit ${dateText(account.since)} · ${runsText(account.runs)}`;
+}
+
+/** What deleting the account deletes, and what it leaves, said before it is done. */
+export function deleteLine(account: Pick<AccountView, 'runs'>): string {
+  const { runs } = account;
+  if (runs === 0) {
+    return 'Löscht Name, Farbe und Erfolge des Kontos. Der Dienstausweis dieses Geräts bleibt.';
+  }
+  const where = runs === 1 ? 'seinem Einsatz' : `seinen ${runs} Einsätzen`;
+  return (
+    `Löscht Name, Farbe und Erfolge des Kontos und nimmt den Namen aus ${where}; die ` +
+    'Einsätze bleiben in der Bestenliste. Der Dienstausweis dieses Geräts bleibt.'
+  );
+}
+
+/** What the settings say once the account is deleted. */
+export const ACCOUNT_DELETED =
+  'Konto gelöscht. Der Dienstausweis dieses Geräts beginnt beim nächsten Besuch ein neues, ' +
+  'leeres Konto.';
+
+/**
+ * The account in the settings at the step `step` of its deletion: what it holds and „Konto
+ * löschen" — a press asks first, saying what it deletes, „Endgültig löschen" sends it off
+ * (`onDelete`), „Abbrechen" steps back — and, once it is gone, that it is. Nothing where there
+ * is no account, nor was one deleted here.
+ */
+export function AccountSection(props: {
+  account: AccountView | null;
+  step: DeleteStep;
+  onStep: (step: DeleteStep) => void;
+  onDelete: () => void;
+}) {
+  const { account, step, onStep, onDelete } = props;
+  if (account === null) {
+    return step !== 'sent' ? null : (
+      <fieldset className="settings-group settings-account">
+        <legend>Konto</legend>
+        <p className="settings-note" role="status">
+          {ACCOUNT_DELETED}
+        </p>
+      </fieldset>
+    );
+  }
+  const send = (): void => {
+    onStep('sent');
+    onDelete();
+  };
+  return (
+    <fieldset className="settings-group settings-account">
+      <legend>Konto</legend>
+      <p className="settings-account-facts">{accountFacts(account)}</p>
+      {step === 'idle' ? (
+        <button type="button" className="danger settings-account-delete" onClick={() => onStep('asked')}>
+          Konto löschen
+        </button>
+      ) : (
+        <div className="settings-account-ask">
+          <p className="settings-note">{deleteLine(account)}</p>
+          <div className="settings-account-actions">
+            <button type="button" className="danger" disabled={step === 'sent'} onClick={send}>
+              Endgültig löschen
+            </button>
+            <button type="button" className="settings-rebind" onClick={() => onStep('idle')}>
+              Abbrechen
+            </button>
+          </div>
+        </div>
+      )}
+    </fieldset>
+  );
+}
+
+interface PanelProps {
+  onClose: () => void;
+  /** the pass's account as the server told it; without, the panel shows none */
+  account?: AccountView | null;
+  /** asks the server to delete the account (`delete-account`) */
+  onDeleteAccount?: () => void;
+}
+
 /**
  * The settings over whatever screen is up — a run goes on under them: the three volumes, the
  * keys and the controller (ControlSettings.tsx), the text size and less motion, each kept on
- * this device as it is set (settings.ts). The top bar's sound switch stays the quick way to
- * silence everything; a controller's Start opens them.
+ * this device as it is set (settings.ts), and the pass's account, which can be deleted here
+ * (`AccountSection`). The top bar's sound switch stays the quick way to silence everything; a
+ * controller's Start opens them.
  */
-export function SettingsPanel({ onClose }: { onClose: () => void }) {
+export function SettingsPanel({ onClose, account = null, onDeleteAccount }: PanelProps) {
+  const [step, setStep] = useState<DeleteStep>('idle');
+  // What deleting the account takes stands at the card's foot: it comes into sight as it is asked.
+  useEffect(() => {
+    if (step === 'asked') {
+      document.querySelector('.settings-account-ask')?.scrollIntoView({ block: 'nearest' });
+    }
+  }, [step]);
   const settings = useSettings();
   const closeKey = useGlyph('close');
   useEscapeCloses(onClose);
@@ -153,6 +251,14 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
           value={settings.motion}
           onChange={(motion) => changeSettings({ motion })}
         />
+        {onDeleteAccount !== undefined && (
+          <AccountSection
+            account={account}
+            step={step}
+            onStep={setStep}
+            onDelete={onDeleteAccount}
+          />
+        )}
       </div>
     </div>
   );

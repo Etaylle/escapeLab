@@ -660,16 +660,28 @@ export class Room {
   }
 
   /**
-   * A new seat for `name`, bound to `pass` (lobby only); its player id. A pass whose id binds a
-   * seat here under another secret is refused before anything changes (seats.ts `check`).
+   * A new seat for `name`, bound to `pass` (lobby only), in `color` where nobody wears it yet;
+   * its player id. A pass whose id binds a seat here under another secret is refused before
+   * anything changes (seats.ts `check`).
    */
-  join(name: string, pass: CrewPass): { playerId: string } {
+  join(name: string, pass: CrewPass, color?: string): { playerId: string } {
     this.seats.check(pass);
     const playerId = randomUUID();
-    this.dispatch({ type: 'player-join', playerId, name });
+    this.dispatch({
+      type: 'player-join',
+      playerId,
+      name,
+      ...(color === undefined ? {} : { color }),
+    });
     this.seats.bind(playerId, pass);
     this.log(`${this.nameOf(playerId)} joined`);
     return { playerId };
+  }
+
+  /** The name and the colour of the seat of `playerId`; null for a seat there is none of. */
+  playerOf(playerId: string): { name: string; color: string } | null {
+    const player = this.state.players.find((p) => p.id === playerId);
+    return player === undefined ? null : { name: player.name, color: player.color };
   }
 
   /** Whether the room has a seat named exactly `name`. */

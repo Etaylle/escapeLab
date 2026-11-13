@@ -141,9 +141,17 @@ export function storeContract(name: string, open: () => Promise<Opened>): void {
     it('refuses a pass shown with a secret not its own', async () => {
       const { store } = await open();
       await store.getOrCreateByIdentity(identityOf('Anna'), anna);
-      await expect(
-        store.getOrCreateByIdentity(identityOf('Anna', 'f'.repeat(64)), anna),
-      ).rejects.toThrow(PASS_REFUSED);
+      const forged = identityOf('Anna', 'f'.repeat(64));
+      await expect(store.getOrCreateByIdentity(forged, anna)).rejects.toThrow(PASS_REFUSED);
+      await expect(store.findByIdentity(forged)).rejects.toThrow(PASS_REFUSED);
+    });
+
+    it('finds the account of a pass without making one', async () => {
+      const { store } = await open();
+      expect(await store.findByIdentity(identityOf('Anna'))).toBeNull();
+      expect(await store.findByIdentity(identityOf('Anna'))).toBeNull();
+      const made = await store.getOrCreateByIdentity(identityOf('Anna'), anna);
+      expect(await store.findByIdentity(identityOf('Anna'))).toMatchObject({ id: made.id, ...anna });
     });
 
     it('changes a profile part by part', async () => {

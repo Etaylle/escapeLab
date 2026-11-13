@@ -1,0 +1,185 @@
+import { mkdtempSync, readFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import {
+  parseMission,
+  type AccountView,
+  type Mission,
+  type ServerMessage,
+} from '@escapelab/core';
+import { AccountDesk } from '../src/accounts.js';
+import { RoomManager } from '../src/roomManager.js';
+import { serveSockets } from '../src/sockets.js';
+import { JsonlStore } from '../src/store/jsonl.js';
+import { FakeServer, joinedOf, type FakeSocket } from './line.js';
+import { passFor } from './passes.js';
+
+/** The tutorial, for two. */
+const mission: Mission = parseMission(
+  JSON.parse(readFileSync(new URL('../../../missions/systemcheck.json', import.meta.url), 'utf8')),
+);
+const catalog = { get: () => mission, default: mission };
+
+/** The server's sockets over a manager of rooms, with the accounts in a store of their own. */
+function lab(manager = new RoomManager()) {
+  const server = new FakeServer();
+  const store = JsonlStore.open(join(mkdtempSync(join(tmpdir(), 'escapelab-acc-')), 'runs.jsonl'));
+  serveSockets(server, { catalog, manager, accounts: new AccountDesk(store) });
+  return { server, manager, store };
+}
+
+/** Every account the socket heard of, in order: none for a deleted one. */
+const accounts = (socket: FakeSocket): (AccountView | null)[] =>
+  socket.heard.flatMap((m) => (m.kind === 'account' ? [m.account] : []));
+
+/** The account the socket heard of last; throws where it heard of none. */
+function accountOf(socket: FakeSocket): AccountView {
+  const last = accounts(socket).at(-1);
+  if (last === undefined || last === null) {
+    throw new Error('this socket heard of no account');
+  }
+  return last;
+}
+
+/** Lets the account work under way come to an end: the stores answer in promises. */
+const settled = (): Promise<void> => new Promise((resolve) => setImmediate(resolve));
+
+/** The refusals the socket heard, as their words and the kind each refused. */
+const refusals = (socket: FakeSocket) =>
+  socket.heard.flatMap((m: ServerMessage) => (m.kind === 'error' ? [[m.message, m.of]] : []));
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
+describe('an account per crew pass', () => {
+  it('makes the account at the pass’s first question, as the device kept it, and finds it after', async () => {
+    const { server } = lab();
+    const anna = server.connect();
+    anna.say({ kind: 'whereami', pass: passFor('Anna'), name: ' Anna ', color: '#a78bfa' });
+    await settled();
+    expect(anna.heard.map((m) => m.kind)).toEqual(['seated', 'account']);
+    const made = accountOf(anna);
+    expect(made).toEqual({
+      name: 'Anna',
+      color: '#a78bfa',
+      since: made.since,
+      runs: 0,
+      achievements: {},
+    });
+    // Another tab of the same browser, its kept name changed meanwhile: the account is the record.
+    const tab = server.connect();
+    tab.say({ kind: 'whereami', pass: passFor('Anna'), name: 'Andere' });
+    await settled();
+    expect(accountOf(tab)).toEqual(made);
+  });
+
+  it('goes by the name its pass sits down under, the seat in its colour where that is free', async () => {
+    const { server } = lab();
+    const anna = server.connect();
+    anna.say({ kind: 'whereami', pass: passFor('Anna'), name: 'Anna', color: '#a78bfa' });
+    anna.say({ kind: 'create-room', name: 'Anna K.', pass: passFor('Anna'), color: '#a78bfa' });
+    await settled();
+    expect(anna.view.you).toMatchObject({ name: 'Anna K.', color: '#a78bfa' });
+    expect(accountOf(anna)).toMatchObject({ name: 'Anna K.', color: '#a78bfa' });
+    const ben = server.connect();
+    const code = joinedOf(anna).code;
+    ben.say({ kind: 'join-room', code, name: 'Ben', pass: passFor('Ben'), color: '#a78bfa' });
+    await settled();
+    // Anna wears it already: Ben's seat takes the first colour free, his account keeps his own.
+    expect(ben.view.you).toMatchObject({ name: 'Ben', color: '#2dd4bf' });
+    expect(accountOf(ben)).toMatchObject({ name: 'Ben', color: '#a78bfa' });
+  });
+
+  it('keeps the colour chosen in a lobby with the account, and the name typed in the menu', async () => {
+    const { server } = lab();
+    const anna = server.connect();
+    anna.say({ kind: 'create-room', name: 'Anna', pass: passFor('Anna') });
+    anna.say({ kind: 'select-color', color: '#60a5fa' });
+    await settled();
+    expect(accountOf(anna)).toMatchObject({ name: 'Anna', color: '#60a5fa' });
+    anna.say({ kind: 'profile', pass: passFor('Anna'), name: '  Anna Berg ' });
+    await settled();
+    expect(accountOf(anna)).toMatchObject({ name: 'Anna Berg', color: '#60a5fa' });
+    // A colour the room refuses — another seat wears it — is none the account takes.
+    const ben = server.connect();
+    ben.say({ kind: 'join-room', code: joinedOf(anna).code, name: 'Ben', pass: passFor('Ben') });
+    ben.say({ kind: 'select-color', color: '#60a5fa' });
+    await settled();
+    expect(refusals(ben)).toEqual([['Die Farbe trägt schon Anna.', 'select-color']]);
+    expect(accounts(ben).map((account) => account?.color)).toEqual([null]);
+  });
+
+  it('starts the account of a pass that comes back to a seat before it had one with the seat', async () => {
+    // The seat is taken where no account is kept, and come back to where accounts are.
+    const manager = new RoomManager();
+    const before = new FakeServer();
+    serveSockets(before, { catalog, manager });
+    const seat = before.connect();
+    seat.say({ kind: 'create-room', name: 'Anna', pass: passFor('Anna'), color: '#fbbf24' });
+    const { server } = lab(manager);
+    const back = server.connect();
+    back.say({ kind: 'resume', code: joinedOf(seat).code, pass: passFor('Anna') });
+    await settled();
+    expect(joinedOf(back).code).toBe(joinedOf(seat).code);
+    expect(accountOf(back)).toMatchObject({ name: 'Anna', color: '#fbbf24' });
+  });
+
+  it('makes no account for a seat it refuses, nor for a pass shown with another’s secret', async () => {
+    const { server } = lab();
+    const anna = server.connect();
+    anna.say({ kind: 'join-room', code: 'ZZZZ', name: 'Anna', pass: passFor('Anna') });
+    await settled();
+    expect(accounts(anna)).toEqual([]);
+    anna.say({ kind: 'whereami', pass: passFor('Anna') });
+    await settled();
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const forged = { ...passFor('Anna'), secret: passFor('Mallory').secret };
+    const mallory = server.connect();
+    mallory.say({ kind: 'whereami', pass: forged });
+    mallory.say({ kind: 'profile', pass: forged, name: 'Mallory' });
+    await settled();
+    expect(accounts(mallory)).toEqual([]);
+    expect(refusals(mallory)).toEqual([['Dieser Ausweis gilt hier nicht.', 'profile']]);
+    expect(logged).toHaveBeenCalledWith(
+      '[escapelab] an account not told its pass: Dieser Ausweis gilt hier nicht.',
+    );
+  });
+
+  it('deletes the account at its pass’s word, and a new one comes at the next question', async () => {
+    const { server } = lab();
+    const anna = server.connect();
+    anna.say({ kind: 'whereami', pass: passFor('Anna'), name: 'Anna', color: '#a78bfa' });
+    await settled();
+    const gone = accountOf(anna);
+    const said = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const forged = { ...passFor('Anna'), secret: passFor('Mallory').secret };
+    anna.say({ kind: 'delete-account', pass: forged });
+    await settled();
+    expect(refusals(anna)).toEqual([['Dieser Ausweis gilt hier nicht.', 'delete-account']]);
+    anna.say({ kind: 'delete-account', pass: passFor('Anna') });
+    await settled();
+    expect(accounts(anna).at(-1)).toBeNull();
+    expect(said).toHaveBeenCalledWith('[escapelab] an account was deleted, as its pass asked');
+    // Deleting it again finds none, and says so the same.
+    anna.say({ kind: 'delete-account', pass: passFor('Anna') });
+    await settled();
+    expect(accounts(anna).at(-1)).toBeNull();
+    anna.say({ kind: 'whereami', pass: passFor('Anna') });
+    await settled();
+    expect(accountOf(anna)).toMatchObject({ name: '', color: null, runs: 0 });
+    expect(accountOf(anna).since).toBeGreaterThanOrEqual(gone.since);
+  });
+
+  it('answers a question about an account with a refusal where the server keeps none', async () => {
+    const server = new FakeServer();
+    serveSockets(server, { catalog, manager: new RoomManager() });
+    const anna = server.connect();
+    anna.say({ kind: 'whereami', pass: passFor('Anna') });
+    anna.say({ kind: 'delete-account', pass: passFor('Anna') });
+    await settled();
+    expect(anna.heard.map((m) => m.kind)).toEqual(['seated', 'error']);
+    expect(refusals(anna)).toEqual([['Konten führt dieser Server nicht.', 'delete-account']]);
+  });
+});

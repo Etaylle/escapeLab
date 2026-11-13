@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 'react';
 import type {
+  AccountView,
   ClientMessage,
   DronePosition,
   PlayerView,
@@ -9,10 +10,11 @@ import type {
   ServerMessage,
   SpectatorView,
 } from '@escapelab/core';
+import { fillEarned, forgetEarned } from './achievements.js';
 import { askForTime, clock, localNow } from './clock.js';
 import { keepConnected, wipesBanner, type Line, type LineStatus, type Retry } from './line.js';
 import { forgetNotes, localStore } from './notes.js';
-import { crewPass } from './pass.js';
+import { crewPass, forgetProfile, keepProfile } from './pass.js';
 import {
   dropSnapshot,
   keepSnapshot,
@@ -90,6 +92,8 @@ export interface Connection {
    * a run on binds it, a lobby holds it; null for neither, and before the first answer
    */
   seat: Seat | null;
+  /** the pass's account as the server last told it; null before it did, and once deleted */
+  account: AccountView | null;
   roomCode: string | null;
   /**
    * the banner's words: a refusal of what is answered nowhere else (`ANSWERED_IN_PLACE`), there
@@ -177,6 +181,7 @@ export interface Page {
   setSpectatorView: (view: SpectatorView | null) => void;
   setRooms: (rooms: RoomSummary[]) => void;
   setSeat: (seat: Seat | null) => void;
+  setAccount: (account: AccountView | null) => void;
   setTakeover: (takeover: Takeover | null) => void;
   setRestoring: (restoring: Restoring | null) => void;
   setError: (message: string) => void;
@@ -270,12 +275,32 @@ function lineNews(msg: ServerMessage, page: Page): void {
     case 'restoring':
       onItsWay(msg.code, page);
       break;
+    case 'account':
+      accountNews(msg.account, page);
+      break;
     case 'error':
       refused(msg, page);
       break;
     default:
       streamNews(msg, page);
   }
+}
+
+/**
+ * What the server says of the pass's account: its name, its colour and its Erfolge kept with the
+ * pass for the next page (pass.ts, achievements.ts) — every one of them forgotten once the
+ * account is deleted.
+ */
+function accountNews(account: AccountView | null, page: Page): void {
+  const store = localStore();
+  if (account === null) {
+    forgetProfile(store);
+    forgetEarned(store);
+  } else {
+    keepProfile(account, store);
+    fillEarned(store, account.achievements);
+  }
+  page.setAccount(account);
 }
 
 /** Takes in what the world streams past React: where everybody stands, the pings, the chat. */
@@ -633,6 +658,7 @@ export function useGameConnection(): Connection {
   const [rooms, setRooms] = useState<RoomSummary[]>([]);
   // The card of the newest snapshot kept stands from the start, till the server says otherwise.
   const [seat, setSeat] = useState<Seat | null>(keptSeat);
+  const [account, setAccount] = useState<AccountView | null>(null);
   const [takeover, setTakeover] = useState<Takeover | null>(null);
   const [restoring, setRestoring] = useState<Restoring | null>(null);
   const [roomCode, setRoomCode] = useState<string | null>(roomOfTab);
@@ -666,6 +692,7 @@ export function useGameConnection(): Connection {
       setSpectatorView,
       setRooms,
       setSeat,
+      setAccount,
       setTakeover,
       setRestoring,
       setError,
@@ -690,6 +717,7 @@ export function useGameConnection(): Connection {
     restoring,
     rooms,
     seat,
+    account,
     roomCode,
     error,
     refusal,

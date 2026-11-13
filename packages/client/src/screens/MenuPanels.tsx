@@ -11,7 +11,7 @@ import {
 import { sessionStore } from '../editor/session.js';
 import { FIRST_RUN_HINT, firstDifficulty, isTutorial, useWon } from '../firstRun.js';
 import { useServerNow } from '../hooks.js';
-import { crewPass } from '../pass.js';
+import { crewPass, lastColor } from '../pass.js';
 import { recordLine } from '../runStats.js';
 import { keepInvite, tabInvite } from '../tab.js';
 import type { Takeover } from '../ws.js';
@@ -29,13 +29,17 @@ import { pauseClock } from './Pause.js';
  * its code, „Offene Runden" lists every room somebody sits in, its crew standing there.
  */
 
+/** The colour a seat is asked to wear: the account's, as the pass keeps it; none before one. */
+const wearing = (color: string | null): { color?: string } => (color === null ? {} : { color });
+
 /**
  * The message that opens a room for `missionId`, or for the server's first
  * mission where none is picked, on `difficulty` where one is given — a first
  * run's „entspannt" (firstRun.ts) — and on normal where not, its seat bound to
- * `pass`. A tester pins the room to a seed with `?seed=<n>` in the page's
- * address (`search`), so that its runs repeat; a value that is no whole number
- * from 0 to SEED_MAX is left out, and the lobby then shows no seed.
+ * `pass` and in `color`, the account's, where given. A tester pins the room to a
+ * seed with `?seed=<n>` in the page's address (`search`), so that its runs
+ * repeat; a value that is no whole number from 0 to SEED_MAX is left out, and
+ * the lobby then shows no seed.
  */
 export function createRoomMessage(
   pass: CrewPass,
@@ -43,6 +47,7 @@ export function createRoomMessage(
   missionId: string | null,
   search: string,
   difficulty: Difficulty | null = null,
+  color: string | null = null,
 ): ClientMessage {
   const asked = new URLSearchParams(search).get('seed') ?? '';
   const seed = /^\d{1,10}$/.test(asked) && Number(asked) <= SEED_MAX ? Number(asked) : null;
@@ -50,15 +55,19 @@ export function createRoomMessage(
     kind: 'create-room',
     name,
     pass,
+    ...wearing(color),
     ...(missionId === null ? {} : { missionId }),
     ...(seed === null ? {} : { seed }),
     ...(difficulty === null ? {} : { difficulty }),
   };
 }
 
-/** The message that joins room `code` as `name`, its seat bound to the browser's pass. */
-function joinMessage(code: string, name: string): ClientMessage {
-  return { kind: 'join-room', code, name, pass: crewPass() };
+/**
+ * The message that joins room `code` as `name`, its seat bound to the browser's pass and in the
+ * colour its account wears.
+ */
+export function joinMessage(code: string, name: string): ClientMessage {
+  return { kind: 'join-room', code, name, pass: crewPass(), ...wearing(lastColor()) };
 }
 
 /** The row the older maps wait behind on the mission panel. */
@@ -323,6 +332,7 @@ export function MissionPanel({
         selected,
         window.location.search,
         firstDifficulty(won),
+        lastColor(),
       ),
     );
   return (

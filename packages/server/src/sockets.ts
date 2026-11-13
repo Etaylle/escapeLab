@@ -2,10 +2,13 @@ import {
   GameError,
   parseClientMessage,
   scaleMission,
+  type AccountView,
   type ClientMessage,
+  type CrewPass,
   type Mission,
   type ServerMessage,
 } from '@escapelab/core';
+import type { AccountDesk } from './accounts.js';
 import { MISSED_PINGS, SILENT_MS, type CutReason } from './heartbeat.js';
 import type { MissionCatalog } from './missions.js';
 import { GAME_KINDS, type GameMessage, type Room } from './room.js';
@@ -23,10 +26,12 @@ export interface SocketServer {
   on(event: 'connection', listener: (socket: PlayerSocket) => void): unknown;
 }
 
-/** What a connection's messages reach: the missions rooms open with, and the rooms. */
+/** What a connection's messages reach: the missions rooms open with, the rooms, the accounts. */
 export interface Lab {
   catalog: Pick<MissionCatalog, 'get' | 'default'>;
   manager: RoomManager;
+  /** the accounts of the passes (accounts.ts); without, no pass hears of an account */
+  accounts?: AccountDesk;
 }
 
 /** Per-connection session, set once the socket joins, resumes or watches a room. */
@@ -34,6 +39,8 @@ interface Session {
   room: Room;
   /** the player's id; for an audience connection, its spectator id */
   playerId: string;
+  /** the pass the seat is bound to; null for an audience connection */
+  pass: CrewPass | null;
   /** who plays on it, as the log names them: the player's name, or the audience */
   who: () => string;
   /**
@@ -124,6 +131,7 @@ const LOGGED_REFUSALS: ReadonlySet<ClientMessage['kind']> = new Set([
   'resume',
   'spectate',
   'abandon',
+  'delete-account',
   'continue-without',
   'call-off',
   'takeover-answer',
@@ -179,7 +187,8 @@ function listenerOf(socket: PlayerSocket): (msg: ServerMessage) => void {
 
 /**
  * What a socket may send whether or not it is in a room: to open, join, watch, resume or give
- * up a seat, or to ask where its pass sits, which rooms there are, what time it is.
+ * up a seat, to ask where its pass sits, which rooms there are, what time it is, or to change or
+ * delete the pass's account.
  */
 const DOOR_KINDS = [
   'create-room',
@@ -190,6 +199,8 @@ const DOOR_KINDS = [
   'resume',
   'whereami',
   'abandon',
+  'profile',
+  'delete-account',
   'tock',
 ] as const satisfies readonly ClientMessage['kind'][];
 
@@ -248,10 +259,69 @@ function atTheDoor(
         : watch(lab, socket, session, msg.code);
     case 'resume':
       return comeBack(lab, socket, session, msg, again);
+    case 'profile':
+    case 'delete-account':
+      answerAccount(lab, socket, msg);
+      return session;
     default:
       answer(lab, socket, msg);
       return session;
   }
+}
+
+/** What a socket is told of an account that is gone, or that a store could not reach. */
+const ACCOUNT_AWAY = 'Das Konto ist gerade nicht erreichbar.';
+
+/** What a socket is told that asks after an account where the server keeps none. */
+const NO_ACCOUNTS = 'Konten führt dieser Server nicht.';
+
+/** Why `err` came, on one line, for the log. */
+const whyOf = (err: unknown): string => (err instanceof Error ? err.message : String(err));
+
+/**
+ * The account of the pass `job` came to, told its socket once it is there (`account`): the
+ * account a seat taken, a seat come back to, a question where the pass sits or a colour chosen
+ * brings with it. A failure the log says, and the socket hears nothing — what it came with
+ * stands all the same.
+ */
+function tellAccount(socket: PlayerSocket, job: Promise<AccountView> | undefined): void {
+  job?.then(
+    (account) => send(socket, { kind: 'account', account }),
+    (err: unknown) => console.error(`[escapelab] an account not told its pass: ${whyOf(err)}`),
+  );
+}
+
+/**
+ * What a pass asked of its account — its name (`profile`), or that it go (`delete-account`) —
+ * done, and the account as it stands told the socket, or none once deleted; refused where it
+ * cannot be done, saying why: a store out of reach in the lab's words, the log saying more.
+ */
+function answerAccount(
+  lab: Lab,
+  socket: PlayerSocket,
+  msg: Extract<ClientMessage, { kind: 'profile' | 'delete-account' }>,
+): void {
+  const desk = lab.accounts;
+  if (desk === undefined) {
+    refuse(socket, null, msg, new GameError(NO_ACCOUNTS));
+    return;
+  }
+  const job =
+    msg.kind === 'profile'
+      ? desk.rename(msg.pass, msg.name.trim())
+      : desk.delete(msg.pass).then(() => {
+          console.log('[escapelab] an account was deleted, as its pass asked');
+          return null;
+        });
+  job.then(
+    (account) => send(socket, { kind: 'account', account }),
+    (err: unknown) => {
+      if (!(err instanceof GameError)) {
+        console.error(`[escapelab] ${msg.kind} not done: ${whyOf(err)}`);
+      }
+      refuse(socket, null, msg, err instanceof GameError ? err : new GameError(ACCOUNT_AWAY));
+    },
+  );
 }
 
 /**
@@ -267,9 +337,15 @@ function comeBack(
   again: () => void,
 ): Session | null {
   const room = lab.manager.roomFor(msg.code, msg.pass, msg.blob);
-  return room === null
-    ? hold(lab, socket, session, msg.code, again)
-    : seated(socket, session, room, room.resume(msg.pass));
+  if (room === null) {
+    return hold(lab, socket, session, msg.code, again);
+  }
+  const back = seated(socket, session, room, room.resume(msg.pass), msg.pass);
+  // A pass that comes back to a seat before it has an account starts one with the seat's name.
+  const seat = room.playerOf(back.playerId);
+  const profile = { displayName: seat?.name ?? '', colour: seat?.color ?? null };
+  tellAccount(socket, lab.accounts?.arrive(msg.pass, profile));
+  return back;
 }
 
 /**
@@ -301,9 +377,13 @@ function answer(
   msg: Extract<AtTheDoor, { kind: 'whereami' | 'list-rooms' | 'clock' | 'tock' }>,
 ): void {
   switch (msg.kind) {
-    case 'whereami':
+    case 'whereami': {
       send(socket, { kind: 'seated', seat: lab.manager.whereIs(msg.pass) });
+      // The account the device knew it by starts with the name and the colour it kept.
+      const kept = { displayName: msg.name?.trim() ?? '', colour: msg.color ?? null };
+      tellAccount(socket, lab.accounts?.arrive(msg.pass, kept));
       break;
+    }
     case 'list-rooms':
       send(socket, { kind: 'rooms', rooms: lab.manager.list() });
       break;
@@ -322,17 +402,32 @@ function watch(lab: Lab, socket: PlayerSocket, session: Session | null, code: st
   session?.detach();
   // An audience connection goes by its spectator id: voice signals reach it by that.
   const { spectatorId, detach } = room.attachSpectator((m) => send(socket, m));
-  return { room, playerId: spectatorId, who: () => 'a spectator', holds: () => true, detach };
+  const who = (): string => 'a spectator';
+  return { room, playerId: spectatorId, pass: null, who, holds: () => true, detach };
 }
 
 /**
- * A pass sits down in a room it opens or joins: on a seat of its own, or — where it holds one
- * there already, a second tab say — on that one again. A run on elsewhere binds it, which
- * refuses it, and a seat it holds in another lobby or after a run there it gives up. A join by
- * the name of a seat in the run on asks the crew to let this device in (`Room.claim`): the
- * socket waits, its session as it was.
+ * A pass sits down in a room it opens or joins: on a seat of its own — in its account's colour
+ * where nobody wears it yet — or, where it holds one there already, a second tab say, on that
+ * one again. A run on elsewhere binds it, which refuses it, and a seat it holds in another lobby
+ * or after a run there it gives up. A join by the name of a seat in the run on asks the crew to
+ * let this device in (`Room.claim`): the socket waits, its session as it was. Its account goes
+ * by the name it sat down under from now on.
  */
 function sitDown(
+  lab: Lab,
+  socket: PlayerSocket,
+  session: Session | null,
+  msg: Extract<ClientMessage, { kind: 'create-room' | 'join-room' }>,
+): Session | null {
+  const next = takeSeat(lab, socket, session, msg);
+  const profile = { displayName: msg.name.trim(), colour: msg.color ?? null };
+  tellAccount(socket, lab.accounts?.arrive(msg.pass, profile, profile.displayName));
+  return next;
+}
+
+/** The seat a create or a join sits down on (`sitDown`): the session it leaves the socket with. */
+function takeSeat(
   lab: Lab,
   socket: PlayerSocket,
   session: Session | null,
@@ -348,15 +443,15 @@ function sitDown(
     }
     const playerId = seatFor(room, msg);
     lab.manager.leaveOthers(msg.pass, room);
-    return seated(socket, session, room, playerId);
+    return seated(socket, session, room, playerId, msg.pass);
   }
   lab.manager.checkWay(msg.pass, null);
   // A new room plays on the difficulty its host's device asked for — normal unless that
   // device has won no run yet — with its alarm limit: scaled from the start.
   const room = createRoom(lab, msg);
-  const { playerId } = room.join(msg.name, msg.pass);
+  const { playerId } = room.join(msg.name, msg.pass, msg.color);
   lab.manager.leaveOthers(msg.pass, room);
-  return seated(socket, session, room, playerId);
+  return seated(socket, session, room, playerId, msg.pass);
 }
 
 /**
@@ -366,7 +461,7 @@ function sitDown(
 function seatFor(room: Room, msg: Extract<ClientMessage, { kind: 'join-room' }>): string {
   return room.seatOf(msg.pass) !== null
     ? room.resume(msg.pass)
-    : room.join(msg.name, msg.pass).playerId;
+    : room.join(msg.name, msg.pass, msg.color).playerId;
 }
 
 /**
@@ -394,14 +489,16 @@ function giveUp(
 }
 
 /**
- * The session of a socket that sat down on the seat of `playerId` in `room`: it is told so, and
- * takes the room's views from now on. Whatever room it sat in before lets go of it first.
+ * The session of a socket that sat down on the seat of `playerId` in `room`, bound to `pass`: it
+ * is told so, and takes the room's views from now on. Whatever room it sat in before lets go of
+ * it first.
  */
 function seated(
   socket: PlayerSocket,
   before: Session | null,
   room: Room,
   playerId: string,
+  pass: CrewPass,
 ): Session {
   if (before !== null && (before.room !== room || before.playerId !== playerId)) {
     before.detach();
@@ -410,7 +507,7 @@ function seated(
   const listener = listenerOf(socket);
   const detach = room.attach(playerId, listener);
   const who = (): string => room.nameOf(playerId);
-  return { room, playerId, who, holds: () => room.plays(playerId, listener), detach };
+  return { room, playerId, pass, who, holds: () => room.plays(playerId, listener), detach };
 }
 
 const FOR_THE_GAME: ReadonlySet<ClientMessage['kind']> = new Set(GAME_KINDS);
@@ -427,6 +524,10 @@ function inRoom(
 ): Session {
   if (forTheGame(msg)) {
     s.room.act(s.playerId, msg);
+    // A colour chosen in a lobby is the account's from now on: the next lobby starts in it.
+    if (msg.kind === 'select-color' && s.pass !== null) {
+      tellAccount(socket, lab.accounts?.recolour(s.pass, msg.color));
+    }
     return s;
   }
   switch (msg.kind) {

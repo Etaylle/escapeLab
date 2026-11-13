@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type RefObject } from 'react';
 import type {
+  AccountView,
   ClientMessage,
   CrewPass,
   MissionInfo,
@@ -9,7 +10,7 @@ import type {
 } from '@escapelab/core';
 import { formatLeft } from '../clock.js';
 import { useNow } from '../hooks.js';
-import { crewPass, keepName, lastName } from '../pass.js';
+import { crewPass, keepName, lastColor, lastName } from '../pass.js';
 import { dropSnapshot, resumeOf } from '../snapshots.js';
 import type { Restoring, Takeover } from '../ws.js';
 import { GiveUpButton } from './GiveUp.js';
@@ -27,7 +28,7 @@ import {
   type SectionProps,
 } from './MenuPanels.js';
 import { useComesOn } from './phosphor.js';
-import { ProfileChip } from './ProfileChip.js';
+import { ProfileChip, WAVE_SETTLE_MS } from './ProfileChip.js';
 
 interface Props {
   send: (msg: ClientMessage) => void;
@@ -41,6 +42,8 @@ interface Props {
   seat?: Seat | null;
   /** this device's ask for a seat by its name, waiting for the crew; null or left out for none */
   takeover?: Takeover | null;
+  /** the pass's account as the server told it (ws.ts); null or left out before it did */
+  account?: AccountView | null;
   /**
    * the room the card went back to, while the server waits to take it up again (ws.ts
    * `Restoring`); null or left out for none
@@ -77,22 +80,88 @@ export const MENU_LEAD =
   'Am Pult die Maschine, im Buch die Regeln — gelöst wird nur gemeinsam, per Stimme, ' +
   'ein Gerät je Kopf, Rücken an Rücken.';
 
-/** The name field's text, starting with the name the pass keeps and kept again as it is typed. */
-function useKeptName(): [string, (name: string) => void] {
+/** How long a typed name stands still before the account takes it, ms: as the figure waits. */
+export const NAME_SETTLE_MS = WAVE_SETTLE_MS;
+
+/**
+ * The name field's text as the account (`account`) changes from `before`, where it does: the
+ * account's name while nothing was typed on this page — a name typed goes to the account
+ * instead — and none once the account is deleted; null to leave the field as it is.
+ */
+export function nameFromAccount(
+  account: AccountView | null,
+  before: AccountView | null,
+  typed: boolean,
+): string | null {
+  if (account === null) {
+    return before === null ? null : '';
+  }
+  return typed || account.name === '' ? null : account.name;
+}
+
+/**
+ * The name field's text: starting with the name the pass keeps, kept again as it is typed, and
+ * the account's name where nothing was typed yet (`nameFromAccount`). A name typed goes to the
+ * account (`profile`) once it has stood still NAME_SETTLE_MS, where the line is up and the
+ * account goes by another.
+ */
+function useProfileName(
+  account: AccountView | null,
+  send: Props['send'],
+  connected: boolean,
+): [string, (name: string) => void] {
   const [name, setName] = useState(() => lastName());
+  const typed = useRef(false);
+  const told = useRef<AccountView | null>(null);
+  useEffect(() => {
+    const next = nameFromAccount(account, told.current, typed.current);
+    told.current = account;
+    if (next !== null) {
+      typed.current = false;
+      setName(next);
+    }
+  }, [account]);
+  useEffect(() => {
+    const wanted = name.trim();
+    if (!typed.current || !connected || account?.name === wanted) {
+      return undefined;
+    }
+    const timer = setTimeout(
+      () => send({ kind: 'profile', pass: crewPass(), name: wanted }),
+      NAME_SETTLE_MS,
+    );
+    return () => clearTimeout(timer);
+    // `send` is stable for the lifetime of the connection.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [name, connected, account]);
   const type = (next: string): void => {
+    typed.current = true;
     setName(next);
     keepName(next);
   };
   return [name, type];
 }
 
+/** What the device kept of its account: the name and the colour its next account starts with. */
+export interface KeptProfile {
+  name: string;
+  color: string | null;
+}
+
 /**
  * What the join screen asks as it comes up, and again whenever the line is back: the rooms
- * there are, and where the browser's pass sits (`whereami`) — a run on binds it.
+ * there are, and where the browser's pass sits (`whereami`) — a run on binds it — with what the
+ * device kept of its account, which an account made now starts with.
  */
-export function doorAsks(pass: CrewPass): ClientMessage[] {
-  return [{ kind: 'list-rooms' }, { kind: 'whereami', pass }];
+export function doorAsks(pass: CrewPass, kept: KeptProfile): ClientMessage[] {
+  const name = kept.name.trim();
+  const whereami: ClientMessage = {
+    kind: 'whereami',
+    pass,
+    ...(name === '' ? {} : { name }),
+    ...(kept.color === null ? {} : { color: kept.color }),
+  };
+  return [{ kind: 'list-rooms' }, whereami];
 }
 
 /** The one line that says a run on holds the pass: no other room until it is over. */
@@ -228,7 +297,7 @@ function useDoor(send: Props['send'], connected: boolean): void {
     if (!connected) {
       return undefined;
     }
-    for (const ask of doorAsks(crewPass())) {
+    for (const ask of doorAsks(crewPass(), { name: lastName(), color: lastColor() })) {
       send(ask);
     }
     const timer = setInterval(() => send({ kind: 'list-rooms' }), REFRESH_MS);
@@ -348,7 +417,8 @@ function Panels({
  */
 export function JoinScreen(props: Props) {
   const { send, connected, missions, rooms, seat = null, restoring = null } = props;
-  const [name, setName] = useKeptName();
+  const account = props.account ?? null;
+  const [name, setName] = useProfileName(account, send, connected);
   const root = useRef<HTMLDivElement>(null);
   const { panel, take, close } = usePanel(root, name.trim() !== '');
   const comesOn = useComesOn('start');
@@ -371,7 +441,7 @@ export function JoinScreen(props: Props) {
         <h1 className={comesOn ? 'menu-title phosphor-title' : 'menu-title'}>ESCAPELAB</h1>
         <p className="menu-sub">{MENU_SUBTITLE}</p>
       </header>
-      <ProfileChip name={name} onName={setName} />
+      <ProfileChip name={name} onName={setName} account={account} />
       <div className="menu-body" inert={panel !== null}>
         <MainMenu
           items={menuItems(props.openEditor !== undefined)}

@@ -189,6 +189,15 @@ export class JsonlStore implements Store {
     return { ...account };
   }
 
+  async findByIdentity(identity: PassIdentity): Promise<Account | null> {
+    const known = this.identities.get(keyOf(identity));
+    if (known === undefined) {
+      return null;
+    }
+    checkSecret(known.secretHash, identity.secretHash);
+    return { ...this.account(known.accountId) };
+  }
+
   async updateProfile(accountId: string, change: Partial<Profile>): Promise<Account> {
     const account = this.account(accountId);
     Object.assign(account, change);

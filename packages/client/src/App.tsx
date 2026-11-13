@@ -11,7 +11,7 @@ import {
 import { firstDifficulty, hasWon, useWonMark } from './firstRun.js';
 import { usePad } from './input/padRuntime.js';
 import { localStore } from './notes.js';
-import { crewPass, keepName } from './pass.js';
+import { crewPass, keepName, lastColor } from './pass.js';
 import { addProbes } from './probes.js';
 import { STATS_PATH, useJson } from './runStats.js';
 import { useRunScreen } from './runScreen.js';
@@ -243,7 +243,14 @@ function useTestRun(conn: Connection) {
       replacePath('/');
       const difficulty = firstDifficulty(hasWon(localStore()));
       conn.send(
-        createRoomMessage(crewPass(), name, missionId, window.location.search, difficulty),
+        createRoomMessage(
+          crewPass(),
+          name,
+          missionId,
+          window.location.search,
+          difficulty,
+          lastColor(),
+        ),
       );
     },
     back: (): void => {
@@ -291,6 +298,7 @@ function OffRoom(props: ScreenProps) {
           missions={missions}
           rooms={conn.rooms}
           seat={conn.seat}
+          account={conn.account}
           takeover={conn.takeover}
           restoring={conn.restoring}
           giveUp={conn.giveUp}
@@ -515,6 +523,17 @@ function useWiped(live: Connection): { conn: Connection; doors: Doors } {
   return { conn: wipe.value, doors: wipe.doors };
 }
 
+/** The settings over every screen, the pass's account with them: deleted on the line `live`. */
+function Settings({ live, close }: { live: Connection; close: () => void }) {
+  return (
+    <SettingsPanel
+      onClose={close}
+      account={live.account}
+      onDeleteAccount={() => live.send({ kind: 'delete-account', pass: crewPass() })}
+    />
+  );
+}
+
 /** The connection's error over every screen, until it is dismissed. */
 function ErrorBanner({ conn }: { conn: Connection }) {
   if (conn.error === null) {
@@ -661,7 +680,7 @@ export function App({ boot }: { boot: EditorBoot }) {
         onSettings={() => setSettingsOpen(true)}
         menu={menu}
       />
-      {settingsOpen && <SettingsPanel onClose={() => setSettingsOpen(false)} />}
+      {settingsOpen && <Settings live={live} close={() => setSettingsOpen(false)} />}
       <ErrorBanner conn={live} />
       <UpdateNotice />
 

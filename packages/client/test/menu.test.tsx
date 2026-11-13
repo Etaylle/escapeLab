@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { MissionInfo, Seat } from '@escapelab/core';
 import { WORLD, offVoice } from '../../core/test/voice.js';
 import { startPad, type PadProbe } from '../src/input/padRuntime.js';
-import { keepColor, lastColor, PASS_KEY } from '../src/pass.js';
+import { forgetProfile, keepProfile, lastColor, lastName, PASS_KEY } from '../src/pass.js';
 import { wavesAnew } from '../src/screens/CrewFigure.js';
 import { DIALOGS } from '../src/input/focus.js';
 import {
@@ -373,9 +373,9 @@ describe('a panel over the menu', () => {
 });
 
 describe('the profile', () => {
-  it('shows the figure, the name to type, the colour last worn and the sign-in’s slot', () => {
+  it('shows the figure, the name to type, the colour kept, and a guest before an account', () => {
     stubWindow('', '#f472b6');
-    const html = renderToStaticMarkup(<ProfileChip name="Anna" onName={noop} />);
+    const html = renderToStaticMarkup(<ProfileChip name="Anna" onName={noop} account={null} />);
     const chip = '<section class="profile-chip" aria-label="Profil">';
     expect(html.startsWith(`${chip}<canvas class="seat-figure"`)).toBe(true);
     const field = html.match(/<input class="profile-name"[^>]*>/)?.[0] ?? '';
@@ -399,20 +399,27 @@ describe('the profile', () => {
 
   it('wears the crew’s first colour before any was worn', () => {
     stubWindow();
-    const html = renderToStaticMarkup(<ProfileChip name="" onName={noop} />);
+    const html = renderToStaticMarkup(<ProfileChip name="" onName={noop} account={null} />);
     expect(html).toContain(`style="background:${FIRST_COLOR}"`);
     expect(html).toContain('Türkis</span>');
   });
 
-  it('keeps the colour worn in a lobby with the pass, and nothing that is no crew colour', () => {
+  it('keeps the account’s name and colour with the pass, and nothing that is no crew colour', () => {
     const kept = stubWindow();
     expect(lastColor()).toBeNull();
-    keepColor('#60a5fa');
-    expect(lastColor()).toBe('#60a5fa');
+    keepProfile({ name: 'Anna B.', color: '#60a5fa' });
+    expect([lastName(), lastColor()]).toEqual(['Anna B.', '#60a5fa']);
     const pass: unknown = JSON.parse(kept.get(PASS_KEY) ?? '{}');
-    expect(pass).toMatchObject({ name: 'Anna', color: '#60a5fa' });
-    keepColor('red; background: url(x)');
+    expect(pass).toMatchObject({ id: 'a1'.repeat(16), name: 'Anna B.', color: '#60a5fa' });
+    keepProfile({ name: 'Anna', color: 'red; background: url(x)' });
     expect(lastColor()).toBe('#60a5fa');
+    // An account that chose no colour yet leaves the one the pass kept.
+    keepProfile({ name: 'Anna', color: null });
+    expect(lastColor()).toBe('#60a5fa');
+    // The account deleted: the pass stays, with neither.
+    forgetProfile();
+    expect([lastName(), lastColor()]).toEqual(['', null]);
+    expect(JSON.parse(kept.get(PASS_KEY) ?? '{}')).toMatchObject({ id: 'a1'.repeat(16) });
   });
 });
 

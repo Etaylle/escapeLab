@@ -79,6 +79,11 @@ export interface Store {
    * where it leads nowhere yet. Throws GameError for a pass shown with the wrong secret.
    */
   getOrCreateByIdentity(identity: PassIdentity, profile: Profile): Promise<Account>;
+  /**
+   * The account `identity` leads into; null where it leads nowhere. Throws GameError for a pass
+   * shown with the wrong secret.
+   */
+  findByIdentity(identity: PassIdentity): Promise<Account | null>;
   /** The account with `change` made to its profile. Throws for an account there is none of. */
   updateProfile(accountId: string, change: Partial<Profile>): Promise<Account>;
   /** The Erfolge `accountId` earned, each once. */

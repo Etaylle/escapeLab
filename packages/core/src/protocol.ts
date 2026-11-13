@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { AchievementId } from './achievements.js';
 import { CHAT_PHRASE_COUNT } from './chat.js';
 import { DIFFICULTIES, type Difficulty } from './difficulty.js';
 import { MAX_NOTES } from './notes.js';
@@ -85,11 +86,19 @@ export const crewPassSchema = z.object({
 
 export type CrewPass = z.infer<typeof crewPassSchema>;
 
+/** A crew colour as the game hands them out (state.ts CREW_COLORS): `#` and six hex digits. */
+const crewColorSchema = z.string().regex(/^#[0-9a-f]{6}$/i);
+
+/** The name a player goes by, as typed: forty characters at most. */
+const nameSchema = z.string().max(40);
+
 export const clientMessageSchema = z.discriminatedUnion('kind', [
   z.object({
     kind: z.literal('create-room'),
-    name: z.string().min(1).max(40),
+    name: nameSchema.min(1),
     pass: crewPassSchema,
+    /** the colour the pass's account wears: the seat wears it where it is free */
+    color: crewColorSchema.optional(),
     missionId: z.string().min(1).optional(),
     /**
      * pins the room for a repeatable test: its run n (from 0) plays seed + n;
@@ -105,8 +114,10 @@ export const clientMessageSchema = z.discriminatedUnion('kind', [
   z.object({
     kind: z.literal('join-room'),
     code: z.string().min(1).max(10),
-    name: z.string().min(1).max(40),
+    name: nameSchema.min(1),
     pass: crewPassSchema,
+    /** the colour the pass's account wears: the seat wears it where it is free */
+    color: crewColorSchema.optional(),
   }),
   z.object({ kind: z.literal('spectate'), code: z.string().min(1).max(10) }),
   z.object({ kind: z.literal('list-rooms') }),
@@ -121,15 +132,30 @@ export const clientMessageSchema = z.discriminatedUnion('kind', [
     pass: crewPassSchema,
     blob: z.string().min(1).max(SNAPSHOT_MAX).optional(),
   }),
-  /** where the pass sits, for the join screen: answered with `seated` */
-  z.object({ kind: z.literal('whereami'), pass: crewPassSchema }),
+  /**
+   * where the pass sits, for the join screen: answered with `seated`, and with its account
+   * (`account`) — one the pass makes now starts with the name and the colour the device kept
+   */
+  z.object({
+    kind: z.literal('whereami'),
+    pass: crewPassSchema,
+    name: nameSchema.optional(),
+    color: crewColorSchema.optional(),
+  }),
+  /** the name the pass's account goes by, as typed in the menu's profile: answered `account` */
+  z.object({ kind: z.literal('profile'), pass: crewPassSchema, name: nameSchema }),
+  /**
+   * the pass's account deleted, with its Erfolge and its seats in the runs — the runs stay,
+   * without its name: answered `account` with none; the pass stays this device's key
+   */
+  z.object({ kind: z.literal('delete-account'), pass: crewPassSchema }),
   /** the seat the pass holds in the room given up for good, from whatever socket this is */
   z.object({
     kind: z.literal('abandon'),
     code: z.string().min(1).max(10),
     pass: crewPassSchema,
   }),
-  z.object({ kind: z.literal('select-color'), color: z.string().regex(/^#[0-9a-f]{6}$/i) }),
+  z.object({ kind: z.literal('select-color'), color: crewColorSchema }),
   /**
    * yes or no to the next run; between runs the host's yes may name the
    * mission it plays, by catalog id — without one it is the same again
@@ -246,6 +272,23 @@ export interface Seat {
   leftMs: number | null;
 }
 
+/**
+ * A crew pass's account, as the server shows it to that pass alone (`account`): what the game
+ * keeps of its player across runs and restarts.
+ */
+export interface AccountView {
+  /** the name its player goes by; '' before they gave one */
+  name: string;
+  /** the crew colour they chose in a lobby, '#rrggbb'; null before they chose one */
+  color: string | null;
+  /** epoch ms the account was made */
+  since: number;
+  /** how many finished runs it played */
+  runs: number;
+  /** the Erfolge it earned, by mission, each with the end of the run that first earned it */
+  achievements: Record<string, Partial<Record<AchievementId, number>>>;
+}
+
 /** One row in the lobby browser. */
 export interface RoomSummary {
   code: string;
@@ -355,6 +398,11 @@ export type ServerMessage =
   | { kind: 'left'; code: string; message: string | null }
   /** the answer to `whereami`: where the pass sits; null where it sits nowhere it is bound to */
   | { kind: 'seated'; seat: Seat | null }
+  /**
+   * the pass's account, as it came to it — by `whereami`, a seat, `profile`, a colour chosen in
+   * a lobby — or none, once `delete-account` deleted it
+   */
+  | { kind: 'account'; account: AccountView | null }
   /**
    * a join by the name of a seat whose line is down waits for the crew on the line to let this
    * device in, until `until` (epoch ms): answered by `takeover-allowed`, or a refusal

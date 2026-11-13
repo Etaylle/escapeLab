@@ -3,11 +3,11 @@ import { ACHIEVEMENT_IDS, type AchievementId } from '@escapelab/core';
 import { localStore } from './notes.js';
 
 /**
- * The Erfolge a device has seen earned, mission by mission, each with the moment of the run that
- * first earned it — kept in the browser, as the device's first won run is (firstRun.ts). The
- * server says which plaques a run earned (core achievements.ts, `PlayerView.achievements`); that
- * one is new here is the device's to tell: the won card lets the new ones come in, the lobby
- * counts them.
+ * The Erfolge the pass's account earned, mission by mission, each with the moment of the run that
+ * first earned it — kept in the browser as a cache that the server fills (`fillEarned`, from the
+ * account it sends), and that a won run adds its plaques to at once. The server says which plaques
+ * a run earned (core achievements.ts, `PlayerView.achievements`); that one is new is the cache's
+ * to tell: the won card lets the new ones come in, the lobby counts them.
  */
 
 /** Where the browser keeps them. */
@@ -106,6 +106,44 @@ export function keepEarned(
   } catch (error) {
     warnOnce('the browser keeps no Erfolge here: the run’s stay on this screen', error);
     return false;
+  }
+}
+
+/**
+ * The Erfolge the server keeps for the pass's account (core protocol.ts `AccountView`) filled
+ * into what `store` keeps — the cache the menu, the lobby and the won card read: every plaque of
+ * either, each with the earlier date. False where the browser refuses it.
+ */
+export function fillEarned(store: Store | null, earned: Earned): boolean {
+  if (store === null) {
+    return false;
+  }
+  const known = readEarned(store);
+  const filled: Record<string, Partial<Record<AchievementId, number>>> = { ...known };
+  for (const [missionId, plaques] of Object.entries(earned)) {
+    const mission = { ...filled[missionId] };
+    for (const [id, at] of Object.entries(missionOf(plaques))) {
+      if (isId(id)) {
+        mission[id] = Math.min(mission[id] ?? at, at);
+      }
+    }
+    filled[missionId] = mission;
+  }
+  try {
+    store.setItem(ACHIEVEMENTS_KEY, JSON.stringify(filled));
+    return true;
+  } catch (error) {
+    warnOnce('the browser keeps no Erfolge here: the account’s stay on the server', error);
+    return false;
+  }
+}
+
+/** The account deleted: the device forgets the Erfolge it kept of it. */
+export function forgetEarned(store: Pick<Storage, 'removeItem'> | null): void {
+  try {
+    store?.removeItem(ACHIEVEMENTS_KEY);
+  } catch (error) {
+    warnOnce('the browser keeps the Erfolge of a deleted account: it refuses to forget them', error);
   }
 }
 
