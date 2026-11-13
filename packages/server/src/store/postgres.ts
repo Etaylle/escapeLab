@@ -101,6 +101,67 @@ function alreadyThere(err: unknown): boolean {
   return err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002';
 }
 
+/**
+ * Seconds a pooled connection may stand idle before the pool opens a fresh one instead: well
+ * under the 5 minutes after which Neon closes an idle connection — the pool would otherwise hand
+ * out one the database closed — and the longest a pool stays stuck on a closed connection
+ * (Prisma 6.19 retires it only once it has stood idle that long).
+ */
+export const IDLE_LIFETIME_S = 60;
+
+/**
+ * `url` with the pool's idle lifetime (`IDLE_LIFETIME_S`), unless it sets one itself
+ * (`max_idle_connection_lifetime`). Throws, naming the variable, for one that is no URL.
+ */
+export function pooledUrl(url: string): string {
+  let pooled: URL;
+  try {
+    pooled = new URL(url);
+  } catch {
+    throw new Error('DATABASE_URL is no connection URL — check the variable');
+  }
+  if (!pooled.searchParams.has('max_idle_connection_lifetime')) {
+    pooled.searchParams.set('max_idle_connection_lifetime', String(IDLE_LIFETIME_S));
+  }
+  return pooled.toString();
+}
+
+/**
+ * Prisma's codes for a connection lost: P1017, the database closed one the pool still held —
+ * Neon closes a connection idle for 5 minutes — P1001 and P1002, none could be opened.
+ */
+const CONNECTION_LOST: ReadonlySet<string> = new Set(['P1001', 'P1002', 'P1017']);
+
+/** The code of Prisma's that `err` carries; null for none. */
+function codeOf(err: unknown): string | null {
+  if (err instanceof Prisma.PrismaClientKnownRequestError) {
+    return err.code;
+  }
+  return err instanceof Prisma.PrismaClientInitializationError ? (err.errorCode ?? null) : null;
+}
+
+/** Whether `err` says the connection was lost: asked again, the request may well go through. */
+export function connectionLost(err: unknown): boolean {
+  const code = codeOf(err);
+  return code !== null && CONNECTION_LOST.has(code);
+}
+
+/**
+ * `work` done — once more where the connection it went out on was lost (`connectionLost`), on
+ * another the pool opens. Anything else, a constraint refused say, is thrown as it came.
+ */
+export async function onceMore<T>(work: () => Promise<T>): Promise<T> {
+  try {
+    return await work();
+  } catch (err) {
+    if (!connectionLost(err)) {
+      throw err;
+    }
+    console.log(`[escapelab] the database had lost the connection (${codeOf(err)}): asked again`);
+    return work();
+  }
+}
+
 export class PostgresStore implements Store {
   readonly description = 'Postgres at DATABASE_URL: accounts, runs and Erfolge outlast a restart';
   private index = new RunStats();
@@ -112,7 +173,7 @@ export class PostgresStore implements Store {
    * database cannot be reached.
    */
   static async open(url: string): Promise<PostgresStore> {
-    const db = new PrismaClient({ datasourceUrl: url });
+    const db = new PrismaClient({ datasourceUrl: pooledUrl(url) });
     const store = new PostgresStore(db);
     try {
       await db.$connect();
@@ -142,33 +203,39 @@ export class PostgresStore implements Store {
   async appendRun(run: FinishedRun): Promise<void> {
     const subjects = run.passes.filter((passId): passId is string => passId !== null);
     const unlocked = unlockedBy(run.report);
-    await this.db.$transaction(async (tx) => {
-      const identities = await tx.identity.findMany({
-        where: { provider: 'pass', subject: { in: subjects } },
-      });
-      const accounts = new Map(identities.map(({ subject, accountId }) => [subject, accountId]));
-      await tx.run.create({ data: runRowOf(run, accounts) });
-      // Each Erfolg once: one an account earned before keeps the date it was first earned.
-      await tx.achievement.createMany({
-        data: [...new Set(accounts.values())].flatMap((accountId) =>
-          unlocked.map(({ key, unlockedAt }) => ({
-            accountId,
-            key,
-            unlockedAt: new Date(unlockedAt),
-          })),
-        ),
-        skipDuplicates: true,
-      });
-    });
+    // A run usually ends after minutes without a word to the database: its write is the one most
+    // likely to find the connection lost (`onceMore`).
+    await onceMore(() =>
+      this.db.$transaction(async (tx) => {
+        const identities = await tx.identity.findMany({
+          where: { provider: 'pass', subject: { in: subjects } },
+        });
+        const accounts = new Map(identities.map(({ subject, accountId }) => [subject, accountId]));
+        await tx.run.create({ data: runRowOf(run, accounts) });
+        // Each Erfolg once: one an account earned before keeps the date it was first earned.
+        await tx.achievement.createMany({
+          data: [...new Set(accounts.values())].flatMap((accountId) =>
+            unlocked.map(({ key, unlockedAt }) => ({
+              accountId,
+              key,
+              unlockedAt: new Date(unlockedAt),
+            })),
+          ),
+          skipDuplicates: true,
+        });
+      }),
+    );
     this.index.add(run.report);
   }
 
   async runs(missionId?: string): Promise<LoggedRun[]> {
-    const rows = await this.db.run.findMany({
-      where: missionId === undefined ? {} : { missionId },
-      include: { members: true },
-      orderBy: [{ endedAt: 'asc' }, { id: 'asc' }],
-    });
+    const rows = await onceMore(() =>
+      this.db.run.findMany({
+        where: missionId === undefined ? {} : { missionId },
+        include: { members: true },
+        orderBy: [{ endedAt: 'asc' }, { id: 'asc' }],
+      }),
+    );
     return rows.flatMap((row) => this.checked(row));
   }
 
@@ -180,22 +247,33 @@ export class PostgresStore implements Store {
     accountId: string,
     limit: number,
   ): Promise<{ total: number; runs: SeatedRun[] }> {
-    const [total, seats] = await this.db.$transaction([
-      this.db.runMember.count({ where: { accountId } }),
-      this.db.runMember.findMany({
-        where: { accountId },
-        include: { run: { include: { members: true } } },
-        orderBy: { run: { endedAt: 'desc' } },
-        take: limit,
-      }),
-    ]);
+    const [total, seats] = await onceMore(() =>
+      this.db.$transaction([
+        this.db.runMember.count({ where: { accountId } }),
+        this.db.runMember.findMany({
+          where: { accountId },
+          include: { run: { include: { members: true } } },
+          orderBy: { run: { endedAt: 'desc' } },
+          take: limit,
+        }),
+      ]),
+    );
     const runs = seats.flatMap(({ run: row, seat }) =>
       this.checked(row).map((run) => ({ run, seat })),
     );
     return { total, runs };
   }
 
-  async getOrCreateByIdentity(identity: PassIdentity, profile: Profile): Promise<Account> {
+  getOrCreateByIdentity(identity: PassIdentity, profile: Profile): Promise<Account> {
+    return onceMore(() => this.getOrCreate(identity, profile));
+  }
+
+  findByIdentity(identity: PassIdentity): Promise<Account | null> {
+    return onceMore(() => this.find(identity));
+  }
+
+  /** `getOrCreateByIdentity`, asked once. */
+  private async getOrCreate(identity: PassIdentity, profile: Profile): Promise<Account> {
     const found = await this.visit(identity);
     if (found !== null) {
       return found;
@@ -225,7 +303,8 @@ export class PostgresStore implements Store {
     }
   }
 
-  async findByIdentity(identity: PassIdentity): Promise<Account | null> {
+  /** `findByIdentity`, asked once. */
+  private async find(identity: PassIdentity): Promise<Account | null> {
     const found = await this.db.identity.findUnique({
       where: { provider_subject: { provider: identity.provider, subject: identity.subject } },
       include: { account: true },
@@ -239,7 +318,7 @@ export class PostgresStore implements Store {
 
   /** The account `identity` leads into, its visit noted; null where it leads nowhere yet. */
   private async visit(identity: PassIdentity): Promise<Account | null> {
-    const found = await this.findByIdentity(identity);
+    const found = await this.find(identity);
     if (found === null) {
       return null;
     }
@@ -251,17 +330,19 @@ export class PostgresStore implements Store {
   }
 
   async updateProfile(accountId: string, change: Partial<Profile>): Promise<Account> {
-    return accountOf(await this.db.account.update({ where: { id: accountId }, data: change }));
+    return accountOf(
+      await onceMore(() => this.db.account.update({ where: { id: accountId }, data: change })),
+    );
   }
 
   async achievements(accountId: string): Promise<Unlocked[]> {
-    const rows = await this.db.achievement.findMany({ where: { accountId } });
+    const rows = await onceMore(() => this.db.achievement.findMany({ where: { accountId } }));
     return rows.map((row) => ({ key: row.key, unlockedAt: row.unlockedAt.getTime() }));
   }
 
   async deleteAccount(accountId: string): Promise<void> {
     // Its identities, Erfolge and seats go with it (onDelete: Cascade); the runs stay.
-    await this.db.account.deleteMany({ where: { id: accountId } });
+    await onceMore(() => this.db.account.deleteMany({ where: { id: accountId } }));
     await this.recount();
   }
 

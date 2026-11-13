@@ -80,6 +80,12 @@ the names it was written with. The start-up log names the store in one line eith
 
 - **Render:** `DATABASE_URL` in the environment (Neon's direct connection), the start script
   applies the migrations first: README, „Hosting auf Render".
+- **A connection lost:** Neon closes a connection that stood idle for five minutes. The pool
+  hands out none idle for more than a minute (`max_idle_connection_lifetime=60`, unless
+  `DATABASE_URL` sets its own), and a request whose connection was lost all the same is asked
+  once more: the log says `the database had lost the connection (P1017): asked again`. A
+  refusal, a unique key say, is never asked again. Prisma 6.19 can stay stuck on a closed
+  connection after a transaction lost one; the minute's lifetime ends that too.
 - **Changing the schema:** edit `prisma/schema.prisma`, then make the migration with
   `pnpm --filter @escapelab/server prisma migrate dev --name <what>` against a database of your
   own, and commit it; the next deploy applies it. `packages/server/test/schema.test.ts` checks that

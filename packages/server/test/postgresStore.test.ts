@@ -22,6 +22,24 @@ async function open(): Promise<Store> {
   return store;
 }
 
+/** A store whose connections go by the name `app` in the database, so that a test finds them. */
+async function openNamed(app: string): Promise<Store> {
+  const named = new URL(url);
+  named.searchParams.set('application_name', app);
+  const store = await PostgresStore.open(named.toString());
+  opened.push(store);
+  return store;
+}
+
+/** Every connection named `app` closed by the database, as Neon closes idle ones; then gone. */
+async function closeConnections(app: string): Promise<void> {
+  const named = `FROM pg_stat_activity WHERE application_name = '${app}'`;
+  await db.$queryRawUnsafe(`SELECT pg_terminate_backend(pid) ${named}`);
+  await vi.waitFor(async () => {
+    expect(await db.$queryRawUnsafe(`SELECT pid ${named}`)).toEqual([]);
+  });
+}
+
 describe.skipIf(url === '')('the store in Postgres', () => {
   beforeAll(() => {
     db = new PrismaClient({ datasourceUrl: url });
@@ -125,6 +143,42 @@ describe.skipIf(url === '')('the store in Postgres', () => {
         await db.$executeRawUnsafe('DROP FUNCTION IF EXISTS refuse_erfolg()');
       }
       expect(await store.achievements(made.id)).toEqual([]);
+    });
+
+    it('keeps a run that ends on a connection the database closed: it asks again', async () => {
+      const store = await openNamed('lost-run');
+      const made = await store.getOrCreateByIdentity(identityOf('Anna'), {
+        displayName: 'Anna',
+        colour: null,
+      });
+      const said = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+      try {
+        await closeConnections('lost-run');
+        await store.appendRun(finished({}, ['Anna', null]));
+        expect(said).toHaveBeenCalledWith(expect.stringContaining('(P1017): asked again'));
+      } finally {
+        said.mockRestore();
+      }
+      expect([await db.run.count(), (await store.runsOfAccount(made.id, 5)).total]).toEqual([1, 1]);
+      expect(store.stats().runs).toBe(1);
+    });
+
+    it('finds and makes accounts on a connection the database closed: it asks again', async () => {
+      const store = await openNamed('lost-account');
+      const anna = { displayName: 'Anna', colour: null };
+      const made = await store.getOrCreateByIdentity(identityOf('Anna'), anna);
+      const said = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+      try {
+        await closeConnections('lost-account');
+        expect(await store.findByIdentity(identityOf('Anna'))).toMatchObject({ id: made.id });
+        await closeConnections('lost-account');
+        const ben = await store.getOrCreateByIdentity(identityOf('Ben'), anna);
+        expect(said).toHaveBeenCalledTimes(2);
+        expect(await db.account.count()).toBe(2);
+        expect(ben.id).not.toBe(made.id);
+      } finally {
+        said.mockRestore();
+      }
     });
 
     it('says why it does not open where the database cannot be reached', async () => {
