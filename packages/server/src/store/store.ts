@@ -3,6 +3,7 @@ import {
   achievementsOf,
   DIFFICULTIES,
   GameError,
+  type AccountStore,
   type RunOutcome,
   type RunReport,
 } from '@escapelab/core';
@@ -64,6 +65,8 @@ export interface Unlocked {
 export interface Store {
   /** the start-up log's line: which store this is, and what of the game outlasts a restart */
   readonly description: string;
+  /** where it keeps the accounts and the runs, as an account's view says it (`AccountStore`) */
+  readonly kind: AccountStore;
   /**
    * Keeps a finished run with a seat for each of its crew — the account of each pass that has
    * one — and the Erfolge it earned for each of those accounts (`unlockedBy`), at once: each
@@ -93,12 +96,16 @@ export interface Store {
   achievements(accountId: string): Promise<Unlocked[]>;
   /**
    * The account gone, and its identities, its Erfolge and its seats in the runs with it: the
-   * runs stay, without its name.
+   * runs stay, without its name — in the Bestenliste and in `runs` at once. A run log keeps the
+   * names it was written with, and so does the Bestenliste counted from it after a restart.
    */
   deleteAccount(accountId: string): Promise<void>;
   /** Lets go of what the store holds open; first wait for the runs handed over (`Recorder`). */
   close(): Promise<void>;
 }
+
+/** The alias a report gives the crew member on `seat`: p1 for the first. */
+export const aliasOf = (seat: number): string => `p${seat + 1}`;
 
 /**
  * The Erfolge a finished run earns each account of its crew (core achievements.ts): „mission:

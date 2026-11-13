@@ -78,6 +78,15 @@ class Tally {
     }
   }
 
+  /** `name` off the crew of the listed run that finished at `finishedAt`, where it is listed. */
+  unname(finishedAt: number, name: string): void {
+    for (const entry of this.top) {
+      if (entry.finishedAt === finishedAt) {
+        entry.crew = entry.crew.filter((member) => member !== name);
+      }
+    }
+  }
+
   /** The place of the won run that finished at `finishedAt`, from 1; null when none did. */
   placeOf(finishedAt: number): number | null {
     const index = this.ranks.findIndex((rank) => rank.finishedAt === finishedAt);
@@ -106,6 +115,11 @@ class Board {
     tally.add(run);
     tallies.set(run.difficulty, tally);
     this.missions.set(run.missionId, tallies);
+  }
+
+  /** `name` off the crew of `run` where this ranking lists it by its crew. */
+  unname(run: LoggedRun, name: string): void {
+    this.missions.get(run.missionId)?.get(run.difficulty)?.unname(run.finishedAt, name);
   }
 
   all(): MissionStats[] {
@@ -142,13 +156,12 @@ class Board {
 const isDaily = (run: LoggedRun): boolean => run.version === 2 && run.daily === true;
 
 /**
- * The Bestenliste's numbers by mission and difficulty: counted from the store's runs
- * as the server starts, then kept up to date run by run — counted anew only where a
- * deleted account takes its name off runs (store/postgres.ts). It keeps the time of
- * every won run, for the median and the places, and names only for the TOP_RUNS
- * fastest. The runs of the
- * Tagesschicht rank apart, a board for each UTC day they started on: every
- * crew that day played the same instance.
+ * The Bestenliste's numbers by mission and difficulty: counted from the store's runs as the
+ * server starts, then kept up to date run by run, a deleted account's name taken off the runs
+ * it is listed with (`unname`) — the run log's store does that, Postgres counts anew. It keeps
+ * the time of every won run, for the median and the places, and names only for the TOP_RUNS
+ * fastest. The runs of the Tagesschicht rank apart, a board for each UTC day they started on:
+ * every crew that day played the same instance.
  */
 export class RunStats {
   private readonly board = new Board();
@@ -179,6 +192,15 @@ export class RunStats {
       this.board.add(run);
     }
     this.counted += 1;
+  }
+
+  /**
+   * `name` off the crew of `run` wherever the Bestenliste lists it by its crew (`TOP_RUNS`): its
+   * account was deleted. The run keeps its place, its time and its count.
+   */
+  unname(run: LoggedRun, name: string): void {
+    const board = isDaily(run) ? this.days.get(utcDay(run.startedAt)) : this.board;
+    board?.unname(run, name);
   }
 
   /** Every mission with a run off the Tagesschicht, by id. */

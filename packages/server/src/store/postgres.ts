@@ -2,6 +2,7 @@ import { Prisma, PrismaClient, type Account as AccountRow } from '@prisma/client
 import { NO_CREDITS, runSeconds, type Credits, type RunReport } from '@escapelab/core';
 import { RunStats } from '../runStats.js';
 import {
+  aliasOf,
   checkSecret,
   isLoggedRun,
   unlockedBy,
@@ -28,9 +29,6 @@ type RunRow = Prisma.RunGetPayload<{ include: { members: true } }>;
 
 /** A report as a run's row keeps it: without the crew's names and what each of them did. */
 type StoredReport = Omit<RunReport, 'crew' | 'credits'>;
-
-/** The alias a report gives the crew member on `seat`: p1 for the first. */
-const aliasOf = (seat: number): string => `p${seat + 1}`;
 
 /** `row`'s account as the store hands it out. */
 function accountOf(row: AccountRow): Account {
@@ -164,6 +162,7 @@ export async function onceMore<T>(work: () => Promise<T>): Promise<T> {
 
 export class PostgresStore implements Store {
   readonly description = 'Postgres at DATABASE_URL: accounts, runs and Erfolge outlast a restart';
+  readonly kind = 'database';
   private index = new RunStats();
 
   private constructor(private readonly db: PrismaClient) {}

@@ -153,6 +153,7 @@ export class AccountDesk {
       since: account.createdAt,
       runs: runs.total,
       achievements: byMission(unlocked),
+      store: this.store.kind,
     };
   }
 

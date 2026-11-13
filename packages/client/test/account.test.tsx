@@ -20,13 +20,14 @@ import { page, storage } from './page.js';
 
 const noop = (): void => undefined;
 
-/** Anna's account as the server tells it: three runs, two Erfolge of Blackout. */
+/** Anna's account as a server with a database tells it: three runs, two Erfolge of Blackout. */
 const ANNA: AccountView = {
   name: 'Anna',
   color: '#a78bfa',
   since: Date.UTC(2026, 10, 1, 12),
   runs: 3,
   achievements: { blackout: { 'ohne-alarm': 1000, 'erste-schicht': 2000 } },
+  store: 'database',
 };
 
 /** Anna's browser: her pass kept with `kept` beside it; what it keeps, by key. */
@@ -172,11 +173,21 @@ describe('„Konto löschen" in the settings', () => {
   });
 
   it('names what deleting takes and leaves, by the runs played', () => {
-    expect(deleteLine({ runs: 0 })).toBe(
+    const kept = { store: 'database' } as const;
+    expect(deleteLine({ ...kept, runs: 0 })).toBe(
       'Löscht Name, Farbe und Erfolge des Kontos. Der Dienstausweis dieses Geräts bleibt.',
     );
-    expect(deleteLine({ runs: 1 })).toContain('nimmt den Namen aus seinem Einsatz;');
-    expect(deleteLine({ runs: 3 })).toContain('nimmt den Namen aus seinen 3 Einsätzen;');
+    expect(deleteLine({ ...kept, runs: 1 })).toContain('nimmt den Namen aus seinem Einsatz;');
+    expect(deleteLine({ ...kept, runs: 3 })).toContain('nimmt den Namen aus seinen 3 Einsätzen;');
+  });
+
+  it('says the run log keeps the name where the server keeps one, and no database', () => {
+    const line = deleteLine({ runs: 3, store: 'run-log' });
+    expect(line).toContain('nimmt den Namen aus der Bestenliste dieses Servers.');
+    expect(line).toContain('Sein Laufprotokoll behält ihn und führt ihn nach einem Neustart');
+    expect(line).not.toContain('Einsätzen');
+    expect(deleteLine({ runs: 0, store: 'run-log' })).toBe(deleteLine({ ...ANNA, runs: 0 }));
+    expect(section({ ...ANNA, store: 'run-log' }, 'asked').html).toContain('Laufprotokoll');
   });
 
   it('stands in the settings where there is an account and a way to delete it', () => {

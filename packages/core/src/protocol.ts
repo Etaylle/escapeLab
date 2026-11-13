@@ -291,7 +291,16 @@ export interface AccountView {
   runs: number;
   /** the Erfolge it earned, by mission, each with the end of the run that first earned it */
   achievements: Record<string, Partial<Record<AchievementId, number>>>;
+  /** where the server keeps it, and so what deleting it takes off its runs (`AccountStore`) */
+  store: AccountStore;
 }
+
+/**
+ * Where a server keeps its accounts and runs: in a database, for good — a deleted account's name
+ * leaves its runs there — or in memory beside its run log, a file that keeps every name its runs
+ * were written with: a deleted account's name leaves the Bestenliste until the server restarts.
+ */
+export type AccountStore = 'database' | 'run-log';
 
 /** A run of an account's, as „Meine Einsätze" lists it (`my-runs`). */
 export interface AccountRun {

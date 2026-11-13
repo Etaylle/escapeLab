@@ -111,16 +111,30 @@ export function accountFacts(account: AccountView): string {
   return `${name} · seit ${dateText(account.since)} · ${runsText(account.runs)}`;
 }
 
-/** What deleting the account deletes, and what it leaves, said before it is done. */
-export function deleteLine(account: Pick<AccountView, 'runs'>): string {
-  const { runs } = account;
+/** What deleting the account leaves on this device, whatever the server keeps. */
+const PASS_STAYS = 'Der Dienstausweis dieses Geräts bleibt.';
+
+/**
+ * What deleting the account deletes, and what it leaves, said before it is done: where the
+ * server keeps a run log (`AccountStore`), the log keeps the name, and so does the Bestenliste
+ * once the server starts anew.
+ */
+export function deleteLine(account: Pick<AccountView, 'runs' | 'store'>): string {
+  const { runs, store } = account;
   if (runs === 0) {
-    return 'Löscht Name, Farbe und Erfolge des Kontos. Der Dienstausweis dieses Geräts bleibt.';
+    return `Löscht Name, Farbe und Erfolge des Kontos. ${PASS_STAYS}`;
+  }
+  if (store === 'run-log') {
+    return (
+      'Löscht Name, Farbe und Erfolge des Kontos und nimmt den Namen aus der Bestenliste dieses ' +
+      'Servers. Sein Laufprotokoll behält ihn und führt ihn nach einem Neustart wieder auf. ' +
+      PASS_STAYS
+    );
   }
   const where = runs === 1 ? 'seinem Einsatz' : `seinen ${runs} Einsätzen`;
   return (
     `Löscht Name, Farbe und Erfolge des Kontos und nimmt den Namen aus ${where}; die ` +
-    'Einsätze bleiben in der Bestenliste. Der Dienstausweis dieses Geräts bleibt.'
+    `Einsätze bleiben in der Bestenliste. ${PASS_STAYS}`
   );
 }
 

@@ -236,5 +236,33 @@ export function storeContract(name: string, open: () => Promise<Opened>): void {
       expect(fresh.id).not.toBe(gone.id);
       expect(await store.runsOfAccount(fresh.id, 10)).toEqual({ total: 0, runs: [] });
     });
+
+    it('takes a deleted account’s name off its runs at once, wherever they are shown', async () => {
+      const { store } = await open();
+      const gone = await store.getOrCreateByIdentity(identityOf('Anna'), anna);
+      const bens = await store.getOrCreateByIdentity(identityOf('Ben'), anna);
+      const daily = finished({ at: DAY + 1 }, ['Anna', 'Ben']);
+      await store.appendRun(finished({ at: DAY }, ['Anna', 'Ben']));
+      await store.appendRun({ ...daily, report: { ...daily.report, daily: true } });
+      await store.deleteAccount(gone.id);
+      const runs = await store.runs();
+      expect(runs.map((run) => (run.version === 2 ? run.crew : []))).toEqual([
+        ['', 'Ben'],
+        ['', 'Ben'],
+      ]);
+      expect(runs.map((run) => (run.version === 2 ? Object.keys(run.credits) : []))).toEqual([
+        ['p2'],
+        ['p2'],
+      ]);
+      const top = store.stats().mission('blackout')?.difficulties[0]?.top;
+      expect(top?.map((entry) => [entry.crew, entry.crewSize])).toEqual([[['Ben'], 2]]);
+      const day = store.stats().daily()[0]?.missions[0]?.difficulties[0]?.top;
+      expect(day?.map((entry) => entry.crew)).toEqual([['Ben']]);
+      const ofBen = await store.runsOfAccount(bens.id, 5);
+      expect(ofBen.runs.map(({ run }) => (run.version === 2 ? run.crew : []))).toEqual([
+        ['', 'Ben'],
+        ['', 'Ben'],
+      ]);
+    });
   });
 }

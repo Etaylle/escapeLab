@@ -217,6 +217,7 @@ export {
   SNAPSHOT_MAX_AGE_MS,
   isCustomMissionId,
   type AccountRun,
+  type AccountStore,
   type AccountView,
   type RtcSignal,
   type ClientMessage,

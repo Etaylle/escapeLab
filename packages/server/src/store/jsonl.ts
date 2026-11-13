@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import type { RunReport } from '@escapelab/core';
 import { RunStats } from '../runStats.js';
 import {
+  aliasOf,
   checkSecret,
   isLoggedRun,
   unlockedBy,
@@ -111,16 +112,42 @@ function loadRuns(file: string): { runs: LoggedRun[]; problems: string[] } {
 const keyOf = (identity: Pick<PassIdentity, 'provider' | 'subject'>): string =>
   `${identity.provider}:${identity.subject}`;
 
-/** The runs in the log at `file`, its accounts in memory. */
+/** A seat's key in memory: the run's room and start, and the seat. */
+const seatKeyOf = (run: RunReport, seat: number): string =>
+  `${run.roomCode}|${run.startedAt}|${seat}`;
+
+/** `run` with the seats `gone` named '' and credited nothing. */
+function withoutSeats<T extends RunReport>(run: T, gone: readonly number[]): T {
+  const aliases = new Set(gone.map(aliasOf));
+  return {
+    ...run,
+    crew: run.crew.map((name, seat) => (gone.includes(seat) ? '' : name)),
+    credits: Object.fromEntries(
+      Object.entries(run.credits).filter(([alias]) => !aliases.has(alias)),
+    ),
+  };
+}
+
+/**
+ * The runs in the log at `file`, its accounts in memory. A deleted account's name leaves the
+ * runs it played since the server started — in the Bestenliste and in what `runs` hands out —
+ * while the log keeps every name it was written with: counted anew from it after a restart.
+ */
 export class JsonlStore implements Store {
   readonly description: string;
+  readonly kind = 'run-log';
   private readonly accounts = new Map<string, Account>();
   /** each identity's account and the hash of its secret, by `keyOf` */
   private readonly identities = new Map<string, { accountId: string; secretHash: string }>();
   /** each account's Erfolge: when each was first earned, by key */
   private readonly earned = new Map<string, Map<string, number>>();
-  /** each account's seats in the runs appended since the server started, the oldest first */
+  /**
+   * each account's seats in the runs appended since the server started, the oldest first: in
+   * the store's own copy of each run, which a deleted account's name leaves
+   */
   private readonly seated = new Map<string, SeatedRun[]>();
+  /** the seats of accounts deleted since the server started, by `seatKeyOf` */
+  private readonly unseated = new Set<string>();
 
   private constructor(
     private readonly file: string,
@@ -147,11 +174,12 @@ export class JsonlStore implements Store {
     appendLine(this.file, report);
     this.index.add(report);
     const unlocked = unlockedBy(report);
+    const kept: RunReport = { ...report, crew: [...report.crew], credits: { ...report.credits } };
     passes.forEach((passId, seat) => {
       const known = passId === null ? undefined : this.identities.get(`pass:${passId}`);
       if (known !== undefined) {
         const seats = this.seated.get(known.accountId) ?? [];
-        this.seated.set(known.accountId, [...seats, { run: report, seat }]);
+        this.seated.set(known.accountId, [...seats, { run: kept, seat }]);
         this.unlock(known.accountId, unlocked);
       }
     });
@@ -170,7 +198,20 @@ export class JsonlStore implements Store {
 
   async runs(missionId?: string): Promise<LoggedRun[]> {
     const { runs } = loadRuns(this.file);
-    return missionId === undefined ? runs : runs.filter((run) => run.missionId === missionId);
+    const asked =
+      missionId === undefined ? runs : runs.filter((run) => run.missionId === missionId);
+    return asked.map((run) => this.withoutUnseated(run));
+  }
+
+  /** `run` as the store hands it out: the seats of accounts deleted since named ''. */
+  private withoutUnseated(run: LoggedRun): LoggedRun {
+    if (run.version === 1 || this.unseated.size === 0) {
+      return run;
+    }
+    const gone = run.crew.flatMap((_, seat) =>
+      this.unseated.has(seatKeyOf(run, seat)) ? [seat] : [],
+    );
+    return gone.length === 0 ? run : withoutSeats(run, gone);
   }
 
   stats(): RunStats {
@@ -224,6 +265,9 @@ export class JsonlStore implements Store {
   }
 
   async deleteAccount(accountId: string): Promise<void> {
+    for (const { run, seat } of this.seated.get(accountId) ?? []) {
+      this.unseat(run, seat);
+    }
     this.accounts.delete(accountId);
     for (const [key, identity] of this.identities) {
       if (identity.accountId === accountId) {
@@ -232,6 +276,20 @@ export class JsonlStore implements Store {
     }
     this.earned.delete(accountId);
     this.seated.delete(accountId);
+  }
+
+  /**
+   * The name on `seat` of `run`, the store's copy, taken off it: off the Bestenliste, off the
+   * runs `runs` hands out, and off the runs of the rest of its crew.
+   */
+  private unseat(run: LoggedRun, seat: number): void {
+    const name = run.version === 1 ? '' : (run.crew[seat] ?? '');
+    if (run.version === 1 || name === '') {
+      return;
+    }
+    this.index.unname(run, name);
+    Object.assign(run, withoutSeats(run, [seat]));
+    this.unseated.add(seatKeyOf(run, seat));
   }
 
   async close(): Promise<void> {

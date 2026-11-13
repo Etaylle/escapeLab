@@ -73,8 +73,12 @@ naming nobody.
 
 Without `DATABASE_URL` — development, the LAN, CI — finished runs go to the run log file as
 before (README, „Laufprotokoll"), and the accounts and their seats in the runs live in memory
-until the server stops. Deleting an account there forgets it and its seats; the run log keeps
-the names it was written with. The start-up log names the store in one line either way.
+until the server stops. Deleting an account there forgets it and its seats and takes its name
+off the runs it played since the server started: off the Bestenliste, off `GET /runs.jsonl` and
+off the rest of the crew's „Meine Einsätze". The run log file keeps the names it was written
+with, so the Bestenliste counted from it after a restart shows them again; „Konto löschen" says
+so there (the account's view names its store, `store: 'run-log'`). The start-up log names the
+store in one line either way.
 
 ## Operating it
 
