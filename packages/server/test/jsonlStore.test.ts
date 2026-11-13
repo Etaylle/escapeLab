@@ -20,10 +20,10 @@ import {
 import { RoomManager } from '../src/roomManager.js';
 import type { Room } from '../src/room.js';
 import { appendLine, JsonlStore, parseRuns, readRuns } from '../src/store/jsonl.js';
-import { recordRuns, type LoggedRun } from '../src/store/store.js';
+import { recordRuns, type FinishedRun, type LoggedRun } from '../src/store/store.js';
 import { pressE, walkTo, type Walker } from './walk.js';
 import { passFor } from './passes.js';
-import { DAY, finished, reportOf, storeContract } from './storeContract.js';
+import { DAY, finished, reportOf, seatPassOf, storeContract } from './storeContract.js';
 
 /**
  * Two presses for the whole crew along a corridor and the hatch between
@@ -330,14 +330,15 @@ describe('a room', () => {
   });
 
   it('hands the store the pass that held each seat, in the order of the crew', () => {
-    const runs: { passes: readonly (string | null)[] }[] = [];
+    const runs: FinishedRun[] = [];
     const room = new RoomManager((run) => runs.push(run)).create(mission);
     const anna = seat(room, 'Anna');
     const ben = seat(room, 'Ben');
     room.setReady(ben.playerId, true);
     room.act(anna.playerId, { kind: 'start-mission' });
     vi.advanceTimersByTime(mission.timeLimitSec * 1000 + 1);
-    expect(runs.map((run) => run.passes)).toEqual([[passFor('Anna').id, passFor('Ben').id]]);
+    // Each by its id and the hash of the secret its seat was bound with: an id alone is no pass.
+    expect(runs.map((run) => run.passes)).toEqual([[seatPassOf('Anna'), seatPassOf('Ben')]]);
     room.dispose();
   });
 

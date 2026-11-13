@@ -566,6 +566,7 @@ function Settings({ live, close }: { live: Connection; close: () => void }) {
       onClose={close}
       account={live.account}
       onDeleteAccount={() => live.send({ kind: 'delete-account', pass: crewPass() })}
+      refusal={live.refusal}
     />
   );
 }

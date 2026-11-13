@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   achievementsOf,
   NO_CREDITS,
@@ -11,6 +11,7 @@ import {
   secretHashOf,
   type FinishedRun,
   type PassIdentity,
+  type SeatPass,
   type Store,
 } from '../src/store/store.js';
 import { passFor } from './passes.js';
@@ -80,11 +81,17 @@ export function identityOf(name: string, secret = passFor(name).secret): PassIde
   return { provider: 'pass', subject: passFor(name).id, secretHash: secretHashOf(secret) };
 }
 
+/** The pass of `name`'s browser on a seat, as its room hands it over: its id, its secret's hash. */
+export function seatPassOf(name: string): SeatPass {
+  const pass = passFor(name);
+  return { id: pass.id, secretHash: secretHashOf(pass.secret) };
+}
+
 /** A finished run of `parts`, each seat held by the pass of the name given, or by none. */
 export function finished(parts: Parts, holders: readonly (string | null)[]): FinishedRun {
   return {
     report: reportOf(parts),
-    passes: holders.map((name) => (name === null ? null : passFor(name).id)),
+    passes: holders.map((name) => (name === null ? null : seatPassOf(name))),
   };
 }
 
@@ -109,7 +116,7 @@ export async function withAccounts(store: Store, names: readonly string[]): Prom
 /** Runs the contract against the store `open` opens, under `name`. */
 export function storeContract(name: string, open: () => Promise<Opened>): void {
   describe(`${name}: the runs`, () => {
-    it('hands a run back whole, the oldest first, those of one mission where asked', async () => {
+    it('hands every run back whole, the oldest first', async () => {
       const { store } = await open();
       await withAccounts(store, ['Anna', 'Ben', 'Cleo']);
       const first = finished({ at: DAY, crew: ['Anna', 'Ben', 'Cleo'] }, ['Anna', 'Ben', 'Cleo']);
@@ -117,8 +124,22 @@ export function storeContract(name: string, open: () => Promise<Opened>): void {
       await store.appendRun(first);
       await store.appendRun(second);
       expect(await store.runs()).toEqual([first.report, second.report]);
-      expect(await store.runs('systemcheck')).toEqual([second.report]);
-      expect(await store.runs('nirgends')).toEqual([]);
+    });
+
+    it('keeps a run once that ends twice: a room taken up again from a snapshot', async () => {
+      const { store, reopen } = await open();
+      await withAccounts(store, ['Anna', 'Ben']);
+      const run = finished({ at: DAY }, ['Anna', 'Ben']);
+      const said = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+      try {
+        await store.appendRun(run);
+        await store.appendRun({ ...run, report: { ...run.report } });
+        expect(said).toHaveBeenCalledWith('[escapelab] run of blackout in room QXT4 kept already');
+      } finally {
+        said.mockRestore();
+      }
+      expect([(await store.runs()).length, store.stats().runs]).toEqual([1, 1]);
+      expect((await reopen()).stats().runs).toBe(1);
     });
 
     it('counts what it keeps into the Bestenliste, and again when opened anew', async () => {
@@ -209,6 +230,15 @@ export function storeContract(name: string, open: () => Promise<Opened>): void {
       await store.appendRun(finished({}, ['Anna', 'Ben']));
       const late = await store.getOrCreateByIdentity(identityOf('Anna'), anna);
       expect(await store.runsOfAccount(late.id, 10)).toEqual({ total: 0, runs: [] });
+    });
+
+    it('credits no account to a seat bound with its pass id and another secret', async () => {
+      const { store } = await open();
+      const annas = await store.getOrCreateByIdentity(identityOf('Anna'), anna);
+      const forged = { id: passFor('Anna').id, secretHash: secretHashOf('f'.repeat(64)) };
+      await store.appendRun({ ...finished({}, [null, null]), passes: [forged, null] });
+      expect(await store.runsOfAccount(annas.id, 10)).toEqual({ total: 0, runs: [] });
+      expect(await store.achievements(annas.id)).toEqual([]);
     });
 
     it('knows no Erfolge of a new account', async () => {

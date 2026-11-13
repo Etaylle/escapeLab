@@ -25,6 +25,8 @@ export function page() {
     seat: null as Seat | null,
     account: undefined as AccountView | null | undefined,
     myRuns: null as Loaded<MyRuns> | null,
+    /** the banner's words, as the page last set them */
+    banner: null as string | null,
   };
   const nothing = (): void => undefined;
   const kept: Page = {
@@ -51,7 +53,9 @@ export function page() {
     setRestoring: (restoring) => {
       got.restoring = restoring;
     },
-    setError: nothing,
+    setError: (message) => {
+      got.banner = message;
+    },
     refuse: nothing,
     resuming: { current: false },
     resumed: { current: null },

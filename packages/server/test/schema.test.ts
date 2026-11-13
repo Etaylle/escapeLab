@@ -71,13 +71,15 @@ describe.skipIf(url === null)('the migrations', () => {
     expect(bare.map((key) => key.name)).toEqual([]);
   });
 
-  it('index the runs the Bestenliste counts by mission, difficulty and outcome', async () => {
+  it('keep a run once, by its room and its start, and index nothing no query reads', async () => {
     const defs = await db.$queryRawUnsafe<{ indexdef: string }[]>(
       "SELECT indexdef FROM pg_indexes WHERE schemaname = $1 AND tablename = 'runs'",
       schema,
     );
-    expect(defs.map((d) => d.indexdef).join('\n')).toContain(
-      '(mission_id, difficulty, outcome)',
-    );
+    const runs = defs.map((d) => d.indexdef.replace(/ ON .*? USING btree /, ' '));
+    expect(runs.sort()).toEqual([
+      'CREATE UNIQUE INDEX runs_pkey (id)',
+      'CREATE UNIQUE INDEX runs_room_code_started_at_key (room_code, started_at)',
+    ]);
   });
 });

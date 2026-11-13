@@ -1,11 +1,13 @@
 packages:
   - packages/*
 
-# Prisma's install scripts fetch its engines and generate the client from the schema that
-# prisma.config.ts names; where pnpm restores them from its cache instead of running them, the
-# server's postinstall generates the client all the same.
+# Prisma's engines are fetched by their own install scripts. The client is generated once per
+# install, by the server's postinstall (packages/server/package.json): @prisma/client's script
+# would generate it a second time, from the repo's root, so it is left out on purpose — listed
+# as ignored, so that pnpm does not ask about it.
 onlyBuiltDependencies:
-  - '@prisma/client'
   - '@prisma/engines'
   - esbuild
   - prisma
+ignoredBuiltDependencies:
+  - '@prisma/client'

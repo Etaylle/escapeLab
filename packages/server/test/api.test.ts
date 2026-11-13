@@ -295,10 +295,9 @@ describe('GET /runs.jsonl', () => {
     }
   });
 
-  it('hands out the runs of one mission where asked', async () => {
+  it('hands out every run whatever the query asks: it picks no mission', async () => {
     const answer = await ask(withToken, get('/runs.jsonl?mission=systemcheck', 'Bearer geheim-42'));
-    const systemcheck = reportOf({ mission: 'systemcheck', at: DAY + 1 });
-    expect(answer.body).toBe(`${JSON.stringify(systemcheck)}\n`);
+    expect(answer.body).toBe(readFileSync(file, 'utf8'));
   });
 
   it('hands out nothing until the first run has finished', async () => {

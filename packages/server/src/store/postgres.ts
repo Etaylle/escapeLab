@@ -5,6 +5,7 @@ import {
   aliasOf,
   checkSecret,
   isLoggedRun,
+  sameSecretHash,
   unlockedBy,
   type Account,
   type FinishedRun,
@@ -54,11 +55,21 @@ function loggedOf(row: RunRow): unknown {
   return { ...(row.report as object), crew, credits };
 }
 
-/** The account that held each seat of `run`, by the pass on it: null for a seat without one. */
-function ownersOf(run: FinishedRun, accounts: ReadonlyMap<string, string>): (string | null)[] {
+/** What an identity row says of its pass: its id, the hash of its secret, its account. */
+type Holder = Pick<Prisma.IdentityGetPayload<object>, 'subject' | 'secretHash' | 'accountId'>;
+
+/**
+ * The account that held each seat of `run`: the one whose identity is the seat's pass — its id
+ * and the hash of its secret both, for an id alone credits nobody — null for a seat without one.
+ */
+function ownersOf(run: FinishedRun, identities: readonly Holder[]): (string | null)[] {
+  const bySubject = new Map(identities.map((identity) => [identity.subject, identity]));
   return run.report.crew.map((_, seat) => {
-    const passId = run.passes[seat] ?? null;
-    return passId === null ? null : (accounts.get(passId) ?? null);
+    const pass = run.passes[seat] ?? null;
+    const identity = pass === null ? undefined : bySubject.get(pass.id);
+    const shown = identity !== undefined && pass !== null;
+    const owned = shown && sameSecretHash(identity.secretHash, pass.secretHash);
+    return owned ? identity.accountId : null;
   });
 }
 
@@ -69,6 +80,35 @@ function ownersOf(run: FinishedRun, accounts: ReadonlyMap<string, string>): (str
 function asKept(report: RunReport, owners: readonly (string | null)[]): RunReport {
   const owned = (seat: number): boolean => (owners[seat] ?? null) !== null;
   return { ...report, crew: report.crew.map((name, seat) => (owned(seat) ? name : '')) };
+}
+
+/**
+ * `run` written in the transaction `tx` — its row, its seats, the Erfolge it earned each account
+ * on its seats — and the account on each seat (`ownersOf`). Rejects with P2002 for a run kept
+ * already: the room and the start name it.
+ */
+async function keep(tx: Prisma.TransactionClient, run: FinishedRun): Promise<(string | null)[]> {
+  const ids = run.passes.flatMap((pass) => (pass === null ? [] : [pass.id]));
+  const identities = await tx.identity.findMany({
+    where: { provider: 'pass', subject: { in: ids } },
+  });
+  const owners = ownersOf(run, identities);
+  await tx.run.create({ data: runRowOf(asKept(run.report, owners), owners) });
+  const unlocked = unlockedBy(run.report);
+  // Each Erfolg once: one an account earned before keeps the date it was first earned.
+  await tx.achievement.createMany({
+    data: [...new Set(owners)].flatMap((accountId) =>
+      accountId === null
+        ? []
+        : unlocked.map(({ key, unlockedAt }) => ({
+            accountId,
+            key,
+            unlockedAt: new Date(unlockedAt),
+          })),
+    ),
+    skipDuplicates: true,
+  });
+  return owners;
 }
 
 /**
@@ -216,39 +256,27 @@ export class PostgresStore implements Store {
   }
 
   async appendRun(run: FinishedRun): Promise<void> {
-    const subjects = run.passes.filter((passId): passId is string => passId !== null);
-    const unlocked = unlockedBy(run.report);
-    // A run usually ends after minutes without a word to the database: its write is the one most
-    // likely to find the connection lost (`onceMore`).
-    const owners = await onceMore(() =>
-      this.db.$transaction(async (tx) => {
-        const identities = await tx.identity.findMany({
-          where: { provider: 'pass', subject: { in: subjects } },
-        });
-        const accounts = new Map(identities.map(({ subject, accountId }) => [subject, accountId]));
-        const held = ownersOf(run, accounts);
-        await tx.run.create({ data: runRowOf(asKept(run.report, held), held) });
-        // Each Erfolg once: one an account earned before keeps the date it was first earned.
-        await tx.achievement.createMany({
-          data: [...new Set(accounts.values())].flatMap((accountId) =>
-            unlocked.map(({ key, unlockedAt }) => ({
-              accountId,
-              key,
-              unlockedAt: new Date(unlockedAt),
-            })),
-          ),
-          skipDuplicates: true,
-        });
-        return held;
-      }),
-    );
+    let owners: (string | null)[];
+    try {
+      // A run usually ends after minutes without a word to the database: its write is the one
+      // most likely to find the connection lost (`onceMore`).
+      owners = await onceMore(() => this.db.$transaction((tx) => keep(tx, run)));
+    } catch (err) {
+      if (!alreadyThere(err)) {
+        throw err;
+      }
+      // The same run once more — a room taken up again from a snapshot made before its end
+      // finished it a second time: kept and counted already.
+      const { missionId, roomCode } = run.report;
+      console.log(`[escapelab] run of ${missionId} in room ${roomCode} kept already`);
+      return;
+    }
     this.index.add(asKept(run.report, owners));
   }
 
-  async runs(missionId?: string): Promise<LoggedRun[]> {
+  async runs(): Promise<LoggedRun[]> {
     const rows = await onceMore(() =>
       this.db.run.findMany({
-        where: missionId === undefined ? {} : { missionId },
         include: { members: true },
         orderBy: [{ endedAt: 'asc' }, { id: 'asc' }],
       }),

@@ -1,5 +1,6 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { GameError, type CrewPass } from '@escapelab/core';
+import type { SeatPass } from './store/store.js';
 
 /** A seat's binding: the id of the pass it belongs to and the hash of that pass's secret. */
 interface Binding {
@@ -81,9 +82,16 @@ export class SeatBook {
     return null;
   }
 
-  /** The id of the pass the seat of `playerId` is bound to; null for a seat bound to none. */
-  passOf(playerId: string): string | null {
-    return this.bindings.get(playerId)?.passId ?? null;
+  /**
+   * The pass the seat of `playerId` is bound to: its id and the hash of its secret, hex — the
+   * hash an account's identity keeps of it (store.ts `secretHashOf`); null for a seat bound to
+   * none.
+   */
+  passOf(playerId: string): SeatPass | null {
+    const binding = this.bindings.get(playerId);
+    return binding === undefined
+      ? null
+      : { id: binding.passId, secretHash: binding.hash.toString('hex') };
   }
 
   /** Lets go of the seat of `playerId`: no pass holds it any more. */

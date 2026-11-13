@@ -191,9 +191,9 @@ export interface RunsExport {
 }
 
 /**
- * GET /runs.jsonl: every run the store keeps, the oldest first, one report of JSON a line — of
- * one mission with `?mission=<id>` — for a request that carries `Authorization: Bearer
- * <RUNS_TOKEN>`. Without a token configured the route answers 404, so a server set up without
+ * GET /runs.jsonl: every run the store keeps, the oldest first, one report of JSON a line, for a
+ * request that carries `Authorization: Bearer <RUNS_TOKEN>`. Without a token configured the
+ * route answers 404, so a server set up without
  * one gives nothing away; before the first run has finished the answer is empty. Returns true
  * when the request was answered.
  */
@@ -215,8 +215,7 @@ export function serveRuns(runs: RunsExport, req: IncomingMessage, res: ServerRes
     res.end();
     return true;
   }
-  const mission = new URLSearchParams((req.url ?? '').split('?')[1] ?? '').get('mission');
-  runs.store.runs(mission ?? undefined).then(
+  runs.store.runs().then(
     (kept) => res.end(kept.map((run) => `${JSON.stringify(run)}\n`).join('')),
     (err: unknown) => {
       const why = err instanceof Error ? err.message : String(err);

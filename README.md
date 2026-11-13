@@ -333,7 +333,7 @@ voll, falscher Pfad, Datenbank weg), steht das im Server-Log, und das Spiel läu
 | Variable | Wirkung |
 | --- | --- |
 | `RUNS_LOG` | Pfad der Protokolldatei ohne Datenbank, am besten absolut. Ohne: `packages/server/data/runs.jsonl`. Fehlende Ordner legt der Server an. |
-| `RUNS_TOKEN` | Gibt `GET /runs.jsonl` frei — alle abgelegten Läufe, ältester zuerst, aus der Datei oder der Datenbank, mit `?mission=<id>` nur die einer Mission —, nur mit dem Header `Authorization: Bearer <RUNS_TOKEN>`. Ohne Token antwortet die Route 404. |
+| `RUNS_TOKEN` | Gibt `GET /runs.jsonl` frei — alle abgelegten Läufe, ältester zuerst, aus der Datei oder der Datenbank —, nur mit dem Header `Authorization: Bearer <RUNS_TOKEN>`. Ohne Token antwortet die Route 404. |
 
 ```sh
 RUNS_TOKEN=… RUNS_LOG=/var/lib/escapelab/runs.jsonl pnpm start
@@ -422,8 +422,9 @@ Prisma wählen und die Zeichenkette in Render unter „Environment" als `DATABAS
 sie gehört nirgends sonst hin, auch nicht ins Repo. Der Start (`pnpm run start`) wendet dann
 zuerst die Migrationen an (`pnpm --filter @escapelab/server prisma migrate deploy`, aus
 `packages/server/prisma/migrations/`) und startet den Server erst danach; scheitert die
-Migration, startet er nicht. Den Prisma-Client erzeugen `pnpm install` und `pnpm build` (das
-Build Command bleibt, wie es ist). Welcher Speicher läuft, sagt das Start-Log in einer Zeile:
+Migration, startet er nicht. Den Prisma-Client erzeugt `pnpm install`, einmal, über die
+postinstall des Servers (das Build Command bleibt, wie es ist). Welcher Speicher läuft, sagt das
+Start-Log in einer Zeile:
 `store: Postgres at DATABASE_URL: …` oder `store: run log …, accounts in memory until the server
 stops (no DATABASE_URL)`.
 

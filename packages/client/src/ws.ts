@@ -37,13 +37,16 @@ export interface Refusal {
 
 /**
  * What is refused where the player looks — at the device they work (its head), at the prompt
- * they pressed E on (the pill) — and not in the banner over the screen, which lies under a
- * device and away from the prompt.
+ * they pressed E on (the pill), on „Meine Einsätze" asked for its runs, in the settings asked to
+ * delete the account — and not in the banner over the screen, which lies under a device and
+ * away from the prompt, and would say it twice.
  */
 const ANSWERED_IN_PLACE: ReadonlySet<ClientMessage['kind']> = new Set([
   'puzzle-input',
   'interact',
   'open-source',
+  'my-runs',
+  'delete-account',
 ]);
 
 /** Whether a refusal of a message of kind `of` goes to the banner: none answered in place. */

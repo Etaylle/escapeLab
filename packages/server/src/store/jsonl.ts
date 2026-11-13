@@ -8,6 +8,7 @@ import {
   aliasOf,
   checkSecret,
   isLoggedRun,
+  sameSecretHash,
   unlockedBy,
   type Account,
   type FinishedRun,
@@ -15,6 +16,7 @@ import {
   type PassIdentity,
   type Profile,
   type SeatedRun,
+  type SeatPass,
   type Store,
   type Unlocked,
 } from './store.js';
@@ -112,9 +114,11 @@ function loadRuns(file: string): { runs: LoggedRun[]; problems: string[] } {
 const keyOf = (identity: Pick<PassIdentity, 'provider' | 'subject'>): string =>
   `${identity.provider}:${identity.subject}`;
 
-/** A seat's key in memory: the run's room and start, and the seat. */
-const seatKeyOf = (run: RunReport, seat: number): string =>
-  `${run.roomCode}|${run.startedAt}|${seat}`;
+/** A run's key in memory: its room and its start, which name it. */
+const runKeyOf = (run: RunReport): string => `${run.roomCode}|${run.startedAt}`;
+
+/** A seat's key in memory: its run's (`runKeyOf`), and the seat. */
+const seatKeyOf = (run: RunReport, seat: number): string => `${runKeyOf(run)}|${seat}`;
 
 /** `run` with the seats `gone` named '' and credited nothing. */
 function withoutSeats<T extends RunReport>(run: T, gone: readonly number[]): T {
@@ -152,6 +156,8 @@ export class JsonlStore implements Store {
   private constructor(
     private readonly file: string,
     private readonly index: RunStats,
+    /** every run in the log, by `runKeyOf`: none is written twice */
+    private readonly logged: Set<string>,
   ) {
     this.description =
       `run log ${file}, accounts in memory until the server stops (no DATABASE_URL)`;
@@ -167,22 +173,40 @@ export class JsonlStore implements Store {
     for (const problem of problems) {
       console.error(`[escapelab] ${problem} (the Bestenliste leaves it out)`);
     }
-    return new JsonlStore(file, new RunStats(runs));
+    const logged = new Set(runs.flatMap((run) => (run.version === 1 ? [] : [runKeyOf(run)])));
+    return new JsonlStore(file, new RunStats(runs), logged);
   }
 
   async appendRun({ report, passes }: FinishedRun): Promise<void> {
+    if (this.logged.has(runKeyOf(report))) {
+      // The same run once more — a room taken up again from a snapshot made before its end
+      // finished it a second time: kept and counted already.
+      console.log(`[escapelab] run of ${report.missionId} in room ${report.roomCode} kept already`);
+      return;
+    }
     appendLine(this.file, report);
+    this.logged.add(runKeyOf(report));
     this.index.add(report);
     const unlocked = unlockedBy(report);
     const kept: RunReport = { ...report, crew: [...report.crew], credits: { ...report.credits } };
-    passes.forEach((passId, seat) => {
-      const known = passId === null ? undefined : this.identities.get(`pass:${passId}`);
-      if (known !== undefined) {
-        const seats = this.seated.get(known.accountId) ?? [];
-        this.seated.set(known.accountId, [...seats, { run: kept, seat }]);
-        this.unlock(known.accountId, unlocked);
+    passes.forEach((pass, seat) => {
+      const accountId = this.ownerOf(pass);
+      if (accountId !== null) {
+        const seats = this.seated.get(accountId) ?? [];
+        this.seated.set(accountId, [...seats, { run: kept, seat }]);
+        this.unlock(accountId, unlocked);
       }
     });
+  }
+
+  /**
+   * The account whose identity `pass` is — its id and the hash of its secret both, for an id
+   * alone credits nobody; null for none.
+   */
+  private ownerOf(pass: SeatPass | null): string | null {
+    const known = pass === null ? undefined : this.identities.get(`pass:${pass.id}`);
+    const shown = known !== undefined && pass !== null;
+    return shown && sameSecretHash(known.secretHash, pass.secretHash) ? known.accountId : null;
   }
 
   /** `unlocked` earned by `accountId`: each Erfolg it had already keeps its first date. */
@@ -196,11 +220,9 @@ export class JsonlStore implements Store {
     this.earned.set(accountId, earned);
   }
 
-  async runs(missionId?: string): Promise<LoggedRun[]> {
+  async runs(): Promise<LoggedRun[]> {
     const { runs } = loadRuns(this.file);
-    const asked =
-      missionId === undefined ? runs : runs.filter((run) => run.missionId === missionId);
-    return asked.map((run) => this.withoutUnseated(run));
+    return runs.map((run) => this.withoutUnseated(run));
   }
 
   /** `run` as the store hands it out: the seats of accounts deleted since named ''. */

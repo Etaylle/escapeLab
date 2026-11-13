@@ -74,7 +74,9 @@ model Run {
   report      Json
   members     RunMember[]
 
-  @@index([missionId, difficulty, outcome])
+  /// a run is kept once, named by its room and its start: a room taken up again from a snapshot
+  /// made before its end may finish the same run a second time
+  @@unique([roomCode, startedAt])
   @@map("runs")
 }
 

@@ -129,6 +129,8 @@ describe('„Meine Einsätze"', () => {
     expect(got.myRuns).toEqual({ status: 'ready', value: { runs: [run()], total: 1 } });
     takeIn({ kind: 'error', message: 'Dieser Ausweis gilt hier nicht.', of: 'my-runs' }, kept);
     expect(got.myRuns).toEqual({ status: 'failed', reason: 'Dieser Ausweis gilt hier nicht.' });
+    // The page says why; the banner does not say it again.
+    expect(got.banner).toBeNull();
   });
 });
 

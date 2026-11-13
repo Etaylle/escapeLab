@@ -11,11 +11,12 @@ import {
   ACCOUNT_DELETED,
   AccountSection,
   deleteLine,
+  deletionNow,
   SettingsPanel,
   type DeleteStep,
 } from '../src/screens/Settings.js';
 import { changeSettings, DEFAULT_SETTINGS } from '../src/settings.js';
-import { takeIn } from '../src/ws.js';
+import { takeIn, type Refusal } from '../src/ws.js';
 import { page, storage } from './page.js';
 
 const noop = (): void => undefined;
@@ -132,13 +133,14 @@ describe('the account on the line', () => {
 });
 
 describe('„Konto löschen" in the settings', () => {
-  /** The section at `step`, its steps and deletions noted. */
-  function section(account: AccountView | null, step: DeleteStep) {
+  /** The section at `step`, a refusal said where given, its steps and deletions noted. */
+  function section(account: AccountView | null, step: DeleteStep, refused: string | null = null) {
     const steps: DeleteStep[] = [];
     const deleted: string[] = [];
     const tree = AccountSection({
       account,
       step,
+      refused,
       onStep: (next) => steps.push(next),
       onDelete: () => deleted.push('delete-account'),
     });
@@ -165,6 +167,30 @@ describe('„Konto löschen" in the settings', () => {
     expect(asked.deleted).toEqual(['delete-account']);
     // Sent off: it waits for the server, and deletes nothing twice.
     expect(button(section(ANNA, 'sent').tree, 'Endgültig löschen').disabled).toBe(true);
+  });
+
+  it('opens „Endgültig löschen" again where the server refused it, saying why there', () => {
+    const away = 'Das Konto ist gerade nicht erreichbar.';
+    const refusal = (seq: number, of: Refusal['of']): Refusal => ({ seq, message: away, of });
+    expect(deletionNow('sent', 3, refusal(4, 'delete-account'))).toEqual({
+      step: 'asked',
+      refused: away,
+    });
+    // A refusal from before it was sent, or of something else, leaves it waiting.
+    const waiting = { step: 'sent', refused: null };
+    expect(deletionNow('sent', 4, refusal(4, 'delete-account'))).toEqual(waiting);
+    expect(deletionNow('sent', 3, refusal(4, 'profile'))).toEqual(waiting);
+    expect(deletionNow('idle', 3, refusal(4, 'delete-account'))).toEqual({
+      step: 'idle',
+      refused: null,
+    });
+    const asked = section(ANNA, 'asked', away);
+    expect(asked.html).toContain(`role="alert">${away}</p>`);
+    expect(button(asked.tree, 'Endgültig löschen').disabled).toBe(false);
+    // The settings say it: the banner does not say it again.
+    const { kept, got } = page();
+    takeIn({ kind: 'error', message: away, of: 'delete-account' }, kept);
+    expect(got.banner).toBeNull();
   });
 
   it('says the account is gone once it is, and shows nothing where there never was one', () => {

@@ -22,11 +22,20 @@ export type RunReportV1 = Omit<RunReport, 'version' | 'crew' | 'roomCode'> & { v
 /** Any report a store holds: version 1 from before names were kept, version 2 since. */
 export type LoggedRun = RunReportV1 | RunReport;
 
+/**
+ * The pass on a seat as its run ended: its id, and the hash of the secret the seat was bound with
+ * (`secretHashOf`) — an account is credited with the seat only where both are its identity's.
+ */
+export interface SeatPass {
+  id: string;
+  secretHash: string;
+}
+
 /** A finished run as a room hands it over: its report and the pass that held each seat. */
 export interface FinishedRun {
   report: RunReport;
-  /** the id of the pass that held each seat as the run ended, by p1…pn; null for none */
-  passes: readonly (string | null)[];
+  /** the pass that held each seat as the run ended, by p1…pn; null for none */
+  passes: readonly (SeatPass | null)[];
 }
 
 /** A run of an account's, and the seat it held there: 0 for the report's p1. */
@@ -74,8 +83,8 @@ export interface Store {
    * naming what to fix, where it could not, and keeps nothing of the run then.
    */
   appendRun(run: FinishedRun): Promise<void>;
-  /** Every run kept, the oldest first; only those of `missionId` where it is given. */
-  runs(missionId?: string): Promise<LoggedRun[]>;
+  /** Every run kept, the oldest first. */
+  runs(): Promise<LoggedRun[]>;
   /** The Bestenliste's numbers over every run kept, up to the last one appended. */
   stats(): RunStats;
   /** How many runs `accountId` played, and the newest `limit` of them, the newest first. */
@@ -127,12 +136,17 @@ export function secretHashOf(secret: string): string {
 export const PASS_REFUSED = 'Dieser Ausweis gilt hier nicht.';
 
 /**
- * Throws GameError(PASS_REFUSED) unless `shown` is the hash `kept`, compared in constant time
- * so that the answer's timing tells nothing about either.
+ * Whether `shown` is the hash `kept`, compared in constant time so that the answer's timing tells
+ * nothing about either; never for an identity that keeps none.
  */
-export function checkSecret(kept: string | null, shown: string): void {
+export function sameSecretHash(kept: string | null, shown: string): boolean {
   const digest = (hex: string): Buffer => createHash('sha256').update(hex).digest();
-  if (kept === null || !timingSafeEqual(digest(kept), digest(shown))) {
+  return kept !== null && timingSafeEqual(digest(kept), digest(shown));
+}
+
+/** Throws GameError(PASS_REFUSED) unless `shown` is the hash `kept` (`sameSecretHash`). */
+export function checkSecret(kept: string | null, shown: string): void {
+  if (!sameSecretHash(kept, shown)) {
     throw new GameError(PASS_REFUSED);
   }
 }
