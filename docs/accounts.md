@@ -33,11 +33,15 @@ store: the account comes to the socket a moment later (`account`).
   Dienstausweis."). An address may make 60 new accounts a minute; past that a pass without one
   still takes its seat, its account waits, and asked for by its name it is refused („Von dieser
   Adresse kommen in dieser Minute zu viele neue Konten."). A pass with an account always
-  arrives in it. Every other write to the accounts — an account visited as its pass arrives, a
-  name, a colour, a deletion — counts against its socket, 10 a minute; past that a name or a
-  deletion is refused („Zu viele Kontoänderungen über diese Verbindung in einer Minute."). A
-  lecture behind one address, thirty new students writing five times each, stays under both.
-  „Meine Einsätze" only reads, and is never held back.
+  arrives in it. A change to an account — a new name, another colour, a deletion — counts
+  against its socket, 30 a minute; past that a name or a deletion is refused („Zu viele
+  Kontoänderungen über diese Verbindung in einer Minute."). An arrival, the menu come back to,
+  or a name or colour the account has already changes nothing and counts nothing, and colours
+  clicked through within a second are kept as one, the last. A player's first minute — the
+  menu loaded and come back to three times, a name typed in two goes, a room opened, four
+  colours tried — leaves most of the minute's changes; a lecture behind one address, thirty new
+  students, stays under the address's new accounts. „Meine Einsätze" only reads, and is never
+  held back.
 - **Whose address.** Behind Render (`RENDER` set) the socket's address is the proxy's, the same
   for everybody, and a client may send any `X-Forwarded-For` it likes: the address is
   Cloudflare's `cf-connecting-ip`, else `true-client-ip`, else the last `X-Forwarded-For` entry,

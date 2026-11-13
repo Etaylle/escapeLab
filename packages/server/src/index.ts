@@ -21,7 +21,7 @@ import { RoomManager, seedsAllowed } from './roomManager.js';
 import { roomKey, roomKeyLogLine } from './seal.js';
 import { frontOf, RateLimiter } from './rateLimiter.js';
 import { onSignal } from './shutdown.js';
-import { ACCOUNT_WRITES_PER_SOCKET, ACCOUNTS_MADE_PER_MINUTE, serveSockets } from './sockets.js';
+import { ACCOUNT_CHANGES_PER_SOCKET, ACCOUNTS_MADE_PER_MINUTE, serveSockets } from './sockets.js';
 import { StaticSite } from './static.js';
 import { DEFAULT_RUNS_LOG } from './store/jsonl.js';
 import { openStore, recordRuns, type Store } from './store/store.js';
@@ -123,7 +123,7 @@ const httpServer = createWebServer(tls, (req, res) => {
 
 const wss = new WebSocketServer({ server: httpServer, path: '/ws' });
 // Every pass has its account in the store, found or made as it comes to the door: one pass a
-// socket, so many new accounts a minute from an address, so many writes a minute on a socket.
+// socket, so many new accounts a minute from an address, so many changes a minute on a socket.
 const accountsMade = new RateLimiter(ACCOUNTS_MADE_PER_MINUTE, 60_000);
 accountsMade.sweepEveryWindow();
 const served = serveSockets(wss, {
@@ -131,7 +131,7 @@ const served = serveSockets(wss, {
   manager,
   accounts: new AccountDesk(store),
   accountsMade,
-  writesPerSocket: ACCOUNT_WRITES_PER_SOCKET,
+  changesPerSocket: ACCOUNT_CHANGES_PER_SOCKET,
   front: frontOf(process.env),
 });
 // A socket gone silent is found out and closed, so that the room pauses for its player; the

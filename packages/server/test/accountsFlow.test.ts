@@ -8,15 +8,15 @@ import {
   type Mission,
   type ServerMessage,
 } from '@escapelab/core';
-import { AccountDesk, TOO_MANY_NEW } from '../src/accounts.js';
+import { AccountDesk, TOO_MANY_CHANGES, TOO_MANY_NEW } from '../src/accounts.js';
 import { RateLimiter, type Front, type Sender } from '../src/rateLimiter.js';
 import { RoomManager } from '../src/roomManager.js';
 import {
-  ACCOUNT_WRITES_PER_SOCKET,
+  ACCOUNT_CHANGES_PER_SOCKET,
   ACCOUNTS_MADE_PER_MINUTE,
+  COLOUR_SETTLE_MS,
   ONE_PASS,
   serveSockets,
-  TOO_MANY_WRITES,
 } from '../src/sockets.js';
 import { JsonlStore } from '../src/store/jsonl.js';
 import { FakeServer, joinedOf, type FakeSocket } from './line.js';
@@ -32,7 +32,7 @@ const catalog = { get: () => mission, default: mission };
 /** What a lab limits: the new accounts of an address, the writes of a socket. */
 interface Limits {
   accountsMade?: RateLimiter;
-  writesPerSocket?: number;
+  changesPerSocket?: number;
 }
 
 /**
@@ -78,11 +78,23 @@ function accountOf(socket: FakeSocket): AccountView {
 /** Lets the account work under way come to an end: the stores answer in promises. */
 const settled = (): Promise<void> => new Promise((resolve) => setImmediate(resolve));
 
+/** The clock of the colours' settling faked: only timeouts and the date, so that `settled` runs. */
+const fakeTheClock = (): void => {
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+};
+
+/** The colours clicked so far settled and kept (`COLOUR_SETTLE_MS`), on the faked clock. */
+async function coloursKept(): Promise<void> {
+  vi.advanceTimersByTime(COLOUR_SETTLE_MS);
+  await settled();
+}
+
 /** The refusals the socket heard, as their words and the kind each refused. */
 const refusals = (socket: FakeSocket) =>
   socket.heard.flatMap((m: ServerMessage) => (m.kind === 'error' ? [[m.message, m.of]] : []));
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.restoreAllMocks();
 });
 
@@ -127,11 +139,12 @@ describe('an account per crew pass', () => {
   });
 
   it('keeps the colour chosen in a lobby with the account, and the name typed', async () => {
+    fakeTheClock();
     const { server } = lab();
     const anna = server.connect();
     anna.say({ kind: 'create-room', name: 'Anna', pass: passFor('Anna') });
     anna.say({ kind: 'select-color', color: '#60a5fa' });
-    await settled();
+    await coloursKept();
     expect(accountOf(anna)).toMatchObject({ name: 'Anna', color: '#60a5fa' });
     anna.say({ kind: 'profile', pass: passFor('Anna'), name: '  Anna Berg ' });
     await settled();
@@ -140,7 +153,7 @@ describe('an account per crew pass', () => {
     const ben = server.connect();
     ben.say({ kind: 'join-room', code: joinedOf(anna).code, name: 'Ben', pass: passFor('Ben') });
     ben.say({ kind: 'select-color', color: '#60a5fa' });
-    await settled();
+    await coloursKept();
     expect(refusals(ben)).toEqual([['Die Farbe trägt schon Anna.', 'select-color']]);
     expect(accounts(ben).map((account) => account?.color)).toEqual([null]);
   });
@@ -299,28 +312,85 @@ describe('the accounts’ door', () => {
     expect(refusals(cleo)).toEqual([[TOO_MANY_NEW, 'profile']]);
   });
 
-  it('bounds the writes of a socket, and no other socket’s behind the same address', async () => {
-    const { server } = lab(new RoomManager(), { writesPerSocket: 3 });
+  it('bounds the changes a socket makes, a visit or a name it has already none', async () => {
+    const { server } = lab(new RoomManager(), { changesPerSocket: 3 });
     const anna = server.connect(onTheLan('192.168.1.20'));
+    const named = (name: string): void => {
+      anna.say({ kind: 'profile', pass: passFor('Anna'), name });
+    };
     anna.say({ kind: 'whereami', pass: passFor('Anna'), name: 'Anna' });
-    anna.say({ kind: 'profile', pass: passFor('Anna'), name: 'Anna K.' });
-    anna.say({ kind: 'profile', pass: passFor('Anna'), name: 'Anna Berg' });
-    anna.say({ kind: 'profile', pass: passFor('Anna'), name: 'Anna Bergmann' });
-    // Reading the runs writes nothing.
+    // Back to the menu five times, and a name it goes by already: nothing changes.
+    for (let i = 0; i < 5; i += 1) {
+      anna.say({ kind: 'whereami', pass: passFor('Anna') });
+    }
+    ['Anna', 'Anna K.', 'Anna Berg', 'Anna Berg', 'Anna B.', 'Anna Bergmann'].forEach(named);
+    anna.say({ kind: 'delete-account', pass: passFor('Anna') });
+    // Reading the runs changes nothing.
     anna.say({ kind: 'my-runs', pass: passFor('Anna') });
     const ben = server.connect(onTheLan('192.168.1.20'));
     ben.say({ kind: 'whereami', pass: passFor('Ben'), name: 'Ben' });
+    ben.say({ kind: 'profile', pass: passFor('Ben'), name: 'Ben K.' });
     await settled();
-    expect(refusals(anna)).toEqual([[TOO_MANY_WRITES, 'profile']]);
-    expect(accountOf(anna)).toMatchObject({ name: 'Anna Berg' });
+    expect(refusals(anna)).toEqual([
+      [TOO_MANY_CHANGES, 'profile'],
+      [TOO_MANY_CHANGES, 'delete-account'],
+    ]);
+    expect(accountOf(anna)).toMatchObject({ name: 'Anna B.' });
     expect(anna.heard.at(-1)).toMatchObject({ kind: 'my-runs', total: 0 });
-    expect(accountOf(ben)).toMatchObject({ name: 'Ben' });
+    expect(accountOf(ben)).toMatchObject({ name: 'Ben K.' });
+  });
+
+  it('keeps only the last of the colours clicked within a second: one change', async () => {
+    fakeTheClock();
+    const { server } = lab(new RoomManager(), { changesPerSocket: 1 });
+    const anna = server.connect();
+    anna.say({ kind: 'create-room', name: 'Anna', pass: passFor('Anna') });
+    await settled();
+    for (const color of ['#60a5fa', '#fbbf24', '#f472b6', '#2dd4bf']) {
+      anna.say({ kind: 'select-color', color });
+      vi.advanceTimersByTime(COLOUR_SETTLE_MS / 4);
+    }
+    await coloursKept();
+    expect(refusals(anna)).toEqual([]);
+    expect(accounts(anna).map((account) => account?.color)).toEqual([null, '#2dd4bf']);
+  });
+
+  it('takes a player’s first minute in its stride, with changes to spare', async () => {
+    fakeTheClock();
+    const limits = {
+      accountsMade: new RateLimiter(ACCOUNTS_MADE_PER_MINUTE, 60_000),
+      changesPerSocket: ACCOUNT_CHANGES_PER_SOCKET,
+    };
+    const { server } = lab(new RoomManager(), limits, 'render');
+    const anna = server.connect(throughRender('203.0.113.7'));
+    const pass = passFor('Anna');
+    // The menu loads, and comes back three times from the pages over it.
+    for (let i = 0; i < 4; i += 1) {
+      anna.say({ kind: 'whereami', pass, name: 'Anna' });
+    }
+    // A name typed in two goes, a room opened under it, four colours tried in it.
+    anna.say({ kind: 'profile', pass, name: 'An' });
+    anna.say({ kind: 'profile', pass, name: 'Anna Berg' });
+    anna.say({ kind: 'create-room', name: 'Anna Berg', pass });
+    await settled();
+    for (const color of ['#60a5fa', '#fbbf24', '#f472b6', '#2dd4bf']) {
+      anna.say({ kind: 'select-color', color });
+      vi.advanceTimersByTime(300);
+    }
+    await coloursKept();
+    // The next rename, and twenty more, go through: the minute had changes to spare.
+    for (let i = 0; i <= 20; i += 1) {
+      anna.say({ kind: 'profile', pass, name: `Anna ${i}` });
+    }
+    await settled();
+    expect(refusals(anna)).toEqual([]);
+    expect(accountOf(anna)).toMatchObject({ name: 'Anna 20', color: '#2dd4bf' });
   });
 
   it('lets a lecture behind one address in: thirty new students, five writes each', async () => {
     const limits = {
       accountsMade: new RateLimiter(ACCOUNTS_MADE_PER_MINUTE, 60_000),
-      writesPerSocket: ACCOUNT_WRITES_PER_SOCKET,
+      changesPerSocket: ACCOUNT_CHANGES_PER_SOCKET,
     };
     const { server } = lab(new RoomManager(), limits, 'render');
     const students = Array.from({ length: 30 }, (_, i) => {

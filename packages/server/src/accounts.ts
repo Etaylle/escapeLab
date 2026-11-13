@@ -29,14 +29,28 @@ import {
  * overtakes the one before it.
  */
 
-/** Whether one more account may be made now: asked only where a pass has none yet. */
-export type MayMake = () => boolean;
+/**
+ * What a socket may write to the accounts now, each asked only where that write would be made,
+ * and counted if so: a new account (`mayMake`, by the socket's address) and a change to one — a
+ * new name, another colour, a deletion (`mayChange`, by the socket). An account found and noted
+ * as visited, or a name or colour it has already, changes nothing and asks nothing.
+ */
+export interface Gate {
+  mayMake: () => boolean;
+  mayChange: () => boolean;
+}
 
-/** Any account may be made: where nothing limits them. */
-const always: MayMake = () => true;
+/** A gate open to every write: where nothing limits them. */
+export const OPEN: Gate = { mayMake: () => true, mayChange: () => true };
 
 /** What a pass is told that has no account, where its address made too many this minute. */
 export const TOO_MANY_NEW = 'Von dieser Adresse kommen in dieser Minute zu viele neue Konten.';
+
+/** What a socket is told that changed its account too often this minute (`Gate.mayChange`). */
+export const TOO_MANY_CHANGES = 'Zu viele Kontoänderungen über diese Verbindung in einer Minute.';
+
+/** A change to a profile, made — or held back: no account may be made, or no change. */
+type Changed = { view: AccountView } | { held: 'new' | 'change' };
 
 /** How many of an account's runs „Meine Einsätze" lists: the newest. */
 export const MY_RUNS = 50;
@@ -87,59 +101,67 @@ export class AccountDesk {
   constructor(private readonly store: Store) {}
 
   /**
-   * The account of `pass`, found — or made, starting with `profile`, where `mayMake` lets one be
+   * The account of `pass`, found — or made, starting with `profile`, where the gate lets one be
    * made — as its owner sees it; null where none may be made. Where a seat is taken under the
-   * name `sitting`, the account goes by that name from now on.
+   * name `sitting`, the account goes by that name from now on, where the gate lets it change.
    */
   arrive(
     pass: CrewPass,
     profile: Profile,
     sitting: string | null = null,
-    mayMake: MayMake = always,
+    gate: Gate = OPEN,
   ): Promise<AccountView | null> {
     return this.serial(pass, async () => {
-      const account = await this.accountOf(pass, profile, mayMake);
+      const account = await this.accountOf(pass, profile, gate);
       if (account === null) {
         return null;
       }
-      const changed =
-        sitting === null || sitting === account.displayName
+      const same = sitting === null || sitting === account.displayName;
+      const renamed =
+        same || !gate.mayChange()
           ? account
           : await this.store.updateProfile(account.id, { displayName: sitting });
-      return this.viewOf(changed);
+      return this.viewOf(renamed);
     });
   }
 
   /**
-   * The account of `pass` goes by `name` from now on; made with it where there was none and
-   * `mayMake` lets it be — else refused, saying so (`TOO_MANY_NEW`).
+   * The account of `pass` goes by `name` from now on; made with it where there was none. Refused,
+   * saying why, where the gate lets no account be made (`TOO_MANY_NEW`) or none change
+   * (`TOO_MANY_CHANGES`).
    */
-  async rename(pass: CrewPass, name: string, mayMake: MayMake = always): Promise<AccountView> {
-    const account = await this.change(pass, { displayName: name }, mayMake);
-    if (account === null) {
-      throw new GameError(TOO_MANY_NEW);
+  async rename(pass: CrewPass, name: string, gate: Gate = OPEN): Promise<AccountView> {
+    const changed = await this.change(pass, { displayName: name }, gate);
+    if ('held' in changed) {
+      throw new GameError(changed.held === 'new' ? TOO_MANY_NEW : TOO_MANY_CHANGES);
     }
-    return account;
+    return changed.view;
   }
 
   /**
-   * The account of `pass` wears `color` from now on; made with it where there was none and
-   * `mayMake` lets it be; null where none may be made.
+   * The account of `pass` wears `color` from now on; made with it where there was none. Null
+   * where the gate lets no account be made, or none change.
    */
-  recolour(pass: CrewPass, color: string, mayMake: MayMake = always): Promise<AccountView | null> {
-    return this.change(pass, { colour: color.toLowerCase() }, mayMake);
+  async recolour(pass: CrewPass, color: string, gate: Gate = OPEN): Promise<AccountView | null> {
+    const changed = await this.change(pass, { colour: color.toLowerCase() }, gate);
+    return 'held' in changed ? null : changed.view;
   }
 
   /**
    * The account of `pass` deleted, with its identities, its Erfolge and its seats in the runs;
-   * nothing where the pass has none. Throws GameError for a pass shown with the wrong secret.
+   * nothing where the pass has none. Throws GameError for a pass shown with the wrong secret, and
+   * where the gate lets no account change (`TOO_MANY_CHANGES`).
    */
-  delete(pass: CrewPass): Promise<void> {
+  delete(pass: CrewPass, gate: Gate = OPEN): Promise<void> {
     return this.serial(pass, async () => {
       const account = await this.store.findByIdentity(identityOf(pass));
-      if (account !== null) {
-        await this.store.deleteAccount(account.id);
+      if (account === null) {
+        return;
       }
+      if (!gate.mayChange()) {
+        throw new GameError(TOO_MANY_CHANGES);
+      }
+      await this.store.deleteAccount(account.id);
     });
   }
 
@@ -159,39 +181,37 @@ export class AccountDesk {
   }
 
   /**
-   * The account of `pass` with `change` made to its profile; made with it where there was none
-   * and `mayMake` lets it be, null where it may not.
+   * The account of `pass` with `change` made to its profile — made with it where there was none —
+   * as its owner sees it; held back where the gate lets no account be made, or none change.
    */
-  private change(
-    pass: CrewPass,
-    change: Partial<Profile>,
-    mayMake: MayMake,
-  ): Promise<AccountView | null> {
-    return this.serial(pass, async () => {
+  private change(pass: CrewPass, change: Partial<Profile>, gate: Gate): Promise<Changed> {
+    return this.serial(pass, async (): Promise<Changed> => {
       const start = { displayName: '', colour: null, ...change };
-      const account = await this.accountOf(pass, start, mayMake);
+      const account = await this.accountOf(pass, start, gate);
       if (account === null) {
-        return null;
+        return { held: 'new' };
       }
       const same = Object.entries(change).every(
         ([field, value]) => account[field as keyof Profile] === value,
       );
-      return this.viewOf(same ? account : await this.store.updateProfile(account.id, change));
+      if (same) {
+        return { view: await this.viewOf(account) };
+      }
+      if (!gate.mayChange()) {
+        return { held: 'change' };
+      }
+      return { view: await this.viewOf(await this.store.updateProfile(account.id, change)) };
     });
   }
 
   /**
    * The account of `pass`, its visit noted — or a new one, starting with `profile`, where it has
-   * none yet and `mayMake` lets one be made (asked only then); null where none may be. Throws
+   * none yet and the gate lets one be made (asked only then); null where none may be. Throws
    * GameError for a pass shown with the wrong secret.
    */
-  private async accountOf(
-    pass: CrewPass,
-    profile: Profile,
-    mayMake: MayMake,
-  ): Promise<Account | null> {
+  private async accountOf(pass: CrewPass, profile: Profile, gate: Gate): Promise<Account | null> {
     const identity = identityOf(pass);
-    if ((await this.store.findByIdentity(identity)) === null && !mayMake()) {
+    if ((await this.store.findByIdentity(identity)) === null && !gate.mayMake()) {
       return null;
     }
     return this.store.getOrCreateByIdentity(identity, profile);

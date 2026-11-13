@@ -8,7 +8,7 @@ import {
   type Mission,
   type ServerMessage,
 } from '@escapelab/core';
-import type { AccountDesk, MayMake } from './accounts.js';
+import type { AccountDesk, Gate } from './accounts.js';
 import { MISSED_PINGS, SILENT_MS, type CutReason } from './heartbeat.js';
 import type { MissionCatalog } from './missions.js';
 import { clientAddress, type Front, type Sender } from './rateLimiter.js';
@@ -42,11 +42,11 @@ export interface Lab {
    */
   accountsMade?: { take: (address: string) => boolean };
   /**
-   * how many writes to the accounts each socket may make a minute — an account made or visited
-   * as its pass arrives, a name, a colour, a deletion: `ACCOUNT_WRITES_PER_SOCKET` in the server;
-   * none counted where unset
+   * how many changes to the accounts each socket may make a minute — a new name, another colour,
+   * a deletion; an arrival changes nothing: `ACCOUNT_CHANGES_PER_SOCKET` in the server; none
+   * counted where unset
    */
-  writesPerSocket?: number;
+  changesPerSocket?: number;
   /** who stands in front of the server, which says where a socket's address is read; none unset */
   front?: Front;
 }
@@ -58,28 +58,33 @@ export interface Lab {
 export const ACCOUNTS_MADE_PER_MINUTE = 60;
 
 /**
- * Writes to the accounts a minute a socket may make (`Lab.writesPerSocket`): a player arriving,
- * renaming and choosing a colour makes a handful; one socket speaks for one pass.
+ * Changes to the accounts a minute a socket may make (`Lab.changesPerSocket`): a player's first
+ * minute — a name typed in two goes, a few colours tried — makes a handful.
  */
-export const ACCOUNT_WRITES_PER_SOCKET = 10;
+export const ACCOUNT_CHANGES_PER_SOCKET = 30;
 
-/** How long a socket's writes to the accounts count against it, ms. */
-const WRITES_WINDOW_MS = 60_000;
+/** How long a socket's changes to the accounts count against it, ms. */
+const CHANGES_WINDOW_MS = 60_000;
+
+/**
+ * How long a socket's colour clicks settle before the last of them is kept with its account, ms:
+ * clicking through the colours makes one change, not one each.
+ */
+export const COLOUR_SETTLE_MS = 1000;
 
 /** What a socket is told that shows a second pass: one socket speaks for one pass. */
 export const ONE_PASS = 'Diese Verbindung gehört schon einem anderen Dienstausweis.';
 
-/** What a socket is told that wrote to the accounts too often this minute. */
-export const TOO_MANY_WRITES = 'Zu viele Kontoänderungen über diese Verbindung in einer Minute.';
-
 /**
  * What a socket came in as: the address its new accounts count against, the pass it showed
- * first, and when it wrote to the accounts in the last minute.
+ * first, when it changed the accounts in the last minute, and the colour it clicked last, while
+ * that waits to be kept (`COLOUR_SETTLE_MS`).
  */
 interface Door {
   address: string;
   pass: string | null;
-  writes: number[];
+  changes: number[];
+  colour: ReturnType<typeof setTimeout> | null;
 }
 
 /** Each socket's door (`Door`), from the request that opened it. */
@@ -100,28 +105,51 @@ function checkPass(socket: PlayerSocket, msg: ClientMessage): void {
   }
 }
 
-/**
- * The accounts where `socket` may write to them once more now (`Lab.writesPerSocket`), the write
- * counted; undefined where it may not, or there are none.
- */
-function writable(lab: Lab, socket: PlayerSocket): AccountDesk | undefined {
-  const door = doors.get(socket);
-  const limit = lab.writesPerSocket;
+/** Whether `door` may change the accounts once more now (`Lab.changesPerSocket`), counted. */
+function mayChange(lab: Lab, door: Door | undefined): boolean {
+  const limit = lab.changesPerSocket;
   if (door === undefined || limit === undefined) {
-    return lab.accounts;
+    return true;
   }
   const now = Date.now();
-  door.writes = door.writes.filter((at) => now - at < WRITES_WINDOW_MS);
-  if (door.writes.length >= limit) {
-    return undefined;
+  door.changes = door.changes.filter((at) => now - at < CHANGES_WINDOW_MS);
+  if (door.changes.length >= limit) {
+    return false;
   }
-  door.writes.push(now);
-  return lab.accounts;
+  door.changes.push(now);
+  return true;
 }
 
-/** Whether `socket` may make one more account now (`Lab.accountsMade`), counted by its address. */
-function mayMakeOn(lab: Lab, socket: PlayerSocket): MayMake {
-  return () => lab.accountsMade?.take(doors.get(socket)?.address ?? 'unknown') ?? true;
+/**
+ * What `socket` may write to the accounts (accounts.ts `Gate`): a new account counted by its
+ * address (`Lab.accountsMade`), a change counted by the socket (`Lab.changesPerSocket`).
+ */
+function gateOf(lab: Lab, socket: PlayerSocket): Gate {
+  const door = doors.get(socket);
+  return {
+    mayMake: () => lab.accountsMade?.take(door?.address ?? 'unknown') ?? true,
+    mayChange: () => mayChange(lab, door),
+  };
+}
+
+/**
+ * A colour `socket` clicked for the account of `pass`: kept once the clicks have settled
+ * (`COLOUR_SETTLE_MS`), the last of them — and its socket told the account then.
+ */
+function keepColour(lab: Lab, socket: PlayerSocket, pass: CrewPass, color: string): void {
+  const door = doors.get(socket);
+  const desk = lab.accounts;
+  if (door === undefined || desk === undefined) {
+    return;
+  }
+  if (door.colour !== null) {
+    clearTimeout(door.colour);
+  }
+  door.colour = setTimeout(() => {
+    door.colour = null;
+    tellAccount(socket, desk.recolour(pass, color, gateOf(lab, socket)));
+  }, COLOUR_SETTLE_MS);
+  door.colour.unref();
 }
 
 /** Per-connection session, set once the socket joins, resumes or watches a room. */
@@ -176,7 +204,7 @@ export function serveSockets(server: SocketServer, lab: Lab): Served {
     let session: Session | null = null;
     sessions.set(socket, () => session);
     const address = request === undefined ? 'unknown' : clientAddress(request, lab.front ?? 'none');
-    doors.set(socket, { address, pass: null, writes: [] });
+    doors.set(socket, { address, pass: null, changes: [], colour: null });
     const take = (msg: ClientMessage): void => {
       try {
         checkPass(socket, msg);
@@ -421,13 +449,8 @@ function answerAccount(lab: Lab, socket: PlayerSocket, msg: AccountAsk): void {
     refuse(socket, null, msg, new GameError(NO_ACCOUNTS));
     return;
   }
-  // Reading the runs writes nothing; a name or a deletion counts against the address.
-  const desk = msg.kind === 'my-runs' ? lab.accounts : writable(lab, socket);
-  if (desk === undefined) {
-    refuse(socket, null, msg, new GameError(TOO_MANY_WRITES));
-    return;
-  }
-  answerOf(desk, msg, mayMakeOn(lab, socket)).then(
+  // Reading the runs changes nothing; a new name or a deletion counts against the socket.
+  answerOf(lab.accounts, msg, gateOf(lab, socket)).then(
     (answer) => send(socket, answer),
     (err: unknown) => {
       if (!(err instanceof GameError)) {
@@ -439,14 +462,14 @@ function answerAccount(lab: Lab, socket: PlayerSocket, msg: AccountAsk): void {
 }
 
 /** What `desk` answers `msg` with, once it has done it (`answerAccount`). */
-function answerOf(desk: AccountDesk, msg: AccountAsk, mayMake: MayMake): Promise<ServerMessage> {
+function answerOf(desk: AccountDesk, msg: AccountAsk, gate: Gate): Promise<ServerMessage> {
   switch (msg.kind) {
     case 'profile':
       return desk
-        .rename(msg.pass, msg.name.trim(), mayMake)
+        .rename(msg.pass, msg.name.trim(), gate)
         .then((account) => ({ kind: 'account', account }));
     case 'delete-account':
-      return desk.delete(msg.pass).then(() => {
+      return desk.delete(msg.pass, gate).then(() => {
         console.log('[escapelab] an account was deleted, as its pass asked');
         return { kind: 'account', account: null };
       });
@@ -475,8 +498,7 @@ function comeBack(
   // A pass that comes back to a seat before it has an account starts one with the seat's name.
   const seat = room.playerOf(back.playerId);
   const profile = { displayName: seat?.name ?? '', colour: seat?.color ?? null };
-  const mayMake = mayMakeOn(lab, socket);
-  tellAccount(socket, writable(lab, socket)?.arrive(msg.pass, profile, null, mayMake));
+  tellAccount(socket, lab.accounts?.arrive(msg.pass, profile, null, gateOf(lab, socket)));
   return back;
 }
 
@@ -535,7 +557,7 @@ function whereAmI(
 ): void {
   send(socket, { kind: 'seated', seat: lab.manager.whereIs(msg.pass) });
   const kept = { displayName: msg.name?.trim() ?? '', colour: msg.color ?? null };
-  tellAccount(socket, writable(lab, socket)?.arrive(msg.pass, kept, null, mayMakeOn(lab, socket)));
+  tellAccount(socket, lab.accounts?.arrive(msg.pass, kept, null, gateOf(lab, socket)));
 }
 
 /** The audience connection a socket opens on the room `code`: the session it had let go of. */
@@ -564,8 +586,8 @@ function sitDown(
 ): Session | null {
   const next = takeSeat(lab, socket, session, msg);
   const profile = { displayName: msg.name.trim(), colour: msg.color ?? null };
-  const desk = writable(lab, socket);
-  tellAccount(socket, desk?.arrive(msg.pass, profile, profile.displayName, mayMakeOn(lab, socket)));
+  const gate = gateOf(lab, socket);
+  tellAccount(socket, lab.accounts?.arrive(msg.pass, profile, profile.displayName, gate));
   return next;
 }
 
@@ -692,7 +714,7 @@ function inRoom(
 function act(lab: Lab, socket: PlayerSocket, s: Session, msg: GameMessage): void {
   s.room.act(s.playerId, msg);
   if (msg.kind === 'select-color' && s.pass !== null) {
-    tellAccount(socket, writable(lab, socket)?.recolour(s.pass, msg.color, mayMakeOn(lab, socket)));
+    keepColour(lab, socket, s.pass, msg.color);
   }
 }
 
