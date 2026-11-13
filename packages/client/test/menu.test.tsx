@@ -9,7 +9,16 @@ import { keepColor, lastColor, PASS_KEY } from '../src/pass.js';
 import { wavesAnew } from '../src/screens/CrewFigure.js';
 import { JoinScreen, MENU_LEAD, MENU_SUBTITLE, panelOnArrival } from '../src/screens/Join.js';
 import { MainMenu, MENU_LABELS, menuItems, menuStep } from '../src/screens/MainMenu.js';
-import { codeOf, escapeHandler, inviteUsed, JoinPanel } from '../src/screens/MenuPanels.js';
+import {
+  codeOf,
+  escapeHandler,
+  inviteUsed,
+  JoinPanel,
+  keptPick,
+  PICKED_KEY,
+  pickedMission,
+  usePicked,
+} from '../src/screens/MenuPanels.js';
 import { FIRST_COLOR, ProfileChip } from '../src/screens/ProfileChip.js';
 import { storage } from './page.js';
 
@@ -479,5 +488,48 @@ describe('a controller over the menu', () => {
     expect(page.focus?.name).toBe('Zurück');
     tap('b');
     expect(back.sent).toEqual(['↓Escape', '↑Escape']);
+  });
+});
+
+/** The pick as the app keeps it, on a page loaded: what it renders, and what picks another. */
+function pickOnLoad(): { html: string; pick: (missionId: string) => void } {
+  let pick: (missionId: string) => void = noop;
+  function Picked() {
+    const [picked, setPicked] = usePicked();
+    pick = setPicked;
+    return <b>{picked ?? 'none'}</b>;
+  }
+  return { html: renderToStaticMarkup(<Picked />), pick: (missionId) => pick(missionId) };
+}
+
+describe('the mission picked', () => {
+  it('comes back as the page loads anew in the tab, as leaving a lobby loads it', () => {
+    const tab = new Map<string, string>();
+    vi.stubGlobal('window', { sessionStorage: storage(tab) });
+    const first = pickOnLoad();
+    expect(first.html).toBe('<b>none</b>');
+    first.pick('notstrom');
+    expect(tab.get(PICKED_KEY)).toBe('notstrom');
+    expect(pickOnLoad().html).toBe('<b>notstrom</b>');
+  });
+
+  it('marks the card kept, or the first where the server no longer has it', () => {
+    const notstrom = { ...blackout, id: 'notstrom' };
+    expect(pickedMission([blackout, notstrom], 'notstrom')).toBe('notstrom');
+    expect(pickedMission([blackout], 'notstrom')).toBe('blackout');
+    expect(pickedMission([], 'notstrom')).toBeNull();
+  });
+
+  it('keeps nothing where the tab refuses its storage, and goes on without it', () => {
+    const refused = (): never => {
+      throw new Error('storage refused');
+    };
+    vi.stubGlobal('window', {
+      sessionStorage: { getItem: refused, setItem: refused, removeItem: refused },
+    });
+    const page = pickOnLoad();
+    expect(page.html).toBe('<b>none</b>');
+    expect(() => page.pick('blackout')).not.toThrow();
+    expect(keptPick()).toBeNull();
   });
 });

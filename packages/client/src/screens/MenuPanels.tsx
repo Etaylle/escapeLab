@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import {
   SEED_MAX,
   type ClientMessage,
@@ -8,6 +8,7 @@ import {
   type MissionStats,
   type RoomSummary,
 } from '@escapelab/core';
+import { sessionStore } from '../editor/session.js';
 import { FIRST_RUN_HINT, firstDifficulty, isTutorial, useWon } from '../firstRun.js';
 import { useServerNow } from '../hooks.js';
 import { crewPass } from '../pass.js';
@@ -68,14 +69,49 @@ function isPrototype(mission: Pick<MissionInfo, 'stage'>): boolean {
 }
 
 /**
- * The mission a round opens for: the one `picked`, else the first current mission — the
- * panel's first card — else the first of all; null while there are none.
+ * The mission a round opens for: the one `picked` where the server has it, else the first
+ * current mission — the panel's first card — else the first of all; null while there are none.
  */
 export function pickedMission(
   missions: readonly Pick<MissionInfo, 'id' | 'stage'>[],
   picked: string | null,
 ): string | null {
-  return picked ?? missions.find((m) => !isPrototype(m))?.id ?? missions[0]?.id ?? null;
+  const known = missions.some((m) => m.id === picked) ? picked : null;
+  return known ?? missions.find((m) => !isPrototype(m))?.id ?? missions[0]?.id ?? null;
+}
+
+/** Where the tab keeps the mission picked last. */
+export const PICKED_KEY = 'escapelab.menu.picked';
+
+/** The mission this tab picked last; null for none, or where the tab keeps nothing. */
+export function keptPick(): string | null {
+  try {
+    return sessionStore()?.getItem(PICKED_KEY) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** Keeps `missionId` as this tab's pick. */
+function keepPick(missionId: string): void {
+  try {
+    sessionStore()?.setItem(PICKED_KEY, missionId);
+  } catch {
+    // Deliberately silent: without it the menu comes back on its first mission.
+  }
+}
+
+/**
+ * The mission picked on the join screen, kept in the tab — so that its card and its lab behind
+ * the menu come back as leaving a lobby loads the page anew — and what picks another.
+ */
+export function usePicked(): [string | null, (missionId: string) => void] {
+  const [picked, setPicked] = useState<string | null>(keptPick);
+  const pick = useCallback((missionId: string): void => {
+    keepPick(missionId);
+    setPicked(missionId);
+  }, []);
+  return [picked, pick];
 }
 
 /** What a panel that seats the browser's pass needs of the menu. */

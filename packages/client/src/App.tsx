@@ -37,7 +37,7 @@ import { UpdateNotice } from './screens/Install.js';
 import { JoinScreen } from './screens/Join.js';
 import { LobbyScreen } from './screens/Lobby.js';
 import { DoorWipe, useDoorWipe, type Doors, type Place } from './screens/DoorWipe.js';
-import { createRoomMessage, pickedMission } from './screens/MenuPanels.js';
+import { createRoomMessage, pickedMission, usePicked } from './screens/MenuPanels.js';
 import { MenuScene } from './screens/MenuScene.js';
 import { GameScreen } from './screens/Game.js';
 import type { GameLine } from './screens/Line.js';
@@ -606,8 +606,9 @@ export function App({ boot }: { boot: EditorBoot }) {
   const [handbook, setHandbook] = useState<string | null>(null);
   // So is the Bestenliste: the mission whose tab is open, or null.
   const [history, setHistory] = useState<string | null>(null);
-  // The mission picked on the join screen: its card marked, its lab in the scene behind.
-  const [picked, setPicked] = useState<string | null>(null);
+  // The mission picked on the join screen: its card marked, its lab in the scene behind — kept
+  // in the tab, so that both come back as leaving a lobby loads the page anew.
+  const [picked, setPicked] = usePicked();
   // The join screen's cards and the host's mission strip in the lobby say each
   // mission's record; without it they say nothing.
   const stats = useJson<MissionStats[]>(STATS_PATH);

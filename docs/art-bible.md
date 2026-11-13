@@ -525,7 +525,8 @@ reduced motion it only fades. Into the lobby and back out, the lab's sliding doo
 screen in 170 ms, speeding up as a heavy door does, and open on the next in 210 ms, slowing to a
 stop: two steel leaves lit from the top, the ink edge where they meet, the amber light strip and the
 two chevrons of the world's doors at the seam (world/art.ts `drawDoor`, screens/DoorWipe.tsx).
-Leaving a lobby loads the page anew; the doors stay shut over it until the page loaded opens them.
+Leaving a lobby loads the page anew; the doors stay shut over it until the page loaded opens them,
+on the mission picked before — its card marked, its lab behind the menu — which the tab keeps.
 Under reduced motion the screens cut. The lobby keeps its layout and stands over the same scene,
 drifting on, evenly dimmed.
 
