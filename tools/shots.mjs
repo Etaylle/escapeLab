@@ -111,7 +111,10 @@
  * item turns the hero's head to it (menu-hero-hover.png, the beam holding its beat on
  * „Beitreten"); „Einsatz starten" open, the hero stands half a tile aside, clear of the panel
  * (menu-hero-missions.png); as the doors close for the lobby it has turned away to the lab; and in
- * the reconnect drill's tab it looks at the run's card. The menu's sound waits for
+ * the reconnect drill's tab it looks at the run's card. At 1280×720 it stands as at 1440×820
+ * (menu-hero-1280.png); at 1024×768 three tiles or so tall, beside a panel open too
+ * (menu-hero-1024.png); at 899×700 and on the guest's phone, upright and sideways, it is left out.
+ * The menu's sound waits for
  * the first key, the speaker's lamp lit, and plays after it; the lobby keeps it at its weight,
  * chimes as the round comes up and chirps as Ben says ready; the run's start ends it. The won card
  * asks for its sting and its theme (end music), which go as the next run opens.
@@ -6312,8 +6315,11 @@ const heroCovers = (hero, clear) =>
     box !== null && overlap(hero, box) ? [name] : [],
   );
 
-/** How far from five scene tiles the hero may stand at 1440×820 and 1280×720. */
-const HERO_TILES_AROUND = 0.25;
+/**
+ * How many scene tiles tall the hero has to stand: about five at 1440×820 and 1280×720, three or
+ * so at 1024×768, beside the widest panel.
+ */
+const HERO_TILES = { laptop: [4.75, 5.25], narrow: [2.5, 3.3] };
 
 /** What the log says of the hero's box as it stands (`box`) and of what it covers. */
 function heroText(hero, box, covers) {
@@ -6344,11 +6350,11 @@ async function heroStanding(page, label) {
 }
 
 /**
- * The hero on `page` (`label`, the window's size): it has to stand there — about five of the
- * scene's tiles tall where `tall` asks it (HERO_TILES_AROUND) — its canvas covering nothing of
- * the menu, its lead line, the profile or a panel open; else the run fails.
+ * The hero on `page` (`label`, the window's size): it has to stand there — as many of the scene's
+ * tiles tall as `tiles` says (HERO_TILES), where it says — nothing of it over the menu, its lead
+ * line, the profile or a panel open; else the run fails.
  */
-async function checkHero(page, label, tall = false) {
+async function checkHero(page, label, tiles = null) {
   const standing = await heroStanding(page, label);
   if (standing === null) {
     return null;
@@ -6356,11 +6362,46 @@ async function checkHero(page, label, tall = false) {
   const { hero, room } = standing;
   const covers = heroCovers(room.hero, room.clear);
   console.log(`hero               ${label}: ${heroText(hero, room.hero, covers)}`);
-  const off = tall && Math.abs(hero.tiles - 5) > HERO_TILES_AROUND;
+  const off = tiles !== null && (hero.tiles < tiles[0] || hero.tiles > tiles[1]);
   if (covers.length > 0 || off) {
     fail(`hero @ ${label}: ${hero.tiles.toFixed(2)} tiles, over [${covers.join(', ')}]`);
   }
   return hero;
+}
+
+/**
+ * The hero left out on `page` (`label`): below 900 px across and on a phone it stands nowhere,
+ * its canvas hidden, the profile's figure standing for it — or the run fails.
+ */
+async function heroGone(page, label) {
+  await sleep(300);
+  const hero = await heroOf(page);
+  const hidden = (await page.locator('.menu-hero[hidden]').count()) === 1;
+  const gone = hero?.shown !== true && hidden;
+  console.log(`hero               ${label}: ${gone ? 'left out' : '!! standing'}`);
+  if (!gone) {
+    fail(`hero @ ${label}: standing where it is left out`);
+  }
+}
+
+/**
+ * menu-hero-1024.png: at 1024×768 the hero stands three scene tiles or so tall, clear of the menu
+ * and the profile — and with „Einsatz starten" open, stepped aside, clear of the panel too; at
+ * 899×700 it is left out — or the run fails.
+ */
+async function heroNarrow(page) {
+  await page.setViewportSize({ width: 1024, height: 768 });
+  await sceneBaked(page, { w: 1024, h: 768 });
+  await checkHero(page, '1024x768', HERO_TILES.narrow);
+  await capture(page, 'menu-hero-1024.png');
+  await openMenuPanel(page, 'Einsatz starten');
+  await page
+    .waitForFunction(() => globalThis.__escapelab?.hero?.step === 1, null, { timeout: 5000 })
+    .catch(() => undefined);
+  await checkHero(page, '1024x768, its panel open');
+  await closeMenuPanel(page);
+  await page.setViewportSize({ width: 899, height: 700 });
+  await heroGone(page, '899x700');
 }
 
 /**
@@ -6375,7 +6416,7 @@ async function captureMenu(page) {
   await heroArrived(page);
   await capture(page, 'menu.png');
   console.log(`menu.png           ${sceneText(scene)}`);
-  await checkHero(page, '1440x820', true);
+  await checkHero(page, '1440x820', HERO_TILES.laptop);
   await menuSoundAtFirstKey(page, () => walkMenuKeys(page));
   const look = await sampleFrames(page, 'on the menu, its scene drifting', () => sleep(SAMPLE_MS));
   if (SOFTWARE_GL && look !== null && look.p95 > MENU_P95_MS) {
@@ -6388,7 +6429,9 @@ async function captureMenu(page) {
   await sceneBaked(page, { w: 1280, h: 720 });
   await overflow(page, 'menu @ 1280x720');
   await capture(page, 'menu-1280.png');
-  await checkHero(page, '1280x720', true);
+  await checkHero(page, '1280x720', HERO_TILES.laptop);
+  await capture(page, 'menu-hero-1280.png');
+  await heroNarrow(page);
   await page.setViewportSize(SIZES[0]);
   await sceneBaked(page, { w: SIZES[0].width, h: SIZES[0].height });
   await captureHeroEntrance();
@@ -6864,6 +6907,7 @@ async function judgeMenuLayout(page, label, upright) {
  */
 async function checkMenuPhones(page) {
   await judgeMenuLayout(page, 'menu-phone.png', true);
+  await heroGone(page, 'menu-phone.png');
   for (const { width, height, shot } of MENU_SIDEWAYS) {
     await page.setViewportSize({ width, height });
     const scene = await sceneBaked(page, { w: width, h: height });
@@ -6871,6 +6915,7 @@ async function checkMenuPhones(page) {
       await capture(page, shot);
     }
     await judgeMenuLayout(page, shot ?? `menu @ ${width}x${height}`, false);
+    await heroGone(page, `${width}x${height}`);
     if (scene?.baked?.w !== width) {
       fail(`menu @ ${width}x${height}: no scene beside the menu (${sceneText(scene)})`);
     }

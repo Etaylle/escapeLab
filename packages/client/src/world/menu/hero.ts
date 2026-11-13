@@ -68,15 +68,28 @@ export interface StageFacts {
   /** the stage's box, the menu's, CSS px */
   w: number;
   h: number;
-  /** the window's height: the scene behind the stage fills the window, its tile follows it */
+  /** the window's width and height: the scene behind the stage fills it, its tile follows it */
+  windowW: number;
   windowH: number;
+  /** a phone, held sideways or upright: the profile's figure stands for the hero */
+  phone: boolean;
   /** the stage's padding at the bottom: the floor the hero stands on */
   padBottom: number;
+  /** the window's safe areas at the right and the bottom: a notch, a home bar */
+  safeRight: number;
+  safeBottom: number;
   /** where the menu's column ends, from the stage's left: the items, the lead line, the card */
   menuRight: number;
+  /** where the widest panel over the menu ends, from the stage's left */
+  panelRight: number;
   /** where the profile ends, from the stage's top */
   chipBottom: number;
 }
+
+/** The narrowest window the hero stands in, CSS px: below it the profile's figure stands for it. */
+export const SMALLEST_WINDOW = 900;
+/** The smallest the hero stands, scene tiles: smaller than this it is left out. */
+export const FEWEST_TILES = 1;
 
 /** Where and how large the hero stands on the stage. */
 export interface HeroPlace {
@@ -108,30 +121,46 @@ export function heroTall(h: number, windowH: number): number {
 }
 
 /**
- * The most CSS px a figure unit the stage leaves the hero: between the menu's column and the
- * stage's right edge, and between the profile and the floor, CLEAR kept from each.
+ * The room the stage `f` leaves the hero, CSS px: across, from where its box may start resting
+ * to where it may end stepped aside — clear of the menu's column resting, of the widest panel
+ * stepped half a tile aside (STEP_TILES), of the stage's edge and its safe area — and down, from
+ * the profile to the floor the stage's padding and its safe area leave.
  */
-function roomFor(f: StageFacts): number {
-  const across = (f.w - CLEAR - (f.menuRight + CLEAR)) / (HERO_BOX.front + HERO_BOX.back);
-  const down = (f.h - f.padBottom - (f.chipBottom + CLEAR)) / (HERO_BOX.top + HERO_BOX.bottom);
-  return Math.min(across, down);
+function roomOf(f: StageFacts): { left: number; right: number; floor: number; step: number } {
+  const step = STEP_TILES * heroTile(f.windowH);
+  const left = Math.max(f.menuRight + CLEAR, f.panelRight + CLEAR - step);
+  const right = f.w - Math.max(CLEAR, f.safeRight) - step;
+  const floor = f.h - Math.max(f.padBottom, f.safeBottom);
+  return { left, right, floor, step };
+}
+
+/** What the hero's box gives up to whole pixels at either side, CSS px: one at most. */
+const ROUNDING = 1;
+
+/** The most CSS px a figure unit the room `room` on the stage `f` leaves the hero. */
+function scaleIn(f: StageFacts, room: ReturnType<typeof roomOf>): number {
+  const across = (room.right - room.left - 2 * ROUNDING) / (HERO_BOX.front + HERO_BOX.back);
+  const down = (room.floor - (f.chipBottom + CLEAR)) / (HERO_BOX.top + HERO_BOX.bottom);
+  return Math.min(heroTall(f.h, f.windowH) / FIGURE_TALL, across, down);
 }
 
 /**
  * Where the hero stands on the stage `f` and how large: as tall as heroTall says — or as the
- * room beside the menu and under the profile allows — its feet in the right third's middle,
- * held inside that room, its shadow on the floor the stage's padding leaves. Null where there
- * is no room for it at all.
+ * room beside the menu, the widest panel and under the profile allows (roomOf) — its feet in the
+ * right third's middle, held inside that room, its shadow on the floor. Null where it is left
+ * out: a window narrower than SMALLEST_WINDOW, a phone, no room for FEWEST_TILES of it.
  */
 export function heroPlace(f: StageFacts): HeroPlace | null {
-  const scale = Math.min(heroTall(f.h, f.windowH) / FIGURE_TALL, roomFor(f));
-  if (!(scale > 0)) {
+  const room = roomOf(f);
+  const scale = scaleIn(f, room);
+  const tiles = (FIGURE_TALL * scale) / heroTile(f.windowH);
+  if (f.phone || f.windowW < SMALLEST_WINDOW || !(tiles >= FEWEST_TILES)) {
     return null;
   }
-  const least = f.menuRight + CLEAR + HERO_BOX.front * scale;
-  const most = f.w - CLEAR - HERO_BOX.back * scale;
+  const least = room.left + ROUNDING + HERO_BOX.front * scale;
+  const most = room.right - ROUNDING - HERO_BOX.back * scale;
   const x = Math.min(most, Math.max(least, f.w * RIGHT_THIRD));
-  const y = f.h - f.padBottom - HERO_BOX.bottom * scale;
+  const y = room.floor - HERO_BOX.bottom * scale;
   const left = Math.floor(x - HERO_BOX.front * scale);
   const top = Math.floor(y - HERO_BOX.top * scale);
   const box = {
@@ -140,7 +169,6 @@ export function heroPlace(f: StageFacts): HeroPlace | null {
     width: Math.ceil(x + HERO_BOX.back * scale) - left,
     height: Math.ceil(y + HERO_BOX.bottom * scale) - top,
   };
-  const tiles = (FIGURE_TALL * scale) / heroTile(f.windowH);
   return { scale, feet: { x, y }, box, tiles };
 }
 

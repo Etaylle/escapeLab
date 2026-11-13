@@ -110,20 +110,46 @@ export interface HeroLook {
   leaving: boolean;
 }
 
-/** The stage `stage` and what stands on it, CSS px; null while it has no box or no menu. */
-export function stageFacts(stage: HTMLElement): StageFacts | null {
+/** A phone held sideways or upright, as menu.css lays the menu out for it. */
+export const PHONE_QUERY = '(orientation: landscape) and (max-height: 500px), (max-width: 560px)';
+
+/** A length the stylesheets give as `value`, CSS px; 0 where it says none. */
+const px = (value: string): number => parseFloat(value) || 0;
+
+/**
+ * Where the widest panel over the menu ends, from the stage's left: from the menu's column's left
+ * as wide as the stage's content lets it, at most `--menu-panel-w` (menu.css).
+ */
+function panelRightOf(stage: HTMLElement, box: DOMRect, bodyLeft: number): number {
+  const style = getComputedStyle(stage);
+  const content = box.width - px(style.paddingLeft) - px(style.paddingRight);
+  const widest = px(style.getPropertyValue('--menu-panel-w')) || content;
+  return bodyLeft - box.left + Math.min(content, widest);
+}
+
+/**
+ * The stage `stage` and what stands on it, CSS px — the hero's canvas `canvas` carrying the
+ * window's safe areas in its margins (menu.css) — null while it has no box or no menu.
+ */
+export function stageFacts(stage: HTMLElement, canvas: HTMLCanvasElement): StageFacts | null {
   const box = stage.getBoundingClientRect();
   const body = stage.querySelector('.menu-body')?.getBoundingClientRect();
   const chip = stage.querySelector('.profile-chip')?.getBoundingClientRect();
   if (body === undefined || chip === undefined || box.width === 0 || box.height === 0) {
     return null;
   }
+  const safe = getComputedStyle(canvas);
   return {
     w: box.width,
     h: box.height,
+    windowW: window.innerWidth,
     windowH: window.innerHeight,
-    padBottom: parseFloat(getComputedStyle(stage).paddingBottom) || 0,
+    phone: window.matchMedia(PHONE_QUERY).matches,
+    padBottom: px(getComputedStyle(stage).paddingBottom),
+    safeRight: px(safe.marginRight),
+    safeBottom: px(safe.marginBottom),
     menuRight: body.right - box.left,
+    panelRight: panelRightOf(stage, box, body.left),
     chipBottom: chip.bottom - box.top,
   };
 }
@@ -168,7 +194,7 @@ function watchStage(
     return () => undefined;
   }
   const measure = (): void => {
-    const facts = stageFacts(stage);
+    const facts = stageFacts(stage, canvas);
     const box = stage.getBoundingClientRect();
     standing.place = facts === null ? null : heroPlace(facts);
     standing.at = { x: box.left, y: box.top };
