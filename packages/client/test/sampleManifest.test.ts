@@ -41,7 +41,12 @@ const remedyFor = (ids: readonly string[]): string =>
  * without its recording goes here with the render command in docs/sound.md, and leaves once
  * the user has made it.
  */
-const AWAITING_RENDER: readonly string[] = [];
+const AWAITING_RENDER: readonly string[] = [
+  // The hum's three takes of 2026-11-13 came out near silent (−50 dBFS with one click); the gain
+  // of +31 dB turned the click into a crack in the menu, so the take was dropped until a render
+  // at full level exists (docs/sound.md, „The menu").
+  'bed-facility',
+];
 const awaiting = new Set(AWAITING_RENDER);
 
 const catalog = readCatalog();
