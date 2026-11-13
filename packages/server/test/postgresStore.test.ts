@@ -1,3 +1,4 @@
+import { connect, createServer, type AddressInfo, type Socket } from 'node:net';
 import { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, inject, it, vi } from 'vitest';
 import { PostgresStore } from '../src/store/postgres.js';
@@ -45,6 +46,38 @@ async function closeConnections(app: string): Promise<void> {
   await vi.waitFor(async () => {
     expect(await db.$queryRawUnsafe(`SELECT pid ${named}`)).toEqual([]);
   });
+}
+
+/**
+ * A proxy in front of the database that holds every new connection `delayMs` before it opens it,
+ * as a Neon compute waking from its pause does; its port, and how to close it.
+ */
+async function slowFront(delayMs: number): Promise<{ port: number; close: () => void }> {
+  const target = new URL(url);
+  const sockets = new Set<Socket>();
+  const server = createServer((client) => {
+    sockets.add(client);
+    client.pause();
+    setTimeout(() => {
+      const upstream = connect(Number(target.port || 5432), target.hostname, () => {
+        client.pipe(upstream);
+        upstream.pipe(client);
+        client.resume();
+      });
+      sockets.add(upstream);
+      upstream.on('error', () => client.destroy());
+      client.on('error', () => upstream.destroy());
+    }, delayMs);
+  });
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const { port } = server.address() as AddressInfo;
+  return {
+    port,
+    close: () => {
+      sockets.forEach((socket) => socket.destroy());
+      server.close();
+    },
+  };
 }
 
 describe.skipIf(url === '')('the store in Postgres', () => {
@@ -226,6 +259,48 @@ describe.skipIf(url === '')('the store in Postgres', () => {
         said.mockRestore();
       }
     });
+
+    it('counts a run kept already that it did not count: another instance’s, or lost', async () => {
+      // Two instances over one database, as a deploy has them for a minute.
+      const [first, second] = [await open(), await open()];
+      await withAccounts(first, ['Anna', 'Ben']);
+      const run = finished({ at: DAY }, ['Anna', 'Ben']);
+      await first.appendRun(run);
+      const said = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+      try {
+        await second.appendRun(run);
+        await second.appendRun(run);
+        expect(said).toHaveBeenCalledWith('[escapelab] run of blackout in room QXT4 kept already');
+      } finally {
+        said.mockRestore();
+      }
+      expect([await db.run.count(), first.stats().runs, second.stats().runs]).toEqual([1, 1, 1]);
+      const top = second.stats().mission('blackout')?.difficulties[0]?.top;
+      expect(top?.map((entry) => entry.crew)).toEqual([['Anna', 'Ben']]);
+    });
+
+    it('waits for a database that takes seconds to open a connection, as Neon wakes', async () => {
+      const front = await slowFront(3000);
+      try {
+        const slow = new URL(url);
+        slow.host = `127.0.0.1:${front.port}`;
+        slow.searchParams.set('max_idle_connection_lifetime', '1');
+        const store = await PostgresStore.open(slow.toString());
+        opened.push(store);
+        // The pool's connection stood idle past its lifetime: the run's write opens another.
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+        const said = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+        try {
+          await store.appendRun(finished({}, [null, null]));
+          expect(said).not.toHaveBeenCalled();
+        } finally {
+          said.mockRestore();
+        }
+        expect(await db.run.count()).toBe(1);
+      } finally {
+        front.close();
+      }
+    }, 30_000);
 
     it('says why it does not open where the database cannot be reached', async () => {
       const nowhere = new URL(url);

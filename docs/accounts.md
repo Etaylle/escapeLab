@@ -73,7 +73,10 @@ another device (the crew's yes to an „Übernahme") is that device's pass's fro
 its Erfolge and the seat's name go to the claiming pass's account. A seat without an account keeps
 no name: its account was deleted while the run went on, or none was made, and no account could
 take the name off again. A run is kept once: a room taken up again from a snapshot made before
-its end may finish it a second time, and the log says `run of … in room … kept already`. A run
+its end may finish it a second time, and the log says `run of … in room … kept already` — the
+unique key on room and start, no other (`runs_once`). Where this server's Bestenliste did not
+count that run yet — another instance kept it during a deploy, or the write landed while its
+answer was lost with the connection — it reads the run back and counts it then. A run
 the store cannot take is logged and dropped; the room plays on. The Bestenliste and the mission
 cards' records count
 every run once as the server starts, then run by run. „Meine Einsätze", the menu's item beside
@@ -117,7 +120,10 @@ store in one line either way.
   `DATABASE_URL` sets its own), and a request whose connection was lost all the same is asked
   once more: the log says `the database had lost the connection (P1017): asked again`. A
   refusal, a unique key say, is never asked again. Prisma 6.19 can stay stuck on a closed
-  connection after a transaction lost one; the minute's lifetime ends that too.
+  connection after a transaction lost one; the minute's lifetime ends that too. A paused Neon
+  takes seconds to wake and open a connection, past the 2 s Prisma gives a transaction to start:
+  the run's transaction waits up to 15 s, and one that did not start in time is asked once more
+  as well (`did not start the transaction in time (P2028): asked again`).
 - **Changing the schema:** edit `prisma/schema.prisma`, then make the migration with
   `pnpm --filter @escapelab/server prisma migrate dev --name <what>` against a database of your
   own, and commit it; the next deploy applies it. `packages/server/test/schema.test.ts` checks that

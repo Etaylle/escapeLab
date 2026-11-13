@@ -181,10 +181,17 @@ export function pooledUrl(url: string): string {
 }
 
 /**
- * Prisma's codes for a connection lost: P1017, the database closed one the pool still held —
- * Neon closes a connection idle for 5 minutes — P1001 and P1002, none could be opened.
+ * Prisma's codes for a request worth asking once more, and what each says happened: P1017, the
+ * database closed a connection the pool still held — Neon closes one idle for 5 minutes — P1001
+ * and P1002, none could be opened, and P2028, a transaction that did not start in time — a Neon
+ * compute waking from its pause while the pool opened a connection.
  */
-const CONNECTION_LOST: ReadonlySet<string> = new Set(['P1001', 'P1002', 'P1017']);
+const ASK_AGAIN: ReadonlyMap<string, string> = new Map([
+  ['P1001', 'had lost the connection'],
+  ['P1002', 'had lost the connection'],
+  ['P1017', 'had lost the connection'],
+  ['P2028', 'did not start the transaction in time'],
+]);
 
 /** The code of Prisma's that `err` carries; null for none. */
 function codeOf(err: unknown): string | null {
@@ -194,32 +201,58 @@ function codeOf(err: unknown): string | null {
   return err instanceof Prisma.PrismaClientInitializationError ? (err.errorCode ?? null) : null;
 }
 
-/** Whether `err` says the connection was lost: asked again, the request may well go through. */
-export function connectionLost(err: unknown): boolean {
+/** Whether `err` is worth asking again for (`ASK_AGAIN`): the request may well go through. */
+export function worthAskingAgain(err: unknown): boolean {
   const code = codeOf(err);
-  return code !== null && CONNECTION_LOST.has(code);
+  return code !== null && ASK_AGAIN.has(code);
 }
 
 /**
- * `work` done — once more where the connection it went out on was lost (`connectionLost`), on
- * another the pool opens. Anything else, a constraint refused say, is thrown as it came.
+ * `work` done — once more where it was worth asking again (`worthAskingAgain`), on a connection
+ * the pool opens anew. Anything else, a constraint refused say, is thrown as it came.
  */
 export async function onceMore<T>(work: () => Promise<T>): Promise<T> {
   try {
     return await work();
   } catch (err) {
-    if (!connectionLost(err)) {
+    const code = codeOf(err);
+    const what = code === null ? undefined : ASK_AGAIN.get(code);
+    if (what === undefined) {
       throw err;
     }
-    console.log(`[escapelab] the database had lost the connection (${codeOf(err)}): asked again`);
+    console.log(`[escapelab] the database ${what} (${code}): asked again`);
     return work();
   }
+}
+
+/**
+ * How long the run's transaction may wait to start, and then take, ms: a Neon compute waking
+ * from its pause takes seconds to open a connection, past Prisma's 2 s to start one (P2028).
+ */
+const RUN_TRANSACTION = { maxWait: 15_000, timeout: 15_000 };
+
+/** A run's key, as the database keeps each run once: its room and its start (`runs_once`). */
+const runKeyOf = (roomCode: string, startedAt: number): string => `${roomCode}|${startedAt}`;
+
+/**
+ * Whether `err` says the database keeps the run already: the unique key on its room and its
+ * start (`runs_once`), and no other a write could run into.
+ */
+export function runKeptAlready(err: unknown): boolean {
+  if (!(err instanceof Prisma.PrismaClientKnownRequestError) || err.code !== 'P2002') {
+    return false;
+  }
+  const { modelName, target } = (err.meta ?? {}) as { modelName?: unknown; target?: unknown };
+  const columns = Array.isArray(target) ? [...(target as unknown[])].sort() : [];
+  return modelName === 'Run' && columns.join() === 'room_code,started_at';
 }
 
 export class PostgresStore implements Store {
   readonly description = 'Postgres at DATABASE_URL: accounts, runs and Erfolge outlast a restart';
   readonly kind = 'database';
   private index = new RunStats();
+  /** every run the Bestenliste counts, by `runKeyOf` */
+  private counted = new Set<string>();
 
   private constructor(private readonly db: PrismaClient) {}
 
@@ -252,26 +285,58 @@ export class PostgresStore implements Store {
 
   /** The Bestenliste counted afresh from every run kept. */
   private async recount(): Promise<void> {
-    this.index = new RunStats(await this.runs());
+    this.index = new RunStats();
+    this.counted = new Set();
+    for (const run of await this.runs()) {
+      this.count(run);
+    }
+  }
+
+  /** `run` counted into the Bestenliste, its key noted (`counted`). */
+  private count(run: LoggedRun): void {
+    this.index.add(run);
+    if (run.version === 2) {
+      this.counted.add(runKeyOf(run.roomCode, run.startedAt));
+    }
   }
 
   async appendRun(run: FinishedRun): Promise<void> {
+    const { missionId, roomCode, startedAt } = run.report;
     let owners: (string | null)[];
     try {
       // A run usually ends after minutes without a word to the database: its write is the one
-      // most likely to find the connection lost (`onceMore`).
-      owners = await onceMore(() => this.db.$transaction((tx) => keep(tx, run)));
+      // most likely to find the connection lost, or to wait while a paused Neon wakes.
+      owners = await onceMore(() =>
+        this.db.$transaction((tx) => keep(tx, run), RUN_TRANSACTION),
+      );
     } catch (err) {
-      if (!alreadyThere(err)) {
+      if (!runKeptAlready(err)) {
         throw err;
       }
       // The same run once more — a room taken up again from a snapshot made before its end
-      // finished it a second time: kept and counted already.
-      const { missionId, roomCode } = run.report;
+      // finished it a second time, or a write that landed while its answer was lost with the
+      // connection: kept already, and counted here unless it is not yet.
       console.log(`[escapelab] run of ${missionId} in room ${roomCode} kept already`);
+      await this.countKept(roomCode, startedAt);
       return;
     }
-    this.index.add(asKept(run.report, owners));
+    this.count(asKept(run.report, owners));
+  }
+
+  /** The run the database keeps under `roomCode` and `startedAt` counted, where it is not yet. */
+  private async countKept(roomCode: string, startedAt: number): Promise<void> {
+    if (this.counted.has(runKeyOf(roomCode, startedAt))) {
+      return;
+    }
+    const row = await onceMore(() =>
+      this.db.run.findUnique({
+        where: { roomCode_startedAt: { roomCode, startedAt: new Date(startedAt) } },
+        include: { members: true },
+      }),
+    );
+    for (const run of row === null ? [] : this.checked(row)) {
+      this.count(run);
+    }
   }
 
   async runs(): Promise<LoggedRun[]> {

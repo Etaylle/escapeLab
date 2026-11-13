@@ -2,11 +2,12 @@ import { Prisma } from '@prisma/client';
 import type * as PrismaModule from '@prisma/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
-  connectionLost,
   IDLE_LIFETIME_S,
   onceMore,
   pooledUrl,
   PostgresStore,
+  runKeptAlready,
+  worthAskingAgain,
 } from '../src/store/postgres.js';
 
 /** The URL of every Prisma client made in this file, in order. */
@@ -31,10 +32,11 @@ vi.mock('@prisma/client', async (importOriginal) => {
  */
 
 const VERSION = '6.19.3';
-const lost = (code: string): Error =>
+const lost = (code: string, meta?: Record<string, unknown>): Error =>
   new Prisma.PrismaClientKnownRequestError('Server has closed the connection.', {
     code,
     clientVersion: VERSION,
+    ...(meta === undefined ? {} : { meta }),
   });
 
 afterEach(() => {
@@ -43,13 +45,23 @@ afterEach(() => {
 
 describe('a lost connection', () => {
   it('is one the database closed or that could not be opened, and no refusal', () => {
-    expect(connectionLost(lost('P1017'))).toBe(true);
-    expect(connectionLost(lost('P1001'))).toBe(true);
+    expect(worthAskingAgain(lost('P1017'))).toBe(true);
+    expect(worthAskingAgain(lost('P1001'))).toBe(true);
     const unreachable = new Prisma.PrismaClientInitializationError('unreachable', VERSION, 'P1002');
-    expect(connectionLost(unreachable)).toBe(true);
-    expect(connectionLost(lost('P2002'))).toBe(false);
-    expect(connectionLost(new Error('Server has closed the connection.'))).toBe(false);
-    expect(connectionLost(new Prisma.PrismaClientInitializationError('bad', VERSION))).toBe(false);
+    expect(worthAskingAgain(unreachable)).toBe(true);
+    expect(worthAskingAgain(lost('P2002'))).toBe(false);
+    expect(worthAskingAgain(new Error('Server has closed the connection.'))).toBe(false);
+    const bad = new Prisma.PrismaClientInitializationError('bad', VERSION);
+    expect(worthAskingAgain(bad)).toBe(false);
+  });
+
+  it('takes in a transaction that did not start in time, as while Neon wakes', async () => {
+    const said = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const work = vi.fn().mockRejectedValueOnce(lost('P2028')).mockResolvedValueOnce('kept');
+    await expect(onceMore(work)).resolves.toBe('kept');
+    expect(said).toHaveBeenCalledWith(
+      '[escapelab] the database did not start the transaction in time (P2028): asked again',
+    );
   });
 
   it('is asked about once more, saying so, and the second answer stands', async () => {
@@ -103,5 +115,20 @@ describe("the pool's idle lifetime", () => {
     expect(() => pooledUrl('not a url')).toThrow(
       'DATABASE_URL is no connection URL — check the variable',
     );
+  });
+});
+
+describe('a run kept already', () => {
+  it('is the unique key on its room and its start, and no other a write runs into', () => {
+    const runs = { modelName: 'Run', target: ['room_code', 'started_at'] };
+    expect(runKeptAlready(lost('P2002', runs))).toBe(true);
+    const turned = { modelName: 'Run', target: ['started_at', 'room_code'] };
+    expect(runKeptAlready(lost('P2002', turned))).toBe(true);
+    const seat = { modelName: 'RunMember', target: ['run_id', 'seat'] };
+    expect(runKeptAlready(lost('P2002', seat))).toBe(false);
+    const other = { modelName: 'Run', target: ['id'] };
+    expect(runKeptAlready(lost('P2002', other))).toBe(false);
+    expect(runKeptAlready(lost('P2002'))).toBe(false);
+    expect(runKeptAlready(lost('P1017', runs))).toBe(false);
   });
 });
