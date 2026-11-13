@@ -122,7 +122,8 @@ export interface Line {
   /**
    * Sends `msg` first on the next socket that opens — before any resume — or at once on a line
    * that is up: a deed that has to reach the server whenever the line is back, the seat given
-   * up while it was down. The last one given is the one sent.
+   * up while it was down. A socket whose comeback waits for its room (`Retry.restoring`) is let
+   * go for it, so that it goes out at once on the next. The last one given is the one sent.
    */
   sendFirst: (msg: ClientMessage) => void;
   /** The page is back, or the player asks: a line down tries at once, one up is asked the time. */
@@ -203,6 +204,8 @@ class Keeper {
   private current: WebSocket | null = null;
   /** `current` is open with its session back, or needs none: what is sent goes straight out */
   private ready = false;
+  /** the comeback on `current` waits for its room on the server (`Retry.restoring`) */
+  private awaitingRoom = false;
   /** asks for the server's time out on `current` and not yet answered */
   private asked = 0;
   /** the line is down for the server's restart (`Retry.restart`), until it is ready again */
@@ -227,6 +230,7 @@ class Keeper {
     const socket = this.open();
     this.current = socket;
     this.ready = false;
+    this.awaitingRoom = false;
     this.asked = 0;
     this.tries += 1;
     this.on.made(socket);
@@ -264,11 +268,17 @@ class Keeper {
   }
 
   sendFirst(msg: ClientMessage): void {
-    if (this.ready && this.current?.readyState === WebSocket.OPEN) {
-      this.current.send(JSON.stringify(msg));
+    const socket = this.current;
+    if (this.ready && socket?.readyState === WebSocket.OPEN) {
+      socket.send(JSON.stringify(msg));
       return;
     }
     this.first = msg;
+    // The server holds this socket's comeback till its room is back: the socket is let go, its
+    // comeback with it, and the next one carries `msg` at once.
+    if (this.awaitingRoom && socket !== null) {
+      this.dead(socket);
+    }
   }
 
   wake(): void {
@@ -324,6 +334,7 @@ class Keeper {
     }
     if (msg.kind === 'restoring' && !this.ready) {
       // The comeback waits for its room: the line stays unready until the seat is back.
+      this.awaitingRoom = true;
       this.on.retry({ attempt: this.tries, at: null, restoring: true, ...this.cause() });
       return;
     }

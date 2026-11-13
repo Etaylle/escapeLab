@@ -440,9 +440,11 @@ whoever dropped in the minute a deploy keeps the old instance up comes back afte
 older snapshot than the crew still on it, whose last ones come some 61 s after the switch at the
 latest; a last snapshot never waits. Meanwhile the player's card says „EINSATZ WIRD
 WIEDERHERGESTELLT · Der letzte Stand trifft gleich ein", with only the reload to press; the join
-screen's card, its way back pressed, says the same with the seconds it has waited, only „Einsatz
-aufgeben" open — carried out once the room is back — and the audience waits as well, while a join
-by its code is told „Der Raum wird gerade wiederhergestellt, gleich noch einmal." A server killed
+screen's card, its way back pressed or the page loaded anew, says the same with the seconds it has
+waited, only „Einsatz aufgeben" open — carried out once the room is back — and the audience waits
+as well, while a join by its code is told „Der Raum wird gerade wiederhergestellt, gleich noch
+einmal." A page loaded anew stands on the card of the newest snapshot it keeps from the start,
+never on the plain form. A server killed
 outright, with no SIGTERM, loses at most the last 2 s of a deed and 10 s of a walk, and its rooms
 are back 90 s after the first of their crew came back to the next one. A snapshot over a day old,
 of a run that is over, of another room or under another key is

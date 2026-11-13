@@ -1,9 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SNAPSHOT_MAX_AGE_MS, type PlayerView, type ServerMessage } from '@escapelab/core';
+import type { Retry } from '../src/line.js';
 import { PASS_KEY } from '../src/pass.js';
 import { keptSeat, keptSnapshot, resumeOf, seatOf, SNAPSHOT_KEY } from '../src/snapshots.js';
-import { comebackOfTab } from '../src/tab.js';
-import { lineDropped, noteOutgoing, replyTo, takeIn } from '../src/ws.js';
+import { comebackOfTab, keepTab } from '../src/tab.js';
+import { comebackWaits, lineDropped, noteOutgoing, replyTo, takeIn } from '../src/ws.js';
 import { page, storage } from './page.js';
 
 /** Ben's pass. */
@@ -304,6 +305,68 @@ describe('the card whose way back waits while the server takes its room up again
   it('is of the card’s room alone: another room awaited is none of its', () => {
     const { kept, got } = wentBack();
     takeIn({ kind: 'restoring', code: 'AB12' }, kept);
+    expect(got.restoring).toBeNull();
+  });
+});
+
+describe('the card of a page loaded anew while the server takes its room up again', () => {
+  let local: Map<string, string>;
+  beforeEach(() => {
+    local = new Map([[PASS_KEY, JSON.stringify({ ...PASS, name: 'Ben' })]]);
+    vi.stubGlobal('sessionStorage', storage(new Map()));
+    vi.stubGlobal('window', { localStorage: storage(local) });
+    vi.useFakeTimers();
+    vi.setSystemTime(T0 + 5000);
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  /** Ben's tab in room QX7R, the snapshot of it kept with its card; the card. */
+  function inRoom() {
+    const seat = seatOf('QX7R', running(), T0);
+    local.set(`${SNAPSHOT_KEY}QX7R`, JSON.stringify({ ...SNAPSHOT, seat }));
+    keepTab({ code: 'QX7R', watching: false });
+    return seat;
+  }
+
+  /** The line's tries as the page loaded anew hears of them: on its way, then its comeback held. */
+  const CONNECTING: Retry = { attempt: 1, at: null };
+  const HELD: Retry = { attempt: 1, at: null, restoring: true };
+
+  it('shows the kept card waiting from the server’s word, going in once the room is back', () => {
+    const seat = inRoom();
+    const { kept, got } = page();
+    comebackWaits(CONNECTING, kept);
+    expect(got.restoring).toBeNull();
+    comebackWaits(HELD, kept);
+    expect(got.seat).toEqual(seat);
+    expect(got.restoring).toEqual({ code: 'QX7R', since: T0 + 5000, comeback: true });
+    // The newest snapshot is in: the server seats the page, whose views open the game.
+    takeIn({ kind: 'joined', code: 'QX7R' }, kept);
+    expect(got.restoring).toBeNull();
+    expect(got.code).toBe('QX7R');
+  });
+
+  it('waits no more once its comeback is refused, the snapshot gone with it', () => {
+    inRoom();
+    const { kept, got } = page();
+    kept.resuming.current = true;
+    comebackWaits(HELD, kept);
+    takeIn({ kind: 'error', message: 'Dieser Einsatz ist schon vorbei.', of: 'resume' }, kept);
+    expect(got.restoring).toBeNull();
+    expect(keptSnapshot('QX7R')).toBeNull();
+  });
+
+  it('shows no card for a tab that watches, nor for a room it keeps no snapshot of', () => {
+    inRoom();
+    keepTab({ code: 'QX7R', watching: true });
+    const { kept, got } = page();
+    comebackWaits(HELD, kept);
+    keepTab({ code: 'AB12', watching: false });
+    comebackWaits(HELD, kept);
+    expect(got.seat).toBeNull();
     expect(got.restoring).toBeNull();
   });
 });

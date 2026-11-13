@@ -77,8 +77,12 @@ const SESSION: Extract<Comeback, { kind: 'resume' }> = {
 /** The server has the seat back. */
 const JOINED: ServerMessage = { kind: 'joined', code: SESSION.code };
 
-/** `keepConnected` over fake sockets, with what it told the page. */
+/**
+ * `keepConnected` over fake sockets, with what it told the page; `leave` has the tab leave the
+ * room `session` comes back to.
+ */
 function connection(session: Comeback | null = SESSION) {
+  let comeback = session;
   const sockets: FakeSocket[] = [];
   const told = {
     statuses: [] as string[],
@@ -92,7 +96,7 @@ function connection(session: Comeback | null = SESSION) {
   const events: SocketEvents = {
     made: () => undefined,
     status: (status) => told.statuses.push(status),
-    session: () => session,
+    session: () => comeback,
     resuming: () => {
       told.resumes += 1;
     },
@@ -120,7 +124,10 @@ function connection(session: Comeback | null = SESSION) {
     }
     return socket;
   };
-  return { sockets, told, line, stop: line.stop, send: line.send, last };
+  const leave = (): void => {
+    comeback = null;
+  };
+  return { sockets, told, line, stop: line.stop, send: line.send, last, leave };
 }
 
 const E: ClientMessage = { kind: 'request-hint' };
@@ -694,5 +701,33 @@ describe('keepConnected — a deed that has to reach the server once the line is
     last().open();
     line.sendFirst(GIVE_UP);
     expect(last().sent).toEqual([GIVE_UP]);
+  });
+
+  it('goes at once while the comeback waits for its room, on a socket of its own', () => {
+    // A page loaded anew while its room waits on the server; the seat given up meanwhile.
+    const { line, last, sockets, told, leave } = connection();
+    last().open();
+    last().say({ kind: 'restoring', code: SESSION.code });
+    leave();
+    line.sendFirst(GIVE_UP);
+    // The socket the server holds the comeback on is let go, and the next carries the give-up.
+    expect(sockets[0]?.closedByPage).toBe(true);
+    expect(sockets).toHaveLength(2);
+    last().open();
+    expect(last().sent).toEqual([GIVE_UP]);
+    expect(told.ready).toBe(1);
+    // A comeback that is not waiting lets its socket be: the give-up goes on the next one. Nor
+    // does the socket after one that waited and dropped, still on its way.
+    const other = connection();
+    other.last().open();
+    other.line.sendFirst(GIVE_UP);
+    expect(other.sockets).toHaveLength(1);
+    expect(other.last().closedByPage).toBe(false);
+    other.last().say({ kind: 'restoring', code: SESSION.code });
+    other.last().end();
+    vi.advanceTimersByTime(1000);
+    other.line.sendFirst(GIVE_UP);
+    expect(other.sockets).toHaveLength(2);
+    expect(other.last().closedByPage).toBe(false);
   });
 });

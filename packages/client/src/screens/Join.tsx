@@ -43,6 +43,11 @@ interface Props {
    * `Restoring`); null or left out for none
    */
   restoring?: Restoring | null;
+  /**
+   * gives the seat up while the tab's own comeback waits for its room (`Restoring.comeback`), on
+   * a socket of its own (ws.ts `Connection.giveUp`); the card gives it up on the line otherwise
+   */
+  giveUp?: () => void;
   /** the Bestenliste's runs, by mission */
   stats: MissionStats[];
   openHandbook: (missionId: string) => void;
@@ -453,29 +458,41 @@ function RestoringLine({ since }: { since: number }) {
 }
 
 /**
+ * How the card gives its seat up: on the line, the snapshot kept of the room going with it — and
+ * a card the server's word replaces — or as `instead` gives it up, where it is given.
+ */
+function wayOut(seat: Seat, send: Props['send'], instead: (() => void) | null): () => void {
+  if (instead !== null) {
+    return instead;
+  }
+  return () => {
+    dropSnapshot(seat.code);
+    send({ kind: 'abandon', code: seat.code, pass: crewPass() });
+    send({ kind: 'whereami', pass: crewPass() });
+  };
+}
+
+/**
  * Where the browser's pass sits, instead of the join form (`Seat`): the mission, the room's
  * code, the crew and the clock as the server showed it, the way back and the way out — from a
  * run on „Einsatz aufgeben" at a second press, from a lobby as free as leaving it always was.
  * While the way back waits for the room (`waiting`), the card says for how long, and only the
- * way out is open; the game opens once the room is back.
+ * way out is open — `giveUp`, where it is given; the game opens once the room is back.
  */
 export function BoundCard({
   seat,
   send,
   waiting = null,
+  giveUp = null,
 }: {
   seat: Seat;
   send: Props['send'];
   waiting?: Restoring | null;
+  giveUp?: (() => void) | null;
 }) {
   const run = seat.phase === 'playing';
   const clock = seat.leftMs === null ? '' : ` · noch ${formatLeft(seat.leftMs)}`;
-  // The snapshot kept of the room goes with the seat — and a card the server's word replaces.
-  const leave = (): void => {
-    dropSnapshot(seat.code);
-    send({ kind: 'abandon', code: seat.code, pass: crewPass() });
-    send({ kind: 'whereami', pass: crewPass() });
-  };
+  const leave = wayOut(seat, send, giveUp);
   return (
     <section className={`bound${run ? ' bound--run' : ''}`}>
       <span className="kicker bound-kicker">{kickerOf(seat, waiting !== null)}</span>
@@ -556,6 +573,17 @@ function boundTo(seat: Seat | null, waiting: Restoring | null): Seat | null {
   return seat?.phase === 'playing' || waiting !== null ? seat : null;
 }
 
+/**
+ * How the card's seat is given up while the tab's own comeback waits for its room
+ * (`Restoring.comeback`): by `giveUp`, on a socket of its own; null for the line as it is.
+ */
+function giveUpOf(
+  waiting: Restoring | null,
+  giveUp: (() => void) | undefined,
+): (() => void) | null {
+  return waiting?.comeback === true && giveUp !== undefined ? giveUp : null;
+}
+
 export function JoinScreen({
   send,
   connected,
@@ -564,6 +592,7 @@ export function JoinScreen({
   seat = null,
   takeover = null,
   restoring = null,
+  giveUp,
   stats,
   openHandbook,
   openHistory,
@@ -603,7 +632,9 @@ export function JoinScreen({
       <InstallOffer />
       <HttpsHint />
 
-      {seat !== null && <BoundCard seat={seat} send={send} waiting={waiting} />}
+      {seat !== null && (
+        <BoundCard seat={seat} send={send} waiting={waiting} giveUp={giveUpOf(waiting, giveUp)} />
+      )}
       {bound !== null ? (
         <p className="bound-line">{boundLine(bound)}</p>
       ) : (
