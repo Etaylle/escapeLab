@@ -7,6 +7,7 @@ import {
   TURN_MS,
   type FigurePose,
 } from '../figure.js';
+import { smooth } from '../ease.js';
 import { SHOT_WIDE } from '../intro/shot.js';
 import { tileCss } from '../viewport.js';
 
@@ -162,6 +163,8 @@ export interface HeroMotion {
   /** how far into the walk cycle its legs are, 0 to 1 (figure.ts gaitStep) */
   walk: number;
   facing: number;
+  /** where its head is turned to look, radians: at what the player attends to; null for round */
+  look: number | null;
 }
 
 /** The hero standing in its place, facing the menu. */
@@ -170,7 +173,78 @@ export const STANDING_STILL: HeroMotion = {
   moving: false,
   walk: 0,
   facing: HERO_FACING,
+  look: null,
 };
+
+/** How far the hero's head turns toward what the player attends to: a little, not all the way. */
+export const LOOK_SHARE = 0.6;
+/** Where its head is, from its feet, figure units: up, and ahead to the menu's side. */
+export const HEAD = { ahead: 0.13, up: 0.6 } as const;
+/** How far it keeps its look from turning it round: the picture's up-and-down line, radians. */
+const LOOK_MARGIN = 0.12;
+
+/** `a` - `b` the short way round, -PI to PI. */
+function turnBy(a: number, b: number): number {
+  const d = a - b;
+  return Math.atan2(Math.sin(d), Math.cos(d));
+}
+
+/**
+ * Where the hero's head is, on the stage, CSS px: placed `place`, standing `offset` figure units
+ * right of its place.
+ */
+export function headAt(place: HeroPlace, offset: number): Spot {
+  const { feet, scale } = place;
+  return { x: feet.x + (offset - HEAD.ahead) * scale, y: feet.y - HEAD.up * scale };
+}
+
+/**
+ * Where the hero looks to look at `angle` (from its head, the picture's way round), facing
+ * `facing`: LOOK_SHARE of the way from its facing, and never so far that the art would turn it
+ * round — its look kept on the menu's side of the picture's up-and-down line.
+ */
+export function lookToward(angle: number, facing: number): number {
+  const look = facing + LOOK_SHARE * turnBy(angle, facing);
+  return Math.min(1.5 * Math.PI - LOOK_MARGIN, Math.max(0.5 * Math.PI + LOOK_MARGIN, look));
+}
+
+/** How far aside the hero steps as a panel opens over the menu: half a scene tile. */
+export const STEP_TILES = 0.5;
+/** How long the step takes, ms: as long as a panel takes to slide in (menu.css). */
+export const STEP_MS = 200;
+
+/** A step aside as it goes: from where, to where, figure units right of the place, since when. */
+export interface Step {
+  from: number;
+  to: number;
+  /** when it began, ms by the page's clock */
+  since: number;
+}
+
+/**
+ * How the hero steps aside `step` at `now`: walking from `step.from` to `step.to` over STEP_MS,
+ * easing in and out, its legs in their cycle as far as the ground it covers, facing as it does;
+ * standing where it came to after. Under reduced motion it stands there at once.
+ */
+export function steppingAt(
+  step: Step,
+  now: number,
+  reduced: boolean,
+): Omit<HeroMotion, 'facing' | 'look'> {
+  const u = reduced ? 1 : Math.min(1, Math.max(0, (now - step.since) / STEP_MS));
+  const covered = (step.to - step.from) * smooth(u);
+  return {
+    offset: step.from + covered,
+    moving: u < 1,
+    walk: gaitStep(0, Math.abs(covered)),
+  };
+}
+
+/**
+ * Where the hero turns to as the menu goes for the lobby: away toward the lab behind it — up the
+ * picture, a little to the menu's side, keeping the art's side — as the doors close.
+ */
+export const AWAY_FACING = 1.5 * Math.PI - 0.35;
 
 /** The hero `ms` into its entrance: how it moves, whether the click has come, its lamp. */
 export interface Entrance {
@@ -197,7 +271,8 @@ export function entranceAt(ms: number, from: number): Entrance {
     const covered = from * (1 - (1 - u) * (1 - u));
     const turning = { from: WALKING_FACING, to: HERO_FACING, since: WALK_IN_MS - TURN_MS };
     const facing = ms < turning.since ? WALKING_FACING : shownFacing(turning, ms);
-    const motion = { offset: from - covered, moving: true, walk: gaitStep(0, covered), facing };
+    const walk = gaitStep(0, covered);
+    const motion = { offset: from - covered, moving: true, walk, facing, look: null };
     return { motion, clicked: false, lamp: 0, done: false };
   }
   const lit = (ms - WALK_IN_MS - CLICK_AFTER_MS) / LAMP_ON_MS;
@@ -246,9 +321,10 @@ export function heroPose(
     reduced: cues.reduced,
   });
   const waving = motion.moving ? 0 : (pose.arms?.front ?? 0);
+  const glance = stepped((pose.look - motion.facing) * GLANCE_SHARE, GLANCE_STEP);
   return {
     ...pose,
-    look: motion.facing + stepped((pose.look - motion.facing) * GLANCE_SHARE, GLANCE_STEP),
+    look: motion.look ?? motion.facing + glance,
     arms: { front: Math.max(HOLD.front, waving), back: HOLD.back },
     holding: true,
   };

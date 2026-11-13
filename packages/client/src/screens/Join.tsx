@@ -69,6 +69,8 @@ interface Props {
   openEditor?: () => void;
   /** opens the settings, as the gear in the top bar does; without it the menu offers none */
   openSettings?: () => void;
+  /** the menu goes for the lobby, the doors closing over it (DoorWipe.tsx); false by default */
+  leaving?: boolean;
 }
 
 const REFRESH_MS = 2500;
@@ -458,7 +460,13 @@ export function JoinScreen(props: Props) {
         <p className="menu-sub">{MENU_SUBTITLE}</p>
       </header>
       <ProfileChip name={name} onName={setName} account={account} />
-      <MenuHero name={name} color={profileColor(account)} />
+      <MenuHero
+        name={name}
+        color={profileColor(account)}
+        panel={panel !== null}
+        card={seat !== null}
+        leaving={props.leaving === true}
+      />
       <div className="menu-body" inert={panel !== null}>
         <MainMenu
           items={menuItems(props.openEditor !== undefined)}

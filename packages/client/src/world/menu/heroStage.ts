@@ -1,20 +1,28 @@
 import { addProbes } from '../../probes.js';
 import { TAU } from '../brush.js';
-import { figurePhase, type FigurePose } from '../figure.js';
+import { figurePhase, shownFacing, TURN_MS, type FigurePose, type Turn } from '../figure.js';
 import { traceRequested } from '../frameTrace.js';
 import { MAX_DENSITY } from '../render/backing.js';
 import {
+  AWAY_FACING,
   entranceAt,
   FIGURE_TALL,
+  headAt,
   heroPlace,
   heroPose,
+  heroTile,
   HERO_FACING,
+  lookToward,
   STANDING_STILL,
+  STEP_TILES,
   stepped,
+  steppingAt,
   type Entrance,
+  type HeroMotion,
   type HeroPlace,
   type StageBox,
   type StageFacts,
+  type Step,
 } from './hero.js';
 import { freeHero, heroCanvas, paintHero, type HeroCanvas } from './heroArt.js';
 import {
@@ -56,6 +64,16 @@ export interface HeroProbe {
   /** what of the menu the player attends to: an item by its id, `card`; null for nothing */
   attends: string | null;
   /**
+   * where its head is turned: at what of the menu, by its id — an item, `card` — and how far
+   * from its facing, radians; null at nothing, looking round
+   */
+  look: { at: string; turned: number } | null;
+  /** how far it has stepped aside for a panel open over the menu, 0 to 1 */
+  step: number;
+  /** the menu goes for the lobby: it turns away toward the lab; where it faces, radians */
+  leaving: boolean;
+  facing: number;
+  /**
    * its lamp's beam: its lens in the window and how far its light reaches, CSS px; where it
    * points, holding a beat or sweeping; how far it is on
    */
@@ -84,6 +102,12 @@ export interface HeroLook {
   speaking: boolean;
   /** when the name last settled anew, ms by the page's clock; null for never */
   waveAt: number | null;
+  /** a panel lies open over the menu: the hero steps aside for it */
+  panel: boolean;
+  /** a run's card stands first in the menu: the hero looks at it while nothing else holds it */
+  card: boolean;
+  /** the menu goes for the lobby, the doors closing over it: the hero turns away to the lab */
+  leaving: boolean;
 }
 
 /** The stage `stage` and what stands on it, CSS px; null while it has no box or no menu. */
@@ -126,6 +150,8 @@ export interface Standing {
   menuRight: number;
   /** how wide the stage is, CSS px: the hero walks in from its right edge */
   stageW: number;
+  /** a scene tile, CSS px: the hero steps aside half of one */
+  tile: number;
 }
 
 /**
@@ -148,6 +174,7 @@ function watchStage(
     standing.at = { x: box.left, y: box.top };
     standing.menuRight = facts?.menuRight ?? 0;
     standing.stageW = facts?.w ?? 0;
+    standing.tile = facts === null ? 0 : heroTile(facts.windowH);
     placeCanvas(canvas, standing.place === null ? null : standing.place.box);
     changed();
   };
@@ -243,6 +270,8 @@ export interface HeroPainting {
   probe: HeroProbe;
   /** its entrance on the first menu of a page (`walksIn`), as far as it has come */
   entrance: EntranceRun;
+  /** how it reacts to the menu: its step aside, its head's turn, its turn away */
+  react: Reactions;
   /** its own offset into its loops (figure.ts figurePhase of the pass's id) */
   phase: number;
   /** whether the player asks for less motion now */
@@ -342,10 +371,142 @@ function entranceClock(run: EntranceRun, now: number): number {
   return run.last;
 }
 
-/** The box the hero's canvas covers: its place's, on to the stage's right edge as it walks in. */
-function canvasBox(place: HeroPlace, entrance: Entrance, stageW: number): StageBox {
+/** How a hero reacts to the menu as it goes: its step aside, its head's turn, its turn away. */
+export interface Reactions {
+  /** its step aside for a panel, or back */
+  step: Step;
+  /** how far aside it stood at the last frame, figure units */
+  stepped: number;
+  /** its head turning to what the player attends to, or back; null before it ever turned */
+  look: Turn | null;
+  /** its turn away to the lab as the menu goes; null while it stays */
+  away: Turn | null;
+}
+
+/** A hero that has not reacted to anything yet. */
+export function stillReactions(): Reactions {
+  return { step: { from: 0, to: 0, since: 0 }, stepped: 0, look: null, away: null };
+}
+
+/** How far aside the hero steps for a panel, figure units: STEP_TILES of the scene's tile. */
+function stepOf(place: HeroPlace, standing: Standing): number {
+  return (STEP_TILES * standing.tile) / place.scale;
+}
+
+/**
+ * The box the hero's canvas covers: its place's and the room to step aside into, on to the
+ * stage's right edge as it walks in.
+ */
+function canvasBox(place: HeroPlace, entrance: Entrance, standing: Standing): StageBox {
   const { box } = place;
-  return entrance.motion.moving ? { ...box, width: Math.max(box.width, stageW - box.left) } : box;
+  const room = Math.ceil(stepOf(place, standing) * place.scale);
+  const width = entrance.motion.moving ? standing.stageW - box.left : box.width + room;
+  return { ...box, width: Math.max(box.width, width) };
+}
+
+/**
+ * The hero's step aside at `now`: half a scene tile toward the stage's edge while a panel lies
+ * open over the menu (`panel`), back as it goes — a new step from wherever the last has come to.
+ */
+function stepNow(on: HeroPainting, place: HeroPlace, now: number) {
+  const { react } = on;
+  const reduced = on.reduced();
+  const to = on.look.current.panel ? stepOf(place, on.standing) : 0;
+  if (react.step.to !== to) {
+    const from = steppingAt(react.step, now, reduced).offset;
+    react.step = { from, to, since: now };
+  }
+  const stepping = steppingAt(react.step, now, reduced);
+  react.stepped = stepping.offset;
+  return stepping;
+}
+
+/**
+ * Where the hero faces at `now`, its entrance at `entrance`: along its way as it walks in; away
+ * toward the lab, in the art's steps, as the menu goes for the lobby; to the menu else.
+ */
+function facingNow(on: HeroPainting, entrance: Entrance, now: number): number {
+  const { react } = on;
+  if (!on.look.current.leaving || on.reduced()) {
+    react.away = null;
+    return entrance.motion.facing;
+  }
+  react.away ??= { from: HERO_FACING, to: AWAY_FACING, since: now };
+  return shownFacing(react.away, now);
+}
+
+/**
+ * What of the menu the hero's head turns to: what the player attends to — the item hovered or
+ * in the focus — else a run's card standing first in the menu; null for nothing.
+ */
+function lookTarget(on: HeroPainting): Attended | null {
+  if (on.attends.current !== null) {
+    return on.attends.current;
+  }
+  const card = on.look.current.card ? on.canvas?.parentElement?.querySelector('.bound') : null;
+  return card === null || card === undefined ? null : attendedOf(card);
+}
+
+/**
+ * Where the hero's head looks at `now`, standing `offset` figure units right of its place facing
+ * `facing`: turned a little toward what it looks at (lookToward) in the art's steps over TURN_MS
+ * — the turn of the walk cycle — and back the same way as nothing holds it; null once it is
+ * back, its glances its own again. Never as it walks or leaves, nor under reduced motion.
+ */
+function lookNow(
+  on: HeroPainting,
+  [place, offset, facing]: readonly [HeroPlace, number, number],
+  now: number,
+): number | null {
+  const { react } = on;
+  const target = eyeHeldBy(on);
+  if (on.reduced() || (target === null && react.look === null)) {
+    react.look = null;
+    return null;
+  }
+  const head = headAt(place, offset);
+  const from = { x: head.x + on.standing.at.x, y: head.y + on.standing.at.y };
+  const to = target === null ? facing : lookToward(angleTo(from, target), facing);
+  const turn = turnedTo(react.look, [to, facing], now);
+  const back = target === null && now - turn.since >= TURN_MS;
+  react.look = back ? null : turn;
+  return back ? null : shownFacing(turn, now);
+}
+
+/** What holds the hero's eye now (lookTarget): nothing as the menu goes, or under less motion. */
+function eyeHeldBy(on: HeroPainting): Attended | null {
+  return on.look.current.leaving || on.reduced() ? null : lookTarget(on);
+}
+
+/**
+ * The head's turn at `now` toward `to`: `turn` as it goes where it already turns there, else a
+ * new one from where the head shows now — the facing `facing` where it turned nowhere yet.
+ */
+function turnedTo(turn: Turn | null, [to, facing]: readonly [number, number], now: number): Turn {
+  if (turn !== null && Math.abs(turn.to - to) <= 1e-3) {
+    return turn;
+  }
+  const shown = turn === null ? facing : shownFacing(turn, now);
+  return { from: shown, to, since: now };
+}
+
+/**
+ * How the hero moves at `now`: walking in (`entrance`), stepping aside for a panel, turning away
+ * as the menu goes, its head turned to what the player attends to.
+ */
+function motionNow(
+  on: HeroPainting,
+  place: HeroPlace,
+  entrance: Entrance,
+  now: number,
+): HeroMotion {
+  const walking = entrance.motion;
+  const step = stepNow(on, place, now);
+  const facing = facingNow(on, entrance, now);
+  const offset = walking.offset + step.offset;
+  const moving = walking.moving || step.moving;
+  const look = moving ? null : lookNow(on, [place, offset, facing], now);
+  return { offset, moving, walk: walking.moving ? walking.walk : step.walk, facing, look };
 }
 
 /** The lamp `on` the hero holds at `now`: where it points and how it is turned in the hands. */
@@ -360,17 +521,20 @@ interface LampFrame {
 }
 
 /**
- * Where the lamp of `on`'s hero points at `now`, standing `place` with its body `bob` figure
- * units up: along its sweep, holding a beat where it comes to the item attended — or still under
- * reduced motion — turned in the hands to the nearest of its steps.
+ * Where the lamp of `on`'s hero points at `now`, placed `placed` and standing `offset` figure
+ * units right of it with its body `bob` up: along its sweep, holding a beat where it comes to the
+ * item attended — or still under reduced motion — turned in the hands to the nearest of its
+ * steps; on as far as `lit`.
  */
 function lampAt(
   on: HeroPainting,
-  [place, bob, lit]: readonly [HeroPlace, number, number],
+  [placed, bob, lit, offset]: readonly [HeroPlace, number, number, number],
   now: number,
 ): LampFrame {
   const { at } = on.standing;
   const reduced = on.reduced();
+  const shift = offset * placed.scale;
+  const place = { ...placed, feet: { x: placed.feet.x + shift, y: placed.feet.y } };
   const grip = lensAt(place, tiltOf(STILL_ANGLE), bob);
   const from = { x: grip.x + at.x, y: grip.y + at.y };
   const attended = on.attends.current;
@@ -382,19 +546,48 @@ function lampAt(
   return { angle, tilt, lens: { x: lens.x + at.x, y: lens.y + at.y }, holding, on: lit };
 }
 
-/** Notes on the probe how the hero stands (`pose`) and where its lamp points (`lamp`). */
-function probePose(on: HeroPainting, pose: FigurePose, lamp: LampFrame, reach: number): void {
+/**
+ * Notes on the probe how the hero stands (`pose`) and moves (`motion`), where its lamp points
+ * (`lamp`) and what it looks at.
+ */
+function probePose(
+  on: HeroPainting,
+  [pose, motion]: readonly [FigurePose, HeroMotion],
+  lamp: LampFrame,
+  reach: number,
+): void {
   const run = on.entrance;
   Object.assign(on.probe, {
-    glance: pose.look - HERO_FACING,
+    glance: pose.look - motion.facing,
     bob: pose.bob,
     waving: pose.arms !== null && pose.arms.front > 1.4,
     speaking: pose.shimmer !== null,
     attends: on.attends.current?.id ?? null,
+    leaving: on.look.current.leaving,
+    facing: motion.facing,
     beam: { lens: lamp.lens, reach, angle: lamp.angle, holding: lamp.holding, on: lamp.on },
     entrance: { walks: run.walks, ms: run.since === null ? null : run.last, done: run.done },
     drawn: { ...on.hero.drawn },
   });
+  probeReactions(on, [pose, motion]);
+  probeBox(on.probe, on.standing, motion.offset);
+}
+
+/** Notes on the probe what the hero's head is turned to, and how far it has stepped aside. */
+function probeReactions(on: HeroPainting, [pose, motion]: readonly [FigurePose, HeroMotion]): void {
+  const { place } = on.standing;
+  const target = motion.look === null ? null : lookTarget(on);
+  const toStep = place === null ? 0 : stepOf(place, on.standing);
+  on.probe.look = target === null ? null : { at: target.id, turned: pose.look - motion.facing };
+  on.probe.step = toStep > 0 ? on.react.stepped / toStep : 0;
+}
+
+/** Notes on the probe the hero's box as it stands now, `offset` figure units right of its place. */
+function probeBox(probe: HeroProbe, { place, at }: Standing, offset: number): void {
+  if (place !== null) {
+    const { box, scale } = place;
+    probe.box = { ...box, left: box.left + offset * scale + at.x, top: box.top + at.y };
+  }
 }
 
 /**
@@ -415,16 +608,16 @@ export function heroPainter(on: HeroPainting, since: number): (now: number) => b
     const look = on.look.current;
     const reduced = on.reduced();
     const entrance = entranceNow(on, place, now);
+    const motion = motionNow(on, place, entrance, now);
     const cues = { phase: on.phase, speaking: look.speaking, waveAt: look.waveAt, reduced };
-    const pose = heroPose(cues, [now, since], entrance.motion);
-    const lamp = lampAt(on, [place, pose.bob, entrance.lamp], now);
-    const box = canvasBox(place, entrance, on.standing.stageW);
+    const pose = heroPose(cues, [now, since], motion);
+    const lamp = lampAt(on, [place, pose.bob, entrance.lamp, motion.offset], now);
+    const box = canvasBox(place, entrance, on.standing);
     if (on.canvas !== null && box !== boxed) {
       placeCanvas(on.canvas, box);
       boxed = box;
     }
     const dpr = Math.min(MAX_DENSITY, window.devicePixelRatio || 1);
-    const { motion } = entrance;
     const frame = { place, box, pose, motion, color: look.color, dpr, lamp: lamp };
     if (paintHero(on.hero, frame)) {
       on.probe.laid += 1;
@@ -432,7 +625,7 @@ export function heroPainter(on: HeroPainting, since: number): (now: number) => b
     const lensX = lamp.lens.x - on.standing.at.x;
     const reach = reachOf(FIGURE_TALL * place.scale, lensX, on.standing.menuRight);
     holdLamp({ ...lamp.lens, angle: lamp.angle, reach, on: lamp.on });
-    probePose(on, pose, lamp, reach);
+    probePose(on, [pose, motion], lamp, reach);
     return !reduced || !entrance.done;
   };
 }
@@ -450,6 +643,10 @@ function emptyProbe(): HeroProbe {
     waving: false,
     speaking: false,
     attends: null,
+    look: null,
+    step: 0,
+    leaving: false,
+    facing: HERO_FACING,
     beam: null,
     entrance: { walks: false, ms: null, done: true },
     laid: 0,
@@ -518,11 +715,13 @@ export function startHero(
     return null;
   }
   const probe = emptyProbe();
-  const standing: Standing = { place: null, at: { x: 0, y: 0 }, menuRight: 0, stageW: 0 };
+  const standing: Standing = { place: null, at: { x: 0, y: 0 }, menuRight: 0, stageW: 0, tile: 0 };
   const attends: { current: Attended | null } = { current: null };
   const phase = figurePhase(pass);
   const entrance = entranceRun(walksIn, walkthroughHold);
-  const on = { hero, standing, look, attends, sweep: newSweep(), probe, phase, entrance, canvas };
+  const react = stillReactions();
+  const sweep = newSweep();
+  const on = { hero, standing, look, attends, sweep, probe, phase, entrance, react, canvas };
   const loop = runScene(heroPainter({ ...on, reduced: motion.reduced }, performance.now()), host);
   const unprobe = probed(probe);
   const unwatch = [
