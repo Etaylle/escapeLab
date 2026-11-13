@@ -269,7 +269,7 @@ function comeBack(
   const room = lab.manager.roomFor(msg.code, msg.pass, msg.blob);
   return room === null
     ? hold(lab, socket, session, msg.code, again)
-    : seated(lab, socket, session, room, room.resume(msg.pass));
+    : seated(socket, session, room, room.resume(msg.pass));
 }
 
 /**
@@ -348,7 +348,7 @@ function sitDown(
     }
     const playerId = seatFor(room, msg);
     lab.manager.leaveOthers(msg.pass, room);
-    return seated(lab, socket, session, room, playerId);
+    return seated(socket, session, room, playerId);
   }
   lab.manager.checkWay(msg.pass, null);
   // A new room plays on the difficulty its host's device asked for — normal unless that
@@ -356,7 +356,7 @@ function sitDown(
   const room = createRoom(lab, msg);
   const { playerId } = room.join(msg.name, msg.pass);
   lab.manager.leaveOthers(msg.pass, room);
-  return seated(lab, socket, session, room, playerId);
+  return seated(socket, session, room, playerId);
 }
 
 /**
@@ -398,7 +398,6 @@ function giveUp(
  * takes the room's views from now on. Whatever room it sat in before lets go of it first.
  */
 function seated(
-  lab: Lab,
   socket: PlayerSocket,
   before: Session | null,
   room: Room,

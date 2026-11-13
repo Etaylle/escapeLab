@@ -246,6 +246,20 @@ describe('the crew’s snapshots as the run goes on', () => {
     room.dispose();
   });
 
+  it('go out no more once the server goes down, for a deed on a line left open either', () => {
+    const { room, anna, ben } = crewRoom();
+    vi.advanceTimersByTime(SNAPSHOT_EVERY_MS);
+    room.goDown(Date.now());
+    expect(anna.heard.at(-1)?.kind).toBe('restart');
+    const after = anna.heard.length;
+    // Ben's yes comes in on a line the server has not closed yet: it holds something new, and
+    // still no snapshot that is not the last replaces the last one the crew holds.
+    room.setReady(ben.playerId, true);
+    vi.advanceTimersByTime(SNAPSHOT_EVERY_MS * 3);
+    expect(snapshotsOf(anna.heard.slice(after))).toEqual([]);
+    room.dispose();
+  });
+
   it('go out where a room whose clock stands holds something new, not for a yes taken back', () => {
     const { room, anna, ben } = crewRoom();
     vi.advanceTimersByTime(SNAPSHOT_EVERY_MS);
