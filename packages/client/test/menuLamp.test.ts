@@ -1,14 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FIGURE_TALL, heroPlace, type StageFacts } from '../src/world/menu/hero.js';
-import { heroCanvas } from '../src/world/menu/heroArt.js';
-import {
-  attendedOf,
-  entranceRun,
-  heroPainter,
-  type HeroPainting,
-  type HeroProbe,
-} from '../src/world/menu/heroStage.js';
+import { attendedOf, heroPainter, type HeroPainting } from '../src/world/menu/heroStage.js';
 import {
   BEAT_MS,
   BEAM_STEP,
@@ -37,6 +30,7 @@ import {
 } from '../src/world/menu/lampArt.js';
 import { OWN_BEAM_STOPS } from '../src/world/light.js';
 import { callEntries, fakeCanvas, FakeGradient, FakePath2D, type Entry } from './fakeCanvas.js';
+import { painting } from './heroPage.js';
 
 /**
  * The hand lamp the hero holds and its beam over the menu's lab (world/menu/lamp.ts,
@@ -299,23 +293,8 @@ describe('layBeam — the beam on the scene’s canvas', () => {
   });
 });
 
-/** What the hero's painter needs on a fake page, at 1440 × 820, attending to `attends`. */
-function painting(reduced: boolean): HeroPainting {
-  const hero = heroCanvas(fakeCanvas(0, 0, 'hero').canvas, (w, h) => fakeCanvas(w, h).canvas);
-  if (hero === null) throw new Error('no hero');
-  return {
-    hero,
-    standing: { place: PLACE, at: { x: 0, y: 60 }, menuRight: DESKTOP.menuRight, stageW: 1440 },
-    look: { current: { color: '#2dd4bf', speaking: false, waveAt: null } },
-    attends: { current: null },
-    sweep: newSweep(),
-    probe: { laid: 0, drawn: { legs: 0, upper: 0 } } as HeroProbe,
-    entrance: entranceRun(false, () => null),
-    phase: 0.3,
-    reduced: () => reduced,
-    canvas: null,
-  };
-}
+/** What the hero's painter needs on a fake page, at 1440 × 820. */
+const paintingOf = (reduced: boolean): HeroPainting => painting({ reduced });
 
 /** The lamp the hero holds out now, there by the test's word. */
 function lampHeld(): HeroLamp {
@@ -335,7 +314,7 @@ describe('the hero’s painter and its lamp', () => {
   });
 
   it('holds its lamp out to the scene, its beam stopping short of the menu’s column', () => {
-    const on = painting(false);
+    const on = paintingOf(false);
     heroPainter(on, 0)(100);
     const lamp = lampHeld();
     expect(lamp.on).toBe(1);
@@ -344,7 +323,7 @@ describe('the hero’s painter and its lamp', () => {
   });
 
   it('holds the beam a beat on the item hovered, pointing at its middle', () => {
-    const on = painting(false);
+    const on = paintingOf(false);
     const paint = heroPainter(on, 0);
     paint(0);
     const lens = heroLamp();
@@ -366,7 +345,7 @@ describe('the hero’s painter and its lamp', () => {
   });
 
   it('stands its beam still under reduced motion, whatever is hovered', () => {
-    const on = painting(true);
+    const on = paintingOf(true);
     on.attends.current = { id: 'join', x: 300, y: 400 };
     const paint = heroPainter(on, 0);
     for (const now of [0, 3000, 7000, 15_000]) {
@@ -377,7 +356,7 @@ describe('the hero’s painter and its lamp', () => {
   });
 
   it('lets its lamp go where the stage leaves it no room', () => {
-    const on = painting(false);
+    const on = paintingOf(false);
     heroPainter(on, 0)(0);
     expect(heroLamp()).not.toBeNull();
     on.standing.place = null;

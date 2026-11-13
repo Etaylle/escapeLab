@@ -76,10 +76,12 @@ export const GROUPS = [
     captures: [
       'menu.png',
       'menu-hero.png',
+      'menu-hero-hover.png',
       'menu-1280.png',
       'menu-hero-entrance.png',
       'history.png',
       'menu-missions.png',
+      'menu-hero-missions.png',
       'menu-to-lobby.png',
       'lobby-title.png',
       'lobby-first.png',

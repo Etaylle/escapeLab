@@ -21,6 +21,11 @@ export type Place = 'menu' | 'lobby' | 'elsewhere';
  */
 export type Doors = 'closing' | 'shut' | 'opening' | null;
 
+/** Whether `doors` close over the screen left or stand shut over it: the screen is going. */
+export function doorsGoing(doors: Doors): boolean {
+  return doors === 'closing' || doors === 'shut';
+}
+
 /** How long the doors take to close over the screen left, and to open on the next, ms. */
 export const CLOSE_MS = 170;
 export const OPEN_MS = 210;

@@ -11,6 +11,7 @@ import {
   DOORS_FRESH_MS,
   DOORS_KEY,
   DoorWipe,
+  doorsGoing,
   doorsMark,
   noteDoors,
   OPEN_MS,
@@ -168,6 +169,13 @@ describe('the door wipe’s doors', () => {
       expect(lengthOf(`.door-wipe--opening .door-leaf--${side}`)).toBe(OPEN_MS);
     }
     expect(CLOSE_MS + OPEN_MS).toBeLessThanOrEqual(400);
+  });
+
+  it('says the screen left is going while they close over it or stand shut, not as they open', () => {
+    expect(doorsGoing('closing')).toBe(true);
+    expect(doorsGoing('shut')).toBe(true);
+    expect(doorsGoing('opening')).toBe(false);
+    expect(doorsGoing(null)).toBe(false);
   });
 
   it('lies over the bar and its banners, under the scanlines', () => {
