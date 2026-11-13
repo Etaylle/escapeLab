@@ -1,15 +1,20 @@
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { readdirSync, readFileSync } from 'node:fs';
+import { join, relative } from 'node:path';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   AUDIBLE_FLOOR_DBFS as SCRIPT_AUDIBLE,
+  CATALOG_FILE,
   DIRS,
   MANIFEST,
   MASKED_WITHIN_DB as SCRIPT_MASKED,
   noisyTakes,
+  optionsOf,
   readCatalog,
+  TAKES_DIR,
   type Manifest,
+  type TakeRecord,
+  type TakesList,
 } from '../scripts/sfx.js';
 import {
   AUDIBLE_FLOOR_DBFS,
@@ -24,7 +29,19 @@ import {
   type CatalogSound,
 } from '../src/sounds/listing.js';
 import { opensSounds, SOUNDS_PATH } from '../src/sounds/path.js';
-import { factsOf, SoundsBoard, type BoardProps } from '../src/sounds/SoundsBoard.js';
+import { factsOf, SoundsBoard, takeFactsOf, type BoardProps } from '../src/sounds/SoundsBoard.js';
+import {
+  chooseTake,
+  keepCommandFor,
+  loadTakes,
+  TAKES_BASE,
+  takeFails,
+  takeKey,
+  takesOf,
+  takeUrl,
+  UNSERVED,
+  type TakeInfo,
+} from '../src/sounds/takes.js';
 import type { SampleEntry } from '../src/world/samples.js';
 
 /**
@@ -183,15 +200,20 @@ describe('the board', () => {
       'key-click': recording(12, 480, -70, -30),
       'mains-hum': recording(1),
     }),
+    takes: {},
+    takesNote: null,
     playing: null,
     loaded: (id) => id === 'key-click',
     selected: new Set(),
+    keeping: {},
     envFile: ENV_FILE,
     command: null,
     copied: null,
     on: {
       play: () => undefined,
+      playTake: () => undefined,
       toggle: () => undefined,
+      keep: () => undefined,
       envFile: () => undefined,
       copy: () => undefined,
     },
@@ -222,5 +244,214 @@ describe('the board', () => {
     expect(html).toContain('checked=""');
     expect(html).toContain(`<pre class="sounds-cli">${command}</pre>`);
     expect(html).not.toContain('Nichts angekreuzt.');
+  });
+});
+
+/** A take as the sound script lists it: menu-theme's second, as the first render measured it. */
+const RECORD: TakeRecord = {
+  n: 2,
+  file: '2.mp3',
+  hash: '7376acdcf4c7',
+  settings: {
+    musicLengthMs: 60_000,
+    forceInstrumental: true,
+    modelId: 'music_v2_5',
+    outputFormat: 'mp3_44100_192',
+  },
+  madeAt: '2026-11-13T17:40:00.000Z',
+  ms: 60_029,
+  gain: 0.5303,
+  startMs: 0,
+  peak: 0.98,
+  rms: 0.189,
+  floor: 0.104,
+  silence: 0,
+  misses: [],
+};
+const LIST: TakesList = { id: 'menu-theme', takes: [RECORD] };
+
+/** A take of the page's own: `n`, its measurements as `over` says, else RECORD's. */
+const takeOf = (n: number, over: Partial<TakeInfo> = {}): TakeInfo => ({
+  ...RECORD,
+  n,
+  file: `${n}.mp3`,
+  ...over,
+});
+
+describe('the takes', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('are read from the lists the sound script writes, and nothing else', () => {
+    expect(takesOf({ 'menu-theme': LIST })).toEqual({ 'menu-theme': [RECORD] });
+    const odd = [
+      { ...RECORD, n: 3 }, // its file is not its number's
+      { ...RECORD, n: 4, file: '4.mp3', gain: 'laut' },
+      { ...RECORD, n: 5, file: '5.mp3', misses: 'length' },
+      null,
+    ];
+    const lists = {
+      'menu-theme': { ...LIST, takes: [RECORD, ...odd] },
+      'end-won': { id: 'end-won' },
+      'end-lost': { id: 'end-lost', takes: [] },
+      won: null,
+    };
+    expect(takesOf(lists)).toEqual({ 'menu-theme': [RECORD] });
+    expect([takesOf(null), takesOf('[]'), takesOf([RECORD])]).toEqual([{}, {}, {}]);
+  });
+
+  it('are asked of the dev server alone, its lists with a plain GET', async () => {
+    const asked: unknown[][] = [];
+    const answer = (res: object | Error) => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn((...args: unknown[]) => {
+          asked.push(args);
+          return res instanceof Error ? Promise.reject(res) : Promise.resolve(res);
+        }),
+      );
+    };
+    answer({ ok: true, status: 200, json: () => Promise.resolve({ 'menu-theme': LIST }) });
+    expect(await loadTakes()).toEqual({ kind: 'served', takes: { 'menu-theme': [RECORD] } });
+    expect(asked).toEqual([['/takes/']]);
+    // A production server serves none: 404 under /takes, never the page in their place.
+    answer({ ok: false, status: 404 });
+    expect(await loadTakes()).toEqual({ kind: 'unserved', why: UNSERVED });
+    expect(UNSERVED).toBe('Takes liefert nur der Entwicklungsserver (pnpm dev).');
+    answer({ ok: false, status: 502 });
+    const failed = 'Die Takes ließen sich nicht laden: ';
+    expect(await loadTakes()).toEqual({ kind: 'unserved', why: `${failed}HTTP 502` });
+    answer(new Error('Failed to fetch'));
+    expect(await loadTakes()).toEqual({ kind: 'unserved', why: `${failed}Failed to fetch` });
+    expect(asked.every((args) => args.length === 1 && args[0] === TAKES_BASE)).toBe(true);
+  });
+
+  it('play from the dev server, each under a key of its own', () => {
+    expect(TAKES_BASE).toBe('/takes/');
+    expect(takeUrl('menu-theme', RECORD)).toBe('/takes/menu-theme/2.mp3');
+    expect(takeKey('menu-theme', 2)).toBe('menu-theme#2');
+    expect(readCatalog().some((entry) => entry.id.includes('#'))).toBe(false);
+  });
+
+  it('are said in one line each: their measurements, and the rules they miss', () => {
+    const plain =
+      '60,0 s · Verstärkung 0,53× · Spitze −0,2 dBFS · RMS −14,5 dBFS · ' +
+      'Grundrauschen vom Klang verdeckt · Stille 0 %';
+    expect(takeFactsOf(RECORD)).toBe(plain);
+    const off = takeOf(3, {
+      ms: 74_000,
+      gain: 1,
+      startMs: 553,
+      rms: 0.2,
+      floor: 0.01,
+      silence: 0.123,
+      misses: ['length', 'floor', 'peak'],
+    });
+    expect(takeFactsOf(off)).toBe(
+      '74,0 s · Verstärkung 1,00× · Spitze −0,2 dBFS · RMS −14,0 dBFS · ' +
+        'Grundrauschen −40,0 dBFS, hörbar · Stille 12 % · Einsatz nach 0,6 s · ' +
+        'Regeln verfehlt: Länge, Grundrauschen, Spitze',
+    );
+    // Kept, a take off its length or with its floor heard fails the game's recordings.
+    expect([takeFails(off), takeFails(RECORD)]).toEqual([true, false]);
+    expect(takeFails(takeOf(4, { misses: ['peak', 'start', 'silence'] }))).toBe(false);
+    expect(takeFails(takeOf(5, { misses: ['floor'] }))).toBe(true);
+  });
+
+  it('are kept by the command the sound script reads, one take of a piece at a time', () => {
+    expect(keepCommandFor('menu-theme', 2)).toBe('node scripts/sfx.ts --keep menu-theme=2');
+    const [, , ...args] = keepCommandFor('end-lost', 3).split(' ');
+    expect(optionsOf(args).keep).toEqual({ id: 'end-lost', n: 3 });
+    expect(chooseTake({}, 'menu-theme', 2)).toEqual({ 'menu-theme': 2 });
+    expect(chooseTake({ 'menu-theme': 2 }, 'menu-theme', 3)).toEqual({ 'menu-theme': 3 });
+    expect(chooseTake({ 'menu-theme': 2, won: 1 }, 'menu-theme', 2)).toEqual({ won: 1 });
+  });
+
+  it('lie beside the build, never in it', () => {
+    const client = join(CATALOG_FILE, '../..');
+    expect(relative(client, TAKES_DIR)).toBe('takes');
+    expect(relative(join(client, 'public'), TAKES_DIR).startsWith('..')).toBe(true);
+    const ignored = readFileSync(new URL('../../../.gitignore', import.meta.url), 'utf8');
+    expect(ignored).toMatch(/^packages\/client\/takes\/$/m);
+  });
+});
+
+describe('the board’s takes', () => {
+  const CALM_TAKES = { calm: [takeOf(1), takeOf(2, { misses: ['length'] })] };
+  const props = (over: Partial<BoardProps> = {}): BoardProps => ({
+    sections: listingOf([CLICK, CALM], { 'key-click': recording(1), calm: recording(1, 72_000) }),
+    takes: CALM_TAKES,
+    takesNote: null,
+    playing: null,
+    loaded: () => true,
+    selected: new Set(),
+    keeping: {},
+    envFile: ENV_FILE,
+    command: null,
+    copied: null,
+    on: {
+      play: () => undefined,
+      playTake: () => undefined,
+      toggle: () => undefined,
+      keep: () => undefined,
+      envFile: () => undefined,
+      copy: () => undefined,
+    },
+    ...over,
+  });
+
+  it('lists each take under its piece: a play button, its measurements, a choice to keep', () => {
+    const html = renderToStaticMarkup(<SoundsBoard {...props()} />);
+    expect(html.match(/>Abspielen</g)).toHaveLength(4); // two recordings, two takes
+    expect(html.match(/>Diesen Take behalten</g)).toHaveLength(2);
+    const calm = html.slice(html.indexOf('<code class="sounds-id">calm</code>'));
+    expect(calm).toContain('<ol class="sounds-take-list" aria-label="Takes von calm">');
+    expect(calm).toContain('<span class="sounds-take-name">Take 1</span>');
+    expect(calm).toContain(`<span class="sounds-facts">${takeFactsOf(takeOf(1))}</span>`);
+    expect(html.match(/class="sounds-take sounds-take--fails"/g)).toHaveLength(1);
+    expect(html).toContain('Neue Takes der Musik stehen unter ihrem Stück');
+    // Nothing is chosen, so no command keeps anything.
+    expect(html).not.toContain('--keep');
+    const click = html.slice(0, html.indexOf('<code class="sounds-id">calm</code>'));
+    expect(click).not.toContain('sounds-takes');
+  });
+
+  it('shows the command that keeps the take chosen, and plays a take as a recording', () => {
+    const chosen = props({ keeping: { calm: 2 }, playing: takeKey('calm', 1) });
+    const html = renderToStaticMarkup(<SoundsBoard {...chosen} />);
+    expect(html).toContain('Im Ordner packages/client behält dieser Befehl Take 2');
+    expect(html).toContain('<pre class="sounds-cli">node scripts/sfx.ts --keep calm=2</pre>');
+    const keeps = [...html.matchAll(/class="sounds-keep" aria-pressed="(\w+)"/g)];
+    expect(keeps.map((match) => match[1])).toEqual(['false', 'true']);
+    const plays = [...html.matchAll(/class="sounds-play" aria-pressed="(\w+)"[^>]*>(\w+)</g)];
+    expect(plays.map((match) => [match[1], match[2]])).toEqual([
+      ['false', 'Abspielen'], // the click
+      ['false', 'Abspielen'], // the calm stem as the game plays it
+      ['true', 'Stopp'], // its take 1
+      ['false', 'Abspielen'],
+    ]);
+  });
+
+  it('says why no take is heard, where the server serves none', () => {
+    const none = props({ takes: {}, takesNote: UNSERVED });
+    const html = renderToStaticMarkup(<SoundsBoard {...none} />);
+    expect(html).toContain(`<p class="muted sounds-note">${UNSERVED}</p>`);
+    expect(html).not.toContain('sounds-takes');
+    expect(html).not.toContain('Neue Takes der Musik');
+  });
+});
+
+describe('the page and the network', () => {
+  it('asks for its lists alone and runs neither a render nor a keep', () => {
+    const dir = new URL('../src/sounds/', import.meta.url);
+    const sources = readdirSync(dir)
+      .sort()
+      .map((name) => readFileSync(new URL(name, dir), 'utf8'));
+    const fetches = sources.flatMap((code) => [...code.matchAll(/\bfetch\(([^)]*)\)/g)]);
+    const asked = fetches.map((match) => match[1]).sort();
+    expect(asked).toEqual(['TAKES_BASE', '`${base}manifest.json`']);
+    const asking = /\bmethod\s*:|\bPOST\b|sendBeacon|XMLHttpRequest|WebSocket|EventSource/;
+    expect(sources.filter((code) => asking.test(code))).toEqual([]);
   });
 });

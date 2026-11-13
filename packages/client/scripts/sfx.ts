@@ -1511,8 +1511,8 @@ export function takesLines(ids: readonly string[], places: Places): string[] {
       const files = (readTakes(places.takes, id)?.takes ?? []).map((take) => take.file);
       return `  ${id}/  ${files.join(', ')}, listed in ${id}/${TAKES_LIST}`;
     }),
-    'sfx: the ear chooses (afplay <file> plays a take); in packages/client, this keeps take <n> ' +
-      'and deletes the others:',
+    'sfx: the ear chooses: with pnpm dev, http://localhost:5173/sounds plays each take under ' +
+      'its piece; in packages/client, this keeps take <n> and deletes the others:',
     ...ids.map((id) => `  node scripts/sfx.ts --keep ${id}=<n>`),
   ];
 }

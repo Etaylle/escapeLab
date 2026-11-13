@@ -59,7 +59,9 @@ const dbfs = (level: number): number => 20 * Math.log10(level);
  * `recording`'s floor once its gain is applied, dBFS: null where it lies less than
  * MASKED_WITHIN_DB under the recording's RMS — the sound itself — as scripts/sfx.ts `floorHeard`.
  */
-export function floorDbfsOf(recording: SampleEntry): number | null {
+export function floorDbfsOf(
+  recording: Pick<SampleEntry, 'floor' | 'rms' | 'gain'>,
+): number | null {
   if (dbfs(recording.rms) - dbfs(recording.floor) < MASKED_WITHIN_DB) return null;
   return dbfs(recording.floor * recording.gain);
 }

@@ -15,6 +15,15 @@ import {
 } from '../world/samples.js';
 import { commandFor, ENV_FILE, listingOf, soundsOf, type CatalogSound } from './listing.js';
 import { SoundsBoard, type BoardActions } from './SoundsBoard.js';
+import {
+  chooseTake,
+  loadTakes,
+  takeKey,
+  takeUrl,
+  type Keeping,
+  type TakeInfo,
+  type TakesState,
+} from './takes.js';
 
 /**
  * The page at /sounds, reached by its address alone: every recording of the catalog, played as
@@ -22,8 +31,10 @@ import { SoundsBoard, type BoardActions } from './SoundsBoard.js';
  * loader (world/samples.ts), decoded as it is first played, the music streamed from its file
  * (world/audioStream.ts) — a room's bed, a loop or a stem round and round until it is stopped,
  * everything else once; its prompt beside it, and a box to tick where it should be made anew.
- * The command for what is ticked goes to the clipboard; the page itself asks no service for
- * anything.
+ * Under a piece of music stand its takes, where the dev server lists any (takes.ts), each
+ * streamed at the gain the game would give it, and the command that keeps the one chosen. The
+ * commands go to the clipboard or are shown; the page itself asks no service for anything and
+ * runs neither a render nor a keep.
  */
 
 const catalog: readonly CatalogSound[] = soundsOf(catalogJson);
@@ -89,17 +100,18 @@ function playEffect(ctx: AudioContext, id: SfxId, loop: boolean, ended: () => vo
 }
 
 /**
- * Streams the piece of music `id` as its manifest names it — a stem round and round — at
- * AUDITION_LEVEL times its gain, and calls `ended` once it has stopped.
+ * Streams the piece of music at `url` — a stem round and round — at AUDITION_LEVEL times its
+ * `gain`, and calls `ended` once it has stopped.
  */
-function playMusic(
+function playStream(
   ctx: AudioContext,
-  entry: SampleEntry,
-  loop: boolean,
+  url: string,
+  sound: { readonly gain: number; readonly loop: boolean },
   ended: () => void,
 ): Audition {
-  const stream = openStream(ctx, `${MUSIC_BASE}${entry.file}`, ctx.destination, 0);
-  stream.out.gain.value = AUDITION_LEVEL * entry.gain;
+  const { gain, loop } = sound;
+  const stream = openStream(ctx, url, ctx.destination, 0);
+  stream.out.gain.value = AUDITION_LEVEL * gain;
   stream.element.loop = loop;
   stream.element.addEventListener('ended', () => {
     closeStream(stream);
@@ -128,8 +140,27 @@ function audition(
   const entry = recordings[id];
   if (ctx === null || entry === undefined) return null;
   ctx.resume().catch(() => undefined); // the click that asked is the gesture it needs
-  if (isMusic(id)) return playMusic(ctx, entry, loop, ended);
+  if (isMusic(id)) {
+    return playStream(ctx, `${MUSIC_BASE}${entry.file}`, { gain: entry.gain, loop }, ended);
+  }
   return isEffect(id) ? playEffect(ctx, id, loop, ended) : null;
+}
+
+/**
+ * Streams take `take` of the piece `id` from the dev server — round and round where `loop`
+ * says — at the gain the game would give it, and calls `ended` once it has stopped; null where
+ * there is no Web Audio.
+ */
+function auditionTake(
+  id: string,
+  take: TakeInfo,
+  loop: boolean,
+  ended: () => void,
+): Audition | null {
+  const ctx = sharedAudio();
+  if (ctx === null) return null;
+  ctx.resume().catch(() => undefined); // the click that asked is the gesture it needs
+  return playStream(ctx, takeUrl(id, take), { gain: take.gain, loop }, ended);
 }
 
 function readEnvFile(): string {
@@ -160,33 +191,53 @@ function toClipboard(text: string): Promise<boolean> {
   );
 }
 
-/** The board at work: the recordings behind its play buttons, its ticks, its command. */
-function Auditions({ recordings }: { recordings: Readonly<Record<string, SampleEntry>> }) {
+/** Whether the catalog plays `id` round and round. */
+const loops = (id: string): boolean => catalog.find((sound) => sound.id === id)?.loop === true;
+
+/** What the board stands on: the recordings behind its play buttons, and the takes as loaded. */
+interface Loaded {
+  readonly recordings: Readonly<Record<string, SampleEntry>>;
+  readonly takes: TakesState;
+}
+
+/**
+ * The board at work: the recordings and the takes behind its play buttons, its ticks, its
+ * command, and the take chosen to be kept of each piece.
+ */
+function Auditions({ recordings, takes }: Loaded) {
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   const [envFile, setEnvFile] = useState(readEnvFile);
   const [playing, setPlaying] = useState<string | null>(null);
   const [copied, setCopied] = useState<'copied' | 'refused' | null>(null);
+  const [keeping, setKeeping] = useState<Keeping>({});
   const voice = useRef<Audition | null>(null);
   useEffect(() => () => voice.current?.stop(), []);
   const ticked = catalog.filter((sound) => selected.has(sound.id)).map((sound) => sound.id);
   const command = commandFor(ticked, envFile);
+  const listed = takes.kind === 'served' ? takes.takes : {};
   const stop = (): void => {
     const current = voice.current;
     voice.current = null;
     current?.stop();
     setPlaying(null);
   };
+  /** Plays what `begin` starts under `key`, the one playing stopped — or nothing, where it was. */
+  const start = (key: string, begin: (ended: () => void) => Audition | null): void => {
+    const was = playing;
+    stop();
+    if (was === key) return;
+    const played: Audition | null = begin(() => {
+      if (voice.current === played) stop();
+    });
+    voice.current = played;
+    setPlaying(played === null ? null : key);
+  };
   const on: BoardActions = {
-    play: (id) => {
-      const was = playing;
-      stop();
-      if (was === id) return;
-      const loop = catalog.find((sound) => sound.id === id)?.loop === true;
-      const played: Audition | null = audition(id, recordings, loop, () => {
-        if (voice.current === played) stop();
-      });
-      voice.current = played;
-      setPlaying(played === null ? null : id);
+    play: (id) => start(id, (ended) => audition(id, recordings, loops(id), ended)),
+    playTake: (id, n) => {
+      const take = listed[id]?.find((each) => each.n === n);
+      if (take === undefined) return;
+      start(takeKey(id, n), (ended) => auditionTake(id, take, loops(id), ended));
     },
     toggle: (id) =>
       setSelected((was) => {
@@ -194,6 +245,7 @@ function Auditions({ recordings }: { recordings: Readonly<Record<string, SampleE
         if (!next.delete(id)) next.add(id);
         return next;
       }),
+    keep: (id, n) => setKeeping((was) => chooseTake(was, id, n)),
     envFile: (path) => {
       setEnvFile(path);
       keepEnvFile(path);
@@ -207,9 +259,12 @@ function Auditions({ recordings }: { recordings: Readonly<Record<string, SampleE
   return (
     <SoundsBoard
       sections={listingOf(catalog, recordings)}
+      takes={listed}
+      takesNote={takes.kind === 'unserved' ? takes.why : null}
       playing={playing}
       loaded={(id) => recordings[id] !== undefined}
       selected={selected}
+      keeping={keeping}
       envFile={envFile}
       command={command}
       copied={copied}
@@ -220,15 +275,15 @@ function Auditions({ recordings }: { recordings: Readonly<Record<string, SampleE
 
 type Loading =
   | { kind: 'loading' }
-  | { kind: 'ready'; recordings: Record<string, SampleEntry> }
+  | ({ kind: 'ready' } & Loaded)
   | { kind: 'failed'; error: string };
 
-/** The page: the manifests fetched, then the board. */
+/** The page: the manifests and the takes fetched, then the board. */
 export function SoundsScreen() {
   const [loading, setLoading] = useState<Loading>({ kind: 'loading' });
   useEffect(() => {
-    loadRecordings().then(
-      (recordings) => setLoading({ kind: 'ready', recordings }),
+    Promise.all([loadRecordings(), loadTakes()]).then(
+      ([recordings, takes]) => setLoading({ kind: 'ready', recordings, takes }),
       (err: unknown) => {
         const error = `Die Klangliste ließ sich nicht laden: ${reasonOf(err)}`;
         setLoading({ kind: 'failed', error });
@@ -246,7 +301,7 @@ export function SoundsScreen() {
       </header>
       <main className="content">
         {loading.kind === 'ready' ? (
-          <Auditions recordings={loading.recordings} />
+          <Auditions recordings={loading.recordings} takes={loading.takes} />
         ) : (
           <section className="card sounds">
             <p className="muted">

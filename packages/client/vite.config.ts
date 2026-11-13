@@ -35,6 +35,9 @@ export default defineConfig({
         target: 'http://localhost:3001',
         bypass: (req) => (req.method === 'POST' ? undefined : req.url),
       },
+      // The music's takes for the /sounds page: the server's, which serves them in dev alone
+      // (ALLOW_TAKES=1); they lie beside public/, never in the build.
+      '/takes': { target: 'http://localhost:3001' },
     },
   },
 });

@@ -23,6 +23,7 @@ import { roomKey, roomKeyLogLine } from './seal.js';
 import { onSignal } from './shutdown.js';
 import { serveSockets } from './sockets.js';
 import { StaticSite } from './static.js';
+import { serveTakes, takesAllowed, TakesShelf } from './takes.js';
 import { createWebServer, lanUrls, tlsLogLine, tlsSetup } from './tls.js';
 import { recordingAllowed, serveVoiceRecording, VoiceDesk } from './voiceRecording.js';
 
@@ -51,6 +52,9 @@ const VOICE_DIR = fileURLToPath(new URL('../../client/public/voice', import.meta
 const voiceDesk = recordingAllowed(process.env)
   ? new VoiceDesk(VOICE_DIR, () => catalog.all.filter((m) => !catalog.isCustom(m.id)))
   : null;
+// The music's takes, for the client's /sounds page to play before one is kept: ALLOW_TAKES=1 only.
+const TAKES_DIR = fileURLToPath(new URL('../../client/takes', import.meta.url));
+const takes = takesAllowed(process.env) ? new TakesShelf(TAKES_DIR) : null;
 // The Bestenliste: read from the log once, then counted run by run as they are logged.
 const stats = loadRunStats(RUNS_LOG);
 // The Tagesschicht's salt: DAILY_SALT, else packages/server/data/daily-salt, made once and kept.
@@ -89,6 +93,10 @@ const httpServer = createWebServer(tls, (req, res) => {
     return;
   }
   if (serveVoiceRecording(voiceDesk, req, res)) {
+    return;
+  }
+  // Before the static site, whose fallback would answer a take's address with the page.
+  if (serveTakes(takes, req, res)) {
     return;
   }
   const url = req.url ?? '/';
@@ -141,6 +149,9 @@ httpServer.listen(PORT, () => {
   console.log(`[escapelab] this boot is instance ${instanceId}: its snapshots name it`);
   if (voiceDesk !== null) {
     console.log(`[escapelab] ALLOW_RECORD=1: POST /voice/:id saves recordings to ${VOICE_DIR}`);
+  }
+  if (takes !== null) {
+    console.log(`[escapelab] ALLOW_TAKES=1: GET /takes/ serves the music's takes in ${TAKES_DIR}`);
   }
   if (site.available) {
     for (const url of lanUrls(PORT, tls.on)) {

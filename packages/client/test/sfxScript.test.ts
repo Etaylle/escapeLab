@@ -990,8 +990,8 @@ describe('keeping a take', () => {
     await takesIn(places);
     const lines = takesLines([STING.id, CALM.id], places);
     expect(lines.slice(-3)).toEqual([
-      'sfx: the ear chooses (afplay <file> plays a take); in packages/client, ' +
-        'this keeps take <n> and deletes the others:',
+      'sfx: the ear chooses: with pnpm dev, http://localhost:5173/sounds plays each take ' +
+        'under its piece; in packages/client, this keeps take <n> and deletes the others:',
       '  node scripts/sfx.ts --keep test-sting=<n>',
       '  node scripts/sfx.ts --keep test-calm=<n>',
     ]);
