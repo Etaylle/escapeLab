@@ -24,14 +24,18 @@ export function numberOf(typed: string): string | null {
 }
 
 /** The fewest and the most characters a Kennwort has; nothing else is asked of it. */
-export const PASSWORD_MIN = 8;
-export const PASSWORD_MAX = 128;
+const PASSWORD_MIN = 8;
+const PASSWORD_MAX = 128;
 
 /** What a Kennwort too short or too long is told. */
 export const PASSWORD_SIZE = `Ein Kennwort hat ${PASSWORD_MIN} bis ${PASSWORD_MAX} Zeichen.`;
 
-/** Whether `password` has a Kennwort's length, its characters counted as typed. */
+/**
+ * Whether `password` has a Kennwort's length, its characters counted as the server reads them:
+ * NFKC-normalised (server login.ts), so that „ä" typed as a and its two dots counts once, and a
+ * ligature as the letters it stands for.
+ */
 export function passwordFits(password: string): boolean {
-  const length = [...password].length;
+  const length = [...password.normalize('NFKC')].length;
   return length >= PASSWORD_MIN && length <= PASSWORD_MAX;
 }

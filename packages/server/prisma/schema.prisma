@@ -40,11 +40,14 @@ model Account {
 }
 
 /// A way into an account: a browser's crew pass (provider `pass`, the pass's id as the subject)
-/// for now; Google sign-in (`google`) is to come. Deleting the account deletes its identities.
+/// or the account's login (provider `login`, its Ausweisnummer as the subject); Google sign-in
+/// (`google`) is to come. Deleting the account deletes its identities.
 model Identity {
   provider   String
   subject    String
-  /// sha256 of the pass's secret, hex — the secret itself is never kept
+  /// a pass: sha256 of its secret, hex, or 64 zeros once it signed out where it held a seat or
+  /// its account's Kennwort changed (store.ts `PARKED`); a login: the Kennwort's scrypt hash,
+  /// `scrypt$N$r$p$salt$key` (login.ts) — neither secret itself is ever kept
   secretHash String?  @map("secret_hash")
   accountId  String   @map("account_id") @db.Uuid
   createdAt  DateTime @default(now()) @map("created_at")

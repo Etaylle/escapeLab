@@ -68,12 +68,21 @@ describe('the Ausweisnummer', () => {
 });
 
 describe('the Kennwort', () => {
-  it('has 8 to 128 characters, counted as typed, and nothing else asked of it', () => {
+  it('has 8 to 128 characters, counted as the server reads them, nothing else asked', () => {
     expect(['1234567', 'a'.repeat(129)].map(passwordFits)).toEqual([false, false]);
     expect(['12345678', 'a'.repeat(128), '        '].map(passwordFits)).toEqual([true, true, true]);
     // A key is one character, two UTF-16 units: counted as typed, four are too few, 100 are not.
     expect(['🔑'.repeat(4), '🔑'.repeat(8), '🔑'.repeat(100), '🔑'.repeat(129)].map(passwordFits))
       .toEqual([false, true, true, false]);
+    // Counted after NFKC: „ä" typed as a and its dots is one, a ligature the letters it holds.
+    const umlauts = (n: number): string => 'a\u0308'.repeat(n);
+    expect([umlauts(4), umlauts(8), umlauts(128), umlauts(129)].map(passwordFits)).toEqual([
+      false,
+      true,
+      true,
+      false,
+    ]);
+    expect(['\ufb03'.repeat(3), '\ufb03'.repeat(43)].map(passwordFits)).toEqual([true, false]);
   });
 
   it('is kept as scrypt with a salt of its own, never as itself', async () => {
