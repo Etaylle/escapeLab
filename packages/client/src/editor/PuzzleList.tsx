@@ -5,9 +5,6 @@ import {
   MODULE_NAMES,
   STATION_TYPES,
   type Draft,
-  firstText,
-  moreTexts,
-  withFirstText,
   type DraftPuzzle,
   type StationType,
 } from './draft.js';
@@ -16,6 +13,7 @@ import {
   FormHead,
   IdField,
   inputId,
+  LineField,
   OptionalNumberField,
   SelectField,
   TextField,
@@ -156,12 +154,11 @@ function PuzzleForm({ draft, index, validation, onChange, onRemove }: FormProps)
         onChange={(next) => set({ ...puzzle, lights: [...next] })}
         issues={at('lights')}
       />
-      <TextField
+      <LineField
         label="Funkspruch, wenn gelöst"
-        value={firstText(puzzle.onSolved)}
+        value={puzzle.onSolved}
         id={inputId(`${path}.onSolved`)}
-        note={moreTexts(puzzle.onSolved)}
-        onChange={(text) => set({ ...puzzle, onSolved: withFirstText(puzzle.onSolved, text) })}
+        onChange={(onSolved) => set({ ...puzzle, onSolved })}
         issues={at('onSolved')}
       />
       <button className="link editor-remove" title="Mit seinen Stationen" onClick={onRemove}>

@@ -1,4 +1,5 @@
 import { readdirSync, readFileSync } from 'node:fs';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import {
   checkMission,
@@ -6,6 +7,7 @@ import {
   moduleFor,
   parseMission,
   type FieldSpec,
+  type Line,
 } from '@escapelab/core';
 import {
   copyOf,
@@ -28,6 +30,7 @@ import {
   type Draft,
   type StationType,
 } from '../src/editor/draft.js';
+import { LineField } from '../src/editor/fields.js';
 
 const MISSIONS = new URL('../../../missions/', import.meta.url);
 const shipped = readdirSync(MISSIONS)
@@ -499,6 +502,22 @@ describe('a line of several texts in the editor', () => {
     expect(moreTexts(line)).toBe('Dazu 2 weitere Fassungen in der Datei; ein Lauf sagt eine.');
     expect(moreTexts(['a.', 'b.'])).toBe('Dazu eine weitere Fassung in der Datei; ein Lauf sagt eine.');
     expect(moreTexts('Los.')).toBeUndefined();
+  });
+
+  it('edits it in one field: the first text in it, the others named under it and kept', () => {
+    const edited: Line[] = [];
+    const onChange = (line: Line): void => {
+      edited.push(line);
+    };
+    const field = LineField({ label: 'Zum Start', value: ['Los.', 'Weiter.'], onChange });
+    const html = renderToStaticMarkup(field);
+    expect(html).toContain('value="Los."');
+    expect(html).toContain('Dazu eine weitere Fassung in der Datei; ein Lauf sagt eine.');
+    (field.props as { onChange: (text: string) => void }).onChange('Neu.');
+    expect(edited).toEqual([['Neu.', 'Weiter.']]);
+    // A line of one text says nothing more under it.
+    const single = LineField({ label: 'Zum Start', value: 'Los.', onChange });
+    expect(renderToStaticMarkup(single)).not.toContain('editor-note');
   });
 
   it('writes a station’s lines and the radio’s back with every text they gave', () => {
