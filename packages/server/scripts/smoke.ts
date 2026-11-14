@@ -75,6 +75,7 @@ import {
   STEP_MARGIN,
   TOKENS,
   UPDATES_PER_SECOND,
+  variantsOf,
   WALK_SPEED,
   walkable as floorFree,
   type ConsoleId,
@@ -2062,8 +2063,10 @@ assert(outAt >= skippedAt && outIn < intro.lightsSec * 1000,
     `skipped the opening, before its ${intro.lightsSec} s were up`);
 assert(dark.deadlineAt === outAt + mission.timeLimitSec * 1000,
   'the clock started when the lights went out, with the whole limit');
-assert(dark.events.map((e) => e.label).join(' | ') === `${POWER_OUT} | ${mission.radio.start}`,
-  'the run report has the blackout, then mission control\'s opener');
+const [blackoutLine, opener] = dark.events;
+assert(dark.events.length === 2 && blackoutLine?.label === POWER_OUT &&
+  variantsOf(mission.radio.start ?? []).includes(opener?.label ?? '') && opener?.moment === 'start',
+  'the run report has the blackout, then one of mission control\'s openers, as the start');
 const darkLever = dark.map?.stations.find((s) => s.puzzleId === leverDef.id);
 assert(darkLever?.known === true && darkLever.status === 'armed',
   'the lever is armed once the lights are out');

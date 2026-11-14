@@ -322,16 +322,20 @@ auf einem M4 mit 16 GB (14.11.2026, Last 9 bis 17) 772 s:
 zur Siegerkarte mit, und `SHOTS_ONLY=run` allein dauerte 262 s (den Systemcheck 85 s).
 
 **Ton und Funkstimme:** Jeder Raum klingt nach seiner Art, die Schritte des Partners kommen von
-dort, wo er steht, und die Musik zieht mit dem Druck an — alles zur Laufzeit erzeugt
-([`docs/sound.md`](docs/sound.md)). Nur die Funksprüche der Leitstelle sind Aufnahmen
-(`packages/client/public/voice/`), gesprochen von einer neuronalen Stimme, die offline läuft
-(Piper, Stimme „Thorsten"). Wer einen Funktext in `missions/*.json` ändert oder neu schreibt,
-nimmt ihn auf einem Mac mit `uv` neu auf — der Test, der jede Zeile prüft, nennt den Befehl;
-das Stimmmodell lädt der erste Lauf einmal nach `~/.cache/escapelab-piper/`:
+dort, wo er steht, und die Musik zieht mit dem Druck an ([`docs/sound.md`](docs/sound.md)). Zwei
+Stimmen sprechen: die Leitstelle am Funk — zum Start, nach jeder Lösung, wenn es still wird, beim
+ersten Alarm, bei fünf, zwei und einer Minute Restzeit, im Notfall, mit einem Schlusswort auf der
+Endkarte und mit einer Funkprobe in der Lobby — und die Anlage über ihre Lautsprecher. Eine Zeile
+darf zwei oder drei Fassungen haben, ein Lauf sagt eine. Die Aufnahmen liegen in
+`packages/client/public/voice/` (ElevenLabs: die Leitstelle „Helmut"). Die eigene Stimme der Anlage
+entsteht per Voice Design und wartet wie die neuen Zeilen noch auf den Render, bis dahin spricht
+Helmut die Durchsage im Intro (Befehle in `docs/sound.md`). Wer einen Funktext in
+`missions/*.json` ändert oder neu schreibt, nimmt ihn neu auf — der Test, der jede Zeile prüft,
+nennt den Befehl:
 
 ```sh
-pnpm --filter @escapelab/client voice            # nur fehlende Zeilen (Piper über uv, afconvert)
-pnpm --filter @escapelab/client voice --fresh    # alle neu, etwa für eine andere Stimme
+VOICE_ENGINE=elevenlabs pnpm --filter @escapelab/client voice   # nur fehlende Zeilen, ElevenLabs
+pnpm --filter @escapelab/client voice            # nur fehlende Zeilen, offline (Piper über uv)
 VOICE_ENGINE=say pnpm --filter @escapelab/client voice --fresh   # ohne Netz: die Mac-Stimme Anna
 ```
 

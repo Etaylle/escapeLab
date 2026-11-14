@@ -17,6 +17,7 @@ import { fullscreenForRun } from '../runScreen.js';
 import { recordParts } from '../runStats.js';
 import { useVoice } from '../voice/useVoice.js';
 import { crewSpeaks, uiSound } from '../world/menuSound.js';
+import { lobbyRadio } from '../world/radioCheck.js';
 import { preloadSamples } from '../world/samples.js';
 import { crewSizeText } from './Crew.js';
 import { CrewRoom } from './CrewRoom.js';
@@ -58,6 +59,16 @@ export function startBlocker(view: Pick<PlayerView, 'crewSize' | 'players'>): st
   }
   const waiting = crew.filter((p) => !p.isHost && !p.ready);
   return waiting.length === 0 ? null : `Warten auf ${waiting.map((p) => p.name).join(', ')} …`;
+}
+
+/**
+ * The operator's Funkprobe (the view's `radioCheck`) once every seat is ready and the host can
+ * start; undefined before, and where the mission has none.
+ */
+export function radioCheckDue(
+  view: Pick<PlayerView, 'crewSize' | 'players' | 'radioCheck'>,
+): string | undefined {
+  return startBlocker(view) === null ? view.radioCheck : undefined;
 }
 
 /** A story up to this many characters fits the two lines the panel shows of it. */
@@ -469,6 +480,19 @@ function useLobbySound(view: PlayerView): void {
 }
 
 /**
+ * The operator's Funkprobe over the radio (world/radioCheck.ts): once every seat is ready and
+ * the host can start, once while this lobby shows, under the crew's voices while anybody speaks;
+ * cut as the lobby goes.
+ */
+function useRadioCheck(view: PlayerView): void {
+  const talking = (useVoice()?.state.speaking.size ?? 0) > 0;
+  const text = radioCheckDue(view);
+  const [radio] = useState(lobbyRadio);
+  useEffect(() => radio.update(text, talking), [radio, text, talking]);
+  useEffect(() => () => radio.end(), [radio]);
+}
+
+/**
  * The lobby as the crew's room: everybody on stage, the colours at your feet,
  * the mission beside them with its settings, the microphone and the start.
  * The room's code stands once, in the header, where the free places point.
@@ -486,6 +510,7 @@ export function LobbyScreen({ view, send, leaveRoom, missions, stats }: Props) {
     void preloadSamples();
   }, []);
   useLobbySound(view);
+  useRadioCheck(view);
   // The host picks among the missions where everyone else sees the map.
   const picker =
     host && missions.length > 1 ? (

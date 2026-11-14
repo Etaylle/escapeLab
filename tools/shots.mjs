@@ -428,7 +428,10 @@
  * page from the blackout or the briefing's end on — has to be spoken by a
  * recording from the manifest the server hands out, saying the banner's line,
  * for 200 ms a word at least and a second at the least; the first line after
- * the Leitstelle's opening squelch, and no other line. In the
+ * the Leitstelle's opening squelch, and no other line. In the lobby, once the
+ * host can start, the host's page has to ask for the Funkprobe its view names
+ * (`window.__escapelab.radioCheck`, client world/radioCheck.ts) and put it on
+ * the air — or log that it awaits its render where the manifest has none. In the
  * escape the music's pressure has to stand at 0.8 or more, a pressure stem
  * up and the calm stem gone under the siren. Wherever the partner stands half a tile
  * or more to one side (after the blackout, at the hatch — and after the lever,
@@ -564,7 +567,7 @@
  */
 import { Buffer } from 'node:buffer';
 import { spawn } from 'node:child_process';
-import { randomBytes } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { createWriteStream, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { fileURLToPath, URL } from 'node:url';
@@ -2926,18 +2929,36 @@ const MS_PER_WORD = 200;
 /** A line's words, as the radio-line test counts them (core test/radioLines.test.ts). */
 const wordsOf = (line) => line.split(/\s+/).filter((word) => /[\p{L}\p{N}]/u.test(word)).length;
 
+/** The id of a line's recording, as the voice script names it: the first 12 hex of its SHA-1. */
+const voiceIdOf = (text) => createHash('sha1').update(text, 'utf8').digest('hex').slice(0, 12);
+
+/** The moments of the run's story on the radio; a line kept before moments were noted is one. */
+const STORY = new Set(['start', 'solved', 'escape']);
+
+/** The newest line of the run's story on `player`'s radio, as its view has it; null before one. */
+const newestStory = (player) =>
+  [...player.seen.view.events]
+    .reverse()
+    .find((e) => e.kind === 'radio' && (e.moment === undefined || STORY.has(e.moment)))?.label ??
+  null;
+
+/** Whether the radio `voice` speaks the recording of `line` now; never where there is no line. */
+const speaks = (voice, line) =>
+  voice?.playing === true && line !== null && voice.lastId === voiceIdOf(line);
+
 /**
- * Listens to `player`'s radio for up to `ms` from now: the first line that
- * speaks, by its recording's id, from when to when it was heard speaking
- * (polled every 100 ms), and whether the Leitstelle opened the channel for
- * it. Null where none spoke.
+ * Listens to `player`'s radio for up to `ms` from now for the line `expected` names as it is
+ * polled — the newest line of the run's story unless told another — by its recording's id: from
+ * when to when it was heard speaking (polled every 100 ms), and whether the Leitstelle opened
+ * the channel for it. A call that speaks meanwhile — the clock, an alarm — is no line of it. Null
+ * where it never spoke.
  */
-async function hearRadio(player, ms) {
+async function hearRadio(player, ms, expected = () => newestStory(player)) {
   const end = Date.now() + ms;
   let heard = null;
   while (Date.now() < end) {
     const voice = (await soundOf(player.page))?.voice;
-    if (voice?.playing === true && (heard === null || voice.lastId === heard.id)) {
+    if (speaks(voice, expected()) && (heard === null || voice.lastId === heard.id)) {
       heard ??= { id: voice.lastId, from: Date.now(), to: Date.now(), opened: voice.opened };
       heard.to = Date.now();
     } else if (heard !== null) {
@@ -2948,42 +2969,70 @@ async function hearRadio(player, ms) {
   return heard;
 }
 
+/** The recorded lines of the manifest `page` is handed, by id; none where it has none. */
+const voiceLinesOf = (page) =>
+  page.evaluate(() =>
+    globalThis
+      .fetch('/voice/manifest.json')
+      .then((res) => res.json())
+      .then((kept) => kept.lines ?? {})
+      .catch(() => ({})),
+  );
+
 /**
  * The line that came over the radio (`listening`, from hearRadio): a
  * recording from the manifest the server hands out has to have spoken it —
- * what the banner says, the view's last radio line, or `expected` where given
- * — for MS_PER_WORD a word at least, a second at the least; the line that
- * opens a run after the Leitstelle's opening squelch, and no other line.
- * Fails otherwise.
+ * the newest line of the run's story as the view has it, or `expected` where
+ * given — for MS_PER_WORD a word at least, a second at the least; the line that
+ * opens a run after the Leitstelle's opening squelch, and no other line. A
+ * line the manifest has no recording of yet awaits its render: logged, it
+ * fails nothing (the voice test holds the list of those). Fails otherwise.
  */
 async function checkRadioVoice(player, listening, after, expected = null) {
   const heard = await listening;
   // A page without the recordings answers with something else: no manifest, and the check fails.
-  const manifest = await player.page.evaluate(() =>
-    globalThis
-      .fetch('/voice/manifest.json')
-      .then((res) => res.json())
-      .catch(() => ({})),
-  );
-  const events = player.seen.view.events;
-  const line =
-    expected ?? [...events].reverse().find((event) => event.kind === 'radio')?.label ?? null;
+  const manifest = await voiceLinesOf(player.page);
+  const line = expected ?? newestStory(player);
+  if (awaitsRender(heard, line, manifest)) {
+    console.log(`radio voice        ${player.name} after ${after}: „${line}" awaits its render`);
+    return;
+  }
   const entry = heard === null ? undefined : manifest[heard.id];
   const spoke = heard === null ? 0 : heard.to - heard.from;
   const words = line === null ? 0 : wordsOf(line);
   const opens = entry?.opens === true;
   const keyedRight = heard !== null && heard.opened === opens;
-  const keyed = opens ? ', opened by the Leitstelle' : '';
-  const said = heard === null
-    ? '!! no line spoke'
-    : `${heard.id} „${entry?.text ?? '!! not in the manifest'}" speaking ${seconds(spoke)} ` +
-      `of its ${seconds(entry?.ms ?? 0)}, ${words} words${keyed}` +
-      `${keyedRight ? '' : ` !! ${heard.opened ? 'opened' : 'not opened'}`}`;
+  const heardAs = { heard, entry, opens, spoke, words, keyedRight };
+  const said = heard === null ? '!! no line spoke' : heardText(heardAs);
   console.log(`radio voice        ${player.name} after ${after}: ${said}; the banner: „${line}"`);
   const plausible = spoke >= Math.max(1000, words * MS_PER_WORD);
   if (entry === undefined || entry.text !== line || !plausible || !keyedRight) {
     fail(`radio voice after ${after}: ${heard?.id ?? 'nothing'} spoke ${spoke} ms for „${line}"`);
   }
+}
+
+/**
+ * Whether the line `line` that nobody `heard` awaits its render: the manifest the page is
+ * handed has recordings, none of them its.
+ */
+const awaitsRender = (heard, line, manifest) =>
+  heard === null &&
+  line !== null &&
+  Object.keys(manifest).length > 0 &&
+  manifest[voiceIdOf(line)] === undefined;
+
+/**
+ * What the log says of a line `heard` (checkRadioVoice): its recording `entry`, how long it
+ * spoke of its length and in how many words, the Leitstelle's opening where it `opens` a run,
+ * and „!!" where it was keyed otherwise.
+ */
+function heardText({ heard, entry, opens, spoke, words, keyedRight }) {
+  const keyed = opens ? ', opened by the Leitstelle' : '';
+  const off = keyedRight ? '' : ` !! ${heard.opened ? 'opened' : 'not opened'}`;
+  return (
+    `${heard.id} „${entry?.text ?? '!! not in the manifest'}" speaking ${seconds(spoke)} ` +
+    `of its ${seconds(entry?.ms ?? 0)}, ${words} words${keyed}${off}`
+  );
 }
 
 /** The run's first line on the radio, as `player`'s view has it; null before it came. */
@@ -3097,7 +3146,8 @@ const LINE_RENDER_S = 3;
 async function checkRadioLine(page, missionId) {
   const render = await page.evaluate(
     async ([mission, seconds]) => {
-      const manifest = await globalThis.fetch('/voice/manifest.json').then((res) => res.json());
+      const kept = await globalThis.fetch('/voice/manifest.json').then((res) => res.json());
+      const manifest = kept.lines ?? {};
       const id = Object.keys(manifest).find(
         (key) => manifest[key].opens === true && manifest[key].missions.includes(mission),
       );
@@ -4635,7 +4685,8 @@ async function captureDepth(player) {
  * and the player at the sign (`signedEarly` where the opening found one), if any.
  */
 async function firstMoments(anna, ben, { intro, signedEarly }) {
-  const opening = intro ? null : whenOn('audio', () => hearRadio(ben, 40_000));
+  const firstLine = () => startLineOf(ben);
+  const opening = intro ? null : whenOn('audio', () => hearRadio(ben, 40_000, firstLine));
   await inGroup('graphics', () => captureCarry(anna));
   await inGroup('graphics', () => captureDepth(anna));
   await inGroup('reading', () => captureNote(anna));
@@ -6358,7 +6409,7 @@ async function captureNudge(players) {
     return;
   }
   const line = nudgesOf(first.seen).at(-1).label;
-  const listening = hearRadio(first, RADIO_LISTEN_MS);
+  const listening = hearRadio(first, RADIO_LISTEN_MS, () => line);
   const banners = await Promise.all(
     players.map(({ page }) =>
       page
@@ -8062,12 +8113,70 @@ async function micsOn(players) {
   }
 }
 
+/** How long the host's page may take to put the Funkprobe on the air once it can start, ms. */
+const FUNKPROBE_MS = 3000;
+
+/** The lobby's Funkprobe off the page's probe (client world/radioCheck.ts); none asked without. */
+const radioCheckOf = (page) =>
+  page.evaluate(() => globalThis.__escapelab?.radioCheck ?? { asked: null, aired: false });
+
+/**
+ * How the Funkprobe `probe` stands against the text `expected`, `recorded` or not, as the log
+ * says it: on the air, awaiting its render, or — marked „!!" — not what it should be.
+ */
+function funkprobeState(probe, expected, recorded) {
+  if (probe.asked !== expected) {
+    return `!! asked for ${probe.asked === null ? 'none' : `„${probe.asked}"`}`;
+  }
+  if (probe.aired) {
+    return 'on the air';
+  }
+  return recorded ? '!! not on the air' : 'awaits its render';
+}
+
+/**
+ * The operator's Funkprobe, once the host can start: the host's page has to ask for the text
+ * its view names (core view.ts `radioCheck`) within FUNKPROBE_MS and put it on the air — where
+ * the manifest has no recording of it yet, it awaits its render, logged. A mission without one
+ * is left alone. Fails otherwise.
+ */
+async function checkRadioCheck(host) {
+  const expected = host.seen.view.radioCheck;
+  if (expected === undefined) {
+    return;
+  }
+  const recorded = (await voiceLinesOf(host.page))[voiceIdOf(expected)] !== undefined;
+  const now = async () => funkprobeState(await radioCheckOf(host.page), expected, recorded);
+  const end = Date.now() + FUNKPROBE_MS;
+  let state = await now();
+  while (state.startsWith('!!') && Date.now() < end) {
+    await sleep(100);
+    state = await now();
+  }
+  console.log(`radio check        ${host.name}: „${expected}" ${state}`);
+  if (state.startsWith('!!')) {
+    fail(`radio check: ${host.name}'s lobby did not put „${expected}" on the air`);
+  }
+}
+
+/**
+ * The host's start pressed, once it reads „Mission starten" — only once nothing blocks it — its
+ * Funkprobe checked before the first press (`checkRadioCheck`).
+ */
+async function pressStart(host, attempt) {
+  const start = host.page.locator('button.lobby-start:enabled', { hasText: 'Mission starten' });
+  await start.waitFor({ state: 'visible', timeout: 10_000 });
+  if (attempt === 1) await inGroup('audio', () => checkRadioCheck(host));
+  await start.click();
+}
+
 /**
  * The guest says it is ready, and the host starts once its own page has the
- * guest ready and its start button enabled; the run then has START_MS to
- * show on both pages. A start the server did not take is pressed once more,
- * logged with what the host's page said. Throws, with what both pages show,
- * when the run does not come up.
+ * guest ready and its start button enabled — its Funkprobe checked first
+ * (`checkRadioCheck`); the run then has START_MS to show on both pages. A
+ * start the server did not take is pressed once more, logged with what the
+ * host's page said. Throws, with what both pages show, when the run does not
+ * come up.
  */
 async function startRun(host, guest) {
   const from = Date.now();
@@ -8082,10 +8191,7 @@ async function startRun(host, guest) {
       console.log(`start              !! ${host.name}'s page has no ready ${guest.name} after 5 s`);
       continue;
     }
-    // The start reads „Mission starten" only once nothing blocks it.
-    const start = host.page.locator('button.lobby-start:enabled', { hasText: 'Mission starten' });
-    await start.waitFor({ state: 'visible', timeout: 10_000 });
-    await start.click();
+    await pressStart(host, attempt);
     if (!(await until(started, 5000))) {
       const banner = await textOf(host.page.locator('.banner.error'));
       console.log(
@@ -10670,7 +10776,52 @@ async function playBlackoutToTheEnd(host, guest, watcher) {
       `${running.stopS.map((s) => s.toFixed(2)).join('–')} s; ` +
       `${emergencies.weathered} emergencies cleared, ${emergencies.missed} missed`,
   );
+  await inGroup('audio', () => radioCensus(host));
   await capturePhoneCard(guest);
+}
+
+/**
+ * The lines on the air of a run won, by their moment on `player`'s view: each source once at
+ * its moment and never twice — the start once, a line for every solve but the last, the escape
+ * once, the last word once and last, no word of a run lost, the first alarm once at most, each
+ * call of the clock once at most, the plant's message and the operator's line on every
+ * emergency, and a line on every end of one — and how many of them have a recording yet.
+ * Fails on a count that is off.
+ */
+async function radioCensus(player) {
+  const { events, puzzleCount } = player.seen.view;
+  // A line on the air with its moment: a radio line, or a nudge, logged as one of its own kind.
+  const on = (moment) => events.filter((e) => e.moment === moment);
+  const count = (moment) => on(moment).length;
+  const started = events.filter((e) => e.kind === 'sabotage' && e.label !== EMERGENCY_CLEARED);
+  const cleared = events.filter((e) => e.kind === 'sabotage' && e.label === EMERGENCY_CLEARED);
+  const missed = events.filter((e) => e.kind === 'penalty' && e.label === EMERGENCY_MISSED);
+  const clocks = on('clock').map((e) => e.label);
+  const checks = [
+    ['start', count('start') === 1],
+    ['solved', count('solved') === puzzleCount - 1],
+    ['escape', count('escape') === 1],
+    ['won', count('won') === 1 && events.at(-1)?.moment === 'won'],
+    ['lost', count('lost') === 0],
+    ['alarm', count('alarm') <= 1],
+    ['clock', clocks.length <= 3 && new Set(clocks).size === clocks.length],
+    ['announce', count('announce') === started.length],
+    ['emergency', count('emergency') === started.length],
+    ['cleared', count('cleared') === cleared.length],
+    ['missed', count('missed') === missed.length],
+  ];
+  const lines = await voiceLinesOf(player.page);
+  const voiced = events.filter((e) => (e.kind === 'radio' || e.kind === 'nudge') && e.moment);
+  const recorded = voiced.filter((e) => lines[voiceIdOf(e.label)] !== undefined).length;
+  const tally = checks.map(([moment, ok]) => `${moment} ${count(moment)}${ok ? '' : ' !!'}`);
+  console.log(
+    `radio census       ${player.name}: ${tally.join(', ')}, nudge ${count('nudge')} — ` +
+      `${recorded} of ${voiced.length} lines recorded, the rest awaiting their render`,
+  );
+  const off = checks.filter(([, ok]) => !ok).map(([moment]) => moment);
+  if (off.length > 0) {
+    fail(`radio census: ${off.join(', ')} off on ${player.name}'s run`);
+  }
 }
 
 /**
@@ -11053,9 +11204,10 @@ async function captureEnd(host, watcher) {
  * theme playing, or none while it awaits its render — or the run fails.
  */
 async function checkEndMusic(page) {
-  const { asked, playing } = await endThemeOf(page);
+  const { asked, line, playing } = await endThemeOf(page);
   const theme = playing ?? 'no theme (awaiting its render?)';
-  console.log(`end music          the card asked for its ${asked} sting, then ${theme}`);
+  const word = line == null ? 'no last word' : `the last word „${line}"`;
+  console.log(`end music          the card asked for its ${asked} sting, ${word}, then ${theme}`);
   if (asked !== 'won') {
     fail(`end music: the won card asked for ${asked}`);
   }
@@ -12882,7 +13034,7 @@ async function openingStage({ code, anna, ben }) {
   if (!intro) {
     return { code, anna, ben, intro, listening: null, signedEarly: undefined };
   }
-  const listening = whenOn('audio', () => hearRadio(ben, 40_000));
+  const listening = whenOn('audio', () => hearRadio(ben, 40_000, () => startLineOf(ben)));
   const take = () => introShots(anna, ben);
   const signedEarly = await inGroup('intro', take, () => skipTheOpening(anna, ben));
   return { code, anna, ben, intro, listening, signedEarly };

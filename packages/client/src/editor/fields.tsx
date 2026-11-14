@@ -1,4 +1,6 @@
 import { useState, type ReactNode } from 'react';
+import type { Line } from '@escapelab/core';
+import { firstText, moreTexts, withFirstText } from './draft.js';
 
 /**
  * The side forms' plain inputs. Each field shows under it what the
@@ -85,6 +87,23 @@ export function TextField({
       <Note note={note} />
       <Issues issues={issues} />
     </label>
+  );
+}
+
+/**
+ * A radio line as the form edits it: its first text in the field, the other texts a mission file
+ * gives it kept as they came, and named under the field (draft.ts `moreTexts`).
+ */
+export function LineField({ label, value, onChange, issues = [], id }: FieldProps<Line>) {
+  return (
+    <TextField
+      label={label}
+      value={firstText(value)}
+      id={id}
+      note={moreTexts(value)}
+      issues={issues}
+      onChange={(text) => onChange(withFirstText(value, text))}
+    />
   );
 }
 

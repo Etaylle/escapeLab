@@ -165,7 +165,7 @@ describe('the lights going out', () => {
     expect(POWER_OUT).toBe('Stromausfall');
     expect(out.events).toEqual([
       { at: OUT_AT, kind: 'power', label: 'Stromausfall', seconds: null },
-      { at: OUT_AT, kind: 'radio', label: 'Strom weg.', seconds: null },
+      { at: OUT_AT, kind: 'radio', label: 'Strom weg.', seconds: null, moment: 'start' },
     ]);
   });
 
@@ -348,7 +348,9 @@ describe('a mission without an intro', () => {
     expect(plain.lightsOutAt).toBe(T0);
     expect(plain.lightsDueAt).toBeNull();
     expect(plain.deadlineAt).toBe(T0 + LIMIT_MS);
-    expect(plain.events).toEqual([{ at: T0, kind: 'radio', label: 'Strom weg.', seconds: null }]);
+    expect(plain.events).toEqual([
+      { at: T0, kind: 'radio', label: 'Strom weg.', seconds: null, moment: 'start' },
+    ]);
     expect(armedStations(plain.mission.map, plain)).toHaveLength(1);
     expect(viewFor(plain, 'p1').lights).toEqual({ out: true, outAt: T0 });
   });

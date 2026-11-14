@@ -236,9 +236,15 @@ describe('notes of the last shift', () => {
 });
 
 describe('mission control on the radio', () => {
-  it('opens the run with the start line', () => {
+  it('opens the run with the start line, naming its moment', () => {
     expect(playing().events).toEqual([
-      { at: T0, kind: 'radio', label: 'Leitstelle hier — wir hören mit.', seconds: null },
+      {
+        at: T0,
+        kind: 'radio',
+        label: 'Leitstelle hier — wir hören mit.',
+        seconds: null,
+        moment: 'start',
+      },
     ]);
   });
 
@@ -247,14 +253,14 @@ describe('mission control on the radio', () => {
     state = solve(open(state, T0 + 1000), T0 + 2000);
     state = solve(open(state, T0 + 3000), T0 + 4000);
     state = solve(open(state, T0 + 5000), T0 + 6000);
-    expect(state.events.map((e) => [e.kind, e.label])).toEqual([
-      ['radio', 'Leitstelle hier — wir hören mit.'],
-      ['puzzle', 'Erstes gelöst'],
-      ['radio', 'Erstes System läuft wieder.'],
-      ['puzzle', 'Zweites gelöst'],
-      ['puzzle', 'Drittes gelöst'],
-      ['escape', 'Notausgang entriegelt'],
-      ['radio', 'Der Ausgang ist offen, raus da!'],
+    expect(state.events.map((e) => [e.kind, e.label, e.moment ?? null])).toEqual([
+      ['radio', 'Leitstelle hier — wir hören mit.', 'start'],
+      ['puzzle', 'Erstes gelöst', null],
+      ['radio', 'Erstes System läuft wieder.', 'solved'],
+      ['puzzle', 'Zweites gelöst', null],
+      ['puzzle', 'Drittes gelöst', null],
+      ['escape', 'Notausgang entriegelt', null],
+      ['radio', 'Der Ausgang ist offen, raus da!', 'escape'],
     ]);
   });
 
