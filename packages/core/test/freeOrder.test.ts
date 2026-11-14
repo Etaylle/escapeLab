@@ -3,6 +3,8 @@ import {
   applyAction,
   checkMission,
   DIFFICULTIES,
+  findables,
+  intercomOf,
   missionSchema,
   nudgeDueAt,
   parseMission,
@@ -311,6 +313,25 @@ describe('free order: the run', () => {
     );
     expect(quiet.quietSince).toBeNull();
     expect(switchOn(quiet, 'zwei', T0 + 1000).quietSince).toBe(T0 + 1000);
+  });
+});
+
+describe('free order: while the crew picks', () => {
+  const fresh = started(freeLab());
+  /** The stations whose consoles there are to find in `state`, in map order. */
+  const toFind = (state: GameState): string[] =>
+    findables(state).flatMap(({ find }) => (find.of === 'console' ? [find.puzzleId] : []));
+
+  it('has every station still to solve to find, and once one is on, that one alone', () => {
+    expect(toFind(fresh)).toEqual(['eins', 'zwei', 'drei']);
+    expect(toFind(switchOn(fresh, 'zwei', T0 + 1000))).toEqual(['zwei']);
+    expect(toFind(take(fresh, 'zwei', T0 + 1000))).toEqual(['eins', 'drei']);
+  });
+
+  it('opens no station’s intercom until one is on, whoever stands at one', () => {
+    const atEins = standing(fresh, { stations: { eins: ['p1', 'p2'] } });
+    expect(intercomOf(atEins)).toEqual([]);
+    expect(intercomOf(switchOn(fresh, 'eins', T0 + 1000))).toEqual(['p1', 'p2']);
   });
 });
 

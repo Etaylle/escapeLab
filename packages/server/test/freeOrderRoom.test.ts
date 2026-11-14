@@ -102,6 +102,17 @@ describe('a free-order run in a room', () => {
     expect(lastView(ben).puzzle?.title).toBe('Eins');
     room.dispose();
   });
+
+  it('shows whoever stands still the stations it no longer arms, once the crew picks one', () => {
+    const { room, anna, ben } = running(freeLab());
+    // All three armed while the crew picks: every view has them whole.
+    expect(lastView(ben).map?.stations.map((s) => s.puzzleId)).toEqual(['eins', 'zwei', 'drei']);
+    switchOn(room, anna, ben, 3);
+    // Zwei and Drei, armed no more and found by nobody, lie in sight down the corridor.
+    const glimpsed = (lastView(ben).map?.stations ?? []).filter((s) => !s.known);
+    expect(glimpsed.map((s) => s.puzzleId)).toEqual(['zwei', 'drei']);
+    room.dispose();
+  });
 });
 
 describe('a run without a clock in a room', () => {
