@@ -462,6 +462,11 @@ export type ServerMessage =
   | { kind: 'takeover-allowed'; code: string }
   | { kind: 'view'; view: PlayerView; at: number }
   | { kind: 'spectator-view'; view: SpectatorView; code: string; at: number }
+  /**
+   * how many audience connections watch room `code` now: told everyone in it as one comes or
+   * goes, and a seat coming onto its line while any watch
+   */
+  | { kind: 'audience'; code: string; count: number }
   /** the answer to a `clock` ask: the page's `sent` handed back, and the server's time (`at`) */
   | { kind: 'clock'; sent: number; at: number }
   /**

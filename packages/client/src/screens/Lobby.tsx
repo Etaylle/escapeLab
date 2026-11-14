@@ -437,7 +437,9 @@ function StartArea({ view, send }: { view: PlayerView; send: Send }) {
             <Icon name="check" /> Bereit — doch nicht?
           </>
         ) : (
-          'Ich bin bereit'
+          <>
+            <Icon name="flag" /> Ich bin bereit
+          </>
         )}
       </button>
       <p className="muted lobby-go-note">
@@ -577,7 +579,7 @@ export function LobbyScreen({ view, send, leaveRoom, missions, stats }: Props) {
         <StartArea view={view} send={send} />
         <div className="lobby-foot">
           <button className="link" onClick={() => closeDoorsThen(leaveRoom)}>
-            Raum verlassen
+            <Icon name="exit" /> Raum verlassen
           </button>
         </div>
       </aside>

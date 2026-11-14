@@ -12,7 +12,7 @@ import {
   type RoomSummary,
   type SpectatorView,
 } from '@escapelab/core';
-import { RoomCode } from '../src/App.js';
+import { RoomCode, TopBar, WatchingChip } from '../src/App.js';
 import { pressingWord } from '../src/puzzles/syncPress.js';
 import { CrewDot, crewSizeText, crewTags } from '../src/screens/Crew.js';
 import { presenceNear } from '../src/world/presence.js';
@@ -299,7 +299,7 @@ describe('the lobby', () => {
 
   it('lets a guest say ready and tells them what the start still waits for', () => {
     const unready = lobby(benSees([anna, ben, carla], false));
-    expect(unready).toContain('<button class="primary lobby-start">Ich bin bereit</button>');
+    expect(unready).toContain('<button class="primary lobby-start">[flag] Ich bin bereit</button>');
     expect(unready).toContain('Erst die Mission lesen, dann bereit melden.');
     expect(unready).not.toContain('Mission starten');
     const waiting = lobby(benSees([anna, { ...ben, ready: true }, carla], true));
@@ -460,7 +460,9 @@ describe('the lobby', () => {
     const html = lobby(annaSees([anna]));
     expect(html).toContain('frei — Code oben teilen');
     expect(html).not.toMatch(/lobby-code|lobby-invite|room-code|Link kopieren/);
-    expect(html).toContain('<div class="lobby-foot"><button class="link">Raum verlassen</button>');
+    expect(html).toContain(
+      '<div class="lobby-foot"><button class="link">[exit] Raum verlassen</button>',
+    );
   });
 
   it('draws its icons, never the platform’s emoji', () => {
@@ -501,6 +503,38 @@ describe('the room code in the header', () => {
         '<span class="room-code-prefix">Raum: </span><strong>QXT4</strong>' +
         '<span class="room-code-action"> [copy] Link</span></button>',
     );
+  });
+});
+
+describe('how many watch, in the header', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  /** The top bar of room `roomCode` that `watching` watch. */
+  function bar(watching: number, roomCode: string | null = 'QXT4'): string {
+    vi.stubGlobal('window', { location: { origin: 'http://lab', pathname: '/' } });
+    const props = { seed: null, running: null, status: 'open', toEditor: null } as const;
+    return iconsAsWords(
+      renderToStaticMarkup(
+        <TopBar {...props} roomCode={roomCode} onGear={noop} watching={watching} />,
+      ),
+    );
+  }
+
+  it('stands as a chip beside the room’s code: the eye, the count, the word in its label', () => {
+    const html = bar(2);
+    expect(html).toContain(
+      '<span class="watching-chip" role="img" aria-label="2 Zuschauer" title="2 Zuschauer">' +
+        '[eye] 2</span>',
+    );
+    expect(html.indexOf('watching-chip')).toBeGreaterThan(html.indexOf('room-code'));
+  });
+
+  it('stands nowhere while nobody watches, nor off any room', () => {
+    expect(bar(0)).not.toContain('watching-chip');
+    expect(bar(3, null)).not.toContain('watching-chip');
+    expect(renderToStaticMarkup(<WatchingChip count={0} />)).toBe('');
   });
 });
 
@@ -941,7 +975,7 @@ describe('the crew strip', () => {
 });
 
 describe('a crew member’s dot', () => {
-  it('wears their colour, and the colour’s place for a pattern the settings may lay over it', () => {
+  it('wears their colour, and the colour’s place for a pattern the settings lay over it', () => {
     const dots = CREW_COLORS.map((color) => renderToStaticMarkup(<CrewDot color={color} />));
     expect(dots[0]).toBe(
       '<span class="crew-dot crew-dot--0" style="background-color:#2dd4bf" aria-hidden="true">' +

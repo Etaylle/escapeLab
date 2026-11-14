@@ -995,6 +995,9 @@ export class Room {
     if (this.positions.size > 0) {
       listener(this.positionsMessage());
     }
+    if (this.spectators.size > 0) {
+      listener(this.audienceMessage());
+    }
     return (end = 'dropped') => {
       if (this.listeners.get(playerId) === listener) {
         this.detach(playerId, end);
@@ -1015,13 +1018,29 @@ export class Room {
     if (this.positions.size > 0) {
       listener(this.positionsMessage());
     }
+    this.tellAudience();
     return {
       spectatorId,
       detach: () => {
-        this.spectators.delete(spectatorId);
+        if (this.spectators.delete(spectatorId)) {
+          this.tellAudience();
+        }
         this.signalAllowance.delete(spectatorId);
       },
     };
+  }
+
+  /** How many watch, as the room tells it (`audience`). */
+  private audienceMessage(): ServerMessage {
+    return { kind: 'audience', code: this.code, count: this.spectators.size };
+  }
+
+  /** Tells everyone in the room — the crew on its lines, the audience — how many watch now. */
+  private tellAudience(): void {
+    const message = this.audienceMessage();
+    for (const listener of this.audience) {
+      listener(message);
+    }
   }
 
   /**

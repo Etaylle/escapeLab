@@ -115,6 +115,22 @@ export function RoomCode({ code, seed = null }: { code: string; seed?: number | 
   );
 }
 
+/**
+ * How many watch the room, as a chip in the bar: the eye and the count, the word for it in its
+ * label; nothing while nobody watches.
+ */
+export function WatchingChip({ count }: { count: number }) {
+  if (count === 0) {
+    return null;
+  }
+  const said = `${count} Zuschauer`;
+  return (
+    <span className="watching-chip" role="img" aria-label={said} title={said}>
+      <Icon name="eye" /> {count}
+    </span>
+  );
+}
+
 interface TopBarProps {
   roomCode: string | null;
   /** the seed a tester pinned the room to, shown in the lobby */
@@ -130,12 +146,14 @@ interface TopBarProps {
   inRoom?: boolean;
   /** the menu is up: its sound switch shows while the menu's sound waits for a gesture */
   menu?: boolean;
+  /** how many watch the room (ws.ts `watching`): a chip beside its code */
+  watching?: number;
 }
 
 /**
- * The bar over every screen: the room's code and seed, the way back to the
- * editor for the host of a test run, the running mission, the sound — the
- * quick switch — and the gear for the room's menu or the settings, and the connection.
+ * The bar over every screen: the room's code and seed, how many watch it, the way back to the
+ * editor for the host of a test run, the running mission, the sound — the quick switch — and the
+ * gear for the room's menu or the settings, and the connection.
  */
 export function TopBar(props: TopBarProps) {
   const { roomCode, seed, running, status, toEditor, onGear } = props;
@@ -143,9 +161,10 @@ export function TopBar(props: TopBarProps) {
   return (
     <header className="topbar">
       <span className="logo">
-        <Icon name="hex" /> ESCAPELAB
+        <Icon name="hex" /> <span className="logo-word">ESCAPELAB</span>
       </span>
       {roomCode !== null && <RoomCode code={roomCode} seed={seed} />}
+      {roomCode !== null && <WatchingChip count={props.watching ?? 0} />}
       {toEditor !== null && (
         <button className="topbar-editor" aria-label="Zurück zum Editor" onClick={toEditor}>
           <span className="topbar-editor-way">Zurück zum </span>Editor
@@ -766,6 +785,7 @@ export function App({ boot }: { boot: EditorBoot }) {
         onGear={layer.gear}
         inRoom={layer.phase !== null}
         menu={menu}
+        watching={conn.watching}
       />
       <RoomMenus layer={layer} live={live} missions={missions} />
       <ErrorBanner conn={live} />

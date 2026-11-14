@@ -179,7 +179,7 @@ function SpectateFoot({
       </ul>
       <ListenToggle />
       <button className="link" onClick={leaveRoom}>
-        Zuschauen beenden
+        <Icon name="exit" /> Zuschauen beenden
       </button>
     </div>
   );

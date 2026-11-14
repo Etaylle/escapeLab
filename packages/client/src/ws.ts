@@ -106,6 +106,8 @@ export interface Connection {
   /** asks the server for the runs of the pass's account (`my-runs`); stable for the page's life */
   askMyRuns: () => void;
   roomCode: string | null;
+  /** how many audience connections watch the tab's room, as the server last said (`audience`) */
+  watching: number;
   /**
    * the banner's words: a refusal of what is answered nowhere else (`ANSWERED_IN_PLACE`), there
    * until the player does the next thing — what the page streams by itself (`pos`, `clock`)
@@ -202,6 +204,7 @@ export interface Page {
   setMyRuns: (runs: Loaded<MyRuns>) => void;
   setTakeover: (takeover: Takeover | null) => void;
   setRestoring: (restoring: Restoring | null) => void;
+  setWatching: (count: number) => void;
   setError: (message: string) => void;
   refuse: (message: string, of: ClientMessage['kind'] | null) => void;
   /** a comeback is out (tab.ts): an error now means the room or seat the tab kept is gone */
@@ -292,8 +295,8 @@ function seatNews(msg: ServerMessage, page: Page): boolean {
 }
 
 /**
- * Takes in what the line carries besides: the time, the rooms, the room's snapshots, a room on
- * its way back, refusals, and the live streams (`streamNews`).
+ * Takes in what the line carries besides: the time, the rooms, how many watch the room, the
+ * room's snapshots, a room on its way back, refusals, and the live streams (`streamNews`).
  */
 function lineNews(msg: ServerMessage, page: Page): void {
   switch (msg.kind) {
@@ -302,6 +305,9 @@ function lineNews(msg: ServerMessage, page: Page): void {
       break;
     case 'rooms':
       page.setRooms(msg.rooms);
+      break;
+    case 'audience':
+      page.setWatching(msg.count);
       break;
     case 'snapshot':
     case 'restart':
@@ -731,6 +737,7 @@ type Shown = Pick<
   | 'account'
   | 'myRuns'
   | 'roomCode'
+  | 'watching'
   | 'error'
   | 'refusal'
 >;
@@ -751,6 +758,7 @@ function usePage(): { shown: Shown; page: Page; clearError: () => void } {
   const [takeover, setTakeover] = useState<Takeover | null>(null);
   const [restoring, setRestoring] = useState<Restoring | null>(null);
   const [roomCode, setRoomCode] = useState<string | null>(roomOfTab);
+  const [watching, setWatching] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [refusal, setRefusal] = useState<Refusal | null>(null);
   const resuming = useRef(false);
@@ -767,6 +775,7 @@ function usePage(): { shown: Shown; page: Page; clearError: () => void } {
     setMyRuns,
     setTakeover,
     setRestoring,
+    setWatching,
     setError,
     refuse: (message, of) => setRefusal((last) => ({ seq: (last?.seq ?? 0) + 1, message, of })),
     resuming,
@@ -776,7 +785,7 @@ function usePage(): { shown: Shown; page: Page; clearError: () => void } {
   };
   const shown = { view, spectatorView, takeover, restoring, rooms, seat, account, myRuns };
   return {
-    shown: { ...shown, roomCode, error, refusal },
+    shown: { ...shown, roomCode, watching, error, refusal },
     page,
     clearError: () => setError(null),
   };
