@@ -81,8 +81,12 @@ laufender Einsatz den Dienstausweis, steht seine Karte als erster Menüpunkt da.
 und zurück geht es durch die Schiebetüren des Labors; ab dem ersten Klick oder Tastendruck
 spielen Titelthema und Anlagenbrummen, in der Lobby leiser weiter. Die Endkarte spielt nach
 ihrem Stinger ein eigenes Thema: hell für einen gewonnenen, ein tiefes Dröhnen für einen
-verlorenen Einsatz. Alle Musik und alle Geräusche sind mit ElevenLabs erzeugt, keine
-Archivmusik (`docs/sound.md`, Abschnitt „Lizenz“).
+verlorenen Einsatz. Die Geräusche und die Hauspartitur sind mit ElevenLabs erzeugt; daneben
+stehen in den Einstellungen („Ton" → „Musik") vier Musikpakete mit Musik von Menschen unter CC BY
+oder CC0 — İlker Yalçıner; Sergey Cheremisinov mit Lee Rosevere und Rafael Krux; Kevin MacLeod;
+Alexandr Zhelanov —, als Ganzes oder je Platz in der „Feinwahl" zu wählen, jedes Stück dort
+vorzuhören, darunter die Nennungen, die ihre Lizenzen verlangen (`docs/sound.md`, Abschnitte
+„Musikpakete“ und „Lizenz“).
 
 **Ablauf einer Partie:** Lobby (Farbe wählen, **bereitmelden** — der Host kann erst starten,
 wenn so viele da sind, wie die Mission braucht, und alle bestätigt haben; jede Änderung an
@@ -291,11 +295,13 @@ selbst, wie die CI, und probt mitten in einem Einsatz den Neustart: SIGTERM, die
 „WARTUNG · Der Server startet neu" auf jeder Seite, und nach dem Neustart alle zurück im Einsatz.
 
 **Nur ein Teil des Rundgangs (Gruppen):** Jede Aufnahme des Rundgangs gehört zu genau einer von
-sechzehn Gruppen (`tools/groups.mjs`); `SHOTS_ONLY=screens,intro` spielt nur diese,
+siebzehn Gruppen (`tools/groups.mjs`); `SHOTS_ONLY=screens,intro` spielt nur diese,
 `SHOTS_SKIP=perf` alle außer diesen — der schnelle Beweis eines Teils. Vor dem Rundgang laufen die
 Proben, jede in einem Raum für sich: `editor`, `art`, `drones` (Gefahrensinn und eine Drohne aus der
-Nähe), `reconnect` und `restart` — im Systemcheck dazu die Probe des Serverraums, die zu `devices`
-gehört, und die der Zugangskontrolle, `access` (Blackout nennt beide im Log als ausgelassen). Der
+Nähe), `reconnect`, `restart` und `music` (die Musikpakete in den Einstellungen auf einer eigenen
+Menüseite: ein anderes Paket hörbar, Vorhören, nach dem Neuladen behalten) — im Systemcheck dazu
+die Probe des Serverraums, die zu `devices` gehört, und die der Zugangskontrolle, `access`
+(Blackout nennt beide im Log als ausgelassen). Der
 Rundgang selbst: `screens` (Menü und sein Ton, Bestenliste, Lobby, der Start aus ihr),
 `intro` (die Eröffnung bis `blackout.png`) und `run` (die Mission bis zur Siegerkarte, nach dem
 gewonnenen Systemcheck die Einsätze des Kontos und sein Löschen); im Lauf `devices` (jede Station,
@@ -329,7 +335,8 @@ auf einem M4 mit 16 GB (14.11.2026, Last 9 bis 17) 772 s:
 | | | | | `perf` | 22,8 |
 
 `SHOTS_ONLY=screens,intro` spielte Blackout in 48 s; jede Gruppe im Lauf zieht die Mission bis
-zur Siegerkarte mit, und `SHOTS_ONLY=run` allein dauerte 262 s (den Systemcheck 85 s).
+zur Siegerkarte mit, und `SHOTS_ONLY=run` allein dauerte 262 s (den Systemcheck 85 s). Die Probe
+`music` kam danach dazu: allein 9,7 s (14.11.2026, Last um 20).
 
 **Ton und Funkstimme:** Jeder Raum klingt nach seiner Art, die Schritte des Partners kommen von
 dort, wo er steht, und die Musik zieht mit dem Druck an ([`docs/sound.md`](docs/sound.md)). Zwei
