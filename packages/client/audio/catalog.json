@@ -862,9 +862,9 @@
         "lines": ["{solo piano plays only the first phrase of the motif, once}"],
         "styles": [
           "only the first phrase of the motif, once, on solo felt piano",
-          "very slow and very quiet, pianissimo, with long silences",
+          "sparse, long held notes at the same tempo, very quiet, pianissimo, with long silences",
           "a warm analog pad breathes underneath",
-          "sparse, leaves room for a voice speaking over it",
+          "leaves room for a voice speaking over it",
           "ends on an open, unresolved chord that hangs"
         ],
         "avoid": ["drums", "percussion", "voice", "vocals", "full arrangement", "crescendo"],
@@ -934,9 +934,9 @@
         "name": "Lights Out",
         "bars": 15,
         "loop": false,
-        "lines": ["{the music breaks off}", "{low piano, the motif slowly}"],
+        "lines": ["{the music breaks off}", "{low piano, the motif in long held notes}"],
         "styles": [
-          "the motif sunk into the low register of the piano, slow and heavy",
+          "the motif sunk into the low register of the piano, heavy, long held notes at the same tempo",
           "a bowed double bass drone",
           "the analog pad dims like lights failing",
           "desolate and very quiet",

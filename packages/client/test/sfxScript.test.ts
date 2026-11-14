@@ -691,9 +691,12 @@ describe('the music’s takes on disk', () => {
 
   it('land in takes/<id>/, none of them kept and nothing public, each listed as made', async () => {
     const places = placesIn();
-    const { client, pieces } = answering({ music: [0.6, 0.8, 0.7].map((a) => piece(10, a)) });
+    const { client, pieces, asked } = answering({
+      music: [0.6, 0.8, 0.7].map((a) => piece(10, a)),
+    });
     const manifests = await runOf([STING], 3, benchOf(client, places));
     expect(pieces).toEqual([musicRequest(STING), musicRequest(STING), musicRequest(STING)]);
+    expect(asked).toEqual([undefined, undefined, undefined]); // a piece of seconds: the SDK's wait
     const folder = join(places.takes, STING.id);
     expect(readdirSync(folder).sort()).toEqual(['1.mp3', '2.mp3', '3.mp3', 'index.json']);
     expect(existsSync(places.dirs.music)).toBe(false);

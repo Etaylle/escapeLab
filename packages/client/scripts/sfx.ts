@@ -221,6 +221,11 @@ export const EDGE_MS = 10;
 /** How far a take of a suite may run off its plan's length, ms: its sections still as planned. */
 export const SUITE_SLACK_MS = 1000;
 /**
+ * How long a suite's request may take, s: a plan of some 8 minutes takes the service two to four
+ * to compose, and the SDK's own 240 s would give up on one it is still composing — and may bill.
+ */
+export const SUITE_TIMEOUT_S = 900;
+/**
  * The loudness a suite's pieces are brought to, every one alike, LUFS: so that no piece jumps
  * against another where the game changes from one to the next — and where the stems and the
  * menu's theme brought to −20 dBFS RMS play today, measured by `lufsOf`: −19.7 to −17.8 LUFS.
@@ -653,7 +658,10 @@ function sending(
   item: CatalogItem,
   influence: number | undefined,
 ): () => PromiseLike<ReadableStream<Uint8Array>> {
-  if (isSuite(item)) return () => client.music.compose(suiteRequest(item));
+  if (isSuite(item)) {
+    const options = { timeoutInSeconds: SUITE_TIMEOUT_S };
+    return () => client.music.compose(suiteRequest(item), options);
+  }
   return groupOf(item) === 'music'
     ? () => client.music.compose(musicRequest(item))
     : () => client.textToSoundEffects.convert(effectRequest(item, influence));

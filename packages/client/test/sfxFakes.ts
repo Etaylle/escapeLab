@@ -83,13 +83,18 @@ export interface Answers {
   readonly music?: readonly Uint8Array<ArrayBuffer>[];
 }
 
+/** What a piece of music is asked with beside its request: the SDK's request options. */
+export type Asked = { readonly timeoutInSeconds?: number } | undefined;
+
 /**
  * A client of the tests' own that answers each effect and each piece of music with the next of
- * its answers, round and round, and keeps the requests; the account has 50 000 credits left.
+ * its answers, round and round, and keeps the requests and what each piece was asked with; the
+ * account has 50 000 credits left.
  */
 export function answering(answers: Answers) {
   const effects: ElevenLabs.CreateSoundEffectRequest[] = [];
   const pieces: ElevenLabs.BodyComposeMusicV1MusicPost[] = [];
+  const asked: Asked[] = [];
   const nth = (list: Answers['music'] = [], i: number): ReadableStream<Uint8Array> =>
     new Blob([list[i % list.length] ?? new Uint8Array(0)]).stream();
   const credits = { characterCount: 81_000, characterLimit: 131_000 };
@@ -99,10 +104,13 @@ export function answering(answers: Answers) {
       convert: (request) => Promise.resolve(nth(answers.effects, effects.push(request) - 1)),
     },
     music: {
-      compose: (request) => Promise.resolve(nth(answers.music, pieces.push(request) - 1)),
+      compose: (request, options) => {
+        asked.push(options);
+        return Promise.resolve(nth(answers.music, pieces.push(request) - 1));
+      },
     },
   };
-  return { client, effects, pieces };
+  return { client, effects, pieces, asked };
 }
 
 /** Folders of a run's own: each group's and the takes', in a temporary folder. */

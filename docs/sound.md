@@ -857,9 +857,14 @@ setting the tone of the whole (ElevenLabs' API reference and its guide „Compos
 the rest. A plan takes no switch for the instrumental as a prompt does (`force_instrumental`):
 here the lines are the switch, and the catalog's rules refuse any line that is neither a
 direction nor a voice's sounds. Eleven Music's overview page still names 5 minutes for a song;
-the score's 491 s keep within the 10 minutes the composition plans name; should the service
-refuse the plan, the run stops at that request, which composed nothing, and says what ElevenLabs
-answered.
+the score's 491 s keep within the 10 minutes the composition plans name. A plan of that length
+takes the service some two to four minutes to compose, so the script waits up to 15 for it
+(sfx.ts `SUITE_TIMEOUT_S`), where the SDK would give up after 4. Should the service refuse the
+plan, the run stops at that request and says what ElevenLabs answered; a request that failed may
+still have been billed, which the account's credits tell. Every section states the tempo, and
+none asks for another: a quiet piece is sparse, its notes held long at the same tempo, as the
+last minute's double time is a feel at the same tempo — the plan's bar lines, which the loops are
+cut on, hold only where the music keeps them.
 
 ## Music that breathes (`music.ts`)
 

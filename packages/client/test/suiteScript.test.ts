@@ -375,12 +375,14 @@ function firstTake(places: ReturnType<typeof placesIn>): TakeRecord {
 describe('a suite’s takes', () => {
   it('go into takes/ even made once, said where they lie, nothing public', async () => {
     const places = placesIn();
-    const { client, pieces } = answering({ music: [takeOf(SMALL, AMPS)] });
+    const { client, pieces, asked } = answering({ music: [takeOf(SMALL, AMPS)] });
     const said = await sayOver(['--only', 'test-score'], studioOf(client, places).studio);
     const waiting = `sfx: none of this music is kept yet; its takes wait in ${places.takes}:`;
     expect(said).toContain(waiting);
     expect(said).toContain('  node scripts/sfx.ts --keep test-score=<n>');
     expect(pieces).toEqual([suiteRequest(SMALL)]);
+    // The plan is waited for as long as the service takes to compose it, not the SDK's 240 s.
+    expect(asked).toEqual([{ timeoutInSeconds: 900 }]);
     expect(readdirSync(join(places.takes, SMALL.id)).sort()).toEqual(['1.mp3', 'index.json']);
     expect(existsSync(places.dirs.music)).toBe(false);
     expect(firstTake(places)).toMatchObject({
@@ -744,5 +746,24 @@ describe('the score in the catalog', () => {
   it('names no composer, no game and no piece it could copy', () => {
     const all = JSON.stringify(SCORE).toLowerCase();
     expect(all).not.toMatch(/expedition|clair|obscur|testard|lorien|lumi[eè]re|in the style of/);
+  });
+});
+
+describe('the score’s tempo', () => {
+  if (SCORE === undefined) throw new Error('audio/catalog.json holds no suite');
+  const otherTempo =
+    /\b(?:slow(?:ly|er|ing)?|fast(?:er)?|quick(?:er|ly)?|accelerando|ritardando|rallentando)\b/i;
+
+  it('is asked of every section, none asking for a slower or a faster one', () => {
+    for (const chunk of chunksOf(SCORE)) {
+      const asked = [chunk.text, ...chunk.positiveStyles].join(' | ');
+      expect(asked, chunk.text.split('\n')[0]).not.toMatch(otherTempo);
+      expect(chunk.positiveStyles, chunk.text.split('\n')[0]).toContain('90 BPM');
+    }
+    // Quiet is sparse and held long, the last minute's drive a feel: the tempo stays.
+    const said = JSON.stringify(SCORE.sections);
+    expect(said).toMatch(/opening[^]*long held notes at the same tempo/i);
+    expect(said).toMatch(/double-time feel at the same tempo/);
+    expect(SCORE.avoid).toContain('tempo changes');
   });
 });
