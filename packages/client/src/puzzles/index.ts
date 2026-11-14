@@ -13,6 +13,7 @@ import { RelayPanel } from './RelayPanel.js';
 import { SignalPanel, signalSounds } from './SignalPanel.js';
 import { CircuitPanel, circuitSounds } from './CircuitPanel.js';
 import { ServersPanel, serversSounds } from './ServersPanel.js';
+import { AccessList, AccessPanel, accessSounds } from './AccessPanel.js';
 import type { MissionTime } from '../clock.js';
 import type { Refusal } from '../ws.js';
 import type { DeviceCrew } from './Device.js';
@@ -64,6 +65,7 @@ export const PANELS: { [K in PuzzleKind]: Panel<K> } = {
   relay: RelayPanel,
   circuit: CircuitPanel,
   servers: ServersPanel,
+  access: AccessPanel,
 };
 
 /** What a change at a module's device sounds like, beyond the kit's press, alarm and solve. */
@@ -86,6 +88,7 @@ export const SOUNDS: { [K in PuzzleKind]?: ChangeSoundsOf<K> } = {
   signal: signalSounds,
   circuit: circuitSounds,
   servers: serversSounds,
+  access: accessSounds,
 };
 
 /** What a reader panel gets: the open puzzle as seen at a manual object covering it. */
@@ -97,8 +100,10 @@ export type Reader<K extends PuzzleKind> = ComponentType<ReaderProps<K>>;
 
 /**
  * The modules that show a reader more than the printed rules, by kind — the
- * maze's wall plan. Most have no entry.
+ * maze's wall plan, the Zugangskontrolle's list of this shift's accounts.
+ * Most have no entry.
  */
 export const READERS: { [K in PuzzleKind]?: Reader<K> } = {
   maze: MazePlan,
+  access: AccessList,
 };
