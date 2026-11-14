@@ -615,12 +615,15 @@ export function rosterBlock(roster: readonly AccessAccount[]): Extract<ManualBlo
   };
 }
 
-/** The list as the notepad takes it down: its columns aligned under their names. */
+/**
+ * The list as the notepad takes it down, its columns aligned under their names: the source's
+ * „Konten" — „Benutzerliste · Konten" on the probe's clipboard.
+ */
 export function rosterTaken(station: { index: number }, roster: readonly AccessAccount[]): Taken {
   const { head, rows } = rosterBlock(roster);
   return {
-    part: 'Benutzerliste',
-    key: `${station.index}/benutzerliste`,
+    part: 'Konten',
+    key: `${station.index}/konten`,
     lines: alignedLines([head, ...rows]),
     form: 'table',
   };

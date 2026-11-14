@@ -70,7 +70,7 @@ export const DOOR_ROLE: Readonly<Record<AccessDoor, AccessRole>> = {
 export const doorName = (door: AccessDoor): string => door.toUpperCase();
 
 /** The doors a role may release, in the printed order. */
-export const doorsOf = (role: AccessRole): AccessDoor[] =>
+const doorsOf = (role: AccessRole): AccessDoor[] =>
   ACCESS_DOORS.filter((door) => DOOR_ROLE[door] === role);
 
 /** The service accounts a run's list draws its names from; the printed log uses none of them. */
@@ -86,16 +86,16 @@ export const ACCOUNT_NAMES = [
 ] as const;
 
 /** How many accounts a run's list holds: one role of the four stays unheld. */
-export const ACCOUNTS = 3;
+const ACCOUNTS = 3;
 
 /** How many digits a token has. */
 export const TOKEN_DIGITS = 6;
 
 /** Wrong tokens in a row for one account that lock it. */
-export const MISSES_TO_LOCK = 3;
+const MISSES_TO_LOCK = 3;
 
 /** How many of the log's last lines the terminal shows, and the state keeps. */
-export const ACCESS_LOG_LINES = 6;
+const ACCESS_LOG_LINES = 6;
 
 const defSchema = z.strictObject({
   type: z.literal('access'),

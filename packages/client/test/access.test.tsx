@@ -263,8 +263,8 @@ describe('the audience and the list', () => {
     expect(html).toContain('<td>berger</td><td>Sicherheitsdienst</td>');
     expect(html).toContain('note-down-word">Notieren');
     expect(rosterTaken({ index: 2 }, roster)).toEqual({
-      part: 'Benutzerliste',
-      key: '2/benutzerliste',
+      part: 'Konten',
+      key: '2/konten',
       lines: ['Konto   Rolle', 'berger  Sicherheitsdienst', 'huber   IT-Betrieb'],
       form: 'table',
     });
