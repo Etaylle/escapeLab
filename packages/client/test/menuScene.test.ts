@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { parseMission, type Mission } from '@escapelab/core';
 import { coverZoom } from '../src/world/assemble.js';
+import { sceneTeller } from '../src/screens/MenuScene.js';
 import { SHOT_WIDE } from '../src/world/intro/shot.js';
 import {
   DRIFT_MS,
@@ -365,6 +366,23 @@ describe('what the scene draws', () => {
     expect(show.from).toBeNull();
   });
 
+  it('brings a mission in over the one before at its drift, while the camera holds a place', () => {
+    const { ctx, log } = fakeCanvas(100, 50);
+    const show = noShow();
+    showBake(show, bakeOf('before'), 0, false);
+    showBake(show, bakeOf('next'), 1000, true);
+    // The camera on a place 60 px in on the lab come in; the drift at the reactor, 100 px in.
+    paintShow(ctx, show, 1000 + SCENE_FADE_MS / 4, { progress: driftAt(0, false), corner: { x: 60, y: 0 } });
+    const drawn = callEntries(log, 'drawImage').map((call) => [
+      (call.args[0] as { name: string }).name,
+      call.args[1],
+    ]);
+    expect(drawn).toEqual([
+      ['before', -100],
+      ['next', -60],
+    ]);
+  });
+
   it('copies the bake as far along the shot as the drift has come', () => {
     const { ctx, log } = fakeCanvas(100, 50);
     const show = noShow();
@@ -458,5 +476,32 @@ describe('what the scene lets go', () => {
       [0, 0],
     ]);
     expect(needsPaint(show, 20, false)).toBe(false);
+  });
+});
+
+describe('the scene as the menu tells it', () => {
+  it('tells its stage the mission and the lobby as each changes, a stage opened later both', () => {
+    const calls: string[] = [];
+    const stage = {
+      show: (id: string | null) => calls.push(`show ${id}`),
+      lobby: (behind: boolean) => calls.push(`lobby ${behind}`),
+      close: () => calls.push('close'),
+    };
+    const teller = sceneTeller(() => stage);
+    teller.tell({ missionId: 'blackout', lobby: true });
+    const detach = teller.attach(fakeCanvas(0, 0).canvas);
+    expect(calls).toEqual(['show blackout', 'lobby true']);
+    teller.tell({ missionId: 'blackout', lobby: true });
+    teller.tell({ missionId: 'blackout', lobby: false });
+    teller.tell({ missionId: 'systemcheck', lobby: false });
+    detach();
+    teller.tell({ missionId: 'systemcheck', lobby: true });
+    expect(calls).toEqual([
+      'show blackout',
+      'lobby true',
+      'lobby false',
+      'show systemcheck',
+      'close',
+    ]);
   });
 });

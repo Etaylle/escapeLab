@@ -11,6 +11,7 @@ import {
   holdLamp,
   newSweep,
   runAt,
+  stepSweep,
   sweepAngle,
   SWEEP,
   type Sweep,
@@ -314,6 +315,20 @@ describe('the place picked out on the menu', () => {
     expect(heldPlace()).toBeNull();
   });
 
+  it('is none for the menu’s first focus arriving after the hero, as the app gives it', () => {
+    const [missions, join] = [new FakeItem('missions', 240), new FakeItem('join', 286)];
+    const page = heroOnPage(1440, 820);
+    page.play(300);
+    // The menu focuses its first item once it stands: a focusin, not the player's move.
+    page.fire('focusin', missions);
+    page.play(300);
+    expect(heldPlace()).toBeNull();
+    page.fire('focusin', join);
+    page.play(100);
+    expect(heldPlace()).toBe('join');
+    page.run.stop();
+  });
+
   it('is the item hovered over the one in the focus, never a run’s card', () => {
     const page = heroOnPage(1440, 820);
     page.play(300);
@@ -349,6 +364,18 @@ describe('the hero’s beam turned to a place', () => {
       angle = next;
     }
     expect(angle).toBeCloseTo(SWEEP.high, 9);
+  });
+
+  it('steps on from where it was turned to once let go, not from where its sweep had stood', () => {
+    const sweep: Sweep = newSweep();
+    sweep.last = 0;
+    const start = sweepAngle(sweep.run);
+    const far = start - SWEEP.low > SWEEP.high - start ? SWEEP.low : SWEEP.high;
+    let aimed = start;
+    for (let now = 0; now <= 4000; now += 1000 / 30) aimed = aimSweep(sweep, now, far);
+    expect(Math.abs(aimed - start)).toBeGreaterThan(0.3);
+    const next = stepSweep(sweep, 4000 + 1000 / 30, null);
+    expect(Math.abs(next - aimed)).toBeLessThan(0.01);
   });
 
   it('goes on sweeping from where it was let go, the way it was going', () => {

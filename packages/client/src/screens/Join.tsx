@@ -322,6 +322,25 @@ export function leaveFor(item: MenuItemId, open: () => void): void {
 }
 
 /**
+ * What an item of the menu taken does: its panel opened over the menu (`take`), or, for an item
+ * that leaves the menu, its page from `pages` after the hero's beat (`leaveFor`) — and the hero's
+ * beat begun (`setTaken`): its lamp flaring, and a half step toward the menu for an item that
+ * leaves it.
+ */
+export function pickOf(
+  pages: Partial<Record<MenuItemId, () => void>>,
+  take: (item: MenuItemId) => void,
+  setTaken: (taken: Taken) => void,
+): (item: MenuItemId) => void {
+  return (item) => {
+    take(item);
+    const page = pages[item];
+    setTaken({ at: performance.now(), toward: page !== undefined });
+    if (page !== undefined) leaveFor(item, page);
+  };
+}
+
+/**
  * The ways the menu's items lead off it to a page of its own: the booklet and the Bestenliste of
  * the mission `selected`, the account's runs, the editor, the settings.
  */
@@ -427,12 +446,7 @@ export function JoinScreen(props: Props) {
           card={card}
           dimmed={bound !== null}
           rooms={rooms.length}
-          onPick={(item) => {
-            take(item);
-            const page = pages[item];
-            setTaken({ at: performance.now(), toward: page !== undefined });
-            if (page !== undefined) leaveFor(item, page);
-          }}
+          onPick={pickOf(pages, take, setTaken)}
         />
         <p className="menu-lead">{MENU_LEAD}</p>
         {bound !== null && <p className="bound-line">{boundLine(bound)}</p>}

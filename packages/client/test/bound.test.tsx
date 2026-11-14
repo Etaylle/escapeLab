@@ -177,6 +177,18 @@ describe('the join screen of a pass bound to a run', () => {
     expect(giveUpPress(T0, T0 + CONFIRM_MS)).toBe('ask');
   });
 
+  it('takes the hero’s beat as it goes back, before the doors close for the room', () => {
+    stubWindow();
+    const sent: ClientMessage[] = [];
+    const onBack = vi.fn();
+    const elements = elementsOf(() => (
+      <BoundCard seat={RUN} send={(msg) => sent.push(msg)} onBack={onBack} />
+    ));
+    press(buttonsOf(elements, 'bound-back')[0]);
+    expect(onBack).toHaveBeenCalledTimes(1);
+    expect(sent).toEqual([{ kind: 'resume', code: 'QX7R', pass: PASS }]);
+  });
+
   it('goes back to the run on the browser’s pass', () => {
     stubWindow();
     const sent: ClientMessage[] = [];

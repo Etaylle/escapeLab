@@ -207,7 +207,7 @@ export function noteDoors(at: number | null): void {
 }
 
 /** How a mounted wipe is asked to close over the window: its leaves, a beat first, staying shut. */
-interface WipeAsk {
+export interface WipeAsk {
   kind: WipeKind;
   beat: boolean;
   stays: boolean;
@@ -252,6 +252,41 @@ export function shutterThen(after: () => void, beat = false): void {
 }
 
 /**
+ * What runs as the leaves of `wipe` have closed, at `now` (ms since the epoch): what they closed
+ * over to run, where there is something — the tab noted first that its doors shut where they
+ * stay shut, the page loading anew under them (`noteDoors`), and only there.
+ */
+export function runShut<T>(wipe: Wipe<T>, now: number): void {
+  if (wipe.doors === 'closing' && wipe.after !== null) {
+    if (wipe.stays) noteDoors(now);
+    wipe.after();
+  }
+}
+
+/**
+ * How the mounted wipe closes over the window as it is asked (`closer`): where things move less
+ * (`reduced`), it runs what is asked at once — the screens cut —; else it sets its leaves going
+ * over what the last screen drawn showed (`last`), as the ask says.
+ */
+export function closerOf<T>(
+  reduced: boolean,
+  last: { readonly current: T },
+  setWipe: (to: (current: Wipe<T>) => Wipe<T>) => void,
+): (after: () => void, ask: WipeAsk) => void {
+  return (after, ask) => {
+    if (reduced) {
+      after();
+      return;
+    }
+    setWipe((current) =>
+      ask.stays
+        ? closedOver(current, last.current, after)
+        : wipedThen(current, last.current, after, [ask.kind, ask.beat]),
+    );
+  };
+}
+
+/**
  * The door wipe over `value` — what the screens are drawn from — as the window goes to `place`:
  * while the doors close or stand shut, the value from before they began; else `value` as it is.
  * `reduced`: the screens cut.
@@ -281,26 +316,13 @@ export function useDoorWipe<T>(
       return undefined;
     }
     const timer = setTimeout(() => {
-      if (wipe.doors === 'closing' && wipe.after !== null) {
-        if (wipe.stays) noteDoors(Date.now());
-        wipe.after();
-      }
+      runShut(wipe, Date.now());
       setWipe((current) => wipeOn(current));
     }, ms);
     return () => clearTimeout(timer);
   }, [wipe]);
   useEffect(() => {
-    closer = (after, ask) => {
-      if (reduced) {
-        after();
-        return;
-      }
-      setWipe((current) =>
-        ask.stays
-          ? closedOver(current, last.current, after)
-          : wipedThen(current, last.current, after, [ask.kind, ask.beat]),
-      );
-    };
+    closer = closerOf(reduced, last, setWipe);
     return () => {
       closer = null;
     };

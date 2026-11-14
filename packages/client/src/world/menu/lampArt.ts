@@ -67,7 +67,7 @@ const SHEEN = rgba(WHITE, 0.22);
 const LENS_OFF = css(sink(mix(STEEL, GLASS, 0.5), 0.3));
 const LENS_ON = css(lift(TUNGSTEN, 0.55));
 /** The glint at a lens alight: white in its middle, the lamp's warm light round it. */
-const GLINT = { reach: 0.14, middle: rgba(WHITE, 0.9), warm: rgba(TUNGSTEN, 0.55) } as const;
+export const GLINT = { reach: 0.14, middle: rgba(WHITE, 0.9), warm: rgba(TUNGSTEN, 0.55) } as const;
 
 /**
  * The torch in the hands, drawn as art.ts draws what a figure holds — round its grip, pointing

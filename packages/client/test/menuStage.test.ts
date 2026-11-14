@@ -482,6 +482,26 @@ describe('the scene’s places', () => {
     places.holdPlace(null);
   });
 
+  it('starts its camera anew with each bake: a lab come in shows its drift at once', async () => {
+    const { page, scene, stage, bake, places } = await staged(false);
+    places.holdPlace('handbook');
+    await framesAndSteps(page, 8);
+    page.run(2500);
+    const [there] = corners(scene, bake, 0).slice(-1);
+    // Another mission's lab, without places: the camera goes to its drift.
+    stage.show('systemcheck');
+    await settled();
+    const from = scene.log.length;
+    page.run(300);
+    const next = present(lastCopied(scene), 'the lab come in');
+    expect(next).not.toBe(bake);
+    const coming = corners(scene, next, from);
+    expect(spanOf([present(there, 'corner'), present(coming[0], 'corner')]).far).toBeGreaterThan(40);
+    expect(spanOf(coming).step).toBeLessThan(5);
+    stage.close();
+    places.holdPlace(null);
+  });
+
   it('travels to the place held over 1.2 to 2 s, holds it, and travels back', async () => {
     const { page, scene, stage, bake, places } = await staged(false);
     const from = scene.log.length;

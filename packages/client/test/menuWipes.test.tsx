@@ -1,8 +1,19 @@
+import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { shutteredMenus, waysBack } from '../src/App.js';
+import type { AccountView } from '@escapelab/core';
+import {
+  barAccountOf,
+  RoomMenus,
+  Settings,
+  shutteredMenus,
+  useRoomMenus,
+  waysBack,
+} from '../src/App.js';
+import { NOTHING_OPEN, type MenuLayer } from '../src/menuLayer.js';
 import { WIPE_MS, type WipeKind } from '../src/screens/DoorWipe.js';
-import { leaveFor, pagesOf } from '../src/screens/Join.js';
+import { leaveFor, pagesOf, pickOf } from '../src/screens/Join.js';
 import { menuItems, opensPanel } from '../src/screens/MainMenu.js';
+import { elementsOf, press } from './probe.js';
 
 /**
  * The wipe before every change of the menu's (screens/DoorWipe.tsx), as the menu, the top bar and
@@ -21,12 +32,41 @@ vi.mock('../src/screens/DoorWipe.js', async (importOriginal) => ({
   shutterThen: wipe.shutter,
 }));
 
+/** What a controller's Start does, as the app hands it to the controller (`usePad`). */
+const pad = vi.hoisted(() => ({ start: (): void => undefined }));
+
+vi.mock('../src/input/padRuntime.js', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  usePad: (onStart: () => void) => {
+    pad.start = onStart;
+  },
+}));
+
 afterEach(() => {
   wipe.doors.mockReset();
   wipe.shutter.mockReset();
 });
 
 const noop = (): void => undefined;
+
+/** The line off any room, as the menus over the screens hear it. */
+const LINE = {
+  ...{ view: null, spectatorView: null, account: null, refusal: null },
+  ...{ send: noop, leaveRoom: noop, toMenu: noop },
+};
+
+/** The page's profile: no name typed yet. */
+const PROFILE = { name: '', onName: noop };
+
+/** An account, as the server tells it. */
+const ANNA: AccountView = {
+  name: 'Anna',
+  color: '#2dd4bf',
+  since: Date.UTC(2026, 9, 1),
+  runs: 3,
+  achievements: {},
+  store: 'database',
+};
 
 /** The one wipe asked for since the last: its leaves, what it runs, and whether after a beat. */
 function asked(): { kind: WipeKind; after: unknown; beat: boolean } {
@@ -68,6 +108,24 @@ describe('the menu left for a page of its own', () => {
     expect(shutter.ms).toBeGreaterThanOrEqual(120);
     expect(shutter.ms).toBeLessThanOrEqual(200);
     expect(lengthOf('door')).toBeGreaterThan(shutter.ms);
+  });
+});
+
+describe('the hero’s beat as an item is taken', () => {
+  it('begins with every item taken, a half step only for one that leaves the menu', () => {
+    const openers = { openHandbook: noop, openMyRuns: noop, openEditor: noop, openSettings: noop };
+    const pages = pagesOf({ ...openers, openHistory: noop }, 'blackout');
+    const take = vi.fn();
+    const taken = vi.fn();
+    const pick = pickOf(pages, take, taken);
+    pick('missions');
+    expect(take).toHaveBeenLastCalledWith('missions');
+    expect(taken).toHaveBeenLastCalledWith({ at: expect.any(Number), toward: false });
+    pick('handbook');
+    expect(taken).toHaveBeenLastCalledWith({ at: expect.any(Number), toward: true });
+    expect(taken).toHaveBeenCalledTimes(2);
+    // The booklet's page behind the shutter, after the beat; „Einsatz starten" opens its panel.
+    expect(asked()).toEqual({ kind: 'shutter', after: pages.handbook, beat: true });
   });
 });
 
@@ -119,5 +177,49 @@ describe('the settings off any room and in one', () => {
     const menus = layer();
     const reached = shutteredMenus(menus, false);
     expect(reached).toEqual(menus);
+  });
+
+  it('open off any room by a controller’s Start behind the shutter too', () => {
+    function Probe() {
+      useRoomMenus({ view: null, spectatorView: null, send: noop }, true);
+      return null;
+    }
+    renderToStaticMarkup(<Probe />);
+    pad.start();
+    expect(asked()).toMatchObject({ kind: 'shutter', beat: false });
+  });
+
+  it('open on „Konto" from the bar’s account, as the menus open it; no account in a room', () => {
+    const menus = layer();
+    const account = barAccountOf(true, { name: 'Anna' }, null, menus);
+    expect(account).toMatchObject({ name: 'Anna', account: null });
+    account?.open();
+    expect(menus.openAccount).toHaveBeenCalledOnce();
+    expect(menus.gear).not.toHaveBeenCalled();
+    expect(barAccountOf(false, { name: 'Anna' }, null, menus)).toBeNull();
+  });
+
+  it('go away as the menus put them away, behind the shutter off any room', () => {
+    const menus = layer();
+    const open: MenuLayer = {
+      ...{ ...NOTHING_OPEN, settings: true, phase: null },
+      ...{ gear: vi.fn(), start: vi.fn(), openPause: vi.fn(), closePause: vi.fn() },
+      ...{ openSettings: vi.fn(), openAccount: vi.fn(), closeSettings: vi.fn() },
+      ...{ openHandbook: vi.fn(), closeHandbook: vi.fn() },
+    };
+    const elements = elementsOf(() => (
+      <RoomMenus layer={open} menus={menus} live={LINE} missions={[]} profile={PROFILE} />
+    ));
+    press(elements.find((el) => el.type === 'button' && el.props['className'] === 'link'));
+    expect(menus.closeSettings).toHaveBeenCalledOnce();
+    expect(open.closeSettings).not.toHaveBeenCalled();
+  });
+
+  it('open on the tab asked: „Konto" for the bar’s account', () => {
+    const live = { ...LINE, account: ANNA };
+    const html = renderToStaticMarkup(
+      <Settings live={live} close={noop} profile={PROFILE} tab="konto" />,
+    );
+    expect(html).toMatch(/data-tab="konto"[^>]*aria-selected="true"/);
   });
 });

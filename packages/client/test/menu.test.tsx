@@ -28,10 +28,12 @@ import {
   inviteArrived,
   JoinPanel,
   keptPick,
+  MissionPanel,
   NAME_MISSING,
   NameField,
   PICKED_KEY,
   pickedMission,
+  RoundsPanel,
   usePicked,
 } from '../src/screens/MenuPanels.js';
 import {
@@ -323,6 +325,30 @@ describe('the menu’s ways off it', () => {
       '.bound-back:not([disabled]), .menu-item true',
       '[data-item="history"] true',
     ]);
+  });
+
+  it('heads every panel that seats the pass with the profile’s name to type', () => {
+    stubWindow();
+    const section = {
+      ...{ send: noop, connected: true, name: '', blocked: false },
+      field: { typed: '', onName: noop },
+    };
+    const panels = [
+      <JoinPanel key="join" {...section} takeover={null} waiting={false} onClose={noop} />,
+      <MissionPanel
+        key="missions"
+        {...section}
+        missions={[blackout]}
+        stats={[]}
+        picked={null}
+        onPick={noop}
+        onClose={noop}
+      />,
+      <RoundsPanel key="rounds" {...section} rooms={[]} missions={[blackout]} onClose={noop} />,
+    ];
+    for (const panel of panels) {
+      expect(renderToStaticMarkup(panel), String(panel.key)).toContain('class="menu-name-field"');
+    }
   });
 
   it('takes a panel’s focus to the name where there is none yet, else to the panel', () => {

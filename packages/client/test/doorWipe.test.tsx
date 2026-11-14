@@ -2,13 +2,14 @@ import { readFileSync } from 'node:fs';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { PlayerView, SpectatorView } from '@escapelab/core';
-import { backdropOf, menuPlaceOf, placeOf } from '../src/App.js';
+import { backdropOf, heroLeaves, menuPlaceOf, placeOf } from '../src/App.js';
 import {
   BEAT_MS,
   bootWipe,
   CLOSE_MS,
   closeDoorsThen,
   closedOver,
+  closerOf,
   DOORS_FRESH_MS,
   DOORS_KEY,
   DoorWipe,
@@ -17,6 +18,7 @@ import {
   doorsThen,
   noteDoors,
   OPEN_MS,
+  runShut,
   SHUTTER_MS,
   shutterThen,
   stepMs,
@@ -162,9 +164,37 @@ describe('the door wipe as the lobby is left, the page loaded anew', () => {
     expect(leave).toHaveBeenCalledOnce();
   });
 
+  it('notes its doors in the tab as they shut over the lobby left, and for no page of the menu’s', () => {
+    const kept = new Map<string, string>();
+    vi.stubGlobal('window', { sessionStorage: storage(kept) });
+    const open = vi.fn();
+    const page = wipedThen(standing('menu'), 'the menu', open, ['shutter', false]);
+    expect(page.doors).toBe('closing');
+    runShut(page, 1234);
+    expect(open).toHaveBeenCalledOnce();
+    expect(kept.has(DOORS_KEY)).toBe(false);
+    const leave = vi.fn();
+    runShut(closedOver(standing('lobby'), 'the lobby', leave), 5678);
+    expect(leave).toHaveBeenCalledOnce();
+    expect(kept.get(DOORS_KEY)).toBe('5678');
+  });
+
 });
 
 describe('the door wipe before a page of the menu’s', () => {
+  it('cuts where things move less: what is asked runs at once, no leaves set going', () => {
+    const setWipe = vi.fn();
+    const open = vi.fn();
+    const ask = { kind: 'shutter', beat: true, stays: false } as const;
+    closerOf(true, { current: 'the menu' }, setWipe)(open, ask);
+    expect(open).toHaveBeenCalledOnce();
+    expect(setWipe).not.toHaveBeenCalled();
+    closerOf(false, { current: 'the menu' }, setWipe)(open, ask);
+    expect(open).toHaveBeenCalledOnce();
+    const step = setWipe.mock.calls[0]?.[0] as (wipe: Wipe<string>) => Wipe<string>;
+    expect(step(standing('menu'))).toMatchObject({ doors: 'beat', after: open, kind: 'shutter' });
+  });
+
   it('waits the hero’s beat, closes its leaves, runs what it opens, and opens on it', () => {
     const open = vi.fn();
     const beat = wipedThen(standing('menu'), 'the menu', open, ['shutter', true]);
@@ -285,6 +315,16 @@ describe('the scene behind the lobby', () => {
     });
     // Under the booklet, the Bestenliste or the editor it stays, hidden.
     expect(backdropOf({ view: null, spectatorView: null }, false, 'blackout')?.shown).toBe(false);
+  });
+
+  it('turns the menu’s hero away as the doors close for the lobby, not for a run or a page', () => {
+    const toLobby = { view: lobby, spectatorView: null };
+    expect(heroLeaves('closing', toLobby)).toBe(true);
+    expect(heroLeaves('shut', toLobby)).toBe(true);
+    expect(heroLeaves(null, toLobby)).toBe(false);
+    // The editor and a page of the menu's close the doors with the line off any room still.
+    expect(heroLeaves('closing', { view: null, spectatorView: null })).toBe(false);
+    expect(heroLeaves('closing', { view: running, spectatorView: null })).toBe(false);
   });
 
   it('is gone in a run and for the audience', () => {

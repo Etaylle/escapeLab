@@ -17,6 +17,7 @@ import {
 import { heroCanvas, VISOR_GLOW } from '../src/world/menu/heroArt.js';
 import { heroPainter } from '../src/world/menu/heroStage.js';
 import { heroLamp, holdLamp, lightStep } from '../src/world/menu/lamp.js';
+import { GLINT } from '../src/world/menu/lampArt.js';
 import { holdPlace } from '../src/world/menu/places.js';
 import { rgba } from '../src/world/palette.js';
 import { fakeCanvas, FakeGradient, FakePath2D, type Entry } from './fakeCanvas.js';
@@ -51,6 +52,31 @@ afterEach(() => {
   holdPlace(null);
 });
 
+/** A painting whose layers' drawings are kept in `logs`. */
+function logged(
+  asked: Parameters<typeof painting>[0] = {},
+): { on: ReturnType<typeof painting>; logs: Entry[][] } {
+  const on = painting(asked);
+  const logs: Entry[][] = [];
+  const hero = heroCanvas(fakeCanvas(0, 0, 'hero').canvas, (w, h) => {
+    const made = fakeCanvas(w, h);
+    logs.push(made.log);
+    return made.canvas;
+  });
+  if (hero === null) throw new Error('no hero canvas');
+  on.hero = hero;
+  return { on, logs };
+}
+
+/** The gradients `logs` filled with, those whose first stop is `colour`. */
+const fillsOf = (logs: Entry[][], colour: string): FakeGradient[] =>
+  logs
+    .flat()
+    .flatMap((e) =>
+      e.kind === 'set' && e.name === 'fillStyle' && e.value instanceof FakeGradient ? [e.value] : [],
+    )
+    .filter((gradient) => gradient.stops[0]?.[1] === colour);
+
 describe('the lamp’s flare as an item is taken', () => {
   it('rises in a moment and dies away by FLARE_MS', () => {
     expect(flareAt(-1)).toBe(0);
@@ -58,6 +84,18 @@ describe('the lamp’s flare as an item is taken', () => {
     expect(flareAt(60)).toBeCloseTo(1, 9);
     expect(flareAt(FLARE_MS / 2)).toBeGreaterThan(0.2);
     expect(flareAt(FLARE_MS)).toBe(0);
+  });
+
+  it('draws the lamp in the hero’s hands anew as it flares, its glint grown as far again', () => {
+    const { on, logs } = logged({ look: { taken: { at: 1000, toward: false } } });
+    const paint = heroPainter(on, 0);
+    paint(900);
+    const upper = on.hero.drawn.upper;
+    const reach = (): number => Number(fillsOf(logs, GLINT.middle).at(-1)?.args[5]);
+    expect(reach()).toBeCloseTo(GLINT.reach, 9);
+    paint(1060);
+    expect(on.hero.drawn.upper).toBe(upper + 1);
+    expect(reach()).toBeCloseTo(2 * GLINT.reach, 9);
   });
 
   it('flares the lamp the hero holds out, and never under reduced motion', () => {
@@ -171,32 +209,12 @@ describe('the look round every 6 to 10 s', () => {
 });
 
 describe('the visor catching the glow of the item looked at', () => {
-  /** A painting whose layers' drawings are kept in `logs`. */
-  function logged(reduced: boolean): { on: ReturnType<typeof painting>; logs: Entry[][] } {
-    const on = painting({ reduced });
-    const logs: Entry[][] = [];
-    const hero = heroCanvas(fakeCanvas(0, 0, 'hero').canvas, (w, h) => {
-      const made = fakeCanvas(w, h);
-      logs.push(made.log);
-      return made.canvas;
-    });
-    if (hero === null) throw new Error('no hero canvas');
-    on.hero = hero;
-    return { on, logs };
-  }
-
   /** Whether `logs` filled anything with the visor's glow. */
   const glowed = (logs: Entry[][]): boolean =>
-    logs.flat().some(
-      (e) =>
-        e.kind === 'set' &&
-        e.name === 'fillStyle' &&
-        e.value instanceof FakeGradient &&
-        e.value.stops[0]?.[1] === rgba(VISOR_GLOW.rgb, VISOR_GLOW.alpha),
-    );
+    fillsOf(logs, rgba(VISOR_GLOW.rgb, VISOR_GLOW.alpha)).length > 0;
 
   it('glows while an item is attended, and not without', () => {
-    const { on, logs } = logged(false);
+    const { on, logs } = logged();
     const paint = heroPainter(on, 0);
     run(paint, 0, 200);
     expect(glowed(logs)).toBe(false);
@@ -206,7 +224,7 @@ describe('the visor catching the glow of the item looked at', () => {
   });
 
   it('catches nothing under reduced motion', () => {
-    const { on, logs } = logged(true);
+    const { on, logs } = logged({ reduced: true });
     on.attends.current = { id: 'join', x: 300, y: 300 };
     run(heroPainter(on, 0), 0, 200);
     expect(glowed(logs)).toBe(false);

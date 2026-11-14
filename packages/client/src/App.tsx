@@ -687,8 +687,8 @@ interface Profile {
  * The settings over every screen, opened on `tab` (the one shown last where null), the pass's
  * account with them: its name the page's own (`profile`), deleted on the line `live`.
  */
-function Settings(props: {
-  live: Connection;
+export function Settings(props: {
+  live: Pick<Connection, 'account' | 'send' | 'refusal'>;
   close: () => void;
   profile: Profile;
   tab: SettingsTab | null;
@@ -712,10 +712,10 @@ function Settings(props: {
  * crew sees this player at the menu. Off any room (`offRoom`) the settings come and go behind the
  * menu's shutter (`shutteredMenus`).
  */
-function useRoomMenus(
-  live: Connection,
+export function useRoomMenus(
+  live: Pick<Connection, 'view' | 'spectatorView' | 'send'>,
   offRoom: boolean,
-): { layer: MenuLayer; menus: ReturnType<typeof shutteredMenus> } {
+): { layer: MenuLayer; menus: ShutteredMenus } {
   const layer = useMenuLayer(pausePhaseOf(live));
   const menus = shutteredMenus(layer, offRoom);
   usePad(menus.start);
@@ -726,19 +726,22 @@ function useRoomMenus(
 }
 
 /**
- * What `layer` holds open over the screens: the room's menus, the settings — put away by
- * `closeSettings` —, on the line `live`.
+ * What `layer` holds open over the screens: the room's menus, the settings — put away as `menus`
+ * puts them away, behind the shutter off any room —, on the line `live`.
  */
-function RoomMenus(props: {
+export function RoomMenus(props: {
   layer: MenuLayer;
-  live: Connection;
+  menus: ShutteredMenus;
+  live: Pick<
+    Connection,
+    'view' | 'spectatorView' | 'account' | 'send' | 'refusal' | 'leaveRoom' | 'toMenu'
+  >;
   missions: MissionInfo[];
   profile: Profile;
-  closeSettings: () => void;
 }) {
   const { layer, live, missions, profile } = props;
   const settings = (
-    <Settings live={live} close={props.closeSettings} profile={profile} tab={layer.tab} />
+    <Settings live={live} close={props.menus.closeSettings} profile={profile} tab={layer.tab} />
   );
   return (
     <MenuLayers
@@ -870,7 +873,7 @@ export function ScreenArea(props: {
 export function shutteredMenus(
   layer: Pick<MenuLayer, 'gear' | 'start' | 'openAccount' | 'closeSettings'>,
   offRoom: boolean,
-) {
+): ShutteredMenus {
   const behind = (run: () => void): (() => void) => (offRoom ? () => shutterThen(run) : run);
   return {
     gear: behind(layer.gear),
@@ -878,6 +881,33 @@ export function shutteredMenus(
     openAccount: behind(layer.openAccount),
     closeSettings: behind(layer.closeSettings),
   };
+}
+
+/** The menus over the screens as the bar, Start and the settings reach them (`shutteredMenus`). */
+export type ShutteredMenus = Pick<MenuLayer, 'gear' | 'start' | 'openAccount' | 'closeSettings'>;
+
+/**
+ * The account as the top bar shows it: off any room (`offRoom`), the profile's name and the
+ * pass's account, a press opening the settings' „Konto" as `menus` open it; in a room none.
+ */
+export function barAccountOf(
+  offRoom: boolean,
+  profile: Pick<Profile, 'name'>,
+  account: AccountView | null,
+  menus: ShutteredMenus,
+): BarProfile | null {
+  return offRoom ? { name: profile.name, account, open: menus.openAccount } : null;
+}
+
+/**
+ * Whether the menu's hero turns away for the lobby: while the doors close over the menu for it —
+ * only for the lobby, not for the editor or a page of the menu's (`doors`, the line `live`).
+ */
+export function heroLeaves(
+  doors: Doors,
+  live: Pick<Connection, 'view' | 'spectatorView'>,
+): boolean {
+  return doorsGoing(doors) && placeOf(live) === 'lobby';
 }
 
 /**
@@ -888,7 +918,7 @@ export function shutteredMenus(
 function AppBar(props: {
   conn: Connection;
   layer: MenuLayer;
-  menus: ReturnType<typeof shutteredMenus>;
+  menus: ShutteredMenus;
   toEditor: (() => void) | null;
   account: BarProfile | null;
   menu: boolean;
@@ -976,17 +1006,11 @@ export function App({ boot }: { boot: EditorBoot }) {
         layer={layer}
         menus={menus}
         toEditor={fromEditor ? testRun.back : null}
-        account={offRoom ? { name, account: live.account, open: menus.openAccount } : null}
+        account={barAccountOf(offRoom, profile, live.account, menus)}
         menu={menu}
         covered={covered}
       />
-      <RoomMenus
-        layer={layer}
-        live={live}
-        missions={missions}
-        profile={profile}
-        closeSettings={menus.closeSettings}
-      />
+      <RoomMenus layer={layer} menus={menus} live={live} missions={missions} profile={profile} />
       <ErrorBanner conn={live} />
       <UpdateNotice />
 
@@ -1005,7 +1029,7 @@ export function App({ boot }: { boot: EditorBoot }) {
             picked={picked}
             setPicked={setPicked}
             openSettings={layer.openSettings}
-            leaving={doorsGoing(doors) && placeOf(live) === 'lobby'}
+            leaving={heroLeaves(doors, live)}
             name={name}
             onName={setName}
           />
