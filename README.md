@@ -73,10 +73,10 @@ Figur, die winkt, sobald der Name sich ändert, und wie viele Einsätze das Kont
 Konto bewahrt Name, Farbe, Erfolge und Läufe über Neustarts und Deploys hinweg; *Meine
 Einsätze* listet seine Läufe, die Einstellungen löschen es auf Wunsch. Mit einem Kennwort
 (Einstellungen, „Konto") bekommt es eine Ausweisnummer wie `EL-7K3M-9Q2D`, mit der sich jedes
-Gerät anmeldet — auch über „Anmelden" am Profil —: Einsätze, Erfolge und ein laufender Platz
-folgen dem Konto; „Abmelden" lässt das Gerät als Gast neu beginnen, „Konto wechseln" meldet in
-einem Schritt um. Ein vergessenes Kennwort lässt sich nicht wiederherstellen
-([`docs/accounts.md`](docs/accounts.md)).
+Gerät dort anmeldet: Einsätze, Erfolge und ein laufender Platz folgen dem Konto; „Abmelden"
+lässt das Gerät als Gast neu beginnen, „Konto wechseln" meldet in einem Schritt um, und ein neues
+Kennwort meldet alle anderen Geräte ab. Ein vergessenes Kennwort lässt sich nicht
+wiederherstellen ([`docs/accounts.md`](docs/accounts.md)).
 *Offene Runden* listet jede Runde mit Kartenvorschau, Mission, Schwierigkeit, ihrer Crew als
 Figuren und den freien Plätzen — ein Klick auf *Beitreten* genügt, niemand muss einen Code
 weitergeben. Laufende Runden erscheinen ebenfalls, dort führt der Knopf zum Zuschauen. Unter

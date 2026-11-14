@@ -664,13 +664,15 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   oder wechseln können." Ausweisnummer vom Server geprägt (`EL-7K3M-9Q2D`, ohne 0/O/1/I),
   Kennwort vom Spieler gesetzt (`crypto.scrypt` N 2^15, r 8, p 1, Salz je Kennwort, Vergleich in
   konstanter Zeit, 8–128 Zeichen, kein E-Mail, noch keine Wiederherstellung — der Reiter sagt es),
-  „Anmelden" in „Konto" und am Profil des Menüs zeigt den Dienstausweis des Geräts auf das Konto
-  um (leeres Gastkonto gelöscht), „Abmelden" prägt einen neuen Ausweis (Gast), „Konto wechseln"
-  beides in einem Schritt; der Platz im Einsatz folgt dem Konto (Wiedereintritt von jedem
-  angemeldeten Gerät ohne Übernahme, auch nach einem Neustart aus dem Snapshot); Limits im
-  Speicher: 10 falsche Versuche je Adresse und Minute, 5 falsche je Ausweisnummer, dann 60 s
-  Sperre — nur falsche zählen, damit ein Hörsaal hinter einem NAT sich anmeldet
-  (`docs/accounts.md`, „Sign in"). Google (K-1b) bleibt zuletzt.
+  „Anmelden" in „Konto" zeigt den Dienstausweis des Geräts auf das Konto um (leeres Gastkonto
+  gelöscht), „Abmelden" prägt einen neuen Ausweis (Gast), „Konto wechseln" beides in einem
+  Schritt, ein neues Kennwort meldet alle anderen Geräte ab; der Platz im Einsatz folgt dem Konto
+  (Wiedereintritt von jedem angemeldeten Gerät ohne Übernahme, auch nach einem Neustart aus dem
+  Snapshot); Limits im Speicher, jeder Versuch vor dem scrypt gezählt: 60 Versuche je Adresse und
+  Minute (richtige zählen nicht), jedes 5. falsche Kennwort sperrt die Ausweisnummer, 60 s und
+  dann je doppelt so lang bis 3600 s, bis ein richtiges oder eine ruhige Stunde; 4 Kennwörter
+  zugleich auf dem Server, 32 warten (`docs/accounts.md`, „Sign in"). Google (K-1b) bleibt
+  zuletzt.
 
 ## Nur lokal
 

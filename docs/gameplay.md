@@ -501,8 +501,9 @@ signed into it (docs/accounts.md, „Sign in") sees the run's card on its join s
 then on. While the seat still plays on its line it is refused („Dieser Platz spielt gerade auf
 einem anderen Gerät.") — the device that has it leaves first, „Zum Hauptmenü" say — and the pass
 that held it hears, when it comes back, that the seat went to another device. A device signed
-out of a run (Abmelden, or a switch of accounts) loses the seat's line as a drop: the seat waits
-for its account, the device starts as a guest with no card. The room's sealed snapshot carries
+out of a run (Abmelden, a switch of accounts, or a new Kennwort set on another device of the
+account) loses the seat's line as a drop: the seat waits for its account, the device starts as a
+guest with no card. The room's sealed snapshot carries
 the binding, so a server that takes the room up again hands the seat to the account's device
 too.
 

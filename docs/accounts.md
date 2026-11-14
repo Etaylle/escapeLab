@@ -59,29 +59,43 @@ then. A pass leads into one account; an account has a pass for every device sign
 
 ## Sign in
 
-In the settings' „Konto" (its section „Ausweis") an account without a Kennwort reads what one
-gives it — „Mit Ausweisnummer und Kennwort holt dieses Konto seine Einsätze und Erfolge auf jedes
-Gerät." — and offers „Kennwort setzen" and „Anmelden"; the menu's profile offers „Anmelden" to
-such an account too, opening „Konto" on it. The first Kennwort, typed twice, makes the server
-mint the account's Ausweisnummer: „EL-", then eight characters of digits and capitals without 0,
-O, 1 and I in two fours (`EL-7K3M-9Q2D`), each drawn from the system's CSPRNG, minted anew where
-one is taken. It is shown once large until „Notiert", and in „Konto" from then on, with a button
-to copy it. It is read however it is typed: any case, spaces or dashes, „EL" or not.
+In the settings' „Konto" (its section „Ausweis"), the only way in, an account without a Kennwort
+reads what one gives it — „Mit Ausweisnummer und Kennwort holt dieses Konto seine Einsätze und
+Erfolge auf jedes Gerät." — and offers „Kennwort setzen" and „Anmelden". The first Kennwort,
+typed twice, makes the server mint the account's Ausweisnummer: „EL-", then eight characters of
+digits and capitals without 0, O, 1 and I in two fours (`EL-7K3M-9Q2D`), each drawn from the
+system's CSPRNG, minted anew where one is taken. It is shown once large until „Notiert", and in
+„Konto" from then on, with a button to copy it. It is read however it is typed: any case, spaces
+or dashes, „EL" or not.
 
-- **The Kennwort** has 8 to 128 characters, counted as typed, and nothing else asked of it. It
-  is NFKC-normalised — the same umlaut from any keyboard — and kept as `scrypt$N$r$p$salt$hash`
-  (N 2^15, r 8, p 1, a random 16-byte salt, a 32-byte key, hex), compared in constant time;
-  never logged, never sent back, and a store error that names its hash is logged with the hash
-  cut. „Kennwort ändern" asks for the present one and replaces it only where it is still the one
-  checked. There is no e-mail and no recovery: „Konto" says plainly that a forgotten Kennwort
-  on a lost device loses the account.
+- **The Kennwort** has 8 to 128 characters and nothing else asked of it. It is NFKC-normalised —
+  the same umlaut from any keyboard — and its characters are counted so, client and server alike;
+  it is kept as `scrypt$N$r$p$salt$hash` (N 2^15, r 8, p 1, a random 16-byte salt, a 32-byte key,
+  hex), compared in constant time; never logged, never sent back, and a store error that names
+  its hash is logged with the hash cut. There is no e-mail and no recovery: „Konto" says plainly
+  that a forgotten Kennwort on a lost device loses the account. On a page reached without
+  encryption — neither https nor this machine — each form that asks a Kennwort says so in a line
+  („Diese Verbindung ist unverschlüsselt: Das Kennwort geht lesbar durchs Netz.") and asks all
+  the same.
+- **Kennwort ändern** asks for the present one and replaces it only where it is still the one
+  checked („Das Kennwort wurde eben an anderer Stelle geändert."). On a pass signed in already it
+  does not go through the number lock, which others' guesses may hold; its wrong present
+  Kennwörter count against that pass instead (the limits below). A new Kennwort signs every other
+  pass of the account out in the same transaction, as „Abmelden" does, the form saying so first:
+  a seat such a pass holds stays the account's, its line dropped. Its way in stays, kept under
+  64 zeros — the hash of no secret anyone could show — so that the device, the next time it shows
+  the pass (the menu come back to, any ask of the account, a resume), is told it signed out, as
+  its own „Abmelden" is answered, and starts anew on a new pass.
 - **Anmelden** re-points the device's pass to the account. The account the pass led into before
   is deleted where nothing is left of it — no way in, no run, no Erfolg; one that played runs
   stays, its names in the Bestenliste, out of reach (the sign-in says so first). The device's
   Erfolge are the new account's from then on, and the join screen asks where it sits anew. A
   sign-in is refused while a run on binds the pass („Ein laufender Einsatz bindet diesen
-  Dienstausweis: Anmelden erst danach."), before any Kennwort is tried; a lobby seat goes along.
-  Signing in again, as a page sends it twice, changes nothing.
+  Dienstausweis: Anmelden erst danach."), before any Kennwort is tried and again once it is, as
+  a run may start meanwhile; a lobby seat goes along. The pass moves only where the account's
+  login still keeps the Kennwort just checked: a change made at once either waits for the
+  sign-in and then signs its pass out with the rest, or comes first and the sign-in is told it is
+  wrong. Signing in again, as a page sends it twice, changes nothing.
 - **Wrong** is one answer for a wrong Ausweisnummer and a wrong Kennwort: „Ausweisnummer oder
   Kennwort stimmen nicht." — and every try costs the same scrypt work, a number nobody holds
   included, so neither the words nor the time tell which numbers are given.
@@ -93,22 +107,36 @@ to copy it. It is read however it is typed: any case, spaces or dashes, „EL" o
   of the browser that sees the pass change loads anew too. A seat the pass held — a run's, or a
   lobby's — stays the account's (gameplay.md, „Verbindung und Wiedereintritt"): its line drops
   as a drop does („Abgemeldet: Der Platz bleibt beim Konto."), and the pass keeps its way in for
-  that seat alone under the hash of a secret nobody holds, so that the run credits the account
-  as ever; the pass itself gets in nowhere any more.
+  that seat alone under 64 zeros, as above, so that the run credits the account as ever; the pass
+  itself gets in nowhere any more, and shown again it is told it signed out.
 - **Konto wechseln** is both in one dialog and one transaction: a new pass, minted by the
   device, signs into the other account and the old pass signs out; a wrong Kennwort changes
-  nothing.
+  nothing. After a sign-out or a switch the socket speaks for the device's next pass.
 
 | Limit | Counts | Kept | Lets go |
 | --- | --- | --- | --- |
-| 10 wrong tries a minute | wrong Ausweisnummern and Kennwörter from an address — Cloudflare's `cf-connecting-ip` behind Render, else the socket's own, as above | in memory | once the oldest is a minute old |
-| 5 wrong Kennwörter, then 60 s locked | per Ausweisnummer, from any address, a number nobody holds too | in memory | at a right Kennwort, and as the lock ends |
+| 60 tries a minute | every try at a Kennwort from an address — Cloudflare's `cf-connecting-ip` behind Render, else the socket's own, as above; a right one is given back once it is checked | in memory | once the oldest is a minute old |
+| every 5th wrong Kennwort locks: 60 s, then twice the last lock, 3600 s at most | per Ausweisnummer, from any address, a number nobody holds too: its wrong Kennwörter, counted without a window, however they are paced | in memory | a right sign-in after the lift, and a quiet hour, clear the count and the escalation |
+| the same for „Kennwort ändern" | per pass signed in already: its wrong present Kennwörter | in memory | as above |
+| 4 Kennwörter at once, 32 waiting | every Kennwort checked or kept, on the whole server | in memory | as each is done; one more is refused („Die Kennwortprüfung ist gerade ausgelastet — in einem Moment wieder möglich.") |
 | 30 changes a minute | every try, a Kennwort set or changed, a sign-out (the socket's changes, as above) | per socket | after a minute |
 
-Only wrong tries count against an address and a number: thirty right sign-ins of a lecture behind
-one NAT go through in the same minute, and a try refused counts nothing, so no limit holds an
-address or a number longer than a minute after the wrong tries stop. The log says when an address
-is refused or a number locks, naming neither, and a restart forgets the limits.
+A number's wrong Kennwörter are counted until a right one or a quiet hour, however they are paced.
+Every 5th counted wrong try locks the number: 60 s the first time, then twice the previous lock —
+120, 240, 480, 960, 1920 and 3600 s, which is the cap. The quiet hour runs from the later of the
+last counted wrong try and the end of the last lock, so five wrong tries right after a 3600 s lock
+lifts lock it again for 3600 s, not 60. During a lock every try on the number is refused, not
+derived, and counts nothing. A right sign-in after the lift and a quiet hour both clear the
+counter and the escalation. At most five guesses per lock, about 120 a day at the cap. A pass's
+„Kennwort ändern" is counted and locked by the same rule, apart from the number's.
+
+Every try is counted the moment its turn at the server's four comes, before its Kennwort is
+derived — as a wrong one, given back where it was right: tries sent at once are held to the limits
+as tries one after the other, so forty sent at once on one number have five derived at most, and
+an address sixty. Waiting for a turn counts nothing yet. Only wrong tries are left counting: sixty
+right sign-ins of a lecture behind one NAT go through in the same minute. A try refused counts
+nothing. The log says when an address reaches its limit, when a number or a pass locks and for
+how long, and when the queue refuses one, naming none; a restart forgets the limits.
 
 ## What is kept
 
@@ -118,7 +146,7 @@ schema.prisma`, tables in snake_case):
 | Table | What it holds |
 | --- | --- |
 | `accounts` | the display name, the colour, when the account was made and last seen |
-| `identities` | a way in: provider `pass` — a device's pass id, the SHA-256 of its secret — or `login` — the account's Ausweisnummer, the scrypt hash of its Kennwort, one an account at most; the account |
+| `identities` | a way in: provider `pass` — a device's pass id, the SHA-256 of its secret, or 64 zeros once it signed out of a seat or its account's Kennwort changed — or `login` — the account's Ausweisnummer, the scrypt hash of its Kennwort, one an account at most; the account |
 | `runs` | the report of each finished run (core `report.ts`) without names, and the columns the Bestenliste ranks by: mission, difficulty, outcome, duration, alarms, crew size, Tagesschicht, seed, room code, start and end; each run once, by its room code and its start |
 | `run_members` | a seat of each run: its place in the crew, what it did, the account of the pass that held it where it had one, and only then the name played under |
 | `achievements` | an account, the plaque by mission („blackout:ohne-alarm"), the end of the run that first earned it |
