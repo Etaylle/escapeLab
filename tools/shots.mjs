@@ -5263,16 +5263,22 @@ async function captureSwing(meter, i, pressed, from) {
 }
 
 /**
+ * The needle's turn as the client gives it (CircuitPanel's angle, to a tenth of a degree) for a
+ * meter's view of the circuit (`puzzle`): at the reading of the wire probed last, at 0 V before.
+ */
+function needleShown(puzzle) {
+  const reading = puzzle?.probed == null ? null : puzzle.readings?.[puzzle.probed];
+  return Math.round(needleFor(reading ?? 0) * 10) / 10;
+}
+
+/**
  * Waits up to 3 s for the meter's needle to be turned, in the page, to the reading of the wire
- * probed last as the view has it (client CircuitPanel's angle, to a tenth of a degree): a page
- * slowed by load can draw the last probe's reading only after the next probe is pressed, and the
- * next hold would take that swing for its own. Whether it was; where not, the log says so for
- * probe `i`, which is then not held.
+ * probed last as the view has it (needleShown): a page slowed by load can draw the last probe's
+ * reading only after the next probe is pressed, and the next hold would take that swing for its
+ * own. Whether it was; where not, the log says so for probe `i`, which is then not held.
  */
 async function needleCaughtUp(meter, i) {
-  const { probed = null, readings = null } = meter.seen.view.puzzle ?? {};
-  const volts = probed === null ? 0 : (readings?.[probed] ?? 0);
-  const deg = Math.round(needleFor(volts) * 10) / 10;
+  const deg = needleShown(meter.seen.view.puzzle);
   const turned = (want) => {
     const turn = document.querySelector('.station-modal .gauge-needle')?.style.transform ?? '';
     return Math.abs(Number(/-?\d+(?:\.\d+)?/.exec(turn)?.[0]) - want) < 0.05;
