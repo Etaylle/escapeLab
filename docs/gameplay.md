@@ -481,19 +481,19 @@ build (`RENDER_GIT_COMMIT`, else `dev`); it names nobody.
 
 ## Pausenmenü und Verlassen
 
-In a room — a run, a lobby, the audience's view — Esc with nothing else open, the gear in the top
-bar, a controller's Start or the strip's „Menü" (the ≡ in a phone's row; under 820 px across the
-gear alone) opens the pause menu over the room, as Hades and Celeste hold theirs: the mission's
-name in Michroma over one item under the next, the door-dark dim behind it, nothing blurred. Off
-any room the gear opens the settings at once. The list: „Weiter", „Einstellungen", „Handbuch" (the
-mission's booklet over the room), then the room's ways out — „Zum Hauptmenü" and „Einsatz
-aufgeben" in a run, „Zum Hauptmenü" and „Raum verlassen" in a lobby, „Zuschauen beenden" for the
-audience. The arrows or the D-pad step between the items, round at the ends; Enter or A takes
-one; Esc, B or „Weiter" closes the menu. Opening it pauses nothing: the clock, the patrols and
-the emergencies run on — a run stands still only for a line down, as above —, the line under the
-list says so in a run, and the crew's strip marks the player „im Menü" for as long as it stands
-open (`pause-menu`, core `set-menu` and `menus`); meanwhile the avatar stands. Under reduced
-motion the menu cuts in.
+In a room — a run, a lobby, the audience's view — Esc with nothing else open (a device or a page
+still fading out takes the Esc meant for it), the gear in the top bar, a controller's Start or the
+strip's „Menü" (the ≡ in a phone's row; under 820 px across the gear alone) opens the pause menu
+over the room, as Hades and Celeste hold theirs: the mission's name in Michroma over one item under
+the next, the door-dark dim behind it, nothing blurred. Off any room the gear opens the settings at
+once. The list: „Weiter", „Einstellungen", „Handbuch" (the mission's booklet over the room), then
+the room's ways out — „Zum Hauptmenü" and „Einsatz aufgeben" in a run, „Zum Hauptmenü" and „Raum
+verlassen" in a lobby, „Zuschauen beenden" for the audience. The arrows or the D-pad step between
+the items, round at the ends; Enter or A takes one; Esc, B or „Weiter" closes the menu. Opening it
+pauses nothing: the clock, the patrols and the emergencies run on — a run stands still only for a
+line down, as above —, the line under the list says so in a run, and the crew's strip marks the
+player „im Menü" for as long as it stands open (`pause-menu`, core `set-menu` and `menus`);
+meanwhile the avatar stands. Under reduced motion the menu cuts in.
 
 **The ways out**, as Dota 2 has them:
 
