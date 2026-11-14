@@ -4,6 +4,7 @@ import { decorIssues } from './decor.js';
 import { MAX_NOTES, NOTE_TEXT_MAX, noteSpot } from './notes.js';
 import { moduleFor, puzzleDefSchema, type PuzzleDef } from './puzzles/index.js';
 import { RELAY_MAX_PLAYERS } from './puzzles/relay.js';
+import { lineSchema } from './radio.js';
 import {
   canGather,
   canStandAt,
@@ -223,6 +224,11 @@ export const mapDefSchema = z.object({
        * many as the mission has, none ever comes
        */
       afterSolved: z.number().int().nonnegative().default(2),
+      /**
+       * what the plant's loudspeakers say as an emergency starts, on their emergency power: a
+       * building system's message, a word to nobody (radio.ts `announce`, client world/pa.ts)
+       */
+      announce: lineSchema.optional(),
     })
     .optional(),
   /**
@@ -277,6 +283,49 @@ export const mapDefSchema = z.object({
       }),
     )
     .default([]),
+});
+
+/**
+ * Mission control's lines on the radio (radio.ts): as the clock starts and for the unlocked
+ * exit; the operator's answers to what the run does — its first alarm, whatever set it off,
+ * the clock's calls with five minutes, two and the last minute left, an emergency as it starts
+ * and as it ends, cleared in time or missed — and the last word on a run: won, by the time it
+ * left (five minutes or more, a minute or more, less), or lost, by what lost it. Before a run,
+ * the lobby's Funkprobe once the whole crew stands ready (`lobby`).
+ */
+const radioSchema = z.object({
+  lobby: lineSchema.optional(),
+  start: lineSchema.optional(),
+  escape: lineSchema.optional(),
+  alarm: lineSchema.optional(),
+  clock: z
+    .object({
+      fiveMinutes: lineSchema.optional(),
+      twoMinutes: lineSchema.optional(),
+      lastMinute: lineSchema.optional(),
+    })
+    .optional(),
+  emergency: z
+    .object({
+      start: lineSchema.optional(),
+      cleared: lineSchema.optional(),
+      missed: lineSchema.optional(),
+    })
+    .optional(),
+  won: z
+    .object({
+      plenty: lineSchema.optional(),
+      tight: lineSchema.optional(),
+      lastMinute: lineSchema.optional(),
+    })
+    .optional(),
+  lost: z
+    .object({
+      time: lineSchema.optional(),
+      alarms: lineSchema.optional(),
+      abandoned: lineSchema.optional(),
+    })
+    .optional(),
 });
 
 export const missionSchema = z
@@ -344,13 +393,8 @@ export const missionSchema = z
         pa: z.array(z.string().min(1)).max(PA_LINES_MAX).default([]),
       })
       .optional(),
-    /** mission control's lines for the moment the clock starts and for the unlocked exit */
-    radio: z
-      .object({
-        start: z.string().min(1).optional(),
-        escape: z.string().min(1).optional(),
-      })
-      .default({}),
+    /** mission control's lines on the radio: when each is said, radio.ts `radioLines` */
+    radio: radioSchema.default({}),
     /**
      * the quick chat's eight phrases, in the crew's own words (chat.ts): one slot at most each,
      * `{n}` for a number from 1 to 9 or `{name}` for one of its `names`; left out, the

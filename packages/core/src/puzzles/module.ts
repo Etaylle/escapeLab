@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { Edgework } from '../edgework.js';
+import { lineSchema, type Line } from '../radio.js';
 import type { Rng } from '../rng.js';
 
 /**
@@ -144,13 +145,14 @@ export interface PuzzleDefCommon {
   hints: string[];
   /**
    * up to two lines mission control sends, one after the other, while the station stays
-   * quiet (actions.ts `nudgeDueAt`): each names the next place to go, never a rule or an answer
+   * quiet (actions.ts `nudgeDueAt`): each names the next place to go, never a rule or an answer;
+   * each may give two or three texts, of which a run says one (radio.ts `pickLine`)
    */
-  nudges: string[];
+  nudges: Line[];
   /** labels of the rooms whose lights come on once the puzzle is solved */
   lights: string[];
-  /** mission control's radio line once the puzzle is solved */
-  onSolved?: string | undefined;
+  /** mission control's radio line once the puzzle is solved: one text, or two or three */
+  onSolved?: Line | undefined;
 }
 
 /**
@@ -161,9 +163,9 @@ export const commonDefShape = {
   id: z.string().min(1),
   title: z.string().min(1),
   hints: z.array(z.string().min(1)).max(3).default([]),
-  nudges: z.array(z.string().min(1)).max(2).default([]),
+  nudges: z.array(lineSchema).max(2).default([]),
   lights: z.array(z.string().min(1)).default([]),
-  onSolved: z.string().min(1).optional(),
+  onSolved: lineSchema.optional(),
 };
 
 /** An object schema whose output is the def — zod can only discriminate on `type` in those. */
@@ -175,15 +177,17 @@ export type DefSchema<Def> = z.ZodType<Def> & z.core.$ZodTypeDiscriminable;
  * changes in play, and the kind of input with its bounds and default.
  *
  * - `int`: a whole number from min to max. With `off`, the field may be left
- *   empty, which the file says the way the schema means "off": null
- *   (`'null'`) or no key at all (`'omit'`). A file without the key is off.
+ *   empty, which the file says as null (`'null'`) or as no key at all
+ *   (`'omit'`), and a file without the key leaves it empty. Empty is off, as
+ *   the help line says — or, for a field whose schema works the value out
+ *   from the def's other fields (the Signalkette's `greyFrom`), that value.
  * - `bool`: ticked or not.
  * - `choice`: one of the options, by value.
  * - `range`: a `{ min, max }` pair of whole numbers, both from min to max.
  *
  * Every field's default is what a new puzzle of the module starts with;
- * where the field cannot be off, it is also what the schema fills in for a
- * file without the key.
+ * where the field cannot be left empty, it is also what the schema fills in
+ * for a file without the key.
  */
 export type FieldSpec = { key: string; label: string; help: string } & (
   | { kind: 'int'; min: number; max: number; default: number; off?: 'null' | 'omit' }

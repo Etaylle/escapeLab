@@ -77,6 +77,7 @@ import {
   STEP_MARGIN,
   TOKENS,
   UPDATES_PER_SECOND,
+  variantsOf,
   WALK_SPEED,
   walkable as floorFree,
   type ConsoleId,
@@ -1463,6 +1464,30 @@ function assertFleeting(consoles: { client: TestClient; from: number }[]): void 
 }
 
 /**
+ * From stage `greyFrom` on the display has lost its colour: so say the views the consoles
+ * received since their logs ran to `from`, and not one of those views carried a sign in colour
+ * to either console — the legend's patterns alone tell the colours then.
+ */
+function assertGrey(consoles: { client: TestClient; from: number }[]): void {
+  const greyFrom = SIGNAL.greyFrom ?? SIGNAL.stages;
+  const seen = consoles.flatMap(({ client, from }) =>
+    viewsSince(client, from).flatMap(({ raw, view }) => {
+      const signal = signalOf(view);
+      return signal === null ? [] : [{ raw, signal }];
+    }),
+  );
+  const grey = seen.filter(({ signal }) => signal.grey);
+  assert(
+    grey.length > 0 && seen.every(({ signal }) => signal.grey === signal.stage >= greyFrom),
+    `the display shows its signs without colour from stage ${greyFrom} on, in colour before`,
+  );
+  assert(
+    grey.every(({ raw }) => !TOKENS.some((token) => raw.includes(`"${token}"`))),
+    'no view of a stage without colour carried a sign in colour to either console',
+  );
+}
+
+/**
  * Station 2, the Signalkette, worked at two consoles at once: `a` stands at
  * console A, `b` at console B, and B switches it on. Console A sends stage 1
  * and B takes it, then the direction swaps with every stage. Nobody is left
@@ -1493,6 +1518,10 @@ async function runSignal(a: TestClient, b: TestClient): Promise<void> {
   await solveStation(SIGNALKETTE);
   assertConsolesApart(b, from.b, { sends, takes });
   assertFleeting([
+    { client: a, from: from.a },
+    { client: b, from: from.b },
+  ]);
+  assertGrey([
     { client: a, from: from.a },
     { client: b, from: from.b },
   ]);
@@ -2038,8 +2067,10 @@ assert(outAt >= skippedAt && outIn < intro.lightsSec * 1000,
     `skipped the opening, before its ${intro.lightsSec} s were up`);
 assert(dark.deadlineAt === outAt + mission.timeLimitSec * 1000,
   'the clock started when the lights went out, with the whole limit');
-assert(dark.events.map((e) => e.label).join(' | ') === `${POWER_OUT} | ${mission.radio.start}`,
-  'the run report has the blackout, then mission control\'s opener');
+const [blackoutLine, opener] = dark.events;
+assert(dark.events.length === 2 && blackoutLine?.label === POWER_OUT &&
+  variantsOf(mission.radio.start ?? []).includes(opener?.label ?? '') && opener?.moment === 'start',
+  'the run report has the blackout, then one of mission control\'s openers, as the start');
 const darkLever = dark.map?.stations.find((s) => s.puzzleId === leverDef.id);
 assert(darkLever?.known === true && darkLever.status === 'armed',
   'the lever is armed once the lights are out');

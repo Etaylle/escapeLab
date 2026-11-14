@@ -38,9 +38,12 @@ function running(): GameState {
   return actions.reduce(applyAction, initialState(blackout));
 }
 
-/** The run's last line of its report, as Anna's view has it. */
-function lastLine(state: GameState): RunEvent | undefined {
-  return viewFor(state, 'p1').events.at(-1);
+/**
+ * The newest alarm in the run's report, as Anna's view has it — what the alarm's notice reads;
+ * a line on the air may follow it, the operator's word on the run's first alarm.
+ */
+function lastAlarm(state: GameState): RunEvent | undefined {
+  return [...viewFor(state, 'p1').events].reverse().find((event) => event.kind === 'penalty');
 }
 
 const dark: ColdOpen = {
@@ -77,11 +80,11 @@ describe('what set an alarm off', () => {
       penaltySec: 20,
       playerId: 'p2',
     });
-    expect(alarmCause(lastLine(spotted)?.label ?? '')).toBe('Drohne');
+    expect(alarmCause(lastAlarm(spotted)?.label ?? '')).toBe('Drohne');
     const started = applyAction(spotted, { type: 'sabotage-start', at: T0 + 7000 });
     const missed = applyAction(started, { type: 'sabotage-expired', at: T0 + 40_000 });
-    expect(lastLine(missed)?.kind).toBe('penalty');
-    expect(alarmCause(lastLine(missed)?.label ?? '')).toBe('Notfall');
+    expect(lastAlarm(missed)?.at).toBe(T0 + 40_000);
+    expect(alarmCause(lastAlarm(missed)?.label ?? '')).toBe('Notfall');
   });
 
   it('is a wrong move for every other alarm: a station’s, an emergency console’s', () => {

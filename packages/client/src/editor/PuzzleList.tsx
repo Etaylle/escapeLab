@@ -13,6 +13,7 @@ import {
   FormHead,
   IdField,
   inputId,
+  LineField,
   OptionalNumberField,
   SelectField,
   TextField,
@@ -153,7 +154,7 @@ function PuzzleForm({ draft, index, validation, onChange, onRemove }: FormProps)
         onChange={(next) => set({ ...puzzle, lights: [...next] })}
         issues={at('lights')}
       />
-      <TextField
+      <LineField
         label="Funkspruch, wenn gelöst"
         value={puzzle.onSolved}
         id={inputId(`${path}.onSolved`)}

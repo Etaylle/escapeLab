@@ -13,6 +13,7 @@ import type { SceneProbe } from './world/menu/stage.js';
 import type { MenuSoundProbe } from './world/menuSound.js';
 import type { MusicProbe } from './world/music.js';
 import type { SoundProbe } from './world/soundProbe.js';
+import type { RadioCheckProbe } from './world/radioCheck.js';
 import type { RadioRender, VoiceProbe as RadioProbe } from './world/radioVoice.js';
 import type { LightWork } from './world/render/census.js';
 import type { MinimapLayout } from './world/render/frame.js';
@@ -163,6 +164,8 @@ export interface Probes {
   readonly menuSound?: MenuSoundProbe;
   /** the end card's music: the ending its card asked for, the theme playing (world/endTheme.ts) */
   readonly endTheme?: EndThemeProbe;
+  /** the lobby's Funkprobe: the text asked for last, and whether it aired (world/radioCheck.ts) */
+  readonly radioCheck?: RadioCheckProbe;
 }
 
 declare global {

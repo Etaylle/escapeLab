@@ -262,7 +262,13 @@ describe('lobby', () => {
     expect(again.currentPuzzleIndex).toBe(0);
     // The fresh report holds nothing but mission control's opener.
     expect(again.events).toEqual([
-      { at: T0 + 500_000, kind: 'radio', label: mission.radio.start, seconds: null },
+      {
+        at: T0 + 500_000,
+        kind: 'radio',
+        label: mission.radio.start,
+        seconds: null,
+        moment: 'start',
+      },
     ]);
     expect(again.deadlineAt).toBe(T0 + 500_000 + mission.timeLimitSec * 1000);
   });

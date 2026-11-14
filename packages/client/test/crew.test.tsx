@@ -19,7 +19,13 @@ import { presenceNear } from '../src/world/presence.js';
 import { lineup, type Place } from '../src/screens/CrewRoom.js';
 import { EndScreen } from '../src/screens/End.js';
 import { MissionPanel, RoundsPanel } from '../src/screens/MenuPanels.js';
-import { LobbyScreen, MissionStrip, startBlocker, stepTo } from '../src/screens/Lobby.js';
+import {
+  LobbyScreen,
+  MissionStrip,
+  radioCheckDue,
+  startBlocker,
+  stepTo,
+} from '../src/screens/Lobby.js';
 import { MissionHud } from '../src/screens/MissionHud.js';
 import { audienceTags, SpectateScreen } from '../src/screens/Spectate.js';
 import { iconsAsWords, mapWith, PICTOGRAPH } from './fixtures.js';
@@ -168,6 +174,17 @@ describe('starting from the lobby', () => {
   it('waits for everyone but the host to confirm', () => {
     expect(startBlocker(annaSees([anna, ben]))).toBe('Warten auf Ben …');
     expect(startBlocker(annaSees([anna, { ...ben, ready: true }]))).toBeNull();
+  });
+
+  it('has the operator’s Funkprobe due once the host can start, and not before', () => {
+    const probe = { radioCheck: 'Kurze Funkprobe.' };
+    expect(radioCheckDue(annaSees([anna, ben], probe))).toBeUndefined();
+    expect(radioCheckDue(annaSees([anna], probe))).toBeUndefined();
+    expect(radioCheckDue(annaSees([anna, { ...ben, ready: true }], probe))).toBe(
+      'Kurze Funkprobe.',
+    );
+    // A mission without one stays quiet.
+    expect(radioCheckDue(annaSees([anna, { ...ben, ready: true }]))).toBeUndefined();
   });
 });
 

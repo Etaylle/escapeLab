@@ -11,6 +11,7 @@ import {
 import { traceRequested } from './world/frameTrace.js';
 import { endThemeProbe } from './world/endTheme.js';
 import { menuSoundProbe, wantMenuSound, type MenuPlace } from './world/menuSound.js';
+import { radioCheckProbe } from './world/radioCheck.js';
 import {
   difficultyInfos,
   type Difficulty,
@@ -561,7 +562,8 @@ export function menuPlaceOf(
 
 /**
  * The menu's sound where it is wanted (`menuPlaceOf`), gone with a run; its probe on the page
- * under `?trace=1`, and the end card's music's beside it (world/endTheme.ts).
+ * under `?trace=1`, and the end card's music's and the lobby's Funkprobe's beside it
+ * (world/endTheme.ts, world/radioCheck.ts).
  */
 function useMenuSound(conn: Connection, editorOpen: boolean): void {
   const where = menuPlaceOf(conn, editorOpen);
@@ -576,6 +578,9 @@ function useMenuSound(conn: Connection, editorOpen: boolean): void {
       },
       get endTheme() {
         return endThemeProbe();
+      },
+      get radioCheck() {
+        return radioCheckProbe();
       },
     });
   }, []);

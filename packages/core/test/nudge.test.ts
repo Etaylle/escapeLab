@@ -64,6 +64,7 @@ describe('mission control watching a quiet station', () => {
       kind: 'nudge',
       label: FIRST[0],
       seconds: null,
+      moment: 'nudge',
     });
     expect(spoken.nudgesGiven).toBe(1);
   });
@@ -149,7 +150,13 @@ describe('what mission control says unasked', () => {
   it('puts the line on the air for everyone as a run event, and nothing else in the view', () => {
     const quiet = started(mission);
     const spoken = nudge(quiet, T0 + 90_000);
-    const line = { at: T0 + 90_000, kind: 'nudge', label: FIRST[0], seconds: null };
+    const line = {
+      at: T0 + 90_000,
+      kind: 'nudge',
+      label: FIRST[0],
+      seconds: null,
+      moment: 'nudge',
+    };
     expect(viewFor(spoken, 'p1').events.at(-1)).toEqual(line);
     expect(viewForSpectator(spoken).events.at(-1)).toEqual(line);
     const { events: before, ...restBefore } = viewFor(quiet, 'p2');

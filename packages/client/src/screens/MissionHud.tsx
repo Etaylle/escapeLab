@@ -3,7 +3,7 @@ import type { PlayerPosition, PlayerView, RunEvent } from '@escapelab/core';
 import { serverNow } from '../clock.js';
 import { useMedia } from '../hooks.js';
 import { pressingWord } from '../puzzles/syncPress.js';
-import { airIcon, fromControl, LAST_SHIFT } from '../radio.js';
+import { airIcon, ANNOUNCED, fromControl, fromPlant, LAST_SHIFT } from '../radio.js';
 import { useGlyph, usePadUsed } from '../input/glyphs.js';
 import { useVoice, type Voice } from '../voice/useVoice.js';
 import type { KnownPositions } from '../world/movement.js';
@@ -59,12 +59,18 @@ export interface ChatHeard {
   text: string;
 }
 
-/** A run-report line as the radio strip reads it; mission control and the last shift are named. */
+/**
+ * A run-report line as the radio strip reads it; mission control, the plant's loudspeakers and
+ * the last shift are named.
+ */
 function eventLine(event: RunEvent): Ticker {
   const text = event.seconds === null ? event.label : `${event.label} (−${event.seconds}s)`;
   const icon = airIcon(event);
   if (event.kind === 'hint') {
     return { icon, text: `${LAST_SHIFT} — ${text}` };
+  }
+  if (fromPlant(event)) {
+    return { icon, text: `${ANNOUNCED}: ${text}` };
   }
   return { icon, text: fromControl(event) ? `Leitstelle: ${text}` : text };
 }

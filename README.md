@@ -8,7 +8,8 @@ neue Missionen brauchen keinen Code.
 (`switches`), Speicherbank (`memory`), Frequenz-Abgleich mit Farblegende (`simon`), Morsefunk
 (`morse`), der Knopf (`button`), unsichtbares Labyrinth (`maze`), Synchron-Knöpfe (`button-sync`),
 Signalkette an zwei Pulten (`signal`), Sicherungskasten und Prüfpult an zwei Pulten (`circuit`),
-Serverraum mit Terminal und Rack an zwei Pulten (`servers`).
+Serverraum mit Terminal und Rack an zwei Pulten (`servers`), Zugangskontrolle mit Terminal und
+Tokengerät an zwei Pulten (`access`).
 Layouts/Codes sind pro Partie zufällig (seeded, deterministisch replaybar), Fehler kosten
 Countdown-Zeit. **Missionen:** Tutorial (2 Spieler), Blackout im Labor (2–3 Spieler, 5 Rätsel),
 Kettenreaktion (3 Spieler, jeder startet in einem anderen verschlossenen Raum und kommt nur mit
@@ -26,7 +27,8 @@ Mitte des Flurs, dann die Stationen in Reihenfolge:
    Prüfpult im Flur davor; die Regeln im Handbuch im Archiv, die Laborkennung daneben. Nach
    jedem Schnitt wird neu gemessen, ein Fehlschnitt verdrahtet den Kasten neu.
 2. *Signalkette* (`signal` mit Legende): Pult A im Flur, Pult B im Maschinenraum, die Legende
-   auf dem Klemmbrett; ab Stufe 3 zeigt das sendende Pult die Zeichen nacheinander.
+   auf dem Klemmbrett; ab Stufe 3 zeigt das sendende Pult die Zeichen nacheinander, in der
+   letzten Stufe ohne Farbe, nur mit ihrem Muster, das die Legende einer Farbe zuordnet.
 3. *Serverraum* (`servers`): Terminal und Rack an zwei Pulten im Raum hinter dem Schott, die
    Regeln im Spind dort.
 4. *Frequenz-Abgleich* (`morse`): Pult im Labor, die Tabellen im Aktenschrank, dessen Schlüssel
@@ -46,6 +48,18 @@ Abhängigkeiten per restart); E50 ist Quarantäne: Strom aus, nie starten, sonst
 weiteren Dienst. Bewiesen im Kerntest, in Blackout und in der Probemission
 `tools/fixtures/servers-probe.json`, die der Systemcheck-Rundgang über den Editor mit festem Seed
 importiert und bis zur Lösung spielt.
+
+**Zugangskontrolle** (`access`): eine Anmeldung mit zwei Faktoren unter laufender Uhr. Pult A ist
+ein Terminal wie das des Serverraums, das die freizugebenden Türen nennt und `login <konto>`, den
+Token, `status` und `freigeben <tür>` annimmt; Pult B ein Tokengerät, das je Periode (30 s) an ein
+Konto des Laufs gebunden ist und dessen sechsstelligen Token mit einem ablaufenden Balken zeigt.
+Welches Konto welche Rolle hat und welche Türen eine Rolle freigibt, steht nur auf der
+Benutzerliste des Laufs an der Quelle, jeden Lauf neu verteilt; das Gerät beginnt nie mit dem
+Konto, das die erste Tür braucht. Ein falscher Token und eine Freigabe ohne Berechtigung kosten
+einen Alarm, drei falsche Token in Folge sperren das Konto für 45 s. Noch in keiner Mission —
+ihr Platz folgt dem Playtest —: bewiesen im Kerntest und in der Probemission
+`tools/fixtures/access-probe.json`, die der Rundgang im Systemcheck über den Editor mit festem
+Seed importiert und bis zur Lösung spielt, jeden Token vom Gerät abgelesen.
 
 Keine Station lässt sich allein bedienen (siehe *Nie allein*), und auf *Normal* beendet der
 fünfte Alarm den Lauf — auf *Hart* der dritte, auf *Entspannt* gibt es keine Grenze.
@@ -277,11 +291,12 @@ selbst, wie die CI, und probt mitten in einem Einsatz den Neustart: SIGTERM, die
 „WARTUNG · Der Server startet neu" auf jeder Seite, und nach dem Neustart alle zurück im Einsatz.
 
 **Nur ein Teil des Rundgangs (Gruppen):** Jede Aufnahme des Rundgangs gehört zu genau einer von
-fünfzehn Gruppen (`tools/groups.mjs`); `SHOTS_ONLY=screens,intro` spielt nur diese,
+sechzehn Gruppen (`tools/groups.mjs`); `SHOTS_ONLY=screens,intro` spielt nur diese,
 `SHOTS_SKIP=perf` alle außer diesen — der schnelle Beweis eines Teils. Vor dem Rundgang laufen die
 Proben, jede in einem Raum für sich: `editor`, `art`, `drones` (Gefahrensinn und eine Drohne aus der
 Nähe), `reconnect` und `restart` — im Systemcheck dazu die Probe des Serverraums, die zu `devices`
-gehört. Der Rundgang selbst: `screens` (Menü und sein Ton, Bestenliste, Lobby, der Start aus ihr),
+gehört, und die der Zugangskontrolle, `access` (Blackout nennt beide im Log als ausgelassen). Der
+Rundgang selbst: `screens` (Menü und sein Ton, Bestenliste, Lobby, der Start aus ihr),
 `intro` (die Eröffnung bis `blackout.png`) und `run` (die Mission bis zur Siegerkarte, nach dem
 gewonnenen Systemcheck die Einsätze des Kontos und sein Löschen); im Lauf `devices` (jede Station,
 auch auf dem quer gehaltenen Handy), `reading` (Quellen, Schild, Notizen der letzten Schicht,
@@ -317,16 +332,20 @@ auf einem M4 mit 16 GB (14.11.2026, Last 9 bis 17) 772 s:
 zur Siegerkarte mit, und `SHOTS_ONLY=run` allein dauerte 262 s (den Systemcheck 85 s).
 
 **Ton und Funkstimme:** Jeder Raum klingt nach seiner Art, die Schritte des Partners kommen von
-dort, wo er steht, und die Musik zieht mit dem Druck an — alles zur Laufzeit erzeugt
-([`docs/sound.md`](docs/sound.md)). Nur die Funksprüche der Leitstelle sind Aufnahmen
-(`packages/client/public/voice/`), gesprochen von einer neuronalen Stimme, die offline läuft
-(Piper, Stimme „Thorsten"). Wer einen Funktext in `missions/*.json` ändert oder neu schreibt,
-nimmt ihn auf einem Mac mit `uv` neu auf — der Test, der jede Zeile prüft, nennt den Befehl;
-das Stimmmodell lädt der erste Lauf einmal nach `~/.cache/escapelab-piper/`:
+dort, wo er steht, und die Musik zieht mit dem Druck an ([`docs/sound.md`](docs/sound.md)). Zwei
+Stimmen sprechen: die Leitstelle am Funk — zum Start, nach jeder Lösung, wenn es still wird, beim
+ersten Alarm, bei fünf, zwei und einer Minute Restzeit, im Notfall, mit einem Schlusswort auf der
+Endkarte und mit einer Funkprobe in der Lobby — und die Anlage über ihre Lautsprecher. Eine Zeile
+darf zwei oder drei Fassungen haben, ein Lauf sagt eine. Die Aufnahmen liegen in
+`packages/client/public/voice/` (ElevenLabs: die Leitstelle „Helmut"). Die eigene Stimme der Anlage
+entsteht per Voice Design und wartet wie die neuen Zeilen noch auf den Render, bis dahin spricht
+Helmut die Durchsage im Intro (Befehle in `docs/sound.md`). Wer einen Funktext in
+`missions/*.json` ändert oder neu schreibt, nimmt ihn neu auf — der Test, der jede Zeile prüft,
+nennt den Befehl:
 
 ```sh
-pnpm --filter @escapelab/client voice            # nur fehlende Zeilen (Piper über uv, afconvert)
-pnpm --filter @escapelab/client voice --fresh    # alle neu, etwa für eine andere Stimme
+VOICE_ENGINE=elevenlabs pnpm --filter @escapelab/client voice   # nur fehlende Zeilen, ElevenLabs
+pnpm --filter @escapelab/client voice            # nur fehlende Zeilen, offline (Piper über uv)
 VOICE_ENGINE=say pnpm --filter @escapelab/client voice --fresh   # ohne Netz: die Mac-Stimme Anna
 ```
 

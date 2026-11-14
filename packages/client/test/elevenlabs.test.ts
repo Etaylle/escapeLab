@@ -11,9 +11,11 @@ import {
   ELEVEN_MODEL,
   ELEVEN_RETRIES,
   ELEVEN_VOICE,
+  elevenAsk,
   ENV_FILE,
   loadApiKey,
   oneByOne,
+  OPERATOR_HELD,
   resolveVoice,
   retryAfterMs,
   sampleFile,
@@ -141,7 +143,7 @@ describe('the account’s voices', () => {
 describe('a request for speech', () => {
   it('asks Eleven v4 for German MP3 at 96 kbit/s, held with stability and similarity alone', () => {
     expect(ELEVEN_MODEL).toBe('eleven_v4');
-    expect(speechRequest('Reaktor läuft.', ELEVEN_MODEL)).toEqual({
+    expect(speechRequest('Reaktor läuft.', ELEVEN_MODEL, OPERATOR_HELD)).toEqual({
       text: 'Reaktor läuft.',
       modelId: 'eleven_v4',
       outputFormat: 'mp3_44100_96',
@@ -151,20 +153,49 @@ describe('a request for speech', () => {
   });
 
   it('gives an older model style and speaker boost, and multilingual v2 no language code', () => {
-    expect(speechRequest('Los.', 'eleven_multilingual_v2')).toEqual({
+    expect(speechRequest('Los.', 'eleven_multilingual_v2', OPERATOR_HELD)).toEqual({
       text: 'Los.',
       modelId: 'eleven_multilingual_v2',
       outputFormat: ELEVEN_FORMAT,
       voiceSettings: { stability: 0.5, similarityBoost: 0.75, style: 0.2, useSpeakerBoost: true },
     });
-    expect(speechRequest('Los.', 'eleven_v3').languageCode).toBe('de');
+    expect(speechRequest('Los.', 'eleven_v3', OPERATOR_HELD).languageCode).toBe('de');
+  });
+
+  it('holds each voice as it is told: the operator as ever, another steadier', () => {
+    expect(OPERATOR_HELD).toEqual({ stability: 0.5, similarityBoost: 0.75 });
+    const steady = { stability: 0.8, similarityBoost: 0.75 };
+    expect(speechRequest('Durchsage.', ELEVEN_MODEL, steady).voiceSettings).toEqual(steady);
+    expect(speechRequest('Durchsage.', 'eleven_v3', steady).voiceSettings).toEqual({
+      ...steady,
+      style: 0.2,
+      useSpeakerBoost: true,
+    });
+  });
+});
+
+describe('a request for a voice', () => {
+  it('answers once, or fails saying what was asked, the status and what ElevenLabs said', async () => {
+    const asking = { tag: 'voice', what: 'design the plant’s voice' };
+    await expect(elevenAsk(() => Promise.resolve({ id: 'x' }), asking)).resolves.toEqual({
+      id: 'x',
+    });
+    let tries = 0;
+    const busy = (): Promise<never> => {
+      tries += 1;
+      return Promise.reject(refusal(429, { 'retry-after': '1' }, { detail: 'busy' }));
+    };
+    await expect(elevenAsk(busy, asking)).rejects.toThrow(
+      /^voice: ElevenLabs did not design the plant’s voice \(429\): \{"detail":"busy"\}$/,
+    );
+    expect(tries).toBe(1);
   });
 });
 
 describe('a line read by ElevenLabs', () => {
   it('comes back as the MP3 the voice made, from one request for its text', async () => {
     const { client, requests } = clientOf(MP3);
-    const voice = { client, voiceId: ELEVEN_VOICE, model: ELEVEN_MODEL };
+    const voice = { client, voiceId: ELEVEN_VOICE, model: ELEVEN_MODEL, held: OPERATOR_HELD };
     const dir = mkdtempSync(join(tmpdir(), 'escapelab-mp3-'));
     try {
       const file = join(dir, 'abc.mp3');
@@ -173,7 +204,9 @@ describe('a line read by ElevenLabs', () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
-    expect(requests).toEqual([[ELEVEN_VOICE, speechRequest('Reaktor läuft.', ELEVEN_MODEL)]]);
+    expect(requests).toEqual([
+      [ELEVEN_VOICE, speechRequest('Reaktor läuft.', ELEVEN_MODEL, OPERATOR_HELD)],
+    ]);
   });
 
   it('waits the seconds a 429’s retry-after asks, and goes again', async () => {
@@ -185,7 +218,7 @@ describe('a line read by ElevenLabs', () => {
     };
     const busy = refusal(429, { 'retry-after': '2' });
     const { client, requests } = clientOf(busy, refusal(429), MP3);
-    const voice = { client, voiceId: ELEVEN_VOICE, model: ELEVEN_MODEL };
+    const voice = { client, voiceId: ELEVEN_VOICE, model: ELEVEN_MODEL, held: OPERATOR_HELD };
     const mp3 = await speakEleven(voice, 'Reaktor läuft.', wait);
     expect([...mp3]).toEqual([...MP3]);
     expect(waits).toEqual([2000, 1000]);
@@ -198,7 +231,12 @@ describe('a line read by ElevenLabs', () => {
     const said = vi.spyOn(console, 'log').mockImplementation(() => undefined);
     const always = Array.from({ length: ELEVEN_RETRIES + 1 }, () => refusal(429));
     const busy = clientOf(...always);
-    const voice = { client: busy.client, voiceId: ELEVEN_VOICE, model: ELEVEN_MODEL };
+    const voice = {
+      client: busy.client,
+      voiceId: ELEVEN_VOICE,
+      model: ELEVEN_MODEL,
+      held: OPERATOR_HELD,
+    };
     await expect(speakEleven(voice, 'Los.', noWait)).rejects.toThrow(/"Los\." \(429\)/);
     expect(busy.requests).toHaveLength(ELEVEN_RETRIES + 1);
     const denied = clientOf(refusal(401, {}, { detail: { status: 'invalid_api_key' } }));

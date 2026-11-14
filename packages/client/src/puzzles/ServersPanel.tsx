@@ -98,7 +98,7 @@ export function withWord(line: string, word: { cmd: Command } | { service: Servi
 const takesService = (word: string | undefined): boolean => word === 'start' || word === 'restart';
 
 /** The longest start every one of `words` shares. */
-function sharedStart(words: readonly string[]): string {
+export function sharedStart(words: readonly string[]): string {
   const [first = '', ...rest] = words;
   let length = first.length;
   for (const word of rest) {
@@ -161,19 +161,20 @@ export function enter(
 }
 
 /**
- * A key going down at the prompt: Tab completes the line's last word (`completed`) and keeps
- * the focus where it is — Shift+Tab still goes back through the controls —; every other key
- * does what it does, Enter sending and Esc stepping back from the device. Every key that types,
- * takes a character back or completes blips.
+ * A key going down at the prompt: Tab completes the line's last word — as `complete` does, by
+ * default the Serverraum's `completed` — and keeps the focus where it is — Shift+Tab still goes
+ * back through the controls —; every other key does what it does, Enter sending and Esc stepping
+ * back from the device. Every key that types, takes a character back or completes blips.
  */
 export function promptKeyDown(
   e: Pick<KeyboardEvent, 'key' | 'shiftKey' | 'altKey' | 'ctrlKey' | 'metaKey' | 'preventDefault'>,
   setLine: (update: (line: string) => string) => void,
+  complete: (line: string) => string = completed,
 ): void {
   const tab = e.key === 'Tab' && !e.shiftKey && !e.altKey && !e.ctrlKey && !e.metaKey;
   if (tab) {
     e.preventDefault();
-    setLine(completed);
+    setLine(complete);
   }
   if (tab || e.key.length === 1 || e.key === 'Backspace' || e.key === 'Delete') {
     typeBlip();
@@ -239,8 +240,11 @@ function otherManned(puzzle: ServersPuzzle): boolean {
   return puzzle.backup?.where === consoleName(other);
 }
 
-/** A lamp on the bezel, lit while somebody stands at the console it names. */
-function Link({ name, manned }: { name: string; manned: boolean }) {
+/**
+ * A lamp on the bezel, lit while somebody stands at the console it names — on the Serverraum's
+ * terminal and rack, and on the Zugangskontrolle's terminal and token device.
+ */
+export function Link({ name, manned }: { name: string; manned: boolean }) {
   return (
     <div
       className="servers-link"
