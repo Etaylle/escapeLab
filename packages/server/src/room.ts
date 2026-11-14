@@ -148,6 +148,19 @@ const PLAYS_IN_ANOTHER_TAB = 'Dieser Platz spielt jetzt in einem anderen Fenster
 /** What a pass is told once another device took its seat over by its name. */
 const SEAT_TAKEN = 'Der Platz wurde auf einem anderen Gerät übernommen.';
 
+/**
+ * How a seat's line ended: dropped — cut, or gone without a word —, closed cleanly by its tab
+ * going away (1000, 1001), or closed on purpose for the main menu (`to-menu`), the seat kept.
+ */
+export type LineEnd = 'dropped' | 'closed' | 'menu';
+
+/** What the log says of a seat's line ending so, by the seat's name. */
+const LINE_END_LOG: Readonly<Record<LineEnd, (name: string) => string>> = {
+  dropped: (name) => `${name}'s line closed`,
+  closed: (name) => `${name}'s line closed, its tab gone`,
+  menu: (name) => `${name} left to the main menu, the seat kept`,
+};
+
 /** How long a seat in the lobby may stay off the line before the room frees it, ms. */
 export const LOBBY_AWAY_MS = 120_000;
 /**
@@ -954,7 +967,7 @@ export class Room {
    * another tab — lets go of nothing: the player stays connected on the new one, and the old
    * one hears that the seat went elsewhere.
    */
-  attach(playerId: string, listener: Listener): (clean?: boolean) => void {
+  attach(playerId: string, listener: Listener): (end?: LineEnd) => void {
     const before = this.listeners.get(playerId);
     this.listeners.set(playerId, listener);
     this.seenOnLine.add(playerId);
@@ -966,9 +979,9 @@ export class Room {
     if (this.positions.size > 0) {
       listener(this.positionsMessage());
     }
-    return (clean = false) => {
+    return (end = 'dropped') => {
       if (this.listeners.get(playerId) === listener) {
-        this.detach(playerId, clean);
+        this.detach(playerId, end);
       }
     };
   }
@@ -996,12 +1009,13 @@ export class Room {
   }
 
   /**
-   * Connection lost: keep the player (they may resume), notify the others. In a run the
-   * reducer stands it still for them (core `player-disconnected`); a drop alone ends nothing.
-   * A socket that closed `clean` — a tab closed or reloaded — frees its seat sooner in the
-   * lobby (LOBBY_GONE_MS); in a run it is held as any other.
+   * Connection lost, as `end` says (`LineEnd`): keep the player (they may resume), notify the
+   * others. In a run the reducer stands it still for them (core `player-disconnected`); a drop
+   * alone ends nothing. A socket that closed cleanly — a tab closed or reloaded — frees its seat
+   * sooner in the lobby (LOBBY_GONE_MS); in a run it is held as any other. A line closed for the
+   * main menu is held as a drop, in the lobby too, and the crew sees where the player went.
    */
-  private detach(playerId: string, clean: boolean): void {
+  private detach(playerId: string, end: LineEnd): void {
     if (!this.listeners.delete(playerId)) {
       return;
     }
@@ -1009,13 +1023,14 @@ export class Room {
       this.emptySince = Date.now();
     }
     this.lostAt.set(playerId, Date.now());
-    if (clean) {
+    if (end === 'closed') {
       this.closedClean.add(playerId);
     } else {
       this.closedClean.delete(playerId);
     }
-    this.log(`${this.nameOf(playerId)}'s line closed${clean ? ', its tab gone' : ''}`);
-    this.dispatch({ type: 'player-disconnected', playerId, at: Date.now() });
+    this.log(LINE_END_LOG[end](this.nameOf(playerId)));
+    const menu = end === 'menu' ? { menu: true as const } : {};
+    this.dispatch({ type: 'player-disconnected', playerId, at: Date.now(), ...menu });
     this.reconcileCrew();
   }
 

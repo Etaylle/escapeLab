@@ -9,6 +9,7 @@ import {
   type MissionStats,
 } from '@escapelab/core';
 import { firstDifficulty, hasWon, useWonMark } from './firstRun.js';
+import { useHistoryGuard } from './historyGuard.js';
 import { usePad } from './input/padRuntime.js';
 import {
   PauseContext,
@@ -49,7 +50,7 @@ import { MenuScene } from './screens/MenuScene.js';
 import { GameScreen } from './screens/Game.js';
 import type { GameLine } from './screens/Line.js';
 import { EndScreen } from './screens/End.js';
-import { MenuLayers, type RoomMission } from './screens/MenuLayers.js';
+import { MenuLayers, type RoomCrew, type RoomMission } from './screens/MenuLayers.js';
 import { SoundSwitch } from './screens/SoundSwitch.js';
 import { SpectateScreen } from './screens/Spectate.js';
 
@@ -541,6 +542,15 @@ export function roomMission(conn: Pick<Connection, 'view' | 'spectatorView'>): R
   return view === null ? null : { id: view.missionId, title: view.missionTitle };
 }
 
+/**
+ * The room's seats as the ask before giving one up counts them: the crew's, and the fewest the
+ * mission takes; null for the audience, which holds none.
+ */
+export function roomCrew(conn: Pick<Connection, 'view'>): RoomCrew | null {
+  const view = conn.view;
+  return view === null ? null : { taken: view.players.length, least: view.crewSize.min };
+}
+
 /** The living scene behind the screens, as screens/MenuScene.tsx takes it. */
 export interface Backdrop {
   missionId: string | null;
@@ -627,10 +637,12 @@ export function App({ boot }: { boot: EditorBoot }) {
   const editor = useEditorPage(boot);
   const testRun = useTestRun(live);
   // The menus over the screens (menuLayer.ts): a room's pause menu, its booklet, the settings —
-  // by the gear, a controller's Start, Esc; over a run the crew sees this player at the menu.
+  // by the gear, a controller's Start, Esc, in a run the browser's back button too; over a run
+  // the crew sees this player at the menu.
   const layer = useMenuLayer(pausePhaseOf(live));
   usePad(layer.start);
   useEscapeOpensMenu(layer);
+  useHistoryGuard(layer.phase === 'run', layer.openPause);
   useMenuMark(live.view, layer.pause, live.send);
   const contentRef = useRef<HTMLElement>(null);
   // How the run ended, on this screen: the world plays it before the end screen opens.
@@ -679,8 +691,10 @@ export function App({ boot }: { boot: EditorBoot }) {
       <MenuLayers
         layer={layer}
         mission={roomMission(live)}
+        crew={roomCrew(live)}
         missions={missions}
         leaveRoom={live.leaveRoom}
+        toMenu={live.toMenu}
       />
       <ErrorBanner conn={live} />
       <UpdateNotice />

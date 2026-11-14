@@ -8,7 +8,7 @@ import {
 } from '@escapelab/core';
 import { MISSED_PINGS, SILENT_MS, type CutReason } from './heartbeat.js';
 import type { MissionCatalog } from './missions.js';
-import { GAME_KINDS, type GameMessage, type Room } from './room.js';
+import { GAME_KINDS, type GameMessage, type LineEnd, type Room } from './room.js';
 import type { RoomManager } from './roomManager.js';
 
 /** What a connection needs of its socket: `ws`'s WebSocket has it. */
@@ -42,11 +42,11 @@ interface Session {
    */
   holds: () => boolean;
   /**
-   * lets go of the room once the socket is gone — `clean`ly, a tab closed or reloaded, or not:
-   * a player stays in the game and may resume, the room pausing while they are away; an
-   * audience connection simply leaves
+   * lets go of the room once the socket is gone, or the player went to the main menu, as `end`
+   * says (`LineEnd`; a drop where it says nothing): a player stays in the game and may resume,
+   * the room pausing while they are away; an audience connection simply leaves
    */
-  detach: (clean?: boolean) => void;
+  detach: (end?: LineEnd) => void;
 }
 
 /** What serving the sockets hands back: the log's line for a socket the heartbeat cuts. */
@@ -100,7 +100,7 @@ export function serveSockets(server: SocketServer, lab: Lab): Served {
     socket.on('close', (code) => {
       asks.get(socket)?.();
       holds.get(socket)?.();
-      session?.detach(code !== undefined && CLEAN_CLOSE.has(code));
+      session?.detach(code !== undefined && CLEAN_CLOSE.has(code) ? 'closed' : 'dropped');
     });
   });
   return {
@@ -200,8 +200,11 @@ const AT_THE_DOOR: ReadonlySet<ClientMessage['kind']> = new Set(DOOR_KINDS);
 /** Whether `msg` is one a socket may send in no room (`AtTheDoor`). */
 const fromTheDoor = (msg: ClientMessage): msg is AtTheDoor => AT_THE_DOOR.has(msg.kind);
 
-/** What a player's own menu says of their seat: the pause menu opened or closed over the run. */
-const MENU_KINDS = ['pause-menu'] as const satisfies readonly ClientMessage['kind'][];
+/**
+ * What a player's own menu says of their seat: the pause menu opened or closed over the run, or
+ * the player off to the main menu, the seat kept.
+ */
+const MENU_KINDS = ['pause-menu', 'to-menu'] as const satisfies readonly ClientMessage['kind'][];
 
 type FromTheMenu = Extract<ClientMessage, { kind: (typeof MENU_KINDS)[number] }>;
 
@@ -227,7 +230,7 @@ function handleMessage(
   // A seat that went to another socket takes nothing from this one any more.
   const held = session !== null && session.holds() ? session : null;
   if (fromTheMenu(msg)) {
-    return atTheMenu(requireSession(held), msg);
+    return atTheMenu(socket, requireSession(held), msg);
   }
   // What the page streams supersedes itself: from no seat it goes nowhere, unanswered.
   return held === null && msg.kind === 'pos'
@@ -237,11 +240,18 @@ function handleMessage(
 
 /**
  * What the player's own menu says of the seat of session `s` (`FromTheMenu`): the pause menu
- * opened or closed over the run, which the crew sees. The session it leaves the socket with.
+ * opened or closed over the run, which the crew sees; or the player off to the main menu — the
+ * seat's line closes on purpose, the seat kept (`LineEnd` menu), and the socket, told so
+ * (`at-menu`), stays at the door. The session it leaves the socket with.
  */
-function atTheMenu(s: Session, msg: FromTheMenu): Session | null {
-  s.room.setMenu(s.playerId, msg.open);
-  return s;
+function atTheMenu(socket: PlayerSocket, s: Session, msg: FromTheMenu): Session | null {
+  if (msg.kind === 'pause-menu') {
+    s.room.setMenu(s.playerId, msg.open);
+    return s;
+  }
+  s.detach('menu');
+  send(socket, { kind: 'at-menu', code: s.room.code });
+  return null;
 }
 
 /**

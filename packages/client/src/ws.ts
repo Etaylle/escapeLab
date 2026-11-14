@@ -139,6 +139,12 @@ export interface Connection {
    * LEAVE_WAIT_MS without a word — the audience simply goes; the page loads anew.
    */
   leaveRoom: () => void;
+  /**
+   * Off to the main menu, the seat kept (`to-menu`, as Dota 2 disconnects): once the server has
+   * the seat off its line, or after LEAVE_WAIT_MS without a word, the page loads anew on the
+   * main menu, whose card of the room leads back (`goToMenu`).
+   */
+  toMenu: () => void;
 }
 
 /** How long leaving waits for the server to free the seat before the page loads anew, ms. */
@@ -549,6 +555,37 @@ export function leaveSeat(
 }
 
 /**
+ * Off to the main menu from room `code`, the seat kept (`to-menu`): once the server says the seat
+ * is off its line (`at-menu`) — or after LEAVE_WAIT_MS without a word, a line down meanwhile
+ * holding it as a drop — the tab is in no room and the page loads anew on the main menu. What
+ * was noted there and the room's snapshot stay: the seat is the pass's still, and the menu's card
+ * of the room (`whereami`) leads back to it.
+ */
+export function goToMenu(
+  code: string,
+  listen: Connection['listen'],
+  send: (msg: ClientMessage) => void,
+  reload: () => void = () => location.reload(),
+): void {
+  const off = (): void => {
+    leaveTab();
+    reload();
+  };
+  const timer = setTimeout(off, LEAVE_WAIT_MS);
+  const stop = listen({
+    message: (msg) => {
+      if (msg.kind === 'at-menu' && msg.code === code) {
+        clearTimeout(timer);
+        stop();
+        off();
+      }
+    },
+    closed: () => undefined,
+  });
+  send({ kind: 'to-menu' });
+}
+
+/**
  * Wakes the line (`Line.wake`) on every way the page comes back: the network back (`online`),
  * the page shown again from the cache or on its tab (`pageshow`, `visibilitychange` to
  * visible), the window in focus. Returns how to stop.
@@ -719,6 +756,14 @@ export function useGameConnection(): Connection {
         return;
       }
       leaveSeat(code, seenRef.current?.you.id ?? null, listen, (msg) => lineRef.current?.send(msg));
+    },
+    toMenu: () => {
+      const code = roomOfTab();
+      if (code === null) {
+        location.reload();
+        return;
+      }
+      goToMenu(code, listen, (msg) => lineRef.current?.send(msg));
     },
   };
 }

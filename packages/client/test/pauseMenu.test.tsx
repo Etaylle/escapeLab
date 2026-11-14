@@ -90,9 +90,10 @@ describe('the pause menu', () => {
     expect(pausePhaseOf({ view: null, spectatorView: null })).toBeNull();
   });
 
-  it('offers „Weiter" first, the settings and the booklet, and last the room’s way out', () => {
-    expect(itemsSaid('run')).toEqual(['Weiter', 'Einstellungen', 'Handbuch']);
-    expect(itemsSaid('lobby')).toEqual(['Weiter', 'Einstellungen', 'Handbuch', 'Raum verlassen']);
+  it('offers „Weiter" first, the settings and the booklet, and last the room’s ways out', () => {
+    const shared = ['Weiter', 'Einstellungen', 'Handbuch'];
+    expect(itemsSaid('run')).toEqual([...shared, 'Zum Hauptmenü', 'Einsatz aufgeben']);
+    expect(itemsSaid('lobby')).toEqual([...shared, 'Zum Hauptmenü', 'Raum verlassen']);
     expect(itemsSaid('audience')).toEqual([
       'Weiter',
       'Einstellungen',

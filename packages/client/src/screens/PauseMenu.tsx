@@ -8,28 +8,41 @@ import { menuStep } from './MainMenu.js';
  * The pause menu over a room (menuLayer.ts), as the main menu stands (styles/menu.css): the
  * mission's name in the title's face over a vertical list in it, over the dark of the lab's doors
  * — no blur, the world drawing on beneath it. „Weiter" stands first and lit, then the settings and
- * the booklet, then the room's way out. The arrows, a controller's D-pad, Enter and A take an
- * item; Esc, B or Start — or a click beside the list — close it. While it stands open, the keys
- * are its own: nothing walks, works or opens under it, but the voice keeps its key. Over a run
- * one line under the list says that nothing stands still for it.
+ * the booklet, then the room's ways out (`WAYS_OUT`). The arrows, a controller's D-pad, Enter and
+ * A take an item; Esc, B or Start — or a click beside the list — close it. While it stands open,
+ * the keys are its own: nothing walks, works or opens under it, but the voice keeps its key. Over
+ * a run one line under the list says that nothing stands still for it.
  */
 
 /** What the pause menu offers, item by item. */
-export type PauseItem = 'resume' | 'settings' | 'handbook' | 'leave' | 'stop-watching';
+export type PauseItem =
+  | 'resume'
+  | 'settings'
+  | 'handbook'
+  | 'main-menu'
+  | 'give-up'
+  | 'leave'
+  | 'stop-watching';
 
 /** What each item says. */
 export const PAUSE_LABELS: Readonly<Record<PauseItem, string>> = {
   resume: 'Weiter',
   settings: 'Einstellungen',
   handbook: 'Handbuch',
+  'main-menu': 'Zum Hauptmenü',
+  'give-up': 'Einsatz aufgeben',
   leave: 'Raum verlassen',
   'stop-watching': 'Zuschauen beenden',
 };
 
-/** The room's own way out of it, by where the menu stands. */
+/**
+ * The room's ways out of it, by where the menu stands: from a run or a lobby to the main menu,
+ * the seat kept, and then the seat given up — the run's after asking once —; the audience simply
+ * goes, which is its way to the main menu.
+ */
 const WAYS_OUT: Readonly<Record<PausePhase, readonly PauseItem[]>> = {
-  run: [],
-  lobby: ['leave'],
+  run: ['main-menu', 'give-up'],
+  lobby: ['main-menu', 'leave'],
   audience: ['stop-watching'],
 };
 

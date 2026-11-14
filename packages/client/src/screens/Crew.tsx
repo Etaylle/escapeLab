@@ -66,7 +66,7 @@ function stationTag(map: MapView | null, at: Whereabouts, pressing: string | nul
 /**
  * What one crew member is doing right now: at the pause menu over the run, which the run goes
  * on under — first, since nothing else they do moves on meanwhile —, and what they do there
- * (`doing`). A member whose line is down is only that.
+ * (`doing`). A member whose line is down is only that, or gone to the main menu, their seat kept.
  */
 export function crewTags(
   map: MapView | null,
@@ -76,7 +76,7 @@ export function crewTags(
   pressing: string | null = null,
 ): CrewTag[] {
   if (!player.connected) {
-    return [{ text: 'getrennt', tone: 'away' }];
+    return [{ text: player.menu === 'main' ? 'im Hauptmenü' : 'getrennt', tone: 'away' }];
   }
   const menu: CrewTag[] = player.menu === 'pause' ? [{ text: 'im Menü', tone: 'menu' }] : [];
   return [...menu, ...doing(map, player.id, at, pos, pressing)];

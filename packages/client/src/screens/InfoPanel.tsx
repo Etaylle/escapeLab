@@ -67,7 +67,7 @@ export function controlsOf(source: GlyphSource): (readonly [string, string])[] {
     ...panels,
     [
       pad ? g('menu') : `${g('menu')} oder ⚙ in der Kopfleiste`,
-      'Menü: Einstellungen, Handbuch — die Uhr läuft weiter',
+      'Menü: Einstellungen, Handbuch, Hauptmenü — die Uhr läuft weiter',
     ],
   ];
 }

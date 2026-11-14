@@ -81,7 +81,7 @@ export interface PlayerView {
      * out for everybody it counts
      */
     waived?: true;
-    /** the menu they have open over the run (`GameState.menus`); left out for none */
+    /** the menu they have open: the pause menu, the main menu (`GameState.menus`); or none */
     menu?: MenuPlace;
     isHost: boolean;
   }[];
@@ -197,6 +197,8 @@ export interface AwayView {
   since: number;
   /** epoch ms from which the crew may go on without them */
   waivableAt: number;
+  /** their line closed on purpose, gone to the main menu, the seat kept; left out for a drop */
+  menu?: true;
 }
 
 /**
@@ -1069,7 +1071,7 @@ export interface SpectatorView {
     connected: boolean;
     /** away, and the run went on without them; left out for everybody it counts */
     waived?: true;
-    /** the menu they have open over the run; left out for none */
+    /** the menu they have open: the pause menu, the main menu; left out for none */
     menu?: MenuPlace;
     presence: PlayerPresence;
   }[];
@@ -1088,7 +1090,10 @@ export interface SpectatorView {
   }[];
 }
 
-/** Whom the run waits for while it stands still, oldest drop first; null while it runs on. */
+/**
+ * Whom the run waits for while it stands still, oldest drop first, and who of them went to the
+ * main menu; null while it runs on.
+ */
 function pausedFor(state: GameState): AwayView[] | null {
   if (state.paused === null) {
     return null;
@@ -1097,9 +1102,10 @@ function pausedFor(state: GameState): AwayView[] | null {
     .flatMap((id) => {
       const away = state.away[id];
       const name = state.players.find((p) => p.id === id)?.name;
+      const menu = state.menus[id] === 'main' ? { menu: true as const } : {};
       return away === undefined || name === undefined
         ? []
-        : [{ id, name, since: away.since, waivableAt: away.waivableAt }];
+        : [{ id, name, since: away.since, waivableAt: away.waivableAt, ...menu }];
     })
     .sort((a, b) => a.since - b.since);
 }
@@ -1125,10 +1131,14 @@ function waivedOf(state: GameState, playerId: string): { waived?: true } {
   return state.away[playerId]?.waived === true ? { waived: true } : {};
 }
 
-/** The menu `playerId` has open over the run (`GameState.menus`); nothing outside a run. */
+/**
+ * The menu `playerId` has open (`GameState.menus`): the pause menu over the run, the main menu
+ * they went to from a run or a lobby; nothing once the run is over.
+ */
 function menuOf(state: GameState, playerId: string): { menu?: MenuPlace } {
   const menu = state.menus[playerId];
-  return menu === undefined || state.phase !== 'playing' ? {} : { menu };
+  const over = state.phase === 'won' || state.phase === 'lost';
+  return menu === undefined || over ? {} : { menu };
 }
 
 /** Why the run was called off, for its end card; nothing for a run that ended any other way. */

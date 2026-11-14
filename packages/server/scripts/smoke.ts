@@ -40,7 +40,8 @@
  * three plays Blackout: Finn's line drops for 70 s, the others go on without
  * him once the minute is over, and he is back on his pass, counted in at once
  * with no pause for it; Gus's line drops and a phone asks for his seat by
- * his name: Eva lets it in, his old pass refused; Gus gives his seat up and the two go on,
+ * his name: Eva lets it in, his old pass refused; Finn goes to the main menu and comes
+ * back, his seat kept all along; Gus gives his seat up and the two go on,
  * then Finn gives his up and the run ends, called off. No answer is written
  * down here.
  * Run with: pnpm --filter @escapelab/server smoke
@@ -58,6 +59,7 @@ import {
   FIND_REACH,
   FIRST_WAIT_MS,
   inCone,
+  LATER_WAIT_MS,
   MAX_STEP,
   moduleFor,
   NO_CREDITS,
@@ -496,6 +498,8 @@ const isAllowed = (m: ServerMessage): m is Extract<ServerMessage, { kind: 'takeo
   m.kind === 'takeover-allowed';
 const isRestoring = (m: ServerMessage): m is Extract<ServerMessage, { kind: 'restoring' }> =>
   m.kind === 'restoring';
+const isAtMenu = (m: ServerMessage): m is Extract<ServerMessage, { kind: 'at-menu' }> =>
+  m.kind === 'at-menu';
 
 // --- map walking -----------------------------------------------------------
 
@@ -2622,9 +2626,36 @@ async function takeOver({ code, eva, gus }: Trio): Promise<TestClient> {
   return phone;
 }
 
+/**
+ * Finn goes to the main menu (`to-menu`): a clean leave the server records as such, not a drop
+ * — his socket told so and standing at the door, his seat bound to the run, which waits for him
+ * as for a later drop and tells Eva where he went; back on his pass, the run goes on.
+ */
+async function toTheMenuAndBack({ code, eva }: Trio, finn: TestClient): Promise<void> {
+  finn.send({ kind: 'to-menu' });
+  const told = await finn.expect('Finn told his seat is off its line', isAtMenu);
+  assert(told.code === code, 'the socket is told which room it left for the menu');
+  const held = await eva.expectView('the run waits for Finn, gone to the main menu', (v) =>
+    v.pausedFor?.[0]?.name === 'Finn' && v.pausedFor[0].menu === true);
+  const gone = held.pausedFor?.[0] ?? fail('nobody away');
+  assert(gone.waivableAt - gone.since === LATER_WAIT_MS,
+    'the crew waits for a leave to the menu as for a later drop');
+  finn.send({ kind: 'whereami', pass: finn.pass });
+  const bound = await finn.expect('where Finn sits from the menu', isSeated);
+  assert(bound.seat?.code === code && bound.seat.phase === 'playing' && bound.seat.paused,
+    'the pass gone to the menu stays bound to the run, which stands paused for it');
+  finn.send({ kind: 'resume', code, pass: finn.pass });
+  await finn.seated();
+  await eva.expectView('Finn back from the menu, the run going on', (v) =>
+    v.pausedFor === null &&
+    v.players.some((p) => p.name === 'Finn' && p.connected && p.menu === undefined));
+  console.log('  Finn left for the main menu, his seat kept, and came back');
+}
+
 const trio = await crewOfThree();
 const finnBack = await awayAndBack(trio);
 const gusPhone = await takeOver(trio);
+await toTheMenuAndBack(trio, finnBack);
 await giveUp({ ...trio, gus: gusPhone }, finnBack);
 for (const client of [trio.eva, finnBack, gusPhone]) {
   client.close();

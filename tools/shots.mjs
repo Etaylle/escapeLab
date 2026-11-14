@@ -6079,7 +6079,7 @@ async function askForNotes(first, second) {
 }
 
 /** The HUD's Info button: in the crew strip, or in the row a phone held sideways folds it into. */
-const INFO_BUTTON = '.hud-info:not(.hud-notes):not(.hud-mic)';
+const INFO_BUTTON = '.hud-info:not(.hud-notes):not(.hud-mic):not(.hud-menu)';
 /** The Laborkennung's chip in the HUD: in the crew strip, or in the row. */
 const CHIP = '.hud .edgework, .stage-row .edgework';
 
@@ -10312,8 +10312,9 @@ const wrongOf = (checks) => checks.filter(([wrong]) => wrong).map(([, words]) =>
  */
 function pauseMenuWrong(shown, clock, mark, closed) {
   const items = shown.items.map((item) => item.label).join(', ');
+  const wanted = 'Weiter, Einstellungen, Handbuch, Zum Hauptmenü, Einsatz aufgeben';
   return wrongOf([
-    [items !== 'Weiter, Einstellungen, Handbuch', `items ${items}`],
+    [items !== wanted, `items ${items}`],
     [shown.focused !== 'resume', `focus on ${shown.focused}`],
     [!shown.line.startsWith('Die Uhr läuft weiter'), 'no line that the clock runs on'],
     [clock.before === clock.after, `the clock stood at ${clock.before}`],
@@ -10331,10 +10332,11 @@ async function menuByEscape(page) {
 
 /**
  * pause-menu.png: Esc over Anna's running world with nothing open opens the pause menu — the
- * mission's name over „Weiter", „Einstellungen", „Handbuch", „Weiter" in the focus, and the line
- * that the clock runs on — and nothing stands still for it: the clock counts on, and Ben's view
- * marks Anna at the menu. Esc closes it again, and the mark goes. The run fails where any of it is
- * not so.
+ * mission's name over „Weiter", „Einstellungen", „Handbuch", „Zum Hauptmenü", „Einsatz aufgeben",
+ * „Weiter" in the focus, and the line that the clock runs on — and nothing stands still for it:
+ * the clock counts on, and Ben's view marks Anna at the menu. Esc closes it again, and the mark
+ * goes. The run fails where any of it is not so. Then the ask before giving up (leave-ask.png)
+ * and the menu on Ben's phone (pause-menu-phone-932.png).
  */
 async function capturePauseMenu(anna, ben) {
   const page = anna.page;
@@ -10362,7 +10364,119 @@ async function capturePauseMenu(anna, ben) {
   if (wrong.length > 0) {
     fail(`pause-menu.png: ${wrong.join(', ')}`);
   }
+  await captureLeaveAsk(page);
   await capturePauseMenuPhone(ben);
+}
+
+/** What the ask before giving up shows: its lines, the focused button, whether it came. */
+async function askShown(page, asked) {
+  const ask = page.locator('.give-up-ask');
+  return {
+    asked,
+    lines: asked ? await ask.locator('p').allInnerTexts() : [],
+    focused: await page.evaluate(() => document.activeElement?.textContent ?? null),
+  };
+}
+
+/**
+ * leave-ask.png: „Einsatz aufgeben" on Anna's menu over the run asks once, on a card of its own
+ * over the menu that says what it means — the seat gone for good, and what becomes of the run —
+ * with „Zurück" in the focus; „Zurück" steps back to the menu, and Esc closes that. The run fails
+ * where no card comes, it says otherwise, or a way back sticks.
+ */
+async function captureLeaveAsk(page) {
+  const menu = page.locator('.pause-menu');
+  if (!(await menuByEscape(page))) {
+    fail('leave-ask.png: Esc over the world opened no menu');
+    return;
+  }
+  await menu.locator('[data-item="give-up"]').click();
+  const ask = page.locator('.give-up-ask');
+  const asked = await settled(ask.waitFor({ timeout: 3000 }));
+  await sleep(200);
+  await capture(page, 'leave-ask.png');
+  const shown = await askShown(page, asked);
+  await ask.locator('.give-up-back').click({ timeout: 2000 }).catch(() => undefined);
+  const back = await settled(ask.waitFor({ state: 'hidden', timeout: 2000 }));
+  const stays = await menu.isVisible();
+  await page.keyboard.press('Escape');
+  const closed = await settled(menu.waitFor({ state: 'hidden', timeout: 2000 }));
+  console.log(
+    `leave-ask.png      Anna's ask: ${shown.lines.map((line) => `„${line}"`).join(' ')}; ` +
+      `the focus on „${shown.focused}"; „Zurück" ${back && stays ? 'to the menu' : '!! stuck'}`,
+  );
+  const wrong = wrongOf([
+    [!asked, 'no ask came'],
+    [shown.lines.length !== 2, `${shown.lines.length} lines`],
+    [!String(shown.lines[0]).startsWith('Der Platz wird aufgegeben'), 'no word of the seat'],
+    [shown.focused !== 'Zurück', `the focus on ${shown.focused}`],
+    [!back, '„Zurück" left the ask open'],
+    [!stays, '„Zurück" closed the menu too'],
+    [!closed, 'Esc left the menu open'],
+  ]);
+  if (wrong.length > 0) {
+    fail(`leave-ask.png: ${wrong.join(', ')}`);
+  }
+}
+
+/** The main menu's card of the run as it stands: first in the list, in the focus, its ways. */
+function boundShown() {
+  const list = document.querySelector('.menu-list');
+  const card = document.querySelector('.menu-list .bound');
+  const ways = card === null ? [] : [...card.querySelectorAll('.bound-actions button')];
+  return {
+    first: card !== null && list.firstElementChild === card,
+    focused: document.activeElement?.classList.contains('bound-back') === true,
+    ways: ways.map((button) => button.textContent.trim()),
+  };
+}
+
+/** Whether `seen`'s latest view has the run waiting for `name`, gone to the main menu. */
+const waitsAtMenu = (seen, name) =>
+  seen.view?.pausedFor?.some((member) => member.name === name && member.menu === true) === true;
+
+/**
+ * menu-bound-after-leave.png: „Zum Hauptmenü" on Ben's menu over the run closes his line on
+ * purpose — the doors shut, his page comes back on the main menu with the run's card first and
+ * lit, „Zurück zum Einsatz" in the focus and „Einsatz aufgeben" after it —, while Anna's run waits
+ * for him, her card saying „Ben ist ins Hauptmenü gegangen."; „Zurück zum Einsatz" takes him back
+ * into the run, which goes on. The run fails where any of it is not so.
+ */
+async function captureLeaveToMenu(ben, anna) {
+  const page = ben.page;
+  if (!(await menuByEscape(page))) {
+    fail('menu-bound-after-leave.png: Esc over the world opened no menu');
+    return;
+  }
+  await page.locator('.pause-menu [data-item="main-menu"]').click();
+  const there = await settled(page.locator('.menu-list .bound--run').waitFor({ timeout: 15_000 }));
+  const waited = await until(() => waitsAtMenu(anna.seen, ben.name), 5000);
+  const said = await textOf(anna.page.locator('.overlay.pause .pause-gone'));
+  await sleep(600);
+  const shown = await page.evaluate(boundShown);
+  await capture(page, 'menu-bound-after-leave.png');
+  await page.locator('.bound-back').click({ timeout: 2000 }).catch(() => undefined);
+  const back = await settled(page.locator('.stage').waitFor({ timeout: 15_000 }));
+  const going = await until(() => anna.seen.view?.pausedFor === null, 10_000);
+  console.log(
+    `menu-bound-after-leave.png Ben's menu: the run's card ` +
+      `${shown.first ? 'first' : '!! not first'}, ways ${shown.ways.join(' · ')}; ` +
+      `Anna's card „${said}"; ` +
+      `„Zurück zum Einsatz" ${back && going ? 'took him back, the run going on' : '!! did not'}`,
+  );
+  const wrong = wrongOf([
+    [!there, 'no card of the run on the main menu'],
+    [!shown.first, 'the card not first'],
+    [!shown.focused, 'the way back not in the focus'],
+    [shown.ways.join('|') !== 'Zurück zum Einsatz|Einsatz aufgeben', `ways ${shown.ways}`],
+    [!waited, 'Anna’s run waits for nobody gone to the main menu'],
+    [said !== `${ben.name} ist ins Hauptmenü gegangen.`, `Anna’s card says „${said}"`],
+    [!back, 'the way back did not open the run'],
+    [!going, 'the run did not go on'],
+  ]);
+  if (wrong.length > 0) {
+    fail(`menu-bound-after-leave.png: ${wrong.join(', ')}`);
+  }
 }
 
 /** Ben's phone turned to 932×430; returns the size it had. */
@@ -10745,7 +10859,7 @@ async function captureControllerSettings(page) {
 /** What the HUD's notepad and info buttons say now. */
 async function hudButtons(page) {
   const notes = await textOf(page.locator('.hud .hud-notes'));
-  const info = await textOf(page.locator('.hud .hud-info:not(.hud-notes):not(.hud-mic)'));
+  const info = await textOf(page.locator(`.hud ${INFO_BUTTON}`));
   return `${notes} · ${info}`;
 }
 
@@ -11978,6 +12092,7 @@ async function run() {
     }
   }
   await captureNotepad(guest, guestSeen);
+  await captureLeaveToMenu(ben, anna);
   await captureNoting(anna, 'reading-notepad.png', 'highlight.png', watcherSeen);
   await captureNotepadCaptured();
   await captureNoting(ben, 'reading-notepad-phone.png', 'highlight-phone.png', watcherSeen);
