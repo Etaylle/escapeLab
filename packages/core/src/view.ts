@@ -434,7 +434,10 @@ export interface MapView {
   labels: { text: string; x: number; y: number; kind?: RoomKind }[];
   /** the furniture on the floor: solid for every step, as walls are */
   decor: { kind: DecorKind; x: number; y: number; variant?: number }[];
-  /** labels of the rooms whose lights the solved stations have switched on, first lit first */
+  /**
+   * labels of the rooms whose lights are on, first lit first: every room of a mission whose
+   * lights stay on (`Mission['lit']`), then those the solved stations have switched on
+   */
   litRooms: string[];
   /** escape hatch; open once every puzzle is solved */
   exit: {
@@ -1015,10 +1018,15 @@ function exitOf(state: GameState): MapView['exit'] {
   };
 }
 
-/** The rooms the solved stations have lit, each once, in the order they lit up. */
+/**
+ * The rooms lit, each once, in the order they lit up: in a mission whose lights stay on
+ * (`Mission['lit']`) every room the map names, from the start; then those the solved stations
+ * have lit.
+ */
 function litRoomsOf(state: GameState): string[] {
+  const named = state.mission.lit ? state.mission.map.labels.map((label) => label.text) : [];
   const solved = state.mission.puzzles.slice(0, state.currentPuzzleIndex);
-  return [...new Set(solved.flatMap((puzzle) => puzzle.lights))];
+  return [...new Set([...named, ...solved.flatMap((puzzle) => puzzle.lights)])];
 }
 
 function mapViewFor(state: GameState, viewer: MapViewer): MapView | null {

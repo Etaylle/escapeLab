@@ -204,12 +204,31 @@ export function MenuPanel({
   );
 }
 
+/** On the Übungshalle's card, over its title, for every device: what the hall is for. */
+export const HALL_HINT = 'Jede Station zum Üben';
+
+/** The Übungshalle among the missions: the one whose title says so. */
+export function isPracticeHall(mission: Pick<MissionInfo, 'title'>): boolean {
+  return /^Übungshalle\b/.test(mission.title);
+}
+
+/**
+ * The line of its own over a card's title: „Erster Einsatz? Hier starten" on the tutorial's
+ * while this device has seen no run won (`first`), what the Übungshalle is for on its card,
+ * always (HALL_HINT); none on any other.
+ */
+function CardHint({ mission, first }: { mission: MissionInfo; first: boolean }) {
+  if (first) {
+    return <span className="mission-first">{FIRST_RUN_HINT}</span>;
+  }
+  return isPracticeHall(mission) ? <span className="mission-hall">{HALL_HINT}</span> : null;
+}
+
 /**
  * One mission to pick: its map, its name and one line of facts; the picked
  * one spells out its subtitle too. Once the mission has been played, a line
- * says its best time and win rate. The tutorial's card says „Erster Einsatz?
- * Hier starten" in a line of its own while this device has seen no run won
- * (`first`).
+ * says its best time and win rate. A line over the title may say what the
+ * card is for (`CardHint`).
  */
 export function MissionCard({
   mission,
@@ -234,7 +253,7 @@ export function MissionCard({
     >
       <MapThumb tiles={mission.tiles} height={64} />
       <span className="mission-text">
-        {first && <span className="mission-first">{FIRST_RUN_HINT}</span>}
+        <CardHint mission={mission} first={first} />
         <span className="mission-title">{mission.title}</span>
         <span className="mission-meta">
           {crewSizeText(mission.players)} · {clockSizeText(mission.timeLimitSec)} ·{' '}

@@ -326,6 +326,12 @@ export const missionSchema = z
     /** how the stations are taken: one after the other (`chain`), or any order (`free`) */
     order: z.enum(MISSION_ORDERS).default('chain'),
     /**
+     * The lab keeps its lights on for the whole run, as a training hall does: every room the
+     * map names is lit from the start, as a solved station lights one (view.ts `litRooms`). An
+     * intro would only put them out, so a lit mission has none.
+     */
+    lit: z.boolean().default(false),
+    /**
      * seconds on the clock once the lights are out; 0 for none: no deadline, every screen shows
      * the time run instead, alarms and notes cost no time and mission control names no place
      */
@@ -378,6 +384,13 @@ export const missionSchema = z
   .superRefine((mission, ctx) => {
     if (mission.players.min > mission.players.max) {
       ctx.addIssue({ code: 'custom', message: 'players: min must not be above max' });
+    }
+    if (mission.lit && mission.intro !== undefined) {
+      ctx.addIssue({
+        code: 'custom',
+        message:
+          'lit: a mission whose lights stay on has no intro to put them out — leave out intro',
+      });
     }
     for (const puzzle of mission.puzzles) {
       if (puzzle.type === 'relay') {

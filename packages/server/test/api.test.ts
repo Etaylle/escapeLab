@@ -74,6 +74,7 @@ describe('GET /missions', () => {
     expect(infos.map((info) => [info.id, info.stage])).toEqual([
       ['blackout', undefined],
       ['systemcheck', undefined],
+      ['uebungshalle', undefined],
       ['kettenreaktion', 'prototype'],
       ['doppelschicht', 'prototype'],
     ]);

@@ -128,7 +128,8 @@ const RELEASE_RULES: ReleaseRule[] = [
 ];
 const RELEASE_OTHERWISE = 1;
 
-const releaseDigit = (strip: StripColour): number =>
+/** The digit the second list names for a strip: the clock has to show it as the button goes. */
+export const releaseDigit = (strip: StripColour): number =>
   RELEASE_RULES.find((rule) => rule.strip === strip)?.digit ?? RELEASE_OTHERWISE;
 
 const releaseWords = (digit: number): string =>

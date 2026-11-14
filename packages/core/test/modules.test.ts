@@ -166,17 +166,32 @@ function openedBy(state: GameState, source: ManualDef, reader: string, at: numbe
   return [...key, open].reduce(applyAction, there);
 }
 
+/** What a solver reads off the crew's clock. */
+type Clock = Pick<SolveAid<PuzzleInput, PuzzleView>, 'remainingSec' | 'elapsedSec'>;
+
+/**
+ * The clock as `client` shows it at `at`: the seconds left on it, or where the mission has none,
+ * the seconds it has counted up (`elapsedSec`).
+ */
+function clockOf(client: PlayerView, at: number): Clock {
+  const { deadlineAt, clockFrom } = client;
+  return {
+    remainingSec: deadlineAt === null ? null : Math.ceil((deadlineAt - at) / 1000),
+    ...(clockFrom === undefined ? {} : { elapsedSec: Math.floor((at - clockFrom) / 1000) }),
+  };
+}
+
 /**
  * What the clients hold of the open puzzle at `at`: the operator's, the
  * partner's and the reader's view of it — with nobody left to read, the
  * partner's stands in — the edgework if one of them has read the sign, and
- * the seconds left on their clock.
+ * their clock (`clockOf`).
  */
 function crewSees(
   state: GameState,
   { operator, partner, reader }: Roles,
   at: number,
-): { views: Perspectives<PuzzleView>; edgework: Edgework | null; remainingSec: number | null } {
+): { views: Perspectives<PuzzleView>; edgework: Edgework | null; clock: Clock } {
   const openAt = (client: PlayerView): PuzzleView => {
     if (client.puzzle === null) {
       throw new Error(`${state.mission.id}: the clients have no open puzzle`);
@@ -189,7 +204,6 @@ function crewSees(
   if (atBook === null) {
     throw new Error(`${state.mission.id}: nobody reads, and nobody works console b`);
   }
-  const deadlineAt = atA.deadlineAt;
   return {
     views: {
       operator: openAt(atA),
@@ -197,7 +211,7 @@ function crewSees(
       reader: openAt(atBook),
     },
     edgework: atA.edgework ?? atB?.edgework ?? atBook.edgework,
-    remainingSec: deadlineAt === null ? null : Math.ceil((deadlineAt - at) / 1000),
+    clock: clockOf(atA, at),
   };
 }
 
@@ -252,8 +266,8 @@ function playMission(mission: Mission, seed: number): GameState {
       state = openStation(state, def, at);
     }
     const roles = rolesAt(def, crew);
-    const { views, edgework, remainingSec } = crewSees(state, roles, at);
-    const moves = moduleFor(def.type).solve(def, views, edgework, { transcript, remainingSec });
+    const { views, edgework, clock } = crewSees(state, roles, at);
+    const moves = moduleFor(def.type).solve(def, views, edgework, { transcript, ...clock });
     idle = moves.length === 0 ? idle + 1 : 0;
     if (idle > MAX_IDLE_SEC) {
       throw new Error(`${mission.id}/${def.id} (seed ${seed}): no move in ${MAX_IDLE_SEC} s`);
