@@ -127,6 +127,7 @@ function standing(state: GameState, stations: Record<string, string[]>): GameSta
     stations,
     manuals: {},
     notes: {},
+    plates: {},
     signSeen: [],
     found: {},
     sight: {},

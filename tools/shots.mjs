@@ -11,11 +11,12 @@
  *     node tools/shots.mjs [baseUrl] [outDir]
  *
  * Groups (tools/groups.mjs): every capture, and every label a skip line carries, belongs to one of
- * sixteen groups; SHOTS_ONLY and SHOTS_SKIP, each a comma-separated list of their names, pick those
- * a run plays — a quick proof of one part. The drills, each in a room of its own before the
- * walkthrough: editor, art, drones (the danger sense, a drone close by), reconnect, restart, and
- * in a Systemcheck run the Serverraum's scratch mission, devices', and the Zugangskontrolle's,
- * access. The walkthrough's own stages:
+ * seventeen groups; SHOTS_ONLY and SHOTS_SKIP, each a comma-separated list of their names, pick
+ * those a run plays — a quick proof of one part. The drills, each in a room of its own before the
+ * walkthrough: editor, art, drones (the danger sense, a drone close by), reconnect, restart, three
+ * (Blackout for a crew of three through the Signalkette) — and in a Systemcheck run the
+ * Serverraum's scratch mission, devices', and the Zugangskontrolle's, access. The walkthrough's
+ * own stages:
  * screens (the menu and its sound, the history, the lobby, the run started from it), intro (the
  * opening to blackout.png, the cold open at density 2 with it) and run (the mission to the won
  * card: the lit rooms, the finds, the audience's way in, the escape, the end, and after the won
@@ -3391,15 +3392,31 @@ async function letThrough(walker, holder, target) {
 }
 
 /**
- * Tiles beside `station` for `count` players to stand on, one each: floor
- * within reach of it, neither a plate, another station nor furniture,
- * nearest first.
+ * The tiles where a note of the last shift lies or is read, by key — E there reads the note
+ * rather than working what stands beside it: round every note `players`' views show, and every
+ * note of Blackout's file where the run plays it, found or not.
  */
-function spotsBy(station, map, count) {
+function noteTiles(players) {
+  const filed = MISSION.toLowerCase() === 'blackout' ? BLACKOUT.map.notes : [];
+  const shown = players.flatMap((player) => player.seen.view?.map?.notes ?? []);
+  return new Set(
+    [...filed, ...shown].flatMap(({ x, y }) =>
+      [[0, 0], ...NEIGHBOURS].map(([dx, dy]) => `${x + dx},${y + dy}`),
+    ),
+  );
+}
+
+/**
+ * Tiles beside `station` for `count` players to stand on, one each: floor
+ * within reach of it, neither a plate, another station, furniture nor one of
+ * `notes` (`noteTiles`), nearest first.
+ */
+function spotsBy(station, map, count, notes) {
   const taken = new Set([
     ...map.plates.map((p) => `${p.x},${p.y}`),
     ...map.stations.map((s) => `${s.x},${s.y}`),
     ...furniture(map),
+    ...notes,
   ]);
   const spots = [];
   for (let dy = -1; dy <= 1; dy++) {
@@ -3417,8 +3434,9 @@ function spotsBy(station, map, count) {
 /**
  * Brings the whole crew to `station`: whoever cannot reach it is let through
  * a plate door by somebody who can, then each stands on a spot of its own
- * beside it, so that whoever held a plate steps off it and its door shuts,
- * as the steps after expect. Throws where somebody cannot get there.
+ * beside it — none where E would read a note instead (`noteTiles`) — so that
+ * whoever held a plate steps off it and its door shuts, as the steps after
+ * expect. Throws where somebody cannot get there.
  */
 async function gatherAt(station, players) {
   const free = players.filter((player) => stepsTo(player.seen, station) !== Infinity);
@@ -3430,7 +3448,7 @@ async function gatherAt(station, players) {
       throw new Error(`${walker.name} found no way to the station at ${station.x},${station.y}`);
     }
   }
-  const spots = spotsBy(station, players[0].seen.view.map, players.length);
+  const spots = spotsBy(station, players[0].seen.view.map, players.length, noteTiles(players));
   for (const [i, player] of players.entries()) {
     const spot = spots[i] ?? station;
     const there =
@@ -5243,10 +5261,12 @@ async function manBothConsoles(players) {
  * it solves. With `pinned` — the stages a pinned seed deals — every stage's
  * sending console and sequence have to be the pinned ones, and the keys
  * pressed are the pinned ones: at consoles with the legend a key is a row and
- * a shape, which only the printed legend ties to a sign. Throws with the step
- * that failed, naming the seed where a stage differs from its pin.
+ * a shape, which only the printed legend ties to a sign. Where `walkthrough`,
+ * the walkthrough's own shots come at its stages (`stageShots`); a drill
+ * takes none of them. Throws with the step that failed, naming the seed where
+ * a stage differs from its pin.
  */
-async function solveSignal(crew, title, pinned = null) {
+async function solveSignal(crew, title, pinned = null, walkthrough = true) {
   const roleOf = (player) => player.seen.view.puzzle?.role ?? null;
   const roles = () => crew.map((p) => `${p.name} ${roleOf(p)}`).join(', ');
   await until(() => crew.every((p) => roleOf(p) !== null), 3000);
@@ -5277,11 +5297,9 @@ async function solveSignal(crew, title, pinned = null) {
     if (pin !== null) {
       checkStage(sending, pin, stage);
     }
-    // The run's one deliberate alarm: where the traced host sends, or at the last stage.
-    if (!flinchShot && (sending.traced === true || stage === stages)) {
-      await inGroup('graphics', () => captureFlinch(sending, pressing, pin?.keys[0] ?? null));
+    if (walkthrough) {
+      await stageShots(sending, pressing, pin, stage === stages);
     }
-    await inGroup('devices', () => captureGreyDisplay(sending));
     const count = await pressStage(sending, pressing, pin?.keys ?? null);
     const line =
       `signal             ${sending.name} sends, ${pressing.name} presses: ` +
@@ -5307,6 +5325,18 @@ async function solveSignal(crew, title, pinned = null) {
     console.log(`${line} through, roles swapped`);
     [sending, pressing] = [pressing, sending];
   }
+}
+
+/**
+ * What the walkthrough shoots at a stage of the Signalkette before it is pressed: the run's one
+ * deliberate alarm (figure-flinch.png), once — where the traced host sends, or at the `last`
+ * stage — and the first display without colour (`captureGreyDisplay`).
+ */
+async function stageShots(sending, pressing, pin, last) {
+  if (!flinchShot && (sending.traced === true || last)) {
+    await inGroup('graphics', () => captureFlinch(sending, pressing, pin?.keys[0] ?? null));
+  }
+  await inGroup('devices', () => captureGreyDisplay(sending));
 }
 
 /**
@@ -5338,8 +5368,9 @@ const touchSessions = new WeakMap();
 /**
  * Runs `look` with `page` held as a large phone sideways: 932×430 under a finger, through CDP's
  * touch on a session of the page's own — as a context made with `hasTouch` has it, which a
- * window's context cannot be given once it is made. Gives the window its size and its mouse
- * back after, whatever `look` did.
+ * window's context cannot be given once it is made — and a resize after the touch, which the
+ * HUD's fold into its row reads (client screens/hudFold.ts). Gives the window its size and its
+ * mouse back after, whatever `look` did.
  */
 async function asLargePhone(page, look) {
   const held = page.viewportSize();
@@ -5351,6 +5382,7 @@ async function asLargePhone(page, look) {
   await page.setViewportSize({ width: SIZES[4].width, height: SIZES[4].height });
   await cdp.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
   try {
+    await page.evaluate(() => globalThis.dispatchEvent(new globalThis.Event('resize')));
     await sleep(500);
     await look();
   } finally {
@@ -10682,15 +10714,11 @@ async function measureRound(meter, box, round, r) {
 }
 
 /**
- * The Notstrom-Kasten to the end, as the pinned seed wires it: the meter at
- * console B reads every wire still live and the box at console A cuts the
- * one the rules name — round after round, the readings and the cuts the
- * plan pins. Fails naming the seed where the box's wires, the serial or a
- * round's readings differ.
+ * The Notstrom-Kasten to the end, as the pinned seed wires it: both walk back to their console
+ * and open it — the meter's phone held sideways shot on the way (devices) — and the box is cut
+ * as the plan pins it (`cutAsPinned`).
  */
 async function finishNotstrom(box, meter) {
-  const pin = BLACKOUT_PLAN.notstrom;
-  const index = box.seen.view.currentPuzzleIndex;
   for (const [player, side] of [
     [box, 'a'],
     [meter, 'b'],
@@ -10701,6 +10729,15 @@ async function finishNotstrom(box, meter) {
     await openPanel(player, side);
   }
   await inGroup('devices', () => captureDevicePhone(meter, stationSlug(meter)));
+  await cutAsPinned(box, meter);
+}
+
+/**
+ * The open fuse box's wires from the top and the Laborkennung's serial, as the box's and the
+ * meter's views show them; fails naming the seed where either is not what the plan pins.
+ */
+function pinnedBox(box, meter) {
+  const pin = BLACKOUT_PLAN.notstrom;
   const wires = (box.seen.view.puzzle?.wires ?? []).map((wire) => wire.colour).join(', ');
   if (wires !== pin.wires.join(', ')) {
     differs('fuse box', wires, pin.wires.join(', '));
@@ -10709,6 +10746,19 @@ async function finishNotstrom(box, meter) {
   if (serial !== BLACKOUT_PLAN.serial) {
     differs('Laborkennung', serial, BLACKOUT_PLAN.serial);
   }
+  return { wires, serial };
+}
+
+/**
+ * The open Notstrom-Kasten worked as the pinned seed wires it: the meter at console B reads
+ * every wire still live and the box at console A cuts the one the rules name — round after
+ * round, the readings and the cuts the plan pins — until it solves. Fails naming the seed where
+ * the box's wires, the serial or a round's readings differ.
+ */
+async function cutAsPinned(box, meter) {
+  const pin = BLACKOUT_PLAN.notstrom;
+  const index = box.seen.view.currentPuzzleIndex;
+  const { wires, serial } = pinnedBox(box, meter);
   for (const [r, round] of pin.rounds.entries()) {
     await measureRound(meter, box, round, r);
     const cut = box.page.locator(`.station-modal .circuit-board [data-index="${round.cut}"]`);
@@ -13397,30 +13447,33 @@ async function joinByCode(player, code) {
 }
 
 /**
- * The drill's crew in Blackout's dark: Anna opens the room, Ben and Cem join and say yes,
- * the microphones on, the run started, the opening skipped by all three.
+ * A drill's room: Anna opens a round of the mission from the menu at `url`, and `guests` join
+ * it by its code, each to the lobby. Returns the room's code.
  */
-async function drillCrew() {
-  const anna = await drillPlayer('Anna');
-  const ben = await drillPlayer('Ben');
-  const cem = await drillPlayer('Cem');
-  const crew = [anna, ben, cem];
-  await anna.page.goto(traced(BASE));
+async function drillRoom(anna, guests, url) {
+  await anna.page.goto(url);
   await typeName(anna.page, 'Anna');
   await openRound(anna.page, MISSION);
   await anna.page.locator('.room-code strong').waitFor({ timeout: 10_000 });
   const code = (await anna.page.locator('.room-code strong').innerText()).trim();
-  for (const player of [ben, cem]) {
+  for (const player of guests) {
     await joinByCode(player, code);
     await player.page.locator('.lobby').waitFor({ timeout: 10_000 });
   }
-  await micsOn(crew);
-  for (const player of [ben, cem]) {
+  return code;
+}
+
+/**
+ * A drill's run: `guests` say yes, Anna starts it, and the whole `crew` skips the opening, on
+ * into Blackout's dark. Throws where somebody never stands ready or the lights stay on.
+ */
+async function drillStart(anna, guests, crew) {
+  for (const player of guests) {
     await clickText(player.page, 'Ich bin bereit');
   }
-  const ready = () => anna.seen.view?.players?.filter((p) => p.ready).length === 2;
+  const ready = () => anna.seen.view?.players?.filter((p) => p.ready).length === guests.length;
   if (!(await until(ready, 10_000))) {
-    throw new Error('Ben and Cem never stood ready on Anna’s page');
+    throw new Error(`${guests.map((p) => p.name).join(' and ')} never stood ready on Anna’s page`);
   }
   await clickText(anna.page, 'Mission starten');
   for (const { page } of crew) {
@@ -13434,6 +13487,20 @@ async function drillCrew() {
     throw new Error('the drill’s lights never went out');
   }
   await sleep(2500); // past the title of the blackout
+}
+
+/**
+ * The drill's crew in Blackout's dark: Anna opens the room, Ben and Cem join and say yes,
+ * the microphones on, the run started, the opening skipped by all three.
+ */
+async function drillCrew() {
+  const anna = await drillPlayer('Anna');
+  const ben = await drillPlayer('Ben');
+  const cem = await drillPlayer('Cem');
+  const crew = [anna, ben, cem];
+  const code = await drillRoom(anna, [ben, cem], traced(BASE));
+  await micsOn(crew);
+  await drillStart(anna, [ben, cem], crew);
   return { code, anna, ben, cem, crew };
 }
 
@@ -13910,11 +13977,339 @@ async function captureRestart() {
   }
 }
 
+// ── the three drill: Blackout for a crew of three (backlog M-1) ─────────────────────────────
+//
+// A room of its own after the restart drill, pinned to the plan's seed: Anna opens Blackout,
+// Ben and Cleo join and say yes, all three skip the opening — Anna in the Archiv, Ben at the
+// Flur's west end, Cleo at its east end. Notlicht: all three walk to the main switch and open
+// its panel — three-lever.png, Anna's: a lamp lit over each of the three levers, the plate
+// saying „NUR ZU DRITT" — and throw together. Notstrom: Ben reads the book in the Archiv first
+// while Cleo stands on the plate HALTEN; Anna walks through the door it holds to the box, Ben to
+// the meter — three-plate.png, Cleo's screen: the hands line „Cleo: HALTEN · Anna: Pult A · Ben:
+// Pult B", the door held — and the box is cut as the plan pins it. Signalkette: Cleo walks to
+// the clipboard, Anna to console A, Ben to console B — three-hands.png, Anna's screen naming all
+// three; three-phone-932.png, Cleo's page as a large phone held sideways, her own job alone as
+// the row's chip; three-reader.png, Cleo's screen with the clipboard's rules open while A and B
+// are manned — and the chain is worked as the plan pins it. Then Cleo and Ben give their seats
+// up from the menu, the run is called off on Anna's page, and Anna leaves the room. Each hands
+// shot has to say its words whole in the window, at the HUD's smallest size or more, the phone's
+// row its rules too (`capturePhoneGame`); the lever and the reader are held to what lever.png
+// and reading.png are. No frame window is sampled: three pages on one runner would make it lie.
+// Any step that fails, fails the run; a run on another mission or seed skips the drill.
+
+/** The smallest the HUD's words may be, CSS px (docs/foundation-audit.md, N-readability). */
+const HUD_MIN_PX = 12;
+
+/**
+ * The drill's crew in Blackout's dark: Anna opens the room pinned to the plan's seed, Ben and
+ * Cleo join and say yes, all three skip the opening. Anna and Ben have to start where the plan
+ * puts the host and the guest — Cleo takes the third start.
+ */
+async function threeCrew() {
+  const anna = await drillPlayer('Anna');
+  const ben = await drillPlayer('Ben');
+  const cleo = await drillPlayer('Cleo');
+  const crew = [anna, ben, cleo];
+  await drillRoom(anna, [ben, cleo], seeded(traced(BASE)));
+  await drillStart(anna, [ben, cleo], crew);
+  const { host, guest } = BLACKOUT_PLAN.spawns;
+  const spot = (at) => `${at?.x},${at?.y}`;
+  const drawn = [anna, ben].map((player) => spot(player.seen.view?.map?.yourSpawn)).join(' · ');
+  if (drawn !== `${spot(host)} · ${spot(guest)}`) {
+    differs('starts of Anna and Ben', drawn, `${spot(host)} · ${spot(guest)}`);
+  }
+  return { anna, ben, cleo, crew };
+}
+
+/**
+ * three-lever.png: the main switch's panel on Anna's page with all three at it — a lamp lit
+ * over every lever, the plate saying the switch takes three, Anna's own name under the first
+ * lever — or the run fails.
+ */
+async function captureThreeLever(anna, crew) {
+  const modal = anna.page.locator('.station-modal');
+  const lit = () => modal.locator('.lever-unit--here').count();
+  await untilAsync(async () => (await lit()) === crew, CATCH_UP_MS);
+  const here = await lit();
+  const plate = await textOf(modal.locator('.lever-plate'));
+  const names = await modal.locator('.lever-name').allInnerTexts();
+  await capture(anna.page, 'three-lever.png');
+  const said = `"${plate}", ${here} of ${crew} lamps lit, names ${names.join(', ') || '!! none'}`;
+  console.log(`three-lever.png    Anna: ${said}`);
+  if (here !== crew || plate?.includes('NUR ZU DRITT') !== true || names[0] !== 'Anna') {
+    fail(`three-lever.png: ${said}`);
+  }
+}
+
+/**
+ * Notlicht for three: all three at the main switch (`gatherAt`), its panel open on every page
+ * (three-lever.png on Anna's), then all three throw at once, and it has to solve.
+ */
+async function threeAtTheLever({ anna, crew }) {
+  const lever = armedAt(anna, null);
+  await gatherAt(lever, crew);
+  for (const player of crew) {
+    await openPanel(player, null);
+  }
+  await captureThreeLever(anna, crew.length);
+  const index = anna.seen.view.currentPuzzleIndex;
+  await Promise.all(crew.map(({ page }) => page.locator('.station-modal .big-button').click()));
+  if (!(await until(() => crew.every((player) => solvedPast(player, index)), 5000))) {
+    throw new Error(`all three threw "${lever.title}" together, but it did not solve`);
+  }
+  console.log(`three              Anna, Ben and Cleo threw "${lever.title}" together: solved`);
+  await panelsClosed(crew);
+}
+
+/** Every station panel of `crew`'s pages closed — a solved one closes itself — or throws. */
+async function panelsClosed(crew) {
+  await Promise.all(
+    crew.map(({ page }) =>
+      page.locator('.station-modal').waitFor({ state: 'hidden', timeout: CATCH_UP_MS }),
+    ),
+  );
+}
+
+/**
+ * What `page` shows of the hands (`selector`: the line under the goal, or the row's chip): its
+ * words, their size in CSS px, and whether they stand whole in the window — inside it, none of
+ * them cut short. Null where the page shows none.
+ */
+function handsShown(page, selector) {
+  return page.evaluate((hands) => {
+    const el = document.querySelector(hands);
+    if (el === null) {
+      return null;
+    }
+    const box = el.getBoundingClientRect();
+    const inside = box.width > 0 && box.left >= 0 && box.right <= globalThis.innerWidth + 0.5;
+    return {
+      text: el.textContent ?? '',
+      px: Number.parseFloat(globalThis.getComputedStyle(el).fontSize),
+      whole: inside && el.scrollWidth <= el.clientWidth + 1,
+    };
+  }, selector);
+}
+
+/**
+ * `shot`, taken by `take` once `player`'s page says `words` in its hands (`selector`) — the
+ * server's word of who stands where reaches the page a moment after the step — and held to what
+ * the HUD's words are held to: whole in the window, HUD_MIN_PX or more. Fails the run where the
+ * page never says them, or not so.
+ */
+async function handsShot(player, shot, selector, words, take) {
+  const say = async () => (await handsShown(player.page, selector))?.text === words;
+  await untilAsync(say, CATCH_UP_MS);
+  await take();
+  const { said, ok } = handsSaid(await handsShown(player.page, selector), words);
+  console.log(`${shot.padEnd(18)} ${player.name}: ${said}`);
+  if (!ok) {
+    fail(`${shot}: the hands say ${said}, not „${words}" whole at ${HUD_MIN_PX} px or more`);
+  }
+}
+
+/** What the log says of `shown` (`handsShown`), and whether it says `words` as it should. */
+function handsSaid(shown, words) {
+  if (shown === null) {
+    return { said: '!! nothing', ok: false };
+  }
+  return {
+    said: `„${shown.text}", ${shown.px} px${shown.whole ? '' : ', !! cut short'}`,
+    ok: shown.text === words && shown.whole && shown.px >= HUD_MIN_PX,
+  };
+}
+
+/** `reader` walks up to `source` and reads it: its pages open a while, then put down. */
+async function readThrough(reader, source) {
+  if (!(await walkNear(reader.page, reader.seen, source))) {
+    throw new Error(`${reader.name} found no way to the ${source.label}`);
+  }
+  const overlay = reader.page.locator('.reading-modal');
+  if (!(await interactUntil(reader, overlay, sourceTarget(source)))) {
+    throw new Error(`${reader.name} stands at the ${source.label}, but no .reading-modal opened`);
+  }
+  await sleep(1500); // a look at the pages
+  await reader.page.keyboard.press('Escape');
+  await overlay.waitFor({ state: 'hidden', timeout: 3000 });
+}
+
+/** Each of `seats` — a player and the armed station's console they work — walks up to it. */
+async function toConsoles(seats) {
+  const there = await Promise.all(
+    seats.map(([player, side]) => standOn(player, atConsole(player, side))),
+  );
+  const stuck = seats.filter((_, i) => !there[i]).map(([player, side]) => `${player.name} ${side}`);
+  if (stuck.length > 0) {
+    throw new Error(`no way to the armed station's consoles for ${stuck.join(' and ')}`);
+  }
+}
+
+/**
+ * The Notstrom for three: Ben reads the book first while Cleo stands on the plate that holds
+ * the Maschinenraum's door; Anna walks through it to the box, Ben to the meter — three-plate.png
+ * on Cleo's page, the door held — and the box is cut as the plan pins it (`cutAsPinned`).
+ */
+async function threeAtTheNotstrom({ anna, ben, cleo, crew }) {
+  await viewsCaughtUp(crew);
+  const plate = mapOf(cleo).plates.find((p) => !p.freezesDrone);
+  const door = BLACKOUT.map.doors.find((d) => d.opensBy.plateId === plate?.id);
+  if (plate === undefined || door === undefined) {
+    throw new Error('Blackout has no plate that holds a door');
+  }
+  await Promise.all([holdPlate(cleo, plate), readThrough(ben, pinnedSource('book'))]);
+  await toConsoles([
+    [anna, 'a'],
+    [ben, 'b'],
+  ]);
+  const words = `Cleo: ${plate.label} · Anna: Pult A · Ben: Pult B`;
+  await handsShot(cleo, 'three-plate.png', '.stage-hands', words, async () => {
+    await capture(cleo.page, 'three-plate.png');
+    await overflow(cleo.page, 'three-plate @ 1440x820');
+  });
+  if (mapOf(cleo).doors.find((d) => d.id === door.id)?.open !== true) {
+    fail(`three-plate.png: Cleo holds "${plate.label}", but the door ${door.id} shows shut`);
+  }
+  await openPanel(anna, 'a');
+  await openPanel(ben, 'b');
+  await cutAsPinned(anna, ben);
+  await panelsClosed(crew);
+}
+
+/**
+ * three-reader.png: Cleo opens the clipboard's rules while Anna and Ben stand at consoles A and
+ * B — her view has to name them there — held to what reading.png is: no page running past its
+ * sheet, the panel not running out sideways; then she puts them down.
+ */
+async function captureThreeReader({ anna, ben, cleo }, clipboard) {
+  const overlay = cleo.page.locator('.reading-modal');
+  if (!(await interactUntil(cleo, overlay, sourceTarget(clipboard)))) {
+    throw new Error(`Cleo stands at the ${clipboard.label}, but no .reading-modal opened`);
+  }
+  await sleep(400); // past the page's fade-in
+  const at = (player) =>
+    cleo.seen.view.hands?.held.find((hand) => hand.playerId === player.seen.view.you.id)?.place;
+  const manned = [anna, ben].map((player) => at(player)?.console ?? '!! none').join(' and ');
+  await capture(cleo.page, 'three-reader.png');
+  const over = await sideways(cleo.page, '.reading-modal .panel');
+  const running = await pagesRunningOver(cleo.page);
+  console.log(
+    `three-reader.png   Cleo at the ${clipboard.label}, Anna and Ben at ${manned}: ` +
+      `${running} page(s) run over, panel ${over > 0 ? `!! +${over}px sideways` : 'fits sideways'}`,
+  );
+  if (manned !== 'a and b' || over > 0 || running > 0) {
+    fail(`three-reader.png: consoles ${manned}, ${running} page(s) over, ${over}px sideways`);
+  }
+  await cleo.page.keyboard.press('Escape');
+  await overlay.waitFor({ state: 'hidden', timeout: 3000 });
+}
+
+/**
+ * The Signalkette for three: Cleo walks to the clipboard, Anna to console A, Ben to console B —
+ * three-hands.png on Anna's page, three-phone-932.png on Cleo's held as a phone, three-reader.png
+ * — and the chain is worked as the plan pins it, without the walkthrough's alarm.
+ */
+async function threeAtTheSignalkette(drill) {
+  const { anna, ben, cleo, crew } = drill;
+  await viewsCaughtUp(crew);
+  const clipboard = pinnedSource('clipboard');
+  const title = armedAt(anna, 'a').title;
+  const [atClipboard] = await Promise.all([
+    standOn(cleo, workSpot(cleo, clipboard)),
+    toConsoles([
+      [anna, 'a'],
+      [ben, 'b'],
+    ]),
+  ]);
+  if (!atClipboard) {
+    throw new Error(`Cleo found no way to the ${clipboard.label}`);
+  }
+  await foundWherePinned(cleo, clipboard);
+  const job = 'Cleo: Klemmbrett';
+  const all = `Anna: Pult A · Ben: Pult B · ${job}`;
+  await handsShot(anna, 'three-hands.png', '.stage-hands', all, () =>
+    capture(anna.page, 'three-hands.png'),
+  );
+  await asLargePhone(cleo.page, () =>
+    handsShot(cleo, 'three-phone-932.png', '.hands-chip', job, () =>
+      capturePhoneGame(cleo.page, 'three-phone-932.png', "Cleo's phone sideways"),
+    ),
+  );
+  await captureThreeReader(drill, clipboard);
+  await openPanel(anna, 'a');
+  await openPanel(ben, 'b');
+  await solveSignal([anna, ben], title, BLACKOUT_PLAN.signalkette.stages, false);
+}
+
+/**
+ * The room given up: Cleo and Ben give their seats up from the card of the run on the menu of a
+ * new tab („Einsatz aufgeben", at a second press) — with one fewer than the smallest crew left,
+ * the run is called off on Anna's page — and Anna leaves the room from its end. Throws where a
+ * step never comes.
+ */
+async function threeGiveUp({ anna, ben, cleo }) {
+  for (const player of [cleo, ben]) {
+    // A new tab of the player's browser: the run's own tab would go straight back into it.
+    const tab = await openPage(player.context, `drill ${player.name} tab`);
+    await tab.goto(traced(BASE));
+    const card = tab.locator('.bound--run');
+    await card.waitFor({ state: 'visible', timeout: DRILL_STEP_MS });
+    const giveUp = card.locator('button.give-up');
+    await giveUp.click();
+    await giveUp.click();
+    await card.waitFor({ state: 'detached', timeout: DRILL_STEP_MS });
+  }
+  if (!(await until(() => anna.seen.view?.phase === 'lost', DRILL_STEP_MS))) {
+    throw new Error(`Cleo and Ben gave up, but Anna's run goes on (${anna.seen.view?.phase})`);
+  }
+  const leave = anna.page.locator('button', { hasText: 'Raum verlassen' });
+  await leave.waitFor({ state: 'visible', timeout: DRILL_STEP_MS });
+  await leave.click();
+  await anna.page.locator('.menu-item').first().waitFor({ timeout: DRILL_STEP_MS });
+  console.log(
+    `three              Cleo and Ben gave their seats up, the run was called off ` +
+      `(„${anna.seen.view?.calledOff ?? '!! no word why'}"), Anna left the room`,
+  );
+}
+
+/**
+ * The three drill (see above): Blackout for three through the Signalkette on the plan's seed,
+ * the room given up after. Skipped for any other mission or seed; the contexts closed whatever
+ * happened.
+ */
+async function captureThree() {
+  if (MISSION.toLowerCase() !== 'blackout') {
+    skip('three', `the three drill plays Blackout; this run plays ${MISSION}`);
+    return;
+  }
+  if (SEED !== BLACKOUT_PLAN.seed) {
+    skip('three', `the drill plays seed ${BLACKOUT_PLAN.seed}, which the plan pins, not ${SEED}`);
+    return;
+  }
+  const from = Date.now();
+  const contexts = [];
+  try {
+    const drill = await threeCrew();
+    contexts.push(...drill.crew.map(({ context }) => context));
+    await threeAtTheLever(drill);
+    await threeAtTheNotstrom(drill);
+    await threeAtTheSignalkette(drill);
+    await threeGiveUp(drill);
+  } catch (err) {
+    console.log(`three              !! ${firstLine(err)}`);
+    fail(`three: ${firstLine(err)}`);
+  } finally {
+    for (const context of contexts) {
+      await context.close();
+    }
+    console.log(`three              the drill took ${seconds(Date.now() - from)}`);
+  }
+}
+
 /**
  * The drills before the walkthrough, each in a room of its own, by the group each belongs to:
  * the editor, the Serverraum's scratch mission (a Systemcheck run's), the art tour, the danger
- * sense, the reconnect drill, the restart drill and the Zugangskontrolle's scratch mission (a
- * Systemcheck run's).
+ * sense, the reconnect drill, the restart drill, the Zugangskontrolle's scratch mission (a
+ * Systemcheck run's) and the three drill.
  */
 const DRILLS = [
   ['editor', captureEditor],
@@ -13924,6 +14319,7 @@ const DRILLS = [
   ['reconnect', captureReconnect],
   ['restart', captureRestart],
   ['access', captureAccess],
+  ['three', captureThree],
 ];
 
 /**

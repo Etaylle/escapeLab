@@ -1624,6 +1624,18 @@ export class Room {
   }
 
   /**
+   * Who stands on each plate the map has, by its id, sorted — by the reach that holds a plate
+   * pressed: the release radius while the game has it pressed, the press radius while not.
+   */
+  private onEachPlate(): [string, string[]][] {
+    const held = new Set(this.state.pressedPlates);
+    return this.state.mission.map.plates.map((plate) => {
+      const radius = held.has(plate.id) ? PLATE_RELEASE_RADIUS : PLATE_PRESS_RADIUS;
+      return [plate.id, this.occupantsOf(plate.x, plate.y, radius).sort()];
+    });
+  }
+
+  /**
    * Translate live positions into plate and panel state; dispatch only on
    * change. Sabotage panels need a *different* player each, so they are
    * assigned greedily.
@@ -1633,17 +1645,9 @@ export class Room {
     if (this.state.phase !== 'playing') {
       return;
     }
-    const held = new Set(this.state.pressedPlates);
-    const plates = map.plates
-      .filter(
-        (plate) =>
-          this.occupantsOf(
-            plate.x,
-            plate.y,
-            held.has(plate.id) ? PLATE_RELEASE_RADIUS : PLATE_PRESS_RADIUS,
-          ).length > 0,
-      )
-      .map((plate) => plate.id)
+    const plates = this.onEachPlate()
+      .filter(([, players]) => players.length > 0)
+      .map(([id]) => id)
       .sort();
 
     const claimed = new Set<string>();
@@ -1824,9 +1828,10 @@ export class Room {
 
   /**
    * Translate live positions into who stands at which station spot — each
-   * console of a station on its own, keyed by `stationKey` — manual object
-   * and note, who has walked up to the sign, what each player has just found
-   * (`findsNow`), and who stands on the open hatch; dispatch only on change.
+   * console of a station on its own, keyed by `stationKey` — manual object,
+   * note and plate, who has walked up to the sign, what each player has just
+   * found (`findsNow`), and who stands on the open hatch; dispatch only on
+   * change.
    */
   private reconcilePresence(): void {
     if (this.state.phase !== 'playing') {
@@ -1842,11 +1847,12 @@ export class Room {
   }
 
   /**
-   * Who stands at each station spot, source and note, who saw the sign, who is on the hatch. At
-   * a source, a note or the sign only a player who has found it — `fresh` from this very look
-   * round included — counts, and at a console only one who sees it or has found it
+   * Who stands at each station spot, source, note and plate, who saw the sign, who is on the
+   * hatch. At a source, a note or the sign only a player who has found it — `fresh` from this
+   * very look round included — counts, and at a console only one who sees it or has found it
    * (`facesConsole`): the distance alone would have them read, open, work or copy the
-   * Laborkennung round a pillar or through a wall.
+   * Laborkennung round a pillar or through a wall. On a plate, whoever holds it pressed
+   * (`onEachPlate`).
    */
   private whereEverybodyStands(
     fresh: Readonly<Record<string, FindKey[]>>,
@@ -1882,6 +1888,7 @@ export class Room {
       notes: onlyFinders(this.atEach(this.noteSpots(), presence.notes), (id) =>
         finders(findKey({ of: 'note', index: Number(id) })),
       ),
+      plates: Object.fromEntries(this.onEachPlate().filter(([, players]) => players.length > 0)),
       signSeen: signSeen.sort(),
       exit: this.onTheHatch(),
     };
@@ -1894,12 +1901,12 @@ export class Room {
    */
   private reachOf(next: PresenceReport): Reach {
     const { presence } = this.state;
-    const { stations, manuals, notes, exit, sight } = presence;
-    const stood = JSON.stringify([next.stations, next.manuals, next.notes, next.exit]);
+    const { stations, manuals, notes, plates, exit, sight } = presence;
+    const stood = JSON.stringify([next.stations, next.manuals, next.notes, next.plates, next.exit]);
     if (
       Object.keys(next.found).length > 0 ||
       next.signSeen.length !== presence.signSeen.length ||
-      stood !== JSON.stringify([stations, manuals, notes, exit])
+      stood !== JSON.stringify([stations, manuals, notes, plates, exit])
     ) {
       return 'everybody';
     }
