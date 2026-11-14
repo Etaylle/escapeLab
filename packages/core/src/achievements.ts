@@ -66,6 +66,7 @@ type Read = Pick<
   | 'startedAt'
   | 'lightsOutAt'
   | 'finishedAt'
+  | 'noHatch'
   | 'stations'
   | 'penalties'
   | 'notes'
@@ -76,10 +77,15 @@ type Read = Pick<
 const alarmsOf = (report: Read): number =>
   report.penalties.reduce((sum, penalty) => sum + penalty.count, 0);
 
+/** Whether the crew got out by the hatch: a run its last solve won had none to go through. */
+const outByTheHatch = (report: Read): boolean => report.noHatch !== true;
+
 /** The predicate of each plaque, for a won run. */
 const EARNED: Readonly<Record<AchievementId, (report: Read) => boolean>> = {
   'ohne-alarm': (report) => alarmsOf(report) === 0,
-  'unter-acht-minuten': (report) => runSeconds(report) < EIGHT_MINUTES_SEC,
+  // To the hatch in under eight minutes: none where there was no hatch to reach.
+  'unter-acht-minuten': (report) =>
+    outByTheHatch(report) && runSeconds(report) < EIGHT_MINUTES_SEC,
   // A map without notes has nothing to read: no plaque for it.
   'alle-notizen': ({ notes }) =>
     notes !== undefined && notes.total > 0 && notes.read === notes.total,
@@ -93,12 +99,14 @@ const EARNED: Readonly<Record<AchievementId, (report: Read) => boolean>> = {
     const rooms = stations.filter((station) => station.type === SERVER_ROOM);
     return rooms.length > 0 && rooms.every((room) => room.alarms === 0);
   },
-  'erste-schicht': () => true,
+  // Through the hatch, the first time: none where the last solve won the run.
+  'erste-schicht': outByTheHatch,
 };
 
 /**
  * The plaques the run of `report` earns, in the order of ACHIEVEMENTS: none for a run lost.
- * „Erste Schicht" comes with every won run; that it is a crew's first is the device's to say.
+ * „Erste Schicht" comes with every won run that ended at the hatch; that it is a crew's first
+ * is the device's to say.
  */
 export function achievementsOf(report: Read): AchievementId[] {
   if (report.outcome !== 'won') {

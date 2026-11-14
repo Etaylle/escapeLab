@@ -1,4 +1,4 @@
-import { crewSizeText } from '../screens/Crew.js';
+import { ClockFact, crewSizeText } from '../screens/Crew.js';
 import { PROTOTYPES_ROW } from '../screens/MenuPanels.js';
 import { MapThumb } from '../screens/MapThumb.js';
 import { customIdOf, type Draft } from './draft.js';
@@ -38,7 +38,7 @@ export function MissionForm({ draft, validation, idTaken, onChange }: Props) {
         <span className="editor-card-text">
           <strong>{draft.title || 'Ohne Titel'}</strong>
           <span className="editor-card-meta">
-            {crewSizeText(draft.players)} · {Math.round(draft.timeLimitSec / 60)} min ·{' '}
+            {crewSizeText(draft.players)} · <ClockFact timeLimitSec={draft.timeLimitSec} />{' '}
             {draft.puzzles.length} Stationen
           </span>
           <code className="editor-id">{customIdOf(draft.title)}</code>

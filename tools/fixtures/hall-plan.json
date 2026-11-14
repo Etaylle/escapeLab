@@ -1,0 +1,261 @@
+{
+  "mission": "uebungshalle",
+  "seed": 26,
+  "spawns": { "host": { "x": 23, "y": 30 }, "guest": { "x": 20, "y": 30 } },
+  "serial": "7MQDU-4",
+  "stations": [
+    {
+      "id": "access",
+      "type": "access",
+      "title": "Zugangskontrolle",
+      "opens": {
+        "terminal": {
+          "doors": [{ "door": "funkraum", "released": false }, { "door": "schleuse", "released": false }],
+          "open": null,
+          "session": null,
+          "prompt": null,
+          "locks": [],
+          "log": [{ "n": 1, "tag": "info", "text": "Angefordert: FUNKRAUM, SCHLEUSE" }]
+        }
+      },
+      "moves": [
+        { "by": "operator", "input": { "cmd": "login", "account": "winkler" } },
+        { "by": "operator", "input": { "token": "246822" } },
+        { "by": "operator", "input": { "cmd": "freigeben", "door": "funkraum" } },
+        { "by": "operator", "input": { "cmd": "login", "account": "berger" } },
+        { "by": "operator", "input": { "token": "580619" } },
+        { "by": "operator", "input": { "cmd": "freigeben", "door": "schleuse" } }
+      ],
+      "releaseAt": null
+    },
+    {
+      "id": "servers",
+      "type": "servers",
+      "title": "Rechnernetz",
+      "opens": {
+        "rows": [
+          { "service": "netz", "running": true, "code": null, "power": true },
+          { "service": "dns", "running": false, "code": "E42", "power": true },
+          { "service": "db", "running": true, "code": null, "power": true },
+          { "service": "auth", "running": false, "code": "E23", "power": false },
+          { "service": "web", "running": false, "code": "E11", "power": false },
+          { "service": "mail", "running": false, "code": "E50", "power": true }
+        ]
+      },
+      "moves": [
+        { "by": "partner", "input": { "power": "mail", "on": false } },
+        { "by": "operator", "input": { "cmd": "restart", "service": "netz" } },
+        { "by": "operator", "input": { "cmd": "start", "service": "dns" } },
+        { "by": "operator", "input": { "cmd": "start", "service": "db" } },
+        { "by": "partner", "input": { "power": "auth", "on": true } },
+        { "by": "operator", "input": { "cmd": "start", "service": "auth" } },
+        { "by": "partner", "input": { "power": "web", "on": true } },
+        { "by": "operator", "input": { "cmd": "start", "service": "web" } }
+      ],
+      "releaseAt": null
+    },
+    {
+      "id": "circuit",
+      "type": "circuit",
+      "title": "Sicherungskasten",
+      "opens": {
+        "wires": [
+          { "colour": "rot", "cut": false },
+          { "colour": "rot", "cut": false },
+          { "colour": "weiß", "cut": false },
+          { "colour": "blau", "cut": false }
+        ]
+      },
+      "moves": [
+        { "by": "partner", "input": { "probe": 0 } },
+        { "by": "partner", "input": { "probe": 1 } },
+        { "by": "partner", "input": { "probe": 2 } },
+        { "by": "partner", "input": { "probe": 3 } },
+        { "by": "operator", "input": { "cut": 3 } },
+        { "by": "partner", "input": { "probe": 0 } },
+        { "by": "partner", "input": { "probe": 1 } },
+        { "by": "partner", "input": { "probe": 2 } },
+        { "by": "operator", "input": { "cut": 2 } },
+        { "by": "partner", "input": { "probe": 0 } },
+        { "by": "partner", "input": { "probe": 1 } },
+        { "by": "operator", "input": { "cut": 0 } },
+        { "by": "partner", "input": { "probe": 1 } },
+        { "by": "operator", "input": { "cut": 1 } }
+      ],
+      "releaseAt": null
+    },
+    {
+      "id": "signal",
+      "type": "signal",
+      "title": "Signalkette",
+      "opens": { "sends": "a", "sequence": ["gelb-dreieck", "gruen-quadrat", "rot-quadrat", "gelb-kreis"] },
+      "moves": [
+        { "by": "partner", "input": { "press": "gelb-dreieck" } },
+        { "by": "partner", "input": { "press": "gruen-quadrat" } },
+        { "by": "partner", "input": { "press": "rot-quadrat" } },
+        { "by": "partner", "input": { "press": "gelb-kreis" } },
+        { "by": "operator", "input": { "press": "rot-quadrat" } },
+        { "by": "operator", "input": { "press": "gruen-kreis" } },
+        { "by": "operator", "input": { "press": "blau-kreis" } },
+        { "by": "operator", "input": { "press": "gruen-dreieck" } },
+        { "by": "partner", "input": { "press": "gruen-dreieck" } },
+        { "by": "partner", "input": { "press": "gelb-kreis" } },
+        { "by": "partner", "input": { "press": "gruen-quadrat" } },
+        { "by": "partner", "input": { "press": "rot-quadrat" } },
+        { "by": "operator", "input": { "press": "blau-dreieck" } },
+        { "by": "operator", "input": { "press": "rot-kreis" } },
+        { "by": "operator", "input": { "press": "blau-dreieck" } },
+        { "by": "operator", "input": { "press": "rot-kreis" } }
+      ],
+      "releaseAt": null
+    },
+    {
+      "id": "button",
+      "type": "button",
+      "title": "Druckknopf",
+      "opens": { "colour": "blau", "label": "HALTEN" },
+      "moves": [
+        { "by": "operator", "input": { "kind": "hold" } },
+        { "by": "operator", "input": { "kind": "release" } }
+      ],
+      "releaseAt": 1
+    },
+    {
+      "id": "simon",
+      "type": "simon",
+      "title": "Abgleichpanel",
+      "opens": { "buttons": ["rot", "blau", "gruen", "gelb"], "flashes": ["blau"] },
+      "moves": [
+        { "by": "operator", "input": { "kind": "press", "color": "gelb" } },
+        { "by": "operator", "input": { "kind": "press", "color": "gelb" } },
+        { "by": "operator", "input": { "kind": "press", "color": "rot" } },
+        { "by": "operator", "input": { "kind": "press", "color": "gelb" } },
+        { "by": "operator", "input": { "kind": "press", "color": "rot" } },
+        { "by": "operator", "input": { "kind": "press", "color": "gruen" } },
+        { "by": "operator", "input": { "kind": "press", "color": "gelb" } },
+        { "by": "operator", "input": { "kind": "press", "color": "rot" } },
+        { "by": "operator", "input": { "kind": "press", "color": "gruen" } },
+        { "by": "operator", "input": { "kind": "press", "color": "rot" } },
+        { "by": "operator", "input": { "kind": "press", "color": "gelb" } },
+        { "by": "operator", "input": { "kind": "press", "color": "rot" } },
+        { "by": "operator", "input": { "kind": "press", "color": "gruen" } },
+        { "by": "operator", "input": { "kind": "press", "color": "rot" } },
+        { "by": "operator", "input": { "kind": "press", "color": "gelb" } }
+      ],
+      "releaseAt": null
+    },
+    {
+      "id": "maze",
+      "type": "maze",
+      "title": "Leitungsnetz",
+      "opens": { "pos": { "x": 1, "y": 4 }, "goal": { "x": 4, "y": 0 } },
+      "moves": [
+        { "by": "operator", "input": { "dir": 1 } },
+        { "by": "operator", "input": { "dir": 0 } },
+        { "by": "operator", "input": { "dir": 3 } },
+        { "by": "operator", "input": { "dir": 0 } },
+        { "by": "operator", "input": { "dir": 0 } },
+        { "by": "operator", "input": { "dir": 3 } },
+        { "by": "operator", "input": { "dir": 0 } },
+        { "by": "operator", "input": { "dir": 1 } },
+        { "by": "operator", "input": { "dir": 1 } },
+        { "by": "operator", "input": { "dir": 2 } },
+        { "by": "operator", "input": { "dir": 2 } },
+        { "by": "operator", "input": { "dir": 1 } },
+        { "by": "operator", "input": { "dir": 0 } },
+        { "by": "operator", "input": { "dir": 1 } },
+        { "by": "operator", "input": { "dir": 0 } }
+      ],
+      "releaseAt": null
+    },
+    {
+      "id": "memory",
+      "type": "memory",
+      "title": "Speicherbank",
+      "opens": { "display": 3, "labels": [3, 4, 2, 1] },
+      "moves": [
+        { "by": "operator", "input": { "position": 0 } },
+        { "by": "operator", "input": { "position": 2 } },
+        { "by": "operator", "input": { "position": 3 } },
+        { "by": "operator", "input": { "position": 2 } },
+        { "by": "operator", "input": { "position": 3 } }
+      ],
+      "releaseAt": null
+    },
+    {
+      "id": "morse",
+      "type": "morse",
+      "title": "Funkfeuer",
+      "opens": { "pattern": ".-.. .- -... --- .-.", "dial": 1 },
+      "moves": [
+        { "by": "operator", "input": { "tune": 1 } },
+        { "by": "operator", "input": { "tune": 1 } },
+        { "by": "operator", "input": { "transmit": true } }
+      ],
+      "releaseAt": null
+    },
+    {
+      "id": "switches",
+      "type": "switches",
+      "title": "Kippschalterbank",
+      "opens": {
+        "switches": [
+          { "led": false, "red": false, "blue": true, "up": false, "star": false },
+          { "led": false, "red": true, "blue": true, "up": false, "star": true },
+          { "led": true, "red": false, "blue": false, "up": false, "star": true },
+          { "led": true, "red": false, "blue": false, "up": false, "star": false },
+          { "led": false, "red": false, "blue": false, "up": false, "star": false },
+          { "led": false, "red": false, "blue": false, "up": false, "star": false }
+        ]
+      },
+      "moves": [
+        { "by": "operator", "input": { "switchIndex": 3 } },
+        { "by": "operator", "input": { "check": true } }
+      ],
+      "releaseAt": null
+    },
+    {
+      "id": "keypad",
+      "type": "keypad",
+      "title": "Zeichentastenfeld",
+      "opens": {
+        "keys": [
+          { "glyph": "₪", "lit": false },
+          { "glyph": "Ѣ", "lit": false },
+          { "glyph": "∂", "lit": false },
+          { "glyph": "¿", "lit": false }
+        ]
+      },
+      "moves": [
+        { "by": "operator", "input": { "keyIndex": 2 } },
+        { "by": "operator", "input": { "keyIndex": 1 } },
+        { "by": "operator", "input": { "keyIndex": 3 } },
+        { "by": "operator", "input": { "keyIndex": 0 } }
+      ],
+      "releaseAt": null
+    },
+    {
+      "id": "wiring",
+      "type": "wiring",
+      "title": "Brückenkasten",
+      "opens": {
+        "wires": [
+          { "id": "w0", "color": "weiß", "cut": false },
+          { "id": "w1", "color": "weiß", "cut": false },
+          { "id": "w2", "color": "schwarz", "cut": false },
+          { "id": "w3", "color": "blau", "cut": false }
+        ]
+      },
+      "moves": [{ "by": "operator", "input": { "wireId": "w0" } }],
+      "releaseAt": null
+    },
+    {
+      "id": "button-sync",
+      "type": "button-sync",
+      "title": "Synchrontaster",
+      "opens": {},
+      "moves": [{ "by": "everyone", "input": { "press": true } }],
+      "releaseAt": null
+    }
+  ]
+}

@@ -75,10 +75,14 @@ export function carriedItem(map: Pick<MapView, 'items'>, playerId: string): Know
   return map.items.filter(known).find((item) => item.carriedBy === playerId && !item.delivered);
 }
 
-/** The manual object prints the rules of the station that is armed now. */
+/**
+ * The manual object prints the rules of a station that is armed now: the one up, or any still
+ * to solve while a free-order run waits for the crew's pick.
+ */
 export function coversArmed(map: Pick<MapView, 'stations'>, manual: KnownSource): boolean {
-  const armed = map.stations.find(isArmed);
-  return armed !== undefined && manual.puzzleIds.includes(armed.puzzleId);
+  return map.stations.some(
+    (station) => isArmed(station) && manual.puzzleIds.includes(station.puzzleId),
+  );
 }
 
 /**
