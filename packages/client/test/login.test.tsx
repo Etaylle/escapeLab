@@ -5,6 +5,7 @@ import { ACHIEVEMENTS_KEY, readEarned } from '../src/achievements.js';
 import { followPass, keptPass, PASS_KEY } from '../src/pass.js';
 import {
   askOf,
+  CHANGE_LINE,
   doneLine,
   leftBehind,
   LoginSection,
@@ -119,7 +120,7 @@ describe('where the Ausweis stands', () => {
   it('says what was done in a line where there is something to say', () => {
     const lines = [doneLine('changed'), doneLine('signed-in'), doneLine('set'), doneLine(null)];
     expect(lines).toEqual([
-      'Kennwort geändert.',
+      'Kennwort geändert: Die anderen Geräte dieses Kontos sind abgemeldet.',
       'Angemeldet.',
       null,
       null,
@@ -215,7 +216,8 @@ describe('the Ausweis in the settings’ „Konto"', () => {
     expect(change.match(/autoComplete="current-password"/g)).toHaveLength(1);
   });
 
-  it('says what a switch and a sign-out keep before either is asked for', () => {
+  it('says what a new Kennwort, a switch and a sign-out do before either is asked for', () => {
+    expect(section(SIGNED, 'change').html).toContain(CHANGE_LINE);
     expect(section(SIGNED, 'switch').html).toContain(SWITCH_LINE);
     const out = section(SIGNED, 'sign-out');
     expect(out.html).toContain(SIGN_OUT_LINE);

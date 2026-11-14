@@ -17,10 +17,10 @@ import { roomKey } from '../src/seal.js';
 import { SeatBook } from '../src/seats.js';
 import { serveSockets } from '../src/sockets.js';
 import { JsonlStore } from '../src/store/jsonl.js';
-import { recordRuns, type Store } from '../src/store/store.js';
+import { PARKED, recordRuns, type Store } from '../src/store/store.js';
 import { FakeServer, joinedOf, type FakeSocket } from './line.js';
 import { passFor } from './passes.js';
-import { identityOf } from './storeContract.js';
+import { identityOf, seatPassOf } from './storeContract.js';
 
 /**
  * The seat follows the account (docs/gameplay.md, „Verbindung und Wiedereintritt"): a seat taken
@@ -350,13 +350,15 @@ describe('a seat bound to the account, its pass signed out', () => {
     expect(out).toEqual({ kind: 'login', done: 'signed-out', account: null });
     expect(anna.heard).toContainEqual({ kind: 'left', code, message: SIGNED_OUT });
     expect(ben.view.players.find((p) => p.name === 'Anna')?.connected).toBe(false);
-    // The pass signed out gets nothing back — not the seat, not a card of it.
+    // The pass signed out gets nothing back — not the seat, not a card of it: it is told so.
     const copy = server.connect();
-    copy.say({ kind: 'resume', code, pass: passFor('Anna') });
+    const signedOut = { kind: 'login', done: 'signed-out', account: null };
+    const resume: ClientMessage = { kind: 'resume', code, pass: passFor('Anna') };
+    expect(await heardAfter(copy, resume, 'login')).toEqual(signedOut);
     copy.say({ kind: 'whereami', pass: passFor('Anna') });
-    const nowhere = 'Wiederverbinden fehlgeschlagen — Raum neu beitreten.';
-    await vi.waitFor(() => expect(refusalOf(copy, 'resume')).toBe(nowhere));
+    await vi.waitFor(() => expect(copy.heard.filter((m) => m.kind === 'login')).toHaveLength(2));
     expect(copy.heard.find((m) => m.kind === 'seated')).toEqual({ kind: 'seated', seat: null });
+    expect(copy.heard.some((m) => m.kind === 'joined' || m.kind === 'account')).toBe(false);
     // A device signed into the account takes it back, and the run counts for the account.
     const phone = await signedIn(server, 'Phone', number);
     await heardAfter(phone, { kind: 'resume', code, pass: passFor('Phone') }, 'joined');
@@ -415,6 +417,42 @@ describe('a seat bound to the account, its pass signed out', () => {
   });
 });
 
+describe('a seat bound to the account, its Kennwort changed on another device', () => {
+  it('signs the device on the seat out: it is told so, and the seat waits', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const store = freshStore();
+    const { server, manager } = serverOn(store);
+    const { anna, ben, code, number, seat } = await runOfTwo(server);
+    // Anna's phone, signed in, changes the Kennwort: her laptop in the run is signed out.
+    const phone = await signedIn(server, 'Phone', number);
+    const change: ClientMessage = {
+      kind: 'change-password',
+      pass: passFor('Phone'),
+      old: KENNWORT,
+      password: 'Neues Kennwort',
+    };
+    expect((await heardAfter(phone, change, 'login')).done).toBe('changed');
+    expect(anna.heard).toContainEqual({ kind: 'left', code, message: SIGNED_OUT });
+    expect(ben.view.players.find((p) => p.name === 'Anna')?.connected).toBe(false);
+    // The laptop's next ask finds it signed out, back to its seat or not.
+    const before = anna.heard.length;
+    const told = await heardAfter(anna, { kind: 'resume', code, pass: passFor('Anna') }, 'login');
+    expect(told).toEqual({ kind: 'login', done: 'signed-out', account: null });
+    const where = await heardAfter(anna, { kind: 'whereami', pass: passFor('Anna') }, 'login');
+    expect(where.done).toBe('signed-out');
+    expect(anna.heard.slice(before).some((m) => m.kind === 'joined')).toBe(false);
+    // The seat waits for the account: the phone takes it back, and the run counts for it.
+    await heardAfter(phone, { kind: 'resume', code, pass: passFor('Phone') }, 'joined');
+    expect(phone.view.you.id).toBe(seat);
+    ben.say({ kind: 'abandon', code, pass: passFor('Ben') });
+    await vi.waitFor(async () => {
+      const annas = (await store.findByIdentity(identityOf('Phone')))?.id ?? '';
+      expect((await store.runsOfAccount(annas, 5)).runs.map((run) => run.seat)).toEqual([0]);
+    });
+    manager.get(code).dispose();
+  });
+});
+
 describe('a seat bound to the account, over a restart', () => {
   it('goes back to a device of the account from the room taken up again', async () => {
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
@@ -457,5 +495,16 @@ describe('the seat book', () => {
     expect([book.seatOf(passFor('Anna')), book.lostSeat(passFor('Anna'))]).toEqual([null, true]);
     const phones = { playerId: 'p-anna', passId: passFor('Phone').id, accountId: 'annas' };
     expect(book.snapshot().bound).toEqual([expect.objectContaining(phones)]);
+  });
+
+  it('parks a seat found by its pass’s id and kept hash both, under PARKED', () => {
+    const book = new SeatBook();
+    book.bind('p-anna', passFor('Anna'));
+    const kept = seatPassOf('Anna');
+    expect(book.seatOfPass({ ...kept, secretHash: seatPassOf('Mallory').secretHash })).toBeNull();
+    expect(book.seatOfPass(kept)).toBe('p-anna');
+    book.park('p-anna', 'annas');
+    expect([book.seatOf(passFor('Anna')), book.seatOfAccount('annas')]).toEqual([null, 'p-anna']);
+    expect(book.passOf('p-anna')).toEqual({ id: kept.id, secretHash: PARKED });
   });
 });

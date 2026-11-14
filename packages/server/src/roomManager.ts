@@ -15,6 +15,7 @@ import {
 import { Room, type RunListener, type Sealer } from './room.js';
 import { open, seal } from './seal.js';
 import { switchOn } from './switches.js';
+import type { SeatPass } from './store/store.js';
 
 /** Room codes avoid ambiguous characters (0/O, 1/I/L). */
 const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
@@ -460,13 +461,13 @@ export class RoomManager {
   }
 
   /**
-   * Every seat `pass` holds, its pass signed out, stays the account's (`Room.parkSeat`): bound to
-   * `hash` — hex, the hash of a secret nobody holds — and to `accountId`, its line dropped.
+   * Every seat of the pass `pass` — its id and the hash of its secret, as a store keeps it — its
+   * pass signed out, stays the account's (`Room.parkSeat`): bound to `accountId`, its line
+   * dropped.
    */
-  parkSeats(pass: CrewPass, hash: string, accountId: string): void {
-    const parked = Buffer.from(hash, 'hex');
+  parkSeats(pass: SeatPass, accountId: string): void {
     for (const room of this.rooms.values()) {
-      room.parkSeat(pass, parked, accountId);
+      room.parkSeat(pass, accountId);
     }
   }
 

@@ -34,7 +34,7 @@ import {
 } from '../src/login.js';
 import type { Sender } from '../src/rateLimiter.js';
 import { RoomManager } from '../src/roomManager.js';
-import { BOUND_SIGN_IN, serveSockets } from '../src/sockets.js';
+import { BOUND_SIGN_IN, ONE_PASS, serveSockets } from '../src/sockets.js';
 import { JsonlStore } from '../src/store/jsonl.js';
 import { HAS_LOGIN, PASS_REFUSED } from '../src/store/store.js';
 import { FakeServer, joinedOf, type FakeSocket } from './line.js';
@@ -206,7 +206,7 @@ describe('a Kennwort for an account', () => {
     const { server, store } = lab();
     const { anna } = await annaWithKennwort(server);
     // The other device's change lands between the check and the write.
-    vi.spyOn(store, 'replaceLoginSecret').mockResolvedValueOnce(false);
+    vi.spyOn(store, 'replaceLoginSecret').mockResolvedValueOnce(null);
     const change: ClientMessage = {
       kind: 'change-password',
       pass: passFor('Anna'),
@@ -619,5 +619,87 @@ describe('signing out, and switching accounts', () => {
     expect(await ask(anna, switchTo('Anna', KENNWORT))).toEqual({ refused: PASS_REFUSED });
     expect((await store.findByIdentity(identityOf('Anna')))?.id).toBe(annaId);
     expect(await store.findByIdentity(identityOf('Eva'))).toBeNull();
+  });
+});
+
+describe('a Kennwort changed, and the account’s other devices', () => {
+  /** The sign-in of the pass of `name`'s into the account of `number`, with `password`. */
+  const signInAs = (name: string, number: string, password: string): ClientMessage => ({
+    kind: 'sign-in',
+    pass: passFor(name),
+    login: number,
+    password,
+  });
+
+  /** What `socket` heard of its account and its login since `from`. */
+  const toldSince = (socket: FakeSocket, from: number): ServerMessage[] =>
+    socket.heard.slice(from).filter((m) => m.kind === 'login' || m.kind === 'account');
+
+  it('signs the other devices out: each is told so the next time it shows its pass', async () => {
+    const said = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const { server } = lab();
+    const { anna, number } = await annaWithKennwort(server);
+    const phone = server.connect();
+    expect(await ask(phone, signInAs('Phone', number, KENNWORT))).toMatchObject({
+      done: 'signed-in',
+    });
+    const change: ClientMessage = {
+      kind: 'change-password',
+      pass: passFor('Anna'),
+      old: KENNWORT,
+      password: 'Neues Kennwort',
+    };
+    expect(await ask(anna, change)).toMatchObject({ done: 'changed', account: { login: number } });
+    expect(said).toHaveBeenCalledWith('[escapelab] a Kennwort changed, 1 other pass signed out');
+    // The phone, back on a line of its own: told it signed out, and nothing of the account.
+    const back = server.connect();
+    back.say({ kind: 'whereami', pass: passFor('Phone') });
+    await vi.waitFor(() => expect(toldSince(back, 0)).not.toEqual([]));
+    expect(toldSince(back, 0)).toEqual([{ kind: 'login', done: 'signed-out', account: null }]);
+    // Whatever it asks of the account on its old line, it is told the same.
+    const runs = phone.heard.length;
+    phone.say({ kind: 'my-runs', pass: passFor('Phone') });
+    await vi.waitFor(() => expect(toldSince(phone, runs)).not.toEqual([]));
+    expect(toldSince(phone, runs)).toEqual([{ kind: 'login', done: 'signed-out', account: null }]);
+    // The device that changed it stays in; the phone's next pass signs in by the new Kennwort.
+    anna.say({ kind: 'whereami', pass: passFor('Anna') });
+    await settled();
+    expect(accountOf(anna).login).toBe(number);
+    expect(await ask(back, signInAs('Phone 2', number, KENNWORT))).toEqual({
+      refused: WRONG_LOGIN,
+    });
+    expect(await ask(back, signInAs('Phone 2', number, 'Neues Kennwort'))).toMatchObject({
+      done: 'signed-in',
+    });
+  });
+});
+
+describe('one socket, as its device signs out or switches', () => {
+  it('speaks for the device’s next pass once its pass signed out, or switched', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const { server } = lab();
+    const { anna, number } = await annaWithKennwort(server);
+    const out = await ask(anna, { kind: 'sign-out', pass: passFor('Anna') });
+    expect(out).toMatchObject({ done: 'signed-out' });
+    // The device's next pass, on the same socket: a guest of its own, nothing refused.
+    anna.say({ kind: 'whereami', pass: passFor('Anna 2'), name: 'Anna' });
+    await settled();
+    expect(accountOf(anna).login).toBeNull();
+    expect(anna.heard.filter((m) => m.kind === 'error')).toEqual([]);
+    // Switched back into the account on the same socket: it speaks for that pass, and no other.
+    const switched = await ask(anna, {
+      kind: 'switch-account',
+      pass: passFor('Anna 2'),
+      next: passFor('Anna 3'),
+      login: number,
+      password: KENNWORT,
+    });
+    expect(switched).toMatchObject({ done: 'switched', account: { login: number } });
+    anna.say({ kind: 'whereami', pass: passFor('Anna 3') });
+    await settled();
+    expect(accountOf(anna).login).toBe(number);
+    expect(anna.heard.filter((m) => m.kind === 'error')).toEqual([]);
+    anna.say({ kind: 'whereami', pass: passFor('Anna 2') });
+    expect(anna.heard.at(-1)).toEqual({ kind: 'error', message: ONE_PASS, of: 'whereami' });
   });
 });

@@ -7,6 +7,7 @@ import {
   HAS_LOGIN,
   isLoggedRun,
   LoginTaken,
+  PARKED,
   sameSecretHash,
   unlockedBy,
   type Account,
@@ -17,6 +18,7 @@ import {
   type PassIdentity,
   type Profile,
   type SeatedRun,
+  type SeatPass,
   type Store,
   type Unlocked,
 } from './store.js';
@@ -201,10 +203,29 @@ async function leave(tx: Tx, { pass, parked }: Leaving): Promise<string | null> 
     return null;
   }
   checkSecret(found.secretHash, pass.secretHash);
-  await (parked === null
-    ? tx.identity.delete({ where: passKey(pass.subject) })
-    : tx.identity.update({ where: passKey(pass.subject), data: { secretHash: parked } }));
+  await (parked
+    ? tx.identity.update({ where: passKey(pass.subject), data: { secretHash: PARKED } })
+    : tx.identity.delete({ where: passKey(pass.subject) }));
   return found.accountId;
+}
+
+/**
+ * Every pass that leads into `accountId` but `staying` signed out in `tx`, its way in kept under
+ * PARKED (store.ts `replaceLoginSecret`) — each row locked first (FOR UPDATE, for which Prisma has
+ * no call), so that none moves to another account meanwhile: those passes, with the hashes their
+ * ways in kept before.
+ */
+async function signOutOthers(tx: Tx, accountId: string, staying: string): Promise<SeatPass[]> {
+  const others = await tx.$queryRaw<{ subject: string; secret_hash: string }[]>`
+    SELECT subject, secret_hash FROM identities
+    WHERE account_id = ${accountId}::uuid AND provider = 'pass'
+      AND subject <> ${staying} AND secret_hash <> ${PARKED}
+    FOR UPDATE`;
+  await tx.identity.updateMany({
+    where: { provider: 'pass', subject: { in: others.map((row) => row.subject) } },
+    data: { secretHash: PARKED },
+  });
+  return others.map((row) => ({ id: row.subject, secretHash: row.secret_hash }));
 }
 
 /**
@@ -757,14 +778,21 @@ export class PostgresStore implements Store {
     }
   }
 
-  async replaceLoginSecret(accountId: string, kept: string, next: string): Promise<boolean> {
-    const { count } = await onceMore(this.clients, (db) =>
-      db.identity.updateMany({
-        where: { accountId, provider: 'login', secretHash: kept },
-        data: { secretHash: next },
-      }),
+  replaceLoginSecret(
+    accountId: string,
+    kept: string,
+    next: string,
+    staying: string,
+  ): Promise<SeatPass[] | null> {
+    return onceMore(this.clients, (db) =>
+      db.$transaction(async (tx) => {
+        const { count } = await tx.identity.updateMany({
+          where: { accountId, provider: 'login', secretHash: kept },
+          data: { secretHash: next },
+        });
+        return count === 1 ? signOutOthers(tx, accountId, staying) : null;
+      }, TRANSACTION),
     );
-    return count === 1;
   }
 
   signIn(pass: PassIdentity, accountId: string, leaving: Leaving | null): Promise<string[]> {

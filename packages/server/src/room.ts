@@ -1,7 +1,7 @@
 import { randomInt, randomUUID } from 'node:crypto';
 import { DronePatrol } from './drones.js';
 import { SeatBook } from './seats.js';
-import type { FinishedRun } from './store/store.js';
+import type { FinishedRun, SeatPass } from './store/store.js';
 import {
   applyAction,
   armedStations,
@@ -864,16 +864,17 @@ export class Room {
   }
 
   /**
-   * The seat `pass` holds, its pass signed out (rule 4): it stays the account's — bound to `hash`,
-   * the hash of a secret nobody holds, and to `accountId` (seats.ts `park`) — and its line, where
-   * up, drops as a line drops, its connection told why. Nothing where the pass holds no seat here.
+   * The seat of the pass `pass` — its id and the hash of its secret, as a store keeps it — its
+   * pass signed out (rule 4): it stays the account's, bound to `accountId` (seats.ts `park`), and
+   * its line, where up, drops as a line drops, its connection told why. Nothing where the pass
+   * holds no seat here.
    */
-  parkSeat(pass: CrewPass, hash: Buffer, accountId: string): void {
-    const playerId = this.seatOf(pass);
-    if (playerId === null) {
+  parkSeat(pass: SeatPass, accountId: string): void {
+    const playerId = this.seats.seatOfPass(pass);
+    if (playerId === null || !this.hasPlayer(playerId)) {
       return;
     }
-    this.seats.park(playerId, hash, accountId);
+    this.seats.park(playerId, accountId);
     const listener = this.listeners.get(playerId);
     this.detach(playerId, 'dropped');
     listener?.({ kind: 'left', code: this.code, message: SIGNED_OUT });

@@ -1,6 +1,6 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { GameError, type CrewPass } from '@escapelab/core';
-import type { SeatPass } from './store/store.js';
+import { PARKED, type SeatPass } from './store/store.js';
 
 /**
  * A seat's binding: the id of the pass it belongs to and the hash of that pass's secret — and the
@@ -13,7 +13,7 @@ interface Binding {
 }
 
 /** A seat's binding as a room's snapshot keeps it (core snapshot.ts `SeatSnapshot`). */
-export interface BoundSeat {
+interface BoundSeat {
   playerId: string;
   passId: string;
   hash: string;
@@ -21,6 +21,9 @@ export interface BoundSeat {
 }
 
 const hashOf = (secret: string): Buffer => createHash('sha256').update(secret).digest();
+
+/** What a seat parked for its account is bound to in place of a pass's hash (store.ts PARKED). */
+const PARKED_HASH = Buffer.from(PARKED, 'hex');
 
 /**
  * Whether `pass` shows the secret `binding` was made with: compared in constant time, so the
@@ -125,20 +128,35 @@ export class SeatBook {
   }
 
   /**
-   * The seat of `playerId`, its pass signed out (rule 4): bound from now on to `hash`, the hash of
-   * a secret nobody holds, under its pass's id — so that the run credits its account still (store
-   * `Leaving`) — and to `accountId`, whose other devices take it back (`takeBack`).
+   * The seat of `playerId`, its pass signed out (rule 4): bound from now on to PARKED, which no
+   * secret's hash is, under its pass's id — so that the run credits its account still, whose
+   * store keeps the same (store.ts `Leaving`) — and to `accountId`, whose other devices take it
+   * back (`takeBack`).
    */
-  park(playerId: string, hash: Buffer, accountId: string): void {
+  park(playerId: string, accountId: string): void {
     const binding = this.bindings.get(playerId);
     if (binding !== undefined) {
-      this.bindings.set(playerId, { passId: binding.passId, hash, accountId });
+      this.bindings.set(playerId, { passId: binding.passId, hash: PARKED_HASH, accountId });
     }
   }
 
   /** Whether another device took over the seat `pass` held here. */
   lostSeat(pass: CrewPass): boolean {
     return this.lost.has(pass.id);
+  }
+
+  /**
+   * The seat bound to the pass `pass` — its id, and the hash of its secret as a store keeps it —
+   * by player id; null for none.
+   */
+  seatOfPass(pass: SeatPass): string | null {
+    const kept = Buffer.from(pass.secretHash, 'hex');
+    for (const [playerId, binding] of this.bindings) {
+      if (binding.passId === pass.id) {
+        return binding.hash.equals(kept) ? playerId : null;
+      }
+    }
+    return null;
   }
 
   /** The seat `pass` holds, by player id; null where it holds none or shows the wrong secret. */

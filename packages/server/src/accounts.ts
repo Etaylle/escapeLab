@@ -30,6 +30,7 @@ import {
   type PassIdentity,
   type Profile,
   type SeatedRun,
+  type SeatPass,
   type Store,
   type Unlocked,
 } from './store/store.js';
@@ -82,6 +83,16 @@ export const CHANGED_MEANWHILE = 'Das Kennwort wurde eben an anderer Stelle geä
 /** What a sign-out is told of an account without a Kennwort, which no device would reach again. */
 export const SIGN_OUT_LOSES =
   'Ohne Kennwort wäre dieses Konto nach dem Abmelden nicht mehr erreichbar.';
+
+/** A Kennwort changed (`AccountDesk.changePassword`). */
+export interface NewKennwort {
+  /** the account as its owner sees it now */
+  view: AccountView;
+  /** its id */
+  accountId: string;
+  /** the account's other passes, signed out with the change: their seats stay the account's */
+  signedOut: SeatPass[];
+}
 
 /** A device switched to another account (`AccountDesk.switchAccount`). */
 export interface Switched {
@@ -237,17 +248,18 @@ export class AccountDesk {
   /**
    * A new Kennwort for the account of `pass`, its present one `old` shown — tried as a sign-in is
    * (`Tries`), but counted against the pass, not the Ausweisnummer: the pass is signed in
-   * already, and a lock of the number by others' guesses holds it not. The account as its owner
-   * sees it. Refused, saying why, for a Kennwort too short or too long, an account without one
-   * (NO_LOGIN), `old` wrong (OLD_WRONG) or a try the limits hold back, a gate that lets nothing
-   * change, and a Kennwort changed meanwhile elsewhere.
+   * already, and a lock of the number by others' guesses holds it not. Every other pass of the
+   * account is signed out with it (store.ts `replaceLoginSecret`): a device the Kennwort was
+   * given away to is in no more. Refused, saying why, for a Kennwort too short or too long, an
+   * account without one (NO_LOGIN), `old` wrong (OLD_WRONG) or a try the limits hold back, a gate
+   * that lets nothing change, and a Kennwort changed meanwhile elsewhere.
    */
   changePassword(
     pass: CrewPass,
     old: string,
     password: string,
     limits: Limits = NO_LIMITS,
-  ): Promise<AccountView> {
+  ): Promise<NewKennwort> {
     return this.serial(pass, async () => {
       if (!passwordFits(password)) {
         throw new GameError(PASSWORD_SIZE);
@@ -264,10 +276,13 @@ export class AccountDesk {
         throw new GameError(OLD_WRONG);
       }
       const next = await this.derives.run(() => hashPassword(password));
-      if (!(await this.store.replaceLoginSecret(account.id, kept, next))) {
+      const signedOut = await this.store.replaceLoginSecret(account.id, kept, next, pass.id);
+      if (signedOut === null) {
         throw new GameError(CHANGED_MEANWHILE);
       }
-      return this.viewOf(account);
+      const others = signedOut.length === 1 ? 'pass' : 'passes';
+      console.log(`[escapelab] a Kennwort changed, ${signedOut.length} other ${others} signed out`);
+      return { view: await this.viewOf(account), accountId: account.id, signedOut };
     });
   }
 
@@ -296,12 +311,11 @@ export class AccountDesk {
 
   /**
    * `pass` signed out of its account, which stays whole (store.ts `signOut`): where it holds a
-   * seat, `parked` is the hash of a secret nobody holds that its way in keeps for that seat; else
-   * null, and its way in is deleted. The id of the account it led into; null for none — nothing
-   * to sign out of. Refused, saying why, for an account without a Kennwort (SIGN_OUT_LOSES) and
-   * where the gate lets nothing change.
+   * seat (`parked`), its way in stays for that seat, kept under PARKED; else it is deleted. The id
+   * of the account it led into; null for none — nothing to sign out of. Refused, saying why, for
+   * an account without a Kennwort (SIGN_OUT_LOSES) and where the gate lets nothing change.
    */
-  signOut(pass: CrewPass, parked: string | null, gate: Gate = OPEN): Promise<string | null> {
+  signOut(pass: CrewPass, parked: boolean, gate: Gate = OPEN): Promise<string | null> {
     return this.serial(pass, async () => {
       const account = await this.store.findByIdentity(identityOf(pass));
       if (account === null) {
@@ -322,14 +336,14 @@ export class AccountDesk {
   /**
    * The device switches accounts in one go (store.ts `signIn` with a pass leaving): the new pass
    * `next` signed into the account of the Ausweisnummer `typed`, its Kennwort shown — tried as
-   * `signIn` tries it — and `pass` signed out, kept for its seat under `parked` where it holds one.
+   * `signIn` tries it — and `pass` signed out, its way in kept for its seat where it holds one.
    * The account it signed out of is deleted where nothing is left of it. Nothing changes where the
    * try is refused, as `signIn` refuses it, or `next` is no new pass.
    */
   switchAccount(
     pass: CrewPass,
     next: CrewPass,
-    login: { typed: string; password: string; parked: string | null },
+    login: { typed: string; password: string; parked: boolean },
     limits: Limits = NO_LIMITS,
   ): Promise<Switched> {
     return this.serial(pass, async () => {

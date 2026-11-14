@@ -150,7 +150,7 @@ function newKennwortAsk(step: 'set' | 'change', { old, password, again }: Fields
 /** What the section says once the server did what was asked; null where nothing is to be said. */
 export function doneLine(done: LoginDone | null): string | null {
   const lines: Partial<Record<LoginDone, string>> = {
-    changed: 'Kennwort geändert.',
+    changed: 'Kennwort geändert: Die anderen Geräte dieses Kontos sind abgemeldet.',
     'signed-in': 'Angemeldet.',
   };
   return done === null ? null : (lines[done] ?? null);
@@ -185,6 +185,11 @@ export function leftBehind(account: Pick<AccountView, 'login' | 'runs'>): string
 export const SWITCH_LINE =
   'Dieses Gerät wechselt auf das Konto der Ausweisnummer; das bisherige bleibt mit seinem ' +
   'Kennwort erreichbar.';
+
+/** What a new Kennwort says it does to the account's other devices before it is asked for. */
+export const CHANGE_LINE =
+  'Ein neues Kennwort meldet alle anderen Geräte dieses Kontos ab; ein Platz in einem laufenden ' +
+  'Einsatz bleibt beim Konto.';
 
 /** What a sign-out says it keeps before it is asked for. */
 export const SIGN_OUT_LINE =
@@ -392,7 +397,7 @@ interface FormText {
 
 const FORMS: Record<FormStep, FormText> = {
   set: { submit: 'Kennwort setzen', line: () => null },
-  change: { submit: 'Kennwort ändern', line: () => null },
+  change: { submit: 'Kennwort ändern', line: () => CHANGE_LINE },
   'sign-in': { submit: 'Anmelden', line: leftBehind },
   switch: { submit: 'Konto wechseln', line: () => SWITCH_LINE },
 };

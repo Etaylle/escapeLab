@@ -10,6 +10,7 @@ import {
   HAS_LOGIN,
   isLoggedRun,
   LoginTaken,
+  PARKED,
   sameSecretHash,
   unlockedBy,
   type Account,
@@ -118,6 +119,9 @@ function loadRuns(file: string): { runs: LoggedRun[]; problems: string[] } {
 const keyOf = (identity: { provider: string; subject: string }): string =>
   `${identity.provider}:${identity.subject}`;
 
+/** What the key of a pass's way in starts with (`keyOf`): its provider. */
+const PASS = 'pass:';
+
 /** What the key of a login in memory starts with (`keyOf`): its provider. */
 const LOGIN = 'login:';
 
@@ -214,7 +218,7 @@ export class JsonlStore implements Store {
    * alone credits nobody; null for none.
    */
   private ownerOf(pass: SeatPass | null): string | null {
-    const known = pass === null ? undefined : this.identities.get(`pass:${pass.id}`);
+    const known = pass === null ? undefined : this.identities.get(`${PASS}${pass.id}`);
     const shown = known !== undefined && pass !== null;
     return shown && sameSecretHash(known.secretHash, pass.secretHash) ? known.accountId : null;
   }
@@ -345,13 +349,27 @@ export class JsonlStore implements Store {
     this.identities.set(loginKeyOf(subject), { accountId, secretHash });
   }
 
-  async replaceLoginSecret(accountId: string, kept: string, next: string): Promise<boolean> {
+  async replaceLoginSecret(
+    accountId: string,
+    kept: string,
+    next: string,
+    staying: string,
+  ): Promise<SeatPass[] | null> {
     const login = this.loginIn(accountId);
     if (login === null || login.secretHash !== kept) {
-      return false;
+      return null;
     }
     this.identities.set(loginKeyOf(login.subject), { accountId, secretHash: next });
-    return true;
+    const signedOut: SeatPass[] = [];
+    for (const [key, known] of this.identities) {
+      const id = key.slice(PASS.length);
+      const other = key.startsWith(PASS) && id !== staying && known.secretHash !== PARKED;
+      if (other && known.accountId === accountId) {
+        signedOut.push({ id, secretHash: known.secretHash });
+        this.identities.set(key, { accountId, secretHash: PARKED });
+      }
+    }
+    return signedOut;
   }
 
   async signIn(pass: PassIdentity, accountId: string, leaving: Leaving | null): Promise<string[]> {
@@ -392,10 +410,10 @@ export class JsonlStore implements Store {
     if (known === undefined) {
       return;
     }
-    if (parked === null) {
-      this.identities.delete(keyOf(pass));
+    if (parked) {
+      this.identities.set(keyOf(pass), { accountId: known.accountId, secretHash: PARKED });
     } else {
-      this.identities.set(keyOf(pass), { accountId: known.accountId, secretHash: parked });
+      this.identities.delete(keyOf(pass));
     }
   }
 
