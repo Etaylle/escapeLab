@@ -193,7 +193,7 @@ describe('going on without somebody away', () => {
       'Die Wartezeit läuft noch.',
     );
     const on = applyAction(again, goOn('p1', 'p2', DROP_AT + 9000 + LATER_WAIT_MS));
-    expect(on.away['p2']?.waived).toBe(true);
+    expect(on.away['p2']).toMatchObject({ waived: true });
     const third = run([lineBack('p2', DROP_AT + 12_000), lineDrops('p3', DROP_AT + 13_000)], again);
     expect(third.away['p3']?.waivableAt).toBe(DROP_AT + 13_000 + LATER_WAIT_MS);
   });

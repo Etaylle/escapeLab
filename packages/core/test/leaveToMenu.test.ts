@@ -55,11 +55,11 @@ describe('a line closed for the main menu', () => {
       { id: 'p2', name: 'p2', since: LEFT_AT, waivableAt: LEFT_AT + FIRST_WAIT_MS, menu: true },
     ]);
     expect(viewFor(waiting, 'p3').players.map((p) => p.menu ?? '')).toEqual(['', 'main', '']);
-    expect(waiting.events.at(-1)?.label).toBe('p2 hat sich abgemeldet.');
+    expect(waiting.events.at(-1)).toMatchObject({ label: 'p2 hat sich abgemeldet.' });
     const dropped = applyAction(running, lineDrops('p2', LEFT_AT));
     expect(viewFor(dropped, 'p1').away[0]?.menu).toBeUndefined();
     expect(dropped.menus).toEqual({});
-    expect(dropped.events.at(-1)?.label).toBe('p2s Leitung ist weg.');
+    expect(dropped.events.at(-1)).toMatchObject({ label: 'p2s Leitung ist weg.' });
   });
 
   it('is over once the player is back on the line, the run going on', () => {
