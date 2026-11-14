@@ -33,6 +33,7 @@ import {
   lengthOff,
   make,
   MASKED_WITHIN_DB,
+  MAX_BED_GAIN_DB,
   MAX_MUSIC_TAKES,
   measuredAnew,
   MIN_CREDITS,
@@ -1044,5 +1045,68 @@ describe('a run as the command line asks', () => {
       'pnpm --filter client sfx -- --candidates 3 --only test-sting',
     ]);
     expect(remakeCommands([CLACK, CALM], [])).toEqual([]);
+  });
+});
+
+/** The facility's hum as a test asks for it: a bed of 10 s. */
+const HUM: CatalogEntry = {
+  id: 'test-hum',
+  kind: 'bed',
+  prompt: 'Room tone of a large research facility at night: distant transformers and ventilation.',
+  durationSeconds: 10,
+  loop: true,
+  target: { measure: 'rms', dbfs: -20 },
+  usedBy: ['src/world/menuSound.ts#HUM'],
+};
+
+/** Runs `items` through `bench`, `count` takes each; returns what it said on the error stream. */
+async function refusedIn(items: readonly CatalogEntry[], count: number, bench: Bench) {
+  const exit = process.exitCode;
+  const said: string[] = [];
+  const keep = (line: string): void => void said.push(line);
+  const error = vi.spyOn(console, 'error').mockImplementation(keep);
+  try {
+    const manifests = await runOf(items, count, bench);
+    return { manifests, said, failed: process.exitCode === 1 };
+  } finally {
+    error.mockRestore();
+    process.exitCode = exit;
+  }
+}
+
+describe('a bed too quiet to bring up', () => {
+  it('is refused in one line where every take needs over +12 dB, landing nowhere', async () => {
+    expect(MAX_BED_GAIN_DB).toBe(12);
+    const places = placesIn();
+    // A tone at 0.004: −51 dBFS RMS, some +31 dB short of a bed's −20.
+    const { client } = answering({ effects: [piece(10, 0.004)] });
+    const { manifests, said, failed } = await refusedIn([HUM], 1, benchOf(client, places));
+    expect(said).toEqual([
+      'sfx: test-hum — a bed may be brought up 12 dB and every take needs more (the least ' +
+        '+31.0 dB): it came back near silent, none kept; make it again: ' +
+        '--candidates 5 --only test-hum',
+    ]);
+    expect(failed).toBe(true);
+    expect(manifests.sfx).toEqual({});
+    expect(readdirSync(places.dirs.sfx)).toEqual([]); // no file, no part of one
+  });
+
+  it('keeps of its candidates one within +12 dB, however loud the others', async () => {
+    const places = placesIn();
+    const takes = [piece(10, 0.004), piece(10, 0.05), piece(10, 0.003)];
+    const { client } = answering({ effects: takes });
+    const { manifests, said } = await refusedIn([HUM], 3, benchOf(client, places));
+    expect(said).toEqual([]);
+    expect(manifests.sfx[HUM.id]).toMatchObject({ influence: 0.6 }); // the 0.05 one: +9 dB
+    expect(manifests.sfx[HUM.id]?.gain).toBeCloseTo(0.1 / (0.05 / Math.SQRT2), 2);
+    expect(readdirSync(places.dirs.sfx).sort()).toEqual(['manifest.json', 'test-hum.mp3']);
+  });
+
+  it('holds a bed alone to it: a one-shot is brought up as far as it needs', async () => {
+    const places = placesIn();
+    const { client } = answering({ effects: [piece(0.6, 0.07)] }); // a peak +20 dB short
+    const { manifests, said } = await refusedIn([CLACK], 1, benchOf(client, places));
+    expect(said).toEqual([]);
+    expect(manifests.sfx[CLACK.id]?.gain).toBeCloseTo(10 ** (-3 / 20) / 0.07, 2);
   });
 });

@@ -8,6 +8,7 @@ import {
   FOLDER_CAPS,
   groupOf,
   MANIFEST,
+  MAX_BED_GAIN_DB,
   musicFormatOf,
   noisyTakes,
   offLength,
@@ -21,7 +22,7 @@ import {
   type Group,
   type Manifest,
 } from '../scripts/sfx.js';
-import { MUSIC_IDS, SFX_IDS } from '../src/world/samples.js';
+import { BED_GAIN_MAX, MUSIC_IDS, SFX_IDS } from '../src/world/samples.js';
 
 /**
  * The lab's recordings against what the game plays: the ids the code may name (samples.ts)
@@ -236,5 +237,29 @@ describe.each(['sfx', 'music'] as const)('the recordings in public/%s', (group) 
     );
     const after = bytesOf(filed()) - bytesOf(replaced) + planned;
     expect(after).toBeLessThanOrEqual(FOLDER_CAPS[group]);
+  });
+});
+
+describe('the levels the game plays its recordings at', () => {
+  it('bring no bed up more than +12 dB: the script keeps none such, the loader plays none', () => {
+    expect(BED_GAIN_MAX).toBeCloseTo(10 ** (MAX_BED_GAIN_DB / 20), 12);
+    const sfx = manifestOf('sfx');
+    const beds = catalog.filter((entry) => entry.kind === 'bed' && sfx[entry.id] !== undefined);
+    const over = beds.filter((entry) => (sfx[entry.id]?.gain ?? 0) > BED_GAIN_MAX);
+    const said = over.map((entry) => `${entry.id} gain ${sfx[entry.id]?.gain}`);
+    expect(said, `brought up past +12 dB — ${remedyFor(over.map((entry) => entry.id))}`).toEqual(
+      [],
+    );
+  });
+
+  it('play a suite’s pieces within 2 dB of each other, each at its loudness by its gain', () => {
+    const music = manifestOf('music');
+    const played = Object.entries(music)
+      .filter(([, kept]) => kept.suite !== undefined && kept.loudness !== undefined)
+      .map(([id, kept]) => [id, (kept.loudness ?? NaN) + 20 * Math.log10(kept.gain)] as const);
+    const levels = played.map(([, lufs]) => lufs);
+    const spread = levels.length === 0 ? 0 : Math.max(...levels) - Math.min(...levels);
+    const said = played.map(([id, lufs]) => `${id} ${lufs.toFixed(1)} LUFS`).join(', ');
+    expect(spread, said).toBeLessThanOrEqual(2);
   });
 });

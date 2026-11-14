@@ -272,6 +272,13 @@ export const FOLDER_CAPS: Readonly<Record<Group, number>> = {
 };
 /** Silence at a recording's start longer than this is skipped, ms. */
 export const LEAD_MS = 30;
+/**
+ * The most a bed may be brought up to its loudness, dB. A take that needs more came back near
+ * silent — the facility's hum of 2026-11-13 needed +31 dB, and its one click came up with it as a
+ * crack — so it is refused and lands nowhere; the game plays no such bed (samples.ts BED_GAIN_MAX).
+ */
+export const MAX_BED_GAIN_DB = 12;
+const MAX_BED_GAIN = 10 ** (MAX_BED_GAIN_DB / 20);
 
 /** A floor that comes out louder than this once the gain is applied is heard, dBFS. */
 export const AUDIBLE_FLOOR_DBFS = -50;
@@ -1187,7 +1194,7 @@ function takeLine(entry: CatalogEntry, take: Take, n: number): string {
 }
 
 /** Says how each take of `entry` measured — an effect's with its influence — and which is kept. */
-function sayTakes(entry: CatalogEntry, takes: readonly Take[], kept: Take): void {
+function sayTakes(entry: CatalogEntry, takes: readonly Take[], kept: Take | null): void {
   takes.forEach((take, i) => {
     console.log(`${takeLine(entry, take, i + 1)}${take === kept ? '  ← kept' : ''}`);
   });
@@ -1555,34 +1562,59 @@ export interface Bench {
 
 const pause = (ms: number): Promise<void> => new Promise((done) => setTimeout(done, ms));
 
+/** Whether `take` of `entry` may be kept: a bed's only where it needs no more than +12 dB. */
+const keepable = (entry: CatalogEntry, take: Take): boolean =>
+  entry.kind !== 'bed' || take.gain <= MAX_BED_GAIN;
+
 /**
- * Makes `entry` of `group` into the project: once, or as `count` takes into the candidates'
- * folder, an effect's each at its influence, each measured and said, the one `pickTake` picks
- * copied into the project. Returns the manifest's entry for what it kept.
+ * Says, in one line, that every take of the bed `entry` came back too quiet to be brought up to
+ * its level within MAX_BED_GAIN_DB, that none is kept, and what makes it again; the run fails.
+ */
+function refuseQuiet(entry: CatalogEntry, takes: readonly Take[]): void {
+  const least = (20 * Math.log10(Math.min(...takes.map((take) => take.gain)))).toFixed(1);
+  console.error(
+    `sfx: ${entry.id} — a bed may be brought up ${MAX_BED_GAIN_DB} dB and every take needs ` +
+      `more (the least +${least} dB): it came back near silent, none kept; make it again: ` +
+      remakeArgs('sfx', [entry.id]),
+  );
+  process.exitCode = 1;
+}
+
+/**
+ * Makes `entry` of `group` into the project: once, into a part beside its file, or as `count`
+ * takes into the candidates' folder, an effect's each at its influence; each measured, the
+ * candidates said, and of those that may be kept (`keepable`) the one `pickTake` picks put into
+ * the project. Returns the manifest's entry for what it kept — null, said in a line, where every
+ * take of a bed came back too quiet (`refuseQuiet`): then nothing of it lands in the project.
  */
 async function renderJob(
   entry: CatalogEntry,
   group: Group,
   making: Making,
   bench: Bench,
-): Promise<ManifestEntry> {
+): Promise<ManifestEntry | null> {
   const target = join(bench.places.dirs[group], fileOf(entry.id));
   const influences = influencesFor(group === 'music' ? 1 : making.count);
-  const [only] = influences;
-  if (influences.length === 1 && only !== undefined) {
-    writeFileSync(target, await make(bench.client, entry, { influence: only, wait: bench.wait }));
-    return entryOf(entry, takeAt(entry, target, only, bench.decode));
-  }
+  const single = influences.length === 1;
   const makeTake = (influence: number, i: number) => async (): Promise<Take> => {
-    const path = join(making.candidates, `${entry.id}-${i + 1}.mp3`);
+    const path = single ? `${target}.part` : join(making.candidates, `${entry.id}-${i + 1}.mp3`);
     writeFileSync(path, await make(bench.client, entry, { influence, wait: bench.wait }));
     return takeAt(entry, path, influence, bench.decode);
   };
-  const takes = await oneByOne(influences.map(makeTake), ELEVEN_GAP_MS, bench.wait);
-  const kept = pickTake(takes);
-  sayTakes(entry, takes, kept);
-  copyFileSync(kept.path, target);
-  return entryOf(entry, { ...kept, path: target });
+  try {
+    const takes = await oneByOne(influences.map(makeTake), ELEVEN_GAP_MS, bench.wait);
+    const fit = takes.filter((take) => keepable(entry, take));
+    const kept = fit.length > 0 ? pickTake(fit) : null;
+    if (!single) sayTakes(entry, takes, kept);
+    if (kept === null) {
+      refuseQuiet(entry, takes);
+      return null;
+    }
+    copyFileSync(kept.path, target);
+    return entryOf(entry, { ...kept, path: target });
+  } finally {
+    rmSync(`${target}.part`, { force: true });
+  }
 }
 
 /** Take `n` of `item` at `path`, measured and said, as its list keeps it. */
@@ -1636,6 +1668,7 @@ async function makeJob(job: Job, manifest: Manifest, making: Making, bench: Benc
   }
   mkdirSync(bench.places.dirs[group], { recursive: true });
   const kept = await renderJob(entry, group, making, bench);
+  if (kept === null) return;
   manifest[entry.id] = kept;
   writeManifest(bench.places, group, manifest);
   console.log(`sfx: ${entry.id} ${(kept.ms / 1000).toFixed(1)} s, gain ${kept.gain}`);

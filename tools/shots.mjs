@@ -6235,16 +6235,17 @@ async function menuSoundAtFirstKey(page, press) {
 }
 
 /**
- * The lobby's sounds on the host's page — the theme kept at the lobby's weight (`lobby`, the
- * probe read there), the round's chime as it came up, the ready chirp as the guest said ready —
- * and the menu's sound gone once the run has started; or the run fails.
+ * The lobby's sounds on the host's page — the music kept in the lobby (`lobby`, the probe read
+ * there): its own piece of the score, or the theme at the lobby's weight where that awaits its
+ * render — the round's chime as it came up, the ready chirp as the guest said ready — and the
+ * menu's sound gone once the run has started; or the run fails.
  */
 async function menuSoundAfterStart(page, lobby) {
   const { state, played } = await menuSoundOf(page);
   const { opened = 0, ready = 0 } = played;
   const kept = keptInLobby(lobby);
   console.log(
-    `menu sound         in the lobby ${kept ? 'playing on at the lobby’s weight' : '!! not kept'}` +
+    `menu sound         in the lobby ${kept ? `playing ${lobbyMusic(lobby)}` : '!! not kept'}` +
       `, the round's chime ${opened}×, the ready chirp ${ready}×; the run started: ${state}`,
   );
   if (!kept || state !== 'off' || opened < 1 || ready < 1) {
@@ -6252,7 +6253,11 @@ async function menuSoundAfterStart(page, lobby) {
   }
 }
 
-/** Whether the menu's sound played on in the lobby at its weight (`lobby`: the probe there). */
+/** What the lobby plays, as the log says it: its own piece, or the theme at its weight. */
+const lobbyMusic = (lobby) =>
+  lobby.piece === 'lobby' ? 'its own piece' : 'the theme at the lobby’s weight';
+
+/** Whether the menu's sound played on in the lobby (`lobby`: the probe there). */
 const keptInLobby = (lobby) => lobby.state === 'playing' && lobby.place === 'lobby';
 
 /** The end card's music off the page's probe (client world/endTheme.ts). */

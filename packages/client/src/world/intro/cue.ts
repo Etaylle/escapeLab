@@ -1,19 +1,22 @@
 import { claim, EFFECTS_LEVEL, LOOKAHEAD, playingEngine, release } from '../audio.js';
 import { closeStream, openStream, startStream, type Stream } from '../audioStream.js';
+import { MUSIC_LEVEL } from '../music.js';
 import { holdMusic, musicFrom } from '../musicTurn.js';
-import type { MusicId } from '../samples.js';
+import { MUSIC_BASE, musicEntry, musicListed, type MusicId } from '../samples.js';
 
 /**
- * The opening's music: one instrumental bed of some 40 s — dark, low, industrial, slowly
- * building — composed once by ElevenLabs Music (scripts/introCue.ts) into public/intro/. It
- * plays from the card on under the announcement, low, into the music's bus at the Musik volume,
- * and counts as one voice of the lab's budget (audio.ts `claim`). It streams from its file
- * (audioStream.ts) rather than being decoded — 40 s in two channels would hold some 15 MB — its
- * level set by the peak its list names. It waits for the bus as all music does — the menu's
- * theme fading out as the run starts (musicTurn.ts) — and comes in where the opening then stands.
- * Skipping the opening fades it out, holding the bus meanwhile; the blackout cuts it off. Where
- * there is no cue — none composed, or the file not to be had — the opening plays without it.
- * Nothing here throws.
+ * The opening's music: the score's title (audio/catalog.json `title`, the motif's first phrase
+ * alone on a piano) where the music's manifest has it, at the stems' level as every piece of the
+ * score — the score's pieces are brought to one loudness, so that the run's music after it does
+ * not jump; else the older cue, one instrumental bed of some 40 s composed by ElevenLabs Music
+ * (scripts/introCue.ts) into public/intro/, its level set by the peak its list names. It plays
+ * from the card on under the announcement into the music's bus at the Musik volume, and counts
+ * as one voice of the lab's budget (audio.ts `claim`). It streams from its file (audioStream.ts)
+ * rather than being decoded — 40 s in two channels would hold some 15 MB. It waits for the bus
+ * as all music does — the menu's theme fading out as the run starts (musicTurn.ts) — and comes in
+ * where the opening then stands. Skipping the opening fades it out, holding the bus meanwhile;
+ * the blackout cuts it off. Where there is neither — none made, or no file to be had — the
+ * opening plays without music. Nothing here throws.
  */
 
 /** The opening's piece of the score, by its id in the music's manifest (audio/catalog.json). */
@@ -36,6 +39,17 @@ export interface CueManifest {
 export const CUE_PEAK = EFFECTS_LEVEL * 0.5;
 /** How long the cue fades where the player skips the opening, s. */
 export const CUE_FADE_S = 1.5;
+
+/**
+ * What the opening streams: its address, how long it lasts and the silence it opens with, s, and
+ * the level it comes in at.
+ */
+interface Source {
+  readonly url: string;
+  readonly seconds: number;
+  readonly lead: number;
+  readonly level: number;
+}
 
 /** The cue as it plays: its stream, when it ends on the audio clock, and whether it has gone. */
 interface Playing {
@@ -62,13 +76,31 @@ function cueListed(): Promise<CueManifest | null> {
 }
 
 /**
- * The cue for the opening that began at `since` (epoch ms): from where that opening stands now,
- * once its list is here — unless the opening was skipped or cut meanwhile.
+ * What the opening plays: the score's title where the music's manifest names it, at the stems'
+ * level times its gain; else the older cue, at CUE_PEAK by its peak; null where there is neither.
+ */
+async function sourceOf(): Promise<Source | null> {
+  await musicListed();
+  const title = musicEntry(TITLE);
+  if (title !== null) {
+    const url = `${MUSIC_BASE}${title.file}`;
+    const level = MUSIC_LEVEL * title.gain;
+    return { url, seconds: title.ms / 1000, lead: title.startMs / 1000, level };
+  }
+  const cue = await cueListed();
+  if (cue === null) return null;
+  const level = CUE_PEAK / (cue.peak > 0 ? cue.peak : 1);
+  return { url: `${CUE_BASE}${cue.file}`, seconds: cue.ms / 1000, lead: 0, level };
+}
+
+/**
+ * The music for the opening that began at `since` (epoch ms): from where that opening stands
+ * now, once its lists are here — unless the opening was skipped or cut meanwhile.
  */
 export function startCue(since: number): void {
   wanted = since;
-  void cueListed().then((cue) => {
-    if (cue !== null && wanted === since) begin(cue, since);
+  void sourceOf().then((source) => {
+    if (source !== null && wanted === since) begin(source, since);
   });
 }
 
@@ -81,24 +113,24 @@ function letGo(cue: Playing): void {
 }
 
 /**
- * Streams `cue` as one voice, as soon as the music's bus is free, from where the opening that
- * began at `since` stands then.
+ * Streams `source` as one voice, as soon as the music's bus is free, from where the opening that
+ * began at `since` stands then: its sound — past the silence it opens with — from the opening's
+ * first moment.
  */
-function begin(cue: CueManifest, since: number): void {
+function begin(source: Source, since: number): void {
   try {
     const engine = playingEngine();
     if (engine === null || playing !== null) return;
     const { ctx } = engine;
     const soonest = ctx.currentTime + LOOKAHEAD;
-    // Where the opening's first moment lies on the audio clock: the cue keeps to it.
-    const zero = soonest - Math.max(0, (Date.now() - since) / 1000);
+    // Where the opening's first moment lies on the audio clock: the music keeps to it.
+    const zero = soonest - Math.max(0, (Date.now() - since) / 1000) - source.lead;
     const at = musicFrom(soonest);
     const from = at - zero;
-    if (from >= cue.ms / 1000 || !claim({ voice: 1 })) return;
-    const level = CUE_PEAK / (cue.peak > 0 ? cue.peak : 1);
-    const stream = openStream(ctx, `${CUE_BASE}${cue.file}`, engine.music, level);
+    if (from >= source.seconds || !claim({ voice: 1 })) return;
+    const stream = openStream(ctx, source.url, engine.music, source.level);
     startStream(stream, ctx, zero, from);
-    const now: Playing = { stream, end: zero + cue.ms / 1000, gone: false };
+    const now: Playing = { stream, end: zero + source.seconds, gone: false };
     playing = now;
     stream.element.addEventListener(
       'ended',

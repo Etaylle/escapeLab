@@ -152,6 +152,26 @@ describe('the recordings, loaded', () => {
     expect(said).not.toHaveBeenCalled();
   });
 
+  it('plays no bed brought up over +12 dB: said once, never fetched; a one-shot', async () => {
+    const said = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const served = {
+      'bed-facility': { gain: 35.5 },
+      'bed-lab': { gain: 3.98 },
+      ping: { gain: 20 },
+    };
+    const fetched = serveSamples(served);
+    const loader = await samples();
+    expect(loader.BED_GAIN_MAX).toBeCloseTo(3.981, 3); // +12 dB
+    expect(await loader.loadSample('bed-facility')).toBeNull();
+    expect(await loader.loadSample('bed-facility')).toBeNull();
+    expect(await loader.loadSample('bed-lab')).not.toBeNull(); // +12 dB, just
+    expect(await loader.loadSample('ping')).not.toBeNull(); // +26 dB: a one-shot's peak
+    expect(files(fetched).sort()).toEqual(['/sfx/bed-lab.mp3', '/sfx/ping.mp3']);
+    expect(said).toHaveBeenCalledTimes(1);
+    const why = /bed-facility\.mp3 could not be loaded \(a bed brought up \+31\.0 dB, over \+12\)/;
+    expect(said.mock.calls[0]?.[0]).toMatch(why);
+  });
+
   it('says once that a recording failed, keeps it silent, and tries it again later', async () => {
     const said = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     const fetched = serveSamples({ siren: { status: 404 } });

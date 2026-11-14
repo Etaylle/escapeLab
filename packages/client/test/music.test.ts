@@ -9,6 +9,7 @@ import {
   clockTension,
   CROSSFADE_S,
   layersFor,
+  loopPeriod,
   MUSIC_LEVEL,
   nextBar,
   passPeriod,
@@ -85,6 +86,16 @@ describe('the pressure the music follows', () => {
     expect(nextBar(10.1, grid)).toBeCloseTo(10 + BAR, 9);
     expect(nextBar(10 + 2 * BAR - 1e-12, grid)).toBeCloseTo(10 + 2 * BAR, 9);
     expect(CROSSFADE_S).toBe(2);
+  });
+
+  it('loops a piece of the score on the bars its manifest names, as far as its file holds', () => {
+    expect(loopPeriod({ ms: 72_000, startMs: 0 }, 90)).toBeCloseTo(24 * BAR, 9); // as it holds
+    expect(loopPeriod({ ms: 72_000, startMs: 0, bars: 20 }, 90)).toBeCloseTo(20 * BAR, 9);
+    expect(loopPeriod({ ms: 72_000, startMs: 0, bars: 24 }, 90)).toBeCloseTo(24 * BAR, 9);
+    // More bars than the file holds with its lead bar and its seam: as many as it holds.
+    expect(loopPeriod({ ms: 72_000, startMs: 0, bars: 26 }, 90)).toBeCloseTo(24 * BAR, 9);
+    // The score's stem: 24 bars round and a tail of 3, its seam inside its own sound.
+    expect(loopPeriod({ ms: 72_000, startMs: 0, bars: 24 }, 90) + BAR + SEAM_S).toBeLessThan(72);
   });
 
   it('starts each next pass on a bar, leaving room for its lead bar and the seam', () => {
@@ -255,6 +266,25 @@ describe('the music as it plays', () => {
     expect(m.inUse().loop).toBe(1); // one stem, its two elements taking turns
     vi.advanceTimersByTime((cross + SEAM_S + 0.05 - ctx.currentTime) * 1000);
     expect([first?.paused, first?.currentTime]).toEqual([true, 0]); // rewound for its next turn
+  });
+
+  it('starts the next pass of a piece of the score on the bars its manifest names', async () => {
+    const m = await music({ calm: { bars: 20 } });
+    m.setTension(tension());
+    await fetchIn();
+    const ctx = lastContext();
+    m.setTension(tension());
+    vi.advanceTimersByTime(300);
+    const zero = 10.3;
+    ctx.currentTime = zero + 20 * BAR - 1.2;
+    m.setTension(tension());
+    expect(decksOf('calm').filter((d) => d.plays > 0)).toHaveLength(1);
+    ctx.currentTime = zero + 20 * BAR - 0.9; // 20 bars, where its 72 s would hold 24
+    m.setTension(tension());
+    vi.advanceTimersByTime(900);
+    const [, second] = decksOf('calm');
+    expect(second?.plays).toBe(1);
+    expect(curveOn(outOf(ctx, second).gain)?.at).toBeCloseTo(zero + 21 * BAR, 9);
   });
 
   it('crosses to the tense stem on the next bar as the clock runs down, calm let go', async () => {
