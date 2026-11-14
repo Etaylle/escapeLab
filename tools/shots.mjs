@@ -552,10 +552,18 @@ import { Buffer } from 'node:buffer';
 import { spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { createWriteStream, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { loadavg } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath, URL } from 'node:url';
 import { chromium, request } from 'playwright';
-import { AGAIN_AFTER_MS, allowanceOf, gateWindow, p95Text, paceOf } from './framegate.mjs';
+import {
+  AGAIN_AFTER_MS,
+  allowanceOf,
+  gateWindow,
+  loadText,
+  p95Text,
+  paceOf,
+} from './framegate.mjs';
 import { withOthersFrozen } from './freeze.mjs';
 import { ART_PX, bobVerdict, GLOWING, glowAtCorners, haloAgainst } from './glowcheck.mjs';
 import {
@@ -1247,11 +1255,15 @@ function frozenText(frozen, measured) {
 }
 
 /**
- * The p95 of the run's quiet pacing window, ms — the host pacing after the game screenshots —
- * once it is measured and within the budget (framegate.mjs `paceOf`); null before. Every gated
- * window after it may reach twice this where that is more than the budget.
+ * The run's quiet pacing window — the host pacing after the game screenshots — once it is
+ * measured and within the budget: its p95, ms, and the machine's 1-minute load as it ran
+ * (framegate.mjs `paceOf`); null before. Every gated window after it may reach twice this p95
+ * where that is more than the budget.
  */
 let runPace = null;
+
+/** The machine's 1-minute load average as the run began: the summary names it. */
+const LOAD_AT_START = loadavg()[0];
 
 /**
  * Samples a window of a page opened with `traced` (`lookAt`), every other page frozen while
@@ -1262,11 +1274,12 @@ let runPace = null;
  * pace for the windows after it. A p95 over the allowance has the window looked at once more a
  * second later, the other pages thawed in between, `again` filling it for as long as the first
  * look ran — the same scene, `quiet` itself unless that would not stay the same — and fails the
- * run only where both looks are over; the line logs both, with the allowance and why. A window
- * for information only (`gating` false) is looked at once and logged alone. A page without a
+ * run only where both looks are over; the line logs both, with the allowance and why and the
+ * machine's 1-minute load as the window began. A window for information only (`gating` false)
+ * is looked at once and logged alone, its load too. A page without a
  * trace or a window without frames fails the run. The machine's, the pages' and the sound's
- * lines are the first look's. Returns that first look — its p50, p95 and count — or null
- * where there was none.
+ * lines are the first look's. Returns that first look — its p50, p95 and count, and the load —
+ * or null where there was none.
  */
 async function sampleFrames(
   page,
@@ -1274,6 +1287,7 @@ async function sampleFrames(
   quiet,
   { gating = true, again = quiet, setsPace = false } = {},
 ) {
+  const load = loadavg()[0];
   const first = await lookAt(page, when, quiet);
   if (first === null) {
     return null;
@@ -1287,14 +1301,16 @@ async function sampleFrames(
         () => sleep(AGAIN_AFTER_MS),
       )
     : { again: null, over: false, verdict: 'for information, gating nothing' };
-  const p95s = gating ? p95Text(first, gate.again, allowed) : `p95 ${first.p95.toFixed(1)} ms`;
+  const p95s = gating
+    ? p95Text(first, gate.again, allowed, load)
+    : `p95 ${first.p95.toFixed(1)} ms at ${loadText(load)}`;
   const counts = [first, gate.again].flatMap((look) => (look === null ? [] : [look.count]));
   console.log(
     `frames             p50 ${first.p50.toFixed(1)} ms · ${p95s} (${counts.join(', ')}) ` +
       `${when}: ${gate.verdict}`,
   );
   if (setsPace && runPace === null) {
-    runPace = paceOf(first, gate);
+    runPace = paceOf(first, gate, load);
     console.log(`pace               ${paceText(runPace)}`);
   }
   console.log(`frozen             ${frozenText(first.frozen, named.get(page))}`);
@@ -1309,7 +1325,7 @@ async function sampleFrames(
   if (gate.over && gate.again !== null) {
     fail(`frame ${p95s} ${when}, over the allowance both times`);
   }
-  return first;
+  return { ...first, load };
 }
 
 /**
@@ -1331,7 +1347,8 @@ function paceText(measured) {
     return `none: the pacing window failed, so every window after it keeps ${FRAME_P95_MS} ms`;
   }
   const { text } = allowanceOf(FRAME_P95_MS, measured);
-  return `${measured.toFixed(1)} ms p95; every window after it ${text}`;
+  const pace = `${measured.p95.toFixed(1)} ms p95 at ${loadText(measured.load)}`;
+  return `${pace}; every window after it ${text}`;
 }
 
 /**
@@ -1377,11 +1394,13 @@ function soundJs(before, after, seconds) {
 
 /**
  * The run's last lines: the seconds each group played took (`groups`), then the summary — the
- * captures taken, skipped and failed, the groups played, and what failed (`summaryText`).
+ * captures taken, skipped and failed, the groups played, the machine's 1-minute load as the run
+ * began and as it ends, and what failed (`summaryText`).
  */
 function summarize() {
+  const load = { start: LOAD_AT_START, end: loadavg()[0] };
   console.log(`groups             ${spentText(timeByGroup.spent(), PLAN.on)}`);
-  console.log(`summary            ${summaryText(tally, PLAN.on)}`);
+  console.log(`summary            ${summaryText(tally, PLAN.on, load)}`);
 }
 
 /**
@@ -6968,7 +6987,8 @@ async function captureMenu(page) {
   await checkPieceCodec(page, list);
   const look = await frameWindow(page, 'on the menu, its scene drifting', () => sleep(SAMPLE_MS));
   if (SOFTWARE_GL && look !== null && look.p95 > MENU_P95_MS) {
-    fail(`menu: its window reached ${look.p95.toFixed(1)} ms p95, over ${MENU_P95_MS}`);
+    const reached = `${look.p95.toFixed(1)} ms p95 at ${loadText(look.load)}`;
+    fail(`menu: its window reached ${reached}, over ${MENU_P95_MS}`);
   }
   await overflow(page, 'menu @ 1440x820');
   await page.setViewportSize({ width: 1280, height: 720 });
@@ -13626,6 +13646,7 @@ async function main() {
   for (const line of PLAN.lines) {
     console.log(line);
   }
+  console.log(`load               ${loadText(LOAD_AT_START)} as the run begins (1-minute average)`);
   try {
     if (SERVER_ENTRY !== null) {
       await startServer();

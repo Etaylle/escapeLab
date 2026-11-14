@@ -481,11 +481,13 @@ export function spentText(spent, on) {
 
 /**
  * The summary's words: the captures taken, skipped and failed, the groups of `on` played, in the
- * table's order, and last what failed, so that a failing summary ends with its failures.
+ * table's order, the machine's 1-minute load as the run began and as it ended (`load`), and last
+ * what failed, so that a failing summary ends with its failures.
  */
-export function summaryText({ taken, skipped, failures }, on) {
+export function summaryText({ taken, skipped, failures }, on, load) {
   const played = GROUP_NAMES.filter((name) => on.has(name)).join(', ');
   const failed = failures.length === 0 ? '' : ` — ${failures.join('; ')}`;
   const counts = `${taken} captures taken, ${skipped} skipped, ${failures.length} failed`;
-  return `${counts} (groups ${played})${failed}`;
+  const loads = `load ${load.start.toFixed(1)} as it began, ${load.end.toFixed(1)} as it ended`;
+  return `${counts} (groups ${played}; ${loads})${failed}`;
 }
