@@ -546,12 +546,16 @@ drone warning (`danger.ts`) keeps the ping's recording (`ping`) until L-1 render
 
 ## A voice on the radio (`radioVoice.ts`, `scripts/voice.ts`)
 
-Mission control speaks every line a shipped mission can put on the air: everything core's
+Two voices speak every line a shipped mission can put on the air: mission control's operator —
+Helmut, the Leitstelle on the radio, a person on the night shift — and the plant's announcement
+system over its loudspeakers, a building's voice. The operator says everything core's
 `logRadio` is handed — `radio.start` as the clock starts, each `puzzles[].onSolved` as its
-station is solved, `radio.escape` as the hatch unlocks — and each station's `nudges` while
-it stays quiet. Emergencies and lost runs go into the run report, not on the air. Notes of
-the last crew and the devices' texts are read, not heard. A line without a recording — a
-custom mission's — keeps the radio's key.
+station is solved, `radio.escape` as the hatch unlocks — and each station's `nudges` while it
+stays quiet, and answers what the run does (below). The loudspeakers make the intro's
+announcement while the power is on (The opening, below) and, after the blackout, on their
+emergency power, the plant's message as an emergency starts (`map.sabotage.announce`). Notes of
+the last crew and the devices' texts are read, not heard. A line without a recording — a custom
+mission's — keeps the radio's key.
 
 **Who speaks.** The Leitstelle talks as a control room does on the radio: short, factual and
 still human — what it sees, what is next, the place in the words a person would use („mitten
@@ -561,13 +565,127 @@ and no other line, and a nudge names the next place in one sentence. A line says
 most beside its call sign, in two sentences at most; a short call of three words or fewer
 („Reaktor läuft.", „Alle raus, jetzt.") may stand beside them, three pieces in all. Read by a
 deep, trailer-like voice, the lines stay plain: only the escape may call out with an
-exclamation mark. `core/test/radioLines.test.ts` holds every shipped line to that — words,
-sentences and pieces, no praise („gut gemacht", „super", „toll" …), the call sign in
-`radio.start` alone, nudges of one sentence, no exclamation mark but on the way out, no
-„Spieler", „Crew-Mitglied" or „Bediener", nothing from the manuals' code tables (E23,
-„Legende", „Zeile"), a line for every station — and Blackout and the Systemcheck to a start
-with the call sign, a nudge for every station, a line after every solve but the last, and the
-escape.
+exclamation mark. The last word on a run, which the end card plays, is a debrief of its own:
+27 words at most, in two or three sentences, and no call-out. `core/test/radioLines.test.ts`
+holds every shipped line to that — words, sentences and pieces, no praise („gut gemacht",
+„super", „toll" …), the call sign in `radio.start` alone, nudges of one sentence, no
+exclamation mark but on the way out, no „Spieler", „Crew-Mitglied" or „Bediener", nothing from
+the manuals' code tables (E23, „Legende", „Zeile"), a line for every station — and Blackout and
+the Systemcheck to a start with the call sign, a nudge for every station, a line after every
+solve but the last, and the escape. The plant speaks as a building system does: a few words of
+what fails or runs, formal, to nobody — no „du", no order, no welcome, no mood — 28 words a
+line at most (the loudspeaker guard of the same test).
+
+**What the operator answers** (core `actions.ts`, its moments in `radio.ts`): each once at its
+moment and never twice, a line on the air with its moment in the run report, as a solve's is.
+
+| Moment | When | Blackout's texts |
+| --- | --- | --- |
+| `alarm` | the run's first alarm, whatever set it off but a missed emergency, which has its own line; every later alarm says nothing | 3 |
+| `clock` | five minutes, two and the last minute left (`clock.fiveMinutes`, `.twoMinutes`, `.lastMinute`), each once — the server's timer (`clockCallDueAt`) as for a nudge; a call the clock passed more than 15 s before (`CLOCK_LATE_MS`: a penalty's jump, a pause) is skipped, and a run started with less time left skips the calls already behind it | 2 each |
+| `emergency` | an emergency's start, after the plant's message (`announce`, 3 texts over the loudspeakers) | 3 |
+| `cleared`, `missed` | its end: every panel held in time, or not | 2 each |
+| `won` | the last word on a run won, by the time it left: five minutes or more (`plenty`), a minute or more (`tight`), less (`lastMinute`) | 2 each |
+| `lost` | the last word on a run lost, by what lost it: the time (`time`), too many alarms (`alarms`), the crew called off or too few to go on (`abandoned`) | 2 each |
+| `lobby` | the Funkprobe before a run (below) | 3 |
+
+**On the air, in turn** (client `radio.ts` `withNews`, `RANKS`). The objective bar carries one
+line at a time. The run's story — the start, a solve's line, the escape — ranks highest, the
+calls — the first alarm, the clock, an emergency and the plant's message on it — below it, a
+nudge lowest: a call cuts a nudge short but waits for a line of the story and for the call
+before it, so that it never speaks over either; a line of the story replaces older ones as the
+newer news. The plant's message is banner „DURCHSAGE" and „Durchsage: …" in the run report, up
+3 s at least (`PA_BANNER_MS`). The last word on the run never goes on the bar: the end card
+says it after the sting, before the theme (The end cards, below).
+
+**Variants.** A line may give two or three texts instead of one — every moment above and
+`start`, `escape`, a station's `nudges` and `onSolved`, the plant's `announce` (core
+`lineSchema`, the editor keeping the texts it does not show). A run says one: the first by its
+seed and the line's place in the mission (`pickLine`: an FNV-1a hash of the place —
+`solved:<station>`, `clock:lastMinute` — mixed into the seed), so that a run on the same seed
+hears the same and a rematch most often other takes; a moment that comes again in a run — the
+next emergency — takes the next text in turn, and the lobby's Funkprobe the next one each time
+the room comes back to its lobby. Every text is its own recording, named by its words as before.
+Blackout's 24 lines are 78 texts now: the five of the announcement and three of the plant's
+message, three Funkproben, three starts, two escapes, two for each of the twelve nudges and five
+solves, and the 28 answers above; with the other missions' 28, 106 lines.
+
+**Moods** (core `radio.ts` `MOODS`, `scripts/voice.ts` `MOOD_TAGS`). The operator says each
+answer in the mood of its moment, which Eleven v3 and v4 are asked for by an audio tag before
+the words:
+
+| Moment | Mood | Tag |
+| --- | --- | --- |
+| `alarm`, `missed` | tense | `[tense]` |
+| `clock` | pressing | `[insistent]` |
+| `emergency` | urgent | `[urgent]` |
+| `cleared` | relieved | `[relieved]` |
+| `won` | warm | `[warm]` |
+| `lost` | quiet | `[subdued]` |
+| `lobby` | calm | `[calm]` |
+
+The story and the plant's lines have no mood: they are said as they always were. A line's mood
+is a field of its own — in core's `radioLines`, the script's catalog and the manifest entry
+(`mood`) — never in its words: the subtitle, the run report and the manifest's `text` stay
+clean, and a model without tags (`eleven_multilingual_v2`) gets the words alone. One word each,
+as ElevenLabs' prompting guide asks for a tag (one or two words; its own examples `[curious]`,
+`[sad]`, `[whispers]`); „pressing" asks for an insistent voice, „quiet" for a subdued one rather
+than a softer one. A tag guides the delivery and guarantees none, so a take is listened to
+before it is committed. `[whispers]` is not used: on a handset's band a whisper is heard as a
+dropout, and the operator has no reason to whisper to the crew. A tag is read as characters too:
+the 31 lines with a mood cost 284 more.
+
+**The Funkprobe** (`world/radioCheck.ts`, core view.ts `radioCheck`). Once every seat is ready
+and the host can start, the operator makes a radio check over the radio's chain — once while
+the lobby lasts, however often the crew stands ready again; the next lobby, after a run, hears
+the mission's next text. It stands 10 dB under the crew's voices while anybody speaks
+(`UNDER_CREW_DB`, as the menu's theme goes under them), is cut as the lobby goes, and is silent
+while it has no recording or before a gesture woke the sound. Its level is a node of the lobby's
+own between the chain and the radio's bus, let go 250 ms after the cut: a run's audio graph
+keeps what it had. Blackout's three:
+
+> Funkprobe, Nachtschicht. Ich höre euch laut und klar. Bisher eine ruhige Nacht im Trakt, von
+> mir aus kann es losgehen.
+> Kurze Funkprobe. Alle haben sich gemeldet, ihr kommt sauber bei mir an. Ich bleibe die ganze
+> Nacht auf dieser Frequenz.
+> Nachtschicht, Funkprobe. Ich höre jeden von euch klar. Dann hoffen wir mal auf eine lange,
+> langweilige Nacht.
+
+**Two speakers** (`scripts/voice.ts` `Speaker`). The manifest keeps a voice for each speaker
+(`voices`) and a speaker for each line. The operator stays Helmut, held as every line was read
+before (`SPEAKER_HELD`: stability 0.5, similarity 0.75); the plant's voice is made once from a
+description with Voice Design (`PA_VOICE`, model `eleven_ttv_v3`) — „Calm, neutral German voice
+of a research facility's public address system. Mid register, even pace, precise diction,
+slightly synthetic like an automated building announcement, no character, no emotion, no
+accent." — and held steadier (stability 0.8). Two speakers never say the same words: one line,
+one recording, one speaker and one mood (`shippedLines` refuses it). Under Piper or the Mac's
+voice both speakers share the one voice. `--design-pa` writes three previews of the plant's
+voice, each reading a few of the loudspeakers' own lines (179 characters), into
+`VOICE_SAMPLES_DIR` with the id of each; `--keep-pa <id>` makes the one kept a voice of the
+account and names it in the manifest, without credits but taking one of the account's voice
+slots. Until one is kept, a render of the plant's lines refuses to start and says so.
+
+**The render.** The agents write the lines and may not spend the account's credits: the 54 lines
+V-voices added await their render, the voice test listing them (`AWAITING_RENDER`, to be emptied
+as they come), and are silent meanwhile: the objective bar and the Einsatzprotokoll show their
+words, the Funkprobe and the last word on the end card say nothing. In the main checkout, once
+V-voices is merged — its `.env.local` holds the key, never printed — in this order:
+
+```sh
+VOICE_SAMPLES_DIR=~/Desktop pnpm --filter @escapelab/client voice --design-pa  # 3 previews of the plant
+pnpm --filter @escapelab/client voice --keep-pa <the id beside the one kept>   # its voice, no credits
+VOICE_ENGINE=elevenlabs pnpm --filter @escapelab/client voice --fresh          # every line, 106
+```
+
+The design reads the previews' 179 characters, billed once for the three; the render 9,987
+characters, tags included, at most a credit each (the API bills text to speech below that): the
+54 new lines 5,636, the operator's 47 lines of 2026-10-25 again 3,983, and the five lines of the
+announcement, now in the plant's voice, 368. A render reads the account's plan first, free of
+charge, and a take made on a paid plan carries it in its render, so that `--fresh` on the paid
+plan makes anew every take made before without it — the 47 lines whose licence the repo cannot
+tell (Lizenz, below) — and a run without `--fresh` keeps them. After it the voice test names the
+`intro.lightsSec` the announcement's new lengths want in `missions/blackout.json`, and the 106
+recordings, some 8 MB at the 52 recorded lines' 870 bytes a character, are committed.
 
 ```sh
 pnpm --filter @escapelab/client voice              # record the lines that have no recording yet
@@ -599,16 +717,19 @@ nothing: espeak-ng reads „Pult A" and „Pult B" as „Pult Ah" and „Pult Be
 line was phonemized to find these.
 Each WAV goes to AAC with `afconvert -f m4af -d aac -b 48000` into
 `packages/client/public/voice/<first 12 hex of the line's SHA-1>.m4a`, and `manifest.json`
-lists `{ [id]: { text, ms, missions, file } }`, `file` naming the recording the radio plays — an
-.m4a or an .mp3 — with `opens: true` on a run's first line. A synthetic recording carries
+keeps the speakers' voices and every line: `{ voices: { [speaker]: { voiceId, name } }, lines:
+{ [id]: { text, ms, missions, speaker, mood?, opens?, file } } }`, `file` naming the recording
+the radio plays — an .m4a or an .mp3 — with `opens: true` on a run's first line, `mood` on an
+answer said in one. A synthetic recording carries
 `render`, a hash of what made it: the engine, the voice and its settings, the words as the engine
 was given them. `--fresh` makes anew only what the chosen voice would make differently, so a
 render cut short goes on where it stopped and spends nothing twice, and the list is written
-after every line. A recording no line needs any more is deleted. The files are committed (47
-lines, 1.6 MB; the longest speaks 9.5 s in 62 kB); `test/voiceLines.test.ts` fails, naming the
-command, when a shipped line has no recording, when a file is over 150 kB or the folder over
-6 MB — raised from 3 MB for ElevenLabs' MP3, some 12 kB a second — and when a recording takes
-less than 200 ms or more than 700 ms a word.
+after every line. A recording no line needs any more is deleted. The files are committed (52
+lines, 3.6 MB; the longest speaks 10.8 s in 127 kB); `test/voiceLines.test.ts` fails, naming the
+command, when a shipped line has no recording but those awaiting their render, when a file is
+over 200 kB or the folder over 12 MB — raised from 150 kB and 6 MB for V-voices' 106 lines,
+some 8 MB, the longest of 163 characters some 13 s and 155 kB at ElevenLabs' 12 kB a second —
+and when a recording takes less than 200 ms or more than 900 ms a word.
 
 **ElevenLabs.** `VOICE_ENGINE=elevenlabs` has an ElevenLabs voice read the lines through the
 official SDK, `@elevenlabs/elevenlabs-js`, a dev dependency of the client that never ships,
@@ -619,24 +740,25 @@ puts that one value into its environment and prints it nowhere. The model is `el
 ElevenLabs' newest and the skill's default, which speaks German among some 90 languages; it
 takes only stability (0.5) and similarity (0.75), so style and speaker boost are left out, and
 German is enforced with `language_code: de` (`ELEVENLABS_MODEL` names another model: style 0.2
-and speaker boost go to v2 and v3, and `eleven_multilingual_v2` takes no language code). The
-voice is „Helmut - German Epic Trailer Voice" (`g1jpii0iyvtRs8fqXsd1`) where `ELEVENLABS_VOICE`
-names none, by id or exact name. Each line comes as `mp3_44100_96` into
-`public/voice/<id>.mp3`; the requests go one after the other, 300 ms apart, and one turned away
-as too many (429) waits the seconds its `retry-after` asks before it goes again. Before it
-starts the script prints how many characters it will spend, and asks nothing.
+and speaker boost go to v2 and v3, and `eleven_multilingual_v2` takes no language code nor a
+mood's tag). Each speaker reads with the voice the manifest names for it — the operator
+„Helmut - German Epic Trailer Voice" (`g1jpii0iyvtRs8fqXsd1`) where it names none, the plant
+the voice `--keep-pa` kept. Each line comes as `mp3_44100_96` into `public/voice/<id>.mp3`; the
+requests go one after the other, 300 ms apart, and one turned away as too many (429) waits the
+seconds its `retry-after` asks before it goes again. Before it starts the script reads the
+account's plan and prints it with how many characters it will spend, tags included, and asks
+nothing.
 
 ```sh
 pnpm --filter @escapelab/client voice --list-voices   # the account's voices: name, id, labels
 VOICE_SAMPLES_DIR=~/Desktop pnpm --filter @escapelab/client voice \
   --sample g1jpii0iyvtRs8fqXsd1 "Reaktor läuft. Alle raus, jetzt."   # one line, to listen to
-VOICE_ENGINE=elevenlabs pnpm --filter @escapelab/client voice --fresh   # every line, by Helmut
+VOICE_ENGINE=elevenlabs pnpm --filter @escapelab/client voice --fresh   # every line, both voices
 ```
 
-The free plan gives 10,000 credits a month; every shipped line read once is 3,983 characters,
-some 4,000 of them, and a run that stops short spends nothing twice. On the free plan ElevenLabs
-asks for attribution: wherever the game is shown with these recordings, name ElevenLabs
-(elevenlabs.io) as the voice's source.
+Every shipped line read once is 9,987 characters, and a run that stops short spends nothing
+twice. Made on the free plan, ElevenLabs asks for attribution and allows no commercial use
+(Lizenz, below).
 
 **A person's voice.** The page `/record`, which no menu links to, shows one line at a time in
 large type with its number and its text to copy („Text kopieren", or marked in a field where
@@ -663,25 +785,25 @@ curl -L -o ~/.cache/escapelab-piper/de_DE-thorsten-high.onnx.json \
   https://huggingface.co/rhasspy/piper-voices/resolve/5041a7a49ae5b3a0f30e6837769eb03fdbb231bd/de/de_DE/thorsten/high/de_DE-thorsten-high.onnx.json
 ```
 
-At a run's start the mission's lines are fetched and kept as they came, compressed — Blackout's
-24 lines some 2 MB — and the line that opens the run decoded, so that it comes the moment the
+At a run's start the mission's lines are fetched and kept as they came, compressed — Blackout's 78
+texts some 6.3 MB once all are recorded, 1.8 MB of them today, every text of a line since a run's
+pick is drawn as it comes — and the line that opens the run decoded, so that it comes the moment the
 lights fail; any other line is decoded as it comes over the air, from its file in memory, in one
-channel at 22.05 kHz (a few tens of milliseconds), spoken and let go, so that a page keeps a line
-or two decoded rather than a mission's 159 s (28 MB at 44.1 kHz). A line asked for while an
-older one still decoded speaks alone. When the banner shows a line, its recording plays as a
-handset hears it: high-pass 300 Hz and low-pass 3.4 kHz, each fourth order, a light waveshaper
-(tanh at a drive of 1.2: a 1 kHz tone at the speech's peak comes out with 8 % distortion,
-where the drive of 2.2 the Mac's voice had gave 17 %, and the quiet parts come up 3 dB against
-the peaks instead of 7, so that the consonants stay clear), a bed of static 33 dB under the
-speech, a squelch as the key goes down and a longer one as it comes up — each a recording
-(`radio-key`, `radio-tail`), its peak about 6 dB under the speech's — and the music goes 8 dB
-and the beds 4 dB down meanwhile (mix.ts, above). The run's first line comes after the
-Leitstelle opening the channel: static swells up for 0.3 s and snaps shut on the squelch gate's
-click (`radio-open`), 0.4 s before the key — on that line alone. A line no recording speaks, a
-custom mission's, keys the radio with the key's recording alone (`radioChirp`). A newer line
-cuts an older one short. The banner stays up while its line speaks: 7 s at least (4 s on a
-touch screen), and as long as the recording, its opening and its squelch take for a longer line
-— by the manifest's length where the line is not decoded yet (`radio.ts` `noticeMs`,
+channel at 22.05 kHz (a few tens of milliseconds), spoken and let go, so that a page keeps a line or
+two decoded rather than a mission's 159 s (28 MB at 44.1 kHz). A line asked for while an older one
+still decoded speaks alone. When the banner shows a line, its recording plays as a handset hears it:
+high-pass 300 Hz and low-pass 3.4 kHz, each fourth order, a light waveshaper (tanh at a drive of
+1.2: a 1 kHz tone at the speech's peak comes out with 8 % distortion, where the drive of 2.2 the
+Mac's voice had gave 17 %, and the quiet parts come up 3 dB against the peaks instead of 7, so that
+the consonants stay clear), a bed of static 33 dB under the speech, a squelch as the key goes down
+and a longer one as it comes up — each a recording (`radio-key`, `radio-tail`), its peak about 6 dB
+under the speech's — and the music goes 8 dB and the beds 4 dB down meanwhile (mix.ts, above). The
+run's first line comes after the Leitstelle opening the channel: static swells up for 0.3 s and
+snaps shut on the squelch gate's click (`radio-open`), 0.4 s before the key — on that line alone. A
+line no recording speaks, a custom mission's, keys the radio with the key's recording alone
+(`radioChirp`). A newer line cuts an older one short. The banner stays up while its line speaks: 7 s
+at least (4 s on a touch screen), and as long as the recording, its opening and its squelch take for
+a longer line — by the manifest's length where the line is not decoded yet (`radio.ts` `noticeMs`,
 `radioVoice.ts` `airtimeMs`).
 
 **The voice.** Three German Piper voices were compared by measurement on the same three
@@ -817,12 +939,21 @@ doors placed and the audience's unplaced), `test/radioVoice.test.ts` (the chain,
 distortion, the static's level, the speech, the squelches' recordings, the Leitstelle's opening,
 the music 8 dB and the beds 4 dB down, the run's lines fetched and the opening line alone
 decoded, a line decoded as it airs and let go once spoken, the newest of two, a line's airtime,
-the offline renders), `test/pa.test.ts` (the loudspeakers' band, the room's answer left to the
-reverb, the lines on their moments, decoded as the announcement starts and let go once said, cut
-with the power), `test/introCue.test.ts` (the script and the cue's peak in its list, the cue
+the offline renders, a line still decoding dropped as the voice stops), `test/radioCheck.test.ts`
+(the Funkprobe once every seat is ready and once only, 10 dB under the crew's voices and back,
+cut with its lobby and its level let go after, nothing asked for once the lobby went, silent
+without a recording or a gesture), `test/radio.test.ts` (what goes on the air, the plant's
+message and its banner, the ranks: a call cuts a nudge short and waits for the story and for
+another call, the last word kept for the end card), `test/pa.test.ts` (the loudspeakers' band,
+the room's answer left to the reverb, the lines on their moments, decoded as the announcement
+starts and let go once said, cut with the power, the emergency power's band and dropouts),
+`test/introCue.test.ts` (the script and the cue's peak in its list, the cue
 streamed from where the opening stands, faded or cut, let go), `test/voiceLines.test.ts` (the
-recordings against the missions, their pace and sizes, the voice's choice, what Piper and `say`
-are given to read, what a run keeps and makes anew), `test/elevenlabs.test.ts` (the key, the
+recordings against the missions, their pace and sizes, the lines awaiting their render, each
+line's speaker and mood against core's, the voice's choice, what Piper and `say` are given to
+read, the moods' tags as Eleven v3 and v4 get them and older models not, the plan in a render,
+what a run keeps and makes anew, the plant's voice designed and kept with a client of the test's
+own), `test/elevenlabs.test.ts` (the key, the
 voices, the request, the MP3, the retry on 429, the gap; with a client of its own, no request
 leaves), `test/record.test.tsx` and `test/recordWav.test.ts` (the /record page's lines, its
 states, its buttons, the files it takes, the trim and the WAV),
@@ -839,7 +970,11 @@ the device hum's loop), `test/coldOpen.test.tsx`, `test/finale.test.tsx` and
 `test/putDown.test.tsx` (the effects on the audio clock, the hatch's grind and its landing, a
 recording that failed made up by nothing, the mute ahead of the brickwall) and
 `test/audioKit.test.ts` (the budget, a recording within it, the loops, the census);
-`core/test/radioLines.test.ts` checks the lines themselves. Ten of them were proved by breaking
+`core/test/radioLines.test.ts` checks the lines themselves, `core/test/operator.test.ts` every
+answer once at its moment — the first alarm, the clock's calls and a call skipped, an emergency's
+start and end, the last words by time left and by cause, the Funkprobe in the lobby's view and
+turned with each run — and `core/test/variants.test.ts` the pick by seed and place, the next
+text in turn and the schema. Ten of them were proved by breaking
 the code once — the brickwall's ratio, the ducks' release, the IR's decay, the downmix, the
 beds' release, the rolloff, the pass's lead bar, a floor's material, the steering's cap, the
 voice decoding every line at the start — each failing its tests.
@@ -854,7 +989,14 @@ brickwall's hold) and `renderRadio(id?)`, which renders the radio's chain offlin
 noise or on the recording `id`. The walkthrough (`tools/shots.mjs`) checks the start room's bed
 dead after the blackout, the room the lever lights alive again, the run's first line and every
 solve's line spoken from the manifest — for 200 ms a word at least, the first after the
-Leitstelle's opening and no other — the pressure in the escape, the partner's side across the
+Leitstelle's opening and no other; a line the manifest has no recording of logged as awaiting its
+render — the radio census of the run won (`radio census`: each moment's lines by the view, the
+start, the escape and the last word once, a line for every solve but the last, the first alarm
+and each clock call once at most, a message and a line on every emergency and on every end of
+one, and how many have a recording), the host's Funkprobe once it can start
+(`window.__escapelab.radioCheck`: the text its view names asked for, and on the air or awaiting
+its render), the won card's last word (`window.__escapelab.endTheme`), the pressure in the
+escape, the partner's side across the
 corridor, the chain's band-pass in the offline renders (`tools/spectrum.mjs`), on white noise and
 on the mission's opening line, and at the first station and in the escape, on each page, the
 PCM it keeps — over 30 MB fails the run — the budget against its caps, the buffer sources
@@ -864,10 +1006,10 @@ playing, the music's streams and their timing, the room's reverb and the brickwa
 ## The opening: loudspeakers and a cue (`pa.ts`, `intro/cue.ts`)
 
 A mission with an intro opens with the lab's power on (`world/intro/sequence.ts`), and while
-the camera runs across the lit lab the Leitstelle makes its routine shift-change announcement
-over the wing's loudspeakers: the same voice as the radio's, recorded with the radio's lines by
-the voice script — the intro's `pa` lines, a run's first, listed in the manifest like every
-other — and never on the air. Blackout's, in full:
+the camera runs across the lit lab the Leitstelle's routine shift-change announcement comes over
+the wing's loudspeakers in the plant's own voice (Two speakers, above), recorded with the radio's
+lines by the voice script — the intro's `pa` lines, a run's first, listed in the manifest like
+every other — and never on the air. Blackout's, in full:
 
 > Durchsage der Leitstelle für Trakt C. Es ist 23 Uhr 47, die Nachtschicht hat übernommen.
 > Reaktor in Teillast, 60 Prozent. Die Zentrifugen laufen bis 6 Uhr durch.
@@ -883,6 +1025,14 @@ answers the announcement with its own impulse response, a corridor long and brig
 archive dead (reverb.ts, above), where two fixed reflections stood before. Nothing ducks under
 it. Its lines are decoded as the announcement starts and let go once said; when the power cuts
 it off, every one of them is let go.
+
+**On the emergency power.** After the blackout the loudspeakers say the plant's message as an
+emergency starts (`map.sabotage.announce`, client `pa.ts` `announce`), from the objective
+bar's queue as its banner comes up: weakly, the horns strained — a narrower band, 450 Hz to
+3.2 kHz (`WEAK_LOW`, `WEAK_HIGH`) — and a loose contact dropping the line out seven times in
+its first 6.7 s, each for 60 to 130 ms down to 0.06 of its level (`DROPOUTS`), the last
+quarter of a second of a line left whole so that its last word is heard. The banner stays up
+while it speaks, 3 s at least; a newer message cuts it short, and the line is let go once said.
 
 **When each line speaks.** The first line starts 3 s into the opening, once the card has gone
 and the lab has faded in; each next one 0.8 s after the one before has ended, by the lengths the
@@ -920,17 +1070,16 @@ later. A player who had skipped before hears the lights fail as ever, flicker an
 
 ```sh
 # in the main checkout, whose .env.local holds the key (never printed)
-VOICE_ENGINE=elevenlabs pnpm --filter @escapelab/client voice --fresh   # Helmut reads the five
 pnpm --filter @escapelab/client intro-cue --dry-run   # what it would compose and spend
 pnpm --filter @escapelab/client intro-cue             # the cue; says what it cost
 ```
 
-The announcement's five lines are 368 characters. In the branch that brought the opening they are
-recorded by Piper (Thorsten) in place of Helmut, and no cue is composed: the session could not
-spend the account's credits. The first command above has Helmut read exactly those five — every
-other line keeps its recording — after which the voice test names the `lightsSec` to set.
+The announcement's five lines are 368 characters. Helmut read them on 2026-10-26; the render
+under „A voice on the radio" has the plant's voice read them anew, after which the voice test
+names the `lightsSec` to set.
 
-`test/pa.test.ts` holds the chain and the lines' timing, the cut and a line left out;
+`test/pa.test.ts` holds the chain and the lines' timing, the cut and a line left out, the
+emergency power's band and dropouts, a message decoded as it comes and let go once said;
 `test/intro.test.tsx` the opening's phases and their timings, the skip and its count, the
 reduced-motion path, the title on the lights-out, the crew held still; `test/introCue.test.ts`
 the script against a client of its own and the cue in the game.
@@ -989,8 +1138,11 @@ before the gesture or with the sound switched off.
 
 ## The end cards (`endTheme.ts`)
 
-The card a run ends on keeps its sting (`playSting`, Music that breathes) and has a theme after it,
-as a film's end does: half a second after the sting has ended (`THEME_GAP_S`), `end-won` — the
+The card a run ends on keeps its sting (`playSting`, Music that breathes), then the operator's
+last word on the run over the radio — the debrief of a run won, by the time it left, or the word
+on a run lost, by its cause (What the operator answers, above), half a second after the sting
+where it has a recording — and has a theme after them, as a film's end does: half a second after
+whichever came last (`THEME_GAP_S`), `end-won` — the
 four-note motif resolved into C major on soft electric piano and warm strings, coming to rest on a
 long held chord — or `end-lost` — a low, slow drone of bowed bass and dark synth, a few low piano
 notes far apart, sinking into silence. Each lasts 32 s and plays once through, not looped (the
@@ -1007,22 +1159,22 @@ plan to the caps before anything is made (`test/sampleManifest.test.ts`: each fo
 entries awaiting their render, at their rates, within its cap).
 
 **Rendered.** The menu's theme, the hum and the two end themes were made on 2026-11-13 on the
-Creator plan: the hum as the best of three takes, the three pieces of music as one take each
-(some 2,352 credits in all); `AWAITING_RENDER` is empty again. Until an entry has its file the
-menu plays the interface's sounds alone, the end card its sting alone, and the walkthrough logs
-„no theme (awaiting its render?)". The three pieces of music are made in three takes and chosen by
-ear with S-audition (see „Takes und Auswahl"). `test/menuSound.test.tsx` holds the gesture — no context
-made before it —, the buses and the 2 s fades, the lobby's weight, the start without a gesture after
-a run, the switch and the sound back at once as it is switched on again, a theme not rendered
-tended by no timer, the end with the run, the crew's duck, the bus held and waited for, and the
-interface's sounds; `test/doorWipe.test.tsx` the places it is wanted, the editor none of them;
-`test/endTheme.test.ts` the sting and the theme after it, its level and voice, its fade with the
-card and the bus held, no theme for a card gone or a theme not made;
-`test/music.test.ts` and `test/introCue.test.ts` the stems and the cue waiting for the bus. The
-walkthrough checks the lamp lit before the first key, the sound playing after it, the lobby's
-weight, chime and chirp, all of it gone in the run, the won card asking for its music and its music
-gone as the next run opens (tools/shots.mjs `menuSoundAtFirstKey`, `menuSoundAfterStart`,
-`checkEndMusic`, `checkEndMusicGone`).
+Creator plan: the hum as the best of three takes, the three pieces of music as one take each (some
+2,352 credits in all); `AWAITING_RENDER` is empty again. Until an entry has its file the menu plays
+the interface's sounds alone, the end card its sting alone, and the walkthrough logs „no theme
+(awaiting its render?)". The three pieces of music are made in three takes and chosen by ear with
+S-audition (see „Takes und Auswahl"). `test/menuSound.test.tsx` holds the gesture — no context made
+before it —, the buses and the 2 s fades, the lobby's weight, the start without a gesture after a
+run, the switch and the sound back at once as it is switched on again, a theme not rendered tended
+by no timer, the end with the run, the crew's duck, the bus held and waited for, and the interface's
+sounds; `test/doorWipe.test.tsx` the places it is wanted, the editor none of them;
+`test/endTheme.test.ts` the sting, the last word after it and the theme after both, its level and
+voice, its fade with the card and the bus held, the word cut with the card, no theme for a card gone
+or a theme not made; `test/music.test.ts` and `test/introCue.test.ts` the stems and the cue waiting
+for the bus. The walkthrough checks the lamp lit before the first key, the sound playing after it,
+the lobby's weight, chime and chirp, all of it gone in the run, the won card asking for its music
+and its last word and its music gone as the next run opens (tools/shots.mjs `menuSoundAtFirstKey`,
+`menuSoundAfterStart`, `checkEndMusic`, `checkEndMusicGone`).
 
 ## Lizenz
 
@@ -1036,7 +1188,7 @@ synthesised by the game as it plays.
 | 82 effects and beds | `public/sfx/` | ElevenLabs text to sound effects | 2026-10-26 to 2026-11-04 | paid Creator plan: commercial use, no credit |
 | 5 pieces of music: 3 stems, 2 stings | `public/music/` | Eleven Music | 2026-10-26 | paid Creator plan, Eleven Music's terms (below) |
 | The opening's cue | `public/intro/title.mp3` | Eleven Music | 2026-10-26 | as the music |
-| 52 lines of the Leitstelle | `public/voice/` | ElevenLabs text to speech, the library voice „Helmut" | 47 on 2026-10-25, 5 on 2026-10-26 | see below |
+| 52 lines of the Leitstelle, 54 more awaiting their render | `public/voice/` | ElevenLabs text to speech: the library voice „Helmut", and the plant's voice made with Voice Design once it is | 47 on 2026-10-25, 5 on 2026-10-26 | see below |
 | Kalam, the notepad's hand | `public/fonts/` | Indian Type Foundry, 2014 | shipped since 2026-11-01 | SIL Open Font License 1.1, its text beside it |
 | Michroma, the title's face | `public/fonts/` | Vernon Adams, 2011 | shipped since 2026-11-13 | SIL Open Font License 1.1, its text beside it |
 | Caveat, the last shift's hand | Google Fonts, loaded by the page | Pablo Impallari | not shipped | SIL Open Font License 1.1 |
@@ -1057,9 +1209,13 @@ first render of the effects and music, which spent 4,678 credits that day.
 voice section of this document still reckoned with the free plan and its credit. The repo does not
 say which plan the account held then. Recorded on the free plan, they need the credit
 „elevenlabs.io" and may not be used commercially; recorded on the paid plan, they are as free as the
-rest. Recording them again settles it, some 4,000 characters, every line by the same voice:
-`VOICE_ENGINE=elevenlabs pnpm --filter @escapelab/client voice --fresh`. A library voice can carry
-conditions of its own, which its page in the Voice Library names.
+rest. Recording them again settles it, 3,983 characters, every line by the same voice: the
+render of V-voices does (A voice on the radio, „The render"). A take made on a paid plan carries
+the plan in its render, so that `--fresh` on the paid plan makes anew every take made before
+without it, those 47 among them, and a run on the free plan would make anew the paid plan's —
+run `--fresh` on the paid plan alone. A library voice can carry conditions of its own, which
+its page in the Voice Library names; the plant's voice, made with Voice Design, is the account's
+own.
 
 **Made as the game plays.** The radio's chain and the static under its voice, the rooms' answers
 (their impulse responses, `reverb.ts`), the meter's hum and the colour game's tones are synthesised
@@ -1070,10 +1226,20 @@ lines before Helmut did, are build tools that never ship.
 
 What the sound packages left for later, one line each, the newest first:
 
+- **The plant's voice and 54 lines await the render** (V-voices): the Voice Design, the voice
+  kept and every line read anew, 179 and 9,987 characters; the commands are under „A voice on
+  the radio". Until then the new lines are silent, their words on the objective bar and in the
+  Einsatzprotokoll, and the announcement keeps Helmut's takes.
+- **A run fetches every text of its mission's lines** (V-voices): which text a run says is
+  drawn as its moment comes, so a run's start fetches them all — Blackout's 78 some 6.3 MB
+  compressed once recorded, where its 24 lines took 1.8 MB. Fetching only what the run may
+  still say would need the pick before the moment, which the client cannot make without the
+  run's seed, and that seed gives every instance away.
 - **Three takes of the menu's theme and the end cards' themes, one kept by ear** (S-audition): the
   user's render and choice, some 6,696 credits; the commands are under „Takes und Auswahl".
 - **The Leitstelle's 47 lines of 2026-10-25** (S-menu, „Lizenz"): the repo does not record the
-  plan they were made on; recorded again on the paid plan, they are licensed as the rest.
+  plan they were made on; recorded again on the paid plan, they are licensed as the rest; the
+  render of V-voices does it.
 
 - **Twelve recordings await a render** (L-sound): the linoleum and steel steps, both door
   closes, the alarm's sting, the drone's fly-by, the hatch's landing and the settings' tick.

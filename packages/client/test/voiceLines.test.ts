@@ -16,12 +16,15 @@ import {
   ELEVEN_FORMAT,
   ELEVEN_VOICE,
   type DesignClient,
+  type SoundClient,
   type SpeechClient,
 } from '../scripts/elevenlabs.js';
 import {
   catalogOf,
+  charactersOf,
   designPa,
   elevenTake,
+  elevenVoiceOf,
   engineOf,
   entryOf,
   fileOf,
@@ -38,6 +41,7 @@ import {
   PAUSE_MS,
   PIPER_MODEL,
   piperText,
+  planOf,
   readManifest,
   renderOf,
   sayText,
@@ -55,6 +59,7 @@ import {
   type Fresh,
   type Line,
   type Manifest,
+  type Plan,
   type ShippedLine,
   type Voice,
 } from '../scripts/voice.js';
@@ -207,13 +212,25 @@ describe('the recorded lines', () => {
     expect(recordings.filter((name) => !named.has(name)), REMEDY).toEqual([]);
   });
 
-  it('keeps every file under 150 kB and the folder under 6 MB, room for MP3', () => {
-    expect([MAX_FILE_BYTES, MAX_FOLDER_BYTES]).toEqual([150 * 1024, 6 * 1024 * 1024]);
+  it('keeps every file under 200 kB and the folder under 12 MB, room for MP3', () => {
+    expect([MAX_FILE_BYTES, MAX_FOLDER_BYTES]).toEqual([200 * 1024, 12 * 1024 * 1024]);
     const sizes = recordings.map((name) => statSync(join(VOICE_DIR, name)).size);
     for (const [i, size] of sizes.entries()) {
       expect(size, `${recordings[i]} is ${size} bytes`).toBeLessThanOrEqual(MAX_FILE_BYTES);
     }
     expect(sizes.reduce((sum, size) => sum + size, 0)).toBeLessThanOrEqual(MAX_FOLDER_BYTES);
+  });
+
+  it('has room for every shipped line, at the bytes a character the recordings take', () => {
+    // The lines awaiting their render, recorded as the others are, still fit the caps.
+    const entries = Object.values(manifest.lines);
+    const bytes = entries.reduce((sum, e) => sum + statSync(join(VOICE_DIR, e.file)).size, 0);
+    const perCharacter = bytes / entries.reduce((sum, e) => sum + e.text.length, 0);
+    const texts = [...shippedLines().keys()];
+    const longest = Math.max(...texts.map((text) => text.length));
+    const all = texts.reduce((sum, text) => sum + text.length, 0);
+    expect(longest * perCharacter, 'the longest line').toBeLessThanOrEqual(MAX_FILE_BYTES);
+    expect(all * perCharacter, 'every shipped line').toBeLessThanOrEqual(MAX_FOLDER_BYTES);
   });
 
   it('knows how long each line speaks, at a pace a person speaks, and finds it by its words', () => {
@@ -514,10 +531,19 @@ const NO_CLIENT = {
   textToSpeech: { convert: () => Promise.reject(new Error('no call')) },
 };
 
-/** ElevenLabs reading by `model`, the operator Helmut — or `voiceId` — and the plant `pa`. */
-const eleven = (model: string, voiceId = ELEVEN_VOICE, pa?: string): Voice => ({
+/**
+ * ElevenLabs reading by `model`, the operator Helmut — or `voiceId` — and the plant `pa`, on the
+ * account's `plan`.
+ */
+const eleven = (
+  model: string,
+  voiceId = ELEVEN_VOICE,
+  pa?: string,
+  plan: Plan = 'free',
+): Voice => ({
   engine: 'elevenlabs',
   name: 'Helmut',
+  plan,
   speakers: {
     operator: { client: NO_CLIENT, voiceId, model, held: SPEAKER_HELD.operator },
     ...(pa === undefined
@@ -607,6 +633,7 @@ describe('what a run keeps, and what it makes anew', () => {
     const loose: Voice = {
       engine: 'elevenlabs',
       name: 'Helmut',
+      plan: 'free',
       speakers: {
         operator: { ...asOperator, voiceId: ELEVEN_VOICE },
         pa: { ...asOperator, voiceId: 'paVoice0000000000000' },
@@ -673,6 +700,91 @@ describe('what a run keeps, and what it makes anew', () => {
       'render',
       'file',
     ]);
+  });
+
+  it('names the paid plan in a render, so that --fresh there makes older takes anew', () => {
+    expect([planOf('free'), planOf(undefined), planOf('creator'), planOf('pro')]).toEqual([
+      'free',
+      'free',
+      'paid',
+      'paid',
+    ]);
+    const free = eleven('eleven_v4');
+    const paid = eleven('eleven_v4', ELEVEN_VOICE, undefined, 'paid');
+    expect(renderOf(paid, said)).not.toBe(renderOf(free, said));
+    // The operator's takes of before name no plan: the free plan keeps them under --fresh, the
+    // paid one makes them anew — those of 2026-10-25 among them — and keeps them without it.
+    const operators = Object.values(manifest.lines).filter((e) => e.speaker === 'operator');
+    for (const entry of operators) {
+      const take = { text: entry.text, speaker: entry.speaker, mood: entry.mood ?? null };
+      const under = (voice: Voice, fresh: Fresh) =>
+        keeps(entry, entry.text, true, fresh, renderOf(voice, take));
+      expect([under(free, 'synthetic'), under(paid, 'synthetic'), under(paid, 'none')]).toEqual([
+        true,
+        false,
+        true,
+      ]);
+    }
+    // Piper and the Mac know no plan.
+    expect(renderOf(piper, said)).toBe(render);
+  });
+
+  it('asks the account for its plan before anything, and for the speakers’ voices', async () => {
+    /** An account on `tier` with Helmut and the plant's voice, or one that will not say. */
+    const account = (tier: string | Error): SpeechClient & SoundClient => ({
+      ...NO_CLIENT,
+      voices: {
+        getAll: () =>
+          Promise.resolve({
+            voices: [
+              { voiceId: ELEVEN_VOICE, name: 'Helmut - German Epic Trailer Voice' },
+              { voiceId: 'paVoice0000000000000', name: 'EscapeLab Durchsage' },
+            ],
+          }),
+      },
+      user: {
+        subscription: {
+          get: () =>
+            tier instanceof Error
+              ? Promise.reject(tier)
+              : Promise.resolve({ characterCount: 0, characterLimit: 100_000, tier }),
+        },
+      },
+      textToSoundEffects: { convert: () => Promise.reject(new Error('no call')) },
+      music: { compose: () => Promise.reject(new Error('no call')) },
+    });
+    const both: Manifest = {
+      voices: {
+        operator: { voiceId: ELEVEN_VOICE, name: 'Helmut' },
+        pa: { voiceId: 'paVoice0000000000000', name: 'EscapeLab Durchsage' },
+      },
+      lines: {},
+    };
+    const paid = await elevenVoiceOf(both, account('creator'), 'eleven_v4');
+    expect(paid.engine === 'elevenlabs' && paid.plan).toBe('paid');
+    expect(paid.engine === 'elevenlabs' && paid.speakers.pa?.voiceId).toBe('paVoice0000000000000');
+    const named = paid.engine === 'elevenlabs' && paid.name;
+    expect(named).toMatch(/pa EscapeLab Durchsage.*the paid plan/);
+    const free = await elevenVoiceOf({ voices: {}, lines: {} }, account('free'), 'eleven_v4');
+    expect(free.engine === 'elevenlabs' && free.plan).toBe('free');
+    expect(free.engine === 'elevenlabs' && Object.keys(free.speakers)).toEqual(['operator']);
+    const silent = elevenVoiceOf(both, account(new Error('offline')), 'eleven_v4');
+    await expect(silent).rejects.toThrow(/did not tell the account's plan/);
+  });
+
+  it('counts what a render spends: the words, and a mood’s tag where the model reads it', () => {
+    const warm = { ...line, mood: 'warm' } as const;
+    const pa = { ...line, speaker: 'pa' } as const;
+    const todo = [
+      { text: 'Alle draußen.', line: warm },
+      { text: 'Störung.', line: pa },
+    ];
+    const v4 = eleven('eleven_v4', ELEVEN_VOICE, 'paVoice0000000000000');
+    expect(charactersOf(v4, todo)).toBe('[warm] Alle draußen.'.length + 'Störung.'.length);
+    const v2 = eleven('eleven_multilingual_v2', ELEVEN_VOICE, 'paVoice0000000000000');
+    expect(charactersOf(v2, todo)).toBe('Alle draußen.Störung.'.length);
+    expect(charactersOf(piper, todo)).toBe('Alle draußen.Störung.'.length);
+    expect(charactersOf(v4, [])).toBe(0);
   });
 
   it('names an ElevenLabs recording .mp3 and every other .m4a', () => {

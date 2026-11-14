@@ -26,9 +26,9 @@ export const ENV_FILE = resolve(HERE, '../../../.env.local');
  * default, which speaks German among 90 languages and more.
  */
 export const ELEVEN_MODEL = 'eleven_v4';
-/** The voice where ELEVENLABS_VOICE names none: „Helmut - German Epic Trailer Voice". */
+/** The operator's voice where the manifest names none: „Helmut - German Epic Trailer Voice". */
 export const ELEVEN_VOICE = 'g1jpii0iyvtRs8fqXsd1';
-/** MP3 at 44.1 kHz and 96 kbit/s, 12 kB a second: a line of 12 s still fits in 150 kB. */
+/** MP3 at 44.1 kHz and 96 kbit/s, 12 kB a second: a line of 16 s still fits in 200 kB. */
 export const ELEVEN_FORMAT = 'mp3_44100_96';
 /** The pause between two requests, ms: they go one after the other. */
 export const ELEVEN_GAP_MS = 300;
@@ -69,11 +69,18 @@ export interface DesignClient {
   };
 }
 
-/** What the sound script (sfx.ts) asks of the SDK's client: the credits left, effects, music. */
+/**
+ * What the sound script (sfx.ts) asks of the SDK's client — the credits left, effects, music —
+ * and the voice script the account's plan (`tier`: `free`, or a paid one).
+ */
 export interface SoundClient {
   readonly user: {
     readonly subscription: {
-      get(): PromiseLike<{ readonly characterCount: number; readonly characterLimit: number }>;
+      get(): PromiseLike<{
+        readonly characterCount: number;
+        readonly characterLimit: number;
+        readonly tier?: string | undefined;
+      }>;
     };
   };
   readonly textToSoundEffects: {
@@ -152,7 +159,7 @@ export function resolveVoice(voices: readonly VoiceInfo[], wanted: string): Voic
     const names = voices.map((voice) => `"${voice.name ?? voice.voiceId}"`).join(', ');
     throw new Error(
       `voice: the account has no voice "${wanted}" — it has ${names || 'none'}; ` +
-        'ELEVENLABS_VOICE takes a voice id or a name exactly as --list-voices prints it',
+        'a voice is named by its id or by its name exactly as --list-voices prints it',
     );
   }
   return found;

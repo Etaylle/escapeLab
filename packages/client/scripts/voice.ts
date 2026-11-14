@@ -40,12 +40,14 @@
  * opens a run (`radio.start`): the radio keys it with the Leitstelle's opening squelch.
  *
  * A synthetic recording carries `render`, a hash of what made it — the engine, the voice, its
- * settings and the words as that engine was given them — so --fresh makes anew only what the
- * chosen voice would make differently: a render cut short goes on where it stopped and spends
- * nothing twice. A recording a person made on the client's /record page carries `source`
- * (`human`, `upload`) and stays under --fresh; --fresh=all replaces it too. A recording no line
- * needs any more goes. The files are committed; test/voiceLines.test.ts fails when a line has
- * none, or a file or the folder outgrows MAX_FILE_BYTES or MAX_FOLDER_BYTES.
+ * settings and the words as that engine was given them, and under ElevenLabs a paid plan where
+ * the account holds one (`Plan`) — so --fresh makes anew only what the chosen voice would make
+ * differently: a render cut short goes on where it stopped and spends nothing twice, and on a
+ * paid plan --fresh makes anew the takes made before without it. A recording a person made on
+ * the client's /record page carries `source` (`human`, `upload`) and stays under --fresh;
+ * --fresh=all replaces it too. A recording no line needs any more goes. The files are committed;
+ * test/voiceLines.test.ts fails when a line has none, or a file or the folder outgrows
+ * MAX_FILE_BYTES or MAX_FOLDER_BYTES.
  *
  * Runs on Node's own TypeScript (type stripping): it imports nothing of the app.
  */
@@ -86,6 +88,7 @@ import {
   type DesignClient,
   type ElevenVoice,
   type Held,
+  type SoundClient,
   type SpeechClient,
   type VoiceInfo,
 } from './elevenlabs.ts';
@@ -117,10 +120,13 @@ export const SAY_RATE = 190;
 export const PAUSE_MS = 250;
 /** AAC's bit rate, bits a second: a handset's band needs no more. */
 export const BITRATE = 48000;
-/** The most one recording may take, bytes. */
-export const MAX_FILE_BYTES = 150 * 1024;
-/** The most the folder may take, bytes: 6 MB, room for every line as ElevenLabs' MP3. */
-export const MAX_FOLDER_BYTES = 6 * 1024 * 1024;
+/**
+ * The most one recording may take, bytes: 16 s of ElevenLabs' MP3, past the longest line of 28
+ * words at the operator's pace, some 13 s.
+ */
+export const MAX_FILE_BYTES = 200 * 1024;
+/** The most the folder may take, bytes: 12 MB, room for every line as ElevenLabs' MP3. */
+export const MAX_FOLDER_BYTES = 12 * 1024 * 1024;
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 /** The shipped missions. */
@@ -565,8 +571,24 @@ export function entryOf(text: string, ms: number, line: ShippedLine, take: Take)
 }
 
 /**
+ * The terms a take is made on: the account's plan, free or paid (ElevenLabs' `tier`). A take
+ * made on a paid plan may be used commercially, for good; one made on the free plan needs the
+ * credit „elevenlabs.io" and may not (docs/sound.md, „Lizenz").
+ */
+export type Plan = 'free' | 'paid';
+
+/** What a take made on a paid plan adds to its render: --fresh there makes the others anew. */
+const PAID_TERMS = 'paid plan';
+
+/** The plan of an account whose subscription names `tier`: the free one where it names none. */
+export function planOf(tier: string | undefined): Plan {
+  return tier === undefined || tier === 'free' ? 'free' : 'paid';
+}
+
+/**
  * Who reads: Piper with its voice's name and model file, or the Mac — either for both speakers
- * — or ElevenLabs with a voice for each speaker the manifest names one for.
+ * — or ElevenLabs with a voice for each speaker the manifest names one for, on the account's
+ * plan.
  */
 export type Voice =
   | { readonly engine: 'say' }
@@ -575,6 +597,8 @@ export type Voice =
       readonly engine: 'elevenlabs';
       readonly name: string;
       readonly speakers: Readonly<Partial<Record<Speaker, ElevenVoice>>>;
+      /** the account's plan, which the takes are made on */
+      readonly plan: Plan;
     };
 
 /** A line as a voice is asked to read it: its words, and who says them. */
@@ -588,7 +612,8 @@ export interface Said {
 /**
  * What makes a take, part by part: the engine, the voice and its settings, the words given — for
  * ElevenLabs the speaker's voice, or, where the manifest names none for it yet, the speaker
- * alone, which no take was ever made by.
+ * alone, which no take was ever made by, and the paid plan where the account holds one: a take
+ * of before, which names none, is made anew there under --fresh.
  */
 function madeBy(voice: Voice, { text, speaker, mood }: Said): readonly (string | number)[] {
   if (voice.engine === 'piper') {
@@ -602,7 +627,8 @@ function madeBy(voice: Voice, { text, speaker, mood }: Said): readonly (string |
     return ['elevenlabs', `no voice for the ${speaker} yet`];
   }
   const request = speechRequest(spokenText(text, mood, eleven.model), eleven.model, eleven.held);
-  return ['elevenlabs', eleven.voiceId, JSON.stringify(request)];
+  const terms = voice.plan === 'paid' ? [PAID_TERMS] : [];
+  return ['elevenlabs', eleven.voiceId, JSON.stringify(request), ...terms];
 }
 
 /**
@@ -802,19 +828,34 @@ function speakersOf(
   );
 }
 
-/** The ElevenLabs voices of the speakers, from the account, by the model ELEVENLABS_MODEL names. */
-async function elevenVoice(manifest: Manifest): Promise<Voice> {
-  loadApiKey();
-  const client = await elevenClient();
+/**
+ * The ElevenLabs voices of the speakers on `client`'s account, reading by `model`, and the
+ * account's plan — asked of ElevenLabs first, free of charge.
+ */
+export async function elevenVoiceOf(
+  manifest: Manifest,
+  client: SpeechClient & SoundClient,
+  model: string,
+): Promise<Voice> {
+  const asking = { tag: 'voice', what: "tell the account's plan" };
+  const { tier } = await elevenAsk(() => client.user.subscription.get(), asking);
+  const plan = planOf(tier);
   const voices = await accountVoices(client);
-  const model = process.env.ELEVENLABS_MODEL || ELEVEN_MODEL;
   const speakers = speakersOf(manifest, voices, client, model);
   const nameOf = (speaker: Speaker): string => {
     const id = speakers[speaker]?.voiceId;
     const name = voices.find((voice) => voice.voiceId === id)?.name ?? id;
     return `${speaker} ${name ?? 'none yet'}`;
   };
-  return { engine: 'elevenlabs', name: `${SPEAKERS.map(nameOf).join(', ')} (${model})`, speakers };
+  const name = `${SPEAKERS.map(nameOf).join(', ')} (${model}, the ${plan} plan)`;
+  return { engine: 'elevenlabs', name, speakers, plan };
+}
+
+/** The speakers' ElevenLabs voices and the plan, by the model ELEVENLABS_MODEL names. */
+async function elevenVoice(manifest: Manifest): Promise<Voice> {
+  loadApiKey();
+  const model = process.env.ELEVENLABS_MODEL || ELEVEN_MODEL;
+  return elevenVoiceOf(manifest, await elevenClient(), model);
 }
 
 /**
@@ -856,6 +897,21 @@ function plan(before: Manifest, fresh: Fresh, voice: Voice): Planned[] {
   });
 }
 
+/**
+ * How many characters making `todo` spends: under ElevenLabs the words each speaker's model is
+ * given, a mood's tag included (`spokenText`); under Piper and the Mac, which spend none, the
+ * words.
+ */
+export function charactersOf(
+  voice: Voice,
+  todo: readonly { readonly text: string; readonly line: ShippedLine }[],
+): number {
+  return todo.reduce((sum, { text, line }) => {
+    const model = voice.engine === 'elevenlabs' ? voice.speakers[line.speaker]?.model : undefined;
+    return sum + (model === undefined ? text : spokenText(text, line.mood, model)).length;
+  }, 0);
+}
+
 /** Fails, before anything is asked of anybody, where a line to be made has no voice to read it. */
 function refuseVoiceless(voice: Voice, todo: readonly Planned[]): void {
   if (voice.engine !== 'elevenlabs') return;
@@ -865,15 +921,19 @@ function refuseVoiceless(voice: Voice, todo: readonly Planned[]): void {
   }
 }
 
+/** `bytes` in whole kilobytes, as the warnings say them. */
+const kilobytes = (bytes: number): string => (bytes / 1024).toFixed(0);
+
 /** The files over MAX_FILE_BYTES, and the folder where it is over MAX_FOLDER_BYTES, as warnings. */
 function overLimits(lines: Readonly<Record<string, Entry>>): string[] {
   const sizes = Object.values(lines).map((entry) => {
     return [entry.file, statSync(join(VOICE_DIR, entry.file)).size] as const;
   });
   const total = sizes.reduce((sum, [, size]) => sum + size, 0);
+  const cap = kilobytes(MAX_FILE_BYTES);
   const files = sizes
     .filter(([, size]) => size > MAX_FILE_BYTES)
-    .map(([file, size]) => `${file} takes ${(size / 1024).toFixed(0)} kB, over 150 kB`);
+    .map(([file, size]) => `${file} takes ${kilobytes(size)} kB, over ${cap} kB`);
   const megabytes = MAX_FOLDER_BYTES / 1024 / 1024;
   const folder =
     total > MAX_FOLDER_BYTES ? [`the folder takes ${total} bytes, over ${megabytes} MB`] : [];
@@ -891,7 +951,7 @@ async function main(fresh: Fresh): Promise<void> {
   const planned = plan(before, fresh, voice);
   const todo = planned.filter((each) => each.kept === null);
   refuseVoiceless(voice, todo);
-  const characters = todo.reduce((sum, each) => sum + each.text.length, 0);
+  const characters = charactersOf(voice, todo);
   const who = voice.engine === 'say' ? `say ${SAY_VOICE}` : `${voice.engine} ${voice.name}`;
   console.log(
     `voice: ${todo.length} of ${planned.length} lines to make, ${characters} characters, ${who}`,
