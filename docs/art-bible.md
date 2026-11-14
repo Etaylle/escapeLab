@@ -485,11 +485,12 @@ Readable first: the writing 18 px, the hand's running text and heads 17 px, the 
 15 px, the red pencil 15 px, all at text size 1 and all scaled by it; against the paper the pen
 stands at 11.9:1, the pencils at 10.2 and 9.3:1, the red pencil at 6.3:1 and the placeholder at
 5.6:1 (`client/test/notepadLook.test.ts` reads them off the stylesheet). A table stays aligned
-up to 38 characters of the pencil's — the terminal's table runs 36, the Signalkette's legend 31
-— which the pad holds whole on a phone 420 px wide (its margin moved in to 24 px there); a wider
-one is set as running text (gameplay.md). The pad in the world's corner is 390 px wide at text
-size 1 and grows with it; the strip beside a page keeps its width (`--note-strip`), so in a
-narrow window at the large text size a table may scroll sideways in its own box.
+up to 38 characters of the pencil's — the terminal's table runs 36, the Signalkette's legend 37,
+its five columns one blank apart — which the pad holds whole on a phone 420 px wide (its margin
+moved in to 24 px there); a wider one is set as running text (gameplay.md). The pad in the
+world's corner is 390 px wide at text size 1 and grows with it; the strip beside a page keeps its
+width (`--note-strip`), so in a narrow window at the large text size a table may scroll sideways
+in its own box.
 notepad-captured.png and notepad-captured-phone.png show the legend and the Laborkennung in it.
 
 ## The menu (screens/Join.tsx, MainMenu.tsx, MenuPanels.tsx, world/menu/, styles/menu.css)

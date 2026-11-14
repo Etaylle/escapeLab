@@ -196,7 +196,10 @@ die Entscheidung.
   ist Betrieb gestrafft, jede Regel bleibt, und Blackouts Seite hält mit 168 Wörtern Fließtext
   die Grenze von 170 (zuvor 169, mit der grauen Stufe ungestrafft 194). Das Panel zeichnet die
   Zeichen grau mit 64 px, das Muster fett (jede Musterzelle ≥ 18 px, Tinte 9,4:1), dazu
-  ANZEIGE · FARBLOS.
+  ANZEIGE · FARBLOS. Der Notizblock nimmt die Legende mit beiden Muster-Spalten, eine
+  Leerstelle auseinander (37 Zeichen, Grenze 38): Jedes Pult findet seine Zeile direkt über das
+  Muster. Der Editor sagt im Hilfetext, dass eine neue Kette auf 0 steht und erst ein leeres
+  Feld die letzte Stufe gibt.
   Blackout: `greyFrom` 4, dritte Frühschicht-Notiz (mit Uros' zweitem Satz 132 Zeichen, Grenze
   120: „Die Farbe dazu steht in der Legende."), Plan mit vier grauen Ringen in Stufe 4. Der
   Walkthrough spielt die Stufe nach Plan (signal-grey.png, signal-grey-phone-932.png); Sieg

@@ -163,8 +163,8 @@ const keyLabel = ({ row, shape }: SignalKey): string =>
  * sending console shows the signs one at a time — the view says so, the
  * client cycles them. With the legend, from stage `greyFrom` on — the last
  * stage unless the def says otherwise — the display loses its colour: every
- * view carries each sign as its form and pattern alone, and only the
- * legend's Muster column gives it its colour back. A wrong sign costs time
+ * view carries each sign as its form and pattern alone, and the legend's
+ * Muster columns give it its colour back. A wrong sign costs time
  * and starts the stage's input again; a key pressed at the sending console
  * is turned away, without an alarm, and so is one pressed at the receiving
  * console while nobody else stands at the sending one: a single player
@@ -184,7 +184,7 @@ const defSchema = z
     fleetingFrom: z.number().int().min(1).nullable().default(null),
     /**
      * from this stage on (1-based) the display shows the signs without colour, each by its
-     * pattern, which only the legend turns into a colour; 0: never. Left out, the last stage
+     * pattern, which the legend turns into a colour; 0: never. Left out, the last stage
      * with the legend (`greyFromOf`); a positive stage needs the legend.
      */
     greyFrom: z.number().int().min(0).max(6).optional(),
@@ -211,7 +211,7 @@ export type SignalDef = z.infer<typeof defSchema>;
 /**
  * What is wrong with a def's `greyFrom`, in words for whoever wrote the mission; null where
  * nothing is: a stage past the last one, or a grey display without the legend, whose Muster
- * column alone gives a grey sign its colour.
+ * columns give a grey sign its colour on paper.
  */
 function greyIssue(def: {
   id: string;
@@ -228,8 +228,8 @@ function greyIssue(def: {
   }
   if (greyFrom > 0 && !def.legend) {
     return (
-      `puzzle "${def.id}": greyFrom (${greyFrom}) needs the legend — only its Muster column ` +
-      'turns a grey sign back into a colour; set legend to true, or greyFrom to 0'
+      `puzzle "${def.id}": greyFrom (${greyFrom}) needs the legend, whose Muster columns ` +
+      'turn a grey sign back into a colour; set legend to true, or greyFrom to 0'
     );
   }
   return null;
@@ -592,7 +592,8 @@ export const signalModule: PuzzleModule<SignalDef, SignalState, SignalInput, Sig
       label: 'Farblos ab Stufe',
       help:
         'Ab dieser Stufe zeigt die Anzeige die Zeichen ohne Farbe, nur mit dem Muster aus der ' +
-        'Legende; 0 = nie, leer = letzte Stufe mit Legende.',
+        'Legende; 0 = nie, leer = letzte Stufe mit Legende. Eine neue Kette steht auf 0: Das ' +
+        'Häkchen bei Legende ändert das nicht, erst ein leeres Feld gibt die letzte Stufe.',
       kind: 'int',
       min: 0,
       max: 6,

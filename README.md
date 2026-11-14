@@ -27,7 +27,7 @@ Mitte des Flurs, dann die Stationen in Reihenfolge:
    jedem Schnitt wird neu gemessen, ein Fehlschnitt verdrahtet den Kasten neu.
 2. *Signalkette* (`signal` mit Legende): Pult A im Flur, Pult B im Maschinenraum, die Legende
    auf dem Klemmbrett; ab Stufe 3 zeigt das sendende Pult die Zeichen nacheinander, in der
-   letzten Stufe ohne Farbe, nur mit ihrem Muster, das allein die Legende einer Farbe zuordnet.
+   letzten Stufe ohne Farbe, nur mit ihrem Muster, das die Legende einer Farbe zuordnet.
 3. *Serverraum* (`servers`): Terminal und Rack an zwei Pulten im Raum hinter dem Schott, die
    Regeln im Spind dort.
 4. *Frequenz-Abgleich* (`morse`): Pult im Labor, die Tabellen im Aktenschrank, dessen Schlüssel

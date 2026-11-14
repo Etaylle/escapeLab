@@ -5198,7 +5198,7 @@ const signSaid = (sign) => (typeof sign === 'string' ? sign : `${sign.shape}/${s
 /** Whether signal-grey.png was taken: a run shoots the first display without colour it meets. */
 let greyShot = false;
 
-/** signal-grey.png and signal-grey-phone-932.png, where no Signalkette of the run lost its colour. */
+/** Skips signal-grey.png and signal-grey-phone-932.png where no Signalkette of the run is grey. */
 function greyLeftOut() {
   if (!greyShot) {
     skip('signal-grey*.png', 'no Signalkette the walkthrough works here loses its colour');
@@ -5323,22 +5323,35 @@ function greyWrongs(seen, reach) {
 }
 
 /**
- * One look at the sending console's display without colour, as `shot`: waits a fleeting
- * strip's cycle at most for a sign to show — and past its flare as it comes on — shoots, reads
- * the device (`greyDisplay`, on a phone `deviceReach` as well), logs it, and fails the run
+ * The open display without colour as `greyDisplay` reads it once a grey sign shows: waited for a
+ * fleeting strip's cycle at most, and past its flare as it comes on. Read before the shot, so
+ * that a shot slow under load cannot land the reading in the strip's dark pause; where no sign
+ * was lit by then, waited for and read once more.
+ */
+async function greyLit(page) {
+  const shown = page.locator('.station-modal .signal-glyph--grey:not(.signal-glyph--fading)');
+  let seen = null;
+  for (let tries = 0; tries < 2 && (seen?.sizes.length ?? 0) === 0; tries++) {
+    await shown
+      .first()
+      .waitFor({ state: 'visible', timeout: 8000 })
+      .catch(() => undefined);
+    await sleep(400);
+    seen = await page.evaluate(greyDisplay);
+  }
+  return seen;
+}
+
+/**
+ * One look at the sending console's display without colour, as `shot`: reads the device as a
+ * sign shows (`greyLit`; on a phone `deviceReach` as well), shoots, logs it, and fails the run
  * where the display shows anything but grey signs at their size, or where its legend does not
  * burn, or where a phone does not hold the device whole.
  */
 async function greyLook({ page, name }, shot, where, phone) {
-  const shown = page.locator('.station-modal .signal-glyph--grey:not(.signal-glyph--fading)');
-  await shown
-    .first()
-    .waitFor({ state: 'visible', timeout: 8000 })
-    .catch(() => undefined);
-  await sleep(400);
-  await capture(page, shot);
-  const seen = await page.evaluate(greyDisplay);
+  const seen = await greyLit(page);
   const reach = phone ? await page.evaluate(deviceReach) : null;
+  await capture(page, shot);
   const wrong = greyWrongs(seen, reach);
   const said =
     seen === null

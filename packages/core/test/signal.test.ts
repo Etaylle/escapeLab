@@ -303,47 +303,6 @@ describe('signal setup', () => {
     ]);
   });
 
-  it('leaves the stage the display goes grey from to the legend, unless the def names one', () => {
-    expect(defOf().greyFrom).toBeUndefined();
-    expect(defOf({ legend: true }).greyFrom).toBeUndefined();
-    for (const greyFrom of [0, 1, 4]) {
-      expect(defOf({ legend: true, greyFrom }).greyFrom).toBe(greyFrom);
-    }
-    // Never without the legend: 0 is taken there, as it says nothing.
-    expect(defOf({ greyFrom: 0 }).greyFrom).toBe(0);
-    expect(defOf({ stages: 6, legend: true, greyFrom: 6 }).greyFrom).toBe(6);
-  });
-
-  it('turns a grey display down without the legend, past the last stage, or out of bounds', () => {
-    const parsed = (fields: object) =>
-      signalModule.defSchema.safeParse({ type: 'signal', id: 'kette', title: 'T', ...fields });
-    const said = (fields: object) =>
-      parsed(fields).error?.issues.map((issue) => [issue.path, issue.message]);
-    for (const fields of [
-      { legend: true, greyFrom: -1 },
-      { legend: true, greyFrom: 7 },
-      { legend: true, greyFrom: 1.5 },
-      { legend: true, greyFrom: '2' },
-      { legend: true, greyFrom: null },
-    ]) {
-      expect(parsed(fields).success, JSON.stringify(fields)).toBe(false);
-    }
-    expect(said({ greyFrom: 2 })).toEqual([
-      [
-        ['greyFrom'],
-        'puzzle "kette": greyFrom (2) needs the legend — only its Muster column turns a grey ' +
-          'sign back into a colour; set legend to true, or greyFrom to 0',
-      ],
-    ]);
-    expect(said({ legend: true, stages: 3, greyFrom: 4 })).toEqual([
-      [
-        ['greyFrom'],
-        'puzzle "kette": greyFrom (4) is past the last stage (3), so no stage would show its ' +
-          'signs without colour — lower it, or set it to 0',
-      ],
-    ]);
-  });
-
   it('lays all twelve keys out at each console, no sign in the same place at both', () => {
     const sorted = [...TOKENS].sort();
     for (let seed = 0; seed < SEEDS; seed++) {
@@ -393,6 +352,60 @@ describe('signal setup', () => {
       fleeting: false,
       grey: false,
     });
+  });
+});
+
+describe('signal setup of a display without colour', () => {
+  it('leaves the stage the display goes grey from to the legend, unless the def names one', () => {
+    expect(defOf().greyFrom).toBeUndefined();
+    expect(defOf({ legend: true }).greyFrom).toBeUndefined();
+    for (const greyFrom of [0, 1, 4]) {
+      expect(defOf({ legend: true, greyFrom }).greyFrom).toBe(greyFrom);
+    }
+    // Never without the legend: 0 is taken there, as it says nothing.
+    expect(defOf({ greyFrom: 0 }).greyFrom).toBe(0);
+    expect(defOf({ stages: 6, legend: true, greyFrom: 6 }).greyFrom).toBe(6);
+  });
+
+  it('turns a grey display down without the legend, past the last stage, or out of bounds', () => {
+    const parsed = (fields: object) =>
+      signalModule.defSchema.safeParse({ type: 'signal', id: 'kette', title: 'T', ...fields });
+    const said = (fields: object) =>
+      parsed(fields).error?.issues.map((issue) => [issue.path, issue.message]);
+    for (const fields of [
+      { legend: true, greyFrom: -1 },
+      { legend: true, greyFrom: 7 },
+      { legend: true, greyFrom: 1.5 },
+      { legend: true, greyFrom: '2' },
+      { legend: true, greyFrom: null },
+    ]) {
+      expect(parsed(fields).success, JSON.stringify(fields)).toBe(false);
+    }
+    expect(said({ greyFrom: 2 })).toEqual([
+      [
+        ['greyFrom'],
+        'puzzle "kette": greyFrom (2) needs the legend, whose Muster columns turn a grey sign ' +
+          'back into a colour; set legend to true, or greyFrom to 0',
+      ],
+    ]);
+    expect(said({ legend: true, stages: 3, greyFrom: 4 })).toEqual([
+      [
+        ['greyFrom'],
+        'puzzle "kette": greyFrom (4) is past the last stage (3), so no stage would show its ' +
+          'signs without colour — lower it, or set it to 0',
+      ],
+    ]);
+  });
+
+  it('starts a new Kette never grey, as the editor’s help line says beside the field', () => {
+    const field = signalModule.fields.find((spec) => spec.key === 'greyFrom');
+    expect(field).toMatchObject({ kind: 'int', min: 0, default: 0, off: 'omit' });
+    // Ticking the legend leaves the 0 in place; only an empty field brings the last stage.
+    expect(field?.help).toContain('0 = nie, leer = letzte Stufe mit Legende.');
+    expect(field?.help).toContain(
+      'Eine neue Kette steht auf 0: Das Häkchen bei Legende ändert das nicht, erst ein leeres ' +
+        'Feld gibt die letzte Stufe.',
+    );
   });
 });
 
@@ -447,6 +460,45 @@ describe('signal views', () => {
     });
   });
 
+  it('say from which stage on the sending console shows one sign at a time, to everyone', () => {
+    for (const fleetingFrom of [null, 1, 3, 5]) {
+      const def = defOf({ stages: 5, length: 3, fleetingFrom });
+      let state = deal(def, 4);
+      for (let stage = 1; stage <= def.stages; stage++) {
+        const fleeting = fleetingFrom !== null && stage >= fleetingFrom;
+        for (const viewer of [AT_STATION, AT_CONSOLE_B, AT_BOOK, ELSEWHERE, AUDIENCE]) {
+          const view = seenFrom(def, state, viewer);
+          expect(view, `from ${fleetingFrom}, stage ${stage}`).toMatchObject({ stage, fleeting });
+        }
+        state = stageThrough(def, state);
+      }
+    }
+  });
+
+  it('swap sides with every stage, all the way through', () => {
+    const def = defOf({ stages: 6, length: 3 });
+    let state = deal(def, 9);
+    for (let stage = 1; stage <= def.stages; stage++) {
+      const sends: ConsoleId = stage % 2 === 1 ? 'a' : 'b';
+      const atA = seenFrom(def, state, AT_STATION);
+      const atB = seenFrom(def, state, AT_CONSOLE_B);
+      expect(atA).toMatchObject({ stage, sends });
+      expect(atB).toMatchObject({ stage, sends });
+      expect(atA.role).toBe(sends === 'a' ? 'sender' : 'receiver');
+      expect(atB.role).toBe(sends === 'b' ? 'sender' : 'receiver');
+      const sequence = inColour(shownSequence(def, state));
+      expect(sequence).toEqual(state.sequences[stage - 1]);
+      for (const [i, token] of sequence.entries()) {
+        const result = press(def, state, token, across(sends));
+        expect(result.penalty).toBeNull();
+        expect(result.solved).toBe(stage === def.stages && i === sequence.length - 1);
+        state = result.state;
+      }
+    }
+  });
+});
+
+describe('signal views with the legend', () => {
   it('give the receiving console rows of shapes and not one colour, stage after stage', () => {
     const def = defOf({ legend: true });
     for (let seed = 0; seed < 50; seed++) {
@@ -498,47 +550,32 @@ describe('signal views', () => {
       });
     }
   });
-
-  it('say from which stage on the sending console shows one sign at a time, to everyone', () => {
-    for (const fleetingFrom of [null, 1, 3, 5]) {
-      const def = defOf({ stages: 5, length: 3, fleetingFrom });
-      let state = deal(def, 4);
-      for (let stage = 1; stage <= def.stages; stage++) {
-        const fleeting = fleetingFrom !== null && stage >= fleetingFrom;
-        for (const viewer of [AT_STATION, AT_CONSOLE_B, AT_BOOK, ELSEWHERE, AUDIENCE]) {
-          const view = seenFrom(def, state, viewer);
-          expect(view, `from ${fleetingFrom}, stage ${stage}`).toMatchObject({ stage, fleeting });
-        }
-        state = stageThrough(def, state);
-      }
-    }
-  });
-
-  it('swap sides with every stage, all the way through', () => {
-    const def = defOf({ stages: 6, length: 3 });
-    let state = deal(def, 9);
-    for (let stage = 1; stage <= def.stages; stage++) {
-      const sends: ConsoleId = stage % 2 === 1 ? 'a' : 'b';
-      const atA = seenFrom(def, state, AT_STATION);
-      const atB = seenFrom(def, state, AT_CONSOLE_B);
-      expect(atA).toMatchObject({ stage, sends });
-      expect(atB).toMatchObject({ stage, sends });
-      expect(atA.role).toBe(sends === 'a' ? 'sender' : 'receiver');
-      expect(atB.role).toBe(sends === 'b' ? 'sender' : 'receiver');
-      const sequence = inColour(shownSequence(def, state));
-      expect(sequence).toEqual(state.sequences[stage - 1]);
-      for (const [i, token] of sequence.entries()) {
-        const result = press(def, state, token, across(sends));
-        expect(result.penalty).toBeNull();
-        expect(result.solved).toBe(stage === def.stages && i === sequence.length - 1);
-        state = result.state;
-      }
-    }
-  });
 });
 
 /** Every place a view of the station is had from: both consoles, the book, away, the audience. */
 const EVERY_VIEWER = [AT_STATION, AT_CONSOLE_B, AT_BOOK, ELSEWHERE, AUDIENCE];
+
+/** Each stage of `def` as dealt from `seed`, looked at by `check` and then pressed through. */
+function eachStage(
+  def: SignalDef,
+  seed: number,
+  check: (state: SignalState, stage: number) => void,
+): void {
+  let state = deal(def, seed);
+  for (let stage = 1; stage <= def.stages; stage++) {
+    check(state, stage);
+    state = stageThrough(def, state);
+  }
+}
+
+/** A def with the legend that goes grey from `greyFrom`: 2–6 stages, fleeting or not, by seed. */
+function greyCase(seed: number): { def: SignalDef; greyFrom: number } {
+  const stages = 2 + (seed % 5);
+  const greyFrom = 1 + (seed % stages);
+  const fleetingFrom = seed % 3 === 0 ? null : 1 + ((seed * 7) % stages);
+  const def = defOf({ stages, length: 3 + (seed % 4), legend: true, greyFrom, fleetingFrom });
+  return { def, greyFrom };
+}
 
 describe('a display without colour', () => {
   it('goes grey in the last stage with the legend, from greyFrom where named, else never', () => {
@@ -554,54 +591,51 @@ describe('a display without colour', () => {
     ];
     for (const [fields, from] of cases) {
       const def = defOf({ length: 3, ...fields });
-      let state = deal(def, 3);
-      for (let stage = 1; stage <= def.stages; stage++) {
+      eachStage(def, 3, (state, stage) => {
         const grey = from !== null && stage >= from;
         for (const viewer of EVERY_VIEWER) {
           const view = seenFrom(def, state, viewer);
           expect(view, `${JSON.stringify(fields)}, stage ${stage}`).toMatchObject({ stage, grey });
         }
-        state = stageThrough(def, state);
-      }
+      });
     }
   });
 
-  it('carries each sign as form and pattern alone, and not one colour to any view', () => {
+  it('carries each sign of a grey stage as form and pattern alone, in its colour before', () => {
     for (let seed = 0; seed < 40; seed++) {
-      const stages = 2 + (seed % 5);
-      const greyFrom = 1 + (seed % stages);
-      const fleetingFrom = seed % 3 === 0 ? null : 1 + ((seed * 7) % stages);
-      const def = defOf({ stages, length: 3 + (seed % 4), legend: true, greyFrom, fleetingFrom });
-      let state = deal(def, seed);
-      for (let stage = 1; stage <= def.stages; stage++) {
+      const { def, greyFrom } = greyCase(seed);
+      eachStage(def, seed, (state, stage) => {
         const dealt = state.sequences[stage - 1] ?? [];
-        const grey = stage >= greyFrom;
-        const sending = stage % 2 === 1 ? AT_STATION : AT_CONSOLE_B;
-        for (const viewer of [sending, AUDIENCE]) {
-          const shown = seenFrom(def, state, viewer).sequence;
-          expect(shown, `seed ${seed}, stage ${stage}`).toEqual(grey ? dealt.map(greyOf) : dealt);
+        const shown = stage >= greyFrom ? dealt.map(greyOf) : dealt;
+        for (const viewer of [stage % 2 === 1 ? AT_STATION : AT_CONSOLE_B, AUDIENCE]) {
+          const { sequence } = seenFrom(def, state, viewer);
+          expect(sequence, `seed ${seed}, stage ${stage}`).toEqual(shown);
         }
-        for (const viewer of EVERY_VIEWER) {
-          const wire = JSON.stringify(seenFrom(def, state, viewer));
-          if (grey) {
-            expect(wire, `seed ${seed}, stage ${stage}`).not.toMatch(COLOUR_WORD);
-          }
-        }
-        state = stageThrough(def, state);
-      }
+      });
+    }
+  });
+
+  it('sends not one colour to any view in a grey stage, and before it only to the display', () => {
+    for (let seed = 0; seed < 40; seed++) {
+      const { def, greyFrom } = greyCase(seed);
+      eachStage(def, seed, (state, stage) => {
+        const display = [stage % 2 === 1 ? AT_STATION : AT_CONSOLE_B, AUDIENCE];
+        const coloured = EVERY_VIEWER.filter((viewer) =>
+          COLOUR_WORD.test(JSON.stringify(seenFrom(def, state, viewer))),
+        );
+        expect(coloured, `seed ${seed}, stage ${stage}`).toEqual(stage < greyFrom ? display : []);
+      });
     }
   });
 
   it('shows a fleeting stage one grey sign at a time: the two compose', () => {
     const def = defOf({ stages: 5, length: 3, legend: true, fleetingFrom: 2, greyFrom: 4 });
-    let state = deal(def, 6);
     const seen: [boolean, boolean][] = [];
-    for (let stage = 1; stage <= def.stages; stage++) {
+    eachStage(def, 6, (state) => {
       const { fleeting, grey, sequence } = seenFrom(def, state, AUDIENCE);
       seen.push([fleeting, grey]);
       expect(sequence?.every((sign) => typeof sign !== 'string')).toBe(grey);
-      state = stageThrough(def, state);
-    }
+    });
     expect(seen).toEqual([
       [false, false],
       [true, false],
@@ -1426,6 +1460,7 @@ describe('signal in a run', () => {
     expect(() => applyAction(state, pressBy('p2', first))).toThrow(
       'Diese Taste gibt es an diesem Pult nicht.',
     );
+    // Stage 4 comes grey, and its keys come from the patterns, as the legend pairs them.
     for (let stage = 1; stage <= 4; stage++) {
       state = stagePressed(state, stage);
     }
@@ -1435,11 +1470,12 @@ describe('signal in a run', () => {
 });
 
 describe('signal in a run, the display without colour', () => {
-  it('with the legend: the last stage reaches no view in colour, pressed by the patterns', () => {
-    let state = signalRun(labWith({ legend: true }));
-    for (let stage = 1; stage <= 3; stage++) {
-      state = stagePressed(state, stage);
-    }
+  /** The lab's Signalkette with the legend, its first three stages pressed: stage 4 is up. */
+  const lastStage = (): GameState =>
+    [1, 2, 3].reduce(stagePressed, signalRun(labWith({ legend: true })));
+
+  it('with the legend: shows the last stage grey, at console b and to the audience', () => {
+    const state = lastStage();
     // Stage 4, sent from console b: the display has lost its colour.
     const dealt = state.puzzleState?.type === 'signal' ? state.puzzleState.sequences[3] : [];
     const sending = signalOf(state, 'p2');
@@ -1447,18 +1483,20 @@ describe('signal in a run, the display without colour', () => {
     expect(sending.sequence).toEqual((dealt ?? []).map(greyOf));
     const audience = viewForSpectator(state).puzzle;
     expect(audience).toMatchObject({ sequence: sending.sequence, grey: true });
+  });
+
+  it('with the legend: lets no colour of the last stage out, but on the printed page', () => {
+    const state = lastStage();
+    const audience = viewForSpectator(state).puzzle;
     // What the consoles and the audience's device show, over the wire; the audience's printed
     // page, like the book's, keeps the legend's colours.
-    const shown: PuzzleView[] = [signalOf(state, 'p1'), sending, ...(audience ? [audience] : [])];
-    for (const view of shown) {
+    const consoles: PuzzleView[] = [signalOf(state, 'p1'), signalOf(state, 'p2')];
+    for (const view of audience ? [...consoles, audience] : consoles) {
       expect(JSON.stringify({ ...view, manual: null }), view.console ?? 'audience').not.toMatch(
         COLOUR_WORD,
       );
     }
     expect(audience?.manual).toEqual(signalModule.manual(defOf({ legend: true })));
-    state = stagePressed(state, 4);
-    expect(state.currentPuzzleIndex).toBe(1);
-    expect(state.penaltySeq).toBe(0);
   });
 });
 

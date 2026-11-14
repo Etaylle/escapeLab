@@ -404,6 +404,16 @@ describe('the maze', () => {
   });
 });
 
+/** Signs a display shows in their colours; throws at a grey one. */
+function inColour(shown: readonly ShownSign[] | null): SignalToken[] {
+  return (shown ?? []).map((sign) => {
+    if (typeof sign !== 'string') {
+      throw new Error(`expected a sign in its colour, not ${JSON.stringify(sign)}`);
+    }
+    return sign;
+  });
+}
+
 describe('the signal chain', () => {
   type SignalSeen = Extract<PuzzleView, { kind: 'signal' }>;
 
@@ -480,16 +490,6 @@ describe('the signal chain', () => {
 
   /** A colour anywhere: drawn, or named. */
   const COLOURED = /fill="#|\b(rot|blau|grün|gruen|gelb)/i;
-
-  /** Signs a display shows in their colours; throws at a grey one. */
-  function inColour(shown: readonly ShownSign[] | null): SignalToken[] {
-    return (shown ?? []).map((sign) => {
-      if (typeof sign !== 'string') {
-        throw new Error(`expected a sign in its colour, not ${JSON.stringify(sign)}`);
-      }
-      return sign;
-    });
-  }
 
   it('shows the sending console the sequence as signs with no word, a lamp under each', () => {
     const sending = at('a');
