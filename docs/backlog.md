@@ -399,7 +399,7 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   Laufende je eine Zeile; `/health` zählt Räume, laufende Partien, Spieler, Zuschauer, nennt
   Laufzeit und Commit (`RENDER_GIT_COMMIT`).
 
-### R-6 Kein Stillstand, wenn eine Leitung abreißt — Status: im PR (R-nopause, PR #18) · Größe: M
+### R-6 Kein Stillstand, wenn eine Leitung abreißt — Status: erledigt (R-nopause, Merge 2026-11-14, 5020329; zwei Review-Runden und zwei Deltas; Cloud-CI grün auf 4b272b7, Check und Walkthrough; Neustart wartet nur auf Plätze, die beim Versiegeln online waren; leere Leitung hält als Wartung) · Größe: M
 - Uros 2026-11-14 mit Screenshot der Karte „MISSION PAUSIERT · Warten auf uros": „Sollte man das
   Spiel im Hintergrund nicht stoppen, wenn jemand weg ist? Alles sollte gleich bleiben und danach
   fortführen." Kehrt die Dota-Pause aus R-3 um: Uhr, Patrouillen und Notfälle laufen weiter, der
