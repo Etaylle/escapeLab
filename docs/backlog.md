@@ -636,7 +636,7 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   Leisten und Panels im Stil des Hauptmenüs. Vorbilder: Dota 2, Hades, Celeste, Deep Rock,
   Helldivers 2, Overcooked 2.
 
-### G-2 Vorbilder-Studie und Übungshalle — Status: im PR (G-testground, PR 7) · Größe: L
+### G-2 Vorbilder-Studie und Übungshalle — Status: erledigt (G-testground, Merge 2026-11-14, 0deec7d; drei Review-Runden; Cloud-CI grün auf 244bcac, Check und Walkthrough; Hallen-Drill 189 s auf dem Runner) · Größe: L
 - Uros 2026-11-14: „Minispiele und Gameplay-Elemente von wo abschauen; im Tutorial ein Testground,
   wo alle Minispiele testbar und spielbar sind; Gameplay-Verbesserung ist ein anderes Ticket."
 - `docs/gameplay-models.md`: je Vorbild (Keep Talking, Among Us, Spaceteam, We Were Here,
