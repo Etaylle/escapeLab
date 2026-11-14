@@ -694,6 +694,29 @@ walkthrough's quiet window on the menu, the hero standing and its beam sweeping 
 lab, held the screen's pace in Blackout and Systemcheck, with `SHOTS_SOFTWARE_GL` and without:
 16.7 ms p50 and 16.7 to 16.8 p95, within the menu's own gate (`MENU_P95_MS`).
 
+With the microphone sending, the same bench measured the scene, the beam and the hero together,
+the microphone off and on, each round also running the hero as it was before its visor's light
+was laid apart (e6d09ed), when that light drew the whole upper layer anew on each of the hero's
+frames; the machine's 1-minute load from other work stood at 4 to 17 meanwhile. Medians, ms:
+
+| Frame: the scene, the beam, the hero | Work a frame, mean | p95 | Upper layer drawn in 6 s |
+| --- | --- | --- | --- |
+| The scene alone | 1.07 | 1.50 | |
+| Microphone off | 1.97 | 4.50 | 19 |
+| Microphone on | 2.24 | 4.60 | 19 |
+| Microphone off, before | 1.90 | 4.30 | 18 |
+| Microphone on, before | 3.78 | 5.60 | 180 |
+
+The sending microphone costs +0.27 ms a frame over the silent one, round by round +0.10 to +0.46
+and +0.86 in the last round as the load rose, where it cost +1.88 (+1.59 to +2.15). What is left
+is the light's band, laid on each of the hero's frames, and the canvas laid anew with it: the body
+rides up and down with the words, so the canvas is laid on each frame while the microphone sends,
+180 times in the 6 s instead of 64. Beam and hero together came to 0.90 ms over the scene with
+the microphone off and 1.17 with it on at that load; the quieter bench above put them at 0.64
+silent. Laid apart, the light looks as it did: on the Canvas path the hero's canvas matched the one
+drawn before in 46 speaking frames at density 1 and at 2, but for one pixel one level off in two
+of them at 1 and in one at 2.
+
 ## Type and targets (styles/devices.css, test/deviceTargets.test.tsx)
 
 Every word on a device is set by its role, at the normal text size and in a laptop's 720 px of

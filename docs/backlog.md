@@ -553,10 +553,13 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   Panel mindestens 3,5 Kacheln hoch stehen kann (1080 px bei 720 px Höhe, 1115 px bei 820),
   darunter und am Handy bleibt der Chip. Kosten ≤ 1 ms je Frame zusammen.
 - Im PR: Figur und Kegel zusammen 0,64 ms je Frame (Figur 0,30, Kegel 0,34; Bench 4× gedrosselt,
-  Canvas-Pfad), Menü-Fenster 16,7–16,8 ms p95 bei Software-GL. Abweichend von der Spec: der Kegel
-  ist ein einmal gebackenes, je Grad gedrehtes Bild statt eines Verlaufs je Frame (der kostete
-  1,3 ms und mehr); bei 1024 px Breite gäbe der Platz neben dem breitesten Panel nur 2,6 Kacheln
-  her (3,1 bei 640 px Höhe), dort steht nur der Chip; der Chip behält seine kleine Figur.
+  Canvas-Pfad), Menü-Fenster 16,7–16,8 ms p95 bei Software-GL. Ein sendendes Mikro kostet mit
+  dem Visier-Schimmer +0,27 ms je Frame (vorher +1,88, als er die ganze obere Ebene der Figur je
+  Frame neu zeichnen ließ); Figur und Kegel kamen dabei bei Last 4–17 auf 0,90 ms ohne und 1,17 ms
+  mit Mikro. Abweichend von der Spec: der Kegel ist ein einmal gebackenes, je Grad gedrehtes Bild
+  statt eines Verlaufs je Frame (der kostete 1,3 ms und mehr); bei 1024 px Breite gäbe der Platz
+  neben dem breitesten Panel nur 2,6 Kacheln her (3,1 bei 640 px Höhe), dort steht nur der Chip;
+  der Chip behält seine kleine Figur.
 
 ### U-1 Pausenmenü, Verlassen wie Dota 2, Einstellungen und Chrome — Status: in Arbeit (U-pause, PR 6) · Größe: L
 - Uros 2026-11-14: „Spielabbruch richtig: Der Spieler kann das Spiel nicht verlassen, wann er
