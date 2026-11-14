@@ -53,6 +53,19 @@ function gatesIn(source) {
   return [...new Set([...steps, ...drills].map(([, name]) => name))];
 }
 
+/**
+ * The body of the top-level function `name` in `source`, from its signature's line to the brace
+ * that closes it at the start of a line; throws where `source` has no such function.
+ */
+function bodyOf(source, name) {
+  const signature = `\\n(?:async )?function ${name}\\(.*?\\) \\{\\n`;
+  const found = source.match(new RegExp(`${signature}([\\s\\S]*?)\\n\\}`));
+  if (found === null) {
+    throw new Error(`tools/shots.mjs has no function ${name}`);
+  }
+  return found[1];
+}
+
 /** Whether the table entry `entry` names `capture`: the same, or a pattern that matches it. */
 function entryNames(entry, capture) {
   const parts = entry.split('*').map((part) => part.replace(/[.+?^${}()|[\]\\]/g, '\\$&'));
@@ -133,6 +146,22 @@ describe('the capture groups against the walkthrough', () => {
       GROUP_NAMES.filter((name) => !gates.includes(name)),
       [],
     );
+  });
+
+  it('holds every capture and skip the walkthrough counts to the gate of its step', () => {
+    // Each capture is counted in taken(), each skip in skip(), both through checkGroup...
+    assert.equal(SHOTS.match(/tally\.taken \+=/g)?.length, 1);
+    assert.equal(SHOTS.match(/tally\.skipped \+=/g)?.length, 1);
+    assert.match(bodyOf(SHOTS, 'capture'), /\btaken\(name\);/);
+    assert.match(bodyOf(SHOTS, 'taken'), /^\s*checkGroup\(name\);\s*tally\.taken \+= 1;$/);
+    assert.match(bodyOf(SHOTS, 'skip'), /^\s*checkGroup\(label\);/);
+    // ...which fails the run on what misfiled() says of it under the step's gate...
+    const check = bodyOf(SHOTS, 'checkGroup');
+    assert.match(check, /const wrong = misfiled\(label, gates\.now\(\)\);/);
+    assert.match(check, /if \(wrong !== null\) \{\s*fail\(wrong\);/);
+    // ...the gate inGroup and whenOn set for the step's group.
+    assert.match(bodyOf(SHOTS, 'inGroup'), /return gates\.run\(name, async \(\) => \{/);
+    assert.match(bodyOf(SHOTS, 'whenOn'), /groupOn\(name\) \? gates\.run\(name, start\) :/);
   });
 });
 
