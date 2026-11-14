@@ -192,14 +192,15 @@ export function dropSnapshot(code: string, store: NoteStore | null = localStore(
  * signed out, or switched accounts — and their seats wait for its account, not for this device.
  */
 export function dropSnapshots(store: KeptStore | null = localStore()): void {
-  const keys: string[] = [];
-  for (let i = 0; i < (store?.length ?? 0); i++) {
-    const key = store?.key(i) ?? null;
+  if (store === null) {
+    return;
+  }
+  const keys = Array.from({ length: store.length }, (_, i) => store.key(i));
+  for (const key of keys) {
     if (key?.startsWith(SNAPSHOT_KEY) === true) {
-      keys.push(key);
+      store.removeItem(key);
     }
   }
-  keys.forEach((key) => store?.removeItem(key));
 }
 
 /** Back onto the seat in the room `code` on the browser's pass, with the snapshot kept of it. */

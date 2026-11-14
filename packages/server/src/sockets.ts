@@ -782,15 +782,25 @@ function comeBack(
     return hold(lab, socket, session, msg.code, again);
   }
   const playerId = seatBack(lab, socket, room, msg, { known, again });
-  if (playerId === null) {
-    return session;
-  }
-  const back = seated(socket, session, room, playerId, msg.pass);
-  // A pass that comes back to a seat before it has an account starts one with the seat's name.
+  return playerId === null ? session : backOnSeat(lab, socket, session, room, playerId, msg.pass);
+}
+
+/**
+ * `socket` back on the seat of `playerId` in `room` (`seated`), its pass's account told it — a
+ * pass that comes back to a seat before it has an account starts one with the seat's name.
+ */
+function backOnSeat(
+  lab: Lab,
+  socket: PlayerSocket,
+  session: Session | null,
+  room: Room,
+  playerId: string,
+  pass: CrewPass,
+): Session {
+  const back = seated(socket, session, room, playerId, pass);
   const seat = room.playerOf(back.playerId);
   const profile = { displayName: seat?.name ?? '', colour: seat?.color ?? null };
-  const arrival = lab.accounts?.arrive(msg.pass, profile, null, gateOf(lab, socket));
-  tellArrival(lab, socket, msg.pass, arrival);
+  tellArrival(lab, socket, pass, lab.accounts?.arrive(pass, profile, null, gateOf(lab, socket)));
   return back;
 }
 

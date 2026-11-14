@@ -401,6 +401,11 @@
   color: var(--accent);
 }
 
+/* The way on, in white on the panel's teal: 5.5:1, where the shared primary stands at 4.4:1. */
+.settings-login-actions button.primary {
+  color: #fff;
+}
+
 /* A form, or the ask before a sign-out: framed as the deletion's ask is, in the panel's line. */
 .settings-login-form {
   display: grid;

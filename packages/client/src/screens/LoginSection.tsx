@@ -70,11 +70,17 @@ export function loginNow(
   if (sent === null || !isAskStep(step)) {
     return shown;
   }
-  if (news !== null && news.seq > sent.news) {
-    return { ...shown, step: news.done === 'set' ? 'minted' : 'idle', done: news.done };
+  const done = news !== null && news.seq > sent.news ? news.done : null;
+  if (done !== null) {
+    return { ...shown, step: done === 'set' ? 'minted' : 'idle', done };
   }
-  const refused = refusal !== null && refusal.seq > sent.refusals && refusal.of === ASKS[step];
-  return refused ? { ...shown, refused: refusal.message } : { ...shown, waiting: true };
+  const refused = refusedSince(refusal, sent.refusals, ASKS[step]);
+  return refused === null ? { ...shown, waiting: true } : { ...shown, refused };
+}
+
+/** Why the server refused an ask of `kind` since its `seq`-th refusal; null where it did not. */
+function refusedSince(refusal: Refusal | null, seq: number, kind: LoginAsk['kind']) {
+  return refusal !== null && refusal.seq > seq && refusal.of === kind ? refusal.message : null;
 }
 
 /** What two Kennwort fields that differ are told. */
