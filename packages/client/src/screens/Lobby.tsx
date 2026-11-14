@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 
 import {
   dailyLabel,
   difficultyInfos,
-  linesDown,
+  seatsOff,
   utcDay,
   type ClientMessage,
   type Difficulty,
@@ -41,14 +41,17 @@ interface Props {
 }
 
 /**
- * Why the host cannot start yet, or null: every seat's line must be up — one down holds the
- * start until it is back, or the room frees the seat — the crew must be a size the mission
- * takes, and everyone but the host must have confirmed. The server checks the same.
+ * Why the host cannot start yet, or null: every seat's line must be up — one down, or gone to the
+ * main menu, holds the start until it is back, or the room frees the seat — the crew must be a
+ * size the mission takes, and everyone but the host must have confirmed. The server checks the
+ * same.
  */
 export function startBlocker(view: Pick<PlayerView, 'crewSize' | 'players'>): string | null {
-  const down = view.players.filter((p) => !p.connected).map((p) => p.name);
-  if (down.length > 0) {
-    return linesDown(down);
+  const off = view.players.filter((p) => !p.connected);
+  if (off.length > 0) {
+    const names = (inMenu: boolean): string[] =>
+      off.filter((p) => (p.menu === 'main') === inMenu).map((p) => p.name);
+    return seatsOff(names(false), names(true));
   }
   const crew = view.players;
   const missing = view.crewSize.min - crew.length;
@@ -449,7 +452,9 @@ function StartArea({ view, send }: { view: PlayerView; send: Send }) {
             <Icon name="check" /> Bereit — doch nicht?
           </>
         ) : (
-          'Ich bin bereit'
+          <>
+            <Icon name="flag" /> Ich bin bereit
+          </>
         )}
       </button>
       <p className="muted lobby-go-note">
@@ -458,6 +463,51 @@ function StartArea({ view, send }: { view: PlayerView; send: Send }) {
           : 'Erst die Mission lesen, dann bereit melden.'}
       </p>
     </div>
+  );
+}
+
+/** How long the lobby says that the host's part passed on, ms. */
+export const HOST_NEWS_MS = 8000;
+
+/** A member of the room as the host's news reads them. */
+type Seated = Pick<PlayerView['players'][number], 'id' | 'name' | 'isHost'>;
+
+/**
+ * The host's part passed on between two lists of the room (core `abandon`, the longest seated on
+ * the line taking it): who went, and who leads the room now — „Anna ist gegangen · Ben leitet
+ * jetzt den Raum." —; null where it did not pass on.
+ */
+export function hostNews(before: readonly Seated[], after: readonly Seated[]): string | null {
+  const was = before.find((p) => p.isHost);
+  const now = after.find((p) => p.isHost);
+  if (was === undefined || now === undefined || after.some((p) => p.id === was.id)) {
+    return null;
+  }
+  return `${was.name} ist gegangen · ${now.name} leitet jetzt den Raum.`;
+}
+
+/** The host's part passed on, said in the lobby for HOST_NEWS_MS (`hostNews`). */
+function HostNews({ players }: { players: PlayerView['players'] }) {
+  const before = useRef(players);
+  const [said, setSaid] = useState<{ text: string; seq: number } | null>(null);
+  useEffect(() => {
+    const news = hostNews(before.current, players);
+    before.current = players;
+    if (news !== null) {
+      setSaid((last) => ({ text: news, seq: (last?.seq ?? 0) + 1 }));
+    }
+  }, [players]);
+  useEffect(() => {
+    if (said === null) {
+      return undefined;
+    }
+    const timer = setTimeout(() => setSaid(null), HOST_NEWS_MS);
+    return () => clearTimeout(timer);
+  }, [said]);
+  return said === null ? null : (
+    <p key={said.seq} className="lobby-host-news" role="status">
+      {said.text}
+    </p>
   );
 }
 
@@ -560,10 +610,11 @@ export function LobbyScreen({ view, send, leaveRoom, missions, stats }: Props) {
           }
         />
         <MicSetup />
+        <HostNews players={view.players} />
         <StartArea view={view} send={send} />
         <div className="lobby-foot">
           <button className="link" onClick={() => closeDoorsThen(leaveRoom)}>
-            Raum verlassen
+            <Icon name="exit" /> Raum verlassen
           </button>
         </div>
       </aside>

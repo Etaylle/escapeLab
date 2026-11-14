@@ -99,12 +99,12 @@ function click(button: Parameters<PadProbe['press']>[0]): string[] {
 let stop: () => void = () => undefined;
 /** a wait of the keys' table, as a test opened it */
 let endWait: () => void = () => undefined;
-const onSettings = vi.fn();
+const onStart = vi.fn();
 
 beforeEach(() => {
   stubPage();
-  onSettings.mockClear();
-  stop = startPad({ onSettings }, '?fakepad=1');
+  onStart.mockClear();
+  stop = startPad({ onStart }, '?fakepad=1');
 });
 
 afterEach(() => {
@@ -153,7 +153,7 @@ describe('a controller in the world', () => {
     expect(talking).toEqual([true, false, true, false]);
     off();
     click('start');
-    expect(onSettings).toHaveBeenCalledTimes(1);
+    expect(onStart).toHaveBeenCalledTimes(1);
   });
 
   it('pings with the D-pad’s ◀ and opens the quick chat with its ▶, by the chat key', () => {
@@ -202,6 +202,20 @@ describe('a controller in the world', () => {
     frame();
     expect(padSteer().x).toBeCloseTo(0.5, 9);
     expect(padSteer().sprint).toBe(true);
+  });
+});
+
+describe('the stick’s dead zone, as the settings set it', () => {
+  it('reads a light lean past 20 % by default, and the zone set from the next poll on', () => {
+    probe().lean(0.3, 0);
+    frame();
+    expect(padSteer().x).toBeCloseTo((0.3 - 0.2) / 0.8, 9);
+    changeSettings({ deadzone: 35 });
+    frame();
+    expect(padSteer().x).toBe(0);
+    changeSettings({ deadzone: 5 });
+    frame();
+    expect(padSteer().x).toBeCloseTo((0.3 - 0.05) / 0.95, 9);
   });
 });
 
@@ -325,7 +339,7 @@ describe('the controllers connected', () => {
     const standard = { id: 'Xbox Wireless Controller', connected: true, mapping: 'standard' };
     const pads = [wheel, { ...standard, buttons: at('a'), axes: [0, 0, 0, 0] }];
     vi.stubGlobal('navigator', { getGamepads: () => pads });
-    stop = startPad({ onSettings }, '');
+    stop = startPad({ onStart }, '');
     page.sent = [];
     frame();
     expect(page.sent).toEqual(['↓ ', '↑ ']);
@@ -348,14 +362,14 @@ describe('remapping in the settings', () => {
     capturePadButton((slot) => got.push(slot));
     expect(click('start')).toEqual([]);
     expect(got).toEqual([null]);
-    expect(onSettings).not.toHaveBeenCalled();
+    expect(onStart).not.toHaveBeenCalled();
   });
 
   it('calls the keys’ wait off with any button — by Esc — and does nothing else meanwhile', () => {
     endWait = startRebinding();
     expect(click('a')).toEqual(['↓Escape', '↑Escape']);
     expect(click('start')).toEqual(['↓Escape', '↑Escape']);
-    expect(onSettings).not.toHaveBeenCalled();
+    expect(onStart).not.toHaveBeenCalled();
     probe().lean(1, 0);
     frame();
     expect(padSteer()).toEqual({ x: 0, y: 0, sprint: false });

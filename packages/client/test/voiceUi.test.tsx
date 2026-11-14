@@ -98,6 +98,7 @@ function hud(
       notesOpen={false}
       onToggleNotes={noop}
       onOpenInfo={noop}
+      onOpenMenu={noop}
     />,
   );
 }

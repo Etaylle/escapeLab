@@ -319,12 +319,17 @@ describe('a press to skip', () => {
 
   it('is Space alone, not repeated, not a combination and not into a field', () => {
     const press = { key: ' ', repeat: false, altKey: false, ctrlKey: false, metaKey: false };
-    expect(skipKey(press)).toBe(true);
-    expect(skipKey({ ...press, key: 'e' })).toBe(false);
-    expect(skipKey({ ...press, repeat: true })).toBe(false);
-    expect(skipKey({ ...press, ctrlKey: true })).toBe(false);
+    expect(skipKey(press, false)).toBe(true);
+    expect(skipKey({ ...press, key: 'e' }, false)).toBe(false);
+    expect(skipKey({ ...press, repeat: true }, false)).toBe(false);
+    expect(skipKey({ ...press, ctrlKey: true }, false)).toBe(false);
     vi.stubGlobal('document', { activeElement: { tagName: 'INPUT' } });
-    expect(skipKey(press)).toBe(false);
+    expect(skipKey(press, false)).toBe(false);
+  });
+
+  it('is no skip under a menu, whose item Space presses: the opening plays on', () => {
+    const press = { key: ' ', repeat: false, altKey: false, ctrlKey: false, metaKey: false };
+    expect(skipKey(press, true)).toBe(false);
   });
 
   it('skips an intro from then on and tells the room; a name card for this screen alone', () => {

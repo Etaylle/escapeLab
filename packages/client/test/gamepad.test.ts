@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { DEFAULT_KEYS, DEFAULT_PAD } from '../src/input/bindings.js';
 import { inputDevice, noteDevice } from '../src/input/device.js';
 import { nextInDirection } from '../src/input/focus.js';
-import { glyph, glyphOf, type GlyphSource } from '../src/input/glyphs.js';
+import { familyOf, glyph, glyphOf, type GlyphSource } from '../src/input/glyphs.js';
 import {
   DEADZONE,
   directionOf,
@@ -168,6 +168,29 @@ describe('the prompts follow the device used last', () => {
     expect(glyphOf('chat', ps)).toBe('▶');
     expect(glyphOf('chat', keys)).toBe('C');
     expect(glyph('notes')).toBe('N');
+  });
+});
+
+describe('the controller as the settings set it', () => {
+  it('reads the stick past the dead zone given, 20 % without one', () => {
+    expect(padStateOf(pad([], [0.3, 0])).stick.x).toBeCloseTo((0.3 - 0.2) / 0.8, 9);
+    expect(padStateOf(pad([], [0.3, 0]), 0.35).stick).toEqual({ x: 0, y: 0 });
+    expect(padStateOf(pad([], [0.3, 0]), 0.05).stick.x).toBeCloseTo((0.3 - 0.05) / 0.95, 9);
+  });
+
+  it('names its buttons by the symbols chosen, by its own kind on „Automatisch"', () => {
+    expect(familyOf('auto', 'playstation')).toBe('playstation');
+    expect(familyOf('xbox', 'playstation')).toBe('xbox');
+    expect(familyOf('playstation', 'xbox')).toBe('playstation');
+    noteDevice('pad', 'xbox');
+    changeSettings({ glyphs: 'playstation' });
+    expect(glyph('interact')).toBe('✕');
+    expect(glyph('menu')).toBe('Options');
+    changeSettings({ glyphs: 'auto' });
+    expect(glyph('interact')).toBe('A');
+    noteDevice('keys');
+    changeSettings({ glyphs: 'playstation' });
+    expect(glyph('interact')).toBe('E');
   });
 });
 

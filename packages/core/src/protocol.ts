@@ -176,6 +176,17 @@ export const clientMessageSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('start-mission') }),
   /** the player has seen enough of the intro: the skip of the opening on their screen */
   z.object({ kind: z.literal('intro-done') }),
+  /**
+   * the pause menu opened over the run on the player's screen, or closed again: the run goes
+   * on, and the crew sees them at the menu
+   */
+  z.object({ kind: z.literal('pause-menu'), open: z.boolean() }),
+  /**
+   * off to the main menu, the seat kept: the player's line to the room closes on purpose — the
+   * crew waits as for a drop and sees where they went — and the socket stays at the door,
+   * answered with `at-menu`
+   */
+  z.object({ kind: z.literal('to-menu') }),
   /** a move at the open puzzle; its module's input schema checks `input` */
   z.object({ kind: z.literal('puzzle-input'), input: z.unknown() }),
   z.object({ kind: z.literal('request-hint') }),
@@ -428,6 +439,11 @@ export type ServerMessage =
    * a tab opened later say — `message` says so
    */
   | { kind: 'left'; code: string; message: string | null }
+  /**
+   * the answer to `to-menu`: this socket plays on its seat in room `code` no more — the seat is
+   * the pass's still, bound to the run or held in the lobby, and `whereami` names it
+   */
+  | { kind: 'at-menu'; code: string }
   /** the answer to `whereami`: where the pass sits; null where it sits nowhere it is bound to */
   | { kind: 'seated'; seat: Seat | null }
   /**
@@ -446,6 +462,11 @@ export type ServerMessage =
   | { kind: 'takeover-allowed'; code: string }
   | { kind: 'view'; view: PlayerView; at: number }
   | { kind: 'spectator-view'; view: SpectatorView; code: string; at: number }
+  /**
+   * how many audience connections watch room `code` now: told everyone in it as one comes or
+   * goes, and a seat coming onto its line while any watch
+   */
+  | { kind: 'audience'; code: string; count: number }
   /** the answer to a `clock` ask: the page's `sent` handed back, and the server's time (`at`) */
   | { kind: 'clock'; sent: number; at: number }
   /**

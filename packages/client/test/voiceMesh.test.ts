@@ -234,6 +234,7 @@ function audienceView(crew: [string, boolean][]): ServerMessage {
   const presence = { stationId: null, console: null, manualId: null, signSeen: false };
   const view: SpectatorView = {
     phase: 'playing',
+    missionId: 'blackout',
     missionTitle: 'Blackout im Labor',
     difficulty: 'normal',
     storyText: '',

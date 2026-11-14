@@ -404,11 +404,11 @@ function Rematch({ view, missions, send, leaveRoom }: RematchProps) {
       </p>
       {view.you.isHost && (
         <button onClick={() => send({ kind: 'back-to-lobby' })}>
-          Zur Lobby (Mission oder Schwierigkeit ändern)
+          <Icon name="crew" /> Zur Lobby (Mission oder Schwierigkeit ändern)
         </button>
       )}
       <button className="link" onClick={leaveRoom}>
-        Raum verlassen
+        <Icon name="exit" /> Raum verlassen
       </button>
     </div>
   );

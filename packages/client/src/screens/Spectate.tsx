@@ -15,7 +15,7 @@ import { RelayConsole } from '../puzzles/RelayPanel.js';
 import { PuzzlePanel } from './PuzzlePanel.js';
 import { Manual } from './Manual.js';
 import { EdgeworkChip } from './EdgeworkChip.js';
-import { CreditsTable, crewTags, CrewTags, type CrewTag } from './Crew.js';
+import { CreditsTable, CrewDot, crewTags, CrewTags, type CrewTag } from './Crew.js';
 import { TitleCard, titleCardOf } from './End.js';
 import { FinaleVeil } from './Game.js';
 import { Icon } from './Icon.js';
@@ -81,8 +81,8 @@ function SpectatePanels({ view }: { view: SpectatorView }) {
   const noop = (): void => undefined;
   const feed = view.events.slice(-14).reverse();
   const over = view.phase === 'won' || view.phase === 'lost';
-  const colorOf = (playerId: string): string | undefined =>
-    view.players.find((p) => p.id === playerId)?.color;
+  const colorOf = (playerId: string): string =>
+    view.players.find((p) => p.id === playerId)?.color ?? 'transparent';
   return (
     <div className="spectate-panels">
       {over ? (
@@ -119,11 +119,7 @@ function SpectatePanels({ view }: { view: SpectatorView }) {
             <section key={panel.playerId} className="panel">
               <div className="panel-label">
                 //{' '}
-                <span
-                  className="crew-dot"
-                  style={{ background: colorOf(panel.playerId) }}
-                  aria-hidden="true"
-                />
+                <CrewDot color={colorOf(panel.playerId)} />
                 {panel.name}
               </div>
               <div className="read-only">
@@ -172,7 +168,7 @@ function SpectateFoot({
       <ul className="players inline">
         {view.players.map((p) => (
           <li key={p.id} className={p.connected ? '' : 'offline'}>
-            <span className="crew-dot" style={{ background: p.color }} aria-hidden="true" />
+            <CrewDot color={p.color} />
             {p.name}
             {speaking?.has(p.id) === true && <SpeakingMark />}
             {view.phase === 'playing' && (
@@ -183,7 +179,7 @@ function SpectateFoot({
       </ul>
       <ListenToggle />
       <button className="link" onClick={leaveRoom}>
-        Zuschauen beenden
+        <Icon name="exit" /> Zuschauen beenden
       </button>
     </div>
   );

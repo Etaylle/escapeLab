@@ -90,6 +90,14 @@ export const NOBODY_PRESENT: Presence = {
   sight: {},
 };
 
+/**
+ * Where a crew member's menu stands, as the crew sees it: the pause menu open over the run while
+ * they are on the line in it ('pause') — the run goes on —, or the main menu they went to on
+ * purpose, off the line, their seat kept bound to them ('main', actions.ts
+ * `player-disconnected`).
+ */
+export type MenuPlace = 'pause' | 'main';
+
 /** A crew member away from a run: their line dropped, and they are not back yet. */
 export interface Away {
   /** epoch ms the line dropped */
@@ -257,6 +265,12 @@ export interface GameState {
    */
   away: Record<string, Away>;
   /**
+   * the crew members whose menu stands open, by player id (`MenuPlace`): the pause menu over the
+   * run (actions.ts `set-menu`), or the main menu they went to, their seat kept, in a run or a
+   * lobby; left out for everybody else
+   */
+  menus: Record<string, MenuPlace>;
+  /**
    * lines dropped in this run so far: the first drop lets the crew go on without whoever
    * dropped after FIRST_WAIT_MS, every later one after LATER_WAIT_MS
    */
@@ -359,6 +373,7 @@ export function initialState(
     sabotage: null,
     paused: null,
     away: {},
+    menus: {},
     drops: 0,
     calledOff: null,
     items: {},

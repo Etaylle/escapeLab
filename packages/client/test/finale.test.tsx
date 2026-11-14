@@ -441,6 +441,7 @@ describe('the title card', () => {
   it('is the audience’s too, where the world was, the run over', () => {
     const watched: SpectatorView = {
       phase: 'lost',
+      missionId: 'blackout',
       missionTitle: 'Blackout im Labor',
       difficulty: 'normal',
       storyText: 'Dunkel.',
@@ -546,6 +547,7 @@ describe('the game screen while the world plays the end', () => {
   it('leaves the audience’s lab without it, in the escape too', () => {
     const watched: SpectatorView = {
       phase: 'playing',
+      missionId: 'systemcheck',
       missionTitle: 'Tutorial: Systemcheck',
       difficulty: 'normal',
       storyText: 'Alle raus.',

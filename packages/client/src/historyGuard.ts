@@ -1,0 +1,77 @@
+import { useEffect, useRef } from 'react';
+
+/**
+ * The browser's back button in a run opens the run's menu (menuLayer.ts) instead of leaving the
+ * page: as the run starts, the page stands one step deeper in its history — the same address, a
+ * state of its own (`GUARD`); back from that step, the menu opens and the step is taken again,
+ * so that the next back opens it as well. Once the run is over, or left, the step stays, marked
+ * spent (`SPENT`): a step back there would cancel a reload under way — leaving a room reloads the
+ * page just as the run lets go, and Chromium drops a reload that a history step follows before
+ * the server answered. The next run in the tab takes the spent step again instead of a new one,
+ * so that runs in one tab leave one step behind, not one each. Closing the tab stays what it
+ * always was: a drop.
+ */
+
+/** The mark of the history's step a run stands on. */
+export const GUARD = 'escapelabRun';
+/** The mark of a step a run stood on once: the next run in the tab takes it again. */
+export const SPENT = 'escapelabRunOver';
+
+/** The page's history as the guard uses it. */
+export interface GuardedHistory {
+  readonly state: unknown;
+  pushState(data: unknown, unused: string): void;
+  replaceState(data: unknown, unused: string): void;
+}
+
+/** The window as the guard uses it: its history, and its `popstate` as the history steps back. */
+export interface GuardedWindow {
+  readonly history: GuardedHistory;
+  addEventListener(type: 'popstate', listener: () => void): void;
+  removeEventListener(type: 'popstate', listener: () => void): void;
+}
+
+/** Whether a history state carries the mark `mark`. */
+function marked(state: unknown, mark: string): boolean {
+  return typeof state === 'object' && state !== null && mark in state;
+}
+
+/** Whether a history state is the run's step (`GUARD`). */
+export function guarded(state: unknown): boolean {
+  return marked(state, GUARD);
+}
+
+/**
+ * Stands the page on the run's step of its history — the step a run before in this tab stood on
+ * where the page still stands on it (`SPENT`), else a new one — and opens the menu (`onBack`)
+ * whenever the history steps back from it, taking the step again. Returns what lets go of it:
+ * the step marked spent where it still stands on top, with no step back.
+ */
+export function guardHistory(win: GuardedWindow, onBack: () => void): () => void {
+  const step = (): void => win.history.pushState({ [GUARD]: true }, '');
+  if (marked(win.history.state, SPENT)) {
+    win.history.replaceState({ [GUARD]: true }, '');
+  } else if (!guarded(win.history.state)) {
+    step();
+  }
+  const onPop = (): void => {
+    if (!guarded(win.history.state)) {
+      step();
+      onBack();
+    }
+  };
+  win.addEventListener('popstate', onPop);
+  return () => {
+    win.removeEventListener('popstate', onPop);
+    if (guarded(win.history.state)) {
+      win.history.replaceState({ [SPENT]: true }, '');
+    }
+  };
+}
+
+/** The back button guarded while `on`, a run on: it opens the menu by `onBack` (`guardHistory`). */
+export function useHistoryGuard(on: boolean, onBack: () => void): void {
+  const latest = useRef(onBack);
+  latest.current = onBack;
+  useEffect(() => (on ? guardHistory(window, () => latest.current()) : undefined), [on]);
+}

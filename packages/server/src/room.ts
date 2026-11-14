@@ -140,6 +140,13 @@ const CHAT_COOLDOWN_MS = 1200;
  */
 const SIGNAL_BURST = 60;
 const SIGNALS_PER_SEC = 10;
+/**
+ * Marks of the pause menu one seat may send at once, and how many more come free each second:
+ * every mark sends every view, and a page that toggles its menu faster than a hand does is let
+ * through no more — its next mark, once the latest view disagrees with its menu, says it again.
+ */
+const MENU_MARK_BURST = 6;
+const MENU_MARKS_PER_SEC = 1;
 /** Patrol simulation step. */
 const DRONE_TICK_MS = 80;
 /** How close you must stand to man an emergency panel. */
@@ -148,10 +155,49 @@ const PANEL_RADIUS = 0.8;
 const ITEM_RADIUS = 0.95;
 /** A relay emergency's instructions are aged this often. */
 const RELAY_TICK_MS = 1000;
+/** What a member may still send of something allowed by the second, and when that was worked out. */
+interface Allowance {
+  left: number;
+  /** epoch ms */
+  at: number;
+}
+
+/**
+ * Takes one off `member`'s allowance in `byMember` — `burst` at first, topped up by `perSec` a
+ * second to at most `burst` since it was last worked out; false where none is left.
+ */
+function takeAllowance(
+  byMember: Map<string, Allowance>,
+  member: string,
+  now: number,
+  burst: number,
+  perSec: number,
+): boolean {
+  const was = byMember.get(member);
+  const left =
+    was === undefined ? burst : Math.min(burst, was.left + ((now - was.at) / 1000) * perSec);
+  const allowed = left >= 1;
+  byMember.set(member, { left: allowed ? left - 1 : left, at: now });
+  return allowed;
+}
+
 /** What a connection hears once its seat plays on another one: a tab opened later, say. */
 const PLAYS_IN_ANOTHER_TAB = 'Dieser Platz spielt jetzt in einem anderen Fenster.';
 /** What a pass is told once another device took its seat over by its name. */
 const SEAT_TAKEN = 'Der Platz wurde auf einem anderen Gerät übernommen.';
+
+/**
+ * How a seat's line ended: dropped — cut, or gone without a word —, closed cleanly by its tab
+ * going away (1000, 1001), or closed on purpose for the main menu (`to-menu`), the seat kept.
+ */
+export type LineEnd = 'dropped' | 'closed' | 'menu';
+
+/** What the log says of a seat's line ending so, by the seat's name. */
+const LINE_END_LOG: Readonly<Record<LineEnd, (name: string) => string>> = {
+  dropped: (name) => `${name}'s line closed`,
+  closed: (name) => `${name}'s line closed, its tab gone`,
+  menu: (name) => `${name} left to the main menu, the seat kept`,
+};
 
 /** How long a seat in the lobby may stay off the line before the room frees it, ms. */
 export const LOBBY_AWAY_MS = 120_000;
@@ -193,15 +239,20 @@ const LINE_ACTIONS: ReadonlySet<Action['type']> = new Set([
   'player-disconnected',
   'set-presence',
   'set-occupancy',
+  'set-menu',
   'maintenance',
 ]);
 
 /**
- * What the room dispatches of where the crew stands, as it walks: no snapshot goes out for it on
- * its own — a run whose clock runs sends one every SNAPSHOT_LIVE_MS, where everybody stands with
- * it.
+ * What the room dispatches of where the crew stands, as it walks, and of a pause menu opened or
+ * closed: no snapshot goes out for it on its own — a run whose clock runs sends one every
+ * SNAPSHOT_LIVE_MS, where everybody stands with it.
  */
-const PRESENCE_ACTIONS: ReadonlySet<Action['type']> = new Set(['set-presence', 'set-occupancy']);
+const PRESENCE_ACTIONS: ReadonlySet<Action['type']> = new Set([
+  'set-presence',
+  'set-occupancy',
+  'set-menu',
+]);
 
 /** A new device's ask for a seat by its name: the pass it brings, whom to tell, its timer. */
 interface Claim {
@@ -291,7 +342,9 @@ export class Room {
   private readonly lastPingAt = new Map<string, number>();
   private readonly lastChatAt = new Map<string, number>();
   /** each member's voice signals still allowed, and when that was last worked out (epoch ms) */
-  private readonly signalAllowance = new Map<string, { left: number; at: number }>();
+  private readonly signalAllowance = new Map<string, Allowance>();
+  /** each seat's marks of its pause menu still allowed (`MENU_MARK_BURST`) */
+  private readonly menuAllowance = new Map<string, Allowance>();
   private drones: DronePatrol | null = null;
   private droneTimer: NodeJS.Timeout | null = null;
   private lastDroneTick = 0;
@@ -870,7 +923,13 @@ export class Room {
     this.log(line);
     this.settle(next, 'abandon');
     this.seats.free(playerId);
-    const kept = [this.signalAllowance, this.lastPingAt, this.lastChatAt, this.glances];
+    const kept = [
+      this.signalAllowance,
+      this.menuAllowance,
+      this.lastPingAt,
+      this.lastChatAt,
+      this.glances,
+    ];
     for (const byPlayer of [...kept, this.lostAt, this.closedClean]) {
       byPlayer.delete(playerId);
     }
@@ -969,7 +1028,7 @@ export class Room {
    * another tab — lets go of nothing: the player stays connected on the new one, and the old
    * one hears that the seat went elsewhere.
    */
-  attach(playerId: string, listener: Listener): (clean?: boolean) => void {
+  attach(playerId: string, listener: Listener): (end?: LineEnd) => void {
     const before = this.listeners.get(playerId);
     this.listeners.set(playerId, listener);
     this.seenOnLine.add(playerId);
@@ -981,9 +1040,12 @@ export class Room {
     if (this.positions.size > 0) {
       listener(this.positionsMessage());
     }
-    return (clean = false) => {
+    if (this.spectators.size > 0) {
+      listener(this.audienceMessage());
+    }
+    return (end = 'dropped') => {
       if (this.listeners.get(playerId) === listener) {
-        this.detach(playerId, clean);
+        this.detach(playerId, end);
       }
     };
   }
@@ -1001,22 +1063,39 @@ export class Room {
     if (this.positions.size > 0) {
       listener(this.positionsMessage());
     }
+    this.tellAudience();
     return {
       spectatorId,
       detach: () => {
-        this.spectators.delete(spectatorId);
+        if (this.spectators.delete(spectatorId)) {
+          this.tellAudience();
+        }
         this.signalAllowance.delete(spectatorId);
       },
     };
   }
 
+  /** How many watch, as the room tells it (`audience`). */
+  private audienceMessage(): ServerMessage {
+    return { kind: 'audience', code: this.code, count: this.spectators.size };
+  }
+
+  /** Tells everyone in the room — the crew on its lines, the audience — how many watch now. */
+  private tellAudience(): void {
+    const message = this.audienceMessage();
+    for (const listener of this.audience) {
+      listener(message);
+    }
+  }
+
   /**
-   * Connection lost: keep the player (they may resume), notify the others. In a run the
-   * reducer stands it still for them (core `player-disconnected`); a drop alone ends nothing.
-   * A socket that closed `clean` — a tab closed or reloaded — frees its seat sooner in the
-   * lobby (LOBBY_GONE_MS); in a run it is held as any other.
+   * Connection lost, as `end` says (`LineEnd`): keep the player (they may resume), notify the
+   * others. In a run the reducer stands it still for them (core `player-disconnected`); a drop
+   * alone ends nothing. A socket that closed cleanly — a tab closed or reloaded — frees its seat
+   * sooner in the lobby (LOBBY_GONE_MS); in a run it is held as any other. A line closed for the
+   * main menu is held as a drop, in the lobby too, and the crew sees where the player went.
    */
-  private detach(playerId: string, clean: boolean): void {
+  private detach(playerId: string, end: LineEnd): void {
     if (!this.listeners.delete(playerId)) {
       return;
     }
@@ -1024,13 +1103,14 @@ export class Room {
       this.emptySince = Date.now();
     }
     this.lostAt.set(playerId, Date.now());
-    if (clean) {
+    if (end === 'closed') {
       this.closedClean.add(playerId);
     } else {
       this.closedClean.delete(playerId);
     }
-    this.log(`${this.nameOf(playerId)}'s line closed${clean ? ', its tab gone' : ''}`);
-    this.dispatch({ type: 'player-disconnected', playerId, at: Date.now() });
+    this.log(LINE_END_LOG[end](this.nameOf(playerId)));
+    const menu = end === 'menu' ? { menu: true as const } : {};
+    this.dispatch({ type: 'player-disconnected', playerId, at: Date.now(), ...menu });
     this.reconcileCrew();
   }
 
@@ -1171,6 +1251,20 @@ export class Room {
   }
 
   /**
+   * `playerId` opens the pause menu over the run, or closes it (`open`): the crew's views say so
+   * (core `set-menu`), and nothing stands still for it. A word that changes nothing — outside a
+   * run, said twice — sends nobody anything.
+   */
+  setMenu(playerId: string, open: boolean): void {
+    const next = applyAction(this.state, { type: 'set-menu', playerId, open });
+    const allowed = (): boolean =>
+      takeAllowance(this.menuAllowance, playerId, Date.now(), MENU_MARK_BURST, MENU_MARKS_PER_SEC);
+    if (next !== this.state && allowed()) {
+      this.settle(next, 'set-menu');
+    }
+  }
+
+  /**
    * The Tagesschicht of a run starting at `at`, for the reducer to play where the host has it
    * on: the day by this server's clock, and the day's seed made with its salt. None without a
    * salt.
@@ -1261,14 +1355,7 @@ export class Room {
 
   /** Takes a signal off a member's allowance, topped up since the last; false when none is left. */
   private allowSignal(member: string, now: number): boolean {
-    const was = this.signalAllowance.get(member);
-    const left =
-      was === undefined
-        ? SIGNAL_BURST
-        : Math.min(SIGNAL_BURST, was.left + ((now - was.at) / 1000) * SIGNALS_PER_SEC);
-    const allowed = left >= 1;
-    this.signalAllowance.set(member, { left: allowed ? left - 1 : left, at: now });
-    return allowed;
+    return takeAllowance(this.signalAllowance, member, now, SIGNAL_BURST, SIGNALS_PER_SEC);
   }
 
   /** One row for the lobby browser. */

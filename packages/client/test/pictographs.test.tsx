@@ -92,6 +92,7 @@ function over(parts: Partial<PlayerView>): PlayerView {
 function watched(parts: Partial<SpectatorView>): SpectatorView {
   return {
     phase: 'playing',
+    missionId: 'blackout',
     missionTitle: 'Blackout im Labor',
     difficulty: 'normal',
     storyText: 'Licht.',

@@ -1,4 +1,4 @@
-import { useContext, useEffect, useRef, useState } from 'react';
+import { useContext, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { ClientMessage, DronePosition, PlayerView, PuzzleView } from '@escapelab/core';
 import { beepDue, clock, clockTime, serverAt, timeLeft } from '../clock.js';
 import { useServerNow } from '../hooks.js';
@@ -144,6 +144,8 @@ interface Props {
   station?: PuzzleView | null;
   /** first-time tips wait while the objective bar carries a notice, so the two never stack */
   holdTips: boolean;
+  /** a menu stands over the world (menuLayer.ts): the keys are the menu's, the world hears none */
+  menuOver?: boolean;
   /** opens the info panel, which owns the briefing and the key list */
   onToggleInfo: () => void;
   /** E at a manual object the server counts this player at: reading needs no message */
@@ -160,6 +162,8 @@ interface Props {
 /** The latest of what the world's loop and its listeners read, as the component last rendered. */
 interface Live extends Latest {
   station: PuzzleView | null;
+  /** a menu stands over the world: it hears no key (`worldHears`) */
+  menuOver: boolean;
   /** where the quick chat's wheel stands: what the digits say (ChatWheel.tsx) */
   wheel: Wheel;
   send: (msg: ClientMessage) => void;
@@ -303,11 +307,24 @@ const KEY_JOBS: Partial<Record<InputAction, KeyJob>> = {
 };
 
 /**
+ * Whether the world hears a key going down: not while a menu stands over it — under the settings
+ * or the booklet over a run's menu the keys would reach it otherwise, for no menu's own catch
+ * holds them there — nor into a text field, nor with a modifier the browser owns.
+ */
+export function worldHears(
+  menuOver: boolean,
+  typing: boolean,
+  e: Pick<KeyboardEvent, 'altKey' | 'ctrlKey' | 'metaKey'>,
+): boolean {
+  return !menuOver && !typing && !e.altKey && !e.ctrlKey && !e.metaKey;
+}
+
+/**
  * A key going down in the world. While the chat wheel stands on a slot's second step, the
  * digits are its, whatever else they are bound to.
  */
 function onKeyDown(loop: Loop, e: KeyboardEvent, setWheel: SetWheel, held: HeldKeys): void {
-  if (isTextEntry(document.activeElement) || e.altKey || e.ctrlKey || e.metaKey) {
+  if (!worldHears(loop.live.current.menuOver, isTextEntry(document.activeElement), e)) {
     return;
   }
   const key = e.key.toLowerCase();
@@ -353,11 +370,47 @@ function pressKey(
     if (!e.repeat) {
       job(loop, setWheel);
     }
-  } else if (key === 'escape') {
-    setWheel(null);
   } else {
     pressChatDigit(loop, key, e, setWheel);
   }
+}
+
+/**
+ * Esc over the open chat wheel, as the page hears it while the wheel stands open — capturing:
+ * the wheel shuts, and the key goes no further, so that the Esc that shut it opens nothing else,
+ * not the run's menu (screens/Game.tsx `escapeStep`). With a menu over the world (`menuOver`) the
+ * Esc is the menu's, and the wheel under it stays as it is.
+ */
+export function wheelEscape(
+  setWheel: SetWheel,
+  menuOver: () => boolean,
+): (e: KeyboardEvent) => void {
+  return (e) => {
+    if (e.key === 'Escape' && !menuOver()) {
+      e.stopPropagation();
+      setWheel(null);
+    }
+  };
+}
+
+/**
+ * While the chat wheel stands open (`open`), Esc shuts it alone (`wheelEscape`) — but under a menu
+ * (`live`'s `menuOver`): taken from the frame the wheel comes in, before it is painted, so that no
+ * Esc pressed as it shows goes past it.
+ */
+function useWheelEscape(
+  open: boolean,
+  setWheel: SetWheel,
+  live: { readonly current: Pick<Live, 'menuOver'> },
+): void {
+  useLayoutEffect(() => {
+    if (!open) {
+      return undefined;
+    }
+    const onKey = wheelEscape(setWheel, () => live.current.menuOver);
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [open, setWheel, live]);
 }
 
 /**
@@ -1153,6 +1206,7 @@ function useWorld(props: Props): WorldState {
     view,
     darkSince,
     locked: inputLocked,
+    menuOver: props.menuOver === true,
     station,
     wheel,
     finale,
@@ -1188,6 +1242,7 @@ function useWorld(props: Props): WorldState {
   useFinaleSounds(finale);
   const refs = { canvasRef, controlsRef, simRef, interactRef, dropRef };
   useWorldLoop({ props, refs, live, alarm: alarmRef, setWheel, setControlsReach });
+  useWheelEscape(wheel !== null, setWheel, live);
   return { refs, live, tip, alarmClass, wheel, setWheel, controlsReach };
 }
 

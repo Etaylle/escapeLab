@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useReducer, useRef } from 'react';
 import type { ClientMessage, PlayerView } from '@escapelab/core';
 import { typing } from '../../hooks.js';
+import { usePause } from '../../menuLayer.js';
 import { addProbes } from '../../probes.js';
 import { traceRequested } from '../frameTrace.js';
 import { cutAnnouncement, paProbe, startAnnouncement, stopAnnouncement } from '../pa.js';
@@ -80,11 +81,16 @@ export function skipAt(
   return { cue: { ...cue, skippedAt: now, closing: intro && closing }, tells: intro };
 }
 
-/** Whether a key going down asks to skip: Space, on its own, not repeated, not into a field. */
+/**
+ * Whether a key going down asks to skip: Space, on its own, not repeated, not into a field, and
+ * with no menu over the run (`covered`), whose item Space presses then.
+ */
 export function skipKey(
   e: Pick<KeyboardEvent, 'key' | 'repeat' | 'altKey' | 'ctrlKey' | 'metaKey'>,
+  covered: boolean,
 ): boolean {
-  return e.key === ' ' && !e.repeat && !e.altKey && !e.ctrlKey && !e.metaKey && !typing();
+  const alone = !e.altKey && !e.ctrlKey && !e.metaKey;
+  return e.key === ' ' && !e.repeat && alone && !typing() && !covered;
 }
 
 /** What the opening on this screen is, and how to skip it. */
@@ -180,13 +186,18 @@ function useOpeningSound(
   }, [bang]);
 }
 
-/** Space skips the opening where it can be skipped; nothing else hears that press then. */
+/**
+ * Space skips the opening where it can be skipped; nothing else hears that press then. Under a
+ * menu (menuLayer.ts `usePause`) Space is the menu's, and the opening plays on.
+ */
 function useSkipKey(kept: React.MutableRefObject<{ cue: IntroCue | null }>, skip: () => void) {
   const latest = useRef(skip);
   latest.current = skip;
+  const covered = useRef(false);
+  covered.current = usePause().open;
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
-      if (!skipKey(e) || skipAt(kept.current.cue, Date.now()) === null) return;
+      if (!skipKey(e, covered.current) || skipAt(kept.current.cue, Date.now()) === null) return;
       e.preventDefault();
       e.stopImmediatePropagation();
       latest.current();

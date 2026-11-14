@@ -280,7 +280,7 @@ cost off the account and says the rest at that rate, and it stops below 40,000 c
 ## The mix (`mix.ts`)
 
 Every sound goes into one AudioContext (`sharedAudio()`, made on first use) and there into one
-of five buses, which the settings' three volumes set:
+of five buses, which the settings' volumes in „Ton" set:
 
 ```text
 music ─────── musicDuck ────┐
@@ -295,18 +295,20 @@ announce ─────── send −6 dB ──┤
 intercom ─────── send −14 dB ─┘   a crew voice over the station's intercom (voice/intercom.ts)
 ```
 
-Musik sets the music, Effekte the effects and the rooms' beds, Funk the radio and the
-loudspeakers (`settings.ts` `applyVolumes`, `mix.ts` `setBusVolumes`); the master gain is the
-sound switch (`isMuted()`). Behind it stands a brickwall, a DynamicsCompressorNode at threshold
-−3 dB, no knee, 20:1, 1 ms attack and 100 ms release, so that effects stacked on one another
-never clip. Web Audio puts a makeup gain behind every compressor, worked out from its own curve
-— its gain at full scale, inverted and raised to 0.6: +1.71 dB for these settings — which the
-trim takes back (`limiterMakeup`), so that whatever stays under the threshold plays exactly as
-loud as before the brickwall. The devices' own sounds (`puzzles/sounds.ts`) go into the
-effects' bus like every other effect — the meter's hum and the colour tones the game pitches,
-and the device hum while a panel stands open, too: the Effekte volume and the sound switch reach
-them there, the bus's send carries them into the room's reverb, and the brickwall covers them
-with the rest (`test/deviceMix.test.ts` follows their chains into the real mix).
+Musik sets the music, Effekte the effects, Umgebung the rooms' beds, Funk the radio and the
+loudspeakers (`settings.ts` `applyVolumes`, `mix.ts` `setBusVolumes`), each muted on its own by its
+button there; Gesamt sets the master gain, which the sound switch mutes (`isMuted()`) — the switch
+is Gesamt's mute. Settings kept before Umgebung had its own volume give it the Effekte's, and the
+old radio volume becomes Funk's. Behind it stands a brickwall, a DynamicsCompressorNode at
+threshold −3 dB, no knee, 20:1, 1 ms attack and 100 ms release, so that effects stacked on one
+another never clip. Web Audio puts a makeup gain behind every compressor, worked out from its own
+curve — its gain at full scale, inverted and raised to 0.6: +1.71 dB for these settings — which the
+trim takes back (`limiterMakeup`), so that whatever stays under the threshold plays exactly as loud
+as before the brickwall. The devices' own sounds (`puzzles/sounds.ts`) go into the effects' bus
+like every other effect — the meter's hum and the colour tones the game pitches, and the device hum
+while a panel stands open, too: the Effekte volume and the sound switch reach them there, the bus's
+send carries them into the room's reverb, and the brickwall covers them with the rest
+(`test/deviceMix.test.ts` follows their chains into the real mix).
 
 **Ducking.** Mission control's voice pulls the music 8 dB and the beds 4 dB down while it is on
 the air — from its opening squelch where it opens a run, else from its first word — and the
@@ -1095,7 +1097,8 @@ its timer comes, how late it came in, caught up at most 3 % faster and slowed wh
 only where the beat does not matter, rewound and let go, held back by the browser and played at the
 next gesture), `test/mix.test.ts` (the brickwall's settings and its makeup taken back, every bus
 into the master and the master through the brickwall, the sends into the reverb and none from the
-radio or the music, Musik, Effekte and Funk on their buses, a later engine at the volumes set, the
+radio or the music, Musik, Effekte, Umgebung and Funk on their buses, Gesamt at the master under
+the switch's mute, a bus the settings mute, a later engine at the volumes set, the
 ducks' depths, 50 ms down and 400 ms back, the deepest of two held, a move cut short, a pull with no
 end, the klaxon and the siren pulling the music, the volume's tick through its bus),
 `test/reverb.test.ts` (each kind's time, 60 dB of decay, the same seed the same answer, its level,
