@@ -197,6 +197,10 @@ describe('opening the pause menu', () => {
     const pages = { id: 'buch' } as ManualHere;
     expect(escapeStep({ ...nothing, notes: true, reading: pages })).toBe('over');
     expect(escapeStep({ ...nothing, info: true, notes: true })).toBe('info');
+    // A panel on its way out — held once solved, or fading — takes the Esc meant for it.
+    expect(escapeStep(nothing, true)).toBe('going');
+    expect(escapeStep({ ...nothing, notes: true }, true)).toBe('going');
+    expect(escapeStep({ ...nothing, reading: pages }, true)).toBe('over');
   });
 
   it('is Esc’s over a lobby or the audience, where nothing took the key first', () => {

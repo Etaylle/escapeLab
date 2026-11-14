@@ -1075,15 +1075,17 @@ function Standstill({
 type OpenNow = ReturnType<typeof useOpened>;
 
 /** What Esc does over the run (`escapeStep`). */
-export type EscapeStep = 'info' | 'over' | 'notes' | 'menu';
+export type EscapeStep = 'info' | 'over' | 'going' | 'notes' | 'menu';
 
 /**
  * What Esc does by what stands open: it closes what lies on top — the info panel, a panel, pages
  * or a note, then the notepad — and with nothing open it opens the pause menu over the run
- * (menuLayer.ts), which stands nothing still.
+ * (menuLayer.ts), which stands nothing still. A panel still on the screen though closed — held
+ * once solved, or fading out (`going`) — takes the Esc that was meant for it: nothing more.
  */
 export function escapeStep(
   open: Pick<OpenNow, 'info' | 'station' | 'reading' | 'note' | 'notes'>,
+  going = false,
 ): EscapeStep {
   if (open.info) {
     return 'info';
@@ -1091,19 +1093,32 @@ export function escapeStep(
   if (open.station !== null || open.reading !== null || open.note !== null) {
     return 'over';
   }
+  if (going) {
+    return 'going';
+  }
   return open.notes ? 'notes' : 'menu';
 }
 
-/** Escape does its step (`escapeStep`). */
-function useEscapeCloses(open: OpenNow, closeModal: () => void, openMenu: () => void): void {
+/**
+ * Escape does its step (`escapeStep`), the panels still on the screen (`shown`: the device, the
+ * pages, a note — leaving ones too) telling whether one is on its way out.
+ */
+function useEscapeCloses(
+  open: OpenNow,
+  shown: readonly (Shown<unknown> | null)[],
+  closeModal: () => void,
+  openMenu: () => void,
+): void {
+  const going = shown.some((panel) => panel !== null);
   useEscape(() => {
     const steps: Record<EscapeStep, () => void> = {
       info: () => open.set({ info: false }),
       over: closeModal,
+      going: () => undefined,
       notes: () => open.set({ notes: false }),
       menu: openMenu,
     };
-    steps[escapeStep(open)]();
+    steps[escapeStep(open, going)]();
   });
 }
 
@@ -1435,7 +1450,7 @@ export function GameScreen(props: Props) {
   const menu = usePause();
   useKeys([keys.notes], pad.toggle);
   useKeys(putDownKeys(overOf(open), keys), closeModal);
-  useEscapeCloses(open, closeModal, menu.show);
+  useEscapeCloses(open, [panel, sheets.reading, sheets.note], closeModal, menu.show);
   // Until the click of the cold open the strip keeps quiet: the opener has the banner.
   const crewStrip = useCrewStrip(props, notice?.kind === 'line' || !coldOpen.dark, {
     notesOpen: open.notes,
