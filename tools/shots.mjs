@@ -557,8 +557,8 @@
  * Figures: the crew stands as client world/figure.ts poses it, and four shots
  * at 1440×1000 show it. lobby-idle.png catches a lobby figure turned in a
  * glance round the room, when the figures' probe (`?trace=1`,
- * `window.__escapelab.figures`) says one is — and says so again after the
- * shot, or it is taken again on the next (figureShot). After Blackout's lever
+ * `window.__escapelab.figures`) says one is — the page holding its frames from
+ * that one through the shot — and says so again after it (figureShot). After Blackout's lever
  * the host picks up the fuse lying in the Archiv, is shot holding it before
  * the chest (figure-carry.png) and puts it down again with Q; then it walks into the aisle behind
  * the nearest shelf and stands pressed up to it (depth-behind-shelf.png): the shelf drawn again
@@ -569,7 +569,7 @@
  * the sender's world is shot the moment the alarm comes in, asked for within
  * 200 ms of it, the crew mid-flinch (figure-flinch.png). The won card, scrolled
  * back to its top so that its figures move in the window, is shot with a
- * figure in the air, before and after the shot (figure-celebrate.png), and
+ * figure in the air, held there through the shot (figure-celebrate.png), and
  * the audience's card has to show its crew celebrating too. A mission the
  * walkthrough does not take that far skips what it leaves out.
  */
@@ -8010,47 +8010,69 @@ function figuresOn(page) {
 }
 
 /**
- * Polls the figures `page` paints every 20 ms until `pick` takes one, or
- * until `ms` have passed: that figure, or null.
+ * In the page, until releaseFigures: the animation frames go on until a figure the probe paints
+ * (`window.__escapelab.figures`) stands in `pose` — its `mood`, its `key` (`rise` or `glance`)
+ * `least` or more either way — and from then the page's frames are kept back: every figure stays
+ * as that frame painted it, so that a shot however late shows it so. `window.__figureHold.held`
+ * is the figure as it stood.
  */
-async function figureWhen(page, pick, ms) {
-  const end = Date.now() + ms;
-  for (;;) {
-    const found = ((await figuresOn(page)) ?? []).find(pick);
-    if (found !== undefined || Date.now() >= end) {
-      return found ?? null;
+function holdFigures({ mood, key, least }) {
+  const plain = globalThis.requestAnimationFrame;
+  const kept = [];
+  const hold = { held: null };
+  const inPose = (figure) => figure.mood === mood && Math.abs(figure[key]) >= least;
+  globalThis.__figureHold = hold;
+  globalThis.__figureHeld = { plain, kept };
+  // Looked at as each frame is asked for: a figure's loop asks for its next one in the frame
+  // that painted it, so the frame that put it in the pose is its last.
+  globalThis.requestAnimationFrame = (run) => {
+    hold.held ??= (globalThis.__escapelab?.figures ?? []).find(inPose) ?? null;
+    if (hold.held !== null) {
+      kept.push(run);
+      return 0;
     }
-    await sleep(20);
+    return plain.call(globalThis, run);
+  };
+}
+
+/** In the page: the frames holdFigures kept back run now, and the figures move on. */
+function releaseFigures() {
+  const held = globalThis.__figureHeld;
+  if (held !== undefined) {
+    globalThis.requestAnimationFrame = held.plain;
+    delete globalThis.__figureHeld;
+    for (const run of held.kept) {
+      held.plain.call(globalThis, run);
+    }
   }
 }
 
+/** Whether `figure` (as the figures' probe gives it) stands in `pose` (holdFigures). */
+const posed = (figure, { mood, key, least }) =>
+  figure.mood === mood && Math.abs(figure[key]) >= least;
+
 /**
- * A shot of `page` with one of its figures in a pose. Waits (figureWhen) for a figure `pick`
- * takes, shoots, and reads the figures again: the shot is kept where the same figure still
- * `holds` the pose within `span` ms of the first read — a pose rises and falls once, so it held
- * in between, through the shot — else the next pose is waited for, until `ms` have passed. A
- * single read can land a slow page's shot on either side of a pose. Returns the last shot (null
- * where no figure took the pose), the figure as found and as read after it, the shots taken and
- * whether the last one held.
+ * A shot of `page` with one of its figures in `pose`: the page holds its frames as a figure first
+ * stands so (holdFigures), within `ms`, then it is shot and its figures read again — the same
+ * pose where the hold held it through the shot — and the frames are let go, however that went.
+ * The walkthrough's own reads round a shot timed a slow page's figure out of its pose: a jump
+ * landed under a screenshot of 1.2 s. Returns the shot (null where no figure took the pose), the
+ * figure as held and as read after the shot, and whether it still stood so.
  */
-async function figureShot(page, { pick, holds, span, ms }) {
-  const end = Date.now() + ms;
-  let last = { png: null, found: null, after: null, tries: 0, held: false };
-  while (last.tries === 0 || Date.now() < end) {
-    const found = await figureWhen(page, pick, Math.max(0, end - Date.now()));
-    if (found === null) {
-      return last;
+async function figureShot(page, { pose, ms }) {
+  await page.evaluate(holdFigures, pose);
+  try {
+    if (!(await pageHolds(page, () => globalThis.__figureHold?.held != null, ms))) {
+      return { png: null, found: null, after: null, held: false };
     }
-    const since = Date.now();
+    const found = await page.evaluate(() => globalThis.__figureHold.held);
     const png = await page.screenshot();
-    const after = ((await figuresOn(page)) ?? []).find((figure) => figure.color === found.color);
-    const held = after !== undefined && holds(after) && Date.now() - since <= span;
-    last = { png, found, after: after ?? null, tries: last.tries + 1, held };
-    if (held) {
-      return last;
-    }
+    const after = ((await figuresOn(page)) ?? []).find((f) => f.color === found.color) ?? null;
+    const held = after !== null && posed(after, pose) && after[pose.key] === found[pose.key];
+    return { png, found, after, held };
+  } finally {
+    await page.evaluate(releaseFigures);
   }
-  return last;
 }
 
 /** Keeps figureShot's last shot as `name`; shoots `page` now where it took none. */
@@ -8067,34 +8089,29 @@ async function keepFigureShot(page, name, caught) {
 const GLANCE_SHOWN = 0.9;
 /** How long the lobby gets for one of its figures to look round: each does every 4 to 7 s. */
 const GLANCE_WAIT_MS = 15_000;
-/** How far apart the reads round lobby-idle.png may lie, ms: a glance stays turned for ~870. */
-const GLANCE_SPAN_MS = 800;
 
 /**
  * lobby-idle.png: the host's lobby at 1440×1000, shot while a figure of the
- * crew stands turned in a glance round the room — the figures' probe says
- * when, before and after the shot (figureShot). Fails where no figure looks
- * round within GLANCE_WAIT_MS, or none is still turned once shot.
+ * crew stands turned in a glance round the room — the page holding its frames
+ * from the one that turned it through the shot, the figures' probe saying so
+ * before and after (figureShot). Fails where no figure looks round within
+ * GLANCE_WAIT_MS, or none is still turned once shot.
  */
 async function captureLobbyIdle(page) {
   await page.setViewportSize(COLD_OPEN);
   await sleep(400);
-  const glancing = (figure) => figure.mood === 'play' && Math.abs(figure.glance) >= GLANCE_SHOWN;
   const caught = await figureShot(page, {
-    pick: glancing,
-    holds: glancing,
-    span: GLANCE_SPAN_MS,
+    pose: { mood: 'play', key: 'glance', least: GLANCE_SHOWN },
     ms: GLANCE_WAIT_MS,
   });
   await keepFigureShot(page, 'lobby-idle.png', caught);
-  const { found, after, tries, held } = caught;
+  const { found, after, held } = caught;
   console.log(
     `lobby-idle.png     Anna's lobby @ ${COLD_OPEN.width}x${COLD_OPEN.height}: ` +
       (found === null
         ? `!! no figure looked round within ${seconds(GLANCE_WAIT_MS)}`
-        : `${found.color} turned ${found.glance.toFixed(2)} rad in a glance, ` +
-          `${after?.glance.toFixed(2) ?? '?'} once shot${held ? '' : ' !! no longer turned'}, ` +
-          `shot ${tries} times`),
+        : `${found.color} turned ${found.glance.toFixed(2)} rad in a glance, held there, ` +
+          `${after?.glance.toFixed(2) ?? '?'} once shot${held ? '' : ' !! no longer turned'}`),
   );
   if (!held) {
     fail(`lobby-idle.png: no lobby figure caught turned round within ${seconds(GLANCE_WAIT_MS)}`);
@@ -11126,11 +11143,6 @@ async function captureLandscapeCard(guest) {
 const JUMP_SHOWN = 0.12;
 /** How long the card gets for one of its figures to be caught mid-jump: each jumps every 1.6 s. */
 const JUMP_WAIT_MS = 5000;
-/**
- * How far apart the reads round figure-celebrate.png may lie, ms: under the 800 ms a figure
- * stands between two flights, so that two reads in the air are of one flight.
- */
-const JUMP_SPAN_MS = 600;
 /** Whether figure-celebrate.png was taken: only a run played to its end has a won card. */
 let celebrateShot = false;
 
@@ -11156,7 +11168,8 @@ function figuresInView(page) {
  * figure-celebrate.png: the host's won card at 1440×1000, scrolled back to its top — „Bild
  * speichern" (captureAchievements) scrolls it down, and on a page whose card runs taller its
  * figures leave the window and stand still — and shot while a figure of the crew is high in
- * its jump and still in the air after the shot, as the figures' probe says (figureShot). Fails
+ * its jump, the page holding its frames from that one through the shot, still in the air after
+ * it as the figures' probe says (figureShot). Fails
  * where the figures do not lie in the window, a figure on the card does not celebrate, or none
  * is caught in the air within JUMP_WAIT_MS.
  */
@@ -11172,9 +11185,7 @@ async function captureCelebrate(page) {
   await sleep(500);
   const inView = await figuresInView(page);
   const caught = await figureShot(page, {
-    pick: (figure) => figure.mood === 'celebrate' && figure.rise >= JUMP_SHOWN,
-    holds: (figure) => figure.mood === 'celebrate' && figure.rise > 0,
-    span: JUMP_SPAN_MS,
+    pose: { mood: 'celebrate', key: 'rise', least: JUMP_SHOWN },
     ms: JUMP_WAIT_MS,
   });
   await keepFigureShot(page, 'figure-celebrate.png', caught);
@@ -11186,15 +11197,15 @@ async function captureCelebrate(page) {
 }
 
 /** figure-celebrate.png's line in the log; the run fails where the crew was not caught so. */
-function reportCelebrate({ found, after, tries, held }, shot, inView) {
+function reportCelebrate({ found, after, held }, shot, inView) {
   const cheering = shot.filter((figure) => figure.mood === 'celebrate').length;
   console.log(
     `figure-celebrate.png Anna's card @ ${COLD_OPEN.width}x${COLD_OPEN.height}: ` +
       (inView ? '' : '!! its figures out of the window; ') +
       (found === null
         ? '!! no figure caught in the air'
-        : `${found.color} ${found.rise.toFixed(3)} tiles up, ${after?.rise.toFixed(3) ?? '?'} ` +
-          `once shot${held ? '' : ' !! landed'}, shot ${tries} times`) +
+        : `${found.color} ${found.rise.toFixed(3)} tiles up, held there, ` +
+          `${after?.rise.toFixed(3) ?? '?'} once shot${held ? '' : ' !! landed'}`) +
       `; ${cheering} of ${shot.length} figures celebrating`,
   );
   if (!inView || !held || shot.length === 0 || cheering !== shot.length) {
