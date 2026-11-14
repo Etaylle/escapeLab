@@ -215,17 +215,17 @@ describe('the music’s styles', () => {
   });
 });
 
-describe('a piece played for the ear, as the game plays it', () => {
-  /** Yalçıner's piece of `slot` played for the ear: the element it streams on, playing. */
-  async function previewed(slot: Slot): Promise<FakeAudio> {
-    togglePreview('yalciner', slot);
-    await vi.advanceTimersByTimeAsync(20);
-    expect(previewing()).toBe(`yalciner/${slot}`);
-    const element = elements.find((each) => each.src === `/music/packs/yalciner/${slot}.m4a`);
-    if (element === undefined || element.paused) throw new Error(`yalciner/${slot} plays not`);
-    return element;
-  }
+/** Yalçıner's piece of `slot` played for the ear: the element it streams on, playing. */
+async function previewed(slot: Slot): Promise<FakeAudio> {
+  togglePreview('yalciner', slot);
+  await vi.advanceTimersByTimeAsync(20);
+  expect(previewing()).toBe(`yalciner/${slot}`);
+  const element = elements.find((each) => each.src === `/music/packs/yalciner/${slot}.m4a`);
+  if (element === undefined || element.paused) throw new Error(`yalciner/${slot} plays not`);
+  return element;
+}
 
+describe('a piece played for the ear, as the game plays it', () => {
   /** The level the stream playing `src` comes in at: its own gain, where the media meets it. */
   const levelOf = (ctx: FakeContext, src: string): FakeGain => {
     const element = elements.find((each) => each.src === src);
@@ -268,6 +268,18 @@ describe('a piece played for the ear, as the game plays it', () => {
     expect(duckLevels(engine, ctx.currentTime).music).toBe(1);
   });
 
+  it('goes out over PREVIEW_FADE_S as it stops', async () => {
+    serveSamples();
+    togglePreview('yalciner', 'tense');
+    await vi.advanceTimersByTimeAsync(20);
+    const { ctx } = engineNow();
+    const level = levelOf(ctx, '/music/packs/yalciner/tense.m4a');
+    stopPreview();
+    expect(level.gain.events.at(-1)).toEqual(['linear', 0, ctx.currentTime + PREVIEW_FADE_S]);
+  });
+});
+
+describe('a piece played for the ear whose file stalls', () => {
   it('plays on through a stall while it plays, and stops where it plays no further', async () => {
     serveSamples();
     const element = await previewed('tense');
@@ -306,16 +318,6 @@ describe('a piece played for the ear, as the game plays it', () => {
     later.pause();
     await vi.advanceTimersByTimeAsync(STALL_MS);
     expect(previewing()).toBeNull();
-  });
-
-  it('goes out over PREVIEW_FADE_S as it stops', async () => {
-    serveSamples();
-    togglePreview('yalciner', 'tense');
-    await vi.advanceTimersByTimeAsync(20);
-    const { ctx } = engineNow();
-    const level = levelOf(ctx, '/music/packs/yalciner/tense.m4a');
-    stopPreview();
-    expect(level.gain.events.at(-1)).toEqual(['linear', 0, ctx.currentTime + PREVIEW_FADE_S]);
   });
 });
 

@@ -615,6 +615,20 @@ describe('what a piece is made from', () => {
     expect(buildHashOf(piece, source, BUILD_SETTINGS, 'a seam sought otherwise')).not.toBe(hash);
   });
 
+  it('keeps to its credit and its notes, and to how its plan is written', () => {
+    const hash = buildHashOf(piece, source);
+    const credited = { ...piece, title: 'x', author: 'y', page: 'https://z' };
+    expect(buildHashOf({ ...credited, licence: 'CC0' }, source)).toBe(hash);
+    expect(buildHashOf({ ...credited, notice: 'n', notes: 'm' }, source)).toBe(hash);
+    const reordered = JSON.parse(
+      JSON.stringify({ loop: { seekMs: 2000, crossfade: [7000, 75_000, 2000] }, trim: piece.trim }),
+    ) as Pick<PlanPiece, 'loop' | 'trim'>;
+    const sought = { ...piece, loop: { crossfade: [7000, 75_000, 2000] as const, seekMs: 2000 } };
+    expect(buildHashOf({ ...piece, ...reordered }, source)).toBe(buildHashOf(sought, source));
+  });
+});
+
+describe('the code a piece is made by', () => {
   /** A packs.ts of the test's own: its cut between the headings, each also named in passing. */
   const own = [
     'head // --- building a piece, named in passing',
@@ -679,18 +693,6 @@ describe('what a piece is made from', () => {
     const section = lines.slice(from, to).join('\n');
     const alone = `before\n${section}\n// --- building a pack\nafter`;
     expect(codeHashOf((file) => (file === 'packs.ts' ? alone : real(file)))).toBe(codeHashOf());
-  });
-
-  it('keeps to its credit and its notes, and to how its plan is written', () => {
-    const hash = buildHashOf(piece, source);
-    const credited = { ...piece, title: 'x', author: 'y', page: 'https://z' };
-    expect(buildHashOf({ ...credited, licence: 'CC0' }, source)).toBe(hash);
-    expect(buildHashOf({ ...credited, notice: 'n', notes: 'm' }, source)).toBe(hash);
-    const reordered = JSON.parse(
-      JSON.stringify({ loop: { seekMs: 2000, crossfade: [7000, 75_000, 2000] }, trim: piece.trim }),
-    ) as Pick<PlanPiece, 'loop' | 'trim'>;
-    const sought = { ...piece, loop: { crossfade: [7000, 75_000, 2000] as const, seekMs: 2000 } };
-    expect(buildHashOf({ ...piece, ...reordered }, source)).toBe(buildHashOf(sought, source));
   });
 });
 
