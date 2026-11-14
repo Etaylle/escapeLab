@@ -362,6 +362,45 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   neuen Momente (Audio-Probe), `docs/sound.md` aktualisiert (nennt heute noch 47 Zeilen und
   Thorsten).
 
+### V-2 Musik mit einem Thema, im Geist von Expedition 33 — Status: im PR (M-music) · Größe: L
+- Uros 2026-11-14: „Die Musik im Hauptmenü ist ein einfacher Ton mit Störung" und „Musik will
+  ich wie Expedition 33." Gemessen: Das Titelthema ist, wie sein Prompt es verlangte, ein dunkles
+  Pad über einem Drone (RMS −14,5 dBFS, Crest 14,5 dB, gleichförmig); die drei Takes des
+  Anlagenbrummens kamen fast stumm (−50 dBFS mit einem Klick), +31 dB machten den Klick im Menü
+  zum Knacken.
+- Vorbild: Clair Obscur: Expedition 33 (Lorien Testard): ein Motiv, das bleibt, Klavier und
+  Streicher, eine Stimme ohne Worte, ein Bogen der Dynamik, elektronische Farbe gegen akustische
+  Wärme, französisch-romantische Melancholie; hier die Nachtschicht einer Forschungsanlage der
+  1980er, die Elektronik ein Analogsynthesizer. Nichts kopiert: ein eigenes Motiv, kein Name im
+  Plan.
+- Umgesetzt: die ganze Musik als eine Partitur (`score` in `audio/catalog.json`), ein
+  Kompositionsplan für Eleven Music (`music_v2_5`) mit acht Abschnitten in einer Generation —
+  Titelthema 93,3 s, Lobby 61,3 s, Titel der Eröffnung 40 s, drei Stems je 72 s, zwei Endthemen
+  je 40 s, zusammen 490,7 s —, A-Moll, 90 bpm, das Motiv in jedem Abschnitt, die Dämmerung in
+  C-Dur. Takes warten immer aufs Ohr: `/sounds` zeigt je Take eine Zeile mit jedem Stück in der
+  Reihenfolge des Plans und den einen Befehl, der ihn ganz behält; `--keep score=<n>` schneidet ihn
+  an den Taktgrenzen des Plans, als AAC mit 160 kbit/s, jedes Stück auf −19 LUFS (BS.1770). Im
+  Spiel loopen Stems und Titelthema auf den Takten aus dem Manifest, die Lobby blendet auf dem
+  nächsten Takt in ihr eigenes Stück über, die Endthemen enden wirklich, der Titel ersetzt den
+  alten Cue (auf dem Pegel der Stems statt 6 dB darüber); ein Bett, das mehr als +12 dB bräuchte,
+  lehnt das Skript in einer Zeile ab, und das Spiel spielt es nicht.
+- Offen, nur lokal (Uros): drei Takes in zwei Läufen, je Take etwa 8.833 Credits zum Satz des
+  Skripts (18 je Sekunde), zusammen etwa 26.500 (zum Listenpreis von 900 je Minute 22.080) — mehr
+  als die geschätzten 19.000, weil die Partitur 8,2 statt 7 Minuten dauert; die Musik darf je Lauf
+  18.000 ausgeben, also erst zwei Takes, dann einer. In `packages/client` des Haupt-Checkouts:
+  `node --env-file=/Users/uros/Documents/Req.Eng./escapelab/.env.local scripts/sfx.ts
+  --candidates 2 --only score`, dann dasselbe nur mit `--only score`; anhören unter `/sounds`
+  (`pnpm dev`), behalten mit `node scripts/sfx.ts --keep score=<n>`; danach verliert
+  `AWAITING_RENDER` die acht Stücke, und der alte Cue samt `scripts/introCue.ts` kann gehen. Das
+  Brummen neu: `--candidates 5 --only bed-facility`, etwa 200 Credits.
+- Beweis: Skript mit Mocks (Plan auf ganzen Takten, Schnitt mit 10-ms-Kanten, Läufe unter der
+  Obergrenze, Behalten der Partitur und jede Ablehnung, ein Bett über +12 dB abgelehnt) und
+  Client (Loop-Punkte aus dem Manifest, Lobby-Stück, Brummen optional, Endthemen enden, Titel
+  statt Cue, `/sounds` mit den Takes der Partitur), jeder neue Test einmal mutiert; Typecheck,
+  Lint, Client 3.391 Tests grün, Smoke grün; Walkthroughs der Cloud auf e40e812 grün (Blackout
+  155/4/0, Systemcheck 96/15/0, Captures und Skips wie auf main, Audio-Zensus im Lauf
+  unverändert; das Menü hält drei Gain-Knoten ohne Quelle mehr).
+
 ### M-1 Drei Spielende: Beweis und Sichtbarkeit — Status: bereit · Größe: M
 - Befund: mechanisch trägt die dritte Person (Leserin mit Regeln, Notizen und Funk an Zwei-Pult-
   Stationen; Platten, Sicherung, Schlüssel, Kameraplatte sonst), aber Modultests spielen Blackout
