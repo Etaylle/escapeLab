@@ -174,7 +174,7 @@ die Entscheidung.
   ist der Lauf identisch zu vorher (per Aufrufgraph geprüft). Gemessene Kosten je Gruppe in der
   README.
 
-### H-4 Der gemessene Lauf unter Software-GL urteilt wieder — Status: im PR (H-sgl, Spec `spec-H-sgl.md`) · Größe: M
+### H-4 Der gemessene Lauf unter Software-GL urteilt wieder — Status: erledigt (H-sgl, Merge 2026-11-14, c0ec09a; zwei Review-Runden; Cloud-CI grün auf 79586af; Beweisläufe 3+3 unter Software-GL plus drei mit dem Finale-Fix, Lead-Lauf 177/9/0 und 131/17/0 allein auf der Maschine; der Finale-Hook aus diesen Läufen ging als F-finale-timer voraus; Spec `spec-H-sgl.md`) · Größe: M
 - Befund 2026-11-14: Der Lauf mit `SHOTS_SOFTWARE_GL=1` scheitert auf main selbst — Systemcheck am
   Panel-Ausblend-Check in 5 von 6 Läufen und am letzten Sync-Check, Blackout an meter-swing,
   panel-close und einem 43-px-Ziel am Handy, der Notstrom-Kasten seit Tagen. Jeder dieser Checks
