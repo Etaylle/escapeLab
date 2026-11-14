@@ -6,11 +6,13 @@ import {
   checkCatalog,
   costOf,
   hashOf,
+  isSuite,
   keepTake,
   noisyTakes,
   optionsOf,
   planLines,
   planOf,
+  readCatalog,
   readManifest,
   readTakes,
   recordingsOf,
@@ -30,10 +32,13 @@ import {
 import {
   barMs,
   BEATS_PER_BAR,
+  chunksOf,
   LEAD_BARS,
+  piecesOf,
   SEAM_S,
   spansOf,
   SPARE_S,
+  suiteMs,
   tailBars,
   type SuiteEntry,
   type SuiteSection,
@@ -643,5 +648,101 @@ describe('a suite’s take kept, refused or measured anew', () => {
     ]);
     const older = { sfx: {}, music: { 'test-open': entry('000000000000', -65) } };
     expect(noisyTakes([SMALL], older)).toEqual([]);
+  });
+});
+
+/** The score as the catalog writes it: the suite the game's music is cut from. */
+const SCORE = readCatalog().find(isSuite);
+
+describe('the score in the catalog', () => {
+  if (SCORE === undefined) throw new Error('audio/catalog.json holds no suite');
+  const sections = new Map(SCORE.sections.map((each) => [each.id, each]));
+  const said = (id: string): string => JSON.stringify(sections.get(id) ?? {}).toLowerCase();
+
+  it('is one suite in A minor at 90 bpm, its pieces in the order a crew hears them', () => {
+    expect(() => checkCatalog(readCatalog())).not.toThrow();
+    expect([SCORE.id, SCORE.key, SCORE.bpm, SCORE.target]).toEqual([
+      'score',
+      'A minor',
+      90,
+      { measure: 'loudness', dbfs: -19 },
+    ]);
+    expect([...sections.keys()]).toEqual([
+      'menu-theme',
+      'lobby',
+      'title',
+      'calm',
+      'tense',
+      'critical',
+      'end-lost',
+      'end-won',
+    ]);
+  });
+
+  it('lasts some 491 s: loops of 32, 20 and three times 24 bars, the rest 40 s each', () => {
+    const pieces = piecesOf(SCORE);
+    const ms = pieces.map((piece) => Math.round(piece.durationSeconds * 1000));
+    // Each on a bar line rounded to the millisecond: the lobby's 23 bars take 61 334 ms.
+    expect(ms).toEqual([93_333, 61_334, 40_000, 72_000, 72_000, 72_000, 40_000, 40_000]);
+    const loops = pieces.filter((piece) => piece.loop).map((piece) => [piece.id, piece.of.bars]);
+    expect(loops).toEqual([
+      ['menu-theme', 32],
+      ['lobby', 20],
+      ['calm', 24],
+      ['tense', 24],
+      ['critical', 24],
+    ]);
+    expect(suiteMs(SCORE)).toBe(490_667);
+    expect([costOf(SCORE), costOf(SCORE, 3), takesPerRun(SCORE)]).toEqual([8833, 26_497, 2]);
+  });
+
+  it('holds the run’s three stems alike: as long, as many bars, each from a bar line', () => {
+    const bar = barMs(SCORE.bpm);
+    const run = (piece: { readonly usedBy: readonly string[] }): boolean =>
+      piece.usedBy.includes('src/world/music.ts#STEMS');
+    const stems = piecesOf(SCORE).filter(run);
+    expect(stems.map((piece) => [piece.id, piece.durationSeconds, piece.of.bars])).toEqual([
+      ['calm', 72, 24],
+      ['tense', 72, 24],
+      ['critical', 72, 24],
+    ]);
+    for (const piece of stems) {
+      const bars = piece.of.fromMs / bar;
+      expect(Math.abs(piece.of.fromMs - Math.round(bars) * bar), piece.id).toBeLessThan(0.5);
+    }
+  });
+
+  it('gives every section the motif, the tempo and its key — the dawn’s own C major', () => {
+    for (const [i, chunk] of chunksOf(SCORE).entries()) {
+      const key = SCORE.sections[i]?.id === 'end-won' ? 'C major' : 'A minor';
+      expect(chunk.positiveStyles, chunk.text).toEqual(
+        expect.arrayContaining([key, '90 BPM', '4/4 time', ...SCORE.motif]),
+      );
+      expect(chunk.positiveStyles.length, chunk.text).toBeLessThanOrEqual(50);
+    }
+  });
+
+  it('sings no word: a wordless voice in the main theme and at dawn alone, none in the run', () => {
+    const voiced = SCORE.sections.filter((each) => each.lines.some((line) => line.startsWith('(')));
+    expect(voiced.map((each) => each.id)).toEqual(['menu-theme', 'end-won']);
+    for (const id of ['menu-theme', 'end-won']) expect(said(id)).toMatch(/wordless female voice/);
+    for (const id of ['lobby', 'title', 'calm', 'tense', 'critical', 'end-lost']) {
+      expect(sections.get(id)?.avoid, id).toContain('voice');
+    }
+    expect(SCORE.avoid).toEqual(expect.arrayContaining(['lyrics', 'spoken words']));
+  });
+
+  it('keeps drums out of the menu, the lobby, the opening and the endings', () => {
+    for (const id of ['menu-theme', 'lobby', 'title', 'calm', 'end-lost', 'end-won']) {
+      expect(sections.get(id)?.avoid, id).toEqual(expect.arrayContaining(['drums', 'percussion']));
+      expect(JSON.stringify(sections.get(id)?.styles), id).not.toMatch(/drum|percussion/);
+    }
+    expect(said('tense')).toMatch(/ticking percussion/);
+    expect(said('critical')).toMatch(/pounding low cinematic drums/);
+  });
+
+  it('names no composer, no game and no piece it could copy', () => {
+    const all = JSON.stringify(SCORE).toLowerCase();
+    expect(all).not.toMatch(/expedition|clair|obscur|testard|lorien|lumi[eè]re|in the style of/);
   });
 });

@@ -207,8 +207,8 @@ export const SFX_FORMAT = 'mp3_44100_128';
 /** Music as MP3 at 44.1 kHz and 192 kbit/s, as the Creator plan gives it: 24 kB a second. */
 export const MUSIC_FORMAT = 'mp3_44100_192';
 /**
- * A theme played once, at the effects' 128 kbit/s, 16 kB a second: the music's folder holds
- * 8 MB (FOLDER_CAPS), which the looped stems at 192 take the most of.
+ * A theme played once, at the effects' 128 kbit/s, 16 kB a second: the music's folder is held to
+ * FOLDER_CAPS, which the looped pieces take the most of.
  */
 export const THEME_FORMAT = 'mp3_44100_128';
 /**
@@ -262,10 +262,13 @@ export const CREDITS_PER_SECOND: Readonly<Record<Group, number>> = { sfx: 4, mus
 export const CAPS: Readonly<Record<Group, number>> = { sfx: 12_000, music: 18_000 };
 /** With fewer credits left than this, nothing is asked. */
 export const MIN_CREDITS = 40_000;
-/** The most each group's folder may hold, bytes. */
+/**
+ * The most each group's folder may hold, bytes. The music's: the score's pieces, 491 s of AAC at
+ * PIECE_BITRATE — some 10.0 MB as afconvert writes it — and the two stings, 0.5 MB.
+ */
 export const FOLDER_CAPS: Readonly<Record<Group, number>> = {
   sfx: 3 * 1024 * 1024,
-  music: 8 * 1024 * 1024,
+  music: 11 * 1024 * 1024,
 };
 /** Silence at a recording's start longer than this is skipped, ms. */
 export const LEAD_MS = 30;

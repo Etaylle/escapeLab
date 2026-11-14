@@ -130,34 +130,36 @@ describe('the catalog', () => {
     for (const entry of sounds) expect(entry.target, entry.id).toEqual(TARGETS[entry.kind]);
   });
 
-  it('has the stems, the menu’s theme too, in one key and tempo, 60–90 s, stings 8–12 s', () => {
-    const stems = sounds.filter((entry) => entry.kind === 'stem');
-    expect(stems.map((entry) => entry.id)).toEqual(['calm', 'tense', 'critical', 'menu-theme']);
-    for (const stem of stems) {
-      expect(stem.prompt, stem.id).toMatch(/A minor, 90 BPM/);
-      expect(stem.durationSeconds).toBeGreaterThanOrEqual(60);
-      expect(stem.durationSeconds).toBeLessThanOrEqual(90);
-    }
-    const stings = sounds.filter((entry) => entry.kind === 'sting').map((entry) => entry.id);
-    expect(stings).toEqual(['won', 'lost']);
+  it('has the end card’s two stings, 8–12 s, beside the score holding the rest', () => {
+    const music = catalog.filter((item) => groupOf(item) === 'music').map((item) => item.id);
+    expect(music).toEqual(['won', 'lost', 'score']);
+    const stings = sounds.filter((entry) => entry.kind === 'sting');
+    expect(stings.map((entry) => [entry.id, entry.loop, entry.durationSeconds])).toEqual([
+      ['won', false, 10],
+      ['lost', false, 10],
+    ]);
+    expect(LENGTHS.sting).toEqual([8, 12]);
   });
 
-  it('has the end cards’ two themes: 30–40 s, played once, made at 128 kbit/s', () => {
-    const themes = sounds.filter((entry) => entry.kind === 'theme');
-    expect(themes.map((entry) => entry.id)).toEqual(['end-won', 'end-lost']);
-    expect(LENGTHS.theme).toEqual([30, 40]);
-    for (const theme of themes) {
-      expect([theme.loop, groupOf(theme)], theme.id).toEqual([false, 'music']);
-      expect(theme.durationSeconds).toBeGreaterThanOrEqual(30);
-      expect(theme.durationSeconds).toBeLessThanOrEqual(40);
-      expect(musicRequest(theme).outputFormat).toBe('mp3_44100_128');
-      expect(flawsOf({ ...theme, loop: true })).toEqual([
-        'loop has to be true for a bed or a stem, and false for the rest',
-      ]);
-    }
+  it('makes a theme at 128 kbit/s, every other piece of music at 192, a suite too', () => {
+    const theme: CatalogEntry = {
+      id: 'test-theme',
+      kind: 'theme',
+      prompt: CALM.prompt,
+      durationSeconds: 32,
+      loop: false,
+      target: { measure: 'rms', dbfs: -20 },
+      usedBy: CALM.usedBy,
+    };
+    expect(musicRequest(theme).outputFormat).toBe('mp3_44100_128');
+    expect(flawsOf({ ...CLACK, kind: 'theme', durationSeconds: 32, loop: true })).toEqual([
+      'loop has to be true for a bed or a stem, and false for the rest',
+      'its target has to be {"measure":"rms","dbfs":-20}',
+    ]);
     // The stems and stings keep 192 kbit/s, and with it the requests they were made from.
     expect(musicFormatOf(CALM)).toBe('mp3_44100_192');
     expect(musicFormatOf({ kind: 'sting' })).toBe('mp3_44100_192');
+    expect(musicFormatOf({ kind: 'suite' })).toBe('mp3_44100_192');
   });
 
   it('finds every flaw of an entry, and a twice-named id', () => {
@@ -661,16 +663,14 @@ describe('the music’s takes, asked for and priced', () => {
   });
 
   it('are priced in the plan, every take counted at 18 credits a second', () => {
-    const ids = 'menu-theme,end-won,end-lost';
-    const music = planOf(catalog, none, always, optionsOf(['--only', ids]));
+    const music = planOf(catalog, none, always, optionsOf(['--only', 'won,lost']));
     expect(planLines(music, 3)).toEqual([
-      'sfx: music — 3 of 3 to make, 3 takes each, into takes/ for the ear, 124.0 s a take, ' +
-        'about 6696 credits (cap 18000)',
-      '  menu-theme  60 s  stem',
-      '  end-won  32 s  theme',
-      '  end-lost  32 s  theme',
+      'sfx: music — 2 of 2 to make, 3 takes each, into takes/ for the ear, 20.0 s a take, ' +
+        'about 1080 credits (cap 18000)',
+      '  won  10 s  sting',
+      '  lost  10 s  sting',
     ]);
-    const once = 'sfx: music — 3 of 3 to make, 124.0 s, about 2232 credits (cap 18000)';
+    const once = 'sfx: music — 2 of 2 to make, 20.0 s, about 360 credits (cap 18000)';
     expect(planLines(music, 1)[0]).toBe(once);
     const effect = planOf([CLACK], none, always, optionsOf([]));
     expect(planLines(effect, 3)[0]).toBe(

@@ -712,6 +712,84 @@ pitch (median 136–174 Hz against 117–130 Hz), but Whisper could not make out
 either take, and every output carries Resemble's inaudible PerTh watermark; the game stays
 with Piper.
 
+## Score
+
+The game's music is one piece of writing in eight parts — the menu's theme, the lobby's, the
+opening's title, the run's three stems and the end cards' two themes — composed by Eleven Music
+in one generation from the suite `score` of the catalog and cut into the pieces the game plays
+(scripts/suite.ts, scripts/sfx.ts). Before it, each piece was asked for on its own, from a prompt
+of its own, the pieces sharing a key and a tempo by their words alone, and the menu's theme came
+out, in the user's words, as „ein einfacher Ton mit Störung": a dark pad over a drone, as its own
+prompt had asked (RMS −14.5 dBFS, a crest of 14.5 dB, steady throughout). The direction since is
+a score with a theme, in the spirit of Clair Obscur: Expedition 33 (Lorien Testard): a melodic
+motif that stays with the player, piano and strings, a wordless voice, a dynamic arc, an
+electronic colour held in tension with the acoustic instruments, French-romantic melancholy —
+here in a 1980s research facility at night, so the electronic colour is an analog synthesiser and
+the melancholy the night shift's.
+
+**The motif.** A melody of eight bars in A minor, two phrases of four, long notes on the strong
+beats so that it can be hummed after one hearing: the first phrase leaps up a minor sixth, sighs
+down a half step and falls by step to rest on the fifth; the answer leaps from a step higher and
+settles on the tonic. The catalog writes it once, in a composer's words (the suite's `motif`), and
+every section of the plan is given those words beside its own, with the key and the tempo — the
+motif is shared by construction: one request, one generation, every chunk told the same melody
+and played on from the chunk before. A wordless voice — a solo female voice on an open „ah",
+written as a voice's sound in parentheses and never as a word — carries the answering phrase once
+in the main theme and sings the motif once more at dawn; nowhere else.
+
+**The pieces**, in the order of the plan, which is the order a crew hears them; a loop's bars that
+go round, and its tail of three:
+
+| Piece | Section | Bars | Length | What plays |
+| --- | --- | --- | --- | --- |
+| `menu-theme` | Main Theme | 32 + 3 | 93.3 s | felt piano states the motif alone, chamber strings answer, the voice enters once; a faint analog pad, cold under the warm piano; a swell to mezzo-forte and back |
+| `lobby` | Interlude | 20 + 3 | 61.3 s | the motif thinner: solo piano, a solo cello answering once, a faint arpeggiated synth like a distant machine |
+| `title` | Opening | 15 | 40 s | the motif's first phrase alone on solo piano, pianissimo, long silences, a warm pad breathing under it, ending on an open chord — room for the loudspeakers' announcement |
+| `calm` | Night Shift | 24 + 3 | 72 s | the motif in fragments, its leap alone with long pauses; low piano, a dark pad, a muted synth bass on every bar |
+| `tense` | Pressure | 24 + 3 | 72 s | an analog ostinato in eighths built from the motif's first notes, a bass pulse on every beat, low strings, a tick like a clock; the piano answers in the low register |
+| `critical` | Last Minute | 24 + 3 | 72 s | a double-time feel at the same tempo: low drums, strings in sixteenths, a pulsing synth bass, horns and strings hammering the motif's leap |
+| `end-lost` | Lights Out | 15 | 40 s | the music breaks off; the motif sunk into the piano's low register over a bowed bass, the pad dimming like failing lights, into silence |
+| `end-won` | Dawn | 15 | 40 s | the motif resolved into C major: strings carry it, the voice sings it once more, piano arpeggios like first light; it comes to rest on a long held chord, a true ending |
+
+**How they hang together.** One key, A minor — the dawn's own C major, the relative major the won
+card's sting has struck just before it — one tempo, 90 bpm in bars of four, and the motif
+throughout. The run's intensity rises as instruments enter by stage — the analog pulse with the
+pressure, percussion only with the pressure, drums only in the last minute — and never by tempo
+or key, so that the music can cross from one stem to the next on any bar line. Every section
+lasts whole bars, so each starts on a bar line of the one generation: the three stems are as long
+as each other to the millisecond and share their bar grid by construction, not by asking three
+times for 90 bpm. A loop's section is written three bars longer than its loop — the bar the game
+catches a next pass up in, and the bars its 3 s seam crosses in, with a second to spare
+(suite.ts `tailBars`) — and is told to stay steady to its last bar and to come back to its
+opening; the cut keeps the tail, and the game loops on the bars the manifest names. What never
+appears: words of any kind, drums in the menu, the lobby, the opening, the calm stem and the
+endings, a voice in the run, an electric guitar, a drop, a change of tempo, sound effects (the
+suite's and each section's `avoid`). `test/suiteScript.test.ts` holds the catalog to all of it:
+the order, the lengths, the stems' grid, the key, the tempo and the motif in every chunk, the
+voice where it belongs and nowhere else, the drums kept out.
+
+**What Expedition 33 showed, and what was not taken.** Its music is remembered as music, not as
+background: a melody comes back, piano and a few strings carry the feeling, a voice without words
+rises above them, and an electronic colour pulls against the acoustic warmth. The score here works
+the same way — one motif in many guises, piano and strings in front, a wordless voice twice, an
+analog synth in tension, an arc from the menu's quiet through the last minute to the quiet after
+— and takes no note of it: the motif is written for this game, the prompts describe music in a
+musician's terms and name no composer, no game and no piece (the test refuses such a name in the
+suite), and Eleven Music is given no recording to follow, only the catalog's words.
+
+**One generation, as the service takes it.** Eleven Music's newest model, `music_v2_5`, takes a
+composition plan of chunks — 30 at most, each 3 to 120 s, 10 minutes in all, every chunk's
+length kept to the millisecond — each with a text of its own (its section's name in brackets,
+directions in braces, a voice's sounds in parentheses) and styles of its own, the first chunk's
+setting the tone of the whole (ElevenLabs' API reference and its guide „Composition plans",
+2026-11). The main theme comes first, the fullest statement of the motif, so that its tone sets
+the rest. A plan takes no switch for the instrumental as a prompt does (`force_instrumental`):
+here the lines are the switch, and the catalog's rules refuse any line that is neither a
+direction nor a voice's sounds. Eleven Music's overview page still names 5 minutes for a song;
+the score's 491 s keep within the 10 minutes the composition plans name; should the service
+refuse the plan, the run stops at that request, which composed nothing, and says what ElevenLabs
+answered.
+
 ## Music that breathes (`music.ts`)
 
 Three recorded stems, between which one pressure value from 0 to 1 crossfades — Eleven Music
@@ -1026,7 +1104,7 @@ gone as the next run opens (tools/shots.mjs `menuSoundAtFirstKey`, `menuSoundAft
 
 ## Lizenz
 
-Every sound the game ships, where it comes from and on what terms, as of 2026-11-13. No stock music,
+Every sound the game ships, where it comes from and on what terms, as of 2026-11-14. No stock music,
 no sample library and no third-party recording is used: every recording was generated from this
 repo's catalog and mission lines, under the account's own ElevenLabs plan, and the rest is
 synthesised by the game as it plays.
@@ -1034,8 +1112,9 @@ synthesised by the game as it plays.
 | What | Where | Made by | When | Terms |
 | --- | --- | --- | --- | --- |
 | 82 effects and beds | `public/sfx/` | ElevenLabs text to sound effects | 2026-10-26 to 2026-11-04 | paid Creator plan: commercial use, no credit |
-| 5 pieces of music: 3 stems, 2 stings | `public/music/` | Eleven Music | 2026-10-26 | paid Creator plan, Eleven Music's terms (below) |
-| The opening's cue | `public/intro/title.mp3` | Eleven Music | 2026-10-26 | as the music |
+| 8 pieces of music: 3 stems, 2 stings, the menu's theme and the end cards' two themes | `public/music/*.mp3` | Eleven Music | 2026-10-26, the themes 2026-11-13 | paid Creator plan, Eleven Music's terms (below) |
+| The score: 8 pieces cut from one suite, `score` | `public/music/*.m4a` | Eleven Music, `music_v2_5`, a composition plan | awaits the user's render | as the music; once kept, it replaces the pieces of the row above but for the stings |
+| The opening's cue | `public/intro/title.mp3` | Eleven Music | 2026-10-26 | as the music; the score's `title` plays in its place once kept |
 | 52 lines of the Leitstelle | `public/voice/` | ElevenLabs text to speech, the library voice „Helmut" | 47 on 2026-10-25, 5 on 2026-10-26 | see below |
 | Kalam, the notepad's hand | `public/fonts/` | Indian Type Foundry, 2014 | shipped since 2026-11-01 | SIL Open Font License 1.1, its text beside it |
 | Michroma, the title's face | `public/fonts/` | Vernon Adams, 2011 | shipped since 2026-11-13 | SIL Open Font License 1.1, its text beside it |
@@ -1052,6 +1131,11 @@ that earned under 1,000,000 USD from all its games. So EscapeLab may use its mus
 long as it stays an Indie Game; beyond that, Eleven Music's Enterprise terms would be needed. The
 paid Creator plan is on record from 2026-10-26: the render script that guards 40,000 credits and the
 first render of the effects and music, which spent 4,678 credits that day.
+
+**The score** is the account's own output on that paid Creator plan, made from the catalog's own
+words alone: no recording is given to the model to follow, and no composer, game or piece is
+named to it (Score, above). Its pieces are then as free as the rest of the music: commercial use as
+long as EscapeLab stays an Indie Game, no credit needed.
 
 **The Leitstelle's 47 lines of 2026-10-25** were recorded the evening before that record, when the
 voice section of this document still reckoned with the free plan and its credit. The repo does not

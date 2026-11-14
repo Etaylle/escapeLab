@@ -73,10 +73,11 @@ function rowOf(sound: CatalogSound, recording: SampleEntry | null): SoundRow {
   return { sound, recording, floorDbfs, noisy };
 }
 
-/** The catalog's entries as the page reads them; one of a kind it does not know is left out. */
-export function soundsOf(
-  entries: readonly (Omit<CatalogSound, 'kind'> & { readonly kind: string })[],
-): CatalogSound[] {
+/**
+ * The catalog's sounds as the page reads them; an item of a kind it does not list as a sound —
+ * a suite, whose pieces it lists apart — is left out.
+ */
+export function soundsOf(entries: readonly { readonly kind: string }[]): CatalogSound[] {
   return entries.filter((entry): entry is CatalogSound => KINDS.has(entry.kind));
 }
 

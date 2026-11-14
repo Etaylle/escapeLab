@@ -39,16 +39,26 @@ const remedyFor = (ids: readonly string[]): string =>
 
 /**
  * The entries whose recordings the user still has to render (they cost credits, which no agent
- * may spend): until then each plays another's recording (`standIn`) or none. Empty since the
- * menu's hum and theme and the end cards' themes were rendered on 2026-11-13; an entry added
- * without its recording goes here with the render command in docs/sound.md, and leaves once
- * the user has made it.
+ * may spend): until then each plays another's recording (`standIn`), an older one of its own, or
+ * none. An entry added without its recording goes here with the render command in docs/sound.md,
+ * and leaves once the user has made it.
  */
 const AWAITING_RENDER: readonly string[] = [
   // The hum's three takes of 2026-11-13 came out near silent (−50 dBFS with one click); the gain
   // of +31 dB turned the click into a crack in the menu, so the take was dropped until a render
   // at full level exists (docs/sound.md, „The menu").
   'bed-facility',
+  // The score's eight pieces, written as one suite on 2026-11-14 (docs/sound.md „Score"): until a
+  // take of it is kept, the menu, the run and the end cards play the recordings of the pieces
+  // before it, the lobby the menu's theme at its weight, the opening its older cue.
+  'menu-theme',
+  'lobby',
+  'title',
+  'calm',
+  'tense',
+  'critical',
+  'end-lost',
+  'end-won',
 ];
 const awaiting = new Set(AWAITING_RENDER);
 
@@ -215,7 +225,7 @@ describe.each(['sfx', 'music'] as const)('the recordings in public/%s', (group) 
     const named = new Set(Object.values(manifest).map((entry) => entry.file));
     expect(filed().filter((file) => !named.has(file))).toEqual([]);
     expect(bytesOf(filed())).toBeLessThanOrEqual(FOLDER_CAPS[group]);
-    expect(FOLDER_CAPS).toEqual({ sfx: 3 * 1024 * 1024, music: 8 * 1024 * 1024 });
+    expect(FOLDER_CAPS).toEqual({ sfx: 3 * 1024 * 1024, music: 11 * 1024 * 1024 });
   });
 
   it('keep within it once the entries awaiting their render are made, each at its rate', () => {

@@ -759,36 +759,6 @@
     "usedBy": ["src/world/menuSound.ts#HUM"]
   },
   {
-    "id": "calm",
-    "kind": "stem",
-    "prompt": "Instrumental underscore for a cooperative escape game set in a dark research lab at night. A minor, 90 BPM. Calm but uneasy: a slow evolving synth pad, a soft low drone, sparse muted piano notes and a gentle pulsing texture, no drums. Steady intensity from start to finish, no intro, no ending, made to loop.",
-    "durationSeconds": 72,
-    "loop": true,
-    "bpm": 90,
-    "target": { "measure": "rms", "dbfs": -20 },
-    "usedBy": ["src/world/music.ts#STEMS"]
-  },
-  {
-    "id": "tense",
-    "kind": "stem",
-    "prompt": "Instrumental tension underscore for a cooperative escape game in a dark research lab. A minor, 90 BPM. Building pressure: a muted bass pulse on every beat, a sparse A minor arpeggio on a plucked synth, low sustained strings and light ticking percussion. Steady intensity from start to finish, no intro, no ending, made to loop.",
-    "durationSeconds": 72,
-    "loop": true,
-    "bpm": 90,
-    "target": { "measure": "rms", "dbfs": -20 },
-    "usedBy": ["src/world/music.ts#STEMS"]
-  },
-  {
-    "id": "critical",
-    "kind": "stem",
-    "prompt": "Instrumental urgent underscore for the last minute of a cooperative escape game in a dark research lab. A minor, 90 BPM with a double-time feel. Driving and urgent: pounding low drums, fast ticking hi-hats, a pulsing bass, a tense string ostinato and rising synth stabs. Steady high intensity from start to finish, no intro, no ending, made to loop.",
-    "durationSeconds": 72,
-    "loop": true,
-    "bpm": 90,
-    "target": { "measure": "rms", "dbfs": -20 },
-    "usedBy": ["src/world/music.ts#STEMS"]
-  },
-  {
     "id": "won",
     "kind": "sting",
     "prompt": "A short triumphant instrumental sting, loud and fully mastered, for a crew that has just escaped a dark research lab: warm strings and brass at full strength from the first beat over a breath of wind, resolving to a bright C major chord that rings out.",
@@ -807,31 +777,197 @@
     "usedBy": ["src/world/music.ts#playSting", "src/screens/End.tsx#TitleCard"]
   },
   {
-    "id": "menu-theme",
-    "kind": "stem",
-    "prompt": "Instrumental title theme for the main menu of a cooperative escape game set in a 1980s research facility at night. A minor, 90 BPM. Dark and quiet: a slow analog synth pad over a deep low drone, a lonely four-note motif on a soft electric piano, the faint far-off hum of machinery, no drums, no vocals. Steady intensity from start to finish, no intro, no ending, made to loop.",
-    "durationSeconds": 60,
-    "loop": true,
+    "id": "score",
+    "kind": "suite",
+    "key": "A minor",
     "bpm": 90,
-    "target": { "measure": "rms", "dbfs": -20 },
-    "usedBy": ["src/world/menuSound.ts#THEME"]
-  },
-  {
-    "id": "end-won",
-    "kind": "theme",
-    "prompt": "Instrumental end theme for a cooperative escape game, heard after the crew has escaped a 1980s research facility at dawn. C major, 90 BPM. A brighter resolution of a lonely four-note motif: soft electric piano and warm strings carry the motif up into the major key over a slow analog synth pad and a quiet low drone, gentle and hopeful, no drums, no vocals. A calm opening that grows a little and comes to rest on a long sustained C major chord, played once through, not looped.",
-    "durationSeconds": 32,
-    "loop": false,
-    "target": { "measure": "rms", "dbfs": -20 },
-    "usedBy": ["src/world/endTheme.ts#THEMES", "src/screens/End.tsx#TitleCard"]
-  },
-  {
-    "id": "end-lost",
-    "kind": "theme",
-    "prompt": "Instrumental end theme for a cooperative escape game, heard after the crew has failed to escape a 1980s research facility at night. A minor, very slow, about 60 BPM. A low, slow drone: deep bowed bass and a dark analog synth drone that swell and recede, a distant metallic resonance, a few sparse low piano notes far apart, no drums, no vocals. Steady and bleak from start to finish, sinking into silence at the very end, played once through, not looped.",
-    "durationSeconds": 32,
-    "loop": false,
-    "target": { "measure": "rms", "dbfs": -20 },
-    "usedBy": ["src/world/endTheme.ts#THEMES", "src/screens/End.tsx#TitleCard"]
+    "motif": [
+      "one memorable main theme returns in every section",
+      "main motif: a four-bar phrase that leaps up a minor sixth, sighs down a half step, then falls stepwise",
+      "the answering phrase climbs a step higher and settles on the tonic; long notes, simple and singable"
+    ],
+    "styles": [
+      "cinematic orchestral video game score",
+      "French romantic melancholy",
+      "felt piano and an intimate chamber string ensemble",
+      "warm 1980s analog polysynth pads and arpeggios in tension with the acoustic instruments",
+      "a research facility at night, lonely and nocturnal",
+      "impressionist harmony with added ninths and suspensions",
+      "emotional, intimate, cinematic",
+      "steady tempo, no rubato",
+      "great production quality"
+    ],
+    "avoid": [
+      "lyrics",
+      "spoken words",
+      "rap",
+      "pop vocals",
+      "choir singing words",
+      "electric guitar",
+      "EDM",
+      "dubstep",
+      "trap beats",
+      "chiptune",
+      "jazz",
+      "swing",
+      "tempo changes",
+      "sound effects"
+    ],
+    "target": { "measure": "loudness", "dbfs": -19 },
+    "sections": [
+      {
+        "id": "menu-theme",
+        "name": "Main Theme",
+        "bars": 32,
+        "loop": true,
+        "lines": [
+          "{felt piano alone states the main motif}",
+          "{chamber strings answer the motif}",
+          "(aah)",
+          "{the piano alone again over a soft held string chord}"
+        ],
+        "styles": [
+          "main title theme, the fullest statement of the motif",
+          "felt piano states the motif alone, then chamber strings answer it",
+          "a solo wordless female voice sings the answering phrase once, softly, in the second half",
+          "a faint analog synth pad underneath, slightly cold against the warm piano",
+          "a gentle swell from piano to mezzo-forte and back",
+          "the last bars return to the opening bars, ready to loop"
+        ],
+        "avoid": ["drums", "percussion", "choir", "fade out", "big ending"],
+        "usedBy": ["src/world/menuSound.ts#THEME"]
+      },
+      {
+        "id": "lobby",
+        "name": "Interlude",
+        "bars": 20,
+        "loop": true,
+        "lines": ["{solo piano, the motif softly}", "{a solo cello answers once}"],
+        "styles": [
+          "the main motif again, thinner and more intimate",
+          "solo felt piano in the middle register",
+          "a solo cello answers the motif once",
+          "a faint arpeggiated analog synth like a distant machine",
+          "quiet and steady throughout, a room where people wait",
+          "the last bars return to the opening bars, ready to loop"
+        ],
+        "avoid": ["drums", "percussion", "voice", "vocals", "crescendo", "climax", "fade out"],
+        "usedBy": ["src/world/menuSound.ts#LOBBY"]
+      },
+      {
+        "id": "title",
+        "name": "Opening",
+        "bars": 15,
+        "loop": false,
+        "lines": ["{solo piano plays only the first phrase of the motif, once}"],
+        "styles": [
+          "only the first phrase of the motif, once, on solo felt piano",
+          "very slow and very quiet, pianissimo, with long silences",
+          "a warm analog pad breathes underneath",
+          "sparse, leaves room for a voice speaking over it",
+          "ends on an open, unresolved chord that hangs"
+        ],
+        "avoid": ["drums", "percussion", "voice", "vocals", "full arrangement", "crescendo"],
+        "usedBy": ["src/world/intro/cue.ts#TITLE"]
+      },
+      {
+        "id": "calm",
+        "name": "Night Shift",
+        "bars": 24,
+        "loop": true,
+        "lines": ["{fragments of the motif in the dark}"],
+        "styles": [
+          "the motif broken into fragments: its opening leap alone, with long pauses",
+          "felt piano in the low middle register",
+          "a dark analog synth pad and a soft muted synth bass note on every bar",
+          "uneasy, quiet, suspended",
+          "steady intensity from the first bar to the last, made to loop"
+        ],
+        "avoid": [
+          "drums",
+          "percussion",
+          "voice",
+          "vocals",
+          "the full melody",
+          "crescendo",
+          "ending",
+          "fade out"
+        ],
+        "usedBy": ["src/world/music.ts#STEMS"]
+      },
+      {
+        "id": "tense",
+        "name": "Pressure",
+        "bars": 24,
+        "loop": true,
+        "lines": ["{a pulsing ostinato built from the motif}"],
+        "styles": [
+          "a plucked analog synth ostinato in eighth notes built from the motif's first notes",
+          "a muted bass pulse on every beat",
+          "low sustained strings",
+          "light ticking percussion like a clock",
+          "the piano answers with the motif in the low register",
+          "building pressure, yet steady from the first bar to the last, made to loop"
+        ],
+        "avoid": ["voice", "vocals", "heavy drums", "drum fills", "drop", "ending", "fade out"],
+        "usedBy": ["src/world/music.ts#STEMS"]
+      },
+      {
+        "id": "critical",
+        "name": "Last Minute",
+        "bars": 24,
+        "loop": true,
+        "lines": ["{the motif hammered by horns and strings}"],
+        "styles": [
+          "urgent and driving, a double-time feel at the same tempo",
+          "pounding low cinematic drums",
+          "a string ostinato in sixteenth notes",
+          "a pulsing analog synth bass",
+          "horns and strings hammer the motif's opening leap",
+          "steady high intensity from the first bar to the last, made to loop"
+        ],
+        "avoid": ["voice", "vocals", "breakdown", "ending", "fade out"],
+        "usedBy": ["src/world/music.ts#STEMS"]
+      },
+      {
+        "id": "end-lost",
+        "name": "Lights Out",
+        "bars": 15,
+        "loop": false,
+        "lines": ["{the music breaks off}", "{low piano, the motif slowly}"],
+        "styles": [
+          "the motif sunk into the low register of the piano, slow and heavy",
+          "a bowed double bass drone",
+          "the analog pad dims like lights failing",
+          "desolate and very quiet",
+          "fades into silence at the end"
+        ],
+        "avoid": ["drums", "percussion", "voice", "vocals", "major key", "brass", "crescendo"],
+        "usedBy": ["src/world/endTheme.ts#THEMES", "src/screens/End.tsx#TitleCard"]
+      },
+      {
+        "id": "end-won",
+        "name": "Dawn",
+        "bars": 15,
+        "loop": false,
+        "key": "C major",
+        "lines": [
+          "{strings carry the motif into the major}",
+          "(aah)",
+          "{a long held final chord}"
+        ],
+        "styles": [
+          "the motif resolved into the major key, hopeful and warm",
+          "warm chamber strings carry the melody",
+          "the wordless female voice sings the motif once more",
+          "flowing piano arpeggios like first light",
+          "the analog pad turns warm",
+          "grows a little, then comes to rest on a long sustained C major chord",
+          "a true ending"
+        ],
+        "avoid": ["drums", "percussion", "minor key", "fade out"],
+        "usedBy": ["src/world/endTheme.ts#THEMES", "src/screens/End.tsx#TitleCard"]
+      }
+    ]
   }
 ]

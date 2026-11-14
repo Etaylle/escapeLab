@@ -41,6 +41,7 @@ import {
   musicListed,
   releaseSample,
   type Sample,
+  type MusicId,
   type SampleEntry,
   type SfxId,
 } from './samples.js';
@@ -66,6 +67,8 @@ import {
 
 /** The title theme, by its id in the catalog and the music's manifest. */
 export const THEME = 'menu-theme';
+/** The lobby's piece, by its id: the score's motif again, thinner (audio/catalog.json). */
+export const LOBBY: MusicId = 'lobby';
 /** The facility's hum under the menu, by its id. */
 export const HUM: SfxId = 'bed-facility';
 

@@ -1,6 +1,7 @@
 import { claim, EFFECTS_LEVEL, LOOKAHEAD, playingEngine, release } from '../audio.js';
 import { closeStream, openStream, startStream, type Stream } from '../audioStream.js';
 import { holdMusic, musicFrom } from '../musicTurn.js';
+import type { MusicId } from '../samples.js';
 
 /**
  * The opening's music: one instrumental bed of some 40 s — dark, low, industrial, slowly
@@ -14,6 +15,9 @@ import { holdMusic, musicFrom } from '../musicTurn.js';
  * there is no cue — none composed, or the file not to be had — the opening plays without it.
  * Nothing here throws.
  */
+
+/** The opening's piece of the score, by its id in the music's manifest (audio/catalog.json). */
+export const TITLE: MusicId = 'title';
 
 /** Where the cue lies, and its list: { file, ms, peak, hash } (scripts/introCue.ts). */
 export const CUE_BASE = '/intro/';

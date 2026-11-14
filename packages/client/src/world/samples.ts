@@ -107,8 +107,9 @@ export const SFX_IDS = [
 ] as const;
 
 /**
- * Every piece of music: the run's three stems, the two stings, the menu's theme and the end
- * cards' two themes, in public/music/manifest.json.
+ * Every piece of music, in public/music/manifest.json: the score's eight — the run's three stems,
+ * the menu's theme, the lobby's, the opening's title and the end cards' two themes, cut from one
+ * suite (audio/catalog.json `score`) — and the end cards' two stings.
  */
 export const MUSIC_IDS = [
   'calm',
@@ -119,6 +120,8 @@ export const MUSIC_IDS = [
   'menu-theme',
   'end-won',
   'end-lost',
+  'lobby',
+  'title',
 ] as const;
 
 export type SfxId = (typeof SFX_IDS)[number];
