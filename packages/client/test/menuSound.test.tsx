@@ -239,7 +239,7 @@ describe('the menu’s sound in the lobby and at the run’s start', () => {
     expect(mix.duckLevels(engine, now + 1).music).toBeCloseTo(1, 6);
   });
 
-  it('ticks, clacks and chimes only while it plays, a tick no oftener than 50 ms', async () => {
+  it('ticks, clacks, chimes and clicks only while it plays, a tick in 50 ms at most', async () => {
     const page = fakeWindow();
     const { sound } = await fresh();
     sound.wantMenuSound('menu');
@@ -249,6 +249,7 @@ describe('the menu’s sound in the lobby and at the run’s start', () => {
     sound.uiSound('back');
     sound.uiSound('opened');
     sound.uiSound('ready');
+    sound.uiSound('lamp');
     sound.uiSound('hover');
     sound.uiSound('hover');
     for (const id of Object.values(sound.UI)) {
@@ -260,6 +261,7 @@ describe('the menu’s sound in the lobby and at the run’s start', () => {
       back: 1,
       opened: 1,
       ready: 1,
+      lamp: 1,
     });
   });
 });

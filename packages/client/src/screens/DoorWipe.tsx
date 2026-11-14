@@ -21,6 +21,11 @@ export type Place = 'menu' | 'lobby' | 'elsewhere';
  */
 export type Doors = 'closing' | 'shut' | 'opening' | null;
 
+/** Whether `doors` close over the screen left or stand shut over it: the screen is going. */
+export function doorsGoing(doors: Doors): boolean {
+  return doors === 'closing' || doors === 'shut';
+}
+
 /** How long the doors take to close over the screen left, and to open on the next, ms. */
 export const CLOSE_MS = 170;
 export const OPEN_MS = 210;
@@ -86,8 +91,16 @@ export function wipeOn<T>(wipe: Wipe<T>): Wipe<T> {
 }
 
 /**
+ * Whether the page before shut its doors as it went, by the tab's note `mark` (ms since the
+ * epoch): less than DOORS_FRESH_MS before `now` — a page come back from the lobby.
+ */
+export function doorsFresh(mark: number | null, now: number): boolean {
+  return mark !== null && now >= mark && now - mark < DOORS_FRESH_MS;
+}
+
+/**
  * The wipe a page starts with at `place`: its doors opening where the page before shut them as
- * it went, `mark` (ms since the epoch) being less than DOORS_FRESH_MS before `now`; else none.
+ * it went (`doorsFresh`); else none.
  */
 export function bootWipe<T>(
   place: Place,
@@ -95,9 +108,8 @@ export function bootWipe<T>(
   now: number,
   reduced: boolean,
 ): Wipe<T> {
-  const fresh = mark !== null && now >= mark && now - mark < DOORS_FRESH_MS;
   const wipe: Wipe<T> = standing(place);
-  return fresh && !reduced ? { ...wipe, doors: 'opening' } : wipe;
+  return doorsFresh(mark, now) && !reduced ? { ...wipe, doors: 'opening' } : wipe;
 }
 
 /** When the page before shut its doors, by the tab's note; null without one. */

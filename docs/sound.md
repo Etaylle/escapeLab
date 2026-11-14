@@ -1483,8 +1483,10 @@ bus under the theme: a tick as an item lights (`ui-tick`, 0.012 at the master ga
 every 50 ms, so that a held arrow ticks along and never buzzes), a toggle's clack as one is taken
 (`toggle-clack`, 0.03), a dial's detent as a panel is stepped out of (`dial-detent`, 0.024), the
 stage's two-note chime as a round comes up on the screen — opened or joined (`stage-chime`, 0.035) —
-and a console's ready chirp as somebody of the crew says ready (`console-ready`, 0.03). None plays
-before the gesture or with the sound switched off.
+a console's ready chirp as somebody of the crew says ready (`console-ready`, 0.03), and the cold
+open's relay click as the menu's hero switches its lamp on at the end of its entrance
+(`relay-click`, 0.04; art bible, „The hero"). None plays before the gesture or with the sound
+switched off.
 
 ## The end cards (`endTheme.ts`)
 
