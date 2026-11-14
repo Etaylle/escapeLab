@@ -28,6 +28,7 @@ import {
   type SectionProps,
 } from './MenuPanels.js';
 import type { Taken } from '../world/menu/heroStage.js';
+import { setChoosing } from '../world/menu/places.js';
 import { profileColor } from './BarAccount.js';
 import { doorsThen, shutterThen } from './DoorWipe.js';
 import { MenuHero } from './MenuHero.js';
@@ -339,6 +340,18 @@ function usePanel(root: RefObject<HTMLElement | null>) {
 }
 
 /**
+ * Tells the scene behind the menu while the missions' cards lie open (`panel`): only then does it
+ * show the picked mission's lab where that lab has no places (world/menu/places.ts `menuLab`).
+ */
+function useChoosing(panel: PanelId | null): void {
+  const choosing = panel === 'missions';
+  useEffect(() => {
+    setChoosing(choosing);
+    return () => setChoosing(false);
+  }, [choosing]);
+}
+
+/**
  * The menu left for a page of its own (`open`) by item `item`, after the hero's beat: the lab's
  * doors before the editor, the short shutter before every other page (DoorWipe.tsx).
  */
@@ -438,6 +451,7 @@ export function JoinScreen(props: Props) {
   const account = props.account ?? null;
   const root = useRef<HTMLDivElement>(null);
   const { panel, take, close } = usePanel(root);
+  useChoosing(panel);
   const comesOn = useComesOn('start');
   const waiting = waitingOf(seat, restoring);
   const bound = boundTo(seat, waiting);

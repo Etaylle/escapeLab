@@ -40,6 +40,51 @@ export function placesOf(missionId: string): Readonly<Record<string, Spot>> {
 }
 
 /**
+ * The lab the menu's scene shows for the mission picked (`picked`), of the server's missions
+ * `known`: the picked one's while the missions' cards lie open (`choosing`) — the lab a round
+ * would open in — and wherever it has places; else the first lab that has them, so that every
+ * item of the menu has a room to show; the picked one's where no lab has any.
+ */
+export function menuLab(
+  picked: string | null,
+  known: readonly string[],
+  choosing: boolean,
+): string | null {
+  if (picked === null || choosing || Object.hasOwn(PLACES, picked)) {
+    return picked;
+  }
+  return known.find((id) => Object.hasOwn(PLACES, id)) ?? picked;
+}
+
+/** Whether the missions' cards lie open over the menu (`setChoosing`). */
+let choosing = false;
+const choosers = new Set<() => void>();
+
+/** Whether the missions' cards lie open over the menu (`setChoosing`). */
+export function choosingNow(): boolean {
+  return choosing;
+}
+
+/** The missions' cards lie open over the menu now (`on`) or no more, every listener told. */
+export function setChoosing(on: boolean): void {
+  if (choosing === on) {
+    return;
+  }
+  choosing = on;
+  for (const chooser of [...choosers]) {
+    chooser();
+  }
+}
+
+/** Tells `changed` whenever the missions' cards open or close; returns what stops it. */
+export function watchChoosing(changed: () => void): () => void {
+  choosers.add(changed);
+  return () => {
+    choosers.delete(changed);
+  };
+}
+
+/**
  * Where a place shows on the scene's canvas, a share of its width and height: between the menu's
  * column and the hero, where the hero's lamp reaches.
  */
