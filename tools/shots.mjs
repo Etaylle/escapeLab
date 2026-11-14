@@ -568,11 +568,13 @@
  * (takeover.png). Any step that fails, fails the run; the log says how long the drill took.
  *
  * Restart (a Blackout run that owns its server, SHOTS_SERVER): after the reconnect drill, the
- * same crew of three in a room of its own; the server gets SIGTERM, as Render sends it before a
- * deploy, and has to exit 0, every page's own card saying „WARTUNG · Der Server startet neu"
- * (restart-maintenance.png); started again on the same port with the same ROOM_SECRET, every
- * page has to be back in the run within 15 s (restart-recovered.png), the clock where it
- * stood. Where the run does not own its server, the drill is skipped, the reason logged.
+ * same crew of three in a room of its own; Cem's tab goes first, and Anna's page has to see him
+ * away. The server gets SIGTERM, as Render sends it before a deploy, and has to exit 0, the own
+ * cards of Anna and Ben saying „WARTUNG · Der Server startet neu" (restart-maintenance.png);
+ * started again on the same port with the same ROOM_SECRET, both have to be back in the run
+ * within 15 s, the clock going on where it stood, without waiting for Cem, whom Anna's strip
+ * still greys (restart-recovered.png); Cem's tab back, he has to be back in the run. Where the
+ * run does not own its server, the drill is skipped, the reason logged.
  *
  * Figures: the crew stands as client world/figure.ts poses it, and four shots
  * at 1440×1000 show it. lobby-idle.png catches a lobby figure turned in a
@@ -13780,14 +13782,16 @@ async function captureReconnect() {
 // ── the server the run owns, and the restart drill ────────────────────────────────────────────
 //
 // Where the run owns its server (SHOTS_SERVER), a room of its own after the reconnect drill:
-// Anna, Ben and Cem in Blackout's dark. The server gets SIGTERM, as Render sends it before a
-// deploy replaces the instance: it stands the run still, hands every page the room's last
-// snapshot and closes its socket with 1012, and exits 0. Every page's own card says the server
-// restarts (restart-maintenance.png). Started again on the same port with the same ROOM_SECRET,
-// the server knows no room: the pages resume with their snapshots, the room is taken up again,
-// and every page is back in the run within RESTART_BACK_MS (restart-recovered.png), the clock
-// where it stood. Skipped, the reason logged, where the run does not own its server or plays
-// another mission.
+// Anna, Ben and Cem in Blackout's dark. Cem's tab goes first, and the run goes on without him.
+// The server gets SIGTERM, as Render sends it before a deploy replaces the instance: it stands
+// the run still, hands every page on the line the room's last snapshot and closes its socket
+// with 1012, and exits 0. Anna's and Ben's own cards say the server restarts
+// (restart-maintenance.png). Started again on the same port with the same ROOM_SECRET, the
+// server knows no room: their pages resume with their snapshots, the room is taken up again, and
+// both are back in the run within RESTART_BACK_MS, the clock going on where it stood — the
+// restart waits for nobody whose line had dropped before it, and Anna's strip still greys Cem
+// (restart-recovered.png). Cem's tab back, he plays on in the run. Skipped, the reason logged,
+// where the run does not own its server or plays another mission.
 
 /** The server the run started (`startServer`), and how it ended; null while it owns none. */
 let owned = null;
@@ -13886,10 +13890,26 @@ async function backInTheRun(player) {
 }
 
 /**
- * SIGTERM for the server the run owns: it exits 0, and every page's own card says the server
- * restarts (restart-maintenance.png). Returns when the server went down.
+ * Cem's tab goes before the restart — its page away, its socket closed — and Anna's page has to
+ * see him away: a seat whose line dropped before the server went down.
  */
-async function serverDown({ anna, crew }) {
+async function cemGoesFirst({ anna, cem }) {
+  const gone = Date.now();
+  await cem.page.goto('about:blank');
+  if (!(await until(() => awayIn(anna.seen, 'Cem'), DRILL_STEP_MS))) {
+    throw new Error('Anna’s page never saw Cem away before the restart');
+  }
+  cem.seen.view = null;
+  const took = seconds(Date.now() - gone);
+  console.log(`restart            Cem's tab gone: Anna's page has him away in ${took}`);
+}
+
+/**
+ * SIGTERM for the server the run owns: it exits 0, and the own card of every page still on the
+ * line — Anna's and Ben's — says the server restarts (restart-maintenance.png). Returns when the
+ * server went down.
+ */
+async function serverDown({ anna, ben }) {
   const clock = await textOf(anna.page.locator('.countdown'));
   const sent = Date.now();
   const end = await stopServer('SIGTERM');
@@ -13898,7 +13918,7 @@ async function serverDown({ anna, crew }) {
     fail(`restart: the server ended ${JSON.stringify(end)} on SIGTERM, not exit 0`);
   }
   const shown = await untilAsync(
-    async () => (await Promise.all(crew.map(restartCard))).every(Boolean),
+    async () => (await Promise.all([anna, ben].map(restartCard))).every(Boolean),
     DRILL_STEP_MS,
   );
   const retry = await textOf(anna.page.locator('.line-lost .line-retry'));
@@ -13906,36 +13926,58 @@ async function serverDown({ anna, crew }) {
   console.log(
     `restart-maintenance.png SIGTERM: the server exits ${end?.code} in ${seconds(took)}, the ` +
       `clock at ${clock}; ` +
-      (shown ? `every page: „WARTUNG · Der Server startet neu", „${retry}"` : '!! not all'),
+      (shown ? `Anna's and Ben's: „WARTUNG · Der Server startet neu", „${retry}"` : '!! not'),
   );
   if (!shown) {
-    fail('restart-maintenance.png: not every page says the server restarts');
+    fail('restart-maintenance.png: the pages of Anna and Ben do not both say it restarts');
   }
   return { clock };
 }
 
 /**
- * The server started again on the same port, the same ROOM_SECRET: every page back in the run
- * within RESTART_BACK_MS (restart-recovered.png), the clock going again where it stood.
+ * The server started again on the same port, the same ROOM_SECRET: Anna and Ben back in the run
+ * within RESTART_BACK_MS, the clock going on where it stood, though Cem is not back — Anna's
+ * strip greying him (restart-recovered.png).
  */
-async function serverBack({ anna, crew }, { clock }) {
+async function serverBack({ anna, ben }, { clock }) {
   await startServer();
   const up = Date.now();
   const back = await untilAsync(
-    async () => (await Promise.all(crew.map(backInTheRun))).every(Boolean),
+    async () => (await Promise.all([anna, ben].map(backInTheRun))).every(Boolean),
     RESTART_BACK_MS,
   );
   const took = Date.now() - up;
   await sleep(1200);
   const after = await textOf(anna.page.locator('.countdown'));
+  const cem = await lineOf(anna.page.locator('.hud-crew li.hud-away'));
   await capture(anna.page, 'restart-recovered.png');
   console.log(
     `restart-recovered.png ` +
-      (back ? `every page back in the run ${seconds(took)} after the server was up` : '!! not') +
-      `; the clock ${clock} → ${after}`,
+      (back ? `Anna and Ben back in the run ${seconds(took)} after the server was up` : '!! not') +
+      `, Cem still away („${cem}"); the clock ${clock} → ${after}`,
+  );
+  if (!back || !awayIn(anna.seen, 'Cem')) {
+    fail(`restart-recovered.png: the run did not go on without Cem within ${seconds(took)}`);
+  }
+  if (after === clock) {
+    fail(`restart-recovered.png: the clock stands at ${after} after the restart`);
+  }
+}
+
+/** Cem's tab back on the room: he plays on in the run, and Anna's page has nobody away. */
+async function cemBack({ anna, cem }) {
+  const from = Date.now();
+  await cem.page.goto(traced(BASE));
+  const back = await untilAsync(
+    async () => (await backInTheRun(cem)) && !awayIn(anna.seen, 'Cem'),
+    DRILL_STEP_MS,
+  );
+  console.log(
+    `restart            Cem's tab back: ` +
+      (back ? `in the run after ${seconds(Date.now() - from)}` : '!! not back in the run'),
   );
   if (!back) {
-    fail(`restart-recovered.png: not every page back in the run within ${seconds(took)}`);
+    fail('restart: Cem’s tab did not come back into the run that went on');
   }
 }
 
@@ -13957,8 +13999,10 @@ async function captureRestart() {
   try {
     const drill = await drillCrew();
     contexts.push(...drill.crew.map(({ context }) => context));
+    await cemGoesFirst(drill);
     const before = await serverDown(drill);
     await serverBack(drill, before);
+    await cemBack(drill);
   } catch (err) {
     console.log(`restart            !! ${firstLine(err)}`);
     fail(`restart: ${firstLine(err)}`);
