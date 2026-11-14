@@ -3,6 +3,7 @@ import catalogJson from '../../audio/catalog.json';
 import { Icon } from '../screens/Icon.js';
 import { sharedAudio } from '../world/audio.js';
 import { closeStream, openStream, startStream } from '../world/audioStream.js';
+import { installedPacks } from '../world/musicPacks.js';
 import {
   loadSample,
   MUSIC_BASE,
@@ -17,10 +18,13 @@ import {
   commandsFor,
   ENV_FILE,
   listingOf,
+  packKey,
+  packListingOf,
   soundsOf,
   suiteListingOf,
   suitesOf,
   type CatalogSound,
+  type PackSound,
 } from './listing.js';
 import { SoundsBoard, type BoardActions } from './SoundsBoard.js';
 import {
@@ -45,8 +49,10 @@ import {
  * Under a piece of music stand its takes, where the dev server lists any (takes.ts), each
  * streamed at the gain the game would give it, and the command that keeps the one chosen; under
  * a suite its takes, one row each, every piece of a take playable where the plan cuts it, and
- * the one command that keeps a take whole. The commands go to the clipboard or are shown; the
- * page itself asks no service for anything and runs neither a render nor a keep.
+ * the one command that keeps a take whole; then every music pack the game ships, each piece
+ * streamed once from where its sound starts at the gain the game gives it, with its attribution.
+ * The commands go to the clipboard or are shown; the page itself asks no service for anything and
+ * runs neither a render nor a keep.
  */
 
 const catalog: readonly CatalogSound[] = soundsOf(catalogJson);
@@ -114,15 +120,15 @@ function playEffect(ctx: AudioContext, id: SfxId, loop: boolean, ended: () => vo
 
 /**
  * Streams the piece of music at `url` — a stem round and round — at AUDITION_LEVEL times its
- * `gain`, and calls `ended` once it has stopped.
+ * `gain`, from its start or from `startMs` into it, and calls `ended` once it has stopped.
  */
 function playStream(
   ctx: AudioContext,
   url: string,
-  sound: { readonly gain: number; readonly loop: boolean },
+  sound: { readonly gain: number; readonly loop: boolean; readonly startMs?: number },
   ended: () => void,
 ): Audition {
-  const { gain, loop } = sound;
+  const { gain, loop, startMs = 0 } = sound;
   const stream = openStream(ctx, url, ctx.destination, 0);
   stream.out.gain.value = AUDITION_LEVEL * gain;
   stream.element.loop = loop;
@@ -130,7 +136,8 @@ function playStream(
     closeStream(stream);
     ended();
   });
-  startStream(stream, ctx, ctx.currentTime + 0.01);
+  const from = startMs / 1000;
+  startStream(stream, ctx, ctx.currentTime + 0.01 - from, from);
   return {
     stop: () => {
       closeStream(stream);
@@ -202,6 +209,18 @@ export function auditionTake(
   return playStream(ctx, takeUrl(id, take), { gain: take.gain, loop }, ended);
 }
 
+/**
+ * Streams the piece of a music pack behind `sound` once, from where its sound starts, at the gain
+ * the game gives it, and calls `ended` once it has stopped; null where there is no Web Audio.
+ */
+export function auditionPack(sound: PackSound, ended: () => void): Audition | null {
+  const ctx = sharedAudio();
+  if (ctx === null) return null;
+  ctx.resume().catch(() => undefined); // the click that asked is the gesture it needs
+  const { gain, startMs } = sound;
+  return playStream(ctx, `${MUSIC_BASE}${sound.file}`, { gain, loop: false, startMs }, ended);
+}
+
 function readEnvFile(): string {
   try {
     return localStorage.getItem(ENV_KEY) ?? ENV_FILE;
@@ -264,6 +283,7 @@ function Auditions({ recordings, takes }: Loaded) {
   const tickedSuites = suites.filter((suite) => selected.has(suite.id)).map((suite) => suite.id);
   const commands = commandsFor(ticked, tickedSuites, envFile);
   const listed = takes.kind === 'served' ? takes.takes : {};
+  const packs = packListingOf(installedPacks(), recordings);
   const stop = (): void => {
     const current = voice.current;
     voice.current = null;
@@ -294,6 +314,12 @@ function Auditions({ recordings, takes }: Loaded) {
       const key = pieceKey(id, n, piece);
       start(key, (ended) => auditionPiece(id, found.take, found.piece, ended));
     },
+    playPack: (pack, slot) => {
+      const rows = packs.find((each) => each.pack.id === pack)?.rows ?? [];
+      const sound = rows.find((row) => row.slot === slot)?.sound ?? null;
+      if (sound === null) return;
+      start(packKey(pack, slot), (ended) => auditionPack(sound, ended));
+    },
     toggle: (id) =>
       setSelected((was) => {
         const next = new Set(was);
@@ -316,6 +342,7 @@ function Auditions({ recordings, takes }: Loaded) {
     <SoundsBoard
       sections={listingOf(catalog, recordings)}
       suites={suiteListingOf(suites, recordings)}
+      packs={packs}
       takes={listed}
       takesNote={takes.kind === 'unserved' ? takes.why : null}
       playing={playing}

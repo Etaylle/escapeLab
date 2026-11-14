@@ -1,0 +1,151 @@
+{
+  "id": "yalciner",
+  "title": "Schicht B · Ermittlung",
+  "composers": [
+    "İlker Yalçıner"
+  ],
+  "pieces": {
+    "menu-theme": {
+      "title": "Solemn (Opening)",
+      "author": "İlker Yalçıner",
+      "source": "https://opengameart.org/content/solemn-opening",
+      "licence": "CC BY 4.0",
+      "attribution": "„Solemn (Opening)“ – İlker Yalçıner (Composer: İlker Yalçıner (ilkeryalciner.com)) · https://opengameart.org/content/solemn-opening · Creative Commons Attribution 4.0 International: https://creativecommons.org/licenses/by/4.0/ · bearbeitet: Schnitt, Schleife, Pegel",
+      "file": "menu-theme.m4a",
+      "ms": 73640,
+      "startMs": 0,
+      "loudness": -20.94,
+      "gain": 1.2505,
+      "loop": {
+        "crossfade": {
+          "startMs": 3000,
+          "endMs": 73140,
+          "fadeMs": 5000
+        }
+      },
+      "build": "fdd9d7a07432f36d"
+    },
+    "lobby": {
+      "title": "One Last Try",
+      "author": "İlker Yalçıner",
+      "source": "https://opengameart.org/content/one-last-try",
+      "licence": "CC BY 4.0",
+      "attribution": "„One Last Try“ – İlker Yalçıner (Composer: İlker Yalçıner (ilkeryalciner.com)) · https://opengameart.org/content/one-last-try · Creative Commons Attribution 4.0 International: https://creativecommons.org/licenses/by/4.0/ · bearbeitet: Schnitt, Schleife, Pegel",
+      "file": "lobby.m4a",
+      "ms": 72500,
+      "startMs": 0,
+      "loudness": -29.08,
+      "gain": 3.1925,
+      "loop": {
+        "crossfade": {
+          "startMs": 3000,
+          "endMs": 72000,
+          "fadeMs": 5000
+        }
+      },
+      "build": "5ad9aca546060f2d"
+    },
+    "title": {
+      "title": "Looking For... Answers",
+      "author": "İlker Yalçıner",
+      "source": "https://opengameart.org/content/looking-for-answers",
+      "licence": "CC BY 4.0",
+      "attribution": "„Looking For... Answers“ – İlker Yalçıner (Music Author Link: https://www.patreon.com/onemansymphony https://opengameart.org/users/onemansymphony) · https://opengameart.org/content/looking-for-answers · Creative Commons Attribution 4.0 International: https://creativecommons.org/licenses/by/4.0/ · bearbeitet: Schnitt, Schleife, Pegel",
+      "file": "title.m4a",
+      "ms": 42000,
+      "startMs": 198,
+      "loudness": -30.13,
+      "gain": 3.6006,
+      "loop": null,
+      "build": "e41fa97705f670fe"
+    },
+    "calm": {
+      "title": "Investigation Theme",
+      "author": "İlker Yalçıner",
+      "source": "https://opengameart.org/content/investigation-theme",
+      "licence": "CC BY 4.0",
+      "attribution": "„Investigation Theme“ – İlker Yalçıner (Composer: İlker Yalçıner (ilkeryalciner.com)) · https://opengameart.org/content/investigation-theme · Creative Commons Attribution 4.0 International: https://creativecommons.org/licenses/by/4.0/ · bearbeitet: Schnitt, Schleife, Pegel",
+      "file": "calm.m4a",
+      "ms": 79000,
+      "startMs": 0,
+      "loudness": -15.66,
+      "gain": 0.6809,
+      "loop": {
+        "crossfade": {
+          "startMs": 3000,
+          "endMs": 78500,
+          "fadeMs": 3000
+        }
+      },
+      "build": "28e59f43963b895f"
+    },
+    "tense": {
+      "title": "Investigation Theme II (Alternative)",
+      "author": "İlker Yalçıner",
+      "source": "https://opengameart.org/content/investigation-theme-ii-alternative",
+      "licence": "CC BY 4.0",
+      "attribution": "„Investigation Theme II (Alternative)“ – İlker Yalçıner (Composer: İlker Yalçıner (ilkeryalciner.com)) · https://opengameart.org/content/investigation-theme-ii-alternative · Creative Commons Attribution 4.0 International: https://creativecommons.org/licenses/by/4.0/ · bearbeitet: Schnitt, Schleife, Pegel",
+      "file": "tense.m4a",
+      "ms": 64910,
+      "startMs": 0,
+      "loudness": -8.26,
+      "gain": 0.2903,
+      "loop": {
+        "crossfade": {
+          "startMs": 1410,
+          "endMs": 64410,
+          "fadeMs": 3000
+        }
+      },
+      "build": "cfbc0c57e82f24e7"
+    },
+    "critical": {
+      "title": "Continuum",
+      "author": "İlker Yalçıner",
+      "source": "https://opengameart.org/content/continuum",
+      "licence": "CC BY 4.0",
+      "attribution": "„Continuum“ – İlker Yalçıner (Composer: İlker Yalçıner (ilkeryalciner.com)) · https://opengameart.org/content/continuum · Creative Commons Attribution 4.0 International: https://creativecommons.org/licenses/by/4.0/ · bearbeitet: Schnitt, Schleife, Pegel",
+      "file": "critical.m4a",
+      "ms": 73540,
+      "startMs": 0,
+      "loudness": -15.84,
+      "gain": 0.695,
+      "loop": {
+        "crossfade": {
+          "startMs": 1040,
+          "endMs": 73040,
+          "fadeMs": 3000
+        }
+      },
+      "build": "bcdf00c15d7fcbb3"
+    },
+    "end-won": {
+      "title": "Darkness Falls In",
+      "author": "İlker Yalçıner",
+      "source": "https://opengameart.org/content/darkness-falls-in",
+      "licence": "CC BY 4.0",
+      "attribution": "„Darkness Falls In“ – İlker Yalçıner (Composer: İlker Yalçıner (ilkeryalciner.com)) · https://opengameart.org/content/darkness-falls-in · Creative Commons Attribution 4.0 International: https://creativecommons.org/licenses/by/4.0/ · bearbeitet: Schnitt, Schleife, Pegel",
+      "file": "end-won.m4a",
+      "ms": 40000,
+      "startMs": 59,
+      "loudness": -18.36,
+      "gain": 0.9292,
+      "loop": null,
+      "build": "0569d9ef2d63713b"
+    },
+    "end-lost": {
+      "title": "Farewell, My Friend",
+      "author": "İlker Yalçıner",
+      "source": "https://opengameart.org/content/farewell-my-friend",
+      "licence": "CC BY 4.0",
+      "attribution": "„Farewell, My Friend“ – İlker Yalçıner (Music Author Link: https://www.patreon.com/onemansymphony https://opengameart.org/users/onemansymphony) · https://opengameart.org/content/farewell-my-friend · Creative Commons Attribution 4.0 International: https://creativecommons.org/licenses/by/4.0/ · bearbeitet: Schnitt, Schleife, Pegel",
+      "file": "end-lost.m4a",
+      "ms": 30900,
+      "startMs": 0,
+      "loudness": -29.77,
+      "gain": 3.4565,
+      "loop": null,
+      "build": "d6c45b7c7918da20"
+    }
+  }
+}

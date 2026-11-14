@@ -24,10 +24,12 @@ import {
   type TextSize,
 } from '../settings.js';
 import { isMuted, setMuted, subscribeMuted, volumeTick } from '../world/audio.js';
+import { stopPreview } from '../world/musicPreview.js';
 import type { LoginAsk, LoginNews, Refusal } from '../ws.js';
 import { ControlSettings, KeyTable } from './ControlSettings.js';
 import { Icon } from './Icon.js';
 import { LoginSection } from './LoginSection.js';
+import { MusicSettings } from './MusicSettings.js';
 import { ProfileFields } from './ProfileFields.js';
 import { runsText } from './BarAccount.js';
 import { Choice, Slider } from './SettingsParts.js';
@@ -35,7 +37,8 @@ import { Choice, Slider } from './SettingsParts.js';
 /**
  * The settings over whatever screen is up — a run goes on under them — in tabs, as Deep Rock
  * Galactic's and Helldivers 2's stand: „Ton" (the whole lab's volume and each bus's, a mute
- * each, the talk key), „Bild" (the text size, less motion, the light, the full screen),
+ * each, the talk key, the music — its pack, a piece for each place, their Nennungen:
+ * MusicSettings.tsx), „Bild" (the text size, less motion, the light, the full screen),
  * „Steuerung" (the keys, the controller, its symbols, the stick's dead zone), „Zugang" (the
  * crew's colour patterns, the spoken lines' size) and, with the pass's account, „Konto" (the
  * profile's name and colour, the account's Ausweis — its Kennwort, signing in and out — and
@@ -115,14 +118,14 @@ function talkBack(keys: KeyBindings): KeyBindings {
 
 /**
  * What a tab's „Zurücksetzen" puts back, from the settings as they stand (`now`): „Ton" every
- * volume, every mute and the talk key; „Bild" the text, the motion and the light; „Steuerung"
- * the keys, the controller, its symbols and the dead zone; „Zugang" the patterns and the
- * spoken lines' size. „Konto" holds no setting.
+ * volume, every mute, the talk key and the music — its pack, the pieces picked cleared; „Bild" the
+ * text, the motion and the light; „Steuerung" the keys, the controller, its symbols and the dead
+ * zone; „Zugang" the patterns and the spoken lines' size. „Konto" holds no setting.
  */
 export function resetOf(tab: SettingsTab, now: Settings): Partial<Settings> {
   const d = DEFAULT_SETTINGS;
   const parts: Record<SettingsTab, Partial<Settings>> = {
-    ton: { volumes: d.volumes, muted: d.muted, keys: talkBack(now.keys) },
+    ton: { volumes: d.volumes, muted: d.muted, keys: talkBack(now.keys), music: d.music },
     bild: { textSize: d.textSize, motion: d.motion, light: d.light },
     steuerung: { keys: DEFAULT_KEYS, pad: DEFAULT_PAD, glyphs: d.glyphs, deadzone: d.deadzone },
     zugang: { patterns: d.patterns, subtitles: d.subtitles },
@@ -272,7 +275,7 @@ function BusRow({ bus, label, muted }: { bus: Bus; label: string; muted: boolean
   );
 }
 
-/** „Ton": the whole lab's volume and each bus's, a mute each, and the talk key. */
+/** „Ton": the whole lab's volume and each bus's, a mute each, the talk key, and the music. */
 function SoundTab() {
   const settings = useSettings();
   const off = useSoundOff();
@@ -288,6 +291,7 @@ function SoundTab() {
         </p>
       </fieldset>
       <KeyTable keys={settings.keys} actions={['talk']} legend="Sprechtaste" note={false} />
+      <MusicSettings />
     </>
   );
 }
@@ -600,7 +604,12 @@ function TabBody({ tab, panel }: { tab: SettingsTab; panel: PanelProps }): React
  * stays — and the tab's „Zurücksetzen".
  */
 export function SettingsPanel(props: PanelProps) {
-  const { onClose } = props;
+  const onClose = (): void => {
+    stopPreview();
+    props.onClose();
+  };
+  // A piece played for the ear stops with the panel, however it goes (musicPreview.ts).
+  useEffect(() => stopPreview, []);
   const tabs = tabsOf(props.onDeleteAccount !== undefined);
   const [tab, setTab] = useState<SettingsTab>(() => {
     const wanted = props.tab ?? lastTab;

@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { precached, precacheFiles, versionOf } from '../src/sw/build.js';
 import { routeOf } from '../src/sw/routes.js';
+import { DEFAULT_PACK } from '../src/world/packFile.js';
 
 const ORIGIN = 'https://lab.test';
 
@@ -76,6 +77,22 @@ describe('the precache list', () => {
     expect(precacheFiles(['.vite/manifest.json'], ['.DS_Store', 'icons/.hidden'])).toEqual(['/']);
   });
 
+  it('keeps the default pack’s music, every other pack left to be fetched as it plays', () => {
+    expect(DEFAULT_PACK).toBe('nachtschicht');
+    const published = [
+      'music/won.mp3',
+      'music/packs/nachtschicht/calm.mp3',
+      'music/packs/yalciner/calm.m4a',
+      'music/packs/macleod/end-won.m4a',
+      'music/packs/nachtschichtx/calm.m4a',
+    ];
+    expect(precacheFiles([], published)).toEqual([
+      '/',
+      '/music/packs/nachtschicht/calm.mp3',
+      '/music/won.mp3',
+    ]);
+  });
+
   it('leaves out every recording of the radio: the game fetches each as it queues it', () => {
     const publicDir = fileURLToPath(new URL('../public', import.meta.url));
     const published = readdirSync(publicDir, { recursive: true, encoding: 'utf8' })
@@ -86,8 +103,11 @@ describe('the precache list', () => {
     expect(voices).toContain('voice/manifest.json');
     const files = precacheFiles([], published);
     expect(files.filter((file) => file.startsWith('/voice/'))).toEqual([]);
-    // Everything else of public/ stays in: the lab's sounds, the music, the icons.
-    expect(files).toHaveLength(published.length - voices.length + 1);
+    // Everything else of public/ stays in — the lab's sounds, the score's music, the icons — but
+    // the music packs besides the score's, which the game fetches as each piece plays.
+    const packs = published.filter((name) => /^music\/packs\/(?!nachtschicht\/)/.test(name));
+    expect(packs.length).toBeGreaterThan(0);
+    expect(files).toHaveLength(published.length - voices.length - packs.length + 1);
     const names = ['voice/helmut-1.mp3', 'voices.svg', 'sfx/a.mp3'];
     expect(names.map(precached)).toEqual([false, true, true]);
     // Not precached, a recording is the browser's to fetch, never the worker's.
@@ -95,10 +115,12 @@ describe('the precache list', () => {
     expect(routeOf(line, ORIGIN, new Set(files))).toBeNull();
   });
 
-  it('versions the worker by the build and what it keeps, never by a take of the radio', () => {
+  it('versions the worker by the build and what it keeps, never by the radio or a pack', () => {
     const built = { 'assets/index-1.js': 'code', 'sw.js': 'worker', 'index.html': '<html>' };
     const published = {
       'icon.svg': '<svg/>',
+      'music/packs/nachtschicht/calm.mp3': 'score',
+      'music/packs/yalciner/calm.m4a': 'piece',
       'voice/helmut-1.mp3': 'take',
       'voice/manifest.json': '{}',
     };
@@ -109,6 +131,10 @@ describe('the precache list', () => {
     // A new take of the radio, a new voice's lines, a new list of them: the same worker.
     const takes = { 'voice/helmut-1.mp3': 'take again', 'voice/laura-1.mp3': 'hers' };
     expect(version({ ...published, ...takes, 'voice/manifest.json': '{"lines":{}}' })).toBe(first);
+    // A pack built anew: the same worker; the score's pack changed: a new one.
+    expect(version({ ...published, 'music/packs/yalciner/calm.m4a': 'piece 2' })).toBe(first);
+    const score = { ...published, 'music/packs/nachtschicht/calm.mp3': 'score 2' };
+    expect(version(score)).not.toBe(first);
     // An icon or the app changed: a new one; the worker's own file is not its version's.
     expect(version({ ...published, 'icon.svg': '<svg></svg>' })).not.toBe(first);
     expect(version(published, { ...built, 'assets/index-1.js': 'code 2' })).not.toBe(first);

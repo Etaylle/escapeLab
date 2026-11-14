@@ -245,10 +245,11 @@ const MOVED: Settings = {
   light: 'canvas',
   patterns: true,
   subtitles: 'larger',
+  music: { pack: 'yalciner', pieces: { calm: 'cheremisinov' } },
 };
 
 describe('„Zurücksetzen", a tab at a time', () => {
-  it('puts back the volumes, the mutes and the talk key in „Ton" — and the sound switch on', () => {
+  it('puts back the volumes, the mutes, the talk key and the music in „Ton" — sound on', () => {
     changeSettings(MOVED);
     setMuted(true);
     resetTab('ton');
@@ -257,6 +258,7 @@ describe('„Zurücksetzen", a tab at a time', () => {
       volumes: DEFAULT_SETTINGS.volumes,
       muted: DEFAULT_SETTINGS.muted,
       keys: { ...MOVED.keys, talk: 'v' },
+      music: { pack: 'nachtschicht', pieces: {} },
     });
     expect(isMuted()).toBe(false);
   });

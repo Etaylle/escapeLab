@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, sep } from 'node:path';
 import type { Plugin, ResolvedConfig, Rollup } from 'vite';
+import { DEFAULT_PACK } from '../world/packFile.js';
 
 /**
  * Build time only, for vite.config.ts; the app never imports this.
@@ -17,23 +18,31 @@ import type { Plugin, ResolvedConfig, Rollup } from 'vite';
 const SW_FILE = 'sw.js';
 
 /**
- * The folders of public/ the worker leaves out of its install: the radio's recordings (voice/),
- * some 20 MB once the whole cast speaks, which the game fetches line by line as each is queued —
- * from the browser's own cache where it has them, and offline a line missing stands in with the
- * radio's chirp. Nor are they hashed into the worker's version: a new take brings no new worker.
+ * What public/ holds that the worker leaves out of its install, each fetched as the game needs it:
+ * the radio's recordings (voice/), some 20 MB once the whole cast speaks, which the game fetches
+ * line by line as each is queued — from the browser's own cache where it has them, and offline a
+ * line missing stands in with the radio's chirp — and the music packs a player may pick besides
+ * the game's own score (world/packFile.ts DEFAULT_PACK), some 7 to 9 MB each, fetched as they play:
+ * a phone that installs the page fetches the music it plays, not every pack the game has. Nor does
+ * the worker keep a pack's pieces as they play — a streamed piece is asked for in ranges, which a
+ * cache refuses — and none of it is hashed into the worker's version: a new take of the radio or a
+ * pack built anew brings no new worker.
  */
-const FETCHED_AS_NEEDED: readonly string[] = ['voice/'];
+const FETCHED_AS_NEEDED: readonly RegExp[] = [
+  /^voice\//,
+  new RegExp(`^music/packs/(?!${DEFAULT_PACK}/)`),
+];
 
 /** Whether the file `name` of public/ goes into the install: all but FETCHED_AS_NEEDED's. */
 export function precached(name: string): boolean {
-  return !FETCHED_AS_NEEDED.some((folder) => name.startsWith(folder));
+  return !FETCHED_AS_NEEDED.some((fetched) => fetched.test(name));
 }
 
 /**
  * What the worker keeps at install: the page as "/", then every file of the
- * build and of public/ by its address — but the folders the game fetches as
- * it needs them (FETCHED_AS_NEEDED). Not the worker itself (the browser
- * fetches it on its own), not index.html under its name, no dotfiles.
+ * build and of public/ by its address — but what the game fetches as it
+ * needs it (FETCHED_AS_NEEDED). Not the worker itself (the browser fetches
+ * it on its own), not index.html under its name, no dotfiles.
  *
  * @param built the bundle's file names, as "assets/index-3f9a.js"
  * @param published the files under public/, as "icon.svg"
@@ -66,7 +75,8 @@ function contentOf(file: Rollup.OutputChunk | Rollup.OutputAsset): string | Uint
 /**
  * The worker's version: a hash of the build's files but the worker itself, and of the files of
  * public/ it keeps at install (`precached`), each by name and content — so that a release that
- * changes one brings a new worker, and a new take of the radio, which no install keeps, does not.
+ * changes one brings a new worker, and a new take of the radio or a pack built anew, which no
+ * install keeps, does not.
  *
  * @param built the bundle's files by name, as "assets/index-3f9a.js", with their content
  * @param published the files under public/, as "icon.svg"

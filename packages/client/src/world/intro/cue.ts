@@ -1,8 +1,10 @@
 import { claim, EFFECTS_LEVEL, LOOKAHEAD, playingEngine, release } from '../audio.js';
 import { closeStream, openStream, startStream, type Stream } from '../audioStream.js';
 import { MUSIC_LEVEL } from '../music.js';
+import { chosenFor, pieceFailed, type Chosen } from '../musicPacks.js';
 import { holdMusic, musicFrom } from '../musicTurn.js';
-import { MUSIC_BASE, musicEntry, musicListed, type MusicId } from '../samples.js';
+import type { Slot } from '../packFile.js';
+import { MUSIC_BASE, musicListed } from '../samples.js';
 
 /**
  * The opening's music: the score's title (audio/catalog.json `title`, the motif's first phrase
@@ -15,12 +17,16 @@ import { MUSIC_BASE, musicEntry, musicListed, type MusicId } from '../samples.js
  * rather than being decoded — 40 s in two channels would hold some 15 MB. It waits for the bus
  * as all music does — the menu's theme fading out as the run starts (musicTurn.ts) — and comes in
  * where the opening then stands. Skipping the opening fades it out, holding the bus meanwhile;
- * the blackout cuts it off. Where there is neither — none made, or no file to be had — the
- * opening plays without music. Nothing here throws.
+ * the blackout cuts it off. A found title whose file cannot be had gives its place to the score's
+ * — or the cue — at once (musicPacks.ts `pieceFailed`). Where there is neither — none made, or no
+ * file to be had — the opening plays without music. Nothing here throws.
  */
 
-/** The opening's piece of the score, by its id in the music's manifest (audio/catalog.json). */
-export const TITLE: MusicId = 'title';
+/**
+ * The opening's piece, by its place in the music (packFile.ts SLOTS): the score's title, or the
+ * music pack's the player picked (musicPacks.ts).
+ */
+export const TITLE: Slot = 'title';
 
 /** Where the cue lies, and its list: { file, ms, peak, hash } (scripts/introCue.ts). */
 export const CUE_BASE = '/intro/';
@@ -41,14 +47,15 @@ export const CUE_PEAK = EFFECTS_LEVEL * 0.5;
 export const CUE_FADE_S = 1.5;
 
 /**
- * What the opening streams: its address, how long it lasts and the silence it opens with, s, and
- * the level it comes in at.
+ * What the opening streams: its address, how long it lasts and the silence it opens with, s, the
+ * level it comes in at, and the piece of the music it is — null for the older cue.
  */
 interface Source {
   readonly url: string;
   readonly seconds: number;
   readonly lead: number;
   readonly level: number;
+  readonly chosen: Chosen | null;
 }
 
 /** The cue as it plays: its stream, when it ends on the audio clock, and whether it has gone. */
@@ -76,21 +83,23 @@ function cueListed(): Promise<CueManifest | null> {
 }
 
 /**
- * What the opening plays: the score's title where the music's manifest names it, at the stems'
- * level times its gain; else the older cue, at CUE_PEAK by its peak; null where there is neither.
+ * What the opening plays: the title of the music chosen where it has one — a pack's, or the
+ * score's where the music's manifest names it — at the stems' level times its gain; else the
+ * older cue, at CUE_PEAK by its peak; null where there is neither.
  */
 async function sourceOf(): Promise<Source | null> {
   await musicListed();
-  const title = musicEntry(TITLE);
+  const chosen = chosenFor(TITLE);
+  const title = chosen.entry;
   if (title !== null) {
     const url = `${MUSIC_BASE}${title.file}`;
     const level = MUSIC_LEVEL * title.gain;
-    return { url, seconds: title.ms / 1000, lead: title.startMs / 1000, level };
+    return { url, seconds: title.ms / 1000, lead: title.startMs / 1000, level, chosen };
   }
   const cue = await cueListed();
   if (cue === null) return null;
   const level = CUE_PEAK / (cue.peak > 0 ? cue.peak : 1);
-  return { url: `${CUE_BASE}${cue.file}`, seconds: cue.ms / 1000, lead: 0, level };
+  return { url: `${CUE_BASE}${cue.file}`, seconds: cue.ms / 1000, lead: 0, level, chosen: null };
 }
 
 /**
@@ -140,9 +149,21 @@ function begin(source: Source, since: number): void {
       },
       { once: true },
     );
+    stream.element.addEventListener('error', () => cueFailed(now, source, since), { once: true });
   } catch {
     // Deliberately silent: the opening plays on without its music.
   }
+}
+
+/**
+ * The opening's music `cue`, streaming `source`, could not be had: let go; and where it was a found
+ * title, the score's — or the older cue — takes its place for the opening that began at `since`.
+ */
+function cueFailed(cue: Playing, source: Source, since: number): void {
+  if (playing !== cue) return;
+  playing = null;
+  letGo(cue);
+  if (source.chosen !== null && pieceFailed(source.chosen) && wanted === since) startCue(since);
 }
 
 /** The cue stops: faded out over `fadeS` (a skip), or at once (0: the blackout). */

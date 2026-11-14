@@ -50,8 +50,8 @@ jobs:
     # on a slow runner since the opening and the gameplay captures, 2 more since the
     # reconnect drill (a crew of three, one away 80 s), 1 more since the restart drill,
     # 2 more since the three drill (a crew of three to the Signalkette, 75 s on a runner),
-    # Systemcheck up to 8, 3 more since the Übungshalle's drill (189 s in CI): setup, 19 and 14
-    # minutes of the two steps fit into the job's 45.
+    # Systemcheck up to 8, 3 more since the Übungshalle's drill (189 s in CI) and 5 s since the
+    # music drill (4.9 s in CI): setup, 19 and 14 minutes of the two steps fit into the job's 45.
     timeout-minutes: 45
     defaults:
       run:

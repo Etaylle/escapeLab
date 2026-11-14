@@ -29,10 +29,11 @@
  * the game plays. A suite is made only where --only names it, and always in takes for the ear — one
  * a run where no more are asked for, MAX_MUSIC_TAKES at most — each take measured piece by piece
  * where the plan cuts it; `--keep <suite>=<n>` keeps a take whole: cut at the plan's boundaries,
- * each piece's edges faded over EDGE_MS, encoded by afconvert as AAC at PIECE_BITRATE into
- * public/music/<id>.m4a, measured as a render — its loudness as BS.1770 has it (pcm.ts `lufsOf`),
- * brought to the suite's target — and listed with the suite's hash and name and a loop's bars; the
- * file each piece played before is deleted with the suite's other takes.
+ * each piece's edges faded over EDGE_MS, encoded by afconvert as AAC at PIECE_BITRATE into the
+ * game's own music pack, public/music/packs/nachtschicht/<id>.m4a (SCORE_DIR), measured as a
+ * render — its loudness as BS.1770 has it (pcm.ts `lufsOf`), brought to the suite's target — and
+ * listed with the suite's hash and name and a loop's bars; the file each piece played before is
+ * deleted with the suite's other takes.
  *
  * With `--candidates N` every entry the run makes is made N times. An effect follows its prompt
  * more or less closely each time (INFLUENCE_SPAN), each take into a folder of its own in the
@@ -68,7 +69,6 @@
  *
  * Runs on Node's own TypeScript, as the voice script does: it imports nothing of the app.
  */
-import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import {
   copyFileSync,
@@ -86,6 +86,14 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { ElevenLabs } from '@elevenlabs/elevenlabs-js';
+import { DEFAULT_PACK } from '../src/world/packFile.ts';
+import {
+  afconvertIn,
+  afconvertOut,
+  requireAfconvert,
+  type Decode,
+  type Encode,
+} from './afconvert.ts';
 import {
   ELEVEN_GAP_MS,
   elevenAudio,
@@ -97,10 +105,8 @@ import {
   floorOf,
   loudnessOf,
   lufsOf,
-  parseWav,
   silenceOf,
   sliceOf,
-  wavBytes,
   type Loudness,
   type Pcm,
 } from './pcm.ts';
@@ -536,9 +542,27 @@ export function fileOf(id: string): string {
   return `${id}.mp3`;
 }
 
-/** The file a piece cut from a suite is kept in, in the music's folder. */
+/**
+ * Where the score's pieces lie in the music's folder: the game's own music pack (docs/sound.md
+ * „Musikpakete"), whose pack.json names the music's manifest for each of its places.
+ */
+export const SCORE_DIR = `packs/${DEFAULT_PACK}`;
+
+/** The file a piece cut from a suite is kept in, in the music's folder: in the score's pack. */
 export function pieceFileOf(id: string): string {
-  return `${id}.m4a`;
+  return `${SCORE_DIR}/${id}.m4a`;
+}
+
+/**
+ * The recordings a group's folder `dir` holds, by their names in the manifest: the effects', and
+ * the music's with the score's pack (SCORE_DIR) — every other pack is the pack script's
+ * (packs.ts), named in its own pack.json.
+ */
+export function keptFiles(dir: string, group: Group): string[] {
+  const audio = (folder: string): string[] =>
+    existsSync(folder) ? readdirSync(folder).filter((name) => /\.(?:mp3|m4a)$/.test(name)) : [];
+  const score = group === 'music' ? audio(join(dir, SCORE_DIR)) : [];
+  return [...audio(dir), ...score.map((name) => `${SCORE_DIR}/${name}`)];
 }
 
 /** How long making `item` asks for, s: a sound's length, or a suite's whole plan. */
@@ -1121,41 +1145,6 @@ export function pickTake(takes: readonly Take[]): Take {
   return best;
 }
 
-/** Decodes the recording at a path into PCM. */
-export type Decode = (path: string) => Pcm;
-/** Encodes `pcm` into the file at `path`: a piece of a suite, as AAC in an .m4a. */
-export type Encode = (pcm: Pcm, path: string) => void;
-
-/** Decodes a recording with afconvert into `scratch` and reads it back as PCM. */
-function afconvertIn(scratch: string): Decode {
-  return (path) => {
-    const wav = join(scratch, 'decoded.wav');
-    execFileSync('afconvert', ['-f', 'WAVE', '-d', 'LEI16', path, wav]);
-    try {
-      return parseWav(readFileSync(wav));
-    } finally {
-      rmSync(wav, { force: true });
-    }
-  };
-}
-
-/**
- * Encodes with afconvert, the piece written as a WAV into `scratch` first: AAC in an .m4a at
- * PIECE_BITRATE, at the encoder's best quality.
- */
-function afconvertOut(scratch: string): Encode {
-  return (pcm, path) => {
-    const wav = join(scratch, 'piece.wav');
-    writeFileSync(wav, wavBytes(pcm));
-    try {
-      const aac = ['-f', 'm4af', '-d', 'aac', '-b', String(PIECE_BITRATE), '-q', '127'];
-      execFileSync('afconvert', [...aac, wav, path]);
-    } finally {
-      rmSync(wav, { force: true });
-    }
-  };
-}
-
 /** The take of `entry` at `path`, made at `influence`, measured. */
 function takeAt(entry: CatalogEntry, path: string, influence: number, decode: Decode): Take {
   const pcm = decode(path);
@@ -1550,14 +1539,6 @@ function requireKey(): void {
   }
 }
 
-function requireTools(): void {
-  try {
-    execFileSync('/usr/bin/which', ['afconvert'], { stdio: 'ignore' });
-  } catch {
-    throw new Error('sfx: afconvert is missing — it comes with macOS; measure the files on a Mac');
-  }
-}
-
 /** How a run makes what it makes: how many takes of each, and where an effect's candidates go. */
 export interface Making {
   readonly count: number;
@@ -1916,7 +1897,7 @@ interface Cut {
  */
 function cutPieces(suite: SuiteEntry, path: string, bench: Keeping): Cut[] {
   const pcm = bench.decode(path);
-  const dir = bench.places.dirs.music;
+  const dir = join(bench.places.dirs.music, SCORE_DIR);
   mkdirSync(dir, { recursive: true });
   const parts: string[] = [];
   try {
@@ -2096,7 +2077,7 @@ function report(manifests: Readonly<Record<Group, Manifest>>, places: Places): v
     const dir = places.dirs[group];
     if (!existsSync(dir)) continue;
     const named = new Set(Object.values(manifests[group]).map((entry) => entry.file));
-    const files = readdirSync(dir).filter((name) => /\.(?:mp3|m4a)$/.test(name));
+    const files = keptFiles(dir, group);
     const bytes = files.reduce((sum, name) => sum + statSync(join(dir, name)).size, 0);
     const kb = (bytes / 1024).toFixed(0);
     console.log(`sfx: public/${group} holds ${files.length} files, ${kb} kB`);
@@ -2253,13 +2234,13 @@ export async function runWith(
 
 async function main(options: Options): Promise<void> {
   const catalog = checkCatalog(readCatalog());
-  if (!options.dryRun) requireTools();
+  if (!options.dryRun) requireAfconvert('sfx');
   const scratch = mkdtempSync(join(tmpdir(), 'escapelab-sfx-'));
   try {
     await runWith(options, catalog, {
       places: PLACES,
       decode: afconvertIn(scratch),
-      encode: afconvertOut(scratch),
+      encode: afconvertOut(scratch, PIECE_BITRATE),
       now: () => new Date(),
       wait: pause,
       candidates: () => mkdtempSync(join(tmpdir(), 'escapelab-sfx-candidates-')),

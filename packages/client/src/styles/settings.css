@@ -460,3 +460,172 @@
   color: var(--text);
   user-select: all;
 }
+
+/* ── Ton: the music (MusicSettings.tsx) ──────────────────────────────────── */
+
+/*
+ * The music's block reads at 14 px and takes a fingertip's 44 px for every press — the packs, the
+ * pieces of the Feinwahl and the ▶ beside each — on a phone held sideways as on a desk.
+ */
+.settings-music > legend {
+  font-size: 14px;
+}
+
+/* The packs, one a row: its name over its composers, the one in force lit. */
+.music-packs {
+  display: grid;
+  gap: 6px;
+}
+
+.music-pack {
+  display: grid;
+  gap: 2px;
+  min-height: 44px;
+  padding: 8px 12px;
+  text-align: left;
+  background: var(--panel-2);
+  color: var(--text);
+}
+
+.music-pack--on {
+  border-color: var(--accent);
+  box-shadow: 0 0 10px var(--accent-glow);
+}
+
+.music-pack-title {
+  font-family: var(--mono);
+  font-size: 14px;
+  letter-spacing: 1px;
+}
+
+.music-pack--on .music-pack-title {
+  color: var(--accent);
+}
+
+.music-pack-by,
+.music-note {
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--muted);
+}
+
+.music-note {
+  margin: 0;
+}
+
+.music-fine-toggle {
+  justify-self: start;
+  min-height: 44px;
+  padding: 8px 14px;
+  font-family: var(--mono);
+  font-size: 14px;
+}
+
+.music-fine-toggle[aria-expanded='true'] {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* The Feinwahl: a place a group, the piece of every pack a row with its ▶. */
+.music-fine {
+  display: grid;
+  gap: 12px;
+}
+
+.music-slot {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+.music-slot legend {
+  margin-bottom: 4px;
+  padding: 0;
+  font-family: var(--mono);
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.music-pieces {
+  display: grid;
+  gap: 4px;
+}
+
+.music-piece-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 44px;
+  gap: 6px;
+}
+
+.music-piece {
+  min-height: 44px;
+  padding: 6px 10px;
+  text-align: left;
+  font-size: 14px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  background: var(--panel-2);
+  color: var(--text);
+}
+
+.music-piece--on {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.music-play {
+  display: grid;
+  place-items: center;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+}
+
+.music-play[aria-pressed='true'] {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* „Nennungen": every piece in play, its place over its attribution, its addresses linked. */
+.music-credits {
+  display: grid;
+  gap: 6px;
+}
+
+.music-credits-head {
+  margin: 4px 0 0;
+  font-family: var(--mono);
+  font-size: 14px;
+  font-weight: 400;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.music-credits ul {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.music-credits li {
+  display: grid;
+  gap: 2px;
+  font-size: 14px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+  color: var(--text);
+}
+
+.music-credit-slot {
+  font-family: var(--mono);
+  color: var(--muted);
+}
+
+.music-credits a {
+  color: var(--accent);
+}

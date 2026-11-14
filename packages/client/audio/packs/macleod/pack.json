@@ -1,0 +1,151 @@
+{
+  "id": "macleod",
+  "title": "Schicht D · Lichtspiel",
+  "composers": [
+    "Kevin MacLeod"
+  ],
+  "pieces": {
+    "menu-theme": {
+      "title": "At Rest",
+      "author": "Kevin MacLeod",
+      "source": "https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1100748",
+      "licence": "CC BY 4.0",
+      "attribution": "„At Rest“ – Kevin MacLeod (incompetech.com) · https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1100748 · Creative Commons Attribution 4.0 International: https://creativecommons.org/licenses/by/4.0/ · bearbeitet: Schnitt, Schleife, Pegel",
+      "file": "menu-theme.m4a",
+      "ms": 74850,
+      "startMs": 0,
+      "loudness": -26.22,
+      "gain": 2.296,
+      "loop": {
+        "crossfade": {
+          "startMs": 1690,
+          "endMs": 74350,
+          "fadeMs": 5000
+        }
+      },
+      "build": "5357c5a38308e6c2"
+    },
+    "lobby": {
+      "title": "Water Lily",
+      "author": "Kevin MacLeod",
+      "source": "https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1400035",
+      "licence": "CC BY 4.0",
+      "attribution": "„Water Lily“ – Kevin MacLeod (incompetech.com) · https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1400035 · Creative Commons Attribution 4.0 International: https://creativecommons.org/licenses/by/4.0/ · bearbeitet: Schnitt, Schleife, Pegel",
+      "file": "lobby.m4a",
+      "ms": 79070,
+      "startMs": 0,
+      "loudness": -27.11,
+      "gain": 2.5441,
+      "loop": {
+        "crossfade": {
+          "startMs": 3000,
+          "endMs": 78570,
+          "fadeMs": 5000
+        }
+      },
+      "build": "5b080d6b97501540"
+    },
+    "title": {
+      "title": "Quinn's Song: The Dance Begins",
+      "author": "Kevin MacLeod",
+      "source": "https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1100576",
+      "licence": "CC BY 4.0",
+      "attribution": "„Quinn's Song: The Dance Begins“ – Kevin MacLeod (incompetech.com) · https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1100576 · Creative Commons Attribution 4.0 International: https://creativecommons.org/licenses/by/4.0/ · bearbeitet: Schnitt, Schleife, Pegel",
+      "file": "title.m4a",
+      "ms": 45000,
+      "startMs": 0,
+      "loudness": -25.45,
+      "gain": 2.1004,
+      "loop": null,
+      "build": "fdd63e2dc6a8f3bf"
+    },
+    "calm": {
+      "title": "Metaphysik",
+      "author": "Kevin MacLeod",
+      "source": "https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1400056",
+      "licence": "CC BY 4.0",
+      "attribution": "„Metaphysik“ – Kevin MacLeod (incompetech.com) · https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1400056 · Creative Commons Attribution 4.0 International: https://creativecommons.org/licenses/by/4.0/ · bearbeitet: Schnitt, Schleife, Pegel",
+      "file": "calm.m4a",
+      "ms": 71920,
+      "startMs": 0,
+      "loudness": -18.09,
+      "gain": 0.9003,
+      "loop": {
+        "crossfade": {
+          "startMs": 3000,
+          "endMs": 71420,
+          "fadeMs": 5000
+        }
+      },
+      "build": "c766396aa0c6f92c"
+    },
+    "tense": {
+      "title": "Decisions",
+      "author": "Kevin MacLeod",
+      "source": "https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1100756",
+      "licence": "CC BY 4.0",
+      "attribution": "„Decisions“ – Kevin MacLeod (incompetech.com) · https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1100756 · Creative Commons Attribution 4.0 International: https://creativecommons.org/licenses/by/4.0/ · bearbeitet: Schnitt, Schleife, Pegel",
+      "file": "tense.m4a",
+      "ms": 78500,
+      "startMs": 0,
+      "loudness": -19.84,
+      "gain": 1.1015,
+      "loop": {
+        "crossfade": {
+          "startMs": 3000,
+          "endMs": 78000,
+          "fadeMs": 3000
+        }
+      },
+      "build": "d077f704c44359e0"
+    },
+    "critical": {
+      "title": "Hitman",
+      "author": "Kevin MacLeod",
+      "source": "https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1300013",
+      "licence": "CC BY 4.0",
+      "attribution": "„Hitman“ – Kevin MacLeod (incompetech.com) · https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1300013 · Creative Commons Attribution 4.0 International: https://creativecommons.org/licenses/by/4.0/ · bearbeitet: Schnitt, Schleife, Pegel",
+      "file": "critical.m4a",
+      "ms": 66500,
+      "startMs": 0,
+      "loudness": -12.55,
+      "gain": 0.4761,
+      "loop": {
+        "crossfade": {
+          "startMs": 3000,
+          "endMs": 66000,
+          "fadeMs": 3000
+        }
+      },
+      "build": "350cca493aee2c04"
+    },
+    "end-won": {
+      "title": "Time Passes",
+      "author": "Kevin MacLeod",
+      "source": "https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1100042",
+      "licence": "CC BY 4.0",
+      "attribution": "„Time Passes“ – Kevin MacLeod (incompetech.com) · https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1100042 · Creative Commons Attribution 4.0 International: https://creativecommons.org/licenses/by/4.0/ · bearbeitet: Schnitt, Schleife, Pegel",
+      "file": "end-won.m4a",
+      "ms": 40000,
+      "startMs": 74,
+      "loudness": -15.95,
+      "gain": 0.7038,
+      "loop": null,
+      "build": "c1a45cbbd0536cbd"
+    },
+    "end-lost": {
+      "title": "Past the Edge",
+      "author": "Kevin MacLeod",
+      "source": "https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1400026",
+      "licence": "CC BY 4.0",
+      "attribution": "„Past the Edge“ – Kevin MacLeod (incompetech.com) · https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1400026 · Creative Commons Attribution 4.0 International: https://creativecommons.org/licenses/by/4.0/ · bearbeitet: Schnitt, Schleife, Pegel",
+      "file": "end-lost.m4a",
+      "ms": 40000,
+      "startMs": 133,
+      "loudness": -36.44,
+      "gain": 7.4504,
+      "loop": null,
+      "build": "4b292b5e5df90ede"
+    }
+  }
+}

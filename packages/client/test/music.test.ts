@@ -86,6 +86,9 @@ describe('the pressure the music follows', () => {
     expect(nextBar(10.1, grid)).toBeCloseTo(10 + BAR, 9);
     expect(nextBar(10 + 2 * BAR - 1e-12, grid)).toBeCloseTo(10 + 2 * BAR, 9);
     expect(CROSSFADE_S).toBe(2);
+    // Music that keeps no bars — a pack's, round by a crossfade — changes at once, from its start.
+    const free = { origin: 10, bpm: null };
+    expect([nextBar(9, free), nextBar(10.1, free)]).toEqual([10, 10.1]);
   });
 
   it('loops a piece of the score on the bars its manifest names, as far as its file holds', () => {

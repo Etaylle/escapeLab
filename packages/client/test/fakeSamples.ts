@@ -71,21 +71,40 @@ export function serveSamples(
     source: 'elevenlabs',
   });
   const listed = (id: string): boolean => served[id]?.listed !== false;
-  const manifest = (ids: readonly string[]): Record<string, SampleEntry> =>
-    Object.fromEntries(ids.filter(listed).map((id) => [id, entry(id)]));
+  /** A manifest's answer at `url`, every id of its group listed but those `served` leaves out. */
+  const listOf = (url: string): Response | null => {
+    const ids = LISTS[url];
+    if (ids === undefined) return null;
+    return Response.json(Object.fromEntries(ids.filter(listed).map((id) => [id, entry(id)])));
+  };
+  /** A music pack's piece (fakePacks.ts) at `url`: served whole, or failed as `served` says. */
+  const packPiece = (url: string): Response | null => {
+    const pack = /^\/music\/(packs\/[\w-]+\/[\w-]+)\.(?:m4a|mp3)$/.exec(url)?.[1];
+    if (pack === undefined) return null;
+    const status = served[pack]?.status ?? 200;
+    return new Response(status === 200 ? `sample:${pack}:1:2` : null, { status });
+  };
+  /** A recording of the manifests at `url`, as long and in as many channels as `served` says. */
+  const recording = (url: string): Response => {
+    const id = /^\/(?:sfx|music)\/([\w-]+)\.mp3$/.exec(url)?.[1];
+    if (id === undefined) return new Response(null, { status: 404 });
+    const status = served[id]?.status ?? 200;
+    const body = `sample:${id}:${secondsOf(id)}:${served[id]?.channels ?? 1}`;
+    return new Response(status === 200 ? body : null, { status });
+  };
   vi.stubGlobal('fetch', (url: string) => {
     if (!/^\/(?:sfx|music)\//.test(url)) return other(url);
     fetched.push(url);
-    if (url === '/sfx/manifest.json') return Promise.resolve(Response.json(manifest(SFX_IDS)));
-    if (url === '/music/manifest.json') return Promise.resolve(Response.json(manifest(MUSIC_IDS)));
-    const id = /^\/(?:sfx|music)\/([\w-]+)\.mp3$/.exec(url)?.[1];
-    const status = id === undefined ? 404 : (served[id]?.status ?? 200);
-    const channels = served[id ?? '']?.channels ?? 1;
-    const body = status === 200 ? `sample:${id ?? ''}:${secondsOf(id ?? '')}:${channels}` : null;
-    return Promise.resolve(new Response(body, { status }));
+    return Promise.resolve(listOf(url) ?? packPiece(url) ?? recording(url));
   });
   return fetched;
 }
+
+/** Each manifest's address, and the ids its group has. */
+const LISTS: Readonly<Record<string, readonly string[]>> = {
+  '/sfx/manifest.json': SFX_IDS,
+  '/music/manifest.json': MUSIC_IDS,
+};
 
 /**
  * Serves the lab's recordings (`serveSamples`) and the radio's voice: its list, `manifest`, and
