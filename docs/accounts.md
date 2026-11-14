@@ -128,12 +128,13 @@ store in one line either way.
   `prisma` script does for the CLI run by hand. The pooled URL takes no flag: Neon's pooler runs
   PgBouncer 1.24, which keeps prepared statements in transaction mode, and Prisma advises against
   `pgbouncer=true` from 1.21 on. The server applies the migrations itself before it opens the
-  store and listens (`src/store/migrate.ts`, its CLI's lines in the log as `migrate: …`, no URL
-  and no host among them), whatever started it: Render's Start Command, `node` straight in
-  `packages/server` with no script before it, or `pnpm run start`, which applies them once
-  before. Where they do not apply, it ends with `not started: the migrations did not apply (P…)`
-  and exit code 1, before it listens: README, „Hosting auf Render" — there too what a start does
-  with Neon away (P1001) or after a migration that broke off (P3009, `prisma migrate resolve`).
+  store and listens (`src/store/migrate.ts`, its CLI's lines in the log as `migrate: …`, with
+  no URL, host, port or user among them), whatever started it: Render's Start Command, `node`
+  straight in `packages/server`, or `pnpm run start`, which only starts the server — Prisma's
+  own lines, run before it, would name the host. Where they do not apply, it ends with
+  `not started: the migrations did not apply (P…)` and exit code 1, before it listens: README,
+  „Hosting auf Render" — there too what a start does with Neon away (P1001) or after a migration
+  that broke off (P3009, `prisma migrate resolve`).
 - **A connection lost:** Neon closes a connection that stood idle for five minutes. The pool
   hands out none idle for more than a minute (`max_idle_connection_lifetime=60`, unless
   `DATABASE_URL` sets its own), and a request whose connection the database closed all the same

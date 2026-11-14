@@ -232,7 +232,8 @@ schreiben dürfen): Je Lauf legen sie dort ein eigenes Schema an, migrieren es u
 Ende; die CI stellt dafür einen Postgres-16-Container bereit. Ohne die Variable sagt eine Zeile am
 Ende des Testlaufs, dass sie übersprungen wurden — mit dem Befehl, der sie per docker startet. Der
 Smoke-Test spielt mit gesetzter Variable zusätzlich ein Tutorial auf einem Server, den das
-Start-Script mit Migration auf einem eigenen Schema startet.
+Start-Script auf einem eigenen Schema startet und der es selbst migriert, und startet einen
+Server so, wie Renders Start Command es tut.
 
 **Zuschauen:** Wer den Raumcode eingibt und auf *Zuschauen* klickt, sieht das ganze Labor ohne
 Dunkelheit, alle Figuren, die Drohnenkegel — **und die offene Station von allen Seiten**: Pult,
@@ -427,9 +428,9 @@ Betrieb:
   per `exec` durch `pnpm --filter @escapelab/server start`, und das durch
   `node --import tsx src/index.ts`, also steht weder eine Shell noch die tsx-CLI dazwischen.
   Wer pnpm ganz aus dem Weg haben will, trägt als Start Command direkt
-  `cd packages/server && exec node --import tsx src/index.ts` ein — das geht genauso: Vor dem
-  Server läuft dann zwar kein Script, aber er wendet die Migrationen der Datenbank selbst an,
-  bevor er sie öffnet und lauscht (siehe unten). Ob es ankommt, zeigt das Log
+  `cd packages/server && exec node --import tsx src/index.ts` ein — das geht genauso, denn der
+  Server wendet die Migrationen der Datenbank selbst an, bevor er sie öffnet und lauscht (siehe
+  unten). Ob es ankommt, zeigt das Log
   der alten Instanz beim ersten Deploy: Es muss `[escapelab] SIGTERM: going down for a restart`
   enthalten, dann je Raum `going down for a restart, snapshot seq …` — fehlt die Zeile, hat
   Render die Instanz ohne Wort beendet. Die Logs im Dashboard reichen 7 Tage zurück;
@@ -473,13 +474,13 @@ sonst, auch nicht im Repo:
 
 Bevor der Server die Datenbank öffnet und lauscht, wendet er selbst die Migrationen an (`prisma
 migrate deploy` aus `packages/server/prisma/migrations/`, über `DATABASE_URL_UNPOOLED`, sonst
-über `DATABASE_URL`) — gleich, ob ihn `pnpm run start` startet, das sie vorher schon einmal
-anwendet, oder Renders direktes Start Command, vor dem kein Script läuft. Das Log zeigt, was die
-Prisma-CLI sagt, Zeile für Zeile als `[escapelab] migrate: …`, ohne Zeichenkette und Host der
-Datenbank; scheitert die Migration, endet der Server mit `not started: the migrations did not
-apply (P…)` und Exit-Code 1, bevor er lauscht. Den Prisma-Client erzeugt `pnpm install`, einmal,
-über die postinstall des Servers (das Build Command bleibt, wie es ist). Welcher Speicher läuft,
-sagt das Start-Log in einer Zeile:
+über `DATABASE_URL`) — gleich, ob ihn `pnpm run start` startet, das nur ihn startet, oder
+Renders direktes Start Command. Das Log zeigt, was die Prisma-CLI sagt, Zeile für Zeile als
+`[escapelab] migrate: …`, ohne Zeichenkette, Host, Port und Benutzer der Datenbank; scheitert
+die Migration, endet der Server mit `not started: the migrations did not apply (P…)` und
+Exit-Code 1, bevor er lauscht. Den Prisma-Client erzeugt `pnpm install`, einmal, über die
+postinstall des Servers (das Build Command bleibt, wie es ist). Welcher Speicher läuft, sagt das
+Start-Log in einer Zeile:
 `store: Postgres at DATABASE_URL: …` oder `store: run log …, accounts in memory until the server
 stops (no DATABASE_URL)`.
 
