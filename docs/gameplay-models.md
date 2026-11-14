@@ -475,7 +475,7 @@ One to four investigators gather evidence of a ghost and name its type.
 ### 1 · The journal as the crew's memory
 
 **What it does.** The journal lists the types of evidence: EMF 5, Spirit Box,
-Fingerprints, Ghost Orbs, Ghost Writing, Freezing Temperatures and D.O.T.S. Each type that is
+Ultraviolet, Ghost Orbs, Ghost Writing, Freezing Temperatures and D.O.T.S. Each type that is
 ticked narrows the list of ghosts. The crew pools what each member found, and the journal is
 where the reasoning happens.
 
@@ -557,7 +557,7 @@ waits, the third player, the first run) against its size.
 
 | # | Borrowing | From | Backlog | Size |
 | --- | --- | --- | --- | --- |
-| 1 | **Needy valve:** while a station is open, a gauge nearby wakes every 40–60 s and needs one hand; missed, an alarm | Keep Talking (needy), Lovers (too few hands) | T-4, M-1 | M |
+| 1 | **Needy valve:** while a station is open, a gauge nearby wakes every 40–60 s and needs one hand; missed, an alarm — a chore for one, the documented exception to „two consoles or a reader", as a plate is | Keep Talking (needy), Lovers (too few hands) | T-4, M-1 | M |
 | 2 | **Parts out of a solve:** a solved station puts out a part that another station needs; in free order the crew splits into a pair and a runner | Overcooked 2 (chains), Among Us (two-part tasks) | G-3 (new) | M |
 | 3 | **Leitstand with door codes:** a terminal shows drones and doors only at its keyboard; the runner reads a door's code, the operator opens it for five seconds | Lethal Company (terminal) | I-1 | L |
 | 4 | **A course without a clock:** a crew's first run without a clock, then the hall, the tutorial and Blackout, one idea added per step | Escape Academy (pacing), Escape Simulator (optional timer) | N-6 | S |
