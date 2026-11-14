@@ -1,9 +1,11 @@
 import type { SampleEntry } from '../world/samples.js';
 
 /**
- * What the audition page (/sounds) lists, and the command it puts together: every sound of the
- * catalog (audio/catalog.json) by its kind, each with its recording as the manifests name it,
- * and the sound script's command that makes the sounds ticked anew (scripts/sfx.ts). Pure.
+ * What the audition page (/sounds) lists, and the commands it puts together: every sound of the
+ * catalog (audio/catalog.json) by its kind, each with its recording as the manifests name it;
+ * every suite — music made as one and cut into the pieces the game plays — with each of its
+ * pieces and their recordings, in the plan's order; and the sound script's commands that make
+ * anew what is ticked (scripts/sfx.ts). Pure.
  */
 
 /** What a sound is, as the catalog has it. */
@@ -66,11 +68,15 @@ export function floorDbfsOf(
   return dbfs(recording.floor * recording.gain);
 }
 
+/** `recording`'s floor as the page says it — none without one — and whether it is heard. */
+function floorFor(recording: SampleEntry | null): { floorDbfs: number | null; noisy: boolean } {
+  const floorDbfs = recording === null ? null : floorDbfsOf(recording);
+  return { floorDbfs, noisy: floorDbfs !== null && floorDbfs > AUDIBLE_FLOOR_DBFS };
+}
+
 /** The row of `sound`, with its recording where there is one. */
 function rowOf(sound: CatalogSound, recording: SampleEntry | null): SoundRow {
-  const floorDbfs = recording === null ? null : floorDbfsOf(recording);
-  const noisy = floorDbfs !== null && floorDbfs > AUDIBLE_FLOOR_DBFS;
-  return { sound, recording, floorDbfs, noisy };
+  return { sound, recording, ...floorFor(recording) };
 }
 
 /**
@@ -95,10 +101,65 @@ export function listingOf(
   }));
 }
 
+/** A section of a suite, as the page reads it: a piece the game plays, its name in the plan. */
+export interface SuitePiece {
+  readonly id: string;
+  readonly name: string;
+  readonly bars: number;
+  readonly loop: boolean;
+}
+
+/** A suite of the catalog, as the page reads it: music made as one, cut into its pieces. */
+export interface CatalogSuite {
+  readonly id: string;
+  readonly kind: 'suite';
+  readonly key: string;
+  readonly bpm: number;
+  readonly sections: readonly SuitePiece[];
+}
+
+/** A piece of a suite as the page lists it: its section, its recording, and its floor heard. */
+export interface PieceRow {
+  readonly piece: SuitePiece;
+  readonly recording: SampleEntry | null;
+  readonly floorDbfs: number | null;
+  readonly noisy: boolean;
+}
+
+/** A suite as the page lists it: the suite, and each of its pieces in the plan's order. */
+export interface SuiteListing {
+  readonly suite: CatalogSuite;
+  readonly rows: readonly PieceRow[];
+}
+
+/** The catalog's suites as the page reads them. */
+export function suitesOf(entries: readonly { readonly kind: string }[]): CatalogSuite[] {
+  return entries.filter((entry): entry is CatalogSuite => entry.kind === 'suite');
+}
+
+/** Each suite of `suites` with its pieces' recordings out of `recordings`, by id. */
+export function suiteListingOf(
+  suites: readonly CatalogSuite[],
+  recordings: Readonly<Record<string, SampleEntry>>,
+): SuiteListing[] {
+  return suites.map((suite) => ({
+    suite,
+    rows: suite.sections.map((piece) => {
+      const recording = recordings[piece.id] ?? null;
+      return { piece, recording, ...floorFor(recording) };
+    }),
+  }));
+}
+
 /** The key file the command names unless told another: the main checkout's, by its full path. */
 export const ENV_FILE = '/Users/uros/Documents/Req.Eng./escapelab/.env.local';
 /** How many takes the command asks of each sound: the script keeps the best. */
 export const CANDIDATES = 3;
+/**
+ * How many takes the command asks of a suite: as many as a run of the script makes within the
+ * music's cap (scripts/sfx.ts `takesPerRun`); the command run again makes more, numbered on.
+ */
+export const SUITE_TAKES = 2;
 
 /** `word` as a shell takes it: as it is where it is plain, else in single quotes. */
 export function shellWord(word: string): string {
@@ -119,4 +180,19 @@ export function commandFor(
   }
   const only = `--only ${ids.join(',')}`;
   return `node --env-file=${shellWord(envFile)} scripts/sfx.ts --candidates ${candidates} ${only}`;
+}
+
+/**
+ * The commands that make what is ticked anew, to be run in packages/client: one for the sounds
+ * `ids`, three candidates each (`commandFor`), and one for each suite of `suites`, SUITE_TAKES
+ * takes of it; none where nothing is ticked.
+ */
+export function commandsFor(
+  ids: readonly string[],
+  suites: readonly string[],
+  envFile = ENV_FILE,
+): string[] {
+  const sounds = commandFor(ids, envFile);
+  const made = suites.map((id) => commandFor([id], envFile, SUITE_TAKES));
+  return [sounds, ...made].filter((command): command is string => command !== null);
 }

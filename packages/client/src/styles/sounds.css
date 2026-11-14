@@ -1,7 +1,8 @@
 /*
- * The audition page (/sounds, sounds/SoundsBoard.tsx): every recording of the lab in a list by
- * its kind, each with its play button, its facts, its prompt and a box to tick for a new take,
- * and the command for the ticked ones at the foot.
+ * The audition page (/sounds, sounds/SoundsBoard.tsx): the score first — its takes, each piece
+ * playable — then every recording of the lab in a list by its kind, each with its play button,
+ * its facts, its prompt and a box to tick for a new take, and the commands for the ticked ones at
+ * the foot.
  */
 
 .card.sounds {
@@ -135,8 +136,12 @@
   min-width: 0;
 }
 
-/* A take that, kept, would fail the game's recordings: off its length, or its floor heard. */
-.sounds-take--fails .sounds-facts {
+/*
+ * A take that, kept, would fail the game's recordings: off its length, or its floor heard — its
+ * own line, and of a suite's pieces those that would.
+ */
+.sounds-take--fails > .sounds-facts,
+.sounds-piece--fails .sounds-facts {
   color: var(--warn);
 }
 
@@ -156,4 +161,28 @@
 
 .sounds-note {
   margin: 4px 0 0;
+}
+
+/*
+ * A take of a suite — the score — with its pieces under it in the plan's order: each with its
+ * play button, its id and its measurements in one line; the row wraps where the page is narrow.
+ */
+.sounds-piece-list {
+  flex: 1 1 100%;
+  margin: 2px 0 4px;
+  padding: 0 0 0 1.5em;
+  list-style: none;
+}
+
+.sounds-piece {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  padding: 3px 0;
+}
+
+.sounds-piece .sounds-facts {
+  flex: 1 1 20em;
+  min-width: 0;
 }

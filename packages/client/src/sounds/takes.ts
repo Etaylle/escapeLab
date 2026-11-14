@@ -3,13 +3,33 @@ import { AUDIBLE_FLOOR_DBFS, floorDbfsOf } from './listing.js';
 /**
  * The music's takes on the audition page (/sounds): what the dev server lists of them (GET
  * /takes/, the server's takes.ts) as the sound script wrote their lists (scripts/sfx.ts
- * `TakesList`), where each take plays from, its floor as the page says it, and the command that
- * keeps one — which the page shows and never runs. Pure, but for `loadTakes`, which asks the
- * dev server for the lists and nothing else.
+ * `TakesList`) — a suite's take with each of its pieces, where the plan cuts it — where each
+ * take plays from, its floor as the page says it, and the command that keeps one — which the
+ * page shows and never runs. Pure, but for `loadTakes`, which asks the dev server for the lists
+ * and nothing else.
  */
 
 /** Where the dev server serves the takes: their lists, and each take under its entry's id. */
 export const TAKES_BASE = '/takes/';
+
+/**
+ * A piece of a suite's take as its list names it: scripts/sfx.ts `PieceRecord` — where it lies
+ * in the take and how long, whether it loops, its gain, its loudness before it (LUFS; null for
+ * silence), its peak, RMS, floor and silence, and the rules it misses: length, silence, floor.
+ */
+export interface PieceInfo {
+  readonly id: string;
+  readonly fromMs: number;
+  readonly ms: number;
+  readonly loop: boolean;
+  readonly gain: number;
+  readonly loudness: number | null;
+  readonly peak: number;
+  readonly rms: number;
+  readonly floor: number;
+  readonly silence: number;
+  readonly misses: readonly string[];
+}
 
 /** A take as its list names it and the page reads it: scripts/sfx.ts `TakeRecord`, in part. */
 export interface TakeInfo {
@@ -24,6 +44,8 @@ export interface TakeInfo {
   readonly silence: number;
   /** the rules of the script's PICK it misses: peak, start, silence, length, floor */
   readonly misses: readonly string[];
+  /** a suite's take: its pieces in the plan's order */
+  readonly pieces?: readonly PieceInfo[];
 }
 
 /** Every entry's takes, by its id, in the order they were made. */
@@ -35,16 +57,44 @@ export type TakesState =
   | { readonly kind: 'unserved'; readonly why: string };
 
 const NUMBERS = ['n', 'ms', 'gain', 'startMs', 'peak', 'rms', 'floor', 'silence'] as const;
+const PIECE_NUMBERS = ['fromMs', 'ms', 'gain', 'peak', 'rms', 'floor', 'silence'] as const;
 
-/** Whether `value` reads as a take: its numbers, its file as `<n>.mp3`, the rules it misses. */
+/** Whether `record`'s `misses` is a list of the rules it misses, by name. */
+const missesRead = (record: Record<string, unknown>): boolean =>
+  Array.isArray(record['misses']) && record['misses'].every((miss) => typeof miss === 'string');
+
+/** Whether `value` reads as a piece of a suite's take: its id, its numbers, its misses. */
+function isPiece(value: unknown): value is PieceInfo {
+  if (typeof value !== 'object' || value === null) return false;
+  const piece = value as Record<string, unknown>;
+  const loudness = piece['loudness'];
+  return (
+    typeof piece['id'] === 'string' &&
+    typeof piece['loop'] === 'boolean' &&
+    (loudness === null || typeof loudness === 'number') &&
+    PIECE_NUMBERS.every((key) => typeof piece[key] === 'number') &&
+    missesRead(piece)
+  );
+}
+
+/** Whether `record`'s pieces, where it has any — a suite's take's — each read as a piece. */
+function piecesRead(record: Record<string, unknown>): boolean {
+  const pieces = record['pieces'];
+  return pieces === undefined || (Array.isArray(pieces) && pieces.every(isPiece));
+}
+
+/**
+ * Whether `value` reads as a take: its numbers, its file as `<n>.mp3`, the rules it misses — and
+ * a suite's pieces, where it has any, each as a piece reads.
+ */
 function isTake(value: unknown): value is TakeInfo {
   if (typeof value !== 'object' || value === null) return false;
   const take = value as Record<string, unknown>;
   return (
     NUMBERS.every((key) => typeof take[key] === 'number') &&
     take['file'] === `${String(take['n'])}.mp3` &&
-    Array.isArray(take['misses']) &&
-    take['misses'].every((miss) => typeof miss === 'string')
+    missesRead(take) &&
+    piecesRead(take)
   );
 }
 
@@ -93,18 +143,38 @@ export function takeKey(id: string, n: number): string {
   return `${id}#${n}`;
 }
 
-/** A take's floor once its gain is applied, dBFS — null where its sound masks it — and if heard. */
-export function takeFloor(take: TakeInfo): { floorDbfs: number | null; noisy: boolean } {
+/** What the page calls the piece `piece` of take `n` of the suite `id` by while it plays. */
+export function pieceKey(id: string, n: number, piece: string): string {
+  return `${takeKey(id, n)}/${piece}`;
+}
+
+/**
+ * A take's floor once its gain is applied, dBFS — null where its sound masks it — and if heard;
+ * a piece of a suite's take's alike.
+ */
+export function takeFloor(
+  take: Pick<TakeInfo, 'floor' | 'rms' | 'gain'>,
+): { floorDbfs: number | null; noisy: boolean } {
   const floorDbfs = floorDbfsOf(take);
   return { floorDbfs, noisy: floorDbfs !== null && floorDbfs > AUDIBLE_FLOOR_DBFS };
 }
 
+/** Whether `record` misses a rule a recording of the game may not: its length, or its floor. */
+const failing = (record: { readonly misses: readonly string[] }): boolean =>
+  record.misses.includes('length') || record.misses.includes('floor');
+
+/** Whether a piece of a suite's take, kept, would fail the game's recordings: cut short, or noisy. */
+export function pieceFails(piece: PieceInfo): boolean {
+  return failing(piece);
+}
+
 /**
- * Whether a take, kept, would fail the game's recordings as sampleManifest.test.ts holds them:
- * more than a fifth off its length, or its floor heard.
+ * Whether a take, kept, would fail the game's recordings as sampleManifest.test.ts holds them —
+ * more than a fifth off its length, or its floor heard — or a suite's could not be kept whole:
+ * off its plan's length, or a piece of it cut short or with its floor heard.
  */
 export function takeFails(take: TakeInfo): boolean {
-  return take.misses.includes('length') || take.misses.includes('floor');
+  return failing(take) || (take.pieces ?? []).some(failing);
 }
 
 /** The takes chosen to be kept, by their entry's id: one take of each entry at most. */
