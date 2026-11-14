@@ -342,7 +342,7 @@ export function serveVoiceRecording(
  */
 function sourceOf(segment: string, query: URLSearchParams): Source | ApiResponse {
   if (!VOICE_ID.test(segment)) {
-    const shape = 'Person, Bindestrich, zwölf Hex-Ziffern';
+    const shape = 'Kürzel der Stimme, Bindestrich, zwölf Hex-Ziffern';
     const error = `„${segment}" ist keine Kennung eines Funkspruchs: ${shape}.`;
     return { status: 400, body: { error } };
   }
