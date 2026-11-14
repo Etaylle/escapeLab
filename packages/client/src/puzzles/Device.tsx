@@ -451,11 +451,25 @@ function serversDone(last: Extract<PuzzleView, { kind: 'servers' }>): PuzzleView
 }
 
 /**
+ * The Zugangskontrolle as it stands done, where the view shows the terminal: every door it
+ * asked for released.
+ */
+function accessDone(last: Extract<PuzzleView, { kind: 'access' }>): PuzzleView {
+  const { terminal } = last;
+  if (terminal === null) {
+    return last;
+  }
+  const doors = terminal.doors.map((row) => ({ ...row, released: true }));
+  return { ...last, terminal: { ...terminal, doors } };
+}
+
+/**
  * The station `last` showed, solved by now (`solved` stations), as it stands done: a sync
  * station with every press in and no word of an earlier miss — a main switch with every
  * lever down — a keypad with every key lit, the Signalkette with every sign of its stage
- * in, the Serverraum's table up (`serversDone`); any other as last seen. Null where it is
- * not solved: only closed, or walked away from.
+ * in, the Serverraum's table up (`serversDone`), the Zugangskontrolle's doors released
+ * (`accessDone`); any other as last seen. Null where it is not solved: only closed, or walked
+ * away from.
  */
 export function heldView(last: PuzzleView, solved: number): PuzzleView | null {
   if (solved <= last.index) {
@@ -482,6 +496,8 @@ export function heldView(last: PuzzleView, solved: number): PuzzleView | null {
       return { ...last, done: last.length };
     case 'servers':
       return serversDone(last);
+    case 'access':
+      return accessDone(last);
     default:
       return last;
   }

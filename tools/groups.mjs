@@ -70,6 +70,19 @@ export const GROUPS = [
     captures: ['restart', 'restart-maintenance.png', 'restart-recovered.png'],
   },
   {
+    // The Zugangskontrolle's scratch mission, played in a Systemcheck run as the Serverraum's is.
+    name: 'access',
+    stage: 'drills',
+    needs: [],
+    captures: [
+      'access (probe)',
+      'access-list.png',
+      'access-terminal.png',
+      'access-token.png',
+      'access-phone-932.png',
+    ],
+  },
+  {
     name: 'screens',
     stage: 'lobby',
     needs: [],

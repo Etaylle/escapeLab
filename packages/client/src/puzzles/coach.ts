@@ -66,9 +66,22 @@ const LINES = {
     touch: 'Tippen oder antippen: start, restart, status — Codes nur hier.',
     mouse: 'Schreiben oder klicken: start, restart, status — Codes nur hier.',
   },
+  'access-terminal': {
+    touch: 'Tippen oder antippen: login, status, freigeben — Token: Pult B.',
+    mouse: 'Schreiben oder klicken: login, status, freigeben — Token: Pult B.',
+  },
+  'access-token': 'Konto und Token ablesen, solange der Balken läuft.',
 } as const satisfies Record<string, Line>;
 
 type Device = keyof typeof LINES;
+
+const isDevice = (name: string): name is Device => Object.hasOwn(LINES, name);
+
+/** A console's part of a station with two, as LINES names it — „signal-sender" —; null for none. */
+function partOf(kind: string, role: string | null): Device | null {
+  const part = `${kind}-${role ?? ''}`;
+  return role !== null && isDevice(part) ? part : null;
+}
 
 /**
  * The device in front of the player: the module — a sync station drawn as a main switch is
@@ -81,11 +94,10 @@ function deviceOf(puzzle: PuzzleView): Device | null {
     case 'button-sync':
       return puzzle.style === 'lever' ? 'lever' : null;
     case 'circuit':
-      return puzzle.role === null ? null : `circuit-${puzzle.role}`;
     case 'signal':
-      return puzzle.role === null ? null : `signal-${puzzle.role}`;
     case 'servers':
-      return puzzle.role === 'terminal' ? 'servers-terminal' : null;
+    case 'access':
+      return partOf(puzzle.kind, puzzle.role);
     case 'relay':
       return null;
     default:

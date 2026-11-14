@@ -4,16 +4,19 @@ How the crew steers, how it finds things, what a run leaves behind and how runs 
 controls on keys and on a controller, the quick chat, the station's intercom, finding things, the
 walks of Blackout's lab, the first win at the stations the whole crew presses, the Erfolge, the
 Tagesschicht, the picture of a run, the danger sense, the Serverraum's cabling diagram, typing at
-its terminal, what the notepad takes down and what happens when a line drops. Code:
+its terminal, the Zugangskontrolle, what the notepad takes down and what happens when a line
+drops. Code:
 `packages/client/src/input/` (bindings, controller, prompts), `client/src/achievements.ts` and
 `screens/{Plaques,ShareButton,ControlSettings}.tsx`,
 `screens/shareCard.ts`, `world/{labelFade,finds,danger,ChatWheel}.ts(x)`,
 `puzzles/RackDiagram.tsx`, `puzzles/{prompt.ts,ServersPanel.tsx}`,
+`puzzles/{AccessPanel.tsx,accessPrompt.ts}`,
 `puzzles/{SyncCount.tsx,syncPress.ts}`, `voice/{rules,intercom}.ts`, `noting.ts`, `notes.ts`,
 `screens/{Notepad,NoteButton}.tsx`, `pass.ts`, `line.ts`, `ws.ts`,
 `screens/{Join,Pause,Line,GiveUp}.tsx`; in the core `chat.ts`, `discovery.ts`, `achievements.ts`,
 `daily.ts`, `map.ts` (`intercomOf`), `puzzles/servers.ts` (`serviceDiagram`),
-`puzzles/buttonSync.ts` and `actions.ts` (the pause); in the server `seats.ts`, `heartbeat.ts`.
+`puzzles/access.ts`, `puzzles/buttonSync.ts` and `actions.ts` (the pause); in the server
+`seats.ts`, `heartbeat.ts`.
 
 ## Controls
 
@@ -336,6 +339,66 @@ The terminal (console A) is worked by typing, and its prompt holds the keyboard 
 `client/test/terminal.test.tsx` holds each of these; the walkthrough types Blackout's first
 command as a player would — a click on the screen first, then letters and Tab — and shoots the
 line half typed (terminal-typing.png).
+
+## The Zugangskontrolle
+
+A login with two factors under a running clock (`access`, backlog I-1), after Quadrilateral
+Cowboy's terminal, Among Us's ID code read and typed, and Lethal Company's terminal as the second
+player's instrument. No shipped mission has it yet — its place follows the playtest (N-6) —; it
+ships with its probe mission, `tools/fixtures/access-probe.json` („Zugangsprobe": the terminal in
+the Leitstand, the token device in the Wache, the list on a clipboard by the terminal).
+
+- **Console A, the terminal**, is of the Serverraum's make — its screen, prompt, keys and FUNK
+  key, typed as above. It names the doors it asks for (`doors`, 1–3) with their state — asked
+  for, standing open with its seconds, released —, the open session, the accounts a lock holds
+  and its log, and takes `login <konto>`, the token that login asks for (six digits, the blank
+  the device groups them by allowed), `status` and `freigeben <tür>`. Tab completes a command
+  and, after `freigeben`, a door it asks for — never an account: the terminal names none. While
+  the prompt asks for a token it reads „TOKEN <konto> ›", a numeric pad takes the door keys'
+  place on the bezel, and a phone's keyboard comes up numeric.
+- **Console B, the token device**, is bound to one account of the run's list each period
+  (`tokenSec`, 30 s), turning through the list's three accounts in an order of its own, and shows
+  that account, its token in two groups of three and a bar that drains to the period's end on
+  the server's clock — blinking, the seconds inverted and a tick each, in the last five. The
+  token is a pure function of the run's seed, the account and the period (`tokenOf`, no TOTP
+  library); the periods count from the moment the station came on, and the room ticks it at each
+  period's end (`dueAt`), the module harness as well.
+- **The source** holds the whole lookup, dealt anew every run: the list of three accounts, each
+  with its role (one of the four roles stays unheld) and the two doors that role may release —
+  no door to two —, shown under the rules once the station is on, as the maze's walls are, with
+  „Notieren" beside it („Benutzerliste · Konten" on the probe's clipboard), so that a crew of two
+  can carry it to the consoles. The printed page names no role's doors; which account a door
+  needs is only decidable at the list. The device never opens on the account the terminal's
+  first door needs, so a crew that logs in whatever it shows first, without the list, takes an
+  alarm at that door in every run; it brings that account second or third at even odds, so a crew
+  that waits for a later turn instead takes one in about half the runs.
+- **The rules.** A login opens a session only with its account's token of the period it arrives
+  in; the session stays open until the next login. A wrong token is a Fehlquittierung, an alarm;
+  the third in a row for an account locks it for `lockSec` (45 s) on the station's clock, as the
+  periods run — the alarms' time off the mission clock takes none off the lock —, the prompt
+  closing. A token of the period just gone — typed as the bar ran out — is turned back without an
+  alarm, the log saying the period changed. A session releases each door of its role once, the
+  door standing open for `openSec` (5 s; whoever passes through is fiction, not a rule); a
+  release the list does not give its role is an alarm as well, the terminal saying no more than
+  „Keine Berechtigung für diese Tür". `status` names the session as typed and the doors still
+  asked for, never what a session may release. Solved once every door the terminal asked for is
+  released.
+- **Nobody alone.** The reducer's backup rule holds as at every station: a command counts only
+  while somebody else stands at the token device or at an open list.
+
+`core/test/access.test.ts` holds the token (pure and exact to the period), the instance, the views
+by presence (the terminal's also with a session open and after a release), every rule, `status`,
+the list's need (over 200 seeds a crew without it takes an alarm, the solver none; over 600 the
+first door's account comes second and third about equally often), the lock and the backup rule
+and the room's tick through the reducer, the solver over 200 seeds in five variants, and the
+probe with its pinned plan (`tools/fixtures/access-plan.json`, made by
+`core/test/accessPlan.ts`); `client/test/access.test.tsx` the prompt, the keys, both devices,
+the list, the sounds and the type and targets at both consoles on three screens. The
+walkthrough drills the probe in a Systemcheck run, as it does the Serverraum's (group `access`;
+`SHOTS_SKIP=access` leaves it out, and Blackout's run logs it as left out): the list
+(access-list.png), both devices (access-terminal.png, access-token.png), the terminal on a large
+phone held sideways (access-phone-932.png), then each door of the plan, the token read off the
+device.
 
 ## Captures in the notepad
 

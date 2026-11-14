@@ -6,6 +6,7 @@ import {
   MODULES,
   parseMission,
   puzzleDefSchema,
+  puzzleDueAt,
   stationKey,
   viewFor,
 } from '../src/index.js';
@@ -63,6 +64,8 @@ const own = [
   { type: 'signal', id: 'signalkette', moves: [16] },
   // the same with the legend and the display grey from the first stage: read by the patterns
   { type: 'signal', id: 'signalkette-farblos', fields: { legend: true, greyFrom: 1 }, moves: [16] },
+  // two doors, each a login, its token and the release
+  { type: 'access', id: 'zugangskontrolle', moves: [6] },
 ].map(({ type, id, fields = {}, moves }) => {
   const def = puzzleDefSchema.parse({ type, id, title: id, ...fields });
   return [id, def, moves] as const;
@@ -228,14 +231,20 @@ function inputsFor(moves: Move<PuzzleInput>[], roles: Roles, crew: string[], at:
   );
 }
 
+/** `state` at `at`, its open puzzle ticked as the room ticks it once its clock is due. */
+function ticked(state: GameState, at: number): GameState {
+  const due = puzzleDueAt(state);
+  return due !== null && due <= at ? applyAction(state, { type: 'puzzle-tick', at }) : state;
+}
+
 /**
  * A whole mission through the reducer: the crew walks past the sign, then
  * at every station the operator's, the partner's and the reader's views go
  * to the solver, with the crew's transcript of the puzzle and the clock,
  * and every move goes back as puzzle-inputs. Each round is a second on the
- * clock; a solver that waits only lets it run, up to MAX_IDLE_SEC rounds in
- * a row. Stops once the last station is solved; getting out is the
- * server's call.
+ * clock, the open puzzle ticked as the room ticks it once it is due; a
+ * solver that waits only lets it run, up to MAX_IDLE_SEC rounds in a row.
+ * Stops once the last station is solved; getting out is the server's call.
  */
 function playMission(mission: Mission, seed: number): GameState {
   const transcripts = mission.puzzles.map((): Transcript => []);
@@ -250,9 +259,7 @@ function playMission(mission: Mission, seed: number): GameState {
       break;
     }
     const at = T0 + round * 1000;
-    if (state.puzzleState === null) {
-      state = openStation(state, def, at);
-    }
+    state = ticked(state.puzzleState === null ? openStation(state, def, at) : state, at);
     const roles = rolesAt(def, crew);
     const { views, edgework, remainingSec } = crewSees(state, roles, at);
     const moves = moduleFor(def.type).solve(def, views, edgework, { transcript, remainingSec });

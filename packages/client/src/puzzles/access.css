@@ -1,0 +1,334 @@
+/* ══ Zugangskontrolle: a terminal and a token device ══════════════════════
+ * AccessPanel.tsx. Console a is a terminal of the Serverraum's make: it wears
+ * styles/servers.css's green screen, prompt, keys and FUNK key, and adds its
+ * head, its doors, its session and a numeric pad here. Console b is a token
+ * device: a fob of dark plastic round a reflective grey-green LCD — the
+ * account it is bound to, the token in large digits, a bar draining to the
+ * next period. This sheet loads before servers.css, so whatever it sets on
+ * the shared classes it sets two classes deep.
+ */
+
+/* ── the terminal ───────────────────────────────────────────────────── */
+
+/* The machine's line at the top of the glass, its make at the right. */
+.access-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0;
+  color: var(--phosphor-dim);
+  font-size: calc(var(--type-body) * var(--text-scale));
+  letter-spacing: 2px;
+}
+
+.access-doors {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.access-doors th,
+.access-doors td {
+  padding: 1px 6px 1px 0;
+  font-weight: 400;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.access-doors thead th {
+  padding-bottom: 3px;
+  border-bottom: 1px solid var(--phosphor-faint);
+  color: var(--phosphor-dim);
+  font-size: calc(var(--type-label) * var(--text-scale));
+  letter-spacing: 1px;
+}
+
+.access-doors tbody th {
+  width: 45%;
+}
+
+/* A door standing open counts its seconds in inverse video; one released dims. */
+.access-door--open .access-door-status {
+  padding: 0 4px;
+  background: var(--phosphor);
+  color: var(--crt-ink);
+  text-shadow: none;
+  box-shadow: 0 0 8px var(--phosphor-glow);
+}
+
+.access-door--done > * {
+  color: var(--phosphor-dim);
+}
+
+/* A door just released glows up for a moment, as a Serverraum row that turned. */
+.access-door--turned > * {
+  animation: servers-turned 700ms ease-out;
+}
+
+.access-session {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.access-session p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.access-session-label {
+  display: inline-block;
+  min-width: 6.5em;
+  color: var(--phosphor-dim);
+}
+
+.access-lock {
+  font-weight: 700;
+}
+
+/* Room for every line the terminal keeps, so that the prompt stays put as lines come in. */
+.access-crt .access-log {
+  min-height: calc(6 * 1.35em);
+}
+
+/* As the terminal comes up, its doors scroll in line by line before the log. */
+.servers-crt--boot .access-doors tbody tr > * {
+  animation: servers-type-in 220ms steps(6) backwards;
+  animation-delay: calc(120ms + var(--i) * 70ms);
+}
+
+/* The numeric pad's keys: a fingertip square each, the token's six digits in one reach. */
+.access-keyboard .access-key {
+  min-width: var(--target);
+  padding-inline: 0;
+  font-size: calc(var(--type-body) * var(--text-scale));
+  font-weight: 700;
+}
+
+/* ── the token device ───────────────────────────────────────────────── */
+
+.access--token {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+/* The fob: dark plastic, rounded, its make moulded over the display. */
+.access-fob {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  max-width: 420px;
+  padding: 12px 16px 16px;
+  border-radius: 22px;
+  background:
+    radial-gradient(ellipse 80% 60% at 30% 0%, rgba(255, 255, 255, 0.08), transparent 70%),
+    linear-gradient(180deg, #2a3138, #161b20);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.14),
+    inset 0 -2px 4px rgba(0, 0, 0, 0.6),
+    0 0 0 1px #05080b,
+    0 8px 16px rgba(0, 0, 0, 0.55);
+}
+
+.access-fob-head {
+  margin: 0;
+  text-align: center;
+}
+
+/* A reflective LCD: dark segments on grey-green, as the keypad's and the maze's displays. */
+.access-lcd {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    'account account'
+    'digits digits'
+    'bar left';
+  align-items: center;
+  gap: 4px 10px;
+  padding: 10px 14px 12px;
+  border-radius: 8px;
+  background: linear-gradient(180deg, #a3b89e, #8aa385);
+  box-shadow:
+    inset 0 1px 4px rgba(0, 0, 0, 0.6),
+    0 0 0 3px #0b0f13,
+    0 1px 0 3px rgba(255, 255, 255, 0.06);
+  color: #1b2a1a;
+  font-family: var(--mono);
+}
+
+.access-lcd p {
+  margin: 0;
+}
+
+.access-account {
+  grid-area: account;
+  font-size: calc(var(--type-body) * var(--text-scale));
+  overflow-wrap: anywhere;
+}
+
+.access-account-label {
+  font-size: calc(var(--type-body) * var(--text-scale));
+  letter-spacing: 2px;
+  opacity: 0.75;
+}
+
+.access-account-name {
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+
+/* The token: two groups of three in large segments, the unlit ones faint behind them. */
+.access-digits {
+  position: relative;
+  grid-area: digits;
+  font-size: calc(var(--type-readout) * 2 * var(--text-scale));
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: 0.12em;
+  text-align: center;
+  white-space: nowrap;
+  animation: access-token-in 240ms steps(6) backwards;
+}
+
+.access-digits::before {
+  content: '888 888';
+  position: absolute;
+  inset: 0;
+  color: rgba(27, 42, 26, 0.09);
+}
+
+@keyframes access-token-in {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+}
+
+/* The bar: a trough the period drains out of, from its right end. */
+.access-bar {
+  position: relative;
+  grid-area: bar;
+  height: 12px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: rgba(27, 42, 26, 0.12);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+
+.access-bar-fill {
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(90deg, #1b2a1a 0 7px, transparent 7px 9px);
+  transform-origin: left center;
+  /* The period's own length and how far into it the display came (AccessPanel.tsx sets both). */
+  animation: access-drain var(--bar-ms) linear var(--bar-delay) forwards;
+}
+
+@keyframes access-drain {
+  from {
+    transform: scaleX(1);
+  }
+
+  to {
+    transform: scaleX(0);
+  }
+}
+
+.access-left {
+  grid-area: left;
+  min-width: 3.2em;
+  font-size: calc(var(--type-body) * var(--text-scale));
+  font-weight: 700;
+  text-align: right;
+}
+
+/* The period's last seconds: the bar blinks — its trough, so that the drain runs on untouched —
+   and the seconds stand out. */
+.access-lcd--ending .access-bar {
+  animation: access-ending 500ms steps(1) infinite;
+}
+
+.access-lcd--ending .access-left {
+  padding: 0 4px;
+  border-radius: 2px;
+  background: #1b2a1a;
+  color: #a3b89e;
+}
+
+@keyframes access-ending {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+/* ── the list at a source ───────────────────────────────────────────── */
+
+.access-roster {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.access-roster-head {
+  margin: 0;
+  font-size: calc(var(--type-label) * var(--text-scale));
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+}
+
+/* ── the audience ───────────────────────────────────────────────────── */
+
+.access--watched .access-fob {
+  max-width: none;
+  padding: 8px 10px 10px;
+}
+
+.servers-watch > .access-roster {
+  margin-top: 14px;
+}
+
+/* ── calm, and narrow windows ───────────────────────────────────────── */
+
+/* Under reduced motion the bar does not drain: it stands at the share left at the display's
+   latest render, a step with each second (AccessPanel.tsx sets --bar-left). */
+:where([data-motion='reduce']) {
+  .access-bar-fill {
+    animation: none;
+    transform: scaleX(var(--bar-left));
+  }
+
+  .access-lcd--ending .access-bar,
+  .access-digits,
+  .servers-crt--boot .access-doors tbody tr > * {
+    animation: none;
+  }
+
+  .access-door--turned > * {
+    animation-duration: 120ms;
+  }
+}
+
+/*
+ * A phone held sideways: the terminal lays out as the Serverraum's (servers.css), its log
+ * scrolling three lines high; the token device sets its display beside the TERMINAL lamp, the
+ * digits a little smaller, so that the whole fob stands in the window's height.
+ */
+@media (pointer: coarse) and (orientation: landscape) and (max-height: 500px) {
+  .access-crt .access-log {
+    min-height: 0;
+  }
+
+  .access--token {
+    flex-direction: row;
+    align-items: center;
+  }
+
+  .access-fob {
+    padding: 8px 12px 10px;
+  }
+
+  .access-digits {
+    font-size: calc(var(--type-readout) * 1.6 * var(--text-scale));
+  }
+}
