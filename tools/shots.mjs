@@ -8051,9 +8051,10 @@ function releaseFigures() {
  * A shot of `page` with one of its figures in `pose`: the page holds its frames as a figure first
  * stands so (holdFigures), within `ms`, then it is shot and its figures read again — the same
  * pose where the hold held it through the shot — and the frames are let go, however that went.
- * The walkthrough's own reads round a shot timed a slow page's figure out of its pose: a jump
- * landed under a screenshot of 1.2 s. Returns the shot (null where no figure took the pose), the
- * figure as held and as read after the shot, and whether it still stood so.
+ * The walkthrough's own reads round a shot timed a slow page's figure out of its pose: at load
+ * 42 to 57 a figure read 0.142 tiles up had landed after each of four screenshots. Returns the
+ * shot (null where no figure took the pose), the figure as held and as read after the shot, and
+ * whether it still stood so.
  */
 async function figureShot(page, { pose, ms }) {
   await page.evaluate(holdFigures, pose);
