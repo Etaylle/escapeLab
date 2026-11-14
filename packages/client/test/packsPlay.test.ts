@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { barOf, CROSSFADE_S, MUSIC_LEVEL, type Tension } from '../src/world/music.js';
-import { MIN_FADE_MS } from '../src/world/packFile.js';
+import { MIN_FADE_MS, type PackFile } from '../src/world/packFile.js';
 import {
   fakeGraph,
   lastContext,
@@ -56,10 +56,13 @@ function unstage(): void {
 beforeEach(stage);
 afterEach(unstage);
 
-/** The modules afresh, PROBE shipped beside the score, the recordings served as `served` says. */
-async function fresh(served: Readonly<Record<string, Served>> = {}) {
+/**
+ * The modules afresh, PROBE — and `more` — shipped beside the score, the recordings served as
+ * `served` says.
+ */
+async function fresh(served: Readonly<Record<string, Served>> = {}, ...more: PackFile[]) {
   vi.resetModules();
-  shipPacks(PROBE);
+  shipPacks(PROBE, ...more);
   await loadedSamples(served);
   fetched = serveSamples(served);
   const music = await import('../src/world/music.js');
@@ -85,13 +88,17 @@ const tension = (over: Partial<Tension> = {}): Tension => ({
 });
 
 /**
- * The elements playing the music file `file` (its address under /music/): its blob was made as
- * the music fetched it, in the order of the music's fetches — the files, not their lists.
+ * The blob the music made of its file `file` (its address under /music/): blobs are made as the
+ * music fetched its files, in the order of its fetches — the files, not their lists.
  */
-function decksOf(file: string): FakeAudio[] {
+function blobOf(file: string): string {
   const files = fetched.filter((url) => url.startsWith('/music/') && /\.(?:m4a|mp3)$/.test(url));
-  const blob = `blob:${files.indexOf(`/music/${file}`)}`;
-  return elements.filter((element) => element.src === blob);
+  return `blob:${files.indexOf(`/music/${file}`)}`;
+}
+
+/** The elements playing the music file `file` (its address under /music/), from its blob. */
+function decksOf(file: string): FakeAudio[] {
+  return elements.filter((element) => element.src === blobOf(file));
 }
 
 /** The level an element's sound comes in at: its stream's own gain. */
@@ -226,6 +233,31 @@ describe('a pack’s stems in a run', () => {
     music.setTension(tension());
     vi.advanceTimersByTime(300);
     expect(score?.src).toBe('');
+  });
+
+  it('let a piece chosen, then passed over before its loop point, go unheard', async () => {
+    const { music, packs } = await fresh({}, foundPack('other'));
+    music.setTension(tension());
+    await fetchIn();
+    const ctx = lastContext();
+    music.setTension(tension());
+    vi.advanceTimersByTime(300); // the score's calm from 10.3
+    ctx.currentTime = 20;
+    packs.setMusicChoice({ pack: 'nachtschicht', pieces: { calm: 'probe' } });
+    music.setTension(tension());
+    await fetchIn();
+    const passedOver = blobOf('packs/probe/calm.m4a');
+    expect(blobs).toContain(passedOver);
+    packs.setMusicChoice({ pack: 'nachtschicht', pieces: { calm: 'other' } });
+    music.setTension(tension());
+    await fetchIn();
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith(passedOver);
+    expect(music.musicProbe().pieces.calm).toBe('nachtschicht/calm');
+    // At the score's loop point the piece chosen last takes over, and the one passed over never.
+    ctx.currentTime = 10.3 + 24 * BAR - 0.9;
+    music.setTension(tension());
+    expect(music.musicProbe().pieces.calm).toBe('other/calm');
+    expect(decksOf('packs/probe/calm.m4a')).toEqual([]);
   });
 
   it('play the piece the Feinwahl names for a place, the pack’s for the rest', async () => {

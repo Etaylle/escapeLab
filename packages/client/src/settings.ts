@@ -221,18 +221,22 @@ function deadzoneOf(value: unknown): number {
 
 /**
  * The music `value` keeps: a pack the game ships, else the default; and for each place a pack
- * the game ships that holds a piece for it — any other is let go, as a pack no longer shipped.
+ * the game ships — any other is let go, as a pack no longer shipped.
  */
 function readMusic(value: unknown): MusicChoice {
   const kept = isRecord(value) ? value : {};
-  const pack = typeof kept['pack'] === 'string' && packById(kept['pack']) !== null;
   const picked = isRecord(kept['pieces']) ? kept['pieces'] : {};
   const pieces: Partial<Record<Slot, string>> = {};
   for (const slot of SLOTS) {
-    const id = picked[slot];
-    if (typeof id === 'string' && packById(id)?.pieces[slot] !== undefined) pieces[slot] = id;
+    const pack = shippedPack(picked[slot]);
+    if (pack !== null) pieces[slot] = pack;
   }
-  return { pack: pack ? String(kept['pack']) : DEFAULT_CHOICE.pack, pieces };
+  return { pack: shippedPack(kept['pack']) ?? DEFAULT_CHOICE.pack, pieces };
+}
+
+/** The pack `value` names, where the game ships it — every pack fills every place; else null. */
+function shippedPack(value: unknown): string | null {
+  return typeof value === 'string' ? (packById(value)?.id ?? null) : null;
 }
 
 /** The settings `store` keeps, each one missing or malformed at its default. */

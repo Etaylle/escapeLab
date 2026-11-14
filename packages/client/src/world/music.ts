@@ -495,7 +495,7 @@ function follow(m: Music, input: Tension): void {
   if (changed || input.escaping !== m.siren) {
     retarget(m, layers, input.escaping);
   }
-  for (const stem of STEMS) followChoice(m, stem);
+  STEMS.forEach((stem) => followChoice(m, stem));
 }
 
 /** Whether `track` is heard now, or comes in: its fade goes up, or has not died yet. */
@@ -509,21 +509,29 @@ const heard = (track: Track, now: number): boolean =>
  */
 function followChoice(m: Music, stem: Stem): void {
   const want = chosenFor(stem);
-  const coming = m.coming[stem];
   if (want.key === m.tracks[stem].chosen.key) {
-    if (coming !== undefined) dropComing(m, stem);
+    dropComing(m, stem);
     return;
   }
-  if (coming?.chosen.key !== want.key) {
-    if (coming !== undefined) dropComing(m, stem);
-    const fresh = trackOn(m.engine.ctx, m.drain, stem, want);
-    m.coming[stem] = fresh;
-    void retryStem(m, fresh);
-  } else if (coming.file === null && Date.now() - coming.tried >= RETRY_MS) {
-    void retryStem(m, coming);
-  }
+  bringComing(m, stem, want);
   const playing = m.tracks[stem];
   if (playing.passes.length === 0 || playing.fade.to === 0) takeOver(m, stem, null);
+}
+
+/**
+ * The track of `want`, the piece chosen anew for `stem`: made and its file fetched where none comes
+ * for it yet — one coming for another piece let go — and its file asked for again RETRY_MS on.
+ */
+function bringComing(m: Music, stem: Stem, want: Chosen): void {
+  const coming = m.coming[stem];
+  if (coming?.chosen.key === want.key) {
+    if (coming.file === null && Date.now() - coming.tried >= RETRY_MS) void retryStem(m, coming);
+    return;
+  }
+  dropComing(m, stem);
+  const fresh = trackOn(m.engine.ctx, m.drain, stem, want);
+  m.coming[stem] = fresh;
+  void retryStem(m, fresh);
 }
 
 /** The piece chosen before for `stem`, never heard, let go: another was chosen since. */
@@ -652,12 +660,18 @@ function passOn(m: Music, track: Track, entry: MusicPiece, grid: Grid, now: numb
     track.next = Math.max(track.first ?? 0, nextBar(now + PREPARE_S, grid));
   }
   if (track.next - now >= READY_S) return;
-  const coming = m.coming[track.stem];
-  if (coming !== undefined && coming.file !== null && track.passes.length > 0) {
-    takeOver(m, track.stem, track.next + roundOf(entry, grid.bpm ?? SCORE_BPM).lead);
+  const bpm = grid.bpm ?? SCORE_BPM;
+  if (takesOverNext(m, track)) {
+    takeOver(m, track.stem, track.next + roundOf(entry, bpm).lead);
     return;
   }
-  layPass(m.engine.ctx, track, entry, grid.bpm ?? SCORE_BPM);
+  layPass(m.engine.ctx, track, entry, bpm);
+}
+
+/** Whether a piece chosen anew for `track`'s stem has its file, to take over at the next pass. */
+function takesOverNext(m: Music, track: Track): boolean {
+  const coming = m.coming[track.stem];
+  return coming !== undefined && coming.file !== null && track.passes.length > 0;
 }
 
 /** The stem stops at `at` and gives its loop back: faded out, or the music is over. */

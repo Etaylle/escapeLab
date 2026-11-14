@@ -20,7 +20,10 @@ export const SILENCE = 10 ** (-60 / 20);
 export const FLOOR_WINDOW_MS = 100;
 
 /** How many samples each channel of `pcm` holds. */
-const lengthOf = (pcm: Pcm): number => pcm.channels[0]?.length ?? 0;
+export const lengthOf = (pcm: Pcm): number => pcm.channels[0]?.length ?? 0;
+
+/** How long `pcm` lasts, ms. */
+export const msOf = (pcm: Pcm): number => (lengthOf(pcm) / pcm.rate) * 1000;
 
 interface WavFormat {
   readonly code: number;

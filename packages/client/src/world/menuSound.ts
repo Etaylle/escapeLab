@@ -419,18 +419,26 @@ function arrive(p: Playing, where: MenuPlace, fresh: Piece): void {
   p.pieces[where] = fresh;
   p.leaving.push(before);
   const now = p.engine.ctx.currentTime;
-  const going = levelAt(before.fade, now) > 0.001 || before.fade.to > 0;
-  if (going) {
-    const soon = now + PREPARE_S;
-    const at = where === 'menu' || p.grid === null ? musicFrom(soon) : nextBar(soon, p.grid);
-    fresh.first = at;
-    fresh.fade = fadeTo(fresh.cross.gain, still(0), now, [at, at + CROSSFADE_S], 1);
-    before.fade = fadeTo(before.cross.gain, before.fade, now, [at, at + CROSSFADE_S], 0);
+  if (levelAt(before.fade, now) > 0.001 || before.fade.to > 0) {
+    crossIn(fresh, before, crossingAt(p, where, now), now);
   } else if (heardOf(p) !== p.heard) {
     turnTo(p, heardOf(p));
   }
   weigh(p);
   tendIfHeard(p);
+}
+
+/** When a piece chosen anew for `where` comes in: the theme at once, the lobby's on the bar. */
+function crossingAt(p: Playing, where: MenuPlace, now: number): number {
+  const soon = now + PREPARE_S;
+  return where === 'menu' || p.grid === null ? musicFrom(soon) : nextBar(soon, p.grid);
+}
+
+/** `fresh` comes in at `at` and `before` goes out under it, crossing over CROSSFADE_S. */
+function crossIn(fresh: Piece, before: Piece, at: number, now: number): void {
+  fresh.first = at;
+  fresh.fade = fadeTo(fresh.cross.gain, still(0), now, [at, at + CROSSFADE_S], 1);
+  before.fade = fadeTo(before.cross.gain, before.fade, now, [at, at + CROSSFADE_S], 0);
 }
 
 /** Tends the pieces ten times a second from when the piece to be heard has its file. */

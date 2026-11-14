@@ -70,7 +70,7 @@ import {
   type Decode,
   type Encode,
 } from './afconvert.ts';
-import { fadedOf, loudnessOf, lufsOf, sliceOf, type Pcm } from './pcm.ts';
+import { fadedOf, loudnessOf, lufsOf, msOf, sliceOf, type Pcm } from './pcm.ts';
 import { bestSeam, featuresOf } from './seam.ts';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -452,7 +452,7 @@ const LOOP_MS = [LOOP_SECONDS[0] * 1000, LOOP_SECONDS[1] * 1000] as const;
  * its loop comes in to TAIL_MS past its end — no second more than a pass plays.
  */
 function keptOf(piece: PlanPiece, cut: Pcm): Kept {
-  const cutMs = ((cut.channels[0]?.length ?? 0) / cut.rate) * 1000;
+  const cutMs = msOf(cut);
   const { loop } = piece;
   if (loop === undefined) return { loop: null, seam: null, span: [0, cutMs] };
   if ('bars' in loop) return { loop: { bars: loop.bars }, seam: null, span: [0, cutMs] };
@@ -479,6 +479,19 @@ export function gainTo(lufs: number): number {
 }
 
 /**
+ * `plan`'s span of the decoded file `pcm`, its edges faded over EDGE_MS and its ends over the
+ * plan's fades; fails where the span runs past the file.
+ */
+function cutOf(plan: PlanPiece, pcm: Pcm): Pcm {
+  const fileMs = Math.floor(msOf(pcm));
+  if (plan.trim[1] > fileMs) {
+    throw new Error(`its span ends at ${plan.trim[1]} ms, past its file's ${fileMs} ms`);
+  }
+  const span = sliceOf(pcm, plan.trim[0], plan.trim[1], EDGE_MS);
+  return fadedOf(span, plan.fades?.inMs ?? 0, plan.fades?.outMs ?? 0);
+}
+
+/**
  * `plan`'s piece for `slot` from its decoded file `pcm`: its span cut out, its seam found, encoded
  * into `part` and measured as encoded.
  */
@@ -489,12 +502,7 @@ export function buildPiece(
   part: string,
   bench: Bench,
 ): Built {
-  const fileMs = Math.floor(((pcm.channels[0]?.length ?? 0) / pcm.rate) * 1000);
-  if (plan.trim[1] > fileMs) {
-    throw new Error(`its span ends at ${plan.trim[1]} ms, past its file's ${fileMs} ms`);
-  }
-  const span = sliceOf(pcm, plan.trim[0], plan.trim[1], EDGE_MS);
-  const cut = fadedOf(span, plan.fades?.inMs ?? 0, plan.fades?.outMs ?? 0);
+  const cut = cutOf(plan, pcm);
   const { loop, seam, span: [from, to] } = keptOf(plan, cut);
   bench.encode(sliceOf(cut, from, to, EDGE_MS), part);
   const encoded = bench.decode(part);

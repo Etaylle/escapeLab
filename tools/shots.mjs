@@ -14011,30 +14011,35 @@ async function previewStops(page) {
 }
 
 /**
- * The choice kept on the device: after a reload and a key the menu plays the theme of `picked`
- * again; „Zurücksetzen" in „Ton" lights the score again and brings its theme back where the
- * music's manifest has it (`listed`). What was wrong.
+ * The choice kept on the device: after a reload and a key the menu has to play the theme of
+ * `picked` again. What was wrong.
  */
-async function musicKept(page, picked, listed) {
+async function musicKept(page, picked) {
   await page.reload();
   await page.locator('.menu-item').first().waitFor({ timeout: 10_000 });
   const kept = await wakeMenuSound(page, (probe) => probe.pack === picked && probe.theme);
-  const opened = await settled(openSettings(page, 'ton'));
-  if (opened) {
-    await page.locator('.settings-reset').click();
+  const playing = kept.theme ? (kept.pack ?? 'nothing') : 'nothing';
+  console.log(`music kept         after a reload: ${playing === picked ? '' : '!! '}${playing} playing`);
+  return wrongOf([[playing !== picked, `after a reload ${playing} played, not ${picked}`]]);
+}
+
+/**
+ * „Zurücksetzen" in „Ton" has to light the score again and bring its theme back where the music's
+ * manifest has it (`listed`); Esc closes the settings. What was wrong.
+ */
+async function musicReset(page, listed) {
+  if (!(await settled(openSettings(page, 'ton')))) {
+    return ['the gear opened no settings after the reload'];
   }
+  await page.locator('.settings-reset').click();
   const back = await menuSoundOnce(page, (probe) => !listed || probe.pack === SCORE_PACK);
   const lit = litOf(await page.evaluate(packsListed));
-  const closed = opened && (await closeSettings(page));
-  console.log(
-    `music kept         after a reload ${kept.pack ?? '!! nothing'} playing; „Zurücksetzen": ` +
-      `${lit || '!! none'} lit, ${back.pack ?? 'nothing'} playing`,
-  );
+  const closed = await closeSettings(page);
+  const playing = back.pack ?? 'nothing';
+  console.log(`music reset        „Zurücksetzen": ${lit || '!! none'} lit, ${playing} playing`);
   return wrongOf([
-    [kept.pack !== picked || !kept.theme, `after a reload ${kept.pack ?? 'nothing'} played`],
-    [!opened, 'the gear opened no settings after the reload'],
     [lit !== SCORE_PACK, `„Zurücksetzen" lit ${lit || 'none'}`],
-    [listed && back.pack !== SCORE_PACK, `„Zurücksetzen" left ${back.pack ?? 'nothing'} playing`],
+    [listed && playing !== SCORE_PACK, `„Zurücksetzen" left ${playing} playing`],
     [!closed, 'Esc left the settings open'],
   ]);
 }
@@ -14045,8 +14050,9 @@ async function musicKept(page, picked, listed) {
  * lists it; the settings on „Ton", scrolled to „Musik" (settings-music.png, `musicBlockShot`);
  * another pack pressed sounds at once (`packSwitch`); a ▶ in the Feinwahl plays its piece over the
  * music pulled down (`previewDucks`); on a phone held sideways the block fits (`musicOnPhone`); Esc
- * stops the piece with the settings (`previewStops`); the pack picked plays again after a reload,
- * and „Zurücksetzen" brings the score back (`musicKept`). The run fails where any of it is not so.
+ * stops the piece with the settings (`previewStops`); the pack picked plays again after a reload
+ * (`musicKept`), and „Zurücksetzen" brings the score back (`musicReset`). The run fails where any
+ * of it is not so.
  */
 async function captureMusicPacks() {
   const context = await browser.newContext({ viewport: SIZES[0] });
@@ -14067,7 +14073,7 @@ async function captureMusicPacks() {
     if (picked !== null) {
       wrong.push(...(await previewDucks(page, picked, shot.packs.length)));
       wrong.push(...(await musicOnPhone(page)), ...(await previewStops(page)));
-      wrong.push(...(await musicKept(page, picked, listed)));
+      wrong.push(...(await musicKept(page, picked)), ...(await musicReset(page, listed)));
     }
     if (wrong.length > 0) {
       fail(`music packs: ${wrong.join(', ')}`);

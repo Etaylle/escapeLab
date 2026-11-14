@@ -16,7 +16,7 @@
  * pack format (src/world/packFile.ts), which imports nothing.
  */
 import { MIN_LEAD_MS, type Crossfade } from '../src/world/packFile.ts';
-import type { Pcm } from './pcm.ts';
+import { lengthOf, type Pcm } from './pcm.ts';
 
 /** The frames the spectrum is read in, ms: a seam is found to this. */
 export const HOP_MS = 10;
@@ -35,7 +35,7 @@ export const MARGIN_MS = 1000;
 
 /** The mean of `pcm`'s channels. */
 function monoOf(pcm: Pcm): Float32Array {
-  const frames = pcm.channels[0]?.length ?? 0;
+  const frames = lengthOf(pcm);
   const mono = new Float32Array(frames);
   for (const channel of pcm.channels) {
     for (let i = 0; i < frames; i++) mono[i] = (mono[i] ?? 0) + (channel[i] ?? 0);
@@ -101,19 +101,20 @@ export function fluxOf(spectrum: readonly Float32Array[]): Float32Array {
   return flux;
 }
 
+/** The mean of `n` values of `x` from `from`. */
+function meanOf(x: Float32Array, from: number, n: number): number {
+  let sum = 0;
+  for (let i = 0; i < n; i++) sum += x[from + i] ?? 0;
+  return sum / n;
+}
+
 /**
  * How `x` from `a` and from `b` rise and fall together over `n` values: their correlation, −1 to 1;
  * 0 where either stands still.
  */
 export function correlation(x: Float32Array, a: number, b: number, n: number): number {
-  let sa = 0;
-  let sb = 0;
-  for (let i = 0; i < n; i++) {
-    sa += x[a + i] ?? 0;
-    sb += x[b + i] ?? 0;
-  }
-  const ma = sa / n;
-  const mb = sb / n;
+  const ma = meanOf(x, a, n);
+  const mb = meanOf(x, b, n);
   let ab = 0;
   let aa = 0;
   let bb = 0;
@@ -176,6 +177,18 @@ interface Sums {
   readonly gap: Float64Array;
 }
 
+/** The spectra's squared gap between frame `t` and `period` frames later, over every band. */
+function gapAt(spectrum: readonly Float32Array[], t: number, period: number): number {
+  let gap = 0;
+  for (const band of spectrum) gap += ((band[t] ?? 0) - (band[t + period] ?? 0)) ** 2;
+  return gap;
+}
+
+/** The running sum `running` taken on by `value` past index `i`. */
+function runOn(running: Float64Array, i: number, value: number): void {
+  running[i + 1] = (running[i] ?? 0) + value;
+}
+
 /** The running sums for `period`, frames `lo` to `hi`. */
 function sumsOf(features: Features, period: number, lo: number, hi: number): Sums {
   const length = Math.max(0, hi - lo);
@@ -192,14 +205,12 @@ function sumsOf(features: Features, period: number, lo: number, hi: number): Sum
     const t = lo + i;
     const x = features.flux[t] ?? 0;
     const y = features.flux[t + period] ?? 0;
-    let gap = 0;
-    for (const band of features.spectrum) gap += ((band[t] ?? 0) - (band[t + period] ?? 0)) ** 2;
-    sums.a[i + 1] = (sums.a[i] ?? 0) + x;
-    sums.b[i + 1] = (sums.b[i] ?? 0) + y;
-    sums.ab[i + 1] = (sums.ab[i] ?? 0) + x * y;
-    sums.aa[i + 1] = (sums.aa[i] ?? 0) + x * x;
-    sums.bb[i + 1] = (sums.bb[i] ?? 0) + y * y;
-    sums.gap[i + 1] = (sums.gap[i] ?? 0) + gap;
+    runOn(sums.a, i, x);
+    runOn(sums.b, i, y);
+    runOn(sums.ab, i, x * y);
+    runOn(sums.aa, i, x * x);
+    runOn(sums.bb, i, y * y);
+    runOn(sums.gap, i, gapAt(features.spectrum, t, period));
   }
   return sums;
 }
