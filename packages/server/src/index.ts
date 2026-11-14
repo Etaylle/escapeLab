@@ -24,7 +24,7 @@ import { onSignal } from './shutdown.js';
 import { ACCOUNT_CHANGES_PER_SOCKET, ACCOUNTS_MADE_PER_MINUTE, serveSockets } from './sockets.js';
 import { StaticSite } from './static.js';
 import { DEFAULT_RUNS_LOG } from './store/jsonl.js';
-import { openStore, recordRuns, type Store } from './store/store.js';
+import { readyStore, recordRuns, type Store } from './store/store.js';
 import { serveTakes, takesAllowed, TakesShelf } from './takes.js';
 import { createWebServer, lanUrls, tlsLogLine, tlsSetup } from './tls.js';
 import { recordingAllowed, serveVoiceRecording, VoiceDesk } from './voiceRecording.js';
@@ -60,8 +60,9 @@ const voiceDesk = recordingAllowed(process.env)
 // The music's takes, for the client's /sounds page to play before one is kept: ALLOW_TAKES=1 only.
 const TAKES_DIR = fileURLToPath(new URL('../../client/takes', import.meta.url));
 const takes = takesAllowed(process.env) ? new TakesShelf(TAKES_DIR) : null;
-// Where finished runs and the accounts are kept: Postgres at DATABASE_URL, else the run log
-// file and the accounts in memory. The Bestenliste is counted from it once, then run by run.
+// Where finished runs and the accounts are kept: Postgres at DATABASE_URL — its migrations
+// applied first, whatever command started the server — else the run log file and the accounts
+// in memory. The Bestenliste is counted from it once, then run by run. Nothing listens before.
 const store = await storeOrExit();
 const recorder = recordRuns(store);
 const runs: RunsExport = { store, token: process.env['RUNS_TOKEN'] };
@@ -184,12 +185,12 @@ httpServer.listen(PORT, () => {
 });
 
 /**
- * The store the environment names (store/store.ts `openStore`); the process exits 1, saying why,
- * where it cannot be opened.
+ * The store the environment names, migrated and opened (store/store.ts `readyStore`); the
+ * process exits 1, saying why, where the migrations do not apply or the store cannot be opened.
  */
 async function storeOrExit(): Promise<Store> {
   try {
-    return await openStore(process.env, RUNS_LOG);
+    return await readyStore(process.env, RUNS_LOG);
   } catch (err) {
     const why = err instanceof Error ? err.message : String(err);
     console.error(`[escapelab] not started: ${why}`);

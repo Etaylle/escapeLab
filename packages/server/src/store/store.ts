@@ -8,6 +8,7 @@ import {
   type RunReport,
 } from '@escapelab/core';
 import type { RunStats } from '../runStats.js';
+import { defaultDirectUrl, migrate } from './migrate.js';
 
 /**
  * What the server keeps beyond a room's life: the finished runs — the Bestenliste counts them —
@@ -197,6 +198,31 @@ export async function openStore(env: NodeJS.ProcessEnv, runsLog: string): Promis
   }
   const { PostgresStore } = await import('./postgres.js');
   return PostgresStore.open(url);
+}
+
+/** What readying the store takes: the migrations applied, then the store opened. */
+export interface ReadySteps {
+  migrate: (env: NodeJS.ProcessEnv) => Promise<void>;
+  open: (env: NodeJS.ProcessEnv, runsLog: string) => Promise<Store>;
+}
+
+/**
+ * The store the environment names (`openStore`), the server's first step: where DATABASE_URL
+ * names a database, its direct URL defaulted to it (migrate.ts `defaultDirectUrl`) before
+ * anything touches Prisma, and its migrations applied (`migrate`) before the store opens — a
+ * Start Command of `node` straight, as Render's, starts as `pnpm run start` does. Rejects where
+ * the migrations do not apply: the store is not opened then.
+ */
+export async function readyStore(
+  env: NodeJS.ProcessEnv,
+  runsLog: string,
+  steps: ReadySteps = { migrate, open: openStore },
+): Promise<Store> {
+  if ((env['DATABASE_URL'] ?? '') !== '') {
+    defaultDirectUrl(env);
+    await steps.migrate(env);
+  }
+  return steps.open(env, runsLog);
 }
 
 /** What the server hands every finished run to (room.ts `RunListener`), and how it waits. */

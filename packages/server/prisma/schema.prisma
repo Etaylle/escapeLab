@@ -4,8 +4,8 @@
 //
 // The schema is the source of truth: change it here, then make the migration with
 // `pnpm --filter @escapelab/server prisma migrate dev --name <what>` against a database of your
-// own. The start script applies the migrations (`prisma migrate deploy`) where DATABASE_URL is
-// set; `pnpm install` and `pnpm build` generate the client.
+// own. The server applies the migrations itself (`prisma migrate deploy`, src/store/migrate.ts)
+// as it starts, where DATABASE_URL is set; `pnpm install` and `pnpm build` generate the client.
 
 generator client {
   provider = "prisma-client-js"
@@ -13,9 +13,9 @@ generator client {
 
 // The server's queries go through DATABASE_URL, which may be Neon's pooled connection; the
 // migrations take DATABASE_URL_UNPOOLED, the direct one Neon's integration sets beside it, for
-// Prisma's schema engine does not go through PgBouncer. Where it is unset, the package's `prisma`
-// script — the start script's way to migrate, and everyone's — hands the CLI DATABASE_URL for
-// both: a single direct URL does for everything.
+// Prisma's schema engine does not go through PgBouncer. Where it is unset, the server as it
+// starts and the package's `prisma` script, run by hand, hand the CLI DATABASE_URL for both: a
+// single direct URL does for everything.
 datasource db {
   provider  = "postgresql"
   url       = env("DATABASE_URL")
