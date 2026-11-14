@@ -34,9 +34,11 @@ describe('the Übungshalle on the menu', () => {
     vi.unstubAllGlobals();
   });
 
-  it('is known by its title', () => {
+  it('is known by its id, not by a title another mission may take', () => {
     expect(isPracticeHall(hall)).toBe(true);
     expect(isPracticeHall(tutorial)).toBe(false);
+    const namesake: MissionInfo = { ...blackout, id: 'custom-halle', title: 'Übungshalle Nord' };
+    expect(isPracticeHall(namesake)).toBe(false);
   });
 
   it('says what it is for over its title, its facts naming no clock', () => {

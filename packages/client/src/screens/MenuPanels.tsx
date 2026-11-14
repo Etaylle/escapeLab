@@ -221,9 +221,12 @@ export function MenuPanel({
 /** On the Übungshalle's card, over its title, for every device: what the hall is for. */
 export const HALL_HINT = 'Jede Station zum Üben';
 
-/** The Übungshalle among the missions: the one whose title says so. */
-export function isPracticeHall(mission: Pick<MissionInfo, 'title'>): boolean {
-  return /^Übungshalle\b/.test(mission.title);
+/** The Übungshalle's id, as core's test/hall.ts makes the mission. */
+const HALL_ID = 'uebungshalle';
+
+/** The Übungshalle among the missions, by its id: a mission of the editor's may take its name. */
+export function isPracticeHall(mission: Pick<MissionInfo, 'id'>): boolean {
+  return mission.id === HALL_ID;
 }
 
 /**
