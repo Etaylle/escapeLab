@@ -68,7 +68,9 @@ export {
   pickLine,
   RADIO_MOMENTS,
   radioLines,
-  speakerOf,
+  roleOf,
+  ROLES,
+  shownText,
   variantsOf,
   WON_BANDS,
   wonBand,
@@ -77,9 +79,22 @@ export {
   type Mood,
   type RadioLine,
   type RadioMoment,
+  type Role,
   type Speaker,
   type WonBand,
 } from './radio.js';
+export {
+  castFor,
+  castOf,
+  inService,
+  personOf,
+  ROSTER,
+  rosterSchema,
+  speakerAt,
+  type Cast,
+  type Person,
+  type Roster,
+} from './cast.js';
 export {
   clockStartOf,
   runReport,

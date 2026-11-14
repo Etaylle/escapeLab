@@ -381,7 +381,8 @@ export class Room {
     private readonly sealer: Sealer | null = null,
   ) {
     this.code = code;
-    this.state = initialState(mission, seed, difficulty);
+    // The room's nights are staffed from its pinned seed, or one drawn now (core cast.ts).
+    this.state = initialState(mission, seed, difficulty, seed ?? randomInt(2 ** 31));
   }
 
   /**

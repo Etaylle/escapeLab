@@ -850,6 +850,7 @@ function justStarted(parts: Partial<PlayerView> = {}): PlayerView {
     missionTitle: 'Blackout im Labor',
     difficulty: 'normal',
     storyText: 'Stromausfall.',
+    cast: { pa: 'anlage', operator: 'helmut', lead: 'kessler' },
     crewSize: { min: 2, max: 2 },
     chat: [],
     you: {

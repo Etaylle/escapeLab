@@ -268,6 +268,7 @@ describe('lobby', () => {
         label: mission.radio.start,
         seconds: null,
         moment: 'start',
+        speaker: { role: 'operator', person: 'helmut' },
       },
     ]);
     expect(again.deadlineAt).toBe(T0 + 500_000 + mission.timeLimitSec * 1000);

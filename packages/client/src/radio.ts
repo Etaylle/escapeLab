@@ -1,4 +1,4 @@
-import { NUDGED, speakerOf, type RadioMoment, type RunEvent } from '@escapelab/core';
+import { NUDGED, roleOf, type RadioMoment, type RunEvent } from '@escapelab/core';
 
 /**
  * How long a line stays on the air at least — a line spoken longer stays while it speaks
@@ -29,10 +29,10 @@ export const ANNOUNCED = 'Durchsage';
 
 /**
  * Whether a line is the plant's: its loudspeakers' message on their emergency power, as an
- * emergency starts (core radio.ts `speakerOf`).
+ * emergency starts (core radio.ts `roleOf`).
  */
 export function fromPlant(event: RunEvent): boolean {
-  return event.kind === 'radio' && event.moment !== undefined && speakerOf(event.moment) === 'pa';
+  return event.kind === 'radio' && event.moment !== undefined && roleOf(event.moment) === 'pa';
 }
 
 /**

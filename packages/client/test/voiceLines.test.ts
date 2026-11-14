@@ -276,9 +276,9 @@ describe('the lines the script reads', () => {
     expect(missions.length).toBe(shippedMissions().length);
     for (const mission of missions) {
       const read = shippedMissions().find((each) => each.id === mission.id);
-      const core = radioLines(mission).map(({ text, speaker, mood, when }) => ({
+      const core = radioLines(mission).map(({ text, role, mood, when }) => ({
         text,
-        speaker,
+        speaker: role === 'pa' ? 'pa' : 'operator',
         mood,
         opens: when === 'start',
       }));

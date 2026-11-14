@@ -265,6 +265,7 @@ function annaSees(parts: Partial<PlayerView> = {}): PlayerView {
     missionTitle: 'Blackout im Labor',
     difficulty: 'normal',
     storyText: '',
+    cast: { pa: 'anlage', operator: 'helmut', lead: 'kessler' },
     crewSize: { min: 2, max: 3 },
     chat: [],
     you: anna,

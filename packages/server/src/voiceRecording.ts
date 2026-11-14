@@ -13,7 +13,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
-import { radioLines, type Mission, type Mood, type Speaker } from '@escapelab/core';
+import { radioLines, type Mission, type Mood, type Role } from '@escapelab/core';
 import type { ApiResponse } from './api.js';
 import { readBody } from './body.js';
 import { switchOn } from './switches.js';
@@ -158,7 +158,7 @@ export interface ShippedLine {
   text: string;
   missions: string[];
   opens: boolean;
-  speaker: Speaker;
+  speaker: Role;
   mood: Mood | null;
 }
 
@@ -174,7 +174,7 @@ interface ManifestEntry {
   text: string;
   ms: number;
   missions: string[];
-  speaker: Speaker;
+  speaker: Role;
   mood?: Mood;
   opens?: true;
   source?: Source;
@@ -211,8 +211,8 @@ export class VoiceDesk {
     let found: ShippedLine | null = null;
     for (const mission of this.missions()) {
       for (const line of radioLines(mission).filter((said) => voiceId(said.text) === id)) {
-        const { text, speaker, mood } = line;
-        found ??= { text, missions: [], opens: false, speaker, mood };
+        const { text, role, mood } = line;
+        found ??= { text, missions: [], opens: false, speaker: role, mood };
         if (!found.missions.includes(mission.id)) found.missions.push(mission.id);
         found.opens ||= line.when === 'start';
       }

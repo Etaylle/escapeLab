@@ -5,7 +5,7 @@ import { missionSchema } from './mission.js';
 import type { RelayedPosition } from './protocol.js';
 import type { PuzzleState } from './puzzles/index.js';
 import type { RelayState } from './puzzles/relay.js';
-import { RADIO_MOMENTS } from './radio.js';
+import { RADIO_MOMENTS, ROLES } from './radio.js';
 import type { GameState, RunEvent } from './state.js';
 
 /**
@@ -149,6 +149,7 @@ const runEventSchema = z.looseObject({
   label: z.string(),
   seconds: z.number().nullable(),
   moment: z.enum(RADIO_MOMENTS).exactOptional(),
+  speaker: z.looseObject({ role: z.enum(ROLES), person: z.string() }).exactOptional(),
 });
 
 const edgeworkSchema = z.looseObject({
@@ -186,6 +187,8 @@ const gameStateSchema = z.looseObject({
   dailyOn: z.boolean(),
   daily: z.string().nullable(),
   runs: count,
+  // A snapshot of a build before the cast: its nights are staffed from 0 on.
+  castSeed: z.number().default(0),
   edgework: edgeworkSchema.nullable(),
   pressedPlates: ids,
   occupiedPanels: ids,

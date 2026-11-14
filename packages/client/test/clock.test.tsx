@@ -192,6 +192,7 @@ function running(deadlineAt: number, pausedAt: number | null = null): PlayerView
     missionTitle: 'Blackout im Labor',
     difficulty: 'normal',
     storyText: '',
+    cast: { pa: 'anlage', operator: 'helmut', lead: 'kessler' },
     crewSize: { min: 2, max: 3 },
     chat: [],
     you,

@@ -20,10 +20,12 @@ import { noteKey } from './notes.js';
 import { mulberry32, shuffle } from './rng.js';
 import { moduleFor, type PuzzleDef, type PuzzleState } from './puzzles/index.js';
 import type { ConsoleId, PuzzleContext } from './puzzles/module.js';
+import { speakerAt } from './cast.js';
 import {
   CLOCK_CALLS,
   CLOCK_LATE_MS,
   pickLine,
+  shownText,
   wonBand,
   type Line,
   type LostCause,
@@ -1192,7 +1194,10 @@ function handleEscaped(state: GameState, action: { at: number }): GameState {
   return wonNow(state, action.at, 'Alle draußen');
 }
 
-/** Append a line to the run report; a line heard in the run names the `moment` that brought it. */
+/**
+ * Append a line to the run report; a line heard in the run names the `moment` that brought it,
+ * and who of the night's cast says it (cast.ts `speakerAt`).
+ */
 function logEvent(
   state: GameState,
   kind: RunEvent['kind'],
@@ -1202,15 +1207,18 @@ function logEvent(
   moment?: RadioMoment,
 ): GameState {
   const event: RunEvent =
-    moment === undefined ? { at, kind, label, seconds } : { at, kind, label, seconds, moment };
+    moment === undefined
+      ? { at, kind, label, seconds }
+      : { at, kind, label, seconds, moment, speaker: speakerAt(state, moment) };
   return { ...state, events: [...state.events, event] };
 }
 
 /**
- * A line is heard at `moment` — mission control's on the radio, or the plant's over its
- * loudspeakers (radio.ts `speakerOf`) — if the mission scripted one for it: of its texts, the
- * one the run picks for it (radio.ts `pickLine`) at its `place` — the station, the clock's
- * call, the band of the time left, the cause — the `occurrence`-th time it comes in the run.
+ * A line is heard at `moment` — on the radio, or over the plant's loudspeakers, said by the role
+ * the moment wants (radio.ts `roleOf`) — if the mission scripted one for it: of its texts, the
+ * one the run picks for it (radio.ts `pickLine`) at its `place` — the station, the clock's call,
+ * the band of the time left, the cause — the `occurrence`-th time it comes in the run, as it is
+ * shown: its audio tags are for the recording alone (radio.ts `shownText`).
  */
 function logRadio(
   state: GameState,
@@ -1224,7 +1232,7 @@ function logRadio(
     return state;
   }
   const key = place === '' ? moment : `${moment}:${place}`;
-  const text = pickLine(line, state.seed ?? 0, key, occurrence);
+  const text = shownText(pickLine(line, state.seed ?? 0, key, occurrence));
   return logEvent(state, 'radio', text, at, null, moment);
 }
 
@@ -1708,7 +1716,7 @@ function nudge(state: GameState, at: number): GameState {
     return state;
   }
   const spoken = { ...state, nudgesGiven: state.nudgesGiven + 1, quietSince: at };
-  const text = pickLine(line, state.seed ?? 0, `nudge:${def.id}:${state.nudgesGiven}`);
+  const text = shownText(pickLine(line, state.seed ?? 0, `nudge:${def.id}:${state.nudgesGiven}`));
   return logEvent(spoken, 'nudge', text, at, null, 'nudge');
 }
 

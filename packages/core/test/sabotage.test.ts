@@ -124,7 +124,14 @@ describe('sabotage emergencies', () => {
     const first = applyAction(playing(announcing), { type: 'sabotage-start', at: T0 + 1000 });
     expect(first.events.slice(-2)).toEqual([
       { at: T0 + 1000, kind: 'sabotage', label: 'Notfall: KÜHLUNG AUSGEFALLEN', seconds: null },
-      { at: T0 + 1000, kind: 'radio', label: ANNOUNCE, seconds: null, moment: 'announce' },
+      {
+        at: T0 + 1000,
+        kind: 'radio',
+        label: ANNOUNCE,
+        seconds: null,
+        moment: 'announce',
+        speaker: { role: 'pa', person: 'anlage' },
+      },
     ]);
     const cleared = applyAction(first, { type: 'sabotage-cleared', at: T0 + 9000 });
     const second = applyAction(cleared, { type: 'sabotage-start', at: T0 + 200_000 });
@@ -140,7 +147,7 @@ describe('sabotage emergencies', () => {
       text: ANNOUNCE,
       when: 'announce',
       puzzleId: null,
-      speaker: 'pa',
+      role: 'pa',
       mood: null,
     });
   });

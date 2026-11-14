@@ -52,6 +52,15 @@ describe('a snapshot of the build before', () => {
     }
   });
 
+  it('staffs the nights of a room kept before the cast from 0, its lines naming nobody', () => {
+    expect('castSeed' in BUILD_BEFORE.state).toBe(false);
+    const opened = open(seal(BUILD_BEFORE, BUILD_BEFORE.code, KEY), BUILD_BEFORE.code, KEY);
+    expect(opened.state.castSeed).toBe(0);
+    const heard = opened.state.events.filter((event) => event.kind === 'radio');
+    expect(heard.length).toBeGreaterThan(0);
+    expect(heard.some((event) => event.speaker !== undefined)).toBe(false);
+  });
+
   it('lets keys this build does not know pass through, wherever they stand', () => {
     const later = {
       ...BUILD_BEFORE,

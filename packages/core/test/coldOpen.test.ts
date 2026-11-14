@@ -77,6 +77,16 @@ const mission: Mission = parseMission(raw);
 const OUT_AT = T0 + 3000;
 const LIMIT_MS = 600_000;
 
+/** Mission control's opener at `at`, said by the Leitstelle on duty: Helmut, the one voiced. */
+const opener = (at: number) => ({
+  at,
+  kind: 'radio',
+  label: 'Strom weg.',
+  seconds: null,
+  moment: 'start',
+  speaker: { role: 'operator', person: 'helmut' },
+});
+
 /** The same lab for a crew of three, the third starting at (2,1). */
 const forThree: Mission = parseMission({
   ...raw,
@@ -165,7 +175,7 @@ describe('the lights going out', () => {
     expect(POWER_OUT).toBe('Stromausfall');
     expect(out.events).toEqual([
       { at: OUT_AT, kind: 'power', label: 'Stromausfall', seconds: null },
-      { at: OUT_AT, kind: 'radio', label: 'Strom weg.', seconds: null, moment: 'start' },
+      opener(OUT_AT),
     ]);
   });
 
@@ -349,7 +359,7 @@ describe('a mission without an intro', () => {
     expect(plain.lightsDueAt).toBeNull();
     expect(plain.deadlineAt).toBe(T0 + LIMIT_MS);
     expect(plain.events).toEqual([
-      { at: T0, kind: 'radio', label: 'Strom weg.', seconds: null, moment: 'start' },
+      opener(T0),
     ]);
     expect(armedStations(plain.mission.map, plain)).toHaveLength(1);
     expect(viewFor(plain, 'p1').lights).toEqual({ out: true, outAt: T0 });
