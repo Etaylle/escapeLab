@@ -623,9 +623,13 @@ the drift stands: one copy, at whole pixels; a pan costs no more than the drift 
 table). The bake holds every place's frame as well as the drift's box, but only as far as the lab
 and a tile of the dark round it reach (drift.ts `labBound`, `DARK_ROUND`): where a frame looks
 further into the dark — the Archiv's, the Maschinenraum's — the frame fills what lies past the
-bake with the dark itself, read off the bake's corner once as it is baked, sunk with the lab at
-night (scene.ts `pastBake`, `paintBake`). So the dark round the lab is never baked, and the box
-grows by the lab's own rooms alone:
+bake with the dark's colour as the bake holds it (scene.ts `pastBake`, `paintBake`): read off the
+bake once as it is baked, at the middle of a side that lies past the lab, and again each time the
+night falls or lifts. A tile out from the lab its dark is one colour all round, the lab's light
+on it, 26, 23, 22 at night; the fill meets the baked tile there to the level, where a night colour
+worked out from the lit one had left a seam of four to five levels, and the bake's edge stretched
+over the part instead cost half a millisecond a frame more. So the dark round the lab is never
+baked, and the box grows by the lab's own rooms alone:
 
 | Window, density | The drift's box | With the places |
 | --- | --- | --- |
@@ -713,10 +717,10 @@ How tall it stands, the menu laid out as menu.css lays it out:
 | Narrower, a phone | left out | |
 
 At 1024 px across the room beside the panel would hold a hero 154 px tall at any height, 2.6 tiles
-at 768 px of height and 3.1 at 640: too small to stand for the player beside the bar's avatar.
-The sizes test measures five windows off the stylesheets, the hero resting and stepped aside,
-against the menu's column, the stage's top, the widest panel and the safe areas, and the widths
-above (test/menuHeroSizes.test.ts); the walkthrough measures it in the browser at 1440 × 820, 1280 × 720
+at 768 px of height and 3.1 at 640: too small to stand for the player beside the bar's avatar. The
+sizes test measures five windows off the stylesheets, the hero resting and stepped aside, against
+the menu's column, the stage's top, the widest panel and the safe areas, and the widths above
+(test/menuHeroSizes.test.ts); the walkthrough measures it in the browser at 1440 × 820, 1280 × 720
 and 1100 × 700, with a panel open and shut, and finds it left out at 1024 × 768 (tools/shots.mjs
 `checkHero`).
 
@@ -798,7 +802,7 @@ there. The flare lays it a second time while it lasts, 320 ms; the dust's motes 
 drawn at each mote's size, about 17 of them a frame. The edge light down the hero's front and the
 visor's glow are drawn into its upper layer, which is drawn anew only as the lamp's light steps
 by a twentieth, as the glow comes or goes, or as a glance turns it. A frame that looks past the
-bake into the dark round the lab fills that part with the dark (The menu's places).
+bake into the dark round the lab fills that part with the dark's colour (The menu's places).
 
 S-hero's bench put the beam and the hero together at +0.64 ms a frame over the scene, the scene
 alone at 1.13; the sending microphone, its light laid over the hero's layers alone (e6d09ed), at
@@ -822,16 +826,19 @@ Medians of the six rounds, ms; „over the scene" is each round's frame against 
 | Travelling between the Archiv and the Maschinenraum | 1.75 | +0.71 | 3.65 | 6 |
 | Travelling between the Flur and the Süd-Flur | 1.62 | +0.58 | 3.50 | 6 |
 
-Round by round the menu's frame cost +0.01 ms over main's with the microphone off (−0.12 to
-+0.38) and +0.16 with it on (−0.10 to +0.37); the sending microphone costs +0.36 here, +0.24 on
-main. A pan costs a frame less than the drift — round by round −0.16 ms between the two rooms at
-the lab's edge, whose frames fill the dark past the bake, cheaper in five rounds of six, and −0.17
-between the two within the lab, cheaper in all six: the hero's head stands turned and its beam held
-on the room, so the hero's layer and the beam's turn are drawn anew less often. The hero's p95 is
-its upper layer drawn anew, fewer times than on main, each dearer for the edge light down its
-front; the frames held the screen's pace, 16.7 to 16.8 ms p95, in every run. Before the beam was
-held to its size and laid as a haze, the same bench put it with the hero at +1.59 ms over the
-scene, +0.57 over main's: the cone at 0.56 rad and 1.45 times the hero's height, added onto the lab.
+Round by round the menu's frame cost +0.01 ms over main's with the microphone off (−0.12 to +0.38)
+and +0.16 with it on (−0.10 to +0.37); the sending microphone costs +0.36 here, +0.24 on main. A pan
+costs a frame less than the drift — round by round −0.16 ms between the two rooms at the lab's edge,
+whose frames fill the dark past the bake, cheaper in five rounds of six, and −0.17 between the two
+within the lab, cheaper in all six: the hero's head stands turned and its beam held on the room, so
+the hero's layer and the beam's turn are drawn anew less often; a rerun of the places' runs on the
+dark's colour as it is now read (load 2.0 to 2.8) put the edge rooms' pan at −0.05 ms against the
+drift, cheaper in five rounds of six, the inner one at −0.16 and an edge room held at −0.28, each
+cheaper in all six. The hero's p95 is its upper layer drawn anew, fewer times than on main, each
+dearer for the edge light down its front; the frames held the screen's pace, 16.7 to 16.8 ms p95, in
+every run. Before the beam was held to its size and laid as a haze, the same bench put it with the
+hero at +1.59 ms over the scene, +0.57 over main's: the cone at 0.56 rad and 1.45 times the hero's
+height, added onto the lab.
 
 ## Chrome (ui.css, styles/lobby.css, finale.css, pause.css, settings.css)
 
