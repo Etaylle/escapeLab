@@ -77,7 +77,7 @@ const SMALL: SuiteEntry = {
   motif: ['a rising minor sixth that falls back by step'],
   styles: ['felt piano and chamber strings', 'great production quality'],
   avoid: ['lyrics'],
-  target: { measure: 'loudness', dbfs: -20 },
+  target: { measure: 'loudness', dbfs: -19 },
   sections: [
     section('test-open', 'Opening', 2, false),
     section('test-round', 'Night Shift', 2, true),
@@ -286,7 +286,7 @@ describe('a suite in the catalog', () => {
 
   it('names a whole of the wrong shape before its sections', () => {
     expect(flaws({ target: { measure: 'rms', dbfs: -20 } })).toEqual([
-      'its target has to be {"measure":"loudness","dbfs":-20}',
+      'its target has to be {"measure":"loudness","dbfs":-19}',
     ]);
     expect(flaws({ styles: ['x'.repeat(121)], bpm: 300 })).toEqual([
       'its tempo, 300 bpm, lies outside 40–200',
@@ -387,7 +387,7 @@ describe('a suite’s takes', () => {
     });
   });
 
-  it('list each piece where the plan cuts it, measured, brought to −20 LUFS', async () => {
+  it('list each piece where the plan cuts it, measured, brought to −19 LUFS', async () => {
     const places = placesIn();
     await suiteTakeIn(places);
     const cut = firstTake(places).pieces ?? [];
@@ -397,7 +397,7 @@ describe('a suite’s takes', () => {
       ['test-turn', 14_000, 10_000, true, 0, []],
       ['test-close', 24_000, 4000, false, 0, []],
     ]);
-    for (const p of cut) expect(Number(p.loudness) + 20 * Math.log10(p.gain)).toBeCloseTo(-20, 2);
+    for (const p of cut) expect(Number(p.loudness) + 20 * Math.log10(p.gain)).toBeCloseTo(-19, 2);
     // Twice the amplitude, half the gain.
     const [, round, turn] = cut.map((p) => [p.gain, p.peak] as const);
     expect(Number(round?.[0]) / Number(turn?.[0])).toBeCloseTo(2, 2);
@@ -528,7 +528,7 @@ describe('keeping a suite’s take', () => {
     expect(loudnessOf(pcmOf(places, 'test-close.m4a')).peak).toBeCloseTo(0.05, 2);
   });
 
-  it('fades each piece in and out over 10 ms where cut, and brings all to −20 LUFS', async () => {
+  it('fades each piece in and out over 10 ms where cut, and brings all to −19 LUFS', async () => {
     const places = placesIn();
     const bench = await suiteTakeIn(places);
     const { kept } = keepTake({ id: SMALL.id, n: 1 }, [SMALL], bench);
@@ -539,7 +539,7 @@ describe('keeping a suite’s take', () => {
     expect(loudest(left.subarray(-8))).toBeLessThan(0.01);
     expect(loudest(left.subarray(4000, 4100))).toBeCloseTo(0.2, 2);
     for (const entry of Object.values(kept)) {
-      expect((entry.loudness ?? NaN) + 20 * Math.log10(entry.gain), entry.file).toBeCloseTo(-20, 2);
+      expect((entry.loudness ?? NaN) + 20 * Math.log10(entry.gain), entry.file).toBeCloseTo(-19, 2);
     }
   });
 

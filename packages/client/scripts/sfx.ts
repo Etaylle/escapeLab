@@ -222,9 +222,10 @@ export const EDGE_MS = 10;
 export const SUITE_SLACK_MS = 1000;
 /**
  * The loudness a suite's pieces are brought to, every one alike, LUFS: so that no piece jumps
- * against another where the game changes from one to the next.
+ * against another where the game changes from one to the next — and where the stems and the
+ * menu's theme brought to −20 dBFS RMS play today, measured by `lufsOf`: −19.7 to −17.8 LUFS.
  */
-export const SUITE_TARGET: Target = { measure: 'loudness', dbfs: -20 };
+export const SUITE_TARGET: Target = { measure: 'loudness', dbfs: -19 };
 /** The effects' model, the one that makes a seamless loop. */
 export const SFX_MODEL = 'eleven_text_to_sound_v2';
 /** The music's model: Eleven Music's newest, the one a composition plan of chunks asks for. */
