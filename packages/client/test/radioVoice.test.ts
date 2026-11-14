@@ -32,6 +32,9 @@ const LEVER_LINE =
   'Notlicht steht, danke. Jetzt der Notstrom: Die Anleitung dafür hängt im Archiv, der ' +
   'Kasten ist im Maschinenraum, das Prüfpult im Flur.';
 const START_LINE = 'Leitstelle an Nachtschicht. Stromausfall im ganzen Trakt.';
+/** Two more lines of the run, for the files a page keeps (FILES_KEPT). */
+const FOURTH = 'Der Kasten steht im Maschinenraum.';
+const FIFTH = 'Die Pulte stehen im Flur.';
 const MANIFEST: VoiceManifest = {
   lines: {
     // A file a person put on the /record page, an MP3: the radio plays whatever the entry names.
@@ -57,6 +60,20 @@ const MANIFEST: VoiceManifest = {
       speaker: 'operator',
       opens: true,
       file: 'cccccccccccc.m4a',
+    },
+    ffffffffffff: {
+      text: FOURTH,
+      ms: 2000,
+      missions: ['blackout'],
+      speaker: 'operator',
+      file: 'ffffffffffff.m4a',
+    },
+    abcdefabcdef: {
+      text: FIFTH,
+      ms: 1800,
+      missions: ['blackout'],
+      speaker: 'operator',
+      file: 'abcdefabcdef.m4a',
     },
   },
 };
@@ -186,31 +203,60 @@ describe('a line spoken over the radio', () => {
     return engine as unknown as { musicDuck: FakeGain; ambienceDuck: FakeGain };
   }
 
-  it('fetches the run’s lines at its start and decodes the opening line alone', async () => {
+  it('fetches the list alone as a run starts, and a line’s own file as it queues', async () => {
     const radio = await voice();
     const { decodedBytes } = await import('../src/world/audioMemory.js');
-    radio.preloadVoice('blackout');
+    radio.voiceForRun();
     await settle();
-    expect(fetched).toEqual([
-      '/voice/manifest.json',
-      '/voice/aaaaaaaaaaaa.mp3',
-      '/voice/cccccccccccc.m4a',
-    ]);
-    expect(radio.clipOf(START_LINE)).not.toBeNull(); // it comes the moment the lights fail
-    expect(radio.clipOf(LEVER_LINE)).toBeNull(); // kept as it came, compressed
+    expect(fetched).toEqual(['/voice/manifest.json']);
+    expect(decodedBytes().voice).toBe(0);
+    // The run's first line queued: its file alone, decoded at once.
+    radio.preloadLines([START_LINE]);
+    await settle();
+    expect(fetched).toEqual(['/voice/manifest.json', '/voice/cccccccccccc.m4a']);
+    expect(radio.clipOf(START_LINE)).not.toBeNull();
     // One channel at 22.05 kHz: the fake decodes any line to 1.5 s.
     expect(radio.VOICE_RATE).toBe(22050);
     expect(decodedBytes().voice).toBe(1.5 * 22050 * 4);
     radio.preloadLines(['Beide hin.', 'Etwas ohne Aufnahme.']);
     await settle();
     expect(fetched.at(-1)).toBe('/voice/bbbbbbbbbbbb.m4a');
-    expect(fetched).toHaveLength(4);
+    expect(fetched).toHaveLength(3);
     expect(radio.clipOf('Beide hin.')).not.toBeNull(); // about to be heard: decoded
+    expect(radio.clipOf(LEVER_LINE)).toBeNull(); // never queued: never fetched
+  });
+
+  it('keeps the files of the last few lines, as they came, and none of a run before', async () => {
+    const radio = await voice();
+    radio.voiceForRun();
+    await settle();
+    const lines = [LEVER_LINE, 'Beide hin.', START_LINE];
+    const again = async (text: string): Promise<string[]> => {
+      radio.releaseLine(text);
+      const before = fetched.length;
+      radio.preloadLines([text]);
+      await settle();
+      return fetched.slice(before);
+    };
+    radio.preloadLines(lines);
+    await settle();
+    // Said again within the run: its file is here still, nothing fetched.
+    expect(await again(LEVER_LINE)).toEqual([]);
+    // Two more lines: past FILES_KEPT the oldest file goes, the one asked for again lately stays.
+    expect(radio.FILES_KEPT).toBe(4);
+    radio.preloadLines([FOURTH, FIFTH]);
+    await settle();
+    expect(await again('Beide hin.')).toEqual(['/voice/bbbbbbbbbbbb.m4a']);
+    expect(await again(FIFTH)).toEqual([]);
+    // A new run lets the files of the last one go.
+    radio.voiceForRun();
+    await settle();
+    expect(await again(FIFTH)).toEqual(['/voice/abcdefabcdef.m4a']);
   });
 
   it('speaks a recorded line through the chain: squelch, speech over static, tail', async () => {
     const radio = await voice();
-    radio.preloadVoice('blackout');
+    radio.voiceForRun();
     await settle();
     expect(radio.sayLine(LEVER_LINE)).toBe(true); // decoded as it comes over the air
     await settle();
@@ -250,7 +296,7 @@ describe('a line spoken over the radio', () => {
 
   it('pulls the music 8 dB and the beds 4 dB down while it speaks, and reports it', async () => {
     const radio = await voice();
-    radio.preloadVoice('blackout');
+    radio.voiceForRun();
     await settle();
     radio.sayLine(LEVER_LINE);
     await settle();
@@ -277,7 +323,8 @@ describe('a line spoken over the radio', () => {
 
   it('opens the run’s first line with the Leitstelle’s squelch, and no other line', async () => {
     const radio = await voice();
-    radio.preloadVoice('blackout');
+    radio.voiceForRun();
+    radio.preloadLines([START_LINE]);
     await settle();
     expect(radio.sayLine(START_LINE)).toBe(true);
     const ctx = lastContext();
@@ -305,11 +352,11 @@ describe('a line spoken over the radio', () => {
   it('tells how long a line keeps the air: the opening, the key, the recording, the tail', async () => {
     const radio = await voice();
     expect(radio.airtimeMs(LEVER_LINE)).toBeNull(); // no manifest yet
-    radio.preloadVoice('blackout');
+    radio.voiceForRun();
     await settle();
     // Not decoded yet: by the manifest's 2 s; decoded, by its recording's 1.5 s.
     expect(radio.airtimeMs(LEVER_LINE)).toBe(Math.round((KEY_S + 2 + TAIL_S) * 1000));
-    radio.preloadLines([LEVER_LINE]);
+    radio.preloadLines([LEVER_LINE, START_LINE]);
     await settle();
     expect(radio.airtimeMs(LEVER_LINE)).toBe(Math.round((KEY_S + 1.5 + TAIL_S) * 1000));
     expect(radio.airtimeMs(START_LINE)).toBe(Math.round((OPEN_S + KEY_S + 1.5 + TAIL_S) * 1000));
@@ -319,8 +366,7 @@ describe('a line spoken over the radio', () => {
 
   it('cuts a line short for a newer one, leaves one without a recording to the chirp', async () => {
     const radio = await voice();
-    radio.preloadVoice('blackout');
-    radio.preloadVoice('systemcheck');
+    radio.voiceForRun();
     await settle();
     radio.sayLine(LEVER_LINE);
     await settle();
@@ -338,8 +384,7 @@ describe('a line spoken over the radio', () => {
 
   it('speaks only the newest of two lines asked for while the first still decoded', async () => {
     const radio = await voice();
-    radio.preloadVoice('blackout');
-    radio.preloadVoice('systemcheck');
+    radio.voiceForRun();
     await settle();
     expect(radio.sayLine(LEVER_LINE)).toBe(true);
     expect(radio.sayLine('Beide hin.')).toBe(true); // before the first is decoded
@@ -353,7 +398,7 @@ describe('a line spoken over the radio', () => {
 
   it('lets go of a line still decoding as the voice stops: nothing airs after', async () => {
     const radio = await voice();
-    radio.preloadVoice('blackout');
+    radio.voiceForRun();
     await settle();
     expect(radio.sayLine(LEVER_LINE)).toBe(true); // not decoded yet
     radio.stopVoice(); // the screen goes before it is
@@ -370,7 +415,7 @@ describe('a line spoken over the radio', () => {
     try {
       const radio = await voice();
       const { decodedBytes } = await import('../src/world/audioMemory.js');
-      radio.preloadVoice('blackout');
+      radio.voiceForRun();
       await vi.advanceTimersByTimeAsync(0);
       radio.sayLine(LEVER_LINE);
       await vi.advanceTimersByTimeAsync(0);
@@ -379,7 +424,7 @@ describe('a line spoken over the radio', () => {
       ctx.currentTime = 11.6; // past its end at 11.58
       await vi.advanceTimersByTimeAsync((1.58 + TAIL_S + 0.2) * 1000);
       expect(radio.clipOf(LEVER_LINE)).toBeNull();
-      // The opening line went as this one came on the air: the run's start is behind it.
+      // Nothing else stays decoded: no line is decoded before it is queued.
       expect(decodedBytes().voice).toBe(0);
       expect(radio.sayLine(LEVER_LINE)).toBe(true); // its file still here
       await vi.advanceTimersByTimeAsync(0);
@@ -392,7 +437,7 @@ describe('a line spoken over the radio', () => {
   it('says nothing before a gesture woke the sound, nor anything not loaded', async () => {
     const radio = await voice();
     expect(radio.sayLine(LEVER_LINE)).toBe(false); // no manifest yet
-    radio.preloadVoice('blackout');
+    radio.voiceForRun();
     await settle();
     lastContext().state = 'suspended';
     expect(radio.sayLine(LEVER_LINE)).toBe(false);
@@ -480,9 +525,14 @@ describe('the lines that may open a run', () => {
     },
   };
 
+  /** The voice's files the page asked for, in order. */
+  let asked: string[] = [];
+
   beforeEach(() => {
     fakeGraph();
-    serveSamples({}, () => {
+    asked = [];
+    serveSamples({}, (url: string) => {
+      asked.push(url);
       const json = (): Promise<VoiceManifest> => Promise.resolve(OPENERS);
       const arrayBuffer = (): Promise<ArrayBuffer> => Promise.resolve(new ArrayBuffer(8));
       return Promise.resolve({ ok: true, status: 200, json, arrayBuffer });
@@ -492,39 +542,21 @@ describe('the lines that may open a run', () => {
     vi.unstubAllGlobals();
   });
 
-  it('go when the run’s start goes by unheard; a page that came late decodes none', async () => {
+  it('come as any line does: the take the run picked, fetched as it queues, no other', async () => {
     vi.resetModules();
     await (await import('../src/world/samples.js')).preloadSamples();
     const radio = await import('../src/world/radioVoice.js');
     const { decodedBytes } = await import('../src/world/audioMemory.js');
-    radio.preloadVoice('blackout');
+    radio.voiceForRun();
     await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(decodedBytes().voice).toBe(2 * 1.5 * 22050 * 4);
-    // The run picked a take with no recording yet: it chirps, and neither recorded one is needed.
-    expect(radio.sayLine('Leitstelle an Nachtschicht. Eine Fassung ohne Aufnahme.')).toBe(false);
-    expect(radio.clipOf(START_LINE)).toBeNull();
-    expect(radio.clipOf(OTHER_START)).toBeNull();
+    expect(asked).toEqual(['/voice/manifest.json']);
     expect(decodedBytes().voice).toBe(0);
-    // A page that comes in after the start fetches the lines and decodes no opening one.
-    radio.preloadVoice('blackout', false);
+    // The run picked the other take: its event names it, and only its file comes.
+    radio.preloadLines([OTHER_START]);
     await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(decodedBytes().voice).toBe(0);
-    expect(radio.recordedMs(START_LINE)).toBe(2500);
-  });
-
-  it('are all decoded at the run’s start, and the others let go as the run’s own airs', async () => {
-    vi.resetModules();
-    await (await import('../src/world/samples.js')).preloadSamples();
-    const radio = await import('../src/world/radioVoice.js');
-    const { decodedBytes } = await import('../src/world/audioMemory.js');
-    radio.preloadVoice('blackout');
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(radio.clipOf(START_LINE)).not.toBeNull();
-    expect(radio.clipOf(OTHER_START)).not.toBeNull();
-    expect(decodedBytes().voice).toBe(2 * 1.5 * 22050 * 4);
+    expect(asked).toEqual(['/voice/manifest.json', '/voice/dddddddddddd.mp3']);
     expect(radio.sayLine(OTHER_START)).toBe(true);
     expect(radio.clipOf(START_LINE)).toBeNull();
-    expect(radio.clipOf(OTHER_START)).not.toBeNull();
     expect(decodedBytes().voice).toBe(1.5 * 22050 * 4);
     expect(radio.voiceProbe()).toMatchObject({ lastId: 'dddddddddddd', opened: true });
   });

@@ -41,8 +41,12 @@ const VOICE: VoiceManifest = {
   },
 };
 
+/** The voice's files the page asked for, in order. */
+const voiceAsked: string[] = [];
+
 /** The voice's list and its recordings, as the static site serves them; nothing else. */
 function serveVoice(url: string): Promise<unknown> {
+  if (url.startsWith('/voice/')) voiceAsked.push(url);
   if (url === '/voice/manifest.json') return Promise.resolve(Response.json(VOICE));
   if (url.startsWith('/voice/')) return Promise.resolve(new Response('mp3'));
   return Promise.resolve(new Response(null, { status: 404 }));
@@ -61,7 +65,7 @@ async function fresh(served: Readonly<Record<string, Served>> = {}) {
   const audio = await import('../src/world/audio.js');
   const turn = await import('../src/world/musicTurn.js');
   const radio = await import('../src/world/radioVoice.js');
-  radio.preloadVoice('blackout');
+  radio.voiceForRun();
   return { end, audio, turn, radio };
 }
 
@@ -159,14 +163,21 @@ describe('the end card’s music', () => {
 });
 
 describe('the operator’s last word on the end card', () => {
-  /** How long the last word keeps the air by the manifest, s: the key, its 3 s, the tail. */
-  const AIR_S = KEY_S + 3 + TAIL_S;
+  /**
+   * How long the last word keeps the air, s: the key, its recording as decoded while the sting
+   * plays — the fake decodes every line to 1.5 s, where the manifest says 3 — and the tail.
+   */
+  const AIR_S = KEY_S + 1.5 + TAIL_S;
 
   it('comes 0.5 s after the sting, over the radio, and the theme 0.5 s after it', async () => {
     const { end, radio } = await fresh();
     await fetchIn();
+    voiceAsked.length = 0;
     end.playEnding('won', LAST_WORD);
     await fetchIn();
+    // Its recording fetched and decoded as the card comes up, while the sting plays.
+    expect(voiceAsked).toEqual(['/voice/aaaaaaaaaaaa.mp3']);
+    expect(radio.clipOf(LAST_WORD)).not.toBeNull();
     expect(end.endThemeProbe()).toEqual({ asked: 'won', line: LAST_WORD, playing: 'end-won' });
     const theme = elements[1];
     // The sting ends 10 s past the look-ahead; the word comes half a second later.
@@ -197,7 +208,10 @@ describe('the operator’s last word on the end card', () => {
     await fetchIn();
     gone.end.playEnding('lost', LAST_WORD);
     await fetchIn();
+    expect(gone.radio.clipOf(LAST_WORD)).not.toBeNull();
     gone.end.stopEnding();
+    // Gone with the card: its recording let go before it was ever said.
+    expect(gone.radio.clipOf(LAST_WORD)).toBeNull();
     await vi.advanceTimersByTimeAsync(20_000);
     expect(gone.radio.voiceProbe().lastId).toBeNull();
     expect(gone.end.endThemeProbe()).toEqual({ asked: null, line: null, playing: null });

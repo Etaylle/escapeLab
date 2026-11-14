@@ -149,7 +149,7 @@ describe('the announcement over the loudspeakers', () => {
     const audio = await import('../src/world/audio.js');
     const memory = await import('../src/world/audioMemory.js');
     audio.sharedAudio(); // the lab's context, made as a world makes it
-    radio.preloadVoice('blackout');
+    radio.voiceForRun();
     await vi.advanceTimersByTimeAsync(0);
     return { radio, pa, memory };
   }

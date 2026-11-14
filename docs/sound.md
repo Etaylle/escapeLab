@@ -327,9 +327,10 @@ this machine for it, and a phone does not give a tab that much. A page now keeps
   none of it. The stems' files are fetched once as the music starts and kept as they came —
   1.7 MB each, compressed, not counted — and their elements play them from memory; the stings
   and the cue stream from the server.
-- **A line as it airs.** Mission control's lines are fetched at a run's start and kept as they
-  came; a line is decoded as it comes over the air, in one channel at 22.05 kHz — the radio's
-  band ends at 3.4 kHz and the loudspeakers' at 5 — and let go once spoken (below).
+- **A line as it airs.** A line's recording is fetched as the line is queued, never before, the
+  files of the last four lines kept as they came; it is decoded then, in one channel at
+  22.05 kHz — the radio's band ends at 3.4 kHz and the loudspeakers' at 5 — and let go once
+  spoken (below).
 - **What is made.** The radio's static (2 s, made once) and the room's impulse responses (one,
   or two while they cross) count too.
 
@@ -788,19 +789,23 @@ curl -L -o ~/.cache/escapelab-piper/de_DE-thorsten-high.onnx.json \
   https://huggingface.co/rhasspy/piper-voices/resolve/5041a7a49ae5b3a0f30e6837769eb03fdbb231bd/de/de_DE/thorsten/high/de_DE-thorsten-high.onnx.json
 ```
 
-At a run's start the mission's lines are fetched and kept as they came, compressed — Blackout's 72
-texts some 6 MB once all are recorded, 1.8 MB of them today, every text of a line since a run's pick
-is drawn as it comes — and the takes that may open the run decoded, so that the one it picks comes
-the moment the lights fail; they go as soon as the run's start is behind it, aired or not, and a
-page that comes in after the start decodes none of them. Any other line is decoded as it comes over
-the air, from its file in memory, in one channel at 22.05 kHz (a few tens of milliseconds), spoken
-and let go, so that a page keeps a line or two decoded rather than a mission's 159 s (28 MB at 44.1
-kHz). A line asked for while an older one still decoded speaks alone. When the banner shows a line,
-its recording plays as a handset hears it: high-pass 300 Hz and low-pass 3.4 kHz, each fourth order,
-a light waveshaper (tanh at a drive of 1.2: a 1 kHz tone at the speech's peak comes out with 8 %
-distortion, where the drive of 2.2 the Mac's voice had gave 17 %, and the quiet parts come up 3 dB
-against the peaks instead of 7, so that the consonants stay clear), a bed of static 33 dB under the
-speech, a squelch as the key goes down and a longer one as it comes up — each a recording
+At a run's start a page fetches the recordings' list alone, a few kB, and no recording: Blackout's
+72 texts would come to some 6 MB once all are recorded, more than a phone on mobile data should
+fetch for a run. A line's own file comes as the line is queued (`preloadLines`) — the take the run
+picked, which its event names, the server's reducer having picked it by the run's seed — and is
+decoded at once, in one channel at 22.05 kHz (a few tens of milliseconds): the run's first line
+waits for the HUD to come back after the opening, or for the briefing, and a solve's line a second
+after the solve, so its file is mostly here before it airs, and where it is not, the voice comes in
+late under its banner. The last word on the end card is fetched as the card comes up, while its
+sting plays. A page keeps the files of the last four lines it asked for (`FILES_KEPT`), so that a
+line said again is not fetched again, and lets them go as the next run starts; a line is spoken and
+let go once said, so that a page keeps a line or two decoded rather than a mission's 159 s (28 MB at
+44.1 kHz). A line asked for while an older one still decoded speaks alone. When the banner shows a
+line, its recording plays as a handset hears it: high-pass 300 Hz and low-pass 3.4 kHz, each fourth
+order, a light waveshaper (tanh at a drive of 1.2: a 1 kHz tone at the speech's peak comes out with
+8 % distortion, where the drive of 2.2 the Mac's voice had gave 17 %, and the quiet parts come up 3
+dB against the peaks instead of 7, so that the consonants stay clear), a bed of static 33 dB under
+the speech, a squelch as the key goes down and a longer one as it comes up — each a recording
 (`radio-key`, `radio-tail`), its peak about 6 dB under the speech's — and the music goes 8 dB and
 the beds 4 dB down meanwhile (mix.ts, above). The run's first line comes after the Leitstelle
 opening the channel: static swells up for 0.3 s and snaps shut on the squelch gate's click
@@ -941,8 +946,9 @@ reverb), `test/spatial.test.ts` (pan, the inverse model and its 12 tiles, a wall
 and 15 ms, steps on the floor under a partner, the rotor, the chirp and the fly-by placed, the
 doors placed and the audience's unplaced), `test/radioVoice.test.ts` (the chain, the shaper's
 distortion, the static's level, the speech, the squelches' recordings, the Leitstelle's opening,
-the music 8 dB and the beds 4 dB down, the run's lines fetched and the opening line alone
-decoded, a line decoded as it airs and let go once spoken, the newest of two, a line's airtime,
+the music 8 dB and the beds 4 dB down, no recording fetched as a run starts and each line's own
+as it is queued, the files of the last four kept and none of a run before, a line let go once
+spoken, the newest of two, a line's airtime,
 the offline renders, a line still decoding dropped as the voice stops), `test/radioCheck.test.ts`
 (the Funkprobe once every seat is ready and once only, 10 dB under the crew's voices and back,
 cut with its lobby and its level let go after, nothing asked for once the lobby went, silent
@@ -1172,8 +1178,9 @@ before it —, the buses and the 2 s fades, the lobby's weight, the start withou
 run, the switch and the sound back at once as it is switched on again, a theme not rendered tended
 by no timer, the end with the run, the crew's duck, the bus held and waited for, and the interface's
 sounds; `test/doorWipe.test.tsx` the places it is wanted, the editor none of them;
-`test/endTheme.test.ts` the sting, the last word after it and the theme after both, its level and
-voice, its fade with the card and the bus held, the word cut with the card, no theme for a card gone
+`test/endTheme.test.ts` the sting, the last word after it — fetched as the card comes up and let
+go with it — and the theme after both, its level and voice, its fade with the card and the bus held,
+the word cut with the card, no theme for a card gone
 or a theme not made; `test/music.test.ts` and `test/introCue.test.ts` the stems and the cue waiting
 for the bus. The walkthrough checks the lamp lit before the first key, the sound playing after it,
 the lobby's weight, chime and chirp, all of it gone in the run, the won card asking for its music
@@ -1235,11 +1242,6 @@ What the sound packages left for later, one line each, the newest first:
   the radio". Until then the new lines show their words on the objective bar and in the
   Einsatzprotokoll, the operator's keyed with the radio's chirp, the plant's message, the last
   word and the Funkprobe silent, and the announcement keeps Helmut's takes.
-- **A run fetches every text of its mission's lines** (V-voices): which text a run says is
-  drawn as its moment comes, so a run's start fetches them all — Blackout's 72 some 6 MB
-  compressed once recorded, where its 24 lines took 1.8 MB. Fetching only what the run may
-  still say would need the pick before the moment, which the client cannot make without the
-  run's seed, and that seed gives every instance away.
 - **Three takes of the menu's theme and the end cards' themes, one kept by ear** (S-audition): the
   user's render and choice, some 6,696 credits; the commands are under „Takes und Auswahl".
 - **The Leitstelle's 47 lines of 2026-10-25** (S-menu, „Lizenz"): the repo does not record the

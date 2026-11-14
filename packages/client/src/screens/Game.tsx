@@ -21,7 +21,6 @@ import {
   fromPlant,
   noticeMs,
   radioNews,
-  startAhead,
   voiced,
   withNews,
   type Notice,
@@ -62,9 +61,9 @@ import { announce, stopAnnounce } from '../world/pa.js';
 import {
   airtimeMs,
   preloadLines,
-  preloadVoice,
   sayLine,
   stopVoice,
+  voiceForRun,
 } from '../world/radioVoice.js';
 import type { ChatLine, MapPing } from '../world/render/frame.js';
 import { startRoom } from '../world/rooms.js';
@@ -397,9 +396,9 @@ function airLine(event: RunEvent): number | null {
  * later, so that the win is seen first — and the note once this player has
  * walked up to the Laborkennung. Nothing shows before its gate opens. A
  * player who spawns at the sign gets the note too; one who reconnects later
- * does not, they read it before. The run's recorded lines are fetched as it
- * starts, a line that comes in as it comes, and one still speaking stops
- * with the screen.
+ * does not, they read it before. As the run starts only the list of the
+ * recordings is fetched; each line's own recording as the line is queued,
+ * and one still speaking stops with the screen.
  */
 function useNotices(view: PlayerView, gates: NoticeGates): Notice | null {
   const seen = useRef(0);
@@ -407,11 +406,9 @@ function useNotices(view: PlayerView, gates: NoticeGates): Notice | null {
   const [shown, setShown] = useState<Notice | null>(null);
   const briefingEnds = (view.startedAt ?? 0) + BRIEFING_MS;
 
-  // The takes that may open the run are decoded only while its start is still to come.
-  const ahead = startAhead(view.events, Date.now());
   useEffect(() => {
-    preloadVoice(view.missionId, ahead);
-  }, [view.missionId, view.startedAt, ahead]);
+    voiceForRun();
+  }, [view.missionId, view.startedAt]);
   useEffect(
     () => () => {
       stopVoice();

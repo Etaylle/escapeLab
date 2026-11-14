@@ -2,7 +2,7 @@ import { claim, LOOKAHEAD, playingEngine, release } from './audio.js';
 import { closeStream, openStream, startStream, type Stream } from './audioStream.js';
 import { MUSIC_LEVEL, playSting } from './music.js';
 import { holdMusic } from './musicTurn.js';
-import { airtimeMs, sayLine, stopVoice } from './radioVoice.js';
+import { airtimeMs, preloadLines, releaseLine, sayLine, stopVoice } from './radioVoice.js';
 import { MUSIC_BASE, musicEntry, type MusicId } from './samples.js';
 
 /**
@@ -51,11 +51,12 @@ let wordTimer: ReturnType<typeof setTimeout> | null = null;
 
 /**
  * The end card's sound for a run that ended so: its sting now, then `line` — the operator's last
- * word on it — and its theme.
+ * word on it, its recording fetched and decoded while the sting plays — and its theme.
  */
 export function playEnding(ending: 'won' | 'lost', line: string | null = null): void {
   const card: Card = { ending, since: Date.now(), line };
   wanted = card;
+  if (line !== null) preloadLines([line]);
   void playSting(ending).then((stingEnd) => {
     if (stingEnd === null || wanted !== card) return;
     const said = line === null ? null : sayAfter(line, stingEnd + THEME_GAP_S, card);
@@ -122,8 +123,8 @@ function startTheme(ending: 'won' | 'lost', at: number): void {
 }
 
 /**
- * The card goes: the last word breaks off, or never comes; its theme fades out over END_FADE_S
- * and is let go, the bus held till then.
+ * The card goes: the last word breaks off, or never comes, its recording let go; its theme fades
+ * out over END_FADE_S and is let go, the bus held till then.
  */
 export function stopEnding(): void {
   const card = wanted;
@@ -132,7 +133,10 @@ export function stopEnding(): void {
     clearTimeout(wordTimer);
     wordTimer = null;
   }
-  if (card?.line != null) stopVoice();
+  if (card?.line != null) {
+    stopVoice();
+    releaseLine(card.line);
+  }
   const theme = playing;
   playing = null;
   if (theme === null) return;

@@ -23,12 +23,14 @@ import { sample, type SfxId } from './samples.js';
  * end, the run's first line opened with the Leitstelle's own squelch, the squelches recordings
  * of their own (samples.ts) — while the music goes 8 dB and the beds 4 dB down under it (mix.ts
  * `duck`). The banner shows the line while it speaks; a line without a recording, as a custom
- * mission's, still only chirps (audio.ts `radioChirp`). At a run's start the mission's lines are
- * fetched and kept as they came, compressed, and the run's opening line decoded; any other line
- * is decoded as it comes over the air — at 22.05 kHz in one channel, a few tens of milliseconds —
- * and let go once it has been spoken, so that a page keeps a line or two decoded, never a
- * mission's (audioMemory.ts). Nothing that plays throws — only the harness's offline render may
- * reject — and nothing plays while the context is held back.
+ * mission's, still only chirps (audio.ts `radioChirp`). At a run's start a page fetches the
+ * recordings' list alone (`voiceForRun`), never a recording: a line's own file comes as the line
+ * is queued (`preloadLines`) — the take the run picked, which its event names — and is decoded
+ * then, at 22.05 kHz in one channel, a few tens of milliseconds, and let go once it has been
+ * spoken, so that a page keeps a line or two decoded, never a mission's (audioMemory.ts), and the
+ * files of the last FILES_KEPT lines as they came, those of a run before none. Nothing that plays
+ * throws — only the harness's offline render may reject — and nothing plays while the context is
+ * held back.
  */
 
 /**
@@ -161,6 +163,12 @@ export interface Clip {
  */
 export const VOICE_RATE = 22050;
 
+/**
+ * How many lines' files a page keeps as they came, the newest: those queued or said lately, so
+ * that a line said again within a run is not fetched again. A run's start lets them all go.
+ */
+export const FILES_KEPT = 4;
+
 /** The line on the air: from when to when it speaks, audio time, and how to cut it short. */
 interface Speaking {
   readonly id: string;
@@ -171,8 +179,8 @@ interface Speaking {
 
 /**
  * What the voice has loaded: the manifest by line, the recordings' files and lengths by id, the
- * openers, each recording's file as fetched — compressed, a few kB a second — and the lines
- * decoded now.
+ * openers, the files fetched lately as they came — compressed, a few kB a second, the newest last
+ * (FILES_KEPT) — and the lines decoded now.
  */
 const store: {
   manifest: Promise<VoiceManifest | null> | null;
@@ -223,13 +231,27 @@ function manifest(): Promise<VoiceManifest | null> {
   return store.manifest;
 }
 
-/** The file of the recording `id`, fetched once and kept as it came; null where it failed. */
+/**
+ * The file of the recording `id`, fetched where it is not kept and kept as it came, the newest of
+ * FILES_KEPT; null where it failed.
+ */
 function bytesOf(id: string): Promise<ArrayBuffer | null> {
-  const known = store.bytes.get(id);
-  if (known !== undefined) return known;
+  const fetching = store.bytes.get(id) ?? fetchFile(id);
+  // The newest last: asked again, it is kept longest.
+  store.bytes.delete(id);
+  store.bytes.set(id, fetching);
+  for (const old of store.bytes.keys()) {
+    if (store.bytes.size <= FILES_KEPT) break;
+    store.bytes.delete(old);
+  }
+  return fetching;
+}
+
+/** The file of the recording `id` from the server; null where it has none or the fetch failed. */
+function fetchFile(id: string): Promise<ArrayBuffer | null> {
   const file = store.files.get(id);
   if (file === undefined) return Promise.resolve(null);
-  const fetching = fetch(`${VOICE_BASE}${file}`)
+  return fetch(`${VOICE_BASE}${file}`)
     .then((res) => {
       if (!res.ok) throw new Error(`voice ${id}: ${res.status}`);
       return res.arrayBuffer();
@@ -238,8 +260,6 @@ function bytesOf(id: string): Promise<ArrayBuffer | null> {
       store.bytes.delete(id);
       return null;
     });
-  store.bytes.set(id, fetching);
-  return fetching;
 }
 
 /**
@@ -270,7 +290,7 @@ function decodeLine(id: string): Promise<Clip | null> {
   return decoding;
 }
 
-/** The decoded recording `id` let go: what it held is free; its file stays for another time. */
+/** The decoded recording `id` let go: what it held is free; its file stays a while (FILES_KEPT). */
 function dropLine(id: string): void {
   store.decoding.delete(id);
   store.clips.delete(id);
@@ -286,21 +306,14 @@ function peakOf(buffer: AudioBuffer): number {
 }
 
 /**
- * At a run's start: every line of the mission `missionId` is fetched — kept compressed — and,
- * while the run's start is `ahead`, the lines that may open the run decoded, so that the one the
- * run picks comes the moment the lights fail; they are let go as soon as the start is behind it
- * (`startBehind`). A page that comes in later decodes none of them.
+ * A run starts: the recordings' list is fetched where it is not here yet — a few kB, so that each
+ * line's length is known before it airs — and the files kept from the runs before are let go. No
+ * recording comes now: each line's own file comes as the line is queued (`preloadLines`), the
+ * take the run picked, which its event names (core radio.ts `pickLine` picks it by the seed).
  */
-export function preloadVoice(missionId: string, ahead = true): void {
-  manifest()
-    .then((loaded) => {
-      for (const [id, entry] of Object.entries(loaded?.lines ?? {})) {
-        if (!entry.missions.includes(missionId)) continue;
-        if (entry.opens === true && ahead) void decodeLine(id);
-        else void bytesOf(id);
-      }
-    })
-    .catch(() => undefined);
+export function voiceForRun(): void {
+  store.bytes.clear();
+  void manifest();
 }
 
 /**
@@ -359,17 +372,13 @@ export function releaseLine(text: string): void {
  * still on the air: a line that opens a run after the Leitstelle's opening squelch; once spoken,
  * it is let go. Into the radio's bus, or `into` where given: a level of the caller's on the way
  * there (the lobby's Funkprobe, radioCheck.ts). True where it speaks; false where it has no
- * recording or nothing can play — the caller chirps then, and the run's start is behind it: the
- * lines decoded to open the run go (`startBehind`).
+ * recording or nothing can play — the caller chirps then.
  */
 export function sayLine(text: string, into?: AudioNode): boolean {
   try {
     const id = store.ids.get(text);
     const engine = playingEngine();
-    if (id === undefined || engine === null || !store.files.has(id)) {
-      startBehind(null);
-      return false;
-    }
+    if (id === undefined || engine === null || !store.files.has(id)) return false;
     asked = id;
     const clip = store.clips.get(id);
     if (clip !== undefined) {
@@ -387,23 +396,12 @@ export function sayLine(text: string, into?: AudioNode): boolean {
 }
 
 /**
- * The run's start is behind it — a line comes after it, or the start itself, said as `said` or
- * gone by unheard (null): a take without a recording, nothing to play it on. Every line decoded
- * to open the run is let go but `said`.
- */
-function startBehind(said: string | null): void {
-  for (const id of store.openers) if (id !== said) dropLine(id);
-}
-
-/**
  * The line `id` on the air from now into `into`, cutting short one still on it; let go once it
- * ends. Whatever comes on the air, the run's start is behind it: the openers decoded for it go,
- * but the one that airs now where it opens the run (`startBehind`).
+ * ends.
  */
 function onAir(engine: Engine, id: string, clip: Clip, into: AudioNode = engine.voice): void {
   const now = engine.ctx.currentTime;
   const opens = store.openers.has(id);
-  startBehind(id);
   speaking?.cut(now);
   const line = speak(engine, id, clip, now + LOOKAHEAD, opens, into);
   speaking = line;
