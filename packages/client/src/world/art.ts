@@ -280,9 +280,19 @@ export interface ScientistOpts {
  * over its legs without drawing either anew (world/menu/heroArt.ts), the legs with the shadow
  * and the ring under them, or everything over the legs — the arms, the pack, the body, the
  * visor, what the hands hold and the name. Laid over each other, the two make the whole figure,
- * one outline round the union of its parts.
+ * one outline round the union of its parts. The light crossing the visor of somebody speaking
+ * can be laid alone (`shimmer`), over the rest drawn without it, so that it moves on without
+ * the rest drawn anew.
  */
-export type FigureLayer = 'all' | 'legs' | 'upper';
+export type FigureLayer = 'all' | 'legs' | 'upper' | 'shimmer';
+
+/** What a drawing of each layer lays besides the figure's parts: what it stands in, its name. */
+const LAYS: Readonly<Record<FigureLayer, { under: boolean; name: boolean }>> = {
+  all: { under: true, name: true },
+  legs: { under: true, name: false },
+  upper: { under: false, name: true },
+  shimmer: { under: false, name: false },
+};
 
 /** The light a figure stands in, for its shadow. */
 export type Ground = 'lit' | 'dark' | 'plain';
@@ -532,11 +542,23 @@ function drawVisorGlints(ctx: CanvasRenderingContext2D, w: number, light: number
 }
 
 /**
- * Visor on the side the figure looks to. Looking toward the camera (down)
- * widens and lowers it; away (up) narrows and raises it — the vertical part
- * of the look. A glance away from the figure's way (`facing`) slides it back
- * across the dome; a dimmed visor loses its glints; while the figure speaks
- * a light sweeps across it.
+ * Where the visor sits on the side the figure looks to, body space: its front edge `x`, its
+ * middle `cy`, its width `w`. Looking toward the camera (down) widens and lowers it; away (up)
+ * narrows and raises it — the vertical part of the look. A glance away from the figure's way
+ * (`facing`) slides it back across the dome.
+ */
+function visorAt(pose: FigurePose, facing: number): { x: number; cy: number; w: number } {
+  const s = Math.sin(pose.look);
+  return {
+    x: VISOR_FRONT - VISOR_SLIDE * (1 - Math.cos(pose.look - facing)),
+    cy: DOME_Y + 0.02 + 0.025 * s,
+    w: 0.3 + 0.05 * Math.max(0, s) - 0.1 * Math.max(0, -s),
+  };
+}
+
+/**
+ * Visor on the side the figure looks to (visorAt): dark glass in its outline, its rim and
+ * glints — lost as it dims — and while the figure speaks a light sweeping across it.
  */
 function drawVisor(
   ctx: CanvasRenderingContext2D,
@@ -544,10 +566,7 @@ function drawVisor(
   facing: number,
   outline: string,
 ): void {
-  const s = Math.sin(pose.look);
-  const w = 0.3 + 0.05 * Math.max(0, s) - 0.1 * Math.max(0, -s);
-  const x = VISOR_FRONT - VISOR_SLIDE * (1 - Math.cos(pose.look - facing));
-  const cy = DOME_Y + 0.02 + 0.025 * s;
+  const { x, cy, w } = visorAt(pose, facing);
   const r = VISOR_H / 2;
   // Visor-local space: front edge at x = 0, vertical center at y = 0.
   ctx.translate(x, cy);
@@ -569,6 +588,17 @@ function drawVisor(
   if (pose.shimmer !== null) {
     drawShimmer(ctx, w, pose.shimmer);
   }
+  ctx.translate(-x, -cy);
+}
+
+/** The light crossing the visor of somebody speaking, alone, where drawVisor lays it. */
+function drawVisorLight(ctx: CanvasRenderingContext2D, pose: FigurePose, facing: number): void {
+  if (pose.shimmer === null) {
+    return;
+  }
+  const { x, cy, w } = visorAt(pose, facing);
+  ctx.translate(x, cy);
+  drawShimmer(ctx, w, pose.shimmer);
   ctx.translate(-x, -cy);
 }
 
@@ -732,6 +762,11 @@ function drawScientistFigure(
   const layer = o.layer ?? 'all';
   ctx.scale(Math.cos(pose.look) < 0 ? -1 : 1, 1);
   ctx.rotate(leanOf(o.facing, o.moving) + pose.bow);
+  if (layer === 'shimmer') {
+    ctx.translate(0, bob);
+    drawVisorLight(ctx, pose, o.facing);
+    return;
+  }
   ctx.lineJoin = 'round';
   ctx.lineWidth = OUTLINE_W * 2;
   ctx.strokeStyle = colors.outline;
@@ -805,25 +840,26 @@ function drawUnder(
  * `o.pose` says (figure.ts) — off the ground and squashed or stretched about
  * its feet, its shadow shrinking under it as it rises — at rest without one;
  * walks as its cycle says (strideAt), over a shadow of the light it stands in.
- * `o.layer` draws only the legs and what lies under them, or only the rest.
+ * `o.layer` draws only the legs and what lies under them, only the rest, or
+ * only the light across its visor (FigureLayer).
  */
 export function drawScientist(ctx: CanvasRenderingContext2D, o: ScientistOpts): void {
   // Resolved first so an invalid color throws before anything is drawn.
   const colors = bodyColors(o.color);
   const pose = o.pose ?? restingPose(o.facing);
-  const layer = o.layer ?? 'all';
+  const lays = LAYS[o.layer ?? 'all'];
   ctx.save();
   try {
     if (!o.connected) ctx.globalAlpha *= DISCONNECTED_ALPHA;
     // The body is highest while the legs pass each other and back down at full stride.
     const stride = strideAt(o.walkPhase, o.moving);
-    if (layer !== 'upper') drawUnder(ctx, o, pose, stride);
+    if (lays.under) drawUnder(ctx, o, pose, stride);
     ctx.save();
     ctx.translate(0, -pose.rise);
     ctx.scale(1 / pose.stretch, pose.stretch);
     drawScientistFigure(ctx, o, colors, stride, stride.bob - pose.bob, pose);
     ctx.restore();
-    if (o.named !== false && layer !== 'legs') {
+    if (o.named !== false && lays.name) {
       drawHaloText(ctx, o.name, 0, NAME_Y, (o.text ?? TILE_TEXT).name, NAME_COLOR, 'bottom');
     }
   } finally {

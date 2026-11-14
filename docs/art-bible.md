@@ -665,8 +665,11 @@ from a conic gradient and along from a radial one; turned to the beam's angle on
 without smoothing, into a canvas the size of the wedge's own box; and copied each frame 1:1 at
 whole pixels. The hero is laid from two layers kept between frames — its legs with its shadows, and
 everything over them drawn without the breath, the legs cut out of it — each redrawn only where
-what it shows has changed: a glance's step, the lamp's step, the visor's light, the wave, the
-colour, the size; the breath only moves the upper layer by whole pixels. Walking in, it is drawn
+what it shows has changed: a glance's step, the lamp's step, the wave, the colour, the size; the
+breath only moves the upper layer by whole pixels. The light crossing the visor while the
+microphone sends is laid over the two on each frame, alone (art.ts FigureLayer `shimmer`), where
+the upper layer would hold it — within that layer only while the front hand waves, which passes
+before the visor and draws the layer anew on every frame anyway. Walking in, it is drawn
 whole each frame, for 1.2 s once a page. Its loop draws 30 frames a second at most, none while the
 tab or its canvas is hidden, and under reduced motion none after its still until something it shows
 changes. Left out as the stage is measured, and gone with the menu, the hero lets go of its lamp and

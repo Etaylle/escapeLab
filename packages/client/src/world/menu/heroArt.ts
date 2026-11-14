@@ -1,7 +1,7 @@
 import { drawScientist, type FigureLayer } from '../art.js';
 import type { CanvasMaker } from '../atlas.js';
 import { softEllipse } from '../brush.js';
-import type { FigurePose } from '../figure.js';
+import { HOLD, type FigurePose } from '../figure.js';
 import { BLACK } from '../palette.js';
 import type { HeroMotion, HeroPlace, StageBox } from './hero.js';
 import { drawHandLamp } from './lampArt.js';
@@ -11,10 +11,11 @@ import { drawHandLamp } from './lampArt.js';
  * hand lamp in its hands (lampArt.ts), on a canvas of its own at the stage's density. It is laid
  * from two layers kept between frames — its legs with the shadow under them, and everything over
  * its legs drawn with the breath taken out (art.ts FigureLayer) — the upper laid as far up as the
- * breath has it, in whole pixels. A frame that changes no more than the breath draws no figure
- * anew: two copies, and only where the breath has come to another pixel. A layer is drawn again
- * only where what it shows has changed — a glance, the visor's light, a wave, the lamp turned
- * another step, the colour, the size.
+ * breath has it, in whole pixels, and over them the light crossing its visor while it speaks. A
+ * frame that changes no more than the breath and that light draws no figure anew: two copies and
+ * the light's band, and only where the breath or the light has moved. A layer is drawn again only
+ * where what it shows has changed — a glance, a wave, the lamp turned another step, the colour,
+ * the size.
  */
 
 /**
@@ -99,8 +100,19 @@ function anchorOf({ place, box, motion, dpr }: HeroFrame): Anchor {
 }
 
 /**
+ * Whether the light across the visor of `pose` is drawn within the upper layer: while the front
+ * hand is raised to wave, which passes before the visor, over that light — and the wave draws the
+ * layer anew on every frame anyway. Else the light is laid over the layers, moving on without
+ * either drawn anew.
+ */
+function lightInLayer(pose: FigurePose): boolean {
+  return (pose.arms?.front ?? 0) > HOLD.front;
+}
+
+/**
  * What layer `which` of `frame` shows, as a key: the canvas's size and anchor, the colour, and
- * of the pose what that layer draws — the breath left out, which the upper is laid by.
+ * of the pose what that layer draws — the breath left out, which the upper is laid by, and the
+ * visor's light, laid over it but while the front hand waves.
  */
 function layerKey(which: FigureLayer, frame: HeroFrame, size: string): string {
   const { pose } = frame;
@@ -108,9 +120,23 @@ function layerKey(which: FigureLayer, frame: HeroFrame, size: string): string {
     return `${size} ${frame.color} ${frame.motion.facing} ${pose.shadow}`;
   }
   const arms = pose.arms === null ? '-' : `${pose.arms.front},${pose.arms.back}`;
-  const parts = [pose.look, pose.shimmer, arms, pose.holding, pose.dim, pose.bow];
+  const light = lightInLayer(pose) ? pose.shimmer : null;
+  const parts = [pose.look, light, arms, pose.holding, pose.dim, pose.bow];
   const { tilt, on } = frame.lamp;
   return `${size} ${frame.color} ${frame.motion.facing} ${parts.join(' ')} ${tilt} ${on}`;
+}
+
+/**
+ * The pose `layer` draws of `frame`'s: all of it whole; a layer without the breath, which the
+ * upper is laid by — the upper without the visor's light, too, where that is laid over it.
+ */
+function poseOf(frame: HeroFrame, layer: FigureLayer): FigurePose {
+  const { pose } = frame;
+  if (layer === 'all') {
+    return pose;
+  }
+  const lightApart = layer === 'upper' && !lightInLayer(pose);
+  return { ...pose, bob: 0, shimmer: lightApart ? null : pose.shimmer };
 }
 
 /** The figure as `frame` has it, drawn on `ctx` whole or as `layer` says, its feet at `at`. */
@@ -125,7 +151,7 @@ function drawFigure(ctx: CanvasRenderingContext2D, frame: HeroFrame, layer: Figu
     walkPhase: motion.walk,
     isYou: false,
     connected: true,
-    pose: layer === 'all' ? frame.pose : { ...frame.pose, bob: 0 },
+    pose: poseOf(frame, layer),
     ground: 'lit',
     named: false,
     layer,
@@ -193,13 +219,42 @@ function drawWalking(hero: HeroCanvas, frame: HeroFrame, at: Anchor): void {
 }
 
 /**
+ * Lays the hero's canvas `w` × `h` from its layers, its feet anchored at `at`: the legs, the
+ * upper lifted by the breath in whole pixels, and over them the light across the visor where it
+ * is laid apart (lightInLayer) — as the upper layer would hold it, lifted alike. Only where any
+ * of it has changed since the canvas was laid last; says whether it was laid.
+ */
+function layCanvas(
+  hero: HeroCanvas,
+  frame: HeroFrame,
+  [w, h, at]: readonly [number, number, Anchor],
+): boolean {
+  const lift = Math.round(frame.pose.bob * at.s);
+  const light = lightInLayer(frame.pose) ? null : frame.pose.shimmer;
+  const laid = `${hero.legs.key} ${hero.upper.key} ${lift} ${light}`;
+  if (laid === hero.laid) {
+    return false;
+  }
+  hero.laid = laid;
+  const { ctx } = hero;
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, w, h);
+  ctx.drawImage(hero.legs.canvas, 0, hero.legs.top);
+  ctx.drawImage(hero.upper.canvas, 0, hero.upper.top - lift);
+  if (light !== null) {
+    ctx.setTransform(at.s, 0, 0, at.s, at.x, at.y - lift);
+    drawFigure(ctx, frame, 'shimmer');
+  }
+  return true;
+}
+
+/**
  * Lays one frame of the hero on its canvas: sized to its box at the stage's density; walking,
- * drawn whole; standing, each layer drawn anew where what it shows has changed, and the two laid
- * over each other where anything has — the upper lifted by the breath, in whole pixels. Says
- * whether the canvas changed.
+ * drawn whole; standing, each layer drawn anew where what it shows has changed, and the canvas
+ * laid from them where anything has (layCanvas). Says whether the canvas changed.
  */
 export function paintHero(hero: HeroCanvas, frame: HeroFrame): boolean {
-  const { canvas, ctx } = hero;
+  const { canvas } = hero;
   const w = Math.max(1, Math.round(frame.box.width * frame.dpr));
   const h = Math.max(1, Math.round(frame.box.height * frame.dpr));
   if (canvas.width !== w || canvas.height !== h) {
@@ -221,17 +276,7 @@ export function paintHero(hero: HeroCanvas, frame: HeroFrame): boolean {
       hero.drawn[which] += 1;
     }
   }
-  const lift = Math.round(frame.pose.bob * at.s);
-  const laid = `${hero.legs.key} ${hero.upper.key} ${lift}`;
-  if (laid === hero.laid) {
-    return false;
-  }
-  hero.laid = laid;
-  ctx.setTransform(1, 0, 0, 1, 0, 0);
-  ctx.clearRect(0, 0, w, h);
-  ctx.drawImage(hero.legs.canvas, 0, hero.legs.top);
-  ctx.drawImage(hero.upper.canvas, 0, hero.upper.top - lift);
-  return true;
+  return layCanvas(hero, frame, [w, h, at]);
 }
 
 /**
