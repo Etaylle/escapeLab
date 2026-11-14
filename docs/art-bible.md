@@ -690,17 +690,24 @@ after it 1 to 10 ms. So the rest asks one frame about as long as the first bake 
 the hero's lamp is on; the frames after it copy what they show as before, piece by piece.
 
 Copying pieces instead of one canvas costs the drift and a place held nothing: on the menu's bench
-(The hero, its cost — 1440 × 820 at density 1, the software Canvas path, the main thread slowed
-four times), six rounds interleaved with the one-canvas bake it replaced (c01dbbd), the machine's
-load 2.9 to 7.5, the medians of the per-round differences were +0.03 ms a frame for the scene
-drifting alone, −0.06 with the hero and its beam and +0.03 with a place held. A pan costs about a
-tenth of a millisecond more, where a frame copies the pieces it falls on: +0.14 between the rooms
-at the lab's edge (cheaper in three rounds of six) and +0.12 between two inner ones (cheaper in
-none); the frames held the screen's pace, 16.8 ms p95, in every run, and a first run beside the
-mutation runs (load 2.5 to 10.6) put the five within −0.02 and +0.11. That session put the pan
-between the edge rooms over the drift in both builds, +0.31 ms with one canvas and +0.35 in
-pieces, where the bench below, at the load of 1.7 to 3.5, put it under: the pan's frames fill the
-dark past the bake, and their cost moves with the machine's load.
+(The hero, its cost — 1440 × 820 at density 1, the software Canvas path, the main thread slowed four
+times), six rounds interleaved with the one-canvas bake it replaced (c01dbbd), the machine's load
+2.9 to 7.5, the medians of the per-round differences were +0.03 ms a frame for the scene drifting
+alone, −0.06 with the hero and its beam and +0.03 with a place held. A pan costs about a tenth of a
+millisecond more, where a frame copies the pieces it falls on: +0.14 between the rooms at the lab's
+edge (cheaper in three rounds of six) and +0.12 between two inner ones (cheaper in none); the frames
+held the screen's pace, 16.8 ms p95, in every run, and a first run beside the mutation runs (load
+2.5 to 10.6) put the five within −0.02 and +0.11. That session put the pan between the edge rooms
+over the drift in both builds, +0.31 ms with one canvas and +0.35 in pieces, where the bench below,
+at the load of 1.7 to 3.5, put it under: the pan's frames fill the dark past the bake, and their
+cost moves with the machine's load. To run it again, alone on the machine: from the session's
+scratchpad/hero2/bench/, `heavy.sh --exclusive <label> ./run-split.sh` builds both pages — the
+one-canvas bake from old-tree (c01dbbd), the branch's from an export of its HEAD (build-split.sh,
+REV to pick another) — and runs ten runs a round, each build with the scene alone, the hero and its
+beam drifting, a place held, the pan between the edge rooms and between two inner ones, six rounds
+of 6 s each, every round starting at another run (run.mjs: 1440 × 820 at density 1,
+`SHOTS_SOFTWARE_GL`'s flags, the main thread slowed four times); bench-split-final.log ends with
+each run's medians, load-split2.log has the load every 10 s.
 
 ## The hero (world/menu/hero.ts, heroArt.ts, heroStage.ts, lamp.ts, lampArt.ts, MenuHero.tsx)
 
@@ -716,17 +723,20 @@ bar's avatar, its head, is the player's badge — the name, the colour, the acco
 for the hero where the hero is left out; the hero is the player in the scene, and waves at a new
 name.
 
-**Composition.** The menu's scene is a night shot: the lab sunk to 38 % of its light (The menu)
-and the hand lamp's beam its main light, as a key light is in a dark set. The hero stands at three
+**Composition.** The menu's scene is a night shot: the lab sunk to 38 % of its light (The menu) and
+the hand lamp's beam its main light, as a key light is in a dark set. The hero stands at three
 quarters toward the menu and holds the lamp toward it, so that the beam crosses the stage's free
 middle, where the places' rooms show (The menu's places), and ends short of the menu's column; the
 title and the menu stand on the dark left, nothing lit under the text. The hero wears its colour
-sunk 35 % for the night, and an edge of the lamp's warm light runs down its front, toward the
-menu — 0.85 strong at its strongest, only while the lamp burns, as strong as it burns
-(heroArt.ts `FRONT_RIM`); its back keeps no edge light. Of the three looks the owner was shown —
-the lamp held at rest in the dark, a cold light along its back against the lamp, the lamp held
-out further — the first stands until the owner chooses (heroArt.ts `BACK_RIM`, hero.ts
-`LAMP_RAISE`).
+sunk 35 % for the night, and an edge of the lamp's warm light runs down its front, toward the menu —
+0.85 strong at its strongest, only while the lamp burns, as strong as it burns; its back keeps no
+edge light (looks.ts `WARM_EDGE`). Of the three looks the owner was shown, the first stands until
+the owner chooses, and each is in code with the values its still was shot with (looks.ts, drawn each
+in test/menuLooks.test.ts): A, the lamp held at rest in the dark; B — `HERO_LIGHT` set to
+`COLD_BACK` —, the figure sunk 45 %, its warm edge 0.8 strong and the server room's blue, lifted
+45 % toward white, down its back at 0.75, against the lamp, whether it burns or not; C —
+`LAMP_RAISE` set to `LAMP_HELD_OUT` —, the arms raised 0.3 rad from the hold and the lamp 0.065 of
+the figure up, held out to the visor's height toward the menu, the lens and the beam with it.
 
 **Size.** The hero stands 42 % of the stage's height tall, held to 4 to 6 scene tiles — 0.9 of a
 run's tile in a window as tall (viewport.ts `tileCss`), as the drift frames a lab that fills the
@@ -803,19 +813,20 @@ step toward the menu and no back turned; it steps aside at once.
 **The beam.** The lamp throws its beam onto the lab behind the menu, a haze of its light laid over
 the lab at night on the scene's canvas, over the camera's copy: a soft cone 0.44 rad across, its
 light falling off along it to 1.2 times the hero's height and ending short of the menu's column, so
-that it never lies over the text; a warm core along its middle in the lamp's tungsten, 0.6 strong at
-its strongest, as the world's lamp beam has it (The lamp's beam); and the dust of particles.ts
-drifting through it, each mote a soft speck of the lamp's light, drawn only where it lies in the
-cone. It sweeps from the floor before the hero up across the lab and back, one pass in 12 s, slowing
-at both ends. An item picked out — hovered, or given the focus by the player — turns it, as the
-scene's camera sets out for the item's room, to the middle of that room, 0.9 rad a second at most,
-and holds it there while the room is held (The menu's places); let go, it sweeps on from where it
-stands, the way it went. In a lab without places it sweeps on whatever is picked out, as the scene
-drifts on (places.ts `placeShown`). Where it comes to the line toward what the hero looks at without
-anything picked out — the focus the menu comes up with, a run's card — it holds a beat there, 1 s,
-its sweep's clock standing still meanwhile. The lamp in the hero's hands tilts with it in steps of
-3°, its lens alight with a small glint at its rim. Under reduced motion the beam stands still,
-pointing a little up into the lab, without dust.
+that it never lies over the text — still A was shot with a cone 0.56 rad across and 1.45 times the
+height, which costs more than the budget lets it (The hero, its cost); a warm core along its middle
+in the lamp's tungsten, 0.6 strong at its strongest, as the world's lamp beam has it (The lamp's
+beam); and the dust of particles.ts drifting through it, each mote a soft speck of the lamp's light,
+drawn only where it lies in the cone. It sweeps from the floor before the hero up across the lab and
+back, one pass in 12 s, slowing at both ends. An item picked out — hovered, or given the focus by
+the player — turns it, as the scene's camera sets out for the item's room, to the middle of that
+room, 0.9 rad a second at most, and holds it there while the room is held (The menu's places); let
+go, it sweeps on from where it stands, the way it went. In a lab without places it sweeps on
+whatever is picked out, as the scene drifts on (places.ts `placeShown`). Where it comes to the line
+toward what the hero looks at without anything picked out — the focus the menu comes up with, a
+run's card — it holds a beat there, 1 s, its sweep's clock standing still meanwhile. The lamp in the
+hero's hands tilts with it in steps of 3°, its lens alight with a small glint at its rim. Under
+reduced motion the beam stands still, pointing a little up into the lab, without dust.
 
 **The entrance.** On the first menu of a page the hero walks in from beyond the stage's right edge
 over 1.2 s, slowing to a stop, its legs in the walk cycle as far as the ground it covers, and turns
@@ -897,6 +908,34 @@ p95 is its upper layer drawn anew, fewer times than on main, each dearer for the
 front; the frames held the screen's pace, 16.7 to 16.8 ms p95, in every run. Before the beam was
 held to its size and laid as a haze, the same bench put it with the hero at +1.59 ms over the scene,
 +0.57 over main's: the cone at 0.56 rad and 1.45 times the hero's height, added onto the lab.
+
+Still A's cone against the small one, and look B (Composition), on the same bench in S-hero2's
+second round: one build of the branch (8d10bff) in four variants — the small cone, and still A's at
+0.56 rad and 1.45 times the hero's height laid as the same haze, each in look A and in look B with
+its cold back light on —, the scene alone and the hero and its beam with the microphone off and on,
+six rounds of 6 s each, every round starting at another run, the machine's 1-minute load at 1.3 to
+3.1 (14.11.2026). The hero and its beam over each round's own scene alone, medians of the six
+rounds, ms:
+
+| Variant | Microphone off | Microphone on |
+| --- | --- | --- |
+| The small cone, look A (shipped) | +0.72 | +0.97 |
+| Still A's cone, look A | +0.90 | +1.19 |
+| The small cone, look B | +0.79 | +1.03 |
+| Still A's cone, look B | +0.97 | +1.15 |
+
+Still A's cone costs +0.18 ms a frame with the microphone off and +0.24 with it on against the small
+one, dearer in every round of six, and comes with the microphone on to 1.19 ms over the scene — over
+the 1.1 ms allowed it (main's beam and hero 1.05) —, so the small cone stays, and the owner decides
+with these figures. Look B's back light costs the small cone +0.05 and +0.08 ms, dearer in four and
+three rounds of six: within the bench's noise. The frames held the screen's pace, 16.8 ms p95, in
+every run. At this load the shipped cone with the microphone on came to +0.97 ms, under the spec's
+1 ms, where the bench above put it at +1.08: the hero's numbers move with the load as the pan's do
+(The menu's places). To run it again, alone on the machine: from the session's
+scratchpad/hero2/bench/, `heavy.sh --exclusive <label> ./run-looks.sh` builds the four variants
+(look-smallA-<rev> to look-bigB-<rev>, exports of the branch at REV, its HEAD unless set, with the
+cone or the look switched) and runs the twelve runs a round;
+`python3 looks-stats.py bench-looks.log` reads the rounds.
 
 ## Chrome (ui.css, styles/lobby.css, finale.css, pause.css, settings.css)
 
