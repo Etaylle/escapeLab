@@ -118,7 +118,7 @@ describe('leaving a run for the main menu', () => {
     vi.restoreAllMocks();
   });
 
-  it('closes the line on purpose: the seat stays bound, the crew waits, sees where it went', () => {
+  it('closes the line on purpose: the seat stays bound, the run goes on, the crew sees where', () => {
     const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
     const { manager, code, crew } = served(['Anna', 'Ben', 'Cem']);
     const [anna, ben] = crew as [FakeSocket, FakeSocket, FakeSocket];
@@ -126,9 +126,11 @@ describe('leaving a run for the main menu', () => {
     const at = Date.now();
     ben.say({ kind: 'to-menu' });
     expect(ben.heard.at(-1)).toEqual({ kind: 'at-menu', code });
-    expect(anna.view.pausedFor).toEqual([
+    expect(anna.view.away).toEqual([
       { id: benId, name: 'Ben', since: at, waivableAt: at + FIRST_WAIT_MS, menu: true },
     ]);
+    expect(anna.view.pausedAt).toBeNull();
+    expect(anna.view.events.at(-1)).toMatchObject({ kind: 'away', label: 'Ben hat sich abgemeldet.' });
     expect(anna.view.players.find((p) => p.name === 'Ben')).toMatchObject({
       connected: false,
       menu: 'main',
@@ -139,13 +141,13 @@ describe('leaving a run for the main menu', () => {
     ben.say({ kind: 'whereami', pass: passFor('Ben') });
     expect(ben.heard.at(-1)).toMatchObject({
       kind: 'seated',
-      seat: { code, phase: 'playing', paused: true },
+      seat: { code, phase: 'playing', paused: false },
     });
     ben.say({ kind: 'request-hint' });
     expect(ben.heard.at(-1)).toMatchObject({ kind: 'error', of: 'request-hint' });
     // The menu card's way back: the seat's own pass resumes it, and the run goes on.
     ben.say({ kind: 'resume', code, pass: passFor('Ben') });
-    expect(anna.view.pausedFor).toBeNull();
+    expect(anna.view.away).toEqual([]);
     expect(anna.view.players.find((p) => p.name === 'Ben')).toMatchObject({ connected: true });
     expect(anna.view.players.find((p) => p.name === 'Ben')?.menu).toBeUndefined();
     manager.get(code).dispose();
@@ -179,7 +181,7 @@ describe('leaving a run for the main menu', () => {
     expect(anna.heard.at(-1)).toMatchObject({ kind: 'error', of: 'continue-without' });
     vi.advanceTimersByTime(1000);
     anna.say({ kind: 'continue-without', absentId: benId });
-    expect(anna.view.pausedFor).toBeNull();
+    expect(anna.view.away.map((away) => [away.name, away.waived])).toEqual([['Ben', true]]);
     expect(anna.view.players.find((p) => p.name === 'Ben')).toMatchObject({ waived: true });
     manager.get(code).dispose();
   });

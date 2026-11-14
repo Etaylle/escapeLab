@@ -1,11 +1,16 @@
 import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { FIRST_WAIT_MS, SNAPSHOT_EVERY_MS, SNAPSHOT_MAX_AGE_MS } from '@escapelab/core';
+import {
+  FIRST_WAIT_MS,
+  SNAPSHOT_EVERY_MS,
+  SNAPSHOT_LIVE_MS,
+  SNAPSHOT_MAX_AGE_MS,
+} from '@escapelab/core';
 import { MissionCatalog } from '../src/missions.js';
 import { RESTORE_WINDOW_MS, Room, type RunListener } from '../src/room.js';
 import { HANDOVER_MS, RoomManager } from '../src/roomManager.js';
-import { roomKey, seal } from '../src/seal.js';
+import { open, roomKey, seal } from '../src/seal.js';
 import { serveSockets } from '../src/sockets.js';
 import { FakeServer, joinedOf, type FakeSocket } from './line.js';
 import { passFor } from './passes.js';
@@ -107,9 +112,8 @@ describe('a room taken up again from the snapshot a resume carries', () => {
     expect(joinedOf(annaBack).code).toBe(code);
     expect(annaBack.view).toMatchObject({
       phase: 'playing',
-      maintenance: true,
       pausedAt: kept.at,
-      pausedFor: [{ name: 'Ben', since: kept.at }],
+      away: [{ name: 'Ben', since: kept.at }],
     });
     const age = ((Date.now() - kept.at) / 1000).toFixed(1);
     expect(logged(log)).toContain(
@@ -119,7 +123,7 @@ describe('a room taken up again from the snapshot a resume carries', () => {
     vi.advanceTimersByTime(4000);
     const benBack = resume(fresh.line, 'Ben', code, bens.blob);
     for (const socket of [annaBack, benBack]) {
-      expect(socket.view.pausedFor).toBeNull();
+      expect(socket.view.pausedAt).toBeNull();
       expect(socket.view.deadlineAt).toBe((before.deadlineAt ?? 0) + (Date.now() - kept.at));
     }
     expect(fresh.manager.counts()).toMatchObject({ total: 1, running: 1, paused: 0, players: 2 });
@@ -217,9 +221,10 @@ describe('a snapshot refused, and the audience after a restore', () => {
 
 /**
  * Anna and Ben in Blackout, handed the same snapshot; then Ben's line drops and only Anna is
- * handed the next one: Ben keeps the older, whose run stands still from its snapshot on, and
- * Anna the newer, whose run stood still from Ben's drop. Once the crew is back, the deadline
- * says which the room was taken up from: each moved on by its own pause.
+ * handed the next one, the run going on through the drop: Ben keeps the older, Anna the newer.
+ * A run taken up from a snapshot stands still from the moment it was taken, so once the crew is
+ * back the deadline says which the room was taken up from — each moved on by the time since its
+ * own; any other shift as it is.
  */
 function apart() {
   const old = server();
@@ -238,7 +243,7 @@ function apart() {
     if (shift === Date.now() - older.at) {
       return 'older';
     }
-    return shift === Date.now() - dropAt ? 'newer' : shift;
+    return shift === Date.now() - newer.at ? 'newer' : shift;
   };
   return { old, code, anna, older, newer, takenFrom };
 }
@@ -262,7 +267,7 @@ describe('the race of the crew’s snapshots after a restore', () => {
     vi.advanceTimersByTime(HANDOVER_MS + RESTORE_WINDOW_MS - 1);
     const anna = resume(fresh.line, 'Anna', code, newer.blob);
     for (const socket of [ben, anna]) {
-      expect(socket.view.pausedFor).toBeNull();
+      expect(socket.view.pausedAt).toBeNull();
       expect(takenFrom(socket)).toBe('newer');
     }
     expect(ben.heard.some((m) => m.kind === 'left')).toBe(false);
@@ -371,8 +376,9 @@ describe('the handover: the new instance waits for the old one’s last snapshot
     const annaBack = resume(fresh.line, 'Anna', code, last.blob);
     for (const socket of [ben, annaBack]) {
       expect(joinedOf(socket)).toEqual({ kind: 'joined', code });
-      expect(socket.view.pausedFor).toBeNull();
-      expect(takenFrom(socket)).toBe('newer');
+      expect(socket.view.pausedAt).toBeNull();
+      // Taken up from the last one: the run went on on the old instance until it went down.
+      expect(takenFrom(socket)).toBe(Date.now() - last.at);
     }
     expect(said()).toContain(
       `[escapelab] restored room ${code} from snapshot seq ${last.seq} ` +
@@ -395,7 +401,7 @@ describe('the handover: the new instance waits for the old one’s last snapshot
     vi.advanceTimersByTime(1);
     for (const socket of [ben, anna]) {
       expect(joinedOf(socket).code).toBe(code);
-      expect(socket.view.pausedFor).toBeNull();
+      expect(socket.view.pausedAt).toBeNull();
       expect(takenFrom(socket)).toBe('newer');
     }
     const age = ((Date.now() - newer.at) / 1000).toFixed(1);
@@ -485,7 +491,7 @@ describe('the handover: who waits for the room, and who does not', () => {
     const annaBack = resume(fresh.line, 'Anna', code, blobOf(anna).blob);
     expect(ben.heard.filter((m) => m.kind === 'joined')).toHaveLength(1);
     expect(tab.heard).toEqual(restoring(code));
-    expect(annaBack.view.pausedFor).toBeNull();
+    expect(annaBack.view.pausedAt).toBeNull();
   });
 
   it('gives the code it waits for to no new room, and refuses a snapshot of another', () => {
@@ -677,5 +683,64 @@ describe('a room closed, and the ghosts its snapshots would bring back', () => {
     annaAgain.say({ kind: 'abandon', code, pass: passFor('Anna') });
     expect(reported).toHaveBeenCalledTimes(1);
     expect(reported.mock.calls[0]?.[0]).toMatchObject({ report: { outcome: 'lost:abandoned' } });
+  });
+});
+
+describe('a seat whose line dropped while the run went on', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(T0);
+    vi.spyOn(console, 'log').mockImplementation(() => undefined);
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  it('comes back on the snapshot it kept into the run that went on: the blob changes nothing', () => {
+    const old = server();
+    const { code, anna, ben } = crewOn(old);
+    const kept = blobOf(ben);
+    ben.close();
+    vi.advanceTimersByTime(30_000);
+    // The run went on: Anna's page was handed snapshots of it meanwhile, newer than Ben's.
+    expect(blobOf(anna).at).toBeGreaterThan(kept.at);
+    const back = resume(old.line, 'Ben', code, kept.blob);
+    expect(joinedOf(back).code).toBe(code);
+    expect(back.view).toMatchObject({ phase: 'playing', pausedAt: null, away: [] });
+    expect(back.view.deadlineAt).toBe(anna.view.deadlineAt);
+    expect(anna.view.away).toEqual([]);
+  });
+
+  it('stays away in the snapshots the crew is handed: a room taken up from one waits for it', () => {
+    const old = server();
+    const { code, anna, ben } = crewOn(old);
+    const benId = ben.view.you.id;
+    ben.close();
+    const dropAt = Date.now();
+    vi.advanceTimersByTime(SNAPSHOT_LIVE_MS + 100);
+    const last = blobOf(anna);
+    expect(last.at).toBeGreaterThan(dropAt);
+    const { state } = open(last.blob, code, KEY);
+    expect(state.away[benId]).toEqual({
+      since: dropAt,
+      waivableAt: last.at + FIRST_WAIT_MS,
+      waived: false,
+    });
+    expect(state.paused).toEqual({ since: last.at, kind: 'wartung' });
+    // The old server gone without a word: a new one takes the room up from Anna's newest.
+    vi.advanceTimersByTime(5000);
+    const fresh = server();
+    const annaBack = resume(fresh.line, 'Anna', code, last.blob);
+    vi.advanceTimersByTime(HANDOVER_MS);
+    expect(annaBack.view).toMatchObject({
+      phase: 'playing',
+      pausedAt: last.at,
+      away: [{ name: 'Ben', since: dropAt }],
+    });
+    const benBack = resume(fresh.line, 'Ben', code);
+    for (const socket of [annaBack, benBack]) {
+      expect(socket.view).toMatchObject({ pausedAt: null, away: [] });
+    }
   });
 });

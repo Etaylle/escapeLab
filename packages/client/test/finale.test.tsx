@@ -211,7 +211,7 @@ function viewOf(parts: Partial<PlayerView> = {}): PlayerView {
     lights: { out: true, outAt: T0 },
     currentPuzzleIndex: 4,
     puzzleCount: 4,
-    pausedFor: null,
+    away: [],
     pausedAt: null,
     events: [],
     grade: null,
@@ -267,15 +267,22 @@ describe('the escape', () => {
     expect(stuck.length).toBeGreaterThan(5);
   });
 
-  it('ticks the crew off on the hatch, as the view says, the connected ones in order', () => {
+  it('ticks the crew the run counts off on the hatch, as the view says, in order', () => {
+    const away = { ready: false, isHost: false, connected: false };
     const players = [
       { ...anna, connected: true },
       { ...ben, connected: true },
-      { id: 'p3', name: 'Cem', color: '#fbbf24', ready: false, isHost: false, connected: false },
+      // Away: the escape waits for Cem as for somebody slow — and for Dora's avatar on the hatch.
+      { ...away, id: 'p3', name: 'Cem', color: '#fbbf24' },
+      { ...away, id: 'p4', name: 'Dora', color: '#60a5fa' },
+      // The crew went on without Emil: the escape counts him out.
+      { ...away, id: 'p5', name: 'Emil', color: '#a78bfa', waived: true as const },
     ];
-    expect(escapeChecklist(players, hatch(T0, ['p2']))).toEqual([
+    expect(escapeChecklist(players, hatch(T0, ['p2', 'p4']))).toEqual([
       { id: 'p1', name: 'Anna', color: '#2dd4bf', out: false },
       { id: 'p2', name: 'Ben', color: '#f472b6', out: true },
+      { id: 'p3', name: 'Cem', color: '#fbbf24', out: false },
+      { id: 'p4', name: 'Dora', color: '#60a5fa', out: true },
     ]);
   });
 
@@ -454,7 +461,7 @@ describe('the title card', () => {
       penaltySeq: 1,
       alarms: { count: 1, limit: 5 },
       hintsUsed: 0,
-      pausedFor: null,
+      away: [],
       pausedAt: null,
       events: [],
       grade: null,
@@ -511,7 +518,7 @@ describe('the game screen while the world plays the end', () => {
 
   it('closes with the veil over everything, nothing over the world', () => {
     const benAway = { id: 'p2', name: 'Ben', since: 0, waivableAt: 60_000 };
-    const view = over({ map, phase: 'won', pausedFor: [benAway] });
+    const view = over({ map, phase: 'won', away: [benAway], pausedAt: 0 });
     const html = game(view, { ending: 'won', since: Date.now(), map, running: true, played: true });
     expect(html).toMatch(/^<div class="game game--finale game--won">/);
     expect(html).toMatch(/<div class="finale-veil finale-veil--white" style="animation-delay:\d+ms;animation-duration:600ms"/);
@@ -559,7 +566,7 @@ describe('the game screen while the world plays the end', () => {
       penaltySeq: 0,
       alarms: { count: 0, limit: null },
       hintsUsed: 0,
-      pausedFor: null,
+      away: [],
       pausedAt: null,
       events: [],
       grade: null,

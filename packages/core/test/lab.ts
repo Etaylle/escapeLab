@@ -102,6 +102,14 @@ export function lineBack(playerId: string, at: number): Action {
 }
 
 /**
+ * The server goes down for maintenance at `at`, as a deploy takes it: a run stands still for
+ * the whole crew, every seat off the line, until it is back (`lineBack`).
+ */
+export function serverDown(at: number): Action {
+  return { type: 'maintenance', at, waitFrom: at };
+}
+
+/**
  * The smallest crew the mission takes joins — p1, p2, … — everyone but the
  * host confirms, the host starts.
  */

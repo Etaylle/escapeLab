@@ -76,7 +76,19 @@ function resume(room: Room, player: Player): Player {
 const goOn = (room: Room, by: Player, absent: Player): void =>
   room.act(by.playerId, { kind: 'continue-without', absentId: absent.playerId });
 
-describe('the pause for a crew member away', () => {
+/** The crew at the station, switched on and pressed by every one of `pressing`: the hatch opens. */
+function solve(room: Room, pressing: Player[]): void {
+  const [first, second] = pressing as [Player, Player];
+  walkTo(room, first, 3.5, 2.5);
+  walkTo(room, second, 4.5, 1.5);
+  pressE(room, first);
+  for (const player of pressing) {
+    room.act(player.playerId, { kind: 'puzzle-input', input: { press: true } });
+  }
+  expect(lastView(first).map?.exit?.open).toBe(true);
+}
+
+describe('a crew member away from a run', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.setSystemTime(1_700_000_000_000);
@@ -85,34 +97,54 @@ describe('the pause for a crew member away', () => {
     vi.useRealTimers();
   });
 
+  it('stands nothing still: the air says so once, and the clock runs on to its end', () => {
+    const { room, players, reports } = crew(['Anna', 'Ben', 'Cem']);
+    const [anna, , cem] = players as [Player, Player, Player];
+    const deadline = lastView(anna).deadlineAt ?? 0;
+    vi.advanceTimersByTime(5000);
+    cem.detach();
+    const dropAt = Date.now();
+    const view = lastView(anna);
+    expect(view.away).toEqual([
+      { id: cem.playerId, name: 'Cem', since: dropAt, waivableAt: dropAt + FIRST_WAIT_MS },
+    ]);
+    expect(view.pausedAt).toBeNull();
+    const said = view.events.filter((event) => event.kind === 'away');
+    expect(said).toEqual([
+      { at: dropAt, kind: 'away', label: 'Cems Leitung ist weg.', seconds: null },
+    ]);
+    vi.advanceTimersByTime(30_000);
+    expect(lastView(anna).deadlineAt).toBe(deadline);
+    vi.advanceTimersByTime(deadline - Date.now());
+    expect(lastView(anna).phase).toBe('lost');
+    expect(reports.map((report) => report.outcome)).toEqual(['lost:time']);
+    room.dispose();
+  });
+
   it('offers the way on without them 60 s after the run’s first drop, 20 s after a later', () => {
     const { room, players } = crew(['Anna', 'Ben', 'Cem']);
     const [anna, ben, cem] = players as [Player, Player, Player];
     const deadline = lastView(anna).deadlineAt ?? 0;
     vi.advanceTimersByTime(5000);
     cem.detach();
-    const dropAt = Date.now();
-    expect(lastView(anna).pausedFor).toEqual([
-      { id: cem.playerId, name: 'Cem', since: dropAt, waivableAt: dropAt + FIRST_WAIT_MS },
-    ]);
     vi.advanceTimersByTime(FIRST_WAIT_MS - 1);
     expect(() => goOn(room, anna, cem)).toThrow('Die Wartezeit läuft noch.');
     vi.advanceTimersByTime(1);
     goOn(room, ben, cem);
-    // The clock goes on where it stood: the pause added to the deadline.
-    expect(lastView(anna).pausedFor).toBeNull();
-    expect(lastView(anna).deadlineAt).toBe(deadline + FIRST_WAIT_MS);
+    // The clock went on all along: nothing added to the deadline.
+    expect(lastView(anna).deadlineAt).toBe(deadline);
+    expect(lastView(anna).away.map((away) => [away.name, away.waived])).toEqual([['Cem', true]]);
     expect(lastView(ben).players.find((p) => p.name === 'Cem')?.waived).toBe(true);
-    // Cem is back: counted in at once, and the run goes on without a pause for it.
+    // Cem is back: counted in at once, playing on.
     vi.advanceTimersByTime(10_000);
     const cemAgain = resume(room, cem);
     for (const view of [lastView(anna), lastView(cemAgain)]) {
-      expect(view.pausedFor).toBeNull();
+      expect(view.away).toEqual([]);
       expect(view.players.find((p) => p.name === 'Cem')).not.toHaveProperty('waived');
     }
     // Every later drop of the run waits 20 s.
     ben.detach();
-    expect(lastView(anna).pausedFor?.[0]?.waivableAt).toBe(Date.now() + LATER_WAIT_MS);
+    expect(lastView(anna).away[0]?.waivableAt).toBe(Date.now() + LATER_WAIT_MS);
     room.dispose();
   });
 
@@ -128,24 +160,32 @@ describe('the pause for a crew member away', () => {
     room.dispose();
   });
 
-  it('ends no run at the hatch for a drop: whoever is away is not out', () => {
+  it('waits at the hatch for whoever is away and not on it, as for somebody slow', () => {
     const { room, players } = crew(['Anna', 'Ben']);
     const [anna, ben] = players as [Player, Player];
-    walkTo(room, anna, 3.5, 2.5);
-    walkTo(room, ben, 4.5, 1.5);
-    pressE(room, anna);
-    for (const player of [anna, ben]) {
-      room.act(player.playerId, { kind: 'puzzle-input', input: { press: true } });
-    }
-    expect(lastView(anna).map?.exit?.open).toBe(true);
+    solve(room, [anna, ben]);
     walkTo(room, anna, 8.5, 2.5);
     expect(lastView(anna).map?.exit?.atExit).toEqual([anna.playerId]);
     ben.detach();
+    vi.advanceTimersByTime(5000);
     expect(lastView(anna).phase).toBe('playing');
-    expect(lastView(anna).pausedFor?.map((away) => away.name)).toEqual(['Ben']);
+    expect(lastView(anna).away.map((away) => away.name)).toEqual(['Ben']);
     const benAgain = resume(room, ben);
     expect(lastView(benAgain).phase).toBe('playing');
     walkTo(room, benAgain, 8.5, 2.5);
+    expect(lastView(anna).phase).toBe('won');
+    room.dispose();
+  });
+
+  it('counts an avatar whose line is down where it stands: on the hatch, it is out', () => {
+    const { room, players } = crew(['Anna', 'Ben']);
+    const [anna, ben] = players as [Player, Player];
+    solve(room, [anna, ben]);
+    walkTo(room, ben, 8.5, 2.5);
+    ben.detach();
+    expect(lastView(anna).map?.exit?.atExit).toEqual([ben.playerId]);
+    expect(lastView(anna).phase).toBe('playing');
+    walkTo(room, anna, 8.5, 2.5);
     expect(lastView(anna).phase).toBe('won');
     room.dispose();
   });
@@ -156,12 +196,7 @@ describe('the pause for a crew member away', () => {
     cem.detach();
     vi.advanceTimersByTime(FIRST_WAIT_MS);
     goOn(room, anna, cem);
-    walkTo(room, anna, 3.5, 2.5);
-    walkTo(room, ben, 4.5, 1.5);
-    pressE(room, anna);
-    for (const player of [anna, ben]) {
-      room.act(player.playerId, { kind: 'puzzle-input', input: { press: true } });
-    }
+    solve(room, [anna, ben]);
     walkTo(room, anna, 8.5, 2.5);
     expect(lastView(anna).phase).toBe('playing');
     walkTo(room, ben, 8.5, 2.5);

@@ -1,6 +1,7 @@
 import {
   CREW_COLORS,
   NO_CREDITS,
+  type AwayView,
   type Credits,
   type MapView,
   type MenuPlace,
@@ -10,6 +11,7 @@ import { consoleName } from '../world/consoles.js';
 import { carriedItem } from '../world/interact.js';
 import { isArmed } from '../world/known.js';
 import { near, type Whereabouts } from '../world/presence.js';
+import { pauseClock } from './Pause.js';
 
 /** How many play a mission: „2 Spieler", or „2–3 Spieler" where the count may vary. */
 export function crewSizeText({ min, max }: { min: number; max: number }): string {
@@ -83,7 +85,8 @@ function stationTag(map: MapView | null, at: Whereabouts, pressing: string | nul
 /**
  * What one crew member is doing right now: at the pause menu over the run, which the run goes
  * on under — first, since nothing else they do moves on meanwhile —, and what they do there
- * (`doing`). A member whose line is down is only that, or gone to the main menu, their seat kept.
+ * (`doing`). A member whose line is down is only that, or gone to the main menu, their seat kept
+ * — for how long, where the screen knows it (`awayMs`, `awayFor`).
  */
 export function crewTags(
   map: MapView | null,
@@ -91,12 +94,27 @@ export function crewTags(
   at: Whereabouts,
   pos: PlayerPosition | undefined,
   pressing: string | null = null,
+  awayMs: number | null = null,
 ): CrewTag[] {
   if (!player.connected) {
-    return [{ text: player.menu === 'main' ? 'im Hauptmenü' : 'getrennt', tone: 'away' }];
+    const where = player.menu === 'main' ? 'im Hauptmenü' : 'getrennt';
+    return [{ text: awayMs === null ? where : `${where} · ${pauseClock(awayMs)}`, tone: 'away' }];
   }
   const menu: CrewTag[] = player.menu === 'pause' ? [{ text: 'im Menü', tone: 'menu' }] : [];
   return [...menu, ...doing(map, player.id, at, pos, pressing)];
+}
+
+/**
+ * How long the crew member `playerId` has been away from the run at server time `now`, ms, by
+ * the view's list of those away; null for one on the line.
+ */
+export function awayFor(
+  away: readonly Pick<AwayView, 'id' | 'since'>[],
+  playerId: string,
+  now: number,
+): number | null {
+  const member = away.find((gone) => gone.id === playerId);
+  return member === undefined ? null : Math.max(0, now - member.since);
 }
 
 /**

@@ -65,7 +65,7 @@ import { useHudRow } from './hudFold.js';
 import { RowCrew, RowTools } from './HudRow.js';
 import { Icon } from './Icon.js';
 import { LineLostCard, lineLost, type GameLine } from './Line.js';
-import { BackToast, PauseCard, TakeoverCard } from './Pause.js';
+import { BackToast, offerFor, PauseCard, TakeoverCard } from './Pause.js';
 import { MissionHud } from './MissionHud.js';
 import { InfoPanel } from './InfoPanel.js';
 import { Manual } from './Manual.js';
@@ -918,11 +918,11 @@ export interface RowParts {
 /**
  * The objective bar over the world: the goal and the clock — while the lab
  * still has its power, its name and NORMALBETRIEB instead — then whatever
- * is on the air, the emergency and the alarm. While a device is open
- * (`deviceOpen`) the alarm shows in its head instead: here it would lie half
- * under it. On a phone held sideways (`row`) it is one row with the crew strip folded in
- * (hudFold.ts), and a line on the air stands in the goal's place; the emergency and the alarm
- * stand under the row while they last.
+ * is on the air, the emergency, the alarm and the way on without somebody away
+ * (`offer`). While a device is open (`deviceOpen`) the alarm shows in its head
+ * instead: here it would lie half under it. On a phone held sideways (`row`) it is one row with
+ * the crew strip folded in (hudFold.ts), and a line on the air stands in the goal's place; the
+ * emergency, the alarm and the way on stand under the row while they last.
  */
 export function StageTop({
   view,
@@ -933,6 +933,7 @@ export function StageTop({
   deviceOpen = false,
   self = spawnOf(map),
   row = null,
+  offer,
 }: {
   view: PlayerView;
   map: MapView;
@@ -944,6 +945,8 @@ export function StageTop({
   self?: Point;
   /** the crew strip's parts, where it folds into the bar's row; none by default */
   row?: RowParts | null;
+  /** the ways on without somebody away the crew misses (Pause.tsx `offerFor`); none by default */
+  offer?: ReactNode;
 }) {
   const relay = map.sabotage?.relay;
   const alarm = alarmVisible && !deviceOpen ? alarmNotice(view.events, view.alarms) : null;
@@ -972,6 +975,7 @@ export function StageTop({
       )}
       {relay === undefined && <SabotageAlert sabotage={map.sabotage} pausedAt={view.pausedAt} />}
       {alarm !== null && <AlarmBanner key={alarm.seq} notice={alarm} />}
+      {offer}
     </div>
   );
 }
@@ -1034,8 +1038,9 @@ function RunOverlays({
 
 /**
  * What stands over the world while the run does not go on for this player: the own line down
- * — whatever stands still for the others is not news here — else the pause, else a new
- * device's ask for a seat the run went on without.
+ * — whatever stands still for the others is not news here — else the server's maintenance,
+ * else a new device's ask for the seat of somebody away. A line of the crew's that drops has no
+ * card: the run goes on, the crew strip says it (`AwayOffer`, Crew.tsx).
  */
 function Standstill({
   view,
@@ -1049,7 +1054,7 @@ function Standstill({
   if (lineLost(line, view)) {
     return <LineLostCard line={line} />;
   }
-  if (view.pausedFor !== null) {
+  if (view.pausedAt !== null) {
     return <PauseCard view={view} send={send} />;
   }
   return view.takeovers === undefined ? null : <TakeoverCard asks={view.takeovers} send={send} />;
@@ -1214,8 +1219,9 @@ function useNotepad(roomCode: string | null, playerId: string, open: OpenNow) {
 
 /**
  * The run around an open device as this player's view has it: its alarms — the latest one's
- * notice for the device's head — the stations solved, what the server refused, and the crew,
- * connected, in order, for the levers' names.
+ * notice for the device's head — the stations solved, what the server refused, and the crew the
+ * run counts, in order, for the levers' names: whoever is away too, until the crew goes on
+ * without them.
  */
 export function deviceRunOf(view: PlayerView, refusal: Refusal | null): DeviceRun {
   return {
@@ -1225,7 +1231,7 @@ export function deviceRunOf(view: PlayerView, refusal: Refusal | null): DeviceRu
     crew: {
       you: view.you.id,
       mates: view.players
-        .filter((player) => player.connected)
+        .filter((player) => player.waived !== true)
         .map(({ id, name, color }) => ({ id, name, color })),
     },
     alarm: alarmNotice(view.events, view.alarms),
@@ -1333,8 +1339,8 @@ export function worldHeld(finale: Finale | null, line: GameLine, view: PlayerVie
 
 /**
  * Whether the world takes no keys: while it is held (`worldHeld`), the station's panel, pages
- * or a note lie over it, the run is paused or the relay console holds them. Pages on their way
- * down hold nothing: the player walks off at once.
+ * or a note lie over it, the run stands still for the server's maintenance or the relay console
+ * holds them. Pages on their way down hold nothing: the player walks off at once.
  */
 export function worldLocked(
   view: PlayerView,
@@ -1344,7 +1350,7 @@ export function worldLocked(
 ) {
   const relayUp = view.map?.sabotage?.relay !== undefined;
   const over = station !== null || open.reading !== null || open.note !== null;
-  return held || over || view.pausedFor !== null || relayUp;
+  return held || over || view.pausedAt !== null || relayUp;
 }
 
 /**
@@ -1503,6 +1509,7 @@ export function GameScreen(props: Props) {
           deviceOpen={live && station !== null}
           self={self}
           row={row}
+          offer={offerFor(view, send)}
         />
         <RunWorld
           game={props}

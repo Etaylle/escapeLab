@@ -47,7 +47,7 @@ describe('a snapshot of the build before', () => {
     vi.advanceTimersByTime(HANDOVER_MS);
     for (const socket of crew) {
       expect(joinedOf(socket).code).toBe(BUILD_BEFORE.code);
-      expect(socket.view).toMatchObject({ phase: 'playing', pausedFor: null });
+      expect(socket.view).toMatchObject({ phase: 'playing', pausedAt: null });
       expect(socket.view.map?.sabotage).not.toBeNull();
     }
   });

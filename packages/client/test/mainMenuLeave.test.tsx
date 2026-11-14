@@ -79,7 +79,7 @@ describe('the crew’s word of who went to the main menu', () => {
     expect(wentToMenu([{ name: 'Cem' }])).toBe('');
     const view = {
       players: [mate('p1'), mate('p2', { connected: false, menu: 'main' })],
-      pausedFor: [away[0]],
+      away: [away[0]],
       pausedAt: 1,
     } as unknown as PlayerView;
     const html = renderToStaticMarkup(<PauseCard view={view} send={noop} />);

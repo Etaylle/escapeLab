@@ -12,6 +12,7 @@ import {
   doorAsks,
   JoinScreen,
   restoringLine,
+  seatLeft,
 } from '../src/screens/Join.js';
 import { MissionPanel } from '../src/screens/MenuPanels.js';
 import { storage } from './page.js';
@@ -149,6 +150,14 @@ describe('the join screen of a pass bound to a run', () => {
     const html = renderToStaticMarkup(<BoundCard seat={{ ...RUN, paused: true }} send={noop} />);
     expect(html).toContain('EINSATZ PAUSIERT');
     expect(html).toContain('noch 12:34');
+  });
+
+  it('counts the clock down from the server’s answer while the run goes on, whoever is away', () => {
+    expect(seatLeft(754_000, false, T0, T0)).toBe(754_000);
+    expect(seatLeft(754_000, false, T0, T0 + 4_500)).toBe(749_500);
+    expect(seatLeft(3_000, false, T0, T0 + 9_000)).toBe(0);
+    // Standing still for the server's maintenance, it stays where the server said.
+    expect(seatLeft(754_000, true, T0, T0 + 4_500)).toBe(754_000);
   });
 
   it('blocks every other room with one line that names the run', () => {

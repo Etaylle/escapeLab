@@ -203,7 +203,8 @@ const gameStateSchema = z.looseObject({
   sabotage: z
     .looseObject({ endsAt: z.number(), emergency: typed<RelayState>().exactOptional() })
     .nullable(),
-  paused: z.looseObject({ since: z.number(), kind: z.enum(['away', 'wartung']) }).nullable(),
+  // A snapshot is taken through the maintenance (room.ts `snapshot`): a run's pause is always it.
+  paused: z.looseObject({ since: z.number(), kind: z.literal('wartung') }).nullable(),
   away: z.record(z.string(), awaySchema),
   // A snapshot from before the pause menu holds no menus: nobody has one open.
   menus: z.record(z.string(), z.enum(['pause', 'main'])).default({}),

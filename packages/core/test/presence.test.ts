@@ -8,7 +8,7 @@ import {
   viewForSpectator,
 } from '../src/index.js';
 import type { Action, GameState, Mission, PuzzleView } from '../src/index.js';
-import { labMission, lineDrops, openLab, standing, started, T0 } from './lab.js';
+import { labMission, openLab, serverDown, standing, started, T0 } from './lab.js';
 
 /** Two stations, each with its own book, and the sign; three players. */
 const twoBooks: Mission = parseMission({
@@ -371,7 +371,7 @@ describe('button-sync by players', () => {
 
   it('keeps the presses of a paused run, with nothing due', () => {
     const pressed = applyAction(syncOpen(), press('p1', T0 + 1000));
-    const paused = applyAction(pressed, lineDrops('p2', T0 + 1500));
+    const paused = applyAction(pressed, serverDown(T0 + 1500));
     expect(puzzleDueAt(paused)).toBeNull();
     expect(applyAction(paused, { type: 'puzzle-tick', at: T0 + 10_000 })).toBe(paused);
   });

@@ -148,13 +148,41 @@ describe('a room where the lamp finds what it rests on, close by', () => {
     room.dispose();
   });
 
-  it('finds nothing while the run stands paused, and looks anew once it goes on', () => {
+  it('looks on while somebody’s line is down: a drop freezes no look', () => {
     const { room, anna, ben } = started();
     walkTo(room, anna, BY_LOCKERS.x, BY_LOCKERS.y);
     ben.detach();
+    vi.advanceTimersByTime(599);
+    expect(sourcesFound(anna)).toEqual([]);
+    vi.advanceTimersByTime(1);
+    expect(sourcesFound(anna)).toEqual(['spind', 'schrank']);
+    room.dispose();
+  });
+
+  it('lets the look of whoever drops go with the line: back, the lamp looks anew', () => {
+    const { room, ben } = started();
+    walkTo(room, ben, BY_LOCKERS.x, BY_LOCKERS.y);
+    vi.advanceTimersByTime(500);
+    ben.detach();
+    vi.advanceTimersByTime(5000);
+    // Ben's lamp rested on the locker all the while, but nobody looked through it.
+    room.resume(passFor('Ben'));
+    room.attach(ben.playerId, (m) => ben.messages.push(m));
+    vi.advanceTimersByTime(599);
+    expect(sourcesFound(ben)).toEqual([]);
+    vi.advanceTimersByTime(1);
+    expect(sourcesFound(ben)).toEqual(['spind', 'schrank']);
+    room.dispose();
+  });
+
+  it('finds nothing while the server’s maintenance stands the run still, and looks anew', () => {
+    const { room, anna } = started();
+    walkTo(room, anna, BY_LOCKERS.x, BY_LOCKERS.y);
+    room.goDown(Date.now());
     vi.advanceTimersByTime(1000);
     expect(sourcesFound(anna)).toEqual([]);
-    // The lamp rested on the locker all through the pause, but the pause froze the look.
+    // The lamp rested on the locker all through the standstill, but it froze the look.
+    room.resume(passFor('Anna'));
     room.resume(passFor('Ben'));
     vi.advanceTimersByTime(599);
     expect(sourcesFound(anna)).toEqual([]);

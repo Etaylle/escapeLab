@@ -86,7 +86,7 @@ describe('a room’s snapshot', () => {
       ['Ben', passFor('Ben').id],
     ]);
     // The room itself plays on as it was.
-    expect(lastView(anna).pausedFor).toBeNull();
+    expect(lastView(anna).pausedAt).toBeNull();
     // As the sealed blob carries it, and back: nothing lost on the way.
     const carried = JSON.parse(JSON.stringify(kept)) as RoomSnapshot;
     expect(carried).toEqual(kept);
@@ -123,9 +123,10 @@ interface Crew {
 }
 
 /**
- * Blackout mid-way, its snapshot taken as its crew's lines drop; DOWNTIME_MS on, a twin taken up
- * again from the snapshot; 10 s on, the crew back in both. Returns both crews, the snapshot, and
- * the view before it with the moments the snapshot was taken and the crew was back.
+ * Blackout mid-way, its snapshot taken as the server goes down for maintenance, the crew's lines
+ * going with it; DOWNTIME_MS on, a twin taken up again from the snapshot; 10 s on, the crew back
+ * in both. Returns both crews, the snapshot, and the view before it with the moments the
+ * snapshot was taken and the crew was back.
  */
 function twins() {
   const { room, anna, ben } = blackoutMidway();
@@ -133,6 +134,7 @@ function twins() {
   const at = Date.now();
   const before = lastView(anna);
   const kept = JSON.parse(JSON.stringify(room.snapshot(at))) as RoomSnapshot;
+  room.goDown(at);
   anna.detach();
   ben.detach();
   vi.advanceTimersByTime(DOWNTIME_MS);
@@ -168,7 +170,7 @@ describe('a room taken up again from its snapshot', () => {
   it('plays Blackout on as the room it was, the clock moved on by the downtime', () => {
     const { was, now, kept, before, at, back } = twins();
     expect(views(now)).toEqual(views(was));
-    expect(lastView(now.anna).pausedFor).toBeNull();
+    expect(lastView(now.anna).pausedAt).toBeNull();
     expect(lastView(now.anna).deadlineAt).toBe((before.deadlineAt ?? 0) + (back - at));
     // The patrol stood still through the pause, where it was: it does not start its loop anew.
     const stood = kept.keeping.drones?.['flurwache'] ?? { x: 0, y: 0 };
@@ -202,9 +204,8 @@ describe('a room taken up again from its snapshot', () => {
     const anna = rejoin(restored, { name: 'Anna' });
     const ben = kept.state.players.find((p) => p.name === 'Ben');
     expect(lastView(anna)).toMatchObject({
-      maintenance: true,
       pausedAt: at,
-      pausedFor: [{ id: ben?.id, name: 'Ben', since: at, waivableAt: restoredAt + FIRST_WAIT_MS }],
+      away: [{ id: ben?.id, name: 'Ben', since: at, waivableAt: restoredAt + FIRST_WAIT_MS }],
     });
     restored.dispose();
   });

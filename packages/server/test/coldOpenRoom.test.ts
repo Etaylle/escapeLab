@@ -170,20 +170,27 @@ describe('a room whose mission opens with the power on', () => {
     room.dispose();
   });
 
-  it('waits out a pause during the intro: the lights go out that much later', () => {
-    const { room, anna, ben } = started();
+  it('goes dark on time with a line down during the intro: a drop holds nothing up', () => {
+    const { room, anna, ben, startedAt } = started();
     vi.advanceTimersByTime(1000);
     ben.detach();
-    expect(lastView(anna).pausedFor?.map((away) => away.name)).toEqual(['Ben']);
-    vi.advanceTimersByTime(10_000);
-    expect(lastView(anna).lights.out).toBe(false);
-    room.resume(passFor('Ben'));
-    room.attach(ben.playerId, (m) => ben.messages.push(m));
-    const resumedAt = Date.now();
+    expect(lastView(anna).away.map((away) => away.name)).toEqual(['Ben']);
     vi.advanceTimersByTime(INTRO_MS - 1000 - 1);
     expect(lastView(anna).lights.out).toBe(false);
     vi.advanceTimersByTime(1);
-    expect(lastView(anna).lights).toEqual({ out: true, outAt: resumedAt + INTRO_MS - 1000 });
+    expect(lastView(anna).lights).toEqual({ out: true, outAt: startedAt + INTRO_MS });
+    room.resume(passFor('Ben'));
+    room.attach(ben.playerId, (m) => ben.messages.push(m));
+    expect(lastView(ben).lights).toEqual({ out: true, outAt: startedAt + INTRO_MS });
+    room.dispose();
+  });
+
+  it('goes dark the moment the one still watching drops, the rest done with it', () => {
+    const { room, anna, ben } = started();
+    room.act(anna.playerId, { kind: 'intro-done' });
+    vi.advanceTimersByTime(1000);
+    ben.detach();
+    expect(lastView(anna).lights).toEqual({ out: true, outAt: Date.now() });
     room.dispose();
   });
 

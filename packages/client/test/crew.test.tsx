@@ -62,7 +62,7 @@ function annaSees(players: Seat[], parts: Partial<PlayerView> = {}): PlayerView 
     lights: { out: false, outAt: null },
     currentPuzzleIndex: 0,
     puzzleCount: 5,
-    pausedFor: null,
+    away: [],
     pausedAt: null,
     events: [],
     grade: null,
@@ -1112,7 +1112,7 @@ describe('the audience', () => {
       penaltySeq: 2,
       alarms: { count: 2, limit: 5 },
       hintsUsed: 1,
-      pausedFor: null,
+      away: [],
       pausedAt: null,
       events: [],
       grade: { rank: 'B', label: 'Solide' },
@@ -1149,6 +1149,21 @@ describe('the audience', () => {
       { text: 'Kennung', tone: 'sign' },
     ]);
     expect(audienceTags(view, watchedBen, on(1, 8))).toEqual([]);
+  });
+
+  it('tags whoever is away with how long, as the crew strip does', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(PULLED_AT + 65_000);
+    const gone = { ...watchedBen, connected: false };
+    const view: SpectatorView = {
+      ...finished(),
+      phase: 'playing',
+      map: lab,
+      players: [watchedAnna, gone],
+      away: [{ id: 'p2', name: 'Ben', since: PULLED_AT, waivableAt: PULLED_AT + 60_000 }],
+    };
+    expect(audienceTags(view, gone, undefined)).toEqual([{ text: 'getrennt · 1:05', tone: 'away' }]);
+    vi.useRealTimers();
   });
 
   it('sees the credits in place of the station once the run is over', () => {

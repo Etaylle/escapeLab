@@ -234,7 +234,7 @@ describe('a lobby seat whose tab closed', () => {
     ben.detach('closed');
     vi.advanceTimersByTime(2 * LOBBY_AWAY_MS);
     expect(anna.names()).toEqual(['Anna', 'Ben']);
-    expect(anna.view().pausedFor?.map((away) => away.name)).toEqual(['Ben']);
+    expect(anna.view().away.map((away) => away.name)).toEqual(['Ben']);
     room.dispose();
   });
 });

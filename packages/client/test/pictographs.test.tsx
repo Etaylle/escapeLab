@@ -31,6 +31,7 @@ const KINDS: Record<RunEvent['kind'], string> = {
   power: 'Stromausfall',
   note: 'Notiz gelesen',
   nudge: 'Die Betriebsanleitung liegt im Archiv.',
+  away: 'Bens Leitung ist weg.',
 };
 
 /** One line of every kind, a minute apart. */
@@ -67,7 +68,7 @@ function over(parts: Partial<PlayerView>): PlayerView {
     lights: { out: true, outAt: 1_000 },
     currentPuzzleIndex: 5,
     puzzleCount: 5,
-    pausedFor: null,
+    away: [],
     pausedAt: null,
     events: REPORT,
     grade: { rank: 'A', label: 'Starke Leistung' },
@@ -105,7 +106,7 @@ function watched(parts: Partial<SpectatorView>): SpectatorView {
     penaltySeq: 1,
     alarms: { count: 1, limit: 5 },
     hintsUsed: 1,
-    pausedFor: null,
+    away: [],
     pausedAt: null,
     events: REPORT,
     grade: null,
@@ -188,6 +189,7 @@ describe('the screens around a run', () => {
       'power',
       'note',
       'radio',
+      'radio',
     ]);
     // Mission control speaking up unasked says so in the report, its line after it.
     expect(won).toContain(
@@ -202,7 +204,7 @@ describe('the screens around a run', () => {
     const BEN_AWAY = { id: 'p2', name: 'Ben', since: 0, waivableAt: 60_000 };
     const states = {
       lobby: spectate(watched({ phase: 'lobby' })),
-      paused: spectate(watched({ pausedFor: [BEN_AWAY] })),
+      paused: spectate(watched({ away: [BEN_AWAY], pausedAt: 0 })),
       won: spectate(watched({ phase: 'won', grade: { rank: 'A', label: 'Stark' } })),
       lost: spectate(watched({ phase: 'lost' })),
     };
@@ -211,7 +213,7 @@ describe('the screens around a run', () => {
       expect(html).not.toMatch(PICTOGRAPH);
     }
     expect(iconsAsWords(states.paused)).toContain(
-      '<div class="banner-result">[pause] Pausiert — warten auf Ben</div>',
+      '<div class="banner-result">[pause] Wartung — warten auf Ben</div>',
     );
     // A run that is over shows its title card where the world was.
     expect(states.won).toContain('<h1 class="end-title-word">GESCHAFFT</h1>');

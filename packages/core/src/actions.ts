@@ -59,15 +59,16 @@ export type Action =
   /** `color`: the crew colour the player's account wears, worn where nobody wears it yet */
   | { type: 'player-join'; playerId: string; name: string; color?: string }
   /**
-   * a crew member's line is back at `at`: in a run they count again at once, whether the crew
-   * went on without them or not, and the run goes on once it waits for nobody
+   * a crew member's line is back at `at`: in a run they play on at once and count again,
+   * whether the crew went on without them or not; a run standing still for the server's
+   * maintenance goes on once it waits for nobody
    */
   | { type: 'player-connected'; playerId: string; at: number }
   /**
    * a crew member's line dropped at `at`: in a run they are away (`GameState.away`), and the
-   * run stands still for them — a drop alone ends no run. With `menu` it closed on purpose, the
-   * player gone to the main menu: the seat stays theirs as after any drop, and the crew sees
-   * where they went (`GameState.menus`)
+   * run goes on — a drop stands nothing still and alone ends no run. With `menu` it closed on
+   * purpose, the player gone to the main menu: the seat stays theirs as after any drop, and the
+   * crew sees where they went (`GameState.menus`)
    */
   | { type: 'player-disconnected'; playerId: string; at: number; menu?: true }
   /**
@@ -188,8 +189,8 @@ function findPlayer(state: GameState, playerId: string): Player {
   return player ?? fail('Unbekannter Spieler — bitte Raum neu beitreten.');
 }
 
-/** What a run paused for a lost connection answers every move with. */
-const PAUSED = 'Pausiert — jemand ist nicht mehr verbunden.';
+/** What a run standing still for the server's maintenance answers every move with. */
+const STANDING_STILL = 'Wartung — der Einsatz steht still.';
 
 /** What every move made outside a run is told. */
 const NO_RUN = 'Nur während des Einsatzes.';
@@ -298,10 +299,10 @@ export function applyAction(state: GameState, action: Action): GameState {
  * everyone confirms anew. In a run they leave its crew (`leaveRun`): with fewer left than the
  * mission's smallest crew the run ends for everyone, lost and called off, its end card naming
  * who left — decided before anything else, an emergency at the relay included, is worked out
- * for a crew that small. Otherwise it goes on: at once where it stood still for them, but with
- * fewer than the smallest crew on the line it waits again for whoever is away (`waitAgain`),
- * rather than running on with too few. An emergency at the relay under way is rolled anew for
- * the crew the run counts then (`relayForCrew`).
+ * for a crew that small. Otherwise it goes on, at once where it stood still for the server's
+ * maintenance and only them; but with fewer than the smallest crew on the line it counts again
+ * whoever it went on without (`waitAgain`), rather than running on with too few counted. An
+ * emergency at the relay under way is rolled anew for the consoles then (`relayForCrew`).
  */
 function abandon(
   state: GameState,
@@ -318,13 +319,14 @@ function abandon(
     return lostNow({ ...left, paused: null, calledOff: line }, action.at, line);
   }
   const counted = onTheLine(left) < min ? waitAgain(left, action.at) : left;
-  return holdForAway(relayForCrew(counted, action.at), action.at);
+  return resumeWhenBack(relayForCrew(counted, action.at), action.at);
 }
 
 /**
- * The run waits again for every crew member away it went on without, from `at` on: their
- * wait starts anew (LATER_WAIT_MS), as for a later drop. A new device's ask for their seat
- * still waits for its answer (`claimUntil`).
+ * The crew counts again every member away it went on without, from `at` on: the stations the
+ * whole crew presses and the hatch wait for them again, and their wait starts anew
+ * (LATER_WAIT_MS), as for a later drop. A new device's ask for their seat still waits for its
+ * answer (`claimUntil`).
  */
 function waitAgain(state: GameState, at: number): GameState {
   const away = Object.fromEntries(
@@ -385,22 +387,41 @@ function presenceWithout(presence: Presence, playerId: string): Presence {
 }
 
 /**
- * An emergency at the relay under way, rolled anew for the crew the run counts (`crewOf`) — a
- * console each — once that crew changed: somebody left, the run went on without somebody, or
- * somebody it went on without is back. Its deadline, and what it completed and missed, are
- * kept. A run standing still rolls it as of the moment it stopped, so that its instructions'
- * clocks start as it goes on (`setPaused`).
+ * An emergency at the relay under way, rolled anew for the consoles it has now
+ * (`relayCrewOf`) — once they changed: somebody's line dropped or is back, somebody left, or
+ * the server's maintenance took every line; nothing where they did not. Its deadline, and what
+ * it completed and missed, are kept. A run standing still rolls it as of the moment it stopped,
+ * so that its instructions' clocks start as it goes on (`thaw`).
  */
 function relayForCrew(state: GameState, at: number): GameState {
   const sabotage = state.sabotage;
   const emergency = sabotage?.emergency;
-  if (sabotage === null || emergency === undefined) {
+  if (sabotage === null || emergency === undefined || sameConsoles(state, emergency)) {
     return state;
   }
   const fresh = openEmergency(state, state.paused?.since ?? at);
   const { endsAt, completed, missed } = emergency;
   const rolled = { ...fresh, endsAt, completed, missed };
   return { ...state, sabotage: { ...sabotage, emergency: rolled } };
+}
+
+/** Whether `emergency` has a console for every one of the relay's crew now, and no other. */
+function sameConsoles(state: GameState, emergency: RelayState): boolean {
+  const owners = new Set(emergency.controls.map((control) => control.ownerId));
+  const crew = relayCrewOf(state);
+  return crew.length === owners.size && crew.every((player) => owners.has(player.id));
+}
+
+/**
+ * Who has a console at the relay in an emergency: the crew the run counts (`crewOf`) on the
+ * line — whoever is away has none, whether the crew went on without them or not. With fewer
+ * than two of them on the line, where no console is worked anyway, the crew the run counts:
+ * an emergency takes two consoles at least, and every one of them is somebody's.
+ */
+export function relayCrewOf(state: GameState): Player[] {
+  const crew = crewOf(state);
+  const on = crew.filter((player) => player.connected);
+  return on.length >= 2 ? on : crew;
 }
 
 /**
@@ -564,12 +585,16 @@ const STILL_WAITING = 'Die Wartezeit läuft noch.';
 const NOBODY_AWAY = 'Hier fehlt niemand.';
 
 /**
- * A crew member's line dropped at `at`. In a run they are away from then on: the run stands
- * still for them, and the crew may go on without them once the drop's wait is over — the run's
- * first drop waits FIRST_WAIT_MS, every later one LATER_WAIT_MS. A drop alone ends no run, and
- * a line that dropped once is down: said twice, nothing counts twice. A menu they had open is
- * closed with it. A line closed on purpose for the main menu (`menu`) waits as a drop does — the
- * seat stays theirs, in a lobby too — and the crew sees where they went.
+ * A crew member's line dropped at `at`. In a run they are away from then on, and the run goes
+ * on: mission control says so on the air once (`awayLine`); their avatar stands where it stood
+ * and holds what it held, the patrols do not see it, their console counts as unmanned and an
+ * emergency at the relay is rolled anew without it (`relayForCrew`); an intro the others have
+ * all seen enough of ends (`introOver`). The crew may go on without them once the drop's wait
+ * is over — the run's first drop waits FIRST_WAIT_MS, every later one LATER_WAIT_MS. A drop
+ * stands nothing still and alone ends no run, and a line that dropped once is down: said twice,
+ * nothing counts twice. A menu they had open is closed with it. A line closed on purpose for
+ * the main menu (`menu`) counts as a drop — the seat stays theirs, in a lobby too — and the crew
+ * sees where they went.
  */
 function lineDropped(
   state: GameState,
@@ -588,14 +613,24 @@ function lineDropped(
     ...state.away,
     [player.id]: { since: action.at, waivableAt: action.at + wait, waived: false },
   };
-  return holdForAway({ ...dropped, away, drops: state.drops + 1 }, action.at);
+  const line = awayLine(player.name, action.menu === true);
+  const said = logEvent({ ...dropped, away, drops: state.drops + 1 }, 'away', line, action.at);
+  return introOver(relayForCrew(said, action.at), action.at);
 }
 
 /**
- * A crew member's line is back at `at`. In a run they count again at once, whether the crew
- * went on without them or waited, and the run goes on once it waits for nobody: a return the
- * crew went on without pauses nothing, and rolls an emergency at the relay anew to give them a
- * console (`relayForCrew`).
+ * What mission control says on the air as a crew member goes from the run: „Bens Leitung ist
+ * weg." for a line that dropped, „Ben hat sich abgemeldet." for the main menu (`menu`).
+ */
+function awayLine(name: string, menu: boolean): string {
+  return menu ? `${name} hat sich abgemeldet.` : `${genitive(name)} Leitung ist weg.`;
+}
+
+/**
+ * A crew member's line is back at `at`. In a run they play on at once and count again, whether
+ * the crew went on without them or not: an emergency at the relay is rolled anew to give them a
+ * console (`relayForCrew`), and a run standing still for the server's maintenance goes on once
+ * it waits for nobody (`resumeWhenBack`).
  */
 function lineBack(state: GameState, action: { playerId: string; at: number }): GameState {
   const id = findPlayer(state, action.playerId).id;
@@ -606,13 +641,15 @@ function lineBack(state: GameState, action: { playerId: string; at: number }): G
   const away = Object.fromEntries(
     Object.entries(state.away).filter(([playerId]) => playerId !== action.playerId),
   );
-  const counted = { ...back, away };
-  const waived = state.away[action.playerId]?.waived === true;
-  return holdForAway(waived ? relayForCrew(counted, action.at) : counted, action.at);
+  return resumeWhenBack(relayForCrew({ ...back, away }, action.at), action.at);
 }
 
-/** Whom the run waits for: the crew members away it has not gone on without, by player id. */
-export function waitingFor(state: GameState): string[] {
+/**
+ * Whom the crew misses: the members away it has not gone on without, by player id — whom the
+ * stations the whole crew presses and the hatch wait for, and a run standing still for the
+ * server's maintenance too.
+ */
+function missing(state: GameState): string[] {
   return Object.entries(state.away)
     .filter(([, away]) => !away.waived)
     .map(([playerId]) => playerId);
@@ -620,7 +657,7 @@ export function waitingFor(state: GameState): string[] {
 
 /**
  * The crew the run counts — at the stations the whole crew presses, at the hatch: everybody
- * but whom it went on without (`continue-without`).
+ * but whom it went on without (`continue-without`), whoever is away included.
  */
 export function crewOf(state: GameState): Player[] {
   return state.players.filter((player) => state.away[player.id]?.waived !== true);
@@ -632,19 +669,19 @@ function onTheLine(state: GameState): number {
 }
 
 /**
- * The run stands still while it waits for somebody away, and goes on — every deadline moved on
- * by the pause — once it waits for nobody (`setPaused`).
+ * A run standing still for the server's maintenance goes on — every deadline moved on by the
+ * pause (`thaw`) — once it misses nobody: the crew back, or gone on without whoever is not.
  */
-function holdForAway(state: GameState, at: number): GameState {
-  return setPaused(state, { paused: waitingFor(state).length > 0, at });
+function resumeWhenBack(state: GameState, at: number): GameState {
+  return state.paused !== null && missing(state).length === 0 ? thaw(state, at) : state;
 }
 
 /**
  * `playerId`, on the line, goes on without `absentId`: away since a drop whose wait is over,
  * and two of the crew at least on the line — one alone could work no station with two
- * consoles. The absent keep their seat and are counted out until they are back (`crewOf`),
- * at the relay too: an emergency under way is rolled anew without their console
- * (`relayForCrew`). The run goes on once it waits for nobody else.
+ * consoles. The absent keep their seat and are counted out until they are back (`crewOf`); at
+ * the relay they have no console already, being away (`relayCrewOf`). A run standing still for
+ * the server's maintenance goes on once it waits for nobody else.
  */
 function continueWithout(
   state: GameState,
@@ -665,7 +702,7 @@ function continueWithout(
     fail('Allein läuft kein Einsatz weiter.');
   }
   const away = { ...state.away, [action.absentId]: { ...absent, waived: true } };
-  return holdForAway(relayForCrew({ ...state, away }, action.at), action.at);
+  return resumeWhenBack({ ...state, away }, action.at);
 }
 
 /** How long a new device's ask to take a seat over waits for the crew to let it in, ms. */
@@ -752,11 +789,13 @@ function menusWithout(
  * The server down for maintenance at `at`, or taking the room up again at `waitFrom`: every
  * seat is off the line. In a run each is away from `at` — whoever was away already keeps their
  * drop, and whom the run went on without stays counted out — and the run stands still for the
- * whole crew (`wartung`), its clock stopped from `at`, or from the pause it stood in already.
- * Nobody may be left behind before FIRST_WAIT_MS after `waitFrom`, however long their own drop
- * has lasted, an ask for a seat lapses — its device went with the server — and every menu
- * open over the run closes with its line; whoever went to the main menu stays gone there. Said
- * twice, nothing more changes.
+ * whole crew (`wartung`), its clock stopped from `at`, or from the pause it stood in already,
+ * until it misses nobody (`resumeWhenBack`): whoever dropped before it is waited for with the
+ * rest. Nobody may be left behind before FIRST_WAIT_MS after `waitFrom`, however long their own
+ * drop has lasted, an ask for a seat lapses — its device went with the server — and every menu
+ * open over the run closes with its line; whoever went to the main menu stays gone there. An
+ * emergency at the relay is rolled for the crew the run counts, nobody being on the line
+ * (`relayForCrew`). Said twice, nothing more changes.
  */
 function maintenance(state: GameState, action: { at: number; waitFrom: number }): GameState {
   const players = state.players.map((p) => (p.connected ? { ...p, connected: false } : p));
@@ -769,7 +808,8 @@ function maintenance(state: GameState, action: { at: number; waitFrom: number })
   );
   const since = state.paused?.since ?? action.at;
   const menus = mainMenusOf(state.menus);
-  return { ...state, players, away, menus, paused: { since, kind: 'wartung' } };
+  const down = { ...state, players, away, menus, paused: { since, kind: 'wartung' as const } };
+  return relayForCrew(down, action.at);
 }
 
 /**
@@ -785,15 +825,15 @@ function awayThroughMaintenance(was: Away | undefined, at: number, waivableAt: n
 }
 
 /**
- * The one crew member still on the line calls the run off, once the wait for whoever it waits
- * for is over: lost for everyone (`lost:abandoned`), its end card naming them.
+ * The one crew member still on the line calls the run off, once the wait for whoever the crew
+ * misses is over: lost for everyone (`lost:abandoned`), its end card naming them.
  */
 function callOff(state: GameState, action: { playerId: string; at: number }): GameState {
   if (state.phase !== 'playing') {
     fail(NO_RUN);
   }
   findPlayer(state, action.playerId);
-  const waited = waitingFor(state);
+  const waited = missing(state);
   if (waited.length === 0) {
     fail(NOBODY_AWAY);
   }
@@ -1017,15 +1057,19 @@ function crewToStart(state: GameState): Player[] {
   return crew;
 }
 
+/** A name in the genitive, „Bens", „Jens’": the s an apostrophe after an s, ß, x or z. */
+function genitive(name: string): string {
+  return /[sßxz]$/i.test(name) ? `${name}’` : `${name}s`;
+}
+
 /**
  * What holds a start back while seats of the room are off the line, by their names: „Bens
- * Leitung ist unterbrochen", the s of the genitive an apostrophe after an s, ß, x or z.
+ * Leitung ist unterbrochen".
  */
 export function linesDown(names: readonly string[]): string {
   const [only] = names;
   if (names.length === 1 && only !== undefined) {
-    const whose = /[sßxz]$/i.test(only) ? `${only}’` : `${only}s`;
-    return `${whose} Leitung ist unterbrochen`;
+    return `${genitive(only)} Leitung ist unterbrochen`;
   }
   return `Leitungen unterbrochen: ${names.join(', ')}`;
 }
@@ -1170,10 +1214,20 @@ function everyoneWatched(state: GameState): boolean {
 }
 
 /**
+ * The intro over at `at` where every one present has said they had seen enough of it
+ * (`everyoneWatched`) while the power is still on: once the one who had not goes away, or a run
+ * standing still for the server's maintenance goes on (`thaw`). Nothing changes otherwise.
+ */
+function introOver(state: GameState, at: number): GameState {
+  const said = state.lightsOutAt === null && state.introDone.length > 0;
+  return said && everyoneWatched(state) ? lightsOut(state, at) : state;
+}
+
+/**
  * A crew member has seen enough of the intro: noted once, however often said, and only while
- * the power is still on. Once every one present has, the lights go out at `at` — not during a
- * pause, which ends it instead as the run goes on: everybody back, or the crew on without
- * whoever is away (`setPaused`).
+ * the power is still on. Once every one present has, the lights go out at `at` — not while the
+ * run stands still for the server's maintenance, which ends it instead as the run goes on
+ * (`thaw`).
  */
 function introDone(state: GameState, action: { playerId: string; at: number }): GameState {
   if (state.phase !== 'playing' || state.lightsOutAt !== null) {
@@ -1213,7 +1267,7 @@ function requirePlaying(
   at: number,
 ): { player: Player; def: PuzzleDef; puzzleState: PuzzleState } | 'lost' {
   if (state.paused !== null) {
-    fail(PAUSED);
+    fail(STANDING_STILL);
   }
   if (state.phase !== 'playing' || state.puzzleState === null) {
     fail('Gerade ist keine Station in Betrieb.');
@@ -1272,8 +1326,9 @@ function advance(state: GameState, at: number): GameState {
 }
 
 /**
- * Dispatched by the server once the whole crew it counts (`crewOf`) stands on the hatch. Never
- * while the run stands still: whoever it waits for is away, not out.
+ * Dispatched by the server once the whole crew it counts (`crewOf`) stands on the hatch —
+ * somebody away counts where their avatar stands. Never while the run stands still for the
+ * server's maintenance: a crew off the line in the middle of the escape is not out.
  */
 function handleEscaped(state: GameState, action: { at: number }): GameState {
   if (!inEscapePhase(state)) {
@@ -1387,7 +1442,10 @@ function wonNow(state: GameState, at: number, how: string): GameState {
   return logRadio(finished, 'won', state.mission.radio.won?.[band], at, band);
 }
 
-/** The clock has run out at `at`: a run that plays, and does not stand still, is lost. */
+/**
+ * The clock has run out at `at`: a run that plays, and does not stand still for the server's
+ * maintenance, is lost — whoever is away meanwhile.
+ */
 function timeExpired(state: GameState, at: number): GameState {
   return state.phase === 'playing' && state.paused === null ? lostNow(state, at) : state;
 }
@@ -1481,7 +1539,7 @@ function clearSabotage(state: GameState, at: number): GameState {
 }
 
 /**
- * The relay emergency's def, a console for each of the crew the run counts (`crewOf`): rebuilt
+ * The relay emergency's def, a console for each of the relay's crew (`relayCrewOf`): rebuilt
  * from the game whenever needed, never stored.
  */
 function emergencyDef(state: GameState): RelayDef {
@@ -1489,7 +1547,7 @@ function emergencyDef(state: GameState): RelayDef {
   if (sabotage === undefined) {
     throw new Error(`mission "${state.mission.id}" has no sabotage to run a relay emergency`);
   }
-  return relayDefFor(crewOf(state), sabotage);
+  return relayDefFor(relayCrewOf(state), sabotage);
 }
 
 /** Emergencies roll on their own stream, salted with the moment they start. */
@@ -1530,7 +1588,7 @@ function handleEmergencyInput(
   emergency: RelayState,
 ): GameState {
   if (state.paused !== null) {
-    fail(PAUSED);
+    fail(STANDING_STILL);
   }
   if (state.deadlineAt !== null && action.at >= state.deadlineAt) {
     return lostNow(state, action.at);
@@ -1563,20 +1621,16 @@ function shiftSabotage(
 }
 
 /**
- * Freezing and thawing the run (`holdForAway`). Everything with a deadline is shifted by the
- * time spent paused, so a dropped connection never costs the crew the clock.
+ * A run standing still for the server's maintenance goes on at `at` (`resumeWhenBack`).
+ * Everything with a deadline is shifted by the time it stood still, so a deploy never costs the
+ * crew the clock; an intro the crew said it had seen enough of while it waited ends as it goes
+ * on (`introOver`).
  */
-function setPaused(state: GameState, action: { paused: boolean; at: number }): GameState {
-  if (state.phase !== 'playing') {
-    return state;
-  }
-  if (action.paused) {
-    return state.paused === null ? { ...state, paused: { since: action.at, kind: 'away' } } : state;
-  }
+function thaw(state: GameState, at: number): GameState {
   if (state.paused === null) {
     return state;
   }
-  const frozen = Math.max(0, action.at - state.paused.since);
+  const frozen = Math.max(0, at - state.paused.since);
   const resumed: GameState = {
     ...state,
     paused: null,
@@ -1586,9 +1640,7 @@ function setPaused(state: GameState, action: { paused: boolean; at: number }): G
     hintReadyAt: later(state.hintReadyAt, frozen),
     quietSince: later(state.quietSince, frozen),
   };
-  // The crew said it had seen enough of the intro while it waited: it ends as the run goes on.
-  const intro = resumed.lightsOutAt === null && resumed.introDone.length > 0;
-  return intro && everyoneWatched(resumed) ? lightsOut(resumed, action.at) : resumed;
+  return introOver(resumed, at);
 }
 
 /** A moment of the run (epoch ms) moved on by `ms`, as a pause moves it; none stays none. */
@@ -1859,7 +1911,7 @@ function requireCarryable(
     fail(NO_RUN);
   }
   if (state.paused !== null) {
-    fail(PAUSED);
+    fail(STANDING_STILL);
   }
   findPlayer(state, playerId);
   const item = state.items[itemId];
@@ -1996,7 +2048,7 @@ function openSource(
     return lostNow(state, action.at);
   }
   if (state.paused !== null) {
-    fail(PAUSED);
+    fail(STANDING_STILL);
   }
   findPlayer(state, action.playerId);
   const source = closedSourceAt(state, action.playerId, action.manualId);
@@ -2035,7 +2087,7 @@ function readNote(
     return lostNow(state, action.at);
   }
   if (state.paused !== null) {
-    fail(PAUSED);
+    fail(STANDING_STILL);
   }
   findPlayer(state, action.playerId);
   if (state.mission.map.notes[action.note] === undefined) {
@@ -2063,7 +2115,7 @@ function handleInteract(state: GameState, action: { playerId: string; at: number
     return lostNow(state, action.at);
   }
   if (state.paused !== null) {
-    fail(PAUSED);
+    fail(STANDING_STILL);
   }
   if (state.sabotage !== null) {
     fail('Gesperrt, bis der Notfall behoben ist.');

@@ -116,7 +116,7 @@ describe('objects — the lab’s things, in tile space', () => {
     );
   });
 
-  it('hides a locked station in the dark; a main switch has a lever per connected player', () => {
+  it('hides a locked station in the dark; a main switch has a lever per crew member counted', () => {
     type Station = Parameters<typeof lab>[0]['stations'];
     const stations: Station = [
       {
@@ -161,12 +161,14 @@ describe('objects — the lab’s things, in tile space', () => {
     const players = [
       player('p1', 'Anna', '#fff'),
       player('p2', 'Ben', '#f0f'),
+      // Away: the switch still waits for Cleo's pull, but not for Dora's, gone on without.
       player('p3', 'Cleo', '#0ff', false),
+      { ...player('p4', 'Dora', '#ff0', false), waived: true as const },
     ];
     const frame = frameWith({ map: lab({ stations }), light: leftOnly, players, pulse: 0.3 });
     const log = drawn(frame);
     expect(strip(drawnAt(log, 2.5, 1.5))).toEqual(
-      recording((c) => drawLeverBox(c, { status: 'armed', pulse: 0.3, levers: 2 })),
+      recording((c) => drawLeverBox(c, { status: 'armed', pulse: 0.3, levers: 3 })),
     );
     const kasten = { status: 'armed' as const, pulse: 0.3, console: 'b' as const };
     expect(strip(drawnAt(log, 7.5, 1.5))).toEqual(

@@ -1571,7 +1571,7 @@ async function reconnect(
     'avatar position survived the reconnect',
   );
   crew = crew[0] === client ? [back, crew[1]] : [crew[0], back];
-  await other.until('the crew back together', (v) => v.pausedFor === null);
+  await other.until('the crew back together', (v) => v.away.length === 0);
   return { back, view };
 }
 
@@ -2147,11 +2147,11 @@ await zoe.untilSpectator(`sees ${first.label} on the hatch and ${onTheWay.label}
   (v) => JSON.stringify(v.map?.exit?.atExit) === firstOut);
 const halfwayOut = onTheWay.view?.phase;
 assert(halfwayOut === 'playing', 'one player at the hatch is not enough to escape');
-// The one still on the way drops, the other on the hatch: the run stands still for them and
-// the hatch waits — whoever is away is not out, and a drop alone never ends a run.
+// The one still on the way drops, the other on the hatch: the run goes on and the hatch waits —
+// whoever is away and not on it is not out, and a drop alone never ends a run.
 const { back: last } = await reconnect(onTheWay, (v) => v.phase === 'playing', async (other) => {
-  await other.expectView('stands still for the one away, on the hatch', (v) =>
-    v.pausedFor?.some((away) => away.id === onTheWay.playerId) === true);
+  await other.expectView('sees the one away, the run going on, from the hatch', (v) =>
+    v.pausedAt === null && v.away.some((away) => away.id === onTheWay.playerId));
   await sleep(500);
   assert(other.view?.phase === 'playing' && first.view?.map?.exit?.atExit.length === 1,
     'the escape with a member dropped does not end the run');
@@ -2564,39 +2564,38 @@ async function crewOfThree(port: number = PORT): Promise<Trio> {
 }
 
 /**
- * Finn's line drops for 70 s: the run stands still for everybody; once the minute of the
- * run's first drop is over Eva goes on without him and the clock runs on, the pause added to
- * the deadline; ten seconds later Finn is back on his pass — counted in at once, and the run
- * does not stand still for the return. Returns Finn's new client.
+ * Finn's line drops for 70 s: the run goes on, the air saying so; once the minute of the run's
+ * first drop is over Eva goes on without him, the clock having run all along; ten seconds later
+ * Finn is back on his pass — counted in at once, and playing on. Returns Finn's new client.
  */
 async function awayAndBack({ code, eva, finn }: Trio): Promise<TestClient> {
   const deadline = eva.view?.deadlineAt ?? fail('eva: no clock running');
   finn.close();
-  const held = await eva.expectView('the run stands still for Finn, away', (v) =>
-    v.pausedFor?.[0]?.name === 'Finn');
-  const away = held.pausedFor?.[0] ?? fail('nobody away');
+  const held = await eva.expectView('Finn away, the run going on', (v) =>
+    v.away[0]?.name === 'Finn' && v.pausedAt === null);
+  const away = held.away[0] ?? fail('nobody away');
   assert(away.waivableAt - away.since === FIRST_WAIT_MS,
     'the run\'s first drop lets the crew go on without him after a minute');
+  assert(held.events.some((e) => e.kind === 'away' && e.label === 'Finns Leitung ist weg.'),
+    'mission control says on the air that Finn\'s line is gone');
   eva.send({ kind: 'continue-without', absentId: away.id });
   const early = await eva.expect('a refusal before the minute is over', isError);
   assert(early.message === 'Die Wartezeit läuft noch.', 'going on before the minute is refused');
   await sleep(Math.max(0, away.waivableAt - Date.now()) + 200);
   eva.send({ kind: 'continue-without', absentId: away.id });
-  const on = await eva.expectView('on without Finn, the clock running again', (v) =>
-    v.pausedFor === null && v.players.some((p) => p.name === 'Finn' && p.waived === true));
-  const shift = (on.deadlineAt ?? 0) - deadline;
-  assert(shift >= FIRST_WAIT_MS && shift < FIRST_WAIT_MS + 5000,
-    `the deadline moved on by the pause, ${(shift / 1000).toFixed(1)} s`);
+  const on = await eva.expectView('on without Finn', (v) =>
+    v.players.some((p) => p.name === 'Finn' && p.waived === true));
+  assert(on.deadlineAt === deadline, 'the clock ran all along: the deadline is as it was');
   await sleep(10_000);
   const back = new TestClient('finn2', finn.raw, finn.pass);
   await back.open();
   back.send({ kind: 'resume', code, pass: back.pass });
   await back.seated();
-  await eva.expectView('Finn back and counted in again, the run not standing still for it',
-    (v) => v.pausedFor === null &&
+  await eva.expectView('Finn back and counted in again, playing on',
+    (v) => v.away.length === 0 &&
       v.players.some((p) => p.name === 'Finn' && p.connected && p.waived === undefined));
-  await sleep(300);
-  assert(eva.view?.pausedFor === null, 'the return paused nothing');
+  assert(back.view?.pausedAt === null && back.view.deadlineAt === deadline,
+    'Finn is back in the run as it runs, its clock where it is');
   console.log(`  Finn was away ${((Date.now() - away.since) / 1000).toFixed(0)} s`);
   return back;
 }
@@ -2633,8 +2632,7 @@ async function giveUp({ code, eva, gus }: Trio, finn: TestClient): Promise<void>
  */
 async function takeOver({ code, eva, gus }: Trio): Promise<TestClient> {
   gus.close();
-  await eva.expectView('the run stands still for Gus, away', (v) =>
-    v.pausedFor?.[0]?.name === 'Gus');
+  await eva.expectView('Gus away, the run going on', (v) => v.away[0]?.name === 'Gus');
   const phone = new TestClient('gus-phone');
   await phone.open();
   phone.send({ kind: 'join-room', code, name: 'Eva', pass: phone.pass });
@@ -2650,7 +2648,7 @@ async function takeOver({ code, eva, gus }: Trio): Promise<TestClient> {
   await phone.seated();
   assert(phone.view?.you.name === 'Gus', 'the phone sits on Gus\'s seat');
   await eva.expectView('Gus back on the phone, the run on', (v) =>
-    v.pausedFor === null && v.players.some((p) => p.name === 'Gus' && p.connected));
+    v.away.length === 0 && v.players.some((p) => p.name === 'Gus' && p.connected));
   const laptop = new TestClient('gus-laptop', [], gus.pass);
   await laptop.open();
   laptop.send({ kind: 'resume', code, pass: laptop.pass });
@@ -2663,26 +2661,26 @@ async function takeOver({ code, eva, gus }: Trio): Promise<TestClient> {
 
 /**
  * Finn goes to the main menu (`to-menu`): a clean leave the server records as such, not a drop
- * — his socket told so and standing at the door, his seat bound to the run, which waits for him
- * as for a later drop and tells Eva where he went; back on his pass, the run goes on.
+ * — his socket told so and standing at the door, his seat bound to the run, which goes on, his
+ * wait as for a later drop, and tells Eva where he went; back on his pass, he plays on.
  */
 async function toTheMenuAndBack({ code, eva }: Trio, finn: TestClient): Promise<void> {
   finn.send({ kind: 'to-menu' });
   const told = await finn.expect('Finn told his seat is off its line', isAtMenu);
   assert(told.code === code, 'the socket is told which room it left for the menu');
-  const held = await eva.expectView('the run waits for Finn, gone to the main menu', (v) =>
-    v.pausedFor?.[0]?.name === 'Finn' && v.pausedFor[0].menu === true);
-  const gone = held.pausedFor?.[0] ?? fail('nobody away');
+  const held = await eva.expectView('Finn gone to the main menu, the run going on', (v) =>
+    v.away[0]?.name === 'Finn' && v.away[0].menu === true && v.pausedAt === null);
+  const gone = held.away[0] ?? fail('nobody away');
   assert(gone.waivableAt - gone.since === LATER_WAIT_MS,
     'the crew waits for a leave to the menu as for a later drop');
   finn.send({ kind: 'whereami', pass: finn.pass });
   const bound = await finn.expect('where Finn sits from the menu', isSeated);
-  assert(bound.seat?.code === code && bound.seat.phase === 'playing' && bound.seat.paused,
-    'the pass gone to the menu stays bound to the run, which stands paused for it');
+  assert(bound.seat?.code === code && bound.seat.phase === 'playing' && !bound.seat.paused,
+    'the pass gone to the menu stays bound to the run, which goes on');
   finn.send({ kind: 'resume', code, pass: finn.pass });
   await finn.seated();
-  await eva.expectView('Finn back from the menu, the run going on', (v) =>
-    v.pausedFor === null &&
+  await eva.expectView('Finn back from the menu, playing on', (v) =>
+    v.away.length === 0 &&
     v.players.some((p) => p.name === 'Finn' && p.connected && p.menu === undefined));
   console.log('  Finn left for the main menu, his seat kept, and came back');
 }
@@ -2892,13 +2890,12 @@ async function throwTheLever(clients: TestClient[]): Promise<void> {
 /**
  * SIGTERM for `server`, as Render sends it: it exits 0 within 10 s, every one of `clients` handed
  * the room's last snapshot (`restart`) and its socket closed with 1012, the run standing still
- * for the whole crew — since the last snapshot, or since the pause it stood in already, `since`.
- * Returns the last snapshot.
+ * for the whole crew since the last snapshot — whoever's line had dropped before. Returns the
+ * last snapshot.
  */
 async function goneBySigterm(
   server: ServerProcess,
   clients: [TestClient, ...TestClient[]],
-  since: number | null = null,
 ): Promise<Kept> {
   const sentAt = Date.now();
   server.kill('SIGTERM');
@@ -2907,7 +2904,7 @@ async function goneBySigterm(
   assert(ended.code === 0 && took < 10_000, `SIGTERM: the server exits 0, in ${took} ms`);
   const last = lastHandedTo(clients);
   const view = clients[0].view ?? fail(`${clients[0].label}: no view`);
-  assert(view.maintenance === true && view.pausedAt === (since ?? last.at),
+  assert(view.pausedAt === last.at,
     'the run stood still for the whole crew as the server went down');
   const kb = (last.blob.length / 1024).toFixed(1);
   console.log(`  the last snapshot: seq ${last.seq}, ${kb} kB sealed`);
@@ -2964,7 +2961,7 @@ function goingOn(client: TestClient, from: number): { view: PlayerView; at: numb
   const going = client.raw
     .slice(from)
     .map((data) => JSON.parse(data) as ServerMessage)
-    .find((msg) => msg.kind === 'view' && msg.view.pausedFor === null);
+    .find((msg) => msg.kind === 'view' && msg.view.pausedAt === null);
   return going?.kind === 'view' ? going : fail(`${client.label}: no view of the run going on`);
 }
 
@@ -2990,7 +2987,7 @@ async function restartBySigterm(): Promise<{ server: ServerProcess; crew: Trio3 
   const heardBefore = [eva, finn, gus].map((client) => client.raw.length);
   const crew = await allBack([eva, finn, gus]);
   await crew[0].expectView('the run on again, the whole crew back',
-    (v) => v.phase === 'playing' && v.pausedFor === null);
+    (v) => v.phase === 'playing' && v.pausedAt === null);
   assertShifted(goingOn(crew[0], heardBefore[0] ?? 0), deadline, last.at);
   assert(server.logged(`restored room ${code} from snapshot seq ${last.seq} (3 seats, `),
     'the new server\'s log says it restored the room from the last snapshot');
@@ -3068,7 +3065,7 @@ async function restartBySigkill(server: ServerProcess, crew: Trio3): Promise<voi
   console.log(`  ${backAfter}, ${(BACK_LATER_MS / 1000).toFixed(0)} s after the server came up`);
   const gusBack = back[2];
   const on = await gusBack.expectView('the run on again after the kill, the lever still thrown',
-    (v) => v.pausedFor === null && v.currentPuzzleIndex === NOTLICHT + 1);
+    (v) => v.pausedAt === null && v.currentPuzzleIndex === NOTLICHT + 1);
   assert(on.phase === 'playing', 'the run goes on');
   await gusBack.untilPositions('Gus where his walk before the kill took him',
     () => standsAt(gusBack, gus, gusTo));
@@ -3085,22 +3082,22 @@ async function restartBySigkill(server: ServerProcess, crew: Trio3): Promise<voi
 
 /**
  * Finn's line drops while Render's deploy has a new server, `fresh`, up beside the old one, the
- * instance `old`: the run stands still for him on the old one, as Eva sees, and his page comes
+ * instance `old`: the run goes on without him on the old one, as Eva sees, and his page comes
  * back to the new one with the snapshot it kept, older than what the old one has — and waits
  * there (`restoring`), the new server's log naming the old one. Returns his client on the new
- * server, and since when the run stands still.
+ * server.
  */
 async function droppedOnto(
   fresh: ServerProcess,
   old: string,
   eva: TestClient,
   finn: TestClient,
-): Promise<{ back: TestClient; since: number }> {
+): Promise<TestClient> {
   const code = finn.joined?.code ?? fail('finn: in no room');
   const kept = finn.kept ?? fail('finn: no snapshot kept');
   finn.close();
-  const held = await eva.expectView('the run stands still on the old server for Finn, away',
-    (v) => v.pausedFor?.[0]?.name === 'Finn');
+  await eva.expectView('Finn away on the old server, the run going on',
+    (v) => v.away[0]?.name === 'Finn' && v.pausedAt === null);
   const back = new TestClient("finn'", finn.raw, finn.pass, HANDOVER_PORT);
   await back.open();
   back.send({ kind: 'resume', code, pass: finn.pass, blob: kept.blob });
@@ -3109,7 +3106,7 @@ async function droppedOnto(
   const waits =
     `room ${code}: snapshot seq ${kept.seq} is not the last of instance ${old}, waiting up to `;
   await fresh.logs(waits, 'it waits for the old server\'s last snapshot, naming the old server');
-  return { back, since: held.pausedAt ?? fail('no pause') };
+  return back;
 }
 
 /**
@@ -3117,8 +3114,8 @@ async function droppedOnto(
  * a while longer for the sockets it has (`droppedOnto`). Then the old one is sent SIGTERM: Eva and
  * Gus come back to the new one with its last snapshot, which the new one takes the room up from —
  * its log says so, and how long it waited — and Finn sits down with them. The run goes on from
- * where the old server left it: its clock moved on by exactly the time it stood still, from
- * Finn's drop on the old server to the moment the last of the crew was back.
+ * where the old server left it: its clock moved on by exactly the time it stood still, from the
+ * old server going down to the moment the last of the crew was back; it ran through Finn's drop.
  */
 async function handover(): Promise<void> {
   const old = new ServerProcess('the old server');
@@ -3130,9 +3127,9 @@ async function handover(): Promise<void> {
   await sleep(SNAPSHOT_EVERY_MS + 500);
   const fresh = new ServerProcess('a new server beside it', HANDOVER_PORT);
   await fresh.up();
-  const { back: finnBack, since } = await droppedOnto(fresh, oldInstance, eva, finn);
+  const finnBack = await droppedOnto(fresh, oldInstance, eva, finn);
   await sleep(OVERLAP_MS);
-  const last = await goneBySigterm(old, [eva, gus], since);
+  const last = await goneBySigterm(old, [eva, gus]);
   const heardBefore = eva.raw.length;
   const [evaBack, gusBack] = await Promise.all([
     comeBack(eva, HANDOVER_PORT),
@@ -3141,8 +3138,8 @@ async function handover(): Promise<void> {
   await finnBack.seated();
   await fresh.logs(`room ${code}: Finn resumed`, 'Finn sits on the new server');
   await evaBack.expectView('the run on again on the new server, Finn back with Eva and Gus',
-    (v) => v.pausedFor === null && v.players.every((p) => p.connected));
-  assertShifted(goingOn(evaBack, heardBefore), deadline, since);
+    (v) => v.pausedAt === null && v.players.every((p) => p.connected));
+  assertShifted(goingOn(evaBack, heardBefore), deadline, last.at);
   const took = await fresh.logs(`restored room ${code} from snapshot seq ${last.seq} (3 seats, `,
     'it took the room up from the old server\'s last snapshot');
   console.log(`  ${took.replace('[escapelab] ', '')}`);

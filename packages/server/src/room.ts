@@ -647,7 +647,10 @@ export class Room {
     }
   }
 
-  /** Whether the run's clock runs: a run on, and standing still for nobody. */
+  /**
+   * Whether the run's clock runs: a run on, not standing still for the server's maintenance —
+   * whoever is away meanwhile.
+   */
   private get clockRuns(): boolean {
     return this.state.phase === 'playing' && this.state.paused === null;
   }
@@ -1004,9 +1007,9 @@ export class Room {
   }
 
   /**
-   * The player of `playerId` back on the line, at once: the run goes on once it waits for
-   * nobody, and a return it went on without pauses nothing (core `player-connected`). Says for
-   * the log how long their line was away.
+   * The player of `playerId` back on the line, at once: they play on in the run as it stands,
+   * and a run standing still for the server's maintenance goes on once it waits for nobody
+   * (core `player-connected`). Says for the log how long their line was away.
    */
   private back(playerId: string): string {
     this.settleClaim(playerId, 'back');
@@ -1089,10 +1092,12 @@ export class Room {
 
   /**
    * Connection lost, as `end` says (`LineEnd`): keep the player (they may resume), notify the
-   * others. In a run the reducer stands it still for them (core `player-disconnected`); a drop
-   * alone ends nothing. A socket that closed cleanly — a tab closed or reloaded — frees its seat
-   * sooner in the lobby (LOBBY_GONE_MS); in a run it is held as any other. A line closed for the
-   * main menu is held as a drop, in the lobby too, and the crew sees where the player went.
+   * others. In a run it goes on (core `player-disconnected`): their avatar stands where it stood
+   * and keeps a plate down, works nothing and looks at nothing — a glance it held goes with the
+   * line —, and a drop alone ends nothing. A socket that closed cleanly — a tab closed or
+   * reloaded — frees its seat sooner in the lobby (LOBBY_GONE_MS); in a run it is held as any
+   * other. A line closed for the main menu is held as a drop, in the lobby too, and the crew sees
+   * where the player went.
    */
   private detach(playerId: string, end: LineEnd): void {
     if (!this.listeners.delete(playerId)) {
@@ -1102,6 +1107,7 @@ export class Room {
       this.emptySince = Date.now();
     }
     this.lostAt.set(playerId, Date.now());
+    this.glances.delete(playerId);
     if (end === 'closed') {
       this.closedClean.add(playerId);
     } else {
@@ -1397,7 +1403,7 @@ export class Room {
     return this.state.phase;
   }
 
-  /** Whether a run on stands paused, waiting for somebody away. */
+  /** Whether a run on stands still for the server's maintenance, waiting for its crew. */
   get paused(): boolean {
     return this.state.paused !== null;
   }
@@ -1610,23 +1616,30 @@ export class Room {
     this.schedulePositionsBroadcast();
   }
 
-  /** Everyone standing close enough to a spot, by player id. */
-  private occupantsOf(x: number, y: number, radius: number): string[] {
+  /**
+   * Everyone whose avatar stands close enough to a spot, by player id: on the line or away — an
+   * avatar whose line is down stands where it stood, and its weight is still on a plate or the
+   * hatch.
+   */
+  private bodiesAt(x: number, y: number, radius: number): string[] {
     return this.state.players
       .filter((player) => {
-        if (!player.connected) {
-          return false;
-        }
         const pos = this.positions.get(player.id);
         return pos !== undefined && Math.hypot(pos.x - (x + 0.5), pos.y - (y + 0.5)) <= radius;
       })
       .map((player) => player.id);
   }
 
+  /** Of those standing close enough to a spot, whoever is on the line: hands that can work it. */
+  private handsAt(x: number, y: number, radius: number): string[] {
+    const on = new Set(this.state.players.filter((p) => p.connected).map((p) => p.id));
+    return this.bodiesAt(x, y, radius).filter((id) => on.has(id));
+  }
+
   /**
-   * Translate live positions into plate and panel state; dispatch only on
-   * change. Sabotage panels need a *different* player each, so they are
-   * assigned greedily.
+   * Translate live positions into plate and panel state; dispatch only on change. A plate holds
+   * under any avatar, whoever's line is down included; an emergency's panel takes somebody on
+   * the line, and a *different* one each, so they are assigned greedily.
    */
   private reconcilePlates(): void {
     const map = this.state.mission.map;
@@ -1637,7 +1650,7 @@ export class Room {
     const plates = map.plates
       .filter(
         (plate) =>
-          this.occupantsOf(
+          this.bodiesAt(
             plate.x,
             plate.y,
             held.has(plate.id) ? PLATE_RELEASE_RADIUS : PLATE_PRESS_RADIUS,
@@ -1649,9 +1662,7 @@ export class Room {
     const claimed = new Set<string>();
     const panels: string[] = [];
     for (const panel of map.sabotage?.panels ?? []) {
-      const free = this.occupantsOf(panel.x, panel.y, PANEL_RADIUS).find(
-        (id) => !claimed.has(id),
-      );
+      const free = this.handsAt(panel.x, panel.y, PANEL_RADIUS).find((id) => !claimed.has(id));
       if (free !== undefined) {
         claimed.add(free);
         panels.push(panel.id);
@@ -1690,8 +1701,8 @@ export class Room {
    * What each connected player finds where they stand at `now` (core discovery.ts), of what
    * they have not found yet, by player id: whatever lies in reach, whatever their lamp's cone
    * has rested on long enough. Keeps the glances still running and arms the look that ends the
-   * next of them. A pause freezes the run: nothing is found while it lasts, and a look begun
-   * before it starts anew after it.
+   * next of them. The server's maintenance freezes the run: nothing is found while it lasts, and
+   * a look begun before it starts anew after it.
    */
   private findsNow(now: number): Record<string, FindKey[]> {
     const found: Record<string, FindKey[]> = {};
@@ -1720,8 +1731,8 @@ export class Room {
 
   /**
    * One player's look round at `now`, of what they have not found yet among `things`, keeping
-   * their glances still running; null for a player away or not placed yet. (One away pauses the
-   * run, and a pause lets every glance go.)
+   * their glances still running; null for a player away — whose glances went with their line
+   * (`detach`) — or not placed yet.
    */
   private lookFor(
     player: GameState['players'][number],
@@ -1749,7 +1760,8 @@ export class Room {
 
   /**
    * What there is to find and to see as the run stands, in one string: the doors shut, the
-   * station armed, the parts lying loose, a pause. Outside a run, just its phase.
+   * station armed, the parts lying loose, the server's maintenance. Outside a run, just its
+   * phase.
    */
   private findingWorld(): string {
     const { state } = this;
@@ -1786,16 +1798,15 @@ export class Room {
   }
 
   /**
-   * Who stands on the exit hatch, sorted: everybody connected within
-   * EXIT_RADIUS of it once it is open — the escape's own measure — and
-   * nobody before.
+   * Who stands on the exit hatch, sorted: every avatar within EXIT_RADIUS of it once it is open
+   * — the escape's own measure —, whoever's line is down included, and nobody before.
    */
   private onTheHatch(): string[] {
     const exit = this.state.mission.map.exit;
     if (exit === undefined || !inEscapePhase(this.state)) {
       return [];
     }
-    return this.occupantsOf(exit.x, exit.y, EXIT_RADIUS).sort();
+    return this.bodiesAt(exit.x, exit.y, EXIT_RADIUS).sort();
   }
 
   /** Connected players in presence range of each spot, by its id; empty spots left out. */
@@ -1912,8 +1923,8 @@ export class Room {
   /**
    * What each connected player has in sight right now (core discovery.ts `inSight`) of what a
    * view carries only in sight (`sightables`), by player id, as the state keeps it: sorted,
-   * nobody with nothing in sight. A pause stops no sight; while the power lights the whole lab
-   * (`labLit`) every view shows all of it, and no sight is kept.
+   * nobody with nothing in sight. The maintenance stops no sight; while the power lights the
+   * whole lab (`labLit`) every view shows all of it, and no sight is kept.
    */
   private sightNow(): Record<string, FindKey[]> {
     if (labLit(this.state)) {
@@ -1986,8 +1997,8 @@ export class Room {
   }
 
   /**
-   * While a relay emergency runs, its instructions run out on the clock: the
-   * reducer is told the time once a second. A pause stops the ticking.
+   * While a relay emergency runs, its instructions run out on the clock: the reducer is told the
+   * time once a second, whoever is away. The server's maintenance stops the ticking.
    */
   private reconcileRelayTick(): void {
     const live =
@@ -2029,9 +2040,10 @@ export class Room {
 
   /**
    * Won once the whole crew the run counts stands on the hatch — everybody but whom it went on
-   * without (core `crewOf`): by the presence the views carry, so that the crew's checklist and
-   * the escape never disagree. Never while the run stands still: whoever it waits for is away,
-   * not out, so a drop alone never ends a run.
+   * without (core `crewOf`), somebody away where their avatar stands (`onTheHatch`): by the
+   * presence the views carry, so that the crew's checklist and the escape never disagree. The
+   * crew waits for whoever is away and not on it as for somebody slow, so a drop alone never ends
+   * a run; never while it stands still for the server's maintenance.
    */
   private checkEscape(): void {
     if (!inEscapePhase(this.state) || this.state.paused !== null) {
@@ -2189,8 +2201,9 @@ export class Room {
 
   /**
    * Fixed-rate patrol simulation: the patrols of a mission with drones are out while its run is
-   * in the dark, and move while it runs; a pause stands them still where they are, as it stands
-   * the clock still. With the lights on, or the run over, there are none.
+   * in the dark, and move while it runs, whoever is away — they see nobody whose line is down
+   * (drones.ts); the server's maintenance stands them still where they are, as it stands the
+   * clock still. With the lights on, or the run over, there are none.
    */
   private reconcileDroneTimer(): void {
     const map = this.state.mission.map;

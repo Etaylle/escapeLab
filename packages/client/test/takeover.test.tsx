@@ -26,10 +26,13 @@ const mate = (id: string, name: string, connected = true): PlayerView['players']
   isHost: id === 'p1',
 });
 
-/** Anna's view of a run that stands still since T0 for Ben, whose seat a new device asks for. */
+/**
+ * Anna's view of a run that stands still since T0 for the server's maintenance, Ben not back
+ * yet, whose seat a new device asks for.
+ */
 const waiting = {
   players: [mate('p1', 'Anna'), mate('p2', 'Ben', false), mate('p3', 'Cem')],
-  pausedFor: [{ id: 'p2', name: 'Ben', since: T0, waivableAt: T0 + 60_000 }],
+  away: [{ id: 'p2', name: 'Ben', since: T0, waivableAt: T0 + 60_000 }],
   pausedAt: T0,
   takeovers: [ASK],
 } as unknown as PlayerView;
@@ -39,7 +42,7 @@ describe('the crew asked to let a new device in on a seat', () => {
     vi.restoreAllMocks();
   });
 
-  it('asks on the pause card whose seat, on the clock, and sends the answer at a press', () => {
+  it('asks on the maintenance card whose seat, on the clock, and sends the answer at a press', () => {
     vi.spyOn(clock, 'now').mockReturnValue(T0 + 5000);
     const html = renderToStaticMarkup(<PauseCard view={waiting} send={() => undefined} />);
     expect(html).toContain(

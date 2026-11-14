@@ -216,15 +216,25 @@ describe('the lights going out', () => {
   });
 });
 
-describe('a pause during the intro', () => {
-  const paused = applyAction(started(mission), lineDrops('p2', T0 + 1000));
+describe('a line that drops during the intro', () => {
+  const away = applyAction(started(mission), lineDrops('p2', T0 + 1000));
+
+  it('holds nothing: the lights fail at their moment', () => {
+    expect(away.lightsDueAt).toBe(OUT_AT);
+    expect(lightsOut(away, OUT_AT).lightsOutAt).toBe(OUT_AT);
+  });
+});
+
+describe('the server’s maintenance during the intro', () => {
+  const down = applyAction(started(mission), { type: 'maintenance', at: T0 + 1000, waitFrom: T0 });
 
   it('holds the lights on while it lasts', () => {
-    expect(lightsOut(paused, OUT_AT)).toBe(paused);
+    expect(lightsOut(down, OUT_AT)).toBe(down);
   });
 
   it('moves the moment they fail on by the time it took, like every deadline', () => {
-    const resumed = applyAction(paused, lineBack('p2', T0 + 11_000));
+    const back = applyAction(down, lineBack('p1', T0 + 5000));
+    const resumed = applyAction(back, lineBack('p2', T0 + 11_000));
     expect(resumed.lightsDueAt).toBe(OUT_AT + 10_000);
     expect(resumed.deadlineAt).toBeNull();
   });
@@ -282,14 +292,26 @@ describe('a crew that has seen enough of the intro', () => {
     expect(lightsOut(one, OUT_AT).lightsOutAt).toBe(OUT_AT);
   });
 
-  it('waits out a pause: that moment moves on, and a crew all done meanwhile goes on dark', () => {
+  it('waits for nobody away: the last one who still watched goes, and the lights go', () => {
+    const both = done(done(started(forThree), 'p1', SKIP_AT), 'p2', SKIP_AT + 300);
+    expect(both.lightsOutAt).toBeNull();
+    const gone = applyAction(both, lineDrops('p3', T0 + 2500));
+    expect(gone.lightsOutAt).toBe(T0 + 2500);
+    expect(gone.deadlineAt).toBe(T0 + 2500 + LIMIT_MS);
+    // One of those who said it gone changes nothing for the one still watching.
     const one = done(started(forThree), 'p1', SKIP_AT);
-    const paused = applyAction(one, lineDrops('p3', T0 + 2000));
-    const resumed = applyAction(paused, lineBack('p3', T0 + 9000));
-    expect(resumed.lightsDueAt).toBe(OUT_AT + 7000);
-    expect(resumed.lightsOutAt).toBeNull();
-    // Nothing fails while the run waits; the lights go as it goes on without the one away.
-    const both = done(paused, 'p2', T0 + 2500);
+    expect(applyAction(one, lineDrops('p2', T0 + 2500)).lightsOutAt).toBeNull();
+  });
+
+  it('waits out the server’s maintenance: a crew all done meanwhile goes on dark', () => {
+    const one = done(started(forThree), 'p1', SKIP_AT);
+    const down = applyAction(one, { type: 'maintenance', at: T0 + 2000, waitFrom: T0 + 2000 });
+    const back = ['p1', 'p2'].reduce(
+      (state, playerId) => applyAction(state, lineBack(playerId, T0 + 4000)),
+      down,
+    );
+    // Nothing fails while the run stands still; the lights go as it goes on without the one away.
+    const both = done(back, 'p2', T0 + 4500);
     expect(both.lightsOutAt).toBeNull();
     const goOn = T0 + 2000 + FIRST_WAIT_MS;
     const on = applyAction(both, {
