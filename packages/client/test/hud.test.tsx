@@ -178,6 +178,21 @@ describe('the Laborkennung in a narrow strip', () => {
   });
 });
 
+describe('the strip under 820 px', () => {
+  const UI_CSS = readFileSync(new URL('../src/ui.css', import.meta.url), 'utf8');
+  const from = UI_CSS.indexOf('@media (max-width: 820px) {\n  .hud {');
+  const grid = UI_CSS.slice(from, UI_CSS.indexOf('\n}\n', from));
+
+  it('keeps its three rows: the menu stays the gear’s in the bar, Info keeps its place', () => {
+    expect(from).toBeGreaterThan(0);
+    expect(grid).toMatch(/grid-template-rows: 20px 27px 40px;/);
+    expect(grid).toMatch(/\n {2}\.hud-menu \{\s*display: none;\s*\}/);
+    const info = /\n {2}\.hud-info:not\(\.hud-notes, \.hud-mic, \.hud-menu\) \{\s*grid-area: info;/;
+    expect(grid).toMatch(info);
+    expect(grid).not.toMatch(/last-child/);
+  });
+});
+
 describe('the HUD buttons’ keys', () => {
   it('name the key on a keyboard', () => {
     expect(withKey('Notizen', 'N', false)).toBe('Notizen [N]');

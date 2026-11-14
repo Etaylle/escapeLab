@@ -2433,8 +2433,16 @@ button.link:hover {
     grid-area: notes;
   }
 
-  .hud-info:last-child {
+  .hud-info:not(.hud-notes, .hud-mic, .hud-menu) {
     grid-area: info;
+  }
+
+  /*
+   * The row of buttons has no room for a fourth: the menu stays the gear's in the bar right over
+   * the world, and the strip keeps its three rows — and the world its height.
+   */
+  .hud-menu {
+    display: none;
   }
 
   .hud-info {
