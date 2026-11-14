@@ -97,8 +97,10 @@ function multiplyLight(g: CanvasRenderingContext2D, times: number): void {
 /**
  * `bake`'s lab at night (`night`) or lit, on its own canvas and only where it stands otherwise:
  * sunk under a black NIGHT_SINK strong, laid over its own pixels alone, or added onto itself
- * until its light is back. Once for each change, so that a frame copies the bake as it is and no
- * frame darkens the scene anew.
+ * until its light is back — over the whole canvas, in its own pixels, whatever transform and
+ * strength the world's passes left on its context, which would shift both by the box's corner.
+ * Once for each change, so that a frame copies the bake as it is and no frame darkens the scene
+ * anew.
  */
 export function nightTo(bake: SceneBake, night: boolean): void {
   const g = bake.night === night ? null : bake.canvas.getContext('2d');
@@ -106,6 +108,8 @@ export function nightTo(bake: SceneBake, night: boolean): void {
     return;
   }
   g.save();
+  g.setTransform(1, 0, 0, 1, 0, 0);
+  g.globalAlpha = 1;
   if (night) {
     g.globalCompositeOperation = 'source-atop';
     g.fillStyle = rgba(BLACK, NIGHT_SINK);

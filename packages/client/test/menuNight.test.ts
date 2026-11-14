@@ -82,6 +82,24 @@ describe('the lab at night', () => {
     expect(times).toBeCloseTo(1 / (1 - NIGHT_SINK), 6);
     expect(bake.night).toBe(false);
   });
+
+  it('falls and lifts over the whole canvas, whatever the passes left on its context', () => {
+    // The world's passes leave the bake's context moved to the box's corner and half strong.
+    for (const night of [true, false]) {
+      const { bake, log } = bakeOf();
+      bake.night = !night;
+      const g = bake.canvas.getContext('2d');
+      g?.setTransform(1, 0, 0, 1, 65, 65);
+      if (g !== null) g.globalAlpha = 0.5;
+      log.length = 0;
+      nightTo(bake, night);
+      const drawn = log.findIndex((e) => e.kind === 'call' && /fillRect|drawImage/.test(e.name));
+      const before = log.slice(0, drawn);
+      const reset = { name: 'setTransform', args: [1, 0, 0, 1, 0, 0] };
+      expect(before).toContainEqual(expect.objectContaining(reset));
+      expect(log[drawn]?.kind === 'call' && log[drawn]?.alpha).toBeGreaterThan(0.5);
+    }
+  });
 });
 
 describe('the night the hero holds', () => {

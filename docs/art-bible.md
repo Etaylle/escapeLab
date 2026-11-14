@@ -622,14 +622,19 @@ the lobby it shows the drift, and it cuts there and back, as the doors stand shu
 the drift stands: one copy, at whole pixels; a pan costs no more than the drift (The hero, its cost
 table). The bake holds every place's frame as well as the drift's box, but only as far as the lab
 and a tile of the dark round it reach (drift.ts `labBound`, `DARK_ROUND`): where a frame looks
-further into the dark — the Archiv's, the Maschinenraum's — the frame fills what lies past the
-bake with the dark's colour as the bake holds it (scene.ts `pastBake`, `paintBake`): read off the
-bake once as it is baked, at the middle of a side that lies past the lab, and again each time the
-night falls or lifts. A tile out from the lab its dark is one colour all round, the lab's light
-on it, 26, 23, 22 at night; the fill meets the baked tile there to the level, where a night colour
-worked out from the lit one had left a seam of four to five levels, and the bake's edge stretched
-over the part instead cost half a millisecond a frame more. So the dark round the lab is never
-baked, and the box grows by the lab's own rooms alone:
+further into the dark — the Archiv's, the Maschinenraum's, the Reaktor's — the frame fills what lies
+past the bake with the dark's colour as the bake holds it (scene.ts `pastBake`, `paintBake`): read
+off the bake once as it is baked, at the middle of a side that lies past the lab, and again each
+time the night falls or lifts. The dark round the lab is one colour as the passes leave it, 26, 23,
+22 lit and 10, 9, 8 at night, on every side, at the box's corners and in the void within the lab's
+extent alike (measured at 1280 × 720, 1440 × 820 and 1920 × 1080), so the fill meets the baked tile
+to the level. The night has to fall on the whole canvas in its own pixels: laid under the transform
+the world's passes leave on the bake's context, it missed the tile on the left and the top, so the
+colour read on the left stayed lit, 26, 23, 22, and at the Reaktor filled past the right side's sunk
+tile, 10, 9, 8 — a black band a tile wide behind the hero; and the light added back for the lobby
+copied the bake onto itself a tile off, up to 129 levels from the lab as baked, where it now comes
+back within 2. So the dark round the lab is never baked, and the box grows by the lab's own rooms
+alone:
 
 | Window, density | The drift's box | With the places |
 | --- | --- | --- |
