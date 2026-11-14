@@ -313,24 +313,32 @@ describe('the login', () => {
     expect(result.state.log.at(-1)).toMatchObject({ tag: 'fail', text: 'Token falsch (1/3)' });
   });
 
-  it('locks the account at the third wrong token in a row, until the mission clock moves on', () => {
+  it('locks the account at the third wrong token in a row, for lockSec on the station’s clock', () => {
     const wrong = { token: tokenOf(state.seed, account, period + 7) };
-    const first = send(asked, wrong, at, DEF, 500).state;
-    const second = send(first, wrong, at, DEF, 500).state;
-    const third = send(second, wrong, at, DEF, 500);
+    const first = send(asked, wrong, at).state;
+    const second = send(first, wrong, at).state;
+    const third = send(second, wrong, at);
     expect(third.penalty).toBe('Zugangskontrolle: Konto gesperrt');
+    const until = at + 45_000;
     expect(third.state).toMatchObject({
       prompt: null,
       misses: { [account]: 0 },
-      locks: { [account]: 455 },
+      locks: { [account]: until },
     });
     expect(third.state.log.at(-1)?.text).toBe(`Token falsch: ${account} für 45 s gesperrt`);
-    expect(seen(third.state, AT_STATION).terminal?.locks).toEqual([{ account, liftsAtSec: 455 }]);
-    // The mission clock, not the wall's: a pause stops the lock with the clock.
-    const later = at + 10 * PERIOD_MS;
-    const stillLocked = () => send(third.state, { cmd: 'login', account }, later, DEF, 456);
+    expect(seen(third.state, AT_STATION).terminal?.locks).toEqual([{ account, until }]);
+    // The room ticks the station as the lock lifts — after this period's end, before the
+    // next's — so that every view drops it then.
+    const turn = state.epoch + (period + 1) * PERIOD_MS;
+    expect(accessModule.dueAt?.(DEF, third.state)).toBe(turn);
+    const turned = accessModule.expire?.(DEF, third.state, turn) ?? third.state;
+    expect(accessModule.dueAt?.(DEF, turned)).toBe(until);
+    expect(accessModule.expire?.(DEF, turned, until - 1)?.locks).toEqual({ [account]: until });
+    expect(accessModule.expire?.(DEF, turned, until)?.locks).toEqual({});
+    // However little the mission clock has left: the lock runs on the station's own.
+    const stillLocked = () => send(third.state, { cmd: 'login', account }, until - 1, DEF, 1);
     expect(refusal(stillLocked)).toBe(`Konto ${account} gesperrt.`);
-    const lifted = send(third.state, { cmd: 'login', account }, at, DEF, 455);
+    const lifted = send(third.state, { cmd: 'login', account }, until, DEF, 600);
     expect(lifted.state).toMatchObject({ prompt: account, locks: {} });
   });
 
@@ -504,6 +512,24 @@ describe('the backup rule, through the reducer', () => {
     }
     return view;
   };
+
+  it('holds a lock its whole lockSec, though its alarms take time off the mission clock', () => {
+    const on = open({ stations: { [consoleB]: ['p2'] }, manuals: { liste: ['p3'] } });
+    const typed = (state: GameState, at: number, input: AccessInput): GameState =>
+      applyAction(state, { type: 'puzzle-input', playerId: 'p1', at, input });
+    const account = accessOf(on, 'p3').roster?.[0]?.name ?? '?';
+    const seed = (on.puzzleState as AccessState).seed;
+    const wrong = { token: tokenOf(seed, account, 7) };
+    const asked = typed(on, T0 + 300, { cmd: 'login', account });
+    const locked = [0, 1, 2].reduce((state, i) => typed(state, T0 + 400 + i, wrong), asked);
+    expect(locked.penaltySeq).toBe(3);
+    expect(locked.deadlineAt).toBeLessThan(on.deadlineAt ?? 0);
+    const lockedAt = T0 + 402;
+    const early = () => typed(locked, lockedAt + 45_000 - 1_000, { cmd: 'login', account });
+    expect(early).toThrow(`Konto ${account} gesperrt.`);
+    const taken = typed(locked, lockedAt + 45_000, { cmd: 'login', account });
+    expect(accessOf(taken, 'p1').terminal?.prompt).toBe(account);
+  });
 
   it('is ticked by the room as each period ends: the device moves on to its next account', () => {
     const state = open({ stations: { [consoleB]: ['p2'] }, manuals: { liste: ['p3'] } });

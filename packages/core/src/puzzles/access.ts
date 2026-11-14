@@ -23,7 +23,7 @@ import { costOf, labDocument, spelled, type TypePlate } from './printed.js';
  * at a source. A login opens a session only with the token the device shows for that account in
  * the period it arrives in: the account comes from the list, the token from the device, and the
  * terminal has neither. A wrong token is an alarm, and the third in a row for an account locks
- * it for `lockSec` seconds of the mission clock; a token of the period just gone is turned back
+ * it for `lockSec` seconds on the station's clock; a token of the period just gone is turned back
  * without one. A session releases each door of its role once, any other with an alarm; from
  * release `strictFrom` on the terminal names the session by its role alone, so only the printed
  * table tells what it may release. Solved once every door the terminal asked for is released.
@@ -162,7 +162,7 @@ export interface AccessState {
   prompt: string | null;
   /** wrong tokens in a row, by account */
   misses: Record<string, number>;
-  /** locked accounts: the seconds left on the mission clock at which each lock lifts */
+  /** locked accounts: when each lock lifts, epoch ms on the station's clock */
   locks: Record<string, number>;
   /** the log's last ACCESS_LOG_LINES lines */
   log: AccessLogLine[];
@@ -191,10 +191,10 @@ export interface AccessDoorRow {
 /** The open session as the terminal names it: by its account, at Sicherheitsstufe 2 by its role. */
 export type AccessSession = { account: string } | { role: AccessRole };
 
-/** A locked account on the terminal, and the seconds left on the mission clock as it lifts. */
+/** A locked account on the terminal, and when its lock lifts (epoch ms, the station's clock). */
 export interface AccessLock {
   account: string;
-  liftsAtSec: number;
+  until: number;
 }
 
 /** What the terminal shows: its doors, its session, its prompt, its locks and its log. */
@@ -303,13 +303,10 @@ function logged(state: AccessState, lines: readonly Omit<AccessLogLine, 'n'>[]):
   };
 }
 
-/**
- * `state` brought up to `at` (epoch ms): its period, and its locks less those the mission clock
- * has lifted by now, `left` seconds before its end.
- */
-function caughtUp(def: AccessDef, state: AccessState, at: number, left: number): AccessState {
+/** `state` brought up to `at` (epoch ms): its period, and its locks less those lifted by then. */
+function caughtUp(def: AccessDef, state: AccessState, at: number): AccessState {
   const period = Math.max(state.period, periodAt(def, state, at));
-  const held = Object.entries(state.locks).filter(([, liftsAt]) => left > liftsAt);
+  const held = Object.entries(state.locks).filter(([, until]) => at < until);
   return { ...state, period, locks: Object.fromEntries(held) };
 }
 
@@ -332,10 +329,11 @@ function loggingIn(state: AccessState, account: string): Outcome {
 }
 
 /**
- * A wrong token for `account`: an alarm, and the third in a row locks the account until the
- * mission clock has run `lockSec` seconds on (`left` its seconds now), the prompt closing.
+ * A wrong token for `account` at `at`: an alarm, and the third in a row locks the account for
+ * `lockSec` seconds on the station's clock — alarms that take time off the mission clock take
+ * none off the lock —, the prompt closing.
  */
-function missed(def: AccessDef, state: AccessState, account: string, left: number): Outcome {
+function missed(def: AccessDef, state: AccessState, account: string, at: number): Outcome {
   const misses = (state.misses[account] ?? 0) + 1;
   if (misses < MISSES_TO_LOCK) {
     const counted = { ...state, misses: { ...state.misses, [account]: misses } };
@@ -349,7 +347,7 @@ function missed(def: AccessDef, state: AccessState, account: string, left: numbe
     ...state,
     prompt: null,
     misses: { ...state.misses, [account]: 0 },
-    locks: { ...state.locks, [account]: left - def.lockSec },
+    locks: { ...state.locks, [account]: at + def.lockSec * 1000 },
   };
   const text = `Token falsch: ${account} für ${def.lockSec} s gesperrt`;
   return {
@@ -363,7 +361,7 @@ function missed(def: AccessDef, state: AccessState, account: string, left: numbe
  * session; the token of the period just gone is turned back without an alarm, the prompt asking
  * on; any other is a miss.
  */
-function tokenTyped(def: AccessDef, state: AccessState, token: string, left: number): Outcome {
+function tokenTyped(def: AccessDef, state: AccessState, token: string, at: number): Outcome {
   const account = state.prompt;
   if (account === null) {
     fail('Keine Anmeldung offen.');
@@ -379,7 +377,7 @@ function tokenTyped(def: AccessDef, state: AccessState, token: string, left: num
     const text = 'Periode gewechselt: Token abgelaufen';
     return { state: logged(state, [{ tag: 'info', text }]), penalty: null };
   }
-  return missed(def, state, account, left);
+  return missed(def, state, account, at);
 }
 
 /** `status`: the session as the terminal names it — before Sicherheitsstufe 2 with its doors. */
@@ -434,9 +432,9 @@ function worked(
   input: AccessInput,
   ctx: PuzzleContext,
 ): Outcome {
-  const now = caughtUp(def, state, ctx.at, ctx.remainingSec);
+  const now = caughtUp(def, state, ctx.at);
   if ('token' in input) {
-    return tokenTyped(def, now, input.token, ctx.remainingSec);
+    return tokenTyped(def, now, input.token, ctx.at);
   }
   switch (input.cmd) {
     case 'login':
@@ -461,7 +459,7 @@ function terminalOf(def: AccessDef, state: AccessState): AccessTerminal {
     open: state.open === null ? null : { ...state.open },
     session: named,
     prompt: state.prompt,
-    locks: Object.entries(state.locks).map(([account, liftsAtSec]) => ({ account, liftsAtSec })),
+    locks: Object.entries(state.locks).map(([account, until]) => ({ account, until })),
     log: state.log.map((line) => ({ ...line })),
     strict,
   };
@@ -525,7 +523,7 @@ function operationText(def: AccessDef): string {
     `nächsten und gibt jede Tür ihrer Rolle für ${def.openSec} Sekunden frei. Ein falscher ` +
     'Token und eine Freigabe ohne Berechtigung sind Fehlquittierungen: Die Überwachung meldet ' +
     `Alarm und zieht ${costOf(def.penaltySec)} ab. Nach ${spelled(MISSES_TO_LOCK)} falschen ` +
-    `Token in Folge bleibt das Konto ${def.lockSec} Sekunden Einsatzzeit gesperrt.`
+    `Token in Folge bleibt das Konto ${def.lockSec} Sekunden gesperrt.`
   );
 }
 
@@ -570,7 +568,7 @@ function rulesOf(def: AccessDef): ManualBlock {
       'Wenn ein Token der abgelaufenen Periode ankommt, meldet das Terminal den Wechsel; das ist ' +
         'keine Fehlquittierung.',
       `Wenn für ein Konto ${spelled(MISSES_TO_LOCK)} Token in Folge falsch sind, sperrt das ` +
-        `Terminal das Konto für ${def.lockSec} Sekunden Einsatzzeit.`,
+        `Terminal das Konto für ${def.lockSec} Sekunden.`,
       ...strict,
       'Wenn jede angeforderte Tür einmal freigegeben ist, ist der Auftrag des Terminals erledigt.',
     ],
@@ -763,14 +761,16 @@ export const accessModule: PuzzleModule<AccessDef, AccessState, AccessInput, Acc
     return { ...outcome, solved: done };
   },
 
-  /** The next period's start: the device moves on to its next account and token then. */
+  /** The next period's start — the device moves on to its next account then — or a lock's lift. */
   dueAt(def, state) {
-    return state.epoch + (state.period + 1) * def.tokenSec * 1000;
+    const turn = state.epoch + (state.period + 1) * def.tokenSec * 1000;
+    return Math.min(turn, ...Object.values(state.locks));
   },
 
   expire(def, state, at) {
-    const period = Math.max(state.period, periodAt(def, state, at));
-    return period === state.period ? state : { ...state, period };
+    const turned = periodAt(def, state, at) > state.period;
+    const lifted = Object.values(state.locks).some((until) => until <= at);
+    return turned || lifted ? caughtUp(def, state, at) : state;
   },
 
   view(def, state, viewer) {

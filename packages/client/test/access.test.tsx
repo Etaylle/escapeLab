@@ -137,13 +137,10 @@ describe('the clock the displays count on', () => {
     expect(secondsTo(10_000, 12_000)).toBe(0);
   });
 
-  it('counts a lock on the mission’s clock, which stands still while the run is paused', () => {
-    const running = { deadlineAt: 100_000, pausedAt: null };
-    expect(lockLeft({ account: 'huber', liftsAtSec: 30 }, running, 50_000)).toBe(20);
-    expect(lockLeft({ account: 'huber', liftsAtSec: 60 }, running, 50_000)).toBe(0);
-    const paused = { deadlineAt: 100_000, pausedAt: 40_000 };
-    expect(lockLeft({ account: 'huber', liftsAtSec: 30 }, paused, 90_000)).toBe(30);
-    expect(lockLeft({ account: 'huber', liftsAtSec: 30 }, NO_CLOCK, 0)).toBe(0);
+  it('counts a lock down to its lift on the station’s clock, whatever the mission clock does', () => {
+    expect(lockLeft({ account: 'huber', until: 50_000 }, 30_000)).toBe(20);
+    expect(lockLeft({ account: 'huber', until: 50_000 }, 49_001)).toBe(1);
+    expect(lockLeft({ account: 'huber', until: 50_000 }, 50_000)).toBe(0);
   });
 });
 
@@ -198,13 +195,12 @@ describe('the terminal', () => {
     expect(idle.match(/<button type="button" class="servers-key" data-door=/g)).toHaveLength(2);
   });
 
-  it('shows a lock while the mission clock holds it, its seconds counting down', () => {
+  it('shows a lock while it holds, its seconds counting down to its lift', () => {
     const locks = [
-      { account: 'huber', liftsAtSec: 60 },
-      { account: 'pohl', liftsAtSec: 120 },
+      { account: 'huber', until: NOW + 40_000 },
+      { account: 'pohl', until: NOW - 1 },
     ];
-    const mission = { deadlineAt: NOW + 100_000, pausedAt: null };
-    const html = panel(atTerminal({ locks }), mission);
+    const html = panel(atTerminal({ locks }));
     expect(html).toContain('data-account="huber"><span class="access-session-label">GESPERRT');
     expect(html).toContain('huber · 40 s');
     expect(html).not.toContain('data-account="pohl"');

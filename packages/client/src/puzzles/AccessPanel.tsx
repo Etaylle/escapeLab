@@ -22,7 +22,7 @@ import {
   type ConsoleId,
   type ManualBlock,
 } from '@escapelab/core';
-import { serverNow, timeLeft, type MissionTime } from '../clock.js';
+import { serverNow } from '../clock.js';
 import { alignedLines, type Taken } from '../noting.js';
 import { Block } from '../screens/Manual.js';
 import { TalkButton } from '../screens/Voice.js';
@@ -95,23 +95,18 @@ function earliest(a: number | null, b: number | null): number | null {
 export const secondsTo = (end: number, now: number): number =>
   Math.max(0, Math.ceil((end - now) / 1000));
 
-/** The seconds a lock still holds at `now`, on the mission's clock; 0 once it has lifted. */
-export function lockLeft(lock: AccessLock, mission: MissionTime, now: number): number {
-  const left = timeLeft(mission, now);
-  return left === null ? 0 : Math.max(0, Math.ceil(left / 1000) - lock.liftsAtSec);
-}
+/** The seconds a lock still holds at `now` (server time); 0 once it has lifted. */
+export const lockLeft = (lock: AccessLock, now: number): number => secondsTo(lock.until, now);
 
 /**
  * The server's time now, rendered anew as each whole second of what the terminal counts down
- * begins: the door standing open, and a lock — on the mission's clock, which stands still
- * while the run is paused.
+ * begins: the door standing open, and every lock.
  */
-function useTerminalNow(terminal: AccessTerminal, mission: MissionTime): number {
+function useTerminalNow(terminal: AccessTerminal): number {
   const read = serverNow();
-  const open = terminal.open === null ? null : nextSecond(terminal.open.until, read);
-  const counting = terminal.locks.length > 0 && mission.pausedAt === null;
-  const lock = counting ? nextSecond(mission.deadlineAt, read) : null;
-  return useNowUntil(earliest(open, lock));
+  const ends = [terminal.open?.until ?? null, ...terminal.locks.map((lock) => lock.until)];
+  const next = ends.reduce<number | null>((first, end) => earliest(first, nextSecond(end, read)), null);
+  return useNowUntil(next);
 }
 
 // --- what a change sounds like ---------------------------------------------------------------
@@ -225,10 +220,9 @@ function Doors(props: { terminal: AccessTerminal; now: number; fresh: AccessDoor
 }
 
 /** The session line, and a line for every account a lock still holds, its seconds counting down. */
-function Session(props: { terminal: AccessTerminal; mission: MissionTime; now: number }) {
-  const { terminal, mission, now } = props;
+function Session({ terminal, now }: { terminal: AccessTerminal; now: number }) {
   const held = terminal.locks.flatMap((lock) => {
-    const left = lockLeft(lock, mission, now);
+    const left = lockLeft(lock, now);
     return left > 0 ? [{ account: lock.account, left }] : [];
   });
   return (
@@ -285,12 +279,11 @@ function freshDoor(change: AccessChange | null): AccessDoor | null {
  */
 function Screen(props: {
   terminal: AccessTerminal;
-  mission: MissionTime;
   change: AccessChange | null;
   children?: ReactNode;
 }) {
-  const { terminal, mission, change, children } = props;
-  const now = useTerminalNow(terminal, mission);
+  const { terminal, change, children } = props;
+  const now = useTerminalNow(terminal);
   const fresh = new Set(linesWith(change).map((line) => line.n));
   return (
     <div className={`servers-crt access-crt${change === null ? ' servers-crt--boot' : ''}`}>
@@ -301,7 +294,7 @@ function Screen(props: {
         </span>
       </p>
       <Doors terminal={terminal} now={now} fresh={freshDoor(change)} />
-      <Session terminal={terminal} mission={mission} now={now} />
+      <Session terminal={terminal} now={now} />
       <Log log={terminal.log} fresh={fresh} />
       {children}
     </div>
@@ -467,12 +460,11 @@ function usePromptLine() {
 function Terminal(props: {
   puzzle: AccessPuzzle;
   terminal: AccessTerminal;
-  mission: MissionTime;
   change: AccessChange | null;
   send: Send;
   refused: Refusal | null;
 }) {
-  const { puzzle, terminal, mission, change, send, refused } = props;
+  const { puzzle, terminal, change, send, refused } = props;
   const { line, setLine, unread, setUnread, field, hold } = usePromptLine();
   const label = useRef<HTMLLabelElement>(null);
   const doors = terminal.doors.map((row) => row.door);
@@ -504,7 +496,7 @@ function Terminal(props: {
   };
   return (
     <form className="servers servers--terminal access access--terminal" onSubmit={submit}>
-      <Screen terminal={terminal} mission={mission} change={change}>
+      <Screen terminal={terminal} change={change}>
         <Prompt
           asking={terminal.prompt}
           line={line}
@@ -652,16 +644,15 @@ function Watched(props: {
   terminal: AccessTerminal;
   device: AccessDevice;
   roster: AccessAccount[] | null;
-  mission: MissionTime;
   index: number;
 }) {
-  const { terminal, device, roster, mission, index } = props;
+  const { terminal, device, roster, index } = props;
   return (
     <div className="servers-watch">
       <div className="servers servers--watched access access--watched">
         <section className="servers-console" aria-label={consoleName('a')}>
           <h4 className="servers-console-name">{consoleName('a')}</h4>
-          <Screen terminal={terminal} mission={mission} change={null} />
+          <Screen terminal={terminal} change={null} />
         </section>
         <section className="servers-console" aria-label={consoleName('b')}>
           <h4 className="servers-console-name">{consoleName('b')}</h4>
@@ -681,14 +672,13 @@ function Watched(props: {
  * shows the account it is bound to and that account's token while its bar drains. The audience
  * sees both side by side, and the list.
  */
-export function AccessPanel({ puzzle, change, send, mission, refused = null }: PanelProps<'access'>) {
+export function AccessPanel({ puzzle, change, send, refused = null }: PanelProps<'access'>) {
   const { role, terminal, device, roster } = puzzle;
   if (role === 'terminal' && terminal !== null) {
     return (
       <Terminal
         puzzle={puzzle}
         terminal={terminal}
-        mission={mission}
         change={change}
         send={send}
         refused={refused}
@@ -700,13 +690,7 @@ export function AccessPanel({ puzzle, change, send, mission, refused = null }: P
   }
   if (terminal !== null && device !== null) {
     return (
-      <Watched
-        terminal={terminal}
-        device={device}
-        roster={roster}
-        mission={mission}
-        index={puzzle.index}
-      />
+      <Watched terminal={terminal} device={device} roster={roster} index={puzzle.index} />
     );
   }
   return <p className="muted">Dieses Pult ist nicht angeschlossen.</p>;
