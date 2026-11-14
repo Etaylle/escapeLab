@@ -3409,11 +3409,26 @@ function spotsBy(station, map, count, notes) {
 }
 
 /**
+ * Where on `spot` beside `station` a player stands to work it: the tile's middle, and on a tile
+ * diagonal to it a fifth of a tile nearer on each axis. That middle lies 1.41 tiles off, and a
+ * step may land STEP_TOLERANCE from it on each axis — up to 1.63 off, beyond the client's reach
+ * of 1.5 (client world/interact.ts INTERACT_RADIUS), where E opens nothing; from the nearer
+ * point a step lands 1.34 off at most.
+ */
+function standingPoint(spot, station) {
+  const nearer = spot.x !== station.x && spot.y !== station.y ? 0.2 : 0;
+  return {
+    x: spot.x + 0.5 + nearer * Math.sign(station.x - spot.x),
+    y: spot.y + 0.5 + nearer * Math.sign(station.y - spot.y),
+  };
+}
+
+/**
  * Brings the whole crew to `station`: whoever cannot reach it is let through
  * a plate door by somebody who can, then each stands on a spot of its own
- * beside it — none where E would read a note instead (`noteTiles`) — so that
- * whoever held a plate steps off it and its door shuts, as the steps after
- * expect. Throws where somebody cannot get there.
+ * beside it (`standingPoint`) — none where E would read a note instead
+ * (`noteTiles`) — so that whoever held a plate steps off it and its door
+ * shuts, as the steps after expect. Throws where somebody cannot get there.
  */
 async function gatherAt(station, players) {
   const free = players.filter((player) => stepsTo(player.seen, station) !== Infinity);
@@ -3428,9 +3443,10 @@ async function gatherAt(station, players) {
   const spots = spotsBy(station, players[0].seen.view.map, players.length, noteTiles(players));
   for (const [i, player] of players.entries()) {
     const spot = spots[i] ?? station;
+    const { x, y } = standingPoint(spot, station);
     const there =
       (await walkNear(player.page, player.seen, spot)) &&
-      (await stepTo(player.page, player.seen, spot.x + 0.5, spot.y + 0.5));
+      (await stepTo(player.page, player.seen, x, y));
     if (!there) {
       throw new Error(`${player.name} got stuck on the way to ${spot.x},${spot.y} by the station`);
     }
