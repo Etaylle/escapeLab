@@ -392,7 +392,7 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
 
 ## Geplant (2026-11-12, Vorbilder je Punkt)
 
-### V-1 Zwei Stimmen und eine Leitstelle, die reagiert — Status: im PR (V-voices) · Größe: M
+### V-1 Zwei Stimmen und eine Leitstelle, die reagiert — Status: erledigt (V-voices, Merge 2026-11-14; vier Review-Runden; Cloud-CI grün auf f5e2785; Render der 48 Zeilen durch Uros offen; kleiner Rest: der Guard der Notfall-Zeilen lässt „ohne Alarm"/„ohne Strafe" noch durch) · Größe: M
 - Vorbilder: Payday 2 (Bain koordiniert, reagiert auf Alarme, warnt vor der Zeit, viele
   Varianten je Ansage), Hitman (Diana: ruhig, kommentiert, bewertet am Ende), Portal 2
   (Anlagen-Durchsage und Person sind zwei Stimmen), Alien: Isolation (Durchsagen folgen dem
