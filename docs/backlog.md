@@ -552,7 +552,7 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   tritt beiseite, wenn ein Panel aufgeht; ab 900 px Breite, am Handy bleibt der Chip. Kosten
   ≤ 1 ms je Frame zusammen.
 
-### U-1 Pausenmenü, Verlassen wie Dota 2, Einstellungen und Chrome — Status: im PR (U-pause, PR 6) · Größe: L
+### U-1 Pausenmenü, Verlassen wie Dota 2, Einstellungen und Chrome — Status: erledigt (U-pause, Merge 2026-11-14; drei Review-Runden mit Playwright-Repros; Cloud-CI grün auf fe6222c; Rest: nach „Zum Hauptmenü" bleibt ein toter Zurück-Schritt je Tab) · Größe: L
 - Uros 2026-11-14: „Spielabbruch richtig: Der Spieler kann das Spiel nicht verlassen, wann er
   will, und ins Hauptmenü zurück. Wie Dota 2: joinen, nach Disconnect reconnecten, verlassen."
   Und: „Einstellungen im Spiel haben kein gutes UI; alles, was nicht direkt Spiel ist, Leisten,
