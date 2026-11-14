@@ -48,6 +48,26 @@ async function closeConnections(app: string): Promise<void> {
   });
 }
 
+/** How many connections named `app` the database holds open. */
+async function connectionsOf(app: string): Promise<number> {
+  const named = `FROM pg_stat_activity WHERE application_name = '${app}'`;
+  const [row] = await db.$queryRawUnsafe<{ n: number }[]>(`SELECT count(*)::int AS n ${named}`);
+  return row?.n ?? 0;
+}
+
+/**
+ * `store` busy as a server is: several requests at once — of the account `accountId` and the
+ * runs — so that its pool holds several connections, each having run statements of its own.
+ */
+async function busy(store: Store, accountId: string): Promise<void> {
+  await Promise.all([
+    store.runs(),
+    store.achievements(accountId),
+    store.runsOfAccount(accountId, 5),
+    store.updateProfile(accountId, { colour: '#60a5fa' }),
+  ]);
+}
+
 /**
  * A proxy in front of the database that holds every new connection `delayMs` before it opens it,
  * as a Neon compute waking from its pause does; its port, and how to close it.
@@ -224,7 +244,7 @@ describe.skipIf(url === '')('the store in Postgres', () => {
       expect(await store.achievements(made.id)).toEqual([]);
     });
 
-    it('keeps a run that ends on a connection the database closed: it asks again', async () => {
+    it('keeps a run that ends after the database closed every connection: asked again', async () => {
       const store = await openNamed('lost-run');
       const made = await store.getOrCreateByIdentity(identityOf('Anna'), {
         displayName: 'Anna',
@@ -232,6 +252,8 @@ describe.skipIf(url === '')('the store in Postgres', () => {
       });
       const said = vi.spyOn(console, 'log').mockImplementation(() => undefined);
       try {
+        await busy(store, made.id);
+        expect(await connectionsOf('lost-run')).toBeGreaterThan(1);
         await closeConnections('lost-run');
         await store.appendRun(finished({}, ['Anna', null]));
         expect(said).toHaveBeenCalledWith(expect.stringContaining('(P1017): asked again'));
@@ -242,14 +264,19 @@ describe.skipIf(url === '')('the store in Postgres', () => {
       expect(store.stats().runs).toBe(1);
     });
 
-    it('finds and makes accounts on a connection the database closed: it asks again', async () => {
+    it('finds and makes accounts after the database closed every connection: asked again', async () => {
       const store = await openNamed('lost-account');
       const anna = { displayName: 'Anna', colour: null };
       const made = await store.getOrCreateByIdentity(identityOf('Anna'), anna);
       const said = vi.spyOn(console, 'log').mockImplementation(() => undefined);
       try {
+        // A busy server's pool, every connection of it closed — and so again on the fresh one.
+        await busy(store, made.id);
+        expect(await connectionsOf('lost-account')).toBeGreaterThan(1);
         await closeConnections('lost-account');
         expect(await store.findByIdentity(identityOf('Anna'))).toMatchObject({ id: made.id });
+        await busy(store, made.id);
+        expect(await connectionsOf('lost-account')).toBeGreaterThan(1);
         await closeConnections('lost-account');
         const ben = await store.getOrCreateByIdentity(identityOf('Ben'), anna);
         expect(said).toHaveBeenCalledTimes(2);

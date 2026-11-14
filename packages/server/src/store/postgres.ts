@@ -193,6 +193,71 @@ const ASK_AGAIN: ReadonlyMap<string, string> = new Map([
   ['P2028', 'did not start the transaction in time'],
 ]);
 
+/**
+ * The code of a connection the database closed while the pool held it. Prisma 6.19's pool may go
+ * on handing such a connection out — one that had not run the request's statement before — every
+ * request failing on it until it has stood idle for its lifetime: asked again, the request goes
+ * to a fresh client (`Clients.renew`).
+ */
+const CLOSED = 'P1017';
+
+/**
+ * How long a client replaced by a fresh one (`Clients.renew`) stays open for the requests still
+ * running on it, ms: longer than a run's transaction may wait and take (RUN_TRANSACTION).
+ */
+export const RETIRING_MS = 60_000;
+
+/** What the store needs of a client it lets go of: that it closes. */
+interface Closable {
+  $disconnect: () => Promise<void>;
+}
+
+/**
+ * The client the store asks — a Prisma client, with a pool of connections of its own — and the
+ * ones it asked before: a client that lost its connections is replaced by a fresh one, and
+ * closed once the requests still running on it have had time to end (RETIRING_MS). Never
+ * `$disconnect` a client and go on asking it: Prisma 6.19 then throws „Engine is not yet
+ * connected" uncaught, which ends the process.
+ */
+export class Clients<C extends Closable> {
+  private client: C;
+  /** each client replaced and not closed yet, with the timer that closes it */
+  private readonly retiring = new Map<C, ReturnType<typeof setTimeout>>();
+
+  constructor(private readonly make: () => C) {
+    this.client = make();
+  }
+
+  /** The client to ask now. */
+  get current(): C {
+    return this.client;
+  }
+
+  /** A fresh client in place of `stale`, unless another request has replaced it already. */
+  renew(stale: C): void {
+    if (stale !== this.client) {
+      return;
+    }
+    this.client = this.make();
+    const timer = setTimeout(() => {
+      this.retiring.delete(stale);
+      stale.$disconnect().catch((err: unknown) => {
+        console.error(`[escapelab] a replaced database client did not close: ${oneLine(err)}`);
+      });
+    }, RETIRING_MS);
+    timer.unref();
+    this.retiring.set(stale, timer);
+  }
+
+  /** Every client closed: the one asked now, and those replaced and not closed yet. */
+  async close(): Promise<void> {
+    const all = [this.client, ...this.retiring.keys()];
+    this.retiring.forEach((timer) => clearTimeout(timer));
+    this.retiring.clear();
+    await Promise.all(all.map((client) => client.$disconnect()));
+  }
+}
+
 /** The code of Prisma's that `err` carries; null for none. */
 function codeOf(err: unknown): string | null {
   if (err instanceof Prisma.PrismaClientKnownRequestError) {
@@ -208,20 +273,28 @@ export function worthAskingAgain(err: unknown): boolean {
 }
 
 /**
- * `work` done — once more where it was worth asking again (`worthAskingAgain`), on a connection
- * the pool opens anew. Anything else, a constraint refused say, is thrown as it came.
+ * `work` asked of the client `clients` hands out — once more where it was worth asking again
+ * (`worthAskingAgain`): of a fresh client where the database had closed the connection drawn
+ * (CLOSED), of the same one else. Anything else, a constraint refused say, is thrown as it came.
  */
-export async function onceMore<T>(work: () => Promise<T>): Promise<T> {
+export async function onceMore<C extends Closable, T>(
+  clients: Clients<C>,
+  work: (client: C) => Promise<T>,
+): Promise<T> {
+  const asked = clients.current;
   try {
-    return await work();
+    return await work(asked);
   } catch (err) {
     const code = codeOf(err);
     const what = code === null ? undefined : ASK_AGAIN.get(code);
     if (what === undefined) {
       throw err;
     }
+    if (code === CLOSED) {
+      clients.renew(asked);
+    }
     console.log(`[escapelab] the database ${what} (${code}): asked again`);
-    return work();
+    return work(clients.current);
   }
 }
 
@@ -269,19 +342,20 @@ export class PostgresStore implements Store {
   /** when the runs kept elsewhere were last looked for; whether a look is under way, or the last */
   private looked = { at: 0, busy: false, done: false };
 
-  private constructor(private readonly db: PrismaClient) {}
+  private constructor(private readonly clients: Clients<PrismaClient>) {}
 
   /**
    * The store in the database at `url`, its runs counted. Rejects, saying why, where the
    * database cannot be reached.
    */
   static async open(url: string): Promise<PostgresStore> {
-    const db = new PrismaClient({ datasourceUrl: pooledUrl(url) });
-    const store = new PostgresStore(db);
+    const pooled = pooledUrl(url);
+    const clients = new Clients(() => new PrismaClient({ datasourceUrl: pooled }));
+    const store = new PostgresStore(clients);
     try {
-      await db.$connect();
+      await clients.current.$connect();
     } catch (err) {
-      await db.$disconnect();
+      await clients.close();
       throw new Error(
         `the database DATABASE_URL names cannot be reached: ${oneLine(err)} — check the variable`,
       );
@@ -289,7 +363,7 @@ export class PostgresStore implements Store {
     try {
       await store.recount();
     } catch (err) {
-      await db.$disconnect();
+      await clients.close();
       throw new Error(
         `the database's runs cannot be read: ${oneLine(err)} — are its migrations applied? ` +
           '(pnpm --filter @escapelab/server prisma migrate deploy, as the start script does)',
@@ -328,8 +402,8 @@ export class PostgresStore implements Store {
     try {
       // A run usually ends after minutes without a word to the database: its write is the one
       // most likely to find the connection lost, or to wait while a paused Neon wakes.
-      owners = await onceMore(() =>
-        this.db.$transaction((tx) => keep(tx, run), RUN_TRANSACTION),
+      owners = await onceMore(this.clients, (db) =>
+        db.$transaction((tx) => keep(tx, run), RUN_TRANSACTION),
       );
     } catch (err) {
       if (!runKeptAlready(err)) {
@@ -350,8 +424,8 @@ export class PostgresStore implements Store {
     if (this.counted.has(runKeyOf(roomCode, startedAt))) {
       return;
     }
-    const row = await onceMore(() =>
-      this.db.run.findUnique({
+    const row = await onceMore(this.clients, (db) =>
+      db.run.findUnique({
         where: { roomCode_startedAt: { roomCode, startedAt: new Date(startedAt) } },
         include: { members: true },
       }),
@@ -362,8 +436,8 @@ export class PostgresStore implements Store {
   }
 
   async runs(): Promise<LoggedRun[]> {
-    const rows = await onceMore(() =>
-      this.db.run.findMany({
+    const rows = await onceMore(this.clients, (db) =>
+      db.run.findMany({
         include: { members: true },
         orderBy: [{ endedAt: 'asc' }, { id: 'asc' }],
       }),
@@ -403,8 +477,8 @@ export class PostgresStore implements Store {
 
   /** Every run that ended around this store's opening (`OVERLAP_MS`), not counted yet, counted. */
   private async countAround(): Promise<void> {
-    const rows = await onceMore(() =>
-      this.db.run.findMany({
+    const rows = await onceMore(this.clients, (db) =>
+      db.run.findMany({
         where: {
           endedAt: {
             gte: new Date(this.openedAt - OVERLAP_MS),
@@ -426,10 +500,10 @@ export class PostgresStore implements Store {
     accountId: string,
     limit: number,
   ): Promise<{ total: number; runs: SeatedRun[] }> {
-    const [total, seats] = await onceMore(() =>
-      this.db.$transaction([
-        this.db.runMember.count({ where: { accountId } }),
-        this.db.runMember.findMany({
+    const [total, seats] = await onceMore(this.clients, (db) =>
+      db.$transaction([
+        db.runMember.count({ where: { accountId } }),
+        db.runMember.findMany({
           where: { accountId },
           include: { run: { include: { members: true } } },
           orderBy: { run: { endedAt: 'desc' } },
@@ -444,21 +518,25 @@ export class PostgresStore implements Store {
   }
 
   getOrCreateByIdentity(identity: PassIdentity, profile: Profile): Promise<Account> {
-    return onceMore(() => this.getOrCreate(identity, profile));
+    return onceMore(this.clients, (db) => this.getOrCreate(db, identity, profile));
   }
 
   findByIdentity(identity: PassIdentity): Promise<Account | null> {
-    return onceMore(() => this.find(identity));
+    return onceMore(this.clients, (db) => this.find(db, identity));
   }
 
-  /** `getOrCreateByIdentity`, asked once. */
-  private async getOrCreate(identity: PassIdentity, profile: Profile): Promise<Account> {
-    const found = await this.visit(identity);
+  /** `getOrCreateByIdentity`, asked once of the client `db`. */
+  private async getOrCreate(
+    db: PrismaClient,
+    identity: PassIdentity,
+    profile: Profile,
+  ): Promise<Account> {
+    const found = await this.visit(db, identity);
     if (found !== null) {
       return found;
     }
     try {
-      const made = await this.db.account.create({
+      const made = await db.account.create({
         data: {
           displayName: profile.displayName,
           colour: profile.colour,
@@ -474,7 +552,7 @@ export class PostgresStore implements Store {
       return accountOf(made);
     } catch (err) {
       // Another request of the same pass made it meanwhile: that one is the pass's account.
-      const meanwhile = alreadyThere(err) ? await this.visit(identity) : null;
+      const meanwhile = alreadyThere(err) ? await this.visit(db, identity) : null;
       if (meanwhile === null) {
         throw err;
       }
@@ -482,9 +560,9 @@ export class PostgresStore implements Store {
     }
   }
 
-  /** `findByIdentity`, asked once. */
-  private async find(identity: PassIdentity): Promise<Account | null> {
-    const found = await this.db.identity.findUnique({
+  /** `findByIdentity`, asked once of the client `db`. */
+  private async find(db: PrismaClient, identity: PassIdentity): Promise<Account | null> {
+    const found = await db.identity.findUnique({
       where: { provider_subject: { provider: identity.provider, subject: identity.subject } },
       include: { account: true },
     });
@@ -495,13 +573,16 @@ export class PostgresStore implements Store {
     return accountOf(found.account);
   }
 
-  /** The account `identity` leads into, its visit noted; null where it leads nowhere yet. */
-  private async visit(identity: PassIdentity): Promise<Account | null> {
-    const found = await this.find(identity);
+  /**
+   * The account `identity` leads into, its visit noted, asked of the client `db`; null where it
+   * leads nowhere yet.
+   */
+  private async visit(db: PrismaClient, identity: PassIdentity): Promise<Account | null> {
+    const found = await this.find(db, identity);
     if (found === null) {
       return null;
     }
-    const account = await this.db.account.update({
+    const account = await db.account.update({
       where: { id: found.id },
       data: { lastSeenAt: new Date() },
     });
@@ -510,12 +591,16 @@ export class PostgresStore implements Store {
 
   async updateProfile(accountId: string, change: Partial<Profile>): Promise<Account> {
     return accountOf(
-      await onceMore(() => this.db.account.update({ where: { id: accountId }, data: change })),
+      await onceMore(this.clients, (db) =>
+        db.account.update({ where: { id: accountId }, data: change }),
+      ),
     );
   }
 
   async achievements(accountId: string): Promise<Unlocked[]> {
-    const rows = await onceMore(() => this.db.achievement.findMany({ where: { accountId } }));
+    const rows = await onceMore(this.clients, (db) =>
+      db.achievement.findMany({ where: { accountId } }),
+    );
     return rows.map((row) => ({ key: row.key, unlockedAt: row.unlockedAt.getTime() }));
   }
 
@@ -523,13 +608,13 @@ export class PostgresStore implements Store {
     // Its identities, Erfolge and seats go with it (onDelete: Cascade); the runs stay. The seats
     // it held, read in the same transaction, take its name off the Bestenliste: no run is read
     // but its own, and none appended meanwhile can be left out of the count.
-    const [held] = await onceMore(() =>
-      this.db.$transaction([
-        this.db.runMember.findMany({
+    const [held] = await onceMore(this.clients, (db) =>
+      db.$transaction([
+        db.runMember.findMany({
           where: { accountId },
           include: { run: { include: { members: true } } },
         }),
-        this.db.account.deleteMany({ where: { id: accountId } }),
+        db.account.deleteMany({ where: { id: accountId } }),
       ]),
     );
     for (const { run: row, seatName } of held) {
@@ -540,7 +625,7 @@ export class PostgresStore implements Store {
   }
 
   async close(): Promise<void> {
-    await this.db.$disconnect();
+    await this.clients.close();
   }
 
   /** The run `row` holds, where it is one to count; the log says why where it is not. */

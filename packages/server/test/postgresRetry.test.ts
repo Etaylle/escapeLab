@@ -2,10 +2,12 @@ import { Prisma } from '@prisma/client';
 import type * as PrismaModule from '@prisma/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  Clients,
   IDLE_LIFETIME_S,
   onceMore,
   pooledUrl,
   PostgresStore,
+  RETIRING_MS,
   runKeptAlready,
   worthAskingAgain,
 } from '../src/store/postgres.js';
@@ -26,9 +28,10 @@ vi.mock('@prisma/client', async (importOriginal) => {
 
 /**
  * The store in Postgres asks once more where the connection was lost — Neon closes one idle for 5
- * minutes, and the pool may still hold it — and never where the database refused the request;
- * its pool lets no connection stand idle long enough for Neon to close it. Without a database:
- * Prisma's errors made as Prisma makes them.
+ * minutes, and the pool may still hold it — of a fresh client where the database closed it, and
+ * never where the database refused the request; its pool lets no connection stand idle long
+ * enough for Neon to close it. Without a database: Prisma's errors made as Prisma makes them,
+ * and clients that only close.
  */
 
 const VERSION = '6.19.3';
@@ -39,7 +42,29 @@ const lost = (code: string, meta?: Record<string, unknown>): Error =>
     ...(meta === undefined ? {} : { meta }),
   });
 
+/** A client as the retry sees it: numbered as made, and closing when told. */
+interface Fake {
+  n: number;
+  $disconnect: () => Promise<void>;
+}
+
+/** Clients made as fakes, numbered from 1 as they are made. */
+function fakes(): { clients: Clients<Fake>; made: Fake[] } {
+  const made: Fake[] = [];
+  const clients = new Clients(() => {
+    const client: Fake = { n: made.length + 1, $disconnect: vi.fn(async () => undefined) };
+    made.push(client);
+    return client;
+  });
+  return { clients, made };
+}
+
+/** Which of the clients each call of `work` was asked of, by number. */
+const askedOf = (work: { mock: { calls: [Fake][] } }): number[] =>
+  work.mock.calls.map(([client]) => client.n);
+
 afterEach(() => {
+  vi.useRealTimers();
   vi.restoreAllMocks();
 });
 
@@ -55,36 +80,97 @@ describe('a lost connection', () => {
     expect(worthAskingAgain(bad)).toBe(false);
   });
 
-  it('takes in a transaction that did not start in time, as while Neon wakes', async () => {
+  it('is asked about once more of a fresh client where the database closed it', async () => {
     const said = vi.spyOn(console, 'log').mockImplementation(() => undefined);
-    const work = vi.fn().mockRejectedValueOnce(lost('P2028')).mockResolvedValueOnce('kept');
-    await expect(onceMore(work)).resolves.toBe('kept');
-    expect(said).toHaveBeenCalledWith(
-      '[escapelab] the database did not start the transaction in time (P2028): asked again',
-    );
-  });
-
-  it('is asked about once more, saying so, and the second answer stands', async () => {
-    const said = vi.spyOn(console, 'log').mockImplementation(() => undefined);
-    const work = vi.fn().mockRejectedValueOnce(lost('P1017')).mockResolvedValueOnce('kept');
-    await expect(onceMore(work)).resolves.toBe('kept');
-    expect(work).toHaveBeenCalledTimes(2);
+    const { clients } = fakes();
+    const work = vi.fn<(client: Fake) => Promise<string>>();
+    work.mockRejectedValueOnce(lost('P1017')).mockResolvedValueOnce('kept');
+    await expect(onceMore(clients, work)).resolves.toBe('kept');
+    expect(askedOf(work)).toEqual([1, 2]);
+    expect(clients.current.n).toBe(2);
     expect(said).toHaveBeenCalledWith(
       '[escapelab] the database had lost the connection (P1017): asked again',
     );
   });
 
+  it('is asked again of the same client where none opened, or a transaction did not start', async () => {
+    const said = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const unreachable = new Prisma.PrismaClientInitializationError('unreachable', VERSION, 'P1002');
+    for (const err of [lost('P1001'), unreachable, lost('P2028')]) {
+      const { clients } = fakes();
+      const work = vi.fn<(client: Fake) => Promise<string>>();
+      work.mockRejectedValueOnce(err).mockResolvedValueOnce('kept');
+      await expect(onceMore(clients, work)).resolves.toBe('kept');
+      // A fresh pool would have to open a connection as well, or wait for a waking Neon.
+      expect(askedOf(work)).toEqual([1, 1]);
+    }
+    expect(said).toHaveBeenCalledWith(
+      '[escapelab] the database did not start the transaction in time (P2028): asked again',
+    );
+  });
+
   it('is asked about once more only: a second loss stands', async () => {
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
-    const work = vi.fn().mockRejectedValue(lost('P1017'));
-    await expect(onceMore(work)).rejects.toThrow('Server has closed the connection.');
-    expect(work).toHaveBeenCalledTimes(2);
+    const { clients } = fakes();
+    const work = vi.fn<(client: Fake) => Promise<string>>().mockRejectedValue(lost('P1017'));
+    await expect(onceMore(clients, work)).rejects.toThrow('Server has closed the connection.');
+    expect(askedOf(work)).toEqual([1, 2]);
   });
 
   it('is never what a refusal is taken for: a unique key is not asked about again', async () => {
-    const work = vi.fn().mockRejectedValue(lost('P2002'));
-    await expect(onceMore(work)).rejects.toMatchObject({ code: 'P2002' });
-    expect(work).toHaveBeenCalledTimes(1);
+    const { clients, made } = fakes();
+    const work = vi.fn<(client: Fake) => Promise<string>>().mockRejectedValue(lost('P2002'));
+    await expect(onceMore(clients, work)).rejects.toMatchObject({ code: 'P2002' });
+    expect(askedOf(work)).toEqual([1]);
+    expect(made).toHaveLength(1);
+  });
+
+  it('renews a client once, however many requests on it lost their connection', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const { clients, made } = fakes();
+    const lostOnFirst = (client: Fake): Promise<number> =>
+      client.n === 1 ? Promise.reject(lost('P1017')) : Promise.resolve(client.n);
+    const answers = await Promise.all([1, 2, 3].map(() => onceMore(clients, lostOnFirst)));
+    expect(answers).toEqual([2, 2, 2]);
+    expect(made).toHaveLength(2);
+  });
+});
+
+describe('a client replaced by a fresh one', () => {
+  it('stays open for the requests still running on it, then closes', () => {
+    vi.useFakeTimers();
+    // Longer than a run's transaction may wait and then take, 15 s each.
+    expect(RETIRING_MS).toBeGreaterThan(30_000);
+    const { clients, made } = fakes();
+    clients.renew(clients.current);
+    vi.advanceTimersByTime(RETIRING_MS - 1);
+    expect(made.map((client) => vi.mocked(client.$disconnect).mock.calls.length)).toEqual([0, 0]);
+    vi.advanceTimersByTime(1);
+    expect(made.map((client) => vi.mocked(client.$disconnect).mock.calls.length)).toEqual([1, 0]);
+  });
+
+  it('closes with the store, as the one asked now does, and only once', async () => {
+    vi.useFakeTimers();
+    const { clients, made } = fakes();
+    clients.renew(clients.current);
+    clients.renew(clients.current);
+    await clients.close();
+    vi.advanceTimersByTime(RETIRING_MS);
+    expect(made.map((client) => vi.mocked(client.$disconnect).mock.calls.length)).toEqual([
+      1, 1, 1,
+    ]);
+  });
+
+  it('says so where it does not close', async () => {
+    vi.useFakeTimers();
+    const said = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const { clients, made } = fakes();
+    vi.mocked(made[0]?.$disconnect ?? vi.fn()).mockRejectedValueOnce(new Error('gone'));
+    clients.renew(clients.current);
+    await vi.advanceTimersByTimeAsync(RETIRING_MS);
+    expect(said).toHaveBeenCalledWith(
+      '[escapelab] a replaced database client did not close: gone',
+    );
   });
 });
 

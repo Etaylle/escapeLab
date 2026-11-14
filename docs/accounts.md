@@ -132,13 +132,18 @@ store in one line either way.
   that broke off (P3009, `prisma migrate resolve`).
 - **A connection lost:** Neon closes a connection that stood idle for five minutes. The pool
   hands out none idle for more than a minute (`max_idle_connection_lifetime=60`, unless
-  `DATABASE_URL` sets its own), and a request whose connection was lost all the same is asked
-  once more: the log says `the database had lost the connection (P1017): asked again`. A
-  refusal, a unique key say, is never asked again. Prisma 6.19 can stay stuck on a closed
-  connection after a transaction lost one; the minute's lifetime ends that too. A paused Neon
-  takes seconds to wake and open a connection, past the 2 s Prisma gives a transaction to start:
-  the run's transaction waits up to 15 s, and one that did not start in time is asked once more
-  as well (`did not start the transaction in time (P2028): asked again`).
+  `DATABASE_URL` sets its own), and a request whose connection the database closed all the same
+  is asked once more, of a fresh client — a pool of its own: Prisma 6.19's pool may go on
+  handing out a closed connection, one that had not run the request's statement before, until
+  it has stood idle for its lifetime. The log says `the database had lost the connection
+  (P1017): asked again`; the client replaced closes a minute later, once the requests still
+  running on it have ended, never earlier — asked again after `$disconnect`, Prisma throws
+  „Engine is not yet connected" uncaught and the process ends. A connection that could not be
+  opened (P1001, P1002) is asked again of the same client. A refusal, a unique key say, is never
+  asked again. A paused Neon takes seconds to wake and open a connection, past the 2 s Prisma
+  gives a transaction to start: the run's transaction waits up to 15 s, and one that did not
+  start in time is asked once more as well (`did not start the transaction in time (P2028):
+  asked again`).
 - **Changing the schema:** edit `prisma/schema.prisma`, then make the migration with
   `pnpm --filter @escapelab/server prisma migrate dev --name <what>` against a database of your
   own, and commit it; the next deploy applies it. `packages/server/test/schema.test.ts` checks that
