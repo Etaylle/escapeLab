@@ -1208,16 +1208,23 @@ export function planReport(costs: readonly Cost[], fresh: Fresh, beside = NO_LIN
 
 /**
  * What a run says of the persons whose lines wait for a voice: each with how many, and the
- * commands that give them one.
+ * commands that give them one — with --replace where takes of theirs in `before` would go stale,
+ * as the keep would refuse it otherwise (`refuseStale`).
  */
-function waitingFor(voice: Voice, planned: readonly Planned[], roster: Roster): string[] {
+export function waitingFor(
+  voice: Voice,
+  planned: readonly Planned[],
+  roster: Roster,
+  before: Manifest,
+): string[] {
   const waiting = planned.filter((each) => each.kept === null && !canRead(voice, each.person.id));
   const persons = [...new Set(waiting.map((each) => each.person.id))];
   return persons.map((id) => {
     const slot = slotsOf(roster).find((each) => each.person.id === id);
     const count = waiting.filter((each) => each.person.id === id).length;
     const lines = `${count} line${count === 1 ? '' : 's'} wait`;
-    return slot === undefined ? `voice: ${id}: ${lines}` : `${voiceless(slot)}\n  (${lines})`;
+    if (slot === undefined) return `voice: ${id}: ${lines}`;
+    return `${voiceless(slot, staleTakes(before, id).length > 0)}\n  (${lines})`;
   });
 }
 
@@ -1270,7 +1277,7 @@ async function main(fresh: Fresh): Promise<void> {
   console.log(
     `voice: ${todo.length} of ${planned.length} lines to make, ${characters} characters, ${who}`,
   );
-  for (const notice of waitingFor(voice, planned, roster)) console.log(notice);
+  for (const notice of waitingFor(voice, planned, roster, before)) console.log(notice);
   const manifest = startingTakes(voice, planned, before);
   const scratch = mkdtempSync(join(tmpdir(), 'escapelab-voice-'));
   try {
@@ -1494,11 +1501,27 @@ const COMMANDS: Readonly<Record<string, (args: readonly string[], at: number) =>
   '--previews': () => previews(),
 };
 
+/** The switches the script takes beside its commands: what a run makes anew, a keep over takes. */
+const OPTIONS: readonly string[] = ['--fresh', '--fresh=all', '--replace'];
+
+/**
+ * Refuses, before anything runs, a switch the script does not know, naming those it does — a
+ * misspelt command (`--plna`) would otherwise fall through to a render, which spends credits.
+ */
+export function refuseUnknownSwitches(args: readonly string[]): void {
+  const known = [...Object.keys(COMMANDS), ...OPTIONS];
+  const unknown = args.filter((arg) => arg.startsWith('--') && !known.includes(arg));
+  if (unknown.length > 0) {
+    throw new Error(`voice: ${unknown.join(', ')} — the script takes ${known.join(', ')}`);
+  }
+}
+
 /**
  * What the command line asks for: the account's voices, a sample, a person's voice designed or
- * one of its samples kept — or the lines.
+ * one of its samples kept — or the lines; a switch it does not know, nothing.
  */
 function run(args: readonly string[]): Promise<void> {
+  refuseUnknownSwitches(args);
   const at = args.findIndex((arg) => COMMANDS[arg] !== undefined);
   const command = COMMANDS[args[at] ?? ''];
   return command === undefined ? main(freshOf(args)) : command(args, at);

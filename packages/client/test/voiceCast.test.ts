@@ -39,6 +39,7 @@ import {
   entryOf,
   readManifest,
   refuseStale,
+  refuseUnknownSwitches,
   remakeCharacters,
   shippedLines,
   staleTakes,
@@ -87,9 +88,34 @@ describe('the persons of the cast, as the command line names them', () => {
   it('says what to run for a person without a voice: a library voice, or a design kept', () => {
     const said = voiceless(slotOf(roster, 'lead'));
     expect(said).toMatch(/Mila \(lead\) has no voice yet/);
-    expect(said).toContain('voice --keep lead=<voice id>');
+    expect(said).toContain('voice --keep lead=<voice id>\n');
     expect(said).toContain('voice --design lead  then  ');
-    expect(said).toContain('voice --keep lead=<n>');
+    expect(said).toMatch(/voice --keep lead=<n>$/);
+    expect(said).not.toContain('--replace');
+    // Where takes of theirs exist, every keep it names carries --replace, as the keep asks.
+    const over = voiceless(slotOf(roster, 'pa'), true);
+    expect(over).toContain('voice --keep pa=<voice id> --replace\n');
+    expect(over).toContain('voice --keep pa=<n> --replace\n');
+    expect(over).toMatch(/\(--replace: the takes there go, for the render to make anew\)$/);
+  });
+});
+
+describe('the command line', () => {
+  it('refuses a switch it does not know before anything runs, naming those it takes', () => {
+    expect(() => refuseUnknownSwitches(['--plna'])).toThrow(
+      'voice: --plna — the script takes --plan, --list-voices, --sample, --design, --keep, ' +
+        '--previews, --fresh, --fresh=all, --replace',
+    );
+    expect(() => refuseUnknownSwitches(['--fresh', '--fresch'])).toThrow(/^voice: --fresch — /);
+    for (const fine of [
+      [],
+      ['--plan', '--fresh'],
+      ['--fresh=all'],
+      ['--keep', 'lead=dCnu06FiOZma2KVNUoPZ', '--replace'],
+      ['--sample', 'g1jpii0iyvtRs8fqXsd1', 'Reaktor läuft. Alle raus, jetzt.'],
+    ]) {
+      expect(() => refuseUnknownSwitches(fine), fine.join(' ')).not.toThrow();
+    }
   });
 });
 

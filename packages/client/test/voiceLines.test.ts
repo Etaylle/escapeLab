@@ -72,6 +72,7 @@ import {
   VOICE_DIR,
   VOICES_URL,
   voiceId,
+  waitingFor,
   type Entry,
   type Fresh,
   type Line,
@@ -1052,6 +1053,21 @@ describe('the plan of a run (--plan)', () => {
     ]);
     const client = voice.persons['helmut']?.client;
     await expect(client?.voices.getAll()).rejects.toThrow(/--plan asks ElevenLabs for nothing/);
+  });
+});
+
+describe('the lines that wait for a voice', () => {
+  it('name the commands that give one, with --replace where takes of the person are there', () => {
+    const voice = eleven('eleven_v4');
+    const planned = plan(manifest, 'none', voice, roster);
+    const said = waitingFor(voice, planned, roster, manifest);
+    // The plant's three new lines wait; its five takes there are Helmut's voice under its name.
+    expect(said).toHaveLength(1);
+    expect(said[0]).toContain('voice: Durchsage (pa) has no voice yet');
+    expect(said[0]).toContain('voice --keep pa=<voice id> --replace');
+    expect(said[0]).toMatch(/\(3 lines wait\)$/);
+    // Without takes of theirs there, the keep it names needs nothing more.
+    expect(waitingFor(voice, planned, roster, { lines: {} })[0]).not.toContain('--replace');
   });
 });
 

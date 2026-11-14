@@ -253,15 +253,18 @@ export function slotOf(roster: Roster, asked: string | undefined): Slot {
 
 /**
  * What to run where the person `slot` names has no voice yet: a library voice kept, or three
- * samples made and one of them kept.
+ * samples made and one of them kept — with --replace where takes of theirs exist (`replace`),
+ * which the keep drops for the render to make anew, and refuses to make stale without it.
  */
-export function voiceless(slot: Slot): string {
+export function voiceless(slot: Slot, replace = false): string {
   const run = 'pnpm --filter @escapelab/client voice';
+  const over = replace ? ' --replace' : '';
+  const why = replace ? '\n  (--replace: the takes there go, for the render to make anew)' : '';
   return (
     `voice: ${slot.person.name} (${slot.name}) has no voice yet — listen on /voices, then keep ` +
     'a library voice, or design three samples and keep one:\n' +
-    `  ${run} --keep ${slot.name}=<voice id>\n` +
-    `  ${run} --design ${slot.name}  then  ${run} --keep ${slot.name}=<n>`
+    `  ${run} --keep ${slot.name}=<voice id>${over}\n` +
+    `  ${run} --design ${slot.name}  then  ${run} --keep ${slot.name}=<n>${over}${why}`
   );
 }
 

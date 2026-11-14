@@ -874,14 +874,17 @@ VOICE_ENGINE=elevenlabs pnpm --filter @escapelab/client voice   # 21,592 for tha
 
 The render reads the account's plan first, free of charge. It makes the kept cast's lines only,
 and of those only what is missing or stale by its render: a person without a voice is named with
-the commands that give them one, and a run cut short goes on where it stopped. The plain run keeps
-Helmut's 47 takes of 2026-10-25; `--fresh` on the paid plan makes them anew besides — 3,983 credits,
-25,575 in all for that cast — which licences them as the rest (Lizenz, below), and so does a new
-voice for Helmut, kept with `--replace` (`--keep operator:helmut=5KvpaGteYkNayiswuX2h --replace`
-keeps „Helmut - Distinctive and Authentic"). After the render the voice test names the
-`intro.lightsSec` the announcement's new lengths want in `missions/blackout.json` and the texts to
-take off `AWAITING_RENDER`, and the recordings — some 20.5 MB with the whole cast at the recorded
-lines' 867 bytes a character — are committed with the roster.
+the commands that give them one — `--replace` in them where takes of theirs are there — and a run
+cut short goes on where it stopped. A switch the script does not know is refused before anything
+runs, with the list of those it takes, so a misspelt `--plan` never falls through to a render. The
+plain run keeps Helmut's 47 takes of 2026-10-25; `--fresh` on the paid plan makes them anew besides
+— 3,983 credits, 25,575 in all for that cast — which licences them as the rest (Lizenz, below), and
+so does a new voice for Helmut, kept with `--replace`
+(`--keep operator:helmut=5KvpaGteYkNayiswuX2h --replace` keeps „Helmut - Distinctive and
+Authentic"). After the render the voice test names the `intro.lightsSec` the announcement's new
+lengths want in `missions/blackout.json` and the texts to take off `AWAITING_RENDER`, and the
+recordings — some 20.5 MB with the whole cast at the recorded lines' 867 bytes a character — are
+committed with the roster.
 
 ```sh
 pnpm --filter @escapelab/client voice              # record the lines that have no recording yet
