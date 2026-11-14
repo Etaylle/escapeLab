@@ -311,13 +311,17 @@ die Entscheidung.
 - Datenpunkt 2026-11-05, Karte 36×22: Die Skript-Crew gewinnt 462–502 s nach dem Blackout
   (40–43 % von 900 s übrig, davon bis 35 s Warten auf Drohnenlücken); der Harness warnt ab unter
   40 %. Vorschlag: Normal 1000 s (Entspannt/Hart skalieren mit), Entscheidung nach dem Playtest.
-- Plätze je Station (M-three, `core/test/hands.test.ts`): Die Kettenreaktion gibt ihrer Crew von
-  drei an fünf von sechs Stationen nur zwei Plätze, Pult und Handbuch (Lastverteilung,
-  Kühlkreislauf, Freigabecode, Resonanz, Leitungsnetz); ihre drei Plattentüren halten ohne
-  `untilSolved` und zählen nicht. Die Doppelschicht gibt ihrer Crew von vier an fünf von sieben
-  Stationen zwei Plätze, am Leitungsnetz drei. Nicht gepatcht: nach dem Playtest entscheiden, ob
-  die Prototypen eine Hand mehr bekommen (Platte bis zur Lösung, Teil, zweite Quelle) oder ihre
-  Crew kleiner wird.
+- Plätze je Station (M-three, `core/test/hands.test.ts`), gegen die größte Crew der Mission:
+  Blackout hat zu dritt überall genug (Notlicht 3, Notstrom 4, Signalkette 3, Subsysteme 3,
+  Frequenz 3, Reaktorstart 4). Die Kettenreaktion (Crew von drei) gibt fünf von sechs Stationen
+  nur zwei Plätze, Pult und Handbuch: Lastverteilung, Kühlkreislauf, Freigabecode,
+  Resonanz-Dämpfung und Leitungsnetz je 2, Synchron-Abschaltung 4; ihre drei Plattentüren halten
+  ohne `untilSolved` und zählen nicht. Die Doppelschicht (Crew von vier): Notstrom-Brücken,
+  Freigabecode, Kühlkreislauf, Funkfeuer und Druckausgleich je 2, Leitungsnetz 3, Not-Aus beider
+  Flügel 4. Das Labor `doppelpult-drei` (Crew von drei) bleibt, wie es ist: sein Kabelkasten
+  nach der Signalkette hat zwei Plätze, Pult und Buch; acht Testdateien bauen auf ihm. Nicht
+  gepatcht: nach dem Playtest entscheiden, ob die Prototypen eine Hand mehr bekommen (Platte bis
+  zur Lösung, Teil, zweite Quelle) oder ihre Crew kleiner wird.
 
 ## Betrieb und Verbindung (2026-11-12)
 
