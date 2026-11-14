@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 
 import {
   dailyLabel,
   difficultyInfos,
-  linesDown,
+  seatsOff,
   utcDay,
   type ClientMessage,
   type Difficulty,
@@ -17,6 +17,7 @@ import { fullscreenForRun } from '../runScreen.js';
 import { recordParts } from '../runStats.js';
 import { useVoice } from '../voice/useVoice.js';
 import { crewSpeaks, uiSound } from '../world/menuSound.js';
+import { lobbyRadio } from '../world/radioCheck.js';
 import { preloadSamples } from '../world/samples.js';
 import { crewSizeText } from './Crew.js';
 import { CrewRoom } from './CrewRoom.js';
@@ -39,14 +40,17 @@ interface Props {
 }
 
 /**
- * Why the host cannot start yet, or null: every seat's line must be up — one down holds the
- * start until it is back, or the room frees the seat — the crew must be a size the mission
- * takes, and everyone but the host must have confirmed. The server checks the same.
+ * Why the host cannot start yet, or null: every seat's line must be up — one down, or gone to the
+ * main menu, holds the start until it is back, or the room frees the seat — the crew must be a
+ * size the mission takes, and everyone but the host must have confirmed. The server checks the
+ * same.
  */
 export function startBlocker(view: Pick<PlayerView, 'crewSize' | 'players'>): string | null {
-  const down = view.players.filter((p) => !p.connected).map((p) => p.name);
-  if (down.length > 0) {
-    return linesDown(down);
+  const off = view.players.filter((p) => !p.connected);
+  if (off.length > 0) {
+    const names = (inMenu: boolean): string[] =>
+      off.filter((p) => (p.menu === 'main') === inMenu).map((p) => p.name);
+    return seatsOff(names(false), names(true));
   }
   const crew = view.players;
   const missing = view.crewSize.min - crew.length;
@@ -58,6 +62,16 @@ export function startBlocker(view: Pick<PlayerView, 'crewSize' | 'players'>): st
   }
   const waiting = crew.filter((p) => !p.isHost && !p.ready);
   return waiting.length === 0 ? null : `Warten auf ${waiting.map((p) => p.name).join(', ')} …`;
+}
+
+/**
+ * The operator's Funkprobe (the view's `radioCheck`) once every seat is ready and the host can
+ * start; undefined before, and where the mission has none.
+ */
+export function radioCheckDue(
+  view: Pick<PlayerView, 'crewSize' | 'players' | 'radioCheck'>,
+): string | undefined {
+  return startBlocker(view) === null ? view.radioCheck : undefined;
 }
 
 /** A story up to this many characters fits the two lines the panel shows of it. */
@@ -434,7 +448,9 @@ function StartArea({ view, send }: { view: PlayerView; send: Send }) {
             <Icon name="check" /> Bereit — doch nicht?
           </>
         ) : (
-          'Ich bin bereit'
+          <>
+            <Icon name="flag" /> Ich bin bereit
+          </>
         )}
       </button>
       <p className="muted lobby-go-note">
@@ -443,6 +459,51 @@ function StartArea({ view, send }: { view: PlayerView; send: Send }) {
           : 'Erst die Mission lesen, dann bereit melden.'}
       </p>
     </div>
+  );
+}
+
+/** How long the lobby says that the host's part passed on, ms. */
+export const HOST_NEWS_MS = 8000;
+
+/** A member of the room as the host's news reads them. */
+type Seated = Pick<PlayerView['players'][number], 'id' | 'name' | 'isHost'>;
+
+/**
+ * The host's part passed on between two lists of the room (core `abandon`, the longest seated on
+ * the line taking it): who went, and who leads the room now — „Anna ist gegangen · Ben leitet
+ * jetzt den Raum." —; null where it did not pass on.
+ */
+export function hostNews(before: readonly Seated[], after: readonly Seated[]): string | null {
+  const was = before.find((p) => p.isHost);
+  const now = after.find((p) => p.isHost);
+  if (was === undefined || now === undefined || after.some((p) => p.id === was.id)) {
+    return null;
+  }
+  return `${was.name} ist gegangen · ${now.name} leitet jetzt den Raum.`;
+}
+
+/** The host's part passed on, said in the lobby for HOST_NEWS_MS (`hostNews`). */
+function HostNews({ players }: { players: PlayerView['players'] }) {
+  const before = useRef(players);
+  const [said, setSaid] = useState<{ text: string; seq: number } | null>(null);
+  useEffect(() => {
+    const news = hostNews(before.current, players);
+    before.current = players;
+    if (news !== null) {
+      setSaid((last) => ({ text: news, seq: (last?.seq ?? 0) + 1 }));
+    }
+  }, [players]);
+  useEffect(() => {
+    if (said === null) {
+      return undefined;
+    }
+    const timer = setTimeout(() => setSaid(null), HOST_NEWS_MS);
+    return () => clearTimeout(timer);
+  }, [said]);
+  return said === null ? null : (
+    <p key={said.seq} className="lobby-host-news" role="status">
+      {said.text}
+    </p>
   );
 }
 
@@ -469,6 +530,19 @@ function useLobbySound(view: PlayerView): void {
 }
 
 /**
+ * The operator's Funkprobe over the radio (world/radioCheck.ts): once every seat is ready and
+ * the host can start, once while this lobby shows, under the crew's voices while anybody speaks;
+ * cut as the lobby goes.
+ */
+function useRadioCheck(view: PlayerView): void {
+  const talking = (useVoice()?.state.speaking.size ?? 0) > 0;
+  const text = radioCheckDue(view);
+  const [radio] = useState(lobbyRadio);
+  useEffect(() => radio.update(text, talking), [radio, text, talking]);
+  useEffect(() => () => radio.end(), [radio]);
+}
+
+/**
  * The lobby as the crew's room: everybody on stage, the colours at your feet,
  * the mission beside them with its settings, the microphone and the start.
  * The room's code stands once, in the header, where the free places point.
@@ -486,6 +560,7 @@ export function LobbyScreen({ view, send, leaveRoom, missions, stats }: Props) {
     void preloadSamples();
   }, []);
   useLobbySound(view);
+  useRadioCheck(view);
   // The host picks among the missions where everyone else sees the map.
   const picker =
     host && missions.length > 1 ? (
@@ -525,10 +600,11 @@ export function LobbyScreen({ view, send, leaveRoom, missions, stats }: Props) {
           }
         />
         <MicSetup />
+        <HostNews players={view.players} />
         <StartArea view={view} send={send} />
         <div className="lobby-foot">
           <button className="link" onClick={() => closeDoorsThen(leaveRoom)}>
-            Raum verlassen
+            <Icon name="exit" /> Raum verlassen
           </button>
         </div>
       </aside>

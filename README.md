@@ -164,6 +164,16 @@ tote Leitung nach 5 Sekunden ohne Uhrantwort, 20 Sekunden Stille oder 8 Sekunden
 Verbindung, verbindet sofort neu und zeigt bis dahin „VERBINDUNG VERLOREN“ mit Versuch und
 Wartezeit. Einzelheiten: `docs/gameplay.md`, „Verbindung und Wiedereintritt“.
 
+**Pausenmenü und Verlassen:** Im Raum öffnen Esc, das Zahnrad oben, die Start-Taste des
+Controllers oder „Menü“ in der Leiste das Pausenmenü — Weiter, Einstellungen, Handbuch und die
+Wege hinaus —, ohne die Uhr der Crew anzuhalten; die Crew sieht „im Menü“ am Namen. „Zum
+Hauptmenü“ trennt die Leitung sauber, der Platz bleibt gebunden wie nach einem Abbruch, und das
+Hauptmenü führt mit „Zurück zum Einsatz“ zurück; „Einsatz aufgeben“ fragt einmal und sagt, was
+es heißt. Verlässt der Host die Lobby, leitet sie, wer am längsten dabei ist. Die Zurück-Taste
+des Browsers öffnet im Einsatz das Menü. Die Einstellungen stehen in Reitern — Ton, Bild,
+Steuerung, Zugang, Konto —, jeder mit „Zurücksetzen“. Einzelheiten: `docs/gameplay.md`,
+„Pausenmenü und Verlassen“.
+
 **Endspurt:** In der letzten Hälfte der Zeit zieht das Ambiente hörbar an, unter einer Minute
 pulsiert der Timer rot und die Ränder glühen, und die **letzten zehn Sekunden werden mit
 ansteigenden Piepsern heruntergezählt** — der Schlusston kommt, wenn die Energie weg ist.
@@ -174,7 +184,7 @@ Live-Status jedes Mitglieds (hält die Platte, trägt etwas, an der Station, lie
 der letzten Funkzeile. Alles zum Nachschlagen — Auftrag, eine Legende der Kartenobjekte,
 Tastenliste — steckt im **Info-Panel** (Taste `I`, alternativ `H`). Alles, wohin man laufen muss, bekommt am
 Bildschirmrand einen **Richtungspfeil mit Entfernung**, solange es außer Sicht ist. Der Ton
-lässt sich oben rechts abschalten.
+lässt sich oben rechts abschalten; neben dem Raumcode zählt ein Chip, wie viele zuschauen.
 
 **Gefahren unterwegs:** **Wachdrohnen** patrouillieren feste Routen und leuchten einen sichtbaren
 Sichtkegel aus — wer hineinläuft, verliert Zeit (Sichtlinie zählt; wer am offenen Pult arbeitet
@@ -339,16 +349,20 @@ der es lief, die Zeile `pace` die ihres Lauffensters, und die Zusammenfassung di
 und am Ende des Laufs.
 
 **Ton und Funkstimme:** Jeder Raum klingt nach seiner Art, die Schritte des Partners kommen von
-dort, wo er steht, und die Musik zieht mit dem Druck an — alles zur Laufzeit erzeugt
-([`docs/sound.md`](docs/sound.md)). Nur die Funksprüche der Leitstelle sind Aufnahmen
-(`packages/client/public/voice/`), gesprochen von einer neuronalen Stimme, die offline läuft
-(Piper, Stimme „Thorsten"). Wer einen Funktext in `missions/*.json` ändert oder neu schreibt,
-nimmt ihn auf einem Mac mit `uv` neu auf — der Test, der jede Zeile prüft, nennt den Befehl;
-das Stimmmodell lädt der erste Lauf einmal nach `~/.cache/escapelab-piper/`:
+dort, wo er steht, und die Musik zieht mit dem Druck an ([`docs/sound.md`](docs/sound.md)). Zwei
+Stimmen sprechen: die Leitstelle am Funk — zum Start, nach jeder Lösung, wenn es still wird, beim
+ersten Alarm, bei fünf, zwei und einer Minute Restzeit, im Notfall, mit einem Schlusswort auf der
+Endkarte und mit einer Funkprobe in der Lobby — und die Anlage über ihre Lautsprecher. Eine Zeile
+darf zwei oder drei Fassungen haben, ein Lauf sagt eine. Die Aufnahmen liegen in
+`packages/client/public/voice/` (ElevenLabs: die Leitstelle „Helmut"). Die eigene Stimme der Anlage
+entsteht per Voice Design und wartet wie die neuen Zeilen noch auf den Render, bis dahin spricht
+Helmut die Durchsage im Intro (Befehle in `docs/sound.md`). Wer einen Funktext in
+`missions/*.json` ändert oder neu schreibt, nimmt ihn neu auf — der Test, der jede Zeile prüft,
+nennt den Befehl:
 
 ```sh
-pnpm --filter @escapelab/client voice            # nur fehlende Zeilen (Piper über uv, afconvert)
-pnpm --filter @escapelab/client voice --fresh    # alle neu, etwa für eine andere Stimme
+VOICE_ENGINE=elevenlabs pnpm --filter @escapelab/client voice   # nur fehlende Zeilen, ElevenLabs
+pnpm --filter @escapelab/client voice            # nur fehlende Zeilen, offline (Piper über uv)
 VOICE_ENGINE=say pnpm --filter @escapelab/client voice --fresh   # ohne Netz: die Mac-Stimme Anna
 ```
 

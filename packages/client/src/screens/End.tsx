@@ -9,7 +9,7 @@ import {
   type RunEvent,
 } from '@escapelab/core';
 import { useRunPlaques } from '../achievements.js';
-import { reportLine } from '../radio.js';
+import { endsRun, reportLine } from '../radio.js';
 import { clock } from '../runStats.js';
 import { endingOf, type Ending } from '../world/finale.js';
 import { playEnding, stopEnding } from '../world/endTheme.js';
@@ -84,6 +84,8 @@ export interface TitleCardProps {
   youId: string | null;
   /** this screen played the run's end: the card comes up out of its fade */
   fresh: boolean;
+  /** the operator's last word on the run, which the card says after its sting; null for none */
+  lastWord: string | null;
   /** what stands under the facts: a player's plaques and „Bild speichern"; none for the audience */
   extra?: ReactNode;
 }
@@ -94,19 +96,20 @@ export interface TitleCardProps {
  * side by side outside on the pavement, the open door behind them, and the
  * won sting swells; lost, it stands in the dark lab under the red of an
  * emergency lamp, and the lost sting sinks (music.ts `playSting`). Where this
- * screen played the end, the card comes up out of its fade with its sting and
- * the ending's theme after it, which goes with the card (world/endTheme.ts).
+ * screen played the end, the card comes up out of its fade with its sting, the
+ * operator's last word on the run and the ending's theme after them, which go
+ * with the card (world/endTheme.ts).
  */
 export function TitleCard(props: TitleCardProps) {
-  const { ending, fresh } = props;
+  const { ending, fresh, lastWord } = props;
   const won = ending === 'won';
   useEffect(() => {
     if (!fresh) {
       return undefined;
     }
-    playEnding(won ? 'won' : 'lost');
+    playEnding(won ? 'won' : 'lost', lastWord);
     return () => stopEnding();
-  }, [fresh, won]);
+  }, [fresh, won, lastWord]);
   const title = ENDING_TITLES[ending];
   const tone = won ? 'won' : ending === 'lost:alarms' ? 'alarms' : 'time';
   return (
@@ -238,7 +241,13 @@ export type CardSource = Pick<
   | 'currentPuzzleIndex'
   | 'puzzleCount'
   | 'calledOff'
+  | 'events'
 > & { players: CardMate[] };
+
+/** The operator's last word on a run that is over, as its report has it; null for none. */
+export function lastWordOf(events: readonly RunEvent[]): string | null {
+  return [...events].reverse().find(endsRun)?.label ?? null;
+}
 
 /** The title card of a run that is over, seen by `youId` — null for the audience. */
 export function titleCardOf(
@@ -263,6 +272,7 @@ export function titleCardOf(
     calledOff: view.calledOff ?? null,
     youId,
     fresh,
+    lastWord: lastWordOf(view.events),
   };
 }
 
@@ -389,11 +399,11 @@ function Rematch({ view, missions, send, leaveRoom }: RematchProps) {
       </p>
       {view.you.isHost && (
         <button onClick={() => send({ kind: 'back-to-lobby' })}>
-          Zur Lobby (Mission oder Schwierigkeit ändern)
+          <Icon name="crew" /> Zur Lobby (Mission oder Schwierigkeit ändern)
         </button>
       )}
       <button className="link" onClick={leaveRoom}>
-        Raum verlassen
+        <Icon name="exit" /> Raum verlassen
       </button>
     </div>
   );

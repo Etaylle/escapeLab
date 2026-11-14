@@ -3,8 +3,6 @@ import {
   ACTION_NAMES,
   ACTIONS,
   bindVerdict,
-  DEFAULT_KEYS,
-  DEFAULT_PAD,
   keyName,
   PAD_ACTIONS,
   rebindPad,
@@ -14,6 +12,7 @@ import {
   type PadAction,
   type PadBindings,
 } from '../input/bindings.js';
+import { familyOf } from '../input/glyphs.js';
 import {
   PAD_CHAT,
   PAD_GLYPHS,
@@ -22,15 +21,23 @@ import {
   type PadFamily,
 } from '../input/pad.js';
 import { capturePadButton, usePadLive, type PadLive } from '../input/padRuntime.js';
-import { changeSettings, startRebinding, useSettings } from '../settings.js';
+import {
+  changeSettings,
+  DEADZONE_MAX,
+  DEADZONE_MIN,
+  startRebinding,
+  useSettings,
+  type GlyphChoice,
+} from '../settings.js';
+import { Choice, Slider } from './SettingsParts.js';
 
 /**
- * The settings' controls (screens/Settings.tsx): every action's key, rebound by pressing the
- * new one — a key the game keeps, or one another action holds, is refused and named — and a
- * controller's live test, every button lighting up as it is pressed, with the four main
- * actions on buttons of the player's choosing; both back to the defaults with one press.
- * Meanwhile, waiting for a key or a button, nothing else acts on it (settings.ts
- * `isRebinding`), and Esc stops waiting.
+ * The settings' controls (screens/Settings.tsx, „Steuerung"): every action's key, rebound by
+ * pressing the new one — a key the game keeps, or one another action holds, is refused and
+ * named — and a controller's live test, every button lighting up as it is pressed, with the four
+ * main actions on buttons of the player's choosing, the symbols the prompts give its buttons and
+ * the stick's dead zone; the tab's „Zurücksetzen" puts them all back. Meanwhile, waiting for a
+ * key or a button, nothing else acts on it (settings.ts `isRebinding`), and Esc stops waiting.
  */
 
 /** What the panel says to a key it cannot bind. */
@@ -115,8 +122,21 @@ const KEPT_NOTE =
   `${KEPT} behalten ihre Aufgabe; ${keyName('escape')} bricht das Ändern ab. ` +
   'Touch-Geräte behalten ihre Knöpfe.';
 
-/** Every action with its key and „Ändern"; a refused key's reason under the table. */
-function KeyTable({ keys }: { keys: KeyBindings }) {
+/**
+ * The `actions` with their keys and „Ändern" — every action by default — a refused key's reason
+ * under the table, and under the whole table what the game's own keys keep (`note`).
+ */
+export function KeyTable({
+  keys,
+  actions = ACTIONS,
+  legend = 'Tastenbelegung',
+  note = true,
+}: {
+  keys: KeyBindings;
+  actions?: readonly InputAction[];
+  legend?: string;
+  note?: boolean;
+}) {
   const [waiting, setWaiting] = useState<InputAction | null>(null);
   const [said, setSaid] = useState<string | null>(null);
   const done = useCallback((refused: string | null) => {
@@ -128,10 +148,10 @@ function KeyTable({ keys }: { keys: KeyBindings }) {
   useKeyCapture(waiting, keys, done);
   return (
     <fieldset className="settings-group">
-      <legend>Tastenbelegung</legend>
+      <legend>{legend}</legend>
       <table className="settings-bindings">
         <tbody>
-          {ACTIONS.map((action) => (
+          {actions.map((action) => (
             <tr key={action} data-action={action}>
               <th scope="row">{ACTION_NAMES[action]}</th>
               <td>
@@ -159,7 +179,7 @@ function KeyTable({ keys }: { keys: KeyBindings }) {
           {said}
         </p>
       )}
-      <p className="settings-note">{KEPT_NOTE}</p>
+      {note && <p className="settings-note">{KEPT_NOTE}</p>}
     </fieldset>
   );
 }
@@ -240,7 +260,7 @@ function fixedLine(family: PadFamily, pad: PadBindings): string {
   const g = PAD_GLYPHS[family];
   return (
     `Der Stick läuft, ${g.r1} sprintet, ${g.l1} hält den Funk, ${g[PAD_PING]} setzt einen ` +
-    `Ping, ${g[PAD_CHAT]} öffnet den Schnellchat, ${g.start} die Einstellungen, ${g.select} ` +
+    `Ping, ${g[PAD_CHAT]} öffnet den Schnellchat, ${g.start} das Menü, ${g.select} ` +
     `die Einsatzinfo; in Pulten und Fenstern wählt das Steuerkreuz, ${g[pad.interact]} drückt.`
   );
 }
@@ -248,10 +268,12 @@ function fixedLine(family: PadFamily, pad: PadBindings): string {
 /**
  * The controller: whether one is there, its live test, and the four main actions each on a
  * button of the player's choosing — the next button pressed takes it, and where another
- * action sat there the two swap, which the panel says; Esc stops waiting.
+ * action sat there the two swap, which the panel says; Esc stops waiting. Its buttons carry the
+ * symbols the settings choose (`glyphs`, input/glyphs.ts `familyOf`).
  */
-function PadSettings({ pad }: { pad: PadBindings }) {
-  const live = usePadLive();
+function PadSettings({ pad, glyphs: choice }: { pad: PadBindings; glyphs: GlyphChoice }) {
+  const reported = usePadLive();
+  const live = { ...reported, family: familyOf(choice, reported.family) };
   const [waiting, setWaiting] = useState<PadAction | null>(null);
   const [said, setSaid] = useState<string | null>(null);
   useEffect(() => {
@@ -286,7 +308,7 @@ function PadSettings({ pad }: { pad: PadBindings }) {
       <legend>Controller</legend>
       <p className="settings-note" role="status">
         {live.connected
-          ? `Verbunden — ${live.family === 'playstation' ? 'PlayStation' : 'Xbox'}-Tasten.`
+          ? `Verbunden — ${FAMILY_NAMES[live.family]}-Tasten.`
           : 'Kein Controller erkannt: eine Taste am Controller drücken, dann meldet er sich.'}
       </p>
       <PadTest live={live} />
@@ -325,20 +347,44 @@ function PadSettings({ pad }: { pad: PadBindings }) {
   );
 }
 
-/** The keys and the controller, and the way back to how they came. */
+/** How the panel names each kind of controller. */
+const FAMILY_NAMES: Readonly<Record<PadFamily, string>> = {
+  xbox: 'Xbox',
+  playstation: 'PlayStation',
+};
+
+/** The symbols the prompts may give a controller's buttons, as the panel names them. */
+export const GLYPH_CHOICES: readonly (readonly [GlyphChoice, string])[] = [
+  ['auto', 'Automatisch'],
+  ['xbox', 'Xbox'],
+  ['playstation', 'PlayStation'],
+];
+
+/**
+ * The keys, the controller, the symbols its buttons carry in the prompts and the stick's dead
+ * zone — how far it may lean before the avatar walks, set at once, the next poll reading it
+ * (input/padRuntime.ts): the settings' „Steuerung" (Settings.tsx).
+ */
 export function ControlSettings() {
-  const { keys, pad } = useSettings();
+  const { keys, pad, glyphs, deadzone } = useSettings();
   return (
     <>
       <KeyTable keys={keys} />
-      <PadSettings pad={pad} />
-      <button
-        type="button"
-        className="settings-reset"
-        onClick={() => changeSettings({ keys: DEFAULT_KEYS, pad: DEFAULT_PAD })}
-      >
-        Tasten und Controller zurücksetzen
-      </button>
+      <PadSettings pad={pad} glyphs={glyphs} />
+      <Choice
+        legend="Controller-Symbole"
+        options={GLYPH_CHOICES}
+        value={glyphs}
+        onChange={(next) => changeSettings({ glyphs: next })}
+      />
+      <Slider
+        label="Stick-Totzone"
+        value={deadzone}
+        min={DEADZONE_MIN}
+        max={DEADZONE_MAX}
+        step={5}
+        onChange={(next) => changeSettings({ deadzone: next })}
+      />
     </>
   );
 }

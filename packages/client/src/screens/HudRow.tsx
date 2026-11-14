@@ -4,7 +4,7 @@ import { useNow } from '../hooks.js';
 import { useVoice } from '../voice/useVoice.js';
 import { escaping } from '../world/escape.js';
 import type { KnownPositions } from '../world/movement.js';
-import { CrewTags, type CrewTag } from './Crew.js';
+import { CrewDot, CrewTags, type CrewTag } from './Crew.js';
 import { EdgeworkChip } from './EdgeworkChip.js';
 import { freshTags, type TagMemory } from './hudFold.js';
 import { Icon } from './Icon.js';
@@ -69,7 +69,7 @@ export function RowCrew({
               aria-label={label}
               title={label}
             >
-              <span className="crew-dot" style={{ background: player.color }} aria-hidden="true" />
+              <CrewDot color={player.color} />
               {onHatch && <Icon name="check" />}
               {fresh.shown.has(player.id) &&
                 (tags.length > 0 ? (
@@ -89,16 +89,18 @@ export function RowCrew({
 /**
  * The row's buttons, a fingertip's target each, their words in their labels: the switch
  * between talking by the button and a microphone that stays open — while the microphone is on —,
- * the notepad and the info panel.
+ * the notepad, the info panel and the menu.
  */
 export function RowTools({
   notesOpen,
   onToggleNotes,
   onOpenInfo,
+  onOpenMenu,
 }: {
   notesOpen: boolean;
   onToggleNotes: () => void;
   onOpenInfo: () => void;
+  onOpenMenu: () => void;
 }) {
   const voice = useVoice();
   const talking = voice?.state.mic === 'on' ? voice : null;
@@ -127,6 +129,9 @@ export function RowTools({
       </button>
       <button className="hud-info" aria-label="Info" title="Info" onClick={onOpenInfo}>
         <Icon name="info" />
+      </button>
+      <button className="hud-info hud-menu" aria-label="Menü" title="Menü" onClick={onOpenMenu}>
+        <Icon name="menu" />
       </button>
     </>
   );

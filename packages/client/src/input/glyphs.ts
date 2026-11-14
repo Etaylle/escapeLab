@@ -1,4 +1,4 @@
-import { getSettings, useSettings } from '../settings.js';
+import { getSettings, useSettings, type GlyphChoice } from '../settings.js';
 import {
   keyName,
   type InputAction,
@@ -17,9 +17,10 @@ import { PAD_CHAT, PAD_GLYPHS, type PadButton, type PadFamily } from './pad.js';
 
 /**
  * What a prompt asks for: an action, or one of the steps every screen shares — stepping back
- * (Esc), putting a sheet down, skipping the opening, turning a book's page.
+ * (Esc), putting a sheet down, skipping the opening, turning a book's page, opening the menu
+ * over a room (Esc with nothing open, a controller's Start).
  */
-export type Prompt = InputAction | 'close' | 'putDown' | 'skip' | 'pageBack' | 'pageOn';
+export type Prompt = InputAction | 'close' | 'putDown' | 'skip' | 'pageBack' | 'pageOn' | 'menu';
 
 /** What the glyph depends on: the bindings, and the device used last. */
 export interface GlyphSource {
@@ -40,6 +41,7 @@ const PAD_FIXED: Readonly<Partial<Record<Prompt, PadButton>>> = {
   chat: PAD_CHAT,
   pageBack: 'dleft',
   pageOn: 'dright',
+  menu: 'start',
 };
 
 /** The prompts worked by one of the controller's main actions, on the button bound to it. */
@@ -60,14 +62,16 @@ function padButtonOf(prompt: Prompt, pad: PadBindings): PadButton | null {
 }
 
 /**
- * The key for `prompt` under `keys`: the shared steps' keys whatever is bound — Esc steps back,
- * Space skips, the arrows turn a page — and a sheet is put down with the key that works things.
+ * The key for `prompt` under `keys`: the shared steps' keys whatever is bound — Esc steps back
+ * and opens the menu, Space skips, the arrows turn a page — and a sheet is put down with the key
+ * that works things.
  */
 function keyOf(prompt: Prompt, keys: KeyBindings): string {
   switch (prompt) {
     case 'putDown':
       return keys.interact;
     case 'close':
+    case 'menu':
       return 'escape';
     case 'skip':
       return ' ';
@@ -94,17 +98,36 @@ export function glyphOf(prompt: Prompt, source: GlyphSource): string {
   return keyName(keyOf(prompt, source.keys));
 }
 
+/**
+ * Which buttons the prompts name: the kind the settings choose (Steuerung, „Controller-Symbole"),
+ * or — „Automatisch" — the kind the controller used last reports itself as (`reported`).
+ */
+export function familyOf(choice: GlyphChoice, reported: PadFamily): PadFamily {
+  return choice === 'auto' ? reported : choice;
+}
+
+/** What the glyphs depend on now: the bindings, the device used last, its symbols as chosen. */
+function sourceOf(
+  settings: { keys: KeyBindings; pad: PadBindings; glyphs: GlyphChoice },
+  used: { device: InputDevice; family: PadFamily },
+): GlyphSource {
+  const { keys, pad, glyphs } = settings;
+  return { keys, pad, device: used.device, family: familyOf(glyphs, used.family) };
+}
+
 /** The glyph for `prompt` now, by the settings and the device used last: for drawn text. */
 export function glyph(prompt: Prompt): string {
-  const { keys, pad } = getSettings();
-  return glyphOf(prompt, { keys, pad, ...inputDevice() });
+  return glyphOf(prompt, sourceOf(getSettings(), inputDevice()));
+}
+
+/** What the glyphs depend on, kept up to date with the settings and the device used last. */
+export function useGlyphSource(): GlyphSource {
+  return sourceOf(useSettings(), useInputDevice());
 }
 
 /** The glyph for `prompt`, kept up to date with the settings and the device used last. */
 export function useGlyph(prompt: Prompt): string {
-  const { keys, pad } = useSettings();
-  const { device, family } = useInputDevice();
-  return glyphOf(prompt, { keys, pad, device, family });
+  return glyphOf(prompt, useGlyphSource());
 }
 
 /** Whether a controller was used last: then prompts name its buttons, touch screen or not. */

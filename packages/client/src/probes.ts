@@ -2,6 +2,7 @@ import type { PadProbe } from './input/padRuntime.js';
 import type { DangerProbe } from './world/danger.js';
 import type { Heard } from './world/finds.js';
 import type { FigureProbe } from './screens/CrewFigure.js';
+import type { HeroProbe } from './world/menu/heroStage.js';
 import type { VoiceProbe } from './voice/mesh.js';
 import type { BedProbe } from './world/ambience.js';
 import type { SoundSystem } from './world/audio.js';
@@ -13,6 +14,7 @@ import type { SceneProbe } from './world/menu/stage.js';
 import type { MenuSoundProbe } from './world/menuSound.js';
 import type { MusicProbe } from './world/music.js';
 import type { SoundProbe } from './world/soundProbe.js';
+import type { RadioCheckProbe } from './world/radioCheck.js';
 import type { RadioRender, VoiceProbe as RadioProbe } from './world/radioVoice.js';
 import type { LightWork } from './world/render/census.js';
 import type { MinimapLayout } from './world/render/frame.js';
@@ -159,16 +161,25 @@ export interface Probes {
    * drift and the frames drawn (world/menu/stage.ts)
    */
   readonly scene?: SceneProbe;
+  /** the hero on the menu's stage: where it stands, its pose, its lamp (world/menu/heroStage.ts) */
+  readonly hero?: HeroProbe;
   /** the menu's sound: waiting for a gesture or playing, its theme, its hum, the crew's duck */
   readonly menuSound?: MenuSoundProbe;
   /** the end card's music: the ending its card asked for, the theme playing (world/endTheme.ts) */
   readonly endTheme?: EndThemeProbe;
+  /** the lobby's Funkprobe: the text asked for last, and whether it aired (world/radioCheck.ts) */
+  readonly radioCheck?: RadioCheckProbe;
 }
 
 declare global {
   interface Window {
     /** Probes for the walkthrough harness, only there when the URL asks for them. */
     __escapelab?: Probes;
+    /**
+     * Where the walkthrough holds the menu's hero in its entrance, ms into it, as the pause trick
+     * holds a device's fade (world/menu/heroStage.ts): read under `?trace=1` only, while set.
+     */
+    __heroHold?: number;
   }
 }
 

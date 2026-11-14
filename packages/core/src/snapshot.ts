@@ -5,6 +5,7 @@ import { missionSchema } from './mission.js';
 import type { RelayedPosition } from './protocol.js';
 import type { PuzzleState } from './puzzles/index.js';
 import type { RelayState } from './puzzles/relay.js';
+import { RADIO_MOMENTS } from './radio.js';
 import type { GameState, RunEvent } from './state.js';
 
 /**
@@ -147,6 +148,7 @@ const runEventSchema = z.looseObject({
   kind: z.custom<RunEvent['kind']>((value) => typeof value === 'string'),
   label: z.string(),
   seconds: z.number().nullable(),
+  moment: z.enum(RADIO_MOMENTS).exactOptional(),
 });
 
 const edgeworkSchema = z.looseObject({
@@ -203,6 +205,8 @@ const gameStateSchema = z.looseObject({
     .nullable(),
   paused: z.looseObject({ since: z.number(), kind: z.enum(['away', 'wartung']) }).nullable(),
   away: z.record(z.string(), awaySchema),
+  // A snapshot from before the pause menu holds no menus: nobody has one open.
+  menus: z.record(z.string(), z.enum(['pause', 'main'])).default({}),
   drops: count,
   calledOff: z.string().nullable(),
   items: z.record(z.string(), itemSchema),
@@ -220,6 +224,8 @@ const gameStateSchema = z.looseObject({
   hintReadyAt: moment,
   quietSince: moment,
   nudgesGiven: count,
+  // A snapshot of a build before the clock's calls: a call it passed by is too late, and unsaid.
+  clockCalls: count.default(0),
 }) satisfies z.ZodType<GameState>;
 
 const seatSchema = z.looseObject({

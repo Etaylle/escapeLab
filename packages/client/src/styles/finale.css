@@ -202,6 +202,19 @@
   width: 100%;
 }
 
+/* The report under the card in the menu's panel (menu.css `.menu-panel`), its heads in Michroma. */
+.end-screen > .card.end {
+  border-color: var(--line-2);
+  background: rgba(9, 14, 19, 0.97);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+}
+
+.end-screen > .card.end h2 {
+  font-family: var(--display);
+  font-weight: 400;
+  letter-spacing: 0.16em;
+}
+
 .end-title {
   position: relative;
   width: 100%;

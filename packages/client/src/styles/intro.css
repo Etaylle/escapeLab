@@ -121,7 +121,7 @@
   margin: 0;
   max-width: 44em;
   color: #ece6da;
-  font-size: calc(16px * var(--text-scale));
+  font-size: calc(16px * var(--text-scale) * var(--subtitle-scale));
   line-height: 1.35;
   text-align: center;
   text-shadow: 0 1px 2px #000;

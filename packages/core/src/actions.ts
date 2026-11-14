@@ -6,6 +6,7 @@ import {
   type Credits,
   type GameState,
   type ItemState,
+  type MenuPlace,
   type Player,
   type Presence,
   type RunEvent,
@@ -20,6 +21,15 @@ import { noteKey } from './notes.js';
 import { mulberry32, shuffle } from './rng.js';
 import { moduleFor, type PuzzleDef, type PuzzleState } from './puzzles/index.js';
 import type { ConsoleId, PuzzleContext } from './puzzles/module.js';
+import {
+  CLOCK_CALLS,
+  CLOCK_LATE_MS,
+  pickLine,
+  wonBand,
+  type Line,
+  type LostCause,
+  type RadioMoment,
+} from './radio.js';
 import {
   expireRelay,
   relayDefFor,
@@ -55,9 +65,11 @@ export type Action =
   | { type: 'player-connected'; playerId: string; at: number }
   /**
    * a crew member's line dropped at `at`: in a run they are away (`GameState.away`), and the
-   * run stands still for them — a drop alone ends no run
+   * run stands still for them — a drop alone ends no run. With `menu` it closed on purpose, the
+   * player gone to the main menu: the seat stays theirs as after any drop, and the crew sees
+   * where they went (`GameState.menus`)
    */
-  | { type: 'player-disconnected'; playerId: string; at: number }
+  | { type: 'player-disconnected'; playerId: string; at: number; menu?: true }
   /**
    * `playerId`, on the line, goes on without `absentId`, away since a drop, once its wait is
    * over (FIRST_WAIT_MS, LATER_WAIT_MS) and two of the crew at least are on the line
@@ -75,6 +87,11 @@ export type Action =
   | { type: 'takeover-claimed'; playerId: string; at: number }
   /** the ask for the seat of `playerId` is over: let in, refused, or withdrawn */
   | { type: 'takeover-settled'; playerId: string }
+  /**
+   * `playerId`, on the line in a run, opens the pause menu over it (`open`) or closes it again:
+   * the run goes on, and the crew sees them at the menu (`GameState.menus`)
+   */
+  | { type: 'set-menu'; playerId: string; open: boolean }
   /**
    * the server goes down for maintenance at `at` — a deploy, a restart — or takes the room up
    * again from a snapshot taken then, at `waitFrom`: every seat is off the line, and a run
@@ -109,6 +126,8 @@ export type Action =
   | { type: 'request-hint'; playerId: string; at: number }
   /** once `nudgeDueAt` has come: mission control names the next place for the station up */
   | { type: 'nudge'; at: number }
+  /** once `clockCallDueAt` has come: mission control calls the time left on the clock */
+  | { type: 'clock-call'; at: number }
   | { type: 'set-occupancy'; plates: string[]; panels: string[] }
   /**
    * who stands at which station spot (by `stationKey`), manual object and
@@ -198,6 +217,8 @@ export function applyAction(state: GameState, action: Action): GameState {
       return takeoverClaimed(state, action);
     case 'takeover-settled':
       return takeoverSettled(state, action);
+    case 'set-menu':
+      return setMenu(state, action);
     case 'maintenance':
       return maintenance(state, action);
     case 'select-color':
@@ -222,14 +243,10 @@ export function applyAction(state: GameState, action: Action): GameState {
       return requestHint(state, action);
     case 'nudge':
       return nudge(state, action.at);
+    case 'clock-call':
+      return clockCall(state, action.at);
     case 'set-occupancy':
-      return state.phase === 'playing'
-        ? {
-            ...state,
-            pressedPlates: [...action.plates].sort(),
-            occupiedPanels: [...action.panels].sort(),
-          }
-        : state;
+      return setOccupancy(state, action);
     case 'set-presence':
       return state.phase === 'playing' ? setPresence(state, action) : state;
     case 'open-source':
@@ -265,9 +282,7 @@ export function applyAction(state: GameState, action: Action): GameState {
     case 'escaped':
       return handleEscaped(state, action);
     case 'time-expired':
-      return state.phase === 'playing' && state.paused === null
-        ? lostNow(state, action.at)
-        : state;
+      return timeExpired(state, action.at);
     case 'back-to-lobby':
       return backToLobby(state, action);
     case 'abandon':
@@ -388,14 +403,27 @@ function relayForCrew(state: GameState, at: number): GameState {
   return { ...state, sabotage: { ...sabotage, emergency: rolled } };
 }
 
-/** The room without `playerId`: the host's part passed on where they held it, nobody ready. */
+/**
+ * The room without `playerId`: the host's part passed on where they held it, nobody ready, and
+ * a menu they had open gone with them.
+ */
 function withoutPlayer(state: GameState, playerId: string): GameState {
   const rest = unready(state.players.filter((p) => p.id !== playerId));
-  const hostless = !rest.some((p) => p.isHost);
+  const heir = rest.some((p) => p.isHost) ? null : heirOf(rest);
   return {
     ...state,
-    players: rest.map((p, i) => (hostless && i === 0 ? { ...p, isHost: true } : p)),
+    players: rest.map((p) => (p === heir ? { ...p, isHost: true } : p)),
+    menus: menusWithout(state.menus, playerId),
   };
+}
+
+/**
+ * Who takes the host's part over from a host gone, of `rest` in the order they sat down: the
+ * longest seated of those on the line — whose start is not held back by their own line down —,
+ * else the longest seated; null for a room left empty.
+ */
+export function heirOf<P extends { connected: boolean }>(rest: readonly P[]): P | null {
+  return rest.find((p) => p.connected) ?? rest[0] ?? null;
 }
 
 function switchMission(
@@ -539,11 +567,19 @@ const NOBODY_AWAY = 'Hier fehlt niemand.';
  * A crew member's line dropped at `at`. In a run they are away from then on: the run stands
  * still for them, and the crew may go on without them once the drop's wait is over — the run's
  * first drop waits FIRST_WAIT_MS, every later one LATER_WAIT_MS. A drop alone ends no run, and
- * a line that dropped once is down: said twice, nothing counts twice.
+ * a line that dropped once is down: said twice, nothing counts twice. A menu they had open is
+ * closed with it. A line closed on purpose for the main menu (`menu`) waits as a drop does — the
+ * seat stays theirs, in a lobby too — and the crew sees where they went.
  */
-function lineDropped(state: GameState, action: { playerId: string; at: number }): GameState {
+function lineDropped(
+  state: GameState,
+  action: { playerId: string; at: number; menu?: true },
+): GameState {
   const player = findPlayer(state, action.playerId);
-  const dropped = setConnected(state, player.id, false);
+  const off = setConnected(state, player.id, false);
+  const menus = menusWithout(state.menus, player.id);
+  const gone: Record<string, MenuPlace> = action.menu === true ? { [player.id]: 'main' } : {};
+  const dropped = { ...off, menus: { ...menus, ...gone } };
   if (state.phase !== 'playing' || !player.connected) {
     return dropped;
   }
@@ -562,7 +598,8 @@ function lineDropped(state: GameState, action: { playerId: string; at: number })
  * console (`relayForCrew`).
  */
 function lineBack(state: GameState, action: { playerId: string; at: number }): GameState {
-  const back = setConnected(state, findPlayer(state, action.playerId).id, true);
+  const id = findPlayer(state, action.playerId).id;
+  const back = { ...setConnected(state, id, true), menus: menusWithout(state.menus, id) };
   if (state.phase !== 'playing') {
     return back;
   }
@@ -669,26 +706,70 @@ function takeoverSettled(state: GameState, action: { playerId: string }): GameSt
   return { ...state, away: { ...state.away, [action.playerId]: settled } };
 }
 
+/** The plates and the emergency's panels manned now, as the room reports them: only in a run. */
+function setOccupancy(
+  state: GameState,
+  action: { plates: string[]; panels: string[] },
+): GameState {
+  if (state.phase !== 'playing') {
+    return state;
+  }
+  const pressedPlates = [...action.plates].sort();
+  return { ...state, pressedPlates, occupiedPanels: [...action.panels].sort() };
+}
+
+/**
+ * A crew member opens the pause menu over the run, or closes it (`open`): the run goes on — the
+ * clock, the patrols, the emergencies — and the crew sees them at the menu (`GameState.menus`).
+ * Only a member on the line, and only in a run: anywhere else it changes nothing — nor does a
+ * menu said open that stands open, or closed that is — and a line that drops closes it
+ * (`lineDropped`).
+ */
+function setMenu(state: GameState, action: { playerId: string; open: boolean }): GameState {
+  const player = findPlayer(state, action.playerId);
+  const open = state.menus[player.id] === 'pause';
+  if (state.phase !== 'playing' || !player.connected || open === action.open) {
+    return state;
+  }
+  const menus = menusWithout(state.menus, player.id);
+  return { ...state, menus: action.open ? { ...menus, [player.id]: 'pause' } : menus };
+}
+
+/** `menus` with only the main menus kept: whoever went there, their seat kept; no pause menus. */
+function mainMenusOf(menus: Record<string, MenuPlace>): Record<string, MenuPlace> {
+  return Object.fromEntries(Object.entries(menus).filter(([, place]) => place === 'main'));
+}
+
+/** `menus` without `playerId`'s: whatever menu they had open, closed. */
+function menusWithout(
+  menus: Record<string, MenuPlace>,
+  playerId: string,
+): Record<string, MenuPlace> {
+  return Object.fromEntries(Object.entries(menus).filter(([id]) => id !== playerId));
+}
+
 /**
  * The server down for maintenance at `at`, or taking the room up again at `waitFrom`: every
  * seat is off the line. In a run each is away from `at` — whoever was away already keeps their
  * drop, and whom the run went on without stays counted out — and the run stands still for the
  * whole crew (`wartung`), its clock stopped from `at`, or from the pause it stood in already.
  * Nobody may be left behind before FIRST_WAIT_MS after `waitFrom`, however long their own drop
- * has lasted, and an ask for a seat lapses: its device went with the server. Said twice,
- * nothing more changes.
+ * has lasted, an ask for a seat lapses — its device went with the server — and every menu
+ * open over the run closes with its line; whoever went to the main menu stays gone there. Said
+ * twice, nothing more changes.
  */
 function maintenance(state: GameState, action: { at: number; waitFrom: number }): GameState {
   const players = state.players.map((p) => (p.connected ? { ...p, connected: false } : p));
   if (state.phase !== 'playing') {
-    return { ...state, players };
+    return { ...state, players, menus: mainMenusOf(state.menus) };
   }
   const waivableAt = action.waitFrom + FIRST_WAIT_MS;
   const away = Object.fromEntries(
     players.map((p) => [p.id, awayThroughMaintenance(state.away[p.id], action.at, waivableAt)]),
   );
   const since = state.paused?.since ?? action.at;
-  return { ...state, players, away, paused: { since, kind: 'wartung' } };
+  const menus = mainMenusOf(state.menus);
+  return { ...state, players, away, menus, paused: { since, kind: 'wartung' } };
 }
 
 /**
@@ -912,9 +993,11 @@ function placeSources(manuals: readonly ManualDef[], seed: number): GameState['p
  * back (`linesDown`) until it is back, or the room frees it.
  */
 function crewToStart(state: GameState): Player[] {
-  const down = state.players.filter((p) => !p.connected).map((p) => p.name);
-  if (down.length > 0) {
-    fail(`${linesDown(down)}.`);
+  const off = state.players.filter((p) => !p.connected);
+  if (off.length > 0) {
+    const inMenu = (p: Player): boolean => state.menus[p.id] === 'main';
+    const names = (ps: Player[]): string[] => ps.map((p) => p.name);
+    fail(`${seatsOff(names(off.filter((p) => !inMenu(p))), names(off.filter(inMenu)))}.`);
   }
   const crew = state.players;
   const { min, max } = state.mission.players;
@@ -945,6 +1028,29 @@ export function linesDown(names: readonly string[]): string {
     return `${whose} Leitung ist unterbrochen`;
   }
   return `Leitungen unterbrochen: ${names.join(', ')}`;
+}
+
+/**
+ * Who went to the main menu, their seat kept: „Cem ist im Hauptmenü", „Cem und Dora sind im
+ * Hauptmenü".
+ */
+export function inMainMenu(names: readonly string[]): string {
+  if (names.length < 2) {
+    return `${names.join('')} ist im Hauptmenü`;
+  }
+  return `${names.slice(0, -1).join(', ')} und ${names.at(-1) ?? ''} sind im Hauptmenü`;
+}
+
+/**
+ * What holds a start back while seats of the room are off the line: whose line is down
+ * (`linesDown`) and who went to the main menu (`inMainMenu`), the two apart by a dot.
+ */
+export function seatsOff(down: readonly string[], inMenu: readonly string[]): string {
+  const said = [
+    ...(down.length > 0 ? [linesDown(down)] : []),
+    ...(inMenu.length > 0 ? [inMainMenu(inMenu)] : []),
+  ];
+  return said.join(' · ');
 }
 
 /**
@@ -1010,6 +1116,7 @@ function startMission(
     sabotage: null,
     paused: null,
     away: {},
+    menus: {},
     drops: 0,
     calledOff: null,
     items: Object.fromEntries(
@@ -1032,6 +1139,7 @@ function startMission(
     hintReadyAt: null,
     quietSince: null,
     nudgesGiven: 0,
+    clockCalls: 0,
   };
   // Without an intro the lights are out from the start, and nobody sees them fail.
   return intro === undefined ? clockStarts(started, action.at) : started;
@@ -1081,18 +1189,21 @@ function introDone(state: GameState, action: { playerId: string; at: number }): 
 
 /**
  * From `at` on the lights are out and the clock runs; mission control opens the run, and the
- * first station, up from now, is quiet from now.
+ * first station, up from now, is quiet from now. A call of the clock at or above the whole time
+ * the run has — five minutes left, in a run of five — is behind it from the start.
  */
 function clockStarts(state: GameState, at: number): GameState {
+  const limitSec = state.mission.timeLimitSec;
   const running: GameState = {
     ...state,
     lightsOutAt: at,
     lightsDueAt: null,
-    deadlineAt: at + state.mission.timeLimitSec * 1000,
+    deadlineAt: at + limitSec * 1000,
     quietSince: at,
     nudgesGiven: 0,
+    clockCalls: CLOCK_CALLS.filter((call) => call.sec >= limitSec).length,
   };
-  return logRadio(running, state.mission.radio.start, at);
+  return logRadio(running, 'start', state.mission.radio.start, at);
 }
 
 /** Common guards for in-game actions; returns the acting player's current puzzle. */
@@ -1141,7 +1252,7 @@ function advance(state: GameState, at: number): GameState {
     `${solved?.title ?? 'Station'} gelöst`,
     at,
   );
-  const logged = logRadio(reported, solved?.onSolved, at);
+  const logged = logRadio(reported, 'solved', solved?.onSolved, at, solved?.id);
   const nextIndex = state.currentPuzzleIndex + 1;
   if (nextIndex >= state.mission.puzzles.length) {
     if (state.mission.map.exit !== undefined) {
@@ -1152,14 +1263,9 @@ function advance(state: GameState, at: number): GameState {
         'Notausgang entriegelt',
         at,
       );
-      return logRadio(unlocked, state.mission.radio.escape, at);
+      return logRadio(unlocked, 'escape', state.mission.radio.escape, at);
     }
-    return logEvent(
-      overNow(logged, 'won', at),
-      'finish',
-      'Alle Systeme online',
-      at,
-    );
+    return wonNow(logged, at, 'Alle Systeme online');
   }
   // The next puzzle waits at its station, quiet from now.
   return { ...logged, currentPuzzleIndex: nextIndex, puzzleState: null, quietSince: at };
@@ -1179,28 +1285,51 @@ function handleEscaped(state: GameState, action: { at: number }): GameState {
   if (state.deadlineAt !== null && action.at >= state.deadlineAt) {
     return lostNow(state, action.at);
   }
-  return logEvent(
-    overNow(state, 'won', action.at),
-    'finish',
-    'Alle draußen',
-    action.at,
-  );
+  return wonNow(state, action.at, 'Alle draußen');
 }
 
-/** Append a line to the run report. */
+/** Append a line to the run report; a line heard in the run names the `moment` that brought it. */
 function logEvent(
   state: GameState,
   kind: RunEvent['kind'],
   label: string,
   at: number,
   seconds: number | null = null,
+  moment?: RadioMoment,
 ): GameState {
-  return { ...state, events: [...state.events, { at, kind, label, seconds }] };
+  const event: RunEvent =
+    moment === undefined ? { at, kind, label, seconds } : { at, kind, label, seconds, moment };
+  return { ...state, events: [...state.events, event] };
 }
 
-/** Mission control speaks up, if the mission scripted a line for this moment. */
-function logRadio(state: GameState, text: string | undefined, at: number): GameState {
-  return text === undefined ? state : logEvent(state, 'radio', text, at);
+/**
+ * A line is heard at `moment` — mission control's on the radio, or the plant's over its
+ * loudspeakers (radio.ts `speakerOf`) — if the mission scripted one for it: of its texts, the
+ * one the run picks for it (radio.ts `pickLine`) at its `place` — the station, the clock's
+ * call, the band of the time left, the cause — the `occurrence`-th time it comes in the run.
+ */
+function logRadio(
+  state: GameState,
+  moment: RadioMoment,
+  line: Line | undefined,
+  at: number,
+  place = '',
+  occurrence = 0,
+): GameState {
+  if (line === undefined) {
+    return state;
+  }
+  const key = place === '' ? moment : `${moment}:${place}`;
+  const text = pickLine(line, state.seed ?? 0, key, occurrence);
+  return logEvent(state, 'radio', text, at, null, moment);
+}
+
+/**
+ * How many emergencies the run has had so far, the one under way among them: its lines take
+ * their turn by it (radio.ts `pickLine`), so that the next emergency hears the next take.
+ */
+function emergenciesSoFar(state: GameState): number {
+  return state.events.filter((e) => e.kind === 'sabotage' && e.label !== EMERGENCY_CLEARED).length;
 }
 
 /** Why a run was lost: the last line of its report. */
@@ -1235,12 +1364,50 @@ function applyPenalty(state: GameState, sec: number, at: number, reason: string)
   if (typeof limit === 'number' && penaltySeq >= limit) {
     return lostNow(punished, at, TOO_MANY_ALARMS);
   }
-  return at >= deadlineAt ? lostNow(punished, at) : punished;
+  return at >= deadlineAt ? lostNow(punished, at) : firstAlarm(punished, reason, at);
 }
 
-/** The run is lost at `at`, `why`: whatever emergency ran ends with it (`overNow`). */
+/**
+ * The operator's word on the run's first alarm, whatever set it off — a wrong move, a drone, a
+ * slip at an emergency's console: nothing on any alarm after it, so that nobody is nagged, and
+ * nothing on an emergency missed, which has a line of its own.
+ */
+function firstAlarm(state: GameState, reason: string, at: number): GameState {
+  const first = state.penaltySeq === 1 && reason !== EMERGENCY_MISSED;
+  return first ? logRadio(state, 'alarm', state.mission.radio.alarm, at) : state;
+}
+
+/**
+ * The run is won at `at`, its report's last line `how`; the operator's last word on it follows,
+ * by the time it left (radio.ts `wonBand`), for the end card to play.
+ */
+function wonNow(state: GameState, at: number, how: string): GameState {
+  const finished = logEvent(overNow(state, 'won', at), 'finish', how, at);
+  const band = wonBand((state.deadlineAt ?? at) - at);
+  return logRadio(finished, 'won', state.mission.radio.won?.[band], at, band);
+}
+
+/** The clock has run out at `at`: a run that plays, and does not stand still, is lost. */
+function timeExpired(state: GameState, at: number): GameState {
+  return state.phase === 'playing' && state.paused === null ? lostNow(state, at) : state;
+}
+
+/**
+ * The run is lost at `at`, `why`: whatever emergency ran ends with it (`overNow`), and the
+ * operator's last word on it follows, by what lost it, for the end card to play.
+ */
 function lostNow(state: GameState, at: number, why = OUT_OF_TIME): GameState {
-  return logEvent(overNow(state, 'lost', at), 'finish', why, at);
+  const finished = logEvent(overNow(state, 'lost', at), 'finish', why, at);
+  const cause = lostCause(state, why);
+  return logRadio(finished, 'lost', state.mission.radio.lost?.[cause], at, cause);
+}
+
+/** What lost a run that ends `why`: called off, its alarms at the limit, or its time. */
+function lostCause(state: GameState, why: string): LostCause {
+  if (state.calledOff !== null) {
+    return 'abandoned';
+  }
+  return why === TOO_MANY_ALARMS ? 'alarms' : 'time';
 }
 
 /**
@@ -1261,7 +1428,9 @@ function overNow(state: GameState, phase: 'won' | 'lost', at: number): GameState
 
 /**
  * An emergency interrupts whatever the crew was doing: the open puzzle is
- * dropped (its station stays armed and can be restarted afterwards).
+ * dropped (its station stays armed and can be restarted afterwards), the
+ * plant's loudspeakers say so, where the mission gives them a message, and the
+ * operator after them.
  */
 function startSabotage(state: GameState, action: { at: number }): GameState {
   const sabotage = state.mission.map.sabotage;
@@ -1269,7 +1438,7 @@ function startSabotage(state: GameState, action: { at: number }): GameState {
     return state;
   }
   const endsAt = action.at + sabotage.durationSec * 1000;
-  return logEvent(
+  const started = logEvent(
     {
       ...state,
       puzzleState: null,
@@ -1282,6 +1451,10 @@ function startSabotage(state: GameState, action: { at: number }): GameState {
     `Notfall: ${sabotage.label}`,
     action.at,
   );
+  const seen = emergenciesSoFar(state);
+  const announced = logRadio(started, 'announce', sabotage.announce, action.at, '', seen);
+  const line = state.mission.radio.emergency?.start;
+  return logRadio(announced, 'emergency', line, action.at, '', seen);
 }
 
 /**
@@ -1292,16 +1465,19 @@ function quietAfterEmergency(state: GameState, at: number): number | null {
   return state.quietSince === null ? null : at;
 }
 
-/** The emergency is over in time: the crew can get back to the stations. */
+/** The emergency is over in time: the crew can get back to the stations, the operator says so. */
 function clearSabotage(state: GameState, at: number): GameState {
-  return state.sabotage === null
-    ? state
-    : logEvent(
-        { ...state, sabotage: null, quietSince: quietAfterEmergency(state, at) },
-        'sabotage',
-        EMERGENCY_CLEARED,
-        at,
-      );
+  if (state.sabotage === null) {
+    return state;
+  }
+  const cleared = logEvent(
+    { ...state, sabotage: null, quietSince: quietAfterEmergency(state, at) },
+    'sabotage',
+    EMERGENCY_CLEARED,
+    at,
+  );
+  const line = state.mission.radio.emergency?.cleared;
+  return logRadio(cleared, 'cleared', line, at, '', emergenciesSoFar(state) - 1);
 }
 
 /**
@@ -1420,17 +1596,23 @@ function later(at: number | null, ms: number): number | null {
   return at === null ? null : at + ms;
 }
 
+/**
+ * The emergency ran out: an alarm with its penalty, and the operator's word on it — unless the
+ * alarm lost the run, which has the last word of its own.
+ */
 function expireSabotage(state: GameState, action: { at: number }): GameState {
   const sabotage = state.mission.map.sabotage;
   if (state.sabotage === null || sabotage === undefined) {
     return state;
   }
-  return applyPenalty(
+  const missed = applyPenalty(
     { ...state, sabotage: null, quietSince: quietAfterEmergency(state, action.at) },
     sabotage.penaltySec,
     action.at,
     EMERGENCY_MISSED,
   );
+  const line = missed.phase === 'playing' ? state.mission.radio.emergency?.missed : undefined;
+  return logRadio(missed, 'missed', line, action.at, '', emergenciesSoFar(state) - 1);
 }
 
 /**
@@ -1616,12 +1798,55 @@ export function nudgeDueAt(state: GameState): number | null {
  */
 function nudge(state: GameState, at: number): GameState {
   const due = nudgeDueAt(state);
-  const line = state.mission.puzzles[state.currentPuzzleIndex]?.nudges[state.nudgesGiven];
-  if (due === null || at < due || line === undefined) {
+  const def = state.mission.puzzles[state.currentPuzzleIndex];
+  const line = def?.nudges[state.nudgesGiven];
+  if (due === null || at < due || def === undefined || line === undefined) {
     return state;
   }
   const spoken = { ...state, nudgesGiven: state.nudgesGiven + 1, quietSince: at };
-  return logEvent(spoken, 'nudge', line, at);
+  const text = pickLine(line, state.seed ?? 0, `nudge:${def.id}:${state.nudgesGiven}`);
+  return logEvent(spoken, 'nudge', text, at, null, 'nudge');
+}
+
+/**
+ * When mission control next calls the time left, epoch ms: as the clock comes down to the next
+ * of its calls the run has not left behind (radio.ts `CLOCK_CALLS`). Null outside a run, before
+ * the lights are out, while paused, once every call is behind the run, and where the mission
+ * has no calls at all.
+ */
+export function clockCallDueAt(state: GameState): number | null {
+  const next = CLOCK_CALLS[state.clockCalls];
+  if (
+    state.phase !== 'playing' ||
+    state.paused !== null ||
+    state.deadlineAt === null ||
+    next === undefined ||
+    state.mission.radio.clock === undefined
+  ) {
+    return null;
+  }
+  return state.deadlineAt - next.sec * 1000;
+}
+
+/**
+ * Mission control calls the time left once `clockCallDueAt` has come: the latest call the clock
+ * has come down to — any before it pass unsaid, so that two never come at once — where the
+ * mission has a line for it and the clock passed it CLOCK_LATE_MS ago at most. Every call up to
+ * it is behind the run from then, said or not: none is ever said twice.
+ */
+function clockCall(state: GameState, at: number): GameState {
+  const due = clockCallDueAt(state);
+  if (due === null || at < due) {
+    return state;
+  }
+  const left = (state.deadlineAt ?? at) - at;
+  const reached = CLOCK_CALLS.filter((call) => call.sec * 1000 >= left).length;
+  const call = CLOCK_CALLS[reached - 1];
+  const passed = { ...state, clockCalls: reached };
+  if (call === undefined || call.sec * 1000 - left > CLOCK_LATE_MS) {
+    return passed;
+  }
+  return logRadio(passed, 'clock', state.mission.radio.clock?.[call.key], at, call.key);
 }
 
 /** Guards shared by all three item actions; proximity is the server's job. */
@@ -1906,6 +2131,7 @@ function backToLobby(state: GameState, action: { playerId: string }): GameState 
     sabotage: null,
     paused: null,
     away: {},
+    menus: mainMenusOf(state.menus),
     drops: 0,
     calledOff: null,
     items: {},
@@ -1923,5 +2149,6 @@ function backToLobby(state: GameState, action: { playerId: string }): GameState 
     hintReadyAt: null,
     quietSince: null,
     nudgesGiven: 0,
+    clockCalls: 0,
   };
 }

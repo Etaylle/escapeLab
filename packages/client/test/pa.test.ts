@@ -1,11 +1,23 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { PA_FROM_MS, PA_GAP_MS } from '../src/world/intro/sequence.js';
-import { PA_HIGH, PA_LOW, paChain } from '../src/world/pa.js';
+import {
+  DROPOUT_LEVEL,
+  DROPOUTS,
+  dropOut,
+  PA_HIGH,
+  PA_LOW,
+  paChain,
+  WEAK_HIGH,
+  WEAK_LOW,
+  weakChain,
+} from '../src/world/pa.js';
 import type { VoiceManifest } from '../src/world/radioVoice.js';
 import {
+  chainFrom,
   downstream,
   fakeGraph,
   FakeContext,
+  FakeParam,
   lastContext,
   type FakeBufferSource,
   type FakeFilter,
@@ -15,9 +27,14 @@ import {
 
 const FIRST = 'Durchsage der Leitstelle für Trakt C. Es ist 23 Uhr 47.';
 const SECOND = 'Reaktor in Teillast, 60 Prozent.';
+const ALERT = 'Störung im Kühlkreislauf. Relaissteuerung auf Handbetrieb.';
+const pa = { missions: ['blackout'], speaker: 'pa' } as const;
 const MANIFEST: VoiceManifest = {
-  aaaaaaaaaaaa: { text: FIRST, ms: 2000, missions: ['blackout'], file: 'aaaaaaaaaaaa.mp3' },
-  bbbbbbbbbbbb: { text: SECOND, ms: 1500, missions: ['blackout'], file: 'bbbbbbbbbbbb.mp3' },
+  lines: {
+    aaaaaaaaaaaa: { ...pa, text: FIRST, ms: 2000, file: 'aaaaaaaaaaaa.mp3' },
+    bbbbbbbbbbbb: { ...pa, text: SECOND, ms: 1500, file: 'bbbbbbbbbbbb.mp3' },
+    cccccccccccc: { ...pa, text: ALERT, ms: 3100, file: 'cccccccccccc.mp3' },
+  },
 };
 
 /** The loudspeakers' chain built on a context of its own, into its output at 0.1. */
@@ -57,6 +74,55 @@ describe('the loudspeakers’ chain', () => {
   });
 });
 
+describe('the loudspeakers on the emergency power', () => {
+  it('pass a narrower band, 450 Hz to 3.2 kHz, behind a gate the dropouts are laid on', () => {
+    const ctx = new FakeContext();
+    const into = ctx.destination as unknown as AudioNode;
+    const weak = weakChain(ctx as unknown as BaseAudioContext, into, 0.1);
+    const nodes = chainFrom(weak.input as unknown as FakeNode);
+    expect(nodes.map((node) => node.kind)).toEqual([
+      'gain',
+      'gain',
+      'biquad',
+      'biquad',
+      'gain',
+      'destination',
+    ]);
+    expect(nodes[1]).toBe(weak.gate);
+    const [low, high] = nodes.slice(2, 4) as FakeFilter[];
+    expect([WEAK_LOW, WEAK_HIGH]).toEqual([450, 3200]);
+    expect([low?.type, low?.frequency.value]).toEqual(['highpass', WEAK_LOW]);
+    expect([high?.type, high?.frequency.value]).toEqual(['lowpass', WEAK_HIGH]);
+    for (const filter of [low, high]) {
+      expect(filter && linearQ(filter)).toBeCloseTo(Math.SQRT1_2, 9);
+    }
+    expect((nodes[4] as FakeGain).gain.value).toBe(0.1);
+    expect(ctx.all('shaper')).toEqual([]);
+  });
+
+  it('drop out where a loose contact would, never into a line’s last quarter second', () => {
+    const gate = new FakeParam(1);
+    dropOut(gate as unknown as AudioParam, 10, 3.1);
+    // A line of 3.1 s takes the three dropouts that end before 2.85 s: 0.7, 1.6 and 2.2.
+    const falls = gate.ramps().filter(([level]) => level === DROPOUT_LEVEL);
+    expect(falls.map(([, at]) => at)).toEqual(
+      [10.7, 11.6, 12.2].map((at) => expect.closeTo(at + 0.008, 9)),
+    );
+    const backs = gate.ramps().filter(([level]) => level === 1);
+    expect(backs.map(([, at]) => at)).toEqual(
+      [10.79, 11.73, 12.26].map((at) => expect.closeTo(at + 0.008, 9)),
+    );
+    expect(DROPOUTS.every(([at, length]) => at > 0 && length >= 0.06 && length <= 0.13)).toBe(
+      true,
+    );
+    expect(20 * Math.log10(DROPOUT_LEVEL)).toBeLessThan(-20);
+    // A short line keeps its words whole.
+    const short = new FakeParam(1);
+    dropOut(short as unknown as AudioParam, 0, 0.9);
+    expect(short.ramps()).toEqual([]);
+  });
+});
+
 describe('the announcement over the loudspeakers', () => {
   beforeEach(() => {
     fakeGraph();
@@ -83,7 +149,7 @@ describe('the announcement over the loudspeakers', () => {
     const audio = await import('../src/world/audio.js');
     const memory = await import('../src/world/audioMemory.js');
     audio.sharedAudio(); // the lab's context, made as a world makes it
-    radio.preloadVoice('blackout');
+    radio.voiceForRun();
     await vi.advanceTimersByTimeAsync(0);
     return { radio, pa, memory };
   }
@@ -115,7 +181,13 @@ describe('the announcement over the loudspeakers', () => {
     expect(after.includes(announce) && after.includes(sends)).toBe(true);
     // Nothing else plays with it: no static bed, no squelch, no Leitstelle opening.
     expect(spoken()).toHaveLength(1);
-    expect(pa.paProbe()).toEqual({ playing: true, lastLine: FIRST, played: 1, cut: false });
+    expect(pa.paProbe()).toEqual({
+      playing: true,
+      lastLine: FIRST,
+      played: 1,
+      cut: false,
+      announced: 0,
+    });
     // The second line 0.8 s after the first has ended, by the manifest's 2 s.
     await vi.advanceTimersByTimeAsync(2000 + PA_GAP_MS - 1);
     expect(spoken()).toHaveLength(1);
@@ -126,7 +198,7 @@ describe('the announcement over the loudspeakers', () => {
 
   it('decodes its lines as it starts, and lets each go once it has been said', async () => {
     const { pa, radio, memory } = await loudspeakers();
-    expect(radio.clipOf(FIRST)).toBeNull(); // fetched at the run's start, not decoded
+    expect(radio.clipOf(FIRST)).toBeNull(); // nothing decoded before the announcement starts
     pa.startAnnouncement([FIRST, SECOND], Date.now());
     await vi.advanceTimersByTimeAsync(0);
     expect(radio.clipOf(FIRST)).not.toBeNull();
@@ -177,6 +249,74 @@ describe('the announcement over the loudspeakers', () => {
     pa.stopAnnouncement();
     await vi.advanceTimersByTimeAsync(10_000);
     expect(spoken()).toEqual([]);
-    expect(pa.paProbe()).toEqual({ playing: false, lastLine: null, played: 0, cut: false });
+    expect(pa.paProbe()).toEqual({
+      playing: false,
+      lastLine: null,
+      played: 0,
+      cut: false,
+      announced: 0,
+    });
+  });
+
+  it('says the plant’s message on the emergency power: the weak band, into the loudspeakers', async () => {
+    const { pa, radio } = await loudspeakers();
+    expect(radio.clipOf(ALERT)).toBeNull(); // not fetched before it is asked for
+    // As it sounds it tells how long it speaks: by its recording, which the fake decodes to 1.5 s.
+    const saying = pa.announce(ALERT);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(await saying).toBe(1500);
+    const [said] = spoken();
+    expect(said?.startedAt).toBeCloseTo(10.01, 9);
+    const after = [...downstream(said as unknown as FakeNode)];
+    const filters = after.filter((node) => node.kind === 'biquad') as FakeFilter[];
+    expect(filters.map((filter) => filter.frequency.value)).toEqual([WEAK_LOW, WEAK_HIGH]);
+    const engine = (await import('../src/world/audio.js')).audioEngine();
+    const { announce, sends } = engine as unknown as { announce: FakeNode; sends: FakeNode };
+    expect(after.includes(announce) && after.includes(sends)).toBe(true);
+    // The gate drops the decoded 1.5 s out once, at 0.7 s.
+    const gains = after.filter((node) => node.kind === 'gain') as FakeGain[];
+    const gate = gains.find((node) => node.gain.ramps().length > 0);
+    expect(gate?.gain.ramps()).toEqual([
+      [DROPOUT_LEVEL, expect.closeTo(10.718, 9)],
+      [1, expect.closeTo(10.808, 9)],
+    ]);
+    expect(pa.paProbe().announced).toBe(1);
+    // Asked again, decoded now: it sounds at once and cuts the one still speaking short.
+    lastContext().currentTime = 11;
+    expect(await pa.announce(ALERT)).toBe(1500);
+    expect(said?.stoppedAt).toBeCloseTo(11.06, 9);
+    expect(spoken()).toHaveLength(2);
+  });
+
+  it('stays silent without a recording, and stops with the screen, its line let go', async () => {
+    const { pa, radio } = await loudspeakers();
+    expect(await pa.announce('Eine Durchsage ohne Aufnahme.')).toBeNull();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(spoken()).toEqual([]);
+    void pa.announce(ALERT);
+    await vi.advanceTimersByTimeAsync(0);
+    lastContext().currentTime = 10.5;
+    pa.stopAnnounce();
+    const [said] = spoken();
+    expect(said?.stoppedAt).toBeGreaterThan(10.5);
+    expect(said?.stoppedAt).toBeLessThan(10.6);
+    said?.end();
+    expect(radio.clipOf(ALERT)).toBeNull();
+    // Stopped before its decoding came in, a message never sounds, and keeps nothing decoded.
+    const stopped = pa.announce(ALERT);
+    pa.stopAnnounce();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(await stopped).toBeNull();
+    expect(spoken()).toHaveLength(1);
+    expect(radio.clipOf(ALERT)).toBeNull();
+  });
+
+  it('says a message asked for twice while it decodes once, for the newer ask', async () => {
+    const { pa, radio } = await loudspeakers();
+    const asks = [pa.announce(ALERT), pa.announce(ALERT)];
+    await vi.advanceTimersByTimeAsync(0);
+    expect(await Promise.all(asks)).toEqual([null, 1500]);
+    expect(spoken()).toHaveLength(1);
+    expect(radio.clipOf(ALERT)).not.toBeNull(); // kept for the one that speaks
   });
 });

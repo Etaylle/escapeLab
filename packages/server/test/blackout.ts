@@ -11,7 +11,7 @@ import {
   type PuzzleView,
   type ServerMessage,
 } from '@escapelab/core';
-import { Room, type RunListener } from '../src/room.js';
+import { Room, type LineEnd, type RunListener } from '../src/room.js';
 import { passFor } from './passes.js';
 import { pressE, walkTo, type Walker } from './walk.js';
 
@@ -34,7 +34,7 @@ export function blackoutMission(): Mission {
 export interface Member extends Walker {
   name: string;
   pass: CrewPass;
-  detach: (clean?: boolean) => void;
+  detach: (end?: LineEnd) => void;
 }
 
 /** The latest view `member` was sent. */

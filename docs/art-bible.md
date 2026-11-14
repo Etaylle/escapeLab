@@ -519,7 +519,9 @@ Under the items one quiet line says how the game is played: „Am Pult die Masch
 Regeln — gelöst wird nur gemeinsam, per Stimme, ein Gerät je Kopf, Rücken an Rücken." A run that
 binds the pass stands first and lit, the items under it dimmed. The profile stands at the top right:
 the player's own figure idling in their colour, waving once a new name has settled, the name to
-type, the colour's name, and a slot where a sign-in will sit.
+type, the colour's name, and what the account holds (ProfileChip.tsx `accountLine`). Where the
+stage leaves it room for three and a half tiles — from about 1100 px across — the same figure stands
+large at the stage's right, the hero (The hero).
 
 A panel slides in over the menu from its side in 200 ms, fading up, the menu dimmed under it; under
 reduced motion it only fades. Into the lobby and back out, the lab's sliding doors close over the
@@ -561,6 +563,204 @@ rounds of six and fell to 33.3 ms p95 in the other two. The walkthrough's quiet 
 the scene drifting, held the screen's pace in Blackout and Systemcheck, with `SHOTS_SOFTWARE_GL` and
 without: 16.7 ms p50 and 16.7 to 16.8 p95, the light working out no sight a frame there
 (`lightWork`).
+
+## The hero (world/menu/hero.ts, heroArt.ts, heroStage.ts, lamp.ts, lampArt.ts, MenuHero.tsx)
+
+The menu's foreground belongs to the player's own crew figure. It stands large at the stage's
+right in front of the drifting lab, as the hero of God of War III's title screen stands before its
+world, the menu at the left — not a copy of anything: the lab's night-shift worker in the colour
+the profile shows, with the hand lamp. It is drawn with the world's own vector drawing and poses
+(art.ts `drawScientist`, figure.ts `figurePose`), facing the menu at three quarters, on a canvas of
+its own at the stage's density. It stands on the scene's floor: under its boots a figure's shadow
+as a lit room throws it, and round them a soft drop shadow thrown a little to the bottom right,
+away from the key light, which a figure's own blob is too small to give at this size. The profile
+keeps its small figure: it is the player's badge — the name, the colour, the account — and
+stands for the hero where the hero is left out; the hero is the player in the scene. Both wave at
+a new name.
+
+**Size.** The hero stands 42 % of the stage's height tall, held to 4 to 6 scene tiles — 0.9 of a
+run's tile in a window as tall (viewport.ts `tileCss`), as the drift frames a lab that fills the
+window; a lab too small to fill it the drift zooms in on until it covers the window (drift.ts
+`sceneShot`), and the hero does not grow with that zoom — and to the room the stage leaves
+it — across, from the menu's column (its items, the run's card, the lead line) and from the widest
+panel once the hero has stepped half a tile aside for it, to the stage's right edge or the window's
+safe area, 12 px clear of each; down, from under the profile to the floor that the stage's padding
+or a home bar leaves. Its feet stand five sixths across the stage, in the right third's middle,
+moved only as far as that room asks. It stands only where it can stand three and a half tiles tall
+at least (hero.ts `FEWEST_TILES`); on a phone held sideways or upright, and wherever the room holds
+fewer tiles of it, it is left out and the profile's figure stands for it. Below about 1200 px across
+the room beside the widest panel — 760 px from the stage's padding — sets its size, whatever the
+window's height, while a tile grows with that height: the taller the window, the wider it has to be
+for the hero. It stands from these widths on, from about 1100 px across on a laptop:
+
+| Window's height | Narrowest window it stands in |
+| --- | --- |
+| 600 | 1038 |
+| 720 | 1080 |
+| 768 | 1097 |
+| 820 | 1115 |
+| 900 | 1144 |
+| 1080 | 1207 |
+
+How tall it stands, the menu laid out as menu.css lays it out:
+
+| Window | Tiles | CSS px |
+| --- | --- | --- |
+| 1920 × 1080 | 5.1 | 428 |
+| 1440 × 900 | 5.0 | 352 |
+| 1440 × 820 | 5.0 | 319 |
+| 1366 × 768 | 4.9 | 297 |
+| 1280 × 720 | 4.9 | 277 |
+| 1180 × 820 | 4.3 | 275 |
+| 1100 × 700 | 3.9 | 213 |
+| 1080 × 720 | 3.5 | 197 |
+| 1024 × 768, 1024 × 640 | left out | |
+| Narrower, a phone | left out | |
+
+At 1024 px across the room beside the panel would hold a hero 154 px tall at any height, 2.6 tiles
+at 768 px of height and 3.1 at 640: too small to stand for the player beside the profile's figure.
+The sizes test measures five windows off the stylesheets, the hero resting and stepped aside,
+against the menu's column, the profile, the widest panel and the safe areas, and the widths above
+(test/menuHeroSizes.test.ts); the walkthrough measures it in the browser at 1440 × 820, 1280 × 720
+and 1100 × 700, with a panel open and shut, and finds it left out at 1024 × 768 (tools/shots.mjs
+`checkHero`).
+
+**Poses.** Standing, it breathes, its body riding a pixel over its legs; its glances are a figure's
+(Figure animation), every 4 to 7 s, turned less than half as far and in steps of 0.1 rad, its look
+kept on the menu's side; a light crosses its visor while the microphone sends, open or held; it
+waves once a new name has settled. It holds the lamp before its chest in both hands, the front arm
+raised from it for the wave. An item of the menu hovered or given the focus — the one under the
+pointer before the one in the focus — turns its head to it, 0.6 of the way from its head to the
+item, in the walk cycle's three turn steps of 150 ms; a run's card first in the menu holds its look
+while nothing else does. While a panel lies open over the menu it steps half a scene tile toward
+the stage's edge over the panel's 200 ms, easing, its legs in their cycle, and back as the panel
+goes. As the menu goes for the lobby — „Runde eröffnen", a code, a round joined — it turns away
+toward the lab in the same steps while the doors close over it. Under reduced motion it stands in
+one still pose: no breath, glance, light or wave, no head turned and no back turned; it steps aside
+at once.
+
+**The beam.** The lamp throws its beam onto the lab behind the menu, laid on the scene's canvas
+over the drift's copy: a soft cone 0.4 rad across, its light falling off along it to 1.1 times the
+hero's height and ending short of the menu's column, so that it never lies over the text; a warm
+core along its middle in the lamp's tungsten, as the world's lamp beam has it (The lamp's beam);
+and the dust of particles.ts drifting through it, drawn only where it lies in the cone. It sweeps
+from the floor before the hero up across the lab and back, one pass in 12 s, slowing at both ends;
+where it comes to the line toward the item hovered or in the focus it holds there for a beat, 1 s,
+its sweep's clock standing still meanwhile. The lamp in the hero's hands tilts with it in steps of
+3°, its lens alight with a small glint at its rim. Under reduced motion the beam stands still,
+pointing a little up into the lab, without dust.
+
+**The entrance.** On the first menu of a page the hero walks in from beyond the stage's right edge
+over 1.2 s, slowing to a stop, its legs in the walk cycle as far as the ground it covers, and turns
+to the menu in the turn's steps as it stops; 350 ms later the cold open's click — its relay click,
+quietly, as one of the menu's sounds — and the lamp comes on over the cold open's 300 ms, the beam
+with it. A browser lets a page sound only after its first gesture: on a page just opened the lamp
+comes on without its click. Back from the lobby, on every later menu of the page and under reduced
+motion it stands there from the start, its lamp on. The walkthrough holds the entrance where it
+wants it for its still (`window.__heroHold`, read only under `?trace=1`).
+
+**What it costs.** Filling the cone with its gradients every frame cost 1.3 ms a frame on the bench
+below with the radial falloff alone, 2.7 ms on a busier machine, and several times that with the
+conic edges. The beam is baked instead: once for each reach, a master of the cone, its light across
+from a conic gradient and along from a radial one; turned to the beam's angle once a degree,
+without smoothing, into a canvas the size of the wedge's own box; and copied each frame 1:1 at
+whole pixels. The hero is laid from two layers kept between frames — its legs with its shadows, and
+everything over them drawn without the breath, the legs cut out of it — each redrawn only where
+what it shows has changed: a glance's step, the lamp's step, the wave, the colour, the size; the
+breath only moves the upper layer by whole pixels. The light crossing the visor while the
+microphone sends is laid over the two on each frame, alone (art.ts FigureLayer `shimmer`), where
+the upper layer would hold it — within that layer only while the front hand waves, which passes
+before the visor and draws the layer anew on every frame anyway. Walking in, it is drawn
+whole each frame, for 1.2 s once a page. Its loop draws 30 frames a second at most, none while the
+tab or its canvas is hidden, and under reduced motion none after its still until something it shows
+changes. Left out as the stage is measured, and gone with the menu, the hero lets go of its lamp and
+its canvases at once, and the scene lets its beam's go, its lab drifting on through the lobby
+without them. On the menu's bench — this M4, the page's main thread slowed four times, the software
+Canvas path of `SHOTS_SOFTWARE_GL`, 1440 × 820 CSS pixels at density 1, Blackout's lab drifting, the
+scene's frame alone, with the beam, with the hero and with both, six rounds each, every round
+starting at another — medians, ms:
+
+| Frame | Work a frame, mean | Over the scene | p95 | Frames p95 |
+| --- | --- | --- | --- | --- |
+| The scene alone, as main draws it | 1.13 | | 1.60 | 16.8 |
+| With the beam | 1.47 | +0.34 | 2.90 | 16.7 |
+| With the hero | 1.43 | +0.30 | 3.40 | 16.8 |
+| Both, as the menu draws | 1.77 | +0.64 | 4.30 | 16.7 |
+
+Round by round the beam took +0.19 to +0.56 ms, the hero +0.11 to +0.72 and both +0.43 to +0.92.
+The hero's p95 is a layer drawn anew — about 20 times in the 6 s, at each of the lamp's steps and
+each glance's, some 2 ms of work each there — and its frames held the screen's pace. The
+walkthrough's quiet window on the menu, the hero standing and its beam sweeping over the drifting
+lab, held the screen's pace in Blackout and Systemcheck, with `SHOTS_SOFTWARE_GL` and without:
+16.7 ms p50 and 16.7 to 16.8 p95, within the menu's own gate (`MENU_P95_MS`).
+
+With the microphone sending, the same bench measured the scene, the beam and the hero together,
+the microphone off and on, each round also running the hero as it was before its visor's light
+was laid apart (e6d09ed), when that light drew the whole upper layer anew on each of the hero's
+frames; the machine's 1-minute load from other work stood at 4 to 17 meanwhile. Medians, ms:
+
+| Frame: the scene, the beam, the hero | Work a frame, mean | p95 | Upper layer drawn in 6 s |
+| --- | --- | --- | --- |
+| The scene alone | 1.07 | 1.50 | |
+| Microphone off | 1.97 | 4.50 | 19 |
+| Microphone on | 2.24 | 4.60 | 19 |
+| Microphone off, before | 1.90 | 4.30 | 18 |
+| Microphone on, before | 3.78 | 5.60 | 180 |
+
+The sending microphone costs +0.27 ms a frame over the silent one, round by round +0.10 to +0.46
+and +0.86 in the last round as the load rose, where it cost +1.88 (+1.59 to +2.15). A rerun in the
+heavy runs' exclusive window (`heavy.sh --exclusive`), the other heavy runs drained but the load
+still 4.9 to 17.2 from lighter work, scattered more and said the same: round by round a median of
++0.24 ms with the light laid apart, +2.32 before. What is left
+is the light's band, laid on each of the hero's frames, and the canvas laid anew with it: the body
+rides up and down with the words, so the canvas is laid on each frame while the microphone sends,
+180 times in the 6 s instead of 64. Beam and hero together came to 0.90 ms over the scene with
+the microphone off and 1.17 with it on at that load; the quieter bench above put them at 0.64
+silent. Laid apart, the light looks as it did: on the Canvas path the hero's canvas matched the one
+drawn before in 46 speaking frames at density 1 and at 2, but for one pixel one level off in two
+of them at 1 and in one at 2.
+
+## Chrome (ui.css, styles/lobby.css, finale.css, pause.css, settings.css)
+
+Everything round the world — the top bar, the strip under a run, the lobby's panel, the end
+screen's report, the pause menu and the settings — wears the main menu's panel: its near-black
+(`rgba(9, 14, 19, 0.97)`), a hairline of `--line-2`, corners of 14 px, the menu's shadow where it
+stands over a scene and none where it stands beside the world, whose foot a shadow would darken.
+Michroma heads it and does nothing else: the bar's name, the lobby's mission, the report's
+sections, the pause menu's title and items (the menu's own), the ask before giving a seat up and
+the settings' title; labels stay in the mono, upper case and spaced, running text in the system
+sans, at the sizes Type and targets gives. The room's code and its invite link stand as one round
+chip, the code in teal to say aloud and the link behind a hairline; beside it a chip counts the
+audience — the eye, the count, „2 Zuschauer" in its label — which the server tells the room as a
+watcher comes or goes (`audience`). The connection's lamp stays as it was. Every way out carries
+the icon set's glyph (screens/Icon.tsx: „Raum verlassen" and „Zuschauen beenden" the exit, „Zur
+Lobby" the crew), never an emoji. A phone upright keeps the logo's mark without its word, so that
+the bar never wraps.
+
+The world's canvas takes what the chrome leaves, and its zoom follows its height (Framing), so the
+chrome keeps its frame: the bar its height, the strip its 58 px on a wide window and its three rows
+of 20, 27 and 40 px under 820 px — where the menu is the gear's alone, the row having no room for a
+fourth button — and a phone held sideways its one row of 44 px. Measured against main (scratchpad
+`pause/chrome-check.mjs`, 14.11.2026) in a Systemcheck room on seed 5 under reduced motion — the
+host's laptop at 1440 × 820, 1280 × 800, 960 × 760 and 420 × 760, the guest's touch phone at 844 ×
+390, 932 × 430 and 420 × 760 — the top bar, the strip or the row and the world's canvas stand on
+the same pixels as on main at every size, its backing too, and the world's own pixels, read back
+from its canvas, differ from main's only in the pulsing halo of the station up next, 0.05 to 2.1 %
+of them, as main's differ from themselves a run later, 0.0 to 1.6 %.
+
+**The settings** stand in five tabs, as Deep Rock Galactic's and Helldivers 2's do: „Ton" (Gesamt —
+the sound switch is its mute —, Musik, Effekte, Funk and Umgebung, each a slider that ticks through
+its bus as it moves, beside a mute; the talk key), „Bild" (the text size, less motion, the light by
+WebGL or by Canvas, the full screen), „Steuerung" (the key table, the controller and its live test,
+the symbols its prompts show, the stick's dead zone from 5 to 40 %), „Zugang" (a pattern of the
+screen's dark over each crew colour but the first on the dots in the chrome — a hole, bars across
+and down, stripes, a ring, a half, a cross —, and the size of the radio's and the opening's lines
+on larger screens) and, with the pass's account, „Konto" (the name the account takes, its colour as
+the lobby chose it, „Konto löschen"). The tabs read in the labels' mono; the card keeps one height
+for every tab, so that the bar stands still while a tab's controls scroll under it, and holds the
+bar whole on a phone held sideways at 932 × 430. Every tab but „Konto" has its „Zurücksetzen" at
+its foot; every change takes at once and is kept on the device. The arrows step along the bar, Home
+and End to its ends, and a controller's D-pad opens each tab its focus comes to.
 
 ## Type and targets (styles/devices.css, test/deviceTargets.test.tsx)
 
@@ -627,7 +827,8 @@ cut short where it runs out, what the crew still has to bring after it; then the
 coloured dots, ringed while one speaks and ticked off on the hatch in the escape, what one does
 beside the dot for three seconds after it changed and no longer (`freshTags`; names and doings
 in the dots' labels); the Laborkennung's value; the clock with the alarm marks; and the
-microphone's switch, the notepad and the info panel by their icons, a fingertip each. A line on
+microphone's switch, the notepad, the info panel and the menu by their icons, a fingertip each
+(a pattern over each dot where the settings' „Farbmuster" asks for it, Chrome). A line on
 the air takes the goal's place for as long as it is up, two lines of it at most, and adds no
 height, so the zoom stands still as it comes and goes (insets.ts); an alarm or an emergency
 stands under the row while it lasts. With no strip under it the world's canvas takes the

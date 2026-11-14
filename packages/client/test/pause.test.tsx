@@ -167,6 +167,7 @@ describe('a run called off', () => {
       grade: null,
       currentPuzzleIndex: 2,
       puzzleCount: 6,
+      events: [],
       players: [mate('p1', 'Anna'), mate('p2', 'Ben', false)],
     };
     expect(endingOf(view)).toBe('lost:abandoned');

@@ -168,27 +168,39 @@ describe('the mix on the lab’s context', () => {
     expect(reaches(mix.music as FakeNode, mix.sends as FakeNode)).toBe(false);
   });
 
-  it('binds Musik to the music, Effekte to effects and beds, Funk to the radio', async () => {
+  it('binds Musik, Effekte, Umgebung and Funk each to its bus, Gesamt to the master', async () => {
     const { mix } = await engine();
     const { applyVolumes } = await import('../src/settings.js');
-    applyVolumes({ radio: 30, effects: 60, music: 90 });
+    applyVolumes({ master: 80, music: 90, effects: 60, voice: 30, ambience: 45 });
     const target = (bus: FakeGain): unknown => bus.gain.events.at(-1)?.[1];
     expect(target(mix.voice)).toBeCloseTo(0.3, 9);
     expect(target(mix.announce)).toBeCloseTo(0.3, 9);
     expect(target(mix.sfx)).toBeCloseTo(0.6, 9);
-    expect(target(mix.ambience)).toBeCloseTo(0.6, 9);
+    expect(target(mix.ambience)).toBeCloseTo(0.45, 9);
     expect(target(mix.music)).toBeCloseTo(0.9, 9);
+    expect(target(mix.master)).toBeCloseTo(0.8, 9);
+  });
+
+  it('mutes a bus the settings mute, and leaves its volume as set', async () => {
+    const { mix } = await engine();
+    const { applyVolumes, DEFAULT_SETTINGS } = await import('../src/settings.js');
+    const muted = { ...DEFAULT_SETTINGS.muted, music: true, ambience: true };
+    applyVolumes(DEFAULT_SETTINGS.volumes, muted);
+    const target = (bus: FakeGain): unknown => bus.gain.events.at(-1)?.[1];
+    expect([target(mix.music), target(mix.ambience), target(mix.sfx)]).toEqual([0, 0, 1]);
   });
 
   it('builds a later engine at the volumes and the mute already set', async () => {
     vi.resetModules();
     await loadedSamples();
     const audio = await import('../src/world/audio.js');
-    audio.setVolumes({ radio: 0.25, effects: 0.5, music: 0.75 });
+    audio.setVolumes({ master: 0.9, music: 0.75, effects: 0.5, voice: 0.25, ambience: 0.4 });
     audio.setMuted(true);
     const mix = audio.audioEngine() as unknown as FakeMix;
     const values = [mix.voice, mix.sfx, mix.ambience, mix.music, mix.master];
-    expect(values.map((bus) => bus.gain.value)).toEqual([0.25, 0.5, 0.5, 0.75, 0]);
+    expect(values.map((bus) => bus.gain.value)).toEqual([0.25, 0.5, 0.4, 0.75, 0]);
+    audio.setMuted(false);
+    expect(mix.master.gain.events.at(-1)?.[1]).toBeCloseTo(0.9, 9);
   });
 
   it('pulls the music 6 dB down under the klaxon, and under the siren until it stops', async () => {
@@ -220,12 +232,14 @@ describe('the mix on the lab’s context', () => {
     audio.volumeTick('music'); // the slider dragged on at once: no second tick
     expect(ticks()).toHaveLength(1);
     expect(reaches(ticks()[0] as FakeNode, mix.music as FakeNode)).toBe(true);
-    audio.volumeTick('radio');
+    audio.volumeTick('voice');
     expect(reaches(ticks()[1] as FakeNode, mix.voice as FakeNode)).toBe(true);
     ctx.currentTime += 0.06;
     audio.volumeTick('music');
     audio.volumeTick('effects');
-    expect(ticks()).toHaveLength(4);
+    audio.volumeTick('ambience');
+    expect(ticks()).toHaveLength(5);
     expect(reaches(ticks()[3] as FakeNode, mix.sfx as FakeNode)).toBe(true);
+    expect(reaches(ticks()[4] as FakeNode, mix.ambience as FakeNode)).toBe(true);
   });
 });

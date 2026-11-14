@@ -63,3 +63,14 @@ describe('the room a tab is in, kept for its next socket', () => {
     expect(comebackOfTab()).toBeNull();
   });
 });
+
+describe('how many watch the room', () => {
+  it('is what the server said last, for the chip in the bar', () => {
+    const { kept, got } = page();
+    expect(got.watching).toBeNull();
+    takeIn({ kind: 'audience', code: 'QX7R', count: 2 }, kept);
+    expect(got.watching).toBe(2);
+    takeIn({ kind: 'audience', code: 'QX7R', count: 0 }, kept);
+    expect(got.watching).toBe(0);
+  });
+});

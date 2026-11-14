@@ -25,6 +25,8 @@ export function page() {
     seat: null as Seat | null,
     account: undefined as AccountView | null | undefined,
     myRuns: null as Loaded<MyRuns> | null,
+    /** how many watch the room, as the page last heard it */
+    watching: null as number | null,
     /** the banner's words, as the page last set them */
     banner: null as string | null,
   };
@@ -52,6 +54,9 @@ export function page() {
     },
     setRestoring: (restoring) => {
       got.restoring = restoring;
+    },
+    setWatching: (count) => {
+      got.watching = count;
     },
     setError: (message) => {
       got.banner = message;
