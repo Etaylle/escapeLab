@@ -1124,7 +1124,7 @@ function clockStarts(state: GameState, at: number): GameState {
     quietSince: mission.order === 'free' ? null : at,
     nudgesGiven: 0,
   };
-  return logRadio(running, mission.radio.start, at);
+  return logRadio(running, state.mission.radio.start, at);
 }
 
 /** Common guards for in-game actions; returns the acting player's current puzzle. */
