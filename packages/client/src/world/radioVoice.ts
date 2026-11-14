@@ -286,7 +286,8 @@ function peakOf(buffer: AudioBuffer): number {
 
 /**
  * At a run's start: every line of the mission `missionId` is fetched — kept compressed — and the
- * line that opens the run decoded, so that it comes the moment the lights fail.
+ * lines that may open the run decoded, so that the one the run picks comes the moment the lights
+ * fail; the others are let go as it airs (`onAir`).
  */
 export function preloadVoice(missionId: string): void {
   manifest()
@@ -378,10 +379,16 @@ export function sayLine(text: string): boolean {
   }
 }
 
-/** The line `id` on the air from now, cutting short one still on it; let go once it ends. */
+/**
+ * The line `id` on the air from now, cutting short one still on it; let go once it ends. A line
+ * that opens the run lets go of the other openers decoded for it: the run has picked its own.
+ */
 function onAir(engine: Engine, id: string, clip: Clip): void {
   const now = engine.ctx.currentTime;
   const opens = store.openers.has(id);
+  if (opens) {
+    for (const other of store.openers) if (other !== id) dropLine(other);
+  }
   speaking?.cut(now);
   const line = speak(engine, id, clip, now + LOOKAHEAD, opens);
   speaking = line;

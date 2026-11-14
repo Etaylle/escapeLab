@@ -13,7 +13,7 @@ import { join } from 'node:path';
 import { Readable } from 'node:stream';
 import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { parseMission, type Mission } from '@escapelab/core';
+import { parseMission, variantsOf, type Line, type Mission } from '@escapelab/core';
 import {
   afconvert,
   audioKind,
@@ -33,8 +33,10 @@ const missions: Mission[] = readdirSync(SHIPPED)
   .filter((name) => name.endsWith('.json'))
   .map((name) => parseMission(JSON.parse(readFileSync(join(SHIPPED, name), 'utf8'))));
 const blackout = missions.find((mission) => mission.id === 'blackout');
-const START = blackout?.radio.start ?? '';
-const NUDGE = blackout?.puzzles[0]?.nudges[0] ?? '';
+/** The first text of a line: the one it had before it was given others. */
+const first = (line: Line | undefined): string => variantsOf(line ?? '')[0] ?? '';
+const START = first(blackout?.radio.start);
+const NUDGE = first(blackout?.puzzles[0]?.nudges[0]);
 const ANNOUNCED = blackout?.intro?.pa[0] ?? '';
 
 /** 0.75 s of a 440 Hz tone as an MP3 (64 kbit/s, made once with LAME): 0.784 s decoded. */

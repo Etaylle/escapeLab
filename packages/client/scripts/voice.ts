@@ -166,14 +166,20 @@ export interface SpeakerVoice {
   readonly name: string;
 }
 
+/**
+ * A line as a mission writes it (core radio.ts `Line`): one text, or two or three, of which a
+ * run says one — each its own recording.
+ */
+export type Line = string | readonly string[];
+
 /** A group of the operator's lines, each under its key: the clock's calls, the end's words. */
-type Group = Readonly<Partial<Record<string, string>>>;
+type Group = Readonly<Partial<Record<string, Line>>>;
 
 /** What the script reads of a mission's radio: the operator's lines, as core's schema has them. */
 export interface RadioLines {
-  readonly start?: string;
-  readonly escape?: string;
-  readonly alarm?: string;
+  readonly start?: Line;
+  readonly escape?: Line;
+  readonly alarm?: Line;
   readonly clock?: Group;
   readonly emergency?: Group;
   readonly won?: Group;
@@ -185,8 +191,8 @@ export interface MissionLines {
   readonly id: string;
   readonly intro?: { readonly pa?: readonly string[] };
   readonly radio?: RadioLines;
-  readonly puzzles: readonly { readonly onSolved?: string; readonly nudges?: readonly string[] }[];
-  readonly map?: { readonly sabotage?: { readonly announce?: string } };
+  readonly puzzles: readonly { readonly onSolved?: Line; readonly nudges?: readonly Line[] }[];
+  readonly map?: { readonly sabotage?: { readonly announce?: Line } };
 }
 
 /**
@@ -204,8 +210,8 @@ const ANSWER_KEYS = {
  * The operator's answers to what a run does, in core's order: an emergency as it starts and as
  * it ends, the first alarm, the clock's calls, the last word on a run won and on one lost.
  */
-function answersOf(radio: RadioLines | undefined): (string | undefined)[] {
-  const group = (name: keyof typeof ANSWER_KEYS): (string | undefined)[] =>
+function answersOf(radio: RadioLines | undefined): (Line | undefined)[] {
+  const group = (name: keyof typeof ANSWER_KEYS): (Line | undefined)[] =>
     ANSWER_KEYS[name].map((key) => radio?.[name]?.[key]);
   return [
     ...group('emergency'),
@@ -280,8 +286,10 @@ export interface CatalogLine {
  * answers to what the run does (`answersOf`).
  */
 export function catalogOf(mission: MissionLines): CatalogLine[] {
-  const said = (speaker: Speaker, opens = false) => (text: string | undefined) =>
-    text === undefined || text.trim() === '' ? [] : [{ text, speaker, opens }];
+  const said = (speaker: Speaker, opens = false) => (line: Line | undefined) =>
+    (typeof line === 'string' ? [line] : (line ?? []))
+      .filter((text) => text.trim() !== '')
+      .map((text) => ({ text, speaker, opens }));
   const { radio, puzzles } = mission;
   const operator = said('operator');
   return [

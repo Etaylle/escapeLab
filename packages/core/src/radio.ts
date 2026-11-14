@@ -1,4 +1,38 @@
+import { z } from 'zod';
 import type { Mission } from './mission.js';
+import { mulberry32 } from './rng.js';
+
+/**
+ * A line as a mission writes it: one text, or two or three to choose from, so that a run hears
+ * one take and a rematch most often another (`pickLine`). Each text is its own recording.
+ */
+export type Line = string | readonly string[];
+
+/** A line in a mission file: a text, or a list of two or three, none of them empty. */
+export const lineSchema = z.union([z.string().min(1), z.array(z.string().min(1)).min(2).max(3)]);
+
+/** Every text `line` may say, in its order. */
+export function variantsOf(line: Line): readonly string[] {
+  return typeof line === 'string' ? [line] : line;
+}
+
+/**
+ * The text a run says of `line` at `key` — its place in the mission: `solved:<station>`,
+ * `clock:lastMinute`, … — the `occurrence`-th time it comes in the run (an emergency's lines
+ * come once for each emergency): the first from the run's `seed` and the key, an FNV-1a hash of
+ * it mixed into the seed, so that one seed always picks the same and another most often other
+ * takes; each later occurrence the next text in turn, so that a run repeats none before it must.
+ */
+export function pickLine(line: Line, seed: number, key: string, occurrence = 0): string {
+  const texts = variantsOf(line);
+  let hash = 0x811c9dc5;
+  for (const char of key) {
+    hash ^= char.charCodeAt(0);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  const first = Math.floor(mulberry32((seed ^ hash) >>> 0)() * texts.length);
+  return texts[(first + occurrence) % texts.length] ?? '';
+}
 
 /**
  * When a line is heard: over the lab's loudspeakers while the intro keeps the power on (`pa`),
@@ -77,30 +111,35 @@ export interface RadioLine {
   readonly speaker: Speaker;
 }
 
-/** The line `text` heard at `when`, said by whoever speaks then. */
-const lineOf = (text: string, when: RadioMoment, puzzleId: string | null = null): RadioLine => ({
-  text,
-  when,
-  puzzleId,
-  speaker: speakerOf(when),
-});
+/**
+ * Every text of `line` heard at `when`, each said by whoever speaks then and each its own
+ * recording; none where the mission has no such line.
+ */
+const textsOf = (
+  line: Line | undefined,
+  when: RadioMoment,
+  puzzleId: string | null = null,
+): RadioLine[] =>
+  line === undefined
+    ? []
+    : variantsOf(line).map((text) => ({ text, when, puzzleId, speaker: speakerOf(when) }));
 
-/** The lines of `said` the mission has, each heard at its moment, in their order. */
-const linesOf = (said: readonly (readonly [string | undefined, RadioMoment])[]): RadioLine[] =>
-  said.flatMap(([text, when]) => (text === undefined ? [] : [lineOf(text, when)]));
+/** Every text of the lines of `said` the mission has, each heard at its moment, in their order. */
+const linesOf = (said: readonly (readonly [Line | undefined, RadioMoment])[]): RadioLine[] =>
+  said.flatMap(([line, when]) => textsOf(line, when));
 
 /**
  * The run's story as it is heard: the intro's announcement over the loudspeakers, the start,
  * for each station its nudges and the line its solve brings, the escape.
  */
 function storyLines(mission: Mission): RadioLine[] {
-  const pa = (mission.intro?.pa ?? []).map((text) => lineOf(text, 'pa'));
+  const pa = (mission.intro?.pa ?? []).flatMap((text) => textsOf(text, 'pa'));
   const stations = mission.puzzles.flatMap((puzzle) => [
-    ...puzzle.nudges.map((text) => lineOf(text, 'nudge', puzzle.id)),
-    ...(puzzle.onSolved === undefined ? [] : [lineOf(puzzle.onSolved, 'solved', puzzle.id)]),
+    ...puzzle.nudges.flatMap((line) => textsOf(line, 'nudge', puzzle.id)),
+    ...textsOf(puzzle.onSolved, 'solved', puzzle.id),
   ]);
   const { start, escape } = mission.radio;
-  return [...pa, ...linesOf([[start, 'start']]), ...stations, ...linesOf([[escape, 'escape']])];
+  return [...pa, ...textsOf(start, 'start'), ...stations, ...textsOf(escape, 'escape')];
 }
 
 /**
@@ -127,8 +166,9 @@ function answerLines(mission: Mission): RadioLine[] {
  * intro's announcement over the loudspeakers (`intro.pa`, played by each screen while the power
  * is on), then on the air `radio.start` as the clock starts (actions.ts, `logRadio`), for each
  * station the nudges `nudge` sends while it stays quiet and the line its solve brings, and
- * `radio.escape` as the hatch unlocks — then what answers the run as it goes (`answerLines`). A
- * line said twice is listed twice.
+ * `radio.escape` as the hatch unlocks — then what answers the run as it goes (`answerLines`).
+ * Every text of a line with several is listed, in its order, as the run may pick any (`pickLine`);
+ * a line said twice is listed twice.
  */
 export function radioLines(mission: Mission): RadioLine[] {
   return [...storyLines(mission), ...answerLines(mission)];

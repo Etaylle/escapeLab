@@ -44,6 +44,7 @@ import {
   writeManifest,
   type Entry,
   type Fresh,
+  type Line,
   type Manifest,
   type ShippedLine,
   type Voice,
@@ -67,30 +68,89 @@ const MS_PER_WORD = { min: 200, max: 900 } as const;
  * fails, and so does a line here that has one now.
  */
 const AWAITING_RENDER: readonly string[] = [
+  'Leitstelle an Nachtschicht. Der Trakt ist dunkel, auf meiner Tafel brennen nur die ' +
+    'Notzellen. Zuerst das Notlicht, den Hauptschalter im Flur legt ihr gemeinsam um.',
+  'Leitstelle an Nachtschicht. Im ganzen Trakt ist das Netz weg, die Notzellen halten noch. ' +
+    'Als Erstes das Notlicht, der Hauptschalter im Flur geht nur gemeinsam.',
+  'Das Notlicht schaltet ihr im Flur, der Hauptschalter hängt in der Mitte unter der roten Lampe.',
+  'Aus dem Archiv geht es durch die Südtür in den Flur, der Hauptschalter liegt dann ein Stück ' +
+    'östlich.',
+  'Notlicht brennt, ich sehe euch wieder auf meiner Tafel. Weiter mit dem Notstrom: Anleitung ' +
+    'im Archiv, Kasten im Maschinenraum, Prüfpult im Flur.',
+  'Für den Notstrom hängt die Anleitung an der Ostseite vom Archiv.',
+  'Der Kasten steht im Maschinenraum hinter der Plattentür, das Prüfpult am Westende vom Flur, ' +
+    'und einer hält die Platte.',
+  'Der Notstrom hält, die Tür zum Maschinenraum bleibt offen. Dann die Signalkette, ein Pult ' +
+    'im Flur und eins im Maschinenraum.',
+  'Für die Signalkette liegt ein Klemmbrett im Flur, an der Südwand.',
+  'Die Signalkette hat zwei Pulte, Pult A am Ostende vom Flur und Pult B im Maschinenraum, ' +
+    'Südostecke.',
+  'Das Schott zum Serverraum geht auf, drinnen warten Terminal und Rack. Vorsicht, die Drohne ' +
+    'ist wach, die Kameraplatte davor hält sie an.',
+  'Zwischen Terminal und Rack steht ein Spind, darin liegt, was ihr für beide braucht.',
+  'Im Serverraum braucht es zwei, einen am Terminal an der Westwand und einen am Rack an der ' +
+    'Ostwand.',
+  'Die Server sind oben, und die Labortür ist offen, aber drinnen kreist eine Drohne. Den ' +
+    'Aktenschrank dort öffnet nur der Schlüssel.',
+  'Den Schlüssel für den Aktenschrank findet ihr im Serverraum, oben in der Nordostecke beim Rack.',
+  'Funkpult und Aktenschrank stehen beide im Labor, das Pult in der Südwestecke.',
+  'Ich hab euch klar auf der Frequenz. Der Reaktorraum ist offen, aber ohne Ersatzsicherung ' +
+    'springt da nichts an.',
+  'Eine Ersatzsicherung liegt im Archiv, ganz hinten in der Südostecke.',
+  'Die Sicherung gehört in den Reaktorraum an die Ostwand, gleich neben den Schalter.',
+  'Reaktor ist am Netz, der Notausgang ist auf, Nordwestecke beim Archiv. Raus da, alle zusammen!',
   'Störung im Kühlkreislauf. Relaissteuerung auf Handbetrieb.',
-  'Bei mir ist ein Alarm aufgelaufen, das kostet uns Zeit. Ruhig bleiben, genau arbeiten.',
-  'Noch fünf Minuten auf den Notzellen. Bleibt dran, aber hetzt nicht.',
-  'Zwei Minuten noch, dann sind die Zellen leer. Jetzt zählt jeder Handgriff.',
-  'Noch eine Minute auf den Zellen. Ich bleibe dran, bis zum letzten Licht.',
+  'Achtung, Kühlkreislauf gestört. Relais nur noch von Hand.',
+  'Kühlkreislauf außer Betrieb. Relais im Handbetrieb schalten.',
   'Ich habe die Relais verloren, das müsst ihr von Hand machen. Lest euch jede Anweisung laut vor.',
+  'Die Kühlung kippt, und ich komme von hier nicht an die Relais. Sagt euch jede Anweisung ' +
+    'laut an und bestätigt sie.',
+  'Notfall in der Kühlung, die Relais müssen von Hand geschaltet werden. Jeder sagt laut, was ' +
+    'auf seinem Pult steht.',
   'Kühlung steht wieder, die Relais halten. Weiter, wo ihr aufgehört habt.',
+  'Die Relais greifen wieder, die Kühlung ist stabil. Zurück an eure Station.',
   'Die Kühlung ist abgesackt, das hat uns Zeit gekostet. Zurück an die Arbeit, beim nächsten ' +
     'Mal schneller.',
+  'Zu spät, die Notversorgung musste die Kühlung abfangen. Das kostet Zeit, weiter.',
+  'Bei mir ist ein Alarm aufgelaufen, das kostet uns Zeit. Ruhig bleiben, genau arbeiten.',
+  'Alarm auf meiner Tafel, das hat uns gerade Zeit gekostet. Lieber einmal mehr nachfragen.',
+  'Da ging ein Alarm raus, ich sehe ihn hier. Nicht hetzen, sonst kommen mehr davon.',
+  'Noch fünf Minuten auf den Notzellen. Bleibt dran, aber hetzt nicht.',
+  'Die Notzellen machen noch fünf Minuten. Das reicht, wenn ihr euch aufteilt.',
+  'Zwei Minuten noch, dann sind die Zellen leer. Jetzt zählt jeder Handgriff.',
+  'Noch zwei Minuten auf der Notversorgung. Keine Umwege mehr.',
+  'Noch eine Minute auf den Zellen. Ich bleibe dran, bis zum letzten Licht.',
+  'Letzte Minute, die Zellen sind fast leer. Jetzt oder gar nicht, Nachtschicht.',
   'Der Trakt hat wieder Strom, die Zentrifugen laufen an, und ihr seid alle draußen. Mit Zeit ' +
     'übrig. So schreibe ich das ins Schichtbuch.',
+  'Alle draußen, und die Notzellen hätten noch eine Weile gehalten. Ihr habt den Reaktor ' +
+    'zurückgeholt, ohne lange zu suchen. Gute Nacht, Nachtschicht.',
   'Licht im ganzen Trakt, und alle sind draußen. Knapp war das, aber die Zellen haben ' +
     'gereicht. Ich trage es ins Schichtbuch ein.',
+  'Reaktor läuft, Notausgang zu, alle vollzählig draußen. Das ging bis in die letzten Minuten. ' +
+    'Geht euch aufwärmen, die Frühschicht übernimmt.',
   'Das war die letzte Minute, und ihr seid raus. Die Zellen waren fast leer, als der Reaktor ' +
     'kam. Durchatmen, Nachtschicht.',
+  'Ihr seid draußen, mit Sekunden übrig. Der Trakt hat Strom, die Proben sind gerettet, und ' +
+    'ich atme hier auch erst mal durch.',
   'Die Notzellen sind leer, im Trakt ist es jetzt ganz dunkel. Bleibt, wo ihr seid, die ' +
     'Frühschicht holt euch raus.',
+  'Das war\'s, die Notversorgung ist aus. Rührt nichts mehr an, die Frühschicht kommt mit Licht.',
   'Die Sicherheitsschaltung hat zugemacht, zu viele Alarme auf einmal. Der Trakt bleibt ' +
     'dunkel, bis die Frühschicht kommt.',
+  'Zu viele Alarme, die Anlage hat die Notversorgung abgeworfen. Für heute bleibt der Trakt ' +
+    'dunkel.',
   'Mit halber Schicht geht da drinnen nichts. Ich breche ab, der Trakt bleibt bis morgen dunkel.',
+  'Ohne die ganze Schicht kommt ihr da nicht durch. Ich hole euch raus, wir versuchen es ' +
+    'morgen neu.',
 ];
 
 const manifest = JSON.parse(readFileSync(MANIFEST_FILE, 'utf8')) as Manifest;
 const recordings = readdirSync(VOICE_DIR).filter((name) => /\.(m4a|mp3)$/.test(name));
+
+/** Every text of a line as a mission writes it: one, or its two or three. */
+const textsOf = (line: Line | undefined): readonly string[] =>
+  typeof line === 'string' ? [line] : (line ?? []);
 
 const wordsIn = (line: string): number =>
   line.split(/\s+/).filter((word) => /[\p{L}\p{N}]/u.test(word)).length;
@@ -149,15 +209,20 @@ describe('the recorded lines', () => {
     }
     const ids = idsOf(manifest);
     const blackout = shippedMissions().find((mission) => mission.id === 'blackout');
-    const start = blackout?.radio?.start ?? '';
-    expect(start).toMatch(/^Leitstelle an Nachtschicht\./);
-    expect(ids.get(start)).toBe(voiceId(start));
+    const starts = textsOf(blackout?.radio?.start);
+    expect(starts).toHaveLength(3);
+    for (const start of starts) {
+      expect(start).toMatch(/^Leitstelle an Nachtschicht\./);
+      const recorded = !AWAITING_RENDER.includes(start);
+      expect(ids.get(start)).toBe(recorded ? voiceId(start) : undefined);
+    }
   });
 
   it('marks the lines that open a run, and only those: the radio opens the channel for them', () => {
-    const starts = shippedMissions().flatMap((mission) => mission.radio?.start ?? []);
+    const starts = shippedMissions().flatMap((mission) => textsOf(mission.radio?.start));
     expect(starts.length).toBeGreaterThanOrEqual(4);
-    expect([...openersOf(manifest)].sort()).toEqual(starts.map(voiceId).sort());
+    const recorded = starts.filter((text) => !AWAITING_RENDER.includes(text));
+    expect([...openersOf(manifest)].sort()).toEqual(recorded.map(voiceId).sort());
     for (const [text, { opens }] of shippedLines()) {
       expect(opens, text).toBe(starts.includes(text));
     }
@@ -195,24 +260,25 @@ describe('the lines the script reads', () => {
   it('take every line core hands logRadio, each with its moment, and every nudge', () => {
     // A new source of lines in the reducer has to be read by core's radioLines, and by the script.
     const actions = readFileSync(new URL('../../core/src/actions.ts', import.meta.url), 'utf8');
-    const calls = [...actions.matchAll(/logRadio\(\w+, ([^,]+), [\w.]+, '(\w+)'\)/g)];
-    expect(calls.map(([, line, moment]) => [line, moment])).toEqual([
-      ['state.mission.radio.start', 'start'],
-      ['solved?.onSolved', 'solved'],
-      ['state.mission.radio.escape', 'escape'],
-      ['state.mission.radio.alarm', 'alarm'],
-      ['state.mission.radio.won?.[band]', 'won'],
-      ['state.mission.radio.lost?.[cause]', 'lost'],
-      ['sabotage.announce', 'announce'],
-      ['state.mission.radio.emergency?.start', 'emergency'],
-      ['state.mission.radio.emergency?.cleared', 'cleared'],
-      ['line', 'missed'],
-      ['state.mission.radio.clock?.[call.key]', 'clock'],
+    const calls = [...actions.matchAll(/logRadio\(\w+, '(\w+)', ([^,]+), /g)];
+    expect(calls.map(([, moment, line]) => [moment, line])).toEqual([
+      ['start', 'state.mission.radio.start'],
+      ['solved', 'solved?.onSolved'],
+      ['escape', 'state.mission.radio.escape'],
+      ['alarm', 'state.mission.radio.alarm'],
+      ['won', 'state.mission.radio.won?.[band]'],
+      ['lost', 'state.mission.radio.lost?.[cause]'],
+      ['announce', 'sabotage.announce'],
+      ['emergency', 'line'],
+      ['cleared', 'line'],
+      ['missed', 'line'],
+      ['clock', 'state.mission.radio.clock?.[call.key]'],
     ]);
     // Every call is one of those: none hides from the pattern, the function's own name aside.
     expect(actions.match(/logRadio\(/g)).toHaveLength(calls.length + 1);
     expect(actions).toMatch(/\.nudges\[state\.nudgesGiven\]/);
-    expect(actions).toMatch(/logEvent\(spoken, 'nudge', line, at, null, 'nudge'\)/);
+    expect(actions).toMatch(/pickLine\(line, state\.seed \?\? 0, `nudge:/);
+    expect(actions).toMatch(/logEvent\(spoken, 'nudge', text, at, null, 'nudge'\)/);
   });
 
   it('give each line its speaker: the loudspeakers the intro’s and the emergency’s, else the operator', () => {
@@ -255,8 +321,10 @@ describe('the lines the script reads', () => {
     }
     const nudges = (blackout?.puzzles ?? []).flatMap((p) => p.nudges ?? []);
     expect(nudges).toHaveLength(12);
-    for (const line of nudges) {
-      expect(shippedLines().get(line)?.missions, line).toEqual(['blackout']);
+    // Each of them in two texts, every text a line of its own to record.
+    expect(nudges.flatMap(textsOf)).toHaveLength(24);
+    for (const text of nudges.flatMap(textsOf)) {
+      expect(shippedLines().get(text)?.missions, text).toEqual(['blackout']);
     }
   });
 

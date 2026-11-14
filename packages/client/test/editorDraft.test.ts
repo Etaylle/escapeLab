@@ -15,13 +15,16 @@ import {
   draftFromJson,
   draftToJson,
   fieldsFromJson,
+  firstText,
   fieldsToJson,
   freeId,
+  moreTexts,
   newDraft,
   newPuzzle,
   slugOf,
   STATION_TYPES,
   twoConsoles,
+  withFirstText,
   type Draft,
   type StationType,
 } from '../src/editor/draft.js';
@@ -481,5 +484,40 @@ describe('a module’s own fields in the file', () => {
     expect(fields['wires']).toEqual(file.wires);
     expect(fields['wires']).not.toBe(file.wires);
     expect(fieldsToJson(specs, fields)['wires']).not.toBe(fields['wires']);
+  });
+});
+
+describe('a line of several texts in the editor', () => {
+  it('shows the first text, edits only it, keeps the others and says how many', () => {
+    const line = ['Eins.', 'Zwei.', 'Drei.'];
+    expect(firstText(line)).toBe('Eins.');
+    expect(firstText('Los.')).toBe('Los.');
+    expect(withFirstText(line, 'Neu.')).toEqual(['Neu.', 'Zwei.', 'Drei.']);
+    expect(withFirstText('Los.', 'Neu.')).toBe('Neu.');
+    // Emptied, the line goes, its other texts with it: a line has no text without a first.
+    expect(withFirstText(line, '')).toBe('');
+    expect(moreTexts(line)).toBe('Dazu 2 weitere Fassungen in der Datei; ein Lauf sagt eine.');
+    expect(moreTexts(['a.', 'b.'])).toBe('Dazu eine weitere Fassung in der Datei; ein Lauf sagt eine.');
+    expect(moreTexts('Los.')).toBeUndefined();
+  });
+
+  it('writes a station’s lines and the radio’s back with every text they gave', () => {
+    const blackout = shipped.find(({ name }) => name === 'blackout.json')?.data as {
+      radio: { start: string[] };
+      puzzles: { onSolved?: unknown; nudges: unknown[] }[];
+    };
+    const draft = loaded(blackout);
+    expect(draft.puzzles[0]?.onSolved).toEqual(blackout.puzzles[0]?.onSolved);
+    const edited = {
+      ...draft,
+      puzzles: draft.puzzles.map((p, i) =>
+        i === 0 ? { ...p, onSolved: withFirstText(p.onSolved, 'Licht an.') } : p,
+      ),
+    };
+    const json = draftToJson(edited) as typeof blackout;
+    const solved = blackout.puzzles[0]?.onSolved as string[];
+    expect(json.puzzles[0]?.onSolved).toEqual(['Licht an.', ...solved.slice(1)]);
+    expect(json.puzzles[1]?.nudges).toEqual(blackout.puzzles[1]?.nudges);
+    expect(json.radio.start).toEqual(blackout.radio.start);
   });
 });

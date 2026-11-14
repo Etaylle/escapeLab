@@ -4,6 +4,7 @@ import { decorIssues } from './decor.js';
 import { MAX_NOTES, NOTE_TEXT_MAX, noteSpot } from './notes.js';
 import { moduleFor, puzzleDefSchema, type PuzzleDef } from './puzzles/index.js';
 import { RELAY_MAX_PLAYERS } from './puzzles/relay.js';
+import { lineSchema } from './radio.js';
 import {
   canGather,
   canStandAt,
@@ -227,7 +228,7 @@ export const mapDefSchema = z.object({
        * what the plant's loudspeakers say as an emergency starts, on their emergency power: a
        * building system's message, a word to nobody (radio.ts `announce`, client world/pa.ts)
        */
-      announce: z.string().min(1).optional(),
+      announce: lineSchema.optional(),
     })
     .optional(),
   /**
@@ -284,9 +285,6 @@ export const mapDefSchema = z.object({
     .default([]),
 });
 
-/** One line of mission control's on the radio, as a mission writes it. */
-const radioLine = z.string().min(1);
-
 /**
  * Mission control's lines on the radio (radio.ts): as the clock starts and for the unlocked
  * exit; the operator's answers to what the run does — its first alarm, whatever set it off,
@@ -295,35 +293,35 @@ const radioLine = z.string().min(1);
  * left (five minutes or more, a minute or more, less), or lost, by what lost it.
  */
 const radioSchema = z.object({
-  start: radioLine.optional(),
-  escape: radioLine.optional(),
-  alarm: radioLine.optional(),
+  start: lineSchema.optional(),
+  escape: lineSchema.optional(),
+  alarm: lineSchema.optional(),
   clock: z
     .object({
-      fiveMinutes: radioLine.optional(),
-      twoMinutes: radioLine.optional(),
-      lastMinute: radioLine.optional(),
+      fiveMinutes: lineSchema.optional(),
+      twoMinutes: lineSchema.optional(),
+      lastMinute: lineSchema.optional(),
     })
     .optional(),
   emergency: z
     .object({
-      start: radioLine.optional(),
-      cleared: radioLine.optional(),
-      missed: radioLine.optional(),
+      start: lineSchema.optional(),
+      cleared: lineSchema.optional(),
+      missed: lineSchema.optional(),
     })
     .optional(),
   won: z
     .object({
-      plenty: radioLine.optional(),
-      tight: radioLine.optional(),
-      lastMinute: radioLine.optional(),
+      plenty: lineSchema.optional(),
+      tight: lineSchema.optional(),
+      lastMinute: lineSchema.optional(),
     })
     .optional(),
   lost: z
     .object({
-      time: radioLine.optional(),
-      alarms: radioLine.optional(),
-      abandoned: radioLine.optional(),
+      time: lineSchema.optional(),
+      alarms: lineSchema.optional(),
+      abandoned: lineSchema.optional(),
     })
     .optional(),
 });

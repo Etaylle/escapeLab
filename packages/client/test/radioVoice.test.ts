@@ -447,3 +447,50 @@ describe('a line spoken over the radio', () => {
     ]);
   });
 });
+
+describe('the lines that may open a run', () => {
+  /** Blackout opens on one of two starts, each recorded: the run picks one (core `pickLine`). */
+  const OTHER_START = 'Leitstelle an Nachtschicht. Der Trakt ist dunkel.';
+  const OPENERS: VoiceManifest = {
+    lines: {
+      ...MANIFEST.lines,
+      dddddddddddd: {
+        text: OTHER_START,
+        ms: 2000,
+        missions: ['blackout'],
+        speaker: 'operator',
+        opens: true,
+        file: 'dddddddddddd.mp3',
+      },
+    },
+  };
+
+  beforeEach(() => {
+    fakeGraph();
+    serveSamples({}, () => {
+      const json = (): Promise<VoiceManifest> => Promise.resolve(OPENERS);
+      const arrayBuffer = (): Promise<ArrayBuffer> => Promise.resolve(new ArrayBuffer(8));
+      return Promise.resolve({ ok: true, status: 200, json, arrayBuffer });
+    });
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('are all decoded at the run’s start, and the others let go as the run’s own airs', async () => {
+    vi.resetModules();
+    await (await import('../src/world/samples.js')).preloadSamples();
+    const radio = await import('../src/world/radioVoice.js');
+    const { decodedBytes } = await import('../src/world/audioMemory.js');
+    radio.preloadVoice('blackout');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(radio.clipOf(START_LINE)).not.toBeNull();
+    expect(radio.clipOf(OTHER_START)).not.toBeNull();
+    expect(decodedBytes().voice).toBe(2 * 1.5 * 22050 * 4);
+    expect(radio.sayLine(OTHER_START)).toBe(true);
+    expect(radio.clipOf(START_LINE)).toBeNull();
+    expect(radio.clipOf(OTHER_START)).not.toBeNull();
+    expect(decodedBytes().voice).toBe(1.5 * 22050 * 4);
+    expect(radio.voiceProbe()).toMatchObject({ lastId: 'dddddddddddd', opened: true });
+  });
+});

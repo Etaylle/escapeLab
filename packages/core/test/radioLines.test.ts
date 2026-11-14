@@ -1,9 +1,14 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
+  CLOCK_CALLS,
+  LOST_CAUSES,
   parseMission,
   PA_LINES_MAX,
   radioLines,
+  variantsOf,
+  WON_BANDS,
+  type Line,
   type Mission,
   type RadioLine,
 } from '../src/index.js';
@@ -372,7 +377,8 @@ describe('the Leitstelle over Blackout’s loudspeakers', () => {
 
   it('says, on its emergency power, as the emergency starts what fails: a few words, no more', () => {
     const messages = blackout === undefined ? [] : messagesOf(blackout);
-    expect(messages).toEqual([blackout?.map.sabotage?.announce]);
+    expect(messages).toEqual(variantsOf(blackout?.map.sabotage?.announce ?? []));
+    expect(messages.length).toBeGreaterThanOrEqual(2);
     for (const message of messages) {
       expect(wordsIn(message), message).toBeLessThanOrEqual(10);
       expect(message).not.toMatch(/\bLeitstelle\b/);
@@ -393,7 +399,11 @@ describe.each(['blackout', 'systemcheck'])('the Leitstelle through %s', (id) => 
   const mission = missions.find((m) => m.id === id);
 
   it('opens the run with its call sign', () => {
-    expect(mission?.radio.start).toMatch(CALL_SIGN);
+    const starts = variantsOf(mission?.radio.start ?? []);
+    expect(starts.length).toBeGreaterThanOrEqual(1);
+    for (const start of starts) {
+      expect(start).toMatch(CALL_SIGN);
+    }
   });
 
   it('opens the run, names the place of every station, follows every solve and the escape', () => {
@@ -415,38 +425,47 @@ describe('the lines a mission can put on the air', () => {
     const blackout = missions.find((m) => m.id === 'blackout');
     if (blackout === undefined) throw new Error('missions/blackout.json is missing');
     const lines = radioLines(blackout);
-    const ids = blackout.puzzles.map((puzzle) => puzzle.id);
-    const station = (puzzleId: string): string[] => {
-      const last = puzzleId === ids.at(-1);
-      return last ? ['nudge', 'nudge'] : ['nudge', 'nudge', 'solved'];
-    };
+    // Every text of a line comes in its place, in its order: a line of three, three times.
+    const times = (when: string, line: Line | undefined): string[] =>
+      variantsOf(line ?? []).map(() => when);
+    const { radio } = blackout;
     const pa = (blackout.intro?.pa ?? []).map(() => 'pa');
     expect(pa).toHaveLength(5);
     expect(lines.map((line) => line.when)).toEqual([
       ...pa,
-      'start',
-      ...ids.flatMap(station),
-      'escape',
-      'announce',
-      ...['emergency', 'cleared', 'missed', 'alarm'],
-      ...['clock', 'clock', 'clock', 'won', 'won', 'won', 'lost', 'lost', 'lost'],
+      ...times('start', radio.start),
+      ...blackout.puzzles.flatMap((puzzle) => [
+        ...puzzle.nudges.flatMap((nudge) => times('nudge', nudge)),
+        ...times('solved', puzzle.onSolved),
+      ]),
+      ...times('escape', radio.escape),
+      ...times('announce', blackout.map.sabotage?.announce),
+      ...times('emergency', radio.emergency?.start),
+      ...times('cleared', radio.emergency?.cleared),
+      ...times('missed', radio.emergency?.missed),
+      ...times('alarm', radio.alarm),
+      ...CLOCK_CALLS.flatMap(({ key }) => times('clock', radio.clock?.[key])),
+      ...WON_BANDS.flatMap((band) => times('won', radio.won?.[band])),
+      ...LOST_CAUSES.flatMap((cause) => times('lost', radio.lost?.[cause])),
     ]);
     const plant = { puzzleId: null, speaker: 'pa' };
     const operator = { puzzleId: null, speaker: 'operator' };
     expect(lines[0]).toEqual({ ...plant, text: blackout.intro?.pa[0], when: 'pa' });
-    expect(lines[pa.length]).toEqual({ ...operator, text: blackout.radio.start, when: 'start' });
+    const first = (line: Line | undefined): string | undefined => variantsOf(line ?? [])[0];
+    expect(lines[pa.length]).toEqual({ ...operator, text: first(radio.start), when: 'start' });
     const out = lines.findIndex((line) => line.when === 'escape');
-    expect(lines[out]).toEqual({ ...operator, text: blackout.radio.escape, when: 'escape' });
-    const announce = blackout.map.sabotage?.announce;
-    expect(lines[out + 1]).toEqual({ ...plant, text: announce, when: 'announce' });
-    expect(lines.at(-1)).toEqual({ ...operator, text: blackout.radio.lost?.abandoned, when: 'lost' });
-    const first = blackout.puzzles[0];
-    const at = { puzzleId: first?.id, speaker: 'operator' };
-    expect(lines.slice(pa.length + 1, pa.length + 4)).toEqual([
-      { ...at, text: first?.nudges[0], when: 'nudge' },
-      { ...at, text: first?.nudges[1], when: 'nudge' },
-      { ...at, text: first?.onSolved, when: 'solved' },
-    ]);
+    expect(lines[out]).toEqual({ ...operator, text: first(radio.escape), when: 'escape' });
+    const announce = first(blackout.map.sabotage?.announce);
+    const announced = lines.findIndex((line) => line.when === 'announce');
+    expect(lines[announced]).toEqual({ ...plant, text: announce, when: 'announce' });
+    const last = variantsOf(radio.lost?.abandoned ?? []).at(-1);
+    expect(lines.at(-1)).toEqual({ ...operator, text: last, when: 'lost' });
+    const station = blackout.puzzles[0];
+    const at = { puzzleId: station?.id, speaker: 'operator' };
+    const starts = variantsOf(radio.start ?? []).length;
+    expect(lines.slice(pa.length + starts, pa.length + starts + 2)).toEqual(
+      variantsOf(station?.nudges[0] ?? []).map((text) => ({ ...at, text, when: 'nudge' })),
+    );
   });
 
   it('leaves out what a mission does not say', () => {

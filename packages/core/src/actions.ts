@@ -23,7 +23,9 @@ import type { ConsoleId, PuzzleContext } from './puzzles/module.js';
 import {
   CLOCK_CALLS,
   CLOCK_LATE_MS,
+  pickLine,
   wonBand,
+  type Line,
   type LostCause,
   type RadioMoment,
 } from './radio.js';
@@ -1104,7 +1106,7 @@ function clockStarts(state: GameState, at: number): GameState {
     nudgesGiven: 0,
     clockCalls: CLOCK_CALLS.filter((call) => call.sec >= limitSec).length,
   };
-  return logRadio(running, state.mission.radio.start, at, 'start');
+  return logRadio(running, 'start', state.mission.radio.start, at);
 }
 
 /** Common guards for in-game actions; returns the acting player's current puzzle. */
@@ -1153,7 +1155,7 @@ function advance(state: GameState, at: number): GameState {
     `${solved?.title ?? 'Station'} gelöst`,
     at,
   );
-  const logged = logRadio(reported, solved?.onSolved, at, 'solved');
+  const logged = logRadio(reported, 'solved', solved?.onSolved, at, solved?.id);
   const nextIndex = state.currentPuzzleIndex + 1;
   if (nextIndex >= state.mission.puzzles.length) {
     if (state.mission.map.exit !== undefined) {
@@ -1164,7 +1166,7 @@ function advance(state: GameState, at: number): GameState {
         'Notausgang entriegelt',
         at,
       );
-      return logRadio(unlocked, state.mission.radio.escape, at, 'escape');
+      return logRadio(unlocked, 'escape', state.mission.radio.escape, at);
     }
     return wonNow(logged, at, 'Alle Systeme online');
   }
@@ -1205,15 +1207,32 @@ function logEvent(
 
 /**
  * A line is heard at `moment` — mission control's on the radio, or the plant's over its
- * loudspeakers (radio.ts `speakerOf`) — if the mission scripted one for it.
+ * loudspeakers (radio.ts `speakerOf`) — if the mission scripted one for it: of its texts, the
+ * one the run picks for it (radio.ts `pickLine`) at its `place` — the station, the clock's
+ * call, the band of the time left, the cause — the `occurrence`-th time it comes in the run.
  */
 function logRadio(
   state: GameState,
-  text: string | undefined,
-  at: number,
   moment: RadioMoment,
+  line: Line | undefined,
+  at: number,
+  place = '',
+  occurrence = 0,
 ): GameState {
-  return text === undefined ? state : logEvent(state, 'radio', text, at, null, moment);
+  if (line === undefined) {
+    return state;
+  }
+  const key = place === '' ? moment : `${moment}:${place}`;
+  const text = pickLine(line, state.seed ?? 0, key, occurrence);
+  return logEvent(state, 'radio', text, at, null, moment);
+}
+
+/**
+ * How many emergencies the run has had so far, the one under way among them: its lines take
+ * their turn by it (radio.ts `pickLine`), so that the next emergency hears the next take.
+ */
+function emergenciesSoFar(state: GameState): number {
+  return state.events.filter((e) => e.kind === 'sabotage' && e.label !== EMERGENCY_CLEARED).length;
 }
 
 /** Why a run was lost: the last line of its report. */
@@ -1258,7 +1277,7 @@ function applyPenalty(state: GameState, sec: number, at: number, reason: string)
  */
 function firstAlarm(state: GameState, reason: string, at: number): GameState {
   const first = state.penaltySeq === 1 && reason !== EMERGENCY_MISSED;
-  return first ? logRadio(state, state.mission.radio.alarm, at, 'alarm') : state;
+  return first ? logRadio(state, 'alarm', state.mission.radio.alarm, at) : state;
 }
 
 /**
@@ -1268,7 +1287,7 @@ function firstAlarm(state: GameState, reason: string, at: number): GameState {
 function wonNow(state: GameState, at: number, how: string): GameState {
   const finished = logEvent(overNow(state, 'won', at), 'finish', how, at);
   const band = wonBand((state.deadlineAt ?? at) - at);
-  return logRadio(finished, state.mission.radio.won?.[band], at, 'won');
+  return logRadio(finished, 'won', state.mission.radio.won?.[band], at, band);
 }
 
 /**
@@ -1278,7 +1297,7 @@ function wonNow(state: GameState, at: number, how: string): GameState {
 function lostNow(state: GameState, at: number, why = OUT_OF_TIME): GameState {
   const finished = logEvent(overNow(state, 'lost', at), 'finish', why, at);
   const cause = lostCause(state, why);
-  return logRadio(finished, state.mission.radio.lost?.[cause], at, 'lost');
+  return logRadio(finished, 'lost', state.mission.radio.lost?.[cause], at, cause);
 }
 
 /** What lost a run that ends `why`: called off, its alarms at the limit, or its time. */
@@ -1330,8 +1349,10 @@ function startSabotage(state: GameState, action: { at: number }): GameState {
     `Notfall: ${sabotage.label}`,
     action.at,
   );
-  const announced = logRadio(started, sabotage.announce, action.at, 'announce');
-  return logRadio(announced, state.mission.radio.emergency?.start, action.at, 'emergency');
+  const seen = emergenciesSoFar(state);
+  const announced = logRadio(started, 'announce', sabotage.announce, action.at, '', seen);
+  const line = state.mission.radio.emergency?.start;
+  return logRadio(announced, 'emergency', line, action.at, '', seen);
 }
 
 /**
@@ -1353,7 +1374,8 @@ function clearSabotage(state: GameState, at: number): GameState {
     EMERGENCY_CLEARED,
     at,
   );
-  return logRadio(cleared, state.mission.radio.emergency?.cleared, at, 'cleared');
+  const line = state.mission.radio.emergency?.cleared;
+  return logRadio(cleared, 'cleared', line, at, '', emergenciesSoFar(state) - 1);
 }
 
 /**
@@ -1488,7 +1510,7 @@ function expireSabotage(state: GameState, action: { at: number }): GameState {
     EMERGENCY_MISSED,
   );
   const line = missed.phase === 'playing' ? state.mission.radio.emergency?.missed : undefined;
-  return logRadio(missed, line, action.at, 'missed');
+  return logRadio(missed, 'missed', line, action.at, '', emergenciesSoFar(state) - 1);
 }
 
 /**
@@ -1674,12 +1696,14 @@ export function nudgeDueAt(state: GameState): number | null {
  */
 function nudge(state: GameState, at: number): GameState {
   const due = nudgeDueAt(state);
-  const line = state.mission.puzzles[state.currentPuzzleIndex]?.nudges[state.nudgesGiven];
-  if (due === null || at < due || line === undefined) {
+  const def = state.mission.puzzles[state.currentPuzzleIndex];
+  const line = def?.nudges[state.nudgesGiven];
+  if (due === null || at < due || def === undefined || line === undefined) {
     return state;
   }
   const spoken = { ...state, nudgesGiven: state.nudgesGiven + 1, quietSince: at };
-  return logEvent(spoken, 'nudge', line, at, null, 'nudge');
+  const text = pickLine(line, state.seed ?? 0, `nudge:${def.id}:${state.nudgesGiven}`);
+  return logEvent(spoken, 'nudge', text, at, null, 'nudge');
 }
 
 /**
@@ -1720,7 +1744,7 @@ function clockCall(state: GameState, at: number): GameState {
   if (call === undefined || call.sec * 1000 - left > CLOCK_LATE_MS) {
     return passed;
   }
-  return logRadio(passed, state.mission.radio.clock?.[call.key], at, 'clock');
+  return logRadio(passed, 'clock', state.mission.radio.clock?.[call.key], at, call.key);
 }
 
 /** Guards shared by all three item actions; proximity is the server's job. */
