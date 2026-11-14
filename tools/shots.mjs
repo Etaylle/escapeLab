@@ -9783,7 +9783,8 @@ async function playBlackoutToTheEnd(host, guest, watcher) {
  */
 async function radioCensus(player) {
   const { events, puzzleCount } = player.seen.view;
-  const on = (moment) => events.filter((e) => e.kind === 'radio' && e.moment === moment);
+  // A line on the air with its moment: a radio line, or a nudge, logged as one of its own kind.
+  const on = (moment) => events.filter((e) => e.moment === moment);
   const count = (moment) => on(moment).length;
   const started = events.filter((e) => e.kind === 'sabotage' && e.label !== EMERGENCY_CLEARED);
   const cleared = events.filter((e) => e.kind === 'sabotage' && e.label === EMERGENCY_CLEARED);
