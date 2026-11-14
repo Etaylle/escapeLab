@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import type { AccountView } from '@escapelab/core';
 import { crewPass, lastColor } from '../pass.js';
 import { CrewFigure } from './CrewFigure.js';
 import { colorName } from './CrewRoom.js';
@@ -19,15 +20,39 @@ function useSettled(value: string, ms: number): string {
   return settled;
 }
 
+/** How many runs an account played, in words: „noch kein Einsatz", „1 Einsatz", „3 Einsätze". */
+export function runsText(runs: number): string {
+  if (runs === 0) {
+    return 'noch kein Einsatz';
+  }
+  return `${runs} ${runs === 1 ? 'Einsatz' : 'Einsätze'}`;
+}
+
 /**
- * The player's profile at the top right of the menu's stage: their figure in the crew colour
- * last worn in a lobby (pass.ts `lastColor`) — breathing and glancing round as in the lobby,
- * waving once the name typed beside it has stood still a moment — the name, kept with the
- * browser's pass as it is typed, and the colour's name. The slot at its end is where an
- * account's sign-in will sit (docs/backlog.md K-1); today everybody is a guest there.
+ * What the profile says of the account at its end: how many runs it played — „Gast" where the
+ * server told of none, the line down or the store away.
  */
-export function ProfileChip({ name, onName }: { name: string; onName: (name: string) => void }) {
-  const color = lastColor() ?? FIRST_COLOR;
+export function accountLine(account: AccountView | null): string {
+  return account === null ? 'Gast' : `Konto · ${runsText(account.runs)}`;
+}
+
+interface ChipProps {
+  name: string;
+  onName: (name: string) => void;
+  /** the pass's account as the server told it; null before it did */
+  account: AccountView | null;
+}
+
+/**
+ * The player's profile at the top right of the menu's stage, the account of the browser's pass
+ * (core protocol.ts `AccountView`): their figure in the colour the account wears — the one kept
+ * with the pass before the server told it, the crew's first before any (pass.ts `lastColor`) —
+ * breathing and glancing round as in the lobby, waving once the name typed beside it has stood
+ * still a moment; the name, which the account takes once it stands still (Join.tsx), the
+ * colour's name, and what the account holds (`accountLine`).
+ */
+export function ProfileChip({ name, onName, account }: ChipProps) {
+  const color = account?.color ?? lastColor() ?? FIRST_COLOR;
   const settled = useSettled(name.trim(), WAVE_SETTLE_MS);
   return (
     <section className="profile-chip" aria-label="Profil">
@@ -57,7 +82,7 @@ export function ProfileChip({ name, onName }: { name: string; onName: (name: str
           {colorName(color)}
         </span>
       </div>
-      <span className="profile-slot">Gast</span>
+      <span className="profile-slot">{accountLine(account)}</span>
     </section>
   );
 }

@@ -4,6 +4,8 @@ import {
   applyAction,
   initialState,
   parseMission,
+  reportGrade,
+  runReport,
   scaleMission,
   viewFor,
   viewForSpectator,
@@ -322,6 +324,13 @@ describe('grades with hints', () => {
 
   it('drops to B with more hints, but no further on hints alone', () => {
     expect(viewFor(wonWith(2), 'p1').grade?.rank).toBe('B');
+  });
+
+  it('reckons the same grade from the run’s report, its notes counted station by station', () => {
+    for (const count of [0, 1, 2]) {
+      const won = wonWith(count);
+      expect(reportGrade(runReport(won, 'QXT4'))).toEqual(viewFor(won, 'p1').grade);
+    }
   });
 });
 

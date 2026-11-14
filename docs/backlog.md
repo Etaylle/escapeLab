@@ -167,6 +167,13 @@ die Entscheidung.
   nennt beide Werte. Tests in tools/framegate; Header-Kommentar und art-bible ergänzen.
 - Langfristig: Flucht-Main-Thread billiger (Licht/Dunkel-Pässe, halbe Frame), siehe Audit-Addenda.
 
+### H-3 Capture-Gruppen im Harness — Status: erledigt (H-quick, Merge 2026-11-14) · Größe: S
+- `tools/groups.mjs` nennt 15 Gruppen; `SHOTS_ONLY=screens,intro` beweist ein Menü-Paket in
+  48 s statt 12 min, `SHOTS_SKIP=run` lässt den Lauf aus; jeder Schritt läuft unter dem Gate
+  seiner Gruppe, ein voller Lauf scheitert an einem falsch eingeordneten Capture. Ohne Variablen
+  ist der Lauf identisch zu vorher (per Aufrufgraph geprüft). Gemessene Kosten je Gruppe in der
+  README.
+
 ### T-9 Tests an der Wanduhr — Status: erledigt (2026-11-13) · Größe: S
 - Zwei Tests lasen die echte Uhr und wurden unter Last rot: `certificate.test.ts` (openssl liest
   seine Uhr zweimal, ein Lauf über eine Sekundengrenze machte aus 825 Tagen 825,00001; jetzt
@@ -373,7 +380,7 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   Captures; Zielzeile nennt der dritten Person ihre Aufgabe („Cleo: Platte halten"). Eine echte
   Drei-Pulte-Station oder ein Needy-Objekt nur bei drei Spielenden erst nach Playtest-Daten.
 
-### I-1 Zugangskontrolle mit Zwei-Faktor — Status: wartet (Entscheidung Uros: Modul zuerst, Platz in Blackout nach dem Playtest) · Größe: L
+### I-1 Zugangskontrolle mit Zwei-Faktor — Status: in Arbeit (I-access, Spec `spec-I-access.md`; Modul mit Probe-Mission, Platz in Blackout nach dem Playtest) · Größe: L
 - Pult A Login-Terminal, Pult B Token-Generator mit Code, der mit der Serveruhr alle 30 s
   wechselt (Restsekunden sichtbar), Quelle Benutzerliste mit Rollen. Vorbilder: Quadrilateral
   Cowboy (`door.open(3)`: das Terminal gibt die Tür drei Sekunden frei, jemand muss durch),
@@ -440,12 +447,41 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   tritt beiseite, wenn ein Panel aufgeht; ab 900 px Breite, am Handy bleibt der Chip. Kosten
   ≤ 1 ms je Frame zusammen.
 
-### K-1 Konto wie bei Dota — Status: bereit (Entscheidung Uros 2026-11-12: eigene Konten, Google zuletzt; nach S-1) · Größe: L
+### U-1 Pausenmenü, Verlassen wie Dota 2, Einstellungen und Chrome — Status: in Arbeit (U-pause, PR 6) · Größe: L
+- Uros 2026-11-14: „Spielabbruch richtig: Der Spieler kann das Spiel nicht verlassen, wann er
+  will, und ins Hauptmenü zurück. Wie Dota 2: joinen, nach Disconnect reconnecten, verlassen."
+  Und: „Einstellungen im Spiel haben kein gutes UI; alles, was nicht direkt Spiel ist, Leisten,
+  Menüs, soll besser werden wie echte Spiele." Heute führt aus `Game.tsx` kein Weg ins Menü.
+- Pausenmenü per Esc, Zahnrad, Controller-Start (Weiter, Einstellungen, Handbuch, Zum Hauptmenü,
+  Einsatz aufgeben, Raum verlassen, Zuschauen beenden), ohne die Uhr der Crew anzuhalten; „Zum
+  Hauptmenü" schließt die Leitung sauber und lässt den Platz gebunden (Menükarte „Zurück zum
+  Einsatz"); Host-Übergabe in der Lobby; Zurück-Taste des Browsers öffnet das Menü; Einstellungen
+  in Reitern Ton, Bild, Steuerung, Zugang, Konto mit Live-Vorschau und Zurücksetzen je Reiter;
+  Leisten und Panels im Stil des Hauptmenüs. Vorbilder: Dota 2, Hades, Celeste, Deep Rock,
+  Helldivers 2, Overcooked 2.
+
+### G-2 Vorbilder-Studie und Übungshalle — Status: in Arbeit (G-testground, PR 7) · Größe: L
+- Uros 2026-11-14: „Minispiele und Gameplay-Elemente von wo abschauen; im Tutorial ein Testground,
+  wo alle Minispiele testbar und spielbar sind; Gameplay-Verbesserung ist ein anderes Ticket."
+- `docs/gameplay-models.md`: je Vorbild (Keep Talking, Among Us, Spaceteam, We Were Here,
+  Operation: Tango, Portal 2 Co-op, Escape Simulator/Academy, Overcooked 2, Lovers in a Dangerous
+  Spacetime, Phasmophobia, Lethal Company) zwei bis drei entlehnbare Mechaniken, gemappt auf
+  unsere Invarianten, mit einer Rangliste von 8–10 Übernahmen als Backlog-Zeilen. Dazu Missionen
+  mit freier Stationsreihenfolge und ohne Uhr, und die Mission „Übungshalle": jede Station einmal,
+  Regeln daneben, aus der Modulliste erzeugt, im Harness bis zum Ende gespielt.
+
+### K-1 Konto wie bei Dota — Status: K-1a erledigt (K-accounts, Merge 2026-11-14; vier Review-Runden, Cloud-CI grün mit Postgres-Dienst); K-1b bereit (Entscheidung Uros 2026-11-12: eigene Konten, Google zuletzt) · Größe: L
 - Reihenfolge: **K-1a** Datenbank (Neon-Postgres, Prisma) mit Konto je Dienstausweis (Kennung,
   Anzeigename, Farbe, Erfolge), Läufe und Bestenliste in der Datenbank statt der Datei, die
   Render bei jedem Deploy löscht, „Meine Einsätze"; ohne `DATABASE_URL` weiter Datei und Gast
   (Entwicklung, CI). **K-1b** Anmeldung mit Google (Identity Services, `jose`), die ein Konto
   geräteunabhängig macht; Übernahme und Bestätigung entfallen für Angemeldete.
+- K-1a im PR (K-accounts): Prisma 6 (Prisma 7 verlangt einen Treiber-Adapter samt `pg`),
+  Tabellen accounts, identities, runs, run_members, achievements; Speicher hinter einer
+  Schnittstelle (Datei oder Postgres, eine Zeile im Start-Log), Konto je Dienstausweis mit Name
+  und Farbe, „Konto löschen" in den Einstellungen, Läufe je Sitz nach Konto in einer Transaktion,
+  Erfolge je Konto, „Meine Einsätze" neben der Bestenliste; CI mit Postgres-16-Dienst, Smoke mit
+  `TEST_DATABASE_URL`, `docs/accounts.md`. Offen bei Render: `DATABASE_URL` (Neon) setzen.
 - Uros 2026-11-12: „Wieso nicht wie Dota Accounts?" Heute bindet ein Dienstausweis je Browser
   (R-3); ein anderes Gerät kommt nur per Übernahme mit Bestätigung der Crew hinein. Ein Konto
   macht die Identität geräteunabhängig: anmelden, und der laufende Einsatz holt einen zurück,
