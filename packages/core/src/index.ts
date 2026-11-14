@@ -89,6 +89,7 @@ export {
 export {
   castFor,
   castOf,
+  deskAt,
   inService,
   personOf,
   ROSTER,

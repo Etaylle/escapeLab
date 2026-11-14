@@ -144,6 +144,14 @@ export function speakerAt(state: Night, moment: RadioMoment, roster: Roster = RO
   return { role, person: castFor(state, roster)[role] ?? '' };
 }
 
+/**
+ * Who says mission control's word outside a moment of the radio — that a crew member is gone
+ * (actions.ts `lineDropped`) — on `state`'s night: the Leitstelle on duty.
+ */
+export function deskAt(state: Night, roster: Roster = ROSTER): Speaker {
+  return { role: 'operator', person: castFor(state, roster).operator };
+}
+
 /** The person of `roster` whose id is `id`; undefined where there is none. */
 export function personOf(id: string, roster: Roster = ROSTER): Person | undefined {
   return ROLES.flatMap((role) => roster[role]).find((person) => person.id === id);

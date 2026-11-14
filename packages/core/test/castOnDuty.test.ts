@@ -67,6 +67,18 @@ describe('the operator on duty, every voice kept', () => {
     }
   });
 
+  it('says that somebody is gone in the voice of the operator on duty', () => {
+    const speakers = castSeeds.map((castSeed) => {
+      const run = start(lobby(castSeed), 7);
+      const gone = applyAction(run, { type: 'player-disconnected', playerId: 'p2', at: T0 + 5000 });
+      const word = gone.events.at(-1);
+      expect([word?.kind, word?.label]).toEqual(['away', 'Bens Leitung ist weg.']);
+      expect(word?.speaker).toEqual({ role: 'operator', person: viewFor(run, 'p1').cast.operator });
+      return word?.speaker?.person;
+    });
+    expect(new Set(speakers)).toEqual(new Set(['helmut', 'laura', 'ben']));
+  });
+
   it('changes with the night: back in the lobby, the next one is drawn', () => {
     const nights = castSeeds.map((castSeed) => {
       const over = applyAction(start(lobby(castSeed), 5), { type: 'time-expired', at: T0 + 1e6 });

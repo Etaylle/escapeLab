@@ -21,7 +21,7 @@ import { noteKey } from './notes.js';
 import { mulberry32, shuffle } from './rng.js';
 import { moduleFor, type PuzzleDef, type PuzzleState } from './puzzles/index.js';
 import type { ConsoleId, PuzzleContext } from './puzzles/module.js';
-import { speakerAt } from './cast.js';
+import { deskAt, speakerAt } from './cast.js';
 import {
   CLOCK_CALLS,
   CLOCK_LATE_MS,
@@ -646,8 +646,15 @@ function lineDropped(
     ...state.away,
     [player.id]: { since: action.at, waivableAt: action.at + wait, waived: false },
   };
-  const line = awayLine(player.name, action.menu === true);
-  const said = logEvent({ ...dropped, away, drops: state.drops + 1 }, 'away', line, action.at);
+  // Said by the Leitstelle on duty, as the night's cast has it: the banner names who speaks.
+  const word: RunEvent = {
+    at: action.at,
+    kind: 'away',
+    label: awayLine(player.name, action.menu === true),
+    seconds: null,
+    speaker: deskAt(state),
+  };
+  const said = { ...dropped, away, drops: state.drops + 1, events: [...dropped.events, word] };
   return introOver(holdForNobody(said, action.at), action.at);
 }
 

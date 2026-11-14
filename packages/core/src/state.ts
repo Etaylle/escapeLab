@@ -49,7 +49,8 @@ export interface RunEvent {
   moment?: RadioMoment;
   /**
    * on a line heard in the run: who says it — the role its moment wants and the person of the
-   * night's cast filling it (cast.ts `speakerAt`); left out with `moment`, and on the lines of a
+   * night's cast filling it (cast.ts `speakerAt`), and on mission control's word that a crew member
+   * is gone the Leitstelle on duty (`deskAt`); left out on every other line, and on the lines of a
    * run kept before the cast
    */
   speaker?: Speaker;
