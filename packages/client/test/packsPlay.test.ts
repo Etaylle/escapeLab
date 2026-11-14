@@ -121,6 +121,20 @@ function lastFade(gain: FakeGain): { start: number; end: number; to: number } {
   return { start: start?.[2] as number, end: end?.[2] as number, to: end?.[1] as number };
 }
 
+/** Deck `i` of the music file `file`, as `decksOf` finds them; fails where it has none. */
+function deckOf(file: string, i: number): FakeAudio {
+  const deck = decksOf(file)[i];
+  if (deck === undefined) throw new Error(`no deck ${i} of ${file}`);
+  return deck;
+}
+
+/** The curve scheduled on `gain` (`curveOn`); fails where none is. */
+function curveOf(gain: FakeGain): { values: number[]; at: number; seconds: number } {
+  const curve = curveOn(gain);
+  if (curve === null) throw new Error('no curve on the gain');
+  return curve;
+}
+
 /** The curve scheduled on a gain: its values, from when, for how long. */
 function curveOn(gain: FakeGain): { values: number[]; at: number; seconds: number } | null {
   const curve = gain.gain.events.find((e) => e[0] === 'curve');
@@ -139,12 +153,10 @@ describe('a pack’s stems in a run', () => {
     vi.advanceTimersByTime(300);
     const zero = 10.3; // as soon as its timer can make it: no bars to wait for
     // Every stem's file once — a pack's stem heard before the music's list came, too.
-    for (const stem of ['calm', 'tense', 'critical']) {
-      const url = `/music/packs/probe/${stem}.m4a`;
-      expect(fetched.filter((asked) => asked === url), url).toHaveLength(1);
-    }
-    const [first] = decksOf('packs/probe/calm.m4a');
-    expect(first?.plays).toBe(1);
+    const asked = fetched.filter((url) => url.startsWith('/music/packs/probe/')).sort();
+    expect(asked).toEqual(['calm', 'critical', 'tense'].map((s) => `/music/packs/probe/${s}.m4a`));
+    const first = deckOf('packs/probe/calm.m4a', 0);
+    expect(first.plays).toBe(1);
     expect(after(ctx, first).outputs[0]).toMatchObject({ gain: { value: 0.5 } }); // its gain
     ctx.currentTime = zero + ROUND_S - 1.2;
     music.setTension(tension());
@@ -152,19 +164,18 @@ describe('a pack’s stems in a run', () => {
     ctx.currentTime = zero + ROUND_S - 0.9;
     music.setTension(tension());
     vi.advanceTimersByTime(900);
-    const [, second] = decksOf('packs/probe/calm.m4a');
-    expect([second?.plays, second?.currentTime]).toEqual([1, 0]); // from its start, no seek
-    const into = curveOn(outOf(ctx, second));
-    const out = curveOn(outOf(ctx, first));
+    const second = deckOf('packs/probe/calm.m4a', 1);
+    expect([second.plays, second.currentTime]).toEqual([1, 0]); // from its start, no seek
+    const into = curveOf(outOf(ctx, second));
+    const out = curveOf(outOf(ctx, first));
     const cross = zero + ROUND_S + LEAD_S;
-    expect([into?.at, into?.seconds]).toEqual([expect.closeTo(cross, 9), ROUND.fadeMs / 1000]);
-    expect([out?.at, out?.seconds]).toEqual([expect.closeTo(cross, 9), ROUND.fadeMs / 1000]);
+    expect([into.at, into.seconds]).toEqual([expect.closeTo(cross, 9), ROUND.fadeMs / 1000]);
+    expect([out.at, out.seconds]).toEqual([expect.closeTo(cross, 9), ROUND.fadeMs / 1000]);
     expect(ROUND.fadeMs).toBeGreaterThanOrEqual(MIN_FADE_MS);
-    into?.values.forEach((level, i) => {
-      expect(level ** 2 + (out?.values[i] ?? NaN) ** 2).toBeCloseTo(1, 6);
-    });
+    const powers = into.values.map((level, i) => level ** 2 + (out.values[i] ?? NaN) ** 2);
+    for (const power of powers) expect(power).toBeCloseTo(1, 6);
     vi.advanceTimersByTime((cross + ROUND.fadeMs / 1000 + 0.05 - ctx.currentTime) * 1000);
-    expect([first?.paused, first?.currentTime]).toEqual([true, 0]);
+    expect([first.paused, first.currentTime]).toEqual([true, 0]);
   });
 
   it('change on the pressure at once, where no bars are counted', async () => {
@@ -185,6 +196,9 @@ describe('a pack’s stems in a run', () => {
     });
   });
 
+});
+
+describe('a pack picked mid-run', () => {
   it('take a pack picked mid-run over at the playing loop point, silent ones at once', async () => {
     const { music, packs } = await fresh();
     music.setTension(tension());

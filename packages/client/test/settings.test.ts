@@ -124,6 +124,9 @@ describe('readSettings and writeSettings — kept on this device', () => {
     });
   });
 
+});
+
+describe('readSettings and writeSettings — where storage fails, and as the page starts', () => {
   it('reads what is no JSON as nothing set, and says so', async () => {
     const { settings } = await fresh();
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);

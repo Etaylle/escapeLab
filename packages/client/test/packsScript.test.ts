@@ -363,6 +363,9 @@ describe('a pack built', BUILDS, () => {
     expect([64_000, 66_000, 68_000]).toContain(round);
   });
 
+});
+
+describe('a pack’s pieces as built', BUILDS, () => {
   it('brings every piece to −19 LUFS by its gain, measured as encoded', async () => {
     const places = placesIn();
     const pack = plannedPack('ada');
@@ -571,6 +574,9 @@ describe('a pack refused', BUILDS, () => {
     expect(process.exitCode).toBe(1);
   });
 
+});
+
+describe('a piece downloaded by hand', BUILDS, () => {
   it('asks for a file downloaded by hand where the plan puts it, takes it once there', async () => {
     const places = placesIn();
     const manual = { manual: 'ada/Boss.wav', from: 'https://clement-panchout.itch.io/x' };

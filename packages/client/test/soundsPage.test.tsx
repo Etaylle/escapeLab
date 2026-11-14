@@ -797,6 +797,9 @@ describe('the music packs on the page', () => {
     expect(playPack).toHaveBeenCalledWith('probe', 'end-lost');
   });
 
+});
+
+describe('the music packs’ credits and sound on the page', () => {
   it('give the whole list of the music’s credits: every piece of every pack shipped', () => {
     const shipped = packListingOf(installedPacks(), {});
     const html = renderToStaticMarkup(<SoundsBoard {...boardOf({ packs: shipped })} />);

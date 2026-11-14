@@ -121,7 +121,17 @@ describe('a bus pulled down', () => {
   });
 });
 
-describe('the mix on the lab’s context', () => {
+/** The audio module afresh, every recording served: its engine's mix, and the context. */
+async function engine() {
+  vi.resetModules();
+  await loadedSamples();
+  const audio = await import('../src/world/audio.js');
+  const mix = audio.audioEngine() as unknown as FakeMix;
+  return { audio, mix, ctx: lastContext() };
+}
+
+/** A fake graph for each test of the engine, and nothing of it left after. */
+function onFakeGraph(): void {
   beforeEach(() => {
     fakeGraph();
     vi.spyOn(Math, 'random').mockReturnValue(0.5);
@@ -130,14 +140,10 @@ describe('the mix on the lab’s context', () => {
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
   });
+}
 
-  async function engine() {
-    vi.resetModules();
-    await loadedSamples();
-    const audio = await import('../src/world/audio.js');
-    const mix = audio.audioEngine() as unknown as FakeMix;
-    return { audio, mix, ctx: lastContext() };
-  }
+describe('the mix on the lab’s context', () => {
+  onFakeGraph();
 
   it('sums every bus in the master, the mute, through the brickwall into the output', async () => {
     const { mix, ctx } = await engine();
@@ -210,6 +216,11 @@ describe('the mix on the lab’s context', () => {
     audio.setMuted(false);
     expect(mix.master.gain.events.at(-1)?.[1]).toBeCloseTo(0.9, 9);
   });
+
+});
+
+describe('the mix under the lab’s sounds', () => {
+  onFakeGraph();
 
   it('pulls the music 6 dB down under the klaxon, and under the siren until it stops', async () => {
     const { audio, mix, ctx } = await engine();
