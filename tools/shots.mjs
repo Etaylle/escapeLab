@@ -226,14 +226,16 @@
  * station type once, with the moves the plan carries (core's test/hallPlan.ts keeps them the
  * solvers' own); the draw and the Laborkennung have to be the plan's. As the briefing ends an
  * audience joins: hall-overview.png is its world, the whole hall lit from the start, every
- * station in its bay — or the run fails. Both walk past the sign. Then, station by station in the
- * plan's order — the host at it or at its console A, the guest by its book or at console B, both
- * at the one the whole crew presses — the host's device has to open on what the plan pins, is shot
- * as it opens (hall-<type>.png), and the plan's moves are made on the devices as a hand makes
- * them, the button held until the clock counting up shows the plan's digit; every station has to
- * solve without an alarm. The hall has no hatch: its last station wins the run, every station
- * counted, and hall-won.png is the won card — GESCHAFFT on the host's and the audience's, its
- * grade in the words of a run without a clock.
+ * station in its bay — or the run fails. Both walk past the sign, where the host's frames are
+ * sampled for information while every station stands armed, a beacon over each. Then, station by
+ * station in the plan's order — the host at it or at its console A, the guest by its book or at
+ * console B, both at the one the whole crew presses — the host's device has to open on what the
+ * plan pins, is shot as it opens (hall-<type>.png), and the plan's moves are made on the devices
+ * as a hand makes them, the button held until the clock counting up shows the plan's digit, a
+ * token read off the guest's device as it comes round; every station has to solve without an
+ * alarm. The hall has no hatch: its last station wins the run, every station counted, and
+ * hall-won.png is the won card — GESCHAFFT on the host's and the audience's, its grade in the
+ * words of a run without a clock.
  *
  * Notes of the last shift: after the lever, the host walks up to the nearest
  * note the crew has found and presses E; note.png shows its slip, which has
@@ -11911,8 +11913,9 @@ function reportOverview(map) {
 
 /**
  * The Übungshalle on its pinned seed to the won card: the draw the plan's; both past the
- * Laborkennung; every station in the plan's order (`playHallStation`), the last of them winning
- * the run (`hallWon`). Logs how long the stations took and the run.
+ * Laborkennung; the host's frames sampled there for information while every station stands
+ * armed, a beacon over each console; every station in the plan's order (`playHallStation`), the
+ * last of them winning the run (`hallWon`). Logs how long the stations took and the run.
  */
 async function playHall(crew, watcher) {
   const { host } = crew;
@@ -11923,6 +11926,8 @@ async function playHall(crew, watcher) {
     throw new Error(`the walkthrough knows no way to work ${types}: give HALL_CONTROLS its keys`);
   }
   await passTheSign(crew);
+  const when = 'in the hall at its sign, every station armed';
+  await sampleFrames(host.page, when, () => pace(host, SAMPLE_MS), { gating: false });
   const from = Date.now();
   for (const station of HALL_PLAN.stations) {
     await playHallStation(crew, station);
@@ -11943,7 +11948,8 @@ async function playHall(crew, watcher) {
  * takes one only with ALLOW_SEED=1.
  */
 async function openHallRoom(host) {
-  await host.page.goto(seeded(paged(BASE), HALL_PLAN.seed));
+  // Traced: the drill samples the host's frames (`playHall`).
+  await host.page.goto(seeded(traced(BASE), HALL_PLAN.seed));
   await host.page.getByPlaceholder('z. B. Anna').fill(host.name);
   await openRound(host.page, HALL_MISSION.title);
   await host.page.locator('.room-code strong').waitFor({ timeout: 10_000 });
