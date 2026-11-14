@@ -15,9 +15,8 @@ drops. Code:
 `screens/{Notepad,NoteButton}.tsx`, `pass.ts`, `line.ts`, `ws.ts`,
 `screens/{Join,Pause,Line,GiveUp}.tsx`; in the core `chat.ts`, `discovery.ts`, `achievements.ts`,
 `daily.ts`, `map.ts` (`intercomOf`), `puzzles/servers.ts` (`serviceDiagram`),
-`puzzles/access.ts`, `puzzles/buttonSync.ts` and `actions.ts` (the line on the air of a crew
-member gone, the maintenance's refusal); in the server
-`seats.ts`, `heartbeat.ts`.
+`puzzles/access.ts`, `puzzles/buttonSync.ts` and `actions.ts` (a line that drops, the
+maintenance); in the server `room.ts`, `seats.ts`, `heartbeat.ts`.
 
 ## Controls
 
