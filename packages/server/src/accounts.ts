@@ -12,7 +12,13 @@ import {
   type AchievementId,
   type CrewPass,
 } from '@escapelab/core';
-import { hashPassword, mintNumber, passwordMatches } from './login.js';
+import {
+  hashPassword,
+  mintNumber,
+  passwordMatches,
+  type Target,
+  type Ticket,
+} from './login.js';
 import {
   HAS_LOGIN,
   LoginTaken,
@@ -89,21 +95,29 @@ const MINT_TRIES = 5;
 
 /**
  * What a socket's tries at a Kennwort may still do now, by its address (login.ts `SignInGuard`):
- * why a try on an Ausweisnummer — null for none readable — may not go ahead now, null where it
- * may; and each try counted, wrong or right.
+ * why a try at `on` may not go ahead now, counting nothing — null where it may; and the try taken,
+ * counted as a wrong one before its Kennwort is checked: the ticket that gives it back where the
+ * Kennwort is right, else why it may not go ahead.
  */
 export interface Tries {
-  refusal: (number: string | null) => string | null;
-  wrong: (number: string | null) => void;
-  right: (number: string) => void;
+  refusal: (on: Target) => string | null;
+  take: (on: Target) => Ticket | string;
 }
 
 /** Tries nothing limits. */
 export const UNLIMITED: Tries = {
   refusal: () => null,
-  wrong: () => undefined,
-  right: () => undefined,
+  take: () => ({ right: () => undefined }),
 };
+
+/** What an ask of a login is held to: the socket's gate, and its tries at a Kennwort. */
+export interface Limits {
+  gate: Gate;
+  tries: Tries;
+}
+
+/** Asks of a login held to nothing. */
+export const NO_LIMITS: Limits = { gate: OPEN, tries: UNLIMITED };
 
 /** The account a pass came to: its id, and the account as its owner sees it. */
 export interface Arrival {
@@ -214,16 +228,17 @@ export class AccountDesk {
 
   /**
    * A new Kennwort for the account of `pass`, its present one `old` shown — tried as a sign-in is
-   * (`Tries`): the account as its owner sees it. Refused, saying why, for a Kennwort too short or
-   * too long, an account without one (NO_LOGIN), `old` wrong (OLD_WRONG) or a try the limits
-   * hold back, a gate that lets nothing change, and a Kennwort changed meanwhile elsewhere.
+   * (`Tries`), but counted against the pass, not the Ausweisnummer: the pass is signed in
+   * already, and a lock of the number by others' guesses holds it not. The account as its owner
+   * sees it. Refused, saying why, for a Kennwort too short or too long, an account without one
+   * (NO_LOGIN), `old` wrong (OLD_WRONG) or a try the limits hold back, a gate that lets nothing
+   * change, and a Kennwort changed meanwhile elsewhere.
    */
   changePassword(
     pass: CrewPass,
     old: string,
     password: string,
-    gate: Gate = OPEN,
-    tries: Tries = UNLIMITED,
+    limits: Limits = NO_LIMITS,
   ): Promise<AccountView> {
     return this.serial(pass, async () => {
       if (!passwordFits(password)) {
@@ -234,8 +249,9 @@ export class AccountDesk {
       if (account === null || login === null) {
         throw new GameError(NO_LOGIN);
       }
-      this.mayTry(login.subject, gate, tries);
-      const kept = await this.tried(login.subject, old, login.secretHash, tries);
+      const on = { pass: pass.id };
+      this.mayTry(on, limits);
+      const kept = await this.tried(on, old, login.secretHash, limits.tries);
       if (kept === null) {
         throw new GameError(OLD_WRONG);
       }
@@ -259,11 +275,10 @@ export class AccountDesk {
     pass: CrewPass,
     typed: string,
     password: string,
-    gate: Gate = OPEN,
-    tries: Tries = UNLIMITED,
+    limits: Limits = NO_LIMITS,
   ): Promise<Arrival> {
     return this.serial(pass, async () => {
-      const login = await this.verified(typed, password, gate, tries);
+      const login = await this.verified(typed, password, limits);
       const deleted = await this.store.signIn(identityOf(pass), login.accountId, null);
       const left = deleted.length > 0 ? ', the empty account it left deleted' : '';
       console.log(`[escapelab] a pass signed into an account${left}`);
@@ -307,14 +322,13 @@ export class AccountDesk {
     pass: CrewPass,
     next: CrewPass,
     login: { typed: string; password: string; parked: string | null },
-    gate: Gate = OPEN,
-    tries: Tries = UNLIMITED,
+    limits: Limits = NO_LIMITS,
   ): Promise<Switched> {
     return this.serial(pass, async () => {
       if (next.id === pass.id) {
         throw new GameError(PASS_REFUSED);
       }
-      const found = await this.verified(login.typed, login.password, gate, tries);
+      const found = await this.verified(login.typed, login.password, limits);
       const left = (await this.store.findByIdentity(identityOf(pass)))?.id ?? null;
       const leaving = { pass: identityOf(pass), parked: login.parked };
       await this.store.signIn(identityOf(next), found.accountId, leaving);
@@ -439,16 +453,12 @@ export class AccountDesk {
    * saying why, where either does not match — in the same words for either (WRONG_LOGIN) — and
    * where the try is held back.
    */
-  private async verified(
-    typed: string,
-    password: string,
-    gate: Gate,
-    tries: Tries,
-  ): Promise<Login> {
+  private async verified(typed: string, password: string, limits: Limits): Promise<Login> {
     const number = numberOf(typed);
-    this.mayTry(number, gate, tries);
+    const on = { number };
+    this.mayTry(on, limits);
     const login = number === null ? null : await this.store.findLogin(number);
-    const right = await this.tried(number, password, login?.secretHash ?? null, tries);
+    const right = await this.tried(on, password, login?.secretHash ?? null, limits.tries);
     if (right === null || login === null) {
       throw new GameError(WRONG_LOGIN);
     }
@@ -456,13 +466,12 @@ export class AccountDesk {
   }
 
   /**
-   * Throws, saying why, where a try at the Kennwort of the Ausweisnummer `number` (null for none
-   * readable) may not go ahead now: the limits hold it back (`Tries`), or the gate lets nothing
-   * change — a try counts as a change, so that a socket tries so many a minute. Asked before the
-   * store is, and before any work is done.
+   * Throws, saying why, where a try at `on` may not go ahead now: the limits hold it back
+   * (`Tries`), or the gate lets nothing change — a try counts as a change, so that a socket tries
+   * so many a minute. Asked before the store is, and before any work is done.
    */
-  private mayTry(number: string | null, gate: Gate, tries: Tries): void {
-    const refusal = tries.refusal(number);
+  private mayTry(on: Target, { gate, tries }: Limits): void {
+    const refusal = tries.refusal(on);
     if (refusal !== null) {
       throw new GameError(refusal);
     }
@@ -472,23 +481,27 @@ export class AccountDesk {
   }
 
   /**
-   * A try at the Kennwort `password` of the Ausweisnummer `number` (null for none readable), whose
-   * hash `stored` keeps (null for no login), once `mayTry` let it go ahead: the hash it matched,
-   * counted right; null, counted wrong, where it did not — after the same work either way (login.ts
-   * `passwordMatches`).
+   * A try at `on` with the Kennwort `password`, whose hash `stored` keeps (null for no login),
+   * once `mayTry` let it go ahead: taken by the limits first (`Tries.take`) — counted as a wrong
+   * one, so that tries sent at once are held to them as tries one after the other, or refused —
+   * then checked (login.ts `passwordMatches`), after the same work either way: the hash it
+   * matched, its ticket given back; null where it did not match, counted.
    */
   private async tried(
-    number: string | null,
+    on: Target,
     password: string,
     stored: string | null,
     tries: Tries,
   ): Promise<string | null> {
+    const taken = tries.take(on);
+    if (typeof taken === 'string') {
+      throw new GameError(taken);
+    }
     const right = await passwordMatches(password, stored);
-    if (!right || number === null || stored === null) {
-      tries.wrong(number);
+    if (!right || stored === null) {
       return null;
     }
-    tries.right(number);
+    taken.right();
     return stored;
   }
 

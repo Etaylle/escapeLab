@@ -9,7 +9,14 @@ import {
   type Mission,
   type ServerMessage,
 } from '@escapelab/core';
-import { UNLIMITED, type AccountDesk, type Arrival, type Gate, type Tries } from './accounts.js';
+import {
+  UNLIMITED,
+  type AccountDesk,
+  type Arrival,
+  type Gate,
+  type Limits,
+  type Tries,
+} from './accounts.js';
 import { MISSED_PINGS, SILENT_MS, type CutReason } from './heartbeat.js';
 import type { SignInGuard } from './login.js';
 import type { MissionCatalog } from './missions.js';
@@ -53,10 +60,10 @@ export interface Lab {
   /** who stands in front of the server, which says where a socket's address is read; none unset */
   front?: Front;
   /**
-   * the limits on trying a Kennwort, by address and by Ausweisnummer (login.ts `SignInGuard`):
-   * one for the server; none counted where unset
+   * the limits on trying a Kennwort, by address, by Ausweisnummer and by pass (login.ts
+   * `SignInGuard`): one for the server; none counted where unset
    */
-  signIns?: Pick<SignInGuard, 'refusal' | 'wrong' | 'right'>;
+  signIns?: Pick<SignInGuard, 'refusal' | 'take'>;
 }
 
 /**
@@ -192,9 +199,8 @@ function triesOf(lab: Lab, socket: PlayerSocket): Tries {
   }
   const address = doors.get(socket)?.address ?? 'unknown';
   return {
-    refusal: (number) => guard.refusal(address, number),
-    wrong: (number) => guard.wrong(address, number),
-    right: (number) => guard.right(number),
+    refusal: (on) => guard.refusal(address, on),
+    take: (on) => guard.take(address, on),
   };
 }
 
@@ -654,12 +660,6 @@ function answerAccount(lab: Lab, socket: PlayerSocket, msg: AccountAsk): void {
   );
 }
 
-/** What a socket's asks of a login are held to: its gate, and its tries at a Kennwort. */
-interface Limits {
-  gate: Gate;
-  tries: Tries;
-}
-
 /** The answer that says `done` was done, the account of the pass now `account`. */
 const told =
   (done: 'set' | 'changed' | 'signed-in' | 'switched') =>
@@ -672,18 +672,15 @@ function answerLogin(
   msg: LoginAsk,
   limits: Limits,
 ): Promise<ServerMessage> {
-  const { gate, tries } = limits;
   switch (msg.kind) {
     case 'set-password':
-      return desk.setPassword(msg.pass, msg.password, gate).then(told('set'));
+      return desk.setPassword(msg.pass, msg.password, limits.gate).then(told('set'));
     case 'change-password':
-      return desk
-        .changePassword(msg.pass, msg.old, msg.password, gate, tries)
-        .then(told('changed'));
+      return desk.changePassword(msg.pass, msg.old, msg.password, limits).then(told('changed'));
     case 'sign-in':
       return signIn(lab, desk, msg, limits);
     case 'sign-out':
-      return signOut(lab, desk, msg.pass, gate);
+      return signOut(lab, desk, msg.pass, limits.gate);
     case 'switch-account':
       return switchAccount(lab, desk, msg, limits);
   }
@@ -697,12 +694,12 @@ async function signIn(
   lab: Lab,
   desk: AccountDesk,
   msg: Extract<ClientMessage, { kind: 'sign-in' }>,
-  { gate, tries }: Limits,
+  limits: Limits,
 ): Promise<ServerMessage> {
   if (lab.manager.whereIs(msg.pass)?.phase === 'playing') {
     throw new GameError(BOUND_SIGN_IN);
   }
-  const arrival = await desk.signIn(msg.pass, msg.login, msg.password, gate, tries);
+  const arrival = await desk.signIn(msg.pass, msg.login, msg.password, limits);
   lab.manager.bindAccount(msg.pass, arrival.id);
   return told('signed-in')(arrival.view);
 }
@@ -736,11 +733,11 @@ async function switchAccount(
   lab: Lab,
   desk: AccountDesk,
   msg: Extract<ClientMessage, { kind: 'switch-account' }>,
-  { gate, tries }: Limits,
+  limits: Limits,
 ): Promise<ServerMessage> {
   const parked = lab.manager.holdsSeat(msg.pass) ? nobodysHash() : null;
   const login = { typed: msg.login, password: msg.password, parked };
-  const { arrival, left } = await desk.switchAccount(msg.pass, msg.next, login, gate, tries);
+  const { arrival, left } = await desk.switchAccount(msg.pass, msg.next, login, limits);
   if (parked !== null && left !== null) {
     lab.manager.parkSeats(msg.pass, parked, left);
   }

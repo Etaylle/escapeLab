@@ -1,3 +1,5 @@
+import type * as Crypto from 'node:crypto';
+import { scrypt } from 'node:crypto';
 import { mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -20,10 +22,11 @@ import {
   WRONG_LOGIN,
 } from '../src/accounts.js';
 import {
+  changeLocked,
   numberLocked,
   SignInGuard,
   WRONG_PER_ADDRESS,
-  WRONG_PER_NUMBER,
+  WRONG_PER_LOCK,
 } from '../src/login.js';
 import type { Sender } from '../src/rateLimiter.js';
 import { RoomManager } from '../src/roomManager.js';
@@ -33,6 +36,12 @@ import { HAS_LOGIN, PASS_REFUSED } from '../src/store/store.js';
 import { FakeServer, joinedOf, type FakeSocket } from './line.js';
 import { passFor } from './passes.js';
 import { DAY, finished, identityOf } from './storeContract.js';
+
+// The real crypto, watched: how many keys scrypt derives.
+vi.mock('node:crypto', async (importOriginal) => {
+  const actual = await importOriginal<typeof Crypto>();
+  return { ...actual, scrypt: vi.fn(actual.scrypt) };
+});
 
 /** The tutorial, for two. */
 const mission: Mission = parseMission(
@@ -315,12 +324,12 @@ describe('signing in', () => {
 });
 
 describe('the limits on signing in, over the line', () => {
-  it(`locks an Ausweisnummer at ${WRONG_PER_NUMBER} wrong Kennwörter, for all`, async () => {
+  it(`locks an Ausweisnummer at ${WRONG_PER_LOCK} wrong Kennwörter, for all`, async () => {
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
     const { server } = lab();
     const { number } = await annaWithKennwort(server);
     const pass = passFor('Ben');
-    for (let i = 0; i < WRONG_PER_NUMBER; i += 1) {
+    for (let i = 0; i < WRONG_PER_LOCK; i += 1) {
       const phone = server.connect(from(`192.168.1.${i + 10}`));
       expect(await ask(phone, { kind: 'sign-in', pass, login: number, password: OTHER })).toEqual({
         refused: WRONG_LOGIN,
@@ -329,28 +338,6 @@ describe('the limits on signing in, over the line', () => {
     const late = server.connect(from('192.168.1.99'));
     const locked = await ask(late, { kind: 'sign-in', pass, login: number, password: KENNWORT });
     expect([{ refused: numberLocked(60) }, { refused: numberLocked(59) }]).toContainEqual(locked);
-  });
-
-  it(`refuses an address after ${WRONG_PER_ADDRESS} wrong tries; a neighbour gets in`, async () => {
-    vi.spyOn(console, 'log').mockImplementation(() => undefined);
-    const { server, store } = lab();
-    const { number } = await annaWithKennwort(server);
-    const guesser = server.connect(from('192.168.1.66'));
-    const pass = passFor('Mallory');
-    for (let i = 0; i < WRONG_PER_ADDRESS; i += 1) {
-      const login = `EL-GGGG-GG${'23456789ABCDEFGH'.charAt(i)}2`;
-      await ask(guesser, { kind: 'sign-in', pass, login, password: KENNWORT });
-    }
-    // Refused before the store is asked, or any Kennwort tried.
-    const looked = vi.spyOn(store, 'findLogin');
-    const right = { kind: 'sign-in', pass, login: number, password: KENNWORT } as const;
-    expect(await ask(guesser, right)).toMatchObject({
-      refused: expect.stringMatching(/^Zu viele falsche Anmeldungen von dieser Adresse/),
-    });
-    expect(looked).not.toHaveBeenCalled();
-    const neighbour = server.connect(from('192.168.1.67'));
-    const theirs = { ...right, pass: passFor('Ben') };
-    expect(await ask(neighbour, theirs)).toMatchObject({ done: 'signed-in' });
   });
 
   it('starts an Ausweisnummer’s count over at a right Kennwort', async () => {
@@ -364,11 +351,11 @@ describe('the limits on signing in, over the line', () => {
         login: number,
         password,
       });
-    for (let i = 0; i < WRONG_PER_NUMBER - 1; i += 1) {
+    for (let i = 0; i < WRONG_PER_LOCK - 1; i += 1) {
       await tryFrom(10 + i, 'Mallory', OTHER);
     }
     expect(await tryFrom(20, 'Ben', KENNWORT)).toMatchObject({ done: 'signed-in' });
-    for (let i = 0; i < WRONG_PER_NUMBER - 1; i += 1) {
+    for (let i = 0; i < WRONG_PER_LOCK - 1; i += 1) {
       await tryFrom(30 + i, 'Mallory', OTHER);
     }
     expect(await tryFrom(40, 'Cleo', KENNWORT)).toMatchObject({ done: 'signed-in' });
@@ -403,6 +390,91 @@ describe('the limits on signing in, over the line', () => {
     expect(await ask(ben, right)).toEqual({ refused: BOUND_SIGN_IN });
     expect(signIns.size).toBe(0);
     manager.get(code).dispose();
+  });
+});
+
+describe('the limits, tried at once', () => {
+  /** How many keys scrypt derived since the count was cleared: a Kennwort checked or kept each. */
+  const derived = (): number => vi.mocked(scrypt).mock.calls.length;
+
+  /** What each of `answers` says: the refusal, or what was done. */
+  const lines = (answers: Answer[]): string[] =>
+    answers.map((answer) => ('refused' in answer ? answer.refused : answer.done));
+
+  it(`checks ${WRONG_PER_LOCK} of the tries sent at once on an Ausweisnummer, no more`, async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const { server } = lab();
+    const { number } = await annaWithKennwort(server);
+    vi.mocked(scrypt).mockClear();
+    // Forty machines behind one address send at once: 39 guesses, then Anna's Kennwort.
+    const answers = await Promise.all(
+      Array.from({ length: 40 }, (_, i) =>
+        ask(server.connect(from('192.168.1.66')), {
+          kind: 'sign-in',
+          pass: passFor(`Mallory ${i}`),
+          login: number,
+          password: i === 39 ? KENNWORT : OTHER,
+        }),
+      ),
+    );
+    expect(derived()).toBe(WRONG_PER_LOCK);
+    const told = lines(answers);
+    expect(told.filter((line) => line === WRONG_LOGIN)).toHaveLength(WRONG_PER_LOCK);
+    expect(told.filter((line) => line === numberLocked(60))).toHaveLength(40 - WRONG_PER_LOCK);
+  });
+
+  it(`checks ${WRONG_PER_ADDRESS} tries an address sends at once; a neighbour gets in`, async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const { server, store } = lab();
+    const { number } = await annaWithKennwort(server);
+    vi.mocked(scrypt).mockClear();
+    const answers = await Promise.all(
+      Array.from({ length: WRONG_PER_ADDRESS + 10 }, (_, i) =>
+        ask(server.connect(from('192.168.1.66')), {
+          kind: 'sign-in',
+          pass: passFor(`Mallory ${i}`),
+          login: 'unleserlich',
+          password: OTHER,
+        }),
+      ),
+    );
+    expect(derived()).toBe(WRONG_PER_ADDRESS);
+    const fromHere = /^Zu viele falsche Anmeldungen von dieser Adresse/;
+    expect(lines(answers).filter((line) => fromHere.test(line))).toHaveLength(10);
+    // Refused before the store is asked, or any Kennwort tried.
+    const looked = vi.spyOn(store, 'findLogin');
+    const right = { kind: 'sign-in', pass: passFor('Mallory'), login: number, password: KENNWORT };
+    const guesser = server.connect(from('192.168.1.66'));
+    expect(await ask(guesser, right as ClientMessage)).toEqual({
+      refused: expect.stringMatching(fromHere),
+    });
+    expect(looked).not.toHaveBeenCalled();
+    const neighbour = server.connect(from('192.168.1.67'));
+    const theirs = { ...right, pass: passFor('Ben') } as ClientMessage;
+    expect(await ask(neighbour, theirs)).toMatchObject({ done: 'signed-in' });
+  });
+
+  it('lets a pass signed in change its Kennwort past a number its guessers locked', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const { server } = lab();
+    const { anna, number } = await annaWithKennwort(server);
+    for (let i = 0; i < WRONG_PER_LOCK; i += 1) {
+      const guess = { kind: 'sign-in', pass: passFor('Mallory'), login: number, password: OTHER };
+      await ask(server.connect(from(`192.168.1.${i + 10}`)), guess as ClientMessage);
+    }
+    const change = (old: string, password: string): ClientMessage => ({
+      kind: 'change-password',
+      pass: passFor('Anna'),
+      old,
+      password,
+    });
+    expect(await ask(anna, change(KENNWORT, 'Neues Kennwort'))).toMatchObject({ done: 'changed' });
+    // Its own wrong present Kennwörter lock its „Kennwort ändern", counted against the pass.
+    for (let i = 0; i < WRONG_PER_LOCK; i += 1) {
+      expect(await ask(anna, change(OTHER, 'Drittes Kennwort'))).toEqual({ refused: OLD_WRONG });
+    }
+    const locked = await ask(anna, change('Neues Kennwort', 'Drittes Kennwort'));
+    expect([{ refused: changeLocked(60) }, { refused: changeLocked(59) }]).toContainEqual(locked);
   });
 });
 

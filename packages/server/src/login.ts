@@ -7,8 +7,10 @@ import { MAX_KEY_LENGTH } from './rateLimiter.js';
  * devices — an Ausweisnummer the server mints, „EL-7K3M-9Q2D", and a Kennwort its player sets
  * (core login.ts reads both as the client does),
  * kept as a scrypt hash with a random salt and compared in constant time — and the limits on
- * trying them: so many wrong tries an address a minute, so many wrong Kennwörter an
- * Ausweisnummer before it locks for a minute. The log never holds a Kennwort or a hash.
+ * trying them: so many tries an address a minute, five wrong Kennwörter an Ausweisnummer — or a
+ * pass's „Kennwort ändern" — before it locks, each lock twice as long as the one before, up to an
+ * hour; and so many Kennwörter derived at once on the whole server. The log never holds a
+ * Kennwort or a hash.
  */
 
 /**
@@ -105,53 +107,164 @@ export async function passwordMatches(password: string, stored: string | null): 
   return timingSafeEqual(key, against.key) && kept !== null;
 }
 
-/** Wrong tries an address may make a minute: a lecture's typos behind a NAT fit, guessing not. */
-export const WRONG_PER_ADDRESS = 10;
+/**
+ * Tries an address may have counted in a minute (`SignInGuard`): a lecture hall's typos behind
+ * one address fit, guessing not.
+ */
+export const WRONG_PER_ADDRESS = 60;
 
-/** Wrong Kennwörter an Ausweisnummer takes within a minute before it locks (LOCK_MS). */
-export const WRONG_PER_NUMBER = 5;
+/** The minute an address's tries count in, ms. */
+export const ADDRESS_WINDOW_MS = 60_000;
 
-/** How long an Ausweisnummer stays locked, ms — and the minute both limits count wrong tries in. */
-export const LOCK_MS = 60_000;
+/**
+ * Every so many wrong Kennwörter counted on an Ausweisnummer, or on a pass's „Kennwort ändern",
+ * lock it (`LockBook`).
+ */
+export const WRONG_PER_LOCK = 5;
 
-/** What a try is told whose address is over its wrong tries: `s` seconds until the next may go. */
+/** The first lock, ms; each lock after lasts twice as long as the one before, up to the longest. */
+export const FIRST_LOCK_MS = 60_000;
+
+/** The longest lock, ms: an hour. */
+export const LONGEST_LOCK_MS = 3_600_000;
+
+/**
+ * How long a count stays quiet before it is forgotten, its locks with it, ms: an hour from its
+ * last wrong Kennwort or the end of its last lock, whichever is later (`quietFrom`).
+ */
+export const QUIET_MS = 3_600_000;
+
+/** `s` seconds as a wait is told: in seconds up to two minutes, in whole minutes beyond. */
+const waitOf = (s: number): string => (s <= 120 ? `${s} s` : `${Math.ceil(s / 60)} min`);
+
+/** What a try is told whose address is over its tries: `s` seconds until the next may go. */
 export const fromTooMany = (s: number): string =>
-  `Zu viele falsche Anmeldungen von dieser Adresse — wieder möglich in ${s} s.`;
+  `Zu viele falsche Anmeldungen von dieser Adresse — wieder möglich in ${waitOf(s)}.`;
 
 /** What a try on an Ausweisnummer locked is told: `s` seconds until the lock lifts. */
 export const numberLocked = (s: number): string =>
-  `Diese Ausweisnummer ist nach ${WRONG_PER_NUMBER} falschen Kennwörtern gesperrt — ` +
-  `wieder möglich in ${s} s.`;
+  `Diese Ausweisnummer ist nach ${WRONG_PER_LOCK} falschen Kennwörtern gesperrt — ` +
+  `wieder möglich in ${waitOf(s)}.`;
+
+/** What „Kennwort ändern" is told on a pass locked: `s` seconds until the lock lifts. */
+export const changeLocked = (s: number): string =>
+  `Nach ${WRONG_PER_LOCK} falschen Kennwörtern ist das Ändern hier gesperrt — ` +
+  `wieder möglich in ${waitOf(s)}.`;
 
 /** Whole seconds from `now` until `at`, at least one. */
 const secondsUntil = (at: number, now: number): number => Math.max(1, Math.ceil((at - now) / 1000));
 
-/** The moments of `moments` within the last LOCK_MS before `now`. */
-const recent = (moments: readonly number[] | undefined, now: number): number[] =>
-  (moments ?? []).filter((at) => now - at < LOCK_MS);
+/** `text` as a key of the limits: its first MAX_KEY_LENGTH characters, the rest counted with it. */
+const keyOf = (text: string): string => text.slice(0, MAX_KEY_LENGTH);
 
-/** An Ausweisnummer's wrong Kennwörter in the last minute, and until when it is locked (ms). */
-interface Tried {
-  wrong: number[];
+/**
+ * What a try at a Kennwort tries: the Kennwort of an Ausweisnummer, as a sign-in does — null for
+ * none readable — or the present Kennwort of a pass's account, as „Kennwort ändern" shows it on a
+ * pass signed in already, by the pass's id.
+ */
+export type Target = { number: string | null } | { pass: string };
+
+/** A try counted before its Kennwort is checked (`SignInGuard.take`). */
+export interface Ticket {
+  /** The Kennwort was right: the try is given back to its address, and what it tried cleared. */
+  right: () => void;
+}
+
+/** A key's wrong Kennwörter and its locks (`LockBook`), times in epoch ms. */
+interface Count {
+  /** wrong Kennwörter counted since its last lock, or since counting began */
+  wrong: number;
+  /** when the last of them was counted */
+  last: number;
+  /** how long its last lock was, ms; 0 before the first */
+  lock: number;
+  /** when its last lock lifts, or lifted; 0 before the first */
   until: number;
 }
 
+/** When `count` began to go quiet: at its last wrong Kennwort or its last lock's end, the later. */
+const quietFrom = (count: Count): number => Math.max(count.last, count.until);
+
 /**
- * The limits on signing in, counted in memory — a restart forgets them: an address with
- * WRONG_PER_ADDRESS wrong tries in the last minute is refused until the oldest is a minute old;
- * an Ausweisnummer locks for LOCK_MS at its WRONG_PER_NUMBER-th wrong Kennwort within a minute,
- * whoever tried it — known or not, so that a lock tells nothing — and its count starts over then,
- * or at a right one. Only wrong tries count: thirty right sign-ins of a lecture behind one address
- * go through in the same minute; and a try refused counts nothing, so that no limit holds longer
- * than a minute after the wrong tries stop. Every key is let go of once its minute and its lock
- * are over — by the next check once a minute has passed since the last sweep, or by the timer of
- * `sweepEveryWindow` — and none is kept longer than MAX_KEY_LENGTH.
+ * Wrong Kennwörter counted by key — an Ausweisnummer, or a pass — and the locks they bring: every
+ * WRONG_PER_LOCK-th locks the key, for FIRST_LOCK_MS the first time and twice as long as the lock
+ * before each time after, LONGEST_LOCK_MS at most. They are counted however they are paced, till
+ * a right Kennwort clears the key or it stays quiet for QUIET_MS (`quietFrom`), which forgets it.
+ */
+class LockBook {
+  private readonly counts = new Map<string, Count>();
+
+  /** `what` names a key of the book in the log line of its lock. */
+  constructor(private readonly what: string) {}
+
+  /** How many keys it holds now. */
+  get size(): number {
+    return this.counts.size;
+  }
+
+  /** How long `key` stays locked from `now`, ms; 0 where it is not. */
+  lockedFor(key: string, now: number): number {
+    const count = this.current(key, now);
+    return count === undefined ? 0 : Math.max(0, count.until - now);
+  }
+
+  /** A wrong Kennwort counted on `key` at `now`: every WRONG_PER_LOCK-th locks it, logged. */
+  count(key: string, now: number): void {
+    const count = this.current(key, now) ?? { wrong: 0, last: now, lock: 0, until: 0 };
+    const wrong = count.wrong + 1;
+    if (wrong < WRONG_PER_LOCK) {
+      this.counts.set(key, { ...count, wrong, last: now });
+      return;
+    }
+    const lock = count.lock === 0 ? FIRST_LOCK_MS : Math.min(2 * count.lock, LONGEST_LOCK_MS);
+    this.counts.set(key, { wrong: 0, last: now, lock, until: now + lock });
+    const after = `${WRONG_PER_LOCK} wrong Kennwörter`;
+    console.log(`[escapelab] ${this.what} locked for ${lock / 1000} s after ${after}`);
+  }
+
+  /** `key` cleared, its count and its locks with it: a right Kennwort. */
+  clear(key: string): void {
+    this.counts.delete(key);
+  }
+
+  /** Forgets every key that has been quiet for QUIET_MS at `now`. */
+  sweep(now: number): void {
+    for (const [key, count] of this.counts) {
+      if (now - quietFrom(count) >= QUIET_MS) {
+        this.counts.delete(key);
+      }
+    }
+  }
+
+  /** The count of `key` at `now`; undefined for none, or for one quiet for QUIET_MS, forgotten. */
+  private current(key: string, now: number): Count | undefined {
+    const count = this.counts.get(key);
+    if (count !== undefined && now - quietFrom(count) >= QUIET_MS) {
+      this.counts.delete(key);
+      return undefined;
+    }
+    return count;
+  }
+}
+
+/**
+ * The limits on trying a Kennwort, counted in memory — a restart forgets them. Every try counts
+ * the moment it goes ahead (`take`), before its Kennwort is checked, as a wrong one, and a right
+ * one is given back once it is: tries sent at once are held to the limits as tries one after the
+ * other. An address with WRONG_PER_ADDRESS tries counted in the last minute is refused till the
+ * oldest is a minute old — right tries given back, a lecture's sign-ins behind one address go
+ * through. An Ausweisnummer, known or not so that a lock tells nothing, and a pass's „Kennwort
+ * ändern" each lock as `LockBook` says. A try refused counts nothing. Every key is let go of once
+ * nothing counts any more — by the next check once a minute has passed since the last sweep, or
+ * by the timer of `sweepEveryWindow` — and none is kept longer than MAX_KEY_LENGTH.
  */
 export class SignInGuard {
-  /** each address's wrong tries in the last minute, the oldest first */
+  /** each address's tries counted in the last minute, the oldest first */
   private readonly addresses = new Map<string, number[]>();
-  /** each Ausweisnummer's wrong Kennwörter and its lock (`Tried`) */
-  private readonly numbers = new Map<string, Tried>();
+  /** the Ausweisnummern tried, and their locks */
+  private readonly numbers = new LockBook('an Ausweisnummer');
+  /** the passes whose „Kennwort ändern" tried a wrong present Kennwort, and their locks */
+  private readonly passes = new LockBook('a pass’s „Kennwort ändern“');
   /** when the keys were last swept */
   private swept: number;
 
@@ -159,82 +272,101 @@ export class SignInGuard {
     this.swept = now();
   }
 
-  /** How many addresses and Ausweisnummern it holds now. */
+  /** How many addresses, Ausweisnummern and passes it holds now. */
   get size(): number {
-    return this.addresses.size + this.numbers.size;
+    return this.addresses.size + this.numbers.size + this.passes.size;
   }
 
   /**
-   * Why a try from `address` on the Ausweisnummer `number` (null for none readable) may not go
-   * ahead now, with the seconds until it may; null where it may.
+   * Why a try from `address` at `on` may not go ahead now, with the time until it may; null where
+   * it may. Counts nothing.
    */
-  refusal(address: string, number: string | null): string | null {
+  refusal(address: string, on: Target): string | null {
     const now = this.now();
-    if (now - this.swept >= LOCK_MS) {
+    if (now - this.swept >= ADDRESS_WINDOW_MS) {
       this.sweep();
     }
-    const wrong = recent(this.addresses.get(address.slice(0, MAX_KEY_LENGTH)), now);
-    const oldest = wrong[0];
-    if (wrong.length >= WRONG_PER_ADDRESS && oldest !== undefined) {
-      return fromTooMany(secondsUntil(oldest + LOCK_MS, now));
+    const tries = this.counted(keyOf(address), now);
+    const oldest = tries[0];
+    if (tries.length >= WRONG_PER_ADDRESS && oldest !== undefined) {
+      return fromTooMany(secondsUntil(oldest + ADDRESS_WINDOW_MS, now));
     }
-    const tried = number === null ? undefined : this.numbers.get(number.slice(0, MAX_KEY_LENGTH));
-    const until = tried?.until ?? 0;
-    return until > now ? numberLocked(secondsUntil(until, now)) : null;
+    const { book, key, told } = this.lockOf(on);
+    const locked = key === null ? 0 : book.lockedFor(key, now);
+    return locked > 0 ? told(secondsUntil(now + locked, now)) : null;
   }
 
   /**
-   * A wrong try from `address` on `number` counted: the number locks at WRONG_PER_NUMBER. The log
-   * says when an address is refused or a number locks, naming neither.
+   * A try from `address` at `on`, counted as a wrong one before its Kennwort is checked, where it
+   * may go ahead (`refusal`): the ticket that gives it back where the Kennwort is right. Else why
+   * it may not, counting nothing. The log says when an address reaches its limit, naming none.
    */
-  wrong(address: string, number: string | null): void {
+  take(address: string, on: Target): Ticket | string {
+    const refused = this.refusal(address, on);
+    if (refused !== null) {
+      return refused;
+    }
     const now = this.now();
-    const from = address.slice(0, MAX_KEY_LENGTH);
-    const tries = [...recent(this.addresses.get(from), now), now];
+    const from = keyOf(address);
+    const tries = [...this.counted(from, now), now];
     this.addresses.set(from, tries);
     if (tries.length === WRONG_PER_ADDRESS) {
       console.log(`[escapelab] an address tried ${WRONG_PER_ADDRESS} wrong Kennwörter in a minute`);
     }
-    if (number === null) {
-      return;
+    const { book, key } = this.lockOf(on);
+    if (key !== null) {
+      book.count(key, now);
     }
-    const key = number.slice(0, MAX_KEY_LENGTH);
-    const was = this.numbers.get(key);
-    const wrong = [...recent(was?.wrong, now), now];
-    const locks = wrong.length >= WRONG_PER_NUMBER;
-    const next = locks ? { wrong: [], until: now + LOCK_MS } : { wrong, until: was?.until ?? 0 };
-    this.numbers.set(key, next);
-    if (locks) {
-      const wrongs = `${WRONG_PER_NUMBER} wrong Kennwörter`;
-      console.log(`[escapelab] an Ausweisnummer locked for ${LOCK_MS / 1000} s after ${wrongs}`);
-    }
+    return {
+      right: () => {
+        this.giveBack(from, now);
+        if (key !== null) {
+          book.clear(key);
+        }
+      },
+    };
   }
 
-  /** A right Kennwort for `number`: its wrong ones are forgotten. */
-  right(number: string): void {
-    this.numbers.delete(number.slice(0, MAX_KEY_LENGTH));
-  }
-
-  /** Lets go of every address and every Ausweisnummer with no wrong try and no lock left. */
+  /** Lets go of every address, Ausweisnummer and pass that nothing counts on any more. */
   sweep(): void {
     const now = this.now();
     this.swept = now;
-    for (const [address, wrong] of this.addresses) {
-      if (recent(wrong, now).length === 0) {
+    for (const address of this.addresses.keys()) {
+      if (this.counted(address, now).length === 0) {
         this.addresses.delete(address);
       }
     }
-    for (const [number, tried] of this.numbers) {
-      if (recent(tried.wrong, now).length === 0 && tried.until <= now) {
-        this.numbers.delete(number);
-      }
-    }
+    this.numbers.sweep(now);
+    this.passes.sweep(now);
   }
 
   /** Sweeps once a minute from now, never keeping the process up for it; returns how to stop. */
   sweepEveryWindow(): () => void {
-    const timer = setInterval(() => this.sweep(), LOCK_MS);
+    const timer = setInterval(() => this.sweep(), ADDRESS_WINDOW_MS);
     timer.unref();
     return () => clearInterval(timer);
+  }
+
+  /** The tries counted from the address `from` within the minute before `now`, the oldest first. */
+  private counted(from: string, now: number): number[] {
+    return (this.addresses.get(from) ?? []).filter((at) => now - at < ADDRESS_WINDOW_MS);
+  }
+
+  /** The try counted from `from` at `at` given back: a right one. */
+  private giveBack(from: string, at: number): void {
+    const tries = this.addresses.get(from) ?? [];
+    const index = tries.indexOf(at);
+    if (index >= 0) {
+      tries.splice(index, 1);
+    }
+  }
+
+  /** The book a try at `on` is counted in, its key there — null for none — and its refusal. */
+  private lockOf(on: Target): { book: LockBook; key: string | null; told: (s: number) => string } {
+    if ('pass' in on) {
+      return { book: this.passes, key: keyOf(on.pass), told: changeLocked };
+    }
+    const key = on.number === null ? null : keyOf(on.number);
+    return { book: this.numbers, key, told: numberLocked };
   }
 }
