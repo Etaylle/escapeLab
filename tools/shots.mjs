@@ -119,7 +119,9 @@
  * walked by the keys: an arrow down and up the items, Enter opening „Einsatz starten" with the
  * picked mission's card in the focus, Esc back on the item. Its quiet window, the scene drifting,
  * is gated like every other and under SHOTS_SOFTWARE_GL has to keep the screen's pace (16.8 ms
- * p95). At 1280×720 it has to fit as at 1440×820 (menu-1280.png), the scene baked anew for each
+ * p95) where the run keeps the gate's budget — with SHOTS_FRAME_P95_MS raised, as a proof run
+ * raises it, it is logged with its load as every window is. At 1280×720 it has to fit as at
+ * 1440×820 (menu-1280.png), the scene baked anew for each
  * size. menu-missions.png shows „Einsatz starten" open, the tutorial's card saying „Erster Einsatz?
  * Hier starten" in a line of its own and no tooltip over the cards; the mission picked comes in as
  * the scene behind. „Runde eröffnen" closes the lab's doors over the menu and opens them on the

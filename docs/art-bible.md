@@ -1096,7 +1096,10 @@ the shot is taken, every figure's canvas keeping that frame, and the probe has t
 stands so after the shot. And every frame window's line names the
 machine's 1-minute load as it began (`os.loadavg`), the `pace` line the load its pacing window ran
 at, and the summary the load as the run began and ended — the windows themselves, the lead's
-gate, keep their budgets.
+gate, keep their budgets. The menu's own pace under software GL, 16.8 ms p95, was the one window
+that gated in a proof run too, whose `SHOTS_FRAME_P95_MS=1000` leaves every other window for
+information: in one Blackout run it failed at 16.8x ms with the load at 158. It gates where the
+run keeps the gate's budget and is logged with its load where the budget is raised.
 
 **The frame in CSS pixels (N-camera).** The walkthrough's host window at 1440 × 820 now shows
 24.3 × 11.5 tiles of 58.2 px where main showed 22.2 × 10.5 of 63.7 — more tiles, each smaller —
