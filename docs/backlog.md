@@ -192,9 +192,11 @@ die Entscheidung.
   Editor „Farblos ab Stufe"). Ab dieser Stufe trägt jede Sicht ein Zeichen nur als Form und
   Muster, kein Farbwort (Negativ-Assertions über jede Sicht, im Smoke über den Draht); der Löser
   liest die Farbe über die Muster der Legende. Betrieb nennt die Stufe und dass die Legende
-  jedem Muster seine Farbe gibt, die Werkstatt die verblassende Farbe; Blackouts Seite hat damit
-  194 Wörter Fließtext, die Grenze steigt von 170 auf 195. Das Panel zeichnet die Zeichen grau
-  mit 64 px, das Muster fett (jede Musterzelle ≥ 18 px, Tinte 9,4:1), dazu ANZEIGE · FARBLOS.
+  jedem Muster seine Farbe gibt, die Werkstatt die Stufe, ab der die Anzeige farblos ist; dafür
+  ist Betrieb gestrafft, jede Regel bleibt, und Blackouts Seite hält mit 168 Wörtern Fließtext
+  die Grenze von 170 (zuvor 169, mit der grauen Stufe ungestrafft 194). Das Panel zeichnet die
+  Zeichen grau mit 64 px, das Muster fett (jede Musterzelle ≥ 18 px, Tinte 9,4:1), dazu
+  ANZEIGE · FARBLOS.
   Blackout: `greyFrom` 4, dritte Frühschicht-Notiz (mit Uros' zweitem Satz 132 Zeichen, Grenze
   120: „Die Farbe dazu steht in der Legende."), Plan mit vier grauen Ringen in Stufe 4. Der
   Walkthrough spielt die Stufe nach Plan (signal-grey.png, signal-grey-phone-932.png); Sieg

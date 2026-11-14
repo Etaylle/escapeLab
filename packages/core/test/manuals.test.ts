@@ -72,13 +72,8 @@ describe('the voice guard', () => {
 const TITLE_LINE =
   /^[A-ZÄÖÜ][\p{L} -]+, Typ ([A-Z]{1,3}-\d{1,2}) \(Baujahr (19[5-9]\d|20[01]\d)\)$/u;
 
-/**
- * The most running text a page carries, in words; tables, rules, figures and the log aside.
- * 195: the Signalkette's page with the legend and a fleeting display, Blackout's, ran to 169
- * of the old 170, and a display that loses its colour adds a sentence to Betrieb and a clause
- * to the workshop's note — 194 words.
- */
-const WORDS_MAX = 195;
+/** The most running text a page carries, in words; tables, rules, figures and the log aside. */
+const WORDS_MAX = 170;
 
 /** The most sentences one part of the running text has. */
 const SENTENCES_MAX = 4;

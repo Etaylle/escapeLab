@@ -433,24 +433,24 @@ function buildText(def: SignalDef): string {
 /**
  * Betrieb: the stages and their direction, the acknowledgement — with a display that loses its
  * colour, from which stage, and that the legend gives each pattern its colour — the fault and
- * its cost.
+ * its cost. Terse, as the page's running text has 170 words in all: that the counter-console
+ * acknowledges sign by sign the purpose says, and whose legend gives a row its colour Aufbau.
  */
 function operationText(def: SignalDef): string {
   const acknowledged = def.legend
-    ? 'jedes mit der Taste gleicher Form in der Zeile, die seine Legende der Farbe gibt'
-    : 'jedes auf seiner Taste';
+    ? 'mit der Taste gleicher Form in der Zeile seiner Farbe'
+    : 'auf seiner Taste';
   const greyFrom = greyFromOf(def);
   const grey =
     greyFrom === 0
       ? ''
-      : ` Ab Stufe ${greyFrom} zeigt die Anzeige die Zeichen ohne Farbe, nur mit ihrem Muster; ` +
-        'seine Farbe nennt die Legende.';
+      : ` Ab Stufe ${greyFrom} ist die Anzeige farblos; die Legende gibt jedem Muster seine Farbe.`;
+  const stages = spelled(def.stages);
   return (
-    `Die Kette hat ${spelled(def.stages)} Stufen; in den ungeraden zeigt Pult A eine Folge von ` +
-    `${spelled(def.length)} Zeichen, in den geraden Pult B. Das Gegenpult quittiert sie Zeichen ` +
-    `für Zeichen, ${acknowledged}.${grey} Eine falsche Taste ist eine Fehlquittierung: Die ` +
-    'Stufe fällt in die Grundstellung, ihre Folge bleibt, und die Überwachung meldet Alarm und ' +
-    `zieht ${costOf(def.penaltySec)} ab.`
+    `${stages.charAt(0).toUpperCase()}${stages.slice(1)} Stufen: In den ungeraden zeigt Pult A ` +
+    `${spelled(def.length)} Zeichen, in den geraden Pult B. Das Gegenpult quittiert jedes ` +
+    `${acknowledged}.${grey} Eine Fehlquittierung versetzt die Stufe in die Grundstellung, die ` +
+    `Folge bleibt; die Überwachung meldet Alarm und zieht ${costOf(def.penaltySec)} ab.`
   );
 }
 
@@ -516,7 +516,7 @@ function logLines(def: SignalDef): string[] {
 /**
  * The workshop's note on the display's capacitor: renewed, the display holds the sequence;
  * never replaced, it shows the signs one at a time from stage `fleetingFrom` on. Either way,
- * from stage `greyFrom` on its colours fade (0: never).
+ * from stage `greyFrom` on its colour has faded (0: never).
  */
 function displayNote(fleetingFrom: number | null, greyFrom: number): string {
   if (fleetingFrom === null) {
@@ -524,7 +524,7 @@ function displayNote(fleetingFrom: number | null, greyFrom: number): string {
       'Kondensator 1994 erneuert: Die Anzeige hält die Folge, bis die Stufe quittiert ist';
     return greyFrom === 0 ? `${steady}.` : `${steady}; ab Stufe ${greyFrom} verblasst ihre Farbe.`;
   }
-  const pale = greyFrom === 0 ? '' : `, ab Stufe ${greyFrom} verblasst ihre Farbe`;
+  const pale = greyFrom === 0 ? '' : `, ab Stufe ${greyFrom} farblos`;
   return (
     `Seit dem Umbau zeigt die Anzeige ab Stufe ${fleetingFrom} die Zeichen nur einzeln und ` +
     `kurz${pale} (Kondensator, nie ersetzt): merken oder notieren.`

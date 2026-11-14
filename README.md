@@ -119,7 +119,7 @@ und übernimmt sie per Knopf in den Notizblock.
 Leute geschrieben hat, keine Anleitung an Spielende — Titelzeile mit Typ und Baujahr („Signalkette,
 Typ SK-4 (Baujahr 1986)“), Zweck, Aufbau unter der Zeichnung, Betrieb (was als Fehler gilt und was
 die Überwachung dann abzieht), die Tabellen der Maschine, ein Protokollauszug als durchgerechneter
-Fall und Notizen aus der Werkstatt, höchstens 195 Wörter Fließtext je Seite. Die Randnotizen sind
+Fall und Notizen aus der Werkstatt, höchstens 170 Wörter Fließtext je Seite. Die Randnotizen sind
 Zettel von Leuten aus dem Labor („Nachtschicht: …“, „Admin: …“), nie die Lösung der Runde.
 `core/test/manuals.test.ts` hält Aufbau, Länge und Ton aller Module und Hinweise fest: kein du, ihr
 oder Sie, keine Spieler, Crew oder Partner, keine Imperative und Regieanweisungen; ein Verstoß nennt

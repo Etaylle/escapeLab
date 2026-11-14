@@ -279,11 +279,13 @@ FARBLOS, and draws the signs grey at 64 px, their patterns bold and near black: 
 pattern 18 px or more, its ink 9.4:1 against the grey (`SignalPanel.tsx`; the art bible's „Type
 and targets"). A fleeting stage stays fleeting, one grey sign at a time; the receiving console's
 keys stay as they are. The printed Betrieb says from which stage the display shows no colour and
-that the legend names each pattern's colour, and the workshop's note on the display's capacitor
-names the colour fading; in Blackout (`greyFrom` 4) the Frühschicht's third note in the margin
-says it too. The solver reads a grey sign's colour back through the patterns the legend prints
-beside the colours, and the walkthrough plays the last stage from the plan with grey signs and
-shoots it (signal-grey.png in the host's window, signal-grey-phone-932.png on a large phone).
+that the legend gives each pattern its colour, and the workshop's note on the display's capacitor
+says from which stage it is colourless; Betrieb is kept terse for it, every rule kept, so that
+the page stays within its 170 words. In Blackout (`greyFrom` 4) the Frühschicht's third note in
+the margin says it too. The solver reads a grey sign's colour back through the patterns the
+legend prints beside the colours, and the walkthrough plays the last stage from the plan with
+grey signs and shoots it (signal-grey.png in the host's window, signal-grey-phone-932.png on a
+large phone).
 
 ## The Serverraum's cabling diagram
 

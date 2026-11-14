@@ -1000,9 +1000,13 @@ describe('signal manual: the document', () => {
     const [build] = paragraphsUnder(def, 'Aufbau');
     expect(build).toContain('zwölf Tasten, eine für jedes Zeichen');
     const [operation] = paragraphsUnder(def, 'Betrieb');
-    expect(operation).toMatch(/^Die Kette hat fünf Stufen; .* eine Folge von drei Zeichen, /);
-    expect(operation).toContain('jedes auf seiner Taste');
-    expect(operation).toContain('Fehlquittierung: Die Stufe fällt in die Grundstellung');
+    expect(operation).toMatch(
+      /^Fünf Stufen: In den ungeraden zeigt Pult A drei Zeichen, in den geraden Pult B\. /,
+    );
+    expect(operation).toContain('Das Gegenpult quittiert jedes auf seiner Taste.');
+    expect(operation).toContain(
+      'Eine Fehlquittierung versetzt die Stufe in die Grundstellung, die Folge bleibt',
+    );
     expect(operation).toContain('zieht 25 Sekunden Einsatzzeit ab.');
     expect(JSON.stringify(manual)).not.toMatch(/Legende|nacheinander/);
   });
@@ -1031,8 +1035,10 @@ describe('signal manual: the document', () => {
     expect(build).toContain('A und B haben verschiedene, ein alter Verwechslungsschutz.');
     const [operation] = paragraphsUnder(def, 'Betrieb');
     expect(operation).toContain(
-      'jedes mit der Taste gleicher Form in der Zeile, die seine Legende der Farbe gibt',
+      'Das Gegenpult quittiert jedes mit der Taste gleicher Form in der Zeile seiner Farbe.',
     );
+    // Whose legend gives a row its colour, Aufbau says: the console's own.
+    expect(build).toContain('Die Farbe einer Zeile nennt die Legende des Pults');
   });
 
 });
@@ -1092,7 +1098,7 @@ describe('signal manual: the workshop and the def', () => {
       for (const legend of [false, true]) {
         const [display] = paragraphsUnder(defOf({ stages: 5, fleetingFrom, legend }), WORKSHOP);
         // With the legend the display loses its colour in the last stage, too.
-        const pale = legend ? ', ab Stufe 5 verblasst ihre Farbe' : '';
+        const pale = legend ? ', ab Stufe 5 farblos' : '';
         expect(display).toBe(
           `Seit dem Umbau zeigt die Anzeige ab Stufe ${fleetingFrom} die Zeichen nur einzeln ` +
             `und kurz${pale} (Kondensator, nie ersetzt): merken oder notieren.`,
@@ -1105,7 +1111,7 @@ describe('signal manual: the workshop and the def', () => {
     );
   });
 
-  it('names the colour fading in the note on the display’s capacitor, from its stage on', () => {
+  it('says in the note on the display’s capacitor from which stage its colour is gone', () => {
     const noteOf = (fields: Partial<SignalDef>) => paragraphsUnder(defOf(fields), WORKSHOP)[0];
     expect(noteOf({ legend: true, greyFrom: 2 })).toBe(
       'Kondensator 1994 erneuert: Die Anzeige hält die Folge, bis die Stufe quittiert ist; ab ' +
@@ -1113,18 +1119,17 @@ describe('signal manual: the workshop and the def', () => {
     );
     expect(noteOf({ legend: true, fleetingFrom: 3 })).toBe(
       'Seit dem Umbau zeigt die Anzeige ab Stufe 3 die Zeichen nur einzeln und kurz, ab Stufe 4 ' +
-        'verblasst ihre Farbe (Kondensator, nie ersetzt): merken oder notieren.',
+        'farblos (Kondensator, nie ersetzt): merken oder notieren.',
     );
     // Never grey: the note keeps to what the display does besides.
     for (const fields of [{ legend: true, greyFrom: 0 }, {}, { greyFrom: 0 }]) {
-      expect(noteOf(fields), JSON.stringify(fields)).not.toMatch(/Farbe/);
+      expect(noteOf(fields), JSON.stringify(fields)).not.toMatch(/Farbe|farblos/);
     }
   });
 
   it('says in Betrieb from which stage the display shows no colour, the legend naming it', () => {
     const grey = (stage: number) =>
-      `Ab Stufe ${stage} zeigt die Anzeige die Zeichen ohne Farbe, nur mit ihrem Muster; ` +
-      'seine Farbe nennt die Legende.';
+      `Ab Stufe ${stage} ist die Anzeige farblos; die Legende gibt jedem Muster seine Farbe.`;
     const operationOf = (fields: Partial<SignalDef>) => paragraphsUnder(defOf(fields), 'Betrieb');
     const [lastStage] = operationOf({ legend: true });
     expect(lastStage).toContain(grey(4));
@@ -1133,7 +1138,7 @@ describe('signal manual: the workshop and the def', () => {
     expect(lastStage?.indexOf(grey(4))).toBeLessThan(lastStage?.indexOf('Fehlquittierung') ?? 0);
     expect(operationOf({ legend: true, stages: 6, greyFrom: 2 })[0]).toContain(grey(2));
     for (const fields of [{ legend: true, greyFrom: 0 }, {}, { fleetingFrom: 2 }]) {
-      expect(operationOf(fields)[0], JSON.stringify(fields)).not.toContain('ohne Farbe');
+      expect(operationOf(fields)[0], JSON.stringify(fields)).not.toContain('farblos');
     }
     // The legend keeps its Muster columns, Abb. 2 its drawing of the four patterns.
     const def = defOf({ legend: true, greyFrom: 1 });
