@@ -144,7 +144,7 @@ describe('the own line down in a run', () => {
     expect(worldHeld(null, lineOf({ status: 'open', retry }), running())).toBe(true);
   });
 
-  it('stands instead of the maintenance card: whatever stands still is no news to the cut off', () => {
+  it('stands instead of the maintenance card: a standstill is no news to the one cut off', () => {
     const away = [{ id: 'p2', name: 'Ben', since: T0, waivableAt: T0 + 60_000 }];
     const view = running({ away, pausedAt: T0 });
     expect(screen(view, lineOf())).not.toContain('<span class="kicker">WARTUNG</span>');

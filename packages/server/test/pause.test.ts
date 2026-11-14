@@ -160,6 +160,17 @@ describe('a crew member away from a run', () => {
     room.dispose();
   });
 
+});
+
+describe('a crew member away at the hatch', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(1_700_000_000_000);
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it('waits at the hatch for whoever is away and not on it, as for somebody slow', () => {
     const { room, players } = crew(['Anna', 'Ben']);
     const [anna, ben] = players as [Player, Player];

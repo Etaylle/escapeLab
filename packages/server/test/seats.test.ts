@@ -491,7 +491,7 @@ describe('a seat taken over by its name (Jackbox), let in by the crew', () => {
     room.claim('Cem', passFor('Cems Telefon'), (msg) => told.push(msg));
     // Ben gives up: Anna alone on the line, the crew counts Cem again.
     room.abandon(passFor('Ben'));
-    expect(views['Anna']?.away.map((away) => [away.name, away.waived])).toEqual([['Cem', undefined]]);
+    expect(views['Anna']?.away.map((m) => [m.name, m.waived])).toEqual([['Cem', undefined]]);
     expect(views['Anna']?.takeovers?.map((ask) => ask.name)).toEqual(['Cem']);
     expect(() => room.claim('Cem', passFor('Zweites Telefon'), () => undefined)).toThrow(
       'Für Cem wartet schon eine Übernahme auf Antwort.',

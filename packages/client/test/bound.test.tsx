@@ -152,7 +152,7 @@ describe('the join screen of a pass bound to a run', () => {
     expect(html).toContain('noch 12:34');
   });
 
-  it('counts the clock down from the server’s answer while the run goes on, whoever is away', () => {
+  it('counts the clock down from the server’s answer as the run goes on, whoever is away', () => {
     expect(seatLeft(754_000, false, T0, T0)).toBe(754_000);
     expect(seatLeft(754_000, false, T0, T0 + 4_500)).toBe(749_500);
     expect(seatLeft(3_000, false, T0, T0 + 9_000)).toBe(0);

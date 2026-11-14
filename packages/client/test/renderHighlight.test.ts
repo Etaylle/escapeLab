@@ -207,21 +207,6 @@ describe('haloAlpha and bobLift — how the glow breathes and a pickable bobs', 
 });
 
 describe('the objects pass — the named thing glows in its own shape, under it', () => {
-  it('glows round a main switch with a lever for each of the crew the run counts', () => {
-    const lever = { ...STATION, look: 'lever' as const };
-    const crew = [
-      player('p1', 'Anna', '#2dd4bf'),
-      // Away, and still waited for: the switch takes Ben's pull too.
-      player('p2', 'Ben', '#f472b6', false),
-      // Away, and gone on without: Cem's lever is not there.
-      { ...player('p3', 'Cem', '#fbbf24', false), waived: true as const },
-    ];
-    const map = mapWith({ ...LAB, stations: [lever] });
-    const frame = frameWith({ map, action: OPERATE, time: 0.3, players: crew });
-    const glow = strip(drawnAt(drawn(frame), 3.5, 2.5, 0));
-    expect(glow).toEqual(glowOf(frame, stationShape(lever, 2), 0.9));
-  });
-
   it('lays two blits of the station’s bake under it, then draws the station as ever', () => {
     const frame = frameWith({ map: LAB, action: OPERATE, time: 0.3 });
     const log = drawn(frame);
@@ -377,6 +362,23 @@ describe('the objects pass — the named thing glows in its own shape, under it'
     const dark = frameWith({ map: LAB, action: PICK, light: lightWith({ shown: () => false }) });
     expect(callsOf(drawn(dark), 'drawImage')).toEqual([]);
     expect(highlightProbe(dark)).toBeNull();
+  });
+});
+
+describe('the objects pass round a main switch', () => {
+  it('glows round a main switch with a lever for each of the crew the run counts', () => {
+    const lever = { ...STATION, look: 'lever' as const };
+    const crew = [
+      player('p1', 'Anna', '#2dd4bf'),
+      // Away, and still waited for: the switch takes Ben's pull too.
+      player('p2', 'Ben', '#f472b6', false),
+      // Away, and gone on without: Cem's lever is not there.
+      { ...player('p3', 'Cem', '#fbbf24', false), waived: true as const },
+    ];
+    const map = mapWith({ ...LAB, stations: [lever] });
+    const frame = frameWith({ map, action: OPERATE, time: 0.3, players: crew });
+    const glow = strip(drawnAt(drawn(frame), 3.5, 2.5, 0));
+    expect(glow).toEqual(glowOf(frame, stationShape(lever, 2), 0.9));
   });
 });
 

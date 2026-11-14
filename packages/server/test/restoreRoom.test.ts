@@ -697,7 +697,7 @@ describe('a seat whose line dropped while the run went on', () => {
     vi.restoreAllMocks();
   });
 
-  it('comes back on the snapshot it kept into the run that went on: the blob changes nothing', () => {
+  it('comes back with the snapshot it kept into the run that went on, which it changes not', () => {
     const old = server();
     const { code, anna, ben } = crewOn(old);
     const kept = blobOf(ben);
@@ -712,7 +712,7 @@ describe('a seat whose line dropped while the run went on', () => {
     expect(anna.view.away).toEqual([]);
   });
 
-  it('stays away in the snapshots the crew is handed: a room taken up from one waits for it', () => {
+  it('stays away in the crew’s snapshots: a room taken up from one waits for it', () => {
     const old = server();
     const { code, anna, ben } = crewOn(old);
     const benId = ben.view.you.id;

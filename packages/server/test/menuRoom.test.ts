@@ -118,7 +118,7 @@ describe('leaving a run for the main menu', () => {
     vi.restoreAllMocks();
   });
 
-  it('closes the line on purpose: the seat stays bound, the run goes on, the crew sees where', () => {
+  it('closes the line on purpose: the seat bound, the run going on, the crew sees where', () => {
     const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
     const { manager, code, crew } = served(['Anna', 'Ben', 'Cem']);
     const [anna, ben] = crew as [FakeSocket, FakeSocket, FakeSocket];
@@ -126,11 +126,9 @@ describe('leaving a run for the main menu', () => {
     const at = Date.now();
     ben.say({ kind: 'to-menu' });
     expect(ben.heard.at(-1)).toEqual({ kind: 'at-menu', code });
-    expect(anna.view.away).toEqual([
-      { id: benId, name: 'Ben', since: at, waivableAt: at + FIRST_WAIT_MS, menu: true },
-    ]);
-    expect(anna.view.pausedAt).toBeNull();
-    expect(anna.view.events.at(-1)).toMatchObject({ kind: 'away', label: 'Ben hat sich abgemeldet.' });
+    const away = { id: benId, name: 'Ben', since: at, waivableAt: at + FIRST_WAIT_MS, menu: true };
+    expect([anna.view.away, anna.view.pausedAt]).toEqual([[away], null]);
+    expect(anna.view.events.at(-1)?.label).toBe('Ben hat sich abgemeldet.');
     expect(anna.view.players.find((p) => p.name === 'Ben')).toMatchObject({
       connected: false,
       menu: 'main',

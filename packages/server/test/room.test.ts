@@ -55,6 +55,45 @@ function firstPart(messages: ServerMessage[]) {
   return item?.known === true ? item : undefined;
 }
 
+/** Anna and Ben connected, each with how to let go of their connection (`detach`). */
+function fullLobby(room: Room) {
+  const seat = (name: string) => {
+    const player = { ...room.join(name, passFor(name)), ...collector() };
+    return { ...player, detach: room.attach(player.playerId, player.listen) };
+  };
+  return { anna: seat('Anna'), ben: seat('Ben') };
+}
+
+/**
+ * A started run with Anna on the mission's first spawn and Ben on the
+ * second — in the tutorial, Anna beside the book and Ben beside the sign.
+ * The room draws the spawns, so runs are started until it draws that way.
+ */
+function startedRoom(fixture: Mission = mission) {
+  const [first] = fixture.map.spawns;
+  for (let attempt = 0; attempt < 64; attempt++) {
+    const room = new Room('TEST', fixture);
+    const crew = fullLobby(room);
+    ready(room, crew.ben);
+    room.act(crew.anna.playerId, { kind: 'start-mission' });
+    if (JSON.stringify(lastView(crew.anna.messages).map?.yourSpawn) === JSON.stringify(first)) {
+      return { room, ...crew };
+    }
+    room.dispose();
+  }
+  throw new Error('64 runs, and Anna never drew the first spawn');
+}
+
+/** Walk an avatar to a tile; the room derives plates, presence and interact range from this. */
+function moveTo(room: Room, player: Walker, x: number, y: number): void {
+  walkTo(room, player, x + 0.5, y + 0.5);
+}
+
+/** Walk an avatar to an exact spot, in tiles. */
+function placeAt(room: Room, player: Walker, x: number, y: number): void {
+  walkTo(room, player, x, y);
+}
+
 describe('Room', () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -62,45 +101,6 @@ describe('Room', () => {
   afterEach(() => {
     vi.useRealTimers();
   });
-
-  /** Anna and Ben connected, each with how to let go of their connection (`detach`). */
-  function fullLobby(room: Room) {
-    const seat = (name: string) => {
-      const player = { ...room.join(name, passFor(name)), ...collector() };
-      return { ...player, detach: room.attach(player.playerId, player.listen) };
-    };
-    return { anna: seat('Anna'), ben: seat('Ben') };
-  }
-
-  /**
-   * A started run with Anna on the mission's first spawn and Ben on the
-   * second — in the tutorial, Anna beside the book and Ben beside the sign.
-   * The room draws the spawns, so runs are started until it draws that way.
-   */
-  function startedRoom(fixture: Mission = mission) {
-    const [first] = fixture.map.spawns;
-    for (let attempt = 0; attempt < 64; attempt++) {
-      const room = new Room('TEST', fixture);
-      const crew = fullLobby(room);
-      ready(room, crew.ben);
-      room.act(crew.anna.playerId, { kind: 'start-mission' });
-      if (JSON.stringify(lastView(crew.anna.messages).map?.yourSpawn) === JSON.stringify(first)) {
-        return { room, ...crew };
-      }
-      room.dispose();
-    }
-    throw new Error('64 runs, and Anna never drew the first spawn');
-  }
-
-  /** Walk an avatar to a tile; the room derives plates, presence and interact range from this. */
-  function moveTo(room: Room, player: Walker, x: number, y: number): void {
-    walkTo(room, player, x + 0.5, y + 0.5);
-  }
-
-  /** Walk an avatar to an exact spot, in tiles. */
-  function placeAt(room: Room, player: Walker, x: number, y: number): void {
-    walkTo(room, player, x, y);
-  }
 
   /**
    * Station 2, the Signalprobe: Anna walks up to console a, Ben to console b,
@@ -279,47 +279,6 @@ describe('Room', () => {
       signSeen: true,
     });
     room.dispose();
-  });
-
-  it('runs on while someone is disconnected: the crew plays, the clock counts', () => {
-    const { room, anna, ben } = startedRoom();
-    const deadline = lastView(anna.messages).deadlineAt ?? 0;
-
-    // Anna is standing right at the first station when Ben drops out.
-    moveTo(room, anna, 12, 2);
-    ben.detach();
-    const gone = lastView(anna.messages);
-    expect(gone.away.map((away) => away.name)).toEqual(['Ben']);
-    expect(gone.pausedAt).toBeNull();
-    // The crew on the line plays on: Anna switches the station on.
-    pressE(room, anna);
-    expect(lastView(anna.messages).puzzle).not.toBeNull();
-
-    vi.advanceTimersByTime(30_000);
-    const benAgain = collector();
-    room.resume(passFor('Ben'));
-    room.attach(ben.playerId, benAgain.listen);
-    const back = lastView(anna.messages);
-    expect(back.away).toEqual([]);
-    // The clock ran all along: no time given back for the drop.
-    expect(back.deadlineAt).toBe(deadline);
-    expect(lastView(benAgain.messages).deadlineAt).toBe(deadline);
-    room.dispose();
-  });
-
-  it('expires the mission timer with someone away, and not while the server goes down', () => {
-    const { room, anna, ben } = startedRoom();
-    ben.detach();
-    vi.advanceTimersByTime(mission.timeLimitSec * 1000 + 1000);
-    expect(lastView(anna.messages).phase).toBe('lost');
-    room.dispose();
-
-    const down = startedRoom();
-    const downAt = Date.now();
-    down.room.goDown(downAt);
-    vi.advanceTimersByTime(mission.timeLimitSec * 1000 + 60_000);
-    expect(lastView(down.anna.messages)).toMatchObject({ phase: 'playing', pausedAt: downAt });
-    down.room.dispose();
   });
 
   it('resolves one key into pick up, deliver or activate by what is at hand', () => {
@@ -557,22 +516,6 @@ describe('Room', () => {
     room.dispose();
   });
 
-  it('keeps a plate down under its holder whose line drops, the run going on', () => {
-    // Blackout: the Flur plate holds the Maschinenraum door.
-    const blackout = load('blackout');
-    const plate = blackout.map.plates.find((p) => p.id === 'flurplatte') ?? { x: 0, y: 0 };
-    const { room, anna, ben } = startedRoom(blackout);
-    moveTo(room, anna, plate.x, plate.y);
-    expect(lastView(ben.messages).map?.plates[0]?.pressed).toBe(true);
-    anna.detach();
-    // Her avatar stands where it stood: its weight is on the plate, and the door stays open.
-    expect(lastView(ben.messages).map?.plates[0]?.pressed).toBe(true);
-    expect(lastView(ben.messages).away.map((away) => away.name)).toEqual(['Anna']);
-    vi.advanceTimersByTime(30_000);
-    expect(lastView(ben.messages).map?.plates[0]?.pressed).toBe(true);
-    room.dispose();
-  });
-
   it('broadcasts a loss when the mission timer expires', () => {
     const { room, anna } = startedRoom();
 
@@ -650,6 +593,72 @@ describe('Room', () => {
     const threeWireRule = 'mehr als ein schwarzes Kabel vorhanden ist';
     expect(JSON.stringify(anna.messages)).toContain(threeWireRule);
     expect(JSON.stringify(ben.messages)).not.toContain(threeWireRule);
+    room.dispose();
+  });
+});
+
+describe('Room with somebody away', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('runs on while someone is disconnected: the crew plays, the clock counts', () => {
+    const { room, anna, ben } = startedRoom();
+    const deadline = lastView(anna.messages).deadlineAt ?? 0;
+
+    // Anna is standing right at the first station when Ben drops out.
+    moveTo(room, anna, 12, 2);
+    ben.detach();
+    const gone = lastView(anna.messages);
+    expect(gone.away.map((away) => away.name)).toEqual(['Ben']);
+    expect(gone.pausedAt).toBeNull();
+    // The crew on the line plays on: Anna switches the station on.
+    pressE(room, anna);
+    expect(lastView(anna.messages).puzzle).not.toBeNull();
+
+    vi.advanceTimersByTime(30_000);
+    const benAgain = collector();
+    room.resume(passFor('Ben'));
+    room.attach(ben.playerId, benAgain.listen);
+    const back = lastView(anna.messages);
+    expect(back.away).toEqual([]);
+    // The clock ran all along: no time given back for the drop.
+    expect(back.deadlineAt).toBe(deadline);
+    expect(lastView(benAgain.messages).deadlineAt).toBe(deadline);
+    room.dispose();
+  });
+
+  it('expires the mission timer with someone away, and not while the server goes down', () => {
+    const { room, anna, ben } = startedRoom();
+    ben.detach();
+    vi.advanceTimersByTime(mission.timeLimitSec * 1000 + 1000);
+    expect(lastView(anna.messages).phase).toBe('lost');
+    room.dispose();
+
+    const down = startedRoom();
+    const downAt = Date.now();
+    down.room.goDown(downAt);
+    vi.advanceTimersByTime(mission.timeLimitSec * 1000 + 60_000);
+    expect(lastView(down.anna.messages)).toMatchObject({ phase: 'playing', pausedAt: downAt });
+    down.room.dispose();
+  });
+
+  it('keeps a plate down under its holder whose line drops, the run going on', () => {
+    // Blackout: the Flur plate holds the Maschinenraum door.
+    const blackout = load('blackout');
+    const plate = blackout.map.plates.find((p) => p.id === 'flurplatte') ?? { x: 0, y: 0 };
+    const { room, anna, ben } = startedRoom(blackout);
+    moveTo(room, anna, plate.x, plate.y);
+    expect(lastView(ben.messages).map?.plates[0]?.pressed).toBe(true);
+    anna.detach();
+    // Her avatar stands where it stood: its weight is on the plate, and the door stays open.
+    expect(lastView(ben.messages).map?.plates[0]?.pressed).toBe(true);
+    expect(lastView(ben.messages).away.map((away) => away.name)).toEqual(['Anna']);
+    vi.advanceTimersByTime(30_000);
+    expect(lastView(ben.messages).map?.plates[0]?.pressed).toBe(true);
     room.dispose();
   });
 });

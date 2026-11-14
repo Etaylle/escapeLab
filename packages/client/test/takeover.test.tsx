@@ -42,7 +42,7 @@ describe('the crew asked to let a new device in on a seat', () => {
     vi.restoreAllMocks();
   });
 
-  it('asks on the maintenance card whose seat, on the clock, and sends the answer at a press', () => {
+  it('asks on the maintenance card whose seat, on the clock, and sends the answer', () => {
     vi.spyOn(clock, 'now').mockReturnValue(T0 + 5000);
     const html = renderToStaticMarkup(<PauseCard view={waiting} send={() => undefined} />);
     expect(html).toContain(

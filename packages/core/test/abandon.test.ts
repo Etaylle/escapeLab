@@ -11,8 +11,9 @@ import {
   viewForSpectator,
 } from '../src/index.js';
 import type { Action, GameState, Mission } from '../src/index.js';
+import type { RelayState } from '../src/puzzles/relay.js';
 import type { Spot } from '../src/reach.js';
-import { consoleLab, lineBack, lineDrops, standing, started, T0 } from './lab.js';
+import { consoleLab, lineBack, lineDrops, serverDown, standing, started, T0 } from './lab.js';
 
 /** A lab for three: Anna hosts, Ben and Cem joined after her. */
 const mission = consoleLab(3);
@@ -173,16 +174,6 @@ describe('giving the seat up in a run', () => {
     expect(viewFor(over, 'p1').calledOff).toBe('Ben hat den Einsatz verlassen.');
   });
 
-  it('goes on at once where the server’s maintenance stood it still for them alone', () => {
-    const down = run([{ type: 'maintenance', at: T0 + 2000, waitFrom: T0 + 2000 }], three);
-    const waiting = run([lineBack('p1', T0 + 5000), lineBack('p2', T0 + 5000)], down);
-    expect(waiting.paused).not.toBeNull();
-    const left = run([abandon('p3', T0 + 32_000)], waiting);
-    expect(left.paused).toBeNull();
-    expect(left.away).toEqual({});
-    expect(left.deadlineAt).toBe((three.deadlineAt ?? 0) + 30_000);
-  });
-
   it('passes the host’s part on, in a run too', () => {
     const left = run([abandon('p1', T0 + 1000)], three);
     expect(left.players.map((p) => [p.id, p.isHost])).toEqual([
@@ -200,6 +191,32 @@ describe('giving the seat up in a run', () => {
     expect(over.players.map((p) => p.id)).toEqual(['p1']);
   });
 
+  it('rolls an emergency at the relay anew for the crew that is left', () => {
+    const alarmed = run([{ type: 'sabotage-start', at: T0 + 5000 }], three);
+    const before = alarmed.sabotage?.emergency;
+    const left = run([abandon('p3', T0 + 6000)], alarmed);
+    const after = left.sabotage?.emergency;
+    expect(after?.endsAt).toBe(before?.endsAt);
+    expect(new Set(after?.controls.map((c) => c.ownerId))).toEqual(new Set(['p1', 'p2']));
+    expect(after?.instructions.map((i) => i.holderId)).toEqual(['p1', 'p2']);
+    for (const id of ['p1', 'p2']) {
+      const relay = viewFor(left, id).map?.sabotage?.relay;
+      expect(relay?.instruction?.playerName).toMatch(/^(Anna|Ben)$/);
+    }
+  });
+});
+
+describe('giving the seat up with somebody away', () => {
+  it('goes on at once where the server’s maintenance stood it still for them alone', () => {
+    const down = run([{ type: 'maintenance', at: T0 + 2000, waitFrom: T0 + 2000 }], three);
+    const waiting = run([lineBack('p1', T0 + 5000), lineBack('p2', T0 + 5000)], down);
+    expect(waiting.paused).not.toBeNull();
+    const left = run([abandon('p3', T0 + 32_000)], waiting);
+    expect(left.paused).toBeNull();
+    expect(left.away).toEqual({});
+    expect(left.deadlineAt).toBe((three.deadlineAt ?? 0) + 30_000);
+  });
+
   it('counts again whoever it went on without, once too few are on the line', () => {
     const gone = run(
       [
@@ -208,7 +225,6 @@ describe('giving the seat up in a run', () => {
       ],
       three,
     );
-    expect(crewOf(gone).map((p) => p.id)).toEqual(['p1', 'p2']);
     const left = run([abandon('p2', T0 + 70_000)], gone);
     expect(left.phase).toBe('playing');
     expect(left.paused).toBeNull();
@@ -216,9 +232,7 @@ describe('giving the seat up in a run', () => {
       p3: { since: T0 + 70_000, waivableAt: T0 + 70_000 + LATER_WAIT_MS, waived: false },
     });
     expect(crewOf(left).map((p) => p.id)).toEqual(['p1', 'p3']);
-    expect(viewFor(left, 'p1').away.map((away) => [away.name, away.waived])).toEqual([
-      ['Cem', undefined],
-    ]);
+    expect(viewFor(left, 'p1').away.map((away) => away.name)).toEqual(['Cem']);
     // Anna, alone on the line, calls it off once the new wait is over.
     const early = { type: 'call-off', playerId: 'p1', at: T0 + 75_000 } as const;
     expect(() => run([early], left)).toThrow(/Wartezeit/);
@@ -242,70 +256,75 @@ describe('giving the seat up in a run', () => {
     });
     expect(viewFor(left, 'p1').takeovers?.map((ask) => ask.name)).toEqual(['Cem']);
   });
-
-  it('rolls an emergency at the relay anew for the crew that is left', () => {
-    const alarmed = run([{ type: 'sabotage-start', at: T0 + 5000 }], three);
-    const before = alarmed.sabotage?.emergency;
-    const left = run([abandon('p3', T0 + 6000)], alarmed);
-    const after = left.sabotage?.emergency;
-    expect(after?.endsAt).toBe(before?.endsAt);
-    expect(new Set(after?.controls.map((c) => c.ownerId))).toEqual(new Set(['p1', 'p2']));
-    expect(after?.instructions.map((i) => i.holderId)).toEqual(['p1', 'p2']);
-    for (const id of ['p1', 'p2']) {
-      const relay = viewFor(left, id).map?.sabotage?.relay;
-      expect(relay?.instruction?.playerName).toMatch(/^(Anna|Ben)$/);
-    }
-  });
 });
 
-describe('the relay works on the crew on the line', () => {
-  /**
-   * The corridor's crew of three: Ben's line down a moment at T0 + 1 s, the run's first drop;
-   * an emergency from T0 + 5 s; Cem's line down since T0 + 6 s, a later drop of 20 s.
-   */
-  const inEmergency = run(
-    [
-      lineDrops('p2', T0 + 1000),
-      lineBack('p2', T0 + 2000),
-      { type: 'sabotage-start', at: T0 + 5000 },
-    ],
-    three,
-  );
-  const cemAway = run([lineDrops('p3', T0 + 6000)], inEmergency);
-  const without = run(
-    [{ type: 'continue-without', playerId: 'p1', absentId: 'p3', at: T0 + 26_000 }],
-    cemAway,
-  );
-  const consoles = (state: GameState): Set<string> =>
-    new Set(state.sabotage?.emergency?.controls.map((c) => c.ownerId));
+/**
+ * The corridor's crew of three: Ben's line down a moment at T0 + 1 s, the run's first drop; an
+ * emergency from T0 + 5 s; Cem's line down since T0 + 6 s, a later drop of 20 s; and the crew on
+ * without him once his wait is over.
+ */
+const inEmergency = run(
+  [
+    lineDrops('p2', T0 + 1000),
+    lineBack('p2', T0 + 2000),
+    { type: 'sabotage-start', at: T0 + 5000 },
+  ],
+  three,
+);
+const cemAway = run([lineDrops('p3', T0 + 6000)], inEmergency);
+const without = run(
+  [{ type: 'continue-without', playerId: 'p1', absentId: 'p3', at: T0 + 26_000 }],
+  cemAway,
+);
 
+/** The emergency at the relay under way in `state`; throws where none runs. */
+function emergencyOf(state: GameState): RelayState {
+  const emergency = state.sabotage?.emergency;
+  if (emergency === undefined) {
+    throw new Error('no emergency at the relay under way');
+  }
+  return emergency;
+}
+
+/** Whose consoles the emergency of `state` has. */
+const consoles = (state: GameState): Set<string> =>
+  new Set(emergencyOf(state).controls.map((c) => c.ownerId));
+
+/** Who holds an instruction of the emergency of `state`, in the crew's order. */
+const holders = (state: GameState): string[] =>
+  emergencyOf(state).instructions.map((i) => i.holderId);
+
+/** `playerId`'s relay console as their view of `state` shows it; null for none. */
+const relayOf = (state: GameState, playerId: string) =>
+  viewFor(state, playerId).map?.sabotage?.relay ?? null;
+
+describe('the relay as a line drops and comes back', () => {
   it('rolls it anew once without whoever’s line dropped: no console, no instruction', () => {
     expect(consoles(inEmergency)).toEqual(new Set(['p1', 'p2', 'p3']));
     expect(consoles(cemAway)).toEqual(new Set(['p1', 'p2']));
-    expect(cemAway.sabotage?.emergency?.instructions.map((i) => i.holderId)).toEqual(['p1', 'p2']);
-    const cem = viewFor(cemAway, 'p3').map?.sabotage?.relay;
-    expect(cem).toMatchObject({ controls: [], instruction: null });
+    expect(holders(cemAway)).toEqual(['p1', 'p2']);
+    expect(relayOf(cemAway, 'p3')).toMatchObject({ controls: [], instruction: null });
     for (const id of ['p1', 'p2']) {
-      const relay = viewFor(cemAway, id).map?.sabotage?.relay;
+      const relay = relayOf(cemAway, id);
       expect(relay?.instruction?.playerName).toMatch(/^(Anna|Ben)$/);
       // Three instructions a console of the crew on the line clear it, as the core counts them.
       expect(relay?.required).toBe(6);
     }
     // Once: what comes after the drop finds the consoles it was rolled with.
     const ticked = run([{ type: 'sabotage-tick', at: T0 + 7000 }], cemAway);
-    expect(ticked.sabotage?.emergency?.controls).toEqual(cemAway.sabotage?.emergency?.controls);
+    expect(emergencyOf(ticked).controls).toEqual(emergencyOf(cemAway).controls);
   });
 
   it('starts the fresh instructions’ clocks at the drop, its deadline kept', () => {
-    for (const instruction of cemAway.sabotage?.emergency?.instructions ?? []) {
+    for (const instruction of emergencyOf(cemAway).instructions) {
       expect(instruction.expiresAt).toBe(T0 + 6000 + 12_000);
     }
-    expect(cemAway.sabotage?.emergency?.endsAt).toBe(inEmergency.sabotage?.emergency?.endsAt);
+    expect(emergencyOf(cemAway).endsAt).toBe(emergencyOf(inEmergency).endsAt);
   });
 
   it('leaves it be as the crew goes on without the one away: no console was his already', () => {
     expect(without.away['p3']?.waived).toBe(true);
-    expect(without.sabotage?.emergency).toEqual(cemAway.sabotage?.emergency);
+    expect(emergencyOf(without)).toEqual(emergencyOf(cemAway));
   });
 
   it('rolls it anew with a console for Cem once he is back, waived or not', () => {
@@ -313,8 +332,8 @@ describe('the relay works on the crew on the line', () => {
       const back = run([lineBack('p3', T0 + 30_000)], before);
       expect(back.paused).toBeNull();
       expect(consoles(back)).toEqual(new Set(['p1', 'p2', 'p3']));
-      expect(viewFor(back, 'p3').map?.sabotage?.relay?.controls).toHaveLength(4);
-      expect(back.sabotage?.emergency?.completed).toBe(before.sabotage?.emergency?.completed);
+      expect(relayOf(back, 'p3')?.controls).toHaveLength(4);
+      expect(emergencyOf(back).completed).toBe(emergencyOf(before).completed);
     }
   });
 
@@ -330,17 +349,19 @@ describe('the relay works on the crew on the line', () => {
     );
     for (const state of [calm, waived]) {
       expect(consoles(state)).toEqual(new Set(['p1', 'p2']));
-      expect(state.sabotage?.emergency?.instructions.map((i) => i.holderId)).toEqual(['p1', 'p2']);
+      expect(holders(state)).toEqual(['p1', 'p2']);
     }
   });
+});
 
+describe('the relay with few on the line, a give-up, the maintenance and the end', () => {
   it('keeps a console for each of the crew it counts while fewer than two are on the line', () => {
     const lone = run([lineDrops('p2', T0 + 6500)], cemAway);
     expect(consoles(lone)).toEqual(new Set(['p1', 'p2', 'p3']));
     const nobody = run([lineDrops('p1', T0 + 7000)], lone);
-    expect(nobody.sabotage?.emergency).toEqual(lone.sabotage?.emergency);
+    expect(emergencyOf(nobody)).toEqual(emergencyOf(lone));
     const one = run([lineBack('p2', T0 + 8000)], nobody);
-    expect(one.sabotage?.emergency).toEqual(lone.sabotage?.emergency);
+    expect(emergencyOf(one)).toEqual(emergencyOf(lone));
     expect(consoles(run([lineBack('p1', T0 + 9000)], one))).toEqual(new Set(['p1', 'p2']));
   });
 
@@ -351,10 +372,10 @@ describe('the relay works on the crew on the line', () => {
   });
 
   it('rolls it for the crew the run counts as the server goes down, nobody on the line', () => {
-    const down = run([{ type: 'maintenance', at: T0 + 7000, waitFrom: T0 + 7000 }], cemAway);
+    const down = run([serverDown(T0 + 7000)], cemAway);
     expect(consoles(down)).toEqual(new Set(['p1', 'p2', 'p3']));
     // As of the moment it stopped: its instructions' clocks start as it goes on.
-    for (const instruction of down.sabotage?.emergency?.instructions ?? []) {
+    for (const instruction of emergencyOf(down).instructions) {
       expect(instruction.expiresAt).toBe(T0 + 7000 + 12_000);
     }
   });

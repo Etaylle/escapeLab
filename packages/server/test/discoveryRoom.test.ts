@@ -148,6 +148,33 @@ describe('a room where the lamp finds what it rests on, close by', () => {
     room.dispose();
   });
 
+  it('lets a look of one run go with it: the next run looks anew', () => {
+    const { room, anna, ben } = started();
+    const here = BEFORE_BOX;
+    walkTo(room, anna, here.x, here.y);
+    // Turned from the box at once, then back to it as the clock runs out: a look cut short.
+    turn(room, anna, here, Math.PI);
+    vi.advanceTimersByTime(hall.timeLimitSec * 1000 - 100);
+    turn(room, anna, here, 0);
+    vi.advanceTimersByTime(200);
+    expect(lastView(anna).phase).toBe('lost');
+    room.setReady(ben.playerId, true);
+    room.setReady(anna.playerId, true);
+    const box = () => lastView(anna).map?.stations[0]?.found;
+    expect([lastView(anna).phase, box()]).toEqual(['playing', false]);
+    walkTo(room, anna, here.x, here.y);
+    vi.advanceTimersByTime(599);
+    expect(box()).toBe(false);
+    vi.advanceTimersByTime(1);
+    expect(box()).toBe(true);
+    room.dispose();
+  });
+});
+
+describe('a room where the lamp finds things, a line down or the server going down', () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
   it('looks on while somebody’s line is down: a drop freezes no look', () => {
     const { room, anna, ben } = started();
     walkTo(room, anna, BY_LOCKERS.x, BY_LOCKERS.y);
@@ -188,28 +215,6 @@ describe('a room where the lamp finds what it rests on, close by', () => {
     expect(sourcesFound(anna)).toEqual([]);
     vi.advanceTimersByTime(1);
     expect(sourcesFound(anna)).toEqual(['spind', 'schrank']);
-    room.dispose();
-  });
-
-  it('lets a look of one run go with it: the next run looks anew', () => {
-    const { room, anna, ben } = started();
-    const here = BEFORE_BOX;
-    walkTo(room, anna, here.x, here.y);
-    // Turned from the box at once, then back to it as the clock runs out: a look cut short.
-    turn(room, anna, here, Math.PI);
-    vi.advanceTimersByTime(hall.timeLimitSec * 1000 - 100);
-    turn(room, anna, here, 0);
-    vi.advanceTimersByTime(200);
-    expect(lastView(anna).phase).toBe('lost');
-    room.setReady(ben.playerId, true);
-    room.setReady(anna.playerId, true);
-    const box = () => lastView(anna).map?.stations[0]?.found;
-    expect([lastView(anna).phase, box()]).toEqual(['playing', false]);
-    walkTo(room, anna, here.x, here.y);
-    vi.advanceTimersByTime(599);
-    expect(box()).toBe(false);
-    vi.advanceTimersByTime(1);
-    expect(box()).toBe(true);
     room.dispose();
   });
 });

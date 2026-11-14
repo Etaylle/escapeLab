@@ -270,8 +270,9 @@ describe('the game screen of a run with somebody away', () => {
 });
 
 describe('a station the whole crew works, with somebody away', () => {
-  it('names a lever for each of the crew the run counts: Cem’s too, till it goes on without', () => {
-    const run = { events: [], alarms: { count: 0, limit: 5 }, penaltySeq: 0, currentPuzzleIndex: 0 };
+  it('names a lever for each of the crew the run counts: Cem’s too, till it goes on', () => {
+    const alarms = { count: 0, limit: 5 };
+    const run = { events: [], alarms, penaltySeq: 0, currentPuzzleIndex: 0 };
     const view = { ...away(), ...run, you: { ...mate('p1', 'Anna'), ready: false } } as PlayerView;
     const names = (v: PlayerView): string[] =>
       deviceRunOf(v, null).crew.mates.map((m) => m.name);

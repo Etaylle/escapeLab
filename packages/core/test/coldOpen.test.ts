@@ -292,6 +292,29 @@ describe('a crew that has seen enough of the intro', () => {
     expect(lightsOut(one, OUT_AT).lightsOutAt).toBe(OUT_AT);
   });
 
+  it('takes nothing outside an intro, and nobody who is not of the crew', () => {
+    const plain = started(withoutIntro());
+    expect(done(plain, 'p1', SKIP_AT)).toBe(plain);
+    const out = lightsOut(started(mission), OUT_AT);
+    expect(done(out, 'p1', OUT_AT + 10)).toBe(out);
+    expect(() => done(started(mission), 'zz', SKIP_AT)).toThrow(/Unbekannter Spieler/);
+  });
+
+  it('forgets who had seen enough with the next run, and in the lobby', () => {
+    const both = done(done(started(mission), 'p1', SKIP_AT), 'p2', SKIP_AT + 700);
+    const lost = applyAction(both, { type: 'time-expired', at: SKIP_AT + 700 + LIMIT_MS });
+    const ready = applyAction(lost, { type: 'set-ready', playerId: 'p2', ready: true });
+    const again = applyAction(ready, { type: 'rematch', playerId: 'p1', at: T0 + 1e6, seed: 3 });
+    expect(again.introDone).toEqual([]);
+    expect(applyAction(lost, { type: 'back-to-lobby', playerId: 'p1' }).introDone).toEqual([]);
+  });
+});
+
+describe('the intro with somebody away', () => {
+  const done = (state: GameState, playerId: string, at: number): GameState =>
+    applyAction(state, { type: 'intro-done', playerId, at });
+  const SKIP_AT = T0 + 1800;
+
   it('waits for nobody away: the last one who still watched goes, and the lights go', () => {
     const both = done(done(started(forThree), 'p1', SKIP_AT), 'p2', SKIP_AT + 300);
     expect(both.lightsOutAt).toBeNull();
@@ -322,23 +345,6 @@ describe('a crew that has seen enough of the intro', () => {
     });
     expect(on.lightsOutAt).toBe(goOn);
     expect(on.deadlineAt).toBe(goOn + LIMIT_MS);
-  });
-
-  it('takes nothing outside an intro, and nobody who is not of the crew', () => {
-    const plain = started(withoutIntro());
-    expect(done(plain, 'p1', SKIP_AT)).toBe(plain);
-    const out = lightsOut(started(mission), OUT_AT);
-    expect(done(out, 'p1', OUT_AT + 10)).toBe(out);
-    expect(() => done(started(mission), 'zz', SKIP_AT)).toThrow(/Unbekannter Spieler/);
-  });
-
-  it('forgets who had seen enough with the next run, and in the lobby', () => {
-    const both = done(done(started(mission), 'p1', SKIP_AT), 'p2', SKIP_AT + 700);
-    const lost = applyAction(both, { type: 'time-expired', at: SKIP_AT + 700 + LIMIT_MS });
-    const ready = applyAction(lost, { type: 'set-ready', playerId: 'p2', ready: true });
-    const again = applyAction(ready, { type: 'rematch', playerId: 'p1', at: T0 + 1e6, seed: 3 });
-    expect(again.introDone).toEqual([]);
-    expect(applyAction(lost, { type: 'back-to-lobby', playerId: 'p1' }).introDone).toEqual([]);
   });
 });
 

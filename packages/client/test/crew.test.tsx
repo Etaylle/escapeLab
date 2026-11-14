@@ -1082,56 +1082,56 @@ describe('the end screen', () => {
   });
 });
 
+type Watched = SpectatorView['players'][number];
+const watch = (p: Seat, signSeen: boolean): Watched => ({
+  id: p.id,
+  name: p.name,
+  color: p.color,
+  connected: true,
+  presence: { stationId: null, console: null, manualId: null, signSeen },
+});
+/** Anna has read the sign, Ben has not. */
+const watchedAnna = watch(anna, true);
+const watchedBen = watch(ben, false);
+
+/** What a spectator gets once Anna and Ben are out. */
+function finished(): SpectatorView {
+  return {
+    phase: 'won',
+    missionId: 'blackout',
+    missionTitle: 'Blackout im Labor',
+    difficulty: 'normal',
+    storyText: 'Licht.',
+    deadlineAt: 481_000,
+    startedAt: 1_000,
+    finishedAt: 301_000,
+    timeLimitSec: 480,
+    lights: { out: true, outAt: 1_000 },
+    currentPuzzleIndex: 5,
+    puzzleCount: 5,
+    penaltySeq: 2,
+    alarms: { count: 2, limit: 5 },
+    hintsUsed: 1,
+    away: [],
+    pausedAt: null,
+    events: [],
+    grade: { rank: 'B', label: 'Solide' },
+    players: [watchedAnna, watchedBen],
+    credits: {
+      p1: { operated: 3, read: 1, found: 0, delivered: 1, alarms: 0, hints: 0 },
+      p2: { operated: 2, read: 4, found: 1, delivered: 0, alarms: 2, hints: 1 },
+    },
+    map: null,
+    puzzle: null,
+    edgework: null,
+    panels: [],
+  };
+}
+
 describe('the audience', () => {
   afterEach(() => {
     vi.useRealTimers();
   });
-
-  type Watched = SpectatorView['players'][number];
-  const watch = (p: Seat, signSeen: boolean): Watched => ({
-    id: p.id,
-    name: p.name,
-    color: p.color,
-    connected: true,
-    presence: { stationId: null, console: null, manualId: null, signSeen },
-  });
-  /** Anna has read the sign, Ben has not. */
-  const watchedAnna = watch(anna, true);
-  const watchedBen = watch(ben, false);
-
-  /** What a spectator gets once Anna and Ben are out. */
-  function finished(): SpectatorView {
-    return {
-      phase: 'won',
-      missionId: 'blackout',
-      missionTitle: 'Blackout im Labor',
-      difficulty: 'normal',
-      storyText: 'Licht.',
-      deadlineAt: 481_000,
-      startedAt: 1_000,
-      finishedAt: 301_000,
-      timeLimitSec: 480,
-      lights: { out: true, outAt: 1_000 },
-      currentPuzzleIndex: 5,
-      puzzleCount: 5,
-      penaltySeq: 2,
-      alarms: { count: 2, limit: 5 },
-      hintsUsed: 1,
-      away: [],
-      pausedAt: null,
-      events: [],
-      grade: { rank: 'B', label: 'Solide' },
-      players: [watchedAnna, watchedBen],
-      credits: {
-        p1: { operated: 3, read: 1, found: 0, delivered: 1, alarms: 0, hints: 0 },
-        p2: { operated: 2, read: 4, found: 1, delivered: 0, alarms: 2, hints: 1 },
-      },
-      map: null,
-      puzzle: null,
-      edgework: null,
-      panels: [],
-    };
-  }
 
   it('tags who has read the sign besides where they stand', () => {
     const view: SpectatorView = { ...finished(), phase: 'playing', map: lab };
@@ -1167,7 +1167,8 @@ describe('the audience', () => {
       players: [watchedAnna, gone],
       away: [{ id: 'p2', name: 'Ben', since: PULLED_AT, waivableAt: PULLED_AT + 60_000 }],
     };
-    expect(audienceTags(view, gone, undefined)).toEqual([{ text: 'getrennt · 1:05', tone: 'away' }]);
+    const away = { text: 'getrennt · 1:05', tone: 'away' };
+    expect(audienceTags(view, gone, undefined)).toEqual([away]);
     vi.useRealTimers();
   });
 
