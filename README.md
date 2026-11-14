@@ -11,9 +11,11 @@ Signalkette an zwei Pulten (`signal`), Sicherungskasten und Prüfpult an zwei Pu
 Serverraum mit Terminal und Rack an zwei Pulten (`servers`).
 Layouts/Codes sind pro Partie zufällig (seeded, deterministisch replaybar), Fehler kosten
 Countdown-Zeit. **Missionen:** Tutorial (2 Spieler), Blackout im Labor (2–3 Spieler, 5 Rätsel),
-Kettenreaktion (3 Spieler, jeder startet in einem anderen verschlossenen Raum und kommt nur mit
-Hilfe heraus) und Doppelschicht (4 Spieler in **zwei getrennten Flügeln** — die Regeln jeder
-Station liegen im anderen Flügel, und erst der Druckausgleich öffnet die Schleuse dazwischen).
+die Übungshalle (2–3 Spieler, jede Station der Anlage einmal mit ihren Regeln daneben, in
+beliebiger Reihenfolge und ohne Uhr), Kettenreaktion (3 Spieler, jeder startet in einem anderen
+verschlossenen Raum und kommt nur mit Hilfe heraus) und Doppelschicht (4 Spieler in **zwei
+getrennten Flügeln** — die Regeln jeder Station liegen im anderen Flügel, und erst der
+Druckausgleich öffnet die Schleuse dazwischen).
 
 **Blackout im Labor** (2–3 Spieler, 15 Minuten auf *Normal*): ein Labor von 36 × 22 Feldern, die
 Räume etwa 9 × 7 groß als Ring — Archiv, Flur, Serverraum, Ost-Flur, Reaktor, Süd-Flur, Labor,
@@ -70,9 +72,11 @@ Archivmusik (`docs/sound.md`, Abschnitt „Lizenz“).
 wenn so viele da sind, wie die Mission braucht, und alle bestätigt haben; jede Änderung an
 Mission oder Besetzung setzt die Bestätigungen zurück; die Startplätze werden beim Start
 verlost) → Briefing-Countdown mit dem eigenen Startraum →
-Stationen in Reihenfolge finden und lösen → wenn alle gelöst sind, öffnet sich der **Notausgang**
-und das ganze Team muss ihn gemeinsam erreichen, bevor die Zeit abläuft → Endbildschirm mit
-Statistiken und persönlicher Bestzeit. **Hilfsmittel:** Klick auf die Welt setzt einen **Ping**
+Stationen in Reihenfolge finden und lösen (in einer Mission mit `order: 'free'` in beliebiger:
+jede steht offen, die Crew schaltet eine nach der anderen ein) → wenn alle gelöst sind, öffnet
+sich der **Notausgang** und das ganze Team muss ihn gemeinsam erreichen, bevor die Zeit abläuft
+(eine Mission mit `timeLimitSec: 0` hat keine Uhr und zählt die Zeit nur hoch) → Endbildschirm
+mit Statistiken und persönlicher Bestzeit. **Hilfsmittel:** Klick auf die Welt setzt einen **Ping**
 für alle (farbige Ringe, Pfeil wenn außerhalb des Bildes), `M` blendet die **Minikarte** ein,
 `N` den eigenen **Notizblock** (bleibt für den Raum gespeichert), `C` öffnet den **Schnellchat**
 (acht feste Sätze, Tasten `1`–`8`, erscheinen als Sprechblase über der Figur) — damit
@@ -179,8 +183,12 @@ aus `packages/client/audio/catalog.json`, siehe `docs/sound.md`).
 prüft jede davon automatisch: gleiche Zeilenlängen, alles auf Bodenfeldern, eine Station pro
 Rätsel — bei einem Rätsel mit zwei Pulten (Notstrom-Kasten, Signalkette, Serverraum) je eine für
 Pult A und Pult B, mehr als vier Felder auseinander — und per Flutfüllung mit den echten
-Tür-Regeln, dass die Stationen in Reihenfolge erreichbar sind und am Ende **alle** den Notausgang
-erreichen können. Eine Plattentür kann mit `untilSolved` ein Rätsel nennen: Ist es gelöst, bleibt
+Tür-Regeln, dass die Stationen in Reihenfolge erreichbar sind (in freier Reihenfolge jede schon
+ohne eine gelöste) und am Ende **alle** den Notausgang erreichen können — nur eine Mission in
+freier Reihenfolge darf ohne enden, dann gewinnt die letzte Station den Lauf. Die Übungshalle
+(`missions/uebungshalle.json`) entsteht aus der Modulliste: Nach einem neuen Modul schreibt
+`node --import tsx ../core/test/writeHall.ts` (aus `packages/server`) sie samt Harness-Plan neu.
+Eine Plattentür kann mit `untilSolved` ein Rätsel nennen: Ist es gelöst, bleibt
 sie auch ohne Platte offen (Blackout: die Maschinenraumtür nach dem Notstrom). An jeder Station mit
 einem Pult muss außerdem — wohin ihre Regeln auch ausgelost werden — einer am Pult stehen können,
 während ein anderer sie zugleich liest, und an jeder mit zwei Pulten müssen zwei Verschiedene

@@ -2,18 +2,21 @@
 
 How the crew steers, how it finds things, what a run leaves behind and how runs compare: the
 controls on keys and on a controller, the quick chat, the station's intercom, finding things, the
-walks of Blackout's lab, the first win at the stations the whole crew presses, the Erfolge, the
-Tagesschicht, the picture of a run, the danger sense, the Serverraum's cabling diagram, typing at
-its terminal, what the notepad takes down and what happens when a line drops. Code:
+walks of Blackout's lab, stations in any order, runs without a clock and the Übungshalle, the
+first win at the stations the whole crew presses, the Erfolge, the Tagesschicht, the picture of
+a run, the danger sense, the Serverraum's cabling diagram, typing at its terminal, what the
+notepad takes down and what happens when a line drops. Code:
 `packages/client/src/input/` (bindings, controller, prompts), `client/src/achievements.ts` and
 `screens/{Plaques,ShareButton,ControlSettings}.tsx`,
 `screens/shareCard.ts`, `world/{labelFade,finds,danger,ChatWheel}.ts(x)`,
 `puzzles/RackDiagram.tsx`, `puzzles/{prompt.ts,ServersPanel.tsx}`,
 `puzzles/{SyncCount.tsx,syncPress.ts}`, `voice/{rules,intercom}.ts`, `noting.ts`, `notes.ts`,
 `screens/{Notepad,NoteButton}.tsx`, `pass.ts`, `line.ts`, `ws.ts`,
-`screens/{Join,Pause,Line,GiveUp}.tsx`; in the core `chat.ts`, `discovery.ts`, `achievements.ts`,
-`daily.ts`, `map.ts` (`intercomOf`), `puzzles/servers.ts` (`serviceDiagram`),
-`puzzles/buttonSync.ts` and `actions.ts` (the pause); in the server `seats.ts`, `heartbeat.ts`.
+`screens/{Join,Pause,Line,GiveUp}.tsx`, `clock.ts`; in the core `chat.ts`, `discovery.ts`,
+`achievements.ts`, `daily.ts`, `mission.ts` (`order`, `lit`), `map.ts` (`intercomOf`,
+`stationUp`), `puzzles/servers.ts` (`serviceDiagram`), `puzzles/buttonSync.ts` and `actions.ts`
+(the pause, `takeUp`, `hasClock`), the hall in `test/hall.ts`; in the server `seats.ts`,
+`heartbeat.ts`.
 
 ## Controls
 
@@ -156,6 +159,57 @@ Each walks the plan in about 55 s now, Anna 55.5 and Ben 53.9, where both took a
 (43.2 and 41.3): three tenths more. Both ways out are 52 steps on the grid, as the last shift's
 note by the hatch says; counted the eight ways, the Labor's is a tile shorter. Every start lies
 3.6 to 4 s from the lever.
+
+## Free order, no clock, the Übungshalle
+
+**Free order.** A mission's stations form a chain unless it says otherwise (`order: 'chain'`):
+one is armed at a time, in the file's order. With `order: 'free'` every station stands open from
+the start, and the crew takes them in any order. The first E at a station's console switches
+that one on (core `actions.ts` `takeUp`), and while it runs no other comes on: one station runs
+at a time, since two at once would need a state of their own each (`docs/gameplay-models.md`
+weighs it). Solved, it closes, and every station still to solve stands open again. The goal line
+names the station that runs, and while none does, how many are left: „Noch 7 Stationen" (client
+`world/known.ts` `armedGoal`). The run is won once every station is solved and the whole crew
+stands on the hatch; a mission in free order may have none, and then its last solve wins the
+run, every station counted (`core/test/missionMaps.test.ts` holds every other mission to its
+hatch). Each station's instance is drawn from the seed and the station's own id, so the order a
+crew takes them in changes none of them.
+The run report lists the stations in the order they were solved. The validation proves every
+station workable with nothing solved yet, as any may come first: reached as in a chain — by the
+whole crew together, by two players at once at two consoles, by one while another reads its
+rules — every source reachable, a cabinet's with its key in hand; a door that only a solve opens
+counts as shut (core `mission.ts` `walkFree`).
+
+**No clock.** `timeLimitSec: 0` is a run without a clock. The HUD counts the time run since the
+lights went out, pauses left out (`clockFrom`), and never turns red; the run report keeps the
+limit as 0 and the time from the lights to the end as ever; the levels keep it at 0. Neither an
+alarm nor a note of the last shift costs time (an alarm still counts), and mission control
+sends no nudges, as nobody is hurried. The mission cards and the lobby say „ohne Uhr", the end
+card „Zeit" instead of „Restzeit", and its top rank „keine Notiz gebraucht" instead of time to
+spare; without a hatch the third rank says every station is done, not that all are out. The
+button's Einsatzuhr counts up as well, and its release reads the digits as shown, a second's
+latency allowed the other way round (core `puzzles/button.ts` `releaseInTime`). An alarm limit
+stays the mission's own (`maxAlarms`).
+
+**The Übungshalle** (`missions/uebungshalle.json`, 40 × 26 tiles, 2–3 players) has one station
+of every type the lab knows, twelve with fifteen consoles — every module but the relay, which
+runs only as an emergency. Each stands in a bay of its own, four abreast in three rows: the
+station, its book on the floor five tiles beside it with a desk, and a sign naming the machine
+and its type („SIGNALKETTE · SK-4"); a station with two consoles has both in its bay, five tiles
+apart — the validation keeps one player from standing at both — and its book under them. The
+crew starts at the entrance, beside the notice board („Übungshalle · Jede Station steht offen;
+die Regeln liegen daneben") and the Laborkennung. Free order, no clock, no alarm limit, no
+drones, no emergencies, no intro: its lights burn from the start (`lit: true` lights every room
+the map names, and refuses an intro). No hatch either: the last station wins the run, as a
+practice ends — no siren, no run back across the hall, whose lit floor the escape's red would
+only wash out. The last shift's notes at each station say how its machine is learned, never an
+instance's answer. The menu's card says „Jede Station zum Üben" over its title. The hall is
+made from the module registry (`core/test/hall.ts`): a module added there fails
+`core/test/hall.test.ts` until the hall is written anew, with the walkthrough's plan, by
+`node --import tsx ../core/test/writeHall.ts` from `packages/server`.
+`SHOTS_MISSION=Uebungshalle` plays it to the won card from that plan
+(`tools/fixtures/hall-plan.json`, made by `core/test/hallPlan.ts`): the overview from the
+audience (`hall-overview.png`) and every station's device as it opens (`hall-<type>.png`).
 
 ## The first win
 
