@@ -1,0 +1,143 @@
+{
+  "id": "zhelanov",
+  "title": "Schicht E · Leuchtschirm",
+  "composers": [
+    "Alexandr Zhelanov"
+  ],
+  "pieces": {
+    "menu-theme": {
+      "title": "Futuristic ambient (3)",
+      "author": "Alexandr Zhelanov",
+      "source": "https://opengameart.org/content/futuristic-ambient",
+      "licence": "CC BY 4.0",
+      "attribution": "„Futuristic ambient (3)“ – Alexandr Zhelanov (https://www.youtube.com/channel/UCxmng6_DMIayDwkiWGVzVRQ?view_as=subscriber Alexandr Zhelanov https://soundcloud.com/alexandr-zhelanov) · https://opengameart.org/content/futuristic-ambient · Creative Commons Attribution 4.0 International: https://creativecommons.org/licenses/by/4.0/ · bearbeitet: Schnitt, Schleife, Pegel",
+      "file": "menu-theme.m4a",
+      "ms": 77500,
+      "startMs": 0,
+      "loudness": -17.94,
+      "gain": 0.8848,
+      "loop": {
+        "crossfade": {
+          "startMs": 3000,
+          "endMs": 77000,
+          "fadeMs": 5000
+        }
+      }
+    },
+    "lobby": {
+      "title": "A Skeletons in the Closet",
+      "author": "Alexandr Zhelanov",
+      "source": "https://opengameart.org/content/a-skeletons-in-the-closet",
+      "licence": "CC BY 4.0",
+      "attribution": "„A Skeletons in the Closet“ – Alexandr Zhelanov (https://www.youtube.com/c/AlexandrZhelanovsMusic) · https://opengameart.org/content/a-skeletons-in-the-closet · Creative Commons Attribution 4.0 International: https://creativecommons.org/licenses/by/4.0/ · bearbeitet: Schnitt, Schleife, Pegel",
+      "file": "lobby.m4a",
+      "ms": 71930,
+      "startMs": 0,
+      "loudness": -14.81,
+      "gain": 0.6176,
+      "loop": {
+        "crossfade": {
+          "startMs": 3000,
+          "endMs": 71430,
+          "fadeMs": 5000
+        }
+      }
+    },
+    "title": {
+      "title": "Behind the Universe",
+      "author": "Alexandr Zhelanov",
+      "source": "https://opengameart.org/content/behind-the-universe",
+      "licence": "CC BY 4.0",
+      "attribution": "„Behind the Universe“ – Alexandr Zhelanov (Alexandr Zhelanov https://soundcloud.com/alexandr-zhelanov) · https://opengameart.org/content/behind-the-universe · Creative Commons Attribution 4.0 International: https://creativecommons.org/licenses/by/4.0/ · bearbeitet: Schnitt, Schleife, Pegel",
+      "file": "title.m4a",
+      "ms": 42000,
+      "startMs": 618,
+      "loudness": -19.2,
+      "gain": 1.0233,
+      "loop": null
+    },
+    "calm": {
+      "title": "Futuristic ambient (2)",
+      "author": "Alexandr Zhelanov",
+      "source": "https://opengameart.org/content/futuristic-ambient",
+      "licence": "CC BY 4.0",
+      "attribution": "„Futuristic ambient (2)“ – Alexandr Zhelanov (https://www.youtube.com/channel/UCxmng6_DMIayDwkiWGVzVRQ?view_as=subscriber Alexandr Zhelanov https://soundcloud.com/alexandr-zhelanov) · https://opengameart.org/content/futuristic-ambient · Creative Commons Attribution 4.0 International: https://creativecommons.org/licenses/by/4.0/ · bearbeitet: Schnitt, Schleife, Pegel",
+      "file": "calm.m4a",
+      "ms": 72500,
+      "startMs": 0,
+      "loudness": -17.49,
+      "gain": 0.8407,
+      "loop": {
+        "crossfade": {
+          "startMs": 3000,
+          "endMs": 72000,
+          "fadeMs": 5000
+        }
+      }
+    },
+    "tense": {
+      "title": "Electron",
+      "author": "Alexandr Zhelanov",
+      "source": "https://opengameart.org/content/futuristic-ambient",
+      "licence": "CC BY 4.0",
+      "attribution": "„Electron“ – Alexandr Zhelanov (https://www.youtube.com/channel/UCxmng6_DMIayDwkiWGVzVRQ?view_as=subscriber Alexandr Zhelanov https://soundcloud.com/alexandr-zhelanov) · https://opengameart.org/content/futuristic-ambient · Creative Commons Attribution 4.0 International: https://creativecommons.org/licenses/by/4.0/ · bearbeitet: Schnitt, Schleife, Pegel",
+      "file": "tense.m4a",
+      "ms": 76510,
+      "startMs": 0,
+      "loudness": -13.87,
+      "gain": 0.5537,
+      "loop": {
+        "crossfade": {
+          "startMs": 2510,
+          "endMs": 76010,
+          "fadeMs": 3000
+        }
+      }
+    },
+    "critical": {
+      "title": "Uncatchable",
+      "author": "Alexandr Zhelanov",
+      "source": "https://opengameart.org/content/uncatchable",
+      "licence": "CC BY 4.0",
+      "attribution": "„Uncatchable“ – Alexandr Zhelanov (Alexandr Zhelanov https://soundcloud.com/alexandr-zhelanov) · https://opengameart.org/content/uncatchable · Creative Commons Attribution 4.0 International: https://creativecommons.org/licenses/by/4.0/ · bearbeitet: Schnitt, Schleife, Pegel",
+      "file": "critical.m4a",
+      "ms": 99500,
+      "startMs": 0,
+      "loudness": -8.35,
+      "gain": 0.2935,
+      "loop": {
+        "crossfade": {
+          "startMs": 3000,
+          "endMs": 99000,
+          "fadeMs": 3000
+        }
+      }
+    },
+    "end-won": {
+      "title": "Hymn of Life",
+      "author": "Alexandr Zhelanov",
+      "source": "https://opengameart.org/content/hymn-of-life",
+      "licence": "CC BY 4.0",
+      "attribution": "„Hymn of Life“ – Alexandr Zhelanov (https://www.youtube.com/c/AlexandrZhelanovsMusic) · https://opengameart.org/content/hymn-of-life · Creative Commons Attribution 4.0 International: https://creativecommons.org/licenses/by/4.0/ · bearbeitet: Schnitt, Schleife, Pegel",
+      "file": "end-won.m4a",
+      "ms": 40000,
+      "startMs": 36,
+      "loudness": -8.82,
+      "gain": 0.3097,
+      "loop": null
+    },
+    "end-lost": {
+      "title": "Inevitability",
+      "author": "Alexandr Zhelanov",
+      "source": "https://opengameart.org/content/inevitability",
+      "licence": "CC BY 4.0",
+      "attribution": "„Inevitability“ – Alexandr Zhelanov (Alexandr Zhelanov https://www.youtube.com/channel/UCxmng6_DMIayDwkiWGVzVRQ?view_as=subscriber totalnomus@gmail.com) · https://opengameart.org/content/inevitability · Creative Commons Attribution 4.0 International: https://creativecommons.org/licenses/by/4.0/ · bearbeitet: Schnitt, Schleife, Pegel",
+      "file": "end-lost.m4a",
+      "ms": 40000,
+      "startMs": 45,
+      "loudness": -9.46,
+      "gain": 0.3335,
+      "loop": null
+    }
+  }
+}
