@@ -55,7 +55,7 @@ function lastView(player: Walker): PlayerView {
 /** A run in the corridor for `names`, the first its host, every player on a connection. */
 function crew(names: string[]) {
   const reports: RunReport[] = [];
-  const room = new Room('TEST', lab, (report) => reports.push(report));
+  const room = new Room('TEST', lab, ({ report }) => reports.push(report));
   const players = names.map((name): Player => {
     const { playerId } = room.join(name, passFor(name));
     const messages: ServerMessage[] = [];

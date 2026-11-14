@@ -676,6 +676,6 @@ describe('a room closed, and the ghosts its snapshots would bring back', () => {
     const annaAgain = crew.line.connect();
     annaAgain.say({ kind: 'abandon', code, pass: passFor('Anna') });
     expect(reported).toHaveBeenCalledTimes(1);
-    expect(reported.mock.calls[0]?.[0]).toMatchObject({ outcome: 'lost:abandoned' });
+    expect(reported.mock.calls[0]?.[0]).toMatchObject({ report: { outcome: 'lost:abandoned' } });
   });
 });
