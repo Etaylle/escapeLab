@@ -62,9 +62,11 @@
  * needed, then both consoles are captured and the meter measures every wire
  * once; nothing is cut. The first reading that moves the needle is shot
  * with its swing held 60 ms in by the page — the needle's own transition
- * paused there, so that a shot coming late under load still shows it on its
- * way — and the page has to say the needle swung, stood still through the
- * shot and on its way to the reading (meter-swing.png), or the run fails.
+ * paused there as it begins, so that a shot coming late under load still
+ * shows it on its way — and the page has to say the needle swung, stood still
+ * through the shot and on its way to the reading (meter-swing.png), or the
+ * run fails. A probe is held only once the page shows the last reading; where
+ * it does not within 3 s, the next probe tries.
  *
  * The opening: a title comes on as a phosphor screen does, once a page
  * load — the game's on the start screen, the mission's in the lobby
@@ -5156,11 +5158,13 @@ const SWING_HOLD_MS = 60;
 const SWING_DEG = 35;
 
 /**
- * In the page, before a probe key is pressed, until releaseNeedle: the needle's next swing to a
- * new reading — the transition of its turn (client styles/devices.css) — is paused `ms` into it,
- * so that a shot however late finds the needle on its way; `window.__needleHold` (pageclock.mjs
- * `NeedleHold`) notes on the page's clock when the probe went down, when the page noted the swing
- * — its event comes with the next frame, late under load — and how long the swing runs.
+ * In the page, before a probe key is pressed, until releaseNeedle: the needle's first swing after
+ * the press — the transition of its turn (client styles/devices.css), taken as the turn's style
+ * changes — is paused `ms` into it, so that a shot however late finds the needle on its way;
+ * `window.__needleHold` (pageclock.mjs `NeedleHold`) notes on the page's clock when the probe
+ * went down, when the swing began and how long it runs. Its `transitionrun` would come only with
+ * the page's next frame: where that lands after the swing's 600 ms, there is nothing to hold. A
+ * swing begun before the press is never taken: the hold waits for the press.
  */
 function holdNeedle(ms) {
   const needle = document.querySelector('.station-modal .gauge-needle');
@@ -5170,12 +5174,11 @@ function holdNeedle(ms) {
   const press = (event) => {
     hold.pressed ??= event.timeStamp - t0;
   };
-  // Where the needle was headed as the hold began: a swing there is the last probe's, whose event
-  // comes with the page's next frame, late under load; this probe's turns the needle anew.
-  const before = needle?.style.transform ?? null;
+  // The turn's style changing after the press is this probe's reading coming in: the swing it
+  // starts is there to be taken at once (getAnimations brings the page's style up to date).
   const swing = () => {
     const turn = needle.getAnimations().find((a) => a.transitionProperty === 'transform');
-    if (hold.swung === null && turn !== undefined && needle.style.transform !== before) {
+    if (hold.pressed !== null && hold.swung === null && turn !== undefined) {
       hold.swung = globalThis.performance.now() - t0;
       hold.length = turn.effect.getComputedTiming().duration;
       turn.pause();
@@ -5183,33 +5186,42 @@ function holdNeedle(ms) {
       held.turn = turn;
     }
   };
+  const watch = new globalThis.MutationObserver(swing);
   held.stop = () => {
-    needle?.removeEventListener('transitionrun', swing);
+    watch.disconnect();
     document.removeEventListener('pointerdown', press, true);
   };
   globalThis.__needleHold = hold;
   globalThis.__needleHeld = held;
   document.addEventListener('pointerdown', press, true);
-  needle?.addEventListener('transitionrun', swing);
+  if (needle !== null) {
+    watch.observe(needle, { attributeFilter: ['style'] });
+  }
 }
 
-/** In the page: the needle held by holdNeedle swings on, and nothing watches it any more. */
+/**
+ * In the page: the needle held by holdNeedle swings on — where its swing is still paused: one a
+ * newer reading cancelled stays gone, played it would turn the needle back over the new one —
+ * and nothing watches it any more.
+ */
 function releaseNeedle() {
   const held = globalThis.__needleHeld;
   held?.stop();
-  held?.turn?.play();
+  if (held?.turn?.playState === 'paused') {
+    held.turn.play();
+  }
   delete globalThis.__needleHeld;
 }
 
 /**
- * Whether `check` holds in `page` within `ms`, looked at every 50 ms — once where no time is
- * left, as Playwright's timeout of 0 would wait forever; throws what is no wait.
+ * Whether `check` holds in `page` within `ms`, looked at every 50 ms with `arg` — once where no
+ * time is left, as Playwright's timeout of 0 would wait forever; throws what is no wait.
  */
-function pageHolds(page, check, ms) {
+function pageHolds(page, check, ms, arg = null) {
   if (ms <= 0) {
-    return page.evaluate(check).then(Boolean);
+    return page.evaluate(check, arg).then(Boolean);
   }
-  return page.waitForFunction(check, null, { timeout: ms, polling: 50 }).then(
+  return page.waitForFunction(check, arg, { timeout: ms, polling: 50 }).then(
     () => true,
     (error) => {
       if (error?.name !== 'TimeoutError') {
@@ -5249,11 +5261,41 @@ async function captureSwing(meter, i, pressed, from) {
 }
 
 /**
+ * Waits up to 3 s for the meter's needle to be turned, in the page, to the reading of the wire
+ * probed last as the view has it (client CircuitPanel's angle, to a tenth of a degree): a page
+ * slowed by load can draw the last probe's reading only after the next probe is pressed, and the
+ * next hold would take that swing for its own. Whether it was; where not, the log says so for
+ * probe `i`, which is then not held.
+ */
+async function needleCaughtUp(meter, i) {
+  const { probed = null, readings = null } = meter.seen.view.puzzle ?? {};
+  const volts = probed === null ? 0 : (readings?.[probed] ?? 0);
+  const deg = Math.round(needleFor(volts) * 10) / 10;
+  const turned = (want) => {
+    const turn = document.querySelector('.station-modal .gauge-needle')?.style.transform ?? '';
+    return Math.abs(Number(/-?\d+(?:\.\d+)?/.exec(turn)?.[0]) - want) < 0.05;
+  };
+  if (await pageHolds(meter.page, turned, 3000, deg)) {
+    return true;
+  }
+  console.log(
+    `meter-swing.png    not tried on wire ${i + 1}: 3 s on, the page had not turned its needle ` +
+      `to the last reading's ${deg}°`,
+  );
+  return false;
+}
+
+/**
  * Probe `i` pressed with `press`, the needle's next swing held for it (holdNeedle) and let go
- * however that went: meter-swing.png where its reading swings the needle far enough
- * (captureSwing). Whether it was shot.
+ * however that went — once the page has drawn the last probe's reading (needleCaughtUp; pressed
+ * plain where it has not, for the next probe to try): meter-swing.png where its reading swings
+ * the needle far enough (captureSwing). Whether it was shot.
  */
 async function probeHeld(meter, i, press) {
+  if (!(await needleCaughtUp(meter, i))) {
+    await press();
+    return false;
+  }
   const from = await needleOnPage(meter.page);
   await meter.page.evaluate(holdNeedle, SWING_HOLD_MS);
   try {

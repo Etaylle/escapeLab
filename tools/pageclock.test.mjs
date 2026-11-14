@@ -56,7 +56,7 @@ describe('swingVerdict — meter-swing.png, the needle held mid-swing by the pag
     assert.deepEqual(swingVerdict(swing({})), {
       faults: [],
       text:
-        'the page noted its 600-ms swing 213 ms after the probe, on its clock; held 60 ms in, ' +
+        "its 600-ms swing began 213 ms after the probe, on the page's clock; held 60 ms in, " +
         'the needle at -58.4° on its way from -90° to -10.8°',
     });
   });
@@ -84,11 +84,6 @@ describe('swingVerdict — meter-swing.png, the needle held mid-swing by the pag
     const verdict = swingVerdict(swing({ after: -40.1 }));
     assert.deepEqual(verdict.faults, ['the needle moved under the shot, from -58.4° to -40.1°']);
     assert.match(verdict.text, /— !! -40\.1° once shot$/);
-  });
-
-  it('says where no press was seen on the page', () => {
-    const text = swingVerdict(swing({ hold: { ...held, pressed: null } })).text;
-    assert.match(text, /swing 217 ms into the hold, no probe seen/);
   });
 });
 
