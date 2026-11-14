@@ -3,6 +3,7 @@ import { checkMission, isCustomMissionId } from '@escapelab/core';
 import type { ApiResponse } from './api.js';
 import { readBody } from './body.js';
 import type { MissionCatalog } from './missions.js';
+import { RateLimiter } from './rateLimiter.js';
 
 /**
  * The editor's write routes: POST /missions/custom saves a mission made in
@@ -15,35 +16,6 @@ import type { MissionCatalog } from './missions.js';
 
 /** How large a mission body may be, in bytes. */
 export const MAX_MISSION_BYTES = 256 * 1024;
-
-/**
- * Counts writes per address in a sliding window: `take` says whether one
- * more is allowed now, and counts it if so.
- */
-export class RateLimiter {
-  private readonly seen = new Map<string, number[]>();
-
-  constructor(
-    private readonly limit: number,
-    private readonly windowMs: number,
-    private readonly now: () => number = Date.now,
-  ) {}
-
-  take(key: string): boolean {
-    const now = this.now();
-    const recent = (this.seen.get(key) ?? []).filter((at) => now - at < this.windowMs);
-    const allowed = recent.length < this.limit;
-    if (allowed) {
-      recent.push(now);
-    }
-    if (recent.length === 0) {
-      this.seen.delete(key);
-    } else {
-      this.seen.set(key, recent);
-    }
-    return allowed;
-  }
-}
 
 /** What the routes work on: the catalog they write to, and the limit on writes. */
 export interface CustomMissions {

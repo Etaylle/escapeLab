@@ -15,3 +15,6 @@ packages/client/takes/
 
 # local secrets (ElevenLabs key)
 .env.local
+
+# Neon CLI state (neon init)
+.neon

@@ -172,9 +172,11 @@ describe('where a pass sits', () => {
     const page = server.connect();
     page.say({ kind: 'whereami', pass: passFor('Mallory') });
     expect(page.heard).toEqual([{ kind: 'seated', seat: null }]);
+    // Another browser, its pass Ben's id with a secret not his.
+    const other = server.connect();
     const forged = { ...passFor('Ben'), secret: passFor('Mallory').secret };
-    page.say({ kind: 'whereami', pass: forged });
-    expect(page.heard.at(-1)).toEqual({ kind: 'seated', seat: null });
+    other.say({ kind: 'whereami', pass: forged });
+    expect(other.heard).toEqual([{ kind: 'seated', seat: null }]);
     manager.get(code).dispose();
   });
 
@@ -366,7 +368,7 @@ describe('a seat taken over by its name (Jackbox), let in by the crew', () => {
     phone.say({ kind: 'join-room', code, name: 'Ben', pass: passFor('Bens Telefon') });
 
   it('asks the crew on the line; let in, the phone resumes the seat on its pass', () => {
-    const { manager, anna, phone, seat, code } = benAway();
+    const { server, manager, anna, phone, seat, code } = benAway();
     ask(phone, code);
     const until = Date.now() + TAKEOVER_WAIT_MS;
     expect(phone.heard.at(-1)).toEqual({ kind: 'takeover-pending', code, name: 'Ben', until });
@@ -378,7 +380,8 @@ describe('a seat taken over by its name (Jackbox), let in by the crew', () => {
     expect(joinedOf(phone)).toEqual({ kind: 'joined', code });
     expect(phone.view.you).toMatchObject({ id: seat, name: 'Ben' });
     expect(anna.view.pausedFor).toBeNull();
-    expect(whereIsBen(phone)).toBeNull();
+    // Ben's own browser, its pass his: it sits nowhere now.
+    expect(whereIsBen(server.connect())).toBeNull();
     manager.get(code).dispose();
   });
 

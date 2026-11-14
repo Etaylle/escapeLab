@@ -82,7 +82,7 @@ function lastReport(reports: RunReport[]): RunReport {
 
 /** A manager of rooms on a server with `salt`, its reports into `reports`. */
 function server(reports: RunReport[], salt: string | null = SALT, seeds = seedsAllowed({})) {
-  return new RoomManager((report) => reports.push(report), seeds, salt);
+  return new RoomManager(({ report }) => reports.push(report), seeds, salt);
 }
 
 describe('the Tagesschicht on the server', () => {

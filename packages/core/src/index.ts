@@ -118,8 +118,8 @@ export {
   type MapStation,
   type PartKind,
   type StationSpotLook,
-  type Grade,
 } from './view.js';
+export { gradeOf, reportGrade, type Grade, type GradeFacts } from './grade.js';
 export {
   MODULES,
   moduleFor,
@@ -216,6 +216,9 @@ export {
   SNAPSHOT_MAX,
   SNAPSHOT_MAX_AGE_MS,
   isCustomMissionId,
+  type AccountRun,
+  type AccountStore,
+  type AccountView,
   type RtcSignal,
   type ClientMessage,
   type CrewPass,

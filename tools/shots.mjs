@@ -7,7 +7,37 @@
  *     [SHOTS_MISSION=Systemcheck] [SHOTS_FRAME_P95_MS=40] [SHOTS_CPU_SLOWDOWN=4] \
  *     [SHOTS_SOFTWARE_GL=1] [SHOTS_WEBGL=1] [SHOTS_HEADED=1] [SHOTS_AUDIO_OFF=beds,music] \
  *     [SHOTS_PROFILE=1] [SHOTS_SERVER=packages/server/src/index.ts] \
+ *     [SHOTS_ONLY=screens,intro] [SHOTS_SKIP=perf] \
  *     node tools/shots.mjs [baseUrl] [outDir]
+ *
+ * Groups (tools/groups.mjs): every capture, and every label a skip line carries, belongs to one of
+ * fifteen groups; SHOTS_ONLY and SHOTS_SKIP, each a comma-separated list of their names, pick those
+ * a run plays — a quick proof of one part. The drills, each in a room of its own before the
+ * walkthrough: editor, art, drones (the danger sense, a drone close by), reconnect, restart — and
+ * in a Systemcheck run the Serverraum's scratch mission, devices'. The walkthrough's own stages:
+ * screens (the menu and its sound, the history, the lobby, the run started from it), intro (the
+ * opening to blackout.png, the cold open at density 2 with it) and run (the mission to the won
+ * card: the lit rooms, the finds, the audience's way in, the escape, the end, and after the won
+ * Systemcheck the account's runs and its deletion). Within the run: devices (every station's panel
+ * and its phone held sideways), reading (the sources, the sign, the notes, the notepad, the books,
+ * highlight.png), hud (the game at every window size, its panels, controls, minimap and sprint),
+ * graphics (the light, the glow at a console, the figures, panel-close.png, the camera and
+ * density 2), audio (the beds, the radio's lines, the partner's side, the music, the nudge), voice
+ * (the microphones and the links) and perf (the frame windows). These need run and pull it in;
+ * SHOTS_SKIP=run refuses them. Every group left out, refused or pulled in gets one line as the run
+ * begins, and what it would have captured counts as neither skipped nor failed. The walkthrough
+ * plays its stages only as far as the groups on reach — screens alone stops once the run is up,
+ * intro after blackout.png — a stage whose group is off still opening the pages and the room,
+ * starting the run, skipping the opening or walking on, as the next one needs. A capture or a check
+ * belongs to the group of the step that takes it — checkGroup holds every capture to its step's
+ * gate, so that every run proves the table — and where that step is another group's, it comes only
+ * with that group on as well: perf's frame windows in screens' step (the menu), in intro's (the
+ * opening's shot, the lit lab and its look at density 2) and in graphics' (the open panel and the
+ * escape at density 2); voice's links after the guest's reload, which reading's notepad does; and
+ * hud's Info button after a sign read on the way, reading's too, where nobody starts at the sign.
+ * Without either variable every group plays, as before; the summary names the groups played, the
+ * line before it the seconds each took. What each costs on a machine: the README, „Nur ein Teil des
+ * Rundgangs (Gruppen)".
  *
  * SHOTS_MISSION names the mission card to start (default Blackout); the
  * crew is two players. Where the first station is a sync station, both
@@ -137,7 +167,12 @@
  * The won tutorial leads on to Blackout: next-mission.png shows the end
  * screen's „Weiter: Blackout im Labor" beside „Nochmal", both click it — the
  * guest first, the host's click naming the mission — and the run fails
- * unless Blackout opens on both pages with the power on.
+ * unless Blackout opens on both pages with the power on. Then a second tab of
+ * the host's browser opens „Meine Einsätze" off the menu (my-runs.png): the
+ * Systemcheck just won leads the list with its crew and a rank, the page fits
+ * a phone sideways. Its settings delete the account at the second word
+ * (account-delete.png the first answered), the profile says „Gast" with no
+ * name, and „Meine Einsätze" lists nothing more — or the run fails.
  *
  * Blackout on its pinned seed is played to the won card too, with the
  * answers tools/fixtures/blackout-plan.json carries (core's
@@ -516,6 +551,16 @@ import { chromium, request } from 'playwright';
 import { AGAIN_AFTER_MS, allowanceOf, gateWindow, p95Text, paceOf } from './framegate.mjs';
 import { withOthersFrozen } from './freeze.mjs';
 import { ART_PX, bobVerdict, GLOWING, glowAtCorners, haloAgainst } from './glowcheck.mjs';
+import {
+  GROUP_NAMES,
+  groupClock,
+  misfiled,
+  planGroups,
+  reaches,
+  spentText,
+  stepGates,
+  summaryText,
+} from './groups.mjs';
 import { lightWorkText } from './lightwork.mjs';
 import { fadeOf, meanLuma, midway } from './panelfade.mjs';
 import { beamLight, beamPatches, beamVerdict } from './beamcheck.mjs';
@@ -594,6 +639,16 @@ const PROFILE = switchedOn('SHOTS_PROFILE', process.env.SHOTS_PROFILE);
  * the sound checks fail for a system switched off.
  */
 const AUDIO_OFF = audioOff(process.env.SHOTS_AUDIO_OFF);
+/**
+ * The groups this run plays (tools/groups.mjs `planGroups`): those SHOTS_ONLY names, or every
+ * group, less those SHOTS_SKIP names — a group that needs another pulls it in, or is refused
+ * where SHOTS_SKIP names that one. `lines` say which groups the run leaves out or pulls in.
+ */
+const PLAN = planGroups(process.env.SHOTS_ONLY, process.env.SHOTS_SKIP);
+/** The time each group of the run takes (`inGroup`), for the line before the summary. */
+const timeByGroup = groupClock();
+/** The gate of the step running now (`inGroup`, `whenOn`), which `checkGroup` holds captures to. */
+const gates = stepGates();
 /**
  * The server the run starts and owns, SHOTS_SERVER=<entry>: node runs the entry — one in
  * TypeScript with the tsx loader — from packages/server, on BASE's port with ALLOW_SEED=1 and TLS
@@ -845,13 +900,69 @@ let panelSampled = false;
 /** Saves what `page` shows as `name` in the output folder, and counts it. */
 async function capture(page, name) {
   await page.screenshot({ path: join(OUT, name) });
+  taken(name);
+}
+
+/** Counts a capture saved as `name`, its group checked (`checkGroup`). */
+function taken(name) {
+  checkGroup(name);
   tally.taken += 1;
 }
 
-/** Logs a capture this run leaves out, and why. A skip fails nothing. */
+/** Logs a capture this run leaves out, and why, its group checked (`checkGroup`). Fails nothing. */
 function skip(label, why) {
+  checkGroup(label);
   console.log(`${label.padEnd(18)} skipped: ${why}`);
   tally.skipped += 1;
+}
+
+/**
+ * Fails the run where a capture, or the label of a skip line, belongs to no group
+ * (tools/groups.mjs), or to another than the step that took it runs under (`gates`): a step
+ * left ungated, or a capture misfiled — so that every run, a full one too, proves the table.
+ * A name the scan of the source cannot read (tools/groups.test.mjs) is held to it here.
+ */
+function checkGroup(label) {
+  const wrong = misfiled(label, gates.now());
+  if (wrong !== null) {
+    fail(wrong);
+  }
+}
+
+/** Whether the group `name` is on in this run; throws for a name no group has. */
+function groupOn(name) {
+  if (!GROUP_NAMES.includes(name)) {
+    throw new Error(`no capture group is called "${name}" (tools/groups.mjs)`);
+  }
+  return PLAN.on.has(name);
+}
+
+/**
+ * Runs `step` where the group `name` is on in this run, under the group's gate (`gates`) and its
+ * time counted to the group — a step of another group within it under that one's; where the
+ * group is off, runs `otherwise` instead, nothing by default. Returns what ran.
+ */
+async function inGroup(name, step, otherwise = () => undefined) {
+  if (!groupOn(name)) {
+    return otherwise();
+  }
+  return gates.run(name, async () => {
+    timeByGroup.enter(name);
+    try {
+      return await step();
+    } finally {
+      timeByGroup.leave();
+    }
+  });
+}
+
+/**
+ * Starts `start` where the group `name` is on, under the group's gate (`gates`) — work going on
+ * beside the steps, its time counted to none — and returns what it returns; where the group is
+ * off, `otherwise`.
+ */
+function whenOn(name, start, otherwise = null) {
+  return groupOn(name) ? gates.run(name, start) : otherwise;
 }
 
 /** Notes a check that fails the run; the walkthrough goes on, so every capture is still taken. */
@@ -1193,6 +1304,19 @@ async function sampleFrames(
   return first;
 }
 
+/**
+ * A frame window, perf's (`sampleFrames`): where the run leaves perf out, `quiet` fills the
+ * window's time all the same — a walk or a pace the steps after it may stand on — and nothing is
+ * measured. Returns the first look, or null.
+ */
+function frameWindow(page, when, quiet, options = {}) {
+  const unmeasured = async () => {
+    await quiet();
+    return null;
+  };
+  return inGroup('perf', () => sampleFrames(page, when, quiet, options), unmeasured);
+}
+
 /** The run's pace as the log names it, and what it lets the windows after it reach. */
 function paceText(measured) {
   if (measured === null) {
@@ -1243,13 +1367,13 @@ function soundJs(before, after, seconds) {
     .join(', ');
 }
 
-/** The run's last line: captures taken, skipped and failed, and what failed. */
+/**
+ * The run's last lines: the seconds each group played took (`groups`), then the summary — the
+ * captures taken, skipped and failed, the groups played, and what failed (`summaryText`).
+ */
 function summarize() {
-  const { taken, skipped, failures } = tally;
-  console.log(
-    `summary            ${taken} captures taken, ${skipped} skipped, ${failures.length} failed` +
-      (failures.length === 0 ? '' : ` — ${failures.join('; ')}`),
-  );
+  console.log(`groups             ${spentText(timeByGroup.spent(), PLAN.on)}`);
+  console.log(`summary            ${summaryText(tally, PLAN.on)}`);
 }
 
 /**
@@ -1291,16 +1415,17 @@ async function sideways(page, selector) {
 }
 
 /**
- * The Bestenliste off the menu, captured as `name` once it is loaded:
+ * The Bestenliste off the menu, captured as `shot` once it is loaded:
  * measured like the menu — at 1280×720 too where the window is a
  * laptop's, sideways on a phone — and left the way a player goes back.
  */
-async function captureHistory(page, name) {
+async function captureHistory(page, shot) {
+  const name = shot.replace(/\.png$/, '');
   await page.locator('.menu-item', { hasText: 'Bestenliste' }).click();
   const loaded = page.locator('.history-board, .history [role="alert"]').first();
   await loaded.waitFor({ timeout: 10_000 });
   await sleep(300);
-  await capture(page, `${name}.png`);
+  await capture(page, shot);
   const { width, height } = page.viewportSize();
   await overflow(page, `${name} @ ${width}x${height}`);
   if (width >= 1280) {
@@ -1311,7 +1436,7 @@ async function captureHistory(page, name) {
     await sleep(300);
   } else {
     const over = await sideways(page, '.content');
-    console.log(`${name}.png`.padEnd(19) + (over > 0 ? `!! +${over}px sideways` : 'fits sideways'));
+    console.log(shot.padEnd(19) + (over > 0 ? `!! +${over}px sideways` : 'fits sideways'));
   }
   await clickText(page, 'Zurück');
   await page.locator('.menu-item').first().waitFor({ timeout: 10_000 });
@@ -1879,9 +2004,9 @@ async function pressTogether(players, station) {
   const doneBefore = await Promise.all(players.map(({ page }) => done(page).count()));
   await Promise.all(players.map(({ page }) => page.locator('.station-modal .big-button').click()));
   // The line that comes with the solve speaks a second after it: listen from the presses on.
-  const listening = hearRadio(first, RADIO_LISTEN_MS);
+  const listening = whenOn('audio', () => hearRadio(first, RADIO_LISTEN_MS));
   if (station.look !== 'lever') {
-    await captureSolved(first, station);
+    await inGroup('devices', () => captureSolved(first, station));
   }
   const solved = await until(() => first.seen.view.currentPuzzleIndex > index, 5000);
   const moved = await Promise.all(
@@ -2056,7 +2181,8 @@ async function captureBothAtStation(reader, operator, station, sync) {
     if (sync) {
       throw new Error(`${reader.name} has no way to the sync station "${station.title}"`);
     }
-    skip('station-both.png', `${reader.name} has no way to "${station.puzzleId}"`);
+    const why = `${reader.name} has no way to "${station.puzzleId}"`;
+    await inGroup('devices', () => skip('station-both.png', why));
     return;
   }
   const readerSees = await interactUntil(
@@ -2066,29 +2192,13 @@ async function captureBothAtStation(reader, operator, station, sync) {
   );
   const operatorSees = await operator.page.locator('.station-modal').isVisible();
   await sleep(400); // past the panel's fade-in
-  await capture(reader.page, 'station-both.png');
   const missing = [
     ...(readerSees ? [] : [reader.name]),
     ...(operatorSees ? [] : [operator.name]),
   ];
-  console.log(
-    `station-both.png   ${reader.name} joins ${operator.name} at "${station.title}": ` +
-      (missing.length === 0
-        ? 'panel up for both'
-        : `!! no .station-modal for ${missing.join(' and ')}`),
-  );
+  await inGroup('devices', () => shootBothAtStation(reader, operator, station, missing));
   if (sync) {
-    if (missing.length > 0) {
-      const who = missing.join(' and ');
-      throw new Error(`"${station.title}" wants both presses, but ${who} has no panel`);
-    }
-    if (station.look === 'lever') {
-      await captureLeverRing(operator, [operator, reader]);
-    }
-    const solved = await pressTogether([operator, reader], station);
-    await bedAlive(operator, solved.lit, `after "${station.title}"`);
-    await checkRadioVoice(operator, solved.listening, `"${station.title}"`);
-    await audioKept([operator, reader], 'at the first station');
+    await pressBoth(reader, operator, station, missing);
   }
   // Whatever E opened instead of the panel locks the avatar too.
   await reader.page.keyboard.press('Escape');
@@ -2098,6 +2208,45 @@ async function captureBothAtStation(reader, operator, station, sync) {
     `station-both       ${reader.name}: ` +
       (returned ? `back near ${back.x},${back.y}` : '!! could not walk back'),
   );
+}
+
+/** station-both.png on the reader's page, and whether the panel showed for both (`missing`). */
+async function shootBothAtStation(reader, operator, station, missing) {
+  await capture(reader.page, 'station-both.png');
+  console.log(
+    `station-both.png   ${reader.name} joins ${operator.name} at "${station.title}": ` +
+      (missing.length === 0
+        ? 'panel up for both'
+        : `!! no .station-modal for ${missing.join(' and ')}`),
+  );
+}
+
+/**
+ * Both press the sync station `station` together — at a main switch with a window after the
+ * operator's lone pull, its ring and both pages' count (captureLeverRing) — and the room it lights
+ * comes up alive, its line spoken. Throws where one of them (`missing`) has no panel to press.
+ */
+async function pressBoth(reader, operator, station, missing) {
+  if (missing.length > 0) {
+    const who = missing.join(' and ');
+    throw new Error(`"${station.title}" wants both presses, but ${who} has no panel`);
+  }
+  if (station.look === 'lever') {
+    await inGroup('devices', () => captureLeverRing(operator, [operator, reader]));
+  }
+  const solved = await pressTogether([operator, reader], station);
+  await inGroup('audio', () => soundAfterTheSync([operator, reader], station, solved));
+}
+
+/**
+ * After a sync station `players` pressed (`solved`, from pressTogether): the bed of the room it
+ * lit alive, its line spoken by its recording, and what each page keeps decoded.
+ */
+async function soundAfterTheSync(players, station, solved) {
+  const [operator] = players;
+  await bedAlive(operator, solved.lit, `after "${station.title}"`);
+  await checkRadioVoice(operator, solved.listening, `"${station.title}"`);
+  await audioKept(players, 'at the first station');
 }
 
 /**
@@ -2254,7 +2403,7 @@ async function captureColdOpen(host) {
   await host.page.setViewportSize(COLD_OPEN);
   await sleep(250);
   // A second look paces where the step ended: one more step could leave the host's room.
-  await sampleFrames(host.page, 'in the lit lab, the power still on', () => stepIntoRoom(host), {
+  await frameWindow(host.page, 'in the lit lab, the power still on', () => stepIntoRoom(host), {
     again: (ms) => pace(host, ms),
   });
   if (host.seen.view.lights.out) {
@@ -2424,7 +2573,7 @@ async function captureIntroShot(player) {
   const hint = await textOf(player.page.locator('.intro-skip'));
   const bars = await barsIn(player.page);
   const from = await cameraOf(player.page);
-  await sampleFrames(player.page, 'over the opening’s shot', () => sleep(SAMPLE_MS), {
+  await frameWindow(player.page, 'over the opening’s shot', () => sleep(SAMPLE_MS), {
     gating: false,
   });
   const to = await cameraOf(player.page);
@@ -3053,12 +3202,11 @@ async function escapeMusic(player) {
 }
 
 /**
- * blackout.png: two seconds after the clock has come into sight on the
- * host's page — it counts from the click, under the HUD the opening keeps
- * out until its title has gone — the flashlight on, the emergency lamps red
- * in the dark. Fails where the HUD never comes back.
+ * The lights out on the host's page once the whole crew has skipped the opening: its clock
+ * counting, and its HUD coming back whole over the dark, waited for up to 8 s each. The clock's
+ * locator, and whether the HUD came back; throws where no clock ever counts.
  */
-async function captureBlackout(host) {
+async function lightsOut(host) {
   const clock = host.page.locator('.stage-clock .countdown');
   if (!(await attached(clock, 8000))) {
     throw new Error('the lights went out, but no clock ever counted');
@@ -3076,6 +3224,17 @@ async function captureBlackout(host) {
       () => true,
       () => false,
     );
+  return { clock, shown };
+}
+
+/**
+ * blackout.png: two seconds after the clock has come into sight on the
+ * host's page — it counts from the click, under the HUD the opening keeps
+ * out until its title has gone — the flashlight on, the emergency lamps red
+ * in the dark. Fails where the HUD never comes back.
+ */
+async function captureBlackout(host) {
+  const { clock, shown } = await lightsOut(host);
   if (!shown) {
     fail('blackout.png: the HUD never came back over the dark lab');
   }
@@ -3176,7 +3335,7 @@ async function throwLever(players) {
   const [first] = players;
   const lever = first.seen.view.map.stations.find((s) => s.status === 'armed');
   if (lever === undefined || lever.look !== 'lever') {
-    skip('lever.png', 'the first station is no main switch');
+    await inGroup('devices', () => skip('lever.png', 'the first station is no main switch'));
     return;
   }
   const watches = players.map((player) => watchFinding(player, lever));
@@ -3186,10 +3345,7 @@ async function throwLever(players) {
     watches.forEach((watch) => watch.stop());
   }
   await reportLeverFound(players, lever, watches);
-  await captureBeaconSweep(first);
-  await captureGradeBlackout(first);
-  await captureBeamCore(first);
-  await capturePose(first, first, 'console', 'pose-console.png');
+  await inGroup('graphics', () => atTheLever(first));
   for (const player of players) {
     const modal = player.page.locator('.station-modal');
     if (!(await interactUntil(player, modal, consoleTarget(lever)))) {
@@ -3197,17 +3353,47 @@ async function throwLever(players) {
     }
   }
   await sleep(500); // past the panel's fade-in
+  await inGroup('devices', () => leverPanels(players));
+  const solved = await pressTogether(players, lever);
+  await captureLitFlur(first, lever);
+  await inGroup('audio', () => soundAfterTheLever(players, solved));
+}
+
+/**
+ * The host at the main switch in the dark, its panel not yet open: the beacon over it turning
+ * (beacon-sweep-a.png, beacon-sweep-b.png), the blackout's grade, the beam's core and the host
+ * posed at the console (pose-console.png).
+ */
+async function atTheLever(first) {
+  await captureBeaconSweep(first);
+  await captureGradeBlackout(first);
+  await captureBeamCore(first);
+  await capturePose(first, first, 'console', 'pose-console.png');
+}
+
+/**
+ * The main switch's panel open on both pages: each phone's held sideways (device-phone-*.png),
+ * the host's levers (lever.png), and its lone pull with the count on both pages (lever-ring.png).
+ */
+async function leverPanels(players) {
+  const [first] = players;
   for (const player of players) {
     await captureDevicePhone(player, stationSlug(player));
   }
   await captureLeverPanel(first, players.length);
   await captureLeverRing(first, players);
-  const solved = await pressTogether(players, lever);
-  await captureLitFlur(first, lever);
+}
+
+/**
+ * After the lever (`solved`, from pressTogether): the lit corridor's bed alive, the lever's line
+ * spoken, what each page keeps decoded, and the partner heard from across the corridor.
+ */
+async function soundAfterTheLever(players, solved) {
+  const [first, partner] = players;
   await bedAlive(first, solved.lit, 'after the lever');
   await checkRadioVoice(first, solved.listening, 'the lever');
   await audioKept(players, 'at the first station');
-  await partnerAcross(first, players[1], 'across the corridor');
+  await partnerAcross(first, partner, 'across the corridor');
 }
 
 /** The beacon burning nearest the page's avatar, as its graphics probe has it; null for none. */
@@ -3243,7 +3429,8 @@ async function captureBeaconSweep(player) {
   const after = await nearestBeacon(page);
   writeFileSync(join(OUT, 'beacon-sweep-a.png'), first);
   writeFileSync(join(OUT, 'beacon-sweep-b.png'), second);
-  tally.taken += 2;
+  taken('beacon-sweep-a.png');
+  taken('beacon-sweep-b.png');
   const half = before.reach * spot.tile;
   const box = { x: spot.x - half, y: spot.y - half, width: 2 * half, height: 2 * half };
   const dpr = await page.evaluate(() => globalThis.devicePixelRatio);
@@ -3355,7 +3542,7 @@ async function captureBeamCore(player) {
   const view = await worldOnPage(page);
   const shot = await page.screenshot();
   writeFileSync(join(OUT, 'beam-core.png'), shot);
-  tally.taken += 1;
+  taken('beam-core.png');
   const beam = probe?.beam ?? null;
   if (beam === null || view === null) {
     console.log(`beam-core.png      ${player.name}: !! no beam on the probe`);
@@ -3749,7 +3936,7 @@ async function captureDiscovery(walker, other) {
   await walker.page.setViewportSize(SIZES[2]);
   reportNames(walker, 'discover-enter.png', 'two steps into the Archiv', enter);
   reportNames(walker, 'discover-later.png', 'by the shelves', later);
-  await reportChimes([walker, other], walker, finds);
+  await inGroup('audio', () => reportChimes([walker, other], walker, finds));
   if (home !== null) {
     await standOrFail(walker, home, `back to ${home.x},${home.y} from the Archiv`);
   }
@@ -4295,25 +4482,21 @@ async function captureNote(player) {
 async function signAtSpawn(players) {
   const atSign = players.find((p) => p.seen.view.presence.signSeen);
   if (atSign !== undefined) {
-    await captureSign(atSign.page, atSign.name);
+    await inGroup('reading', () => captureSign(atSign.page, atSign.name));
   }
   return atSign;
 }
 
 /**
- * A mission's intro, the power on, then the lights failing: the opening's
- * shot (intro-pan.png), the host's skip counted on the guest's phone
- * (intro-skip.png), sign.png for a player spawned at the Laborkennung
- * (signAtSpawn), the host in the lit lab (cold-open.png), the guest's skip and
- * with it the blackout's beat on both (intro-title.png, intro-title-phone.png)
- * — both pages skip, so that the pinned plan keeps its timing — blackout.png,
- * the Leitstelle's first line heard on the guest's radio from its opening
- * squelch on — the guest's page, so that the host's frame samples are left
- * alone — and the lever the first station is (lever.png, lit-flur.png).
- * Returns the player sign.png caught, if any.
+ * A mission's intro, the power on, then the lights failing, as the intro group takes it: the
+ * opening's shot (intro-pan.png), the host's skip counted on the guest's phone (intro-skip.png),
+ * the opening on a large phone (intro-phone-932.png), sign.png for a player spawned at the
+ * Laborkennung (signAtSpawn), the host in the lit lab (cold-open.png), the guest's skip and with
+ * it the blackout's beat on both (intro-title.png, intro-title-phone.png) — both pages skip, so
+ * that the pinned plan keeps its timing — and blackout.png. Returns the player at the sign, if
+ * any.
  */
-async function coldOpen(host, guest) {
-  const opening = hearRadio(guest, 40_000);
+async function introShots(host, guest) {
   await captureIntroShot(host);
   await captureIntroSkip(host, guest);
   await captureOpeningLarge(guest);
@@ -4321,13 +4504,45 @@ async function coldOpen(host, guest) {
   await captureColdOpen(host);
   await captureIntroTitle(host, guest);
   await captureBlackout(host);
-  await captureDust(host);
-  await bedDead(host, 'after the blackout');
-  await partnerSide(host, guest, 'after the blackout');
-  await checkRadioVoice(guest, opening, 'the blackout', startLineOf(guest));
+  return atSign;
+}
+
+/**
+ * The opening where the run leaves intro out: the host skips it once its first line and the skip
+ * are up, sign.png comes for a player spawned at the Laborkennung (signAtSpawn), the guest skips
+ * it too, and the lights go out over both (`lightsOut`), as after intro-title.png. Returns the
+ * player at the sign, if any.
+ */
+async function skipTheOpening(host, guest) {
+  await attached(host.page.locator('.intro-subtitle'), 8000);
+  await attached(host.page.locator('.intro-skip'), 3000);
+  await host.page.keyboard.press('Space');
+  const atSign = await signAtSpawn([host, guest]);
+  // A press, not a touch, as in captureIntroTitle: a touch would take the phone fullscreen.
+  await guest.page.locator('.intro').click();
+  await lightsOut(host);
+  return atSign;
+}
+
+/**
+ * Blackout past its opening: the motes in the host's lamp (dust.png); the host's room dead, the
+ * partner heard on its side and the Leitstelle's first line on the guest's radio — listened for
+ * since the opening began (`listening`), on the guest's page so that the host's frame samples
+ * are left alone; the lever the first station is (lever.png, lit-flur.png); and the guest's walk
+ * into the Archiv (discover-*.png).
+ */
+async function afterTheLights(host, guest, listening) {
+  await inGroup('graphics', () => captureDust(host));
+  await inGroup('audio', () => soundOfTheBlackout(host, guest, listening));
   await throwLever([host, guest]);
   await captureDiscovery(guest, host);
-  return atSign;
+}
+
+/** After the blackout: the host's room dead, the partner heard on its side, the first line. */
+async function soundOfTheBlackout(host, guest, listening) {
+  await bedDead(host, 'after the blackout');
+  await partnerSide(host, guest, 'after the blackout');
+  await checkRadioVoice(guest, listening, 'the blackout', startLineOf(guest));
 }
 
 /** The furniture standing tall, which a figure behind shows only above (client world/depth.ts). */
@@ -4390,27 +4605,24 @@ async function captureDepth(player) {
 }
 
 /**
- * The run's first moments. A mission with an intro opens with the power on:
- * the cold open comes first, the lever with it. Then Anna carries what lies
- * loose for a moment (figure-carry.png) and reads the nearest note of the
- * last shift found (note.png), the draw — who works the first
- * station, who reads — and, without an intro, sign.png for a player spawned
- * at the Laborkennung, whose note is up as soon as the briefing is gone, and
- * the Leitstelle's first line, heard on Ben's radio as the briefing ends.
- * Returns both and the player sign.png caught, if any.
+ * The run's first moments, once a mission with an intro (`intro`) is past its opening and its
+ * lever (afterTheLights): Anna carries what lies loose for a moment (figure-carry.png), hides
+ * behind a shelf (depth-behind-shelf.png) and reads the nearest note of the last shift found
+ * (note.png); the draw — who works the first station, who reads — and, without an intro,
+ * sign.png for a player spawned at the Laborkennung, whose note is up as soon as the briefing is
+ * gone, and the Leitstelle's first line, heard on Ben's radio as the briefing ends. Returns both
+ * and the player at the sign (`signedEarly` where the opening found one), if any.
  */
-async function firstMoments(anna, ben) {
-  const intro = anna.seen.view.lights.out === false;
-  const opening = intro ? null : hearRadio(ben, 40_000);
-  const signedEarly = intro ? await coldOpen(anna, ben) : undefined;
-  await captureCarry(anna);
-  await captureDepth(anna);
-  await captureNote(anna);
+async function firstMoments(anna, ben, { intro, signedEarly }) {
+  const opening = intro ? null : whenOn('audio', () => hearRadio(ben, 40_000));
+  await inGroup('graphics', () => captureCarry(anna));
+  await inGroup('graphics', () => captureDepth(anna));
+  await inGroup('reading', () => captureNote(anna));
   const [operator, reader] = operatorFirst([anna, ben]);
   console.log(`the draw:          ${operator.name} works the first station, ${reader.name} reads`);
   const atSign = intro ? signedEarly : await signAtSpawn([reader, operator]);
   if (opening !== null) {
-    await checkRadioVoice(ben, opening, 'the briefing', startLineOf(ben));
+    await inGroup('audio', () => checkRadioVoice(ben, opening, 'the briefing', startLineOf(ben)));
   }
   return { operator, reader, atSign };
 }
@@ -4580,10 +4792,8 @@ async function captureConsoles(operator, reader) {
   const consoleA = armed.find((s) => s.console === 'a');
   const consoleB = armed.find((s) => s.console === 'b');
   if (consoleA === undefined || consoleB === undefined) {
-    skip(
-      'console-*.png',
-      armed.length === 0 ? 'no station is armed' : `"${armed[0].title}" has one console`,
-    );
+    const why = armed.length === 0 ? 'no station is armed' : `"${armed[0].title}" has one console`;
+    await inGroup('devices', () => skip('console-*.png', why));
     return;
   }
   const title = consoleA.title;
@@ -4592,6 +4802,25 @@ async function captureConsoles(operator, reader) {
     [operator, consoleA],
     [reader, consoleB],
   ];
+  await walkToConsoles(seats, title);
+  // Console A glows for its player before E — in Blackout in the Maschinenraum still dark.
+  const glowing = { subject: { of: 'station', x: consoleA.x, y: consoleA.y } };
+  const said = `console A of "${title}"`;
+  const shot = 'highlight-console.png';
+  await inGroup('graphics', () => captureHighlight(operator, { ...glowing, said }, shot));
+  const kind = await openConsoles(seats, title);
+  await atOpenConsoles(crew, seats, title, kind);
+  if (kind === 'signal') {
+    await solveSignal(crew, title);
+  } else if (kind === 'circuit') {
+    await inGroup('devices', () => measureEveryWire(reader, title));
+  } else {
+    console.log(`consoles           "${title}" is a ${kind} panel: captured, left open`);
+  }
+}
+
+/** Each player of `seats` walks up to its console of `title`; throws where one finds no way. */
+async function walkToConsoles(seats, title) {
   for (const [player, spot] of seats) {
     if (!(await walkNear(player.page, player.seen, spot))) {
       throw new Error(
@@ -4600,10 +4829,13 @@ async function captureConsoles(operator, reader) {
       );
     }
   }
-  // Console A glows for its player before E — in Blackout in the Maschinenraum still dark.
-  const glowing = { subject: { of: 'station', x: consoleA.x, y: consoleA.y } };
-  const said = `console A of "${title}"`;
-  await captureHighlight(operator, { ...glowing, said }, 'highlight-console.png');
+}
+
+/**
+ * E opens each console of `seats` on its player's page; the panels' kind, which both have to
+ * show alike. Throws where a panel does not open, or the two are not one station's.
+ */
+async function openConsoles(seats, title) {
   for (const [player, spot] of seats) {
     const modal = player.page.locator('.station-modal');
     if (!(await interactUntil(player, modal, consoleTarget(spot)))) {
@@ -4613,15 +4845,42 @@ async function captureConsoles(operator, reader) {
       );
     }
   }
+  const crew = seats.map(([player]) => player);
   const kindOf = (player) => player.seen.view.puzzle?.kind ?? null;
   await until(() => crew.every((p) => kindOf(p) !== null), 3000);
-  const kind = kindOf(operator);
-  if (kind === null || kindOf(reader) !== kind) {
+  const kind = kindOf(crew[0]);
+  if (kind === null || kindOf(crew[1]) !== kind) {
     const panels = crew.map((p) => `${p.name} ${kindOf(p)}`).join(', ');
     throw new Error(`both stand at "${title}", but not at one open panel: ${panels}`);
   }
+  return kind;
+}
 
+/**
+ * Both consoles of `title` open: their panels at laptop size and their heads together
+ * (shootConsoles), the station's intercom (partner-funk.png), each window back at its own size,
+ * the notepad beside each device (device-notepad*.png), and the host's frames idle at its panel
+ * (idleAtPanel).
+ */
+async function atOpenConsoles(crew, seats, title, kind) {
   const sizes = crew.map(({ page }) => page.viewportSize());
+  await inGroup('devices', () => shootConsoles(crew, seats, title, kind));
+  await inGroup('voice', () => capturePartnerFunk(seats, title));
+  for (const [i, { page }] of crew.entries()) {
+    if (sizes[i] !== null) {
+      await page.setViewportSize(sizes[i]);
+    }
+  }
+  await sleep(300); // past the resize
+  await inGroup('reading', () => notingAtDevices(crew));
+  await idleAtPanel(crew, title);
+}
+
+/**
+ * console-a.png, console-b.png: both panels of `title` at laptop size, each logged with whether
+ * it fits sideways, then their heads together (console-plate.png, `capturePlates`).
+ */
+async function shootConsoles(crew, seats, title, kind) {
   await Promise.all(crew.map(({ page }) => page.setViewportSize(SIZES[0])));
   await sleep(500); // the layout settles, the panel past its fade-in
   for (const [player, spot] of seats) {
@@ -4633,33 +4892,32 @@ async function captureConsoles(operator, reader) {
     );
   }
   await capturePlates(seats, title);
-  await capturePartnerFunk(seats, title);
-  for (const [i, { page }] of crew.entries()) {
-    if (sizes[i] !== null) {
-      await page.setViewportSize(sizes[i]);
-    }
-  }
-  await sleep(300); // past the resize
+}
+
+/** device-notepad.png, device-notepad-phone.png: the notepad beside each open device of `crew`. */
+async function notingAtDevices(crew) {
   for (const player of crew) {
     const phone = (player.page.viewportSize()?.width ?? 0) <= 560;
     await captureDeviceNoting(player, phone ? 'device-notepad-phone.png' : 'device-notepad.png');
   }
-  // The world under an open panel is the game's own cost: it keeps the budget too.
+}
+
+/**
+ * The world under an open panel is the game's own cost: it keeps the budget too. The traced page
+ * of `crew` is sampled idle at the open `title` panel, then looked at density 2 as well
+ * (panel-dpr2.png).
+ */
+async function idleAtPanel(crew, title) {
   const watched = crew.find((player) => player.traced);
-  if (watched !== undefined) {
-    await sleep(300); // past the resize
-    const idle = `idle at the open "${title}" panel`;
-    await sampleFrames(watched.page, idle, () => sleep(SAMPLE_MS));
-    panelSampled = true;
-    await keySceneAtTwo(watched, idle, () => sleep(SAMPLE_MS), 'panel-dpr2.png');
+  if (watched === undefined) {
+    return;
   }
-  if (kind === 'signal') {
-    await solveSignal(crew, title);
-  } else if (kind === 'circuit') {
-    await measureEveryWire(reader, title);
-  } else {
-    console.log(`consoles           "${title}" is a ${kind} panel: captured, left open`);
-  }
+  await sleep(300); // past the resize
+  const idle = `idle at the open "${title}" panel`;
+  await frameWindow(watched.page, idle, () => sleep(SAMPLE_MS));
+  panelSampled = true;
+  const quiet = () => sleep(SAMPLE_MS);
+  await inGroup('graphics', () => keySceneAtTwo(watched, idle, quiet, 'panel-dpr2.png'));
 }
 
 /** The angle the meter's needle stands at on the page right now, transition and all, in °. */
@@ -4835,11 +5093,10 @@ async function manBothConsoles(players) {
     .map((pair) => entryPlan(pair, consoleA, plates))
     .find((option) => option !== null);
   if (plan === undefined) {
-    skip(
-      'console-*.png',
+    const why =
       `nobody reaches console A of "${consoleA.title}", ` +
-        'and nobody else a plate to hold the way open',
-    );
+      'and nobody else a plate to hold the way open';
+    await inGroup('devices', () => skip('console-*.png', why));
     return null;
   }
   const { box, meter, plate } = plan;
@@ -4902,9 +5159,9 @@ async function solveSignal(crew, title, pinned = null) {
     }
     // The run's one deliberate alarm: where the traced host sends, or at the last stage.
     if (!flinchShot && (sending.traced === true || stage === stages)) {
-      await captureFlinch(sending, pressing, pin?.keys[0] ?? null);
+      await inGroup('graphics', () => captureFlinch(sending, pressing, pin?.keys[0] ?? null));
     }
-    await captureGreyDisplay(sending);
+    await inGroup('devices', () => captureGreyDisplay(sending));
     const count = await pressStage(sending, pressing, pin?.keys ?? null);
     const line =
       `signal             ${sending.name} sends, ${pressing.name} presses: ` +
@@ -4941,11 +5198,8 @@ const signSaid = (sign) => (typeof sign === 'string' ? sign : `${sign.shape}/${s
 /** Whether signal-grey.png was taken: a run shoots the first display without colour it meets. */
 let greyShot = false;
 
-/** The Signalkette's shots a mission's walkthrough never came to, each skipped with why. */
-function skipSignalShots() {
-  if (!flinchShot) {
-    skip('figure-flinch.png', 'the walkthrough works no Signalkette in this mission');
-  }
+/** signal-grey.png and signal-grey-phone-932.png, where no Signalkette of the run lost its colour. */
+function greyLeftOut() {
   if (!greyShot) {
     skip('signal-grey*.png', 'no Signalkette the walkthrough works here loses its colour');
   }
@@ -5292,7 +5546,7 @@ async function capturePanelClose(player, modal) {
     held = { shot, attempt, lumas: [open, mid, gone], between: midway(open, mid, gone) };
   }
   writeFileSync(join(OUT, 'panel-close.png'), held.shot);
-  tally.taken += 1;
+  taken('panel-close.png');
   reportPanelClose(player, fade, held);
 }
 
@@ -5313,14 +5567,20 @@ function reportPanelClose(player, fade, held) {
   }
 }
 
-/** Steps `player` back from the open station `modal` with Esc: the first time, panel-close.png. */
+/**
+ * Steps `player` back from the open station `modal` with Esc: the first time, panel-close.png,
+ * graphics' — where the run leaves graphics out, as any other time.
+ */
 async function stepBack(player, modal) {
+  const plainly = async () => {
+    await player.page.keyboard.press('Escape');
+    await modal.waitFor({ state: 'hidden', timeout: 3000 });
+  };
   if (!panelCloseShot && (await modal.isVisible())) {
-    await capturePanelClose(player, modal);
+    await inGroup('graphics', () => capturePanelClose(player, modal), plainly);
     return;
   }
-  await player.page.keyboard.press('Escape');
-  await modal.waitFor({ state: 'hidden', timeout: 3000 });
+  await plainly();
 }
 
 /**
@@ -6472,7 +6732,7 @@ async function captureMenu(page) {
   await capture(page, 'menu.png');
   console.log(`menu.png           ${sceneText(scene)}`);
   await menuSoundAtFirstKey(page, () => walkMenuKeys(page));
-  const look = await sampleFrames(page, 'on the menu, its scene drifting', () => sleep(SAMPLE_MS));
+  const look = await frameWindow(page, 'on the menu, its scene drifting', () => sleep(SAMPLE_MS));
   if (SOFTWARE_GL && look !== null && look.p95 > MENU_P95_MS) {
     fail(`menu: its window reached ${look.p95.toFixed(1)} ms p95, over ${MENU_P95_MS}`);
   }
@@ -6486,26 +6746,39 @@ async function captureMenu(page) {
 }
 
 /**
- * menu-missions.png: „Einsatz starten" open over the menu, the mission cards in it
- * (`checkFirstRunCard`); the walkthrough's mission is picked — its lab comes in as the scene
- * behind — and „Runde eröffnen" opens its room.
+ * „Einsatz starten" open over the menu, the mission cards in it (menu-missions.png, screens');
+ * the walkthrough's mission is picked and „Runde eröffnen" opens its room — where screens is on,
+ * the picked lab coming in as the scene behind first, and the door wipe caught on the way
+ * (`pickedAndOpened`).
  */
 async function openMissionRound(page) {
   await openMenuPanel(page, 'Einsatz starten');
-  await sleep(300);
-  await capture(page, 'menu-missions.png');
-  await checkFirstRunCard(page);
+  const cards = () => page.locator('.mission').first().waitFor({ timeout: 10_000 });
+  await inGroup('screens', () => shootMissions(page), cards);
   const card = page.locator('.mission', { hasText: MISSION }).first();
   if ((await card.count()) === 0) {
     throw new Error(`no mission card reads "${MISSION}" — SHOTS_MISSION has to name one`);
   }
   await card.click();
-  const picked = MISSION.toLowerCase();
-  const scene = await sceneBaked(page, { missionId: picked });
+  const open = () => page.locator('.menu-panel button', { hasText: 'Runde eröffnen' }).click();
+  await inGroup('screens', () => pickedAndOpened(page, open), open);
+}
+
+/** menu-missions.png: the mission cards of „Einsatz starten" on a first run (checkFirstRunCard). */
+async function shootMissions(page) {
+  await sleep(300);
+  await capture(page, 'menu-missions.png');
+  await checkFirstRunCard(page);
+}
+
+/**
+ * The walkthrough's mission picked, its lab coming in as the menu's scene, then `open` — „Runde
+ * eröffnen" — behind the door wipe (menu-to-lobby.png, `captureDoors`).
+ */
+async function pickedAndOpened(page, open) {
+  const scene = await sceneBaked(page, { missionId: MISSION.toLowerCase() });
   console.log(`menu-missions.png  ${MISSION} picked: ${sceneText(scene)}`);
-  await captureDoors(page, () =>
-    page.locator('.menu-panel button', { hasText: 'Runde eröffnen' }).click(),
-  );
+  await captureDoors(page, open);
 }
 
 /** The door wipe's close, ms (client screens/DoorWipe.tsx `CLOSE_MS`). */
@@ -6929,8 +7202,7 @@ async function captureLobbyTitle(page, joined) {
 
 /**
  * lobby-first.png: the host's device has won no run, so the room it opened stands on
- * „entspannt", the lobby saying why under the levels. Then the host picks „Normal", which the
- * walkthrough plays: its drones' flights, clocks and alarm marks are counted at that level.
+ * „entspannt", the lobby saying why under the levels.
  */
 async function captureFirstRun(page, seen) {
   const line = page.locator('.lobby-first-run');
@@ -6947,6 +7219,13 @@ async function captureFirstRun(page, seen) {
   if (level !== 'entspannt' || !shown) {
     fail(`lobby-first.png: a first room on "${level}"${shown ? '' : ', no word why'}`);
   }
+}
+
+/**
+ * The host picks „Normal" in its lobby, which the walkthrough plays: its drones' flights, clocks
+ * and alarm marks are counted at that level. Throws where the room stays on another.
+ */
+async function pickNormal(page, seen) {
   await page.locator('.level-chip', { hasText: 'Normal' }).click();
   if (!(await until(() => seen.view?.difficulty === 'normal', 5000))) {
     throw new Error(`the host picked „Normal", but the room stays on "${seen.view?.difficulty}"`);
@@ -7318,7 +7597,8 @@ async function deviceOnPhone(player, slug, size) {
   await page.setViewportSize({ width: size.width, height: size.height });
   await sleep(500);
   const seen = await page.evaluate(deviceReach);
-  const shot = size === SIZES[3] ? `device-phone-${slug}.png` : `device-${size.name}-${slug}.png`;
+  const shot =
+    size === SIZES[3] ? `device-phone-${slug}.png` : `device-phone-${size.width}-${slug}.png`;
   await capture(page, shot);
   const name = shot.padEnd(18);
   if (seen === null) {
@@ -7441,7 +7721,7 @@ async function keepFigureShot(page, name, caught) {
     return;
   }
   writeFileSync(join(OUT, name), caught.png);
-  tally.taken += 1;
+  taken(name);
 }
 
 /** A figure counts as mid look-around turned this far from its way, radians (it turns 1.1). */
@@ -7485,12 +7765,41 @@ async function captureLobbyIdle(page) {
 }
 
 /**
- * locker.png: the guest stands before the nearest locker it can walk to,
- * „Durchsuchen" on offer, then searches it — the find has to reach the HUD
- * line. Lockers lie undiscovered at first, so where they are comes from the
+ * The guest searches the nearest closed locker it can walk to — opened, a locker is a source a
+ * player can back a station from (core map.ts `backupsOf`), as the Systemcheck's Kabelprüfung
+ * wants — and locker.png, reading's, shows it before it, „Durchsuchen" on offer; the find has to
+ * reach the HUD line. Lockers lie undiscovered at first, so where they are comes from the
  * audience's view.
  */
 async function captureLocker(page, seen, audience) {
+  const { locker, why } = lockerInReach(seen, audience);
+  if (locker === undefined) {
+    await inGroup('reading', () => skip('locker.png', why));
+    return;
+  }
+  if (!(await walkNear(page, seen, locker))) {
+    const where = `${locker.x},${locker.y}`;
+    const broke = `the guest's walk to the locker at ${where} broke off (stuck, or a door shut)`;
+    await inGroup('reading', () => skip('locker.png', broke));
+    return;
+  }
+  const target = sourceTarget(locker);
+  const here = await until(() => presentAt(seen.view, target), COUNT_WAIT.ms);
+  await inGroup('reading', async () => {
+    await sleep(400); // the prompt is drawn from the next frame on
+    await capture(page, 'locker.png');
+  });
+  const opened = () => seen.view.map.manuals.some((m) => m.id === locker.id && m.opened);
+  const guest = { page, seen, name: 'the guest' };
+  const searched = await pressUntil(guest, target, 'the open locker', opened);
+  await inGroup('reading', () => reportLocker(page, locker, here, searched));
+}
+
+/**
+ * The closed locker nearest by walking to `seen`'s player — where the lockers lie comes from the
+ * audience's view (`audience`) — and why there is none, for the skip line.
+ */
+function lockerInReach(seen, audience) {
   const everything = audience.view?.map ?? seen.view.map;
   const lockers = everything.manuals.filter((m) => m.kind === 'locker' && !m.opened);
   const from = tileOf(seen);
@@ -7498,31 +7807,16 @@ async function captureLocker(page, seen, audience) {
     .map((locker) => ({ locker, path: from === null ? null : route(seen.view.map, from, locker) }))
     .filter((option) => option.path !== null)
     .sort((a, b) => a.path.length - b.path.length);
-  const locker = options[0]?.locker;
-  if (locker === undefined) {
-    const where = lockers.map((l) => `${l.x},${l.y}`).join(' · ');
-    skip(
-      'locker.png',
-      lockers.length === 0
-        ? 'no closed locker on this map'
-        : `no locker in the guest's reach (${where})`,
-    );
-    return;
-  }
-  if (!(await walkNear(page, seen, locker))) {
-    skip(
-      'locker.png',
-      `the guest's walk to the locker at ${locker.x},${locker.y} broke off (stuck, or a door shut)`,
-    );
-    return;
-  }
-  const target = sourceTarget(locker);
-  const here = await until(() => presentAt(seen.view, target), COUNT_WAIT.ms);
-  await sleep(400); // the prompt is drawn from the next frame on
-  await capture(page, 'locker.png');
-  const opened = () => seen.view.map.manuals.some((m) => m.id === locker.id && m.opened);
-  const guest = { page, seen, name: 'the guest' };
-  const searched = await pressUntil(guest, target, 'the open locker', opened);
+  const where = lockers.map((l) => `${l.x},${l.y}`).join(' · ');
+  const why =
+    lockers.length === 0
+      ? 'no closed locker on this map'
+      : `no locker in the guest's reach (${where})`;
+  return { locker: options[0]?.locker, why };
+}
+
+/** locker.png's line: whether the guest was counted at the locker, and what searching it said. */
+async function reportLocker(page, locker, here, searched) {
   const hud = page.locator('.hud-radio');
   const line = searched && (await hud.count()) > 0 ? (await hud.innerText()).trim() : '';
   console.log(
@@ -8490,39 +8784,51 @@ async function captureServersConsoles({ terminal, rack }) {
 }
 
 /**
- * One move of the plan at its console — a switch at the rack; a command at
- * the terminal, typed at the prompt where `typed` (`typeCommand`, shot as
- * `shot` where one is named), else put together on the keys and sent with ⏎
- * — and its effect in that console's view, or the solve. Returns the move as
- * the log says it; throws where nothing shows.
+ * One move of the plan at its console — a switch at the rack (`rackMove`); a command at the
+ * terminal, typed at the prompt where `typed` and the run plays devices (`typeCommand`, shot as
+ * `shot` where one is named), else put together on the keys and sent with ⏎ — and its effect in
+ * that console's view, or the solve. Returns the move as the log says it; throws where nothing
+ * shows.
  */
 async function serversMove({ terminal, rack }, move, typed, shot = null) {
   const index = terminal.seen.view.currentPuzzleIndex;
   const solved = () => terminal.seen.view.currentPuzzleIndex > index;
   if (move.by === 'partner') {
-    const { power: service, on } = move.input;
-    await rack.page.locator(`.station-modal .servers-switch[data-service="${service}"]`).click();
-    const unit = () => rack.seen.view.puzzle?.rack?.find((u) => u.service === service);
-    if (!(await until(() => solved() || unit()?.power === on, 3000))) {
-      throw new Error(`${rack.name} switched ${service} ${on ? 'on' : 'off'}, but it stayed`);
-    }
-    return `B ${service} ${on ? 'an' : 'aus'}`;
+    return rackMove(rack, move.input, solved);
   }
   const { cmd, service } = move.input;
   const modal = terminal.page.locator('.station-modal');
   const last = terminal.seen.view.puzzle?.log?.at(-1)?.n ?? 0;
-  if (typed) {
-    await typeCommand(terminal, move.input, shot);
-  } else {
+  const onTheKeys = async () => {
     await modal.locator(`.servers-key[data-cmd="${cmd}"]`).click();
     await modal.locator(`.servers-key[data-service="${service}"]`).click();
     await modal.locator('.servers-key--enter').click();
-  }
+    return false;
+  };
+  const atThePrompt = async () => {
+    await typeCommand(terminal, move.input, shot);
+    return true;
+  };
+  const typedIt = typed ? await inGroup('devices', atThePrompt, onTheKeys) : await onTheKeys();
   const logged = () => (terminal.seen.view.puzzle?.log?.at(-1)?.n ?? 0) > last;
   if (!(await until(() => solved() || logged(), 3000))) {
     throw new Error(`${terminal.name} sent "${cmd} ${service}", but the log took no line`);
   }
-  return `A ${cmd} ${service}${typed ? ' (getippt)' : ''}`;
+  return `A ${cmd} ${service}${typedIt ? ' (getippt)' : ''}`;
+}
+
+/**
+ * A switch thrown at the rack — `input` names the service and on or off — until its unit stands
+ * so on the rack's view or the station solves (`solved`). Returns the move as the log says it;
+ * throws where the unit stays.
+ */
+async function rackMove(rack, { power: service, on }, solved) {
+  await rack.page.locator(`.station-modal .servers-switch[data-service="${service}"]`).click();
+  const unit = () => rack.seen.view.puzzle?.rack?.find((u) => u.service === service);
+  if (!(await until(() => solved() || unit()?.power === on, 3000))) {
+    throw new Error(`${rack.name} switched ${service} ${on ? 'on' : 'off'}, but it stayed`);
+  }
+  return `B ${service} ${on ? 'an' : 'aus'}`;
 }
 
 /** Whether the terminal's prompt holds the focus on `page`. */
@@ -8621,15 +8927,8 @@ async function playServers(crew, moves = SERVERS_PLAN.moves, typingShot = null) 
   const index = terminal.seen.view.currentPuzzleIndex;
   const alarms = terminal.seen.view.alarms.count;
   const from = Date.now();
-  const said = [];
-  for (const move of moves) {
-    const typed = move.by === 'operator' && !said.some((line) => line.startsWith('A '));
-    said.push(await serversMove(crew, move, typed, typed ? typingShot : null));
-    if (said.length < moves.length) {
-      await sleep(150);
-    }
-  }
-  const shot = await captureServersSolved(terminal);
+  const said = await playMoves(crew, moves, typingShot);
+  const shot = await inGroup('devices', () => captureServersSolved(terminal));
   const took = Date.now() - from;
   const solved = await until(() => terminal.seen.view.currentPuzzleIndex > index, 3000);
   const raised = terminal.seen.view.alarms.count - alarms;
@@ -8638,15 +8937,41 @@ async function playServers(crew, moves = SERVERS_PLAN.moves, typingShot = null) 
     `servers            ${said.length} moves in ${seconds(took)} (${said.join(', ')}): ` +
       `${solved ? 'solved' : '!! not solved'}, ${alarmed}`,
   );
+  const missed = await inGroup('devices', () => reportServersSolved(terminal, shot), () => false);
+  if (!solved || raised > 0 || missed) {
+    fail(`servers: the plan ended ${solved ? 'solved' : 'unsolved'} with ${raised} alarm(s)`);
+  }
+}
+
+/**
+ * The plan's `moves` at both consoles of `crew`, ~150 ms apart, the first command typed at the
+ * prompt (`serversMove`, caught as `typingShot` where one is named). Returns the moves as the
+ * log says them.
+ */
+async function playMoves(crew, moves, typingShot) {
+  const said = [];
+  for (const move of moves) {
+    const typed = move.by === 'operator' && !said.some((line) => line.startsWith('A '));
+    said.push(await serversMove(crew, move, typed, typed ? typingShot : null));
+    if (said.length < moves.length) {
+      await sleep(150);
+    }
+  }
+  return said;
+}
+
+/**
+ * servers-solved.png's line: how long after the device showed solved the shot came (`shot`, ms),
+ * or that it never showed solved — which this returns, for the run to fail on.
+ */
+function reportServersSolved(terminal, shot) {
   console.log(
     `servers-solved.png ${terminal.name}: ` +
       (shot === null
         ? '!! the device never showed solved'
         : `shot ${shot} ms after it showed solved${shot >= SOLVED_CLOSE_MS ? ' (late)' : ''}`),
   );
-  if (!solved || raised > 0 || shot === null) {
-    fail(`servers: the plan ended ${solved ? 'solved' : 'unsolved'} with ${raised} alarm(s)`);
-  }
+  return shot === null;
 }
 
 /**
@@ -9109,7 +9434,7 @@ async function weather() {
   const label = relayCrew.find((p) => emergencyOn(p.seen))?.seen.view.map.sabotage.label;
   for (const player of relayCrew) {
     if (await player.page.locator('.relay-modal').isVisible()) {
-      await captureDevicePhone(player, 'relay');
+      await inGroup('devices', () => captureDevicePhone(player, 'relay'));
     }
   }
   while (relayCrew.some((p) => emergencyOn(p.seen)) && Date.now() - from < 70_000) {
@@ -9340,7 +9665,7 @@ async function finishNotstrom(box, meter) {
     }
     await openPanel(player, side);
   }
-  await captureDevicePhone(meter, stationSlug(meter));
+  await inGroup('devices', () => captureDevicePhone(meter, stationSlug(meter)));
   const wires = (box.seen.view.puzzle?.wires ?? []).map((wire) => wire.colour).join(', ');
   if (wires !== pin.wires.join(', ')) {
     differs('fuse box', wires, pin.wires.join(', '));
@@ -9383,7 +9708,7 @@ async function playSignalkette(host, guest) {
     throw new Error(`${host.name} found no way to console B of "${title}"`);
   }
   await openPanel(guest, 'a');
-  await captureDevicePhone(guest, stationSlug(guest));
+  await inGroup('devices', () => captureDevicePhone(guest, stationSlug(guest)));
   await openPanel(host, 'b');
   await solveSignal([host, guest], title, BLACKOUT_PLAN.signalkette.stages);
 }
@@ -9404,10 +9729,12 @@ async function readLocker(reader, locker, watcher) {
     throw new Error(`${reader.name} searched the ${locker.label}, but no .reading-modal opened`);
   }
   await sleep(500); // past the page's fade-in
-  await capture(reader.page, 'servers-manual.png');
-  await capturePose(watcher, reader, 'reading', 'pose-reading.png');
-  const where = await textOf(overlay.locator('.book-where, .terminal-status'));
-  console.log(`servers-manual.png ${reader.name} at the ${locker.label}: ${where ?? 'one sheet'}`);
+  await inGroup('devices', () => capture(reader.page, 'servers-manual.png'));
+  await inGroup('graphics', () => capturePose(watcher, reader, 'reading', 'pose-reading.png'));
+  await inGroup('devices', async () => {
+    const where = (await textOf(overlay.locator('.book-where, .terminal-status'))) ?? 'one sheet';
+    console.log(`servers-manual.png ${reader.name} at the ${locker.label}: ${where}`);
+  });
   await reader.page.keyboard.press('Escape');
   await overlay.waitFor({ state: 'hidden', timeout: 3000 });
 }
@@ -9428,7 +9755,7 @@ async function readLocker(reader, locker, watcher) {
 async function playServerraum(host, guest) {
   const locker = pinnedSource('locker');
   await sneakTo(host, atConsole(host, 'a'));
-  await captureRackLeds(host);
+  await inGroup('graphics', () => captureRackLeds(host));
   await sneakTo(guest, workSpot(guest, locker));
   await foundWherePinned(guest, locker);
   await readLocker(guest, locker, host);
@@ -9443,8 +9770,8 @@ async function playServerraum(host, guest) {
       throw new Error(`the Serverraum's panels say ${role(host)} and ${role(guest)}`);
     }
     const rows = host.seen.view.puzzle?.rows ?? null;
-    await captureServersConsoles(crew);
-    await captureDevicePhone(guest, stationSlug(guest));
+    await inGroup('devices', () => captureServersConsoles(crew));
+    await inGroup('devices', () => captureDevicePhone(guest, stationSlug(guest)));
     if (JSON.stringify(rows) !== JSON.stringify(BLACKOUT_PLAN.subsysteme.rows)) {
       differs('terminal table', tableSaid(rows), tableSaid(BLACKOUT_PLAN.subsysteme.rows));
     }
@@ -9728,7 +10055,7 @@ async function playFrequenz(host, guest) {
   if (!(await pressUntil(guest, atCabinet, 'the unlocked cabinet', unlocked))) {
     throw new Error(`${guest.name} pressed E for the cabinet, but nothing happened`);
   }
-  await captureMorseBook(guest, atCabinet);
+  await inGroup('reading', () => captureMorseBook(guest, atCabinet));
   await sneakTo(host, atConsole(host, null));
   await clearOfEmergencies(host, 25);
   const index = host.seen.view.currentPuzzleIndex;
@@ -9801,9 +10128,8 @@ async function playReaktor(host, guest) {
       `${pin.to.x},${pin.to.y} and put it in`,
   );
   await clearOfEmergencies(host, 25);
-  await pastEmergencies(() =>
-    pressLastSync([host, guest], () => captureDevicePhone(guest, stationSlug(guest))),
-  );
+  const onPhone = () => inGroup('devices', () => captureDevicePhone(guest, stationSlug(guest)));
+  await pastEmergencies(() => pressLastSync([host, guest], onPhone));
 }
 
 /**
@@ -9840,6 +10166,13 @@ function clockLeft(leftMs, limitSec) {
   return `${seconds(leftMs)} left on the clock, ${percent} % of ${limitSec} s${under}`;
 }
 
+/** A run in which no relay emergency came says that device-phone-relay.png is left out. */
+function relayLeftOut() {
+  if (!phoneDevices.has('relay')) {
+    skip('device-phone-relay', 'no relay emergency came in this run (v-relay.mjs measures it)');
+  }
+}
+
 /**
  * Blackout from the end of the station step to the won card, on its pinned
  * seed: the Notstrom-Kasten finished, the Signalkette, the Serverraum, the
@@ -9869,9 +10202,7 @@ async function playBlackoutToTheEnd(host, guest, watcher) {
       await viewsCaughtUp([host, guest]);
     }
     await runForTheHatch(host, guest);
-    if (!phoneDevices.has('relay')) {
-      skip('device-phone-relay', 'no relay emergency came in this run (v-relay.mjs measures it)');
-    }
+    await inGroup('devices', relayLeftOut);
     await captureEscape(host, guest);
     await captureEnd(host, watcher);
   } finally {
@@ -9958,7 +10289,8 @@ async function pressLastSync(players, opened = async () => undefined) {
   await sleep(400); // past the panel's fade-in
   await opened();
   const solved = await pressTogether(players, station);
-  await checkRadioVoice(players[0], solved.listening, `"${station.title}"`);
+  const line = `"${station.title}"`;
+  await inGroup('audio', () => checkRadioVoice(players[0], solved.listening, line));
 }
 
 /**
@@ -10004,6 +10336,12 @@ async function escapeHud(page) {
   });
 }
 
+/** In the escape: the music under pressure, and what each page keeps decoded. */
+async function soundOfTheEscape(host, guest) {
+  await escapeMusic(host);
+  await audioKept([host, guest], 'in the escape');
+}
+
 /**
  * escape.png: the hatch open and the siren on — the light turned red, the
  * clock pulsing, the checklist under the goal. The host walks up beside the
@@ -10023,16 +10361,16 @@ async function captureEscape(host, guest) {
     throw new Error(`${host.name} found no way to ${beside.x},${beside.y} beside the hatch`);
   }
   const siren = 'in the escape, the siren on';
-  await sampleFrames(host.page, siren, () => pace(host, SAMPLE_MS));
-  await keySceneAtTwo(host, siren, () => pace(host, SAMPLE_MS), 'escape-dpr2.png');
-  await escapeMusic(host);
-  await audioKept([host, guest], 'in the escape');
+  const pacing = () => pace(host, SAMPLE_MS);
+  await frameWindow(host.page, siren, pacing);
+  await inGroup('graphics', () => keySceneAtTwo(host, siren, pacing, 'escape-dpr2.png'));
+  await inGroup('audio', () => soundOfTheEscape(host, guest));
   const guestId = guest.seen.view.you.id;
   const ticked = () => host.seen.view.map?.exit?.atExit.includes(guestId) === true;
   if (!(await standOn(guest, exit)) || !(await until(ticked, 3000))) {
     throw new Error(`${guest.name} did not get onto the hatch, or the checklist never ticked`);
   }
-  await partnerSide(host, guest, 'at the hatch');
+  await inGroup('audio', () => partnerSide(host, guest, 'at the hatch'));
   await sleep(Math.max(600, openedAt + 2400 - Date.now())); // the hatch ground open, the light red
   await capture(host.page, 'escape.png');
   const hud = await escapeHud(host.page);
@@ -10239,7 +10577,7 @@ async function captureEnd(host, watcher) {
   const says = await textOf(card.locator('.end-title-word'));
   const figures = await card.locator('.end-mate canvas').count();
   const facts = (await textOf(card.locator('.end-facts')))?.replace(/\s+/g, ' ') ?? 'none';
-  await captureCelebrate(host.page);
+  await inGroup('graphics', () => captureCelebrate(host.page));
   const tall = await captureWholeEnd(host.page);
   const watched = watcher.locator('.spectate .end-title-word');
   const audience = (await attached(watched, 6000)) ? await textOf(watched) : null;
@@ -10256,7 +10594,7 @@ async function captureEnd(host, watcher) {
   if (says !== 'GESCHAFFT' || figures !== 2 || audience !== 'GESCHAFFT' || crowd !== 2) {
     fail(`won.png: "${says}", ${figures} figures, the audience's card "${audience}" (${crowd})`);
   }
-  await checkEndMusic(host.page);
+  await inGroup('audio', () => checkEndMusic(host.page));
 }
 
 /**
@@ -10310,7 +10648,7 @@ async function captureNextMission(host, guest) {
   if (!label?.startsWith('Weiter: ') || beside !== 'Nochmal' || !confirmed || !opened || !lit) {
     fail(`next-mission.png: "${label}" beside "${beside}", ${next} opened ${opened}, lit ${lit}`);
   }
-  await checkEndMusicGone(host.page);
+  await inGroup('audio', () => checkEndMusicGone(host.page));
 }
 
 /** The end card's music gone with its card once the next run is up; or the run fails. */
@@ -10336,18 +10674,118 @@ async function playToTheEnd(host, guest, watcher, pinned) {
   await captureEnd(host, watcher);
   await capturePhoneCard(guest);
   await captureNextMission(host, guest);
+  await captureAccount(host);
+}
+
+/** What the first row of „Meine Einsätze" has to say of the Systemcheck just won. */
+const WON_ROW = [/Systemcheck/, /Geschafft/, /Anna/, /Ben/];
+
+/**
+ * my-runs.png and account-delete.png, after the won Systemcheck: a second tab of the host's
+ * browser — its pass, its account — opens „Meine Einsätze" off the menu, the run just won leading
+ * the list with the crew and a rank, and fitting a phone sideways; then the settings delete the
+ * account at the second word, „Konto löschen" and „Endgültig löschen" (account-delete.png shows
+ * the first answered), the profile says „Gast" with no name, and „Meine Einsätze" lists nothing
+ * any more. The run fails wherever that does not hold.
+ */
+async function captureAccount(host) {
+  const page = await openPage(host.page.context(), 'host tab');
+  try {
+    await page.goto(paged(BASE));
+    const row = await captureMyRuns(page);
+    await page.locator('.history-back').click();
+    await deleteAccount(page);
+    // The slot's text as written: the chip sets it in capitals.
+    const slot = (await page.locator('.profile-slot').textContent())?.trim() ?? null;
+    const name = await page.locator('.profile-name').inputValue();
+    await page.locator('.menu-item', { hasText: 'Meine Einsätze' }).click();
+    const empty = await attached(page.getByText('Noch kein Einsatz mit diesem Konto.'), 10_000);
+    console.log(
+      `account-delete.png ${host.name}'s account deleted: profile "${slot}"` +
+        `${name === '' ? ', no name' : ` !! still "${name}"`}` +
+        (empty ? ', „Meine Einsätze" empty' : ', !! „Meine Einsätze" still lists runs'),
+    );
+    if (slot !== 'Gast' || name !== '' || !empty) {
+      fail(`account-delete: profile "${slot}", name "${name}", runs listed ${!empty} (row ${row})`);
+    }
+  } finally {
+    await page.close();
+  }
+}
+
+/**
+ * my-runs.png: „Meine Einsätze" off the menu of `page`, its first row the run just won (WON_ROW)
+ * with a rank, the page fitting both the window and a phone; the row's text, for the log.
+ */
+async function captureMyRuns(page) {
+  await page.locator('.menu-item', { hasText: 'Meine Einsätze' }).click();
+  const first = page.locator('.my-runs-table tbody tr').first();
+  if (!(await attached(first, 10_000))) {
+    fail('my-runs: „Meine Einsätze" lists no run after the won Systemcheck');
+    return null;
+  }
+  await sleep(300);
+  await capture(page, 'my-runs.png');
+  const row = (await first.innerText()).replace(/\s+/g, ' ').trim();
+  const ranked = (await first.locator('.my-runs-rank').count()) === 1;
+  const { width, height } = page.viewportSize();
+  await overflow(page, `my-runs @ ${width}x${height}`);
+  await page.setViewportSize({ width: SIZES[2].width, height: SIZES[2].height });
+  await sleep(300);
+  const over = await sideways(page, '.content');
+  await page.setViewportSize({ width, height });
+  const holds = WON_ROW.every((part) => part.test(row)) && ranked;
+  console.log(
+    `my-runs.png        first row "${row}"${ranked ? '' : ' !! no rank'}; ` +
+      (over > 0 ? `!! +${over}px sideways on a phone` : 'fits a phone sideways'),
+  );
+  if (!holds || over > 0) {
+    fail(`my-runs: first row "${row}", ranked ${ranked}, ${over}px sideways on a phone`);
+  }
+  return row;
+}
+
+/**
+ * The account of `page`'s pass deleted in the settings: „Konto löschen" asks first, saying what
+ * goes (account-delete.png), „Endgültig löschen" sends it off, the settings say it is gone, and
+ * Esc closes them.
+ */
+async function deleteAccount(page) {
+  await page.locator('.menu-item', { hasText: 'Einstellungen' }).click();
+  await page.locator('.settings-account-delete').click();
+  await page.locator('.settings-account-ask').waitFor({ timeout: 5000 });
+  await sleep(400);
+  const inSight = await page.locator('.settings-account-actions').evaluate((actions) => {
+    const card = actions.closest('.settings-card').getBoundingClientRect();
+    return actions.getBoundingClientRect().bottom <= card.bottom + 0.5;
+  });
+  await capture(page, 'account-delete.png');
+  if (!inSight) {
+    fail('account-delete: „Endgültig löschen" asked below the settings’ fold');
+  }
+  await clickText(page, 'Endgültig löschen');
+  const gone = await attached(page.getByText('Konto gelöscht.', { exact: false }), 10_000);
+  if (!gone) {
+    fail('account-delete: the settings never said the account is gone');
+  }
+  await page.keyboard.press('Escape');
+  await page.locator('.settings-card').waitFor({ state: 'hidden', timeout: 3000 });
 }
 
 /**
  * Where the mission's seed is pinned — the Systemcheck's wiring box,
  * Blackout's every station — the walkthrough plays the run out to the card;
- * elsewhere the captures of the end are skipped, saying why. The hatch's dust
- * is watched for meanwhile, and the watch stopped however the play ends: one
+ * elsewhere the captures of the end are skipped, saying why. Where the run plays graphics, the
+ * hatch's dust is watched for meanwhile, and the watch stopped however the play ends: one
  * left polling after a step threw would hold the process open, and a CI job
  * with it, until the job's time limit.
  */
 async function playPinnedOut(anna, ben, watcher) {
-  const stopHatchDust = watchHatchDust(watcher, anna.seen);
+  const stopHatchDust = whenOn(
+    'graphics',
+    () => watchHatchDust(watcher, anna.seen),
+    async () => undefined,
+  );
   try {
     const mission = MISSION.toLowerCase();
     const pinned = mission === 'systemcheck' ? PINNED_WIRING.get(SEED) : undefined;
@@ -10356,6 +10794,7 @@ async function playPinnedOut(anna, ben, watcher) {
     } else if (mission === 'blackout' && SEED === BLACKOUT_PLAN.seed) {
       await playBlackoutToTheEnd(anna, ben, watcher);
       skip('next-mission.png', 'Blackout leads on to no other mission');
+      skip('my-runs.png', 'taken after the won Systemcheck, with account-delete.png');
     } else if (mission === 'blackout') {
       skip('escape.png', `seed ${SEED} is not the one tools/fixtures/blackout-plan.json pins`);
     }
@@ -10665,7 +11104,7 @@ function padded(url) {
 /** Saves what `locator` shows as `name` in the output folder, and counts it. */
 async function captureElement(locator, name) {
   await locator.screenshot({ path: join(OUT, name) });
-  tally.taken += 1;
+  taken(name);
 }
 
 /** Calls `method` on the page's controller with `args` (client input/padRuntime.ts PadProbe). */
@@ -11050,7 +11489,7 @@ async function captureAchievements(player) {
   ]);
   const path = join(OUT, 'share-card.png');
   await download.saveAs(path);
-  tally.taken += 1;
+  taken('share-card.png');
   const { width, height } = pngSize(path);
   console.log(
     `achievements.png   ${player.name}: ${shown.join(', ') || 'no plaque'} (${fresh} new); ` +
@@ -11767,6 +12206,24 @@ async function captureRestart() {
   }
 }
 
+/**
+ * The drills before the walkthrough, each in a room of its own, by the group each belongs to:
+ * the editor, the Serverraum's scratch mission (a Systemcheck run's), the art tour, the danger
+ * sense, the reconnect drill and the restart drill.
+ */
+const DRILLS = [
+  ['editor', captureEditor],
+  ['devices', captureServers],
+  ['art', captureArtTour],
+  ['drones', captureDangerSense],
+  ['reconnect', captureReconnect],
+  ['restart', captureRestart],
+];
+
+/**
+ * The run: the browser and what draws its pages, the drills of the groups on, and the
+ * walkthrough as far as they reach (`walkthrough`).
+ */
 async function run() {
   mkdirSync(OUT, { recursive: true });
   if (CPU_SLOWDOWN > 1) {
@@ -11777,14 +12234,70 @@ async function run() {
     args: [...VOICE_FLAGS, ...(SOFTWARE_GL ? SOFTWARE_GL_FLAGS : [])],
   });
   await logRendering();
-  await captureEditor();
-  await captureServers();
-  await captureArtTour();
-  await captureDangerSense();
-  await captureReconnect();
-  await captureRestart();
+  for (const [group, drill] of DRILLS) {
+    await inGroup(group, drill);
+  }
+  await walkthrough();
+  await browser.close();
+  console.log('screenshots in', OUT);
+}
 
-  // --- host: create a room and grab the code ---------------------------
+/**
+ * The walkthrough, stage by stage as far as the groups on reach (tools/groups.mjs `reaches`):
+ * the menu and the lobby to the started run (`lobbyStage`), the mission's opening
+ * (`openingStage`), and the run to its end (`runStage`). A stage's own steps count to its
+ * group — screens, intro, run — where that is on; where it is not, the stage only leads on to a
+ * later one, and its time counts to none.
+ */
+async function walkthrough() {
+  if (!reaches(PLAN.on, 'lobby')) {
+    return;
+  }
+  const lobby = await asStage('screens', lobbyStage);
+  if (!reaches(PLAN.on, 'opening')) {
+    return;
+  }
+  const opened = await asStage('intro', () => openingStage(lobby));
+  if (reaches(PLAN.on, 'run')) {
+    await asStage('run', () => runStage(opened));
+  }
+}
+
+/** Plays `stage`, its time counted to the group `name` where that is on, to none where not. */
+function asStage(name, stage) {
+  return inGroup(name, stage, stage);
+}
+
+/**
+ * The menu and the lobby, as far as the run's start: the host opens the menu and a round of the
+ * mission (`hostOpensRound`), the guest's phone joins by the code (`guestJoins`), the lobby's
+ * captures with the crew in it, and the run started from it (`startTheRun`). Returns the room's
+ * code and the crew in the run.
+ */
+async function lobbyStage() {
+  const { host, hostSeen, code, lobbySound } = await hostOpensRound();
+  const { guest, guestSeen } = await guestJoins(code);
+  // crew, ready, start — nothing to pick: the start draws who begins where
+  await host.locator('.seat .seat-name', { hasText: /^Ben$/ }).waitFor({ timeout: 10_000 });
+  await sleep(300);
+  await inGroup('screens', () => capture(host, 'lobby-filled.png'));
+  await inGroup('screens', captureOpenRounds);
+  await inGroup('graphics', () => captureLobbyIdle(host));
+  await inGroup('screens', () => lobbyAtSizes(host, guest));
+  const anna = { name: 'Anna', page: host, seen: hostSeen, traced: true };
+  const ben = { name: 'Ben', page: guest, seen: guestSeen };
+  await startTheRun(anna, ben, lobbySound);
+  return { code, anna, ben };
+}
+
+/**
+ * The host's page: the menu over its scene, walked by the keys, its frames, at a laptop's sizes
+ * (menu.png), the history (history.png), a round of the mission opened (`openMissionRound`),
+ * the room's code and seed, and the lobby's own captures — its title, the first room's level —
+ * with „Normal" picked as the walkthrough plays it, and the daily shift. Returns the host's page
+ * and socket, the room's code, and the menu's sound as the lobby keeps it (screens').
+ */
+async function hostOpensRound() {
   const hostCtx = await browser.newContext({ viewport: SIZES[0] });
   const host = await openPage(hostCtx, 'host');
   const hostSeen = eavesdrop(host);
@@ -11798,36 +12311,46 @@ async function run() {
   const titleCameOn = (await host.locator('.menu h1.phosphor-title').count()) === 1;
   await host.getByPlaceholder('z. B. Anna').fill('Anna');
   await host.locator('.menu-item').first().waitFor({ timeout: 10_000 });
-  // The menu over its scene, walked by the keys, its frames, at a laptop's sizes.
-  await captureMenu(host);
-  await captureHistory(host, 'history');
+  await inGroup('screens', () => captureMenu(host));
+  await inGroup('screens', () => captureHistory(host, 'history.png'));
   await openMissionRound(host);
   // The lobby keeps the menu's sound at its own weight (checked as the run starts).
-  const lobbySound = await menuSoundOf(host);
+  const lobbySound = await inGroup('screens', () => menuSoundOf(host));
   await host.locator('.room-code strong').waitFor({ timeout: 10_000 });
   const code = (await host.locator('.room-code strong').innerText()).trim();
   console.log('room code:', code, `(${MISSION})`);
-  if (SEED !== null) {
-    // The lobby names the seed beside the code once the server has pinned the room to it.
-    const label = host.locator('.room-seed');
-    await label.waitFor({ timeout: 3000 }).catch(() => undefined);
-    const shown = await textOf(label);
-    console.log(
-      `seed               ${SEED}: ` +
-        (shown === `Seed ${SEED}`
-          ? 'the room is pinned to it'
-          : `!! the room is not pinned (${shown ?? 'no seed beside the code'}): ` +
-            'the server takes one only with ALLOW_SEED=1, so the draw is chance'),
-    );
-  }
-  await captureLobbyTitle(host, titleCameOn);
-  await captureFirstRun(host, hostSeen);
-  await capture(host, 'lobby-host.png');
-  await captureDaily(host, hostSeen);
+  await seedBesideTheCode(host);
+  await inGroup('screens', () => captureLobbyTitle(host, titleCameOn));
+  await inGroup('screens', () => captureFirstRun(host, hostSeen));
+  await pickNormal(host, hostSeen);
+  await inGroup('screens', () => capture(host, 'lobby-host.png'));
+  await inGroup('screens', () => captureDaily(host, hostSeen));
+  return { host, hostSeen, code, lobbySound };
+}
 
-  // --- guest: join by code ---------------------------------------------
-  // Touch-capable on purpose: the on-screen D-pad is hidden for `pointer:
-  // fine`, so a default context would never show it.
+/** The lobby names the seed beside the code once the server has pinned the room to it. */
+async function seedBesideTheCode(host) {
+  if (SEED === null) {
+    return;
+  }
+  const label = host.locator('.room-seed');
+  await label.waitFor({ timeout: 3000 }).catch(() => undefined);
+  const shown = await textOf(label);
+  console.log(
+    `seed               ${SEED}: ` +
+      (shown === `Seed ${SEED}`
+        ? 'the room is pinned to it'
+        : `!! the room is not pinned (${shown ?? 'no seed beside the code'}): ` +
+          'the server takes one only with ALLOW_SEED=1, so the draw is chance'),
+  );
+}
+
+/**
+ * The guest's phone — touch-capable on purpose: the on-screen D-pad is hidden for `pointer:
+ * fine`, so a default context would never show it — opens the menu (`guestMenu`, screens') and
+ * joins the room `code` by its code. Returns its page and socket.
+ */
+async function guestJoins(code) {
   const guestCtx = await browser.newContext({ viewport: SIZES[2], hasTouch: true });
   const guest = await openPage(guestCtx, 'guest');
   const guestSeen = eavesdrop(guest);
@@ -11835,22 +12358,31 @@ async function run() {
   await guest.goto(traced(BASE));
   await guest.getByPlaceholder('z. B. Anna').fill('Ben');
   await guest.locator('.menu-item').first().waitFor({ timeout: 10_000 });
+  await inGroup('screens', () => guestMenu(guest));
+  await byCode(guest, code);
+  await guest.locator('.lobby').waitFor({ timeout: 10_000 });
+  return { guest, guestSeen };
+}
+
+/**
+ * The menu on the guest's phone: upright over its scene (menu-phone.png), turned sideways
+ * (`checkMenuPhones`), and its history (history-phone.png).
+ */
+async function guestMenu(guest) {
   await sceneBaked(guest);
   await capture(guest, 'menu-phone.png');
   await checkMenuPhones(guest);
-  await captureHistory(guest, 'history-phone');
-  await byCode(guest, code);
-  await guest.locator('.lobby').waitFor({ timeout: 10_000 });
+  await captureHistory(guest, 'history-phone.png');
+}
 
-  // crew, ready, start — nothing to pick: the start draws who begins where
-  await host.locator('.seat .seat-name', { hasText: /^Ben$/ }).waitFor({ timeout: 10_000 });
-  await sleep(300);
-  await capture(host, 'lobby-filled.png');
-  await captureOpenRounds();
-  await captureLobbyIdle(host);
+/**
+ * The lobby at its sizes: on the guest's phone (lobby-phone.png) — a phone scrolls the lobby
+ * down and the crew's row sideways, but nothing else may run out past the window's edge — in
+ * the host's window at 1440×820 and 1280×720 (lobby-1280.png) and on a phone held sideways
+ * (lobby-landscape.png); the host's window at a laptop's size again after.
+ */
+async function lobbyAtSizes(host, guest) {
   await capture(guest, 'lobby-phone.png');
-  // A phone scrolls the lobby down and the crew's row sideways, but nothing
-  // else may run out past the window's edge.
   const phoneOver = await sideways(guest, '.content');
   console.log(
     `lobby-phone.png    Ben's lobby @ 420x760 ` +
@@ -11864,208 +12396,396 @@ async function run() {
   await captureLobbySideways(host);
   await host.setViewportSize(SIZES[0]);
   await sleep(300);
-  await micsOn([
-    { name: 'Anna', page: host },
-    { name: 'Ben', page: guest },
-  ]);
+}
+
+/**
+ * Both microphones on (voice), the run started by the host once the guest says it is ready —
+ * its opening card waited for from before the start (intro-card.png, intro's) — and the menu's
+ * sound gone with the start (screens'). Throws where the sockets show no running view.
+ */
+async function startTheRun(anna, ben, lobbySound) {
+  await inGroup('voice', () => micsOn([anna, ben]));
   // The card stands 1.5 s at most: it is waited for from before the start, and shot as it comes.
-  const opening = captureIntroCard({ name: 'Anna', page: host });
-  await startRun(
-    { name: 'Anna', page: host, seen: hostSeen },
-    { name: 'Ben', page: guest, seen: guestSeen },
-  );
+  const opening = whenOn('intro', () => captureIntroCard(anna));
+  await startRun(anna, ben);
   await opening;
-  await menuSoundAfterStart(host, lobbySound);
+  await inGroup('screens', () => menuSoundAfterStart(anna.page, lobbySound));
   await sleep(500); // presence follows the start within a tick
-  if (guestSeen.view?.map == null || hostSeen.view?.map == null) {
+  if (ben.seen.view?.map == null || anna.seen.view?.map == null) {
     throw new Error('no running view on the sockets — does the client still talk on /ws?');
   }
-  const anna = { name: 'Anna', page: host, seen: hostSeen, traced: true };
-  const ben = { name: 'Ben', page: guest, seen: guestSeen };
-  const { operator, reader, atSign } = await firstMoments(anna, ben);
-  if (atSign !== undefined) {
-    await infoAfterSign(atSign, ben);
+}
+
+/**
+ * The mission's opening: in a mission with an intro, the Leitstelle's first line listened for on
+ * the guest's radio from its opening squelch on (audio), and the opening itself — taken by intro
+ * (`introShots`), or skipped on both pages where the run leaves intro out (`skipTheOpening`).
+ * Returns what the run goes on from: the code and the crew, whether the mission has an intro,
+ * what is listened for, and the player at the sign the opening found, if any.
+ */
+async function openingStage({ code, anna, ben }) {
+  const intro = anna.seen.view.lights.out === false;
+  if (!intro) {
+    return { code, anna, ben, intro, listening: null, signedEarly: undefined };
   }
-  // Let the briefing countdown finish; server and browsers share this clock.
-  await sleep(Math.max(0, guestSeen.view.startedAt + 4200 - Date.now()));
+  const listening = whenOn('audio', () => hearRadio(ben, 40_000));
+  const take = () => introShots(anna, ben);
+  const signedEarly = await inGroup('intro', take, () => skipTheOpening(anna, ben));
+  return { code, anna, ben, intro, listening, signedEarly };
+}
+
+/**
+ * The run to its end: Blackout past its opening and its lever (`afterTheLights`), the first
+ * moments (`firstMoments`), the briefing over (`briefingOver`), the game at its sizes
+ * (`inTheGame`), the audience (`audienceJoins`), the sources (`readTheSources`), the first
+ * station (`stationStep`), the world on its own again (`afterTheStation`), the mission played
+ * out (`playPinnedOut`), what the run left out (`runLeftOut`), and the views and the walking.
+ */
+async function runStage(opened) {
+  const { code, anna, ben, intro } = opened;
+  if (intro) {
+    await afterTheLights(anna, ben, opened.listening);
+  }
+  const { operator, reader, atSign } = await firstMoments(anna, ben, opened);
+  if (atSign !== undefined) {
+    await inGroup('hud', () => infoAfterSign(atSign, ben));
+  }
+  await briefingOver(anna, ben);
+  const steady = await inTheGame(anna, ben);
+  const audience = await audienceJoins(anna, ben, code);
+  await readTheSources({ anna, ben, operator, reader, atSign }, audience.seen);
+  await stationStep(anna, ben, operator, reader);
+  await afterTheStation(anna, ben, steady);
+  await playPinnedOut(anna, ben, audience.page);
+  await runLeftOut();
+  reportViews({ Anna: anna.seen, Ben: ben.seen, 'the audience': audience.seen });
+  reportWalking();
+}
+
+/**
+ * The briefing's countdown over — server and browsers share this clock — then the start's sound
+ * (audio): the bed of a room dark from the start dead, the radio's chain band-passed, and the
+ * mission's opening line through it.
+ */
+async function briefingOver(anna, ben) {
+  await sleep(Math.max(0, ben.seen.view.startedAt + 4200 - Date.now()));
+  await inGroup('audio', () => soundOfTheStart(anna));
+}
+
+/** The bed of a room dark from the start dead; the radio's chain on noise and on a recording. */
+async function soundOfTheStart(anna) {
   if (anna.seen.view.lights.outAt === anna.seen.view.startedAt) {
     await bedDead(anna, 'with the lights out from the start');
   }
-  await checkRadioBand(host);
-  await checkRadioLine(host, anna.seen.view.missionId);
+  await checkRadioBand(anna.page);
+  await checkRadioLine(anna.page, anna.seen.view.missionId);
+}
+
+/**
+ * The game on the crew's screens, the briefing over: the zoom each page starts at (hud), the
+ * voice between the two (voice), the game at the host's window sizes and on the guest's phone,
+ * upright, sideways with its pad and on a large phone (hud), the camera's frame (graphics); then
+ * at laptop size the light's way (graphics), the run's pacing window (perf), the HUD's panels
+ * and controls (hud) and the walk cycle (graphics). Returns the zoom each page started at, held
+ * against the end (`zoomHeld`).
+ */
+async function inTheGame(anna, ben) {
   // The world's zoom follows the canvas height: nothing the run brings up in
   // the HUD — the sign's chip, a long radio line, the notes — may change it.
-  const steady = [
-    { name: 'Anna', page: host, start: await layoutOf(host) },
-    { name: 'Ben', page: guest, start: await layoutOf(guest) },
-  ];
-  await captureVoice(anna, ben);
+  const steady = await inGroup('hud', () => layoutsNow([anna, ben]), () => []);
+  await inGroup('voice', () => captureVoice(anna, ben));
+  await inGroup('hud', () => gameAtSizes(anna.page, ben.page));
+  // Ben turns the phone sideways: the landscape layout, pad and all. Its zoom has to hold
+  // there too, so the end of the run turns the phone once more and compares.
+  const turned = SIZES[3];
+  await ben.page.setViewportSize({ width: turned.width, height: turned.height });
+  await sleep(700);
+  await inGroup('hud', () => phoneSideways(ben.page, steady));
+  await inGroup('graphics', () => captureCamera(anna, ben));
+  const upright = () => ben.page.setViewportSize(SIZES[2]);
+  await inGroup('hud', () => captureLargePhone(ben.page, SIZES[2]), upright);
+  await sleep(400);
+  // info panel and spectator view at laptop size
+  await anna.page.setViewportSize(SIZES[0]);
+  await sleep(400);
+  await inGroup('graphics', () => checkLight(anna));
+  const pacing = () => pace(anna, SAMPLE_MS);
+  await frameWindow(anna.page, 'pacing, after the game screenshots', pacing, { setsPace: true });
+  await inGroup('hud', () => hudPanels(anna, ben));
+  await inGroup('graphics', () => captureWalkCycle(anna));
+  return steady;
+}
 
+/** The world's canvas each of `players` shows now (`layoutOf`), by name. */
+async function layoutsNow(players) {
+  const now = [];
+  for (const { name, page } of players) {
+    now.push({ name, page, start: await layoutOf(page) });
+  }
+  return now;
+}
+
+/**
+ * The game in the host's window at each size without touch (game-laptop-13.png …), and on the
+ * guest's phone, phone-sized and touch-capable all along (game-phone-touch.png).
+ */
+async function gameAtSizes(host, guest) {
   for (const size of SIZES.filter((s) => !s.hasTouch)) {
     await host.setViewportSize({ width: size.width, height: size.height });
     await sleep(700);
     await capture(host, `game-${size.name}.png`);
     await overflow(host, `game @ ${size.width}x${size.height}`);
   }
-  // The guest's window is phone-sized and touch-capable all along.
   await capture(guest, 'game-phone-touch.png');
-  // Ben turns the phone sideways: the landscape layout, pad and all. Its zoom has to hold
-  // there too, so the end of the run turns the phone once more and compares.
+}
+
+/**
+ * The guest's phone held sideways: the game in its one row (game-phone-landscape.png) and its
+ * pad (pad-left.png); the zoom it shows now is kept with `steady`, to hold at the end.
+ */
+async function phoneSideways(guest, steady) {
   const turned = SIZES[3];
-  await guest.setViewportSize({ width: turned.width, height: turned.height });
-  await sleep(700);
   await capturePhoneGame(guest, `game-${turned.name}.png`, "Ben's phone sideways");
   await overflow(guest, `game @ ${turned.width}x${turned.height}, Ben's phone sideways`);
   await capturePadLeft(guest);
   steady.push({ name: 'Ben sideways', page: guest, start: await layoutOf(guest), turn: turned });
-  await captureCamera(anna, ben);
-  await captureLargePhone(guest, SIZES[2]);
-  await sleep(400);
+}
 
-  // info panel and spectator view at laptop size
-  await host.setViewportSize(SIZES[0]);
+/**
+ * The HUD's panels and controls in the host's window: the info panel (info-panel.png), the
+ * settings, the controller, the quick chat, the minimap's goal and the sprint.
+ */
+async function hudPanels(anna, ben) {
+  await anna.page.keyboard.press('i');
   await sleep(400);
-  await checkLight(anna);
-  await sampleFrames(host, 'pacing, after the game screenshots', () => pace(anna, SAMPLE_MS), {
-    setsPace: true,
-  });
-  await host.keyboard.press('i');
-  await sleep(400);
-  await capture(host, 'info-panel.png');
-  await host.keyboard.press('Escape');
-  await captureSettings(host);
+  await capture(anna.page, 'info-panel.png');
+  await anna.page.keyboard.press('Escape');
+  await captureSettings(anna.page);
   await captureControls(anna, ben);
   await captureMinimapGoal(anna);
   await captureSprint(anna);
-  await captureWalkCycle(anna);
+}
 
+/**
+ * The audience joins from the menu by the room's code `code` (menu-join.png) and watches
+ * (spectate.png), listens in on the crew (voice), and a second audience page joins at density 2
+ * (dpr2.png, graphics). Returns its page and socket — traced for its voice links; its frames are
+ * never sampled.
+ */
+async function audienceJoins(anna, ben, code) {
   const watcherCtx = await browser.newContext({ viewport: SIZES[0] });
-  const watcher = await openPage(watcherCtx, 'audience');
-  const watcherSeen = eavesdrop(watcher);
-  // Traced for its voice links; its frames are never sampled.
-  await watcher.goto(traced(BASE));
-  await watchFromMenu(watcher, code);
-  await watcher.locator('.spectate').waitFor({ timeout: 10_000 });
+  const page = await openPage(watcherCtx, 'audience');
+  const seen = eavesdrop(page);
+  await page.goto(traced(BASE));
+  await watchFromMenu(page, code);
+  await page.locator('.spectate').waitFor({ timeout: 10_000 });
   await sleep(1200);
-  await capture(watcher, 'spectate.png');
-  await overflow(watcher, 'spectate @ 1440x820');
-  await listenIn(watcher, [anna, ben]);
-  await captureDpr2(code);
+  await capture(page, 'spectate.png');
+  await overflow(page, 'spectate @ 1440x820');
+  await inGroup('voice', () => listenIn(page, [anna, ben]));
+  await inGroup('graphics', () => captureDpr2(code));
+  return { page, seen };
+}
 
-  await captureLocker(guest, guestSeen, watcherSeen);
-
-  // --- reading, the sign, notes: the guest reads, opens the first station, asks for a note ---
+/**
+ * The sources: the guest searches the nearest locker (`captureLocker`, its shot reading's), the
+ * host's info panel is closed where it is still open, and reading's own steps follow
+ * (`readingSteps`) — `audience`, the audience's socket, places every source before the crew has
+ * come across it.
+ */
+async function readTheSources(crew, audience) {
+  const { anna, ben } = crew;
+  await captureLocker(ben.page, ben.seen, audience);
   // The host's info panel may still be open; close it the way a player would.
-  const closeInfo = host.locator('.info-card button', { hasText: 'Schließen' });
+  const closeInfo = anna.page.locator('.info-card button', { hasText: 'Schließen' });
   if (await closeInfo.isVisible()) {
     await closeInfo.click();
   }
-  // Whatever lies within the reader's reach is read; locked away from it, the
-  // operator reads instead.
-  if (!(await captureReading(reader.page, reader.seen, reader.name))) {
-    console.log(
-      `reading.png        ${reader.name}: no manual object in reach — ` +
-        `${operator.name} reads instead`,
-    );
-    if (!(await captureReading(operator.page, operator.seen, operator.name))) {
-      skip('reading.png', 'no manual object in reach of either player');
-    }
-  }
+  await inGroup('reading', () => readingSteps(crew, audience));
+}
 
-  const sign = reader.seen.view.map.edgeworkSign;
+/**
+ * Reading, the sign, notes: whoever has a source in reach reads it (`readOrSkip`), the reader
+ * walks to the sign where nobody started at it (`signWalk`), the guest's notepad takes the
+ * Laborkennung and keeps it over a reload (notepad.png), both note a block from an open source
+ * (reading-notepad*.png, highlight*.png) and the host's pad shows both (notepad-captured*.png);
+ * then the voice comes back after the guest's reload (voice).
+ */
+async function readingSteps({ anna, ben, operator, reader, atSign }, audience) {
+  await readOrSkip(operator, reader);
   if (atSign === undefined) {
-    if (sign === null) {
-      skip('sign.png', 'this map has no Laborkennung');
-    } else if (await walkNear(reader.page, reader.seen, sign)) {
-      await captureSign(reader.page, reader.name);
-      await infoAfterSign(reader, ben);
-    } else {
-      skip(
-        'sign.png',
-        stepsTo(reader.seen, sign) === Infinity
-          ? `the sign at ${sign.x},${sign.y} is out of ${reader.name}'s reach`
-          : `${reader.name}'s walk to the sign at ${sign.x},${sign.y} broke off ` +
-              '(stuck, or a door shut)',
-      );
-    }
+    await signWalk(reader, ben);
   }
-  await captureNotepad(guest, guestSeen);
-  await captureNoting(anna, 'reading-notepad.png', 'highlight.png', watcherSeen);
+  await captureNotepad(ben.page, ben.seen);
+  await captureNoting(anna, 'reading-notepad.png', 'highlight.png', audience);
   await captureNotepadCaptured();
-  await captureNoting(ben, 'reading-notepad-phone.png', 'highlight-phone.png', watcherSeen);
-  await voiceAfterReload(anna, ben);
+  await captureNoting(ben, 'reading-notepad-phone.png', 'highlight-phone.png', audience);
+  await inGroup('voice', () => voiceAfterReload(anna, ben));
+}
 
+/**
+ * reading.png: whatever lies within the reader's reach is read; locked away from it, the
+ * operator reads instead — skipped where neither has a source in reach.
+ */
+async function readOrSkip(operator, reader) {
+  if (await captureReading(reader.page, reader.seen, reader.name)) {
+    return;
+  }
+  console.log(
+    `reading.png        ${reader.name}: no manual object in reach — ` +
+      `${operator.name} reads instead`,
+  );
+  if (!(await captureReading(operator.page, operator.seen, operator.name))) {
+    skip('reading.png', 'no manual object in reach of either player');
+  }
+}
+
+/**
+ * sign.png where nobody started at the Laborkennung: the reader walks to it and reads it, the
+ * Info button checked in view after (hud) — skipped where the map has none or no way leads there.
+ */
+async function signWalk(reader, guest) {
+  const sign = reader.seen.view.map.edgeworkSign;
+  if (sign === null) {
+    skip('sign.png', 'this map has no Laborkennung');
+  } else if (await walkNear(reader.page, reader.seen, sign)) {
+    await captureSign(reader.page, reader.name);
+    await inGroup('hud', () => infoAfterSign(reader, guest));
+  } else {
+    skip(
+      'sign.png',
+      stepsTo(reader.seen, sign) === Infinity
+        ? `the sign at ${sign.x},${sign.y} is out of ${reader.name}'s reach`
+        : `${reader.name}'s walk to the sign at ${sign.x},${sign.y} broke off ` +
+            '(stuck, or a door shut)',
+    );
+  }
+}
+
+/**
+ * The first station: worked at two consoles (`bothConsolesFirst`) or at one
+ * (`oneConsoleFirst`). The draw may leave both starts shut off from the first station until a
+ * plate is held; then there is no station to capture this time — unless it is worked at two
+ * consoles, where one holds the plate for the other.
+ */
+async function stationStep(anna, ben, operator, reader) {
   const firstSpots = operator.seen.view.map.stations.filter((s) => s.status === 'armed');
-  // The draw may leave both starts shut off from the first station until a
-  // plate is held; then there is no station to capture this time — unless it
-  // is worked at two consoles, where one holds the plate for the other.
   const station = firstSpots[0];
   if (firstSpots.some((s) => s.console === 'b')) {
-    const pair = await manBothConsoles([anna, ben]);
-    if (pair !== null) {
-      // The last shift's notes come only for an open station: leave it open, go read.
-      for (const { page } of [pair.box, pair.meter]) {
-        await page.keyboard.press('Escape');
-        await page.locator('.station-modal').waitFor({ state: 'hidden', timeout: 3000 });
-      }
-      await askForNotes(pair.meter, pair.box);
-    }
+    await bothConsolesFirst([anna, ben]);
   } else if (station === undefined || stepsTo(operator.seen, station) === Infinity) {
-    skip(
-      'station',
+    const why =
       station === undefined
         ? 'no station is armed'
-        : 'no open way from either start to the armed station',
-    );
+        : 'no open way from either start to the armed station';
+    await inGroup('devices', () => skip('station', why));
   } else {
-    if (!(await walkNear(operator.page, operator.seen, station))) {
-      throw new Error(`${operator.name} got stuck on the way to "${station.puzzleId}"`);
-    }
-    const modal = operator.page.locator('.station-modal');
-    if (!(await interactUntil(operator, modal, consoleTarget(station)))) {
-      throw new Error(
-        `${operator.name} stands at "${station.puzzleId}", but no .station-modal after ${TRIES}`,
-      );
-    }
-    await sleep(300); // past its fade-in
-    const stationSideways = await sideways(operator.page, '.station-modal .panel');
-    await capture(operator.page, 'station.png');
-    console.log(
-      `station.png        ${operator.name}: "${station.title}", panel ` +
-        (stationSideways > 0 ? `!! +${stationSideways}px sideways` : 'fits sideways'),
-    );
-    // A sync station needs the whole crew's press: the walkthrough solves it.
-    const sync = operator.seen.view.puzzle?.kind === 'button-sync';
-    await captureBothAtStation(reader, operator, station, sync);
-    // The last shift's notes come only for an open station: leave it open, go read.
-    await stepBack(operator, modal);
-    if (sync) {
-      skip(
-        'hint-*.png',
-        'notes come for an open station only: the sync station is solved, ' +
-          'and nobody has opened the next yet',
-      );
-      // Where the next station has two consoles, the crew captures both; a Signalkette it works.
-      // Both walk there by their own page's view, so both have to show the solve first.
-      await viewsCaughtUp([operator, reader]);
-      await captureConsoles(operator, reader);
-    } else {
-      await askForNotes(reader, operator);
-    }
+    await oneConsoleFirst(operator, reader, station);
   }
-  // The world on its own again: whatever the host still has open closes first.
-  const onTop = host.locator('.station-modal, .reading-modal').first();
+}
+
+/**
+ * A first station worked at two consoles (`manBothConsoles`), then left: the last shift's
+ * notes come only for an open station, so it is left open while one of the crew goes to read
+ * (hint-*.png, reading).
+ */
+async function bothConsolesFirst(players) {
+  const pair = await manBothConsoles(players);
+  if (pair === null) {
+    return;
+  }
+  for (const { page } of [pair.box, pair.meter]) {
+    await page.keyboard.press('Escape');
+    await page.locator('.station-modal').waitFor({ state: 'hidden', timeout: 3000 });
+  }
+  await inGroup('reading', () => askForNotes(pair.meter, pair.box));
+}
+
+/**
+ * A first station worked at one console: the operator walks up and opens it (station.png,
+ * devices), the reader joins at it — a sync station both press, which solves it
+ * (`captureBothAtStation`) — and the operator steps back (`stepBack`). After a sync station the
+ * crew works the next at its two consoles (`captureConsoles`); at any other the last shift's
+ * notes are asked for at its source (reading).
+ */
+async function oneConsoleFirst(operator, reader, station) {
+  if (!(await walkNear(operator.page, operator.seen, station))) {
+    throw new Error(`${operator.name} got stuck on the way to "${station.puzzleId}"`);
+  }
+  const modal = operator.page.locator('.station-modal');
+  if (!(await interactUntil(operator, modal, consoleTarget(station)))) {
+    throw new Error(
+      `${operator.name} stands at "${station.puzzleId}", but no .station-modal after ${TRIES}`,
+    );
+  }
+  await sleep(300); // past its fade-in
+  await inGroup('devices', () => shootStation(operator, station));
+  // A sync station needs the whole crew's press: the walkthrough solves it.
+  const sync = operator.seen.view.puzzle?.kind === 'button-sync';
+  await captureBothAtStation(reader, operator, station, sync);
+  // The last shift's notes come only for an open station: leave it open, go read.
+  await stepBack(operator, modal);
+  if (sync) {
+    await inGroup('reading', syncLeavesNoNotes);
+    // Where the next station has two consoles, the crew captures both; a Signalkette it works.
+    // Both walk there by their own page's view, so both have to show the solve first.
+    await viewsCaughtUp([operator, reader]);
+    await captureConsoles(operator, reader);
+  } else {
+    await inGroup('reading', () => askForNotes(reader, operator));
+  }
+}
+
+/** station.png: the operator's open panel, and whether it fits sideways. */
+async function shootStation(operator, station) {
+  const stationSideways = await sideways(operator.page, '.station-modal .panel');
+  await capture(operator.page, 'station.png');
+  console.log(
+    `station.png        ${operator.name}: "${station.title}", panel ` +
+      (stationSideways > 0 ? `!! +${stationSideways}px sideways` : 'fits sideways'),
+  );
+}
+
+/** A solved sync station leaves no station open to ask the last shift's notes for. */
+function syncLeavesNoNotes() {
+  skip(
+    'hint-*.png',
+    'notes come for an open station only: the sync station is solved, ' +
+      'and nobody has opened the next yet',
+  );
+}
+
+/**
+ * The world on its own again once the first station is done — whatever the host still has open
+ * closes first: the run's pacing window after it (perf), mission control's nudge (audio), the
+ * frame windows' word where no panel was sampled (perf), the room the station lit
+ * (lit-room.png), and each page's zoom held since the briefing (`zoomHeld`, hud).
+ */
+async function afterTheStation(anna, ben, steady) {
+  const onTop = anna.page.locator('.station-modal, .reading-modal').first();
   if (await onTop.isVisible()) {
-    await host.keyboard.press('Escape');
+    await anna.page.keyboard.press('Escape');
     await onTop.waitFor({ state: 'hidden', timeout: 3000 });
   }
-  await sampleFrames(host, 'pacing, after the station step', () => pace(anna, SAMPLE_MS));
-  await captureNudge([anna, ben]);
+  await frameWindow(anna.page, 'pacing, after the station step', () => pace(anna, SAMPLE_MS));
+  await inGroup('audio', () => captureNudge([anna, ben]));
+  await inGroup('perf', panelLeftOut);
+  await captureLitRoom(ben.page, ben.seen);
+  await inGroup('hud', () => zoomHeld(steady));
+}
+
+/** A run whose host page had no station panel open in a frame window says so. */
+function panelLeftOut() {
   if (!panelSampled) {
     skip('frames', 'no station panel was open on the host page, so none was sampled with one');
   }
-  await captureLitRoom(guest, guestSeen);
+}
 
+/**
+ * The world's zoom held: each page of `steady` — turned to its window again where it was turned
+ * — shows the canvas it started at after the briefing, whatever the HUD has brought up since.
+ */
+async function zoomHeld(steady) {
   for (const { name, page, start, turn } of steady) {
     if (turn !== undefined) {
       await page.setViewportSize({ width: turn.width, height: turn.height });
@@ -12080,26 +12800,45 @@ async function run() {
           : ` — !! the world zoom moved (HUD ${start.hud} → ${end.hud}px${banners})`),
     );
   }
+}
 
-  await playPinnedOut(anna, ben, watcher);
-  skipSignalShots();
+/**
+ * What the run left out by its end, each said where its group is on: the figures' flinch, the
+ * panel's fade and the crew celebrating (graphics), the partner never heard to one side (audio),
+ * the solved device's shot that came late and a display that never lost its colour (devices).
+ */
+async function runLeftOut() {
+  await inGroup('graphics', graphicsLeftOut);
+  await inGroup('audio', sidesLeftOut);
+  await inGroup('devices', solvedShotLeftOut);
+  await inGroup('devices', greyLeftOut);
+}
+
+/** figure-flinch.png, panel-close.png and figure-celebrate.png, where the run took none. */
+function graphicsLeftOut() {
+  if (!flinchShot) {
+    skip('figure-flinch.png', 'the walkthrough works no Signalkette in this mission');
+  }
   if (!panelCloseShot) {
     skip('panel-close.png', 'no player stepped back from a station standing open');
   }
   if (!celebrateShot) {
     skip('figure-celebrate.png', 'the walkthrough does not play this mission to a won card');
   }
+}
 
+/** The partner's side told apart once a run at least, or the run fails. */
+function sidesLeftOut() {
   if (sides.checked === 0) {
     fail("the partner's side was never told apart: the crew never stood apart sideways");
   }
+}
+
+/** device-solved.png late, and no sync station came after it to shoot again: skipped. */
+function solvedShotLeftOut() {
   if (!solvedShot.taken && solvedShot.late.length === 1) {
-    skipLateShot(); // late, and no sync station came after it to shoot again
+    skipLateShot();
   }
-  reportViews({ Anna: hostSeen, Ben: guestSeen, 'the audience': watcherSeen });
-  reportWalking();
-  await browser.close();
-  console.log('screenshots in', OUT);
 }
 
 /**
@@ -12204,7 +12943,7 @@ async function shootAround(page, name, at, tiles) {
   const width = Math.min(view.width - x, Math.round(half * 2));
   const height = Math.min(view.height - y, Math.round(half * 2));
   await page.screenshot({ path: join(OUT, name), clip: { x, y, width, height } });
-  tally.taken += 1;
+  taken(name);
   return true;
 }
 
@@ -12546,7 +13285,7 @@ async function atDensityTwo(page, look) {
 async function captureDense(cdp, name) {
   const { data } = await cdp.send('Page.captureScreenshot', { format: 'png' });
   writeFileSync(join(OUT, name), Buffer.from(data, 'base64'));
-  tally.taken += 1;
+  taken(name);
 }
 
 /**
@@ -12597,18 +13336,22 @@ async function keySceneAtTwo(player, when, quiet, shot) {
       return;
     }
     sameFrame(plain, dense, `${player.name} ${when}`);
-    await sampleFrames(player.page, `${when}, at density 2`, quiet, { gating: false });
+    await frameWindow(player.page, `${when}, at density 2`, quiet, { gating: false });
     await captureDense(cdp, shot);
     console.log(`${shot.padEnd(18)} ${player.name} ${when}: ${frameText(dense)}`);
   });
 }
 
 /**
- * Runs the walkthrough, then prints the summary as the last line. A step that
+ * Says first which groups the run leaves out or pulls in (SHOTS_ONLY, SHOTS_SKIP), runs the
+ * walkthrough, then prints the summary as the last line. A step that
  * throws ends the walkthrough there and counts as failed; the exit code is set
  * rather than forced, so a log piped through tee keeps its last lines.
  */
 async function main() {
+  for (const line of PLAN.lines) {
+    console.log(line);
+  }
   try {
     if (SERVER_ENTRY !== null) {
       await startServer();

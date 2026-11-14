@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { applyAction, initialState, parseMission, viewFor } from '../src/index.js';
+import {
+  applyAction,
+  initialState,
+  parseMission,
+  reportGrade,
+  runReport,
+  viewFor,
+} from '../src/index.js';
 import type { Action, GameState, Mission, RunEvent } from '../src/index.js';
 import { standing } from './lab.js';
 
@@ -195,5 +202,21 @@ describe('grades', () => {
     expect(viewFor(playing(), 'p1').grade).toBeNull();
     const lost = applyAction(playing(), { type: 'time-expired', at: T0 + 600_000 });
     expect(viewFor(lost, 'p1').grade).toBeNull();
+  });
+
+  it('reckons the same grade from the run’s report as the end screen does from the run', () => {
+    const runs: [number, number][] = [
+      [120_000, 0],
+      [120_000, 1],
+      [120_000, 3],
+      [120_000, 6],
+      [590_000, 0],
+    ];
+    for (const [at, alarms] of runs) {
+      const won = finished(T0 + at, alarms);
+      expect(reportGrade(runReport(won, 'QXT4'))).toEqual(viewFor(won, 'p1').grade);
+    }
+    const lost = applyAction(playing(), { type: 'time-expired', at: T0 + 600_000 });
+    expect(reportGrade(runReport(lost, 'QXT4'))).toBeNull();
   });
 });

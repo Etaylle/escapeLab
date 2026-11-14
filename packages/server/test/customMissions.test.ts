@@ -9,11 +9,11 @@ import { parseMission, type Mission, type MissionInfo } from '@escapelab/core';
 import { apiResponse } from '../src/api.js';
 import {
   MAX_MISSION_BYTES,
-  RateLimiter,
   serveCustomMissions,
   type CustomMissions,
 } from '../src/customMissions.js';
 import { MissionCatalog } from '../src/missions.js';
+import { RateLimiter } from '../src/rateLimiter.js';
 
 const SHIPPED = fileURLToPath(new URL('../../../missions', import.meta.url));
 

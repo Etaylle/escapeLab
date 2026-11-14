@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { parseRuns } from '../src/runLog.js';
+import { parseRuns } from '../src/store/jsonl.js';
 import { formatSummary, summarize } from '../src/runSummary.js';
 
 /**
