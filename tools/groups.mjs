@@ -408,7 +408,7 @@ function planLines({ on, left, pulled, refused }) {
  * less those SHOTS_SKIP names (`skip`); a group that needs another pulls it in, unless SHOTS_SKIP
  * names that one, which refuses the group. Returns the groups on and the log's lines, one for
  * each group skipped, refused or pulled in. Throws for a name no group has, and where nothing is
- * left to play.
+ * left to play — its message the plan's lines first, the refusals that emptied it among them.
  */
 export function planGroups(only, skip) {
   const asked = groupNames('SHOTS_ONLY', only);
@@ -419,13 +419,14 @@ export function planGroups(only, skip) {
   const refused = new Map();
   pullIn(on, left, pulled);
   refuse(on, refused);
+  const lines = planLines({ on, left, pulled, refused });
   if (on.size === 0) {
-    throw new Error(
+    const none =
       `SHOTS_ONLY "${only ?? ''}" and SHOTS_SKIP "${skip ?? ''}" leave no group to play: ` +
-        `the groups are ${GROUP_NAMES.join(', ')}`,
-    );
+      `the groups are ${GROUP_NAMES.join(', ')}`;
+    throw new Error([...lines, none].join('\n'));
   }
-  return { on, lines: planLines({ on, left, pulled, refused }) };
+  return { on, lines };
 }
 
 /** Whether a group of `on` reaches `stage`: the walkthrough plays it, and the stages before. */
@@ -473,4 +474,15 @@ export function spentText(spent, on) {
   const of = (group) => `${((spent.get(group) ?? 0) / 1000).toFixed(1)} s`;
   const groups = GROUP_NAMES.filter((name) => on.has(name)).map((name) => `${name} ${of(name)}`);
   return `${groups.join(', ')}; outside them ${of(null)}`;
+}
+
+/**
+ * The summary's words: the captures taken, skipped and failed, the groups of `on` played, in the
+ * table's order, and last what failed, so that a failing summary ends with its failures.
+ */
+export function summaryText({ taken, skipped, failures }, on) {
+  const played = GROUP_NAMES.filter((name) => on.has(name)).join(', ');
+  const failed = failures.length === 0 ? '' : ` — ${failures.join('; ')}`;
+  const counts = `${taken} captures taken, ${skipped} skipped, ${failures.length} failed`;
+  return `${counts} (groups ${played})${failed}`;
 }

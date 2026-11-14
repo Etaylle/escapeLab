@@ -14,6 +14,7 @@ import {
   reaches,
   spentText,
   stepGates,
+  summaryText,
 } from './groups.mjs';
 
 /** The walkthrough's source, read as text: shots.mjs runs its walkthrough as it loads. */
@@ -21,14 +22,28 @@ const SHOTS = readFileSync(fileURLToPath(new URL('./shots.mjs', import.meta.url)
 
 /**
  * Every capture the walkthrough's source names: each string literal that is a file name ending
- * in .png — a value spliced into one (`${…}`) standing as `*` — and the label of every skip line.
+ * in .png — a value spliced into a template (`${…}`, spaces and all) standing as `*` — and the
+ * label of every skip line. A name put together with `+` escapes this scan, so the walkthrough
+ * may build none (`concatenatedIn`); and every name it takes, however built, it holds to the
+ * table as it runs (shots.mjs `checkGroup`).
  */
 function capturesIn(source) {
-  const literal = /(['"`])((?:(?!\1)[^\s\\])+?\.png)\1/g;
+  const quoted = /(['"])((?:(?!\1)[^\s\\])+?\.png)\1/g;
+  const templated = /`((?:[^`\s\\$]|\$\{[^}]*\})+?\.png)`/g;
   const spliced = /\$\{[^}]*\}/g;
-  const files = [...source.matchAll(literal)].map(([, , name]) => name.replace(spliced, '*'));
+  const files = [
+    ...[...source.matchAll(quoted)].map(([, , name]) => name),
+    ...[...source.matchAll(templated)].map(([, name]) => name.replace(spliced, '*')),
+  ];
   const labels = [...source.matchAll(/\bskip\(\s*'([^']+)'/g)].map(([, label]) => label);
   return [...new Set([...files, ...labels])];
+}
+
+/** The capture names `source` puts together with `+` — a `.png` tail added on — as written. */
+function concatenatedIn(source) {
+  const appended = /\+\s*(['"`])[^'"`\n]*\.png\1/g;
+  const bare = /(['"`])\.png\1/g;
+  return [...source.matchAll(appended), ...source.matchAll(bare)].map(([found]) => found);
 }
 
 /** Every group a step of the walkthrough is gated by, as its source names it. */
@@ -63,6 +78,26 @@ describe('the capture groups against the walkthrough', () => {
     assert.ok(captures.length >= 150, `only ${captures.length} captures found`);
     assert.ok(captures.includes('beacon-sweep-b.png') && captures.includes('frames'));
     assert.ok(captures.includes('game-*.png') && captures.includes('device-phone-*-*.png'));
+  });
+
+  it('reads a name with spaces in its splice, and finds one put together with +', () => {
+    const source = [
+      "capture(page, `device-phone-${size === turned ? 'a' : 'b'}-${slug}.png`);",
+      "capture(page, 'plain.png');",
+      'capture(page, "double.png");',
+    ].join('\n');
+    assert.deepEqual(capturesIn(source).sort(), [
+      'device-phone-*-*.png',
+      'double.png',
+      'plain.png',
+    ]);
+    assert.equal(concatenatedIn(source).length, 0);
+    assert.ok(concatenatedIn("capture(page, 'menu-' + size + '.png');").length > 0);
+    assert.ok(concatenatedIn('capture(page, name + `-phone.png`);').length > 0);
+  });
+
+  it('builds no capture’s name with +, which the scan could not read', () => {
+    assert.deepEqual(concatenatedIn(SHOTS), []);
   });
 
   it('puts every capture the walkthrough names in a group', () => {
@@ -262,8 +297,16 @@ describe('planGroups — what SHOTS_ONLY and SHOTS_SKIP leave a run to play', ()
     assert.ok(plan.lines.includes('group run          skipped: SHOTS_SKIP names it'));
   });
 
-  it('throws where the two leave no group to play', () => {
-    assert.throws(() => planGroups('devices', 'run'), /leave no group to play/);
+  it('throws where the two leave no group to play, the refusal that emptied it said first', () => {
+    const refusal = 'group devices      refused: it needs run, which SHOTS_SKIP leaves out';
+    assert.throws(
+      () => planGroups('devices', 'run'),
+      ({ message }) => {
+        const lines = message.split('\n');
+        const at = lines.indexOf(refusal);
+        return at >= 0 && at < lines.length - 1 && /leave no group to play/.test(lines.at(-1));
+      },
+    );
     assert.throws(() => planGroups('run', 'run'), /leave no group to play/);
   });
 
@@ -347,6 +390,26 @@ describe('spentText — the line before the summary', () => {
     assert.equal(
       spentText(spent, on),
       'editor 0.0 s, screens 60.2 s, intro 41.0 s; outside them 12.3 s',
+    );
+  });
+});
+
+describe('summaryText — the summary’s words', () => {
+  const on = new Set(['intro', 'screens']);
+
+  it('names the groups played in the table’s order, and ends with what failed', () => {
+    const tally = { taken: 26, skipped: 1, failures: ['menu.png: off', 'frames: slow'] };
+    assert.equal(
+      summaryText(tally, on),
+      '26 captures taken, 1 skipped, 2 failed (groups screens, intro) — ' +
+        'menu.png: off; frames: slow',
+    );
+  });
+
+  it('ends with the groups played where nothing failed', () => {
+    assert.equal(
+      summaryText({ taken: 3, skipped: 0, failures: [] }, on),
+      '3 captures taken, 0 skipped, 0 failed (groups screens, intro)',
     );
   });
 });

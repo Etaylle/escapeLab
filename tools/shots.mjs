@@ -13,29 +13,31 @@
  * Groups (tools/groups.mjs): every capture, and every label a skip line carries, belongs to one of
  * fifteen groups; SHOTS_ONLY and SHOTS_SKIP, each a comma-separated list of their names, pick those
  * a run plays — a quick proof of one part. The drills, each in a room of its own before the
- * walkthrough: editor, art, drones (the danger sense, a drone close by), reconnect, restart. The
- * walkthrough's own stages: screens (the menu and its sound, the history, the lobby, the run
- * started from it), intro (the opening to blackout.png, the cold open at density 2 with it) and run
- * (the mission to the won card: the lit rooms, the finds, the audience's way in, the escape, the
- * end, and after the won Systemcheck the account's runs and its deletion). Within the run: devices
- * (every station's panel and its phone held sideways; the Serverraum's scratch mission too),
- * reading (the sources, the sign, the notes, the notepad, the books, highlight.png), hud (the game
- * at every window size, its panels, controls, minimap and sprint), graphics (the light, the glow at
- * a console, the figures, panel-close.png, the camera and density 2), audio (the beds, the radio's
- * lines, the partner's side, the music, the nudge), voice (the microphones and the links) and perf
- * (the frame windows). These need run and pull it in; SHOTS_SKIP=run refuses them. Every group left
- * out, refused or pulled in gets one line as the run begins, and what it would have captured counts
- * as neither skipped nor failed. The walkthrough plays its stages only as far as the groups on
- * reach — screens alone stops once the run is up, intro after blackout.png — a stage whose group is
- * off still opening the pages and the room, starting the run, skipping the opening or walking on,
- * as the next one needs. A capture or a check belongs to the group of the step that takes it; the
- * frame windows in screens' and intro's steps come only where that group is on as well. Without
- * either variable every group plays, as before; the summary names the groups played, the line
- * before it the seconds each took. On this Mac (an M4 with 16 GB, 2026-11-14) a full Blackout run
- * took 772 s: run 292, reconnect 114, audio 87, reading 66, graphics 52, hud 33, screens 25,
- * perf 23, art 19, devices 18, intro 12, restart 11, drones 8, editor 8 and voice 3 s;
- * SHOTS_ONLY=screens,intro took 48 s, and SHOTS_ONLY=run, the floor of a group within the run,
- * 262 s (the Systemcheck 85 s).
+ * walkthrough: editor, art, drones (the danger sense, a drone close by), reconnect, restart — and
+ * in a Systemcheck run the Serverraum's scratch mission, devices'. The walkthrough's own stages:
+ * screens (the menu and its sound, the history, the lobby, the run started from it), intro (the
+ * opening to blackout.png, the cold open at density 2 with it) and run (the mission to the won
+ * card: the lit rooms, the finds, the audience's way in, the escape, the end, and after the won
+ * Systemcheck the account's runs and its deletion). Within the run: devices (every station's panel
+ * and its phone held sideways), reading (the sources, the sign, the notes, the notepad, the books,
+ * highlight.png), hud (the game at every window size, its panels, controls, minimap and sprint),
+ * graphics (the light, the glow at a console, the figures, panel-close.png, the camera and
+ * density 2), audio (the beds, the radio's lines, the partner's side, the music, the nudge), voice
+ * (the microphones and the links) and perf (the frame windows). These need run and pull it in;
+ * SHOTS_SKIP=run refuses them. Every group left out, refused or pulled in gets one line as the run
+ * begins, and what it would have captured counts as neither skipped nor failed. The walkthrough
+ * plays its stages only as far as the groups on reach — screens alone stops once the run is up,
+ * intro after blackout.png — a stage whose group is off still opening the pages and the room,
+ * starting the run, skipping the opening or walking on, as the next one needs. A capture or a check
+ * belongs to the group of the step that takes it — checkGroup holds every capture to its step's
+ * gate, so that every run proves the table — and where that step is another group's, it comes only
+ * with that group on as well: perf's frame windows in screens' step (the menu), in intro's (the
+ * opening's shot, the lit lab and its look at density 2) and in graphics' (the open panel and the
+ * escape at density 2); voice's links after the guest's reload, which reading's notepad does; and
+ * hud's Info button after a sign read on the way, reading's too, where nobody starts at the sign.
+ * Without either variable every group plays, as before; the summary names the groups played, the
+ * line before it the seconds each took. What each costs on a machine: the README, „Nur ein Teil des
+ * Rundgangs (Gruppen)".
  *
  * SHOTS_MISSION names the mission card to start (default Blackout); the
  * crew is two players. Where the first station is a sync station, both
@@ -552,6 +554,7 @@ import {
   reaches,
   spentText,
   stepGates,
+  summaryText,
 } from './groups.mjs';
 import { lightWorkText } from './lightwork.mjs';
 import { fadeOf, meanLuma, midway } from './panelfade.mjs';
@@ -1361,16 +1364,11 @@ function soundJs(before, after, seconds) {
 
 /**
  * The run's last lines: the seconds each group played took (`groups`), then the summary — the
- * captures taken, skipped and failed, what failed, and the groups played.
+ * captures taken, skipped and failed, the groups played, and what failed (`summaryText`).
  */
 function summarize() {
-  const { skipped, failures } = tally;
-  const played = GROUP_NAMES.filter((name) => PLAN.on.has(name)).join(', ');
   console.log(`groups             ${spentText(timeByGroup.spent(), PLAN.on)}`);
-  console.log(
-    `summary            ${tally.taken} captures taken, ${skipped} skipped, ${failures.length} ` +
-      `failed${failures.length === 0 ? '' : ` — ${failures.join('; ')}`} (groups ${played})`,
-  );
+  console.log(`summary            ${summaryText(tally, PLAN.on)}`);
 }
 
 /**
