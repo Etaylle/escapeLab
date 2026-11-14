@@ -201,6 +201,75 @@ describe('a seat bound to the account', () => {
 
 });
 
+describe('a resume while the store looks up its account', () => {
+  /**
+   * The store holds back what it says of the pass of `name`'s till `answer` is called: `looked`
+   * settles once it said it.
+   */
+  function holdLookup(store: Store, name: string) {
+    const find = store.findByIdentity.bind(store);
+    let answer = (): void => undefined;
+    const held = new Promise<void>((resolve) => {
+      answer = resolve;
+    });
+    let said = (): void => undefined;
+    const looked = new Promise<void>((resolve) => {
+      said = resolve;
+    });
+    vi.spyOn(store, 'findByIdentity').mockImplementation((identity) =>
+      identity.subject === passFor(name).id
+        ? held.then(() => find(identity)).finally(said)
+        : find(identity),
+    );
+    return { answer, looked };
+  }
+
+  it('drops the resume of a device that is gone before the store answered', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const store = freshStore();
+    const { server, manager } = serverOn(store);
+    const { anna, ben, code, number, seat } = await runOfTwo(server);
+    anna.close(1006);
+    const phone = await signedIn(server, 'Phone', number);
+    const { answer, looked } = holdLookup(store, 'Phone');
+    phone.say({ kind: 'resume', code, pass: passFor('Phone') });
+    phone.close(1006);
+    answer();
+    await looked;
+    await settled();
+    // Nobody plays on Anna's seat: the crew waits for her, and her laptop comes back to it.
+    expect(ben.view.players.find((p) => p.name === 'Anna')?.connected).toBe(false);
+    const laptop = server.connect();
+    laptop.say({ kind: 'resume', code, pass: passFor('Anna') });
+    await vi.waitFor(() => {
+      expect(laptop.heard.some((m) => m.kind === 'joined') || refusalOf(laptop, 'resume')).toBe(
+        true,
+      );
+    });
+    expect([refusalOf(laptop, 'resume'), laptop.view.you.id]).toEqual([null, seat]);
+    manager.get(code).dispose();
+  });
+
+  it('looks the room up again once the store answered: one closed meanwhile seats nobody', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const store = freshStore();
+    const { server, manager } = serverOn(store);
+    const { anna, ben, code, number } = await runOfTwo(server);
+    anna.close(1006);
+    const phone = await signedIn(server, 'Phone', number);
+    const { answer, looked } = holdLookup(store, 'Phone');
+    phone.say({ kind: 'resume', code, pass: passFor('Phone') });
+    // The crew gone, the room stands empty till the server closes it.
+    ben.close(1006);
+    manager.sweep(Date.now() + 60 * 60_000);
+    answer();
+    await looked;
+    await vi.waitFor(() => expect(refusalOf(phone, 'resume')).not.toBeNull());
+    expect(refusalOf(phone, 'resume')).toMatch(/existiert nicht/);
+    expect(phone.heard.some((m) => m.kind === 'joined')).toBe(false);
+  });
+});
+
 describe('the account’s run on its devices', () => {
   it('shows the account’s run on a device signed into it, and nothing to a guest', async () => {
     vi.spyOn(console, 'log').mockImplementation(() => undefined);

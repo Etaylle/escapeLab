@@ -381,7 +381,11 @@ function send(socket: PlayerSocket, msg: ServerMessage): void {
 /** The ask for a seat each socket waits on (`Room.claim`), by how to withdraw it. */
 const asks = new WeakMap<PlayerSocket, () => void>();
 
-/** The room each socket waits for, the server about to take it up again (`hold`): how to stop. */
+/**
+ * What each socket waits for before what it asked goes again — its room, the server about to take
+ * it up again (`hold`), or the store to say the account of a resume's pass (`seatBack`): how to
+ * stop waiting. A socket that closes, or waits anew, stops.
+ */
 const holds = new WeakMap<PlayerSocket, () => void>();
 
 /** Each socket's one way to hear its room: the same for every seat it sits down on. */
@@ -767,7 +771,8 @@ function answerOf(
 /**
  * A pass back on its seat in room `msg.code`, with the snapshot its page keeps, which a server
  * that knows the room no more takes it up again from (`RoomManager.roomFor`): at once, or once
- * the newest snapshot of the crew's is in (`hold`).
+ * the newest snapshot of the crew's is in (`hold`). The room is looked up anew each time the
+ * resume goes: after the store said the pass's account (`seatBack`) too.
  */
 function comeBack(
   lab: Lab,
@@ -777,7 +782,7 @@ function comeBack(
   again: () => void,
 ): Session | null {
   const known = lookedUp(socket, msg);
-  const room = known?.room ?? lab.manager.roomFor(msg.code, msg.pass, msg.blob);
+  const room = lab.manager.roomFor(msg.code, msg.pass, msg.blob);
   if (room === null) {
     return hold(lab, socket, session, msg.code, again);
   }
@@ -806,12 +811,12 @@ function backOnSeat(
 
 /**
  * The account of a resume's pass as the store said it, for that resume to go on with (`seatBack`):
- * the room it comes back to, and the account — null for none, or for none to be had.
+ * the room's code and the pass it was asked for, and the account — null for none, or for none to
+ * be had.
  */
 interface LookedUp {
   code: string;
   passId: string;
-  room: Room;
   accountId: string | null;
 }
 
@@ -832,8 +837,9 @@ function lookedUp(
 /**
  * The seat `msg.pass` comes back to in `room`, by player id: its own — else, where seats here are
  * bound to accounts, the seat of the pass's account, without the crew's yes (`Room.takeBack`).
- * The account is asked of the store first (`known`), and the resume goes `again` once it said:
- * null meanwhile. Throws as `Room.resume` does where the pass comes back to neither.
+ * The account is asked of the store first (`known`), and the resume goes `again` once it said —
+ * unless the socket closed, or waits anew, first (`holds`): null meanwhile. Throws as
+ * `Room.resume` does where the pass comes back to neither.
  */
 function seatBack(
   lab: Lab,
@@ -848,10 +854,18 @@ function seatBack(
   }
   const { known, again } = waiting;
   if (known === undefined) {
+    let waits = true;
     const looked = (accountId: string | null): void => {
-      lookups.set(socket, { code: room.code, passId: msg.pass.id, room, accountId });
-      again();
+      if (waits) {
+        waits = false;
+        lookups.set(socket, { code: room.code, passId: msg.pass.id, accountId });
+        again();
+      }
     };
+    holds.get(socket)?.();
+    holds.set(socket, () => {
+      waits = false;
+    });
     desk.accountIdOf(msg.pass).then(looked, () => looked(null));
     return null;
   }
