@@ -309,7 +309,7 @@ place. Nothing moves. For a crew of two nothing changes (`client/test/hands.test
 Blackout for Anna, Ben and Cleo in a room of its own on the plan's seed: all three throw the main
 switch (three-lever.png); Ben reads the book while Cleo holds HALTEN, Anna cuts the box and Ben
 measures (three-plate.png, Cleo's screen); Cleo reads the clipboard while Anna and Ben work the
-Signalkette (three-hands.png, Anna's screen; three-phone-932.png, Cleo's phone; three-reader.png).
+Signalkette (three-hands.png, Anna's screen; three-reader.png; three-phone-932.png, Cleo's phone).
 Then Cleo and Ben give their seats up from the menu, the run is called off, and Anna leaves the
 room. It samples no frame window: three pages on one runner would make it lie.
 
