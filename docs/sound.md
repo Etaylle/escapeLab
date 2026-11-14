@@ -604,12 +604,13 @@ shift, one of three a night may have — says everything core's `logRadio` is ha
 `radio.start` as the clock starts, each `puzzles[].onSolved` as its station is solved,
 `radio.escape` as the hatch unlocks — each station's `nudges` while it stays quiet, and answers
 what the run does (below); the Schichtleitung (`lead`), a second voice, cuts in when it gets
-serious: the clock's calls and the last word on a run lost; the plant's announcement system
-(`pa`), a building's voice, makes the intro's announcement over the loudspeakers while the power
-is on (The opening, below) and, after the blackout, on their emergency power, the plant's
-message as an emergency starts (`map.sabotage.announce`). Who of the cast that is on a night is
-the run's to say (The cast, below). Notes of the last crew and the devices' texts are read, not
-heard. A line without a recording — a custom mission's — keeps the radio's key.
+serious: the clock's calls and the last word on a run lost — the Leitstelle on duty says them
+while no voice of the Schichtleitung is kept; the plant's announcement system (`pa`), a
+building's voice, makes the intro's announcement over the loudspeakers while the power is on
+(The opening, below) and, after the blackout, on their emergency power, the plant's message as
+an emergency starts (`map.sabotage.announce`). Who of the cast that is on a night is the run's
+to say (The cast, below). Notes of the last crew and the devices' texts are read, not heard. A
+line without a recording — a custom mission's — keeps the radio's key.
 
 **Who speaks.** The Leitstelle talks as a control room does on the radio: short, factual and
 still human — what it sees, what is next, the place in the words a person would use („mitten
@@ -650,9 +651,11 @@ calls — the first alarm, the clock, an emergency and the plant's message on it
 nudge lowest: a call cuts a nudge short but waits for a line of the story and for the call
 before it, so that it never speaks over either; a line of the story replaces older ones as the
 newer news. The banner names who speaks: the role and the person of the night's cast —
-„LEITSTELLE · MARTA", „SCHICHTLEITUNG · KESSLER" — and the radio strip under the run the role
-(„Leitstelle: …", „Schichtleitung: …"); a line of a run kept before the cast is its role's first
-person's, whose recordings it had then (client `radio.ts` `speakerOf`, `bannerFrom`). The plant's
+„LEITSTELLE · LAURA", „SCHICHTLEITUNG · MILA" — and the radio strip under the run the role
+(„Leitstelle: …", „Schichtleitung: …"); while the Schichtleitung has no voice its calls are the
+desk's, „LEITSTELLE · HELMUT", and no banner names a person nobody hears. A line of a run kept
+before the cast is the role's that speaks it now, by its first person in service (client
+`radio.ts` `speakerOf`, `bannerFrom`). The plant's
 message is banner „DURCHSAGE" and „Durchsage: …" in the run report, up 3 s at least
 (`PA_BANNER_MS`). The last word on the run never goes on the bar: the end card says it after the
 sting, before the theme, in the voice of whoever said it (The end cards, below).
@@ -730,115 +733,155 @@ the cut: a run's audio graph keeps what it had. Blackout's three:
 > langweilige Nacht.
 
 **The cast** (core `cast.ts`, its roster in `core/src/cast.json`). The roster names who can fill
-each role — a name, a line of who they are in the world's voice, the description Voice Design
-makes their voice from, and once it is kept the voice on the account and the model it reads with:
+each role — a name and a line of who they are in the world's voice — and once a voice is kept for
+them, the voice on the account and the model it reads with. How a voice is asked for stays with
+the voice script, out of the game: `packages/client/scripts/casting.json` keeps each person's
+Voice-Design prompt and the library voices offered for them, the owner's own pick from the
+ElevenLabs library (his collection „escapeLab"), and no module of the client or of core imports
+it (`test/voiceCast.test.ts` holds it), so the core chunk carries names, characters and kept
+voices alone:
 
-| Role | Person | Who they are | Voice |
-| --- | --- | --- | --- |
-| `pa` | Durchsage (`anlage`) | the plant's loudspeakers, a building's voice | to be designed |
-| `operator` | Helmut | the senior night operator, deep and slow | the library voice „Helmut - German Epic Trailer Voice" (`g1jpii0iyvtRs8fqXsd1`), `eleven_v4` |
-| `operator` | Marta | from the plant's grid control room, dry and precise | to be designed |
-| `operator` | Jonas | the youngest operator, quick, working to sound calm | to be designed |
-| `lead` | Kessler | the night's shift supervisor, low and firm | to be designed |
+| Role | Person | Who they are | Voice | Library voices offered |
+| --- | --- | --- | --- | --- |
+| `pa` | Durchsage (`anlage`) | the plant's loudspeakers, a building's voice | none kept: Helmut's five takes | „Nastassja", „Lana Weiss - Soft and Sweet" |
+| `operator` | Helmut | the senior night operator, deep and slow | „Helmut - German Epic Trailer Voice" (`g1jpii0iyvtRs8fqXsd1`), `eleven_v4` | that one, and „Helmut - Distinctive and Authentic" |
+| `operator` | Laura | from the plant's grid control room, calm and even | none kept | „Laura - Calm and Smooth" |
+| `operator` | Ben | the youngest operator, quick and casual | none kept | „Ben - Effortless and Casual" |
+| `lead` | Mila | the night's shift supervisor, young and sure of herself | none kept | „Mila - Confident and Opinionated" |
 
-A night's cast is `castOf(seed)`: for each role one of its persons in service, picked by the seed
-and the role (rng.ts `pickOf`), so that one seed always hears the same and the seeds spread over
-the persons — Helmut, Marta and Jonas a third of the nights each once all three are kept. In
-service are the persons whose voice is kept; where none of a role's is, its first: a person goes
-on duty with their voice, so that no night's lines wait for a render, and today Helmut has every
-night. The seed is the room's: each room draws a `castSeed` as it opens — a room pinned to a seed
-has that seed, so that a pinned run's cast is its own seed's — and night n is
-`castOf(castSeed + n)` (core `castFor`). So the lobby knows the next run's cast before any run
-seed is drawn, and the Funkprobe is said by the operator who then has the run; a rematch, past
-the lobby, is the next night. Every line on the air carries its speaker — the role and the
-person's id (`RunEvent.speaker`) — and every view the night's cast (`cast`); the voices, their
-prompts and models never reach a view (core `test/cast.test.ts` holds it with
-`JSON.stringify`). A snapshot of a room from before the cast is staffed from 0 on.
+Three decisions shape the cast; each was made so, not left so:
 
-Every line has a recording for each person in service who says it, named by the person and its
-words (`helmut-075e89ba063b.mp3`): the client asks for a line by both (`radioVoice.ts`
+- **The nights are the room's.** Each room draws a `castSeed` as it opens — a room pinned to a
+  seed has that seed, so that a pinned run's cast is its own seed's — and night n is
+  `castOf(castSeed + n)` (core `castFor`): for each role one of its persons on duty, picked by the
+  seed and the role (rng.ts `pickOf`), so that one seed always hears the same and the seeds spread
+  over the persons — Helmut, Laura and Ben a third of the nights each once all three are kept. So
+  the lobby knows the next run's cast before any run seed is drawn, the Funkprobe is said by the
+  operator who then has the run, and a rematch, past the lobby, is the next night. A snapshot of a
+  room from before the cast is staffed from 0 on.
+- **A person is on duty only once their voice is kept** (`inService`). Where none of a role has
+  one, the plant and the Leitstelle keep their first person, whose recordings the game has —
+  Helmut, and the plant's five takes in his voice — and the Schichtleitung nobody: its moments go
+  to the Leitstelle on duty (`speakingFor`), whose banner they carry, and every person who says a
+  role's lines needs a recording of each (`sayersOf`). No night's lines wait for a render, and
+  today Helmut has every night and the Schichtleitung's twelve lines too. A keep puts its person on
+  duty as soon as the roster has the voice, so their lines are made before it is committed: the
+  voice test holds everybody who says a line to its recording.
+- **The model is the person's.** Helmut reads on `eleven_v4`, which keeps the render of every
+  take of his; a library voice kept for somebody reads on `eleven_v4` as well, a voice made with
+  Voice Design on `eleven_v3`, which its voices are made for (ElevenLabs: on v4 they may sound less
+  performative). The manifest names the model of every take (`model`). Eleven v3 for a line that
+  carries tags of its own is only the fallback where `ELEVENLABS_MODEL` names a model that reads
+  none.
+
+Every line on the air carries its speaker — the role and the person's id (`RunEvent.speaker`) —
+and every view the night's cast (`cast`, with no Schichtleitung while it has no voice); the
+voices and their models never reach a view (core `test/cast.test.ts` holds it with
+`JSON.stringify`). Every line has a recording for each person who says it, named by the person
+and its words (`helmut-075e89ba063b.mp3`): the client asks for a line by both (`radioVoice.ts`
 `VoiceLine`), and no other person's recording stands in for a voice that has none — that line is
 keyed with the chirp, as one without a recording is. Under ElevenLabs a person reads with the
 voice the roster keeps for them, held as their role asks (`ROLE_HELD`: the Leitstelle and the
 Schichtleitung stability 0.5 and similarity 0.75 as every line was read before; the plant
 steadier, 0.8, which Eleven v3 takes as its Robust setting). Under Piper or the Mac's voice every
 person shares the one voice. The 52 recordings of before are Helmut's — 47 of the Leitstelle and
-the announcement's five, which keep his takes until the plant's voice is kept; each was checked to
+the announcement's five, filed under the plant's name until its voice is kept; each was checked to
 be his Eleven v4 take before its model was written into the list.
 
-**Hearing a voice before it is kept** (`scripts/cast.ts`, the page `/voices`). `--design
-<slot>` asks Voice Design (`eleven_ttv_v3`) for three samples of a person's voice from their
-prompt, each saying a few of their role's own lines (`DESIGN_TEXT`, the same for every person of
-a role, so that they are heard alike), into `packages/client/takes/voices/<folder>/<n>.mp3` beside
-the music's takes — a folder git ignores — numbered on after those there and listed in its
-`index.json` with the preview's id, the prompt, the text and the model. A slot is the role where
-it has one person (`pa`, `lead`, its folder named alike) and role and id where it has several
-(`operator:marta`, its folder `operator-marta`). `--keep <slot>=<n>` makes sample n the person's
-voice on the account — no credits, one of the account's voice slots — and writes its id and
-`eleven_v3` into the roster, the model Voice Design's voices are made for (ElevenLabs: on Eleven v4
-they may sound less performative); it refuses, before it asks anything, a sample it has not or whose
-file is gone. A keep puts the person on duty, so their lines are made in the same go: the voice test
-holds every person in service to their recordings. The page `/voices`, which no menu links to,
-in the shape of `/sounds`, lists each role and who can fill it — their character, the prompt, the
-voice kept — plays each person's samples where the dev server lists them (`GET /takes/voices/`,
-`GET /takes/voices/<folder>/<n>.mp3`, `ALLOW_TAKES=1` as for the music's takes; without it the page
-says „Stimmproben liefert nur der Entwicklungsserver (pnpm dev).") with „Diese Stimme besetzen"
-showing the keep command and the render that puts the voice on duty, the design command where a
-person has no samples yet, and every rendered line by its moment, naming who says it and the
-model that read it — plain, without the radio's chain, so that a voice is judged as it is. The
-page runs nothing.
+**Hearing a voice before it is kept** (`scripts/cast.ts`, the page `/voices`). A person gets a
+voice one of two ways. A library voice of the account: `--previews` fetches the preview ElevenLabs
+keeps of each voice in casting.json — the account's list of voices names its address
+(GET /v1/voices), the preview is a file of ElevenLabs' own, and neither costs a credit — into
+`packages/client/takes/voices/library/<voice id>.mp3`, beside the music's takes in a folder git
+ignores; a voice the account has not, or one without a preview, is named with why. Or a voice of
+its own design: `--design <slot>` asks Voice Design (`eleven_ttv_v3`) for three samples from the
+person's prompt, each saying a few of their role's own lines (`DESIGN_TEXT`, the same for every
+person of a role, so that they are heard alike), into `takes/voices/<folder>/<n>.mp3`, numbered on
+after those there and listed in its `index.json` with the preview's id, the prompt, the text and
+the model — the text's characters once for the three. A slot is the role where it has one person
+(`pa`, `lead`, its folder named alike) and role and id where it has several (`operator:laura`, its
+folder `operator-laura`). `--keep <slot>=<voice id>` keeps a library voice — by its id, or its name
+exactly — for the person: it asks the account's list of voices whether it has it, and nothing
+else, and writes its id and `eleven_v4` into the roster. `--keep <slot>=<n>` makes sample n the
+person's voice on the account — no credits, one of the account's voice slots — and writes its id
+and `eleven_v3`; it refuses, before it asks anything, a sample it has not or whose file is gone.
+Either refuses, before it asks anything, to give a person a new voice while takes a voice made of
+theirs exist — it says how many and what making them anew costs — unless `--replace` is given:
+then it drops those takes from the list and their files for the next render to make in the new
+voice (a recording a person made stays; a library voice that is theirs already makes nothing
+stale). The plant's five takes are Helmut's voice under its name, so its first keep needs
+`--replace`; so does any new voice for Helmut. The page `/voices`, which no menu links to, in the
+shape of `/sounds`, lists each role and who can fill it — their character, the voice kept, where
+the desk speaks for a Schichtleitung without one — and under each person the library voices
+offered for them with their previews (`GET /takes/voices/library/`, the dev server reading
+casting.json and the previews' folder; „Hörprobe fehlt" and the `--previews` command where one
+is not fetched yet) and their samples from Voice Design (`GET /takes/voices/`, the design command
+where there are none), each with „Diese Stimme besetzen", which shows the keep command —
+`--replace` in it where the person has takes — and the render that puts the voice on duty; then
+every rendered line by its moment, naming who says it and the model that read it — plain, without
+the radio's chain, so that a voice is judged as it is. The samples and previews come only from the
+dev server (`ALLOW_TAKES=1` as for the music's takes; without it the page says „Stimmproben
+liefert nur der Entwicklungsserver (pnpm dev)."). The page runs nothing.
 
-**What the cast costs** (`--plan`). `voice --plan`, with `--fresh` as the render would be run,
-says what a render would make, by whom and at what cost, without a key, a client or a tool: per
-person the lines to make now, their characters and credits at a credit a character at most, and
-those already made as the render would make them; for a person without a voice the characters
-their design reads and every line of their role once it is kept, on Eleven v3; then the kept
-cast's sum and the whole cast's. It assumes the paid plan the account holds, which a render reads
-off it. Today's `--plan --fresh`:
+**What the cast costs** (`--plan`). `voice --plan` says what a render would make, by whom and at
+what cost, without a key, a client or a tool: per person the lines to make now, their characters
+and credits at a credit a character at most — of those, the lines said for a Schichtleitung
+without a voice — and those already made as the render would make them; for a person without a
+voice that a library voice costs nothing to keep and a design its text, and every line of their
+role once one is kept; then the kept cast's sum and the whole cast's, every voice kept; and for a
+plain run what `--fresh` would make beside it. It assumes the paid plan the account holds, which
+a render reads off it. A plain render keeps every take there and makes what is missing — Helmut's
+47 takes of 2026-10-25 with them; `--fresh` makes those anew besides, which settles their licence
+(Lizenz, below). Today's `--plan`, and the cast the owner proposed, with the plant's voice kept
+over its five takes (`--replace`):
 
-| Person | Design | Lines | Credits |
-| --- | --- | --- | --- |
-| Helmut | kept | 80 | 7,917 |
-| Marta, Jonas | 228 each | 80 each | 7,917 each |
-| Durchsage | 179 | 8 | 598 |
-| Kessler | 161 | 12 | 1,226 |
-| the whole cast | 796 | 260 | 25,575 |
+| | Today | Laura, Ben, Mila, the plant kept |
+| --- | --- | --- |
+| Helmut | 45 lines, 5,160 credits — 12 of them, 1,226, the Schichtleitung's | 33 lines, 3,934 |
+| Laura, Ben | no voice yet | 80 lines, 7,917 each |
+| Mila | no voice yet: the desk speaks for her | 12 lines, 1,226 |
+| Durchsage | no voice yet: Helmut's five takes | 8 lines, 598 |
+| the render, plain | 5,160 credits | 21,592 credits, 213 lines |
+| with `--fresh` | 9,143 credits | 25,575 credits, 260 lines |
 
-A further operator costs about one render of the Leitstelle's lines: 228 credits to design and
-7,917 for its 80 lines, moods and tags included. The big render waits for the final cast: a
-voice kept anew after its lines are made makes them anew, every credit again.
+A further operator costs one render of the Leitstelle's lines: 7,917 credits for its 80 lines,
+moods and tags included, and 228 more where their voice is designed rather than a library voice.
+The big render waits for the final cast: a voice kept anew after its lines are made makes them
+anew, every credit again.
 
 **The render.** The agents write the lines and may not spend the account's credits: the 48 lines
 V-voices added and every line of a voice not yet kept await the owner, the voice test listing
-the texts (`AWAITING_RENDER`, to be emptied as they come for everyone in service). Meanwhile the
-objective bar and the Einsatzprotokoll show their words, and what is heard depends on where they
-come: the radio's lines on the bar key the radio's chirp, as every line without a recording does;
-the plant's message, the last word on the end card and the Funkprobe are silent. In the main
+the texts (`AWAITING_RENDER`, to be emptied as they come for everyone who says them). Meanwhile
+the objective bar and the Einsatzprotokoll show their words, and what is heard depends on where
+they come: the radio's lines on the bar key the radio's chirp, as every line without a recording
+does; the plant's message, the last word on the end card and the Funkprobe are silent. In the main
 checkout, whose `.env.local` holds the key — never printed — in this order:
 
 ```sh
-pnpm --filter @escapelab/client voice --plan --fresh           # the plan, no key: 26,371 in all
-pnpm --filter @escapelab/client voice --design pa              # 3 samples of the plant: 179 credits
-pnpm --filter @escapelab/client voice --design operator:marta  # Marta: 228
-pnpm --filter @escapelab/client voice --design operator:jonas  # Jonas: 228
-pnpm --filter @escapelab/client voice --design lead            # the Schichtleitung: 161
-pnpm dev                     # at the repo's root, then http://localhost:5173/voices: listen
-pnpm --filter @escapelab/client voice --keep pa=<n>            # each: no credits, a voice slot
-pnpm --filter @escapelab/client voice --keep operator:marta=<n>
-pnpm --filter @escapelab/client voice --keep operator:jonas=<n>
-pnpm --filter @escapelab/client voice --keep lead=<n>
-VOICE_ENGINE=elevenlabs pnpm --filter @escapelab/client voice --fresh   # every line: 25,575
+pnpm --filter @escapelab/client voice --plan        # 0 credits: what the render would make
+pnpm --filter @escapelab/client voice --previews    # 0 credits: the seven library voices' previews
+pnpm dev                     # at the repo's root, then http://localhost:5173/voices: listen, choose
+# only where no library voice fits a person: three samples of a voice of its own design
+pnpm --filter @escapelab/client voice --design operator:laura   # 228 credits; pa 179, lead 161
+# each keep: 0 credits — a library voice by its id, or a sample by its number
+pnpm --filter @escapelab/client voice --keep operator:laura=Qy4b2JlSGxY7I9M9Bqxb
+pnpm --filter @escapelab/client voice --keep operator:ben=aTTiK3YzK3dXETpuDE2h
+pnpm --filter @escapelab/client voice --keep lead=dCnu06FiOZma2KVNUoPZ
+pnpm --filter @escapelab/client voice --keep pa=<voice id or n> --replace   # drops Helmut's 5
+pnpm --filter @escapelab/client voice --plan        # 0 credits: the render's credits, to the last
+VOICE_ENGINE=elevenlabs pnpm --filter @escapelab/client voice   # 21,592 for that cast, plain
 ```
 
-A design reads its text once for its three samples. The render reads the account's plan first,
-free of charge, and a take made on a paid plan carries it in its render, so that `--fresh` on the
-paid plan makes anew every take made before without it — Helmut's 47 lines whose licence the repo
-cannot tell (Lizenz, below) — and a run without `--fresh` keeps them. It makes the kept cast's
-lines only, and of those only what is missing or stale by its render: a person without a voice
-is named with the commands that give them one, and a run cut short goes on where it stopped. After
-it the voice test names the `intro.lightsSec` the announcement's new lengths want in
-`missions/blackout.json`, and the 260 recordings, some 20.5 MB at the recorded lines' 867 bytes a
-character, are committed with the roster.
+The render reads the account's plan first, free of charge. It makes the kept cast's lines only,
+and of those only what is missing or stale by its render: a person without a voice is named with
+the commands that give them one, and a run cut short goes on where it stopped. The plain run keeps
+Helmut's 47 takes of 2026-10-25; `--fresh` on the paid plan makes them anew besides — 3,983 credits,
+25,575 in all for that cast — which licences them as the rest (Lizenz, below), and so does a new
+voice for Helmut, kept with `--replace` (`--keep operator:helmut=5KvpaGteYkNayiswuX2h --replace`
+keeps „Helmut - Distinctive and Authentic"). After the render the voice test names the
+`intro.lightsSec` the announcement's new lengths want in `missions/blackout.json` and the texts to
+take off `AWAITING_RENDER`, and the recordings — some 20.5 MB with the whole cast at the recorded
+lines' 867 bytes a character — are committed with the roster.
 
 ```sh
 pnpm --filter @escapelab/client voice              # record the lines that have no recording yet
@@ -878,9 +921,9 @@ roster's, not the list's. A synthetic recording carries `render`, a hash of what
 engine, the voice and its settings, the words as the engine was given them, tags and all.
 `--fresh` makes anew only what the chosen voice would make differently, so a render cut short
 goes on where it stopped and spends nothing twice, and the list is written after every line. A
-recording no line needs any more — nor anybody in service — is deleted. The files are committed
+recording no line needs any more — nor anybody who says it — is deleted. The files are committed
 (52 lines, 3.6 MB; the longest speaks 10.8 s in 127 kB); `test/voiceLines.test.ts` fails, naming
-the command, when a line has no recording for somebody in service but those awaiting their
+the command, when a line has no recording for somebody who says it but those awaiting their
 render, when a file is over 200 kB or the folder over 24 MB — raised from 12 MB for the whole
 cast's 260 recordings, some 20.5 MB at the 867 bytes a character the recordings take (from 6 MB
 to 12 MB for V-voices' 100 lines; the longest of 163 characters some 13 s and 155 kB at
@@ -893,9 +936,10 @@ written as ElevenLabs' text-to-speech skill shows it (`scripts/elevenlabs.ts`). 
 `ELEVENLABS_API_KEY`: from the environment, or from the repo's `.env.local`, which the
 ElevenLabs CLI writes (`npx -y @elevenlabs/cli@latest onboard init`) and git ignores; the script
 puts that one value into its environment and prints it nowhere. Each person reads with the voice
-and the model the roster keeps for them (core `cast.json`, The cast, above): Helmut his library
-voice on `eleven_v4`, ElevenLabs' newest and the skill's default, which speaks German among some
-90 languages; a voice kept from Voice Design on `eleven_v3`. Both read audio tags and take only
+and the model the roster keeps for them (core `cast.json`, The cast, above): a library voice —
+Helmut's, and any the owner keeps — on `eleven_v4`, ElevenLabs' newest and the skill's default,
+which speaks German among some 90 languages; a voice kept from Voice Design on `eleven_v3`. Both
+read audio tags and take only
 stability and similarity — v3 its stability as one of its three settings, Creative 0, Natural
 0.5 and Robust 1, the nearest to the hold asked for — so style and speaker boost are left out,
 and German is enforced with `language_code: de` (`ELEVENLABS_MODEL` names one model for every
@@ -911,7 +955,7 @@ characters it will spend, tags included, and asks nothing.
 pnpm --filter @escapelab/client voice --list-voices   # the account's voices: name, id, labels
 VOICE_SAMPLES_DIR=~/Desktop pnpm --filter @escapelab/client voice \
   --sample g1jpii0iyvtRs8fqXsd1 "Reaktor läuft. Alle raus, jetzt."   # one line, to listen to
-VOICE_ENGINE=elevenlabs pnpm --filter @escapelab/client voice --fresh   # the kept cast's lines
+VOICE_ENGINE=elevenlabs pnpm --filter @escapelab/client voice   # the kept cast's missing lines
 ```
 
 Every shipped line read once by each voice of the whole cast is 25,575 characters, and a run that
@@ -919,14 +963,14 @@ stops short spends nothing twice. Made on the free plan, ElevenLabs asks for att
 allows no commercial use (Lizenz, below).
 
 **A person's voice.** The page `/record`, which no menu links to, shows one line at a time — once
-for each person of the cast in service who says it, named beside its moment — in large type with
+for each person of the cast who says it, named beside its moment — in large type with
 its number and its text to copy („Text kopieren", or marked in a field where the browser keeps the
 clipboard shut), records it from the microphone, trims the silence at both ends to 120 ms in the
 browser and plays the take back for a retake or „Speichern"; a file made elsewhere — in ElevenLabs'
 web app, say — can be dropped on the line's zone instead („Audiodatei ablegen": mp3, m4a or wav;
 WebM not, which afconvert cannot read). Either goes to the server's `POST /voice/:id` — the id the
-person's and the line's, `marta-0123456789ab`; there only with `ALLOW_RECORD=1`, as `pnpm dev` sets
-it, 404 otherwise, 8 MB at most, and for a line somebody in service says — which keeps an MP3 or an
+person's and the line's, `laura-0123456789ab`; there only with `ALLOW_RECORD=1`, as `pnpm dev` sets
+it, 404 otherwise, 8 MB at most, and for a line the person says — which keeps an MP3 or an
 M4A as it came and converts a WAV with `afconvert`, and marks the line's manifest entry with its
 file, its decoded length and `source: 'human'` or `'upload'`. The game plays whatever the manifest
 names, so a person's recordings replace the synthetic ones line by line, and the voice script keeps
@@ -946,8 +990,12 @@ curl -L -o ~/.cache/escapelab-piper/de_DE-thorsten-high.onnx.json \
 
 At a run's start a page fetches the recordings' list alone, a few kB, and no recording: Blackout's
 72 texts would come to some 6 MB once all are recorded, more than a phone on mobile data should
-fetch for a run. A line's own file comes as the line is queued (`fetchLines`) — the take the run
-picked, which its event names, the server's reducer having picked it by the run's seed — and the
+fetch for a run. Nor does the service worker keep them at its install: `public/voice` — some
+20.5 MB once the whole cast speaks — is left out of its precache and its version
+(src/sw/build.ts `FETCHED_AS_NEEDED`), a line played stays in the browser's own cache, and offline
+a line not fetched before keeps the radio's chirp; the music packs (`public/music/packs`, M-packs)
+follow the same rule. A line's own file comes as the line is queued (`fetchLines`) — the take the
+run picked, which its event names, the server's reducer having picked it by the run's seed — and the
 line is decoded as it goes on the air, in one channel at 22.05 kHz (a few tens of milliseconds), so
 that a line the queue drops before its turn, a nudge a call cuts short or a line of the story a
 newer one replaces, leaves nothing decoded. The run's first line waits for the HUD to come back
@@ -1272,42 +1320,51 @@ its level let go after, nothing asked for once the lobby went, silent without a 
 gesture), `test/radio.test.ts` (what goes on the air, the plant's message and its banner, the
 ranks: a call cuts a nudge short and waits for the story and for another call, the last word kept
 for the end card and said by whoever said it, the banner's role and person, the strip's
-Leitstelle or Schichtleitung, a line of before the cast its role's first person's),
-`test/pa.test.ts` (the
-loudspeakers' band, the room's answer left to the reverb, the lines on their moments, decoded as the
-announcement starts and let go once said, cut with the power, the emergency power's band and
-dropouts, a message asked twice said once), `test/introCue.test.ts` (the script and the cue's peak
+Leitstelle or Schichtleitung, the desk's banner on a call it says for the Schichtleitung, a line of
+before the cast the speaking role's first person's), `test/pa.test.ts` (the loudspeakers' band, the
+room's answer left to the reverb, the lines on their moments, decoded as the announcement starts
+and let go once said, cut with the power, the emergency power's band and dropouts, a message asked
+twice said once), `test/introCue.test.ts` (the script and the cue's peak
 in its list, the cue streamed from where the opening stands, faded or cut, let go),
-`test/voiceLines.test.ts` (the recordings against the missions for everyone in service, their
-pace and sizes, the whole cast's room in the folder, the lines awaiting their render, each line's
-role, moment and mood against core's, the roster read as core reads it, the voice's choice, what
-Piper and `say` are given to read, the moods' tags and a line's own as Eleven v3 and v4 get them
-and older models not, the paid plan in a render, what a run keeps and makes anew — the kept cast
-alone, never a line twice — and `--plan`'s numbers), `test/voiceCast.test.ts` (the slots, a
-person's voice designed in three samples numbered on and kept into a roster of the test's own,
-the refusals before any ask; no SDK loaded), `test/voicesPage.test.tsx` (the /voices page: the
-roles and persons, the samples and the one kept, the keep, design and render commands, the
-rendered lines by moment and speaker), `test/elevenlabs.test.ts` (the key, the voices, the
+`test/voiceLines.test.ts` (the recordings against the missions for everyone who says them,
+their pace and sizes, the whole cast's room in the folder, the lines awaiting their render, each
+line's role, moment and mood against core's, the roster read as core reads it — who is in service
+and who says a role's lines — the voice's choice, what Piper and `say` are given to read, the
+moods' tags and a line's own as Eleven v3 and v4 get them and older models not, the paid plan in
+a render, what a run keeps and makes anew — the kept cast alone, the desk's lines for a
+Schichtleitung without a voice, never a line twice — `--plan`'s numbers and what `--fresh` would
+make beside a plain run), `test/voiceCast.test.ts` (the slots, the prompts and the owner's library
+voices in casting.json, which nothing of the game imports, a person's voice designed in three
+samples numbered on and kept into a roster of the test's own, a library voice kept by its id or
+its name and one the account has not refused, the keep asked by number or id, the takes a new
+voice makes stale, the refusal without `--replace` and the drop with it, the previews fetched or
+said missing; no SDK loaded), `test/voicesPage.test.tsx` (the /voices page: the roles and persons,
+the library voices with their previews or none yet, the samples and the one kept, the keep —
+`--replace` in it over takes — preview, design and render commands, the desk standing in for the
+Schichtleitung, the rendered lines by moment and speaker), `test/sw.test.ts` (none of the
+radio's recordings precached), `test/elevenlabs.test.ts` (the key, the voices, the
 request, Eleven v3's stability settings, the MP3, the retry on 429, the gap; with a client of its
 own, no request leaves), `test/record.test.tsx` and `test/recordWav.test.ts` (the /record page's
-lines once per person in service, its states, its buttons, the files it takes, the trim and the
+lines once per person who says them, its states, its buttons, the files it takes, the trim and the
 WAV), `server/test/voiceRecording.test.ts` (the switch, the size limit, a WAV converted, an MP3
-and an M4A kept, WebM turned away, a person's id and nobody out of service, the manifest),
-`server/test/takes.test.ts` (the music's takes and the voices' samples, served in dev alone),
-core `test/cast.test.ts` and `test/castOnDuty.test.ts` (the roster, castOf per seed and spread
-over 200 seeds, the role per moment, the event's role and person, tags out of everything shown,
-no voice or prompt in a view, the lobby's operator the run's), `test/music.test.ts` (pressure,
-the stem it brings, bars of four beats, a pass's period on whole bars with room for its lead bar and
-its seam, every stem's file fetched once and none decoded, a stem from its start on its first bar,
-the next pass a bar ahead of its 3 s equal-power seam and the old element rewound, a change on the
-next bar crossing over 2 s, a late element caught up, the critical stem in the last minute and the
-escape, the alarm's push and sting, a stem kept waiting for the budget, a file asked for again, the
-endings and the drain, the streamed stings), `test/sounds.test.ts` (each device's recording, the
-alarm after a buzz or an arc, the meter's hum and the colour tones still made, the device hum's
-loop), `test/coldOpen.test.tsx`, `test/finale.test.tsx` and `test/putDown.test.tsx` (the effects on
-the audio clock, the hatch's grind and its landing, a recording that failed made up by nothing, the
-mute ahead of the brickwall) and `test/audioKit.test.ts` (the budget, a recording within it, the
-loops, the census); `core/test/radioLines.test.ts` checks the lines themselves,
+and an M4A kept, WebM turned away, a person's id and nobody who does not say the line, the desk's
+take of a Schichtleitung's call, the manifest), `server/test/takes.test.ts` (the music's takes,
+the voices' samples and the library voices with their previews, served in dev alone), core
+`test/cast.test.ts` and `test/castOnDuty.test.ts` (the roster with no prompt in it, castOf per seed
+and spread over 200 seeds, nobody on duty without a voice and the desk speaking for a
+Schichtleitung without one, the role per moment, the event's role and person, tags out of
+everything shown, no voice in a view, the lobby's operator the run's), `test/music.test.ts`
+(pressure, the stem it brings, bars of four beats, a pass's period on whole bars with room for its
+lead bar and its seam, every stem's file fetched once and none decoded, a stem from its start on its
+first bar, the next pass a bar ahead of its 3 s equal-power seam and the old element rewound, a
+change on the next bar crossing over 2 s, a late element caught up, the critical stem in the last
+minute and the escape, the alarm's push and sting, a stem kept waiting for the budget, a file asked
+for again, the endings and the drain, the streamed stings), `test/sounds.test.ts` (each device's
+recording, the alarm after a buzz or an arc, the meter's hum and the colour tones still made, the
+device hum's loop), `test/coldOpen.test.tsx`, `test/finale.test.tsx` and `test/putDown.test.tsx`
+(the effects on the audio clock, the hatch's grind and its landing, a recording that failed made up
+by nothing, the mute ahead of the brickwall) and `test/audioKit.test.ts` (the budget, a recording
+within it, the loops, the census); `core/test/radioLines.test.ts` checks the lines themselves,
 `core/test/operator.test.ts` every answer once at its moment — the first alarm, the clock's calls
 and a call skipped, an emergency's start and end, the last words by time left and by cause, the
 Funkprobe in the lobby's view and turned with each run — and `core/test/variants.test.ts` the pick
@@ -1551,7 +1608,7 @@ synthesised by the game as it plays.
 | 8 pieces of music: 3 stems, 2 stings, the menu's theme and the end cards' two themes | `public/music/*.mp3` | Eleven Music | 2026-10-26, the themes 2026-11-13 | paid Creator plan, Eleven Music's terms (below) |
 | The score: 8 pieces cut from one suite, `score` | `public/music/*.m4a` | Eleven Music, `music_v2_5`, a composition plan | awaits the user's render | as the music; once kept, it replaces the pieces of the row above but for the stings |
 | The opening's cue | `public/intro/title.mp3` | Eleven Music | 2026-10-26 | as the music; the score's `title` plays in its place once kept |
-| 52 recordings by Helmut, 47 of the Leitstelle and the announcement's five; the cast's other voices and 48 lines awaiting their render | `public/voice/` | ElevenLabs text to speech: the library voice „Helmut", and the voices of the plant, the Schichtleitung and two more operators made with Voice Design once they are kept | 47 on 2026-10-25, 5 on 2026-10-26 | see below |
+| 52 recordings by Helmut, 47 of the Leitstelle and the announcement's five; the cast's other voices and 48 lines awaiting their render | `public/voice/` | ElevenLabs text to speech: the library voice „Helmut", and the cast's other voices once they are kept — library voices of the owner's pick (casting.json) or made with Voice Design | 47 on 2026-10-25, 5 on 2026-10-26 | see below |
 | Kalam, the notepad's hand | `public/fonts/` | Indian Type Foundry, 2014 | shipped since 2026-11-01 | SIL Open Font License 1.1, its text beside it |
 | Michroma, the title's face | `public/fonts/` | Vernon Adams, 2011 | shipped since 2026-11-13 | SIL Open Font License 1.1, its text beside it |
 | Caveat, the last shift's hand | Google Fonts, loaded by the page | Pablo Impallari | not shipped | SIL Open Font License 1.1 |
@@ -1578,13 +1635,13 @@ voice section of this document still reckoned with the free plan and its credit.
 say which plan the account held then. Recorded on the free plan, they need the credit
 „elevenlabs.io" and may not be used commercially; recorded on the paid plan, they are as free as the
 rest. Recording them again settles it, 3,983 characters, every line by the same voice: the
-cast's render does (A voice on the radio, „The render"). A take made on a paid plan carries
+cast's render under `--fresh` does, or a new voice for Helmut kept with `--replace` (A voice on the
+radio, „The render"); a plain render keeps them. A take made on a paid plan carries
 the plan in its render, so that `--fresh` on the paid plan makes anew every take made before
 without it, those 47 among them, and a run on the free plan would make anew the paid plan's —
-run `--fresh` on the paid plan alone. A library voice can carry conditions of its own, which
-its page in the Voice Library names; the cast's other voices — the plant's, the Schichtleitung's,
-Marta's and Jonas' — made with Voice Design from the roster's own descriptions, are the
-account's own.
+run `--fresh` on the paid plan alone. A library voice — Helmut's and the owner's other picks in
+casting.json — can carry conditions of its own, which its page in the Voice Library names; a voice
+made with Voice Design from the cast's own descriptions is the account's own.
 
 **Made as the game plays.** The radio's chain and the static under its voice, the rooms' answers
 (their impulse responses, `reverb.ts`), the meter's hum and the colour game's tones are synthesised
@@ -1595,16 +1652,14 @@ lines before Helmut did, are build tools that never ship.
 
 What the sound packages left for later, one line each, the newest first:
 
-- **The cast's voices and their lines await the owner** (V-cast, V-voices): four designs on
-  `/voices` (796 credits), four keeps, then one render of every kept voice's lines (25,575
-  credits by `--plan --fresh`, Helmut's 80 lines 7,917 of them); the commands are under „A voice
-  on the radio". Until then Helmut has every night, the new lines show their words on the
-  objective bar and in the Einsatzprotokoll, the radio's keyed with the chirp, the plant's
-  message, the last word and the Funkprobe silent, and the announcement keeps Helmut's takes;
-  the clock's calls and a lost run's word are Kessler's, keyed or silent until her voice is kept.
-- **Every voice in the precache** (V-cast): the service worker keeps all of `public/` (src/sw/
-  build.ts), the voices too — 3.6 MB today, some 20.5 MB with the whole cast — though the game
-  fetches each line only as it is queued.
+- **The cast's voices and their lines await the owner** (V-cast, V-voices): the library voices'
+  previews and `/voices` free, a keep each (free, `--replace` over the plant's five takes), then
+  one plain render of the kept cast's lines — 21,592 credits for Laura, Ben and Mila by their
+  library voices and the plant kept, 3,983 more under `--fresh` for Helmut's licence; the
+  commands are under „A voice on the radio". Until then Helmut has every night and says the
+  Schichtleitung's calls, the new lines show their words on the objective bar and in the
+  Einsatzprotokoll, the radio's keyed with the chirp, the plant's message, the last word and the
+  Funkprobe silent, and the announcement keeps Helmut's takes.
 - **The score, rendered and kept by ear** (M-music): three takes in two runs, about 26,500
   credits at the script's rate (22,080 at ElevenLabs' 900 a minute); the commands are under „Takes
   und Auswahl". Then `AWAITING_RENDER` loses the eight pieces.

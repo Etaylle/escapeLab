@@ -342,17 +342,21 @@ Funk spricht eine Besetzung (`packages/core/src/cast.json`): die Leitstelle im D
 nach jeder Lösung, wenn es still wird, beim ersten Alarm, im Notfall, mit dem Schlusswort eines
 gewonnenen Laufs und mit einer Funkprobe in der Lobby —, die Schichtleitung, wenn es ernst wird —
 bei fünf, zwei und einer Minute Restzeit und mit dem Schlusswort eines verlorenen Laufs —, und die
-Anlage über ihre Lautsprecher. Wer von Helmut, Marta und Jonas eine Nacht in der Leitstelle hat,
-lost der Seed des Raums aus; das Banner nennt Rolle und Person („LEITSTELLE · MARTA"). Eine Zeile
-darf zwei oder drei Fassungen haben, ein Lauf sagt eine; Regieanweisungen wie `[sighs]` im Text
-hört nur die Aufnahme. Die Aufnahmen liegen in `packages/client/public/voice/`, eine je Person und
-Zeile (ElevenLabs, bisher nur „Helmut"). Die übrigen Stimmen entstehen per Voice Design:
-`voice --design <rolle>` macht drei Proben, die Seite `/voices` spielt sie unter `pnpm dev` und
-dazu jede gerenderte Zeile, `voice --keep <rolle>=<n>` besetzt eine, und `voice --plan` nennt vor
-jedem Render Zeilen, Zeichen und Credits je Person (Befehle und Kosten in `docs/sound.md`). Bis
-dahin hat Helmut jede Nacht und spricht die Durchsage im Intro. Wer einen Funktext in
-`missions/*.json` ändert oder neu schreibt, nimmt ihn neu auf — der Test, der jede Zeile prüft,
-nennt den Befehl:
+Anlage über ihre Lautsprecher. Wer von Helmut, Laura und Ben eine Nacht in der Leitstelle hat,
+lost der Seed des Raums aus; das Banner nennt Rolle und Person („LEITSTELLE · LAURA"). Dienst hat
+nur, wessen Stimme besetzt ist: Solange Mila, die Schichtleitung, keine hat, spricht die
+Leitstelle im Dienst ihre Zeilen. Eine Zeile darf zwei oder drei Fassungen haben, ein Lauf sagt
+eine; Regieanweisungen wie `[sighs]` im Text hört nur die Aufnahme. Die Aufnahmen liegen in
+`packages/client/public/voice/`, eine je Person und Zeile (ElevenLabs, bisher nur „Helmut"); der
+Service Worker lädt sie nicht vorab. Eine Stimme kommt aus der Bibliothek des Kontos —
+`voice --previews` holt die Hörproben der sieben Stimmen, die `packages/client/scripts/casting.json`
+anbietet, kostenlos — oder aus Voice Design, `voice --design <rolle>` macht drei Proben; die Seite
+`/voices` spielt beides unter `pnpm dev` und dazu jede gerenderte Zeile, `voice --keep
+<rolle>=<stimmen-id oder n>` besetzt eine (über vorhandene Aufnahmen nur mit `--replace`), und
+`voice --plan` nennt vor jedem Render Zeilen, Zeichen und Credits je Person (Befehle und Kosten in
+`docs/sound.md`). Bis dahin hat Helmut jede Nacht und spricht die Durchsage im Intro. Wer einen
+Funktext in `missions/*.json` ändert oder neu schreibt, nimmt ihn neu auf — der Test, der jede
+Zeile prüft, nennt den Befehl:
 
 ```sh
 pnpm --filter @escapelab/client voice --plan     # was ein Render kostet, ohne Schlüssel
