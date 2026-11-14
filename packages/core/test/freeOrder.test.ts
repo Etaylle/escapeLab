@@ -10,6 +10,7 @@ import {
   runSeconds,
   scaleMission,
   viewFor,
+  viewForSpectator,
 } from '../src/index.js';
 import type { GameState, Mission } from '../src/index.js';
 import { everyConsole, labMission, openLab, standing, started, T0 } from './lab.js';
@@ -271,7 +272,7 @@ describe('free order: the run', () => {
     expect(stations).toEqual(['drei', 'eins', 'zwei']);
   });
 
-  it('is won with the last solve where the mission has no hatch', () => {
+  it('is won with the last solve where the mission has no hatch, every station counted', () => {
     const noHatch = started(freeLab({ map: { ...freeLab().map, exit: undefined } }));
     const won = ['zwei', 'drei', 'eins'].reduce(
       (state, id, i) => take(state, id, T0 + 1000 * (i + 1)),
@@ -279,6 +280,10 @@ describe('free order: the run', () => {
     );
     expect(won.phase).toBe('won');
     expect(won.events.at(-1)?.label).toBe('Alle Systeme online');
+    // Every screen counts the stations solved by the index: the last one too.
+    expect(won.currentPuzzleIndex).toBe(3);
+    expect(viewFor(won, 'p1').currentPuzzleIndex).toBe(3);
+    expect(viewForSpectator(won).currentPuzzleIndex).toBe(3);
   });
 
   it('deals a station the same whichever order the crew takes it in', () => {

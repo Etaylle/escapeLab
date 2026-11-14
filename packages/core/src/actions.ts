@@ -1187,8 +1187,9 @@ function advance(state: GameState, at: number): GameState {
       );
       return logRadio(unlocked, state.mission.radio.escape, at);
     }
+    // No hatch: the last solve wins the run, and every station counts as solved, as on the way out.
     return logEvent(
-      overNow(logged, 'won', at),
+      overNow({ ...logged, currentPuzzleIndex: nextIndex }, 'won', at),
       'finish',
       'Alle Systeme online',
       at,
