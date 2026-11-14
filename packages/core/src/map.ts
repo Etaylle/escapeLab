@@ -25,7 +25,7 @@ export function platePressed(state: GameState, plateId: string): boolean {
 }
 
 /** Whether the crew has solved `puzzleId`: it comes before the current one, or the run is won. */
-function solvedYet(state: GameState, puzzleId: string): boolean {
+export function solvedYet(state: GameState, puzzleId: string): boolean {
   const index = state.mission.puzzles.findIndex((p) => p.id === puzzleId);
   return index >= 0 && (state.phase === 'won' || index < state.currentPuzzleIndex);
 }

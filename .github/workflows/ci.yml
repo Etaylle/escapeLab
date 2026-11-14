@@ -49,8 +49,10 @@ jobs:
     # Setup takes 4 to 11 minutes by runner; Blackout runs 7 minutes locally and up to 12
     # on a slow runner since the opening and the gameplay captures, 2 more since the
     # reconnect drill (a crew of three, one away 80 s), 1 more since the restart drill,
-    # Systemcheck up to 8, 3 more since the Übungshalle's drill (182 s locally).
-    timeout-minutes: 43
+    # 2 more since the three drill (a crew of three to the Signalkette, 75 s on a runner),
+    # Systemcheck up to 8, 3 more since the Übungshalle's drill (182 s locally): setup, 19 and 14
+    # minutes of the two steps fit into the job's 45.
+    timeout-minutes: 45
     defaults:
       run:
         # Named, bash runs with -o pipefail: a walkthrough piped through tee
@@ -70,7 +72,7 @@ jobs:
       # ROOM_SECRET of its own: its restart drill takes the server down and brings it back.
       # The server's log is server.log in each walkthrough's folder.
       - name: Walkthrough (Blackout)
-        timeout-minutes: 17
+        timeout-minutes: 19
         env:
           SHOTS_SERVER: packages/server/src/index.ts
         run: >-

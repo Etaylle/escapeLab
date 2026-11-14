@@ -85,6 +85,19 @@ export const GROUPS = [
     ],
   },
   {
+    name: 'three',
+    stage: 'drills',
+    needs: [],
+    captures: [
+      'three',
+      'three-lever.png',
+      'three-plate.png',
+      'three-hands.png',
+      'three-phone-932.png',
+      'three-reader.png',
+    ],
+  },
+  {
     // The Übungshalle played to its won card, in a Systemcheck run.
     name: 'hall',
     stage: 'drills',
