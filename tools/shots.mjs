@@ -13890,12 +13890,13 @@ async function backInTheRun(player) {
 }
 
 /**
- * Cem's tab goes before the restart — its page away, its socket closed — and Anna's page has to
- * see him away: a seat whose line dropped before the server went down.
+ * Cem's tab goes before the restart — on to a page of the server's that is no game, /health, its
+ * socket closed and the tab's room kept — and Anna's page has to see him away: a seat whose line
+ * dropped before the server went down.
  */
 async function cemGoesFirst({ anna, cem }) {
   const gone = Date.now();
-  await cem.page.goto('about:blank');
+  await cem.page.goto(new URL('/health', BASE).href);
   if (!(await until(() => awayIn(anna.seen, 'Cem'), DRILL_STEP_MS))) {
     throw new Error('Anna’s page never saw Cem away before the restart');
   }
