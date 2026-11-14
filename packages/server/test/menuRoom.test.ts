@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FIRST_WAIT_MS, parseMission } from '@escapelab/core';
-import { LOBBY_AWAY_MS } from '../src/room.js';
+import { LOBBY_AWAY_MS, LOBBY_GONE_MS } from '../src/room.js';
 import { RoomManager } from '../src/roomManager.js';
 import { serveSockets } from '../src/sockets.js';
 import { FakeServer, joinedOf, type FakeSocket } from './line.js';
@@ -184,7 +184,10 @@ describe('leaving a run for the main menu', () => {
     expect(anna.heard.at(-1)).toMatchObject({ kind: 'error', message: 'Ben ist im Hauptmenü.' });
     ben.say({ kind: 'whereami', pass: passFor('Ben') });
     expect(ben.heard.at(-1)).toMatchObject({ kind: 'seated', seat: { code, phase: 'lobby' } });
-    vi.advanceTimersByTime(LOBBY_AWAY_MS);
+    // Held as a line down is, not freed as a tab closed for good is.
+    vi.advanceTimersByTime(LOBBY_GONE_MS + 1000);
+    expect(anna.view.players.map((p) => p.name)).toEqual(['Anna', 'Ben']);
+    vi.advanceTimersByTime(LOBBY_AWAY_MS - LOBBY_GONE_MS - 1000);
     expect(anna.view.players.map((p) => p.name)).toEqual(['Anna']);
     manager.get(code).dispose();
   });
