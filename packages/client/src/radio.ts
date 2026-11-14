@@ -1,4 +1,4 @@
-import { NUDGED, type RunEvent } from '@escapelab/core';
+import { NUDGED, speakerOf, type RunEvent } from '@escapelab/core';
 
 /**
  * How long a line stays on the air at least — a line spoken longer stays while it speaks
@@ -7,6 +7,11 @@ import { NUDGED, type RunEvent } from '@escapelab/core';
 export const BANNER_MS = 7000;
 /** The same on a touch screen, where the bar covers more of a small world. */
 export const BANNER_MS_COARSE = 4000;
+/**
+ * How long the plant's message stays up at least, on any screen: a few words of a building
+ * system, read at a glance, which the operator's line after it does not wait 7 s for.
+ */
+export const PA_BANNER_MS = 3000;
 /** How long the note that the sign was read stays up; its fade in ui.css matches. */
 export const SIGN_NOTE_MS = 3500;
 
@@ -19,38 +24,57 @@ export const NEWS_MS = 10_000;
 /** A revealed note goes on the air under the last shift's name, not mission control's. */
 export const LAST_SHIFT = 'Notiz der letzten Schicht';
 
+/** What the run report and the radio strip call the plant's message over its loudspeakers. */
+export const ANNOUNCED = 'Durchsage';
+
+/**
+ * Whether a line is the plant's: its loudspeakers' message on their emergency power, as an
+ * emergency starts (core radio.ts `speakerOf`).
+ */
+export function fromPlant(event: RunEvent): boolean {
+  return event.kind === 'radio' && event.moment !== undefined && speakerOf(event.moment) === 'pa';
+}
+
 /**
  * Whether a line is mission control's: a scripted one, or one it sent unasked because the
  * station that is up stayed quiet (a nudge).
  */
 export function fromControl(event: RunEvent): boolean {
-  return event.kind === 'radio' || event.kind === 'nudge';
+  return (event.kind === 'radio' || event.kind === 'nudge') && !fromPlant(event);
 }
 
-/** What goes on the air: mission control's lines and the notes the crew revealed. */
+/** What goes on the air: mission control's lines, the plant's, and the notes the crew revealed. */
 function onAir(event: RunEvent): boolean {
-  return fromControl(event) || event.kind === 'hint';
+  return fromControl(event) || fromPlant(event) || event.kind === 'hint';
 }
 
 /**
- * Whether a line on the air is spoken: mission control's are (world/radioVoice.ts, where a
- * recording of it exists), a note of the last shift is read, never heard.
+ * Whether a line on the air is spoken: mission control's are, over the radio (world/
+ * radioVoice.ts), and the plant's over its loudspeakers (world/pa.ts), where a recording of it
+ * exists; a note of the last shift is read, never heard.
  */
 export function voiced(event: RunEvent): boolean {
-  return fromControl(event);
+  return fromControl(event) || fromPlant(event);
 }
 
 /**
  * A line of the run report as the Einsatzprotokoll prints it: a nudge says that mission
- * control spoke up — „Leitstelle meldet sich: …" — every other line its own words.
+ * control spoke up — „Leitstelle meldet sich: …" — the plant's message that it is one —
+ * „Durchsage: …" — every other line its own words.
  */
 export function reportLine(event: RunEvent): string {
-  return event.kind === 'nudge' ? `${NUDGED}: ${event.label}` : event.label;
+  if (event.kind === 'nudge') {
+    return `${NUDGED}: ${event.label}`;
+  }
+  return fromPlant(event) ? `${ANNOUNCED}: ${event.label}` : event.label;
 }
 
 /** Who a line on the air is from, as the banner names them. */
 export function bannerFrom(event: RunEvent): string {
-  return event.kind === 'hint' ? LAST_SHIFT : 'LEITSTELLE';
+  if (event.kind === 'hint') {
+    return LAST_SHIFT;
+  }
+  return fromPlant(event) ? 'DURCHSAGE' : 'LEITSTELLE';
 }
 
 /**
@@ -109,12 +133,16 @@ export function withNews(
 }
 
 /**
- * How long a notice stays up; `coarse` for a touch screen. A line spoken over the radio for
- * `airMs` (radioVoice.ts `airtimeMs`) stays while it speaks, however long that is.
+ * How long a notice stays up; `coarse` for a touch screen. A line spoken for `airMs` — over the
+ * radio (radioVoice.ts `airtimeMs`) or the loudspeakers (pa.ts `announce`) — stays while it
+ * speaks, however long that is; the plant's message at least PA_BANNER_MS.
  */
 export function noticeMs(notice: Notice, coarse: boolean, airMs: number | null = null): number {
   if (notice.kind === 'sign') {
     return SIGN_NOTE_MS;
+  }
+  if (fromPlant(notice.event)) {
+    return Math.max(PA_BANNER_MS, airMs ?? 0);
   }
   return Math.max(coarse ? BANNER_MS_COARSE : BANNER_MS, airMs ?? 0);
 }

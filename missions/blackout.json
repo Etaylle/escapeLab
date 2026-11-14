@@ -235,7 +235,8 @@
       "penaltySec": 60,
       "windowSec": 15,
       "required": 6,
-      "afterSolved": 3
+      "afterSolved": 3,
+      "announce": "Störung im Kühlkreislauf. Relaissteuerung auf Handbetrieb."
     },
     "drones": [
       {

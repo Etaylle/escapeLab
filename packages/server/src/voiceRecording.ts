@@ -13,7 +13,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
-import { radioLines, type Mission } from '@escapelab/core';
+import { radioLines, type Mission, type Speaker } from '@escapelab/core';
 import type { ApiResponse } from './api.js';
 import { readBody } from './body.js';
 import { switchOn } from './switches.js';
@@ -149,11 +149,15 @@ export async function decodedMs(file: string): Promise<number> {
   }
 }
 
-/** A line a shipped mission puts on the air: what it says, who says it, whether it opens a run. */
+/**
+ * A line a shipped mission puts on the air: what it says, the missions that say it, whether it
+ * opens a run, and who speaks it — the plant's loudspeakers or the operator.
+ */
 export interface ShippedLine {
   text: string;
   missions: string[];
   opens: boolean;
+  speaker: Speaker;
 }
 
 /** A recording sent in: its kind, its bytes, and — for a WAV, from its header — its length. */
@@ -168,9 +172,19 @@ interface ManifestEntry {
   text: string;
   ms: number;
   missions: string[];
+  speaker: Speaker;
   opens?: true;
   source?: Source;
   file: string;
+}
+
+/**
+ * The manifest as the voice script writes it: the voices that speak the lines (kept as they
+ * are), and every recorded line by its id.
+ */
+interface Manifest {
+  [key: string]: unknown;
+  lines: Record<string, ManifestEntry>;
 }
 
 /**
@@ -194,7 +208,7 @@ export class VoiceDesk {
     let found: ShippedLine | null = null;
     for (const mission of this.missions()) {
       for (const line of radioLines(mission).filter((said) => voiceId(said.text) === id)) {
-        found ??= { text: line.text, missions: [], opens: false };
+        found ??= { text: line.text, missions: [], opens: false, speaker: line.speaker };
         if (!found.missions.includes(mission.id)) found.missions.push(mission.id);
         found.opens ||= line.when === 'start';
       }
@@ -229,7 +243,8 @@ export class VoiceDesk {
       // The line's recording of the other kind, an earlier one, goes.
       rmSync(join(this.dir, file.endsWith('.mp3') ? `${id}.m4a` : `${id}.mp3`), { force: true });
       const opening = line.opens ? { opens: true as const } : {};
-      this.note(id, { text: line.text, ms, missions: line.missions, ...opening, source, file });
+      const { text, missions, speaker } = line;
+      this.note(id, { text, ms, missions, speaker, ...opening, source, file });
       return { status: 200, body: { id, ms, source, file } };
     } finally {
       rmSync(scratch, { recursive: true, force: true });
@@ -258,15 +273,18 @@ export class VoiceDesk {
     }
   }
 
-  /** Writes `entry` into the manifest, which keeps its entries in the order of their ids. */
+  /**
+   * Writes `entry` into the manifest's lines, which it keeps in the order of their ids; the rest
+   * of the manifest — the voices — stays as it is.
+   */
   private note(id: string, entry: ManifestEntry): void {
     const file = join(this.dir, 'manifest.json');
-    const manifest = existsSync(file)
-      ? (JSON.parse(readFileSync(file, 'utf8')) as Record<string, ManifestEntry>)
-      : {};
-    manifest[id] = entry;
-    const sorted = Object.entries(manifest).sort(([a], [b]) => (a < b ? -1 : 1));
-    writeFileSync(`${file}.tmp`, `${JSON.stringify(Object.fromEntries(sorted), null, 2)}\n`);
+    const manifest: Manifest = existsSync(file)
+      ? (JSON.parse(readFileSync(file, 'utf8')) as Manifest)
+      : { lines: {} };
+    const lines = Object.entries({ ...manifest.lines, [id]: entry });
+    const sorted = Object.fromEntries(lines.sort(([a], [b]) => (a < b ? -1 : 1)));
+    writeFileSync(`${file}.tmp`, `${JSON.stringify({ ...manifest, lines: sorted }, null, 2)}\n`);
     renameSync(`${file}.tmp`, file);
   }
 }

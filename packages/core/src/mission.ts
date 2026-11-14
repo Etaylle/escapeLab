@@ -223,6 +223,11 @@ export const mapDefSchema = z.object({
        * many as the mission has, none ever comes
        */
       afterSolved: z.number().int().nonnegative().default(2),
+      /**
+       * what the plant's loudspeakers say as an emergency starts, on their emergency power: a
+       * building system's message, a word to nobody (radio.ts `announce`, client world/pa.ts)
+       */
+      announce: z.string().min(1).optional(),
     })
     .optional(),
   /**

@@ -2788,6 +2788,7 @@ async function checkRadioVoice(player, listening, after, expected = null) {
     globalThis
       .fetch('/voice/manifest.json')
       .then((res) => res.json())
+      .then((kept) => kept.lines ?? {})
       .catch(() => ({})),
   );
   const events = player.seen.view.events;
@@ -2922,7 +2923,8 @@ const LINE_RENDER_S = 3;
 async function checkRadioLine(page, missionId) {
   const render = await page.evaluate(
     async ([mission, seconds]) => {
-      const manifest = await globalThis.fetch('/voice/manifest.json').then((res) => res.json());
+      const kept = await globalThis.fetch('/voice/manifest.json').then((res) => res.json());
+      const manifest = kept.lines ?? {};
       const id = Object.keys(manifest).find(
         (key) => manifest[key].opens === true && manifest[key].missions.includes(mission),
       );

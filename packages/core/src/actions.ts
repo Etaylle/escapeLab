@@ -20,6 +20,7 @@ import { noteKey } from './notes.js';
 import { mulberry32, shuffle } from './rng.js';
 import { moduleFor, type PuzzleDef, type PuzzleState } from './puzzles/index.js';
 import type { ConsoleId, PuzzleContext } from './puzzles/module.js';
+import type { RadioMoment } from './radio.js';
 import {
   expireRelay,
   relayDefFor,
@@ -1089,7 +1090,7 @@ function clockStarts(state: GameState, at: number): GameState {
     quietSince: at,
     nudgesGiven: 0,
   };
-  return logRadio(running, state.mission.radio.start, at);
+  return logRadio(running, state.mission.radio.start, at, 'start');
 }
 
 /** Common guards for in-game actions; returns the acting player's current puzzle. */
@@ -1138,7 +1139,7 @@ function advance(state: GameState, at: number): GameState {
     `${solved?.title ?? 'Station'} gelöst`,
     at,
   );
-  const logged = logRadio(reported, solved?.onSolved, at);
+  const logged = logRadio(reported, solved?.onSolved, at, 'solved');
   const nextIndex = state.currentPuzzleIndex + 1;
   if (nextIndex >= state.mission.puzzles.length) {
     if (state.mission.map.exit !== undefined) {
@@ -1149,7 +1150,7 @@ function advance(state: GameState, at: number): GameState {
         'Notausgang entriegelt',
         at,
       );
-      return logRadio(unlocked, state.mission.radio.escape, at);
+      return logRadio(unlocked, state.mission.radio.escape, at, 'escape');
     }
     return logEvent(
       overNow(logged, 'won', at),
@@ -1184,20 +1185,31 @@ function handleEscaped(state: GameState, action: { at: number }): GameState {
   );
 }
 
-/** Append a line to the run report. */
+/** Append a line to the run report; a line heard in the run names the `moment` that brought it. */
 function logEvent(
   state: GameState,
   kind: RunEvent['kind'],
   label: string,
   at: number,
   seconds: number | null = null,
+  moment?: RadioMoment,
 ): GameState {
-  return { ...state, events: [...state.events, { at, kind, label, seconds }] };
+  const event: RunEvent =
+    moment === undefined ? { at, kind, label, seconds } : { at, kind, label, seconds, moment };
+  return { ...state, events: [...state.events, event] };
 }
 
-/** Mission control speaks up, if the mission scripted a line for this moment. */
-function logRadio(state: GameState, text: string | undefined, at: number): GameState {
-  return text === undefined ? state : logEvent(state, 'radio', text, at);
+/**
+ * A line is heard at `moment` — mission control's on the radio, or the plant's over its
+ * loudspeakers (radio.ts `speakerOf`) — if the mission scripted one for it.
+ */
+function logRadio(
+  state: GameState,
+  text: string | undefined,
+  at: number,
+  moment: RadioMoment,
+): GameState {
+  return text === undefined ? state : logEvent(state, 'radio', text, at, null, moment);
 }
 
 /** Why a run was lost: the last line of its report. */
@@ -1258,7 +1270,8 @@ function overNow(state: GameState, phase: 'won' | 'lost', at: number): GameState
 
 /**
  * An emergency interrupts whatever the crew was doing: the open puzzle is
- * dropped (its station stays armed and can be restarted afterwards).
+ * dropped (its station stays armed and can be restarted afterwards), and the
+ * plant's loudspeakers say so, where the mission gives them a message.
  */
 function startSabotage(state: GameState, action: { at: number }): GameState {
   const sabotage = state.mission.map.sabotage;
@@ -1266,7 +1279,7 @@ function startSabotage(state: GameState, action: { at: number }): GameState {
     return state;
   }
   const endsAt = action.at + sabotage.durationSec * 1000;
-  return logEvent(
+  const started = logEvent(
     {
       ...state,
       puzzleState: null,
@@ -1279,6 +1292,7 @@ function startSabotage(state: GameState, action: { at: number }): GameState {
     `Notfall: ${sabotage.label}`,
     action.at,
   );
+  return logRadio(started, sabotage.announce, action.at, 'announce');
 }
 
 /**
@@ -1618,7 +1632,7 @@ function nudge(state: GameState, at: number): GameState {
     return state;
   }
   const spoken = { ...state, nudgesGiven: state.nudgesGiven + 1, quietSince: at };
-  return logEvent(spoken, 'nudge', line, at);
+  return logEvent(spoken, 'nudge', line, at, null, 'nudge');
 }
 
 /** Guards shared by all three item actions; proximity is the server's job. */

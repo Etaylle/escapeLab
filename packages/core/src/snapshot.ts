@@ -5,6 +5,7 @@ import { missionSchema } from './mission.js';
 import type { RelayedPosition } from './protocol.js';
 import type { PuzzleState } from './puzzles/index.js';
 import type { RelayState } from './puzzles/relay.js';
+import { RADIO_MOMENTS } from './radio.js';
 import type { GameState, RunEvent } from './state.js';
 
 /**
@@ -147,6 +148,7 @@ const runEventSchema = z.looseObject({
   kind: z.custom<RunEvent['kind']>((value) => typeof value === 'string'),
   label: z.string(),
   seconds: z.number().nullable(),
+  moment: z.enum(RADIO_MOMENTS).exactOptional(),
 });
 
 const edgeworkSchema = z.looseObject({

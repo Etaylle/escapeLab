@@ -54,6 +54,21 @@ export interface SpeechClient {
   };
 }
 
+/**
+ * What the voice script asks of the SDK's client to make a voice from a description (Voice
+ * Design): three previews of it, and the account's voice from the one kept.
+ */
+export interface DesignClient {
+  readonly textToVoice: {
+    design(
+      request: ElevenLabs.VoiceDesignRequestModel,
+    ): PromiseLike<ElevenLabs.VoiceDesignPreviewResponse>;
+    create(
+      request: ElevenLabs.BodyCreateANewVoiceFromVoicePreviewV1TextToVoicePost,
+    ): PromiseLike<{ readonly voiceId: string; readonly name?: string | undefined }>;
+  };
+}
+
 /** What the sound script (sfx.ts) asks of the SDK's client: the credits left, effects, music. */
 export interface SoundClient {
   readonly user: {
@@ -71,11 +86,21 @@ export interface SoundClient {
   };
 }
 
-/** Who reads: the client, the voice by id, the model. */
+/** How a voice holds as it reads: how steady it stays, and how close to itself. */
+export interface Held {
+  readonly stability: number;
+  readonly similarityBoost: number;
+}
+
+/** The operator's hold: as every line was read before the plant had a voice of its own. */
+export const OPERATOR_HELD: Held = { stability: 0.5, similarityBoost: 0.75 };
+
+/** Who reads: the client, the voice by id, the model, and how the voice holds. */
 export interface ElevenVoice {
   readonly client: SpeechClient;
   readonly voiceId: string;
   readonly model: string;
+  readonly held: Held;
 }
 
 /**
@@ -101,7 +126,7 @@ export function loadApiKey(env: NodeJS.ProcessEnv = process.env, file = ENV_FILE
 }
 
 /** The SDK's client, which takes the key from the environment and leaves retrying to us. */
-export async function elevenClient(): Promise<SpeechClient & SoundClient> {
+export async function elevenClient(): Promise<SpeechClient & SoundClient & DesignClient> {
   const { ElevenLabsClient } = await import('@elevenlabs/elevenlabs-js');
   return new ElevenLabsClient({ maxRetries: 0 });
 }
@@ -133,21 +158,26 @@ export function resolveVoice(voices: readonly VoiceInfo[], wanted: string): Voic
   return found;
 }
 
-/** How the voice holds: Eleven v4 takes stability and similarity alone, older models more. */
-export function voiceSettings(model: string): ElevenLabs.VoiceSettings {
-  const held = { stability: 0.5, similarityBoost: 0.75 };
-  return model.startsWith('eleven_v4') ? held : { ...held, style: 0.2, useSpeakerBoost: true };
+/** How a voice holds on `model`: Eleven v4 takes stability and similarity alone, older ones more. */
+export function voiceSettings(model: string, held: Held): ElevenLabs.VoiceSettings {
+  const { stability, similarityBoost } = held;
+  const steady = { stability, similarityBoost };
+  return model.startsWith('eleven_v4') ? steady : { ...steady, style: 0.2, useSpeakerBoost: true };
 }
 
-/** What ElevenLabs is asked to read: German enforced where the model takes it. */
-export function speechRequest(text: string, model: string): ElevenLabs.BodyTextToSpeechFull {
+/** What ElevenLabs is asked to read, by a voice that holds as `held`: German where it takes it. */
+export function speechRequest(
+  text: string,
+  model: string,
+  held: Held,
+): ElevenLabs.BodyTextToSpeechFull {
   const german = model.startsWith('eleven_multilingual') ? {} : { languageCode: 'de' };
   return {
     text,
     modelId: model,
     outputFormat: ELEVEN_FORMAT,
     ...german,
-    voiceSettings: voiceSettings(model),
+    voiceSettings: voiceSettings(model, held),
   };
 }
 
@@ -185,6 +215,19 @@ function refused(error: unknown, asking: Asking): Error {
   return new Error(`${asking.tag}: ElevenLabs did not ${asking.what} (${status}): ${said}`);
 }
 
+/**
+ * Sends `request` once and returns its answer: one that asks for a voice, not for audio, which
+ * nobody waits out a 429 for. A refusal fails saying what was asked, the status and what
+ * ElevenLabs said.
+ */
+export async function elevenAsk<T>(request: () => PromiseLike<T>, asking: Asking): Promise<T> {
+  try {
+    return await request();
+  } catch (error) {
+    throw refused(error, asking);
+  }
+}
+
 const pause = (ms: number): Promise<void> => new Promise((done) => setTimeout(done, ms));
 
 /**
@@ -218,7 +261,7 @@ export function speakEleven(
   text: string,
   wait: (ms: number) => Promise<void> = pause,
 ): Promise<Buffer> {
-  const request = speechRequest(text, voice.model);
+  const request = speechRequest(text, voice.model, voice.held);
   const asking = { tag: 'voice', what: `read "${text}"` };
   return elevenAudio(() => voice.client.textToSpeech.convert(voice.voiceId, request), asking, wait);
 }

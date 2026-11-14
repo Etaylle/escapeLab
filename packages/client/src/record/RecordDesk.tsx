@@ -26,6 +26,7 @@ const MOMENTS: Readonly<Record<RadioMoment, string>> = {
   nudge: 'Hinweis',
   solved: 'Gelöst',
   escape: 'Notausgang',
+  announce: 'Durchsage im Notfall',
 };
 
 const momentOf = (line: RecordLine): string =>

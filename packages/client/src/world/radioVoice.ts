@@ -11,6 +11,7 @@ import {
   startSample,
   type Engine,
 } from './audio.js';
+import type { Speaker } from '@escapelab/core';
 import { hold, letGo } from './audioMemory.js';
 import { duck, unduck } from './mix.js';
 import { sample, type SfxId } from './samples.js';
@@ -30,7 +31,11 @@ import { sample, type SfxId } from './samples.js';
  * reject — and nothing plays while the context is held back.
  */
 
-/** Where the recordings lie, and their list: { [id]: { text, ms, missions, opens?, file } }. */
+/**
+ * Where the recordings lie, and their list: the voices that speak them (`voices`, the script's)
+ * and every recorded line by its id (`lines`: { [id]: { text, ms, missions, speaker, opens?,
+ * file } }).
+ */
 export const VOICE_BASE = '/voice/';
 export const MANIFEST_URL = `${VOICE_BASE}manifest.json`;
 
@@ -38,22 +43,27 @@ export const MANIFEST_URL = `${VOICE_BASE}manifest.json`;
 export type PersonSource = 'human' | 'upload';
 
 /**
- * One recorded line: what it says, how long it speaks, ms, the missions that say it, whether
- * it opens a run (a mission's `radio.start`), who made it — a person (`source`), or a synthetic
- * voice's render (`render`) — and its file under VOICE_BASE, an .m4a or an .mp3. The radio plays
+ * One recorded line: what it says, how long it speaks, ms, the missions that say it, who says
+ * it — the plant's loudspeakers or the operator (core radio.ts `Speaker`) — whether it opens a
+ * run (a mission's `radio.start`), who made it — a person (`source`), or a synthetic voice's
+ * render (`render`) — and its file under VOICE_BASE, an .m4a or an .mp3. The game plays
  * whatever the entry names, alike.
  */
 export interface VoiceEntry {
   readonly text: string;
   readonly ms: number;
   readonly missions: readonly string[];
+  readonly speaker: Speaker;
   readonly opens?: true;
   readonly source?: PersonSource;
   readonly render?: string;
   readonly file: string;
 }
 
-export type VoiceManifest = Readonly<Record<string, VoiceEntry>>;
+/** The recordings' list as the game reads it: every recorded line, by its id. */
+export interface VoiceManifest {
+  readonly lines: Readonly<Record<string, VoiceEntry>>;
+}
 
 /** The radio's band, Hz: each edge a fourth-order Butterworth, two biquads. */
 export const BAND_LOW = 300;
@@ -128,12 +138,13 @@ export function radioChain(ctx: BaseAudioContext, dest: AudioNode, level: number
 
 /** The manifest as lines to ids: a line on the air is found by what it says. */
 export function idsOf(manifest: VoiceManifest): Map<string, string> {
-  return new Map(Object.entries(manifest).map(([id, entry]) => [entry.text, id]));
+  return new Map(Object.entries(manifest.lines).map(([id, entry]) => [entry.text, id]));
 }
 
 /** The recordings that open a run, by id: the radio keys them with the Leitstelle's opening. */
 export function openersOf(manifest: VoiceManifest): Set<string> {
-  return new Set(Object.keys(manifest).filter((id) => manifest[id]?.opens === true));
+  const { lines } = manifest;
+  return new Set(Object.keys(lines).filter((id) => lines[id]?.opens === true));
 }
 
 /** A decoded recording, and its peak, which the chain is fed at SPEECH_PEAK. */
@@ -196,9 +207,10 @@ function manifest(): Promise<VoiceManifest | null> {
       if (loaded === null) {
         store.manifest = null;
       } else {
+        const lines = Object.entries(loaded.lines);
         store.ids = idsOf(loaded);
-        store.files = new Map(Object.entries(loaded).map(([id, entry]) => [id, entry.file]));
-        store.ms = new Map(Object.entries(loaded).map(([id, entry]) => [id, entry.ms]));
+        store.files = new Map(lines.map(([id, entry]) => [id, entry.file]));
+        store.ms = new Map(lines.map(([id, entry]) => [id, entry.ms]));
         store.openers = openersOf(loaded);
       }
       return loaded;
@@ -279,7 +291,7 @@ function peakOf(buffer: AudioBuffer): number {
 export function preloadVoice(missionId: string): void {
   manifest()
     .then((loaded) => {
-      for (const [id, entry] of Object.entries(loaded ?? {})) {
+      for (const [id, entry] of Object.entries(loaded?.lines ?? {})) {
         if (!entry.missions.includes(missionId)) continue;
         if (entry.opens === true) void decodeLine(id);
         else void bytesOf(id);
@@ -300,6 +312,15 @@ export function voiceReady(): Promise<void> {
 export function clipOf(text: string): Clip | null {
   const id = store.ids.get(text);
   return id === undefined ? null : (store.clips.get(id) ?? null);
+}
+
+/**
+ * The recording of the line `text`, decoded now where it is not yet (once, however often
+ * asked) and counted until it is let go (`releaseLine`); null where it has none, or it failed.
+ */
+export function lineClip(text: string): Promise<Clip | null> {
+  const id = store.ids.get(text);
+  return id === undefined ? Promise.resolve(null) : decodeLine(id);
 }
 
 /** How long the line `text` speaks by the manifest, ms; null before it, or without a recording. */
@@ -522,7 +543,7 @@ function whiteNoise(length: number): Float32Array {
  * as `speak` feeds it in.
  */
 async function lineAt(id: string, rate: number): Promise<Float32Array> {
-  const file = (await manifest())?.[id]?.file;
+  const file = (await manifest())?.lines[id]?.file;
   if (file === undefined) {
     throw new Error(`voice ${id}: not in the manifest`);
   }

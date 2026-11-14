@@ -18,6 +18,7 @@ import {
   airIcon,
   bannerFrom,
   followsSolve,
+  fromPlant,
   noticeMs,
   radioNews,
   voiced,
@@ -56,6 +57,7 @@ import { coversArmed } from '../world/interact.js';
 import { isArmed, known } from '../world/known.js';
 import { dueParts } from '../world/markers.js';
 import { startingSpot, type KnownPositions } from '../world/movement.js';
+import { announce, stopAnnounce } from '../world/pa.js';
 import {
   airtimeMs,
   preloadLines,
@@ -370,11 +372,15 @@ export interface NoticeGates {
 }
 
 /**
- * A line goes on the air as it shows: mission control's spoken over the radio where it has a
- * recording (world/radioVoice.ts), every other keyed with the radio's chirp. Returns how long
- * a spoken line keeps the air, ms; null for a chirp.
+ * A line goes on the air as it shows: the plant's message over its loudspeakers on their
+ * emergency power (world/pa.ts), silent without a recording; mission control's spoken over the
+ * radio where it has a recording (world/radioVoice.ts), every other keyed with the radio's
+ * chirp. Returns how long a spoken line keeps the air, ms; null for a chirp or silence.
  */
 function airLine(event: RunEvent): number | null {
+  if (fromPlant(event)) {
+    return announce(event.label);
+  }
   if (voiced(event) && sayLine(event.label)) {
     return airtimeMs(event.label);
   }
@@ -403,7 +409,13 @@ function useNotices(view: PlayerView, gates: NoticeGates): Notice | null {
   useEffect(() => {
     preloadVoice(view.missionId);
   }, [view.missionId, view.startedAt]);
-  useEffect(() => stopVoice, []);
+  useEffect(
+    () => () => {
+      stopVoice();
+      stopAnnounce();
+    },
+    [],
+  );
 
   useEffect(() => {
     const now = Date.now();

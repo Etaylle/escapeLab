@@ -73,10 +73,10 @@ function offAir(lines: readonly string[]): string[] {
   );
 }
 
-/** Every line `mission` can put on the air, in the order a run hears them. */
+/** Every line the operator can put on the air in `mission`, in the order a run hears them. */
 const textsOf = (mission: Mission): string[] =>
   radioLines(mission)
-    .filter((line) => line.when !== 'pa')
+    .filter((line) => line.speaker === 'operator')
     .map((line) => line.text);
 
 /** Every line of the intro's announcement over the loudspeakers, in its order. */
@@ -85,13 +85,19 @@ const announcementOf = (mission: Mission): string[] =>
     .filter((line) => line.when === 'pa')
     .map((line) => line.text);
 
+/** Every message the loudspeakers say after the blackout, on their emergency power. */
+const messagesOf = (mission: Mission): string[] =>
+  radioLines(mission)
+    .filter((line) => line.speaker === 'pa' && line.when !== 'pa')
+    .map((line) => line.text);
+
 /**
  * Every line on the air of `mission` but its start that names the Leitstelle: its call sign
- * comes once. The loudspeakers are no radio: the desk names itself there as a plant's does.
+ * comes once. The loudspeakers are no radio: the plant names the desk there as a plant does.
  */
 const callsAfterStart = (mission: Mission): string[] =>
   radioLines(mission)
-    .filter((line) => line.when !== 'start' && line.when !== 'pa')
+    .filter((line) => line.when !== 'start' && line.speaker === 'operator')
     .filter((line) => /\bLeitstelle\b/.test(line.text))
     .map((line) => line.text);
 
@@ -201,6 +207,7 @@ describe('the radio-line guard', () => {
     const loud = {
       radio: { start: 'Los!', escape: 'Raus, jetzt!' },
       puzzles: [{ id: 'p', nudges: ['Hier lang!'], onSolved: 'Gut.' }],
+      map: {},
     } as unknown as Mission;
     expect(callingOut(loud)).toEqual(['Los!', 'Hier lang!']);
   });
@@ -272,6 +279,14 @@ describe.each(byId)('the radio in mission %s', (_id, mission) => {
 
   it(`announces over the loudspeakers as a plant does: ${PA_WORDS_MAX} words a line`, () => {
     expect(offSpeaker(announcementOf(mission))).toEqual([]);
+    expect(offSpeaker(messagesOf(mission))).toEqual([]);
+  });
+
+  it('has every line said by its speaker: the loudspeakers the plant’s, the operator the rest', () => {
+    for (const line of radioLines(mission)) {
+      const plant = line.when === 'pa' || line.when === 'announce';
+      expect(line.speaker, line.text).toBe(plant ? 'pa' : 'operator');
+    }
   });
 
   it('gives the call sign in the run’s first line and in no other', () => {
@@ -302,6 +317,15 @@ describe('the Leitstelle over Blackout’s loudspeakers', () => {
   it('makes the shift’s announcement in four to six lines', () => {
     expect(lines.length).toBeGreaterThanOrEqual(4);
     expect(lines.length).toBeLessThanOrEqual(Math.min(6, PA_LINES_MAX));
+  });
+
+  it('says, on its emergency power, as the emergency starts what fails: a few words, no more', () => {
+    const messages = blackout === undefined ? [] : messagesOf(blackout);
+    expect(messages).toEqual([blackout?.map.sabotage?.announce]);
+    for (const message of messages) {
+      expect(wordsIn(message), message).toBeLessThanOrEqual(10);
+      expect(message).not.toMatch(/\bLeitstelle\b/);
+    }
   });
 
   it('opens with who speaks and the time, and gives its own people a routine word', () => {
@@ -352,21 +376,34 @@ describe('the lines a mission can put on the air', () => {
       'start',
       ...ids.flatMap(station),
       'escape',
+      'announce',
     ]);
-    expect(lines[0]).toEqual({ text: blackout.intro?.pa[0], when: 'pa', puzzleId: null });
-    expect(lines[pa.length]).toEqual({ text: blackout.radio.start, when: 'start', puzzleId: null });
-    expect(lines.at(-1)).toEqual({ text: blackout.radio.escape, when: 'escape', puzzleId: null });
+    const plant = { puzzleId: null, speaker: 'pa' };
+    const operator = { puzzleId: null, speaker: 'operator' };
+    expect(lines[0]).toEqual({ ...plant, text: blackout.intro?.pa[0], when: 'pa' });
+    expect(lines[pa.length]).toEqual({ ...operator, text: blackout.radio.start, when: 'start' });
+    expect(lines.at(-2)).toEqual({ ...operator, text: blackout.radio.escape, when: 'escape' });
+    const announce = blackout.map.sabotage?.announce;
+    expect(lines.at(-1)).toEqual({ ...plant, text: announce, when: 'announce' });
     const first = blackout.puzzles[0];
+    const at = { puzzleId: first?.id, speaker: 'operator' };
     expect(lines.slice(pa.length + 1, pa.length + 4)).toEqual([
-      { text: first?.nudges[0], when: 'nudge', puzzleId: first?.id },
-      { text: first?.nudges[1], when: 'nudge', puzzleId: first?.id },
-      { text: first?.onSolved, when: 'solved', puzzleId: first?.id },
+      { ...at, text: first?.nudges[0], when: 'nudge' },
+      { ...at, text: first?.nudges[1], when: 'nudge' },
+      { ...at, text: first?.onSolved, when: 'solved' },
     ]);
   });
 
   it('leaves out what a mission does not say', () => {
     const quiet = missions.map(
-      (m) => ({ ...m, intro: undefined, radio: {}, puzzles: [] }) as unknown as Mission,
+      (m) =>
+        ({
+          ...m,
+          intro: undefined,
+          radio: {},
+          puzzles: [],
+          map: { ...m.map, sabotage: undefined },
+        }) as unknown as Mission,
     );
     expect(quiet.flatMap(radioLines)).toEqual([]);
   });

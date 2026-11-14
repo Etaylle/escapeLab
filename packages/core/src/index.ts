@@ -58,7 +58,14 @@ export {
   waitingFor,
   type Action,
 } from './actions.js';
-export { radioLines, type RadioLine, type RadioMoment } from './radio.js';
+export {
+  RADIO_MOMENTS,
+  radioLines,
+  speakerOf,
+  type RadioLine,
+  type RadioMoment,
+  type Speaker,
+} from './radio.js';
 export {
   clockStartOf,
   runReport,

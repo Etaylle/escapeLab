@@ -33,26 +33,31 @@ const LEVER_LINE =
   'Kasten ist im Maschinenraum, das Prüfpult im Flur.';
 const START_LINE = 'Leitstelle an Nachtschicht. Stromausfall im ganzen Trakt.';
 const MANIFEST: VoiceManifest = {
-  // A file a person put on the /record page, an MP3: the radio plays whatever the entry names.
-  aaaaaaaaaaaa: {
-    text: LEVER_LINE,
-    ms: 2000,
-    missions: ['blackout'],
-    source: 'upload',
-    file: 'aaaaaaaaaaaa.mp3',
-  },
-  bbbbbbbbbbbb: {
-    text: 'Beide hin.',
-    ms: 900,
-    missions: ['systemcheck'],
-    file: 'bbbbbbbbbbbb.m4a',
-  },
-  cccccccccccc: {
-    text: START_LINE,
-    ms: 2500,
-    missions: ['blackout'],
-    opens: true,
-    file: 'cccccccccccc.m4a',
+  lines: {
+    // A file a person put on the /record page, an MP3: the radio plays whatever the entry names.
+    aaaaaaaaaaaa: {
+      text: LEVER_LINE,
+      ms: 2000,
+      missions: ['blackout'],
+      speaker: 'operator',
+      source: 'upload',
+      file: 'aaaaaaaaaaaa.mp3',
+    },
+    bbbbbbbbbbbb: {
+      text: 'Beide hin.',
+      ms: 900,
+      missions: ['systemcheck'],
+      speaker: 'operator',
+      file: 'bbbbbbbbbbbb.m4a',
+    },
+    cccccccccccc: {
+      text: START_LINE,
+      ms: 2500,
+      missions: ['blackout'],
+      speaker: 'operator',
+      opens: true,
+      file: 'cccccccccccc.m4a',
+    },
   },
 };
 

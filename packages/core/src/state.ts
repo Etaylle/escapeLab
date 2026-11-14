@@ -5,6 +5,7 @@ import type { Edgework } from './edgework.js';
 import type { Mission } from './mission.js';
 import type { PuzzleState } from './puzzles/index.js';
 import type { RelayState } from './puzzles/relay.js';
+import type { RadioMoment } from './radio.js';
 
 export type Phase = 'lobby' | 'playing' | 'won' | 'lost';
 
@@ -40,6 +41,12 @@ export interface RunEvent {
   label: string;
   /** seconds lost, for penalty and hint lines */
   seconds: number | null;
+  /**
+   * on a line heard in the run (`radio`, `nudge`): the moment that brought it, which says who
+   * speaks it and how it ranks on the air (radio.ts); left out on every other line, and on the
+   * lines of a run kept before it was noted
+   */
+  moment?: RadioMoment;
 }
 
 /**

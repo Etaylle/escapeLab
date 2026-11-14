@@ -3,11 +3,14 @@ import type { RunEvent } from '@escapelab/core';
 import {
   AFTER_SOLVE_MS,
   airIcon,
+  ANNOUNCED,
   bannerFrom,
   followsSolve,
   fromControl,
+  fromPlant,
   NEWS_MS,
   noticeMs,
+  PA_BANNER_MS,
   radioNews,
   reportLine,
   voiced,
@@ -102,6 +105,45 @@ describe('mission control speaking up unasked (a nudge)', () => {
       icon: 'radio',
       text: 'Leitstelle: Die Betriebsanleitung liegt im Archiv.',
     });
+  });
+});
+
+describe('the plant’s loudspeakers on their emergency power (an emergency’s message)', () => {
+  const message: RunEvent = {
+    at: NOW - 500,
+    kind: 'radio',
+    label: 'Störung im Kühlkreislauf. Relaissteuerung auf Handbetrieb.',
+    seconds: null,
+    moment: 'announce',
+  };
+  const notice: Notice = { kind: 'line', event: message, notBefore: 0 };
+
+  it('goes on the air as the plant’s, not mission control’s, and is spoken there', () => {
+    expect(labels(radioNews([event('sabotage', 500), message], 0, NOW))).toEqual([message.label]);
+    expect(fromPlant(message)).toBe(true);
+    expect(fromControl(message)).toBe(false);
+    expect(voiced(message)).toBe(true);
+    expect(bannerFrom(message)).toBe('DURCHSAGE');
+    expect(reportLine(message)).toBe(`${ANNOUNCED}: ${message.label}`);
+    expect(tickerLine(message, undefined, false)).toEqual({
+      icon: 'radio',
+      text: `Durchsage: ${message.label}`,
+    });
+    // The operator's lines stay his, the moment or not.
+    const start: RunEvent = { ...event('radio', 0, 'Los.'), moment: 'start' };
+    expect([fromPlant(start), fromControl(start), bannerFrom(start)]).toEqual([
+      false,
+      true,
+      'LEITSTELLE',
+    ]);
+    expect(fromPlant(event('radio', 0))).toBe(false);
+  });
+
+  it('stays up while it speaks, 3 s at least on any screen: the operator’s line waits on it', () => {
+    expect(PA_BANNER_MS).toBe(3000);
+    expect(noticeMs(notice, false)).toBe(3000);
+    expect(noticeMs(notice, true, 2100)).toBe(3000);
+    expect(noticeMs(notice, false, 4200)).toBe(4200);
   });
 });
 

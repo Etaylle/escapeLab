@@ -42,26 +42,31 @@ const START = blackout.radio.start ?? '';
 const NUDGE = blackout.puzzles[0]?.nudges[0] ?? '';
 const SECOND = blackout.puzzles[0]?.nudges[1] ?? '';
 const MANIFEST: VoiceManifest = {
-  [voiceId(START)]: {
-    text: START,
-    ms: 9500,
-    missions: ['blackout'],
-    opens: true,
-    file: `${voiceId(START)}.m4a`,
-  },
-  [voiceId(NUDGE)]: {
-    text: NUDGE,
-    ms: 4400,
-    missions: ['blackout'],
-    source: 'human',
-    file: `${voiceId(NUDGE)}.m4a`,
-  },
-  [voiceId(SECOND)]: {
-    text: SECOND,
-    ms: 5100,
-    missions: ['blackout'],
-    source: 'upload',
-    file: `${voiceId(SECOND)}.mp3`,
+  lines: {
+    [voiceId(START)]: {
+      text: START,
+      ms: 9500,
+      missions: ['blackout'],
+      speaker: 'operator',
+      opens: true,
+      file: `${voiceId(START)}.m4a`,
+    },
+    [voiceId(NUDGE)]: {
+      text: NUDGE,
+      ms: 4400,
+      missions: ['blackout'],
+      speaker: 'operator',
+      source: 'human',
+      file: `${voiceId(NUDGE)}.m4a`,
+    },
+    [voiceId(SECOND)]: {
+      text: SECOND,
+      ms: 5100,
+      missions: ['blackout'],
+      speaker: 'operator',
+      source: 'upload',
+      file: `${voiceId(SECOND)}.mp3`,
+    },
   },
 };
 
@@ -103,7 +108,11 @@ describe('the lines the page offers', () => {
     expect(nudge?.recording).toEqual(human);
     expect(second?.recording).toMatchObject({ source: 'upload', file: `${voiceId(SECOND)}.mp3` });
     expect(solved).toMatchObject({ when: 'solved', station: 'Notlicht', recording: null });
-    expect(lines.at(-1)).toMatchObject({ when: 'escape', station: null });
+    // The escape, then the loudspeakers' message as an emergency starts.
+    expect(lines.slice(-2)).toMatchObject([
+      { when: 'escape', station: null },
+      { when: 'announce', station: null, text: blackout.map.sabotage?.announce },
+    ]);
   });
 
   it('list a line two missions say once, under both', () => {
