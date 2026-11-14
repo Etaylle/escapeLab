@@ -16,7 +16,7 @@
  * environment, as the voice script's does (elevenlabs.ts `loadApiKey`), and is printed nowhere.
  *
  * Runs on Node's own TypeScript (type stripping), as the voice script does, and measures the
- * file with macOS's afconvert (scripts/sfx.ts `parseWav`, `loudnessOf`).
+ * file with macOS's afconvert (scripts/pcm.ts `parseWav`, `loudnessOf`).
  */
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -26,7 +26,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { ElevenLabs } from '@elevenlabs/elevenlabs-js';
 import { loadApiKey } from './elevenlabs.ts';
-import { loudnessOf, parseWav } from './sfx.ts';
+import { loudnessOf, parseWav } from './pcm.ts';
 
 /** What the cue is asked to be: a bed under an announcement, no tune to talk over. */
 export const CUE_PROMPT =

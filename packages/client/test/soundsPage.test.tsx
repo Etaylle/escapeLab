@@ -11,6 +11,7 @@ import {
   noisyTakes,
   optionsOf,
   readCatalog,
+  recordingsOf,
   TAKES_DIR,
   type Manifest,
   type TakeRecord,
@@ -124,7 +125,7 @@ describe('the command for the sounds ticked', () => {
 
 describe('the listing', () => {
   it('names every sound of the catalog once, in sections by kind, in the catalog’s order', () => {
-    const catalog = soundsOf(readCatalog());
+    const catalog = soundsOf(recordingsOf(readCatalog()));
     const sections = listingOf(catalog, {});
     expect(sections.map((section) => section.title)).toEqual([
       'Effekte',
@@ -135,7 +136,7 @@ describe('the listing', () => {
     ]);
     const listed = sections.flatMap((section) => section.rows.map((row) => row.sound.id));
     expect(listed.sort()).toEqual(catalog.map((sound) => sound.id).sort());
-    expect(catalog).toHaveLength(readCatalog().length);
+    expect(catalog).toHaveLength(recordingsOf(readCatalog()).length);
     for (const section of sections) {
       expect(section.rows.every((row) => row.sound.kind === section.kind)).toBe(true);
     }
@@ -166,7 +167,8 @@ describe('the listing', () => {
     const read = (dir: string): Manifest =>
       JSON.parse(readFileSync(join(dir, MANIFEST), 'utf8')) as Manifest;
     const manifests = { sfx: read(DIRS.sfx), music: read(DIRS.music) };
-    const rows = listingOf(soundsOf(catalog), { ...manifests.sfx, ...manifests.music });
+    const recordings = { ...manifests.sfx, ...manifests.music };
+    const rows = listingOf(soundsOf(recordingsOf(catalog)), recordings);
     const flagged = rows.flatMap((section) => section.rows.filter((row) => row.noisy));
     const ids = (list: readonly { readonly id: string }[]): string[] =>
       list.map(({ id }) => id).sort();

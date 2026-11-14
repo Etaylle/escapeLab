@@ -1,18 +1,16 @@
-import { createHash } from 'node:crypto';
-import {
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readdirSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import type { ElevenLabs } from '@elevenlabs/elevenlabs-js';
 import type { SoundClient } from '../scripts/elevenlabs.js';
+import {
+  FLOOR_WINDOW_MS,
+  floorOf,
+  loudnessOf,
+  parseWav,
+  silenceOf,
+  type Pcm,
+} from '../scripts/pcm.js';
 import {
   asTakes,
   AUDIBLE_FLOOR_DBFS,
@@ -22,19 +20,17 @@ import {
   creditsLeft,
   effectRequest,
   flawsOf,
-  FLOOR_WINDOW_MS,
   floorHeard,
-  floorOf,
   gainOf,
   groupOf,
   hashOf,
   heardDbfs,
   influencesFor,
+  isSuite,
   keepTake,
   LEAD_MS,
   LENGTHS,
   lengthOff,
-  loudnessOf,
   make,
   MASKED_WITHIN_DB,
   MAX_MUSIC_TAKES,
@@ -46,7 +42,6 @@ import {
   noisyTakes,
   offLength,
   optionsOf,
-  parseWav,
   pickTake,
   planLines,
   planOf,
@@ -57,10 +52,8 @@ import {
   refuseBelow,
   remakeArgs,
   remakeCommands,
-  renderWith,
   runWith,
   settingsOf,
-  silenceOf,
   startMsOf,
   takesLines,
   TARGETS,
@@ -68,15 +61,26 @@ import {
   upToDate,
   type Bench,
   type CatalogEntry,
+  type CatalogItem,
   type Floor,
   type Keep,
   type Manifest,
   type ManifestEntry,
-  type Pcm,
   type Places,
   type Studio,
   type Take,
 } from '../scripts/sfx.js';
+import {
+  answering,
+  benchOf,
+  digest,
+  piece,
+  placesIn,
+  runOf,
+  studioOf,
+  toneAfter,
+  wavOf,
+} from './sfxFakes.js';
 
 /**
  * The sound script against a client of the tests' own — no request ever leaves — and PCM
@@ -84,6 +88,8 @@ import {
  */
 
 const catalog = readCatalog();
+/** The catalog's sounds, each made on its own: every item but the suites. */
+const sounds = catalog.filter((item): item is CatalogEntry => !isSuite(item));
 
 const CLACK: CatalogEntry = {
   id: 'test-clack',
@@ -121,23 +127,23 @@ describe('the catalog', () => {
       sting: { measure: 'rms', dbfs: -14 },
       theme: { measure: 'rms', dbfs: -20 },
     });
-    for (const entry of catalog) expect(entry.target, entry.id).toEqual(TARGETS[entry.kind]);
+    for (const entry of sounds) expect(entry.target, entry.id).toEqual(TARGETS[entry.kind]);
   });
 
   it('has the stems, the menu’s theme too, in one key and tempo, 60–90 s, stings 8–12 s', () => {
-    const stems = catalog.filter((entry) => entry.kind === 'stem');
+    const stems = sounds.filter((entry) => entry.kind === 'stem');
     expect(stems.map((entry) => entry.id)).toEqual(['calm', 'tense', 'critical', 'menu-theme']);
     for (const stem of stems) {
       expect(stem.prompt, stem.id).toMatch(/A minor, 90 BPM/);
       expect(stem.durationSeconds).toBeGreaterThanOrEqual(60);
       expect(stem.durationSeconds).toBeLessThanOrEqual(90);
     }
-    const stings = catalog.filter((entry) => entry.kind === 'sting').map((entry) => entry.id);
+    const stings = sounds.filter((entry) => entry.kind === 'sting').map((entry) => entry.id);
     expect(stings).toEqual(['won', 'lost']);
   });
 
   it('has the end cards’ two themes: 30–40 s, played once, made at 128 kbit/s', () => {
-    const themes = catalog.filter((entry) => entry.kind === 'theme');
+    const themes = sounds.filter((entry) => entry.kind === 'theme');
     expect(themes.map((entry) => entry.id)).toEqual(['end-won', 'end-lost']);
     expect(LENGTHS.theme).toEqual([30, 40]);
     for (const theme of themes) {
@@ -194,7 +200,7 @@ describe('the catalog', () => {
     const prompt = CALM.prompt.replace('90', '120');
     const quicker = { ...CALM, id: 'test-quick', prompt, bpm: 120 };
     expect(() => checkCatalog([CALM, quicker])).toThrow(/share one tempo, not 90, 120 bpm/);
-    for (const stem of catalog.filter((entry) => entry.kind === 'stem')) {
+    for (const stem of sounds.filter((entry) => entry.kind === 'stem')) {
       expect(stem.bpm, stem.id).toBe(90);
     }
     expect(hashOf({ ...CALM, bpm: 120 })).toBe(hashOf(CALM)); // the tempo asks nothing anew
@@ -211,7 +217,7 @@ describe('a request', () => {
       modelId: 'eleven_text_to_sound_v2',
       outputFormat: 'mp3_44100_128',
     });
-    const bed = catalog.find((entry) => entry.id === 'bed-server') as CatalogEntry;
+    const bed = sounds.find((entry) => entry.id === 'bed-server') as CatalogEntry;
     expect(effectRequest(bed).loop).toBe(true);
     expect(effectRequest(CLACK, 0.9).promptInfluence).toBe(0.9);
   });
@@ -444,50 +450,6 @@ describe('a run', () => {
   });
 });
 
-/** A WAV file as afconvert writes one: 16-bit PCM, interleaved, a chunk before the data. */
-function wavOf(rate: number, channels: readonly number[][]): Uint8Array<ArrayBuffer> {
-  const frames = channels[0]?.length ?? 0;
-  const data = frames * channels.length * 2;
-  const bytes = new Uint8Array(12 + 24 + 12 + 8 + data);
-  const view = new DataView(bytes.buffer);
-  const tag = (at: number, text: string): void => {
-    for (let i = 0; i < 4; i++) bytes[at + i] = text.charCodeAt(i);
-  };
-  tag(0, 'RIFF');
-  view.setUint32(4, bytes.length - 8, true);
-  tag(8, 'WAVE');
-  tag(12, 'fmt ');
-  view.setUint32(16, 16, true);
-  view.setUint16(20, 1, true);
-  view.setUint16(22, channels.length, true);
-  view.setUint32(24, rate, true);
-  view.setUint32(28, rate * channels.length * 2, true);
-  view.setUint16(32, channels.length * 2, true);
-  view.setUint16(34, 16, true);
-  tag(36, 'FLLR'); // afconvert's padding chunk, skipped
-  view.setUint32(40, 4, true);
-  tag(48, 'data');
-  view.setUint32(52, data, true);
-  for (let i = 0; i < frames; i++) {
-    channels.forEach((channel, c) => {
-      const at = 56 + (i * channels.length + c) * 2;
-      view.setInt16(at, Math.round((channel[i] ?? 0) * 32767), true);
-    });
-  }
-  return bytes;
-}
-
-/** `ms` of silence, then a sine at `amplitude` for `soundMs`, at `rate`. */
-function toneAfter(rate: number, ms: number, amplitude: number, soundMs: number): number[] {
-  const quiet = Math.round((rate * ms) / 1000);
-  const sound = Math.round((rate * soundMs) / 1000);
-  const wave = (i: number): number => amplitude * Math.sin((2 * Math.PI * 441 * i) / rate);
-  return [
-    ...Array.from({ length: quiet }, () => 0),
-    ...Array.from({ length: sound }, (_, i) => wave(i)),
-  ];
-}
-
 describe('the loudness of a recording', () => {
   it('reads a WAV’s 16-bit samples, every channel, past the chunks before its data', () => {
     const pcm = parseWav(wavOf(8000, [[0, 0.5, -0.5], [0.25, 0, -1]]));
@@ -636,78 +598,6 @@ describe('picking a candidate', () => {
   });
 });
 
-/** What a file holds, in a word: the SHA-1 of its bytes, which a failure says in a line. */
-const digest = (bytes: Uint8Array): string => createHash('sha1').update(bytes).digest('hex');
-
-/** A piece `seconds` long, a 441 Hz tone at `amplitude` throughout, as a WAV at 2 kHz. */
-const piece = (seconds: number, amplitude: number): Uint8Array<ArrayBuffer> =>
-  wavOf(2000, [toneAfter(2000, 0, amplitude, seconds * 1000)]);
-
-/** The answers of a client of the tests' own: WAVs, which the tests decode as they are. */
-interface Answers {
-  readonly effects?: readonly Uint8Array<ArrayBuffer>[];
-  readonly music?: readonly Uint8Array<ArrayBuffer>[];
-}
-
-/**
- * A client of the tests' own that answers each effect and each piece of music with the next of
- * its answers, round and round, and keeps the requests; the account has 50 000 credits left.
- */
-function answering(answers: Answers) {
-  const effects: ElevenLabs.CreateSoundEffectRequest[] = [];
-  const pieces: ElevenLabs.BodyComposeMusicV1MusicPost[] = [];
-  const nth = (list: Answers['music'] = [], i: number): ReadableStream<Uint8Array> =>
-    new Blob([list[i % list.length] ?? new Uint8Array(0)]).stream();
-  const credits = { characterCount: 81_000, characterLimit: 131_000 };
-  const client: SoundClient = {
-    user: { subscription: { get: () => Promise.resolve(credits) } },
-    textToSoundEffects: {
-      convert: (request) => Promise.resolve(nth(answers.effects, effects.push(request) - 1)),
-    },
-    music: {
-      compose: (request) => Promise.resolve(nth(answers.music, pieces.push(request) - 1)),
-    },
-  };
-  return { client, effects, pieces };
-}
-
-/** Folders of a run's own: each group's and the takes', in a temporary folder. */
-function placesIn(): Places {
-  const root = mkdtempSync(join(tmpdir(), 'escapelab-sfx-test-'));
-  const dirs = { sfx: join(root, 'sfx'), music: join(root, 'music') };
-  return { dirs, takes: join(root, 'takes') };
-}
-
-/** A run's bench in `places`: no pause between requests, every take made at `madeAt`. */
-function benchOf(client: SoundClient, places: Places, madeAt = '2026-11-13T17:40:00.000Z'): Bench {
-  return {
-    client,
-    places,
-    decode: (path) => parseWav(readFileSync(path)),
-    now: () => new Date(madeAt),
-    wait: () => Promise.resolve(),
-  };
-}
-
-/** A quiet run of `entries` through `bench`, `count` takes of each; returns its manifests. */
-async function runOf(
-  entries: readonly CatalogEntry[],
-  count: number,
-  bench: Bench,
-): Promise<Record<'sfx' | 'music', Manifest>> {
-  const { places } = bench;
-  const manifests = { sfx: readManifest(places, 'sfx'), music: readManifest(places, 'music') };
-  const jobs = planOf(entries, manifests, () => false, optionsOf(['--candidates', `${count}`]));
-  const candidates = mkdtempSync(join(tmpdir(), 'escapelab-sfx-candidates-test-'));
-  const quiet = vi.spyOn(console, 'log').mockImplementation(() => undefined);
-  try {
-    await renderWith(jobs, manifests, { count, candidates }, bench);
-  } finally {
-    quiet.mockRestore();
-  }
-  return manifests;
-}
-
 /** A manifest entry of `entry`, as a run would write it for a recording made from its request. */
 function manifestOf(entry: CatalogEntry): ManifestEntry {
   return {
@@ -752,9 +642,9 @@ describe('the music’s takes, asked for and priced', () => {
       ['test-clack', true],
       ['test-calm', false],
     ]);
-    const music = { group: 'music' } as const;
+    const music = { entry: CALM, group: 'music' } as const;
     expect([asTakes(music, 3), asTakes(music, 2), asTakes(music, 1)]).toEqual([true, true, false]);
-    expect(asTakes({ group: 'sfx' }, 3)).toBe(false);
+    expect(asTakes({ entry: CLACK, group: 'sfx' }, 3)).toBe(false);
   });
 
   it('are asked for with the piece’s request, its settings listed beside the prompt', () => {
@@ -895,15 +785,14 @@ async function takesIn(places: Places): Promise<Bench> {
 
 const keep = (id: string, n: number): Keep => ({ id, n });
 
-/** Why keeping `asked` out of `places` is refused, in its one line; „kept" where it is not. */
+/** Why keeping `asked` with `bench` is refused, in its one line; „kept" where it is not. */
 function refusalOf(
   asked: Keep,
-  places: Places,
-  decode: Bench['decode'],
-  catalog: readonly CatalogEntry[] = [STING, CALM, CLACK],
+  bench: Bench,
+  catalog: readonly CatalogItem[] = [STING, CALM, CLACK],
 ): string {
   try {
-    keepTake(asked, catalog, places, decode);
+    keepTake(asked, catalog, bench);
   } catch (error) {
     return (error as Error).message;
   }
@@ -951,8 +840,10 @@ describe('keeping a take, on disk', () => {
     const places = placesIn();
     const bench = await takesIn(places);
     const before = readManifest(places, 'music');
-    const { group, kept } = keepTake(keep(STING.id, 2), [STING, CALM], places, bench.decode);
+    const { group, kept: all } = keepTake(keep(STING.id, 2), [STING, CALM], bench);
     expect(group).toBe('music');
+    expect(Object.keys(all)).toEqual([STING.id]);
+    const kept = all[STING.id] as ManifestEntry;
     const file = join(places.dirs.music, 'test-sting.mp3');
     expect(digest(readFileSync(file))).toBe(digest(piece(10, 0.8)));
     expect(existsSync(join(places.takes, STING.id))).toBe(false);
@@ -982,9 +873,10 @@ describe('keeping a take, on disk', () => {
   it('keeps a stem round and round at its tempo, beside the music kept before', async () => {
     const places = placesIn();
     const bench = await takesIn(places);
-    keepTake(keep(STING.id, 1), [STING, CALM], places, bench.decode);
-    const { kept } = keepTake(keep(CALM.id, 2), [STING, CALM], places, bench.decode);
-    expect(kept).toMatchObject({ file: 'test-calm.mp3', loop: true, bpm: 90, hash: hashOf(CALM) });
+    keepTake(keep(STING.id, 1), [STING, CALM], bench);
+    const { kept } = keepTake(keep(CALM.id, 2), [STING, CALM], bench);
+    const calmKept = { file: 'test-calm.mp3', loop: true, bpm: 90, hash: hashOf(CALM) };
+    expect(kept[CALM.id]).toMatchObject(calmKept);
     expect(Object.keys(readManifest(places, 'music'))).toEqual(['test-calm', 'test-sting']);
     expect(readdirSync(places.takes)).toEqual([]);
     const calm = readFileSync(join(places.dirs.music, 'test-calm.mp3'));
@@ -998,7 +890,7 @@ describe('keeping a take, refused', () => {
     const places = placesIn();
     const bench = await takesIn(places);
     const refusal = (asked: Keep, catalog?: readonly CatalogEntry[]): string =>
-      refusalOf(asked, places, bench.decode, catalog);
+      refusalOf(asked, bench, catalog);
     const unknown = 'sfx: --keep nope=1 — audio/catalog.json has no such entry';
     expect(refusal(keep('nope', 1))).toBe(unknown);
     const lost = { ...STING, id: 'test-lost' };
@@ -1030,14 +922,14 @@ describe('keeping a take, refused', () => {
   it('says a piece is kept already where a second keep asks for it', async () => {
     const places = placesIn();
     const bench = await takesIn(places);
-    keepTake(keep(STING.id, 2), [STING, CALM], places, bench.decode);
-    expect(refusalOf(keep(STING.id, 2), places, bench.decode)).toBe(
+    keepTake(keep(STING.id, 2), [STING, CALM], bench);
+    expect(refusalOf(keep(STING.id, 2), bench)).toBe(
       'sfx: --keep test-sting=2 — test-sting is kept already, as public/music/test-sting.mp3, ' +
         'and no takes of it wait',
     );
     // An older recording is no keep: the catalog's request has changed since it was made.
     const changed = { ...STING, prompt: `${STING.prompt} Louder.` };
-    expect(refusalOf(keep(STING.id, 2), places, bench.decode, [changed])).toBe(
+    expect(refusalOf(keep(STING.id, 2), bench, [changed])).toBe(
       'sfx: --keep test-sting=2 — test-sting has no takes; make some: ' +
         '--candidates 3 --only test-sting',
     );
@@ -1050,29 +942,11 @@ describe('keeping a take, refused', () => {
     writeFileSync(list, '{ "id": "test-sting", "takes": [');
     const named = `sfx: ${list} does not read as a list of takes: `;
     expect(() => readTakes(places.takes, STING.id)).toThrow(named);
-    expect(refusalOf(keep(STING.id, 1), places, bench.decode)).toMatch(/^sfx: \S+index\.json does/);
+    expect(refusalOf(keep(STING.id, 1), bench)).toMatch(/^sfx: \S+index\.json does/);
     const { studio } = studioOf(answering({}).client, places);
     await expect(runWith(optionsOf(['music']), [STING], studio)).rejects.toThrow(named);
   });
 });
-
-/** A studio over `places` whose account is `client`, and how often the run opened it. */
-function studioOf(client: SoundClient, places: Places): { studio: Studio; opened: () => number } {
-  let opened = 0;
-  const { decode, now, wait } = benchOf(client, places);
-  const studio: Studio = {
-    places,
-    decode,
-    now,
-    wait,
-    candidates: () => mkdtempSync(join(tmpdir(), 'escapelab-sfx-candidates-test-')),
-    account: () => {
-      opened += 1;
-      return Promise.resolve(client);
-    },
-  };
-  return { studio, opened: () => opened };
-}
 
 /** The sting as an older prompt made it: its file in the project, its entry that request's. */
 const OLDER: CatalogEntry = { ...STING, prompt: `${STING.prompt} Softer.` };

@@ -11,7 +11,9 @@ import {
   musicFormatOf,
   noisyTakes,
   offLength,
+  PIECE_BITRATE,
   readCatalog,
+  recordingsOf,
   remakeCommands,
   SFX_FORMAT,
   upToDate,
@@ -23,16 +25,17 @@ import { MUSIC_IDS, SFX_IDS } from '../src/world/samples.js';
 
 /**
  * The lab's recordings against what the game plays: the ids the code may name (samples.ts)
- * are the catalog's, the catalog says truly where each plays, and every one has its file,
- * measured, in the manifest the game loads.
+ * are the catalog's — a suite's pieces among them — the catalog says truly where each plays,
+ * and every one has its file, measured, in the manifest the game loads.
  */
 
 /**
  * What makes the recordings `ids` again on a Mac, as the sound script says it: a command for
- * each group — five candidates of an effect, three takes of a piece of music for the ear.
+ * each group — five candidates of an effect, three takes of a piece of music for the ear, a
+ * suite's takes as many as a run of it may make.
  */
 const remedyFor = (ids: readonly string[]): string =>
-  `render them on a Mac: ${remakeCommands(catalog, ids).join('; ')} (docs/sound.md)`;
+  `render them on a Mac: ${remakeCommands(items, ids).join('; ')} (docs/sound.md)`;
 
 /**
  * The entries whose recordings the user still has to render (they cost credits, which no agent
@@ -49,7 +52,9 @@ const AWAITING_RENDER: readonly string[] = [
 ];
 const awaiting = new Set(AWAITING_RENDER);
 
-const catalog = readCatalog();
+const items = readCatalog();
+/** Every recording the catalog names: each sound, and each piece of a suite. */
+const catalog = recordingsOf(items);
 const CLIENT = join(CATALOG_FILE, '../..');
 const idsOf = (group: Group): string[] =>
   catalog.filter((entry) => groupOf(entry) === group).map((entry) => entry.id);
@@ -108,6 +113,32 @@ describe('the entries awaiting the user’s render', () => {
     }
   });
 });
+
+/**
+ * How many bytes a second a recording made of `entry` takes: an MP3 at a constant rate, a
+ * format's kbit/s 125 bytes each — or a suite's piece as AAC at PIECE_BITRATE, its .m4a some 2 %
+ * over that rate (afconvert, 72 s: 162.6 kbit/s).
+ */
+function rateOf(entry: CatalogEntry): number {
+  if (entry.of !== undefined) return (PIECE_BITRATE / 8) * 1.05;
+  const format = groupOf(entry) === 'sfx' ? SFX_FORMAT : musicFormatOf(entry);
+  return Number(format.split('_')[2]) * 125;
+}
+
+/**
+ * The files `waiting` let go of in `manifest` once they are made: those they play now that are
+ * their own, which no entry made already plays.
+ */
+function replacedFiles(manifest: Manifest, waiting: readonly CatalogEntry[]): string[] {
+  const others = new Set(
+    Object.entries(manifest)
+      .filter(([id]) => !awaiting.has(id))
+      .map(([, kept]) => kept.file),
+  );
+  const own = waiting.map((entry) => manifest[entry.id]?.file);
+  const mine = own.filter((file): file is string => file !== undefined && !others.has(file));
+  return [...new Set(mine)];
+}
 
 describe.each(['sfx', 'music'] as const)('the recordings in public/%s', (group) => {
   const manifest = manifestOf(group);
@@ -171,33 +202,29 @@ describe.each(['sfx', 'music'] as const)('the recordings in public/%s', (group) 
     expect(heard, `floors over ${AUDIBLE_FLOOR_DBFS} dBFS — ${remedy}`).toEqual([]);
   });
 
-  /** The bytes the folder's recordings take now. */
-  const filedBytes = (): number => {
-    const files = existsSync(DIRS[group])
-      ? readdirSync(DIRS[group]).filter((name) => name.endsWith('.mp3'))
+  /** The recordings in the folder now: an MP3 as ElevenLabs made it, a suite's piece as AAC. */
+  const filed = (): string[] =>
+    existsSync(DIRS[group])
+      ? readdirSync(DIRS[group]).filter((name) => /\.(?:mp3|m4a)$/.test(name))
       : [];
-    return files.reduce((sum, file) => sum + statSync(join(DIRS[group], file)).size, 0);
-  };
+  /** The bytes `files` of the folder take. */
+  const bytesOf = (files: readonly string[]): number =>
+    files.reduce((sum, file) => sum + statSync(join(DIRS[group], file)).size, 0);
 
   it('keep within the folder’s cap, and no file the manifest does not name', () => {
-    const files = existsSync(DIRS[group])
-      ? readdirSync(DIRS[group]).filter((name) => name.endsWith('.mp3'))
-      : [];
     const named = new Set(Object.values(manifest).map((entry) => entry.file));
-    expect(files.filter((file) => !named.has(file))).toEqual([]);
-    expect(filedBytes()).toBeLessThanOrEqual(FOLDER_CAPS[group]);
+    expect(filed().filter((file) => !named.has(file))).toEqual([]);
+    expect(bytesOf(filed())).toBeLessThanOrEqual(FOLDER_CAPS[group]);
     expect(FOLDER_CAPS).toEqual({ sfx: 3 * 1024 * 1024, music: 8 * 1024 * 1024 });
   });
 
   it('keep within it once the entries awaiting their render are made, each at its rate', () => {
-    // A format's kbit/s are 125 bytes a second each: an MP3 at a constant rate.
-    const rate = (entry: CatalogEntry): number => {
-      const format = group === 'sfx' ? SFX_FORMAT : musicFormatOf(entry);
-      return Number(format.split('_')[2]) * 125;
-    };
-    const planned = entries
-      .filter((entry) => awaiting.has(entry.id))
-      .reduce((sum, entry) => sum + entry.durationSeconds * rate(entry), 0);
-    expect(filedBytes() + planned).toBeLessThanOrEqual(FOLDER_CAPS[group]);
+    const waiting = entries.filter((entry) => awaiting.has(entry.id));
+    const planned = waiting.reduce((sum, entry) => sum + entry.durationSeconds * rateOf(entry), 0);
+    const replaced = replacedFiles(manifest, waiting).filter((file) =>
+      existsSync(join(DIRS[group], file)),
+    );
+    const after = bytesOf(filed()) - bytesOf(replaced) + planned;
+    expect(after).toBeLessThanOrEqual(FOLDER_CAPS[group]);
   });
 });
