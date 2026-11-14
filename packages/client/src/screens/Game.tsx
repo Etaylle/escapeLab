@@ -55,7 +55,7 @@ import { dueParts } from '../world/markers.js';
 import { startingSpot, type KnownPositions } from '../world/movement.js';
 import { airNotice } from '../world/onAir.js';
 import { stopAnnounce } from '../world/pa.js';
-import { preloadLines, stopVoice, voiceForRun } from '../world/radioVoice.js';
+import { fetchLines, stopVoice, voiceForRun } from '../world/radioVoice.js';
 import type { ChatLine, MapPing } from '../world/render/frame.js';
 import { startRoom } from '../world/rooms.js';
 import { PuzzlePanel } from './PuzzlePanel.js';
@@ -374,7 +374,8 @@ export interface NoticeGates {
  * Nothing shows before its gate opens. A player who spawns at the sign gets
  * the note too; one who reconnects later does not, they read it before. As
  * the run starts only the list of the recordings is fetched; each line's own
- * recording as the line is queued, and one still speaking stops with the
+ * recording as the line is queued, decoded only as it airs, so that a line
+ * the queue drops leaves nothing decoded; one still speaking stops with the
  * screen.
  */
 function useNotices(view: PlayerView, gates: NoticeGates): Notice | null {
@@ -400,7 +401,7 @@ function useNotices(view: PlayerView, gates: NoticeGates): Notice | null {
     const notBefore = followsSolve(view.events, seen.current) ? now + AFTER_SOLVE_MS : 0;
     seen.current = view.events.length;
     if (news.length > 0) {
-      preloadLines(news.filter(voiced).map((event) => event.label));
+      fetchLines(news.filter(voiced).map((event) => event.label));
       setQueue((queued) => withNews(queued, news, notBefore));
     }
   }, [view.events]);

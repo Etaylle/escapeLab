@@ -25,12 +25,12 @@ import { sample, type SfxId } from './samples.js';
  * `duck`). The banner goes up as the line starts and stays while it speaks (onAir.ts); a line
  * without a recording, as a custom mission's, still only chirps (audio.ts `radioChirp`). At a
  * run's start a page fetches the recordings' list alone (`voiceForRun`), never a recording: a
- * line's own file comes as the line is queued (`preloadLines`) — the take the run picked, which
- * its event names — and is decoded then, at 22.05 kHz in one channel, a few tens of milliseconds,
- * and let go once it has been spoken, so that a page keeps a line or two decoded, never a
- * mission's (audioMemory.ts), and the files of the last FILES_KEPT lines as they came, those of a
- * run before none. Nothing that plays throws — only the harness's offline render may reject — and
- * nothing plays while the context is held back.
+ * line's own file comes as the line is queued (`fetchLines`) — the take the run picked, which its
+ * event names — and the line is decoded as it goes on the air, at 22.05 kHz in one channel, a few
+ * tens of milliseconds, and let go once its sound has ended, or as its ask is made moot; so a page
+ * keeps a line or two decoded, never a mission's (audioMemory.ts), and the files of the last
+ * FILES_KEPT lines as they came, those of a run before none. Nothing that plays throws — only the
+ * harness's offline render may reject — and nothing plays while the context is held back.
  */
 
 /**
@@ -313,8 +313,8 @@ function peakOf(buffer: AudioBuffer): number {
 /**
  * A run starts: the recordings' list is fetched where it is not here yet — a few kB, so that each
  * line's length is known before it airs — and the files kept from the runs before are let go. No
- * recording comes now: each line's own file comes as the line is queued (`preloadLines`), the
- * take the run picked, which its event names (core radio.ts `pickLine` picks it by the seed).
+ * recording comes now: each line's own file comes as the line is queued (`fetchLines`), the take
+ * the run picked, which its event names (core radio.ts `pickLine` picks it by the seed).
  */
 export function voiceForRun(): void {
   store.bytes.clear();
@@ -351,8 +351,26 @@ export function recordedMs(text: string): number | null {
 }
 
 /**
- * Lines about to be heard — just come over the air, or the loudspeakers' — each decoded now
- * where it is not yet: its file is here already, or fetched first.
+ * Lines queued on the objective bar: each one's file fetched now where it is not kept, the line
+ * decoded only as it goes on the air (`sayLine`, pa.ts `announce`) — so that a line the queue
+ * drops before its turn leaves nothing decoded.
+ */
+export function fetchLines(texts: readonly string[]): void {
+  if (texts.length === 0) return;
+  manifest()
+    .then(() => {
+      for (const text of texts) {
+        const id = store.ids.get(text);
+        if (id !== undefined) void bytesOf(id);
+      }
+    })
+    .catch(() => undefined);
+}
+
+/**
+ * Lines heard on a moment of their own — the announcement's (pa.ts), the end card's last word
+ * (endTheme.ts) — each decoded now where it is not yet, its file here already or fetched first,
+ * so that it speaks on its moment; whoever asked lets it go (`releaseLine`) where it is not said.
  */
 export function preloadLines(texts: readonly string[]): void {
   if (texts.length === 0) return;
@@ -369,7 +387,12 @@ export function preloadLines(texts: readonly string[]): void {
 /** The line `text` heard and done with (the loudspeakers', pa.ts): what it held let go. */
 export function releaseLine(text: string): void {
   const id = store.ids.get(text);
-  if (id !== undefined && speaking?.id !== id) dropLine(id);
+  if (id !== undefined) release(id);
+}
+
+/** The decoded recording `id` let go, unless it speaks on the radio now. */
+function release(id: string): void {
+  if (speaking?.id !== id) dropLine(id);
 }
 
 /**
@@ -401,30 +424,41 @@ export function sayLine(text: string, into?: AudioNode): Promise<number | null> 
 
 /**
  * The line asked for as `ask` on the air with its decoded `clip`, where nothing made it moot
- * since: how long it keeps the air, ms; null where it is moot.
+ * since: how long it keeps the air, ms. Null where it is moot — its line went up without it, or
+ * was taken back — and what it decoded is let go then, unless a newer ask wants the same words.
  */
 function airAsked(engine: Engine, ask: Ask, clip: Clip, into?: AudioNode): number | null {
-  if (asked !== ask) return null;
+  if (asked !== ask) {
+    if (asked?.id !== ask.id) release(ask.id);
+    return null;
+  }
   onAir(engine, ask.id, clip, into);
   return airtimeOf(ask.id, clip.buffer.duration);
 }
 
 /**
- * The line `id` on the air from now into `into`, cutting short one still on it; let go once it
- * ends.
+ * The line `id` on the air from now into `into`, cutting short one still on it; let go once its
+ * sound has ended (`saidOut`).
  */
 function onAir(engine: Engine, id: string, clip: Clip, into: AudioNode = engine.voice): void {
   const now = engine.ctx.currentTime;
   const opens = store.openers.has(id);
   speaking?.cut(now);
-  const line = speak(engine, id, clip, now + LOOKAHEAD, opens, into);
+  const line: Speaking = speak(engine, id, clip, now + LOOKAHEAD, opens, into, () =>
+    saidOut(line),
+  );
   speaking = line;
   lastId = id;
   lastOpened = opens;
-  setTimeout(() => {
-    if (speaking !== line) dropLine(id);
-    else if (engine.ctx.currentTime >= line.end) dropLine(id);
-  }, (line.end - now + TAIL_S + 0.2) * 1000);
+}
+
+/**
+ * The line `line` is over — played out or cut, its static and squelches with it: its recording
+ * is let go, unless the same recording went on the air again since. By its sound's own end, not
+ * a timer, so that a line a held-back context finishes later is let go then all the same.
+ */
+function saidOut(line: Speaking): void {
+  if (speaking === line || speaking?.id !== line.id) dropLine(line.id);
 }
 
 /**
@@ -451,7 +485,7 @@ function airtimeOf(id: string, seconds: number): number {
 
 /**
  * The line `id` keyed at `at` into `into`: the opening where it `opens` a run, the squelch,
- * speech over its static, the tail; the lab ducks.
+ * speech over its static, the tail; the lab ducks. `over` once all of it has ended.
  */
 function speak(
   engine: Engine,
@@ -460,6 +494,7 @@ function speak(
   at: number,
   opens: boolean,
   into: AudioNode,
+  over: () => void,
 ): Speaking {
   const { ctx } = engine;
   const radio = radioChain(ctx, into, VOICE_LEVEL);
@@ -476,7 +511,10 @@ function speak(
   const keys = outlet(ctx, radio.input, KEY_LEVEL);
   const opening = opens ? openChannel(ctx, keys, at) : [];
   const sources = [speech, bed, ...opening, ...squelch(ctx, keys, keyed, end)];
-  onAllEnded(sources, () => radio.out.disconnect());
+  onAllEnded(sources, () => {
+    radio.out.disconnect();
+    over();
+  });
   duck(engine, 'voice', opens ? at : start, end, ctx.currentTime);
   const cut = (when: number): void => {
     radio.out.gain.setTargetAtTime(0, when, 0.02);

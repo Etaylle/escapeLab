@@ -9,7 +9,13 @@ import {
 } from '../src/radio.js';
 import type * as OnAirModule from '../src/world/onAir.js';
 import type { VoiceManifest } from '../src/world/radioVoice.js';
-import { fakeGraph, lastContext, type FakeBufferSource, type FakeContext } from './fakeGraph.js';
+import {
+  endAll,
+  fakeGraph,
+  lastContext,
+  type FakeBufferSource,
+  type FakeContext,
+} from './fakeGraph.js';
 import { serveSamples } from './fakeSamples.js';
 
 /** The plant's message as an emergency starts, then mission control's line on it. */
@@ -111,7 +117,8 @@ describe('the objective bar’s lines on the air', () => {
     const since = Date.now();
     Object.defineProperty(ctx, 'currentTime', { get: () => 10 + (Date.now() - since) / 1000 });
     const air = await import('../src/world/onAir.js');
-    return { radio, air, ctx };
+    const memory = await import('../src/world/audioMemory.js');
+    return { radio, air, ctx, memory };
   }
 
   /**
@@ -142,7 +149,7 @@ describe('the objective bar’s lines on the air', () => {
     const { radio, air, ctx } = await onTheAir();
     // The plant's message over a slow line: its file comes 2 s after it was queued.
     late['/voice/aaaaaaaaaaaa.m4a'] = 2000;
-    radio.preloadLines([ALERT, CALL]);
+    radio.fetchLines([ALERT, CALL]);
     const up = inTurn(air, [line(ALERT, 'announce'), line(CALL, 'emergency')]);
     await vi.advanceTimersByTimeAsync(1999);
     expect(up).toEqual([]); // nothing up before it sounds
@@ -167,10 +174,10 @@ describe('the objective bar’s lines on the air', () => {
   });
 
   it('puts a line up without a recording late past its wait, keyed; it stays unsaid', async () => {
-    const { radio, air, ctx } = await onTheAir();
+    const { radio, air, ctx, memory } = await onTheAir();
     expect(air.VOICE_WAIT_MS).toBe(3000);
     late['/voice/bbbbbbbbbbbb.m4a'] = 10_000;
-    radio.preloadLines([CALL]);
+    radio.fetchLines([CALL]);
     const up = inTurn(air, [line(CALL, 'emergency')]);
     await vi.advanceTimersByTimeAsync(air.VOICE_WAIT_MS - 1);
     expect(up).toEqual([]);
@@ -178,9 +185,10 @@ describe('the objective bar’s lines on the air', () => {
     await vi.advanceTimersByTimeAsync(1);
     expect(up).toEqual([{ at: air.VOICE_WAIT_MS, ms: BANNER_MS }]);
     expect(keyed(ctx)).toBe(1); // the chirp
-    // The recording comes at last, its line long up: it is never said.
+    // The recording comes at last, its line long up: it is never said, nor kept decoded.
     await vi.advanceTimersByTimeAsync(20_000);
     expect(speechOf(ctx, 'bbbbbbbbbbbb')).toEqual([]);
+    expect(memory.decodedBytes().voice).toBe(0);
   });
 
   it('puts a line without a recording up at once: keyed, the plant’s silent', async () => {
@@ -214,14 +222,14 @@ describe('the objective bar’s lines on the air', () => {
 
   it('cuts what the other speaker still says as a line goes up: one line on the air', async () => {
     const { radio, air, ctx } = await onTheAir();
-    radio.preloadLines([NUDGE, STORY]);
+    radio.fetchLines([NUDGE, STORY]);
     await vi.advanceTimersByTimeAsync(0);
     const quiet = { show: () => undefined, done: () => undefined, coarse: false };
     // A nudge speaks; the plant's message, a call, outranks it — its file 0.5 s late.
     const nudge = air.airNotice(line(NUDGE), { ...quiet, wait: 0 });
     await vi.advanceTimersByTimeAsync(1000);
     late['/voice/aaaaaaaaaaaa.m4a'] = 500;
-    radio.preloadLines([ALERT]);
+    radio.fetchLines([ALERT]);
     nudge(); // the bar takes it back
     const message = air.airNotice(line(ALERT, 'announce'), { ...quiet, wait: 0 });
     await vi.advanceTimersByTimeAsync(499);
@@ -242,11 +250,11 @@ describe('the objective bar’s lines on the air', () => {
     expect(speechOf(ctx, 'dddddddddddd')[0]?.stoppedAt).toBeCloseTo(13 + 0.1, 9);
   });
 
-  it('says nothing of a line taken back before its recording came', async () => {
-    const { radio, air, ctx } = await onTheAir();
+  it('says nothing of a line taken back before its recording came, nor keeps it', async () => {
+    const { radio, air, ctx, memory } = await onTheAir();
     late['/voice/aaaaaaaaaaaa.m4a'] = 2000;
     late['/voice/bbbbbbbbbbbb.m4a'] = 2000;
-    radio.preloadLines([ALERT, CALL]);
+    radio.fetchLines([ALERT, CALL]);
     const shown: Notice[] = [];
     const done = vi.fn();
     const take = { wait: 0, coarse: false, show: (notice: Notice) => shown.push(notice), done };
@@ -261,5 +269,19 @@ describe('the objective bar’s lines on the air', () => {
     expect(speechOf(ctx, 'bbbbbbbbbbbb')).toEqual([]);
     expect(shown).toEqual([]);
     expect(done).not.toHaveBeenCalled();
+    expect(memory.decodedBytes().voice).toBe(0);
+  });
+
+  it('decodes a queued line only as it airs: one the queue drops leaves nothing', async () => {
+    const { radio, air, ctx, memory } = await onTheAir();
+    // A nudge and a line of the story come in; the story's line drops the nudge from the queue.
+    radio.fetchLines([NUDGE, STORY]);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(memory.decodedBytes().voice).toBe(0); // both files here, nothing decoded
+    inTurn(air, [line(STORY, 'solved')]);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(memory.decodedBytes().voice).toBe(2.5 * 22050 * 4); // the line on the air alone
+    endAll(ctx); // said
+    expect(memory.decodedBytes().voice).toBe(0);
   });
 });

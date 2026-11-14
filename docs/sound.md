@@ -839,20 +839,25 @@ curl -L -o ~/.cache/escapelab-piper/de_DE-thorsten-high.onnx.json \
 
 At a run's start a page fetches the recordings' list alone, a few kB, and no recording: Blackout's
 72 texts would come to some 6 MB once all are recorded, more than a phone on mobile data should
-fetch for a run. A line's own file comes as the line is queued (`preloadLines`) — the take the run
-picked, which its event names, the server's reducer having picked it by the run's seed — and is
-decoded at once, in one channel at 22.05 kHz (a few tens of milliseconds): the run's first line
-waits for the HUD to come back after the opening, or for the briefing, and a solve's line a second
-after the solve, so its file is mostly here before it airs. Where it is not, its banner waits for
-it: a line goes up on the objective bar as its sound starts and stays while it speaks (`onAir.ts`
-`airNotice`), so that the line after it, which waits for the banner, never speaks over it however
-late the file came; one whose recording has not sounded within 3 s (`VOICE_WAIT_MS`) goes up
-without it — keyed with the chirp, the plant's message silent — and the recording, coming after,
-stays unsaid. The last word on the end card is fetched as the card comes up, while its
-sting plays. A page keeps the files of the last four lines it asked for (`FILES_KEPT`), so that a
-line said again is not fetched again, and lets them go as the next run starts; a line is spoken and
-let go once said, so that a page keeps a line or two decoded rather than a mission's 159 s (28 MB at
-44.1 kHz). A line asked for while an older one still decoded speaks alone. When the banner shows a
+fetch for a run. A line's own file comes as the line is queued (`fetchLines`) — the take the run
+picked, which its event names, the server's reducer having picked it by the run's seed — and the
+line is decoded as it goes on the air, in one channel at 22.05 kHz (a few tens of milliseconds), so
+that a line the queue drops before its turn, a nudge a call cuts short or a line of the story a
+newer one replaces, leaves nothing decoded. The run's first line waits for the HUD to come back
+after the opening, or for the briefing, and a solve's line a second after the solve, so its file
+is mostly here before it airs. Where it is not, its banner waits for it: a line goes up on the
+objective bar as its sound starts and stays while it speaks (`onAir.ts` `airNotice`), so that the
+line after it, which waits for the banner, never speaks over it however late the file came; one
+whose recording has not sounded within 3 s (`VOICE_WAIT_MS`) goes up without it — keyed with the
+chirp, the plant's message silent — and the recording, coming after, stays unsaid and is let go
+as it comes, as is one whose line was taken back. The last word on the end card is fetched and
+decoded as the card comes up, while its sting plays, and let go with the card where it is not
+said. A page keeps the files of the last four lines it asked for (`FILES_KEPT`), so that a line
+said again is not fetched again, and lets them go as the next run starts; a line is let go once
+its sound has ended, played out or cut — by the sound's own end, not a timer, so that a line a
+held-back context finishes later is let go all the same — and a page keeps a line or two decoded
+rather than a mission's 159 s (28 MB at 44.1 kHz). A line asked for while an older one still
+decoded speaks alone. When the banner shows a
 line, its recording plays as a handset hears it: high-pass 300 Hz and low-pass 3.4 kHz, each fourth
 order, a light waveshaper (tanh at a drive of 1.2: a 1 kHz tone at the speech's peak comes out with
 8 % distortion, where the drive of 2.2 the Mac's voice had gave 17 %, and the quiet parts come up 3
@@ -1142,14 +1147,16 @@ comes near and let go 4 s after, the rest brought in as the lights fail, the roo
 steps on the floor under a partner, the rotor, the chirp and the fly-by placed, the doors placed and
 the audience's unplaced), `test/radioVoice.test.ts` (the chain, the shaper's distortion, the
 static's level, the speech, the squelches' recordings, the Leitstelle's opening, the music 8 dB and
-the beds 4 dB down, no recording fetched as a run starts and each line's own as it is queued, the
-files of the last four kept and none of a run before, a line let go once spoken, the newest of two
-and the same line asked twice said once, a line's airtime as it goes on, the offline renders, a line
-still decoding dropped as the voice stops), `test/onAir.test.ts` (a line up on the bar as its sound
-starts and the next after its end, however late its file came; a line whose recording has not
-sounded in 3 s up without it, keyed, the recording unsaid; a line without one up at once, the
-plant's silent; the other speaker cut as a line goes up; a line taken back before its recording came
-saying nothing), `test/radioCheck.test.ts` (the Funkprobe once every seat is ready and once only, 10
+the beds 4 dB down, no recording fetched as a run starts and each line's own as it is queued,
+decoded only on the air, the files of the last four kept and none of a run before, a line let go
+once its sound has ended however late and not while it is on the air again, the newest of two and
+the same line asked twice said once, a moot ask's recording let go, a line's airtime as it goes on,
+the offline renders, a line still decoding dropped as the voice stops), `test/onAir.test.ts` (a line
+up on the bar as its sound starts and the next after its end, however late its file came; a line
+whose recording has not sounded in 3 s up without it, keyed, the recording unsaid and not kept; a
+line without one up at once, the plant's silent; the other speaker cut as a line goes up; a line
+taken back before its recording came saying nothing and keeping nothing; a line the queue drops
+never decoded), `test/radioCheck.test.ts` (the Funkprobe once every seat is ready and once only, 10
 dB under the crew's voices and back, cut with its lobby and its level let go after, nothing asked
 for once the lobby went, silent without a recording or a gesture), `test/radio.test.ts` (what goes
 on the air, the plant's message and its banner, the ranks: a call cuts a nudge short and waits for
