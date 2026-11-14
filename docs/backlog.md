@@ -369,7 +369,7 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   neuen Momente (Audio-Probe), `docs/sound.md` aktualisiert (nennt heute noch 47 Zeilen und
   Thorsten).
 
-### V-2 Musik mit einem Thema, im Geist von Expedition 33 — Status: im PR (M-music) · Größe: L
+### V-2 Musik mit einem Thema, im Geist von Expedition 33 — Status: erledigt (M-music, Merge 2026-11-14; zwei Review-Runden; Cloud-CI auf ac29d77 grün; Render der Partitur offen, Befehle unten) · Größe: L
 - Uros 2026-11-14: „Die Musik im Hauptmenü ist ein einfacher Ton mit Störung" und „Musik will
   ich wie Expedition 33." Gemessen: Das Titelthema ist, wie sein Prompt es verlangte, ein dunkles
   Pad über einem Drone (RMS −14,5 dBFS, Crest 14,5 dB, gleichförmig); die drei Takes des
@@ -407,6 +407,9 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   Lint, Client 3.391 Tests grün, Smoke grün; Walkthroughs der Cloud auf e40e812 grün (Blackout
   155/4/0, Systemcheck 96/15/0, Captures und Skips wie auf main, Audio-Zensus im Lauf
   unverändert; das Menü hält drei Gain-Knoten ohne Quelle mehr).
+- Offen aus der zweiten Review (klein): die AAC-Prüfung (`canPlayType`) läuft nur in der
+  Capture-Gruppe `screens`; ein Lauf mit `SHOTS_ONLY=audio` spielt eine behaltene Partitur
+  ungeprüft, weil der Musik-Zensus im Lauf nur protokolliert.
 
 ### M-1 Drei Spielende: Beweis und Sichtbarkeit — Status: bereit · Größe: M
 - Befund: mechanisch trägt die dritte Person (Leserin mit Regeln, Notizen und Funk an Zwei-Pult-
