@@ -561,15 +561,27 @@ SHA-256 of its secret, never the secret — and any socket that shows the pass h
 code (`sessionStorage`) and whether it just watches, so a reload or a new socket is back in the
 run, or back in its audience (`spectate`), at once.
 
+**The seat follows the account.** Once the server has found the pass's account — as it sits down,
+comes back or signs in — the seat is bound to the account as well, as in Dota 2: every device
+signed into it (docs/accounts.md, „Sign in") sees the run's card on its join screen, and its
+„Zurück zum Einsatz" takes the seat back without the crew's yes, its own pass bound to it from
+then on. While the seat still plays on its line it is refused („Dieser Platz spielt gerade auf
+einem anderen Gerät.") — the device that has it leaves first, „Zum Hauptmenü" say — and the pass
+that held it hears, when it comes back, that the seat went to another device. A device signed
+out of a run (Abmelden, a switch of accounts, or a new Kennwort set on another device of the
+account) loses the seat's line as a drop: the seat waits for its account, the device starts as a
+guest with no card. The room's sealed snapshot carries the binding, so a server that takes the
+room up again hands the seat to the account's device too.
+
 **Bound to the run.** While the pass sits in a run that is on, running or standing still for the
-server's maintenance, the join screen opens on the run's card instead of the form (`whereami`,
-asked as the screen comes up): the mission, the room's code, the crew and the clock as the server
-last showed it — counting down as the run goes on, whoever is away; standing where it was while
-the maintenance stands the run still („WARTUNG"), or nobody of the crew is on the line („WARTUNG ·
-NIEMAND AUF DER LEITUNG") — with „Zurück zum Einsatz" and
-„Einsatz aufgeben" (a second press within 4 s confirms it). Opening or joining another room is
-refused, naming the run. A seat in a lobby shows its card too, and „Raum verlassen" leaves it as
-before; a finished run binds nobody.
+server's maintenance — or a seat of its account does, on another device — the join screen opens on
+the run's card instead of the form (`whereami`, asked as the screen comes up): the mission, the
+room's code, the crew and the clock as the server last showed it — counting down as the run goes
+on, whoever is away; standing where it was while the maintenance stands the run still
+(„WARTUNG"), or nobody of the crew is on the line („WARTUNG · NIEMAND AUF DER LEITUNG") — with
+„Zurück zum Einsatz" and „Einsatz aufgeben" (a second press within 4 s confirms it). Opening or
+joining another room is refused, naming the run. A seat in a lobby shows its card too, and „Raum
+verlassen" leaves it as before; a finished run binds nobody.
 
 **The line that drops.** A line that drops stops nothing: the clock, the patrols, the emergencies
 and the escape run on, as in Overcooked 2 and Among Us, and as Deep Rock Galactic keeps its
@@ -628,7 +640,8 @@ the seat — that device may ask for it again only a minute later, refused quiet
 card for the crew. Ben back first ends the ask („Ben ist wieder verbunden."), and with nobody of the
 crew on the line none is taken. The name of a seat still on the line is refused („Ben ist noch
 verbunden."); any other name gets the refusal of a join into a run, which says that a seat whose
-line is down can be taken over by its name.
+line is down can be taken over by its name. The ask is for guests and for devices of other
+accounts: a device signed into the seat's account comes back by its card, without one.
 
 **The line.** The page counts its line dead when an ask for the server's time stays unanswered
 for 5 s, after 20 s without a word from the server, or when a socket is not open 8 s after it

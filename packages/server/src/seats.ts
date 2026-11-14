@@ -1,14 +1,29 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { GameError, type CrewPass } from '@escapelab/core';
-import type { SeatPass } from './store/store.js';
+import { PARKED, type SeatPass } from './store/store.js';
 
-/** A seat's binding: the id of the pass it belongs to and the hash of that pass's secret. */
+/**
+ * A seat's binding: the id of the pass it belongs to and the hash of that pass's secret — and the
+ * account of the pass that sat down on it, once the server knows it (`bindAccount`).
+ */
 interface Binding {
   passId: string;
   hash: Buffer;
+  accountId: string | null;
+}
+
+/** A seat's binding as a room's snapshot keeps it (core snapshot.ts `SeatSnapshot`). */
+interface BoundSeat {
+  playerId: string;
+  passId: string;
+  hash: string;
+  accountId?: string;
 }
 
 const hashOf = (secret: string): Buffer => createHash('sha256').update(secret).digest();
+
+/** What a seat parked for its account is bound to in place of a pass's hash (store.ts PARKED). */
+const PARKED_HASH = Buffer.from(PARKED, 'hex');
 
 /**
  * Whether `pass` shows the secret `binding` was made with: compared in constant time, so the
@@ -19,8 +34,9 @@ const sameSecret = (binding: Binding, pass: CrewPass): boolean =>
 
 /**
  * Which crew pass each seat of a room belongs to, by player id (core protocol.ts `CrewPass`):
- * the pass's id and a hash of its secret — the secret itself is never kept. A pass shown with
- * the wrong secret holds no seat.
+ * the pass's id and a hash of its secret — the secret itself is never kept — and the account
+ * that pass led into, which any other pass of the account takes the seat back on (`takeBack`).
+ * A pass shown with the wrong secret holds no seat.
  */
 export class SeatBook {
   private readonly bindings = new Map<string, Binding>();
@@ -52,7 +68,58 @@ export class SeatBook {
       }
     }
     this.lost.delete(pass.id);
-    this.bindings.set(playerId, { passId: pass.id, hash: hashOf(pass.secret) });
+    this.bindings.set(playerId, { passId: pass.id, hash: hashOf(pass.secret), accountId: null });
+  }
+
+  /**
+   * The seat `pass` holds is bound to `accountId` from now on, the account the server found for
+   * the pass; nothing where it holds none or shows the wrong secret.
+   */
+  bindAccount(pass: CrewPass, accountId: string): void {
+    const playerId = this.seatOf(pass);
+    const binding = playerId === null ? undefined : this.bindings.get(playerId);
+    if (binding !== undefined) {
+      binding.accountId = accountId;
+    }
+  }
+
+  /** The seats bound to `accountId` but the one of the pass `staying`, by player id. */
+  seatsOfAccount(accountId: string, staying: string): string[] {
+    return [...this.bindings]
+      .filter(([, binding]) => binding.accountId === accountId && binding.passId !== staying)
+      .map(([playerId]) => playerId);
+  }
+
+  /** The seat bound to `accountId`, by player id; null for none. */
+  seatOfAccount(accountId: string): string | null {
+    for (const [playerId, binding] of this.bindings) {
+      if (binding.accountId === accountId) {
+        return playerId;
+      }
+    }
+    return null;
+  }
+
+  /** Whether any seat is bound to an account: only then may a pass take one back by its account. */
+  get holdsAccounts(): boolean {
+    return [...this.bindings.values()].some((binding) => binding.accountId !== null);
+  }
+
+  /**
+   * The seat of `playerId`, bound to an account, goes to `pass`, another pass of that account: the
+   * account stays, and the pass that held it is told, when it comes back, that the seat went to
+   * another device (`lostSeat`). Refused, before anything changes, as `bind` refuses.
+   */
+  takeBack(playerId: string, pass: CrewPass): void {
+    const before = this.bindings.get(playerId);
+    this.bind(playerId, pass);
+    const now = this.bindings.get(playerId);
+    if (before !== undefined && now !== undefined) {
+      now.accountId = before.accountId;
+      if (before.passId !== pass.id) {
+        this.lost.add(before.passId);
+      }
+    }
   }
 
   /**
@@ -67,9 +134,36 @@ export class SeatBook {
     }
   }
 
+  /**
+   * The seat of `playerId`, its pass signed out (rule 4): bound from now on to PARKED, which no
+   * secret's hash is, under its pass's id — so that the run credits its account still, whose
+   * store keeps the same (store.ts `Leaving`) — and to `accountId`, whose other devices take it
+   * back (`takeBack`).
+   */
+  park(playerId: string, accountId: string): void {
+    const binding = this.bindings.get(playerId);
+    if (binding !== undefined) {
+      this.bindings.set(playerId, { passId: binding.passId, hash: PARKED_HASH, accountId });
+    }
+  }
+
   /** Whether another device took over the seat `pass` held here. */
   lostSeat(pass: CrewPass): boolean {
     return this.lost.has(pass.id);
+  }
+
+  /**
+   * The seat bound to the pass `pass` — its id, and the hash of its secret as a store keeps it —
+   * by player id; null for none.
+   */
+  seatOfPass(pass: SeatPass): string | null {
+    const kept = Buffer.from(pass.secretHash, 'hex');
+    for (const [playerId, binding] of this.bindings) {
+      if (binding.passId === pass.id) {
+        return binding.hash.equals(kept) ? playerId : null;
+      }
+    }
+    return null;
   }
 
   /** The seat `pass` holds, by player id; null where it holds none or shows the wrong secret. */
@@ -100,26 +194,26 @@ export class SeatBook {
   }
 
   /**
-   * Every seat's binding, as a room's snapshot keeps it: the pass's id and the hash of its
-   * secret (hex) by player id; and the passes whose seat another device took over.
+   * Every seat's binding, as a room's snapshot keeps it: the pass's id, the hash of its secret
+   * (hex) and its account where it has one, by player id; and the passes whose seat another
+   * device took over.
    */
-  snapshot(): { bound: { playerId: string; passId: string; hash: string }[]; lost: string[] } {
-    const bound = [...this.bindings].map(([playerId, { passId, hash }]) => ({
+  snapshot(): { bound: BoundSeat[]; lost: string[] } {
+    const bound = [...this.bindings].map(([playerId, { passId, hash, accountId }]) => ({
       playerId,
       passId,
       hash: hash.toString('hex'),
+      ...(accountId === null ? {} : { accountId }),
     }));
     return { bound, lost: [...this.lost] };
   }
 
   /** The book as a snapshot kept it (`snapshot`), in place of whatever it held. */
-  restore(
-    bound: readonly { playerId: string; passId: string; hash: string }[],
-    lost: readonly string[],
-  ): void {
+  restore(bound: readonly BoundSeat[], lost: readonly string[]): void {
     this.bindings.clear();
-    for (const { playerId, passId, hash } of bound) {
-      this.bindings.set(playerId, { passId, hash: Buffer.from(hash, 'hex') });
+    for (const { playerId, passId, hash, accountId } of bound) {
+      const binding = { passId, hash: Buffer.from(hash, 'hex'), accountId: accountId ?? null };
+      this.bindings.set(playerId, binding);
     }
     this.lost.clear();
     for (const passId of lost) {

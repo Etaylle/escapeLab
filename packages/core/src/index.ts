@@ -250,6 +250,13 @@ export {
 } from './discovery.js';
 export { type MapDef } from './mission.js';
 export {
+  NUMBER_ALPHABET,
+  numberOf,
+  PASSWORD_SIZE,
+  passwordFits,
+  writtenNumber,
+} from './login.js';
+export {
   parseClientMessage,
   clientMessageSchema,
   crewPassSchema,
@@ -265,6 +272,7 @@ export {
   type AccountRun,
   type AccountStore,
   type AccountView,
+  type LoginDone,
   type RtcSignal,
   type ClientMessage,
   type CrewPass,

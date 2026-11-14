@@ -16,6 +16,7 @@ import { AccountDesk } from './accounts.js';
 import { customMissions, serveCustomMissions } from './customMissions.js';
 import { dailySalt } from './dailySalt.js';
 import { HEARTBEAT_MS, startHeartbeat } from './heartbeat.js';
+import { SignInGuard } from './login.js';
 import { MissionCatalog } from './missions.js';
 import { RoomManager, seedsAllowed } from './roomManager.js';
 import { roomKey, roomKeyLogLine } from './seal.js';
@@ -129,6 +130,9 @@ const wss = new WebSocketServer({ server: httpServer, path: '/ws' });
 // socket, so many new accounts a minute from an address, so many changes a minute on a socket.
 const accountsMade = new RateLimiter(ACCOUNTS_MADE_PER_MINUTE, 60_000);
 accountsMade.sweepEveryWindow();
+// Every wrong Kennwort counts against its address and its Ausweisnummer, in memory (login.ts).
+const signIns = new SignInGuard();
+signIns.sweepEveryWindow();
 const desk = new AccountDesk(store);
 const served = serveSockets(wss, {
   catalog,
@@ -137,6 +141,7 @@ const served = serveSockets(wss, {
   accountsMade,
   changesPerSocket: ACCOUNT_CHANGES_PER_SOCKET,
   front: frontOf(process.env),
+  signIns,
 });
 // A socket gone silent is found out and closed, so that the room pauses for its player; the
 // log names the room and the seat of each socket it cuts.

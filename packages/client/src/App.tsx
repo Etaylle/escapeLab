@@ -626,8 +626,8 @@ function useWiped(live: Connection): { conn: Connection; doors: Doors } {
 }
 
 /**
- * The settings over every screen, the pass's account with them: named and deleted on the line
- * `live`.
+ * The settings over every screen, the pass's account with them: named, signed in and out, and
+ * deleted on the line `live`.
  */
 function Settings({ live, close }: { live: Connection; close: () => void }) {
   return (
@@ -637,6 +637,8 @@ function Settings({ live, close }: { live: Connection; close: () => void }) {
       onDeleteAccount={() => live.send({ kind: 'delete-account', pass: crewPass() })}
       onName={(name) => live.send({ kind: 'profile', pass: crewPass(), name })}
       refusal={live.refusal}
+      login={live.login}
+      askLogin={live.askLogin}
     />
   );
 }

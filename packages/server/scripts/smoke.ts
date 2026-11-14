@@ -46,7 +46,8 @@
  * names a Postgres, the start script brings a server up on a schema of its own,
  * which it migrates itself first, and a crew winning the tutorial there leaves the
  * run in the database with a seat for each by account and the Erfolge it
- * earned. No answer is written down here.
+ * earned; a Kennwort set there mints the account's Ausweisnummer, a phone signs
+ * in with both and finds the run, and signs out again. No answer is written down here.
  * Run with: pnpm --filter @escapelab/server smoke
  */
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
@@ -3217,6 +3218,92 @@ async function checkLanded(db: PrismaClient, lab: Lab): Promise<void> {
   console.log(`✓ the won tutorial is in Postgres: 2 seats by account, Erfolge ${named}`);
 }
 
+const isLogin = (m: ServerMessage): m is Extract<ServerMessage, { kind: 'login' }> =>
+  m.kind === 'login';
+const isMyRuns = (m: ServerMessage): m is Extract<ServerMessage, { kind: 'my-runs' }> =>
+  m.kind === 'my-runs';
+
+/** The Kennwort Cleo sets for her account on Postgres (`signInOnPostgres`). */
+const CLEOS_KENNWORT = 'Kaltenbrunn 1986';
+
+/**
+ * Cleo's account on Postgres gets a Kennwort, which mints its Ausweisnummer — returned: the login
+ * keeps a scrypt hash, never the Kennwort.
+ */
+async function kennwortOnPostgres(db: PrismaClient, cleo: TestClient): Promise<string> {
+  cleo.send({ kind: 'set-password', pass: cleo.pass, password: CLEOS_KENNWORT });
+  const set = await cleo.expect('the Ausweisnummer minted', isLogin, 10_000);
+  const number = set.account?.login ?? fail('no Ausweisnummer minted');
+  const login = await db.identity.findUnique({
+    where: { provider_subject: { provider: 'login', subject: number } },
+  });
+  const hash = login?.secretHash ?? '';
+  assert(
+    hash.startsWith('scrypt$32768$8$1$') && !hash.includes(CLEOS_KENNWORT),
+    `the login keeps a scrypt hash, never the Kennwort (${number})`,
+  );
+  return number;
+}
+
+/**
+ * Cleo's account on Postgres, its Kennwort set (`kennwortOnPostgres`): a phone of hers — a pass the
+ * database never saw — hears of a wrong Kennwort what a wrong number would hear, signs in with the
+ * right one, finds the won tutorial in „Meine Einsätze", and signs out again: its way in gone,
+ * the account whole. Then a tablet of hers signs in, and a new Kennwort signs it out
+ * (`changedOnPostgres`).
+ */
+async function signInOnPostgres(db: PrismaClient, lab: Lab): Promise<void> {
+  const cleo = lab.crew[0] ?? fail('no Cleo on Postgres');
+  const number = await kennwortOnPostgres(db, cleo);
+  const phone = new TestClient('cleos phone', [], mintPass(), DATABASE_PORT);
+  await phone.open();
+  phone.send({ kind: 'sign-in', pass: phone.pass, login: number, password: 'nicht das Kennwort' });
+  const wrong = await phone.expect('a wrong Kennwort refused', isError, 10_000);
+  assert(
+    wrong.message === 'Ausweisnummer oder Kennwort stimmen nicht.',
+    `a wrong Kennwort hears what a wrong number would (${wrong.message})`,
+  );
+  phone.send({ kind: 'sign-in', pass: phone.pass, login: number, password: CLEOS_KENNWORT });
+  const signed = await phone.expect('signed in', isLogin, 10_000);
+  assert(signed.done === 'signed-in' && signed.account?.runs === 1, 'the phone signed in');
+  phone.send({ kind: 'my-runs', pass: phone.pass });
+  const mine = await phone.expect('„Meine Einsätze" of the account', isMyRuns);
+  assert(mine.total === 1 && mine.runs[0]?.missionId === tutorial.id, 'the phone finds the run');
+  phone.send({ kind: 'sign-out', pass: phone.pass });
+  const out = await phone.expect('signed out', isLogin, 10_000);
+  const way = await db.identity.findUnique({
+    where: { provider_subject: { provider: 'pass', subject: phone.pass.id } },
+  });
+  assert(out.done === 'signed-out' && way === null, "the phone signed out, its way in gone");
+  phone.close();
+  console.log(`✓ on Postgres: a Kennwort minted ${number}, a phone signed in, found the run, out`);
+  await changedOnPostgres(db, cleo, number);
+}
+
+/**
+ * Cleo's tablet signs into her account on Postgres by the Ausweisnummer `number`, then Cleo sets a
+ * new Kennwort: the tablet's next ask finds it signed out, its way in kept under 64 zeros.
+ */
+async function changedOnPostgres(db: PrismaClient, cleo: TestClient, number: string) {
+  const tablet = new TestClient('cleos tablet', [], mintPass(), DATABASE_PORT);
+  await tablet.open();
+  tablet.send({ kind: 'sign-in', pass: tablet.pass, login: number, password: CLEOS_KENNWORT });
+  assert((await tablet.expect('signed in', isLogin, 10_000)).done === 'signed-in', 'tablet in');
+  const password = 'Kaltenbrunn 1987';
+  cleo.send({ kind: 'change-password', pass: cleo.pass, old: CLEOS_KENNWORT, password });
+  const changed = await cleo.expect('the Kennwort changed', isLogin, 10_000);
+  assert(changed.done === 'changed', 'Cleo changed her Kennwort');
+  tablet.send({ kind: 'my-runs', pass: tablet.pass });
+  const told = await tablet.expect('told it signed out', isLogin, 10_000);
+  const way = await db.identity.findUnique({
+    where: { provider_subject: { provider: 'pass', subject: tablet.pass.id } },
+  });
+  const parked = way?.secretHash === '0'.repeat(64);
+  assert(told.done === 'signed-out' && parked, 'the tablet signed out, its way in parked');
+  tablet.close();
+  console.log('✓ on Postgres: a new Kennwort signed the tablet out, told on its next ask');
+}
+
 /** The colour Ida clicks just before the server goes down (`colourAtTheEnd`). */
 const LAST_COLOUR = '#f472b6';
 
@@ -3278,6 +3365,7 @@ async function runOnPostgres(): Promise<void> {
     await wiringBox(lab);
     await finale(lab);
     await checkLanded(db, lab);
+    await signInOnPostgres(db, lab);
     for (const client of lab.crew) {
       client.close();
     }
@@ -3369,7 +3457,9 @@ console.log(
     'over from an old server still up, the run going on from its last snapshot; the ' +
     'start script passing SIGTERM on to the server; and, where TEST_DATABASE_URL names a ' +
     'Postgres, the server migrating it itself over a single URL, a won tutorial landing there ' +
-    'by account, a colour clicked just before SIGTERM kept, and the server started as ' +
+    'by account, a phone signing into the account with its Ausweisnummer and Kennwort, a ' +
+    'new Kennwort signing a tablet of the account out, a ' +
+    'colour clicked just before SIGTERM kept, and the server started as ' +
     'Render\'s Start Command starts it migrating the database itself before it listens, a ' +
     'migration broken off stopping its start. 🎉',
 );

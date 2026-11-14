@@ -1,12 +1,16 @@
 import { connect, createServer, type AddressInfo, type Socket } from 'node:net';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, type Prisma } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, inject, it, vi } from 'vitest';
+import { NO_CREDITS } from '@escapelab/core';
 import { PostgresStore } from '../src/store/postgres.js';
-import type { Store } from '../src/store/store.js';
+import { HAS_LOGIN, PassSignedOut, type Store } from '../src/store/store.js';
+import { passFor } from './passes.js';
 import {
+  accountFor,
   DAY,
   finished,
   identityOf,
+  kennwortOf,
   reportOf,
   storeContract,
   withAccounts,
@@ -119,6 +123,66 @@ async function slowFront(delayMs: number): Promise<{ port: number; close: () => 
     close: () => {
       sockets.forEach((socket) => socket.destroy());
       server.close();
+    },
+  };
+}
+
+/** Resolves once a connection named `app` waits for a lock another transaction holds. */
+async function waitsForLock(app: string): Promise<void> {
+  const waiting =
+    'SELECT count(*)::int AS n FROM pg_stat_activity ' +
+    `WHERE application_name = '${app}' AND wait_event_type = 'Lock'`;
+  await vi.waitFor(
+    async () => {
+      const [row] = await db.$queryRawUnsafe<{ n: number }[]>(waiting);
+      expect(row?.n).toBeGreaterThan(0);
+    },
+    { timeout: 10_000, interval: 50 },
+  );
+}
+
+/**
+ * A transaction of the test's own that does `work` and is held open, its locks with it, until
+ * `release`: `done` once the work is done, `committed` once it is.
+ */
+function heldOpen(work: (tx: Prisma.TransactionClient) => Promise<void>) {
+  let release = (): void => undefined;
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let ready = (): void => undefined;
+  const done = new Promise<void>((resolve) => {
+    ready = resolve;
+  });
+  const committed = db.$transaction(
+    async (tx) => {
+      await work(tx);
+      ready();
+      await held;
+    },
+    { maxWait: 10_000, timeout: 30_000 },
+  );
+  return { done, release: () => release(), committed };
+}
+
+/** A won run of Ben's alone as the database holds one, its seat in the account `accountId`. */
+function bensRun(accountId: string): Prisma.RunCreateInput {
+  const { crew, credits, ...report } = reportOf({ crew: ['Ben'] });
+  return {
+    missionId: report.missionId,
+    difficulty: report.difficulty,
+    roomCode: report.roomCode,
+    outcome: report.outcome,
+    startedAt: new Date(report.startedAt),
+    endedAt: new Date(report.finishedAt),
+    durationSec: 300,
+    crewSize: crew.length,
+    alarms: 1,
+    report: report as unknown as Prisma.InputJsonObject,
+    members: {
+      create: [
+        { seat: 0, seatName: 'Ben', contributions: { ...NO_CREDITS, ...credits['p1'] }, accountId },
+      ],
     },
   };
 }
@@ -367,6 +431,7 @@ describe.skipIf(url === '')('the store in Postgres', () => {
       }
     }, 30_000);
 
+
     it('says why it does not open where the database cannot be reached', async () => {
       const nowhere = new URL(url);
       nowhere.port = '1';
@@ -388,6 +453,131 @@ describe.skipIf(url === '')('the store in Postgres', () => {
       } finally {
         await db.$executeRawUnsafe(`DROP SCHEMA "${bare}" CASCADE`);
       }
+    });
+  });
+
+  describe('Postgres alone, at once with another transaction', () => {
+    it('takes a second Kennwort set meanwhile only after the first, and refuses it', async () => {
+      const store = await openNamed('login-lock');
+      const cleo = await accountFor(store, 'Cleo');
+      // Cleo's first Kennwort is being set — her account's row held, its login not committed yet.
+      const setting = heldOpen(async (tx) => {
+        await tx.account.update({ where: { id: cleo }, data: { lastSeenAt: new Date() } });
+        await tx.identity.create({
+          data: { provider: 'login', subject: 'EL-CCCC-CCC2', secretHash: 'a', accountId: cleo },
+        });
+      });
+      await setting.done;
+      const second = store.addLogin(cleo, 'EL-CCCC-CCC3', 'b');
+      const refused = expect(second).rejects.toThrow(HAS_LOGIN);
+      try {
+        await waitsForLock('login-lock');
+      } finally {
+        setting.release();
+        await setting.committed;
+      }
+      await refused;
+      expect(await store.findLogin('EL-CCCC-CCC3')).toBeNull();
+    });
+
+    it('keeps an account a sign-in leaves where a run lands a seat for it meanwhile', async () => {
+      const store = await openNamed('signin-lock');
+      const anna = await accountFor(store, 'Anna', 'EL-7K3M-9Q2D');
+      const guest = await accountFor(store, 'Ben');
+      // Ben's run lands with a seat for his account, its transaction not committed yet.
+      const landing = heldOpen(async (tx) => {
+        await tx.run.create({ data: bensRun(guest) });
+      });
+      await landing.done;
+      const signing = store.signIn(identityOf('Ben'), anna, null, kennwortOf('Anna'));
+      try {
+        await waitsForLock('signin-lock');
+      } finally {
+        landing.release();
+        await landing.committed;
+      }
+      expect(await signing).toEqual([]);
+      expect((await store.runsOfAccount(guest, 5)).total).toBe(1);
+    });
+
+    it('keeps a run whose account went while it was written, its seat crediting none', async () => {
+      const store = await openNamed('run-again');
+      const gone = await accountFor(store, 'Ben');
+      // Ben's account goes — signed away from, left empty — as his run is written.
+      const deleting = heldOpen(async (tx) => {
+        await tx.account.delete({ where: { id: gone } });
+      });
+      await deleting.done;
+      const said = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+      try {
+        const keeping = store.appendRun(finished({ crew: ['Ben'] }, ['Ben']));
+        try {
+          await waitsForLock('run-again');
+        } finally {
+          deleting.release();
+          await deleting.committed;
+        }
+        await keeping;
+        expect(said).toHaveBeenCalledWith(
+          '[escapelab] an account of the crew of blackout went meanwhile: asked again',
+        );
+      } finally {
+        said.mockRestore();
+      }
+      const seats = await db.runMember.findMany();
+      expect(seats.map((seat) => [seat.seatName, seat.accountId])).toEqual([['', null]]);
+      expect(await store.runs()).toHaveLength(1);
+    });
+  });
+
+  describe('Postgres alone, a Kennwort changed as a pass signs in', () => {
+    /** The login row of `accountId`, its Kennwort replaced by `next` in `tx`. */
+    const replaceIn = (tx: Prisma.TransactionClient, accountId: string, next: string) =>
+      tx.identity.updateMany({
+        where: { accountId, provider: 'login' },
+        data: { secretHash: next },
+      });
+
+    it('signs no pass in by a Kennwort that is being changed', async () => {
+      const store = await openNamed('change-first');
+      const anna = await accountFor(store, 'Anna', 'EL-7K3M-9Q2D');
+      // The Kennwort is being changed: the login's row held, the new hash not committed yet.
+      const changing = heldOpen(async (tx) => {
+        await replaceIn(tx, anna, 'next');
+      });
+      await changing.done;
+      const signing = store.signIn(identityOf('Ben'), anna, null, kennwortOf('Anna'));
+      try {
+        await waitsForLock('change-first');
+      } finally {
+        changing.release();
+        await changing.committed;
+      }
+      expect(await signing).toBeNull();
+      expect(await store.findByIdentity(identityOf('Ben'))).toBeNull();
+    });
+
+    it('signs a pass out that signed in as the Kennwort was changed', async () => {
+      const store = await openNamed('sign-in-first');
+      const anna = await accountFor(store, 'Anna', 'EL-7K3M-9Q2D');
+      // Ben's pass signs in: the login's row held, his way in not committed yet.
+      const signing = heldOpen(async (tx) => {
+        await tx.$queryRaw`SELECT 1 FROM identities WHERE account_id = ${anna}::uuid FOR UPDATE`;
+        const ben = identityOf('Ben');
+        await tx.identity.create({ data: { ...ben, accountId: anna } });
+      });
+      await signing.done;
+      const annas = passFor('Anna').id;
+      const changing = store.replaceLoginSecret(anna, kennwortOf('Anna'), 'next', annas);
+      try {
+        await waitsForLock('sign-in-first');
+      } finally {
+        signing.release();
+        await signing.committed;
+      }
+      expect((await changing)?.map((pass) => pass.id)).toEqual([passFor('Ben').id]);
+      const shown = store.findByIdentity(identityOf('Ben'));
+      await expect(shown).rejects.toBeInstanceOf(PassSignedOut);
     });
   });
 });
