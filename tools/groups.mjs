@@ -227,6 +227,7 @@ export const GROUPS = [
       'highlight-console.png',
       'panel-dpr2.png',
       'panel-close.png',
+      'panel-close (fade)',
       'figure-flinch.png',
       'rack-leds.png',
       'pose-reading.png',

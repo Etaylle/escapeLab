@@ -260,9 +260,14 @@
  *
  * Stepping back: the first player to step back with Esc from a station standing
  * open — the station step's operator, else the Signalkette's sender — sees the
- * device fade out as it came, over 150 ms: the page notes the panel each frame
- * meanwhile, and it has to leave inert, its opacity only falling and midway on
- * a frame at least, gone within 100 to 600 ms. For the shot (panel-close.png)
+ * device fade out as it came, over 150 ms: the page records the panel on its own
+ * clock meanwhile — when it began to leave and when it was gone, as its DOM
+ * changed, and at each frame it drew the panel's opacity and how far the fade
+ * had run — and it has to leave inert, its opacity only falling, gone within
+ * 100 to 600 ms of the page's clock, and midway on each frame drawn between
+ * half and nine tenths into the fade; where the page, under load, drew no frame
+ * there, the midway frames are skipped with the times it drew them (the shot
+ * below still judges the fade). For the shot (panel-close.png)
  * the station is opened anew and stepped back from with the fade held 120 ms
  * in and the game's timer that lets the panel go kept back until it is taken —
  * a screenshot asked for at once draws the fade's first frame, the panel whole,
@@ -562,7 +567,7 @@ import {
   summaryText,
 } from './groups.mjs';
 import { lightWorkText } from './lightwork.mjs';
-import { fadeOf, meanLuma, midway } from './panelfade.mjs';
+import { drawnText, fadeOf, fadeVerdict, meanLuma, midway } from './panelfade.mjs';
 import { beamLight, beamPatches, beamVerdict } from './beamcheck.mjs';
 import { changedShare, sweepOf, sweepVerdict } from './sweep.mjs';
 import {
@@ -5416,26 +5421,52 @@ let flinchShot = false;
 let panelCloseShot = false;
 
 /**
- * From now on, each animation frame of `page` notes the station's panel — there or not, on its
- * way out (`puzzle-modal--leaving`), inert, its opacity — until it is gone or a second has
- * passed (`window.__panelFade`, read by panelfade.mjs `fadeOf`).
+ * From now on, `page` records the station's panel on its own clock (`window.__panelFade`, read
+ * by panelfade.mjs `fadeOf`): as its DOM changes, when the panel begins to leave
+ * (`puzzle-modal--leaving`), inert or not, and when it is gone; and at each animation frame until
+ * then, or a second, the panel — there or not, leaving, inert, its opacity, and how far its
+ * fade-out (`panel-down`) has run on the fade's own clock. A frame the page draws late is so
+ * judged by what it showed, not by when the walkthrough looked.
  */
 function recordPanelFade(page) {
   return page.evaluate(() => {
-    const samples = [];
-    globalThis.__panelFade = samples;
     const t0 = globalThis.performance.now();
-    const step = () => {
-      const modal = document.querySelector('.station-modal');
-      const panel = modal?.querySelector('.panel') ?? null;
-      samples.push({
-        t: globalThis.performance.now() - t0,
-        present: modal !== null,
-        leaving: modal?.classList.contains('puzzle-modal--leaving') ?? false,
-        inert: modal?.inert ?? false,
+    const now = () => globalThis.performance.now() - t0;
+    const record = { left: null, gone: null, inertAtLeft: null, frames: [] };
+    globalThis.__panelFade = record;
+    const modalNow = () => document.querySelector('.station-modal');
+    const leavingNow = (modal) => modal?.classList.contains('puzzle-modal--leaving') === true;
+    const watch = new globalThis.MutationObserver(() => {
+      const modal = modalNow();
+      if (record.left === null && leavingNow(modal)) {
+        record.left = now();
+        record.inertAtLeft = modal.inert;
+      }
+      if (modal === null) {
+        record.gone = now();
+        watch.disconnect();
+      }
+    });
+    watch.observe(document.body, { subtree: true, childList: true, attributeFilter: ['class'] });
+    // A panel that never goes is the walkthrough's to report (it waits 3 s for it): stop watching.
+    globalThis.setTimeout(() => watch.disconnect(), 5000);
+    const frameOf = (modal) => {
+      const panel = modal.querySelector('.panel');
+      const fade = panel?.getAnimations().find((a) => a.animationName === 'panel-down');
+      return {
+        t: now(),
+        present: true,
+        leaving: leavingNow(modal),
+        inert: modal.inert,
         opacity: panel === null ? 0 : Number(globalThis.getComputedStyle(panel).opacity),
-      });
-      if (modal !== null && globalThis.performance.now() - t0 < 1000) {
+        fade: fade === undefined ? null : Number(fade.currentTime),
+      };
+    };
+    const gone = () => ({ t: now(), present: false, leaving: false, inert: false, opacity: 0 });
+    const step = () => {
+      const modal = modalNow();
+      record.frames.push(modal === null ? { ...gone(), fade: null } : frameOf(modal));
+      if (modal !== null && now() < 1000) {
         globalThis.requestAnimationFrame(step);
       }
     };
@@ -5490,8 +5521,11 @@ function releasePanelFade() {
   }
 }
 
+/** A page's record of a panel that never began to leave (recordPanelFade). */
+const NO_FADE = { left: null, gone: null, inertAtLeft: null, frames: [] };
+
 /**
- * The device's fade-out as the game plays it: Esc, the page noting the panel each frame
+ * The device's fade-out as the game plays it: Esc, the page recording the panel on its own clock
  * (recordPanelFade) until it has gone, and the world shot once it has.
  */
 async function fadeOutAsPlayed(page, modal) {
@@ -5500,8 +5534,8 @@ async function fadeOutAsPlayed(page, modal) {
   await modal.waitFor({ state: 'hidden', timeout: 3000 });
   await sleep(100);
   const closed = await page.screenshot();
-  const samples = await page.evaluate(() => globalThis.__panelFade ?? []);
-  return { closed, fade: fadeOf(samples) };
+  const record = await page.evaluate(() => globalThis.__panelFade ?? null);
+  return { closed, fade: fadeOf(record ?? NO_FADE, PANEL_FADE_MS) };
 }
 
 /**
@@ -5533,11 +5567,14 @@ async function heldFadeShot(player, modal) {
 
 /**
  * panel-close.png: `player` steps back from the open station with Esc, and the device fades out
- * as it came, over 150 ms (client styles/interaction.css, screens/Game.tsx): the page notes the
- * panel each frame meanwhile — it has to leave inert, its opacity only falling and midway on a
- * frame at least, and be gone within 100 to 600 ms. Then the shot (heldFadeShot), which has to
- * lie between the panel open and gone over the panel's box; one that came after the game had
- * let the panel go is taken again, up to three times. Any of these that fails, fails the run.
+ * as it came, over 150 ms (client styles/interaction.css, screens/Game.tsx): the page records
+ * the panel on its own clock meanwhile (recordPanelFade) — it has to leave inert, its opacity
+ * only falling, be gone within 100 to 600 ms of its beginning to leave, and show midway on a
+ * frame drawn in the fade's middle (panelfade.mjs `fadeVerdict`). Then the shot (heldFadeShot),
+ * which has to lie between the panel open and gone over the panel's box; one that came after
+ * the game had let the panel go is taken again, up to three times. Any of these that fails,
+ * fails the run; where the page drew no frame in the fade's middle, its midway frames are
+ * skipped with when it drew them.
  */
 async function capturePanelClose(player, modal) {
   const { page } = player;
@@ -5563,20 +5600,31 @@ async function capturePanelClose(player, modal) {
   reportPanelClose(player, fade, held);
 }
 
-/** panel-close.png's line in the log; the run fails where the fade or its shot was wrong. */
+/**
+ * panel-close.png's line in the log, the fade's numbers on the page's clock. The run fails where
+ * the fade (panelfade.mjs `fadeVerdict`) or its shot was wrong; where the page drew no frame in
+ * the fade's middle, its frames midway are skipped (`panel-close (fade)`), the reason naming
+ * when the page drew them.
+ */
 function reportPanelClose(player, fade, held) {
-  const faded = fade.ms !== null && fade.ms >= 100 && fade.ms <= 600;
-  const fine = faded && fade.midway > 0 && fade.falling && fade.inert && held.between;
-  const gone = fade.ms === null ? '!! gone at once' : `gone in ${Math.round(fade.ms)} ms`;
+  const { faults, unjudged } = fadeVerdict(fade, PANEL_FADE_MS);
+  const gone =
+    fade.ms === null ? '!! never leaving, or never gone' : `gone in ${Math.round(fade.ms)} ms`;
+  const lumas = `luma ${held.lumas.map((l) => l.toFixed(0)).join(' → ')}`;
   console.log(
-    `panel-close.png    ${player.name}, Esc: ${gone}, ${fade.midway} frames midway, ` +
+    `panel-close.png    ${player.name}, Esc: ${gone}, ${fade.midway} of ${fade.drawn.length} ` +
+      `frames midway (the fade at ${drawnText(fade.drawn)} ms), ` +
       `${fade.falling ? 'falling' : '!! not only falling'}, ` +
-      `${fade.inert ? 'inert' : '!! taking input'}; the shot held ${PANEL_SHOT_MS} ms in ` +
-      `${held.between ? 'midway' : '!! not midway'} ` +
-      `(luma ${held.lumas.map((l) => l.toFixed(0)).join(' → ')}), try ${held.attempt}`,
+      `${fade.inert ? 'inert' : '!! taking input'}, on the page's clock; the shot held ` +
+      `${PANEL_SHOT_MS} ms in ${held.between ? 'midway' : '!! not midway'} (${lumas}), ` +
+      `try ${held.attempt}`,
   );
-  if (!fine) {
-    fail(`panel-close.png: ${JSON.stringify(fade)}, shot midway ${held.between}`);
+  const shot = held.between ? [] : [`the shot held ${PANEL_SHOT_MS} ms in not midway (${lumas})`];
+  if (faults.length + shot.length > 0) {
+    fail(`panel-close.png: ${[...faults, ...shot].join('; ')}`);
+  }
+  if (unjudged !== null) {
+    skip('panel-close (fade)', unjudged);
   }
 }
 
