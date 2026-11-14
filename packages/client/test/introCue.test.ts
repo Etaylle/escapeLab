@@ -131,48 +131,55 @@ describe('composing the cue', () => {
   });
 });
 
+/** The cue's list, as the game finds it in public/intro/. */
+const MANIFEST: CueManifest = { file: 'title.mp3', ms: 40_000, peak: 0.8, hash: 'abcdefabcdef' };
+/** Whether the cue's list is to be had: a test of an opening without one sets it false. */
+let found = true;
+
+/** An opening's page: a fake graph and media, its clock held, the cue's list served. */
+function stage(): void {
+  fakeGraph();
+  fakeMedia();
+  vi.useFakeTimers();
+  vi.spyOn(console, 'warn').mockImplementation(() => undefined); // a list not to be had
+  found = true;
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(() => {
+      const json = (): Promise<CueManifest> => Promise.resolve(MANIFEST);
+      return Promise.resolve({ ok: found, status: found ? 200 : 404, json });
+    }),
+  );
+}
+
+function unstage(): void {
+  vi.useRealTimers();
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+}
+
+async function fresh() {
+  vi.resetModules();
+  const cue = await import('../src/world/intro/cue.js');
+  const audio = await import('../src/world/audio.js');
+  audio.audioEngine();
+  return { cue, audio };
+}
+
+/** The cue's list fetched, and its element played, a lookahead on. */
+const settle = (): Promise<void> => vi.advanceTimersByTimeAsync(10).then(() => undefined);
+
+/** The level the cue's element comes in at: its stream's own gain. */
+const levelOf = (element: FakeAudio | undefined): FakeGain => {
+  const media = lastContext()
+    .all<FakeNode & { mediaElement: unknown }>('media')
+    .find((node) => node.mediaElement === element);
+  return media?.outputs[0] as FakeGain;
+};
+
 describe('the cue in the game', () => {
-  const MANIFEST: CueManifest = { file: 'title.mp3', ms: 40_000, peak: 0.8, hash: 'abcdefabcdef' };
-  let found = true;
-
-  beforeEach(() => {
-    fakeGraph();
-    fakeMedia();
-    vi.useFakeTimers();
-    vi.spyOn(console, 'warn').mockImplementation(() => undefined); // a list not to be had
-    found = true;
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(() => {
-        const json = (): Promise<CueManifest> => Promise.resolve(MANIFEST);
-        return Promise.resolve({ ok: found, status: found ? 200 : 404, json });
-      }),
-    );
-  });
-  afterEach(() => {
-    vi.useRealTimers();
-    vi.unstubAllGlobals();
-    vi.restoreAllMocks();
-  });
-
-  async function fresh() {
-    vi.resetModules();
-    const cue = await import('../src/world/intro/cue.js');
-    const audio = await import('../src/world/audio.js');
-    audio.audioEngine();
-    return { cue, audio };
-  }
-
-  /** The cue's list fetched, and its element played, a lookahead on. */
-  const settle = (): Promise<void> => vi.advanceTimersByTimeAsync(10).then(() => undefined);
-
-  /** The level the cue's element comes in at: its stream's own gain. */
-  const levelOf = (element: FakeAudio | undefined): FakeGain => {
-    const media = lastContext()
-      .all<FakeNode & { mediaElement: unknown }>('media')
-      .find((node) => node.mediaElement === element);
-    return media?.outputs[0] as FakeGain;
-  };
+  beforeEach(stage);
+  afterEach(unstage);
 
   it('streams from where the opening stands, low, into the music, as one voice', async () => {
     const { cue, audio } = await fresh();
@@ -189,40 +196,6 @@ describe('the cue in the game', () => {
     expect(downstream(levelOf(element) as unknown as FakeNode).has(engine.music)).toBe(true);
     expect(lastContext().all<FakeBufferSource>('buffer')).toEqual([]); // nothing decoded
     expect(cue.cueProbe().playing).toBe(true);
-  });
-
-  it('plays the score’s title in its place where the music has one, as loud', async () => {
-    const title: SampleEntry = {
-      file: 'title.m4a',
-      ms: 40_000,
-      gain: 1.4,
-      startMs: 120,
-      floor: 0,
-      rms: 0.1,
-      loop: false,
-      hash: 'abcdefabcdef',
-      source: 'elevenlabs',
-    };
-    const asked: string[] = [];
-    vi.stubGlobal(
-      'fetch',
-      vi.fn((url: string) => {
-        asked.push(url);
-        const body = url === '/music/manifest.json' ? { [TITLE]: title } : MANIFEST;
-        return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(body) });
-      }),
-    );
-    const { cue, audio } = await fresh();
-    cue.startCue(Date.now() - 1000);
-    await settle();
-    const [element] = elements;
-    expect(element?.src).toBe('/music/title.m4a');
-    expect(element?.currentTime).toBeCloseTo(1.12, 9); // where the opening stands, past its lead
-    expect(levelOf(element).gain.value).toBeCloseTo(MUSIC_LEVEL * 1.4, 9);
-    expect(asked).not.toContain('/intro/manifest.json');
-    expect([audio.inUse().voice, cue.cueProbe().playing]).toEqual([1, true]);
-    cue.stopCue(0);
-    expect(levelOf(element).gain.ramps()).toEqual([[0, expect.closeTo(10.02, 9)]]);
   });
 
   it('fades out where the player skips, and stops dead at the blackout', async () => {
@@ -292,4 +265,43 @@ describe('the cue the game ships', () => {
       expect(statSync(join(INTRO_DIR, entry.file)).size).toBeLessThan(1024 * 1024);
     },
   );
+});
+
+describe('the score’s title in the cue’s place', () => {
+  beforeEach(stage);
+  afterEach(unstage);
+
+  it('plays the score’s title where the music has one, at the stems’ level', async () => {
+    const title: SampleEntry = {
+      file: 'title.m4a',
+      ms: 40_000,
+      gain: 1.4,
+      startMs: 120,
+      floor: 0,
+      rms: 0.1,
+      loop: false,
+      hash: 'abcdefabcdef',
+      source: 'elevenlabs',
+    };
+    const asked: string[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        asked.push(url);
+        const body = url === '/music/manifest.json' ? { [TITLE]: title } : MANIFEST;
+        return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(body) });
+      }),
+    );
+    const { cue, audio } = await fresh();
+    cue.startCue(Date.now() - 1000);
+    await settle();
+    const [element] = elements;
+    expect(element?.src).toBe('/music/title.m4a');
+    expect(element?.currentTime).toBeCloseTo(1.12, 9); // where the opening stands, past its lead
+    expect(levelOf(element).gain.value).toBeCloseTo(MUSIC_LEVEL * 1.4, 9);
+    expect(asked).not.toContain('/intro/manifest.json');
+    expect([audio.inUse().voice, cue.cueProbe().playing]).toEqual([1, true]);
+    cue.stopCue(0);
+    expect(levelOf(element).gain.ramps()).toEqual([[0, expect.closeTo(10.02, 9)]]);
+  });
 });
