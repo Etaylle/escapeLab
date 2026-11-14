@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { applyAction, checkMission, moduleFor, viewFor } from '../src/index.js';
+import { applyAction, checkMission, missionSchema, moduleFor, viewFor } from '../src/index.js';
 import type { Action, GameState, Move, PuzzleInput, PuzzleView } from '../src/index.js';
 import { hallMission, machineOf, stationTypes } from './hall.js';
 import { crewAt, hall, HALL_SEED, hallPlan, ticked, walkOrder } from './hallPlan.js';
@@ -27,9 +27,13 @@ describe('the Übungshalle', () => {
     expect(committed).toEqual(hallMission());
   });
 
-  it('validates as a mission', () => {
+  it('validates as a mission, and with its stations in any order a run takes them in', () => {
     const checked = checkMission(committed);
     expect(checked.ok ? [] : checked.issues).toEqual([]);
+    // A run's snapshot keeps the order the crew took, and a server parses it again from there.
+    const mission = hall();
+    const taken = missionSchema.safeParse({ ...mission, puzzles: [...mission.puzzles].reverse() });
+    expect(taken.success ? [] : taken.error.issues).toEqual([]);
   });
 
   it('has a station of every type that stands at one, each worked as its module is', () => {

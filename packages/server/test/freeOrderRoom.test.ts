@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { parseMission, type Mission, type PlayerView, type ServerMessage } from '@escapelab/core';
 import { Room } from '../src/room.js';
+import { open, roomKey, seal } from '../src/seal.js';
+import { rejoin } from './blackout.js';
 import { passFor } from './passes.js';
 import { pressE, walkTo, type Walker } from './walk.js';
 
@@ -131,5 +133,42 @@ describe('a run without a clock in a room', () => {
     expect(view.deadlineAt).toBeNull();
     expect(room.seatSummary(passFor('Anna'))?.leftMs).toBeNull();
     room.dispose();
+  });
+});
+
+/** The key the snapshots below are sealed under. */
+const KEY = roomKey({ ROOM_SECRET: 'f00d'.repeat(16) }).key;
+
+/** How long the server is down between the snapshot and the room taken up again, ms. */
+const DOWNTIME_MS = 30_000;
+
+describe('a free-order run without a clock, sealed while the crew picks', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('keeps the order taken, the pick and the clock’s start, and its clock stood still', () => {
+    const { room, anna, ben } = running(freeLab(0));
+    // Drei first: it swaps places with Eins at the run's first, and once solved the crew picks.
+    switchOn(room, anna, ben, 11);
+    pressTogether(room, anna, ben);
+    const kept = room.snapshot(Date.now());
+    room.dispose();
+    const blob = seal({ ...kept, instance: 'frei', final: true }, 'TEST', KEY);
+    const { state } = open(blob, 'TEST', KEY);
+    expect(state.mission.puzzles.map((p) => p.id)).toEqual(['drei', 'zwei', 'eins']);
+    expect([state.currentPuzzleIndex, state.picked]).toEqual([1, false]);
+    expect(state.clockFrom).toBe(kept.state.clockFrom);
+    vi.advanceTimersByTime(DOWNTIME_MS);
+    const again = Room.restore(open(blob, 'TEST', KEY), Date.now());
+    const [back] = [rejoin(again, { name: 'Anna' }), rejoin(again, { name: 'Ben' })];
+    // Both back: the time run counts on from where it stood, the downtime left out.
+    expect(lastView(back).pausedFor).toBeNull();
+    expect(lastView(back).clockFrom).toBe((kept.state.clockFrom ?? 0) + DOWNTIME_MS);
+    expect(lastView(back).currentPuzzleIndex).toBe(1);
+    again.dispose();
   });
 });
