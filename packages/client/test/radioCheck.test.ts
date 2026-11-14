@@ -9,21 +9,48 @@ import {
   type FakeGain,
   type FakeNode,
 } from './fakeGraph.js';
-import { serveSamples } from './fakeSamples.js';
+import { serveVoice } from './fakeSamples.js';
 
-const PROBE = 'Funkprobe, Nachtschicht. Ich höre euch laut und klar.';
+/**
+ * The Funkprobe, said by Laura, the operator on duty for the run to come (the view's `cast`) —
+ * and Helmut's recording of the same words, which this lobby does not hear.
+ */
+const WORDS = 'Funkprobe, Nachtschicht. Ich höre euch laut und klar.';
+const PROBE = { text: WORDS, person: 'laura' };
+const take = {
+  text: WORDS,
+  ms: 3000,
+  missions: ['blackout'],
+  role: 'operator',
+  moment: 'lobby',
+} as const;
 const MANIFEST: VoiceManifest = {
   lines: {
-    dddddddddddd: {
-      text: PROBE,
-      ms: 3000,
-      missions: ['blackout'],
-      speaker: 'operator',
-      mood: 'calm',
-      file: 'dddddddddddd.mp3',
-    },
+    'laura-dddd': { ...take, person: 'laura', mood: 'calm', file: 'laura-dddd.mp3' },
+    'helmut-dddd': { ...take, person: 'helmut', mood: 'calm', file: 'helmut-dddd.mp3' },
   },
 };
+
+/** The lobby's radio, its sound made and woken as a click in the lobby makes and wakes it. */
+async function lobby() {
+  vi.resetModules();
+  await (await import('../src/world/samples.js')).preloadSamples();
+  (await import('../src/world/audio.js')).audioEngine();
+  return import('../src/world/radioCheck.js');
+}
+
+/** Lets the fetches and the decoding settle. */
+const settle = (): Promise<void> => vi.advanceTimersByTimeAsync(0).then(() => undefined);
+
+/** The Funkprobe's speech as it was played: the fake decodes every line to 1.5 s. */
+const speech = (): FakeBufferSource[] =>
+  lastContext()
+    .all<FakeBufferSource>('buffer')
+    .filter((source) => source.buffer?.duration === 1.5);
+
+/** The level the Funkprobe goes through, between the radio's chain and the radio's bus. */
+const levelOf = (source: FakeBufferSource | undefined): FakeGain =>
+  chainFrom(source as FakeBufferSource)[9] as unknown as FakeGain;
 
 describe('the operator’s Funkprobe in the lobby', () => {
   let fetched: string[] = [];
@@ -31,39 +58,13 @@ describe('the operator’s Funkprobe in the lobby', () => {
   beforeEach(() => {
     fakeGraph();
     fetched = [];
-    serveSamples({}, (url: string) => {
-      fetched.push(url);
-      const json = (): Promise<VoiceManifest> => Promise.resolve(MANIFEST);
-      const arrayBuffer = (): Promise<ArrayBuffer> => Promise.resolve(new ArrayBuffer(8));
-      return Promise.resolve({ ok: true, status: 200, json, arrayBuffer });
-    });
+    serveVoice(MANIFEST, fetched);
   });
   afterEach(() => {
     vi.useRealTimers();
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
   });
-
-  /** The lobby's radio, its sound made and woken as a click in the lobby makes and wakes it. */
-  async function lobby() {
-    vi.resetModules();
-    await (await import('../src/world/samples.js')).preloadSamples();
-    (await import('../src/world/audio.js')).audioEngine();
-    return import('../src/world/radioCheck.js');
-  }
-
-  /** Lets the fetches and the decoding settle. */
-  const settle = (): Promise<void> => vi.advanceTimersByTimeAsync(0).then(() => undefined);
-
-  /** The Funkprobe's speech as it was played: the fake decodes every line to 1.5 s. */
-  const speech = (): FakeBufferSource[] =>
-    lastContext()
-      .all<FakeBufferSource>('buffer')
-      .filter((source) => source.buffer?.duration === 1.5);
-
-  /** The level the Funkprobe goes through, between the radio's chain and the radio's bus. */
-  const levelOf = (source: FakeBufferSource | undefined): FakeGain =>
-    chainFrom(source as FakeBufferSource)[9] as unknown as FakeGain;
 
   it('says nothing before every seat is ready, then the Funkprobe, and only once', async () => {
     vi.useFakeTimers();
@@ -72,11 +73,13 @@ describe('the operator’s Funkprobe in the lobby', () => {
     radio.update(undefined, false);
     await settle();
     expect(fetched).toEqual([]);
-    expect(radioCheckProbe()).toEqual({ asked: null, aired: false });
+    expect(radioCheckProbe()).toEqual({ asked: null, by: null, aired: false });
     radio.update(PROBE, false);
     await settle();
     expect(speech()).toHaveLength(1);
-    expect(radioCheckProbe()).toEqual({ asked: PROBE, aired: true });
+    expect(radioCheckProbe()).toEqual({ asked: WORDS, by: 'laura', aired: true });
+    // In the voice of the operator on duty: her recording, not another's of the same words.
+    expect(fetched).toEqual(['/voice/manifest.json', '/voice/laura-dddd.mp3']);
     // Somebody is not ready after all, then is again: the lobby has heard it.
     radio.update(undefined, false);
     radio.update(PROBE, false);
@@ -171,16 +174,21 @@ describe('the operator’s Funkprobe in the lobby', () => {
     await settle();
     // No audio context made for it: the page has had no gesture to make one in.
     expect(FakeContext.made).toEqual([]);
-    expect(radioCheckProbe()).toEqual({ asked: PROBE, aired: false });
+    expect(radioCheckProbe()).toEqual({ asked: WORDS, by: 'laura', aired: false });
   });
 
   it('stays silent without a recording, and before a gesture woke the sound', async () => {
     vi.useFakeTimers();
     const { lobbyRadio, radioCheckProbe } = await lobby();
-    lobbyRadio().update('Eine Funkprobe ohne Aufnahme.', false);
+    lobbyRadio().update({ text: 'Eine Funkprobe ohne Aufnahme.', person: 'laura' }, false);
     await settle();
     // Asked for, and not on the air: the walkthrough says it awaits its render.
-    expect(radioCheckProbe()).toEqual({ asked: 'Eine Funkprobe ohne Aufnahme.', aired: false });
+    const unrecorded = { asked: 'Eine Funkprobe ohne Aufnahme.', by: 'laura', aired: false };
+    expect(radioCheckProbe()).toEqual(unrecorded);
+    // Nor in another's voice where the operator on duty has no recording of it.
+    lobbyRadio().update({ text: WORDS, person: 'ben' }, false);
+    await settle();
+    expect(speech()).toEqual([]);
     const ctx = lastContext();
     expect(ctx.all<FakeBufferSource>('buffer').filter((s) => s.startedAt !== null)).toEqual([]);
     // Nothing of it stays wired to the radio's bus: its level was let go at once.

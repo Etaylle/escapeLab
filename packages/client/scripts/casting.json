@@ -1,0 +1,53 @@
+{
+  "prompts": {
+    "anlage": "Calm, neutral German voice of a research facility's public address system. Mid register, even pace, precise diction, slightly synthetic like an automated building announcement, no character, no emotion, no accent. Clean studio recording without background noise.",
+    "helmut": "A German man in his late fifties, the senior night operator in the control room of a research facility, talking to colleagues over a two-way radio. Deep, resonant voice like a film trailer narrator, slow and steady pace, unhurried authority. Native German, no accent. Clean studio recording without background noise.",
+    "laura": "A German woman in her mid-forties, a control room operator on the night shift of a research facility, talking to colleagues over a two-way radio. Calm, smooth and even, low-mid register, short factual sentences with a trace of warmth, never raised. Native German, no accent. Clean studio recording without background noise.",
+    "ben": "A German man in his late twenties, the youngest operator in the control room of a research facility on night duty, talking to colleagues over a two-way radio. Clear, relaxed mid register, quick and conversational, effortless and casual yet focused. Native German, no accent. Clean studio recording without background noise.",
+    "mila": "A German woman in her early thirties, the night shift supervisor of a research facility, cutting in on the control room's radio when time runs short. Clear, confident and decisive, a voice with opinions, economical with words, never shouting. Native German, no accent. Clean studio recording without background noise."
+  },
+  "library": [
+    {
+      "voiceId": "g1jpii0iyvtRs8fqXsd1",
+      "name": "Helmut - German Epic Trailer Voice",
+      "about": "old male, advertisement",
+      "slot": "operator:helmut"
+    },
+    {
+      "voiceId": "5KvpaGteYkNayiswuX2h",
+      "name": "Helmut - Distinctive and Authentic",
+      "about": "old male, deep, characters",
+      "slot": "operator:helmut"
+    },
+    {
+      "voiceId": "Qy4b2JlSGxY7I9M9Bqxb",
+      "name": "Laura - Calm and Smooth",
+      "about": "female, middle-aged, calm",
+      "slot": "operator:laura"
+    },
+    {
+      "voiceId": "aTTiK3YzK3dXETpuDE2h",
+      "name": "Ben - Effortless and Casual",
+      "about": "young male, conversational",
+      "slot": "operator:ben"
+    },
+    {
+      "voiceId": "dCnu06FiOZma2KVNUoPZ",
+      "name": "Mila - Confident and Opinionated",
+      "about": "young female, confident",
+      "slot": "lead"
+    },
+    {
+      "voiceId": "OCDYul75SEKSUI3jtFCT",
+      "name": "Nastassja",
+      "about": "female, middle-aged, pleasant, narrative",
+      "slot": "pa"
+    },
+    {
+      "voiceId": "rAmra0SCIYOxYmRNDSm3",
+      "name": "Lana Weiss - Soft and Sweet",
+      "about": "young female, soft",
+      "slot": "pa"
+    }
+  ]
+}

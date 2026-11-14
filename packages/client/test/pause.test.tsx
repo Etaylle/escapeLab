@@ -217,6 +217,7 @@ function screen(parts: Partial<PlayerView>, now: number): string {
     missionTitle: 'Tutorial: Systemcheck',
     difficulty: 'normal',
     storyText: 'Los.',
+    cast: { pa: 'anlage', operator: 'helmut', lead: null },
     crewSize: { min: 3, max: 3 },
     chat: [],
     you: anna,

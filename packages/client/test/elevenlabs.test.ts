@@ -10,7 +10,6 @@ import {
   ELEVEN_GAP_MS,
   ELEVEN_MODEL,
   ELEVEN_RETRIES,
-  ELEVEN_VOICE,
   elevenAsk,
   ENV_FILE,
   loadApiKey,
@@ -25,7 +24,11 @@ import {
   voiceRow,
   type SpeechClient,
   type VoiceInfo,
+  V3_STABILITY,
 } from '../scripts/elevenlabs.js';
+
+/** Helmut's library voice, the operator every recorded line was made with (core cast.json). */
+const HELMUT = 'g1jpii0iyvtRs8fqXsd1';
 
 /**
  * The ElevenLabs engine against a client of the tests' own: no request ever leaves, and the
@@ -34,7 +37,7 @@ import {
 
 const VOICES: VoiceInfo[] = [
   {
-    voiceId: ELEVEN_VOICE,
+    voiceId: HELMUT,
     name: 'Helmut - German Epic Trailer Voice',
     category: 'professional',
     labels: { language: 'de', gender: 'male', age: 'old' },
@@ -119,7 +122,7 @@ describe('the account’s voices', () => {
     const { client } = clientOf();
     const rows = (await accountVoices(client)).map(voiceRow);
     expect(rows).toEqual([
-      `Helmut - German Epic Trailer Voice  ·  ${ELEVEN_VOICE}  ·  professional  ·  ` +
+      `Helmut - German Epic Trailer Voice  ·  ${HELMUT}  ·  professional  ·  ` +
         'language de, gender male, age old',
       'George  ·  JBFqnCBsd6RMkjVDRZzb  ·  premade',
       '(no name)  ·  nameless0000000000aa',
@@ -127,9 +130,8 @@ describe('the account’s voices', () => {
   });
 
   it('give the voice by its id or its exact name, Helmut by default', () => {
-    expect(resolveVoice(VOICES, ELEVEN_VOICE).name).toBe('Helmut - German Epic Trailer Voice');
+    expect(resolveVoice(VOICES, HELMUT).name).toBe('Helmut - German Epic Trailer Voice');
     expect(resolveVoice(VOICES, 'George').voiceId).toBe('JBFqnCBsd6RMkjVDRZzb');
-    expect(ELEVEN_VOICE).toBe('g1jpii0iyvtRs8fqXsd1');
   });
 
   it('refuse a name that is not exact, naming every voice there is', () => {
@@ -166,11 +168,21 @@ describe('a request for speech', () => {
     expect(OPERATOR_HELD).toEqual({ stability: 0.5, similarityBoost: 0.75 });
     const steady = { stability: 0.8, similarityBoost: 0.75 };
     expect(speechRequest('Durchsage.', ELEVEN_MODEL, steady).voiceSettings).toEqual(steady);
-    expect(speechRequest('Durchsage.', 'eleven_v3', steady).voiceSettings).toEqual({
+    expect(speechRequest('Durchsage.', 'eleven_multilingual_v2', steady).voiceSettings).toEqual({
       ...steady,
       style: 0.2,
       useSpeakerBoost: true,
     });
+  });
+
+  it('holds a voice on Eleven v3 at the nearest of its three settings, nothing besides', () => {
+    expect(V3_STABILITY).toEqual([0, 0.5, 1]);
+    const at = (stability: number) =>
+      speechRequest('Los.', 'eleven_v3', { stability, similarityBoost: 0.75 }).voiceSettings;
+    expect(at(0.8)).toEqual({ stability: 1, similarityBoost: 0.75 });
+    expect(at(0.5)).toEqual({ stability: 0.5, similarityBoost: 0.75 });
+    expect(at(0.2)).toEqual({ stability: 0, similarityBoost: 0.75 });
+    expect(at(0.25)).toEqual({ stability: 0, similarityBoost: 0.75 });
   });
 });
 
@@ -195,7 +207,7 @@ describe('a request for a voice', () => {
 describe('a line read by ElevenLabs', () => {
   it('comes back as the MP3 the voice made, from one request for its text', async () => {
     const { client, requests } = clientOf(MP3);
-    const voice = { client, voiceId: ELEVEN_VOICE, model: ELEVEN_MODEL, held: OPERATOR_HELD };
+    const voice = { client, voiceId: HELMUT, model: ELEVEN_MODEL, held: OPERATOR_HELD };
     const dir = mkdtempSync(join(tmpdir(), 'escapelab-mp3-'));
     try {
       const file = join(dir, 'abc.mp3');
@@ -205,7 +217,7 @@ describe('a line read by ElevenLabs', () => {
       rmSync(dir, { recursive: true, force: true });
     }
     expect(requests).toEqual([
-      [ELEVEN_VOICE, speechRequest('Reaktor läuft.', ELEVEN_MODEL, OPERATOR_HELD)],
+      [HELMUT, speechRequest('Reaktor läuft.', ELEVEN_MODEL, OPERATOR_HELD)],
     ]);
   });
 
@@ -218,7 +230,7 @@ describe('a line read by ElevenLabs', () => {
     };
     const busy = refusal(429, { 'retry-after': '2' });
     const { client, requests } = clientOf(busy, refusal(429), MP3);
-    const voice = { client, voiceId: ELEVEN_VOICE, model: ELEVEN_MODEL, held: OPERATOR_HELD };
+    const voice = { client, voiceId: HELMUT, model: ELEVEN_MODEL, held: OPERATOR_HELD };
     const mp3 = await speakEleven(voice, 'Reaktor läuft.', wait);
     expect([...mp3]).toEqual([...MP3]);
     expect(waits).toEqual([2000, 1000]);
@@ -233,7 +245,7 @@ describe('a line read by ElevenLabs', () => {
     const busy = clientOf(...always);
     const voice = {
       client: busy.client,
-      voiceId: ELEVEN_VOICE,
+      voiceId: HELMUT,
       model: ELEVEN_MODEL,
       held: OPERATOR_HELD,
     };
@@ -307,7 +319,7 @@ describe('a sample', () => {
     expect(sampleFile('Helmut - German Epic Trailer Voice')).toBe(
       'Helmut-German-Epic-Trailer-Voice.mp3',
     );
-    expect(sampleFile(ELEVEN_VOICE)).toBe(`${ELEVEN_VOICE}.mp3`);
+    expect(sampleFile(HELMUT)).toBe(`${HELMUT}.mp3`);
     expect(sampleFile('../..')).toBe('voice.mp3');
   });
 });

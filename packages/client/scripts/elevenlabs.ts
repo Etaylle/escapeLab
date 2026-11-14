@@ -26,8 +26,6 @@ export const ENV_FILE = resolve(HERE, '../../../.env.local');
  * default, which speaks German among 90 languages and more.
  */
 export const ELEVEN_MODEL = 'eleven_v4';
-/** The operator's voice where the manifest names none: „Helmut - German Epic Trailer Voice". */
-export const ELEVEN_VOICE = 'g1jpii0iyvtRs8fqXsd1';
 /** MP3 at 44.1 kHz and 96 kbit/s, 12 kB a second: a line of 16 s still fits in 200 kB. */
 export const ELEVEN_FORMAT = 'mp3_44100_96';
 /** The pause between two requests, ms: they go one after the other. */
@@ -35,12 +33,13 @@ export const ELEVEN_GAP_MS = 300;
 /** How often a request turned away as one too many (429) goes again. */
 export const ELEVEN_RETRIES = 5;
 
-/** A voice of the account, as GET /v1/voices lists it. */
+/** A voice of the account, as GET /v1/voices lists it, with the address of its preview. */
 export interface VoiceInfo {
   readonly voiceId: string;
   readonly name?: string | undefined;
   readonly category?: string | undefined;
   readonly labels?: Readonly<Record<string, string>> | undefined;
+  readonly previewUrl?: string | undefined;
 }
 
 /** What the script asks of the SDK's client: the account's voices, and speech. */
@@ -166,11 +165,27 @@ export function resolveVoice(voices: readonly VoiceInfo[], wanted: string): Voic
   return found;
 }
 
-/** How a voice holds on `model`: Eleven v4 takes stability and similarity alone, older ones more. */
+/**
+ * Eleven v3's stability, three settings rather than a slider — Creative, Natural and Robust — of
+ * which a hold takes the nearest.
+ */
+export const V3_STABILITY = [0, 0.5, 1] as const;
+
+/** The setting of `steps` nearest to `value`; the lower of two as near. */
+const nearest = (steps: readonly number[], value: number): number =>
+  steps.reduce((best, step) => (Math.abs(step - value) < Math.abs(best - value) ? step : best));
+
+/**
+ * How a voice holds on `model`: Eleven v4 takes stability and similarity alone, and so does v3,
+ * its stability one of its three settings; the older models style and speaker boost besides.
+ */
 export function voiceSettings(model: string, held: Held): ElevenLabs.VoiceSettings {
   const { stability, similarityBoost } = held;
-  const steady = { stability, similarityBoost };
-  return model.startsWith('eleven_v4') ? steady : { ...steady, style: 0.2, useSpeakerBoost: true };
+  if (model.startsWith('eleven_v4')) return { stability, similarityBoost };
+  if (model.startsWith('eleven_v3')) {
+    return { stability: nearest(V3_STABILITY, stability), similarityBoost };
+  }
+  return { stability, similarityBoost, style: 0.2, useSpeakerBoost: true };
 }
 
 /** What ElevenLabs is asked to read, by a voice that holds as `held`: German where it takes it. */

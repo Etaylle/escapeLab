@@ -9,6 +9,7 @@ import { opensRecording } from './record/path.js';
 import { RecordScreen } from './record/RecordScreen.js';
 import { startSettings } from './settings.js';
 import { opensSounds } from './sounds/path.js';
+import { opensVoices } from './voices/path.js';
 import './ui.css';
 import './styles/notepad.css';
 import './styles/notes.css';
@@ -69,6 +70,19 @@ if (opensRecording(window.location.pathname)) {
       );
     },
     (err: unknown) => console.error('[escapelab] the sounds page could not be loaded:', err),
+  );
+} else if (opensVoices(window.location.pathname)) {
+  // /voices: the radio's cast to listen to — the samples of a voice before it is kept, every
+  // line after its render — a tool beside the game, in a chunk of its own as /sounds.
+  import('./voices/VoicesScreen.js').then(
+    ({ VoicesScreen }) => {
+      createRoot(root).render(
+        <StrictMode>
+          <VoicesScreen />
+        </StrictMode>,
+      );
+    },
+    (err: unknown) => console.error('[escapelab] the voices page could not be loaded:', err),
   );
 } else {
   // The address may open the editor, with a mission a shared link packed into it: unpacked

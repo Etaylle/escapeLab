@@ -35,8 +35,9 @@ export default defineConfig({
         target: 'http://localhost:3001',
         bypass: (req) => (req.method === 'POST' ? undefined : req.url),
       },
-      // The music's takes for the /sounds page: the server's, which serves them in dev alone
-      // (ALLOW_TAKES=1); they lie beside public/, never in the build.
+      // The music's takes and the voices' samples for the /sounds and /voices pages: the
+      // server's, which serves them in dev alone (ALLOW_TAKES=1); they lie beside public/, never
+      // in the build. (/voices itself is the page's, which the '/voice' bypass leaves to Vite.)
       '/takes': { target: 'http://localhost:3001' },
     },
   },
