@@ -1,7 +1,7 @@
 import { randomInt, randomUUID } from 'node:crypto';
 import { DronePatrol } from './drones.js';
 import { SeatBook } from './seats.js';
-import type { FinishedRun } from './store/store.js';
+import type { FinishedRun, SeatPass } from './store/store.js';
 import {
   applyAction,
   armedPuzzleIds,
@@ -186,6 +186,10 @@ function takeAllowance(
 const PLAYS_IN_ANOTHER_TAB = 'Dieser Platz spielt jetzt in einem anderen Fenster.';
 /** What a pass is told once another device took its seat over by its name. */
 const SEAT_TAKEN = 'Der Platz wurde auf einem anderen Gerät übernommen.';
+/** What a pass of an account is told that would take its seat back while it plays elsewhere. */
+export const SEAT_ELSEWHERE = 'Dieser Platz spielt gerade auf einem anderen Gerät.';
+/** What the line of a seat whose pass signed out hears: the seat waits for the account. */
+export const SIGNED_OUT = 'Abgemeldet: Der Platz bleibt beim Konto.';
 
 /**
  * How a seat's line ended: dropped — cut, or gone without a word —, closed cleanly by its tab
@@ -855,9 +859,75 @@ export class Room {
   /** The seat `pass` holds in this room, by player id; null for none. */
   seatOf(pass: CrewPass): string | null {
     const playerId = this.seats.seatOf(pass);
-    return playerId !== null && this.state.players.some((p) => p.id === playerId)
-      ? playerId
-      : null;
+    return playerId !== null && this.hasPlayer(playerId) ? playerId : null;
+  }
+
+  /**
+   * The seat `pass` holds is bound to `accountId` as well, the account the server found for the
+   * pass: any other pass of that account takes it back from now on (`takeBack`); nothing where
+   * the pass holds no seat here.
+   */
+  bindAccount(pass: CrewPass, accountId: string): void {
+    this.seats.bindAccount(pass, accountId);
+  }
+
+  /**
+   * The seat of the pass `pass` — its id and the hash of its secret, as a store keeps it — its
+   * pass signed out (rule 4): it stays the account's, bound to `accountId` (seats.ts `park`), and
+   * its line, where up, drops as a line drops, its connection told why. Nothing where the pass
+   * holds no seat here.
+   */
+  parkSeat(pass: SeatPass, accountId: string): void {
+    const playerId = this.seats.seatOfPass(pass);
+    if (playerId !== null) {
+      this.parkAt(playerId, accountId);
+    }
+  }
+
+  /**
+   * Every seat here bound to `accountId` but the one of the pass `staying`, parked as `parkSeat`
+   * parks it: the account's Kennwort changed on the device of that pass.
+   */
+  parkAccountSeats(accountId: string, staying: string): void {
+    for (const playerId of this.seats.seatsOfAccount(accountId, staying)) {
+      this.parkAt(playerId, accountId);
+    }
+  }
+
+  /** The seat of `playerId` parked for `accountId` (`parkSeat`); nothing for one not in play. */
+  private parkAt(playerId: string, accountId: string): void {
+    if (!this.hasPlayer(playerId)) {
+      return;
+    }
+    this.seats.park(playerId, accountId);
+    const listener = this.listeners.get(playerId);
+    this.detach(playerId, 'dropped');
+    listener?.({ kind: 'left', code: this.code, message: SIGNED_OUT });
+  }
+
+  /** Whether a seat here is bound to an account, which a pass may take back by it (`takeBack`). */
+  get holdsAccounts(): boolean {
+    return this.seats.holdsAccounts;
+  }
+
+  /**
+   * The seat bound to `accountId` back on `pass`, another pass of that account — another device
+   * signed into it — without the crew's yes, as `resume` brings a seat back: its player id; null
+   * where the account holds no seat here. The pass that held the seat holds it no more. Throws
+   * where the seat plays on its line now (SEAT_ELSEWHERE): a device leaves it first.
+   */
+  takeBack(pass: CrewPass, accountId: string): string | null {
+    const playerId = this.seats.seatOfAccount(accountId);
+    if (playerId === null || !this.hasPlayer(playerId)) {
+      return null;
+    }
+    if (this.listeners.has(playerId)) {
+      throw new GameError(SEAT_ELSEWHERE);
+    }
+    this.seats.takeBack(playerId, pass);
+    const gap = this.back(playerId);
+    this.log(`${this.nameOf(playerId)} back on another device of the account, ${gap}`);
+    return playerId;
   }
 
   /** Whether `listener` is the connection the seat of `playerId` plays on right now. */
@@ -881,8 +951,32 @@ export class Room {
    * finished run — the end screen binds nobody.
    */
   seatSummary(pass: CrewPass, now = Date.now()): Seat | null {
+    return this.binds(pass) ? this.summaryAt(now) : null;
+  }
+
+  /**
+   * Where the account `accountId` sits in this room, as the join screen of any device signed into
+   * it shows it: a run on, live or paused, on a seat bound to the account whose line has been up
+   * since the room was opened or taken up again; null otherwise.
+   */
+  accountRun(accountId: string, now = Date.now()): Seat | null {
+    const playerId = this.seats.seatOfAccount(accountId);
+    const seated = playerId !== null && this.seenOnLine.has(playerId) && this.hasPlayer(playerId);
+    return seated && this.state.phase === 'playing' ? this.summaryAt(now) : null;
+  }
+
+  /** Whether a seat of `playerId` is in the game. */
+  private hasPlayer(playerId: string): boolean {
+    return this.state.players.some((p) => p.id === playerId);
+  }
+
+  /**
+   * The room as its join screen's card shows it, the mission's clock read at `now`; null for a
+   * room whose run is over.
+   */
+  private summaryAt(now: number): Seat | null {
     const { state } = this;
-    if (!this.binds(pass) || (state.phase !== 'lobby' && state.phase !== 'playing')) {
+    if (state.phase !== 'lobby' && state.phase !== 'playing') {
       return null;
     }
     const clock = state.paused?.since ?? now;

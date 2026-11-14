@@ -198,9 +198,16 @@
  * unless Blackout opens on both pages with the power on. Then a second tab of
  * the host's browser opens „Meine Einsätze" off the menu (my-runs.png): the
  * Systemcheck just won leads the list with its crew and a rank, the page fits
- * a phone sideways. Its settings delete the account at the second word
- * (account-delete.png the first answered), the profile says „Gast" with no
- * name, and „Meine Einsätze" lists nothing more — or the run fails.
+ * a phone sideways. Its settings' „Konto" sets a Kennwort, the Ausweisnummer
+ * minted shown large (account-password.png); the guest's tab sets one too. A
+ * second browser of the guest's — another device — signs into the host's
+ * account from its „Konto"'s „Anmelden" (account-signin.png) and finds the run
+ * in „Meine Einsätze" with the host's seat marked, then switches to the
+ * guest's account (account-switch.png) on a new pass and finds the guest's
+ * seat marked — each Ausweis readable, its texts 12 px or more and 4.5:1, its
+ * way on in sight. Then the host's settings delete the account at the second
+ * word (account-delete.png the first answered), the profile says „Gast" with
+ * no name, and „Meine Einsätze" lists nothing more — or the run fails.
  *
  * Blackout on its pinned seed is played to the won card too, with the
  * answers tools/fixtures/blackout-plan.json carries (core's
@@ -12184,7 +12191,7 @@ async function playToTheEnd(host, guest, watcher, pinned) {
   await captureEnd(host, watcher);
   await capturePhoneCard(guest);
   await captureNextMission(host, guest);
-  await captureAccount(host);
+  await captureAccount(host, guest);
 }
 
 /** What the first row of „Meine Einsätze" has to say of the Systemcheck just won. */
@@ -12198,12 +12205,13 @@ const WON_ROW = [/Systemcheck/, /Geschafft/, /Anna/, /Ben/];
  * the first answered), the profile says „Gast" with no name, and „Meine Einsätze" lists nothing
  * any more. The run fails wherever that does not hold.
  */
-async function captureAccount(host) {
+async function captureAccount(host, guest) {
   const page = await openPage(host.page.context(), 'host tab');
   try {
     await page.goto(paged(BASE));
     const row = await captureMyRuns(page);
     await page.locator('.history-back').click();
+    await captureLogin(page, host, guest);
     await deleteAccount(page);
     // The slot's text as written: the chip sets it in capitals.
     const slot = (await page.locator('.profile-slot').textContent())?.trim() ?? null;
@@ -12253,6 +12261,248 @@ async function captureMyRuns(page) {
     fail(`my-runs: first row "${row}", ranked ${ranked}, ${over}px sideways on a phone`);
   }
   return row;
+}
+
+/** The Kennwort the walkthrough's accounts take (`captureLogin`). */
+const KENNWORT = 'Kaltenbrunn 1986';
+
+/**
+ * What „Konto"'s Ausweis shows on `page`, read off it: the size of its smallest text and of the
+ * Ausweisnummer, the least contrast of its texts against what they stand on, the lowest of its
+ * controls, whether its last control stands within the settings' view, and how far the card runs
+ * out sideways.
+ */
+function loginLook(page) {
+  return page.evaluate(() => {
+    const style = (el) => globalThis.getComputedStyle(el);
+    const luminance = (color) => {
+      const [r, g, b] = (color.match(/[\d.]+/g) ?? []).slice(0, 3).map((c) => {
+        const v = Number(c) / 255;
+        return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+      });
+      return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    };
+    // What a text stands on: the nearest ground with a colour of its own.
+    const groundOf = (el) => {
+      for (let at = el; at !== null; at = at.parentElement) {
+        const ground = style(at).backgroundColor;
+        if (!/rgba\([^)]*,\s*0\)$/.test(ground) && ground !== 'transparent') {
+          return luminance(ground);
+        }
+      }
+      return 0;
+    };
+    const shown = (el) => el.getBoundingClientRect().height > 0;
+    const section = document.querySelector('.settings-login');
+    const texts = [...section.querySelectorAll('p, span, code, button')].filter(
+      (el) => shown(el) && el.textContent.trim() !== '',
+    );
+    const contrast = Math.min(
+      ...texts.map((el) => {
+        const [light, dark] = [luminance(style(el).color), groundOf(el)].sort((a, b) => b - a);
+        return (light + 0.05) / (dark + 0.05);
+      }),
+    );
+    const number = section.querySelector('.settings-login-big, .settings-login-code');
+    const controls = [...section.querySelectorAll('button, input')].filter(shown);
+    const last = controls.at(-1)?.getBoundingClientRect();
+    const view = document.querySelector('.settings-body').getBoundingClientRect();
+    const card = document.querySelector('.settings-card');
+    return {
+      smallest: Math.min(...texts.map((el) => Number.parseFloat(style(el).fontSize))),
+      number: number === null ? null : Number.parseFloat(style(number).fontSize),
+      contrast,
+      lowest: Math.min(...controls.map((el) => Math.round(el.getBoundingClientRect().height))),
+      inView: last !== undefined && last.bottom <= view.bottom + 0.5,
+      sideways: card.scrollWidth - card.clientWidth,
+    };
+  });
+}
+
+/**
+ * What falls short in `look` (`loginLook`): a text under 12 px or under 4.5:1, the Ausweisnummer
+ * under `numberAt` px, a control under `target` px, its way on below the fold, the card out
+ * sideways; none where nothing does.
+ */
+function loginFaults(look, target, numberAt) {
+  return [
+    look.smallest >= 12 ? '' : `!! text at ${look.smallest} px`,
+    look.number === null || look.number >= numberAt ? '' : `!! the number at ${look.number} px`,
+    look.contrast >= 4.5 ? '' : `!! contrast ${look.contrast.toFixed(1)}:1`,
+    look.lowest >= target ? '' : `!! a control ${look.lowest} px tall`,
+    look.inView ? '' : '!! its way on below the fold',
+    look.sideways <= 0 ? '' : `!! +${look.sideways}px sideways`,
+  ].filter((fault) => fault !== '');
+}
+
+/**
+ * Captures `page` as `shot` and judges its Ausweis (`loginLook`, `loginFaults`): its texts at 12
+ * px or more and 4.5:1, the Ausweisnummer at `numberAt` px or more where it shows, every control a
+ * target of 36 px — 44 under a finger — its last one in sight, nothing out sideways; or the run
+ * fails. `what` says what it shows, for the log.
+ */
+async function judgeLogin(page, shot, what, numberAt = 18) {
+  await sleep(300);
+  await capture(page, shot);
+  const look = await loginLook(page);
+  const touch = await page.evaluate(() => globalThis.matchMedia('(pointer: coarse)').matches);
+  const faults = loginFaults(look, touch ? 44 : 36, numberAt);
+  const { width, height } = page.viewportSize();
+  const number = look.number === null ? '' : `, the number ${look.number} px`;
+  console.log(
+    `${`${shot} `.padEnd(19)}${what} @ ${width}x${height}: smallest ${look.smallest} px` +
+      `${number}, contrast ${look.contrast.toFixed(1)}:1, controls ${look.lowest} px` +
+      faults.map((fault) => `; ${fault}`).join(''),
+  );
+  if (faults.length > 0) {
+    fail(`${shot}: ${faults.join('; ')}`);
+  }
+}
+
+/** „Konto" opened in `page`'s settings off the menu. */
+async function openKonto(page) {
+  await page.locator('.menu-item', { hasText: 'Einstellungen' }).click();
+  await page.locator('.settings-tab[data-tab="konto"]').click();
+  await page.locator('.settings-login').waitFor({ timeout: 10_000 });
+}
+
+/**
+ * A first Kennwort for the account of `page`'s pass in „Konto": typed twice and set, the
+ * Ausweisnummer minted shown large till „Notiert" — captured as `shot` where given. Returns the
+ * Ausweisnummer; null where none came.
+ */
+async function setKennwort(page, shot = null) {
+  await openKonto(page);
+  await page.locator('[data-login="set"]').click();
+  await page.locator('input[name="password"]').fill(KENNWORT);
+  await page.locator('input[name="again"]').fill(KENNWORT);
+  await page.locator('.settings-login-send').click();
+  const big = page.locator('.settings-login-big');
+  if (!(await attached(big, 15_000))) {
+    return null;
+  }
+  const number = (await big.textContent())?.trim() ?? null;
+  if (shot !== null) {
+    await judgeLogin(page, shot, `the Ausweisnummer ${number} minted`, 24);
+  }
+  await page.locator('.settings-login-noted').click();
+  await page.keyboard.press('Escape');
+  await page.locator('.settings-card').waitFor({ state: 'hidden', timeout: 3000 });
+  return number;
+}
+
+/** The first row of „Meine Einsätze" on `page`, and the seat marked in it; null where none came. */
+async function firstRun(page) {
+  await page.locator('.menu-item', { hasText: 'Meine Einsätze' }).click();
+  const first = page.locator('.my-runs-table tbody tr').first();
+  if (!(await attached(first, 10_000))) {
+    await page.locator('.history-back').click();
+    return null;
+  }
+  const row = (await first.innerText()).replace(/\s+/g, ' ').trim();
+  const you = (await first.locator('.my-runs-you').textContent())?.trim() ?? null;
+  await page.locator('.history-back').click();
+  return { row, you };
+}
+
+/**
+ * The Ausweis of the won Systemcheck's accounts: the host's tab `page` sets a Kennwort
+ * (account-password.png, the number large), a tab of the guest's browser sets one too; a second
+ * browser of the guest's — another device, a guest of its own — signs into the host's account by
+ * „Konto"'s „Anmelden" (account-signin.png, the form filled) and finds the run with the host's
+ * seat marked in „Meine Einsätze", then switches to the guest's account in one go
+ * (account-switch.png, the form filled) on a new pass and finds the guest's seat marked. The run
+ * fails wherever that does not hold.
+ */
+async function captureLogin(page, host, guest) {
+  const hosts = await setKennwort(page, 'account-password.png');
+  const tab = await openPage(guest.page.context(), 'guest tab');
+  const guests = await (async () => {
+    await tab.goto(paged(BASE));
+    return setKennwort(tab).finally(() => tab.close());
+  })();
+  if (hosts === null || guests === null) {
+    fail(`account-password: no Ausweisnummer minted (host ${hosts}, guest ${guests})`);
+    return;
+  }
+  const device = await browser.newContext({ viewport: SIZES[0] });
+  try {
+    const other = await openPage(device, 'guest device');
+    await other.goto(paged(BASE));
+    await signInOn(other, hosts, host.name);
+    await switchOn(other, guests, guest.name);
+  } finally {
+    await device.close();
+  }
+}
+
+/**
+ * What is wrong with `run`, the first row of „Meine Einsätze" (`firstRun`), where it should be the
+ * won Systemcheck (WON_ROW) with `name`'s seat marked; '' where nothing is.
+ */
+function wrongRun(run, name) {
+  if (run === null) {
+    return '!! „Meine Einsätze" lists nothing';
+  }
+  if (!WON_ROW.every((part) => part.test(run.row))) {
+    return `!! the first row "${run.row}"`;
+  }
+  return run.you === name ? '' : `!! ${run.you ?? 'nobody'} marked, not ${name}`;
+}
+
+/** Logs `label`'s line — what was seen, then each fault — and fails the run where any came. */
+function judged(label, seen, faults) {
+  const wrong = faults.filter((fault) => fault !== '');
+  console.log(`${label.padEnd(19)}${seen}${wrong.map((fault) => `; ${fault}`).join('')}`);
+  if (wrong.length > 0) {
+    fail(`${label}: ${wrong.join('; ')}`);
+  }
+}
+
+/**
+ * `page`, a device of its own, signs into the account of `number` by „Konto"'s „Anmelden"
+ * (account-signin.png) and finds the run with `name`'s seat marked; or the run fails.
+ */
+async function signInOn(page, number, name) {
+  await openKonto(page);
+  await page.locator('[data-login="sign-in"]').click();
+  await page.locator('.settings-login input[name="number"]').fill(number.toLowerCase());
+  await page.locator('.settings-login input[name="password"]').fill(KENNWORT);
+  await judgeLogin(page, 'account-signin.png', `${number} typed in`);
+  await page.locator('.settings-login-send').click();
+  const signed = await attached(page.getByText('Angemeldet.'), 15_000);
+  await page.keyboard.press('Escape');
+  const run = await firstRun(page);
+  judged('account-signin', `signed into ${number}; „Meine Einsätze" marks ${run?.you}`, [
+    signed ? '' : '!! not signed in',
+    wrongRun(run, name),
+  ]);
+}
+
+/**
+ * `page` switches to the account of `number` in „Konto" (account-switch.png): the page loads
+ * anew on a new pass, and „Meine Einsätze" marks `name`'s seat; or the run fails.
+ */
+async function switchOn(page, number, name) {
+  const passOf = () =>
+    page.evaluate(() => JSON.parse(globalThis.localStorage.getItem('escapelab-pass')).id);
+  const before = await passOf();
+  await openKonto(page);
+  await page.locator('[data-login="switch"]').click();
+  await page.locator('.settings-login input[name="number"]').fill(number);
+  await page.locator('.settings-login input[name="password"]').fill(KENNWORT);
+  await judgeLogin(page, 'account-switch.png', `${number} typed in`);
+  const loaded = settled(page.waitForEvent('load', { timeout: 15_000 }));
+  await page.locator('.settings-login-send').click();
+  const anew = await loaded;
+  await page.locator('.menu-item').first().waitFor({ timeout: 10_000 });
+  const fresh = (await passOf()) !== before;
+  const run = await firstRun(page);
+  judged('account-switch', `switched to ${number}; „Meine Einsätze" marks ${run?.you}`, [
+    anew ? '' : '!! not loaded anew',
+    fresh ? '' : '!! on the same pass',
+    wrongRun(run, name),
+  ]);
 }
 
 /**
@@ -12305,7 +12555,10 @@ async function playPinnedOut(anna, ben, watcher) {
     } else if (mission === 'blackout' && SEED === BLACKOUT_PLAN.seed) {
       await playBlackoutToTheEnd(anna, ben, watcher);
       skip('next-mission.png', 'Blackout leads on to no other mission');
-      skip('my-runs.png', 'taken after the won Systemcheck, with account-delete.png');
+      for (const shot of ['my-runs.png', 'account-password.png', 'account-signin.png']) {
+        skip(shot, 'taken after the won Systemcheck, with account-delete.png');
+      }
+      skip('account-switch.png', 'taken after the won Systemcheck, with account-delete.png');
     } else if (mission === 'blackout') {
       skip('escape.png', `seed ${SEED} is not the one tools/fixtures/blackout-plan.json pins`);
     }

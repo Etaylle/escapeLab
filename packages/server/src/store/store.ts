@@ -12,7 +12,8 @@ import { defaultDirectUrl, migrate } from './migrate.js';
 
 /**
  * What the server keeps beyond a room's life: the finished runs — the Bestenliste counts them —
- * and the accounts, one per crew pass, with the Erfolge each earned. One interface, two stores:
+ * and the accounts, reached by the crew passes of their devices and by an Ausweisnummer and its
+ * Kennwort, with the Erfolge each earned. One interface, two stores:
  * Postgres where DATABASE_URL names one (postgres.ts), so that both outlast a deploy; else the
  * run log file and accounts in memory (jsonl.ts), as development and CI run.
  */
@@ -51,6 +52,59 @@ export interface PassIdentity {
   subject: string;
   /** `secretHashOf` the pass's secret: the secret itself is never kept */
   secretHash: string;
+}
+
+/**
+ * An account's way in by its Ausweisnummer and its Kennwort (login.ts), one an account at most:
+ * the account, the Ausweisnummer, and the Kennwort's scrypt hash — null for a login that keeps
+ * none, which no Kennwort matches.
+ */
+export interface Login {
+  accountId: string;
+  subject: string;
+  secretHash: string | null;
+}
+
+/** A pass a device lets go of as it signs out (`Store.signOut`, `Store.signIn`). */
+export interface Leaving {
+  pass: PassIdentity;
+  /**
+   * whether the pass holds a seat (sockets.ts): its way in stays then, kept under PARKED, for
+   * that seat alone — so that the seat's run credits the account still; else it is deleted
+   */
+  parked: boolean;
+}
+
+/**
+ * What the way in of a pass signed out keeps in place of the hash of its secret — where it holds a
+ * seat, or as its account's Kennwort changed on another device: 32 bytes of zeros, the sha256 of
+ * no secret anyone could show. The way in stays for the seat's run to credit the account
+ * (seats.ts binds the seat to the same), and the pass, shown again, is told it signed out
+ * (`PassSignedOut`).
+ */
+export const PARKED = '0'.repeat(64);
+
+/** What a pass signed out is told where it is shown again (`PassSignedOut`). */
+export const SIGNED_OUT_PASS = 'Dieser Dienstausweis ist vom Konto abgemeldet.';
+
+/**
+ * Thrown for a pass shown again whose way in is PARKED: it signed out, or its account's Kennwort
+ * changed on another device — its device starts anew on a new pass (sockets.ts).
+ */
+export class PassSignedOut extends GameError {
+  constructor() {
+    super(SIGNED_OUT_PASS);
+  }
+}
+
+/** What a Kennwort set for an account that has one already is told. */
+export const HAS_LOGIN = 'Dieses Konto hat schon ein Kennwort.';
+
+/** Thrown where an Ausweisnummer just minted is another login's: one more is minted then. */
+export class LoginTaken extends Error {
+  constructor() {
+    super('the Ausweisnummer minted is another login’s — mint another');
+  }
 }
 
 /** What a player chose: the name they go by, and their crew colour ('#rrggbb') or none yet. */
@@ -110,6 +164,53 @@ export interface Store {
    * names it was written with, and so does the Bestenliste counted from it after a restart.
    */
   deleteAccount(accountId: string): Promise<void>;
+  /** The login of `accountId`; null for an account without a Kennwort. */
+  loginOf(accountId: string): Promise<Login | null>;
+  /** The login of the Ausweisnummer `subject`; null for one no account has. */
+  findLogin(subject: string): Promise<Login | null>;
+  /**
+   * `accountId` gets its login: the Ausweisnummer `subject`, the Kennwort's hash `secretHash`.
+   * Rejects with LoginTaken for an Ausweisnummer another login has, with GameError(HAS_LOGIN)
+   * for an account that has one — two set at once give it one — and for an account there is none
+   * of; nothing is made then.
+   */
+  addLogin(accountId: string, subject: string, secretHash: string): Promise<void>;
+  /**
+   * The Kennwort of `accountId`'s login replaced — `kept` the hash it was checked against, `next`
+   * the new one — and every pass that leads into the account but `staying`'s signed out at once,
+   * its way in kept under PARKED: its device is told so the next time it shows it, and a seat it
+   * holds stays the account's (sockets.ts). Returns those passes, each with the hash its way in
+   * kept before. Null, changing nothing, where the login keeps `kept` no more — changed
+   * meanwhile, or gone.
+   */
+  replaceLoginSecret(
+    accountId: string,
+    kept: string,
+    next: string,
+    staying: string,
+  ): Promise<SeatPass[] | null>;
+  /**
+   * `pass` leads into `accountId` from now on — its way in made where it had none — and the pass
+   * `leaving`, where given, signs out (`Leaving`). Every account either of them led into before
+   * that nothing is left of — no way in, no run, no Erfolg — is deleted. All in one go, and only
+   * where the account's login still keeps `checked`, the hash its Kennwort was checked against: a
+   * Kennwort changed at once signs the pass out with the rest (`replaceLoginSecret`), or it signs
+   * nobody in. Returns the ids of the accounts deleted; null, changing nothing, where the login
+   * keeps `checked` no more — changed meanwhile, or gone. Throws GameError for a pass shown with
+   * the wrong secret, changing nothing.
+   */
+  signIn(
+    pass: PassIdentity,
+    accountId: string,
+    leaving: Leaving | null,
+    checked: string,
+  ): Promise<string[] | null>;
+  /**
+   * The pass of `leaving` signs out (`Leaving`); the account it led into stays whole. Returns that
+   * account's id; null where the pass led nowhere. Throws GameError for a pass shown with the
+   * wrong secret.
+   */
+  signOut(leaving: Leaving): Promise<string | null>;
   /** Lets go of what the store holds open; first wait for the runs handed over (`Recorder`). */
   close(): Promise<void>;
 }
@@ -145,10 +246,23 @@ export function sameSecretHash(kept: string | null, shown: string): boolean {
   return kept !== null && timingSafeEqual(digest(kept), digest(shown));
 }
 
-/** Throws GameError(PASS_REFUSED) unless `shown` is the hash `kept` (`sameSecretHash`). */
+/**
+ * Whether a run's seat, bound to the hash `seat`, credits the account of the way in of the same
+ * pass that keeps `kept`: the same hash — or a seat the server parked for the account (PARKED,
+ * which no secret's hash is): its pass signs out that moment, or signed out, and its way in,
+ * parked or about to be, is still the account's (sockets.ts parks the seats first).
+ */
+export function creditsSeat(kept: string | null, seat: string): boolean {
+  return seat === PARKED || sameSecretHash(kept, seat);
+}
+
+/**
+ * Throws unless `shown` is the hash `kept` (`sameSecretHash`): PassSignedOut where `kept` is
+ * PARKED, GameError(PASS_REFUSED) else.
+ */
 export function checkSecret(kept: string | null, shown: string): void {
   if (!sameSecretHash(kept, shown)) {
-    throw new GameError(PASS_REFUSED);
+    throw kept === PARKED ? new PassSignedOut() : new GameError(PASS_REFUSED);
   }
 }
 

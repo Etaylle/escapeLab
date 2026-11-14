@@ -1,4 +1,4 @@
-import type { AccountView, Seat, SpectatorView } from '@escapelab/core';
+import type { AccountView, LoginDone, Seat, SpectatorView } from '@escapelab/core';
 import type { Loaded } from '../src/runStats.js';
 import type { MyRuns, Page, Restoring, Takeover } from '../src/ws.js';
 
@@ -29,6 +29,10 @@ export function page() {
     watching: null as number | null,
     /** the banner's words, as the page last set them */
     banner: null as string | null,
+    /** what each answer to an ask of a login said was done, in order */
+    logins: [] as LoginDone[],
+    /** how often the page loaded anew */
+    startedOver: 0,
   };
   const nothing = (): void => undefined;
   const kept: Page = {
@@ -62,6 +66,13 @@ export function page() {
       got.banner = message;
     },
     refuse: nothing,
+    noteLogin: (done) => {
+      got.logins.push(done);
+    },
+    nextPass: { current: null },
+    startOver: () => {
+      got.startedOver += 1;
+    },
     resuming: { current: false },
     resumed: { current: null },
     seen: { current: null },

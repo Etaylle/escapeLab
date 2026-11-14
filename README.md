@@ -73,8 +73,12 @@ Mission, das langsam vorbeizieht: *Einsatz starten* (die Missionskarten, „Rund
 (Steuerkreuz, A, B). Oben rechts steht das Profil, das Konto des Browsers: Name, Farbe, die eigene
 Figur, die winkt, sobald der Name sich ändert, und wie viele Einsätze das Konto gespielt hat. Das
 Konto bewahrt Name, Farbe, Erfolge und Läufe über Neustarts und Deploys hinweg; *Meine
-Einsätze* listet seine Läufe, die Einstellungen löschen es auf Wunsch
-([`docs/accounts.md`](docs/accounts.md)).
+Einsätze* listet seine Läufe, die Einstellungen löschen es auf Wunsch. Mit einem Kennwort
+(Einstellungen, „Konto") bekommt es eine Ausweisnummer wie `EL-7K3M-9Q2D`, mit der sich jedes
+Gerät dort anmeldet: Einsätze, Erfolge und ein laufender Platz folgen dem Konto; „Abmelden"
+lässt das Gerät als Gast neu beginnen, „Konto wechseln" meldet in einem Schritt um, und ein neues
+Kennwort meldet alle anderen Geräte ab. Ein vergessenes Kennwort lässt sich nicht
+wiederherstellen ([`docs/accounts.md`](docs/accounts.md)).
 *Offene Runden* listet jede Runde mit Kartenvorschau, Mission, Schwierigkeit, ihrer Crew als
 Figuren und den freien Plätzen — ein Klick auf *Beitreten* genügt, niemand muss einen Code
 weitergeben. Laufende Runden erscheinen ebenfalls, dort führt der Knopf zum Zuschauen. Unter
@@ -169,10 +173,11 @@ Das Hauptmenü stellt einen laufenden Einsatz als hellen ersten Menüpunkt voran
 gedimmt („Zurück zum Einsatz“, „Einsatz aufgeben“), und sperrt andere Räume;
 aufgeben gibt den Platz frei, unter der Mindestzahl der Crew endet der Lauf für alle („EINSATZ
 ABGEBROCHEN“). Ein anderes Gerät übernimmt einen getrennten Platz mit Raumcode und genau dessen
-Namen (wie bei Jackbox), sobald jemand aus der Crew es zulässt. Die eigene Seite erkennt eine
-tote Leitung nach 5 Sekunden ohne Uhrantwort, 20 Sekunden Stille oder 8 Sekunden ohne offene
-Verbindung, verbindet sofort neu und zeigt bis dahin „VERBINDUNG VERLOREN“ mit Versuch und
-Wartezeit. Einzelheiten: `docs/gameplay.md`, „Verbindung und Wiedereintritt“.
+Namen (wie bei Jackbox), sobald jemand aus der Crew es zulässt; ein Gerät, das im Konto des
+Platzes angemeldet ist, holt ihn ohne Zustimmung über seine Karte zurück. Die eigene Seite
+erkennt eine tote Leitung nach 5 Sekunden ohne Uhrantwort, 20 Sekunden Stille oder 8 Sekunden
+ohne offene Verbindung, verbindet sofort neu und zeigt bis dahin „VERBINDUNG VERLOREN“ mit
+Versuch und Wartezeit. Einzelheiten: `docs/gameplay.md`, „Verbindung und Wiedereintritt“.
 
 **Pausenmenü und Verlassen:** Im Raum öffnen Esc, das Zahnrad oben, die Start-Taste des
 Controllers oder „Menü“ in der Leiste das Pausenmenü — Weiter, Einstellungen, Handbuch und die
@@ -315,7 +320,8 @@ zu `devices` gehört, die der Zugangskontrolle, `access`, und `hall` (die Übung
 Siegerkarte); Blackout nennt alle drei im Log als ausgelassen. Der Rundgang selbst: `screens` (Menü
 und sein Ton, Bestenliste, Lobby, der Start aus ihr), `intro` (die Eröffnung bis `blackout.png`)
 und `run` (die Mission bis zur Siegerkarte, nach dem gewonnenen Systemcheck die Einsätze des
-Kontos und sein Löschen); im Lauf `devices` (jede Station,
+Kontos, sein Kennwort, die Anmeldung auf einem zweiten Gerät, der Kontowechsel und sein Löschen);
+im Lauf `devices` (jede Station,
 auch auf dem quer gehaltenen Handy), `reading` (Quellen, Schild, Notizen der letzten Schicht,
 Notizblock, Bücher), `hud` (das Spiel in jeder Fenstergröße, Einstellungen, Steuerung, Minikarte,
 Sprint), `graphics` (Licht, Leuchten, Figuren, Kamera, Dichte 2), `audio` (Raumklang, Funk, Seite

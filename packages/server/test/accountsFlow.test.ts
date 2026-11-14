@@ -114,6 +114,7 @@ describe('an account per crew pass', () => {
       runs: 0,
       achievements: {},
       store: 'run-log',
+      login: null,
     });
     // Another tab of the same browser, its kept name changed meanwhile: the account is the record.
     const tab = server.connect();
