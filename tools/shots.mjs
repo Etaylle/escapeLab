@@ -5141,12 +5141,12 @@ async function manBothConsoles(players) {
  * it solves. With `pinned` — the stages a pinned seed deals — every stage's
  * sending console and sequence have to be the pinned ones, and the keys
  * pressed are the pinned ones: at consoles with the legend a key is a row and
- * a shape, which only the printed legend ties to a sign. Where `flinch`, the
- * walkthrough's, the run's one deliberate alarm may be raised here
- * (figure-flinch.png); a drill raises none. Throws with the step that failed,
- * naming the seed where a stage differs from its pin.
+ * a shape, which only the printed legend ties to a sign. Where `walkthrough`,
+ * the walkthrough's own shots come at its stages (`stageShots`); a drill
+ * takes none of them. Throws with the step that failed, naming the seed where
+ * a stage differs from its pin.
  */
-async function solveSignal(crew, title, pinned = null, flinch = true) {
+async function solveSignal(crew, title, pinned = null, walkthrough = true) {
   const roleOf = (player) => player.seen.view.puzzle?.role ?? null;
   const roles = () => crew.map((p) => `${p.name} ${roleOf(p)}`).join(', ');
   await until(() => crew.every((p) => roleOf(p) !== null), 3000);
@@ -5177,10 +5177,9 @@ async function solveSignal(crew, title, pinned = null, flinch = true) {
     if (pin !== null) {
       checkStage(sending, pin, stage);
     }
-    if (flinchHere(flinch, sending, stage, stages)) {
-      await inGroup('graphics', () => captureFlinch(sending, pressing, pin?.keys[0] ?? null));
+    if (walkthrough) {
+      await stageShots(sending, pressing, pin, stage === stages);
     }
-    await inGroup('devices', () => captureGreyDisplay(sending));
     const count = await pressStage(sending, pressing, pin?.keys ?? null);
     const line =
       `signal             ${sending.name} sends, ${pressing.name} presses: ` +
@@ -5209,12 +5208,15 @@ async function solveSignal(crew, title, pinned = null, flinch = true) {
 }
 
 /**
- * Whether the run's one deliberate alarm (figure-flinch.png) is raised at `stage` of `stages`:
- * once, where `flinch` lets it — the walkthrough, never a drill — where the traced host sends,
- * or at the last stage.
+ * What the walkthrough shoots at a stage of the Signalkette before it is pressed: the run's one
+ * deliberate alarm (figure-flinch.png), once — where the traced host sends, or at the `last`
+ * stage — and the first display without colour (`captureGreyDisplay`).
  */
-function flinchHere(flinch, sending, stage, stages) {
-  return flinch && !flinchShot && (sending.traced === true || stage === stages);
+async function stageShots(sending, pressing, pin, last) {
+  if (!flinchShot && (sending.traced === true || last)) {
+    await inGroup('graphics', () => captureFlinch(sending, pressing, pin?.keys[0] ?? null));
+  }
+  await inGroup('devices', () => captureGreyDisplay(sending));
 }
 
 /**
@@ -5246,8 +5248,9 @@ const touchSessions = new WeakMap();
 /**
  * Runs `look` with `page` held as a large phone sideways: 932×430 under a finger, through CDP's
  * touch on a session of the page's own — as a context made with `hasTouch` has it, which a
- * window's context cannot be given once it is made. Gives the window its size and its mouse
- * back after, whatever `look` did.
+ * window's context cannot be given once it is made — and a resize after the touch, which the
+ * HUD's fold into its row reads (client screens/hudFold.ts). Gives the window its size and its
+ * mouse back after, whatever `look` did.
  */
 async function asLargePhone(page, look) {
   const held = page.viewportSize();
@@ -5259,6 +5262,7 @@ async function asLargePhone(page, look) {
   await page.setViewportSize({ width: SIZES[4].width, height: SIZES[4].height });
   await cdp.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
   try {
+    await page.evaluate(() => globalThis.dispatchEvent(new globalThis.Event('resize')));
     await sleep(500);
     await look();
   } finally {
@@ -12563,37 +12567,6 @@ async function threeAtTheNotstrom({ anna, ben, cleo, crew }) {
   await panelsClosed(crew);
 }
 
-/** Each page's CDP session that lends it a finger for a while (`asTouchPhone`), kept open. */
-const phoneSessions = new WeakMap();
-
-/**
- * Runs `look` with `page` held as a large phone sideways: 932×430 under a finger, through CDP's
- * touch on a session of the page's own — a window's context cannot be given `hasTouch` once it
- * is made — and a resize after it, which the HUD's fold reads (screens/hudFold.ts). Gives the
- * window its size and its mouse back after, whatever `look` did.
- */
-async function asTouchPhone(page, look) {
-  const held = page.viewportSize();
-  let cdp = phoneSessions.get(page);
-  if (cdp === undefined) {
-    cdp = await page.context().newCDPSession(page);
-    phoneSessions.set(page, cdp);
-  }
-  await page.setViewportSize({ width: SIZES[4].width, height: SIZES[4].height });
-  await cdp.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
-  try {
-    await page.evaluate(() => globalThis.dispatchEvent(new globalThis.Event('resize')));
-    await sleep(700); // the HUD folds into its row
-    await look();
-  } finally {
-    await cdp.send('Emulation.setTouchEmulationEnabled', { enabled: false });
-    if (held !== null) {
-      await page.setViewportSize(held);
-    }
-    await sleep(400);
-  }
-}
-
 /**
  * three-reader.png: Cleo opens the clipboard's rules while Anna and Ben stand at consoles A and
  * B — her view has to name them there — held to what reading.png is: no page running past its
@@ -12648,7 +12621,7 @@ async function threeAtTheSignalkette(drill) {
   await handsShot(anna, 'three-hands.png', '.stage-hands', all, () =>
     capture(anna.page, 'three-hands.png'),
   );
-  await asTouchPhone(cleo.page, () =>
+  await asLargePhone(cleo.page, () =>
     handsShot(cleo, 'three-phone-932.png', '.hands-chip', job, () =>
       capturePhoneGame(cleo.page, 'three-phone-932.png', "Cleo's phone sideways"),
     ),
