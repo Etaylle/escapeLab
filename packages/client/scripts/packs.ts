@@ -21,14 +21,14 @@
  * starts, its loudness as BS.1770 has it (pcm.ts `lufsOf`) and the gain that brings it to the
  * score's −19 LUFS (sfx.ts SUITE_TARGET); and writes audio/packs/<pack>/pack.json, the attribution
  * each licence wants with every piece, and prints the attribution block. A piece whose file was
- * made from what the plan says of its sound now and from the same source (its `build` hash) is kept
- * as it is, its credit taken anew from the plan; only the rest is made anew — or every piece, with
- * --force — and an encode of the same PCM comes out as the same bytes (mp4.ts), so that git keeps
- * nothing new for a file nothing changed. A pack is built whole or not at all: its pieces are
- * encoded as parts, then moved in together; a pack that misses a piece — a fetch that failed, a
- * manual file not there yet, a rule the plan breaks — or passes PACK_CAP is said with what to do,
- * and the run goes on with the next and fails at its end. Nothing is ever skipped in silence, and
- * nothing here asks a paid service for anything.
+ * made from what the plan says of its sound now, from the same source and by the same code (its
+ * `build` hash) is kept as it is, its credit taken anew from the plan; only the rest is made anew —
+ * or every piece, with --force — and an encode of the same PCM comes out as the same bytes
+ * (mp4.ts), so that git keeps nothing new for a file nothing changed. A pack is built whole or not
+ * at all: its pieces are encoded as parts, then moved in together; a pack that misses a piece — a
+ * fetch that failed, a manual file not there yet, a rule the plan breaks — or passes PACK_CAP is
+ * said with what to do, and the run goes on with the next and fails at its end. Nothing is ever
+ * skipped in silence, and nothing here asks a paid service for anything.
  *
  * The game's own score is the pack `nachtschicht`, which the sound script keeps (sfx.ts
  * `--keep score=<n>`); its pack.json names the music's manifest and is not built here.
@@ -452,18 +452,52 @@ function canonical(value: unknown): string {
   );
 }
 
+/** The files of scripts/ beside this one whose code every piece is made by. */
+const MADE_BY = ['seam.ts', 'pcm.ts'] as const;
+/**
+ * The heading of this file's section that cuts a piece, seeks its seam and measures it, as it
+ * stands at the start of a line — never as it is written here.
+ */
+const CUT_HEADING = '\n// --- building a piece';
+/** The heading of the section after it, at the start of a line. */
+const NEXT_HEADING = '\n// --- building a pack';
+
+/** A file of scripts/ by its name, as it is on disk. */
+const scriptOf = (file: string): string => readFileSync(join(HERE, file), 'utf8');
+
+/**
+ * The code every piece is made by, hashed: the seam search (seam.ts), the cuts, fades and
+ * measures of PCM (pcm.ts) and this file's section „building a piece", which cuts a piece, seeks
+ * its seam and measures it — any change to them, their comments too, makes every piece anew. `read`
+ * reads a file of scripts/ by its name; fails where packs.ts has lost the section's headings.
+ */
+export function codeHashOf(read: (file: string) => string = scriptOf): string {
+  const own = read('packs.ts');
+  const from = own.indexOf(CUT_HEADING);
+  const to = own.indexOf(NEXT_HEADING, from);
+  if (from < 0 || to < 0) {
+    throw new Error('packs: packs.ts has no section „building a piece" before „building a pack"');
+  }
+  const files = Object.fromEntries(MADE_BY.map((file) => [file, read(file)]));
+  return createHash('sha1')
+    .update(canonical({ cut: own.slice(from, to), ...files }))
+    .digest('hex');
+}
+
 /**
  * What a piece's file is made from, hashed: what `piece`'s plan says of its sound — its span, its
- * loop, its fades — the `settings` the script makes it by, and its source's bytes. Its credit is no
- * part of it: a title, an author or a licence corrected changes pack.json, never the file.
+ * loop, its fades — the `settings` and the `code` the script makes it by, and its source's bytes.
+ * Its credit is no part of it: a title, an author or a licence corrected changes pack.json, never
+ * the file.
  */
 export function buildHashOf(
   piece: PlanPiece,
   source: Uint8Array,
   settings: Readonly<Record<string, number>> = BUILD_SETTINGS,
+  code: string = codeHashOf(),
 ): string {
   const { trim, loop = null, fades = null } = piece;
-  const said = canonical({ trim, loop, fades, settings });
+  const said = canonical({ trim, loop, fades, settings, code });
   return createHash('sha1').update(said).update(source).digest('hex').slice(0, 16);
 }
 

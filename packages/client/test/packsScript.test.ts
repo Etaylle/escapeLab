@@ -17,6 +17,7 @@ import {
   BUILD_SETTINGS,
   buildHashOf,
   buildPack,
+  codeHashOf,
   optionsOf,
   PACK_CAP,
   packFlaws,
@@ -606,6 +607,78 @@ describe('what a piece is made from', () => {
     const hash = buildHashOf(piece, source);
     expect(buildHashOf(piece, source, BUILD_SETTINGS)).toBe(hash);
     expect(buildHashOf(piece, source, { ...BUILD_SETTINGS, bitrate: 96_000 })).not.toBe(hash);
+  });
+
+  it('changes with the code the script makes it by', () => {
+    const hash = buildHashOf(piece, source);
+    expect(buildHashOf(piece, source, BUILD_SETTINGS, codeHashOf())).toBe(hash);
+    expect(buildHashOf(piece, source, BUILD_SETTINGS, 'a seam sought otherwise')).not.toBe(hash);
+  });
+
+  /** A packs.ts of the test's own: its cut between the headings, each also named in passing. */
+  const own = [
+    'head // --- building a piece, named in passing',
+    '// --- building a piece ---',
+    'cut // --- building a pack, named in passing',
+    'more of the cut',
+    '// --- building a pack ---',
+    'rest',
+  ].join('\n');
+
+  /** The files of scripts/ as the test has them, `changed` changed; noting each one read. */
+  function reading(
+    asked: Set<string>,
+    changed: Readonly<Record<string, string>> = {},
+  ): (file: string) => string {
+    const files: Readonly<Record<string, string>> = {
+      'packs.ts': own,
+      'seam.ts': 's',
+      'pcm.ts': 'p',
+    };
+    return (file: string): string => {
+      asked.add(file);
+      return changed[file] ?? files[file] ?? '';
+    };
+  }
+
+  it('reads that code from the seam search, the PCM and its own cut alone', () => {
+    const asked = new Set<string>();
+    const hash = codeHashOf(reading(asked));
+    expect([...asked].sort()).toEqual(['packs.ts', 'pcm.ts', 'seam.ts']);
+    const changes = [
+      ['seam.ts', 's otherwise'],
+      ['pcm.ts', 'p otherwise'],
+      ['packs.ts', own.replace('cut //', 'cut otherwise //')],
+      ['packs.ts', own.replace('more of the cut', 'more of it')],
+    ] as const;
+    for (const [file, text] of changes) {
+      expect(codeHashOf(reading(asked, { [file]: text })), text).not.toBe(hash);
+    }
+    // The rest of packs.ts makes no file: a change there keeps every piece as it is.
+    const around = own.replace('in passing', 'by the way').replace('rest', 'the rest');
+    expect(codeHashOf(reading(asked, { 'packs.ts': around }))).toBe(hash);
+  });
+
+  it('fails where the script has lost a heading of its cut, or turned them round', () => {
+    const noNext = own.replace('\n// --- building a pack ---', '');
+    const noCut = own.replace('\n// --- building a piece ---', '');
+    const turned = 'head\n// --- building a pack ---\nrest\n// --- building a piece ---\ncut';
+    for (const lost of [noNext, noCut, turned]) {
+      const read = reading(new Set(), { 'packs.ts': lost });
+      expect(() => codeHashOf(read), lost).toThrow(/building a piece/);
+    }
+  });
+
+  it('reads of the script itself its section „building a piece" alone', () => {
+    const real = (file: string): string =>
+      readFileSync(new URL(`../scripts/${file}`, import.meta.url), 'utf8');
+    const lines = real('packs.ts').split('\n');
+    const from = lines.findIndex((line) => line.startsWith('// --- building a piece '));
+    const to = lines.findIndex((line) => line.startsWith('// --- building a pack '));
+    expect(to - from).toBeGreaterThan(50);
+    const section = lines.slice(from, to).join('\n');
+    const alone = `before\n${section}\n// --- building a pack\nafter`;
+    expect(codeHashOf((file) => (file === 'packs.ts' ? alone : real(file)))).toBe(codeHashOf());
   });
 
   it('keeps to its credit and its notes, and to how its plan is written', () => {

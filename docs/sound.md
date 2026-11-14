@@ -1517,11 +1517,14 @@ said, and that pack is built no further; nothing the script does asks ElevenLabs
 writes `pack.json` and prints the pack's attribution block.
 
 **Built once.** Every found piece in pack.json carries what its file was made from, hashed
-(`build`): what the plan says of its sound — its span, its loop, its fades — the script's settings
-and its source's bytes. A run keeps every piece whose hash is unchanged and whose file is there,
-taking only its credit anew from the plan, so that a title, an author or a licence corrected changes
-pack.json and never a file; only a piece whose sound changed is made anew, or every piece with
-`--force`. afconvert writes the moment it encodes into each .m4a — the creation and modification
+(`build`): what the plan says of its sound — its span, its loop, its fades — the script's settings,
+the code every piece is made by — the seam search (`seam.ts`), the cuts, fades and measures of PCM
+(`pcm.ts`) and the script's own section „building a piece", comments and all — and its source's
+bytes. A run keeps every piece whose hash is unchanged and whose file is there, taking only its
+credit anew from the plan, so that a title, an author or a licence corrected changes pack.json and
+never a file; only a piece whose sound or code changed is made anew, or every piece with `--force`,
+which a change to the encoder (`afconvert.ts`, `mp4.ts`) takes: it is no part of the hash.
+afconvert writes the moment it encodes into each .m4a — the creation and modification
 times of the movie, the track and the media — so that two encodes of the same audio differ in those
 bytes alone; the script sets them to zero (`scripts/mp4.ts`), and a piece made anew from what it was
 made from comes out byte for byte the same. Where the file already there holds the same audio, the
@@ -1531,7 +1534,9 @@ changed a file would otherwise stay in the history for good, some 1 MB a piece. 
 pack was rebuilt from its plan into a scratch folder: 28 of the 32 files came out the same, their
 times aside, and the four of `cheremisinov` that did not — the menu's theme, the critical stem and
 both endings, encoded that morning from slightly different audio, their measurements the same to the
-hundredth — were made anew once, so that every file is now what its plan makes.
+hundredth — were made anew once, so that every file is now what its plan makes. As the code joined
+the hash that evening, every piece was made anew once more: all 32 files came out as they were, and
+only each piece's `build` changed.
 
 ```sh
 # in packages/client
@@ -1579,7 +1584,9 @@ licence.
 **Proof.** `test/packsScript.test.ts` and `test/seam.test.ts` run the script against fakes: the plan
 read and held to its rules, every file fetched once, a failed fetch said and its pack built no
 further, a download by hand found where the plan puts it, the seam and a stated tempo's whole bars,
-the gain to −19 LUFS as encoded, the cap, the dry run. `test/packsPlay.test.ts` plays a pack of the
+the gain to −19 LUFS as encoded, the cap, a piece made anew only where its plan, the script's
+settings or code or its source changed — its file kept where it comes out the same — the dry run.
+`test/packsPlay.test.ts` plays a pack of the
 test's own beside the score: its stems round by their crossfade, equal in power, a pack picked
 mid-run taking over at the loop point, the menu's theme at once and the lobby's piece on the next
 bar, its endings once and never round, its title for the opening, and the menu's probe saying a
