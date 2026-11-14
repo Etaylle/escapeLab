@@ -7,8 +7,10 @@
  *   pnpm --filter @escapelab/client voice --fresh=all  … and a person's recordings too
  *   pnpm --filter @escapelab/client voice --list-voices            the ElevenLabs account's voices
  *   pnpm --filter @escapelab/client voice --sample <voice> <text>  one line by an ElevenLabs voice
+ *   pnpm --filter @escapelab/client voice --previews       the library voices' previews, free
  *   pnpm --filter @escapelab/client voice --design <slot>   three Voice-Design samples of a person
  *   pnpm --filter @escapelab/client voice --keep <slot>=<n> one of them kept as the person's voice
+ *   pnpm --filter @escapelab/client voice --keep <slot>=<voice id>  … or a library voice
  *
  * Every line a shipped mission (missions/*.json) has heard, as core's `radioLines` lists them:
  * the intro's announcement over the lab's loudspeakers (`intro.pa`, client world/pa.ts), then
@@ -98,7 +100,11 @@ import {
   DESIGN_TEXT,
   DESIGNED_READS,
   designVoice,
+  fetchPreviews,
+  keepLibraryVoice,
   keepVoice,
+  promptOf,
+  readCasting,
   readRoster,
   ROLE_HELD,
   roleOf,
@@ -107,6 +113,7 @@ import {
   sayersOf,
   slotOf,
   slotsOf,
+  VOICE_ID,
   voiceless,
   type Person,
   type RadioMoment,
@@ -1279,37 +1286,67 @@ function finish(manifest: Manifest, made: number): void {
   if (over.length > 0) process.exitCode = 1;
 }
 
+/** The voice script as the owner runs it, from anywhere in the repo, with the key file. */
+const RUN = 'pnpm --filter @escapelab/client voice';
+
 /** --design <slot>: three samples of a person's voice, each with its file, and how to keep one. */
 async function design(asked: string | undefined): Promise<void> {
   const slot = slotOf(readRoster(), asked);
+  const prompt = promptOf(readCasting(), slot);
   loadApiKey();
   const characters = DESIGN_TEXT[slot.role].length;
   const who = `${slot.person.name} (${slot.name})`;
   console.log(`voice: Voice Design for ${who}, ${characters} characters`);
-  const made = await designVoice(await elevenClient(), slot);
+  const made = await designVoice(await elevenClient(), slot, prompt);
   for (const { n, file, seconds } of made) {
     console.log(`voice: ${n}  ${join(SAMPLES_DIR, slot.dir, file)}  ${seconds.toFixed(1)} s`);
   }
-  console.log(
-    `voice: listen — /voices with pnpm dev — then keep one: ` +
-      `node --env-file=<repo>/.env.local scripts/voice.ts --keep ${slot.name}=<n>`,
+  console.log(`voice: listen on /voices (pnpm dev), then keep one: ${RUN} --keep ${slot.name}=<n>`);
+}
+
+/** What --keep keeps: a sample of the person's by its number, or a library voice by its id. */
+export type Choice = { readonly sample: number } | { readonly voice: string };
+
+/**
+ * The person and the voice `asked` names — `operator:laura=2` a sample of theirs,
+ * `lead=dCnu06FiOZma2KVNUoPZ` a library voice by its id — or fails, saying how --keep is asked.
+ */
+export function choiceOf(asked: string | undefined): { slot: string; choice: Choice } {
+  const [, slot, value = ''] = /^([^=]+)=(.+)$/.exec(asked ?? '') ?? [];
+  if (slot !== undefined && /^[1-9]\d*$/.test(value)) {
+    return { slot, choice: { sample: Number(value) } };
+  }
+  if (slot !== undefined && VOICE_ID.test(value)) return { slot, choice: { voice: value } };
+  throw new Error(
+    'voice: --keep takes a person and a sample number or a library voice id: ' +
+      '--keep operator:laura=2, --keep lead=dCnu06FiOZma2KVNUoPZ',
   );
 }
 
-/** --keep <slot>=<n>: that sample kept as the person's voice, in the roster. */
+/** --keep <slot>=<n | voice id>: that voice kept as the person's, in the roster. */
 async function keep(asked: string | undefined): Promise<void> {
-  const [, name, number] = /^(.+)=([1-9]\d*)$/.exec(asked ?? '') ?? [];
-  if (name === undefined || number === undefined) {
-    throw new Error('voice: --keep takes a person and a sample: --keep operator:marta=2');
-  }
+  const { slot: name, choice } = choiceOf(asked);
   const slot = slotOf(readRoster(), name);
   loadApiKey();
-  const kept = await keepVoice(await elevenClient(), slot, Number(number));
+  const client = await elevenClient();
+  const kept =
+    'sample' in choice
+      ? await keepVoice(client, slot, choice.sample)
+      : await keepLibraryVoice(client, slot, choice.voice);
   console.log(
-    `voice: ${kept.name} speaks with „EscapeLab ${kept.name}" (${kept.voiceId ?? ''}, ` +
-      `${kept.model ?? ''}), kept in ${CAST_FILE} — on duty once the lines are made: ` +
-      'VOICE_ENGINE=elevenlabs pnpm --filter @escapelab/client voice --fresh',
+    `voice: ${kept.name} speaks with ${kept.voiceId ?? ''} (${kept.model ?? ''}), kept in ` +
+      `${CAST_FILE}: on duty in every build of this roster, so their lines are made before it ` +
+      `is committed — the voice test asks for them: VOICE_ENGINE=elevenlabs ${RUN}`,
   );
+}
+
+/** --previews: the library voices' previews, free of charge, for /voices to play. */
+async function previews(): Promise<void> {
+  loadApiKey();
+  for (const preview of await fetchPreviews(await elevenClient(), readCasting())) {
+    const got = 'file' in preview ? preview.file : `no preview: ${preview.missing}`;
+    console.log(`voice: ${preview.voiceId}  ${got}`);
+  }
 }
 
 /**
@@ -1359,6 +1396,7 @@ const COMMANDS: Readonly<Record<string, (args: readonly string[], at: number) =>
   '--sample': (args, at) => sample(args[at + 1], args[at + 2]),
   '--design': (args, at) => design(args[at + 1]),
   '--keep': (args, at) => keep(args[at + 1]),
+  '--previews': () => previews(),
 };
 
 /**

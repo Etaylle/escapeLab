@@ -30,7 +30,7 @@ import { switchOn } from './switches.js';
  * A person's voice for the radio's cast (the client's /record page): POST /voice/:id takes a
  * recording of the radio line whose id it names — the id of the person of the cast who says it
  * and the first 12 hex digits of the SHA-1 of what the line says, as the client's voice script
- * names its recordings (`marta-0123456789ab`) — of 8 MB at most: a take
+ * names its recordings (`laura-0123456789ab`) — of 8 MB at most: a take
  * the page recorded (a PCM WAV, `source: 'human'`), or a file put there (`?source=upload`: an
  * MP3, an M4A or a WAV). An MP3 or an M4A is kept as it is, a WAV converted to AAC; either goes
  * into the client's public/voice/ under the line's id, and the manifest's entry for the line

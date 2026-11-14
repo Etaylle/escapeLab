@@ -276,8 +276,8 @@ describe('the operator’s answers on the air, by rank', () => {
     });
     expect(lastWordOf([said('escape', 'raus')])).toBeNull();
     // A run lost: the Schichtleitung's word, by the person the night's cast named.
-    const hers = { ...lost, speaker: { role: 'lead', person: 'kessler' } } as const;
-    expect(lastWordOf([event('finish', 0), hers])).toEqual({ text: lost.label, person: 'kessler' });
+    const hers = { ...lost, speaker: { role: 'lead', person: 'mila' } } as const;
+    expect(lastWordOf([event('finish', 0), hers])).toEqual({ text: lost.label, person: 'mila' });
   });
 });
 
@@ -291,9 +291,9 @@ describe('who speaks on the air', () => {
   });
 
   it('names the person of the night’s cast in the banner, beside the role', () => {
-    expect(bannerFrom(by('solved', 'marta'))).toBe('LEITSTELLE · MARTA');
-    expect(bannerFrom(by('nudge', 'jonas'))).toBe('LEITSTELLE · JONAS');
-    expect(bannerFrom(by('clock', 'kessler'))).toBe('SCHICHTLEITUNG · KESSLER');
+    expect(bannerFrom(by('solved', 'laura'))).toBe('LEITSTELLE · LAURA');
+    expect(bannerFrom(by('nudge', 'ben'))).toBe('LEITSTELLE · BEN');
+    expect(bannerFrom(by('clock', 'mila'))).toBe('SCHICHTLEITUNG · MILA');
     // The plant's loudspeakers are no person: their banner says what they are.
     const plant = { role: 'pa', person: 'anlage' } as const;
     const message: RunEvent = { ...event('radio', 0), moment: 'announce', speaker: plant };
@@ -303,9 +303,9 @@ describe('who speaks on the air', () => {
   });
 
   it('asks the voice for the recording of whoever said it', () => {
-    expect(voiceLineOf(by('solved', 'marta', 'Notstrom steht.'))).toEqual({
+    expect(voiceLineOf(by('solved', 'laura', 'Notstrom steht.'))).toEqual({
       text: 'Notstrom steht.',
-      person: 'marta',
+      person: 'laura',
     });
     // A line of a run kept before the cast: the role that speaks it now, its first in service —
     // the Schichtleitung's by the desk, Helmut, while it has no voice.
@@ -320,12 +320,12 @@ describe('who speaks on the air', () => {
   });
 
   it('reads on the HUD’s radio strip as the Leitstelle’s or the Schichtleitung’s', () => {
-    expect(radioName(by('clock', 'kessler'))).toBe('Schichtleitung');
-    expect(tickerLine(by('clock', 'kessler', 'Noch zwei Minuten.'), undefined, false)).toEqual({
+    expect(radioName(by('clock', 'mila'))).toBe('Schichtleitung');
+    expect(tickerLine(by('clock', 'mila', 'Noch zwei Minuten.'), undefined, false)).toEqual({
       icon: 'radio',
       text: 'Schichtleitung: Noch zwei Minuten.',
     });
-    expect(tickerLine(by('solved', 'marta', 'Weiter.'), undefined, false)?.text).toBe(
+    expect(tickerLine(by('solved', 'laura', 'Weiter.'), undefined, false)?.text).toBe(
       'Leitstelle: Weiter.',
     );
     // While the Schichtleitung has no voice, the desk says its calls: they read as the desk's.

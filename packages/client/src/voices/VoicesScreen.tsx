@@ -6,19 +6,22 @@ import { MANIFEST_URL, VOICE_BASE, type VoiceManifest } from '../world/radioVoic
 import {
   linesByMoment,
   loadSamples,
+  previewKey,
+  previewUrl,
   sampleKey,
   sampleUrl,
+  type KeepChoice,
   type SamplesState,
 } from './samples.js';
 import { VoicesBoard, type VoicesActions } from './VoicesBoard.js';
 
 /**
- * The page at /voices, reached by its address alone: the radio's cast as the roster has it,
- * each person's samples from Voice Design where the dev server lists any (samples.ts), and every
- * line the game has rendered, by its moment, in the voice of whoever says it — each played as it
- * was made, plain, without the radio's chain, so that a voice is judged as it is. Choosing a
- * sample shows the command that keeps it; the page itself asks no service for anything and runs
- * neither a design, a keep nor a render.
+ * The page at /voices, reached by its address alone: the radio's cast as the roster has it, the
+ * library voices offered for each person and their samples from Voice Design where the dev server
+ * lists any (samples.ts), and every line the game has rendered, by its moment, in the voice of
+ * whoever says it — each played as it was made, plain, without the radio's chain, so that a voice
+ * is judged as it is. Choosing a voice shows the command that keeps it; the page itself asks no
+ * service for anything and runs neither a preview's fetch, a design, a keep nor a render.
  */
 
 /** Where the page keeps the key file the commands name, for the next visit: as /sounds does. */
@@ -59,14 +62,17 @@ function playFile(url: string, ended: () => void): Audition {
   };
 }
 
-/** `chosen` with sample `n` of `slot` chosen — or none of `slot`, where `n` was the one chosen. */
-export function chooseSample(
-  chosen: Readonly<Record<string, number>>,
+/**
+ * `chosen` with `choice` — a sample, or a library voice — chosen for `slot`; or none of `slot`,
+ * where it was the one chosen.
+ */
+export function chooseVoice(
+  chosen: Readonly<Record<string, KeepChoice>>,
   slot: string,
-  n: number,
-): Record<string, number> {
+  choice: KeepChoice,
+): Record<string, KeepChoice> {
   const others = Object.fromEntries(Object.entries(chosen).filter(([each]) => each !== slot));
-  return chosen[slot] === n ? others : { ...others, [slot]: n };
+  return chosen[slot] === choice ? others : { ...others, [slot]: choice };
 }
 
 /** What the board stands on: the recordings' list and the samples, as loaded. */
@@ -78,7 +84,7 @@ interface Loaded {
 /** The board at work: what plays, the samples chosen, the key file. */
 function Auditions({ manifest, samples }: Loaded) {
   const [playing, setPlaying] = useState<string | null>(null);
-  const [keeping, setKeeping] = useState<Readonly<Record<string, number>>>({});
+  const [keeping, setKeeping] = useState<Readonly<Record<string, KeepChoice>>>({});
   const [envFile, setEnvFile] = useState(readEnvFile);
   const sound = useRef<Audition | null>(null);
   useEffect(() => () => sound.current?.stop(), []);
@@ -100,11 +106,12 @@ function Auditions({ manifest, samples }: Loaded) {
   };
   const on: VoicesActions = {
     playSample: (dir, n) => start(sampleKey(dir, n), sampleUrl(dir, { file: `${n}.mp3` })),
+    playPreview: (voiceId) => start(previewKey(voiceId), previewUrl(voiceId)),
     playLine: (id) => {
       const file = manifest.lines[id]?.file;
       if (file !== undefined) start(id, `${VOICE_BASE}${file}`);
     },
-    keep: (slot, n) => setKeeping((was) => chooseSample(was, slot, n)),
+    keep: (slot, choice) => setKeeping((was) => chooseVoice(was, slot, choice)),
     envFile: (path) => {
       setEnvFile(path);
       keepEnvFile(path);
@@ -114,6 +121,7 @@ function Auditions({ manifest, samples }: Loaded) {
     <VoicesBoard
       roster={ROSTER}
       samples={samples.kind === 'served' ? samples.samples : {}}
+      library={samples.kind === 'served' ? samples.library : []}
       samplesNote={samples.kind === 'unserved' ? samples.why : null}
       lines={linesByMoment(manifest)}
       playing={playing}

@@ -11,10 +11,13 @@ import { switchOn } from './switches.js';
  * entry's list by its id, GET /takes/<id>/<n>.mp3 the take itself. Beside them the samples of the
  * radio's voices, for the client's /voices page to play before one is kept: scripts/voice.ts
  * `--design` makes them into takes/voices/<slot>/<n>.mp3 — a role's folder (`pa`), or a role's
- * and a person's (`operator-marta`) — listed alike; GET /takes/voices/ answers every person's
- * list by their folder, GET /takes/voices/<slot>/<n>.mp3 the sample. Only with ALLOW_TAKES=1,
- * as `pnpm dev` sets it: without, every address under /takes answers 404 — never the page in its
- * place — so a production server serves no take.
+ * and a person's (`operator-laura`) — listed alike; GET /takes/voices/ answers every person's
+ * list by their folder, GET /takes/voices/<slot>/<n>.mp3 the sample. And the library voices
+ * offered for the cast (scripts/casting.json) with their previews, which `--previews` fetches
+ * into takes/voices/library/<voice id>.mp3: GET /takes/voices/library/ answers the voices, each
+ * with whether its preview is there, GET /takes/voices/library/<voice id>.mp3 the preview. Only
+ * with ALLOW_TAKES=1, as `pnpm dev` sets it: without, every address under /takes answers 404 —
+ * never the page in its place — so a production server serves no take.
  */
 
 /** An entry's id, as the catalog names it: lower-case words joined by dashes. */
@@ -25,10 +28,35 @@ const TAKE_PATH = /^\/takes\/([a-z0-9]+(?:-[a-z0-9]+)*)\/([1-9]\d*\.mp3)$/;
 const LIST = 'index.json';
 /** The folder of the voices' samples, among the takes. */
 const VOICES = 'voices';
-/** A person's folder of samples: their role (`pa`), or their role and id (`operator-marta`). */
+/** A person's folder of samples: their role (`pa`), or their role and id (`operator-laura`). */
 const SLOT = /^[a-z]+(?:-[a-z]+)?$/;
 /** A sample's address: its person's folder, then its number as the file's name. */
 const SAMPLE_PATH = /^\/takes\/voices\/([a-z]+(?:-[a-z]+)?)\/([1-9]\d*\.mp3)$/;
+/** The folder of the library voices' previews, among the voices' samples. */
+const LIBRARY = 'library';
+/** A voice's id on the ElevenLabs account. */
+const VOICE_ID = /^[A-Za-z0-9]{8,64}$/;
+/** A library voice's preview's address: its id as the file's name. */
+const PREVIEW_PATH = /^\/takes\/voices\/library\/([A-Za-z0-9]{8,64})\.mp3$/;
+
+/** A library voice offered for the cast, as /voices plays it: whether its preview is there. */
+export interface LibraryEntry {
+  readonly voiceId: string;
+  readonly name: string;
+  readonly about: string;
+  readonly slot: string;
+  readonly preview: boolean;
+}
+
+/** Whether `value` reads as a library voice of the casting file: an id, a name, what, for whom. */
+function isLibraryVoice(value: unknown): value is Omit<LibraryEntry, 'preview'> {
+  const voice = (value ?? {}) as Record<string, unknown>;
+  return (
+    typeof voice['voiceId'] === 'string' &&
+    VOICE_ID.test(voice['voiceId']) &&
+    ['name', 'about', 'slot'].every((key) => typeof voice[key] === 'string')
+  );
+}
 
 /**
  * Whether the server serves the takes: with ALLOW_TAKES=1, as `pnpm dev` sets it; not with 0 or
@@ -39,9 +67,15 @@ export function takesAllowed(env: NodeJS.ProcessEnv): boolean {
   return switchOn(env, 'ALLOW_TAKES', does);
 }
 
-/** The folder the takes wait in, read as the page asks for it. */
+/**
+ * The folder the takes wait in, read as the page asks for it, and the voice script's casting file
+ * (`casting`), whose library voices the page offers.
+ */
 export class TakesShelf {
-  constructor(readonly dir: string) {}
+  constructor(
+    readonly dir: string,
+    readonly casting: string | null = null,
+  ) {}
 
   /**
    * Every entry's list of takes by its id, each as its folder's index.json has it; a list that
@@ -52,11 +86,28 @@ export class TakesShelf {
   }
 
   /**
-   * Every person's list of voice samples by their folder (`pa`, `operator-marta`), as
+   * Every person's list of voice samples by their folder (`pa`, `operator-laura`), as
    * scripts/voice.ts writes it; one that does not read as JSON is said and left out.
    */
   samples(): Record<string, unknown> {
     return listsIn(join(this.dir, VOICES), SLOT, `takes/${VOICES}`);
+  }
+
+  /**
+   * The library voices the casting file offers for the cast, each with whether its preview lies in
+   * takes/voices/library/; none without a casting file. One that does not read is said and left
+   * out, a file that does not read as JSON said and taken as none.
+   */
+  library(): { library: LibraryEntry[] } {
+    const listed = this.casting === null ? [] : readLibrary(this.casting);
+    const library = listed.filter(isLibraryVoice).map(({ voiceId, name, about, slot }) => {
+      const preview = existsSync(join(this.dir, VOICES, LIBRARY, `${voiceId}.mp3`));
+      return { voiceId, name, about, slot, preview };
+    });
+    if (library.length < listed.length) {
+      console.error(`[escapelab] ${this.casting ?? ''}: a library voice does not read, left out`);
+    }
+    return { library };
   }
 
   /**
@@ -97,6 +148,19 @@ function listsIn(dir: string, named: RegExp, where: string): Record<string, unkn
     }
   }
   return lists;
+}
+
+/** The library list of the casting file at `file`; none where there is none or it does not read. */
+function readLibrary(file: string): unknown[] {
+  if (!existsSync(file)) return [];
+  try {
+    const { library } = JSON.parse(readFileSync(file, 'utf8')) as { library?: unknown };
+    return Array.isArray(library) ? library : [];
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : String(err);
+    console.error(`[escapelab] ${file} could not be read: ${reason}`);
+    return [];
+  }
 }
 
 /** A take as one look found it: its file, and its size in bytes. */
@@ -193,18 +257,31 @@ function askedUnderTakes(req: IncomingMessage): string | null {
   return under && (req.method === 'GET' || req.method === 'HEAD') ? path : null;
 }
 
-/** The take or the voice sample the address `path` names on `shelf`; null where there is none. */
+/**
+ * The take, the voice sample or the library voice's preview the address `path` names on `shelf`;
+ * null where there is none.
+ */
 function takeFileAt(shelf: TakesShelf, path: string): TakeFile | null {
   const [, id, name] = TAKE_PATH.exec(path) ?? [];
   if (id !== undefined && name !== undefined) return shelf.take(id, name);
+  const [, voiceId] = PREVIEW_PATH.exec(path) ?? [];
+  if (voiceId !== undefined) return shelf.take(join(VOICES, LIBRARY), `${voiceId}.mp3`);
   const [, slot, sample] = SAMPLE_PATH.exec(path) ?? [];
   return slot === undefined || sample === undefined ? null : shelf.take(join(VOICES, slot), sample);
 }
 
-/** The lists the address `path` asks for: the takes', the voices' samples', or neither (null). */
+/** Whether `path` names the folder `folder` under /takes, with its slash or without. */
+const isFolder = (path: string, folder: string): boolean =>
+  path === `/takes/${folder}` || path === `/takes/${folder}/`;
+
+/**
+ * The lists the address `path` asks for: the takes', the voices' samples', the library voices',
+ * or none of them (null).
+ */
 function listsAt(shelf: TakesShelf, path: string): Record<string, unknown> | null {
   if (path === '/takes' || path === '/takes/') return shelf.lists();
-  return path === `/takes/${VOICES}` || path === `/takes/${VOICES}/` ? shelf.samples() : null;
+  if (isFolder(path, `${VOICES}/${LIBRARY}`)) return shelf.library();
+  return isFolder(path, VOICES) ? shelf.samples() : null;
 }
 
 /**

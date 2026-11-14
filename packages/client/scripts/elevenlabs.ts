@@ -33,12 +33,13 @@ export const ELEVEN_GAP_MS = 300;
 /** How often a request turned away as one too many (429) goes again. */
 export const ELEVEN_RETRIES = 5;
 
-/** A voice of the account, as GET /v1/voices lists it. */
+/** A voice of the account, as GET /v1/voices lists it, with the address of its preview. */
 export interface VoiceInfo {
   readonly voiceId: string;
   readonly name?: string | undefined;
   readonly category?: string | undefined;
   readonly labels?: Readonly<Record<string, string>> | undefined;
+  readonly previewUrl?: string | undefined;
 }
 
 /** What the script asks of the SDK's client: the account's voices, and speech. */

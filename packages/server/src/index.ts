@@ -59,7 +59,9 @@ const voiceDesk = recordingAllowed(process.env)
   : null;
 // The music's takes and the voices' samples, for /sounds and /voices to play: ALLOW_TAKES=1 only.
 const TAKES_DIR = fileURLToPath(new URL('../../client/takes', import.meta.url));
-const takes = takesAllowed(process.env) ? new TakesShelf(TAKES_DIR) : null;
+/** The voice script's casting file: the library voices /voices offers for the cast. */
+const CASTING_FILE = fileURLToPath(new URL('../../client/scripts/casting.json', import.meta.url));
+const takes = takesAllowed(process.env) ? new TakesShelf(TAKES_DIR, CASTING_FILE) : null;
 // Where finished runs and the accounts are kept: Postgres at DATABASE_URL — its migrations
 // applied first, whatever command started the server — else the run log file and the accounts
 // in memory. The Bestenliste is counted from it once, then run by run. Nothing listens before.

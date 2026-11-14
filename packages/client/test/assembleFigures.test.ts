@@ -45,7 +45,7 @@ function viewWith(items: Item[]): PlayerView {
     missionTitle: 'Probe',
     difficulty: 'normal',
     storyText: '',
-    cast: { pa: 'anlage', operator: 'helmut', lead: 'kessler' },
+    cast: { pa: 'anlage', operator: 'helmut', lead: null },
     crewSize: { min: 2, max: 2 },
     chat: [],
     you,

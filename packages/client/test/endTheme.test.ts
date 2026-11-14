@@ -29,11 +29,11 @@ afterEach(() => {
 
 /**
  * The last word on a run, Helmut's recording of 3 s in the voice's list, and the same words in
- * Kessler's voice: each person has a recording of their own.
+ * Mila's voice: each person has a recording of their own.
  */
 const WORDS = 'Alle draußen, und der Trakt hat wieder Strom.';
 const LAST_WORD = { text: WORDS, person: 'helmut' };
-const HERS = { text: WORDS, person: 'kessler' };
+const HERS = { text: WORDS, person: 'mila' };
 const said = { text: WORDS, ms: 3000, missions: ['blackout'], moment: 'won' } as const;
 const VOICE: VoiceManifest = {
   lines: {
@@ -43,11 +43,11 @@ const VOICE: VoiceManifest = {
       person: 'helmut',
       file: 'helmut-aaaaaaaaaaaa.mp3',
     },
-    'kessler-aaaaaaaaaaaa': {
+    'mila-aaaaaaaaaaaa': {
       ...said,
       role: 'lead',
-      person: 'kessler',
-      file: 'kessler-aaaaaaaaaaaa.mp3',
+      person: 'mila',
+      file: 'mila-aaaaaaaaaaaa.mp3',
     },
   },
 };
@@ -238,10 +238,10 @@ describe('the last word on the end card', () => {
     voiceAsked.length = 0;
     end.playEnding('lost', HERS);
     await fetchIn();
-    expect(voiceAsked).toEqual(['/voice/kessler-aaaaaaaaaaaa.mp3']);
+    expect(voiceAsked).toEqual(['/voice/mila-aaaaaaaaaaaa.mp3']);
     expect([radio.clipOf(HERS) === null, radio.clipOf(LAST_WORD) === null]).toEqual([false, true]);
     await vi.advanceTimersByTimeAsync((LOOKAHEAD + 10.6) * 1000);
-    expect(radio.voiceProbe().lastId).toBe('kessler-aaaaaaaaaaaa');
+    expect(radio.voiceProbe().lastId).toBe('mila-aaaaaaaaaaaa');
   });
 
   it('never brings the word once the card has gone, and breaks it off where it speaks', async () => {

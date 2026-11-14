@@ -39,22 +39,21 @@ const person = (id: string, voiced = true): Person => ({
   id,
   name: `${id.charAt(0).toUpperCase()}${id.slice(1)}`,
   character: 'Arbeitet in der Leitstelle.',
-  prompt: 'A calm German voice on a two-way radio, clean studio recording.',
   ...(voiced ? { voiceId: `${id}Voice0000000` } : {}),
 });
 
 /** A roster of three voiced operators, two voiced leads and one plant's voice. */
 const VOICED: Roster = {
   pa: [person('anlage')],
-  operator: [person('helmut'), person('marta'), person('jonas')],
-  lead: [person('kessler'), person('brandt')],
+  operator: [person('helmut'), person('laura'), person('ben')],
+  lead: [person('mila'), person('brandt')],
 };
 
 describe('the roster in cast.json', () => {
   it('names the plant’s voice, three Leitstellen and the Schichtleitung, every id its own', () => {
     expect(ROSTER.pa.map((p) => p.id)).toEqual(['anlage']);
-    expect(ROSTER.operator.map((p) => p.id)).toEqual(['helmut', 'marta', 'jonas']);
-    expect(ROSTER.lead.map((p) => p.id)).toEqual(['kessler']);
+    expect(ROSTER.operator.map((p) => p.id)).toEqual(['helmut', 'laura', 'ben']);
+    expect(ROSTER.lead.map((p) => p.id)).toEqual(['mila']);
     const ids = ROLES.flatMap((role) => ROSTER[role].map((p) => p.id));
     expect(new Set(ids).size).toBe(ids.length);
     // Helmut keeps the library voice every recorded line was made with, and its model.
@@ -66,16 +65,15 @@ describe('the roster in cast.json', () => {
     expect(personOf('nobody')).toBeUndefined();
   });
 
-  it('says who each is in the world’s voice, and asks Voice Design for them in English', () => {
+  it('says who each is in the world’s voice, and keeps how a voice is asked for out of it', () => {
     const everyone = ROLES.flatMap((role) => ROSTER[role]);
     expect(offVoice(everyone.map((p) => p.character), WORLD)).toEqual([]);
-    for (const { id, prompt, name } of everyone) {
+    for (const { id, name } of everyone) {
       expect(name, id).toMatch(/^[A-ZÄÖÜ]/);
-      expect(prompt.length, id).toBeGreaterThanOrEqual(20);
-      expect(prompt.length, id).toBeLessThanOrEqual(1000);
-      expect(prompt, id).toMatch(/German/);
-      expect(prompt, id).toMatch(/studio recording without background noise/);
     }
+    // The Voice-Design prompts and the library stay with the voice script, out of the game.
+    const keys = new Set(everyone.flatMap((p) => Object.keys(p)));
+    expect([...keys].sort()).toEqual(['character', 'id', 'model', 'name', 'voiceId']);
   });
 
   it('refuses a roster that a run could not cast from', () => {
@@ -109,7 +107,7 @@ describe('who is on duty', () => {
       const { operator } = castOf(seed, VOICED);
       nights.set(operator, (nights.get(operator) ?? 0) + 1);
     }
-    expect([...nights.keys()].sort()).toEqual(['helmut', 'jonas', 'marta']);
+    expect([...nights.keys()].sort()).toEqual(['ben', 'helmut', 'laura']);
     for (const [who, count] of nights) {
       // A third each, give or take: never under a fifth of the nights.
       expect(count, who).toBeGreaterThanOrEqual(45);
@@ -122,15 +120,15 @@ describe('who is on duty', () => {
   });
 
   it('puts nobody on duty without a voice: the plant’s and the desk’s first stand in', () => {
-    const one: Roster = { ...VOICED, operator: [person('helmut', false), person('marta')] };
-    expect(new Set(seeds.map((seed) => castOf(seed, one).operator))).toEqual(new Set(['marta']));
+    const one: Roster = { ...VOICED, operator: [person('helmut', false), person('laura')] };
+    expect(new Set(seeds.map((seed) => castOf(seed, one).operator))).toEqual(new Set(['laura']));
     const silent: Roster = { ...VOICED, pa: [person('anlage', false)] };
     expect(new Set(seeds.map((seed) => castOf(seed, silent).pa))).toEqual(new Set(['anlage']));
     // A Schichtleitung without a voice: nobody of it on duty.
-    const none: Roster = { ...VOICED, lead: [person('kessler', false), person('brandt', false)] };
+    const none: Roster = { ...VOICED, lead: [person('mila', false), person('brandt', false)] };
     expect(new Set(seeds.map((seed) => castOf(seed, none).lead))).toEqual(new Set([null]));
     expect(inService('lead', none)).toEqual([]);
-    expect(inService('operator', VOICED).map((p) => p.id)).toEqual(['helmut', 'marta', 'jonas']);
+    expect(inService('operator', VOICED).map((p) => p.id)).toEqual(['helmut', 'laura', 'ben']);
     // The shipped roster: Helmut's voice is the one kept so far, and he has every night.
     for (const seed of seeds) {
       expect(castOf(seed)).toEqual({ pa: 'anlage', operator: 'helmut', lead: null });
@@ -138,18 +136,18 @@ describe('who is on duty', () => {
   });
 
   it('has the operator on duty speak for a Schichtleitung without a voice', () => {
-    const none: Roster = { ...VOICED, lead: [person('kessler', false)] };
+    const none: Roster = { ...VOICED, lead: [person('mila', false)] };
     expect([speakingFor('lead', none), speakingFor('lead', VOICED)]).toEqual(['operator', 'lead']);
     expect([speakingFor('pa', none), speakingFor('operator', none)]).toEqual(['pa', 'operator']);
-    expect(sayersOf('lead', none).map((p) => p.id)).toEqual(['helmut', 'marta', 'jonas']);
-    expect(sayersOf('lead', VOICED).map((p) => p.id)).toEqual(['kessler', 'brandt']);
+    expect(sayersOf('lead', none).map((p) => p.id)).toEqual(['helmut', 'laura', 'ben']);
+    expect(sayersOf('lead', VOICED).map((p) => p.id)).toEqual(['mila', 'brandt']);
     // On a night: the clock's call is the desk's, said by whoever has the desk.
     const night = { phase: 'playing', runs: 1, castSeed: 3 } as const;
     const desk = castFor(night, none).operator;
     expect(speakerAt(night, 'clock', none)).toEqual({ role: 'operator', person: desk });
     const lead = castFor(night, VOICED).lead;
     expect(speakerAt(night, 'lost', VOICED)).toEqual({ role: 'lead', person: lead });
-    expect(['kessler', 'brandt']).toContain(lead);
+    expect(['mila', 'brandt']).toContain(lead);
   });
 });
 
@@ -302,9 +300,9 @@ describe('a line heard in a run', () => {
     expect(texts).toContain('Die Zeit ist um.');
   });
 
-  it('keeps every voice, its prompt and its model out of a player’s view', () => {
+  it('keeps every voice, its model and who the person is out of a player’s view', () => {
     const everyone = ROLES.flatMap((role) => ROSTER[role]);
-    const secrets = everyone.flatMap((p) => [p.prompt, p.character, p.voiceId, p.model]);
+    const secrets = everyone.flatMap((p) => [p.character, p.voiceId, p.model]);
     const kept = secrets.filter((secret): secret is string => secret !== undefined);
     expect(kept).toContain('g1jpii0iyvtRs8fqXsd1');
     const views = [lobby(), started(mission), run].flatMap((state) => [

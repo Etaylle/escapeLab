@@ -1,27 +1,35 @@
 /**
  * The radio's cast as the voice script knows it (voice.ts): the roster core keeps in
- * core/src/cast.json — who can fill each role, how Voice Design is asked for their voice, the
- * voice kept for them and the model it reads with — read as a file, as the script imports nothing
- * of the app; the persons in service, whose lines are made; and each person's voice heard before
- * it is kept: three samples from their prompt (--design), one of them kept as their voice on the
- * account and in the roster (--keep). Asks ElevenLabs for nothing itself: whoever calls it hands
- * it a client.
+ * core/src/cast.json — who can fill each role, the voice kept for them and the model it reads
+ * with — read as a file, as the script imports nothing of the app; the persons in service, whose
+ * lines are made; how a voice is asked for, which the game never needs (casting.json): each
+ * person's Voice-Design prompt and the library voices of the account to choose from; and each
+ * person's voice heard before it is kept: three samples from their prompt (--design), one of
+ * them — or a library voice — kept as their voice on the account and in the roster (--keep).
+ * Asks ElevenLabs for nothing itself: whoever calls it hands it a client.
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
+  accountVoices,
   ELEVEN_FORMAT,
+  ELEVEN_MODEL,
   elevenAsk,
   OPERATOR_HELD,
+  resolveVoice,
   type DesignClient,
   type Held,
+  type SpeechClient,
+  type VoiceInfo,
 } from './elevenlabs.ts';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
 /** The roster of the radio's cast, as core reads it (core/src/cast.ts): --keep writes it. */
 export const CAST_FILE = resolve(HERE, '../../core/src/cast.json');
+/** How each person's voice is asked for: their prompts and the library voices to choose from. */
+export const CASTING_FILE = resolve(HERE, 'casting.json');
 /**
  * Where --design puts each person's samples, a folder git ignores beside public/, which no
  * build copies, as the music's takes: takes/voices/<slot>/<n>.mp3 and their index.json.
@@ -86,8 +94,6 @@ export interface Person {
   readonly id: string;
   readonly name: string;
   readonly character: string;
-  /** the description, in English, Voice Design makes their voice from */
-  readonly prompt: string;
   /** their voice on the ElevenLabs account, kept by --keep */
   readonly voiceId?: string;
   /** the model their voice reads with */
@@ -105,6 +111,42 @@ export function readRoster(file = CAST_FILE): Roster {
 /** Writes `roster` to `file`, two spaces to a level, as the file is kept. */
 function writeRoster(roster: Roster, file = CAST_FILE): void {
   writeFileSync(file, `${JSON.stringify(roster, null, 2)}\n`);
+}
+
+/**
+ * A voice of the ElevenLabs library the account has, offered for one person of the cast: its id,
+ * its name and what it is as the library labels it, and the person it is offered for, by the
+ * name the command line gives them (`slotsOf`): `--keep <slot>=<voice id>` keeps it.
+ */
+export interface LibraryVoice {
+  readonly voiceId: string;
+  readonly name: string;
+  readonly about: string;
+  readonly slot: string;
+}
+
+/**
+ * How each person's voice is asked for, kept apart from the roster so that the game never carries
+ * it: the description Voice Design makes their voice from (`--design`), in English, by their id;
+ * and the library voices offered for them, the owner's own pick.
+ */
+export interface Casting {
+  readonly prompts: Readonly<Record<string, string>>;
+  readonly library: readonly LibraryVoice[];
+}
+
+/** The casting as it stands at `file`. */
+export function readCasting(file = CASTING_FILE): Casting {
+  return JSON.parse(readFileSync(file, 'utf8')) as Casting;
+}
+
+/** The Voice-Design prompt of the person `slot` names; fails, naming the file, without one. */
+export function promptOf(casting: Casting, slot: Slot): string {
+  const prompt = casting.prompts[slot.person.id];
+  if (prompt === undefined) {
+    throw new Error(`voice: ${CASTING_FILE} has no prompt for ${slot.person.id} (${slot.name})`);
+  }
+  return prompt;
 }
 
 /**
@@ -144,6 +186,11 @@ export const ROLE_HELD: Readonly<Record<Role, Held>> = {
 /** The model Voice Design makes a voice with. */
 export const DESIGN_MODEL = 'eleven_ttv_v3';
 /**
+ * The model a library voice reads with, as --keep writes it into the roster: Eleven v4, the
+ * script's default, as Helmut's lines were read — a library voice is made for every model.
+ */
+export const LIBRARY_READS = ELEVEN_MODEL;
+/**
  * The model a designed voice reads with, as --keep writes it into the roster: Eleven v3, which
  * Voice Design's voices are made for — on Eleven v4 they may sound less performative, as
  * ElevenLabs says — and which reads audio tags.
@@ -170,8 +217,8 @@ export const DESIGN_TEXT: Readonly<Record<Role, string>> = {
 
 /**
  * A person of the cast as the command line names them (--design, --keep): by their role where
- * it has them alone (`pa`, `lead`), else by role and id (`operator:marta`); and the folder their
- * samples go to under SAMPLES_DIR, named alike (`pa`, `operator-marta`).
+ * it has them alone (`pa`, `lead`), else by role and id (`operator:laura`); and the folder their
+ * samples go to under SAMPLES_DIR, named alike (`pa`, `operator-laura`).
  */
 export interface Slot {
   readonly role: Role;
@@ -191,7 +238,7 @@ export function slotsOf(roster: Roster): Slot[] {
   );
 }
 
-/** The person `asked` names (`pa`, `operator:marta`; `pa:anlage` too); fails naming them all. */
+/** The person `asked` names (`pa`, `operator:laura`; `pa:anlage` too); fails naming them all. */
 export function slotOf(roster: Roster, asked: string | undefined): Slot {
   const slots = slotsOf(roster);
   const found = slots.find(
@@ -204,14 +251,76 @@ export function slotOf(roster: Roster, asked: string | undefined): Slot {
   return found;
 }
 
-/** What to run where the person `slot` names has no voice yet: three samples, one kept. */
+/**
+ * What to run where the person `slot` names has no voice yet: a library voice kept, or three
+ * samples made and one of them kept.
+ */
 export function voiceless(slot: Slot): string {
+  const run = 'pnpm --filter @escapelab/client voice';
   return (
-    `voice: ${slot.person.name} (${slot.name}) has no voice yet — make three samples, ` +
-    'listen to them and keep one, in packages/client:\n' +
-    `  node --env-file=<repo>/.env.local scripts/voice.ts --design ${slot.name}\n` +
-    `  node --env-file=<repo>/.env.local scripts/voice.ts --keep ${slot.name}=<n>`
+    `voice: ${slot.person.name} (${slot.name}) has no voice yet — listen on /voices, then keep ` +
+    'a library voice, or design three samples and keep one:\n' +
+    `  ${run} --keep ${slot.name}=<voice id>\n` +
+    `  ${run} --design ${slot.name}  then  ${run} --keep ${slot.name}=<n>`
   );
+}
+
+/** The folder under SAMPLES_DIR the library voices' previews go to: library/<voice id>.mp3. */
+export const LIBRARY_DIR = 'library';
+
+/** The bytes of the file at `url`, a library voice's preview; fails naming the status. */
+async function fetchBytes(url: string): Promise<Buffer> {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return Buffer.from(await res.arrayBuffer());
+}
+
+/** What became of one library voice's preview: its file, or why there is none. */
+export type Preview =
+  | { readonly voiceId: string; readonly file: string }
+  | { readonly voiceId: string; readonly missing: string };
+
+/**
+ * Fetches the preview ElevenLabs keeps of each library voice of `casting` into `dir` as
+ * <voice id>.mp3, for /voices to play: the account's list of voices names each preview's address
+ * (GET /v1/voices), and the preview is a file of ElevenLabs' own — neither costs a credit. A voice
+ * the account has not, one without a preview and one whose preview does not come are said, each
+ * with why, and the others fetched all the same.
+ */
+export async function fetchPreviews(
+  client: SpeechClient,
+  casting: Casting,
+  dir = join(SAMPLES_DIR, LIBRARY_DIR),
+  download: (url: string) => Promise<Buffer> = fetchBytes,
+): Promise<Preview[]> {
+  const voices = await accountVoices(client);
+  mkdirSync(dir, { recursive: true });
+  const previews: Preview[] = [];
+  for (const { voiceId } of casting.library) {
+    previews.push(await previewOf(voices, voiceId, dir, download));
+  }
+  return previews;
+}
+
+/** The preview of the library voice `voiceId`, fetched into `dir`; or why there is none. */
+async function previewOf(
+  voices: readonly VoiceInfo[],
+  voiceId: string,
+  dir: string,
+  download: (url: string) => Promise<Buffer>,
+): Promise<Preview> {
+  const voice = voices.find((each) => each.voiceId === voiceId);
+  if (voice === undefined) return { voiceId, missing: 'the account has no such voice' };
+  if (voice.previewUrl === undefined) return { voiceId, missing: 'it has no preview' };
+  try {
+    const bytes = await download(voice.previewUrl);
+    const file = join(dir, `${voiceId}.mp3`);
+    writeFileSync(file, bytes);
+    return { voiceId, file };
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : String(err);
+    return { voiceId, missing: `its preview did not come: ${reason}` };
+  }
 }
 
 /**
@@ -253,14 +362,15 @@ function writeSamples(dir: string, samples: Samples): void {
 }
 
 /**
- * Asks Voice Design for three samples of the voice of the person `slot` names, from their prompt
- * in the roster, each saying their role's DESIGN_TEXT, into their folder under `dir` — numbered
- * on after those it has — and lists them there. The request costs the text's characters, once
- * for all three; a refusal fails saying what ElevenLabs said.
+ * Asks Voice Design for three samples of the voice of the person `slot` names, from their
+ * `prompt` (casting.json), each saying their role's DESIGN_TEXT, into their folder under `dir` —
+ * numbered on after those it has — and lists them there. The request costs the text's
+ * characters, once for all three; a refusal fails saying what ElevenLabs said.
  */
 export async function designVoice(
   client: DesignClient,
   slot: Slot,
+  prompt: string,
   dir = SAMPLES_DIR,
   now: () => Date = () => new Date(),
 ): Promise<Sample[]> {
@@ -270,7 +380,7 @@ export async function designVoice(
   const answer = await elevenAsk(
     () =>
       client.textToVoice.design({
-        voiceDescription: person.prompt,
+        voiceDescription: prompt,
         modelId: DESIGN_MODEL,
         text,
         outputFormat: ELEVEN_FORMAT,
@@ -286,7 +396,7 @@ export async function designVoice(
     const n = first + i;
     writeFileSync(join(folder, `${n}.mp3`), Buffer.from(preview.audioBase64, 'base64'));
     const { generatedVoiceId, durationSecs: seconds } = preview;
-    const how = { prompt: person.prompt, text, model: DESIGN_MODEL, madeAt };
+    const how = { prompt, text, model: DESIGN_MODEL, madeAt };
     return { n, file: `${n}.mp3`, seconds, generatedVoiceId, ...how };
   });
   writeSamples(folder, { ...list, samples: [...list.samples, ...made] });
@@ -307,6 +417,21 @@ function sampleOf(slot: Slot, folder: string, n: number): { list: Samples; sampl
     throw new Error(`voice: the sample ${n} of ${slot.name} is gone from ${folder}`);
   }
   return { list, sample };
+}
+
+/** What a voice id on the ElevenLabs account looks like: letters and digits, 8 to 64. */
+export const VOICE_ID = /^[A-Za-z0-9]{8,64}$/;
+
+/**
+ * Writes `voice` into the roster at `cast` as the voice of the person `slot` names, with the
+ * model it reads with; returns the person as kept.
+ */
+function keptAs(slot: Slot, voice: { voiceId: string; model: string }, cast: string): Person {
+  const kept: Person = { ...slot.person, ...voice };
+  const roster = readRoster(cast);
+  const persons = roster[slot.role].map((each) => (each.id === kept.id ? kept : each));
+  writeRoster({ ...roster, [slot.role]: persons }, cast);
+  return kept;
 }
 
 /**
@@ -335,13 +460,27 @@ export async function keepVoice(
       }),
     asking,
   );
-  if (!/^[A-Za-z0-9]{8,64}$/.test(made.voiceId)) {
+  if (!VOICE_ID.test(made.voiceId)) {
     throw new Error(`voice: ElevenLabs made the voice "${made.voiceId}", which is no voice id`);
   }
-  const kept: Person = { ...slot.person, voiceId: made.voiceId, model: DESIGNED_READS };
-  const roster = readRoster(cast);
-  const persons = roster[slot.role].map((each) => (each.id === kept.id ? kept : each));
-  writeRoster({ ...roster, [slot.role]: persons }, cast);
+  const kept = keptAs(slot, { voiceId: made.voiceId, model: DESIGNED_READS }, cast);
   writeSamples(folder, { ...list, kept: { n, voiceId: made.voiceId } });
   return kept;
+}
+
+/**
+ * Makes the library voice `wanted` — its id, or its name exactly — the voice of the person `slot`
+ * names, and keeps it in the roster at `cast` with the model it reads with (LIBRARY_READS). The
+ * voice is the account's already: nothing is made and nothing spent, the account's list of
+ * voices (GET /v1/voices, free) the one thing asked. Refuses, naming the account's voices, one it
+ * has not.
+ */
+export async function keepLibraryVoice(
+  client: SpeechClient,
+  slot: Slot,
+  wanted: string,
+  cast = CAST_FILE,
+): Promise<Person> {
+  const found = resolveVoice(await accountVoices(client), wanted);
+  return keptAs(slot, { voiceId: found.voiceId, model: LIBRARY_READS }, cast);
 }

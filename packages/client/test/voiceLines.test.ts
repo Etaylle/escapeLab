@@ -276,7 +276,7 @@ describe('the recorded lines', () => {
       const helmut = lineKey({ text: start, person: 'helmut' });
       expect(ids.get(helmut)).toBe(recorded ? lineId('helmut', start) : undefined);
       // Another person's voice finds nothing of his.
-      expect(ids.get(lineKey({ text: start, person: 'marta' }))).toBeUndefined();
+      expect(ids.get(lineKey({ text: start, person: 'laura' }))).toBeUndefined();
     }
   });
 
@@ -308,7 +308,7 @@ describe('the cast the script reads', () => {
         expect(ids(sayersOf(cast, role)), role).toBe(ids(coreSayersOf(role, cast)));
       }
     }
-    expect(ids(inService(voiced, 'operator'))).toBe('helmut marta jonas');
+    expect(ids(inService(voiced, 'operator'))).toBe('helmut laura ben');
     // The shipped roster: no Schichtleitung with a voice, so the desk says its lines.
     expect([ids(inService(roster, 'lead')), ids(sayersOf(roster, 'lead'))]).toEqual(['', 'helmut']);
   });
@@ -446,7 +446,7 @@ describe('the lines the script reads', () => {
   it('names a recording by its person and the first 12 hex of the SHA-1 of its words', () => {
     expect(voiceId('abc')).toBe('a9993e364706');
     expect(voiceId('Beide hin.')).toMatch(/^[0-9a-f]{12}$/);
-    expect(lineId('marta', 'abc')).toBe('marta-a9993e364706');
+    expect(lineId('laura', 'abc')).toBe('laura-a9993e364706');
   });
 });
 
@@ -637,11 +637,11 @@ const eleven = (
   persons: { helmut: voiceOf(voiceId, model), ...others },
 });
 
-/** The roster with Marta's voice kept besides Helmut's, Jonas and Kessler without one yet. */
-const MARTA_KEPT: Roster = {
+/** The roster with Laura's voice kept besides Helmut's, Ben and Mila without one yet. */
+const LAURA_KEPT: Roster = {
   ...roster,
   operator: roster.operator.map((p) =>
-    p.id === 'marta' ? { ...p, voiceId: 'martaVoice0000000000', model: 'eleven_v3' } : p,
+    p.id === 'laura' ? { ...p, voiceId: 'lauraVoice0000000000', model: 'eleven_v3' } : p,
   ),
 };
 
@@ -721,9 +721,9 @@ describe('what a run keeps, and what it makes anew', () => {
   });
 
   it('tells the persons apart under ElevenLabs alone: their voices, and how each holds', () => {
-    const marta = voiceOf('martaVoice0000000000', 'eleven_v3');
-    const both = eleven('eleven_v4', HELMUT, 'free', { marta });
-    const hers = { ...said, person: 'marta' };
+    const laura = voiceOf('lauraVoice0000000000', 'eleven_v3');
+    const both = eleven('eleven_v4', HELMUT, 'free', { laura });
+    const hers = { ...said, person: 'laura' };
     expect(renderOf(both, said)).toBe(renderOf(eleven('eleven_v4'), said));
     expect(renderOf(both, hers)).not.toBe(renderOf(both, said));
     // The plant's voice held as the operator's would be another take, too.
@@ -768,7 +768,7 @@ describe('what a run keeps, and what it makes anew', () => {
       'Los.',
       900,
       { ...line, missions: ['b', 'a'], moment: 'start', opens: true },
-      'marta',
+      'laura',
       upload,
     );
     expect(opening).toEqual({
@@ -776,7 +776,7 @@ describe('what a run keeps, and what it makes anew', () => {
       ms: 900,
       missions: ['a', 'b'],
       role: 'operator',
-      person: 'marta',
+      person: 'laura',
       moment: 'start',
       opens: true,
       source: 'upload',
@@ -817,7 +817,7 @@ describe('what a run keeps, and what it makes anew', () => {
   });
 
   it('asks the account for its plan before anything, and for the voices of the cast', async () => {
-    /** An account on `tier` with Helmut and Marta's kept voice, or one that will not say. */
+    /** An account on `tier` with Helmut and Laura's kept voice, or one that will not say. */
     const account = (tier: string | Error): SpeechClient & SoundClient => ({
       ...NO_CLIENT,
       voices: {
@@ -825,7 +825,7 @@ describe('what a run keeps, and what it makes anew', () => {
           Promise.resolve({
             voices: [
               { voiceId: HELMUT, name: 'Helmut - German Epic Trailer Voice' },
-              { voiceId: 'martaVoice0000000000', name: 'EscapeLab Marta' },
+              { voiceId: 'lauraVoice0000000000', name: 'EscapeLab Laura' },
             ],
           }),
       },
@@ -840,15 +840,15 @@ describe('what a run keeps, and what it makes anew', () => {
       textToSoundEffects: { convert: () => Promise.reject(new Error('no call')) },
       music: { compose: () => Promise.reject(new Error('no call')) },
     });
-    const paid = await elevenVoiceOf(MARTA_KEPT, account('creator'));
+    const paid = await elevenVoiceOf(LAURA_KEPT, account('creator'));
     expect(paid.engine === 'elevenlabs' && paid.plan).toBe('paid');
     const persons = paid.engine === 'elevenlabs' ? paid.persons : {};
-    expect(Object.keys(persons)).toEqual(['helmut', 'marta']);
-    expect([persons['helmut']?.model, persons['marta']?.model]).toEqual(['eleven_v4', 'eleven_v3']);
-    expect(persons['marta']?.held).toEqual(ROLE_HELD.operator);
-    expect(paid.engine === 'elevenlabs' && paid.name).toMatch(/helmut eleven_v4, marta.*paid plan/);
+    expect(Object.keys(persons)).toEqual(['helmut', 'laura']);
+    expect([persons['helmut']?.model, persons['laura']?.model]).toEqual(['eleven_v4', 'eleven_v3']);
+    expect(persons['laura']?.held).toEqual(ROLE_HELD.operator);
+    expect(paid.engine === 'elevenlabs' && paid.name).toMatch(/helmut eleven_v4, laura.*paid plan/);
     // ELEVENLABS_MODEL names the model every voice reads with.
-    const over = await elevenVoiceOf(MARTA_KEPT, account('free'), 'eleven_multilingual_v2');
+    const over = await elevenVoiceOf(LAURA_KEPT, account('free'), 'eleven_multilingual_v2');
     const models = over.engine === 'elevenlabs' ? Object.values(over.persons) : [];
     expect(models.map((voice) => voice.model)).toEqual([
       'eleven_multilingual_v2',
@@ -856,9 +856,9 @@ describe('what a run keeps, and what it makes anew', () => {
     ]);
     // A voice the roster keeps and the account has not: refused, naming the account's voices.
     const lead = [{ ...roster.lead[0]!, voiceId: 'goneVoice00000000' }];
-    const gone: Roster = { ...MARTA_KEPT, lead };
+    const gone: Roster = { ...LAURA_KEPT, lead };
     await expect(elevenVoiceOf(gone, account('free'))).rejects.toThrow(/no voice "goneVoice/);
-    const silent = elevenVoiceOf(MARTA_KEPT, account(new Error('offline')));
+    const silent = elevenVoiceOf(LAURA_KEPT, account(new Error('offline')));
     await expect(silent).rejects.toThrow(/did not tell the account's plan/);
   });
 
@@ -885,9 +885,9 @@ describe('a run over the cast', () => {
     puzzles: [],
   };
   const lines = shippedLines([probe]);
-  const kept = MARTA_KEPT;
-  const marta = voiceOf('martaVoice0000000000', 'eleven_v3');
-  const both = eleven('eleven_v4', HELMUT, 'paid', { marta });
+  const kept = LAURA_KEPT;
+  const laura = voiceOf('lauraVoice0000000000', 'eleven_v3');
+  const both = eleven('eleven_v4', HELMUT, 'paid', { laura });
 
   /** Who says which role's line in `planned`, as „helmut:lead", in order. */
   const sayers = (planned: readonly Planned[]): string =>
@@ -896,17 +896,17 @@ describe('a run over the cast', () => {
   it('makes each line for each person who says it: the lead’s by the desk without a voice', () => {
     const planned = plan({ lines: {} }, 'none', both, kept, lines);
     // Both operators in service say the start, and the clock's call while the lead has no voice.
-    expect(sayers(planned)).toBe('helmut:lead helmut:operator marta:lead marta:operator');
+    expect(sayers(planned)).toBe('helmut:lead helmut:operator laura:lead laura:operator');
     expect(toMake(both, planned)).toHaveLength(4);
     // A Schichtleitung with a voice says its call alone; ElevenLabs reads it once it has the voice.
     const voice = { voiceId: 'leadVoice000', model: 'eleven_v3' };
     const led: Roster = { ...kept, lead: kept.lead.map((p) => ({ ...p, ...voice })) };
     const withLead = plan({ lines: {} }, 'none', both, led, lines);
     const lead = led.lead[0]?.id ?? '';
-    expect(sayers(withLead)).toBe(`helmut:operator ${lead}:lead marta:operator`);
+    expect(sayers(withLead)).toBe(`helmut:operator laura:operator ${lead}:lead`);
     expect(toMake(both, withLead).map(({ person }) => person.id).sort()).toEqual([
       'helmut',
-      'marta',
+      'laura',
     ]);
     expect([canRead(both, lead), canRead({ engine: 'say' }, lead)]).toEqual([false, true]);
     // Piper or the Mac read everybody's in their one voice.
@@ -929,7 +929,7 @@ describe('a run over the cast', () => {
       expect(toMake(both, plan(done, fresh, both, kept, lines)), fresh).toEqual([]);
     }
     // A voice that would read them otherwise — the free plan — makes them anew under --fresh.
-    const free = eleven('eleven_v4', HELMUT, 'free', { marta });
+    const free = eleven('eleven_v4', HELMUT, 'free', { laura });
     expect(toMake(free, plan(done, 'none', free, kept, lines))).toEqual([]);
     expect(toMake(free, plan(done, 'synthetic', free, kept, lines))).toHaveLength(4);
     // Helmut's takes of the shipped lines, made on the free plan's terms: --fresh on the paid
@@ -944,7 +944,7 @@ describe('a run over the cast', () => {
   it('counts the characters each person’s model is given, tags and moods included', () => {
     const planned = plan({ lines: {} }, 'none', both, kept, lines);
     const todo = toMake(both, planned);
-    // Helmut on v4 and Marta on v3 read the start as it is written, the clock's call pressing.
+    // Helmut on v4 and Laura on v3 read the start as it is written, the clock's call pressing.
     const call = '[insistent] Noch eine Probeminute.';
     expect(charactersOf(both, todo)).toBe(('Probe läuft an.'.length + call.length) * 2);
     const all = toMake({ engine: 'say' }, planned);
@@ -966,22 +966,22 @@ describe('the plan of a run (--plan)', () => {
     puzzles: [],
   };
   const lines = shippedLines([probe]);
-  const kept = MARTA_KEPT;
+  const kept = LAURA_KEPT;
 
   it('counts for each person the lines made now and their credits, or design and lines', () => {
     const costs = costsOf(kept, { lines: {} }, 'synthetic', undefined, lines);
     const of = (slot: string) => costs.find((cost) => cost.slot === slot);
-    // Helmut on v4 and Marta on v3 read the start as written and the alarm with its mood's tag,
+    // Helmut on v4 and Laura on v3 read the start as written and the alarm with its mood's tag,
     // and the Schichtleitung's call, pressing, as long as it has no voice of its own.
     const theirs = 'Probe läuft an.'.length + '[tense] Probealarm.'.length;
     const call = { lines: 1, characters: '[insistent] Probeminute.'.length };
     const desk = { make: 3, characters: theirs + call.characters, skip: 0, standIn: call };
     expect(of('operator:helmut')).toMatchObject({ model: 'eleven_v4', ...desk });
-    expect(of('operator:marta')).toMatchObject({ model: 'eleven_v3', ...desk });
-    // Jonas has no voice yet: his design, then the Leitstelle's two lines on Eleven v3.
-    expect(of('operator:jonas')).toEqual({
-      slot: 'operator:jonas',
-      name: 'Jonas',
+    expect(of('operator:laura')).toMatchObject({ model: 'eleven_v3', ...desk });
+    // Ben has no voice yet: his design, then the Leitstelle's two lines on Eleven v3.
+    expect(of('operator:ben')).toEqual({
+      slot: 'operator:ben',
+      name: 'Ben',
       model: null,
       make: 0,
       characters: 0,
@@ -993,7 +993,7 @@ describe('the plan of a run (--plan)', () => {
     // The Schichtleitung's call, once its voice is kept, its own.
     expect(of('lead')?.later).toEqual(call);
     const slots = costs.map((cost) => cost.slot).join(' ');
-    expect(slots).toBe('pa operator:helmut operator:marta operator:jonas lead');
+    expect(slots).toBe('pa operator:helmut operator:laura operator:ben lead');
   });
 
   it('skips what is made as the run would make it, and tells what --fresh would make', () => {
@@ -1028,7 +1028,7 @@ describe('the plan of a run (--plan)', () => {
       'voice:   operator:helmut  Helmut     eleven_v4  3 lines, 58 credits (1 of them, 24 ' +
         'credits, the Schichtleitung’s until it has a voice); 0 made as they are, kept',
     );
-    expect(report[4]).toMatch(/operator:jonas +Jonas +no voice yet: its design 228 credits/);
+    expect(report[4]).toMatch(/operator:ben +Ben +no voice yet: its design 228 credits/);
     expect(report.at(-2)).toBe('voice: now, the kept cast: 6 lines, 116 credits');
     // Every voice kept: three operators' two lines each, the call once, by the Schichtleitung.
     const designs = DESIGN_TEXT.pa.length + DESIGN_TEXT.operator.length + DESIGN_TEXT.lead.length;

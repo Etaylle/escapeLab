@@ -141,8 +141,8 @@ const ROLE_BANNER: Readonly<Record<Role, string>> = {
 
 /**
  * Who a line on the air is from, as the banner names them: the plant's loudspeakers by what
- * they are, the radio by its role and the person of the night's cast — „LEITSTELLE · MARTA",
- * „SCHICHTLEITUNG · KESSLER" — and a note by the last shift.
+ * they are, the radio by its role and the person of the night's cast — „LEITSTELLE · LAURA",
+ * „SCHICHTLEITUNG · MILA" — and a note by the last shift.
  */
 export function bannerFrom(event: RunEvent): string {
   if (event.kind === 'hint') {

@@ -50,7 +50,7 @@ function annaSees(players: Seat[], parts: Partial<PlayerView> = {}): PlayerView 
     missionTitle: 'Blackout im Labor',
     difficulty: 'normal',
     storyText: 'Stromausfall.',
-    cast: { pa: 'anlage', operator: 'helmut', lead: 'kessler' },
+    cast: { pa: 'anlage', operator: 'helmut', lead: null },
     crewSize: { min: 2, max: 3 },
     chat: [],
     you: { id: 'p1', name: 'Anna', color: '#2dd4bf', ready: false, isHost: true },
@@ -190,9 +190,9 @@ describe('starting from the lobby', () => {
   });
 
   it('has the Funkprobe said by the operator on duty for the run to come', () => {
-    const cast = { pa: 'anlage', operator: 'marta', lead: 'kessler' };
+    const cast = { pa: 'anlage', operator: 'laura', lead: 'mila' };
     const ready = annaSees([anna, { ...ben, ready: true }], { radioCheck: 'Funkprobe.', cast });
-    expect(radioCheckDue(ready)).toEqual({ text: 'Funkprobe.', person: 'marta' });
+    expect(radioCheckDue(ready)).toEqual({ text: 'Funkprobe.', person: 'laura' });
   });
 });
 
@@ -1110,7 +1110,7 @@ describe('the audience', () => {
       missionTitle: 'Blackout im Labor',
       difficulty: 'normal',
       storyText: 'Licht.',
-      cast: { pa: 'anlage', operator: 'helmut', lead: 'kessler' },
+      cast: { pa: 'anlage', operator: 'helmut', lead: null },
       deadlineAt: 481_000,
       startedAt: 1_000,
       finishedAt: 301_000,

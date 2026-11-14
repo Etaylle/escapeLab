@@ -27,12 +27,12 @@ const STORY = 'Notstrom steht. Weiter zum Serverraum.';
 const UNRECORDED = 'Eine Zeile aus dem Editor.';
 
 /**
- * Each recording: its id, its words, who says them — the plant's voice, Marta on duty for the
+ * Each recording: its id, its words, who says them — the plant's voice, Laura on duty for the
  * call, Helmut the rest — the moment, how long it speaks, s.
  */
 const LINES = [
   { id: 'anlage-aaaa', text: ALERT, person: 'anlage', moment: 'announce', seconds: 3.1 },
-  { id: 'marta-bbbb', text: CALL, person: 'marta', moment: 'emergency', seconds: 2 },
+  { id: 'laura-bbbb', text: CALL, person: 'laura', moment: 'emergency', seconds: 2 },
   { id: 'helmut-cccc', text: NUDGE, person: 'helmut', moment: 'nudge', seconds: 4 },
   { id: 'helmut-dddd', text: STORY, person: 'helmut', moment: 'solved', seconds: 2.5 },
 ] as const;
@@ -172,7 +172,7 @@ describe('the objective bar’s lines on the air', () => {
     expect(up).toEqual([{ at: 2000, ms: 3100 }]);
     await vi.advanceTimersByTimeAsync(10_000);
     const [message] = speechOf(ctx, 'anlage-aaaa');
-    const [call] = speechOf(ctx, 'marta-bbbb');
+    const [call] = speechOf(ctx, 'laura-bbbb');
     expect(message?.startedAt).toBeCloseTo(12.01, 9);
     // The operator keys up once the message has ended, and speaks after the key. (A timer set in
     // another fires a millisecond on under the fake clock: hence „close to".)
@@ -189,7 +189,7 @@ describe('the objective bar’s lines on the air', () => {
   it('puts a line up without a recording late past its wait, keyed; it stays unsaid', async () => {
     const { radio, air, ctx, memory } = await onTheAir();
     expect(air.VOICE_WAIT_MS).toBe(3000);
-    late['/voice/marta-bbbb.m4a'] = 10_000;
+    late['/voice/laura-bbbb.m4a'] = 10_000;
     radio.fetchLines([asked(CALL)]);
     const up = inTurn(air, [line(CALL, 'emergency')]);
     await vi.advanceTimersByTimeAsync(air.VOICE_WAIT_MS - 1);
@@ -200,7 +200,7 @@ describe('the objective bar’s lines on the air', () => {
     expect(keyed(ctx)).toBe(1); // the chirp
     // The recording comes at last, its line long up: it is never said, nor kept decoded.
     await vi.advanceTimersByTimeAsync(20_000);
-    expect(speechOf(ctx, 'marta-bbbb')).toEqual([]);
+    expect(speechOf(ctx, 'laura-bbbb')).toEqual([]);
     expect(memory.decodedBytes().voice).toBe(0);
   });
 
@@ -266,7 +266,7 @@ describe('the objective bar’s lines on the air', () => {
   it('says nothing of a line taken back before its recording came, nor keeps it', async () => {
     const { radio, air, ctx, memory } = await onTheAir();
     late['/voice/anlage-aaaa.m4a'] = 2000;
-    late['/voice/marta-bbbb.m4a'] = 2000;
+    late['/voice/laura-bbbb.m4a'] = 2000;
     radio.fetchLines([ALERT, CALL].map(asked));
     const shown: Notice[] = [];
     const done = vi.fn();
@@ -279,7 +279,7 @@ describe('the objective bar’s lines on the air', () => {
     call();
     await vi.advanceTimersByTimeAsync(10_000);
     expect(speechOf(ctx, 'anlage-aaaa')).toEqual([]);
-    expect(speechOf(ctx, 'marta-bbbb')).toEqual([]);
+    expect(speechOf(ctx, 'laura-bbbb')).toEqual([]);
     expect(shown).toEqual([]);
     expect(done).not.toHaveBeenCalled();
     expect(memory.decodedBytes().voice).toBe(0);

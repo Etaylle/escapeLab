@@ -11,7 +11,7 @@ import { labMission, T0 } from './lab.js';
 
 /**
  * The cast on duty once every operator's voice is kept: a roster of the test's own, as cast.json
- * reads after `--keep operator:marta=<n>` and `--keep operator:jonas=<n>`. The lobby's Funkprobe
+ * reads after `--keep operator:laura=<n>` and `--keep operator:ben=<n>`. The lobby's Funkprobe
  * is said by the operator who then has the run, every line of the run names the night's person,
  * and the nights spread over the three.
  */
@@ -21,14 +21,13 @@ vi.mock('../src/cast.json', () => {
     id,
     name: id,
     character: 'Arbeitet in der Leitstelle.',
-    prompt: 'A calm German voice on a two-way radio, clean studio recording.',
     voiceId: `${id}Voice0000000`,
   });
   return {
     default: {
       pa: [voiced('anlage')],
-      operator: [voiced('helmut'), voiced('marta'), voiced('jonas')],
-      lead: [voiced('kessler')],
+      operator: [voiced('helmut'), voiced('laura'), voiced('ben')],
+      lead: [voiced('mila')],
     },
   };
 });
@@ -76,7 +75,7 @@ describe('the operator on duty, every voice kept', () => {
       return [viewFor(over, 'p1').cast.operator, viewFor(back, 'p1').cast.operator];
     });
     // Crews hear different people on different nights: every operator, and nights that differ.
-    expect(new Set(nights.flat())).toEqual(new Set(['helmut', 'marta', 'jonas']));
+    expect(new Set(nights.flat())).toEqual(new Set(['helmut', 'laura', 'ben']));
     expect(nights.some(([first, next]) => first !== next)).toBe(true);
   });
 

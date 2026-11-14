@@ -3,8 +3,7 @@
     {
       "id": "anlage",
       "name": "Durchsage",
-      "character": "Die Lautsprecher der Anlage in Trakt C: Uhrzeit, Lasten und Störungen, bei Tag und Nacht in derselben Stimme.",
-      "prompt": "Calm, neutral German voice of a research facility's public address system. Mid register, even pace, precise diction, slightly synthetic like an automated building announcement, no character, no emotion, no accent. Clean studio recording without background noise."
+      "character": "Die Lautsprecher der Anlage in Trakt C: Uhrzeit, Lasten und Störungen, bei Tag und Nacht in derselben Stimme."
     }
   ],
   "operator": [
@@ -12,29 +11,25 @@
       "id": "helmut",
       "name": "Helmut",
       "character": "Dienstältester Disponent der Leitstelle, seit über zwanzig Jahren im Nachtdienst. Spricht tief und ruhig und sagt nichts zweimal.",
-      "prompt": "A German man in his late fifties, the senior night operator in the control room of a research facility, talking to colleagues over a two-way radio. Deep, resonant voice like a film trailer narrator, slow and steady pace, unhurried authority. Native German, no accent. Clean studio recording without background noise.",
       "voiceId": "g1jpii0iyvtRs8fqXsd1",
       "model": "eleven_v4"
     },
     {
-      "id": "marta",
-      "name": "Marta",
-      "character": "Kam aus der Netzwarte des Kraftwerks in die Leitstelle. Knapp und trocken, wird nie laut, zählt lieber mit, als zu raten.",
-      "prompt": "A German woman in her mid-forties, a control room operator on the night shift of a research facility, talking to colleagues over a two-way radio. Low-mid register, dry and precise, calm under pressure, short factual sentences with a trace of warmth. Native German, no accent. Clean studio recording without background noise."
+      "id": "laura",
+      "name": "Laura",
+      "character": "Kam aus der Netzwarte des Kraftwerks in die Leitstelle. Spricht ruhig und gleichmäßig, wird nie laut und zählt lieber mit, als zu raten."
     },
     {
-      "id": "jonas",
-      "name": "Jonas",
-      "character": "Jüngster Disponent der Leitstelle, seit dem Frühjahr im Nachtdienst. Spricht schnell und gibt sich Mühe, ruhig zu klingen.",
-      "prompt": "A German man in his late twenties, the youngest operator in the control room of a research facility on night duty, talking to colleagues over a two-way radio. Clear, bright mid register, quick pace, earnest and focused, working hard to sound calm. Native German, no accent. Clean studio recording without background noise."
+      "id": "ben",
+      "name": "Ben",
+      "character": "Jüngster Disponent der Leitstelle, seit dem Frühjahr im Nachtdienst. Spricht locker und schnell, wie unter Kollegen am Funk."
     }
   ],
   "lead": [
     {
-      "id": "kessler",
-      "name": "Kessler",
-      "character": "Schichtleiterin der Nacht. Meldet sich auf dem Funk erst, wenn die Zeit knapp wird oder eine Schicht verloren ist, dann kurz und bestimmt.",
-      "prompt": "A German woman in her late fifties, the night shift supervisor of a research facility, cutting in on the control room's radio when time runs short. Low register, measured and firm, economical with words, quiet authority, never shouting. Native German, no accent. Clean studio recording without background noise."
+      "id": "mila",
+      "name": "Mila",
+      "character": "Schichtleiterin der Nacht, jung für den Posten und sich ihrer Sache sicher. Meldet sich auf dem Funk erst, wenn die Zeit knapp wird oder eine Schicht verloren ist, dann kurz und bestimmt."
     }
   ]
 }

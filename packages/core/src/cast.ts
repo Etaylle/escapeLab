@@ -9,21 +9,21 @@ import type { GameState } from './state.js';
  * loudspeakers, the Leitstelle on duty, the Schichtleitung — as the roster in cast.json names
  * them, and who of them is on duty a night (`castOf`), so that crews hear different people on
  * different nights. A line's words, the manuals and the rules are the same whoever speaks; only
- * the voice differs. The roster also keeps what makes each voice — its Voice-Design prompt, the
- * voice kept on the ElevenLabs account and the model it reads with (client scripts/voice.ts) —
- * none of which reaches a player's view: a run names its speakers by role and id alone.
+ * the voice differs. The roster keeps the voice kept for each person on the ElevenLabs account and
+ * the model it reads with (client scripts/voice.ts), neither of which reaches a player's view: a
+ * run names its speakers by role and id alone. How a voice is asked for — the Voice-Design
+ * prompts, the library voices to choose from — stays with the voice script
+ * (client scripts/casting.json), out of the game.
  */
 
 /** A person of the roster, who can fill a role on the radio. */
 export interface Person {
   /** what a run's lines and the recordings name them by (radio.ts `Speaker`): small letters */
   readonly id: string;
-  /** their name, as the objective bar names them beside the role („Leitstelle · Marta") */
+  /** their name, as the objective bar names them beside the role („Leitstelle · Laura") */
   readonly name: string;
   /** who they are, a line of the world's voice: the audition page (/voices) shows it */
   readonly character: string;
-  /** the description, in English, that Voice Design makes their voice from (`--design`) */
-  readonly prompt: string;
   /** their voice on the ElevenLabs account (`--keep`); without one, nobody hears them yet */
   readonly voiceId?: string;
   /** the model their voice reads with: eleven_v4 for a library voice, eleven_v3 for a designed */
@@ -40,8 +40,6 @@ const personSchema = z.strictObject({
   id: z.string().regex(/^[a-z]+$/),
   name: z.string().min(1),
   character: z.string().min(1),
-  // Voice Design takes a description of 20 to 1,000 characters.
-  prompt: z.string().min(20).max(1000),
   voiceId: z
     .string()
     .regex(/^[A-Za-z0-9]{8,64}$/)

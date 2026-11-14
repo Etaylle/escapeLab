@@ -357,9 +357,9 @@ describe('a take of the cast in service', () => {
   });
 
   it('refuses a line as somebody says it who says none of its role’s lines', async () => {
-    // Marta has no voice yet, nor has the Schichtleitung: Helmut says its calls meanwhile.
+    // Laura has no voice yet, nor has the Schichtleitung: Helmut says its calls meanwhile.
     const clock = first(blackout?.radio.clock?.lastMinute);
-    for (const off of [idOf('marta', START), idOf('kessler', clock)]) {
+    for (const off of [idOf('laura', START), idOf('mila', clock)]) {
       expect((await ask(desk(), post(off, toneWav(0.2))))?.status, off).toBe(404);
     }
     expect(readdirSync(dir)).toEqual(['manifest.json']);

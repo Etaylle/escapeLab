@@ -103,7 +103,7 @@ describe('the lines the page offers', () => {
     expect(names).toContain('start:Helmut');
     expect(names).toContain('clock:Helmut');
     expect(names).toContain('lost:Helmut');
-    expect([...names].filter((name) => name.endsWith(':Kessler'))).toEqual([]);
+    expect([...names].filter((name) => name.endsWith(':Mila'))).toEqual([]);
   });
 
   it('say of each where it comes over the air and what recording it has, in which file', () => {

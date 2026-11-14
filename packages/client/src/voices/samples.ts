@@ -12,13 +12,17 @@ import type { VoiceEntry, VoiceManifest } from '../world/radioVoice.js';
 /**
  * The radio's voices on their audition page (/voices): who of the cast each role has, the
  * samples of a person's voice the dev server lists (GET /takes/voices/, the server's takes.ts) as
- * the voice script wrote them (scripts/cast.ts `Samples`), the commands that design and keep one
- * — which the page shows and never runs — and every rendered line by its moment. Pure, but for
- * `loadSamples`, which asks the dev server for the lists and nothing else.
+ * the voice script wrote them (scripts/cast.ts `Samples`), the library voices offered for each
+ * person with their previews (GET /takes/voices/library/), the commands that fetch previews,
+ * design a voice and keep one — which the page shows and never runs — and every rendered line by
+ * its moment. Pure, but for `loadSamples`, which asks the dev server for the lists and nothing
+ * else.
  */
 
 /** Where the dev server serves the voices' samples: their lists, and each under its folder. */
 export const SAMPLES_BASE = '/takes/voices/';
+/** Where it lists the library voices offered for the cast, and serves their previews. */
+export const LIBRARY_BASE = `${SAMPLES_BASE}library/`;
 
 /**
  * A person of the cast as the voice script's command line names them (scripts/cast.ts
@@ -43,6 +47,41 @@ export function slotsOf(roster: Roster): Slot[] {
   );
 }
 
+/**
+ * A library voice of the account offered for one person of the cast (the voice script's
+ * casting.json), as the dev server lists it: its id, its name and what it is, the person it is
+ * offered for by the name the command line gives them (`slotsOf`), and whether its preview is
+ * there to play — `voice --previews` fetches the previews, free of charge.
+ */
+export interface LibraryVoice {
+  readonly voiceId: string;
+  readonly name: string;
+  readonly about: string;
+  readonly slot: string;
+  readonly preview: boolean;
+}
+
+/** Whether `value` reads as a library voice of the dev server's list. */
+function isLibraryVoice(value: unknown): value is LibraryVoice {
+  if (typeof value !== 'object' || value === null) return false;
+  const voice = value as Record<string, unknown>;
+  const named = ['voiceId', 'name', 'about', 'slot'].every((key) => typeof voice[key] === 'string');
+  return named && typeof voice['preview'] === 'boolean';
+}
+
+/** The library voices of `answer`, the dev server's list: each that reads as one. */
+export function libraryOf(answer: unknown): LibraryVoice[] {
+  const listed = (answer as { library?: unknown } | null)?.library;
+  const voices = Array.isArray(listed) ? listed.filter(isLibraryVoice) : [];
+  return voices.map(({ voiceId, name, about, slot, preview }) => ({
+    voiceId,
+    name,
+    about,
+    slot,
+    preview,
+  }));
+}
+
 /** A sample as its list names it and the page reads it: its number, its file, its length, s. */
 export interface SampleInfo {
   readonly n: number;
@@ -59,9 +98,16 @@ export interface PersonSamples {
 /** Every person's samples, by the folder they lie in. */
 export type SamplesByDir = Readonly<Record<string, PersonSamples>>;
 
-/** What the page has of the samples: those the dev server lists, or why there are none to hear. */
+/**
+ * What the page has of the samples and the library voices: those the dev server lists, or why
+ * there are none to hear.
+ */
 export type SamplesState =
-  | { readonly kind: 'served'; readonly samples: SamplesByDir }
+  | {
+      readonly kind: 'served';
+      readonly samples: SamplesByDir;
+      readonly library: readonly LibraryVoice[];
+    }
   | { readonly kind: 'unserved'; readonly why: string };
 
 /** Whether `value` reads as a sample: its number, its file as `<n>.mp3`, its length. */
@@ -98,20 +144,23 @@ export function samplesOf(lists: unknown): SamplesByDir {
 export const UNSERVED = 'Stimmproben liefert nur der Entwicklungsserver (pnpm dev).';
 
 /**
- * The samples as the dev server lists them; where it serves none (404, as a production server
- * answers) or the lists cannot be had, why. Asks for the lists alone, with a plain GET.
+ * The samples and the library voices as the dev server lists them; where it serves none (404, as
+ * a production server answers) or the lists cannot be had, why. Asks for the lists alone, with a
+ * plain GET each.
  */
 export async function loadSamples(): Promise<SamplesState> {
   try {
-    const res = await fetch(SAMPLES_BASE);
-    if (res.status === 404) {
+    const [samples, library] = await Promise.all([fetch(SAMPLES_BASE), fetch(LIBRARY_BASE)]);
+    if (samples.status === 404 || library.status === 404) {
       return { kind: 'unserved', why: UNSERVED };
     }
-    if (!res.ok) {
-      const why = `Die Stimmproben ließen sich nicht laden: HTTP ${res.status}`;
+    const failed = [samples, library].find((res) => !res.ok);
+    if (failed !== undefined) {
+      const why = `Die Stimmproben ließen sich nicht laden: HTTP ${failed.status}`;
       return { kind: 'unserved', why };
     }
-    return { kind: 'served', samples: samplesOf(await res.json()) };
+    const [sampled, offered] = await Promise.all([samples.json(), library.json()]);
+    return { kind: 'served', samples: samplesOf(sampled), library: libraryOf(offered) };
   } catch (err) {
     const reason = err instanceof Error ? err.message : String(err);
     return { kind: 'unserved', why: `Die Stimmproben ließen sich nicht laden: ${reason}` };
@@ -128,6 +177,16 @@ export function sampleKey(dir: string, n: number): string {
   return `${dir}#${n}`;
 }
 
+/** Where the preview of the library voice `voiceId` plays from. */
+export function previewUrl(voiceId: string): string {
+  return `${LIBRARY_BASE}${voiceId}.mp3`;
+}
+
+/** What the page calls the preview of the library voice `voiceId` by while it plays. */
+export function previewKey(voiceId: string): string {
+  return `library#${voiceId}`;
+}
+
 /** The command, to be run in packages/client with the key file, that runs the voice script. */
 const scriptWith = (envFile: string): string =>
   `node --env-file=${shellWord(envFile)} scripts/voice.ts`;
@@ -137,9 +196,17 @@ export function designCommandFor(slot: string, envFile: string): string {
   return `${scriptWith(envFile)} --design ${slot}`;
 }
 
-/** The command that keeps sample `n` of the person `slot` names as their voice (--keep). */
-export function keepCommandFor(slot: string, n: number, envFile: string): string {
-  return `${scriptWith(envFile)} --keep ${slot}=${n}`;
+/** What --keep keeps for a person: a sample of theirs by its number, or a library voice by id. */
+export type KeepChoice = number | string;
+
+/** The command that keeps `choice` as the voice of the person `slot` names (--keep). */
+export function keepCommandFor(slot: string, choice: KeepChoice, envFile: string): string {
+  return `${scriptWith(envFile)} --keep ${slot}=${choice}`;
+}
+
+/** The command that fetches the library voices' previews for the page, free of charge. */
+export function previewsCommandFor(envFile: string): string {
+  return `${scriptWith(envFile)} --previews`;
 }
 
 /** The command that makes the lines of the cast whose voices are kept, by ElevenLabs. */

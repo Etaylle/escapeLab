@@ -78,14 +78,14 @@ const MANIFEST: VoiceManifest = {
       file: 'ffffffffffff.m4a',
     },
     abcdefabcdef: { ...HIS, text: FIFTH.text, ms: 1800, moment: 'nudge', file: 'abcdefabcdef.m4a' },
-    // The lever's line as Marta says it, on the nights she has the desk: a recording of her own.
-    'marta-aaaa': {
+    // The lever's line as Laura says it, on the nights she has the desk: a recording of her own.
+    'laura-aaaa': {
       ...HIS,
-      person: 'marta',
+      person: 'laura',
       text: LEVER_LINE.text,
       ms: 2200,
       moment: 'solved',
-      file: 'marta-aaaa.mp3',
+      file: 'laura-aaaa.mp3',
     },
   },
 };
@@ -566,18 +566,18 @@ describe('a line by who says it', () => {
     const radio = await voice();
     radio.voiceForRun();
     await settle();
-    const hers = { text: LEVER_LINE.text, person: 'marta' };
+    const hers = { text: LEVER_LINE.text, person: 'laura' };
     radio.fetchLines([hers]);
     await settle();
-    expect(fetched).toEqual(['/voice/manifest.json', '/voice/marta-aaaa.mp3']);
+    expect(fetched).toEqual(['/voice/manifest.json', '/voice/laura-aaaa.mp3']);
     expect(radio.recordedMs(hers)).toBe(2200);
     expect(radio.recordedMs(LEVER_LINE)).toBe(2000);
     expect(await radio.sayLine(hers)).not.toBeNull();
-    expect(radio.voiceProbe().lastId).toBe('marta-aaaa');
+    expect(radio.voiceProbe().lastId).toBe('laura-aaaa');
     expect(await radio.sayLine(LEVER_LINE)).not.toBeNull();
     expect(radio.voiceProbe().lastId).toBe('aaaaaaaaaaaa');
     // Nobody else's recording stands in for a voice that has none: the caller chirps.
-    const his = { text: LEVER_LINE.text, person: 'jonas' };
+    const his = { text: LEVER_LINE.text, person: 'ben' };
     expect([radio.recordedMs(his), radio.airtimeMs(his), await radio.sayLine(his)]).toEqual([
       null,
       null,
