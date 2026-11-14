@@ -875,13 +875,22 @@ does a panel gone at once. meter-swing.png: the page pauses the needle's own tra
 into its 600-ms swing as it begins — some 40 % of its way, −58° on a swing from −90° to −10.8° —
 so that the screenshot shows it on its way whenever it lands; the needle has to have swung, held
 still through the shot and stood between where it was and its reading, or past it, and the log
-names when the swing began after the probe on the page's clock. The 250 ms the shot had to be
-asked for within is gone: it timed the round trip and the poll, never the picture. The phone's
-targets are measured once the device's animations that ran have ended on the page's clock (3 s
-at most; a control measured short while one still ran is skipped, the wait named). At a sync
-station each page notes, from before the presses, when its strip first shows the station done
-and when its own press went down, so that a banner over the strip later no longer hides it; the
-log gives each page's time from its press to its strip. And every frame window's line names the
+names when the swing began after the probe on the page's clock, from the swing's own start time.
+The hold takes only a swing to a new reading — the needle's inline turn changed since the hold
+began: in the first Blackout proof run the last probe's swing announced itself only with the
+page's next frame, after the hold was on, and was held while the probe's own ran free (−74° read
+before the shot, −7° after it). The 250 ms the shot had to be asked for within is gone: it timed
+the round trip and the poll, never the picture. The phone's targets are measured once the
+animations on or round its controls have ended on the page's clock (3 s at most; a control
+measured short while one still ran is skipped, the wait named; a token's bar draining beside
+its keys moves none). At a sync station each page notes, from before the presses, when its
+strip first shows the station done and when its own press went down, so that a banner over the
+strip later no longer hides it; the log gives each page's time from its press to its strip. The
+crew figures' pose shots, lobby-idle.png and figure-celebrate.png, read the figures' probe before
+and after a screenshot that, at load 42 to 57, outlasted a jump: four shots found the figure
+landed. The page now holds its animation frames from the one that put a figure in the pose until
+the shot is taken, every figure's canvas keeping that frame, and the probe has to say it still
+stands so after the shot. And every frame window's line names the
 machine's 1-minute load as it began (`os.loadavg`), the `pace` line the load its pacing window ran
 at, and the summary the load as the run began and ended — the windows themselves, the lead's
 gate, keep their budgets.

@@ -208,8 +208,12 @@ die Entscheidung.
   den Zeiten der gezeichneten Bilder. Die Nadel hält die Seite 60 ms in ihren Ausschlag an, bis die
   Aufnahme sitzt. Die Ziele auf dem Handy werden gemessen, wenn die Animationen des Geräts auf der
   Uhr der Seite zu Ende sind (höchstens 3 s, sonst übersprungen mit der Wartezeit). Die LED-Leiste
-  merkt sich jede Seite vor den Drücken. Jedes Frame-Fenster nennt die 1-Minuten-Last, unter der es
-  lief, die Zusammenfassung die zu Beginn und am Ende; kein Budget geändert.
+  merkt sich jede Seite vor den Drücken. In den Beweisläufen kamen zwei Funde dazu: Die Nadel hielt
+  den späten Ausschlag der vorigen Probe fest (jetzt nur einen zu einer neuen Ablesung), und
+  figure-celebrate.png fand die Figur nach vier Aufnahmen gelandet (Last 42–57); für die Aufnahmen
+  der Figuren hält die Seite ihre Bilder an, bis die Aufnahme sitzt. Jedes Frame-Fenster nennt die
+  1-Minuten-Last, unter der es lief, die Zusammenfassung die zu Beginn und am Ende; kein Budget
+  geändert.
 
 ### T-9 Tests an der Wanduhr — Status: erledigt (2026-11-13) · Größe: S
 - Zwei Tests lasen die echte Uhr und wurden unter Last rot: `certificate.test.ts` (openssl liest

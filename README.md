@@ -328,9 +328,11 @@ eines Geräts (`panel-close.png`) hält ein Beobachter auf der Seite fest — wa
 und wann es weg war, je gezeichnetem Bild Deckkraft und Stand der Blende (`tools/panelfade.mjs`);
 den Ausschlag der Nadel (`meter-swing.png`) hält die Seite 60 ms in seiner Bewegung an, bis die
 Aufnahme sitzt; die LED-Leiste einer Gleichzeit-Station merkt sich jede Seite, sobald sie die
-Station gelöst zeigt, auch wenn danach das Funkband an ihrer Stelle steht; die Bedienelemente eines
-Geräts auf dem quer gehaltenen Handy werden gemessen, wenn seine Animationen auf der Uhr der Seite
-zu Ende sind (`tools/pageclock.mjs`). Wo es unter Last nichts zu urteilen gibt — die Seite
+Station gelöst zeigt, auch wenn danach das Funkband an ihrer Stelle steht; für die Aufnahmen der
+Figuren (`lobby-idle.png`, `figure-celebrate.png`) hält die Seite ihre Bilder an, sobald eine Figur
+springt oder sich umsieht, bis die Aufnahme sitzt; die Bedienelemente eines Geräts auf dem quer
+gehaltenen Handy werden gemessen, wenn seine Animationen auf der Uhr der Seite zu Ende sind
+(`tools/pageclock.mjs`). Wo es unter Last nichts zu urteilen gibt — die Seite
 zeichnete in der Mitte der Blende kein Bild —, steht eine Zeile `skipped:` mit den gemessenen
 Zeiten im Log und zählt in der Zusammenfassung. Jedes Frame-Fenster nennt die 1-Minuten-Last, unter
 der es lief, die Zeile `pace` die ihres Lauffensters, und die Zusammenfassung die Last zu Beginn
