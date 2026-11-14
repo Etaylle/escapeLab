@@ -1093,7 +1093,11 @@ crew figures' pose shots, lobby-idle.png and figure-celebrate.png, read the figu
 and after a screenshot that, at load 42 to 57, outlasted a jump: four shots found the figure
 landed. The page now holds its animation frames from the one that put a figure in the pose until
 the shot is taken, every figure's canvas keeping that frame, and the probe has to say it still
-stands so after the shot. And every frame window's line names the
+stands so after the shot. The walk cycle's two shots, walk-cycle-a.png and walk-cycle-b.png,
+polled the walk's phase for the two stretches in which the legs stand wide, and main's own
+Systemcheck missed both at load 24 to 38: they hold the world's frames the same way from the
+one that brought the walk into a stretch, the walk standing still meanwhile and its end moving
+on by that long. And every frame window's line names the
 machine's 1-minute load as it began (`os.loadavg`), the `pace` line the load its pacing window ran
 at, and the summary the load as the run began and ended — the windows themselves, the lead's
 gate, keep their budgets. The menu's own pace under software GL, 16.8 ms p95, was the one window

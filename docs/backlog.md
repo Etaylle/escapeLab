@@ -211,7 +211,10 @@ die Entscheidung.
   merkt sich jede Seite vor den Drücken. In den Beweisläufen kamen zwei Funde dazu: Die Nadel hielt
   den späten Ausschlag der vorigen Probe fest (jetzt nur einen zu einer neuen Ablesung), und
   figure-celebrate.png fand die Figur nach vier Aufnahmen gelandet (Last 42–57); für die Aufnahmen
-  der Figuren hält die Seite ihre Bilder an, bis die Aufnahme sitzt. Jedes Frame-Fenster nennt die
+  der Figuren hält die Seite ihre Bilder an, bis die Aufnahme sitzt. Dazu walk-cycle, das auch main
+  ohne Software-GL verfehlte (Last 24–38): die Seite hält die Welt im Schritt an. Das Tempo des
+  Menüs unter Software-GL (16,8 ms) gilt, wo der Lauf das Budget des Gates hat, und steht in
+  Beweisläufen mit angehobenem Budget nur im Log. Jedes Frame-Fenster nennt die
   1-Minuten-Last, unter der es lief, die Zusammenfassung die zu Beginn und am Ende; kein Budget
   geändert.
 
