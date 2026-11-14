@@ -5378,12 +5378,13 @@ function reportPanelClose(player, fade, held) {
 
 /**
  * Esc over the world, as a player puts away whatever lies over it: where nothing did, Esc opens
- * the run's menu instead (client Game.tsx `escapeStep`), and a second Esc puts that away too.
+ * the run's menu instead (client Game.tsx `escapeStep`), and a second Esc puts that away too —
+ * looked for over a second, as a page under load renders the menu late.
  */
 async function escapeWorld(page) {
   await page.keyboard.press('Escape');
   const menu = page.locator('.pause-menu');
-  if (await settled(menu.waitFor({ timeout: 400 }))) {
+  if (await settled(menu.waitFor({ timeout: 1000 }))) {
     await page.keyboard.press('Escape');
     await menu.waitFor({ state: 'hidden', timeout: 2000 });
   }
@@ -6137,8 +6138,9 @@ async function captureNudge(players) {
   const [first] = players;
   for (const { page } of players) {
     const onTop = page.locator('.station-modal, .reading-modal').first();
+    // A panel that goes on its own meanwhile leaves Esc to the run's menu: escapeWorld shuts it.
     if (await onTop.isVisible()) {
-      await page.keyboard.press('Escape');
+      await escapeWorld(page);
       await onTop.waitFor({ state: 'hidden', timeout: 3000 }).catch(() => undefined);
     }
   }
@@ -13145,7 +13147,7 @@ function syncLeavesNoNotes() {
 async function afterTheStation(anna, ben, steady) {
   const onTop = anna.page.locator('.station-modal, .reading-modal').first();
   if (await onTop.isVisible()) {
-    await anna.page.keyboard.press('Escape');
+    await escapeWorld(anna.page);
     await onTop.waitFor({ state: 'hidden', timeout: 3000 });
   }
   await frameWindow(anna.page, 'pacing, after the station step', () => pace(anna, SAMPLE_MS));
