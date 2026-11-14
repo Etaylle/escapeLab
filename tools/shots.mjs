@@ -5745,14 +5745,16 @@ let panelCloseShot = false;
  * From now on, `page` records the station's panel on its own clock (`window.__panelFade`, read
  * by panelfade.mjs `fadeOf`): as its DOM changes, when the panel begins to leave
  * (`puzzle-modal--leaving`), inert or not, and when it is gone; and at each animation frame until
- * then, or a second, the panel — there or not, leaving, inert, its opacity, and how far its
- * fade-out (`panel-down`) has run on the fade's own clock. A frame the page draws late is so
- * judged by what it showed, not by when the walkthrough looked.
+ * the one that finds it gone, the panel — there or not, leaving, inert, its opacity, and how far
+ * its fade-out (`panel-down`) has run on the fade's own clock. A frame the page draws late is so
+ * judged by what it showed, not by when the walkthrough looked. A panel still there 5 s on is
+ * no longer recorded: the walkthrough reports one that never goes (it waits 3 s for it).
  */
 function recordPanelFade(page) {
   return page.evaluate(() => {
     const t0 = globalThis.performance.now();
     const now = () => globalThis.performance.now() - t0;
+    const lastMs = 5000;
     const record = { left: null, gone: null, inertAtLeft: null, frames: [] };
     globalThis.__panelFade = record;
     const modalNow = () => document.querySelector('.station-modal');
@@ -5769,8 +5771,7 @@ function recordPanelFade(page) {
       }
     });
     watch.observe(document.body, { subtree: true, childList: true, attributeFilter: ['class'] });
-    // A panel that never goes is the walkthrough's to report (it waits 3 s for it): stop watching.
-    globalThis.setTimeout(() => watch.disconnect(), 5000);
+    globalThis.setTimeout(() => watch.disconnect(), lastMs);
     const frameOf = (modal) => {
       const panel = modal.querySelector('.panel');
       const fade = panel?.getAnimations().find((a) => a.animationName === 'panel-down');
@@ -5787,7 +5788,7 @@ function recordPanelFade(page) {
     const step = () => {
       const modal = modalNow();
       record.frames.push(modal === null ? { ...gone(), fade: null } : frameOf(modal));
-      if (modal !== null && now() < 1000) {
+      if (modal !== null && now() < lastMs) {
         globalThis.requestAnimationFrame(step);
       }
     };
