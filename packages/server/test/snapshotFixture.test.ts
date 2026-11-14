@@ -61,6 +61,13 @@ describe('a snapshot of the build before', () => {
     expect(heard.some((event) => event.speaker !== undefined)).toBe(false);
   });
 
+  it('fills in what it kept no word of: nobody on a plate, until the crew is back', () => {
+    const presence = BUILD_BEFORE.state.presence as Partial<SealedSnapshot['state']['presence']>;
+    expect(presence.plates).toBeUndefined();
+    const opened = open(seal(BUILD_BEFORE, BUILD_BEFORE.code, KEY), BUILD_BEFORE.code, KEY);
+    expect(opened.state.presence.plates).toEqual({});
+  });
+
   it('lets keys this build does not know pass through, wherever they stand', () => {
     const later = {
       ...BUILD_BEFORE,

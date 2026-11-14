@@ -584,6 +584,7 @@ function runWith(standing: Pick<Standing, 'stations' | 'manuals'>): GameState {
     stations: standing.stations ?? {},
     manuals: standing.manuals ?? {},
     notes: {},
+    plates: {},
     signSeen: [],
     found: {},
     sight: {},

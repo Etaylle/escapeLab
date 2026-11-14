@@ -9,7 +9,7 @@ import {
 } from '../src/index.js';
 import type { Action, GameState, Mission } from '../src/index.js';
 import { decide, wiringModule } from '../src/puzzles/wiring.js';
-import { consoleLab, labMission, standing, T0 } from './lab.js';
+import { chamber, consoleLab, INSIDE, labMission, OUTSIDE, standing, T0 } from './lab.js';
 
 /** What a station turns a move away with that nobody backs up: where it finds nobody. */
 const ALONE = 'Eingabe gesperrt: Bei den Regeln steht niemand.';
@@ -245,57 +245,6 @@ describe('the backup in the view', () => {
     expect(viewFor(open, 'p1').puzzle?.backup).toBeNull();
   });
 });
-
-const INSIDE = { x: 7, y: 3 };
-const OUTSIDE = { x: 2, y: 3 };
-
-/**
- * Two rooms: the west one with the spawns, the sign and a plate, the east
- * one with the wiring box behind a door that only the plate holds open —
- * until the box is solved, then it stays open. Each source of the box's
- * rules lies on the spots given.
- *
- *   0123456789
- * 0 ##########
- * 1 #....#...#   sign (2,1); box (7,1)
- * 2 #........#   spawns (1,1) (1,2) (1,3); plate (3,2); door (5,2)
- * 3 #....#...#   inside (7,3), outside (2,3)
- * 4 ##########
- */
-function chamber(
-  crew: number,
-  sources: { x: number; y: number }[][],
-  opensBy: object = { kind: 'plate', plateId: 'platte', untilSolved: 'kabel' },
-): unknown {
-  const labels = ['HANDBUCH', 'TAFEL'];
-  return {
-    id: 'kammer',
-    title: 'Kammer',
-    players: { min: crew, max: crew },
-    story: { intro: 'i', win: 'w', lose: 'l' },
-    timeLimitSec: 600,
-    puzzles: [{ type: 'wiring', id: 'kabel', title: 'Kabel' }],
-    map: {
-      tiles: ['##########', '#....#...#', '#........#', '#....#...#', '##########'],
-      spawns: [
-        { x: 1, y: 1 },
-        { x: 1, y: 2 },
-        { x: 1, y: 3 },
-      ],
-      doors: [{ id: 'tuer', x: 5, y: 2, opensBy }],
-      plates: [{ id: 'platte', x: 3, y: 2, label: 'HALTEN' }],
-      stations: [{ puzzleId: 'kabel', x: 7, y: 1 }],
-      manuals: sources.map((spots, i) => ({
-        id: `quelle-${i}`,
-        kind: 'book',
-        label: labels[i] ?? 'HANDBUCH',
-        puzzleIds: ['kabel'],
-        spots,
-      })),
-      edgeworkSign: { x: 2, y: 1 },
-    },
-  };
-}
 
 describe('the map walk: a second player at every station', () => {
   it('turns down a station whose only rules lie behind its own door, for a crew of two', () => {

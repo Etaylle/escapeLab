@@ -311,6 +311,17 @@ die Entscheidung.
 - Datenpunkt 2026-11-05, Karte 36×22: Die Skript-Crew gewinnt 462–502 s nach dem Blackout
   (40–43 % von 900 s übrig, davon bis 35 s Warten auf Drohnenlücken); der Harness warnt ab unter
   40 %. Vorschlag: Normal 1000 s (Entspannt/Hart skalieren mit), Entscheidung nach dem Playtest.
+- Plätze je Station (M-three, `core/test/hands.test.ts`), gegen die größte Crew der Mission:
+  Blackout hat zu dritt überall genug (Notlicht 3, Notstrom 4, Signalkette 3, Subsysteme 3,
+  Frequenz 3, Reaktorstart 4). Die Kettenreaktion (Crew von drei) gibt fünf von sechs Stationen
+  nur zwei Plätze, Pult und Handbuch: Lastverteilung, Kühlkreislauf, Freigabecode,
+  Resonanz-Dämpfung und Leitungsnetz je 2, Synchron-Abschaltung 4; ihre drei Plattentüren halten
+  ohne `untilSolved` und zählen nicht. Die Doppelschicht (Crew von vier): Notstrom-Brücken,
+  Freigabecode, Kühlkreislauf, Funkfeuer und Druckausgleich je 2, Leitungsnetz 3, Not-Aus beider
+  Flügel 4. Das Labor `doppelpult-drei` (Crew von drei) bleibt, wie es ist: sein Kabelkasten
+  nach der Signalkette hat zwei Plätze, Pult und Buch; acht Testdateien bauen auf ihm. Nicht
+  gepatcht: nach dem Playtest entscheiden, ob die Prototypen eine Hand mehr bekommen (Platte bis
+  zur Lösung, Teil, zweite Quelle) oder ihre Crew kleiner wird.
 
 ## Betrieb und Verbindung (2026-11-12)
 
@@ -485,7 +496,7 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   Designs 796, 260 Zeilen 25.575). Offen: Designs, Wahl auf `/voices` und Render durch Uros;
   ob `public/voice/` aus dem Precache des Service Workers fällt (mit allen Stimmen ≈ 20,5 MB).
 
-### M-1 Drei Spielende: Beweis und Sichtbarkeit — Status: bereit · Größe: M
+### M-1 Drei Spielende: Beweis und Sichtbarkeit — Status: erledigt (M-three, Merge 2026-11-14, a2ef8da; drei Review-Runden; Cloud-CI grün auf 347d444, Check und Walkthrough; CI-Budget um zwei Minuten angehoben) · Größe: M
 - Befund: mechanisch trägt die dritte Person (Leserin mit Regeln, Notizen und Funk an Zwei-Pult-
   Stationen; Platten, Sicherung, Schlüssel, Kameraplatte sonst), aber Modultests spielen Blackout
   nur zu zweit, der Harness auch; die Validierung beweist nur Erreichbarkeit.
@@ -495,6 +506,15 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
 - Modultests über alle Crewgrößen min..max; Harness mit dritter Spielerin (Cleo) in Blackout mit
   Captures; Zielzeile nennt der dritten Person ihre Aufgabe („Cleo: Platte halten"). Eine echte
   Drei-Pulte-Station oder ein Needy-Objekt nur bei drei Spielenden erst nach Playtest-Daten.
+- Umgesetzt (M-three): Die Modultests spielen jede Mission für jede Crewgröße durch den Reducer,
+  Blackout zu zweit und zu dritt, je 200 Seeds ohne Alarm; die dritte Hand liest an Zwei-Pult-
+  Stationen und läuft sonst (Teile, Schlüssel, Spind, Platten bis zur Lösung), und an jeder
+  Station arbeiten so viele, wie sie Plätze hat (`core/src/hands.ts`). Blackout hat zu dritt an
+  jeder Station Platz für alle: 3, 4, 3, 3, 3, 4. Der Server meldet jetzt, wer auf welcher Platte
+  steht; die Zielzeile nennt ab drei Spielenden jede Hand, die eigene zuerst („Cleo: Klemmbrett ·
+  Anna: Pult A · Ben: Pult B", frei: „Cleo: frei — Handbuch, HALTEN"), das quer gehaltene Handy
+  die eigene als Chip. Harness-Probe `three`: Anna, Ben und Cleo bis zur Signalkette, fünf
+  Captures, 75 bis 100 s. Kettenreaktion und Doppelschicht: siehe N-6.
 
 ### I-1 Zugangskontrolle mit Zwei-Faktor — Status: erledigt (I-access, Merge 2026-11-14; drei Review-Runden; Cloud-CI grün auf 4136fa0; Modul mit Probe-Mission und Drill im Systemcheck-Lauf, Platz in Blackout nach dem Playtest, N-6) · Größe: L
 - Pult A Login-Terminal, Pult B Token-Generator mit Code, der mit der Serveruhr alle 30 s
