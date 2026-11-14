@@ -1189,6 +1189,7 @@ export function planReport(costs: readonly Cost[], fresh: Fresh, beside = NO_LIN
   const now = sum((cost) => cost.characters) * CREDITS_PER_CHARACTER;
   const designs = sum((cost) => cost.design);
   const unvoiced = costs.filter((cost) => cost.model === null).length;
+  const designed = `up to ${unvoiced}, ${counted(designs)} credits`;
   // Once every voice is kept, nobody stands in for another role: those lines are not made.
   const standIn = sum((cost) => cost.standIn.characters) * CREDITS_PER_CHARACTER;
   const later = sum((cost) => cost.later.characters) * CREDITS_PER_CHARACTER - standIn;
@@ -1199,8 +1200,8 @@ export function planReport(costs: readonly Cost[], fresh: Fresh, beside = NO_LIN
     ...costs.map(costLine),
     `voice: now, the kept cast: ${counted(sum((cost) => cost.make))} lines, ` +
       `${counted(now)} credits`,
-    `voice: every voice kept: ${counted(lines)} lines, ${counted(now + later)} credits; designs ` +
-      `where no library voice is kept: up to ${unvoiced}, ${counted(designs)} credits`,
+    `voice: every voice kept: ${counted(lines)} lines, ${counted(now + later)} credits` +
+      (unvoiced === 0 ? '' : `; designs where no library voice is kept: ${designed}`),
     ...besideFresh(beside),
   ];
 }

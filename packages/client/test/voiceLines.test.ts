@@ -24,6 +24,7 @@ import {
   readRoster,
   ROLE_HELD,
   sayersOf,
+  type Person,
   type Roster,
 } from '../scripts/cast.js';
 import {
@@ -1065,7 +1066,17 @@ describe('a plain run, and what --fresh would make beside it', () => {
       'voice: --fresh would make 47 takes anew besides, made before the paid plan named ' +
         'itself: 3,983 credits, which licence them as the rest (docs/sound.md, „Lizenz")',
     );
-    // Under --fresh, or where it would make nothing more, nothing is said of it.
+    // Every voice kept, no design is said; under --fresh, or where it would make nothing more,
+    // nothing is said of it.
+    const voiced = (persons: readonly Person[]) =>
+      persons.map((p) => ({ ...p, voiceId: `${p.id}Voice00000000`, model: 'eleven_v4' }));
+    const everyone: Roster = {
+      pa: voiced(roster.pa),
+      operator: voiced(roster.operator),
+      lead: voiced(roster.lead),
+    };
+    const kept = planReport(costsOf(everyone, manifest, 'none'), 'none');
+    expect(kept.at(-1)).toMatch(/^voice: every voice kept: [\d,]+ lines, [\d,]+ credits$/);
     const nothing = freshBeside(fresh, fresh);
     expect(nothing).toEqual({ lines: 0, characters: 0 });
     for (const report of [planReport(fresh, 'synthetic'), planReport(plain, 'none', nothing)]) {
