@@ -265,6 +265,46 @@ steht im Log. Mit `SHOTS_SERVER=packages/server/src/index.ts` startet der Rundga
 selbst, wie die CI, und probt mitten in einem Einsatz den Neustart: SIGTERM, die Karte
 „WARTUNG · Der Server startet neu" auf jeder Seite, und nach dem Neustart alle zurück im Einsatz.
 
+**Nur ein Teil des Rundgangs (Gruppen):** Jede Aufnahme des Rundgangs gehört zu genau einer von
+fünfzehn Gruppen (`tools/groups.mjs`); `SHOTS_ONLY=screens,intro` spielt nur diese,
+`SHOTS_SKIP=perf` alle außer diesen — der schnelle Beweis eines Teils. Vor dem Rundgang laufen die
+Proben, jede in einem Raum für sich: `editor`, `art`, `drones` (Gefahrensinn und eine Drohne aus der
+Nähe), `reconnect` und `restart` — im Systemcheck dazu die Probe des Serverraums, die zu `devices`
+gehört. Der Rundgang selbst: `screens` (Menü und sein Ton, Bestenliste, Lobby, der Start aus ihr),
+`intro` (die Eröffnung bis `blackout.png`) und `run` (die Mission bis zur Siegerkarte, nach dem
+gewonnenen Systemcheck die Einsätze des Kontos und sein Löschen); im Lauf `devices` (jede Station,
+auch auf dem quer gehaltenen Handy), `reading` (Quellen, Schild, Notizen der letzten Schicht,
+Notizblock, Bücher), `hud` (das Spiel in jeder Fenstergröße, Einstellungen, Steuerung, Minikarte,
+Sprint), `graphics` (Licht, Leuchten, Figuren, Kamera, Dichte 2), `audio` (Raumklang, Funk, Seite
+des Partners, Musik), `voice` (Mikrofone, Sprechverbindungen) und `perf` (die Frame-Fenster). Die
+Gruppen im Lauf brauchen `run` und ziehen ihn mit; `SHOTS_SKIP=run` lehnt sie ab. Jede ausgelassene,
+abgelehnte oder mitgezogene Gruppe steht zu Beginn mit einer Zeile im Log, und was sie aufgenommen
+hätte, zählt weder als übersprungen noch als fehlgeschlagen. Der Rundgang spielt nur so weit, wie
+die gewählten Gruppen reichen: `screens` allein endet, sobald der Lauf gestartet ist, `intro` nach
+`blackout.png`. Eine Aufnahme oder Prüfung gehört zur Gruppe des Schritts, der sie macht — jeder
+Lauf hält jede Aufnahme an die Gruppe ihres Schritts, so prüft jeder volle Lauf die Tabelle —, und
+wo der Schritt einer anderen Gruppe gehört, kommt sie nur mit dieser: die Frame-Fenster von `perf`
+im Menü (`screens`), in der Eröffnung (`intro`: der Vorspann, das beleuchtete Labor und sein Blick
+bei Dichte 2) und bei Dichte 2 am Pult und in der Flucht (`graphics`), die Sprechverbindungen von
+`voice` nach dem Neuladen des Gast-Handys, das der Notizblock von `reading` auslöst, und der
+Info-Knopf von `hud` nach einem unterwegs gelesenen Schild, ebenfalls `reading`, wo niemand am
+Schild startet. Ohne beide Variablen spielt er alles wie bisher; die Zusammenfassung nennt die
+gespielten Gruppen, die Zeile `groups` davor die Sekunden jeder Gruppe — was ihre eigenen Schritte
+brauchten, bei `run` mit allen Wegen und Lösungen der Mission. Ein voller Blackout-Rundgang dauerte
+auf einem M4 mit 16 GB (14.11.2026, Last 9 bis 17) 772 s:
+
+| Gruppe | s | Gruppe | s | Gruppe | s |
+| --- | --- | --- | --- | --- | --- |
+| `editor` | 7,5 | `screens` | 25,0 | `reading` | 65,9 |
+| `art` | 19,0 | `intro` | 12,3 | `hud` | 33,2 |
+| `drones` | 8,2 | `run` | 292,3 | `graphics` | 51,9 |
+| `reconnect` | 114,4 | `devices` | 17,7 | `audio` | 86,9 |
+| `restart` | 10,8 | | | `voice` | 3,4 |
+| | | | | `perf` | 22,8 |
+
+`SHOTS_ONLY=screens,intro` spielte Blackout in 48 s; jede Gruppe im Lauf zieht die Mission bis
+zur Siegerkarte mit, und `SHOTS_ONLY=run` allein dauerte 262 s (den Systemcheck 85 s).
+
 **Ton und Funkstimme:** Jeder Raum klingt nach seiner Art, die Schritte des Partners kommen von
 dort, wo er steht, und die Musik zieht mit dem Druck an — alles zur Laufzeit erzeugt
 ([`docs/sound.md`](docs/sound.md)). Nur die Funksprüche der Leitstelle sind Aufnahmen
