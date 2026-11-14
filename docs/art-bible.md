@@ -485,11 +485,12 @@ Readable first: the writing 18 px, the hand's running text and heads 17 px, the 
 15 px, the red pencil 15 px, all at text size 1 and all scaled by it; against the paper the pen
 stands at 11.9:1, the pencils at 10.2 and 9.3:1, the red pencil at 6.3:1 and the placeholder at
 5.6:1 (`client/test/notepadLook.test.ts` reads them off the stylesheet). A table stays aligned
-up to 38 characters of the pencil's — the terminal's table runs 36, the Signalkette's legend 31
-— which the pad holds whole on a phone 420 px wide (its margin moved in to 24 px there); a wider
-one is set as running text (gameplay.md). The pad in the world's corner is 390 px wide at text
-size 1 and grows with it; the strip beside a page keeps its width (`--note-strip`), so in a
-narrow window at the large text size a table may scroll sideways in its own box.
+up to 38 characters of the pencil's — the terminal's table runs 36, the Signalkette's legend 37,
+its five columns one blank apart — which the pad holds whole on a phone 420 px wide (its margin
+moved in to 24 px there); a wider one is set as running text (gameplay.md). The pad in the
+world's corner is 390 px wide at text size 1 and grows with it; the strip beside a page keeps its
+width (`--note-strip`), so in a narrow window at the large text size a table may scroll sideways
+in its own box.
 notepad-captured.png and notepad-captured-phone.png show the legend and the Laborkennung in it.
 
 ## The menu (screens/Join.tsx, MainMenu.tsx, MenuPanels.tsx, world/menu/, styles/menu.css)
@@ -579,6 +580,17 @@ device's one figure keep their own size: the radio's frequency 32 px, the relay'
 24 px and its seconds 26 px. Words drawn in an SVG grow with their drawing: the Netzplan's
 names stand 11 units high (12 at most at the large text size, as much as their box holds right
 of its LED), the meter's scale 11 units, 13 on a phone, where its dial is drawn smaller.
+
+The Signalkette's signs say no word, but where its display has lost its colour (core
+`greyFrom`) the pattern is all a sign has left, and it is read as a readout is: the signs come up
+grey (#b8b8b8) at 64 px on every screen — 44 and 36 px in colour — their pattern bold and near
+black over them, 9.4:1 against the grey, so that every cell of it measures a readout's 18 px or
+more: dot to dot, stripe to stripe and the ring across, 6.9, 6.9 and 9.6 of the glyph's 24 units
+(SignalPanel.tsx `BOLD`; client test/signalGrey.test.tsx measures them through the stylesheets at
+1280×720, 1440×820 and on phones at 932×430, 844×390 and 420×760). The dots stand as a hexagon
+on the circle, a five on the square, four on the triangle; the stripes rise to the right as
+Abb. 2 draws them; every mark keeps clear of its form's edge. The status strip lights ANZEIGE ·
+FARBLOS beside BETRIEB (signal-grey.png, and signal-grey-phone-932.png on a large phone).
 
 Under the label plate and its LED every device engraves, in a row of its own, what the machine
 at that console does — „DAS PRÜFPULT MISST DIE SPANNUNG DES GEWÄHLTEN KABELS", „DER KASTEN TRENNT

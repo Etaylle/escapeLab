@@ -1459,6 +1459,30 @@ function assertFleeting(consoles: { client: TestClient; from: number }[]): void 
 }
 
 /**
+ * From stage `greyFrom` on the display has lost its colour: so say the views the consoles
+ * received since their logs ran to `from`, and not one of those views carried a sign in colour
+ * to either console — the legend's patterns alone tell the colours then.
+ */
+function assertGrey(consoles: { client: TestClient; from: number }[]): void {
+  const greyFrom = SIGNAL.greyFrom ?? SIGNAL.stages;
+  const seen = consoles.flatMap(({ client, from }) =>
+    viewsSince(client, from).flatMap(({ raw, view }) => {
+      const signal = signalOf(view);
+      return signal === null ? [] : [{ raw, signal }];
+    }),
+  );
+  const grey = seen.filter(({ signal }) => signal.grey);
+  assert(
+    grey.length > 0 && seen.every(({ signal }) => signal.grey === signal.stage >= greyFrom),
+    `the display shows its signs without colour from stage ${greyFrom} on, in colour before`,
+  );
+  assert(
+    grey.every(({ raw }) => !TOKENS.some((token) => raw.includes(`"${token}"`))),
+    'no view of a stage without colour carried a sign in colour to either console',
+  );
+}
+
+/**
  * Station 2, the Signalkette, worked at two consoles at once: `a` stands at
  * console A, `b` at console B, and B switches it on. Console A sends stage 1
  * and B takes it, then the direction swaps with every stage. Nobody is left
@@ -1489,6 +1513,10 @@ async function runSignal(a: TestClient, b: TestClient): Promise<void> {
   await solveStation(SIGNALKETTE);
   assertConsolesApart(b, from.b, { sends, takes });
   assertFleeting([
+    { client: a, from: from.a },
+    { client: b, from: from.b },
+  ]);
+  assertGrey([
     { client: a, from: from.a },
     { client: b, from: from.b },
   ]);

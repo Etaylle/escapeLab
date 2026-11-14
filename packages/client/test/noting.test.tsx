@@ -86,22 +86,22 @@ describe('a printed block as the notepad takes it', () => {
   it('names the place it is taken at in its head, and keys it by place, station and part', () => {
     const legend: ManualSection = { heading: 'Legende', blocks: [LEGEND] };
     const taken = blockTaken(STATION, MANUAL, legend, LEGEND);
-    // Its five columns run wider than a phone's pad holds aligned: a row a line, cells parted.
+    // Its five columns run wider than the pad two blanks apart, so they stand one apart.
     expect(captureAt(CLIPBOARD, taken)).toEqual({
       key: 'klemmbrett/2/Legende',
       head: 'Klemmbrett · Legende',
       lines: [
-        'Zeile · Pult A · Muster · Pult B · Muster',
-        '1 · rot · Kreis · gelb · Dreieck',
-        '2 · blau · Quadrat · rot · Kreis',
+        'Zeile Pult A Muster  Pult B Muster',
+        '1     rot    Kreis   gelb   Dreieck',
+        '2     blau   Quadrat rot    Kreis',
       ],
-      form: 'text',
+      form: 'table',
     });
     expect(captureAt(null, taken).head).toBe('Legende');
   });
 
-  it('leaves out a repeated column the table already gives, and keeps one it does not', () => {
-    // Pult B's patterns are those Pult A's column gives its colours: the second „Muster" goes.
+  it('keeps every column as printed, two blanks apart where the pad holds them so', () => {
+    // Both „Muster": the pattern beside each console's colour, a row found by either alone.
     const kept: NotableBlock = {
       kind: 'table',
       head: ['Zeile', 'Pult A', 'Muster', 'Pult B', 'Muster'],
@@ -112,15 +112,26 @@ describe('a printed block as the notepad takes it', () => {
     };
     const section: ManualSection = { heading: 'Legende', blocks: [kept] };
     expect(blockTaken(STATION, MANUAL, section, kept).lines).toEqual([
-      'Zeile  Pult A  Muster  Pult B',
-      '1      rot     glatt   blau',
-      '2      blau    Punkte  rot',
+      'Zeile  Pult A  Muster  Pult B  Muster',
+      '1      rot     glatt   blau    Punkte',
+      '2      blau    Punkte  rot     glatt',
     ]);
-    // One cell it does not give — gelb stands nowhere in Pult A's column — keeps the column.
-    const legend: ManualSection = { heading: 'Legende', blocks: [LEGEND] };
-    expect(blockTaken(STATION, MANUAL, legend, LEGEND).lines[0]).toBe(
-      'Zeile · Pult A · Muster · Pult B · Muster',
-    );
+  });
+
+  it('sets a table that runs wider than the pad even one blank apart as a row a line', () => {
+    const wide: NotableBlock = {
+      kind: 'table',
+      head: ['Zeile', 'Pult A', 'Muster', 'Pult B', 'Muster'],
+      rows: [['1', 'rot', 'Kreis mit Ring', 'gelb', 'Dreieck mit Streifen']],
+    };
+    const section: ManualSection = { heading: 'Legende', blocks: [wide] };
+    expect(blockTaken(STATION, MANUAL, section, wide)).toMatchObject({
+      lines: [
+        'Zeile · Pult A · Muster · Pult B · Muster',
+        '1 · rot · Kreis mit Ring · gelb · Dreieck mit Streifen',
+      ],
+      form: 'text',
+    });
   });
 
   it('notes the whole of a table or a list from any page it runs over', () => {

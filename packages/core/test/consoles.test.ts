@@ -269,7 +269,8 @@ describe('the open station at two consoles', () => {
     const puzzle = viewFor(state, 'p1').puzzle;
     const first = puzzle?.kind === 'signal' ? puzzle.sequence?.[0] : undefined;
     const apply = vi.spyOn(signalModule, 'apply');
-    applyAction(state, input('p2', first ?? 'rot-kreis'));
+    // The lab's Signalkette has no legend: its display shows every sign in colour.
+    applyAction(state, input('p2', typeof first === 'string' ? first : 'rot-kreis'));
     expect(apply.mock.calls[0]?.[3]).toBe('p2');
     expect(apply.mock.calls[0]?.[4]).toMatchObject({ console: 'b' });
     apply.mockRestore();
