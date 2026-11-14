@@ -142,9 +142,14 @@ export function useMenuLayer(phase: PausePhase | null): MenuLayer {
   };
 }
 
-/** Whether the pause menu stands open, and how the game screen opens it: Esc, the HUD's button. */
+/** The menus over the screens as the screens reach them (App.tsx `ScreenArea`). */
 export interface PauseHand {
+  /**
+   * a menu stands over the screens — the pause menu, the settings or the booklet (`anyOpen`): the
+   * keys are its, the screens hear none (hooks.ts `useKeys`), and the world holds still
+   */
   open: boolean;
+  /** opens the room's pause menu, as Esc over a run and the HUD's button do */
   show: () => void;
 }
 

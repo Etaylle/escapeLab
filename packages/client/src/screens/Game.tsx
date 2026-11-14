@@ -27,7 +27,7 @@ import {
 import { deviceCoach, firstSight, SHOWN_MARKS, type CoachMark } from '../puzzles/coach.js';
 import { useSolvedHold, type DeviceRun } from '../puzzles/Device.js';
 import { RelayConsole } from '../puzzles/RelayPanel.js';
-import { usePause } from '../menuLayer.js';
+import { usePause, type PauseHand } from '../menuLayer.js';
 import { useReducedMotion, useSettings } from '../settings.js';
 import type { Connection, Refusal } from '../ws.js';
 import {
@@ -1100,14 +1100,26 @@ export function escapeStep(
 }
 
 /**
- * Escape does its step (`escapeStep`), the panels still on the screen (`shown`: the device, the
- * pages, a note — leaving ones too) telling whether one is on its way out.
+ * What Esc does over the run with a menu over it (`menuOpen`): nothing of the run's own — the
+ * menu has its keys, the settings or the booklet over it theirs —; else its step (`escapeStep`).
+ */
+export function escapeStepUnder(
+  menuOpen: boolean,
+  open: Pick<OpenNow, 'info' | 'station' | 'reading' | 'note' | 'notes'>,
+  going: boolean,
+): EscapeStep | null {
+  return menuOpen ? null : escapeStep(open, going);
+}
+
+/**
+ * Escape does its step (`escapeStepUnder`), the panels still on the screen (`shown`: the device,
+ * the pages, a note — leaving ones too) telling whether one is on its way out.
  */
 function useEscapeCloses(
   open: OpenNow,
   shown: readonly (Shown<unknown> | null)[],
   closeModal: () => void,
-  openMenu: () => void,
+  menu: PauseHand,
 ): void {
   const going = shown.some((panel) => panel !== null);
   useEscape(() => {
@@ -1116,27 +1128,31 @@ function useEscapeCloses(
       over: closeModal,
       going: () => undefined,
       notes: () => open.set({ notes: false }),
-      menu: openMenu,
+      menu: menu.show,
     };
-    steps[escapeStep(open, going)]();
+    const step = escapeStepUnder(menu.open, open, going);
+    if (step !== null) {
+      steps[step]();
+    }
   });
 }
 
 /**
  * The screen's keys: the notepad's (`toggleNotes`), the keys that put down what lies over the
- * world, and Esc (`useEscapeCloses`, the panels still on the screen `shown`).
+ * world, and Esc (`useEscapeCloses`, the panels still on the screen `shown`) — none of them while
+ * a menu stands over the run (`menu`; hooks.ts `useKeys`, `escapeStepUnder`).
  */
 function useScreenKeys(
   open: OpenNow,
   toggleNotes: () => void,
   shown: readonly (Shown<unknown> | null)[],
   closeModal: () => void,
-  openMenu: () => void,
+  menu: PauseHand,
 ): void {
   const { keys } = useSettings();
   useKeys([keys.notes], toggleNotes);
   useKeys(putDownKeys(overOf(open), keys), closeModal);
-  useEscapeCloses(open, shown, closeModal, openMenu);
+  useEscapeCloses(open, shown, closeModal, menu);
 }
 
 /** What lies over the world: the station's device, a source's pages, a note; null for nothing. */
@@ -1385,6 +1401,7 @@ function RunWorld({
       station={station}
       holdTips={holdTips}
       inputLocked={worldLocked(view, open, station, held)}
+      menuOver={menu.open}
       onToggleInfo={open.toggleInfo}
       onRead={(manualId) => open.set({ readingId: manualId })}
       onReadNote={(index) => open.set({ noteIndex: index })}
@@ -1464,7 +1481,7 @@ export function GameScreen(props: Props) {
   const pad = useNotepad(roomCode, view.you.id, open);
   const closeModal = (): void => open.set(NOTHING_OVER);
   const menu = usePause();
-  useScreenKeys(open, pad.toggle, [panel, sheets.reading, sheets.note], closeModal, menu.show);
+  useScreenKeys(open, pad.toggle, [panel, sheets.reading, sheets.note], closeModal, menu);
   // Until the click of the cold open the strip keeps quiet: the opener has the banner.
   const crewStrip = useCrewStrip(props, notice?.kind === 'line' || !coldOpen.dark, {
     notesOpen: open.notes,

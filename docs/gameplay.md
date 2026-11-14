@@ -492,12 +492,15 @@ verlassen" in a lobby, „Zuschauen beenden" for the audience. The arrows or the
 the items, round at the ends; Enter or A takes one; Esc, B or „Weiter" closes the menu, and the
 control that had the focus before has it again — in a lobby or the audience; in a run the focus
 stays with the world. While a menu stands open, nothing under it takes a key, a press or the
-controller (the screens are `inert`). Opening it pauses nothing: the clock, the patrols and the
-emergencies run on — a run stands still only for a line down, as above —, the line under the list
-says so in a run, and the crew's strip marks the player „im Menü" for as long as it stands open — a
-phone's row, which shows a doing only for three seconds after it changed, for those (`pause-menu`,
-core `set-menu` and `menus`; six marks at once and one more a second, as the voice's signals are
-allowed). Meanwhile the avatar stands. Under reduced motion the menu cuts in.
+controller: the screens are `inert`, and what they listen for on the window hears nothing either —
+the world's keys, the notepad's, the lever's, the arrows of a book, the opening's Space (App.tsx
+`ScreenArea`, hooks.ts `useKeys`); the talk key alone talks on. Opening it pauses nothing: the
+clock, the patrols and the emergencies run on — a run stands still only for a line down, as
+above —, the line under the list says so in a run, and the crew's strip marks the player „im
+Menü" for as long as it stands open — a phone's row, which shows a doing only for three seconds
+after it changed, for those (`pause-menu`, core `set-menu` and `menus`; six marks at once and
+one more a second, as the voice's signals are allowed). Meanwhile the avatar stands. Under
+reduced motion the menu cuts in.
 
 **The ways out**, as Dota 2 has them:
 

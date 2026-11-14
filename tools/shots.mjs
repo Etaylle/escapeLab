@@ -10832,9 +10832,10 @@ async function tabSteps(page) {
  * settings.png: the gear in the top bar opens the run's menu, and its „Einstellungen" the
  * settings over the running world, on „Ton" — the whole lab's volume and each bus's, a mute each,
  * the talk key — and nothing pauses under them: the clock counts on. Esc closes them again, and
- * the menu under them. The run fails where no panel comes up, where it runs out sideways, where
- * the clock stands still under it, or where Esc leaves it open. The mutes and the tab bar are the
- * lobby's to prove (`lobbySettings`), off the run's clock.
+ * the menu under them; N and I pressed under them open nothing of the run's. The run fails where
+ * no panel comes up, where it runs out sideways, where the clock stands still under it, where a
+ * key reaches the run, or where Esc leaves it open. The mutes and the tab bar are the lobby's to
+ * prove (`lobbySettings`), off the run's clock.
  */
 async function captureSettings(page) {
   const clock = page.locator('.stage-top .countdown');
@@ -10850,7 +10851,16 @@ async function captureSettings(page) {
   await capture(page, 'settings.png');
   const volumes = (await page.locator('.settings-volume').allInnerTexts()).map(rowText);
   const key = await textOf(page.locator('.settings-kbd'));
+  // The run's own keys under the settings over its menu: none of them may reach the run.
+  const runPanels = page.locator('.notepad, .info-card');
+  const openBefore = await runPanels.count();
+  await page.keyboard.press('n');
+  await page.keyboard.press('i');
   const closed = await closeSettings(page);
+  const under = (await runPanels.count()) - openBefore;
+  for (let left = under; left > 0; left--) {
+    await page.keyboard.press('Escape');
+  }
   const stood = ticking && before === after;
   const clockSaid = !ticking
     ? 'no clock up'
@@ -10861,10 +10871,12 @@ async function captureSettings(page) {
     [stood, 'the clock stood'],
     [!closed, 'Esc left it open'],
     [over > 0, `+${over}px sideways`],
+    [under > 0, 'N or I under the settings opened the run’s notepad or info panel'],
   ]);
   console.log(
     `settings.png       ${volumes.join(', ')}; talk key ${key}; ${clockSaid}` +
-      (closed ? '; Esc closed it' : ''),
+      (closed ? '; Esc closed it' : '') +
+      (under === 0 ? '; N and I under them reached nothing' : ''),
   );
   if (wrong.length > 0) {
     fail(`settings: ${wrong.join(', ')}`);

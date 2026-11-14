@@ -155,12 +155,20 @@ describe('Esc over the open chat wheel', () => {
   it('shuts the wheel alone: the key goes no further, to open the run’s menu', () => {
     const setWheel = vi.fn();
     const stopPropagation = vi.fn();
-    const onKey = wheelEscape(setWheel);
+    const onKey = wheelEscape(setWheel, () => false);
     onKey({ key: 'Escape', stopPropagation } as unknown as KeyboardEvent);
     expect(setWheel).toHaveBeenCalledWith(null);
     expect(stopPropagation).toHaveBeenCalledOnce();
     onKey({ key: 'c', stopPropagation } as unknown as KeyboardEvent);
     expect(setWheel).toHaveBeenCalledOnce();
     expect(stopPropagation).toHaveBeenCalledOnce();
+  });
+
+  it('leaves the wheel under a menu as it is: the Esc goes on to the menu', () => {
+    const setWheel = vi.fn();
+    const stopPropagation = vi.fn();
+    wheelEscape(setWheel, () => true)({ key: 'Escape', stopPropagation } as unknown as KeyboardEvent);
+    expect(setWheel).not.toHaveBeenCalled();
+    expect(stopPropagation).not.toHaveBeenCalled();
   });
 });

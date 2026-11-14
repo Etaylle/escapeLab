@@ -1,8 +1,9 @@
 import { readFileSync } from 'node:fs';
+import { createRef } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import type { ManualHere, PlayerView } from '@escapelab/core';
-import { roomMission, TopBar } from '../src/App.js';
+import { roomMission, ScreenArea, TopBar } from '../src/App.js';
 import { menuScope } from '../src/input/focus.js';
 import {
   anyOpen,
@@ -14,9 +15,12 @@ import {
   NOTHING_OPEN,
   pausePhaseOf,
   startPressed,
+  usePause,
 } from '../src/menuLayer.js';
 import { crewTags } from '../src/screens/Crew.js';
-import { escapeStep } from '../src/screens/Game.js';
+import { escapeStep, escapeStepUnder } from '../src/screens/Game.js';
+import { worldHears } from '../src/world/GameWorld.js';
+import { keyTaken } from '../src/hooks.js';
 import { MissionHud } from '../src/screens/MissionHud.js';
 import {
   menuKeyHandler,
@@ -30,6 +34,11 @@ import {
 import { mapWith } from './fixtures.js';
 
 const noop = (): void => undefined;
+
+/** A screen as it hears the menus over it (`usePause`). */
+function MenuProbe() {
+  return <p>{usePause().open ? 'covered' : 'open'}</p>;
+}
 
 /** Ben's view of a run on, Anna beside him — Anna at the menu where `annaAtMenu`. */
 function runView(annaAtMenu = false): PlayerView {
@@ -204,6 +213,17 @@ describe('the screens under a menu', () => {
     vi.unstubAllGlobals();
   });
 
+  it('leave the screens’ area inert under it, its screens told that a menu stands over them', () => {
+    const area = (covered: boolean): string =>
+      renderToStaticMarkup(
+        <ScreenArea ref={createRef()} layout="content--menu" covered={covered} openPause={noop}>
+          <MenuProbe />
+        </ScreenArea>,
+      );
+    expect(area(true)).toBe('<main class="content content--menu" inert=""><p>covered</p></main>');
+    expect(area(false)).toBe('<main class="content content--menu"><p>open</p></main>');
+  });
+
   it('keep a controller in the menu: a device’s dialog in the inert room is passed over', () => {
     /** A dialog as menuScope reads it: shown, its class, under an inert part or not. */
     const dialog = (name: string, inert: boolean) => ({
@@ -217,6 +237,34 @@ describe('the screens under a menu', () => {
     const device = dialog('station-modal', true);
     const page = { querySelectorAll: () => [menu, device], querySelector: () => null };
     expect(menuScope(page as unknown as Document)).toBe(menu);
+  });
+});
+
+describe('the run’s keys under its menu', () => {
+  const plain = { altKey: false, ctrlKey: false, metaKey: false };
+
+  it('reach not the world while a menu stands over it — the settings or the booklet too', () => {
+    expect(worldHears(false, false, plain)).toBe(true);
+    expect(worldHears(true, false, plain)).toBe(false);
+    // As before: nor into a text field, nor with a modifier the browser owns.
+    expect(worldHears(false, true, plain)).toBe(false);
+    expect(worldHears(false, false, { ...plain, ctrlKey: true })).toBe(false);
+  });
+
+  it('reach not the screens: no notepad, no lever, no page turned, no Esc of the run’s own', () => {
+    const listened = new Set(['n', 'e', 'arrowright']);
+    const key = (name: string) => ({ key: name, ...plain });
+    expect(keyTaken(listened, key('N'), false, false)).toBe(true);
+    expect(keyTaken(listened, key('n'), false, true)).toBe(false);
+    expect(keyTaken(listened, key('e'), false, true)).toBe(false);
+    expect(keyTaken(listened, key('ArrowRight'), false, true)).toBe(false);
+    // As before: no key not listened for, nor into a text field, nor with a modifier.
+    expect(keyTaken(listened, key('m'), false, false)).toBe(false);
+    expect(keyTaken(listened, key('n'), true, false)).toBe(false);
+    expect(keyTaken(listened, { ...key('n'), metaKey: true }, false, false)).toBe(false);
+    const nothing = { info: true, station: null, reading: null, note: null, notes: false };
+    expect(escapeStepUnder(false, nothing, false)).toBe('info');
+    expect(escapeStepUnder(true, nothing, false)).toBeNull();
   });
 });
 

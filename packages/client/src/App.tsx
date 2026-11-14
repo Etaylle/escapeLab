@@ -1,4 +1,13 @@
-import { Activity, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import {
+  Activity,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ReactNode,
+  type Ref,
+} from 'react';
 import { traceRequested } from './world/frameTrace.js';
 import { endThemeProbe } from './world/endTheme.js';
 import { menuSoundProbe, wantMenuSound, type MenuPlace } from './world/menuSound.js';
@@ -741,6 +750,28 @@ function layoutOf(immersive: boolean, editing: boolean, menu: boolean): string {
 }
 
 /**
+ * The one scrolling area every screen shares. Under a menu (`covered`: the pause menu, the
+ * settings, the booklet) it takes nothing: inert, it leaves a press, Tab and a controller to the
+ * menu, and its screens hear none of the keys they listen for on the window, which inert keeps
+ * from no listener (`PauseContext`). `openPause` opens the room's pause menu.
+ */
+export function ScreenArea(props: {
+  ref: Ref<HTMLElement>;
+  layout: string;
+  covered: boolean;
+  openPause: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <main ref={props.ref} className={`content ${props.layout}`} inert={props.covered}>
+      <PauseContext value={{ open: props.covered, show: props.openPause }}>
+        {props.children}
+      </PauseContext>
+    </main>
+  );
+}
+
+/**
  * The app. `boot` is what the address asked for on load: the editor at
  * /editor, with a shared mission or the draft the tab kept.
  */
@@ -815,27 +846,24 @@ export function App({ boot }: { boot: EditorBoot }) {
       <ErrorBanner conn={live} />
       <UpdateNotice />
 
-      {/* Under a menu the screens take nothing: a controller and Tab stay in the menu. */}
-      <main ref={contentRef} className={`content ${layout}`} inert={covered}>
+      <ScreenArea ref={contentRef} layout={layout} covered={covered} openPause={layer.openPause}>
         {backdrop !== null && <MenuScene {...backdrop} />}
         <VoiceContext value={voice}>
-          <PauseContext value={{ open: layer.pause, show: layer.openPause }}>
-            <Screens
-              conn={conn}
-              missions={missions}
-              loadMissions={loadMissions}
-              stats={stats.status === 'ready' ? stats.value : []}
-              pages={pages}
-              editor={editor}
-              startTestRun={testRun.start}
-              finale={finale}
-              picked={picked}
-              setPicked={setPicked}
-              openSettings={layer.openSettings}
-            />
-          </PauseContext>
+          <Screens
+            conn={conn}
+            missions={missions}
+            loadMissions={loadMissions}
+            stats={stats.status === 'ready' ? stats.value : []}
+            pages={pages}
+            editor={editor}
+            startTestRun={testRun.start}
+            finale={finale}
+            picked={picked}
+            setPicked={setPicked}
+            openSettings={layer.openSettings}
+          />
         </VoiceContext>
-      </main>
+      </ScreenArea>
     </div>
   );
 }
