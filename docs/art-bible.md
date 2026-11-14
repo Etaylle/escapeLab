@@ -708,7 +708,10 @@ frames; the machine's 1-minute load from other work stood at 4 to 17 meanwhile. 
 | Microphone on, before | 3.78 | 5.60 | 180 |
 
 The sending microphone costs +0.27 ms a frame over the silent one, round by round +0.10 to +0.46
-and +0.86 in the last round as the load rose, where it cost +1.88 (+1.59 to +2.15). What is left
+and +0.86 in the last round as the load rose, where it cost +1.88 (+1.59 to +2.15). A rerun in the
+heavy runs' exclusive window (`heavy.sh --exclusive`), the other heavy runs drained but the load
+still 4.9 to 17.2 from lighter work, scattered more and said the same: round by round a median of
++0.24 ms with the light laid apart, +2.32 before. What is left
 is the light's band, laid on each of the hero's frames, and the canvas laid anew with it: the body
 rides up and down with the words, so the canvas is laid on each frame while the microphone sends,
 180 times in the 6 s instead of 64. Beam and hero together came to 0.90 ms over the scene with
