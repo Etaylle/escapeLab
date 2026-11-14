@@ -209,7 +209,10 @@ drones, no emergencies, no intro: its lights burn from the start (`lit: true` li
 the map names, and refuses an intro). No hatch either: the last station wins the run, as a
 practice ends — no siren, no run back across the hall, whose lit floor the escape's red would
 only wash out. The last shift's notes at each station say how its machine is learned, never an
-instance's answer. The menu's card says „Jede Station zum Üben" over its title. The hall is
+instance's answer. Each station takes its module's defaults, but for the Zugangskontrolle's token
+device, which turns every 15 s, the module's shortest period: a practice waits less for an
+account. The menu's card, known by the hall's id, says „Jede Station zum Üben" over its title.
+The hall is
 made from the module registry (`core/test/hall.ts`): a module added there fails
 `core/test/hall.test.ts` until the hall is written anew, with the walkthrough's plan, by
 `node --import tsx ../core/test/writeHall.ts` from `packages/server`.
