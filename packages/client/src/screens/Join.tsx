@@ -27,8 +27,9 @@ import {
   RoundsPanel,
   type SectionProps,
 } from './MenuPanels.js';
+import { MenuHero } from './MenuHero.js';
 import { useComesOn } from './phosphor.js';
-import { ProfileChip, WAVE_SETTLE_MS } from './ProfileChip.js';
+import { FIRST_COLOR, ProfileChip, WAVE_SETTLE_MS } from './ProfileChip.js';
 
 interface Props {
   send: (msg: ClientMessage) => void;
@@ -68,6 +69,8 @@ interface Props {
   openEditor?: () => void;
   /** opens the settings, as the gear in the top bar does; without it the menu offers none */
   openSettings?: () => void;
+  /** the menu goes for the lobby, the doors closing over it (DoorWipe.tsx); false by default */
+  leaving?: boolean;
 }
 
 const REFRESH_MS = 2500;
@@ -413,13 +416,21 @@ function Panels({
 }
 
 /**
+ * The colour the profile shows (ProfileChip.tsx), which the hero wears: the account's, the one
+ * the pass kept from a lobby before the server told one, the crew's first before any.
+ */
+function profileColor(account: AccountView | null): string {
+  return account?.color ?? lastColor() ?? FIRST_COLOR;
+}
+
+/**
  * The start screen as a game's main menu: the game's title over the living scene of the
  * mission picked (screens/MenuScene.tsx) and a line of the world under it, the profile at the
- * top right, and the menu — the card of where the pass sits first, then „Einsatz starten",
- * „Beitreten", „Offene Runden", the booklet, the Bestenliste, „Meine Einsätze", the editor and
- * the settings — the
- * install offer and the HTTPS hint as quiet lines under it. An item with a panel opens it over
- * the menu (MenuPanels.tsx), the rest open their page. A run that binds the pass dims every
+ * top right, the player's own figure standing large at the right (screens/MenuHero.tsx), and
+ * the menu — the card of where the pass sits first, then „Einsatz starten", „Beitreten",
+ * „Offene Runden", the booklet, the Bestenliste, „Meine Einsätze", the editor and the settings
+ * — the install offer and the HTTPS hint as quiet lines under it. An item with a panel opens it
+ * over the menu (MenuPanels.tsx), the rest open their page. A run that binds the pass dims every
  * item but its card, and one line says why no other room opens.
  */
 export function JoinScreen(props: Props) {
@@ -449,6 +460,13 @@ export function JoinScreen(props: Props) {
         <p className="menu-sub">{MENU_SUBTITLE}</p>
       </header>
       <ProfileChip name={name} onName={setName} account={account} />
+      <MenuHero
+        name={name}
+        color={profileColor(account)}
+        panel={panel !== null}
+        card={seat !== null}
+        leaving={props.leaving === true}
+      />
       <div className="menu-body" inert={panel !== null}>
         <MainMenu
           items={menuItems(props.openEditor !== undefined)}

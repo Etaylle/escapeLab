@@ -66,8 +66,8 @@ export interface Atlas {
   grains: Map<number, HTMLCanvasElement>;
 }
 
-/** A canvas from the document. */
-const domCanvas: CanvasMaker = (width, height) => {
+/** A canvas from the document: the atlas's, and the menu hero's layers and its beam's. */
+export const domCanvas: CanvasMaker = (width, height) => {
   const canvas = document.createElement('canvas');
   canvas.width = width;
   canvas.height = height;
