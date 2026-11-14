@@ -110,7 +110,8 @@ const NOTES: Readonly<Partial<Record<PuzzleDef['type'], readonly string[]>>> = {
   ],
   access: [
     'Einweisung: Erst die Tür am Terminal, dann auf der Benutzerliste das Konto, dessen Rolle ' +
-      'sie freigibt. Den Token erst, wenn das Tokengerät dieses Konto zeigt.',
+      'sie freigibt.',
+    'Einweisung: Den Token erst eingeben, wenn das Tokengerät dieses Konto zeigt.',
   ],
 };
 
