@@ -164,6 +164,16 @@ tote Leitung nach 5 Sekunden ohne Uhrantwort, 20 Sekunden Stille oder 8 Sekunden
 Verbindung, verbindet sofort neu und zeigt bis dahin „VERBINDUNG VERLOREN“ mit Versuch und
 Wartezeit. Einzelheiten: `docs/gameplay.md`, „Verbindung und Wiedereintritt“.
 
+**Pausenmenü und Verlassen:** Im Raum öffnen Esc, das Zahnrad oben, die Start-Taste des
+Controllers oder „Menü“ in der Leiste das Pausenmenü — Weiter, Einstellungen, Handbuch und die
+Wege hinaus —, ohne die Uhr der Crew anzuhalten; die Crew sieht „im Menü“ am Namen. „Zum
+Hauptmenü“ trennt die Leitung sauber, der Platz bleibt gebunden wie nach einem Abbruch, und das
+Hauptmenü führt mit „Zurück zum Einsatz“ zurück; „Einsatz aufgeben“ fragt einmal und sagt, was
+es heißt. Verlässt der Host die Lobby, leitet sie, wer am längsten dabei ist. Die Zurück-Taste
+des Browsers öffnet im Einsatz das Menü. Die Einstellungen stehen in Reitern — Ton, Bild,
+Steuerung, Zugang, Konto —, jeder mit „Zurücksetzen“. Einzelheiten: `docs/gameplay.md`,
+„Pausenmenü und Verlassen“.
+
 **Endspurt:** In der letzten Hälfte der Zeit zieht das Ambiente hörbar an, unter einer Minute
 pulsiert der Timer rot und die Ränder glühen, und die **letzten zehn Sekunden werden mit
 ansteigenden Piepsern heruntergezählt** — der Schlusston kommt, wenn die Energie weg ist.
@@ -174,7 +184,7 @@ Live-Status jedes Mitglieds (hält die Platte, trägt etwas, an der Station, lie
 der letzten Funkzeile. Alles zum Nachschlagen — Auftrag, eine Legende der Kartenobjekte,
 Tastenliste — steckt im **Info-Panel** (Taste `I`, alternativ `H`). Alles, wohin man laufen muss, bekommt am
 Bildschirmrand einen **Richtungspfeil mit Entfernung**, solange es außer Sicht ist. Der Ton
-lässt sich oben rechts abschalten.
+lässt sich oben rechts abschalten; neben dem Raumcode zählt ein Chip, wie viele zuschauen.
 
 **Gefahren unterwegs:** **Wachdrohnen** patrouillieren feste Routen und leuchten einen sichtbaren
 Sichtkegel aus — wer hineinläuft, verliert Zeit (Sichtlinie zählt; wer am offenen Pult arbeitet

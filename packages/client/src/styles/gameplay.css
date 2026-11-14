@@ -37,14 +37,6 @@
   color: var(--accent);
 }
 
-.settings-reset {
-  justify-self: start;
-  margin-top: 14px;
-  padding: 7px 12px;
-  font-family: var(--mono);
-  font-size: 13px;
-}
-
 /* The controller's live test: every button lit while it is held. */
 .pad-test {
   width: 100%;

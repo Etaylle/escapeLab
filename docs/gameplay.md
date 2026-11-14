@@ -19,70 +19,71 @@ happens when a line drops. Code: `packages/client/src/input/` (bindings, control
 
 ## Controls
 
-Every action has a key of the player's choosing (Settings → Tastenbelegung); a few keys keep
-their task whatever is bound. A standard-mapping controller works everything; its four main
-actions sit on buttons of the player's choosing (Settings → Controller), the rest is fixed.
+Every action has a key of the player's choosing (Einstellungen → Steuerung → Tastenbelegung); a
+few keys keep their task whatever is bound. A standard-mapping controller works everything; its
+four main actions sit on buttons of the player's choosing (Einstellungen → Steuerung →
+Controller), the rest is fixed.
 
 | Action | Keys (default) | Controller |
 | --- | --- | --- |
-| Laufen | W A S D, arrows (fixed) | left stick (dead zone 0.2, radial) |
+| Laufen | W A S D, arrows (fixed) | left stick (dead zone 20 %, radial; 5–40 % in Steuerung) |
 | Sprinten | Shift, held | R1, held |
 | Benutzen: bedienen, lesen, durchsuchen, aufnehmen, einsetzen | E; Enter and Space (fixed) | A/✕ |
 | Ablegen (hands full) | Q | B/○ |
 | Weglegen / Zurücktreten / Fenster schließen | Esc (fixed); E or a step puts a sheet down | B/○ |
+| Menü (Pausenmenü und Verlassen) | Esc with nothing open, ⚙ in the top bar, the strip's „Menü" | Start |
 | Notizblock | N | X/□ |
 | Minikarte | M | Y/△ |
 | Ping für alle | a click on the world | D-pad ◀: the floor the lamp points at |
 | Schnellchat | C, then 1–8 (fixed); a phrase with a slot, then 1–9 | D-pad ▶, then the D-pad to a phrase and A, and to a slot's value and A |
 | Einsatzinfo | I | Select |
 | Sprechen (push-to-talk) | V, held (at the terminal V types; its FUNK key talks) | L1, held |
-| Einstellungen | ⚙ in the top bar | Start |
 | Blättern beim Lesen | ← → (fixed) | D-pad ◀ ▶ |
 | In Pulten und Fenstern wählen und drücken | Tab, Enter | D-pad or a flick of the stick, then A |
 
 **Rebinding.** „Ändern" waits for the next key: a key the game keeps (the arrows, Enter, Space,
-Esc, Tab, 1–8, Backspace, Delete) is refused with its task, a key another action holds is
-refused naming that action („Schon belegt: Notizblock (N)."), a key held with Strg, Alt or Cmd
-is no key to hold alone; Esc stops waiting, and so does any controller button, which has no key
-to give. On the controller the next button pressed takes the action — A, B, X, Y, L2 or R2 —
-and where another of the four sat there, the two swap, which the panel says. „Tasten und
-Controller zurücksetzen" brings both back. The settings are kept on the device
-(`escapelab.settings`, `keys` and `pad`); settings kept before the key map keep their talk key.
-A bound key is the game's: the browser's own use of it stays off (F5 bound to the minimap
-reloads nothing). A key held down — a step, the sprint, the talk key — is let go where it went
-down, whatever Shift or a new binding made of its name meanwhile (`input/heldKeys.ts`).
+Esc, Tab, 1–8, Backspace, Delete) is refused with its task, a key another action holds is refused
+naming that action („Schon belegt: Notizblock (N)."), a key held with Strg, Alt or Cmd is no key to
+hold alone; Esc stops waiting, and so does any controller button, which has no key to give. On the
+controller the next button pressed takes the action — A, B, X, Y, L2 or R2 — and where another of
+the four sat there, the two swap, which the panel says. „Zurücksetzen" in „Steuerung" brings both
+back, with the symbols and the dead zone. The settings are kept on the device
+(`escapelab.settings`, `keys` and `pad`); settings kept before the key map keep their talk key. A
+bound key is the game's: the browser's own use of it stays off (F5 bound to the minimap reloads
+nothing). A key held down — a step, the sprint, the talk key — is let go where it went down,
+whatever Shift or a new binding made of its name meanwhile (`input/heldKeys.ts`).
 
 **Prompts.** No screen names a key by itself: every prompt reads it from the binding map
-(`input/glyphs.ts`) — „[E] Lesen" on keys, „[A] Lesen" (or „[✕] Lesen" on a PlayStation
-controller, told by its id) once a controller was pressed or its stick leant, and back to keys
-at the next real key. The world's prompt, the carried part's line, the HUD's buttons, the foot
-of a sheet and of a device, the notepad's and the book's buttons, the intro's skip and the key
-list all follow, and the lever and the world's tips name the keys bound.
-`client/test/bindings.test.tsx` reads every screen's strings and JSX text and fails on a key
+(`input/glyphs.ts`) — „[E] Lesen" on keys, „[A] Lesen" (or „[✕] Lesen" on a PlayStation controller,
+told by its id, or as „Controller-Symbole" in Steuerung choose) once a controller was pressed or
+its stick leant, and back to keys at the next real key. The world's prompt, the carried part's
+line, the HUD's buttons, the foot of a sheet and of a device, the notepad's and the book's buttons,
+the intro's skip and the key list all follow, and the lever and the world's tips name the keys
+bound. `client/test/bindings.test.tsx` reads every screen's strings and JSX text and fails on a key
 written by hand — in brackets or worked in a sentence („E drücken") — and on a letter a handler
 listens for itself (`useKeys(['e'], …)`).
 
 **A controller.** Polled once a frame while one of the standard mapping is connected — another
-one's buttons and axes would mean something else (`input/padRuntime.ts`). In the world the
-stick walks as far as it leans — past the dead zone of 0.2, scaled from there to the rim, as
-fast on a diagonal; the buttons press the keys they stand for, A by Space, so that it also
-skips the opening. The D-pad walks nobody there: its ◀ pings for the whole crew where the lamp
-points — two tiles ahead along the way the avatar faces, short of the first wall, shut door or
-piece of furniture (`world/padPing.ts`), as a click pings where it lands — and its ▶ opens the
-quick chat by its key; the wheel then takes the controller as a dialog does, its first phrase in
-the focus, the D-pad moving between them, A saying one — or opening the second step of one with a
-slot, its first value in the focus — and B shutting it. ▲ and ▼ do nothing in
-the world. A text field in the focus lets go first, as a controller types nothing: X closes the
-notepad it opened. Over a dialog (the device, the pages, the settings, the info) the D-pad moves
-the focus to the nearest control that way, A presses it — a control made to be held, as the
-button module's face (`data-pad="hold"`), by Space for as long as A is held, every other one by a
-click — and B steps back; in a book the D-pad turns the pages. A direction still held in the
-world as a dialog comes up — the stick walking, the ▶ that opened the quick chat — moves nothing
-there until it is let go. An Xbox controller says Xbox in its id
-(„Xbox Wireless Controller"), a PlayStation one Sony's vendor or its name. The settings show a
-live test: every button lights while held, the stick's dot leans. The walkthrough's
-`?fakepad=1` puts a controller of its own on `window.__escapelab.pad` (press, release, tap,
-lean).
+one's buttons and axes would mean something else (`input/padRuntime.ts`). In the world the stick
+walks as far as it leans — past the dead zone, 20 % unless „Stick-Totzone" in Steuerung sets it
+from 5 to 40 %, scaled from there to the rim, as fast on a diagonal; the buttons press the keys
+they stand for, A by Space, so that it also skips the opening. The D-pad walks nobody there: its ◀
+pings for the whole crew where the lamp points — two tiles ahead along the way the avatar faces,
+short of the first wall, shut door or piece of furniture (`world/padPing.ts`), as a click pings
+where it lands — and its ▶ opens the quick chat by its key; the wheel then takes the controller as
+a dialog does, its first phrase in the focus, the D-pad moving between them, A saying one — or
+opening the second step of one with a slot, its first value in the focus — and B shutting it. ▲ and
+▼ do nothing in the world. A text field in the focus lets go first, as a controller types nothing:
+X closes the notepad it opened. Over a dialog (the device, the pages, the menu, the settings, the
+info) the D-pad moves the focus to the nearest control that way — on the settings' tab bar each tab
+opens as the focus comes to it —, A presses it — a control made to be held, as the button module's
+face (`data-pad="hold"`), by Space for as long as A is held, every other one by a click — and B
+steps back; in a book the D-pad turns the pages. A direction still held in the world as a dialog
+comes up — the stick walking, the ▶ that opened the quick chat — moves nothing there until it is
+let go. An Xbox controller says Xbox in its id („Xbox Wireless Controller"), a PlayStation one
+Sony's vendor or its name. The settings show a live test: every button lights while held, the
+stick's dot leans. The walkthrough's `?fakepad=1` puts a controller of its own on
+`window.__escapelab.pad` (press, release, tap, lean).
 
 ## Quick chat
 
@@ -614,3 +615,56 @@ with each room's last snapshot, and a room taken up again: `restored room <code>
 <n> (<k> seats, <age> old)`, or why a snapshot was not taken. `GET /health` counts the rooms,
 the runs on and paused, the players and the audience on the line, and says the uptime and the
 build (`RENDER_GIT_COMMIT`, else `dev`); it names nobody.
+
+## Pausenmenü und Verlassen
+
+In a room — a run, a lobby, the audience's view — Esc with nothing else open (a device or a page
+still fading out takes the Esc meant for it), the gear in the top bar, a controller's Start or the
+strip's „Menü" (the ≡ in a phone's row; under 820 px across the gear alone) opens the pause menu
+over the room, as Hades and Celeste hold theirs: the mission's name in Michroma over one item under
+the next, the door-dark dim behind it, nothing blurred. Off any room the gear opens the settings at
+once. The list: „Weiter", „Einstellungen", „Handbuch" (the mission's booklet over the room), then
+the room's ways out — „Zum Hauptmenü" and „Einsatz aufgeben" in a run, „Zum Hauptmenü" and „Raum
+verlassen" in a lobby, „Zuschauen beenden" for the audience. The arrows or the D-pad step between
+the items, round at the ends; Enter or A takes one; Esc, B or „Weiter" closes the menu, and the
+control that had the focus before has it again — in a lobby or the audience; in a run the focus
+stays with the world. While a menu stands open, nothing under it takes a key, a press or the
+controller: the screens are `inert`, and what they listen for on the window hears nothing either —
+the world's keys, the notepad's, the lever's, the arrows of a book, the opening's Space (App.tsx
+`ScreenArea`, hooks.ts `useKeys`); the talk key alone talks on. Opening it pauses nothing: the
+clock, the patrols and the emergencies run on — a run stands still only for a line down, as
+above —, the line under the list says so in a run, and the crew's strip marks the player „im
+Menü" for as long as it stands open — a phone's row, which shows a doing only for three seconds
+after it changed, for those (`pause-menu`, core `set-menu` and `menus`; six marks at once and
+one more a second, as the voice's signals are allowed). Meanwhile the avatar stands. Under
+reduced motion the menu cuts in.
+
+**The ways out**, as Dota 2 has them:
+
+- „Zum Hauptmenü" in a run closes the seat's line on purpose (`to-menu`): the seat stays bound,
+  and the server logs `left to the main menu, the seat kept` where a drop logs a drop. The crew's
+  card says „Ben ist ins Hauptmenü gegangen" and offers „Ohne Ben weiter" after the same wait as
+  for a drop (60 s the first time, 20 s later). The page loads anew on the main menu, the run's
+  card first and lit: „Zurück zum Einsatz" — the way back a drop takes — and „Einsatz aufgeben".
+- „Einsatz aufgeben" asks once, as Overcooked 2 does: a card says what it means in the world's
+  words — „Der Platz wird aufgegeben und lässt sich nicht zurückholen." and „Der Einsatz läuft
+  mit 2 Plätzen weiter.", or below the mission's least crew „Mit 1 Platz liegt der Einsatz unter
+  seiner Mindestbesetzung von 2 und endet damit für alle." — „Zurück" in the focus; its „Einsatz
+  aufgeben" gives the seat up as the run's card does (`abandon`).
+- „Zum Hauptmenü" in a lobby leaves the seat as a line down does: the lobby says „Ben ist im
+  Hauptmenü" and the start waits, until Ben is back by the menu's card or the seat is freed 120 s
+  later.
+- „Raum verlassen" in a lobby leaves at once, the seat freed.
+- „Zuschauen beenden" leaves the audience.
+- Closing the tab stays a drop: a run waits for the seat, a lobby frees it after 10 s.
+
+The end screen keeps its „Nochmal", its way back to the lobby and „Raum verlassen".
+
+**The host's part.** Where the host leaves a lobby, or its seat is freed, the part passes to the
+longest-seated member still on the line — the first in the crew's order whose line is up, else
+the first (core `heirOf`) — and the lobby says so for 8 s: „Anna ist gegangen · Ben leitet jetzt
+den Raum."
+
+**The back button.** In a run the browser's back button opens the pause menu instead of leaving
+the page: the run keeps a history entry of its own (`historyGuard.ts`), which a press of back
+spends and the menu puts back.

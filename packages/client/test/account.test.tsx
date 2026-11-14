@@ -7,6 +7,7 @@ import { lastColor, lastName, PASS_KEY } from '../src/pass.js';
 import { nameFromAccount } from '../src/screens/Join.js';
 import { createRoomMessage, joinMessage } from '../src/screens/MenuPanels.js';
 import { accountLine, ProfileChip, runsText } from '../src/screens/ProfileChip.js';
+import { nameToTake, ProfileFields } from '../src/screens/ProfileFields.js';
 import {
   ACCOUNT_DELETED,
   AccountSection,
@@ -18,6 +19,7 @@ import {
 import { changeSettings, DEFAULT_SETTINGS } from '../src/settings.js';
 import { takeIn, type Refusal } from '../src/ws.js';
 import { page, storage } from './page.js';
+import { elementsOf } from './probe.js';
 
 const noop = (): void => undefined;
 
@@ -216,11 +218,44 @@ describe('„Konto löschen" in the settings', () => {
     expect(section({ ...ANNA, store: 'run-log' }, 'asked').html).toContain('Laufprotokoll');
   });
 
-  it('stands in the settings where there is an account and a way to delete it', () => {
+  it('stands in the settings’ „Konto" where there is an account and a way to delete it', () => {
     const panel = renderToStaticMarkup(
-      <SettingsPanel onClose={noop} account={ANNA} onDeleteAccount={noop} />,
+      <SettingsPanel onClose={noop} account={ANNA} onDeleteAccount={noop} tab="konto" />,
     );
     expect(panel).toContain('<legend>Konto</legend>');
-    expect(renderToStaticMarkup(<SettingsPanel onClose={noop} />)).not.toContain('Konto');
+    expect(panel).toContain('>Konto löschen</button>');
+    const none = renderToStaticMarkup(<SettingsPanel onClose={noop} tab="konto" />);
+    expect(none).not.toContain('Konto');
+    expect(none).toContain('<legend>Lautstärke</legend>');
+  });
+});
+
+describe('the profile in the settings’ „Konto"', () => {
+  it('shows the account’s name to change, its colour as the lobby chose it, and what it holds', () => {
+    browser();
+    const html = renderToStaticMarkup(<ProfileFields account={ANNA} onName={noop} />);
+    expect(html).toContain('value="Anna"');
+    expect(html).toContain('Violett · gewählt in der Lobby');
+    expect(html).toContain('Konto · 3 Einsätze');
+    expect(html).toContain('Gilt ab dem nächsten Raum.');
+  });
+
+  it('keeps a name typed with the pass at once', () => {
+    browser();
+    const field = elementsOf(() => <ProfileFields account={ANNA} onName={noop} />).find(
+      (el) => el.type === 'input',
+    );
+    (field?.props['onChange'] as (e: { target: { value: string } }) => void)({
+      target: { value: 'Annika' },
+    });
+    expect(lastName()).toBe('Annika');
+  });
+
+  it('hands the account a name once typed, trimmed — not an empty one, nor the one it has', () => {
+    expect(nameToTake(true, '  Annika ', ANNA)).toBe('Annika');
+    expect(nameToTake(true, 'Annika', null)).toBe('Annika');
+    expect(nameToTake(false, 'Annika', ANNA)).toBeNull();
+    expect(nameToTake(true, '   ', ANNA)).toBeNull();
+    expect(nameToTake(true, ' Anna ', ANNA)).toBeNull();
   });
 });
