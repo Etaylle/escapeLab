@@ -66,6 +66,7 @@ import {
 import type { ChatLine, MapPing } from '../world/render/frame.js';
 import { startRoom } from '../world/rooms.js';
 import { PuzzlePanel } from './PuzzlePanel.js';
+import { handsLine, type HandsLine } from './hands.js';
 import { useHudRow } from './hudFold.js';
 import { RowCrew, RowTools } from './HudRow.js';
 import { Icon } from './Icon.js';
@@ -749,6 +750,8 @@ interface Goal {
   title: string;
   exitCall: boolean;
   missing: string | null;
+  /** who of a crew of three or more does what at the station (screens/hands.ts); null for two */
+  hands: HandsLine | null;
 }
 
 /** Where a player stands, in tiles. */
@@ -756,8 +759,9 @@ type Point = { x: number; y: number };
 
 /**
  * The goal line for a player standing at `self`: the station, or the way out — and under it
- * what the station in front of the crew lacks, and what the one after it will (hands are free
- * to carry it now) or what lies in sight; a part for a station further on waits (`dueParts`).
+ * who of a crew of three or more does what there (`handsLine`), what the station in front of
+ * the crew lacks, and what the one after it will (hands are free to carry it now) or what lies
+ * in sight; a part for a station further on waits (`dueParts`).
  */
 function goalOf(view: PlayerView, map: MapView, self: Point): Goal {
   const armedTitle = map.stations.find(isArmed)?.title ?? null;
@@ -778,7 +782,22 @@ function goalOf(view: PlayerView, map: MapView, self: Point): Goal {
           : (armedTitle ?? 'Alle Stationen erledigt'),
     exitCall: view.puzzle === null && out,
     missing: out || errands.length === 0 ? null : errands.join(' · '),
+    hands: handsLine(view, map),
   };
+}
+
+/** The hands line under the goal's title, for a crew of three or more; nothing for two. */
+function GoalHands({ hands }: { hands: HandsLine | null }) {
+  return hands === null ? null : <span className="stage-sub stage-hands">{hands.line}</span>;
+}
+
+/**
+ * The own job alone, as a chip beside the goal in the phone row (hudFold.ts), where the whole
+ * line would not fit: „Cleo: Klemmbrett". Nothing for a crew of two.
+ */
+function HandsChip({ view, map }: { view: PlayerView; map: MapView }) {
+  const own = handsLine(view, map)?.own ?? null;
+  return own === null ? null : <span className="hands-chip">{own}</span>;
 }
 
 /** The escape's checklist under the goal: the crew by name, each ticked off on the hatch. */
@@ -839,6 +858,7 @@ function StageGoal({ view, map, goal }: { view: PlayerView; map: MapView; goal: 
         )}
         {goal.title}
       </h1>
+      <GoalHands hands={goal.hands} />
       {goal.missing !== null && <span className="stage-sub">{goal.missing}</span>}
       {goal.exitCall && map.exit !== null && (
         <EscapeChecklist mates={escapeChecklist(view.players, map.exit)} />
@@ -979,6 +999,7 @@ export function StageTop({
       ) : (
         <div className="stage-row">
           {onAir ?? goal}
+          <HandsChip view={view} map={map} />
           {row.crew}
           {clock}
           {row.tools}

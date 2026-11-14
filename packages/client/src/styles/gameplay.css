@@ -316,3 +316,38 @@
     animation: none;
   }
 }
+
+/* ── the hands at the station for a crew of three (screens/hands.ts, Game.tsx) ──────────── */
+
+/*
+ * Under the goal's title: who of the crew does what at the station, the own job first — the
+ * plain text of the bar rather than the amber of what is still missing under it. Nothing moves.
+ */
+.stage-hands {
+  color: var(--text);
+}
+
+/*
+ * A phone held sideways folds the bar into one row (styles/pwa.css): the whole line has no room
+ * there, so the row keeps the own job alone as a chip beside the goal, cut short where it runs
+ * out.
+ */
+.stage-row .stage-hands {
+  display: none;
+}
+
+.hands-chip {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 34%;
+  overflow: hidden;
+  padding: 3px 9px;
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+  font-family: var(--mono);
+  font-size: calc(12px * var(--text-scale));
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--text);
+  background: rgba(13, 20, 27, 0.9);
+}
