@@ -167,20 +167,22 @@ describe('the lines the page offers', () => {
     expect(lines).toHaveLength(radioLines(blackout).length);
     expect(lines[0]?.missions).toEqual([blackout.title, 'Blackout, noch einmal']);
   });
+});
 
-  it('are named as the voice script names their recordings, in the browser too', async () => {
+describe('the page, by its address and its recordings', () => {
+  it('names a line as the voice script names its recordings, in the browser too', async () => {
     const texts = [START, NUDGE, 'abc'];
     const named = await voiceIds(texts);
     expect([...named.values()]).toEqual(texts.map(voiceId));
     expect(named.get('abc')).toBe('a9993e364706');
   });
 
-  it('play from the file their entry names, past the browser’s copy', () => {
+  it('plays a recording from the file its entry names, past the browser’s copy', () => {
     const mp3: Recording = { ms: 1, source: 'upload', file: 'abc.mp3' };
     expect(recordingUrl(mp3, 42)).toBe('/voice/abc.mp3?t=42');
   });
 
-  it('open at /record, and only there', () => {
+  it('opens at /record, and only there', () => {
     expect(opensRecording('/record')).toBe(true);
     expect(opensRecording('/record/')).toBe(true);
     expect(opensRecording('/')).toBe(false);
@@ -480,6 +482,15 @@ describe('the page', () => {
     expect(html).toContain('2 von 3 ersetzt');
   });
 
+  it('says so where there are no lines, and writes seconds the German way', () => {
+    const empty: Desk = { lines: [], index: 0, phase: { kind: 'idle' }, copy: 'idle' };
+    expect(render(empty)).toContain('Keine Funksprüche gefunden.');
+    expect(seconds(4250)).toBe('4,3 s');
+    expect(seconds(-20)).toBe('0,0 s');
+  });
+});
+
+describe('the page while a take is made', () => {
   it('while rolling, offers nothing but „Stopp" and counts the seconds', () => {
     const desk = run(fresh(), { kind: 'record' }, { kind: 'rolling', at: 1000 });
     const html = render(desk, 3500);
@@ -520,12 +531,5 @@ describe('the page', () => {
     expect(render(failed)).toContain('role="status">Kein Mikrofon.</p>');
     expect(phaseText({ kind: 'processing' }, 0)).toBe('Stille an den Enden wird geschnitten …');
     expect(phaseText({ kind: 'arming' }, 0)).toBe('Mikrofon wird geöffnet …');
-  });
-
-  it('says so where there are no lines, and writes seconds the German way', () => {
-    const empty: Desk = { lines: [], index: 0, phase: { kind: 'idle' }, copy: 'idle' };
-    expect(render(empty)).toContain('Keine Funksprüche gefunden.');
-    expect(seconds(4250)).toBe('4,3 s');
-    expect(seconds(-20)).toBe('0,0 s');
   });
 });

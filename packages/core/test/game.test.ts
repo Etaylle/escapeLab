@@ -171,6 +171,14 @@ describe('lobby', () => {
     ).toThrow(/nur in der Lobby/);
   });
 
+  it('rejects blank player names', () => {
+    expect(() =>
+      applyAction(initialState(mission), { type: 'player-join', playerId: 'p1', name: '   ' }),
+    ).toThrow(/Namen/);
+  });
+});
+
+describe('the lobby’s confirmations', () => {
   it('refuses to start before everyone but the host has confirmed', () => {
     const lobby = run([
       { type: 'player-join', playerId: 'p1', name: 'Anna' },
@@ -237,8 +245,10 @@ describe('lobby', () => {
       applyAction(finished, { type: 'set-ready', playerId: 'p2', ready: true }).players[1]?.ready,
     ).toBe(true);
   });
+});
 
-  it('runs a rematch straight from the end screen, keeping the crew', () => {
+describe('a rematch', () => {
+  it('runs straight from the end screen, keeping the crew', () => {
     const finished = applyAction(started(), { type: 'time-expired', at: T0 + 400_000 });
     expect(() =>
       applyAction(finished, { type: 'rematch', playerId: 'p2', at: T0 + 500_000, seed: 2 }),
@@ -274,7 +284,7 @@ describe('lobby', () => {
     expect(again.deadlineAt).toBe(T0 + 500_000 + mission.timeLimitSec * 1000);
   });
 
-  it('refuses a rematch while still playing or before everyone confirms', () => {
+  it('is refused while still playing or before everyone confirms', () => {
     expect(() =>
       applyAction(started(), { type: 'rematch', playerId: 'p1', at: T0 + 1, seed: 2 }),
     ).toThrow(/erst nach Missionsende/);
@@ -291,12 +301,6 @@ describe('lobby', () => {
     expect(() =>
       applyAction(notReady, { type: 'rematch', playerId: 'p1', at: T0 + 500_000, seed: 2 }),
     ).toThrow(/Noch nicht bereit: Ben/);
-  });
-
-  it('rejects blank player names', () => {
-    expect(() =>
-      applyAction(initialState(mission), { type: 'player-join', playerId: 'p1', name: '   ' }),
-    ).toThrow(/Namen/);
   });
 });
 

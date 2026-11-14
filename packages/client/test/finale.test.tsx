@@ -437,59 +437,6 @@ describe('the title card', () => {
     expect(html).toContain('<span class="stat-label">Restzeit</span>');
     expect(html).not.toContain('gebraucht');
   });
-
-  it('is the audience’s too, where the world was, the run over', () => {
-    const watched: SpectatorView = {
-      phase: 'lost',
-      missionId: 'blackout',
-      missionTitle: 'Blackout im Labor',
-      difficulty: 'normal',
-      storyText: 'Dunkel.',
-      cast: { pa: 'anlage', operator: 'helmut', lead: null },
-      deadlineAt: T0,
-      startedAt: T0 - 600_000,
-      finishedAt: T0,
-      timeLimitSec: 660,
-      lights: { out: true, outAt: T0 - 597_000 },
-      currentPuzzleIndex: 3,
-      puzzleCount: 6,
-      penaltySeq: 1,
-      alarms: { count: 1, limit: 5 },
-      hintsUsed: 0,
-      pausedFor: null,
-      pausedAt: null,
-      events: [],
-      grade: null,
-      players: [anna, ben].map((p) => ({
-        id: p.id,
-        name: p.name,
-        color: p.color,
-        connected: true,
-        presence: { stationId: null, console: null, manualId: null, signSeen: false },
-      })),
-      credits: {},
-      map: null,
-      puzzle: null,
-      edgework: null,
-      panels: [],
-    };
-    const html = renderToStaticMarkup(
-      <SpectateScreen
-        view={watched}
-        finale={null}
-        positionsRef={{ current: { run: null, players: {} } }}
-        dronesRef={{ current: {} }}
-        pingsRef={{ current: [] }}
-        chatsRef={{ current: [] }}
-        leaveRoom={noop}
-      />,
-    );
-    expect(html).toContain(
-      '<div class="spectate-world"><section class="end-title end-title--time" ' +
-        'aria-label="ZEIT ABGELAUFEN">',
-    );
-    expect(html).toContain('<span class="end-fact-value">3/6</span>');
-  });
 });
 
 describe('the game screen while the world plays the end', () => {
@@ -544,14 +491,83 @@ describe('the game screen while the world plays the end', () => {
     expect(edged(null)).toBeUndefined();
   });
 
-  it('leaves the audience’s lab without it, in the escape too', () => {
-    const watched: SpectatorView = {
+  it('times the veil from when the end started on this screen, to black for a run lost', () => {
+    const html = renderToStaticMarkup(<FinaleVeil ending="lost:alarms" since={Date.now() - 500} />);
+    const delay = Number(/animation-delay:(-?\d+)ms/.exec(html)?.[1]);
+    expect(html).toContain('class="finale-veil finale-veil--black"');
+    expect(delay).toBeLessThanOrEqual(-500);
+    expect(delay).toBeGreaterThan(-600);
+    expect(html).toContain('animation-duration:1500ms');
+  });
+});
+
+describe('the end on the audience’s screen', () => {
+  /** What every spectator's view of Anna's and Ben's run here has, whatever its state. */
+  const COMMON = {
+    difficulty: 'normal',
+    cast: { pa: 'anlage', operator: 'helmut', lead: null },
+    hintsUsed: 0,
+    pausedFor: null,
+    pausedAt: null,
+    events: [],
+    grade: null,
+    players: [anna, ben].map((p) => ({
+      id: p.id,
+      name: p.name,
+      color: p.color,
+      connected: true,
+      presence: { stationId: null, console: null, manualId: null, signSeen: false },
+    })),
+    credits: {},
+    puzzle: null,
+    edgework: null,
+    panels: [],
+  } as const satisfies Partial<SpectatorView>;
+
+  /** The audience's screen of a run as `parts` has it, beside COMMON. */
+  const spectate = (parts: Omit<SpectatorView, keyof typeof COMMON>): string =>
+    renderToStaticMarkup(
+      <SpectateScreen
+        view={{ ...COMMON, ...parts }}
+        finale={null}
+        positionsRef={{ current: { run: null, players: {} } }}
+        dronesRef={{ current: {} }}
+        pingsRef={{ current: [] }}
+        chatsRef={{ current: [] }}
+        leaveRoom={noop}
+      />,
+    );
+
+  it('has the title card where the world was, the run over', () => {
+    const html = spectate({
+      phase: 'lost',
+      missionId: 'blackout',
+      missionTitle: 'Blackout im Labor',
+      storyText: 'Dunkel.',
+      deadlineAt: T0,
+      startedAt: T0 - 600_000,
+      finishedAt: T0,
+      timeLimitSec: 660,
+      lights: { out: true, outAt: T0 - 597_000 },
+      currentPuzzleIndex: 3,
+      puzzleCount: 6,
+      penaltySeq: 1,
+      alarms: { count: 1, limit: 5 },
+      map: null,
+    });
+    expect(html).toContain(
+      '<div class="spectate-world"><section class="end-title end-title--time" ' +
+        'aria-label="ZEIT ABGELAUFEN">',
+    );
+    expect(html).toContain('<span class="end-fact-value">3/6</span>');
+  });
+
+  it('leaves the lab without the red edge of the game screen, in the escape too', () => {
+    const html = spectate({
       phase: 'playing',
       missionId: 'systemcheck',
       missionTitle: 'Tutorial: Systemcheck',
-      difficulty: 'normal',
       storyText: 'Alle raus.',
-      cast: { pa: 'anlage', operator: 'helmut', lead: null },
       deadlineAt: Date.now() + 30_000,
       startedAt: T0,
       finishedAt: null,
@@ -561,46 +577,10 @@ describe('the game screen while the world plays the end', () => {
       puzzleCount: 4,
       penaltySeq: 0,
       alarms: { count: 0, limit: null },
-      hintsUsed: 0,
-      pausedFor: null,
-      pausedAt: null,
-      events: [],
-      grade: null,
-      players: [anna, ben].map((p) => ({
-        id: p.id,
-        name: p.name,
-        color: p.color,
-        connected: true,
-        presence: { stationId: null, console: null, manualId: null, signSeen: false },
-      })),
-      credits: {},
-      map,
-      puzzle: null,
-      edgework: null,
-      panels: [],
-    };
-    const html = renderToStaticMarkup(
-      <SpectateScreen
-        view={watched}
-        finale={null}
-        positionsRef={{ current: { run: null, players: {} } }}
-        dronesRef={{ current: {} }}
-        pingsRef={{ current: [] }}
-        chatsRef={{ current: [] }}
-        leaveRoom={noop}
-      />,
-    );
+      map: mapWith({ exit: hatch(T0 + 60_000, ['p1', 'p2']) }),
+    });
     expect(html).toContain('<canvas class="world-canvas world-canvas--wide"></canvas>');
     expect(html).not.toContain('vignette');
-  });
-
-  it('times the veil from when the end started on this screen, to black for a run lost', () => {
-    const html = renderToStaticMarkup(<FinaleVeil ending="lost:alarms" since={Date.now() - 500} />);
-    const delay = Number(/animation-delay:(-?\d+)ms/.exec(html)?.[1]);
-    expect(html).toContain('class="finale-veil finale-veil--black"');
-    expect(delay).toBeLessThanOrEqual(-500);
-    expect(delay).toBeGreaterThan(-600);
-    expect(html).toContain('animation-duration:1500ms');
   });
 });
 

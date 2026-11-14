@@ -957,13 +957,10 @@ describe('a run over the cast', () => {
 
 describe('the plan of a run (--plan)', () => {
   /** A start, a nudge in a mood's moment, and a clock call: three lines no mission says. */
+  const clock = { lastMinute: 'Probeminute.' };
   const probe: MissionLines = {
     id: 'probe',
-    radio: {
-      start: 'Probe läuft an.',
-      alarm: 'Probealarm.',
-      clock: { lastMinute: 'Probeminute.' },
-    },
+    radio: { start: 'Probe läuft an.', alarm: 'Probealarm.', clock },
     puzzles: [],
   };
   const lines = shippedLines([probe]);
