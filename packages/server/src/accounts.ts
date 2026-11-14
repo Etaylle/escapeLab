@@ -121,14 +121,19 @@ export const UNLIMITED: Tries = {
   take: () => ({ right: () => undefined }),
 };
 
-/** What an ask of a login is held to: the socket's gate, and its tries at a Kennwort. */
+/**
+ * What an ask of a login is held to: the socket's gate, its tries at a Kennwort, and the address
+ * it comes from, which holds so many of the server's turns at deriving one (login.ts
+ * `DeriveQueue`).
+ */
 export interface Limits {
   gate: Gate;
   tries: Tries;
+  from: string;
 }
 
-/** Asks of a login held to nothing. */
-export const NO_LIMITS: Limits = { gate: OPEN, tries: UNLIMITED };
+/** Asks of a login held to nothing, from an address nobody knows. */
+export const NO_LIMITS: Limits = { gate: OPEN, tries: UNLIMITED, from: 'unknown' };
 
 /** The account a pass came to: its id, and the account as its owner sees it. */
 export interface Arrival {
@@ -221,10 +226,14 @@ export class AccountDesk {
    * The first Kennwort of the account of `pass` — made where there was none, as `arrive` makes
    * one — and with it the account's Ausweisnummer, minted (login.ts): the account as its owner
    * sees it now. Refused, saying why, for a Kennwort too short or too long (PASSWORD_SIZE), for
-   * an account with one already (HAS_LOGIN), and where the gate lets no account be made or none
-   * change.
+   * an account with one already (HAS_LOGIN), where the gate lets no account be made or none
+   * change, and where the server's turns at deriving one are taken (login.ts `DeriveQueue`).
    */
-  setPassword(pass: CrewPass, password: string, gate: Gate = OPEN): Promise<AccountView> {
+  setPassword(
+    pass: CrewPass,
+    password: string,
+    { gate, from }: Limits = NO_LIMITS,
+  ): Promise<AccountView> {
     return this.serial(pass, async () => {
       if (!passwordFits(password)) {
         throw new GameError(PASSWORD_SIZE);
@@ -239,7 +248,7 @@ export class AccountDesk {
       if (!gate.mayChange()) {
         throw new GameError(TOO_MANY_CHANGES);
       }
-      await this.mint(account.id, await this.derives.run(() => hashPassword(password)));
+      await this.mint(account.id, await this.derives.run(() => hashPassword(password), from));
       return this.viewOf(account);
     });
   }
@@ -270,11 +279,11 @@ export class AccountDesk {
       }
       const on = { pass: pass.id };
       this.mayTry(on, limits);
-      const kept = await this.tried(on, old, login.secretHash, limits.tries);
+      const kept = await this.tried(on, old, login.secretHash, limits);
       if (kept === null) {
         throw new GameError(OLD_WRONG);
       }
-      const next = await this.derives.run(() => hashPassword(password));
+      const next = await this.derives.run(() => hashPassword(password), limits.from);
       const signedOut = await this.store.replaceLoginSecret(account.id, kept, next, pass.id);
       if (signedOut === null) {
         throw new GameError(CHANGED_MEANWHILE);
@@ -492,7 +501,7 @@ export class AccountDesk {
     const on = { number };
     this.mayTry(on, limits);
     const login = number === null ? null : await this.store.findLogin(number);
-    const right = await this.tried(on, password, login?.secretHash ?? null, limits.tries);
+    const right = await this.tried(on, password, login?.secretHash ?? null, limits);
     if (right === null || login === null) {
       throw new GameError(WRONG_LOGIN);
     }
@@ -526,7 +535,7 @@ export class AccountDesk {
     on: Target,
     password: string,
     stored: string | null,
-    tries: Tries,
+    { tries, from }: Limits,
   ): Promise<string | null> {
     return this.derives.run(async () => {
       const taken = tries.take(on);
@@ -539,7 +548,7 @@ export class AccountDesk {
       }
       taken.right();
       return stored;
-    });
+    }, from);
   }
 
   /**

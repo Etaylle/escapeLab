@@ -201,13 +201,16 @@ function gateOf(lab: Lab, socket: PlayerSocket): Gate {
   };
 }
 
+/** The address `socket` came from (`Door`); `unknown` for none read. */
+const fromOf = (socket: PlayerSocket): string => doors.get(socket)?.address ?? 'unknown';
+
 /** What `socket`'s tries at a Kennwort may still do (accounts.ts `Tries`): by its address. */
 function triesOf(lab: Lab, socket: PlayerSocket): Tries {
   const guard = lab.signIns;
   if (guard === undefined) {
     return UNLIMITED;
   }
-  const address = doors.get(socket)?.address ?? 'unknown';
+  const address = fromOf(socket);
   return {
     refusal: (on) => guard.refusal(address, on),
     take: (on) => guard.take(address, on),
@@ -674,7 +677,7 @@ function answerAccount(lab: Lab, socket: PlayerSocket, msg: AccountAsk): void {
   // against the socket.
   const gate = gateOf(lab, socket);
   const answer = askOfLogin(msg)
-    ? answerLogin(lab, socket, msg, { gate, tries: triesOf(lab, socket) })
+    ? answerLogin(lab, socket, msg, { gate, tries: triesOf(lab, socket), from: fromOf(socket) })
     : answerOf(lab.accounts, msg, gate);
   answer.then(
     (answer) => send(socket, answer),
@@ -715,7 +718,7 @@ function answerLogin(
   const desk = lab.accounts;
   switch (msg.kind) {
     case 'set-password':
-      return desk.setPassword(msg.pass, msg.password, limits.gate).then(told('set'));
+      return desk.setPassword(msg.pass, msg.password, limits).then(told('set'));
     case 'change-password':
       return changePassword(lab, msg, limits);
     case 'sign-in':

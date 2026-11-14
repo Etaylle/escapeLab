@@ -116,13 +116,22 @@ export const DERIVES_WAITING = 32;
 /** What a Kennwort is told that finds every turn taken and the queue full (`DeriveQueue`). */
 export const BUSY = 'Die Kennwortprüfung ist gerade ausgelastet — in einem Moment wieder möglich.';
 
+/** The places one address holds in the queue at once (`DeriveQueue`): deriving and waiting. */
+interface Held {
+  places: number;
+  /** whether the log said that it was refused, since it last held none */
+  told: boolean;
+}
+
 /**
  * The turns at deriving a Kennwort's key on the whole server — a hash made (`hashPassword`), a
  * Kennwort checked (`passwordMatches`): `atOnce` at a time, the rest waiting in the order they
  * came, `mayWait` at most; one more is refused (BUSY), which the log says once till the queue
- * has emptied. scrypt takes 32 MiB and one of Node's four worker threads each: a lecture signing
- * in at once neither runs the server out of memory nor keeps its files and its database waiting
- * behind a crowd of keys.
+ * has emptied. One address holds half the places at most, deriving and waiting together, and is
+ * refused the same way beyond: a machine that floods the queue keeps no other out, and a hall
+ * behind one address still gets its half. scrypt takes 32 MiB and one of Node's four worker
+ * threads each: a lecture signing in at once neither runs the server out of memory nor keeps its
+ * files and its database waiting behind a crowd of keys.
  */
 export class DeriveQueue {
   /** how many derive now */
@@ -131,23 +140,60 @@ export class DeriveQueue {
   private readonly waiting: (() => void)[] = [];
   /** whether one was refused since the queue was last empty */
   private refusing = false;
+  /** the places each address holds now, by address (`Held`) */
+  private readonly held = new Map<string, Held>();
+  /** the places one address may hold at once: half of all */
+  private readonly share: number;
 
   constructor(
     private readonly atOnce = DERIVES_AT_ONCE,
     private readonly mayWait = DERIVES_WAITING,
-  ) {}
+  ) {
+    this.share = Math.max(1, Math.floor((atOnce + mayWait) / 2));
+  }
 
   /**
-   * `job` in a turn of its own — at once, or once those before it are done — the turn going on
-   * to the next once `job` settles, however. Rejects with GameError(BUSY), running nothing, where
-   * `mayWait` wait already.
+   * `job` in a turn of its own, asked from the address `from` — at once, or once those before it
+   * are done — the turn going on to the next once `job` settles, however. Rejects with
+   * GameError(BUSY), running nothing, where `from` holds its share of the places already, or
+   * `mayWait` wait.
    */
-  async run<T>(job: () => Promise<T>): Promise<T> {
-    await this.turn();
+  async run<T>(job: () => Promise<T>, from: string): Promise<T> {
+    this.take(from);
     try {
-      return await job();
+      await this.turn();
+      try {
+        return await job();
+      } finally {
+        this.next();
+      }
     } finally {
-      this.next();
+      this.letGo(from);
+    }
+  }
+
+  /** A place for `from`, where it holds fewer than its share; else BUSY, the log saying it once. */
+  private take(from: string): void {
+    const held = this.held.get(from) ?? { places: 0, told: false };
+    if (held.places < this.share) {
+      this.held.set(from, { ...held, places: held.places + 1 });
+      return;
+    }
+    if (!held.told) {
+      this.held.set(from, { ...held, told: true });
+      const places = `${this.share} of the ${this.atOnce + this.mayWait} places`;
+      console.log(`[escapelab] Kennwörter refused: one address holds ${places}`);
+    }
+    throw new GameError(BUSY);
+  }
+
+  /** A place `from` held, given back: done, or refused by the queue. */
+  private letGo(from: string): void {
+    const held = this.held.get(from);
+    if (held === undefined || held.places <= 1) {
+      this.held.delete(from);
+    } else {
+      this.held.set(from, { ...held, places: held.places - 1 });
     }
   }
 

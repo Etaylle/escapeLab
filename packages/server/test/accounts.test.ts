@@ -8,6 +8,7 @@ import {
   accountRunOf,
   byMission,
   MY_RUNS,
+  NO_LIMITS,
   WRONG_LOGIN,
 } from '../src/accounts.js';
 import { DeriveQueue } from '../src/login.js';
@@ -163,18 +164,19 @@ describe('the desk', () => {
 });
 
 describe('the desk’s Kennwörter', () => {
-  it('takes a turn of the server’s for every Kennwort it keeps or checks', async () => {
+  it('takes a turn of the server’s for every Kennwort it keeps or checks, by address', async () => {
     const { store } = desk();
     const queue = new DeriveQueue();
     const turns = vi.spyOn(queue, 'run');
     const accounts = new AccountDesk(store, queue);
-    const set = await accounts.setPassword(passFor('Anna'), 'Kaltenbrunn 1986');
+    const limits = { ...NO_LIMITS, from: '203.0.113.7' };
+    const set = await accounts.setPassword(passFor('Anna'), 'Kaltenbrunn 1986', limits);
     expect(turns).toHaveBeenCalledTimes(1);
     // The present one checked, the new one kept.
-    await accounts.changePassword(passFor('Anna'), 'Kaltenbrunn 1986', 'Kaltenbrunn 1987');
+    await accounts.changePassword(passFor('Anna'), 'Kaltenbrunn 1986', 'Kaltenbrunn 1987', limits);
     expect(turns).toHaveBeenCalledTimes(3);
-    await accounts.signIn(passFor('Phone'), set.login ?? '', 'Kaltenbrunn 1987');
-    expect(turns).toHaveBeenCalledTimes(4);
+    await accounts.signIn(passFor('Phone'), set.login ?? '', 'Kaltenbrunn 1987', limits);
+    expect(turns.mock.calls.map(([, from]) => from)).toEqual(Array(4).fill('203.0.113.7'));
   });
 
   it('signs nobody in whose Kennwort changed between its check and its sign-in', async () => {

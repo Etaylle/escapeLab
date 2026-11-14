@@ -399,7 +399,8 @@ describe('the turns at deriving a Kennwort', () => {
     const said = vi.spyOn(console, 'log').mockImplementation(() => undefined);
     const queue = new DeriveQueue(2, 3);
     const derives = Array.from({ length: 6 }, derive);
-    const runs = derives.map((d) => queue.run(d.run));
+    // From as many machines: no address holds more than its share.
+    const runs = derives.map((d, i) => queue.run(d.run, `198.51.100.${i}`));
     await expect(runs[5]).rejects.toThrow(BUSY);
     await flush();
     expect(derives.map((d) => d.began())).toEqual([true, true, false, false, false, false]);
@@ -417,7 +418,7 @@ describe('the turns at deriving a Kennwort', () => {
     const full = '[escapelab] Kennwörter refused: 2 derive at once and 3 wait';
     expect(said.mock.calls).toEqual([[full]]);
     const again = Array.from({ length: 6 }, derive);
-    const later = again.map((d) => queue.run(d.run));
+    const later = again.map((d, i) => queue.run(d.run, `198.51.100.${i}`));
     await expect(later[5]).rejects.toThrow(BUSY);
     expect(said.mock.calls).toEqual([[full], [full]]);
     for (const d of again.slice(0, 5)) {
@@ -427,11 +428,47 @@ describe('the turns at deriving a Kennwort', () => {
     await Promise.all(later.slice(0, 5));
   });
 
-  it('gives a turn on however its derive ended', async () => {
+  it('gives a turn and a place on however its derive ended', async () => {
     const queue = new DeriveQueue(1, 1);
-    await expect(queue.run(() => Promise.reject(new Error('scrypt failed')))).rejects.toThrow(
-      'scrypt failed',
-    );
-    await expect(queue.run(() => Promise.resolve('key'))).resolves.toBe('key');
+    const failed = queue.run(() => Promise.reject(new Error('scrypt failed')), '203.0.113.7');
+    await expect(failed).rejects.toThrow('scrypt failed');
+    await expect(queue.run(() => Promise.resolve('key'), '203.0.113.7')).resolves.toBe('key');
+  });
+
+  it('lets one address hold half the places, deriving and waiting: others get theirs', async () => {
+    const said = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    // Six places, three an address's.
+    const queue = new DeriveQueue(2, 4);
+    const flood = Array.from({ length: 6 }, derive);
+    const flooding = flood.map((d) => queue.run(d.run, '203.0.113.7'));
+    for (const refused of flooding.slice(3)) {
+      await expect(refused).rejects.toThrow(BUSY);
+    }
+    const neighbour = derive();
+    const theirs = queue.run(neighbour.run, '198.51.100.4');
+    await flush();
+    expect([...flood.map((d) => d.began()), neighbour.began()]).toEqual([
+      ...[true, true, false, false, false, false],
+      false,
+    ]);
+    // In the order they came: the flood's third, then the neighbour's.
+    flood[0]?.end();
+    await flush();
+    flood[1]?.end();
+    await flush();
+    expect([flood[2]?.began(), neighbour.began()]).toEqual([true, true]);
+    flood[2]?.end();
+    neighbour.end();
+    await Promise.all([...flooding.slice(0, 3), theirs]);
+    expect(said.mock.calls).toEqual([
+      ['[escapelab] Kennwörter refused: one address holds 3 of the 6 places'],
+    ]);
+    // Its places given back, the address holds its share again.
+    const back = derive();
+    const again = queue.run(back.run, '203.0.113.7');
+    await flush();
+    expect(back.began()).toBe(true);
+    back.end();
+    await again;
   });
 });

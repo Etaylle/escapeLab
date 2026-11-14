@@ -118,7 +118,7 @@ or dashes, „EL" or not.
 | 60 tries a minute | every try at a Kennwort from an address — Cloudflare's `cf-connecting-ip` behind Render, else the socket's own, as above; a right one is given back once it is checked | in memory | once the oldest is a minute old |
 | every 5th wrong Kennwort locks: 60 s, then twice the last lock, 3600 s at most | per Ausweisnummer, from any address, a number nobody holds too: its wrong Kennwörter, counted without a window, however they are paced | in memory | a right sign-in after the lift, and a quiet hour, clear the count and the escalation |
 | the same for „Kennwort ändern" | per pass signed in already: its wrong present Kennwörter | in memory | as above |
-| 4 Kennwörter at once, 32 waiting | every Kennwort checked or kept, on the whole server | in memory | as each is done; one more is refused („Die Kennwortprüfung ist gerade ausgelastet — in einem Moment wieder möglich.") |
+| 4 Kennwörter at once, 32 waiting, half of all to one address at most | every Kennwort checked or kept, on the whole server; an address's deriving and waiting together | in memory | as each is done; one more is refused („Die Kennwortprüfung ist gerade ausgelastet — in einem Moment wieder möglich.") |
 | 30 changes a minute | every try, a Kennwort set or changed, a sign-out (the socket's changes, as above) | per socket | after a minute |
 
 A number's wrong Kennwörter are counted until a right one or a quiet hour, however they are paced.
@@ -133,7 +133,9 @@ counter and the escalation. At most five guesses per lock, about 120 a day at th
 Every try is counted the moment its turn at the server's four comes, before its Kennwort is
 derived — as a wrong one, given back where it was right: tries sent at once are held to the limits
 as tries one after the other, so forty sent at once on one number have five derived at most, and
-an address sixty. Waiting for a turn counts nothing yet. Only wrong tries are left counting: sixty
+an address sixty. Waiting for a turn counts nothing yet, but one address holds 18 of the 36 places
+at most, deriving and waiting together: a machine that floods the queue keeps nobody else out,
+and a hall behind one address still gets its half. Only wrong tries are left counting: sixty
 right sign-ins of a lecture behind one NAT go through in the same minute. A try refused counts
 nothing. The log says when an address reaches its limit, when a number or a pass locks and for
 how long, and when the queue refuses one, naming none; a restart forgets the limits.

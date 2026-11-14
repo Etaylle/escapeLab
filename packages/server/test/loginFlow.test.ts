@@ -432,8 +432,9 @@ describe('the limits, tried at once', () => {
 
   it(`checks ${WRONG_PER_ADDRESS} tries sent at once from an address; others get in`, async () => {
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
-    // A queue that holds every try: the address's limit is what holds them back.
-    const { server, store } = lab({ derives: new DeriveQueue(DERIVES_AT_ONCE, 100) });
+    // A queue that holds every try, and an address's share of it: the address's limit is what
+    // holds them back.
+    const { server, store } = lab({ derives: new DeriveQueue(DERIVES_AT_ONCE, 200) });
     const { number } = await annaWithKennwort(server);
     vi.mocked(scrypt).mockClear();
     const answers = await Promise.all(
@@ -534,6 +535,36 @@ describe('the turns at deriving, over the line', () => {
     } finally {
       restore();
     }
+  });
+});
+
+describe('the turns at deriving, shared between addresses', () => {
+  it('keeps half the turns for other machines while one floods them', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const { server } = lab();
+    const { number } = await annaWithKennwort(server);
+    // One machine sends forty at once, none of their numbers readable; then a neighbour signs in.
+    const flood = Array.from({ length: 40 }, (_, i) =>
+      ask(server.connect(from('192.168.1.66')), {
+        kind: 'sign-in',
+        pass: passFor(`Mallory ${i}`),
+        login: 'unleserlich',
+        password: OTHER,
+      }),
+    );
+    const neighbour = ask(server.connect(from('192.168.1.67')), {
+      kind: 'sign-in',
+      pass: passFor('Ben'),
+      login: number,
+      password: KENNWORT,
+    });
+    const share = (DERIVES_AT_ONCE + DERIVES_WAITING) / 2;
+    const told = (await Promise.all(flood)).map((answer) =>
+      'refused' in answer ? answer.refused : answer.done,
+    );
+    expect(told.filter((line) => line === WRONG_LOGIN)).toHaveLength(share);
+    expect(told.filter((line) => line === BUSY)).toHaveLength(40 - share);
+    expect(await neighbour).toMatchObject({ done: 'signed-in' });
   });
 });
 

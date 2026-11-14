@@ -741,8 +741,8 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   Snapshot); Limits im Speicher, jeder Versuch vor dem scrypt gezählt: 60 Versuche je Adresse und
   Minute (richtige zählen nicht), jedes 5. falsche Kennwort sperrt die Ausweisnummer, 60 s und
   dann je doppelt so lang bis 3600 s, bis ein richtiges oder eine ruhige Stunde; 4 Kennwörter
-  zugleich auf dem Server, 32 warten (`docs/accounts.md`, „Sign in"). Google (K-1b) bleibt
-  zuletzt.
+  zugleich auf dem Server, 32 warten, eine Adresse hält höchstens die Hälfte der Plätze
+  (`docs/accounts.md`, „Sign in"). Google (K-1b) bleibt zuletzt.
 
 ## Nur lokal
 
