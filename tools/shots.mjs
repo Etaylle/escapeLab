@@ -5158,8 +5158,14 @@ function releaseNeedle() {
   delete globalThis.__needleHeld;
 }
 
-/** Whether `check` holds in `page` within `ms`, looked at every 50 ms; throws what is no wait. */
+/**
+ * Whether `check` holds in `page` within `ms`, looked at every 50 ms — once where no time is
+ * left, as Playwright's timeout of 0 would wait forever; throws what is no wait.
+ */
 function pageHolds(page, check, ms) {
+  if (ms <= 0) {
+    return page.evaluate(check).then(Boolean);
+  }
   return page.waitForFunction(check, null, { timeout: ms, polling: 50 }).then(
     () => true,
     (error) => {
@@ -8477,20 +8483,30 @@ function figuresOn(page) {
 }
 
 /**
- * In the page, until releaseFigures: the animation frames go on until a figure the probe paints
- * (`window.__escapelab.figures`) stands in `pose` — its `mood`, its `key` (`rise` or `glance`)
- * `least` or more either way — and from then the page's frames are kept back: every figure stays
- * as that frame painted it, so that a shot however late shows it so. `window.__figureHold.held`
- * is the figure as it stood.
+ * In the page, until releaseFrames: the animation frames go on until the page's probe shows
+ * `spec` — a crew figure in a pose (`figure`: its `mood`, its `key`, `rise` or `glance`, `least`
+ * or more either way; `window.__escapelab.figures`) or your own figure's walk in a stretch of its
+ * cycle (`gait`: walking, its phase `from` to `to`; `window.__escapelab.graphics`) — and from then
+ * the page's frames are kept back: the world and every figure stay as that frame painted them,
+ * the world's walk standing still, so that a shot however late shows them so.
+ * `window.__frameHold.held` is what the probe showed.
  */
-function holdFigures({ mood, key, least }) {
+function holdFrames(spec) {
   const plain = globalThis.requestAnimationFrame;
   const kept = [];
   const hold = { held: null };
   const armed = { now: false };
-  const inPose = (figure) => figure.mood === mood && Math.abs(figure[key]) >= least;
-  globalThis.__figureHold = hold;
-  globalThis.__figureHeld = { plain, kept };
+  const figureIn = ({ mood, key, least }) => () =>
+    (globalThis.__escapelab?.figures ?? []).find(
+      (figure) => figure.mood === mood && Math.abs(figure[key]) >= least,
+    ) ?? null;
+  const gaitIn = ({ from, to }) => () => {
+    const gait = globalThis.__escapelab?.graphics?.gait;
+    return gait?.moving === true && gait.phase >= from && gait.phase <= to ? { ...gait } : null;
+  };
+  const shown = spec.gait === undefined ? figureIn(spec.figure) : gaitIn(spec.gait);
+  globalThis.__frameHold = hold;
+  globalThis.__frameHeld = { plain, kept };
   // The frames asked for before the hold run as they were asked, painting once more: the hold
   // looks only from the next on, when every frame comes through it.
   plain.call(globalThis, () => {
@@ -8503,11 +8519,11 @@ function holdFigures({ mood, key, least }) {
       kept.push(run);
     }
   };
-  // Looked at as each frame is asked for: a figure's loop asks for its next one in the frame
-  // that painted it, and a frame asked for before the figure stood so runs no more.
+  // Looked at as each frame is asked for: a loop asks for its next frame in the one that painted
+  // it, and a frame asked for before the probe showed `spec` runs no more once it does.
   globalThis.requestAnimationFrame = (run) => {
     if (armed.now) {
-      hold.held ??= (globalThis.__escapelab?.figures ?? []).find(inPose) ?? null;
+      hold.held ??= shown();
     }
     if (hold.held !== null) {
       kept.push(run);
@@ -8517,12 +8533,12 @@ function holdFigures({ mood, key, least }) {
   };
 }
 
-/** In the page: the frames holdFigures kept back run now, and the figures move on. */
-function releaseFigures() {
-  const held = globalThis.__figureHeld;
+/** In the page: the frames holdFrames kept back run now, and the page moves on. */
+function releaseFrames() {
+  const held = globalThis.__frameHeld;
   if (held !== undefined) {
     globalThis.requestAnimationFrame = held.plain;
-    delete globalThis.__figureHeld;
+    delete globalThis.__frameHeld;
     for (const run of held.kept) {
       held.plain.call(globalThis, run);
     }
@@ -8531,7 +8547,7 @@ function releaseFigures() {
 
 /**
  * A shot of `page` with one of its figures in `pose`: the page holds its frames as a figure first
- * stands so (holdFigures), within `ms`, then it is shot and its figures read again — the same
+ * stands so (holdFrames), within `ms`, then it is shot and its figures read again — the same
  * pose where the hold held it through the shot — and the frames are let go, however that went.
  * The walkthrough's own reads round a shot timed a slow page's figure out of its pose: at load
  * 42 to 57 a figure read 0.142 tiles up had landed after each of four screenshots. Returns the
@@ -8539,17 +8555,17 @@ function releaseFigures() {
  * whether it still stood so.
  */
 async function figureShot(page, { pose, ms }) {
-  await page.evaluate(holdFigures, pose);
+  await page.evaluate(holdFrames, { figure: pose });
   try {
-    if (!(await pageHolds(page, () => globalThis.__figureHold?.held != null, ms))) {
+    if (!(await pageHolds(page, () => globalThis.__frameHold?.held != null, ms))) {
       return { png: null, found: null, after: null, held: false };
     }
-    const found = await page.evaluate(() => globalThis.__figureHold.held);
+    const found = await page.evaluate(() => globalThis.__frameHold.held);
     const png = await page.screenshot();
     const after = ((await figuresOn(page)) ?? []).find((f) => f.color === found.color) ?? null;
     return { png, found, after, held: figureHeld(found, after, pose) };
   } finally {
-    await page.evaluate(releaseFigures);
+    await page.evaluate(releaseFrames);
   }
 }
 
@@ -14828,7 +14844,8 @@ function reportViews(pages) {
 //
 // walk-cycle-a.png, walk-cycle-b.png  the host walking out along the longest open stretch from
 //   its tile, shot as its legs stand wide one way and then the other — the probe's phase in
-//   each shot's window, half a cycle apart — or the run fails
+//   each shot's window, half a cycle apart, the page's frames held from the one that brought the
+//   walk into it through the shot — or the run fails
 // shadow-blob.png  the host standing still again, the blob of shadow under it in the light it
 //   stands in, the probe saying which
 // dust.png  in Blackout two seconds into the dark, after blackout.png — in a mission without
@@ -14972,31 +14989,59 @@ async function captureWalkCycle(player) {
   }
 }
 
-/** Holds the key out along `run`, shooting each stride window as it comes; their phases. */
+/**
+ * Stride shot `shot` of `page`'s own figure on its walk, its phase in `stride` ({ from, to }): the
+ * page holds its frames as the walk comes into the stretch (holdFrames), within `ms`, the figure
+ * is shot round it and its walk read again — the same phase where the hold held it through the
+ * shot — and the frames go on, however that went. The phase held, whether it still stood there
+ * once shot, and how long the walk stood held, ms; null where the walk never came into the
+ * stretch, or the page shows no figure of its own.
+ */
+async function strideShot(page, shot, stride, ms) {
+  await page.evaluate(holdFrames, { gait: stride });
+  try {
+    if (!(await pageHolds(page, () => globalThis.__frameHold?.held != null, ms))) {
+      return null;
+    }
+    const heldAt = Date.now();
+    const held = await page.evaluate(() => globalThis.__frameHold.held);
+    const self = await selfOn(page);
+    if (self === null) {
+      return null;
+    }
+    await shootAround(page, shot, { x: self.x, y: self.y - 0.15 }, FIGURE_SHOT);
+    const after = (await graphicsOf(page))?.gait ?? null;
+    return { phase: held.phase, still: after?.phase === held.phase, heldMs: Date.now() - heldAt };
+  } finally {
+    await page.evaluate(releaseFrames);
+  }
+}
+
+/**
+ * Holds the key out along `run`, shooting each stride window as the walk comes into it
+ * (strideShot); the walk stands still while a shot holds the page, so its end moves on by that
+ * long, and its walking time leaves it out. The phases held through their shots.
+ */
 async function walkTheStride({ page }, run) {
   const out = WALK_KEYS.get(`${run.dx},${run.dy}`);
   const ms = ((run.tiles - 0.4) / SPEED) * 1000;
   const phases = [];
+  let heldMs = 0;
   await page.keyboard.down(out);
   const start = Date.now();
   try {
     for (const [shot, from, to] of STRIDE_WINDOWS) {
-      const left = Math.max(0, start + ms - Date.now());
-      const at = await graphicsWhen(
-        page,
-        ({ gait }) => gait.moving && gait.phase >= from && gait.phase <= to,
-        left,
-      );
-      const self = at === null ? null : await selfOn(page);
-      if (self === null) {
+      const left = Math.max(0, start + heldMs + ms - Date.now());
+      const stride = await strideShot(page, shot, { from, to }, left);
+      if (stride === null) {
         break;
       }
-      await shootAround(page, shot, { x: self.x, y: self.y - 0.15 }, FIGURE_SHOT);
-      phases.push(at.gait.phase);
+      heldMs += stride.heldMs;
+      phases.push(...(stride.still ? [stride.phase] : []));
     }
   } finally {
     await page.keyboard.up(out);
-    walking.ms.set(page, (walking.ms.get(page) ?? 0) + (Date.now() - start));
+    walking.ms.set(page, (walking.ms.get(page) ?? 0) + (Date.now() - start - heldMs));
   }
   await sleep(200);
   return phases;
