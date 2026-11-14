@@ -9,7 +9,7 @@ import { useVoice, type Voice } from '../voice/useVoice.js';
 import type { KnownPositions } from '../world/movement.js';
 import type { ChatLine } from '../world/render/frame.js';
 import { presenceNear } from '../world/presence.js';
-import { CrewDot, crewTags, CrewTags, type CrewTag } from './Crew.js';
+import { awayFor, CrewDot, crewTags, CrewTags, type CrewTag } from './Crew.js';
 import { EdgeworkChip } from './EdgeworkChip.js';
 import { Icon } from './Icon.js';
 import { SpeakingMark } from './Voice.js';
@@ -35,7 +35,8 @@ export const STATUS_SAMPLE_MS = 300;
  * server's word; for the others it follows the live positions the renderer
  * already receives — informational only, so the client may work it out. A
  * press waiting at the sync station is the station's view, which every
- * player gets wherever they stand: „zieht" calls a partner to the lever.
+ * player gets wherever they stand: „zieht" calls a partner to the lever. One
+ * away is only that, counting up on the server's clock: „getrennt · 0:12".
  */
 export function tagsOf(
   view: PlayerView,
@@ -44,7 +45,18 @@ export function tagsOf(
 ): CrewTag[] {
   const pos = positions[player.id];
   const at = player.id === view.you.id ? view.presence : presenceNear(view.map, pos);
-  return crewTags(view.map, player, at, pos, pressingWord(view.puzzle, player.id, serverNow()));
+  const now = serverNow();
+  const pressing = pressingWord(view.puzzle, player.id, now);
+  return crewTags(view.map, player, at, pos, pressing, awayFor(view.away, player.id, now));
+}
+
+/** The class of a crew member's entry in the strip: theirs, greyed while away, or plain. */
+export function mateClass(view: PlayerView, player: PlayerView['players'][number]): string {
+  const classes = [
+    ...(player.id === view.you.id ? ['hud-me'] : []),
+    ...(player.connected ? [] : ['hud-away']),
+  ];
+  return classes.join(' ');
 }
 
 /** A line on the radio strip: the icon of who or what it is from, and its words. */
@@ -187,9 +199,8 @@ export function MissionHud({
       <ul className="hud-crew">
         {view.players.map((p) => {
           const tags = tagsOf(view, p, positions);
-          const mine = p.id === view.you.id;
           return (
-            <li key={p.id} className={mine ? 'hud-me' : ''}>
+            <li key={p.id} className={mateClass(view, p)}>
               <CrewDot color={p.color} />
               <span className="hud-name">{p.name}</span>
               {voice?.state.speaking.has(p.id) === true && <SpeakingMark />}

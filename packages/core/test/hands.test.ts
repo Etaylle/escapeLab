@@ -2,7 +2,16 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { applyAction, moduleFor, parseMission, placesOf, viewFor } from '../src/index.js';
 import type { GameState, Mission, PlayerView } from '../src/index.js';
-import { chamberLab, consoleLab, handsTaken, lightsOut, standing, started, T0 } from './lab.js';
+import {
+  chamberLab,
+  consoleLab,
+  handsTaken,
+  lightsOut,
+  lineDrops,
+  standing,
+  started,
+  T0,
+} from './lab.js';
 
 const missionsDir = new URL('../../../missions/', import.meta.url);
 
@@ -189,6 +198,14 @@ describe('the hands at the station in front of the crew', () => {
     const reading = standing(found, { stations: where.stations, manuals: { 'buch-archiv': ['p3'] } });
     expect(heldIn(reading)).toMatchObject({ p3: { kind: 'source', id: 'buch-archiv' } });
     expect(handsIn(reading)?.open).toEqual([{ kind: 'plate', id: 'flurplatte' }]);
+  });
+
+  it('name whoever is away only where their avatar holds a plate or a part still', () => {
+    const away = applyAction(atStation('notstrom'), lineDrops('p3', T0 + 1000));
+    expect(heldIn(away)).toEqual({ p1: null, p2: null });
+    const holding = standing(away, { plates: { flurplatte: ['p3'] } });
+    const plate = { kind: 'plate', id: 'flurplatte' };
+    expect(heldIn(holding)).toEqual({ p1: null, p2: null, p3: plate });
   });
 
   it('take a plate that holds a door not open for good, or a drone, as a job — no other', () => {

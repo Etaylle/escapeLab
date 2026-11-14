@@ -66,7 +66,7 @@ function runView(annaAtMenu = false): PlayerView {
     lights: { out: true, outAt: 0 },
     currentPuzzleIndex: 0,
     puzzleCount: 1,
-    pausedFor: null,
+    away: [],
     pausedAt: null,
     events: [],
     grade: null,

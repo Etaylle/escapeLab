@@ -11,7 +11,7 @@ import {
   viewForSpectator,
 } from '../src/index.js';
 import type { Action, GameState, Mission, RunEvent } from '../src/index.js';
-import { lineBack, lineDrops, standing } from './lab.js';
+import { lineBack, serverDown, standing } from './lab.js';
 
 /**
  * Three stations where the whole crew presses, a chart that covers them
@@ -215,10 +215,11 @@ describe('notes of the last shift', () => {
     expect(() => askForHint(state, T0 + 210_000 + DELAY_MS)).toThrow(/Keine weiteren Notizen/);
   });
 
-  it('adds the time spent paused to the wait', () => {
+  it('adds the time the server’s maintenance stood the run still to the wait', () => {
     let state = open(playing(), T0);
-    state = applyAction(state, lineDrops('p2', T0 + 10_000));
-    expect(() => askForHint(state, T0 + DELAY_MS)).toThrow(/Pausiert/);
+    state = applyAction(state, serverDown(T0 + 10_000));
+    expect(() => askForHint(state, T0 + DELAY_MS)).toThrow(/Wartung/);
+    state = applyAction(state, lineBack('p1', T0 + 25_000));
     state = applyAction(state, lineBack('p2', T0 + 40_000));
     expect(state.hintReadyAt).toBe(T0 + DELAY_MS + 30_000);
     expect(() => askForHint(state, T0 + DELAY_MS + 29_999)).toThrow(/noch einen Moment/);

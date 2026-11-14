@@ -26,12 +26,22 @@ function outOnHatch(view: PlayerView): ReadonlySet<string> {
   return new Set(exit !== null && escaping(view.map) ? exit.atExit : []);
 }
 
+/** A crew member's place in the row: ringed while they speak, greyed while their line is down. */
+function mateClass(speaking: boolean, connected: boolean): string {
+  return [
+    'row-mate',
+    ...(speaking ? ['row-mate--speaking'] : []),
+    ...(connected ? [] : ['row-mate--away']),
+  ].join(' ');
+}
+
 /**
  * The crew in the row: a dot in each one's colour — ringed while they speak, ticked once they
- * stand on the open hatch — and beside it what they do, for TAG_SHOWN_MS after it changed
- * (`freshTags`), read again from the live positions every STATUS_SAMPLE_MS; their name and what
- * they do stand in the dot's label all along. Then the Laborkennung's value, once the sign is
- * read.
+ * stand on the open hatch, greyed while away — and beside it what they do, for TAG_SHOWN_MS
+ * after it changed (`freshTags`), read again from the live positions every STATUS_SAMPLE_MS:
+ * one away keeps theirs, its counter of their time away changing every second. Their name and
+ * what they do stand in the dot's label all along. Then the Laborkennung's value, once the sign
+ * is read.
  */
 export function RowCrew({
   view,
@@ -65,7 +75,7 @@ export function RowCrew({
           return (
             <li
               key={player.id}
-              className={speaking ? 'row-mate row-mate--speaking' : 'row-mate'}
+              className={mateClass(speaking, player.connected)}
               aria-label={label}
               title={label}
             >

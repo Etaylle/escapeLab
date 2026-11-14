@@ -140,7 +140,7 @@ type Place = Pick<Named, 'x' | 'y' | 'shape'>;
 
 function stationPlace(frame: Frame, at: { x: number; y: number }): Place | null {
   const station = frame.map.stations.find((s) => s.x === at.x && s.y === at.y);
-  const levers = frame.players.filter((p) => p.connected).length;
+  const levers = frame.players.filter((p) => p.waived !== true).length;
   return station === undefined
     ? null
     : {

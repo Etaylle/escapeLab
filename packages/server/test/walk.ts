@@ -105,8 +105,8 @@ export function pressE(room: Room, walker: Walker): void {
 export function walkTo(room: Room, walker: Walker, x: number, y: number): void {
   const view = latestView(walker);
   const run = view.startedAt;
-  if (view.map === null || run === null || view.pausedFor !== null) {
-    throw new Error(`${view.you.name} cannot walk: no run under way`);
+  if (view.map === null || run === null || view.pausedAt !== null) {
+    throw new Error(`${view.you.name} cannot walk: no run going on`);
   }
   const spawn = { x: view.map.yourSpawn.x + 0.5, y: view.map.yourSpawn.y + 0.5 };
   const inRoom = walked.get(room) ?? new Map<string, { run: number; at: Spot }>();

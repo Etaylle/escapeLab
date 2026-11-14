@@ -26,7 +26,6 @@ export {
   type GameState,
   type ItemState,
   type MenuPlace,
-  type PauseKind,
   type Player,
   type Phase,
   type Presence,
@@ -58,9 +57,9 @@ export {
   nudgeDueAt,
   POWER_OUT,
   puzzleDueAt,
+  RELAY_GRACE_MS,
   seatsOff,
   TAKEOVER_WAIT_MS,
-  waitingFor,
   type Action,
 } from './actions.js';
 export {

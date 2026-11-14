@@ -9,12 +9,6 @@ import type { RadioMoment, Speaker } from './radio.js';
 
 export type Phase = 'lobby' | 'playing' | 'won' | 'lost';
 
-/**
- * Why a run stands still: a crew member's line dropped ('away'), or the server went down for
- * maintenance — a deploy, a restart — and every seat is away until it is back ('wartung').
- */
-export type PauseKind = 'away' | 'wartung';
-
 /** One line of the run report, recorded as the mission unfolds. */
 export interface RunEvent {
   /** epoch ms, turned into mm:ss against startedAt for display */
@@ -37,7 +31,13 @@ export interface RunEvent {
      * mission control naming the next place, the station that is up having stayed quiet
      * (actions.ts `nudge`): on the air like a radio line, its line the label
      */
-    | 'nudge';
+    | 'nudge'
+    /**
+     * a crew member gone from the run — their line dropped, or they went to the main menu, their
+     * seat kept (actions.ts `player-disconnected`): mission control says so on the air once, its
+     * line the label, and the run goes on
+     */
+    | 'away';
   label: string;
   /** seconds lost, for penalty and hint lines */
   seconds: number | null;
@@ -104,15 +104,20 @@ export const NOBODY_PRESENT: Presence = {
  */
 export type MenuPlace = 'pause' | 'main';
 
-/** A crew member away from a run: their line dropped, and they are not back yet. */
+/**
+ * A crew member away from a run: their line dropped, and they are not back yet. The run goes on
+ * without stopping for them: their avatar stands where it stood and holds what it held, the
+ * patrols do not see it, and their console counts as unmanned.
+ */
 export interface Away {
   /** epoch ms the line dropped */
   since: number;
   /** epoch ms from which the crew may go on without them (actions.ts `continue-without`) */
   waivableAt: number;
   /**
-   * the crew went on without them: the run runs on and counts them out — at the stations the
-   * whole crew presses, at the hatch — until they are back; their seat stays theirs
+   * the crew went on without them: it counts them out — at the stations the whole crew
+   * presses, at the hatch — until they are back; their seat stays theirs. Until then those wait
+   * for them as for somebody slow
    */
   waived: boolean;
   /**
@@ -120,6 +125,13 @@ export interface Away {
    * line to let it in (actions.ts `takeover-claimed`); left out while nobody asks
    */
   claimUntil?: number;
+  /**
+   * their line went down with the server for its maintenance (actions.ts `maintenance`): a run
+   * standing still for it waits for them until they are back or the crew goes on without them;
+   * left out for a line that dropped on its own, before the maintenance or after, which stands
+   * nothing still
+   */
+  maintenance?: true;
 }
 
 export interface ItemState {
@@ -273,14 +285,18 @@ export interface GameState {
    */
   sabotage: { endsAt: number; emergency?: RelayState } | null;
   /**
-   * Set while the run waits for somebody away (`away`, not waived): the clock, patrols and
-   * emergencies all stand still, because the crew cannot finish a mission short-handed. Its
-   * kind says why: a line dropped, or the server's maintenance put every seat away.
+   * Set while the run stands still for the server's maintenance — a deploy, a restart put every
+   * seat away (actions.ts `maintenance`) — until whoever was on the line then is back, or the
+   * crew has gone on without them (`Away.maintenance`); and from the moment the crew's last line
+   * drops until the first of them is back (`player-disconnected`): the clock, the patrols and
+   * the emergencies stand still meanwhile. Any other line that drops stands nothing still. The
+   * kind is the one there is, kept as snapshots carry it.
    */
-  paused: { since: number; kind: PauseKind } | null;
+  paused: { since: number; kind: 'wartung' } | null;
   /**
    * the crew members whose line dropped in this run and who are not back, by player id
-   * (actions.ts `player-disconnected`): the run waits for them, or has gone on without them
+   * (actions.ts `player-disconnected`): the run goes on, and the crew may go on without them
+   * once their wait is over, or has
    */
   away: Record<string, Away>;
   /**

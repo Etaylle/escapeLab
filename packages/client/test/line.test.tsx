@@ -42,7 +42,7 @@ function running(parts: Partial<PlayerView> = {}): PlayerView {
     lights: { out: true, outAt: T0 },
     currentPuzzleIndex: 0,
     puzzleCount: 4,
-    pausedFor: null,
+    away: [],
     pausedAt: null,
     events: [],
     grade: null,
@@ -145,11 +145,13 @@ describe('the own line down in a run', () => {
     expect(worldHeld(null, lineOf({ status: 'open', retry }), running())).toBe(true);
   });
 
-  it('stands instead of the pause card: the others’ pause is no news to whoever is cut off', () => {
+  it('stands instead of the maintenance card: a standstill is no news to the one cut off', () => {
     const away = [{ id: 'p2', name: 'Ben', since: T0, waivableAt: T0 + 60_000 }];
-    const view = running({ pausedFor: away, pausedAt: T0 });
-    expect(screen(view, lineOf())).not.toContain('MISSION PAUSIERT');
-    expect(screen(view, lineOf({ status: 'open', retry: null }))).toContain('MISSION PAUSIERT');
+    const view = running({ away, pausedAt: T0 });
+    expect(screen(view, lineOf())).not.toContain('<span class="kicker">WARTUNG</span>');
+    expect(screen(view, lineOf({ status: 'open', retry: null }))).toContain(
+      '<span class="kicker">WARTUNG</span>',
+    );
   });
 
   it('tries again at a press', () => {

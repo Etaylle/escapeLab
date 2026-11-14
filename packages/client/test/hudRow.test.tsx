@@ -1,7 +1,8 @@
 import { readFileSync } from 'node:fs';
 import type { ReactNode } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { clock } from '../src/clock.js';
 import {
   applyAction,
   initialState,
@@ -282,7 +283,7 @@ function annaSees(parts: Partial<PlayerView> = {}): PlayerView {
     timeLimitSec: 600,
     currentPuzzleIndex: 0,
     puzzleCount: 1,
-    pausedFor: null,
+    away: [],
     pausedAt: null,
     events: [],
     grade: null,
@@ -320,6 +321,24 @@ describe('the crew in the row', () => {
     expect(mates[1]).toContain('aria-label="Ben: unterwegs"');
     expect(html).not.toContain('presence-tag');
     expect(html).not.toContain('hud-idle');
+  });
+
+  it('greys whoever is away, their time away counting in the label', () => {
+    vi.spyOn(clock, 'now').mockReturnValue(1_000 + 12_000);
+    const view = annaSees({
+      players: [
+        { ...anna, connected: true },
+        { ...ben, connected: false },
+      ],
+      away: [{ id: 'p2', name: 'Ben', since: 1_000, waivableAt: 61_000 }],
+    });
+    expect(crew(view)).toContain(
+      '<li class="row-mate row-mate--away" aria-label="Ben: getrennt · 0:12"',
+    );
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   it('rings the dot of whoever speaks', () => {

@@ -222,14 +222,17 @@ describe('the crew’s snapshots as the run goes on', () => {
     room.dispose();
   });
 
-  it('stand still with the run: none goes out while it waits for somebody', () => {
+  it('go on with the run while somebody is away: the drop, then every 10 s as ever', () => {
     const { room, anna, ben } = runOn();
     ben.detach();
     vi.advanceTimersByTime(SNAPSHOT_EVERY_MS);
-    // The drop itself goes out: the run stands still from it.
+    // The drop itself goes out, and the run's beat after it, its clock running on.
     expect(snapshotsOf(anna.heard)).toHaveLength(2);
     vi.advanceTimersByTime(SNAPSHOT_LIVE_MS * 6);
-    expect(snapshotsOf(anna.heard)).toHaveLength(2);
+    expect(snapshotsOf(anna.heard)).toHaveLength(8);
+    // Ben away in every one, since his line dropped.
+    const kept = open(snapshotsOf(anna.heard).at(-1)?.blob ?? '', 'FLUR', KEY);
+    expect(kept.state.away[ben.playerId]).toMatchObject({ since: T0, waived: false });
     room.dispose();
   });
 

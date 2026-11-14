@@ -193,7 +193,7 @@ describe('where a pass sits', () => {
     manager.get(code).dispose();
   });
 
-  it('is the run on, with its clock as it stands, paused or not', () => {
+  it('is the run on, its clock running with the seat away, standing for the maintenance', () => {
     const { server, manager, ben, code } = running();
     vi.advanceTimersByTime(20_000);
     const page = server.connect();
@@ -206,8 +206,15 @@ describe('where a pass sits', () => {
     vi.advanceTimersByTime(30_000);
     expect(whereIsBen(page)).toMatchObject({
       phase: 'playing',
+      paused: false,
+      leftMs: (mission.timeLimitSec - 50) * 1000,
+    });
+    manager.get(code).goDown(Date.now());
+    vi.advanceTimersByTime(10_000);
+    expect(whereIsBen(page)).toMatchObject({
+      phase: 'playing',
       paused: true,
-      leftMs: (mission.timeLimitSec - 20) * 1000,
+      leftMs: (mission.timeLimitSec - 50) * 1000,
     });
     manager.get(code).dispose();
   });
@@ -359,7 +366,7 @@ describe('a seat taken over by its name (Jackbox), let in by the crew', () => {
   function benAway() {
     const room = running();
     room.ben.close();
-    expect(room.anna.view.pausedFor?.map((away) => away.name)).toEqual(['Ben']);
+    expect(room.anna.view.away.map((away) => away.name)).toEqual(['Ben']);
     return { ...room, phone: room.server.connect(), seat: room.ben.view.you.id };
   }
 
@@ -379,7 +386,7 @@ describe('a seat taken over by its name (Jackbox), let in by the crew', () => {
     phone.say({ kind: 'resume', code, pass: passFor('Bens Telefon') });
     expect(joinedOf(phone)).toEqual({ kind: 'joined', code });
     expect(phone.view.you).toMatchObject({ id: seat, name: 'Ben' });
-    expect(anna.view.pausedFor).toBeNull();
+    expect(anna.view.away).toEqual([]);
     // Ben's own browser, its pass his: it sits nowhere now.
     expect(whereIsBen(server.connect())).toBeNull();
     manager.get(code).dispose();
@@ -482,9 +489,9 @@ describe('a seat taken over by its name (Jackbox), let in by the crew', () => {
     room.act(anna?.playerId ?? '', { kind: 'continue-without', absentId: cem?.playerId ?? '' });
     const told: ServerMessage[] = [];
     room.claim('Cem', passFor('Cems Telefon'), (msg) => told.push(msg));
-    // Ben gives up: Anna alone on the line, the run waits for Cem again.
+    // Ben gives up: Anna alone on the line, the crew counts Cem again.
     room.abandon(passFor('Ben'));
-    expect(views['Anna']?.pausedFor?.map((away) => away.name)).toEqual(['Cem']);
+    expect(views['Anna']?.away.map((m) => [m.name, m.waived])).toEqual([['Cem', undefined]]);
     expect(views['Anna']?.takeovers?.map((ask) => ask.name)).toEqual(['Cem']);
     expect(() => room.claim('Cem', passFor('Zweites Telefon'), () => undefined)).toThrow(
       'Für Cem wartet schon eine Übernahme auf Antwort.',

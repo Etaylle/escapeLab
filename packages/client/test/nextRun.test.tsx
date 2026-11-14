@@ -32,7 +32,7 @@ function wonTutorial(parts: Partial<PlayerView> = {}): PlayerView {
     timeLimitSec: 420,
     currentPuzzleIndex: 4,
     puzzleCount: 4,
-    pausedFor: null,
+    away: [],
     pausedAt: null,
     events: [],
     grade: { rank: 'A', label: 'Stark' },

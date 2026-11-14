@@ -118,14 +118,14 @@ describe('a seat given up in a run', () => {
     room.dispose();
   });
 
-  it('goes on at once, given up from another device while the run waited for them', () => {
+  it('lets a seat away go, given up from another device, the run going on', () => {
     const { room, players } = crew(['Anna', 'Ben', 'Cem']);
     const [anna, , cem] = players as [Player, Player, Player];
     cem.detach();
-    expect(lastView(anna).pausedFor?.map((away) => away.name)).toEqual(['Cem']);
+    expect(lastView(anna).away.map((away) => away.name)).toEqual(['Cem']);
     vi.advanceTimersByTime(10_000);
     room.abandon(passFor('Cem'));
-    expect(lastView(anna).pausedFor).toBeNull();
+    expect(lastView(anna).away).toEqual([]);
     expect(lastView(anna).phase).toBe('playing');
     room.dispose();
   });
