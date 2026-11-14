@@ -1,6 +1,37 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { swingVerdict } from './pageclock.mjs';
+import { stripVerdict, swingVerdict } from './pageclock.mjs';
+
+describe('stripVerdict — a sync station’s strip, as each page noted it', () => {
+  it('names when each page showed the station done after its own press', () => {
+    const verdict = stripVerdict([
+      { name: 'Anna', seen: { done: 160.4, pressed: 112.2 } },
+      { name: 'Ben', seen: { done: 1210, pressed: 980 } },
+    ]);
+    assert.deepEqual(verdict, {
+      stuck: [],
+      text: 'Anna 48 ms after the press, Ben 230 ms after the press',
+    });
+  });
+
+  it('holds a strip seen done however late the walkthrough looked: the page noted it', () => {
+    // Ben's strip showed it done 90 ms after his press, then the radio's banner took its place.
+    const verdict = stripVerdict([{ name: 'Ben', seen: { done: 4090, pressed: 4000 } }]);
+    assert.deepEqual(verdict.stuck, []);
+  });
+
+  it('names a page whose strip never showed the station done, or that kept no watch', () => {
+    const verdict = stripVerdict([
+      { name: 'Anna', seen: { done: 50, pressed: null } },
+      { name: 'Ben', seen: { done: null, pressed: 20 } },
+      { name: 'Cem', seen: null },
+    ]);
+    assert.deepEqual(verdict, {
+      stuck: ['Ben', 'Cem'],
+      text: 'Anna 50 ms into the watch, no press seen, Ben never, Cem never',
+    });
+  });
+});
 
 describe('swingVerdict — meter-swing.png, the needle held mid-swing by the page', () => {
   const held = { pressed: 4.2, swung: 216.9, length: 600 };

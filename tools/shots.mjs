@@ -581,7 +581,7 @@ import {
   spottedOn,
   stretchOf,
 } from './patrol.mjs';
-import { swingVerdict } from './pageclock.mjs';
+import { stripVerdict, swingVerdict } from './pageclock.mjs';
 import { percentile } from './percentile.mjs';
 import { decodePng } from './pixeldiff.mjs';
 import {
@@ -1999,17 +1999,55 @@ async function captureReading(page, seen, who) {
 }
 
 /**
+ * In the page, before a sync station's presses: from now on it notes on its own clock when its
+ * strip first shows station `index` done (`led-done`) and when its own press went down
+ * (`window.__stripWatch`, pageclock.mjs `StripSeen`) — however late the walkthrough looks, and
+ * whatever takes the strip's place by then: on a phone held sideways, the radio's banner takes
+ * it over in the row a moment after a solve (client screens/Game.tsx `StageTop`). The watch
+ * ends once the strip shows it done, its listeners after 20 s.
+ */
+function watchStrip(index) {
+  const t0 = globalThis.performance.now();
+  const seen = { done: null, pressed: null };
+  globalThis.__stripWatch = seen;
+  const press = (event) => {
+    seen.pressed ??= event.timeStamp - t0;
+  };
+  const look = () => {
+    const led = document.querySelector('.led-strip')?.children[index];
+    if (seen.done === null && led?.classList.contains('led-done') === true) {
+      seen.done = globalThis.performance.now() - t0;
+      watch.disconnect();
+    }
+  };
+  const watch = new globalThis.MutationObserver(look);
+  watch.observe(document.body, { subtree: true, childList: true, attributeFilter: ['class'] });
+  document.addEventListener('pointerdown', press, true);
+  globalThis.setTimeout(() => {
+    watch.disconnect();
+    document.removeEventListener('pointerdown', press, true);
+  }, 20_000);
+  look();
+}
+
+/** What `page`'s strip watch noted (watchStrip) once it saw the station done, or after `ms`. */
+async function stripSeen(page, ms) {
+  await pageHolds(page, () => globalThis.__stripWatch?.done != null, ms);
+  return page.evaluate(() => globalThis.__stripWatch ?? null);
+}
+
+/**
  * A sync station takes every press within its window: both players click
  * its button at the same moment, and the station has to solve — the run
- * moves on past it, and the LED strip moves on for both; the rooms it lights,
- * if any, come up. Throws when it does not.
+ * moves on past it, and the LED strip moves on for both, as each page noted
+ * it on its own clock (watchStrip); the rooms it lights, if any, come up.
+ * Throws when it does not.
  */
 async function pressTogether(players, station) {
   const [first] = players;
   const litBefore = first.seen.view.map.litRooms.length;
   const index = first.seen.view.currentPuzzleIndex;
-  const done = (page) => page.locator('.led-strip .led-done');
-  const doneBefore = await Promise.all(players.map(({ page }) => done(page).count()));
+  await Promise.all(players.map(({ page }) => page.evaluate(watchStrip, index)));
   await Promise.all(players.map(({ page }) => page.locator('.station-modal .big-button').click()));
   // The line that comes with the solve speaks a second after it: listen from the presses on.
   const listening = whenOn('audio', () => hearRadio(first, RADIO_LISTEN_MS));
@@ -2017,29 +2055,23 @@ async function pressTogether(players, station) {
     await inGroup('devices', () => captureSolved(first, station));
   }
   const solved = await until(() => first.seen.view.currentPuzzleIndex > index, 5000);
-  const moved = await Promise.all(
-    players.map(({ page }, i) =>
-      done(page)
-        .nth(doneBefore[i])
-        .waitFor({ state: 'attached', timeout: 5000 })
-        .then(
-          () => true,
-          () => false,
-        ),
-    ),
-  );
-  const stuck = players.filter((_, i) => !moved[i]).map(({ name }) => name);
-  if (!solved || stuck.length > 0) {
+  const seen = await Promise.all(players.map(({ page }) => stripSeen(page, 5000)));
+  const strips = stripVerdict(players.map(({ name }, i) => ({ name, seen: seen[i] })));
+  if (!solved || strips.stuck.length > 0) {
     const why = [
       ...(solved ? [] : ['the run did not move on']),
-      ...(stuck.length === 0 ? [] : [`the LED strip stood still for ${stuck.join(' and ')}`]),
+      ...(strips.stuck.length === 0 ? [] : [`the LED strip stood still (${strips.text})`]),
     ];
+    // The radio still listens on: once this throw has closed the browser its page is gone, and
+    // that error, left unheard, would end the process before the summary could name this one.
+    listening?.catch((error) => console.log(`radio voice        stopped: ${firstLine(error)}`));
     throw new Error(`both pressed "${station.title}", but it did not solve: ${why.join(', ')}`);
   }
   console.log(
     `sync               ${players.map(({ name }) => name).join(' and ')} pressed ` +
       `"${station.title}" together: solved, ` +
-      `${first.seen.view.map.litRooms.join(', ') || 'no room'} lit`,
+      `${first.seen.view.map.litRooms.join(', ') || 'no room'} lit; the strip showed it done, ` +
+      `on each page's clock: ${strips.text}`,
   );
   return { listening, lit: first.seen.view.map.litRooms.slice(litBefore) };
 }

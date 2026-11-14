@@ -5,6 +5,38 @@
  */
 
 /**
+ * What a page's strip watch noted at a sync station (shots.mjs `watchStrip`), ms on the page's
+ * clock from the watch's start: when the strip first showed the station done, and when the
+ * page's own press went down; null for what never came.
+ *
+ * @typedef {{ done: number | null, pressed: number | null }} StripSeen
+ */
+
+/**
+ * The verdict on a sync station's strip, as each player's page noted it (`seen` null where the
+ * page kept no watch): who saw it stand still, and when each page showed the station done after
+ * its own press, in the log's words — „Anna 48 ms after the press, Ben never".
+ *
+ * @param {Array<{ name: string, seen: StripSeen | null }>} pages
+ * @returns {{ stuck: string[], text: string }}
+ */
+export function stripVerdict(pages) {
+  const stuck = pages.filter(({ seen }) => seen?.done == null).map(({ name }) => name);
+  const text = pages.map(({ name, seen }) => `${name} ${stripText(seen)}`).join(', ');
+  return { stuck, text };
+}
+
+/** When one page's strip showed the station done, in words (stripVerdict). */
+function stripText(seen) {
+  if (seen?.done == null) {
+    return 'never';
+  }
+  return seen.pressed === null
+    ? `${Math.round(seen.done)} ms into the watch, no press seen`
+    : `${Math.round(seen.done - seen.pressed)} ms after the press`;
+}
+
+/**
  * What a page noted of the meter's needle held mid-swing (shots.mjs `holdNeedle`), ms on its
  * clock from the hold's start: when the probe went down, when the swing began — its own start
  * time — and how long the swing runs; null for what never came.
