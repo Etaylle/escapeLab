@@ -109,12 +109,25 @@ function writeRoster(roster: Roster, file = CAST_FILE): void {
 
 /**
  * The persons of `role` in service, as core's cast.ts `inService` has them: those whose voice is
- * kept, and where none has one yet, the role's first — the persons a night can put on duty.
+ * kept; where none has one yet, the plant's and the Leitstelle's first, the Schichtleitung nobody.
  */
 export function inService(roster: Roster, role: Role): readonly Person[] {
   const persons = roster[role];
   const voiced = persons.filter((person) => person.voiceId !== undefined);
-  return voiced.length > 0 ? voiced : persons.slice(0, 1);
+  return voiced.length > 0 || role === 'lead' ? voiced : persons.slice(0, 1);
+}
+
+/**
+ * The role whose person on duty says `role`'s lines, as core's `speakingFor` has it: the role
+ * itself, or the Leitstelle for a Schichtleitung nobody of which has a voice.
+ */
+export function speakingFor(roster: Roster, role: Role): Role {
+  return inService(roster, role).length > 0 ? role : 'operator';
+}
+
+/** Everybody who says `role`'s lines on some night, as core's `sayersOf`: each needs them made. */
+export function sayersOf(roster: Roster, role: Role): readonly Person[] {
+  return inService(roster, speakingFor(roster, role));
 }
 
 /**

@@ -356,16 +356,16 @@ describe('a take of the cast in service', () => {
     expect(manifest()[pa]).toMatchObject({ ...plant, source: 'human' });
   });
 
-  it('refuses a line as somebody says it who is not in service for it', async () => {
-    // Marta has no voice yet, and the clock's calls are the Schichtleitung's.
+  it('refuses a line as somebody says it who says none of its role’s lines', async () => {
+    // Marta has no voice yet, nor has the Schichtleitung: Helmut says its calls meanwhile.
     const clock = first(blackout?.radio.clock?.lastMinute);
-    for (const off of [idOf('marta', START), his(clock)]) {
+    for (const off of [idOf('marta', START), idOf('kessler', clock)]) {
       expect((await ask(desk(), post(off, toneWav(0.2))))?.status, off).toBe(404);
     }
     expect(readdirSync(dir)).toEqual(['manifest.json']);
-    const kessler = idOf('kessler', clock);
-    expect((await ask(desk(fakeConvert), post(kessler, toneWav(0.2))))?.status).toBe(200);
-    expect(manifest()[kessler]).toMatchObject({ role: 'lead', person: 'kessler', moment: 'clock' });
+    expect((await ask(desk(fakeConvert), post(his(clock), toneWav(0.2))))?.status).toBe(200);
+    const call = { role: 'lead', person: 'helmut', moment: 'clock' };
+    expect(manifest()[his(clock)]).toMatchObject(call);
   });
 });
 

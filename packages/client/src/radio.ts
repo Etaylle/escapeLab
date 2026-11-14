@@ -1,8 +1,9 @@
 import {
+  inService,
   NUDGED,
   personOf,
   roleOf,
-  ROSTER,
+  speakingFor,
   type RadioMoment,
   type Role,
   type RunEvent,
@@ -55,13 +56,13 @@ export function fromControl(event: RunEvent): boolean {
 
 /**
  * Who says a line on the air: the role and the person its event names (core cast.ts
- * `speakerAt`); a line of a run kept before the cast, the role's first person, whose recordings
- * it had then.
+ * `speakerAt`); a line of a run kept before the cast, the role that speaks it now and its first
+ * person in service — Helmut, who said them then, while the Schichtleitung has no voice.
  */
 export function speakerOf(event: RunEvent): Speaker {
   if (event.speaker !== undefined) return event.speaker;
-  const role = event.moment === undefined ? 'operator' : roleOf(event.moment);
-  return { role, person: ROSTER[role][0]?.id ?? '' };
+  const role = speakingFor(event.moment === undefined ? 'operator' : roleOf(event.moment));
+  return { role, person: inService(role)[0]?.id ?? '' };
 }
 
 /** A line on the air as the voice is asked for it: its words, said by whoever says them. */

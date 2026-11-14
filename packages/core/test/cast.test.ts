@@ -13,7 +13,10 @@ import {
   ROLES,
   ROSTER,
   rosterSchema,
+  sayersOf,
   shownText,
+  speakerAt,
+  speakingFor,
   viewFor,
   viewForSpectator,
   type GameState,
@@ -118,17 +121,35 @@ describe('who is on duty', () => {
     expect(pairs.size).toBe(3 * 2);
   });
 
-  it('puts nobody on duty without a voice, and the role’s first where none has one', () => {
+  it('puts nobody on duty without a voice: the plant’s and the desk’s first stand in', () => {
     const one: Roster = { ...VOICED, operator: [person('helmut', false), person('marta')] };
     expect(new Set(seeds.map((seed) => castOf(seed, one).operator))).toEqual(new Set(['marta']));
+    const silent: Roster = { ...VOICED, pa: [person('anlage', false)] };
+    expect(new Set(seeds.map((seed) => castOf(seed, silent).pa))).toEqual(new Set(['anlage']));
+    // A Schichtleitung without a voice: nobody of it on duty.
     const none: Roster = { ...VOICED, lead: [person('kessler', false), person('brandt', false)] };
-    expect(new Set(seeds.map((seed) => castOf(seed, none).lead))).toEqual(new Set(['kessler']));
-    expect(inService('lead', none).map((p) => p.id)).toEqual(['kessler']);
+    expect(new Set(seeds.map((seed) => castOf(seed, none).lead))).toEqual(new Set([null]));
+    expect(inService('lead', none)).toEqual([]);
     expect(inService('operator', VOICED).map((p) => p.id)).toEqual(['helmut', 'marta', 'jonas']);
     // The shipped roster: Helmut's voice is the one kept so far, and he has every night.
     for (const seed of seeds) {
-      expect(castOf(seed)).toEqual({ pa: 'anlage', operator: 'helmut', lead: 'kessler' });
+      expect(castOf(seed)).toEqual({ pa: 'anlage', operator: 'helmut', lead: null });
     }
+  });
+
+  it('has the operator on duty speak for a Schichtleitung without a voice', () => {
+    const none: Roster = { ...VOICED, lead: [person('kessler', false)] };
+    expect([speakingFor('lead', none), speakingFor('lead', VOICED)]).toEqual(['operator', 'lead']);
+    expect([speakingFor('pa', none), speakingFor('operator', none)]).toEqual(['pa', 'operator']);
+    expect(sayersOf('lead', none).map((p) => p.id)).toEqual(['helmut', 'marta', 'jonas']);
+    expect(sayersOf('lead', VOICED).map((p) => p.id)).toEqual(['kessler', 'brandt']);
+    // On a night: the clock's call is the desk's, said by whoever has the desk.
+    const night = { phase: 'playing', runs: 1, castSeed: 3 } as const;
+    const desk = castFor(night, none).operator;
+    expect(speakerAt(night, 'clock', none)).toEqual({ role: 'operator', person: desk });
+    const lead = castFor(night, VOICED).lead;
+    expect(speakerAt(night, 'lost', VOICED)).toEqual({ role: 'lead', person: lead });
+    expect(['kessler', 'brandt']).toContain(lead);
   });
 });
 
@@ -256,14 +277,15 @@ describe('a line heard in a run', () => {
       ['alarm', { role: 'operator', person: 'helmut' }],
       ['announce', { role: 'pa', person: 'anlage' }],
       ['emergency', { role: 'operator', person: 'helmut' }],
-      ['clock', { role: 'lead', person: 'kessler' }],
-      ['lost', { role: 'lead', person: 'kessler' }],
+      // The Schichtleitung has no voice yet: the desk says its lines.
+      ['clock', { role: 'operator', person: 'helmut' }],
+      ['lost', { role: 'operator', person: 'helmut' }],
     ]);
     // Every other line of the report names nobody.
     const rest = run.events.filter((event) => event.moment === undefined);
     expect(rest.length).toBeGreaterThan(0);
     expect(rest.every((event) => !('speaker' in event))).toBe(true);
-    expect(viewFor(run, 'p1').cast).toEqual({ pa: 'anlage', operator: 'helmut', lead: 'kessler' });
+    expect(viewFor(run, 'p1').cast).toEqual({ pa: 'anlage', operator: 'helmut', lead: null });
   });
 
   it('shows its words without the audio tags, which only its recording hears', () => {
@@ -297,7 +319,7 @@ describe('a line heard in a run', () => {
     }
     // What a view says of the cast is the role and the person's id, and nothing else.
     const lost = viewFor(run, 'p1').events.at(-1);
-    expect(JSON.stringify(lost?.speaker)).toBe('{"role":"lead","person":"kessler"}');
+    expect(JSON.stringify(lost?.speaker)).toBe('{"role":"operator","person":"helmut"}');
   });
 });
 

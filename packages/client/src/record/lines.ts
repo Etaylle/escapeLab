@@ -1,6 +1,6 @@
 import {
-  inService,
   radioLines,
+  sayersOf,
   type Mission,
   type MissionInfo,
   type RadioMoment,
@@ -15,8 +15,8 @@ import {
 /**
  * The radio lines the /record page offers a person to speak or to replace with a file: every
  * line a shipped mission can put on the air (core's `radioLines`, from the missions the server
- * hands out — not the ones made in the editor), once for each person of the cast in service who
- * says it (core cast.ts `inService`), each with what the manifest says of its recording.
+ * hands out — not the ones made in the editor), once for each person of the cast who says it
+ * (core cast.ts `sayersOf`), each with what the manifest says of its recording.
  */
 
 /** Who made a recording: a synthetic voice, a person at the page's microphone, or a file. */
@@ -55,7 +55,7 @@ function recordingOf(manifest: VoiceManifest, id: string): Recording | null {
 
 /**
  * Every line `missions` can put on the air, in their order and each mission's in the order a
- * run hears them, once for each person in service who says it — a line two missions say listed
+ * run hears them, once for each person who says it — a line two missions say listed
  * once, under both — with its recording as `manifest` has it; `hashes` names each line's words
  * (`voiceIds`), the person's id before it naming the recording.
  */
@@ -72,7 +72,7 @@ export function recordLines(
         throw new Error(`recordLines: no id for the line "${said.text}"`);
       }
       const station = mission.puzzles.find((p) => p.id === said.puzzleId)?.title ?? null;
-      for (const person of inService(said.role)) {
+      for (const person of sayersOf(said.role)) {
         const id = `${person.id}-${hash}`;
         const known = lines.get(id);
         const titles = [...new Set([...(known?.missions ?? []), mission.title])];

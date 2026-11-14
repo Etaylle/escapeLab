@@ -307,13 +307,14 @@ describe('who speaks on the air', () => {
       text: 'Notstrom steht.',
       person: 'marta',
     });
-    // A line of a run kept before the cast: the role's first person, whose recordings it had.
+    // A line of a run kept before the cast: the role that speaks it now, its first in service —
+    // the Schichtleitung's by the desk, Helmut, while it has no voice.
     const old = (moment?: Moment) =>
       speakerOf({ ...event('radio', 0), ...(moment === undefined ? {} : { moment }) });
     expect([old('start'), old('announce'), old('clock'), old(undefined)]).toEqual([
       { role: 'operator', person: 'helmut' },
       { role: 'pa', person: 'anlage' },
-      { role: 'lead', person: 'kessler' },
+      { role: 'operator', person: 'helmut' },
       { role: 'operator', person: 'helmut' },
     ]);
   });
@@ -327,5 +328,9 @@ describe('who speaks on the air', () => {
     expect(tickerLine(by('solved', 'marta', 'Weiter.'), undefined, false)?.text).toBe(
       'Leitstelle: Weiter.',
     );
+    // While the Schichtleitung has no voice, the desk says its calls: they read as the desk's.
+    const desk = { role: 'operator', person: 'helmut' } as const;
+    const call: RunEvent = { ...by('clock', 'helmut'), speaker: desk };
+    expect([bannerFrom(call), radioName(call)]).toEqual(['LEITSTELLE · HELMUT', 'Leitstelle']);
   });
 });

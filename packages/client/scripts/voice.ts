@@ -20,8 +20,9 @@
  * Funkprobe (`radio.lobby`) once the crew stands ready; a line written in two or three texts is
  * two or three lines here, a run saying one. A role says each (`Role`, `roleOf`, as core's
  * radio.ts has them): the plant's loudspeakers, the Leitstelle on duty, the Schichtleitung; and
- * each person of the role in service (core cast.ts `inService`, the roster in core/src/cast.json)
- * has a recording of it of their own, so that whoever is on duty a night is heard. Under
+ * each person who says the role's lines (core cast.ts `sayersOf`, the roster in
+ * core/src/cast.json: the role's persons in service, the Leitstelle's for a Schichtleitung without
+ * a voice) has a recording of it of their own, so that whoever is on duty a night is heard. Under
  * ElevenLabs each person reads with the voice the roster keeps for them, made from its prompt
  * with Voice Design (--design, --keep) — Helmut with the library voice his lines were made with —
  * held as the role asks (`ROLE_HELD`). A line says its moment's mood by an audio tag before the
@@ -97,13 +98,13 @@ import {
   DESIGN_TEXT,
   DESIGNED_READS,
   designVoice,
-  inService,
   keepVoice,
   readRoster,
   ROLE_HELD,
   roleOf,
   ROLES,
   SAMPLES_DIR,
+  sayersOf,
   slotOf,
   slotsOf,
   voiceless,
@@ -972,8 +973,8 @@ const saidBy = (text: string, line: ShippedLine, person: string): Said => ({
 });
 
 /**
- * Every shipped line as each person of its role in service says it (`inService`), in the order
- * of their ids, each with what it keeps of `before`.
+ * Every shipped line as each person who says it says it (`sayersOf`), in the order of their ids,
+ * each with what it keeps of `before`.
  */
 export function plan(
   before: Manifest,
@@ -983,7 +984,7 @@ export function plan(
   lines = shippedLines(),
 ): Planned[] {
   const planned = [...lines].flatMap(([text, line]) =>
-    inService(roster, line.role).map((person): Planned => {
+    sayersOf(roster, line.role).map((person): Planned => {
       const id = lineId(person.id, text);
       const render = renderOf(voice, saidBy(text, line, person.id));
       const had = before.lines[id];
@@ -1043,11 +1044,19 @@ export function plannedVoice(roster: Roster, override?: string): Eleven {
   return { engine: 'elevenlabs', name: 'the cast as kept', persons, plan: 'paid' };
 }
 
+/** A count of lines, and the characters they take. */
+export interface Lines {
+  readonly lines: number;
+  readonly characters: number;
+}
+
 /**
  * What --plan says of one person of the cast: their name on the command line and the model their
  * voice reads with — null where they have none yet — the lines a run makes for them now, their
- * characters, and those it skips, made as it would make them; and for a person without a voice
- * what its design reads, and every line of their role once it is kept, on Eleven v3.
+ * characters, and those it skips, made as it would make them; of those made now, the ones they
+ * say for a role without a voice (`standIn`: the Schichtleitung's, for the Leitstelle), which no
+ * run needs once that role has one; and for a person without a voice what its design reads, and
+ * every line of their role once it is kept, on Eleven v3.
  */
 export interface Cost {
   readonly slot: string;
@@ -1056,12 +1065,13 @@ export interface Cost {
   readonly make: number;
   readonly characters: number;
   readonly skip: number;
+  readonly standIn: Lines;
   readonly design: number;
-  readonly later: { readonly lines: number; readonly characters: number };
+  readonly later: Lines;
 }
 
-/** What a person with a voice kept makes once every voice is kept: nothing beside what is now. */
-const NOTHING_LATER = { lines: 0, characters: 0 } as const;
+/** Nothing: no lines, no characters. */
+const NO_LINES: Lines = { lines: 0, characters: 0 };
 
 /** What a person without a voice yet costs: its design, and their role's lines once it is kept. */
 function unvoicedCost(slot: Slot, lines: ReadonlyMap<string, ShippedLine>): Cost {
@@ -1076,6 +1086,7 @@ function unvoicedCost(slot: Slot, lines: ReadonlyMap<string, ShippedLine>): Cost
     make: 0,
     characters: 0,
     skip: 0,
+    standIn: NO_LINES,
     design: DESIGN_TEXT[slot.role].length,
     later: { lines: theirs.length, characters },
   };
@@ -1102,24 +1113,35 @@ export function costsOf(
     if (eleven === undefined) return unvoicedCost(slot, lines);
     const mine = todo.filter((each) => each.person.id === id);
     const skip = planned.filter((each) => each.person.id === id && each.kept !== null).length;
+    const theirs = mine.filter((each) => each.line.role !== slot.role);
+    const standIn = { lines: theirs.length, characters: charactersOf(voice, theirs) };
     const { name } = slot.person;
-    const said = { slot: slot.name, name, model: eleven.model, make: mine.length, skip };
-    return { ...said, characters: charactersOf(voice, mine), design: 0, later: NOTHING_LATER };
+    const said = { slot: slot.name, name, model: eleven.model, make: mine.length, skip, standIn };
+    return { ...said, characters: charactersOf(voice, mine), design: 0, later: NO_LINES };
   });
 }
 
 /** A count as --plan says it: „3,817". */
 const counted = (n: number): string => n.toLocaleString('en-US');
 
+/** What --plan says of the lines a person says for a role without a voice; nothing for none. */
+const standingIn = ({ lines, characters }: Lines): string =>
+  lines === 0
+    ? ''
+    : ` (${counted(lines)} of them, ${counted(characters * CREDITS_PER_CHARACTER)} credits, ` +
+      'the Schichtleitung’s until it has a voice)';
+
 /** What --plan says of one person: the lines and credits now, or their design and lines later. */
-function costLine({ slot, name, model, make, characters, skip, design, later }: Cost): string {
+function costLine(cost: Cost): string {
+  const { slot, name, model, make, characters, skip, design, later } = cost;
   const who = `${slot.padEnd(16)} ${name.padEnd(10)}`;
   if (model === null) {
     const after = `${counted(later.lines)} lines, ${counted(later.characters)} credits`;
     return `voice:   ${who} no voice yet: its design ${counted(design)} credits, then ${after}`;
   }
   const now = `${counted(make)} lines, ${counted(characters * CREDITS_PER_CHARACTER)} credits`;
-  return `voice:   ${who} ${model.padEnd(10)} ${now}; ${counted(skip)} made as they are, kept`;
+  const kept = `${counted(skip)} made as they are, kept`;
+  return `voice:   ${who} ${model.padEnd(10)} ${now}${standingIn(cost.standIn)}; ${kept}`;
 }
 
 /**
@@ -1132,8 +1154,10 @@ export function planReport(costs: readonly Cost[], fresh: Fresh): string[] {
     costs.reduce((total, cost) => total + of(cost), 0);
   const now = sum((cost) => cost.characters) * CREDITS_PER_CHARACTER;
   const designs = sum((cost) => cost.design);
-  const later = sum((cost) => cost.later.characters) * CREDITS_PER_CHARACTER;
-  const lines = sum((cost) => cost.make + cost.later.lines);
+  // Once every voice is kept, nobody stands in for another role: those lines are not made.
+  const standIn = sum((cost) => cost.standIn.characters) * CREDITS_PER_CHARACTER;
+  const later = sum((cost) => cost.later.characters) * CREDITS_PER_CHARACTER - standIn;
+  const lines = sum((cost) => cost.make - cost.standIn.lines + cost.later.lines);
   return [
     `voice: the plan of \`${asked}\` under ElevenLabs on the paid plan, at most ` +
       `${CREDITS_PER_CHARACTER} credit a character; nothing is asked of ElevenLabs`,

@@ -14,8 +14,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import {
-  inService,
   radioLines,
+  sayersOf,
   type Mission,
   type Mood,
   type RadioLine,
@@ -218,14 +218,14 @@ export class VoiceDesk {
 
   /**
    * The shipped line whose recording has the id `id`, as the person it names says it; null where
-   * no mission says it, or nobody of the cast in service for its role is that person.
+   * no mission says it, or that person says none of its role's lines (core cast.ts `sayersOf`).
    */
   line(id: string): ShippedLine | null {
     const named = partsOf(id);
     if (named === null) return null;
     const { person, hash } = named;
     const says = (said: RadioLine): boolean =>
-      voiceId(said.text) === hash && inService(said.role).some((p) => p.id === person);
+      voiceId(said.text) === hash && sayersOf(said.role).some((p) => p.id === person);
     let found: ShippedLine | null = null;
     for (const mission of this.missions()) {
       for (const line of radioLines(mission).filter(says)) {

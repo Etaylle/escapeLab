@@ -2,7 +2,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
-  inService,
+  sayersOf,
   parseMission,
   radioLines,
   shownText,
@@ -83,8 +83,8 @@ const MANIFEST: VoiceManifest = {
   },
 };
 
-/** Who says `line` in service (core cast.ts): Helmut on the desk, the plant, Kessler. */
-const sayerOf = (line: RadioLine) => inService(line.role)[0];
+/** Who says `line` (core cast.ts `sayersOf`): Helmut at the desk and for the lead, the plant. */
+const sayerOf = (line: RadioLine) => sayersOf(line.role)[0];
 
 describe('the lines the page offers', () => {
   it('are every line of the missions, in their order and each mission’s run order', () => {
@@ -96,12 +96,14 @@ describe('the lines the page offers', () => {
       said.map((line) => lineId(sayerOf(line)?.id ?? '', line.text)),
     );
     expect(lines[0]).toMatchObject({ when: 'start', station: null, missions: [systemcheck.title] });
-    // Each by whoever says it: the plant's voice, the Leitstelle on duty, the Schichtleitung.
+    // Each by whoever says it: the plant's voice, the Leitstelle on duty — and the
+    // Schichtleitung's by the Leitstelle too, while it has no voice.
     const names = new Set(lines.map((line) => `${line.when}:${line.name}`));
     expect(names).toContain('pa:Durchsage');
     expect(names).toContain('start:Helmut');
-    expect(names).toContain('clock:Kessler');
-    expect(names).toContain('lost:Kessler');
+    expect(names).toContain('clock:Helmut');
+    expect(names).toContain('lost:Helmut');
+    expect([...names].filter((name) => name.endsWith(':Kessler'))).toEqual([]);
   });
 
   it('say of each where it comes over the air and what recording it has, in which file', () => {

@@ -30,7 +30,10 @@ export interface Person {
   readonly model?: string;
 }
 
-/** The persons for each role, in the roster's order: the first stands in where none has a voice. */
+/**
+ * The persons for each role, in the roster's order: the plant's and the Leitstelle's first stands
+ * in where none of theirs has a voice (`inService`).
+ */
 export type Roster = Readonly<Record<Role, readonly Person[]>>;
 
 const personSchema = z.strictObject({
@@ -65,28 +68,54 @@ export const rosterSchema = z
 /** The shipped roster, read from cast.json as the game loads: a broken one fails it at once. */
 export const ROSTER: Roster = rosterSchema.parse(rosterFile);
 
-/** Who speaks for each role on one night, by the persons' ids. */
-export type Cast = Readonly<Record<Role, string>>;
+/**
+ * Who speaks for each role on one night, by the persons' ids: no Schichtleitung (null) while
+ * nobody of it has a voice — the operator on duty says its lines then (`speakingFor`).
+ */
+export interface Cast {
+  readonly pa: string;
+  readonly operator: string;
+  readonly lead: string | null;
+}
 
 /**
  * The persons of `role` who can be on duty: those whose voice is kept on the account — a person
- * goes on duty with their voice, so that no night's lines wait for a render — and where none of
- * them has one yet, the role's first, whose lines the game has as they are.
+ * goes on duty with their voice, so that no night's lines wait for a render. Where none of them
+ * has one yet, the plant's and the Leitstelle's first, whose lines the game has as they are; the
+ * Schichtleitung nobody, its lines going to the Leitstelle on duty (`speakingFor`).
  */
 export function inService(role: Role, roster: Roster = ROSTER): readonly Person[] {
   const persons = roster[role];
   const voiced = persons.filter((person) => person.voiceId !== undefined);
-  return voiced.length > 0 ? voiced : persons.slice(0, 1);
+  return voiced.length > 0 || role === 'lead' ? voiced : persons.slice(0, 1);
+}
+
+/**
+ * The role whose person on duty says `role`'s lines: the role itself, or — for the Schichtleitung
+ * while nobody of it has a voice kept — the Leitstelle, so that its calls are heard as the
+ * operator on duty's and no banner names a person nobody hears.
+ */
+export function speakingFor(role: Role, roster: Roster = ROSTER): Role {
+  return inService(role, roster).length > 0 ? role : 'operator';
+}
+
+/**
+ * Everybody who says `role`'s lines on some night (`speakingFor`): the persons who need a
+ * recording of each of them.
+ */
+export function sayersOf(role: Role, roster: Roster = ROSTER): readonly Person[] {
+  return inService(speakingFor(role, roster), roster);
 }
 
 /**
  * Who is on duty on the night `seed` names: for each role one of its persons in service, by the
- * seed and the role (rng.ts `pickOf`) — one seed always the same, the seeds spread over them.
+ * seed and the role (rng.ts `pickOf`) — one seed always the same, the seeds spread over them —
+ * and no Schichtleitung where none is in service.
  */
 export function castOf(seed: number, roster: Roster = ROSTER): Cast {
-  const pick = (role: Role): string =>
-    pickOf(inService(role, roster), seed, `cast:${role}`)?.id ?? '';
-  return { pa: pick('pa'), operator: pick('operator'), lead: pick('lead') };
+  const pick = (role: Role): string | null =>
+    pickOf(inService(role, roster), seed, `cast:${role}`)?.id ?? null;
+  return { pa: pick('pa') ?? '', operator: pick('operator') ?? '', lead: pick('lead') };
 }
 
 /**
@@ -97,21 +126,24 @@ function nightOf(state: Pick<GameState, 'phase' | 'runs'>): number {
   return state.phase === 'lobby' ? state.runs : state.runs - 1;
 }
 
+/** What of a room's state its nights are staffed by. */
+type Night = Pick<GameState, 'phase' | 'runs' | 'castSeed'>;
+
 /**
  * The cast of the night `state` stands at (`GameState.castSeed`): the lobby's Funkprobe is said
  * by the operator who then has the run.
  */
-export function castFor(state: Pick<GameState, 'phase' | 'runs' | 'castSeed'>): Cast {
-  return castOf((state.castSeed + nightOf(state)) >>> 0);
+export function castFor(state: Night, roster: Roster = ROSTER): Cast {
+  return castOf((state.castSeed + nightOf(state)) >>> 0, roster);
 }
 
-/** Who says a line heard at `moment` on `state`'s night: its role, and the person filling it. */
-export function speakerAt(
-  state: Pick<GameState, 'phase' | 'runs' | 'castSeed'>,
-  moment: RadioMoment,
-): Speaker {
-  const role = roleOf(moment);
-  return { role, person: castFor(state)[role] };
+/**
+ * Who says a line heard at `moment` on `state`'s night: the role that speaks it (`speakingFor`)
+ * and the person filling that role.
+ */
+export function speakerAt(state: Night, moment: RadioMoment, roster: Roster = ROSTER): Speaker {
+  const role = speakingFor(roleOf(moment), roster);
+  return { role, person: castFor(state, roster)[role] ?? '' };
 }
 
 /** The person of `roster` whose id is `id`; undefined where there is none. */
