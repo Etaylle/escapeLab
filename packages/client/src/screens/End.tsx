@@ -266,17 +266,36 @@ export function titleCardOf(
   };
 }
 
-/** What the run left on the clock, and the alarms and notes it took. */
-function EndStats({ view, won }: { view: PlayerView; won: boolean }) {
+/**
+ * What a won run's clock came to: what it left — or, where the mission has no clock, the time
+ * the run took (`usedMs`, from the lights going out).
+ */
+export function clockStat(view: PlayerView, usedMs: number | null): { ms: number; label: string } {
+  if (view.timeLimitSec === 0) {
+    return { ms: usedMs ?? 0, label: 'Zeit' };
+  }
   const { finishedAt, deadlineAt } = view;
-  const remainingMs =
-    finishedAt !== null && deadlineAt !== null ? Math.max(0, deadlineAt - finishedAt) : 0;
+  const ended = finishedAt !== null && deadlineAt !== null;
+  return { ms: ended ? Math.max(0, deadlineAt - finishedAt) : 0, label: 'Restzeit' };
+}
+
+/** What the run left on the clock — or took, without one — and the alarms and notes it took. */
+function EndStats({
+  view,
+  won,
+  usedMs,
+}: {
+  view: PlayerView;
+  won: boolean;
+  usedMs: number | null;
+}) {
+  const time = clockStat(view, usedMs);
   return (
     <div className="stats">
       {won && (
         <div className="stat">
-          <span className="stat-value">{fmt(remainingMs)}</span>
-          <span className="stat-label">Restzeit</span>
+          <span className="stat-value">{fmt(time.ms)}</span>
+          <span className="stat-label">{time.label}</span>
         </div>
       )}
       <div className="stat">
@@ -452,7 +471,7 @@ export function EndScreen({ view, fresh, send, leaveRoom, missions = [] }: Props
       <TitleCard {...card} extra={<CardExtras view={view} card={card} />} />
       <div className={`card end end-${won ? 'won' : 'lost'}`}>
         <p className="story">{view.storyText}</p>
-        {haveStats && <EndStats view={view} won={won} />}
+        {haveStats && <EndStats view={view} won={won} usedMs={card.usedMs} />}
         {haveStats && (
           <RunStanding
             run={{

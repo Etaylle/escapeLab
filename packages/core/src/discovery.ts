@@ -1,4 +1,4 @@
-import { lightsAreOut } from './map.js';
+import { armedPuzzleIds } from './map.js';
 import type { MapDef } from './mission.js';
 import { noteSpot } from './notes.js';
 import type { ConsoleId } from './puzzles/module.js';
@@ -143,10 +143,12 @@ function notePoint(map: MapDef, note: { x: number; y: number }): { x: number; y:
   return { x: note.x + 0.5 + (spot.x - note.x) * out, y: note.y + 0.5 + (spot.y - note.y) * out };
 }
 
-/** The puzzle of the armed station, while one is: the lights out and a station still to work. */
-function armedPuzzle(state: GameState): string | null {
-  const current = state.mission.puzzles[state.currentPuzzleIndex];
-  return lightsAreOut(state) && current !== undefined ? current.id : null;
+/**
+ * The puzzles of the armed stations, by id (map.ts `armedPuzzleIds`): the lights out and a
+ * station still to work — every one still to solve while a free-order run waits for its pick.
+ */
+function armedPuzzles(state: GameState): ReadonlySet<string> {
+  return new Set(armedPuzzleIds(state));
 }
 
 /** The sources where the run placed them, in map order. */
@@ -186,14 +188,14 @@ function consolesAt(spots: readonly StationSpot[]): Findable[] {
  */
 export function findables(state: GameState): Findable[] {
   const { map } = state.mission;
-  const armed = armedPuzzle(state);
+  const armed = armedPuzzles(state);
   const sign = map.edgeworkSign;
   const signs = sign === undefined ? [] : [findable({ of: 'sign' }, sign.x + 0.5, sign.y + 0.5)];
   return [
     ...placedSources(state),
     ...notesOf(map),
     ...looseParts(state),
-    ...consolesAt(map.stations.filter((s) => s.puzzleId === armed)),
+    ...consolesAt(map.stations.filter((s) => armed.has(s.puzzleId))),
     ...signs,
   ];
 }
@@ -216,12 +218,12 @@ export function labLit(state: GameState): boolean {
  */
 export function sightables(state: GameState): Findable[] {
   const { map } = state.mission;
-  const armed = armedPuzzle(state);
+  const armed = armedPuzzles(state);
   return [
     ...placedSources(state),
     ...notesOf(map),
     ...looseParts(state),
-    ...consolesAt(map.stations.filter((s) => s.puzzleId !== armed)),
+    ...consolesAt(map.stations.filter((s) => !armed.has(s.puzzleId))),
   ].filter((thing) => !crewFound(state, thing.key));
 }
 
@@ -331,11 +333,11 @@ export function foundBy(state: GameState, playerId: string, key: FindKey): boole
   return state.found[playerId]?.includes(key) === true;
 }
 
-/** Whether the source `id` prints the rules of the armed station. */
+/** Whether the source `id` prints the rules of an armed station. */
 function printsArmedRules(state: GameState, id: string): boolean {
-  const armed = armedPuzzle(state);
+  const armed = armedPuzzles(state);
   const source = state.mission.map.manuals.find((m) => m.id === id);
-  return armed !== null && source?.puzzleIds.includes(armed) === true;
+  return source?.puzzleIds.some((puzzleId) => armed.has(puzzleId)) === true;
 }
 
 /**
@@ -348,7 +350,7 @@ function printsArmedRules(state: GameState, id: string): boolean {
 export function mattering(state: GameState, find: Find): number | null {
   switch (find.of) {
     case 'console':
-      return find.puzzleId === armedPuzzle(state) ? 0 : null;
+      return armedPuzzles(state).has(find.puzzleId) ? 0 : null;
     case 'source':
       return printsArmedRules(state, find.id) ? 1 : null;
     case 'item':

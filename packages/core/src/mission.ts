@@ -35,6 +35,15 @@ export const INTRO_MAX_SEC = 40;
 /** How many lines the plant's loudspeakers may say in an intro. */
 export const PA_LINES_MAX = 6;
 
+/**
+ * The order a mission's stations are taken in: 'chain', one after the other as the file lists
+ * them, each armed once the one before is solved; or 'free', every station armed from the
+ * start, the crew switching on whichever it likes — that one is then the crew's until solved,
+ * as in a chain, and the rest wait armed for the next pick.
+ */
+export const MISSION_ORDERS = ['chain', 'free'] as const;
+export type MissionOrder = (typeof MISSION_ORDERS)[number];
+
 export const MANUAL_KINDS = [
   'book',
   'terminal',
@@ -90,8 +99,8 @@ export type DecorKind = (typeof DECOR_KINDS)[number];
 export const DECOR_VARIANTS = 4;
 
 /**
- * The tile map: players walk a grid, puzzle stations must be activated in
- * mission order, puzzle doors open permanently once solved, plate doors stay
+ * The tile map: players walk a grid, puzzle stations are activated in mission
+ * order (or in any, `order: 'free'`), puzzle doors open for good once solved, plate doors stay
  * open only while someone stands on the plate — or, where they name a puzzle
  * in `untilSolved`, for good once that puzzle is solved.
  * Tiles: '#' wall, '.' floor, ' ' void.
@@ -314,7 +323,13 @@ export const missionSchema = z
       win: z.string(),
       lose: z.string(),
     }),
-    timeLimitSec: z.number().int().positive(),
+    /** how the stations are taken: one after the other (`chain`), or any order (`free`) */
+    order: z.enum(MISSION_ORDERS).default('chain'),
+    /**
+     * seconds on the clock once the lights are out; 0 for none: no deadline, every screen shows
+     * the time run instead, alarms and notes cost no time and mission control names no place
+     */
+    timeLimitSec: z.number().int().nonnegative(),
     /** seconds every note of the last shift takes off the clock */
     hintCostSec: z.number().int().positive().default(20),
     /** seconds at an open puzzle before the first or next note may be asked for */
@@ -392,7 +407,7 @@ interface MapCheck {
 }
 
 type Crew = { min: number; max: number };
-type MissionParts = { players: Crew; puzzles: PuzzleDef[]; map: MapDef };
+type MissionParts = { players: Crew; puzzles: PuzzleDef[]; map: MapDef; order: MissionOrder };
 
 function validateMap(mission: MissionParts, ctx: z.RefinementCtx): void {
   const map = mission.map;
@@ -434,7 +449,7 @@ function validateMap(mission: MissionParts, ctx: z.RefinementCtx): void {
   checkKeys(check);
   checkSign(check, stations);
   decorIssues(map, floor).forEach(issue);
-  checkSolvable(check, mission.players, stations);
+  checkSolvable(check, mission, stations);
 }
 
 function checkSpawns({ map, issue, requireFloor }: MapCheck, maxPlayers: number): void {
@@ -783,15 +798,21 @@ function checkSign({ map, issue, requireFloor }: MapCheck, stations: PuzzleDef[]
 /**
  * Solvability for every crew the mission takes — any count of players from
  * min to max, starting on any choice of that many spawns — walked the way
- * the game opens doors. Reports the first crew that gets stuck.
+ * the game opens doors: station by station in a chain, every station from
+ * the start in free order. Reports the first crew that gets stuck.
  */
-function checkSolvable(check: MapCheck, players: Crew, stations: PuzzleDef[]): void {
+function checkSolvable(
+  check: MapCheck,
+  { players, order }: Pick<MissionParts, 'players' | 'order'>,
+  stations: PuzzleDef[],
+): void {
   if (check.map.spawns.length < players.max) {
     return;
   }
+  const walk = order === 'free' ? walkFree : walkStations;
   for (const crew of crewsOf(check.map.spawns, players.min, players.max)) {
     const stuck: string[] = [];
-    walkStations({ ...check, issue: (message) => stuck.push(message) }, crew, stations);
+    walk({ ...check, issue: (message) => stuck.push(message) }, crew, stations);
     if (stuck.length > 0) {
       const from = crew.map((spawn) => `${spawn.x},${spawn.y}`).join(' · ');
       for (const message of stuck) {
@@ -815,30 +836,65 @@ function walkStations(check: MapCheck, crew: Spot[], stations: PuzzleDef[]): voi
     stations.find((p) => manual.puzzleIds.includes(p.id))?.id;
   const solved = new Set<string>();
   for (const puzzle of stations) {
-    const reach = reachability(check.map, crew, solved);
-    const spots = check.map.stations.filter((s) => s.puzzleId === puzzle.id);
-    if (spots.length > 0) {
-      checkReachable(check, { crew, solved, reach }, puzzle, spots);
-      checkBackup(check, { crew, solved, reach }, puzzle, spots);
-    }
+    const stage: Stage = {
+      crew,
+      solved,
+      reach: reachability(check.map, crew, solved),
+      when: 'once the puzzles before it are solved',
+    };
+    checkStation(check, stage, puzzle);
     for (const manual of check.map.manuals.filter((m) => firstNeed(m) === puzzle.id)) {
-      checkSource(check, reach, manual, puzzle.id);
+      checkSource(check, stage.reach, manual, puzzle.id);
     }
     solved.add(puzzle.id);
   }
 }
 
-/** Where a crew can be while one puzzle is open. */
+/**
+ * One crew through a mission in free order: any station may come first, so every one has to
+ * work with nothing solved yet — reached as in a chain (by the whole crew together, by two
+ * players at once at its two consoles, by one player while another reads its rules), every
+ * spot of every manual object reachable, a cabinet's with its key in hand, and the sign before
+ * any rule reads it. A door that only a solve opens counts as shut.
+ */
+function walkFree(check: MapCheck, crew: Spot[], stations: PuzzleDef[]): void {
+  const solved = new Set<string>();
+  const stage: Stage = {
+    crew,
+    solved,
+    reach: reachability(check.map, crew, solved),
+    when: 'with nothing solved yet, as any station may come first',
+  };
+  for (const puzzle of stations) {
+    checkStation(check, stage, puzzle);
+  }
+  for (const manual of check.map.manuals) {
+    checkSource(check, stage.reach, manual, manual.puzzleIds[0] ?? manual.id);
+  }
+}
+
+/** Where a crew can be while one puzzle is open, and what has to be done by then, in words. */
 interface Stage {
   crew: Spot[];
   solved: ReadonlySet<string>;
   /** per player, the tiles they can reach */
   reach: Set<string>[];
+  /** when the puzzle is open, as an issue says it: „once the puzzles before it are solved" */
+  when: string;
+}
+
+/** A station of `puzzle` can be reached and worked by two at the `stage` it is open at. */
+function checkStation(check: MapCheck, stage: Stage, puzzle: PuzzleDef): void {
+  const spots = check.map.stations.filter((s) => s.puzzleId === puzzle.id);
+  if (spots.length > 0) {
+    checkReachable(check, stage, puzzle, spots);
+    checkBackup(check, stage, puzzle, spots);
+  }
 }
 
 function checkReachable(
   { map, issue }: MapCheck,
-  { crew, solved, reach }: Stage,
+  { crew, solved, reach, when }: Stage,
   puzzle: PuzzleDef,
   spots: StationDef[],
 ): void {
@@ -846,7 +902,7 @@ function checkReachable(
   const someone = (spot: Spot): boolean => reach.some((tiles) => canStandAt(tiles, spot));
   const [station] = spots;
   if (consoles === 2) {
-    checkConsoleReach(issue, reach, puzzle.id, spots);
+    checkConsoleReach(issue, { reach, when }, puzzle.id, spots);
   } else if (
     station !== undefined &&
     (wholeCrew ? !canGather(map, crew, solved, station) : !someone(station))
@@ -855,7 +911,7 @@ function checkReachable(
       wholeCrew
         ? `map: the whole crew cannot stand at station "${puzzle.id}" together — nobody may ` +
             'be left outside on a plate, and somebody has to walk in without one'
-        : `map: nobody can reach station "${puzzle.id}" once the puzzles before it are solved`,
+        : `map: nobody can reach station "${puzzle.id}" ${when}`,
     );
   }
   if (usesEdgework && map.edgeworkSign !== undefined && !someone(map.edgeworkSign)) {
@@ -870,7 +926,7 @@ function checkReachable(
  */
 function checkConsoleReach(
   issue: MapCheck['issue'],
-  reach: Set<string>[],
+  { reach, when }: Pick<Stage, 'reach' | 'when'>,
   puzzleId: string,
   spots: StationDef[],
 ): void {
@@ -883,7 +939,7 @@ function checkConsoleReach(
     reach.flatMap((tiles, player) => (canStandAt(tiles, spot) ? [player] : []));
   const problem = consoleOutOfReach(at(a), at(b));
   if (problem !== null) {
-    issue(`map: ${problem} of station "${puzzleId}" once the puzzles before it are solved`);
+    issue(`map: ${problem} of station "${puzzleId}" ${when}`);
   }
 }
 

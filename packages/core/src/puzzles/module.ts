@@ -39,6 +39,12 @@ export interface PuzzleContext {
   alarms: number;
   /** seconds left on the mission clock at `at` */
   remainingSec: number;
+  /**
+   * where the mission has no clock: the seconds its clock has counted up at `at` — the time run
+   * since the lights went out, pauses left out — as every screen shows them; left out where the
+   * clock counts down (`remainingSec`)
+   */
+  elapsedSec?: number;
   at: number;
   /** ids of the connected players */
   crew: string[];
@@ -128,6 +134,11 @@ export interface SolveAid<Input, View> {
   transcript: (Move<Input> & { before: Perspectives<View> })[];
   /** seconds left on the mission clock right now; null when the caller has no clock */
   remainingSec: number | null;
+  /**
+   * where the mission has no clock: the seconds it has counted up right now, as the screens
+   * show them (`PuzzleContext.elapsedSec`); left out where it counts down
+   */
+  elapsedSec?: number;
 }
 
 /** Fields every puzzle def carries; the reducer and the views rely on them. */

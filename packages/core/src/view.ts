@@ -23,7 +23,7 @@ import type {
 import { noteKey } from './notes.js';
 import { CREW_COLORS, type Credits, type GameState, type Phase, type RunEvent } from './state.js';
 import { moduleFor, type PuzzleView } from './puzzles/index.js';
-import { crewOf, waitingFor } from './actions.js';
+import { crewOf, hasClock, waitingFor } from './actions.js';
 import { clockStartOf, runReport } from './report.js';
 import type { ConsoleId, ManualSection, Viewer, ViewContext } from './puzzles/module.js';
 import { relayDefFor, relayModule, type RelayDef, type RelayView } from './puzzles/relay.js';
@@ -32,11 +32,11 @@ import {
   consoleOf,
   doorOpen,
   intercomOf,
-  lightsAreOut,
   operatorsOf,
   platePressed,
   readersOf,
   sourceOpen,
+  stationArmed,
 } from './map.js';
 
 /**
@@ -46,7 +46,7 @@ import {
  * edgework on the sign never reach a client that is not there, so no amount
  * of DevTools digging can leak them.
  */
-export interface PlayerView {
+export interface PlayerView extends RunShape {
   phase: Phase;
   missionId: string;
   missionTitle: string;
@@ -81,10 +81,14 @@ export interface PlayerView {
   deadlineAt: number | null;
   startedAt: number | null;
   finishedAt: number | null;
+  /** seconds on the clock at the start; 0 for a mission without a clock (`clockFrom`) */
   timeLimitSec: number;
   /** whether the lights are out, and since when (epoch ms); see `Lights` */
   lights: Lights;
-  /** solved puzzles so far (== index of the current one); independent of station activation */
+  /**
+   * solved puzzles so far (== index of the current one, in the run's order); independent of
+   * station activation
+   */
   currentPuzzleIndex: number;
   puzzleCount: number;
   /**
@@ -209,6 +213,33 @@ export interface IntroView {
 }
 
 /**
+ * How a run differs from the usual chain against a clock, as every view tells it — each part
+ * left out where it does not.
+ */
+export interface RunShape {
+  /**
+   * where the mission has no clock (`timeLimitSec` 0) and its lights are out: the moment its
+   * clock counts up from, epoch ms — the lights going out, moved on by every pause since —
+   * which the screens show the time run against, standing still while the run is paused
+   */
+  clockFrom?: number;
+  /**
+   * the stations are taken in any order (`Mission['order']` 'free'): every one still to solve is
+   * armed until the crew switches one on, which is theirs until solved
+   */
+  freeOrder?: true;
+}
+
+/** The run's shape (`RunShape`) as the views tell it. */
+function runShapeOf(state: GameState): RunShape {
+  const from = hasClock(state.mission) ? null : state.clockFrom;
+  return {
+    ...(from === null ? {} : { clockFrom: from }),
+    ...(state.mission.order === 'free' ? { freeOrder: true } : {}),
+  };
+}
+
+/**
  * The lab's power. A mission with an intro starts with it on — lit, the
  * clock standing still, no station armed — until the lights fail; one
  * without is out from the start. Out stays out for the rest of the run.
@@ -262,7 +293,7 @@ export interface ManualHere {
     noteReadyAt: number | null;
     /** how many more notes there are; 0 unless this is the open station */
     notesLeft: number;
-    /** seconds the next note costs, already scaled to the difficulty */
+    /** seconds the next note costs, already scaled to the difficulty; 0 without a clock */
     costSec: number;
   }[];
 }
@@ -473,18 +504,19 @@ export interface Grade {
 
 /**
  * How well the crew did: a clean run with time to spare is the top rank,
- * every alarm and every lost second pushes it down. Hints count too, but
- * more gently: they only stand between the crew and the top two ranks.
+ * every alarm and every lost second pushes it down — where a clock runs at all.
+ * Hints count too, but more gently: they only stand between the crew and the
+ * top two ranks.
  */
 function gradeFor(state: GameState): Grade | null {
   if (state.phase !== 'won' || state.startedAt === null || state.finishedAt === null) {
     return null;
   }
-  const budget = state.mission.timeLimitSec * 1000;
-  // The run's time is the clock's: from the lights going out, the intro left out.
-  const { startedAt, lightsOutAt } = state;
-  const used = state.finishedAt - clockStartOf({ startedAt, lightsOutAt });
-  const spare = Math.max(0, 1 - used / budget);
+  const spare = spareOf(state.mission, {
+    startedAt: state.startedAt,
+    lightsOutAt: state.lightsOutAt,
+    finishedAt: state.finishedAt,
+  });
   const alarms = state.penaltySeq;
   const hints = state.hintsUsed;
   if (alarms === 0 && hints === 0 && spare >= 0.3) {
@@ -497,6 +529,19 @@ function gradeFor(state: GameState): Grade | null {
     return { rank: 'B', label: 'Solide — es hat gewackelt, aber alle sind draußen' };
   }
   return { rank: 'C', label: 'Knapp vorbei an der Katastrophe' };
+}
+
+/**
+ * The share of its clock a finished run left, 0 to 1 — the run's time being the clock's, from
+ * the lights going out, the intro left out — and all of it where the mission has no clock.
+ */
+function spareOf(
+  mission: Pick<Mission, 'timeLimitSec'>,
+  run: { startedAt: number; lightsOutAt: number | null; finishedAt: number },
+): number {
+  const budget = mission.timeLimitSec * 1000;
+  const used = run.finishedAt - clockStartOf(run);
+  return budget === 0 ? 1 : Math.max(0, 1 - used / budget);
 }
 
 /** The alarms so far against the mission's limit; every viewer sees the same. */
@@ -604,7 +649,7 @@ function sectionsOf(state: GameState, manual: ManualDef): ManualHere['sections']
         notes: index === open ? def.hints.slice(0, state.hintsRevealed) : [],
         noteReadyAt: notesLeft > 0 ? state.hintReadyAt : null,
         notesLeft,
-        costSec: state.mission.hintCostSec,
+        costSec: hasClock(state.mission) ? state.mission.hintCostSec : 0,
       },
     ];
   });
@@ -723,12 +768,15 @@ function relayPartFor(
 /** Who a map view is for: a player, or the audience (null), which has everything in sight. */
 type MapViewer = string | null;
 
-/** A station's state on the map: solved, up now — once the lights are out — or still to come. */
+/**
+ * A station's state on the map: solved, armed — up now once the lights are out, or any still to
+ * solve while a free-order run waits for its pick (map.ts `stationArmed`) — or still to come.
+ */
 function stationStatus(state: GameState, index: number): 'done' | 'armed' | 'locked' {
   if (index < state.currentPuzzleIndex) {
     return 'done';
   }
-  return index === state.currentPuzzleIndex && lightsAreOut(state) ? 'armed' : 'locked';
+  return stationArmed(state, index) ? 'armed' : 'locked';
 }
 
 /** A station spot's look: a main switch, a fuse box, or a plain console (null). */
@@ -1026,7 +1074,7 @@ function mapViewFor(state: GameState, viewer: MapViewer): MapView | null {
  * revealing everything is the point — watching the halves fail to line up
  * is the fun part.
  */
-export interface SpectatorView {
+export interface SpectatorView extends RunShape {
   phase: Phase;
   missionTitle: string;
   difficulty: Difficulty;
@@ -1127,6 +1175,7 @@ export function viewForSpectator(state: GameState): SpectatorView {
     startedAt: state.startedAt,
     finishedAt: state.finishedAt,
     timeLimitSec: state.mission.timeLimitSec,
+    ...runShapeOf(state),
     lights: lightsOf(state),
     currentPuzzleIndex: state.currentPuzzleIndex,
     puzzleCount: state.mission.puzzles.length,
@@ -1200,6 +1249,7 @@ export function viewFor(state: GameState, playerId: string): PlayerView {
     startedAt: state.startedAt,
     finishedAt: state.finishedAt,
     timeLimitSec: state.mission.timeLimitSec,
+    ...runShapeOf(state),
     lights: lightsOf(state),
     currentPuzzleIndex: state.currentPuzzleIndex,
     puzzleCount: state.mission.puzzles.length,

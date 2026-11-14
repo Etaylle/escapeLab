@@ -45,7 +45,10 @@ export interface RunReport {
   /** the code of the room it was played in */
   roomCode: string;
   difficulty: Difficulty;
-  /** seconds on the clock at the start, scaled to the difficulty */
+  /**
+   * seconds on the clock at the start, scaled to the difficulty; 0 for a mission without a
+   * clock, whose run's time is still kept from `lightsOutAt` to `finishedAt` (`runSeconds`)
+   */
   timeLimitSec: number;
   /** the alarm that reaches this many loses the run; null where the mission has no limit */
   alarmLimit: number | null;
@@ -74,7 +77,10 @@ export interface RunReport {
   lightsOutAt?: number;
   finishedAt: number;
   outcome: RunOutcome;
-  /** every station of the mission, in mission order */
+  /**
+   * every station of the mission, in the run's order: the mission's — or, where the crew takes
+   * them in any order, the order it solved them in, the rest after
+   */
   stations: StationReport[];
   /** emergencies started, and those that ran out before the crew cleared them */
   emergencies: { count: number; failed: number };
@@ -202,10 +208,10 @@ function isStationAlarm(event: RunEvent): boolean {
 }
 
 /**
- * Stations fall strictly in mission order, one 'puzzle' line each: an event
- * belongs to the station that was up, the one after all solved before it.
- * Whatever happens after the last solve, on the way out, belongs to none. The
- * first comes up as the clock starts, at `clockStart`.
+ * Stations fall strictly in the run's order (`GameState.mission`, the solved ones first), one
+ * 'puzzle' line each: an event belongs to the station that was up, the one after all solved
+ * before it. Whatever happens after the last solve, on the way out, belongs to none. The first
+ * comes up as the clock starts, at `clockStart`.
  */
 function stationsOf(state: GameState, clockStart: number): StationReport[] {
   const located: { event: RunEvent; station: number }[] = [];

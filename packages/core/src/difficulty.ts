@@ -107,7 +107,8 @@ export function scaleMission(mission: Mission, difficulty: Difficulty): Mission 
   return {
     ...mission,
     maxAlarms,
-    timeLimitSec: atLeast(mission.timeLimitSec * s.time, 60),
+    // A mission without a clock keeps none at every level.
+    timeLimitSec: mission.timeLimitSec === 0 ? 0 : atLeast(mission.timeLimitSec * s.time, 60),
     hintCostSec: atLeast(mission.hintCostSec * s.penalty, 5),
     puzzles: mission.puzzles.map((puzzle) => scalePuzzle(puzzle, s)),
     map: {

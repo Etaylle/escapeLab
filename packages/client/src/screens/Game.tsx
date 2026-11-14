@@ -9,7 +9,7 @@ import type {
   PuzzleView,
   RunEvent,
 } from '@escapelab/core';
-import { clockTime, formatLeft, type MissionTime } from '../clock.js';
+import { clockText, clockTime, formatLeft, type MissionTime } from '../clock.js';
 import { useKeys, useNow, useServerNow } from '../hooks.js';
 import { withCapture } from '../notes.js';
 import { NotepadContext, NotingPlace, placeName, type NotepadHand } from '../noting.js';
@@ -53,7 +53,7 @@ import { IntroOverlay } from '../world/intro/IntroOverlay.js';
 import { airFrom, cutIn, hudBackAt, hudHeld, type IntroCue } from '../world/intro/sequence.js';
 import { useIntro, type Intro } from '../world/intro/useIntro.js';
 import { coversArmed } from '../world/interact.js';
-import { isArmed, known } from '../world/known.js';
+import { armedGoal, isArmed, known } from '../world/known.js';
 import { dueParts } from '../world/markers.js';
 import { startingSpot, type KnownPositions } from '../world/movement.js';
 import {
@@ -249,6 +249,16 @@ function Countdown({
 
 /** How long the clock's digits flash red as it starts: its animation in coldopen.css. */
 const START_FLASH_MS = 900;
+
+/**
+ * A mission without a clock counts the time run instead, on the server's clock, from the moment
+ * its view names (`clockFrom`, which every pause moves on), standing still while the run is
+ * paused. It never turns red: nothing runs out.
+ */
+function RunClock({ mission }: { mission: MissionTime }) {
+  const text = clockText(mission, useServerNow(200));
+  return text === null ? null : <div className="countdown countdown--run">{text}</div>;
+}
 
 /** Where the clock will be while the lab still has its power: the plant's state, a dot. */
 export function PowerStatus() {
@@ -760,7 +770,6 @@ type Point = { x: number; y: number };
  * to carry it now) or what lies in sight; a part for a station further on waits (`dueParts`).
  */
 function goalOf(view: PlayerView, map: MapView, self: Point): Goal {
-  const armedTitle = map.stations.find(isArmed)?.title ?? null;
   const out = escaping(map);
   const parts = dueParts(map, self);
   const forNow = parts.filter((i) => i.requiredFor === null || i.requiredFor.ahead === 0);
@@ -775,7 +784,7 @@ function goalOf(view: PlayerView, map: MapView, self: Point): Goal {
         ? view.puzzle.title
         : out
           ? 'NOTAUSGANG ENTRIEGELT'
-          : (armedTitle ?? 'Alle Stationen erledigt'),
+          : (armedGoal(view, map) ?? 'Alle Stationen erledigt'),
     exitCall: view.puzzle === null && out,
     missing: out || errands.length === 0 ? null : errands.join(' · '),
   };
@@ -891,7 +900,8 @@ function OnAir({ notice }: { notice: Notice }) {
 
 /**
  * The clock's column of the bar: while the lab still has its power NORMALBETRIEB, then the
- * mission's clock; the alarm marks with either.
+ * mission's clock — counting the time run where the mission has none; the alarm marks with
+ * either.
  */
 function StageClock({
   view,
@@ -902,19 +912,20 @@ function StageClock({
   map: MapView;
   coldOpen: ColdOpen;
 }) {
+  const { deadlineAt, pausedAt } = view;
+  const clock =
+    deadlineAt === null ? (
+      <RunClock mission={view} />
+    ) : (
+      <Countdown
+        mission={{ deadlineAt, pausedAt }}
+        flashUntil={coldOpen.flashUntil}
+        escaping={escaping(map)}
+      />
+    );
   return (
     <div className="stage-clock">
-      {!coldOpen.dark ? (
-        <PowerStatus />
-      ) : (
-        view.deadlineAt !== null && (
-          <Countdown
-            mission={{ deadlineAt: view.deadlineAt, pausedAt: view.pausedAt }}
-            flashUntil={coldOpen.flashUntil}
-            escaping={escaping(map)}
-          />
-        )
-      )}
+      {coldOpen.dark ? clock : <PowerStatus />}
       <AlarmMarks alarms={view.alarms} />
     </div>
   );
