@@ -139,6 +139,13 @@ const CHAT_COOLDOWN_MS = 1200;
  */
 const SIGNAL_BURST = 60;
 const SIGNALS_PER_SEC = 10;
+/**
+ * Marks of the pause menu one seat may send at once, and how many more come free each second:
+ * every mark sends every view, and a page that toggles its menu faster than a hand does is let
+ * through no more — its next mark, once the latest view disagrees with its menu, says it again.
+ */
+const MENU_MARK_BURST = 6;
+const MENU_MARKS_PER_SEC = 1;
 /** Patrol simulation step. */
 const DRONE_TICK_MS = 80;
 /** How close you must stand to man an emergency panel. */
@@ -147,6 +154,32 @@ const PANEL_RADIUS = 0.8;
 const ITEM_RADIUS = 0.95;
 /** A relay emergency's instructions are aged this often. */
 const RELAY_TICK_MS = 1000;
+/** What a member may still send of something allowed by the second, and when that was worked out. */
+interface Allowance {
+  left: number;
+  /** epoch ms */
+  at: number;
+}
+
+/**
+ * Takes one off `member`'s allowance in `byMember` — `burst` at first, topped up by `perSec` a
+ * second to at most `burst` since it was last worked out; false where none is left.
+ */
+function takeAllowance(
+  byMember: Map<string, Allowance>,
+  member: string,
+  now: number,
+  burst: number,
+  perSec: number,
+): boolean {
+  const was = byMember.get(member);
+  const left =
+    was === undefined ? burst : Math.min(burst, was.left + ((now - was.at) / 1000) * perSec);
+  const allowed = left >= 1;
+  byMember.set(member, { left: allowed ? left - 1 : left, at: now });
+  return allowed;
+}
+
 /** What a connection hears once its seat plays on another one: a tab opened later, say. */
 const PLAYS_IN_ANOTHER_TAB = 'Dieser Platz spielt jetzt in einem anderen Fenster.';
 /** What a pass is told once another device took its seat over by its name. */
@@ -308,7 +341,9 @@ export class Room {
   private readonly lastPingAt = new Map<string, number>();
   private readonly lastChatAt = new Map<string, number>();
   /** each member's voice signals still allowed, and when that was last worked out (epoch ms) */
-  private readonly signalAllowance = new Map<string, { left: number; at: number }>();
+  private readonly signalAllowance = new Map<string, Allowance>();
+  /** each seat's marks of its pause menu still allowed (`MENU_MARK_BURST`) */
+  private readonly menuAllowance = new Map<string, Allowance>();
   private drones: DronePatrol | null = null;
   private droneTimer: NodeJS.Timeout | null = null;
   private lastDroneTick = 0;
@@ -884,7 +919,13 @@ export class Room {
     this.log(line);
     this.settle(next, 'abandon');
     this.seats.free(playerId);
-    const kept = [this.signalAllowance, this.lastPingAt, this.lastChatAt, this.glances];
+    const kept = [
+      this.signalAllowance,
+      this.menuAllowance,
+      this.lastPingAt,
+      this.lastChatAt,
+      this.glances,
+    ];
     for (const byPlayer of [...kept, this.lostAt, this.closedClean]) {
       byPlayer.delete(playerId);
     }
@@ -1212,7 +1253,9 @@ export class Room {
    */
   setMenu(playerId: string, open: boolean): void {
     const next = applyAction(this.state, { type: 'set-menu', playerId, open });
-    if (next !== this.state) {
+    const allowed = (): boolean =>
+      takeAllowance(this.menuAllowance, playerId, Date.now(), MENU_MARK_BURST, MENU_MARKS_PER_SEC);
+    if (next !== this.state && allowed()) {
       this.settle(next, 'set-menu');
     }
   }
@@ -1308,14 +1351,7 @@ export class Room {
 
   /** Takes a signal off a member's allowance, topped up since the last; false when none is left. */
   private allowSignal(member: string, now: number): boolean {
-    const was = this.signalAllowance.get(member);
-    const left =
-      was === undefined
-        ? SIGNAL_BURST
-        : Math.min(SIGNAL_BURST, was.left + ((now - was.at) / 1000) * SIGNALS_PER_SEC);
-    const allowed = left >= 1;
-    this.signalAllowance.set(member, { left: allowed ? left - 1 : left, at: now });
-    return allowed;
+    return takeAllowance(this.signalAllowance, member, now, SIGNAL_BURST, SIGNALS_PER_SEC);
   }
 
   /** One row for the lobby browser. */

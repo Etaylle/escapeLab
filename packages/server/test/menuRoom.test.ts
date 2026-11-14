@@ -151,6 +151,23 @@ describe('leaving a run for the main menu', () => {
     manager.get(code).dispose();
   });
 
+  it('takes a seat’s marks of its menu six at once, and one more each second', () => {
+    const { manager, code, crew } = served(['Anna', 'Ben']);
+    const [anna, ben] = crew as [FakeSocket, FakeSocket];
+    const views = (): number => anna.heard.filter((msg) => msg.kind === 'view').length;
+    const before = views();
+    for (let i = 0; i < 10; i++) {
+      ben.say({ kind: 'pause-menu', open: i % 2 === 0 });
+    }
+    // Open, shut, three times over: the seventh mark, open again, waits.
+    expect(views() - before).toBe(6);
+    expect(menusOn(anna)).toEqual(['', '']);
+    vi.advanceTimersByTime(1000);
+    ben.say({ kind: 'pause-menu', open: true });
+    expect(menusOn(anna)).toEqual(['', 'pause']);
+    manager.get(code).dispose();
+  });
+
   it('lets the crew go on without the player after the same wait as a drop', () => {
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
     const { manager, code, crew } = served(['Anna', 'Ben', 'Cem']);
