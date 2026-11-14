@@ -52,6 +52,23 @@ const PRAISE = new RegExp(
   'i',
 );
 
+/**
+ * A claim that something cost the crew nothing, however it is put — no time, not a second,
+ * nothing lost, without loss — which a slip at an emergency's consoles makes false (core
+ * actions.ts `handleEmergencyInput` charges it).
+ */
+const COSTLESS = new RegExp(
+  [
+    '\\bkein(?:e[nm]?)?\\s+(?:Zeit|Sekunde|Minute|Augenblick|Moment)',
+    '\\bnicht\\s+eine?n?\\s+(?:Sekunde|Minute|Augenblick|Moment)',
+    '\\bnichts\\b[^.!?]*\\b(?:gekostet|verloren|eingebüßt)',
+    '\\bkoste(?:t|te)?\\b[^.!?]*\\bnichts\\b',
+    '\\bohne\\b[^.!?]*verl(?:ust|ier)',
+    'verlustfrei',
+  ].join('|'),
+  'i',
+);
+
 const wordsIn = (text: string): number =>
   text.split(/\s+/).filter((word) => /[\p{L}\p{N}]/u.test(word)).length;
 
@@ -253,6 +270,30 @@ describe('the radio-line guard', () => {
     expect(offAir(['Der Stollen ist frei.', 'Die Supermarktkasse piept.'])).toEqual([]);
   });
 
+  it('hears a claim that nothing was lost, however it is put', () => {
+    const claims = [
+      'Das hat uns keine Zeit gekostet.',
+      'Kein Zeitverlust, weiter.',
+      'Keine Sekunde verloren.',
+      'Die Relais halten, ohne Zeit zu verlieren.',
+      'Ohne Zeitverlust zurück an die Arbeit.',
+      'Nichts verloren, die Kühlung steht.',
+      'Das kostet uns nichts.',
+      'Nicht eine Minute verloren.',
+    ];
+    for (const claim of claims) {
+      expect(claim).toMatch(COSTLESS);
+    }
+    const plain = [
+      'Die Relais greifen wieder, ich habe die Kühlung zurück. Rechtzeitig, danke euch.',
+      'Die Kühlung ist abgesackt, das hat uns Zeit gekostet.',
+      'Noch zwei Minuten auf der Notversorgung. Keine Umwege mehr.',
+    ];
+    for (const line of plain) {
+      expect(line).not.toMatch(COSTLESS);
+    }
+  });
+
   it('hears a call-out anywhere but in the escape', () => {
     const loud = {
       radio: { start: 'Los!', escape: 'Raus, jetzt!' },
@@ -423,9 +464,8 @@ describe('the operator’s answers in Blackout', () => {
     // crew can clear the emergency in time after it: no take may say that it cost nothing.
     const cleared = variantsOf(radio?.emergency?.cleared ?? []);
     expect(cleared.length).toBeGreaterThanOrEqual(2);
-    const costless = /keine Zeit|nichts gekostet|nichts verloren|ohne (Zeit)?verlust|umsonst/i;
     for (const line of cleared) {
-      expect(line).not.toMatch(costless);
+      expect(line).not.toMatch(COSTLESS);
     }
   });
 });
