@@ -18,10 +18,10 @@ import {
 } from '../src/world/menu/hero.js';
 import { heroCanvas, paintHero, type HeroCanvas } from '../src/world/menu/heroArt.js';
 import { heroPainter, type HeroPainting } from '../src/world/menu/heroStage.js';
-import { holdLamp } from '../src/world/menu/lamp.js';
-import { runScene, type SceneHost } from '../src/world/menu/loop.js';
+import { heroLamp, holdLamp } from '../src/world/menu/lamp.js';
+import { runScene } from '../src/world/menu/loop.js';
 import { callEntries, callsOf, fakeCanvas, FakePath2D, type Entry } from './fakeCanvas.js';
-import { painting } from './heroPage.js';
+import { framesPage, heroOnPage, painting } from './heroPage.js';
 
 /**
  * The hero on the menu's stage (world/menu/hero.ts, heroArt.ts, screens/MenuHero.tsx): as tall
@@ -256,38 +256,12 @@ describe('drawScientist — a figure’s legs and the rest as layers of their ow
   });
 });
 
-/** A page for the hero's loop: frames that run when the test says, a canvas shown or hidden. */
-function page(): { host: SceneHost; show: (shown: boolean) => void; tick: (now: number) => void } {
-  const waiting = new Map<number, (now: number) => void>();
-  let next = 1;
-  let seen: ((shown: boolean) => void) | null = null;
-  return {
-    host: {
-      frame: (run) => {
-        waiting.set(next, run);
-        return next++;
-      },
-      cancel: (handle) => {
-        waiting.delete(handle);
-      },
-      watch: (report) => {
-        seen = report;
-        return () => {
-          seen = null;
-        };
-      },
-    },
-    show: (shown) => seen?.(shown),
-    tick: (now) => {
-      const due = [...waiting.values()];
-      waiting.clear();
-      for (const run of due) run(now);
-    },
-  };
-}
-
 /** What the hero's painter needs, on a fake page, standing at 1440 × 820. */
 const paintingOf = (reduced: boolean): HeroPainting => painting({ reduced });
+
+/** The width and height of each of `canvases`. */
+const sizesOf = (canvases: HTMLCanvasElement[]): number[][] =>
+  canvases.map((canvas) => [canvas.width, canvas.height]);
 
 describe('heroPainter — the hero’s loop', () => {
   beforeEach(() => {
@@ -300,7 +274,7 @@ describe('heroPainter — the hero’s loop', () => {
   });
 
   it('asks no frames while its canvas is hidden, and paints once it shows', () => {
-    const p = page();
+    const p = framesPage();
     const on = paintingOf(false);
     const paint = heroPainter(on, 0);
     let painted = 0;
@@ -321,7 +295,7 @@ describe('heroPainter — the hero’s loop', () => {
   });
 
   it('holds still under reduced motion: one picture, then no more frames asked', () => {
-    const p = page();
+    const p = framesPage();
     const on = paintingOf(true);
     let painted = 0;
     const paint = heroPainter(on, 0);
@@ -335,10 +309,53 @@ describe('heroPainter — the hero’s loop', () => {
     expect(on.probe.laid).toBe(1);
   });
 
-  it('stops asking frames where the stage leaves the hero no room', () => {
+  it('stops asking frames where the stage leaves the hero no room, its canvases let go', () => {
     const on = paintingOf(false);
+    const paint = heroPainter(on, 0);
+    paint(500);
+    expect(on.hero.drawn).toEqual({ legs: 1, upper: 1 });
+    const canvases = [on.hero.canvas, on.hero.legs.canvas, on.hero.upper.canvas];
+    expect(canvases.every((canvas) => canvas.width > 1 && canvas.height > 1)).toBe(true);
+    const { place } = on.standing;
     on.standing.place = null;
-    expect(heroPainter(on, 0)(100)).toBe(false);
-    expect(on.probe.laid).toBe(0);
+    expect(paint(600)).toBe(false);
+    expect(on.probe.laid).toBe(1);
+    expect(sizesOf(canvases)).toEqual([[0, 0], [0, 0], [0, 0]]);
+    // Given room again, it draws its layers anew: none is laid from a canvas let go.
+    on.standing.place = place;
+    paint(700);
+    expect(on.hero.drawn).toEqual({ legs: 2, upper: 2 });
+    expect(canvases.every((canvas) => canvas.width > 1 && canvas.height > 1)).toBe(true);
+  });
+});
+
+describe('startHero — the hero on the menu’s stage', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    holdLamp(null);
+  });
+
+  it('lets its lamp and its canvases go at once where a window leaves it no room', () => {
+    const page = heroOnPage(1440, 820);
+    page.play(200);
+    expect(page.probe().shown).toBe(true);
+    expect(heroLamp()?.on).toBe(1);
+    const canvases = [page.canvas, ...page.made];
+    expect(canvases).toHaveLength(3);
+    expect(canvases.every((canvas) => canvas.width > 1 && canvas.height > 1)).toBe(true);
+    // Narrower than any window that has room for it: measured anew, before any frame.
+    page.resize(860, 700);
+    expect(page.canvas.hidden).toBe(true);
+    expect(page.probe().shown).toBe(false);
+    expect(heroLamp()).toBeNull();
+    expect(sizesOf(canvases)).toEqual([[0, 0], [0, 0], [0, 0]]);
+    page.resize(1440, 820);
+    page.play(200);
+    expect(page.canvas.hidden).toBe(false);
+    expect(heroLamp()?.on).toBe(1);
+    expect(canvases.every((canvas) => canvas.width > 1 && canvas.height > 1)).toBe(true);
+    page.run.stop();
+    expect(sizesOf(canvases)).toEqual([[0, 0], [0, 0], [0, 0]]);
+    expect(heroLamp()).toBeNull();
   });
 });

@@ -244,7 +244,9 @@ export interface BeamFrame {
 
 /**
  * Lays the beam of the hero's `lamp` over `ctx` — the scene's canvas, the lab copied on it — at
- * whole pixels, as strong as the lamp is on, and the dust drifting in it; nothing without a lamp.
+ * whole pixels, as strong as the lamp is on, and the dust drifting in it. Without a lamp alight
+ * it lays nothing and lets its canvases go: no hero stands on the stage, or the menu has gone for
+ * the lobby, whose scene drifts on.
  */
 export function layBeam(
   ctx: CanvasRenderingContext2D,
@@ -253,6 +255,7 @@ export function layBeam(
   frame: BeamFrame,
 ): void {
   if (lamp === null || lamp.on <= 0) {
+    freeBeam(beam);
     return;
   }
   const turned = turnedFor(beam, lamp, frame.dpr);

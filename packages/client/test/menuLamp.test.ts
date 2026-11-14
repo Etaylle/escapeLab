@@ -254,6 +254,25 @@ describe('layBeam — the beam on the scene’s canvas', () => {
     expect(made).toEqual([]);
   });
 
+  it('lets its canvases go once no lamp is alight, and bakes anew for the next', () => {
+    const scene = fakeCanvas(1440, 820, 'scene');
+    const canvases: HTMLCanvasElement[] = [];
+    const beam = sceneBeam((w, h) => {
+      const { canvas } = fakeCanvas(w, h);
+      canvases.push(canvas);
+      return canvas;
+    });
+    layBeam(scene.ctx, beam, lampAt(900, 500, Math.PI), FRAME);
+    expect(canvases).toHaveLength(2);
+    layBeam(scene.ctx, beam, null, FRAME);
+    expect([beam.master, beam.turned]).toEqual([null, null]);
+    expect(canvases.map((canvas) => [canvas.width, canvas.height])).toEqual([[0, 0], [0, 0]]);
+    layBeam(scene.ctx, beam, lampAt(900, 500, Math.PI), FRAME);
+    expect(canvases).toHaveLength(4);
+    layBeam(scene.ctx, beam, lampAt(900, 500, Math.PI, 0), FRAME);
+    expect([beam.master, beam.turned]).toEqual([null, null]);
+  });
+
   it('bakes a warm cone no stronger than BEAM_LIGHT, fading out along its reach', () => {
     vi.stubGlobal('Path2D', FakePath2D);
     const scene = fakeCanvas(1440, 820, 'scene');
@@ -472,6 +491,7 @@ describe('the scene lays the hero’s beam', () => {
       callEntries(scene.log, 'drawImage').filter((e) => e.alpha === 0.8).length;
     expect(beams()).toBe(0);
     expect(queued.size).toBe(0);
+    const baked = made.length;
     lamps.holdLamp({ x: 120, y: 60, angle: Math.PI, reach: 80, on: 0.8 });
     expect(queued.size).toBe(1);
     run(100);
@@ -484,6 +504,10 @@ describe('the scene lays the hero’s beam', () => {
     run(100);
     expect(callEntries(scene.log, 'drawImage').length).toBe(copies + 1);
     expect(beams()).toBe(2);
+    // The beam's canvases go with the lamp: the lobby's scene drifts on without them.
+    const sprites = made.slice(baked);
+    expect(sprites).toHaveLength(2);
+    expect(sprites.map((canvas) => [canvas.width, canvas.height])).toEqual([[0, 0], [0, 0]]);
     reduced = false;
     stage.close();
   });

@@ -654,7 +654,9 @@ what it shows has changed: a glance's step, the lamp's step, the visor's light, 
 colour, the size; the breath only moves the upper layer by whole pixels. Walking in, it is drawn
 whole each frame, for 1.2 s once a page. Its loop draws 30 frames a second at most, none while the
 tab or its canvas is hidden, and under reduced motion none after its still until something it shows
-changes. On the menu's bench — this M4, the page's main thread slowed four times, the software
+changes. Left out as the stage is measured, and gone with the menu, the hero lets go of its lamp and
+its canvases at once, and the scene lets its beam's go, its lab drifting on through the lobby
+without them. On the menu's bench — this M4, the page's main thread slowed four times, the software
 Canvas path of `SHOTS_SOFTWARE_GL`, 1440 × 820 CSS pixels at density 1, Blackout's lab drifting, the
 scene's frame alone, with the beam, with the hero and with both, six rounds each, every round
 starting at another — medians, ms:

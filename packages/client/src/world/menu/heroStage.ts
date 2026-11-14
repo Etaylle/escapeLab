@@ -617,6 +617,15 @@ function probeBox(probe: HeroProbe, { place, at }: Standing, offset: number): vo
 }
 
 /**
+ * The hero gone from the stage — left out where the stage leaves it no room, or gone with the
+ * menu: its lamp let go, so that the scene lays no beam, and its canvases with it.
+ */
+function leaveOut(hero: HeroCanvas): void {
+  holdLamp(null);
+  freeHero(hero);
+}
+
+/**
  * What paints the hero on each frame of its loop, up `since` (ms, the page's clock): its pose as
  * it stands now, laid from its layers (heroArt.ts), and the lamp it holds out to the scene's
  * canvas. Says whether it moves on: never under reduced motion, which holds it still until
@@ -627,7 +636,7 @@ export function heroPainter(on: HeroPainting, since: number): (now: number) => b
   return (now) => {
     const { place } = on.standing;
     if (place === null) {
-      holdLamp(null);
+      leaveOut(on.hero);
       return false;
     }
     shownOnPage = true;
@@ -725,9 +734,11 @@ export interface HeroRun {
 /**
  * Starts the hero on `canvas` as the menu shows it: measured on its stage, painted by a loop of
  * its own no more than 30 times a second while its canvas shows (loop.ts), woken as the stage,
- * the motion, what the player attends to or what the menu hands it (`look`) change. `pass` is
- * the browser's pass's id: the hero's own offset into its loops; `walksIn` whether it walks in
- * on this menu, or stands there from the start. Null where the browser gives no 2D canvas.
+ * the motion, what the player attends to or what the menu hands it (`look`) change; measured
+ * with no room left for it, it lets its lamp and its canvases go at once, as it does stopped.
+ * `pass` is the browser's pass's id: the hero's own offset into its loops; `walksIn` whether it
+ * walks in on this menu, or stands there from the start. Null where the browser gives no 2D
+ * canvas.
  */
 export function startHero(
   canvas: HTMLCanvasElement,
@@ -753,6 +764,9 @@ export function startHero(
   const unwatch = [
     watchStage(canvas, standing, () => {
       probePlace(probe, standing);
+      if (standing.place === null) {
+        leaveOut(hero);
+      }
       loop.wake();
     }),
     watchAttention(stage, (attended) => {
@@ -767,8 +781,7 @@ export function startHero(
       loop.stop();
       unwatch.forEach((stop) => stop());
       unprobe();
-      holdLamp(null);
-      freeHero(hero);
+      leaveOut(hero);
     },
   };
 }

@@ -234,10 +234,16 @@ export function paintHero(hero: HeroCanvas, frame: HeroFrame): boolean {
   return true;
 }
 
-/** Lets the hero's canvases go at once rather than whenever they are collected. */
+/**
+ * Lets the hero's canvases go at once — its own and its two layers — rather than whenever they
+ * are collected, and forgets what they showed: painted again, it lays them anew.
+ */
 export function freeHero(hero: HeroCanvas): void {
   for (const canvas of [hero.canvas, hero.legs.canvas, hero.upper.canvas]) {
     canvas.width = 0;
     canvas.height = 0;
   }
+  hero.legs.key = null;
+  hero.upper.key = null;
+  hero.laid = null;
 }
