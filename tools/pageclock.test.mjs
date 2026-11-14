@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { deviceVerdict, stripVerdict, swingVerdict } from './pageclock.mjs';
+import { deviceVerdict, figureHeld, stripVerdict, swingVerdict } from './pageclock.mjs';
 
 describe('stripVerdict — a sync station’s strip, as each page noted it', () => {
   it('names when each page showed the station done after its own press', () => {
@@ -123,5 +123,29 @@ describe('deviceVerdict — a device a phone shows sideways, measured once it se
       faults: [],
       unjudged: null,
     });
+  });
+});
+
+describe('figureHeld — a figure held in its pose through its shot', () => {
+  const jump = { mood: 'celebrate', key: 'rise', least: 0.12 };
+  const up = { color: '#2dd4bf', mood: 'celebrate', rise: 0.142, glance: 0 };
+
+  it('holds a figure still in the air as the page held it', () => {
+    assert.equal(figureHeld(up, { ...up }, jump), true);
+    const glance = { mood: 'play', key: 'glance', least: 0.9 };
+    const turned = { ...up, mood: 'play', rise: 0, glance: -1.1 };
+    assert.equal(figureHeld(turned, { ...turned }, glance), true);
+  });
+
+  it('fails one a frame moved under the shot, one landed, one gone, one in another mood', () => {
+    assert.equal(figureHeld(up, { ...up, rise: 0.137 }, jump), false);
+    assert.equal(figureHeld(up, { ...up, rise: 0 }, jump), false);
+    assert.equal(figureHeld(up, null, jump), false);
+    assert.equal(figureHeld(up, { ...up, mood: 'play' }, jump), false);
+  });
+
+  it('fails a figure held out of its pose, however still it stood', () => {
+    const low = { ...up, rise: 0.05 };
+    assert.equal(figureHeld(low, { ...low }, jump), false);
   });
 });

@@ -87,6 +87,26 @@ function swingText({ hold, holdMs, way, at, after, moved, onItsWay }) {
 }
 
 /**
+ * Whether a figure held in `pose` for its shot (shots.mjs `figureShot`) — `found` as the page
+ * held it, `after` as the figures' probe gave it once shot, null where it was gone — still
+ * stood so: in the pose, its `mood` and its `key` `least` or more either way, and as held, no
+ * frame having moved it under the shot.
+ *
+ * @param {{ mood: string, rise: number, glance: number }} found
+ * @param {{ mood: string, rise: number, glance: number } | null} after
+ * @param {{ mood: string, key: 'rise' | 'glance', least: number }} pose
+ * @returns {boolean}
+ */
+export function figureHeld(found, after, { mood, key, least }) {
+  return (
+    after !== null &&
+    after.mood === mood &&
+    Math.abs(after[key]) >= least &&
+    after[key] === found[key]
+  );
+}
+
+/**
  * What a phone showed of its open device (shots.mjs `deviceReach`): how far it scrolls, px; its
  * controls shown; those under a fingertip's 44 px either way and those cut off, in words.
  *

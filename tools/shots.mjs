@@ -614,7 +614,7 @@ import {
   spottedOn,
   stretchOf,
 } from './patrol.mjs';
-import { deviceVerdict, stripVerdict, swingVerdict } from './pageclock.mjs';
+import { deviceVerdict, figureHeld, stripVerdict, swingVerdict } from './pageclock.mjs';
 import { percentile } from './percentile.mjs';
 import { decodePng } from './pixeldiff.mjs';
 import {
@@ -8047,10 +8047,6 @@ function releaseFigures() {
   }
 }
 
-/** Whether `figure` (as the figures' probe gives it) stands in `pose` (holdFigures). */
-const posed = (figure, { mood, key, least }) =>
-  figure.mood === mood && Math.abs(figure[key]) >= least;
-
 /**
  * A shot of `page` with one of its figures in `pose`: the page holds its frames as a figure first
  * stands so (holdFigures), within `ms`, then it is shot and its figures read again — the same
@@ -8068,8 +8064,7 @@ async function figureShot(page, { pose, ms }) {
     const found = await page.evaluate(() => globalThis.__figureHold.held);
     const png = await page.screenshot();
     const after = ((await figuresOn(page)) ?? []).find((f) => f.color === found.color) ?? null;
-    const held = after !== null && posed(after, pose) && after[pose.key] === found[pose.key];
-    return { png, found, after, held };
+    return { png, found, after, held: figureHeld(found, after, pose) };
   } finally {
     await page.evaluate(releaseFigures);
   }
