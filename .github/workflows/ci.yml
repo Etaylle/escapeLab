@@ -50,7 +50,7 @@ jobs:
     # on a slow runner since the opening and the gameplay captures, 2 more since the
     # reconnect drill (a crew of three, one away 80 s), 1 more since the restart drill,
     # 2 more since the three drill (a crew of three to the Signalkette, 75 s on a runner),
-    # Systemcheck up to 8.
+    # Systemcheck up to 8; the music drill adds 10 s to each, measured locally.
     timeout-minutes: 45
     defaults:
       run:
