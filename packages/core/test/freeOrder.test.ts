@@ -366,19 +366,6 @@ describe('a mission without a clock', () => {
     });
   });
 
-  it('grades a run without a hatch in words it can bear: nobody had to get out', () => {
-    const noHatch = started(freeLab({ map: { ...freeLab().map, exit: undefined } }));
-    const won = ['eins', 'zwei', 'drei'].reduce((state, id) => take(state, id, T0 + 1000), noHatch);
-    // Two alarms, as a drone or a wrong move would have cost: the third rank.
-    const shaky = { ...won, penaltySeq: 2 };
-    expect(viewFor(shaky, 'p1').grade).toEqual({
-      rank: 'B',
-      label: 'Solide — es hat gewackelt, aber jede Station ist abgenommen',
-    });
-    const throughTheHatch = viewFor({ ...shaky, mission: freeLab() }, 'p1').grade;
-    expect(throughTheHatch?.label).toBe('Solide — es hat gewackelt, aber alle sind draußen');
-  });
-
   it('gives the notes of the last shift for no time, and mission control names no place', () => {
     const lab = (timeLimitSec: number) =>
       parseMission({
@@ -412,5 +399,20 @@ describe('a mission without a clock', () => {
       expect(scaleMission(clockless, difficulty).timeLimitSec, difficulty).toBe(0);
       expect(scaleMission(freeLab(), difficulty).timeLimitSec, difficulty).toBeGreaterThan(0);
     }
+  });
+});
+
+describe('a mission without a hatch', () => {
+  it('grades its run in words it can bear: nobody had to get out', () => {
+    const noHatch = started(freeLab({ map: { ...freeLab().map, exit: undefined } }));
+    const won = ['eins', 'zwei', 'drei'].reduce((state, id) => take(state, id, T0 + 1000), noHatch);
+    // Two alarms, as a drone or a wrong move would have cost: the third rank.
+    const shaky = { ...won, penaltySeq: 2 };
+    expect(viewFor(shaky, 'p1').grade).toEqual({
+      rank: 'B',
+      label: 'Solide — es hat gewackelt, aber jede Station ist abgenommen',
+    });
+    const throughTheHatch = viewFor({ ...shaky, mission: freeLab() }, 'p1').grade;
+    expect(throughTheHatch?.label).toBe('Solide — es hat gewackelt, aber alle sind draußen');
   });
 });

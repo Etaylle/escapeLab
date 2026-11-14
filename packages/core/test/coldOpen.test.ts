@@ -359,7 +359,8 @@ describe('a mission without an intro', () => {
 });
 
 describe('a mission whose lights stay on', () => {
-  const { intro, ...dark } = { ...raw, map: { ...raw.map, labels: [{ text: 'GANG', x: 4, y: 1 }] } };
+  const labelled = { ...raw, map: { ...raw.map, labels: [{ text: 'GANG', x: 4, y: 1 }] } };
+  const { intro, ...dark } = labelled;
 
   it('lights every room its map names from the start, where a dark lab lights none', () => {
     const lit = parseMission({ ...dark, lit: true });
