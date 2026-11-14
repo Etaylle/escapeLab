@@ -4,7 +4,7 @@ import { worldText } from '../art.js';
 import type { CanvasMaker } from '../atlas.js';
 import { bakeable } from '../baked.js';
 import { openLightPath } from '../gl/path.js';
-import { BLACK, rgba } from '../palette.js';
+import { BLACK, css, rgba, sink, type Rgb } from '../palette.js';
 import * as actors from '../render/actors.js';
 import { backingSize } from '../render/backing.js';
 import { renderKit, type Frame } from '../render/frame.js';
@@ -16,6 +16,7 @@ import { newSim } from '../sim.js';
 import {
   driftOffset,
   fadeAt,
+  labBound,
   sceneBox,
   sceneShot,
   SCENE_FADE_MS,
@@ -65,6 +66,11 @@ export interface SceneBake {
   night: boolean;
   /** where on it the frame that shows each item's place starts, device px (places.ts) */
   spots: Readonly<Record<string, Spot>>;
+  /**
+   * the dark round the lab as it holds it, lit and at night: what a frame that looks past its
+   * edge shows there (`paintBake`); null where no place's frame looks past the lab
+   */
+  dark: { lit: string; night: string } | null;
 }
 
 /**
@@ -204,6 +210,8 @@ interface SceneFraming {
   /** where the frame of each item's place starts on the lab at the shot's scale, device px */
   corners: [item: string, corner: Spot][];
   box: PixelBox;
+  /** the lab's own pixels at the shot's scale: what lies past them is its dark */
+  lab: PixelBox;
 }
 
 /** How a canvas `w` × `h` at `dpr` frames `lab`; null where the view has no map. */
@@ -218,13 +226,40 @@ function framingOf(lab: SceneLab, w: number, h: number, dpr: number): SceneFrami
     item,
     placeCorner(spot, shot.scale, w, h),
   ]);
+  const bound = labBound(map, shot.scale);
   const box = sceneBox(
     shot,
-    w,
-    h,
+    [w, h],
     corners.map(([, corner]) => corner),
+    bound,
   );
-  return { shot, corners, box };
+  const round = -bound.left;
+  const own = { left: 0, top: 0, width: bound.width - 2 * round, height: bound.height - 2 * round };
+  return { shot, corners, box, lab: own };
+}
+
+/**
+ * The dark round the lab as `g`, the bake of `box`, holds it, lit and at night: read off the
+ * corner of the box that lies furthest past the lab `lab`; null where the box holds none of it.
+ */
+function darkOf(g: CanvasRenderingContext2D, box: PixelBox, lab: PixelBox): SceneBake['dark'] {
+  const [right, bottom] = [box.left + box.width - 1, box.top + box.height - 1];
+  const corners = [
+    [box.left, box.top],
+    [right, box.top],
+    [box.left, bottom],
+    [right, bottom],
+  ] as const;
+  const [labRight, labBottom] = [lab.left + lab.width - 1, lab.top + lab.height - 1];
+  const past = ([x, y]: readonly [number, number]): number =>
+    Math.max(lab.left - x, lab.top - y, x - labRight, y - labBottom);
+  const [x, y] = corners.reduce((a, b) => (past(b) > past(a) ? b : a));
+  if (past([x, y]) <= 0) {
+    return null;
+  }
+  const { data } = g.getImageData(x - box.left, y - box.top, 1, 1);
+  const rgb: Rgb = [data[0] ?? 0, data[1] ?? 0, data[2] ?? 0];
+  return { lit: css(rgb), night: css(sink(rgb, NIGHT_SINK)) };
 }
 
 /**
@@ -240,7 +275,7 @@ export function bakeScene(lab: SceneLab, w: number, h: number, dpr: number): Sce
   if (map === null || framing === null) {
     return null;
   }
-  const { shot, box, corners } = framing;
+  const { shot, box, corners, lab: own } = framing;
   const canvases = canvasesFor(box);
   if (canvases === null) {
     return null;
@@ -259,7 +294,8 @@ export function bakeScene(lab: SceneLab, w: number, h: number, dpr: number): Sce
   const spots = Object.fromEntries(
     corners.map(([item, corner]) => [item, { x: corner.x - box.left, y: corner.y - box.top }]),
   );
-  return { canvas: ctx.canvas, shot, box, w, h, night: false, spots };
+  const dark = darkOf(ctx, box, own);
+  return { canvas: ctx.canvas, shot, box, w, h, night: false, spots, dark };
 }
 
 /** Where on `bake` the frame starts that the drift shows `progress` along its shot. */
@@ -275,7 +311,36 @@ export function goalCorner(bake: SceneBake, item: string | null, progress: numbe
   return (item === null ? undefined : bake.spots[item]) ?? driftCorner(bake, progress);
 }
 
-/** Copies `bake` onto `ctx`'s canvas, its frame starting at `corner`, `alpha` strong. */
+/** `v` held within `lo` and `hi`. */
+const within = (lo: number, v: number, hi: number): number => Math.min(hi, Math.max(lo, v));
+
+/**
+ * What of a frame `w` × `h` starting at `corner` on a bake `bw` × `bh` lies past the bake, as
+ * rectangles on the frame — x, y, width, height —: none where the frame lies within it.
+ */
+export function pastBake(
+  corner: Spot,
+  [bw, bh]: readonly [number, number],
+  [w, h]: readonly [number, number],
+): [number, number, number, number][] {
+  const left = within(0, -corner.x, w);
+  const right = within(left, bw - corner.x, w);
+  const top = within(0, -corner.y, h);
+  const bottom = within(top, bh - corner.y, h);
+  const parts: [number, number, number, number][] = [
+    [0, 0, left, h],
+    [right, 0, w - right, h],
+    [left, 0, right - left, top],
+    [left, bottom, right - left, h - bottom],
+  ];
+  return parts.filter(([, , pw, ph]) => pw > 0 && ph > 0);
+}
+
+/**
+ * Copies `bake` onto `ctx`'s canvas, its frame starting at `corner`, `alpha` strong — and where
+ * the frame looks past the bake, into the dark round the lab, fills that with the dark as the
+ * bake holds it, at night or lit as the bake stands.
+ */
 export function paintBake(
   ctx: CanvasRenderingContext2D,
   bake: SceneBake,
@@ -284,6 +349,12 @@ export function paintBake(
 ): void {
   ctx.globalAlpha = alpha;
   ctx.drawImage(bake.canvas, -corner.x, -corner.y);
+  const size = [ctx.canvas.width, ctx.canvas.height] as const;
+  const past = pastBake(corner, [bake.canvas.width, bake.canvas.height], size);
+  if (past.length > 0 && bake.dark !== null) {
+    ctx.fillStyle = bake.night ? bake.dark.night : bake.dark.lit;
+    for (const [x, y, pw, ph] of past) ctx.fillRect(x, y, pw, ph);
+  }
   ctx.globalAlpha = 1;
 }
 

@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { parseMission } from '@escapelab/core';
 import { menuItems } from '../src/screens/MainMenu.js';
 import { cameraAt, newCamera, TRAVEL_MS, travelMs } from '../src/world/menu/camera.js';
-import { driftBox, sceneBox, sceneShot } from '../src/world/menu/drift.js';
+import { DARK_ROUND, driftBox, labBound, sceneBox, sceneShot } from '../src/world/menu/drift.js';
 import { heroPainter } from '../src/world/menu/heroStage.js';
 import {
   aimSweep,
@@ -23,9 +23,15 @@ import {
   SCENE_ANCHOR,
   watchPlace,
 } from '../src/world/menu/places.js';
-import { sceneBacking, type SceneLab } from '../src/world/menu/scene.js';
+import {
+  paintBake,
+  pastBake,
+  sceneBacking,
+  type SceneBake,
+  type SceneLab,
+} from '../src/world/menu/scene.js';
 import { parkedDrones, sceneViewOf } from '../src/world/menu/view.js';
-import { FakePath2D } from './fakeCanvas.js';
+import { callEntries, fakeCanvas, FakePath2D } from './fakeCanvas.js';
 import { FakeItem, heroOnPage, painting } from './heroPage.js';
 
 /**
@@ -76,33 +82,86 @@ describe('the box the scene bakes', () => {
   const map = LAB.view.map;
   if (map === null) throw new Error('no map');
 
-  it('holds the drift and every place’s frame, the dark round the lab where one reaches it', () => {
+  it('holds the drift and every place’s frame as far as the lab and a tile of its dark reach', () => {
     const shot = sceneShot(map, 1440, 820, 1);
     const corners = Object.values(placesOf('blackout')).map((spot) =>
       placeCorner(spot, shot.scale, 1440, 820),
     );
-    const box = sceneBox(shot, 1440, 820, corners);
+    const bound = labBound(map, shot.scale);
+    const box = sceneBox(shot, [1440, 820], corners, bound);
     const drift = driftBox(shot, 1440, 820);
-    for (const { x, y } of [{ x: drift.left, y: drift.top }, ...corners]) {
-      expect(x).toBeGreaterThanOrEqual(box.left);
-      expect(y).toBeGreaterThanOrEqual(box.top);
-    }
+    const inside = (outer: typeof box, inner: typeof box): boolean =>
+      inner.left >= outer.left &&
+      inner.top >= outer.top &&
+      inner.left + inner.width <= outer.left + outer.width &&
+      inner.top + inner.height <= outer.top + outer.height;
+    expect(inside(box, drift)).toBe(true);
     for (const { x, y } of corners) {
-      expect(x + 1440).toBeLessThanOrEqual(box.left + box.width);
-      expect(y + 820).toBeLessThanOrEqual(box.top + box.height);
+      // Each place's frame, as far as it lies within the lab and its dark.
+      const left = Math.max(x, bound.left);
+      const top = Math.max(y, bound.top);
+      const right = Math.min(x + 1440, bound.left + bound.width);
+      const bottom = Math.min(y + 820, bound.top + bound.height);
+      expect(inside(box, { left, top, width: right - left, height: bottom - top })).toBe(true);
     }
+    expect(inside(bound, box)).toBe(true);
+    // The Archiv, in the lab's corner, is seen from beyond the lab's edge: a tile of dark baked.
+    expect(box.left).toBe(bound.left);
+    expect(bound.left).toBe(-Math.ceil(DARK_ROUND * shot.scale));
     expect(box.width * box.height).toBeGreaterThan(drift.width * drift.height);
-    // The Archiv, in the lab's corner, is seen from beyond the lab's edge.
-    expect(box.left).toBeLessThan(0);
   });
 
-  it('drops its density by quarters where the box would not bake at the screen’s', () => {
+  it('bakes at the screen’s density where the lab fits, a quarter less at a time where not', () => {
     expect(sceneBacking(LAB, 1440, 820, 1).dpr).toBe(1);
-    const dense = sceneBacking(LAB, 1440, 820, 2);
-    expect(dense.dpr).toBeGreaterThan(1);
-    expect(dense.dpr).toBeLessThanOrEqual(2);
-    expect((dense.dpr * 4) % 1).toBe(0);
-    expect(dense.w).toBe(Math.round(1440 * dense.dpr));
+    expect(sceneBacking(LAB, 1440, 820, 2).dpr).toBe(2);
+    const wide = sceneBacking(LAB, 1920, 1080, 2);
+    expect(wide.dpr).toBeGreaterThan(1);
+    expect(wide.dpr).toBeLessThan(2);
+    expect((wide.dpr * 4) % 1).toBe(0);
+    expect(wide.w).toBe(Math.round(1920 * wide.dpr));
+  });
+});
+
+describe('the dark past the bake', () => {
+  it('finds nothing past a bake the frame lies within, and each strip of a frame past it', () => {
+    expect(pastBake({ x: 0, y: 0 }, [300, 200], [100, 50])).toEqual([]);
+    expect(pastBake({ x: 200, y: 150 }, [300, 200], [100, 50])).toEqual([]);
+    expect(pastBake({ x: -30, y: 0 }, [300, 200], [100, 50])).toEqual([[0, 0, 30, 50]]);
+    expect(pastBake({ x: 220, y: 160 }, [300, 200], [100, 50])).toEqual([
+      [80, 0, 20, 50],
+      [0, 40, 80, 10],
+    ]);
+    expect(pastBake({ x: 0, y: -20 }, [300, 200], [100, 50])).toEqual([[0, 0, 100, 20]]);
+  });
+
+  /** A bake 300 × 200 holding the lab's dark, at night or lit. */
+  function darkBake(night: boolean): SceneBake {
+    return {
+      canvas: fakeCanvas(300, 200, 'bake').canvas,
+      shot: { from: { x: 1, y: 1 }, to: { x: 2, y: 1 }, scale: 50 },
+      box: { left: 0, top: 0, width: 300, height: 200 },
+      w: 100,
+      h: 50,
+      night,
+      spots: {},
+      dark: { lit: '#04070a', night: '#020304' },
+    };
+  }
+
+  it('fills what the frame shows past the bake with the dark it holds, as strong as the copy', () => {
+    for (const night of [false, true]) {
+      const frame = fakeCanvas(100, 50, 'frame');
+      paintBake(frame.ctx, darkBake(night), { x: -30, y: 0 }, 0.5);
+      const [fill, ...more] = callEntries(frame.log, 'fillRect');
+      expect(more).toEqual([]);
+      expect(fill?.args).toEqual([0, 0, 30, 50]);
+      expect(fill?.alpha).toBe(0.5);
+      const style = frame.log.filter((e) => e.kind === 'set' && e.name === 'fillStyle').at(-1);
+      expect(style?.kind === 'set' && style.value).toBe(night ? '#020304' : '#04070a');
+    }
+    const within = fakeCanvas(100, 50, 'frame');
+    paintBake(within.ctx, darkBake(false), { x: 10, y: 10 }, 1);
+    expect(callEntries(within.log, 'fillRect')).toEqual([]);
   });
 });
 

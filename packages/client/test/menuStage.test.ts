@@ -124,6 +124,18 @@ describe('a bake of the scene', () => {
     expect(held.map(sizeOf)).toEqual([sizeOf(bake.canvas), [map.width, map.height]]);
   });
 
+  it('reads the dark round the lab off the bake where a place looks past the lab', async () => {
+    const { bakeScene } = await import('../src/world/menu/scene.js');
+    const mission = parseMission(BLACKOUT);
+    const lab = { missionId: 'blackout', view: sceneViewOf(mission), drones: parkedDrones(mission) };
+    const bake = bakeScene(lab, 1440, 820, 1);
+    // The fake canvas reads every pixel black.
+    expect(bake?.dark).toEqual({ lit: '#000000', night: '#000000' });
+    expect(bake?.spots['handbook']?.x).toBeLessThan(0);
+    // A lab without places drifts within itself: no dark baked, none read.
+    expect(bakeScene({ ...lab, missionId: 'other' }, 1440, 820, 1)?.dark).toBeNull();
+  });
+
   it('frees what it made where the box is too large to bake', async () => {
     const { bakeScene } = await import('../src/world/menu/scene.js');
     const mission = parseMission(BLACKOUT);

@@ -319,6 +319,7 @@ function bakeOf(name: string): SceneBake {
     h: 50,
     night: false,
     spots: {},
+    dark: null,
   };
 }
 

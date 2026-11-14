@@ -44,6 +44,7 @@ function bakeOf(w = 400, h = 200): { bake: SceneBake; log: Entry[] } {
     h,
     night: false,
     spots: {},
+    dark: null,
   };
   return { bake, log };
 }

@@ -83,22 +83,45 @@ export function driftBox(shot: SceneShot, w: number, h: number): PixelBox {
   return { left, top, width: right - left, height: bottom - top };
 }
 
+/** How far round the lab its dark is baked where a place's frame looks past the lab's edge, tiles. */
+export const DARK_ROUND = 1;
+
 /**
- * The box of the lab a canvas `w` × `h` ever shows: along `shot` (driftBox) and at each of the
- * frames whose corners `corners` are — the menu's places (places.ts), which may reach past the
- * lab's edge into the dark round it — in whole pixels round them all.
+ * The lab of `map` at `scale` px a tile and the dark DARK_ROUND round it, whole pixels: as far as
+ * the scene bakes what a place's frame shows (`sceneBox`).
+ */
+export function labBound(map: { width: number; height: number }, scale: number): PixelBox {
+  const round = Math.ceil(DARK_ROUND * scale);
+  const width = Math.ceil(map.width * scale) + 2 * round;
+  const height = Math.ceil(map.height * scale) + 2 * round;
+  return { left: -round, top: -round, width, height };
+}
+
+/** `v` held within `lo` and `hi`. */
+const within = (lo: number, v: number, hi: number): number => Math.min(hi, Math.max(lo, v));
+
+/**
+ * The box of the lab a canvas `w` × `h` ever shows: along `shot` (driftBox), and at each of the
+ * frames whose corners `corners` are — the menu's places (places.ts) — as far as `bound` reaches,
+ * the lab and the dark round it (`labBound`): further into the dark a frame shows the dark
+ * without the bake (scene.ts `paintBake`). In whole pixels round them all.
  */
 export function sceneBox(
   shot: SceneShot,
-  w: number,
-  h: number,
+  [w, h]: readonly [number, number],
   corners: readonly { x: number; y: number }[],
+  bound: PixelBox,
 ): PixelBox {
   const drift = driftBox(shot, w, h);
-  const xs = [drift.left, drift.left + drift.width - w, ...corners.map((corner) => corner.x)];
-  const ys = [drift.top, drift.top + drift.height - h, ...corners.map((corner) => corner.y)];
+  const [right, bottom] = [bound.left + bound.width, bound.top + bound.height];
+  const xs = [drift.left, drift.left + drift.width];
+  const ys = [drift.top, drift.top + drift.height];
+  for (const { x, y } of corners) {
+    xs.push(within(bound.left, x, right), within(bound.left, x + w, right));
+    ys.push(within(bound.top, y, bottom), within(bound.top, y + h, bottom));
+  }
   const [left, top] = [Math.min(...xs), Math.min(...ys)];
-  return { left, top, width: Math.max(...xs) + w - left, height: Math.max(...ys) + h - top };
+  return { left, top, width: Math.max(...xs) - left, height: Math.max(...ys) - top };
 }
 
 /**
