@@ -344,11 +344,12 @@ auf einem M4 mit 16 GB (14.11.2026, Last 9 bis 17) 772 s:
 
 `SHOTS_ONLY=screens,intro` spielte Blackout in 48 s; jede Gruppe im Lauf zieht die Mission bis
 zur Siegerkarte mit, und `SHOTS_ONLY=run` allein dauerte 262 s (den Systemcheck 85 s). Die
-Übungshalle, `hall`, kommt nur im Systemcheck dazu: 269 s (14.11.2026, Last um 30; im CI 163 s,
-als sie ihre Frames noch am Schild maß), davon 46 s an der Zugangskontrolle, deren Tokengerät alle
-15 s zum nächsten Konto wechselt. Gemessen wird, während jede Station scharf ist: beim Host
-zwischen zwei Reihen der Halle (21,13, 8 von 17 Pulten im Bild), beim Publikum über die ganze
-Halle (alle 17 Pulte und 13 Bücher); beide lagen bei p95 16,7 ms.
+Übungshalle, `hall`, kommt nur im Systemcheck dazu: 189 s im CI (14.11.2026; der Schritt brauchte
+9:42 seiner 14 Minuten), lokal 269 s bei Last um 30, davon 45,6 s an der Zugangskontrolle, deren
+Tokengerät alle 15 s zum nächsten Konto wechselt. Ihre Frames misst sie, während 13 von 13
+Stationen scharf sind: beim Host an 21,13 zwischen zwei Reihen der Halle, 8 von 17 Pulten und 2 von
+13 Büchern im Bild (im CI p50 16,7 ms, p95 16,8 ms über 137 Frames), beim Publikum über die ganze
+Halle, alle 17 Pulte und 13 Bücher im Bild (p50 16,7 ms, p95 16,7 ms über 121 Frames).
 
 **Ton und Funkstimme:** Jeder Raum klingt nach seiner Art, die Schritte des Partners kommen von
 dort, wo er steht, und die Musik zieht mit dem Druck an ([`docs/sound.md`](docs/sound.md)). Zwei
