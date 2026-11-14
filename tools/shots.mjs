@@ -10362,15 +10362,10 @@ async function captureSettings(page) {
   }
 }
 
-/** The pause menu's items as they stand in the window: each one's words, foot and height. */
-function pauseItemsShown(menu) {
-  return [...menu.querySelectorAll('.menu-item')].map((el) => {
-    const box = el.getBoundingClientRect();
-    return { label: el.textContent.trim(), bottom: box.bottom, height: box.height };
-  });
-}
-
-/** The pause menu as it stands in the window: its name, items, line, focus, and what it fits. */
+/**
+ * The pause menu as it stands in the window, read in the page (whole, as page.evaluate takes a
+ * function): its name, its items' words, feet and heights, its line, the focus, what it fits.
+ */
 function pauseMenuShown() {
   const menu = document.querySelector('.pause-menu');
   if (menu === null) {
@@ -10378,9 +10373,13 @@ function pauseMenuShown() {
   }
   const panel = menu.querySelector('.pause-menu-panel');
   const said = (selector) => menu.querySelector(selector)?.textContent ?? '';
+  const items = [...menu.querySelectorAll('.menu-item')].map((el) => {
+    const box = el.getBoundingClientRect();
+    return { label: el.textContent.trim(), bottom: box.bottom, height: box.height };
+  });
   return {
     title: said('.pause-menu-title'),
-    items: pauseItemsShown(menu),
+    items,
     line: said('.pause-menu-line'),
     scrolls: panel.scrollHeight > panel.clientHeight + 1,
     focused: document.activeElement?.getAttribute('data-item') ?? null,
