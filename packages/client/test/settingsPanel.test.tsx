@@ -52,6 +52,7 @@ const ANNA: AccountView = {
   runs: 3,
   achievements: {},
   store: 'database',
+  login: null,
 };
 
 /** The panel open on `tab`, as markup: with the pass's account where `account` is given. */

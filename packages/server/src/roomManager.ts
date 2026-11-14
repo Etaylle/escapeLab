@@ -15,6 +15,7 @@ import {
 import { Room, type RunListener, type Sealer } from './room.js';
 import { open, seal } from './seal.js';
 import { switchOn } from './switches.js';
+import type { SeatPass } from './store/store.js';
 
 /** Room codes avoid ambiguous characters (0/O, 1/I/L). */
 const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
@@ -437,18 +438,57 @@ export class RoomManager {
   /**
    * Where `pass` sits, as its join screen shows it: in a run on — live or paused — before
    * anything else, else in a lobby; null for neither. Only a room that binds the pass counts
-   * (`Room.binds`): one taken up again that the pass has not come back to does not.
+   * (`Room.binds`): one taken up again that the pass has not come back to does not. With the
+   * pass's account (`accountId`), a run on with a seat of the account's counts as the pass's own,
+   * whichever device sat down on it (`Room.accountRun`).
    */
-  whereIs(pass: CrewPass): Seat | null {
+  whereIs(pass: CrewPass, accountId: string | null = null): Seat | null {
     let lobby: Seat | null = null;
     for (const room of this.rooms.values()) {
-      const seat = room.seatSummary(pass);
+      const own = room.seatSummary(pass);
+      const seat = own ?? (accountId === null ? null : room.accountRun(accountId));
       if (seat?.phase === 'playing') {
         return seat;
       }
       lobby ??= seat;
     }
     return lobby;
+  }
+
+  /** Whether `pass` holds a seat in any room, a lobby's or a run's. */
+  holdsSeat(pass: CrewPass): boolean {
+    return [...this.rooms.values()].some((room) => room.seatOf(pass) !== null);
+  }
+
+  /**
+   * Every seat of the pass `pass` — its id and the hash of its secret, as a store keeps it — its
+   * pass signed out, stays the account's (`Room.parkSeat`): bound to `accountId`, its line
+   * dropped.
+   */
+  parkSeats(pass: SeatPass, accountId: string): void {
+    for (const room of this.rooms.values()) {
+      room.parkSeat(pass, accountId);
+    }
+  }
+
+  /**
+   * Every seat bound to `accountId` but the one of the pass `staying` stays the account's, its
+   * line dropped (`Room.parkAccountSeats`): the account's Kennwort changed on that pass's device.
+   */
+  parkAccountSeats(accountId: string, staying: string): void {
+    for (const room of this.rooms.values()) {
+      room.parkAccountSeats(accountId, staying);
+    }
+  }
+
+  /**
+   * Every seat `pass` holds is bound to `accountId` as well (`Room.bindAccount`), the account the
+   * server found for the pass — as it sat down, came back, or signed in.
+   */
+  bindAccount(pass: CrewPass, accountId: string): void {
+    for (const room of this.rooms.values()) {
+      room.bindAccount(pass, accountId);
+    }
   }
 
   /**

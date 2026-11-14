@@ -73,8 +73,12 @@ Mission, das langsam vorbeizieht: *Einsatz starten* (die Missionskarten, „Rund
 (Steuerkreuz, A, B). Oben rechts steht das Profil, das Konto des Browsers: Name, Farbe, die eigene
 Figur, die winkt, sobald der Name sich ändert, und wie viele Einsätze das Konto gespielt hat. Das
 Konto bewahrt Name, Farbe, Erfolge und Läufe über Neustarts und Deploys hinweg; *Meine
-Einsätze* listet seine Läufe, die Einstellungen löschen es auf Wunsch
-([`docs/accounts.md`](docs/accounts.md)).
+Einsätze* listet seine Läufe, die Einstellungen löschen es auf Wunsch. Mit einem Kennwort
+(Einstellungen, „Konto") bekommt es eine Ausweisnummer wie `EL-7K3M-9Q2D`, mit der sich jedes
+Gerät dort anmeldet: Einsätze, Erfolge und ein laufender Platz folgen dem Konto; „Abmelden"
+lässt das Gerät als Gast neu beginnen, „Konto wechseln" meldet in einem Schritt um, und ein neues
+Kennwort meldet alle anderen Geräte ab. Ein vergessenes Kennwort lässt sich nicht
+wiederherstellen ([`docs/accounts.md`](docs/accounts.md)).
 *Offene Runden* listet jede Runde mit Kartenvorschau, Mission, Schwierigkeit, ihrer Crew als
 Figuren und den freien Plätzen — ein Klick auf *Beitreten* genügt, niemand muss einen Code
 weitergeben. Laufende Runden erscheinen ebenfalls, dort führt der Knopf zum Zuschauen. Unter
@@ -173,10 +177,11 @@ Das Hauptmenü stellt einen laufenden Einsatz als hellen ersten Menüpunkt voran
 gedimmt („Zurück zum Einsatz“, „Einsatz aufgeben“), und sperrt andere Räume;
 aufgeben gibt den Platz frei, unter der Mindestzahl der Crew endet der Lauf für alle („EINSATZ
 ABGEBROCHEN“). Ein anderes Gerät übernimmt einen getrennten Platz mit Raumcode und genau dessen
-Namen (wie bei Jackbox), sobald jemand aus der Crew es zulässt. Die eigene Seite erkennt eine
-tote Leitung nach 5 Sekunden ohne Uhrantwort, 20 Sekunden Stille oder 8 Sekunden ohne offene
-Verbindung, verbindet sofort neu und zeigt bis dahin „VERBINDUNG VERLOREN“ mit Versuch und
-Wartezeit. Einzelheiten: `docs/gameplay.md`, „Verbindung und Wiedereintritt“.
+Namen (wie bei Jackbox), sobald jemand aus der Crew es zulässt; ein Gerät, das im Konto des
+Platzes angemeldet ist, holt ihn ohne Zustimmung über seine Karte zurück. Die eigene Seite
+erkennt eine tote Leitung nach 5 Sekunden ohne Uhrantwort, 20 Sekunden Stille oder 8 Sekunden
+ohne offene Verbindung, verbindet sofort neu und zeigt bis dahin „VERBINDUNG VERLOREN“ mit
+Versuch und Wartezeit. Einzelheiten: `docs/gameplay.md`, „Verbindung und Wiedereintritt“.
 
 **Pausenmenü und Verlassen:** Im Raum öffnen Esc, das Zahnrad oben, die Start-Taste des
 Controllers oder „Menü“ in der Leiste das Pausenmenü — Weiter, Einstellungen, Handbuch und die
@@ -320,27 +325,27 @@ Siegerkarte) und `music` (die Musikpakete in den Einstellungen auf einer eigenen
 anderes Paket hörbar, Vorhören, nach dem Neuladen behalten); Blackout nennt alle vier im Log als
 ausgelassen. Der Rundgang selbst: `screens` (Menü und sein Ton, Bestenliste, Lobby, der Start aus
 ihr), `intro` (die Eröffnung bis `blackout.png`) und `run` (die Mission bis zur Siegerkarte, nach
-dem gewonnenen Systemcheck die Einsätze des Kontos und sein Löschen); im Lauf `devices` (jede
-Station, auch auf dem quer gehaltenen Handy), `reading` (Quellen, Schild, Notizen der letzten
-Schicht, Notizblock, Bücher), `hud` (das Spiel in jeder Fenstergröße, Einstellungen, Steuerung,
-Minikarte, Sprint), `graphics` (Licht, Leuchten, Figuren, Kamera, Dichte 2), `audio` (Raumklang,
-Funk, Seite des Partners, Musik), `voice` (Mikrofone, Sprechverbindungen) und `perf` (die
-Frame-Fenster). Die Gruppen im Lauf brauchen `run` und ziehen ihn mit; `SHOTS_SKIP=run` lehnt sie
-ab. Jede ausgelassene, abgelehnte oder mitgezogene Gruppe steht zu Beginn mit einer Zeile im Log,
-und was sie aufgenommen hätte, zählt weder als übersprungen noch als fehlgeschlagen. Der Rundgang
-spielt nur so weit, wie die gewählten Gruppen reichen: `screens` allein endet, sobald der Lauf
-gestartet ist, `intro` nach `blackout.png`. Eine Aufnahme oder Prüfung gehört zur Gruppe des
-Schritts, der sie macht — jeder Lauf hält jede Aufnahme an die Gruppe ihres Schritts, so prüft jeder
-volle Lauf die Tabelle —, und wo der Schritt einer anderen Gruppe gehört, kommt sie nur mit dieser:
-die Frame-Fenster von `perf` im Menü (`screens`), in der Eröffnung (`intro`: der Vorspann, das
-beleuchtete Labor und sein Blick bei Dichte 2) und bei Dichte 2 am Pult und in der Flucht
-(`graphics`), die Sprechverbindungen von `voice` nach dem Neuladen des Gast-Handys, das der
-Notizblock von `reading` auslöst, und der Info-Knopf von `hud` nach einem unterwegs gelesenen
-Schild, ebenfalls `reading`, wo niemand am Schild startet. Ohne beide Variablen spielt er alles wie
-bisher; die Zusammenfassung nennt die gespielten Gruppen, die Zeile `groups` davor die Sekunden
-jeder Gruppe — was ihre eigenen Schritte brauchten, bei `run` mit allen Wegen und Lösungen der
-Mission. Ein voller Blackout-Rundgang dauerte auf einem M4 mit 16 GB (14.11.2026, Last 9 bis 17)
-772 s:
+dem gewonnenen Systemcheck die Einsätze des Kontos, sein Kennwort, die Anmeldung auf einem zweiten
+Gerät, der Kontowechsel und sein Löschen); im Lauf `devices` (jede Station, auch auf dem quer
+gehaltenen Handy), `reading` (Quellen, Schild, Notizen der letzten Schicht, Notizblock, Bücher),
+`hud` (das Spiel in jeder Fenstergröße, Einstellungen, Steuerung, Minikarte, Sprint), `graphics`
+(Licht, Leuchten, Figuren, Kamera, Dichte 2), `audio` (Raumklang, Funk, Seite des Partners, Musik),
+`voice` (Mikrofone, Sprechverbindungen) und `perf` (die Frame-Fenster). Die Gruppen im Lauf brauchen
+`run` und ziehen ihn mit; `SHOTS_SKIP=run` lehnt sie ab. Jede ausgelassene, abgelehnte oder
+mitgezogene Gruppe steht zu Beginn mit einer Zeile im Log, und was sie aufgenommen hätte, zählt
+weder als übersprungen noch als fehlgeschlagen. Der Rundgang spielt nur so weit, wie die gewählten
+Gruppen reichen: `screens` allein endet, sobald der Lauf gestartet ist, `intro` nach `blackout.png`.
+Eine Aufnahme oder Prüfung gehört zur Gruppe des Schritts, der sie macht — jeder Lauf hält jede
+Aufnahme an die Gruppe ihres Schritts, so prüft jeder volle Lauf die Tabelle —, und wo der Schritt
+einer anderen Gruppe gehört, kommt sie nur mit dieser: die Frame-Fenster von `perf` im Menü
+(`screens`), in der Eröffnung (`intro`: der Vorspann, das beleuchtete Labor und sein Blick bei
+Dichte 2) und bei Dichte 2 am Pult und in der Flucht (`graphics`), die Sprechverbindungen von
+`voice` nach dem Neuladen des Gast-Handys, das der Notizblock von `reading` auslöst, und der
+Info-Knopf von `hud` nach einem unterwegs gelesenen Schild, ebenfalls `reading`, wo niemand am
+Schild startet. Ohne beide Variablen spielt er alles wie bisher; die Zusammenfassung nennt die
+gespielten Gruppen, die Zeile `groups` davor die Sekunden jeder Gruppe — was ihre eigenen Schritte
+brauchten, bei `run` mit allen Wegen und Lösungen der Mission. Ein voller Blackout-Rundgang dauerte
+auf einem M4 mit 16 GB (14.11.2026, Last 9 bis 17) 772 s:
 
 | Gruppe | s | Gruppe | s | Gruppe | s |
 | --- | --- | --- | --- | --- | --- |
