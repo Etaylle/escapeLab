@@ -87,7 +87,7 @@ describe('the server going down for a restart', () => {
     ];
     const paused = firstCall(annaSend, (data) => {
       const msg = said(data);
-      return msg.kind === 'view' && msg.view.maintenance === true;
+      return msg.kind === 'view' && msg.view.pausedAt !== null;
     });
     const restart = firstCall(annaSend, (data) => said(data).kind === 'restart');
     const order = [

@@ -142,12 +142,12 @@ function drawDoors(ctx: CanvasRenderingContext2D, frame: Frame): void {
 
 /**
  * Every station's spot: a station with two consoles stands twice, both lit while it is armed.
- * A main switch has a lever for each of the crew; a circuit's box is a fuse box. A locked
- * station shows where light fell.
+ * A main switch has a lever for each of the crew the run counts — whoever is away too, until it
+ * goes on without them; a circuit's box is a fuse box. A locked station shows where light fell.
  */
 function drawStations(ctx: CanvasRenderingContext2D, frame: Frame): void {
   const { map, light, pulse } = frame;
-  const levers = frame.players.filter((p) => p.connected).length;
+  const levers = frame.players.filter((p) => p.waived !== true).length;
   for (const station of map.stations) {
     const status = statusOf(station);
     if (status !== 'locked' || light.shown(station.x, station.y)) {

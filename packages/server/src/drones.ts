@@ -40,7 +40,9 @@ function headsDown(state: GameState): Set<string> {
  * lamps light by — and a cooldown so one sighting costs time exactly once.
  * Players heads-down at the open puzzle — working its station or reading its
  * rules — are not spotted: the console counts as cover, which keeps the
- * penalty fair. Every drone sleeps at its first waypoint while the lights
+ * penalty fair. Nor is an avatar whose line is down, standing where it stood
+ * while the run goes on: the crew is not punished for a body that cannot
+ * move. Every drone sleeps at its first waypoint while the lights
  * are on, and one with `activeAfterSolved` until the crew has solved that
  * many puzzles too (core's `patrollingDrones`): until then it neither moves,
  * nor sees, nor shows up. One with `frozenByPlate` stands still and sees

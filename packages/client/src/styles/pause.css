@@ -119,13 +119,7 @@
   min-height: 44px;
 }
 
-/* ── the crew's word of who went to the main menu ───────────────────────── */
-
-/* On the waiting card of everybody still in the run (Pause.tsx): who went, the seat kept. */
-.overlay.pause .pause-gone {
-  margin: 0;
-  color: var(--text);
-}
+/* ── the crew's word of who went ────────────────────────────────────────── */
 
 /* In the lobby (Lobby.tsx): the host's part passed on, said for a few seconds. */
 .lobby-host-news {

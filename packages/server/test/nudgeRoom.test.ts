@@ -65,19 +65,19 @@ const nudges = (walker: Walker): string[] =>
     .events.filter((e) => e.kind === 'nudge')
     .map((e) => e.label);
 
+/** Anna and Ben in a run of the corridor, at `difficulty`; the clock runs from the start. */
+function started(difficulty: Difficulty = 'normal') {
+  const room = new Room('TEST', scaleMission(mission, difficulty), undefined, null, difficulty);
+  const anna = join(room, 'Anna');
+  const ben = join(room, 'Ben');
+  room.setReady(ben.playerId, true);
+  room.act(anna.playerId, { kind: 'start-mission' });
+  return { room, anna, ben };
+}
+
 describe('mission control watching from the room', () => {
   beforeEach(() => vi.useFakeTimers());
   afterEach(() => vi.useRealTimers());
-
-  /** Anna and Ben in a run of the corridor, at `difficulty`; the clock runs from the start. */
-  function started(difficulty: Difficulty = 'normal') {
-    const room = new Room('TEST', scaleMission(mission, difficulty), undefined, null, difficulty);
-    const anna = join(room, 'Anna');
-    const ben = join(room, 'Ben');
-    room.setReady(ben.playerId, true);
-    room.act(anna.playerId, { kind: 'start-mission' });
-    return { room, anna, ben };
-  }
 
   it('speaks up once nothing has happened at the station for 90 s', () => {
     const { room, anna } = started();
@@ -104,21 +104,6 @@ describe('mission control watching from the room', () => {
     room.dispose();
   });
 
-  it('stands still while the run is paused', () => {
-    const { room, anna, ben } = started();
-    vi.advanceTimersByTime(30_000);
-    ben.detach();
-    vi.advanceTimersByTime(120_000);
-    expect(nudges(anna)).toEqual([]);
-    room.resume(passFor('Ben'));
-    room.attach(ben.playerId, (m) => ben.messages.push(m));
-    vi.advanceTimersByTime(QUIET_MS - 30_000 - 1);
-    expect(nudges(anna)).toEqual([]);
-    vi.advanceTimersByTime(1);
-    expect(nudges(anna)).toEqual([FIRST[0]]);
-    room.dispose();
-  });
-
   it('sends the second line after another quiet spell, and no third', () => {
     const { room, anna } = started();
     vi.advanceTimersByTime(QUIET_MS);
@@ -139,7 +124,7 @@ describe('mission control watching from the room', () => {
     room.dispose();
   });
 
-  it('calls the clock at five minutes, two and the last, once each, and not while paused', () => {
+  it('calls the clock at five minutes, two and the last, once each, not in a maintenance', () => {
     const clock = {
       fiveMinutes: 'Noch fünf Minuten.',
       twoMinutes: 'Noch zwei Minuten.',
@@ -160,12 +145,15 @@ describe('mission control watching from the room', () => {
     expect(calls()).toEqual([]);
     vi.advanceTimersByTime(1);
     expect(calls()).toEqual([clock.fiveMinutes]);
-    // A line dropped for 60 s moves every call on by as long.
+    // A line dropped for 30 s moves no call on; the server's maintenance for 60 s every one.
     ben.detach();
-    vi.advanceTimersByTime(60_000);
+    vi.advanceTimersByTime(30_000);
     room.resume(passFor('Ben'));
-    room.attach(ben.playerId, (m) => ben.messages.push(m));
-    vi.advanceTimersByTime(180_000 - 1);
+    room.goDown(Date.now());
+    vi.advanceTimersByTime(60_000);
+    room.resume(passFor('Anna'));
+    room.resume(passFor('Ben'));
+    vi.advanceTimersByTime(150_000 - 1);
     expect(calls()).toEqual([clock.fiveMinutes]);
     vi.advanceTimersByTime(1);
     expect(calls()).toEqual([clock.fiveMinutes, clock.twoMinutes]);
@@ -186,5 +174,36 @@ describe('mission control watching from the room', () => {
     expect(lastView(anna).difficulty).toBe('entspannt');
     expect(lastView(anna).timeLimitSec).toBe(scaleMission(mission, 'entspannt').timeLimitSec);
     relaxed.dispose();
+  });
+});
+
+describe('mission control with a line down, and through the server’s maintenance', () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it('stands still while the server’s maintenance stands the run still', () => {
+    const { room, anna } = started();
+    vi.advanceTimersByTime(30_000);
+    room.goDown(Date.now());
+    vi.advanceTimersByTime(120_000);
+    expect(nudges(anna)).toEqual([]);
+    room.resume(passFor('Anna'));
+    room.resume(passFor('Ben'));
+    vi.advanceTimersByTime(QUIET_MS - 30_000 - 1);
+    expect(nudges(anna)).toEqual([]);
+    vi.advanceTimersByTime(1);
+    expect(nudges(anna)).toEqual([FIRST[0]]);
+    room.dispose();
+  });
+
+  it('speaks up on time with a line down: a drop stands nothing still', () => {
+    const { room, anna, ben } = started();
+    vi.advanceTimersByTime(30_000);
+    ben.detach();
+    vi.advanceTimersByTime(QUIET_MS - 30_000 - 1);
+    expect(nudges(anna)).toEqual([]);
+    vi.advanceTimersByTime(1);
+    expect(nudges(anna)).toEqual([FIRST[0]]);
+    room.dispose();
   });
 });

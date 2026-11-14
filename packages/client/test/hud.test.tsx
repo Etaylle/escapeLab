@@ -29,7 +29,7 @@ function hud(events: RunEvent[], onAir = false, edgework: Edgework | null = null
     lights: { out: true, outAt: 0 },
     currentPuzzleIndex: 0,
     puzzleCount: 1,
-    pausedFor: null,
+    away: [],
     pausedAt: null,
     events,
     grade: null,

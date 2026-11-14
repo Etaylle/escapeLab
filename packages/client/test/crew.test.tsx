@@ -27,7 +27,12 @@ import {
   stepTo,
 } from '../src/screens/Lobby.js';
 import { MissionHud } from '../src/screens/MissionHud.js';
-import { audienceTags, SpectateScreen } from '../src/screens/Spectate.js';
+import {
+  audienceRunOf,
+  audienceTags,
+  SpectateScreen,
+  spectatorAsPlayerView,
+} from '../src/screens/Spectate.js';
 import { iconsAsWords, mapWith, PICTOGRAPH } from './fixtures.js';
 
 const noop = (): void => undefined;
@@ -62,7 +67,7 @@ function annaSees(players: Seat[], parts: Partial<PlayerView> = {}): PlayerView 
     lights: { out: false, outAt: null },
     currentPuzzleIndex: 0,
     puzzleCount: 5,
-    pausedFor: null,
+    away: [],
     pausedAt: null,
     events: [],
     grade: null,
@@ -1077,56 +1082,56 @@ describe('the end screen', () => {
   });
 });
 
+type Watched = SpectatorView['players'][number];
+const watch = (p: Seat, signSeen: boolean): Watched => ({
+  id: p.id,
+  name: p.name,
+  color: p.color,
+  connected: true,
+  presence: { stationId: null, console: null, manualId: null, signSeen },
+});
+/** Anna has read the sign, Ben has not. */
+const watchedAnna = watch(anna, true);
+const watchedBen = watch(ben, false);
+
+/** What a spectator gets once Anna and Ben are out. */
+function finished(): SpectatorView {
+  return {
+    phase: 'won',
+    missionId: 'blackout',
+    missionTitle: 'Blackout im Labor',
+    difficulty: 'normal',
+    storyText: 'Licht.',
+    deadlineAt: 481_000,
+    startedAt: 1_000,
+    finishedAt: 301_000,
+    timeLimitSec: 480,
+    lights: { out: true, outAt: 1_000 },
+    currentPuzzleIndex: 5,
+    puzzleCount: 5,
+    penaltySeq: 2,
+    alarms: { count: 2, limit: 5 },
+    hintsUsed: 1,
+    away: [],
+    pausedAt: null,
+    events: [],
+    grade: { rank: 'B', label: 'Solide' },
+    players: [watchedAnna, watchedBen],
+    credits: {
+      p1: { operated: 3, read: 1, found: 0, delivered: 1, alarms: 0, hints: 0 },
+      p2: { operated: 2, read: 4, found: 1, delivered: 0, alarms: 2, hints: 1 },
+    },
+    map: null,
+    puzzle: null,
+    edgework: null,
+    panels: [],
+  };
+}
+
 describe('the audience', () => {
   afterEach(() => {
     vi.useRealTimers();
   });
-
-  type Watched = SpectatorView['players'][number];
-  const watch = (p: Seat, signSeen: boolean): Watched => ({
-    id: p.id,
-    name: p.name,
-    color: p.color,
-    connected: true,
-    presence: { stationId: null, console: null, manualId: null, signSeen },
-  });
-  /** Anna has read the sign, Ben has not. */
-  const watchedAnna = watch(anna, true);
-  const watchedBen = watch(ben, false);
-
-  /** What a spectator gets once Anna and Ben are out. */
-  function finished(): SpectatorView {
-    return {
-      phase: 'won',
-      missionId: 'blackout',
-      missionTitle: 'Blackout im Labor',
-      difficulty: 'normal',
-      storyText: 'Licht.',
-      deadlineAt: 481_000,
-      startedAt: 1_000,
-      finishedAt: 301_000,
-      timeLimitSec: 480,
-      lights: { out: true, outAt: 1_000 },
-      currentPuzzleIndex: 5,
-      puzzleCount: 5,
-      penaltySeq: 2,
-      alarms: { count: 2, limit: 5 },
-      hintsUsed: 1,
-      pausedFor: null,
-      pausedAt: null,
-      events: [],
-      grade: { rank: 'B', label: 'Solide' },
-      players: [watchedAnna, watchedBen],
-      credits: {
-        p1: { operated: 3, read: 1, found: 0, delivered: 1, alarms: 0, hints: 0 },
-        p2: { operated: 2, read: 4, found: 1, delivered: 0, alarms: 2, hints: 1 },
-      },
-      map: null,
-      puzzle: null,
-      edgework: null,
-      panels: [],
-    };
-  }
 
   it('tags who has read the sign besides where they stand', () => {
     const view: SpectatorView = { ...finished(), phase: 'playing', map: lab };
@@ -1149,6 +1154,39 @@ describe('the audience', () => {
       { text: 'Kennung', tone: 'sign' },
     ]);
     expect(audienceTags(view, watchedBen, on(1, 8))).toEqual([]);
+  });
+
+  it('tags whoever is away with how long, as the crew strip does', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(PULLED_AT + 65_000);
+    const gone = { ...watchedBen, connected: false };
+    const view: SpectatorView = {
+      ...finished(),
+      phase: 'playing',
+      map: lab,
+      players: [watchedAnna, gone],
+      away: [{ id: 'p2', name: 'Ben', since: PULLED_AT, waivableAt: PULLED_AT + 60_000 }],
+    };
+    const away = { text: 'getrennt · 1:05', tone: 'away' };
+    expect(audienceTags(view, gone, undefined)).toEqual([away]);
+    vi.useRealTimers();
+  });
+
+  it('counts the crew the run counts at a lever, whoever is away, as the crew does', () => {
+    const away = { ...watchedBen, connected: false };
+    const waived = { ...watch(ben, false), id: 'p3', name: 'Cem', connected: false };
+    const view: SpectatorView = {
+      ...finished(),
+      phase: 'playing',
+      players: [watchedAnna, away, { ...waived, waived: true }],
+    };
+    expect(audienceRunOf(view).crew.mates.map((mate) => mate.name)).toEqual(['Anna', 'Ben']);
+    const world = spectatorAsPlayerView(view);
+    expect(world.players.map((p) => [p.name, p.connected, p.waived ?? false])).toEqual([
+      ['Anna', true, false],
+      ['Ben', false, false],
+      ['Cem', false, true],
+    ]);
   });
 
   it('sees the credits in place of the station once the run is over', () => {

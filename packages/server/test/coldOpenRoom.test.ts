@@ -87,19 +87,19 @@ function streamedDrones(walker: Walker): string[] {
   return last?.kind === 'positions' ? Object.keys(last.drones) : [];
 }
 
+/** Anna and Ben in a started run; `startedAt` is the fake clock's now. */
+function started(afterSolved?: number) {
+  const room = new Room('TEST', mission(afterSolved));
+  const anna = join(room, 'Anna');
+  const ben = join(room, 'Ben');
+  room.setReady(ben.playerId, true);
+  room.act(anna.playerId, { kind: 'start-mission' });
+  return { room, anna, ben, startedAt: Date.now() };
+}
+
 describe('a room whose mission opens with the power on', () => {
   beforeEach(() => vi.useFakeTimers());
   afterEach(() => vi.useRealTimers());
-
-  /** Anna and Ben in a started run; `startedAt` is the fake clock's now. */
-  function started(afterSolved?: number) {
-    const room = new Room('TEST', mission(afterSolved));
-    const anna = join(room, 'Anna');
-    const ben = join(room, 'Ben');
-    room.setReady(ben.playerId, true);
-    room.act(anna.playerId, { kind: 'start-mission' });
-    return { room, anna, ben, startedAt: Date.now() };
-  }
 
   /** Both at the armed station, switched on, both press. */
   function solveNext(room: Room, anna: Walker, ben: Walker): void {
@@ -170,23 +170,6 @@ describe('a room whose mission opens with the power on', () => {
     room.dispose();
   });
 
-  it('waits out a pause during the intro: the lights go out that much later', () => {
-    const { room, anna, ben } = started();
-    vi.advanceTimersByTime(1000);
-    ben.detach();
-    expect(lastView(anna).pausedFor?.map((away) => away.name)).toEqual(['Ben']);
-    vi.advanceTimersByTime(10_000);
-    expect(lastView(anna).lights.out).toBe(false);
-    room.resume(passFor('Ben'));
-    room.attach(ben.playerId, (m) => ben.messages.push(m));
-    const resumedAt = Date.now();
-    vi.advanceTimersByTime(INTRO_MS - 1000 - 1);
-    expect(lastView(anna).lights.out).toBe(false);
-    vi.advanceTimersByTime(1);
-    expect(lastView(anna).lights).toEqual({ out: true, outAt: resumedAt + INTRO_MS - 1000 });
-    room.dispose();
-  });
-
   it('keeps the drone asleep until the lights are out, then sends it on patrol', () => {
     const { room, anna } = started();
     vi.advanceTimersByTime(INTRO_MS - 100);
@@ -228,6 +211,35 @@ describe('a room whose mission opens with the power on', () => {
     expect(lastView(anna).phase).toBe('playing');
     vi.advanceTimersByTime(INTRO_MS);
     expect(lastView(anna).phase).toBe('lost');
+    room.dispose();
+  });
+});
+
+describe('a room whose mission opens with the power on, a line down', () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it('goes dark on time with a line down during the intro: a drop holds nothing up', () => {
+    const { room, anna, ben, startedAt } = started();
+    vi.advanceTimersByTime(1000);
+    ben.detach();
+    expect(lastView(anna).away.map((away) => away.name)).toEqual(['Ben']);
+    vi.advanceTimersByTime(INTRO_MS - 1000 - 1);
+    expect(lastView(anna).lights.out).toBe(false);
+    vi.advanceTimersByTime(1);
+    expect(lastView(anna).lights).toEqual({ out: true, outAt: startedAt + INTRO_MS });
+    room.resume(passFor('Ben'));
+    room.attach(ben.playerId, (m) => ben.messages.push(m));
+    expect(lastView(ben).lights).toEqual({ out: true, outAt: startedAt + INTRO_MS });
+    room.dispose();
+  });
+
+  it('goes dark the moment the one still watching drops, the rest done with it', () => {
+    const { room, anna, ben } = started();
+    room.act(anna.playerId, { kind: 'intro-done' });
+    vi.advanceTimersByTime(1000);
+    ben.detach();
+    expect(lastView(anna).lights).toEqual({ out: true, outAt: Date.now() });
     room.dispose();
   });
 });
