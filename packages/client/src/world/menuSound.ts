@@ -17,7 +17,7 @@ import {
   type Fade,
 } from './audio.js';
 import { closeStream, openStream, rewindStream, steer } from './audioStream.js';
-import { duck, unduck } from './mix.js';
+import { duck, duckLevels, unduck } from './mix.js';
 import {
   barsOf,
   CROSSFADE_S,
@@ -35,6 +35,7 @@ import {
   type Chosen,
   type MusicPiece,
 } from './musicPacks.js';
+import { previewing } from './musicPreview.js';
 import { holdMusic, musicFrom } from './musicTurn.js';
 import type { Slot } from './packFile.js';
 import {
@@ -655,6 +656,10 @@ export interface MenuSoundProbe {
   sounding: number;
   hum: boolean;
   ducked: boolean;
+  /** how far the music stands pulled down now, linear (mix.ts): 1 where nothing pulls it */
+  musicDuck: number;
+  /** the piece the settings play for the ear (musicPreview.ts), by its key; null for none */
+  preview: string | null;
   /** how often each of the interface's sounds has played on this page */
   played: Record<UiSound, number>;
 }
@@ -675,6 +680,12 @@ function soundingPiece(): Piece | null {
   return heard !== null && soundingOf(heard) > 0 ? heard : null;
 }
 
+/** How far the menu's music stands pulled down now, linear; 1 while it does not play. */
+function musicDuckNow(): number {
+  const engine = playing?.engine;
+  return engine === undefined ? 1 : duckLevels(engine, engine.ctx.currentTime).music;
+}
+
 /** The menu's sound as it stands, for the walkthrough: what sounds, not what is laid. */
 export function menuSoundProbe(): MenuSoundProbe {
   const heard = soundingPiece();
@@ -687,6 +698,8 @@ export function menuSoundProbe(): MenuSoundProbe {
     sounding: piecesNow().reduce((sum, piece) => sum + soundingOf(piece), 0),
     hum: playing?.hum != null,
     ducked,
+    musicDuck: musicDuckNow(),
+    preview: previewing(),
     played: { ...played },
   };
 }

@@ -305,6 +305,25 @@ describe('a pack picked on the menu and in the lobby', () => {
     expect(before?.src).toBe('');
   });
 
+  it('says on its probe a piece played for the ear, the music 24 dB under it', async () => {
+    const page = fakeWindow();
+    const { sound } = await freshMenu();
+    const preview = await import('../src/world/musicPreview.js');
+    sound.wantMenuSound('menu');
+    page.fire('keydown');
+    await vi.advanceTimersByTimeAsync(600);
+    expect(sound.menuSoundProbe()).toMatchObject({ theme: true, preview: null, musicDuck: 1 });
+    const ctx = lastContext();
+    preview.togglePreview('probe', 'calm');
+    await vi.advanceTimersByTimeAsync(20);
+    ctx.currentTime += 0.1;
+    expect(sound.menuSoundProbe().preview).toBe('probe/calm');
+    expect(sound.menuSoundProbe().musicDuck).toBeCloseTo(10 ** (-24 / 20), 6);
+    preview.stopPreview();
+    ctx.currentTime += 1;
+    expect(sound.menuSoundProbe()).toMatchObject({ preview: null, musicDuck: 1 });
+  });
+
   it('brings its lobby’s piece in on the next bar of the lobby’s piece playing', async () => {
     const page = fakeWindow();
     const { sound, packs } = await freshMenu({ lobby: { seconds: 61 } });

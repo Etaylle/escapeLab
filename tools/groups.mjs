@@ -85,6 +85,13 @@ export const GROUPS = [
     ],
   },
   {
+    // The music packs in the settings' „Ton", on a menu page of its own (client MusicSettings.tsx).
+    name: 'music',
+    stage: 'drills',
+    needs: [],
+    captures: ['settings-music.png'],
+  },
+  {
     name: 'screens',
     stage: 'lobby',
     needs: [],

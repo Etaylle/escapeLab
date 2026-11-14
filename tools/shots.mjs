@@ -13824,11 +13824,267 @@ async function captureRestart() {
   }
 }
 
+/** The pack the game plays until another is picked: the game's own score (client packFile.ts). */
+const SCORE_PACK = 'nachtschicht';
+
+/** How far the music has to stand under a piece played for the ear: its 24 dB, 4 dB to spare. */
+const PREVIEW_DUCKED = 10 ** (-20 / 20);
+
+/** In the page: the packs „Musik" lists, in their order — each one's id, and whether it is lit. */
+const packsListed = () =>
+  [...document.querySelectorAll('.settings-music .music-pack')].map((button) => ({
+    id: button.dataset.pack,
+    on: button.getAttribute('aria-checked') === 'true',
+  }));
+
+/** The ids of the packs lit among `packs` (`packsListed`), joined: the one in force. */
+const litOf = (packs) =>
+  packs
+    .filter((pack) => pack.on)
+    .map((pack) => pack.id)
+    .join(', ');
+
+/**
+ * In the page: „Musik" as it stands in the window — how far the settings' card runs out
+ * sideways, px, the least height of a press in it and the least size of a text in it, px.
+ */
+function musicBlockShown() {
+  const block = document.querySelector('.settings-music');
+  const card = document.querySelector('.settings-card');
+  if (block === null || card === null) {
+    return null;
+  }
+  const presses = [...block.querySelectorAll('button')].map((b) => b.getBoundingClientRect());
+  const said = (el) =>
+    [...el.childNodes].some((node) => node.nodeType === 3 && node.textContent.trim() !== '');
+  const sizes = [...block.querySelectorAll('*')]
+    .filter(said)
+    .map((el) => parseFloat(globalThis.getComputedStyle(el).fontSize));
+  return {
+    over: card.scrollWidth - card.clientWidth,
+    press: Math.round(Math.min(...presses.map((box) => box.height))),
+    text: Math.min(...sizes),
+  };
+}
+
+/**
+ * A key on `page` wakes the menu's sound; its probe once it plays and `heard` holds of it — or as
+ * it stands after SOUND_WITHIN_MS.
+ */
+async function wakeMenuSound(page, heard) {
+  await page.keyboard.press('Shift');
+  return menuSoundOnce(page, (probe) => probe.state === 'playing' && heard(probe));
+}
+
+/**
+ * settings-music.png: the settings opened on „Ton" over the menu, scrolled to „Musik" — the packs
+ * shipped, the score's lit, the Feinwahl's button and the Nennungen of the eight pieces in play.
+ * Returns the packs listed (`packsListed`) and what was wrong.
+ */
+async function musicBlockShot(page) {
+  if (!(await settled(openSettings(page, 'ton')))) {
+    return { packs: [], wrong: ['the gear opened no settings'] };
+  }
+  const block = page.locator('.settings-music');
+  await block.evaluate((el) => el.scrollIntoView({ block: 'start' }));
+  await sleep(300);
+  await capture(page, 'settings-music.png');
+  const packs = await page.evaluate(packsListed);
+  const credits = await block.locator('[data-credit]').count();
+  const lit = litOf(packs);
+  console.log(
+    `settings-music.png ${packs.length} packs (${packs.map((pack) => pack.id).join(', ')}), ` +
+      `${lit || '!! none'} lit; ${credits} Nennungen`,
+  );
+  const wrong = wrongOf([
+    [packs.length < 2, `${packs.length} packs listed`],
+    [lit !== SCORE_PACK, `${lit || 'none'} lit, not the score`],
+    [credits !== 8, `${credits} Nennungen, not the eight pieces in play`],
+  ]);
+  return { packs, wrong };
+}
+
+/**
+ * Another pack than the score pressed in „Musik": its theme has to sound on the menu within
+ * SOUND_WITHIN_MS — at once, crossing the score's — and its button has to be lit. Returns the pack
+ * pressed and what was wrong.
+ */
+async function packSwitch(page, packs) {
+  const picked = packs.find((pack) => !pack.on)?.id ?? null;
+  if (picked === null) {
+    return { picked, wrong: ['no other pack to press'] };
+  }
+  const from = Date.now();
+  await page.locator(`.music-pack[data-pack="${picked}"]`).click();
+  const heard = await menuSoundOnce(page, (probe) => probe.pack === picked && probe.theme);
+  const took = seconds(Date.now() - from);
+  const lit = litOf(await page.evaluate(packsListed));
+  const sounds = heard.pack === picked && heard.theme;
+  console.log(
+    `music pack         ${picked} pressed: ` +
+      (sounds
+        ? `its theme sounding ${took} later, ${heard.sounding} of the music's elements playing`
+        : `!! ${heard.pack ?? 'nothing'} heard ${took} later`) +
+      `; ${lit} lit`,
+  );
+  const wrong = wrongOf([
+    [!sounds, `${picked}'s theme never sounded on the menu`],
+    [lit !== picked, `${lit || 'none'} lit after ${picked} was pressed`],
+  ]);
+  return { picked, wrong };
+}
+
+/**
+ * The Feinwahl opened: eight places, each with the piece of every one of the `count` packs; ▶
+ * beside the calm piece of `picked` plays it, the menu's music pulled PREVIEW_DUCKED down under
+ * it at least (the probe's `preview` and `musicDuck`). What was wrong.
+ */
+async function previewDucks(page, picked, count) {
+  await page.locator('.music-fine-toggle').click();
+  const slots = page.locator('.music-slot');
+  await settled(slots.first().waitFor({ timeout: 2000 }));
+  const [places, pieces] = [await slots.count(), await page.locator('.music-piece-row').count()];
+  const key = `${picked}/calm`;
+  const row = page.locator('.music-piece-row', { has: page.locator(`[data-piece="${key}"]`) });
+  await row.locator('.music-play').click();
+  const probe = await menuSoundOnce(
+    page,
+    (heard) => heard.preview === key && heard.musicDuck <= PREVIEW_DUCKED,
+  );
+  const db = (20 * Math.log10(Math.max(probe.musicDuck ?? 1, 1e-6))).toFixed(1);
+  console.log(
+    `music preview      the Feinwahl: ${places} places, ${pieces} pieces; ▶ ${key}: ` +
+      (probe.preview === key ? `the menu's music at ${db} dB under it` : '!! nothing played'),
+  );
+  return wrongOf([
+    [places !== 8, `${places} places in the Feinwahl`],
+    [pieces !== 8 * count, `${pieces} pieces in the Feinwahl, not ${8 * count}`],
+    [probe.preview !== key, `▶ ${key} played nothing`],
+    [!(probe.musicDuck <= PREVIEW_DUCKED), `the music only ${db} dB under the piece played`],
+  ]);
+}
+
+/**
+ * „Musik" on a phone held sideways (`asLargePhone`), the Feinwahl open: the settings' card runs
+ * out sideways nowhere, every press is a fingertip's 44 px high, every text 14 px. What was wrong.
+ */
+async function musicOnPhone(page) {
+  let shown = null;
+  await asLargePhone(page, async () => {
+    shown = await page.evaluate(musicBlockShown);
+  });
+  if (shown === null) {
+    return ['no „Musik" to read on the phone'];
+  }
+  console.log(
+    `music on a phone   932x430, the Feinwahl open: +${shown.over} px sideways; ` +
+      `every press ${shown.press} px high at least, every text ${shown.text} px at least`,
+  );
+  return wrongOf([
+    [shown.over > 0, `the settings run +${shown.over} px out sideways`],
+    [shown.press < 44, `a press only ${shown.press} px high`],
+    [shown.text < 14, `a text at ${shown.text} px`],
+  ]);
+}
+
+/**
+ * Esc puts the settings away, and with them the piece played for the ear: the probe has to say
+ * none within SOUND_WITHIN_MS, the music back up. What was wrong.
+ */
+async function previewStops(page) {
+  const closed = await closeSettings(page);
+  const probe = await menuSoundOnce(
+    page,
+    (heard) => heard.preview === null && heard.musicDuck > 0.99,
+  );
+  const level = (probe.musicDuck ?? 0).toFixed(2);
+  console.log(
+    `music preview      Esc: the settings ${closed ? 'closed' : '!! open'}, ` +
+      (probe.preview === null ? 'the piece stopped' : `!! ${probe.preview} playing on`) +
+      `, the music at ${level}`,
+  );
+  return wrongOf([
+    [!closed, 'Esc left the settings open'],
+    [probe.preview !== null, `${probe.preview} played on past the settings`],
+    [!(probe.musicDuck > 0.99), `the music stayed at ${level}`],
+  ]);
+}
+
+/**
+ * The choice kept on the device: after a reload and a key the menu plays the theme of `picked`
+ * again; „Zurücksetzen" in „Ton" lights the score again and brings its theme back where the
+ * music's manifest has it (`listed`). What was wrong.
+ */
+async function musicKept(page, picked, listed) {
+  await page.reload();
+  await page.locator('.menu-item').first().waitFor({ timeout: 10_000 });
+  const kept = await wakeMenuSound(page, (probe) => probe.pack === picked && probe.theme);
+  const opened = await settled(openSettings(page, 'ton'));
+  if (opened) {
+    await page.locator('.settings-reset').click();
+  }
+  const back = await menuSoundOnce(page, (probe) => !listed || probe.pack === SCORE_PACK);
+  const lit = litOf(await page.evaluate(packsListed));
+  const closed = opened && (await closeSettings(page));
+  console.log(
+    `music kept         after a reload ${kept.pack ?? '!! nothing'} playing; „Zurücksetzen": ` +
+      `${lit || '!! none'} lit, ${back.pack ?? 'nothing'} playing`,
+  );
+  return wrongOf([
+    [kept.pack !== picked || !kept.theme, `after a reload ${kept.pack ?? 'nothing'} played`],
+    [!opened, 'the gear opened no settings after the reload'],
+    [lit !== SCORE_PACK, `„Zurücksetzen" lit ${lit || 'none'}`],
+    [listed && back.pack !== SCORE_PACK, `„Zurücksetzen" left ${back.pack ?? 'nothing'} playing`],
+    [!closed, 'Esc left the settings open'],
+  ]);
+}
+
+/**
+ * The music packs (client screens/MusicSettings.tsx, world/musicPacks.ts), a drill on a menu page
+ * of its own: a key wakes the menu's sound, the score's theme sounding where the music's manifest
+ * lists it; the settings on „Ton", scrolled to „Musik" (settings-music.png, `musicBlockShot`);
+ * another pack pressed sounds at once (`packSwitch`); a ▶ in the Feinwahl plays its piece over the
+ * music pulled down (`previewDucks`); on a phone held sideways the block fits (`musicOnPhone`); Esc
+ * stops the piece with the settings (`previewStops`); the pack picked plays again after a reload,
+ * and „Zurücksetzen" brings the score back (`musicKept`). The run fails where any of it is not so.
+ */
+async function captureMusicPacks() {
+  const context = await browser.newContext({ viewport: SIZES[0] });
+  try {
+    const page = await openPage(context, 'music');
+    page.on('pageerror', (e) => console.log('[music error]', e.message));
+    await page.goto(traced(BASE));
+    await page.locator('.menu-item').first().waitFor({ timeout: 10_000 });
+    const listed = (await musicListOf(page))['menu-theme'] !== undefined;
+    const first = await wakeMenuSound(page, (probe) => !listed || probe.theme);
+    const wrong = wrongOf([
+      [listed && first.pack !== SCORE_PACK, `the menu began with ${first.pack ?? 'nothing'}`],
+    ]);
+    const shot = await musicBlockShot(page);
+    wrong.push(...shot.wrong);
+    const { picked, wrong: switched } = await packSwitch(page, shot.packs);
+    wrong.push(...switched);
+    if (picked !== null) {
+      wrong.push(...(await previewDucks(page, picked, shot.packs.length)));
+      wrong.push(...(await musicOnPhone(page)), ...(await previewStops(page)));
+      wrong.push(...(await musicKept(page, picked, listed)));
+    }
+    if (wrong.length > 0) {
+      fail(`music packs: ${wrong.join(', ')}`);
+    }
+  } catch (err) {
+    console.log(`music packs        !! ${firstLine(err)}`);
+    fail(`music packs: ${firstLine(err)}`);
+  } finally {
+    await context.close();
+  }
+}
+
 /**
  * The drills before the walkthrough, each in a room of its own, by the group each belongs to:
  * the editor, the Serverraum's scratch mission (a Systemcheck run's), the art tour, the danger
- * sense, the reconnect drill, the restart drill and the Zugangskontrolle's scratch mission (a
- * Systemcheck run's).
+ * sense, the reconnect drill, the restart drill, the Zugangskontrolle's scratch mission (a
+ * Systemcheck run's) and the music packs in the settings, on a menu of their own.
  */
 const DRILLS = [
   ['editor', captureEditor],
@@ -13838,6 +14094,7 @@ const DRILLS = [
   ['reconnect', captureReconnect],
   ['restart', captureRestart],
   ['access', captureAccess],
+  ['music', captureMusicPacks],
 ];
 
 /**
