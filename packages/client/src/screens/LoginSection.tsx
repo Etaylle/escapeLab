@@ -215,7 +215,7 @@ interface Props {
   refusal: Refusal | null;
   /** sends an ask of a login (ws.ts `Connection.askLogin`) */
   ask: (ask: LoginAsk) => void;
-  /** the step it opens on: the menu's profile opens it on the sign-in */
+  /** the step it opens on: its ways, the first time (`idle`), by default */
   opensOn?: LoginStep;
 }
 

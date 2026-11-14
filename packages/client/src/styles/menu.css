@@ -319,7 +319,7 @@
   border-radius: 50%;
 }
 
-/* What the account holds: its runs, „Gast" while the server told of none. */
+/* Where an account's sign-in will sit (backlog K-1): a guest today. */
 .profile-slot {
   align-self: stretch;
   display: flex;
@@ -331,20 +331,6 @@
   font-size: 11px;
   letter-spacing: 0.22em;
   text-transform: uppercase;
-}
-
-/* An account without a Kennwort: the way into an account of another device (Settings, „Konto"). */
-.profile-chip .profile-sign-in {
-  align-self: stretch;
-  padding: 0 0 0 12px;
-  border-left: 1px solid var(--line-2);
-  border-radius: 0;
-  color: var(--accent);
-  font-family: var(--mono);
-  font-size: 13px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  text-decoration: none;
 }
 
 /* ── the hero, standing large at the stage's right ──────────────────────── */
@@ -511,21 +497,6 @@
 
   .profile-chip {
     justify-self: start;
-    flex-wrap: wrap;
-    row-gap: 6px;
-  }
-
-  /*
-   * What the account holds and the sign-in take a line each under the profile: the chip keeps to
-   * the phone's width.
-   */
-  .profile-slot,
-  .profile-chip .profile-sign-in {
-    flex-basis: 100%;
-    padding: 6px 0 0;
-    border-left: none;
-    border-top: 1px solid var(--line-2);
-    text-align: left;
   }
 
   .menu-body {

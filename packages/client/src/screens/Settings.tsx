@@ -27,7 +27,7 @@ import { isMuted, setMuted, subscribeMuted, volumeTick } from '../world/audio.js
 import type { LoginAsk, LoginNews, Refusal } from '../ws.js';
 import { ControlSettings, KeyTable } from './ControlSettings.js';
 import { Icon } from './Icon.js';
-import { LoginSection, type LoginStep } from './LoginSection.js';
+import { LoginSection } from './LoginSection.js';
 import { ProfileFields } from './ProfileFields.js';
 import { runsText } from './ProfileChip.js';
 import { Choice, Slider } from './SettingsParts.js';
@@ -525,8 +525,6 @@ interface PanelProps {
   askLogin?: (ask: LoginAsk) => void;
   /** the tab the panel opens on; the last one opened on this page by default */
   tab?: SettingsTab;
-  /** the step „Konto"'s Ausweis opens on: the menu's profile opens it on the sign-in */
-  loginStep?: LoginStep;
 }
 
 /**
@@ -560,7 +558,6 @@ function AccountTab(props: Required<Pick<PanelProps, 'onDeleteAccount'>> & Panel
           news={props.login ?? null}
           refusal={refusal}
           ask={askLogin}
-          {...(props.loginStep === undefined ? {} : { opensOn: props.loginStep })}
         />
       )}
       <AccountSection

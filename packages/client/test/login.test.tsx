@@ -23,7 +23,6 @@ import {
   type LoginState,
   type LoginStep,
 } from '../src/screens/LoginSection.js';
-import { offersSignIn, ProfileChip } from '../src/screens/ProfileChip.js';
 import { SettingsPanel } from '../src/screens/Settings.js';
 import { SNAPSHOT_KEY } from '../src/snapshots.js';
 import { inBanner, replyTo, takeIn, type LoginAsk, type Refusal } from '../src/ws.js';
@@ -254,45 +253,18 @@ describe('the Ausweis in the settings’ „Konto"', () => {
     expect(asked).toEqual([]);
   });
 
-  it('stands in „Konto" between profile and account, opened on a sign-in where asked', () => {
+  it('stands in „Konto" between profile and account, the way to sign in with it', () => {
     const props = { onClose: noop, account: GUEST, onDeleteAccount: noop, askLogin: noop };
     const plain = renderToStaticMarkup(<SettingsPanel {...props} tab="konto" />);
     const order = ['<legend>Profil</legend>', '<legend>Ausweis</legend>', '<legend>Konto</legend>'];
     const at = order.map((legend) => plain.indexOf(legend));
     expect(at.every((where, i) => where > (at[i - 1] ?? -1))).toBe(true);
-    const signIn = renderToStaticMarkup(
-      <SettingsPanel {...props} tab="konto" loginStep="sign-in" />,
-    );
-    expect(signIn).toContain('autoComplete="username"');
+    expect(plain).toContain('data-login="sign-in"');
     // Without a way to ask, no Ausweis.
     const none = renderToStaticMarkup(
       <SettingsPanel onClose={noop} account={GUEST} onDeleteAccount={noop} tab="konto" />,
     );
     expect(none).not.toContain('<legend>Ausweis</legend>');
-  });
-});
-
-describe('the menu’s profile', () => {
-  it('offers a sign-in to an account without a Kennwort, and to no other', () => {
-    expect([offersSignIn(GUEST), offersSignIn(SIGNED), offersSignIn(null)]).toEqual([
-      true,
-      false,
-      false,
-    ]);
-    browser();
-    const opened: string[] = [];
-    const onSignIn = (): void => {
-      opened.push('sign-in');
-    };
-    const chip = (account: AccountView) =>
-      elementsOf(() => (
-        <ProfileChip name="Anna" onName={noop} account={account} onSignIn={onSignIn} />
-      ));
-    press(buttonsOf(chip(GUEST), 'profile-sign-in')[0]);
-    expect(opened).toEqual(['sign-in']);
-    expect(buttonsOf(chip(SIGNED), 'profile-sign-in')).toEqual([]);
-    const without = renderToStaticMarkup(<ProfileChip name="Anna" onName={noop} account={GUEST} />);
-    expect(without).not.toContain('Anmelden');
   });
 });
 

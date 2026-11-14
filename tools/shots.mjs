@@ -191,7 +191,7 @@
  * a phone sideways. Its settings' „Konto" sets a Kennwort, the Ausweisnummer
  * minted shown large (account-password.png); the guest's tab sets one too. A
  * second browser of the guest's — another device — signs into the host's
- * account from the profile's „Anmelden" (account-signin.png) and finds the run
+ * account from its „Konto"'s „Anmelden" (account-signin.png) and finds the run
  * in „Meine Einsätze" with the host's seat marked, then switches to the
  * guest's account (account-switch.png) on a new pass and finds the guest's
  * seat marked — each Ausweis readable, its texts 12 px or more and 4.5:1, its
@@ -11997,8 +11997,8 @@ async function firstRun(page) {
  * The Ausweis of the won Systemcheck's accounts: the host's tab `page` sets a Kennwort
  * (account-password.png, the number large), a tab of the guest's browser sets one too; a second
  * browser of the guest's — another device, a guest of its own — signs into the host's account by
- * the profile's „Anmelden" (account-signin.png, the form filled) and finds the run with the
- * host's seat marked in „Meine Einsätze", then switches to the guest's account in one go
+ * „Konto"'s „Anmelden" (account-signin.png, the form filled) and finds the run with the host's
+ * seat marked in „Meine Einsätze", then switches to the guest's account in one go
  * (account-switch.png, the form filled) on a new pass and finds the guest's seat marked. The run
  * fails wherever that does not hold.
  */
@@ -12048,11 +12048,12 @@ function judged(label, seen, faults) {
 }
 
 /**
- * `page`, a device of its own, signs into the account of `number` by its profile's „Anmelden"
+ * `page`, a device of its own, signs into the account of `number` by „Konto"'s „Anmelden"
  * (account-signin.png) and finds the run with `name`'s seat marked; or the run fails.
  */
 async function signInOn(page, number, name) {
-  await page.locator('.profile-sign-in').click();
+  await openKonto(page);
+  await page.locator('[data-login="sign-in"]').click();
   await page.locator('.settings-login input[name="number"]').fill(number.toLowerCase());
   await page.locator('.settings-login input[name="password"]').fill(KENNWORT);
   await judgeLogin(page, 'account-signin.png', `${number} typed in`);
@@ -12060,11 +12061,9 @@ async function signInOn(page, number, name) {
   const signed = await attached(page.getByText('Angemeldet.'), 15_000);
   await page.keyboard.press('Escape');
   const run = await firstRun(page);
-  const offered = (await page.locator('.profile-sign-in').count()) > 0;
   judged('account-signin', `signed into ${number}; „Meine Einsätze" marks ${run?.you}`, [
     signed ? '' : '!! not signed in',
     wrongRun(run, name),
-    offered ? '!! the profile still offers „Anmelden"' : '',
   ]);
 }
 

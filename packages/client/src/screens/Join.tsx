@@ -69,8 +69,6 @@ interface Props {
   openEditor?: () => void;
   /** opens the settings, as the gear in the top bar does; without it the menu offers none */
   openSettings?: () => void;
-  /** opens the settings on „Konto"'s sign-in: the profile offers it without a Kennwort */
-  openSignIn?: () => void;
   /** the menu goes for the lobby, the doors closing over it (DoorWipe.tsx); false by default */
   leaving?: boolean;
 }
@@ -445,12 +443,7 @@ export function JoinScreen(props: Props) {
         <h1 className={comesOn ? 'menu-title phosphor-title' : 'menu-title'}>ESCAPELAB</h1>
         <p className="menu-sub">{MENU_SUBTITLE}</p>
       </header>
-      <ProfileChip
-        name={name}
-        onName={setName}
-        account={account}
-        {...(props.openSignIn === undefined ? {} : { onSignIn: props.openSignIn })}
-      />
+      <ProfileChip name={name} onName={setName} account={account} />
       <MenuHero
         name={name}
         color={profileColor(account)}
