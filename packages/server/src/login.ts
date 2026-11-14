@@ -209,11 +209,18 @@ export class SignInGuard {
     return until > now ? numberLocked(secondsUntil(until, now)) : null;
   }
 
-  /** A wrong try from `address` on `number` counted: the number locks at WRONG_PER_NUMBER. */
+  /**
+   * A wrong try from `address` on `number` counted: the number locks at WRONG_PER_NUMBER. The log
+   * says when an address is refused or a number locks, naming neither.
+   */
   wrong(address: string, number: string | null): void {
     const now = this.now();
     const from = address.slice(0, MAX_KEY_LENGTH);
-    this.addresses.set(from, [...recent(this.addresses.get(from), now), now]);
+    const tries = [...recent(this.addresses.get(from), now), now];
+    this.addresses.set(from, tries);
+    if (tries.length === WRONG_PER_ADDRESS) {
+      console.log(`[escapelab] an address tried ${WRONG_PER_ADDRESS} wrong Kennwörter in a minute`);
+    }
     if (number === null) {
       return;
     }
@@ -223,6 +230,10 @@ export class SignInGuard {
     const locks = wrong.length >= WRONG_PER_NUMBER;
     const next = locks ? { wrong: [], until: now + LOCK_MS } : { wrong, until: was?.until ?? 0 };
     this.numbers.set(key, next);
+    if (locks) {
+      const wrongs = `${WRONG_PER_NUMBER} wrong Kennwörter`;
+      console.log(`[escapelab] an Ausweisnummer locked for ${LOCK_MS / 1000} s after ${wrongs}`);
+    }
   }
 
   /** A right Kennwort for `number`: its wrong ones are forgotten. */

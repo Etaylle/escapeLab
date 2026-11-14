@@ -245,6 +245,7 @@ export {
   type AccountRun,
   type AccountStore,
   type AccountView,
+  type LoginDone,
   type RtcSignal,
   type ClientMessage,
   type CrewPass,

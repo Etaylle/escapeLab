@@ -31,6 +31,7 @@ const ANNA: AccountView = {
   runs: 3,
   achievements: { blackout: { 'ohne-alarm': 1000, 'erste-schicht': 2000 } },
   store: 'database',
+  login: null,
 };
 
 /** Anna's browser: her pass kept with `kept` beside it; what it keeps, by key. */

@@ -8,8 +8,9 @@ import {
   type Mission,
   type ServerMessage,
 } from '@escapelab/core';
-import type { AccountDesk, Gate } from './accounts.js';
+import { UNLIMITED, type AccountDesk, type Arrival, type Gate, type Tries } from './accounts.js';
 import { MISSED_PINGS, SILENT_MS, type CutReason } from './heartbeat.js';
+import type { SignInGuard } from './login.js';
 import type { MissionCatalog } from './missions.js';
 import { readAddress, type Front, type Sender } from './rateLimiter.js';
 import { GAME_KINDS, type GameMessage, type LineEnd, type Room } from './room.js';
@@ -49,6 +50,11 @@ export interface Lab {
   changesPerSocket?: number;
   /** who stands in front of the server, which says where a socket's address is read; none unset */
   front?: Front;
+  /**
+   * the limits on trying a Kennwort, by address and by Ausweisnummer (login.ts `SignInGuard`):
+   * one for the server; none counted where unset
+   */
+  signIns?: Pick<SignInGuard, 'refusal' | 'wrong' | 'right'>;
 }
 
 /**
@@ -173,6 +179,20 @@ function gateOf(lab: Lab, socket: PlayerSocket): Gate {
   return {
     mayMake: () => lab.accountsMade?.take(door?.address ?? 'unknown') ?? true,
     mayChange: () => mayChange(lab, door),
+  };
+}
+
+/** What `socket`'s tries at a Kennwort may still do (accounts.ts `Tries`): by its address. */
+function triesOf(lab: Lab, socket: PlayerSocket): Tries {
+  const guard = lab.signIns;
+  if (guard === undefined) {
+    return UNLIMITED;
+  }
+  const address = doors.get(socket)?.address ?? 'unknown';
+  return {
+    refusal: (number) => guard.refusal(address, number),
+    wrong: (number) => guard.wrong(address, number),
+    right: (number) => guard.right(number),
   };
 }
 
@@ -392,6 +412,9 @@ const DOOR_KINDS = [
   'profile',
   'delete-account',
   'my-runs',
+  'set-password',
+  'change-password',
+  'sign-in',
   'tock',
 ] as const satisfies readonly ClientMessage['kind'][];
 
@@ -507,8 +530,13 @@ const ACCOUNT_AWAY = 'Das Konto ist gerade nicht erreichbar.';
 /** What a socket is told that asks after an account where the server keeps none. */
 const NO_ACCOUNTS = 'Konten führt dieser Server nicht.';
 
-/** Why `err` came, on one line, for the log. */
-const whyOf = (err: unknown): string => (err instanceof Error ? err.message : String(err));
+/** Why `err` came, on one line, for the log: a Kennwort's hash in it never shows. */
+const whyOf = (err: unknown): string =>
+  (err instanceof Error ? err.message : String(err)).replace(/scrypt\$\S+/g, 'scrypt$…');
+
+/** What a sign-in is told while a run on binds its pass. */
+export const BOUND_SIGN_IN =
+  'Ein laufender Einsatz bindet diesen Dienstausweis: Anmelden erst danach.';
 
 /**
  * The account of the pass `job` came to, told its socket once it is there (`account`): the
@@ -527,14 +555,40 @@ function tellAccount(socket: PlayerSocket, job: Promise<AccountView | null> | un
   );
 }
 
-/** What a pass asks of its account: its name, that it go, the runs it played. */
-type AccountAsk = Extract<ClientMessage, { kind: 'profile' | 'delete-account' | 'my-runs' }>;
+/** The account a pass came to (accounts.ts `Arrival`), told its socket as `tellAccount` does. */
+function tellArrival(socket: PlayerSocket, job: Promise<Arrival | null> | undefined): void {
+  tellAccount(socket, job?.then((arrival) => arrival?.view ?? null));
+}
+
+/**
+ * What a pass asks of its account: its name, that it go, the runs it played — and its Kennwort
+ * set or changed, or to sign into an account (`LoginAsk`).
+ */
+type AccountAsk = Extract<
+  ClientMessage,
+  { kind: 'profile' | 'delete-account' | 'my-runs' | LoginAsk['kind'] }
+>;
+
+/** What a pass asks of a login: its Kennwort set or changed, or to sign into an account. */
+type LoginAsk = Extract<ClientMessage, { kind: 'set-password' | 'change-password' | 'sign-in' }>;
 
 const ACCOUNT_ASKS: ReadonlySet<ClientMessage['kind']> = new Set([
   'profile',
   'delete-account',
   'my-runs',
+  'set-password',
+  'change-password',
+  'sign-in',
 ] satisfies AccountAsk['kind'][]);
+
+const LOGIN_ASKS: ReadonlySet<ClientMessage['kind']> = new Set([
+  'set-password',
+  'change-password',
+  'sign-in',
+] satisfies LoginAsk['kind'][]);
+
+/** Whether `msg` asks something of a login (`LoginAsk`). */
+const askOfLogin = (msg: AccountAsk): msg is LoginAsk => LOGIN_ASKS.has(msg.kind);
 
 /** Whether `msg` asks something of its pass's account (`AccountAsk`). */
 const askOfAccount = (msg: ClientMessage): msg is AccountAsk => ACCOUNT_ASKS.has(msg.kind);
@@ -550,8 +604,13 @@ function answerAccount(lab: Lab, socket: PlayerSocket, msg: AccountAsk): void {
     refuse(socket, null, msg, new GameError(NO_ACCOUNTS));
     return;
   }
-  // Reading the runs changes nothing; a new name or a deletion counts against the socket.
-  answerOf(lab.accounts, msg, gateOf(lab, socket)).then(
+  // Reading the runs changes nothing; a new name, a deletion or a try at a Kennwort counts
+  // against the socket.
+  const gate = gateOf(lab, socket);
+  const answer = askOfLogin(msg)
+    ? answerLogin(lab, lab.accounts, msg, { gate, tries: triesOf(lab, socket) })
+    : answerOf(lab.accounts, msg, gate);
+  answer.then(
     (answer) => send(socket, answer),
     (err: unknown) => {
       if (!(err instanceof GameError)) {
@@ -562,8 +621,42 @@ function answerAccount(lab: Lab, socket: PlayerSocket, msg: AccountAsk): void {
   );
 }
 
+/**
+ * What `desk` answers `msg`, a Kennwort to set or change or a sign-in, with once it has done it
+ * (`answerAccount`): a sign-in is refused while a run on binds the pass, before it is tried.
+ */
+function answerLogin(
+  lab: Lab,
+  desk: AccountDesk,
+  msg: LoginAsk,
+  limits: { gate: Gate; tries: Tries },
+): Promise<ServerMessage> {
+  const { gate, tries } = limits;
+  const told = (done: 'set' | 'changed' | 'signed-in') => (account: AccountView) =>
+    ({ kind: 'login', done, account }) as const;
+  switch (msg.kind) {
+    case 'set-password':
+      return desk.setPassword(msg.pass, msg.password, gate).then(told('set'));
+    case 'change-password':
+      return desk
+        .changePassword(msg.pass, msg.old, msg.password, gate, tries)
+        .then(told('changed'));
+    case 'sign-in':
+      if (lab.manager.whereIs(msg.pass)?.phase === 'playing') {
+        return Promise.reject(new GameError(BOUND_SIGN_IN));
+      }
+      return desk
+        .signIn(msg.pass, msg.login, msg.password, gate, tries)
+        .then((arrival: Arrival) => told('signed-in')(arrival.view));
+  }
+}
+
 /** What `desk` answers `msg` with, once it has done it (`answerAccount`). */
-function answerOf(desk: AccountDesk, msg: AccountAsk, gate: Gate): Promise<ServerMessage> {
+function answerOf(
+  desk: AccountDesk,
+  msg: Exclude<AccountAsk, LoginAsk>,
+  gate: Gate,
+): Promise<ServerMessage> {
   switch (msg.kind) {
     case 'profile':
       return desk
@@ -599,7 +692,7 @@ function comeBack(
   // A pass that comes back to a seat before it has an account starts one with the seat's name.
   const seat = room.playerOf(back.playerId);
   const profile = { displayName: seat?.name ?? '', colour: seat?.color ?? null };
-  tellAccount(socket, lab.accounts?.arrive(msg.pass, profile, null, gateOf(lab, socket)));
+  tellArrival(socket, lab.accounts?.arrive(msg.pass, profile, null, gateOf(lab, socket)));
   return back;
 }
 
@@ -658,7 +751,7 @@ function whereAmI(
 ): void {
   send(socket, { kind: 'seated', seat: lab.manager.whereIs(msg.pass) });
   const kept = { displayName: msg.name?.trim() ?? '', colour: msg.color ?? null };
-  tellAccount(socket, lab.accounts?.arrive(msg.pass, kept, null, gateOf(lab, socket)));
+  tellArrival(socket, lab.accounts?.arrive(msg.pass, kept, null, gateOf(lab, socket)));
 }
 
 /** The audience connection a socket opens on the room `code`: the session it had let go of. */
@@ -688,7 +781,7 @@ function sitDown(
   const next = takeSeat(lab, socket, session, msg);
   const profile = { displayName: msg.name.trim(), colour: msg.color ?? null };
   const gate = gateOf(lab, socket);
-  tellAccount(socket, lab.accounts?.arrive(msg.pass, profile, profile.displayName, gate));
+  tellArrival(socket, lab.accounts?.arrive(msg.pass, profile, profile.displayName, gate));
   return next;
 }
 

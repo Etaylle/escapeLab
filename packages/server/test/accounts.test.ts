@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { achievementsOf, utcDay } from '@escapelab/core';
 import { AccountDesk, accountRunOf, byMission, MY_RUNS } from '../src/accounts.js';
 import { JsonlStore } from '../src/store/jsonl.js';
-import type { Profile, RunReportV1 } from '../src/store/store.js';
+import { LoginTaken, type Profile, type RunReportV1 } from '../src/store/store.js';
 import { passFor } from './passes.js';
 import { DAY, finished, reportOf } from './storeContract.js';
 
@@ -74,7 +74,7 @@ describe('the desk', () => {
     const pass = passFor('Anna');
     await accounts.arrive(pass, { displayName: 'Anna', colour: null });
     await store.appendRun(finished({ at: DAY }, ['Anna', null]));
-    const view = await accounts.arrive(pass, { displayName: 'Andere', colour: null });
+    const view = (await accounts.arrive(pass, { displayName: 'Andere', colour: null }))?.view;
     const earned = achievementsOf(reportOf());
     expect(view?.runs).toBe(1);
     expect(view?.achievements).toEqual({
@@ -94,6 +94,32 @@ describe('the desk', () => {
     expect(total).toBe(MY_RUNS + 1);
     expect(runs).toHaveLength(MY_RUNS);
     expect(runs[0]?.finishedAt).toBe(DAY + MY_RUNS);
+  });
+
+  it('mints the Ausweisnummer anew where the one minted is taken, five times at most', async () => {
+    const { desk: accounts, store } = desk();
+    const add = store.addLogin.bind(store);
+    const tried: string[] = [];
+    let taken = 2;
+    vi.spyOn(store, 'addLogin').mockImplementation(async (id, subject, hash) => {
+      tried.push(subject);
+      taken -= 1;
+      if (taken >= 0) {
+        throw new LoginTaken();
+      }
+      return add(id, subject, hash);
+    });
+    const view = await accounts.setPassword(passFor('Anna'), 'Kaltenbrunn 1986');
+    expect(tried).toHaveLength(3);
+    expect(view.login).toBe(tried[2]);
+    // Taken five times in a row: no login is made.
+    taken = 5;
+    tried.length = 0;
+    const ben = accounts.setPassword(passFor('Ben'), 'Kaltenbrunn 1986');
+    await expect(ben).rejects.toBeInstanceOf(LoginTaken);
+    expect(tried).toHaveLength(5);
+    expect((await accounts.arrive(passFor('Ben'), { displayName: '', colour: null }))?.view.login)
+      .toBeNull();
   });
 
   it('settles once every request under way has: a slow one, one behind it', async () => {

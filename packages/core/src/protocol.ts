@@ -94,6 +94,15 @@ const crewColorSchema = z.string().regex(/^#[0-9a-f]{6}$/i);
 /** The name a player goes by, as typed: forty characters at most. */
 const nameSchema = z.string().max(40);
 
+/**
+ * A Kennwort as typed: what one may be — 8 to 128 characters — the server says in words (server
+ * login.ts); this only bounds what a message carries.
+ */
+const passwordSchema = z.string().min(1).max(512);
+
+/** An Ausweisnummer as typed — „EL-7K3M-9Q2D", however spaced: the server reads it (login.ts). */
+const loginSchema = z.string().min(1).max(32);
+
 export const clientMessageSchema = z.discriminatedUnion('kind', [
   z.object({
     kind: z.literal('create-room'),
@@ -153,6 +162,28 @@ export const clientMessageSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('delete-account'), pass: crewPassSchema }),
   /** the runs the pass's account played, the newest first, for „Meine Einsätze": `my-runs` */
   z.object({ kind: z.literal('my-runs'), pass: crewPassSchema }),
+  /**
+   * the first Kennwort of the pass's account: the server mints the account's Ausweisnummer —
+   * answered `login` (set), the account showing it
+   */
+  z.object({ kind: z.literal('set-password'), pass: crewPassSchema, password: passwordSchema }),
+  /** a new Kennwort for the pass's account, its present one shown: answered `login` (changed) */
+  z.object({
+    kind: z.literal('change-password'),
+    pass: crewPassSchema,
+    old: passwordSchema,
+    password: passwordSchema,
+  }),
+  /**
+   * the pass leads into the account of the Ausweisnummer `login` from now on, its Kennwort shown —
+   * answered `login` (signed-in); the account it led into before goes where nothing is left of it
+   */
+  z.object({
+    kind: z.literal('sign-in'),
+    pass: crewPassSchema,
+    login: loginSchema,
+    password: passwordSchema,
+  }),
   /** the seat the pass holds in the room given up for good, from whatever socket this is */
   z.object({
     kind: z.literal('abandon'),
@@ -304,7 +335,18 @@ export interface AccountView {
   achievements: Record<string, Partial<Record<AchievementId, number>>>;
   /** where the server keeps it, and so what deleting it takes off its runs (`AccountStore`) */
   store: AccountStore;
+  /**
+   * its Ausweisnummer, „EL-7K3M-9Q2D", where it has a Kennwort: with both, it signs in on any
+   * device; null for an account without one
+   */
+  login: string | null;
 }
+
+/**
+ * What a `login` answer says was done: the account's first Kennwort set, its Ausweisnummer minted;
+ * the Kennwort changed; the pass signed into an account.
+ */
+export type LoginDone = 'set' | 'changed' | 'signed-in';
 
 /**
  * Where a server keeps its accounts and runs: in a database, for good — a deleted account's name
@@ -453,6 +495,8 @@ export type ServerMessage =
   | { kind: 'account'; account: AccountView | null }
   /** the runs the pass's account played, the newest first, and how many in all */
   | { kind: 'my-runs'; runs: AccountRun[]; total: number }
+  /** the answer to a Kennwort set or changed, or a sign-in: what was done, and the account now */
+  | { kind: 'login'; done: LoginDone; account: AccountView }
   /**
    * a join by the name of a seat whose line is down waits for the crew on the line to let this
    * device in, until `until` (epoch ms): answered by `takeover-allowed`, or a refusal

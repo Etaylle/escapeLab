@@ -1,6 +1,6 @@
 import type * as Crypto from 'node:crypto';
 import { scrypt, timingSafeEqual } from 'node:crypto';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import {
   COST,
   fromTooMany,
@@ -121,6 +121,13 @@ describe('the Kennwort', () => {
 });
 
 describe('the limits on signing in', () => {
+  /** What the guard logs: it says when an address is refused, and when an Ausweisnummer locks. */
+  let said: MockInstance<typeof console.log>;
+
+  beforeEach(() => {
+    said = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+  });
+
   /** A guard on a clock of its own: `at` moves it. */
   function guarded() {
     let at = 1_000_000;
@@ -137,6 +144,10 @@ describe('the limits on signing in', () => {
     }
     expect(guard.refusal('203.0.113.7', 'EL-BBBB-BBBB')).toBe(fromTooMany(50));
     expect(guard.refusal('198.51.100.4', 'EL-BBBB-BBBB')).toBeNull();
+    // The log says it once, naming no address.
+    expect(said.mock.calls).toEqual([
+      ['[escapelab] an address tried 10 wrong Kennwörter in a minute'],
+    ]);
     // A try refused counts nothing: the address is free a minute after its first wrong try.
     pass(49_000);
     expect(guard.refusal('203.0.113.7', null)).toBe(fromTooMany(1));
@@ -169,6 +180,9 @@ describe('the limits on signing in', () => {
     }
     expect(guard.refusal('203.0.113.9', number)).toBe(numberLocked(60));
     expect(guard.refusal('203.0.113.9', 'EL-7K3M-9Q2E')).toBeNull();
+    expect(said.mock.calls).toEqual([
+      ['[escapelab] an Ausweisnummer locked for 60 s after 5 wrong Kennwörter'],
+    ]);
     pass(LOCK_MS - 1);
     expect(guard.refusal('203.0.113.9', number)).toBe(numberLocked(1));
     pass(1);
