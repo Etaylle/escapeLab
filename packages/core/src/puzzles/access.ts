@@ -513,18 +513,19 @@ const PURPOSE =
 
 const BUILD =
   'Pult A ist das Terminal: Es nennt die Türen, die es freigeben soll, und nimmt Befehle an. ' +
-  'Pult B ist das Tokengerät: Es zeigt das Konto, an das es gebunden ist, dessen Token aus ' +
-  'sechs Ziffern und einen Balken bis zum nächsten Wechsel. Die Benutzerliste nennt die Rolle ' +
-  'jedes Kontos.';
+  'Pult B ist das Tokengerät: Es zeigt das Konto, an das es gebunden ist, den Token dieses ' +
+  'Kontos aus sechs Ziffern und einen Balken bis zum nächsten Wechsel. Die Benutzerliste nennt ' +
+  'die Rolle jedes Kontos.';
 
-/** Betrieb: the device's periods, the login and the session, the faults and their cost. */
+/** Betrieb: the device's periods, the login and the session, the faults, their cost, the lock. */
 function operationText(def: AccessDef): string {
   return (
-    `Alle ${def.tokenSec} Sekunden bindet sich das Gerät an das nächste Konto und zeigt dessen ` +
-    'neuen Token. Eine Anmeldung verlangt Konto und Token; die Sitzung bleibt offen bis zur ' +
+    `Alle ${def.tokenSec} Sekunden wechselt das Gerät zum nächsten Konto und dessen neuem ` +
+    'Token. Eine Anmeldung verlangt Konto und Token; die Sitzung bleibt offen bis zur ' +
     `nächsten und gibt jede Tür ihrer Rolle für ${def.openSec} Sekunden frei. Ein falscher ` +
     'Token und eine Freigabe ohne Berechtigung sind Fehlquittierungen: Die Überwachung meldet ' +
-    `Alarm und zieht ${costOf(def.penaltySec)} ab.`
+    `Alarm und zieht ${costOf(def.penaltySec)} ab. Nach ${spelled(MISSES_TO_LOCK)} falschen ` +
+    `Token in Folge bleibt das Konto ${def.lockSec} Sekunden Einsatzzeit gesperrt.`
   );
 }
 
@@ -588,8 +589,8 @@ function logLines(def: AccessDef): string[] {
 }
 
 const WORKSHOP: readonly string[] = [
-  'Die Uhr im Gerät geht eine Spur nach: Der neue Token erscheint einen Augenblick nach dem ' +
-    'Wechsel, und ein Token aus der letzten Sekunde des Balkens kommt oft zu spät.',
+  'Die Uhr im Gerät geht eine Spur nach: Der neue Token erscheint erst kurz nach dem Wechsel, ' +
+    'und einer aus der letzten Sekunde des Balkens kommt oft zu spät.',
 ];
 
 // --- the solver ----------------------------------------------------------------------------

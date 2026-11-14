@@ -57,7 +57,7 @@ type AccessPuzzle = PanelProps<'access'>['puzzle'];
 type AccessChange = Change<AccessPuzzle>;
 type Send = PanelProps<'access'>['send'];
 
-/** The last seconds of a period: the bar turns amber, the lamp too, and the device ticks. */
+/** The last seconds of a period: the bar blinks, the seconds stand inverted, the device ticks. */
 export const ENDING_SEC = 5;
 
 /** The digits of the terminal's pad, as a numeric pad lays them out. */
@@ -557,8 +557,9 @@ function useEndingTicks(endsAt: number, left: number, audible: boolean): void {
 
 /**
  * The token device's display: KONTO and the account it is bound to, the token in two groups of
- * three, the bar draining to the period's end and the seconds left beside it — amber in the
- * last ENDING_SEC. A new token types in as its period begins.
+ * three, the bar draining to the period's end and the seconds left beside it — in the last
+ * ENDING_SEC the bar blinking and the seconds inverted. A new token types in as its period
+ * begins.
  */
 function TokenScreen({ device, audible }: { device: AccessDevice; audible: boolean }) {
   const now = useNowUntil(nextSecond(device.endsAt, serverNow()));
