@@ -3,6 +3,7 @@
  * pulls another down, and the brickwall on the master that keeps them from clipping.
  *
  *   music ───── musicDuck ────┐
+ *   preview ──────────────────┤      (a piece the settings play for the ear)
  *   sfx ──────────────────────┤
  *   ambience ── ambienceDuck ─┼── master (the mute) ── limiter ── trim ── output
  *   voice ────────────────────┤      (the radio: dry)
@@ -10,17 +11,17 @@
  *   reverb's return ──────────┘
  *   sfx, ambience after its duck, announce ── a send each ── reverb (reverb.ts)
  *
- * The settings' volumes set the buses (settings.ts): Musik the music, Effekte the effects,
- * Umgebung the rooms' beds, Funk mission control's voice and the plant's loudspeakers; Gesamt
- * sets the master gain, which the sound switch mutes (audio.ts). Behind it a
- * DynamicsCompressorNode stands as a brickwall — threshold −3 dB, no knee, 20:1, 1 ms attack,
- * 100 ms release — so that effects stacked on one another never clip; Web Audio raises
- * everything after it by a makeup gain worked out from those settings (`limiterMakeup`), which
- * the trim takes back, so the mix under the threshold plays as loud as before. Ducking (`duck`):
- * mission control's voice pulls the music 8 dB and the beds 4 dB down, the klaxon and the siren
- * pull the music 6 dB down; where several pull at once the deepest holds. A bus goes down over
- * DUCK_ATTACK_S and comes back over DUCK_RELEASE_S, in straight lines on the audio clock
- * (`duckKnots`, pure).
+ * The settings' volumes set the buses (settings.ts): Musik the music and the preview — a piece
+ * the settings play (musicPreview.ts), past the music's duck — Effekte the effects, Umgebung the
+ * rooms' beds, Funk mission control's voice and the plant's loudspeakers; Gesamt sets the master
+ * gain, which the sound switch mutes (audio.ts). Behind it a DynamicsCompressorNode stands as a
+ * brickwall — threshold −3 dB, no knee, 20:1, 1 ms attack, 100 ms release — so that effects
+ * stacked on one another never clip; Web Audio raises everything after it by a makeup gain worked
+ * out from those settings (`limiterMakeup`), which the trim takes back, so the mix under the
+ * threshold plays as loud as before. Ducking (`duck`): mission control's voice pulls the music
+ * 8 dB and the beds 4 dB down, the klaxon and the siren pull the music 6 dB down, a preview the
+ * music 24 dB; where several pull at once the deepest holds. A bus goes down over DUCK_ATTACK_S and
+ * comes back over DUCK_RELEASE_S, in straight lines on the audio clock (`duckKnots`, pure).
  */
 
 /** The volumes, each a share of full (0 to 1): the master's and the buses'. */
@@ -51,6 +52,8 @@ export interface Mix {
   /** the music (Musik), in front of its duck */
   readonly music: GainNode;
   readonly musicDuck: GainNode;
+  /** a piece the settings play for the ear (musicPreview.ts): at Musik's volume, past its duck */
+  readonly preview: GainNode;
   /** mission control's voice and the radio's key (Funk): dry, the radio stays out of the room */
   readonly voice: GainNode;
   /** the plant's loudspeakers (Funk): heard in the room, its reverb and all */
@@ -118,6 +121,7 @@ export function buildMix(ctx: BaseAudioContext, volumes: BusVolumes, master: num
     ambienceDuck,
     music: stage(ctx, musicDuck, volumes.music),
     musicDuck,
+    preview: stage(ctx, out, volumes.music),
     voice: stage(ctx, out, volumes.voice),
     announce: stage(ctx, out, volumes.voice),
     sends,
@@ -133,8 +137,8 @@ export function buildMix(ctx: BaseAudioContext, volumes: BusVolumes, master: num
 }
 
 /**
- * Sets the buses to `volumes` from `now`, gliding: Funk, Effekte, Umgebung, Musik; the master
- * gain is the sound switch's to set (audio.ts).
+ * Sets the buses to `volumes` from `now`, gliding: Funk, Effekte, Umgebung, Musik and its preview;
+ * the master gain is the sound switch's to set (audio.ts).
  */
 export function setBusVolumes(mix: Mix, volumes: BusVolumes, now: number): void {
   const set = (bus: GainNode, value: number): void => {
@@ -145,22 +149,24 @@ export function setBusVolumes(mix: Mix, volumes: BusVolumes, now: number): void 
   set(mix.sfx, volumes.effects);
   set(mix.ambience, volumes.ambience);
   set(mix.music, volumes.music);
+  set(mix.preview, volumes.music);
 }
 
 // --- ducking ---------------------------------------------------------------------------------
 
 /**
- * What pulls a bus down: mission control's voice, the klaxon, the siren — and the crew's own voice
- * in the lobby, over the menu's theme and hum (menuSound.ts).
+ * What pulls a bus down: mission control's voice, the klaxon, the siren — the crew's own voice in
+ * the lobby, over the menu's theme and hum (menuSound.ts) — and a piece the settings play for the
+ * ear, over the music playing (musicPreview.ts).
  */
-export type DuckSource = 'voice' | 'alarm' | 'siren' | 'crew';
+export type DuckSource = 'voice' | 'alarm' | 'siren' | 'crew' | 'preview';
 
 /** How far each source pulls a bus down, dB; a source with none for the bus leaves it be. */
 export type Depths = Readonly<Partial<Record<DuckSource, number>>>;
 
 /** How far the sources pull the music and the beds down, dB. */
 export const DUCK_DB: Readonly<Record<'music' | 'ambience', Depths>> = {
-  music: { voice: -8, alarm: -6, siren: -6, crew: -8 },
+  music: { voice: -8, alarm: -6, siren: -6, crew: -8, preview: -24 },
   ambience: { voice: -4, crew: -4 },
 };
 /** A bus goes down over this long, s… */

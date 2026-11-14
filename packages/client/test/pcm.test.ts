@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { kWeighting, lufsOf, parseWav, sliceOf, wavBytes, type Pcm } from '../scripts/pcm.js';
+import {
+  fadedOf,
+  kWeighting,
+  lufsOf,
+  parseWav,
+  sliceOf,
+  wavBytes,
+  type Pcm,
+} from '../scripts/pcm.js';
 
 /**
  * The sound script's PCM (scripts/pcm.ts): loudness as ITU-R BS.1770-4 measures it, a span cut
@@ -93,6 +101,22 @@ describe('a span cut out', () => {
     // A cut shorter than its two edges fades over half of it each way.
     const short = sliceOf(steady, 0, 8, 10).channels[0] ?? new Float32Array(0);
     expect([short[0], short[7]]).toEqual([0, 0]);
+  });
+
+  it('comes in and ends over fades of their own, every channel alike, the middle as it was', () => {
+    const both: Pcm = {
+      rate,
+      channels: [0.5, 0.25].map((level) => Float32Array.from({ length: 4000 }, () => level)),
+    };
+    const shaped = fadedOf(both, 1000, 2000);
+    const [left = new Float32Array(0), right = new Float32Array(0)] = shaped.channels;
+    expect([left[0], left[500], left[1000], left[1999]]).toEqual([0, 0.25, 0.5, 0.5]);
+    // The fade-out's two seconds run from 2000 to the end, half way down at 2999.
+    expect(left[2999]).toBeCloseTo(0.25, 6);
+    expect(left[3999]).toBe(0);
+    expect([right[500], right[1999], right[2999]]).toEqual([0.125, 0.25, 0.125]);
+    expect([...(both.channels[0] ?? [])].every((x) => x === 0.5)).toBe(true); // left as it was
+    expect(fadedOf(both, 0, 0).channels).toEqual(both.channels);
   });
 });
 

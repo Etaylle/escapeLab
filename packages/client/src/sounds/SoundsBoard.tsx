@@ -1,4 +1,15 @@
-import type { CatalogSuite, PieceRow, Section, SoundRow, SuiteListing } from './listing.js';
+import { linked } from '../screens/linked.js';
+import { crossfadePeriod, isScore, playedOnce, type Slot } from '../world/packFile.js';
+import {
+  packKey,
+  type CatalogSuite,
+  type PackListing,
+  type PackRow,
+  type PieceRow,
+  type Section,
+  type SoundRow,
+  type SuiteListing,
+} from './listing.js';
 import {
   keepCommandFor,
   pieceFails,
@@ -18,6 +29,8 @@ export interface BoardActions {
   playTake(id: string, n: number): void;
   /** play the piece `piece` of take `n` of the suite `id`, where the plan cuts it */
   playPiece(id: string, n: number, piece: string): void;
+  /** play the piece of the place `slot` in the music pack `pack` */
+  playPack(pack: string, slot: Slot): void;
   toggle(id: string): void;
   /** choose take `n` of `id` to be kept, or let the choice go where it is the one chosen */
   keep(id: string, n: number): void;
@@ -33,11 +46,13 @@ export interface BoardProps {
   readonly sections: readonly Section[];
   /** the catalog's suites, each with its pieces as the game plays them now */
   readonly suites: readonly SuiteListing[];
+  /** the music packs the game ships, each with its piece for every place */
+  readonly packs: readonly PackListing[];
   /** each entry's takes, by its id: the music's, waiting for the ear */
   readonly takes: Takes;
   /** why no take can be heard: the dev server serves none, or their lists did not load */
   readonly takesNote: string | null;
-  /** the sound playing now, by id, or a take by its key (`takeKey`) */
+  /** the sound playing now, by id, a take by its key (`takeKey`), a pack's piece by `packKey` */
   readonly playing: string | null;
   /** whether the recording `id` is loaded and can be played */
   readonly loaded: (id: string) => boolean;
@@ -165,6 +180,32 @@ export function pieceFactsOf(piece: PieceInfo): string {
 function loudnessFact(lufs: number | null): string {
   if (lufs === null) return 'Lautheit: still';
   return `Lautheit ${lufs.toFixed(1).replace('-', '−').replace('.', ',')} LUFS`;
+}
+
+/** How a piece of a pack goes round in the game: once, on bars, or by a crossfade at its seam. */
+function packLoopFact(row: PackRow): string {
+  const { piece } = row;
+  if (playedOnce(row.slot)) return 'einmal';
+  if (isScore(piece)) return 'Schleife auf Takten';
+  const { loop } = piece;
+  if (loop === null) return 'einmal';
+  if ('bars' in loop) return `Schleife: ${loop.bars.count} Takte zu ${loop.bars.bpm} bpm`;
+  const { startMs, fadeMs } = loop.crossfade;
+  const period = seconds(crossfadePeriod(loop.crossfade) * 1000);
+  return `Schleife ab ${seconds(startMs)} alle ${period}, Überblendung ${seconds(fadeMs)}`;
+}
+
+/**
+ * What the page says of a piece of a pack, in one line: its length, its loudness before the gain
+ * — a found piece's, as its pack.json keeps it — its gain, its licence and how it goes round.
+ */
+export function packFactsOf(row: PackRow): string {
+  const { piece, sound } = row;
+  if (sound === null) return 'keine Aufnahme: wartet auf die Partitur';
+  const loudness = isScore(piece) ? [] : [loudnessFact(piece.loudness)];
+  const licence = piece.licence === 'own' ? 'eigene Partitur' : piece.licence;
+  const loop = packLoopFact(row);
+  return [seconds(sound.ms), ...loudness, gainFact(sound.gain), licence, loop].join(' · ');
 }
 
 /** One take of the entry `id`: its play button, its number and facts, and the choice to keep it. */
@@ -399,6 +440,62 @@ function SuiteBlock({ listing, props }: { listing: SuiteListing; props: BoardPro
   );
 }
 
+/** A piece of a pack: its play button, its place, its facts, and its attribution, links and all. */
+function PackRowView({ pack, row, props }: { pack: string; row: PackRow; props: BoardProps }) {
+  const playing = props.playing === packKey(pack, row.slot);
+  return (
+    <li className="sounds-row">
+      <button
+        type="button"
+        className="sounds-play"
+        aria-pressed={playing}
+        disabled={row.sound === null}
+        onClick={() => props.on.playPack(pack, row.slot)}
+      >
+        {playing ? 'Stopp' : 'Abspielen'}
+      </button>
+      <div className="sounds-what">
+        <code className="sounds-id">{row.slot}</code>
+        <span className="sounds-facts">{packFactsOf(row)}</span>
+        <p className="sounds-prompt sounds-credit">{linked(row.piece.attribution)}</p>
+      </div>
+    </li>
+  );
+}
+
+/**
+ * The music packs: each under its title, its id and its composers, with its piece for every place
+ * in their order — each played as the game levels it, its attribution under it as its licence
+ * wants it: the whole list of the music's credits.
+ */
+function PacksBlock({ packs, props }: { packs: readonly PackListing[]; props: BoardProps }) {
+  return (
+    <section className="sounds-section" aria-label="Musikpakete">
+      <h2>
+        Musikpakete <span className="muted">({packs.length})</span>
+      </h2>
+      <p className="muted">
+        Jedes Stück so laut, wie das Spiel es einpegelt, einmal von seinem Einsatz bis zum Ende; im
+        Spiel gehen die Schleifen an ihrer Naht ineinander über. Unter jedem Stück steht seine
+        Nennung, wie seine Lizenz sie verlangt.
+      </p>
+      {packs.map(({ pack, rows }) => (
+        <section key={pack.id} className="sounds-pack" aria-label={pack.title}>
+          <h3>
+            {pack.title}{' '}
+            <span className="muted">{`(${pack.id} · ${pack.composers.join(', ')})`}</span>
+          </h3>
+          <ul className="sounds-list">
+            {rows.map((row) => (
+              <PackRowView key={row.slot} pack={pack.id} row={row} props={props} />
+            ))}
+          </ul>
+        </section>
+      ))}
+    </section>
+  );
+}
+
 /** The box with the command for what is ticked, and the key file it names. */
 function CommandBox(props: BoardProps) {
   const said =
@@ -439,7 +536,8 @@ function CommandBox(props: BoardProps) {
 
 /**
  * Every sound of the lab, section by section, to be listened to as the game loads it, the takes
- * of the music under their piece, and the command that makes the ones ticked anew.
+ * of the music under their piece, the music packs with their credits, and the command that makes
+ * the ones ticked anew.
  */
 export function SoundsBoard(props: BoardProps) {
   const anyTakes = Object.keys(props.takes).length > 0;
@@ -460,6 +558,7 @@ export function SoundsBoard(props: BoardProps) {
       {props.suites.map((listing) => (
         <SuiteBlock key={listing.suite.id} listing={listing} props={props} />
       ))}
+      {props.packs.length === 0 ? null : <PacksBlock packs={props.packs} props={props} />}
       {props.sections.filter((section) => section.rows.length > 0).map((section) => (
         <section key={section.kind} className="sounds-section" aria-label={section.title}>
           <h2>

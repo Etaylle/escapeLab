@@ -527,7 +527,7 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   Vorschlagsliste mit Hörlinks sucht ein Agent; Einbau (Schleifennaht auf dem Takt, −19 LUFS)
   als kleines Paket M-2, sobald Uros gewählt hat.
 
-### M-2 Musikpakete, wählbar in den Einstellungen — Status: in Arbeit (M-packs, Spec `spec-M-packs.md`) · Größe: L
+### M-2 Musikpakete, wählbar in den Einstellungen — Status: im PR (M-packs, Spec `spec-M-packs.md`) · Größe: L
 - Uros 2026-11-14 09:35: „Builde mir von allen Kombinationen Musikpakete, die ich im Spielmenü
   aussuchen kann: Paket 1, 2, 3 …, und je Platz einstellbar." Drei Suchagenten fanden am Morgen
   Kandidaten für alle acht Plätze (OpenGameArt, Free Music Archive, FreePD-Archiv, incompetech,
@@ -539,6 +539,17 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   yalciner, cheremisinov (+ Krux für die Stems), macleod, panchout/Hitctrl, zhelanov; nur CC0 und
   CC BY. In Einstellungen → Ton: Paketwahl, Feinwahl je Platz aus allen Paketen, Vorhören,
   „Nennungen"; Wahl je Gerät in `settings.ts`.
+- Gebaut: fünf Pakete — die Hauspartitur `nachtschicht` und vier mit Musik von Menschen unter
+  CC BY oder CC0 (`yalciner`, `cheremisinov`, `macleod`, `zhelanov`, je 7,7 bis 8,5 MB) —,
+  gewählt unter Einstellungen → Ton → „Musik", je Platz in der „Feinwahl", jedes Stück dort
+  vorzuhören, darunter die „Nennungen"; `/sounds` listet jedes Paket mit allen Nennungen. Das
+  Skript `scripts/packs.ts` baut ein Paket aus `audio/packs.plan.json` (Naht der Schleife gesucht,
+  −19 LUFS, AAC 128 kbit/s, höchstens 9 MiB); die Probe `music` im Rundgang hört ein anderes Paket,
+  das Vorhören und das Behalten nach dem Neuladen.
+- Offen: `panchout` wartet auf den Download von itch.io von Hand, „Unrecord" statt „Space Horror
+  Boss" für die letzte Minute (Befehle in `docs/sound.md`, „Musikpakete"); weitere Pakete bis zu den
+  zehn gewünschten (FreePD-CC0, ein Paket der besten Stücke je Platz), je etwa 8 MB im Repo; Pixabay
+  und Pakete mit eigener Lizenz nur lokal.
 
 ### V-3 Stimmenbesetzung: Stimmen, die sich abwechseln — Status: erledigt (V-cast, Merge 2026-11-14, 1ebaf24; zwei Review-Runden und zwei Deltas; Cloud-CI grün auf af1e84a, Check und Walkthrough; Render der Besetzung bleibt bei Uros: 21.592 Credits für 213 Zeilen, 25.575 mit --fresh; Spec `spec-V-cast.md`) · Größe: M
 - Uros 2026-11-14 08:05: „Ich will alles hören, und vielleicht ist cool, wenn sich sogar alle

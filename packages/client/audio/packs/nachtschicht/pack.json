@@ -1,0 +1,71 @@
+{
+  "id": "nachtschicht",
+  "title": "Schicht A · Hauspartitur",
+  "composers": ["EscapeLab mit Eleven Music"],
+  "pieces": {
+    "menu-theme": {
+      "title": "Leitthema",
+      "author": "EscapeLab mit Eleven Music",
+      "source": "https://elevenlabs.io/music",
+      "licence": "own",
+      "attribution": "„Leitthema“ – EscapeLab mit Eleven Music · Partitur des Spiels, keine Nennung verlangt",
+      "score": "menu-theme"
+    },
+    "lobby": {
+      "title": "Zwischenspiel",
+      "author": "EscapeLab mit Eleven Music",
+      "source": "https://elevenlabs.io/music",
+      "licence": "own",
+      "attribution": "„Zwischenspiel“ – EscapeLab mit Eleven Music · Partitur des Spiels, keine Nennung verlangt",
+      "score": "lobby"
+    },
+    "title": {
+      "title": "Eröffnung",
+      "author": "EscapeLab mit Eleven Music",
+      "source": "https://elevenlabs.io/music",
+      "licence": "own",
+      "attribution": "„Eröffnung“ – EscapeLab mit Eleven Music · Partitur des Spiels, keine Nennung verlangt",
+      "score": "title"
+    },
+    "calm": {
+      "title": "Nachtschicht",
+      "author": "EscapeLab mit Eleven Music",
+      "source": "https://elevenlabs.io/music",
+      "licence": "own",
+      "attribution": "„Nachtschicht“ – EscapeLab mit Eleven Music · Partitur des Spiels, keine Nennung verlangt",
+      "score": "calm"
+    },
+    "tense": {
+      "title": "Druck",
+      "author": "EscapeLab mit Eleven Music",
+      "source": "https://elevenlabs.io/music",
+      "licence": "own",
+      "attribution": "„Druck“ – EscapeLab mit Eleven Music · Partitur des Spiels, keine Nennung verlangt",
+      "score": "tense"
+    },
+    "critical": {
+      "title": "Letzte Minute",
+      "author": "EscapeLab mit Eleven Music",
+      "source": "https://elevenlabs.io/music",
+      "licence": "own",
+      "attribution": "„Letzte Minute“ – EscapeLab mit Eleven Music · Partitur des Spiels, keine Nennung verlangt",
+      "score": "critical"
+    },
+    "end-won": {
+      "title": "Morgengrauen",
+      "author": "EscapeLab mit Eleven Music",
+      "source": "https://elevenlabs.io/music",
+      "licence": "own",
+      "attribution": "„Morgengrauen“ – EscapeLab mit Eleven Music · Partitur des Spiels, keine Nennung verlangt",
+      "score": "end-won"
+    },
+    "end-lost": {
+      "title": "Lichter aus",
+      "author": "EscapeLab mit Eleven Music",
+      "source": "https://elevenlabs.io/music",
+      "licence": "own",
+      "attribution": "„Lichter aus“ – EscapeLab mit Eleven Music · Partitur des Spiels, keine Nennung verlangt",
+      "score": "end-lost"
+    }
+  }
+}

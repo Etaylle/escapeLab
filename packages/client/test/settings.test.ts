@@ -60,6 +60,7 @@ describe('readSettings and writeSettings — kept on this device', () => {
       light: 'auto',
       patterns: false,
       subtitles: 'normal',
+      music: { pack: 'nachtschicht', pieces: {} },
     });
     expect(settings.readSettings(null)).toEqual(settings.DEFAULT_SETTINGS);
   });
@@ -79,6 +80,7 @@ describe('readSettings and writeSettings — kept on this device', () => {
       light: 'canvas',
       patterns: true,
       subtitles: 'larger',
+      music: { pack: 'yalciner', pieces: { lobby: 'cheremisinov', title: 'nachtschicht' } },
     } as const;
     expect(settings.writeSettings(store, chosen)).toBe(true);
     expect(JSON.parse(store.items.get('escapelab.settings') ?? 'null')).toEqual(chosen);
@@ -100,12 +102,18 @@ describe('readSettings and writeSettings — kept on this device', () => {
       light: 'laser',
       patterns: 'gern',
       subtitles: 'riesig',
+      // A pack no longer shipped, a place no pack fills, a piece that is no pack.
+      music: {
+        pack: 'pixabay',
+        pieces: { lobby: 'nonesuch', solo: 'yalciner', title: 7, calm: 'yalciner' },
+      },
     };
     const store = memory({ 'escapelab.settings': JSON.stringify(odd) });
     expect(settings.readSettings(store)).toEqual({
       ...settings.DEFAULT_SETTINGS,
       volumes: { master: 100, music: 70, effects: 0, voice: 100, ambience: 0 },
       deadzone: 40,
+      music: { pack: 'nachtschicht', pieces: { calm: 'yalciner' } },
     });
     const rounded = memory({
       'escapelab.settings': '{"volumes":{"music":33.6},"keys":{"talk":"F4"}}',
@@ -116,6 +124,9 @@ describe('readSettings and writeSettings — kept on this device', () => {
     });
   });
 
+});
+
+describe('readSettings and writeSettings — where storage fails, and as the page starts', () => {
   it('reads what is no JSON as nothing set, and says so', async () => {
     const { settings } = await fresh();
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);

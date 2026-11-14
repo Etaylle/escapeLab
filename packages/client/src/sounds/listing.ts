@@ -1,11 +1,20 @@
+import {
+  isScore,
+  packFileOf,
+  SLOTS,
+  type PackFile,
+  type PackPiece,
+  type Slot,
+} from '../world/packFile.js';
 import type { SampleEntry } from '../world/samples.js';
 
 /**
  * What the audition page (/sounds) lists, and the commands it puts together: every sound of the
  * catalog (audio/catalog.json) by its kind, each with its recording as the manifests name it;
  * every suite — music made as one and cut into the pieces the game plays — with each of its
- * pieces and their recordings, in the plan's order; and the sound script's commands that make
- * anew what is ticked (scripts/sfx.ts). Pure.
+ * pieces and their recordings, in the plan's order; every music pack with its piece for each of
+ * the music's places (world/packFile.ts); and the sound script's commands that make anew what is
+ * ticked (scripts/sfx.ts). Pure.
  */
 
 /**
@@ -151,6 +160,66 @@ export function suiteListingOf(
     }),
   }));
 }
+
+/**
+ * The recording behind a piece of a pack, as the page plays it: its file under public/music/, how
+ * long it lasts and where its sound starts, ms, and the gain the game gives it.
+ */
+export interface PackSound {
+  readonly file: string;
+  readonly ms: number;
+  readonly startMs: number;
+  readonly gain: number;
+}
+
+/**
+ * A piece of a pack as the page lists it: its place, its credit and how it is made, and its
+ * recording — null for a piece of the score that awaits its render.
+ */
+export interface PackRow {
+  readonly slot: Slot;
+  readonly piece: PackPiece;
+  readonly sound: PackSound | null;
+}
+
+/** A music pack as the page lists it: the pack, and its piece for each place in their order. */
+export interface PackListing {
+  readonly pack: PackFile;
+  readonly rows: readonly PackRow[];
+}
+
+/** The recording behind `piece` of the pack `pack`: the score's out of `recordings`, by id. */
+function packSoundOf(
+  pack: string,
+  piece: PackPiece,
+  recordings: Readonly<Record<string, SampleEntry>>,
+): PackSound | null {
+  if (!isScore(piece)) {
+    const { ms, startMs, gain } = piece;
+    return { file: packFileOf(pack, piece.file), ms, startMs, gain };
+  }
+  const entry = recordings[piece.score];
+  return entry === undefined
+    ? null
+    : { file: entry.file, ms: entry.ms, startMs: entry.startMs, gain: entry.gain };
+}
+
+/** Each pack of `packs` with its pieces, those of the score with their recordings, by id. */
+export function packListingOf(
+  packs: readonly PackFile[],
+  recordings: Readonly<Record<string, SampleEntry>>,
+): PackListing[] {
+  return packs.map((pack) => ({
+    pack,
+    rows: SLOTS.map((slot) => {
+      const piece = pack.pieces[slot];
+      return { slot, piece, sound: packSoundOf(pack.id, piece, recordings) };
+    }),
+  }));
+}
+
+/** The key a piece of a pack plays under on the page, apart from every recording's id. */
+export const packKey = (pack: string, slot: Slot): string => `pack:${pack}/${slot}`;
 
 /** The key file the command names unless told another: the main checkout's, by its full path. */
 export const ENV_FILE = '/Users/uros/Documents/Req.Eng./escapelab/.env.local';

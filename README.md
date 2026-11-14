@@ -66,6 +66,33 @@ Seed importiert und bis zur Lösung spielt, jeden Token vom Gerät abgelesen.
 Keine Station lässt sich allein bedienen (siehe *Nie allein*), und auf *Normal* beendet der
 fünfte Alarm den Lauf — auf *Hart* der dritte, auf *Entspannt* gibt es keine Grenze.
 
+**Startseite:** Ein Hauptmenü wie in einem Spiel, über dem beleuchteten Labor der gewählten
+Mission, das langsam vorbeizieht: *Einsatz starten* (die Missionskarten, „Runde eröffnen"),
+*Beitreten*, *Offene Runden*, *Handbuch*, *Bestenliste*, *Meine Einsätze*, *Editor* und
+*Einstellungen* — mit der Maus, der Tastatur (Pfeile, Enter, Esc) oder dem Controller
+(Steuerkreuz, A, B). Oben rechts steht das Profil, das Konto des Browsers: Name, Farbe, die eigene
+Figur, die winkt, sobald der Name sich ändert, und wie viele Einsätze das Konto gespielt hat. Das
+Konto bewahrt Name, Farbe, Erfolge und Läufe über Neustarts und Deploys hinweg; *Meine
+Einsätze* listet seine Läufe, die Einstellungen löschen es auf Wunsch. Mit einem Kennwort
+(Einstellungen, „Konto") bekommt es eine Ausweisnummer wie `EL-7K3M-9Q2D`, mit der sich jedes
+Gerät dort anmeldet: Einsätze, Erfolge und ein laufender Platz folgen dem Konto; „Abmelden"
+lässt das Gerät als Gast neu beginnen, „Konto wechseln" meldet in einem Schritt um, und ein neues
+Kennwort meldet alle anderen Geräte ab. Ein vergessenes Kennwort lässt sich nicht
+wiederherstellen ([`docs/accounts.md`](docs/accounts.md)).
+*Offene Runden* listet jede Runde mit Kartenvorschau, Mission, Schwierigkeit, ihrer Crew als
+Figuren und den freien Plätzen — ein Klick auf *Beitreten* genügt, niemand muss einen Code
+weitergeben. Laufende Runden erscheinen ebenfalls, dort führt der Knopf zum Zuschauen. Unter
+*Beitreten* bleibt ein Code-Feld für direkte Verabredungen, daneben *Zuschauen*. Bindet ein
+laufender Einsatz den Dienstausweis, steht seine Karte als erster Menüpunkt da. In die Lobby
+und zurück geht es durch die Schiebetüren des Labors; ab dem ersten Klick oder Tastendruck
+spielen Titelthema und Anlagenbrummen, in der Lobby leiser weiter. Die Endkarte spielt nach
+ihrem Stinger ein eigenes Thema: hell für einen gewonnenen, ein tiefes Dröhnen für einen
+verlorenen Einsatz. Die Geräusche und die Hauspartitur sind mit ElevenLabs erzeugt; daneben
+stehen in den Einstellungen („Ton" → „Musik") vier Musikpakete mit Musik von Menschen unter CC BY
+oder CC0 — İlker Yalçıner; Sergey Cheremisinov mit Lee Rosevere und Rafael Krux; Kevin MacLeod;
+Alexandr Zhelanov —, als Ganzes oder je Platz in der „Feinwahl" zu wählen, jedes Stück dort
+vorzuhören, darunter die Nennungen, die ihre Lizenzen verlangen (`docs/sound.md`, Abschnitte
+„Musikpakete“ und „Lizenz“).
 **Startseite:** Ein Hauptmenü wie in einem Spiel, über dem nächtlichen Labor der gewählten Mission,
 das langsam vorbeizieht; rechts steht die eigene Figur mit der Handlampe, deren Kegel das Labor
 erhellt. Jeder Menüpunkt hat in Blackouts Labor einen eigenen Raum, zu dem die Kamera beim
@@ -314,31 +341,32 @@ selbst, wie die CI, und probt mitten in einem Einsatz den Neustart: SIGTERM, die
 „WARTUNG · Der Server startet neu" auf jeder Seite, und nach dem Neustart alle zurück im Einsatz.
 
 **Nur ein Teil des Rundgangs (Gruppen):** Jede Aufnahme des Rundgangs gehört zu genau einer von
-achtzehn Gruppen (`tools/groups.mjs`); `SHOTS_ONLY=screens,intro` spielt nur diese,
+neunzehn Gruppen (`tools/groups.mjs`); `SHOTS_ONLY=screens,intro` spielt nur diese,
 `SHOTS_SKIP=perf` alle außer diesen — der schnelle Beweis eines Teils. Vor dem Rundgang laufen die
 Proben, jede in einem Raum für sich: `editor`, `art`, `drones` (Gefahrensinn und eine Drohne aus der
 Nähe), `reconnect`, `restart` und `three` (Blackout zu dritt bis zur Signalkette, die Zielzeile mit
 jeder Hand: `three-lever`, `three-plate`, `three-hands`, `three-reader`, `three-phone-932`; der
 Systemcheck nennt sie im Log als ausgelassen) — im Systemcheck dazu die Probe des Serverraums, die
-zu `devices` gehört, die der Zugangskontrolle, `access`, und `hall` (die Übungshalle bis zur
-Siegerkarte); Blackout nennt alle drei im Log als ausgelassen. Der Rundgang selbst: `screens` (Menü
-und sein Ton, Bestenliste, Lobby, der Start aus ihr), `intro` (die Eröffnung bis `blackout.png`)
-und `run` (die Mission bis zur Siegerkarte, nach dem gewonnenen Systemcheck die Einsätze des
-Kontos, sein Kennwort, die Anmeldung auf einem zweiten Gerät, der Kontowechsel und sein Löschen);
-im Lauf `devices` (jede Station,
-auch auf dem quer gehaltenen Handy), `reading` (Quellen, Schild, Notizen der letzten Schicht,
-Notizblock, Bücher), `hud` (das Spiel in jeder Fenstergröße, Einstellungen, Steuerung, Minikarte,
-Sprint), `graphics` (Licht, Leuchten, Figuren, Kamera, Dichte 2), `audio` (Raumklang, Funk, Seite
-des Partners, Musik), `voice` (Mikrofone, Sprechverbindungen) und `perf` (die Frame-Fenster). Die
-Gruppen im Lauf brauchen `run` und ziehen ihn mit; `SHOTS_SKIP=run` lehnt sie ab. Jede ausgelassene,
-abgelehnte oder mitgezogene Gruppe steht zu Beginn mit einer Zeile im Log, und was sie aufgenommen
-hätte, zählt weder als übersprungen noch als fehlgeschlagen. Der Rundgang spielt nur so weit, wie
-die gewählten Gruppen reichen: `screens` allein endet, sobald der Lauf gestartet ist, `intro` nach
-`blackout.png`. Eine Aufnahme oder Prüfung gehört zur Gruppe des Schritts, der sie macht — jeder
-Lauf hält jede Aufnahme an die Gruppe ihres Schritts, so prüft jeder volle Lauf die Tabelle —, und
-wo der Schritt einer anderen Gruppe gehört, kommt sie nur mit dieser: die Frame-Fenster von `perf`
-im Menü (`screens`), in der Eröffnung (`intro`: der Vorspann, das beleuchtete Labor und sein Blick
-bei Dichte 2) und bei Dichte 2 am Pult und in der Flucht (`graphics`), die Sprechverbindungen von
+zu `devices` gehört, die der Zugangskontrolle, `access`, `hall` (die Übungshalle bis zur
+Siegerkarte) und `music` (die Musikpakete in den Einstellungen auf einer eigenen Menüseite: ein
+anderes Paket hörbar, Vorhören, nach dem Neuladen behalten); Blackout nennt alle vier im Log als
+ausgelassen. Der Rundgang selbst: `screens` (Menü und sein Ton, Bestenliste, Lobby, der Start aus
+ihr), `intro` (die Eröffnung bis `blackout.png`) und `run` (die Mission bis zur Siegerkarte, nach
+dem gewonnenen Systemcheck die Einsätze des Kontos, sein Kennwort, die Anmeldung auf einem zweiten
+Gerät, der Kontowechsel und sein Löschen); im Lauf `devices` (jede Station, auch auf dem quer
+gehaltenen Handy), `reading` (Quellen, Schild, Notizen der letzten Schicht, Notizblock, Bücher),
+`hud` (das Spiel in jeder Fenstergröße, Einstellungen, Steuerung, Minikarte, Sprint), `graphics`
+(Licht, Leuchten, Figuren, Kamera, Dichte 2), `audio` (Raumklang, Funk, Seite des Partners, Musik),
+`voice` (Mikrofone, Sprechverbindungen) und `perf` (die Frame-Fenster). Die Gruppen im Lauf brauchen
+`run` und ziehen ihn mit; `SHOTS_SKIP=run` lehnt sie ab. Jede ausgelassene, abgelehnte oder
+mitgezogene Gruppe steht zu Beginn mit einer Zeile im Log, und was sie aufgenommen hätte, zählt
+weder als übersprungen noch als fehlgeschlagen. Der Rundgang spielt nur so weit, wie die gewählten
+Gruppen reichen: `screens` allein endet, sobald der Lauf gestartet ist, `intro` nach `blackout.png`.
+Eine Aufnahme oder Prüfung gehört zur Gruppe des Schritts, der sie macht — jeder Lauf hält jede
+Aufnahme an die Gruppe ihres Schritts, so prüft jeder volle Lauf die Tabelle —, und wo der Schritt
+einer anderen Gruppe gehört, kommt sie nur mit dieser: die Frame-Fenster von `perf` im Menü
+(`screens`), in der Eröffnung (`intro`: der Vorspann, das beleuchtete Labor und sein Blick bei
+Dichte 2) und bei Dichte 2 am Pult und in der Flucht (`graphics`), die Sprechverbindungen von
 `voice` nach dem Neuladen des Gast-Handys, das der Notizblock von `reading` auslöst, und der
 Info-Knopf von `hud` nach einem unterwegs gelesenen Schild, ebenfalls `reading`, wo niemand am
 Schild startet. Ohne beide Variablen spielt er alles wie bisher; die Zusammenfassung nennt die
@@ -356,7 +384,8 @@ auf einem M4 mit 16 GB (14.11.2026, Last 9 bis 17) 772 s:
 | `three` | 92,5 | | | `perf` | 22,8 |
 
 `three` kam danach dazu (M-three): 92,5 s im vollen Rundgang desselben Tages bei Last 7 bis 31,
-75 bis 91 s allein mit `SHOTS_ONLY=three`.
+75 bis 91 s allein mit `SHOTS_ONLY=three`. `music` (M-packs) spielt nur im Systemcheck: 4,9 s im CI,
+9,7 s allein mit `SHOTS_ONLY=music` bei Last um 20.
 
 `SHOTS_ONLY=screens,intro` spielte Blackout in 48 s; jede Gruppe im Lauf zieht die Mission bis
 zur Siegerkarte mit, und `SHOTS_ONLY=run` allein dauerte 262 s (den Systemcheck 85 s). Die

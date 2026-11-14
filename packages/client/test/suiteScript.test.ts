@@ -8,8 +8,10 @@ import {
   hashOf,
   isSuite,
   keepTake,
+  keptFiles,
   noisyTakes,
   optionsOf,
+  pieceFileOf,
   planLines,
   planOf,
   readCatalog,
@@ -419,7 +421,10 @@ describe('a suite’s cost', () => {
 /** The music's entries of `places` and the files of its folder. */
 const musicIn = (places: ReturnType<typeof placesIn>): { manifest: Manifest; files: string[] } => ({
   manifest: readManifest(places, 'music'),
-  files: existsSync(places.dirs.music) ? readdirSync(places.dirs.music).sort() : [],
+  files: [
+    ...(existsSync(join(places.dirs.music, 'manifest.json')) ? ['manifest.json'] : []),
+    ...keptFiles(places.dirs.music, 'music'),
+  ].sort(),
 });
 
 /** One take of SMALL in `places`, each section at `amps`, its sound `shortMs` short of the plan. */
@@ -575,6 +580,10 @@ const old = (file: string): ManifestEntry => ({
 });
 
 describe('keeping a suite’s take', () => {
+  it('keeps the score’s pieces in the folder of its own music pack', () => {
+    expect(pieceFileOf('calm')).toBe('packs/nachtschicht/calm.m4a');
+  });
+
   it('cuts it into its pieces where the plan puts them, each encoded and measured', async () => {
     const places = placesIn();
     const bench = await suiteTakeIn(places);
@@ -583,16 +592,16 @@ describe('keeping a suite’s take', () => {
     const { manifest, files } = musicIn(places);
     expect(files).toEqual([
       'manifest.json',
-      'test-close.m4a',
-      'test-open.m4a',
-      'test-round.m4a',
-      'test-turn.m4a',
+      pieceFileOf('test-close'),
+      pieceFileOf('test-open'),
+      pieceFileOf('test-round'),
+      pieceFileOf('test-turn'),
     ]);
     expect(manifest).toEqual(kept);
     expect(existsSync(join(places.takes, SMALL.id))).toBe(false);
     const round = kept['test-round'] as ManifestEntry;
     expect(round).toEqual({
-      file: 'test-round.m4a',
+      file: pieceFileOf('test-round'),
       ms: 10_000,
       gain: expect.any(Number),
       startMs: 0,
@@ -609,15 +618,15 @@ describe('keeping a suite’s take', () => {
     expect(kept['test-open']).toMatchObject({ loop: false, startMs: 0, suite: SMALL.id });
     expect(kept['test-open']?.bpm).toBeUndefined();
     // Each piece is its own section's sound: the tone at that section's amplitude.
-    expect(loudnessOf(pcmOf(places, 'test-turn.m4a')).peak).toBeCloseTo(0.4, 2);
-    expect(loudnessOf(pcmOf(places, 'test-close.m4a')).peak).toBeCloseTo(0.05, 2);
+    expect(loudnessOf(pcmOf(places, pieceFileOf('test-turn'))).peak).toBeCloseTo(0.4, 2);
+    expect(loudnessOf(pcmOf(places, pieceFileOf('test-close'))).peak).toBeCloseTo(0.05, 2);
   });
 
   it('fades each piece in and out over 10 ms where cut, and brings all to −19 LUFS', async () => {
     const places = placesIn();
     const bench = await suiteTakeIn(places);
     const { kept } = keepTake({ id: SMALL.id, n: 1 }, [SMALL], bench);
-    const [left = new Float32Array(0)] = pcmOf(places, 'test-round.m4a').channels;
+    const [left = new Float32Array(0)] = pcmOf(places, pieceFileOf('test-round')).channels;
     // Its first and last millisecond under 0.01, where its tone, cut bare, would reach 0.2.
     const loudest = (span: Float32Array): number => Math.max(...[...span].map(Math.abs));
     expect(loudest(left.subarray(0, 8))).toBeLessThan(0.01);
@@ -659,7 +668,7 @@ describe('keeping a suite’s take', () => {
     expect(files).not.toContain('test-round.mp3');
     expect(files).toContain('shared.mp3'); // the sting plays it still
     expect(manifest['test-sting']).toEqual(before['test-sting']);
-    expect(manifest['test-turn']?.file).toBe('test-turn.m4a');
+    expect(manifest['test-turn']?.file).toBe(pieceFileOf('test-turn'));
   });
 
 });
@@ -702,7 +711,7 @@ describe('a suite’s take kept, refused or measured anew', () => {
     const before = { 'test-round': old('test-round.mp3') };
     writeFileSync(join(places.dirs.music, 'manifest.json'), JSON.stringify(before));
     expect(() => keepTake({ id: SMALL.id, n: 1 }, [SMALL], bench)).toThrow(/EISDIR/);
-    expect(readManifest(places, 'music')['test-round']?.file).toBe('test-round.m4a');
+    expect(readManifest(places, 'music')['test-round']?.file).toBe(pieceFileOf('test-round'));
   });
 
   it('is measured anew by a run that makes nothing, its entries as kept', async () => {
