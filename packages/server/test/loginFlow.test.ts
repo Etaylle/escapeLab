@@ -537,6 +537,56 @@ describe('the turns at deriving, over the line', () => {
   });
 });
 
+describe('a run that starts while a sign-in is checked', () => {
+  /** scrypt's next key held back till `release`: the derive of the next Kennwort checked. */
+  async function holdNextDerive() {
+    const actual = await vi.importActual<typeof Crypto>('node:crypto');
+    let release = (): void => undefined;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let begun = (): void => undefined;
+    const started = new Promise<void>((resolve) => {
+      begun = resolve;
+    });
+    const waiting = (...args: Parameters<typeof actual.scrypt>): void => {
+      begun();
+      void held.then(() => Reflect.apply(actual.scrypt, undefined, args));
+    };
+    vi.mocked(scrypt).mockImplementationOnce(waiting as typeof scrypt);
+    return { started, release };
+  }
+
+  it('refuses the sign-in once its Kennwort is checked: the run binds the pass', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const { server, manager, store } = lab();
+    const { number } = await annaWithKennwort(server);
+    // Ben in the tutorial's lobby with Cleo, ready; his guest account binds his seat.
+    const cleo = server.connect();
+    cleo.say({ kind: 'create-room', name: 'Cleo', pass: passFor('Cleo') });
+    const { code } = joinedOf(cleo);
+    const ben = server.connect();
+    ben.say({ kind: 'join-room', code, name: 'Ben', pass: passFor('Ben') });
+    ben.say({ kind: 'set-ready', ready: true });
+    await settled();
+    const guest = (await store.findByIdentity(identityOf('Ben')))?.id;
+    const { started, release } = await holdNextDerive();
+    const pass = passFor('Ben');
+    const answer = ask(ben, { kind: 'sign-in', pass, login: number, password: KENNWORT });
+    await started;
+    // The run starts while the Kennwort is checked.
+    cleo.say({ kind: 'start-mission' });
+    expect(ben.view.phase).toBe('playing');
+    release();
+    expect(await answer).toEqual({ refused: BOUND_SIGN_IN });
+    expect((await store.findByIdentity(identityOf('Ben')))?.id).toBe(guest);
+    expect(manager.get(code).snapshot().seats.find((seat) => seat.name === 'Ben')?.accountId).toBe(
+      guest,
+    );
+    manager.get(code).dispose();
+  });
+});
+
 describe('signing out, and switching accounts', () => {
   it('signs a pass out: the account whole, the pass a stranger, the number opens it', async () => {
     const said = vi.spyOn(console, 'log').mockImplementation(() => undefined);

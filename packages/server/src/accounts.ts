@@ -291,16 +291,19 @@ export class AccountDesk {
    * pass led into before is deleted where nothing is left of it (store.ts `signIn`); signed in
    * once more, nothing changes. Refused, saying why, for a number or a Kennwort that does not
    * match — in the same words for either (WRONG_LOGIN) — a try the limits hold back (`Tries`),
-   * and a gate that lets nothing change.
+   * a gate that lets nothing change, and where `free` throws: asked once the Kennwort is
+   * checked, right before the pass moves, as the seats it holds may have changed meanwhile.
    */
   signIn(
     pass: CrewPass,
     typed: string,
     password: string,
     limits: Limits = NO_LIMITS,
+    free: () => void = () => undefined,
   ): Promise<Arrival> {
     return this.serial(pass, async () => {
       const { accountId, checked } = await this.verified(typed, password, limits);
+      free();
       const deleted = await this.store.signIn(identityOf(pass), accountId, null, checked);
       if (deleted === null) {
         throw new GameError(WRONG_LOGIN);

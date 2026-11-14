@@ -15,6 +15,7 @@ import {
   NO_NUMBER,
   NO_OLD_KENNWORT,
   NO_RECOVERY,
+  PLAIN_LINE,
   SIGN_OUT_LINE,
   SWITCH_LINE,
   WHY_KENNWORT,
@@ -165,6 +166,19 @@ describe('the asks of the Ausweis’s forms', () => {
     });
     expect(askOf('change', { ...fields, old: '' })).toEqual({ problem: NO_OLD_KENNWORT });
     expect(askOf('sign-out', typed({}))).toEqual({ kind: 'sign-out' });
+  });
+
+  it('say on a page reached unencrypted that the Kennwort goes readable, and ask it', () => {
+    vi.stubGlobal('window', { isSecureContext: false });
+    for (const step of ['sign-in', 'set', 'change', 'switch'] as const) {
+      const { html } = section(step === 'set' ? GUEST : SIGNED, step);
+      expect(html, step).toContain(PLAIN_LINE);
+      expect(html, step).toContain('type="password"');
+    }
+    expect(section(SIGNED, 'idle').html).not.toContain(PLAIN_LINE);
+    // Over https, or on this machine: nothing to say.
+    vi.stubGlobal('window', { isSecureContext: true });
+    expect(section(SIGNED, 'sign-in').html).not.toContain(PLAIN_LINE);
   });
 });
 

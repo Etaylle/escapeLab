@@ -745,7 +745,8 @@ async function changePassword(
 
 /**
  * The pass of `msg` signed into an account (`AccountDesk.signIn`): refused while a run on binds
- * it, before any Kennwort is tried; the seats it holds — a lobby's — are the account's then.
+ * it — before any Kennwort is tried, and again once it is, as a run may have started meanwhile;
+ * the seats it holds — a lobby's — are the account's then.
  */
 async function signIn(
   lab: Lab,
@@ -753,10 +754,13 @@ async function signIn(
   msg: Extract<ClientMessage, { kind: 'sign-in' }>,
   limits: Limits,
 ): Promise<ServerMessage> {
-  if (lab.manager.whereIs(msg.pass)?.phase === 'playing') {
-    throw new GameError(BOUND_SIGN_IN);
-  }
-  const arrival = await desk.signIn(msg.pass, msg.login, msg.password, limits);
+  const free = (): void => {
+    if (lab.manager.whereIs(msg.pass)?.phase === 'playing') {
+      throw new GameError(BOUND_SIGN_IN);
+    }
+  };
+  free();
+  const arrival = await desk.signIn(msg.pass, msg.login, msg.password, limits, free);
   lab.manager.bindAccount(msg.pass, arrival.id);
   return told('signed-in')(arrival.view);
 }
