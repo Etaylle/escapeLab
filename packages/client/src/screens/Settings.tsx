@@ -1,25 +1,73 @@
-import { useEffect, useRef, useState } from 'react';
+import {
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type KeyboardEvent,
+  type ReactNode,
+} from 'react';
 import type { AccountView } from '@escapelab/core';
-import type { Refusal } from '../ws.js';
+import { bindVerdict, DEFAULT_KEYS, DEFAULT_PAD, type KeyBindings } from '../input/bindings.js';
 import { useGlyph } from '../input/glyphs.js';
 import { dateText } from '../runStats.js';
-import { ControlSettings } from './ControlSettings.js';
-import { runsText } from './ProfileChip.js';
 import {
   changeSettings,
+  DEFAULT_SETTINGS,
+  getSettings,
   isRebinding,
   useSettings,
+  type Bus,
+  type LightWay,
   type Motion,
+  type Settings,
+  type SubtitleSize,
   type TextSize,
-  type Volumes,
 } from '../settings.js';
-import { volumeTick } from '../world/audio.js';
+import { isMuted, setMuted, subscribeMuted, volumeTick } from '../world/audio.js';
+import type { Refusal } from '../ws.js';
+import { ControlSettings, KeyTable } from './ControlSettings.js';
+import { Icon } from './Icon.js';
+import { ProfileFields } from './ProfileFields.js';
+import { runsText } from './ProfileChip.js';
+import { Choice, Slider } from './SettingsParts.js';
 
-/** The three volumes as the panel names them. */
-const VOLUMES: readonly (readonly [keyof Volumes, string])[] = [
-  ['radio', 'Funk'],
-  ['effects', 'Effekte'],
+/**
+ * The settings over whatever screen is up — a run goes on under them — in tabs, as Deep Rock
+ * Galactic's and Helldivers 2's stand: „Ton" (the whole lab's volume and each bus's, a mute
+ * each, the talk key), „Bild" (the text size, less motion, the light, the full screen),
+ * „Steuerung" (the keys, the controller, its symbols, the stick's dead zone), „Zugang" (the
+ * crew's colour patterns, the spoken lines' size) and, with the pass's account, „Konto" (the
+ * profile's name and colour, the account and „Konto löschen"). Every change takes at once and is
+ * kept on this device (settings.ts); a volume ticks through its bus as it is set, so that the
+ * ear hears where it stands. Each tab but „Konto" has its „Zurücksetzen". The arrows step along
+ * the tab bar, a controller's D-pad and A move through it and the controls as through every
+ * dialog (input/focus.ts); the tab bar stays put while a tab's controls scroll under it.
+ */
+
+/** The settings' tabs. */
+export type SettingsTab = 'ton' | 'bild' | 'steuerung' | 'zugang' | 'konto';
+
+/** What each tab says. */
+export const TAB_NAMES: Readonly<Record<SettingsTab, string>> = {
+  ton: 'Ton',
+  bild: 'Bild',
+  steuerung: 'Steuerung',
+  zugang: 'Zugang',
+  konto: 'Konto',
+};
+
+/** The panel's tabs in order: „Konto" where the panel has the pass's account to show. */
+export function tabsOf(account: boolean): SettingsTab[] {
+  return ['ton', 'bild', 'steuerung', 'zugang', ...(account ? (['konto'] as const) : [])];
+}
+
+/** The buses of „Ton", as the panel names them. */
+const BUSES: readonly (readonly [Bus, string])[] = [
+  ['master', 'Gesamt'],
   ['music', 'Musik'],
+  ['effects', 'Effekte'],
+  ['voice', 'Funk'],
+  ['ambience', 'Umgebung'],
 ];
 
 const TEXT_SIZES: readonly (readonly [TextSize, string])[] = [
@@ -34,53 +82,59 @@ const MOTIONS: readonly (readonly [Motion, string])[] = [
   ['system', 'System'],
 ];
 
-/** A volume's slider, 0 to 100, with its value beside it. */
-function Volume(props: { label: string; value: number; onChange: (value: number) => void }) {
-  const { label, value, onChange } = props;
-  return (
-    <label className="settings-volume">
-      <span className="settings-label">{label}</span>
-      <input
-        type="range"
-        min={0}
-        max={100}
-        step={5}
-        value={value}
-        aria-valuetext={`${value} %`}
-        onChange={(e) => onChange(Number(e.target.value))}
-      />
-      <output className="settings-value">{value}</output>
-    </label>
-  );
+const LIGHTS: readonly (readonly [LightWay, string])[] = [
+  ['auto', 'Automatisch'],
+  ['canvas', 'Einfach'],
+];
+
+const SUBTITLE_SIZES: readonly (readonly [SubtitleSize, string])[] = [
+  ['normal', 'Normal'],
+  ['large', 'Groß'],
+  ['larger', 'Sehr groß'],
+];
+
+/** An on and an off, as „Zugang" and „Bild" offer them. */
+const SWITCH: readonly (readonly ['off' | 'on', string])[] = [
+  ['off', 'Aus'],
+  ['on', 'An'],
+];
+
+/** `on` as a switch's option. */
+const onOff = (on: boolean): 'off' | 'on' => (on ? 'on' : 'off');
+
+/**
+ * The talk key back to V where no other action holds V meanwhile; else the one it has — two
+ * actions on one key would put every key back (input/bindings.ts `readKeys`).
+ */
+function talkBack(keys: KeyBindings): KeyBindings {
+  const v = DEFAULT_KEYS.talk;
+  return bindVerdict(keys, 'talk', v).ok ? { ...keys, talk: v } : keys;
 }
 
-/** One of a few options, side by side, the one in force lit. */
-function Choice<T extends string>(props: {
-  legend: string;
-  options: readonly (readonly [T, string])[];
-  value: T;
-  onChange: (value: T) => void;
-}) {
-  const { legend, options, value, onChange } = props;
-  return (
-    <fieldset className="settings-group">
-      <legend>{legend}</legend>
-      <div className="settings-options" role="radiogroup" aria-label={legend}>
-        {options.map(([option, label]) => (
-          <button
-            key={option}
-            type="button"
-            role="radio"
-            aria-checked={option === value}
-            className={option === value ? 'settings-option settings-option--on' : 'settings-option'}
-            onClick={() => onChange(option)}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-    </fieldset>
-  );
+/**
+ * What a tab's „Zurücksetzen" puts back, from the settings as they stand (`now`): „Ton" every
+ * volume, every mute and the talk key; „Bild" the text, the motion and the light; „Steuerung"
+ * the keys, the controller, its symbols and the dead zone; „Zugang" the patterns and the
+ * spoken lines' size. „Konto" holds no setting.
+ */
+export function resetOf(tab: SettingsTab, now: Settings): Partial<Settings> {
+  const d = DEFAULT_SETTINGS;
+  const parts: Record<SettingsTab, Partial<Settings>> = {
+    ton: { volumes: d.volumes, muted: d.muted, keys: talkBack(now.keys) },
+    bild: { textSize: d.textSize, motion: d.motion, light: d.light },
+    steuerung: { keys: DEFAULT_KEYS, pad: DEFAULT_PAD, glyphs: d.glyphs, deadzone: d.deadzone },
+    zugang: { patterns: d.patterns, subtitles: d.subtitles },
+    konto: {},
+  };
+  return parts[tab];
+}
+
+/** A tab's „Zurücksetzen": its settings back (`resetOf`), and with „Ton" the sound switch on. */
+export function resetTab(tab: SettingsTab): void {
+  changeSettings(resetOf(tab, getSettings()));
+  if (tab === 'ton') {
+    setMuted(false);
+  }
 }
 
 /**
@@ -92,7 +146,7 @@ function useEscapeCloses(onClose: () => void): void {
   const close = useRef(onClose);
   close.current = onClose;
   useEffect(() => {
-    const onKey = (e: KeyboardEvent): void => {
+    const onKey = (e: globalThis.KeyboardEvent): void => {
       if (e.key === 'Escape' && !isRebinding()) {
         e.stopPropagation();
         close.current();
@@ -101,6 +155,228 @@ function useEscapeCloses(onClose: () => void): void {
     window.addEventListener('keydown', onKey, true);
     return () => window.removeEventListener('keydown', onKey, true);
   }, []);
+}
+
+/**
+ * Where an arrow key, Home or End on the tab bar goes from tab `at` of `count`: the next or the
+ * one before, round at the ends, or an end; null for any other key.
+ */
+export function tabStep(at: number, key: string, count: number): number | null {
+  const steps: Record<string, number> = {
+    ArrowRight: (at + 1) % count,
+    ArrowLeft: (at - 1 + count) % count,
+    Home: 0,
+    End: count - 1,
+  };
+  return steps[key] ?? null;
+}
+
+/**
+ * The tab bar: a tab a press, or the arrows, Home and End stepping along it, the tab the focus
+ * comes to — by the keys, a controller's D-pad — opening as it does.
+ */
+function TabBar(props: {
+  tabs: readonly SettingsTab[];
+  tab: SettingsTab;
+  onTab: (tab: SettingsTab) => void;
+}) {
+  const { tabs, tab, onTab } = props;
+  const onKey = (e: KeyboardEvent<HTMLDivElement>): void => {
+    const next = tabStep(tabs.indexOf(tab), e.key, tabs.length);
+    const id = next === null ? undefined : tabs[next];
+    if (id === undefined) {
+      return;
+    }
+    e.preventDefault();
+    onTab(id);
+    e.currentTarget.querySelector<HTMLElement>(`[data-tab="${id}"]`)?.focus();
+  };
+  return (
+    <div className="settings-tabs" role="tablist" aria-label="Bereiche" onKeyDown={onKey}>
+      {tabs.map((id) => (
+        <button
+          key={id}
+          type="button"
+          role="tab"
+          id={`settings-tab-${id}`}
+          data-tab={id}
+          aria-selected={id === tab}
+          aria-controls="settings-panel"
+          tabIndex={id === tab ? 0 : -1}
+          className={id === tab ? 'settings-tab settings-tab--on' : 'settings-tab'}
+          onClick={() => onTab(id)}
+          onFocus={() => onTab(id)}
+        >
+          {TAB_NAMES[id]}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** The sound switch's mute, the whole lab's (world/audio.ts), kept up to date. */
+function useSoundOff(): boolean {
+  return useSyncExternalStore(subscribeMuted, isMuted, isMuted);
+}
+
+/** Whether `bus` stands muted: the whole lab by the sound switch (`off`), a bus by the settings. */
+const mutedOf = (bus: Bus, settings: Settings, off: boolean): boolean =>
+  bus === 'master' ? off : settings.muted[bus];
+
+/** `bus` muted or heard again (`mute`): the whole lab by the sound switch, a bus in settings. */
+function muteBus(bus: Bus, mute: boolean): void {
+  if (bus === 'master') {
+    setMuted(mute);
+    return;
+  }
+  changeSettings({ muted: { ...getSettings().muted, [bus]: mute } });
+}
+
+/**
+ * A bus's volume and its mute: the slider ticks through the bus as it is set, at its new level
+ * (world/audio.ts `volumeTick`), and so does the bus heard again.
+ */
+function BusRow({ bus, label, muted }: { bus: Bus; label: string; muted: boolean }) {
+  const { volumes } = useSettings();
+  const value = volumes[bus];
+  return (
+    <div className={muted ? 'settings-bus settings-bus--muted' : 'settings-bus'}>
+      <Slider
+        label={label}
+        value={value}
+        min={0}
+        max={100}
+        step={5}
+        valueText={muted ? `${value} %, stumm` : `${value} %`}
+        onChange={(next) => {
+          changeSettings({ volumes: { ...getSettings().volumes, [bus]: next } });
+          volumeTick(bus);
+        }}
+      />
+      <button
+        type="button"
+        className="settings-mute"
+        aria-pressed={muted}
+        aria-label={`${label} stumm`}
+        title={muted ? `${label}: stumm` : `${label}: hörbar`}
+        onClick={() => {
+          muteBus(bus, !muted);
+          volumeTick(bus);
+        }}
+      >
+        <Icon name={muted ? 'speaker-off' : 'speaker'} />
+      </button>
+    </div>
+  );
+}
+
+/** „Ton": the whole lab's volume and each bus's, a mute each, and the talk key. */
+function SoundTab() {
+  const settings = useSettings();
+  const off = useSoundOff();
+  return (
+    <>
+      <fieldset className="settings-group">
+        <legend>Lautstärke</legend>
+        {BUSES.map(([bus, label]) => (
+          <BusRow key={bus} bus={bus} label={label} muted={mutedOf(bus, settings, off)} />
+        ))}
+        <p className="settings-note">
+          Gesamt schaltet wie der Lautsprecher oben; Stimmen über das Mikrofon bleiben hörbar.
+        </p>
+      </fieldset>
+      <KeyTable keys={settings.keys} actions={['talk']} legend="Sprechtaste" note={false} />
+    </>
+  );
+}
+
+/** Whether the page fills the screen now, kept up to date; false where there is no document. */
+function useFullscreen(): boolean {
+  const [on, setOn] = useState(() => fullscreenNow());
+  useEffect(() => {
+    const follow = (): void => setOn(fullscreenNow());
+    document.addEventListener('fullscreenchange', follow);
+    return () => document.removeEventListener('fullscreenchange', follow);
+  }, []);
+  return on;
+}
+
+/** Whether anything fills the screen; nothing where there is no document, or no API. */
+function fullscreenNow(): boolean {
+  return typeof document !== 'undefined' && (document.fullscreenElement ?? null) !== null;
+}
+
+/** The page to the full screen, or back, inside the press as browsers ask; a refusal is quiet. */
+function setFullscreen(on: boolean): void {
+  const asked = on
+    ? document.documentElement.requestFullscreen({ navigationUI: 'hide' })
+    : document.exitFullscreen();
+  asked.catch(() => undefined);
+}
+
+/** „Bild": the text's size, less motion, the light's way, the full screen. */
+function PictureTab() {
+  const settings = useSettings();
+  const full = useFullscreen();
+  const canFill = typeof document !== 'undefined' && document.fullscreenEnabled === true;
+  return (
+    <>
+      <Choice
+        legend="Textgröße"
+        options={TEXT_SIZES}
+        value={settings.textSize}
+        onChange={(textSize) => changeSettings({ textSize })}
+      />
+      <Choice
+        legend="Weniger Bewegung"
+        options={MOTIONS}
+        value={settings.motion}
+        onChange={(motion) => changeSettings({ motion })}
+      />
+      <Choice
+        legend="Licht"
+        options={LIGHTS}
+        value={settings.light}
+        onChange={(light) => changeSettings({ light })}
+      />
+      <p className="settings-note">Einfach zeichnet das Licht der Welt ohne WebGL.</p>
+      <Choice
+        legend="Vollbild"
+        options={SWITCH}
+        value={onOff(full)}
+        disabled={!canFill}
+        onChange={(next) => setFullscreen(next === 'on')}
+      />
+    </>
+  );
+}
+
+/** „Zugang": the crew's colours with a pattern each, and the spoken lines' size. */
+function AccessTab() {
+  const settings = useSettings();
+  return (
+    <>
+      <Choice
+        legend="Farbmuster"
+        options={SWITCH}
+        value={onOff(settings.patterns)}
+        onChange={(next) => changeSettings({ patterns: next === 'on' })}
+      />
+      <p className="settings-note">
+        Die Punkte neben den Namen tragen je Farbe ein Zeichen. Die Signalkette zeigt ihre Muster
+        immer, die Kabel ihre Namen.
+      </p>
+      <Choice
+        legend="Untertitel"
+        options={SUBTITLE_SIZES}
+        value={settings.subtitles}
+        onChange={(subtitles) => changeSettings({ subtitles })}
+      />
+      <p className="settings-note">
+        Die Zeilen von Funk und Durchsagen; auf dem Handy behalten sie ihre Größe.
+      </p>
+    </>
+  );
 }
 
 /** Where „Konto löschen" stands: not asked yet, asked — what it deletes said — or sent off. */
@@ -229,19 +505,20 @@ interface PanelProps {
   account?: AccountView | null;
   /** asks the server to delete the account (`delete-account`) */
   onDeleteAccount?: () => void;
+  /** the account takes the name typed in „Konto" (`profile`) */
+  onName?: (name: string) => void;
   /** the server's latest refusal on the line (ws.ts `Connection.refusal`) */
   refusal?: Refusal | null;
+  /** the tab the panel opens on; the last one opened on this page by default */
+  tab?: SettingsTab;
 }
 
 /**
- * The settings over whatever screen is up — a run goes on under them: the three volumes, the
- * keys and the controller (ControlSettings.tsx), the text size and less motion, each kept on
- * this device as it is set (settings.ts), and the pass's account, which can be deleted here
- * (`AccountSection`). The top bar's sound switch stays the quick way to silence everything; a
- * controller's Start opens them.
+ * „Konto": the profile's name, which the account takes once it stands still, and its colour,
+ * what the account holds and „Konto löschen" (`AccountSection`).
  */
-export function SettingsPanel(props: PanelProps) {
-  const { onClose, account = null, onDeleteAccount, refusal = null } = props;
+function AccountTab(props: Required<Pick<PanelProps, 'onDeleteAccount'>> & PanelProps) {
+  const { account = null, onDeleteAccount, refusal = null } = props;
   const [taken, setTaken] = useState<DeleteStep>('idle');
   const [sentAfter, setSentAfter] = useState(0);
   const { step, refused } = deletionNow(taken, sentAfter, refusal);
@@ -251,19 +528,62 @@ export function SettingsPanel(props: PanelProps) {
     }
     setTaken(next);
   };
-  // What deleting the account takes stands at the card's foot: it comes into sight as it is asked.
+  // What deleting the account takes stands at the tab's foot: it comes into sight as it is asked.
   useEffect(() => {
     if (step === 'asked') {
       document.querySelector('.settings-account-ask')?.scrollIntoView({ block: 'nearest' });
     }
   }, [step]);
-  const settings = useSettings();
+  return (
+    <>
+      <ProfileFields account={account} onName={props.onName ?? (() => undefined)} />
+      <AccountSection
+        account={account}
+        step={step}
+        refused={refused}
+        onStep={takeStep}
+        onDelete={onDeleteAccount}
+      />
+    </>
+  );
+}
+
+/** The tab the panel opened last on this page: it opens on it again. */
+let lastTab: SettingsTab = 'ton';
+
+/** What tab `tab` holds. */
+function TabBody({ tab, panel }: { tab: SettingsTab; panel: PanelProps }): ReactNode {
+  const { onDeleteAccount } = panel;
+  const bodies: Record<SettingsTab, () => ReactNode> = {
+    ton: () => <SoundTab />,
+    bild: () => <PictureTab />,
+    steuerung: () => <ControlSettings />,
+    zugang: () => <AccessTab />,
+    konto: () =>
+      onDeleteAccount === undefined ? null : (
+        <AccountTab {...panel} onDeleteAccount={onDeleteAccount} />
+      ),
+  };
+  return bodies[tab]();
+}
+
+/**
+ * The settings in tabs over whatever screen is up (see the module's comment): the head with its
+ * way out, the tab bar, the tab's controls — scrolling where they run long, under a tab bar that
+ * stays — and the tab's „Zurücksetzen".
+ */
+export function SettingsPanel(props: PanelProps) {
+  const { onClose } = props;
+  const tabs = tabsOf(props.onDeleteAccount !== undefined);
+  const [tab, setTab] = useState<SettingsTab>(() => {
+    const wanted = props.tab ?? lastTab;
+    return tabs.includes(wanted) ? wanted : 'ton';
+  });
   const closeKey = useGlyph('close');
   useEscapeCloses(onClose);
-  // A volume set ticks through the bus it sets, at its new level (world/audio.ts `volumeTick`).
-  const setVolume = (part: keyof Volumes, value: number): void => {
-    changeSettings({ volumes: { ...settings.volumes, [part]: value } });
-    volumeTick(part);
+  const choose = (next: SettingsTab): void => {
+    lastTab = next;
+    setTab(next);
   };
   return (
     <div
@@ -274,44 +594,27 @@ export function SettingsPanel(props: PanelProps) {
       onClick={onClose}
     >
       <div className="card settings-card" onClick={(e) => e.stopPropagation()}>
-        <div className="info-head">
-          <h2>Einstellungen</h2>
+        <div className="settings-head">
+          <h2 className="settings-title">Einstellungen</h2>
           <button className="link" onClick={onClose}>
             Schließen [{closeKey}]
           </button>
         </div>
-        <fieldset className="settings-group">
-          <legend>Lautstärke</legend>
-          {VOLUMES.map(([part, label]) => (
-            <Volume
-              key={part}
-              label={label}
-              value={settings.volumes[part]}
-              onChange={(value) => setVolume(part, value)}
-            />
-          ))}
-        </fieldset>
-        <ControlSettings />
-        <Choice
-          legend="Textgröße"
-          options={TEXT_SIZES}
-          value={settings.textSize}
-          onChange={(textSize) => changeSettings({ textSize })}
-        />
-        <Choice
-          legend="Weniger Bewegung"
-          options={MOTIONS}
-          value={settings.motion}
-          onChange={(motion) => changeSettings({ motion })}
-        />
-        {onDeleteAccount !== undefined && (
-          <AccountSection
-            account={account}
-            step={step}
-            refused={refused}
-            onStep={takeStep}
-            onDelete={onDeleteAccount}
-          />
+        <TabBar tabs={tabs} tab={tab} onTab={choose} />
+        <div
+          className="settings-body"
+          role="tabpanel"
+          id="settings-panel"
+          aria-labelledby={`settings-tab-${tab}`}
+        >
+          <TabBody tab={tab} panel={props} />
+        </div>
+        {tab !== 'konto' && (
+          <div className="settings-foot">
+            <button type="button" className="settings-reset" onClick={() => resetTab(tab)}>
+              Zurücksetzen
+            </button>
+          </div>
         )}
       </div>
     </div>

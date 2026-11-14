@@ -1,4 +1,5 @@
 import { readdirSync, readFileSync } from 'node:fs';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import {
   checkMission,
@@ -6,6 +7,7 @@ import {
   moduleFor,
   parseMission,
   type FieldSpec,
+  type Line,
 } from '@escapelab/core';
 import {
   copyOf,
@@ -15,16 +17,20 @@ import {
   draftFromJson,
   draftToJson,
   fieldsFromJson,
+  firstText,
   fieldsToJson,
   freeId,
+  moreTexts,
   newDraft,
   newPuzzle,
   slugOf,
   STATION_TYPES,
   twoConsoles,
+  withFirstText,
   type Draft,
   type StationType,
 } from '../src/editor/draft.js';
+import { LineField } from '../src/editor/fields.js';
 
 const MISSIONS = new URL('../../../missions/', import.meta.url);
 const shipped = readdirSync(MISSIONS)
@@ -177,6 +183,23 @@ describe('draft ↔ JSON', () => {
       panels: [],
     });
     expect(json.map.lamps).toHaveLength(5);
+  });
+
+  it('keeps mission control’s lines the form does not show, and writes the ones it edits', () => {
+    const blackout = shipped.find(({ name }) => name === 'blackout.json')?.data as {
+      radio: Record<string, unknown>;
+    };
+    const draft = loaded(blackout);
+    expect(Object.keys(draft.radio.extra).sort()).toEqual(
+      ['alarm', 'clock', 'emergency', 'lobby', 'lost', 'won'].sort(),
+    );
+    expect((draftToJson(draft) as { radio: unknown }).radio).toEqual(blackout.radio);
+    const edited = { ...draft, radio: { ...draft.radio, start: 'Leitstelle an Frühschicht.' } };
+    const json = draftToJson(edited) as { radio: Record<string, unknown> };
+    expect(json.radio['start']).toBe('Leitstelle an Frühschicht.');
+    expect(json.radio['clock']).toEqual(blackout.radio['clock']);
+    // A new draft has none to keep.
+    expect(newDraft().radio).toEqual({ start: '', escape: '', extra: {} });
   });
 });
 
@@ -482,5 +505,56 @@ describe('a module’s own fields in the file', () => {
     expect(fields['wires']).toEqual(file.wires);
     expect(fields['wires']).not.toBe(file.wires);
     expect(fieldsToJson(specs, fields)['wires']).not.toBe(fields['wires']);
+  });
+});
+
+describe('a line of several texts in the editor', () => {
+  it('shows the first text, edits only it, keeps the others and says how many', () => {
+    const line = ['Eins.', 'Zwei.', 'Drei.'];
+    expect(firstText(line)).toBe('Eins.');
+    expect(firstText('Los.')).toBe('Los.');
+    expect(withFirstText(line, 'Neu.')).toEqual(['Neu.', 'Zwei.', 'Drei.']);
+    expect(withFirstText('Los.', 'Neu.')).toBe('Neu.');
+    // Emptied, the line goes, its other texts with it: a line has no text without a first.
+    expect(withFirstText(line, '')).toBe('');
+    expect(moreTexts(line)).toBe('Dazu 2 weitere Fassungen in der Datei; ein Lauf sagt eine.');
+    expect(moreTexts(['a.', 'b.'])).toBe('Dazu eine weitere Fassung in der Datei; ein Lauf sagt eine.');
+    expect(moreTexts('Los.')).toBeUndefined();
+  });
+
+  it('edits it in one field: the first text in it, the others named under it and kept', () => {
+    const edited: Line[] = [];
+    const onChange = (line: Line): void => {
+      edited.push(line);
+    };
+    const field = LineField({ label: 'Zum Start', value: ['Los.', 'Weiter.'], onChange });
+    const html = renderToStaticMarkup(field);
+    expect(html).toContain('value="Los."');
+    expect(html).toContain('Dazu eine weitere Fassung in der Datei; ein Lauf sagt eine.');
+    (field.props as { onChange: (text: string) => void }).onChange('Neu.');
+    expect(edited).toEqual([['Neu.', 'Weiter.']]);
+    // A line of one text says nothing more under it.
+    const single = LineField({ label: 'Zum Start', value: 'Los.', onChange });
+    expect(renderToStaticMarkup(single)).not.toContain('editor-note');
+  });
+
+  it('writes a station’s lines and the radio’s back with every text they gave', () => {
+    const blackout = shipped.find(({ name }) => name === 'blackout.json')?.data as {
+      radio: { start: string[] };
+      puzzles: { onSolved?: unknown; nudges: unknown[] }[];
+    };
+    const draft = loaded(blackout);
+    expect(draft.puzzles[0]?.onSolved).toEqual(blackout.puzzles[0]?.onSolved);
+    const edited = {
+      ...draft,
+      puzzles: draft.puzzles.map((p, i) =>
+        i === 0 ? { ...p, onSolved: withFirstText(p.onSolved, 'Licht an.') } : p,
+      ),
+    };
+    const json = draftToJson(edited) as typeof blackout;
+    const solved = blackout.puzzles[0]?.onSolved as string[];
+    expect(json.puzzles[0]?.onSolved).toEqual(['Licht an.', ...solved.slice(1)]);
+    expect(json.puzzles[1]?.nudges).toEqual(blackout.puzzles[1]?.nudges);
+    expect(json.radio.start).toEqual(blackout.radio.start);
   });
 });

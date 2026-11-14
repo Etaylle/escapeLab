@@ -16,6 +16,7 @@ import {
   rebindPad,
 } from '../src/input/bindings.js';
 import { ControlSettings, keyPressed } from '../src/screens/ControlSettings.js';
+import { SettingsPanel } from '../src/screens/Settings.js';
 import { changeSettings, DEFAULT_SETTINGS, getSettings } from '../src/settings.js';
 import { buttonsOf, elementsOf, press } from './probe.js';
 
@@ -107,17 +108,19 @@ describe('rebinding in the settings', () => {
     });
   });
 
-  it('shows every action with its key, and resets keys and controller with one press', () => {
+  it('shows every action with its key, and „Steuerung" puts keys and controller back at a press', () => {
     changeSettings({
       keys: { ...DEFAULT_KEYS, talk: 'g', interact: 'f' },
       pad: { ...DEFAULT_PAD, notes: 'r2' },
     });
-    const elements = elementsOf(() => <ControlSettings />);
-    const keycaps = elements.filter((el) => el.props['className'] === 'settings-kbd');
+    const keycaps = elementsOf(() => <ControlSettings />).filter(
+      (el) => el.props['className'] === 'settings-kbd',
+    );
     expect(keycaps.map((el) => el.props['children'])).toEqual([
       ...['W', 'S', 'A', 'D', 'Shift', 'F', 'Q', 'N', 'M', 'C', 'I', 'G'],
     ]);
-    press(buttonsOf(elements, 'settings-reset')[0]);
+    const panel = elementsOf(() => <SettingsPanel onClose={() => undefined} tab="steuerung" />);
+    press(buttonsOf(panel, 'settings-reset')[0]);
     expect(getSettings().keys).toEqual(DEFAULT_KEYS);
     expect(getSettings().pad).toEqual(DEFAULT_PAD);
   });

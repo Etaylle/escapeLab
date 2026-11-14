@@ -7,6 +7,7 @@ import {
   type PointerEvent,
 } from 'react';
 import { serverNow } from './clock.js';
+import { usePause } from './menuLayer.js';
 
 /** The wall clock, read again every `intervalMs`. */
 export function useNow(intervalMs: number): number {
@@ -59,24 +60,41 @@ export function keysClaimed(): boolean {
 }
 
 /**
+ * Whether a key going down is one `useKeys` takes: listened for (`listened`), pressed alone — no
+ * modifier the browser owns —, not into a text field (`inField`), and with no menu over the
+ * screens (`covered`), whose key it is then: inert keeps no listener on the window from it.
+ */
+export function keyTaken(
+  listened: ReadonlySet<string>,
+  e: Pick<KeyboardEvent, 'key' | 'altKey' | 'ctrlKey' | 'metaKey'>,
+  inField: boolean,
+  covered: boolean,
+): boolean {
+  const alone = !e.altKey && !e.ctrlKey && !e.metaKey;
+  return listened.has(e.key.toLowerCase()) && alone && !inField && !covered;
+}
+
+/**
  * Calls `onKey` with the key, lower-cased, when one of `keys` goes down —
- * not while typing, not on auto-repeat, not with a modifier the browser owns.
+ * not while typing, not on auto-repeat, not with a modifier the browser owns,
+ * not while a menu stands over the screens (menuLayer.ts `usePause`; `keyTaken`).
  */
 export function useKeys(keys: readonly string[], onKey: (key: string) => void): void {
   const handler = useRef(onKey);
   handler.current = onKey;
+  const covered = useRef(false);
+  covered.current = usePause().open;
   const wanted = keys.join(' ');
   useEffect(() => {
     const listened = new Set(wanted.split(' '));
     const onDown = (e: KeyboardEvent): void => {
-      const key = e.key.toLowerCase();
-      if (!listened.has(key) || e.altKey || e.ctrlKey || e.metaKey || typing()) {
+      if (!keyTaken(listened, e, typing(), covered.current)) {
         return;
       }
       // The key is the game's, auto-repeat too: F5 bound to the notepad reloads nothing.
       e.preventDefault();
       if (!e.repeat) {
-        handler.current(key);
+        handler.current(e.key.toLowerCase());
       }
     };
     window.addEventListener('keydown', onDown);

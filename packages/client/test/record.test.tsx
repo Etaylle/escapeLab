@@ -1,7 +1,7 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { parseMission, radioLines, type Mission } from '@escapelab/core';
+import { parseMission, radioLines, variantsOf, type Line, type Mission } from '@escapelab/core';
 import { voiceId } from '../scripts/voice.js';
 import { busy, openDesk, step, type Desk, type DeskEvent, type Take } from '../src/record/desk.js';
 import {
@@ -38,30 +38,37 @@ const ids = new Map(
   missions.flatMap((m) => radioLines(m)).map((line) => [line.text, voiceId(line.text)] as const),
 );
 
-const START = blackout.radio.start ?? '';
-const NUDGE = blackout.puzzles[0]?.nudges[0] ?? '';
-const SECOND = blackout.puzzles[0]?.nudges[1] ?? '';
+/** The first text of a line: the one the run had before it was given alternatives. */
+const first = (line: Line | undefined): string => variantsOf(line ?? '')[0] ?? '';
+const START = first(blackout.radio.start);
+const NUDGE = first(blackout.puzzles[0]?.nudges[0]);
+const SECOND = first(blackout.puzzles[0]?.nudges[1]);
 const MANIFEST: VoiceManifest = {
-  [voiceId(START)]: {
-    text: START,
-    ms: 9500,
-    missions: ['blackout'],
-    opens: true,
-    file: `${voiceId(START)}.m4a`,
-  },
-  [voiceId(NUDGE)]: {
-    text: NUDGE,
-    ms: 4400,
-    missions: ['blackout'],
-    source: 'human',
-    file: `${voiceId(NUDGE)}.m4a`,
-  },
-  [voiceId(SECOND)]: {
-    text: SECOND,
-    ms: 5100,
-    missions: ['blackout'],
-    source: 'upload',
-    file: `${voiceId(SECOND)}.mp3`,
+  lines: {
+    [voiceId(START)]: {
+      text: START,
+      ms: 9500,
+      missions: ['blackout'],
+      speaker: 'operator',
+      opens: true,
+      file: `${voiceId(START)}.m4a`,
+    },
+    [voiceId(NUDGE)]: {
+      text: NUDGE,
+      ms: 4400,
+      missions: ['blackout'],
+      speaker: 'operator',
+      source: 'human',
+      file: `${voiceId(NUDGE)}.m4a`,
+    },
+    [voiceId(SECOND)]: {
+      text: SECOND,
+      ms: 5100,
+      missions: ['blackout'],
+      speaker: 'operator',
+      source: 'upload',
+      file: `${voiceId(SECOND)}.mp3`,
+    },
   },
 };
 
@@ -89,7 +96,14 @@ describe('the lines the page offers', () => {
         recording: null,
       })),
     );
-    const [start, nudge, second, solved] = lines.slice(pa.length);
+    // Every text of a line is a line to record: the start's three, in their order.
+    const texts = (line: Line | undefined): readonly string[] => variantsOf(line ?? '');
+    const of = (when: string): string[] =>
+      lines.filter((line) => line.when === when).map((line) => line.text);
+    expect(of('start')).toEqual(texts(blackout.radio.start));
+    const byText = (text: string) => lines.find((line) => line.text === text);
+    const [start, nudge, second] = [START, NUDGE, SECOND].map(byText);
+    const solved = byText(first(blackout.puzzles[0]?.onSolved));
     expect(start).toEqual({
       id: voiceId(START),
       text: START,
@@ -103,7 +117,18 @@ describe('the lines the page offers', () => {
     expect(nudge?.recording).toEqual(human);
     expect(second?.recording).toMatchObject({ source: 'upload', file: `${voiceId(SECOND)}.mp3` });
     expect(solved).toMatchObject({ when: 'solved', station: 'Notlicht', recording: null });
-    expect(lines.at(-1)).toMatchObject({ when: 'escape', station: null });
+    // The escape, then the loudspeakers' message as an emergency starts, then the operator's
+    // answers to the run, the last word on a run called off the last of them, and the lobby's
+    // Funkprobe last of all.
+    expect(of('escape')).toEqual(texts(blackout.radio.escape));
+    expect(of('announce')).toEqual(texts(blackout.map.sabotage?.announce));
+    const out = lines.findIndex((line) => line.when === 'announce');
+    expect(lines.slice(out - 1, out + 1).map((line) => line.when)).toEqual(['escape', 'announce']);
+    const last = texts(blackout.radio.lost?.abandoned).at(-1);
+    const probes = texts(blackout.radio.lobby);
+    expect(lines.at(-1 - probes.length)).toMatchObject({ when: 'lost', station: null, text: last });
+    expect(of('lobby')).toEqual(probes);
+    expect(lines.at(-1)).toMatchObject({ when: 'lobby', station: null, text: probes.at(-1) });
   });
 
   it('list a line two missions say once, under both', () => {

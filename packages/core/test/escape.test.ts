@@ -86,7 +86,7 @@ describe('the escape phase', () => {
     }
     expect(escaping.events.slice(-2)).toEqual([
       { at: SOLVED_AT, kind: 'escape', label: 'Notausgang entriegelt', seconds: null },
-      { at: SOLVED_AT, kind: 'radio', label: 'Raus hier.', seconds: null },
+      { at: SOLVED_AT, kind: 'radio', label: 'Raus hier.', seconds: null, moment: 'escape' },
     ]);
   });
 

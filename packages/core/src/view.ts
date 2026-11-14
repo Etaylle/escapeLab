@@ -21,7 +21,15 @@ import type {
   RoomKind,
 } from './mission.js';
 import { noteKey } from './notes.js';
-import { CREW_COLORS, type Credits, type GameState, type Phase, type RunEvent } from './state.js';
+import { pickLine } from './radio.js';
+import {
+  CREW_COLORS,
+  type Credits,
+  type GameState,
+  type MenuPlace,
+  type Phase,
+  type RunEvent,
+} from './state.js';
 import { moduleFor, type PuzzleView } from './puzzles/index.js';
 import { crewOf, hasClock, waitingFor } from './actions.js';
 import { gradeOf, type Grade } from './grade.js';
@@ -75,6 +83,8 @@ export interface PlayerView extends RunShape {
      * out for everybody it counts
      */
     waived?: true;
+    /** the menu they have open: the pause menu, the main menu (`GameState.menus`); or none */
+    menu?: MenuPlace;
     isHost: boolean;
   }[];
   /** crew colors and who holds them, for the lobby picker */
@@ -175,6 +185,12 @@ export interface PlayerView extends RunShape {
   nextMissionId?: string;
   /** the run's opening while the lab still has its power (`IntroView`); left out without one */
   intro?: IntroView;
+  /**
+   * In the lobby, the operator's Funkprobe the crew hears once every seat is ready and the host
+   * can start: one of the mission's `radio.lobby` texts, the next each time the room comes back
+   * to its lobby. Left out in a run, and where the mission has none
+   */
+  radioCheck?: string;
 }
 
 /** A seat whose line is down that a new device asks to take over, by its name. */
@@ -193,6 +209,8 @@ export interface AwayView {
   since: number;
   /** epoch ms from which the crew may go on without them */
   waivableAt: number;
+  /** their line closed on purpose, gone to the main menu, the seat kept; left out for a drop */
+  menu?: true;
 }
 
 /**
@@ -1058,6 +1076,8 @@ function mapViewFor(state: GameState, viewer: MapViewer): MapView | null {
  */
 export interface SpectatorView extends RunShape {
   phase: Phase;
+  /** the mission's catalog id: its booklet opens by it from the audience's menu */
+  missionId: string;
   missionTitle: string;
   difficulty: Difficulty;
   storyText: string;
@@ -1088,6 +1108,8 @@ export interface SpectatorView extends RunShape {
     connected: boolean;
     /** away, and the run went on without them; left out for everybody it counts */
     waived?: true;
+    /** the menu they have open: the pause menu, the main menu; left out for none */
+    menu?: MenuPlace;
     presence: PlayerPresence;
   }[];
   /** who did what this run, by player id */
@@ -1105,7 +1127,10 @@ export interface SpectatorView extends RunShape {
   }[];
 }
 
-/** Whom the run waits for while it stands still, oldest drop first; null while it runs on. */
+/**
+ * Whom the run waits for while it stands still, oldest drop first, and who of them went to the
+ * main menu; null while it runs on.
+ */
 function pausedFor(state: GameState): AwayView[] | null {
   if (state.paused === null) {
     return null;
@@ -1114,9 +1139,10 @@ function pausedFor(state: GameState): AwayView[] | null {
     .flatMap((id) => {
       const away = state.away[id];
       const name = state.players.find((p) => p.id === id)?.name;
+      const menu = state.menus[id] === 'main' ? { menu: true as const } : {};
       return away === undefined || name === undefined
         ? []
-        : [{ id, name, since: away.since, waivableAt: away.waivableAt }];
+        : [{ id, name, since: away.since, waivableAt: away.waivableAt, ...menu }];
     })
     .sort((a, b) => a.since - b.since);
 }
@@ -1142,6 +1168,16 @@ function waivedOf(state: GameState, playerId: string): { waived?: true } {
   return state.away[playerId]?.waived === true ? { waived: true } : {};
 }
 
+/**
+ * The menu `playerId` has open (`GameState.menus`): the pause menu over the run, the main menu
+ * they went to from a run or a lobby; nothing once the run is over.
+ */
+function menuOf(state: GameState, playerId: string): { menu?: MenuPlace } {
+  const menu = state.menus[playerId];
+  const over = state.phase === 'won' || state.phase === 'lost';
+  return menu === undefined || over ? {} : { menu };
+}
+
 /** Why the run was called off, for its end card; nothing for a run that ended any other way. */
 function calledOffOf(state: GameState): { calledOff?: string } {
   return state.calledOff === null ? {} : { calledOff: state.calledOff };
@@ -1150,6 +1186,7 @@ function calledOffOf(state: GameState): { calledOff?: string } {
 export function viewForSpectator(state: GameState): SpectatorView {
   return {
     phase: state.phase,
+    missionId: state.mission.id,
     missionTitle: state.mission.title,
     difficulty: state.difficulty,
     storyText: storyText(state),
@@ -1175,6 +1212,7 @@ export function viewForSpectator(state: GameState): SpectatorView {
       color: p.color,
       connected: p.connected,
       ...waivedOf(state, p.id),
+      ...menuOf(state, p.id),
       presence: presenceOf(state, p.id),
     })),
     credits: { ...state.credits },
@@ -1221,6 +1259,7 @@ export function viewFor(state: GameState, playerId: string): PlayerView {
       ready: p.ready,
       connected: p.connected,
       ...waivedOf(state, p.id),
+      ...menuOf(state, p.id),
       isHost: p.isHost,
     })),
     palette: CREW_COLORS.map((color) => ({
@@ -1260,7 +1299,22 @@ export function viewFor(state: GameState, playerId: string): PlayerView {
     ...achievementsOfRun(state),
     ...(state.mission.next === undefined ? {} : { nextMissionId: state.mission.next }),
     ...introOf(state),
+    ...radioCheckOf(state),
   };
+}
+
+/**
+ * The lobby's Funkprobe (`radio.lobby`): before the room's first run its first text by the
+ * line's place, and each time the room comes back to its lobby the next — no run's seed is
+ * drawn yet, the runs so far turn it (radio.ts `pickLine`). Left out in a run, and where the
+ * mission has none.
+ */
+function radioCheckOf(state: GameState): Pick<PlayerView, 'radioCheck'> {
+  const line = state.mission.radio.lobby;
+  if (state.phase !== 'lobby' || line === undefined) {
+    return {};
+  }
+  return { radioCheck: pickLine(line, 0, 'lobby', state.runs) };
 }
 
 /**

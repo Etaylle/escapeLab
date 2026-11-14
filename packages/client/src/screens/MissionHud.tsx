@@ -3,13 +3,13 @@ import type { PlayerPosition, PlayerView, RunEvent } from '@escapelab/core';
 import { serverNow } from '../clock.js';
 import { useMedia } from '../hooks.js';
 import { pressingWord } from '../puzzles/syncPress.js';
-import { airIcon, fromControl, LAST_SHIFT } from '../radio.js';
+import { airIcon, ANNOUNCED, fromControl, fromPlant, LAST_SHIFT } from '../radio.js';
 import { useGlyph, usePadUsed } from '../input/glyphs.js';
 import { useVoice, type Voice } from '../voice/useVoice.js';
 import type { KnownPositions } from '../world/movement.js';
 import type { ChatLine } from '../world/render/frame.js';
 import { presenceNear } from '../world/presence.js';
-import { crewTags, CrewTags, type CrewTag } from './Crew.js';
+import { CrewDot, crewTags, CrewTags, type CrewTag } from './Crew.js';
 import { EdgeworkChip } from './EdgeworkChip.js';
 import { Icon } from './Icon.js';
 import { SpeakingMark } from './Voice.js';
@@ -23,6 +23,8 @@ interface Props {
   notesOpen: boolean;
   onToggleNotes: () => void;
   onOpenInfo: () => void;
+  /** opens the pause menu over the run (menuLayer.ts) */
+  onOpenMenu: () => void;
 }
 
 /** How often the crew's tags are read again from their live positions, ms. */
@@ -37,7 +39,7 @@ export const STATUS_SAMPLE_MS = 300;
  */
 export function tagsOf(
   view: PlayerView,
-  player: { id: string; connected: boolean },
+  player: PlayerView['players'][number],
   positions: Record<string, PlayerPosition>,
 ): CrewTag[] {
   const pos = positions[player.id];
@@ -57,12 +59,18 @@ export interface ChatHeard {
   text: string;
 }
 
-/** A run-report line as the radio strip reads it; mission control and the last shift are named. */
+/**
+ * A run-report line as the radio strip reads it; mission control, the plant's loudspeakers and
+ * the last shift are named.
+ */
 function eventLine(event: RunEvent): Ticker {
   const text = event.seconds === null ? event.label : `${event.label} (−${event.seconds}s)`;
   const icon = airIcon(event);
   if (event.kind === 'hint') {
     return { icon, text: `${LAST_SHIFT} — ${text}` };
+  }
+  if (fromPlant(event)) {
+    return { icon, text: `${ANNOUNCED}: ${text}` };
   }
   return { icon, text: fromControl(event) ? `Leitstelle: ${text}` : text };
 }
@@ -130,8 +138,9 @@ function RadioStrip({ radio }: { radio: Ticker | null }) {
 /**
  * The permanent strip under the world. Deliberately thin: only the crew, the
  * edgework once you have read the sign, and the latest radio line, because
- * everything else either sits on the world itself or belongs in the info panel.
- * A phone held sideways folds it into the objective bar's row instead (hudFold.ts).
+ * everything else either sits on the world itself or belongs in the info panel —
+ * and the buttons for the notepad, the info panel and the menu. A phone held
+ * sideways folds it into the objective bar's row instead (hudFold.ts).
  */
 export function MissionHud({
   view,
@@ -141,6 +150,7 @@ export function MissionHud({
   notesOpen,
   onToggleNotes,
   onOpenInfo,
+  onOpenMenu,
 }: Props) {
   const [tick, setTick] = useState(0);
   useEffect(() => {
@@ -154,6 +164,7 @@ export function MissionHud({
   const keyless = touch && !padUsed;
   const notesKey = useGlyph('notes');
   const infoKey = useGlyph('info');
+  const menuKey = useGlyph('menu');
   const voice = useVoice();
   const talking = voice?.state.mic === 'on' ? voice : null;
 
@@ -179,7 +190,7 @@ export function MissionHud({
           const mine = p.id === view.you.id;
           return (
             <li key={p.id} className={mine ? 'hud-me' : ''}>
-              <span className="crew-dot" style={{ background: p.color }} aria-hidden="true" />
+              <CrewDot color={p.color} />
               <span className="hud-name">{p.name}</span>
               {voice?.state.speaking.has(p.id) === true && <SpeakingMark />}
               {tags.length > 0 ? (
@@ -201,6 +212,9 @@ export function MissionHud({
         </button>
         <button className="hud-info" onClick={onOpenInfo}>
           <Icon name="info" /> {withKey('Info', infoKey, keyless)}
+        </button>
+        <button className="hud-info hud-menu" onClick={onOpenMenu}>
+          <Icon name="menu" /> {withKey('Menü', menuKey, keyless)}
         </button>
       </div>
     </section>

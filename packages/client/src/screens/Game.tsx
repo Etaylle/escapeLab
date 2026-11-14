@@ -7,7 +7,6 @@ import type {
   NoteHere,
   PlayerView,
   PuzzleView,
-  RunEvent,
 } from '@escapelab/core';
 import { clockText, clockTime, formatLeft, type MissionTime } from '../clock.js';
 import { useKeys, useNow, useServerNow } from '../hooks.js';
@@ -18,7 +17,6 @@ import {
   airIcon,
   bannerFrom,
   followsSolve,
-  noticeMs,
   radioNews,
   voiced,
   withNews,
@@ -27,6 +25,7 @@ import {
 import { deviceCoach, firstSight, SHOWN_MARKS, type CoachMark } from '../puzzles/coach.js';
 import { useSolvedHold, type DeviceRun } from '../puzzles/Device.js';
 import { RelayConsole } from '../puzzles/RelayPanel.js';
+import { usePause, type PauseHand } from '../menuLayer.js';
 import { useReducedMotion, useSettings } from '../settings.js';
 import type { Connection, Refusal } from '../ws.js';
 import {
@@ -40,7 +39,6 @@ import {
   coverShut,
   paperSwish,
   pencilScratch,
-  radioChirp,
   readerSolve,
   sheetDown,
 } from '../world/audio.js';
@@ -56,16 +54,13 @@ import { coversArmed } from '../world/interact.js';
 import { armedGoal, isArmed, known } from '../world/known.js';
 import { dueParts } from '../world/markers.js';
 import { startingSpot, type KnownPositions } from '../world/movement.js';
-import {
-  airtimeMs,
-  preloadLines,
-  preloadVoice,
-  sayLine,
-  stopVoice,
-} from '../world/radioVoice.js';
+import { airNotice } from '../world/onAir.js';
+import { stopAnnounce } from '../world/pa.js';
+import { fetchLines, stopVoice, voiceForRun } from '../world/radioVoice.js';
 import type { ChatLine, MapPing } from '../world/render/frame.js';
 import { startRoom } from '../world/rooms.js';
 import { PuzzlePanel } from './PuzzlePanel.js';
+import { CrewDot } from './Crew.js';
 import { useHudRow } from './hudFold.js';
 import { RowCrew, RowTools } from './HudRow.js';
 import { Icon } from './Icon.js';
@@ -380,29 +375,20 @@ export interface NoticeGates {
 }
 
 /**
- * A line goes on the air as it shows: mission control's spoken over the radio where it has a
- * recording (world/radioVoice.ts), every other keyed with the radio's chirp. Returns how long
- * a spoken line keeps the air, ms; null for a chirp.
- */
-function airLine(event: RunEvent): number | null {
-  if (voiced(event) && sayLine(event.label)) {
-    return airtimeMs(event.label);
-  }
-  radioChirp();
-  return null;
-}
-
-/**
  * What the objective bar carries under the goal right now, one notice at a
- * time so they never stack: the lines on the air as they come in, each
- * spoken or keyed as it shows (`airLine`; see `withNews` for a fresh batch)
- * and up while it speaks — a line that comes with a solve AFTER_SOLVE_MS
- * later, so that the win is seen first — and the note once this player has
- * walked up to the Laborkennung. Nothing shows before its gate opens. A
- * player who spawns at the sign gets the note too; one who reconnects later
- * does not, they read it before. The run's recorded lines are fetched as it
- * starts, a line that comes in as it comes, and one still speaking stops
- * with the screen.
+ * time so they never stack: the lines on the air as they come in, each up
+ * as its sound starts and while it speaks — the plant's message over its
+ * loudspeakers, mission control's over the radio, a line without a
+ * recording keyed with the radio's chirp or, the plant's, silent
+ * (world/onAir.ts `airNotice`; see `withNews` for a fresh batch); a line
+ * that comes with a solve AFTER_SOLVE_MS later, so that the win is seen
+ * first — and the note once this player has walked up to the Laborkennung.
+ * Nothing shows before its gate opens. A player who spawns at the sign gets
+ * the note too; one who reconnects later does not, they read it before. As
+ * the run starts only the list of the recordings is fetched; each line's own
+ * recording as the line is queued, decoded only as it airs, so that a line
+ * the queue drops leaves nothing decoded; one still speaking stops with the
+ * screen.
  */
 function useNotices(view: PlayerView, gates: NoticeGates): Notice | null {
   const seen = useRef(0);
@@ -411,9 +397,15 @@ function useNotices(view: PlayerView, gates: NoticeGates): Notice | null {
   const briefingEnds = (view.startedAt ?? 0) + BRIEFING_MS;
 
   useEffect(() => {
-    preloadVoice(view.missionId);
+    voiceForRun();
   }, [view.missionId, view.startedAt]);
-  useEffect(() => stopVoice, []);
+  useEffect(
+    () => () => {
+      stopVoice();
+      stopAnnounce();
+    },
+    [],
+  );
 
   useEffect(() => {
     const now = Date.now();
@@ -421,7 +413,7 @@ function useNotices(view: PlayerView, gates: NoticeGates): Notice | null {
     const notBefore = followsSolve(view.events, seen.current) ? now + AFTER_SOLVE_MS : 0;
     seen.current = view.events.length;
     if (news.length > 0) {
-      preloadLines(news.filter(voiced).map((event) => event.label));
+      fetchLines(news.filter(voiced).map((event) => event.label));
       setQueue((queued) => withNews(queued, news, notBefore));
     }
   }, [view.events]);
@@ -444,18 +436,12 @@ function useNotices(view: PlayerView, gates: NoticeGates): Notice | null {
       return undefined;
     }
     const from = next.kind === 'line' ? Math.max(gate, next.notBefore) : gate;
-    const wait = Math.max(0, from - Date.now());
-    let off: ReturnType<typeof setTimeout> | undefined;
-    const on = setTimeout(() => {
-      const air = next.kind === 'line' ? airLine(next.event) : null;
-      const up = noticeMs(next, window.matchMedia('(pointer: coarse)').matches, air);
-      setShown(next.kind === 'line' ? { ...next, upMs: up } : next);
-      off = setTimeout(() => setQueue((queued) => queued.slice(1)), up);
-    }, wait);
-    return () => {
-      clearTimeout(on);
-      clearTimeout(off);
-    };
+    return airNotice(next, {
+      wait: Math.max(0, from - Date.now()),
+      coarse: window.matchMedia('(pointer: coarse)').matches,
+      show: setShown,
+      done: () => setQueue((queued) => queued.slice(1)),
+    });
   }, [next, gate]);
 
   return shown;
@@ -797,7 +783,7 @@ export function EscapeChecklist({ mates }: { mates: Mate[] }) {
     <ul className="escape-list" aria-label={`Am Notausgang: ${out} von ${mates.length}`}>
       {mates.map((mate) => (
         <li key={mate.id} className={mate.out ? 'escape-mate escape-mate--out' : 'escape-mate'}>
-          <span className="crew-dot" style={{ background: mate.color }} aria-hidden="true" />
+          <CrewDot color={mate.color} />
           {mate.name}
           {mate.out && <Icon name="check" />}
         </li>
@@ -1083,17 +1069,85 @@ function Standstill({
 /** What this player has open, as the screen keeps it (`useOpened`). */
 type OpenNow = ReturnType<typeof useOpened>;
 
-/** Escape closes what lies on top: the info panel, a panel, pages or a note, then the notepad. */
-function useEscapeCloses(open: OpenNow, closeModal: () => void): void {
+/** What Esc does over the run (`escapeStep`). */
+export type EscapeStep = 'info' | 'over' | 'going' | 'notes' | 'menu';
+
+/**
+ * What Esc does by what stands open: it closes what lies on top — the info panel, a panel, pages
+ * or a note, then the notepad — and with nothing open it opens the pause menu over the run
+ * (menuLayer.ts), which stands nothing still. A panel still on the screen though closed — held
+ * once solved, or fading out (`going`) — takes the Esc that was meant for it: nothing more.
+ */
+export function escapeStep(
+  open: Pick<OpenNow, 'info' | 'station' | 'reading' | 'note' | 'notes'>,
+  going = false,
+): EscapeStep {
+  if (open.info) {
+    return 'info';
+  }
+  if (open.station !== null || open.reading !== null || open.note !== null) {
+    return 'over';
+  }
+  if (going) {
+    return 'going';
+  }
+  return open.notes ? 'notes' : 'menu';
+}
+
+/**
+ * What Esc does over the run with a menu over it (`menuOpen`): nothing of the run's own — the
+ * menu has its keys, the settings or the booklet over it theirs —; else its step (`escapeStep`).
+ */
+export function escapeStepUnder(
+  menuOpen: boolean,
+  open: Pick<OpenNow, 'info' | 'station' | 'reading' | 'note' | 'notes'>,
+  going: boolean,
+): EscapeStep | null {
+  return menuOpen ? null : escapeStep(open, going);
+}
+
+/**
+ * Escape does its step (`escapeStepUnder`), the panels still on the screen (`shown`: the device,
+ * the pages, a note — leaving ones too) telling whether one is on its way out.
+ */
+function useEscapeCloses(
+  open: OpenNow,
+  shown: readonly (Shown<unknown> | null)[],
+  closeModal: () => void,
+  menu: PauseHand,
+): void {
+  const going = shown.some((panel) => panel !== null);
   useEscape(() => {
-    if (open.info) {
-      open.set({ info: false });
-    } else if (open.station !== null || open.reading !== null || open.note !== null) {
-      closeModal();
-    } else {
-      open.set({ notes: false });
+    const steps: Record<EscapeStep, () => void> = {
+      info: () => open.set({ info: false }),
+      over: closeModal,
+      going: () => undefined,
+      notes: () => open.set({ notes: false }),
+      menu: menu.show,
+    };
+    const step = escapeStepUnder(menu.open, open, going);
+    if (step !== null) {
+      steps[step]();
     }
   });
+}
+
+/**
+ * The screen's keys: the notepad's (`toggleNotes`), the keys that put down what lies over the
+ * world, and Esc (`useEscapeCloses`, the panels still on the screen `shown`) — none of them while
+ * a menu stands over the run (`menu`; hooks.ts `useKeys`, `escapeStepUnder`).
+ */
+function useScreenKeys(
+  open: OpenNow,
+  toggleNotes: () => void,
+  shown: readonly (Shown<unknown> | null)[],
+  closeModal: () => void,
+  menu: PauseHand,
+): void {
+  const { keys } = useSettings();
+  useKeys([keys.notes], toggleNotes);
+  useKeys(putDownKeys(overOf(open), keys), closeModal);
+  useEscapeCloses(open, shown, closeModal, menu);
 }
 
 /** What lies over the world: the station's device, a source's pages, a note; null for nothing. */
@@ -1306,7 +1360,8 @@ export function worldLocked(
 
 /**
  * The world as the running mission shows it to this player: the cold open, the end, the open
- * station — and E at a source, a note or the station opens it over the world.
+ * station — and E at a source, a note or the station opens it over the world. Under the pause
+ * menu it takes no keys: the avatar stands while the run goes on.
  */
 function RunWorld({
   game,
@@ -1325,6 +1380,8 @@ function RunWorld({
   holdTips: boolean;
 }) {
   const { view, finale } = game;
+  const menu = usePause();
+  const held = worldHeld(finale, game.line, view) || menu.open;
   return (
     <GameWorld
       view={view}
@@ -1338,7 +1395,8 @@ function RunWorld({
       finale={finale === null ? null : { ending: finale.ending, since: finale.since }}
       station={station}
       holdTips={holdTips}
-      inputLocked={worldLocked(view, open, station, worldHeld(finale, game.line, view))}
+      inputLocked={worldLocked(view, open, station, held)}
+      menuOver={menu.open}
       onToggleInfo={open.toggleInfo}
       onRead={(manualId) => open.set({ readingId: manualId })}
       onReadNote={(index) => open.set({ noteIndex: index })}
@@ -1349,11 +1407,12 @@ function RunWorld({
   );
 }
 
-/** What the crew strip's buttons open: the notepad and the info panel. */
+/** What the crew strip's buttons open: the notepad, the info panel and the pause menu. */
 interface StripButtons {
   notesOpen: boolean;
   onToggleNotes: () => void;
   onOpenInfo: () => void;
+  onOpenMenu: () => void;
 }
 
 /**
@@ -1416,15 +1475,14 @@ export function GameScreen(props: Props) {
   const sheets = useSheets(open);
   const pad = useNotepad(roomCode, view.you.id, open);
   const closeModal = (): void => open.set(NOTHING_OVER);
-  const { keys } = useSettings();
-  useKeys([keys.notes], pad.toggle);
-  useKeys(putDownKeys(overOf(open), keys), closeModal);
-  useEscapeCloses(open, closeModal);
+  const menu = usePause();
+  useScreenKeys(open, pad.toggle, [panel, sheets.reading, sheets.note], closeModal, menu);
   // Until the click of the cold open the strip keeps quiet: the opener has the banner.
   const crewStrip = useCrewStrip(props, notice?.kind === 'line' || !coldOpen.dark, {
     notesOpen: open.notes,
     onToggleNotes: pad.toggle,
     onOpenInfo: () => open.set({ info: true }),
+    onOpenMenu: menu.show,
   });
   const map = view.map;
   if (map === null) {

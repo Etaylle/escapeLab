@@ -13,7 +13,7 @@ import { join } from 'node:path';
 import { Readable } from 'node:stream';
 import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { parseMission, type Mission } from '@escapelab/core';
+import { parseMission, variantsOf, type Line, type Mission } from '@escapelab/core';
 import {
   afconvert,
   audioKind,
@@ -33,8 +33,12 @@ const missions: Mission[] = readdirSync(SHIPPED)
   .filter((name) => name.endsWith('.json'))
   .map((name) => parseMission(JSON.parse(readFileSync(join(SHIPPED, name), 'utf8'))));
 const blackout = missions.find((mission) => mission.id === 'blackout');
-const START = blackout?.radio.start ?? '';
-const NUDGE = blackout?.puzzles[0]?.nudges[0] ?? '';
+/** The first text of a line: the one it had before it was given others. */
+const first = (line: Line | undefined): string => variantsOf(line ?? '')[0] ?? '';
+const START = first(blackout?.radio.start);
+const NUDGE = first(blackout?.puzzles[0]?.nudges[0]);
+const ANNOUNCED = blackout?.intro?.pa[0] ?? '';
+const ALARM = first(blackout?.radio.alarm);
 
 /** 0.75 s of a 440 Hz tone as an MP3 (64 kbit/s, made once with LAME): 0.784 s decoded. */
 const TONE_MP3 = readFileSync(new URL('fixtures/tone.mp3', import.meta.url));
@@ -118,22 +122,37 @@ const upload = (id: string, file: Buffer): IncomingMessage =>
 
 let dir = '';
 const manifestFile = (): string => join(dir, 'manifest.json');
-const manifest = (): Record<string, Record<string, unknown>> =>
-  JSON.parse(readFileSync(manifestFile(), 'utf8')) as Record<string, Record<string, unknown>>;
+/** The manifest as the folder holds it: its voices, and its lines by id. */
+interface Kept {
+  voices: Record<string, unknown>;
+  lines: Record<string, Record<string, unknown>>;
+}
+const kept = (): Kept => JSON.parse(readFileSync(manifestFile(), 'utf8')) as Kept;
+const manifest = (): Kept['lines'] => kept().lines;
+/** The voices the manifest names, which a recording leaves as they are. */
+const VOICES = { operator: { voiceId: 'g1jpii0iyvtRs8fqXsd1', name: 'Helmut' } };
 
 beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), 'escapelab-voice-test-'));
   const start = voiceId(START);
-  const entries = {
-    [start]: { text: START, ms: 9000, missions: ['blackout'], opens: true, file: `${start}.m4a` },
+  const lines = {
+    [start]: {
+      text: START,
+      ms: 9000,
+      missions: ['blackout'],
+      speaker: 'operator',
+      opens: true,
+      file: `${start}.m4a`,
+    },
     ffffffffffff: {
       text: 'Eine andere Zeile.',
       ms: 1200,
       missions: ['systemcheck'],
+      speaker: 'operator',
       file: 'ffffffffffff.m4a',
     },
   };
-  writeFileSync(manifestFile(), `${JSON.stringify(entries, null, 2)}\n`);
+  writeFileSync(manifestFile(), `${JSON.stringify({ voices: VOICES, lines }, null, 2)}\n`);
 });
 
 afterEach(() => {
@@ -191,6 +210,7 @@ describe('a take recorded on the page', () => {
       text: START,
       ms: 600,
       missions: ['blackout'],
+      speaker: 'operator',
       opens: true,
       source: 'human',
       file: `${id}.m4a`,
@@ -199,8 +219,11 @@ describe('a take recorded on the page', () => {
       text: 'Eine andere Zeile.',
       ms: 1200,
       missions: ['systemcheck'],
+      speaker: 'operator',
       file: 'ffffffffffff.m4a',
     });
+    // The voices the script keeps stay as they were.
+    expect(kept().voices).toEqual(VOICES);
     expect(readdirSync(dir).sort()).toEqual([`${id}.m4a`, 'manifest.json']);
   });
 
@@ -212,12 +235,52 @@ describe('a take recorded on the page', () => {
       text: NUDGE,
       ms: 1250,
       missions: ['blackout'],
+      speaker: 'operator',
       source: 'human',
       file: `${id}.m4a`,
     });
+    // A line of the loudspeakers is entered as theirs.
+    const pa = voiceId(ANNOUNCED);
+    expect((await ask(desk(fakeConvert), post(pa, toneWav(0.8))))?.status).toBe(200);
+    expect(manifest()[pa]).toMatchObject({ text: ANNOUNCED, speaker: 'pa', source: 'human' });
     const ids = Object.keys(manifest());
     expect(ids).toEqual([...ids].sort());
     expect(readFileSync(manifestFile(), 'utf8')).toMatch(/\n$/);
+  });
+
+  it('enters a line the operator says in a mood with it, as the voice script does', async () => {
+    const id = voiceId(ALARM);
+    expect((await ask(desk(fakeConvert), post(id, toneWav(2))))?.status).toBe(200);
+    const entry = manifest()[id];
+    expect(entry).toEqual({
+      text: ALARM,
+      ms: 2000,
+      missions: ['blackout'],
+      speaker: 'operator',
+      mood: 'tense',
+      source: 'human',
+      file: `${id}.m4a`,
+    });
+    expect(Object.keys(entry ?? {})).toEqual([
+      'text',
+      'ms',
+      'missions',
+      'speaker',
+      'mood',
+      'source',
+      'file',
+    ]);
+    // A line said in no mood has none in its entry, and the opening one keeps its place.
+    await ask(desk(fakeConvert), post(voiceId(START), toneWav(1)));
+    expect(Object.keys(manifest()[voiceId(START)] ?? {})).toEqual([
+      'text',
+      'ms',
+      'missions',
+      'speaker',
+      'opens',
+      'source',
+      'file',
+    ]);
   });
 
   it('refuses an id or a source that is none, and a line no shipped mission says', async () => {
@@ -301,6 +364,7 @@ describe('a file put on the page', () => {
       text: START,
       ms,
       missions: ['blackout'],
+      speaker: 'operator',
       opens: true,
       source: 'upload',
       file: `${id}.mp3`,

@@ -44,7 +44,7 @@ describe('a room’s snapshot', () => {
     room.relaySignal(ben.playerId, anna.playerId, { type: 'offer', sdp: 'v=0' });
     const far = { x: 1.5, y: 1.5, facing: 0, moving: false };
     room.updatePosition(ben.playerId, lastView(ben).startedAt ?? 0, far);
-    ben.detach(true);
+    ben.detach('closed');
     const phone = passFor('Bens Telefon');
     room.claim('Ben', phone, () => undefined);
     room.answerTakeover(anna.playerId, ben.playerId, false);
@@ -183,7 +183,9 @@ describe('a room taken up again from its snapshot', () => {
       expect(views(now)).toEqual(views(was));
       expect(lastPositions(now.anna).drones).toEqual(lastPositions(was.anna).drones);
     }
-    expect(lastView(now.anna).events.at(-1)?.kind).toBe('sabotage');
+    const emergencies = lastView(now.anna).events.filter((e) => e.kind === 'sabotage');
+    expect(emergencies.map((e) => e.label)).toEqual(['Notfall: KÜHLKREISLAUF — RELAIS VON HAND']);
+    expect(lastView(now.anna).map?.sabotage).not.toBeNull();
     was.room.dispose();
     now.room.dispose();
   });

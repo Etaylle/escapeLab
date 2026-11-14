@@ -1,17 +1,29 @@
 /**
- * Mission control's lines as recordings, made on a Mac:
+ * The lines heard in a run as recordings, made on a Mac:
  *
  *   pnpm --filter @escapelab/client voice              the lines that have no recording yet
- *   pnpm --filter @escapelab/client voice --fresh      every synthetic line this voice did not make
+ *   pnpm --filter @escapelab/client voice --fresh      every synthetic line its voice did not make
  *   pnpm --filter @escapelab/client voice --fresh=all  … and a person's recordings too
  *   pnpm --filter @escapelab/client voice --list-voices            the ElevenLabs account's voices
  *   pnpm --filter @escapelab/client voice --sample <voice> <text>  one line by an ElevenLabs voice
+ *   pnpm --filter @escapelab/client voice --design-pa              three previews of the plant's
+ *   pnpm --filter @escapelab/client voice --keep-pa <id>           voice (Voice Design), one kept
  *
- * Every line a shipped mission (missions/*.json) has mission control say: the intro's
- * announcement over the lab's loudspeakers (`intro.pa`, client world/pa.ts), then all core's
- * `logRadio` (core/src/actions.ts) is ever handed — `radio.start` as the clock starts, every
- * `puzzles[].onSolved` as its station is solved, `radio.escape` as the hatch unlocks — and
- * every `puzzles[].nudges` line its `nudge` sends while a station stays quiet.
+ * Every line a shipped mission (missions/*.json) has heard, as core's `radioLines` lists them:
+ * the intro's announcement over the lab's loudspeakers (`intro.pa`, client world/pa.ts), then
+ * every line core's `logRadio` (core/src/actions.ts) is ever handed — `radio.start` as the clock
+ * starts, every `puzzles[].onSolved` as its station is solved, `radio.escape` as the hatch
+ * unlocks, the loudspeakers' `map.sabotage.announce` as an emergency starts, the operator's
+ * answers to what a run does (`radio.emergency`, `.alarm`, `.clock`, `.won`, `.lost`) — and
+ * every `puzzles[].nudges` line its `nudge` sends while a station stays quiet, and the lobby's
+ * Funkprobe (`radio.lobby`) once the crew stands ready; a line written in two or three texts is
+ * two or three lines here, a run saying one. Two speakers say them
+ * (`Speaker`): the plant's announcement system the loudspeakers' lines, mission control's
+ * operator the rest; under ElevenLabs each by a voice of its own, which the manifest keeps
+ * (`voices`) — the operator Helmut, the plant a voice made from a description (`PA_VOICE`,
+ * --design-pa, --keep-pa) — each holding as its part asks (`SPEAKER_HELD`). The operator says
+ * the answers in a mood (`Mood`), which Eleven v3 and v4 are asked for by an audio tag before
+ * the words (`MOOD_TAGS`, `spokenText`): the subtitle and the manifest keep the words alone.
  *
  * Each is read by Piper, a neural voice that runs offline — the model VOICE_MODEL names,
  * de_DE-thorsten-high where it names none (docs/sound.md says why) — through `uv run --with
@@ -21,18 +33,21 @@
  * Hugging Face into ~/.cache/escapelab-piper/, outside the repo. VOICE_ENGINE=say reads the
  * lines with the Mac's own voice instead (`say`, `sayText`); either is squeezed to AAC at
  * BITRATE (`afconvert`) into public/voice/<id>.m4a, the id being the first 12 hex digits of the
- * line's SHA-1. VOICE_ENGINE=elevenlabs has an ElevenLabs voice read them (elevenlabs.ts) into
- * public/voice/<id>.mp3. public/voice/manifest.json lists every line as { [id]: { text, ms,
- * missions, file } }, `file` naming its recording, with `opens: true` on a line that opens a
- * run (`radio.start`): the radio keys it with the Leitstelle's opening squelch.
+ * line's SHA-1. VOICE_ENGINE=elevenlabs has ElevenLabs voices read them (elevenlabs.ts) into
+ * public/voice/<id>.mp3. public/voice/manifest.json keeps the speakers' voices as { voices:
+ * { [speaker]: { voiceId, name } } } and every line as { lines: { [id]: { text, ms, missions,
+ * speaker, mood?, file } } }, `file` naming its recording, with `opens: true` on a line that
+ * opens a run (`radio.start`): the radio keys it with the Leitstelle's opening squelch.
  *
  * A synthetic recording carries `render`, a hash of what made it — the engine, the voice, its
- * settings and the words as that engine was given them — so --fresh makes anew only what the
- * chosen voice would make differently: a render cut short goes on where it stopped and spends
- * nothing twice. A recording a person made on the client's /record page carries `source`
- * (`human`, `upload`) and stays under --fresh; --fresh=all replaces it too. A recording no line
- * needs any more goes. The files are committed; test/voiceLines.test.ts fails when a line has
- * none, or a file or the folder outgrows MAX_FILE_BYTES or MAX_FOLDER_BYTES.
+ * settings and the words as that engine was given them, and under ElevenLabs a paid plan where
+ * the account holds one (`Plan`) — so --fresh makes anew only what the chosen voice would make
+ * differently: a render cut short goes on where it stopped and spends nothing twice, and on a
+ * paid plan --fresh makes anew the takes made before without it. A recording a person made on
+ * the client's /record page carries `source` (`human`, `upload`) and stays under --fresh;
+ * --fresh=all replaces it too. A recording no line needs any more goes. The files are committed;
+ * test/voiceLines.test.ts fails when a line has none, or a file or the folder outgrows
+ * MAX_FILE_BYTES or MAX_FOLDER_BYTES.
  *
  * Runs on Node's own TypeScript (type stripping): it imports nothing of the app.
  */
@@ -55,19 +70,27 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   accountVoices,
+  ELEVEN_FORMAT,
   ELEVEN_GAP_MS,
   ELEVEN_MODEL,
   ELEVEN_VOICE,
+  elevenAsk,
   elevenClient,
   loadApiKey,
   oneByOne,
+  OPERATOR_HELD,
   resolveVoice,
   sampleFile,
   samplesDir,
   speakEleven,
   speechRequest,
   voiceRow,
+  type DesignClient,
   type ElevenVoice,
+  type Held,
+  type SoundClient,
+  type SpeechClient,
+  type VoiceInfo,
 } from './elevenlabs.ts';
 
 /** Who reads the lines: Piper, the Mac's own voice, or an ElevenLabs voice. */
@@ -97,10 +120,13 @@ export const SAY_RATE = 190;
 export const PAUSE_MS = 250;
 /** AAC's bit rate, bits a second: a handset's band needs no more. */
 export const BITRATE = 48000;
-/** The most one recording may take, bytes. */
-export const MAX_FILE_BYTES = 150 * 1024;
-/** The most the folder may take, bytes: 6 MB, room for every line as ElevenLabs' MP3. */
-export const MAX_FOLDER_BYTES = 6 * 1024 * 1024;
+/**
+ * The most one recording may take, bytes: 16 s of ElevenLabs' MP3, past the longest line of 28
+ * words at the operator's pace, some 13 s.
+ */
+export const MAX_FILE_BYTES = 200 * 1024;
+/** The most the folder may take, bytes: 12 MB, room for every line as ElevenLabs' MP3. */
+export const MAX_FOLDER_BYTES = 12 * 1024 * 1024;
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 /** The shipped missions. */
@@ -109,30 +135,170 @@ export const MISSIONS_DIR = resolve(HERE, '../../../missions');
 export const VOICE_DIR = resolve(HERE, '../public/voice');
 export const MANIFEST_FILE = join(VOICE_DIR, 'manifest.json');
 
+/**
+ * Who says a line, as core's radio.ts `Speaker` has it: the plant's announcement system over the
+ * loudspeakers, or mission control's operator on the radio.
+ */
+export type Speaker = 'pa' | 'operator';
+
+/** The speakers, the operator first: whose voice the script looks up, in that order. */
+export const SPEAKERS: readonly Speaker[] = ['operator', 'pa'];
+
+/**
+ * How each speaker's ElevenLabs voice holds: the operator as every line was read before; the
+ * plant steadier, a building's system that says every line alike.
+ */
+export const SPEAKER_HELD: Readonly<Record<Speaker, Held>> = {
+  operator: OPERATOR_HELD,
+  pa: { stability: 0.8, similarityBoost: 0.75 },
+};
+
+/**
+ * The plant's voice as Voice Design is asked for it (--design-pa): its name on the account, the
+ * description it is made from, the model that makes it, and the text its three previews say —
+ * a few of the loudspeakers' own lines, 100 to 1,000 characters, which is what a design costs.
+ */
+export const PA_VOICE = {
+  name: 'EscapeLab Durchsage',
+  description:
+    "Calm, neutral German voice of a research facility's public address system. Mid register, " +
+    'even pace, precise diction, slightly synthetic like an automated building announcement, ' +
+    'no character, no emotion, no accent. Clean studio recording without background noise.',
+  model: 'eleven_ttv_v3',
+  text:
+    'Durchsage für Trakt C. Es ist 23 Uhr 47, die Nachtschicht hat übernommen. Netzlast im ' +
+    'Trakt 96 Prozent, Notstrom in Bereitschaft. Störung im Kühlkreislauf, Relais auf ' +
+    'Handbetrieb.',
+} as const;
+
+/** A speaker's voice as the manifest keeps it: its id on the account, and its name there. */
+export interface SpeakerVoice {
+  readonly voiceId: string;
+  readonly name: string;
+}
+
+/**
+ * A line as a mission writes it (core radio.ts `Line`): one text, or two or three, of which a
+ * run says one — each its own recording.
+ */
+export type Line = string | readonly string[];
+
+/** A group of the operator's lines, each under its key: the clock's calls, the end's words. */
+type Group = Readonly<Partial<Record<string, Line>>>;
+
+/** What the script reads of a mission's radio: the operator's lines, as core's schema has them. */
+export interface RadioLines {
+  readonly lobby?: Line;
+  readonly start?: Line;
+  readonly escape?: Line;
+  readonly alarm?: Line;
+  readonly clock?: Group;
+  readonly emergency?: Group;
+  readonly won?: Group;
+  readonly lost?: Group;
+}
+
 /** What the script reads of a mission: its id, its intro's announcement and its radio lines. */
 export interface MissionLines {
   readonly id: string;
   readonly intro?: { readonly pa?: readonly string[] };
-  readonly radio?: { readonly start?: string; readonly escape?: string };
-  readonly puzzles: readonly { readonly onSolved?: string; readonly nudges?: readonly string[] }[];
+  readonly radio?: RadioLines;
+  readonly puzzles: readonly { readonly onSolved?: Line; readonly nudges?: readonly Line[] }[];
+  readonly map?: { readonly sabotage?: { readonly announce?: Line } };
+}
+
+/**
+ * How the operator says a line, as core's radio.ts `MOODS` has it by the moment: the first alarm
+ * and an emergency missed tense, the clock pressing, an emergency urgent and its clearing
+ * relieved, a run won warm, a run lost quiet, the lobby's Funkprobe calm; every other line has
+ * none.
+ */
+export type Mood = 'tense' | 'pressing' | 'urgent' | 'relieved' | 'warm' | 'quiet' | 'calm';
+
+/**
+ * The audio tag each mood asks Eleven v3 and v4 for: a short instruction in brackets before the
+ * words, never said and never shown — the subtitle and the manifest keep the words alone. One
+ * word each, as ElevenLabs' prompting guide asks (one or two; its own examples `[curious]`,
+ * `[sad]`, `[whispers]`): „pressing" asks for an insistent voice, „quiet" for a subdued one
+ * rather than a softer one. A tag guides the delivery and guarantees none: a take is listened to.
+ */
+export const MOOD_TAGS: Readonly<Record<Mood, string>> = {
+  tense: '[tense]',
+  pressing: '[insistent]',
+  urgent: '[urgent]',
+  relieved: '[relieved]',
+  warm: '[warm]',
+  quiet: '[subdued]',
+  calm: '[calm]',
+};
+
+/** Whether `model` reads audio tags (Eleven v3 and v4): an older one would say them aloud. */
+export function takesTags(model: string): boolean {
+  return /^eleven_v[34]/.test(model);
+}
+
+/** The words ElevenLabs is given of a line: its mood's tag before them where `model` reads it. */
+export function spokenText(text: string, mood: Mood | null, model: string): string {
+  return mood === null || !takesTags(model) ? text : `${MOOD_TAGS[mood]} ${text}`;
+}
+
+/**
+ * The keys of each group of the operator's answers, in the order core's radio.ts lists them: the
+ * clock's calls, a run won by its time left, a run lost by its cause.
+ */
+const ANSWER_KEYS = {
+  clock: ['fiveMinutes', 'twoMinutes', 'lastMinute'],
+  won: ['plenty', 'tight', 'lastMinute'],
+  lost: ['time', 'alarms', 'abandoned'],
+} as const;
+
+/** A line of the operator's answers, and the mood it is said in. */
+type Answer = readonly [Line | undefined, Mood];
+
+/**
+ * The operator's answers to what a run does, in core's order, each with its mood: an emergency
+ * as it starts and as it ends, the first alarm, the clock's calls, the last word on a run won
+ * and on one lost.
+ */
+function answersOf(radio: RadioLines | undefined): Answer[] {
+  const group = (name: keyof typeof ANSWER_KEYS, mood: Mood): Answer[] =>
+    ANSWER_KEYS[name].map((key) => [radio?.[name]?.[key], mood] as const);
+  const emergency = radio?.emergency;
+  return [
+    [emergency?.['start'], 'urgent'],
+    [emergency?.['cleared'], 'relieved'],
+    [emergency?.['missed'], 'tense'],
+    [radio?.alarm, 'tense'],
+    ...group('clock', 'pressing'),
+    ...group('won', 'warm'),
+    ...group('lost', 'quiet'),
+  ];
 }
 
 /** Who made a recording a person's: spoken on the /record page, or a file put there. */
 export type PersonSource = 'human' | 'upload';
 
 /**
- * One recorded line: what it says, how long it speaks, ms, the missions that say it, whether it
- * opens a run, who made it — a person (`source`), or a voice's render (`render`, a hash of what
- * made it) — and its file in the voice folder.
+ * One recorded line: what it says, how long it speaks, ms, the missions that say it, who says
+ * it and in what mood, whether it opens a run, who made it — a person (`source`), or a voice's
+ * render (`render`, a hash of what made it) — and its file in the voice folder.
  */
 export interface Entry {
   text: string;
   ms: number;
   missions: string[];
+  speaker: Speaker;
+  mood?: Mood;
   opens?: true;
   source?: PersonSource;
   render?: string;
   file: string;
+}
+
+/** The recordings' list: the speakers' voices, and every recorded line by its id. */
+export interface Manifest {
+  voices: Partial<Record<Speaker, SpeakerVoice>>;
+  lines: Record<string, Entry>;
 }
 
 /** A recording, as an entry names it: its file, and a person who made it or a voice's render. */
@@ -149,26 +315,54 @@ export interface Take {
  */
 export type Fresh = 'none' | 'synthetic' | 'all';
 
-/** A line the shipped missions can put on the air: who says it, and whether it opens a run. */
+/**
+ * A line the shipped missions can put on the air: the missions that say it, who says it, the
+ * mood it is said in (null for none), and whether it opens a run.
+ */
 export interface ShippedLine {
   missions: string[];
+  speaker: Speaker;
+  mood: Mood | null;
   opens: boolean;
 }
 
 /**
- * Every line mission control says in `mission`, in the order a run hears them: the intro's
+ * A line of a mission as the script reads it: what it says, who says it, the mood it is said in
+ * (null for none), whether it opens a run.
+ */
+export interface CatalogLine {
+  readonly text: string;
+  readonly speaker: Speaker;
+  readonly mood: Mood | null;
+  readonly opens: boolean;
+}
+
+/**
+ * Every line heard in `mission`, in the order core's `radioLines` lists them: the intro's
  * announcement over the lab's loudspeakers, line by line (client world/pa.ts), then on the air
  * the start, for each station the nudges it may get while it is up and the line its solve
- * brings, the escape.
+ * brings, the escape; then the loudspeakers' message as an emergency starts, the operator's
+ * answers to what the run does (`answersOf`), and last the lobby's Funkprobe.
  */
-export function radioTexts(mission: MissionLines): string[] {
-  const lines = [
-    ...(mission.intro?.pa ?? []),
-    mission.radio?.start,
-    ...mission.puzzles.flatMap((puzzle) => [...(puzzle.nudges ?? []), puzzle.onSolved]),
-    mission.radio?.escape,
+export function catalogOf(mission: MissionLines): CatalogLine[] {
+  const said =
+    (speaker: Speaker, opens = false) =>
+    (line: Line | undefined, mood: Mood | null = null): CatalogLine[] =>
+      (typeof line === 'string' ? [line] : (line ?? []))
+        .filter((text) => text.trim() !== '')
+        .map((text) => ({ text, speaker, mood, opens }));
+  const { radio, puzzles } = mission;
+  const operator = said('operator');
+  const stations = puzzles.flatMap((puzzle) => [...(puzzle.nudges ?? []), puzzle.onSolved]);
+  return [
+    ...(mission.intro?.pa ?? []).flatMap((text) => said('pa')(text)),
+    ...said('operator', true)(radio?.start),
+    ...stations.flatMap((line) => operator(line)),
+    ...operator(radio?.escape),
+    ...said('pa')(mission.map?.sabotage?.announce),
+    ...answersOf(radio).flatMap(([line, mood]) => operator(line, mood)),
+    ...operator(radio?.lobby, 'calm'),
   ];
-  return lines.filter((line): line is string => line !== undefined && line.trim() !== '');
 }
 
 /** The id of a line's recording: the first 12 hex digits of the SHA-1 of what it says. */
@@ -291,14 +485,33 @@ export function shippedMissions(dir = MISSIONS_DIR): MissionLines[] {
     .map((name) => JSON.parse(readFileSync(join(dir, name), 'utf8')) as MissionLines);
 }
 
-/** Every shipped line, by what it says: the missions that say it, and whether it opens a run. */
+/**
+ * Why `said` cannot share the recording of `line`, the shipped line of the same words: another
+ * speaker says it, or in another mood — one line, one recording. Null where it can.
+ */
+function clash(line: ShippedLine, said: CatalogLine): string | null {
+  if (line.speaker === said.speaker && line.mood === said.mood) return null;
+  const how = (who: Speaker, as: Mood | null): string =>
+    as === null ? `the ${who}` : `the ${who} in a ${as} mood`;
+  const both = `${how(line.speaker, line.mood)} and ${how(said.speaker, said.mood)}`;
+  return `voice: „${said.text}" is said by ${both} alike: one line, one recording`;
+}
+
+/**
+ * Every shipped line, by what it says: the missions that say it, who says it and in what mood,
+ * and whether it opens a run. Fails where two speakers, or two moods, would say the same words
+ * (`clash`): a line has one recording.
+ */
 export function shippedLines(missions = shippedMissions()): Map<string, ShippedLine> {
   const lines = new Map<string, ShippedLine>();
   for (const mission of missions) {
-    for (const text of radioTexts(mission)) {
-      const line = lines.get(text) ?? { missions: [], opens: false };
+    for (const said of catalogOf(mission)) {
+      const { text, speaker, mood, opens } = said;
+      const line = lines.get(text) ?? { missions: [], speaker, mood, opens: false };
+      const refused = clash(line, said);
+      if (refused !== null) throw new Error(refused);
       if (!line.missions.includes(mission.id)) line.missions.push(mission.id);
-      line.opens ||= text === mission.radio?.start;
+      line.opens ||= opens;
       lines.set(text, line);
     }
   }
@@ -348,6 +561,8 @@ export function entryOf(text: string, ms: number, line: ShippedLine, take: Take)
     text,
     ms,
     missions: [...line.missions].sort(),
+    speaker: line.speaker,
+    ...(line.mood === null ? {} : { mood: line.mood }),
     ...(line.opens ? { opens: true as const } : {}),
     ...(take.source === undefined ? {} : { source: take.source }),
     ...(take.render === undefined ? {} : { render: take.render }),
@@ -355,30 +570,73 @@ export function entryOf(text: string, ms: number, line: ShippedLine, take: Take)
   };
 }
 
-/** Who reads: Piper with its voice's name and model file, the Mac, or an ElevenLabs voice. */
+/**
+ * The terms a take is made on: the account's plan, free or paid (ElevenLabs' `tier`). A take
+ * made on a paid plan may be used commercially, for good; one made on the free plan needs the
+ * credit „elevenlabs.io" and may not (docs/sound.md, „Lizenz").
+ */
+export type Plan = 'free' | 'paid';
+
+/** What a take made on a paid plan adds to its render: --fresh there makes the others anew. */
+const PAID_TERMS = 'paid plan';
+
+/** The plan of an account whose subscription names `tier`: the free one where it names none. */
+export function planOf(tier: string | undefined): Plan {
+  return tier === undefined || tier === 'free' ? 'free' : 'paid';
+}
+
+/**
+ * Who reads: Piper with its voice's name and model file, or the Mac — either for both speakers
+ * — or ElevenLabs with a voice for each speaker the manifest names one for, on the account's
+ * plan.
+ */
 export type Voice =
   | { readonly engine: 'say' }
   | { readonly engine: 'piper'; readonly name: string; readonly model: string }
-  | { readonly engine: 'elevenlabs'; readonly name: string; readonly voice: ElevenVoice };
+  | {
+      readonly engine: 'elevenlabs';
+      readonly name: string;
+      readonly speakers: Readonly<Partial<Record<Speaker, ElevenVoice>>>;
+      /** the account's plan, which the takes are made on */
+      readonly plan: Plan;
+    };
 
-/** What makes a take, part by part: the engine, the voice and its settings, the words given. */
-function madeBy(voice: Voice, text: string): readonly (string | number)[] {
+/** A line as a voice is asked to read it: its words, and who says them. */
+export interface Said {
+  readonly text: string;
+  readonly speaker: Speaker;
+  /** how the operator says it, asked for by an audio tag (`spokenText`); null for none */
+  readonly mood: Mood | null;
+}
+
+/**
+ * What makes a take, part by part: the engine, the voice and its settings, the words given — for
+ * ElevenLabs the speaker's voice, or, where the manifest names none for it yet, the speaker
+ * alone, which no take was ever made by, and the paid plan where the account holds one: a take
+ * of before, which names none, is made anew there under --fresh.
+ */
+function madeBy(voice: Voice, { text, speaker, mood }: Said): readonly (string | number)[] {
   if (voice.engine === 'piper') {
     return ['piper', voice.name, LENGTH_SCALE, SENTENCE_PAUSE_S, piperText(text)];
   }
   if (voice.engine === 'say') {
     return ['say', SAY_VOICE, SAY_RATE, sayText(text)];
   }
-  const request = speechRequest(text, voice.voice.model);
-  return ['elevenlabs', voice.voice.voiceId, JSON.stringify(request)];
+  const eleven = voice.speakers[speaker];
+  if (eleven === undefined) {
+    return ['elevenlabs', `no voice for the ${speaker} yet`];
+  }
+  const request = speechRequest(spokenText(text, mood, eleven.model), eleven.model, eleven.held);
+  const terms = voice.plan === 'paid' ? [PAID_TERMS] : [];
+  return ['elevenlabs', eleven.voiceId, JSON.stringify(request), ...terms];
 }
 
 /**
- * The render of `text` by `voice`, as a hash of what makes it (`madeBy`): what that voice would
+ * The render of a line by `voice`, as a hash of what makes it (`madeBy`): what that voice would
  * make again, take for take.
  */
-export function renderOf(voice: Voice, text: string): string {
-  const made = madeBy(voice, text).join('\n');
+export function renderOf(voice: Voice, said: Said): string {
+  const made = madeBy(voice, said).join('\n');
   return createHash('sha1').update(made, 'utf8').digest('hex').slice(0, 12);
 }
 
@@ -478,17 +736,47 @@ function durationOf(path: string, text: string): number {
   return Math.round(Number(seconds) * 1000);
 }
 
-/** Reads `text`, the line `id`, into the voice folder; returns its file and how long it speaks. */
+/**
+ * What to run where the line of a `speaker` is to be made and the manifest names no voice for
+ * it: only the plant's can be missing, the operator's is Helmut where none is named.
+ */
+function voiceless(speaker: Speaker): string {
+  return (
+    `voice: the ${speaker === 'pa' ? "plant's loudspeakers have" : `${speaker} has`} no voice ` +
+    'yet — make one, listen to its three previews and keep one, in packages/client:\n' +
+    '  node --env-file=<repo>/.env.local scripts/voice.ts --design-pa\n' +
+    '  node --env-file=<repo>/.env.local scripts/voice.ts --keep-pa <the id of the one kept>'
+  );
+}
+
+/**
+ * The MP3 ElevenLabs makes of `said` by its speaker's voice among `speakers`: the words with
+ * its mood's tag before them where the model reads tags (`spokenText`), the take `renderOf`
+ * names. Fails where the speaker has no voice yet.
+ */
+export async function elevenTake(
+  speakers: Readonly<Partial<Record<Speaker, ElevenVoice>>>,
+  { text, speaker, mood }: Said,
+): Promise<Buffer> {
+  const eleven = speakers[speaker];
+  if (eleven === undefined) {
+    throw new Error(voiceless(speaker));
+  }
+  return speakEleven(eleven, spokenText(text, mood, eleven.model));
+}
+
+/** Reads the line `said`, its recording `id`, into the voice folder: its file and how long. */
 async function record(
-  text: string,
+  said: Said,
   id: string,
   scratch: string,
   voice: Voice,
 ): Promise<{ file: string; ms: number }> {
+  const { text } = said;
   const file = fileOf(voice.engine, id);
   const path = join(VOICE_DIR, file);
   if (voice.engine === 'elevenlabs') {
-    writeFileSync(path, await speakEleven(voice.voice, text));
+    writeFileSync(path, await elevenTake(voice.speakers, said));
     return { file, ms: durationOf(path, text) };
   }
   const raw = join(scratch, voice.engine === 'say' ? 'line.aiff' : 'line.wav');
@@ -497,39 +785,91 @@ async function record(
   return { file, ms: durationOf(raw, text) };
 }
 
-/** The manifest as it stands; empty where there is none yet. */
-function readManifest(): Record<string, Entry> {
-  return existsSync(MANIFEST_FILE)
-    ? (JSON.parse(readFileSync(MANIFEST_FILE, 'utf8')) as Record<string, Entry>)
-    : {};
+/** The manifest at `file` as it stands; empty where there is none yet. */
+export function readManifest(file = MANIFEST_FILE): Manifest {
+  return existsSync(file)
+    ? (JSON.parse(readFileSync(file, 'utf8')) as Manifest)
+    : { voices: {}, lines: {} };
 }
 
-/** Writes the manifest, its entries in the order of their ids. */
-function writeManifest(manifest: Readonly<Record<string, Entry>>): void {
-  const sorted = Object.entries(manifest).sort(([a], [b]) => (a < b ? -1 : 1));
-  writeFileSync(MANIFEST_FILE, `${JSON.stringify(Object.fromEntries(sorted), null, 2)}\n`);
+/** Writes `manifest` to `file`: the speakers' voices, the operator first, then its lines by id. */
+export function writeManifest(manifest: Manifest, file = MANIFEST_FILE): void {
+  const voices = SPEAKERS.flatMap((speaker) => {
+    const voice = manifest.voices[speaker];
+    return voice === undefined ? [] : [[speaker, voice] as const];
+  });
+  const lines = Object.entries(manifest.lines).sort(([a], [b]) => (a < b ? -1 : 1));
+  const sorted = { voices: Object.fromEntries(voices), lines: Object.fromEntries(lines) };
+  writeFileSync(file, `${JSON.stringify(sorted, null, 2)}\n`);
 }
 
-/** The ElevenLabs voice ELEVENLABS_VOICE names — Helmut where it names none — from the account. */
-async function elevenVoice(): Promise<Voice> {
+/**
+ * Each speaker's ElevenLabs voice as the manifest names it, found among the account's
+ * `voices` — Helmut for the operator where it names none, nothing for the plant until
+ * --keep-pa has named one — reading by `model`, holding as SPEAKER_HELD says.
+ */
+function speakersOf(
+  manifest: Manifest,
+  voices: readonly VoiceInfo[],
+  client: SpeechClient,
+  model: string,
+): Partial<Record<Speaker, ElevenVoice>> {
+  const named: Readonly<Record<Speaker, string | undefined>> = {
+    operator: manifest.voices.operator?.voiceId ?? ELEVEN_VOICE,
+    pa: manifest.voices.pa?.voiceId,
+  };
+  return Object.fromEntries(
+    SPEAKERS.flatMap((speaker) => {
+      const id = named[speaker];
+      if (id === undefined) return [];
+      const { voiceId } = resolveVoice(voices, id);
+      return [[speaker, { client, voiceId, model, held: SPEAKER_HELD[speaker] }] as const];
+    }),
+  );
+}
+
+/**
+ * The ElevenLabs voices of the speakers on `client`'s account, reading by `model`, and the
+ * account's plan — asked of ElevenLabs first, free of charge.
+ */
+export async function elevenVoiceOf(
+  manifest: Manifest,
+  client: SpeechClient & SoundClient,
+  model: string,
+): Promise<Voice> {
+  const asking = { tag: 'voice', what: "tell the account's plan" };
+  const { tier } = await elevenAsk(() => client.user.subscription.get(), asking);
+  const plan = planOf(tier);
+  const voices = await accountVoices(client);
+  const speakers = speakersOf(manifest, voices, client, model);
+  const nameOf = (speaker: Speaker): string => {
+    const id = speakers[speaker]?.voiceId;
+    const name = voices.find((voice) => voice.voiceId === id)?.name ?? id;
+    return `${speaker} ${name ?? 'none yet'}`;
+  };
+  const name = `${SPEAKERS.map(nameOf).join(', ')} (${model}, the ${plan} plan)`;
+  return { engine: 'elevenlabs', name, speakers, plan };
+}
+
+/** The speakers' ElevenLabs voices and the plan, by the model ELEVENLABS_MODEL names. */
+async function elevenVoice(manifest: Manifest): Promise<Voice> {
   loadApiKey();
-  const client = await elevenClient();
-  const wanted = process.env.ELEVENLABS_VOICE || ELEVEN_VOICE;
-  const found = resolveVoice(await accountVoices(client), wanted);
   const model = process.env.ELEVENLABS_MODEL || ELEVEN_MODEL;
-  const name = `${found.name ?? found.voiceId} (${model})`;
-  return { engine: 'elevenlabs', name, voice: { client, voiceId: found.voiceId, model } };
+  return elevenVoiceOf(manifest, await elevenClient(), model);
 }
 
-/** The voice VOICE_ENGINE and VOICE_MODEL ask for, its Piper model fetched where needed. */
-async function chosenVoice(): Promise<Voice> {
+/**
+ * The voice VOICE_ENGINE and VOICE_MODEL ask for, its Piper model fetched where needed; under
+ * ElevenLabs the voices `manifest` names for the speakers.
+ */
+async function chosenVoice(manifest: Manifest): Promise<Voice> {
   const engine = engineOf(process.env.VOICE_ENGINE);
   requireTools(engine);
   if (engine === 'say') {
     return { engine };
   }
   if (engine === 'elevenlabs') {
-    return elevenVoice();
+    return elevenVoice(manifest);
   }
   const name = process.env.VOICE_MODEL || PIPER_MODEL;
   return { engine, name, model: await piperModel(name) };
@@ -545,28 +885,58 @@ interface Planned {
 }
 
 /** Every shipped line, in the order of their ids, each with what it keeps of `before`. */
-function plan(before: Readonly<Record<string, Entry>>, fresh: Fresh, voice: Voice): Planned[] {
+function plan(before: Manifest, fresh: Fresh, voice: Voice): Planned[] {
   const lines = [...shippedLines()].sort(([a], [b]) => (voiceId(a) < voiceId(b) ? -1 : 1));
   return lines.map(([text, line]) => {
     const id = voiceId(text);
-    const render = renderOf(voice, text);
-    const was = before[id];
+    const render = renderOf(voice, { text, speaker: line.speaker, mood: line.mood });
+    const was = before.lines[id];
     const filed = was !== undefined && existsSync(join(VOICE_DIR, was.file));
     const kept = was !== undefined && keeps(was, text, filed, fresh, render) ? was : null;
     return { text, line, id, kept, render };
   });
 }
 
+/**
+ * How many characters making `todo` spends: under ElevenLabs the words each speaker's model is
+ * given, a mood's tag included (`spokenText`); under Piper and the Mac, which spend none, the
+ * words.
+ */
+export function charactersOf(
+  voice: Voice,
+  todo: readonly { readonly text: string; readonly line: ShippedLine }[],
+): number {
+  return todo.reduce((sum, { text, line }) => {
+    const model = voice.engine === 'elevenlabs' ? voice.speakers[line.speaker]?.model : undefined;
+    return sum + (model === undefined ? text : spokenText(text, line.mood, model)).length;
+  }, 0);
+}
+
+/** Fails, before anything is asked of anybody, where a line to be made has no voice to read it. */
+function refuseVoiceless(voice: Voice, todo: readonly Planned[]): void {
+  if (voice.engine !== 'elevenlabs') return;
+  const speaker = todo.map(({ line }) => line.speaker).find((each) => !voice.speakers[each]);
+  if (speaker !== undefined) {
+    throw new Error(voiceless(speaker));
+  }
+}
+
+/** `bytes` in whole kilobytes, as the warnings say them. */
+const kilobytes = (bytes: number): string => (bytes / 1024).toFixed(0);
+
 /** The files over MAX_FILE_BYTES, and the folder where it is over MAX_FOLDER_BYTES, as warnings. */
-function overLimits(manifest: Readonly<Record<string, Entry>>): string[] {
-  const sizes = Object.values(manifest).map((entry) => {
+function overLimits(lines: Readonly<Record<string, Entry>>): string[] {
+  const sizes = Object.values(lines).map((entry) => {
     return [entry.file, statSync(join(VOICE_DIR, entry.file)).size] as const;
   });
   const total = sizes.reduce((sum, [, size]) => sum + size, 0);
+  const cap = kilobytes(MAX_FILE_BYTES);
   const files = sizes
     .filter(([, size]) => size > MAX_FILE_BYTES)
-    .map(([file, size]) => `${file} takes ${(size / 1024).toFixed(0)} kB, over 150 kB`);
-  const folder = total > MAX_FOLDER_BYTES ? [`the folder takes ${total} bytes, over 6 MB`] : [];
+    .map(([file, size]) => `${file} takes ${kilobytes(size)} kB, over ${cap} kB`);
+  const megabytes = MAX_FOLDER_BYTES / 1024 / 1024;
+  const folder =
+    total > MAX_FOLDER_BYTES ? [`the folder takes ${total} bytes, over ${megabytes} MB`] : [];
   return [...files, ...folder];
 }
 
@@ -575,25 +945,27 @@ function overLimits(manifest: Readonly<Record<string, Entry>>): string[] {
  * written after each, so that a run cut short keeps what it made; then drops what is stale.
  */
 async function main(fresh: Fresh): Promise<void> {
-  const voice = await chosenVoice();
-  mkdirSync(VOICE_DIR, { recursive: true });
   const before = readManifest();
+  const voice = await chosenVoice(before);
+  mkdirSync(VOICE_DIR, { recursive: true });
   const planned = plan(before, fresh, voice);
   const todo = planned.filter((each) => each.kept === null);
-  const characters = todo.reduce((sum, each) => sum + each.text.length, 0);
+  refuseVoiceless(voice, todo);
+  const characters = charactersOf(voice, todo);
   const who = voice.engine === 'say' ? `say ${SAY_VOICE}` : `${voice.engine} ${voice.name}`;
   console.log(
     `voice: ${todo.length} of ${planned.length} lines to make, ${characters} characters, ${who}`,
   );
-  const manifest: Record<string, Entry> = { ...before };
+  const manifest: Manifest = { voices: { ...before.voices }, lines: { ...before.lines } };
   for (const { text, line, id, kept } of planned) {
-    if (kept !== null) manifest[id] = entryOf(text, kept.ms, line, kept);
+    if (kept !== null) manifest.lines[id] = entryOf(text, kept.ms, line, kept);
   }
   const scratch = mkdtempSync(join(tmpdir(), 'escapelab-voice-'));
   try {
     const jobs = todo.map(({ text, line, id, render }) => async () => {
-      const { file, ms } = await record(text, id, scratch, voice);
-      manifest[id] = entryOf(text, ms, line, { file, render });
+      const said = { text, speaker: line.speaker, mood: line.mood };
+      const { file, ms } = await record(said, id, scratch, voice);
+      manifest.lines[id] = entryOf(text, ms, line, { file, render });
       writeManifest(manifest);
       console.log(`voice: ${id} ${(ms / 1000).toFixed(1)} s „${text}"`);
     });
@@ -601,31 +973,118 @@ async function main(fresh: Fresh): Promise<void> {
   } finally {
     rmSync(scratch, { recursive: true, force: true });
   }
-  finish(Object.fromEntries(planned.map(({ id }) => [id, manifest[id] as Entry])), todo.length);
+  const lines = Object.fromEntries(planned.map(({ id }) => [id, manifest.lines[id] as Entry]));
+  finish({ voices: manifest.voices, lines }, todo.length);
 }
 
 /** Writes the final list, drops every recording it does not name, says what it holds. */
-function finish(manifest: Readonly<Record<string, Entry>>, made: number): void {
+function finish(manifest: Manifest, made: number): void {
   writeManifest(manifest);
-  const named = new Set(Object.values(manifest).map((entry) => entry.file));
+  const entries = Object.values(manifest.lines);
+  const named = new Set(entries.map((entry) => entry.file));
   const stale = readdirSync(VOICE_DIR).filter(
     (name) => /\.(m4a|mp3)$/.test(name) && !named.has(name),
   );
   for (const name of stale) unlinkSync(join(VOICE_DIR, name));
-  const persons = Object.values(manifest).filter((entry) => entry.source !== undefined).length;
-  const bytes = Object.values(manifest).reduce(
-    (sum, entry) => sum + statSync(join(VOICE_DIR, entry.file)).size,
-    0,
-  );
+  const persons = entries.filter((entry) => entry.source !== undefined).length;
+  const bytes = entries.reduce((sum, entry) => sum + statSync(join(VOICE_DIR, entry.file)).size, 0);
   console.log(
-    `voice: ${Object.keys(manifest).length} lines (${made} made, ${persons} by a person, ` +
+    `voice: ${entries.length} lines (${made} made, ${persons} by a person, ` +
       `${stale.length} dropped), ${(bytes / 1024).toFixed(0)} kB in ${VOICE_DIR}`,
   );
-  const over = overLimits(manifest);
+  const over = overLimits(manifest.lines);
   for (const warning of over) {
     console.error(`voice: ${warning} — test/voiceLines.test.ts refuses it`);
   }
   if (over.length > 0) process.exitCode = 1;
+}
+
+/** A preview of the plant's voice as Voice Design made it: its number, file, length and id. */
+export interface Preview {
+  readonly n: number;
+  readonly file: string;
+  readonly seconds: number;
+  readonly generatedVoiceId: string;
+}
+
+/**
+ * Asks Voice Design for the plant's voice from its description (PA_VOICE): its three previews,
+ * each saying PA_VOICE.text, into `dir` as pa-1.mp3, pa-2.mp3, pa-3.mp3. The request costs the
+ * text's characters, once for all three; a refusal fails saying what ElevenLabs said.
+ */
+export async function designPa(client: DesignClient, dir: string): Promise<Preview[]> {
+  const asking = { tag: 'voice', what: 'design the plant’s voice' };
+  const answer = await elevenAsk(
+    () =>
+      client.textToVoice.design({
+        voiceDescription: PA_VOICE.description,
+        modelId: PA_VOICE.model,
+        text: PA_VOICE.text,
+        outputFormat: ELEVEN_FORMAT,
+      }),
+    asking,
+  );
+  mkdirSync(dir, { recursive: true });
+  return answer.previews.map((preview, i) => {
+    const file = join(dir, `pa-${i + 1}.mp3`);
+    writeFileSync(file, Buffer.from(preview.audioBase64, 'base64'));
+    const { generatedVoiceId, durationSecs: seconds } = preview;
+    return { n: i + 1, file, seconds, generatedVoiceId };
+  });
+}
+
+/**
+ * Makes the preview `generatedVoiceId` of --design-pa the account's voice for the plant, named
+ * and described as PA_VOICE has it, and keeps it in the manifest at `file` as the plant's —
+ * which costs no credits, but takes one of the account's voice slots. Refuses an id no preview
+ * could have, before anything is asked.
+ */
+export async function keepPa(
+  client: DesignClient,
+  generatedVoiceId: string,
+  file = MANIFEST_FILE,
+): Promise<SpeakerVoice> {
+  if (!/^[A-Za-z0-9]{8,64}$/.test(generatedVoiceId)) {
+    throw new Error(
+      `voice: --keep-pa takes the id --design-pa printed beside the preview kept, ` +
+        `not "${generatedVoiceId}"`,
+    );
+  }
+  const asking = { tag: 'voice', what: `keep the preview ${generatedVoiceId} as the plant's voice` };
+  const made = await elevenAsk(
+    () =>
+      client.textToVoice.create({
+        voiceName: PA_VOICE.name,
+        voiceDescription: PA_VOICE.description,
+        generatedVoiceId,
+      }),
+    asking,
+  );
+  const kept = { voiceId: made.voiceId, name: made.name ?? PA_VOICE.name };
+  const manifest = readManifest(file);
+  writeManifest({ ...manifest, voices: { ...manifest.voices, pa: kept } }, file);
+  return kept;
+}
+
+/** --design-pa: the plant's three previews made, each said with its id, and how to keep one. */
+async function design(): Promise<void> {
+  loadApiKey();
+  console.log(`voice: Voice Design, ${PA_VOICE.text.length} characters, „${PA_VOICE.name}"`);
+  const previews = await designPa(await elevenClient(), samplesDir());
+  for (const { n, file, seconds, generatedVoiceId } of previews) {
+    console.log(`voice: ${n}  ${file}  ${seconds.toFixed(1)} s  ${generatedVoiceId}`);
+  }
+  console.log('voice: listen, then keep one: scripts/voice.ts --keep-pa <the id beside it>');
+}
+
+/** --keep-pa <id>: that preview kept as the plant's voice. */
+async function keep(generatedVoiceId: string | undefined): Promise<void> {
+  if (generatedVoiceId === undefined) {
+    throw new Error('voice: --keep-pa takes the id --design-pa printed beside the preview kept');
+  }
+  loadApiKey();
+  const kept = await keepPa(await elevenClient(), generatedVoiceId);
+  console.log(`voice: the plant speaks with „${kept.name}" (${kept.voiceId}), kept in the manifest`);
 }
 
 /** --list-voices: the ElevenLabs account's voices, one a line. */
@@ -652,20 +1111,27 @@ async function sample(wanted: string | undefined, text: string | undefined): Pro
   const dir = samplesDir();
   mkdirSync(dir, { recursive: true });
   const file = join(dir, sampleFile(wanted));
-  writeFileSync(file, await speakEleven({ client, voiceId: found.voiceId, model }, text));
+  const voice = { client, voiceId: found.voiceId, model, held: OPERATOR_HELD };
+  writeFileSync(file, await speakEleven(voice, text));
   console.log(`voice: ${file}`);
 }
 
-/** What the command line asks for: the account's voices, a sample, or the lines. */
+/** What the command line asks for, by its first switch that names something else than the lines. */
+const COMMANDS: Readonly<Record<string, (args: readonly string[], at: number) => Promise<void>>> = {
+  '--list-voices': () => listVoices(),
+  '--sample': (args, at) => sample(args[at + 1], args[at + 2]),
+  '--design-pa': () => design(),
+  '--keep-pa': (args, at) => keep(args[at + 1]),
+};
+
+/**
+ * What the command line asks for: the account's voices, a sample, the plant's voice designed
+ * or one of its previews kept — or the lines.
+ */
 function run(args: readonly string[]): Promise<void> {
-  if (args.includes('--list-voices')) {
-    return listVoices();
-  }
-  const at = args.indexOf('--sample');
-  if (at >= 0) {
-    return sample(args[at + 1], args[at + 2]);
-  }
-  return main(freshOf(args));
+  const at = args.findIndex((arg) => COMMANDS[arg] !== undefined);
+  const command = COMMANDS[args[at] ?? ''];
+  return command === undefined ? main(freshOf(args)) : command(args, at);
 }
 
 if (process.argv[1] !== undefined && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

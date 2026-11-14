@@ -231,7 +231,7 @@ describe('a lobby seat whose tab closed', () => {
     const ben = seated(room, 'Ben');
     room.setReady(ben.playerId, true);
     room.act(anna.playerId, { kind: 'start-mission' });
-    ben.detach(true);
+    ben.detach('closed');
     vi.advanceTimersByTime(2 * LOBBY_AWAY_MS);
     expect(anna.names()).toEqual(['Anna', 'Ben']);
     expect(anna.view().pausedFor?.map((away) => away.name)).toEqual(['Ben']);

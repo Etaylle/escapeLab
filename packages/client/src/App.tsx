@@ -1,7 +1,17 @@
-import { Activity, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import {
+  Activity,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ReactNode,
+  type Ref,
+} from 'react';
 import { traceRequested } from './world/frameTrace.js';
 import { endThemeProbe } from './world/endTheme.js';
 import { menuSoundProbe, wantMenuSound, type MenuPlace } from './world/menuSound.js';
+import { radioCheckProbe } from './world/radioCheck.js';
 import {
   difficultyInfos,
   type Difficulty,
@@ -9,7 +19,17 @@ import {
   type MissionStats,
 } from '@escapelab/core';
 import { firstDifficulty, hasWon, useWonMark } from './firstRun.js';
+import { useHistoryGuard } from './historyGuard.js';
 import { usePad } from './input/padRuntime.js';
+import {
+  anyOpen,
+  PauseContext,
+  pausePhaseOf,
+  useEscapeOpensMenu,
+  useMenuLayer,
+  useMenuMark,
+  type MenuLayer,
+} from './menuLayer.js';
 import { localStore } from './notes.js';
 import { crewPass, keepName, lastColor } from './pass.js';
 import { addProbes } from './probes.js';
@@ -43,6 +63,7 @@ import { MenuScene } from './screens/MenuScene.js';
 import { GameScreen } from './screens/Game.js';
 import type { GameLine } from './screens/Line.js';
 import { EndScreen } from './screens/End.js';
+import { MenuLayers, type RoomCrew, type RoomMission } from './screens/MenuLayers.js';
 import { SettingsPanel } from './screens/Settings.js';
 import { SoundSwitch } from './screens/SoundSwitch.js';
 import { SpectateScreen } from './screens/Spectate.js';
@@ -105,6 +126,42 @@ export function RoomCode({ code, seed = null }: { code: string; seed?: number | 
   );
 }
 
+/**
+ * How many watch the room, as a chip in the bar: the eye and the count, the word for it in its
+ * label; nothing while nobody watches.
+ */
+export function WatchingChip({ count }: { count: number }) {
+  if (count === 0) {
+    return null;
+  }
+  const said = `${count} Zuschauer`;
+  return (
+    <span className="watching-chip" role="img" aria-label={said} title={said}>
+      <Icon name="eye" /> {count}
+    </span>
+  );
+}
+
+interface RoomChipsProps {
+  code: string | null;
+  seed: number | null;
+  /** how many watch the room (ws.ts `watching`); nobody where it is not given */
+  watching?: number | undefined;
+}
+
+/** The room's code and how many watch it, as the bar's chips; nothing off any room. */
+function RoomChips({ code, seed, watching }: RoomChipsProps) {
+  if (code === null) {
+    return null;
+  }
+  return (
+    <>
+      <RoomCode code={code} seed={seed} />
+      <WatchingChip count={watching ?? 0} />
+    </>
+  );
+}
+
 interface TopBarProps {
   roomCode: string | null;
   /** the seed a tester pinned the room to, shown in the lobby */
@@ -114,25 +171,32 @@ interface TopBarProps {
   status: Connection['status'];
   /** leaves the room for the editor, where it came from the editor's test run; else null */
   toEditor: (() => void) | null;
-  /** opens the settings (screens/Settings.tsx) */
-  onSettings: () => void;
+  /** the gear: in a room its pause menu (`inRoom`), off any room the settings (menuLayer.ts) */
+  onGear: () => void;
+  /** the window stands in a room — a run, a lobby, the audience's —, whose menu the gear opens */
+  inRoom?: boolean;
   /** the menu is up: its sound switch shows while the menu's sound waits for a gesture */
   menu?: boolean;
+  /** how many watch the room (ws.ts `watching`): a chip beside its code */
+  watching?: number;
+  /** a menu stands over the screens (menuLayer.ts `anyOpen`): the bar takes nothing meanwhile */
+  covered?: boolean;
 }
 
 /**
- * The bar over every screen: the room's code and seed, the way back to the
- * editor for the host of a test run, the running mission, the sound — the
- * quick switch — and the gear for the settings, and the connection.
+ * The bar over every screen: the room's code and seed, how many watch it, the way back to the
+ * editor for the host of a test run, the running mission, the sound — the quick switch — and the
+ * gear for the room's menu or the settings, and the connection.
  */
 export function TopBar(props: TopBarProps) {
-  const { roomCode, seed, running, status, toEditor, onSettings } = props;
+  const { roomCode, seed, running, status, toEditor, onGear } = props;
+  const gear = props.inRoom === true ? 'Menü' : 'Einstellungen';
   return (
-    <header className="topbar">
+    <header className="topbar" inert={props.covered}>
       <span className="logo">
-        <Icon name="hex" /> ESCAPELAB
+        <Icon name="hex" /> <span className="logo-word">ESCAPELAB</span>
       </span>
-      {roomCode !== null && <RoomCode code={roomCode} seed={seed} />}
+      <RoomChips code={roomCode} seed={seed} watching={props.watching} />
       {toEditor !== null && (
         <button className="topbar-editor" aria-label="Zurück zum Editor" onClick={toEditor}>
           <span className="topbar-editor-way">Zurück zum </span>Editor
@@ -145,12 +209,7 @@ export function TopBar(props: TopBarProps) {
         </span>
       )}
       <SoundSwitch menu={props.menu === true} />
-      <button
-        className="settings-toggle"
-        title="Einstellungen"
-        aria-label="Einstellungen"
-        onClick={onSettings}
-      >
+      <button className="settings-toggle" title={gear} aria-label={gear} onClick={onGear}>
         <Icon name="gear" />
       </button>
       <span className={`conn conn-${status}`}>
@@ -503,7 +562,8 @@ export function menuPlaceOf(
 
 /**
  * The menu's sound where it is wanted (`menuPlaceOf`), gone with a run; its probe on the page
- * under `?trace=1`, and the end card's music's beside it (world/endTheme.ts).
+ * under `?trace=1`, and the end card's music's and the lobby's Funkprobe's beside it
+ * (world/endTheme.ts, world/radioCheck.ts).
  */
 function useMenuSound(conn: Connection, editorOpen: boolean): void {
   const where = menuPlaceOf(conn, editorOpen);
@@ -518,6 +578,9 @@ function useMenuSound(conn: Connection, editorOpen: boolean): void {
       },
       get endTheme() {
         return endThemeProbe();
+      },
+      get radioCheck() {
+        return radioCheckProbe();
       },
     });
   }, []);
@@ -559,14 +622,48 @@ function useWiped(live: Connection): { conn: Connection; doors: Doors } {
   return { conn: wipe.value, doors: wipe.doors };
 }
 
-/** The settings over every screen, the pass's account with them: deleted on the line `live`. */
+/**
+ * The settings over every screen, the pass's account with them: named and deleted on the line
+ * `live`.
+ */
 function Settings({ live, close }: { live: Connection; close: () => void }) {
   return (
     <SettingsPanel
       onClose={close}
       account={live.account}
       onDeleteAccount={() => live.send({ kind: 'delete-account', pass: crewPass() })}
+      onName={(name) => live.send({ kind: 'profile', pass: crewPass(), name })}
       refusal={live.refusal}
+    />
+  );
+}
+
+/**
+ * The menus over the screens (menuLayer.ts): a room's pause menu, its booklet, the settings — by
+ * the gear, a controller's Start, Esc, in a run the browser's back button too; over a run the
+ * crew sees this player at the menu.
+ */
+function useRoomMenus(live: Connection): MenuLayer {
+  const layer = useMenuLayer(pausePhaseOf(live));
+  usePad(layer.start);
+  useEscapeOpensMenu(layer);
+  useHistoryGuard(layer.phase === 'run', layer.openPause);
+  useMenuMark(live.view, layer.pause, live.send);
+  return layer;
+}
+
+/** What `layer` holds open over the screens: the room's menus, the settings, on the line `live`. */
+function RoomMenus(props: { layer: MenuLayer; live: Connection; missions: MissionInfo[] }) {
+  const { layer, live, missions } = props;
+  return (
+    <MenuLayers
+      layer={layer}
+      mission={roomMission(live)}
+      crew={roomCrew(live)}
+      missions={missions}
+      leaveRoom={live.leaveRoom}
+      toMenu={live.toMenu}
+      settings={<Settings live={live} close={layer.closeSettings} />}
     />
   );
 }
@@ -584,6 +681,21 @@ function ErrorBanner({ conn }: { conn: Connection }) {
       </button>
     </div>
   );
+}
+
+/** The room's mission, as its menu names it and opens its booklet: a run's, lobby's, audience's. */
+export function roomMission(conn: Pick<Connection, 'view' | 'spectatorView'>): RoomMission | null {
+  const view = conn.view ?? conn.spectatorView;
+  return view === null ? null : { id: view.missionId, title: view.missionTitle };
+}
+
+/**
+ * The room's seats as the ask before giving one up counts them: the crew's, and the fewest the
+ * mission takes; null for the audience, which holds none.
+ */
+export function roomCrew(conn: Pick<Connection, 'view'>): RoomCrew | null {
+  const view = conn.view;
+  return view === null ? null : { taken: view.players.length, least: view.crewSize.min };
 }
 
 /** The living scene behind the screens, as screens/MenuScene.tsx takes it. */
@@ -643,6 +755,28 @@ function layoutOf(immersive: boolean, editing: boolean, menu: boolean): string {
 }
 
 /**
+ * The one scrolling area every screen shares. Under a menu (`covered`: the pause menu, the
+ * settings, the booklet) it takes nothing: inert, it leaves a press, Tab and a controller to the
+ * menu, and its screens hear none of the keys they listen for on the window, which inert keeps
+ * from no listener (`PauseContext`). `openPause` opens the room's pause menu.
+ */
+export function ScreenArea(props: {
+  ref: Ref<HTMLElement>;
+  layout: string;
+  covered: boolean;
+  openPause: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <main ref={props.ref} className={`content ${props.layout}`} inert={props.covered}>
+      <PauseContext value={{ open: props.covered, show: props.openPause }}>
+        {props.children}
+      </PauseContext>
+    </main>
+  );
+}
+
+/**
  * The app. `boot` is what the address asked for on load: the editor at
  * /editor, with a shared mission or the draft the tab kept.
  */
@@ -665,9 +799,8 @@ export function App({ boot }: { boot: EditorBoot }) {
   // The mission editor, another page off the join screen; the booklet opens over it.
   const editor = useEditorPage(boot);
   const testRun = useTestRun(live);
-  // The settings, over whatever screen is up (a controller's Start too); nothing pauses.
-  const [settingsOpen, setSettingsOpen] = useState(false);
-  usePad(() => setSettingsOpen((open) => !open));
+  const layer = useRoomMenus(live);
+  const covered = anyOpen(layer);
   const contentRef = useRef<HTMLElement>(null);
   // How the run ended, on this screen: the world plays it before the end screen opens.
   const finale = useFinale(live.view ?? live.spectatorView);
@@ -708,14 +841,17 @@ export function App({ boot }: { boot: EditorBoot }) {
         running={running}
         status={conn.status}
         toEditor={fromEditor ? testRun.back : null}
-        onSettings={() => setSettingsOpen(true)}
+        onGear={layer.gear}
+        inRoom={layer.phase !== null}
         menu={menu}
+        watching={conn.watching}
+        covered={covered}
       />
-      {settingsOpen && <Settings live={live} close={() => setSettingsOpen(false)} />}
+      <RoomMenus layer={layer} live={live} missions={missions} />
       <ErrorBanner conn={live} />
       <UpdateNotice />
 
-      <main ref={contentRef} className={`content ${layout}`}>
+      <ScreenArea ref={contentRef} layout={layout} covered={covered} openPause={layer.openPause}>
         {backdrop !== null && <MenuScene {...backdrop} />}
         <VoiceContext value={voice}>
           <Screens
@@ -729,10 +865,10 @@ export function App({ boot }: { boot: EditorBoot }) {
             finale={finale}
             picked={picked}
             setPicked={setPicked}
-            openSettings={() => setSettingsOpen(true)}
+            openSettings={layer.openSettings}
           />
         </VoiceContext>
-      </main>
+      </ScreenArea>
     </div>
   );
 }

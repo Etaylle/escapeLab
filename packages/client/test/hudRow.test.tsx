@@ -312,7 +312,8 @@ describe('the crew in the row', () => {
     expect(mates).toHaveLength(2);
     expect(mates[0]).toBe(
       '<li class="row-mate" aria-label="Anna: liest" title="Anna: liest">' +
-        '<span class="crew-dot" style="background:#2dd4bf" aria-hidden="true"></span></li>',
+        '<span class="crew-dot crew-dot--0" style="background-color:#2dd4bf" aria-hidden="true">' +
+          '</span></li>',
     );
     expect(mates[1]).toContain('aria-label="Ben: unterwegs"');
     expect(html).not.toContain('presence-tag');
@@ -330,7 +331,8 @@ describe('the crew in the row', () => {
     const html = crew(annaSees({ map: mapWith({ exit }) }));
     expect(html).toContain(
       'aria-label="Ben: unterwegs, am Notausgang" title="Ben: unterwegs, am Notausgang">' +
-        '<span class="crew-dot" style="background:#f472b6" aria-hidden="true"></span>[check]</li>',
+        '<span class="crew-dot crew-dot--1" style="background-color:#f472b6" aria-hidden="true">' +
+          '</span>[check]</li>',
     );
     const shut = { x: 3, y: 3, open: false, openedAt: null, atExit: ['p2'] };
     expect(crew(annaSees({ map: mapWith({ exit: shut }) }))).not.toContain('[check]');
@@ -350,13 +352,17 @@ describe('the crew in the row', () => {
 
 describe('the row’s buttons', () => {
   const tools = (voice: VoiceMesh | null, notesOpen = false): string =>
-    within(voice, <RowTools notesOpen={notesOpen} onToggleNotes={noop} onOpenInfo={noop} />);
+    within(
+      voice,
+      <RowTools notesOpen={notesOpen} onToggleNotes={noop} onOpenInfo={noop} onOpenMenu={noop} />,
+    );
 
-  it('open the notepad and the info panel by their icons, their words in their labels', () => {
+  it('open the notepad, the info panel and the menu by their icons, their words in labels', () => {
     expect(tools(null, true)).toBe(
       '<button class="hud-info hud-notes" aria-pressed="true" aria-label="Notizen" ' +
         'title="Notizen">[pencil]</button>' +
-        '<button class="hud-info" aria-label="Info" title="Info">[info]</button>',
+        '<button class="hud-info" aria-label="Info" title="Info">[info]</button>' +
+        '<button class="hud-info hud-menu" aria-label="Menü" title="Menü">[menu]</button>',
     );
   });
 
