@@ -8,26 +8,28 @@ import { serveSamples } from './fakeSamples.js';
  * channel or kept in two, let go again, counted — no network, no audio thread.
  */
 
+function unstage(): void {
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+}
+
+async function samples() {
+  vi.resetModules();
+  const loader = await import('../src/world/samples.js');
+  const memory = await import('../src/world/audioMemory.js');
+  return { ...loader, decodedBytes: memory.decodedBytes };
+}
+
+/** Lets the loads in flight settle, however many turns they take. */
+const settle = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
+const files = (fetched: readonly string[]): string[] =>
+  fetched.filter((url) => url.endsWith('.mp3'));
+
 describe('the recordings, loaded', () => {
   beforeEach(() => {
     fakeGraph();
   });
-  afterEach(() => {
-    vi.unstubAllGlobals();
-    vi.restoreAllMocks();
-  });
-
-  async function samples() {
-    vi.resetModules();
-    const loader = await import('../src/world/samples.js');
-    const memory = await import('../src/world/audioMemory.js');
-    return { ...loader, decodedBytes: memory.decodedBytes };
-  }
-
-  /** Lets the loads in flight settle, however many turns they take. */
-  const settle = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
-  const files = (fetched: readonly string[]): string[] =>
-    fetched.filter((url) => url.endsWith('.mp3'));
+  afterEach(unstage);
 
   it('loads nothing before it is asked, then the first minute’s recordings only', async () => {
     const fetched = serveSamples();
@@ -196,5 +198,32 @@ describe('the recordings, loaded', () => {
     expect(loader.musicEntry('calm')).toMatchObject({ file: 'calm.mp3', bpm: 90 });
     expect(loader.musicEntry('won')?.bpm).toBeUndefined();
     expect(files(fetched)).toEqual([]);
+  });
+});
+
+describe('a bed brought up too far', () => {
+  beforeEach(() => {
+    fakeGraph();
+  });
+  afterEach(unstage);
+
+  it('plays no bed brought up over +12 dB: said once, never fetched; a one-shot', async () => {
+    const said = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const served = {
+      'bed-facility': { gain: 35.5 },
+      'bed-lab': { gain: 3.98 },
+      ping: { gain: 20 },
+    };
+    const fetched = serveSamples(served);
+    const loader = await samples();
+    expect(loader.BED_GAIN_MAX).toBeCloseTo(3.981, 3); // +12 dB
+    expect(await loader.loadSample('bed-facility')).toBeNull();
+    expect(await loader.loadSample('bed-facility')).toBeNull();
+    expect(await loader.loadSample('bed-lab')).not.toBeNull(); // +12 dB, just
+    expect(await loader.loadSample('ping')).not.toBeNull(); // +26 dB: a one-shot's peak
+    expect(files(fetched).sort()).toEqual(['/sfx/bed-lab.mp3', '/sfx/ping.mp3']);
+    expect(said).toHaveBeenCalledTimes(1);
+    const why = /bed-facility\.mp3 could not be loaded \(a bed brought up \+31\.0 dB, over \+12\)/;
+    expect(said.mock.calls[0]?.[0]).toMatch(why);
   });
 });

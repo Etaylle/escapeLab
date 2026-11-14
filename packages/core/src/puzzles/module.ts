@@ -175,15 +175,17 @@ export type DefSchema<Def> = z.ZodType<Def> & z.core.$ZodTypeDiscriminable;
  * changes in play, and the kind of input with its bounds and default.
  *
  * - `int`: a whole number from min to max. With `off`, the field may be left
- *   empty, which the file says the way the schema means "off": null
- *   (`'null'`) or no key at all (`'omit'`). A file without the key is off.
+ *   empty, which the file says as null (`'null'`) or as no key at all
+ *   (`'omit'`), and a file without the key leaves it empty. Empty is off, as
+ *   the help line says — or, for a field whose schema works the value out
+ *   from the def's other fields (the Signalkette's `greyFrom`), that value.
  * - `bool`: ticked or not.
  * - `choice`: one of the options, by value.
  * - `range`: a `{ min, max }` pair of whole numbers, both from min to max.
  *
  * Every field's default is what a new puzzle of the module starts with;
- * where the field cannot be off, it is also what the schema fills in for a
- * file without the key.
+ * where the field cannot be left empty, it is also what the schema fills in
+ * for a file without the key.
  */
 export type FieldSpec = { key: string; label: string; help: string } & (
   | { kind: 'int'; min: number; max: number; default: number; off?: 'null' | 'omit' }

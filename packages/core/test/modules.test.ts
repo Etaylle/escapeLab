@@ -62,14 +62,16 @@ const own = [
   { type: 'button', id: 'knopf', moves: [1, 2] },
   // four stages of four signs
   { type: 'signal', id: 'signalkette', moves: [16] },
+  // the same with the legend and the display grey from the first stage: read by the patterns
+  { type: 'signal', id: 'signalkette-farblos', fields: { legend: true, greyFrom: 1 }, moves: [16] },
   // two doors, each a login, its token and the release
   { type: 'access', id: 'zugangskontrolle', moves: [6] },
-].map(({ type, id, moves }) => {
-  const def = puzzleDefSchema.parse({ type, id, title: id });
-  return [type, def, moves] as const;
+].map(({ type, id, fields = {}, moves }) => {
+  const def = puzzleDefSchema.parse({ type, id, title: id, ...fields });
+  return [id, def, moves] as const;
 });
 
-describe.each(own)('%s on its own', (_type, def, moves) => {
+describe.each(own)('%s on its own', (_id, def, moves) => {
   it(`is solved through the harness without an alarm, for ${OWN_SEEDS} seeds`, () => {
     const taken = new Set<number>();
     for (let seed = 0; seed < OWN_SEEDS; seed++) {

@@ -598,6 +598,7 @@ describe('the station frame', () => {
       grid: null,
       grids: null,
       fleeting: false,
+      grey: false,
       keys: null,
       index: 1,
       total: 5,

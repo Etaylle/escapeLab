@@ -13,15 +13,26 @@ import {
   type SampleEntry,
   type SfxId,
 } from '../world/samples.js';
-import { commandFor, ENV_FILE, listingOf, soundsOf, type CatalogSound } from './listing.js';
+import {
+  commandsFor,
+  ENV_FILE,
+  listingOf,
+  soundsOf,
+  suiteListingOf,
+  suitesOf,
+  type CatalogSound,
+} from './listing.js';
 import { SoundsBoard, type BoardActions } from './SoundsBoard.js';
 import {
   chooseTake,
   loadTakes,
+  pieceKey,
   takeKey,
   takeUrl,
   type Keeping,
+  type PieceInfo,
   type TakeInfo,
+  type Takes,
   type TakesState,
 } from './takes.js';
 
@@ -32,12 +43,14 @@ import {
  * (world/audioStream.ts) — a room's bed, a loop or a stem round and round until it is stopped,
  * everything else once; its prompt beside it, and a box to tick where it should be made anew.
  * Under a piece of music stand its takes, where the dev server lists any (takes.ts), each
- * streamed at the gain the game would give it, and the command that keeps the one chosen. The
- * commands go to the clipboard or are shown; the page itself asks no service for anything and
- * runs neither a render nor a keep.
+ * streamed at the gain the game would give it, and the command that keeps the one chosen; under
+ * a suite its takes, one row each, every piece of a take playable where the plan cuts it, and
+ * the one command that keeps a take whole. The commands go to the clipboard or are shown; the
+ * page itself asks no service for anything and runs neither a render nor a keep.
  */
 
 const catalog: readonly CatalogSound[] = soundsOf(catalogJson);
+const suites = suitesOf(catalogJson);
 const EFFECTS = new Set<string>(SFX_IDS);
 const MUSIC = new Set<string>(MUSIC_IDS);
 const isEffect = (id: string): id is SfxId => EFFECTS.has(id);
@@ -147,6 +160,32 @@ function audition(
 }
 
 /**
+ * Streams the piece `piece` of take `take` of the suite `id` from the dev server, from where the
+ * plan cuts it to where its next begins, at the gain the game would give it, and calls `ended`
+ * once it has stopped; null where there is no Web Audio.
+ */
+export function auditionPiece(
+  id: string,
+  take: TakeInfo,
+  piece: PieceInfo,
+  ended: () => void,
+): Audition | null {
+  const ctx = sharedAudio();
+  if (ctx === null) return null;
+  ctx.resume().catch(() => undefined); // the click that asked is the gesture it needs
+  const stream = openStream(ctx, takeUrl(id, take), ctx.destination, AUDITION_LEVEL * piece.gain);
+  const from = piece.fromMs / 1000;
+  startStream(stream, ctx, ctx.currentTime + 0.01 - from, from);
+  const stop = (): void => {
+    clearTimeout(timer);
+    closeStream(stream);
+    ended();
+  };
+  const timer = setTimeout(stop, piece.ms + 10);
+  return { stop };
+}
+
+/**
  * Streams take `take` of the piece `id` from the dev server — round and round where `loop`
  * says — at the gain the game would give it, and calls `ended` once it has stopped; null where
  * there is no Web Audio.
@@ -191,8 +230,17 @@ function toClipboard(text: string): Promise<boolean> {
   );
 }
 
-/** Whether the catalog plays `id` round and round. */
-const loops = (id: string): boolean => catalog.find((sound) => sound.id === id)?.loop === true;
+/** Whether the catalog plays `id` round and round: a sound, or a piece of a suite. */
+const loops = (id: string): boolean =>
+  catalog.some((sound) => sound.id === id && sound.loop) ||
+  suites.some((suite) => suite.sections.some((piece) => piece.id === id && piece.loop));
+
+/** The piece `piece` of take `n` of `id`, where the dev server lists it; none where it does not. */
+function pieceIn(takes: Takes, id: string, n: number, piece: string) {
+  const take = takes[id]?.find((each) => each.n === n);
+  const found = take?.pieces?.find((each) => each.id === piece);
+  return take === undefined || found === undefined ? null : { take, piece: found };
+}
 
 /** What the board stands on: the recordings behind its play buttons, and the takes as loaded. */
 interface Loaded {
@@ -213,7 +261,8 @@ function Auditions({ recordings, takes }: Loaded) {
   const voice = useRef<Audition | null>(null);
   useEffect(() => () => voice.current?.stop(), []);
   const ticked = catalog.filter((sound) => selected.has(sound.id)).map((sound) => sound.id);
-  const command = commandFor(ticked, envFile);
+  const tickedSuites = suites.filter((suite) => selected.has(suite.id)).map((suite) => suite.id);
+  const commands = commandsFor(ticked, tickedSuites, envFile);
   const listed = takes.kind === 'served' ? takes.takes : {};
   const stop = (): void => {
     const current = voice.current;
@@ -239,6 +288,12 @@ function Auditions({ recordings, takes }: Loaded) {
       if (take === undefined) return;
       start(takeKey(id, n), (ended) => auditionTake(id, take, loops(id), ended));
     },
+    playPiece: (id, n, piece) => {
+      const found = pieceIn(listed, id, n, piece);
+      if (found === null) return;
+      const key = pieceKey(id, n, piece);
+      start(key, (ended) => auditionPiece(id, found.take, found.piece, ended));
+    },
     toggle: (id) =>
       setSelected((was) => {
         const next = new Set(was);
@@ -251,14 +306,16 @@ function Auditions({ recordings, takes }: Loaded) {
       keepEnvFile(path);
     },
     copy: () => {
-      if (command !== null) {
-        void toClipboard(command).then((done) => setCopied(done ? 'copied' : 'refused'));
+      if (commands.length > 0) {
+        const said = (done: boolean): void => setCopied(done ? 'copied' : 'refused');
+        void toClipboard(commands.join('\n')).then(said);
       }
     },
   };
   return (
     <SoundsBoard
       sections={listingOf(catalog, recordings)}
+      suites={suiteListingOf(suites, recordings)}
       takes={listed}
       takesNote={takes.kind === 'unserved' ? takes.why : null}
       playing={playing}
@@ -266,7 +323,7 @@ function Auditions({ recordings, takes }: Loaded) {
       selected={selected}
       keeping={keeping}
       envFile={envFile}
-      command={command}
+      commands={commands}
       copied={copied}
       on={on}
     />

@@ -33,13 +33,13 @@ import {
 } from './samples.js';
 
 /**
- * Music that breathes: three recorded stems (samples.ts: Eleven Music composed them, all three
- * in A minor at the one tempo the catalog gives them, so that one blends into the next), between
- * which one pressure value, 0 to 1, crossfades —
+ * Music that breathes: three recorded stems, pieces of the score (samples.ts, docs/sound.md
+ * „Score": Eleven Music composed them in one generation, in A minor at one tempo on one bar
+ * grid, so that one crosses into the next), between which one pressure value, 0 to 1, crossfades —
  *
- *   calm      an uneasy pad over a low drone, sparse piano, no drums;
- *   tense     from 0.35: a bass pulse on every beat, a sparse arpeggio, low strings;
- *   critical  from 0.8: pounding drums, fast hats, a string ostinato in double time.
+ *   calm      the motif in fragments, low piano, a dark pad, a muted synth bass, no percussion;
+ *   tense     from 0.35: an analog ostinato from the motif, a bass pulse on every beat, a tick;
+ *   critical  from 0.8: low drums, strings in sixteenths, horns hammering the motif's leap.
  *
  * The pressure follows the clock (the tension curve the lab always had: nothing in the first
  * half, then rising to 1 as it runs out — and at least 0.8 in the last minute), every alarm
@@ -48,8 +48,9 @@ import {
  * click, and its first bar is where its bars are counted from. A change of stem waits for the
  * next bar: the stem coming in starts from its beginning on it and crosses with the one going
  * over CROSSFADE_S. A stem plays round and round: its next pass starts from its beginning on a
- * bar line too, one bar before it comes in over the last SEAM_S of the pass before, equal in
- * power — the bar it has to be caught up in. The stems are never decoded: each streams from its
+ * bar line too — as many bars after the last as its manifest names (`loopPeriod`) — one bar
+ * before it comes in over the last SEAM_S of the pass before, equal in power — the bar it has to
+ * be caught up in. The stems are never decoded: each streams from its
  * file (audioStream.ts) on two <audio> elements taking turns, every stem's file fetched once as
  * the music starts; an element that came in late is caught up by playing it a little faster.
  * While a stem is heard it takes one loop of the budget of audio.ts (`CAPS`), and it stops once
@@ -183,6 +184,19 @@ export function nextBar(t: number, grid: Grid): number {
 export function passPeriod(seconds: number, bpm: number): number {
   const bar = barOf(bpm);
   return Math.max(1, Math.floor((seconds - SEAM_S) / bar) - SEAM_LEAD_BARS) * bar;
+}
+
+/**
+ * How long after a pass of `entry` starts the next one does, s: the bars its manifest names as
+ * going round — a piece of the score's, cut with a tail for its lead bar and its seam — as far as
+ * its file holds them with those; else as many whole bars as its file holds (`passPeriod`).
+ */
+export function loopPeriod(
+  entry: Pick<SampleEntry, 'ms' | 'startMs' | 'bars'>,
+  bpm: number,
+): number {
+  const holds = passPeriod((entry.ms - entry.startMs) / 1000, bpm);
+  return entry.bars === undefined ? holds : Math.min(entry.bars * barOf(bpm), holds);
 }
 
 /** The music's input, ten times a second (GameWorld.tsx). */
@@ -474,8 +488,7 @@ function startPass(m: Music, track: Track, entry: SampleEntry, grid: Grid): void
   }
   const pass = { stream: deck, zero };
   track.passes = previous === undefined ? [pass] : [previous, pass];
-  const seconds = (entry.ms - entry.startMs) / 1000;
-  track.next = zero + passPeriod(seconds, grid.bpm);
+  track.next = zero + loopPeriod(entry, grid.bpm);
 }
 
 /** The stem stops at `at` and gives its loop back: faded out, or the music is over. */

@@ -10,6 +10,8 @@ import {
   type RackUnit,
   type ServerLogLine,
   type ServerRow,
+  type ShownSign,
+  type SignalToken,
 } from '@escapelab/core';
 import { missedLine } from '../src/puzzles/ButtonSyncPanel.js';
 import { needleAngle, SCALE_MAX } from '../src/puzzles/CircuitPanel.js';
@@ -402,6 +404,16 @@ describe('the maze', () => {
   });
 });
 
+/** Signs a display shows in their colours; throws at a grey one. */
+function inColour(shown: readonly ShownSign[] | null): SignalToken[] {
+  return (shown ?? []).map((sign) => {
+    if (typeof sign !== 'string') {
+      throw new Error(`expected a sign in its colour, not ${JSON.stringify(sign)}`);
+    }
+    return sign;
+  });
+}
+
 describe('the signal chain', () => {
   type SignalSeen = Extract<PuzzleView, { kind: 'signal' }>;
 
@@ -481,7 +493,7 @@ describe('the signal chain', () => {
 
   it('shows the sending console the sequence as signs with no word, a lamp under each', () => {
     const sending = at('a');
-    const sequence = sending.sequence ?? [];
+    const sequence = inColour(sending.sequence);
     expect(sequence).toHaveLength(4);
     const html = panel(sending);
     expect(stageOf(html)).toBe('Stufe 1 von 4');
@@ -500,7 +512,7 @@ describe('the signal chain', () => {
   it('shows a fleeting stage one sign at a time in its own place, every lamp kept', () => {
     const sending = { ...signalAt('a', { fleetingFrom: 1 }), done: 1 };
     expect(sending.fleeting).toBe(true);
-    const [first, ...rest] = sending.sequence ?? [];
+    const [first, ...rest] = inColour(sending.sequence);
     expect(rest).toHaveLength(3);
     const html = panel(sending);
     expect(stageOf(html)).toBe('Stufe 1 von 4');
@@ -526,7 +538,7 @@ describe('the signal chain', () => {
     const sending = signalAt('a', { fleetingFrom: 2 });
     expect(sending.fleeting).toBe(false);
     const html = panel(sending);
-    expect(signs(html)).toEqual((sending.sequence ?? []).map(tokenLabel));
+    expect(signs(html)).toEqual(inColour(sending.sequence).map(tokenLabel));
     expect(html).not.toContain('signal-strip--fleeting');
   });
 
@@ -659,7 +671,7 @@ describe('the signal chain', () => {
     }
     const sending = at('a');
     const strip = texturesIn(panel(sending));
-    for (const token of sending.sequence ?? []) {
+    for (const token of inColour(sending.sequence)) {
       expect(strip.get(tokenLabel(token))).toBe(textureOf(token));
     }
   });
@@ -711,7 +723,7 @@ describe('the signal chain', () => {
     expect(names.map((m) => m[1])).toEqual(['Pult A', 'Pult B']);
     const key = /<span class="signal-key" data-token="([a-z]+-[a-z]+)">/g;
     expect([...html.matchAll(key)].map((m) => m[1])).toEqual([...grids.a, ...grids.b]);
-    expect(signs(html)).toEqual([...sequence, ...grids.a, ...grids.b].map(tokenLabel));
+    expect(signs(html)).toEqual([...inColour(sequence), ...grids.a, ...grids.b].map(tokenLabel));
     expect(textOf(html)).not.toMatch(SAID);
     expect(lit(html)).toBe(1);
     expect(html).not.toContain('<button');
@@ -719,7 +731,7 @@ describe('the signal chain', () => {
 
   it('shows the audience with the legend the strip and the rows both consoles share', () => {
     const watched = signalAt(null, { legend: true, fleetingFrom: 1 });
-    const sequence = watched.sequence ?? [];
+    const sequence = inColour(watched.sequence);
     expect(sequence).toHaveLength(4);
     const html = panel(watched);
     expect(stageOf(html)).toBe('Stufe 1 von 4');

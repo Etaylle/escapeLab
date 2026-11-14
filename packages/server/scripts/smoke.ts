@@ -43,7 +43,7 @@
  * his name: Eva lets it in, his old pass refused; Gus gives his seat up and the two go on,
  * then Finn gives his up and the run ends, called off. Where TEST_DATABASE_URL
  * names a Postgres, the start script brings a server up on a schema of its own,
- * the migrations applied first, and a crew winning the tutorial there leaves the
+ * which it migrates itself first, and a crew winning the tutorial there leaves the
  * run in the database with a seat for each by account and the Erfolge it
  * earned. No answer is written down here.
  * Run with: pnpm --filter @escapelab/server smoke
@@ -1459,6 +1459,30 @@ function assertFleeting(consoles: { client: TestClient; from: number }[]): void 
 }
 
 /**
+ * From stage `greyFrom` on the display has lost its colour: so say the views the consoles
+ * received since their logs ran to `from`, and not one of those views carried a sign in colour
+ * to either console — the legend's patterns alone tell the colours then.
+ */
+function assertGrey(consoles: { client: TestClient; from: number }[]): void {
+  const greyFrom = SIGNAL.greyFrom ?? SIGNAL.stages;
+  const seen = consoles.flatMap(({ client, from }) =>
+    viewsSince(client, from).flatMap(({ raw, view }) => {
+      const signal = signalOf(view);
+      return signal === null ? [] : [{ raw, signal }];
+    }),
+  );
+  const grey = seen.filter(({ signal }) => signal.grey);
+  assert(
+    grey.length > 0 && seen.every(({ signal }) => signal.grey === signal.stage >= greyFrom),
+    `the display shows its signs without colour from stage ${greyFrom} on, in colour before`,
+  );
+  assert(
+    grey.every(({ raw }) => !TOKENS.some((token) => raw.includes(`"${token}"`))),
+    'no view of a stage without colour carried a sign in colour to either console',
+  );
+}
+
+/**
  * Station 2, the Signalkette, worked at two consoles at once: `a` stands at
  * console A, `b` at console B, and B switches it on. Console A sends stage 1
  * and B takes it, then the direction swaps with every stage. Nobody is left
@@ -1489,6 +1513,10 @@ async function runSignal(a: TestClient, b: TestClient): Promise<void> {
   await solveStation(SIGNALKETTE);
   assertConsolesApart(b, from.b, { sends, takes });
   assertFleeting([
+    { client: a, from: from.a },
+    { client: b, from: from.b },
+  ]);
+  assertGrey([
     { client: a, from: from.a },
     { client: b, from: from.b },
   ]);
@@ -3186,9 +3214,9 @@ async function colourAtTheEnd(server: ServerProcess, db: PrismaClient): Promise<
 }
 
 /**
- * Where TEST_DATABASE_URL names a Postgres the smoke may write to: the start script, as Render
- * runs it with a single direct DATABASE_URL, on a schema of the smoke's own — the migrations
- * applied before the server starts — a crew winning the tutorial there (`checkLanded`), and a
+ * Where TEST_DATABASE_URL names a Postgres the smoke may write to: the start script with a
+ * single direct DATABASE_URL, on a schema of the smoke's own — the server applying the
+ * migrations itself before it listens — a crew winning the tutorial there (`checkLanded`), and a
  * colour clicked as the server goes down (`colourAtTheEnd`); the schema is dropped after.
  * Skipped, saying so, without.
  */
@@ -3309,7 +3337,7 @@ console.log(
     'and SIGKILL, the run taken up again from the crew\'s snapshots; a deploy handing ' +
     'over from an old server still up, the run going on from its last snapshot; the ' +
     'start script passing SIGTERM on to the server; and, where TEST_DATABASE_URL names a ' +
-    'Postgres, the start script migrating it over a single URL, a won tutorial landing there ' +
+    'Postgres, the server migrating it itself over a single URL, a won tutorial landing there ' +
     'by account, a colour clicked just before SIGTERM kept, and the server started as ' +
     'Render\'s Start Command starts it migrating the database itself before it listens, a ' +
     'migration broken off stopping its start. 🎉',

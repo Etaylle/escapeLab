@@ -8,7 +8,7 @@ import type { TestProject } from 'vitest/node';
 /**
  * The tests' Postgres, where TEST_DATABASE_URL names one the tests may write to: a schema of this
  * run's own, migrated with the committed migrations before the first test (`prisma migrate
- * deploy`, as the start script does), dropped after the last; the tests reach it by
+ * deploy`, as the server runs it as it starts), dropped after the last; the tests reach it by
  * `inject('postgresUrl')` and empty its tables as they need. Without the variable the store's
  * tests in Postgres are skipped, and one line at the end of the run says so — and how to run
  * them where docker is at hand.
