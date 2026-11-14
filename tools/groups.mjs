@@ -86,6 +86,19 @@ export const GROUPS = [
     ],
   },
   {
+    name: 'three',
+    stage: 'drills',
+    needs: [],
+    captures: [
+      'three',
+      'three-lever.png',
+      'three-plate.png',
+      'three-hands.png',
+      'three-reader.png',
+      'three-phone-932.png',
+    ],
+  },
+  {
     name: 'screens',
     stage: 'lobby',
     needs: [],
