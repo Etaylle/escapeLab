@@ -789,25 +789,26 @@ curl -L -o ~/.cache/escapelab-piper/de_DE-thorsten-high.onnx.json \
 ```
 
 At a run's start the mission's lines are fetched and kept as they came, compressed — Blackout's 72
-texts some 6 MB once all are recorded, 1.8 MB of them today, every text of a line since a run's
-pick is drawn as it comes — and the line that opens the run decoded, so that it comes the moment the
-lights fail; any other line is decoded as it comes over the air, from its file in memory, in one
-channel at 22.05 kHz (a few tens of milliseconds), spoken and let go, so that a page keeps a line or
-two decoded rather than a mission's 159 s (28 MB at 44.1 kHz). A line asked for while an older one
-still decoded speaks alone. When the banner shows a line, its recording plays as a handset hears it:
-high-pass 300 Hz and low-pass 3.4 kHz, each fourth order, a light waveshaper (tanh at a drive of
-1.2: a 1 kHz tone at the speech's peak comes out with 8 % distortion, where the drive of 2.2 the
-Mac's voice had gave 17 %, and the quiet parts come up 3 dB against the peaks instead of 7, so that
-the consonants stay clear), a bed of static 33 dB under the speech, a squelch as the key goes down
-and a longer one as it comes up — each a recording (`radio-key`, `radio-tail`), its peak about 6 dB
-under the speech's — and the music goes 8 dB and the beds 4 dB down meanwhile (mix.ts, above). The
-run's first line comes after the Leitstelle opening the channel: static swells up for 0.3 s and
-snaps shut on the squelch gate's click (`radio-open`), 0.4 s before the key — on that line alone. A
-line no recording speaks, a custom mission's, keys the radio with the key's recording alone
-(`radioChirp`). A newer line cuts an older one short. The banner stays up while its line speaks: 7 s
-at least (4 s on a touch screen), and as long as the recording, its opening and its squelch take for
-a longer line — by the manifest's length where the line is not decoded yet (`radio.ts` `noticeMs`,
-`radioVoice.ts` `airtimeMs`).
+texts some 6 MB once all are recorded, 1.8 MB of them today, every text of a line since a run's pick
+is drawn as it comes — and the takes that may open the run decoded, so that the one it picks comes
+the moment the lights fail; they go as soon as the run's start is behind it, aired or not, and a
+page that comes in after the start decodes none of them. Any other line is decoded as it comes over
+the air, from its file in memory, in one channel at 22.05 kHz (a few tens of milliseconds), spoken
+and let go, so that a page keeps a line or two decoded rather than a mission's 159 s (28 MB at 44.1
+kHz). A line asked for while an older one still decoded speaks alone. When the banner shows a line,
+its recording plays as a handset hears it: high-pass 300 Hz and low-pass 3.4 kHz, each fourth order,
+a light waveshaper (tanh at a drive of 1.2: a 1 kHz tone at the speech's peak comes out with 8 %
+distortion, where the drive of 2.2 the Mac's voice had gave 17 %, and the quiet parts come up 3 dB
+against the peaks instead of 7, so that the consonants stay clear), a bed of static 33 dB under the
+speech, a squelch as the key goes down and a longer one as it comes up — each a recording
+(`radio-key`, `radio-tail`), its peak about 6 dB under the speech's — and the music goes 8 dB and
+the beds 4 dB down meanwhile (mix.ts, above). The run's first line comes after the Leitstelle
+opening the channel: static swells up for 0.3 s and snaps shut on the squelch gate's click
+(`radio-open`), 0.4 s before the key — on that line alone. A line no recording speaks, a custom
+mission's, keys the radio with the key's recording alone (`radioChirp`). A newer line cuts an older
+one short. The banner stays up while its line speaks: 7 s at least (4 s on a touch screen), and as
+long as the recording, its opening and its squelch take for a longer line — by the manifest's length
+where the line is not decoded yet (`radio.ts` `noticeMs`, `radioVoice.ts` `airtimeMs`).
 
 **The voice.** Three German Piper voices were compared by measurement on the same three
 Blackout lines — the start, the Signalkette's places, the escape — each at `length_scale` 1.05
