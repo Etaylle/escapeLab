@@ -226,10 +226,12 @@ function wayOut(seat: Seat, send: Props['send'], instead: (() => void) | null): 
 /**
  * What the run's clock on its card shows at `now`, ms left, of `leftMs` as the server answered at
  * `heardAt` (both by this page's clock): counting down as the run goes on, whoever is away;
- * standing where it was while the run stands still for the server's maintenance (`paused`).
+ * standing where it was while the run stands still (`paused`) — for the server's maintenance,
+ * or for nobody on the line. A `now` read a moment before the answer was noted counts as none of
+ * the run's time, never as time given back.
  */
 export function seatLeft(leftMs: number, paused: boolean, heardAt: number, now: number): number {
-  return paused ? leftMs : Math.max(0, leftMs - (now - heardAt));
+  return paused ? leftMs : Math.max(0, leftMs - Math.max(0, now - heardAt));
 }
 
 /**
