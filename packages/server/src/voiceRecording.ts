@@ -221,7 +221,9 @@ export class VoiceDesk {
    * no mission says it, or nobody of the cast in service for its role is that person.
    */
   line(id: string): ShippedLine | null {
-    const [, person = '', hash = ''] = VOICE_ID.exec(id) ?? [];
+    const named = partsOf(id);
+    if (named === null) return null;
+    const { person, hash } = named;
     const says = (said: RadioLine): boolean =>
       voiceId(said.text) === hash && inService(said.role).some((p) => p.id === person);
     let found: ShippedLine | null = null;
@@ -309,6 +311,12 @@ export class VoiceDesk {
 const VOICE_PATH = /^\/voice\/([^/]+)$/;
 /** A recording's id: the person's, then the first 12 hex digits of the SHA-1 of the line. */
 const VOICE_ID = /^([a-z]+)-([0-9a-f]{12})$/;
+
+/** The person and the line's hash a recording's id names; null where it is no such id. */
+function partsOf(id: string): { person: string; hash: string } | null {
+  const [, person, hash] = VOICE_ID.exec(id) ?? [];
+  return person === undefined || hash === undefined ? null : { person, hash };
+}
 
 /**
  * Answers POST /voice/:id — with `desk` null, as without ALLOW_RECORD=1, a 404 — and returns

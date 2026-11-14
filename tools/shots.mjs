@@ -3030,7 +3030,7 @@ async function checkRadioVoice(player, listening, after, expected = null) {
   // A page without the recordings answers with something else: no manifest, and the check fails.
   const manifest = await voiceLinesOf(player.page);
   const line = expected ?? newestStory(player);
-  const text = line?.label ?? null;
+  const text = bannerOf(line);
   if (awaitsRender(heard, line, manifest)) {
     console.log(`radio voice        ${player.name} after ${after}: „${text}" awaits its render`);
     return;
@@ -3044,12 +3044,20 @@ async function checkRadioVoice(player, listening, after, expected = null) {
   const said = heard === null ? '!! no line spoke' : heardText(heardAs);
   console.log(`radio voice        ${player.name} after ${after}: ${said}; the banner: „${text}"`);
   const plausible = spoke >= Math.max(1000, words * MS_PER_WORD);
-  // The person of the night's cast speaks it, whoever that is: their recording, their words.
-  const theirs = entry?.text === text && entry?.person === line?.person;
-  if (entry === undefined || !theirs || !plausible || !keyedRight) {
+  if (!saidByTheirs(entry, line) || !plausible || !keyedRight) {
     fail(`radio voice after ${after}: ${heard?.id ?? 'nothing'} spoke ${spoke} ms for „${text}"`);
   }
 }
+
+/** The words a radio line `line` shows on the banner; null where there is none. */
+const bannerOf = (line) => line?.label ?? null;
+
+/**
+ * Whether `entry`, the recording the page played, is `line` as the person of the night's cast
+ * says it, whoever that is: their recording, their words.
+ */
+const saidByTheirs = (entry, line) =>
+  entry !== undefined && entry.text === bannerOf(line) && entry.person === line?.person;
 
 /**
  * Whether the line `line` that nobody `heard` awaits its render: the manifest the page is
