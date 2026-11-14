@@ -112,7 +112,8 @@ describe('the Feinwahl', () => {
     }
     expect(html.match(/aria-checked="true"/g)).toHaveLength(1);
     expect(html).toMatch(/aria-checked="true" data-piece="cheremisinov\/lobby"/);
-    expect(html).toContain('Way To Silence · Sergey Cheremisinov · Schicht C · Kammerklang (Paket)');
+    const own = 'Way To Silence · Sergey Cheremisinov · Schicht C · Kammerklang (Paket)';
+    expect(html).toContain(own);
   });
 
   it('plays a piece picked in its place, and the pack’s own again clears the pick', () => {

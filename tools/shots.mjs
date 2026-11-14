@@ -14839,7 +14839,8 @@ async function musicKept(page, picked) {
   await page.locator('.menu-item').first().waitFor({ timeout: 10_000 });
   const kept = await wakeMenuSound(page, (probe) => probe.pack === picked && probe.theme);
   const playing = kept.theme ? (kept.pack ?? 'nothing') : 'nothing';
-  console.log(`music kept         after a reload: ${playing === picked ? '' : '!! '}${playing} playing`);
+  const mark = playing === picked ? '' : '!! ';
+  console.log(`music kept         after a reload: ${mark}${playing} playing`);
   return wrongOf([[playing !== picked, `after a reload ${playing} played, not ${picked}`]]);
 }
 
@@ -14867,8 +14868,9 @@ async function musicReset(page, listed) {
 /**
  * The music packs (client screens/MusicSettings.tsx, world/musicPacks.ts), a drill on a menu page
  * of its own, in a Systemcheck run — Blackout's skips it, for it needs no mission: a key wakes the
- * menu's sound, the score's theme sounding where the music's manifest lists it; the settings on „Ton", scrolled to „Musik" (settings-music.png, `musicBlockShot`);
- * another pack pressed sounds at once (`packSwitch`); a ▶ in the Feinwahl plays its piece over the
+ * menu's sound, the score's theme sounding where the music's manifest lists it; the settings on
+ * „Ton", scrolled to „Musik" (settings-music.png, `musicBlockShot`); another pack pressed sounds
+ * at once (`packSwitch`); a ▶ in the Feinwahl plays its piece over the
  * music pulled down (`previewDucks`); on a phone held sideways the block fits (`musicOnPhone`); Esc
  * stops the piece with the settings (`previewStops`); the pack picked plays again after a reload
  * (`musicKept`), and „Zurücksetzen" brings the score back (`musicReset`). The run fails where any

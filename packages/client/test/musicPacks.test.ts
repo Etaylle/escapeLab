@@ -210,7 +210,7 @@ describe('a found piece that cannot be had', () => {
     vi.restoreAllMocks();
   });
 
-  it('changes nothing where the score’s own piece cannot be had: it has none to fall to', async () => {
+  it('changes nothing where the score’s own piece cannot be had: it has none', async () => {
     const music = await fresh();
     const heard = vi.fn();
     music.subscribeMusicChoice(heard);

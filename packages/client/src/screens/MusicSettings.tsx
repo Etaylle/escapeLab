@@ -46,7 +46,7 @@ export function withPack(choice: MusicChoice, pack: string): MusicChoice {
   return { pack, pieces };
 }
 
-/** The music with the piece of `pack` picked for `slot`: nothing kept where it is the pack's own. */
+/** The music with the piece of `pack` picked for `slot`: none kept where it is the pack's own. */
 export function withPiece(choice: MusicChoice, slot: Slot, pack: string): MusicChoice {
   const pieces = Object.fromEntries(
     Object.entries(choice.pieces).filter(([place]) => place !== slot),

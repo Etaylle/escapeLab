@@ -476,7 +476,7 @@ describe('a pack’s file that cannot be had', () => {
     expect(warned().filter((line) => line.includes('probe/menu-theme'))).toHaveLength(1);
   });
 
-  it('gives an ending and the opening’s title the score’s at once as their stream fails', async () => {
+  it('gives an ending and the title the score’s at once as their stream fails', async () => {
     vi.resetModules();
     shipPacks(PROBE);
     const title = { title: { seconds: 40 } };
