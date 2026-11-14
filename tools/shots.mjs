@@ -544,7 +544,15 @@ import { chromium, request } from 'playwright';
 import { AGAIN_AFTER_MS, allowanceOf, gateWindow, p95Text, paceOf } from './framegate.mjs';
 import { withOthersFrozen } from './freeze.mjs';
 import { ART_PX, bobVerdict, GLOWING, glowAtCorners, haloAgainst } from './glowcheck.mjs';
-import { GROUP_NAMES, groupClock, groupOf, planGroups, reaches, spentText } from './groups.mjs';
+import {
+  GROUP_NAMES,
+  groupClock,
+  misfiled,
+  planGroups,
+  reaches,
+  spentText,
+  stepGates,
+} from './groups.mjs';
 import { lightWorkText } from './lightwork.mjs';
 import { fadeOf, meanLuma, midway } from './panelfade.mjs';
 import { beamLight, beamPatches, beamVerdict } from './beamcheck.mjs';
@@ -631,6 +639,8 @@ const AUDIO_OFF = audioOff(process.env.SHOTS_AUDIO_OFF);
 const PLAN = planGroups(process.env.SHOTS_ONLY, process.env.SHOTS_SKIP);
 /** The time each group of the run takes (`inGroup`), for the line before the summary. */
 const timeByGroup = groupClock();
+/** The gate of the step running now (`inGroup`, `whenOn`), which `checkGroup` holds captures to. */
+const gates = stepGates();
 /**
  * The server the run starts and owns, SHOTS_SERVER=<entry>: node runs the entry — one in
  * TypeScript with the tsx loader — from packages/server, on BASE's port with ALLOW_SEED=1 and TLS
@@ -900,14 +910,14 @@ function skip(label, why) {
 
 /**
  * Fails the run where a capture, or the label of a skip line, belongs to no group
- * (tools/groups.mjs) or to one this run leaves out: the step that took it is not gated by it.
+ * (tools/groups.mjs), or to another than the step that took it runs under (`gates`): a step
+ * left ungated, or a capture misfiled — so that every run, a full one too, proves the table.
+ * A name the scan of the source cannot read (tools/groups.test.mjs) is held to it here.
  */
 function checkGroup(label) {
-  const group = groupOf(label);
-  if (group === null) {
-    fail(`${label}: no capture group names it — add it to tools/groups.mjs`);
-  } else if (!PLAN.on.has(group)) {
-    fail(`${label}: taken though the run leaves ${group} out — its step is not gated by it`);
+  const wrong = misfiled(label, gates.now());
+  if (wrong !== null) {
+    fail(wrong);
   }
 }
 
@@ -920,28 +930,31 @@ function groupOn(name) {
 }
 
 /**
- * Runs `step` where the group `name` is on in this run, its time counted to the group — a step
- * of another group within it counting to that one; where the group is off, runs `otherwise`
- * instead, nothing by default. Returns what ran.
+ * Runs `step` where the group `name` is on in this run, under the group's gate (`gates`) and its
+ * time counted to the group — a step of another group within it under that one's; where the
+ * group is off, runs `otherwise` instead, nothing by default. Returns what ran.
  */
 async function inGroup(name, step, otherwise = () => undefined) {
   if (!groupOn(name)) {
     return otherwise();
   }
-  timeByGroup.enter(name);
-  try {
-    return await step();
-  } finally {
-    timeByGroup.leave();
-  }
+  return gates.run(name, async () => {
+    timeByGroup.enter(name);
+    try {
+      return await step();
+    } finally {
+      timeByGroup.leave();
+    }
+  });
 }
 
 /**
- * Starts `start` where the group `name` is on — work going on beside the steps, its time counted
- * to none — and returns what it returns; where the group is off, `otherwise`.
+ * Starts `start` where the group `name` is on, under the group's gate (`gates`) — work going on
+ * beside the steps, its time counted to none — and returns what it returns; where the group is
+ * off, `otherwise`.
  */
 function whenOn(name, start, otherwise = null) {
-  return groupOn(name) ? start() : otherwise;
+  return groupOn(name) ? gates.run(name, start) : otherwise;
 }
 
 /** Notes a check that fails the run; the walkthrough goes on, so every capture is still taken. */

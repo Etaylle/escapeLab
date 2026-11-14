@@ -9,9 +9,11 @@ import {
   groupClock,
   groupNames,
   groupOf,
+  misfiled,
   planGroups,
   reaches,
   spentText,
+  stepGates,
 } from './groups.mjs';
 
 /** The walkthrough's source, read as text: shots.mjs runs its walkthrough as it loads. */
@@ -77,6 +79,15 @@ describe('the capture groups against the walkthrough', () => {
     assert.deepEqual(stale, []);
   });
 
+  it('lets every group within the run need run, which pulls the mission in', () => {
+    const within = GROUPS.filter(({ name, stage }) => stage === 'run' && name !== 'run');
+    assert.ok(within.length >= 7, `only ${within.length} groups within the run`);
+    assert.deepEqual(
+      within.filter(({ needs }) => !needs.includes('run')).map(({ name }) => name),
+      [],
+    );
+  });
+
   it('gates the walkthrough’s steps by groups the table has, each of them', () => {
     const gates = gatesIn(SHOTS);
     assert.deepEqual(
@@ -103,6 +114,61 @@ describe('groupOf — the group a capture or a skip label belongs to', () => {
   it('finds no group for a name the table has nowhere', () => {
     assert.equal(groupOf('nowhere.png'), null);
     assert.equal(groupOf('game-laptop-13.jpg'), null);
+  });
+});
+
+describe('misfiled — a capture held to the group of the step that takes it', () => {
+  it('passes a capture its own group’s step takes', () => {
+    assert.equal(misfiled('menu.png', 'screens'), null);
+    assert.equal(misfiled('device-phone-932-notlicht.png', 'devices'), null);
+  });
+
+  it('fails a capture taken in another group’s step, as a misfiled one is', () => {
+    // cold-open.png is intro's: filed under screens, intro's step would take it all the same.
+    const said = misfiled('cold-open.png', 'screens') ?? '';
+    assert.ok(said.startsWith('cold-open.png: tools/groups.mjs files it under intro'), said);
+    assert.match(said, /but it was taken in a step of screens/);
+  });
+
+  it('fails a capture taken outside every step, and one no group files', () => {
+    assert.match(misfiled('menu.png', null) ?? '', /under screens, but it was taken outside/);
+    assert.match(misfiled('nowhere.png', 'run') ?? '', /nowhere\.png: no capture group names it/);
+  });
+});
+
+describe('stepGates — the gate of the step that runs now', () => {
+  it('names no group outside every step', () => {
+    assert.equal(stepGates().now(), null);
+  });
+
+  it('names the innermost step’s group, past an await and back out of it', async () => {
+    const gates = stepGates();
+    const seen = [];
+    await gates.run('run', async () => {
+      await Promise.resolve();
+      seen.push(gates.now());
+      await gates.run('devices', async () => {
+        await new Promise((done) => setTimeout(done, 5));
+        seen.push(gates.now());
+      });
+      seen.push(gates.now());
+    });
+    assert.deepEqual(seen, ['run', 'devices', 'run']);
+    assert.equal(gates.now(), null);
+  });
+
+  it('keeps each of two steps running side by side to its own group', async () => {
+    const gates = stepGates();
+    const later = (ms) => new Promise((done) => setTimeout(done, ms));
+    const step = (ms) => async () => {
+      await later(ms);
+      return gates.now();
+    };
+    const groups = await Promise.all([
+      gates.run('intro', step(10)),
+      gates.run('screens', step(1)),
+    ]);
+    assert.deepEqual(groups, ['intro', 'screens']);
   });
 });
 

@@ -5,8 +5,10 @@
  * SHOTS_ONLY and SHOTS_SKIP pick the groups a run plays (`planGroups`): a group that needs
  * another pulls it in, unless SHOTS_SKIP leaves that one out, which refuses the group. The
  * walkthrough goes only as far as the groups on reach (`reaches`), and the time each group took
- * is counted as it goes (`groupClock`).
+ * is counted as it goes (`groupClock`). Each step runs under its group's gate (`stepGates`), and
+ * a capture its step's group does not file fails the run (`misfiled`).
  */
+import { AsyncLocalStorage } from 'node:async_hooks';
 
 /**
  * The walkthrough's stages in the order a run plays them: the drills, each in a room of its own
@@ -295,6 +297,39 @@ export function groupOf(capture) {
   const exact = GROUPS.find((group) => group.captures.includes(capture));
   const found = exact ?? GROUPS.find((group) => group.captures.some((e) => names(e, capture)));
   return found?.name ?? null;
+}
+
+/**
+ * The gate of the step that runs now: `run(group, step)` runs `step` as that group's — and with
+ * it all it awaits and all it starts — and `now` names the group of the innermost step running;
+ * null outside every step.
+ */
+export function stepGates() {
+  const store = new AsyncLocalStorage();
+  return {
+    run: (group, step) => store.run(group, step),
+    now: () => store.getStore() ?? null,
+  };
+}
+
+/**
+ * What is wrong with `capture` — a file name or a skip line's label — taken in a step of the
+ * group `step` (null outside every step): a name no group files, or one the table files under
+ * another group than the step's. Null where it is its step's group's own.
+ */
+export function misfiled(capture, step) {
+  const group = groupOf(capture);
+  if (group === null) {
+    return `${capture}: no capture group names it — add it to tools/groups.mjs`;
+  }
+  if (group === step) {
+    return null;
+  }
+  const where = step === null ? 'outside every group' : `in a step of ${step}`;
+  return (
+    `${capture}: tools/groups.mjs files it under ${group}, but it was taken ${where} — ` +
+    `gate the step by ${group}, or file the capture under the step's group`
+  );
 }
 
 /**
