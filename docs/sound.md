@@ -1620,7 +1620,7 @@ sideways, and the pack kept across a reload until „Zurücksetzen" brings the s
 
 - `menu-theme`: „Futuristic ambient (3)“ – Alexandr Zhelanov (https://www.youtube.com/channel/UCxmng6_DMIayDwkiWGVzVRQ?view_as=subscriber Alexandr Zhelanov https://soundcloud.com/alexandr-zhelanov) · https://opengameart.org/content/futuristic-ambient · Creative Commons Attribution 4.0 International: https://creativecommons.org/licenses/by/4.0/ · bearbeitet: Schnitt, Schleife, Pegel
 - `lobby`: „A Skeletons in the Closet“ – Alexandr Zhelanov (https://www.youtube.com/c/AlexandrZhelanovsMusic) · https://opengameart.org/content/a-skeletons-in-the-closet · Creative Commons Attribution 4.0 International: https://creativecommons.org/licenses/by/4.0/ · bearbeitet: Schnitt, Schleife, Pegel
-- `title`: „Behind the Universe“ – Alexandr Zhelanov (Alexandr Zhelanov https://soundcloud.com/alexandr-zhelanov) · https://opengameart.org/content/behind-the-universe · Creative Commons Attribution 4.0 International: https://creativecommons.org/licenses/by/4.0/ · bearbeitet: Schnitt, Schleife, Pegel
+- `title`: „Behind the Universe“ – Alexandr Zhelanov (Alexandr Zhelanov https://soundcloud.com/alexandr-zhelanov) · https://opengameart.org/content/behind-the-universe · Creative Commons Attribution 3.0: https://creativecommons.org/licenses/by/3.0/ · bearbeitet: Schnitt, Schleife, Pegel
 - `calm`: „Futuristic ambient (2)“ – Alexandr Zhelanov (https://www.youtube.com/channel/UCxmng6_DMIayDwkiWGVzVRQ?view_as=subscriber Alexandr Zhelanov https://soundcloud.com/alexandr-zhelanov) · https://opengameart.org/content/futuristic-ambient · Creative Commons Attribution 4.0 International: https://creativecommons.org/licenses/by/4.0/ · bearbeitet: Schnitt, Schleife, Pegel
 - `tense`: „Electron“ – Alexandr Zhelanov (https://www.youtube.com/channel/UCxmng6_DMIayDwkiWGVzVRQ?view_as=subscriber Alexandr Zhelanov https://soundcloud.com/alexandr-zhelanov) · https://opengameart.org/content/futuristic-ambient · Creative Commons Attribution 4.0 International: https://creativecommons.org/licenses/by/4.0/ · bearbeitet: Schnitt, Schleife, Pegel
 - `critical`: „Uncatchable“ – Alexandr Zhelanov (Alexandr Zhelanov https://soundcloud.com/alexandr-zhelanov) · https://opengameart.org/content/uncatchable · Creative Commons Attribution 4.0 International: https://creativecommons.org/licenses/by/4.0/ · bearbeitet: Schnitt, Schleife, Pegel
@@ -1643,7 +1643,7 @@ licence is used.
 | 82 effects and beds | `public/sfx/` | ElevenLabs text to sound effects | 2026-10-26 to 2026-11-04 | paid Creator plan: commercial use, no credit |
 | 8 pieces of music: 3 stems, 2 stings, the menu's theme and the end cards' two themes | `public/music/packs/nachtschicht/*.mp3`, the stings `public/music/*.mp3` | Eleven Music | 2026-10-26, the themes 2026-11-13 | paid Creator plan, Eleven Music's terms (below) |
 | The score: 8 pieces cut from one suite, `score` | `public/music/packs/nachtschicht/*.m4a` | Eleven Music, `music_v2_5`, a composition plan | awaits the user's render | as the music; once kept, it replaces the pieces of the row above but for the stings |
-| 32 pieces in four music packs: `yalciner`, `cheremisinov`, `macleod`, `zhelanov` | `public/music/packs/<pack>/*.m4a` | İlker Yalçıner, Sergey Cheremisinov, Lee Rosevere, Rafael Krux, Kevin MacLeod, Alexandr Zhelanov; from OpenGameArt, the Free Music Archive, incompetech and FreePD's archive on Hugging Face | fetched, cut and levelled 2026-11-14 | CC BY 4.0 with the attribution each pack carries; Rafael Krux's „Cornfield Chase" CC0 (below) |
+| 32 pieces in four music packs: `yalciner`, `cheremisinov`, `macleod`, `zhelanov` | `public/music/packs/<pack>/*.m4a` | İlker Yalçıner, Sergey Cheremisinov, Lee Rosevere, Rafael Krux, Kevin MacLeod, Alexandr Zhelanov; from OpenGameArt, the Free Music Archive, incompetech and FreePD's archive on Hugging Face | fetched, cut and levelled 2026-11-14 | CC BY 4.0 with the attribution each pack carries; Alexandr Zhelanov's „Behind the Universe" CC BY 3.0, Rafael Krux's „Cornfield Chase" CC0 (below) |
 | The opening's cue | `public/intro/title.mp3` | Eleven Music | 2026-10-26 | as the music; the score's `title` plays in its place once kept |
 | 52 lines of the Leitstelle, 48 more awaiting their render | `public/voice/` | ElevenLabs text to speech: the library voice „Helmut", and the plant's voice made with Voice Design once it is | 47 on 2026-10-25, 5 on 2026-10-26 | see below |
 | Kalam, the notepad's hand | `public/fonts/` | Indian Type Foundry, 2014 | shipped since 2026-11-01 | SIL Open Font License 1.1, its text beside it |
@@ -1683,11 +1683,13 @@ own.
 commercially, as long as it is credited — its title, its author, where it came from, the licence
 with its link — and a change is marked; CC0 asks nothing. Every licence was read on the piece's own
 page on 2026-11-14, track by track: Cheremisinov's pages on the Free Music Archive mix BY and BY-NC,
-and every piece of his taken here is BY 4.0 on its page. Every found piece carries its attribution
-in its pack (Musikpakete, „Attributions"), „bearbeitet: Schnitt, Schleife, Pegel" marking the cut,
-the loop and the level, and the game shows it wherever the piece can be chosen: „Nennungen" in the
-settings for every piece in play, `/sounds` for all of them. A CC0 piece keeps its line as the
-record of where it came from. Three things to know:
+and every piece of his taken here is BY 4.0 on its page. The review of that day found one licence
+taken down wrong: „Behind the Universe" is CC BY 3.0 on its OpenGameArt page, not 4.0 — corrected,
+its deed with it, and every OpenGameArt page of the plan read again. Every found piece carries its
+attribution in its pack (Musikpakete, „Attributions"), „bearbeitet: Schnitt, Schleife, Pegel"
+marking the cut, the loop and the level, and the game shows it wherever the piece can be chosen:
+„Nennungen" in the settings for every piece in play, `/sounds` for all of them. A CC0 piece keeps
+its line as the record of where it came from. Three things to know:
 
 - **YouTube.** Kevin MacLeod's music is pre-registered with Content ID (incompetech, „YouTube
   Content ID"): a video of the game playing his pack is claimed where its description does not
