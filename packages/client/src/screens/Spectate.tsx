@@ -1,5 +1,5 @@
 import type { PlayerPosition, DronePosition, SpectatorView } from '@escapelab/core';
-import { formatLeft, serverNow, timeLeft } from '../clock.js';
+import { clockText, serverNow } from '../clock.js';
 import { useServerNow } from '../hooks.js';
 import type { DeviceRun } from '../puzzles/Device.js';
 import { pressingWord } from '../puzzles/syncPress.js';
@@ -199,8 +199,9 @@ export function SpectateScreen({
   chatsRef,
   leaveRoom,
 }: Props) {
-  // The mission's clock on the server's, standing still while the run is paused (clock.ts).
-  const left = timeLeft(view, useServerNow(250));
+  // The mission's clock on the server's, standing still while the run is paused (clock.ts):
+  // the time left, or the time run where the mission has no clock.
+  const shown = clockText(view, useServerNow(250));
   // The audience sees the lights fail too, unless it came in after.
   const darkSince = useDarkSince(view.lights, view.startedAt);
 
@@ -218,9 +219,7 @@ export function SpectateScreen({
           <h1>{view.missionTitle}</h1>
         </div>
         <div className="spectate-stats">
-          {left !== null && view.phase === 'playing' && (
-            <span className="countdown">{formatLeft(left)}</span>
-          )}
+          {shown !== null && view.phase === 'playing' && <span className="countdown">{shown}</span>}
           <span className="pill">
             {view.currentPuzzleIndex}/{view.puzzleCount} Stationen · {view.penaltySeq} Alarme
           </span>

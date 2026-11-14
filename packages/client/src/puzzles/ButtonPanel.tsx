@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { formatLeft, timeLeft, type MissionTime } from '../clock.js';
+import { clockText, type MissionTime } from '../clock.js';
 import { useServerNow } from '../hooks.js';
 import { Icon } from '../screens/Icon.js';
 import type { PanelProps } from './index.js';
@@ -31,11 +31,11 @@ const MISTAKES: Record<NonNullable<ButtonPuzzle['lastResult']>, string> = {
 
 /**
  * The mission clock again, worked out like the HUD's — on the server's clock, standing still
- * while the run is paused — so the operator need not look away.
+ * while the run is paused, counting the time run where the mission has no clock — so the
+ * operator need not look away.
  */
 function MissionClock({ mission }: { mission: MissionTime }) {
-  const left = timeLeft(mission, useServerNow(200));
-  const text = left === null ? '--:--' : formatLeft(left);
+  const text = clockText(mission, useServerNow(200)) ?? '--:--';
   return (
     <div className="button-clock">
       <span className="button-clock-label">MISSIONSUHR</span>

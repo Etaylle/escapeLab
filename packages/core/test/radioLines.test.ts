@@ -402,8 +402,11 @@ describe.each(byId)('the radio in mission %s', (_id, mission) => {
   });
 
   it('has a line for every station: its own nudge, or the line that sends the crew there', () => {
-    const silent = mission.puzzles.filter((puzzle, i) => {
-      const before = i === 0 ? mission.radio.start : mission.puzzles[i - 1]?.onSolved;
+    // A chain's only: in free order the crew picks the next station itself, and no line sends it
+    // to one.
+    const chain = mission.order === 'chain' ? mission.puzzles : [];
+    const silent = chain.filter((puzzle, i) => {
+      const before = i === 0 ? mission.radio.start : chain[i - 1]?.onSolved;
       return puzzle.nudges.length === 0 && before === undefined;
     });
     expect(silent.map((puzzle) => puzzle.id)).toEqual([]);

@@ -1,0 +1,310 @@
+{
+  "id": "uebungshalle",
+  "title": "Übungshalle",
+  "subtitle": "Jede Station der Anlage einmal, die Regeln daneben, ohne Uhr",
+  "listOrder": 25,
+  "order": "free",
+  "lit": true,
+  "players": { "min": 2, "max": 3 },
+  "story": {
+    "intro": "Übungshalle der Forschungsanlage Kaltenbrunn: Jede Maschine der Anlage steht hier einmal, ihre Betriebsanleitung daneben. Keine Uhr läuft, keine Drohne fliegt.",
+    "win": "Jede Station abgenommen. Die Halle steht für die nächste Schicht bereit.",
+    "lose": "Die Übung endet vor der letzten Station. Die Halle bleibt für die nächste Schicht offen."
+  },
+  "timeLimitSec": 0,
+  "hintDelaySec": 20,
+  "maxAlarms": null,
+  "puzzles": [
+    { "type": "button-sync", "id": "button-sync", "title": "Synchrontaster", "hints": [] },
+    {
+      "type": "wiring",
+      "id": "wiring",
+      "title": "Brückenkasten",
+      "hints": [
+        "Einweisung: Erst die Kabel von oben zählen; dann gilt die Liste zu dieser Zahl und ihre erste passende Regel.",
+        "Einweisung: Kennung, Leuchten und Zellen stehen auf dem Kennungsschild am Eingang der Halle."
+      ]
+    },
+    {
+      "type": "keypad",
+      "id": "keypad",
+      "title": "Zeichentastenfeld",
+      "hints": [
+        "Einweisung: Nur eine Spalte der Tafel enthält alle vier Zeichen; dort gilt die Folge von oben nach unten."
+      ]
+    },
+    {
+      "type": "switches",
+      "id": "switches",
+      "title": "Kippschalterbank",
+      "hints": [
+        "Einweisung: Jeder Schalter hat seine eigene Zeile. Erst alle sechs stellen, dann PRÜFEN.",
+        "Einweisung: Für die Zeilen mit „wenn“ zählen Endziffer der Kennung, Zellen und Leuchte SIG."
+      ]
+    },
+    {
+      "type": "simon",
+      "id": "simon",
+      "title": "Abgleichpanel",
+      "hints": [
+        "Einweisung: Die Kennung wählt die Tabelle, der Alarmstand die Zeile, die blinkende Farbe die Spalte.",
+        "Einweisung: Nach einem Alarm gilt die nächste Zeile, und die Stufe beginnt von vorn."
+      ]
+    },
+    {
+      "type": "maze",
+      "id": "maze",
+      "title": "Leitungsnetz",
+      "hints": [
+        "Einweisung: Nur der Schaltplan zeigt die Wände, das Pult nur Prüfkopf und Ziel. Vom Ziel rückwärts ist der Weg kurz."
+      ]
+    },
+    {
+      "type": "memory",
+      "id": "memory",
+      "title": "Speicherbank",
+      "hints": [
+        "Einweisung: Zu jeder Stufe Platz und Ziffer der angenommenen Taste notieren; die Bank zeigt sie später nicht."
+      ]
+    },
+    {
+      "type": "morse",
+      "id": "morse",
+      "title": "Funkfeuer",
+      "hints": [
+        "Einweisung: Das Wort beginnt nach der langen Pause. Drei Buchstaben genügen für die Frequenztabelle."
+      ]
+    },
+    {
+      "type": "button",
+      "id": "button",
+      "title": "Druckknopf",
+      "hints": [
+        "Einweisung: Die Uhr der Halle zählt vorwärts; die gesuchte Ziffer kommt an der letzten Stelle binnen zehn Sekunden."
+      ]
+    },
+    {
+      "type": "signal",
+      "id": "signal",
+      "title": "Signalkette",
+      "hints": [
+        "Einweisung: Ein Pult zeigt die Folge, das Gegenpult quittiert sie. Es zählen Farbe und Form, nie die Lage der Taste."
+      ]
+    },
+    {
+      "type": "circuit",
+      "id": "circuit",
+      "title": "Sicherungskasten",
+      "hints": [
+        "Einweisung: Der Kasten zeigt Farben, das Prüfpult Spannungen. Nach jedem Schnitt alle ganzen Kabel neu messen."
+      ]
+    },
+    {
+      "type": "servers",
+      "id": "servers",
+      "title": "Rechnernetz",
+      "hints": [
+        "Einweisung: Zuerst den Dienst mit E50 vom Strom nehmen, dann von NETZ aus in der Folge des Netzplans hochfahren."
+      ]
+    },
+    {
+      "type": "access",
+      "id": "access",
+      "title": "Zugangskontrolle",
+      "tokenSec": 15,
+      "hints": [
+        "Einweisung: Erst die Tür am Terminal, dann auf der Benutzerliste das Konto, dessen Rolle sie freigibt.",
+        "Einweisung: Den Token erst eingeben, wenn das Tokengerät dieses Konto zeigt."
+      ]
+    }
+  ],
+  "map": {
+    "tiles": [
+      "########################################",
+      "#......................................#",
+      "#......................................#",
+      "#......................................#",
+      "#......................................#",
+      "#......................................#",
+      "#......................................#",
+      "#......................................#",
+      "#......................................#",
+      "#......................................#",
+      "#......................................#",
+      "#......................................#",
+      "#......................................#",
+      "#......................................#",
+      "#......................................#",
+      "#......................................#",
+      "#......................................#",
+      "#......................................#",
+      "#......................................#",
+      "#......................................#",
+      "#......................................#",
+      "#......................................#",
+      "#......................................#",
+      "#......................................#",
+      "#......................................#",
+      "#......................................#",
+      "#......................................#",
+      "#......................................#",
+      "#......................................#",
+      "#......................................#",
+      "#......................................#",
+      "#......................................#",
+      "########################################"
+    ],
+    "spawns": [{ "x": 17, "y": 30 }, { "x": 20, "y": 30 }, { "x": 23, "y": 30 }],
+    "stations": [
+      { "puzzleId": "button-sync", "x": 3, "y": 2 },
+      { "puzzleId": "wiring", "x": 12, "y": 2 },
+      { "puzzleId": "keypad", "x": 21, "y": 2 },
+      { "puzzleId": "switches", "x": 30, "y": 2 },
+      { "puzzleId": "simon", "x": 3, "y": 9 },
+      { "puzzleId": "maze", "x": 12, "y": 9 },
+      { "puzzleId": "memory", "x": 21, "y": 9 },
+      { "puzzleId": "morse", "x": 30, "y": 9 },
+      { "puzzleId": "button", "x": 3, "y": 16 },
+      { "puzzleId": "signal", "x": 12, "y": 16, "console": "a" },
+      { "puzzleId": "signal", "x": 17, "y": 16, "console": "b" },
+      { "puzzleId": "circuit", "x": 21, "y": 16, "console": "a" },
+      { "puzzleId": "circuit", "x": 26, "y": 16, "console": "b" },
+      { "puzzleId": "servers", "x": 30, "y": 16, "console": "a" },
+      { "puzzleId": "servers", "x": 35, "y": 16, "console": "b" },
+      { "puzzleId": "access", "x": 3, "y": 23, "console": "a" },
+      { "puzzleId": "access", "x": 8, "y": 23, "console": "b" }
+    ],
+    "labels": [
+      { "text": "ÜBUNGSHALLE", "x": 20, "y": 29 },
+      { "text": "SYNCHRONTASTER · ST-2", "x": 5, "y": 5 },
+      { "text": "BRÜCKENKASTEN · NB-6", "x": 14, "y": 5 },
+      { "text": "ZEICHENTASTENFELD · ZT-4", "x": 23, "y": 5 },
+      { "text": "KIPPSCHALTERBANK · KS-6", "x": 32, "y": 5 },
+      { "text": "ABGLEICHPANEL · FA-4", "x": 5, "y": 12 },
+      { "text": "LEITUNGSNETZ · LN-8", "x": 14, "y": 12 },
+      { "text": "SPEICHERBANK · SB-5", "x": 23, "y": 12 },
+      { "text": "FUNKFEUER · FF-16", "x": 32, "y": 12 },
+      { "text": "DRUCKKNOPF · DK-1", "x": 5, "y": 19 },
+      { "text": "SIGNALKETTE · SK-4", "x": 14, "y": 18 },
+      { "text": "SICHERUNGSKASTEN · SP-12", "x": 23, "y": 18 },
+      { "text": "RECHNERNETZ · RN-6", "x": 32, "y": 18 },
+      { "text": "ZUGANGSKONTROLLE · ZK-2", "x": 5, "y": 25 }
+    ],
+    "decor": [
+      { "kind": "desk", "x": 9, "y": 2 },
+      { "kind": "desk", "x": 18, "y": 2 },
+      { "kind": "desk", "x": 27, "y": 2 },
+      { "kind": "desk", "x": 36, "y": 2 },
+      { "kind": "desk", "x": 9, "y": 9 },
+      { "kind": "desk", "x": 18, "y": 9 },
+      { "kind": "desk", "x": 27, "y": 9 },
+      { "kind": "desk", "x": 36, "y": 9 },
+      { "kind": "desk", "x": 9, "y": 16 },
+      { "kind": "desk", "x": 16, "y": 20 },
+      { "kind": "desk", "x": 25, "y": 20 },
+      { "kind": "desk", "x": 34, "y": 20 },
+      { "kind": "desk", "x": 7, "y": 27 }
+    ],
+    "manuals": [
+      {
+        "id": "anleitung-button-sync",
+        "kind": "book",
+        "label": "ANLEITUNG SYNCHRONTASTER",
+        "puzzleIds": ["button-sync"],
+        "spots": [{ "x": 8, "y": 2 }]
+      },
+      {
+        "id": "anleitung-wiring",
+        "kind": "book",
+        "label": "ANLEITUNG BRÜCKENKASTEN",
+        "puzzleIds": ["wiring"],
+        "spots": [{ "x": 17, "y": 2 }]
+      },
+      {
+        "id": "anleitung-keypad",
+        "kind": "book",
+        "label": "ANLEITUNG ZEICHENTASTENFELD",
+        "puzzleIds": ["keypad"],
+        "spots": [{ "x": 26, "y": 2 }]
+      },
+      {
+        "id": "anleitung-switches",
+        "kind": "book",
+        "label": "ANLEITUNG KIPPSCHALTERBANK",
+        "puzzleIds": ["switches"],
+        "spots": [{ "x": 35, "y": 2 }]
+      },
+      {
+        "id": "anleitung-simon",
+        "kind": "book",
+        "label": "ANLEITUNG ABGLEICHPANEL",
+        "puzzleIds": ["simon"],
+        "spots": [{ "x": 8, "y": 9 }]
+      },
+      {
+        "id": "anleitung-maze",
+        "kind": "book",
+        "label": "ANLEITUNG LEITUNGSNETZ",
+        "puzzleIds": ["maze"],
+        "spots": [{ "x": 17, "y": 9 }]
+      },
+      {
+        "id": "anleitung-memory",
+        "kind": "book",
+        "label": "ANLEITUNG SPEICHERBANK",
+        "puzzleIds": ["memory"],
+        "spots": [{ "x": 26, "y": 9 }]
+      },
+      {
+        "id": "anleitung-morse",
+        "kind": "book",
+        "label": "ANLEITUNG FUNKFEUER",
+        "puzzleIds": ["morse"],
+        "spots": [{ "x": 35, "y": 9 }]
+      },
+      {
+        "id": "anleitung-button",
+        "kind": "book",
+        "label": "ANLEITUNG DRUCKKNOPF",
+        "puzzleIds": ["button"],
+        "spots": [{ "x": 8, "y": 16 }]
+      },
+      {
+        "id": "anleitung-signal",
+        "kind": "book",
+        "label": "ANLEITUNG SIGNALKETTE",
+        "puzzleIds": ["signal"],
+        "spots": [{ "x": 15, "y": 20 }]
+      },
+      {
+        "id": "anleitung-circuit",
+        "kind": "book",
+        "label": "ANLEITUNG SICHERUNGSKASTEN",
+        "puzzleIds": ["circuit"],
+        "spots": [{ "x": 24, "y": 20 }]
+      },
+      {
+        "id": "anleitung-servers",
+        "kind": "book",
+        "label": "ANLEITUNG RECHNERNETZ",
+        "puzzleIds": ["servers"],
+        "spots": [{ "x": 33, "y": 20 }]
+      },
+      {
+        "id": "anleitung-access",
+        "kind": "book",
+        "label": "ANLEITUNG ZUGANGSKONTROLLE",
+        "puzzleIds": ["access"],
+        "spots": [{ "x": 6, "y": 27 }]
+      }
+    ],
+    "notes": [
+      {
+        "x": 23,
+        "y": 32,
+        "text": "Übungshalle · Jede Station steht offen; die Regeln liegen daneben"
+      }
+    ],
+    "edgeworkSign": { "x": 17, "y": 31 }
+  }
+}

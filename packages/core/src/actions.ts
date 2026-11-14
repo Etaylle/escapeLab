@@ -41,12 +41,13 @@ import {
   type RelayState,
 } from './puzzles/relay.js';
 import {
-  armedStations,
   backupsOf,
   consoleOf,
   operatorsOf,
+  picking,
   readersOf,
   sourceOpen,
+  stationArmed,
   stationKey,
 } from './map.js';
 import type { Spot } from './reach.js';
@@ -859,12 +860,29 @@ function puzzleContext(state: GameState, at: number, from: ConsoleId | null): Pu
       state.deadlineAt === null
         ? state.mission.timeLimitSec
         : Math.max(0, Math.ceil((state.deadlineAt - at) / 1000)),
+    ...countedUp(state, at),
     at,
     crew: crewOf(state).map((p) => p.id),
     console: from,
     atConsoles: presentAtConsoles(state, from),
     readers: from === null || open === undefined ? [] : readersOf(state, open.id),
   };
+}
+
+/**
+ * Where the mission has no clock, the seconds it has counted up at `at` — the time run since the
+ * lights went out, its pauses left out (`clockFrom`) — as every screen shows them; nothing where
+ * a clock counts down, and while the lights are on.
+ */
+function countedUp(state: GameState, at: number): Pick<PuzzleContext, 'elapsedSec'> {
+  return hasClock(state.mission) || state.clockFrom === null
+    ? {}
+    : { elapsedSec: Math.max(0, Math.floor((at - state.clockFrom) / 1000)) };
+}
+
+/** Whether a mission's run counts down against a clock: a time limit above 0. */
+export function hasClock(mission: Pick<Mission, 'timeLimitSec'>): boolean {
+  return mission.timeLimitSec > 0;
 }
 
 /**
@@ -944,9 +962,21 @@ function initPuzzleState(state: GameState, index: number, at: number): PuzzleSta
   if (def === undefined) {
     throw new Error(`mission "${state.mission.id}" has no puzzle at index ${index}`);
   }
-  // Distinct deterministic stream per puzzle.
-  const rng = mulberry32(((state.seed ?? 0) + index * 7919) >>> 0);
+  // Distinct deterministic stream per puzzle: by its place in a chain; by its id in free
+  // order, where the place is the crew's pick, so that a station deals the same in any order.
+  const stream = state.mission.order === 'free' ? idStream(def.id) : index;
+  const rng = mulberry32(((state.seed ?? 0) + stream * 7919) >>> 0);
   return moduleFor(def.type).init(def, rng, puzzleContext(state, at, null));
+}
+
+/** A puzzle id as a number to key its stream by: FNV-1a over its text, 32 bits. */
+function idStream(id: string): number {
+  let hash = 0x811c9dc5;
+  for (const char of id) {
+    hash ^= char.charCodeAt(0);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return hash >>> 0;
 }
 
 /**
@@ -1105,6 +1135,7 @@ function startMission(
     phase: 'playing',
     players: drawSpawns(crew, map.spawns, seed),
     currentPuzzleIndex: 0,
+    picked: false,
     puzzleState: null,
     seed,
     // The Tagesschicht a run plays is the day it starts on, by the server's clock.
@@ -1139,6 +1170,7 @@ function startMission(
     lightsOutAt: null,
     lightsDueAt: intro === undefined ? null : action.at + intro.lightsSec * 1000,
     deadlineAt: null,
+    clockFrom: null,
     finishedAt: null,
     penaltySeq: 0,
     lastPenaltySec: null,
@@ -1196,18 +1228,22 @@ function introDone(state: GameState, action: { playerId: string; at: number }): 
 }
 
 /**
- * From `at` on the lights are out and the clock runs; mission control opens the run, and the
- * first station, up from now, is quiet from now. A call of the clock at or above the whole time
- * the run has — five minutes left, in a run of five — is behind it from the start.
+ * From `at` on the lights are out and the clock runs — down to the deadline, or, where the
+ * mission has none, up from `at`; mission control opens the run, and the first station, up from
+ * now, is quiet from now. In free order no station is up before the crew switches one on. A call
+ * of the clock at or above the whole time the run has — five minutes left, in a run of five — is
+ * behind it from the start: a run without a clock has every call behind it.
  */
 function clockStarts(state: GameState, at: number): GameState {
-  const limitSec = state.mission.timeLimitSec;
+  const { mission } = state;
+  const limitSec = mission.timeLimitSec;
   const running: GameState = {
     ...state,
     lightsOutAt: at,
     lightsDueAt: null,
-    deadlineAt: at + limitSec * 1000,
-    quietSince: at,
+    deadlineAt: hasClock(mission) ? at + limitSec * 1000 : null,
+    clockFrom: at,
+    quietSince: mission.order === 'free' ? null : at,
     nudgesGiven: 0,
     clockCalls: CLOCK_CALLS.filter((call) => call.sec >= limitSec).length,
   };
@@ -1250,6 +1286,7 @@ function advance(state: GameState, at: number): GameState {
   const reported = logEvent(
     {
       ...state,
+      picked: false,
       hintsRevealed: 0,
       hintReadyAt: null,
       readersCredited: [],
@@ -1273,10 +1310,13 @@ function advance(state: GameState, at: number): GameState {
       );
       return logRadio(unlocked, 'escape', state.mission.radio.escape, at);
     }
-    return wonNow(logged, at, 'Alle Systeme online');
+    // No hatch: the last solve wins the run, and every station counts as solved, as on the way out.
+    return wonNow({ ...logged, currentPuzzleIndex: nextIndex }, at, 'Alle Systeme online');
   }
-  // The next puzzle waits at its station, quiet from now.
-  return { ...logged, currentPuzzleIndex: nextIndex, puzzleState: null, quietSince: at };
+  // In a chain the next puzzle waits at its station, quiet from now; in free order every
+  // station still to solve waits for the crew's pick, and none is up before it.
+  const quietSince = state.mission.order === 'free' ? null : at;
+  return { ...logged, currentPuzzleIndex: nextIndex, puzzleState: null, quietSince };
 }
 
 /**
@@ -1358,27 +1398,47 @@ export const EMERGENCY_MISSED = 'Notfall nicht rechtzeitig behoben';
 export const EMERGENCY_CLEARED = 'Notfall behoben';
 
 /**
+ * What taking `sec` seconds off the clock at `at` comes to: what it costs and the deadline it
+ * leaves — where the mission has no clock, nothing, and the deadline as it stands (none).
+ */
+function timeOff(
+  state: GameState,
+  sec: number,
+  at: number,
+): { cost: number | null; deadlineAt: number | null } {
+  return hasClock(state.mission)
+    ? { cost: sec, deadlineAt: (state.deadlineAt ?? at) - sec * 1000 }
+    : { cost: null, deadlineAt: state.deadlineAt };
+}
+
+/** Whether the clock has run out at `at`, against `deadlineAt`; never without one. */
+function overdue(deadlineAt: number | null, at: number): boolean {
+  return deadlineAt !== null && at >= deadlineAt;
+}
+
+/**
  * Sound the alarm: count it and shrink the deadline. Every alarm of the run
  * comes through here — a wrong move at a station or an emergency console, a
  * drone sighting, an emergency that ran out. The alarm that reaches the
  * mission's limit loses the run at once, whatever is left on the clock; so
- * does one whose penalty eats the rest of the time.
+ * does one whose penalty eats the rest of the time. Without a clock it costs
+ * no time and is logged without seconds.
  */
 function applyPenalty(state: GameState, sec: number, at: number, reason: string): GameState {
-  const deadlineAt = (state.deadlineAt ?? at) - sec * 1000;
+  const { cost, deadlineAt } = timeOff(state, sec, at);
   const penaltySeq = state.penaltySeq + 1;
   const punished = logEvent(
-    { ...state, deadlineAt, penaltySeq, lastPenaltySec: sec },
+    { ...state, deadlineAt, penaltySeq, lastPenaltySec: cost },
     'penalty',
     reason,
     at,
-    sec,
+    cost,
   );
   const limit = state.mission.maxAlarms;
   if (typeof limit === 'number' && penaltySeq >= limit) {
     return lostNow(punished, at, TOO_MANY_ALARMS);
   }
-  return at >= deadlineAt ? lostNow(punished, at) : firstAlarm(punished, reason, at);
+  return overdue(deadlineAt, at) ? lostNow(punished, at) : firstAlarm(punished, reason, at);
 }
 
 /**
@@ -1393,11 +1453,13 @@ function firstAlarm(state: GameState, reason: string, at: number): GameState {
 
 /**
  * The run is won at `at`, its report's last line `how`; the operator's last word on it follows,
- * by the time it left (radio.ts `wonBand`), for the end card to play.
+ * by the time it left (radio.ts `wonBand`), for the end card to play — a run without a clock
+ * ran short of none, and hears the word for time to spare.
  */
 function wonNow(state: GameState, at: number, how: string): GameState {
   const finished = logEvent(overNow(state, 'won', at), 'finish', how, at);
-  const band = wonBand((state.deadlineAt ?? at) - at);
+  const left = state.deadlineAt === null ? Number.POSITIVE_INFINITY : state.deadlineAt - at;
+  const band = wonBand(left);
   return logRadio(finished, 'won', state.mission.radio.won?.[band], at, band);
 }
 
@@ -1596,6 +1658,7 @@ function setPaused(state: GameState, action: { paused: boolean; at: number }): G
     paused: null,
     lightsDueAt: later(state.lightsDueAt, frozen),
     deadlineAt: later(state.deadlineAt, frozen),
+    clockFrom: later(state.clockFrom, frozen),
     sabotage: state.sabotage === null ? null : shiftSabotage(state.sabotage, frozen),
     hintReadyAt: later(state.hintReadyAt, frozen),
     quietSince: later(state.quietSince, frozen),
@@ -1738,8 +1801,8 @@ function creditWorkers(state: GameState, def: PuzzleDef, playerId: string): Game
 /**
  * The last shift left notes beside the rules: a player reading the open
  * station's rules may ask for them, one at a time. A note costs time like a
- * penalty but is no alarm, so it leaves the alarm counter alone; the next
- * one only comes after another wait.
+ * penalty — none without a clock — but is no alarm, so it leaves the alarm
+ * counter alone; the next one only comes after another wait.
  */
 function requestHint(state: GameState, action: { playerId: string; at: number }): GameState {
   const ctx = requirePlaying(state, action.playerId, action.at);
@@ -1757,7 +1820,7 @@ function requestHint(state: GameState, action: { playerId: string; at: number })
     fail('Die nächste Notiz braucht noch einen Moment.');
   }
   const { hintCostSec, hintDelaySec } = state.mission;
-  const deadlineAt = (state.deadlineAt ?? action.at) - hintCostSec * 1000;
+  const { cost, deadlineAt } = timeOff(state, hintCostSec, action.at);
   const helped = logEvent(
     {
       ...credited(state, ctx.player.id, 'hints'),
@@ -1769,9 +1832,9 @@ function requestHint(state: GameState, action: { playerId: string; at: number })
     'hint',
     hint,
     action.at,
-    hintCostSec,
+    cost,
   );
-  return action.at >= deadlineAt ? lostNow(helped, action.at) : helped;
+  return overdue(deadlineAt, action.at) ? lostNow(helped, action.at) : helped;
 }
 
 /**
@@ -1786,9 +1849,10 @@ export const NUDGED = 'Leitstelle meldet sich';
 /**
  * When mission control next speaks up about the station that is up, epoch ms: NUDGE_QUIET_MS
  * after it went quiet, while the mission has a line left for it — the second only after
- * another quiet spell. Null between stations, in an emergency, while paused, outside a run,
- * once its lines are said and where the mission has none (on „hart" `scaleMission` takes them
- * away).
+ * another quiet spell. Null between stations — in free order until the crew has switched one
+ * on —, in an emergency, while paused, outside a run, once its lines are said, where the
+ * mission has none (on „hart" `scaleMission` takes them away) and where it has no clock: with
+ * no time running out, nobody is hurried.
  */
 export function nudgeDueAt(state: GameState): number | null {
   const def = state.mission.puzzles[state.currentPuzzleIndex];
@@ -1798,7 +1862,8 @@ export function nudgeDueAt(state: GameState): number | null {
     state.sabotage !== null ||
     state.quietSince === null ||
     def === undefined ||
-    state.nudgesGiven >= def.nudges.length
+    state.nudgesGiven >= def.nudges.length ||
+    !hasClock(state.mission)
   ) {
     return null;
   }
@@ -2066,14 +2131,16 @@ function readNote(
 }
 
 /**
- * Spatial proximity to the station is validated by the server (it owns the
- * live positions); the reducer enforces everything else.
+ * E at a station switches it on. Spatial proximity to the station is validated by the server
+ * (it owns the live positions); the reducer enforces everything else. In a chain that is the
+ * station up; while a free-order run waits for its pick, the station still to solve whose
+ * console the player stands at, which then moves up (`takeUp`).
  */
 function handleInteract(state: GameState, action: { playerId: string; at: number }): GameState {
   if (state.phase !== 'playing') {
     fail(NO_RUN);
   }
-  if (state.deadlineAt !== null && action.at >= state.deadlineAt) {
+  if (overdue(state.deadlineAt, action.at)) {
     return lostNow(state, action.at);
   }
   if (state.paused !== null) {
@@ -2086,15 +2153,51 @@ function handleInteract(state: GameState, action: { playerId: string; at: number
     fail('Die Station läuft schon.');
   }
   findPlayer(state, action.playerId);
-  const current = state.mission.puzzles[state.currentPuzzleIndex];
-  if (armedStations(state.mission.map, state).length === 0 || current === undefined) {
+  const index = stationToSwitchOn(state, action.playerId);
+  const def = state.mission.puzzles[index];
+  if (def === undefined || !stationArmed(state, index)) {
     fail('Hier gibt es nichts zu aktivieren.');
   }
-  const missing = missingItemsFor(state, current.id);
+  const missing = missingItemsFor(state, def.id);
   if (missing.length > 0) {
     fail(`Der Station fehlt noch: ${missing.join(', ')}.`);
   }
-  return openPuzzle(state, state.currentPuzzleIndex, action.at);
+  return openPuzzle(takeUp(state, index), state.currentPuzzleIndex, action.at);
+}
+
+/**
+ * The station `playerId` switches on, by its place in the run's order: the station up — or,
+ * while a free-order run waits for its pick (`picking`), the station still to solve whose
+ * console they stand at; -1 where they stand at none.
+ */
+function stationToSwitchOn(state: GameState, playerId: string): number {
+  const current = state.currentPuzzleIndex;
+  if (!picking(state)) {
+    return current;
+  }
+  return state.mission.puzzles.findIndex(
+    (def, index) => index >= current && consoleOf(state, def.id, playerId) !== null,
+  );
+}
+
+/**
+ * The run with the station at `index` up: while a free-order run waits for its pick, it trades
+ * places with the station up (`currentPuzzleIndex`) — the solved ones stay first, the rest
+ * keep theirs — and is the crew's until solved (`picked`); otherwise the run as it is.
+ */
+function takeUp(state: GameState, index: number): GameState {
+  if (!picking(state)) {
+    return state;
+  }
+  const current = state.currentPuzzleIndex;
+  const { puzzles } = state.mission;
+  const taken = puzzles[index];
+  const was = puzzles[current];
+  if (taken === undefined || was === undefined) {
+    throw new Error(`takeUp: mission "${state.mission.id}" has no station ${index} or ${current}`);
+  }
+  const order = puzzles.map((def, i) => (i === current ? taken : i === index ? was : def));
+  return { ...state, mission: { ...state.mission, puzzles: order }, picked: true };
 }
 
 
@@ -2128,6 +2231,7 @@ function backToLobby(state: GameState, action: { playerId: string }): GameState 
     phase: 'lobby',
     players: unready(state.players).map((p) => ({ ...p, spawn: null })),
     currentPuzzleIndex: 0,
+    picked: false,
     puzzleState: null,
     seed: null,
     daily: null,
@@ -2155,6 +2259,7 @@ function backToLobby(state: GameState, action: { playerId: string }): GameState 
     lightsOutAt: null,
     lightsDueAt: null,
     deadlineAt: null,
+    clockFrom: null,
     finishedAt: null,
     penaltySeq: 0,
     lastPenaltySec: null,

@@ -1,4 +1,5 @@
 import { startsClosed, type ManualDef, type MapDef } from './mission.js';
+import type { PuzzleDef } from './puzzles/index.js';
 import type { ConsoleId } from './puzzles/module.js';
 import { tileKey, walkable, type Spot } from './reach.js';
 import type { GameState } from './state.js';
@@ -114,21 +115,55 @@ export function lightsAreOut(state: GameState): boolean {
 }
 
 /**
- * The spots of the current puzzle's station while the mission is running
- * with its lights out — one, or one per console — with the console each is
- * (null where the station has one); empty otherwise.
+ * Whether a free-order run waits for the crew to pick its next station: none switched on since
+ * the last solve, so that every station still to solve stands armed and the first one switched
+ * on becomes the station up.
+ */
+export function picking(state: GameState): boolean {
+  return state.mission.order === 'free' && !state.picked;
+}
+
+/**
+ * Whether the station at `index` of the run's order is armed: the lights are out and it is the
+ * station up — or, while a free-order run waits for its pick (`picking`), any station still to
+ * solve.
+ */
+export function stationArmed(state: GameState, index: number): boolean {
+  const { currentPuzzleIndex: current } = state;
+  if (!lightsAreOut(state) || index < current || index >= state.mission.puzzles.length) {
+    return false;
+  }
+  return index === current || picking(state);
+}
+
+/** The puzzles of the armed stations (`stationArmed`), by id, in the run's order. */
+export function armedPuzzleIds(state: GameState): string[] {
+  return state.mission.puzzles.filter((_, i) => stationArmed(state, i)).map((p) => p.id);
+}
+
+/**
+ * The spots of the armed stations while the mission is running with its lights out — one, or
+ * one per console — with the console each is (null where the station has one); empty
+ * otherwise.
  */
 export function armedStations(
   map: MapDef,
   state: GameState,
 ): { x: number; y: number; console: ConsoleId | null }[] {
-  const current = state.mission.puzzles[state.currentPuzzleIndex];
-  if (!lightsAreOut(state) || current === undefined) {
-    return [];
-  }
+  const armed = new Set(armedPuzzleIds(state));
   return map.stations
-    .filter((s) => s.puzzleId === current.id)
+    .filter((s) => armed.has(s.puzzleId))
     .map((s) => ({ x: s.x, y: s.y, console: s.console ?? null }));
+}
+
+/**
+ * The station the crew works now, while the lights are out: the one up in a chain; in free
+ * order the one it switched on, none while it has still to pick one. None once every station
+ * is solved.
+ */
+export function stationUp(state: GameState): PuzzleDef | null {
+  const current = state.mission.puzzles[state.currentPuzzleIndex];
+  return lightsAreOut(state) && current !== undefined && !picking(state) ? current : null;
 }
 
 /**
@@ -232,17 +267,17 @@ export function backupsOf(state: GameState, puzzleId: string, playerId: string):
 }
 
 /**
- * Who of the crew stands at a place of the armed station — at one of its consoles or at an
- * open manual object that covers it — each once, sorted. Between any two of them the
+ * Who of the crew stands at a place of the station up (`stationUp`) — at one of its consoles or
+ * at an open manual object that covers it — each once, sorted. Between any two of them the
  * station's intercom carries the voice in full, however far apart they stand and whatever
- * walls lie between (client voice/rules.ts). Nobody while no station is armed: before the
- * lights go out and once the last one is solved.
+ * walls lie between (client voice/rules.ts). Nobody while no station is up: before the lights
+ * go out, while a free-order run waits for its pick, and once the last one is solved.
  */
 export function intercomOf(state: GameState): string[] {
-  const current = state.mission.puzzles[state.currentPuzzleIndex];
-  if (!lightsAreOut(state) || current === undefined) {
+  const up = stationUp(state);
+  if (up === null) {
     return [];
   }
-  const places = [...operatorsOf(state, current.id), ...readersOf(state, current.id)];
+  const places = [...operatorsOf(state, up.id), ...readersOf(state, up.id)];
   return [...new Set(places)].sort();
 }

@@ -264,6 +264,15 @@ describe('the operator’s last word on a run', () => {
     }
   });
 
+  it('debriefs a run without a clock as one with time to spare: none ran short', () => {
+    const clockless = operatorMission({ timeLimitSec: 0 });
+    // Won as late as a ten-minute clock would have had it in its last minute.
+    const solvedAt = T0 + MINUTES_10 - 30_000;
+    const won = solve(solve(started(clockless), solvedAt - 10_000), solvedAt - 5000);
+    expect(won.phase).toBe('won');
+    expect(said(won).filter(([moment]) => moment === 'won')).toEqual([['won', LINES.won.plenty]]);
+  });
+
   it('says it as the crew is out, where the mission has a hatch', () => {
     const hatched = operatorMission({
       map: { ...JSON.parse(JSON.stringify(mission.map)), exit: { x: 3, y: 2 } },
