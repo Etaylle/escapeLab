@@ -729,8 +729,9 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   Erfolge je Konto.
 - Alternative mit eigenen Konten (Name und Passwort, `crypto.scrypt`, Neon-Postgres,
   Wiederherstellungscodes statt E-Mail): mehr Code, mehr Angriffsfläche, kein Dritter.
-- **K-1c** An- und Abmelden, Konto wechseln — Status: erledigt (K-login, Spec
-  `spec-K-login.md`) · Größe: M. Uros 2026-11-14: „Bei Konten sollte man sich an- und abmelden
+- **K-1c** An- und Abmelden, Konto wechseln — Status: erledigt (K-login, Merge 2026-11-14,
+  3267fed; zwei Review-Runden mit Sonden-Koffer und ein Delta; Cloud-CI grün auf 84116c5, Check
+  und Walkthrough; Server-Suite auf Postgres 17 ohne Skips; Spec `spec-K-login.md`) · Größe: M. Uros 2026-11-14: „Bei Konten sollte man sich an- und abmelden
   oder wechseln können." Ausweisnummer vom Server geprägt (`EL-7K3M-9Q2D`, ohne 0/O/1/I),
   Kennwort vom Spieler gesetzt (`crypto.scrypt` N 2^15, r 8, p 1, Salz je Kennwort, Vergleich in
   konstanter Zeit, 8–128 Zeichen, kein E-Mail, noch keine Wiederherstellung — der Reiter sagt es),
