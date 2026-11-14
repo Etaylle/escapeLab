@@ -4,8 +4,11 @@ import {
   applyAction,
   moduleFor,
   MODULES,
+  operatorsOf,
   parseMission,
+  placesOf,
   puzzleDefSchema,
+  readersOf,
   stationKey,
   viewFor,
 } from '../src/index.js';
@@ -23,7 +26,7 @@ import type {
   SolveAid,
 } from '../src/index.js';
 import { startsClosed, type ManualDef } from '../src/mission.js';
-import { consoleLab, lightsOut, started, standing, T0 } from './lab.js';
+import { handsTaken, labs, lightsOut, started, standing, T0 } from './lab.js';
 import { MAX_IDLE_SEC, playInstance } from './solveModule.js';
 
 const SEEDS = 200;
@@ -105,11 +108,19 @@ interface Roles {
   partner: string | null;
   /** reads the rules at a manual object; null when the crew has nobody left for it */
   reader: string | null;
+  /**
+   * the third of the crew, so that the first two never leave their places: carries the
+   * station's parts in, fetches a cabinet's key and opens a shut source, and at a station of
+   * one console holds the plates of the doors it keeps open until solved; null for a crew of
+   * two, whose operator carries the parts and whose reader opens the source
+   */
+  runner: string | null;
 }
 
 /**
  * p1 works every station, p2 reads every book — except at a station with
  * two consoles, where p2 works console b and p3, if the crew has one, reads.
+ * p3 runs the errands wherever the crew has one.
  */
 function rolesAt(def: PuzzleDef, crew: string[]): Roles {
   const twoConsoles = moduleFor(def.type).consoles === 2;
@@ -117,30 +128,54 @@ function rolesAt(def: PuzzleDef, crew: string[]): Roles {
     operator: 'p1',
     partner: twoConsoles ? 'p2' : null,
     reader: (twoConsoles ? crew[2] : crew[1]) ?? null,
+    runner: crew[2] ?? null,
   };
+}
+
+/** The station's parts carried in: by the runner, or by the operator where the crew has none. */
+function partsIn(state: GameState, def: PuzzleDef, roles: Roles, at: number): GameState {
+  const carrier = roles.runner ?? roles.operator;
+  return state.mission.map.items
+    .filter((item) => item.requiredFor === def.id)
+    .flatMap((item): Action[] => [
+      { type: 'pick-item', playerId: carrier, itemId: item.id, at },
+      { type: 'deliver-item', playerId: carrier, itemId: item.id, at },
+    ])
+    .reduce(applyAction, state);
+}
+
+/**
+ * The plates of the doors `def`'s station keeps open until solved, by plate id, held by the
+ * runner at a station of one console; none anywhere else.
+ */
+function platesHeld(state: GameState, def: PuzzleDef, roles: Roles): Record<string, string[]> {
+  const { runner, partner } = roles;
+  if (runner === null || partner !== null || moduleFor(def.type).wholeCrew) {
+    return {};
+  }
+  const plates = placesOf(state.mission, def.id).filter((place) => place.kind === 'plate');
+  return Object.fromEntries(plates.map((plate) => [plate.id, [runner]]));
 }
 
 /**
  * Switch on the current station, the way the crew walks up to it: whatever
- * it waits for is carried in, the reader opens the manual object covering it
- * where that is shut, then the operator stands at it (and the partner at
- * console b) and the reader at that manual object — or the whole crew at
- * it, where everyone presses.
+ * it waits for is carried in, the manual object covering it is opened where
+ * that is shut — by the runner, else by the reader — then the operator
+ * stands at it (and the partner at console b), the reader at that manual
+ * object and the runner on the plates it holds — or the whole crew at it,
+ * where everyone presses.
  */
 function openStation(state: GameState, def: PuzzleDef, at: number): GameState {
   const map = state.mission.map;
   const crew = state.players.map((p) => p.id);
-  const { operator, partner, reader } = rolesAt(def, crew);
-  const errands = map.items
-    .filter((item) => item.requiredFor === def.id)
-    .flatMap((item): Action[] => [
-      { type: 'pick-item', playerId: operator, itemId: item.id, at },
-      { type: 'deliver-item', playerId: operator, itemId: item.id, at },
-    ]);
-  const delivered = errands.reduce(applyAction, state);
+  const roles = rolesAt(def, crew);
+  const { operator, partner, reader, runner } = roles;
+  const delivered = partsIn(state, def, roles, at);
   const book = map.manuals.find((m) => m.puzzleIds.includes(def.id));
   const readable =
-    book === undefined || reader === null ? delivered : openedBy(delivered, book, reader, at);
+    book === undefined || reader === null
+      ? delivered
+      : openedBy(delivered, book, runner ?? reader, at);
   const consoleB = stationKey({ puzzleId: def.id, console: 'b' });
   const atB = partner === null ? {} : { [consoleB]: [partner] };
   const here = moduleFor(def.type).wholeCrew
@@ -148,8 +183,25 @@ function openStation(state: GameState, def: PuzzleDef, at: number): GameState {
     : standing(readable, {
         stations: { [def.id]: [operator], ...atB },
         manuals: book === undefined || reader === null ? {} : { [book.id]: [reader] },
+        plates: platesHeld(readable, def, roles),
       });
   return applyAction(here, { type: 'interact', playerId: operator, at });
+}
+
+/**
+ * How many of the crew are at work at the station of `def` once it is switched on (`now`, from
+ * `before` it was): at one of its consoles, reading at a manual object covering it, holding a
+ * plate, or back from carrying a part in — a cabinet's key included, which counts as delivered.
+ */
+function atWork(before: GameState, now: GameState, def: PuzzleDef): number {
+  const plates = Object.values(now.presence.plates).flat();
+  const delivered = (state: GameState, id: string): number => state.credits[id]?.delivered ?? 0;
+  const busy = (id: string): boolean =>
+    operatorsOf(now, def.id).includes(id) ||
+    readersOf(now, def.id).includes(id) ||
+    plates.includes(id) ||
+    delivered(now, id) > delivered(before, id);
+  return now.players.filter((player) => busy(player.id)).length;
 }
 
 /** A shut manual object opened by `reader`: a locker searched, a cabinet unlocked with its key. */
@@ -227,17 +279,23 @@ function inputsFor(moves: Move<PuzzleInput>[], roles: Roles, crew: string[], at:
 }
 
 /**
- * A whole mission through the reducer: the crew walks past the sign, then
- * at every station the operator's, the partner's and the reader's views go
- * to the solver, with the crew's transcript of the puzzle and the clock,
- * and every move goes back as puzzle-inputs. Each round is a second on the
- * clock; a solver that waits only lets it run, up to MAX_IDLE_SEC rounds in
- * a row. Stops once the last station is solved; getting out is the
- * server's call.
+ * A whole mission through the reducer for a crew of `size`: the crew walks
+ * past the sign, then at every station the operator's, the partner's and the
+ * reader's views go to the solver, with the crew's transcript of the puzzle
+ * and the clock, and every move goes back as puzzle-inputs. Each round is a
+ * second on the clock; a solver that waits only lets it run, up to
+ * MAX_IDLE_SEC rounds in a row. Stops once the last station is solved;
+ * getting out is the server's call. Returns the state, and how many of the
+ * crew each station put to work as it was switched on (`atWork`).
  */
-function playMission(mission: Mission, seed: number): GameState {
+function playMission(
+  mission: Mission,
+  seed: number,
+  size: number,
+): { state: GameState; atWork: number[] } {
   const transcripts = mission.puzzles.map((): Transcript => []);
-  let state = lightsOut(started(mission, seed));
+  const working: number[] = [];
+  let state = lightsOut(started(mission, seed, T0, size));
   const crew = state.players.map((p) => p.id);
   state = standing(state, { signSeen: crew });
   let idle = 0;
@@ -249,7 +307,9 @@ function playMission(mission: Mission, seed: number): GameState {
     }
     const at = T0 + round * 1000;
     if (state.puzzleState === null) {
+      const before = state;
       state = openStation(state, def, at);
+      working.push(atWork(before, state, def));
     }
     const roles = rolesAt(def, crew);
     const { views, edgework, remainingSec } = crewSees(state, roles, at);
@@ -261,20 +321,22 @@ function playMission(mission: Mission, seed: number): GameState {
     transcript.push(...moves.map((move) => ({ ...move, before: views })));
     state = inputsFor(moves, roles, crew, at).reduce(applyAction, state);
   }
-  return state;
+  return { state, atWork: working };
 }
 
 /**
- * Beside the shipped missions, a lab with a station of two consoles, for a
- * crew of two (nobody left to read there) and of three.
+ * Every shipped mission and lab (lab.ts `labs`), for every size of crew it takes, from the
+ * smallest to the largest.
  */
-const labs = [consoleLab(2, 'doppelpult-zwei'), consoleLab(3, 'doppelpult-drei')];
-const played = [...missions, ...labs].map((m) => [m.id, m] as const);
+const played = [...missions, ...labs()].flatMap((mission) => {
+  const { min, max } = mission.players;
+  return Array.from({ length: max - min + 1 }, (_, i) => [mission.id, min + i, mission] as const);
+});
 
-describe.each(played)('mission %s', (_id, mission) => {
+describe.each(played)('mission %s for %i', (_id, size, mission) => {
   it(`is won through the reducer without an alarm for ${SEEDS} seeds`, () => {
     for (let seed = 0; seed < SEEDS; seed++) {
-      const state = playMission(mission, seed);
+      const { state } = playMission(mission, seed, size);
       // The last station unlocks the hatch; getting out is the server's call.
       expect(state.currentPuzzleIndex, `seed ${seed}`).toBe(mission.puzzles.length);
       expect(state.penaltySeq, `seed ${seed}`).toBe(0);
@@ -286,12 +348,17 @@ describe.each(played)('mission %s', (_id, mission) => {
     if (def === undefined) {
       throw new Error(`${mission.id} has no puzzles`);
     }
-    const state = openStation(lightsOut(started(mission, 1)), def, T0 + 1000);
+    const state = openStation(lightsOut(started(mission, 1, T0, size)), def, T0 + 1000);
     const { reader } = rolesAt(def, state.players.map((p) => p.id));
     for (const { id } of state.players) {
       const manual = viewFor(state, id).puzzle?.manual ?? null;
       const reads = id === reader && !moduleFor(def.type).wholeCrew;
       expect(manual, id).toEqual(reads ? moduleFor(def.type).manual(def) : null);
     }
+  });
+
+  it('puts a hand at every place of each station, as far as the crew goes', () => {
+    const wanted = mission.puzzles.map((def) => Math.min(size, handsTaken(mission, def, size)));
+    expect(playMission(mission, 1, size).atWork).toEqual(wanted);
   });
 });

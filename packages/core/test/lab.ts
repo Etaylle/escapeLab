@@ -106,13 +106,13 @@ export const OUTSIDE = { x: 2, y: 3 };
 /**
  * Two rooms: the west one with the spawns, the sign and a plate, the east one with the wiring
  * box behind a door that only the plate holds open — until the box is solved, then it stays
- * open. Each source of the box's rules lies on the spots given. Unparsed, so that a test may
- * hold the validation to it.
+ * open — and the hatch. Each source of the box's rules lies on the spots given. Unparsed, so
+ * that a test may hold the validation to it.
  *
  *   0123456789
  * 0 ##########
  * 1 #....#...#   sign (2,1); box (7,1)
- * 2 #........#   spawns (1,1) (1,2) (1,3); plate (3,2); door (5,2)
+ * 2 #........#   spawns (1,1) (1,2) (1,3); plate (3,2); door (5,2); exit (8,2)
  * 3 #....#...#   inside (7,3), outside (2,3)
  * 4 ##########
  */
@@ -147,6 +147,7 @@ export function chamber(
         spots,
       })),
       edgeworkSign: { x: 2, y: 1 },
+      exit: { x: 8, y: 2 },
     },
   };
 }
@@ -154,6 +155,14 @@ export function chamber(
 /** The chamber for a crew of three, its box's rules inside the door: one of them holds the plate. */
 export function chamberLab(): Mission {
   return parseMission({ ...chamber(3, [[INSIDE]]), id: 'kammer-drei' });
+}
+
+/**
+ * The labs the module tests play beside the shipped missions: the station of two consoles for
+ * a crew of two (nobody left to read there) and of three, and the chamber for three.
+ */
+export function labs(): Mission[] {
+  return [consoleLab(2, 'doppelpult-zwei'), consoleLab(3, 'doppelpult-drei'), chamberLab()];
 }
 
 /**
@@ -177,11 +186,16 @@ export function lineBack(playerId: string, at: number): Action {
 }
 
 /**
- * The smallest crew the mission takes joins — p1, p2, … — everyone but the
- * host confirms, the host starts.
+ * A crew of `size` joins — p1, p2, …, the smallest the mission takes unless told otherwise —
+ * everyone but the host confirms, the host starts.
  */
-export function started(mission: Mission, seed = 7, at = T0): GameState {
-  const crew = Array.from({ length: mission.players.min }, (_, i) => `p${i + 1}`);
+export function started(
+  mission: Mission,
+  seed = 7,
+  at = T0,
+  size = mission.players.min,
+): GameState {
+  const crew = Array.from({ length: size }, (_, i) => `p${i + 1}`);
   const actions: Action[] = [
     ...crew.map((playerId): Action => ({ type: 'player-join', playerId, name: playerId })),
     ...crew.slice(1).map((playerId): Action => ({ type: 'set-ready', playerId, ready: true })),
