@@ -2086,7 +2086,7 @@ async function captureBothAtStation(reader, operator, station, sync) {
     await audioKept([operator, reader], 'at the first station');
   }
   // Whatever E opened instead of the panel locks the avatar too.
-  await reader.page.keyboard.press('Escape');
+  await escapeWorld(reader.page);
   await sleep(300);
   const returned = back !== null && (await walkNear(reader.page, reader.seen, back));
   console.log(
@@ -5115,6 +5115,19 @@ function reportPanelClose(player, fade, held) {
   }
 }
 
+/**
+ * Esc over the world, as a player puts away whatever lies over it: where nothing did, Esc opens
+ * the run's menu instead (client Game.tsx `escapeStep`), and a second Esc puts that away too.
+ */
+async function escapeWorld(page) {
+  await page.keyboard.press('Escape');
+  const menu = page.locator('.pause-menu');
+  if (await settled(menu.waitFor({ timeout: 400 }))) {
+    await page.keyboard.press('Escape');
+    await menu.waitFor({ state: 'hidden', timeout: 2000 });
+  }
+}
+
 /** Steps `player` back from the open station `modal` with Esc: the first time, panel-close.png. */
 async function stepBack(player, modal) {
   if (!panelCloseShot && (await modal.isVisible())) {
@@ -7346,7 +7359,7 @@ async function captureLitRoom(page, seen) {
     skip('lit-room.png', 'litRooms is empty — no station solved in this run');
     return;
   }
-  await page.keyboard.press('Escape');
+  await escapeWorld(page);
   const label = map.labels.find((l) => l.text === room);
   const inside = label !== undefined && (await walkNear(page, seen, label));
   await sleep(1200); // past the lights coming up
@@ -9286,14 +9299,44 @@ async function handle(player, what, done) {
   }
 }
 
+/**
+ * The settings, as a player opens them: in a room the gear opens the room's menu and its
+ * „Einstellungen" the settings over it; off any room the gear opens them at once.
+ */
+async function openSettings(page) {
+  const card = page.locator('.settings-card');
+  const item = page.locator('.pause-menu [data-item="settings"]');
+  await page.locator('.settings-toggle').click();
+  await card.or(item).first().waitFor({ timeout: 3000 });
+  if (await item.isVisible()) {
+    await item.click();
+    await card.waitFor({ timeout: 3000 });
+  }
+}
+
+/**
+ * Esc puts the settings away, and once more the room's menu they were opened from; whether
+ * both went within 2 s.
+ */
+async function closeSettings(page) {
+  await page.keyboard.press('Escape');
+  const card = page.locator('.settings-card');
+  const gone = await settled(card.waitFor({ state: 'hidden', timeout: 2000 }));
+  const menu = page.locator('.pause-menu');
+  if (!(await menu.isVisible())) {
+    return gone;
+  }
+  await page.keyboard.press('Escape');
+  return gone && (await settled(menu.waitFor({ state: 'hidden', timeout: 2000 })));
+}
+
 /** Picks the text size reading `label` („Klein", „Normal", „Groß") in the settings, then Esc. */
 async function chooseTextSize(page, label) {
-  await page.locator('.settings-toggle').click();
+  await openSettings(page);
   const sizes = page.locator('.settings-options[aria-label="Textgröße"]');
   await sizes.waitFor({ timeout: 3000 });
   await sizes.locator('.settings-option', { hasText: label }).click();
-  await page.keyboard.press('Escape');
-  await page.locator('.settings-card').waitFor({ state: 'hidden', timeout: 2000 });
+  await closeSettings(page);
 }
 
 /** How the open book shows its Morsetafel: the page it stands on, its rows, the table facing it. */
@@ -10177,18 +10220,17 @@ const settled = (promise) =>
 const rowText = (text) => text.replace(/\s+/g, ' ').trim();
 
 /**
- * settings.png: the gear in the top bar opens the settings over the running world — the three
- * volumes, the talk key, the text size and less motion — and nothing pauses under them: the
- * clock counts on. Esc closes them again. The run fails where no panel comes up, where it runs
- * out sideways, where the clock stands still under it, or where Esc leaves it open.
+ * settings.png: the gear in the top bar opens the run's menu, and its „Einstellungen" the
+ * settings over the running world — the three volumes, the talk key, the text size and less
+ * motion — and nothing pauses under them: the clock counts on. Esc closes them again, and the menu
+ * under them. The run fails where no panel comes up, where it runs out sideways, where the clock
+ * stands still under it, or where Esc leaves it open.
  */
 async function captureSettings(page) {
   const clock = page.locator('.stage-top .countdown');
   const ticking = await clock.isVisible();
-  await page.locator('.settings-toggle').click();
-  const card = page.locator('.settings-card');
-  if (!(await settled(card.waitFor({ timeout: 3000 })))) {
-    fail('settings: the gear in the top bar opened no panel');
+  if (!(await settled(openSettings(page)))) {
+    fail('settings: the gear in the top bar and the menu under it opened no panel');
     return;
   }
   const before = ticking ? await textOf(clock) : null;
@@ -10199,8 +10241,7 @@ async function captureSettings(page) {
   const volumes = (await page.locator('.settings-volume').allInnerTexts()).map(rowText);
   const key = await textOf(page.locator('.settings-kbd'));
   const lit = await page.locator('.settings-option--on').allInnerTexts();
-  await page.keyboard.press('Escape');
-  const closed = await settled(card.waitFor({ state: 'hidden', timeout: 2000 }));
+  const closed = await closeSettings(page);
   const stood = ticking && before === after;
   const clockSaid = !ticking
     ? 'no clock up'
@@ -10217,6 +10258,151 @@ async function captureSettings(page) {
   if (wrong.some(Boolean)) {
     fail(`settings: ${wrong.filter(Boolean).join(', ')}`);
   }
+}
+
+/** The pause menu's items as they stand in the window: each one's words, foot and height. */
+function pauseItemsShown(menu) {
+  return [...menu.querySelectorAll('.menu-item')].map((el) => {
+    const box = el.getBoundingClientRect();
+    return { label: el.textContent.trim(), bottom: box.bottom, height: box.height };
+  });
+}
+
+/** The pause menu as it stands in the window: its name, items, line, focus, and what it fits. */
+function pauseMenuShown() {
+  const menu = document.querySelector('.pause-menu');
+  if (menu === null) {
+    return null;
+  }
+  const panel = menu.querySelector('.pause-menu-panel');
+  const said = (selector) => menu.querySelector(selector)?.textContent ?? '';
+  return {
+    title: said('.pause-menu-title'),
+    items: pauseItemsShown(menu),
+    line: said('.pause-menu-line'),
+    scrolls: panel.scrollHeight > panel.clientHeight + 1,
+    focused: document.activeElement?.getAttribute('data-item') ?? null,
+    height: globalThis.innerHeight,
+  };
+}
+
+/** The pause menu `shown` with nothing in it, for a window that showed none. */
+const NO_PAUSE_MENU = { title: '', items: [], line: '', scrolls: false, focused: null, height: 0 };
+
+/** Whether `seen`'s latest view marks the crew member `name` at the pause menu. */
+const atMenuIn = (seen, name) =>
+  seen.view?.players.some((p) => p.name === name && p.menu === 'pause') === true;
+
+/** What is wrong with the pause menu `shown`: items too small or too low, the list scrolling. */
+function pauseMenuFaults(shown, least) {
+  return [
+    ...shown.items.filter((item) => item.height < least).map((i) => `${i.label} ${i.height}px`),
+    ...shown.items.filter((item) => item.bottom > shown.height).map((i) => `${i.label} cut off`),
+    ...(shown.scrolls ? ['the list scrolls'] : []),
+  ];
+}
+
+/** The words of `checks` — [wrong, words] pairs — that hold. */
+const wrongOf = (checks) => checks.filter(([wrong]) => wrong).map(([, words]) => words);
+
+/**
+ * What a look at the pause menu over Anna's run found wrong: its items, its focus, its line, the
+ * clock standing (`clock`, before and after), Ben's view marking nothing (`mark`, while open and
+ * once closed), Esc leaving it open.
+ */
+function pauseMenuWrong(shown, clock, mark, closed) {
+  const items = shown.items.map((item) => item.label).join(', ');
+  return wrongOf([
+    [items !== 'Weiter, Einstellungen, Handbuch', `items ${items}`],
+    [shown.focused !== 'resume', `focus on ${shown.focused}`],
+    [!shown.line.startsWith('Die Uhr läuft weiter'), 'no line that the clock runs on'],
+    [clock.before === clock.after, `the clock stood at ${clock.before}`],
+    [!mark.open, 'Ben sees no mark'],
+    [!closed, 'Esc left it open'],
+    [!mark.gone, 'the mark stayed'],
+  ]);
+}
+
+/** Esc over Anna's world, nothing open: whether the pause menu came up within 3 s. */
+async function menuByEscape(page) {
+  await page.keyboard.press('Escape');
+  return settled(page.locator('.pause-menu').waitFor({ timeout: 3000 }));
+}
+
+/**
+ * pause-menu.png: Esc over Anna's running world with nothing open opens the pause menu — the
+ * mission's name over „Weiter", „Einstellungen", „Handbuch", „Weiter" in the focus, and the line
+ * that the clock runs on — and nothing stands still for it: the clock counts on, and Ben's view
+ * marks Anna at the menu. Esc closes it again, and the mark goes. The run fails where any of it is
+ * not so.
+ */
+async function capturePauseMenu(anna, ben) {
+  const page = anna.page;
+  const clock = page.locator('.stage-top .countdown');
+  if (!(await menuByEscape(page))) {
+    fail('pause-menu.png: Esc over the world with nothing open opened no menu');
+    return;
+  }
+  const before = await textOf(clock);
+  await sleep(1300);
+  const ticked = { before, after: await textOf(clock) };
+  const open = await until(() => atMenuIn(ben.seen, anna.name), 3000);
+  await capture(page, 'pause-menu.png');
+  const shown = (await page.evaluate(pauseMenuShown)) ?? NO_PAUSE_MENU;
+  await page.keyboard.press('Escape');
+  const closed = await settled(page.locator('.pause-menu').waitFor({ state: 'hidden' }));
+  const gone = await until(() => !atMenuIn(ben.seen, anna.name), 3000);
+  const wrong = pauseMenuWrong(shown, ticked, { open, gone }, closed);
+  console.log(
+    `pause-menu.png     "${shown.title}": ${shown.items.map((i) => i.label).join(', ')}; ` +
+      `focus on ${shown.focused}; "${shown.line}"; the clock ${ticked.before} → ${ticked.after}; ` +
+      `Ben's view marked Anna ${open ? 'at the menu' : '!! nowhere'}, ` +
+      `then ${gone ? 'no more' : '!! still'}`,
+  );
+  if (wrong.length > 0) {
+    fail(`pause-menu.png: ${wrong.join(', ')}`);
+  }
+  await capturePauseMenuPhone(ben);
+}
+
+/** Ben's phone turned to 932×430; returns the size it had. */
+async function turnTo932(page) {
+  const was = page.viewportSize();
+  const large = SIZES.find((size) => size.name === 'phone-932');
+  await page.setViewportSize({ width: large.width, height: large.height });
+  await sleep(700);
+  return was;
+}
+
+/**
+ * pause-menu-phone-932.png: Ben's phone held sideways at 932×430 opens the pause menu by the
+ * row's menu button: every item a fingertip's 44 px tall and in the window, the list scrolling
+ * not at all; „Weiter" closes it again. The run fails where any of it is not so; the phone goes
+ * back to the size it had.
+ */
+async function capturePauseMenuPhone(ben) {
+  const page = ben.page;
+  const was = await turnTo932(page);
+  const menu = page.locator('.pause-menu');
+  await page.locator('.stage-row .hud-menu').click();
+  const opened = await settled(menu.waitFor({ timeout: 3000 }));
+  await sleep(300);
+  await capture(page, 'pause-menu-phone-932.png');
+  const shown = (await page.evaluate(pauseMenuShown)) ?? NO_PAUSE_MENU;
+  const wrong = [...pauseMenuFaults(shown, 44), ...wrongOf([[!opened, 'no menu came up']])];
+  await menu.locator('[data-item="resume"]').click({ timeout: 2000 }).catch(() => undefined);
+  const closed = await settled(menu.waitFor({ state: 'hidden', timeout: 2000 }));
+  wrong.push(...wrongOf([[!closed, '„Weiter" left it open']]));
+  const heights = shown.items.map((item) => Math.round(item.height)).join('/');
+  console.log(
+    `pause-menu-phone-932.png Ben @ 932x430: items ${heights} px tall; ` +
+      (wrong.length === 0 ? 'all in the window, none scrolling, „Weiter" closed it' : ''),
+  );
+  if (wrong.length > 0) {
+    fail(`pause-menu-phone-932.png: ${wrong.join(', ')}`);
+  }
+  await page.setViewportSize(was);
+  await sleep(400);
 }
 
 /** A colour as '#rrggbb', from its channels. */
@@ -10526,7 +10712,7 @@ function litButtons(page) {
  * Esc closes the settings again: a real key, which turns the prompts back to the keys.
  */
 async function captureControllerSettings(page) {
-  await page.locator('.settings-toggle').click();
+  await settled(openSettings(page));
   const section = page.locator('.settings-pad');
   if (!(await settled(section.waitFor({ timeout: 3000 })))) {
     fail('settings-controller.png: the settings show no controller');
@@ -10545,8 +10731,7 @@ async function captureControllerSettings(page) {
   for (const button of held) {
     await onPad(page, 'release', button);
   }
-  await page.keyboard.press('Escape');
-  const closed = await settled(page.locator('.settings-card').waitFor({ state: 'hidden' }));
+  const closed = await closeSettings(page);
   console.log(
     `settings-controller.png lit ${lit.join(', ') || 'nothing'}; "${status}"; ` +
       `${actions} actions with their keys; ${closed ? 'Esc closed it' : '!! still open'}`,
@@ -11736,6 +11921,7 @@ async function run() {
   await capture(host, 'info-panel.png');
   await host.keyboard.press('Escape');
   await captureSettings(host);
+  await capturePauseMenu(anna, ben);
   await captureControls(anna, ben);
   await captureMinimapGoal(anna);
   await captureSprint(anna);

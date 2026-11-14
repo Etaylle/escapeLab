@@ -66,8 +66,8 @@ export function controlsOf(source: GlyphSource): (readonly [string, string])[] {
     [g('info'), 'Dieses Info-Fenster'],
     ...panels,
     [
-      pad ? PAD_GLYPHS[source.family].start : '⚙ in der Kopfleiste',
-      'Einstellungen: Lautstärke, Tasten und Controller, Textgröße, Bewegung',
+      pad ? g('menu') : `${g('menu')} oder ⚙ in der Kopfleiste`,
+      'Menü: Einstellungen, Handbuch — die Uhr läuft weiter',
     ],
   ];
 }

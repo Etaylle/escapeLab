@@ -25,6 +25,7 @@ export {
   type Away,
   type GameState,
   type ItemState,
+  type MenuPlace,
   type PauseKind,
   type Player,
   type Phase,

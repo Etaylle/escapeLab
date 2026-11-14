@@ -203,6 +203,8 @@ const gameStateSchema = z.looseObject({
     .nullable(),
   paused: z.looseObject({ since: z.number(), kind: z.enum(['away', 'wartung']) }).nullable(),
   away: z.record(z.string(), awaySchema),
+  // A snapshot from before the pause menu holds no menus: nobody has one open.
+  menus: z.record(z.string(), z.enum(['pause'])).default({}),
   drops: count,
   calledOff: z.string().nullable(),
   items: z.record(z.string(), itemSchema),

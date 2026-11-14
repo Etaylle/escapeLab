@@ -53,6 +53,7 @@ function hud(events: RunEvent[], onAir = false, edgework: Edgework | null = null
       chatsRef={{ current: [] }}
       onAir={onAir}
       onOpenInfo={() => undefined}
+      onOpenMenu={() => undefined}
       notesOpen={false}
       onToggleNotes={() => undefined}
     />,
@@ -149,12 +150,15 @@ describe('the Laborkennung in a narrow strip', () => {
     cells: 3,
   };
 
-  it('stands before the buttons, the Info button last, and carries its value ready', () => {
+  it('stands before the buttons, Info and the menu last, and carries its value ready', () => {
     const html = hud([radio('Strom weg.')], false, edgework);
     const chip = html.indexOf('<div class="edgework"');
     expect(chip).toBeGreaterThan(html.indexOf('</ul>'));
     expect(html.indexOf('class="hud-info hud-notes"')).toBeGreaterThan(chip);
-    expect(html).toMatch(/<button class="hud-info">.*?Info \[I\]<\/button><\/div><\/section>$/);
+    const info = html.indexOf(' Info [I]</button>');
+    expect(info).toBeGreaterThan(html.indexOf('class="hud-info hud-notes"'));
+    expect(html.indexOf('<button class="hud-info hud-menu">')).toBeGreaterThan(info);
+    expect(html.endsWith(' Menü [Esc]</button></div></section>')).toBe(true);
     expect(html).toContain('<span class="edgework-value" title="Laborkennung K7G3A-2; ');
   });
 

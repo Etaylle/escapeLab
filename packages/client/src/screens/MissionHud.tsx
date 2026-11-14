@@ -23,6 +23,8 @@ interface Props {
   notesOpen: boolean;
   onToggleNotes: () => void;
   onOpenInfo: () => void;
+  /** opens the pause menu over the run (menuLayer.ts) */
+  onOpenMenu: () => void;
 }
 
 /** How often the crew's tags are read again from their live positions, ms. */
@@ -37,7 +39,7 @@ export const STATUS_SAMPLE_MS = 300;
  */
 export function tagsOf(
   view: PlayerView,
-  player: { id: string; connected: boolean },
+  player: PlayerView['players'][number],
   positions: Record<string, PlayerPosition>,
 ): CrewTag[] {
   const pos = positions[player.id];
@@ -130,8 +132,9 @@ function RadioStrip({ radio }: { radio: Ticker | null }) {
 /**
  * The permanent strip under the world. Deliberately thin: only the crew, the
  * edgework once you have read the sign, and the latest radio line, because
- * everything else either sits on the world itself or belongs in the info panel.
- * A phone held sideways folds it into the objective bar's row instead (hudFold.ts).
+ * everything else either sits on the world itself or belongs in the info panel —
+ * and the buttons for the notepad, the info panel and the menu. A phone held
+ * sideways folds it into the objective bar's row instead (hudFold.ts).
  */
 export function MissionHud({
   view,
@@ -141,6 +144,7 @@ export function MissionHud({
   notesOpen,
   onToggleNotes,
   onOpenInfo,
+  onOpenMenu,
 }: Props) {
   const [tick, setTick] = useState(0);
   useEffect(() => {
@@ -154,6 +158,7 @@ export function MissionHud({
   const keyless = touch && !padUsed;
   const notesKey = useGlyph('notes');
   const infoKey = useGlyph('info');
+  const menuKey = useGlyph('menu');
   const voice = useVoice();
   const talking = voice?.state.mic === 'on' ? voice : null;
 
@@ -201,6 +206,9 @@ export function MissionHud({
         </button>
         <button className="hud-info" onClick={onOpenInfo}>
           <Icon name="info" /> {withKey('Info', infoKey, keyless)}
+        </button>
+        <button className="hud-info hud-menu" onClick={onOpenMenu}>
+          <Icon name="menu" /> {withKey('Menü', menuKey, keyless)}
         </button>
       </div>
     </section>

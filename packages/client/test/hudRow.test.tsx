@@ -350,13 +350,17 @@ describe('the crew in the row', () => {
 
 describe('the row’s buttons', () => {
   const tools = (voice: VoiceMesh | null, notesOpen = false): string =>
-    within(voice, <RowTools notesOpen={notesOpen} onToggleNotes={noop} onOpenInfo={noop} />);
+    within(
+      voice,
+      <RowTools notesOpen={notesOpen} onToggleNotes={noop} onOpenInfo={noop} onOpenMenu={noop} />,
+    );
 
-  it('open the notepad and the info panel by their icons, their words in their labels', () => {
+  it('open the notepad, the info panel and the menu by their icons, their words in labels', () => {
     expect(tools(null, true)).toBe(
       '<button class="hud-info hud-notes" aria-pressed="true" aria-label="Notizen" ' +
         'title="Notizen">[pencil]</button>' +
-        '<button class="hud-info" aria-label="Info" title="Info">[info]</button>',
+        '<button class="hud-info" aria-label="Info" title="Info">[info]</button>' +
+        '<button class="hud-info hud-menu" aria-label="Menü" title="Menü">[menu]</button>',
     );
   });
 

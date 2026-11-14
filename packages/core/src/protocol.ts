@@ -146,6 +146,11 @@ export const clientMessageSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('start-mission') }),
   /** the player has seen enough of the intro: the skip of the opening on their screen */
   z.object({ kind: z.literal('intro-done') }),
+  /**
+   * the pause menu opened over the run on the player's screen, or closed again: the run goes
+   * on, and the crew sees them at the menu
+   */
+  z.object({ kind: z.literal('pause-menu'), open: z.boolean() }),
   /** a move at the open puzzle; its module's input schema checks `input` */
   z.object({ kind: z.literal('puzzle-input'), input: z.unknown() }),
   z.object({ kind: z.literal('request-hint') }),

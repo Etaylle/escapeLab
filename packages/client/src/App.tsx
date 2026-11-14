@@ -10,6 +10,13 @@ import {
 } from '@escapelab/core';
 import { firstDifficulty, hasWon, useWonMark } from './firstRun.js';
 import { usePad } from './input/padRuntime.js';
+import {
+  PauseContext,
+  pausePhaseOf,
+  useEscapeOpensMenu,
+  useMenuLayer,
+  useMenuMark,
+} from './menuLayer.js';
 import { localStore } from './notes.js';
 import { crewPass, keepName } from './pass.js';
 import { addProbes } from './probes.js';
@@ -42,7 +49,7 @@ import { MenuScene } from './screens/MenuScene.js';
 import { GameScreen } from './screens/Game.js';
 import type { GameLine } from './screens/Line.js';
 import { EndScreen } from './screens/End.js';
-import { SettingsPanel } from './screens/Settings.js';
+import { MenuLayers, type RoomMission } from './screens/MenuLayers.js';
 import { SoundSwitch } from './screens/SoundSwitch.js';
 import { SpectateScreen } from './screens/Spectate.js';
 
@@ -113,8 +120,10 @@ interface TopBarProps {
   status: Connection['status'];
   /** leaves the room for the editor, where it came from the editor's test run; else null */
   toEditor: (() => void) | null;
-  /** opens the settings (screens/Settings.tsx) */
-  onSettings: () => void;
+  /** the gear: in a room its pause menu (`inRoom`), off any room the settings (menuLayer.ts) */
+  onGear: () => void;
+  /** the window stands in a room — a run, a lobby, the audience's —, whose menu the gear opens */
+  inRoom?: boolean;
   /** the menu is up: its sound switch shows while the menu's sound waits for a gesture */
   menu?: boolean;
 }
@@ -122,10 +131,11 @@ interface TopBarProps {
 /**
  * The bar over every screen: the room's code and seed, the way back to the
  * editor for the host of a test run, the running mission, the sound — the
- * quick switch — and the gear for the settings, and the connection.
+ * quick switch — and the gear for the room's menu or the settings, and the connection.
  */
 export function TopBar(props: TopBarProps) {
-  const { roomCode, seed, running, status, toEditor, onSettings } = props;
+  const { roomCode, seed, running, status, toEditor, onGear } = props;
+  const gear = props.inRoom === true ? 'Menü' : 'Einstellungen';
   return (
     <header className="topbar">
       <span className="logo">
@@ -144,12 +154,7 @@ export function TopBar(props: TopBarProps) {
         </span>
       )}
       <SoundSwitch menu={props.menu === true} />
-      <button
-        className="settings-toggle"
-        title="Einstellungen"
-        aria-label="Einstellungen"
-        onClick={onSettings}
-      >
+      <button className="settings-toggle" title={gear} aria-label={gear} onClick={onGear}>
         <Icon name="gear" />
       </button>
       <span className={`conn conn-${status}`}>
@@ -530,6 +535,12 @@ function ErrorBanner({ conn }: { conn: Connection }) {
   );
 }
 
+/** The room's mission, as its menu names it and opens its booklet: a run's, lobby's, audience's. */
+export function roomMission(conn: Pick<Connection, 'view' | 'spectatorView'>): RoomMission | null {
+  const view = conn.view ?? conn.spectatorView;
+  return view === null ? null : { id: view.missionId, title: view.missionTitle };
+}
+
 /** The living scene behind the screens, as screens/MenuScene.tsx takes it. */
 export interface Backdrop {
   missionId: string | null;
@@ -615,9 +626,12 @@ export function App({ boot }: { boot: EditorBoot }) {
   // The mission editor, another page off the join screen; the booklet opens over it.
   const editor = useEditorPage(boot);
   const testRun = useTestRun(live);
-  // The settings, over whatever screen is up (a controller's Start too); nothing pauses.
-  const [settingsOpen, setSettingsOpen] = useState(false);
-  usePad(() => setSettingsOpen((open) => !open));
+  // The menus over the screens (menuLayer.ts): a room's pause menu, its booklet, the settings —
+  // by the gear, a controller's Start, Esc; over a run the crew sees this player at the menu.
+  const layer = useMenuLayer(pausePhaseOf(live));
+  usePad(layer.start);
+  useEscapeOpensMenu(layer);
+  useMenuMark(live.view, layer.pause, live.send);
   const contentRef = useRef<HTMLElement>(null);
   // How the run ended, on this screen: the world plays it before the end screen opens.
   const finale = useFinale(live.view ?? live.spectatorView);
@@ -658,32 +672,40 @@ export function App({ boot }: { boot: EditorBoot }) {
         running={running}
         status={conn.status}
         toEditor={fromEditor ? testRun.back : null}
-        onSettings={() => setSettingsOpen(true)}
+        onGear={layer.gear}
+        inRoom={layer.phase !== null}
         menu={menu}
       />
-      {settingsOpen && <SettingsPanel onClose={() => setSettingsOpen(false)} />}
+      <MenuLayers
+        layer={layer}
+        mission={roomMission(live)}
+        missions={missions}
+        leaveRoom={live.leaveRoom}
+      />
       <ErrorBanner conn={live} />
       <UpdateNotice />
 
       <main ref={contentRef} className={`content ${layout}`}>
         {backdrop !== null && <MenuScene {...backdrop} />}
         <VoiceContext value={voice}>
-          <Screens
-            conn={conn}
-            missions={missions}
-            loadMissions={loadMissions}
-            stats={stats.status === 'ready' ? stats.value : []}
-            handbook={handbook}
-            setHandbook={setHandbook}
-            history={history}
-            setHistory={setHistory}
-            editor={editor}
-            startTestRun={testRun.start}
-            finale={finale}
-            picked={picked}
-            setPicked={setPicked}
-            openSettings={() => setSettingsOpen(true)}
-          />
+          <PauseContext value={{ open: layer.pause, show: layer.openPause }}>
+            <Screens
+              conn={conn}
+              missions={missions}
+              loadMissions={loadMissions}
+              stats={stats.status === 'ready' ? stats.value : []}
+              handbook={handbook}
+              setHandbook={setHandbook}
+              history={history}
+              setHistory={setHistory}
+              editor={editor}
+              startTestRun={testRun.start}
+              finale={finale}
+              picked={picked}
+              setPicked={setPicked}
+              openSettings={layer.openSettings}
+            />
+          </PauseContext>
         </VoiceContext>
       </main>
     </div>

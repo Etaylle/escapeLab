@@ -17,9 +17,10 @@ import { PAD_CHAT, PAD_GLYPHS, type PadButton, type PadFamily } from './pad.js';
 
 /**
  * What a prompt asks for: an action, or one of the steps every screen shares — stepping back
- * (Esc), putting a sheet down, skipping the opening, turning a book's page.
+ * (Esc), putting a sheet down, skipping the opening, turning a book's page, opening the menu
+ * over a room (Esc with nothing open, a controller's Start).
  */
-export type Prompt = InputAction | 'close' | 'putDown' | 'skip' | 'pageBack' | 'pageOn';
+export type Prompt = InputAction | 'close' | 'putDown' | 'skip' | 'pageBack' | 'pageOn' | 'menu';
 
 /** What the glyph depends on: the bindings, and the device used last. */
 export interface GlyphSource {
@@ -40,6 +41,7 @@ const PAD_FIXED: Readonly<Partial<Record<Prompt, PadButton>>> = {
   chat: PAD_CHAT,
   pageBack: 'dleft',
   pageOn: 'dright',
+  menu: 'start',
 };
 
 /** The prompts worked by one of the controller's main actions, on the button bound to it. */
@@ -60,14 +62,16 @@ function padButtonOf(prompt: Prompt, pad: PadBindings): PadButton | null {
 }
 
 /**
- * The key for `prompt` under `keys`: the shared steps' keys whatever is bound — Esc steps back,
- * Space skips, the arrows turn a page — and a sheet is put down with the key that works things.
+ * The key for `prompt` under `keys`: the shared steps' keys whatever is bound — Esc steps back
+ * and opens the menu, Space skips, the arrows turn a page — and a sheet is put down with the key
+ * that works things.
  */
 function keyOf(prompt: Prompt, keys: KeyBindings): string {
   switch (prompt) {
     case 'putDown':
       return keys.interact;
     case 'close':
+    case 'menu':
       return 'escape';
     case 'skip':
       return ' ';

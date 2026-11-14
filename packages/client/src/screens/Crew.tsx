@@ -1,4 +1,10 @@
-import { NO_CREDITS, type Credits, type MapView, type PlayerPosition } from '@escapelab/core';
+import {
+  NO_CREDITS,
+  type Credits,
+  type MapView,
+  type MenuPlace,
+  type PlayerPosition,
+} from '@escapelab/core';
 import { consoleName } from '../world/consoles.js';
 import { carriedItem } from '../world/interact.js';
 import { isArmed } from '../world/known.js';
@@ -11,7 +17,7 @@ export function crewSizeText({ min, max }: { min: number; max: number }): string
 
 export interface CrewTag {
   text: string;
-  tone: 'pult' | 'press' | 'read' | 'hold' | 'carry' | 'sign' | 'away';
+  tone: 'pult' | 'press' | 'read' | 'hold' | 'carry' | 'sign' | 'away' | 'menu';
 }
 
 /** Reach in tiles of a plate, and of an emergency valve (a station's: world/presence.ts). */
@@ -58,14 +64,13 @@ function stationTag(map: MapView | null, at: Whereabouts, pressing: string | nul
 }
 
 /**
- * What one crew member is doing right now: at the armed station — pulling or pressing there,
- * where their press waits for the others' (`pressing`, from the station's view) — reading,
- * holding a plate or a valve, carrying something. Plates and loads follow the live position
- * and the map; where they stand is whatever the screen showing them knows.
+ * What one crew member is doing right now: at the pause menu over the run, which the run goes
+ * on under — first, since nothing else they do moves on meanwhile —, and what they do there
+ * (`doing`). A member whose line is down is only that.
  */
 export function crewTags(
   map: MapView | null,
-  player: { id: string; connected: boolean },
+  player: { id: string; connected: boolean; menu?: MenuPlace },
   at: Whereabouts,
   pos: PlayerPosition | undefined,
   pressing: string | null = null,
@@ -73,6 +78,23 @@ export function crewTags(
   if (!player.connected) {
     return [{ text: 'getrennt', tone: 'away' }];
   }
+  const menu: CrewTag[] = player.menu === 'pause' ? [{ text: 'im Menü', tone: 'menu' }] : [];
+  return [...menu, ...doing(map, player.id, at, pos, pressing)];
+}
+
+/**
+ * What one crew member on the line is doing: at the armed station — pulling or pressing there,
+ * where their press waits for the others' (`pressing`, from the station's view) — reading,
+ * holding a plate or a valve, carrying something. Plates and loads follow the live position
+ * and the map; where they stand is whatever the screen showing them knows.
+ */
+function doing(
+  map: MapView | null,
+  playerId: string,
+  at: Whereabouts,
+  pos: PlayerPosition | undefined,
+  pressing: string | null,
+): CrewTag[] {
   const tags: CrewTag[] = [];
   const station = stationTag(map, at, pressing);
   if (station !== null) {
@@ -85,7 +107,7 @@ export function crewTags(
   if (held !== null) {
     tags.push({ text: held, tone: 'hold' });
   }
-  const carried = map === null ? undefined : carriedItem(map, player.id);
+  const carried = map === null ? undefined : carriedItem(map, playerId);
   if (carried !== undefined) {
     tags.push({ text: `trägt ${carried.label}`, tone: 'carry' });
   }

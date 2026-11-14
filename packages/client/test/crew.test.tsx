@@ -868,6 +868,7 @@ describe('a press waiting at the sync station', () => {
           chatsRef={{ current: [] }}
           onAir={false}
           onOpenInfo={noop}
+          onOpenMenu={noop}
           notesOpen={false}
           onToggleNotes={noop}
         />,
@@ -900,6 +901,7 @@ describe('the crew strip', () => {
         chatsRef={{ current: [] }}
         onAir={false}
         onOpenInfo={noop}
+        onOpenMenu={noop}
         notesOpen={false}
         onToggleNotes={() => undefined}
       />,
@@ -926,6 +928,7 @@ describe('the crew strip', () => {
         chatsRef={{ current: [] }}
         onAir={false}
         onOpenInfo={noop}
+        onOpenMenu={noop}
         notesOpen={false}
         onToggleNotes={noop}
       />,
@@ -1023,6 +1026,7 @@ describe('the audience', () => {
   function finished(): SpectatorView {
     return {
       phase: 'won',
+      missionId: 'blackout',
       missionTitle: 'Blackout im Labor',
       difficulty: 'normal',
       storyText: 'Licht.',

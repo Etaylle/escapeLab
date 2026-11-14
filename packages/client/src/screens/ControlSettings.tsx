@@ -240,7 +240,7 @@ function fixedLine(family: PadFamily, pad: PadBindings): string {
   const g = PAD_GLYPHS[family];
   return (
     `Der Stick läuft, ${g.r1} sprintet, ${g.l1} hält den Funk, ${g[PAD_PING]} setzt einen ` +
-    `Ping, ${g[PAD_CHAT]} öffnet den Schnellchat, ${g.start} die Einstellungen, ${g.select} ` +
+    `Ping, ${g[PAD_CHAT]} öffnet den Schnellchat, ${g.start} das Menü, ${g.select} ` +
     `die Einsatzinfo; in Pulten und Fenstern wählt das Steuerkreuz, ${g[pad.interact]} drückt.`
   );
 }

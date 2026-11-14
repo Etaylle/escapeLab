@@ -200,6 +200,16 @@ const AT_THE_DOOR: ReadonlySet<ClientMessage['kind']> = new Set(DOOR_KINDS);
 /** Whether `msg` is one a socket may send in no room (`AtTheDoor`). */
 const fromTheDoor = (msg: ClientMessage): msg is AtTheDoor => AT_THE_DOOR.has(msg.kind);
 
+/** What a player's own menu says of their seat: the pause menu opened or closed over the run. */
+const MENU_KINDS = ['pause-menu'] as const satisfies readonly ClientMessage['kind'][];
+
+type FromTheMenu = Extract<ClientMessage, { kind: (typeof MENU_KINDS)[number] }>;
+
+const FROM_THE_MENU: ReadonlySet<ClientMessage['kind']> = new Set(MENU_KINDS);
+
+/** Whether `msg` comes from the player's own menu (`FromTheMenu`). */
+const fromTheMenu = (msg: ClientMessage): msg is FromTheMenu => FROM_THE_MENU.has(msg.kind);
+
 /**
  * `msg` carried out on `socket`: the session it leaves the socket with. `again` carries it out
  * once more, for a socket that waits for its room (`hold`).
@@ -216,10 +226,22 @@ function handleMessage(
   }
   // A seat that went to another socket takes nothing from this one any more.
   const held = session !== null && session.holds() ? session : null;
+  if (fromTheMenu(msg)) {
+    return atTheMenu(requireSession(held), msg);
+  }
   // What the page streams supersedes itself: from no seat it goes nowhere, unanswered.
   return held === null && msg.kind === 'pos'
     ? null
     : inRoom(lab, socket, requireSession(held), msg);
+}
+
+/**
+ * What the player's own menu says of the seat of session `s` (`FromTheMenu`): the pause menu
+ * opened or closed over the run, which the crew sees. The session it leaves the socket with.
+ */
+function atTheMenu(s: Session, msg: FromTheMenu): Session | null {
+  s.room.setMenu(s.playerId, msg.open);
+  return s;
 }
 
 /**
@@ -423,7 +445,7 @@ function inRoom(
   lab: Lab,
   socket: PlayerSocket,
   s: Session,
-  msg: Exclude<ClientMessage, AtTheDoor>,
+  msg: Exclude<ClientMessage, AtTheDoor | FromTheMenu>,
 ): Session {
   if (forTheGame(msg)) {
     s.room.act(s.playerId, msg);

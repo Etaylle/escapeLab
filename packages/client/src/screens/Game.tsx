@@ -27,6 +27,7 @@ import {
 import { deviceCoach, firstSight, SHOWN_MARKS, type CoachMark } from '../puzzles/coach.js';
 import { useSolvedHold, type DeviceRun } from '../puzzles/Device.js';
 import { RelayConsole } from '../puzzles/RelayPanel.js';
+import { usePause } from '../menuLayer.js';
 import { useReducedMotion, useSettings } from '../settings.js';
 import type { Connection, Refusal } from '../ws.js';
 import {
@@ -1072,16 +1073,36 @@ function Standstill({
 /** What this player has open, as the screen keeps it (`useOpened`). */
 type OpenNow = ReturnType<typeof useOpened>;
 
-/** Escape closes what lies on top: the info panel, a panel, pages or a note, then the notepad. */
-function useEscapeCloses(open: OpenNow, closeModal: () => void): void {
+/** What Esc does over the run (`escapeStep`). */
+export type EscapeStep = 'info' | 'over' | 'notes' | 'menu';
+
+/**
+ * What Esc does by what stands open: it closes what lies on top — the info panel, a panel, pages
+ * or a note, then the notepad — and with nothing open it opens the pause menu over the run
+ * (menuLayer.ts), which stands nothing still.
+ */
+export function escapeStep(
+  open: Pick<OpenNow, 'info' | 'station' | 'reading' | 'note' | 'notes'>,
+): EscapeStep {
+  if (open.info) {
+    return 'info';
+  }
+  if (open.station !== null || open.reading !== null || open.note !== null) {
+    return 'over';
+  }
+  return open.notes ? 'notes' : 'menu';
+}
+
+/** Escape does its step (`escapeStep`). */
+function useEscapeCloses(open: OpenNow, closeModal: () => void, openMenu: () => void): void {
   useEscape(() => {
-    if (open.info) {
-      open.set({ info: false });
-    } else if (open.station !== null || open.reading !== null || open.note !== null) {
-      closeModal();
-    } else {
-      open.set({ notes: false });
-    }
+    const steps: Record<EscapeStep, () => void> = {
+      info: () => open.set({ info: false }),
+      over: closeModal,
+      notes: () => open.set({ notes: false }),
+      menu: openMenu,
+    };
+    steps[escapeStep(open)]();
   });
 }
 
@@ -1295,7 +1316,8 @@ export function worldLocked(
 
 /**
  * The world as the running mission shows it to this player: the cold open, the end, the open
- * station — and E at a source, a note or the station opens it over the world.
+ * station — and E at a source, a note or the station opens it over the world. Under the pause
+ * menu it takes no keys: the avatar stands while the run goes on.
  */
 function RunWorld({
   game,
@@ -1314,6 +1336,8 @@ function RunWorld({
   holdTips: boolean;
 }) {
   const { view, finale } = game;
+  const menu = usePause();
+  const held = worldHeld(finale, game.line, view) || menu.open;
   return (
     <GameWorld
       view={view}
@@ -1327,7 +1351,7 @@ function RunWorld({
       finale={finale === null ? null : { ending: finale.ending, since: finale.since }}
       station={station}
       holdTips={holdTips}
-      inputLocked={worldLocked(view, open, station, worldHeld(finale, game.line, view))}
+      inputLocked={worldLocked(view, open, station, held)}
       onToggleInfo={open.toggleInfo}
       onRead={(manualId) => open.set({ readingId: manualId })}
       onReadNote={(index) => open.set({ noteIndex: index })}
@@ -1338,11 +1362,12 @@ function RunWorld({
   );
 }
 
-/** What the crew strip's buttons open: the notepad and the info panel. */
+/** What the crew strip's buttons open: the notepad, the info panel and the pause menu. */
 interface StripButtons {
   notesOpen: boolean;
   onToggleNotes: () => void;
   onOpenInfo: () => void;
+  onOpenMenu: () => void;
 }
 
 /**
@@ -1406,14 +1431,16 @@ export function GameScreen(props: Props) {
   const pad = useNotepad(roomCode, view.you.id, open);
   const closeModal = (): void => open.set(NOTHING_OVER);
   const { keys } = useSettings();
+  const menu = usePause();
   useKeys([keys.notes], pad.toggle);
   useKeys(putDownKeys(overOf(open), keys), closeModal);
-  useEscapeCloses(open, closeModal);
+  useEscapeCloses(open, closeModal, menu.show);
   // Until the click of the cold open the strip keeps quiet: the opener has the banner.
   const crewStrip = useCrewStrip(props, notice?.kind === 'line' || !coldOpen.dark, {
     notesOpen: open.notes,
     onToggleNotes: pad.toggle,
     onOpenInfo: () => open.set({ info: true }),
+    onOpenMenu: menu.show,
   });
   const map = view.map;
   if (map === null) {

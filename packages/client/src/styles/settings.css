@@ -8,10 +8,11 @@
 
 /*
  * A plain dim, no backdrop-filter: a blur over the live canvas is redone on every frame. Over
- * every other overlay — the info panel opened under it too — as Esc closes it first.
+ * every other overlay — the info panel opened under it too, the pause menu it was opened from
+ * (pause.css) — as Esc closes it first.
  */
 .overlay.settings {
-  z-index: 61;
+  z-index: 62;
   background: rgba(4, 7, 10, 0.86);
   cursor: pointer;
 }

@@ -188,15 +188,20 @@ const LINE_ACTIONS: ReadonlySet<Action['type']> = new Set([
   'player-disconnected',
   'set-presence',
   'set-occupancy',
+  'set-menu',
   'maintenance',
 ]);
 
 /**
- * What the room dispatches of where the crew stands, as it walks: no snapshot goes out for it on
- * its own — a run whose clock runs sends one every SNAPSHOT_LIVE_MS, where everybody stands with
- * it.
+ * What the room dispatches of where the crew stands, as it walks, and of a pause menu opened or
+ * closed: no snapshot goes out for it on its own — a run whose clock runs sends one every
+ * SNAPSHOT_LIVE_MS, where everybody stands with it.
  */
-const PRESENCE_ACTIONS: ReadonlySet<Action['type']> = new Set(['set-presence', 'set-occupancy']);
+const PRESENCE_ACTIONS: ReadonlySet<Action['type']> = new Set([
+  'set-presence',
+  'set-occupancy',
+  'set-menu',
+]);
 
 /** A new device's ask for a seat by its name: the pass it brings, whom to tell, its timer. */
 interface Claim {
@@ -1147,6 +1152,18 @@ export class Room {
         this.log(`${this.nameOf(playerId)} went on without ${this.nameOf(msg.absentId)}`);
         this.reconcileCrew();
         break;
+    }
+  }
+
+  /**
+   * `playerId` opens the pause menu over the run, or closes it (`open`): the crew's views say so
+   * (core `set-menu`), and nothing stands still for it. A word that changes nothing — outside a
+   * run, said twice — sends nobody anything.
+   */
+  setMenu(playerId: string, open: boolean): void {
+    const next = applyAction(this.state, { type: 'set-menu', playerId, open });
+    if (next !== this.state) {
+      this.settle(next, 'set-menu');
     }
   }
 

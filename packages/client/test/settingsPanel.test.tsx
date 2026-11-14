@@ -76,7 +76,7 @@ describe('the gear in the top bar', () => {
         running={null}
         status="open"
         toEditor={null}
-        onSettings={noop}
+        onGear={noop}
       />,
     );
     const sound = html.indexOf('class="sound-toggle"');
@@ -86,6 +86,22 @@ describe('the gear in the top bar', () => {
     expect(html).toMatch(
       /<button class="settings-toggle" title="Einstellungen" aria-label="Einstellungen">/,
     );
+  });
+
+  it('opens the room’s menu in a room, and says so', () => {
+    vi.stubGlobal('window', { location: { origin: 'http://lab', pathname: '/' } });
+    const html = renderToStaticMarkup(
+      <TopBar
+        roomCode="ABCD"
+        seed={null}
+        running={null}
+        status="open"
+        toEditor={null}
+        onGear={noop}
+        inRoom
+      />,
+    );
+    expect(html).toMatch(/<button class="settings-toggle" title="Menü" aria-label="Menü">/);
   });
 });
 
@@ -102,19 +118,19 @@ describe('the Info panel’s keys', () => {
     expect(keys.get('W A S D / Pfeile')).toBe('Laufen');
     expect(keys.get('Shift halten')).toMatch(/^Sprinten/);
     expect(keys.get('V halten')).toMatch(/^Sprechen/);
-    expect(keys.get('⚙ in der Kopfleiste')).toMatch(/^Einstellungen/);
+    expect(keys.get('Esc oder ⚙ in der Kopfleiste')).toMatch(/^Menü: Einstellungen/);
     const rebound = new Map(controlsOf({ ...keyboard, keys: { ...DEFAULT_KEYS, talk: 'g' } }));
     expect(rebound.has('V halten')).toBe(false);
     expect(rebound.get('G halten')).toMatch(/^Sprechen/);
   });
 
-  it('names the controller’s buttons where one was used last, Start for the settings', () => {
+  it('names the controller’s buttons where one was used last, Start for the menu', () => {
     const pad = new Map(controlsOf({ ...keyboard, device: 'pad', family: 'playstation' }));
     expect(pad.get('R1 halten')).toMatch(/^Sprinten/);
     expect(pad.get('L1 halten')).toMatch(/^Sprechen/);
     expect(pad.get('✕')).toMatch(/^Bedienen/);
     expect(pad.get('□')).toMatch(/^Notizblock/);
-    expect(pad.get('Options')).toMatch(/^Einstellungen/);
+    expect(pad.get('Options')).toMatch(/^Menü: Einstellungen/);
     expect(pad.get('Steuerkreuz, dann ✕')).toMatch(/Pulten und Fenstern/);
     // The stick walks; the D-pad's ◀ pings where the lamp points, its ▶ opens the quick chat.
     expect(pad.get('Stick')).toBe('Laufen');
