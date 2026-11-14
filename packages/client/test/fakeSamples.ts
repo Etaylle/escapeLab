@@ -9,14 +9,16 @@ import { MUSIC_IDS, SFX_IDS, type SampleEntry } from '../src/world/samples.js';
  */
 
 /**
- * How a test serves one recording: its length, its gain, where its sound starts, its status,
- * its channels, the file its entry names (another's, for an entry that borrows a recording), or
- * no entry at all (`listed: false`, as one awaiting its render).
+ * How a test serves one recording: its length, its gain, where its sound starts, the bars a
+ * piece of the score loops on, its status, its channels, the file its entry names (another's, for
+ * an entry that borrows a recording), or no entry at all (`listed: false`, as one awaiting its
+ * render).
  */
 export interface Served {
   readonly seconds?: number;
   readonly gain?: number;
   readonly startMs?: number;
+  readonly bars?: number;
   readonly status?: number;
   readonly channels?: number;
   readonly file?: string;
@@ -49,6 +51,11 @@ export function serveSamples(
 ): string[] {
   const fetched: string[] = [];
   const secondsOf = (id: string): number => served[id]?.seconds ?? SECONDS[id] ?? 0.5;
+  /** The bars a piece of the score loops on, where the test serves it so. */
+  const barsOf = (id: string): { bars?: number } => {
+    const bars = served[id]?.bars;
+    return bars === undefined ? {} : { bars };
+  };
   const entry = (id: string): SampleEntry => ({
     file: served[id]?.file ?? `${id}.mp3`,
     ms: Math.round(secondsOf(id) * 1000),
@@ -59,6 +66,7 @@ export function serveSamples(
     loop: LOOPS.has(id) || id.startsWith('bed-'),
     hash: '000000000000',
     ...(STEMS.has(id) ? { bpm: 90 } : {}),
+    ...barsOf(id),
     source: 'elevenlabs',
   });
   const listed = (id: string): boolean => served[id]?.listed !== false;

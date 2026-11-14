@@ -207,9 +207,10 @@ instance's answer. The menu's card says „Jede Station zum Üben" over its titl
 made from the module registry (`core/test/hall.ts`): a module added there fails
 `core/test/hall.test.ts` until the hall is written anew, with the walkthrough's plan, by
 `node --import tsx ../core/test/writeHall.ts` from `packages/server`.
-`SHOTS_MISSION=Uebungshalle` plays it to the won card from that plan
-(`tools/fixtures/hall-plan.json`, made by `core/test/hallPlan.ts`): the overview from the
-audience (`hall-overview.png`) and every station's device as it opens (`hall-<type>.png`).
+Every Systemcheck walkthrough plays it before its own run, a drill in a room of its own (group
+`hall`, `tools/groups.mjs`), to the won card from that plan (`tools/fixtures/hall-plan.json`,
+made by `core/test/hallPlan.ts`): the overview from the audience (`hall-overview.png`), every
+station's device as it opens (`hall-<type>.png`) and the won card (`hall-won.png`).
 
 ## The first win
 
@@ -264,14 +265,15 @@ Seven plaques a crew earns in a run it wins, read off the run's report alone
 | Jede Station im ersten Versuch | no station reported a wrong move (a drone's alarm is none) |
 | Ungesehen | no drone caught anybody, on a map where drones patrol |
 | Stiller Serverraum | no command at the Serverraum failed (an alarm there); none without one |
-| Erste Schicht | every won run — that it is the first is the device's to tell |
+| Erste Schicht | every won run — that it is the first is the account's to tell |
 
-The view of a finished run carries them (`PlayerView.achievements`). The device keeps each with
-the moment of the run that first earned it (`escapelab.achievements`, by mission). The won card
-shows them as brass plates under its facts — title, line, the day first earned — the ones new
-to this device coming in one after the other, 300 ms apart; under reduced motion they are
-simply there. The lobby counts the mission's: „Erfolge 3/7". The plates praise nobody: they say
-what happened.
+The view of a finished run carries them (`PlayerView.achievements`). The account of each crew
+member's pass keeps each with the end of the run that first earned it, unlocked as the run is
+stored (docs/accounts.md); the browser keeps a cache of them (`escapelab.achievements`, by
+mission), which the server fills with every account message. The won card shows them as brass
+plates under its facts — title, line, the day first earned — the ones new to the account coming in
+one after the other, 300 ms apart; under reduced motion they are simply there. The lobby counts
+the mission's: „Erfolge 3/7". The plates praise nobody: they say what happened.
 
 ## Tagesschicht
 
@@ -316,6 +318,31 @@ distance, muffled through a wall), 900 ms apart at five tiles and 220 ms right b
 nearer. The screen's edge glows red toward it through the marker system — a marker with a glow
 instead of an arrow, on the screen's edge where the line toward the drone leaves it — as strong
 as it is near. At every difficulty; a drone held still by its plate, or one flying off, is quiet.
+
+## The Signalkette's last stage without colour
+
+Every colour of the Signalkette carries a pattern — rot glatt, blau Punkte, grün Streifen, gelb
+Ring — which the consoles draw over the sign and the legend's two „Muster" columns name beside the
+colours. With the legend the pattern carries a rule as well: from stage `greyFrom` on (core
+`puzzles/signal.ts`; left out, the last stage; 0, never; a positive stage only with the legend, as
+the validation says) the display loses its colour. No view of the station names a colour then: the
+sending console's and the audience's carry each sign as its form and its pattern alone, the
+receiving console's, as in every stage, no sign at all. In a grey stage the legend's Muster columns
+are the way back from a pattern to its colour, and so to the row to press: they, or Abb. 2, or the
+textures the coloured stages showed over each colour, which tell the same; a player who cannot tell
+the colours apart reads exactly what everyone else reads. With both Muster columns in the notepad
+(Klemmbrett · Legende), either console finds its row by the pattern at once. The sending console
+lights a third legend, ANZEIGE · FARBLOS, and draws the signs grey at 64 px, their patterns bold and
+near black: every cell of a pattern 18 px or more, its ink 9.4:1 against the grey
+(`SignalPanel.tsx`; the art bible's „Type and targets"). A fleeting stage stays fleeting, one grey
+sign at a time; the receiving console's keys stay as they are. The printed Betrieb says from which
+stage the display shows no colour and that the legend gives each pattern its colour, and the
+workshop's note on the display's capacitor says from which stage it is colourless; Betrieb is kept
+terse for it, every rule kept, so that the page stays within its 170 words. In Blackout
+(`greyFrom` 4) the Frühschicht's third note in the margin says it too. The solver reads a grey
+sign's colour back through the patterns the legend prints beside the colours, and the walkthrough
+plays the last stage from the plan with grey signs and shoots it (signal-grey.png in the host's
+window, signal-grey-phone-932.png on a large phone).
 
 ## The Serverraum's cabling diagram
 
@@ -378,7 +405,7 @@ section a table by its first column, a list as „Regeln" — or what the place 
 
 | Template | Set as | In Blackout (seed 5) |
 | --- | --- | --- |
-| Table | its columns aligned under their names, two blanks apart, never wrapped; a repeated column the table already gives left out | Klemmbrett · Legende (Zeile · Pult A · Muster · Pult B: the printed second „Muster" is the pattern Pult A's column gives B's colour), Spind · Netzplan, Terminal · Dienste (Dienst · Status · Strom · Braucht) |
+| Table | its columns aligned under their names, two blanks apart (one where two would run wider than the pad), never wrapped | Klemmbrett · Legende (Zeile · Pult A · Muster · Pult B · Muster: each console's pattern beside its colour, so that a grey sign's pattern gives either console its row at once), Spind · Netzplan, Terminal · Dienste (Dienst · Status · Strom · Braucht) |
 | More pairs than lines | two pairs a line, the first half down the left | Aktenschrank · Frequenztabelle: 16 words in 8 lines |
 | Morsetafel | only the letters the Frequenztabelle's words are told apart by (their first three) — 18 of 26 — two a line | Aktenschrank · Morsetafel: 9 lines |
 | Long table of pairs of rows | a pair of rows a line, alike but for a yes-or-no column | the Kippschalterbank's Stellungstabelle (Stern nein · Stern ja) |

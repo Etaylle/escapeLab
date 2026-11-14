@@ -1,6 +1,13 @@
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import {
+  appendFileSync,
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   initialState,
@@ -11,10 +18,12 @@ import {
   type ServerMessage,
 } from '@escapelab/core';
 import { RoomManager } from '../src/roomManager.js';
-import { appendRun, parseRuns, readRuns } from '../src/runLog.js';
 import type { Room } from '../src/room.js';
+import { appendLine, JsonlStore, parseRuns, readRuns } from '../src/store/jsonl.js';
+import { recordRuns, type FinishedRun, type LoggedRun } from '../src/store/store.js';
 import { pressE, walkTo, type Walker } from './walk.js';
 import { passFor } from './passes.js';
+import { DAY, finished, reportOf, seatPassOf, storeContract } from './storeContract.js';
 
 /**
  * Two presses for the whole crew along a corridor and the hatch between
@@ -68,29 +77,25 @@ beforeEach(() => {
 
 const linesOf = (file: string): string[] => readFileSync(file, 'utf8').trimEnd().split('\n');
 
-describe('appendRun', () => {
+storeContract('the run log with the accounts in memory', async () => {
+  const file = join(mkdtempSync(join(tmpdir(), 'escapelab-store-')), 'runs.jsonl');
+  return { store: JsonlStore.open(file), reopen: async () => JsonlStore.open(file) };
+});
+
+describe('appendLine', () => {
   it('puts every run on a line of its own, in a directory made on demand', () => {
     const file = join(dir, 'neu', 'tief', 'runs.jsonl');
-    appendRun(file, someReport());
-    appendRun(file, someReport());
+    appendLine(file, someReport());
+    appendLine(file, someReport());
     expect(linesOf(file).map((line) => JSON.parse(line))).toEqual([someReport(), someReport()]);
   });
 
-  it('says whether the line was written', () => {
-    expect(appendRun(join(dir, 'runs.jsonl'), someReport())).toBe(true);
-  });
-
-  it('logs a write that fails instead of throwing it', () => {
+  it('throws for a write that fails, naming the file and what to do', () => {
     const blocker = join(dir, 'datei');
     writeFileSync(blocker, 'kein Ordner');
-    const logged = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    try {
-      expect(appendRun(join(blocker, 'runs.jsonl'), someReport())).toBe(false);
-      expect(logged).toHaveBeenCalledWith(expect.stringContaining(join(blocker, 'runs.jsonl')));
-      expect(logged).toHaveBeenCalledWith(expect.stringContaining('RUNS_LOG'));
-    } finally {
-      logged.mockRestore();
-    }
+    const file = join(blocker, 'runs.jsonl');
+    expect(() => appendLine(file, someReport())).toThrow(file);
+    expect(() => appendLine(file, someReport())).toThrow(/point RUNS_LOG at a writable file$/);
   });
 });
 
@@ -146,6 +151,96 @@ describe('parseRuns', () => {
   });
 });
 
+describe('the run log opened as the store', () => {
+  /** The stats of Blackout at normal. */
+  const normal = (store: JsonlStore) =>
+    store.stats().mission('blackout')?.difficulties.find((d) => d.difficulty === 'normal');
+
+  it('starts empty where there is no log yet', () => {
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      expect(JsonlStore.open(join(dir, 'runs.jsonl')).stats().runs).toBe(0);
+      expect(logged).not.toHaveBeenCalled();
+    } finally {
+      logged.mockRestore();
+    }
+  });
+
+  it('counts a log of both versions, as the server shipped it', () => {
+    const fixture = fileURLToPath(new URL('./fixtures/runs.jsonl', import.meta.url));
+    const stats = JsonlStore.open(fixture).stats();
+    expect(stats.runs).toBe(7);
+    const systemcheck = stats
+      .mission('systemcheck')
+      ?.difficulties.find((level) => level.difficulty === 'normal');
+    expect(systemcheck).toMatchObject({
+      runs: 4,
+      wins: 2,
+      bestSeconds: 300,
+      medianSeconds: 330,
+      top: [
+        { crew: [], seconds: 300, alarms: 1 },
+        { crew: ['Anna', 'Ben'], seconds: 360, alarms: 3 },
+      ],
+    });
+    const hart = stats.mission('blackout')?.difficulties.find((d) => d.difficulty === 'hart');
+    expect(hart?.top).toMatchObject([{ crew: ['Cleo', 'Dan'] }]);
+  });
+
+  it('leaves out each line that holds no run, and says which', () => {
+    const file = join(dir, 'runs.jsonl');
+    const good = JSON.stringify(reportOf());
+    // A run of the Tagesschicht starting at no moment has no day to be ranked on.
+    const dayless = JSON.stringify({ ...reportOf(), daily: true, startedAt: 7 });
+    const never = dayless.replace('"startedAt":7', '"startedAt":1e999');
+    writeFileSync(file, `${good}\n{"version":2,\n${good}\n{"version":9}\n${never}\n`);
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      expect(JsonlStore.open(file).stats().runs).toBe(2);
+      expect(logged.mock.calls.map(([line]) => String(line))).toEqual([
+        expect.stringMatching(/runs\.jsonl:2: not JSON .*\(the Bestenliste leaves it out\)$/),
+        expect.stringMatching(/runs\.jsonl:4: not a run report .*\(the Bestenliste leaves it ou/),
+        expect.stringMatching(/runs\.jsonl:5: not a run report .*\(the Bestenliste leaves it ou/),
+      ]);
+    } finally {
+      logged.mockRestore();
+    }
+  });
+
+  it('starts empty, saying why, where the log cannot be read', () => {
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      // A directory where the log should be.
+      expect(JsonlStore.open(dir).stats().runs).toBe(0);
+      expect(logged).toHaveBeenCalledWith(expect.stringContaining(`run log ${dir} not read`));
+    } finally {
+      logged.mockRestore();
+    }
+  });
+
+  it('counts each run as it is kept, and never reads the log again for the stats', async () => {
+    const file = join(dir, 'runs.jsonl');
+    writeFileSync(file, `${JSON.stringify(reportOf({ seconds: 300 }))}\n`);
+    const store = JsonlStore.open(file);
+    // Whatever else lands in the log afterwards is not counted ...
+    appendFileSync(file, `${JSON.stringify(reportOf({ seconds: 100, at: DAY + 1 }))}\n`);
+    expect(store.stats().runs).toBe(1);
+    // ... only what the store keeps itself, which it writes first.
+    await store.appendRun(finished({ seconds: 200, at: DAY + 2, crew: ['Cleo'] }, [null]));
+    expect(store.stats().runs).toBe(2);
+    expect(linesOf(file)).toHaveLength(3);
+    expect(normal(store)?.top.map((entry) => entry.crew)).toEqual([['Cleo'], ['Anna', 'Ben']]);
+  });
+
+  it('counts no run it could not write, and says why', async () => {
+    const blocker = join(dir, 'datei');
+    writeFileSync(blocker, 'kein Ordner');
+    const store = JsonlStore.open(join(blocker, 'runs.jsonl'));
+    await expect(store.appendRun(finished({}, [null, null]))).rejects.toThrow('RUNS_LOG');
+    expect(store.stats().runs).toBe(0);
+  });
+});
+
 /** `name` joins, and everything the room pushes to them is kept. */
 function seat(room: Room, name: string): Walker {
   const messages: ServerMessage[] = [];
@@ -175,24 +270,26 @@ describe('a room', () => {
     room.act(ben.playerId, { kind: 'puzzle-input', input: { press: true } });
   }
 
-  /** A room of the manager whose runs go to `file`, with Anna and Ben in a started run. */
+  /** A room of the manager whose runs go to the store over `file`, with Anna and Ben under way. */
   function startedRoom(file: string) {
-    const room = new RoomManager((report) => appendRun(file, report)).create(mission);
+    const recorder = recordRuns(JsonlStore.open(file));
+    const room = new RoomManager(recorder.record).create(mission);
     const anna = seat(room, 'Anna');
     const ben = seat(room, 'Ben');
     room.setReady(ben.playerId, true);
     room.act(anna.playerId, { kind: 'start-mission' });
-    return { room, anna, ben };
+    return { room, anna, ben, recorder };
   }
 
-  it('appends a line for every run that ends, a rematch on its own line', () => {
+  it('keeps a line for every run that ends, a rematch on its own line', async () => {
     const file = join(dir, 'runs.jsonl');
-    const { room, anna, ben } = startedRoom(file);
+    const { room, anna, ben, recorder } = startedRoom(file);
     expect(existsSync(file)).toBe(false);
 
     // The first run runs out of time.
     vi.advanceTimersByTime(mission.timeLimitSec * 1000 + 1);
     expect(phaseOf(anna)).toBe('lost');
+    await recorder.settled();
     expect(linesOf(file)).toHaveLength(1);
 
     // Both confirm, the rematch starts by itself, and this time the crew gets out.
@@ -205,9 +302,10 @@ describe('a room', () => {
     moveTo(room, ben, 3, 2);
     moveTo(room, anna, 3, 2);
     expect(phaseOf(anna)).toBe('won');
+    await recorder.settled();
 
     const text = readFileSync(file, 'utf8');
-    const [lost, won, ...more] = parseRuns(text, file);
+    const [lost, won, ...more]: LoggedRun[] = parseRuns(text, file);
     expect(more).toEqual([]);
     expect(lost).toMatchObject({ missionId: 'protokollraum', outcome: 'lost:time', crewSize: 2 });
     const rematchAt = (lost?.finishedAt ?? 0) + 1;
@@ -221,25 +319,42 @@ describe('a room', () => {
       ],
     });
     // The crew goes by the names it played under, in the order it joined, and the room by its
-    // code; nobody by id.
+    // code; nobody by id, nor by pass.
     for (const run of [lost, won]) {
       expect(run).toMatchObject({ version: 2, roomCode: room.code, crew: ['Anna', 'Ben'] });
     }
-    for (const id of [anna.playerId, ben.playerId]) {
+    for (const id of [anna.playerId, ben.playerId, passFor('Anna').id, passFor('Ben').id]) {
       expect(text).not.toContain(id);
     }
     room.dispose();
   });
 
-  it('plays on when the line cannot be written', () => {
+  it('hands the store the pass that held each seat, in the order of the crew', () => {
+    const runs: FinishedRun[] = [];
+    const room = new RoomManager((run) => runs.push(run)).create(mission);
+    const anna = seat(room, 'Anna');
+    const ben = seat(room, 'Ben');
+    room.setReady(ben.playerId, true);
+    room.act(anna.playerId, { kind: 'start-mission' });
+    vi.advanceTimersByTime(mission.timeLimitSec * 1000 + 1);
+    // Each by its id and the hash of the secret its seat was bound with: an id alone is no pass.
+    expect(runs.map((run) => run.passes)).toEqual([[seatPassOf('Anna'), seatPassOf('Ben')]]);
+    room.dispose();
+  });
+
+  it('plays on when the line cannot be written, the log saying why', async () => {
     const blocker = join(dir, 'datei');
     writeFileSync(blocker, 'kein Ordner');
     const logged = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     try {
-      const { room, anna } = startedRoom(join(blocker, 'runs.jsonl'));
+      const { room, anna, recorder } = startedRoom(join(blocker, 'runs.jsonl'));
       vi.advanceTimersByTime(mission.timeLimitSec * 1000 + 1);
       expect(phaseOf(anna)).toBe('lost');
+      await recorder.settled();
       expect(logged).toHaveBeenCalledOnce();
+      expect(String(logged.mock.calls[0]?.[0])).toMatch(
+        /^\[escapelab\] run of protokollraum not kept: run report not written to .*RUNS_LOG/,
+      );
       room.dispose();
     } finally {
       logged.mockRestore();

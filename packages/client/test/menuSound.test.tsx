@@ -11,7 +11,7 @@ import {
   type FakeNode,
 } from './fakeGraph.js';
 import { elements, fakeMedia } from './fakeMedia.js';
-import { serveSamples } from './fakeSamples.js';
+import { serveSamples, type Served } from './fakeSamples.js';
 
 /** The page's window as the menu's sound reaches it: its listeners, which a test fires. */
 function fakeWindow() {
@@ -33,10 +33,13 @@ function fakeWindow() {
   };
 }
 
-/** The sound's modules afresh, the theme 60 s and the hum, both rendered, served. */
-async function fresh() {
+/**
+ * The sound's modules afresh, the theme 60 s and the hum, both rendered, served — the lobby's
+ * piece awaiting its render, as the score's pieces do — or as `served` says.
+ */
+async function fresh(served: Readonly<Record<string, Served>> = {}) {
   vi.resetModules();
-  serveSamples({ 'menu-theme': { seconds: 60 } });
+  serveSamples({ 'menu-theme': { seconds: 60 }, lobby: { listed: false }, ...served });
   const sound = await import('../src/world/menuSound.js');
   const audio = await import('../src/world/audio.js');
   const mix = await import('../src/world/mix.js');
@@ -258,6 +261,88 @@ describe('the menu’s sound in the lobby and at the run’s start', () => {
       opened: 1,
       ready: 1,
     });
+  });
+});
+
+describe('the lobby’s own piece and the hum, where they are rendered', () => {
+  /** The gains the pieces cross by: those that feed the music's level on its bus. */
+  const crosses = (music: FakeNode): FakeGain[] => {
+    const out = themeOut(music);
+    return lastContext()
+      .all<FakeGain>('gain')
+      .filter((node) => out !== undefined && node.outputs.includes(out));
+  };
+
+  it('comes in from its start on the theme’s next bar, crossing over 2 s, as loud', async () => {
+    const page = fakeWindow();
+    const { sound, audio } = await fresh({ lobby: { seconds: 61.334, bars: 20 } });
+    sound.wantMenuSound('menu');
+    page.fire('pointerdown');
+    await vi.advanceTimersByTimeAsync(600); // the theme's first pass on 10.3, its bars from there
+    const engine = audio.audioEngine() as unknown as { music: FakeNode };
+    expect(sound.menuSoundProbe().piece).toBe('menu-theme');
+    lastContext().currentTime = 20;
+    sound.wantMenuSound('lobby');
+    await vi.advanceTimersByTimeAsync(100);
+    const bar = 10.3 + 4 * (8 / 3); // the first bar line after 20.3
+    const fades = crosses(engine.music).map((node) => node.gain.ramps().at(-1));
+    expect(fades).toEqual([
+      [0, expect.closeTo(bar + 2, 9)],
+      [1, expect.closeTo(bar + 2, 9)],
+    ]);
+    // As loud as the theme: the score's pieces share one loudness, no lobby weight.
+    expect(themeOut(engine.music)?.gain.ramps().at(-1)?.[0]).toBe(MUSIC_LEVEL);
+    expect(streaming()).toHaveLength(1);
+    await vi.advanceTimersByTimeAsync((bar - 20) * 1000);
+    expect(streaming()).toHaveLength(2); // the lobby's first pass on that bar, from its start
+    expect(sound.menuSoundProbe()).toMatchObject({ piece: 'lobby', sounding: 2 }); // crossing
+    lastContext().currentTime = bar + 2.1;
+    await vi.advanceTimersByTimeAsync(300);
+    expect(streaming()).toHaveLength(1); // the theme let go once it has faded
+    expect(sound.menuSoundProbe()).toMatchObject({ place: 'lobby', piece: 'lobby', sounding: 1 });
+    expect(audio.inUse().loop).toBe(2); // the lobby's piece and the hum
+  });
+
+  it('takes a loop for the hum only where it plays: the theme alone takes one', async () => {
+    const page = fakeWindow();
+    const { sound, audio } = await fresh({ 'bed-facility': { listed: false } });
+    sound.wantMenuSound('menu');
+    page.fire('keydown');
+    await vi.advanceTimersByTimeAsync(600);
+    expect(sound.menuSoundProbe()).toMatchObject({ theme: true, hum: false });
+    expect(sourcesOf(sound.HUM)).toHaveLength(0);
+    expect(audio.inUse().loop).toBe(1);
+    sound.wantMenuSound(null);
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(audio.inUse().loop).toBe(0);
+  });
+
+  it('keeps silent a hum brought up more than +12 dB, the theme playing on', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const page = fakeWindow();
+    const { sound, audio } = await fresh({ 'bed-facility': { gain: 35.5 } }); // +31 dB
+    sound.wantMenuSound('menu');
+    page.fire('keydown');
+    await vi.advanceTimersByTimeAsync(600);
+    expect(sound.menuSoundProbe()).toMatchObject({ theme: true, hum: false });
+    expect(sourcesOf(sound.HUM)).toHaveLength(0);
+    expect(audio.inUse().loop).toBe(1);
+  });
+});
+
+describe('the menu’s sound as the walkthrough hears it', () => {
+  it('sounds once an element of the theme plays, not as soon as its pass is laid', async () => {
+    const page = fakeWindow();
+    const { sound } = await fresh();
+    sound.wantMenuSound('menu');
+    page.fire('keydown');
+    await vi.advanceTimersByTimeAsync(150); // its first pass laid for 10.3, its element waiting
+    expect(streaming()).toHaveLength(0);
+    expect(sound.menuSoundProbe()).toMatchObject({ theme: false, piece: null, sounding: 0 });
+    await vi.advanceTimersByTimeAsync(450);
+    expect(streaming()).toHaveLength(1);
+    const heard = { theme: true, piece: 'menu-theme', sounding: 1 };
+    expect(sound.menuSoundProbe()).toMatchObject(heard);
   });
 });
 

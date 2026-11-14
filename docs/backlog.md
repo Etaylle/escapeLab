@@ -167,13 +167,30 @@ die Entscheidung.
   nennt beide Werte. Tests in tools/framegate; Header-Kommentar und art-bible ergänzen.
 - Langfristig: Flucht-Main-Thread billiger (Licht/Dunkel-Pässe, halbe Frame), siehe Audit-Addenda.
 
+### H-3 Capture-Gruppen im Harness — Status: erledigt (H-quick, Merge 2026-11-14) · Größe: S
+- `tools/groups.mjs` nennt 15 Gruppen; `SHOTS_ONLY=screens,intro` beweist ein Menü-Paket in
+  48 s statt 12 min, `SHOTS_SKIP=run` lässt den Lauf aus; jeder Schritt läuft unter dem Gate
+  seiner Gruppe, ein voller Lauf scheitert an einem falsch eingeordneten Capture. Ohne Variablen
+  ist der Lauf identisch zu vorher (per Aufrufgraph geprüft). Gemessene Kosten je Gruppe in der
+  README.
+
+### H-4 Der gemessene Lauf unter Software-GL urteilt wieder — Status: in Arbeit (H-sgl, Spec `spec-H-sgl.md`) · Größe: M
+- Befund 2026-11-14: Der Lauf mit `SHOTS_SOFTWARE_GL=1` scheitert auf main selbst — Systemcheck am
+  Panel-Ausblend-Check in 5 von 6 Läufen und am letzten Sync-Check, Blackout an meter-swing,
+  panel-close und einem 43-px-Ziel am Handy, der Notstrom-Kasten seit Tagen. Jeder dieser Checks
+  liest die Latenz des Screenshots, als wäre sie die Zeit der Animation; so entscheidet die Last,
+  nicht der Code, und das Tor für Pakete mit Zeichenarbeit je Frame (S-hero) steht offen.
+- Plan: jeden Check die Zeit der Seite lesen lassen (eigene Uhr, Animation API, gehaltenes
+  Standbild), sonst mit benanntem Grund und gemessener Latenz überspringen, nie still; das 43-px-
+  Ziel an der Ursache beheben; Frame-Fenster nennen die Last, unter der sie liefen.
+
 ### T-9 Tests an der Wanduhr — Status: erledigt (2026-11-13) · Größe: S
 - Zwei Tests lasen die echte Uhr und wurden unter Last rot: `certificate.test.ts` (openssl liest
   seine Uhr zweimal, ein Lauf über eine Sekundengrenze machte aus 825 Tagen 825,00001; jetzt
   gerundet) und `coldOpen.test.tsx` (Zielleiste und Briefing rendern nach `Date.now()`, bei Last
   über 15 wurde aus „10:59" „10:58"; jetzt eingefrorene Uhr). Regel: Tests fälschen die Zeit.
 
-### T-8 Signalkette: das Muster zählt — Status: bereit (Entscheidung Uros 2026-11-13, Spec `spec-T-signal-grey.md`) · Größe: S
+### T-8 Signalkette: das Muster zählt — Status: erledigt (T-signal-grey, Merge 2026-11-14; zwei Review-Runden; Cloud-CI grün auf e26424b: Blackout 157 Captures; Blackout farblos ab Stufe 4) · Größe: S
 - Uros beim Spielen: „Ist das Muster ganz ohne Nutzen?" Mit Legende ja: Die Pulte zeichnen je
   Farbe ein Muster und die Legende nennt es, aber die Lösung braucht nur die Farbe; die Spalte
   ist Dekoration, die wie eine Regel aussieht.
@@ -181,6 +198,22 @@ die Entscheidung.
   ihrem Muster; die Muster-Spalte der Legende ist dann der einzige Weg zur Farbe. Feld
   `greyFrom` (Standard letzte Stufe), Sichten ohne Farbwort in diesen Stufen, Löser über die
   Legende, Frühschicht-Hinweis, Panel mit kontrastreichem Muster, Plan neu erzeugt.
+- Umgesetzt: `greyFrom` (leer = letzte Stufe mit Legende, 0 = nie, ohne Legende abgelehnt; im
+  Editor „Farblos ab Stufe"). Ab dieser Stufe trägt jede Sicht ein Zeichen nur als Form und
+  Muster, kein Farbwort (Negativ-Assertions über jede Sicht, im Smoke über den Draht); der Löser
+  liest die Farbe über die Muster der Legende. Betrieb nennt die Stufe und dass die Legende
+  jedem Muster seine Farbe gibt, die Werkstatt die Stufe, ab der die Anzeige farblos ist; dafür
+  ist Betrieb gestrafft, jede Regel bleibt, und Blackouts Seite hält mit 168 Wörtern Fließtext
+  die Grenze von 170 (zuvor 169, mit der grauen Stufe ungestrafft 194). Das Panel zeichnet die
+  Zeichen grau mit 64 px, das Muster fett (jede Musterzelle ≥ 18 px, Tinte 9,4:1), dazu
+  ANZEIGE · FARBLOS. Der Notizblock nimmt die Legende mit beiden Muster-Spalten, eine
+  Leerstelle auseinander (37 Zeichen, Grenze 38): Jedes Pult findet seine Zeile direkt über das
+  Muster. Der Editor sagt im Hilfetext, dass eine neue Kette auf 0 steht und erst ein leeres
+  Feld die letzte Stufe gibt.
+  Blackout: `greyFrom` 4, dritte Frühschicht-Notiz (mit Uros' zweitem Satz 132 Zeichen, Grenze
+  120: „Die Farbe dazu steht in der Legende."), Plan mit vier grauen Ringen in Stufe 4. Der
+  Walkthrough spielt die Stufe nach Plan (signal-grey.png, signal-grey-phone-932.png); Sieg
+  548,8 s nach dem Lichtausfall, main 553,9 s (je ein Lauf unter Last 8–11).
 
 ### T-4 Leerlauf zu zweit — Status: wartet (Entscheidung Uros) · Größe: M
 - Audit: Ben wartet 7,7 s am Reaktor auf die Sicherung, Anna 5 s vor der Notstrom-Tür. Optionen:
@@ -352,6 +385,16 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   Laufende je eine Zeile; `/health` zählt Räume, laufende Partien, Spieler, Zuschauer, nennt
   Laufzeit und Commit (`RENDER_GIT_COMMIT`).
 
+### R-6 Kein Stillstand, wenn eine Leitung abreißt — Status: bereit (Spec `spec-R-nopause.md`, nach U-pause) · Größe: M
+- Uros 2026-11-14 mit Screenshot der Karte „MISSION PAUSIERT · Warten auf uros": „Sollte man das
+  Spiel im Hintergrund nicht stoppen, wenn jemand weg ist? Alles sollte gleich bleiben und danach
+  fortführen." Kehrt die Dota-Pause aus R-3 um: Uhr, Patrouillen und Notfälle laufen weiter, der
+  Platz bleibt gebunden, wer zurückkommt, spielt sofort weiter; die Pausenkarte bleibt nur für die
+  Wartung (R-2). Der Ausgefallene steht still, hält, was er hielt, und wird von Patrouillen nicht
+  gesehen; Notfälle würfeln ohne seine Konsole; „Ohne X weiter" nach 60 s (später 20 s) bleibt in
+  Crew-Leiste und HUD, weil Stationen zu zweit bedient werden. Vorbilder: Overcooked 2, Among Us,
+  Deep Rock Galactic (die Mission läuft, der Platz bleibt offen).
+
 ## Geplant (2026-11-12, Vorbilder je Punkt)
 
 ### V-1 Zwei Stimmen und eine Leitstelle, die reagiert — Status: bereit (nur lokal: Render der Zeilen) · Größe: M
@@ -367,6 +410,48 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   neuen Momente (Audio-Probe), `docs/sound.md` aktualisiert (nennt heute noch 47 Zeilen und
   Thorsten).
 
+### V-2 Musik mit einem Thema, im Geist von Expedition 33 — Status: erledigt (M-music, Merge 2026-11-14; zwei Review-Runden; Cloud-CI auf ac29d77 grün; Render der Partitur offen, Befehle unten) · Größe: L
+- Uros 2026-11-14: „Die Musik im Hauptmenü ist ein einfacher Ton mit Störung" und „Musik will
+  ich wie Expedition 33." Gemessen: Das Titelthema ist, wie sein Prompt es verlangte, ein dunkles
+  Pad über einem Drone (RMS −14,5 dBFS, Crest 14,5 dB, gleichförmig); die drei Takes des
+  Anlagenbrummens kamen fast stumm (−50 dBFS mit einem Klick), +31 dB machten den Klick im Menü
+  zum Knacken.
+- Vorbild: Clair Obscur: Expedition 33 (Lorien Testard): ein Motiv, das bleibt, Klavier und
+  Streicher, eine Stimme ohne Worte, ein Bogen der Dynamik, elektronische Farbe gegen akustische
+  Wärme, französisch-romantische Melancholie; hier die Nachtschicht einer Forschungsanlage der
+  1980er, die Elektronik ein Analogsynthesizer. Nichts kopiert: ein eigenes Motiv, kein Name im
+  Plan.
+- Umgesetzt: die ganze Musik als eine Partitur (`score` in `audio/catalog.json`), ein
+  Kompositionsplan für Eleven Music (`music_v2_5`) mit acht Abschnitten in einer Generation —
+  Titelthema 93,3 s, Lobby 61,3 s, Titel der Eröffnung 40 s, drei Stems je 72 s, zwei Endthemen
+  je 40 s, zusammen 490,7 s —, A-Moll, 90 bpm, das Motiv in jedem Abschnitt, die Dämmerung in
+  C-Dur. Takes warten immer aufs Ohr: `/sounds` zeigt je Take eine Zeile mit jedem Stück in der
+  Reihenfolge des Plans und den einen Befehl, der ihn ganz behält; `--keep score=<n>` schneidet ihn
+  an den Taktgrenzen des Plans, als AAC mit 160 kbit/s, jedes Stück auf −19 LUFS (BS.1770). Im
+  Spiel loopen Stems und Titelthema auf den Takten aus dem Manifest, die Lobby blendet auf dem
+  nächsten Takt in ihr eigenes Stück über, die Endthemen enden wirklich, der Titel ersetzt den
+  alten Cue (auf dem Pegel der Stems statt 6 dB darüber); ein Bett, das mehr als +12 dB bräuchte,
+  lehnt das Skript in einer Zeile ab, und das Spiel spielt es nicht.
+- Offen, nur lokal (Uros): drei Takes in zwei Läufen, je Take etwa 8.833 Credits zum Satz des
+  Skripts (18 je Sekunde), zusammen etwa 26.500 (zum Listenpreis von 900 je Minute 22.080) — mehr
+  als die geschätzten 19.000, weil die Partitur 8,2 statt 7 Minuten dauert; die Musik darf je Lauf
+  18.000 ausgeben, also erst zwei Takes, dann einer. In `packages/client` des Haupt-Checkouts:
+  `node --env-file=/Users/uros/Documents/Req.Eng./escapelab/.env.local scripts/sfx.ts
+  --candidates 2 --only score`, dann dasselbe nur mit `--only score`; anhören unter `/sounds`
+  (`pnpm dev`), behalten mit `node scripts/sfx.ts --keep score=<n>`; danach verliert
+  `AWAITING_RENDER` die acht Stücke, und der alte Cue samt `scripts/introCue.ts` kann gehen. Das
+  Brummen neu: `--candidates 5 --only bed-facility`, etwa 200 Credits.
+- Beweis: Skript mit Mocks (Plan auf ganzen Takten, Schnitt mit 10-ms-Kanten, Läufe unter der
+  Obergrenze, Behalten der Partitur und jede Ablehnung, ein Bett über +12 dB abgelehnt) und
+  Client (Loop-Punkte aus dem Manifest, Lobby-Stück, Brummen optional, Endthemen enden, Titel
+  statt Cue, `/sounds` mit den Takes der Partitur), jeder neue Test einmal mutiert; Typecheck,
+  Lint, Client 3.391 Tests grün, Smoke grün; Walkthroughs der Cloud auf e40e812 grün (Blackout
+  155/4/0, Systemcheck 96/15/0, Captures und Skips wie auf main, Audio-Zensus im Lauf
+  unverändert; das Menü hält drei Gain-Knoten ohne Quelle mehr).
+- Offen aus der zweiten Review (klein): die AAC-Prüfung (`canPlayType`) läuft nur in der
+  Capture-Gruppe `screens`; ein Lauf mit `SHOTS_ONLY=audio` spielt eine behaltene Partitur
+  ungeprüft, weil der Musik-Zensus im Lauf nur protokolliert.
+
 ### M-1 Drei Spielende: Beweis und Sichtbarkeit — Status: bereit · Größe: M
 - Befund: mechanisch trägt die dritte Person (Leserin mit Regeln, Notizen und Funk an Zwei-Pult-
   Stationen; Platten, Sicherung, Schlüssel, Kameraplatte sonst), aber Modultests spielen Blackout
@@ -380,7 +465,7 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
 - Studie G-2, Rang 1 und 8: das Nadelventil als dritte Hand (T-4); das Relais, an dem je Notfall
   ein Bedienelement ausfällt und seine Anweisung zum nächsten wandert (Spaceteam).
 
-### I-1 Zugangskontrolle mit Zwei-Faktor — Status: wartet (Entscheidung Uros: Modul zuerst, Platz in Blackout nach dem Playtest) · Größe: L
+### I-1 Zugangskontrolle mit Zwei-Faktor — Status: in Arbeit (I-access, Spec `spec-I-access.md`; Modul mit Probe-Mission, Platz in Blackout nach dem Playtest) · Größe: L
 - Pult A Login-Terminal, Pult B Token-Generator mit Code, der mit der Serveruhr alle 30 s
   wechselt (Restsekunden sichtbar), Quelle Benutzerliste mit Rollen. Vorbilder: Quadrilateral
   Cowboy (`door.open(3)`: das Terminal gibt die Tür drei Sekunden frei, jemand muss durch),
@@ -452,7 +537,7 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   tritt beiseite, wenn ein Panel aufgeht; ab 900 px Breite, am Handy bleibt der Chip. Kosten
   ≤ 1 ms je Frame zusammen.
 
-### U-1 Pausenmenü, Verlassen wie Dota 2, Einstellungen und Chrome — Status: bereit (Spec `spec-U-pause.md`) · Größe: L
+### U-1 Pausenmenü, Verlassen wie Dota 2, Einstellungen und Chrome — Status: in Arbeit (U-pause, PR 6) · Größe: L
 - Uros 2026-11-14: „Spielabbruch richtig: Der Spieler kann das Spiel nicht verlassen, wann er
   will, und ins Hauptmenü zurück. Wie Dota 2: joinen, nach Disconnect reconnecten, verlassen."
   Und: „Einstellungen im Spiel haben kein gutes UI; alles, was nicht direkt Spiel ist, Leisten,
@@ -465,7 +550,7 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   Leisten und Panels im Stil des Hauptmenüs. Vorbilder: Dota 2, Hades, Celeste, Deep Rock,
   Helldivers 2, Overcooked 2.
 
-### G-2 Vorbilder-Studie und Übungshalle — Status: im PR (G-testground) · Größe: L
+### G-2 Vorbilder-Studie und Übungshalle — Status: im PR (G-testground, PR 7) · Größe: L
 - Uros 2026-11-14: „Minispiele und Gameplay-Elemente von wo abschauen; im Tutorial ein Testground,
   wo alle Minispiele testbar und spielbar sind; Gameplay-Verbesserung ist ein anderes Ticket."
 - `docs/gameplay-models.md`: je Vorbild (Keep Talking, Among Us, Spaceteam, We Were Here,
@@ -482,8 +567,8 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   Felder, zwölf Stationen mit fünfzehn Pulten (jeder Typ außer dem Relais, das nur als Notfall
   läuft), je Station Buch und Schild in einer eigenen Nische, Licht von Anfang an, ohne Uhr,
   Drohnen, Notfälle und Luke (die letzte Station gewinnt den Lauf), 2–3 Spielende; aus der
-  Modulliste erzeugt, im Menü mit „Jede Station zum Üben"; der Harness spielt sie mit
-  `SHOTS_MISSION=Uebungshalle` bis zum Sieg.
+  Modulliste erzeugt, im Menü mit „Jede Station zum Üben"; jeder Systemcheck-Rundgang spielt sie
+  vorab als eigene Probe (Gruppe `hall`) bis zum Sieg.
 
 ### G-3 Teile aus einer Lösung — Status: wartet (Entscheidung Uros) · Größe: M
 - Studie Rang 2 (Overcooked 2, Among Us): Eine gelöste Station gibt ein Teil aus, das eine andere
@@ -514,12 +599,18 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   sie liest, verweist darauf, statt sie in eigenen Worten neu zu erklären. Liegt bei jeder Quelle,
   die eine Station mit Laborkennung abdeckt; die Handbuch-Stimmtests prüfen den Wortlaut.
 
-### K-1 Konto wie bei Dota — Status: bereit (Entscheidung Uros 2026-11-12: eigene Konten, Google zuletzt; nach S-1) · Größe: L
+### K-1 Konto wie bei Dota — Status: K-1a erledigt (K-accounts, Merge 2026-11-14; vier Review-Runden, Cloud-CI grün mit Postgres-Dienst); K-1b bereit (Entscheidung Uros 2026-11-12: eigene Konten, Google zuletzt) · Größe: L
 - Reihenfolge: **K-1a** Datenbank (Neon-Postgres, Prisma) mit Konto je Dienstausweis (Kennung,
   Anzeigename, Farbe, Erfolge), Läufe und Bestenliste in der Datenbank statt der Datei, die
   Render bei jedem Deploy löscht, „Meine Einsätze"; ohne `DATABASE_URL` weiter Datei und Gast
   (Entwicklung, CI). **K-1b** Anmeldung mit Google (Identity Services, `jose`), die ein Konto
   geräteunabhängig macht; Übernahme und Bestätigung entfallen für Angemeldete.
+- K-1a im PR (K-accounts): Prisma 6 (Prisma 7 verlangt einen Treiber-Adapter samt `pg`),
+  Tabellen accounts, identities, runs, run_members, achievements; Speicher hinter einer
+  Schnittstelle (Datei oder Postgres, eine Zeile im Start-Log), Konto je Dienstausweis mit Name
+  und Farbe, „Konto löschen" in den Einstellungen, Läufe je Sitz nach Konto in einer Transaktion,
+  Erfolge je Konto, „Meine Einsätze" neben der Bestenliste; CI mit Postgres-16-Dienst, Smoke mit
+  `TEST_DATABASE_URL`, `docs/accounts.md`. Offen bei Render: `DATABASE_URL` (Neon) setzen.
 - Uros 2026-11-12: „Wieso nicht wie Dota Accounts?" Heute bindet ein Dienstausweis je Browser
   (R-3); ein anderes Gerät kommt nur per Übernahme mit Bestätigung der Crew hinein. Ein Konto
   macht die Identität geräteunabhängig: anmelden, und der laufende Einsatz holt einen zurück,
@@ -533,6 +624,13 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   Erfolge je Konto.
 - Alternative mit eigenen Konten (Name und Passwort, `crypto.scrypt`, Neon-Postgres,
   Wiederherstellungscodes statt E-Mail): mehr Code, mehr Angriffsfläche, kein Dritter.
+- **K-1c** An- und Abmelden, Konto wechseln — Status: bereit (Spec `spec-K-login.md`, nach
+  U-pause) · Größe: M. Uros 2026-11-14: „Bei Konten sollte man sich an- und abmelden oder wechseln
+  können." Ausweisnummer vom Server geprägt (lesbar, ohne 0/O/1/I), Kennwort vom Spieler gesetzt
+  (`crypto.scrypt`, 8–128 Zeichen, kein E-Mail, noch keine Wiederherstellung), „Anmelden" zeigt
+  den Dienstausweis des Geräts auf das Konto um, „Abmelden" prägt einen neuen Ausweis (Gast), der
+  Platz im Einsatz folgt dem Konto (Wiedereintritt von jedem angemeldeten Gerät ohne Übernahme);
+  Limits je Adresse und je Ausweisnummer. Google (K-1b) bleibt zuletzt.
 
 ## Nur lokal
 

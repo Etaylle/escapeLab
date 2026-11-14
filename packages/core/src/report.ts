@@ -77,6 +77,8 @@ export interface RunReport {
   lightsOutAt?: number;
   finishedAt: number;
   outcome: RunOutcome;
+  /** the mission had no hatch: the solve of its last station won the run; left out otherwise */
+  noHatch?: true;
   /**
    * every station of the mission, in the run's order: the mission's — or, where the crew takes
    * them in any order, the order it solved them in, the rest after
@@ -121,6 +123,7 @@ export function runReport(state: GameState, roomCode: string): RunReport {
     ...(state.lightsOutAt === null ? {} : { lightsOutAt: state.lightsOutAt }),
     finishedAt,
     outcome: outcomeOf(state, alarmLimit),
+    ...(state.mission.map.exit === undefined ? { noHatch: true as const } : {}),
     stations: stationsOf(state, clockStartOf({ startedAt, lightsOutAt: state.lightsOutAt })),
     emergencies: emergenciesOf(state.events),
     notes: { read: state.notesRead.length, total: state.mission.map.notes.length },

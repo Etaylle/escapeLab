@@ -41,8 +41,11 @@
  * him once the minute is over, and he is back on his pass, counted in at once
  * with no pause for it; Gus's line drops and a phone asks for his seat by
  * his name: Eva lets it in, his old pass refused; Gus gives his seat up and the two go on,
- * then Finn gives his up and the run ends, called off. No answer is written
- * down here.
+ * then Finn gives his up and the run ends, called off. Where TEST_DATABASE_URL
+ * names a Postgres, the start script brings a server up on a schema of its own,
+ * which it migrates itself first, and a crew winning the tutorial there leaves the
+ * run in the database with a seat for each by account and the Erfolge it
+ * earned. No answer is written down here.
  * Run with: pnpm --filter @escapelab/server smoke
  */
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
@@ -52,6 +55,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createInterface } from 'node:readline';
 import { fileURLToPath } from 'node:url';
+import { PrismaClient } from '@prisma/client';
 import WebSocket from 'ws';
 import {
   canSee,
@@ -1455,6 +1459,30 @@ function assertFleeting(consoles: { client: TestClient; from: number }[]): void 
 }
 
 /**
+ * From stage `greyFrom` on the display has lost its colour: so say the views the consoles
+ * received since their logs ran to `from`, and not one of those views carried a sign in colour
+ * to either console — the legend's patterns alone tell the colours then.
+ */
+function assertGrey(consoles: { client: TestClient; from: number }[]): void {
+  const greyFrom = SIGNAL.greyFrom ?? SIGNAL.stages;
+  const seen = consoles.flatMap(({ client, from }) =>
+    viewsSince(client, from).flatMap(({ raw, view }) => {
+      const signal = signalOf(view);
+      return signal === null ? [] : [{ raw, signal }];
+    }),
+  );
+  const grey = seen.filter(({ signal }) => signal.grey);
+  assert(
+    grey.length > 0 && seen.every(({ signal }) => signal.grey === signal.stage >= greyFrom),
+    `the display shows its signs without colour from stage ${greyFrom} on, in colour before`,
+  );
+  assert(
+    grey.every(({ raw }) => !TOKENS.some((token) => raw.includes(`"${token}"`))),
+    'no view of a stage without colour carried a sign in colour to either console',
+  );
+}
+
+/**
  * Station 2, the Signalkette, worked at two consoles at once: `a` stands at
  * console A, `b` at console B, and B switches it on. Console A sends stage 1
  * and B takes it, then the direction swaps with every stage. Nobody is left
@@ -1485,6 +1513,10 @@ async function runSignal(a: TestClient, b: TestClient): Promise<void> {
   await solveStation(SIGNALKETTE);
   assertConsolesApart(b, from.b, { sends, takes });
   assertFleeting([
+    { client: a, from: from.a },
+    { client: b, from: from.b },
+  ]);
+  assertGrey([
     { client: a, from: from.a },
     { client: b, from: from.b },
   ]);
@@ -2318,13 +2350,13 @@ const tutorial = parseMission(
 );
 
 /**
- * A room for the tutorial: Cleo opens it, Dan joins and says yes, Cleo
- * starts. The tutorial has no intro: its lights are out and its first
- * station is armed from the start.
+ * A room for the tutorial on the server at `port`: Cleo opens it, Dan joins and
+ * says yes, Cleo starts. The tutorial has no intro: its lights are out and its
+ * first station is armed from the start.
  */
-async function openTutorial(): Promise<Lab> {
-  const cleo = new TestClient('cleo');
-  const dan = new TestClient('dan');
+async function openTutorial(port: number = PORT): Promise<Lab> {
+  const cleo = new TestClient('cleo', [], mintPass(), port);
+  const dan = new TestClient('dan', [], mintPass(), port);
   await cleo.open();
   await dan.open();
   cleo.send({ kind: 'create-room', name: 'Cleo', pass: cleo.pass, missionId: tutorial.id });
@@ -2682,6 +2714,7 @@ class ServerProcess {
     readonly name: string,
     readonly port = RESTART_PORT,
     launch: Launch = 'entry',
+    env: Record<string, string> = {},
   ) {
     const { file, args, cwd } = LAUNCH[launch];
     this.child = spawn(file, args, {
@@ -2692,6 +2725,7 @@ class ServerProcess {
         TLS: 'off',
         ROOM_SECRET,
         RUNS_LOG: join(runsDir, 'logs', 'restarts.jsonl'),
+        ...env,
       },
       stdio: ['ignore', 'pipe', 'pipe'],
       detached: launch === 'start-script',
@@ -3103,10 +3137,191 @@ async function startScript(): Promise<void> {
   assert(ended.code === 0, `pnpm exits 0 with the server (${ended.code ?? ended.signal})`);
 }
 
+// --- the database: runs and accounts that outlast a deploy --------------------------------
+
+/** The port of the server on Postgres (`runOnPostgres`). */
+const DATABASE_PORT = START_PORT + 1;
+
+/** The run the database holds once one has landed there, seats and all; none after 10 s. */
+async function landed(db: PrismaClient) {
+  const until = Date.now() + 10_000;
+  for (;;) {
+    const runs = await db.run.findMany({ include: { members: true } });
+    if (runs.length > 0 || Date.now() > until) {
+      return runs;
+    }
+    await sleep(200);
+  }
+}
+
+/**
+ * The won tutorial as the database at `db` holds it: one run of the tutorial, won; a seat for
+ * Cleo and for Dan, each by the account of the pass that held it, the names only there — the
+ * run's report names nobody — and the Erfolge the run earned unlocked for both accounts.
+ */
+async function checkLanded(db: PrismaClient, lab: Lab): Promise<void> {
+  const runs = await landed(db);
+  const run = runs[0];
+  assert(runs.length === 1 && run !== undefined, `one run landed in the database (${runs.length})`);
+  assert(run.missionId === tutorial.id && run.outcome === 'won', 'the won tutorial landed');
+  const seats = [...run.members].sort((a, b) => a.seat - b.seat);
+  assert(seats.map((seat) => seat.seatName).join() === 'Cleo,Dan', 'a seat for Cleo and Dan');
+  const identities = await db.identity.findMany();
+  const accountOf = (client: TestClient): string | undefined =>
+    identities.find((identity) => identity.subject === client.pass.id)?.accountId;
+  const holders = lab.crew.map(accountOf);
+  assert(
+    seats.every((seat, i) => seat.accountId !== null && seat.accountId === holders[i]),
+    'each seat by the account of the pass that held it',
+  );
+  assert(!JSON.stringify(run.report).includes('Cleo'), 'the report itself names nobody');
+  const unlocked = await db.achievement.findMany();
+  const keys = new Set(unlocked.map((achievement) => achievement.key));
+  const named = [...keys].join(', ');
+  assert(
+    unlocked.length === keys.size * 2 &&
+      [...keys].every((key) => key.startsWith(`${tutorial.id}:`)),
+    `the run's Erfolge unlocked for both accounts: ${named}`,
+  );
+  console.log(`✓ the won tutorial is in Postgres: 2 seats by account, Erfolge ${named}`);
+}
+
+/** The colour Ida clicks just before the server goes down (`colourAtTheEnd`). */
+const LAST_COLOUR = '#f472b6';
+
+/**
+ * A colour clicked in a lobby just before Render's SIGTERM: the server going down keeps it with
+ * the account all the same, before it lets go of the store — the clicks settle for a second.
+ */
+async function colourAtTheEnd(server: ServerProcess, db: PrismaClient): Promise<void> {
+  const ida = new TestClient('ida', [], mintPass(), DATABASE_PORT);
+  await ida.open();
+  ida.send({ kind: 'create-room', name: 'Ida', pass: ida.pass, missionId: tutorial.id });
+  await ida.seated();
+  ida.send({ kind: 'select-color', color: LAST_COLOUR });
+  await ida.until('her seat in the colour she clicked', (v) => v.you.color === LAST_COLOUR);
+  server.kill('SIGTERM');
+  const ended = await server.exited;
+  const kept = await db.identity.findUnique({
+    where: { provider_subject: { provider: 'pass', subject: ida.pass.id } },
+    include: { account: true },
+  });
+  const colour = kept?.account.colour ?? 'none';
+  assert(
+    ended.code === 0 && colour === LAST_COLOUR,
+    `a colour clicked just before SIGTERM kept with its account (${colour}, exit ${ended.code})`,
+  );
+}
+
+/**
+ * Where TEST_DATABASE_URL names a Postgres the smoke may write to: the start script with a
+ * single direct DATABASE_URL, on a schema of the smoke's own — the server applying the
+ * migrations itself before it listens — a crew winning the tutorial there (`checkLanded`), and a
+ * colour clicked as the server goes down (`colourAtTheEnd`); the schema is dropped after.
+ * Skipped, saying so, without.
+ */
+async function runOnPostgres(): Promise<void> {
+  const base = process.env['TEST_DATABASE_URL'];
+  if (base === undefined || base === '') {
+    console.log('– the run on Postgres skipped: TEST_DATABASE_URL unset');
+    return;
+  }
+  const schema = `smoke_${randomBytes(4).toString('hex')}`;
+  const at = new URL(base);
+  at.searchParams.set('schema', schema);
+  const url = at.toString();
+  const db = new PrismaClient({ datasourceUrl: url });
+  // DATABASE_URL alone, as Render sets it without Neon's integration: the migrations take it too.
+  // An unpooled URL the shell holds steers them nowhere else.
+  const server = new ServerProcess('the start script on Postgres', DATABASE_PORT, 'start-script', {
+    DATABASE_URL: url,
+    DATABASE_URL_UNPOOLED: '',
+  });
+  try {
+    await server.up();
+    await server.logs('All migrations have been successfully applied', 'the migrations ran first');
+    await server.logs('store: Postgres', 'it keeps the runs and the accounts in Postgres');
+    const lab = await openTutorial(DATABASE_PORT);
+    await initLever(lab);
+    await signalProbe(lab);
+    await wiringBox(lab);
+    await finale(lab);
+    await checkLanded(db, lab);
+    for (const client of lab.crew) {
+      client.close();
+    }
+    await colourAtTheEnd(server, db);
+  } finally {
+    server.kill('SIGTERM');
+    await server.exited;
+    await db.$executeRawUnsafe(`DROP SCHEMA IF EXISTS "${schema}" CASCADE`);
+    await db.$disconnect();
+  }
+}
+
+/** The port of the server as Render's Start Command starts it (`renderStartCommand`). */
+const RENDER_PORT = DATABASE_PORT + 1;
+
+/** Where in `lines` the first that holds `text` stands; -1 for none. */
+const lineOf = (lines: readonly string[], text: string): number =>
+  lines.findIndex((line) => line.includes(text));
+
+/**
+ * Where TEST_DATABASE_URL names a Postgres: the server as Render's Start Command starts it —
+ * `node` straight in packages/server, no script before it — on a schema of the smoke's own with
+ * DATABASE_URL alone: it applies the migrations itself before it listens. Then, a migration
+ * broken off as a deploy cut short leaves it, the next start stops before it listens, saying
+ * P3009; no line names the database's URL or host. Skipped, saying so, without.
+ */
+async function renderStartCommand(): Promise<void> {
+  const base = process.env['TEST_DATABASE_URL'];
+  if (base === undefined || base === '') {
+    console.log("– Render's Start Command on Postgres skipped: TEST_DATABASE_URL unset");
+    return;
+  }
+  const schema = `smoke_${randomBytes(4).toString('hex')}`;
+  const at = new URL(base);
+  at.searchParams.set('schema', schema);
+  const env = { DATABASE_URL: at.toString(), DATABASE_URL_UNPOOLED: '' };
+  const db = new PrismaClient({ datasourceUrl: at.toString() });
+  const name = "Render's Start Command on Postgres";
+  try {
+    const first = new ServerProcess(name, RENDER_PORT, 'entry', env);
+    await first.up();
+    const applied = lineOf(first.lines, 'migrate: All migrations have been successfully applied');
+    const listening = lineOf(first.lines, '[escapelab] server on');
+    assert(applied >= 0 && applied < listening, 'it applied the migrations before it listened');
+    await first.logs('store: Postgres', 'it keeps the runs and the accounts in Postgres');
+    first.kill('SIGTERM');
+    await first.exited;
+    await db.$executeRawUnsafe(
+      `UPDATE "${schema}"._prisma_migrations SET finished_at = NULL WHERE migration_name =
+         (SELECT max(migration_name) FROM "${schema}"._prisma_migrations)`,
+    );
+    const second = new ServerProcess(`${name}, a migration broken off`, RENDER_PORT, 'entry', env);
+    const ended = await second.exited;
+    await second.logs('not started: the migrations did not apply (P3009)', 'it says P3009');
+    assert(
+      ended.code === 1 && lineOf(second.lines, '[escapelab] server on') < 0,
+      `a migration broken off stops the start before it listens (exit ${ended.code})`,
+    );
+    const said = [...first.lines, ...second.lines];
+    assert(
+      said.every((line) => !line.includes('postgresql://') && !line.includes(at.host)),
+      "no line names the database's URL or host",
+    );
+  } finally {
+    await db.$executeRawUnsafe(`DROP SCHEMA IF EXISTS "${schema}" CASCADE`);
+    await db.$disconnect();
+  }
+}
+
 const restarted = await restartBySigterm();
 await restartBySigkill(restarted.server, restarted.crew);
 await handover();
 await startScript();
+await runOnPostgres();
+await renderStartCommand();
 
 rmSync(runsDir, { recursive: true, force: true });
 console.log(
@@ -3120,7 +3335,11 @@ console.log(
     'the crew let the phone in, and ' +
     'seats given up till the run is called off; then a server restarting mid-run, SIGTERM ' +
     'and SIGKILL, the run taken up again from the crew\'s snapshots; a deploy handing ' +
-    'over from an old server still up, the run going on from its last snapshot; and the ' +
-    'start script passing SIGTERM on to the server. 🎉',
+    'over from an old server still up, the run going on from its last snapshot; the ' +
+    'start script passing SIGTERM on to the server; and, where TEST_DATABASE_URL names a ' +
+    'Postgres, the server migrating it itself over a single URL, a won tutorial landing there ' +
+    'by account, a colour clicked just before SIGTERM kept, and the server started as ' +
+    'Render\'s Start Command starts it migrating the database itself before it listens, a ' +
+    'migration broken off stopping its start. 🎉',
 );
 process.exit(0);

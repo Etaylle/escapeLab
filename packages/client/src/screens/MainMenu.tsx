@@ -9,6 +9,7 @@ export type MenuItemId =
   | 'rounds'
   | 'handbook'
   | 'history'
+  | 'myruns'
   | 'editor'
   | 'settings';
 
@@ -19,6 +20,7 @@ export const MENU_LABELS: Readonly<Record<MenuItemId, string>> = {
   rounds: 'Offene Runden',
   handbook: 'Handbuch',
   history: 'Bestenliste',
+  myruns: 'Meine Einsätze',
   editor: 'Editor',
   settings: 'Einstellungen',
 };
@@ -31,7 +33,10 @@ export function opensPanel(item: MenuItemId): item is PanelId {
   return item === 'missions' || item === 'join' || item === 'rounds';
 }
 
-/** The menu's items in order, top to bottom: the editor where the page offers one. */
+/**
+ * The menu's items in order, top to bottom: the account's runs beside the Bestenliste, the
+ * editor where the page offers one.
+ */
 export function menuItems(editor: boolean): MenuItemId[] {
   return [
     'missions',
@@ -39,6 +44,7 @@ export function menuItems(editor: boolean): MenuItemId[] {
     'rounds',
     'handbook',
     'history',
+    'myruns',
     ...(editor ? (['editor'] as const) : []),
     'settings',
   ];
@@ -53,9 +59,13 @@ export function menuStep(at: number, key: string, count: number): number | null 
   return count === 0 ? null : stepTo(Math.max(0, at), key, count);
 }
 
-/** The controls an arrow key moves between in the menu: its buttons, the card's included. */
-function controlsIn(nav: HTMLElement): HTMLButtonElement[] {
-  return [...nav.querySelectorAll<HTMLButtonElement>('button:not([disabled])')];
+/**
+ * The controls an arrow key moves between in the menu: its buttons, the card's included — but
+ * none the layout hides (menu.css, a phone held sideways).
+ */
+export function controlsIn(nav: Pick<HTMLElement, 'querySelectorAll'>): HTMLButtonElement[] {
+  const buttons = [...nav.querySelectorAll<HTMLButtonElement>('button:not([disabled])')];
+  return buttons.filter((button) => button.getClientRects().length > 0);
 }
 
 /** An arrow key in the menu: the focus goes to the control it points at. */

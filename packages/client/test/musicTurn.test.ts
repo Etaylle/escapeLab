@@ -29,10 +29,19 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-/** The music's modules afresh, every recording served, the opening's cue list too. */
+/**
+ * The music's modules afresh, every recording served — but the lobby's piece and the opening's
+ * title, which await their render with the score — and the opening's cue list too.
+ */
 async function fresh() {
   vi.resetModules();
-  const served = { 'menu-theme': { seconds: 60 }, 'end-won': { seconds: 32 } };
+  const awaiting = { listed: false } as const;
+  const served = {
+    'menu-theme': { seconds: 60 },
+    'end-won': { seconds: 32 },
+    lobby: awaiting,
+    title: awaiting,
+  };
   await loadedSamples(served);
   const other = (url: string): Promise<Response> =>
     Promise.resolve(url === '/intro/manifest.json' ? Response.json(CUE) : new Response(null));
