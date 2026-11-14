@@ -12,6 +12,7 @@ import {
   doorAsks,
   JoinScreen,
   restoringLine,
+  seatLeft,
 } from '../src/screens/Join.js';
 import { MissionPanel } from '../src/screens/MenuPanels.js';
 import { storage } from './page.js';
@@ -145,10 +146,40 @@ describe('the join screen of a pass bound to a run', () => {
     expect(menu.indexOf('class="bound bound--run"')).toBeLessThan(firstItem);
   });
 
-  it('says a paused run is paused, and its clock as it stood', () => {
+  it('says a run standing still for the server’s maintenance so, and its clock as it stood', () => {
     const html = renderToStaticMarkup(<BoundCard seat={{ ...RUN, paused: true }} send={noop} />);
-    expect(html).toContain('EINSATZ PAUSIERT');
+    expect(html).toContain('<span class="kicker bound-kicker">WARTUNG</span>');
     expect(html).toContain('noch 12:34');
+  });
+
+  it('says a run held for nobody on the line so: it goes on as the first is back', () => {
+    const held = { ...RUN, paused: true, nobodyOnLine: true as const };
+    const html = renderToStaticMarkup(<BoundCard seat={held} send={noop} />);
+    expect(html).toContain(
+      '<span class="kicker bound-kicker">WARTUNG · NIEMAND AUF DER LEITUNG</span>',
+    );
+    expect(html).toContain('noch 12:34');
+  });
+
+  it('counts the clock down from the server’s answer as the run goes on, whoever is away', () => {
+    expect(seatLeft(754_000, false, T0, T0)).toBe(754_000);
+    expect(seatLeft(754_000, false, T0, T0 + 4_500)).toBe(749_500);
+    expect(seatLeft(3_000, false, T0, T0 + 9_000)).toBe(0);
+    // A clock read a millisecond before the answer was noted gives no time back.
+    expect(seatLeft(754_000, false, T0 + 1, T0)).toBe(754_000);
+    // Standing still for the server's maintenance, it stays where the server said.
+    expect(seatLeft(754_000, true, T0, T0 + 4_500)).toBe(754_000);
+  });
+
+  it('shows the server’s clock however the page’s ticks between its two reads of it', () => {
+    // Every read of the page's clock a millisecond after the one before: the card's clock is
+    // read before the server's answer is noted.
+    let tick = T0;
+    const reads = vi.spyOn(Date, 'now').mockImplementation(() => tick++);
+    const html = renderToStaticMarkup(<BoundCard seat={RUN} send={noop} />);
+    reads.mockRestore();
+    expect(tick).toBeGreaterThan(T0 + 1);
+    expect(html).toContain('Raum QX7R · noch 12:34 · Anna, Ben, Cem');
   });
 
   it('blocks every other room with one line that names the run', () => {

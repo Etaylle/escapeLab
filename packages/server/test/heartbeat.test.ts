@@ -90,11 +90,11 @@ describe('the heartbeat', () => {
       // A tock is taken from a socket in no room, as from one on a seat: nothing refused.
       expect(socket.heard.filter((msg) => msg.kind === 'error')).toEqual([]);
     }
-    expect(anna.view.pausedFor).toBeNull();
+    expect(anna.view.away).toEqual([]);
     end();
   });
 
-  it('ends a socket gone silent at its second missed pong, the run paused within 30 s', () => {
+  it('ends a socket gone silent at its second missed pong, Ben away within 30 s', () => {
     const { anna, ben, end } = startedRun();
     vi.advanceTimersByTime(HEARTBEAT_MS + ROUND_TRIP_MS);
     // Ben's line goes dead right after his first pong: the longest the server can be fooled.
@@ -104,12 +104,12 @@ describe('the heartbeat', () => {
     // The beat at 20 s pinged him, the one at 30 s found that ping missed and pinged again.
     expect(ben.pings).toBe(3);
     expect(ben.terminated).toBe(false);
-    expect(anna.view.pausedFor).toBeNull();
+    expect(anna.view.away).toEqual([]);
     vi.advanceTimersByTime(HEARTBEAT_MS - ROUND_TRIP_MS - 1);
     expect(ben.terminated).toBe(false);
     vi.advanceTimersByTime(1);
     expect(ben.terminated).toBe(true);
-    expect(anna.view.pausedFor?.map((away) => away.name)).toEqual(['Ben']);
+    expect(anna.view.away.map((away) => away.name)).toEqual(['Ben']);
     expect(Date.now() - silentSince).toBeLessThanOrEqual(30_000);
     expect(anna.terminated).toBe(false);
     end();
@@ -126,20 +126,20 @@ describe('the heartbeat', () => {
     end();
   });
 
-  it('unpauses the run once the player is back on a new socket, which it keeps', () => {
+  it('has the player back on a new socket, which it keeps', () => {
     const { server, anna, ben, end } = startedRun();
     ben.answering = false;
     vi.advanceTimersByTime(3 * HEARTBEAT_MS);
     expect(ben.terminated).toBe(true);
-    expect(anna.view.pausedFor?.map((away) => away.name)).toEqual(['Ben']);
+    expect(anna.view.away.map((away) => away.name)).toEqual(['Ben']);
     const back = resumeBen(server, ben);
     expect(joinedOf(back).code).toBe(joinedOf(ben).code);
     expect(back.view.you.id).toBe(ben.view.you.id);
-    expect(anna.view.pausedFor).toBeNull();
-    expect(back.view.pausedFor).toBeNull();
+    expect(anna.view.away).toEqual([]);
+    expect(back.view.away).toEqual([]);
     vi.advanceTimersByTime(5 * HEARTBEAT_MS);
     expect(back.terminated).toBe(false);
-    expect(anna.view.pausedFor).toBeNull();
+    expect(anna.view.away).toEqual([]);
     end();
   });
 
@@ -150,14 +150,14 @@ describe('the heartbeat', () => {
     const back = resumeBen(server, ben);
     vi.advanceTimersByTime(3 * HEARTBEAT_MS);
     expect(ben.terminated).toBe(true);
-    expect(anna.view.pausedFor).toBeNull();
+    expect(anna.view.away).toEqual([]);
     expect(anna.view.players.find((p) => p.name === 'Ben')?.connected).toBe(true);
     anna.say({ kind: 'ping', x: 3, y: 3 });
     expect(back.heard.at(-1)).toMatchObject({ kind: 'ping', x: 3, y: 3 });
     end();
   });
 
-  it('lets a silent audience go without pausing the run', () => {
+  it('lets a silent audience go, nobody of the crew away for it', () => {
     const { server, anna, code, end } = startedRun();
     const audience = server.connect();
     audience.say({ kind: 'spectate', code });
@@ -167,7 +167,7 @@ describe('the heartbeat', () => {
     const heard = audience.heard.length;
     anna.say({ kind: 'ping', x: 3, y: 3 });
     expect(audience.heard).toHaveLength(heard);
-    expect(anna.view.pausedFor).toBeNull();
+    expect(anna.view.away).toEqual([]);
     end();
   });
 
@@ -181,7 +181,7 @@ describe('the heartbeat', () => {
     expect(ben.pings).toBe(1);
     vi.advanceTimersByTime(1);
     expect(ben.terminated).toBe(true);
-    expect(anna.view.pausedFor?.map((away) => away.name)).toEqual(['Ben']);
+    expect(anna.view.away.map((away) => away.name)).toEqual(['Ben']);
     expect(cuts).toEqual([{ socket: ben, why: 'silent' }]);
     expect(anna.terminated).toBe(false);
     end();
@@ -195,7 +195,7 @@ describe('the heartbeat', () => {
     expect(ben.terminated).toBe(false);
     expect(cuts).toEqual([]);
     expect(ben.heard.filter((msg) => msg.kind === 'tick')).toHaveLength(20);
-    expect(anna.view.pausedFor).toBeNull();
+    expect(anna.view.away).toEqual([]);
     end();
   });
 
@@ -267,25 +267,28 @@ describe('the server’s clock on the line', () => {
     expect(lastViewOf(anna).at).toBe(1_700_000_000_000);
     ben.answering = false;
     vi.advanceTimersByTime(3 * HEARTBEAT_MS);
-    expect(anna.view.pausedFor?.map((away) => away.name)).toEqual(['Ben']);
+    expect(anna.view.away.map((away) => away.name)).toEqual(['Ben']);
     expect(lastViewOf(anna).at).toBe(Date.now());
     end();
   });
 
-  it('says since when a run stands paused: its clock reads the same then, through, after', () => {
+  it('runs the clock on through a line cut and its return, as the views read it', () => {
     const { server, anna, ben, end } = startedRun();
     vi.advanceTimersByTime(HEARTBEAT_MS + 5);
     ben.answering = false;
     vi.advanceTimersByTime(3 * HEARTBEAT_MS);
-    expect(anna.view.pausedAt).toBe(lastViewOf(anna).at);
-    const atPause = clockOf(anna, Date.now());
-    vi.advanceTimersByTime(20_000);
-    expect(clockOf(anna, Date.now())).toBe(atPause);
-    resumeBen(server, ben);
+    expect(anna.view.away.map((away) => away.name)).toEqual(['Ben']);
     expect(anna.view.pausedAt).toBeNull();
-    expect(clockOf(anna, Date.now())).toBe(atPause);
+    const atCut = clockOf(anna, Date.now());
+    vi.advanceTimersByTime(20_000);
+    expect(clockOf(anna, Date.now())).toBe(atCut - 20_000);
+    const back = resumeBen(server, ben);
+    for (const page of [anna, back]) {
+      expect(page.view.pausedAt).toBeNull();
+      expect(clockOf(page, Date.now())).toBe(atCut - 20_000);
+    }
     vi.advanceTimersByTime(1_000);
-    expect(clockOf(anna, Date.now())).toBe(atPause - 1_000);
+    expect(clockOf(anna, Date.now())).toBe(atCut - 21_000);
     end();
   });
 });

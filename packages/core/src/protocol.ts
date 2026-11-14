@@ -329,7 +329,13 @@ export interface Seat {
   missionTitle: string;
   /** 'lobby' before the run; 'playing' while it runs or stands paused */
   phase: 'lobby' | 'playing';
+  /** whether the run stands still: for the server's maintenance, or for nobody on the line */
   paused: boolean;
+  /**
+   * the run stands still while nobody of its crew is on the line, and goes on as the first is
+   * back (core `player-disconnected`); left out otherwise
+   */
+  nobodyOnLine?: true;
   crew: string[];
   /** ms left on the mission's clock as the server answered; null before the clock started */
   leftMs: number | null;

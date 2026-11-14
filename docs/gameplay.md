@@ -16,8 +16,8 @@ the Zugangskontrolle, what the notepad takes down and what happens when a line d
 `screens/{Join,Pause,Line,GiveUp}.tsx`, `clock.ts`; in the core `chat.ts`, `discovery.ts`,
 `achievements.ts`, `daily.ts`, `hands.ts`, `mission.ts` (`order`, `lit`), `map.ts` (`intercomOf`,
 `stationUp`), `puzzles/servers.ts` (`serviceDiagram`), `puzzles/access.ts`,
-`puzzles/buttonSync.ts` and `actions.ts` (the pause, `takeUp`, `hasClock`), the hall in
-`test/hall.ts`; in the server `seats.ts`, `heartbeat.ts`.
+`puzzles/buttonSync.ts` and `actions.ts` (a line that drops, the maintenance, `takeUp`,
+`hasClock`), the hall in `test/hall.ts`; in the server `room.ts`, `seats.ts`, `heartbeat.ts`.
 
 ## Controls
 
@@ -290,20 +290,21 @@ station everyone presses. As each station is switched on, exactly as many of the
 work as it has places, up to the crew. Kettenreaktion (three) and the Doppelschicht (four) give
 most of their stations two places only (backlog N-6).
 
-**The hands line.** For a crew of three or more the goal line names, under its title, each
-hand's job at the station in front of the crew, from the view's `hands` (core `handsOf`): where
-the server counts each of the crew — at a console, at a manual object covering the station, on a
-plate that still holds a door or a drone (presence `plates`, counted by the reach that keeps the
-plate pressed), or with a part in hand — and the station's places nobody holds that the crew
-knows of. The screen says them in the map's words, its own player first: „Cleo: Klemmbrett ·
-Anna: Pult A · Ben: Pult B". A console is Pult A or B, the main switch („Hauptschalter") or the
-station's title; a source goes by its label as a name („Handbuch"), a plate by its own
-(„HALTEN"), a part as „SICHERUNG holen". The first hand without a place names the places nobody
-holds, the others say „frei": „Cleo: frei — Handbuch, HALTEN · Anna: frei". A source or a part
-nobody has found stays unnamed, and so does a key until its cabinet has been come across. On a
-phone held sideways the row keeps the own job alone as a chip beside the goal („Cleo:
-Klemmbrett"); while a device is open the line gives way to its Laborkennung row, keeping its
-place. Nothing moves. For a crew of two nothing changes (`client/test/hands.test.tsx`).
+**The hands line.** For a crew of three or more the goal line names, under its title, each hand's
+job at the station in front of the crew, from the view's `hands` (core `handsOf`): where the server
+counts each of the crew — at a console, at a manual object covering the station, on a plate that
+still holds a door or a drone (presence `plates`, counted by the reach that keeps the plate
+pressed), or with a part in hand — and the station's places nobody holds that the crew knows of. The
+screen says them in the map's words, its own player first: „Cleo: Klemmbrett · Anna: Pult A · Ben:
+Pult B". A console is Pult A or B, the main switch („Hauptschalter") or the station's title; a
+source goes by its label as a name („Handbuch"), a plate by its own („HALTEN"), a part as „SICHERUNG
+holen". The first hand without a place names the places nobody holds, the others say „frei": „Cleo:
+frei — Handbuch, HALTEN · Anna: frei". Whoever is away has no hand free and is named only where
+their avatar still holds a plate or a part („Cem: HALTEN"); the crew strip says the rest. A source
+or a part nobody has found stays unnamed, and so does a key until its cabinet has been come across.
+On a phone held sideways the row keeps the own job alone as a chip beside the goal („Cleo:
+Klemmbrett"); while a device is open the line gives way to its Laborkennung row, keeping its place.
+Nothing moves. For a crew of two nothing changes (`client/test/hands.test.tsx`).
 
 **The drill.** The walkthrough's three drill (`SHOTS_ONLY=three`, 75 to 100 s on a laptop) plays
 Blackout for Anna, Ben and Cleo in a room of its own on the plan's seed: all three throw the main
@@ -569,55 +570,78 @@ einem anderen Gerät.") — the device that has it leaves first, „Zum Hauptmen
 that held it hears, when it comes back, that the seat went to another device. A device signed
 out of a run (Abmelden, a switch of accounts, or a new Kennwort set on another device of the
 account) loses the seat's line as a drop: the seat waits for its account, the device starts as a
-guest with no card. The room's sealed snapshot carries
-the binding, so a server that takes the room up again hands the seat to the account's device
-too.
+guest with no card. The room's sealed snapshot carries the binding, so a server that takes the
+room up again hands the seat to the account's device too.
 
-**Bound to the run.** While the pass sits in a run that is on, live or paused — or a seat of its
-account does, on another device — the join screen
-opens on the run's card instead of the form (`whereami`, asked as the screen comes up): the
-mission, the room's code, the crew and the clock as the server last showed it, with „Zurück zum
-Einsatz" and „Einsatz aufgeben" (a second press within 4 s confirms it). Opening or joining
-another room is refused, naming the run. A seat in a lobby shows its card too, and „Raum
+**Bound to the run.** While the pass sits in a run that is on, running or standing still for the
+server's maintenance — or a seat of its account does, on another device — the join screen opens on
+the run's card instead of the form (`whereami`, asked as the screen comes up): the mission, the
+room's code, the crew and the clock as the server last showed it — counting down as the run goes
+on, whoever is away; standing where it was while the maintenance stands the run still
+(„WARTUNG"), or nobody of the crew is on the line („WARTUNG · NIEMAND AUF DER LEITUNG") — with
+„Zurück zum Einsatz" and „Einsatz aufgeben" (a second press within 4 s confirms it). Opening or
+joining another room is refused, naming the run. A seat in a lobby shows its card too, and „Raum
 verlassen" leaves it as before; a finished run binds nobody.
 
-**The pause.** A line that drops pauses the run for everyone — the clock, the patrols, the
-emergencies — and the others' card counts: „Warten auf Ben · 0:12". 60 s into the run's first
-drop, and 20 s into every later one, everybody still on the line is offered „Ohne Ben weiter"
-(Overcooked 2: the crew chooses between waiting and going on). One press runs the clock again
-and waives Ben: the stations the whole crew presses, the hatch and the escape count the crew
-without him, and an emergency at the relay is rolled anew without his console (and with it
-again once he is back); a station with two consoles still takes two. With one member left on
-the line the way on is never offered; after the same wait the card offers „Einsatz abbrechen"
-instead, which ends the run lost (`lost:abandoned`, „EINSATZ ABGEBROCHEN"). A waived member who
-comes back counts again at once, without a pause, and the others read „Ben ist zurück". The
-escape is never judged while the run stands paused, and a drop alone ends no run.
+**The line that drops.** A line that drops stops nothing: the clock, the patrols, the emergencies
+and the escape run on, as in Overcooked 2 and Among Us, and as Deep Rock Galactic keeps its
+mission running with the seat open. (Until 2026-11-14 a drop stood the run still for everybody, as
+Dota 2 pauses a match; Uros asked for the run to go on.) The seat stays bound, and whoever comes
+back plays on at once, in the run as it stands. Meanwhile their avatar stands where it stood and
+holds what it held — a plate stays down under it, and on the open hatch it counts as out —, the
+patrols do not see it, so the crew is not punished for a body that cannot move, and its console
+counts as unmanned: a station with two consoles still takes two of the crew on the line, and an
+emergency at the relay is rolled without the consoles of whoever is away — anew, once, at its
+first tick after a line has been down 5 s while one runs, and again as they are back; a page
+loaded anew is back sooner and rolls nothing, its console and every clock as they were. With
+fewer than two of the crew on the line, where no console is worked anyway, it keeps one for each
+of the crew the run counts; the server's maintenance stands it still as it is. Mission
+control says it on the air once — „Bens Leitung ist weg.", for the main menu „Ben hat sich
+abgemeldet." — and the crew strip greys Ben, his time away counting up („getrennt · 0:12", „im
+Hauptmenü · 0:12"); no card stands over the world. The stations the whole crew presses, the hatch
+and the escape count Ben as ever and wait for him as for somebody slow, until the crew goes on
+without him: 60 s into the run's first drop, and 20 s into every later one, the bar over the world
+offers everybody still on the line „Ohne Ben weiter" (Overcooked 2: the crew chooses between
+waiting and going on). One press waives Ben: the stations the whole crew presses, the hatch and
+the escape count the crew without him; a station with two consoles still takes two. With one
+member left on the line the way on is never offered; after the same wait the bar offers „Einsatz
+abbrechen" instead, which ends the run lost (`lost:abandoned`, „EINSATZ ABGEBROCHEN"). A waived
+member who comes back counts again at once, and the others read „Ben ist zurück"; one not waived
+simply plays on. A drop alone ends no run.
+
+**The whole crew off the line.** With nobody of the crew on the line there is nobody to run the
+run for: from the moment the last line drops it holds as for the server's maintenance (`wartung`)
+— the clock, the patrols and the emergencies stand still — and goes on as soon as the first of
+the crew is back, every deadline moved on by the hold; whoever is still away stays away as after
+their drop. The run's card on the main menu says „WARTUNG · NIEMAND AUF DER LEITUNG", the
+audience's banner „Wartung — niemand auf der Leitung"; nobody on the line sees a card, since the
+first back finds the run going on. The room still closes once it has stood empty 10 minutes,
+held or not, and a seat given up meanwhile leaves the hold as it is.
 
 **Giving the run up.** „Einsatz aufgeben", on the run's card or on the card of a line lost, gives
 the seat up for good: what they carried goes down where they stood (on their start where the
 server never had them), a plate they held lets go, and the pass is free again. Below the
 mission's least crew (`players.min`) the run ends lost for everyone, its end card naming who
 left („Ben hat den Einsatz verlassen."), and the rematch works as ever — decided before an
-emergency at the relay is rolled anew for whoever is left. Otherwise the run goes on, its clock
-running again where it waited for them; but with fewer than the least crew left on the line it
-waits again for whoever it went on without, their wait starting anew (20 s), and the one left
-alone may call it off once that is over.
+emergency at the relay is rolled anew for whoever is left. Otherwise the run goes on — at once
+where the server's maintenance stood it still for them alone; but with fewer than the least crew
+left on the line it counts again whoever it went on without, their wait starting anew (20 s), and
+the one left alone may call it off once that is over.
 
-**Taking a seat over.** As in Jackbox, a new device joins a running room by its code and the
-exact name of a seat whose line is down — but the crew lets it in, since the room list shows
-every running room's crew to anybody. The ask waits up to 30 s while every member on the line
-reads „Ben meldet sich von einem anderen Gerät" with „Zulassen" and „Ablehnen", on the pause
-card, or on a card of its own at the top where the run went on without Ben; the first answer
-decides. Let in, the device resumes the seat on its own pass, and the pass that held it is
-refused from then on („Der Platz wurde auf einem anderen Gerät übernommen."); turned away or
-left unanswered, the device is told „Die Crew hat die Übernahme nicht bestätigt.", and Ben's
-pass keeps the seat — that device may ask for it again only a minute later, refused quietly
-meanwhile, with no card for the crew. Ben back first ends the ask („Ben ist wieder
-verbunden."), and with nobody of the crew on the line none is taken. The name of a seat still
-on the line is refused („Ben ist noch verbunden."); any other name gets the refusal of a join
-into a run, which says that a seat whose line is down can be taken over by its name. The ask is
-for guests and for devices of other accounts: a device signed into the seat's account comes back
-by its card, without one.
+**Taking a seat over.** As in Jackbox, a new device joins a running room by its code and the exact
+name of a seat whose line is down — but the crew lets it in, since the room list shows every running
+room's crew to anybody. The ask waits up to 30 s while every member on the line reads „Ben meldet
+sich von einem anderen Gerät" with „Zulassen" and „Ablehnen", on a card of its own at the top while
+the run goes on, or on the maintenance card while it stands still for that; the first answer
+decides. Let in, the device resumes the seat on its own pass, and the pass that held it is refused
+from then on („Der Platz wurde auf einem anderen Gerät übernommen."); turned away or left
+unanswered, the device is told „Die Crew hat die Übernahme nicht bestätigt.", and Ben's pass keeps
+the seat — that device may ask for it again only a minute later, refused quietly meanwhile, with no
+card for the crew. Ben back first ends the ask („Ben ist wieder verbunden."), and with nobody of the
+crew on the line none is taken. The name of a seat still on the line is refused („Ben ist noch
+verbunden."); any other name gets the refusal of a join into a run, which says that a seat whose
+line is down can be taken over by its name. The ask is for guests and for devices of other
+accounts: a device signed into the seat's account comes back by its card, without one.
 
 **The line.** The page counts its line dead when an ask for the server's time stays unanswered
 for 5 s, after 20 s without a word from the server, or when a socket is not open 8 s after it
@@ -643,44 +667,47 @@ On SIGTERM the server stands every run still — the maintenance pause (`wartung
 hands every seat the room's last snapshot (`restart`), closes the sockets with 1012 and exits. The
 player's own card says „WARTUNG · Der Server startet neu" with the usual retry counter, and the page
 comes back as for a line dropped, the snapshot in its `resume`. A server that knows the room no more
-takes it up again from it, under its code, still in the maintenance pause: the pause card says
-„WARTUNG" over „Warten auf Ben", and the run goes on, its deadline moved on by exactly the downtime,
-once the crew is back — or goes on without whoever is not, as after any drop: „Ohne Ben weiter" a
-minute after the restore at the soonest, „Einsatz abbrechen" for one alone. A lobby's seats wait
-from the restore as well: one not back is freed 120 s after it, whatever the lobby's last snapshot
-was. For 10 s after the restore, until the crew does anything, a newer snapshot handed in replaces
-the one the room was taken up from; an older one changes nothing, and a newer one that comes later
-only goes into the log, with both seqs. A seq orders the snapshots of one history only: a room
-taken up again from an older snapshot counts on from it, a history of its own, so a last snapshot
-of the history it left could in theory outrank its newer ones — accepted. Every snapshot names the
-server instance that sealed it, one
-id per boot, and the one at SIGTERM is its last (`final`): a new instance takes a room up from a
-snapshot of another one that is not its last only once that last one comes, or 90 s after the first
-such snapshot came, however long the instance has been up, from the newest handed in meanwhile —
-whoever dropped in the minute a deploy keeps the old instance up comes back after the switch with an
-older snapshot than the crew still on it, whose last ones come some 61 s after the switch at the
-latest; a last snapshot never waits. Meanwhile the player's card says „EINSATZ WIRD
-WIEDERHERGESTELLT · Der letzte Stand trifft gleich ein", with only the reload to press; the join
-screen's card, its way back pressed or the page loaded anew, says the same with the seconds it has
-waited, only „Einsatz aufgeben" open — carried out once the room is back — and the audience waits
-as well, while a join by its code is told „Der Raum wird gerade wiederhergestellt, gleich noch
-einmal." A page loaded anew stands on the card of the newest snapshot it keeps from the start,
-never on the plain form. A server killed
-outright, with no SIGTERM, loses at most the last 2 s of a deed and 10 s of a walk, and its rooms
-are back 90 s after the first of their crew came back to the next one. A snapshot over a day old,
-of a run that is over, of another room or under another key is
-refused in one line, and so is one whose code another room holds meanwhile. A room the server closed
-for standing empty 10 minutes leaves a tombstone for a day that refuses its snapshots — „Dieser
-Einsatz ist beendet." where its run was over by then, else „Der Raum stand 10 Minuten leer und wurde
-geschlossen." — and the page drops the snapshot and its card: a seat that left mid-run brings back
-no ghost of the run. A room taken up again binds only whoever has come back to it: the join screen
-of anybody else shows its own card, and nothing keeps them from another room; a run given up by the
-only one of its crew who came back is not counted. Where the server does not know the room yet, the
-join screen shows its card from the kept snapshot: „Zurück zum Einsatz" takes the room up again, and
-„Raum verlassen" or „Einsatz aufgeben" there drops it. A tab that watched the room asks for it again
-for 30 s after a restart, until the room is back. Patrols stand still through a pause, where they
-are; an ask for a seat lapses with the restart. Without `ROOM_SECRET` the key is one of the server's
-boot alone, and no room survives a restart.
+takes it up again from it, under its code, still in the maintenance pause — the one thing that
+stands a run still: its card over the world says „WARTUNG" over „Warten auf Ben", and the run goes
+on, its deadline moved on by exactly the downtime, once whoever was on the line at SIGTERM is back,
+or goes on without whoever of them is not: the card offers „Ohne Ben weiter" a minute after the
+restore at the soonest, „Einsatz abbrechen" for one alone once that minute is over. Whoever's line
+had dropped before stays away as before, its wait the one of the drop, and is not waited for: a drop
+never turns into a pause by way of a deploy (decided 2026-11-14). A server killed outright takes the
+same rule from the newest snapshot, which names whoever was on the line as it was taken; a snapshot
+of a build before R-nopause names nobody, and its run goes on as the first of the crew is back. A
+lobby's seats wait from the restore as well: one not back is freed 120 s after it, whatever the
+lobby's last snapshot was. For 10 s after the restore, until the crew does anything, a newer
+snapshot handed in replaces the one the room was taken up from; an older one changes nothing, and a
+newer one that comes later only goes into the log, with both seqs. A seq orders the snapshots of one
+history only: a room taken up again from an older snapshot counts on from it, a history of its own,
+so a last snapshot of the history it left could in theory outrank its newer ones — accepted. Every
+snapshot names the server instance that sealed it, one id per boot, and the one at SIGTERM is its
+last (`final`): a new instance takes a room up from a snapshot of another one that is not its last
+only once that last one comes, or 90 s after the first such snapshot came, however long the instance
+has been up, from the newest handed in meanwhile — whoever dropped in the minute a deploy keeps the
+old instance up comes back after the switch with an older snapshot than the crew still on it, whose
+last ones come some 61 s after the switch at the latest; a last snapshot never waits. Meanwhile the
+player's card says „EINSATZ WIRD WIEDERHERGESTELLT · Der letzte Stand trifft gleich ein", with only
+the reload to press; the join screen's card, its way back pressed or the page loaded anew, says the
+same with the seconds it has waited, only „Einsatz aufgeben" open — carried out once the room is
+back — and the audience waits as well, while a join by its code is told „Der Raum wird gerade
+wiederhergestellt, gleich noch einmal." A page loaded anew stands on the card of the newest snapshot
+it keeps from the start, never on the plain form. A server killed outright, with no SIGTERM, loses
+at most the last 2 s of a deed and 10 s of a walk, and its rooms are back 90 s after the first of
+their crew came back to the next one. A snapshot over a day old, of a run that is over, of another
+room or under another key is refused in one line, and so is one whose code another room holds
+meanwhile. A room the server closed for standing empty 10 minutes leaves a tombstone for a day that
+refuses its snapshots — „Dieser Einsatz ist beendet." where its run was over by then, else „Der Raum
+stand 10 Minuten leer und wurde geschlossen." — and the page drops the snapshot and its card: a seat
+that left mid-run brings back no ghost of the run. A room taken up again binds only whoever has come
+back to it: the join screen of anybody else shows its own card, and nothing keeps them from another
+room; a run given up by the only one of its crew who came back is not counted. Where the server does
+not know the room yet, the join screen shows its card from the kept snapshot: „Zurück zum Einsatz"
+takes the room up again, and „Raum verlassen" or „Einsatz aufgeben" there drops it. A tab that
+watched the room asks for it again for 30 s after a restart, until the room is back. Patrols stand
+still through the maintenance, where they are; an ask for a seat lapses with the restart. Without
+`ROOM_SECRET` the key is one of the server's boot alone, and no room survives a restart.
 
 **The lobby.** The host cannot start while a seat's line is down: the lobby says whose („Bens
 Leitung ist unterbrochen"), as it says who has not confirmed yet. A seat whose line has been
@@ -695,8 +722,8 @@ refusal at the door or of the way on, going on without somebody, a seat given up
 for and let in or kept, every run's end with its outcome, the server going down for a restart
 with each room's last snapshot, and a room taken up again: `restored room <code> from snapshot seq
 <n> (<k> seats, <age> old)`, or why a snapshot was not taken. `GET /health` counts the rooms,
-the runs on and paused, the players and the audience on the line, and says the uptime and the
-build (`RENDER_GIT_COMMIT`, else `dev`); it names nobody.
+the runs on and those the maintenance stands still, the players and the audience on the line, and
+says the uptime and the build (`RENDER_GIT_COMMIT`, else `dev`); it names nobody.
 
 ## Pausenmenü und Verlassen
 
@@ -714,20 +741,23 @@ stays with the world. While a menu stands open, nothing under it takes a key, a 
 controller: the screens are `inert`, and what they listen for on the window hears nothing either —
 the world's keys, the notepad's, the lever's, the arrows of a book, the opening's Space (App.tsx
 `ScreenArea`, hooks.ts `useKeys`); the talk key alone talks on. Opening it pauses nothing: the
-clock, the patrols and the emergencies run on — a run stands still only for a line down, as
-above —, the line under the list says so in a run, and the crew's strip marks the player „im
-Menü" for as long as it stands open — a phone's row, which shows a doing only for three seconds
-after it changed, for those (`pause-menu`, core `set-menu` and `menus`; six marks at once and
-one more a second, as the voice's signals are allowed). Meanwhile the avatar stands. Under
-reduced motion the menu cuts in.
+clock, the patrols and the emergencies run on — a run stands still only for the server's maintenance
+and while nobody of the crew is on the line, as above —, the line under the list says so in a run,
+and the crew's strip marks the player „im Menü" for as long as it stands open — a phone's row, which
+shows a doing only for three seconds after it changed, for those (`pause-menu`, core `set-menu` and
+`menus`; six marks at once and one more a second, as the voice's signals are allowed). Meanwhile the
+avatar stands. Under reduced motion the menu cuts in.
 
 **The ways out**, as Dota 2 has them:
 
 - „Zum Hauptmenü" in a run closes the seat's line on purpose (`to-menu`): the seat stays bound,
-  and the server logs `left to the main menu, the seat kept` where a drop logs a drop. The crew's
-  card says „Ben ist ins Hauptmenü gegangen" and offers „Ohne Ben weiter" after the same wait as
-  for a drop (60 s the first time, 20 s later). The page loads anew on the main menu, the run's
-  card first and lit: „Zurück zum Einsatz" — the way back a drop takes — and „Einsatz aufgeben".
+  and the server logs `left to the main menu, the seat kept` where a drop logs a drop. The run goes
+  on as after a drop: mission control says „Ben hat sich abgemeldet.", the crew strip „im
+  Hauptmenü · 0:12" by his name, and the bar offers „Ohne Ben weiter" after the same wait as for
+  a drop (60 s the first time, 20 s later). Only when nobody of the crew is left on the line does
+  the run hold — whoever leaves last stalls nobody, and the room's 10-minute close caps it — until
+  the first one is back. The page loads anew on the main menu, the run's card first and lit:
+  „Zurück zum Einsatz" — the way back a drop takes — and „Einsatz aufgeben".
 - „Einsatz aufgeben" asks once, as Overcooked 2 does: a card says what it means in the world's
   words — „Der Platz wird aufgegeben und lässt sich nicht zurückholen." and „Der Einsatz läuft
   mit 2 Plätzen weiter.", or below the mission's least crew „Mit 1 Platz liegt der Einsatz unter
@@ -738,7 +768,7 @@ reduced motion the menu cuts in.
   later.
 - „Raum verlassen" in a lobby leaves at once, the seat freed.
 - „Zuschauen beenden" leaves the audience.
-- Closing the tab stays a drop: a run waits for the seat, a lobby frees it after 10 s.
+- Closing the tab stays a drop: a run keeps the seat and goes on, a lobby frees it after 10 s.
 
 The end screen keeps its „Nochmal", its way back to the lobby and „Raum verlassen".
 

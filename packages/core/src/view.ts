@@ -25,6 +25,7 @@ import { noteKey } from './notes.js';
 import { pickLine } from './radio.js';
 import {
   CREW_COLORS,
+  type Away,
   type Credits,
   type GameState,
   type MenuPlace,
@@ -32,11 +33,11 @@ import {
   type RunEvent,
 } from './state.js';
 import { moduleFor, type PuzzleView } from './puzzles/index.js';
-import { crewOf, hasClock, waitingFor } from './actions.js';
+import { crewOf, emergencyDef, hasClock } from './actions.js';
 import { gradeOf, type Grade } from './grade.js';
 import { clockStartOf, runReport } from './report.js';
 import type { ConsoleId, ManualSection, Viewer, ViewContext } from './puzzles/module.js';
-import { relayDefFor, relayModule, type RelayDef, type RelayView } from './puzzles/relay.js';
+import { relayModule, type RelayDef, type RelayView } from './puzzles/relay.js';
 import {
   backupsOf,
   consoleOf,
@@ -104,20 +105,19 @@ export interface PlayerView extends RunShape {
   currentPuzzleIndex: number;
   puzzleCount: number;
   /**
-   * set while the run stands still for crew members away: whom it waits for, each with since
-   * when and from when the crew may go on without them (`continue-without`)
+   * the crew members away from the run — their line down, or gone to the main menu, their seat
+   * kept — oldest first, each with since when, from when the crew may go on without them
+   * (`continue-without`) and whether it has; empty while everybody is on the line, and outside
+   * a run. The run goes on meanwhile, but for the server's maintenance (`pausedAt`), which waits
+   * for those whose line went down with the server (`maintenance`)
    */
-  pausedFor: AwayView[] | null;
+  away: AwayView[];
   /**
-   * since when the run stands frozen, epoch ms; null while it runs. The mission clock stands
-   * at it — the pause moves every deadline on by its length once it is over
+   * since when the run stands frozen for the server's maintenance — a deploy or a restart put
+   * every seat away — epoch ms; null while it runs, whoever is away. The mission clock stands
+   * at it, and the pause moves every deadline on by its length once it is over
    */
   pausedAt: number | null;
-  /**
-   * the run stands frozen for the server's maintenance (pause kind `wartung`): a deploy or a
-   * restart put every seat away; left out while it runs, or stands frozen for a line dropped
-   */
-  maintenance?: true;
   /**
    * seats of the crew a new device asks to take over, each until when the ask waits for the
    * crew on the line to let it in (`takeover-answer`); left out while nobody asks
@@ -208,7 +208,7 @@ export interface TakeoverView {
   until: number;
 }
 
-/** A crew member the run waits for, away since their line dropped. */
+/** A crew member away from the run since their line dropped. */
 export interface AwayView {
   id: string;
   name: string;
@@ -218,6 +218,13 @@ export interface AwayView {
   waivableAt: number;
   /** their line closed on purpose, gone to the main menu, the seat kept; left out for a drop */
   menu?: true;
+  /** the crew went on without them (`continue-without`); left out while it misses them */
+  waived?: true;
+  /**
+   * their line went down with the server for its maintenance: a run standing still for it
+   * (`pausedAt`) waits for them; left out for a line that dropped on its own
+   */
+  maintenance?: true;
 }
 
 /**
@@ -741,20 +748,19 @@ function viewerOf(state: GameState, puzzleId: string, playerId: string | null): 
 
 /**
  * The running relay emergency as one player sees it, with the def it runs on — a console for
- * each of the crew the run counts (`crewOf`), none for whom it went on without; null outside a
- * running run, whose crew the emergency no longer matches once somebody left, in valves mode
- * and between emergencies.
+ * each of the crew it was rolled for (actions.ts `emergencyDef`), none for whoever is away
+ * longer than a page takes to load anew; null outside a running run, whose crew the emergency
+ * no longer matches once somebody left, in valves mode and between emergencies.
  */
 function relayViewFor(
   state: GameState,
   playerId: string | null,
 ): { def: RelayDef; view: RelayView } | null {
-  const sabotage = state.mission.map.sabotage;
   const emergency = state.sabotage?.emergency;
-  if (state.phase !== 'playing' || sabotage === undefined || emergency === undefined) {
+  if (state.phase !== 'playing' || emergency === undefined) {
     return null;
   }
-  const def = relayDefFor(crewOf(state), sabotage);
+  const def = emergencyDef(state, emergency);
   return { def, view: relayModule.view(def, emergency, playerId, viewContext(state, null)) };
 }
 
@@ -1100,9 +1106,9 @@ export interface SpectatorView extends RunShape {
   /** the alarms so far and how many end the run, as the players see them */
   alarms: PlayerView['alarms'];
   hintsUsed: number;
-  /** whom the run waits for, as the players see it */
-  pausedFor: AwayView[] | null;
-  /** since when the run stands frozen, as the players see it */
+  /** the crew members away from the run, as the players see them */
+  away: AwayView[];
+  /** since when the run stands frozen for the server's maintenance, as the players see it */
   pausedAt: number | null;
   events: RunEvent[];
   /** why the run was called off, as the players see it; left out for any other run */
@@ -1135,28 +1141,36 @@ export interface SpectatorView extends RunShape {
 }
 
 /**
- * Whom the run waits for while it stands still, oldest drop first, and who of them went to the
- * main menu; null while it runs on.
+ * The crew members away from the run, oldest drop first, each with its marks (`awayMarks`);
+ * none outside a run.
  */
-function pausedFor(state: GameState): AwayView[] | null {
-  if (state.paused === null) {
-    return null;
+function awayOf(state: GameState): AwayView[] {
+  if (state.phase !== 'playing') {
+    return [];
   }
-  return waitingFor(state)
-    .flatMap((id) => {
-      const away = state.away[id];
+  return Object.entries(state.away)
+    .flatMap(([id, away]) => {
       const name = state.players.find((p) => p.id === id)?.name;
-      const menu = state.menus[id] === 'main' ? { menu: true as const } : {};
-      return away === undefined || name === undefined
-        ? []
-        : [{ id, name, since: away.since, waivableAt: away.waivableAt, ...menu }];
+      const at = { since: away.since, waivableAt: away.waivableAt };
+      return name === undefined ? [] : [{ id, name, ...at, ...awayMarks(state, id, away) }];
     })
     .sort((a, b) => a.since - b.since);
 }
 
-/** That the run stands still for the server's maintenance; nothing while it runs or waits else. */
-function maintenanceOf(state: GameState): { maintenance?: true } {
-  return state.paused?.kind === 'wartung' ? { maintenance: true } : {};
+/**
+ * What marks a crew member away: gone to the main menu, gone on without, gone with the server
+ * for its maintenance; nothing for a line that dropped.
+ */
+function awayMarks(
+  state: GameState,
+  id: string,
+  away: Away,
+): Pick<AwayView, 'menu' | 'waived' | 'maintenance'> {
+  return {
+    ...(state.menus[id] === 'main' ? { menu: true as const } : {}),
+    ...(away.waived ? { waived: true as const } : {}),
+    ...(away.maintenance === true ? { maintenance: true as const } : {}),
+  };
 }
 
 /** The seats a new device asks to take over in the run on, for its crew; nothing while none. */
@@ -1208,7 +1222,7 @@ export function viewForSpectator(state: GameState): SpectatorView {
     penaltySeq: state.penaltySeq,
     alarms: alarmsOf(state),
     hintsUsed: state.hintsUsed,
-    pausedFor: pausedFor(state),
+    away: awayOf(state),
     pausedAt: state.paused?.since ?? null,
     events: [...state.events],
     ...calledOffOf(state),
@@ -1281,9 +1295,8 @@ export function viewFor(state: GameState, playerId: string): PlayerView {
     lights: lightsOf(state),
     currentPuzzleIndex: state.currentPuzzleIndex,
     puzzleCount: state.mission.puzzles.length,
-    pausedFor: pausedFor(state),
+    away: awayOf(state),
     pausedAt: state.paused?.since ?? null,
-    ...maintenanceOf(state),
     ...takeoversOf(state),
     events: [...state.events],
     ...calledOffOf(state),

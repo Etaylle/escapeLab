@@ -52,11 +52,13 @@ describe('GET /health', () => {
     const manager = new RoomManager();
     serveSockets(line, { catalog: shipped, manager });
     const lobby = roomOf(line, 'systemcheck', ['Anna', 'Ben'], false);
-    // A run for three, Emil's line gone: it waits for him, and somebody watches.
+    // A run for three, Emil's line gone: it goes on without stopping, and somebody watches.
     const waiting = roomOf(line, 'blackout', ['Cem', 'Dora', 'Emil'], true);
     waiting.sockets[2]?.close();
     line.connect().say({ kind: 'spectate', code: waiting.code });
+    // A run standing still for the server's maintenance, as one taken up again stands.
     const running = roomOf(line, 'systemcheck', ['Finn', 'Gus'], true);
+    manager.get(running.code).goDown(Date.now());
     // A lobby whose one player's line closed: a room, nobody on the line.
     const left = roomOf(line, 'systemcheck', ['Hana'], false);
     left.sockets[0]?.close();

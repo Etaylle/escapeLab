@@ -243,7 +243,7 @@ function restoredMidEmergency() {
   vi.advanceTimersByTime(DOWNTIME_MS);
   const again = Room.restore(kept, Date.now());
   const crew = [rejoin(again, 'Anna'), rejoin(again, 'Ben')] as const;
-  expect(lastView(crew[0].messages).pausedFor).toBeNull();
+  expect(lastView(crew[0].messages).pausedAt).toBeNull();
   return { room: again, crew, left: (kept.state.sabotage?.endsAt ?? 0) - at };
 }
 
