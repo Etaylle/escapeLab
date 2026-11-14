@@ -34,13 +34,18 @@ import { BEAM_STEP, LENS_AHEAD, lightStep, type HeroLamp } from './lamp.js';
  * its reach, the dust motes of the world's air drifting in it (particles.ts). The beam is turned
  * once for each degree of its sweep from a sprite baked once for its reach — a conic gradient
  * across, the lamp's falloff along (render/beam.ts profiles the world's beams so) — and laid
- * each frame whole at whole pixels, the copy the software canvas makes fastest.
+ * each frame whole at whole pixels, the copy the software canvas makes fastest: laid over the lab
+ * as a haze of the lamp's light, which over a lab at night looks as light added onto it would, at
+ * a fifth less of the beam's cost.
  */
 
-/** The menu's beam: as wide as this either way of its axis before its edge fades, radians. */
-export const BEAM_HALF = 0.28;
 /**
- * How strong its light is at its strongest, on the core near the lens, added onto the lab at
+ * The menu's beam: as wide as this either way of its axis before its edge fades, radians — a
+ * little wider than the world's, held there by its cost, which grows with the cone's pixels.
+ */
+export const BEAM_HALF = 0.22;
+/**
+ * How strong its light is at its strongest, on the core near the lens, laid over the lab at
  * night: a warm haze the dust hangs in.
  */
 export const BEAM_LIGHT = 0.6;
@@ -282,7 +287,6 @@ export function layBeam(
   const x = Math.round(lamp.x * frame.dpr) + turned.x;
   const y = Math.round(lamp.y * frame.dpr) + turned.y;
   ctx.globalAlpha = lamp.on;
-  ctx.globalCompositeOperation = 'lighter';
   ctx.drawImage(turned.canvas, x, y);
   if (lamp.flare > 0) {
     ctx.globalAlpha = lightStep(lamp.flare) * FLARE_LIGHT;
@@ -290,7 +294,6 @@ export function layBeam(
     ctx.globalAlpha = lamp.on;
   }
   layDust(ctx, beam, lamp, frame);
-  ctx.globalCompositeOperation = 'source-over';
   ctx.globalAlpha = 1;
 }
 

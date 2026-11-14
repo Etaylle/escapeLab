@@ -25,8 +25,11 @@ export const BEAT_MS = 1000;
 export const SWEEP = { low: Math.PI - 0.32, high: Math.PI + 0.48 } as const;
 /** Where the beam stands under reduced motion: across toward the menu's middle. */
 export const STILL_ANGLE = Math.PI + 0.12;
-/** How far the beam's light reaches against the hero's height, before the menu stops it. */
-export const REACH_SHARE = 1.45;
+/**
+ * How far the beam's light reaches against the hero's height, before the menu stops it: past the
+ * middle of a place's room (places.ts), and no further, as the beam's pixels are its cost.
+ */
+export const REACH_SHARE = 1.2;
 /** The steps a beam is drawn at: a degree, and the lamp in the hands every three. */
 export const BEAM_STEP = TAU / 360;
 export const LAMP_STEP = 3 * BEAM_STEP;

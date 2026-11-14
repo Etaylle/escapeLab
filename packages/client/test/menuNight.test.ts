@@ -133,7 +133,7 @@ const lampOf = (on = 1, flare = 0): HeroLamp => ({
 const FRAME = { dpr: 1, tile: 64, now: 0, reduced: false };
 
 describe('the beam over the lab at night', () => {
-  it('adds its light onto the lab, the motes as well, and a second light as it flares', () => {
+  it('lays its haze over the lab, the motes as well, and a second haze as it flares', () => {
     const scene = fakeCanvas(1440, 820, 'scene');
     const beam = sceneBeam((w, h) => fakeCanvas(w, h).canvas);
     for (let now = 0; now < 3000; now += 1000 / 30) {
@@ -141,15 +141,15 @@ describe('the beam over the lab at night', () => {
     }
     const laid = callEntries(scene.log, 'drawImage');
     expect(laid.length).toBeGreaterThan(90);
-    expect(laid.every((e) => e.op === 'lighter')).toBe(true);
+    expect(laid.every((e) => e.op === 'source-over')).toBe(true);
     expect(laid.some((e) => e.args[0] === beam.mote)).toBe(true);
     scene.log.length = 0;
     layBeam(scene.ctx, beam, lampOf(1, 0.5), { ...FRAME, now: 3000 });
     const turned = callEntries(scene.log, 'drawImage').filter((e) => e.args[0] === beam.turned?.canvas);
     expect(turned.map((e) => e.alpha)).toEqual([1, 0.5 * FLARE_LIGHT]);
-    // Back on the scene's own way of drawing once the beam is laid.
-    const state = scene.log.filter((e) => e.kind === 'set' && e.name === 'globalCompositeOperation');
-    expect(state.at(-1)?.kind === 'set' && state.at(-1)).toMatchObject({ value: 'source-over' });
+    // Back at full strength for the scene's next copy once the beam is laid.
+    const strength = scene.log.filter((e) => e.kind === 'set' && e.name === 'globalAlpha');
+    expect(strength.at(-1)?.kind === 'set' && strength.at(-1)).toMatchObject({ value: 1 });
   });
 });
 
