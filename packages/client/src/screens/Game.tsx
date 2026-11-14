@@ -1122,6 +1122,23 @@ function useEscapeCloses(
   });
 }
 
+/**
+ * The screen's keys: the notepad's (`toggleNotes`), the keys that put down what lies over the
+ * world, and Esc (`useEscapeCloses`, the panels still on the screen `shown`).
+ */
+function useScreenKeys(
+  open: OpenNow,
+  toggleNotes: () => void,
+  shown: readonly (Shown<unknown> | null)[],
+  closeModal: () => void,
+  openMenu: () => void,
+): void {
+  const { keys } = useSettings();
+  useKeys([keys.notes], toggleNotes);
+  useKeys(putDownKeys(overOf(open), keys), closeModal);
+  useEscapeCloses(open, shown, closeModal, openMenu);
+}
+
 /** What lies over the world: the station's device, a source's pages, a note; null for nothing. */
 function overOf(open: OpenNow): Over | null {
   if (open.station !== null) {
@@ -1446,11 +1463,8 @@ export function GameScreen(props: Props) {
   const sheets = useSheets(open);
   const pad = useNotepad(roomCode, view.you.id, open);
   const closeModal = (): void => open.set(NOTHING_OVER);
-  const { keys } = useSettings();
   const menu = usePause();
-  useKeys([keys.notes], pad.toggle);
-  useKeys(putDownKeys(overOf(open), keys), closeModal);
-  useEscapeCloses(open, [panel, sheets.reading, sheets.note], closeModal, menu.show);
+  useScreenKeys(open, pad.toggle, [panel, sheets.reading, sheets.note], closeModal, menu.show);
   // Until the click of the cold open the strip keeps quiet: the opener has the banner.
   const crewStrip = useCrewStrip(props, notice?.kind === 'line' || !coldOpen.dark, {
     notesOpen: open.notes,
