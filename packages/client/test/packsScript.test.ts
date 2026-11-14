@@ -20,6 +20,7 @@ import {
   packsAsked,
   runWith,
   sourceFile,
+  LEAD_KEPT_MS,
   TAIL_MS,
   type Bench,
   type Made,
@@ -33,11 +34,13 @@ import { wavOf } from './sfxFakes.js';
 
 /**
  * The pack script (scripts/packs.ts) run against a host of the test's own: every file a WAV of
- * known loudness at 8 kHz, decoded as it is, a piece "encoded" as a WAV; folders of its own.
+ * known loudness at 4 kHz, decoded as it is, a piece "encoded" as a WAV; folders of its own.
  * Nothing leaves the machine.
  */
 
-const RATE = 8000;
+const RATE = 4000;
+/** How long a test that builds whole packs may take: a loaded machine takes its time. */
+const BUILDS = { timeout: 30_000 };
 
 /** `seconds` of a 441 Hz tone at `amplitude`, after `quietMs` of silence, at RATE. */
 function tone(seconds: number, amplitude: number, quietMs = 0): number[] {
@@ -173,7 +176,7 @@ describe('the plan’s rules', () => {
       'end-lost': { source: { manual: '../ada/x.wav', from: 'https://ada.example' } },
     });
     expect(packFlaws(broken)).toEqual([
-      'ada/lobby: it goes round in 51000 ± 0 ms, not 60–120 s',
+      'ada/lobby: it goes round in 51000 ms, not 60–120 s',
       'ada/title: it loops, and it plays once',
       'ada/calm: its licence CC BY-NC 4.0 is none of CC0, CC BY 3.0, CC BY 4.0',
       'ada/calm: it has no loop',
@@ -190,13 +193,26 @@ describe('the plan’s rules', () => {
     expect(packFlaws(missing)).toEqual(['ada/menu-theme: no piece']);
   });
 
-  it('hold a loop sought within its reach to 60–120 s round, wherever the seam falls', () => {
-    const reaching = plannedPack('ada', {
-      calm: { loop: { crossfade: [7000, 73_000, 2000], seekMs: 5000 } },
+  it('fade a piece played once within its halves, and leave a loop’s fades to the game', () => {
+    const faded = plannedPack('ada', {
+      title: { fades: { inMs: 1500, outMs: 4000 } },
+      'end-won': { fades: { outMs: 20_000 } },
+      calm: { fades: { inMs: 1500 } },
     });
-    expect(packFlaws(reaching)).toEqual([
-      'ada/calm: it goes round in 64000 ± 5000 ms, not 60–120 s',
+    expect(packFlaws(faded)).toEqual([
+      'ada/calm: it fades, and the game fades its loops',
+      'ada/end-won: a fade runs past its half',
     ]);
+  });
+
+  it('hold a planned loop to 60–120 s round, and leave its reach to the seam’s search', () => {
+    const short = plannedPack('ada', { calm: { loop: { crossfade: [7000, 66_000, 2000] } } });
+    expect(packFlaws(short)).toEqual(['ada/calm: it goes round in 57000 ms, not 60–120 s']);
+    // 64 s round, sought 8 s either way: the search keeps to 60 s and more itself.
+    const reaching = plannedPack('ada', {
+      calm: { loop: { crossfade: [7000, 73_000, 2000], seekMs: 8000 } },
+    });
+    expect(packFlaws(reaching)).toEqual([]);
   });
 
   it('fetch over https from the hosts the plan may name, and from no other', () => {
@@ -241,8 +257,8 @@ describe('the attribution', () => {
   });
 });
 
-describe('a pack built', () => {
-  it('fetches each file once, cuts, measures and encodes the pieces, writes pack.json', async () => {
+describe('a pack built', BUILDS, () => {
+  it('fetches each file once, cuts, measures, encodes the pieces, writes pack.json', async () => {
     const places = placesIn();
     const pack = plannedPack('ada');
     const host = hostFor([pack]);
@@ -274,6 +290,22 @@ describe('a pack built', () => {
     expect([title.ms, title.loop]).toEqual([35_000, null]);
   });
 
+  it('keeps a sought loop from 3 s before its seam to just past, 60 s round or more', async () => {
+    const places = placesIn();
+    // Planned 15 s into its file — 10 s into its span — and sought 3 s either way.
+    const pack = plannedPack('ada', {
+      calm: { loop: { crossfade: [15_000, 77_500, 2000], seekMs: 3000 } },
+    });
+    const made = (await buildPack(pack, benchOf(places, hostFor([pack])))) as Made;
+    const calm = made.built.pieces.calm as FoundPiece;
+    const loop = calm.loop as { crossfade: { startMs: number; endMs: number; fadeMs: number } };
+    expect(loop.crossfade.startMs).toBe(LEAD_KEPT_MS);
+    expect(calm.ms).toBe(loop.crossfade.endMs + TAIL_MS);
+    const round = loop.crossfade.endMs - loop.crossfade.fadeMs - loop.crossfade.startMs;
+    expect(round).toBeGreaterThanOrEqual(60_000);
+    expect(round).toBeLessThanOrEqual(63_500);
+  });
+
   it('brings every piece to −19 LUFS by its gain, measured as encoded', async () => {
     const places = placesIn();
     const pack = plannedPack('ada');
@@ -303,6 +335,24 @@ describe('a pack built', () => {
     expect((made.built.pieces.title as FoundPiece).startMs).toBeLessThanOrEqual(410);
   });
 
+  it('brings a piece played once in and to its end over the fades the plan gives it', async () => {
+    const places = placesIn();
+    const pack = plannedPack('ada', { 'end-lost': { fades: { inMs: 2000, outMs: 4000 } } });
+    await buildPack(pack, benchOf(places, hostFor([pack])));
+    const ending = parseWav(readFileSync(join(places.music, 'ada', 'end-lost.m4a')));
+    const data = ending.channels[0] ?? new Float32Array(0);
+    /** The level of the 50 ms around `ms`: its peak. */
+    const peakAt = (ms: number): number => {
+      const from = Math.round(((ms - 25) / 1000) * RATE);
+      return Math.max(...data.slice(Math.max(0, from), from + RATE / 20).map(Math.abs));
+    };
+    expect(peakAt(30)).toBeLessThan(0.002);
+    expect(peakAt(1000)).toBeCloseTo(0.05, 1);
+    expect(peakAt(10_000)).toBeCloseTo(0.1, 2);
+    expect(peakAt(33_000)).toBeCloseTo(0.05, 1);
+    expect(peakAt(34_980)).toBeLessThan(0.002);
+  });
+
   it('carries each piece’s credit and its attribution into pack.json', async () => {
     const places = placesIn();
     const pack = plannedPack('ada');
@@ -321,7 +371,7 @@ describe('a pack built', () => {
   });
 });
 
-describe('a pack refused', () => {
+describe('a pack refused', BUILDS, () => {
   it('says a fetch that failed, builds nothing of that pack and the rest as asked', async () => {
     const places = placesIn();
     const ada = plannedPack('ada');
@@ -353,11 +403,24 @@ describe('a pack refused', () => {
           'takes/packs/ada/',
       ],
     });
-    mkdirSync(join(places.takes, 'ada'), { recursive: true });
-    writeFileSync(join(places.takes, 'ada', 'Boss.wav'), wavOf(RATE, [tone(87, 0.1)]));
-    const second = await buildPack(pack, benchOf(places, host));
+    // Downloaded as its host names it, in a folder of the download's own.
+    const download = join(places.takes, 'ada', 'Free Pack (1-50)');
+    mkdirSync(download, { recursive: true });
+    writeFileSync(join(download, '[ACTION] Space BOSS.wav'), wavOf(RATE, [tone(87, 0.1)]));
+    const fragment = { manual: 'ada/space boss', from: manual.from };
+    const second = await buildPack(plannedPack('ada', { critical: { source: fragment } }), {
+      ...benchOf(places, host),
+    });
     expect('built' in second).toBe(true);
-    expect(host.asked).not.toContain(expect.stringContaining('Boss'));
+    expect(host.asked).not.toContain(expect.stringContaining('oss'));
+    writeFileSync(join(download, 'Space Boss (loop).wav'), wavOf(RATE, [tone(87, 0.1)]));
+    const twice = await buildPack(plannedPack('ada', { critical: { source: fragment } }), {
+      ...benchOf(places, host),
+    });
+    expect(twice).toEqual({
+      id: 'ada',
+      refused: ['ada/critical: manual: 2 files in takes/packs/ada/ hold „space boss"'],
+    });
   });
 
   it('refuses a pack over its cap, taking every part back and leaving what was there', async () => {
@@ -387,6 +450,19 @@ describe('a pack refused', () => {
     expect(readFileSync(join(places.packs, 'ada', 'pack.json'), 'utf8')).toBe(before);
   });
 
+  it('refuses a span that runs past its file, saying how long the file lasts', async () => {
+    const places = placesIn();
+    const pack = plannedPack('ada');
+    const host = hostFor([pack]);
+    host.files.set(urlOf('ada', 'lobby'), tone(52, 0.1));
+    const outcome = await buildPack(pack, benchOf(places, host));
+    expect(outcome).toEqual({
+      id: 'ada',
+      refused: ['ada/lobby: its span ends at 85000 ms, past its file\'s 52000 ms'],
+    });
+    expect(existsSync(join(places.packs, 'ada'))).toBe(false);
+  });
+
   it('refuses a plan that breaks a rule before it fetches anything', async () => {
     const places = placesIn();
     const pack = plannedPack('ada', { calm: { loop: undefined } });
@@ -397,7 +473,7 @@ describe('a pack refused', () => {
   });
 });
 
-describe('a dry run', () => {
+describe('a dry run', BUILDS, () => {
   it('says where each piece comes from and whether it is had, fetching nothing', async () => {
     const places = placesIn();
     const manual = { manual: 'ada/Boss.wav', from: 'https://clement-panchout.itch.io/x' };

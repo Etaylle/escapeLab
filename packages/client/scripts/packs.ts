@@ -36,6 +36,7 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   renameSync,
   rmSync,
@@ -43,7 +44,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   crossfadeFlaws,
@@ -69,7 +70,7 @@ import {
   type Decode,
   type Encode,
 } from './afconvert.ts';
-import { loudnessOf, lufsOf, sliceOf, type Pcm } from './pcm.ts';
+import { fadedOf, loudnessOf, lufsOf, sliceOf, type Pcm } from './pcm.ts';
 import { bestSeam, featuresOf } from './seam.ts';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -94,6 +95,12 @@ export const TARGET_LUFS = -19;
 export const LEAD_MS = 30;
 /** What a looped piece keeps past its loop's end, ms: its last pass fades out within it. */
 export const TAIL_MS = 500;
+/**
+ * What a looped piece keeps before its loop comes in, ms: the music its first pass comes in on —
+ * the game fades it in — and a next pass plays silent, caught up meanwhile (packFile.ts
+ * MIN_LEAD_MS).
+ */
+export const LEAD_KEPT_MS = 3000;
 /** The most a pack's eight files may take together, bytes: some 9 MB. */
 export const PACK_CAP = 9 * 1024 * 1024;
 
@@ -101,7 +108,10 @@ export const PACK_CAP = 9 * 1024 * 1024;
 export type Source =
   | { readonly url: string }
   | {
-      /** where the owner puts it, under takes/packs/ */
+      /**
+       * where the owner puts it: `<folder>/<name>`, a folder under takes/packs/ and a part of the
+       * file's name — a download keeps the name its host gave it, which the plan cannot know
+       */
       readonly manual: string;
       /** where the owner downloads it */
       readonly from: string;
@@ -128,6 +138,8 @@ export interface PlanPiece {
   /** the span of its file the game plays */
   readonly trim: readonly [fromMs: number, toMs: number];
   readonly loop?: PlanLoop;
+  /** a piece played once, cut out of longer music: how long it comes in and how long it ends */
+  readonly fades?: { readonly inMs?: number; readonly outMs?: number };
   /** how its gain comes about, and anything else worth knowing of it */
   readonly notes?: string;
 }
@@ -225,11 +237,14 @@ function pieceCrossfade(loop: PlanCrossfade, fromMs: number): Crossfade {
   return { startMs: startMs - fromMs, endMs: endMs - fromMs, fadeMs };
 }
 
-/** What breaks a piece played once: a length off 30–45 s, or a loop. */
+/** What breaks a piece played once: a length off 30–45 s, a loop, a fade over half its span. */
 function onceFlaws(piece: PlanPiece): string[] {
   const length = piece.trim[1] - piece.trim[0];
   const flaws = within(length, ONCE_SECONDS) ? [] : [`it lasts ${length} ms, not 30–45 s`];
-  return piece.loop === undefined ? flaws : [...flaws, 'it loops, and it plays once'];
+  const fades = [piece.fades?.inMs ?? 0, piece.fades?.outMs ?? 0];
+  const long = fades.some((ms) => ms < 0 || ms > length / 2) ? ['a fade runs past its half'] : [];
+  const loops = piece.loop === undefined ? [] : ['it loops, and it plays once'];
+  return [...flaws, ...long, ...loops];
 }
 
 /** What breaks a loop on bars: a round off 60–120 s. */
@@ -239,24 +254,28 @@ function barsFlaws({ bpm, count }: { bpm: number; count: number }): string[] {
 }
 
 /**
- * What breaks a crossfade planned in the span `trim`: a round off 60–120 s anywhere within its
- * reach, and what breaks the crossfade itself (packFile.ts `crossfadeFlaws`).
+ * What breaks a crossfade planned in the span `trim`: a round off 60–120 s — the seam sought
+ * within its reach stays within them (`loopOf`) — and what breaks the crossfade itself
+ * (packFile.ts `crossfadeFlaws`).
  */
 function crossfadeLoopFlaws(loop: PlanCrossfade, trim: PlanPiece['trim']): string[] {
   const fade = pieceCrossfade(loop, trim[0]);
-  const reach = loop.seekMs ?? 0;
   const period = crossfadePeriod(fade) * 1000;
-  const round = within(period - reach, LOOP_SECONDS) && within(period + reach, LOOP_SECONDS);
-  const flaws = round ? [] : [`it goes round in ${period} ± ${reach} ms, not 60–120 s`];
+  const flaws = within(period, LOOP_SECONDS) ? [] : [`it goes round in ${period} ms, not 60–120 s`];
   return [...flaws, ...crossfadeFlaws(fade, trim[1] - trim[0])];
 }
 
-/** What breaks `piece`'s loop, planned for `slot`: none on a piece played once, one on the rest. */
+/**
+ * What breaks `piece`'s loop, planned for `slot`: none on a piece played once, one on the rest —
+ * which comes in and goes as the game fades it, with no fade of its own.
+ */
 function loopFlaws(slot: Slot, piece: PlanPiece): string[] {
   if (playedOnce(slot)) return onceFlaws(piece);
   const { loop } = piece;
-  if (loop === undefined) return ['it has no loop'];
-  return 'bars' in loop ? barsFlaws(loop.bars) : crossfadeLoopFlaws(loop, piece.trim);
+  const faded = piece.fades === undefined ? [] : ['it fades, and the game fades its loops'];
+  if (loop === undefined) return [...faded, 'it has no loop'];
+  const round = 'bars' in loop ? barsFlaws(loop.bars) : crossfadeLoopFlaws(loop, piece.trim);
+  return [...faded, ...round];
 }
 
 /** One rule a planned piece keeps: whether it does, and what is said where it does not. */
@@ -348,25 +367,44 @@ export function sourceFile(url: string): string {
   return `${createHash('sha1').update(url).digest('hex').slice(0, 10)}-${plain}`;
 }
 
-/** Where `source` lies once it is had, under `takes`. */
-export function sourcePath(source: Source, takes: string): string {
-  return 'url' in source ? join(takes, sourceFile(source.url)) : join(takes, source.manual);
-}
-
 /** What a piece's source came to: its path, or why there is none. */
 type Had = { readonly path: string; readonly fetched: boolean } | { readonly missing: string };
 
+/** The files of an audio kind in `dir` and the folders under it; none where it is not there. */
+function audioUnder(dir: string): string[] {
+  if (!existsSync(dir)) return [];
+  const names = readdirSync(dir, { recursive: true, encoding: 'utf8' });
+  return names.filter((name) => /\.(?:wav|mp3|ogg|flac|m4a|aiff?)$/i.test(name));
+}
+
+/**
+ * The file downloaded by hand that `manual` (`<folder>/<name>`) names under `takes`: the one in
+ * that folder, or a folder under it, whose name holds `<name>`, any case — or why there is none.
+ */
+export function manualFile(manual: string, from: string, takes: string): Had {
+  const folder = dirname(manual);
+  const part = basename(manual).toLowerCase();
+  const found = audioUnder(join(takes, folder)).filter((name) =>
+    basename(name).toLowerCase().includes(part),
+  );
+  const [only] = found;
+  if (found.length === 1 && only !== undefined) {
+    return { path: join(takes, folder, only), fetched: false };
+  }
+  if (found.length > 1) {
+    return { missing: `manual: ${found.length} files in takes/packs/${folder}/ hold „${part}"` };
+  }
+  return { missing: `manual: download ${from} by hand into takes/packs/${folder}/` };
+}
+
 /**
  * `source` once, under `takes`: a file fetched before is not fetched again; a fetch that fails
- * says why; a file downloaded by hand is looked for where the plan puts it.
+ * says why; a file downloaded by hand is looked for where the plan puts it (`manualFile`).
  */
 export async function haveSource(source: Source, takes: string, get: Bench['get']): Promise<Had> {
-  const path = sourcePath(source, takes);
+  if ('manual' in source) return manualFile(source.manual, source.from, takes);
+  const path = join(takes, sourceFile(source.url));
   if (existsSync(path)) return { path, fetched: false };
-  if ('manual' in source) {
-    const folder = dirname(source.manual);
-    return { missing: `manual: download ${source.from} by hand into takes/packs/${folder}/` };
-  }
   const response = await get(source.url).catch((error: unknown) => error);
   if (!(response instanceof Response) || !response.ok) {
     const why = response instanceof Response ? `HTTP ${response.status}` : String(response);
@@ -389,25 +427,42 @@ export interface Built {
   readonly seam: number | null;
 }
 
-/** `piece`'s loop in its own time: a crossfade with its seam found, or bars; null played once. */
-function loopOf(piece: PlanPiece, cut: Pcm): { loop: Loop | null; seam: number | null } {
+/**
+ * What a piece keeps of its cut: the span its file holds, ms of the cut, its loop in the file's
+ * own time — null for a piece played once — and how alike a crossfade's two sides sound.
+ */
+interface Kept {
+  readonly loop: Loop | null;
+  readonly seam: number | null;
+  readonly span: readonly [fromMs: number, toMs: number];
+}
+
+/** The rounds a loop may go, ms (packFile.ts LOOP_SECONDS). */
+const LOOP_MS = [LOOP_SECONDS[0] * 1000, LOOP_SECONDS[1] * 1000] as const;
+
+/**
+ * What `piece` keeps of `cut`: a piece played once or on bars the whole of it; a crossfade, its
+ * seam sought within its reach and its rounds (seam.ts `bestSeam`), from LEAD_KEPT_MS before
+ * its loop comes in to TAIL_MS past its end — no second more than a pass plays.
+ */
+function keptOf(piece: PlanPiece, cut: Pcm): Kept {
+  const cutMs = ((cut.channels[0]?.length ?? 0) / cut.rate) * 1000;
   const { loop } = piece;
-  if (loop === undefined) return { loop: null, seam: null };
-  if ('bars' in loop) return { loop: { bars: loop.bars }, seam: null };
+  if (loop === undefined) return { loop: null, seam: null, span: [0, cutMs] };
+  if ('bars' in loop) return { loop: { bars: loop.bars }, seam: null, span: [0, cutMs] };
   const planned = pieceCrossfade(loop, piece.trim[0]);
-  const found = bestSeam(featuresOf(cut), planned, loop.seekMs ?? 0);
+  const found = bestSeam(featuresOf(cut), planned, loop.seekMs ?? 0, LOOP_MS);
   if (!Number.isFinite(found.score)) {
     throw new Error(`its seam at ${planned.endMs} ms finds no music past it to compare`);
   }
-  const { startMs, endMs, fadeMs } = found;
-  return { loop: { crossfade: { startMs, endMs, fadeMs } }, seam: found.score };
-}
-
-/** How long the encoded piece keeps of `cut`: a crossfade's file ends TAIL_MS past its loop. */
-function keptMs(loop: Loop | null, cutMs: number): number {
-  return loop !== null && 'crossfade' in loop
-    ? Math.min(cutMs, loop.crossfade.endMs + TAIL_MS)
-    : cutMs;
+  const from = Math.max(0, found.startMs - LEAD_KEPT_MS);
+  const to = Math.min(cutMs, found.endMs + TAIL_MS);
+  const crossfade = {
+    startMs: found.startMs - from,
+    endMs: found.endMs - from,
+    fadeMs: found.fadeMs,
+  };
+  return { loop: { crossfade }, seam: found.score, span: [from, to] };
 }
 
 /** The gain that brings a loudness of `lufs` to TARGET_LUFS; fails on silence. */
@@ -427,9 +482,14 @@ export function buildPiece(
   part: string,
   bench: Bench,
 ): Built {
-  const cut = sliceOf(pcm, plan.trim[0], plan.trim[1], EDGE_MS);
-  const { loop, seam } = loopOf(plan, cut);
-  bench.encode(sliceOf(cut, 0, keptMs(loop, loudnessOf(cut).ms), EDGE_MS), part);
+  const fileMs = Math.floor(((pcm.channels[0]?.length ?? 0) / pcm.rate) * 1000);
+  if (plan.trim[1] > fileMs) {
+    throw new Error(`its span ends at ${plan.trim[1]} ms, past its file's ${fileMs} ms`);
+  }
+  const span = sliceOf(pcm, plan.trim[0], plan.trim[1], EDGE_MS);
+  const cut = fadedOf(span, plan.fades?.inMs ?? 0, plan.fades?.outMs ?? 0);
+  const { loop, seam, span: [from, to] } = keptOf(plan, cut);
+  bench.encode(sliceOf(cut, from, to, EDGE_MS), part);
   const encoded = bench.decode(part);
   const measured = loudnessOf(encoded);
   const loudness = lufsOf(encoded);
@@ -590,20 +650,23 @@ export function builtLines({ built, bytes, seams }: Made): string[] {
   ];
 }
 
+/** What a dry run says of a piece's source: where it is had from, and whether it is had. */
+function sourceLine(source: Source, takes: string): string {
+  if ('manual' in source) {
+    const had = manualFile(source.manual, source.from, takes);
+    const state = 'path' in had ? 'there' : 'missing';
+    return `manual (${state}): takes/packs/${source.manual} from ${source.from}`;
+  }
+  const had = existsSync(join(takes, sourceFile(source.url)));
+  const host = new URL(source.url).hostname;
+  return `${had ? 'fetched before' : 'to fetch'} from ${host}: ${source.url}`;
+}
+
 /** What a dry run says of `pack`: each piece's source, its host, and whether it is had already. */
 export function dryLines(pack: PlanPack, takes: string): string[] {
   return [
     `packs: ${pack.id} — ${pack.title}`,
-    ...SLOTS.map((slot) => {
-      const { source } = pack.pieces[slot];
-      const had = existsSync(sourcePath(source, takes));
-      if ('manual' in source) {
-        const state = had ? 'there' : 'missing';
-        return `  ${slot}  manual (${state}): takes/packs/${source.manual} from ${source.from}`;
-      }
-      const host = new URL(source.url).hostname;
-      return `  ${slot}  ${had ? 'fetched before' : 'to fetch'} from ${host}: ${source.url}`;
-    }),
+    ...SLOTS.map((slot) => `  ${slot}  ${sourceLine(pack.pieces[slot].source, takes)}`),
   ];
 }
 

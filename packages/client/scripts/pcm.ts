@@ -314,6 +314,27 @@ export function lufsOf(pcm: Pcm): number {
 // --- a span cut out -------------------------------------------------------------------------
 
 /**
+ * `pcm` faded in over its first `inMs` and out over its last `outMs`, each on a raised cosine — a
+ * span of music cut out of a longer piece, shaped to come in and to end (scripts/packs.ts).
+ */
+export function fadedOf(pcm: Pcm, inMs: number, outMs: number): Pcm {
+  const total = lengthOf(pcm);
+  const fadeIn = Math.min(total, Math.round((inMs / 1000) * pcm.rate));
+  const fadeOut = Math.min(total, Math.round((outMs / 1000) * pcm.rate));
+  const rise = (i: number, n: number): number => 0.5 - 0.5 * Math.cos((Math.PI * i) / n);
+  const channels = pcm.channels.map((channel) => {
+    const shaped = Float32Array.from(channel);
+    for (let i = 0; i < fadeIn; i++) shaped[i] = (shaped[i] ?? 0) * rise(i, fadeIn);
+    for (let i = 0; i < fadeOut; i++) {
+      const at = total - 1 - i;
+      shaped[at] = (shaped[at] ?? 0) * rise(i, fadeOut);
+    }
+    return shaped;
+  });
+  return { rate: pcm.rate, channels };
+}
+
+/**
  * The span of `pcm` from `fromMs` to `toMs` — no further than its end — its first and its last
  * `edgeMs` faded in and out on a raised cosine, so that the cut does not click where the sound
  * at it is not at rest.

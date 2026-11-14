@@ -8,12 +8,14 @@
  * the two sides' spectral flux — how much the bands rise from frame to frame, the onsets — goes up
  * and down together (a correlation), and its chord, its instruments and its level where the two
  * spectra lie close (their RMS difference in dB). The seam's score is the first less the second
- * over SPECTRUM_WEIGHT_DB, over the fade and MARGIN_MS either side of it; the period is moved in
- * steps of a frame within the plan's reach and the best one kept (`bestSeam`). Pure.
+ * over SPECTRUM_WEIGHT_DB, over the fade and MARGIN_MS either side of it; the loop's start and its
+ * period are each moved in steps of a frame within the plan's reach and the best pair kept
+ * (`bestSeam`), every window's sums taken from running sums, so that the search stays quick. Pure.
  *
- * Runs on Node's own TypeScript, as the sound script does: it imports nothing of the app.
+ * Runs on Node's own TypeScript, as the sound script does: it imports nothing of the app but the
+ * pack format (src/world/packFile.ts), which imports nothing.
  */
-import type { Crossfade } from '../src/world/packFile.ts';
+import { MIN_LEAD_MS, type Crossfade } from '../src/world/packFile.ts';
 import type { Pcm } from './pcm.ts';
 
 /** The frames the spectrum is read in, ms: a seam is found to this. */
@@ -161,22 +163,113 @@ export function seamScore(features: Features, from: number, period: number, n: n
 }
 
 /**
- * `fade` with its end moved within `seekMs` of the plan's, in HOP_MS steps, to where the two sides
- * of its seam sound most alike (`seamScore`), over the fade and MARGIN_MS either side; its start
- * and its length as planned. With no reach, `fade` as it is, scored.
+ * Running sums of what a seam of `period` frames is judged by, frame by frame from `lo` to `hi`:
+ * the flux on each side, its products and squares, and the spectra's squared gap — the sum of
+ * the first i frames at index i, so that any window's sum is one subtraction.
  */
-export function bestSeam(features: Features, fade: Crossfade, seekMs: number): Seam {
-  const frames = features.flux.length;
-  const from = Math.max(0, Math.round((fade.startMs - MARGIN_MS) / HOP_MS));
-  const n = Math.round((fade.fadeMs + 2 * MARGIN_MS) / HOP_MS);
-  const planned = Math.round((fade.endMs - fade.fadeMs - fade.startMs) / HOP_MS);
-  const reach = Math.round(seekMs / HOP_MS);
-  let best = { period: planned, score: -Infinity };
-  for (let period = planned - reach; period <= planned + reach; period++) {
-    if (period <= n || from + period + n > frames) continue;
-    const score = seamScore(features, from, period, n);
-    if (score > best.score) best = { period, score };
+interface Sums {
+  readonly a: Float64Array;
+  readonly b: Float64Array;
+  readonly ab: Float64Array;
+  readonly aa: Float64Array;
+  readonly bb: Float64Array;
+  readonly gap: Float64Array;
+}
+
+/** The running sums for `period`, frames `lo` to `hi`. */
+function sumsOf(features: Features, period: number, lo: number, hi: number): Sums {
+  const length = Math.max(0, hi - lo);
+  const fresh = (): Float64Array => new Float64Array(length + 1);
+  const sums: Sums = {
+    a: fresh(),
+    b: fresh(),
+    ab: fresh(),
+    aa: fresh(),
+    bb: fresh(),
+    gap: fresh(),
+  };
+  for (let i = 0; i < length; i++) {
+    const t = lo + i;
+    const x = features.flux[t] ?? 0;
+    const y = features.flux[t + period] ?? 0;
+    let gap = 0;
+    for (const band of features.spectrum) gap += ((band[t] ?? 0) - (band[t + period] ?? 0)) ** 2;
+    sums.a[i + 1] = (sums.a[i] ?? 0) + x;
+    sums.b[i + 1] = (sums.b[i] ?? 0) + y;
+    sums.ab[i + 1] = (sums.ab[i] ?? 0) + x * y;
+    sums.aa[i + 1] = (sums.aa[i] ?? 0) + x * x;
+    sums.bb[i + 1] = (sums.bb[i] ?? 0) + y * y;
+    sums.gap[i + 1] = (sums.gap[i] ?? 0) + gap;
   }
-  const endMs = fade.startMs + best.period * HOP_MS + fade.fadeMs;
-  return { ...fade, endMs, score: Number(best.score.toFixed(3)) };
+  return sums;
+}
+
+/** A variance this small against its sum of squares is none: the flux stands still. */
+const STILL = 1e-9;
+
+/**
+ * The score (`seamScore`) of the window of `n` frames from index `i` of `sums`, over `bands`
+ * bands, worked out from the running sums.
+ */
+function windowScore(sums: Sums, i: number, n: number, bands: number): number {
+  const take = (running: Float64Array): number => (running[i + n] ?? 0) - (running[i] ?? 0);
+  const [a, b] = [take(sums.a), take(sums.b)];
+  const [ab, aa, bb] = [take(sums.ab), take(sums.aa), take(sums.bb)];
+  const varA = n * aa - a * a;
+  const varB = n * bb - b * b;
+  const moving = varA > STILL * n * aa && varB > STILL * n * bb;
+  const beats = moving ? (n * ab - a * b) / Math.sqrt(varA * varB) : 0;
+  const gap = Math.sqrt(Math.max(0, take(sums.gap)) / Math.max(1, n * bands));
+  return beats - gap / SPECTRUM_WEIGHT_DB;
+}
+
+/** The best seam of one period: the start within `first`–`last` (frames) that scores most. */
+function bestStart(
+  features: Features,
+  period: number,
+  [first, last]: readonly [number, number],
+  n: number,
+): { from: number; score: number } {
+  const margin = MARGIN_MS / HOP_MS;
+  const fits = Math.min(last, features.flux.length - period - n + margin);
+  let best = { from: first, score: -Infinity };
+  if (period <= n || fits < first) return best;
+  const lo = first - margin;
+  const sums = sumsOf(features, period, lo, fits - margin + n);
+  for (let from = first; from <= fits; from++) {
+    const score = windowScore(sums, from - margin - lo, n, features.spectrum.length);
+    if (score > best.score) best = { from, score };
+  }
+  return best;
+}
+
+/**
+ * `fade` with its start and its period each moved within `seekMs` of the plan's, in HOP_MS steps,
+ * to where the two sides of its seam sound most alike (`seamScore`) over the fade and MARGIN_MS
+ * either side — its start never under MIN_LEAD_MS, its period within `periodMs`, its length as
+ * planned. With no reach, `fade` as it is, scored; −Infinity where no seam within reach finds the
+ * music past it in the file.
+ */
+export function bestSeam(
+  features: Features,
+  fade: Crossfade,
+  seekMs: number,
+  periodMs: readonly [number, number] = [0, Infinity],
+): Seam {
+  const n = Math.round((fade.fadeMs + 2 * MARGIN_MS) / HOP_MS);
+  const reach = Math.round(seekMs / HOP_MS);
+  const start = Math.round(fade.startMs / HOP_MS);
+  const lowest = Math.max(MIN_LEAD_MS, MARGIN_MS) / HOP_MS;
+  const starts = [Math.max(lowest, start - reach), start + reach] as const;
+  const planned = Math.round((fade.endMs - fade.fadeMs - fade.startMs) / HOP_MS);
+  const shortest = Math.max(planned - reach, Math.ceil(periodMs[0] / HOP_MS));
+  const longest = Math.min(planned + reach, Math.floor(periodMs[1] / HOP_MS));
+  let best = { from: start, period: planned, score: -Infinity };
+  for (let period = shortest; period <= longest; period++) {
+    const found = bestStart(features, period, starts, n);
+    if (found.score > best.score) best = { ...found, period };
+  }
+  const startMs = best.from * HOP_MS;
+  const endMs = (best.from + best.period) * HOP_MS + fade.fadeMs;
+  return { startMs, endMs, fadeMs: fade.fadeMs, score: Number(best.score.toFixed(3)) };
 }

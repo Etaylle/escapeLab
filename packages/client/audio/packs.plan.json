@@ -1,0 +1,654 @@
+{
+  "packs": [
+    {
+      "id": "yalciner",
+      "title": "Schicht B · Ermittlung",
+      "composers": ["İlker Yalçıner"],
+      "pieces": {
+        "menu-theme": {
+          "source": {
+            "url": "https://opengameart.org/sites/default/files/Solemn%20%28Opening%29_0.mp3"
+          },
+          "page": "https://opengameart.org/content/solemn-opening",
+          "title": "Solemn (Opening)",
+          "author": "İlker Yalçıner",
+          "licence": "CC BY 4.0",
+          "notice": "Composer: İlker Yalçıner (ilkeryalciner.com)",
+          "trim": [11000, 99200],
+          "loop": {
+            "crossfade": [20000, 86000, 5000],
+            "seekMs": 8000
+          },
+          "notes": "99.5 s at −21.6 LUFS; steady −18 to −24 from 0:12 to 1:24, then it falls away"
+        },
+        "lobby": {
+          "source": {
+            "url": "https://opengameart.org/sites/default/files/One%20Last%20Try_0.mp3"
+          },
+          "page": "https://opengameart.org/content/one-last-try",
+          "title": "One Last Try",
+          "author": "İlker Yalçıner",
+          "licence": "CC BY 4.0",
+          "notice": "Composer: İlker Yalçıner (ilkeryalciner.com)",
+          "trim": [13000, 110000],
+          "loop": {
+            "crossfade": [22000, 93000, 5000],
+            "seekMs": 8000
+          },
+          "notes": "114.7 s at −29.6 LUFS, solo piano; steady from 0:22, its last 6 s fade"
+        },
+        "title": {
+          "source": {
+            "url": "https://opengameart.org/sites/default/files/Looking%20For...%20Answers_0.mp3"
+          },
+          "page": "https://opengameart.org/content/looking-for-answers",
+          "title": "Looking For... Answers",
+          "author": "İlker Yalçıner",
+          "licence": "CC BY 4.0",
+          "notice": "Music Author Link: https://www.patreon.com/onemansymphony https://opengameart.org/users/onemansymphony",
+          "trim": [0, 42000],
+          "fades": {
+            "outMs": 4000
+          },
+          "notes": "75.5 s at −30.3 LUFS, even throughout: its first 42 s, ending over 4 s"
+        },
+        "calm": {
+          "source": {
+            "url": "https://opengameart.org/sites/default/files/Investigation%20Theme_0.mp3"
+          },
+          "page": "https://opengameart.org/content/investigation-theme",
+          "title": "Investigation Theme",
+          "author": "İlker Yalçıner",
+          "licence": "CC BY 4.0",
+          "notice": "Composer: İlker Yalçıner (ilkeryalciner.com)",
+          "trim": [0, 90000],
+          "loop": {
+            "crossfade": [4000, 73000, 3000],
+            "seekMs": 8000
+          },
+          "notes": "124.5 s at −15.4 LUFS, flat at −15/−16 to 1:52"
+        },
+        "tense": {
+          "source": {
+            "url": "https://opengameart.org/sites/default/files/Investigation%20Theme%20II_2.mp3"
+          },
+          "page": "https://opengameart.org/content/investigation-theme-ii-alternative",
+          "title": "Investigation Theme II (Alternative)",
+          "author": "İlker Yalçıner",
+          "licence": "CC BY 4.0",
+          "notice": "Composer: İlker Yalçıner (ilkeryalciner.com)",
+          "trim": [0, 90000],
+          "loop": {
+            "crossfade": [4000, 73000, 3000],
+            "seekMs": 8000
+          },
+          "notes": "175.6 s at −7.9 LUFS, dense and flat: some 11 dB less gain than the calm stem"
+        },
+        "critical": {
+          "source": {
+            "url": "https://opengameart.org/sites/default/files/Continuum_0.mp3"
+          },
+          "page": "https://opengameart.org/content/continuum",
+          "title": "Continuum",
+          "author": "İlker Yalçıner",
+          "licence": "CC BY 4.0",
+          "notice": "Composer: İlker Yalçıner (ilkeryalciner.com)",
+          "trim": [11000, 106000],
+          "loop": {
+            "crossfade": [20000, 89000, 3000],
+            "seekMs": 8000
+          },
+          "notes": "132.1 s at −15.2 LUFS; its body from 0:18 to 1:36 at −15 to −18, a break after it"
+        },
+        "end-won": {
+          "source": {
+            "url": "https://opengameart.org/sites/default/files/Darkness%20Falls%20In_0.mp3"
+          },
+          "page": "https://opengameart.org/content/darkness-falls-in",
+          "title": "Darkness Falls In",
+          "author": "İlker Yalçıner",
+          "licence": "CC BY 4.0",
+          "notice": "Composer: İlker Yalçıner (ilkeryalciner.com)",
+          "trim": [56000, 96000],
+          "fades": {
+            "inMs": 1500
+          },
+          "notes": "96.1 s at −18.3 LUFS: from 0:56, the swell's close and the settled ending"
+        },
+        "end-lost": {
+          "source": {
+            "url": "https://opengameart.org/sites/default/files/Farewell%2C%20My%20Friend_0.mp3"
+          },
+          "page": "https://opengameart.org/content/farewell-my-friend",
+          "title": "Farewell, My Friend",
+          "author": "İlker Yalçıner",
+          "licence": "CC BY 4.0",
+          "notice": "Music Author Link: https://www.patreon.com/onemansymphony https://opengameart.org/users/onemansymphony",
+          "trim": [0, 30900],
+          "notes": "30.9 s at −29.8 LUFS, whole: it ends by itself in a 7 s tail"
+        }
+      }
+    },
+    {
+      "id": "cheremisinov",
+      "title": "Schicht C · Kammerklang",
+      "composers": ["Sergey Cheremisinov", "Lee Rosevere", "Rafael Krux"],
+      "pieces": {
+        "menu-theme": {
+          "source": {
+            "url": "https://files.freemusicarchive.org/storage-freemusicarchive-org/music/ccCommunity/Sergey_Cheremisinov/Charms/Sergey_Cheremisinov_-_01_-_Closer_To_You.mp3"
+          },
+          "page": "https://freemusicarchive.org/music/Sergey_Cheremisinov/Charms/Sergey_Cheremisinov_-_Charms_-_01_Closer_To_You/",
+          "title": "Closer To You",
+          "author": "Sergey Cheremisinov",
+          "licence": "CC BY 4.0",
+          "trim": [15000, 112000],
+          "loop": {
+            "crossfade": [24000, 95000, 5000],
+            "seekMs": 8000
+          },
+          "notes": "144 s at −16.5 LUFS, piano and strings in phrases from −13 to −29; licence BY 4.0 on its page"
+        },
+        "lobby": {
+          "source": {
+            "url": "https://files.freemusicarchive.org/storage-freemusicarchive-org/tracks/RjkCUzqZTWqjS6nJFDWH6U2ZotiwDXR6y3NOprMu.mp3"
+          },
+          "page": "https://freemusicarchive.org/music/Sergey_Cheremisinov/way-to-silence/way-to-silence/",
+          "title": "Way To Silence",
+          "author": "Sergey Cheremisinov",
+          "licence": "CC BY 4.0",
+          "trim": [0, 81900],
+          "loop": {
+            "crossfade": [4000, 75000, 5000],
+            "seekMs": 8000
+          },
+          "notes": "82.2 s at −19.1 LUFS, steady at −18 to −21; „Fog“ falls away after 1:20, so not it"
+        },
+        "title": {
+          "source": {
+            "url": "https://files.freemusicarchive.org/storage-freemusicarchive-org/tracks/kgmj6BtU0xxaf80Y4jkYLNngom1Mfn9dFlkwSmDQ.mp3"
+          },
+          "page": "https://freemusicarchive.org/music/Sergey_Cheremisinov/way-to-silence/amadines/",
+          "title": "Amadines",
+          "author": "Sergey Cheremisinov",
+          "licence": "CC BY 4.0",
+          "trim": [0, 42000],
+          "fades": {
+            "outMs": 4000
+          },
+          "notes": "77.8 s at −20.6 LUFS: its first 42 s, ending over 4 s"
+        },
+        "calm": {
+          "source": {
+            "url": "https://files.freemusicarchive.org/storage-freemusicarchive-org/tracks/MzkDiyFNrcdc2cGBVescHHzTQGXrQNZgoC0wpyf7.mp3"
+          },
+          "page": "https://freemusicarchive.org/music/Sergey_Cheremisinov/metamorphoses/mindful-choice/",
+          "title": "Mindful Choice",
+          "author": "Sergey Cheremisinov",
+          "licence": "CC BY 4.0",
+          "trim": [31000, 128000],
+          "loop": {
+            "crossfade": [40000, 111000, 5000],
+            "seekMs": 8000
+          },
+          "notes": "322 s at −11.7 LUFS; 0:40–1:50 at −16 to −20 with a breath at 1:04, before it grows loud at 2:02"
+        },
+        "tense": {
+          "source": {
+            "url": "https://files.freemusicarchive.org/storage-freemusicarchive-org/tracks/uP27WWhMWy4N5uuzfR8nXXhqf2n0tyBlG1bY0InV.mp3"
+          },
+          "page": "https://freemusicarchive.org/music/lee-rosevere/music-for-podcasts-serious/under-suspicion/",
+          "title": "Under Suspicion",
+          "author": "Lee Rosevere",
+          "licence": "CC BY 4.0",
+          "trim": [24000, 119000],
+          "loop": {
+            "crossfade": [33000, 102000, 3000],
+            "seekMs": 8000
+          },
+          "notes": "167.9 s at −16.4 LUFS, flat at −15/−16 from 0:30 to 2:28; borrowed: Cheremisinov has no tense piece"
+        },
+        "critical": {
+          "source": {
+            "url": "https://huggingface.co/datasets/Youmiel/FreePD-Data/resolve/main/music/Epic_Dramatic_mp3/Cornfield%20Chase.mp3"
+          },
+          "page": "https://huggingface.co/datasets/Youmiel/FreePD-Data",
+          "title": "Cornfield Chase",
+          "author": "Rafael Krux",
+          "licence": "CC0",
+          "trim": [27000, 122000],
+          "loop": {
+            "crossfade": [36000, 105000, 3000],
+            "seekMs": 8000
+          },
+          "notes": "137.8 s at −15.5 LUFS, −13 to −16 from 0:36 to 1:50; CC0 as FreePD's catalogue lists it (freepd.com closed 2025-12-09, its archive on Hugging Face); credited anyway"
+        },
+        "end-won": {
+          "source": {
+            "url": "https://files.freemusicarchive.org/storage-freemusicarchive-org/tracks/EXf3vsZVftm5dXHbdkJRvTnTx0jVQpAHvnzcGPQp.mp3"
+          },
+          "page": "https://freemusicarchive.org/music/Sergey_Cheremisinov/slow-light/limitless-1/",
+          "title": "Limitless",
+          "author": "Sergey Cheremisinov",
+          "licence": "CC BY 4.0",
+          "trim": [70000, 110000],
+          "fades": {
+            "inMs": 1500
+          },
+          "notes": "113 s at −13.5 LUFS: its last 40 s, to its own end"
+        },
+        "end-lost": {
+          "source": {
+            "url": "https://files.freemusicarchive.org/storage-freemusicarchive-org/tracks/C3qQ1zFUVF1wEDhLofdTx4aJXOiMtoNliGDbErXw.mp3"
+          },
+          "page": "https://freemusicarchive.org/music/Sergey_Cheremisinov/metamorphoses/last-moon-last-stars/",
+          "title": "Last Moon Last Stars",
+          "author": "Sergey Cheremisinov",
+          "licence": "CC BY 4.0",
+          "trim": [38000, 78000],
+          "fades": {
+            "inMs": 1500
+          },
+          "notes": "80 s at −9.7 LUFS: its last 40 s, to its own end; „Dybbuk Box“ is on no page of his any more"
+        }
+      }
+    },
+    {
+      "id": "macleod",
+      "title": "Schicht D · Lichtspiel",
+      "composers": ["Kevin MacLeod"],
+      "pieces": {
+        "menu-theme": {
+          "source": {
+            "url": "https://incompetech.com/music/royalty-free/mp3-royaltyfree/At%20Rest.mp3"
+          },
+          "page": "https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1100748",
+          "title": "At Rest",
+          "author": "Kevin MacLeod",
+          "licence": "CC BY 4.0",
+          "notice": "incompetech.com",
+          "trim": [0, 96000],
+          "loop": {
+            "crossfade": [8000, 79000, 5000],
+            "seekMs": 8000
+          },
+          "notes": "206.5 s at −25.5 LUFS, 57 bpm, a voice over piano chords in phrases from −20 to −34"
+        },
+        "lobby": {
+          "source": {
+            "url": "https://incompetech.com/music/royalty-free/mp3-royaltyfree/Water%20Lily.mp3"
+          },
+          "page": "https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1400035",
+          "title": "Water Lily",
+          "author": "Kevin MacLeod",
+          "licence": "CC BY 4.0",
+          "notice": "incompetech.com",
+          "trim": [0, 96000],
+          "loop": {
+            "crossfade": [8000, 79000, 5000],
+            "seekMs": 8000
+          },
+          "notes": "144 s at −27.6 LUFS, 62 bpm, piano with low strings, −24 to −31 to 1:56"
+        },
+        "title": {
+          "source": {
+            "url": "https://incompetech.com/music/royalty-free/mp3-royaltyfree/Quinns%20Song-The%20Dance%20Begins.mp3"
+          },
+          "page": "https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1100576",
+          "title": "Quinn's Song: The Dance Begins",
+          "author": "Kevin MacLeod",
+          "licence": "CC BY 4.0",
+          "notice": "incompetech.com",
+          "trim": [0, 45000],
+          "notes": "45.6 s at −25.4 LUFS: whole, it dies away by itself"
+        },
+        "calm": {
+          "source": {
+            "url": "https://incompetech.com/music/royalty-free/mp3-royaltyfree/Metaphysik.mp3"
+          },
+          "page": "https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1400056",
+          "title": "Metaphysik",
+          "author": "Kevin MacLeod",
+          "licence": "CC BY 4.0",
+          "notice": "incompetech.com",
+          "trim": [0, 94000],
+          "loop": {
+            "crossfade": [6000, 77000, 5000],
+            "seekMs": 8000
+          },
+          "notes": "277.9 s at −17.2 LUFS, 48 bpm, strings, piano and synth; its quieter first minutes"
+        },
+        "tense": {
+          "source": {
+            "url": "https://incompetech.com/music/royalty-free/mp3-royaltyfree/Decisions.mp3"
+          },
+          "page": "https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1100756",
+          "title": "Decisions",
+          "author": "Kevin MacLeod",
+          "licence": "CC BY 4.0",
+          "notice": "incompetech.com",
+          "trim": [0, 88200],
+          "loop": {
+            "crossfade": [5000, 74000, 3000],
+            "seekMs": 8000
+          },
+          "notes": "88.5 s at −19.9 LUFS, 80 bpm, flat at −19 to −22; its page calls it loopable"
+        },
+        "critical": {
+          "source": {
+            "url": "https://incompetech.com/music/royalty-free/mp3-royaltyfree/Hitman.mp3"
+          },
+          "page": "https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1300013",
+          "title": "Hitman",
+          "author": "Kevin MacLeod",
+          "licence": "CC BY 4.0",
+          "notice": "incompetech.com",
+          "trim": [47000, 142000],
+          "loop": {
+            "crossfade": [56000, 125000, 3000],
+            "seekMs": 8000
+          },
+          "notes": "200.8 s at −12.6 LUFS, 76 bpm, driving at −11 to −14 from 0:52 to 2:46; „Darkling“ dips where a seam would fall"
+        },
+        "end-won": {
+          "source": {
+            "url": "https://incompetech.com/music/royalty-free/mp3-royaltyfree/Time%20Passes.mp3"
+          },
+          "page": "https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1100042",
+          "title": "Time Passes",
+          "author": "Kevin MacLeod",
+          "licence": "CC BY 4.0",
+          "notice": "incompetech.com",
+          "trim": [22000, 62000],
+          "fades": {
+            "inMs": 1500
+          },
+          "notes": "70.8 s at −16.2 LUFS: its last 40 s, to the open major chord it ends on"
+        },
+        "end-lost": {
+          "source": {
+            "url": "https://incompetech.com/music/royalty-free/mp3-royaltyfree/Past%20the%20Edge.mp3"
+          },
+          "page": "https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1400026",
+          "title": "Past the Edge",
+          "author": "Kevin MacLeod",
+          "licence": "CC BY 4.0",
+          "notice": "incompetech.com",
+          "trim": [36000, 76000],
+          "fades": {
+            "inMs": 1500
+          },
+          "notes": "78.1 s at −36.5 LUFS, a voice over low strings: its last 40 s, some +17 dB of gain"
+        }
+      }
+    },
+    {
+      "id": "zhelanov",
+      "title": "Schicht E · Leuchtschirm",
+      "composers": ["Alexandr Zhelanov"],
+      "pieces": {
+        "menu-theme": {
+          "source": {
+            "url": "https://opengameart.org/sites/default/files/Futuristic_ambient_3.ogg"
+          },
+          "page": "https://opengameart.org/content/futuristic-ambient",
+          "title": "Futuristic ambient (3)",
+          "author": "Alexandr Zhelanov",
+          "licence": "CC BY 4.0",
+          "notice": "https://www.youtube.com/channel/UCxmng6_DMIayDwkiWGVzVRQ?view_as=subscriber Alexandr Zhelanov https://soundcloud.com/alexandr-zhelanov",
+          "trim": [0, 94000],
+          "loop": {
+            "crossfade": [6000, 77000, 5000],
+            "seekMs": 8000
+          },
+          "notes": "207 s at −18.6 LUFS, an analog synth in the 1980s way, −15 to −23 throughout"
+        },
+        "lobby": {
+          "source": {
+            "url": "https://opengameart.org/sites/default/files/a_skeletons_in_the_closet.ogg"
+          },
+          "page": "https://opengameart.org/content/a-skeletons-in-the-closet",
+          "title": "A Skeletons in the Closet",
+          "author": "Alexandr Zhelanov",
+          "licence": "CC BY 4.0",
+          "notice": "https://www.youtube.com/c/AlexandrZhelanovsMusic",
+          "trim": [0, 82000],
+          "loop": {
+            "crossfade": [4000, 74000, 5000],
+            "seekMs": 8000
+          },
+          "notes": "82.3 s at −15.1 LUFS, sad piano over pads"
+        },
+        "title": {
+          "source": {
+            "url": "https://opengameart.org/sites/default/files/Behind%20the%20Universe.mp3"
+          },
+          "page": "https://opengameart.org/content/behind-the-universe",
+          "title": "Behind the Universe",
+          "author": "Alexandr Zhelanov",
+          "licence": "CC BY 4.0",
+          "notice": "Alexandr Zhelanov https://soundcloud.com/alexandr-zhelanov",
+          "trim": [0, 42000],
+          "fades": {
+            "outMs": 4000
+          },
+          "notes": "233.2 s at −17.7 LUFS: its first 42 s, rising out of silence, ending over 4 s"
+        },
+        "calm": {
+          "source": {
+            "url": "https://opengameart.org/sites/default/files/Futuristic_ambient_2.ogg"
+          },
+          "page": "https://opengameart.org/content/futuristic-ambient",
+          "title": "Futuristic ambient (2)",
+          "author": "Alexandr Zhelanov",
+          "licence": "CC BY 4.0",
+          "notice": "https://www.youtube.com/channel/UCxmng6_DMIayDwkiWGVzVRQ?view_as=subscriber Alexandr Zhelanov https://soundcloud.com/alexandr-zhelanov",
+          "trim": [21000, 118000],
+          "loop": {
+            "crossfade": [30000, 101000, 5000],
+            "seekMs": 8000
+          },
+          "notes": "230.4 s at −19 LUFS; from 0:26 at −15 to −23"
+        },
+        "tense": {
+          "source": {
+            "url": "https://opengameart.org/sites/default/files/Electron.ogg"
+          },
+          "page": "https://opengameart.org/content/futuristic-ambient",
+          "title": "Electron",
+          "author": "Alexandr Zhelanov",
+          "licence": "CC BY 4.0",
+          "notice": "https://www.youtube.com/channel/UCxmng6_DMIayDwkiWGVzVRQ?view_as=subscriber Alexandr Zhelanov https://soundcloud.com/alexandr-zhelanov",
+          "trim": [0, 83700],
+          "loop": {
+            "crossfade": [4000, 70000, 3000],
+            "seekMs": 8000
+          },
+          "notes": "84 s at −14 LUFS, a steady pulse at −13/−14 to 1:12; „I know your secret“ is 58 s, too short to go round"
+        },
+        "critical": {
+          "source": {
+            "url": "https://opengameart.org/sites/default/files/Uncatchable.mp3"
+          },
+          "page": "https://opengameart.org/content/uncatchable",
+          "title": "Uncatchable",
+          "author": "Alexandr Zhelanov",
+          "licence": "CC BY 4.0",
+          "notice": "Alexandr Zhelanov https://soundcloud.com/alexandr-zhelanov",
+          "trim": [43000, 166000],
+          "loop": {
+            "crossfade": [52000, 149000, 3000],
+            "seekMs": 8000
+          },
+          "notes": "183.8 s at −8.6 LUFS, loud at −5/−6 in 0:48–1:12 and 2:22–2:46: round from the one into the other, 94 s"
+        },
+        "end-won": {
+          "source": {
+            "url": "https://opengameart.org/sites/default/files/hymn_of_life_0.wav"
+          },
+          "page": "https://opengameart.org/content/hymn-of-life",
+          "title": "Hymn of Life",
+          "author": "Alexandr Zhelanov",
+          "licence": "CC BY 4.0",
+          "notice": "https://www.youtube.com/c/AlexandrZhelanovsMusic",
+          "trim": [196000, 236000],
+          "fades": {
+            "inMs": 1500
+          },
+          "notes": "240 s at −11 LUFS, orchestral: its last 40 s, to its own end"
+        },
+        "end-lost": {
+          "source": {
+            "url": "https://opengameart.org/sites/default/files/inevitability.wav"
+          },
+          "page": "https://opengameart.org/content/inevitability",
+          "title": "Inevitability",
+          "author": "Alexandr Zhelanov",
+          "licence": "CC BY 4.0",
+          "notice": "Alexandr Zhelanov https://www.youtube.com/channel/UCxmng6_DMIayDwkiWGVzVRQ?view_as=subscriber totalnomus@gmail.com",
+          "trim": [260000, 300000],
+          "fades": {
+            "inMs": 1500
+          },
+          "notes": "302 s at −11.6 LUFS: its last 40 s, a last blow and a quiet coda"
+        }
+      }
+    },
+    {
+      "id": "panchout",
+      "title": "Schicht F · Raumstation",
+      "composers": ["Clement Panchout", "Hitctrl"],
+      "pieces": {
+        "menu-theme": {
+          "source": {
+            "url": "https://opengameart.org/sites/default/files/Adrift%20on%20the%20Currents%20of%20Time%20%28Main%20Menu%20_%20Ambience%29.mp3"
+          },
+          "page": "https://opengameart.org/content/adrift-on-the-currents-of-time-main-menu-music",
+          "title": "Adrift on the Currents of Time",
+          "author": "Hitctrl",
+          "licence": "CC BY 3.0",
+          "notice": "HitCtrl",
+          "trim": [3000, 100000],
+          "loop": {
+            "crossfade": [12000, 83000, 5000],
+            "seekMs": 8000
+          },
+          "notes": "141 s at −15.4 LUFS, written for a main menu; borrowed, as the free pack's menu cues are its own songs"
+        },
+        "lobby": {
+          "source": {
+            "url": "https://opengameart.org/sites/default/files/Beyond%20the%20Stars%20%28Ambient%29.mp3"
+          },
+          "page": "https://opengameart.org/content/beyond-the-stars-ambient",
+          "title": "Beyond the Stars (Ambient)",
+          "author": "Hitctrl",
+          "licence": "CC BY 3.0",
+          "notice": "HitCtrl",
+          "trim": [27000, 124000],
+          "loop": {
+            "crossfade": [36000, 107000, 5000],
+            "seekMs": 8000
+          },
+          "notes": "224 s at −17.9 LUFS, steady at −15 to −18 from 0:32"
+        },
+        "title": {
+          "source": {
+            "url": "https://opengameart.org/sites/default/files/time_flies_clement_panchout_2016.wav"
+          },
+          "page": "https://opengameart.org/content/emotional-time-flies",
+          "title": "Time Flies",
+          "author": "Clement Panchout",
+          "licence": "CC BY 4.0",
+          "notice": "Credits : Clement Panchout http://www.clementpanchout.com/",
+          "trim": [0, 42000],
+          "fades": {
+            "outMs": 4000
+          },
+          "notes": "100.8 s at −12.6 LUFS: its first 42 s, ending over 4 s"
+        },
+        "calm": {
+          "source": {
+            "manual": "panchout/Space Horror Exploration",
+            "from": "https://clement-panchout.itch.io/yet-another-free-music-pack"
+          },
+          "page": "https://clement-panchout.itch.io/yet-another-free-music-pack",
+          "title": "Space Horror Exploration (Layer Ambient)",
+          "author": "Clement Panchout",
+          "licence": "CC BY 4.0",
+          "notice": "Music by Clement Panchout – www.clementpanchout.com",
+          "trim": [0, 91000],
+          "loop": {
+            "crossfade": [5000, 74000, 3000],
+            "seekMs": 8000
+          },
+          "notes": "a 32 MB WAV, unmeasured: some 3 min if 16-bit at 44.1 kHz; the run says its length if the span misses it"
+        },
+        "tense": {
+          "source": {
+            "manual": "panchout/Space Horror Tense",
+            "from": "https://clement-panchout.itch.io/yet-another-free-music-pack"
+          },
+          "page": "https://clement-panchout.itch.io/yet-another-free-music-pack",
+          "title": "Space Horror Tense (Layer Tense)",
+          "author": "Clement Panchout",
+          "licence": "CC BY 4.0",
+          "notice": "Music by Clement Panchout – www.clementpanchout.com",
+          "trim": [0, 91000],
+          "loop": {
+            "crossfade": [5000, 74000, 3000],
+            "seekMs": 8000
+          },
+          "notes": "the exploration's layer of tension, as long as it: unmeasured"
+        },
+        "critical": {
+          "source": {
+            "manual": "panchout/Space Horror Boss",
+            "from": "https://clement-panchout.itch.io/yet-another-free-music-pack"
+          },
+          "page": "https://clement-panchout.itch.io/yet-another-free-music-pack",
+          "title": "Space Horror Boss",
+          "author": "Clement Panchout",
+          "licence": "CC BY 4.0",
+          "notice": "Music by Clement Panchout – www.clementpanchout.com",
+          "trim": [0, 90000],
+          "loop": {
+            "crossfade": [4000, 73000, 3000],
+            "seekMs": 8000
+          },
+          "notes": "a 9.2 MB WAV, unmeasured: some 52 s if 16-bit at 44.1 kHz, too short to go round 60 s — the owner decides"
+        },
+        "end-won": {
+          "source": {
+            "url": "https://opengameart.org/sites/default/files/clement_panchout_round_glasses_2016.wav"
+          },
+          "page": "https://opengameart.org/content/orchestral-round-glasses",
+          "title": "Round Glasses",
+          "author": "Clement Panchout",
+          "licence": "CC BY 4.0",
+          "notice": "Credits : Clement Panchout http://www.clementpanchout.com/",
+          "trim": [21300, 61300],
+          "fades": {
+            "outMs": 4000
+          },
+          "notes": "61.3 s at −12 LUFS, magical and mysterious, made to loop: its last 40 s, ending over 4 s; „Unsettling Victory“ lasts 24 s"
+        },
+        "end-lost": {
+          "source": {
+            "url": "https://opengameart.org/sites/default/files/retro_spooky_soundscape_the_whispering_shadows_dungeon_clement_panchout_2016_1.wav"
+          },
+          "page": "https://opengameart.org/content/dark-the-whispering-shadows-dungeon",
+          "title": "The Whispering Shadows Dungeon",
+          "author": "Clement Panchout",
+          "licence": "CC BY 4.0",
+          "notice": "Credits : Clement Panchout http://www.clementpanchout.com/",
+          "trim": [62000, 102000],
+          "fades": {
+            "inMs": 1500,
+            "outMs": 5000
+          },
+          "notes": "106.6 s at −10.9 LUFS, a dark soundscape made to loop: 40 s of it, ending over 5 s"
+        }
+      }
+    }
+  ]
+}

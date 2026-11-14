@@ -93,20 +93,49 @@ describe('the seam’s score', () => {
 });
 
 describe('the seam found', () => {
-  it('moves the loop’s end to where beat and chord come round alike, within its reach', () => {
+  it('moves the loop to where beat and chord come round alike, within its reach', () => {
     const features = featuresOf(music(100));
     // Planned 70.3 s round; within 3 s of it only 72 s is a whole round of the chords.
     const seam = bestSeam(features, { startMs: 2000, endMs: 75_300, fadeMs: 3000 }, 3000);
-    expect(seam).toMatchObject({ startMs: 2000, endMs: 2000 + 72_000 + 3000, fadeMs: 3000 });
+    expect(seam.endMs - seam.fadeMs - seam.startMs).toBe(72_000);
+    expect(seam.startMs).toBeGreaterThanOrEqual(1000); // never under the lead a pass needs
+    expect(seam.startMs).toBeLessThanOrEqual(5000);
+    expect(seam.fadeMs).toBe(3000);
     expect(seam.score).toBeCloseTo(1, 2);
   });
 
-  it('keeps the plan’s seam where it may not move, and scores it lower off the round', () => {
+  it('keeps the plan’s seam where it may not move, scored as seamScore scores it', () => {
     const features = featuresOf(music(100));
     const planned = { startMs: 2000, endMs: 75_300, fadeMs: 3000 };
     const kept = bestSeam(features, planned, 0);
     expect(kept).toMatchObject(planned);
+    // Its window from a second before its start, 500 frames: 3 s of fade and 2 s around it.
+    expect(kept.score).toBeCloseTo(seamScore(features, 100, 7030, 500), 3);
     expect(kept.score).toBeLessThan(0.5);
+  });
+
+  it('moves the start to where the music it crosses from has come in', () => {
+    // Eight seconds of silence, then the music: a seam from 6 s would cross from nothing.
+    const quiet = new Float32Array(RATE * 8);
+    const rest = music(92).channels[0] ?? new Float32Array(0);
+    const both = new Float32Array(quiet.length + rest.length);
+    both.set(rest, quiet.length);
+    const features = featuresOf({ rate: RATE, channels: [both] });
+    const seam = bestSeam(features, { startMs: 6000, endMs: 81_000, fadeMs: 3000 }, 4000);
+    expect(seam.startMs).toBeGreaterThanOrEqual(9000);
+    expect(seam.endMs - seam.fadeMs - seam.startMs).toBe(72_000);
+  });
+
+  it('keeps the rounds it may go: none shorter or longer than it is given', () => {
+    const features = featuresOf(music(100));
+    // Planned 58 s round, sought 3 s either way: 56 s is the chords' round within reach.
+    const planned = { startMs: 2000, endMs: 63_000, fadeMs: 3000 };
+    const free = bestSeam(features, planned, 3000);
+    expect(free.endMs - free.fadeMs - free.startMs).toBe(56_000);
+    const kept = bestSeam(features, planned, 3000, [60_000, 120_000]);
+    const round = kept.endMs - kept.fadeMs - kept.startMs;
+    expect(round).toBeGreaterThanOrEqual(60_000);
+    expect(round).toBeLessThanOrEqual(61_000);
   });
 
   it('finds no seam where the music past it runs out of the file', () => {
