@@ -36,38 +36,38 @@ describe('midway — a picture between the panel up and gone', () => {
   });
 });
 
-describe('fadeOf and fadeVerdict — a panel going, on the page’s own clock', () => {
-  const FADE = 150;
-  /** A frame drawn `t` ms into the record, `fade` ms into the fade (null: none), at `opacity`. */
-  const frame = (t, fade, opacity, inert = true) => ({
-    t,
-    present: true,
-    leaving: fade !== null,
-    inert,
-    opacity,
-    fade,
-  });
-  const goneAt = (t) => ({ ...frame(t, null, 0, false), present: false });
-  /** The record of a panel that began to leave at 10 ms and was gone at `gone`. */
-  const record = (frames, gone = 162) => ({
-    left: 10,
-    gone,
-    inertAtLeft: true,
-    frames: [frame(2, null, 1, false), ...frames, goneAt(gone + 4)],
-  });
-  /** A fade at the screen's pace: a frame every 16.7 ms, the ease-in's opacities. */
-  const paced = record([
-    frame(12, 0, 1),
-    frame(29, 17, 1),
-    frame(46, 33, 0.98),
-    frame(62, 50, 0.95),
-    frame(79, 67, 0.9),
-    frame(96, 83, 0.81),
-    frame(112, 100, 0.69),
-    frame(129, 117, 0.54),
-    frame(146, 133, 0.33),
-  ]);
+const FADE = 150;
+/** A frame drawn `t` ms into the record, `fade` ms into the fade (null: none), at `opacity`. */
+const frame = (t, fade, opacity, inert = true) => ({
+  t,
+  present: true,
+  leaving: fade !== null,
+  inert,
+  opacity,
+  fade,
+});
+const goneAt = (t) => ({ ...frame(t, null, 0, false), present: false });
+/** The record of a panel that began to leave at 10 ms and was gone at `gone`. */
+const record = (frames, gone = 162) => ({
+  left: 10,
+  gone,
+  inertAtLeft: true,
+  frames: [frame(2, null, 1, false), ...frames, goneAt(gone + 4)],
+});
+/** A fade at the screen's pace: a frame every 16.7 ms, the ease-in's opacities. */
+const paced = record([
+  frame(12, 0, 1),
+  frame(29, 17, 1),
+  frame(46, 33, 0.98),
+  frame(62, 50, 0.95),
+  frame(79, 67, 0.9),
+  frame(96, 83, 0.81),
+  frame(112, 100, 0.69),
+  frame(129, 117, 0.54),
+  frame(146, 133, 0.33),
+]);
 
+describe('fadeOf and fadeVerdict — the frames a panel going drew, on the page’s own clock', () => {
   it('judges a fade at the screen’s pace by its frames: midway in its middle, all well', () => {
     const fade = fadeOf(paced, FADE);
     assert.deepEqual(fade, {
@@ -117,6 +117,13 @@ describe('fadeOf and fadeVerdict — a panel going, on the page’s own clock', 
     });
   });
 
+  it('says the fade’s times at the frames drawn, a dash where none ran', () => {
+    assert.equal(drawnText([0, 16.6, null]), '0, 17, –');
+    assert.equal(drawnText([]), 'none');
+  });
+});
+
+describe('fadeVerdict — what is wrong with a panel going, on the page’s own clock', () => {
   it('fails a panel gone at once, never gone, gone too soon or too late, or with no fade', () => {
     const at = (left, gone) => fadeVerdict(fadeOf({ ...paced, left, gone }, FADE), FADE).faults;
     assert.deepEqual(at(null, 20), ['it went at once, never leaving']);
@@ -140,10 +147,5 @@ describe('fadeOf and fadeVerdict — a panel going, on the page’s own clock', 
     assert.deepEqual(fadeVerdict(keys, FADE).faults, ['it took input as it left']);
     const late = record([frame(12, 0, 1), frame(80, 70, 0.9, false)]);
     assert.deepEqual(fadeVerdict(fadeOf(late, FADE), FADE).faults, ['it took input as it left']);
-  });
-
-  it('says the fade’s times at the frames drawn, a dash where none ran', () => {
-    assert.equal(drawnText([0, 16.6, null]), '0, 17, –');
-    assert.equal(drawnText([]), 'none');
   });
 });
