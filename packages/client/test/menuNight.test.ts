@@ -145,7 +145,8 @@ describe('the beam over the lab at night', () => {
     expect(laid.some((e) => e.args[0] === beam.mote)).toBe(true);
     scene.log.length = 0;
     layBeam(scene.ctx, beam, lampOf(1, 0.5), { ...FRAME, now: 3000 });
-    const turned = callEntries(scene.log, 'drawImage').filter((e) => e.args[0] === beam.turned?.canvas);
+    const laidTurned = callEntries(scene.log, 'drawImage');
+    const turned = laidTurned.filter((e) => e.args[0] === beam.turned?.canvas);
     expect(turned.map((e) => e.alpha)).toEqual([1, 0.5 * FLARE_LIGHT]);
     // Back at full strength for the scene's next copy once the beam is laid.
     const strength = scene.log.filter((e) => e.kind === 'set' && e.name === 'globalAlpha');

@@ -201,7 +201,7 @@ describe('the menu laid out', () => {
     expect(valueOf(panel, 'grid-area', UPRIGHT)).toBe('body');
   });
 
-  it('makes the bar’s account a target, its avatar alone on a phone, its runs where they fit', () => {
+  it('makes the bar’s account a target, its avatar alone on a phone, its runs from 1100 px', () => {
     stubWindow();
     const account = {
       name: 'Anna',

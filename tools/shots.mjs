@@ -150,7 +150,8 @@
  * (menu-hero-click.png); then the menu's short shutter held half shut over the menu
  * (menu-shutter.png), its leaves 80 ms. „Einsatz starten" open, the hero stands half a tile
  * aside, clear of the panel (menu-hero-missions.png); as the doors close for the lobby it has
- * turned away to the lab; and in the reconnect drill's tab it looks at the run's card. At 1280×720 it stands as at 1440×820
+ * turned away to the lab; and in the reconnect drill's tab it looks at the run's card. At
+ * 1280×720 it stands as at 1440×820
  * (menu-hero-1280.png); at 1100×700 three and a half tiles tall at least, beside a panel open too;
  * at 1024×768, where the room beside the widest panel holds fewer, it is left out, the bar's
  * avatar standing for it (menu-hero-1024.png), and on the guest's phone, upright and sideways.
@@ -1566,7 +1567,8 @@ function shutterText({ came, shut, lengths, under }) {
     return '!! no shutter';
   }
   const over = under ? 'the menu' : '!! the page';
-  return `the shutter ${Math.round(shut * 100)} % shut over ${over}, its leaves ${lengths.join(' + ')} ms`;
+  const leaves = lengths.join(' + ');
+  return `the shutter ${Math.round(shut * 100)} % shut over ${over}, its leaves ${leaves} ms`;
 }
 
 /** What the log says of the held press (`beat`, beatOf) and the shutter (`shutter`). */
@@ -1575,7 +1577,8 @@ function heldClickText(beat, shutter) {
   const hero = beat.stepped
     ? `the hero ${step} of its step to the menu, its lamp flared ${flare}`
     : `!! the hero not mid-step (${step}, flare ${flare})`;
-  return `held ${HERO_BEAT_HOLD_MS} ms after „Bestenliste" was pressed: ${hero}; ${shutterText(shutter)}`;
+  const held = `held ${HERO_BEAT_HOLD_MS} ms after „Bestenliste" was pressed`;
+  return `${held}: ${hero}; ${shutterText(shutter)}`;
 }
 
 /**
@@ -7266,7 +7269,9 @@ async function captureMenu(page) {
   return list;
 }
 
-/** In the page: the share of the bar's avatar drawn — the figure's head on its canvas; 0 for none. */
+/**
+ * In the page: the share of the bar's avatar drawn — the figure's head on its canvas; 0 for none.
+ */
 function avatarDrawn() {
   const canvas = document.querySelector('.bar-account canvas.avatar');
   const ctx = canvas?.getContext('2d');
@@ -7529,7 +7534,8 @@ async function placeShot(page, { item, label, shot }) {
   const there = await cameraCame(page, item);
   await capture(page, shot);
   const after = ((Date.now() - started) / 1000).toFixed(1);
-  const said = there ? `the camera at the room of „${label}" ${after} s after the hover` : '!! no room';
+  const came = `the camera at the room of „${label}" ${after} s after the hover`;
+  const said = there ? came : '!! no room';
   console.log(`${shot} ${said}`);
   return there;
 }

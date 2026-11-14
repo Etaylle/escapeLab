@@ -83,7 +83,9 @@ export function driftBox(shot: SceneShot, w: number, h: number): PixelBox {
   return { left, top, width: right - left, height: bottom - top };
 }
 
-/** How far round the lab its dark is baked where a place's frame looks past the lab's edge, tiles. */
+/**
+ * How far round the lab its dark is baked where a place's frame looks past the lab's edge, tiles.
+ */
 export const DARK_ROUND = 1;
 
 /**

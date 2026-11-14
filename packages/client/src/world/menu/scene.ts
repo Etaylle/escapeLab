@@ -497,7 +497,9 @@ export function sceneLab(missionId: string): Promise<SceneLab | null> {
 /** The steps a scene's density falls in where its box would be too large to bake. */
 const DENSITY_STEP = 0.25;
 
-/** Whether `lab`'s scene bakes for a canvas `cssW` × `cssH` at `dpr`: its whole box (`framingOf`). */
+/**
+ * Whether `lab`'s scene bakes for a canvas `cssW` × `cssH` at `dpr`: its whole box (`framingOf`).
+ */
 function bakesAt(lab: SceneLab, [cssW, cssH]: readonly [number, number], dpr: number): boolean {
   const size = backingSize(cssW, cssH, dpr);
   const box = framingOf(lab, size.w, size.h, size.dpr)?.box;

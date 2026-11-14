@@ -98,7 +98,12 @@ describe('the way back from a page of the menu’s', () => {
 
 describe('the settings off any room and in one', () => {
   /** A layer of menus whose ways each tell they were taken. */
-  const layer = () => ({ gear: vi.fn(), start: vi.fn(), openAccount: vi.fn(), closeSettings: vi.fn() });
+  const layer = () => ({
+    gear: vi.fn(),
+    start: vi.fn(),
+    openAccount: vi.fn(),
+    closeSettings: vi.fn(),
+  });
 
   it('open and close behind the shutter off any room: the gear, Start, the account', () => {
     const menus = layer();

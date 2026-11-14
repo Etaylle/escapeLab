@@ -149,7 +149,8 @@ describe('the join screen of a pass bound to a run', () => {
   });
 
   it('says a paused run is paused, and its clock as it stood', () => {
-    const html = renderToStaticMarkup(<BoundCard seat={{ ...RUN, paused: true }} send={noop} onBack={noop} />);
+    const card = <BoundCard seat={{ ...RUN, paused: true }} send={noop} onBack={noop} />;
+    const html = renderToStaticMarkup(card);
     expect(html).toContain('EINSATZ PAUSIERT');
     expect(html).toContain('noch 12:34');
   });

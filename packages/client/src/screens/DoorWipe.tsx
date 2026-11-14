@@ -301,7 +301,8 @@ export function useDoorWipe<T>(
       closer = null;
     };
   }, [reduced]);
-  return { value: next.held === null ? value : next.held.value, doors: next.doors, kind: next.kind };
+  const shown = next.held === null ? value : next.held.value;
+  return { value: shown, doors: next.doors, kind: next.kind };
 }
 
 /** Chevrons pointing to the seam, as on the world's doors. */

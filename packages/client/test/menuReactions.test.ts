@@ -61,7 +61,8 @@ describe('steppingAt — half a tile aside', () => {
 
   it('stands still all along a step to where it stands', () => {
     const step = { from: STEP, to: STEP, since: 1000 };
-    expect(steppingAt(step, 1000 + STEP_MS / 2, false)).toMatchObject({ offset: STEP, moving: false });
+    const halfway = steppingAt(step, 1000 + STEP_MS / 2, false);
+    expect(halfway).toMatchObject({ offset: STEP, moving: false });
   });
 });
 

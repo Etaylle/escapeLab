@@ -82,7 +82,7 @@ describe('the box the scene bakes', () => {
   const map = LAB.view.map;
   if (map === null) throw new Error('no map');
 
-  it('holds the drift and every place’s frame as far as the lab and a tile of its dark reach', () => {
+  it('holds the drift and every place’s frame as far as the lab and one tile of its dark', () => {
     const shot = sceneShot(map, 1440, 820, 1);
     const corners = Object.values(placesOf('blackout')).map((spot) =>
       placeCorner(spot, shot.scale, 1440, 820),
@@ -148,7 +148,7 @@ describe('the dark past the bake', () => {
     };
   }
 
-  it('fills what the frame shows past the bake with the dark it holds, as strong as the copy', () => {
+  it('fills what the frame shows past the bake with the bake’s dark, as strong as the copy', () => {
     for (const night of [false, true]) {
       const frame = fakeCanvas(100, 50, 'frame');
       paintBake(frame.ctx, darkBake(night), { x: -30, y: 0 }, 0.5);

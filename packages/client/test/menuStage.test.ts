@@ -127,7 +127,8 @@ describe('a bake of the scene', () => {
   it('reads the dark round the lab off the bake where a place looks past the lab', async () => {
     const { bakeScene } = await import('../src/world/menu/scene.js');
     const mission = parseMission(BLACKOUT);
-    const lab = { missionId: 'blackout', view: sceneViewOf(mission), drones: parkedDrones(mission) };
+    const drones = parkedDrones(mission);
+    const lab = { missionId: 'blackout', view: sceneViewOf(mission), drones };
     const bake = bakeScene(lab, 1440, 820, 1);
     // The fake canvas reads every pixel black.
     expect(bake?.dark).toEqual({ lit: '#000000', night: '#000000' });
@@ -243,7 +244,7 @@ async function staged(reduced: boolean) {
 }
 
 describe('the scene’s places', () => {
-  it('travels to the place the menu holds over 1.2 to 2 s, holds it, and travels back', async () => {
+  it('travels to the place held over 1.2 to 2 s, holds it, and travels back', async () => {
     const { page, scene, stage, bake, places } = await staged(false);
     const from = scene.log.length;
     places.holdPlace('handbook');
@@ -289,7 +290,7 @@ describe('the scene’s places under reduced motion and behind the lobby', () =>
     stage.close();
   });
 
-  it('shows the drift, lit, behind the lobby, cut there and back as the doors stand shut', async () => {
+  it('shows the drift lit behind the lobby, cut there and back under the doors', async () => {
     const { page, scene, stage, bake, places } = await staged(false);
     const lamps = await import('../src/world/menu/lamp.js');
     lamps.holdNight(true);

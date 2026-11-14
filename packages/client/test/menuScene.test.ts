@@ -326,7 +326,8 @@ function bakeOf(name: string): SceneBake {
 /** How the drift frames `show`'s lab `driftMs` in: no place of the menu's held. */
 function drifting(show: SceneShow, driftMs: number, reduced: boolean): SceneView {
   const progress = driftAt(driftMs, reduced);
-  return { progress, corner: show.bake === null ? { x: 0, y: 0 } : driftCorner(show.bake, progress) };
+  const corner = show.bake === null ? { x: 0, y: 0 } : driftCorner(show.bake, progress);
+  return { progress, corner };
 }
 
 const noShow = (): SceneShow => ({ bake: null, from: null, since: 0, drawn: null });

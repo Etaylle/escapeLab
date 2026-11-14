@@ -194,14 +194,16 @@ describe('the door wipe before a page of the menu’s', () => {
     expect(stepMs({ doors: null, kind: 'door' })).toBeNull();
   });
 
-  it('keeps nothing waiting more than 250 ms on the way to a page, its shutter 120 to 200 ms', () => {
+  it('keeps a page waiting 250 ms at most after the press, its shutter 120 to 200 ms', () => {
     expect(BEAT_MS + SHUTTER_MS.close).toBeLessThanOrEqual(250);
     const shutter = SHUTTER_MS.close + SHUTTER_MS.open;
     expect(shutter).toBeGreaterThanOrEqual(120);
     expect(shutter).toBeLessThanOrEqual(200);
     // The sheet moves the shutter's leaves as long as the hook times them.
-    const timed = (state: string): number =>
-      Number(/animation-duration: (\d+)ms/.exec(ruleOf(`.door-wipe--shutter.door-wipe--${state} .door-leaf`))?.[1]);
+    const timed = (state: string): number => {
+      const rule = ruleOf(`.door-wipe--shutter.door-wipe--${state} .door-leaf`);
+      return Number(/animation-duration: (\d+)ms/.exec(rule)?.[1]);
+    };
     expect([timed('closing'), timed('opening')]).toEqual([SHUTTER_MS.close, SHUTTER_MS.open]);
   });
 

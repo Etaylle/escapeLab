@@ -310,7 +310,7 @@ describe('the menu’s ways off it', () => {
     expect(Object.keys(none)).toEqual([]);
   });
 
-  it('stands the focus on the item last taken as the menu comes up, the first where none was', () => {
+  it('stands the focus on the item last taken as the menu comes up, else on the first', () => {
     const focused: string[] = [];
     const root = {
       querySelector: (selector: string) => ({
@@ -325,7 +325,7 @@ describe('the menu’s ways off it', () => {
     ]);
   });
 
-  it('takes a panel’s focus to the name where there is none yet, else leaves it to the panel', () => {
+  it('takes a panel’s focus to the name where there is none yet, else to the panel', () => {
     const field = (typed: string): string =>
       renderToStaticMarkup(<NameField typed={typed} onName={noop} />);
     expect(field('')).toContain('data-focus="true"');
@@ -360,7 +360,8 @@ describe('the menu under the pointer', () => {
       onPointerEnter?.({ currentTarget: { focus } });
     }
     expect(focus).not.toHaveBeenCalled();
-    // It brightens all the same, slowly: the item under the pointer a little, the focused one fully.
+    // It brightens all the same, slowly: the item under the pointer a little, the focused one
+    // fully.
     const hovered = menuRule('.menu-list .menu-item:hover:not(:disabled):not(:focus)');
     expect(hovered).toContain('background:');
     expect(hovered).toContain('border-left-color: transparent;');
@@ -368,7 +369,7 @@ describe('the menu under the pointer', () => {
     expect(menuRule('.menu-list .menu-item')).toMatch(/background 0\.4s ease-out,\s+color 0\.4s/);
   });
 
-  it('stands the item in the focus on a rail of the beam’s light, a keyboard’s focus ringed', () => {
+  it('stands the item in the focus on a rail of the beam’s light, the keyboard’s ringed', () => {
     const focused = menuRule('.menu-list .menu-item:focus');
     expect(focused).toContain('border-left-color: var(--beam);');
     // The ring of every control's keyboard focus (interaction.css) is left to show.
