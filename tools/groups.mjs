@@ -88,6 +88,7 @@ export const GROUPS = [
       'history-phone.png',
       'lobby-filled.png',
       'menu-open-rounds.png',
+      'lobby-chrome.png',
       'lobby-phone.png',
       'lobby-1280.png',
       'lobby-landscape.png',
@@ -190,6 +191,7 @@ export const GROUPS = [
     captures: [
       'game-*.png',
       'pad-left.png',
+      'hud-chrome.png',
       'info-panel.png',
       'settings.png',
       'settings-ton.png',

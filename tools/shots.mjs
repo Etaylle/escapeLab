@@ -12666,12 +12666,65 @@ async function guestMenu(guest) {
 }
 
 /**
+ * How the chrome stands in `page`, read in the page (whole, as page.evaluate takes a function):
+ * the faces of the bar's name and of the panel's heading, whether Michroma is loaded, the panel's
+ * and the strip's ground, the chips' corners and what the audience's chip says.
+ */
+function chromeShown() {
+  const style = (selector) => {
+    const el = document.querySelector(selector);
+    return el === null ? null : globalThis.getComputedStyle(el);
+  };
+  const watching = document.querySelector('.watching-chip');
+  return {
+    logo: style('.logo')?.fontFamily ?? null,
+    heading: style('.lobby-head h1')?.fontFamily ?? null,
+    loaded: document.fonts.check('14px Michroma'),
+    panel: style('.lobby-panel')?.backgroundColor ?? null,
+    strip: style('.hud')?.backgroundColor ?? null,
+    chip: style('.room-code')?.borderRadius ?? null,
+    watching: watching?.getAttribute('aria-label') ?? null,
+  };
+}
+
+/** The menu's panel's ground, as a computed style reads it. */
+const MENU_GROUND = 'rgba(9, 14, 19, 0.97)';
+
+/** Whether the face `family` is Michroma's. */
+const michroma = (family) => family?.startsWith('Michroma') === true;
+
+/**
+ * lobby-chrome.png: the host's lobby at the laptop's size in the main menu's look — the bar's
+ * name and the panel's heading in Michroma, loaded, the panel on the menu's ground, the room's
+ * code a round chip. The run fails where any of it is not so.
+ */
+async function captureLobbyChrome(host) {
+  await capture(host, 'lobby-chrome.png');
+  const shown = await host.evaluate(chromeShown);
+  const wrong = wrongOf([
+    [!michroma(shown.logo), `the bar's name in ${shown.logo}`],
+    [!michroma(shown.heading), `the panel's heading in ${shown.heading}`],
+    [!shown.loaded, 'Michroma not loaded'],
+    [shown.panel !== MENU_GROUND, `the panel on ${shown.panel}`],
+    [shown.chip !== '999px', `the code's chip with corners of ${shown.chip}`],
+  ]);
+  console.log(
+    `lobby-chrome.png   the host's lobby @ 1440x820: ` +
+      (wrong.length === 0 ? 'Michroma heads it, the panel on the menu’s ground, a code chip' : ''),
+  );
+  if (wrong.length > 0) {
+    fail(`lobby-chrome.png: ${wrong.join(', ')}`);
+  }
+}
+
+/**
  * The lobby at its sizes: on the guest's phone (lobby-phone.png) — a phone scrolls the lobby
  * down and the crew's row sideways, but nothing else may run out past the window's edge — in
- * the host's window at 1440×820 and 1280×720 (lobby-1280.png) and on a phone held sideways
- * (lobby-landscape.png); the host's window at a laptop's size again after.
+ * the host's window at 1440×820 (lobby-chrome.png) and 1280×720 (lobby-1280.png) and on a phone
+ * held sideways (lobby-landscape.png); the host's window at a laptop's size again after.
  */
 async function lobbyAtSizes(host, guest) {
+  await captureLobbyChrome(host);
   await capture(guest, 'lobby-phone.png');
   const phoneOver = await sideways(guest, '.content');
   console.log(
@@ -12743,6 +12796,7 @@ async function runStage(opened) {
   await briefingOver(anna, ben);
   const steady = await inTheGame(anna, ben);
   const audience = await audienceJoins(anna, ben, code);
+  await inGroup('hud', () => captureHudChrome(anna));
   await readTheSources({ anna, ben, operator, reader, atSign }, audience.seen);
   await stationStep(anna, ben, operator, reader);
   await afterTheStation(anna, ben, steady);
@@ -12804,6 +12858,35 @@ async function inTheGame(anna, ben) {
   await inGroup('hud', () => hudPanels(anna, ben));
   await inGroup('graphics', () => captureWalkCycle(anna));
   return steady;
+}
+
+/**
+ * hud-chrome.png: the host's run at the laptop's size in the main menu's look, the audience
+ * watching — the bar's name in Michroma, the code a round chip and beside it the audience's,
+ * which has to count the audience's page, the strip on the menu's ground — the world's canvas
+ * and the strip as tall as at the run's start (`layoutOf`), logged. The run fails where any of it
+ * is not so.
+ */
+async function captureHudChrome(anna) {
+  const page = anna.page;
+  await page.locator('.watching-chip').waitFor({ timeout: 5000 }).catch(() => undefined);
+  await capture(page, 'hud-chrome.png');
+  const shown = await page.evaluate(chromeShown);
+  const layout = await layoutOf(page);
+  const wrong = wrongOf([
+    [!michroma(shown.logo), `the bar's name in ${shown.logo}`],
+    [shown.chip !== '999px', `the code's chip with corners of ${shown.chip}`],
+    [!/^[1-9]\d* Zuschauer$/.test(shown.watching ?? ''), `the audience's chip „${shown.watching}"`],
+    [shown.strip !== MENU_GROUND, `the strip on ${shown.strip}`],
+  ]);
+  console.log(
+    `hud-chrome.png     Anna's run @ 1440x820: „${shown.watching}" beside the code; the world ` +
+      `${layout.size}, the strip ${layout.hud}px` +
+      (wrong.length === 0 ? '; Michroma names the bar, the strip on the menu’s ground' : ''),
+  );
+  if (wrong.length > 0) {
+    fail(`hud-chrome.png: ${wrong.join(', ')}`);
+  }
 }
 
 /** The world's canvas each of `players` shows now (`layoutOf`), by name. */
