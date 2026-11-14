@@ -208,15 +208,16 @@ die Entscheidung.
   den Zeiten der gezeichneten Bilder. Die Nadel hält die Seite 60 ms in ihren Ausschlag an, bis die
   Aufnahme sitzt. Die Ziele auf dem Handy werden gemessen, wenn die Animationen des Geräts auf der
   Uhr der Seite zu Ende sind (höchstens 3 s, sonst übersprungen mit der Wartezeit). Die LED-Leiste
-  merkt sich jede Seite vor den Drücken. In den Beweisläufen kamen zwei Funde dazu: Die Nadel hielt
-  den späten Ausschlag der vorigen Probe fest (jetzt nur einen zu einer neuen Ablesung), und
-  figure-celebrate.png fand die Figur nach vier Aufnahmen gelandet (Last 42–57); für die Aufnahmen
-  der Figuren hält die Seite ihre Bilder an, bis die Aufnahme sitzt. Dazu walk-cycle, das auch main
-  ohne Software-GL verfehlte (Last 24–38): die Seite hält die Welt im Schritt an. Das Tempo des
-  Menüs unter Software-GL (16,8 ms) gilt, wo der Lauf das Budget des Gates hat, und steht in
-  Beweisläufen mit angehobenem Budget nur im Log. Jedes Frame-Fenster nennt die
-  1-Minuten-Last, unter der es lief, die Zusammenfassung die zu Beginn und am Ende; kein Budget
-  geändert.
+  merkt sich jede Seite vor den Drücken. Die Beweisläufe fanden fünf weitere Stellen derselben Art:
+  Die Nadel hielt den späten Ausschlag der vorigen Probe fest (jetzt nur einen zu einer neuen
+  Ablesung); figure-celebrate.png fand die Figur nach vier Aufnahmen gelandet (Last 42–57), und
+  walk-cycle verfehlte auch auf main ohne Software-GL beide Schrittfenster (Last 24–38) — für die
+  Aufnahmen der Figuren und des Schritts hält die Seite ihre Bilder an, bis die Aufnahme sitzt;
+  eine Blende, während der die Seite gar kein Bild zeichnete, galt als Blende ohne Animation (jetzt
+  übersprungen); und das Tempo des Menüs unter Software-GL (16,8 ms) entschied auch in Beweisläufen
+  mit angehobenem Budget (Last 158) — es gilt jetzt, wo der Lauf das Budget des Gates hat, sonst
+  steht es im Log. Jedes Frame-Fenster nennt die 1-Minuten-Last, unter der es lief, die
+  Zusammenfassung die zu Beginn und am Ende; kein Budget geändert.
 
 ### T-9 Tests an der Wanduhr — Status: erledigt (2026-11-13) · Größe: S
 - Zwei Tests lasen die echte Uhr und wurden unter Last rot: `certificate.test.ts` (openssl liest
