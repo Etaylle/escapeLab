@@ -11839,7 +11839,7 @@ async function captureLeaveToMenu(ben, anna) {
   const there = await settled(page.locator('.menu-list .bound--run').waitFor({ timeout: 15_000 }));
   const gone = await until(() => awayAtMenu(anna.seen, ben.name), 5000);
   await sleep(600);
-  const said = await textOf(anna.page.locator('.hud-crew li.hud-away', { hasText: ben.name }));
+  const said = await lineOf(anna.page.locator('.hud-crew li.hud-away', { hasText: ben.name }));
   const aired = signedOff(anna.seen, ben.name) === true;
   const shown = await page.evaluate(boundShown);
   await capture(page, 'menu-bound-after-leave.png');
@@ -13076,17 +13076,26 @@ function judgeWayOn(offeredAfter, before, after) {
   }
 }
 
-/** Anna's way on without Ben in her bar, once a minute of his absence is over, pressed. */
-async function annaGoesOn(anna) {
+/**
+ * Anna's way on without Ben in her bar, once a minute of his absence is over, pressed: when it
+ * came, and how far her clock had run since `from` by then (`clockRan`).
+ */
+async function annaGoesOn(anna, from) {
   const button = anna.page.locator('.away-offer .pause-go-on', { hasText: 'Ohne Ben weiter' });
   await button.waitFor({ state: 'visible', timeout: DRILL_WAIT_MS + DRILL_STEP_MS });
   const offered = Date.now();
+  const ran = await clockRan(anna.page, from);
   await button.click();
   const waived = () => anna.seen.view?.away?.some((m) => m.name === 'Ben' && m.waived) === true;
   if (!(await until(waived, 5000))) {
     throw new Error('the run did not go on without Ben after the press');
   }
-  return offered;
+  return { offered, ran };
+}
+
+/** What a locator's text says on one line, its line breaks as spaces; null for none. */
+async function lineOf(locator) {
+  return (await textOf(locator))?.replace(/\s+/g, ' ') ?? null;
 }
 
 /**
@@ -13103,12 +13112,12 @@ async function benAway({ anna, ben }) {
   const since = anna.seen.view?.away?.find((member) => member.name === 'Ben')?.since ?? off;
   const from = await clockRead(anna.page);
   await sleep(2500);
-  const badge = await textOf(anna.page.locator('.hud-crew li.hud-away'));
+  const badge = await lineOf(anna.page.locator('.hud-crew li.hud-away'));
   const card = await anna.page.locator('.overlay.pause').count();
   await capture(anna.page, 'away-badge.png');
   await captureBound(anna);
-  const ran = await clockRan(anna.page, from);
-  const offeredAfter = (await annaGoesOn(anna)) - since;
+  const { offered, ran } = await annaGoesOn(anna, from);
+  const offeredAfter = offered - since;
   await sleep(600);
   const before = await textOf(anna.page.locator('.countdown'));
   await sleep(2200);
