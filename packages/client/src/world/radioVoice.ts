@@ -22,15 +22,15 @@ import { sample, type SfxId } from './samples.js';
  * 300 Hz–3.4 kHz, lightly saturated, over a faint bed of static, keyed with a squelch at either
  * end, the run's first line opened with the Leitstelle's own squelch, the squelches recordings
  * of their own (samples.ts) — while the music goes 8 dB and the beds 4 dB down under it (mix.ts
- * `duck`). The banner shows the line while it speaks; a line without a recording, as a custom
- * mission's, still only chirps (audio.ts `radioChirp`). At a run's start a page fetches the
- * recordings' list alone (`voiceForRun`), never a recording: a line's own file comes as the line
- * is queued (`preloadLines`) — the take the run picked, which its event names — and is decoded
- * then, at 22.05 kHz in one channel, a few tens of milliseconds, and let go once it has been
- * spoken, so that a page keeps a line or two decoded, never a mission's (audioMemory.ts), and the
- * files of the last FILES_KEPT lines as they came, those of a run before none. Nothing that plays
- * throws — only the harness's offline render may reject — and nothing plays while the context is
- * held back.
+ * `duck`). The banner goes up as the line starts and stays while it speaks (onAir.ts); a line
+ * without a recording, as a custom mission's, still only chirps (audio.ts `radioChirp`). At a
+ * run's start a page fetches the recordings' list alone (`voiceForRun`), never a recording: a
+ * line's own file comes as the line is queued (`preloadLines`) — the take the run picked, which
+ * its event names — and is decoded then, at 22.05 kHz in one channel, a few tens of milliseconds,
+ * and let go once it has been spoken, so that a page keeps a line or two decoded, never a
+ * mission's (audioMemory.ts), and the files of the last FILES_KEPT lines as they came, those of a
+ * run before none. Nothing that plays throws — only the harness's offline render may reject — and
+ * nothing plays while the context is held back.
  */
 
 /**
@@ -202,11 +202,16 @@ const store: {
   clips: new Map(),
 };
 
+/** A line asked for (`sayLine`), as it was asked: a newer ask, or the voice stopping, moots it. */
+interface Ask {
+  readonly id: string;
+}
+
 let speaking: Speaking | null = null;
 let lastId: string | null = null;
 let lastOpened = false;
 /** The line asked for last, whose decoding a newer ask makes moot. */
-let asked: string | null = null;
+let asked: Ask | null = null;
 
 /** The manifest, fetched once; null where there is none to be had (it is tried again later). */
 function manifest(): Promise<VoiceManifest | null> {
@@ -368,31 +373,40 @@ export function releaseLine(text: string): void {
 }
 
 /**
- * Speaks the line `text` over the radio, now — or as soon as it is decoded — cutting short one
- * still on the air: a line that opens a run after the Leitstelle's opening squelch; once spoken,
- * it is let go. Into the radio's bus, or `into` where given: a level of the caller's on the way
- * there (the lobby's Funkprobe, radioCheck.ts). True where it speaks; false where it has no
- * recording or nothing can play — the caller chirps then.
+ * Speaks the line `text` over the radio — now where it is decoded, else as soon as it is —
+ * cutting short one still on the air: a line that opens a run after the Leitstelle's opening
+ * squelch; once spoken, it is let go. Into the radio's bus, or `into` where given: a level of the
+ * caller's on the way there (the lobby's Funkprobe, radioCheck.ts). Resolves as it goes on the
+ * air, with how long it keeps it, ms, by its recording as decoded (`airtimeMs`); with null where
+ * it never does — it has no recording, nothing can play, its recording failed, or a line asked
+ * for after it or the voice stopping (`stopVoice`) made it moot: the caller chirps then.
  */
-export function sayLine(text: string, into?: AudioNode): boolean {
+export function sayLine(text: string, into?: AudioNode): Promise<number | null> {
   try {
     const id = store.ids.get(text);
     const engine = playingEngine();
-    if (id === undefined || engine === null || !store.files.has(id)) return false;
-    asked = id;
+    if (id === undefined || engine === null || !store.files.has(id)) return Promise.resolve(null);
+    const ask: Ask = { id };
+    asked = ask;
     const clip = store.clips.get(id);
-    if (clip !== undefined) {
-      onAir(engine, id, clip, into);
-    } else {
-      void decodeLine(id).then((decoded) => {
-        if (decoded !== null && asked === id) onAir(engine, id, decoded, into);
-      });
-    }
-    return true;
+    if (clip !== undefined) return Promise.resolve(airAsked(engine, ask, clip, into));
+    return decodeLine(id)
+      .then((decoded) => (decoded === null ? null : airAsked(engine, ask, decoded, into)))
+      .catch(() => null);
   } catch {
     // Deliberately silent: the banner shows the line as well.
-    return false;
+    return Promise.resolve(null);
   }
+}
+
+/**
+ * The line asked for as `ask` on the air with its decoded `clip`, where nothing made it moot
+ * since: how long it keeps the air, ms; null where it is moot.
+ */
+function airAsked(engine: Engine, ask: Ask, clip: Clip, into?: AudioNode): number | null {
+  if (asked !== ask) return null;
+  onAir(engine, ask.id, clip, into);
+  return airtimeOf(ask.id, clip.buffer.duration);
 }
 
 /**
@@ -423,7 +437,14 @@ export function airtimeMs(text: string): number | null {
   if (id === undefined) return null;
   const clip = store.clips.get(id);
   const seconds = clip?.buffer.duration ?? (store.ms.get(id) ?? NaN) / 1000;
-  if (!Number.isFinite(seconds)) return null;
+  return Number.isFinite(seconds) ? airtimeOf(id, seconds) : null;
+}
+
+/**
+ * How long the recording `id`, `seconds` long, keeps the air when it is spoken, ms: the
+ * Leitstelle's opening where it opens a run, the key, the speech, the tail.
+ */
+function airtimeOf(id: string, seconds: number): number {
   const lead = (store.openers.has(id) ? OPEN_S : 0) + KEY_S;
   return Math.round((lead + seconds + TAIL_S) * 1000);
 }

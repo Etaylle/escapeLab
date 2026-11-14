@@ -258,8 +258,8 @@ describe('a line spoken over the radio', () => {
     const radio = await voice();
     radio.voiceForRun();
     await settle();
-    expect(radio.sayLine(LEVER_LINE)).toBe(true); // decoded as it comes over the air
-    await settle();
+    // Decoded as it comes over the air: on it, it tells how long it keeps the air.
+    expect(await radio.sayLine(LEVER_LINE)).toBe(Math.round((KEY_S + 1.5 + TAIL_S) * 1000));
     const ctx = lastContext();
     const sources = ctx.all<FakeBufferSource>('buffer');
     const speech = sources.find((s) => s.buffer?.duration === 1.5);
@@ -298,8 +298,7 @@ describe('a line spoken over the radio', () => {
     const radio = await voice();
     radio.voiceForRun();
     await settle();
-    radio.sayLine(LEVER_LINE);
-    await settle();
+    await radio.sayLine(LEVER_LINE);
     const ctx = lastContext();
     const { musicDuck, ambienceDuck } = await ducks();
     const music = 10 ** (-8 / 20);
@@ -326,10 +325,12 @@ describe('a line spoken over the radio', () => {
     radio.voiceForRun();
     radio.preloadLines([START_LINE]);
     await settle();
-    expect(radio.sayLine(START_LINE)).toBe(true);
+    // Decoded already: on the air at once, the opening counted in its airtime.
+    const said = radio.sayLine(START_LINE);
     const ctx = lastContext();
     const sources = ctx.all<FakeBufferSource>('buffer');
     const speech = sources.find((s) => s.buffer?.duration === 1.5);
+    expect(await said).toBe(Math.round((OPEN_S + KEY_S + 1.5 + TAIL_S) * 1000));
     // Keyed at 10.01: the opening, then the key's squelch, then the voice.
     expect(speech?.startedAt).toBeCloseTo(10.01 + OPEN_S + KEY_S, 9);
     // The opening's recording from the start — static swelling, snapping shut — then the key.
@@ -342,8 +343,7 @@ describe('a line spoken over the radio', () => {
     ctx.currentTime = 10.45; // the opening plays, the voice has not begun
     expect(radio.voiceProbe().playing).toBe(false);
     ctx.currentTime = 11;
-    expect(radio.sayLine(LEVER_LINE)).toBe(true);
-    await settle();
+    expect(await radio.sayLine(LEVER_LINE)).toBe(Math.round((KEY_S + 1.5 + TAIL_S) * 1000));
     expect(radio.voiceProbe()).toMatchObject({ lastId: 'aaaaaaaaaaaa', opened: false });
     const lever = ctx.all<FakeBufferSource>('buffer').filter((s) => s.buffer?.duration === 1.5);
     expect(lever.at(-1)?.startedAt).toBeCloseTo(11.01 + KEY_S, 9);
@@ -368,40 +368,45 @@ describe('a line spoken over the radio', () => {
     const radio = await voice();
     radio.voiceForRun();
     await settle();
-    radio.sayLine(LEVER_LINE);
-    await settle();
+    await radio.sayLine(LEVER_LINE);
     const ctx = lastContext();
     ctx.currentTime = 11;
-    expect(radio.sayLine('Beide hin.')).toBe(true);
-    await settle();
+    expect(await radio.sayLine('Beide hin.')).not.toBeNull();
     const clips = ctx.all<FakeBufferSource>('buffer').filter((s) => s.buffer?.duration === 1.5);
     const [first, second] = clips;
     expect(first?.stoppedAt).toBeCloseTo(11.1, 9);
     expect(second?.startedAt).toBeCloseTo(11.08, 9);
     expect(radio.voiceProbe().lastId).toBe('bbbbbbbbbbbb');
-    expect(radio.sayLine('Eine Zeile aus dem Editor.')).toBe(false);
+    expect(await radio.sayLine('Eine Zeile aus dem Editor.')).toBeNull();
   });
 
   it('speaks only the newest of two lines asked for while the first still decoded', async () => {
     const radio = await voice();
     radio.voiceForRun();
     await settle();
-    expect(radio.sayLine(LEVER_LINE)).toBe(true);
-    expect(radio.sayLine('Beide hin.')).toBe(true); // before the first is decoded
-    await settle();
-    const clips = lastContext()
-      .all<FakeBufferSource>('buffer')
-      .filter((s) => s.buffer?.duration === 1.5);
-    expect(clips).toHaveLength(1);
+    const first = radio.sayLine(LEVER_LINE);
+    const second = radio.sayLine('Beide hin.'); // before the first is decoded
+    expect(await first).toBeNull(); // made moot: it never goes on the air
+    expect(await second).toBe(Math.round((KEY_S + 1.5 + TAIL_S) * 1000));
+    const speech = (): FakeBufferSource[] =>
+      lastContext()
+        .all<FakeBufferSource>('buffer')
+        .filter((s) => s.buffer?.duration === 1.5);
+    expect(speech()).toHaveLength(1);
     expect(radio.voiceProbe().lastId).toBe('bbbbbbbbbbbb');
+    // The same line asked for twice while it decodes goes on the air once, for the newer ask.
+    const asks = [radio.sayLine(FOURTH), radio.sayLine(FOURTH)];
+    expect(await Promise.all(asks)).toEqual([null, Math.round((KEY_S + 1.5 + TAIL_S) * 1000)]);
+    expect(speech()).toHaveLength(2);
   });
 
   it('lets go of a line still decoding as the voice stops: nothing airs after', async () => {
     const radio = await voice();
     radio.voiceForRun();
     await settle();
-    expect(radio.sayLine(LEVER_LINE)).toBe(true); // not decoded yet
+    const saying = radio.sayLine(LEVER_LINE); // not decoded yet
     radio.stopVoice(); // the screen goes before it is
+    expect(await saying).toBeNull();
     await settle();
     const clips = lastContext()
       .all<FakeBufferSource>('buffer')
@@ -417,7 +422,7 @@ describe('a line spoken over the radio', () => {
       const { decodedBytes } = await import('../src/world/audioMemory.js');
       radio.voiceForRun();
       await vi.advanceTimersByTimeAsync(0);
-      radio.sayLine(LEVER_LINE);
+      void radio.sayLine(LEVER_LINE);
       await vi.advanceTimersByTimeAsync(0);
       const ctx = lastContext();
       expect(radio.clipOf(LEVER_LINE)).not.toBeNull();
@@ -426,8 +431,9 @@ describe('a line spoken over the radio', () => {
       expect(radio.clipOf(LEVER_LINE)).toBeNull();
       // Nothing else stays decoded: no line is decoded before it is queued.
       expect(decodedBytes().voice).toBe(0);
-      expect(radio.sayLine(LEVER_LINE)).toBe(true); // its file still here
+      const again = radio.sayLine(LEVER_LINE); // its file still here
       await vi.advanceTimersByTimeAsync(0);
+      expect(await again).not.toBeNull();
       expect(radio.voiceProbe()).toMatchObject({ lastId: 'aaaaaaaaaaaa' });
     } finally {
       vi.useRealTimers();
@@ -436,11 +442,11 @@ describe('a line spoken over the radio', () => {
 
   it('says nothing before a gesture woke the sound, nor anything not loaded', async () => {
     const radio = await voice();
-    expect(radio.sayLine(LEVER_LINE)).toBe(false); // no manifest yet
+    expect(await radio.sayLine(LEVER_LINE)).toBeNull(); // no manifest yet
     radio.voiceForRun();
     await settle();
     lastContext().state = 'suspended';
-    expect(radio.sayLine(LEVER_LINE)).toBe(false);
+    expect(await radio.sayLine(LEVER_LINE)).toBeNull();
     expect(radio.voiceProbe()).toEqual({ playing: false, lastId: null, opened: false });
   });
 
@@ -555,7 +561,9 @@ describe('the lines that may open a run', () => {
     radio.preloadLines([OTHER_START]);
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(asked).toEqual(['/voice/manifest.json', '/voice/dddddddddddd.mp3']);
-    expect(radio.sayLine(OTHER_START)).toBe(true);
+    expect(await radio.sayLine(OTHER_START)).toBe(
+      Math.round((OPEN_S + KEY_S + 1.5 + TAIL_S) * 1000),
+    );
     expect(radio.clipOf(START_LINE)).toBeNull();
     expect(decodedBytes().voice).toBe(1.5 * 22050 * 4);
     expect(radio.voiceProbe()).toMatchObject({ lastId: 'dddddddddddd', opened: true });

@@ -198,7 +198,7 @@ describe('the announcement over the loudspeakers', () => {
 
   it('decodes its lines as it starts, and lets each go once it has been said', async () => {
     const { pa, radio, memory } = await loudspeakers();
-    expect(radio.clipOf(FIRST)).toBeNull(); // fetched at the run's start, not decoded
+    expect(radio.clipOf(FIRST)).toBeNull(); // nothing decoded before the announcement starts
     pa.startAnnouncement([FIRST, SECOND], Date.now());
     await vi.advanceTimersByTimeAsync(0);
     expect(radio.clipOf(FIRST)).not.toBeNull();
@@ -260,10 +260,11 @@ describe('the announcement over the loudspeakers', () => {
 
   it('says the plant’s message on the emergency power: the weak band, into the loudspeakers', async () => {
     const { pa, radio } = await loudspeakers();
-    expect(radio.clipOf(ALERT)).toBeNull(); // fetched at the run's start, not decoded
-    // By the manifest's length as it is asked for, before it is decoded.
-    expect(pa.announce(ALERT)).toBe(3100);
+    expect(radio.clipOf(ALERT)).toBeNull(); // not fetched before it is asked for
+    // As it sounds it tells how long it speaks: by its recording, which the fake decodes to 1.5 s.
+    const saying = pa.announce(ALERT);
     await vi.advanceTimersByTimeAsync(0);
+    expect(await saying).toBe(1500);
     const [said] = spoken();
     expect(said?.startedAt).toBeCloseTo(10.01, 9);
     const after = [...downstream(said as unknown as FakeNode)];
@@ -280,16 +281,19 @@ describe('the announcement over the loudspeakers', () => {
       [1, expect.closeTo(10.808, 9)],
     ]);
     expect(pa.paProbe().announced).toBe(1);
-    // Decoded now: asked again, it says its recording's own length.
-    expect(pa.announce(ALERT)).toBe(1500);
+    // Asked again, decoded now: it sounds at once and cuts the one still speaking short.
+    lastContext().currentTime = 11;
+    expect(await pa.announce(ALERT)).toBe(1500);
+    expect(said?.stoppedAt).toBeCloseTo(11.06, 9);
+    expect(spoken()).toHaveLength(2);
   });
 
   it('stays silent without a recording, and stops with the screen, its line let go', async () => {
     const { pa, radio } = await loudspeakers();
-    expect(pa.announce('Eine Durchsage ohne Aufnahme.')).toBeNull();
+    expect(await pa.announce('Eine Durchsage ohne Aufnahme.')).toBeNull();
     await vi.advanceTimersByTimeAsync(0);
     expect(spoken()).toEqual([]);
-    pa.announce(ALERT);
+    void pa.announce(ALERT);
     await vi.advanceTimersByTimeAsync(0);
     lastContext().currentTime = 10.5;
     pa.stopAnnounce();
@@ -299,10 +303,20 @@ describe('the announcement over the loudspeakers', () => {
     said?.end();
     expect(radio.clipOf(ALERT)).toBeNull();
     // Stopped before its decoding came in, a message never sounds, and keeps nothing decoded.
-    pa.announce(ALERT);
+    const stopped = pa.announce(ALERT);
     pa.stopAnnounce();
     await vi.advanceTimersByTimeAsync(0);
+    expect(await stopped).toBeNull();
     expect(spoken()).toHaveLength(1);
     expect(radio.clipOf(ALERT)).toBeNull();
+  });
+
+  it('says a message asked for twice while it decodes once, for the newer ask', async () => {
+    const { pa, radio } = await loudspeakers();
+    const asks = [pa.announce(ALERT), pa.announce(ALERT)];
+    await vi.advanceTimersByTimeAsync(0);
+    expect(await Promise.all(asks)).toEqual([null, 1500]);
+    expect(spoken()).toHaveLength(1);
+    expect(radio.clipOf(ALERT)).not.toBeNull(); // kept for the one that speaks
   });
 });

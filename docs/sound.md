@@ -795,8 +795,12 @@ fetch for a run. A line's own file comes as the line is queued (`preloadLines`) 
 picked, which its event names, the server's reducer having picked it by the run's seed — and is
 decoded at once, in one channel at 22.05 kHz (a few tens of milliseconds): the run's first line
 waits for the HUD to come back after the opening, or for the briefing, and a solve's line a second
-after the solve, so its file is mostly here before it airs, and where it is not, the voice comes in
-late under its banner. The last word on the end card is fetched as the card comes up, while its
+after the solve, so its file is mostly here before it airs. Where it is not, its banner waits for
+it: a line goes up on the objective bar as its sound starts and stays while it speaks (`onAir.ts`
+`airNotice`), so that the line after it, which waits for the banner, never speaks over it however
+late the file came; one whose recording has not sounded within 3 s (`VOICE_WAIT_MS`) goes up
+without it — keyed with the chirp, the plant's message silent — and the recording, coming after,
+stays unsaid. The last word on the end card is fetched as the card comes up, while its
 sting plays. A page keeps the files of the last four lines it asked for (`FILES_KEPT`), so that a
 line said again is not fetched again, and lets them go as the next run starts; a line is spoken and
 let go once said, so that a page keeps a line or two decoded rather than a mission's 159 s (28 MB at
@@ -811,9 +815,11 @@ the beds 4 dB down meanwhile (mix.ts, above). The run's first line comes after t
 opening the channel: static swells up for 0.3 s and snaps shut on the squelch gate's click
 (`radio-open`), 0.4 s before the key — on that line alone. A line no recording speaks, a custom
 mission's, keys the radio with the key's recording alone (`radioChirp`). A newer line cuts an older
-one short. The banner stays up while its line speaks: 7 s at least (4 s on a touch screen), and as
-long as the recording, its opening and its squelch take for a longer line — by the manifest's length
-where the line is not decoded yet (`radio.ts` `noticeMs`, `radioVoice.ts` `airtimeMs`).
+one short, over the radio and the loudspeakers alike: as a line goes up, whatever either still says
+of another is cut, so that one line is on the air at a time. The banner stays up while its line
+speaks: 7 s at least (4 s on a touch screen), and as long as the recording, its opening and its
+squelch take for a longer line, by the recording as decoded (`radio.ts` `noticeMs`, `radioVoice.ts`
+`airtimeMs`).
 
 **The voice.** Three German Piper voices were compared by measurement on the same three
 Blackout lines — the start, the Signalkette's places, the escape — each at `length_scale` 1.05
@@ -948,15 +954,20 @@ doors placed and the audience's unplaced), `test/radioVoice.test.ts` (the chain,
 distortion, the static's level, the speech, the squelches' recordings, the Leitstelle's opening,
 the music 8 dB and the beds 4 dB down, no recording fetched as a run starts and each line's own
 as it is queued, the files of the last four kept and none of a run before, a line let go once
-spoken, the newest of two, a line's airtime,
-the offline renders, a line still decoding dropped as the voice stops), `test/radioCheck.test.ts`
+spoken, the newest of two and the same line asked twice said once, a line's airtime as it goes on,
+the offline renders, a line still decoding dropped as the voice stops), `test/onAir.test.ts` (a
+line up on the bar as its sound starts and the next after its end, however late its file came; a
+line whose recording has not sounded in 3 s up without it, keyed, the recording unsaid; a line
+without one up at once, the plant's silent; the other speaker cut as a line goes up; a line taken
+back before its recording came saying nothing), `test/radioCheck.test.ts`
 (the Funkprobe once every seat is ready and once only, 10 dB under the crew's voices and back,
 cut with its lobby and its level let go after, nothing asked for once the lobby went, silent
 without a recording or a gesture), `test/radio.test.ts` (what goes on the air, the plant's
 message and its banner, the ranks: a call cuts a nudge short and waits for the story and for
 another call, the last word kept for the end card), `test/pa.test.ts` (the loudspeakers' band,
 the room's answer left to the reverb, the lines on their moments, decoded as the announcement
-starts and let go once said, cut with the power, the emergency power's band and dropouts),
+starts and let go once said, cut with the power, the emergency power's band and dropouts, a
+message asked twice said once),
 `test/introCue.test.ts` (the script and the cue's peak in its list, the cue
 streamed from where the opening stands, faded or cut, let go), `test/voiceLines.test.ts` (the
 recordings against the missions, their pace and sizes, the lines awaiting their render, each
@@ -1038,11 +1049,12 @@ it off, every one of them is let go.
 
 **On the emergency power.** After the blackout the loudspeakers say the plant's message as an
 emergency starts (`map.sabotage.announce`, client `pa.ts` `announce`), from the objective
-bar's queue as its banner comes up: weakly, the horns strained — a narrower band, 450 Hz to
-3.2 kHz (`WEAK_LOW`, `WEAK_HIGH`) — and a loose contact dropping the line out seven times in
-its first 6.7 s, each for 60 to 130 ms down to 0.06 of its level (`DROPOUTS`), the last
-quarter of a second of a line left whole so that its last word is heard. The banner stays up
-while it speaks, 3 s at least; a newer message cuts it short, and the line is let go once said.
+bar's queue, its banner coming up as it sounds: weakly, the horns strained — a narrower band,
+450 Hz to 3.2 kHz (`WEAK_LOW`, `WEAK_HIGH`) — and a loose contact dropping the line out seven
+times in its first 6.7 s, each for 60 to 130 ms down to 0.06 of its level (`DROPOUTS`), the
+last quarter of a second of a line left whole so that its last word is heard. The banner stays
+up while it speaks, 3 s at least; a newer line on the bar cuts it short — a message of the
+plant's or the operator's — and the line is let go once said.
 
 **When each line speaks.** The first line starts 3 s into the opening, once the card has gone
 and the lab has faded in; each next one 0.8 s after the one before has ended, by the lengths the

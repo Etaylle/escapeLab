@@ -77,7 +77,7 @@ function sayAfter(text: string, at: number, card: Card): number | null {
   wordTimer = setTimeout(
     () => {
       wordTimer = null;
-      if (wanted === card) sayLine(text);
+      if (wanted === card) void sayLine(text);
     },
     Math.max(0, (at - engine.ctx.currentTime) * 1000),
   );

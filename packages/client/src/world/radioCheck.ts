@@ -78,13 +78,17 @@ export function lobbyRadio(): LobbyRadio {
       const engine = liveEngine();
       if (asked !== ask || engine === null) return;
       asked = null;
+      // The level stands from the ask on, so that the lobby's end cuts a Funkprobe still decoding.
       const under = outlet(engine.ctx, engine.voice, levelFor(talking));
-      if (!sayLine(text, under)) {
-        under.disconnect();
-        return;
-      }
       level = under;
-      probe = { asked: text, aired: true };
+      void sayLine(text, under).then((aired) => {
+        if (aired !== null) {
+          probe = { asked: text, aired: true };
+          return;
+        }
+        if (level === under) level = null;
+        under.disconnect();
+      });
     });
   };
   return {

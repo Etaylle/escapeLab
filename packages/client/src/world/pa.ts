@@ -145,11 +145,16 @@ interface Announcement {
 
 let current: Announcement | null = null;
 
+/** A message asked of the loudspeakers (`announce`), as it was asked. */
+interface Ask {
+  readonly text: string;
+}
+
 /**
  * The loudspeakers on the emergency power: the line they say now, the one asked for last —
  * whose decoding a newer ask makes moot — and how many they have said.
  */
-const weak: { speaking: Speaking | null; asked: string | null; said: number } = {
+const weak: { speaking: Speaking | null; asked: Ask | null; said: number } = {
   speaking: null,
   asked: null,
   said: 0,
@@ -252,33 +257,42 @@ export function stopAnnouncement(): void {
 }
 
 /**
- * The plant's message `text` over the loudspeakers on their emergency power, now — or as soon
- * as it is decoded — cutting short one they still say; let go once said. Returns how long it
- * speaks, ms: by its recording where decoded, else by the manifest; null where it has no
- * recording or nothing can play, and then nothing sounds: the loudspeakers have no chirp.
+ * The plant's message `text` over the loudspeakers on their emergency power — now where it is
+ * decoded, else as soon as it is — cutting short one they still say; let go once said. Resolves
+ * as it sounds, with how long it speaks, ms, by its recording; with null where it never does — it
+ * has no recording, nothing can play, its recording failed, or a message asked for after it or
+ * the screen going (`stopAnnounce`) made it moot — and then nothing sounds: the loudspeakers
+ * have no chirp.
  */
-export function announce(text: string): number | null {
+export function announce(text: string): Promise<number | null> {
   try {
     const engine = playingEngine();
-    const ms = recordedMs(text);
-    if (engine === null || ms === null) return null;
-    weak.asked = text;
-    void lineClip(text).then((clip) => {
-      if (clip === null) return;
-      if (weak.asked !== text) {
-        releaseLine(text);
-        return;
-      }
-      weak.speaking?.stop(engine.ctx.currentTime);
-      weak.speaking = speak(engine, clip, text, weakChain(engine.ctx, engine.announce, PA_LEVEL));
-      weak.said += 1;
-    });
-    const decoded = clipOf(text);
-    return decoded === null ? ms : Math.round(decoded.buffer.duration * 1000);
+    if (engine === null || recordedMs(text) === null) return Promise.resolve(null);
+    const ask: Ask = { text };
+    weak.asked = ask;
+    return lineClip(text)
+      .then((clip) => (clip === null ? null : sayAsked(engine, ask, clip)))
+      .catch(() => null);
   } catch {
     // Deliberately silent: the objective bar shows the line as well.
+    return Promise.resolve(null);
+  }
+}
+
+/**
+ * The message asked for as `ask` said with its decoded `clip`, where nothing made it moot since:
+ * how long it speaks, ms. Null where it is moot, its recording let go then — unless a newer ask
+ * wants the same words.
+ */
+function sayAsked(engine: Engine, ask: Ask, clip: Clip): number | null {
+  if (weak.asked !== ask) {
+    if (weak.asked?.text !== ask.text) releaseLine(ask.text);
     return null;
   }
+  weak.speaking?.stop(engine.ctx.currentTime);
+  weak.speaking = speak(engine, clip, ask.text, weakChain(engine.ctx, engine.announce, PA_LEVEL));
+  weak.said += 1;
+  return Math.round(clip.buffer.duration * 1000);
 }
 
 /** The game screen is gone: the loudspeakers' message breaks off, and none asked for comes. */
