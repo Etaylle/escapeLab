@@ -11,11 +11,12 @@
  *     node tools/shots.mjs [baseUrl] [outDir]
  *
  * Groups (tools/groups.mjs): every capture, and every label a skip line carries, belongs to one of
- * sixteen groups; SHOTS_ONLY and SHOTS_SKIP, each a comma-separated list of their names, pick those
- * a run plays — a quick proof of one part. The drills, each in a room of its own before the
+ * seventeen groups; SHOTS_ONLY and SHOTS_SKIP, each a comma-separated list of their names, pick
+ * those a run plays — a quick proof of one part. The drills, each in a room of its own before the
  * walkthrough: editor, art, drones (the danger sense, a drone close by), reconnect, restart, three
  * (Blackout for a crew of three through the Signalkette) — and in a Systemcheck run the
- * Serverraum's scratch mission, devices'. The walkthrough's own stages:
+ * Serverraum's scratch mission, devices', and the Zugangskontrolle's, access. The walkthrough's
+ * own stages:
  * screens (the menu and its sound, the history, the lobby, the run started from it), intro (the
  * opening to blackout.png, the cold open at density 2 with it) and run (the mission to the won
  * card: the lit rooms, the finds, the audience's way in, the escape, the end, and after the won
@@ -488,6 +489,26 @@
  * solves without an alarm, and servers-solved.png catches the device as it
  * stands done. The log says how long the moves took. The mission is deleted
  * again whatever happened.
+ *
+ * Zugangskontrolle (a Systemcheck run): the editor, opened at /editor?seed=4,
+ * imports tools/fixtures/access-probe.json („Zugangsprobe",
+ * custom-zugangsprobe) and starts its test run; a second page joins by code,
+ * both touch screens. The player nearer console B switches the station on at
+ * the token device; the other reads the list of this shift's accounts at the
+ * clipboard (access-list.png) — it has to be the one
+ * tools/fixtures/access-plan.json was made for — and takes the terminal,
+ * which has to ask for the plan's doors (access-terminal.png; the device in
+ * access-token.png, its digits the view's token). On a large phone held
+ * sideways the terminal has to stand whole, nothing scrolling, every control
+ * 44 px (access-phone-932.png), the token device the same. Then each door of
+ * the plan: the login — the first typed letter by letter, Tab completing
+ * `login` —, the token read off the device once it shows the account with
+ * four seconds left at least and sent — the first typed in two groups, the
+ * next on the pad —, the door released on its key; the station has to solve
+ * without an alarm. The device never opens on the first door's account, so
+ * the first door waits a period or two (15 s each in the probe). The log says
+ * how long the device kept each account waiting. The mission is deleted again
+ * whatever happened.
  *
  * Art (a Blackout run only): before the walkthrough, a scratch copy of
  * Blackout — custom-blackout, ten seconds of power before the lights fail,
@@ -7721,16 +7742,27 @@ async function captureDevicePhone(player, slug) {
 
 /** The device `player`'s phone has open at `size` (`captureDevicePhone`), shot and checked. */
 async function deviceOnPhone(player, slug, size) {
+  const shot =
+    size === SIZES[3] ? `device-phone-${slug}.png` : `device-phone-${size.width}-${slug}.png`;
+  await phoneReach(player, size, shot);
+}
+
+/**
+ * The device `player`'s phone has open, held at `size`: the device whole in the window, nothing
+ * of it scrolling, every control in view and 44 px at least each way (`deviceReach`), or the run
+ * fails — shot as `shot` where one is named, and logged under `label`, the shot's name by default.
+ */
+async function phoneReach(player, size, shot, label = shot) {
   const { page } = player;
   await page.setViewportSize({ width: size.width, height: size.height });
   await sleep(500);
   const seen = await page.evaluate(deviceReach);
-  const shot =
-    size === SIZES[3] ? `device-phone-${slug}.png` : `device-phone-${size.width}-${slug}.png`;
-  await capture(page, shot);
-  const name = shot.padEnd(18);
+  if (shot !== null) {
+    await capture(page, shot);
+  }
+  const name = label.padEnd(18);
   if (seen === null) {
-    fail(`${shot}: no device open on ${player.name}'s phone`);
+    fail(`${label}: no device open on ${player.name}'s phone`);
     console.log(`${name} !! ${player.name}'s phone has no device open`);
     return;
   }
@@ -7740,15 +7772,21 @@ async function deviceOnPhone(player, slug, size) {
       `${seen.cut.length} cut off` +
       [...seen.small, ...seen.cut].map((what) => `\n                   !! ${what}`).join(''),
   );
+  const wrong = reachWrong(seen);
+  if (wrong.length > 0) {
+    fail(`${label}: ${wrong.join('; ')}`);
+  }
+}
+
+/** What a device held on a phone (`deviceReach`) does wrong: none where it stands whole. */
+function reachWrong(seen) {
   const wrong = [
     seen.controls === 0 && 'no control shown',
     seen.scroll > 1 && `it scrolls ${seen.scroll}px`,
     seen.small.length > 0 && `${seen.small.join(', ')} under 44 px`,
     seen.cut.length > 0 && `${seen.cut.join(', ')} cut off`,
   ];
-  if (wrong.some(Boolean)) {
-    fail(`${shot}: ${wrong.filter(Boolean).join('; ')}`);
-  }
+  return wrong.filter(Boolean);
 }
 
 /**
@@ -8730,23 +8768,26 @@ const SERVERS_PLAN = JSON.parse(
   readFileSync(fileURLToPath(new URL('fixtures/servers-plan.json', import.meta.url)), 'utf8'),
 );
 
-/** A player of the Serverraum step, in a context of its own at laptop size. */
-async function serversPlayer(name) {
-  const context = await browser.newContext({ viewport: SIZES[0] });
+/**
+ * A player of a scratch mission's drill — `drill` names it in the log: „servers", „access" —
+ * in a context of its own at laptop size, a touch screen where `touch` says so.
+ */
+async function probePlayer(drill, name, touch = false) {
+  const context = await browser.newContext({ viewport: SIZES[0], hasTouch: touch });
   await wonBefore(context);
-  const page = await openPage(context, `servers ${name}`);
-  page.on('pageerror', (e) => console.log(`[servers ${name} error]`, e.message));
+  const page = await openPage(context, `${drill} ${name}`);
+  page.on('pageerror', (e) => console.log(`[${drill} ${name} error]`, e.message));
   return { name, page, seen: eavesdrop(page), context };
 }
 
 /**
- * The editor at /editor?seed=<the plan's seed>, the scratch mission imported
- * and started as its test run under `host`'s name: the room is pinned to the
- * seed, as its lobby has to say. Returns the room's code.
+ * The editor at /editor?seed=<seed>, the scratch mission `mission` imported from `file` and
+ * started as its test run under `host`'s name: the room is pinned to the seed, as its lobby has
+ * to say — the log's lines and a failure under `drill`'s name. Returns the room's code.
  */
-async function openServersRoom(host) {
-  const { title } = SERVERS_MISSION;
-  await importProbe(host.page, SERVERS_FILE, title, `/editor?seed=${SERVERS_PLAN.seed}`);
+async function openProbeRoom(host, { drill, file, mission, seed }) {
+  const { title } = mission;
+  await importProbe(host.page, file, title, `/editor?seed=${seed}`);
   const play = host.page.locator('.editor-actions button:not([disabled])', {
     hasText: 'Probespiel',
   });
@@ -8759,20 +8800,20 @@ async function openServersRoom(host) {
   await host.page.locator('.lobby', { hasText: title }).waitFor({ timeout: 10_000 });
   const code = (await host.page.locator('.room-code strong').innerText()).trim();
   await host.page.locator('.room-seed').waitFor({ timeout: 3000 }).catch(() => undefined);
-  const seed = await textOf(host.page.locator('.room-seed'));
-  const pinned = seed === `Seed ${SERVERS_PLAN.seed}`;
+  const shown = await textOf(host.page.locator('.room-seed'));
+  const pinned = shown === `Seed ${seed}`;
   console.log(
-    `servers            „${title}" imported at /editor, its test run in room ${code}, ` +
-      (pinned ? `pinned to seed ${SERVERS_PLAN.seed}` : `!! not pinned (${seed ?? 'no seed'})`),
+    `${drill.padEnd(19)}„${title}" imported at /editor, its test run in room ${code}, ` +
+      (pinned ? `pinned to seed ${seed}` : `!! not pinned (${shown ?? 'no seed'})`),
   );
   if (!pinned) {
-    fail(`servers: the test run is not pinned to seed ${SERVERS_PLAN.seed} — ALLOW_SEED=1?`);
+    fail(`${drill}: the test run is not pinned to seed ${seed} — ALLOW_SEED=1?`);
   }
   return code;
 }
 
 /** `guest` joins the room `code` from the menu. */
-async function joinServersRoom(guest, code) {
+async function joinProbeRoom(guest, code) {
   await guest.page.goto(paged(BASE));
   await guest.page.getByPlaceholder('z. B. Anna').fill(guest.name);
   await byCode(guest.page, code);
@@ -8812,10 +8853,10 @@ async function readServersManual(reader) {
 }
 
 /**
- * Whoever the draw put nearer console A works the terminal, the other one
- * the rack. Returns them in that order.
+ * Whoever the draw put nearer console A works it — the Serverraum's terminal, the
+ * Zugangskontrolle's — the other one console B. Returns them in that order.
  */
-function serversSeats(players) {
+function probeSeats(players) {
   const consoleA = players[0].seen.view.map.stations.find((s) => s.console === 'a');
   return [...players].sort((p, q) => stepsTo(p.seen, consoleA) - stepsTo(q.seen, consoleA));
 }
@@ -9121,16 +9162,17 @@ async function captureServers() {
   }
   const crew = [];
   try {
-    const host = await serversPlayer('Anna');
+    const host = await probePlayer('servers', 'Anna');
     crew.push(host);
-    const code = await openServersRoom(host);
-    const guest = await serversPlayer('Ben');
+    const room = { drill: 'servers', file: SERVERS_FILE, mission: SERVERS_MISSION };
+    const code = await openProbeRoom(host, { ...room, seed: SERVERS_PLAN.seed });
+    const guest = await probePlayer('servers', 'Ben');
     crew.push(guest);
-    await joinServersRoom(guest, code);
+    await joinProbeRoom(guest, code);
     await startRun(host, guest);
     // Past the briefing's countdown, as in the walkthrough.
     await sleep(Math.max(0, host.seen.view.startedAt + 4200 - Date.now()));
-    const [terminal, rack] = serversSeats([host, guest]);
+    const [terminal, rack] = probeSeats([host, guest]);
     await readServersManual(terminal);
     await manServers({ terminal, rack });
     const rows = terminal.seen.view.puzzle?.rows ?? null;
@@ -9155,6 +9197,319 @@ async function captureServers() {
     const gone = await api.delete(`/missions/custom/${SERVERS_MISSION.id}`).catch(() => null);
     const status = gone?.status() ?? 'no answer';
     console.log(`servers            ${SERVERS_MISSION.id} deleted again: ${status}`);
+    await api.dispose();
+  }
+}
+
+/**
+ * The Zugangskontrolle's scratch mission (tools/fixtures/access-probe.json, „Zugangsprobe",
+ * custom-zugangsprobe) and what its pinned seed deals (access-plan.json): the doors the
+ * terminal asks for, the list on the clipboard, and the account core's solver logs in for each
+ * door. The tokens are in no plan — they hang on the server's clock —: the drill reads each off
+ * the token device as the player there would. Core's test of the module keeps the plan the
+ * solver's own.
+ */
+const ACCESS_FILE = fileURLToPath(new URL('fixtures/access-probe.json', import.meta.url));
+const ACCESS_MISSION = JSON.parse(readFileSync(ACCESS_FILE, 'utf8'));
+const ACCESS_PLAN = JSON.parse(
+  readFileSync(fileURLToPath(new URL('fixtures/access-plan.json', import.meta.url)), 'utf8'),
+);
+/** The least a period has to have left for the drill to read its token off the device. */
+const ACCESS_READ_MS = 4000;
+/**
+ * How long the drill waits for the device to come round to an account: it turns through three, a
+ * period each, so two periods and the one under way, and some slack.
+ */
+const ACCESS_TURN_MS = 3 * ACCESS_MISSION.puzzles[0].tokenSec * 1000 + 5000;
+
+/** The open Zugangskontrolle as `player`'s page has it; null for none. */
+function accessView(player) {
+  const puzzle = player.seen.view?.puzzle ?? null;
+  return puzzle?.kind === 'access' ? puzzle : null;
+}
+
+/**
+ * `player` walks to console `letter` of the probe and opens its panel with E — at console B the
+ * first E switches the station on — and the panel has to show its `part`: the terminal or the
+ * device. Throws where it does not.
+ */
+async function manAccess(player, letter, part) {
+  const spot = player.seen.view.map.stations.find((station) => station.console === letter);
+  if (!(await walkNear(player.page, player.seen, spot))) {
+    throw new Error(`${player.name} found no way to console ${letter} at ${spot.x},${spot.y}`);
+  }
+  const modal = player.page.locator('.station-modal');
+  if (!(await interactUntil(player, modal, consoleTarget(spot)))) {
+    throw new Error(`${player.name} stands at console ${letter}, but no .station-modal`);
+  }
+  if (!(await until(() => (accessView(player)?.[part] ?? null) !== null, 3000))) {
+    throw new Error(`${player.name}'s console ${letter} shows no ${part}`);
+  }
+}
+
+/**
+ * access-list.png: `reader` walks to the clipboard and reads the list of this shift's accounts
+ * under the rules — there once the station is on. The list has to be the one the plan was made
+ * for, every account of it on the page, or the run fails naming the seed.
+ */
+async function readAccessList(reader) {
+  const [clipboard] = ACCESS_MISSION.map.manuals;
+  const [spot] = clipboard.spots;
+  if (!(await walkNear(reader.page, reader.seen, spot))) {
+    throw new Error(`${reader.name} found no way to the ${clipboard.label} at ${spot.x},${spot.y}`);
+  }
+  const target = sourceTarget({ id: clipboard.id, label: clipboard.label, ...spot });
+  const overlay = reader.page.locator('.reading-modal');
+  if (!(await interactUntil(reader, overlay, target))) {
+    throw new Error(`${reader.name} at the ${clipboard.label}, but no .reading-modal opened`);
+  }
+  const list = overlay.locator('.access-roster');
+  await list.waitFor({ timeout: 3000 });
+  await sleep(500); // past the page's fade-in
+  await capture(reader.page, 'access-list.png');
+  const names = await list.locator('tbody tr td:first-child').allInnerTexts();
+  const dealt = JSON.stringify(accessView(reader)?.roster) === JSON.stringify(ACCESS_PLAN.roster);
+  const shown = ACCESS_PLAN.roster.every(({ name }) => names.includes(name));
+  console.log(
+    `access-list.png    ${reader.name} at the ${clipboard.label}: ${names.join(', ')}` +
+      (dealt && shown ? '' : ` !! the plan's list is ${ACCESS_PLAN.roster.map((a) => a.name)}`),
+  );
+  await reader.page.keyboard.press('Escape');
+  await overlay.waitFor({ state: 'hidden', timeout: 3000 });
+  if (!dealt || !shown) {
+    fail(
+      `access: seed ${ACCESS_PLAN.seed} deals another list than tools/fixtures/access-plan.json ` +
+        'was made for — regenerate it from the core test',
+    );
+  }
+}
+
+/**
+ * access-terminal.png, access-token.png: both devices at laptop size, the terminal's screen
+ * scrolled in; the terminal has to ask for the doors the plan was made for, the device has to
+ * show a token in its digits — the one its view holds.
+ */
+async function captureAccessConsoles({ terminal, token }) {
+  await sleep(1400); // past the panels' fade-in and the terminal's boot scroll
+  await capture(terminal.page, 'access-terminal.png');
+  await capture(token.page, 'access-token.png');
+  const doors = doorsAsked(terminal);
+  const device = tokenDevice(token);
+  const digits = (await textOf(token.page.locator('.station-modal .access-digits'))) ?? '';
+  const asked = JSON.stringify(doors) === JSON.stringify(ACCESS_PLAN.doors);
+  const read = digits.replace(/\s+/g, '') === device?.token;
+  console.log(consolesSaid({ terminal, token, doors, device, digits, asked, read }));
+  if (!asked) {
+    fail(`access: seed ${ACCESS_PLAN.seed} asks for other doors than access-plan.json names`);
+  }
+  if (!read) {
+    fail(`access: the device shows „${digits}", its view says ${device?.token}`);
+  }
+}
+
+/** The doors `player`'s terminal asks for, in its order; none where it shows no terminal. */
+const doorsAsked = (player) =>
+  accessView(player)?.terminal?.doors.map((row) => row.door) ?? [];
+
+/** The token device `player` has open: its account, token and period's end; null for none. */
+const tokenDevice = (player) => accessView(player)?.device ?? null;
+
+/** The log's line for both devices as shot (`captureAccessConsoles`). */
+function consolesSaid({ terminal, token, doors, device, digits, asked, read }) {
+  return (
+    `access-terminal.png ${terminal.name} at ${seatOf(terminal)}: asks for ${doors.join(', ')}` +
+    `${asked ? '' : ' !! not the plan’s doors'}; access-token.png ${token.name}: ` +
+    `${device?.account ?? '?'} „${digits}"${read ? '' : ' !! not the view’s token'}`
+  );
+}
+
+/**
+ * access-phone-932.png: the terminal on a large phone held sideways (SIZES[4]) — both pages are
+ * touch screens — whole in the window, nothing of it scrolling, every control in view and 44 px
+ * at least each way (`phoneReach`); the token device held the same way on its page, checked
+ * without a shot. Both go back to laptop size.
+ */
+async function accessOnPhone({ terminal, token }) {
+  await phoneReach(terminal, SIZES[4], 'access-phone-932.png');
+  await phoneReach(token, SIZES[4], null, 'access token 932');
+  for (const { page } of [terminal, token]) {
+    await page.setViewportSize({ width: SIZES[0].width, height: SIZES[0].height });
+  }
+  await sleep(300);
+}
+
+/**
+ * `login <account>` at the terminal's prompt — `typed`: its first letter typed and Tab
+ * completing the command, else the bezel's login key —, the account's name typed after it and
+ * Enter; the prompt has to ask for the account's token then. Returns the line as sent.
+ */
+async function accessLogin(terminal, account, typed) {
+  const { page } = terminal;
+  const modal = page.locator('.station-modal');
+  if (typed) {
+    await page.keyboard.type('l', { delay: 40 });
+    await page.keyboard.press('Tab');
+  } else {
+    await modal.locator('.servers-key[data-cmd="login"]').click();
+  }
+  await page.keyboard.type(account, { delay: 40 });
+  const line = await modal.locator('.servers-input').inputValue();
+  await page.keyboard.press('Enter');
+  if (!(await until(() => accessView(terminal)?.terminal?.prompt === account, 3000))) {
+    throw new Error(`${terminal.name} sent „${line}", but the prompt asks for no token of ${account}`);
+  }
+  return line;
+}
+
+/**
+ * The token device watched until it shows `account` with ACCESS_READ_MS left at least, then its
+ * six digits read off the display — the view's token, or the run fails. Returns them and how long
+ * the device took to come round.
+ */
+async function readToken(token, account) {
+  const from = Date.now();
+  const ready = () => {
+    const device = accessView(token)?.device ?? null;
+    return device?.account === account && device.endsAt - Date.now() > ACCESS_READ_MS;
+  };
+  if (!(await until(ready, ACCESS_TURN_MS))) {
+    throw new Error(`${token.name}'s device came round to ${account} with no time to read`);
+  }
+  await sleep(300); // the display takes the period's token
+  const shown = await textOf(token.page.locator('.station-modal .access-digits'));
+  const digits = shown?.replace(/\s+/g, '') ?? '';
+  const told = accessView(token)?.device?.token;
+  if (digits !== told) {
+    throw new Error(`${token.name}'s display reads „${shown}", its view says ${told}`);
+  }
+  return { digits, waited: Date.now() - from };
+}
+
+/**
+ * The token at the terminal's prompt — `typed`: in two groups as the device shows them and
+ * Enter, else on the pad's keys and ⏎ —; the session has to open.
+ */
+async function sendToken(terminal, digits, typed) {
+  const { page } = terminal;
+  const modal = page.locator('.station-modal');
+  if (typed) {
+    await page.keyboard.type(`${digits.slice(0, 3)} ${digits.slice(3)}`, { delay: 40 });
+    await page.keyboard.press('Enter');
+  } else {
+    for (const digit of digits) {
+      await modal.locator(`.access-key[data-digit="${digit}"]`).click();
+    }
+    await modal.locator('.servers-key--enter').click();
+  }
+  if (!(await until(() => (accessView(terminal)?.terminal?.session ?? null) !== null, 3000))) {
+    const last = accessView(terminal)?.terminal?.log.at(-1)?.text ?? 'nothing';
+    throw new Error(`${terminal.name} sent ${digits}, but no session opened: „${last}"`);
+  }
+}
+
+/** `door` released at the terminal on its key and ⏎; it has to stand released, or the station solve. */
+async function releaseDoor(terminal, door) {
+  const modal = terminal.page.locator('.station-modal');
+  const index = terminal.seen.view.currentPuzzleIndex;
+  await modal.locator(`.servers-key[data-door="${door}"]`).click();
+  await modal.locator('.servers-key--enter').click();
+  const released = () =>
+    terminal.seen.view.currentPuzzleIndex > index ||
+    accessView(terminal)?.terminal?.doors.some((row) => row.door === door && row.released) === true;
+  if (!(await until(released, 3000))) {
+    throw new Error(`${terminal.name} released ${door}, but it stays asked for`);
+  }
+}
+
+/**
+ * One door of the plan at both consoles: the login (`accessLogin`), the token read off the
+ * device once it shows the account (`readToken`) and sent (`sendToken`), the door released —
+ * the first door typed at the prompt, the next on the keys. At the first, the terminal asking
+ * for the token is held sideways on the large phone as well, its numeric pad in place of the
+ * door keys: whole, nothing scrolling, every control 44 px (`phoneReach`, no shot). Returns the
+ * door as the log says it.
+ */
+async function accessDoor({ terminal, token }, { door, account }, typed) {
+  const line = await accessLogin(terminal, account, typed);
+  if (typed) {
+    await phoneReach(terminal, SIZES[4], null, 'access pad 932');
+    await terminal.page.setViewportSize({ width: SIZES[0].width, height: SIZES[0].height });
+  }
+  const { digits, waited } = await readToken(token, account);
+  await sendToken(terminal, digits, typed);
+  await releaseDoor(terminal, door);
+  const how = typed ? 'getippt' : 'Tasten';
+  return `${door.toUpperCase()}: „${line}", Token ${digits} nach ${seconds(waited)} (${how})`;
+}
+
+/**
+ * The plan's doors played at both consoles, one after the other; the station has to solve on
+ * the last without an alarm. The log says how long it took and how long the device kept each
+ * account waiting.
+ */
+async function playAccess(crew) {
+  const { terminal } = crew;
+  const alarms = terminal.seen.view.alarms.count;
+  const from = Date.now();
+  const said = [];
+  for (const [i, login] of ACCESS_PLAN.logins.entries()) {
+    said.push(await accessDoor(crew, login, i === 0));
+  }
+  const solved = await until(() => terminal.seen.view.currentPuzzleIndex > 0, 3000);
+  const raised = terminal.seen.view.alarms.count - alarms;
+  console.log(
+    `access             ${said.length} doors in ${seconds(Date.now() - from)} ` +
+      `(${said.join('; ')}): ${solved ? 'solved' : '!! not solved'}, ` +
+      (raised === 0 ? 'no alarm' : `!! ${raised} alarm(s)`),
+  );
+  if (!solved || raised > 0) {
+    fail(`access: the plan ended ${solved ? 'solved' : 'unsolved'} with ${raised} alarm(s)`);
+  }
+}
+
+/**
+ * The Zugangskontrolle, proven in a scratch mission of its own, in a Systemcheck run as the
+ * Serverraum is (Blackout says it leaves it out): imported through the editor at a pinned seed and
+ * started as its test run, the second player joining by code, both on touch screens. The player nearer console B switches the station on at the token device, the other
+ * reads the list at the clipboard (access-list.png) and takes the terminal; both devices are
+ * shot at laptop size (access-terminal.png, access-token.png) and on a large phone held sideways
+ * (access-phone-932.png, the token device checked too); then the plan's doors are played, each
+ * token read off the device. The mission is deleted again whatever happened.
+ */
+async function captureAccess() {
+  if (MISSION.toLowerCase() === 'blackout') {
+    skip('access (probe)', 'Blackout plays no Zugangskontrolle: its probe plays in a Systemcheck run');
+    return;
+  }
+  const crew = [];
+  try {
+    const host = await probePlayer('access', 'Anna', true);
+    crew.push(host);
+    const room = { drill: 'access', file: ACCESS_FILE, mission: ACCESS_MISSION };
+    const code = await openProbeRoom(host, { ...room, seed: ACCESS_PLAN.seed });
+    const guest = await probePlayer('access', 'Ben', true);
+    crew.push(guest);
+    await joinProbeRoom(guest, code);
+    await startRun(host, guest);
+    // Past the briefing's countdown, as in the walkthrough.
+    await sleep(Math.max(0, host.seen.view.startedAt + 4200 - Date.now()));
+    const [terminal, token] = probeSeats([host, guest]);
+    await manAccess(token, 'b', 'device');
+    await readAccessList(terminal);
+    await manAccess(terminal, 'a', 'terminal');
+    await captureAccessConsoles({ terminal, token });
+    await accessOnPhone({ terminal, token });
+    await playAccess({ terminal, token });
+  } catch (err) {
+    console.log(`access             !! ${firstLine(err)}`);
+    fail(`access: ${firstLine(err)}`);
+  } finally {
+    for (const { context } of crew) {
+      await context.close();
+    }
+    const api = await request.newContext({ baseURL: BASE });
+    const gone = await api.delete(`/missions/custom/${ACCESS_MISSION.id}`).catch(() => null);
+    console.log(`access             ${ACCESS_MISSION.id} deleted again: ${gone?.status() ?? 'none'}`);
     await api.dispose();
   }
 }
@@ -12700,7 +13055,8 @@ async function captureThree() {
 /**
  * The drills before the walkthrough, each in a room of its own, by the group each belongs to:
  * the editor, the Serverraum's scratch mission (a Systemcheck run's), the art tour, the danger
- * sense, the reconnect drill, the restart drill and the three drill.
+ * sense, the reconnect drill, the restart drill, the Zugangskontrolle's scratch mission (a
+ * Systemcheck run's) and the three drill.
  */
 const DRILLS = [
   ['editor', captureEditor],
@@ -12709,6 +13065,7 @@ const DRILLS = [
   ['drones', captureDangerSense],
   ['reconnect', captureReconnect],
   ['restart', captureRestart],
+  ['access', captureAccess],
   ['three', captureThree],
 ];
 

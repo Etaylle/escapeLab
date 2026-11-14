@@ -3,6 +3,7 @@ import {
   LEVER_FIGURE,
   PATTERN_FIGURE,
   SIGNAL_PATTERNS,
+  TOKEN_FIGURE,
   type PuzzleDef,
   type SignalPattern,
 } from '@escapelab/core';
@@ -10,7 +11,8 @@ import { ServicesGraph } from '../puzzles/RackDiagram.js';
 
 /**
  * Line drawings of the devices for the printed rules, one per module type,
- * and the Signalkette's key of colours and patterns (PATTERN_FIGURE).
+ * the Signalkette's key of colours and patterns (PATTERN_FIGURE) and the
+ * Zugangskontrolle's token device with its bar (TOKEN_FIGURE).
  * Thin strokes in the colour of the text around them; a surface is only ever
  * hatched or lightly tinted, so a drawing reads the same on paper, on the
  * terminal's glass and from a printer. Drawn 376 units across and 140 down:
@@ -720,6 +722,99 @@ function Servers() {
   );
 }
 
+/**
+ * A token device's display, as both drawings of the Zugangskontrolle letter it: the account the
+ * printed log logs in, its token in two groups of three, and a bar of `segments` segments, `lit`
+ * of them left — 17 of a period's 30 seconds.
+ */
+function TokenDisplay(props: {
+  x: number;
+  y: number;
+  width: number;
+  scale: number;
+  segments: number;
+  lit: number;
+}) {
+  const { x, y, width, scale, segments, lit } = props;
+  const inner = width - 20 * scale;
+  const step = (inner - 24 * scale) / segments;
+  const bar = { x: x + 10 * scale, y: y + 46 * scale, h: 7 * scale };
+  return (
+    <>
+      <rect x={x} y={y} width={width} height={62 * scale} rx={4 * scale} {...TINT} />
+      <Mark x={x + 10 * scale} y={y + 14 * scale} size={8 * scale} anchor="start">
+        KONTO meier
+      </Mark>
+      <Mark x={x + width / 2} y={y + 36 * scale} size={18 * scale}>
+        405 217
+      </Mark>
+      {Array.from({ length: segments }, (_, i) => (
+        <rect
+          key={i}
+          x={round(bar.x + i * step)}
+          y={bar.y}
+          width={round(step - 1.5 * scale)}
+          height={bar.h}
+          {...(i < lit ? GLOW : {})}
+        />
+      ))}
+      <Mark x={x + width - 8 * scale} y={bar.y + bar.h} size={7 * scale} anchor="end">
+        17 s
+      </Mark>
+    </>
+  );
+}
+
+/**
+ * The Zugangskontrolle: on the left the terminal — its glass with the doors it asks for, the
+ * session and a prompt with its cursor, over a row of keys — and on the right the token device,
+ * a rounded fob round its display.
+ */
+function Access() {
+  return (
+    <>
+      <rect x={12} y={6} width={200} height={100} rx={6} strokeWidth={1.6} />
+      <rect x={22} y={14} width={180} height={84} rx={4} {...TINT} />
+      <Lettering x={32} y={27} width={84} />
+      {[41, 53].map((y) => (
+        <g key={y}>
+          <Lettering x={32} y={y} width={52} />
+          <Lettering x={112} y={y} width={62} />
+        </g>
+      ))}
+      <Lettering x={32} y={66} width={70} />
+      <Mark x={32} y={88} anchor="start">
+        {'> login meier'}
+      </Mark>
+      <rect x={113} y={79} width={6} height={11} {...GLOW} />
+      {Array.from({ length: 9 }, (_, i) => (
+        <rect key={i} x={22 + i * 20.3} y={114} width={16} height={16} rx={2} />
+      ))}
+      <rect x={238} y={14} width={132} height={112} rx={20} strokeWidth={1.6} />
+      <Mark x={304} y={30} size={7}>
+        ZK-2 TOKEN
+      </Mark>
+      <TokenDisplay x={248} y={40} width={112} scale={1} segments={10} lit={6} />
+    </>
+  );
+}
+
+/**
+ * The token device close up, as the rules' second drawing shows it: the fob, its make over the
+ * display, and on the display the account, the token and the bar draining to the period's end.
+ */
+function AccessToken() {
+  return (
+    <>
+      <rect x={68} y={4} width={240} height={132} rx={28} strokeWidth={1.6} />
+      <Mark x={188} y={22} size={9}>
+        ZK-2 TOKEN
+      </Mark>
+      <TokenDisplay x={88} y={32} width={200} scale={1.5} segments={15} lit={9} />
+    </>
+  );
+}
+
 /** A device without a drawing: an empty frame naming its type, so its pages still print. */
 function Frame({ of }: { of: string }) {
   return (
@@ -740,10 +835,11 @@ interface Drawing {
 
 /**
  * Every module the core knows has its drawing, and so have the Signalkette's
- * key of patterns and the main switch a sync station may be built as.
+ * key of patterns, the main switch a sync station may be built as and the
+ * Zugangskontrolle's token device close up.
  */
 const DRAWINGS: Record<
-  PuzzleDef['type'] | typeof PATTERN_FIGURE | typeof LEVER_FIGURE,
+  PuzzleDef['type'] | typeof PATTERN_FIGURE | typeof LEVER_FIGURE | typeof TOKEN_FIGURE,
   Drawing
 > = {
   wiring: {
@@ -822,6 +918,18 @@ const DRAWINGS: Record<
       'Abhängigkeit zum Dienst, der sie braucht; rechts ein Rack mit 6 Einschüben, je ' +
       'Name, LED und Schalter',
     draw: Servers,
+  },
+  access: {
+    label:
+      'Terminal und Tokengerät: links ein Bildschirm mit Türliste und Eingabezeile über einer ' +
+      'Tastenreihe, rechts ein Tokengerät mit Kontozeile, Token und Balken',
+    draw: Access,
+  },
+  [TOKEN_FIGURE]: {
+    label:
+      'Tokengerät: Anzeige mit der Zeile KONTO meier, dem Token 405 217 in zwei ' +
+      'Dreiergruppen und einem Balken aus Segmenten, der bis zum Wechsel abläuft, daneben 17 s',
+    draw: AccessToken,
   },
 };
 

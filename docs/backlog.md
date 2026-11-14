@@ -474,13 +474,24 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   die eigene als Chip. Harness-Probe `three`: Anna, Ben und Cleo bis zur Signalkette, fünf
   Captures, etwa 85 s. Kettenreaktion und Doppelschicht: siehe N-6.
 
-### I-1 Zugangskontrolle mit Zwei-Faktor — Status: in Arbeit (I-access, Spec `spec-I-access.md`; Modul mit Probe-Mission, Platz in Blackout nach dem Playtest) · Größe: L
+### I-1 Zugangskontrolle mit Zwei-Faktor — Status: erledigt (I-access, Merge 2026-11-14; drei Review-Runden; Cloud-CI grün auf 4136fa0; Modul mit Probe-Mission und Drill im Systemcheck-Lauf, Platz in Blackout nach dem Playtest, N-6) · Größe: L
 - Pult A Login-Terminal, Pult B Token-Generator mit Code, der mit der Serveruhr alle 30 s
   wechselt (Restsekunden sichtbar), Quelle Benutzerliste mit Rollen. Vorbilder: Quadrilateral
   Cowboy (`door.open(3)`: das Terminal gibt die Tür drei Sekunden frei, jemand muss durch),
   Among Us (ID-Code ablesen und eintippen; Reaktor mit zwei Händen an zwei Panels).
 - Dazu als eigenes Spielelement: eine Schleuse, die das Terminal fünf Sekunden öffnet, während
   die andere Person läuft (nutzt die vorhandene Bewegung).
+- Umgesetzt als Modul `access` (`docs/gameplay.md`, „The Zugangskontrolle"): Das Terminal nennt
+  die angeforderten Türen und nimmt `login`, den Token, `status` und `freigeben`; das
+  Tokengerät ist je Periode an ein Konto gebunden und zeigt dessen Token mit ablaufendem
+  Balken; welches Konto welche Rolle hat und welche Türen eine Rolle freigibt, steht nur auf der
+  Benutzerliste des Laufs, jeden Lauf neu verteilt, und das Gerät beginnt nie mit dem Konto der
+  ersten Tür. Falscher Token und Freigabe ohne Berechtigung sind Alarme, drei falsche Token
+  sperren das Konto auf der Uhr der Station. Felder `doors`, `tokenSec`, `openSec`,
+  `lockSec`. Die Tür offen zu halten, während jemand durchläuft, bleibt Fiktion, keine Regel.
+- Noch in keiner Mission: Probemission `tools/fixtures/access-probe.json`, die der Rundgang im
+  Systemcheck spielt (Gruppe `access`). Offen für N-6: ob und wo die Station in Blackout steht — mit
+  zwei Spielenden muss die Liste vor den Pulten gelesen (oder notiert) werden.
 
 ### I-2 Firewall-Regelwerk — Status: wartet (Entscheidung Uros) · Größe: L
 - Pult A zeigt laufende Pakete (Quelle, Ziel, Port), Pult B bearbeitet die Regelliste, erste
