@@ -168,10 +168,10 @@ aufgeben“), und sperrt andere Räume;
 aufgeben gibt den Platz frei, unter der Mindestzahl der Crew endet der Lauf für alle („EINSATZ
 ABGEBROCHEN“). Ein anderes Gerät übernimmt einen getrennten Platz mit Raumcode und genau dessen
 Namen (wie bei Jackbox), sobald jemand aus der Crew es zulässt; ein Gerät, das im Konto des
-Platzes angemeldet ist, holt ihn ohne Zustimmung über seine Karte zurück. Die eigene Seite erkennt eine
-tote Leitung nach 5 Sekunden ohne Uhrantwort, 20 Sekunden Stille oder 8 Sekunden ohne offene
-Verbindung, verbindet sofort neu und zeigt bis dahin „VERBINDUNG VERLOREN“ mit Versuch und
-Wartezeit. Einzelheiten: `docs/gameplay.md`, „Verbindung und Wiedereintritt“.
+Platzes angemeldet ist, holt ihn ohne Zustimmung über seine Karte zurück. Die eigene Seite
+erkennt eine tote Leitung nach 5 Sekunden ohne Uhrantwort, 20 Sekunden Stille oder 8 Sekunden
+ohne offene Verbindung, verbindet sofort neu und zeigt bis dahin „VERBINDUNG VERLOREN“ mit
+Versuch und Wartezeit. Einzelheiten: `docs/gameplay.md`, „Verbindung und Wiedereintritt“.
 
 **Pausenmenü und Verlassen:** Im Raum öffnen Esc, das Zahnrad oben, die Start-Taste des
 Controllers oder „Menü“ in der Leiste das Pausenmenü — Weiter, Einstellungen, Handbuch und die
