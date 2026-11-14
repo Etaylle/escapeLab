@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import type { PlayerView } from '@escapelab/core';
 import { roomCrew } from '../src/App.js';
-import { GUARD, guardHistory, guarded, type GuardedWindow } from '../src/historyGuard.js';
+import { GUARD, guardHistory, guarded, SPENT, type GuardedWindow } from '../src/historyGuard.js';
 import { crewTags } from '../src/screens/Crew.js';
 import { GiveUpAsk, giveUpLines } from '../src/screens/GiveUp.js';
 import { hostNews, startBlocker } from '../src/screens/Lobby.js';
@@ -166,11 +166,22 @@ describe('the browser’s back button in a run', () => {
     const opened = vi.fn();
     const letGo = guardHistory(win, opened);
     letGo();
-    // The step stays where it stood, its mark taken off: the page goes nowhere.
-    expect(steps()).toEqual([null, null]);
+    // The step stays where it stood, marked spent: the page goes nowhere.
+    expect(steps()).toEqual([null, { [SPENT]: true }]);
     back();
     expect(opened).not.toHaveBeenCalled();
     expect(steps()).toEqual([null]);
+  });
+
+  it('takes the spent step of a run before again: three runs in a tab leave one step', () => {
+    const { win, steps } = browserHistory();
+    for (let run = 0; run < 3; run++) {
+      guardHistory(win, noop)();
+    }
+    expect(steps()).toEqual([null, { [SPENT]: true }]);
+    const letGo = guardHistory(win, noop);
+    expect(steps()).toEqual([null, { [GUARD]: true }]);
+    letGo();
   });
 
   it('takes no second step where a reload found the page on the run’s step already', () => {
