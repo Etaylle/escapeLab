@@ -454,6 +454,22 @@ export class RoomManager {
     return lobby;
   }
 
+  /** Whether `pass` holds a seat in any room, a lobby's or a run's. */
+  holdsSeat(pass: CrewPass): boolean {
+    return [...this.rooms.values()].some((room) => room.seatOf(pass) !== null);
+  }
+
+  /**
+   * Every seat `pass` holds, its pass signed out, stays the account's (`Room.parkSeat`): bound to
+   * `hash` — hex, the hash of a secret nobody holds — and to `accountId`, its line dropped.
+   */
+  parkSeats(pass: CrewPass, hash: string, accountId: string): void {
+    const parked = Buffer.from(hash, 'hex');
+    for (const room of this.rooms.values()) {
+      room.parkSeat(pass, parked, accountId);
+    }
+  }
+
   /**
    * Every seat `pass` holds is bound to `accountId` as well (`Room.bindAccount`), the account the
    * server found for the pass — as it sat down, came back, or signed in.

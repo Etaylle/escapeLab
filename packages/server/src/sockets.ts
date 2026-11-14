@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import {
   GameError,
   parseClientMessage,
@@ -15,6 +16,7 @@ import type { MissionCatalog } from './missions.js';
 import { readAddress, type Front, type Sender } from './rateLimiter.js';
 import { GAME_KINDS, type GameMessage, type LineEnd, type Room } from './room.js';
 import type { RoomManager } from './roomManager.js';
+import { secretHashOf } from './store/store.js';
 
 /** What a connection needs of its socket: `ws`'s WebSocket has it. */
 export interface PlayerSocket {
@@ -415,6 +417,8 @@ const DOOR_KINDS = [
   'set-password',
   'change-password',
   'sign-in',
+  'sign-out',
+  'switch-account',
   'tock',
 ] as const satisfies readonly ClientMessage['kind'][];
 
@@ -586,23 +590,31 @@ type AccountAsk = Extract<
   { kind: 'profile' | 'delete-account' | 'my-runs' | LoginAsk['kind'] }
 >;
 
-/** What a pass asks of a login: its Kennwort set or changed, or to sign into an account. */
-type LoginAsk = Extract<ClientMessage, { kind: 'set-password' | 'change-password' | 'sign-in' }>;
+/**
+ * What a pass asks of a login: its Kennwort set or changed, to sign into an account or out of
+ * its own, or the device to switch accounts.
+ */
+type LoginAsk = Extract<
+  ClientMessage,
+  { kind: 'set-password' | 'change-password' | 'sign-in' | 'sign-out' | 'switch-account' }
+>;
+
+const LOGIN_KINDS = [
+  'set-password',
+  'change-password',
+  'sign-in',
+  'sign-out',
+  'switch-account',
+] as const satisfies readonly LoginAsk['kind'][];
 
 const ACCOUNT_ASKS: ReadonlySet<ClientMessage['kind']> = new Set([
   'profile',
   'delete-account',
   'my-runs',
-  'set-password',
-  'change-password',
-  'sign-in',
+  ...LOGIN_KINDS,
 ] satisfies AccountAsk['kind'][]);
 
-const LOGIN_ASKS: ReadonlySet<ClientMessage['kind']> = new Set([
-  'set-password',
-  'change-password',
-  'sign-in',
-] satisfies LoginAsk['kind'][]);
+const LOGIN_ASKS: ReadonlySet<ClientMessage['kind']> = new Set(LOGIN_KINDS);
 
 /** Whether `msg` asks something of a login (`LoginAsk`). */
 const askOfLogin = (msg: AccountAsk): msg is LoginAsk => LOGIN_ASKS.has(msg.kind);
@@ -638,19 +650,25 @@ function answerAccount(lab: Lab, socket: PlayerSocket, msg: AccountAsk): void {
   );
 }
 
-/**
- * What `desk` answers `msg`, a Kennwort to set or change or a sign-in, with once it has done it
- * (`answerAccount`): a sign-in is refused while a run on binds the pass, before it is tried.
- */
+/** What a socket's asks of a login are held to: its gate, and its tries at a Kennwort. */
+interface Limits {
+  gate: Gate;
+  tries: Tries;
+}
+
+/** The answer that says `done` was done, the account of the pass now `account`. */
+const told =
+  (done: 'set' | 'changed' | 'signed-in' | 'switched') =>
+  (account: AccountView): ServerMessage => ({ kind: 'login', done, account });
+
+/** What `desk` answers `msg`, an ask of a login, with once it has done it (`answerAccount`). */
 function answerLogin(
   lab: Lab,
   desk: AccountDesk,
   msg: LoginAsk,
-  limits: { gate: Gate; tries: Tries },
+  limits: Limits,
 ): Promise<ServerMessage> {
   const { gate, tries } = limits;
-  const told = (done: 'set' | 'changed' | 'signed-in') => (account: AccountView) =>
-    ({ kind: 'login', done, account }) as const;
   switch (msg.kind) {
     case 'set-password':
       return desk.setPassword(msg.pass, msg.password, gate).then(told('set'));
@@ -659,15 +677,70 @@ function answerLogin(
         .changePassword(msg.pass, msg.old, msg.password, gate, tries)
         .then(told('changed'));
     case 'sign-in':
-      if (lab.manager.whereIs(msg.pass)?.phase === 'playing') {
-        return Promise.reject(new GameError(BOUND_SIGN_IN));
-      }
-      return desk.signIn(msg.pass, msg.login, msg.password, gate, tries).then((arrival) => {
-        // The seats the pass holds — a lobby's — are the new account's from now on.
-        lab.manager.bindAccount(msg.pass, arrival.id);
-        return told('signed-in')(arrival.view);
-      });
+      return signIn(lab, desk, msg, limits);
+    case 'sign-out':
+      return signOut(lab, desk, msg.pass, gate);
+    case 'switch-account':
+      return switchAccount(lab, desk, msg, limits);
   }
+}
+
+/**
+ * The pass of `msg` signed into an account (`AccountDesk.signIn`): refused while a run on binds
+ * it, before any Kennwort is tried; the seats it holds — a lobby's — are the account's then.
+ */
+async function signIn(
+  lab: Lab,
+  desk: AccountDesk,
+  msg: Extract<ClientMessage, { kind: 'sign-in' }>,
+  { gate, tries }: Limits,
+): Promise<ServerMessage> {
+  if (lab.manager.whereIs(msg.pass)?.phase === 'playing') {
+    throw new GameError(BOUND_SIGN_IN);
+  }
+  const arrival = await desk.signIn(msg.pass, msg.login, msg.password, gate, tries);
+  lab.manager.bindAccount(msg.pass, arrival.id);
+  return told('signed-in')(arrival.view);
+}
+
+/** The hash of a secret nobody holds: made up here, and forgotten at once (store `Leaving`). */
+const nobodysHash = (): string => secretHashOf(randomBytes(32).toString('hex'));
+
+/**
+ * `pass` signed out of its account (`AccountDesk.signOut`, rule 4): a seat it holds stays the
+ * account's, its line dropped (`RoomManager.parkSeats`), under the hash of a secret nobody holds.
+ */
+async function signOut(
+  lab: Lab,
+  desk: AccountDesk,
+  pass: CrewPass,
+  gate: Gate,
+): Promise<ServerMessage> {
+  const parked = lab.manager.holdsSeat(pass) ? nobodysHash() : null;
+  const accountId = await desk.signOut(pass, parked, gate);
+  if (parked !== null && accountId !== null) {
+    lab.manager.parkSeats(pass, parked, accountId);
+  }
+  return { kind: 'login', done: 'signed-out', account: null };
+}
+
+/**
+ * The device of `msg` switched accounts on its new pass (`AccountDesk.switchAccount`): a seat the
+ * old pass holds stays the old account's, as at a sign-out.
+ */
+async function switchAccount(
+  lab: Lab,
+  desk: AccountDesk,
+  msg: Extract<ClientMessage, { kind: 'switch-account' }>,
+  { gate, tries }: Limits,
+): Promise<ServerMessage> {
+  const parked = lab.manager.holdsSeat(msg.pass) ? nobodysHash() : null;
+  const login = { typed: msg.login, password: msg.password, parked };
+  const { arrival, left } = await desk.switchAccount(msg.pass, msg.next, login, gate, tries);
+  if (parked !== null && left !== null) {
+    lab.manager.parkSeats(msg.pass, parked, left);
+  }
+  return told('switched')(arrival.view);
 }
 
 /** What `desk` answers `msg` with, once it has done it (`answerAccount`). */

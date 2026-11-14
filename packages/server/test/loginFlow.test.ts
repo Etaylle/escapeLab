@@ -14,6 +14,7 @@ import {
   CHANGED_MEANWHILE,
   NO_LOGIN,
   OLD_WRONG,
+  SIGN_OUT_LOSES,
   TOO_MANY_CHANGES,
   WRONG_LOGIN,
 } from '../src/accounts.js';
@@ -28,7 +29,7 @@ import type { Sender } from '../src/rateLimiter.js';
 import { RoomManager } from '../src/roomManager.js';
 import { BOUND_SIGN_IN, serveSockets } from '../src/sockets.js';
 import { JsonlStore } from '../src/store/jsonl.js';
-import { HAS_LOGIN } from '../src/store/store.js';
+import { HAS_LOGIN, PASS_REFUSED } from '../src/store/store.js';
 import { FakeServer, joinedOf, type FakeSocket } from './line.js';
 import { passFor } from './passes.js';
 import { DAY, finished, identityOf } from './storeContract.js';
@@ -105,10 +106,11 @@ async function annaWithKennwort(server: FakeServer): Promise<{ anna: FakeSocket;
   anna.say({ kind: 'whereami', pass: passFor('Anna'), name: 'Anna' });
   await settled();
   const set = await ask(anna, { kind: 'set-password', pass: passFor('Anna'), password: KENNWORT });
-  if (!('kind' in set) || set.account.login === null) {
+  const number = 'kind' in set ? set.account?.login : null;
+  if (number === undefined || number === null) {
     throw new Error(`no Kennwort set: ${JSON.stringify(set)}`);
   }
-  return { anna, number: set.account.login };
+  return { anna, number };
 }
 
 afterEach(() => {
@@ -251,7 +253,8 @@ describe('signing in', () => {
       done: 'signed-in',
       account: { name: 'Anna', runs: 1, login: number },
     });
-    expect('kind' in answer && Object.keys(answer.account.achievements)).toEqual(['blackout']);
+    const earned = 'kind' in answer ? Object.keys(answer.account?.achievements ?? {}) : [];
+    expect(earned).toEqual(['blackout']);
     expect(said).toHaveBeenCalledWith(
       '[escapelab] a pass signed into an account, the empty account it left deleted',
     );
@@ -391,5 +394,90 @@ describe('signing in', () => {
     expect(await ask(ben, right)).toEqual({ refused: BOUND_SIGN_IN });
     expect(signIns.size).toBe(0);
     manager.get(code).dispose();
+  });
+});
+
+describe('signing out, and switching accounts', () => {
+  it('signs a pass out: the account whole, the pass a stranger, the number opens it', async () => {
+    const said = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const { server, store } = lab();
+    const { anna, number } = await annaWithKennwort(server);
+    await store.appendRun(finished({ at: DAY, crew: ['Anna'] }, ['Anna']));
+    expect(await ask(anna, { kind: 'sign-out', pass: passFor('Anna') })).toEqual({
+      kind: 'login',
+      done: 'signed-out',
+      account: null,
+    });
+    expect(said).toHaveBeenCalledWith('[escapelab] a pass signed out of its account');
+    expect(await store.findByIdentity(identityOf('Anna'))).toBeNull();
+    const laptop = server.connect();
+    const signIn: ClientMessage = {
+      kind: 'sign-in',
+      pass: passFor('Laptop'),
+      login: number,
+      password: KENNWORT,
+    };
+    expect(await ask(laptop, signIn)).toMatchObject({ account: { name: 'Anna', runs: 1 } });
+  });
+
+  it('keeps a guest from signing out of an account no device would reach again', async () => {
+    const { server, store } = lab();
+    const guest = server.connect();
+    guest.say({ kind: 'whereami', pass: passFor('Ben'), name: 'Ben' });
+    await settled();
+    expect(await ask(guest, { kind: 'sign-out', pass: passFor('Ben') })).toEqual({
+      refused: SIGN_OUT_LOSES,
+    });
+    expect((await store.findByIdentity(identityOf('Ben')))?.displayName).toBe('Ben');
+    // A pass with no account at all has nothing to sign out of.
+    const fresh = server.connect();
+    const nothing = await ask(fresh, { kind: 'sign-out', pass: passFor('Cleo') });
+    expect(nothing).toMatchObject({ done: 'signed-out' });
+  });
+
+  it('switches a device in one go: the new pass into the account, the old one out', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const { server, store } = lab();
+    const { anna, number: annas } = await annaWithKennwort(server);
+    const dan = server.connect();
+    const set = await ask(dan, { kind: 'set-password', pass: passFor('Dan'), password: OTHER });
+    const dans = 'kind' in set ? (set.account?.login ?? '') : '';
+    const switched = await ask(anna, {
+      kind: 'switch-account',
+      pass: passFor('Anna'),
+      next: passFor('Eva'),
+      login: dans,
+      password: OTHER,
+    });
+    expect(switched).toMatchObject({ kind: 'login', done: 'switched', account: { login: dans } });
+    const danId = (await store.findByIdentity(identityOf('Dan')))?.id;
+    expect((await store.findByIdentity(identityOf('Eva')))?.id).toBe(danId);
+    expect(await store.findByIdentity(identityOf('Anna'))).toBeNull();
+    // Anna's account waits for its Kennwort.
+    const laptop = server.connect();
+    const back: ClientMessage = {
+      kind: 'sign-in',
+      pass: passFor('Laptop'),
+      login: annas,
+      password: KENNWORT,
+    };
+    expect(await ask(laptop, back)).toMatchObject({ account: { name: 'Anna', login: annas } });
+  });
+
+  it('changes nothing where the switch’s Kennwort is wrong, or its pass no new one', async () => {
+    const { server, store } = lab();
+    const { anna, number } = await annaWithKennwort(server);
+    const annaId = (await store.findByIdentity(identityOf('Anna')))?.id;
+    const switchTo = (next: string, password: string): ClientMessage => ({
+      kind: 'switch-account',
+      pass: passFor('Anna'),
+      next: passFor(next),
+      login: number,
+      password,
+    });
+    expect(await ask(anna, switchTo('Eva', OTHER))).toEqual({ refused: WRONG_LOGIN });
+    expect(await ask(anna, switchTo('Anna', KENNWORT))).toEqual({ refused: PASS_REFUSED });
+    expect((await store.findByIdentity(identityOf('Anna')))?.id).toBe(annaId);
+    expect(await store.findByIdentity(identityOf('Eva'))).toBeNull();
   });
 });

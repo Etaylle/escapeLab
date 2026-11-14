@@ -187,6 +187,8 @@ const PLAYS_IN_ANOTHER_TAB = 'Dieser Platz spielt jetzt in einem anderen Fenster
 const SEAT_TAKEN = 'Der Platz wurde auf einem anderen Gerät übernommen.';
 /** What a pass of an account is told that would take its seat back while it plays elsewhere. */
 export const SEAT_ELSEWHERE = 'Dieser Platz spielt gerade auf einem anderen Gerät.';
+/** What the line of a seat whose pass signed out hears: the seat waits for the account. */
+export const SIGNED_OUT = 'Abgemeldet: Der Platz bleibt beim Konto.';
 
 /**
  * How a seat's line ended: dropped — cut, or gone without a word —, closed cleanly by its tab
@@ -859,6 +861,22 @@ export class Room {
    */
   bindAccount(pass: CrewPass, accountId: string): void {
     this.seats.bindAccount(pass, accountId);
+  }
+
+  /**
+   * The seat `pass` holds, its pass signed out (rule 4): it stays the account's — bound to `hash`,
+   * the hash of a secret nobody holds, and to `accountId` (seats.ts `park`) — and its line, where
+   * up, drops as a line drops, its connection told why. Nothing where the pass holds no seat here.
+   */
+  parkSeat(pass: CrewPass, hash: Buffer, accountId: string): void {
+    const playerId = this.seatOf(pass);
+    if (playerId === null) {
+      return;
+    }
+    this.seats.park(playerId, hash, accountId);
+    const listener = this.listeners.get(playerId);
+    this.detach(playerId, 'dropped');
+    listener?.({ kind: 'left', code: this.code, message: SIGNED_OUT });
   }
 
   /** Whether a seat here is bound to an account, which a pass may take back by it (`takeBack`). */

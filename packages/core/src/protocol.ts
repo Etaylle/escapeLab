@@ -184,6 +184,23 @@ export const clientMessageSchema = z.discriminatedUnion('kind', [
     login: loginSchema,
     password: passwordSchema,
   }),
+  /**
+   * the pass signs out of its account, which stays whole — a seat it holds stays the account's,
+   * its line dropped: answered `login` (signed-out), and the device mints a new pass
+   */
+  z.object({ kind: z.literal('sign-out'), pass: crewPassSchema }),
+  /**
+   * the device changes accounts in one go: the new pass `next` signed into the account of the
+   * Ausweisnummer `login`, its Kennwort shown, and the pass signed out — answered `login`
+   * (switched); where the Kennwort is wrong, nothing changes
+   */
+  z.object({
+    kind: z.literal('switch-account'),
+    pass: crewPassSchema,
+    next: crewPassSchema,
+    login: loginSchema,
+    password: passwordSchema,
+  }),
   /** the seat the pass holds in the room given up for good, from whatever socket this is */
   z.object({
     kind: z.literal('abandon'),
@@ -344,9 +361,10 @@ export interface AccountView {
 
 /**
  * What a `login` answer says was done: the account's first Kennwort set, its Ausweisnummer minted;
- * the Kennwort changed; the pass signed into an account.
+ * the Kennwort changed; the pass signed into an account, or out of it; the device switched to
+ * another account on a new pass.
  */
-export type LoginDone = 'set' | 'changed' | 'signed-in';
+export type LoginDone = 'set' | 'changed' | 'signed-in' | 'signed-out' | 'switched';
 
 /**
  * Where a server keeps its accounts and runs: in a database, for good — a deleted account's name
@@ -495,8 +513,12 @@ export type ServerMessage =
   | { kind: 'account'; account: AccountView | null }
   /** the runs the pass's account played, the newest first, and how many in all */
   | { kind: 'my-runs'; runs: AccountRun[]; total: number }
-  /** the answer to a Kennwort set or changed, or a sign-in: what was done, and the account now */
-  | { kind: 'login'; done: LoginDone; account: AccountView }
+  /**
+   * the answer to a Kennwort set or changed, a sign-in, a sign-out or a switch: what was done,
+   * and the account the device's pass leads into now — none once it signed out
+   */
+  | { kind: 'login'; done: Exclude<LoginDone, 'signed-out'>; account: AccountView }
+  | { kind: 'login'; done: 'signed-out'; account: null }
   /**
    * a join by the name of a seat whose line is down waits for the crew on the line to let this
    * device in, until `until` (epoch ms): answered by `takeover-allowed`, or a refusal

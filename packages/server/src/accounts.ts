@@ -20,8 +20,10 @@ import {
 import {
   HAS_LOGIN,
   LoginTaken,
+  PASS_REFUSED,
   secretHashOf,
   type Account,
+  type Login,
   type PassIdentity,
   type Profile,
   type SeatedRun,
@@ -73,6 +75,18 @@ export const NO_LOGIN = 'Dieses Konto hat noch kein Kennwort.';
 
 /** What a new Kennwort is told where the Kennwort was changed meanwhile, elsewhere. */
 export const CHANGED_MEANWHILE = 'Das Kennwort wurde eben an anderer Stelle geändert.';
+
+/** What a sign-out is told of an account without a Kennwort, which no device would reach again. */
+export const SIGN_OUT_LOSES =
+  'Ohne Kennwort wäre dieses Konto nach dem Abmelden nicht mehr erreichbar.';
+
+/** A device switched to another account (`AccountDesk.switchAccount`). */
+export interface Switched {
+  /** the account the new pass leads into, as its owner sees it */
+  arrival: Arrival;
+  /** the account the pass signed out of; null where it led into none */
+  left: string | null;
+}
 
 /** How often an Ausweisnummer is minted anew where the one minted is taken (`LoginTaken`). */
 const MINT_TRIES = 5;
@@ -252,16 +266,63 @@ export class AccountDesk {
     tries: Tries = UNLIMITED,
   ): Promise<Arrival> {
     return this.serial(pass, async () => {
-      const number = numberOf(typed);
-      const login = number === null ? null : await this.store.findLogin(number);
-      const right = await this.tried(number, password, login?.secretHash ?? null, gate, tries);
-      if (right === null || login === null) {
-        throw new GameError(WRONG_LOGIN);
-      }
+      const login = await this.verified(typed, password, gate, tries);
       const deleted = await this.store.signIn(identityOf(pass), login.accountId, null);
       const left = deleted.length > 0 ? ', the empty account it left deleted' : '';
       console.log(`[escapelab] a pass signed into an account${left}`);
       return this.arrivalOf(pass);
+    });
+  }
+
+  /**
+   * `pass` signed out of its account, which stays whole (store.ts `signOut`): where it holds a
+   * seat, `parked` is the hash of a secret nobody holds that its way in keeps for that seat; else
+   * null, and its way in is deleted. The id of the account it led into; null for none — nothing
+   * to sign out of. Refused, saying why, for an account without a Kennwort (SIGN_OUT_LOSES) and
+   * where the gate lets nothing change.
+   */
+  signOut(pass: CrewPass, parked: string | null, gate: Gate = OPEN): Promise<string | null> {
+    return this.serial(pass, async () => {
+      const account = await this.store.findByIdentity(identityOf(pass));
+      if (account === null) {
+        return null;
+      }
+      if ((await this.store.loginOf(account.id)) === null) {
+        throw new GameError(SIGN_OUT_LOSES);
+      }
+      if (!gate.mayChange()) {
+        throw new GameError(TOO_MANY_CHANGES);
+      }
+      await this.store.signOut({ pass: identityOf(pass), parked });
+      console.log('[escapelab] a pass signed out of its account');
+      return account.id;
+    });
+  }
+
+  /**
+   * The device switches accounts in one go (store.ts `signIn` with a pass leaving): the new pass
+   * `next` signed into the account of the Ausweisnummer `typed`, its Kennwort shown — tried as
+   * `signIn` tries it — and `pass` signed out, kept for its seat under `parked` where it holds one.
+   * The account it signed out of is deleted where nothing is left of it. Nothing changes where the
+   * try is refused, as `signIn` refuses it, or `next` is no new pass.
+   */
+  switchAccount(
+    pass: CrewPass,
+    next: CrewPass,
+    login: { typed: string; password: string; parked: string | null },
+    gate: Gate = OPEN,
+    tries: Tries = UNLIMITED,
+  ): Promise<Switched> {
+    return this.serial(pass, async () => {
+      if (next.id === pass.id) {
+        throw new GameError(PASS_REFUSED);
+      }
+      const found = await this.verified(login.typed, login.password, gate, tries);
+      const left = (await this.store.findByIdentity(identityOf(pass)))?.id ?? null;
+      const leaving = { pass: identityOf(pass), parked: login.parked };
+      await this.store.signIn(identityOf(next), found.accountId, leaving);
+      console.log('[escapelab] a device switched accounts on a new pass');
+      return { arrival: await this.arrivalOf(next), left };
     });
   }
 
@@ -374,6 +435,26 @@ export class AccountDesk {
       return null;
     }
     return this.store.getOrCreateByIdentity(identity, profile);
+  }
+
+  /**
+   * The login of the Ausweisnummer `typed`, its Kennwort `password` tried (`tried`). Refused,
+   * saying why, where either does not match — in the same words for either (WRONG_LOGIN) — and
+   * where the try is held back.
+   */
+  private async verified(
+    typed: string,
+    password: string,
+    gate: Gate,
+    tries: Tries,
+  ): Promise<Login> {
+    const number = numberOf(typed);
+    const login = number === null ? null : await this.store.findLogin(number);
+    const right = await this.tried(number, password, login?.secretHash ?? null, gate, tries);
+    if (right === null || login === null) {
+      throw new GameError(WRONG_LOGIN);
+    }
+    return login;
   }
 
   /**

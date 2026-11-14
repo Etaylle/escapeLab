@@ -124,6 +124,18 @@ export class SeatBook {
     }
   }
 
+  /**
+   * The seat of `playerId`, its pass signed out (rule 4): bound from now on to `hash`, the hash of
+   * a secret nobody holds, under its pass's id — so that the run credits its account still (store
+   * `Leaving`) — and to `accountId`, whose other devices take it back (`takeBack`).
+   */
+  park(playerId: string, hash: Buffer, accountId: string): void {
+    const binding = this.bindings.get(playerId);
+    if (binding !== undefined) {
+      this.bindings.set(playerId, { passId: binding.passId, hash, accountId });
+    }
+  }
+
   /** Whether another device took over the seat `pass` held here. */
   lostSeat(pass: CrewPass): boolean {
     return this.lost.has(pass.id);
