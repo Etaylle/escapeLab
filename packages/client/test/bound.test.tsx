@@ -76,6 +76,8 @@ function joinScreen(
     <JoinScreen
       send={send}
       connected
+      name="Ben"
+      onName={noop}
       missions={[blackout]}
       rooms={[]}
       seat={seat}
@@ -115,6 +117,7 @@ function opensRound(seat: Seat | null, restoring: Restoring | null = null): bool
       send={noop}
       connected
       name="Ben"
+      field={{ typed: 'Ben', onName: noop }}
       blocked={blocked !== null}
       missions={[blackout]}
       stats={[]}
@@ -147,14 +150,15 @@ describe('the join screen of a pass bound to a run', () => {
   });
 
   it('says a run standing still for the server’s maintenance so, and its clock as it stood', () => {
-    const html = renderToStaticMarkup(<BoundCard seat={{ ...RUN, paused: true }} send={noop} />);
+    const card = <BoundCard seat={{ ...RUN, paused: true }} send={noop} onBack={noop} />;
+    const html = renderToStaticMarkup(card);
     expect(html).toContain('<span class="kicker bound-kicker">WARTUNG</span>');
     expect(html).toContain('noch 12:34');
   });
 
   it('says a run held for nobody on the line so: it goes on as the first is back', () => {
     const held = { ...RUN, paused: true, nobodyOnLine: true as const };
-    const html = renderToStaticMarkup(<BoundCard seat={held} send={noop} />);
+    const html = renderToStaticMarkup(<BoundCard seat={held} send={noop} onBack={noop} />);
     expect(html).toContain(
       '<span class="kicker bound-kicker">WARTUNG · NIEMAND AUF DER LEITUNG</span>',
     );
@@ -176,7 +180,7 @@ describe('the join screen of a pass bound to a run', () => {
     // read before the server's answer is noted.
     let tick = T0;
     const reads = vi.spyOn(Date, 'now').mockImplementation(() => tick++);
-    const html = renderToStaticMarkup(<BoundCard seat={RUN} send={noop} />);
+    const html = renderToStaticMarkup(<BoundCard seat={RUN} send={noop} onBack={noop} />);
     reads.mockRestore();
     expect(tick).toBeGreaterThan(T0 + 1);
     expect(html).toContain('Raum QX7R · noch 12:34 · Anna, Ben, Cem');
@@ -202,6 +206,18 @@ describe('the join screen of a pass bound to a run', () => {
     expect(giveUpPress(null, T0)).toBe('ask');
     expect(giveUpPress(T0, T0 + CONFIRM_MS - 1)).toBe('confirm');
     expect(giveUpPress(T0, T0 + CONFIRM_MS)).toBe('ask');
+  });
+
+  it('takes the hero’s beat as it goes back, before the doors close for the room', () => {
+    stubWindow();
+    const sent: ClientMessage[] = [];
+    const onBack = vi.fn();
+    const elements = elementsOf(() => (
+      <BoundCard seat={RUN} send={(msg) => sent.push(msg)} onBack={onBack} />
+    ));
+    press(buttonsOf(elements, 'bound-back')[0]);
+    expect(onBack).toHaveBeenCalledTimes(1);
+    expect(sent).toEqual([{ kind: 'resume', code: 'QX7R', pass: PASS }]);
   });
 
   it('goes back to the run on the browser’s pass', () => {

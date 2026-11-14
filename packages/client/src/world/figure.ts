@@ -70,6 +70,14 @@ export interface FigureState {
   task: FigureTask;
   /** the player asked for less motion: every pose holds its resting frame */
   reduced: boolean;
+  /** how often it looks round (`Glances`); a crew member's rhythm (CREW_GLANCES) when left out */
+  glances?: Glances;
+}
+
+/** How often a figure looks round: one glance in each slot, starting up to `jitterMs` into it. */
+export interface Glances {
+  slotMs: number;
+  jitterMs: number;
 }
 
 /**
@@ -124,6 +132,8 @@ export const IDLE_LOOK_MS = 2000;
  */
 export const GLANCE_SLOT_MS = 5500;
 export const GLANCE_JITTER_MS = 1500;
+/** A crew member's rhythm of glances: one every 4 to 7 s. */
+export const CREW_GLANCES: Glances = { slotMs: GLANCE_SLOT_MS, jitterMs: GLANCE_JITTER_MS };
 export const GLANCE_MS = 1600;
 const GLANCE_TURN_MS = 500;
 export const GLANCE = 1.1;
@@ -508,21 +518,31 @@ function startleAt(ms: number): Arms {
  * The glance the look turns by `s.t`: none while the figure walks, plays no
  * longer or moves less (reduced motion); otherwise, once it has stood still
  * for IDLE_LOOK_MS before a glance begins, a turn of GLANCE to one side and
- * back over GLANCE_MS, one in each slot of GLANCE_SLOT_MS.
+ * back over GLANCE_MS, one in each slot of its rhythm (`glanceIn`).
  */
 function glanceOf(s: FigureState): number {
   if (s.reduced || s.moving || s.mood !== 'play') {
     return 0;
   }
-  const seed = Math.floor(s.phase * UINT32);
-  const t = s.t + s.phase * GLANCE_SLOT_MS;
-  const slot = Math.floor(t / GLANCE_SLOT_MS);
-  const into = t - slot * GLANCE_SLOT_MS - (hashTile(seed, slot, 0) % GLANCE_JITTER_MS);
+  const { into, side } = glanceIn(s);
   if (into < 0 || into >= GLANCE_MS || s.idleMs - into < IDLE_LOOK_MS) {
     return 0;
   }
-  const side = hashTile(seed, slot, 1) % 2 === 0 ? 1 : -1;
   return side * GLANCE * turnedAt(into);
+}
+
+/**
+ * How far into the glance of its slot a figure is by `s.t` — ms, below 0 before it begins — and
+ * the side it turns to: one glance in each slot of its rhythm (`s.glances`, a crew member's by
+ * default), at a time its phase and the slot draw.
+ */
+function glanceIn(s: Pick<FigureState, 't' | 'phase' | 'glances'>): { into: number; side: 1 | -1 } {
+  const { slotMs, jitterMs } = s.glances ?? CREW_GLANCES;
+  const seed = Math.floor(s.phase * UINT32);
+  const t = s.t + s.phase * slotMs;
+  const slot = Math.floor(t / slotMs);
+  const into = t - slot * slotMs - (hashTile(seed, slot, 0) % jitterMs);
+  return { into, side: hashTile(seed, slot, 1) % 2 === 0 ? 1 : -1 };
 }
 
 /** How far a glance `ms` in has turned, 0 to 1: turning out, holding, turning back. */

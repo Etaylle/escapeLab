@@ -93,6 +93,33 @@ oder CC0 — İlker Yalçıner; Sergey Cheremisinov mit Lee Rosevere und Rafael 
 Alexandr Zhelanov —, als Ganzes oder je Platz in der „Feinwahl" zu wählen, jedes Stück dort
 vorzuhören, darunter die Nennungen, die ihre Lizenzen verlangen (`docs/sound.md`, Abschnitte
 „Musikpakete“ und „Lizenz“).
+**Startseite:** Ein Hauptmenü wie in einem Spiel, über dem nächtlichen Labor der gewählten Mission,
+das langsam vorbeizieht; rechts steht die eigene Figur mit der Handlampe, deren Kegel das Labor
+erhellt. Jeder Menüpunkt hat in Blackouts Labor einen eigenen Raum, zu dem die Kamera beim
+Darüberfahren langsam schwenkt (`docs/art-bible.md`, „The menu's places"): *Einsatz starten* (die
+Missionskarten, „Runde eröffnen"), *Beitreten*, *Offene Runden*, *Handbuch*, *Bestenliste*, *Meine
+Einsätze*, *Editor* und *Einstellungen* — mit der Maus, der Tastatur (Pfeile, Enter, Esc) oder dem
+Controller (Steuerkreuz, A, B). Oben in der Leiste steht das Konto des Browsers: der Kopf der
+eigenen Figur in ihrer Farbe, der Name und, wo Platz ist, wie viele Einsätze das Konto gespielt hat;
+ein Klick öffnet „Konto" in den Einstellungen, am Handy steht nur der Kopf. Den Namen tragen die
+Panels ein, die einen Platz nehmen (*Einsatz starten*, *Beitreten*, *Offene Runden*), und „Konto" —
+ein Name für die ganze Seite. Das Konto bewahrt Name, Farbe, Erfolge und Läufe über Neustarts und
+Deploys hinweg; *Meine Einsätze* listet seine Läufe, die Einstellungen löschen es auf Wunsch. Mit
+einem Kennwort (Einstellungen, „Konto") bekommt es eine Ausweisnummer wie `EL-7K3M-9Q2D`, mit der
+sich jedes Gerät dort anmeldet: Einsätze, Erfolge und ein laufender Platz folgen dem Konto;
+„Abmelden" lässt das Gerät als Gast neu beginnen, „Konto wechseln" meldet in einem Schritt um, und
+ein neues Kennwort meldet alle anderen Geräte ab. Ein vergessenes Kennwort lässt sich nicht
+wiederherstellen ([`docs/accounts.md`](docs/accounts.md)). *Offene Runden* listet jede Runde mit
+Kartenvorschau, Mission, Schwierigkeit, ihrer Crew als Figuren und den freien Plätzen — ein Klick
+auf *Beitreten* genügt, niemand muss einen Code weitergeben. Laufende Runden erscheinen ebenfalls,
+dort führt der Knopf zum Zuschauen. Unter *Beitreten* bleibt ein Code-Feld für direkte
+Verabredungen, daneben *Zuschauen*. Bindet ein laufender Einsatz den Dienstausweis, steht seine
+Karte als erster Menüpunkt da. In die Lobby, in den Editor und zurück geht es durch die Schiebetüren
+des Labors, zu *Handbuch*, *Bestenliste*, *Meine Einsätze* und den Einstellungen und zurück durch
+eine kurze Blende; ab dem ersten Klick oder Tastendruck spielen Titelthema und Anlagenbrummen, in
+der Lobby leiser weiter. Die Endkarte spielt nach ihrem Stinger ein eigenes Thema: hell für einen
+gewonnenen, ein tiefes Dröhnen für einen verlorenen Einsatz. Alle Musik und alle Geräusche sind mit
+ElevenLabs erzeugt, keine Archivmusik (`docs/sound.md`, Abschnitt „Lizenz“).
 
 **Ablauf einer Partie:** Lobby (Farbe wählen, **bereitmelden** — der Host kann erst starten,
 wenn so viele da sind, wie die Mission braucht, und alle bestätigt haben; jede Änderung an

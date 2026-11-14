@@ -58,6 +58,12 @@ describe('steppingAt — half a tile aside', () => {
     const step = { from: 0, to: STEP, since: 1000 };
     expect(steppingAt(step, 1000, true)).toMatchObject({ offset: STEP, moving: false });
   });
+
+  it('stands still all along a step to where it stands', () => {
+    const step = { from: STEP, to: STEP, since: 1000 };
+    const halfway = steppingAt(step, 1000 + STEP_MS / 2, false);
+    expect(halfway).toMatchObject({ offset: STEP, moving: false });
+  });
 });
 
 /** Paints with `paint` at 30 frames a second from `from` for `ms`; returns where it stopped. */
@@ -189,12 +195,12 @@ describe('the hero stepping aside and turning away on the stage', () => {
     const paint = heroPainter(on, 0);
     let now = run(paint, 0, 300);
     const resting = on.probe.box?.left ?? 0;
-    Object.assign(on.look.current, { panel: true });
+    Object.assign(on.look.current, { panel: 'missions' });
     now = run(paint, now, STEP_MS + 100);
     expect(on.probe.step).toBeCloseTo(1, 9);
     const stepped = (on.probe.box?.left ?? 0) - resting;
     expect(stepped).toBeCloseTo(0.5 * heroTile(DESKTOP_STAGE.windowH), 6);
-    Object.assign(on.look.current, { panel: false });
+    Object.assign(on.look.current, { panel: null });
     run(paint, now, STEP_MS + 100);
     expect(on.probe.step).toBeCloseTo(0, 9);
   });

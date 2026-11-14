@@ -14,6 +14,7 @@ import { menuSoundProbe, wantMenuSound, type MenuPlace } from './world/menuSound
 import { radioCheckProbe } from './world/radioCheck.js';
 import {
   difficultyInfos,
+  type AccountView,
   type Difficulty,
   type MissionInfo,
   type MissionStats,
@@ -33,6 +34,7 @@ import {
 import { localStore } from './notes.js';
 import { crewPass, keepName, lastColor } from './pass.js';
 import { addProbes } from './probes.js';
+import { useProfileName } from './profileName.js';
 import { STATS_PATH, useJson } from './runStats.js';
 import { useRunScreen } from './runScreen.js';
 import { useReducedMotion } from './settings.js';
@@ -40,6 +42,7 @@ import { useVoiceMesh, VoiceContext } from './voice/useVoice.js';
 import { useGameConnection, type Connection } from './ws.js';
 import { useFinale, type Finale } from './world/finale.js';
 import { EditorScreen } from './editor/EditorScreen.js';
+import { BarAccount } from './screens/BarAccount.js';
 import {
   mirrorRun,
   mirrorWork,
@@ -57,14 +60,23 @@ import { Icon, type IconName } from './screens/Icon.js';
 import { UpdateNotice } from './screens/Install.js';
 import { JoinScreen } from './screens/Join.js';
 import { LobbyScreen } from './screens/Lobby.js';
-import { DoorWipe, doorsGoing, useDoorWipe, type Doors, type Place } from './screens/DoorWipe.js';
+import {
+  DoorWipe,
+  doorsGoing,
+  doorsThen,
+  shutterThen,
+  useDoorWipe,
+  type Doors,
+  type Place,
+  type WipeKind,
+} from './screens/DoorWipe.js';
 import { createRoomMessage, pickedMission, usePicked } from './screens/MenuPanels.js';
 import { MenuScene } from './screens/MenuScene.js';
 import { GameScreen } from './screens/Game.js';
 import type { GameLine } from './screens/Line.js';
 import { EndScreen } from './screens/End.js';
 import { MenuLayers, type RoomCrew, type RoomMission } from './screens/MenuLayers.js';
-import { SettingsPanel } from './screens/Settings.js';
+import { SettingsPanel, type SettingsTab } from './screens/Settings.js';
 import { SoundSwitch } from './screens/SoundSwitch.js';
 import { SpectateScreen } from './screens/Spectate.js';
 
@@ -181,15 +193,25 @@ interface TopBarProps {
   watching?: number;
   /** a menu stands over the screens (menuLayer.ts `anyOpen`): the bar takes nothing meanwhile */
   covered?: boolean;
+  /** the pass's account off any room, where the bar shows it (BarAccount.tsx); else null */
+  account?: BarProfile | null;
+}
+
+/** The account as the bar shows it: the profile's name, the server's account, the way to it. */
+export interface BarProfile {
+  name: string;
+  account: AccountView | null;
+  /** opens the settings' „Konto" */
+  open: () => void;
 }
 
 /**
  * The bar over every screen: the room's code and seed, how many watch it, the way back to the
- * editor for the host of a test run, the running mission, the sound — the quick switch — and the
- * gear for the room's menu or the settings, and the connection.
+ * editor for the host of a test run, the running mission; off any room the account; the sound —
+ * the quick switch — and the gear for the room's menu or the settings, and the connection.
  */
 export function TopBar(props: TopBarProps) {
-  const { roomCode, seed, running, status, toEditor, onGear } = props;
+  const { roomCode, seed, running, status, toEditor, onGear, account = null } = props;
   const gear = props.inRoom === true ? 'Menü' : 'Einstellungen';
   return (
     <header className="topbar" inert={props.covered}>
@@ -207,6 +229,9 @@ export function TopBar(props: TopBarProps) {
           {running.missionTitle}
           <span className="muted"> · {difficultyLabel(running.difficulty)}</span>
         </span>
+      )}
+      {account !== null && (
+        <BarAccount name={account.name} account={account.account} onOpen={account.open} />
       )}
       <SoundSwitch menu={props.menu === true} />
       <button className="settings-toggle" title={gear} aria-label={gear} onClick={onGear}>
@@ -359,11 +384,31 @@ interface ScreenProps {
   openSettings: () => void;
   /** the doors close over the screen for the next, or stand shut: the menu's hero turns away */
   leaving: boolean;
+  /** the profile's name as the page edits it (profileName.ts) */
+  name: string;
+  onName: (name: string) => void;
 }
 
 /** Whether a page lies over the join screen: booklet, Bestenliste, „Meine Einsätze", editor. */
 function joinCovered(pages: PageState, editor: EditorPage): boolean {
   return pages.handbook !== null || pages.history !== null || pages.myRuns || editor.open;
+}
+
+/**
+ * The ways back from the pages off the join screen to it: from the booklet, the Bestenliste and
+ * „Meine Einsätze" behind the menu's shutter, from the editor behind the lab's doors
+ * (screens/DoorWipe.tsx).
+ */
+export function waysBack(
+  pages: Pick<PageState, 'setHandbook' | 'setHistory' | 'setMyRuns'>,
+  editor: Pick<EditorPage, 'close'>,
+) {
+  return {
+    handbook: () => shutterThen(() => pages.setHandbook(null)),
+    history: () => shutterThen(() => pages.setHistory(null)),
+    myRuns: () => shutterThen(() => pages.setMyRuns(false)),
+    editor: () => doorsThen(editor.close),
+  };
 }
 
 /**
@@ -376,6 +421,7 @@ function OffRoom(props: ScreenProps) {
   const { conn, missions, pages, editor } = props;
   const { handbook, history } = pages;
   const over = joinCovered(pages, editor);
+  const back = waysBack(pages, editor);
   return (
     <>
       <Activity mode={over ? 'hidden' : 'visible'}>
@@ -398,6 +444,8 @@ function OffRoom(props: ScreenProps) {
           openEditor={editor.show}
           openSettings={props.openSettings}
           leaving={props.leaving}
+          name={props.name}
+          onName={props.onName}
         />
       </Activity>
       {editor.open && (
@@ -406,7 +454,7 @@ function OffRoom(props: ScreenProps) {
             missions={missions}
             reloadMissions={props.loadMissions}
             openHandbook={pages.setHandbook}
-            back={editor.close}
+            back={back.editor}
             work={editor.work}
             onWork={editor.setWork}
             greeting={editor.greeting}
@@ -420,7 +468,7 @@ function OffRoom(props: ScreenProps) {
           missions={missions}
           missionId={handbook}
           selectMission={pages.setHandbook}
-          back={() => pages.setHandbook(null)}
+          back={back.handbook}
         />
       )}
       {history !== null && (
@@ -428,7 +476,7 @@ function OffRoom(props: ScreenProps) {
           missions={missions}
           missionId={history}
           selectMission={pages.setHistory}
-          back={() => pages.setHistory(null)}
+          back={back.history}
         />
       )}
       {pages.myRuns && (
@@ -437,7 +485,7 @@ function OffRoom(props: ScreenProps) {
           loaded={conn.myRuns}
           ask={conn.askMyRuns}
           connected={conn.status === 'open'}
-          back={() => pages.setMyRuns(false)}
+          back={back.myRuns}
         />
       )}
     </>
@@ -604,6 +652,9 @@ function useMissions(): [MissionInfo[], () => void] {
   return [missions, load];
 }
 
+/** The places of the window by a room's phase, as the door wipe tells them apart. */
+const PHASE_PLACES: Readonly<Partial<Record<string, Place>>> = { lobby: 'lobby', playing: 'run' };
+
 /** Where the window is, as the door wipe tells the screens apart (screens/DoorWipe.tsx). */
 export function placeOf(conn: Pick<Connection, 'view' | 'spectatorView'>): Place {
   if (conn.spectatorView !== null) {
@@ -612,33 +663,48 @@ export function placeOf(conn: Pick<Connection, 'view' | 'spectatorView'>): Place
   if (conn.view === null) {
     return 'menu';
   }
-  return conn.view.phase === 'lobby' ? 'lobby' : 'elsewhere';
+  return PHASE_PLACES[conn.view.phase] ?? 'elsewhere';
 }
 
 /**
- * The connection as the screens draw it: between the menu and the lobby as it was before the
- * door wipe's doors began to close, until they have (screens/DoorWipe.tsx); and the doors.
+ * The connection as the screens draw it: between the menu and the lobby or a run as it was before
+ * the door wipe's doors began to close, until they have (screens/DoorWipe.tsx); and the doors, and
+ * the leaves they are.
  */
-function useWiped(live: Connection): { conn: Connection; doors: Doors } {
+function useWiped(live: Connection): { conn: Connection; doors: Doors; kind: WipeKind } {
   const reduced = useReducedMotion();
   const wipe = useDoorWipe(live, placeOf(live), reduced);
-  return { conn: wipe.value, doors: wipe.doors };
+  return { conn: wipe.value, doors: wipe.doors, kind: wipe.kind };
+}
+
+/** The profile's name as the page edits it (profileName.ts), handed to what types it. */
+interface Profile {
+  name: string;
+  onName: (name: string) => void;
 }
 
 /**
- * The settings over every screen, the pass's account with them: named, signed in and out, and
- * deleted on the line `live`.
+ * The settings over every screen, opened on `tab` (the one shown last where null), the pass's
+ * account with them: its name the page's own (`profile`), signed in and out, and deleted on the
+ * line `live`.
  */
-function Settings({ live, close }: { live: Connection; close: () => void }) {
+export function Settings(props: {
+  live: Pick<Connection, 'account' | 'send' | 'refusal' | 'login' | 'askLogin'>;
+  close: () => void;
+  profile: Profile;
+  tab: SettingsTab | null;
+}) {
+  const { live, close, profile, tab } = props;
   return (
     <SettingsPanel
       onClose={close}
       account={live.account}
       onDeleteAccount={() => live.send({ kind: 'delete-account', pass: crewPass() })}
-      onName={(name) => live.send({ kind: 'profile', pass: crewPass(), name })}
+      profile={profile}
       refusal={live.refusal}
       login={live.login}
       askLogin={live.askLogin}
+      {...(tab === null ? {} : { tab })}
     />
   );
 }
@@ -646,20 +712,48 @@ function Settings({ live, close }: { live: Connection; close: () => void }) {
 /**
  * The menus over the screens (menuLayer.ts): a room's pause menu, its booklet, the settings — by
  * the gear, a controller's Start, Esc, in a run the browser's back button too; over a run the
- * crew sees this player at the menu.
+ * crew sees this player at the menu. Off any room (`offRoom`) the settings come and go behind the
+ * menu's shutter (`shutteredMenus`).
  */
-function useRoomMenus(live: Connection): MenuLayer {
+export function useRoomMenus(
+  live: Pick<Connection, 'view' | 'spectatorView' | 'send'>,
+  offRoom: boolean,
+): { layer: MenuLayer; menus: ShutteredMenus } {
   const layer = useMenuLayer(pausePhaseOf(live));
-  usePad(layer.start);
+  const menus = shutteredMenus(layer, offRoom);
+  usePad(menus.start);
   useEscapeOpensMenu(layer);
   useHistoryGuard(layer.phase === 'run', layer.openPause);
   useMenuMark(live.view, layer.pause, live.send);
-  return layer;
+  return { layer, menus };
 }
 
-/** What `layer` holds open over the screens: the room's menus, the settings, on the line `live`. */
-function RoomMenus(props: { layer: MenuLayer; live: Connection; missions: MissionInfo[] }) {
-  const { layer, live, missions } = props;
+/**
+ * What `layer` holds open over the screens: the room's menus, the settings — put away as `menus`
+ * puts them away, behind the shutter off any room —, on the line `live`.
+ */
+export function RoomMenus(props: {
+  layer: MenuLayer;
+  menus: ShutteredMenus;
+  live: Pick<
+    Connection,
+    | 'view'
+    | 'spectatorView'
+    | 'account'
+    | 'send'
+    | 'refusal'
+    | 'login'
+    | 'askLogin'
+    | 'leaveRoom'
+    | 'toMenu'
+  >;
+  missions: MissionInfo[];
+  profile: Profile;
+}) {
+  const { layer, live, missions, profile } = props;
+  const settings = (
+    <Settings live={live} close={props.menus.closeSettings} profile={profile} tab={layer.tab} />
+  );
   return (
     <MenuLayers
       layer={layer}
@@ -668,7 +762,7 @@ function RoomMenus(props: { layer: MenuLayer; live: Connection; missions: Missio
       missions={missions}
       leaveRoom={live.leaveRoom}
       toMenu={live.toMenu}
-      settings={<Settings live={live} close={layer.closeSettings} />}
+      settings={settings}
     />
   );
 }
@@ -782,13 +876,94 @@ export function ScreenArea(props: {
 }
 
 /**
+ * The menus over the screens as the top bar, a controller's Start and the settings reach them:
+ * off any room (`offRoom`) the settings come and go behind the menu's shutter
+ * (screens/DoorWipe.tsx), by the gear, Start or the account alike; in a room they open over it at
+ * once.
+ */
+export function shutteredMenus(
+  layer: Pick<MenuLayer, 'gear' | 'start' | 'openAccount' | 'closeSettings'>,
+  offRoom: boolean,
+): ShutteredMenus {
+  const behind = (run: () => void): (() => void) => (offRoom ? () => shutterThen(run) : run);
+  return {
+    gear: behind(layer.gear),
+    start: behind(layer.start),
+    openAccount: behind(layer.openAccount),
+    closeSettings: behind(layer.closeSettings),
+  };
+}
+
+/** The menus over the screens as the bar, Start and the settings reach them (`shutteredMenus`). */
+export type ShutteredMenus = Pick<MenuLayer, 'gear' | 'start' | 'openAccount' | 'closeSettings'>;
+
+/**
+ * The account as the top bar shows it: off any room (`offRoom`), the profile's name and the
+ * pass's account, a press opening the settings' „Konto" as `menus` open it; in a room none.
+ */
+export function barAccountOf(
+  offRoom: boolean,
+  profile: Pick<Profile, 'name'>,
+  account: AccountView | null,
+  menus: ShutteredMenus,
+): BarProfile | null {
+  return offRoom ? { name: profile.name, account, open: menus.openAccount } : null;
+}
+
+/**
+ * Whether the menu's hero turns away for the lobby: while the doors close over the menu for it —
+ * only for the lobby, not for the editor or a page of the menu's (`doors`, the line `live`).
+ */
+export function heroLeaves(
+  doors: Doors,
+  live: Pick<Connection, 'view' | 'spectatorView'>,
+): boolean {
+  return doorsGoing(doors) && placeOf(live) === 'lobby';
+}
+
+/**
+ * The top bar as the app draws it (TopBar) over the connection `conn`: the running mission —
+ * the lobby names its own as its headline, so naming it twice there would be noise —, the seed a
+ * tester pinned the lobby to (?seed=), the way back to the editor, and off any room the account.
+ */
+function AppBar(props: {
+  conn: Connection;
+  layer: MenuLayer;
+  menus: ShutteredMenus;
+  toEditor: (() => void) | null;
+  account: BarProfile | null;
+  menu: boolean;
+  covered: boolean;
+}) {
+  const { conn, layer } = props;
+  const running =
+    conn.spectatorView ?? (conn.view !== null && conn.view.phase !== 'lobby' ? conn.view : null);
+  const pinnedTo = conn.view?.phase === 'lobby' ? (conn.view.seed?.room ?? null) : null;
+  return (
+    <TopBar
+      roomCode={conn.roomCode}
+      seed={pinnedTo}
+      running={running}
+      status={conn.status}
+      toEditor={props.toEditor}
+      onGear={props.menus.gear}
+      inRoom={layer.phase !== null}
+      menu={props.menu}
+      watching={conn.watching}
+      covered={props.covered}
+      account={props.account}
+    />
+  );
+}
+
+/**
  * The app. `boot` is what the address asked for on load: the editor at
  * /editor, with a shared mission or the draft the tab kept.
  */
 export function App({ boot }: { boot: EditorBoot }) {
   const live = useGameConnection();
   // The screens draw the connection as the door wipe shows it; the rest hears it live.
-  const { conn, doors } = useWiped(live);
+  const { conn, doors, kind } = useWiped(live);
   // The crew's voice lives as long as the page: lobby, run and end screen alike.
   const voice = useVoiceMesh(live);
   // Fetched at the start, and again whenever the editor saves or deletes a mission.
@@ -804,23 +979,20 @@ export function App({ boot }: { boot: EditorBoot }) {
   // The mission editor, another page off the join screen; the booklet opens over it.
   const editor = useEditorPage(boot);
   const testRun = useTestRun(live);
-  const layer = useRoomMenus(live);
+  const offRoom = conn.view === null && conn.spectatorView === null;
+  const { layer, menus } = useRoomMenus(live, offRoom);
   const covered = anyOpen(layer);
+  // The profile's one name: the bar shows it, the menu's panels and the settings type it.
+  const [name, setName] = useProfileName(live.account, live.send, live.status === 'open');
+  const profile = { name, onName: setName };
   const contentRef = useRef<HTMLElement>(null);
   // How the run ended, on this screen: the world plays it before the end screen opens.
   const finale = useFinale(live.view ?? live.spectatorView);
   // A run won on this device ends its first-run default (firstRun.ts).
   useWonMark(live.view?.phase ?? null);
   const immersive = useStage(conn, finale);
-  // Which mission is running, for the header. The lobby already has it as its
-  // headline, so naming it twice there would be noise.
-  const running =
-    conn.spectatorView ?? (conn.view !== null && conn.view.phase !== 'lobby' ? conn.view : null);
-  // A tester sees in the lobby that the room is pinned to a seed (?seed=).
-  const pinnedTo = conn.view?.phase === 'lobby' ? (conn.view.seed?.room ?? null) : null;
   const fromEditor = returnsToEditor(testRun.run, conn.roomCode, conn.view?.you.isHost === true);
 
-  const offRoom = conn.view === null && conn.spectatorView === null;
   useMenuSound(conn, editor.open);
   // The editor scrolls on a phone (styles/editor.css); the menu lies over its living scene.
   const { editing, menu } = offRoomOf(offRoom, pages, editor.open);
@@ -839,20 +1011,17 @@ export function App({ boot }: { boot: EditorBoot }) {
   return (
     <div className="app">
       <div className="scanlines" aria-hidden="true" />
-      <DoorWipe doors={doors} />
-      <TopBar
-        roomCode={conn.roomCode}
-        seed={pinnedTo}
-        running={running}
-        status={conn.status}
+      <DoorWipe doors={doors} kind={kind} />
+      <AppBar
+        conn={conn}
+        layer={layer}
+        menus={menus}
         toEditor={fromEditor ? testRun.back : null}
-        onGear={layer.gear}
-        inRoom={layer.phase !== null}
+        account={barAccountOf(offRoom, profile, live.account, menus)}
         menu={menu}
-        watching={conn.watching}
         covered={covered}
       />
-      <RoomMenus layer={layer} live={live} missions={missions} />
+      <RoomMenus layer={layer} menus={menus} live={live} missions={missions} profile={profile} />
       <ErrorBanner conn={live} />
       <UpdateNotice />
 
@@ -871,7 +1040,9 @@ export function App({ boot }: { boot: EditorBoot }) {
             picked={picked}
             setPicked={setPicked}
             openSettings={layer.openSettings}
-            leaving={doorsGoing(doors)}
+            leaving={heroLeaves(doors, live)}
+            name={name}
+            onName={setName}
           />
         </VoiceContext>
       </ScreenArea>

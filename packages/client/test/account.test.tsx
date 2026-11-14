@@ -4,9 +4,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { AccountView } from '@escapelab/core';
 import { ACHIEVEMENTS_KEY, fillEarned, readEarned } from '../src/achievements.js';
 import { lastColor, lastName, PASS_KEY } from '../src/pass.js';
+import { nameFromAccount, nameToTake, useProfileName } from '../src/profileName.js';
+import { accountLine, Avatar, BarAccount, runsText } from '../src/screens/BarAccount.js';
 import { createRoomMessage, joinMessage } from '../src/screens/MenuPanels.js';
-import { accountLine, nameFromAccount, ProfileChip, runsText } from '../src/screens/ProfileChip.js';
-import { nameToTake, ProfileFields } from '../src/screens/ProfileFields.js';
+import { ProfileFields } from '../src/screens/ProfileFields.js';
 import {
   ACCOUNT_DELETED,
   AccountSection,
@@ -68,13 +69,33 @@ afterEach(() => {
   changeSettings(DEFAULT_SETTINGS);
 });
 
+/** The page's profile name as a probe holds it after its first render: the name, its setter. */
+function nameProbe(account: AccountView | null): { name: string; type: (name: string) => void } {
+  let held: [string, (name: string) => void] = ['', noop];
+  function Probe() {
+    held = useProfileName(account, noop, true);
+    return null;
+  }
+  renderToStaticMarkup(<Probe />);
+  return { name: held[0], type: held[1] };
+}
+
 describe('the profile, as the account', () => {
-  it('wears the account’s colour and says how many runs it played', () => {
+  it('wears the account’s colour in the bar and says how many runs it played', () => {
     browser({ color: '#f472b6' });
-    const html = renderToStaticMarkup(<ProfileChip name="Anna" onName={noop} account={ANNA} />);
-    expect(html).toContain('style="background:#a78bfa"');
-    expect(html).toContain('Violett</span>');
-    expect(html).toContain('<span class="profile-slot">Konto · 3 Einsätze</span>');
+    const bar = BarAccount({ name: 'Anna', account: ANNA, onOpen: noop });
+    const avatar = elementsIn(bar).find((el) => el.type === Avatar);
+    expect((avatar?.props as { color?: string } | undefined)?.color).toBe('#a78bfa');
+    const html = renderToStaticMarkup(bar);
+    expect(html).toContain('<span class="bar-account-badge">3 Einsätze</span>');
+  });
+
+  it('starts with the name the pass keeps, and keeps a name typed with the pass at once', () => {
+    browser({ name: 'Anna' });
+    const profile = nameProbe(null);
+    expect(profile.name).toBe('Anna');
+    profile.type('Annika');
+    expect(lastName()).toBe('Annika');
   });
 
   it('counts the runs in words, and says „Gast" without an account', () => {
@@ -249,22 +270,23 @@ describe('deleting an account with a Kennwort', () => {
 describe('the profile in the settings’ „Konto"', () => {
   it('shows the account’s name to change, its colour as the lobby chose it, and what it holds', () => {
     browser();
-    const html = renderToStaticMarkup(<ProfileFields account={ANNA} onName={noop} />);
+    const html = renderToStaticMarkup(<ProfileFields account={ANNA} name="Anna" onName={noop} />);
     expect(html).toContain('value="Anna"');
     expect(html).toContain('Violett · gewählt in der Lobby');
     expect(html).toContain('Konto · 3 Einsätze');
     expect(html).toContain('Gilt ab dem nächsten Raum.');
   });
 
-  it('keeps a name typed with the pass at once', () => {
+  it('types the page’s one name: the bar shows it, the menu’s panels type it too', () => {
     browser();
-    const field = elementsOf(() => <ProfileFields account={ANNA} onName={noop} />).find(
-      (el) => el.type === 'input',
-    );
+    const typed: string[] = [];
+    const field = elementsOf(() => (
+      <ProfileFields account={ANNA} name="Anna" onName={(name) => typed.push(name)} />
+    )).find((el) => el.type === 'input');
     (field?.props['onChange'] as (e: { target: { value: string } }) => void)({
       target: { value: 'Annika' },
     });
-    expect(lastName()).toBe('Annika');
+    expect(typed).toEqual(['Annika']);
   });
 
   it('hands the account a name once typed, trimmed — not an empty one, nor the one it has', () => {

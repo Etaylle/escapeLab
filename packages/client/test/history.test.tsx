@@ -131,6 +131,7 @@ describe('the menu and its missions', () => {
           send={noop}
           connected
           name="Anna"
+          field={{ typed: 'Anna', onName: noop }}
           blocked={false}
           missions={[blackout, tutorial]}
           stats={stats}
@@ -162,6 +163,8 @@ describe('the menu and its missions', () => {
       <JoinScreen
         send={noop}
         connected
+        name="Anna"
+        onName={noop}
         missions={[blackout, tutorial]}
         rooms={[]}
         stats={[]}

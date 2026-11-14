@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { parseMission, type Mission } from '@escapelab/core';
 import { coverZoom } from '../src/world/assemble.js';
+import { sceneTeller } from '../src/screens/MenuScene.js';
 import { SHOT_WIDE } from '../src/world/intro/shot.js';
 import {
   DRIFT_MS,
@@ -20,11 +21,13 @@ import {
 } from '../src/world/menu/loop.js';
 import {
   clearShow,
+  driftCorner,
   needsPaint,
   paintShow,
   showBake,
   type SceneBake,
   type SceneShow,
+  type SceneView,
 } from '../src/world/menu/scene.js';
 import { parkedDrones, sceneViewOf } from '../src/world/menu/view.js';
 import { tileCss } from '../src/world/viewport.js';
@@ -307,15 +310,26 @@ describe('the browser’s side of the loop', () => {
   });
 });
 
-/** A bake for a canvas 100 × 50 of the scene's lab, its box twice as wide. */
+/** A bake for a canvas 100 × 50 of the scene's lab, its box twice as wide, in one piece. */
 function bakeOf(name: string): SceneBake {
+  const box = { left: 0, top: 0, width: 200, height: 50 };
   return {
-    canvas: fakeCanvas(200, 50, name).canvas,
     shot: { from: { x: 3, y: 1 }, to: { x: 1, y: 1 }, scale: 50 },
-    box: { left: 0, top: 0, width: 200, height: 50 },
+    box,
+    pieces: [{ box, canvas: fakeCanvas(200, 50, name).canvas, failed: false }],
     w: 100,
     h: 50,
+    night: false,
+    spots: {},
+    dark: null,
   };
+}
+
+/** How the drift frames `show`'s lab `driftMs` in: no place of the menu's held. */
+function drifting(show: SceneShow, driftMs: number, reduced: boolean): SceneView {
+  const progress = driftAt(driftMs, reduced);
+  const corner = show.bake === null ? { x: 0, y: 0 } : driftCorner(show.bake, progress);
+  return { progress, corner };
 }
 
 const noShow = (): SceneShow => ({ bake: null, from: null, since: 0, drawn: null });
@@ -326,12 +340,12 @@ describe('what the scene draws', () => {
     const show = noShow();
     const first = bakeOf('first');
     showBake(show, first, 0, true);
-    paintShow(ctx, show, SCENE_FADE_MS / 2, 0, false);
+    paintShow(ctx, show, SCENE_FADE_MS / 2, drifting(show, 0, false));
     expect(callEntries(log, 'clearRect')).toHaveLength(1);
     const half = callEntries(log, 'drawImage');
     expect(half.map((call) => call.alpha)).toEqual([0.5]);
     log.length = 0;
-    paintShow(ctx, show, SCENE_FADE_MS, 0, false);
+    paintShow(ctx, show, SCENE_FADE_MS, drifting(show, 0, false));
     expect(callEntries(log, 'clearRect')).toHaveLength(0);
     expect(callEntries(log, 'drawImage').map((call) => call.alpha)).toEqual([1]);
   });
@@ -343,24 +357,41 @@ describe('what the scene draws', () => {
     const next = bakeOf('next');
     showBake(show, before, 0, false);
     showBake(show, next, 1000, true);
-    paintShow(ctx, show, 1000 + SCENE_FADE_MS / 4, 0, false);
+    paintShow(ctx, show, 1000 + SCENE_FADE_MS / 4, drifting(show, 0, false));
     const drawn = callEntries(log, 'drawImage');
     const names = drawn.map((call) => (call.args[0] as { name: string }).name);
     expect(names).toEqual(['before', 'next']);
     expect(drawn.map((call) => call.alpha)).toEqual([1, 0.25]);
-    paintShow(ctx, show, 1000 + SCENE_FADE_MS, 0, false);
+    paintShow(ctx, show, 1000 + SCENE_FADE_MS, drifting(show, 0, false));
     expect(show.from).toBeNull();
+  });
+
+  it('brings a mission in over the one before at its drift, while the camera holds a place', () => {
+    const { ctx, log } = fakeCanvas(100, 50);
+    const show = noShow();
+    showBake(show, bakeOf('before'), 0, false);
+    showBake(show, bakeOf('next'), 1000, true);
+    // The camera on a place 60 px in on the lab come in; the drift at the reactor, 100 px in.
+    paintShow(ctx, show, 1000 + SCENE_FADE_MS / 4, { progress: driftAt(0, false), corner: { x: 60, y: 0 } });
+    const drawn = callEntries(log, 'drawImage').map((call) => [
+      (call.args[0] as { name: string }).name,
+      call.args[1],
+    ]);
+    expect(drawn).toEqual([
+      ['before', -100],
+      ['next', -60],
+    ]);
   });
 
   it('copies the bake as far along the shot as the drift has come', () => {
     const { ctx, log } = fakeCanvas(100, 50);
     const show = noShow();
     showBake(show, bakeOf('lab'), 0, false);
-    paintShow(ctx, show, 0, 0, false);
-    paintShow(ctx, show, 1, DRIFT_MS / 2, false);
+    paintShow(ctx, show, 0, drifting(show, 0, false));
+    paintShow(ctx, show, 1, drifting(show, DRIFT_MS / 2, false));
     const [there, back] = callEntries(log, 'drawImage').map((call) => call.args[1]);
     // At the reactor end the frame starts 100 px in, at the spawn at the box's left edge.
-    expect([there, back]).toEqual([-100, -0]);
+    expect([there, back]).toEqual([-100, 0]);
   });
 
   it('draws a still lab once under reduced motion, and again only for a new one', () => {
@@ -368,7 +399,7 @@ describe('what the scene draws', () => {
     expect(needsPaint(show, 0, true)).toBe(false);
     showBake(show, bakeOf('lab'), 0, false);
     expect(needsPaint(show, 0, true)).toBe(true);
-    paintShow(fakeCanvas(100, 50).ctx, show, 0, 0, true);
+    paintShow(fakeCanvas(100, 50).ctx, show, 0, drifting(show, 0, true));
     expect(needsPaint(show, 10_000, true)).toBe(false);
     expect(needsPaint(show, 10_000, false)).toBe(true);
     showBake(show, bakeOf('next'), 10_000, true);
@@ -385,7 +416,10 @@ describe('what the scene draws', () => {
 });
 
 /** The size of `bake`'s canvas: 0 × 0 once it is freed. */
-const sizeOf = (bake: SceneBake): [number, number] => [bake.canvas.width, bake.canvas.height];
+const sizeOf = (bake: SceneBake): [number, number] => {
+  const canvas = bake.pieces[0]?.canvas;
+  return [canvas?.width ?? -1, canvas?.height ?? -1];
+};
 
 describe('what the scene lets go', () => {
   it('frees the lab before once the one picked anew has come in over it', () => {
@@ -394,9 +428,9 @@ describe('what the scene lets go', () => {
     const next = bakeOf('next');
     showBake(show, before, 0, false);
     showBake(show, next, 1000, true);
-    paintShow(fakeCanvas(100, 50).ctx, show, 1000 + SCENE_FADE_MS / 2, 0, false);
+    paintShow(fakeCanvas(100, 50).ctx, show, 1000 + SCENE_FADE_MS / 2, drifting(show, 0, false));
     expect(sizeOf(before)).toEqual([200, 50]);
-    paintShow(fakeCanvas(100, 50).ctx, show, 1000 + SCENE_FADE_MS, 0, false);
+    paintShow(fakeCanvas(100, 50).ctx, show, 1000 + SCENE_FADE_MS, drifting(show, 0, false));
     expect([sizeOf(before), sizeOf(next)]).toEqual([
       [0, 0],
       [200, 50],
@@ -442,5 +476,32 @@ describe('what the scene lets go', () => {
       [0, 0],
     ]);
     expect(needsPaint(show, 20, false)).toBe(false);
+  });
+});
+
+describe('the scene as the menu tells it', () => {
+  it('tells its stage the mission and the lobby as each changes, a stage opened later both', () => {
+    const calls: string[] = [];
+    const stage = {
+      show: (id: string | null) => calls.push(`show ${id}`),
+      lobby: (behind: boolean) => calls.push(`lobby ${behind}`),
+      close: () => calls.push('close'),
+    };
+    const teller = sceneTeller(() => stage);
+    teller.tell({ missionId: 'blackout', lobby: true });
+    const detach = teller.attach(fakeCanvas(0, 0).canvas);
+    expect(calls).toEqual(['show blackout', 'lobby true']);
+    teller.tell({ missionId: 'blackout', lobby: true });
+    teller.tell({ missionId: 'blackout', lobby: false });
+    teller.tell({ missionId: 'systemcheck', lobby: false });
+    detach();
+    teller.tell({ missionId: 'systemcheck', lobby: true });
+    expect(calls).toEqual([
+      'show blackout',
+      'lobby true',
+      'lobby false',
+      'show systemcheck',
+      'close',
+    ]);
   });
 });

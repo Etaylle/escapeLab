@@ -166,6 +166,13 @@
   color: var(--text);
 }
 
+/* The profile's colour as a dot before its name (ProfileFields.tsx). */
+.profile-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
 /* A phone upright: the tab bar wraps rather than run off the card. */
 @media (max-width: 560px) {
   .settings-tabs {

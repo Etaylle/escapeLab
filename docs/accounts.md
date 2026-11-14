@@ -5,8 +5,8 @@ the crew colour they chose, the runs they played and the Erfolge those runs earn
 bei Dota", backlog K-1a). With a Kennwort it gets an Ausweisnummer, and any device signs into it
 (K-1c, „Sign in" below). Signing in with Google comes last (K-1b) as one more way into the same
 account. Code: `packages/server/src/{accounts.ts,login.ts,store/}`, `packages/server/prisma/`,
-`packages/core/src/login.ts`, and in the client `pass.ts`, `achievements.ts`,
-`screens/{ProfileChip,MyRuns,Settings,LoginSection}.tsx`.
+`packages/core/src/login.ts`, and in the client `pass.ts`, `profileName.ts`, `achievements.ts`,
+`screens/{BarAccount,MyRuns,Settings,LoginSection}.tsx`.
 
 ## One account per crew pass
 
@@ -19,15 +19,20 @@ another secret is refused („Dieser Ausweis gilt hier nicht."). Seating never w
 store: the account comes to the socket a moment later (`account`), and the seat is bound to it
 then. A pass leads into one account; an account has a pass for every device signed into it.
 
-- **Name.** Typed in the menu's profile; once it has stood still for 0.6 s the account takes it
-  (`profile`). A seat taken under a name gives the account that name, so the seat's name and the
+- **Name.** One name for the page (`profileName.ts`), typed at the head of the menu's panels
+  that seat the pass and in the settings' „Konto"; once it has stood still for 0.6 s the account
+  takes it (`profile`) — an emptied field leaves the account its name. A seat taken under a name
+  gives the account that name, so the seat's name and the
   account's are one. An account made at the menu starts with the name the device kept, one made
   at a comeback with its seat's.
 - **Colour.** Chosen in a lobby (`select-color`), it becomes the account's. The next seat wears
   it wherever nobody else in the room does (`create-room` and `join-room` carry it).
-- **Profile.** The chip at the top right of the menu shows the account: its name, its colour and
-  the figure in it, and „Konto · 3 Einsätze" — „Gast" while the server has told of none (line
-  down, store away).
+- **In the top bar.** Off any room the bar shows the account at its end: the figure's head as
+  its avatar in the account's colour, the name — „Ohne Namen" before one — and „3 Einsätze"
+  where the bar has the room; a press opens the settings' „Konto", which says „Konto · 3
+  Einsätze", or „Gast" while the server has told of none (line down, store away). On a phone the
+  avatar stands alone. A picture of the player's own is not kept: the avatar takes one
+  (`Avatar` `src`) once one can be stored and looked over.
 - **The pass is the device's key.** Without a Kennwort it is the account's only way in: a browser
   whose storage is cleared mints a new pass and with it gets a new account; the old one stays
   where it was, out of reach. With a Kennwort, any device's pass signs into the account

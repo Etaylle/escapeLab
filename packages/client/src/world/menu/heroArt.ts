@@ -1,9 +1,9 @@
-import { drawScientist, type FigureLayer } from '../art.js';
+import { drawScientist, HELD_SCALE, type EdgeLight, type FigureLayer, type Rim } from '../art.js';
 import type { CanvasMaker } from '../atlas.js';
 import { softEllipse } from '../brush.js';
 import { HOLD, type FigurePose } from '../figure.js';
-import { BLACK } from '../palette.js';
-import type { HeroMotion, HeroPlace, StageBox } from './hero.js';
+import { BLACK, css, lift, parseHex, sink, TUNGSTEN } from '../palette.js';
+import { LAMP_RAISE, type HeroMotion, type HeroPlace, type StageBox } from './hero.js';
 import { drawHandLamp } from './lampArt.js';
 
 /**
@@ -63,8 +63,13 @@ export interface HeroFrame {
   color: string;
   /** the stage's density, device px a CSS px */
   dpr: number;
-  /** the lamp in its hands: turned `tilt` from straight ahead, its lens alight `on`, 0 to 1 */
-  lamp: { tilt: number; on: number };
+  /**
+   * the lamp in its hands: turned `tilt` from straight ahead, its lens alight `on` and flaring
+   * `flare`, each 0 to 1 at the steps the beam is laid at (lamp.ts `lightStep`)
+   */
+  lamp: { tilt: number; on: number; flare: number };
+  /** its visor catches the glow of the item it looks at */
+  glow: boolean;
 }
 
 /** The hero's canvas `canvas`, its layers made by `make`; null where the browser gives no 2D. */
@@ -121,9 +126,9 @@ function layerKey(which: FigureLayer, frame: HeroFrame, size: string): string {
   }
   const arms = pose.arms === null ? '-' : `${pose.arms.front},${pose.arms.back}`;
   const light = lightInLayer(pose) ? pose.shimmer : null;
-  const parts = [pose.look, light, arms, pose.holding, pose.dim, pose.bow];
-  const { tilt, on } = frame.lamp;
-  return `${size} ${frame.color} ${frame.motion.facing} ${parts.join(' ')} ${tilt} ${on}`;
+  const parts = [pose.look, light, arms, pose.holding, pose.dim, pose.bow, frame.glow];
+  const { tilt, on, flare } = frame.lamp;
+  return `${size} ${frame.color} ${frame.motion.facing} ${parts.join(' ')} ${tilt} ${on} ${flare}`;
 }
 
 /**
@@ -139,12 +144,35 @@ function poseOf(frame: HeroFrame, layer: FigureLayer): FigurePose {
   return { ...pose, bob: 0, shimmer: lightApart ? null : pose.shimmer };
 }
 
+/**
+ * How far the hero's colour sinks in the lab at night (scene.ts `nightTo`): the lamp in its
+ * hands, not the room, lights it.
+ */
+export const HERO_NIGHT = 0.35;
+/** The lamp's warm light along the hero's front edge, toward the menu, at its strongest. */
+export const FRONT_RIM: EdgeLight = { rgb: lift(TUNGSTEN, 0.15), alpha: 0.85 };
+/** The glow of the item the hero looks at, as its visor catches it: the beam's warm light. */
+export const VISOR_GLOW: EdgeLight = { rgb: lift(TUNGSTEN, 0.2), alpha: 0.55 };
+/** The lab's cold light along its back edge, at its strongest; null for none. */
+export const BACK_RIM: EdgeLight | null = null;
+
+/** The hero's colour `color` in the lab at night (HERO_NIGHT). */
+function nightColor(color: string): string {
+  return css(sink(parseHex(color), HERO_NIGHT));
+}
+
+/** The light on the hero's edges with its lamp `on` of the way (0 to 1): the front's with it. */
+function rimOf(on: number): Rim {
+  const front = on <= 0 ? null : { ...FRONT_RIM, alpha: FRONT_RIM.alpha * on };
+  return { front, back: BACK_RIM };
+}
+
 /** The figure as `frame` has it, drawn on `ctx` whole or as `layer` says, its feet at `at`. */
 function drawFigure(ctx: CanvasRenderingContext2D, frame: HeroFrame, layer: FigureLayer): void {
-  const { tilt, on } = frame.lamp;
+  const { tilt, on, flare } = frame.lamp;
   const { motion } = frame;
   drawScientist(ctx, {
-    color: frame.color,
+    color: nightColor(frame.color),
     name: '',
     facing: motion.facing,
     moving: motion.moving,
@@ -155,7 +183,12 @@ function drawFigure(ctx: CanvasRenderingContext2D, frame: HeroFrame, layer: Figu
     ground: 'lit',
     named: false,
     layer,
-    held: (held) => drawHandLamp(held, tilt, on),
+    held: (held) => {
+      held.translate(0, -LAMP_RAISE.up / HELD_SCALE);
+      drawHandLamp(held, tilt, on, flare);
+    },
+    rim: rimOf(on),
+    visorGlow: frame.glow ? VISOR_GLOW : null,
   });
 }
 

@@ -26,26 +26,25 @@ import {
  * 1440 × 820 and on a desktop; three and a half at least wherever it stands — from 1080 px across
  * at 720 px of height, 1115 px at 820 — and left out where the room beside the widest panel holds
  * fewer, as at 1024 px across, and on every phone; at every size nothing of it over the menu's
- * column and its lead line, the profile, or the widest panel — resting, or stepped half a tile
- * aside for the panel — and clear of the window's safe areas. The walkthrough measures the same
- * in a browser (tools/shots.mjs `checkHero`).
+ * column and its lead line, the stage's top, or the widest panel — resting, or stepped half a
+ * tile aside for the panel — and clear of the window's safe areas. The walkthrough measures the
+ * same in a browser (tools/shots.mjs `checkHero`).
  */
 
 const sheets = new Sheets();
 
-/** The menu's stage as markup: its column, a panel, the profile with its figure. */
-const [STAGE, BODY, PANEL, CHIP, FIGURE] = ((): Styled[] => {
+/** The menu's stage as markup: its column and a panel. */
+const [STAGE, BODY, PANEL] = ((): Styled[] => {
   const nodes = elementsOf(
-    '<div class="menu"><div class="menu-body"></div><section class="menu-panel"></section>' +
-      '<section class="profile-chip"><canvas class="seat-figure"></canvas></section></div>',
+    '<div class="menu"><div class="menu-body"></div><section class="menu-panel"></section></div>',
   );
   const find = (name: string): Styled => {
     const node = nodes.find((each) => each.classes.includes(name));
     if (node === undefined) throw new Error(`no .${name}`);
     return node;
   };
-  return ['menu', 'menu-body', 'menu-panel', 'profile-chip', 'seat-figure'].map(find);
-})() as [Styled, Styled, Styled, Styled, Styled];
+  return ['menu', 'menu-body', 'menu-panel'].map(find);
+})() as [Styled, Styled, Styled];
 
 /** The top bar over the stage, CSS px: a line of its buttons and its padding (ui.css). */
 const TOP_BAR = 61;
@@ -76,8 +75,6 @@ const widthOf = (node: Styled, screen: Screen, whole: number): number =>
 function stageOn(screen: Screen, safe = { right: 0, bottom: 0 }): StageFacts {
   const [padTop, padRight, padBottom, padLeft] = sidesOf(STAGE, 'padding', screen);
   const content = screen.width - Math.max(padRight, safe.right) - padLeft;
-  const [chipTop, , chipBottom] = sidesOf(CHIP, 'padding', screen);
-  const figure = lengthIn(FIGURE, sheets.declared(FIGURE, 'height', screen)?.value ?? '0', screen);
   return {
     w: screen.width,
     h: screen.height - TOP_BAR,
@@ -88,7 +85,7 @@ function stageOn(screen: Screen, safe = { right: 0, bottom: 0 }): StageFacts {
     safeBottom: safe.bottom,
     menuRight: padLeft + widthOf(BODY, screen, content),
     panelRight: padLeft + widthOf(PANEL, screen, content),
-    chipBottom: padTop + chipTop + figure + chipBottom + 2,
+    ceiling: padTop,
   };
 }
 
@@ -153,7 +150,7 @@ describe('the hero at the menu’s sizes', () => {
   });
 
   it('is left out where it would stand smaller, and on every phone', () => {
-    // The profile's figure stands for it. At 1024 px across the room beside the widest panel
+    // The top bar's avatar stands for it. At 1024 px across the room beside the widest panel
     // holds 2.6 tiles at 768 px of height.
     for (const screen of [at(1024, 768), at(1024, 640), at(960, 700), at(900, 700)]) {
       expect(heroPlace(stageOn(screen)), `${screen.width}x${screen.height}`).toBeNull();
@@ -178,14 +175,14 @@ describe('the hero at the menu’s sizes', () => {
     expect(heroPlace(stageOn(at(1180, 1400)))).toBeNull();
   });
 
-  it('covers nothing of the menu, its lead line, the profile or a panel at the five sizes', () => {
+  it('covers nothing of the menu, its lead line, the stage’s top or a panel at five sizes', () => {
     for (const screen of FIVE) {
       const facts = stageOn(screen);
       const { resting, stepped } = boxesOf(placed(facts), facts);
       const size = `${screen.width}x${screen.height}`;
       // The menu's column — its items, the card, the lead line under them — ends at menuRight.
       expect(resting.left, size).toBeGreaterThanOrEqual(Math.floor(facts.menuRight + CLEAR));
-      expect(resting.top, size).toBeGreaterThanOrEqual(Math.floor(facts.chipBottom + CLEAR));
+      expect(resting.top, size).toBeGreaterThanOrEqual(Math.floor(facts.ceiling + CLEAR));
       expect(stepped.left, size).toBeGreaterThanOrEqual(Math.floor(facts.panelRight + CLEAR));
       expect(stepped.right, size).toBeLessThanOrEqual(Math.ceil(facts.w - CLEAR));
       expect(resting.bottom, size).toBeLessThanOrEqual(Math.ceil(facts.h - facts.padBottom));
@@ -202,8 +199,9 @@ describe('the hero at the menu’s sizes', () => {
     }
   });
 
-  it('reads the menu’s padding, column, widest panel and profile off the stylesheets', () => {
+  it('reads the menu’s padding, column and widest panel off the stylesheets', () => {
     const facts = stageOn(at(1440, 820));
+    expect(facts.ceiling).toBeCloseTo(49.2, 6);
     expect(facts.menuRight).toBeCloseTo(72 + 440, 6);
     expect(facts.panelRight).toBeCloseTo(72 + 760, 6);
     expect(facts.padBottom).toBeCloseTo(32.8, 6);

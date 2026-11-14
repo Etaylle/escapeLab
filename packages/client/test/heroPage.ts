@@ -32,7 +32,7 @@ export const DESKTOP_STAGE: StageFacts = {
   safeBottom: 0,
   menuRight: 512,
   panelRight: 832,
-  chipBottom: 115,
+  ceiling: 49.2,
 };
 
 /** Where the hero stands on `facts`, there by the test's word. */
@@ -49,9 +49,10 @@ export const PLAIN_LOOK: HeroLook = {
   color: '#2dd4bf',
   speaking: false,
   waveAt: null,
-  panel: false,
+  panel: null,
   card: false,
   leaving: false,
+  taken: null,
 };
 
 /** What a test may set of a painting: the motion, the menu's look, its entrance, its canvas. */
@@ -60,7 +61,16 @@ export interface PaintingAsked {
   look?: Partial<HeroLook>;
   entrance?: EntranceRun;
   canvas?: HTMLCanvasElement | null;
+  /** where the walkthrough holds the hero's beat, ms after an item is taken */
+  beatHeld?: () => number | null;
 }
+
+/** What a painting takes where the test sets nothing: full motion, no canvas, no beat held. */
+const PAINTING_ASKED = {
+  reduced: false,
+  canvas: null,
+  beatHeld: (): number | null => null,
+} satisfies PaintingAsked;
 
 /** A hero's painting on fake canvases, standing at 1440 × 820, the stage at (0, 60). */
 export function painting(asked: PaintingAsked = {}): HeroPainting {
@@ -68,7 +78,7 @@ export function painting(asked: PaintingAsked = {}): HeroPainting {
   if (hero === null) {
     throw new Error('no hero canvas');
   }
-  const reduced = asked.reduced ?? false;
+  const { reduced, canvas, beatHeld } = { ...PAINTING_ASKED, ...asked };
   return {
     hero,
     standing: {
@@ -80,13 +90,15 @@ export function painting(asked: PaintingAsked = {}): HeroPainting {
     },
     look: { current: { ...PLAIN_LOOK, ...asked.look } },
     attends: { current: null },
+    picked: { current: null },
     sweep: newSweep(),
     probe: { laid: 0, drawn: { legs: 0, upper: 0 } } as HeroProbe,
     entrance: asked.entrance ?? entranceRun(false, () => null),
     react: stillReactions(),
     phase: 0.3,
     reduced: () => reduced,
-    canvas: asked.canvas ?? null,
+    canvas,
+    beatHeld,
   };
 }
 
@@ -196,19 +208,16 @@ export interface HeroOnPage {
 
 /**
  * The menu's hero started on a fake page in a window `w` × `h` — the stage under the top bar laid
- * out as menu.css lays it out, its menu's column and its profile, `focused` the element in the
+ * out as menu.css lays it out, its padding and its menu's column, `focused` the element in the
  * focus — under `?trace=1`, standing there from the start, its canvas shown. Stubs the page's
  * globals: `vi.unstubAllGlobals()` after.
  */
 export function heroOnPage(w: number, h: number, focused: FakeItem | null = null): HeroOnPage {
   const size = { w, h };
   const pad = (): number => clamp(20, 0.05 * size.w, 80);
-  const chip = (): ReturnType<typeof rect> =>
-    rect(size.w - pad() - 260, TOP_BAR + clamp(22, 0.06 * size.h, 60), 260, 66);
   const [onWindow, onStage] = [listening(), listening()];
   const parts: Record<string, unknown> = {
     '.menu-body': { getBoundingClientRect: () => rect(pad(), TOP_BAR + 200, 440, 400) },
-    '.profile-chip': { getBoundingClientRect: chip },
   };
   const stage = {
     getBoundingClientRect: () => rect(0, TOP_BAR, size.w, size.h - TOP_BAR),
@@ -247,6 +256,7 @@ export function heroOnPage(w: number, h: number, focused: FakeItem | null = null
     },
   });
   vi.stubGlobal('getComputedStyle', () => ({
+    paddingTop: `${clamp(22, 0.06 * size.h, 60)}px`,
     paddingLeft: `${pad()}px`,
     paddingRight: `${pad()}px`,
     paddingBottom: `${clamp(18, 0.04 * size.h, 40)}px`,

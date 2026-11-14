@@ -129,12 +129,20 @@ export function usePicked(): [string | null, (missionId: string) => void] {
   return [picked, pick];
 }
 
+/** The profile's name as a panel types it (profileName.ts): as typed, and what takes it anew. */
+export interface NameEdit {
+  typed: string;
+  onName: (name: string) => void;
+}
+
 /** What a panel that seats the browser's pass needs of the menu. */
 export interface SectionProps {
   send: (msg: ClientMessage) => void;
   connected: boolean;
   /** the name as typed, trimmed: nothing goes out under an empty one */
   name: string;
+  /** the name's field at the panel's head (`NameField`) */
+  field: NameEdit;
   /** a run on binds the pass: no room opens or takes it till it is over */
   blocked: boolean;
 }
@@ -145,7 +153,31 @@ function sitsDown({ connected, name, blocked }: SectionProps): boolean {
 }
 
 /** The line a panel shows while no name is typed: where it goes. */
-export const NAME_MISSING = 'Zum Beitreten einen Namen im Profil eintragen.';
+export const NAME_MISSING = 'Zum Beitreten zuerst oben einen Namen eintragen.';
+
+/**
+ * The profile's name at the head of a panel that seats the pass: the page's one name, which the
+ * settings' „Konto" types as well and the top bar shows; it takes the panel's focus as the panel
+ * opens without one (`MenuPanel`). A field no password manager takes for a login.
+ */
+export function NameField({ typed, onName }: NameEdit) {
+  return (
+    <label className="menu-name">
+      <span className="menu-name-label">Name</span>
+      <input
+        className="menu-name-field"
+        value={typed}
+        onChange={(e) => onName(e.target.value)}
+        maxLength={40}
+        placeholder="z. B. Anna"
+        name="crew-name"
+        autoComplete="off"
+        spellCheck={false}
+        {...(typed.trim() === '' ? { 'data-focus': true } : {})}
+      />
+    </label>
+  );
+}
 
 /**
  * What Esc does to a panel (`keydown` on the window, as a controller's B sends it too): steps
@@ -173,18 +205,21 @@ function useEscape(close: () => void): void {
 
 /**
  * A panel over the menu: a dialog with its title and the way back — Esc, B or „Zurück", a
- * detent's click as it goes (world/menuSound.ts). It takes the focus as it comes up: what it
- * marks `data-focus`, else the way back.
+ * detent's click as it goes (world/menuSound.ts) —, and where it seats the pass the profile's
+ * name under its head (`name`, NameField). It takes the focus as it comes up: what it marks
+ * `data-focus` first — the name where there is none yet —, else the way back.
  */
 export function MenuPanel({
   title,
   className,
   onClose,
+  name = null,
   children,
 }: {
   title: string;
   className: string;
   onClose: () => void;
+  name?: NameEdit | null;
   children: ReactNode;
 }) {
   const heading = useId();
@@ -213,6 +248,7 @@ export function MenuPanel({
           Zurück
         </button>
       </header>
+      {name !== null && <NameField {...name} />}
       {children}
     </section>
   );
@@ -363,7 +399,12 @@ export function MissionPanel({
       ),
     );
   return (
-    <MenuPanel title="Einsatz starten" className="menu-panel--missions" onClose={onClose}>
+    <MenuPanel
+      title="Einsatz starten"
+      className="menu-panel--missions"
+      onClose={onClose}
+      name={section.field}
+    >
       {missions.length > 0 ? (
         <>
           <div className="mission-grid">
@@ -527,7 +568,12 @@ export function JoinPanel({ takeover, waiting, onClose, ...section }: JoinPanelP
   const { send, connected, name } = section;
   const [code, setCode] = useState(invitedCode);
   return (
-    <MenuPanel title="Beitreten" className="menu-panel--join" onClose={onClose}>
+    <MenuPanel
+      title="Beitreten"
+      className="menu-panel--join"
+      onClose={onClose}
+      name={section.field}
+    >
       <p className="muted">Für eine verabredete Runde: der Code des Raums.</p>
       <div className="join-with-code">
         <CodeField code={code} onCode={setCode} />
@@ -628,7 +674,12 @@ interface RoundsPanelProps extends SectionProps {
 export function RoundsPanel({ rooms, missions, onClose, ...section }: RoundsPanelProps) {
   const { send, name } = section;
   return (
-    <MenuPanel title="Offene Runden" className="menu-panel--rounds" onClose={onClose}>
+    <MenuPanel
+      title="Offene Runden"
+      className="menu-panel--rounds"
+      onClose={onClose}
+      name={section.field}
+    >
       {rooms.length === 0 ? (
         <p className="muted">
           Gerade läuft nichts — eine Runde, die über „Einsatz starten“ eröffnet wird, taucht hier

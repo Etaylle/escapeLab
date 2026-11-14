@@ -129,11 +129,13 @@
  * Hier starten" in a line of its own and no tooltip over the cards; the mission picked comes in as
  * the scene behind. „Runde eröffnen" closes the lab's doors over the menu and opens them on the
  * lobby: menu-to-lobby.png holds them two thirds shut, the menu between them (the pause trick of
- * the device's fade); the lobby has to stand over the menu's scene drifting on. The guest's phone
- * shows the menu upright (menu-phone.png), the profile under the title, and turned sideways —
- * 932×430 (menu-phone-932.png), 844×390, and what an iPhone's notch leaves, 750×369 and 667×375 —
- * the menu left whole beside the scene, the title and the profile right; every target a fingertip's
- * 44 px at least, nothing cut off. A second crew's room — Cem's, of the other mission — and the
+ * the device's fade); the lobby has to stand over the menu's scene drifting on. The account stands
+ * at the top bar's end (menu-account.png): the avatar — the figure's head in its colour — and the
+ * name; a press opens the settings on „Konto". The guest's phone shows the menu upright
+ * (menu-phone.png), the menu under the title, and turned sideways — 932×430 (menu-phone-932.png),
+ * 844×390, and what an iPhone's notch leaves, 750×369 and 667×375 — the menu left whole beside the
+ * scene, the title right, the bar's account its avatar alone; every target a fingertip's 44 px at
+ * least, nothing cut off. A second crew's room — Cem's, of the other mission — and the
  * host's stand in a fourth page's „Offene Runden", every crew member as a figure, painted
  * (menu-open-rounds.png); Cem's door wipes are timed as his page draws them, into the lobby and,
  * „Raum verlassen", out of it — shut over the lobby, the page loaded anew, open on the menu — none
@@ -144,19 +146,25 @@
  * (menu-bound.png). The hero — the player's own
  * figure standing large at the stage's right (client screens/MenuHero.tsx) — has to stand there at
  * 1440×820 and at 1280×720 about five of the scene's tiles tall, its canvas clear of the menu's
- * column, its lead line and the profile, or the run fails. menu-hero.png shows it with its hand
- * lamp on, the beam laid over the scene and ending short of the menu's column; with „Beitreten"
- * hovered the beam has to hold a beat pointing at it within two passes of its sweep. On the first
- * menu of a page it walks in: a page of its own holds it 600 ms into its walk, as the pause trick
- * holds a device's fade (menu-hero-entrance.png), its lamp off; a key wakes the menu's sound, and
- * let go, the hero has to stop, click the cold open's click and switch its lamp on. Hovered, an
- * item turns the hero's head to it (menu-hero-hover.png, the beam holding its beat on
- * „Beitreten"); „Einsatz starten" open, the hero stands half a tile aside, clear of the panel
- * (menu-hero-missions.png); as the doors close for the lobby it has turned away to the lab; and in
- * the reconnect drill's tab it looks at the run's card. At 1280×720 it stands as at 1440×820
+ * column, its lead line and the title, or the run fails. menu-hero.png shows it with its hand
+ * lamp on in the lab at night, the beam laid over the scene and ending short of the menu's
+ * column. On the first menu of a page it walks in: a page of its own holds it 600 ms into its
+ * walk, as the pause trick holds a device's fade (menu-hero-entrance.png), its lamp off; a key
+ * wakes the menu's sound, and let go, the hero has to stop, click the cold open's click and
+ * switch its lamp on. Hovered, „Beitreten" turns the hero's head to it, its visor catching the
+ * item's glow, and its beam to the item's room of Blackout's lab, which the scene's camera has to
+ * come to (menu-hero-hover.png); „Handbuch" and „Einstellungen" hovered, the camera has to come
+ * to their rooms (menu-place-handbook.png, menu-place-settings.png), and with nothing hovered or
+ * in the focus go back to its drift (menu-place-idle.png). „Bestenliste" pressed, the hero's
+ * clock held 110 ms after the press: half way through its step toward the menu, its lamp flared
+ * (menu-hero-click.png); then the menu's short shutter held half shut over the menu
+ * (menu-shutter.png), its leaves 80 ms. „Einsatz starten" open, the hero stands half a tile
+ * aside, clear of the panel (menu-hero-missions.png); as the doors close for the lobby it has
+ * turned away to the lab; and in the reconnect drill's tab it looks at the run's card. At
+ * 1280×720 it stands as at 1440×820
  * (menu-hero-1280.png); at 1100×700 three and a half tiles tall at least, beside a panel open too;
- * at 1024×768, where the room beside the widest panel holds fewer, it is left out, the profile's
- * figure standing for it (menu-hero-1024.png), and on the guest's phone, upright and sideways.
+ * at 1024×768, where the room beside the widest panel holds fewer, it is left out, the bar's
+ * avatar standing for it (menu-hero-1024.png), and on the guest's phone, upright and sideways.
  * The menu's sound waits for
  * the first key, the speaker's lamp lit, and plays after it; the lobby keeps it at its weight,
  * chimes as the round comes up and chirps as Ben says ready; the run's start ends it. The won card
@@ -206,8 +214,9 @@
  * guest's account (account-switch.png) on a new pass and finds the guest's
  * seat marked — each Ausweis readable, its texts 12 px or more and 4.5:1, its
  * way on in sight. Then the host's settings delete the account at the second
- * word (account-delete.png the first answered), the profile says „Gast" with
- * no name, and „Meine Einsätze" lists nothing more — or the run fails.
+ * word (account-delete.png the first answered), the top bar's account says it
+ * has no name and no runs, and „Meine Einsätze" lists nothing more — or the
+ * run fails.
  *
  * Blackout on its pinned seed is played to the won card too, with the
  * answers tools/fixtures/blackout-plan.json carries (core's
@@ -647,6 +656,7 @@ import { loadavg } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath, URL } from 'node:url';
 import { chromium, request } from 'playwright';
+import { lineContrast, TEXT_CONTRAST } from './contrast.mjs';
 import {
   AGAIN_AFTER_MS,
   allowanceOf,
@@ -1557,14 +1567,17 @@ async function sideways(page, selector) {
   }, selector);
 }
 
+/** Opens the Bestenliste from the menu as a player does: its item pressed. */
+const pressHistory = (page) => page.locator('.menu-item', { hasText: 'Bestenliste' }).click();
+
 /**
- * The Bestenliste off the menu, captured as `shot` once it is loaded:
- * measured like the menu — at 1280×720 too where the window is a
- * laptop's, sideways on a phone — and left the way a player goes back.
+ * The Bestenliste off the menu — opened by `open`, its item pressed — captured as `shot` once it
+ * is loaded: measured like the menu — at 1280×720 too where the window is a laptop's, sideways on
+ * a phone — and left the way a player goes back.
  */
-async function captureHistory(page, shot) {
+async function captureHistory(page, shot, open = pressHistory) {
   const name = shot.replace(/\.png$/, '');
-  await page.locator('.menu-item', { hasText: 'Bestenliste' }).click();
+  await open(page);
   const loaded = page.locator('.history-board, .history [role="alert"]').first();
   await loaded.waitFor({ timeout: 10_000 });
   await sleep(300);
@@ -1583,6 +1596,111 @@ async function captureHistory(page, shot) {
   }
   await clickText(page, 'Zurück');
   await page.locator('.menu-item').first().waitFor({ timeout: 10_000 });
+}
+
+/**
+ * How long after an item is taken menu-hero-click.png holds the hero, ms: half way through its
+ * step toward the menu, its lamp flared (client hero.ts STEP_MS, FLARE_MS).
+ */
+const HERO_BEAT_HOLD_MS = 110;
+/** The hero's beat before the shutter closes, and the shutter's close, ms (client DoorWipe.tsx). */
+const SHUTTER = { beat: 100, close: 80 };
+/** How far into its close menu-shutter.png holds the shutter, ms: a little over half shut. */
+const SHUTTER_SHOT_MS = 55;
+
+/** In the page: holds the hero's clock `ms` after the next item taken (heroStage.ts). */
+function holdHeroBeat(ms) {
+  globalThis.__heroBeat = ms;
+}
+
+/** In the page: lets the hero's clock run again. */
+function releaseHeroBeat() {
+  delete globalThis.__heroBeat;
+}
+
+/** In the page: whether the hero stands held half way through its step to the menu, flared. */
+const midStep = () => {
+  const hero = globalThis.__escapelab?.hero;
+  return hero?.step < -0.2 && hero.step > -0.9 && hero.beam?.flare > 0.5;
+};
+
+/** In the page: how long the leaves of the wipe that shows ask for, ms, each once. */
+const leafLengths = () => [
+  ...new Set(
+    [...document.querySelectorAll('.door-wipe .door-leaf')].flatMap((leaf) =>
+      leaf.getAnimations().map((move) => move.effect.getTiming().duration),
+    ),
+  ),
+];
+
+/** The hero's beat as menu-hero-click.png holds it (`hero`, its probe), and whether it stepped. */
+const beatOf = (hero, stepped) => ({
+  stepped,
+  step: hero?.step ?? 0,
+  flare: hero?.beam?.flare ?? 0,
+});
+
+/**
+ * The shutter as menu-shutter.png holds it: whether it came, how far shut, 0 to 1, how long its
+ * leaves ask for, ms, and whether the menu still stands under it.
+ */
+async function heldShutter(page) {
+  const came = await attached(page.locator('.door-wipe--shutter.door-wipe--closing'), 5000);
+  await sleep(150);
+  return {
+    came,
+    shut: (await doorShut(page)) ?? 0,
+    lengths: await page.evaluate(leafLengths),
+    under: (await page.locator('.menu').count()) === 1,
+  };
+}
+
+/** What the log says of the shutter held (`heldShutter`). */
+function shutterText({ came, shut, lengths, under }) {
+  if (!came) {
+    return '!! no shutter';
+  }
+  const over = under ? 'the menu' : '!! the page';
+  const leaves = lengths.join(' + ');
+  return `the shutter ${Math.round(shut * 100)} % shut over ${over}, its leaves ${leaves} ms`;
+}
+
+/** What the log says of the held press (`beat`, beatOf) and the shutter (`shutter`). */
+function heldClickText(beat, shutter) {
+  const [step, flare] = [beat.step, beat.flare].map((n) => n.toFixed(2));
+  const hero = beat.stepped
+    ? `the hero ${step} of its step to the menu, its lamp flared ${flare}`
+    : `!! the hero not mid-step (${step}, flare ${flare})`;
+  const held = `held ${HERO_BEAT_HOLD_MS} ms after „Bestenliste" was pressed`;
+  return `${held}: ${hero}; ${shutterText(shutter)}`;
+}
+
+/**
+ * „Bestenliste" pressed with the hero's clock held HERO_BEAT_HOLD_MS after it and the wipe's
+ * beat kept back (holdWipeAt): menu-hero-click.png shows the hero half way through its step
+ * toward the menu, its lamp flared; let on, the shutter held SHUTTER_SHOT_MS into its close
+ * over the menu (menu-shutter.png); let go, the Bestenliste opens — or the run fails where the
+ * hero did not step and flare, or no shutter of its own length came over the menu.
+ */
+async function heldClick(page) {
+  await page.evaluate(holdHeroBeat, HERO_BEAT_HOLD_MS);
+  await page.evaluate(holdWipeAt, { ms: SHUTTER_SHOT_MS, delay: SHUTTER.beat });
+  await pressHistory(page);
+  const stepped = await page.waitForFunction(midStep, null, { timeout: 5000 }).then(
+    () => true,
+    () => false,
+  );
+  await capture(page, 'menu-hero-click.png');
+  const beat = beatOf(await heroOf(page), stepped);
+  await page.evaluate(holdWipeAt, { ms: SHUTTER_SHOT_MS, delay: SHUTTER.close });
+  const shutter = await heldShutter(page);
+  await capture(page, 'menu-shutter.png');
+  await page.evaluate(releaseWipe);
+  await page.evaluate(releaseHeroBeat);
+  console.log(`menu-shutter.png   ${heldClickText(beat, shutter)}`);
+  if (!stepped || !shutter.came || !shutter.under || shutter.lengths[0] !== SHUTTER.close) {
+    fail('menu-hero-click.png, menu-shutter.png: no step and flare, or no shutter over the menu');
+  }
 }
 
 /** Click a button whose visible text contains `text`. */
@@ -1610,6 +1728,26 @@ async function openMenuPanel(page, label) {
 async function closeMenuPanel(page) {
   await page.keyboard.press('Escape');
   await page.locator('.menu-panel').waitFor({ state: 'detached', timeout: 5000 });
+}
+
+/**
+ * Types `name` as the page's profile name, which the panels that seat the pass carry at their
+ * head (client screens/MenuPanels.tsx `NameField`, profileName.ts): „Beitreten" opened, the name
+ * filled in, and the panel left by its „Zurück" — each by an event the page takes as no gesture,
+ * so that the menu's sound still waits for the first key (`menuSoundAtFirstKey`). A panel the
+ * menu came up on, an invite's, takes the name where it stands, and stays.
+ */
+async function typeName(page, name) {
+  await page.locator('.menu-item').first().waitFor({ timeout: 10_000 });
+  const open = (await page.locator('.menu-panel').count()) > 0;
+  if (!open) {
+    await page.locator('.menu-item', { hasText: 'Beitreten' }).dispatchEvent('click');
+  }
+  await page.locator('.menu-panel .menu-name-field').fill(name);
+  if (!open) {
+    await page.locator('.menu-panel .menu-back').dispatchEvent('click');
+    await page.locator('.menu-panel').waitFor({ state: 'detached', timeout: 5000 });
+  }
 }
 
 /** Opens a round of the mission whose card reads `title`: its card picked, „Runde eröffnen". */
@@ -7340,7 +7478,7 @@ const heroOf = (page) => page.evaluate(() => globalThis.__escapelab?.hero ?? nul
 
 /**
  * In the page: the hero's canvas, where it shows, and what the hero has to keep clear of — the
- * menu's column, its lead line, the profile and a panel open over the menu — each a box in the
+ * menu's column, its lead line, the title and a panel open over the menu — each a box in the
  * window's CSS px; null for what is not there.
  */
 function heroRoom() {
@@ -7357,7 +7495,7 @@ function heroRoom() {
     clear: {
       menu: box('.menu-body'),
       lead: box('.menu-lead'),
-      profile: box('.profile-chip'),
+      title: box('.menu-head'),
       panel: box('.menu-panel'),
     },
   };
@@ -7383,7 +7521,7 @@ const HERO_TILES = { laptop: [4.75, 5.25], narrow: [3.5, 4.2] };
 function heroText(hero, box, covers) {
   const [left, top, right, bottom] = [box.left, box.top, box.right, box.bottom].map(Math.round);
   const where = `${left}–${right} × ${top}–${bottom}`;
-  const clear = covers.length === 0 ? 'clear of the menu, its lead line and the profile' : '';
+  const clear = covers.length === 0 ? 'clear of the menu, its lead line and the title' : '';
   return (
     `${hero.tiles.toFixed(2)} scene tiles tall, standing ${where} px, ` +
     (clear === '' ? `!! over ${covers.join(', ')}` : clear)
@@ -7410,7 +7548,7 @@ async function heroStanding(page, label) {
 /**
  * The hero on `page` (`label`, the window's size): it has to stand there — as many of the scene's
  * tiles tall as `tiles` says (HERO_TILES), where it says — nothing of it over the menu, its lead
- * line, the profile or a panel open; else the run fails.
+ * line, the title or a panel open; else the run fails.
  */
 async function checkHero(page, label, tiles = null) {
   const standing = await heroStanding(page, label);
@@ -7430,7 +7568,7 @@ async function checkHero(page, label, tiles = null) {
 /**
  * The hero left out on `page` (`label`): where the room beside the widest panel holds fewer than
  * three and a half scene tiles of it, and on a phone, it stands nowhere, its canvas hidden, the
- * profile's figure standing for it — or the run fails.
+ * bar's avatar standing for it — or the run fails.
  */
 async function heroGone(page, label) {
   await sleep(300);
@@ -7445,8 +7583,8 @@ async function heroGone(page, label) {
 
 /**
  * At 1100×700 the hero stands three and a half scene tiles tall at least, clear of the menu and
- * the profile — and with „Einsatz starten" open, stepped aside, clear of the panel too; at
- * 1024×768 the room beside the widest panel holds fewer, and it is left out, the profile's figure
+ * the title — and with „Einsatz starten" open, stepped aside, clear of the panel too; at
+ * 1024×768 the room beside the widest panel holds fewer, and it is left out, the bar's avatar
  * standing for it (menu-hero-1024.png) — or the run fails.
  */
 async function heroNarrow(page) {
@@ -7463,12 +7601,48 @@ async function heroNarrow(page) {
   await sceneBaked(page, { w: 1024, h: 768 });
   await heroGone(page, '1024x768');
   await capture(page, 'menu-hero-1024.png');
+  await checkMenuLines(page, 'menu-hero-1024.png');
 }
 
 /**
- * menu.png: the start screen as a game's menu over its living scene — the lit lab of the first
- * mission baked for the window and drifting, the title, the menu, the profile — walked by the
- * keys (`walkMenuKeys`), its music heard as the music's manifest has it; its quiet window, the
+ * The menu's quiet lines over the scene on `page` as it stands — the sign under the title and the
+ * line under the items: each one's text made clear, its box shot, and its colour laid over each
+ * pixel behind it (contrast.mjs `lineContrast`); fails the run where a line lies out of the window
+ * or under TEXT_CONTRAST at any pixel. The drift moves the lab behind them: this is one moment of
+ * it (docs/art-bible.md, The menu, has the whole drift measured).
+ */
+async function checkMenuLines(page, label) {
+  for (const line of ['.menu-sub', '.menu-lead']) {
+    const el = page.locator(line).first();
+    const box = await el.boundingBox();
+    const view = page.viewportSize();
+    if (box === null || view === null || box.y < 0 || box.y + box.height > view.height) {
+      fail(`${label}: ${line} lies out of the window (${JSON.stringify(box)})`);
+      continue;
+    }
+    const colour = await el.evaluate((node) => globalThis.getComputedStyle(node).color);
+    const clear = await page.addStyleTag({
+      content: `${line} { color: transparent !important; text-shadow: none !important; }`,
+    });
+    const png = await page.screenshot({ clip: box, type: 'png' });
+    await clear.evaluate((node) => node.remove());
+    const { worst, lightest } = lineContrast(colour, decodePng(png, line).rgba);
+    const verdict = worst >= TEXT_CONTRAST ? '' : ` (!! under ${TEXT_CONTRAST}:1)`;
+    console.log(
+      `${'lines'.padEnd(19)}${label} ${line}: ${worst.toFixed(2)}:1 at its lightest pixel ` +
+        `(${lightest.toFixed(4)})${verdict}`,
+    );
+    if (worst < TEXT_CONTRAST) {
+      fail(`${label}: ${line} stands at ${worst.toFixed(2)}:1 over the scene`);
+    }
+  }
+}
+
+/**
+ * menu.png: the start screen as a game's menu over its living scene — the lab of the first
+ * mission at night, baked for the window and drifting, the title, the menu, the bar's account —
+ * walked by
+ * the keys (`walkMenuKeys`), its music heard as the music's manifest has it; its quiet window, the
  * scene drifting, has to keep the screen's pace under SHOTS_SOFTWARE_GL (MENU_P95_MS) and the
  * gate's allowance anyway; at 1280×720 it has to fit as at 1440×820 (menu-1280.png), the scene
  * baked anew for each. Returns the music's manifest, which the lobby's check reads too.
@@ -7479,13 +7653,16 @@ async function captureMenu(page) {
   await heroArrived(page);
   await capture(page, 'menu.png');
   console.log(`menu.png           ${sceneText(scene)}`);
+  await checkMenuLines(page, 'menu.png');
   await checkHero(page, '1440x820', HERO_TILES.laptop);
   await menuSoundAtFirstKey(page, () => walkMenuKeys(page), list);
   await checkPieceCodec(page, list);
   const look = await frameWindow(page, 'on the menu, its scene drifting', () => sleep(SAMPLE_MS));
   menuPace(look);
   await heroLampShot(page);
-  await heroBeamBeat(page);
+  await heroHover(page);
+  await captureMenuPlaces(page);
+  await captureAccountBar(page);
   await overflow(page, 'menu @ 1440x820');
   await page.setViewportSize({ width: 1280, height: 720 });
   await sceneBaked(page, { w: 1280, h: 720 });
@@ -7498,6 +7675,51 @@ async function captureMenu(page) {
   await sceneBaked(page, { w: SIZES[0].width, h: SIZES[0].height });
   await captureHeroEntrance();
   return list;
+}
+
+/**
+ * In the page: the share of the bar's avatar drawn — the figure's head on its canvas; 0 for none.
+ */
+function avatarDrawn() {
+  const canvas = document.querySelector('.bar-account canvas.avatar');
+  const ctx = canvas?.getContext('2d');
+  if (ctx === null || ctx === undefined || canvas.width === 0) {
+    return 0;
+  }
+  const { data } = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  let drawn = 0;
+  for (let i = 3; i < data.length; i += 4) {
+    drawn += data[i] > 0 ? 1 : 0;
+  }
+  return drawn / (canvas.width * canvas.height);
+}
+
+/**
+ * menu-account.png: the top bar with the account at its end, off any room — the avatar, the
+ * figure's head drawn in the account's colour, and the name typed — a target 36 px tall at least
+ * under a mouse; a press opens the settings on „Konto", Esc closes them — or the run fails.
+ */
+async function captureAccountBar(page) {
+  const bar = page.locator('.bar-account');
+  const [drawn, said, box] = [
+    await page.evaluate(avatarDrawn),
+    await bar.getAttribute('aria-label'),
+    await bar.boundingBox(),
+  ];
+  await captureElement(page.locator('.topbar'), 'menu-account.png');
+  await bar.click();
+  const konto = await attached(page.locator('.settings-tab--on[data-tab="konto"]'), 5000);
+  await page.keyboard.press('Escape');
+  await page.locator('.overlay.settings').waitFor({ state: 'detached', timeout: 5000 });
+  const tall = box !== null && box.height >= 35.5;
+  const size = box === null ? '!! no box' : `${Math.round(box.width)}×${Math.round(box.height)}`;
+  console.log(
+    `menu-account.png   the bar's account "${said}", ${size} px, its avatar ` +
+      `${Math.round(drawn * 100)} % drawn; a press opened ${konto ? '„Konto"' : '!! no „Konto"'}`,
+  );
+  if (drawn < 0.2 || !tall || !konto) {
+    fail(`menu-account.png: avatar ${drawn}, ${size}, „Konto" opened ${konto}`);
+  }
 }
 
 /** How long the hero's entrance takes at most: its walk, the click and the lamp, and a margin. */
@@ -7592,9 +7814,6 @@ const lampOn = () =>
   globalThis.__escapelab?.scene?.beam?.laid === true &&
   globalThis.__escapelab?.hero?.beam?.on === 1;
 
-/** How long the beam may take to come to an item hovered, ms: two passes and a beat. */
-const BEAM_BEAT_WITHIN_MS = 26_000;
-
 /** What the log says of the hero's beam (`beam`, its probe) and the menu's column (`menu`). */
 function beamText(beam, menu) {
   const [x, y, reach] = [beam.lens.x, beam.lens.y, beam.reach].map(Math.round);
@@ -7623,34 +7842,130 @@ async function heroLampShot(page) {
   }
 }
 
-/** In the page: whether the hero looks at „Beitreten", hovered, its beam holding a beat on it. */
-const beatOnJoin = () => {
-  const probe = globalThis.__escapelab?.hero;
-  return probe?.look?.at === 'join' && probe.beam?.holding === true;
+/** Where the menu's places show in the window: its share across and down (client places.ts). */
+const SCENE_ANCHOR = { x: 0.5, y: 0.55 };
+
+/**
+ * How long the hero and the scene may take to turn to an item hovered, ms: the camera's pan of
+ * 2 s at most (client camera.ts TRAVEL_MS), the beam's turn, and a loaded runner's margin.
+ */
+const TURNED_WITHIN_MS = 10_000;
+
+/** In the page: whether the scene's camera has come to the place of `item` — null: the drift. */
+const cameraArrived = (item) => {
+  const camera = globalThis.__escapelab?.scene?.camera;
+  return camera?.aimed === item && camera.travelling === false;
 };
 
 /**
- * menu-hero-hover.png: „Beitreten" hovered, the hero's head turned to it and its beam holding a
- * beat on it within two passes of its sweep (BEAM_BEAT_WITHIN_MS), or the run fails; the pointer
- * goes off the menu after.
+ * In the page: whether the hero has turned to `item`, hovered — its head to the item, its visor
+ * catching the item's glow — and holds its beam on the item's room.
  */
-async function heroBeamBeat(page) {
+const heldOn = (item) => {
+  const hero = globalThis.__escapelab?.hero;
+  return (
+    hero?.look?.at === item &&
+    hero.glow === true &&
+    hero.beam?.room === item &&
+    hero.beam.holding === true
+  );
+};
+
+/** How far the beam `beam` (the hero's probe) points from the middle of the room shown, radians. */
+function offTheRoom(beam, size) {
+  const to = { x: SCENE_ANCHOR.x * size.width, y: SCENE_ANCHOR.y * size.height };
+  const toward = Math.atan2(to.y - beam.lens.y, to.x - beam.lens.x);
+  return Math.abs(beam.angle - (toward < 0 ? toward + 2 * Math.PI : toward));
+}
+
+/** What the log says of the hero turned to an item hovered (`hero`, its probe) after `ms`. */
+function hoverText(hero, size, ms) {
+  if (hero === null || hero.beam === null) {
+    return `!! no hero or no beam: ${JSON.stringify(hero)}`;
+  }
+  const visor = hero.glow ? 'its visor catching the glow' : '!! its visor dark';
+  const off = offTheRoom(hero.beam, size).toFixed(2);
+  const after = (ms / 1000).toFixed(1);
+  return (
+    `its head turned ${(hero.look?.turned ?? 0).toFixed(2)} rad, ${visor}, its beam on the ` +
+    `room ${off} rad off its middle, the camera there ${after} s after the hover`
+  );
+}
+
+/**
+ * menu-hero-hover.png: „Beitreten" hovered — the hero's head turned to it, its visor catching the
+ * item's glow, its beam held on the item's room (the Flur at the Serverschott), which the scene's
+ * camera has come to — or the run fails; the pointer goes off the menu after.
+ */
+async function heroHover(page) {
   const started = Date.now();
   await page.locator('.menu-item', { hasText: 'Beitreten' }).hover();
-  const beat = await page
-    .waitForFunction(beatOnJoin, null, { timeout: BEAM_BEAT_WITHIN_MS, polling: 50 })
+  const there = await cameraCame(page, 'join');
+  const held = await page
+    .waitForFunction(heldOn, 'join', { timeout: TURNED_WITHIN_MS, polling: 50 })
     .then(
       () => true,
       () => false,
     );
   await capture(page, 'menu-hero-hover.png');
-  const turned = (await heroOf(page))?.look?.turned ?? 0;
-  const after = ((Date.now() - started) / 1000).toFixed(1);
-  const said = beat ? `held a beat on BEITRETEN ${after} s after the hover` : '!! no beat';
-  console.log(`menu-hero-hover.png its head turned ${turned.toFixed(2)} rad, its beam ${said}`);
+  const said = hoverText(await heroOf(page), page.viewportSize(), Date.now() - started);
+  console.log(`menu-hero-hover.png ${there && held ? '' : '!! not turned: '}${said}`);
   await page.mouse.move(2, 2);
-  if (!beat) {
-    fail('hero beam: it never held a beat on the item hovered');
+  if (!there || !held) {
+    fail('menu-hero-hover.png: the hero or the scene did not turn to the item hovered');
+  }
+}
+
+/**
+ * The items whose places menu-place-*.png show: Blackout's Archiv for the booklet, its
+ * Maschinenraum for the settings (client places.ts).
+ */
+const PLACE_SHOTS = [
+  { item: 'handbook', label: 'Handbuch', shot: 'menu-place-handbook.png' },
+  { item: 'settings', label: 'Einstellungen', shot: 'menu-place-settings.png' },
+];
+
+/** Waits for the scene's camera on `page` to come to the place of `item`; whether it came. */
+const cameraCame = (page, item) =>
+  page.waitForFunction(cameraArrived, item, { timeout: TURNED_WITHIN_MS, polling: 50 }).then(
+    () => true,
+    () => false,
+  );
+
+/**
+ * The item `label` hovered on `page` until the scene's camera has come to the room of its place
+ * (`item`), shot as `shot`; whether the camera came.
+ */
+async function placeShot(page, { item, label, shot }) {
+  const started = Date.now();
+  await page.locator('.menu-item', { hasText: label }).hover();
+  const there = await cameraCame(page, item);
+  await capture(page, shot);
+  const after = ((Date.now() - started) / 1000).toFixed(1);
+  const came = `the camera at the room of „${label}" ${after} s after the hover`;
+  const said = there ? came : '!! no room';
+  console.log(`${shot} ${said}`);
+  return there;
+}
+
+/**
+ * menu-place-handbook.png, menu-place-settings.png: each item hovered, the scene's camera come to
+ * its room of Blackout's lab; menu-place-idle.png: nothing hovered or in the focus, the scene
+ * back on its drift — or the run fails, as it does where the scene shows a lab without places.
+ */
+async function captureMenuPlaces(page) {
+  const lab = (await sceneOf(page))?.missionId ?? null;
+  const came = [];
+  for (const place of PLACE_SHOTS) {
+    came.push(await placeShot(page, place));
+  }
+  await page.mouse.move(2, 2);
+  await page.evaluate(() => document.activeElement?.blur());
+  const idle = await cameraCame(page, null);
+  await capture(page, 'menu-place-idle.png');
+  console.log(`menu-place-idle.png ${idle ? `${lab}'s lab on its drift` : '!! a place held'}`);
+  if (lab !== 'blackout' || came.includes(false) || !idle) {
+    fail(`menu-place-*.png: the lab ${lab}, its rooms reached ${came.join(', ')}, idle ${idle}`);
   }
 }
 
@@ -7719,36 +8034,43 @@ const DOOR_CLOSE_MS = 170;
 const DOOR_SHOT_MS = 130;
 
 /**
- * In the page: holds the door wipe `ms` into its close, its leaves paused there, and keeps back
- * the timer that would open them (`close` ms) — holdPanelFade's way with a device's fade.
+ * In the page: holds the door wipe at a step of its own — its leaves paused `ms` into their close,
+ * the timers of `delay` ms kept back: the beat's, or the close's that would open them —
+ * holdPanelFade's way with a device's fade. Called again, it runs the timers it kept, so that the
+ * wipe goes on to its next step, and keeps back those of the new `delay`.
  */
-function holdDoors({ ms, close }) {
-  const style = document.createElement('style');
-  style.id = 'shots-door-hold';
-  style.textContent =
+function holdWipeAt({ ms, delay }) {
+  let hold = globalThis.__wipeHold;
+  if (hold === undefined) {
+    const style = document.createElement('style');
+    document.head.append(style);
+    // The browser's own setTimeout throws unless it is called on the window.
+    hold = { plain: globalThis.setTimeout, kept: [], delay, style };
+    globalThis.__wipeHold = hold;
+    globalThis.setTimeout = (run, wait, ...args) => {
+      if (wait !== hold.delay) {
+        return hold.plain.call(globalThis, run, wait, ...args);
+      }
+      hold.kept.push(() => run(...args));
+      return hold.plain.call(globalThis, () => undefined, 0);
+    };
+  }
+  hold.style.textContent =
     '.door-wipe--closing .door-leaf ' +
     `{ animation-delay: -${ms}ms !important; animation-play-state: paused !important; }`;
-  document.head.append(style);
-  // The browser's own setTimeout throws unless it is called on the window.
-  const plain = globalThis.setTimeout;
-  const kept = [];
-  globalThis.__doorHold = { plain, kept };
-  globalThis.setTimeout = (run, delay, ...args) => {
-    if (delay !== close) {
-      return plain.call(globalThis, run, delay, ...args);
-    }
-    kept.push(() => run(...args));
-    return plain.call(globalThis, () => undefined, 0);
-  };
+  hold.delay = delay;
+  for (const run of hold.kept.splice(0)) {
+    hold.plain.call(globalThis, run, 0);
+  }
 }
 
-/** In the page: lets the doors held by holdDoors go — their timer runs now, they open. */
-function releaseDoors() {
-  const hold = globalThis.__doorHold;
-  document.getElementById('shots-door-hold')?.remove();
+/** In the page: lets the wipe held by holdWipeAt go — its kept timers run now, its leaves move. */
+function releaseWipe() {
+  const hold = globalThis.__wipeHold;
   if (hold !== undefined) {
+    hold.style.remove();
     globalThis.setTimeout = hold.plain;
-    delete globalThis.__doorHold;
+    delete globalThis.__wipeHold;
     for (const run of hold.kept) {
       hold.plain.call(globalThis, run, 0);
     }
@@ -7764,12 +8086,12 @@ const doorShut = (page) =>
 
 /**
  * „Runde eröffnen" pressed (`open`) with the door wipe held DOOR_SHOT_MS into its close over the
- * menu (holdDoors), shot as menu-to-lobby.png, then let go until the lobby stands behind them and
+ * menu (holdWipeAt), shot as menu-to-lobby.png, then let go until the lobby stands behind them and
  * they have gone: whether the doors came, how far they had shut, 0 to 1, and whether the menu
  * still stood under them, the lobby not yet there, while they closed.
  */
 async function shootHeldDoors(page, open) {
-  await page.evaluate(holdDoors, { ms: DOOR_SHOT_MS, close: DOOR_CLOSE_MS });
+  await page.evaluate(holdWipeAt, { ms: DOOR_SHOT_MS, delay: DOOR_CLOSE_MS });
   await open();
   const came = await page
     .locator('.door-wipe--closing')
@@ -7784,7 +8106,7 @@ async function shootHeldDoors(page, open) {
   const lobby = await page.locator('.lobby').count();
   const hero = await heroOf(page);
   await capture(page, 'menu-to-lobby.png');
-  await page.evaluate(releaseDoors);
+  await page.evaluate(releaseWipe);
   await page.locator('.lobby').waitFor({ timeout: 10_000 });
   await page.locator('.door-wipe').waitFor({ state: 'detached', timeout: 5000 });
   const away = hero?.leaving === true && Math.sin(hero.facing) < 0;
@@ -7921,8 +8243,9 @@ const MENU_SIDEWAYS = [
 
 /**
  * In the page: how the menu stands in its window — the controls under a fingertip's 44 px, the
- * items running out of the menu's column or the window, where the menu, the title and the
- * profile stand, and how far the page runs out sideways.
+ * items running out of the menu's column or the window, where the menu and the title stand, the
+ * top bar's account — its box, whether it shows its name — and how far the page runs out
+ * sideways.
  */
 function menuLayout() {
   const box = (selector) => document.querySelector(selector).getBoundingClientRect();
@@ -7936,37 +8259,55 @@ function menuLayout() {
   const clipped = [...document.querySelectorAll('.menu-item')]
     .filter((el) => el.getBoundingClientRect().bottom > floor)
     .map((el) => el.textContent.trim());
+  const account = document.querySelector('.bar-account')?.getBoundingClientRect() ?? null;
+  const named = document.querySelector('.bar-account-name')?.getBoundingClientRect().width ?? 0;
   return {
     width: globalThis.innerWidth,
     targets: shown.length,
     short,
     clipped,
     navRight: box('.menu-list').right,
+    navTop: box('.menu-list').top,
     headLeft: box('.menu-head').left,
     headBottom: box('.menu-head').bottom,
-    chipLeft: box('.profile-chip').left,
-    chipTop: box('.profile-chip').top,
+    account: account === null ? null : { w: account.width, h: account.height, named: named > 0 },
     sideways: document.documentElement.scrollWidth - globalThis.innerWidth,
   };
 }
 
-/** What the log says of `look` (menuLayout) — and what falls short, '' where nothing does. */
+/** What falls short of the top bar's account on a phone (`look`, menuLayout): '' for nothing. */
+function phoneAccountFault({ account }) {
+  if (account === null) {
+    return '!! no account in the bar';
+  }
+  const small = account.w < 43.5 || account.h < 43.5;
+  const size = `${Math.round(account.w)}×${Math.round(account.h)}`;
+  return [small ? `!! its account ${size} px` : '', account.named ? '!! its name beside it' : '']
+    .filter((fault) => fault !== '')
+    .join('; ');
+}
+
+/**
+ * What the log says of `look` (menuLayout) on a phone — and what falls short, '' where nothing
+ * does: upright the menu under the title; sideways the menu left of the title, the scene beside
+ * it 40 % wide; the bar's account its avatar alone, a fingertip's target.
+ */
 function menuLayoutText(look, upright) {
-  // Sideways the menu stands left of the title and the profile, the scene beside it 40 % wide.
-  const right = Math.min(look.headLeft, look.chipLeft);
   const placed = upright
-    ? look.chipTop >= look.headBottom - 1
-    : look.navRight <= right && look.width - look.navRight >= look.width * 0.4;
+    ? look.navTop >= look.headBottom - 1
+    : look.navRight <= look.headLeft && look.width - look.navRight >= look.width * 0.4;
   const where = upright
-    ? 'the profile under the title'
-    : `the menu left (to ${Math.round(look.navRight)} px), the title and the profile right`;
+    ? 'the menu under the title'
+    : `the menu left (to ${Math.round(look.navRight)} px), the title right`;
   const faults = [
     placed ? '' : `!! not laid out so: ${JSON.stringify(look)}`,
     look.short.length === 0 ? '' : `!! under 44 px: ${look.short.join(', ')}`,
     look.clipped.length === 0 ? '' : `!! cut off: ${look.clipped.join(', ')}`,
     look.sideways <= 0 ? '' : `!! +${look.sideways}px sideways`,
+    phoneAccountFault(look),
   ].filter((fault) => fault !== '');
-  return { text: `${where}, ${look.targets} targets ≥ 44 px`, faults: faults.join('; ') };
+  const text = `${where}, ${look.targets} targets ≥ 44 px, the bar's avatar alone`;
+  return { text, faults: faults.join('; ') };
 }
 
 /** Logs the menu's layout on `page` (menuLayoutText); fails the run where it falls short. */
@@ -7979,10 +8320,11 @@ async function judgeMenuLayout(page, label, upright) {
 }
 
 /**
- * The menu on the guest's phone: upright, the profile under the title (menu-phone.png, shot
+ * The menu on the guest's phone: upright, the menu under the title (menu-phone.png, shot
  * before); then turned, in every window of MENU_SIDEWAYS, the menu left in its column whole and
- * the scene beside it, the title and the profile over it (menu-phone-932.png) — every target a
- * fingertip's at least, nothing cut off, nothing out sideways; then upright again.
+ * the scene beside it, the title over it (menu-phone-932.png) — every target a fingertip's at
+ * least, the bar's account its avatar alone, nothing cut off, nothing out sideways; then upright
+ * again.
  */
 async function checkMenuPhones(page) {
   await judgeMenuLayout(page, 'menu-phone.png', true);
@@ -8010,7 +8352,7 @@ async function sidePage(name, contexts) {
   const page = await openPage(context, name);
   page.on('pageerror', (e) => console.log(`[${name} error]`, e.message));
   await page.goto(traced(BASE));
-  await page.getByPlaceholder('z. B. Anna').fill(name);
+  await typeName(page, name);
   return page;
 }
 
@@ -9531,13 +9873,13 @@ async function artPage(name, size = ART_SIZE) {
 async function artLobby() {
   const host = await artPage('art host');
   await host.page.goto(traced(BASE));
-  await host.page.getByPlaceholder('z. B. Anna').fill('Anna');
+  await typeName(host.page, 'Anna');
   await openRound(host.page, ART_MISSION.title);
   await host.page.locator('.room-code strong').waitFor({ timeout: 10_000 });
   const code = (await host.page.locator('.room-code strong').innerText()).trim();
   const guest = await artPage('art guest');
   await guest.page.goto(traced(BASE));
-  await guest.page.getByPlaceholder('z. B. Anna').fill('Ben');
+  await typeName(guest.page, 'Ben');
   await byCode(guest.page, code);
   await guest.page.locator('.lobby').waitFor({ timeout: 10_000 });
   const watcher = await artPage('art audience');
@@ -9777,7 +10119,7 @@ async function openProbeRoom(host, { drill, file, mission, seed }) {
 /** `guest` joins the room `code` from the menu. */
 async function joinProbeRoom(guest, code) {
   await guest.page.goto(paged(BASE));
-  await guest.page.getByPlaceholder('z. B. Anna').fill(guest.name);
+  await typeName(guest.page, guest.name);
   await byCode(guest.page, code);
   await guest.page.locator('.lobby').waitFor({ timeout: 10_000 });
 }
@@ -12233,8 +12575,8 @@ const WON_ROW = [/Systemcheck/, /Geschafft/, /Anna/, /Ben/];
  * browser — its pass, its account — opens „Meine Einsätze" off the menu, the run just won leading
  * the list with the crew and a rank, and fitting a phone sideways; then the settings delete the
  * account at the second word, „Konto löschen" and „Endgültig löschen" (account-delete.png shows
- * the first answered), the profile says „Gast" with no name, and „Meine Einsätze" lists nothing
- * any more. The run fails wherever that does not hold.
+ * the first answered), the top bar's account says it has no name and no runs, and „Meine
+ * Einsätze" lists nothing any more. The run fails wherever that does not hold.
  */
 async function captureAccount(host, guest) {
   const page = await openPage(host.page.context(), 'host tab');
@@ -12244,18 +12586,17 @@ async function captureAccount(host, guest) {
     await page.locator('.history-back').click();
     await captureLogin(page, host, guest);
     await deleteAccount(page);
-    // The slot's text as written: the chip sets it in capitals.
-    const slot = (await page.locator('.profile-slot').textContent())?.trim() ?? null;
-    const name = await page.locator('.profile-name').inputValue();
+    const said = await page.locator('.bar-account').getAttribute('aria-label');
     await page.locator('.menu-item', { hasText: 'Meine Einsätze' }).click();
     const empty = await attached(page.getByText('Noch kein Einsatz mit diesem Konto.'), 10_000);
+    const gone = said === 'Konto: Ohne Namen';
     console.log(
-      `account-delete.png ${host.name}'s account deleted: profile "${slot}"` +
-        `${name === '' ? ', no name' : ` !! still "${name}"`}` +
+      `account-delete.png ${host.name}'s account deleted: the bar says "${said}"` +
+        `${gone ? ', no name, no runs' : ' !! not emptied'}` +
         (empty ? ', „Meine Einsätze" empty' : ', !! „Meine Einsätze" still lists runs'),
     );
-    if (slot !== 'Gast' || name !== '' || !empty) {
-      fail(`account-delete: profile "${slot}", name "${name}", runs listed ${!empty} (row ${row})`);
+    if (!gone || !empty) {
+      fail(`account-delete: the bar says "${said}", runs listed ${!empty} (row ${row})`);
     }
   } finally {
     await page.close();
@@ -13107,7 +13448,7 @@ async function playHall(crew, watcher) {
 async function openHallRoom(host) {
   // Traced: the drill samples the host's frames (`playHall`).
   await host.page.goto(seeded(traced(BASE), HALL_PLAN.seed));
-  await host.page.getByPlaceholder('z. B. Anna').fill(host.name);
+  await typeName(host.page, host.name);
   await openRound(host.page, HALL_MISSION.title);
   await host.page.locator('.room-code strong').waitFor({ timeout: 10_000 });
   const code = (await host.page.locator('.room-code strong').innerText()).trim();
@@ -14497,14 +14838,14 @@ async function captureDangerSense() {
     const host = await artPage('Anna', SIZES[0]);
     pages.push(host);
     await host.page.goto(traced(BASE));
-    await host.page.getByPlaceholder('z. B. Anna').fill('Anna');
+    await typeName(host.page, 'Anna');
     await openRound(host.page, DANGER_MISSION.title);
     await host.page.locator('.room-code strong').waitFor({ timeout: 10_000 });
     const code = (await host.page.locator('.room-code strong').innerText()).trim();
     const guest = await artPage('Ben', SIZES[0]);
     pages.push(guest);
     await guest.page.goto(traced(BASE));
-    await guest.page.getByPlaceholder('z. B. Anna').fill('Ben');
+    await typeName(guest.page, 'Ben');
     await byCode(guest.page, code);
     await guest.page.locator('.lobby').waitFor({ timeout: 10_000 });
     await startRun(host, guest);
@@ -14637,7 +14978,7 @@ async function drillPlayer(name) {
 /** `player` joins room `code` from the menu, by the code's own field. */
 async function joinByCode(player, code) {
   await player.page.goto(traced(BASE));
-  await player.page.getByPlaceholder('z. B. Anna').fill(player.name);
+  await typeName(player.page, player.name);
   await byCode(player.page, code);
 }
 
@@ -14647,7 +14988,7 @@ async function joinByCode(player, code) {
  */
 async function drillRoom(anna, guests, url) {
   await anna.page.goto(url);
-  await anna.page.getByPlaceholder('z. B. Anna').fill('Anna');
+  await typeName(anna.page, 'Anna');
   await openRound(anna.page, MISSION);
   await anna.page.locator('.room-code strong').waitFor({ timeout: 10_000 });
   const code = (await anna.page.locator('.room-code strong').innerText()).trim();
@@ -15999,11 +16340,11 @@ async function hostOpensRound() {
   await host.goto(padded(seeded(traced(BASE))));
   // The game's title comes on as a phosphor screen does as the page loads (lobby-title.png).
   const titleCameOn = (await host.locator('.menu h1.phosphor-title').count()) === 1;
-  await host.getByPlaceholder('z. B. Anna').fill('Anna');
+  await typeName(host, 'Anna');
   await host.locator('.menu-item').first().waitFor({ timeout: 10_000 });
   // The menu, its music as the music's manifest lists it (`captureMenu` returns the list).
   const musicList = await inGroup('screens', () => captureMenu(host));
-  await inGroup('screens', () => captureHistory(host, 'history.png'));
+  await inGroup('screens', () => captureHistory(host, 'history.png', heldClick));
   await openMissionRound(host);
   // The lobby's music, its own piece where it is listed (checked as the run starts).
   const lobbySound = await inGroup('screens', () => lobbySoundOf(host, musicList));
@@ -16047,7 +16388,7 @@ async function guestJoins(code) {
   const guestSeen = eavesdrop(guest);
   // Traced for its voice links; its frames are never sampled.
   await guest.goto(traced(BASE));
-  await guest.getByPlaceholder('z. B. Anna').fill('Ben');
+  await typeName(guest, 'Ben');
   await guest.locator('.menu-item').first().waitFor({ timeout: 10_000 });
   await inGroup('screens', () => guestMenu(guest));
   await byCode(guest, code);
@@ -16062,6 +16403,7 @@ async function guestJoins(code) {
 async function guestMenu(guest) {
   await sceneBaked(guest);
   await capture(guest, 'menu-phone.png');
+  await checkMenuLines(guest, 'menu-phone.png');
   await checkMenuPhones(guest);
   await captureHistory(guest, 'history-phone.png');
 }

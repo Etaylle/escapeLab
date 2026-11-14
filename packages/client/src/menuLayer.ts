@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import type { ClientMessage, Phase, PlayerView } from '@escapelab/core';
+import type { SettingsTab } from './screens/Settings.js';
 
 /**
  * The menus over the screens (App.tsx): the pause menu over a room — a run, a lobby, the
@@ -35,15 +36,28 @@ export function pausePhaseOf(conn: {
 export interface Layers {
   pause: boolean;
   settings: boolean;
+  /**
+   * the settings' tab they were opened on — „Konto" by the top bar's account; null for the one
+   * they showed last (screens/Settings.tsx)
+   */
+  tab: SettingsTab | null;
   /** the mission whose booklet lies over the room, opened from the pause menu, by id; or null */
   handbook: string | null;
 }
 
-export const NOTHING_OPEN: Layers = { pause: false, settings: false, handbook: null };
+export const NOTHING_OPEN: Layers = { pause: false, settings: false, tab: null, handbook: null };
 
 /** The gear in the top bar: in a room the pause menu, off any room the settings. */
 export function gearOpens(layers: Layers, phase: PausePhase | null): Layers {
   return phase === null ? { ...layers, settings: true } : { ...layers, pause: true };
+}
+
+/**
+ * The settings opened over the screens on `tab` — „Konto" by the top bar's account — or, where
+ * null, on the tab they showed last.
+ */
+export function settingsOpen(layers: Layers, tab: SettingsTab | null): Layers {
+  return { ...layers, settings: true, tab };
 }
 
 /**
@@ -76,6 +90,8 @@ export interface MenuLayer extends Layers {
   /** closes the pause menu, and whatever was opened from it */
   closePause: () => void;
   openSettings: () => void;
+  /** opens the settings on „Konto", as the top bar's account does */
+  openAccount: () => void;
   closeSettings: () => void;
   openHandbook: (missionId: string) => void;
   closeHandbook: () => void;
@@ -135,8 +151,9 @@ export function useMenuLayer(phase: PausePhase | null): MenuLayer {
     start: () => change((now) => startPressed(now, phase)),
     openPause: () => patch({ pause: phase !== null }),
     closePause: () => setLayers(NOTHING_OPEN),
-    openSettings: () => patch({ settings: true }),
-    closeSettings: () => patch({ settings: false }),
+    openSettings: () => change((now) => settingsOpen(now, null)),
+    openAccount: () => change((now) => settingsOpen(now, 'konto')),
+    closeSettings: () => patch({ settings: false, tab: null }),
     openHandbook: (missionId) => patch({ handbook: missionId }),
     closeHandbook: () => patch({ handbook: null }),
   };

@@ -1,5 +1,5 @@
 /* ══ the menu over its living scene ══════════════════════════════════════════
- * screens/Join.tsx, MainMenu.tsx, MenuPanels.tsx, ProfileChip.tsx, MenuScene.tsx, world/menu/.
+ * screens/Join.tsx, MainMenu.tsx, MenuPanels.tsx, MenuScene.tsx, MenuHero.tsx, world/menu/.
  * Behind the join screen's content, over the whole window, the lit lab of the mission picked
  * drifts along the opening's shot; a vignette lies over it, darker behind the menu, the page's
  * scanlines over all (ui.css). The screens' area is a stacking context of its own, so that the
@@ -26,6 +26,10 @@
 
 :root {
   --display: 'Michroma', 'Eurostile', 'Microgramma', system-ui, -apple-system, sans-serif;
+  /* The colour of the hero's beam, the lamp's tungsten (world/palette.ts TUNGSTEN): the menu's
+     item in the focus stands on a rail of it, as if the lamp had found it. */
+  --beam: #ffd6a8;
+  --beam-light: rgba(255, 214, 168, 0.22);
 }
 
 .content--menu {
@@ -70,7 +74,7 @@
     rgba(5, 8, 12, 0.22);
 }
 
-/* ── the stage: the title, the profile, the menu ────────────────────────── */
+/* ── the stage: the title, the menu; the account stands in the top bar ─── */
 
 .menu {
   /* How wide a panel over the menu grows at most: the hero keeps clear of it (MenuHero.tsx). */
@@ -80,11 +84,11 @@
   min-width: 0;
   height: 100%;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: auto minmax(0, 1fr);
   grid-template-areas:
-    'head chip'
-    'body body';
+    'head'
+    'body';
   column-gap: 32px;
   row-gap: clamp(16px, 4.5vh, 44px);
   padding: clamp(22px, 6vh, 60px) max(clamp(20px, 5vw, 80px), env(safe-area-inset-right))
@@ -96,14 +100,15 @@
   min-width: 0;
 }
 
-/* It comes on as a phosphor screen does, once a page load (intro.css `phosphor-title`). */
+/* It comes on as a phosphor screen does, once a page load (intro.css `phosphor-title`). Spaced
+   wide, as a film's title is, and a little larger on a wide screen. */
 .menu-title {
   margin: 0;
   font-family: var(--display);
-  font-size: clamp(28px, 3.9vw, 56px);
+  font-size: clamp(28px, 3.9vw, 64px);
   font-weight: 400;
   line-height: 1.15;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.2em;
   color: #e9fff0;
   text-shadow:
     0 0 3px rgba(110, 255, 150, 0.55),
@@ -111,13 +116,16 @@
   white-space: nowrap;
 }
 
+/* The sign at the gate under it, a thin line: the light mono, softer than the title's white —
+   4.5:1 at least over the lab at night wherever it lies over it (docs/art-bible.md, The menu). */
 .menu-sub {
-  margin: 12px 0 0;
+  margin: 14px 0 0;
   font-family: var(--mono);
-  font-size: 12.5px;
-  letter-spacing: 0.22em;
+  font-size: 12px;
+  font-weight: 300;
+  letter-spacing: 0.28em;
   text-transform: uppercase;
-  color: #a69c8b;
+  color: #d0c5b2;
   text-shadow: 0 1px 2px #000;
 }
 
@@ -153,9 +161,10 @@
   list-style: none;
 }
 
-/* The focused item stands lit — its bar, its light, its step to the right — for the keyboard and
-   a controller alike: the ring of every other control (interaction.css) would only box it in.
-   The pointer only glows the item it is over, and moves no focus (MainMenu.tsx). */
+/* The focused item stands lit — a rail of the beam's warm light, its light behind it, its step to
+   the right — for the keyboard, a controller and a click alike; the keyboard's focus rings it too,
+   as every control's does (interaction.css). The pointer only brightens the item it is over,
+   slowly, and moves no focus (MainMenu.tsx). */
 .menu-list .menu-item {
   display: flex;
   align-items: center;
@@ -176,35 +185,32 @@
   text-transform: uppercase;
   text-shadow: 0 1px 3px #000;
   transition:
-    background 0.12s,
-    color 0.12s,
-    border-color 0.12s;
+    background 0.4s ease-out,
+    color 0.4s ease-out,
+    border-color 0.15s;
 }
 
-.menu-list .menu-item:hover:not(:disabled) {
+/* Hovered, an item only brightens: no rail, no glow round it, as a plain button's hover has. */
+.menu-list .menu-item:hover:not(:disabled):not(:focus) {
+  border-left-color: transparent;
   background: linear-gradient(
     90deg,
-    rgba(45, 212, 191, 0.16),
-    rgba(45, 212, 191, 0.04) 72%,
+    rgba(255, 214, 168, 0.09),
+    rgba(255, 214, 168, 0.02) 72%,
     transparent
   );
-  color: #f2fffc;
+  color: #fbf7f1;
+  box-shadow: none;
 }
 
 .menu-list .menu-item:focus {
-  border-left-color: var(--accent);
-  background: linear-gradient(
-    90deg,
-    rgba(45, 212, 191, 0.34),
-    rgba(45, 212, 191, 0.08) 72%,
-    transparent
-  );
-  color: #f2fffc;
+  border-left-color: var(--beam);
+  background: linear-gradient(90deg, var(--beam-light), rgba(255, 214, 168, 0.05) 72%, transparent);
+  color: #fffaf3;
   text-shadow:
-    0 0 10px rgba(45, 212, 191, 0.55),
+    0 0 10px rgba(255, 214, 168, 0.45),
     0 1px 3px #000;
   box-shadow: none;
-  outline: none;
 }
 
 .menu-label {
@@ -226,9 +232,19 @@
   text-shadow: none;
 }
 
-/* The card of a run that binds the pass stands first and lit; every item after it dims. */
+/* The card of a run that binds the pass stands first and lit, in a panel's frame — its corners,
+   its hairline —, its head in the title's face; every item after it dims. */
 .menu-list .bound {
   margin: 0 0 6px;
+  border-radius: 14px;
+}
+
+.menu-list .bound-title {
+  font-family: var(--display);
+  font-size: 16px;
+  font-weight: 400;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
 }
 
 .menu-list--bound .menu-item {
@@ -243,13 +259,16 @@
   margin: 0;
 }
 
-/* How the game is played, one quiet line under the items. */
+/* How the game is played, one quiet line under the items: the title's face, small and spaced, a
+   step lighter than the muted grey, so that it holds 4.5:1 over the lab at night (the art bible). */
 .menu-lead {
-  margin: 0;
-  max-width: 44ch;
-  color: var(--muted);
-  font-size: 13px;
-  line-height: 1.5;
+  margin: 4px 0 0;
+  max-width: 40em;
+  color: #b4c3cf;
+  font-family: var(--display);
+  font-size: 12px;
+  letter-spacing: 0.05em;
+  line-height: 1.8;
   text-shadow: 0 1px 2px #000;
 }
 
@@ -268,75 +287,10 @@
   font-size: 13px;
 }
 
-/* ── the profile, at the stage's top right ──────────────────────────────── */
-
-.profile-chip {
-  grid-area: chip;
-  align-self: start;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 6px 14px 6px 8px;
-  border: 1px solid var(--line-2);
-  border-radius: 14px;
-  background: rgba(9, 14, 19, 0.9);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
-}
-
-.profile-chip .seat-figure {
-  flex: none;
-  width: 46px;
-  height: 54px;
-}
-
-.profile-who {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-}
-
-.profile-name {
-  width: 168px;
-  padding: 6px 9px;
-  background: rgba(5, 8, 12, 0.7);
-  font-size: 15px;
-}
-
-.profile-color {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  color: var(--muted);
-  font-family: var(--mono);
-  font-size: 11.5px;
-  letter-spacing: 0.08em;
-}
-
-.profile-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-}
-
-/* Where an account's sign-in will sit (backlog K-1): a guest today. */
-.profile-slot {
-  align-self: stretch;
-  display: flex;
-  align-items: center;
-  padding-left: 12px;
-  border-left: 1px solid var(--line-2);
-  color: var(--muted);
-  font-family: var(--mono);
-  font-size: 11px;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
-}
-
 /* ── the hero, standing large at the stage's right ──────────────────────── */
 
-/* screens/MenuHero.tsx places and sizes its canvas on the stage, clear of the menu's column, the
-   profile and the widest panel; it lies under every panel and catches no pointer. Its margins
+/* screens/MenuHero.tsx places and sizes its canvas on the stage, clear of the menu's column and
+   the widest panel; it lies under every panel and catches no pointer. Its margins
    carry the window's safe areas to the script, which keeps the hero clear of them: placed by
    its left and top, a canvas's right and bottom margins move nothing. */
 .menu-hero {
@@ -397,6 +351,27 @@
   margin: 0 0 12px;
 }
 
+/* The profile's name at the head of a panel that seats the pass (MenuPanels.tsx `NameField`). */
+.menu-name {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 14px;
+}
+
+.menu-name-label {
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+.menu-name-field {
+  width: min(100%, 240px);
+}
+
 .menu-panel-actions {
   display: flex;
   flex-wrap: wrap;
@@ -416,7 +391,7 @@
 .mission-first,
 .mission-hall {
   color: var(--warn);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -476,17 +451,26 @@
   line-height: var(--target);
 }
 
+/* ── a wide screen ──────────────────────────────────────────────────────── */
+
+/* 1600 px across and more: the menu a step larger and its column wider, so that it holds its own
+   beside the hero standing taller there. */
+@media (min-width: 1600px) {
+  .menu-body {
+    width: min(100%, 480px);
+  }
+
+  .menu-list .menu-item {
+    min-height: 50px;
+    font-size: 16.5px;
+  }
+}
+
 /* ── a phone held upright ───────────────────────────────────────────────── */
 
-/* One column: the title, the profile under it, the menu under that, a panel over the menu. */
+/* One column: the title, the menu under it, a panel over the menu. */
 @media (max-width: 560px) {
   .menu {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto auto minmax(0, 1fr);
-    grid-template-areas:
-      'head'
-      'chip'
-      'body';
     row-gap: 18px;
     padding: 24px max(18px, env(safe-area-inset-right)) max(18px, env(safe-area-inset-bottom))
       max(18px, env(safe-area-inset-left));
@@ -498,13 +482,8 @@
 
   .menu-sub {
     margin-top: 8px;
-    font-size: 11px;
     line-height: 1.5;
     letter-spacing: 0.16em;
-  }
-
-  .profile-chip {
-    justify-self: start;
   }
 
   .menu-body {
@@ -516,17 +495,16 @@
 
 /*
  * The menu takes the left column whole, one item a fingertip's height under the next; the title
- * and the profile stand at the right over the scene, which shows beside the menu. A panel takes
- * the stage whole. What the column cannot hold — the card of a run that binds the pass, the
- * quiet lines — scrolls in it.
+ * stands at the right over the scene, which shows beside the menu. A panel takes the stage whole.
+ * What the column cannot hold — the card of a run that binds the pass, the quiet lines — scrolls
+ * in it.
  */
 @media (orientation: landscape) and (max-height: 500px) {
   .menu {
     grid-template-columns: minmax(0, 330px) minmax(0, 1fr);
-    grid-template-rows: auto auto minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
     grid-template-areas:
       'body head'
-      'body chip'
       'body .';
     column-gap: 24px;
     row-gap: 10px;
@@ -545,24 +523,8 @@
 
   .menu-sub {
     margin-top: 6px;
-    font-size: 11px;
     line-height: 1.5;
     letter-spacing: 0.14em;
-  }
-
-  /* The profile keeps to its column: the name's field gives way where the window is narrow. */
-  .profile-chip {
-    justify-self: end;
-    max-width: 100%;
-  }
-
-  .profile-who {
-    flex: 1 1 auto;
-  }
-
-  .profile-name {
-    width: 100%;
-    max-width: 168px;
   }
 
   .menu-body {
@@ -604,14 +566,15 @@
   background: rgba(5, 8, 12, 0.5);
 }
 
-/* ── the door wipe between the menu and the lobby ───────────────────────── */
+/* ── the door wipe before every change of the menu ────────────────────── */
 
 /*
  * screens/DoorWipe.tsx: the lab's sliding doors over the whole window, under the scanlines — two
  * steel leaves lit from the top, the ink edge where they meet, an amber light strip and two
  * chevrons at the seam, as the world draws a door (world/art.ts `drawDoor`). They close in 170 ms,
  * gathering speed as a heavy door does, and open in 210 ms, slowing to a stop: 380 ms in all
- * (`CLOSE_MS`, `OPEN_MS`). Under reduced motion they never come: the screens cut.
+ * (`CLOSE_MS`, `OPEN_MS`); before a page the same leaves close and open quicker, a shutter. Under
+ * reduced motion they never come: the screens cut.
  */
 .door-wipe {
   position: fixed;
@@ -699,6 +662,16 @@
 
 .door-wipe--opening .door-leaf--right {
   animation: door-open-right 210ms cubic-bezier(0, 0, 0.2, 1) both;
+}
+
+/* The shutter before a page of the menu's and on the way back: the same leaves, quicker — 80 ms
+   to close, 100 to open (DoorWipe.tsx SHUTTER_MS). */
+.door-wipe--shutter.door-wipe--closing .door-leaf {
+  animation-duration: 80ms;
+}
+
+.door-wipe--shutter.door-wipe--opening .door-leaf {
+  animation-duration: 100ms;
 }
 
 @keyframes door-close-left {

@@ -67,6 +67,7 @@ describe('the Übungshalle on the menu', () => {
         send={noop}
         connected
         name="Anna"
+        field={{ typed: 'Anna', onName: noop }}
         blocked={false}
         missions={[blackout, tutorial, hall]}
         stats={[]}

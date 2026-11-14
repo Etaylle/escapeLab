@@ -106,6 +106,7 @@ describe('a device that asks for a seat by its name', () => {
           send={() => undefined}
           connected
           name="Ben"
+          field={{ typed: 'Ben', onName: () => undefined }}
           blocked={false}
           takeover={{ code: 'QX7R', name: 'Ben', until: ASK.until }}
           waiting={false}

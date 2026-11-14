@@ -4,6 +4,7 @@ import {
   figurePainter,
   figureStateOf,
   runFigure,
+  wavesAnew,
   type FigureHost,
   type FigureLook,
   type FigureProbe,
@@ -201,6 +202,13 @@ describe('figureStateOf — a figure in the lobby or on a title card', () => {
     expect(figureStateOf({ ...ANNA, facing: 'left' }, 0, null, false).facing).toBeCloseTo(
       Math.PI - 0.55,
     );
+  });
+
+  it('begins to wave as its player says ready — not when it came up ready', () => {
+    expect(wavesAnew(false, true)).toBe(true);
+    expect(wavesAnew(true, true)).toBe(false);
+    expect(wavesAnew(true, false)).toBe(false);
+    expect(wavesAnew(false, false)).toBe(false);
   });
 
   it('waves as its player says ready, and holds still under reduced motion', () => {

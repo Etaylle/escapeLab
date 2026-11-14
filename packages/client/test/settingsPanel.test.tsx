@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { AccountView } from '@escapelab/core';
-import { TopBar } from '../src/App.js';
+import { TopBar, type BarProfile } from '../src/App.js';
 import { DEFAULT_KEYS, DEFAULT_PAD } from '../src/input/bindings.js';
 import { controlsOf } from '../src/screens/InfoPanel.js';
 import {
@@ -57,7 +57,10 @@ const ANNA: AccountView = {
 
 /** The panel open on `tab`, as markup: with the pass's account where `account` is given. */
 function panel(tab: SettingsTab, account?: AccountView): string {
-  const own = account === undefined ? {} : { account, onDeleteAccount: noop };
+  const own =
+    account === undefined
+      ? {}
+      : { account, onDeleteAccount: noop, profile: { name: account.name, onName: noop } };
   return renderToStaticMarkup(<SettingsPanel onClose={noop} tab={tab} {...own} />);
 }
 
@@ -390,6 +393,27 @@ describe('the gear in the top bar', () => {
     expect(html).toMatch(
       /<button class="settings-toggle" title="Einstellungen" aria-label="Einstellungen">/,
     );
+  });
+
+  it('carries the account off any room, between the mission and the sound switch', () => {
+    vi.stubGlobal('window', { location: { origin: 'http://lab', pathname: '/' } });
+    const bar = (account: BarProfile | null): string =>
+      renderToStaticMarkup(
+        <TopBar
+          roomCode={null}
+          seed={null}
+          running={null}
+          status="open"
+          toEditor={null}
+          onGear={noop}
+          account={account}
+        />,
+      );
+    const html = bar({ name: 'Anna', account: null, open: noop });
+    expect(html.indexOf('class="bar-account"')).toBeGreaterThan(0);
+    expect(html.indexOf('class="bar-account"')).toBeLessThan(html.indexOf('class="sound-toggle"'));
+    expect(html).toContain('<span class="bar-account-name">Anna</span>');
+    expect(bar(null)).not.toContain('bar-account');
   });
 
   it('opens the room’s menu in a room, and says so', () => {
