@@ -703,6 +703,47 @@ describe('signing out, and switching accounts', () => {
   });
 });
 
+describe('a switch to a pass that is no new one', () => {
+  it('is refused for a pass signed out, or another account’s, and nothing else said', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const { server, store } = lab();
+    const { anna, number } = await annaWithKennwort(server);
+    const annaId = (await store.findByIdentity(identityOf('Anna')))?.id;
+    const phone = server.connect();
+    const phoneIn: ClientMessage = {
+      kind: 'sign-in',
+      pass: passFor('Phone'),
+      login: number,
+      password: KENNWORT,
+    };
+    expect(await ask(phone, phoneIn)).toMatchObject({ done: 'signed-in' });
+    // A new Kennwort signs the phone's pass out; Ben's pass is a guest's of its own.
+    const change: ClientMessage = {
+      kind: 'change-password',
+      pass: passFor('Anna'),
+      old: KENNWORT,
+      password: OTHER,
+    };
+    expect(await ask(anna, change)).toMatchObject({ done: 'changed' });
+    const ben = server.connect();
+    ben.say({ kind: 'whereami', pass: passFor('Ben'), name: 'Ben' });
+    await settled();
+    const switchTo = (next: string): ClientMessage => ({
+      kind: 'switch-account',
+      pass: passFor('Anna'),
+      next: passFor(next),
+      login: number,
+      password: OTHER,
+    });
+    const before = anna.heard.length;
+    expect(await ask(anna, switchTo('Phone'))).toEqual({ refused: PASS_REFUSED });
+    expect(await ask(anna, switchTo('Ben'))).toEqual({ refused: PASS_REFUSED });
+    expect(anna.heard.slice(before).some((m) => m.kind === 'login')).toBe(false);
+    expect((await store.findByIdentity(identityOf('Anna')))?.id).toBe(annaId);
+    expect((await store.findByIdentity(identityOf('Ben')))?.id).not.toBe(annaId);
+  });
+});
+
 describe('a Kennwort changed, and the account’s other devices', () => {
   /** The sign-in of the pass of `name`'s into the account of `number`, with `password`. */
   const signInAs = (name: string, number: string, password: string): ClientMessage => ({

@@ -373,7 +373,9 @@ export class AccountDesk {
    * `signIn` tries it — and `pass` signed out, its way in kept for its seat where it holds one, the
    * seat parked first (`parkFirst`).
    * The account it signed out of is deleted where nothing is left of it. Nothing changes where the
-   * try is refused, as `signIn` refuses it, or `next` is no new pass.
+   * try is refused, as `signIn` refuses it, or `next` is no new pass (PASS_REFUSED): one the
+   * store knows — leading into an account, or signed out of one — which only a broken client
+   * sends.
    */
   switchAccount(
     pass: CrewPass,
@@ -383,7 +385,7 @@ export class AccountDesk {
     parkFirst: ParkFirst = PARK_NOTHING,
   ): Promise<Switched> {
     return this.serial(pass, async () => {
-      if (next.id === pass.id) {
+      if (next.id === pass.id || (await this.known(next))) {
         throw new GameError(PASS_REFUSED);
       }
       const { accountId, checked } = await this.verified(login.typed, login.password, limits);
@@ -591,6 +593,21 @@ export class AccountDesk {
           throw err;
         }
       }
+    }
+  }
+
+  /**
+   * Whether the store knows `next`: it leads into an account, signed out of one, or is shown with
+   * another secret than its way in keeps. A failing store throws.
+   */
+  private async known(next: CrewPass): Promise<boolean> {
+    try {
+      return (await this.store.findByIdentity(identityOf(next))) !== null;
+    } catch (err) {
+      if (err instanceof GameError) {
+        return true;
+      }
+      throw err;
     }
   }
 
