@@ -56,8 +56,10 @@ const ANNA: AccountView = {
 
 /** The panel open on `tab`, as markup: with the pass's account where `account` is given. */
 function panel(tab: SettingsTab, account?: AccountView): string {
-  const profile = { name: account?.name ?? '', onName: noop };
-  const own = account === undefined ? {} : { account, onDeleteAccount: noop, profile };
+  const own =
+    account === undefined
+      ? {}
+      : { account, onDeleteAccount: noop, profile: { name: account.name, onName: noop } };
   return renderToStaticMarkup(<SettingsPanel onClose={noop} tab={tab} {...own} />);
 }
 

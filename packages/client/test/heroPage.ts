@@ -65,13 +65,20 @@ export interface PaintingAsked {
   beatHeld?: () => number | null;
 }
 
+/** What a painting takes where the test sets nothing: full motion, no canvas, no beat held. */
+const PAINTING_ASKED = {
+  reduced: false,
+  canvas: null,
+  beatHeld: (): number | null => null,
+} satisfies PaintingAsked;
+
 /** A hero's painting on fake canvases, standing at 1440 × 820, the stage at (0, 60). */
 export function painting(asked: PaintingAsked = {}): HeroPainting {
   const hero = heroCanvas(fakeCanvas(0, 0, 'hero').canvas, (w, h) => fakeCanvas(w, h).canvas);
   if (hero === null) {
     throw new Error('no hero canvas');
   }
-  const reduced = asked.reduced ?? false;
+  const { reduced, canvas, beatHeld } = { ...PAINTING_ASKED, ...asked };
   return {
     hero,
     standing: {
@@ -90,8 +97,8 @@ export function painting(asked: PaintingAsked = {}): HeroPainting {
     react: stillReactions(),
     phase: 0.3,
     reduced: () => reduced,
-    canvas: asked.canvas ?? null,
-    beatHeld: asked.beatHeld ?? (() => null),
+    canvas,
+    beatHeld,
   };
 }
 

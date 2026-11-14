@@ -513,12 +513,16 @@ interface PanelProps {
   tab?: SettingsTab;
 }
 
+/** The profile where the panel is handed none: no name, and none to type. */
+const NO_PROFILE = { name: '', onName: (): void => undefined };
+
 /**
  * „Konto": the profile's name, which the account takes once it stands still, and its colour,
  * what the account holds and „Konto löschen" (`AccountSection`).
  */
 function AccountTab(props: Required<Pick<PanelProps, 'onDeleteAccount'>> & PanelProps) {
   const { account = null, onDeleteAccount, refusal = null } = props;
+  const profile = props.profile ?? NO_PROFILE;
   const [taken, setTaken] = useState<DeleteStep>('idle');
   const [sentAfter, setSentAfter] = useState(0);
   const { step, refused } = deletionNow(taken, sentAfter, refusal);
@@ -536,11 +540,7 @@ function AccountTab(props: Required<Pick<PanelProps, 'onDeleteAccount'>> & Panel
   }, [step]);
   return (
     <>
-      <ProfileFields
-        account={account}
-        name={props.profile?.name ?? ''}
-        onName={props.profile?.onName ?? (() => undefined)}
-      />
+      <ProfileFields account={account} name={profile.name} onName={profile.onName} />
       <AccountSection
         account={account}
         step={step}

@@ -138,6 +138,17 @@ export function withinSweep(angle: number): number {
 }
 
 /**
+ * `s` let go of the place it was turned to (`aimSweep`): its sweep goes on from where the beam
+ * stands, the way it was going; nothing where it was turned to none.
+ */
+function sweepFromAim(s: Sweep): void {
+  if (s.aim !== null) {
+    s.run = runAt(s.aim, s.run);
+    s.aim = null;
+  }
+}
+
+/**
  * Where the beam of `s` points at `now` (ms): on along its sweep since the frame before, and
  * holding still for BEAT_MS where it comes to `target` — the menu's item hovered, its angle from
  * the lens held within the sweep; null for none. Its clock stands while it holds, so that it
@@ -146,10 +157,7 @@ export function withinSweep(angle: number): number {
 export function stepSweep(s: Sweep, now: number, target: number | null): number {
   const dt = s.last === null ? 0 : Math.max(0, now - s.last);
   s.last = now;
-  if (s.aim !== null) {
-    s.run = runAt(s.aim, s.run);
-    s.aim = null;
-  }
+  sweepFromAim(s);
   if (s.hold !== null) {
     if (now < s.hold.until) {
       return s.hold.angle;

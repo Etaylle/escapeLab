@@ -135,13 +135,17 @@ export function wipeOn<T>(wipe: Wipe<T>): Wipe<T> {
   if (wipe.doors === 'beat') {
     return { ...wipe, doors: 'closing' };
   }
-  if (wipe.doors === 'closing' && wipe.after !== null && wipe.stays) {
-    return { ...wipe, doors: 'shut', after: null };
-  }
   if (wipe.doors === 'closing') {
-    return { ...wipe, doors: 'opening', held: null, after: null };
+    return closedOn(wipe);
   }
   return wipe.doors === 'opening' ? standing(wipe.place) : wipe;
+}
+
+/** The step of `wipe`'s doors once closed: shut, where the page loads anew under them, else open. */
+function closedOn<T>(wipe: Wipe<T>): Wipe<T> {
+  return wipe.after !== null && wipe.stays
+    ? { ...wipe, doors: 'shut', after: null }
+    : { ...wipe, doors: 'opening', held: null, after: null };
 }
 
 /** How long `wipe`'s doors take to come to their next step, ms; null where they stand. */
