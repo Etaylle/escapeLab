@@ -338,6 +338,16 @@ function playMission(
 }
 
 /**
+ * Whether somebody of `crew` reads the rules of `def`'s station at a manual object covering it
+ * (`rolesAt`): never where the whole crew presses, nor where the crew has nobody left to read —
+ * a crew of two at a station of two consoles.
+ */
+function readAt(mission: Mission, def: PuzzleDef, crew: string[]): boolean {
+  const covered = mission.map.manuals.some((manual) => manual.puzzleIds.includes(def.id));
+  return covered && !moduleFor(def.type).wholeCrew && rolesAt(def, crew).reader !== null;
+}
+
+/**
  * Every shipped mission and lab (lab.ts `labs`), for every size of crew it takes, from the
  * smallest to the largest.
  */
@@ -356,17 +366,20 @@ describe.each(played)('mission %s for %i', (_id, size, mission) => {
     }
   });
 
-  it('shows the first station\'s rules to its reader and to nobody else', () => {
-    const def = mission.puzzles[0];
+  it('shows the rules of the first station read at a source to its reader and nobody else', () => {
+    const start = lightsOut(started(mission, 1, T0, size));
+    const crew = start.players.map((p) => p.id);
+    const index = mission.puzzles.findIndex((def) => readAt(mission, def, crew));
+    const def = mission.puzzles[index];
     if (def === undefined) {
-      throw new Error(`${mission.id} has no puzzles`);
+      throw new Error(`${mission.id}: nobody of a crew of ${size} reads at any station`);
     }
-    const state = openStation(lightsOut(started(mission, 1, T0, size)), def, T0 + 1000);
-    const { reader } = rolesAt(def, state.players.map((p) => p.id));
+    const state = openStation({ ...start, currentPuzzleIndex: index }, def, T0 + 1000);
+    const { reader } = rolesAt(def, crew);
     for (const { id } of state.players) {
       const manual = viewFor(state, id).puzzle?.manual ?? null;
-      const reads = id === reader && !moduleFor(def.type).wholeCrew;
-      expect(manual, id).toEqual(reads ? moduleFor(def.type).manual(def) : null);
+      const rules = id === reader ? moduleFor(def.type).manual(def) : null;
+      expect(manual, `${def.id} ${id}`).toEqual(rules);
     }
   });
 
