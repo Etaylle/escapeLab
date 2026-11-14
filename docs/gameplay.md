@@ -264,12 +264,15 @@ Seven plaques a crew earns in a run it wins, read off the run's report alone
 | Plaque | Earned when |
 | --- | --- |
 | Ohne Alarm | not one alarm in the whole run, whatever set it off |
-| Unter acht Minuten | from the lights going out to the escape in under 8:00 |
+| Unter acht Minuten | from the lights going out to the escape in under 8:00; none without a hatch |
 | Alle Notizen gelesen | every note of the last shift on the map read; none on a map without notes |
 | Jede Station im ersten Versuch | no station reported a wrong move (a drone's alarm is none) |
 | Ungesehen | no drone caught anybody, on a map where drones patrol |
 | Stiller Serverraum | no command at the Serverraum failed (an alarm there); none without one |
-| Erste Schicht | every won run — that it is the first is the account's to tell |
+| Erste Schicht | every run won at the hatch — that it is the first is the account's to tell |
+
+A run its last solve won, in a mission without a hatch (the Übungshalle), earns neither of the
+hatch's two: its report says so (`noHatch`).
 
 The view of a finished run carries them (`PlayerView.achievements`). The account of each crew
 member's pass keeps each with the end of the run that first earned it, unlocked as the run is
