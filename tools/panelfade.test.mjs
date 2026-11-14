@@ -109,6 +109,16 @@ describe('fadeOf and fadeVerdict — the frames a panel going drew, on the page�
     });
   });
 
+  it('judges no frames midway of a panel gone at once: it had no fade to draw', () => {
+    // The page drew the panel whole, then gone: it never began to leave.
+    const frames = [frame(2, null, 1), goneAt(24)];
+    const once = { left: null, gone: 20, inertAtLeft: null, frames };
+    assert.deepEqual(fadeVerdict(fadeOf(once, FADE), FADE), {
+      faults: ['it went at once, never leaving'],
+      unjudged: null,
+    });
+  });
+
   it('fails a fade that never falls on a frame in its middle, naming the frames’ times', () => {
     const still = fadeOf(record([frame(12, 0, 1), frame(100, 88, 1), frame(140, 128, 0.99)]), FADE);
     assert.deepEqual(fadeVerdict(still, FADE), {

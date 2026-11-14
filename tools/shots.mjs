@@ -294,10 +294,12 @@
  * clock meanwhile — when it began to leave and when it was gone, as its DOM
  * changed, and at each frame it drew the panel's opacity and how far the fade
  * had run — and it has to leave inert, its opacity only falling, gone within
- * 100 to 600 ms of the page's clock, and midway on each frame drawn between
- * half and nine tenths into the fade; where the page, under load, drew no frame
- * there, the midway frames are skipped with the times it drew them (the shot
- * below still judges the fade). For the shot (panel-close.png)
+ * 100 to 600 ms of the page's clock, and show midway on one frame at least:
+ * where none does, a frame drawn between half and nine tenths into the fade,
+ * where a fade that falls as it should has the panel midway, fails it; where
+ * the page, under load, drew no frame there, the midway frames are skipped
+ * with the times it drew them (the shot below still judges the fade). For the
+ * shot (panel-close.png)
  * the station is opened anew and stepped back from with the fade held 120 ms
  * in and the game's timer that lets the panel go kept back until it is taken —
  * a screenshot asked for at once draws the fade's first frame, the panel whole,
@@ -5891,8 +5893,9 @@ async function heldFadeShot(player, modal) {
  * panel-close.png: `player` steps back from the open station with Esc, and the device fades out
  * as it came, over 150 ms (client styles/interaction.css, screens/Game.tsx): the page records
  * the panel on its own clock meanwhile (recordPanelFade) — it has to leave inert, its opacity
- * only falling, be gone within 100 to 600 ms of its beginning to leave, and show midway on a
- * frame drawn in the fade's middle (panelfade.mjs `fadeVerdict`). Then the shot (heldFadeShot),
+ * only falling, be gone within 100 to 600 ms of its beginning to leave, and show midway on one
+ * frame at least, a frame drawn in the fade's middle failing it where none does (panelfade.mjs
+ * `fadeVerdict`). Then the shot (heldFadeShot),
  * which has to lie between the panel open and gone over the panel's box; one that came after
  * the game had let the panel go is taken again, up to three times. Any of these that fails,
  * fails the run; where the page drew no frame in the fade's middle, its midway frames are

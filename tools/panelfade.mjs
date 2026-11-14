@@ -29,9 +29,10 @@
  */
 
 /**
- * The stretch of the fade, as shares of its length, in which a frame has to show the panel
- * midway: from half its length, where its ease-in has the panel at 0.86 opacity, to nine
- * tenths, at 0.28.
+ * The stretch of the fade, as shares of its length, in which a frame shows the panel midway
+ * where the fade falls as it should: from half its length, where its ease-in has the panel at
+ * 0.86 opacity, to nine tenths, at 0.28. A fade with no frame midway fails where the page drew a
+ * frame here, and goes unjudged where it drew none.
  */
 export const MIDDLE = [0.5, 0.9];
 
@@ -117,9 +118,10 @@ export function fadeOf({ left, gone, inertAtLeft, frames }, fadeMs) {
  * The verdict on a fade as the page played it (`fade`, from fadeOf; `fadeMs` its length): what
  * is wrong with it, in the log's words — a panel gone at once or outside GONE_MS, an opacity
  * that rose, a panel taking input as it left, frames drawn as it left with no fade-out on them,
- * frames drawn in the fade's middle none of which showed it midway — and, where no frame showed
- * it midway because the page drew none in the fade's middle, or none at all as the panel left,
- * why the midway frames go unjudged, naming the frames' times.
+ * no frame at all showing it midway though the page drew one in the fade's middle (MIDDLE) —
+ * and, where no frame showed it midway because the page drew none in the fade's middle, or none
+ * at all as the panel left, why the midway frames go unjudged, naming the frames' times. One
+ * frame midway is enough.
  *
  * @param {ReturnType<typeof fadeOf>} fade
  * @param {number} fadeMs
