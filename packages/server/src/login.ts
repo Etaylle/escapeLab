@@ -1,5 +1,5 @@
 import { randomBytes, randomInt, scrypt, timingSafeEqual } from 'node:crypto';
-import { NUMBER_ALPHABET, writtenNumber } from '@escapelab/core';
+import { GameError, NUMBER_ALPHABET, writtenNumber } from '@escapelab/core';
 import { MAX_KEY_LENGTH } from './rateLimiter.js';
 
 /**
@@ -105,6 +105,79 @@ export async function passwordMatches(password: string, stored: string | null): 
   const against = kept ?? NOBODY;
   const key = await derive(password, against.salt, against, against.key.length);
   return timingSafeEqual(key, against.key) && kept !== null;
+}
+
+/** Kennwörter scrypt derives at once on the whole server (`DeriveQueue`). */
+export const DERIVES_AT_ONCE = 4;
+
+/** Kennwörter that may wait for a turn at once (`DeriveQueue`): beyond them one is refused. */
+export const DERIVES_WAITING = 32;
+
+/** What a Kennwort is told that finds every turn taken and the queue full (`DeriveQueue`). */
+export const BUSY = 'Die Kennwortprüfung ist gerade ausgelastet — in einem Moment wieder möglich.';
+
+/**
+ * The turns at deriving a Kennwort's key on the whole server — a hash made (`hashPassword`), a
+ * Kennwort checked (`passwordMatches`): `atOnce` at a time, the rest waiting in the order they
+ * came, `mayWait` at most; one more is refused (BUSY), which the log says once till the queue
+ * has emptied. scrypt takes 32 MiB and one of Node's four worker threads each: a lecture signing
+ * in at once neither runs the server out of memory nor keeps its files and its database waiting
+ * behind a crowd of keys.
+ */
+export class DeriveQueue {
+  /** how many derive now */
+  private running = 0;
+  /** who waits for a turn, the first first */
+  private readonly waiting: (() => void)[] = [];
+  /** whether one was refused since the queue was last empty */
+  private refusing = false;
+
+  constructor(
+    private readonly atOnce = DERIVES_AT_ONCE,
+    private readonly mayWait = DERIVES_WAITING,
+  ) {}
+
+  /**
+   * `job` in a turn of its own — at once, or once those before it are done — the turn going on
+   * to the next once `job` settles, however. Rejects with GameError(BUSY), running nothing, where
+   * `mayWait` wait already.
+   */
+  async run<T>(job: () => Promise<T>): Promise<T> {
+    await this.turn();
+    try {
+      return await job();
+    } finally {
+      this.next();
+    }
+  }
+
+  /** A turn: at once where one is free, else once those waiting before it had theirs. */
+  private turn(): Promise<void> {
+    if (this.running < this.atOnce) {
+      this.running += 1;
+      return Promise.resolve();
+    }
+    if (this.waiting.length >= this.mayWait) {
+      if (!this.refusing) {
+        this.refusing = true;
+        const full = `${this.atOnce} derive at once and ${this.mayWait} wait`;
+        console.log(`[escapelab] Kennwörter refused: ${full}`);
+      }
+      return Promise.reject(new GameError(BUSY));
+    }
+    return new Promise((resolve) => this.waiting.push(resolve));
+  }
+
+  /** A turn done: the first waiting has it, else it is free. */
+  private next(): void {
+    const first = this.waiting.shift();
+    if (first === undefined) {
+      this.running -= 1;
+      this.refusing = false;
+    } else {
+      first();
+    }
+  }
 }
 
 /**

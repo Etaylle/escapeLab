@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { achievementsOf, utcDay } from '@escapelab/core';
 import { AccountDesk, accountRunOf, byMission, MY_RUNS } from '../src/accounts.js';
+import { DeriveQueue } from '../src/login.js';
 import { JsonlStore } from '../src/store/jsonl.js';
 import { LoginTaken, type Profile, type RunReportV1 } from '../src/store/store.js';
 import { passFor } from './passes.js';
@@ -152,5 +153,21 @@ describe('the desk', () => {
     answer();
     await waited;
     expect(written).toEqual([{ colour: '#60a5fa' }, { displayName: 'Anna Berg' }]);
+  });
+});
+
+describe('the desk’s Kennwörter', () => {
+  it('takes a turn of the server’s for every Kennwort it keeps or checks', async () => {
+    const { store } = desk();
+    const queue = new DeriveQueue();
+    const turns = vi.spyOn(queue, 'run');
+    const accounts = new AccountDesk(store, queue);
+    const set = await accounts.setPassword(passFor('Anna'), 'Kaltenbrunn 1986');
+    expect(turns).toHaveBeenCalledTimes(1);
+    // The present one checked, the new one kept.
+    await accounts.changePassword(passFor('Anna'), 'Kaltenbrunn 1986', 'Kaltenbrunn 1987');
+    expect(turns).toHaveBeenCalledTimes(3);
+    await accounts.signIn(passFor('Phone'), set.login ?? '', 'Kaltenbrunn 1987');
+    expect(turns).toHaveBeenCalledTimes(4);
   });
 });

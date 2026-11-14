@@ -22,7 +22,11 @@ import {
   WRONG_LOGIN,
 } from '../src/accounts.js';
 import {
+  BUSY,
   changeLocked,
+  DeriveQueue,
+  DERIVES_AT_ONCE,
+  DERIVES_WAITING,
   numberLocked,
   SignInGuard,
   WRONG_PER_ADDRESS,
@@ -55,15 +59,17 @@ const OTHER = 'Kaltenbrunn 1987';
 
 /**
  * The server's sockets with the accounts in a store of their own and the limits on signing in
- * (login.ts), each address's wrong tries counted.
+ * (login.ts), each address's wrong tries counted — and so many changes a socket, and the turns at
+ * deriving a Kennwort, where `options` says.
  */
-function lab(changesPerSocket?: number) {
+function lab(options: { changesPerSocket?: number; derives?: DeriveQueue } = {}) {
   const server = new FakeServer();
   const manager = new RoomManager();
   const folder = mkdtempSync(join(tmpdir(), 'escapelab-login-'));
   const store = JsonlStore.open(join(folder, 'runs.jsonl'));
   const signIns = new SignInGuard();
-  const accounts = new AccountDesk(store);
+  const accounts = new AccountDesk(store, options.derives);
+  const { changesPerSocket } = options;
   const limits = changesPerSocket === undefined ? {} : { changesPerSocket };
   serveSockets(server, { catalog, manager, accounts, signIns, ...limits });
   return { server, manager, store, signIns };
@@ -362,7 +368,7 @@ describe('the limits on signing in, over the line', () => {
   });
 
   it('counts every try as a change on its socket: so many a minute, tried or not', async () => {
-    const { server } = lab(2);
+    const { server } = lab({ changesPerSocket: 2 });
     const { number } = await annaWithKennwort(server);
     const phone = server.connect();
     const pass = passFor('Mallory');
@@ -401,7 +407,7 @@ describe('the limits, tried at once', () => {
   const lines = (answers: Answer[]): string[] =>
     answers.map((answer) => ('refused' in answer ? answer.refused : answer.done));
 
-  it(`checks ${WRONG_PER_LOCK} of the tries sent at once on an Ausweisnummer, no more`, async () => {
+  it(`checks ${WRONG_PER_LOCK} tries sent at once on an Ausweisnummer, no more`, async () => {
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
     const { server } = lab();
     const { number } = await annaWithKennwort(server);
@@ -420,12 +426,14 @@ describe('the limits, tried at once', () => {
     expect(derived()).toBe(WRONG_PER_LOCK);
     const told = lines(answers);
     expect(told.filter((line) => line === WRONG_LOGIN)).toHaveLength(WRONG_PER_LOCK);
-    expect(told.filter((line) => line === numberLocked(60))).toHaveLength(40 - WRONG_PER_LOCK);
+    const held = told.filter((line) => line === numberLocked(60) || line === BUSY);
+    expect(held).toHaveLength(40 - WRONG_PER_LOCK);
   });
 
-  it(`checks ${WRONG_PER_ADDRESS} tries an address sends at once; a neighbour gets in`, async () => {
+  it(`checks ${WRONG_PER_ADDRESS} tries sent at once from an address; others get in`, async () => {
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
-    const { server, store } = lab();
+    // A queue that holds every try: the address's limit is what holds them back.
+    const { server, store } = lab({ derives: new DeriveQueue(DERIVES_AT_ONCE, 100) });
     const { number } = await annaWithKennwort(server);
     vi.mocked(scrypt).mockClear();
     const answers = await Promise.all(
@@ -475,6 +483,57 @@ describe('the limits, tried at once', () => {
     }
     const locked = await ask(anna, change('Neues Kennwort', 'Drittes Kennwort'));
     expect([{ refused: changeLocked(60) }, { refused: changeLocked(59) }]).toContainEqual(locked);
+  });
+});
+
+describe('the turns at deriving, over the line', () => {
+  /** scrypt as it is, with how many keys it derived at once at most: `most`. */
+  async function counted() {
+    const actual = await vi.importActual<typeof Crypto>('node:crypto');
+    const seen = { running: 0, most: 0 };
+    type Done = (err: Error | null, key: Buffer) => void;
+    const watched = (...[password, salt, length, options, done]: [
+      Crypto.BinaryLike,
+      Crypto.BinaryLike,
+      number,
+      Crypto.ScryptOptions,
+      Done,
+    ]): void => {
+      seen.running += 1;
+      seen.most = Math.max(seen.most, seen.running);
+      actual.scrypt(password, salt, length, options, (err, key) => {
+        seen.running -= 1;
+        done(err, key);
+      });
+    };
+    vi.mocked(scrypt).mockImplementation(watched as unknown as typeof scrypt);
+    return { seen, restore: () => vi.mocked(scrypt).mockImplementation(actual.scrypt) };
+  }
+
+  it(`derives ${DERIVES_AT_ONCE} at once, lets ${DERIVES_WAITING} wait, refuses more`, async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const { server } = lab();
+    const { seen, restore } = await counted();
+    try {
+      // A crowd from as many machines, none of their numbers readable: only the turns hold them.
+      const answers = await Promise.all(
+        Array.from({ length: DERIVES_AT_ONCE + DERIVES_WAITING + 4 }, (_, i) =>
+          ask(server.connect(from(`10.0.${i}.1`)), {
+            kind: 'sign-in',
+            pass: passFor(`Gast ${i}`),
+            login: 'unleserlich',
+            password: OTHER,
+          }),
+        ),
+      );
+      expect(seen.most).toBe(DERIVES_AT_ONCE);
+      const told = answers.map((answer) => ('refused' in answer ? answer.refused : answer.done));
+      expect(told.filter((line) => line === BUSY)).toHaveLength(4);
+      const checked = told.filter((line) => line === WRONG_LOGIN);
+      expect(checked).toHaveLength(DERIVES_AT_ONCE + DERIVES_WAITING);
+    } finally {
+      restore();
+    }
   });
 });
 

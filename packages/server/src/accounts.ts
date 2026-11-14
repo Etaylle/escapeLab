@@ -13,6 +13,7 @@ import {
   type CrewPass,
 } from '@escapelab/core';
 import {
+  DeriveQueue,
   hashPassword,
   mintNumber,
   passwordMatches,
@@ -171,7 +172,14 @@ export class AccountDesk {
   /** the last request of each pass under way, by the pass's id: the next waits for it */
   private readonly queues = new Map<string, Promise<unknown>>();
 
-  constructor(private readonly store: Store) {}
+  /**
+   * `derives` are the server's turns at deriving a Kennwort's key (login.ts): every hash made and
+   * every Kennwort checked here takes one.
+   */
+  constructor(
+    private readonly store: Store,
+    private readonly derives = new DeriveQueue(),
+  ) {}
 
   /**
    * The account of `pass`, found — or made, starting with `profile`, where the gate lets one be
@@ -221,7 +229,7 @@ export class AccountDesk {
       if (!gate.mayChange()) {
         throw new GameError(TOO_MANY_CHANGES);
       }
-      await this.mint(account.id, await hashPassword(password));
+      await this.mint(account.id, await this.derives.run(() => hashPassword(password)));
       return this.viewOf(account);
     });
   }
@@ -255,7 +263,7 @@ export class AccountDesk {
       if (kept === null) {
         throw new GameError(OLD_WRONG);
       }
-      const next = await hashPassword(password);
+      const next = await this.derives.run(() => hashPassword(password));
       if (!(await this.store.replaceLoginSecret(account.id, kept, next))) {
         throw new GameError(CHANGED_MEANWHILE);
       }
@@ -482,27 +490,30 @@ export class AccountDesk {
 
   /**
    * A try at `on` with the Kennwort `password`, whose hash `stored` keeps (null for no login),
-   * once `mayTry` let it go ahead: taken by the limits first (`Tries.take`) — counted as a wrong
-   * one, so that tries sent at once are held to them as tries one after the other, or refused —
-   * then checked (login.ts `passwordMatches`), after the same work either way: the hash it
-   * matched, its ticket given back; null where it did not match, counted.
+   * once `mayTry` let it go ahead, in a turn of the server's (`DeriveQueue`): taken by the limits
+   * as the turn comes (`Tries.take`) — counted as a wrong one, so that tries sent at once are held
+   * to them as tries one after the other, or refused — then checked (login.ts `passwordMatches`),
+   * after the same work either way: the hash it matched, its ticket given back; null where it did
+   * not match, counted.
    */
-  private async tried(
+  private tried(
     on: Target,
     password: string,
     stored: string | null,
     tries: Tries,
   ): Promise<string | null> {
-    const taken = tries.take(on);
-    if (typeof taken === 'string') {
-      throw new GameError(taken);
-    }
-    const right = await passwordMatches(password, stored);
-    if (!right || stored === null) {
-      return null;
-    }
-    taken.right();
-    return stored;
+    return this.derives.run(async () => {
+      const taken = tries.take(on);
+      if (typeof taken === 'string') {
+        throw new GameError(taken);
+      }
+      const right = await passwordMatches(password, stored);
+      if (!right || stored === null) {
+        return null;
+      }
+      taken.right();
+      return stored;
+    });
   }
 
   /**

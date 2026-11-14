@@ -250,7 +250,7 @@ describe('a resume while the store looks up its account', () => {
     manager.get(code).dispose();
   });
 
-  it('looks the room up again once the store answered: one closed meanwhile seats nobody', async () => {
+  it('looks the room up again once the store answered: a room closed seats nobody', async () => {
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
     const store = freshStore();
     const { server, manager } = serverOn(store);

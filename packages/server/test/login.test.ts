@@ -4,8 +4,10 @@ import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } fr
 import { NUMBER_ALPHABET, numberOf, passwordFits } from '@escapelab/core';
 import {
   ADDRESS_WINDOW_MS,
+  BUSY,
   changeLocked,
   COST,
+  DeriveQueue,
   FIRST_LOCK_MS,
   fromTooMany,
   hashPassword,
@@ -364,5 +366,63 @@ describe('the limits letting go', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe('the turns at deriving a Kennwort', () => {
+  /** A derive that runs till it is ended: whether it began. */
+  function derive() {
+    let end = (): void => undefined;
+    let began = false;
+    const run = (): Promise<string> => {
+      began = true;
+      return new Promise((resolve) => {
+        end = () => resolve('key');
+      });
+    };
+    return { run, end: () => end(), began: () => began };
+  }
+
+  /** Lets what waits on promises go on. */
+  const flush = (): Promise<void> => new Promise((resolve) => setImmediate(resolve));
+
+  it('derives so many at once, the rest in the order they came, none past the queue', async () => {
+    const said = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const queue = new DeriveQueue(2, 3);
+    const derives = Array.from({ length: 6 }, derive);
+    const runs = derives.map((d) => queue.run(d.run));
+    await expect(runs[5]).rejects.toThrow(BUSY);
+    await flush();
+    expect(derives.map((d) => d.began())).toEqual([true, true, false, false, false, false]);
+    derives[1]?.end();
+    await expect(runs[1]).resolves.toBe('key');
+    await flush();
+    expect(derives.map((d) => d.began())).toEqual([true, true, true, false, false, false]);
+    for (const d of derives.slice(0, 5)) {
+      d.end();
+      await flush();
+    }
+    await Promise.all(runs.slice(0, 5));
+    expect(derives.map((d) => d.began())).toEqual([true, true, true, true, true, false]);
+    // The log says it once, till the queue has emptied: then again.
+    const full = '[escapelab] Kennwörter refused: 2 derive at once and 3 wait';
+    expect(said.mock.calls).toEqual([[full]]);
+    const again = Array.from({ length: 6 }, derive);
+    const later = again.map((d) => queue.run(d.run));
+    await expect(later[5]).rejects.toThrow(BUSY);
+    expect(said.mock.calls).toEqual([[full], [full]]);
+    for (const d of again.slice(0, 5)) {
+      await flush();
+      d.end();
+    }
+    await Promise.all(later.slice(0, 5));
+  });
+
+  it('gives a turn on however its derive ended', async () => {
+    const queue = new DeriveQueue(1, 1);
+    await expect(queue.run(() => Promise.reject(new Error('scrypt failed')))).rejects.toThrow(
+      'scrypt failed',
+    );
+    await expect(queue.run(() => Promise.resolve('key'))).resolves.toBe('key');
   });
 });
