@@ -1,15 +1,43 @@
 /**
  * The walkthrough's proof that a station's device fades out as it came (client
- * screens/Game.tsx, styles/interaction.css): what the page recorded of the panel frame by
- * frame as it was stepped back from, and a shot of the fade held part-way, against the panel
+ * screens/Game.tsx, styles/interaction.css): what the page recorded of the panel on its own
+ * clock as it was stepped back from, and a shot of the fade held part-way, against the panel
  * open and the panel gone. Pure.
  */
 
-/** A frame as the page recorded it while the panel closed. */
 /**
- * @typedef {{ t: number, present: boolean, leaving: boolean, inert: boolean, opacity: number }}
- *   FadeSample
+ * A frame as the page drew it while the panel closed: when, on the page's clock, ms; whether
+ * the panel was there, on its way out (`puzzle-modal--leaving`), inert; its opacity; and how far
+ * its fade-out had run on the fade's own clock (the animation's currentTime, ms), null where no
+ * fade-out ran on it.
+ *
+ * @typedef {{
+ *   t: number, present: boolean, leaving: boolean, inert: boolean, opacity: number,
+ *   fade: number | null
+ * }} FadeSample
  */
+
+/**
+ * What the page recorded as the panel closed: when it began to leave and when it was gone, on
+ * its own clock as its DOM changed (ms; null where it never did), whether it was inert as it
+ * began to leave, and the frames it drew meanwhile.
+ *
+ * @typedef {{
+ *   left: number | null, gone: number | null, inertAtLeft: boolean | null,
+ *   frames: FadeSample[]
+ * }} FadeRecord
+ */
+
+/**
+ * The stretch of the fade, as shares of its length, in which a frame shows the panel midway
+ * where the fade falls as it should: from half its length, where its ease-in has the panel at
+ * 0.86 opacity, to nine tenths, at 0.28. A fade with no frame midway fails where the page drew a
+ * frame here, and goes unjudged where it drew none.
+ */
+export const MIDDLE = [0.5, 0.9];
+
+/** How long a panel may take to go once it began to leave, ms: its fade, and a page's lag. */
+export const GONE_MS = [100, 600];
 
 /**
  * The mean luma of `image` (a decoded PNG, tools/pixeldiff.mjs `decodePng`) over `box`, CSS
@@ -55,23 +83,112 @@ export function midway(open, mid, closed, share = 0.1) {
 }
 
 /**
- * What the frames recorded as the panel closed say: how long it was leaving before it was
- * gone, ms (null where it never left, or never went); how many frames showed it midway, its
- * opacity past 0.05 and short of 0.95; whether its opacity only fell; whether it took nothing
- * the while (inert).
+ * What the page recorded as the panel closed (`record`, its fade-out `fadeMs` long) says, all
+ * on the page's clock: whether the panel began to leave; how long it was leaving before it was
+ * gone, ms (null where it never left, or never went); whether its opacity only fell; whether it
+ * took nothing the while (inert); whether a fade-out ran on it; how many frames showed it
+ * midway, its opacity past 0.05 and short of 0.95; how many frames the page drew in the fade's
+ * middle (MIDDLE), each of which shows it midway where the fade falls as it should; and how far
+ * the fade had run at each frame drawn while the panel left.
  *
- * @param {FadeSample[]} samples
- * @returns {{ ms: number | null, midway: number, falling: boolean, inert: boolean }}
+ * @param {FadeRecord} record
+ * @param {number} fadeMs
+ * @returns {{
+ *   left: boolean, ms: number | null, falling: boolean, inert: boolean, faded: boolean,
+ *   midway: number, middle: number, drawn: Array<number | null>
+ * }}
  */
-export function fadeOf(samples) {
-  const leaving = samples.filter((s) => s.present && s.leaving);
-  const first = leaving[0];
-  const gone = samples.find((s) => !s.present && first !== undefined && s.t >= first.t);
-  const falling = leaving.every((s, i) => i === 0 || s.opacity <= leaving[i - 1].opacity + 1e-3);
+export function fadeOf({ left, gone, inertAtLeft, frames }, fadeMs) {
+  const leaving = frames.filter((s) => s.present && s.leaving);
+  const [from, to] = MIDDLE.map((share) => share * fadeMs);
+  const inMiddle = (s) => s.fade !== null && s.fade >= from && s.fade < to;
   return {
-    ms: first === undefined || gone === undefined ? null : gone.t - first.t,
+    left: left !== null,
+    ms: left === null || gone === null ? null : gone - left,
+    falling: leaving.every((s, i) => i === 0 || s.opacity <= leaving[i - 1].opacity + 1e-3),
+    inert: inertAtLeft !== false && leaving.every((s) => s.inert),
+    faded: leaving.some((s) => s.fade !== null),
     midway: leaving.filter((s) => s.opacity > 0.05 && s.opacity < 0.95).length,
-    falling,
-    inert: leaving.every((s) => s.inert),
+    middle: leaving.filter(inMiddle).length,
+    drawn: leaving.map((s) => s.fade),
   };
+}
+
+/**
+ * The verdict on a fade as the page played it (`fade`, from fadeOf; `fadeMs` its length): what
+ * is wrong with it, in the log's words — a panel gone at once or outside GONE_MS, an opacity
+ * that rose, a panel taking input as it left, frames drawn as it left with no fade-out on them,
+ * no frame at all showing it midway though the page drew one in the fade's middle (MIDDLE) —
+ * and, where no frame showed it midway because the page drew none in the fade's middle, or none
+ * at all as the panel left, why the midway frames go unjudged, naming the frames' times. One
+ * frame midway is enough.
+ *
+ * @param {ReturnType<typeof fadeOf>} fade
+ * @param {number} fadeMs
+ * @returns {{ faults: string[], unjudged: string | null }}
+ */
+export function fadeVerdict(fade, fadeMs) {
+  const faults = fadeFaults(fade);
+  const unfaded = fade.drawn.length > 0 && !fade.faded;
+  if (fade.midway > 0 || !fade.left || unfaded) {
+    return { faults, unjudged: null };
+  }
+  if (fade.middle > 0) {
+    const came = `its frames came ${drawnText(fade.drawn)} ms into the ${fadeMs}-ms fade`;
+    return { faults: [...faults, `no frame showed it midway: ${came}`], unjudged: null };
+  }
+  return { faults, unjudged: unjudgedFade(fade, fadeMs) };
+}
+
+/** What is wrong with a fade as played (fadeVerdict), but its frames midway. */
+function fadeFaults(fade) {
+  return [
+    goneFault(fade),
+    fade.falling ? null : 'its opacity rose on its way out',
+    fade.inert ? null : 'it took input as it left',
+    fade.drawn.length > 0 && !fade.faded ? 'no fade-out ran on the frames it drew' : null,
+  ].filter((fault) => fault !== null);
+}
+
+/**
+ * Why the midway frames of a fade (`fade`, `fadeMs` long) go unjudged: the page drew no frame in
+ * its middle — none at all while the panel left, or only at the times it names.
+ */
+function unjudgedFade(fade, fadeMs) {
+  const [from, to] = MIDDLE.map((share) => Math.round(share * fadeMs));
+  const gone =
+    fade.ms === null ? 'never gone' : `gone ${Math.round(fade.ms)} ms after it began to leave`;
+  const drew =
+    fade.drawn.length === 0
+      ? 'the page drew no frame while the panel left'
+      : `the page drew no frame ${from} to ${to} ms into the ${fadeMs}-ms fade, only at ` +
+        `${drawnText(fade.drawn)} ms of it`;
+  return `${drew}, the panel ${gone}: no frame to judge midway; the held shot judges the fade`;
+}
+
+/** What is wrong with when the panel went (`left`, `ms` from fadeOf), or null. */
+function goneFault({ left, ms }) {
+  if (!left) {
+    return 'it went at once, never leaving';
+  }
+  if (ms === null) {
+    return 'it never went';
+  }
+  const [least, most] = GONE_MS;
+  return ms >= least && ms <= most
+    ? null
+    : `it went ${Math.round(ms)} ms after it began to leave, on the page's clock`;
+}
+
+/**
+ * The fade's times at the frames drawn while the panel left (fadeOf's `drawn`), ms, as the log
+ * says them: „0, 17, 33", a dash for a frame without a fade-out.
+ *
+ * @param {Array<number | null>} drawn
+ * @returns {string}
+ */
+export function drawnText(drawn) {
+  return drawn.length === 0
+    ? 'none'
+    : drawn.map((ms) => (ms === null ? '–' : String(Math.round(ms)))).join(', ');
 }

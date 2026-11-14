@@ -364,6 +364,24 @@ der Halle, 8 von 17 Pulten und 2 von 13 Büchern im Bild (im CI p50 16,7 ms, p95
 Frames), beim Publikum über die ganze Halle, alle 17 Pulte und 13 Bücher im Bild (p50 16,7 ms, p95
 16,7 ms über 121 Frames).
 
+**Zeitprüfungen unter Last:** Unter `SHOTS_SOFTWARE_GL=1` und auf einer ausgelasteten Maschine
+kommen Screenshots und Abfragen spät. Was eine Bewegung oder einen Zeitpunkt prüft, liest deshalb,
+was die Seite selbst auf ihrer Uhr festhielt, nicht, wann der Rundgang nachsah: Das Ausblenden
+eines Geräts (`panel-close.png`) hält ein Beobachter auf der Seite fest — wann es zu gehen begann
+und wann es weg war, je gezeichnetem Bild Deckkraft und Stand der Blende (`tools/panelfade.mjs`);
+den Ausschlag der Nadel (`meter-swing.png`) hält die Seite 60 ms in seiner Bewegung an, bis die
+Aufnahme sitzt; die LED-Leiste einer Gleichzeit-Station merkt sich jede Seite, sobald sie die
+Station gelöst zeigt, auch wenn danach das Funkband an ihrer Stelle steht; für die Aufnahmen der
+Figuren (`lobby-idle.png`, `figure-celebrate.png`) und den Schritt der eigenen Figur
+(`walk-cycle-*.png`) hält die Seite ihre Bilder an, sobald eine Figur springt, sich umsieht oder
+weit ausschreitet, bis die Aufnahme sitzt; die Bedienelemente eines Geräts auf dem quer
+gehaltenen Handy werden gemessen, wenn seine Animationen auf der Uhr der Seite zu Ende sind
+(`tools/pageclock.mjs`). Wo es unter Last nichts zu urteilen gibt — die Seite
+zeichnete in der Mitte der Blende kein Bild —, steht eine Zeile `skipped:` mit den gemessenen
+Zeiten im Log und zählt in der Zusammenfassung. Jedes Frame-Fenster nennt die 1-Minuten-Last, unter
+der es lief, die Zeile `pace` die ihres Lauffensters, und die Zusammenfassung die Last zu Beginn
+und am Ende des Laufs.
+
 **Ton und Funkstimme:** Jeder Raum klingt nach seiner Art, die Schritte des Partners kommen von
 dort, wo er steht, und die Musik zieht mit dem Druck an ([`docs/sound.md`](docs/sound.md)). Am
 Funk spricht eine Besetzung (`packages/core/src/cast.json`): die Leitstelle im Dienst — zum Start,

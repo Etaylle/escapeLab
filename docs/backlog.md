@@ -174,15 +174,55 @@ die Entscheidung.
   ist der Lauf identisch zu vorher (per Aufrufgraph geprüft). Gemessene Kosten je Gruppe in der
   README.
 
-### H-4 Der gemessene Lauf unter Software-GL urteilt wieder — Status: in Arbeit (H-sgl, Spec `spec-H-sgl.md`) · Größe: M
+### H-4 Der gemessene Lauf unter Software-GL urteilt wieder — Status: im PR (H-sgl, Spec `spec-H-sgl.md`) · Größe: M
 - Befund 2026-11-14: Der Lauf mit `SHOTS_SOFTWARE_GL=1` scheitert auf main selbst — Systemcheck am
   Panel-Ausblend-Check in 5 von 6 Läufen und am letzten Sync-Check, Blackout an meter-swing,
   panel-close und einem 43-px-Ziel am Handy, der Notstrom-Kasten seit Tagen. Jeder dieser Checks
   liest die Latenz des Screenshots, als wäre sie die Zeit der Animation; so entscheidet die Last,
   nicht der Code, und das Tor für Pakete mit Zeichenarbeit je Frame (S-hero) steht offen.
-- Plan: jeden Check die Zeit der Seite lesen lassen (eigene Uhr, Animation API, gehaltenes
-  Standbild), sonst mit benanntem Grund und gemessener Latenz überspringen, nie still; das 43-px-
-  Ziel an der Ursache beheben; Frame-Fenster nennen die Last, unter der sie liefen.
+- Gemessen auf main 997275c, je zwei Läufe unter Software-GL bei der Last, die da war (1-Minuten-Last
+  alle 20 s; Tabelle in der Art-Bible, Cost, „What the timing checks read"):
+  - panel-close.png, die Blende wie gespielt: gescheitert in 3 von 4 Läufen (Last im Mittel 45, 26
+    und 15). Die Seite zeichnete das erste Bild der Blende und das nächste 117, 817 und 583 ms
+    auseinander, das Gerät war nach ihrer eigenen Uhr dazwischen weg, 152 bis 167 ms nach Beginn;
+    main las die Lücke als Blende („gone in 124 / 815 / 571 ms", kein Bild in der Mitte). Bestanden
+    nur bei Last 7, mit einem Bild bei 0,95 als einzigem in der Mitte. Der angehaltene Schuss war
+    jedes Mal mittig.
+  - meter-swing.png: bestand zweimal, einmal fälschlich — 186 ms nach der Probe bei −52,4° gelesen,
+    der Screenshot erst 763 ms nach der Probe fertig, die Nadel darauf in Ruhe bei −10,8°.
+  - device-phone-signalkette-a.png: gescheitert einmal, „Zurücktreten" und „Notizen" 43,38 px hoch
+    bei 44 px Layout — das Öffnen des Geräts (`panel-up` ab 0,98, `device-open` ab 0,94, je 150 ms)
+    beim Messen erst 50 ms weit. Das Layout ist echt 44 px; die Prüfung lag falsch.
+  - Die letzte Gleichzeit-Station (Systemcheck, Läufe des Signal-Bauers): auf dem quer gehaltenen
+    Handy nimmt das Funkband die Stelle der LED-Leiste ein; kam die Prüfung spät, war die Leiste
+    weg, und der unbehandelte Funk-Lauscher beendete den Prozess vor der Zusammenfassung. In diesen
+    vier Läufen bewegte sich die Leiste rechtzeitig.
+  - device-solved.png: zweimal übersprungen (Schuss 570 und 2912 ms nach „gelöst", das Gerät zu
+    nach 572 und 2931 ms), wie bisher mit den Zeiten. lever-countdown las beide Seiten 1301 bis
+    1303 ms nach dem Zug, beide „2". Die übrigen Skips sind die der Missionen (Systemcheck 16,
+    Blackout 4), wie in der CI auf main.
+- Umgesetzt: Jede Zeitprüfung liest, was die Seite auf ihrer eigenen Uhr festhielt
+  (`tools/panelfade.mjs`, `tools/pageclock.mjs`). Die Blende: ein MutationObserver hält Beginn und
+  Ende fest, jedes Bild bis zum Ende Deckkraft und Stand der Blende; mindestens ein Bild muss das
+  Gerät halb zeigen, wie auf main. Zeigt keines es so, scheitert die Prüfung an einem Bild zwischen
+  halber und neun Zehntel Blende; gab es dort keines, wird übersprungen (`panel-close (fade)`) mit
+  den Zeiten der gezeichneten Bilder. Die Nadel hält die Seite 60 ms in ihren Ausschlag an, sobald
+  sich ihre Drehung nach dem Druck ändert (MutationObserver; `transitionrun` kommt erst mit dem
+  nächsten Bild, unter Last nach dem Ausschlag), bis die Aufnahme sitzt. Die Ziele auf dem Handy
+  werden gemessen, wenn die Animationen des Geräts auf der Uhr der Seite zu Ende sind (höchstens
+  3 s, sonst übersprungen mit der Wartezeit). Die LED-Leiste merkt sich jede Seite vor den Drücken.
+  Die Beweisläufe fanden sechs weitere Stellen derselben Art: Die Nadel hielt den späten Ausschlag
+  der vorigen Probe fest (jetzt wartet der Rundgang, bis die Nadel auf der letzten Ablesung steht);
+  figure-celebrate.png fand die Figur nach vier Aufnahmen gelandet (Last 42–57), und walk-cycle
+  verfehlte auch auf main ohne Software-GL beide Schrittfenster (Last 24–38) — für die Aufnahmen der
+  Figuren und des Schritts hält die Seite ihre Bilder an, bis die Aufnahme sitzt; eine Blende,
+  während der die Seite gar kein Bild zeichnete, galt als Blende ohne Animation (jetzt
+  übersprungen); und das Tempo des Menüs unter Software-GL (16,8 ms) entschied auch in Beweisläufen
+  mit angehobenem Budget (Last 158) — es gilt jetzt, wo der Lauf das Budget des Gates hat, sonst
+  steht es im Log; nudge.png wartete auf eine dritte Meldung, wo der langsame Lauf beide der Station
+  schon unterwegs verbraucht hatte — jetzt übersprungen, mit den Zeiten der beiden. Jedes
+  Frame-Fenster nennt die 1-Minuten-Last, unter der es lief, die Zusammenfassung die zu Beginn und
+  am Ende; kein Budget geändert.
 
 ### T-9 Tests an der Wanduhr — Status: erledigt (2026-11-13) · Größe: S
 - Zwei Tests lasen die echte Uhr und wurden unter Last rot: `certificate.test.ts` (openssl liest
