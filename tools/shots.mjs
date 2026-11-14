@@ -10705,7 +10705,8 @@ async function muteChecks(page) {
   const dimmed = await attached(page.locator('.settings-bus--muted'), 2000);
   await sleep(200);
   await capture(page, 'settings-ton.png');
-  const muted = await page.locator('.settings-bus--muted .settings-label').allInnerTexts();
+  // The words as written: the label shows them in capitals.
+  const muted = await page.locator('.settings-bus--muted .settings-label').allTextContents();
   await mute('Musik').click();
   const heard = await settled(
     page.locator('.settings-bus--muted').waitFor({ state: 'detached', timeout: 2000 }),
