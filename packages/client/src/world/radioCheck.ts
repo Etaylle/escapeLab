@@ -1,4 +1,4 @@
-import { outlet, playingEngine } from './audio.js';
+import { liveEngine, outlet } from './audio.js';
 import { DUCK_ATTACK_S, DUCK_RELEASE_S } from './mix.js';
 import { sayLine, stopVoice, voiceReady } from './radioVoice.js';
 
@@ -9,8 +9,10 @@ import { sayLine, stopVoice, voiceReady } from './radioVoice.js';
  * stands ready again; the next lobby, after a run, hears the mission's next text. While anybody
  * of the crew speaks it stands UNDER_CREW_DB down, under their voices, as the menu's theme does
  * (menuSound.ts `crewSpeaks`); it is cut as the lobby goes. Silent while it has no recording, or
- * before a gesture woke the sound. Its level is a node of its own between the radio's chain and
- * the radio's bus, there only while the lobby lasts: a run's sound keeps what it had.
+ * before a gesture woke the sound: it plays only on the audio context a gesture made and woke
+ * (audio.ts `liveEngine`), never making one itself — a page reloaded into a ready lobby hears
+ * nothing. Its level is a node of its own between the radio's chain and the radio's bus, there
+ * only while the lobby lasts: a run's sound keeps what it had.
  */
 
 /** How far the crew's voices pull the Funkprobe down, dB: under them, still to be made out. */
@@ -73,7 +75,7 @@ export function lobbyRadio(): LobbyRadio {
     asked = ask;
     probe = { asked: text, aired: false };
     void voiceReady().then(() => {
-      const engine = playingEngine();
+      const engine = liveEngine();
       if (asked !== ask || engine === null) return;
       asked = null;
       const under = outlet(engine.ctx, engine.voice, levelFor(talking));

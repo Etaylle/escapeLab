@@ -3,6 +3,7 @@ import type { VoiceManifest } from '../src/world/radioVoice.js';
 import {
   chainFrom,
   fakeGraph,
+  FakeContext,
   lastContext,
   type FakeBufferSource,
   type FakeGain,
@@ -43,10 +44,11 @@ describe('the operator’s Funkprobe in the lobby', () => {
     vi.restoreAllMocks();
   });
 
-  /** The lobby's radio, its sound woken as a click in the lobby wakes it. */
+  /** The lobby's radio, its sound made and woken as a click in the lobby makes and wakes it. */
   async function lobby() {
     vi.resetModules();
     await (await import('../src/world/samples.js')).preloadSamples();
+    (await import('../src/world/audio.js')).audioEngine();
     return import('../src/world/radioCheck.js');
   }
 
@@ -159,6 +161,17 @@ describe('the operator’s Funkprobe in the lobby', () => {
     radio.update(PROBE, false);
     await settle();
     expect(speech()).toHaveLength(1);
+  });
+
+  it('makes no sound of its own: reloaded into a ready lobby, it waits for a gesture', async () => {
+    vi.useFakeTimers();
+    vi.resetModules();
+    const { lobbyRadio, radioCheckProbe } = await import('../src/world/radioCheck.js');
+    lobbyRadio().update(PROBE, false);
+    await settle();
+    // No audio context made for it: the page has had no gesture to make one in.
+    expect(FakeContext.made).toEqual([]);
+    expect(radioCheckProbe()).toEqual({ asked: PROBE, aired: false });
   });
 
   it('stays silent without a recording, and before a gesture woke the sound', async () => {

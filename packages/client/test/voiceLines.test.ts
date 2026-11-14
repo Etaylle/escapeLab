@@ -126,9 +126,10 @@ const AWAITING_RENDER: readonly string[] = [
   'Die Kühlung ist abgesackt, das hat uns Zeit gekostet. Zurück an die Arbeit, beim nächsten ' +
     'Mal schneller.',
   'Zu spät, die Notversorgung musste die Kühlung abfangen. Das kostet Zeit, weiter.',
-  'Bei mir ist ein Alarm aufgelaufen, das kostet uns Zeit. Ruhig bleiben, genau arbeiten.',
-  'Alarm auf meiner Tafel, das hat uns gerade Zeit gekostet. Lieber einmal mehr nachfragen.',
-  'Da ging ein Alarm raus, ich sehe ihn hier. Nicht hetzen, sonst kommen mehr davon.',
+  'Bei mir ist ein Alarm aufgelaufen, das hat uns Zeit gekostet. Einer ist kein Beinbruch, ' +
+    'aber die Anlage zählt jeden mit.',
+  'Alarm auf meiner Tafel, die Uhr ist gerade gesprungen. Kurz sammeln, dann weiter, Nachtschicht.',
+  'Da ging ein Alarm raus, ich sehe ihn hier. Das war der erste heute Nacht, bei mehr wird es eng.',
   'Noch fünf Minuten auf den Notzellen. Bleibt dran, aber hetzt nicht.',
   'Die Notzellen machen noch fünf Minuten. Das reicht, wenn ihr euch aufteilt.',
   'Zwei Minuten noch, dann sind die Zellen leer. Jetzt zählt jeder Handgriff.',

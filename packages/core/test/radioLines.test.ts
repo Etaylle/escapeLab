@@ -395,6 +395,20 @@ describe('the Leitstelle over Blackout’s loudspeakers', () => {
   });
 });
 
+describe('the operator’s answers in Blackout', () => {
+  const radio = missions.find((m) => m.id === 'blackout')?.radio;
+
+  it('gives the first alarm a word for any cause: a wrong input, or a drone that saw them', () => {
+    const alarms = variantsOf(radio?.alarm ?? []);
+    expect(alarms.length).toBeGreaterThanOrEqual(2);
+    // Nothing that holds for one cause alone: neither the drone nor the input, nor advice on it.
+    const causes = /Drohne|Kamera|gesehen|erwischt|Eingabe|falsch|vertippt|nachfrag|genau|hetz/i;
+    for (const line of alarms) {
+      expect(line).not.toMatch(causes);
+    }
+  });
+});
+
 describe.each(['blackout', 'systemcheck'])('the Leitstelle through %s', (id) => {
   const mission = missions.find((m) => m.id === id);
 

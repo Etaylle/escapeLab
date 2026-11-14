@@ -2818,8 +2818,7 @@ async function checkRadioVoice(player, listening, after, expected = null) {
   // A page without the recordings answers with something else: no manifest, and the check fails.
   const manifest = await voiceLinesOf(player.page);
   const line = expected ?? newestStory(player);
-  const recorded = line === null || manifest[voiceIdOf(line)] !== undefined;
-  if (heard === null && !recorded && Object.keys(manifest).length > 0) {
+  if (awaitsRender(heard, line, manifest)) {
     console.log(`radio voice        ${player.name} after ${after}: „${line}" awaits its render`);
     return;
   }
@@ -2828,17 +2827,37 @@ async function checkRadioVoice(player, listening, after, expected = null) {
   const words = line === null ? 0 : wordsOf(line);
   const opens = entry?.opens === true;
   const keyedRight = heard !== null && heard.opened === opens;
-  const keyed = opens ? ', opened by the Leitstelle' : '';
-  const said = heard === null
-    ? '!! no line spoke'
-    : `${heard.id} „${entry?.text ?? '!! not in the manifest'}" speaking ${seconds(spoke)} ` +
-      `of its ${seconds(entry?.ms ?? 0)}, ${words} words${keyed}` +
-      `${keyedRight ? '' : ` !! ${heard.opened ? 'opened' : 'not opened'}`}`;
+  const heardAs = { heard, entry, opens, spoke, words, keyedRight };
+  const said = heard === null ? '!! no line spoke' : heardText(heardAs);
   console.log(`radio voice        ${player.name} after ${after}: ${said}; the banner: „${line}"`);
   const plausible = spoke >= Math.max(1000, words * MS_PER_WORD);
   if (entry === undefined || entry.text !== line || !plausible || !keyedRight) {
     fail(`radio voice after ${after}: ${heard?.id ?? 'nothing'} spoke ${spoke} ms for „${line}"`);
   }
+}
+
+/**
+ * Whether the line `line` that nobody `heard` awaits its render: the manifest the page is
+ * handed has recordings, none of them its.
+ */
+const awaitsRender = (heard, line, manifest) =>
+  heard === null &&
+  line !== null &&
+  Object.keys(manifest).length > 0 &&
+  manifest[voiceIdOf(line)] === undefined;
+
+/**
+ * What the log says of a line `heard` (checkRadioVoice): its recording `entry`, how long it
+ * spoke of its length and in how many words, the Leitstelle's opening where it `opens` a run,
+ * and „!!" where it was keyed otherwise.
+ */
+function heardText({ heard, entry, opens, spoke, words, keyedRight }) {
+  const keyed = opens ? ', opened by the Leitstelle' : '';
+  const off = keyedRight ? '' : ` !! ${heard.opened ? 'opened' : 'not opened'}`;
+  return (
+    `${heard.id} „${entry?.text ?? '!! not in the manifest'}" speaking ${seconds(spoke)} ` +
+    `of its ${seconds(entry?.ms ?? 0)}, ${words} words${keyed}${off}`
+  );
 }
 
 /** The run's first line on the radio, as `player`'s view has it; null before it came. */
@@ -7514,6 +7533,17 @@ async function checkRadioCheck(host) {
 }
 
 /**
+ * The host's start pressed, once it reads „Mission starten" — only once nothing blocks it — its
+ * Funkprobe checked before the first press (`checkRadioCheck`).
+ */
+async function pressStart(host, attempt) {
+  const start = host.page.locator('button.lobby-start:enabled', { hasText: 'Mission starten' });
+  await start.waitFor({ state: 'visible', timeout: 10_000 });
+  if (attempt === 1) await checkRadioCheck(host);
+  await start.click();
+}
+
+/**
  * The guest says it is ready, and the host starts once its own page has the
  * guest ready and its start button enabled — its Funkprobe checked first
  * (`checkRadioCheck`); the run then has START_MS to show on both pages. A
@@ -7534,11 +7564,7 @@ async function startRun(host, guest) {
       console.log(`start              !! ${host.name}'s page has no ready ${guest.name} after 5 s`);
       continue;
     }
-    // The start reads „Mission starten" only once nothing blocks it.
-    const start = host.page.locator('button.lobby-start:enabled', { hasText: 'Mission starten' });
-    await start.waitFor({ state: 'visible', timeout: 10_000 });
-    if (attempt === 1) await checkRadioCheck(host);
-    await start.click();
+    await pressStart(host, attempt);
     if (!(await until(started, 5000))) {
       const banner = await textOf(host.page.locator('.banner.error'));
       console.log(
