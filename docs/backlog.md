@@ -487,7 +487,7 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   gerenderten Zeilen je Sprecher. Kosten: je weiterer Operator ≈ 10.000 Credits; der große
   Render wartet auf die fertige Besetzung.
 
-### M-1 Drei Spielende: Beweis und Sichtbarkeit — Status: im PR (M-three) · Größe: M
+### M-1 Drei Spielende: Beweis und Sichtbarkeit — Status: erledigt (M-three, Merge 2026-11-14, a2ef8da; drei Review-Runden; Cloud-CI grün auf 347d444, Check und Walkthrough; CI-Budget um zwei Minuten angehoben) · Größe: M
 - Befund: mechanisch trägt die dritte Person (Leserin mit Regeln, Notizen und Funk an Zwei-Pult-
   Stationen; Platten, Sicherung, Schlüssel, Kameraplatte sonst), aber Modultests spielen Blackout
   nur zu zweit, der Harness auch; die Validierung beweist nur Erreichbarkeit.
