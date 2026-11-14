@@ -131,6 +131,26 @@ export function WatchingChip({ count }: { count: number }) {
   );
 }
 
+interface RoomChipsProps {
+  code: string | null;
+  seed: number | null;
+  /** how many watch the room (ws.ts `watching`); nobody where it is not given */
+  watching?: number | undefined;
+}
+
+/** The room's code and how many watch it, as the bar's chips; nothing off any room. */
+function RoomChips({ code, seed, watching }: RoomChipsProps) {
+  if (code === null) {
+    return null;
+  }
+  return (
+    <>
+      <RoomCode code={code} seed={seed} />
+      <WatchingChip count={watching ?? 0} />
+    </>
+  );
+}
+
 interface TopBarProps {
   roomCode: string | null;
   /** the seed a tester pinned the room to, shown in the lobby */
@@ -163,8 +183,7 @@ export function TopBar(props: TopBarProps) {
       <span className="logo">
         <Icon name="hex" /> <span className="logo-word">ESCAPELAB</span>
       </span>
-      {roomCode !== null && <RoomCode code={roomCode} seed={seed} />}
-      {roomCode !== null && <WatchingChip count={props.watching ?? 0} />}
+      <RoomChips code={roomCode} seed={seed} watching={props.watching} />
       {toEditor !== null && (
         <button className="topbar-editor" aria-label="Zurück zum Editor" onClick={toEditor}>
           <span className="topbar-editor-way">Zurück zum </span>Editor

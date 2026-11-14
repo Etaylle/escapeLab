@@ -11438,6 +11438,17 @@ async function padToSteering(page) {
   return page.locator('.settings-tab--on').getAttribute('data-tab');
 }
 
+/** settings-steuerung.png: „Steuerung" as two steps of the D-pad from „Ton" open it, or fails. */
+async function captureSteering(page) {
+  const reached = await padToSteering(page);
+  await sleep(300);
+  await capture(page, 'settings-steuerung.png');
+  console.log(`settings-steuerung.png the D-pad stepped from „Ton" to „${reached}"`);
+  if (reached !== 'steuerung') {
+    fail(`settings-steuerung.png: two steps of the D-pad from „Ton" opened „${reached}"`);
+  }
+}
+
 /**
  * settings-steuerung.png and settings-controller.png: the gear opens the settings on „Ton", the
  * controller's D-pad steps to „Steuerung" (settings-steuerung.png, `padToSteering`), its
@@ -11448,13 +11459,7 @@ async function padToSteering(page) {
  */
 async function captureControllerSettings(page) {
   await settled(openSettings(page, 'ton'));
-  const reached = await padToSteering(page);
-  await sleep(300);
-  await capture(page, 'settings-steuerung.png');
-  console.log(`settings-steuerung.png the D-pad stepped from „Ton" to „${reached}"`);
-  if (reached !== 'steuerung') {
-    fail(`settings-steuerung.png: two steps of the D-pad from „Ton" opened „${reached}"`);
-  }
+  await captureSteering(page);
   const section = page.locator('.settings-pad');
   if (!(await settled(section.waitFor({ timeout: 3000 })))) {
     fail('settings-controller.png: the settings show no controller');
@@ -12671,19 +12676,18 @@ async function guestMenu(guest) {
  * and the strip's ground, the chips' corners and what the audience's chip says.
  */
 function chromeShown() {
-  const style = (selector) => {
+  const css = (selector, property) => {
     const el = document.querySelector(selector);
-    return el === null ? null : globalThis.getComputedStyle(el);
+    return el === null ? null : globalThis.getComputedStyle(el)[property];
   };
-  const watching = document.querySelector('.watching-chip');
   return {
-    logo: style('.logo')?.fontFamily ?? null,
-    heading: style('.lobby-head h1')?.fontFamily ?? null,
+    logo: css('.logo', 'fontFamily'),
+    heading: css('.lobby-head h1', 'fontFamily'),
     loaded: document.fonts.check('14px Michroma'),
-    panel: style('.lobby-panel')?.backgroundColor ?? null,
-    strip: style('.hud')?.backgroundColor ?? null,
-    chip: style('.room-code')?.borderRadius ?? null,
-    watching: watching?.getAttribute('aria-label') ?? null,
+    panel: css('.lobby-panel', 'backgroundColor'),
+    strip: css('.hud', 'backgroundColor'),
+    chip: css('.room-code', 'borderRadius'),
+    watching: document.querySelector('.watching-chip')?.getAttribute('aria-label') ?? null,
   };
 }
 
