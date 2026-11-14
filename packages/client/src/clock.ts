@@ -103,10 +103,15 @@ export function askForTime(ask: () => void): { open: () => void; close: () => vo
   };
 }
 
-/** What the mission's clock counts against: its deadline, and since when the run stands paused. */
+/**
+ * What the mission's clock counts against: its deadline, and since when the run stands paused —
+ * and where the mission has no clock, the moment it counts the time run from (`clockFrom`, core
+ * view.ts `RunShape`), which every pause moves on.
+ */
 export interface MissionTime {
   deadlineAt: number | null;
   pausedAt: number | null;
+  clockFrom?: number;
 }
 
 /**
@@ -128,6 +133,37 @@ export function formatLeft(leftMs: number): string {
 /** What is left on the mission's clock at server time `now`, ms; null without a deadline. */
 export function timeLeft(mission: MissionTime, now: number = serverNow()): number | null {
   return mission.deadlineAt === null ? null : mission.deadlineAt - clockTime(mission.pausedAt, now);
+}
+
+/** `ranMs` of a run on a clock that counts it up, „mm:ss": whole seconds gone, never below 0. */
+export function formatRun(ranMs: number): string {
+  const totalSec = Math.max(0, Math.floor(ranMs / 1000));
+  const min = Math.floor(totalSec / 60);
+  const sec = totalSec % 60;
+  return `${String(min).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
+}
+
+/**
+ * How long a run without a clock has gone at server time `now`, ms, its pauses left out: from
+ * `clockFrom`, standing still while it is paused; null where a clock counts down, or none runs.
+ */
+export function timeRun(mission: MissionTime, now: number = serverNow()): number | null {
+  const from = mission.deadlineAt === null ? mission.clockFrom : undefined;
+  return from === undefined ? null : clockTime(mission.pausedAt, now) - from;
+}
+
+/**
+ * The mission's clock as every screen prints it at server time `now`, „mm:ss": what is left,
+ * counting down — or, where the mission has no clock, the time run, counting up; null with
+ * neither, as before the lights go out.
+ */
+export function clockText(mission: MissionTime, now: number = serverNow()): string | null {
+  const left = timeLeft(mission, now);
+  if (left !== null) {
+    return formatLeft(left);
+  }
+  const ran = timeRun(mission, now);
+  return ran === null ? null : formatRun(ran);
 }
 
 /**

@@ -16,7 +16,8 @@ import { blackoutPlan } from './blackoutPlan.js';
 /**
  * Guardrail for every shipped mission, beyond what the mission validation
  * already walks (stations in order, every spot of every manual object, the
- * sign): every crew the mission takes can gather at the exit, every
+ * sign): every crew the mission takes can gather at the exit — a mission in
+ * free order may have none and end with its last solve —, every
  * carryable can be carried where it belongs, a plate door that waits for a
  * puzzle needs nobody on its plate once that puzzle is solved, both consoles
  * of a station can be manned at once, and the walk the game does — puzzle
@@ -52,6 +53,28 @@ function solvedBefore(mission: Mission, puzzleId: string | undefined): Set<strin
   return solved;
 }
 
+/**
+ * Every crew of `mission` can gather at its exit once all is solved. Only a mission in free
+ * order may have none and end with its last solve, as the Übungshalle does.
+ */
+function expectAllOut(mission: Mission): void {
+  const exit = mission.map.exit;
+  if (exit === undefined) {
+    expect(mission.order).toBe('free');
+    return;
+  }
+  const solved = new Set(mission.puzzles.map((p) => p.id));
+  for (const crew of crews(mission)) {
+    for (const [i, tiles] of reachability(mission.map, crew, solved).entries()) {
+      const from = crew[i] === undefined ? String(i) : tileKey(crew[i].x, crew[i].y);
+      expect(
+        tiles.has(tileKey(exit.x, exit.y)),
+        `the player starting at ${from} cannot reach the exit`,
+      ).toBe(true);
+    }
+  }
+}
+
 describe.each(missions.map((m) => [m.id, m] as const))('mission %s', (_id, mission) => {
   const map = mission.map;
 
@@ -61,19 +84,8 @@ describe.each(missions.map((m) => [m.id, m] as const))('mission %s', (_id, missi
     expect(spawns.length).toBeGreaterThanOrEqual(mission.players.max);
   });
 
-  it('lets every crew gather at the exit once all puzzles are solved', () => {
-    const exit = map.exit;
-    expect(exit).toBeDefined();
-    const solved = new Set(mission.puzzles.map((p) => p.id));
-    for (const crew of crews(mission)) {
-      for (const [i, tiles] of reachability(map, crew, solved).entries()) {
-        const from = crew[i] === undefined ? String(i) : tileKey(crew[i].x, crew[i].y);
-        expect(
-          exit !== undefined && tiles.has(tileKey(exit.x, exit.y)),
-          `the player starting at ${from} cannot reach the exit`,
-        ).toBe(true);
-      }
-    }
+  it('lets every crew gather at the exit once all is solved, or ends free at the last', () => {
+    expectAllOut(mission);
   });
 
   it('lets someone in every crew fetch and deliver every carryable before it is needed', () => {

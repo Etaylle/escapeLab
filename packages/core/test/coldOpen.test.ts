@@ -388,6 +388,25 @@ describe('a mission without an intro', () => {
   });
 });
 
+describe('a mission whose lights stay on', () => {
+  const labelled = { ...raw, map: { ...raw.map, labels: [{ text: 'GANG', x: 4, y: 1 }] } };
+  const { intro, ...dark } = labelled;
+
+  it('lights every room its map names from the start, where a dark lab lights none', () => {
+    const lit = parseMission({ ...dark, lit: true });
+    expect(viewFor(started(lit), 'p1').map?.litRooms).toEqual(['GANG']);
+    expect(viewForSpectator(started(lit)).map?.litRooms).toEqual(['GANG']);
+    expect(viewFor(started(parseMission(dark)), 'p1').map?.litRooms).toEqual([]);
+  });
+
+  it('has no intro to put the lights out: a file with one is turned away', () => {
+    const checked = checkMission({ ...dark, lit: true, intro });
+    expect(checked.ok ? [] : checked.issues).toEqual([
+      '(root): lit: a mission whose lights stay on has no intro to put them out — leave out intro',
+    ]);
+  });
+});
+
 describe('after the run', () => {
   const lost = applyAction(lightsOut(started(mission), OUT_AT), {
     type: 'time-expired',

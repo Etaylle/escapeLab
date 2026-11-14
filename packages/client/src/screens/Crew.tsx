@@ -18,6 +18,23 @@ export function crewSizeText({ min, max }: { min: number; max: number }): string
   return min === max ? `${min} Spieler` : `${min}–${max} Spieler`;
 }
 
+/** How long a mission's clock runs: „15 min", or „ohne Uhr" for one that has none. */
+export function clockSizeText(timeLimitSec: number): string {
+  return timeLimitSec === 0 ? 'ohne Uhr' : `${Math.round(timeLimitSec / 60)} min`;
+}
+
+/**
+ * A mission's clock in a line of its facts, the separator after it: „15 min ·", or „ohne Uhr
+ * ·". The minutes stand in a text node of their own, as the lines always had them: the browser
+ * shapes text node by text node, and a line with a clock lays out to the pixel as before.
+ */
+export function ClockFact({ timeLimitSec }: { timeLimitSec: number }) {
+  if (timeLimitSec === 0) {
+    return <>{clockSizeText(timeLimitSec)} ·</>;
+  }
+  return <>{Math.round(timeLimitSec / 60)} min ·</>;
+}
+
 /**
  * A crew member's dot in their colour — and where the settings ask for it (Zugang, „Farbmuster"),
  * the mark of that colour over it (styles/settings.css), so that the crew stands told apart
@@ -68,18 +85,17 @@ function atStation(armed: MapView['stations'][number], at: Whereabouts): string 
 }
 
 /**
- * What someone does at the armed station: „zieht" or „drückt" while their press there waits
- * for the rest of the crew (`pressing`), else that they stand at it; null away from it.
+ * What someone does at an armed station: „zieht" or „drückt" while their press there waits
+ * for the rest of the crew (`pressing`), else that they stand at it; null away from every one.
  */
 function stationTag(map: MapView | null, at: Whereabouts, pressing: string | null): CrewTag | null {
   if (pressing !== null) {
     return { text: pressing, tone: 'press' };
   }
-  // A station with two consoles is armed at both; either one has its puzzle id.
-  const armed = map?.stations.find(isArmed);
-  return armed !== undefined && at.stationId === armed.puzzleId
-    ? { text: atStation(armed, at), tone: 'pult' }
-    : null;
+  // A station with two consoles is armed at both; either one has its puzzle id. While a
+  // free-order run waits for the crew's pick, every station still to solve is armed.
+  const armed = map?.stations.find((s) => isArmed(s) && s.puzzleId === at.stationId);
+  return armed === undefined ? null : { text: atStation(armed, at), tone: 'pult' };
 }
 
 /**

@@ -192,12 +192,25 @@ export const NO_CREDITS: Credits = {
 
 export interface GameState {
   phase: Phase;
-  /** already scaled to `difficulty` — downstream code just reads the numbers */
+  /**
+   * already scaled to `difficulty` — downstream code just reads the numbers; in a free-order
+   * run its puzzles stand in the run's order, the solved ones first (`currentPuzzleIndex`)
+   */
   mission: Mission;
   difficulty: Difficulty;
   players: Player[];
-  /** index into mission.puzzles; only meaningful while playing */
+  /**
+   * index into mission.puzzles of the station up — as many as are solved, since the run's
+   * `mission.puzzles` keep the solved ones first: in free order the station the crew switches
+   * on is moved up to this place (actions.ts `takeUp`); only meaningful while playing
+   */
   currentPuzzleIndex: number;
+  /**
+   * in a free-order run, whether the crew has switched on the station up since the last solve:
+   * from then on it is theirs until solved, as in a chain; until then every station still to
+   * solve stands armed. False in a chain run, and outside a run
+   */
+  picked: boolean;
   puzzleState: PuzzleState | null;
   /** PRNG seed for this run; set by start-mission */
   seed: number | null;
@@ -312,8 +325,17 @@ export interface GameState {
    * deadline. Null otherwise.
    */
   lightsDueAt: number | null;
-  /** epoch ms; set once the lights are out, shrinks when penalties strike */
+  /**
+   * epoch ms; set once the lights are out, shrinks when penalties strike — null all through a
+   * run whose mission has no clock (`timeLimitSec` 0)
+   */
   deadlineAt: number | null;
+  /**
+   * epoch ms the run's clock counts from: the lights going out, moved on by every pause since,
+   * as a deadline is — where the mission has no clock, every screen shows the time run since
+   * then. Null while the lights are on, and outside a run
+   */
+  clockFrom: number | null;
   /** epoch ms; set when the mission ends (won or lost) */
   finishedAt: number | null;
   /** increments on every penalty — lets clients retrigger alarm effects */
@@ -355,6 +377,7 @@ export function initialState(
     difficulty,
     players: [],
     currentPuzzleIndex: 0,
+    picked: false,
     puzzleState: null,
     seed: null,
     roomSeed,
@@ -385,6 +408,7 @@ export function initialState(
     lightsOutAt: null,
     lightsDueAt: null,
     deadlineAt: null,
+    clockFrom: null,
     finishedAt: null,
     penaltySeq: 0,
     lastPenaltySec: null,

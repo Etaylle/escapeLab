@@ -4,6 +4,7 @@ import { SeatBook } from './seats.js';
 import type { FinishedRun } from './store/store.js';
 import {
   applyAction,
+  armedPuzzleIds,
   armedStations,
   canSee,
   clockCallDueAt,
@@ -1566,20 +1567,21 @@ export class Room {
   }
 
   /**
-   * Whether the armed station — any of its consoles — lies within this player's reach, and the
+   * Whether an armed station — any of its consoles — lies within this player's reach, and the
    * player faces it (`facesConsole`): through a wall or round a pillar there is nothing to work.
+   * While a free-order run waits for its pick, every station still to solve is armed.
    */
   private stationInReach(playerId: string): boolean {
     const pos = this.positions.get(playerId);
     const { state } = this;
-    const current = state.mission.puzzles[state.currentPuzzleIndex]?.id;
-    if (pos === undefined || !lightsAreOut(state) || current === undefined) {
+    const armed = new Set(armedPuzzleIds(state));
+    if (pos === undefined || armed.size === 0) {
       return false;
     }
     const shut = shutDoors(state.mission.map, state);
     return state.mission.map.stations.some(
       (spot) =>
-        spot.puzzleId === current &&
+        armed.has(spot.puzzleId) &&
         Math.hypot(pos.x - (spot.x + 0.5), pos.y - (spot.y + 0.5)) <= INTERACT_RADIUS &&
         this.facesConsole(playerId, spot, shut, {}),
     );
@@ -1786,7 +1788,7 @@ export class Room {
       return state.phase;
     }
     const shut = [...shutDoors(state.mission.map, state)].sort().join(' ');
-    const armed = lightsAreOut(state) ? state.currentPuzzleIndex : -1;
+    const armed = armedPuzzleIds(state).join(' ');
     const loose = Object.entries(state.items)
       .filter(([, item]) => item.carriedBy === null && !item.delivered)
       .map(([id, item]) => `${id}@${item.x},${item.y}`)
