@@ -12302,9 +12302,16 @@ async function hallFramed(page) {
   );
 }
 
+/** How many of the hall's stations the host's view has armed, each counted once. */
+const armedOf = (view) =>
+  new Set((view.map?.stations ?? []).filter((s) => s.status === 'armed').map((s) => s.puzzleId))
+    .size;
+
 /**
  * The host's frames sampled for information at HALL_SAMPLE_AT while every station stands armed,
- * the log saying what the window frames (`hallFramed`). Throws where the host finds no way there.
+ * the log saying what they were measured under: the stations armed and what the window frames
+ * (`hallFramed`) — its line counting the frames as every window does. Throws where the host
+ * finds no way there.
  */
 async function sampleArmedHall(host) {
   const at = HALL_SAMPLE_AT;
@@ -12314,7 +12321,8 @@ async function sampleArmedHall(host) {
   }
   await sleep(1500); // the camera settles behind the walk
   const framed = (await hallFramed(host.page)) ?? 'no camera to say what is in view';
-  const when = `at ${at.x},${at.y} in the hall, every station armed, ${framed}`;
+  const armed = `${armedOf(host.seen.view)} of ${HALL_PLAN.stations.length} stations armed`;
+  const when = `at ${at.x},${at.y} in the hall, ${armed}, ${framed}`;
   await sampleFrames(host.page, when, () => pace(host, SAMPLE_MS), { gating: false });
 }
 
