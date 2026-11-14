@@ -7,6 +7,8 @@ import {
   type RunReport,
 } from '@escapelab/core';
 import {
+  HAS_LOGIN,
+  LoginTaken,
   PASS_REFUSED,
   secretHashOf,
   type FinishedRun,
@@ -111,6 +113,27 @@ export async function withAccounts(store: Store, names: readonly string[]): Prom
   for (const name of names) {
     await store.getOrCreateByIdentity(identityOf(name), { displayName: name, colour: null });
   }
+}
+
+/** What a test hands a store as the hash of `name`'s Kennwort: a store keeps it as it is given. */
+export const kennwortOf = (name: string): string => `scrypt-of-${name}`;
+
+/**
+ * The account of the pass of `name`, made where it has none, with a login of its own where
+ * `number` is given (`kennwortOf`); its id.
+ */
+export async function accountFor(store: Store, name: string, number?: string): Promise<string> {
+  const profile = { displayName: name, colour: null };
+  const { id } = await store.getOrCreateByIdentity(identityOf(name), profile);
+  if (number !== undefined) {
+    await store.addLogin(id, number, kennwortOf(name));
+  }
+  return id;
+}
+
+/** The id of the account the pass of `name` leads into; null for none. */
+async function accountOfPass(store: Store, name: string): Promise<string | null> {
+  return (await store.findByIdentity(identityOf(name)))?.id ?? null;
 }
 
 /** Runs the contract against the store `open` opens, under `name`. */
@@ -280,6 +303,14 @@ export function storeContract(name: string, open: () => Promise<Opened>): void {
       expect(await store.runsOfAccount(fresh.id, 10)).toEqual({ total: 0, runs: [] });
     });
 
+    it('takes a deleted account’s login with it', async () => {
+      const { store } = await open();
+      const gone = await accountFor(store, 'Anna', 'EL-7K3M-9Q2D');
+      await store.deleteAccount(gone);
+      expect(await store.findLogin('EL-7K3M-9Q2D')).toBeNull();
+      expect(await store.loginOf(gone)).toBeNull();
+    });
+
     it('takes a deleted account’s name off its runs at once, wherever they are shown', async () => {
       const { store } = await open();
       const gone = await store.getOrCreateByIdentity(identityOf('Anna'), anna);
@@ -306,6 +337,148 @@ export function storeContract(name: string, open: () => Promise<Opened>): void {
         ['', 'Ben'],
         ['', 'Ben'],
       ]);
+    });
+  });
+
+  loginContract(name, open);
+}
+
+/** The logins and the ways in by them (store.ts `Login`, `signIn`, `signOut`), in either store. */
+function loginContract(name: string, open: () => Promise<Opened>): void {
+  describe(`${name}: the logins`, () => {
+    it('gives an account its login, found by its Ausweisnummer and by the account', async () => {
+      const { store } = await open();
+      const anna = await accountFor(store, 'Anna', 'EL-7K3M-9Q2D');
+      const ben = await accountFor(store, 'Ben');
+      const login = { accountId: anna, subject: 'EL-7K3M-9Q2D', secretHash: kennwortOf('Anna') };
+      expect(await store.findLogin('EL-7K3M-9Q2D')).toEqual(login);
+      expect(await store.loginOf(anna)).toEqual(login);
+      expect(await store.loginOf(ben)).toBeNull();
+      expect(await store.findLogin('EL-7K3M-9Q2E')).toBeNull();
+      // An Ausweisnummer is no pass's id, and a pass's id no Ausweisnummer.
+      expect(await store.findLogin(passFor('Anna').id)).toBeNull();
+    });
+
+    it('gives an account one login, and an Ausweisnummer to one account', async () => {
+      const { store } = await open();
+      const anna = await accountFor(store, 'Anna', 'EL-7K3M-9Q2D');
+      const ben = await accountFor(store, 'Ben');
+      await expect(store.addLogin(anna, 'EL-AAAA-AAAA', 'x')).rejects.toThrow(HAS_LOGIN);
+      await expect(store.addLogin(ben, 'EL-7K3M-9Q2D', 'x')).rejects.toBeInstanceOf(LoginTaken);
+      expect(await store.loginOf(ben)).toBeNull();
+      expect(await store.findLogin('EL-AAAA-AAAA')).toBeNull();
+      // Two Kennwörter set at once for one account: it gets one.
+      const cleo = await accountFor(store, 'Cleo');
+      const both = await Promise.allSettled([
+        store.addLogin(cleo, 'EL-CCCC-CCC2', 'a'),
+        store.addLogin(cleo, 'EL-CCCC-CCC3', 'b'),
+      ]);
+      expect(both.map((settled) => settled.status).sort()).toEqual(['fulfilled', 'rejected']);
+      const found = await Promise.all(['EL-CCCC-CCC2', 'EL-CCCC-CCC3'].map(store.findLogin, store));
+      expect(found.filter((login) => login !== null)).toHaveLength(1);
+    });
+
+    it('replaces a Kennwort only where it is still the one it was checked against', async () => {
+      const { store } = await open();
+      const anna = await accountFor(store, 'Anna', 'EL-7K3M-9Q2D');
+      expect(await store.replaceLoginSecret(anna, kennwortOf('Anna'), 'next')).toBe(true);
+      expect(await store.replaceLoginSecret(anna, kennwortOf('Anna'), 'other')).toBe(false);
+      expect((await store.findLogin('EL-7K3M-9Q2D'))?.secretHash).toBe('next');
+      const ben = await accountFor(store, 'Ben');
+      expect(await store.replaceLoginSecret(ben, 'next', 'other')).toBe(false);
+      expect(await store.loginOf(ben)).toBeNull();
+    });
+  });
+
+  describe(`${name}: signing in and out`, () => {
+    it('leads a pass into another account, the empty one it left deleted', async () => {
+      const { store } = await open();
+      const anna = await accountFor(store, 'Anna', 'EL-7K3M-9Q2D');
+      const guest = await accountFor(store, 'Ben');
+      expect(await store.signIn(identityOf('Ben'), anna, null)).toEqual([guest]);
+      expect(await accountOfPass(store, 'Ben')).toBe(anna);
+      await expect(store.updateProfile(guest, { displayName: 'Ben' })).rejects.toThrow();
+      // Signed in once more, as a page sends it again: nothing changes, nothing else goes.
+      expect(await store.signIn(identityOf('Ben'), anna, null)).toEqual([]);
+      expect([await accountOfPass(store, 'Ben'), await accountOfPass(store, 'Anna')]).toEqual([
+        anna,
+        anna,
+      ]);
+    });
+
+    it('keeps the account a pass left where a run, a Kennwort or a way in is left', async () => {
+      const { store } = await open();
+      const anna = await accountFor(store, 'Anna', 'EL-7K3M-9Q2D');
+      const ben = await accountFor(store, 'Ben');
+      // A run lost: it earned no Erfolg, and keeps the account all the same.
+      await store.appendRun(finished({ outcome: 'lost:time' }, ['Ben', null]));
+      const cleo = await accountFor(store, 'Cleo', 'EL-CCCC-CCCC');
+      const dan = await accountFor(store, 'Dan');
+      await store.signIn(identityOf('Eva'), dan, null);
+      for (const left of ['Ben', 'Cleo', 'Dan']) {
+        expect(await store.signIn(identityOf(left), anna, null), left).toEqual([]);
+      }
+      expect((await store.runsOfAccount(ben, 10)).total).toBe(1);
+      expect(await store.achievements(ben)).toEqual([]);
+      expect((await store.findLogin('EL-CCCC-CCCC'))?.accountId).toBe(cleo);
+      expect(await accountOfPass(store, 'Eva')).toBe(dan);
+    });
+
+    it('makes a way in for a pass without; one with another’s secret changes nothing', async () => {
+      const { store } = await open();
+      const anna = await accountFor(store, 'Anna', 'EL-7K3M-9Q2D');
+      expect(await store.signIn(identityOf('Ben'), anna, null)).toEqual([]);
+      expect(await accountOfPass(store, 'Ben')).toBe(anna);
+      const guest = await accountFor(store, 'Cleo');
+      const forged = identityOf('Cleo', 'f'.repeat(64));
+      await expect(store.signIn(forged, anna, null)).rejects.toThrow(PASS_REFUSED);
+      expect(await accountOfPass(store, 'Cleo')).toBe(guest);
+      const leaving = { pass: forged, parked: null };
+      await expect(store.signIn(identityOf('Dan'), anna, leaving)).rejects.toThrow(PASS_REFUSED);
+      expect(await accountOfPass(store, 'Dan')).toBeNull();
+      expect(await accountOfPass(store, 'Cleo')).toBe(guest);
+    });
+
+    it('signs a pass out: its way in gone, the account whole', async () => {
+      const { store } = await open();
+      const anna = await accountFor(store, 'Anna', 'EL-7K3M-9Q2D');
+      await store.signIn(identityOf('Ben'), anna, null);
+      expect(await store.signOut({ pass: identityOf('Ben'), parked: null })).toBe(anna);
+      expect(await accountOfPass(store, 'Ben')).toBeNull();
+      expect(await accountOfPass(store, 'Anna')).toBe(anna);
+      expect((await store.findLogin('EL-7K3M-9Q2D'))?.accountId).toBe(anna);
+      expect(await store.signOut({ pass: identityOf('Ben'), parked: null })).toBeNull();
+      const forged = { pass: identityOf('Anna', 'f'.repeat(64)), parked: null };
+      await expect(store.signOut(forged)).rejects.toThrow(PASS_REFUSED);
+      expect(await accountOfPass(store, 'Anna')).toBe(anna);
+    });
+
+    it('parks a pass signed out of a seat: its run credits the account still', async () => {
+      const { store } = await open();
+      const anna = await accountFor(store, 'Anna', 'EL-7K3M-9Q2D');
+      const parked = secretHashOf('d'.repeat(64));
+      expect(await store.signOut({ pass: identityOf('Anna'), parked })).toBe(anna);
+      await expect(store.findByIdentity(identityOf('Anna'))).rejects.toThrow(PASS_REFUSED);
+      const seat = { id: passFor('Anna').id, secretHash: parked };
+      await store.appendRun({ ...finished({}, [null, null]), passes: [seat, null] });
+      expect((await store.runsOfAccount(anna, 10)).total).toBe(1);
+    });
+
+    it('switches a device in one go: a new pass into an account, the old one out', async () => {
+      const { store } = await open();
+      const anna = await accountFor(store, 'Anna', 'EL-7K3M-9Q2D');
+      const ben = await accountFor(store, 'Ben', 'EL-BBBB-BBBB');
+      const leaving = { pass: identityOf('Anna'), parked: null };
+      expect(await store.signIn(identityOf('Dan'), ben, leaving)).toEqual([]);
+      expect([await accountOfPass(store, 'Dan'), await accountOfPass(store, 'Anna')]).toEqual([
+        ben,
+        null,
+      ]);
+      expect((await store.findLogin('EL-7K3M-9Q2D'))?.accountId).toBe(anna);
+      // A guest switched away leaves nothing behind.
+      const guest = await accountFor(store, 'Cleo');
+      const away = { pass: identityOf('Cleo'), parked: null };
+      expect(await store.signIn(identityOf('Eva'), ben, away)).toEqual([guest]);
     });
   });
 }

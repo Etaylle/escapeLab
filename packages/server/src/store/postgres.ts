@@ -1,15 +1,19 @@
 import { Prisma, PrismaClient, type Account as AccountRow } from '@prisma/client';
-import { NO_CREDITS, runSeconds, type Credits, type RunReport } from '@escapelab/core';
+import { GameError, NO_CREDITS, runSeconds, type Credits, type RunReport } from '@escapelab/core';
 import { RunStats } from '../runStats.js';
 import {
   aliasOf,
   checkSecret,
+  HAS_LOGIN,
   isLoggedRun,
+  LoginTaken,
   sameSecretHash,
   unlockedBy,
   type Account,
   type FinishedRun,
+  type Leaving,
   type LoggedRun,
+  type Login,
   type PassIdentity,
   type Profile,
   type SeatedRun,
@@ -155,6 +159,83 @@ function alreadyThere(err: unknown): boolean {
   return err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002';
 }
 
+/** Whether `err` is a foreign key to a row gone: an account deleted while a seat was written. */
+function accountGone(err: unknown): boolean {
+  return err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2003';
+}
+
+/** A transaction's client. */
+type Tx = Prisma.TransactionClient;
+
+/** The key of the way in of the pass `subject`. */
+const passKey = (subject: string): Prisma.IdentityWhereUniqueInput => ({
+  provider_subject: { provider: 'pass', subject },
+});
+
+/**
+ * `pass` led into `accountId` in `tx`, its way in made where it had none; the account it led into
+ * before, null for none. Throws GameError for a pass shown with the wrong secret.
+ */
+async function pointPass(tx: Tx, pass: PassIdentity, accountId: string): Promise<string | null> {
+  const found = await tx.identity.findUnique({ where: passKey(pass.subject) });
+  if (found === null) {
+    await tx.identity.create({ data: { ...pass, accountId } });
+    return null;
+  }
+  checkSecret(found.secretHash, pass.secretHash);
+  if (found.accountId === accountId) {
+    return null;
+  }
+  await tx.identity.update({ where: passKey(pass.subject), data: { accountId } });
+  return found.accountId;
+}
+
+/**
+ * The pass of `leaving` signed out in `tx` (`Leaving`): its way in deleted, or kept for its seat
+ * alone. The account it led into; null for none. Throws GameError for a pass shown with the
+ * wrong secret.
+ */
+async function leave(tx: Tx, { pass, parked }: Leaving): Promise<string | null> {
+  const found = await tx.identity.findUnique({ where: passKey(pass.subject) });
+  if (found === null) {
+    return null;
+  }
+  checkSecret(found.secretHash, pass.secretHash);
+  await (parked === null
+    ? tx.identity.delete({ where: passKey(pass.subject) })
+    : tx.identity.update({ where: passKey(pass.subject), data: { secretHash: parked } }));
+  return found.accountId;
+}
+
+/**
+ * Every account of `left` but `staying` that nothing is left of — no way in, no run, no Erfolg —
+ * deleted in `tx`; their ids. Each account's row is locked first (FOR UPDATE, for which Prisma
+ * has no call): a run's seat written for it meanwhile is counted once that run is kept, and one
+ * written after waits, finds it gone and is written again without it (`PostgresStore.write`).
+ */
+async function deleteEmpty(
+  tx: Tx,
+  left: readonly (string | null)[],
+  staying: string,
+): Promise<string[]> {
+  const deleted: string[] = [];
+  for (const id of new Set(left)) {
+    if (id === null || id === staying) {
+      continue;
+    }
+    await tx.$queryRaw`SELECT id FROM accounts WHERE id = ${id}::uuid FOR UPDATE`;
+    const held =
+      (await tx.identity.count({ where: { accountId: id } })) +
+      (await tx.runMember.count({ where: { accountId: id } })) +
+      (await tx.achievement.count({ where: { accountId: id } }));
+    if (held === 0) {
+      await tx.account.delete({ where: { id } });
+      deleted.push(id);
+    }
+  }
+  return deleted;
+}
+
 /**
  * Seconds a pooled connection may stand idle before the pool opens a fresh one instead: well
  * under the 5 minutes after which Neon closes an idle connection — the pool would otherwise hand
@@ -203,7 +284,7 @@ const CLOSED = 'P1017';
 
 /**
  * How long a client replaced by a fresh one (`Clients.renew`) stays open for the requests still
- * running on it, ms: longer than a run's transaction may wait and take (RUN_TRANSACTION).
+ * running on it, ms: longer than a transaction may wait and take (TRANSACTION).
  */
 export const RETIRING_MS = 60_000;
 
@@ -299,10 +380,11 @@ export async function onceMore<C extends Closable, T>(
 }
 
 /**
- * How long the run's transaction may wait to start, and then take, ms: a Neon compute waking
- * from its pause takes seconds to open a connection, past Prisma's 2 s to start one (P2028).
+ * How long a transaction — a run's, a sign-in's — may wait to start, and then take, ms: a Neon
+ * compute waking from its pause takes seconds to open a connection, past Prisma's 2 s to start
+ * one (P2028).
  */
-const RUN_TRANSACTION = { maxWait: 15_000, timeout: 15_000 };
+const TRANSACTION = { maxWait: 15_000, timeout: 15_000 };
 
 /**
  * How long another instance may go on keeping runs around this one's opening, ms: Render
@@ -400,11 +482,7 @@ export class PostgresStore implements Store {
     const { missionId, roomCode, startedAt } = run.report;
     let owners: (string | null)[];
     try {
-      // A run usually ends after minutes without a word to the database: its write is the one
-      // most likely to find the connection lost, or to wait while a paused Neon wakes.
-      owners = await onceMore(this.clients, (db) =>
-        db.$transaction((tx) => keep(tx, run), RUN_TRANSACTION),
-      );
+      owners = await this.write(run);
     } catch (err) {
       if (!runKeptAlready(err)) {
         throw err;
@@ -417,6 +495,29 @@ export class PostgresStore implements Store {
       return;
     }
     this.count(asKept(run.report, owners));
+  }
+
+  /**
+   * `run` kept (`keep`), and the account on each of its seats: asked again where the database
+   * had lost the connection (`onceMore`), and once more where an account of its crew went while
+   * it was written — deleted, or left empty by a sign-in (`deleteEmpty`) — the seats read anew.
+   * Nothing is kept twice: a write that failed kept nothing, and the room and the start key it.
+   */
+  private async write(run: FinishedRun): Promise<(string | null)[]> {
+    // A run usually ends after minutes without a word to the database: its write is the one
+    // most likely to find the connection lost, or to wait while a paused Neon wakes.
+    const once = (): Promise<(string | null)[]> =>
+      onceMore(this.clients, (db) => db.$transaction((tx) => keep(tx, run), TRANSACTION));
+    try {
+      return await once();
+    } catch (err) {
+      if (!accountGone(err)) {
+        throw err;
+      }
+      const { missionId } = run.report;
+      console.log(`[escapelab] an account of the crew of ${missionId} went meanwhile: asked again`);
+      return once();
+    }
   }
 
   /** The run the database keeps under `roomCode` and `startedAt` counted, where it is not yet. */
@@ -622,6 +723,66 @@ export class PostgresStore implements Store {
         this.index.unname(run, seatName);
       }
     }
+  }
+
+  async loginOf(accountId: string): Promise<Login | null> {
+    const row = await onceMore(this.clients, (db) =>
+      db.identity.findFirst({ where: { accountId, provider: 'login' } }),
+    );
+    return row === null ? null : { accountId, subject: row.subject, secretHash: row.secretHash };
+  }
+
+  async findLogin(subject: string): Promise<Login | null> {
+    const row = await onceMore(this.clients, (db) =>
+      db.identity.findUnique({ where: { provider_subject: { provider: 'login', subject } } }),
+    );
+    return row === null ? null : { accountId: row.accountId, subject, secretHash: row.secretHash };
+  }
+
+  async addLogin(accountId: string, subject: string, secretHash: string): Promise<void> {
+    try {
+      await onceMore(this.clients, (db) =>
+        db.$transaction(async (tx) => {
+          // The account's row held till the end: a Kennwort set for it at once waits, then
+          // finds this one.
+          await tx.account.update({ where: { id: accountId }, data: { lastSeenAt: new Date() } });
+          if ((await tx.identity.count({ where: { accountId, provider: 'login' } })) > 0) {
+            throw new GameError(HAS_LOGIN);
+          }
+          await tx.identity.create({ data: { provider: 'login', subject, secretHash, accountId } });
+        }, TRANSACTION),
+      );
+    } catch (err) {
+      throw alreadyThere(err) ? new LoginTaken() : err;
+    }
+  }
+
+  async replaceLoginSecret(accountId: string, kept: string, next: string): Promise<boolean> {
+    const { count } = await onceMore(this.clients, (db) =>
+      db.identity.updateMany({
+        where: { accountId, provider: 'login', secretHash: kept },
+        data: { secretHash: next },
+      }),
+    );
+    return count === 1;
+  }
+
+  signIn(pass: PassIdentity, accountId: string, leaving: Leaving | null): Promise<string[]> {
+    return onceMore(this.clients, (db) =>
+      db.$transaction(async (tx) => {
+        const left = [await pointPass(tx, pass, accountId)];
+        if (leaving !== null) {
+          left.push(await leave(tx, leaving));
+        }
+        return deleteEmpty(tx, left, accountId);
+      }, TRANSACTION),
+    );
+  }
+
+  signOut(leaving: Leaving): Promise<string | null> {
+    return onceMore(this.clients, (db) =>
+      db.$transaction((tx) => leave(tx, leaving), TRANSACTION),
+    );
   }
 
   async close(): Promise<void> {

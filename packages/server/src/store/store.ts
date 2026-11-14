@@ -12,7 +12,8 @@ import { defaultDirectUrl, migrate } from './migrate.js';
 
 /**
  * What the server keeps beyond a room's life: the finished runs — the Bestenliste counts them —
- * and the accounts, one per crew pass, with the Erfolge each earned. One interface, two stores:
+ * and the accounts, reached by the crew passes of their devices and by an Ausweisnummer and its
+ * Kennwort, with the Erfolge each earned. One interface, two stores:
  * Postgres where DATABASE_URL names one (postgres.ts), so that both outlast a deploy; else the
  * run log file and accounts in memory (jsonl.ts), as development and CI run.
  */
@@ -51,6 +52,37 @@ export interface PassIdentity {
   subject: string;
   /** `secretHashOf` the pass's secret: the secret itself is never kept */
   secretHash: string;
+}
+
+/**
+ * An account's way in by its Ausweisnummer and its Kennwort (login.ts), one an account at most:
+ * the account, the Ausweisnummer, and the Kennwort's scrypt hash — null for a login that keeps
+ * none, which no Kennwort matches.
+ */
+export interface Login {
+  accountId: string;
+  subject: string;
+  secretHash: string | null;
+}
+
+/** A pass a device lets go of as it signs out (`Store.signOut`, `Store.signIn`). */
+export interface Leaving {
+  pass: PassIdentity;
+  /**
+   * where the pass holds a seat, the hash of a secret nobody holds (sockets.ts): its way in stays
+   * for that seat alone, so that the seat's run credits the account still; null: it is deleted
+   */
+  parked: string | null;
+}
+
+/** What a Kennwort set for an account that has one already is told. */
+export const HAS_LOGIN = 'Dieses Konto hat schon ein Kennwort.';
+
+/** Thrown where an Ausweisnummer just minted is another login's: one more is minted then. */
+export class LoginTaken extends Error {
+  constructor() {
+    super('the Ausweisnummer minted is another login’s — mint another');
+  }
 }
 
 /** What a player chose: the name they go by, and their crew colour ('#rrggbb') or none yet. */
@@ -110,6 +142,37 @@ export interface Store {
    * names it was written with, and so does the Bestenliste counted from it after a restart.
    */
   deleteAccount(accountId: string): Promise<void>;
+  /** The login of `accountId`; null for an account without a Kennwort. */
+  loginOf(accountId: string): Promise<Login | null>;
+  /** The login of the Ausweisnummer `subject`; null for one no account has. */
+  findLogin(subject: string): Promise<Login | null>;
+  /**
+   * `accountId` gets its login: the Ausweisnummer `subject`, the Kennwort's hash `secretHash`.
+   * Rejects with LoginTaken for an Ausweisnummer another login has, with GameError(HAS_LOGIN)
+   * for an account that has one — two set at once give it one — and for an account there is none
+   * of; nothing is made then.
+   */
+  addLogin(accountId: string, subject: string, secretHash: string): Promise<void>;
+  /**
+   * The Kennwort of `accountId`'s login replaced: `kept` the hash it was checked against, `next`
+   * the new one. False, changing nothing, where the login keeps `kept` no more — changed
+   * meanwhile, or gone.
+   */
+  replaceLoginSecret(accountId: string, kept: string, next: string): Promise<boolean>;
+  /**
+   * `pass` leads into `accountId` from now on — its way in made where it had none — and the pass
+   * `leaving`, where given, signs out (`Leaving`). Every account either of them led into before
+   * that nothing is left of — no way in, no run, no Erfolg — is deleted. All in one go; returns
+   * the ids of the accounts deleted. Throws GameError for a pass shown with the wrong secret,
+   * changing nothing.
+   */
+  signIn(pass: PassIdentity, accountId: string, leaving: Leaving | null): Promise<string[]>;
+  /**
+   * The pass of `leaving` signs out (`Leaving`); the account it led into stays whole. Returns that
+   * account's id; null where the pass led nowhere. Throws GameError for a pass shown with the
+   * wrong secret.
+   */
+  signOut(leaving: Leaving): Promise<string | null>;
   /** Lets go of what the store holds open; first wait for the runs handed over (`Recorder`). */
   close(): Promise<void>;
 }
