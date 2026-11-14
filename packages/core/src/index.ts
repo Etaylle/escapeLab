@@ -178,7 +178,7 @@ export {
   stationKey,
   intercomOf,
 } from './map.js';
-export { placesOf, type Place } from './hands.js';
+export { HANDS_FROM, placesOf, type Hand, type HandsView, type Place } from './hands.js';
 export { canSee, sightFrom, visibleTiles, type Sight, type SightMap } from './sight.js';
 export {
   CHIME_GAP_MS,
