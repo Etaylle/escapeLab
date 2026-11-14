@@ -146,9 +146,9 @@ describe('the join screen of a pass bound to a run', () => {
     expect(menu.indexOf('class="bound bound--run"')).toBeLessThan(firstItem);
   });
 
-  it('says a paused run is paused, and its clock as it stood', () => {
+  it('says a run standing still for the server’s maintenance so, and its clock as it stood', () => {
     const html = renderToStaticMarkup(<BoundCard seat={{ ...RUN, paused: true }} send={noop} />);
-    expect(html).toContain('EINSATZ PAUSIERT');
+    expect(html).toContain('<span class="kicker bound-kicker">WARTUNG</span>');
     expect(html).toContain('noch 12:34');
   });
 
