@@ -1491,26 +1491,42 @@ async function sample(wanted: string | undefined, text: string | undefined): Pro
   console.log(`voice: ${file}`);
 }
 
+/** A command of the script: what it does, and how many of the arguments after it are its own. */
+interface Command {
+  /** The arguments right after the switch that the command reads, as the slot of `--design pa`. */
+  readonly values: number;
+  readonly run: (args: readonly string[], at: number) => Promise<void>;
+}
+
 /** What the command line asks for, by its first switch that names something else than the lines. */
-const COMMANDS: Readonly<Record<string, (args: readonly string[], at: number) => Promise<void>>> = {
-  '--plan': (args) => planned(freshOf(args)),
-  '--list-voices': () => listVoices(),
-  '--sample': (args, at) => sample(args[at + 1], args[at + 2]),
-  '--design': (args, at) => design(args[at + 1]),
-  '--keep': (args, at) => keep(args[at + 1], args.includes('--replace')),
-  '--previews': () => previews(),
+const COMMANDS: Readonly<Record<string, Command>> = {
+  '--plan': { values: 0, run: (args) => planned(freshOf(args)) },
+  '--list-voices': { values: 0, run: () => listVoices() },
+  '--sample': { values: 2, run: (args, at) => sample(args[at + 1], args[at + 2]) },
+  '--design': { values: 1, run: (args, at) => design(args[at + 1]) },
+  '--keep': { values: 1, run: (args, at) => keep(args[at + 1], args.includes('--replace')) },
+  '--previews': { values: 0, run: () => previews() },
 };
 
 /** The switches the script takes beside its commands: what a run makes anew, a keep over takes. */
 const OPTIONS: readonly string[] = ['--fresh', '--fresh=all', '--replace'];
 
+/** Where the command stands in `args`: the first argument that names one, or -1 for the lines. */
+function commandAt(args: readonly string[]): number {
+  return args.findIndex((arg) => COMMANDS[arg] !== undefined);
+}
+
 /**
- * Refuses, before anything runs, a switch the script does not know, naming those it does — a
- * misspelt command (`--plna`) would otherwise fall through to a render, which spends credits.
+ * Refuses, before anything runs, an argument the script does not take, whatever its shape, and
+ * names the switches it does: a misspelt command (`--plna`, `-plan`, `plan`) would otherwise fall
+ * through to a render, which spends credits. Only a command's own values pass beside them.
  */
-export function refuseUnknownSwitches(args: readonly string[]): void {
+export function refuseUnknownArguments(args: readonly string[]): void {
+  const at = commandAt(args);
+  const values = COMMANDS[args[at] ?? '']?.values ?? 0;
   const known = [...Object.keys(COMMANDS), ...OPTIONS];
-  const unknown = args.filter((arg) => arg.startsWith('--') && !known.includes(arg));
+  const own = (i: number): boolean => i > at && i <= at + values;
+  const unknown = args.filter((arg, i) => !own(i) && !known.includes(arg));
   if (unknown.length > 0) {
     throw new Error(`voice: ${unknown.join(', ')} — the script takes ${known.join(', ')}`);
   }
@@ -1518,13 +1534,13 @@ export function refuseUnknownSwitches(args: readonly string[]): void {
 
 /**
  * What the command line asks for: the account's voices, a sample, a person's voice designed or
- * one of its samples kept — or the lines; a switch it does not know, nothing.
+ * one of its samples kept — or the lines; an argument it does not take, nothing.
  */
 function run(args: readonly string[]): Promise<void> {
-  refuseUnknownSwitches(args);
-  const at = args.findIndex((arg) => COMMANDS[arg] !== undefined);
+  refuseUnknownArguments(args);
+  const at = commandAt(args);
   const command = COMMANDS[args[at] ?? ''];
-  return command === undefined ? main(freshOf(args)) : command(args, at);
+  return command === undefined ? main(freshOf(args)) : command.run(args, at);
 }
 
 if (process.argv[1] !== undefined && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

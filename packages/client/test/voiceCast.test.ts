@@ -39,7 +39,7 @@ import {
   entryOf,
   readManifest,
   refuseStale,
-  refuseUnknownSwitches,
+  refuseUnknownArguments,
   remakeCharacters,
   shippedLines,
   staleTakes,
@@ -101,20 +101,29 @@ describe('the persons of the cast, as the command line names them', () => {
 });
 
 describe('the command line', () => {
-  it('refuses a switch it does not know before anything runs, naming those it takes', () => {
-    expect(() => refuseUnknownSwitches(['--plna'])).toThrow(
+  it('refuses an argument it does not take before anything runs, whatever its shape', () => {
+    expect(() => refuseUnknownArguments(['--plna'])).toThrow(
       'voice: --plna — the script takes --plan, --list-voices, --sample, --design, --keep, ' +
         '--previews, --fresh, --fresh=all, --replace',
     );
-    expect(() => refuseUnknownSwitches(['--fresh', '--fresch'])).toThrow(/^voice: --fresch — /);
+    expect(() => refuseUnknownArguments(['-plan'])).toThrow(/^voice: -plan — /);
+    expect(() => refuseUnknownArguments(['plan'])).toThrow(/^voice: plan — /);
+    expect(() => refuseUnknownArguments(['--fresh', '--fresch'])).toThrow(/^voice: --fresch — /);
+  });
+
+  it("lets a command's own values pass, and no more of them", () => {
+    expect(() => refuseUnknownArguments(['--design', 'pa', 'lead'])).toThrow(/^voice: lead — /);
+    expect(() => refuseUnknownArguments(['--plan', 'pa'])).toThrow(/^voice: pa — /);
+    expect(() => refuseUnknownArguments(['pa', '--design'])).toThrow(/^voice: pa — /);
     for (const fine of [
       [],
       ['--plan', '--fresh'],
       ['--fresh=all'],
+      ['--design', 'operator:laura'],
       ['--keep', 'lead=dCnu06FiOZma2KVNUoPZ', '--replace'],
       ['--sample', 'g1jpii0iyvtRs8fqXsd1', 'Reaktor läuft. Alle raus, jetzt.'],
     ]) {
-      expect(() => refuseUnknownSwitches(fine), fine.join(' ')).not.toThrow();
+      expect(() => refuseUnknownArguments(fine), fine.join(' ')).not.toThrow();
     }
   });
 });
