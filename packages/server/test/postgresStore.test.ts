@@ -72,6 +72,29 @@ async function busy(store: Store, accountId: string): Promise<void> {
   ]);
 }
 
+/** How often `busyOnSeveral` makes a store busy at most, and the milliseconds between. */
+const BUSY_ROUNDS = 20;
+const BUSY_PAUSE_MS = 5;
+
+/**
+ * `store` busy (`busy`) till the database holds more than one of its connections, named `app`:
+ * a pool may serve the requests at once on the one connection it has while it is still opening
+ * the next — busy again, a few milliseconds apart, BUSY_ROUNDS times at most. Throws, naming
+ * the count, where the pool never holds two.
+ */
+async function busyOnSeveral(store: Store, accountId: string, app: string): Promise<void> {
+  let held = 0;
+  for (let round = 0; round < BUSY_ROUNDS; round += 1) {
+    await busy(store, accountId);
+    held = await connectionsOf(app);
+    if (held > 1) {
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, BUSY_PAUSE_MS));
+  }
+  throw new Error(`the pool of ${app} held ${held} connection(s) after ${BUSY_ROUNDS} busy rounds`);
+}
+
 /**
  * A proxy in front of the database that holds every new connection `delayMs` before it opens it,
  * as a Neon compute waking from its pause does; its port, and how to close it.
@@ -316,8 +339,7 @@ describe.skipIf(url === '')('the store in Postgres', () => {
       });
       const said = vi.spyOn(console, 'log').mockImplementation(() => undefined);
       try {
-        await busy(store, made.id);
-        expect(await connectionsOf('lost-run')).toBeGreaterThan(1);
+        await busyOnSeveral(store, made.id, 'lost-run');
         await closeConnections('lost-run');
         await store.appendRun(finished({}, ['Anna', null]));
         expect(said).toHaveBeenCalledWith(expect.stringContaining('(P1017): asked again'));
@@ -335,12 +357,10 @@ describe.skipIf(url === '')('the store in Postgres', () => {
       const said = vi.spyOn(console, 'log').mockImplementation(() => undefined);
       try {
         // A busy server's pool, every connection of it closed — and so again on the fresh one.
-        await busy(store, made.id);
-        expect(await connectionsOf('lost-account')).toBeGreaterThan(1);
+        await busyOnSeveral(store, made.id, 'lost-account');
         await closeConnections('lost-account');
         expect(await store.findByIdentity(identityOf('Anna'))).toMatchObject({ id: made.id });
-        await busy(store, made.id);
-        expect(await connectionsOf('lost-account')).toBeGreaterThan(1);
+        await busyOnSeveral(store, made.id, 'lost-account');
         await closeConnections('lost-account');
         const ben = await store.getOrCreateByIdentity(identityOf('Ben'), anna);
         expect(said).toHaveBeenCalledTimes(2);
