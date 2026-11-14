@@ -124,6 +124,8 @@ export const GROUPS = [
       'won-phone.png',
       'won-landscape.png',
       'next-mission.png',
+      'my-runs.png',
+      'account-delete.png',
     ],
   },
   {
