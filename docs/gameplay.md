@@ -227,20 +227,21 @@ station everyone presses. As each station is switched on, exactly as many of the
 work as it has places, up to the crew. Kettenreaktion (three) and the Doppelschicht (four) give
 most of their stations two places only (backlog N-6).
 
-**The hands line.** For a crew of three or more the goal line names, under its title, each
-hand's job at the station in front of the crew, from the view's `hands` (core `handsOf`): where
-the server counts each of the crew — at a console, at a manual object covering the station, on a
-plate that still holds a door or a drone (presence `plates`, counted by the reach that keeps the
-plate pressed), or with a part in hand — and the station's places nobody holds that the crew
-knows of. The screen says them in the map's words, its own player first: „Cleo: Klemmbrett ·
-Anna: Pult A · Ben: Pult B". A console is Pult A or B, the main switch („Hauptschalter") or the
-station's title; a source goes by its label as a name („Handbuch"), a plate by its own
-(„HALTEN"), a part as „SICHERUNG holen". The first hand without a place names the places nobody
-holds, the others say „frei": „Cleo: frei — Handbuch, HALTEN · Anna: frei". A source or a part
-nobody has found stays unnamed, and so does a key until its cabinet has been come across. On a
-phone held sideways the row keeps the own job alone as a chip beside the goal („Cleo:
-Klemmbrett"); while a device is open the line gives way to its Laborkennung row, keeping its
-place. Nothing moves. For a crew of two nothing changes (`client/test/hands.test.tsx`).
+**The hands line.** For a crew of three or more the goal line names, under its title, each hand's
+job at the station in front of the crew, from the view's `hands` (core `handsOf`): where the server
+counts each of the crew — at a console, at a manual object covering the station, on a plate that
+still holds a door or a drone (presence `plates`, counted by the reach that keeps the plate
+pressed), or with a part in hand — and the station's places nobody holds that the crew knows of. The
+screen says them in the map's words, its own player first: „Cleo: Klemmbrett · Anna: Pult A · Ben:
+Pult B". A console is Pult A or B, the main switch („Hauptschalter") or the station's title; a
+source goes by its label as a name („Handbuch"), a plate by its own („HALTEN"), a part as „SICHERUNG
+holen". The first hand without a place names the places nobody holds, the others say „frei": „Cleo:
+frei — Handbuch, HALTEN · Anna: frei". Whoever is away has no hand free and is named only where
+their avatar still holds a plate or a part („Cem: HALTEN"); the crew strip says the rest. A source
+or a part nobody has found stays unnamed, and so does a key until its cabinet has been come across.
+On a phone held sideways the row keeps the own job alone as a chip beside the goal („Cleo:
+Klemmbrett"); while a device is open the line gives way to its Laborkennung row, keeping its place.
+Nothing moves. For a crew of two nothing changes (`client/test/hands.test.tsx`).
 
 **The drill.** The walkthrough's three drill (`SHOTS_ONLY=three`, 75 to 100 s on a laptop) plays
 Blackout for Anna, Ben and Cleo in a room of its own on the plan's seed: all three throw the main

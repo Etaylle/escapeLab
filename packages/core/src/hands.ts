@@ -62,8 +62,9 @@ interface Hand {
 
 /**
  * The hands at the station in front of the crew, as a view tells them (PlayerView `hands`): the
- * place each of the crew the run counts holds, in crew order, and the places of the station
- * that nobody holds and the crew knows of.
+ * place each of the crew the run counts holds, in crew order — whoever is away only where their
+ * avatar holds a plate or a part still, since they have no hand free —, and the places of the
+ * station that nobody holds and the crew knows of.
  */
 export interface HandsView {
   held: Hand[];
@@ -81,8 +82,11 @@ export function handsOf(state: GameState): HandsView | null {
   if (!lightsAreOut(state) || def === undefined || crew.length < HANDS_FROM) {
     return null;
   }
+  const held = crew.map((playerId) => ({ playerId, place: placeHeld(state, def, playerId) }));
+  const handFree = ({ playerId, place }: Hand): boolean =>
+    place !== null || state.away[playerId] === undefined;
   return {
-    held: crew.map((playerId) => ({ playerId, place: placeHeld(state, def, playerId) })),
+    held: held.filter(handFree),
     open: placesOf(state.mission, def.id).filter((place) => isOpen(state, def, crew, place)),
   };
 }
