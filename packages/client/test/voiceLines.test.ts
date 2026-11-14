@@ -37,6 +37,7 @@ import {
   engineOf,
   entryOf,
   fileOf,
+  freshBeside,
   freshOf,
   keeps,
   lineId,
@@ -1028,14 +1029,17 @@ describe('the plan of a run (--plan)', () => {
       'voice:   operator:helmut  Helmut     eleven_v4  3 lines, 58 credits (1 of them, 24 ' +
         'credits, the Schichtleitung’s until it has a voice); 0 made as they are, kept',
     );
-    expect(report[4]).toMatch(/operator:ben +Ben +no voice yet: its design 228 credits/);
+    expect(report[4]).toBe(
+      'voice:   operator:ben     Ben        no voice yet — a library voice free, or a design ' +
+        '228 credits — then 2 lines, 34 credits',
+    );
     expect(report.at(-2)).toBe('voice: now, the kept cast: 6 lines, 116 credits');
-    // Every voice kept: three operators' two lines each, the call once, by the Schichtleitung.
+    // Every voice kept: three operators' two lines each, the call once, by the Schichtleitung;
+    // a design only for whoever no library voice is kept for.
     const designs = DESIGN_TEXT.pa.length + DESIGN_TEXT.operator.length + DESIGN_TEXT.lead.length;
-    const all = 34 * 3 + 24;
     expect(report.at(-1)).toBe(
-      `voice: every voice kept: 3 designs (${designs} credits) and 7 lines ` +
-        `(${all} credits), ${designs + all} credits in all`,
+      `voice: every voice kept: 7 lines, ${34 * 3 + 24} credits; designs where no library ` +
+        `voice is kept: up to 3, ${designs} credits`,
     );
     expect(planReport(costs, 'none')[0]).toMatch(/plan of `voice` /);
     expect(planReport(costs, 'all')[0]).toMatch(/plan of `voice --fresh=all` /);
@@ -1050,6 +1054,26 @@ describe('the plan of a run (--plan)', () => {
     ]);
     const client = voice.persons['helmut']?.client;
     await expect(client?.voices.getAll()).rejects.toThrow(/--plan asks ElevenLabs for nothing/);
+  });
+});
+
+describe('a plain run, and what --fresh would make beside it', () => {
+  it('keeps Helmut’s takes of before, and names what --fresh would make anew, with credits', () => {
+    const plain = costsOf(roster, manifest, 'none');
+    const fresh = costsOf(roster, manifest, 'synthetic');
+    expect(plain.find((cost) => cost.slot === 'operator:helmut')?.skip).toBe(47);
+    const beside = freshBeside(plain, fresh);
+    expect(beside).toEqual({ lines: 47, characters: 3983 });
+    expect(planReport(plain, 'none', beside).at(-1)).toBe(
+      'voice: --fresh would make 47 takes anew besides, made before the paid plan named ' +
+        'itself: 3,983 credits, which licence them as the rest (docs/sound.md, „Lizenz")',
+    );
+    // Under --fresh, or where it would make nothing more, nothing is said of it.
+    const nothing = freshBeside(fresh, fresh);
+    expect(nothing).toEqual({ lines: 0, characters: 0 });
+    for (const report of [planReport(fresh, 'synthetic'), planReport(plain, 'none', nothing)]) {
+      expect(report.at(-1)).toMatch(/^voice: every voice kept/);
+    }
   });
 });
 

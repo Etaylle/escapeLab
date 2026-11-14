@@ -165,7 +165,8 @@ describe('the cast as the page names it', () => {
       `${run} --keep lead=dCnu06FiOZma2KVNUoPZ`,
     );
     expect(previewsCommandFor(ENV)).toBe(`${run} --previews`);
-    expect(renderCommandFor(ENV)).toBe(`VOICE_ENGINE=elevenlabs ${run} --fresh`);
+    // The render a keep is followed by: the plain run, which keeps the takes there.
+    expect(renderCommandFor(ENV)).toBe(`VOICE_ENGINE=elevenlabs ${run}`);
     const sample = sampleUrl('operator-laura', { file: '2.mp3' });
     const urls = [sample, previewUrl('Qy4b2JlSGxY7I9M9Bqxb')];
     expect(urls).toEqual([

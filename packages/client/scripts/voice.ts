@@ -1145,7 +1145,8 @@ function costLine(cost: Cost): string {
   const who = `${slot.padEnd(16)} ${name.padEnd(10)}`;
   if (model === null) {
     const after = `${counted(later.lines)} lines, ${counted(later.characters)} credits`;
-    return `voice:   ${who} no voice yet: its design ${counted(design)} credits, then ${after}`;
+    const voice = `a library voice free, or a design ${counted(design)} credits`;
+    return `voice:   ${who} no voice yet — ${voice} — then ${after}`;
   }
   const now = `${counted(make)} lines, ${counted(characters * CREDITS_PER_CHARACTER)} credits`;
   const kept = `${counted(skip)} made as they are, kept`;
@@ -1153,15 +1154,41 @@ function costLine(cost: Cost): string {
 }
 
 /**
- * What --plan prints of `costs`: what it assumes, a line for each person, what the kept cast
- * costs now and what the whole cast costs once every voice is kept — designs and lines.
+ * What --fresh makes beside a plain run of the same cast: the takes the plain run keeps that the
+ * paid plan would make anew — those made before it named itself, Helmut's of 2026-10-25 among
+ * them — from the costs of a plain run (`plain`) and of one under --fresh (`fresh`).
  */
-export function planReport(costs: readonly Cost[], fresh: Fresh): string[] {
+export function freshBeside(plain: readonly Cost[], fresh: readonly Cost[]): Lines {
+  const now = (costs: readonly Cost[]): Lines => ({
+    lines: costs.reduce((sum, cost) => sum + cost.make, 0),
+    characters: costs.reduce((sum, cost) => sum + cost.characters, 0),
+  });
+  const [before, after] = [now(plain), now(fresh)];
+  return { lines: after.lines - before.lines, characters: after.characters - before.characters };
+}
+
+/** What --plan says of what --fresh would make beside a plain run; nothing where it makes none. */
+const besideFresh = ({ lines, characters }: Lines): string[] =>
+  lines === 0
+    ? []
+    : [
+        `voice: --fresh would make ${counted(lines)} takes anew besides, made before the paid ` +
+          `plan named itself: ${counted(characters * CREDITS_PER_CHARACTER)} credits, which ` +
+          'licence them as the rest (docs/sound.md, „Lizenz")',
+      ];
+
+/**
+ * What --plan prints of `costs`: what it assumes, a line for each person, what the kept cast
+ * costs now and what the whole cast costs once every voice is kept — designs and lines — and for
+ * a plain run what --fresh would make beside it (`fresh`).
+ */
+export function planReport(costs: readonly Cost[], fresh: Fresh, beside = NO_LINES): string[] {
   const asked = fresh === 'none' ? 'voice' : `voice --fresh${fresh === 'all' ? '=all' : ''}`;
   const sum = (of: (cost: Cost) => number): number =>
     costs.reduce((total, cost) => total + of(cost), 0);
   const now = sum((cost) => cost.characters) * CREDITS_PER_CHARACTER;
   const designs = sum((cost) => cost.design);
+  const unvoiced = costs.filter((cost) => cost.model === null).length;
   // Once every voice is kept, nobody stands in for another role: those lines are not made.
   const standIn = sum((cost) => cost.standIn.characters) * CREDITS_PER_CHARACTER;
   const later = sum((cost) => cost.later.characters) * CREDITS_PER_CHARACTER - standIn;
@@ -1172,9 +1199,9 @@ export function planReport(costs: readonly Cost[], fresh: Fresh): string[] {
     ...costs.map(costLine),
     `voice: now, the kept cast: ${counted(sum((cost) => cost.make))} lines, ` +
       `${counted(now)} credits`,
-    `voice: every voice kept: ${costs.filter((cost) => cost.model === null).length} designs ` +
-      `(${counted(designs)} credits) and ${counted(lines)} lines (${counted(now + later)} ` +
-      `credits), ${counted(designs + now + later)} credits in all`,
+    `voice: every voice kept: ${counted(lines)} lines, ${counted(now + later)} credits; designs ` +
+      `where no library voice is kept: up to ${unvoiced}, ${counted(designs)} credits`,
+    ...besideFresh(beside),
   ];
 }
 
@@ -1412,12 +1439,18 @@ async function previews(): Promise<void> {
 
 /**
  * --plan [--fresh]: what that run would make, by whom, and what it costs — no key, no client, no
- * tool: the roster, the manifest and the files alone.
+ * tool: the roster, the manifest and the files alone; for a plain run, what --fresh would make
+ * beside it.
  */
 function planned(fresh: Fresh): Promise<void> {
   const override = process.env.ELEVENLABS_MODEL || undefined;
-  const costs = costsOf(readRoster(), readManifest(), fresh, override);
-  for (const line of planReport(costs, fresh)) console.log(line);
+  const [roster, manifest] = [readRoster(), readManifest()];
+  const costs = costsOf(roster, manifest, fresh, override);
+  const beside =
+    fresh === 'none'
+      ? freshBeside(costs, costsOf(roster, manifest, 'synthetic', override))
+      : NO_LINES;
+  for (const line of planReport(costs, fresh, beside)) console.log(line);
   return Promise.resolve();
 }
 

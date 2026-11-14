@@ -217,9 +217,13 @@ export function previewsCommandFor(envFile: string): string {
   return `${scriptWith(envFile)} --previews`;
 }
 
-/** The command that makes the lines of the cast whose voices are kept, by ElevenLabs. */
+/**
+ * The command that makes the lines of the cast whose voices are kept, by ElevenLabs: what is
+ * missing, the takes there kept as they are (--fresh, which makes the free plan's anew, is the
+ * owner's own choice: docs/sound.md, „Lizenz").
+ */
 export function renderCommandFor(envFile: string): string {
-  return `VOICE_ENGINE=elevenlabs ${scriptWith(envFile)} --fresh`;
+  return `VOICE_ENGINE=elevenlabs ${scriptWith(envFile)}`;
 }
 
 /** A rendered line, by its recording's id. */
