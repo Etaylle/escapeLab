@@ -627,18 +627,19 @@ drift it follows the drift's frame, which moves on meanwhile. Under reduced moti
 the lobby it shows the drift, and it cuts there and back, as the doors stand shut over the change.
 
 **What it costs.** A frame copies the bake from where the camera stands as it copies it from where
-the drift stands: each piece of it the frame shows, whole, at whole pixels — the drift's piece
-alone while the drift goes on, at a place the pieces its frame falls on; a pan costs no more than
-the drift (The hero, its cost table). The bake holds every place's frame as well as the drift's box, but only
-as far as the lab and a tile of the dark round it reach (drift.ts `labBound`, `DARK_ROUND`): where a
-frame looks further into the dark — the Archiv's, the Maschinenraum's, the Reaktor's — the frame
-fills what lies past the bake with the dark's colour as the bake holds it (scene.ts `pastBake`,
-`layDark`): read off the piece that holds it once that piece is baked, at the middle of a side that
-lies past the lab, and again each time the night falls or lifts. The dark round the lab is one colour as the passes leave it, 26, 23,
-22 lit and 10, 9, 8 at night, on every side, at the box's corners and in the void within the lab's
-extent alike (measured at 1280 × 720, 1440 × 820 and 1920 × 1080), so the fill meets the baked tile
-to the level. The night has to fall on the whole canvas in its own pixels: laid under the transform
-the world's passes leave on the bake's context, it missed the tile on the left and the top, so the
+the drift stands: each piece of it the frame shows, whole, at whole pixels — the drift's piece alone
+while the drift goes on, at a place the pieces its frame falls on; a pan costs about as much as the
+drift (The hero, its cost table), the pieces a tenth of a millisecond more (below). The bake holds
+every place's frame as well as the drift's box, but only as far as the lab and a tile of the dark
+round it reach (drift.ts `labBound`, `DARK_ROUND`): where a frame looks further into the dark — the
+Archiv's, the Maschinenraum's, the Reaktor's — the frame fills what lies past the bake with the
+dark's colour as the bake holds it (scene.ts `pastBake`, `layDark`): read off the piece that holds
+it once that piece is baked, at the middle of a side that lies past the lab, and again each time the
+night falls or lifts. The dark round the lab is one colour as the passes leave it, 26, 23, 22 lit
+and 10, 9, 8 at night, on every side, at the box's corners and in the void within the lab's extent
+alike (measured at 1280 × 720, 1440 × 820 and 1920 × 1080), so the fill meets the baked tile to the
+level. The night has to fall on the whole canvas in its own pixels: laid under the transform the
+world's passes leave on the bake's context, it missed the tile on the left and the top, so the
 colour read on the left stayed lit, 26, 23, 22, and at the Reaktor filled past the right side's sunk
 tile, 10, 9, 8 — a black band a tile wide behind the hero; and the light added back for the lobby
 copied the bake onto itself a tile off, up to 129 levels from the lab as baked, where it now comes
@@ -687,6 +688,19 @@ in its first piece: the light of the rooms the drift never shows — their ceili
 glow round them — baked whole as the first piece reaches them, 45, 157, 198 and 198 ms; each piece
 after it 1 to 10 ms. So the rest asks one frame about as long as the first bake did, once, after
 the hero's lamp is on; the frames after it copy what they show as before, piece by piece.
+
+Copying pieces instead of one canvas costs the drift and a place held nothing: on the menu's bench
+(The hero, its cost — 1440 × 820 at density 1, the software Canvas path, the main thread slowed
+four times), six rounds interleaved with the one-canvas bake it replaced (c01dbbd), the machine's
+load 2.9 to 7.5, the medians of the per-round differences were +0.03 ms a frame for the scene
+drifting alone, −0.06 with the hero and its beam and +0.03 with a place held. A pan costs about a
+tenth of a millisecond more, where a frame copies the pieces it falls on: +0.14 between the rooms
+at the lab's edge (cheaper in three rounds of six) and +0.12 between two inner ones (cheaper in
+none); the frames held the screen's pace, 16.8 ms p95, in every run, and a first run beside the
+mutation runs (load 2.5 to 10.6) put the five within −0.02 and +0.11. That session put the pan
+between the edge rooms over the drift in both builds, +0.31 ms with one canvas and +0.35 in
+pieces, where the bench below, at the load of 1.7 to 3.5, put it under: the pan's frames fill the
+dark past the bake, and their cost moves with the machine's load.
 
 ## The hero (world/menu/hero.ts, heroArt.ts, heroStage.ts, lamp.ts, lampArt.ts, MenuHero.tsx)
 
