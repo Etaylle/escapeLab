@@ -137,15 +137,20 @@
  * figure standing large at the stage's right (client screens/MenuHero.tsx) — has to stand there at
  * 1440×820 and at 1280×720 about five of the scene's tiles tall, its canvas clear of the menu's
  * column, its lead line and the title, or the run fails. menu-hero.png shows it with its hand
- * lamp on, the beam laid over the scene and ending short of the menu's column; with „Beitreten"
- * hovered the beam has to hold a beat pointing at it within two passes of its sweep. On the first
- * menu of a page it walks in: a page of its own holds it 600 ms into its walk, as the pause trick
- * holds a device's fade (menu-hero-entrance.png), its lamp off; a key wakes the menu's sound, and
- * let go, the hero has to stop, click the cold open's click and switch its lamp on. Hovered, an
- * item turns the hero's head to it (menu-hero-hover.png, the beam holding its beat on
- * „Beitreten"); „Einsatz starten" open, the hero stands half a tile aside, clear of the panel
- * (menu-hero-missions.png); as the doors close for the lobby it has turned away to the lab; and in
- * the reconnect drill's tab it looks at the run's card. At 1280×720 it stands as at 1440×820
+ * lamp on in the lab at night, the beam laid over the scene and ending short of the menu's
+ * column. On the first menu of a page it walks in: a page of its own holds it 600 ms into its
+ * walk, as the pause trick holds a device's fade (menu-hero-entrance.png), its lamp off; a key
+ * wakes the menu's sound, and let go, the hero has to stop, click the cold open's click and
+ * switch its lamp on. Hovered, „Beitreten" turns the hero's head to it, its visor catching the
+ * item's glow, and its beam to the item's room of Blackout's lab, which the scene's camera has to
+ * come to (menu-hero-hover.png); „Handbuch" and „Einstellungen" hovered, the camera has to come
+ * to their rooms (menu-place-handbook.png, menu-place-settings.png), and with nothing hovered or
+ * in the focus go back to its drift (menu-place-idle.png). „Bestenliste" pressed, the hero's
+ * clock held 110 ms after the press: half way through its step toward the menu, its lamp flared
+ * (menu-hero-click.png); then the menu's short shutter held two thirds shut over the menu
+ * (menu-shutter.png), its leaves 80 ms. „Einsatz starten" open, the hero stands half a tile
+ * aside, clear of the panel (menu-hero-missions.png); as the doors close for the lobby it has
+ * turned away to the lab; and in the reconnect drill's tab it looks at the run's card. At 1280×720 it stands as at 1440×820
  * (menu-hero-1280.png); at 1100×700 three and a half tiles tall at least, beside a panel open too;
  * at 1024×768, where the room beside the widest panel holds fewer, it is left out, the bar's
  * avatar standing for it (menu-hero-1024.png), and on the guest's phone, upright and sideways.
@@ -1467,14 +1472,17 @@ async function sideways(page, selector) {
   }, selector);
 }
 
+/** Opens the Bestenliste from the menu as a player does: its item pressed. */
+const pressHistory = (page) => page.locator('.menu-item', { hasText: 'Bestenliste' }).click();
+
 /**
- * The Bestenliste off the menu, captured as `shot` once it is loaded:
- * measured like the menu — at 1280×720 too where the window is a
- * laptop's, sideways on a phone — and left the way a player goes back.
+ * The Bestenliste off the menu — opened by `open`, its item pressed — captured as `shot` once it
+ * is loaded: measured like the menu — at 1280×720 too where the window is a laptop's, sideways on
+ * a phone — and left the way a player goes back.
  */
-async function captureHistory(page, shot) {
+async function captureHistory(page, shot, open = pressHistory) {
   const name = shot.replace(/\.png$/, '');
-  await page.locator('.menu-item', { hasText: 'Bestenliste' }).click();
+  await open(page);
   const loaded = page.locator('.history-board, .history [role="alert"]').first();
   await loaded.waitFor({ timeout: 10_000 });
   await sleep(300);
@@ -1493,6 +1501,109 @@ async function captureHistory(page, shot) {
   }
   await clickText(page, 'Zurück');
   await page.locator('.menu-item').first().waitFor({ timeout: 10_000 });
+}
+
+/**
+ * How long after an item is taken menu-hero-click.png holds the hero, ms: half way through its
+ * step toward the menu, its lamp flared (client hero.ts STEP_MS, FLARE_MS).
+ */
+const HERO_BEAT_HOLD_MS = 110;
+/** The hero's beat before the shutter closes, and the shutter's close, ms (client DoorWipe.tsx). */
+const SHUTTER = { beat: 100, close: 80 };
+/** How far into its close menu-shutter.png holds the shutter, ms: about two thirds shut. */
+const SHUTTER_SHOT_MS = 55;
+
+/** In the page: holds the hero's clock `ms` after the next item taken (heroStage.ts). */
+function holdHeroBeat(ms) {
+  globalThis.__heroBeat = ms;
+}
+
+/** In the page: lets the hero's clock run again. */
+function releaseHeroBeat() {
+  delete globalThis.__heroBeat;
+}
+
+/** In the page: whether the hero stands held half way through its step to the menu, flared. */
+const midStep = () => {
+  const hero = globalThis.__escapelab?.hero;
+  return hero?.step < -0.2 && hero.step > -0.9 && hero.beam?.flare > 0.5;
+};
+
+/** In the page: how long the leaves of the wipe that shows ask for, ms, each once. */
+const leafLengths = () => [
+  ...new Set(
+    [...document.querySelectorAll('.door-wipe .door-leaf')].flatMap((leaf) =>
+      leaf.getAnimations().map((move) => move.effect.getTiming().duration),
+    ),
+  ),
+];
+
+/** The hero's beat as menu-hero-click.png holds it (`hero`, its probe), and whether it stepped. */
+const beatOf = (hero, stepped) => ({
+  stepped,
+  step: hero?.step ?? 0,
+  flare: hero?.beam?.flare ?? 0,
+});
+
+/**
+ * The shutter as menu-shutter.png holds it: whether it came, how far shut, 0 to 1, how long its
+ * leaves ask for, ms, and whether the menu still stands under it.
+ */
+async function heldShutter(page) {
+  const came = await attached(page.locator('.door-wipe--shutter.door-wipe--closing'), 5000);
+  await sleep(150);
+  return {
+    came,
+    shut: (await doorShut(page)) ?? 0,
+    lengths: await page.evaluate(leafLengths),
+    under: (await page.locator('.menu').count()) === 1,
+  };
+}
+
+/** What the log says of the shutter held (`heldShutter`). */
+function shutterText({ came, shut, lengths, under }) {
+  if (!came) {
+    return '!! no shutter';
+  }
+  const over = under ? 'the menu' : '!! the page';
+  return `the shutter ${Math.round(shut * 100)} % shut over ${over}, its leaves ${lengths.join(' + ')} ms`;
+}
+
+/** What the log says of the held press (`beat`, beatOf) and the shutter (`shutter`). */
+function heldClickText(beat, shutter) {
+  const [step, flare] = [beat.step, beat.flare].map((n) => n.toFixed(2));
+  const hero = beat.stepped
+    ? `the hero ${step} of its step to the menu, its lamp flared ${flare}`
+    : `!! the hero not mid-step (${step}, flare ${flare})`;
+  return `held ${HERO_BEAT_HOLD_MS} ms after „Bestenliste" was pressed: ${hero}; ${shutterText(shutter)}`;
+}
+
+/**
+ * „Bestenliste" pressed with the hero's clock held HERO_BEAT_HOLD_MS after it and the wipe's
+ * beat kept back (holdWipeAt): menu-hero-click.png shows the hero half way through its step
+ * toward the menu, its lamp flared; let on, the shutter held SHUTTER_SHOT_MS into its close
+ * over the menu (menu-shutter.png); let go, the Bestenliste opens — or the run fails where the
+ * hero did not step and flare, or no shutter of its own length came over the menu.
+ */
+async function heldClick(page) {
+  await page.evaluate(holdHeroBeat, HERO_BEAT_HOLD_MS);
+  await page.evaluate(holdWipeAt, { ms: SHUTTER_SHOT_MS, delay: SHUTTER.beat });
+  await pressHistory(page);
+  const stepped = await page.waitForFunction(midStep, null, { timeout: 5000 }).then(
+    () => true,
+    () => false,
+  );
+  await capture(page, 'menu-hero-click.png');
+  const beat = beatOf(await heroOf(page), stepped);
+  await page.evaluate(holdWipeAt, { ms: SHUTTER_SHOT_MS, delay: SHUTTER.close });
+  const shutter = await heldShutter(page);
+  await capture(page, 'menu-shutter.png');
+  await page.evaluate(releaseWipe);
+  await page.evaluate(releaseHeroBeat);
+  console.log(`menu-shutter.png   ${heldClickText(beat, shutter)}`);
+  if (!stepped || !shutter.came || !shutter.under || shutter.lengths[0] !== SHUTTER.close) {
+    fail('menu-hero-click.png, menu-shutter.png: no step and flare, or no shutter over the menu');
+  }
 }
 
 /** Click a button whose visible text contains `text`. */
@@ -7138,7 +7249,8 @@ async function captureMenu(page) {
     fail(`menu: its window reached ${look.p95.toFixed(1)} ms p95, over ${MENU_P95_MS}`);
   }
   await heroLampShot(page);
-  await heroBeamBeat(page);
+  await heroHover(page);
+  await captureMenuPlaces(page);
   await captureAccountBar(page);
   await overflow(page, 'menu @ 1440x820');
   await page.setViewportSize({ width: 1280, height: 720 });
@@ -7289,9 +7401,6 @@ const lampOn = () =>
   globalThis.__escapelab?.scene?.beam?.laid === true &&
   globalThis.__escapelab?.hero?.beam?.on === 1;
 
-/** How long the beam may take to come to an item hovered, ms: two passes and a beat. */
-const BEAM_BEAT_WITHIN_MS = 26_000;
-
 /** What the log says of the hero's beam (`beam`, its probe) and the menu's column (`menu`). */
 function beamText(beam, menu) {
   const [x, y, reach] = [beam.lens.x, beam.lens.y, beam.reach].map(Math.round);
@@ -7320,34 +7429,129 @@ async function heroLampShot(page) {
   }
 }
 
-/** In the page: whether the hero looks at „Beitreten", hovered, its beam holding a beat on it. */
-const beatOnJoin = () => {
-  const probe = globalThis.__escapelab?.hero;
-  return probe?.look?.at === 'join' && probe.beam?.holding === true;
+/** Where the menu's places show in the window: its share across and down (client places.ts). */
+const SCENE_ANCHOR = { x: 0.5, y: 0.55 };
+
+/**
+ * How long the hero and the scene may take to turn to an item hovered, ms: the camera's pan of
+ * 2 s at most (client camera.ts TRAVEL_MS), the beam's turn, and a loaded runner's margin.
+ */
+const TURNED_WITHIN_MS = 10_000;
+
+/** In the page: whether the scene's camera has come to the place of `item` — null: the drift. */
+const cameraArrived = (item) => {
+  const camera = globalThis.__escapelab?.scene?.camera;
+  return camera?.aimed === item && camera.travelling === false;
 };
 
 /**
- * menu-hero-hover.png: „Beitreten" hovered, the hero's head turned to it and its beam holding a
- * beat on it within two passes of its sweep (BEAM_BEAT_WITHIN_MS), or the run fails; the pointer
- * goes off the menu after.
+ * In the page: whether the hero has turned to `item`, hovered — its head to the item, its visor
+ * catching the item's glow — and holds its beam on the item's room.
  */
-async function heroBeamBeat(page) {
+const heldOn = (item) => {
+  const hero = globalThis.__escapelab?.hero;
+  return (
+    hero?.look?.at === item &&
+    hero.glow === true &&
+    hero.beam?.room === item &&
+    hero.beam.holding === true
+  );
+};
+
+/** How far the beam `beam` (the hero's probe) points from the middle of the room shown, radians. */
+function offTheRoom(beam, size) {
+  const to = { x: SCENE_ANCHOR.x * size.width, y: SCENE_ANCHOR.y * size.height };
+  const toward = Math.atan2(to.y - beam.lens.y, to.x - beam.lens.x);
+  return Math.abs(beam.angle - (toward < 0 ? toward + 2 * Math.PI : toward));
+}
+
+/** What the log says of the hero turned to an item hovered (`hero`, its probe) after `ms`. */
+function hoverText(hero, size, ms) {
+  if (hero === null || hero.beam === null) {
+    return `!! no hero or no beam: ${JSON.stringify(hero)}`;
+  }
+  const visor = hero.glow ? 'its visor catching the glow' : '!! its visor dark';
+  const off = offTheRoom(hero.beam, size).toFixed(2);
+  const after = (ms / 1000).toFixed(1);
+  return (
+    `its head turned ${(hero.look?.turned ?? 0).toFixed(2)} rad, ${visor}, its beam on the ` +
+    `room ${off} rad off its middle, the camera there ${after} s after the hover`
+  );
+}
+
+/**
+ * menu-hero-hover.png: „Beitreten" hovered — the hero's head turned to it, its visor catching the
+ * item's glow, its beam held on the item's room (the Flur at the Serverschott), which the scene's
+ * camera has come to — or the run fails; the pointer goes off the menu after.
+ */
+async function heroHover(page) {
   const started = Date.now();
   await page.locator('.menu-item', { hasText: 'Beitreten' }).hover();
-  const beat = await page
-    .waitForFunction(beatOnJoin, null, { timeout: BEAM_BEAT_WITHIN_MS, polling: 50 })
+  const there = await cameraCame(page, 'join');
+  const held = await page
+    .waitForFunction(heldOn, 'join', { timeout: TURNED_WITHIN_MS, polling: 50 })
     .then(
       () => true,
       () => false,
     );
   await capture(page, 'menu-hero-hover.png');
-  const turned = (await heroOf(page))?.look?.turned ?? 0;
-  const after = ((Date.now() - started) / 1000).toFixed(1);
-  const said = beat ? `held a beat on BEITRETEN ${after} s after the hover` : '!! no beat';
-  console.log(`menu-hero-hover.png its head turned ${turned.toFixed(2)} rad, its beam ${said}`);
+  const said = hoverText(await heroOf(page), page.viewportSize(), Date.now() - started);
+  console.log(`menu-hero-hover.png ${there && held ? '' : '!! not turned: '}${said}`);
   await page.mouse.move(2, 2);
-  if (!beat) {
-    fail('hero beam: it never held a beat on the item hovered');
+  if (!there || !held) {
+    fail('menu-hero-hover.png: the hero or the scene did not turn to the item hovered');
+  }
+}
+
+/**
+ * The items whose places menu-place-*.png show: Blackout's Archiv for the booklet, its
+ * Maschinenraum for the settings (client places.ts).
+ */
+const PLACE_SHOTS = [
+  { item: 'handbook', label: 'Handbuch', shot: 'menu-place-handbook.png' },
+  { item: 'settings', label: 'Einstellungen', shot: 'menu-place-settings.png' },
+];
+
+/** Waits for the scene's camera on `page` to come to the place of `item`; whether it came. */
+const cameraCame = (page, item) =>
+  page.waitForFunction(cameraArrived, item, { timeout: TURNED_WITHIN_MS, polling: 50 }).then(
+    () => true,
+    () => false,
+  );
+
+/**
+ * The item `label` hovered on `page` until the scene's camera has come to the room of its place
+ * (`item`), shot as `shot`; whether the camera came.
+ */
+async function placeShot(page, { item, label, shot }) {
+  const started = Date.now();
+  await page.locator('.menu-item', { hasText: label }).hover();
+  const there = await cameraCame(page, item);
+  await capture(page, shot);
+  const after = ((Date.now() - started) / 1000).toFixed(1);
+  const said = there ? `the camera at the room of „${label}" ${after} s after the hover` : '!! no room';
+  console.log(`${shot.padEnd(19)}${said}`);
+  return there;
+}
+
+/**
+ * menu-place-handbook.png, menu-place-settings.png: each item hovered, the scene's camera come to
+ * its room of Blackout's lab; menu-place-idle.png: nothing hovered or in the focus, the scene
+ * back on its drift — or the run fails, as it does where the scene shows a lab without places.
+ */
+async function captureMenuPlaces(page) {
+  const lab = (await sceneOf(page))?.missionId ?? null;
+  const came = [];
+  for (const place of PLACE_SHOTS) {
+    came.push(await placeShot(page, place));
+  }
+  await page.mouse.move(2, 2);
+  await page.evaluate(() => document.activeElement?.blur());
+  const idle = await cameraCame(page, null);
+  await capture(page, 'menu-place-idle.png');
+  console.log(`menu-place-idle.png ${idle ? `${lab}'s lab on its drift` : '!! a place held'}`);
+  if (lab !== 'blackout' || came.includes(false) || !idle) {
+    fail(`menu-place-*.png: the lab ${lab}, its rooms reached ${came.join(', ')}, idle ${idle}`);
   }
 }
 
@@ -7416,36 +7620,43 @@ const DOOR_CLOSE_MS = 170;
 const DOOR_SHOT_MS = 130;
 
 /**
- * In the page: holds the door wipe `ms` into its close, its leaves paused there, and keeps back
- * the timer that would open them (`close` ms) — holdPanelFade's way with a device's fade.
+ * In the page: holds the door wipe at a step of its own — its leaves paused `ms` into their close,
+ * the timers of `delay` ms kept back: the beat's, or the close's that would open them —
+ * holdPanelFade's way with a device's fade. Called again, it runs the timers it kept, so that the
+ * wipe goes on to its next step, and keeps back those of the new `delay`.
  */
-function holdDoors({ ms, close }) {
-  const style = document.createElement('style');
-  style.id = 'shots-door-hold';
-  style.textContent =
+function holdWipeAt({ ms, delay }) {
+  let hold = globalThis.__wipeHold;
+  if (hold === undefined) {
+    const style = document.createElement('style');
+    document.head.append(style);
+    // The browser's own setTimeout throws unless it is called on the window.
+    hold = { plain: globalThis.setTimeout, kept: [], delay, style };
+    globalThis.__wipeHold = hold;
+    globalThis.setTimeout = (run, wait, ...args) => {
+      if (wait !== hold.delay) {
+        return hold.plain.call(globalThis, run, wait, ...args);
+      }
+      hold.kept.push(() => run(...args));
+      return hold.plain.call(globalThis, () => undefined, 0);
+    };
+  }
+  hold.style.textContent =
     '.door-wipe--closing .door-leaf ' +
     `{ animation-delay: -${ms}ms !important; animation-play-state: paused !important; }`;
-  document.head.append(style);
-  // The browser's own setTimeout throws unless it is called on the window.
-  const plain = globalThis.setTimeout;
-  const kept = [];
-  globalThis.__doorHold = { plain, kept };
-  globalThis.setTimeout = (run, delay, ...args) => {
-    if (delay !== close) {
-      return plain.call(globalThis, run, delay, ...args);
-    }
-    kept.push(() => run(...args));
-    return plain.call(globalThis, () => undefined, 0);
-  };
+  hold.delay = delay;
+  for (const run of hold.kept.splice(0)) {
+    hold.plain.call(globalThis, run, 0);
+  }
 }
 
-/** In the page: lets the doors held by holdDoors go — their timer runs now, they open. */
-function releaseDoors() {
-  const hold = globalThis.__doorHold;
-  document.getElementById('shots-door-hold')?.remove();
+/** In the page: lets the wipe held by holdWipeAt go — its kept timers run now, its leaves move. */
+function releaseWipe() {
+  const hold = globalThis.__wipeHold;
   if (hold !== undefined) {
+    hold.style.remove();
     globalThis.setTimeout = hold.plain;
-    delete globalThis.__doorHold;
+    delete globalThis.__wipeHold;
     for (const run of hold.kept) {
       hold.plain.call(globalThis, run, 0);
     }
@@ -7461,12 +7672,12 @@ const doorShut = (page) =>
 
 /**
  * „Runde eröffnen" pressed (`open`) with the door wipe held DOOR_SHOT_MS into its close over the
- * menu (holdDoors), shot as menu-to-lobby.png, then let go until the lobby stands behind them and
+ * menu (holdWipeAt), shot as menu-to-lobby.png, then let go until the lobby stands behind them and
  * they have gone: whether the doors came, how far they had shut, 0 to 1, and whether the menu
  * still stood under them, the lobby not yet there, while they closed.
  */
 async function shootHeldDoors(page, open) {
-  await page.evaluate(holdDoors, { ms: DOOR_SHOT_MS, close: DOOR_CLOSE_MS });
+  await page.evaluate(holdWipeAt, { ms: DOOR_SHOT_MS, delay: DOOR_CLOSE_MS });
   await open();
   const came = await page
     .locator('.door-wipe--closing')
@@ -7481,7 +7692,7 @@ async function shootHeldDoors(page, open) {
   const lobby = await page.locator('.lobby').count();
   const hero = await heroOf(page);
   await capture(page, 'menu-to-lobby.png');
-  await page.evaluate(releaseDoors);
+  await page.evaluate(releaseWipe);
   await page.locator('.lobby').waitFor({ timeout: 10_000 });
   await page.locator('.door-wipe').waitFor({ state: 'detached', timeout: 5000 });
   const away = hero?.leaving === true && Math.sin(hero.facing) < 0;
@@ -14417,7 +14628,7 @@ async function hostOpensRound() {
   await host.locator('.menu-item').first().waitFor({ timeout: 10_000 });
   // The menu, its music as the music's manifest lists it (`captureMenu` returns the list).
   const musicList = await inGroup('screens', () => captureMenu(host));
-  await inGroup('screens', () => captureHistory(host, 'history.png'));
+  await inGroup('screens', () => captureHistory(host, 'history.png', heldClick));
   await openMissionRound(host);
   // The lobby's music, its own piece where it is listed (checked as the run starts).
   const lobbySound = await inGroup('screens', () => lobbySoundOf(host, musicList));
