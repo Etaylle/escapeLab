@@ -647,6 +647,7 @@ import {
 import {
   deviceVerdict,
   figureHeld,
+  nudgesSpent,
   strideHeld,
   stripVerdict,
   swingVerdict,
@@ -6614,11 +6615,34 @@ const NUDGE_WAIT_MS = 110_000;
 /** The lines mission control sent unasked so far, as a page's view has them. */
 const nudgesOf = (seen) => (seen.view?.events ?? []).filter((event) => event.kind === 'nudge');
 
+/** Why no nudge is left to wait for at the station `view` has up (nudgesSpent), or null. */
+function spentOn({ events, missionId, currentPuzzleIndex, startedAt }) {
+  return nudgesSpent(events, nudgeLinesOf(missionId, currentPuzzleIndex), startedAt ?? 0);
+}
+
+/**
+ * How many lines the mission `id` gives the Leitstelle for its station `index`, as its file in
+ * missions/ has them; null for a mission that has none there, a custom one.
+ */
+function nudgeLinesOf(id, index) {
+  const file = fileURLToPath(new URL(`../missions/${id}.json`, import.meta.url));
+  try {
+    return JSON.parse(readFileSync(file, 'utf8')).puzzles?.[index]?.nudges?.length ?? null;
+  } catch (error) {
+    if (error?.code === 'ENOENT') {
+      return null;
+    }
+    throw error;
+  }
+}
+
 /**
  * nudge.png (nudge-phone.png on the guest's phone): with nothing open over the world, the
  * crew lets the station that is up stand quiet until the Leitstelle names the next place —
  * within its 90 s of quiet. Its line has to show in both banners and be spoken by a recording
- * from the manifest, or the run fails.
+ * from the manifest, or the run fails. Where every line the mission has for the station went
+ * out on the way there — a walkthrough slowed by load lets it stand quiet long enough — it is
+ * skipped, saying when each came (pageclock.mjs `nudgesSpent`).
  */
 async function captureNudge(players) {
   const [first] = players;
@@ -6630,8 +6654,13 @@ async function captureNudge(players) {
       await onTop.waitFor({ state: 'hidden', timeout: 3000 }).catch(() => undefined);
     }
   }
-  const before = nudgesOf(first.seen).length;
   const armed = first.seen.view.map.stations.find((s) => s.status === 'armed')?.title ?? 'none';
+  const spent = spentOn(first.seen.view);
+  if (spent !== null) {
+    skip('nudge.png', `"${armed}": ${spent}`);
+    return;
+  }
+  const before = nudgesOf(first.seen).length;
   const from = Date.now();
   if (!(await until(() => nudgesOf(first.seen).length > before, NUDGE_WAIT_MS))) {
     console.log(`nudge.png          !! no word from the Leitstelle at "${armed}" within ${seconds(NUDGE_WAIT_MS)}`);

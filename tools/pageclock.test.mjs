@@ -3,6 +3,7 @@ import { describe, it } from 'node:test';
 import {
   deviceVerdict,
   figureHeld,
+  nudgesSpent,
   strideHeld,
   stripVerdict,
   swingVerdict,
@@ -172,5 +173,34 @@ describe('strideHeld — your walk held in a stride through its shot', () => {
       assert.equal(strideHeld(out, { ...out }, wide), false);
     }
     assert.equal(strideHeld(held, null, wide), false);
+  });
+});
+
+describe('nudgesSpent — the Leitstelle’s lines on the station up, all gone before the wait', () => {
+  const events = [
+    { at: 1000, kind: 'power' },
+    { at: 50_000, kind: 'nudge' },
+    { at: 70_000, kind: 'puzzle' },
+    { at: 160_000, kind: 'nudge' },
+    { at: 250_500, kind: 'nudge' },
+  ];
+
+  it('says when each line came where every one the station has went out', () => {
+    assert.equal(
+      nudgesSpent(events, 2, 0),
+      "the Leitstelle's 2 lines on the station up all came before the walkthrough waited, " +
+        '90.0 s and 180.5 s after it came up: none left to shoot',
+    );
+  });
+
+  it('waits where a line is left, where none came yet, and where the lines are not known', () => {
+    assert.equal(nudgesSpent(events.slice(0, 4), 2, 0), null);
+    assert.equal(nudgesSpent(events.slice(0, 3), 2, 0), null);
+    assert.equal(nudgesSpent(events, null, 0), null);
+  });
+
+  it('counts the first station’s lines from the run’s start, before any solve', () => {
+    const first = [{ at: 91_000, kind: 'nudge' }];
+    assert.match(nudgesSpent(first, 1, 1000), /90\.0 s after it came up/);
   });
 });

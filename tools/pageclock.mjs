@@ -128,6 +128,32 @@ export function strideHeld(held, after, { from, to }) {
 }
 
 /**
+ * Why no nudge of the Leitstelle's is left to wait for at the station that is up, or null where
+ * one is: the run's `events` (the view's log, server time) since the station came up — the last
+ * solve, or `startedAt` before the first — hold a nudge for each of the `lines` the mission gives
+ * it (null: not known, so one is waited for). A walkthrough slowed by load lets the station stand
+ * quiet long enough on its way there for every one to go out; the reason names when each came.
+ *
+ * @param {Array<{ at: number, kind: string }>} events
+ * @param {number | null} lines
+ * @param {number} startedAt
+ * @returns {string | null}
+ */
+export function nudgesSpent(events, lines, startedAt) {
+  const solves = events.filter((event) => event.kind === 'puzzle').map((event) => event.at);
+  const since = solves.length === 0 ? startedAt : Math.max(...solves);
+  const given = events.filter((event) => event.kind === 'nudge' && event.at >= since);
+  if (lines === null || given.length < lines) {
+    return null;
+  }
+  const times = given.map((nudge) => `${((nudge.at - since) / 1000).toFixed(1)} s`).join(' and ');
+  return (
+    `the Leitstelle's ${lines} lines on the station up all came before the walkthrough waited, ` +
+    `${times} after it came up: none left to shoot`
+  );
+}
+
+/**
  * What a phone showed of its open device (shots.mjs `deviceReach`): how far it scrolls, px; its
  * controls shown; those under a fingertip's 44 px either way and those cut off, in words.
  *
