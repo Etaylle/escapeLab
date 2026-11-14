@@ -32,6 +32,7 @@ interface FakeMix {
   ambienceDuck: FakeGain;
   music: FakeGain;
   musicDuck: FakeGain;
+  preview: FakeGain;
   voice: FakeGain;
   announce: FakeGain;
   sends: FakeGain;
@@ -56,10 +57,11 @@ describe('a bus pulled down', () => {
   const dips = (entries: [DuckSource, Dip][]): Map<DuckSource, Dip> => new Map(entries);
   const music = (source: DuckSource): number => 10 ** ((DUCK_DB.music[source] ?? 0) / 20);
 
-  it('pulls the music 8 dB under a voice, 6 under the klaxon and the siren, the beds 4', () => {
-    // A voice: mission control's on the radio, and the crew's in the lobby over the menu's sound.
+  it('pulls the music 8 dB under a voice, 6 under the klaxon and siren, 24 under a preview', () => {
+    // A voice: mission control's on the radio, and the crew's in the lobby over the menu's sound;
+    // a preview: a piece the settings play for the ear (musicPreview.ts). The beds feel voices.
     expect(DUCK_DB).toEqual({
-      music: { voice: -8, alarm: -6, siren: -6, crew: -8 },
+      music: { voice: -8, alarm: -6, siren: -6, crew: -8, preview: -24 },
       ambience: { voice: -4, crew: -4 },
     });
     expect([DUCK_ATTACK_S, DUCK_RELEASE_S]).toEqual([0.05, 0.4]);
@@ -146,10 +148,13 @@ describe('the mix on the lab’s context', () => {
     const settings = [mix.limiter.threshold, mix.limiter.knee, mix.limiter.ratio];
     expect(settings.map((param) => param.value)).toEqual([-3, 0, 20]);
     expect([mix.limiter.attack.value, mix.limiter.release.value]).toEqual([0.001, 0.1]);
-    for (const bus of [mix.sfx, mix.voice, mix.announce, mix.musicDuck, mix.ambienceDuck]) {
+    const buses = [mix.sfx, mix.voice, mix.announce, mix.musicDuck, mix.ambienceDuck, mix.preview];
+    for (const bus of buses) {
       expect(bus.outputs).toContain(mix.master);
     }
     expect(mix.music.outputs).toEqual([mix.musicDuck]);
+    // A piece played for the ear goes past the music's duck, which it pulls down itself.
+    expect(mix.preview.outputs).toEqual([mix.master]);
     expect(mix.ambience.outputs).toEqual([mix.ambienceDuck]);
   });
 
@@ -163,12 +168,13 @@ describe('the mix on the lab’s context', () => {
     expect(sendOf(mix.ambienceDuck)).toBeCloseTo(SEND_DB.ambience, 9);
     expect(sendOf(mix.announce)).toBeCloseTo(SEND_DB.announce, 9);
     expect(SEND_DB).toEqual({ sfx: -14, ambience: -18, announce: -6 });
-    // The radio stays dry, and the music.
+    // The radio stays dry, and the music, and a piece played for the ear.
     expect(reaches(mix.voice as FakeNode, mix.sends as FakeNode)).toBe(false);
     expect(reaches(mix.music as FakeNode, mix.sends as FakeNode)).toBe(false);
+    expect(reaches(mix.preview as FakeNode, mix.sends as FakeNode)).toBe(false);
   });
 
-  it('binds Musik, Effekte, Umgebung and Funk each to its bus, Gesamt to the master', async () => {
+  it('binds Musik, Effekte, Umgebung, Funk each to its buses, Gesamt to the master', async () => {
     const { mix } = await engine();
     const { applyVolumes } = await import('../src/settings.js');
     applyVolumes({ master: 80, music: 90, effects: 60, voice: 30, ambience: 45 });
@@ -178,6 +184,7 @@ describe('the mix on the lab’s context', () => {
     expect(target(mix.sfx)).toBeCloseTo(0.6, 9);
     expect(target(mix.ambience)).toBeCloseTo(0.45, 9);
     expect(target(mix.music)).toBeCloseTo(0.9, 9);
+    expect(target(mix.preview)).toBeCloseTo(0.9, 9);
     expect(target(mix.master)).toBeCloseTo(0.8, 9);
   });
 
@@ -187,7 +194,8 @@ describe('the mix on the lab’s context', () => {
     const muted = { ...DEFAULT_SETTINGS.muted, music: true, ambience: true };
     applyVolumes(DEFAULT_SETTINGS.volumes, muted);
     const target = (bus: FakeGain): unknown => bus.gain.events.at(-1)?.[1];
-    expect([target(mix.music), target(mix.ambience), target(mix.sfx)]).toEqual([0, 0, 1]);
+    const buses = [mix.music, mix.preview, mix.ambience, mix.sfx];
+    expect(buses.map(target)).toEqual([0, 0, 0, 1]);
   });
 
   it('builds a later engine at the volumes and the mute already set', async () => {
@@ -197,8 +205,8 @@ describe('the mix on the lab’s context', () => {
     audio.setVolumes({ master: 0.9, music: 0.75, effects: 0.5, voice: 0.25, ambience: 0.4 });
     audio.setMuted(true);
     const mix = audio.audioEngine() as unknown as FakeMix;
-    const values = [mix.voice, mix.sfx, mix.ambience, mix.music, mix.master];
-    expect(values.map((bus) => bus.gain.value)).toEqual([0.25, 0.5, 0.4, 0.75, 0]);
+    const values = [mix.voice, mix.sfx, mix.ambience, mix.music, mix.preview, mix.master];
+    expect(values.map((bus) => bus.gain.value)).toEqual([0.25, 0.5, 0.4, 0.75, 0.75, 0]);
     audio.setMuted(false);
     expect(mix.master.gain.events.at(-1)?.[1]).toBeCloseTo(0.9, 9);
   });

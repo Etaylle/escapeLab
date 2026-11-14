@@ -24,9 +24,11 @@ import {
   type TextSize,
 } from '../settings.js';
 import { isMuted, setMuted, subscribeMuted, volumeTick } from '../world/audio.js';
+import { stopPreview } from '../world/musicPreview.js';
 import type { Refusal } from '../ws.js';
 import { ControlSettings, KeyTable } from './ControlSettings.js';
 import { Icon } from './Icon.js';
+import { MusicSettings } from './MusicSettings.js';
 import { ProfileFields } from './ProfileFields.js';
 import { runsText } from './ProfileChip.js';
 import { Choice, Slider } from './SettingsParts.js';
@@ -34,7 +36,8 @@ import { Choice, Slider } from './SettingsParts.js';
 /**
  * The settings over whatever screen is up — a run goes on under them — in tabs, as Deep Rock
  * Galactic's and Helldivers 2's stand: „Ton" (the whole lab's volume and each bus's, a mute
- * each, the talk key), „Bild" (the text size, less motion, the light, the full screen),
+ * each, the talk key, the music — its pack, a piece for each place, their Nennungen:
+ * MusicSettings.tsx), „Bild" (the text size, less motion, the light, the full screen),
  * „Steuerung" (the keys, the controller, its symbols, the stick's dead zone), „Zugang" (the
  * crew's colour patterns, the spoken lines' size) and, with the pass's account, „Konto" (the
  * profile's name and colour, the account and „Konto löschen"). Every change takes at once and is
@@ -270,7 +273,7 @@ function BusRow({ bus, label, muted }: { bus: Bus; label: string; muted: boolean
   );
 }
 
-/** „Ton": the whole lab's volume and each bus's, a mute each, and the talk key. */
+/** „Ton": the whole lab's volume and each bus's, a mute each, the talk key, and the music. */
 function SoundTab() {
   const settings = useSettings();
   const off = useSoundOff();
@@ -286,6 +289,7 @@ function SoundTab() {
         </p>
       </fieldset>
       <KeyTable keys={settings.keys} actions={['talk']} legend="Sprechtaste" note={false} />
+      <MusicSettings />
     </>
   );
 }
@@ -573,7 +577,12 @@ function TabBody({ tab, panel }: { tab: SettingsTab; panel: PanelProps }): React
  * stays — and the tab's „Zurücksetzen".
  */
 export function SettingsPanel(props: PanelProps) {
-  const { onClose } = props;
+  const onClose = (): void => {
+    stopPreview();
+    props.onClose();
+  };
+  // A piece played for the ear stops with the panel, however it goes (musicPreview.ts).
+  useEffect(() => stopPreview, []);
   const tabs = tabsOf(props.onDeleteAccount !== undefined);
   const [tab, setTab] = useState<SettingsTab>(() => {
     const wanted = props.tab ?? lastTab;
