@@ -89,6 +89,7 @@ export interface SoundClient {
   readonly music: {
     compose(
       request: ElevenLabs.BodyComposeMusicV1MusicPost,
+      options?: { readonly timeoutInSeconds?: number },
     ): PromiseLike<ReadableStream<Uint8Array>>;
   };
 }

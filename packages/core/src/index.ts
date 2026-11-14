@@ -256,10 +256,13 @@ export {
 export { SIMON_COLORS, type SimonColor } from './puzzles/simon.js';
 export { LEVER_FIGURE } from './puzzles/buttonSync.js';
 export {
+  greySignLabel,
   PATTERN_FIGURE,
   SIGNAL_PATTERNS,
   TOKENS,
   tokenLabel,
+  type GreySign,
+  type ShownSign,
   type SignalPattern,
   type SignalToken,
 } from './puzzles/signal.js';

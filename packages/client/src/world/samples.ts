@@ -107,8 +107,9 @@ export const SFX_IDS = [
 ] as const;
 
 /**
- * Every piece of music: the run's three stems, the two stings, the menu's theme and the end
- * cards' two themes, in public/music/manifest.json.
+ * Every piece of music, in public/music/manifest.json: the score's eight — the run's three stems,
+ * the menu's theme, the lobby's, the opening's title and the end cards' two themes, cut from one
+ * suite (audio/catalog.json `score`) — and the end cards' two stings.
  */
 export const MUSIC_IDS = [
   'calm',
@@ -119,6 +120,8 @@ export const MUSIC_IDS = [
   'menu-theme',
   'end-won',
   'end-lost',
+  'lobby',
+  'title',
 ] as const;
 
 export type SfxId = (typeof SFX_IDS)[number];
@@ -132,8 +135,9 @@ export const MUSIC_BASE = '/music/';
 /**
  * One recording as its manifest lists it (scripts/sfx.ts): its file, how long it lasts, ms, the
  * gain that brings it to its loudness, where its sound starts, ms, its noise floor and its RMS
- * before the gain, whether it plays round and round, the hash of what made it, a stem's tempo,
- * the recording it borrows until its own is made, and who made it.
+ * before the gain, whether it plays round and round, the hash of what made it, a stem's tempo, a
+ * piece of the score's loudness, the bars its loop goes round and the suite it was cut from, the
+ * recording it borrows until its own is made, and who made it.
  */
 export interface SampleEntry {
   readonly file: string;
@@ -148,6 +152,12 @@ export interface SampleEntry {
   readonly hash: string;
   /** a stem's tempo, beats a minute (audio/catalog.json) */
   readonly bpm?: number;
+  /** a piece of the score's loudness before the gain, LUFS (scripts/pcm.ts `lufsOf`) */
+  readonly loudness?: number;
+  /** a looped piece of the score: the bars that go round, which the game loops on */
+  readonly bars?: number;
+  /** a piece of the score: the suite it was cut from, by its id */
+  readonly suite?: string;
   /** the entry whose recording it plays until its own is rendered */
   readonly standIn?: string;
   readonly source: 'elevenlabs';
@@ -170,6 +180,18 @@ export const BED_RATE = 32000;
 /** Whether `id` is a room's bed: the only recording kept in two channels. */
 export function isBed(id: string): boolean {
   return id.startsWith('bed-');
+}
+
+/**
+ * The most a room's bed may be brought up to its loudness, as a gain: +12 dB. A bed that needs
+ * more came back near silent — and its noise, a click and all, would come up with it — so it is
+ * not played at all, as the sound script keeps no such take (scripts/sfx.ts MAX_BED_GAIN_DB).
+ */
+export const BED_GAIN_MAX = 10 ** (12 / 20);
+
+/** Whether `id`, listed as `entry`, is a bed that would be brought up more than it may be. */
+function overBrought(id: string, entry: SampleEntry): boolean {
+  return isBed(id) && entry.gain > BED_GAIN_MAX;
 }
 
 /**
@@ -348,15 +370,22 @@ async function decode(url: string, entry: SampleEntry, bed: boolean): Promise<Sa
 /**
  * The recording `id` loaded and kept: fetched and decoded once — an entry that borrows another's
  * recording shares that one's load — in its turn, `now` before the rest. Null where it is not in
- * the manifest (it awaits its render) or could not be loaded: that is said once, and an ask
- * RETRY_MS later tries again.
+ * the manifest (it awaits its render), is a bed brought up more than BED_GAIN_MAX — said once,
+ * never fetched — or could not be loaded: that is said once, and an ask RETRY_MS later tries
+ * again.
  */
 export function loadSample(id: SfxId, now = true): Promise<Sample | null> {
   const kept = ready.get(id);
   if (kept !== undefined) return Promise.resolve(kept);
   return manifestOf('sfx').then((list) => {
     const entry = list?.[id];
-    return entry === undefined ? null : loadFrom(id, entry, now);
+    if (entry === undefined) return null;
+    if (overBrought(id, entry)) {
+      const db = (20 * Math.log10(entry.gain)).toFixed(1);
+      sayOnce(`${SFX_BASE}${entry.file}`, new Error(`a bed brought up +${db} dB, over +12`));
+      return null;
+    }
+    return loadFrom(id, entry, now);
   });
 }
 

@@ -6,12 +6,14 @@ import {
   AUDIBLE_FLOOR_DBFS as SCRIPT_AUDIBLE,
   CATALOG_FILE,
   DIRS,
+  isSuite,
   MANIFEST,
   MASKED_WITHIN_DB as SCRIPT_MASKED,
   noisyTakes,
   optionsOf,
   readCatalog,
   TAKES_DIR,
+  takesPerRun,
   type Manifest,
   type TakeRecord,
   type TakesList,
@@ -20,26 +22,41 @@ import {
   AUDIBLE_FLOOR_DBFS,
   CANDIDATES,
   commandFor,
+  commandsFor,
   ENV_FILE,
   listingOf,
   MASKED_WITHIN_DB,
   SECTIONS,
   shellWord,
   soundsOf,
+  SUITE_TAKES,
+  suiteListingOf,
+  suitesOf,
   type CatalogSound,
 } from '../src/sounds/listing.js';
 import { opensSounds, SOUNDS_PATH } from '../src/sounds/path.js';
-import { factsOf, SoundsBoard, takeFactsOf, type BoardProps } from '../src/sounds/SoundsBoard.js';
+import {
+  factsOf,
+  pieceFactsOf,
+  pieceRowFactsOf,
+  SoundsBoard,
+  suiteTakeFactsOf,
+  takeFactsOf,
+  type BoardProps,
+} from '../src/sounds/SoundsBoard.js';
 import {
   chooseTake,
   keepCommandFor,
   loadTakes,
+  pieceFails,
+  pieceKey,
   TAKES_BASE,
   takeFails,
   takeKey,
   takesOf,
   takeUrl,
   UNSERVED,
+  type PieceInfo,
   type TakeInfo,
 } from '../src/sounds/takes.js';
 import type { SampleEntry } from '../src/world/samples.js';
@@ -78,7 +95,7 @@ const HUM: CatalogSound = {
   durationSeconds: 6,
   loop: true,
 };
-const CALM: CatalogSound = { ...HUM, id: 'calm', kind: 'stem', durationSeconds: 72 };
+const WON: CatalogSound = { ...HUM, id: 'won', kind: 'sting', durationSeconds: 10, loop: false };
 
 describe('the page’s address', () => {
   it('is /sounds, with or without its slash, and nothing else', () => {
@@ -129,35 +146,29 @@ describe('the listing', () => {
     expect(sections.map((section) => section.title)).toEqual([
       'Effekte',
       'Räume und Schleifen',
-      'Musik',
       'Endkarte',
-      'Nach der Endkarte',
     ]);
     const listed = sections.flatMap((section) => section.rows.map((row) => row.sound.id));
     expect(listed.sort()).toEqual(catalog.map((sound) => sound.id).sort());
-    expect(catalog).toHaveLength(readCatalog().length);
+    // Every item but a suite, whose pieces the page lists apart, in the plan's order.
+    expect(catalog).toHaveLength(readCatalog().filter((item) => !isSuite(item)).length);
+    expect(suitesOf(readCatalog()).map((suite) => suite.id)).toEqual(['score']);
     for (const section of sections) {
       expect(section.rows.every((row) => row.sound.kind === section.kind)).toBe(true);
     }
-    expect(SECTIONS.map((section) => section.kind)).toEqual([
-      'oneshot',
-      'bed',
-      'stem',
-      'sting',
-      'theme',
-    ]);
+    expect(SECTIONS.map((section) => section.kind)).toEqual(['oneshot', 'bed', 'sting']);
   });
 
   it('gives each sound its recording, and hears its floor as the sound script does', () => {
     expect([AUDIBLE_FLOOR_DBFS, MASKED_WITHIN_DB]).toEqual([SCRIPT_AUDIBLE, SCRIPT_MASKED]);
-    const [effects, loops, music] = listingOf([CLICK, HUM, CALM], {
+    const [effects, loops, music] = listingOf([CLICK, HUM, WON], {
       'key-click': recording(12, 480, -70, -30), // its tail brought up to −48.4 dBFS
       'mains-hum': recording(8, 6000, -40, -38), // its quietest 100 ms: the hum itself
     });
     expect(effects?.rows[0]).toMatchObject({ noisy: true, recording: { gain: 12 } });
     expect(effects?.rows[0]?.floorDbfs).toBeCloseTo(-48.42, 2);
     expect(loops?.rows[0]).toMatchObject({ noisy: false, floorDbfs: null });
-    const none = { sound: CALM, recording: null, floorDbfs: null, noisy: false };
+    const none = { sound: WON, recording: null, floorDbfs: null, noisy: false };
     expect(music?.rows[0]).toEqual(none);
   });
 
@@ -166,11 +177,17 @@ describe('the listing', () => {
     const read = (dir: string): Manifest =>
       JSON.parse(readFileSync(join(dir, MANIFEST), 'utf8')) as Manifest;
     const manifests = { sfx: read(DIRS.sfx), music: read(DIRS.music) };
-    const rows = listingOf(soundsOf(catalog), { ...manifests.sfx, ...manifests.music });
-    const flagged = rows.flatMap((section) => section.rows.filter((row) => row.noisy));
+    const recordings = { ...manifests.sfx, ...manifests.music };
+    // As the page lists them: the sounds by kind, a suite's pieces apart.
+    const rows = listingOf(soundsOf(catalog), recordings).flatMap((section) => section.rows);
+    const pieces = suiteListingOf(suitesOf(catalog), recordings).flatMap((each) => each.rows);
+    const flagged = [
+      ...rows.filter((row) => row.noisy).map((row) => row.sound),
+      ...pieces.filter((row) => row.noisy).map((row) => row.piece),
+    ];
     const ids = (list: readonly { readonly id: string }[]): string[] =>
       list.map(({ id }) => id).sort();
-    expect(ids(flagged.map((row) => row.sound))).toEqual(ids(noisyTakes(catalog, manifests)));
+    expect(ids(flagged)).toEqual(ids(noisyTakes(catalog, manifests)));
   });
 
   it('reads only the kinds it knows from the catalog', () => {
@@ -202,6 +219,7 @@ describe('the board', () => {
       'key-click': recording(12, 480, -70, -30),
       'mains-hum': recording(1),
     }),
+    suites: [],
     takes: {},
     takesNote: null,
     playing: null,
@@ -209,11 +227,12 @@ describe('the board', () => {
     selected: new Set(),
     keeping: {},
     envFile: ENV_FILE,
-    command: null,
+    commands: [],
     copied: null,
     on: {
       play: () => undefined,
       playTake: () => undefined,
+      playPiece: () => undefined,
       toggle: () => undefined,
       keep: () => undefined,
       envFile: () => undefined,
@@ -238,8 +257,12 @@ describe('the board', () => {
   });
 
   it('shows what plays, what is ticked and the command for it', () => {
-    const command = commandFor(['key-click']);
-    const ticked = props({ playing: 'key-click', selected: new Set(['key-click']), command });
+    const command = commandFor(['key-click']) ?? '';
+    const ticked = props({
+      playing: 'key-click',
+      selected: new Set(['key-click']),
+      commands: [command],
+    });
     const html = renderToStaticMarkup(<SoundsBoard {...ticked} />);
     expect(html).toContain('aria-pressed="true"');
     expect(html).toContain('>Stopp<');
@@ -380,21 +403,23 @@ describe('the takes', () => {
 });
 
 describe('the board’s takes', () => {
-  const CALM_TAKES = { calm: [takeOf(1), takeOf(2, { misses: ['length'] })] };
+  const WON_TAKES = { won: [takeOf(1), takeOf(2, { misses: ['length'] })] };
   const props = (over: Partial<BoardProps> = {}): BoardProps => ({
-    sections: listingOf([CLICK, CALM], { 'key-click': recording(1), calm: recording(1, 72_000) }),
-    takes: CALM_TAKES,
+    sections: listingOf([CLICK, WON], { 'key-click': recording(1), won: recording(1, 10_000) }),
+    suites: [],
+    takes: WON_TAKES,
     takesNote: null,
     playing: null,
     loaded: () => true,
     selected: new Set(),
     keeping: {},
     envFile: ENV_FILE,
-    command: null,
+    commands: [],
     copied: null,
     on: {
       play: () => undefined,
       playTake: () => undefined,
+      playPiece: () => undefined,
       toggle: () => undefined,
       keep: () => undefined,
       envFile: () => undefined,
@@ -407,23 +432,23 @@ describe('the board’s takes', () => {
     const html = renderToStaticMarkup(<SoundsBoard {...props()} />);
     expect(html.match(/>Abspielen</g)).toHaveLength(4); // two recordings, two takes
     expect(html.match(/>Diesen Take wählen</g)).toHaveLength(2);
-    const calm = html.slice(html.indexOf('<code class="sounds-id">calm</code>'));
-    expect(calm).toContain('<ol class="sounds-take-list" aria-label="Takes von calm">');
-    expect(calm).toContain('<span class="sounds-take-name">Take 1</span>');
-    expect(calm).toContain(`<span class="sounds-facts">${takeFactsOf(takeOf(1))}</span>`);
+    const won = html.slice(html.indexOf('<code class="sounds-id">won</code>'));
+    expect(won).toContain('<ol class="sounds-take-list" aria-label="Takes von won">');
+    expect(won).toContain('<span class="sounds-take-name">Take 1</span>');
+    expect(won).toContain(`<span class="sounds-facts">${takeFactsOf(takeOf(1))}</span>`);
     expect(html.match(/class="sounds-take sounds-take--fails"/g)).toHaveLength(1);
     expect(html).toContain('Neue Takes der Musik stehen unter ihrem Stück');
     // Nothing is chosen, so no command keeps anything.
     expect(html).not.toContain('--keep');
-    const click = html.slice(0, html.indexOf('<code class="sounds-id">calm</code>'));
+    const click = html.slice(0, html.indexOf('<code class="sounds-id">won</code>'));
     expect(click).not.toContain('sounds-takes');
   });
 
   it('shows the command that keeps the take chosen, and plays a take as a recording', () => {
-    const chosen = props({ keeping: { calm: 2 }, playing: takeKey('calm', 1) });
+    const chosen = props({ keeping: { won: 2 }, playing: takeKey('won', 1) });
     const html = renderToStaticMarkup(<SoundsBoard {...chosen} />);
     expect(html).toContain('Im Ordner packages/client behält dieser Befehl Take 2');
-    expect(html).toContain('<pre class="sounds-cli">node scripts/sfx.ts --keep calm=2</pre>');
+    expect(html).toContain('<pre class="sounds-cli">node scripts/sfx.ts --keep won=2</pre>');
     // The page reads its lists as it opens: the take kept plays as the game's once it reloads.
     const reload = 'Danach die Seite neu laden: Der Take spielt dann als Aufnahme des Spiels.';
     expect(html).toContain(`</pre><p class="muted">${reload}</p>`);
@@ -432,7 +457,7 @@ describe('the board’s takes', () => {
     const plays = [...html.matchAll(/class="sounds-play" aria-pressed="(\w+)"[^>]*>(\w+)</g)];
     expect(plays.map((match) => [match[1], match[2]])).toEqual([
       ['false', 'Abspielen'], // the click
-      ['false', 'Abspielen'], // the calm stem as the game plays it
+      ['false', 'Abspielen'], // the sting as the game plays it
       ['true', 'Stopp'], // its take 1
       ['false', 'Abspielen'],
     ]);
@@ -486,5 +511,204 @@ describe('a take played', () => {
     const once = auditionTake('end-won', takeOf(1, { gain: 1.92 }), false, () => undefined);
     expect(elements.find((each) => each.src === '/takes/end-won/1.mp3')?.loop).toBe(false);
     once?.stop();
+  });
+});
+
+/** A piece of the score's take as the sound script lists it, where the plan cuts it. */
+const pieceOf = (id: string, fromMs: number, ms: number, over: Partial<PieceInfo> = {}) => ({
+  id,
+  fromMs,
+  ms,
+  loop: false,
+  gain: 1.2,
+  loudness: -22.3,
+  peak: 0.6,
+  rms: 0.08,
+  floor: 0.0001,
+  silence: 0,
+  misses: [],
+  ...over,
+});
+
+/** The score's first take as its list keeps it: the whole, and its eight pieces. */
+const SCORE_TAKE: TakeInfo = {
+  n: 1,
+  file: '1.mp3',
+  ms: 490_667,
+  gain: 1,
+  startMs: 0,
+  peak: 0.9,
+  rms: 0.1,
+  floor: 0.0001,
+  silence: 0,
+  misses: [],
+  pieces: [
+    pieceOf('menu-theme', 0, 93_333, { loop: true }),
+    pieceOf('lobby', 93_333, 61_334, { loop: true }),
+    pieceOf('title', 154_667, 40_000),
+    pieceOf('calm', 194_667, 72_000, { loop: true }),
+    pieceOf('tense', 266_667, 72_000, { loop: true }),
+    pieceOf('critical', 338_667, 72_000, { loop: true }),
+    pieceOf('end-lost', 410_667, 40_000),
+    pieceOf('end-won', 450_667, 40_000),
+  ],
+};
+
+/** The board with the score as the catalog writes it, its pieces unrecorded, as `over` says. */
+const boardOf = (over: Partial<BoardProps> = {}): BoardProps => ({
+  sections: listingOf([], {}),
+  suites: suiteListingOf(suitesOf(readCatalog()), {}),
+  takes: {},
+  takesNote: null,
+  playing: null,
+  loaded: () => false,
+  selected: new Set(),
+  keeping: {},
+  envFile: ENV_FILE,
+  commands: [],
+  copied: null,
+  on: {
+    play: () => undefined,
+    playTake: () => undefined,
+    playPiece: () => undefined,
+    toggle: () => undefined,
+    keep: () => undefined,
+    envFile: () => undefined,
+    copy: () => undefined,
+  },
+  ...over,
+});
+
+describe('the score on the page', () => {
+  const suites = suitesOf(readCatalog());
+  const order = ['menu-theme', 'lobby', 'title', 'calm', 'tense', 'critical'];
+  order.push('end-lost', 'end-won');
+
+  it('reads the catalog’s suite: its pieces in the plan’s order, each with its recording', () => {
+    expect(suites.map((suite) => [suite.id, suite.key, suite.bpm])).toEqual([
+      ['score', 'A minor', 90],
+    ]);
+    const [listing] = suiteListingOf(suites, {
+      'menu-theme': recording(12, 93_333, -70, -30), // its floor brought up to −48.4 dBFS
+      calm: { ...recording(1.2, 72_000), loop: true },
+    });
+    expect(listing?.rows.map((row) => row.piece.id)).toEqual(order);
+    expect(listing?.rows[0]).toMatchObject({ noisy: true });
+    expect(listing?.rows[1]).toMatchObject({ recording: null, noisy: false });
+    const [calm] = listing?.rows.filter((row) => row.piece.id === 'calm') ?? [];
+    expect(calm === undefined ? '' : pieceRowFactsOf(calm)).toBe(
+      '72,0 s · Verstärkung 1,20× · Grundrauschen −88,4 dBFS · Schleife',
+    );
+  });
+
+  it('asks the script for the score in as many takes as a run makes, beside the sounds', () => {
+    const score = readCatalog().find(isSuite);
+    expect(score === undefined ? 0 : takesPerRun(score)).toBe(SUITE_TAKES);
+    const node = `node --env-file=${ENV_FILE} scripts/sfx.ts`;
+    expect(commandsFor(['ping'], ['score'])).toEqual([
+      `${node} --candidates 3 --only ping`,
+      `${node} --candidates 2 --only score`,
+    ]);
+    expect(commandsFor([], [])).toEqual([]);
+    const [, , , ...args] = (commandsFor([], ['score'])[0] ?? '').split(' ');
+    expect(optionsOf(args)).toMatchObject({ candidates: 2, only: ['score'], keep: null });
+  });
+
+  it('reads a suite’s takes with their pieces, and none whose pieces do not read', () => {
+    const odd = { ...SCORE_TAKE, n: 2, file: '2.mp3', pieces: [{ id: 'calm', fromMs: 'x' }] };
+    expect(takesOf({ score: { id: 'score', takes: [SCORE_TAKE, odd] } })).toEqual({
+      score: [SCORE_TAKE],
+    });
+    const still = [pieceOf('calm', 0, 1, { loudness: null })];
+    const silent = { ...SCORE_TAKE, n: 3, file: '3.mp3', pieces: still };
+    expect(takesOf({ score: { id: 'score', takes: [silent] } })['score']).toHaveLength(1);
+    expect(pieceKey('score', 2, 'calm')).toBe('score#2/calm');
+  });
+
+  it('says a take of the score and each piece in a line, and which cannot be kept whole', () => {
+    expect(suiteTakeFactsOf(SCORE_TAKE)).toBe('490,7 s · 8 Stücke');
+    const off = { ...SCORE_TAKE, ms: 480_000, misses: ['length'] };
+    expect(suiteTakeFactsOf(off)).toBe('480,0 s · 8 Stücke · Regeln verfehlt: Länge');
+    const [menu] = SCORE_TAKE.pieces ?? [];
+    expect(menu === undefined ? '' : pieceFactsOf(menu)).toBe(
+      '93,3 s · Verstärkung 1,20× · Lautheit −22,3 LUFS · Grundrauschen −78,4 dBFS · ' +
+        'Stille 0 % · Schleife',
+    );
+    expect(pieceFactsOf(pieceOf('end-lost', 0, 40_000, { loudness: null, misses: ['silence'] })))
+      .toBe(
+        '40,0 s · Verstärkung 1,20× · Lautheit: still · Grundrauschen −78,4 dBFS · Stille 0 % · ' +
+          'Regeln verfehlt: Stille',
+      );
+    const loud = pieceOf('calm', 0, 72_000, { misses: ['floor'] });
+    const noisy = { ...SCORE_TAKE, pieces: [loud] };
+    expect([takeFails(SCORE_TAKE), takeFails(off), takeFails(noisy)]).toEqual([false, true, true]);
+    expect([pieceFails(loud), pieceFails(pieceOf('calm', 0, 72_000))]).toEqual([true, false]);
+    const flagged = renderToStaticMarkup(
+      <SoundsBoard {...boardOf({ takes: { score: [noisy] } })} />,
+    );
+    expect(flagged.match(/class="sounds-piece sounds-piece--fails"/g)).toHaveLength(1);
+  });
+
+});
+
+describe('the score on the board', () => {
+  const order = ['menu-theme', 'lobby', 'title', 'calm', 'tense', 'critical'];
+  order.push('end-lost', 'end-won');
+
+  it('lists the score: a row a take, every piece playable in order, one command keeps it', () => {
+    const second = { ...SCORE_TAKE, n: 2, file: '2.mp3' };
+    const html = renderToStaticMarkup(
+      <SoundsBoard
+        {...boardOf({
+          takes: { score: [SCORE_TAKE, second] },
+          playing: pieceKey('score', 1, 'calm'),
+          selected: new Set(['score']),
+          keeping: { score: 2 },
+          commands: commandsFor([], ['score']),
+        })}
+      />,
+    );
+    expect(html).toContain('Partitur <span class="muted">(8 Stücke)</span>');
+    expect(html).toContain('<ol class="sounds-take-list" aria-label="Takes von score">');
+    expect(html.match(/>Diesen Take wählen</g)).toHaveLength(2);
+    const first = html.slice(html.indexOf('aria-label="Stücke von Take 1"'));
+    const piece = /<li class="sounds-piece">.*?<code class="sounds-id">([\w-]+)</g;
+    const ids = [...first.matchAll(piece)];
+    expect(ids.slice(0, 8).map((match) => match[1])).toEqual(order);
+    expect(first.slice(0, first.indexOf('</ol>'))).toContain('aria-pressed="true">Stopp<');
+    expect(html).toContain('<pre class="sounds-cli">node scripts/sfx.ts --keep score=2</pre>');
+    expect(html).toContain('behält dieser Befehl Take 2 der ganzen Partitur, schneidet ihn');
+    expect(html.match(/entsteht mit der Partitur/g)).toHaveLength(8);
+    expect(html).not.toContain('sounds-piece--fails'); // no piece of either take would fail
+    expect(html).not.toContain('Musik <span class="muted">(0)</span>');
+    expect(html).toContain('--candidates 2 --only score</pre>');
+  });
+
+  it('plays a piece of a take from where the plan cuts it, at its gain, to its end', async () => {
+    fakeGraph();
+    fakeMedia();
+    vi.useFakeTimers();
+    vi.resetModules();
+    try {
+      const { auditionPiece, AUDITION_LEVEL } = await import('../src/sounds/SoundsScreen.js');
+      const ended = vi.fn();
+      const calm = pieceOf('calm', 194_667, 72_000, { loop: true, gain: 0.8 });
+      auditionPiece('score', SCORE_TAKE, calm, ended);
+      const element = elements.find((each) => each.src === '/takes/score/1.mp3');
+      expect(element?.currentTime).toBeCloseTo(194.667, 6);
+      const source = lastContext()
+        .all<FakeNode & { mediaElement: unknown }>('media')
+        .find((node) => node.mediaElement === element);
+      const level = (source?.outputs[0] as FakeGain | undefined)?.gain.value;
+      expect(level).toBeCloseTo(AUDITION_LEVEL * 0.8, 9);
+      vi.advanceTimersByTime(20);
+      expect(element?.plays).toBe(1);
+      vi.advanceTimersByTime(71_970);
+      expect(ended).not.toHaveBeenCalled();
+      vi.advanceTimersByTime(30);
+      expect([ended.mock.calls.length, element?.src]).toEqual([1, '']);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

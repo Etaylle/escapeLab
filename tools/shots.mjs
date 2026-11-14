@@ -180,7 +180,12 @@
  * against them first — the run fails naming the seed where one differs: the
  * Notstrom-Kasten's wires, serial and readings round by round and its cuts,
  * every stage of the Signalkette at consoles with the legend (a key a row
- * and a shape; the deliberate wrong one gives figure-flinch.png), the
+ * and a shape; the deliberate wrong one gives figure-flinch.png) — its last
+ * one without colour, the sending console's device shot as it starts in the
+ * host's window (signal-grey.png) and with that window held as a large phone
+ * sideways, under a finger (signal-grey-phone-932.png): the strip grey, its
+ * signs grey at 64 px, ANZEIGE · FARBLOS lit, nothing of the colour in the
+ * device and the phone holding it whole, or the run fails — the
  * Serverraum's table and moves (servers-manual.png from its locker, the
  * host's window showing the guest reading it as pose-reading.png,
  * servers-a.png and servers-b.png from its consoles, servers-solved.png),
@@ -4711,8 +4716,8 @@ async function pressStage(sender, presser, pinned = null) {
     return view.currentPuzzleIndex > currentPuzzleIndex || (view.puzzle?.stage ?? 0) > stage;
   };
   const lamp = (page, i) => page.locator('.station-modal .signal-lamp--lit').nth(i);
-  for (const [i, token] of sequence.entries()) {
-    await presser.page.locator(keyFor(i, token)).click({ timeout: 3000 });
+  for (const [i, sign] of sequence.entries()) {
+    await presser.page.locator(keyFor(i, sign)).click({ timeout: 3000 });
     const last = i === sequence.length - 1;
     const counted = await until(
       () => (last ? through() : presser.seen.view.puzzle?.done === i + 1),
@@ -4721,8 +4726,9 @@ async function pressStage(sender, presser, pinned = null) {
     if (!counted) {
       const now = presser.seen.view.puzzle;
       throw new Error(
-        `${presser.name} pressed "${token}", sign ${i + 1} of ${sequence.length} in stage ` +
-          `${stage}, but it did not count (done ${now?.done}, last result ${now?.lastResult})`,
+        `${presser.name} pressed "${signSaid(sign)}", sign ${i + 1} of ${sequence.length} in ` +
+          `stage ${stage}, but it did not count (done ${now?.done}, last result ` +
+          `${now?.lastResult})`,
       );
     }
     // The last press clears the lamps: the next stage starts dark.
@@ -5206,6 +5212,7 @@ async function solveSignal(crew, title, pinned = null) {
     if (!flinchShot && (sending.traced === true || stage === stages)) {
       await inGroup('graphics', () => captureFlinch(sending, pressing, pin?.keys[0] ?? null));
     }
+    await inGroup('devices', () => captureGreyDisplay(sending));
     const count = await pressStage(sending, pressing, pin?.keys ?? null);
     const line =
       `signal             ${sending.name} sends, ${pressing.name} presses: ` +
@@ -5233,14 +5240,215 @@ async function solveSignal(crew, title, pinned = null) {
   }
 }
 
+/**
+ * A sign as a view and the plan carry it, said for the log: its id in colour („rot-kreis"), or
+ * a grey one's form and pattern („kreis/ring").
+ */
+const signSaid = (sign) => (typeof sign === 'string' ? sign : `${sign.shape}/${sign.pattern}`);
+
+/** Whether signal-grey.png was taken: a run shoots the first display without colour it meets. */
+let greyShot = false;
+
+/** Skips signal-grey.png and signal-grey-phone-932.png where no Signalkette of the run is grey. */
+function greyLeftOut() {
+  if (!greyShot) {
+    skip('signal-grey*.png', 'no Signalkette the walkthrough works here loses its colour');
+  }
+}
+
+/**
+ * How wide a grey sign has to be drawn, px: at this size every cell of its bold pattern — dot to
+ * dot, stripe to stripe, the ring across — measures 18 px or more (client SignalPanel.tsx BOLD,
+ * measured in test/signalGrey.test.tsx).
+ */
+const GREY_SIGN_PX = 64;
+
+/** Each page's CDP session that lends it a finger for a while (`asLargePhone`), kept open. */
+const touchSessions = new WeakMap();
+
+/**
+ * Runs `look` with `page` held as a large phone sideways: 932×430 under a finger, through CDP's
+ * touch on a session of the page's own — as a context made with `hasTouch` has it, which a
+ * window's context cannot be given once it is made. Gives the window its size and its mouse
+ * back after, whatever `look` did.
+ */
+async function asLargePhone(page, look) {
+  const held = page.viewportSize();
+  let cdp = touchSessions.get(page);
+  if (cdp === undefined) {
+    cdp = await page.context().newCDPSession(page);
+    touchSessions.set(page, cdp);
+  }
+  await page.setViewportSize({ width: SIZES[4].width, height: SIZES[4].height });
+  await cdp.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
+  try {
+    await sleep(500);
+    await look();
+  } finally {
+    await cdp.send('Emulation.setTouchEmulationEnabled', { enabled: false });
+    if (held !== null) {
+      await page.setViewportSize(held);
+    }
+    await sleep(300);
+  }
+}
+
+/**
+ * What the open Signalkette's device shows of a display without colour, read in the page: the
+ * strip's class, the signs it lights (none fading out), how wide each grey one is drawn, the
+ * legends that burn, every paint of a grey sign that is not a grey, the first colour's word in
+ * the device's markup and how many of its elements carry a sign's id.
+ */
+function greyDisplay() {
+  const device = document.querySelector('.station-modal .signal');
+  if (device === null) {
+    return null;
+  }
+  const lit = [...device.querySelectorAll('.signal-strip .signal-glyph')].filter(
+    ({ classList }) =>
+      !classList.contains('signal-glyph--dark') && !classList.contains('signal-glyph--fading'),
+  );
+  const grey = lit.filter(({ classList }) => classList.contains('signal-glyph--grey'));
+  const paints = grey.flatMap((glyph) => [
+    globalThis.getComputedStyle(glyph).color,
+    ...[...glyph.querySelectorAll('*')].flatMap((el) => [
+      el.getAttribute('fill'),
+      el.getAttribute('stroke'),
+    ]),
+  ]);
+  const channels = (paint) =>
+    paint.startsWith('#')
+      ? [1, 3, 5].map((at) => parseInt(paint.slice(at, at + 2), 16))
+      : (paint.match(/\d+/g) ?? []).slice(0, 3).map(Number);
+  const hued = paints.filter((paint) => {
+    if (paint === null || paint === 'none') {
+      return false;
+    }
+    const [r, g, b] = channels(paint);
+    return r !== g || g !== b;
+  });
+  const legend = (mode) =>
+    `${mode.querySelector('.device-engraving')?.textContent} · ` +
+    `${mode.querySelector('.signal-legend--lit')?.textContent ?? '–'}`;
+  return {
+    grey: device.querySelector('.signal-strip')?.classList.contains('signal-strip--grey') ?? false,
+    lit: lit.length,
+    sizes: grey.map((glyph) => Math.round(glyph.getBoundingClientRect().width)),
+    legends: [...device.querySelectorAll('.signal-mode')].map(legend),
+    hued: [...new Set(hued)],
+    word: /\b(rot|rote[mnrs]?|blau\w*|grün\w*|gruen|gelb\w*)\b/i.exec(device.outerHTML)?.[0] ??
+      null,
+    tokens: device.querySelectorAll('[data-token]').length,
+  };
+}
+
+/**
+ * What a display without colour must not show (`greyDisplay`) and a phone must not do with it
+ * (`deviceReach`, null in a window): each a test of the two, and what the log says of it.
+ */
+const GREY_WRONGS = [
+  [(seen) => !seen.grey, () => 'the strip is not grey'],
+  [(seen) => seen.sizes.length === 0, () => 'no grey sign lit'],
+  [
+    (seen) => seen.lit > seen.sizes.length,
+    (seen) => `${seen.lit - seen.sizes.length} sign(s) lit in colour`,
+  ],
+  [
+    (seen) => seen.sizes.some((px) => px < GREY_SIGN_PX),
+    () => `a grey sign under ${GREY_SIGN_PX} px`,
+  ],
+  [(seen) => !seen.legends.includes('ANZEIGE · FARBLOS'), () => 'no ANZEIGE · FARBLOS lit'],
+  [(seen) => seen.hued.length > 0, (seen) => `drawn in colour: ${seen.hued.join(', ')}`],
+  [(seen) => seen.word !== null, (seen) => `a colour named: „${seen.word}"`],
+  [(seen) => seen.tokens > 0, (seen) => `${seen.tokens} key(s) carrying a sign's id`],
+  [(_, reach) => (reach?.scroll ?? 0) > 1, (_, reach) => `it scrolls ${reach.scroll}px`],
+  [(_, reach) => (reach?.cut.length ?? 0) > 0, (_, reach) => `${reach.cut.join(', ')} cut off`],
+];
+
+/** What a look at a display without colour finds wrong, as the log says it. */
+function greyWrongs(seen, reach) {
+  if (seen === null) {
+    return ['no Signalkette open'];
+  }
+  return GREY_WRONGS.filter(([wrong]) => wrong(seen, reach)).map(([, said]) => said(seen, reach));
+}
+
+/**
+ * The open display without colour as `greyDisplay` reads it once a grey sign shows: waited for a
+ * fleeting strip's cycle at most, and past its flare as it comes on. Read before the shot, so
+ * that a shot slow under load cannot land the reading in the strip's dark pause; where no sign
+ * was lit by then, waited for and read once more.
+ */
+async function greyLit(page) {
+  const shown = page.locator('.station-modal .signal-glyph--grey:not(.signal-glyph--fading)');
+  let seen = null;
+  for (let tries = 0; tries < 2 && (seen?.sizes.length ?? 0) === 0; tries++) {
+    await shown
+      .first()
+      .waitFor({ state: 'visible', timeout: 8000 })
+      .catch(() => undefined);
+    await sleep(400);
+    seen = await page.evaluate(greyDisplay);
+  }
+  return seen;
+}
+
+/**
+ * One look at the sending console's display without colour, as `shot`: reads the device as a
+ * sign shows (`greyLit`; on a phone `deviceReach` as well), shoots, logs it, and fails the run
+ * where the display shows anything but grey signs at their size, or where its legend does not
+ * burn, or where a phone does not hold the device whole.
+ */
+async function greyLook({ page, name }, shot, where, phone) {
+  const seen = await greyLit(page);
+  const reach = phone ? await page.evaluate(deviceReach) : null;
+  await capture(page, shot);
+  const wrong = greyWrongs(seen, reach);
+  const said =
+    seen === null
+      ? 'no Signalkette open'
+      : `${seen.lit} sign(s) lit, grey at ${[...new Set(seen.sizes)].join('/') || '–'} px; ` +
+        seen.legends.join(', ');
+  const fits = reach === null ? '' : `; ${reach.controls} controls, scrolls ${reach.scroll}px`;
+  console.log(
+    `${shot.padEnd(18)} ${name} @ ${where}: ${said}${fits}` +
+      wrong.map((what) => `\n                   !! ${what}`).join(''),
+  );
+  if (wrong.length > 0) {
+    fail(`${shot}: ${wrong.join('; ')}`);
+  }
+}
+
+/**
+ * signal-grey.png and signal-grey-phone-932.png: the sending console's device as the first stage
+ * whose display has lost its colour starts (core puzzles/signal.ts `greyFrom`) — in the window
+ * as it stands, the host's 1440×820, and as a large phone held sideways (`asLargePhone`). Each
+ * has to show the strip grey, its signs grey at GREY_SIGN_PX, ANZEIGE · FARBLOS lit and nothing
+ * of the colour, and the phone the device whole (`greyLook`). Nothing in a stage in colour, or
+ * once taken.
+ */
+async function captureGreyDisplay(sender) {
+  if (greyShot || sender.seen.view.puzzle?.grey !== true) {
+    return;
+  }
+  greyShot = true;
+  const held = sender.page.viewportSize();
+  await greyLook(sender, 'signal-grey.png', `${held?.width}×${held?.height}`, false);
+  await asLargePhone(sender.page, () =>
+    greyLook(sender, 'signal-grey-phone-932.png', 'a large phone sideways', true),
+  );
+}
+
 /** A stage of the pinned Signalkette: sent from the pinned console, the pinned sequence. */
 function checkStage(sending, pin, stage) {
   const { sends, sequence } = sending.seen.view.puzzle;
-  if (sends !== pin.sends || (sequence ?? []).join(' ') !== pin.sequence.join(' ')) {
+  const shown = (sequence ?? []).map(signSaid).join(' ');
+  const pinned = pin.sequence.map(signSaid).join(' ');
+  if (sends !== pin.sends || shown !== pinned) {
     differs(
       `Signalkette, stage ${stage}`,
-      `${(sequence ?? []).join(' ')} from console ${sends}`,
-      `${pin.sequence.join(' ')} from console ${pin.sends}`,
+      `${shown} from console ${sends}`,
+      `${pinned} from console ${pin.sends}`,
     );
   }
 }
@@ -6513,16 +6721,48 @@ async function walkMenuKeys(page) {
   }
 }
 
-/** The menu's sound off the page's probe (client world/menuSound.ts): its state, what played. */
+/**
+ * The menu's sound off the page's probe (client world/menuSound.ts): its state, what sounds — an
+ * element of the piece heard playing, not a pass laid — and what played.
+ */
 const menuSoundOf = (page) =>
   page.evaluate(
     () => globalThis.__escapelab?.menuSound ?? { state: '!! no probe', theme: false, played: {} },
   );
 
-/** What the log says of the menu's sound: its state, its theme and its hum. */
-function menuSoundText({ state, theme, hum }) {
-  const music = theme ? 'the theme playing' : 'no theme (awaiting its render?)';
-  return `${state}, ${music}, ${hum ? 'the hum' : 'no hum (awaiting its render?)'}`;
+/** The music's manifest as the page's server serves it (public/music/manifest.json); {} if none. */
+const musicListOf = (page) =>
+  page.evaluate(() =>
+    globalThis.fetch('/music/manifest.json').then(
+      (res) => (res.ok ? res.json() : {}),
+      () => ({}),
+    ),
+  );
+
+/** How long a piece listed may take to sound once wanted, ms: its file, a bar, its crossing. */
+const SOUND_WITHIN_MS = 8000;
+
+/** The menu's probe on `page` once `heard` holds of it, or as it stands after SOUND_WITHIN_MS. */
+async function menuSoundOnce(page, heard) {
+  const until = Date.now() + SOUND_WITHIN_MS;
+  let probe = await menuSoundOf(page);
+  while (!heard(probe) && Date.now() < until) {
+    await sleep(100);
+    probe = await menuSoundOf(page);
+  }
+  return probe;
+}
+
+/** What the log says of the menu's music: sounding, not rendered, or listed and never heard. */
+function themeText(theme, listed) {
+  if (theme) return 'the theme sounding';
+  return listed ? '!! the theme listed, never heard' : 'no theme (awaiting its render?)';
+}
+
+/** What the log says of the menu's sound: its state, its theme (`listed` or not) and its hum. */
+function menuSoundText({ state, theme, hum }, listed) {
+  const humSaid = hum ? 'the hum' : 'no hum (awaiting its render?)';
+  return `${state}, ${themeText(theme, listed)}, ${humSaid}`;
 }
 
 /** Whether the speaker's lamp is lit on `page`: the menu's sound waits for a gesture. */
@@ -6530,43 +6770,90 @@ const lampLit = async (page) => (await page.locator('.sound-toggle--waiting').co
 
 /**
  * The menu's sound before the first key and after it: waiting, the speaker's lamp lit, until a
- * key lets the browser's sound start — then playing, the lamp out; or the run fails.
+ * key lets the browser's sound start — then playing, the lamp out, and the theme sounding within
+ * SOUND_WITHIN_MS where the music's manifest (`list`) has it; or the run fails.
  */
-async function menuSoundAtFirstKey(page, press) {
+async function menuSoundAtFirstKey(page, press, list) {
   const before = await menuSoundOf(page);
   const litBefore = await lampLit(page);
   await press();
-  const after = await menuSoundOf(page);
+  const listed = list['menu-theme'] !== undefined;
+  const after = await menuSoundOnce(page, (probe) => !listed || probe.theme);
   const litAfter = await lampLit(page);
   console.log(
     `menu sound         before a key: ${before.state}, the speaker’s lamp ` +
-      `${litBefore ? 'lit' : '!! out'}; after it: ${menuSoundText(after)}, the lamp ` +
+      `${litBefore ? 'lit' : '!! out'}; after it: ${menuSoundText(after, listed)}, the lamp ` +
       (litAfter ? '!! still lit' : 'out'),
   );
   if (before.state !== 'waiting' || !litBefore || after.state !== 'playing' || litAfter) {
     fail(`menu sound: ${before.state} before the first key, ${after.state} after it`);
   }
+  heardWhereListed(after.theme, listed, 'the theme');
+}
+
+/** Fails where the music's manifest lists a piece (`listed`) the menu's sound never `heard`. */
+function heardWhereListed(heard, listed, what) {
+  if (listed && !heard) fail(`menu sound: ${what} is listed, and never sounded`);
 }
 
 /**
- * The lobby's sounds on the host's page — the theme kept at the lobby's weight (`lobby`, the
- * probe read there), the round's chime as it came up, the ready chirp as the guest said ready —
- * and the menu's sound gone once the run has started; or the run fails.
+ * Whether this browser plays the score's pieces — AAC in .m4a, as a keep cuts them — asked once,
+ * where the music's manifest (`list`) names a piece so kept: canPlayType's answer, said; none
+ * fails the run, for the game's music would be silent in it.
+ */
+async function checkPieceCodec(page, list) {
+  const pieces = Object.values(list).filter((entry) => entry?.file?.endsWith('.m4a'));
+  if (pieces.length === 0) {
+    console.log('music codec        no piece of the score kept yet: every recording an MP3');
+    return;
+  }
+  const answer = await page.evaluate(() =>
+    new globalThis.Audio().canPlayType('audio/mp4; codecs="mp4a.40.2"'),
+  );
+  console.log(
+    `music codec        ${pieces.length} pieces of the score as AAC in .m4a: canPlayType says ` +
+      (answer === '' ? '!! nothing' : `„${answer}"`),
+  );
+  if (answer === '') fail('music codec: this browser plays no AAC in MP4, the score’s pieces');
+}
+
+/**
+ * The menu's sound in the lobby on `page`, and whether the music's manifest (`list`) has the
+ * lobby's own piece (`listed`): read once that piece sounds where it is listed — a bar and its
+ * crossing after the doors close — else as it stands.
+ */
+async function lobbySoundOf(page, list) {
+  const listed = list.lobby !== undefined;
+  const probe = await menuSoundOnce(page, (heard) => !listed || heard.piece === 'lobby');
+  return { ...probe, listed };
+}
+
+/**
+ * The lobby's sounds on the host's page — the music kept in the lobby (`lobby`, read there by
+ * `lobbySoundOf`): its own piece of the score, sounding where the music's manifest lists it, or
+ * the theme at the lobby's weight where that awaits its render — the round's chime as it came up,
+ * the ready chirp as the guest said ready — and the menu's sound gone once the run has started;
+ * or the run fails.
  */
 async function menuSoundAfterStart(page, lobby) {
   const { state, played } = await menuSoundOf(page);
   const { opened = 0, ready = 0 } = played;
   const kept = keptInLobby(lobby);
   console.log(
-    `menu sound         in the lobby ${kept ? 'playing on at the lobby’s weight' : '!! not kept'}` +
+    `menu sound         in the lobby ${kept ? `playing ${lobbyMusic(lobby)}` : '!! not kept'}` +
       `, the round's chime ${opened}×, the ready chirp ${ready}×; the run started: ${state}`,
   );
   if (!kept || state !== 'off' || opened < 1 || ready < 1) {
     fail(`menu sound: ${lobby.state} in the lobby, ${state} in the run, ${opened}×, ${ready}×`);
   }
+  heardWhereListed(lobby.piece === 'lobby', lobby.listed, 'the lobby’s piece');
 }
 
-/** Whether the menu's sound played on in the lobby at its weight (`lobby`: the probe there). */
+/** What the lobby plays, as the log says it: its own piece, or the theme at its weight. */
+const lobbyMusic = (lobby) =>
+  lobby.piece === 'lobby' ? 'its own piece' : 'the theme at the lobby’s weight';
+
+/** Whether the menu's sound played on in the lobby (`lobby`: the probe there). */
 const keptInLobby = (lobby) => lobby.state === 'playing' && lobby.place === 'lobby';
 
 /** The end card's music off the page's probe (client world/endTheme.ts). */
@@ -6579,15 +6866,18 @@ const MENU_P95_MS = 16.8;
 /**
  * menu.png: the start screen as a game's menu over its living scene — the lit lab of the first
  * mission baked for the window and drifting, the title, the menu, the profile — walked by the
- * keys (`walkMenuKeys`); its quiet window, the scene drifting, has to keep the screen's pace
- * under SHOTS_SOFTWARE_GL (MENU_P95_MS) and the gate's allowance anyway; at 1280×720 it has to
- * fit as at 1440×820 (menu-1280.png), the scene baked anew for each.
+ * keys (`walkMenuKeys`), its music heard as the music's manifest has it; its quiet window, the
+ * scene drifting, has to keep the screen's pace under SHOTS_SOFTWARE_GL (MENU_P95_MS) and the
+ * gate's allowance anyway; at 1280×720 it has to fit as at 1440×820 (menu-1280.png), the scene
+ * baked anew for each. Returns the music's manifest, which the lobby's check reads too.
  */
 async function captureMenu(page) {
+  const list = await musicListOf(page);
   const scene = await sceneBaked(page, { w: SIZES[0].width, h: SIZES[0].height });
   await capture(page, 'menu.png');
   console.log(`menu.png           ${sceneText(scene)}`);
-  await menuSoundAtFirstKey(page, () => walkMenuKeys(page));
+  await menuSoundAtFirstKey(page, () => walkMenuKeys(page), list);
+  await checkPieceCodec(page, list);
   const look = await frameWindow(page, 'on the menu, its scene drifting', () => sleep(SAMPLE_MS));
   if (SOFTWARE_GL && look !== null && look.p95 > MENU_P95_MS) {
     fail(`menu: its window reached ${look.p95.toFixed(1)} ms p95, over ${MENU_P95_MS}`);
@@ -6599,6 +6889,7 @@ async function captureMenu(page) {
   await capture(page, 'menu-1280.png');
   await page.setViewportSize(SIZES[0]);
   await sceneBaked(page, { w: SIZES[0].width, h: SIZES[0].height });
+  return list;
 }
 
 /**
@@ -12268,11 +12559,12 @@ async function hostOpensRound() {
   const titleCameOn = (await host.locator('.menu h1.phosphor-title').count()) === 1;
   await host.getByPlaceholder('z. B. Anna').fill('Anna');
   await host.locator('.menu-item').first().waitFor({ timeout: 10_000 });
-  await inGroup('screens', () => captureMenu(host));
+  // The menu, its music as the music's manifest lists it (`captureMenu` returns the list).
+  const musicList = await inGroup('screens', () => captureMenu(host));
   await inGroup('screens', () => captureHistory(host, 'history.png'));
   await openMissionRound(host);
-  // The lobby keeps the menu's sound at its own weight (checked as the run starts).
-  const lobbySound = await inGroup('screens', () => menuSoundOf(host));
+  // The lobby's music, its own piece where it is listed (checked as the run starts).
+  const lobbySound = await inGroup('screens', () => lobbySoundOf(host, musicList));
   await host.locator('.room-code strong').waitFor({ timeout: 10_000 });
   const code = (await host.locator('.room-code strong').innerText()).trim();
   console.log('room code:', code, `(${MISSION})`);
@@ -12762,12 +13054,13 @@ async function zoomHeld(steady) {
 /**
  * What the run left out by its end, each said where its group is on: the figures' flinch, the
  * panel's fade and the crew celebrating (graphics), the partner never heard to one side (audio),
- * and the solved device's shot that came late (devices).
+ * the solved device's shot that came late and a display that never lost its colour (devices).
  */
 async function runLeftOut() {
   await inGroup('graphics', graphicsLeftOut);
   await inGroup('audio', sidesLeftOut);
   await inGroup('devices', solvedShotLeftOut);
+  await inGroup('devices', greyLeftOut);
 }
 
 /** figure-flinch.png, panel-close.png and figure-celebrate.png, where the run took none. */

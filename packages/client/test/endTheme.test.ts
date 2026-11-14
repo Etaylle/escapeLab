@@ -106,6 +106,23 @@ describe('the end card’s music', () => {
     expect(end.endThemeProbe()).toEqual({ asked: 'won', line: null, playing: null });
   });
 
+  it('plays a theme to its true end once, never round again, the bus free after it', async () => {
+    const { end, audio, turn } = await fresh({ 'end-won': { seconds: 40 } });
+    end.playEnding('won');
+    await fetchIn();
+    const theme = elements[1];
+    expect(theme?.loop).toBe(false);
+    vi.advanceTimersByTime((LOOKAHEAD + 10.6) * 1000);
+    expect(theme?.plays).toBe(1);
+    // It ends on its own — the score's endings end as written — and is let go, nothing after it.
+    lastContext().currentTime = 61;
+    theme?.fire('ended');
+    expect([theme?.src, audio.inUse().voice]).toEqual(['', 0]);
+    expect(turn.musicFrom(61)).toBe(61);
+    vi.advanceTimersByTime(60_000);
+    expect([elements.length, theme?.plays]).toEqual([2, 1]);
+  });
+
   it('plays the lost theme for a run lost, the sting alone while no theme is made', async () => {
     const lost = await fresh();
     lost.end.playEnding('lost');

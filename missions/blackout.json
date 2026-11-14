@@ -415,9 +415,11 @@
       "length": 4,
       "legend": true,
       "fleetingFrom": 3,
+      "greyFrom": 4,
       "hints": [
         "Frühschicht: Jedes Pult quittiert nach seiner eigenen Spalte der Legende. Verwechselt gibt es Alarm.",
-        "Haller: Ab Stufe 3 zeigt die Anzeige jedes Zeichen nur kurz. Erst mitschreiben, dann quittieren."
+        "Haller: Ab Stufe 3 zeigt die Anzeige jedes Zeichen nur kurz. Erst mitschreiben, dann quittieren.",
+        "Frühschicht: In der letzten Stufe ist die Anzeige farblos, nur das Muster bleibt. Die Farbe dazu steht in der Legende."
       ],
       "lights": ["SERVERRAUM"],
       "onSolved": [

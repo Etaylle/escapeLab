@@ -99,20 +99,20 @@ function captureOf(sourceId: string, part: string): Capture {
   return found;
 }
 
-describe('captures of Blackout’s sources, as their rules print', () => {
-  it('takes the legend at the Klemmbrett as rows „Zeile · Pult A · Muster · Pult B"', () => {
+describe('the Signalkette’s legend captured at Blackout’s Klemmbrett', () => {
+  it('takes the legend at the Klemmbrett as printed, both „Muster" one blank apart', () => {
     expect(shown(captureOf('klemmbrett', 'Legende'))).toEqual([
       'Klemmbrett · Legende',
-      'Zeile  Pult A  Muster    Pult B',
-      '1      rot     glatt     gelb',
-      '2      blau    Punkte    grün',
-      '3      grün    Streifen  rot',
-      '4      gelb    Ring      blau',
+      'Zeile Pult A Muster   Pult B Muster',
+      '1     rot    glatt    gelb   Ring',
+      '2     blau   Punkte   grün   Streifen',
+      '3     grün   Streifen rot    glatt',
+      '4     gelb   Ring     blau   Punkte',
     ]);
     expect(captureOf('klemmbrett', 'Legende').form).toBe('table');
   });
 
-  it('leaves out the printed legend’s second „Muster" only because Pult A’s column gives it', () => {
+  it('keeps Pult B’s „Muster": a grey sign’s pattern gives either console its row at once', () => {
     const station = stationOf(blackout, 'signalkette');
     const printed = station.manual
       .flatMap((section) => section.blocks)
@@ -121,12 +121,16 @@ describe('captures of Blackout’s sources, as their rules print', () => {
       throw new Error('the Signalkette prints no legend');
     }
     expect(printed.head).toEqual(['Zeile', 'Pult A', 'Muster', 'Pult B', 'Muster']);
-    const patterns = new Map(printed.rows.map(([, colour, pattern]) => [colour, pattern]));
-    for (const [, , , colour, pattern] of printed.rows) {
-      expect(patterns.get(colour), colour).toBe(pattern);
+    // Each line of the capture: the row, then each console's colour with its pattern.
+    const rows = captureOf('klemmbrett', 'Legende').lines.slice(1).map((line) => line.split(/ +/));
+    expect(rows).toEqual(printed.rows);
+    for (const pattern of ['glatt', 'Punkte', 'Streifen', 'Ring']) {
+      expect(rows.filter((row) => row[4] === pattern), pattern).toHaveLength(1);
     }
   });
+});
 
+describe('captures of Blackout’s sources, as their rules print', () => {
   it('takes the Notstrom’s rules in the Handbuch as numbered lines, word for word', () => {
     const capture = captureOf('buch-archiv', 'Schnittfolge');
     expect(capture.head).toBe('Handbuch · Schnittfolge');
@@ -261,6 +265,8 @@ describe('captures of the notes of the last shift', () => {
         'gibt es Alarm.',
       'Haller: Ab Stufe 3 zeigt die Anzeige jedes Zeichen nur kurz. Erst mitschreiben, dann ' +
         'quittieren.',
+      'Frühschicht: In der letzten Stufe ist die Anzeige farblos, nur das Muster bleibt. Die ' +
+        'Farbe dazu steht in der Legende.',
     ]);
     expect(capture.form).toBe('text');
   });
