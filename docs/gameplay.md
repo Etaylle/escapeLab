@@ -212,8 +212,7 @@ only wash out. The last shift's notes at each station say how its machine is lea
 instance's answer. Each station takes its module's defaults, but for the Zugangskontrolle's token
 device, which turns every 15 s, the module's shortest period: a practice waits less for an
 account. The menu's card, known by the hall's id, says „Jede Station zum Üben" over its title.
-The hall is
-made from the module registry (`core/test/hall.ts`): a module added there fails
+The hall is made from the module registry (`core/test/hall.ts`): a module added there fails
 `core/test/hall.test.ts` until the hall is written anew, with the walkthrough's plan, by
 `node --import tsx ../core/test/writeHall.ts` from `packages/server`.
 Every Systemcheck walkthrough plays it before its own run, a drill in a room of its own (group
