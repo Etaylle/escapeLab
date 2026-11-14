@@ -1,0 +1,145 @@
+{
+  "id": "cheremisinov",
+  "title": "Schicht C · Kammerklang",
+  "composers": [
+    "Sergey Cheremisinov",
+    "Lee Rosevere",
+    "Rafael Krux"
+  ],
+  "pieces": {
+    "menu-theme": {
+      "title": "Closer To You",
+      "author": "Sergey Cheremisinov",
+      "source": "https://freemusicarchive.org/music/Sergey_Cheremisinov/Charms/Sergey_Cheremisinov_-_Charms_-_01_Closer_To_You/",
+      "licence": "CC BY 4.0",
+      "attribution": "„Closer To You“ – Sergey Cheremisinov · https://freemusicarchive.org/music/Sergey_Cheremisinov/Charms/Sergey_Cheremisinov_-_Charms_-_01_Closer_To_You/ · Creative Commons Attribution 4.0 International: https://creativecommons.org/licenses/by/4.0/ · bearbeitet: Schnitt, Schleife, Pegel",
+      "file": "menu-theme.m4a",
+      "ms": 80550,
+      "startMs": 0,
+      "loudness": -15.74,
+      "gain": 0.6872,
+      "loop": {
+        "crossfade": {
+          "startMs": 3000,
+          "endMs": 80050,
+          "fadeMs": 5000
+        }
+      }
+    },
+    "lobby": {
+      "title": "Way To Silence",
+      "author": "Sergey Cheremisinov",
+      "source": "https://freemusicarchive.org/music/Sergey_Cheremisinov/way-to-silence/way-to-silence/",
+      "licence": "CC BY 4.0",
+      "attribution": "„Way To Silence“ – Sergey Cheremisinov · https://freemusicarchive.org/music/Sergey_Cheremisinov/way-to-silence/way-to-silence/ · Creative Commons Attribution 4.0 International: https://creativecommons.org/licenses/by/4.0/ · bearbeitet: Schnitt, Schleife, Pegel",
+      "file": "lobby.m4a",
+      "ms": 67560,
+      "startMs": 0,
+      "loudness": -19.16,
+      "gain": 1.019,
+      "loop": {
+        "crossfade": {
+          "startMs": 1040,
+          "endMs": 67060,
+          "fadeMs": 5000
+        }
+      }
+    },
+    "title": {
+      "title": "Amadines",
+      "author": "Sergey Cheremisinov",
+      "source": "https://freemusicarchive.org/music/Sergey_Cheremisinov/way-to-silence/amadines/",
+      "licence": "CC BY 4.0",
+      "attribution": "„Amadines“ – Sergey Cheremisinov · https://freemusicarchive.org/music/Sergey_Cheremisinov/way-to-silence/amadines/ · Creative Commons Attribution 4.0 International: https://creativecommons.org/licenses/by/4.0/ · bearbeitet: Schnitt, Schleife, Pegel",
+      "file": "title.m4a",
+      "ms": 42000,
+      "startMs": 35,
+      "loudness": -19.99,
+      "gain": 1.121,
+      "loop": null
+    },
+    "calm": {
+      "title": "Mindful Choice",
+      "author": "Sergey Cheremisinov",
+      "source": "https://freemusicarchive.org/music/Sergey_Cheremisinov/metamorphoses/mindful-choice/",
+      "licence": "CC BY 4.0",
+      "attribution": "„Mindful Choice“ – Sergey Cheremisinov · https://freemusicarchive.org/music/Sergey_Cheremisinov/metamorphoses/mindful-choice/ · Creative Commons Attribution 4.0 International: https://creativecommons.org/licenses/by/4.0/ · bearbeitet: Schnitt, Schleife, Pegel",
+      "file": "calm.m4a",
+      "ms": 72880,
+      "startMs": 0,
+      "loudness": -17.27,
+      "gain": 0.8193,
+      "loop": {
+        "crossfade": {
+          "startMs": 3000,
+          "endMs": 72380,
+          "fadeMs": 5000
+        }
+      }
+    },
+    "tense": {
+      "title": "Under Suspicion",
+      "author": "Lee Rosevere",
+      "source": "https://freemusicarchive.org/music/lee-rosevere/music-for-podcasts-serious/under-suspicion/",
+      "licence": "CC BY 4.0",
+      "attribution": "„Under Suspicion“ – Lee Rosevere · https://freemusicarchive.org/music/lee-rosevere/music-for-podcasts-serious/under-suspicion/ · Creative Commons Attribution 4.0 International: https://creativecommons.org/licenses/by/4.0/ · bearbeitet: Schnitt, Schleife, Pegel",
+      "file": "tense.m4a",
+      "ms": 66960,
+      "startMs": 0,
+      "loudness": -16.13,
+      "gain": 0.7189,
+      "loop": {
+        "crossfade": {
+          "startMs": 3000,
+          "endMs": 66460,
+          "fadeMs": 3000
+        }
+      }
+    },
+    "critical": {
+      "title": "Cornfield Chase",
+      "author": "Rafael Krux",
+      "source": "https://huggingface.co/datasets/Youmiel/FreePD-Data",
+      "licence": "CC0",
+      "attribution": "„Cornfield Chase“ – Rafael Krux · https://huggingface.co/datasets/Youmiel/FreePD-Data · CC0 1.0 Universal: https://creativecommons.org/publicdomain/zero/1.0/ · bearbeitet: Schnitt, Schleife, Pegel",
+      "file": "critical.m4a",
+      "ms": 67830,
+      "startMs": 0,
+      "loudness": -15.33,
+      "gain": 0.6552,
+      "loop": {
+        "crossfade": {
+          "startMs": 3000,
+          "endMs": 67330,
+          "fadeMs": 3000
+        }
+      }
+    },
+    "end-won": {
+      "title": "Limitless",
+      "author": "Sergey Cheremisinov",
+      "source": "https://freemusicarchive.org/music/Sergey_Cheremisinov/slow-light/limitless-1/",
+      "licence": "CC BY 4.0",
+      "attribution": "„Limitless“ – Sergey Cheremisinov · https://freemusicarchive.org/music/Sergey_Cheremisinov/slow-light/limitless-1/ · Creative Commons Attribution 4.0 International: https://creativecommons.org/licenses/by/4.0/ · bearbeitet: Schnitt, Schleife, Pegel",
+      "file": "end-won.m4a",
+      "ms": 40000,
+      "startMs": 52,
+      "loudness": -14.21,
+      "gain": 0.5764,
+      "loop": null
+    },
+    "end-lost": {
+      "title": "Last Moon Last Stars",
+      "author": "Sergey Cheremisinov",
+      "source": "https://freemusicarchive.org/music/Sergey_Cheremisinov/metamorphoses/last-moon-last-stars/",
+      "licence": "CC BY 4.0",
+      "attribution": "„Last Moon Last Stars“ – Sergey Cheremisinov · https://freemusicarchive.org/music/Sergey_Cheremisinov/metamorphoses/last-moon-last-stars/ · Creative Commons Attribution 4.0 International: https://creativecommons.org/licenses/by/4.0/ · bearbeitet: Schnitt, Schleife, Pegel",
+      "file": "end-lost.m4a",
+      "ms": 40000,
+      "startMs": 40,
+      "loudness": -9.75,
+      "gain": 0.3449,
+      "loop": null
+    }
+  }
+}
