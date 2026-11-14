@@ -3252,10 +3252,12 @@ async function kennwortOnPostgres(db: PrismaClient, cleo: TestClient): Promise<s
  * Cleo's account on Postgres, its Kennwort set (`kennwortOnPostgres`): a phone of hers — a pass the
  * database never saw — hears of a wrong Kennwort what a wrong number would hear, signs in with the
  * right one, finds the won tutorial in „Meine Einsätze", and signs out again: its way in gone,
- * the account whole.
+ * the account whole. Then a tablet of hers signs in, and a new Kennwort signs it out
+ * (`changedOnPostgres`).
  */
 async function signInOnPostgres(db: PrismaClient, lab: Lab): Promise<void> {
-  const number = await kennwortOnPostgres(db, lab.crew[0] ?? fail('no Cleo on Postgres'));
+  const cleo = lab.crew[0] ?? fail('no Cleo on Postgres');
+  const number = await kennwortOnPostgres(db, cleo);
   const phone = new TestClient('cleos phone', [], mintPass(), DATABASE_PORT);
   await phone.open();
   phone.send({ kind: 'sign-in', pass: phone.pass, login: number, password: 'nicht das Kennwort' });
@@ -3278,6 +3280,31 @@ async function signInOnPostgres(db: PrismaClient, lab: Lab): Promise<void> {
   assert(out.done === 'signed-out' && way === null, "the phone signed out, its way in gone");
   phone.close();
   console.log(`✓ on Postgres: a Kennwort minted ${number}, a phone signed in, found the run, out`);
+  await changedOnPostgres(db, cleo, number);
+}
+
+/**
+ * Cleo's tablet signs into her account on Postgres by the Ausweisnummer `number`, then Cleo sets a
+ * new Kennwort: the tablet's next ask finds it signed out, its way in kept under 64 zeros.
+ */
+async function changedOnPostgres(db: PrismaClient, cleo: TestClient, number: string) {
+  const tablet = new TestClient('cleos tablet', [], mintPass(), DATABASE_PORT);
+  await tablet.open();
+  tablet.send({ kind: 'sign-in', pass: tablet.pass, login: number, password: CLEOS_KENNWORT });
+  assert((await tablet.expect('signed in', isLogin, 10_000)).done === 'signed-in', 'tablet in');
+  const password = 'Kaltenbrunn 1987';
+  cleo.send({ kind: 'change-password', pass: cleo.pass, old: CLEOS_KENNWORT, password });
+  const changed = await cleo.expect('the Kennwort changed', isLogin, 10_000);
+  assert(changed.done === 'changed', 'Cleo changed her Kennwort');
+  tablet.send({ kind: 'my-runs', pass: tablet.pass });
+  const told = await tablet.expect('told it signed out', isLogin, 10_000);
+  const way = await db.identity.findUnique({
+    where: { provider_subject: { provider: 'pass', subject: tablet.pass.id } },
+  });
+  const parked = way?.secretHash === '0'.repeat(64);
+  assert(told.done === 'signed-out' && parked, 'the tablet signed out, its way in parked');
+  tablet.close();
+  console.log('✓ on Postgres: a new Kennwort signed the tablet out, told on its next ask');
 }
 
 /** The colour Ida clicks just before the server goes down (`colourAtTheEnd`). */
@@ -3434,6 +3461,7 @@ console.log(
     'start script passing SIGTERM on to the server; and, where TEST_DATABASE_URL names a ' +
     'Postgres, the server migrating it itself over a single URL, a won tutorial landing there ' +
     'by account, a phone signing into the account with its Ausweisnummer and Kennwort, a ' +
+    'new Kennwort signing a tablet of the account out, a ' +
     'colour clicked just before SIGTERM kept, and the server started as ' +
     'Render\'s Start Command starts it migrating the database itself before it listens, a ' +
     'migration broken off stopping its start. 🎉',
