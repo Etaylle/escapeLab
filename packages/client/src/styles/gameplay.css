@@ -330,9 +330,10 @@
 /*
  * A phone held sideways folds the bar into one row (styles/pwa.css): the whole line has no room
  * there, so the row keeps the own job alone as a chip beside the goal, cut short where it runs
- * out.
+ * out. The line is one of the bar's lines too: this outweighs the row's `.stage-sub` rule
+ * whichever stylesheet comes first.
  */
-.stage-row .stage-hands {
+.stage-row .stage-sub.stage-hands {
   display: none;
 }
 

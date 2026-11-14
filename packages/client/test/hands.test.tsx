@@ -186,7 +186,7 @@ describe('the hands on the objective bar', () => {
     expect(html).toContain('<span class="hands-chip">Cleo: Klemmbrett</span>');
     expect(html.indexOf('hands-chip')).toBeLessThan(html.indexOf('probe-crew'));
     const css = readFileSync(new URL('../src/styles/gameplay.css', import.meta.url), 'utf8');
-    expect(css).toMatch(/\.stage-row \.stage-hands \{\s*display: none;/);
+    expect(css).toMatch(/\.stage-row \.stage-sub\.stage-hands \{\s*display: none;/);
   });
 
   it('give way to an open device, whose Laborkennung row lies over them, keeping their place', () => {
