@@ -1,4 +1,5 @@
 import { vi } from 'vitest';
+import type { VoiceManifest } from '../src/world/radioVoice.js';
 import { MUSIC_IDS, SFX_IDS, type SampleEntry } from '../src/world/samples.js';
 
 /**
@@ -104,6 +105,20 @@ const LISTS: Readonly<Record<string, readonly string[]>> = {
   '/sfx/manifest.json': SFX_IDS,
   '/music/manifest.json': MUSIC_IDS,
 };
+
+/**
+ * Serves the lab's recordings (`serveSamples`) and the radio's voice: its list, `manifest`, and
+ * each of its recordings as bytes the fake contexts decode. Every address of the voice the page
+ * asks for goes into `asked`, in order.
+ */
+export function serveVoice(manifest: VoiceManifest, asked: string[]): void {
+  serveSamples({}, (url: string) => {
+    asked.push(url);
+    const json = (): Promise<VoiceManifest> => Promise.resolve(manifest);
+    const arrayBuffer = (): Promise<ArrayBuffer> => Promise.resolve(new ArrayBuffer(8));
+    return Promise.resolve({ ok: true, status: 200, json, arrayBuffer });
+  });
+}
 
 /** The samples module afresh, every recording served and every effect, loop and bed loaded. */
 export async function loadedSamples(served: Readonly<Record<string, Served>> = {}) {

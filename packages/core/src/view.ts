@@ -21,8 +21,9 @@ import type {
   Mission,
   RoomKind,
 } from './mission.js';
+import { castFor, type Cast } from './cast.js';
 import { noteKey } from './notes.js';
-import { pickLine } from './radio.js';
+import { pickLine, shownText } from './radio.js';
 import {
   CREW_COLORS,
   type Away,
@@ -194,10 +195,17 @@ export interface PlayerView extends RunShape {
   intro?: IntroView;
   /**
    * In the lobby, the operator's Funkprobe the crew hears once every seat is ready and the host
-   * can start: one of the mission's `radio.lobby` texts, the next each time the room comes back
-   * to its lobby. Left out in a run, and where the mission has none
+   * can start: one of the mission's `radio.lobby` texts, as shown, the next each time the room
+   * comes back to its lobby; said by the operator of `cast`. Left out in a run, and where the
+   * mission has none
    */
   radioCheck?: string;
+  /**
+   * Who speaks on the radio and over the loudspeakers this night, by the persons' ids (cast.ts
+   * `castFor`): in the lobby the next run's — whose operator says the Funkprobe — in a run its
+   * own, whose plant's voice says the intro's announcement. Never a voice or how it is made.
+   */
+  cast: Cast;
 }
 
 /** A seat whose line is down that a new device asks to take over, by its name. */
@@ -597,7 +605,8 @@ function introOf(state: GameState): Pick<PlayerView, 'intro'> {
     return {};
   }
   const { place = '', time = '', pa, lightsSec } = intro;
-  return { intro: { place, time, pa: [...pa], lightsSec, done: [...state.introDone] } };
+  const shown = pa.map(shownText);
+  return { intro: { place, time, pa: shown, lightsSec, done: [...state.introDone] } };
 }
 
 /** The manual objects `playerId` stands at, in map order. */
@@ -1111,6 +1120,8 @@ export interface SpectatorView extends RunShape {
   /** since when the run stands frozen for the server's maintenance, as the players see it */
   pausedAt: number | null;
   events: RunEvent[];
+  /** who speaks on the radio this night, as the players' views name them */
+  cast: Cast;
   /** why the run was called off, as the players see it; left out for any other run */
   calledOff?: string;
   grade: Grade | null;
@@ -1225,6 +1236,7 @@ export function viewForSpectator(state: GameState): SpectatorView {
     away: awayOf(state),
     pausedAt: state.paused?.since ?? null,
     events: [...state.events],
+    cast: castFor(state),
     ...calledOffOf(state),
     grade: gradeFor(state),
     players: state.players.map((p) => ({
@@ -1321,12 +1333,13 @@ export function viewFor(state: GameState, playerId: string): PlayerView {
     ...(state.mission.next === undefined ? {} : { nextMissionId: state.mission.next }),
     ...introOf(state),
     ...radioCheckOf(state),
+    cast: castFor(state),
   };
 }
 
 /**
- * The lobby's Funkprobe (`radio.lobby`): before the room's first run its first text by the
- * line's place, and each time the room comes back to its lobby the next — no run's seed is
+ * The lobby's Funkprobe (`radio.lobby`), as shown: before the room's first run its first text by
+ * the line's place, and each time the room comes back to its lobby the next — no run's seed is
  * drawn yet, the runs so far turn it (radio.ts `pickLine`). Left out in a run, and where the
  * mission has none.
  */
@@ -1335,7 +1348,7 @@ function radioCheckOf(state: GameState): Pick<PlayerView, 'radioCheck'> {
   if (state.phase !== 'lobby' || line === undefined) {
     return {};
   }
-  return { radioCheck: pickLine(line, 0, 'lobby', state.runs) };
+  return { radioCheck: shownText(pickLine(line, 0, 'lobby', state.runs)) };
 }
 
 /**

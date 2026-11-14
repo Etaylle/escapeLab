@@ -119,6 +119,8 @@ describe('a line dropping in a run', () => {
       kind: 'away',
       label: 'Cems Leitung ist weg.',
       seconds: null,
+      // Said by the Leitstelle on duty: Helmut, the one voice kept.
+      speaker: { role: 'operator', person: 'helmut' },
     });
     expect(applyAction(gone, lineDrops('p3', DROP_AT + 5000))).toEqual(gone);
     const toMenu: Action = { type: 'player-disconnected', playerId: 'p2', at: DROP_AT, menu: true };

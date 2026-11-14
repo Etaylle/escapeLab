@@ -5,7 +5,7 @@ import type { Edgework } from './edgework.js';
 import type { Mission } from './mission.js';
 import type { PuzzleState } from './puzzles/index.js';
 import type { RelayState } from './puzzles/relay.js';
-import type { RadioMoment } from './radio.js';
+import type { RadioMoment, Speaker } from './radio.js';
 
 export type Phase = 'lobby' | 'playing' | 'won' | 'lost';
 
@@ -47,6 +47,13 @@ export interface RunEvent {
    * lines of a run kept before it was noted
    */
   moment?: RadioMoment;
+  /**
+   * on a line heard in the run: who says it — the role its moment wants and the person of the
+   * night's cast filling it (cast.ts `speakerAt`), and on mission control's word that a crew member
+   * is gone the Leitstelle on duty (`deskAt`); left out on every other line, and on the lines of a
+   * run kept before the cast
+   */
+  speaker?: Speaker;
 }
 
 /**
@@ -232,6 +239,13 @@ export interface GameState {
   daily: DailyDay | null;
   /** runs started in this room so far: the n of the next one */
   runs: number;
+  /**
+   * What each night's cast is drawn from (cast.ts `castFor`): run n (from 0) is staffed by
+   * castOf(castSeed + n). A room pinned to a seed has that seed here, so that a run's cast follows
+   * its seed; any other room one the server drew as it opened the room — known in the lobby, so
+   * that the Funkprobe is said by the operator who then has the run.
+   */
+  castSeed: number;
   /** serial, lamps and cells of this run; rolled from the seed by start-mission */
   edgework: Edgework | null;
   /**
@@ -362,14 +376,20 @@ export interface GameState {
   clockCalls: number;
 }
 
+/** What a room's nights are staffed from: the seed `drawn` by the server, else the pinned one. */
+const castSeedOf = (roomSeed: number | null, drawn: number | undefined): number =>
+  drawn ?? roomSeed ?? 0;
+
 /**
  * A fresh room for `mission` — already scaled to `difficulty` — its runs pinned to `roomSeed`
- * where a tester asked for one.
+ * where a tester asked for one, its nights staffed from `castSeed`, which the server draws for a
+ * room pinned to nothing (`GameState.castSeed`).
  */
 export function initialState(
   mission: Mission,
   roomSeed: number | null = null,
   difficulty: Difficulty = 'normal',
+  castSeed?: number,
 ): GameState {
   return {
     phase: 'lobby',
@@ -384,6 +404,7 @@ export function initialState(
     dailyOn: false,
     daily: null,
     runs: 0,
+    castSeed: castSeedOf(roomSeed, castSeed),
     edgework: null,
     pressedPlates: [],
     occupiedPanels: [],

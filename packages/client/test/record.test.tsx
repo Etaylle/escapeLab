@@ -1,8 +1,17 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { parseMission, radioLines, variantsOf, type Line, type Mission } from '@escapelab/core';
-import { voiceId } from '../scripts/voice.js';
+import {
+  sayersOf,
+  parseMission,
+  radioLines,
+  shownText,
+  variantsOf,
+  type Line,
+  type Mission,
+  type RadioLine,
+} from '@escapelab/core';
+import { lineId, voiceId } from '../scripts/voice.js';
 import { busy, openDesk, step, type Desk, type DeskEvent, type Take } from '../src/record/desk.js';
 import {
   MAX_UPLOAD_BYTES,
@@ -33,7 +42,7 @@ const byId = (id: string): Mission => {
 const blackout = byId('blackout');
 const systemcheck = byId('systemcheck');
 
-/** The ids of every line, as the voice script names its recordings. */
+/** What names every line's words in the ids of its recordings, as the voice script names them. */
 const ids = new Map(
   missions.flatMap((m) => radioLines(m)).map((line) => [line.text, voiceId(line.text)] as const),
 );
@@ -43,42 +52,58 @@ const first = (line: Line | undefined): string => variantsOf(line ?? '')[0] ?? '
 const START = first(blackout.radio.start);
 const NUDGE = first(blackout.puzzles[0]?.nudges[0]);
 const SECOND = first(blackout.puzzles[0]?.nudges[1]);
+/** Helmut's recordings of the start and two nudges: the Leitstelle's, he the one in service. */
+const HELMUT = { role: 'operator', person: 'helmut', missions: ['blackout'] } as const;
 const MANIFEST: VoiceManifest = {
   lines: {
-    [voiceId(START)]: {
+    [lineId('helmut', START)]: {
+      ...HELMUT,
       text: START,
       ms: 9500,
-      missions: ['blackout'],
-      speaker: 'operator',
+      moment: 'start',
       opens: true,
-      file: `${voiceId(START)}.m4a`,
+      file: `${lineId('helmut', START)}.m4a`,
     },
-    [voiceId(NUDGE)]: {
+    [lineId('helmut', NUDGE)]: {
+      ...HELMUT,
       text: NUDGE,
       ms: 4400,
-      missions: ['blackout'],
-      speaker: 'operator',
+      moment: 'nudge',
       source: 'human',
-      file: `${voiceId(NUDGE)}.m4a`,
+      file: `${lineId('helmut', NUDGE)}.m4a`,
     },
-    [voiceId(SECOND)]: {
+    [lineId('helmut', SECOND)]: {
+      ...HELMUT,
       text: SECOND,
       ms: 5100,
-      missions: ['blackout'],
-      speaker: 'operator',
+      moment: 'nudge',
       source: 'upload',
-      file: `${voiceId(SECOND)}.mp3`,
+      file: `${lineId('helmut', SECOND)}.mp3`,
     },
   },
 };
+
+/** Who says `line` (core cast.ts `sayersOf`): Helmut at the desk and for the lead, the plant. */
+const sayerOf = (line: RadioLine) => sayersOf(line.role)[0];
 
 describe('the lines the page offers', () => {
   it('are every line of the missions, in their order and each mission’s run order', () => {
     const lines = recordLines([systemcheck, blackout], MANIFEST, ids);
     const texts = [...radioLines(systemcheck), ...radioLines(blackout)].map((line) => line.text);
     expect(lines.map((line) => line.text)).toEqual(texts);
-    expect(lines.map((line) => line.id)).toEqual(texts.map(voiceId));
+    const said = [...radioLines(systemcheck), ...radioLines(blackout)];
+    expect(lines.map((line) => line.id)).toEqual(
+      said.map((line) => lineId(sayerOf(line)?.id ?? '', line.text)),
+    );
     expect(lines[0]).toMatchObject({ when: 'start', station: null, missions: [systemcheck.title] });
+    // Each by whoever says it: the plant's voice, the Leitstelle on duty — and the
+    // Schichtleitung's by the Leitstelle too, while it has no voice.
+    const names = new Set(lines.map((line) => `${line.when}:${line.name}`));
+    expect(names).toContain('pa:Durchsage');
+    expect(names).toContain('start:Helmut');
+    expect(names).toContain('clock:Helmut');
+    expect(names).toContain('lost:Helmut');
+    expect([...names].filter((name) => name.endsWith(':Mila'))).toEqual([]);
   });
 
   it('say of each where it comes over the air and what recording it has, in which file', () => {
@@ -88,8 +113,9 @@ describe('the lines the page offers', () => {
     expect(pa).toHaveLength(5);
     expect(lines.slice(0, pa.length)).toEqual(
       pa.map((text) => ({
-        id: voiceId(text),
+        id: lineId('anlage', text),
         text,
+        name: 'Durchsage',
         missions: [blackout.title],
         when: 'pa',
         station: null,
@@ -97,7 +123,9 @@ describe('the lines the page offers', () => {
       })),
     );
     // Every text of a line is a line to record: the start's three, in their order.
-    const texts = (line: Line | undefined): readonly string[] => variantsOf(line ?? '');
+    // As the page shows them: a line's audio tags are its recording's alone.
+    const texts = (line: Line | undefined): readonly string[] =>
+      variantsOf(line ?? '').map(shownText);
     const of = (when: string): string[] =>
       lines.filter((line) => line.when === when).map((line) => line.text);
     expect(of('start')).toEqual(texts(blackout.radio.start));
@@ -105,17 +133,19 @@ describe('the lines the page offers', () => {
     const [start, nudge, second] = [START, NUDGE, SECOND].map(byText);
     const solved = byText(first(blackout.puzzles[0]?.onSolved));
     expect(start).toEqual({
-      id: voiceId(START),
+      id: lineId('helmut', START),
       text: START,
+      name: 'Helmut',
       missions: [blackout.title],
       when: 'start',
       station: null,
-      recording: { ms: 9500, source: 'synthetic', file: `${voiceId(START)}.m4a` },
+      recording: { ms: 9500, source: 'synthetic', file: `${lineId('helmut', START)}.m4a` },
     });
     expect(nudge).toMatchObject({ text: NUDGE, when: 'nudge', station: 'Notlicht' });
-    const human = { ms: 4400, source: 'human', file: `${voiceId(NUDGE)}.m4a` };
+    const human = { ms: 4400, source: 'human', file: `${lineId('helmut', NUDGE)}.m4a` };
     expect(nudge?.recording).toEqual(human);
-    expect(second?.recording).toMatchObject({ source: 'upload', file: `${voiceId(SECOND)}.mp3` });
+    const upload = { source: 'upload', file: `${lineId('helmut', SECOND)}.mp3` };
+    expect(second?.recording).toMatchObject(upload);
     expect(solved).toMatchObject({ when: 'solved', station: 'Notlicht', recording: null });
     // The escape, then the loudspeakers' message as an emergency starts, then the operator's
     // answers to the run, the last word on a run called off the last of them, and the lobby's
@@ -137,20 +167,22 @@ describe('the lines the page offers', () => {
     expect(lines).toHaveLength(radioLines(blackout).length);
     expect(lines[0]?.missions).toEqual([blackout.title, 'Blackout, noch einmal']);
   });
+});
 
-  it('are named as the voice script names their recordings, in the browser too', async () => {
+describe('the page, by its address and its recordings', () => {
+  it('names a line as the voice script names its recordings, in the browser too', async () => {
     const texts = [START, NUDGE, 'abc'];
     const named = await voiceIds(texts);
     expect([...named.values()]).toEqual(texts.map(voiceId));
     expect(named.get('abc')).toBe('a9993e364706');
   });
 
-  it('play from the file their entry names, past the browser’s copy', () => {
+  it('plays a recording from the file its entry names, past the browser’s copy', () => {
     const mp3: Recording = { ms: 1, source: 'upload', file: 'abc.mp3' };
     expect(recordingUrl(mp3, 42)).toBe('/voice/abc.mp3?t=42');
   });
 
-  it('open at /record, and only there', () => {
+  it('opens at /record, and only there', () => {
     expect(opensRecording('/record')).toBe(true);
     expect(opensRecording('/record/')).toBe(true);
     expect(opensRecording('/')).toBe(false);
@@ -234,6 +266,7 @@ const take = (ms = 4200): Take => ({ wav: new Blob(['wav']), url: 'blob:take', m
 const lineOf = (id: string, text: string, said: Partial<RecordLine>): RecordLine => ({
   id,
   text,
+  name: 'Helmut',
   missions: ['Blackout im Labor'],
   when: 'solved',
   station: null,
@@ -394,7 +427,8 @@ describe('the page', () => {
     const html = render(fresh());
     expect(html).toContain('FUNKSPRUCH 1 VON 3');
     expect(html).toContain('<blockquote class="record-line">Reaktor läuft.</blockquote>');
-    expect(html).toContain('Notausgang');
+    // Who says it, before where it comes over the air.
+    expect(html).toContain('Helmut · Notausgang');
     expect(html).toContain('Bisher: synthetisch, 1,4 s · Kennung aaaaaaaaaaaa');
     expect(controls(html)).toEqual({
       'Text kopieren': true,
@@ -408,7 +442,7 @@ describe('the page', () => {
 
   it('offers „Aufnehmen" for a line without a recording, and nothing to play', () => {
     const html = render({ ...fresh(), index: 1 });
-    expect(html).toContain('Gelöst · Signalprobe');
+    expect(html).toContain('Helmut · Gelöst · Signalprobe');
     expect(html).toContain('Bisher keine Aufnahme');
     expect(controls(html)).toMatchObject({ Aufnehmen: true, Anhören: false, Speichern: false });
   });
@@ -448,6 +482,15 @@ describe('the page', () => {
     expect(html).toContain('2 von 3 ersetzt');
   });
 
+  it('says so where there are no lines, and writes seconds the German way', () => {
+    const empty: Desk = { lines: [], index: 0, phase: { kind: 'idle' }, copy: 'idle' };
+    expect(render(empty)).toContain('Keine Funksprüche gefunden.');
+    expect(seconds(4250)).toBe('4,3 s');
+    expect(seconds(-20)).toBe('0,0 s');
+  });
+});
+
+describe('the page while a take is made', () => {
   it('while rolling, offers nothing but „Stopp" and counts the seconds', () => {
     const desk = run(fresh(), { kind: 'record' }, { kind: 'rolling', at: 1000 });
     const html = render(desk, 3500);
@@ -488,12 +531,5 @@ describe('the page', () => {
     expect(render(failed)).toContain('role="status">Kein Mikrofon.</p>');
     expect(phaseText({ kind: 'processing' }, 0)).toBe('Stille an den Enden wird geschnitten …');
     expect(phaseText({ kind: 'arming' }, 0)).toBe('Mikrofon wird geöffnet …');
-  });
-
-  it('says so where there are no lines, and writes seconds the German way', () => {
-    const empty: Desk = { lines: [], index: 0, phase: { kind: 'idle' }, copy: 'idle' };
-    expect(render(empty)).toContain('Keine Funksprüche gefunden.');
-    expect(seconds(4250)).toBe('4,3 s');
-    expect(seconds(-20)).toBe('0,0 s');
   });
 });

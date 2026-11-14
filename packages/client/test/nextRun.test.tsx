@@ -19,6 +19,7 @@ function wonTutorial(parts: Partial<PlayerView> = {}): PlayerView {
     nextMissionId: 'blackout',
     difficulty: 'normal',
     storyText: 'Alle Systeme online.',
+    cast: { pa: 'anlage', operator: 'helmut', lead: null },
     crewSize: { min: 2, max: 2 },
     chat: [],
     you: ANNA,

@@ -1,0 +1,35 @@
+{
+  "pa": [
+    {
+      "id": "anlage",
+      "name": "Durchsage",
+      "character": "Die Lautsprecher der Anlage in Trakt C: Uhrzeit, Lasten und Störungen, bei Tag und Nacht in derselben Stimme."
+    }
+  ],
+  "operator": [
+    {
+      "id": "helmut",
+      "name": "Helmut",
+      "character": "Dienstältester Disponent der Leitstelle, seit über zwanzig Jahren im Nachtdienst. Spricht tief und ruhig und sagt nichts zweimal.",
+      "voiceId": "g1jpii0iyvtRs8fqXsd1",
+      "model": "eleven_v4"
+    },
+    {
+      "id": "laura",
+      "name": "Laura",
+      "character": "Kam aus der Netzwarte des Kraftwerks in die Leitstelle. Spricht ruhig und gleichmäßig, wird nie laut und zählt lieber mit, als zu raten."
+    },
+    {
+      "id": "ben",
+      "name": "Ben",
+      "character": "Jüngster Disponent der Leitstelle, seit dem Frühjahr im Nachtdienst. Spricht locker und schnell, wie unter Kollegen am Funk."
+    }
+  ],
+  "lead": [
+    {
+      "id": "mila",
+      "name": "Mila",
+      "character": "Schichtleiterin der Nacht, jung für den Posten und sich ihrer Sache sicher. Meldet sich auf dem Funk erst, wenn die Zeit knapp wird oder eine Schicht verloren ist, dann kurz und bestimmt."
+    }
+  ]
+}

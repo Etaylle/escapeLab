@@ -3,20 +3,23 @@ import { paSchedule } from './intro/sequence.js';
 import {
   clipOf,
   lineClip,
+  lineKey,
   preloadLines,
   recordedMs,
   releaseLine,
   SPEECH_PEAK,
   voiceReady,
   type Clip,
+  type VoiceLine,
 } from './radioVoice.js';
 
 /**
- * The lab's loudspeakers: the plant's announcement system (scripts/voice.ts, its own voice),
- * recorded with mission control's lines into public/voice/. Not a handset but a horn on a wall:
- * a wider band, 300 Hz to 5 kHz, each edge second order — no squelch, no static, no shaper —
- * into the loudspeakers' bus at the Funk volume (mix.ts `announce`), whose send the room the
- * player stands in answers with its own impulse response (reverb.ts); nothing ducks under it.
+ * The lab's loudspeakers: the plant's announcement system (scripts/voice.ts, the cast's voice
+ * for the loudspeakers), recorded with the radio's lines into public/voice/. Not a handset but a
+ * horn on a wall: a wider band, 300 Hz to 5 kHz, each edge second order — no squelch, no
+ * static, no shaper — into the loudspeakers' bus at the Funk volume (mix.ts `announce`), whose
+ * send the room the player stands in answers with its own impulse response (reverb.ts); nothing
+ * ducks under it.
  * While an intro keeps the power on they make the shift's announcement (intro/sequence.ts):
  * each line comes as its moment on the sequence's clock comes (its place from `paSchedule`); a
  * line without a recording ready is left out, its subtitle still shown. When the lights fail the
@@ -128,14 +131,14 @@ export function dropOut(gate: AudioParam, at: number, seconds: number): void {
 
 /** The line on the loudspeakers: what it says, when it ends (audio time), how it breaks off. */
 interface Speaking {
-  readonly text: string;
+  readonly line: VoiceLine;
   readonly end: number;
   readonly stop: (at: number) => void;
 }
 
-/** An announcement under way on this screen. */
+/** An announcement under way on this screen: its lines, each said by the plant's voice. */
 interface Announcement {
-  readonly lines: readonly string[];
+  readonly lines: readonly VoiceLine[];
   timers: ReturnType<typeof setTimeout>[];
   speaking: Speaking | null;
   lastLine: string | null;
@@ -147,7 +150,7 @@ let current: Announcement | null = null;
 
 /** A message asked of the loudspeakers (`announce`), as it was asked. */
 interface Ask {
-  readonly text: string;
+  readonly line: VoiceLine;
 }
 
 /**
@@ -161,12 +164,12 @@ const weak: { speaking: Speaking | null; asked: Ask | null; said: number } = {
 };
 
 /**
- * Starts the announcement `lines` on a sequence that began at `since` (epoch ms): once the voice
- * manifest is here, every line is decoded (radioVoice.ts `preloadLines`) and put in its place on
- * the sequence's clock by its length, and each speaks as its moment comes, then is let go. One
- * already under way stops.
+ * Starts the announcement `lines` — each said by the plant's voice of the night's cast — on a
+ * sequence that began at `since` (epoch ms): once the voice manifest is here, every line is
+ * decoded (radioVoice.ts `preloadLines`) and put in its place on the sequence's clock by its
+ * length, and each speaks as its moment comes, then is let go. One already under way stops.
  */
-export function startAnnouncement(lines: readonly string[], since: number): void {
+export function startAnnouncement(lines: readonly VoiceLine[], since: number): void {
   stopAnnouncement();
   const run: Announcement = {
     lines,
@@ -180,26 +183,26 @@ export function startAnnouncement(lines: readonly string[], since: number): void
   void voiceReady().then(() => {
     if (current !== run) return;
     preloadLines(lines);
-    const schedule = paSchedule(lines.map((text) => ({ text, ms: recordedMs(text) })));
-    for (const line of schedule) {
-      const wait = since + line.at - Date.now();
+    const schedule = paSchedule(lines.map((line) => ({ text: line.text, ms: recordedMs(line) })));
+    for (const [i, line] of lines.entries()) {
+      const wait = since + (schedule[i]?.at ?? 0) - Date.now();
       if (wait >= -LATE_MS) {
-        run.timers.push(setTimeout(() => sayOver(run, line.text), Math.max(0, wait)));
+        run.timers.push(setTimeout(() => sayOver(run, line), Math.max(0, wait)));
       }
     }
   });
 }
 
-/** The line `text` over the loudspeakers, now, where its recording is ready and sound plays. */
-function sayOver(run: Announcement, text: string): void {
+/** `line` over the loudspeakers, now, where its recording is ready and sound plays. */
+function sayOver(run: Announcement, line: VoiceLine): void {
   if (current !== run || run.cut) return;
   try {
-    run.lastLine = text;
-    const clip = clipOf(text);
+    run.lastLine = line.text;
+    const clip = clipOf(line);
     const engine = playingEngine();
     if (clip === null || engine === null) return;
     run.speaking?.stop(engine.ctx.currentTime);
-    run.speaking = speak(engine, clip, text, paChain(engine.ctx, engine.announce, PA_LEVEL));
+    run.speaking = speak(engine, clip, line, paChain(engine.ctx, engine.announce, PA_LEVEL));
     run.played += 1;
   } catch {
     // Deliberately silent: the subtitle shows the line as well.
@@ -211,7 +214,7 @@ function sayOver(run: Announcement, text: string): void {
  * on — the emergency power's dropouts on its gate, where it has one; the chain goes as the line
  * ends, the room's answer ringing on in the reverb.
  */
-function speak(engine: Engine, clip: Clip, text: string, pa: PaChain | WeakChain): Speaking {
+function speak(engine: Engine, clip: Clip, line: VoiceLine, pa: PaChain | WeakChain): Speaking {
   const { ctx } = engine;
   const speech = ctx.createBufferSource();
   speech.buffer = clip.buffer;
@@ -221,13 +224,13 @@ function speak(engine: Engine, clip: Clip, text: string, pa: PaChain | WeakChain
   speech.start(at);
   speech.addEventListener('ended', () => {
     pa.out.disconnect();
-    releaseLine(text);
+    releaseLine(line);
   });
   const stop = (when: number): void => {
     pa.out.gain.setTargetAtTime(0, when, CUT_TAU);
     speech.stop(when + CUT_TAU * 5);
   };
-  return { text, end: at + clip.buffer.duration, stop };
+  return { line, end: at + clip.buffer.duration, stop };
 }
 
 /**
@@ -247,7 +250,7 @@ export function cutAnnouncement(): void {
     // Deliberately silent: the line ends on its own.
   }
   run.speaking = null;
-  for (const text of run.lines) releaseLine(text);
+  for (const line of run.lines) releaseLine(line);
 }
 
 /** The screen is gone: the announcement breaks off and is forgotten. */
@@ -257,20 +260,20 @@ export function stopAnnouncement(): void {
 }
 
 /**
- * The plant's message `text` over the loudspeakers on their emergency power — now where it is
+ * The plant's message `line` over the loudspeakers on their emergency power — now where it is
  * decoded, else as soon as it is — cutting short one they still say; let go once said. Resolves
  * as it sounds, with how long it speaks, ms, by its recording; with null where it never does — it
  * has no recording, nothing can play, its recording failed, or a message asked for after it or
  * the screen going (`stopAnnounce`) made it moot — and then nothing sounds: the loudspeakers
  * have no chirp.
  */
-export function announce(text: string): Promise<number | null> {
+export function announce(line: VoiceLine): Promise<number | null> {
   try {
     const engine = playingEngine();
-    if (engine === null || recordedMs(text) === null) return Promise.resolve(null);
-    const ask: Ask = { text };
+    if (engine === null || recordedMs(line) === null) return Promise.resolve(null);
+    const ask: Ask = { line };
     weak.asked = ask;
-    return lineClip(text)
+    return lineClip(line)
       .then((clip) => (clip === null ? null : sayAsked(engine, ask, clip)))
       .catch(() => null);
   } catch {
@@ -286,11 +289,12 @@ export function announce(text: string): Promise<number | null> {
  */
 function sayAsked(engine: Engine, ask: Ask, clip: Clip): number | null {
   if (weak.asked !== ask) {
-    if (weak.asked?.text !== ask.text) releaseLine(ask.text);
+    const same = weak.asked !== null && lineKey(weak.asked.line) === lineKey(ask.line);
+    if (!same) releaseLine(ask.line);
     return null;
   }
   weak.speaking?.stop(engine.ctx.currentTime);
-  weak.speaking = speak(engine, clip, ask.text, weakChain(engine.ctx, engine.announce, PA_LEVEL));
+  weak.speaking = speak(engine, clip, ask.line, weakChain(engine.ctx, engine.announce, PA_LEVEL));
   weak.said += 1;
   return Math.round(clip.buffer.duration * 1000);
 }

@@ -110,8 +110,9 @@ describe('a crew member away from a run', () => {
     ]);
     expect(view.pausedAt).toBeNull();
     const said = view.events.filter((event) => event.kind === 'away');
+    const desk = { role: 'operator', person: 'helmut' };
     expect(said).toEqual([
-      { at: dropAt, kind: 'away', label: 'Cems Leitung ist weg.', seconds: null },
+      { at: dropAt, kind: 'away', label: 'Cems Leitung ist weg.', seconds: null, speaker: desk },
     ]);
     vi.advanceTimersByTime(30_000);
     expect(lastView(anna).deadlineAt).toBe(deadline);

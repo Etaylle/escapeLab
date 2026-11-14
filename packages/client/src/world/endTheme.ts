@@ -4,23 +4,31 @@ import { MUSIC_LEVEL, playSting } from './music.js';
 import { chosenFor, pieceFailed, type Chosen } from './musicPacks.js';
 import { holdMusic } from './musicTurn.js';
 import type { Slot } from './packFile.js';
-import { airtimeMs, preloadLines, releaseLine, sayLine, stopVoice } from './radioVoice.js';
+import {
+  airtimeMs,
+  preloadLines,
+  releaseLine,
+  sayLine,
+  stopVoice,
+  type VoiceLine,
+} from './radioVoice.js';
 import { MUSIC_BASE } from './samples.js';
 
 /**
  * The end card's sound (screens/End.tsx `TitleCard`, docs/sound.md „The end cards"): the run's
- * sting first (music.ts `playSting`), then the operator's last word on the run over the radio
- * (core actions.ts `wonNow`, `lostNow`) where it has a recording, then the ending's theme half a
- * second after whichever came last — for a run won `end-won`, the title theme's motif resolved
- * into a brighter key, for a run lost `end-lost`, a low, slow drone — or the endings of the music
- * pack the player picked (musicPacks.ts), played once, never looped, whatever loop its piece may
- * name. The theme streams on the music's bus at the stems' level, so the Leitstelle's voice pulls
- * it down as it does the run's music (mix.ts `DUCK_DB`), and takes one voice of the budget while it
- * plays (audio.ts `CAPS`). It goes with the card, fading out over END_FADE_S and holding the bus
- * until then (musicTurn.ts), so the lobby's theme comes in only after it, and the last word with
- * it. An ending whose theme is not rendered yet plays the sting and the word alone; a found ending
- * whose file cannot be had gives its place to the score's at once (musicPacks.ts `pieceFailed`);
- * nothing plays while the context is held back. Nothing here throws.
+ * sting first (music.ts `playSting`), then the last word on the run over the radio — the
+ * Leitstelle's on a run won, the Schichtleitung's on one lost (core actions.ts `wonNow`, `lostNow`)
+ * — where it has a recording, then the ending's theme half a second after whichever came last — for
+ * a run won `end-won`, the title theme's motif resolved into a brighter key, for a run lost
+ * `end-lost`, a low, slow drone — or the endings of the music pack the player picked
+ * (musicPacks.ts), played once, never looped, whatever loop its piece may name. The theme streams
+ * on the music's bus at the stems' level, so the radio's voice pulls it down as it does the run's
+ * music (mix.ts `DUCK_DB`), and takes one voice of the budget while it plays (audio.ts `CAPS`). It
+ * goes with the card, fading out over END_FADE_S and holding the bus until then (musicTurn.ts), so
+ * the lobby's theme comes in only after it, and the last word with it. An ending whose theme is not
+ * rendered yet plays the sting and the word alone; a found ending whose file cannot be had gives
+ * its place to the score's at once (musicPacks.ts `pieceFailed`); nothing plays while the context
+ * is held back. Nothing here throws.
  */
 
 /** Each ending's theme, by its place in the music (packFile.ts SLOTS, audio/catalog.json). */
@@ -43,8 +51,8 @@ interface Playing {
 interface Card {
   readonly ending: 'won' | 'lost';
   readonly since: number;
-  /** the operator's last word the card asked for; null where the run has none */
-  readonly line: string | null;
+  /** the last word on the run the card asked for, by who says it; null where the run has none */
+  readonly line: VoiceLine | null;
 }
 
 let playing: Playing | null = null;
@@ -54,10 +62,10 @@ let wanted: Card | null = null;
 let wordTimer: ReturnType<typeof setTimeout> | null = null;
 
 /**
- * The end card's sound for a run that ended so: its sting now, then `line` — the operator's last
- * word on it, its recording fetched and decoded while the sting plays — and its theme.
+ * The end card's sound for a run that ended so: its sting now, then `line` — the last word on
+ * it, its recording fetched and decoded while the sting plays — and its theme.
  */
-export function playEnding(ending: 'won' | 'lost', line: string | null = null): void {
+export function playEnding(ending: 'won' | 'lost', line: VoiceLine | null = null): void {
   const card: Card = { ending, since: Date.now(), line };
   wanted = card;
   if (line !== null) preloadLines([line]);
@@ -69,19 +77,19 @@ export function playEnding(ending: 'won' | 'lost', line: string | null = null): 
 }
 
 /**
- * The last word `text` over the radio from `at` (audio time), while `card` stands; returns when
+ * The last word `line` over the radio from `at` (audio time), while `card` stands; returns when
  * it ends, audio time — by its airtime (radioVoice.ts `airtimeMs`) — or null where it has no
  * recording to be said with, or nothing plays.
  */
-function sayAfter(text: string, at: number, card: Card): number | null {
+function sayAfter(line: VoiceLine, at: number, card: Card): number | null {
   const engine = playingEngine();
-  const ms = airtimeMs(text);
+  const ms = airtimeMs(line);
   if (engine === null || ms === null) return null;
   clearTimeout(wordTimer ?? undefined);
   wordTimer = setTimeout(
     () => {
       wordTimer = null;
-      if (wanted === card) void sayLine(text);
+      if (wanted === card) void sayLine(line);
     },
     Math.max(0, (at - engine.ctx.currentTime) * 1000),
   );
@@ -176,15 +184,18 @@ export function stopEnding(): void {
 export interface EndThemeProbe {
   /** the ending whose card asked for its music; null while no card is up */
   asked: 'won' | 'lost' | null;
-  /** the operator's last word the card asked for; null where none, or no card is up */
+  /** the last word on the run the card asked for, as shown; null where none, or no card is up */
   line: string | null;
   /** the theme playing or due; null where none is — not rendered yet, played out, or gone */
   playing: Slot | null;
 }
 
+/** The words of the last word `card` asked for; null where it asked for none, or none is up. */
+const wordOf = (card: Card | null): string | null => card?.line?.text ?? null;
+
 /** The end card's sound as it stands, for the walkthrough. */
 export function endThemeProbe(): EndThemeProbe {
   const card = wanted;
   const theme = playing !== null && card !== null ? THEMES[card.ending] : null;
-  return { asked: card?.ending ?? null, line: card?.line ?? null, playing: theme };
+  return { asked: card?.ending ?? null, line: wordOf(card), playing: theme };
 }

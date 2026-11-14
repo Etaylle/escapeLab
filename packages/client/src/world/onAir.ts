@@ -1,5 +1,5 @@
 import type { RunEvent } from '@escapelab/core';
-import { fromPlant, noticeMs, voiced, type Notice } from '../radio.js';
+import { fromPlant, noticeMs, voiced, voiceLineOf, type Notice } from '../radio.js';
 import { radioChirp } from './audio.js';
 import { announce, stopAnnounce } from './pa.js';
 import { sayLine, stopVoice } from './radioVoice.js';
@@ -68,10 +68,13 @@ export function airNotice(notice: Notice, airing: Airing): () => void {
   };
 }
 
-/** What `event` asks of its speaker: how long it keeps the air once it sounds; null for never. */
+/**
+ * What `event` asks of whoever says it — the person of the night's cast its line names: how long
+ * it keeps the air once it sounds; null for never.
+ */
 function voiceOf(event: RunEvent): Promise<number | null> {
-  if (fromPlant(event)) return announce(event.label);
-  return voiced(event) ? sayLine(event.label) : Promise.resolve(null);
+  if (fromPlant(event)) return announce(voiceLineOf(event));
+  return voiced(event) ? sayLine(voiceLineOf(event)) : Promise.resolve(null);
 }
 
 /** Neither speaker says anything more: a line still on the air is cut, one asked for made moot. */

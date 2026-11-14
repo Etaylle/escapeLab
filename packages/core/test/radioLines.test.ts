@@ -6,6 +6,7 @@ import {
   parseMission,
   PA_LINES_MAX,
   radioLines,
+  shownText,
   variantsOf,
   WON_BANDS,
   type Line,
@@ -105,12 +106,13 @@ function offAir(lines: readonly string[]): string[] {
 const lastWord = (line: RadioLine): boolean => line.when === 'won' || line.when === 'lost';
 
 /**
- * Every line the operator can put on the air in `mission`, in the order a run hears them: all
- * but the last word on the run, a debrief of its own (`lastWordsOf`).
+ * Every line the radio can put on the air in `mission` — the Leitstelle's and the
+ * Schichtleitung's, a control room either way — in the order a run hears them: all but the last
+ * word on the run, a debrief of its own (`lastWordsOf`).
  */
 const textsOf = (mission: Mission): string[] =>
   radioLines(mission)
-    .filter((line) => line.speaker === 'operator' && !lastWord(line))
+    .filter((line) => line.role !== 'pa' && !lastWord(line))
     .map((line) => line.text);
 
 /** The operator's last words on a run of `mission`, won and lost. */
@@ -155,7 +157,7 @@ const announcementOf = (mission: Mission): string[] =>
 /** Every message the loudspeakers say after the blackout, on their emergency power. */
 const messagesOf = (mission: Mission): string[] =>
   radioLines(mission)
-    .filter((line) => line.speaker === 'pa' && line.when !== 'pa')
+    .filter((line) => line.role === 'pa' && line.when !== 'pa')
     .map((line) => line.text);
 
 /**
@@ -164,7 +166,7 @@ const messagesOf = (mission: Mission): string[] =>
  */
 const callsAfterStart = (mission: Mission): string[] =>
   radioLines(mission)
-    .filter((line) => line.when !== 'start' && line.speaker === 'operator')
+    .filter((line) => line.when !== 'start' && line.role !== 'pa')
     .filter((line) => /\bLeitstelle\b/.test(line.text))
     .map((line) => line.text);
 
@@ -379,10 +381,11 @@ describe.each(byId)('the radio in mission %s', (_id, mission) => {
     expect(short).toEqual([]);
   });
 
-  it('has every line said by its speaker: the loudspeakers the plant’s, the operator the rest', () => {
+  it('has every line said by its role: the plant’s, the Schichtleitung’s, the Leitstelle’s', () => {
     for (const line of radioLines(mission)) {
       const plant = line.when === 'pa' || line.when === 'announce';
-      expect(line.speaker, line.text).toBe(plant ? 'pa' : 'operator');
+      const serious = line.when === 'clock' || line.when === 'lost';
+      expect(line.role, line.text).toBe(plant ? 'pa' : serious ? 'lead' : 'operator');
     }
   });
 
@@ -578,10 +581,12 @@ describe('the lines a mission can put on the air', () => {
       ...LOST_CAUSES.flatMap((cause) => times('lost', radio.lost?.[cause])),
       ...times('lobby', radio.lobby),
     ]);
-    const plant = { puzzleId: null, speaker: 'pa', mood: null };
-    const operator = { puzzleId: null, speaker: 'operator', mood: null };
+    const plant = { puzzleId: null, role: 'pa', mood: null };
+    const operator = { puzzleId: null, role: 'operator', mood: null };
     expect(lines[0]).toEqual({ ...plant, text: blackout.intro?.pa[0], when: 'pa' });
-    const first = (line: Line | undefined): string | undefined => variantsOf(line ?? [])[0];
+    // As a run shows them: a line's audio tags are its recording's alone.
+    const first = (line: Line | undefined): string | undefined =>
+      variantsOf(line ?? []).map(shownText)[0];
     expect(lines[pa.length]).toEqual({ ...operator, text: first(radio.start), when: 'start' });
     const out = lines.findIndex((line) => line.when === 'escape');
     expect(lines[out]).toEqual({ ...operator, text: first(radio.escape), when: 'escape' });
@@ -589,18 +594,22 @@ describe('the lines a mission can put on the air', () => {
     const announced = lines.findIndex((line) => line.when === 'announce');
     expect(lines[announced]).toEqual({ ...plant, text: announce, when: 'announce' });
     // Last the lobby's Funkprobe, before a run, said calm; the last word on a lost run before it.
-    const probes = variantsOf(radio.lobby ?? []);
+    const probes = variantsOf(radio.lobby ?? []).map(shownText);
     expect(probes).toHaveLength(3);
-    const last = variantsOf(radio.lost?.abandoned ?? []).at(-1);
-    const lost = { ...operator, text: last, when: 'lost', mood: 'quiet' };
+    const last = variantsOf(radio.lost?.abandoned ?? []).map(shownText).at(-1);
+    const lost = { ...operator, role: 'lead', text: last, when: 'lost', mood: 'quiet' };
     expect(lines.at(-1 - probes.length)).toEqual(lost);
     const probe = { ...operator, text: probes.at(-1), when: 'lobby', mood: 'calm' };
     expect(lines.at(-1)).toEqual(probe);
     const station = blackout.puzzles[0];
-    const at = { puzzleId: station?.id, speaker: 'operator', mood: null };
+    const at = { puzzleId: station?.id, role: 'operator', mood: null };
     const starts = variantsOf(radio.start ?? []).length;
     expect(lines.slice(pa.length + starts, pa.length + starts + 2)).toEqual(
-      variantsOf(station?.nudges[0] ?? []).map((text) => ({ ...at, text, when: 'nudge' })),
+      variantsOf(station?.nudges[0] ?? []).map((text) => ({
+        ...at,
+        text: shownText(text),
+        when: 'nudge',
+      })),
     );
   });
 
