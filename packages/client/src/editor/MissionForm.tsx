@@ -2,7 +2,7 @@ import { crewSizeText } from '../screens/Crew.js';
 import { PROTOTYPES_ROW } from '../screens/MenuPanels.js';
 import { MapThumb } from '../screens/MapThumb.js';
 import { customIdOf, type Draft } from './draft.js';
-import { AreaField, CheckField, FormHead, NumberField, TextField } from './fields.js';
+import { AreaField, CheckField, FormHead, LineField, NumberField, TextField } from './fields.js';
 import { mapSize, MAP_LIMITS, resize } from './tools.js';
 import { messagesAt, type Validation } from './validate.js';
 
@@ -102,12 +102,12 @@ export function MissionForm({ draft, validation, idTaken, onChange }: Props) {
         />
       </div>
       <FormHead title="Funk" />
-      <TextField
+      <LineField
         label="Zum Start"
         value={draft.radio.start}
         onChange={(start) => onChange({ ...draft, radio: { ...draft.radio, start } })}
       />
-      <TextField
+      <LineField
         label="Wenn der Ausgang offen ist"
         value={draft.radio.escape}
         onChange={(escape) => onChange({ ...draft, radio: { ...draft.radio, escape } })}

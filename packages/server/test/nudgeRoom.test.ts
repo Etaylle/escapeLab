@@ -139,6 +139,43 @@ describe('mission control watching from the room', () => {
     room.dispose();
   });
 
+  it('calls the clock at five minutes, two and the last, once each, and not while paused', () => {
+    const clock = {
+      fiveMinutes: 'Noch fünf Minuten.',
+      twoMinutes: 'Noch zwei Minuten.',
+      lastMinute: 'Letzte Minute.',
+    };
+    const timed = parseMission({ ...JSON.parse(JSON.stringify(mission)), radio: { clock } });
+    const room = new Room('ZEIT', timed, undefined, null, 'normal');
+    const anna = join(room, 'Anna');
+    const ben = join(room, 'Ben');
+    room.setReady(ben.playerId, true);
+    room.act(anna.playerId, { kind: 'start-mission' });
+    const calls = (): string[] =>
+      lastView(anna)
+        .events.filter((e) => e.moment === 'clock')
+        .map((e) => e.label);
+    // 900 s on the clock: five minutes left after 600 s.
+    vi.advanceTimersByTime(600_000 - 1);
+    expect(calls()).toEqual([]);
+    vi.advanceTimersByTime(1);
+    expect(calls()).toEqual([clock.fiveMinutes]);
+    // A line dropped for 60 s moves every call on by as long.
+    ben.detach();
+    vi.advanceTimersByTime(60_000);
+    room.resume(passFor('Ben'));
+    room.attach(ben.playerId, (m) => ben.messages.push(m));
+    vi.advanceTimersByTime(180_000 - 1);
+    expect(calls()).toEqual([clock.fiveMinutes]);
+    vi.advanceTimersByTime(1);
+    expect(calls()).toEqual([clock.fiveMinutes, clock.twoMinutes]);
+    vi.advanceTimersByTime(60_000);
+    expect(calls()).toEqual([clock.fiveMinutes, clock.twoMinutes, clock.lastMinute]);
+    vi.advanceTimersByTime(59_000);
+    expect(calls()).toHaveLength(3);
+    room.dispose();
+  });
+
   it('opens a room on the difficulty asked for, normal where none is', () => {
     const manager = new RoomManager();
     const relaxed = manager.create(scaleMission(mission, 'entspannt'), null, 'entspannt');

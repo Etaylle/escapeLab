@@ -22,6 +22,7 @@ import type {
   RoomKind,
 } from './mission.js';
 import { noteKey } from './notes.js';
+import { pickLine } from './radio.js';
 import { CREW_COLORS, type Credits, type GameState, type Phase, type RunEvent } from './state.js';
 import { moduleFor, type PuzzleView } from './puzzles/index.js';
 import { crewOf, waitingFor } from './actions.js';
@@ -178,6 +179,12 @@ export interface PlayerView {
   nextMissionId?: string;
   /** the run's opening while the lab still has its power (`IntroView`); left out without one */
   intro?: IntroView;
+  /**
+   * In the lobby, the operator's Funkprobe the crew hears once every seat is ready and the host
+   * can start: one of the mission's `radio.lobby` texts, the next each time the room comes back
+   * to its lobby. Left out in a run, and where the mission has none
+   */
+  radioCheck?: string;
 }
 
 /** A seat whose line is down that a new device asks to take over, by its name. */
@@ -1220,7 +1227,22 @@ export function viewFor(state: GameState, playerId: string): PlayerView {
     ...achievementsOfRun(state),
     ...(state.mission.next === undefined ? {} : { nextMissionId: state.mission.next }),
     ...introOf(state),
+    ...radioCheckOf(state),
   };
+}
+
+/**
+ * The lobby's Funkprobe (`radio.lobby`): before the room's first run its first text by the
+ * line's place, and each time the room comes back to its lobby the next — no run's seed is
+ * drawn yet, the runs so far turn it (radio.ts `pickLine`). Left out in a run, and where the
+ * mission has none.
+ */
+function radioCheckOf(state: GameState): Pick<PlayerView, 'radioCheck'> {
+  const line = state.mission.radio.lobby;
+  if (state.phase !== 'lobby' || line === undefined) {
+    return {};
+  }
+  return { radioCheck: pickLine(line, 0, 'lobby', state.runs) };
 }
 
 /**

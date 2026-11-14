@@ -61,7 +61,7 @@ export function recordLines(
         continue;
       }
       const puzzle = mission.puzzles.find((p) => p.id === said.puzzleId);
-      const entry = manifest[id];
+      const entry = manifest.lines[id];
       const recording: Recording | null =
         entry === undefined
           ? null
