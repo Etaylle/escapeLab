@@ -97,6 +97,18 @@ describe('fadeOf and fadeVerdict — a panel going, on the page’s own clock', 
     });
   });
 
+  it('leaves them unjudged where the page drew no frame at all while the panel left', () => {
+    // Under load: a frame before the panel began to leave, the next once it was gone.
+    const fade = fadeOf(record([], 162), FADE);
+    assert.deepEqual(fade.drawn, []);
+    assert.deepEqual(fadeVerdict(fade, FADE), {
+      faults: [],
+      unjudged:
+        'the page drew no frame while the panel left, the panel gone 152 ms after it began to ' +
+        'leave: no frame to judge midway; the held shot judges the fade',
+    });
+  });
+
   it('fails a fade that never falls on a frame in its middle, naming the frames’ times', () => {
     const still = fadeOf(record([frame(12, 0, 1), frame(100, 88, 1), frame(140, 128, 0.99)]), FADE);
     assert.deepEqual(fadeVerdict(still, FADE), {
@@ -114,7 +126,7 @@ describe('fadeOf and fadeVerdict — a panel going, on the page’s own clock', 
     const bare = record([frame(12, null, 1), frame(29, null, 1)]);
     bare.frames = bare.frames.map((f) => (f.t > 10 && f.present ? { ...f, leaving: true } : f));
     assert.deepEqual(fadeVerdict(fadeOf(bare, FADE), FADE), {
-      faults: ['no fade-out ran on it'],
+      faults: ['no fade-out ran on the frames it drew'],
       unjudged: null,
     });
   });
@@ -132,6 +144,6 @@ describe('fadeOf and fadeVerdict — a panel going, on the page’s own clock', 
 
   it('says the fade’s times at the frames drawn, a dash where none ran', () => {
     assert.equal(drawnText([0, 16.6, null]), '0, 17, –');
-    assert.equal(drawnText([]), 'at no time');
+    assert.equal(drawnText([]), 'none');
   });
 });

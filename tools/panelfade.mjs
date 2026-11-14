@@ -116,36 +116,52 @@ export function fadeOf({ left, gone, inertAtLeft, frames }, fadeMs) {
 /**
  * The verdict on a fade as the page played it (`fade`, from fadeOf; `fadeMs` its length): what
  * is wrong with it, in the log's words — a panel gone at once or outside GONE_MS, an opacity
- * that rose, a panel taking input as it left, no fade-out on it, frames drawn in the fade's
- * middle none of which showed it midway — and, where no frame showed it midway because the page
- * drew none in the fade's middle, why the midway frames go unjudged, naming the frames' times.
+ * that rose, a panel taking input as it left, frames drawn as it left with no fade-out on them,
+ * frames drawn in the fade's middle none of which showed it midway — and, where no frame showed
+ * it midway because the page drew none in the fade's middle, or none at all as the panel left,
+ * why the midway frames go unjudged, naming the frames' times.
  *
  * @param {ReturnType<typeof fadeOf>} fade
  * @param {number} fadeMs
  * @returns {{ faults: string[], unjudged: string | null }}
  */
 export function fadeVerdict(fade, fadeMs) {
-  const faults = [
+  const faults = fadeFaults(fade);
+  const unfaded = fade.drawn.length > 0 && !fade.faded;
+  if (fade.midway > 0 || !fade.left || unfaded) {
+    return { faults, unjudged: null };
+  }
+  if (fade.middle > 0) {
+    const came = `its frames came ${drawnText(fade.drawn)} ms into the ${fadeMs}-ms fade`;
+    return { faults: [...faults, `no frame showed it midway: ${came}`], unjudged: null };
+  }
+  return { faults, unjudged: unjudgedFade(fade, fadeMs) };
+}
+
+/** What is wrong with a fade as played (fadeVerdict), but its frames midway. */
+function fadeFaults(fade) {
+  return [
     goneFault(fade),
     fade.falling ? null : 'its opacity rose on its way out',
     fade.inert ? null : 'it took input as it left',
-    fade.faded ? null : 'no fade-out ran on it',
+    fade.drawn.length > 0 && !fade.faded ? 'no fade-out ran on the frames it drew' : null,
   ].filter((fault) => fault !== null);
-  if (fade.midway > 0 || !fade.faded) {
-    return { faults, unjudged: null };
-  }
-  const times = drawnText(fade.drawn);
-  if (fade.middle > 0) {
-    const came = `its frames came ${times} ms into the ${fadeMs}-ms fade`;
-    return { faults: [...faults, `no frame showed it midway: ${came}`], unjudged: null };
-  }
+}
+
+/**
+ * Why the midway frames of a fade (`fade`, `fadeMs` long) go unjudged: the page drew no frame in
+ * its middle — none at all while the panel left, or only at the times it names.
+ */
+function unjudgedFade(fade, fadeMs) {
   const [from, to] = MIDDLE.map((share) => Math.round(share * fadeMs));
   const gone =
     fade.ms === null ? 'never gone' : `gone ${Math.round(fade.ms)} ms after it began to leave`;
-  const unjudged =
-    `the page drew no frame ${from} to ${to} ms into the ${fadeMs}-ms fade, only at ${times} ms ` +
-    `of it, the panel ${gone}: no frame to judge midway; the held shot judges the fade`;
-  return { faults, unjudged };
+  const drew =
+    fade.drawn.length === 0
+      ? 'the page drew no frame while the panel left'
+      : `the page drew no frame ${from} to ${to} ms into the ${fadeMs}-ms fade, only at ` +
+        `${drawnText(fade.drawn)} ms of it`;
+  return `${drew}, the panel ${gone}: no frame to judge midway; the held shot judges the fade`;
 }
 
 /** What is wrong with when the panel went (`left`, `ms` from fadeOf), or null. */
@@ -171,6 +187,6 @@ function goneFault({ left, ms }) {
  */
 export function drawnText(drawn) {
   return drawn.length === 0
-    ? 'at no time'
+    ? 'none'
     : drawn.map((ms) => (ms === null ? '–' : String(Math.round(ms)))).join(', ');
 }

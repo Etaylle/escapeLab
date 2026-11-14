@@ -5036,8 +5036,8 @@ const SWING_DEG = 35;
  * In the page, before a probe key is pressed, until releaseNeedle: the needle's next swing to a
  * new reading — the transition of its turn (client styles/devices.css) — is paused `ms` into it,
  * so that a shot however late finds the needle on its way; `window.__needleHold` (pageclock.mjs
- * `NeedleHold`) notes on the page's clock when the probe went down, when the swing began and how
- * long it runs.
+ * `NeedleHold`) notes on the page's clock when the probe went down, when the page noted the swing
+ * — its event comes with the next frame, late under load — and how long the swing runs.
  */
 function holdNeedle(ms) {
   const needle = document.querySelector('.station-modal .gauge-needle');
@@ -5053,9 +5053,7 @@ function holdNeedle(ms) {
   const swing = () => {
     const turn = needle.getAnimations().find((a) => a.transitionProperty === 'transform');
     if (hold.swung === null && turn !== undefined && needle.style.transform !== before) {
-      // The swing's own start time, on the document's timeline — the clock performance.now()
-      // reads — says when it began, however late its event came.
-      hold.swung = (turn.startTime ?? globalThis.performance.now()) - t0;
+      hold.swung = globalThis.performance.now() - t0;
       hold.length = turn.effect.getComputedTiming().duration;
       turn.pause();
       turn.currentTime = ms;
@@ -5749,9 +5747,13 @@ function reportPanelClose(player, fade, held) {
   const gone =
     fade.ms === null ? '!! never leaving, or never gone' : `gone in ${Math.round(fade.ms)} ms`;
   const lumas = `luma ${held.lumas.map((l) => l.toFixed(0)).join(' → ')}`;
+  const frames =
+    fade.drawn.length === 0
+      ? 'no frame drawn as it left'
+      : `${fade.midway} of ${fade.drawn.length} frames midway (the fade at ` +
+        `${drawnText(fade.drawn)} ms)`;
   console.log(
-    `panel-close.png    ${player.name}, Esc: ${gone}, ${fade.midway} of ${fade.drawn.length} ` +
-      `frames midway (the fade at ${drawnText(fade.drawn)} ms), ` +
+    `panel-close.png    ${player.name}, Esc: ${gone}, ${frames}, ` +
       `${fade.falling ? 'falling' : '!! not only falling'}, ` +
       `${fade.inert ? 'inert' : '!! taking input'}, on the page's clock; the shot held ` +
       `${PANEL_SHOT_MS} ms in ${held.between ? 'midway' : '!! not midway'} (${lumas}), ` +

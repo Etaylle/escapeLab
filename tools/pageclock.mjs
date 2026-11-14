@@ -38,8 +38,8 @@ function stripText(seen) {
 
 /**
  * What a page noted of the meter's needle held mid-swing (shots.mjs `holdNeedle`), ms on its
- * clock from the hold's start: when the probe went down, when the swing began — its own start
- * time — and how long the swing runs; null for what never came.
+ * clock from the hold's start: when the probe went down, when it noted the swing — the swing's
+ * event comes with the page's next frame — and how long the swing runs; null for what never came.
  *
  * @typedef {{ pressed: number | null, swung: number | null, length: number | null }} NeedleHold
  */
@@ -49,7 +49,8 @@ function stripText(seen) {
  * turns it to `target`, swung — the page held its swing `holdMs` into it (`hold`, null where the
  * page kept none) — and was read at `at` before the shot and `after` it. It has to have swung,
  * held still through the shot and stood on its way there, or swinging past it. Its faults, and
- * the log's words: when the swing began after the probe on the page's clock, and where it stood.
+ * the log's words: when the page noted the swing after the probe, on its clock, and where it
+ * stood.
  *
  * @param {{ from: number, target: number, at: number, after: number,
  *   hold: NeedleHold | null, holdMs: number }} swing
@@ -74,12 +75,12 @@ export function swingVerdict({ from, target, at, after, hold, holdMs }) {
 
 /** A held swing in the log's words (swingVerdict). */
 function swingText({ hold, holdMs, way, at, after, moved, onItsWay }) {
-  const began =
+  const noted =
     hold.pressed === null
       ? `${Math.round(hold.swung)} ms into the hold, no probe seen`
       : `${Math.round(hold.swung - hold.pressed)} ms after the probe`;
   return (
-    `its ${Math.round(hold.length ?? 0)}-ms swing began ${began} on the page's clock; held ` +
+    `the page noted its ${Math.round(hold.length ?? 0)}-ms swing ${noted}, on its clock; held ` +
     `${holdMs} ms in, the needle at ${at}° on its way ${way}` +
     (moved ? ` — !! ${after}° once shot` : '') +
     (onItsWay ? '' : ' — !! not swinging')
