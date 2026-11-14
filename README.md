@@ -267,11 +267,13 @@ selbst, wie die CI, und probt mitten in einem Einsatz den Neustart: SIGTERM, die
 „WARTUNG · Der Server startet neu" auf jeder Seite, und nach dem Neustart alle zurück im Einsatz.
 
 **Nur ein Teil des Rundgangs (Gruppen):** Jede Aufnahme des Rundgangs gehört zu genau einer von
-fünfzehn Gruppen (`tools/groups.mjs`); `SHOTS_ONLY=screens,intro` spielt nur diese,
+sechzehn Gruppen (`tools/groups.mjs`); `SHOTS_ONLY=screens,intro` spielt nur diese,
 `SHOTS_SKIP=perf` alle außer diesen — der schnelle Beweis eines Teils. Vor dem Rundgang laufen die
 Proben, jede in einem Raum für sich: `editor`, `art`, `drones` (Gefahrensinn und eine Drohne aus der
-Nähe), `reconnect` und `restart` — im Systemcheck dazu die Probe des Serverraums, die zu `devices`
-gehört. Der Rundgang selbst: `screens` (Menü und sein Ton, Bestenliste, Lobby, der Start aus ihr),
+Nähe), `reconnect`, `restart` und `three` (Blackout zu dritt bis zur Signalkette, die Zielzeile mit
+jeder Hand: `three-lever`, `three-plate`, `three-hands`, `three-phone-932`, `three-reader`) — im
+Systemcheck dazu die Probe des Serverraums, die zu `devices` gehört. Der Rundgang selbst: `screens`
+(Menü und sein Ton, Bestenliste, Lobby, der Start aus ihr),
 `intro` (die Eröffnung bis `blackout.png`) und `run` (die Mission bis zur Siegerkarte, nach dem
 gewonnenen Systemcheck die Einsätze des Kontos und sein Löschen); im Lauf `devices` (jede Station,
 auch auf dem quer gehaltenen Handy), `reading` (Quellen, Schild, Notizen der letzten Schicht,

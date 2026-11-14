@@ -597,7 +597,8 @@ and the line keeps its place. The rack and its Netzplan stand side by side, and 
 takes the window's height but the dim's edge: every device stands whole in 720 px of height.
 
 Around the devices: the HUD's smallest words stand at 12 px (the Laborkennung's heads, ALARME,
-„unterwegs"). On the canvas, room names stand at 13 px on a dark plate that keeps them at 4.5:1
+„unterwegs", the hands line under the goal for a crew of three, which gives way while a device is
+open). On the canvas, room names stand at 13 px on a dark plate that keeps them at 4.5:1
 or more over the brightest lit floor (WCAG 2.2; FLUR on the lit corridor read 1.3:1 without
 it); the E prompt, captions, chat bubbles, the carry line and the hatch's sign at 12 px, the
 arrows' captions at 11, a prop's label within 10 to 12 and a name tag within 11 to 14 whatever
@@ -610,7 +611,8 @@ the one that matters less moves a line down or is left out (labelLayout.ts).
 sideways and 500 px tall or less — the height every rule for it in the stylesheets reads
 (screens/hudFold.ts `foldsHud`) — folds the objective bar and the crew strip into one row along
 the world's top edge, a fingertip's 44 px tall: the stations' LEDs over the goal in one line,
-cut short where it runs out, what the crew still has to bring after it; then the crew as
+cut short where it runs out, what the crew still has to bring after it; for a crew of three or
+more the own job at the station as a chip beside it („Cleo: Klemmbrett"); then the crew as
 coloured dots, ringed while one speaks and ticked off on the hatch in the escape, what one does
 beside the dot for three seconds after it changed and no longer (`freshTags`; names and doings
 in the dots' labels); the Laborkennung's value; the clock with the alarm marks; and the

@@ -2,17 +2,17 @@
 
 How the crew steers, how it finds things, what a run leaves behind and how runs compare: the
 controls on keys and on a controller, the quick chat, the station's intercom, finding things, the
-walks of Blackout's lab, the first win at the stations the whole crew presses, the Erfolge, the
-Tagesschicht, the picture of a run, the danger sense, the Serverraum's cabling diagram, typing at
-its terminal, what the notepad takes down and what happens when a line drops. Code:
-`packages/client/src/input/` (bindings, controller, prompts), `client/src/achievements.ts` and
-`screens/{Plaques,ShareButton,ControlSettings}.tsx`,
+walks of Blackout's lab, the first win at the stations the whole crew presses, a crew of three,
+the Erfolge, the Tagesschicht, the picture of a run, the danger sense, the Serverraum's cabling
+diagram, typing at its terminal, what the notepad takes down and what happens when a line drops.
+Code: `packages/client/src/input/` (bindings, controller, prompts), `client/src/achievements.ts`
+and `screens/{Plaques,ShareButton,ControlSettings}.tsx`,
 `screens/shareCard.ts`, `world/{labelFade,finds,danger,ChatWheel}.ts(x)`,
 `puzzles/RackDiagram.tsx`, `puzzles/{prompt.ts,ServersPanel.tsx}`,
 `puzzles/{SyncCount.tsx,syncPress.ts}`, `voice/{rules,intercom}.ts`, `noting.ts`, `notes.ts`,
-`screens/{Notepad,NoteButton}.tsx`, `pass.ts`, `line.ts`, `ws.ts`,
+`screens/{Notepad,NoteButton}.tsx`, `pass.ts`, `line.ts`, `ws.ts`, `screens/hands.ts`,
 `screens/{Join,Pause,Line,GiveUp}.tsx`; in the core `chat.ts`, `discovery.ts`, `achievements.ts`,
-`daily.ts`, `map.ts` (`intercomOf`), `puzzles/servers.ts` (`serviceDiagram`),
+`daily.ts`, `hands.ts`, `map.ts` (`intercomOf`), `puzzles/servers.ts` (`serviceDiagram`),
 `puzzles/buttonSync.ts` and `actions.ts` (the pause); in the server `seats.ts`, `heartbeat.ts`.
 
 ## Controls
@@ -196,6 +196,56 @@ on an upright phone in the tutorial — and shoots lever-countdown.png (the pull
 lever-countdown-partner.png 1.3 s in: the digits no more than one apart, the partner's page
 naming the puller and its strip saying „zieht"; once the window has shut, the count has to be
 gone from both pages (`client/test/syncCount.test.tsx`, `crew.test.tsx`).
+
+## Zu dritt
+
+Blackout takes two or three (`players` 2..3), and a crew of three finds a place for every hand at
+every station. A station's places are its consoles, the manual objects covering it, the plates of
+the doors it keeps open until it is solved (`untilSolved`) and the parts it still needs carried
+in, a cabinet's key at the first station the cabinet covers (core `hands.ts` `placesOf`); where
+the whole crew works the panel, every hand stands at it. Core `test/hands.test.ts` counts them for
+every shipped mission and lab:
+
+| Station | Its places | Hands at work | With three |
+| --- | --- | --- | --- |
+| Notlicht | the main switch, for the whole crew | 3 | all three throw their lever together; the plate says „NUR ZU DRITT" |
+| Notstrom-Kasten | Pult A (the box), Pult B (the meter), the Handbuch, the plate HALTEN | 4 | one reads the book first and works the meter, one holds HALTEN, one cuts at the box |
+| Signalkette | Pult A, Pult B, the Klemmbrett | 3 | two at the consoles, the third reads the legend at the clipboard |
+| Serverraum | the terminal (A), the rack (B), the Spind | 3 | two at the consoles, the third searches the locker and reads; the camera plate holds the Flur's drone still |
+| Frequenz-Abgleich | the radio desk, the Aktenschrank, its key | 3 | one at the radio, one reading the cabinet, the third fetching the key — and the fuse for the reactor |
+| Reaktor-Neustart | the switch, for the whole crew; the SICHERUNG | 4 | the third carries the fuse in, then all three press |
+
+The module tests play every mission for every crew size from `players.min` to `players.max`
+through the reducer (`core/test/modules.test.ts`), 200 seeds each without an alarm. With a third
+hand the roles follow the stations: at two consoles p1 works A, p2 works B and p3 reads; at one,
+p1 works, p2 reads and p3 runs the errands — the parts, a cabinet's key, a shut source, the plates
+the station's doors need — so that the first two never leave their places; at a whole-crew
+station everyone presses. As each station is switched on, exactly as many of the crew are at
+work as it has places, up to the crew. Kettenreaktion (three) and the Doppelschicht (four) give
+most of their stations two places only (backlog N-6).
+
+**The hands line.** For a crew of three or more the goal line names, under its title, each
+hand's job at the station in front of the crew, from the view's `hands` (core `handsOf`): where
+the server counts each of the crew — at a console, at a manual object covering the station, on a
+plate that still holds a door or a drone (presence `plates`, counted by the reach that keeps the
+plate pressed), or with a part in hand — and the station's places nobody holds that the crew
+knows of. The screen says them in the map's words, its own player first: „Cleo: Klemmbrett ·
+Anna: Pult A · Ben: Pult B". A console is Pult A or B, the main switch („Hauptschalter") or the
+station's title; a source goes by its label as a name („Handbuch"), a plate by its own
+(„HALTEN"), a part as „SICHERUNG holen". The first hand without a place names the places nobody
+holds, the others say „frei": „Cleo: frei — Handbuch, HALTEN · Anna: frei". A source or a part
+nobody has found stays unnamed, and so does a key until its cabinet has been come across. On a
+phone held sideways the row keeps the own job alone as a chip beside the goal („Cleo:
+Klemmbrett"); while a device is open the line gives way to its Laborkennung row, keeping its
+place. Nothing moves. For a crew of two nothing changes (`client/test/hands.test.tsx`).
+
+**The drill.** The walkthrough's three drill (`SHOTS_ONLY=three`, about 85 s on a laptop) plays
+Blackout for Anna, Ben and Cleo in a room of its own on the plan's seed: all three throw the main
+switch (three-lever.png); Ben reads the book while Cleo holds HALTEN, Anna cuts the box and Ben
+measures (three-plate.png, Cleo's screen); Cleo reads the clipboard while Anna and Ben work the
+Signalkette (three-hands.png, Anna's screen; three-phone-932.png, Cleo's phone; three-reader.png).
+Then Cleo and Ben give their seats up from the menu, the run is called off, and Anna leaves the
+room. It samples no frame window: three pages on one runner would make it lie.
 
 ## Erfolge
 
