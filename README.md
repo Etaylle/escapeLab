@@ -254,6 +254,24 @@ steht im Log. Mit `SHOTS_SERVER=packages/server/src/index.ts` startet der Rundga
 selbst, wie die CI, und probt mitten in einem Einsatz den Neustart: SIGTERM, die Karte
 „WARTUNG · Der Server startet neu" auf jeder Seite, und nach dem Neustart alle zurück im Einsatz.
 
+**Nur ein Teil des Rundgangs (Gruppen):** Jede Aufnahme des Rundgangs gehört zu genau einer von
+fünfzehn Gruppen (`tools/groups.mjs`); `SHOTS_ONLY=screens,intro` spielt nur diese,
+`SHOTS_SKIP=perf` alle außer diesen — der schnelle Beweis eines Teils. Vor dem Rundgang laufen
+die Proben, jede in einem Raum für sich: `editor`, `art`, `drones` (Gefahrensinn und eine Drohne
+aus der Nähe), `reconnect` und `restart`. Der Rundgang selbst: `screens` (Menü und sein Ton,
+Bestenliste, Lobby, der Start aus ihr), `intro` (die Eröffnung bis `blackout.png`) und `run` (die
+Mission bis zur Siegerkarte); im Lauf `devices` (jede Station, auch auf dem quer gehaltenen
+Handy), `reading` (Quellen, Schild, Notizen der letzten Schicht, Notizblock, Bücher), `hud` (das
+Spiel in jeder Fenstergröße, Einstellungen, Steuerung, Minikarte, Sprint), `graphics` (Licht,
+Leuchten, Figuren, Kamera, Dichte 2), `audio` (Raumklang, Funk, Seite des Partners, Musik),
+`voice` (Mikrofone, Sprechverbindungen) und `perf` (die Frame-Fenster). Die Gruppen im Lauf
+brauchen `run` und ziehen ihn mit; `SHOTS_SKIP=run` lehnt sie ab. Jede ausgelassene, abgelehnte
+oder mitgezogene Gruppe steht zu Beginn mit einer Zeile im Log, und was sie aufgenommen hätte,
+zählt weder als übersprungen noch als fehlgeschlagen. Der Rundgang spielt nur so weit, wie die
+gewählten Gruppen reichen: `screens` allein endet, sobald der Lauf gestartet ist, `intro` nach
+`blackout.png`. Ohne beide Variablen spielt er alles wie bisher; die Zusammenfassung nennt die
+gespielten Gruppen.
+
 **Ton und Funkstimme:** Jeder Raum klingt nach seiner Art, die Schritte des Partners kommen von
 dort, wo er steht, und die Musik zieht mit dem Druck an — alles zur Laufzeit erzeugt
 ([`docs/sound.md`](docs/sound.md)). Nur die Funksprüche der Leitstelle sind Aufnahmen
