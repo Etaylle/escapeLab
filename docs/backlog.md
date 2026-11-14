@@ -446,6 +446,22 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
 - Offen aus der zweiten Review (klein): die AAC-Prüfung (`canPlayType`) läuft nur in der
   Capture-Gruppe `screens`; ein Lauf mit `SHOTS_ONLY=audio` spielt eine behaltene Partitur
   ungeprüft, weil der Musik-Zensus im Lauf nur protokolliert.
+- Nachtrag Uros 2026-11-14 08:00: das generierte Menüthema ist ihm „nichts Besonderes"; das
+  Menüthema wird durch ein freies, von Menschen komponiertes Stück ersetzt (CC0/CC BY/Pixabay,
+  Nennung unter „Lizenz"), der Rest der Partitur bleibt (zwei Takes gerendert, je 6.747 Credits).
+  Vorschlagsliste mit Hörlinks sucht ein Agent; Einbau (Schleifennaht auf dem Takt, −19 LUFS)
+  als kleines Paket M-2, sobald Uros gewählt hat.
+
+### V-3 Stimmenbesetzung: Stimmen, die sich abwechseln — Status: in Arbeit (V-cast, Spec `spec-V-cast.md`) · Größe: M
+- Uros 2026-11-14 08:05: „Ich will alles hören, und vielleicht ist cool, wenn sich sogar alle
+  Stimmen abwechseln oder kombinieren; nutze das Beste und Maximum aus ElevenLabs."
+- Rollen statt Sprecher: `pa` (Anlage), `operator` (Leitstelle im Dienst, je Lauf per Seed aus
+  zwei bis drei Personen gewählt), `lead` (Schichtleitung: 5/2/1 Minuten und die verlorene
+  Nachbesprechung); v3-Regie-Tags in den Takes; `--design <rolle>`, `--keep <rolle>=<n>`,
+  `--plan` (Zeilen, Zeichen, Credits je Person), `--fresh` rendert nur die gewählte Besetzung
+  und nur fehlende Dateien; Seite `/voices` (nur `pnpm dev`) spielt alle Stimmproben und alle
+  gerenderten Zeilen je Sprecher. Kosten: je weiterer Operator ≈ 10.000 Credits; der große
+  Render wartet auf die fertige Besetzung.
 
 ### M-1 Drei Spielende: Beweis und Sichtbarkeit — Status: bereit · Größe: M
 - Befund: mechanisch trägt die dritte Person (Leserin mit Regeln, Notizen und Funk an Zwei-Pult-
