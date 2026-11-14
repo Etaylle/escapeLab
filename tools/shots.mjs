@@ -56,8 +56,10 @@
  * the guest holds the plate door for the host on the way to console A where
  * needed, then both consoles are captured and the meter measures every wire
  * once; nothing is cut. The first reading that moves the needle is shot
- * within 250 ms of its probe, the needle still swinging (meter-swing.png),
- * or the run fails.
+ * with its swing held 60 ms in by the page — the needle's own transition
+ * paused there, so that a shot coming late under load still shows it on its
+ * way — and the page has to say the needle swung, stood still through the
+ * shot and on its way to the reading (meter-swing.png), or the run fails.
  *
  * The opening: a title comes on as a phosphor screen does, once a page
  * load — the game's on the start screen, the mission's in the lobby
@@ -579,6 +581,7 @@ import {
   spottedOn,
   stretchOf,
 } from './patrol.mjs';
+import { swingVerdict } from './pageclock.mjs';
 import { percentile } from './percentile.mjs';
 import { decodePng } from './pixeldiff.mjs';
 import {
@@ -4948,33 +4951,76 @@ async function readingIn(meter, i, end) {
   return reading();
 }
 
-/**
- * The needle's angle once it has come a third of its way from `from` to
- * `target`, or where it stands at `end` (epoch ms), whichever is first.
- */
-async function swungAThird(page, from, target, end) {
-  let at = await needleOnPage(page);
-  while ((at - from) / (target - from) < 1 / 3 && Date.now() < end) {
-    await sleep(8);
-    at = await needleOnPage(page);
-  }
-  return at;
-}
-
-/** How soon after its probe meter-swing.png is shot, at the latest, in ms. */
-const SWING_MS = 250;
+/** How far into its swing meter-swing.png holds the needle, ms: some 40 % of its way there. */
+const SWING_HOLD_MS = 60;
 /** How far a reading has to move the needle for meter-swing.png to show it, in °. */
 const SWING_DEG = 35;
-/** What the screenshot itself takes, kept free of SWING_MS, in ms. */
-const SHOT_MS = 90;
 
 /**
- * meter-swing.png: the wire just probed (`i`, its key pressed at `pressed`,
- * the needle standing at `from`) comes in, and where its reading swings the
- * needle SWING_DEG or more, the meter is shot as soon as the needle has come
- * a third of its way — within SWING_MS of the probe, the needle still on its
- * way to the reading or swinging past it. True once shot; false where the
- * reading moves the needle less, for the next probe to try.
+ * In the page, before a probe key is pressed, until releaseNeedle: the needle's next swing —
+ * the transition of its turn (client styles/devices.css) — is paused `ms` into it, so that a
+ * shot however late finds the needle on its way; `window.__needleHold` (pageclock.mjs
+ * `NeedleHold`) notes on the page's clock when the probe went down, when the swing began and
+ * how long it runs.
+ */
+function holdNeedle(ms) {
+  const needle = document.querySelector('.station-modal .gauge-needle');
+  const t0 = globalThis.performance.now();
+  const hold = { pressed: null, swung: null, length: null };
+  const held = { turn: null, stop: () => undefined };
+  const press = (event) => {
+    hold.pressed ??= event.timeStamp - t0;
+  };
+  const swing = () => {
+    const turn = needle.getAnimations().find((a) => a.transitionProperty === 'transform');
+    if (hold.swung === null && turn !== undefined) {
+      // The event comes with the page's next frame, late under load: the swing's own start
+      // time, on the document's timeline (the clock performance.now() reads), says when it began.
+      hold.swung = (turn.startTime ?? globalThis.performance.now()) - t0;
+      hold.length = turn.effect.getComputedTiming().duration;
+      turn.pause();
+      turn.currentTime = ms;
+      held.turn = turn;
+    }
+  };
+  held.stop = () => {
+    needle?.removeEventListener('transitionrun', swing);
+    document.removeEventListener('pointerdown', press, true);
+  };
+  globalThis.__needleHold = hold;
+  globalThis.__needleHeld = held;
+  document.addEventListener('pointerdown', press, true);
+  needle?.addEventListener('transitionrun', swing);
+}
+
+/** In the page: the needle held by holdNeedle swings on, and nothing watches it any more. */
+function releaseNeedle() {
+  const held = globalThis.__needleHeld;
+  held?.stop();
+  held?.turn?.play();
+  delete globalThis.__needleHeld;
+}
+
+/** Whether `check` holds in `page` within `ms`, looked at every 50 ms; throws what is no wait. */
+function pageHolds(page, check, ms) {
+  return page.waitForFunction(check, null, { timeout: ms, polling: 50 }).then(
+    () => true,
+    (error) => {
+      if (error?.name !== 'TimeoutError') {
+        throw error;
+      }
+      return false;
+    },
+  );
+}
+
+/**
+ * meter-swing.png: the wire just probed (`i`, its key pressed at `pressed`, the needle standing
+ * at `from`, its next swing held by holdNeedle) comes in, and where its reading swings the needle
+ * SWING_DEG or more, the meter is shot with the needle held SWING_HOLD_MS into its swing, and
+ * judged by what the page says it showed (pageclock.mjs `swingVerdict`): the needle swung, held
+ * still through the shot, on its way to the reading or swinging past it. True once shot; false
+ * where the reading moves the needle less, for the next probe to try.
  */
 async function captureSwing(meter, i, pressed, from) {
   const volts = await readingIn(meter, i, pressed + 3000);
@@ -4982,21 +5028,35 @@ async function captureSwing(meter, i, pressed, from) {
   if (Math.abs(target - from) < SWING_DEG) {
     return false;
   }
-  const at = await swungAThird(meter.page, from, target, pressed + SWING_MS - SHOT_MS);
-  const ms = Date.now() - pressed;
+  await pageHolds(meter.page, () => globalThis.__needleHold?.swung != null, 3000);
+  const hold = await meter.page.evaluate(() => globalThis.__needleHold ?? null);
+  const at = await needleOnPage(meter.page);
   await capture(meter.page, 'meter-swing.png');
   const after = await needleOnPage(meter.page);
-  const swinging = Math.abs(at - target) > 1 && Math.abs(at - from) > 1;
-  console.log(
-    `meter-swing.png    ${meter.name} probed wire ${i + 1}: ${volts} V; shot ${ms} ms after ` +
-      `the probe, the needle at ${at}° on its way from ${from}° to ${target.toFixed(1)}° ` +
-      `(${after}° once shot)` +
-      (swinging ? '' : ' — !! not swinging'),
-  );
-  if (ms > SWING_MS || !swinging) {
-    fail(`meter-swing.png: ${ms} ms after the probe, needle at ${at}° for ${target}°`);
+  const swing = { from, target, at, after, hold, holdMs: SWING_HOLD_MS };
+  const { faults, text } = swingVerdict(swing);
+  console.log(`meter-swing.png    ${meter.name} probed wire ${i + 1}: ${volts} V; ${text}`);
+  if (faults.length > 0) {
+    fail(`meter-swing.png: ${faults.join('; ')}`);
   }
   return true;
+}
+
+/**
+ * Probe `i` pressed with `press`, the needle's next swing held for it (holdNeedle) and let go
+ * however that went: meter-swing.png where its reading swings the needle far enough
+ * (captureSwing). Whether it was shot.
+ */
+async function probeHeld(meter, i, press) {
+  const from = await needleOnPage(meter.page);
+  await meter.page.evaluate(holdNeedle, SWING_HOLD_MS);
+  try {
+    const pressed = Date.now();
+    await press();
+    return await captureSwing(meter, i, pressed, from);
+  } finally {
+    await meter.page.evaluate(releaseNeedle);
+  }
 }
 
 /**
@@ -5033,15 +5093,14 @@ function reportMeasured(meter, count, swung) {
 
 /**
  * Presses wire `i`'s probe key at the meter and waits for its reading; until
- * one has been shot mid-swing (`swung`), tries meter-swing.png on this one.
- * Returns whether this one was shot. Throws where the reading stays empty.
+ * one has been shot mid-swing (`swung`), tries meter-swing.png on this one
+ * (probeHeld). Returns whether this one was shot. Throws where the reading
+ * stays empty.
  */
 async function probeWire(meter, title, i, swung) {
   const key = meter.page.locator(`.station-modal .circuit-probe[data-index="${i}"]`);
-  const from = swung ? 0 : await needleOnPage(meter.page);
-  const pressed = Date.now();
-  await key.click({ timeout: 3000 });
-  const shot = !swung && (await captureSwing(meter, i, pressed, from));
+  const press = () => key.click({ timeout: 3000 });
+  const shot = swung ? await press().then(() => false) : await probeHeld(meter, i, press);
   if (!(await until(() => meter.seen.view.puzzle?.readings?.[i] != null, 3000))) {
     throw new Error(
       `${meter.name} measured wire ${i + 1} of "${title}", but its reading stayed empty`,
