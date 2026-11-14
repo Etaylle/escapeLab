@@ -70,6 +70,19 @@ export const GROUPS = [
     captures: ['restart', 'restart-maintenance.png', 'restart-recovered.png'],
   },
   {
+    name: 'three',
+    stage: 'drills',
+    needs: [],
+    captures: [
+      'three',
+      'three-lever.png',
+      'three-plate.png',
+      'three-hands.png',
+      'three-phone-932.png',
+      'three-reader.png',
+    ],
+  },
+  {
     name: 'screens',
     stage: 'lobby',
     needs: [],
