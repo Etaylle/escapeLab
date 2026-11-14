@@ -258,16 +258,25 @@ function askedUnderTakes(req: IncomingMessage): string | null {
 }
 
 /**
+ * The addresses under /takes a file is served at, and where each one's file lies on the shelf:
+ * its folder and its name — a take, a library voice's preview, a voice's sample.
+ */
+const FILE_PATHS: readonly (readonly [RegExp, (match: RegExpExecArray) => [string, string]])[] = [
+  [TAKE_PATH, ([, id = '', name = '']) => [id, name]],
+  [PREVIEW_PATH, ([, voiceId = '']) => [join(VOICES, LIBRARY), `${voiceId}.mp3`]],
+  [SAMPLE_PATH, ([, slot = '', sample = '']) => [join(VOICES, slot), sample]],
+];
+
+/**
  * The take, the voice sample or the library voice's preview the address `path` names on `shelf`;
  * null where there is none.
  */
 function takeFileAt(shelf: TakesShelf, path: string): TakeFile | null {
-  const [, id, name] = TAKE_PATH.exec(path) ?? [];
-  if (id !== undefined && name !== undefined) return shelf.take(id, name);
-  const [, voiceId] = PREVIEW_PATH.exec(path) ?? [];
-  if (voiceId !== undefined) return shelf.take(join(VOICES, LIBRARY), `${voiceId}.mp3`);
-  const [, slot, sample] = SAMPLE_PATH.exec(path) ?? [];
-  return slot === undefined || sample === undefined ? null : shelf.take(join(VOICES, slot), sample);
+  for (const [pattern, where] of FILE_PATHS) {
+    const match = pattern.exec(path);
+    if (match !== null) return shelf.take(...where(match));
+  }
+  return null;
 }
 
 /** Whether `path` names the folder `folder` under /takes, with its slash or without. */
