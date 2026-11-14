@@ -452,6 +452,19 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   Vorschlagsliste mit Hörlinks sucht ein Agent; Einbau (Schleifennaht auf dem Takt, −19 LUFS)
   als kleines Paket M-2, sobald Uros gewählt hat.
 
+### M-2 Musikpakete, wählbar in den Einstellungen — Status: in Arbeit (M-packs, Spec `spec-M-packs.md`) · Größe: L
+- Uros 2026-11-14 09:35: „Builde mir von allen Kombinationen Musikpakete, die ich im Spielmenü
+  aussuchen kann: Paket 1, 2, 3 …, und je Platz einstellbar." Drei Suchagenten fanden am Morgen
+  Kandidaten für alle acht Plätze (OpenGameArt, Free Music Archive, FreePD-Archiv, incompetech,
+  itch.io; Pixabay nur außerhalb des Repos); die Liste liegt als private Seite bei Uros.
+- Ein Paket ist Daten (`audio/packs/<id>/pack.json`: je Platz Datei, Lizenz, Nennung, Länge,
+  Schleife als Takte oder Crossfade); Stücke als AAC in `public/music/packs/`, 60–120 s Schleifen,
+  30–45 s Enden, −19 LUFS; `scripts/packs.ts` holt die Quellen einmal, schneidet, misst, schreibt
+  das Manifest und den Nennungsblock. Pakete zum Start: nachtschicht (die eigene Partitur),
+  yalciner, cheremisinov (+ Krux für die Stems), macleod, panchout/Hitctrl, zhelanov; nur CC0 und
+  CC BY. In Einstellungen → Ton: Paketwahl, Feinwahl je Platz aus allen Paketen, Vorhören,
+  „Nennungen"; Wahl je Gerät in `settings.ts`.
+
 ### V-3 Stimmenbesetzung: Stimmen, die sich abwechseln — Status: in Arbeit (V-cast, Spec `spec-V-cast.md`) · Größe: M
 - Uros 2026-11-14 08:05: „Ich will alles hören, und vielleicht ist cool, wenn sich sogar alle
   Stimmen abwechseln oder kombinieren; nutze das Beste und Maximum aus ElevenLabs."
