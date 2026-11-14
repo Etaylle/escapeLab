@@ -93,10 +93,22 @@ describe('entranceAt — the walk in, the click, the lamp', () => {
   });
 });
 
-/** A canvas element of the stage's, its box as the hero puts it there. */
-function stageCanvas(): HTMLCanvasElement & { style: Record<string, string> } {
-  return { hidden: true, style: {} } as unknown as HTMLCanvasElement & {
+/** A canvas element of the stage's, its box as the hero puts it there, its style's writes told. */
+function stageCanvas(): HTMLCanvasElement & { style: Record<string, string>; written: number } {
+  const canvas = { hidden: true, written: 0, style: {} };
+  canvas.style = new Proxy<Record<string, string>>(
+    {},
+    {
+      set: (style, side: string, value: string) => {
+        canvas.written += 1;
+        style[side] = value;
+        return true;
+      },
+    },
+  );
+  return canvas as unknown as HTMLCanvasElement & {
     style: Record<string, string>;
+    written: number;
   };
 }
 
@@ -140,6 +152,13 @@ describe('the hero’s entrance on the stage', () => {
     const room = Math.ceil(STEP_TILES * heroTile(DESKTOP.windowH));
     expect(canvas.style['width']).toBe(`${PLACE.box.width + room}px`);
     expect(on.hero.drawn).toEqual({ legs: 1, upper: 1 });
+  });
+
+  it('puts its canvas on a box anew only where its box changes, not on every frame', async () => {
+    const { paint, canvas } = await stage(true);
+    for (let now = 0; now < ENTRANCE_MS + 1000; now += 1000 / 30) paint(now);
+    // Its four sides once widened for the walk in, and once on its box and the room beside it.
+    expect(canvas.written).toBe(8);
   });
 
   it('holds its lamp off until the click, which sounds once, and then on', async () => {

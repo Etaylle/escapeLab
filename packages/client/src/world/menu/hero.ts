@@ -18,7 +18,7 @@ import { tileCss } from '../viewport.js';
  * waving as a new name settles. Pure: how large it stands and where (heroPlace), and how it
  * stands at a moment (heroPose). Lengths in CSS pixels, but where tiles are said: a figure unit
  * is a tile of the art (art.ts draws a figure 0.85 of one tall), a scene tile one of the lab
- * drifting behind the menu (menu/drift.ts `sceneShot`).
+ * drifting behind the menu as the drift frames a lab that fills the window (heroTile).
  */
 
 /** The hero's height against the stage's, before the scene's tiles hold it in. */
@@ -108,7 +108,11 @@ export function stepped(value: number, step: number): number {
   return Math.round(value / step) * step;
 }
 
-/** A scene tile in CSS px for a window `windowH` tall, as the menu's lab is framed (drift.ts). */
+/**
+ * A scene tile in CSS px for a window `windowH` tall: SHOT_WIDE of a run's tile there, as the
+ * drift frames a lab that fills the window — not the zoom it gives a lab too small for that to
+ * cover the window (menu/drift.ts `sceneShot`), which leaves the hero's size as it is.
+ */
 export function heroTile(windowH: number): number {
   return tileCss({ height: windowH, bar: 0, touch: false }) * SHOT_WIDE;
 }

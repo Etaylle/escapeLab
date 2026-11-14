@@ -1,4 +1,5 @@
 import { addProbes } from '../../probes.js';
+import { domCanvas } from '../atlas.js';
 import { TAU } from '../brush.js';
 import { figurePhase, shownFacing, TURN_MS, type FigurePose, type Turn } from '../figure.js';
 import { traceRequested } from '../frameTrace.js';
@@ -154,16 +155,24 @@ export function stageFacts(stage: HTMLElement, canvas: HTMLCanvasElement): Stage
   };
 }
 
-/** Puts the hero's canvas on `box` in the stage, or hides it where it stands nowhere. */
+/**
+ * Puts the hero's canvas on `box` in the stage, or hides it where it stands nowhere: its style
+ * written only where it lies elsewhere, as its loop asks on every frame.
+ */
 function placeCanvas(canvas: HTMLCanvasElement, box: StageBox | null): void {
   canvas.hidden = box === null;
-  if (box !== null) {
-    Object.assign(canvas.style, {
-      left: `${box.left}px`,
-      top: `${box.top}px`,
-      width: `${box.width}px`,
-      height: `${box.height}px`,
-    });
+  if (box === null) {
+    return;
+  }
+  const at = {
+    left: `${box.left}px`,
+    top: `${box.top}px`,
+    width: `${box.width}px`,
+    height: `${box.height}px`,
+  };
+  const sides = Object.keys(at) as (keyof typeof at)[];
+  if (sides.some((side) => canvas.style[side] !== at[side])) {
+    Object.assign(canvas.style, at);
   }
 }
 
@@ -632,7 +641,6 @@ function leaveOut(hero: HeroCanvas): void {
  * something it shows changes and wakes it.
  */
 export function heroPainter(on: HeroPainting, since: number): (now: number) => boolean {
-  let boxed: StageBox | null = null;
   return (now) => {
     const { place } = on.standing;
     if (place === null) {
@@ -648,9 +656,8 @@ export function heroPainter(on: HeroPainting, since: number): (now: number) => b
     const pose = heroPose(cues, [now, since], motion);
     const lamp = lampAt(on, [place, pose.bob, entrance.lamp, motion.offset], now);
     const box = canvasBox(place, entrance, on.standing);
-    if (on.canvas !== null && box !== boxed) {
+    if (on.canvas !== null) {
       placeCanvas(on.canvas, box);
-      boxed = box;
     }
     const dpr = Math.min(MAX_DENSITY, window.devicePixelRatio || 1);
     const frame = { place, box, pose, motion, color: look.color, dpr, lamp: lamp };
@@ -717,14 +724,6 @@ function probed(probe: HeroProbe): () => void {
   });
 }
 
-/** A canvas `width` × `height` of the page's own: the hero's layers. */
-function makeCanvas(width: number, height: number): HTMLCanvasElement {
-  const canvas = document.createElement('canvas');
-  canvas.width = width;
-  canvas.height = height;
-  return canvas;
-}
-
 /** A hero started on its canvas: what wakes its loop, and its end. */
 export interface HeroRun {
   wake: () => void;
@@ -746,7 +745,7 @@ export function startHero(
   host: SceneHost,
   motion: { reduced: () => boolean; watch: (changed: () => void) => () => void },
 ): HeroRun | null {
-  const hero = heroCanvas(canvas, makeCanvas);
+  const hero = heroCanvas(canvas, domCanvas);
   const stage = canvas.parentElement;
   if (hero === null || stage === null) {
     return null;

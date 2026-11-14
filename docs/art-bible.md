@@ -576,8 +576,10 @@ keeps its small figure: it is the player's badge — the name, the colour, the a
 stands for the hero where the hero is left out; the hero is the player in the scene. Both wave at
 a new name.
 
-**Size.** The hero stands 42 % of the stage's height tall, held to 4 to 6 tiles of the lab behind
-the menu (its tile as the drift frames it: drift.ts `sceneShot`), and to the room the stage leaves
+**Size.** The hero stands 42 % of the stage's height tall, held to 4 to 6 scene tiles — 0.9 of a
+run's tile in a window as tall (viewport.ts `tileCss`), as the drift frames a lab that fills the
+window; a lab too small to fill it the drift zooms in on until it covers the window (drift.ts
+`sceneShot`), and the hero does not grow with that zoom — and to the room the stage leaves
 it — across, from the menu's column (its items, the run's card, the lead line) and from the widest
 panel once the hero has stepped half a tile aside for it, to the stage's right edge or the window's
 safe area, 12 px clear of each; down, from under the profile to the floor that the stage's padding

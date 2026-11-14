@@ -171,7 +171,7 @@ describe('the door wipe’s doors', () => {
     expect(CLOSE_MS + OPEN_MS).toBeLessThanOrEqual(400);
   });
 
-  it('says the screen left is going while they close over it or stand shut, not as they open', () => {
+  it('says the screen left goes while they close over it or stand shut, not as they open', () => {
     expect(doorsGoing('closing')).toBe(true);
     expect(doorsGoing('shut')).toBe(true);
     expect(doorsGoing('opening')).toBe(false);

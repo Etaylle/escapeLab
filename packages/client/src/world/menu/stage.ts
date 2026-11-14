@@ -1,4 +1,5 @@
 import { addProbes } from '../../probes.js';
+import { domCanvas } from '../atlas.js';
 import { frameTrace, traceRequested } from '../frameTrace.js';
 import { censusTrace, lightCensus, type LightCensus } from '../render/census.js';
 import { driftAt } from './drift.js';
@@ -56,14 +57,6 @@ export interface SceneProbe {
   paints: number;
   /** the hero's beam: laid on the last frame drawn, and turned anew so often so far */
   beam: { laid: boolean; turns: number };
-}
-
-/** A canvas `width` × `height` of the page's own: the beam's. */
-function makeCanvas(width: number, height: number): HTMLCanvasElement {
-  const canvas = document.createElement('canvas');
-  canvas.width = width;
-  canvas.height = height;
-  return canvas;
 }
 
 /** The canvas's size changes: the scene is baked anew once it has held still SETTLE_MS. */
@@ -167,7 +160,7 @@ export function openStage(canvas: HTMLCanvasElement, motion: StageMotion): Scene
     beam: { laid: false, turns: 0 },
   };
   const census = lightCensus();
-  const beam = sceneBeam(makeCanvas);
+  const beam = sceneBeam(domCanvas);
   let lab: SceneLab | null = null;
   let wanted: string | null = null;
   let closed = false;

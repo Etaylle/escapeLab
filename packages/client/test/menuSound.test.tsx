@@ -239,7 +239,7 @@ describe('the menu’s sound in the lobby and at the run’s start', () => {
     expect(mix.duckLevels(engine, now + 1).music).toBeCloseTo(1, 6);
   });
 
-  it('ticks, clacks, chimes and clicks only while it plays, a tick no oftener than 50 ms', async () => {
+  it('ticks, clacks, chimes and clicks only while it plays, a tick in 50 ms at most', async () => {
     const page = fakeWindow();
     const { sound } = await fresh();
     sound.wantMenuSound('menu');
