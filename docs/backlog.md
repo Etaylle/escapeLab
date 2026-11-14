@@ -585,6 +585,11 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   Klick: halber Schritt, Lampe flackert auf, dann die Tür (voll zu Lobby/Editor/Lauf, kurze Blende
   vor Panels); reduzierte Bewegung: Schnitte; Design-Durchgang (Titel, Menüpunkte, Panelrahmen,
   Abstände, Handy); Budget ≤ 1 ms je Frame bleibt, Stills zuerst zur Auswahl.
+- Nachtrag Uros 09:58: je Menüpunkt ein eigener Ort im Labor statt derselben driftenden Stelle –
+  die Kamera fährt beim Hover langsam hin (Einsatz starten → Reaktor und Notausgang, Beitreten →
+  Pforte im Flur, Offene Runden → Leitstand, Handbuch → Archiv, Bestenliste → Tafel, Meine
+  Einsätze → Spinde, Editor → Werkstatt, Einstellungen → Maschinenraum), die Lampe leuchtet den
+  Raum aus; mit reduzierter Bewegung Schnitte; Orte mit Koordinaten in der Art-Bible.
 
 ### U-1 Pausenmenü, Verlassen wie Dota 2, Einstellungen und Chrome — Status: erledigt (U-pause, Merge 2026-11-14; drei Review-Runden mit Playwright-Repros; Cloud-CI grün auf fe6222c; Rest: nach „Zum Hauptmenü" bleibt ein toter Zurück-Schritt je Tab) · Größe: L
 - Uros 2026-11-14: „Spielabbruch richtig: Der Spieler kann das Spiel nicht verlassen, wann er
