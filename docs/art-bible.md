@@ -868,7 +868,7 @@ leave and when it is gone, and each frame the panel's opacity and how far its fa
 the fade's own clock (the animation's currentTime); the panel has to go 100 to 600 ms after it
 began to leave, inert, its opacity only falling, and show midway on a frame — a frame drawn
 between half and nine tenths into the 150-ms fade, where its ease-in has the panel at 0.86 to
-0.28, has to. Where the page drew none there — or, at load 15 in one run, none at all while the
+0.28, has to. Where the page drew none there — or, in one Blackout run, none at all while the
 panel left — the midway frames are skipped (`panel-close (fade)`), the reason naming the fade's
 times at the frames it drew and when the panel went, and the held shot judges the fade; a fade that never falls still fails on a frame in its middle, as
 does a panel gone at once. meter-swing.png: the page pauses the needle's own transition 60 ms
