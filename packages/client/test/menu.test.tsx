@@ -361,7 +361,10 @@ describe('the menu under the pointer', () => {
     }
     expect(focus).not.toHaveBeenCalled();
     // It brightens all the same, slowly: the item under the pointer a little, the focused one fully.
-    expect(menuRule('.menu-list .menu-item:hover:not(:disabled)')).toContain('background:');
+    const hovered = menuRule('.menu-list .menu-item:hover:not(:disabled):not(:focus)');
+    expect(hovered).toContain('background:');
+    expect(hovered).toContain('border-left-color: transparent;');
+    expect(hovered).toContain('box-shadow: none;');
     expect(menuRule('.menu-list .menu-item')).toMatch(/background 0\.4s ease-out,\s+color 0\.4s/);
   });
 

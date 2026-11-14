@@ -189,7 +189,9 @@
     border-color 0.15s;
 }
 
-.menu-list .menu-item:hover:not(:disabled) {
+/* Hovered, an item only brightens: no rail, no glow round it, as a plain button's hover has. */
+.menu-list .menu-item:hover:not(:disabled):not(:focus) {
+  border-left-color: transparent;
   background: linear-gradient(
     90deg,
     rgba(255, 214, 168, 0.09),
@@ -197,6 +199,7 @@
     transparent
   );
   color: #fbf7f1;
+  box-shadow: none;
 }
 
 .menu-list .menu-item:focus {
