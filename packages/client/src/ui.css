@@ -2421,8 +2421,12 @@ button.link:hover {
   overflow: hidden;
 }
 
+/*
+ * The radio line gives way before the crew, at every width: its words were on the banner already,
+ * and the crew's names are what the strip is for.
+ */
 .hud-radio {
-  flex: 0 1 auto;
+  flex: 0 8 auto;
   min-width: 80px;
 }
 

@@ -170,11 +170,18 @@ describe('the Laborkennung in a narrow strip', () => {
     expect(narrow).toMatch(/\n {2}\.hud \.edgework-value \{\s*display: block;/);
     const givesWay = /\n {2}\.hud-crew,\n {2}\.hud-radio,\n {2}\.hud \.edgework \{\s*min-width: 0;/;
     expect(narrow).toMatch(givesWay);
-    // The radio line first, then the crew; the chip's value stays whole, nothing lets it shrink.
-    expect(narrow).toMatch(/\n {2}\.hud-radio \{\s*flex-shrink: 4;\s*\}/);
+    // The chip's value stays whole, nothing lets it shrink.
     expect(narrow).not.toMatch(/\.edgework[^{]*\{[^}]*flex/);
     // Nothing in it touches the buttons: they keep their size and stay on the screen.
     expect(narrow).not.toMatch(/hud-info|hud-notes|hud-mic/);
+  });
+});
+
+describe('the strip’s crew', () => {
+  it('keeps its names as the radio line gives way first, at every width', () => {
+    const ui = readFileSync(new URL('../src/ui.css', import.meta.url), 'utf8');
+    expect(ui).toMatch(/\n\.hud-radio \{\s*flex: 0 8 auto;\s*min-width: 80px;/);
+    expect(ui).toMatch(/\n\.hud-crew \{\s*flex: 0 1 auto;/);
   });
 });
 
