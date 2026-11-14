@@ -22,7 +22,13 @@ import {
   steer,
   type Stream,
 } from './audioStream.js';
-import { chosenFor, entryOf, type Chosen, type MusicPiece } from './musicPacks.js';
+import {
+  chosenFor,
+  entryOf,
+  fetchPieceFile,
+  type Chosen,
+  type MusicPiece,
+} from './musicPacks.js';
 import { holdMusic, musicFrom } from './musicTurn.js';
 import { crossfadePeriod } from './packFile.js';
 import {
@@ -456,15 +462,16 @@ async function fetchStems(m: Music): Promise<void> {
 }
 
 /**
- * A track's file fetched into memory and named by a blob address; tried again RETRY_MS on. A
- * track let go meanwhile lets its file go as it comes.
+ * A track's file fetched into memory and named by a blob address; tried again RETRY_MS on — but a
+ * found piece's, which gives its place to the score's (musicPacks.ts `pieceFailed`): the stem
+ * follows that as any choice (`followChoice`). A track let go meanwhile lets its file go as it
+ * comes.
  */
 async function fetchStem(m: Music, track: Track): Promise<void> {
   track.tried = Date.now();
   const entry = entryOfTrack(track);
   if (entry === null || track.file !== null) return;
-  const res = await fetch(`${MUSIC_BASE}${entry.file}`).catch(() => null);
-  const blob = res?.ok === true ? await res.blob().catch(() => null) : null;
+  const blob = await fetchPieceFile(track.chosen, entry);
   if (blob === null || m.ended || track.file !== null) return;
   track.file = URL.createObjectURL(blob);
   track.level.gain.value = entry.gain;

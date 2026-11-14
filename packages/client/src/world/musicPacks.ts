@@ -10,7 +10,7 @@ import {
   type Slot,
 } from './packFile.js';
 import { PACK_FILES } from './packList.js';
-import { musicEntry, type MusicId, type SampleEntry } from './samples.js';
+import { MUSIC_BASE, musicEntry, type MusicId, type SampleEntry } from './samples.js';
 
 /**
  * musicPacks.ts: the music the player picks in the settings (screens/Settings.tsx „Musik",
@@ -19,7 +19,9 @@ import { musicEntry, type MusicId, type SampleEntry } from './samples.js';
  * place. A piece of the game's own score plays as the music's manifest lists it (samples.ts), a
  * found piece as its pack.json does, from public/music/packs/<pack>/. The choice comes from the
  * settings (settings.ts `music`, kept on this device) and is told to whoever listens; the run's
- * music, the menu's sound, the opening and the end card ask here what plays.
+ * music, the menu's sound, the opening and the end card ask here what plays. A found piece whose
+ * file cannot be had — a server that fails it, an installed app without a connection — gives its
+ * place to the score's piece for as long as the page lives (`pieceFailed`), said once.
  */
 
 /** What the player chose: a pack, and for some places a piece of another pack, by its pack. */
@@ -73,6 +75,13 @@ export function packById(id: string): PackFile | null {
 
 let choice: MusicChoice = DEFAULT_CHOICE;
 const listeners = new Set<() => void>();
+/** The found pieces whose file could not be had on this page, by key: the score plays there. */
+const failed = new Set<string>();
+
+/** Tells whoever listens that what plays has changed. */
+function tell(): void {
+  for (const listener of [...listeners]) listener();
+}
 
 /** What the player chose, as the settings last told it. */
 export function musicChoice(): MusicChoice {
@@ -84,8 +93,7 @@ export function setMusicChoice(next: MusicChoice): void {
   const same =
     next.pack === choice.pack && SLOTS.every((slot) => next.pieces[slot] === choice.pieces[slot]);
   choice = next;
-  if (same) return;
-  for (const listener of [...listeners]) listener();
+  if (!same) tell();
 }
 
 /** Calls `listener` at every change of the choice; returns what stops it. */
@@ -127,9 +135,12 @@ export function entryOf(pack: string, piece: PackPiece): MusicPiece | null {
   return isScore(piece) ? musicEntry(piece.score as MusicId) : foundEntry(pack, piece);
 }
 
-/** The piece of `slot` in the pack `pack`; the default pack's where that has none. */
+/**
+ * The piece of `slot` in the pack `pack`; the default pack's — the score's — where that has none,
+ * or its file could not be had (`pieceFailed`).
+ */
 function pieceIn(pack: string, slot: Slot): { pack: string; piece: PackPiece } {
-  const own = packById(pack)?.pieces[slot];
+  const own = failed.has(`${pack}/${slot}`) ? undefined : packById(pack)?.pieces[slot];
   if (own !== undefined) return { pack, piece: own };
   const fallback = packById(DEFAULT_PACK)?.pieces[slot];
   if (fallback === undefined) throw new Error(`music: no pack has a piece for ${slot}`);
@@ -145,4 +156,28 @@ export function chosenFor(slot: Slot, chosen: MusicChoice = choice): Chosen {
 /** How the piece in play for `slot` plays now; null where it cannot yet (`Chosen.entry`). */
 export function slotEntry(slot: Slot): MusicPiece | null {
   return chosenFor(slot).entry;
+}
+
+/**
+ * The file of the found piece `chosen` could not be had: its place plays the score's piece from
+ * now on, which is said once and told to whoever listens. Whether it was a found piece newly
+ * given up — a piece of the score has none to fall back to, and one given up before is so already.
+ */
+export function pieceFailed(chosen: Chosen): boolean {
+  if (isScore(chosen.piece) || failed.has(chosen.key)) return false;
+  failed.add(chosen.key);
+  console.warn(`music: ${chosen.key} could not be had — the score's piece plays in its place`);
+  tell();
+  return true;
+}
+
+/**
+ * The file of `chosen`, played as `entry`, fetched whole; null where it could not be had — a found
+ * piece's place then plays the score's (`pieceFailed`).
+ */
+export async function fetchPieceFile(chosen: Chosen, entry: MusicPiece): Promise<Blob | null> {
+  const res = await fetch(`${MUSIC_BASE}${entry.file}`).catch(() => null);
+  const blob = res?.ok === true ? await res.blob().catch(() => null) : null;
+  if (blob === null) pieceFailed(chosen);
+  return blob;
 }

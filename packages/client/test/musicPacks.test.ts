@@ -185,3 +185,38 @@ describe('the music chosen', () => {
     expect(heard).toHaveBeenCalledTimes(2);
   });
 });
+
+describe('a found piece that cannot be had', () => {
+  /** The choice module afresh: nothing given up yet, the packs the game ships. */
+  async function fresh() {
+    vi.resetModules();
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    return import('../src/world/musicPacks.js');
+  }
+
+  it('gives its place to the score’s piece, said once and told to whoever listens', async () => {
+    const music = await fresh();
+    const macleod = { pack: 'macleod', pieces: {} };
+    const heard = vi.fn();
+    music.subscribeMusicChoice(heard);
+    const calm = music.chosenFor('calm', macleod);
+    expect(music.pieceFailed(calm)).toBe(true);
+    expect(music.chosenFor('calm', macleod).key).toBe('nachtschicht/calm');
+    expect(music.chosenFor('tense', macleod).key).toBe('macleod/tense');
+    // Given up once: a second fetch of it failing, as two stems' might, changes nothing.
+    expect(music.pieceFailed(calm)).toBe(false);
+    expect(heard).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(console.warn)).toHaveBeenCalledTimes(1);
+    vi.restoreAllMocks();
+  });
+
+  it('changes nothing where the score’s own piece cannot be had: it has none to fall to', async () => {
+    const music = await fresh();
+    const heard = vi.fn();
+    music.subscribeMusicChoice(heard);
+    expect(music.pieceFailed(music.chosenFor('calm', DEFAULT_CHOICE))).toBe(false);
+    expect(music.chosenFor('calm', DEFAULT_CHOICE).key).toBe('nachtschicht/calm');
+    expect([heard.mock.calls.length, vi.mocked(console.warn).mock.calls.length]).toEqual([0, 0]);
+    vi.restoreAllMocks();
+  });
+});

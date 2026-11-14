@@ -419,3 +419,70 @@ describe('a pack’s endings and its title', () => {
     expect(outOf(lastContext(), title).gain.value).toBeCloseTo(MUSIC_LEVEL * 0.8, 9);
   });
 });
+
+describe('a pack’s file that cannot be had', () => {
+  /** What the page warned of: each warning's words. */
+  const warned = (): string[] =>
+    vi.mocked(console.warn).mock.calls.map((call) => String(call[0]));
+
+  it('gives its stem’s place to the score’s piece, said once', async () => {
+    const { music, packs } = await fresh({ 'packs/probe/calm': { status: 404 } });
+    packs.setMusicChoice({ pack: 'probe', pieces: {} });
+    music.setTension(tension());
+    await fetchIn();
+    music.setTension(tension());
+    await fetchIn();
+    music.setTension(tension());
+    vi.advanceTimersByTime(300);
+    expect(music.musicProbe().pieces.calm).toBe('nachtschicht/calm');
+    // The blobs follow the files had: the one that failed made none.
+    const had = fetched.filter((url) => /\.(?:m4a|mp3)$/.test(url) && !url.includes('probe/calm'));
+    const score = `blob:${had.indexOf('/music/calm.mp3')}`;
+    expect(elements.some((element) => element.src === score && element.plays > 0)).toBe(true);
+    // Asked no more, and said once, however long the run goes on.
+    vi.advanceTimersByTime(12_000);
+    music.setTension(tension());
+    await fetchIn();
+    expect(fetched.filter((url) => url === '/music/packs/probe/calm.m4a')).toHaveLength(1);
+    expect(warned().filter((line) => line.includes('probe/calm'))).toHaveLength(1);
+  });
+
+  it('gives the menu’s theme the score’s, as a pack changed on the menu comes in', async () => {
+    const page = fakeWindow();
+    const { sound, packs } = await freshMenu({ 'packs/probe/menu-theme': { status: 404 } });
+    packs.setMusicChoice({ pack: 'probe', pieces: {} });
+    sound.wantMenuSound('menu');
+    page.fire('keydown');
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(sound.menuSoundProbe()).toMatchObject({ theme: true, pack: 'nachtschicht' });
+    expect(fetched).toContain('/music/menu-theme.mp3');
+    expect(warned().filter((line) => line.includes('probe/menu-theme'))).toHaveLength(1);
+  });
+
+  it('gives an ending and the opening’s title the score’s at once as their stream fails', async () => {
+    vi.resetModules();
+    shipPacks(PROBE);
+    const title = { title: { seconds: 40 } };
+    await loadedSamples(title);
+    fetched = serveSamples(title, () => Promise.resolve(new Response(null, { status: 404 })));
+    const packs = await import('../src/world/musicPacks.js');
+    const end = await import('../src/world/endTheme.js');
+    const cue = await import('../src/world/intro/cue.js');
+    (await import('../src/world/audio.js')).audioEngine();
+    packs.setMusicChoice({ pack: 'probe', pieces: {} });
+    end.playEnding('won');
+    await fetchIn();
+    const playingFrom = (src: string): FakeAudio | undefined =>
+      elements.find((element) => element.src === src);
+    playingFrom('/music/packs/probe/end-won.m4a')?.fire('error');
+    expect(playingFrom('/music/end-won.mp3')).toBeDefined();
+    expect(end.endThemeProbe().playing).toBe('end-won');
+    end.stopEnding();
+    cue.startCue(Date.now());
+    await vi.advanceTimersByTimeAsync(10);
+    playingFrom('/music/packs/probe/title.m4a')?.fire('error');
+    await vi.advanceTimersByTimeAsync(10);
+    expect(playingFrom('/music/title.mp3')).toBeDefined();
+    expect(warned().filter((line) => / probe\/(?:end-won|title) /.test(line))).toHaveLength(2);
+  });
+});

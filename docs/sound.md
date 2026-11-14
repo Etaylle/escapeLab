@@ -1486,6 +1486,15 @@ music's duck (`mix.ts` `preview`), the music pulled 24 dB down under it — unti
 played, it is pressed again or the settings close (`musicPreview.ts`). „Nennungen" below lists the
 attribution of every piece in play, its addresses linked; `/sounds` lists every pack's.
 
+**A file that cannot be had.** An installed app keeps only the score's pack; another pack's piece
+is fetched as it is first played. Where that fails — a server that answers with an error, a phone
+without a connection — the found piece gives its place to the score's piece for as long as the
+page lives, said once in the console (`musicPacks.ts` `pieceFailed`), and every part of the music
+follows it as it follows any choice: a run's stem crosses to the score's on its next tick, the
+menu's theme or the lobby's piece as a change comes in, an ending or the opening's title as soon as
+its stream fails. A piece of the score that cannot be had has none to fall back to: a stem asks for
+it again 5 s on, as before, and the rest plays without it.
+
 **Built by a script.** `scripts/packs.ts` builds the packs from the plan `audio/packs.plan.json`:
 per pack and place the source — a file's address, or `manual` with the page to fetch it from by
 hand — the page its licence was read on, title, author, licence, the composer's own credit text
@@ -1717,10 +1726,9 @@ What the sound packages left for later, one line each, the newest first:
 - **More packs** (M-packs): the owner asked for up to ten; a CC0 pack from FreePD's archive and a
   pack of the best piece per place are the next candidates, each some 8 MB more in the repository —
   the Feinwahl already lets any place take any pack's piece.
-- **Packs other than the score come over the network** (M-packs): an installed app keeps only the
-  score's pack (Musikpakete); another pack's piece is fetched as it is first played, and where that
-  fails its place stays silent — the run's stems ask again 5 s on — and nothing falls back to the
-  score.
+- **A pack's piece given up stays given up** (M-packs): a found piece whose file once failed plays
+  the score's piece until the page is loaded anew, even where the connection comes back
+  (Musikpakete, „A file that cannot be had").
 - **The plant's voice and 48 lines await the render** (V-voices): the Voice Design, the voice
   kept and every line read anew, 179 and 9,692 characters; the commands are under „A voice on
   the radio". Until then the new lines show their words on the objective bar and in the

@@ -31,6 +31,7 @@ import {
 import {
   chosenFor,
   entryOf,
+  fetchPieceFile,
   subscribeMusicChoice,
   type Chosen,
   type MusicPiece,
@@ -40,7 +41,6 @@ import { holdMusic, musicFrom } from './musicTurn.js';
 import type { Slot } from './packFile.js';
 import {
   loadSample,
-  MUSIC_BASE,
   musicListed,
   releaseSample,
   type Sample,
@@ -358,14 +358,14 @@ function start(engine: Engine): void {
 }
 
 /**
- * The piece's file fetched into memory and named by a blob address; nothing where none is. A
- * piece let go meanwhile lets its file go as it comes.
+ * The piece's file fetched into memory and named by a blob address; nothing where none is — a
+ * found piece's place then plays the score's, as any change of the choice comes in (musicPacks.ts
+ * `pieceFailed`, `chooseAnew`). A piece let go meanwhile lets its file go as it comes.
  */
 async function fetchPiece(p: Playing, piece: Piece): Promise<void> {
   const entry = entryOf(piece.chosen.pack, piece.chosen.piece);
   if (entry === null) return;
-  const res = await fetch(`${MUSIC_BASE}${entry.file}`).catch(() => null);
-  const blob = res?.ok === true ? await res.blob().catch(() => null) : null;
+  const blob = await fetchPieceFile(piece.chosen, entry);
   if (blob === null || playing !== p) return;
   piece.entry = entry;
   piece.file = URL.createObjectURL(blob);
