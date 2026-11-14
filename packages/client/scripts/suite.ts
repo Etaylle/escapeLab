@@ -2,12 +2,13 @@
  * A suite: one generation of Eleven Music in named sections — a composition plan whose sections
  * share a key, a tempo and a motif by construction — cut into the pieces the game plays
  * (docs/sound.md „Score"). The catalog writes a suite once (audio/catalog.json, kind `suite`):
- * its key, its tempo, the motif in a composer's words, the styles every section shares and those
- * none may have, and its sections, each with its bars, whether it loops, its lines and its own
+ * its key, its tempo, the motif in a composer's words — its cell, the fall that ends its first
+ * phrase, its answer — the styles every section shares and those none may have, and its sections,
+ * each with its bars, whether it loops, how much of the motif it plays, its lines and its own
  * styles. This module reads that shape: where each section lies in the generation (`spansOf`),
- * the chunks of the plan Eleven Music is asked for (`chunksOf`), and each section as the piece it
- * makes, an entry of its own as the manifests list it (`piecesOf`). Its rules are the catalog's,
- * in sfx.ts. Pure.
+ * the chunks of the plan Eleven Music is asked for (`chunksOf`), each given the motif as far as
+ * its section plays it (`motifOf`), and each section as the piece it makes, an entry of its own
+ * as the manifests list it (`piecesOf`). Its rules are the catalog's, in sfx.ts. Pure.
  *
  * A loop's section is planned with a tail past the bars that go round (`tailBars`): the bar the
  * game catches a next pass up in, the bars its seam crosses in, and a spare second (music.ts
@@ -20,6 +21,23 @@
 import type { ElevenLabs } from '@elevenlabs/elevenlabs-js';
 import type { CatalogEntry, Target } from './sfx.ts';
 
+/**
+ * How much of the motif a section plays, and is told of: its cell alone (the leap and the sigh),
+ * its first phrase (the cell and the fall), or the whole of it, the answer besides.
+ */
+export type MotifPart = 'cell' | 'phrase' | 'whole';
+export const MOTIF_PARTS: readonly MotifPart[] = ['cell', 'phrase', 'whole'];
+
+/**
+ * The motif in a composer's words, each part a phrase the plan's chunks are given: its cell, the
+ * fall that ends its first phrase, and its answering phrase.
+ */
+export interface Motif {
+  readonly cell: string;
+  readonly fall: string;
+  readonly answer: string;
+}
+
 /** One section of a suite: a piece the game plays, as the catalog writes it. */
 export interface SuiteSection {
   /** the piece's id, as the game plays it (samples.ts MUSIC_IDS) */
@@ -31,6 +49,8 @@ export interface SuiteSection {
   readonly loop: boolean;
   /** a key of its own, where it leaves the suite's */
   readonly key?: string;
+  /** how much of the motif it plays: the chunk is told of that much, and no more */
+  readonly motif: MotifPart;
   /** its lines: directions in braces, a wordless voice's sounds in parentheses; no lyrics */
   readonly lines: readonly string[];
   readonly styles: readonly string[];
@@ -46,8 +66,8 @@ export interface SuiteEntry {
   readonly key: string;
   /** its tempo, beats a minute, in bars of BEATS_PER_BAR */
   readonly bpm: number;
-  /** the motif in a composer's words, given to every section */
-  readonly motif: readonly string[];
+  /** the motif in a composer's words, each section given as much of it as it plays */
+  readonly motif: Motif;
   /** what every section shares: the genre, the instruments, the mood */
   readonly styles: readonly string[];
   /** what no section may have */
@@ -142,13 +162,24 @@ export function suiteMs(suite: SuiteEntry): number {
   return spansOf(suite).at(-1)?.toMs ?? 0;
 }
 
+/** The parts of `suite`'s motif `section` plays: its cell, its first phrase, or the whole. */
+export function motifOf(suite: SuiteEntry, section: SuiteSection): string[] {
+  const { cell, fall, answer } = suite.motif;
+  const parts: Readonly<Record<MotifPart, string[]>> = {
+    cell: [cell],
+    phrase: [cell, fall],
+    whole: [cell, fall, answer],
+  };
+  return parts[section.motif];
+}
+
 /**
  * What every section of `suite` is given besides its own styles: its key — a section's own where
- * it has one — the tempo and the bar, the motif, and the suite's styles.
+ * it has one — the tempo and the bar, the motif as far as it plays it, and the suite's styles.
  */
 function sharedStyles(suite: SuiteEntry, section: SuiteSection): string[] {
   const tempo = [`${suite.bpm} BPM`, `${BEATS_PER_BAR}/4 time`];
-  return [section.key ?? suite.key, ...tempo, ...suite.motif, ...suite.styles];
+  return [section.key ?? suite.key, ...tempo, ...motifOf(suite, section), ...suite.styles];
 }
 
 /**

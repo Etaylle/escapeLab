@@ -38,7 +38,6 @@ import {
   measuredAnew,
   MIN_CREDITS,
   missesOf,
-  musicFormatOf,
   musicRequest,
   noisyTakes,
   offLength,
@@ -58,7 +57,6 @@ import {
   startMsOf,
   takesLines,
   TARGETS,
-  tempoOf,
   upToDate,
   type Bench,
   type CatalogEntry,
@@ -102,15 +100,15 @@ const CLACK: CatalogEntry = {
   usedBy: ['src/world/audio.ts#leverChunk'],
 };
 
-const CALM: CatalogEntry = {
-  id: 'test-calm',
-  kind: 'stem',
-  prompt: 'Instrumental underscore for a dark lab at night, A minor, 90 BPM, steady, made to loop.',
-  durationSeconds: 72,
-  loop: true,
-  bpm: 90,
-  target: { measure: 'rms', dbfs: -20 },
-  usedBy: ['src/world/music.ts#STEMS'],
+/** A second piece of music on its own beside the stings: a swell of 12 s, as a run makes any. */
+const SWELL: CatalogEntry = {
+  id: 'test-swell',
+  kind: 'sting',
+  prompt: 'A short instrumental swell, low strings rising to an open chord and ringing out, 12 s.',
+  durationSeconds: 12,
+  loop: false,
+  target: { measure: 'rms', dbfs: -14 },
+  usedBy: ['src/world/music.ts#playSting'],
 };
 
 describe('the catalog', () => {
@@ -120,15 +118,15 @@ describe('the catalog', () => {
     expect(new Set(catalog.map((entry) => entry.id)).size).toBe(catalog.length);
   });
 
-  it('brings one-shots to a −3 dBFS peak, the rest to −20 dBFS RMS, stings to −14', () => {
+  it('brings one-shots to a −3 dBFS peak, beds to −20 dBFS RMS, stings to −14', () => {
     expect(TARGETS).toEqual({
       oneshot: { measure: 'peak', dbfs: -3 },
       bed: { measure: 'rms', dbfs: -20 },
-      stem: { measure: 'rms', dbfs: -20 },
       sting: { measure: 'rms', dbfs: -14 },
-      theme: { measure: 'rms', dbfs: -20 },
     });
-    for (const entry of sounds) expect(entry.target, entry.id).toEqual(TARGETS[entry.kind]);
+    for (const entry of sounds) {
+      expect(entry.target, entry.id).toEqual(Reflect.get(TARGETS, entry.kind));
+    }
   });
 
   it('has the end card’s two stings, 8–12 s, beside the score holding the rest', () => {
@@ -142,25 +140,14 @@ describe('the catalog', () => {
     expect(LENGTHS.sting).toEqual([8, 12]);
   });
 
-  it('makes a theme at 128 kbit/s, every other piece of music at 192, a suite too', () => {
-    const theme: CatalogEntry = {
-      id: 'test-theme',
-      kind: 'theme',
-      prompt: CALM.prompt,
-      durationSeconds: 32,
-      loop: false,
-      target: { measure: 'rms', dbfs: -20 },
-      usedBy: CALM.usedBy,
-    };
-    expect(musicRequest(theme).outputFormat).toBe('mp3_44100_128');
-    expect(flawsOf({ ...CLACK, kind: 'theme', durationSeconds: 32, loop: true })).toEqual([
-      'loop has to be true for a bed or a stem, and false for the rest',
-      'its target has to be {"measure":"rms","dbfs":-20}',
-    ]);
-    // The stems and stings keep 192 kbit/s, and with it the requests they were made from.
-    expect(musicFormatOf(CALM)).toBe('mp3_44100_192');
-    expect(musicFormatOf({ kind: 'sting' })).toBe('mp3_44100_192');
-    expect(musicFormatOf({ kind: 'suite' })).toBe('mp3_44100_192');
+  it('makes no stem or theme on its own — each is a section of a suite — and music at 192', () => {
+    for (const kind of ['stem', 'theme'] as const) {
+      expect(flawsOf({ ...SWELL, kind }), kind).toEqual([
+        `its kind "${kind}" is not oneshot, bed, sting: a stem or a theme is a section of a suite`,
+      ]);
+    }
+    expect(sounds.filter((entry) => !(entry.kind in TARGETS))).toEqual([]);
+    expect(settingsOf(SWELL).outputFormat).toBe('mp3_44100_192');
   });
 
   it('finds every flaw of an entry, and a twice-named id', () => {
@@ -178,35 +165,18 @@ describe('the catalog', () => {
     expect(flawsOf({ ...CLACK, kind: 'jingle' as never })).toContainEqual(
       expect.stringMatching(/kind "jingle"/),
     );
-    expect(flawsOf({ ...CALM, durationSeconds: 30 })).toEqual([
-      expect.stringMatching(/30 s, outside 60–90 s/),
+    expect(flawsOf({ ...SWELL, durationSeconds: 30 })).toEqual([
+      expect.stringMatching(/30 s, outside 8–12 s/),
     ]);
     expect(() => checkCatalog([CLACK, CLACK])).toThrow(/test-clack: its id comes twice/);
   });
 
-  it('gives each stem the tempo its prompt states, one for all three, no other kind one', () => {
-    expect(tempoOf(CALM.prompt)).toBe(90);
-    expect(tempoOf('steady, 92.5 bpm, no drums')).toBe(92.5);
-    expect(tempoOf(CLACK.prompt)).toBeNull();
-    const untimed: CatalogEntry = {
-      id: CALM.id,
-      kind: 'stem',
-      prompt: CALM.prompt,
-      durationSeconds: CALM.durationSeconds,
-      loop: true,
-      target: CALM.target,
-      usedBy: CALM.usedBy,
-    };
-    expect(flawsOf(untimed)).toEqual([expect.stringMatching(/the tempo its prompt states \(90\)/)]);
-    expect(flawsOf({ ...CALM, bpm: 120 })).toHaveLength(1);
-    expect(flawsOf({ ...CLACK, bpm: 90 })).toEqual(['only a stem has a bpm']);
-    const prompt = CALM.prompt.replace('90', '120');
-    const quicker = { ...CALM, id: 'test-quick', prompt, bpm: 120 };
-    expect(() => checkCatalog([CALM, quicker])).toThrow(/share one tempo, not 90, 120 bpm/);
-    for (const stem of sounds.filter((entry) => entry.kind === 'stem')) {
-      expect(stem.bpm, stem.id).toBe(90);
-    }
-    expect(hashOf({ ...CALM, bpm: 120 })).toBe(hashOf(CALM)); // the tempo asks nothing anew
+  it('gives no sound of its own a tempo: a tempo is its suite’s', () => {
+    expect(flawsOf({ ...SWELL, bpm: 90 })).toEqual([
+      "a sound of its own has no bpm: a tempo is its suite's",
+    ]);
+    expect(sounds.filter((entry) => entry.bpm !== undefined)).toEqual([]);
+    expect(hashOf({ ...SWELL, bpm: 120 })).toBe(hashOf(SWELL)); // the tempo asks nothing anew
   });
 });
 
@@ -226,14 +196,14 @@ describe('a request', () => {
   });
 
   it('asks Eleven Music for an instrumental piece at 192 kbit/s, as long as asked', () => {
-    expect(musicRequest(CALM)).toEqual({
-      prompt: CALM.prompt,
-      musicLengthMs: 72_000,
+    expect(musicRequest(SWELL)).toEqual({
+      prompt: SWELL.prompt,
+      musicLengthMs: 12_000,
       forceInstrumental: true,
       modelId: 'music_v2_5',
       outputFormat: 'mp3_44100_192',
     });
-    expect(groupOf(CALM)).toBe('music');
+    expect(groupOf(SWELL)).toBe('music');
     expect(groupOf({ kind: 'sting' })).toBe('music');
     expect(groupOf(CLACK)).toBe('sfx');
     expect(groupOf({ kind: 'bed' })).toBe('sfx');
@@ -251,7 +221,7 @@ describe('a request', () => {
       hashOf(CLACK, 0.9),
     ];
     expect(new Set([hash, ...changed]).size).toBe(5);
-    expect(hashOf(CALM, 0.9)).toBe(hashOf(CALM)); // music follows no influence
+    expect(hashOf(SWELL, 0.9)).toBe(hashOf(SWELL)); // music follows no influence
   });
 
   it('spreads an effect’s candidates from loose to close, one made once at 0.5', () => {
@@ -264,8 +234,8 @@ describe('a request', () => {
   it('costs about 4 credits a second of an effect, 18 of music, and keeps within the caps', () => {
     expect(costOf(CLACK)).toBe(3);
     expect(costOf(CLACK, 3)).toBe(8); // three candidates
-    expect(costOf(CALM)).toBe(1296);
-    expect(costOf(CALM, 3)).toBe(3888); // three takes of the piece, too
+    expect(costOf(SWELL)).toBe(216);
+    expect(costOf(SWELL, 3)).toBe(648); // three takes of the piece, too
     expect(CAPS).toEqual({ sfx: 12_000, music: 18_000 });
     for (const group of ['sfx', 'music'] as const) {
       const all = catalog.filter((entry) => groupOf(entry) === group);
@@ -300,8 +270,8 @@ describe('making a recording', () => {
     expect([...(await make(client, CLACK))]).toEqual([...MP3]);
     await make(client, CLACK, { influence: 0.3 });
     expect(effects).toEqual([effectRequest(CLACK), effectRequest(CLACK, 0.3)]);
-    await make(client, CALM);
-    expect(pieces).toEqual([musicRequest(CALM)]);
+    await make(client, SWELL);
+    expect(pieces).toEqual([musicRequest(SWELL)]);
   });
 
   it('names the entry ElevenLabs refuses, and waits out a 429 as the voice does', async () => {
@@ -332,11 +302,22 @@ describe('making a recording', () => {
     expect(() => refuseBelow(39_999)).toThrow(/39999 credits left.*nothing asked/);
   });
 
-  it('prices a group at what its first entry cost a second, and stops it over its cap', () => {
+  it('prices a group at what its first take cost a second, and stops it over its cap', () => {
     expect(priced(24, 0.6, 1.8, 'sfx')).toEqual({ perSecond: 40, total: 96, over: false });
     expect(priced(600, 0.6, 18, 'sfx').over).toBe(true);
     expect(priced(600, 0.6, 18, 'music').over).toBe(true);
     expect(priced(0, 0.6, 1.8, 'sfx').total).toBe(0); // the account not caught up yet: no stop
+  });
+
+  it('reads the price once the first effect has landed, and stops there over the cap', async () => {
+    const places = placesIn();
+    // An effect the dry run prices at 3 credits costs the account 9 000: two would pass 12 000.
+    const { client, effects } = answering({ effects: [piece(0.6, 0.9)], spend: 9000 });
+    const second = { ...CLACK, id: 'test-clack-again' };
+    const run = runOf([CLACK, second], 1, benchOf(client, places));
+    await expect(run).rejects.toThrow('sfx: that is over the 12000 the sfx may spend');
+    expect(effects).toHaveLength(1);
+    expect(readManifest(places, 'sfx')[CLACK.id]?.file).toBe('test-clack.mp3'); // the first kept
   });
 });
 
@@ -358,10 +339,10 @@ describe('a run', () => {
 
   it('makes what is new, changed or gone, and keeps what is there unchanged', () => {
     const always = (): boolean => true;
-    const kept = planOf([CLACK, CALM], manifests, always, everything);
+    const kept = planOf([CLACK, SWELL], manifests, always, everything);
     expect(kept.map((job) => [job.entry.id, job.group, job.make])).toEqual([
       ['test-clack', 'sfx', false],
-      ['test-calm', 'music', true],
+      ['test-swell', 'music', true],
     ]);
     const louder = { ...CLACK, prompt: `${CLACK.prompt} Louder.` };
     expect(planOf([louder], manifests, always, everything)[0]?.make).toBe(true);
@@ -371,12 +352,12 @@ describe('a run', () => {
 
   it('takes the groups asked for, or the one entry --only names, made anew', () => {
     const always = (): boolean => true;
-    const music = planOf([CLACK, CALM], manifests, always, optionsOf(['music']));
-    expect(music.map((job) => job.entry.id)).toEqual(['test-calm']);
-    const only = planOf([CLACK, CALM], manifests, always, optionsOf(['--only', 'test-clack']));
+    const music = planOf([CLACK, SWELL], manifests, always, optionsOf(['music']));
+    expect(music.map((job) => job.entry.id)).toEqual(['test-swell']);
+    const only = planOf([CLACK, SWELL], manifests, always, optionsOf(['--only', 'test-clack']));
     expect(only.map((job) => [job.entry.id, job.make])).toEqual([['test-clack', true]]);
-    const both = optionsOf(['--only', 'test-calm,test-clack']);
-    expect(planOf([CLACK, CALM], manifests, always, both).map((job) => job.make)).toEqual([
+    const both = optionsOf(['--only', 'test-swell,test-clack']);
+    expect(planOf([CLACK, SWELL], manifests, always, both).map((job) => job.make)).toEqual([
       true,
       true,
     ]);
@@ -404,7 +385,7 @@ describe('a run', () => {
   });
 
   it('names every recording whose floor is heard, with its gain and that floor', () => {
-    const BED = { ...CALM, id: 'test-bed', kind: 'bed', durationSeconds: 10 } as const;
+    const BED = { ...SWELL, id: 'test-bed', kind: 'bed', loop: true, target: TARGETS.bed } as const;
     const at = (entry: CatalogEntry, gain: number, floorDbfs: number, rmsDbfs: number) => ({
       ...manifestEntry(entry),
       gain,
@@ -413,23 +394,26 @@ describe('a run', () => {
     });
     const manifests = {
       sfx: { [CLACK.id]: at(CLACK, 12, -70, -30), [BED.id]: at(BED, 8, -40, -38) },
-      music: { [CALM.id]: at(CALM, 1, -90, -20) },
+      music: { [SWELL.id]: at(SWELL, 1, -90, -20) },
     };
-    expect(noisyTakes([CLACK, BED, CALM], manifests)).toEqual([
+    expect(noisyTakes([CLACK, BED, SWELL], manifests)).toEqual([
       { id: 'test-clack', gain: 12, heardDbfs: -48.4 },
     ]);
     const softer = { ...manifests, sfx: { [CLACK.id]: at(CLACK, 8, -70, -30) } };
-    expect(noisyTakes([CLACK, BED, CALM], softer)).toEqual([]);
+    expect(noisyTakes([CLACK, BED, SWELL], softer)).toEqual([]);
   });
 
   it('names every recording more than a fifth off the length it asked for', () => {
-    const at = (ms: number) => ({ sfx: {}, music: { [CALM.id]: { ...manifestEntry(CALM), ms } } });
-    expect(lengthOff(CALM, 86_400)).toBeCloseTo(0.2, 9);
-    expect(offLength([CALM], at(86_400))).toEqual([]); // 72 s and a fifth
-    expect(offLength([CALM], at(57_600))).toEqual([]);
-    const long = [{ id: 'test-calm', ms: 86_500, asked: 72_000 }];
-    expect(offLength([CALM], at(86_500))).toEqual(long);
-    expect(offLength([CALM], { sfx: {}, music: {} })).toEqual([]); // nothing made yet
+    const at = (ms: number) => ({
+      sfx: {},
+      music: { [SWELL.id]: { ...manifestEntry(SWELL), ms } },
+    });
+    expect(lengthOff(SWELL, 14_400)).toBeCloseTo(0.2, 9);
+    expect(offLength([SWELL], at(14_400))).toEqual([]); // 12 s and a fifth
+    expect(offLength([SWELL], at(9_600))).toEqual([]);
+    const long = [{ id: 'test-swell', ms: 14_500, asked: 12_000 }];
+    expect(offLength([SWELL], at(14_500))).toEqual(long);
+    expect(offLength([SWELL], { sfx: {}, music: {} })).toEqual([]); // nothing made yet
   });
 
   it('reads the command line, pnpm’s -- and all, and refuses anything else', () => {
@@ -632,35 +616,35 @@ describe('the music’s takes, asked for and priced', () => {
 
   it('are three of a piece at most, its cost running by the second; an effect keeps five', () => {
     expect(MAX_MUSIC_TAKES).toBe(3);
-    const four = optionsOf(['--candidates', '4', '--only', 'test-calm,test-sting']);
+    const four = optionsOf(['--candidates', '4', '--only', 'test-swell,test-sting']);
     const refusal =
       'sfx: --candidates 4 — music is made in 3 takes at most, its cost runs by the second: ' +
-      '--candidates 3 --only test-calm,test-sting';
-    expect(() => planOf([CLACK, CALM, STING], none, always, four)).toThrow(refusal);
+      '--candidates 3 --only test-swell,test-sting';
+    expect(() => planOf([CLACK, SWELL, STING], none, always, four)).toThrow(refusal);
     expect(planOf([CLACK], none, always, optionsOf(['--candidates', '5']))).toHaveLength(1);
     // Music already made, and so not asked for, does not stop the effects' five candidates.
-    const made = { ...none, music: { [CALM.id]: manifestOf(CALM) } };
-    const five = planOf([CLACK, CALM], made, always, optionsOf(['--candidates', '5']));
+    const made = { ...none, music: { [SWELL.id]: manifestOf(SWELL) } };
+    const five = planOf([CLACK, SWELL], made, always, optionsOf(['--candidates', '5']));
     expect(five.map((job) => [job.entry.id, job.make])).toEqual([
       ['test-clack', true],
-      ['test-calm', false],
+      ['test-swell', false],
     ]);
-    const music = { entry: CALM, group: 'music' } as const;
+    const music = { entry: SWELL, group: 'music' } as const;
     expect([asTakes(music, 3), asTakes(music, 2), asTakes(music, 1)]).toEqual([true, true, false]);
     expect(asTakes({ entry: CLACK, group: 'sfx' }, 3)).toBe(false);
   });
 
   it('are asked for with the piece’s request, its settings listed beside the prompt', () => {
-    expect(settingsOf(CALM)).toEqual({
-      musicLengthMs: 72_000,
+    expect(settingsOf(SWELL)).toEqual({
+      musicLengthMs: 12_000,
       forceInstrumental: true,
       modelId: 'music_v2_5',
       outputFormat: 'mp3_44100_192',
     });
-    expect(musicRequest(CALM)).toEqual({ prompt: CALM.prompt, ...settingsOf(CALM) });
+    expect(musicRequest(SWELL)).toEqual({ prompt: SWELL.prompt, ...settingsOf(SWELL) });
     // In this order: the request's JSON is what every recording's hash is taken of.
     const order = ['prompt', 'musicLengthMs', 'forceInstrumental', 'modelId', 'outputFormat'];
-    expect(Object.keys(musicRequest(CALM))).toEqual(order);
+    expect(Object.keys(musicRequest(SWELL))).toEqual(order);
   });
 
   it('are priced in the plan, every take counted at 18 credits a second', () => {
@@ -754,15 +738,18 @@ describe('the music’s takes on disk', () => {
   });
 
   it('leave the recording the game plays, and its entry, as they were', () => {
-    const made = { sfx: { [CLACK.id]: manifestOf(CLACK) }, music: { [CALM.id]: manifestOf(CALM) } };
-    const jobs = planOf([CLACK, CALM, STING], made, always, optionsOf(['--only', 'test-calm']));
+    const made = {
+      sfx: { [CLACK.id]: manifestOf(CLACK) },
+      music: { [SWELL.id]: manifestOf(SWELL) },
+    };
+    const jobs = planOf([CLACK, SWELL, STING], made, always, optionsOf(['--only', 'test-swell']));
     const ids = (count: number): string[] => measuredAnew(jobs, count).map((job) => job.entry.id);
-    expect(ids(3)).toEqual([]); // the stem goes into takes: its old recording is not measured
-    expect(ids(1)).toEqual(['test-calm']); // made once, into the project: measured as made
-    const all = planOf([CLACK, CALM], made, always, optionsOf(['--candidates', '3']));
+    expect(ids(3)).toEqual([]); // the piece goes into takes: its old recording is not measured
+    expect(ids(1)).toEqual(['test-swell']); // made once, into the project: measured as made
+    const all = planOf([CLACK, SWELL], made, always, optionsOf(['--candidates', '3']));
     expect(measuredAnew(all, 3).map((job) => [job.entry.id, job.make])).toEqual([
       ['test-clack', false],
-      ['test-calm', false],
+      ['test-swell', false],
     ]);
   });
 
@@ -777,13 +764,13 @@ describe('the music’s takes on disk', () => {
   });
 });
 
-/** Three takes of the sting, at 0.6, 0.8 and 0.7, and two of the calm stem, in `places`. */
+/** Three takes of the sting, at 0.6, 0.8 and 0.7, and two of the swell, in `places`. */
 async function takesIn(places: Places): Promise<Bench> {
   const sting = answering({ music: [0.6, 0.8, 0.7].map((a) => piece(10, a)) });
   await runOf([STING], 3, benchOf(sting.client, places));
-  const calm = answering({ music: [piece(72, 0.5), piece(72, 0.9)] });
-  const bench = benchOf(calm.client, places);
-  await runOf([CALM], 2, bench);
+  const swell = answering({ music: [piece(12, 0.5), piece(12, 0.9)] });
+  const bench = benchOf(swell.client, places);
+  await runOf([SWELL], 2, bench);
   return bench;
 }
 
@@ -793,7 +780,7 @@ const keep = (id: string, n: number): Keep => ({ id, n });
 function refusalOf(
   asked: Keep,
   bench: Bench,
-  catalog: readonly CatalogItem[] = [STING, CALM, CLACK],
+  catalog: readonly CatalogItem[] = [STING, SWELL, CLACK],
 ): string {
   try {
     keepTake(asked, catalog, bench);
@@ -829,12 +816,12 @@ describe('keeping a take, as asked', () => {
   it('is said after a run that made takes, a command for each entry', async () => {
     const places = placesIn();
     await takesIn(places);
-    const lines = takesLines([STING.id, CALM.id], places);
+    const lines = takesLines([STING.id, SWELL.id], places);
     expect(lines.slice(-3)).toEqual([
       'sfx: the ear chooses: with pnpm dev, http://localhost:5173/sounds plays each take ' +
         'under its piece; in packages/client, this keeps take <n> and deletes the others:',
       '  node scripts/sfx.ts --keep test-sting=<n>',
-      '  node scripts/sfx.ts --keep test-calm=<n>',
+      '  node scripts/sfx.ts --keep test-swell=<n>',
     ]);
   });
 });
@@ -844,14 +831,14 @@ describe('keeping a take, on disk', () => {
     const places = placesIn();
     const bench = await takesIn(places);
     const before = readManifest(places, 'music');
-    const { group, kept: all } = keepTake(keep(STING.id, 2), [STING, CALM], bench);
+    const { group, kept: all } = keepTake(keep(STING.id, 2), [STING, SWELL], bench);
     expect(group).toBe('music');
     expect(Object.keys(all)).toEqual([STING.id]);
     const kept = all[STING.id] as ManifestEntry;
     const file = join(places.dirs.music, 'test-sting.mp3');
     expect(digest(readFileSync(file))).toBe(digest(piece(10, 0.8)));
     expect(existsSync(join(places.takes, STING.id))).toBe(false);
-    expect(readTakes(places.takes, CALM.id)?.takes).toHaveLength(2); // another's takes stay
+    expect(readTakes(places.takes, SWELL.id)?.takes).toHaveLength(2); // another's takes stay
     const manifest = readManifest(places, 'music');
     expect(manifest).toEqual({ ...before, [STING.id]: kept });
     expect(kept).toEqual({
@@ -874,17 +861,18 @@ describe('keeping a take, on disk', () => {
     expect(kept.startMs).toBeLessThan(kept.ms / 4);
   });
 
-  it('keeps a stem round and round at its tempo, beside the music kept before', async () => {
+  it('keeps a second piece beside the music kept before, with no tempo of its own', async () => {
     const places = placesIn();
     const bench = await takesIn(places);
-    keepTake(keep(STING.id, 1), [STING, CALM], bench);
-    const { kept } = keepTake(keep(CALM.id, 2), [STING, CALM], bench);
-    const calmKept = { file: 'test-calm.mp3', loop: true, bpm: 90, hash: hashOf(CALM) };
-    expect(kept[CALM.id]).toMatchObject(calmKept);
-    expect(Object.keys(readManifest(places, 'music'))).toEqual(['test-calm', 'test-sting']);
+    keepTake(keep(STING.id, 1), [STING, SWELL], bench);
+    const { kept } = keepTake(keep(SWELL.id, 2), [STING, SWELL], bench);
+    const swellKept = { file: 'test-swell.mp3', loop: false, hash: hashOf(SWELL) };
+    expect(kept[SWELL.id]).toMatchObject(swellKept);
+    expect(kept[SWELL.id]?.bpm).toBeUndefined();
+    expect(Object.keys(readManifest(places, 'music'))).toEqual(['test-sting', 'test-swell']);
     expect(readdirSync(places.takes)).toEqual([]);
-    const calm = readFileSync(join(places.dirs.music, 'test-calm.mp3'));
-    expect(digest(calm)).toBe(digest(piece(72, 0.9)));
+    const swell = readFileSync(join(places.dirs.music, 'test-swell.mp3'));
+    expect(digest(swell)).toBe(digest(piece(12, 0.9)));
   });
 
 });
@@ -926,7 +914,7 @@ describe('keeping a take, refused', () => {
   it('says a piece is kept already where a second keep asks for it', async () => {
     const places = placesIn();
     const bench = await takesIn(places);
-    keepTake(keep(STING.id, 2), [STING, CALM], bench);
+    keepTake(keep(STING.id, 2), [STING, SWELL], bench);
     expect(refusalOf(keep(STING.id, 2), bench)).toBe(
       'sfx: --keep test-sting=2 — test-sting is kept already, as public/music/test-sting.mp3, ' +
         'and no takes of it wait',
@@ -1025,29 +1013,29 @@ describe('a run as the command line asks', () => {
   });
 
   it('plans a piece whose takes wait to be left, and measures it not anew', () => {
-    const made = { sfx: {}, music: { [CALM.id]: { ...manifestOf(CALM), hash: hashOf(OLDER) } } };
-    const waits = (id: string): boolean => id === CALM.id;
+    const made = { sfx: {}, music: { [SWELL.id]: { ...manifestOf(SWELL), hash: hashOf(OLDER) } } };
+    const waits = (id: string): boolean => id === SWELL.id;
     const always = (): boolean => true;
-    const once = planOf([CLACK, CALM], made, always, optionsOf([]), waits);
-    expect(once.map((job) => [job.entry.id, job.make, job.waiting])).toEqual([
-      ['test-clack', true, false],
-      ['test-calm', false, true],
+    const once = planOf([CLACK, SWELL], made, always, optionsOf([]), waits);
+    expect(once.map((job) => [job.entry.id, job.make, job.left])).toEqual([
+      ['test-clack', true, null],
+      ['test-swell', false, 'takes'],
     ]);
     expect(measuredAnew(once, 1).map((job) => job.entry.id)).toEqual(['test-clack']);
-    const takes = planOf([CALM], made, always, optionsOf(['--candidates', '3']), waits);
-    expect(takes.map((job) => [job.make, job.waiting])).toEqual([[true, false]]);
+    const takes = planOf([SWELL], made, always, optionsOf(['--candidates', '3']), waits);
+    expect(takes.map((job) => [job.make, job.left])).toEqual([[true, null]]);
     // A piece made from the request as it stands is not due: nothing waits for it.
-    const current = { sfx: {}, music: { [CALM.id]: manifestOf(CALM) } };
-    const fresh = planOf([CALM], current, always, optionsOf([]), waits);
-    expect(fresh.map((job) => [job.make, job.waiting])).toEqual([[false, false]]);
+    const current = { sfx: {}, music: { [SWELL.id]: manifestOf(SWELL) } };
+    const fresh = planOf([SWELL], current, always, optionsOf([]), waits);
+    expect(fresh.map((job) => [job.make, job.left])).toEqual([[false, null]]);
   });
 
   it('names what makes a recording again: a command for each group, in the catalog’s order', () => {
-    expect(remakeCommands([CLACK, CALM, STING], ['test-sting', 'test-clack', 'nope'])).toEqual([
+    expect(remakeCommands([CLACK, SWELL, STING], ['test-sting', 'test-clack', 'nope'])).toEqual([
       'pnpm --filter client sfx -- --candidates 5 --only test-clack',
       'pnpm --filter client sfx -- --candidates 3 --only test-sting',
     ]);
-    expect(remakeCommands([CLACK, CALM], [])).toEqual([]);
+    expect(remakeCommands([CLACK, SWELL], [])).toEqual([]);
   });
 });
 

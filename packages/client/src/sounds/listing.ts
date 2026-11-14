@@ -8,8 +8,11 @@ import type { SampleEntry } from '../world/samples.js';
  * anew what is ticked (scripts/sfx.ts). Pure.
  */
 
-/** What a sound is, as the catalog has it. */
-export type SoundKind = 'oneshot' | 'bed' | 'stem' | 'sting' | 'theme';
+/**
+ * What a sound made on its own is, as the catalog has it: the music's stems and themes are pieces
+ * of a suite, listed with it.
+ */
+export type SoundKind = 'oneshot' | 'bed' | 'sting';
 
 /** One sound of the catalog, as the page reads it. */
 export interface CatalogSound {
@@ -24,9 +27,7 @@ export interface CatalogSound {
 export const SECTIONS: readonly { readonly kind: SoundKind; readonly title: string }[] = [
   { kind: 'oneshot', title: 'Effekte' },
   { kind: 'bed', title: 'Räume und Schleifen' },
-  { kind: 'stem', title: 'Musik' },
   { kind: 'sting', title: 'Endkarte' },
-  { kind: 'theme', title: 'Nach der Endkarte' },
 ];
 
 /** A floor that comes out louder than this once the gain is applied is heard: as scripts/sfx.ts. */

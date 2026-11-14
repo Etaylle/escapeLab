@@ -7,33 +7,32 @@
  *   pnpm --filter client sfx -- --only a,b,c    those entries, made anew
  *   pnpm --filter client sfx -- --candidates 3  each made three times: an effect's best take
  *                                               kept, a piece of music's takes left to the ear
- *   pnpm --filter client sfx -- --keep calm=2   take 2 of the music's calm stem kept, the rest
- *                                               of its takes deleted
+ *   pnpm --filter client sfx -- --keep won=2    take 2 of the won sting kept, the rest of its
+ *                                               takes deleted
  *   pnpm --filter client sfx -- --keep score=2  take 2 of a suite kept whole, cut into its pieces
  *
  * audio/catalog.json lists every sound the game plays: its id, its kind — a one-shot, a bed that
- * loops seamlessly, a stem of the music, a sting or a theme played once — what ElevenLabs is
- * asked for (an English prompt and a length), whether it loops, the loudness it is brought to and
- * where the game plays it. An effect comes from text-to-sound-effects (`eleven_text_to_sound_v2`,
- * a bed as a seamless loop) as MP3 at 44.1 kHz and 128 kbit/s, a piece of music from Eleven
- * Music, instrumental, at 192 kbit/s — a theme at 128, for the music's folder to hold it; each
- * into public/sfx/<id>.mp3 or public/music/<id>.mp3. public/sfx/manifest.json
- * and public/music/manifest.json list each as { file, ms, gain, startMs, floor, rms, loop, hash,
- * influence, bpm, source }: `hash` names the request that made it — `influence` how closely an
- * effect followed its prompt, `bpm` a stem's tempo as its prompt states it — so an entry whose
+ * loops seamlessly or a sting; the music's stems and themes are sections of a suite (below) — what
+ * ElevenLabs is asked for (an English prompt and a length), whether it loops, the loudness it is
+ * brought to and where the game plays it. An effect comes from text-to-sound-effects
+ * (`eleven_text_to_sound_v2`, a bed as a seamless loop) as MP3 at 44.1 kHz and 128 kbit/s, a
+ * sting from Eleven Music, instrumental, at 192 kbit/s; each into public/sfx/<id>.mp3 or
+ * public/music/<id>.mp3. public/sfx/manifest.json and public/music/manifest.json list each as
+ * { file, ms, gain, startMs, floor, rms, loop, hash, influence, source }: `hash` names the request
+ * that made it — `influence` how closely an effect followed its prompt — so an entry whose
  * request is unchanged and whose file is there is not made again, and a run cut short goes on
  * where it stopped. An entry not made yet may play another's recording meanwhile (`standIn`): it
  * counts as made from another request, and the next run makes it.
  *
- * The catalog may hold a suite as well (suite.ts): music written as one generation of Eleven
- * Music, a composition plan of named sections that share a key, a tempo and a motif, each section
- * a piece the game plays. A suite is always made in takes for the ear — one a run where no more
- * are asked for, MAX_MUSIC_TAKES at most — each take measured piece by piece where the plan cuts
- * it; `--keep <suite>=<n>` keeps a take whole: cut at the plan's boundaries, each piece's edges
- * faded over EDGE_MS, encoded by afconvert as AAC at PIECE_BITRATE into public/music/<id>.m4a,
- * measured as a render — its loudness as BS.1770 has it (pcm.ts `lufsOf`), brought to the suite's
- * target — and listed with the suite's hash and name and a loop's bars; the file each piece
- * played before is deleted with the suite's other takes.
+ * The catalog may hold a suite as well (suite.ts): music written as one generation of Eleven Music,
+ * a composition plan of named sections that share a key, a tempo and a motif, each section a piece
+ * the game plays. A suite is made only where --only names it, and always in takes for the ear — one
+ * a run where no more are asked for, MAX_MUSIC_TAKES at most — each take measured piece by piece
+ * where the plan cuts it; `--keep <suite>=<n>` keeps a take whole: cut at the plan's boundaries,
+ * each piece's edges faded over EDGE_MS, encoded by afconvert as AAC at PIECE_BITRATE into
+ * public/music/<id>.m4a, measured as a render — its loudness as BS.1770 has it (pcm.ts `lufsOf`),
+ * brought to the suite's target — and listed with the suite's hash and name and a loop's bars; the
+ * file each piece played before is deleted with the suite's other takes.
  *
  * With `--candidates N` every entry the run makes is made N times. An effect follows its prompt
  * more or less closely each time (INFLUENCE_SPAN), each take into a folder of its own in the
@@ -49,23 +48,23 @@
  * public/music as the entry's file, its manifest entry written — and deletes the entry's other
  * takes; it asks ElevenLabs for nothing and needs no key.
  *
- * The files stay as ElevenLabs made them. afconvert decodes each into a temporary folder, its
- * peak and RMS are measured there, and `gain` is what brings it to its target — a one-shot's peak
- * to −3 dBFS, a bed's, a stem's or a theme's RMS to −20 dBFS, a sting's to −14 dBFS — for the game
- * to apply;
- * more than 30 ms of silence at the start becomes `startMs`, except in a bed, whose loop keeps its
- * start. `floor` is the RMS of its quietest 100 ms: where that is a gap in the sound and comes out
- * louder than −50 dBFS once the gain is applied, the take plays its noise floor where it is heard
- * (`floorHeard`) — the run names it with its gain and fails, nothing capped, so that it is made
- * anew. A run that makes nothing measures every file anew, so a rule changed costs nothing.
+ * The files stay as ElevenLabs made them. afconvert decodes each into a temporary folder, its peak
+ * and RMS are measured there, and `gain` is what brings it to its target — a one-shot's peak to −3
+ * dBFS, a bed's RMS to −20 dBFS, a sting's to −14 dBFS, a piece of a suite's loudness to its
+ * suite's — for the game to apply; more than 30 ms of silence at the start becomes `startMs`,
+ * except in a bed, whose loop keeps its start. `floor` is the RMS of its quietest 100 ms: where
+ * that is a gap in the sound and comes out louder than −50 dBFS once the gain is applied, the take
+ * plays its noise floor where it is heard (`floorHeard`) — the run names it with its gain and
+ * fails, nothing capped, so that it is made anew. A run that makes nothing measures every file
+ * anew, so a rule changed costs nothing.
  *
  * The key is ELEVENLABS_API_KEY in the environment — the package's `sfx` script hands node the
  * repo's .env.local (`--env-file`); this script opens no file for it. Before it asks for anything
- * it reads the account's credits and stops where fewer than MIN_CREDITS are left or the plan
- * would cost a group more than its cap; after a group's first entry it says what that cost and
- * prices the rest at that rate, stopping there if it would go over. Requests go one after the
- * other, ELEVEN_GAP_MS apart, a 429 waited out (elevenlabs.ts). A file no entry names is reported,
- * never deleted.
+ * it reads the account's credits and stops where fewer than MIN_CREDITS are left or the plan would
+ * cost a group more than its cap — a dry run stops there too; after a group's first take it says
+ * what that cost and prices the rest at that rate, stopping there if it would go over. Requests go
+ * one after the other, ELEVEN_GAP_MS apart, a 429 waited out (elevenlabs.ts). A file no entry names
+ * is reported, never deleted.
  *
  * Runs on Node's own TypeScript, as the voice script does: it imports nothing of the app.
  */
@@ -108,6 +107,7 @@ import {
 import {
   barMs,
   chunksOf,
+  MOTIF_PARTS,
   piecesOf,
   PLAN_LIMITS,
   STYLE_CHARS,
@@ -123,6 +123,11 @@ import {
  * theme — a piece of music played once through, as an end card's.
  */
 export type Kind = 'oneshot' | 'bed' | 'stem' | 'sting' | 'theme';
+/**
+ * What a sound made on its own is: a one-shot, a bed or a sting. A stem and a theme are sections
+ * of a suite, made with it (suite.ts `piecesOf`).
+ */
+export type SoundKind = 'oneshot' | 'bed' | 'sting';
 /** Where a sound is made and kept: the effects (public/sfx/) or the music (public/music/). */
 export type Group = 'sfx' | 'music';
 export const GROUPS: readonly Group[] = ['sfx', 'music'];
@@ -143,7 +148,7 @@ export interface CatalogEntry {
   readonly prompt: string;
   readonly durationSeconds: number;
   readonly loop: boolean;
-  /** a stem's tempo, beats a minute: the one its prompt states (`tempoOf`); no other kind's */
+  /** a looped piece of a suite: its suite's tempo, beats a minute; a sound of its own has none */
   readonly bpm?: number;
   readonly target: Target;
   /** where the game plays it: "src/<file>#<symbol>" */
@@ -176,7 +181,7 @@ export interface ManifestEntry {
   readonly hash: string;
   /** an effect's prompt influence; PROMPT_INFLUENCE where it is not given */
   readonly influence?: number;
-  /** a stem's tempo, as the catalog has it: the music's bars are counted by it */
+  /** a looped piece of a suite: its suite's tempo, which the music's bars are counted by */
   readonly bpm?: number;
   /** a looped piece of a suite: the bars that go round, which the game loops on */
   readonly bars?: number;
@@ -206,11 +211,6 @@ export const MANIFEST = 'manifest.json';
 export const SFX_FORMAT = 'mp3_44100_128';
 /** Music as MP3 at 44.1 kHz and 192 kbit/s, as the Creator plan gives it: 24 kB a second. */
 export const MUSIC_FORMAT = 'mp3_44100_192';
-/**
- * A theme played once, at the effects' 128 kbit/s, 16 kB a second: the music's folder is held to
- * FOLDER_CAPS, which the looped pieces take the most of.
- */
-export const THEME_FORMAT = 'mp3_44100_128';
 /**
  * A piece cut from a suite as afconvert encodes it, bit/s: AAC in an .m4a, about 20 kB a second —
  * as clear as the suite's MP3 at 192 it is cut from, a second encoding that keeps its margin.
@@ -300,42 +300,28 @@ export const MASKED_WITHIN_DB = 20;
  */
 export const PICK = { peakDbfs: -6, leadMs: 50, silence: 0.1, length: 0.2 } as const;
 
-/** The loudness each kind is brought to. */
-export const TARGETS: Readonly<Record<Kind, Target>> = {
+/** The loudness each kind of sound made on its own is brought to. */
+export const TARGETS: Readonly<Record<SoundKind, Target>> = {
   oneshot: { measure: 'peak', dbfs: -3 },
   bed: { measure: 'rms', dbfs: -20 },
-  stem: { measure: 'rms', dbfs: -20 },
   sting: { measure: 'rms', dbfs: -14 },
-  theme: { measure: 'rms', dbfs: -20 },
 };
-/** How long each kind may last, s: ElevenLabs' bounds for an effect; the music's own. */
-export const LENGTHS: Readonly<Record<Kind, readonly [number, number]>> = {
+/** How long each kind may last, s: ElevenLabs' bounds for an effect; a sting's own. */
+export const LENGTHS: Readonly<Record<SoundKind, readonly [number, number]>> = {
   oneshot: [0.5, 30],
   bed: [0.5, 30],
-  stem: [60, 90],
   sting: [8, 12],
-  theme: [30, 40],
 };
+/** The target and the lengths of a kind, where a sound may be made on its own as it. */
+const targetOf = (kind: Kind): Target | undefined =>
+  (TARGETS as Partial<Record<Kind, Target>>)[kind];
+const lengthsOf = (kind: Kind): readonly [number, number] | undefined =>
+  (LENGTHS as Partial<Record<Kind, readonly [number, number]>>)[kind];
 
 // --- the catalog ----------------------------------------------------------------------------
 
 const ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const USED_BY = /^src\/[\w/.-]+\.tsx?#\w+$/;
-const TEMPO = /\b(\d+(?:\.\d+)?)\s*BPM\b/i;
-const kindOf = (entry: CatalogEntry): Kind | undefined =>
-  Object.keys(TARGETS).find((kind): kind is Kind => kind === entry.kind);
-
-/** The tempo a prompt states, beats a minute („A minor, 90 BPM"); null where it states none. */
-export function tempoOf(prompt: string): number | null {
-  const stated = TEMPO.exec(prompt)?.[1];
-  return stated === undefined ? null : Number(stated);
-}
-
-/** Whether `entry` keeps the tempo rule: a stem names its prompt's tempo, the rest none. */
-function tempoKept(entry: CatalogEntry): boolean {
-  if (entry.kind !== 'stem') return entry.bpm === undefined;
-  return entry.bpm !== undefined && entry.bpm === tempoOf(entry.prompt);
-}
 
 /** Each rule an item of the catalog keeps, and what is said where it does not. */
 type Rule<T> = readonly [(item: T) => boolean, (item: T) => string];
@@ -347,42 +333,48 @@ const broken = <T>(rules: readonly Rule<T>[], item: T): string[] =>
 const usedByKept = (usedBy: unknown): boolean =>
   Array.isArray(usedBy) && usedBy.length > 0 && usedBy.every((u) => USED_BY.test(String(u)));
 
+/** The rules every sound of its own keeps, whatever its kind. */
 const RULES: readonly Rule<CatalogEntry>[] = [
   [(e) => ID.test(e.id), () => 'its id is not lower-case words joined by dashes'],
-  [(e) => kindOf(e) !== undefined, (e) => `its kind "${e.kind}" is not ${Object.keys(TARGETS)}`],
-  [(e) => /^[\x20-\x7e]{40,}$/.test(e.prompt), () => 'its prompt is not 40 chars of English'],
   [
-    (e) => {
-      const [min, max] = LENGTHS[e.kind] ?? [NaN, NaN];
-      return e.durationSeconds >= min && e.durationSeconds <= max;
-    },
-    (e) => `it lasts ${e.durationSeconds} s, outside ${LENGTHS[e.kind]?.join('–') ?? '?'} s`,
-  ],
-  [
-    (e) => e.loop === (e.kind === 'bed' || e.kind === 'stem'),
-    () => 'loop has to be true for a bed or a stem, and false for the rest',
-  ],
-  [
+    (e) => targetOf(e.kind) !== undefined,
     (e) =>
-      e.target?.measure === TARGETS[e.kind]?.measure && e.target.dbfs === TARGETS[e.kind]?.dbfs,
-    (e) => `its target has to be ${JSON.stringify(TARGETS[e.kind])}`,
+      `its kind "${e.kind}" is not ${Object.keys(TARGETS).join(', ')}: a stem or a theme is a ` +
+      'section of a suite',
   ],
+  [(e) => /^[\x20-\x7e]{40,}$/.test(e.prompt), () => 'its prompt is not 40 chars of English'],
   [
     (e) => usedByKept(e.usedBy),
     () => 'usedBy has to name where it plays, as "src/<file>#<symbol>"',
   ],
+  [(e) => e.bpm === undefined, () => "a sound of its own has no bpm: a tempo is its suite's"],
+];
+
+/** The rules a sound of its own keeps by its kind, `target` and `lengths` its kind's. */
+const kindRules = (
+  target: Target,
+  [least, most]: readonly [number, number],
+): readonly Rule<CatalogEntry>[] => [
   [
-    tempoKept,
-    (e) =>
-      e.kind === 'stem'
-        ? `its bpm has to be the tempo its prompt states (${tempoOf(e.prompt) ?? 'none'})`
-        : 'only a stem has a bpm',
+    (e) => e.durationSeconds >= least && e.durationSeconds <= most,
+    (e) => `it lasts ${e.durationSeconds} s, outside ${least}–${most} s`,
+  ],
+  [(e) => e.loop === (e.kind === 'bed'), () => 'loop has to be true for a bed, false for the rest'],
+  [
+    (e) => e.target?.measure === target.measure && e.target.dbfs === target.dbfs,
+    () => `its target has to be ${JSON.stringify(target)}`,
   ],
 ];
 
-/** What is wrong with `entry`, a sentence each; none for an entry that keeps every rule. */
+/**
+ * What is wrong with `entry`, a sentence each; none for an entry that keeps every rule — those of
+ * its kind only where its kind is one a sound may be made on its own as.
+ */
 export function flawsOf(entry: CatalogEntry): string[] {
-  return broken(RULES, entry);
+  const target = targetOf(entry.kind);
+  const lengths = lengthsOf(entry.kind);
+  const own = target === undefined || lengths === undefined ? [] : kindRules(target, lengths);
+  return [...broken(RULES, entry), ...broken(own, entry)];
 }
 
 /** Whether `item` is a suite: music made as one, its sections the pieces. */
@@ -398,6 +390,12 @@ function phrase(text: unknown, most: number): boolean {
 /** Whether `list` is a list of styles: phrases of STYLE_CHARS at most. */
 const styles = (list: unknown): boolean =>
   Array.isArray(list) && list.every((style) => phrase(style, STYLE_CHARS));
+
+/** Whether `motif` is a motif: its cell, fall and answer, each a phrase of STYLE_CHARS at most. */
+const motifKept = (motif: unknown): boolean =>
+  typeof motif === 'object' &&
+  motif !== null &&
+  ['cell', 'fall', 'answer'].every((part) => phrase(Reflect.get(motif, part), STYLE_CHARS));
 
 /**
  * A line of a section: a direction in braces („{solo cello answers}"), or a wordless voice's
@@ -415,8 +413,12 @@ const SUITE_RULES: readonly Rule<SuiteEntry>[] = [
   [(s) => phrase(s.key, 40), () => 'its key is not a short phrase, as "A minor"'],
   [(s) => within(s.bpm, [40, 200]), (s) => `its tempo, ${s.bpm} bpm, lies outside 40–200`],
   [
-    (s) => [s.motif, s.styles, s.avoid].every(styles),
-    () => `its motif, styles and avoid are not lists of phrases of ${STYLE_CHARS} chars at most`,
+    (s) => motifKept(s.motif),
+    () => `its motif is no cell, fall and answer, each a phrase of ${STYLE_CHARS} chars at most`,
+  ],
+  [
+    (s) => [s.styles, s.avoid].every(styles),
+    () => `its styles and avoid are not lists of phrases of ${STYLE_CHARS} chars at most`,
   ],
   [
     (s) => s.target?.measure === SUITE_TARGET.measure && s.target.dbfs === SUITE_TARGET.dbfs,
@@ -438,6 +440,10 @@ const SECTION_RULES: readonly Rule<SuiteSection>[] = [
   [(c) => Number.isInteger(c.bars) && c.bars > 0, (c) => `${c.id}: its bars are no whole number`],
   [(c) => typeof c.loop === 'boolean', (c) => `${c.id}: loop has to be true or false`],
   [(c) => c.key === undefined || phrase(c.key, 40), (c) => `${c.id}: its key is no short phrase`],
+  [
+    (c) => MOTIF_PARTS.includes(c.motif),
+    (c) => `${c.id}: its motif has to be ${MOTIF_PARTS.join(', ')}: how much of it it plays`,
+  ],
   [
     (c) => Array.isArray(c.lines) && c.lines.length < PLAN_LIMITS.lines && c.lines.every(lineKept),
     (c) =>
@@ -494,9 +500,8 @@ const idsOf = (item: CatalogItem): string[] =>
     : [item.id];
 
 /**
- * Returns `catalog` where every item keeps its rules, no id comes twice — a section's among them
- * — and the stems and suites share one tempo — the music crosses from one to the next on their
- * common bar; fails naming each flaw.
+ * Returns `catalog` where every item keeps its rules and no id comes twice — a section's among
+ * them; fails naming each flaw.
  */
 export function checkCatalog(catalog: readonly CatalogItem[]): readonly CatalogItem[] {
   const seen = new Set<string>();
@@ -509,11 +514,6 @@ export function checkCatalog(catalog: readonly CatalogItem[]): readonly CatalogI
     const own = isSuite(item) ? suiteFlawsOf(item) : flawsOf(item);
     return [...own.map((flaw) => `${item.id}: ${flaw}`), ...idsOf(item).flatMap(twice)];
   });
-  const timed = catalog.filter((item) => item.kind === 'stem' || isSuite(item));
-  const tempos = new Set(timed.map((item) => item.bpm));
-  if (tempos.size > 1) {
-    flaws.push(`the stems and suites have to share one tempo, not ${[...tempos].join(', ')} bpm`);
-  }
   if (flaws.length > 0) {
     throw new Error(`sfx: audio/catalog.json —\n  ${flaws.join('\n  ')}`);
   }
@@ -525,17 +525,10 @@ export function recordingsOf(catalog: readonly CatalogItem[]): CatalogEntry[] {
   return catalog.flatMap((item): CatalogEntry[] => (isSuite(item) ? piecesOf(item) : [item]));
 }
 
-/** Where an item is made and kept: a stem, a sting, a theme or a suite with the music. */
+/** Where an item is made and kept: a sting, a suite and a suite's pieces with the music. */
 export function groupOf(item: Pick<CatalogItem, 'kind'>): Group {
   const music: readonly CatalogItem['kind'][] = ['stem', 'sting', 'theme', 'suite'];
   return music.includes(item.kind) ? 'music' : 'sfx';
-}
-
-/** The format a piece of music is made in: the music's, or a theme's (THEME_FORMAT). */
-export function musicFormatOf(
-  entry: Pick<CatalogItem, 'kind'>,
-): typeof MUSIC_FORMAT | typeof THEME_FORMAT {
-  return entry.kind === 'theme' ? THEME_FORMAT : MUSIC_FORMAT;
 }
 
 /** The file an entry is kept in, in its group's folder. */
@@ -575,7 +568,7 @@ export interface MusicSettings {
   readonly musicLengthMs: number;
   readonly forceInstrumental: true;
   readonly modelId: typeof MUSIC_MODEL;
-  readonly outputFormat: typeof MUSIC_FORMAT | typeof THEME_FORMAT;
+  readonly outputFormat: typeof MUSIC_FORMAT;
 }
 
 /** What Eleven Music is asked for a suite beside its plan: the model, the format, its length. */
@@ -592,7 +585,7 @@ export function settingsOf(entry: CatalogEntry): MusicSettings {
     musicLengthMs: Math.round(entry.durationSeconds * 1000),
     forceInstrumental: true,
     modelId: MUSIC_MODEL,
-    outputFormat: musicFormatOf(entry),
+    outputFormat: MUSIC_FORMAT,
   };
 }
 
@@ -839,18 +832,19 @@ export function optionsOf(args: readonly string[]): Options {
   return settled(said);
 }
 
-/** An item as a run sees it: its group, whether it has to be made, whether its takes wait. */
+/** An item as a run sees it: its group, whether it has to be made, and why it is left. */
 export interface Job {
   readonly entry: CatalogItem;
   readonly group: Group;
-  /** new, changed, its file gone, or asked for by --only — and not left for its takes */
+  /** new, changed, its file gone, or asked for by --only — and not left */
   readonly make: boolean;
   /**
-   * a piece of music the run would make once, straight into the project, while takes of it
-   * wait for the ear — or a suite --only does not name whose takes wait: it is left as it is,
-   * for --keep or for new takes
+   * why a run leaves an item that is due as it is: `takes` — a piece of music the run would make
+   * once, straight into the project, or a suite --only does not name, while takes of it wait for
+   * the ear (for --keep or new takes); `unnamed` — a suite --only does not name, which a run of
+   * everything never makes: it costs thousands of credits a take; null where nothing is left
    */
-  readonly waiting: boolean;
+  readonly left: 'takes' | 'unnamed' | null;
 }
 
 /** Whether a group's folder holds a file, and whether takes of an entry wait for the ear. */
@@ -858,10 +852,22 @@ type Filed = (group: Group, file: string) => boolean;
 type Waits = (id: string) => boolean;
 
 /**
+ * Why a run leaves `item` of `group`, due to be made, as it is (`Job['left']`): a suite --only
+ * does not name, its takes waiting or not; a piece of music the run would make once while takes
+ * of it wait (`waits`).
+ */
+function leftOf(item: CatalogItem, group: Group, options: Options, waits: Waits): Job['left'] {
+  if (isSuite(item)) {
+    if (options.only !== null) return null;
+    return waits(item.id) ? 'takes' : 'unnamed';
+  }
+  const once = group === 'music' && !asTakes({ entry: item, group }, options.candidates);
+  return once && waits(item.id) ? 'takes' : null;
+}
+
+/**
  * The job of `item`: made where it is new, changed, gone or named by --only — every piece of a
- * suite made from its request and filed, or it is made — but a piece of music made once while
- * takes of it wait (`waits`), or a suite whose takes wait where --only does not name it, which
- * waits with them.
+ * suite made from its request and filed, or it is made — but left as it is where `leftOf` says.
  */
 function jobOf(
   item: CatalogItem,
@@ -875,11 +881,8 @@ function jobOf(
     return kept !== undefined && upToDate(entry, kept) && disk.filed(group, kept.file);
   });
   const due = options.only !== null || !fresh;
-  const left = isSuite(item)
-    ? options.only === null
-    : group === 'music' && !asTakes({ entry: item, group }, options.candidates);
-  const waiting = due && left && disk.waits(item.id);
-  return { entry: item, group, make: due && !waiting, waiting };
+  const left = due ? leftOf(item, group, options, disk.waits) : null;
+  return { entry: item, group, make: due && left === null, left };
 }
 
 /**
@@ -1180,7 +1183,6 @@ function entryOf(entry: CatalogEntry, take: Take): ManifestEntry {
     loop: entry.loop,
     hash: hashOf(entry, take.influence),
     ...(groupOf(entry) === 'sfx' ? { influence: take.influence } : {}),
-    ...(entry.bpm === undefined ? {} : { bpm: entry.bpm }),
     source: 'elevenlabs',
   };
 }
@@ -1482,9 +1484,18 @@ function remakeArgsOf(item: CatalogItem): string {
   return `--candidates ${takesPerRun(item)} --only ${item.id}`;
 }
 
-/** What a plan says of a piece it leaves as it is while its takes wait, and the two ways on. */
-function waitingLine(job: Job): string {
+/**
+ * What a plan says of an item it leaves as it is: while its takes wait, the two ways on; a suite
+ * not named, the command that makes its takes.
+ */
+function leftLine(job: Job): string {
   const { id } = job.entry;
+  if (job.left === 'unnamed') {
+    return (
+      `sfx: ${id} is made only where --only names it, never by a run of everything: ` +
+      `${remakeArgsOf(job.entry)} makes its takes`
+    );
+  }
   return (
     `sfx: ${id} is left as it is, its takes waiting: --keep ${id}=<n> keeps one, ` +
     `${remakeArgsOf(job.entry)} makes new ones`
@@ -1524,7 +1535,7 @@ export function planLines(jobs: readonly Job[], candidates: number): string[] {
         `${takesSaid(todo, group, candidates)}, ` +
         `${seconds.toFixed(1)} s${each}, about ${credits} credits (cap ${CAPS[group]})`,
       ...todo.flatMap(itemLines),
-      ...mine.filter((job) => job.waiting).map(waitingLine),
+      ...mine.filter((job) => job.left !== null).map(leftLine),
     ];
   });
 }
@@ -1552,6 +1563,11 @@ export interface Making {
   readonly count: number;
   /** a folder in the system's temp: an effect's candidates, each a file in it */
   readonly candidates: string;
+  /**
+   * told each time a take has landed — in takes/, or a job's in the project — with the seconds of
+   * music or effect it asked for: the first prices the rest of its group (`renderGroup`)
+   */
+  readonly took?: (seconds: number) => Promise<void>;
 }
 
 /**
@@ -1640,13 +1656,15 @@ function recordAt(item: CatalogItem, n: number, path: string, bench: Bench): Tak
 /**
  * Makes `count` takes of the piece of music or the suite `item` into its folder under the takes'
  * — each by the same request, numbered on from those already there, measured, said and listed
- * as it comes, so that a run cut short keeps every take it paid for — and keeps none of them in
- * the project: the ear chooses. Returns its list, the takes made before included.
+ * as it comes, so that a run cut short keeps every take it paid for, and `took` told of it — and
+ * keeps none of them in the project: the ear chooses. Returns its list, the takes made before
+ * included.
  */
 export async function makeTakes(
   item: CatalogItem,
   count: number,
   bench: Bench,
+  took?: Making['took'],
 ): Promise<TakesList> {
   const dir = join(bench.places.takes, item.id);
   mkdirSync(dir, { recursive: true });
@@ -1657,6 +1675,7 @@ export async function makeTakes(
     writeFileSync(path, await make(bench.client, item, { wait: bench.wait }));
     list = { id: item.id, takes: [...list.takes, recordAt(item, n, path, bench)] };
     writeTakes(bench.places.takes, list);
+    await took?.(secondsOf(item));
   };
   const numbers = Array.from({ length: count }, (_, i) => first + i);
   await oneByOne(numbers.map(makeOne), ELEVEN_GAP_MS, bench.wait);
@@ -1666,50 +1685,58 @@ export async function makeTakes(
 /**
  * Makes `job`: a suite, or a piece of music made more than once, in takes for the ear
  * (`asTakes`); anything else into the project, its entry written into its group's manifest as
- * it comes.
+ * it comes — and tells `making.took` of every take as it lands.
  */
 async function makeJob(job: Job, manifest: Manifest, making: Making, bench: Bench): Promise<void> {
   const { entry, group } = job;
   if (isSuite(entry) || asTakes(job, making.count)) {
-    await makeTakes(entry, making.count, bench);
+    await makeTakes(entry, making.count, bench, making.took);
     return;
   }
   mkdirSync(bench.places.dirs[group], { recursive: true });
   const kept = await renderJob(entry, group, making, bench);
-  if (kept === null) return;
-  manifest[entry.id] = kept;
-  writeManifest(bench.places, group, manifest);
-  console.log(`sfx: ${entry.id} ${(kept.ms / 1000).toFixed(1)} s, gain ${kept.gain}`);
+  if (kept !== null) {
+    manifest[entry.id] = kept;
+    writeManifest(bench.places, group, manifest);
+    console.log(`sfx: ${entry.id} ${(kept.ms / 1000).toFixed(1)} s, gain ${kept.gain}`);
+  }
+  const takes = group === 'music' ? 1 : making.count;
+  await making.took?.(secondsOf(entry) * takes);
 }
 
 /**
- * Reads what a group's first job cost off the account, `before` it the credits left, and prices
- * the `rest` at that rate; over the group's cap, the run stops there.
+ * Reads what a group's first take cost off the account — `before` it the credits left, `seconds`
+ * of music or effect asked for — and prices what the group's `jobs` ask for besides at that rate;
+ * over the group's cap, the run stops there, the take it paid for kept.
  */
 async function priceTheRest(
-  first: Job,
-  rest: readonly Job[],
+  jobs: readonly Job[],
+  seconds: number,
   before: number,
   making: Making,
   client: SoundClient,
 ): Promise<void> {
+  const [first] = jobs;
+  if (first === undefined) return;
+  const { group } = first;
   const spent = before - (await creditsLeft(client));
-  const takenOf = (job: Job): number => secondsOf(job.entry) * making.count;
-  const later = rest.reduce((sum, job) => sum + takenOf(job), 0);
-  const price = priced(spent, takenOf(first), later, first.group);
-  const expected = costOf(first.entry, making.count);
+  const all = jobs.reduce((sum, job) => sum + secondsOf(job.entry) * making.count, 0);
+  const price = priced(spent, seconds, all - seconds, group);
+  const expected = Math.ceil(seconds * CREDITS_PER_SECOND[group]);
   console.log(
-    `sfx: ${first.entry.id} cost ${spent} credits (${price.perSecond.toFixed(1)} a second, ` +
-      `${expected} expected); the ${first.group} come to about ${price.total}`,
+    `sfx: the first take of ${first.entry.id} cost ${spent} credits ` +
+      `(${price.perSecond.toFixed(1)} a second, ${expected} expected); the ${group} come to ` +
+      `about ${price.total}`,
   );
   if (price.over) {
-    throw new Error(`sfx: that is over the ${CAPS[first.group]} the ${first.group} may spend`);
+    throw new Error(`sfx: that is over the ${CAPS[group]} the ${group} may spend`);
   }
 }
 
 /**
- * Makes a group's `jobs` one after the other; after the first, its cost is read off the account
- * and the rest priced at that rate (`priceTheRest`). Returns what the group spent.
+ * Makes a group's `jobs` one after the other; once its first take has landed — the first of a
+ * suite's takes, before the next is asked for — its cost is read off the account and the rest
+ * priced at that rate (`priceTheRest`). Returns what the group spent.
  */
 async function renderGroup(
   jobs: readonly Job[],
@@ -1718,10 +1745,13 @@ async function renderGroup(
   bench: Bench,
 ): Promise<number> {
   const before = await creditsLeft(bench.client);
-  const tasks = jobs.map((job, i) => async () => {
-    await makeJob(job, manifest, making, bench);
-    if (i === 0) await priceTheRest(job, jobs.slice(1), before, making, bench.client);
-  });
+  let metered = false;
+  const took = async (seconds: number): Promise<void> => {
+    if (metered) return;
+    metered = true;
+    await priceTheRest(jobs, seconds, before, making, bench.client);
+  };
+  const tasks = jobs.map((job) => () => makeJob(job, manifest, { ...making, took }, bench));
   await oneByOne(tasks, ELEVEN_GAP_MS, bench.wait);
   return before - (await creditsLeft(bench.client));
 }
@@ -1742,6 +1772,17 @@ function refuseOverCap(jobs: readonly Job[], group: Group, count: number): void 
   throw new Error(`sfx: ${over}${advice}`);
 }
 
+/** Fails where `jobs`, `count` takes of each, would cost any group more than its cap. */
+function refuseOverCaps(jobs: readonly Job[], count: number): void {
+  for (const group of GROUPS) {
+    refuseOverCap(
+      jobs.filter((job) => job.group === group),
+      group,
+      count,
+    );
+  }
+}
+
 /**
  * Makes every job of `todo` through `bench`, group by group, within the credits and the caps:
  * an effect, or a piece of music made once, into the project; a suite, or a piece of music made
@@ -1756,13 +1797,7 @@ export async function renderWith(
   const left = await creditsLeft(bench.client);
   console.log(`sfx: ${left} credits left`);
   refuseBelow(left);
-  for (const group of GROUPS) {
-    refuseOverCap(
-      todo.filter((job) => job.group === group),
-      group,
-      making.count,
-    );
-  }
+  refuseOverCaps(todo, making.count);
   for (const group of GROUPS) {
     const jobs = todo.filter((job) => job.group === group);
     if (jobs.length === 0) continue;
@@ -1913,8 +1948,8 @@ function replacedBy(kept: Manifest, before: Manifest): string[] {
 /**
  * Keeps take `record` of `suite` whole: refused, before anything moves, where it runs off its
  * plan or a piece of it came back silent; else every piece cut where the plan puts it, encoded
- * into the music's folder, measured as a render and listed in the manifest, the files the pieces
- * played before deleted.
+ * into the music's folder, measured as a render and listed in the manifest — and only then the
+ * files the pieces played before deleted, so that the manifest never names a file gone.
  */
 function keepSuite(suite: SuiteEntry, record: TakeRecord, bench: Keeping): Manifest {
   const asked = `sfx: --keep ${suite.id}=${record.n}`;
@@ -1936,8 +1971,9 @@ function keepSuite(suite: SuiteEntry, record: TakeRecord, bench: Keeping): Manif
     kept[piece.id] = pieceEntryOf(piece, measure);
   }
   const before = readManifest(bench.places, 'music');
-  for (const file of replacedBy(kept, before)) rmSync(join(dir, file), { force: true });
+  const replaced = replacedBy(kept, before);
   writeManifest(bench.places, 'music', { ...before, ...kept });
+  for (const file of replaced) rmSync(join(dir, file), { force: true });
   return kept;
 }
 
@@ -2076,11 +2112,11 @@ function report(manifests: Readonly<Record<Group, Manifest>>, places: Places): v
 
 /**
  * The jobs whose files a run measures anew: every one it took, but a piece of music or a suite
- * it made in takes or left for the takes that wait, whose files in the project — and their
+ * it made in takes or left as it is (`Job['left']`), whose files in the project — and their
  * manifest's entries with them, made perhaps from an older request — stay as they were.
  */
 export function measuredAnew(jobs: readonly Job[], count: number): Job[] {
-  return jobs.filter((job) => !job.waiting && !(job.make && asTakes(job, count)));
+  return jobs.filter((job) => job.left === null && !(job.make && asTakes(job, count)));
 }
 
 /** What `job` measures anew in `places`: each file of its own it finds, by its entry's id. */
@@ -2191,9 +2227,9 @@ async function makePlan(
 
 /**
  * Runs the script as `options` ask, in and with `studio`: keeps the take `--keep` names, or plans
- * what to make — a piece of music whose takes wait left as it is — says the plan and, but for a
- * dry run, makes it (`makePlan`); then says what the folders hold and names every recording that
- * would fail the game's.
+ * what to make — a piece of music whose takes wait left as it is — says the plan and makes it
+ * (`makePlan`), where a dry run only refuses what passes a cap, as a run would; then says what the
+ * folders hold and names every recording that would fail the game's.
  */
 export async function runWith(
   options: Options,
@@ -2205,7 +2241,8 @@ export async function runWith(
     const manifests = manifestsIn(places);
     const jobs = planOf(catalog, manifests, filedIn(places), options, takesWaitIn(places));
     for (const line of planLines(jobs, options.candidates)) console.log(line);
-    if (!options.dryRun) await makePlan(jobs, manifests, options.candidates, studio);
+    if (options.dryRun) refuseOverCaps(jobs.filter((job) => job.make), options.candidates);
+    else await makePlan(jobs, manifests, options.candidates, studio);
   } else {
     console.log(keptLine(options.keep, keepTake(options.keep, catalog, studio)));
   }

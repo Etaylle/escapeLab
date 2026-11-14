@@ -20,29 +20,29 @@ census; the recordings are made by `packages/client/scripts/sfx.ts`, the score w
 and `pcm.ts` beside it.
 
 **The catalog.** Each entry names one sound: its `id`, its `kind` — a one-shot, a bed that loops
-seamlessly, a stem of the music, a sting or a theme played once through — the English prompt
-ElevenLabs is given (material, mechanism, room, distance), how long it lasts, whether it loops, the
-loudness it is brought to (`target`), a stem's tempo (`bpm`, the one its prompt states: the script
-holds the two to each other, and the stems and suites to one tempo) and where the game plays it
-(`usedBy`, `src/<file>#<symbol>`). One entry is of another kind: the suite `score`, the game's
-music written as one (Score, below) — its key, its tempo, its motif in a composer's words, the
-styles every section shares and those none may have, the loudness its pieces are brought to, and
-its eight sections, each a piece the game plays with its name, its bars, whether it loops, its
-lines, its styles and where it plays. There are 83 effects — 70 one-shots, three loops (the mains
-hum, the siren, the drone's rotor) and ten room beds, the facility's hum under the menu among them
-— the end card's stings `won` and `lost`, 10 s each, and the score's eight pieces, all in A minor
-at 90 bpm but the dawn's C major: the menu's theme and the lobby's, the opening's title, the run's
-stems `calm`, `tense` and `critical`, 72 s each, and the end cards' themes `end-lost` and
-`end-won`, 40 s each. A step is one of three takes of the same
-work boot on the floor it lands on — `step-concrete-1`–`3`, `step-lino-1`–`3`, `step-steel-1`–`3` —
-a door that slides open has its pneumatic slide and one that shuts one of two closes
-(`door-close-1`, `-2`), the hatch strikes its stops as it does on screen (`hatch-open-done`), a
-drone that comes close whooshes by (`drone-pass`), every alarm brings a two-second stinger with it
-(`alarm-sting`) and a volume set in the settings ticks through the bus it sets (`ui-tick`).
+seamlessly or a sting — the English prompt ElevenLabs is given (material, mechanism, room,
+distance), how long it lasts, whether it loops, the loudness it is brought to (`target`) and where
+the game plays it (`usedBy`, `src/<file>#<symbol>`). None has a tempo of its own, and a stem or a
+theme on its own is refused: the music's stems and themes are sections of a suite. One entry is of
+that other kind: the suite `score`, the game's music written as one (Score, below) — its key, its
+tempo, its motif in a composer's words (its cell, the fall that ends its first phrase, its answer),
+the styles every section shares and those none may have, the loudness its pieces are brought to, and
+its eight sections, each a piece the game plays with its name, its bars, whether it loops, how much
+of the motif it plays, its lines, its styles and where it plays. There are 83 effects — 70
+one-shots, three loops (the mains hum, the siren, the drone's rotor) and ten room beds, the
+facility's hum under the menu among them — the end card's stings `won` and `lost`, 10 s each, and
+the score's eight pieces, all in A minor at 90 bpm but the dawn's C major: the menu's theme and the
+lobby's, the opening's title, the run's stems `calm`, `tense` and `critical`, 72 s each, and the end
+cards' themes `end-lost` and `end-won`, 40 s each. A step is one of three takes of the same work
+boot on the floor it lands on — `step-concrete-1`–`3`, `step-lino-1`–`3`, `step-steel-1`–`3` — a
+door that slides open has its pneumatic slide and one that shuts one of two closes (`door-close-1`,
+`-2`), the hatch strikes its stops as it does on screen (`hatch-open-done`), a drone that comes
+close whooshes by (`drone-pass`), every alarm brings a two-second stinger with it (`alarm-sting`)
+and a volume set in the settings ticks through the bus it sets (`ui-tick`).
 
 ```sh
 pnpm --filter client sfx -- --dry-run                    # the plan and its cost; nothing asked
-pnpm --filter client sfx                                 # everything not made yet
+pnpm --filter client sfx                                 # all not made yet; a suite: --only
 pnpm --filter client sfx -- sfx                          # the effects alone (`music`: the music)
 pnpm --filter client sfx -- --only klaxon,ping           # those entries, made anew
 pnpm --filter client sfx -- --candidates 3 --only ping   # three takes, the best one kept
@@ -98,20 +98,23 @@ Auswahl, below).
 The key comes from the environment: the package script hands node the repo's `.env.local`
 (`--env-file-if-exists`), and from a worktree it is `node --env-file=<repo>/.env.local
 scripts/sfx.ts` in `packages/client`. Before it asks for anything the script reads the account's
-credits and stops below 40,000 or where the plan would pass a group's cap (12,000 credits for
-the effects, 18,000 for the music); after a group's first request it reads what that cost and
-prices the rest at that rate. The first full render (2026-10-26) cost 542 credits for the 154 s
-of effects and 4,136 for the 236 s of music; the dry run prices at those rates, rounded up to 4
-and 18 credits a second, times the takes.
+credits and stops below 40,000 or where the plan would pass a group's cap (12,000 credits for the
+effects, 18,000 for the music) — a dry run refuses what passes a cap as a run does. Once a group's
+first take has landed it reads what that cost and prices the rest at that rate, before the next is
+asked for: the first of a suite's two takes, so that a rate dearer than the dry run's stops the
+second where both would pass the cap. The first full render (2026-10-26) cost 542 credits for the
+154 s of effects and 4,136 for the 236 s of music; the dry run prices at those rates, rounded up to
+4 and 18 credits a second, times the takes.
 
 **Listening to them.** The page `/sounds`, which no menu links to, lists every entry of the
-catalog by its kind — effects, rooms and loops, music, the end card — each with its prompt, its
-length, its gain and its floor once the gain is applied („Grundrauschen −45,7 dBFS, hörbar"
-where it is heard, „vom Klang verdeckt" where the sound fills its quietest 100 ms), a button
-that plays it through the game's own loader at the loudness the game brings it to (a loop — a
-room's bed, a stem — round and round until it is stopped) and a box „neu rendern"; below, it
-puts together the command for what is ticked, to be run in `packages/client` — an effect ticked
-comes back as the best of three candidates, a piece of music as three takes under its row:
+catalog by its kind — effects, rooms and loops, the end card's stings — and the score with its
+pieces apart, each with its prompt, its length, its gain and its floor once the gain is applied
+(„Grundrauschen −45,7 dBFS, hörbar" where it is heard, „vom Klang verdeckt" where the sound fills
+its quietest 100 ms), a button that plays it through the game's own loader at the loudness the
+game brings it to (a loop — a room's bed, a stem — round and round until it is stopped) and a box
+„neu rendern"; below, it puts together the command for what is ticked, to be run in
+`packages/client` — an effect ticked comes back as the best of three candidates, a sting as three
+takes under its row, the score as two:
 
 ```sh
 node --env-file=/Users/uros/Documents/Req.Eng./escapelab/.env.local scripts/sfx.ts --candidates 3 --only a,b,c
@@ -167,7 +170,7 @@ The `lost` sting came back 19.0 s long for the 10 s asked, its chord struck thre
 ## Takes und Auswahl
 
 No measurement says whether a piece of music sounds right, so the script picks none. With
-`--candidates N` every piece the run makes — a stem, a sting, a theme — is made N times by the
+`--candidates N` every piece of music the run makes on its own — a sting — is made N times by the
 same request, three times at most (`MAX_MUSIC_TAKES`: its cost runs by the second, and a fourth
 is refused before anything is asked), and every take goes into
 `packages/client/takes/<id>/<n>.mp3`, a folder git ignores beside `public/`, which no build
@@ -184,10 +187,11 @@ one of each. A run asking for one take (no `--candidates`) makes a piece once, s
 no recording goes into the game past takes nobody has heard, and says so in a line
 (`--keep <id>=<n>` keeps one, `--candidates 3 --only <id>` makes more); its recording is not
 measured anew either, so that a stale one stays stale in the manifest. An effect keeps its
-candidates and its pick. A suite is always made in takes, one where no more are asked for — its
-pieces replace the game's whole score at once, and none of it goes into the game before the ear
-has chosen — at most as many a run as the music's cap holds (two of the score), its takes
-numbered on; a run that does not name it with `--only` leaves it while its takes wait. Each take
+candidates and its pick. A suite is made only where `--only` names it: a run of everything leaves
+it and says the command that makes its takes, for a take of the score costs thousands of credits.
+Named, it is always made in takes, one where no more are asked for — its pieces replace the game's
+whole score at once, and none of it goes into the game before the ear has chosen — at most as many
+a run as the music's cap holds (two of the score), its takes numbered on. Each take
 of a suite is listed with its pieces where the plan cuts it, each measured as a render would
 measure it — its length, gain, loudness, peak, RMS, floor and silence, and `length`, `silence`
 or `floor` missed — and the take itself misses `length` where it runs more than a second off its
@@ -240,7 +244,7 @@ the eight pieces as the game plays them now, each to be played round and round w
 
 **Keeping.** `--keep <id>=<n>` measures the take as a render is measured, moves it into
 `public/music` as the entry's file, writes its manifest entry — the request's hash, the gain,
-the floor, a stem's tempo — and deletes the entry's other takes and their list. It asks
+the floor — and deletes the entry's other takes and their list. It asks
 ElevenLabs for nothing and needs no key, only afconvert. It refuses, in one line and before
 anything moves, an id the catalog does not know, an entry without takes, a number it has no take
 of, a take made from another request than the catalog's now (the prompt changed since: new
@@ -252,13 +256,13 @@ take, on a copy of the client, wrote its manifest entry to the digit as the rend
 A take of a suite is kept whole (`--keep score=<n>`): decoded, cut where the plan puts each piece,
 each piece's edges faded over 10 ms, encoded by afconvert as AAC at 160 kbit/s into
 `public/music/<piece>.m4a` — as a part first, every piece measured as encoded, then all moved in at
-once — and listed with the suite's hash, the gain that brings it to −19 LUFS, a loop's bars and
-its suite; the file each piece played before is deleted where no other entry plays it, and so are
-the suite's other takes. It refuses, besides the refusals above and before anything moves, a piece
-named alone („a piece of score, kept whole: --keep score=<n>"), a take more than a second off its
-plan's length — its pieces would not lie where the plan put them — and a take a piece of which came
-back silent, taking back every part it had encoded. A piece of a suite is never made or kept alone:
-`--only calm` is refused as well, naming `--only score`.
+once — and listed with the suite's hash, the gain that brings it to −19 LUFS, a loop's bars and its
+suite; only then, the manifest naming the pieces, the file each piece played before is deleted where
+no other entry plays it, and so are the suite's other takes. It refuses, besides the refusals above
+and before anything moves, a piece named alone („a piece of score, kept whole: --keep score=<n>"), a
+take more than a second off its plan's length — its pieces would not lie where the plan put them —
+and a take a piece of which came back silent, taking back every part it had encoded. A piece of a
+suite is never made or kept alone: `--only calm` is refused as well, naming `--only score`.
 
 **What a take costs**, at the dry run's 18 credits a second of music:
 
@@ -771,15 +775,23 @@ electronic colour held in tension with the acoustic instruments, French-romantic
 here in a 1980s research facility at night, so the electronic colour is an analog synthesiser and
 the melancholy the night shift's.
 
-**The motif.** A melody of eight bars in A minor, two phrases of four, long notes on the strong
-beats so that it can be hummed after one hearing: the first phrase leaps up a minor sixth, sighs
-down a half step and falls by step to rest on the fifth; the answer leaps from a step higher and
-settles on the tonic. The catalog writes it once, in a composer's words (the suite's `motif`), and
-every section of the plan is given those words beside its own, with the key and the tempo — the
-motif is shared by construction: one request, one generation, every chunk told the same melody
-and played on from the chunk before. A wordless voice — a solo female voice on an open „ah",
-written as a voice's sound in parentheses and never as a word — carries the answering phrase once
-in the main theme and sings the motif once more at dawn; nowhere else.
+**The motif.** A melody of eight bars, two phrases of four, long notes on the strong beats so that
+it can be hummed after one hearing, written in the key's own degrees: from the fifth, a leap up a
+sixth held three beats and a sigh down one step, then falling by step in half notes to rest on the
+fifth, held a whole bar — a half cadence; the answer leaps from the sixth up to the fourth, held
+three beats, and falls by step to a full close on the tonic. In A minor that is E–C–B, A–G–F, E and
+F–D, C–B, A; in the dawn's C major the same steps, G–E–D, C–B–A, G and A–F, E–D, C. It starts on the
+fifth, not on the tonic: from the tonic, a minor sixth up and a sigh down is the opening of Wagner's
+Tristan prelude. The catalog writes it in three parts (the suite's `motif`: `cell`, `fall`,
+`answer`), and every section names how much of it it plays (`motif`: `cell`, `phrase` or `whole`)
+and is told that much beside its own words, with the key and the tempo, and no more: the main theme,
+the lobby and the dawn the whole, the opening and the lights going out the first phrase, the three
+stems the cell alone, which the calm stem breaks into fragments, the tense stem's ostinato is built
+from and the last minute hammers — no chunk is told to play a melody its section avoids. The motif
+is shared by construction: one request, one generation, every chunk told the same cell and played on
+from the chunk before. A wordless voice — a solo female voice on an open „ah", written as a voice's
+sound in parentheses and never as a word — carries the answering phrase once in the main theme and
+sings the motif once more at dawn; nowhere else.
 
 **The pieces**, in the order of the plan, which is the order a crew hears them; a loop's bars that
 go round, and its tail of three:
@@ -797,20 +809,20 @@ go round, and its tail of three:
 
 **How they hang together.** One key, A minor — the dawn's own C major, the relative major the won
 card's sting has struck just before it — one tempo, 90 bpm in bars of four, and the motif
-throughout. The run's intensity rises as instruments enter by stage — the analog pulse with the
-pressure, percussion only with the pressure, drums only in the last minute — and never by tempo
-or key, so that the music can cross from one stem to the next on any bar line. Every section
-lasts whole bars, so each starts on a bar line of the one generation: the three stems are as long
-as each other to the millisecond and share their bar grid by construction, not by asking three
-times for 90 bpm. A loop's section is written three bars longer than its loop — the bar the game
-catches a next pass up in, and the bars its 3 s seam crosses in, with a second to spare
-(suite.ts `tailBars`) — and is told to stay steady to its last bar and to come back to its
-opening; the cut keeps the tail, and the game loops on the bars the manifest names. What never
-appears: words of any kind, drums in the menu, the lobby, the opening, the calm stem and the
-endings, a voice in the run, an electric guitar, a drop, a change of tempo, sound effects (the
-suite's and each section's `avoid`). `test/suiteScript.test.ts` holds the catalog to all of it:
-the order, the lengths, the stems' grid, the key, the tempo and the motif in every chunk, the
-voice where it belongs and nowhere else, the drums kept out.
+throughout, as far as each section plays it. The run's intensity rises as instruments enter by stage
+— the analog pulse with the pressure, percussion only with the pressure, drums only in the last
+minute — and never by tempo or key, so that the music can cross from one stem to the next on any bar
+line. Every section lasts whole bars, so each starts on a bar line of the one generation: the three
+stems are as long as each other to the millisecond and share their bar grid by construction, not by
+asking three times for 90 bpm. A loop's section is written three bars longer than its loop — the bar
+the game catches a next pass up in, and the bars its 3 s seam crosses in, with a second to spare
+(suite.ts `tailBars`) — and is told to stay steady to its last bar and to come back to its opening;
+the cut keeps the tail, and the game loops on the bars the manifest names. What never appears: words
+of any kind, drums in the menu, the lobby, the opening, the calm stem and the endings, a voice in
+the run, an electric guitar, a drop, a change of tempo, sound effects (the suite's and each
+section's `avoid`). `test/suiteScript.test.ts` holds the catalog to all of it: the order, the
+lengths, the stems' grid, the key, the tempo and the motif in every chunk, the voice where it
+belongs and nowhere else, the drums kept out.
 
 **What Expedition 33 showed, and what was not taken.** Its music is remembered as music, not as
 background: a melody comes back, piano and a few strings carry the feeling, a voice without words
@@ -954,68 +966,71 @@ Hz tone at −3.01 LUFS in one channel and 0 in two at 44.1 and 48 kHz, the gate
 lies 10 LU under the rest and silence, a span cut out with its 10 ms edges faded, a WAV written and
 read back), `test/suiteScript.test.ts` (a suite's plan on whole bars, a loop's tail for the game's
 lead bar, seam and a spare second — the seam's numbers held to music.ts — the chunks of one request,
-the hash, a piece of each section; the catalog's rules: no lyric, the API's limits, the ids once;
-the cost and the runs within the cap; the takes made into takes/ even once, each piece measured, the
-plan's length missed, a section refused alone, a suite left while its takes wait; a take kept whole
-— cut, faded, encoded, measured, brought to −19 LUFS, the loops' bars alike — the files the pieces
-played before deleted and nobody else's, each refusal moving nothing, a kept suite measured anew;
-and the score as the catalog writes it: its order, its lengths, its stems' bar grid, the motif,
-tempo and key in every chunk, the voice where it belongs, no drums before the run, no name copied),
-`test/sampleManifest.test.ts` (the code's ids against the catalog, the catalog's `usedBy` against
-the code, the entries awaiting the render and what they borrow, every other recording on disk, made
-from its request as it stands, its length, its start, its gain, its floor, the stems' tempo in the
-manifest, the folders' caps, no bed past +12 dB, a suite's pieces within 2 dB as played),
-`test/sfxScript.test.ts` (the catalog's rules — a stem's tempo the one its prompt states, the stems'
-one tempo, no other kind's — the requests and their hash, the tempo asking nothing anew, what a run
-makes, the command line, the candidates' influences and the rules a take is picked by, the credits'
-guard and the pricing at the first entry's rate, a WAV read, the gain, the start, the silence and
-the floor worked out from PCM of known loudness, the floor heard or masked, a length off; the
-music's takes against a client of the test's own — three at most, each into `takes/<id>/` with its
-list and nothing public, numbered on, the recording the game plays left as it was, every take priced
-in the plan — and `--keep`: the take moved, its manifest entry as a render writes it, the rest
-deleted, each refusal in a line; a bed whose every take needs more than +12 dB refused in a line and
-landing nowhere, one within kept), `test/soundsPage.test.tsx` (the audition page's address, its
-listing by kind, the score's block — a row a take, every piece in the plan's order, one command
-keeping it whole, a piece played where the plan cuts it, its suite's command for two takes — its
-floors flagged as the script flags them, what it says of each recording, the command it puts
-together, the takes read from the script's lists and asked of the dev server with a plain GET, each
-under its piece in one line, the keep command the script reads, a take played at the gain the game
-would give it, no other request in its sources), `server/test/takes.test.ts` (the switch, 404 under
-`/takes` ahead of the built site without it, the lists and a take with it, a span a Range asks for
-and 416 past the end), `test/ambience.test.ts` (rooms, levels, power, the beds' recorded loops, dead
-and alive variants, crossfades, the sporadic sounds, sounds let go, the rooms one way near, the beds
-wanted by power, a bed loaded as its room comes near and let go 4 s after, the rest brought in as
-the lights fail, the room's reverb), `test/spatial.test.ts` (pan, the inverse model and its 12
-tiles, a wall's 600 Hz, 6 dB and 15 ms, steps on the floor under a partner, the rotor, the chirp and
-the fly-by placed, the doors placed and the audience's unplaced), `test/radioVoice.test.ts` (the
-chain, the shaper's distortion, the static's level, the speech, the squelches' recordings, the
-Leitstelle's opening, the music 8 dB and the beds 4 dB down, the run's lines fetched and the opening
-line alone decoded, a line decoded as it airs and let go once spoken, the newest of two, a line's
-airtime, the offline renders), `test/pa.test.ts` (the loudspeakers' band, the room's answer left to
-the reverb, the lines on their moments, decoded as the announcement starts and let go once said, cut
-with the power), `test/introCue.test.ts` (the script and the cue's peak in its list, the cue
-streamed from where the opening stands, faded or cut, let go), `test/voiceLines.test.ts` (the
-recordings against the missions, their pace and sizes, the voice's choice, what Piper and `say` are
-given to read, what a run keeps and makes anew), `test/elevenlabs.test.ts` (the key, the voices, the
-request, the MP3, the retry on 429, the gap; with a client of its own, no request leaves),
-`test/record.test.tsx` and `test/recordWav.test.ts` (the /record page's lines, its states, its
-buttons, the files it takes, the trim and the WAV), `server/test/voiceRecording.test.ts` (the
-switch, the size limit, a WAV converted, an MP3 and an M4A kept, WebM turned away, the manifest),
-`test/music.test.ts` (pressure, the stem it brings, bars of four beats, a pass's period on whole
-bars with room for its lead bar and its seam, every stem's file fetched once and none decoded, a
-stem from its start on its first bar, the next pass a bar ahead of its 3 s equal-power seam and the
-old element rewound, a change on the next bar crossing over 2 s, a late element caught up, the
-critical stem in the last minute and the escape, the alarm's push and sting, a stem kept waiting for
-the budget, a file asked for again, the endings and the drain, the streamed stings),
-`test/sounds.test.ts` (each device's recording, the alarm after a buzz or an arc, the meter's hum
-and the colour tones still made, the device hum's loop), `test/coldOpen.test.tsx`,
-`test/finale.test.tsx` and `test/putDown.test.tsx` (the effects on the audio clock, the hatch's
-grind and its landing, a recording that failed made up by nothing, the mute ahead of the brickwall)
-and `test/audioKit.test.ts` (the budget, a recording within it, the loops, the census);
-`core/test/radioLines.test.ts` checks the lines themselves. Ten of them were proved by breaking the
-code once — the brickwall's ratio, the ducks' release, the IR's decay, the downmix, the beds'
-release, the rolloff, the pass's lead bar, a floor's material, the steering's cap, the voice
-decoding every line at the start — each failing its tests.
+the hash, a piece of each section, the motif as far as each plays it; the catalog's rules: no lyric,
+the API's limits, the ids once, a motif in three parts; the cost and the runs within the cap, a dry
+run refusing them as a run does, the price read after the first take and the run stopped there, that
+take kept; the takes made into takes/ even once, the plan waited for 900 s, each piece measured, the
+plan's length missed, a section refused alone, a suite left while its takes wait and by a run of
+everything; a take kept whole — cut, faded, encoded, measured, brought to −19 LUFS, the loops' bars
+alike — the files the pieces played before deleted and nobody else's, the manifest written first,
+each refusal moving nothing, a kept suite measured anew; and the score as the catalog writes it: its
+order, its lengths, its stems' bar grid, the tempo and key in every chunk and no other tempo asked,
+the motif from the fifth with its rhythm and cadences, each section told as much of it as it plays,
+the voice where it belongs, no drums before the run, no name copied), `test/sampleManifest.test.ts`
+(the code's ids against the catalog, the catalog's `usedBy` against the code, the entries awaiting
+the render and what they borrow, every other recording on disk, made from its request as it stands,
+its length, its start, its gain, its floor, a looped piece's tempo in the manifest, the folders'
+caps, no bed past +12 dB, a suite's pieces within 2 dB as played), `test/sfxScript.test.ts` (the
+catalog's rules — no stem or theme of its own, no sound of its own with a tempo — the requests and
+their hash, the tempo asking nothing anew, what a run makes, the command line, the candidates'
+influences and the rules a take is picked by, the credits' guard and the pricing at the first take's
+rate, a WAV read, the gain, the start, the silence and the floor worked out from PCM of known
+loudness, the floor heard or masked, a length off; the music's takes against a client of the test's
+own — three at most, each into `takes/<id>/` with its list and nothing public, numbered on, the
+recording the game plays left as it was, every take priced in the plan — and `--keep`: the take
+moved, its manifest entry as a render writes it, the rest deleted, each refusal in a line; a bed
+whose every take needs more than +12 dB refused in a line and landing nowhere, one within kept),
+`test/soundsPage.test.tsx` (the audition page's address, its listing by kind, the score's block — a
+row a take, every piece in the plan's order, one command keeping it whole, a piece played where the
+plan cuts it, its suite's command for two takes — its floors flagged as the script flags them, what
+it says of each recording, the command it puts together, the takes read from the script's lists and
+asked of the dev server with a plain GET, each under its piece in one line, the keep command the
+script reads, a take played at the gain the game would give it, no other request in its sources),
+`server/test/takes.test.ts` (the switch, 404 under `/takes` ahead of the built site without it, the
+lists and a take with it, a span a Range asks for and 416 past the end), `test/ambience.test.ts`
+(rooms, levels, power, the beds' recorded loops, dead and alive variants, crossfades, the sporadic
+sounds, sounds let go, the rooms one way near, the beds wanted by power, a bed loaded as its room
+comes near and let go 4 s after, the rest brought in as the lights fail, the room's reverb),
+`test/spatial.test.ts` (pan, the inverse model and its 12 tiles, a wall's 600 Hz, 6 dB and 15 ms,
+steps on the floor under a partner, the rotor, the chirp and the fly-by placed, the doors placed and
+the audience's unplaced), `test/radioVoice.test.ts` (the chain, the shaper's distortion, the
+static's level, the speech, the squelches' recordings, the Leitstelle's opening, the music 8 dB and
+the beds 4 dB down, the run's lines fetched and the opening line alone decoded, a line decoded as it
+airs and let go once spoken, the newest of two, a line's airtime, the offline renders),
+`test/pa.test.ts` (the loudspeakers' band, the room's answer left to the reverb, the lines on their
+moments, decoded as the announcement starts and let go once said, cut with the power),
+`test/introCue.test.ts` (the script and the cue's peak in its list, the cue streamed from where the
+opening stands, faded or cut, let go), `test/voiceLines.test.ts` (the recordings against the
+missions, their pace and sizes, the voice's choice, what Piper and `say` are given to read, what a
+run keeps and makes anew), `test/elevenlabs.test.ts` (the key, the voices, the request, the MP3, the
+retry on 429, the gap; with a client of its own, no request leaves), `test/record.test.tsx` and
+`test/recordWav.test.ts` (the /record page's lines, its states, its buttons, the files it takes, the
+trim and the WAV), `server/test/voiceRecording.test.ts` (the switch, the size limit, a WAV
+converted, an MP3 and an M4A kept, WebM turned away, the manifest), `test/music.test.ts` (pressure,
+the stem it brings, bars of four beats, a pass's period on whole bars with room for its lead bar and
+its seam, every stem's file fetched once and none decoded, a stem from its start on its first bar,
+the next pass a bar ahead of its 3 s equal-power seam and the old element rewound, a change on the
+next bar crossing over 2 s, a late element caught up, the critical stem in the last minute and the
+escape, the alarm's push and sting, a stem kept waiting for the budget, a file asked for again, the
+endings and the drain, the streamed stings), `test/sounds.test.ts` (each device's recording, the
+alarm after a buzz or an arc, the meter's hum and the colour tones still made, the device hum's
+loop), `test/coldOpen.test.tsx`, `test/finale.test.tsx` and `test/putDown.test.tsx` (the effects on
+the audio clock, the hatch's grind and its landing, a recording that failed made up by nothing, the
+mute ahead of the brickwall) and `test/audioKit.test.ts` (the budget, a recording within it, the
+loops, the census); `core/test/radioLines.test.ts` checks the lines themselves. Ten of them were
+proved by breaking the code once — the brickwall's ratio, the ducks' release, the IR's decay, the
+downmix, the beds' release, the rolloff, the pass's lead bar, a floor's material, the steering's
+cap, the voice decoding every line at the start — each failing its tests.
 
 With `?trace=1` the page exposes `window.__escapelab.audio`: `room`, `kind`, `beds` and
 `power` by kind, `music` (`calm`, `pressure`, `last`, the pressure as `level`, the `streams`
@@ -1187,9 +1202,8 @@ lobby or out — fading over 1 s and holding the bus until then, so the lobby's 
 after it. The sting waits for the bus as well: the run's music has faded by the time the card comes.
 
 The score's pieces are AAC at 160 kbit/s, some 20 kB a second: the music's folder is held to 11 MB —
-the eight pieces some 10.0 MB, the stings 0.5 — where it held 8 MB for MP3s of 72 s and less; a
-theme the catalog lists on its own, as the older end themes were, is made at 128 kbit/s
-(scripts/sfx.ts `THEME_FORMAT`). A test holds the plan to the caps before anything is made
+the eight pieces some 10.0 MB, the stings 0.5 — where it held 8 MB for MP3s of 72 s and less. A
+test holds the plan to the caps before anything is made
 (`test/sampleManifest.test.ts`: each folder's files, less those the entries awaiting their render
 will replace, and those entries at their rates, within its cap).
 
@@ -1203,16 +1217,21 @@ before it —, the buses and the 2 s fades, the lobby's weight, the lobby's own 
 theme's next bar over 2 s as loud as the theme, the start without a gesture after a run, the switch
 and the sound back at once as it is switched on again, a theme not rendered tended by no timer, the
 hum's loop taken only while it plays and a hum brought up past +12 dB kept silent, the end with the
-run, the crew's duck, the bus held and waited for, and the interface's sounds;
+run, the crew's duck, the bus held and waited for, the interface's sounds, and the probe saying the
+music sounds once an element of it plays, not when its pass is laid;
 `test/doorWipe.test.tsx` the places it is wanted, the editor none of them; `test/endTheme.test.ts`
 the sting and the theme after it, its level and voice, a true ending played once and never round
 again, its fade with the card and the bus held, no theme for a card gone or a theme not made;
 `test/music.test.ts` and `test/introCue.test.ts` the stems and the cue waiting for the bus, the
 stems looped on the bars their manifest names, the score's title in the cue's place. The walkthrough
-checks the lamp lit before the first key, the sound playing after it, the lobby's music — its own
-piece or the theme at its weight, which its log line names — chime and chirp, all of it gone in the
-run, the won card asking for its music and its music gone as the next run opens (tools/shots.mjs
-`menuSoundAtFirstKey`, `menuSoundAfterStart`, `checkEndMusic`, `checkEndMusicGone`).
+checks the lamp lit before the first key, the sound playing after it and the theme sounding within
+8 s where the music's manifest lists it — an element of it playing, as the probe counts it, not a
+pass laid — the lobby's music, its own piece sounding where it is listed, else the theme at its
+weight, which its log line names, chime and chirp, all of it gone in the run, the won card asking
+for its music and its music gone as the next run opens; and once the manifest lists a kept score's
+pieces, AAC in .m4a, it asks the browser once whether it plays them (`canPlayType`), and fails
+where it plays none (tools/shots.mjs `menuSoundAtFirstKey`, `checkPieceCodec`,
+`menuSoundAfterStart`, `checkEndMusic`, `checkEndMusicGone`).
 
 ## Lizenz
 

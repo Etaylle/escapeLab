@@ -781,11 +781,11 @@
     "kind": "suite",
     "key": "A minor",
     "bpm": 90,
-    "motif": [
-      "one memorable main theme returns in every section",
-      "main motif: a four-bar phrase that leaps up a minor sixth, sighs down a half step, then falls stepwise",
-      "the answering phrase climbs a step higher and settles on the tonic; long notes, simple and singable"
-    ],
+    "motif": {
+      "cell": "main motif in the key's own notes: from the fifth, a leap up a sixth held three beats, then a sigh down one step",
+      "fall": "the first phrase falls on by step in half notes to rest on the fifth, held a whole bar: a half cadence, four bars",
+      "answer": "answering phrase: from the sixth, a leap up to the fourth held three beats, then by step to a full close on the tonic"
+    },
     "styles": [
       "cinematic orchestral video game score",
       "French romantic melancholy",
@@ -820,6 +820,7 @@
         "name": "Main Theme",
         "bars": 32,
         "loop": true,
+        "motif": "whole",
         "lines": [
           "{felt piano alone states the main motif}",
           "{chamber strings answer the motif}",
@@ -842,6 +843,7 @@
         "name": "Interlude",
         "bars": 20,
         "loop": true,
+        "motif": "whole",
         "lines": ["{solo piano, the motif softly}", "{a solo cello answers once}"],
         "styles": [
           "the main motif again, thinner and more intimate",
@@ -859,6 +861,7 @@
         "name": "Opening",
         "bars": 15,
         "loop": false,
+        "motif": "phrase",
         "lines": ["{solo piano plays only the first phrase of the motif, once}"],
         "styles": [
           "only the first phrase of the motif, once, on solo felt piano",
@@ -875,6 +878,7 @@
         "name": "Night Shift",
         "bars": 24,
         "loop": true,
+        "motif": "cell",
         "lines": ["{fragments of the motif in the dark}"],
         "styles": [
           "the motif broken into fragments: its opening leap alone, with long pauses",
@@ -900,6 +904,7 @@
         "name": "Pressure",
         "bars": 24,
         "loop": true,
+        "motif": "cell",
         "lines": ["{a pulsing ostinato built from the motif}"],
         "styles": [
           "a plucked analog synth ostinato in eighth notes built from the motif's first notes",
@@ -917,6 +922,7 @@
         "name": "Last Minute",
         "bars": 24,
         "loop": true,
+        "motif": "cell",
         "lines": ["{the motif hammered by horns and strings}"],
         "styles": [
           "urgent and driving, a double-time feel at the same tempo",
@@ -934,6 +940,7 @@
         "name": "Lights Out",
         "bars": 15,
         "loop": false,
+        "motif": "phrase",
         "lines": ["{the music breaks off}", "{low piano, the motif in long held notes}"],
         "styles": [
           "the motif sunk into the low register of the piano, heavy, long held notes at the same tempo",
@@ -951,6 +958,7 @@
         "bars": 15,
         "loop": false,
         "key": "C major",
+        "motif": "whole",
         "lines": [
           "{strings carry the motif into the major}",
           "(aah)",

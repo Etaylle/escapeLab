@@ -95,7 +95,7 @@ const HUM: CatalogSound = {
   durationSeconds: 6,
   loop: true,
 };
-const CALM: CatalogSound = { ...HUM, id: 'calm', kind: 'stem', durationSeconds: 72 };
+const WON: CatalogSound = { ...HUM, id: 'won', kind: 'sting', durationSeconds: 10, loop: false };
 
 describe('the page’s address', () => {
   it('is /sounds, with or without its slash, and nothing else', () => {
@@ -146,9 +146,7 @@ describe('the listing', () => {
     expect(sections.map((section) => section.title)).toEqual([
       'Effekte',
       'Räume und Schleifen',
-      'Musik',
       'Endkarte',
-      'Nach der Endkarte',
     ]);
     const listed = sections.flatMap((section) => section.rows.map((row) => row.sound.id));
     expect(listed.sort()).toEqual(catalog.map((sound) => sound.id).sort());
@@ -158,25 +156,19 @@ describe('the listing', () => {
     for (const section of sections) {
       expect(section.rows.every((row) => row.sound.kind === section.kind)).toBe(true);
     }
-    expect(SECTIONS.map((section) => section.kind)).toEqual([
-      'oneshot',
-      'bed',
-      'stem',
-      'sting',
-      'theme',
-    ]);
+    expect(SECTIONS.map((section) => section.kind)).toEqual(['oneshot', 'bed', 'sting']);
   });
 
   it('gives each sound its recording, and hears its floor as the sound script does', () => {
     expect([AUDIBLE_FLOOR_DBFS, MASKED_WITHIN_DB]).toEqual([SCRIPT_AUDIBLE, SCRIPT_MASKED]);
-    const [effects, loops, music] = listingOf([CLICK, HUM, CALM], {
+    const [effects, loops, music] = listingOf([CLICK, HUM, WON], {
       'key-click': recording(12, 480, -70, -30), // its tail brought up to −48.4 dBFS
       'mains-hum': recording(8, 6000, -40, -38), // its quietest 100 ms: the hum itself
     });
     expect(effects?.rows[0]).toMatchObject({ noisy: true, recording: { gain: 12 } });
     expect(effects?.rows[0]?.floorDbfs).toBeCloseTo(-48.42, 2);
     expect(loops?.rows[0]).toMatchObject({ noisy: false, floorDbfs: null });
-    const none = { sound: CALM, recording: null, floorDbfs: null, noisy: false };
+    const none = { sound: WON, recording: null, floorDbfs: null, noisy: false };
     expect(music?.rows[0]).toEqual(none);
   });
 
@@ -411,11 +403,11 @@ describe('the takes', () => {
 });
 
 describe('the board’s takes', () => {
-  const CALM_TAKES = { calm: [takeOf(1), takeOf(2, { misses: ['length'] })] };
+  const WON_TAKES = { won: [takeOf(1), takeOf(2, { misses: ['length'] })] };
   const props = (over: Partial<BoardProps> = {}): BoardProps => ({
-    sections: listingOf([CLICK, CALM], { 'key-click': recording(1), calm: recording(1, 72_000) }),
+    sections: listingOf([CLICK, WON], { 'key-click': recording(1), won: recording(1, 10_000) }),
     suites: [],
-    takes: CALM_TAKES,
+    takes: WON_TAKES,
     takesNote: null,
     playing: null,
     loaded: () => true,
@@ -440,23 +432,23 @@ describe('the board’s takes', () => {
     const html = renderToStaticMarkup(<SoundsBoard {...props()} />);
     expect(html.match(/>Abspielen</g)).toHaveLength(4); // two recordings, two takes
     expect(html.match(/>Diesen Take wählen</g)).toHaveLength(2);
-    const calm = html.slice(html.indexOf('<code class="sounds-id">calm</code>'));
-    expect(calm).toContain('<ol class="sounds-take-list" aria-label="Takes von calm">');
-    expect(calm).toContain('<span class="sounds-take-name">Take 1</span>');
-    expect(calm).toContain(`<span class="sounds-facts">${takeFactsOf(takeOf(1))}</span>`);
+    const won = html.slice(html.indexOf('<code class="sounds-id">won</code>'));
+    expect(won).toContain('<ol class="sounds-take-list" aria-label="Takes von won">');
+    expect(won).toContain('<span class="sounds-take-name">Take 1</span>');
+    expect(won).toContain(`<span class="sounds-facts">${takeFactsOf(takeOf(1))}</span>`);
     expect(html.match(/class="sounds-take sounds-take--fails"/g)).toHaveLength(1);
     expect(html).toContain('Neue Takes der Musik stehen unter ihrem Stück');
     // Nothing is chosen, so no command keeps anything.
     expect(html).not.toContain('--keep');
-    const click = html.slice(0, html.indexOf('<code class="sounds-id">calm</code>'));
+    const click = html.slice(0, html.indexOf('<code class="sounds-id">won</code>'));
     expect(click).not.toContain('sounds-takes');
   });
 
   it('shows the command that keeps the take chosen, and plays a take as a recording', () => {
-    const chosen = props({ keeping: { calm: 2 }, playing: takeKey('calm', 1) });
+    const chosen = props({ keeping: { won: 2 }, playing: takeKey('won', 1) });
     const html = renderToStaticMarkup(<SoundsBoard {...chosen} />);
     expect(html).toContain('Im Ordner packages/client behält dieser Befehl Take 2');
-    expect(html).toContain('<pre class="sounds-cli">node scripts/sfx.ts --keep calm=2</pre>');
+    expect(html).toContain('<pre class="sounds-cli">node scripts/sfx.ts --keep won=2</pre>');
     // The page reads its lists as it opens: the take kept plays as the game's once it reloads.
     const reload = 'Danach die Seite neu laden: Der Take spielt dann als Aufnahme des Spiels.';
     expect(html).toContain(`</pre><p class="muted">${reload}</p>`);
@@ -465,7 +457,7 @@ describe('the board’s takes', () => {
     const plays = [...html.matchAll(/class="sounds-play" aria-pressed="(\w+)"[^>]*>(\w+)</g)];
     expect(plays.map((match) => [match[1], match[2]])).toEqual([
       ['false', 'Abspielen'], // the click
-      ['false', 'Abspielen'], // the calm stem as the game plays it
+      ['false', 'Abspielen'], // the sting as the game plays it
       ['true', 'Stopp'], // its take 1
       ['false', 'Abspielen'],
     ]);

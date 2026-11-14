@@ -34,6 +34,7 @@ import {
   BEATS_PER_BAR,
   chunksOf,
   LEAD_BARS,
+  motifOf,
   piecesOf,
   SEAM_S,
   spansOf,
@@ -52,7 +53,10 @@ import { answering, benchOf, placesIn, runOf, studioOf } from './sfxFakes.js';
  * against a client of the tests' own; no request leaves.
  */
 
-/** A section of the tests' suites: a loop or a piece played once, in a few bars. */
+/**
+ * A section of the tests' suites: a loop or a piece played once, in a few bars — a loop playing
+ * the motif's cell, a piece played once its first phrase, unless told.
+ */
 function section(
   id: string,
   name: string,
@@ -65,6 +69,7 @@ function section(
     name,
     bars,
     loop,
+    motif: loop ? 'cell' : 'phrase',
     lines: [],
     styles: [`${name.toLowerCase()} section`, 'steady'],
     avoid: loop ? ['ending'] : [],
@@ -79,7 +84,11 @@ const SMALL: SuiteEntry = {
   kind: 'suite',
   key: 'A minor',
   bpm: 120,
-  motif: ['a rising minor sixth that falls back by step'],
+  motif: {
+    cell: 'from the fifth, a leap up a sixth, then a sigh down a step',
+    fall: 'falling by step to rest on the fifth',
+    answer: 'from the sixth up to the fourth, then by step to the tonic',
+  },
   styles: ['felt piano and chamber strings', 'great production quality'],
   avoid: ['lyrics'],
   target: { measure: 'loudness', dbfs: -19 },
@@ -89,6 +98,7 @@ const SMALL: SuiteEntry = {
     section('test-turn', 'Pressure', 2, true),
     section('test-close', 'Dawn', 2, false, {
       key: 'C major',
+      motif: 'whole',
       lines: ['{a long held final chord}', '(aah)'],
     }),
   ],
@@ -180,8 +190,12 @@ describe('a suite’s plan', () => {
     ]);
   });
 
+});
+
+describe('a suite’s request', () => {
   it('is one request of chunks: each section’s name, lines, length, own styles first', () => {
-    const shared = ['120 BPM', '4/4 time', ...SMALL.motif, ...SMALL.styles];
+    const { cell, fall, answer } = SMALL.motif;
+    const [tempo, styles] = [['120 BPM', '4/4 time'], SMALL.styles];
     const request = suiteRequest(SMALL);
     expect(Object.keys(request)).toEqual(['compositionPlan', 'modelId', 'outputFormat']);
     expect([request.modelId, request.outputFormat]).toEqual(['music_v2_5', 'mp3_44100_192']);
@@ -189,15 +203,20 @@ describe('a suite’s plan', () => {
     expect(chunks[0]).toEqual({
       text: '[Opening]',
       durationMs: 4000,
-      positiveStyles: ['opening section', 'steady', 'A minor', ...shared],
+      positiveStyles: ['opening section', 'steady', 'A minor', ...tempo, cell, fall, ...styles],
       negativeStyles: ['lyrics'],
     });
-    expect(chunks[1]).toMatchObject({ durationMs: 10_000, negativeStyles: ['lyrics', 'ending'] });
-    // A section's own key stands where the suite's would.
+    expect(chunks[1]).toMatchObject({
+      durationMs: 10_000,
+      positiveStyles: ['night shift section', 'steady', 'A minor', ...tempo, cell, ...styles],
+      negativeStyles: ['lyrics', 'ending'],
+    });
+    // A section's own key stands where the suite's would; the whole motif where it plays it.
     expect(chunks[3]).toEqual({
       text: '[Dawn]\n{a long held final chord}\n(aah)',
       durationMs: 4000,
-      positiveStyles: ['dawn section', 'steady', 'C major', ...shared],
+      positiveStyles: ['dawn section', 'steady', 'C major', ...tempo, cell, fall, answer]
+        .concat(styles),
       negativeStyles: ['lyrics'],
     });
   });
@@ -209,12 +228,13 @@ describe('a suite’s plan', () => {
     const changed = [
       { ...SMALL, bpm: 121 },
       { ...SMALL, key: 'D minor' },
-      { ...SMALL, motif: ['a falling fifth'] },
+      { ...SMALL, motif: { ...SMALL.motif, cell: 'a falling fifth' } },
       { ...SMALL, sections: [{ ...first, bars: 3 }, ...rest] },
+      { ...SMALL, sections: [{ ...first, motif: 'whole' as const }, ...rest] },
       { ...SMALL, sections: [{ ...first, loop: true }, ...rest] },
       { ...SMALL, sections: [{ ...first, lines: ['{solo piano}'] }, ...rest] },
     ];
-    expect(new Set([hash, ...changed.map((suite) => hashOf(suite))]).size).toBe(7);
+    expect(new Set([hash, ...changed.map((suite) => hashOf(suite))]).size).toBe(8);
     const renamed = { ...first, id: 'test-other', usedBy: ['src/world/menuSound.ts#THEME'] };
     expect(hashOf({ ...SMALL, id: 'test-again', sections: [renamed, ...rest] })).toBe(hash);
     expect(recordingsOf([SMALL]).map((piece) => hashOf(piece))).toEqual([hash, hash, hash, hash]);
@@ -261,7 +281,21 @@ describe('a suite in the catalog', () => {
       bpm: 90,
       target: { measure: 'rms', dbfs: -20 },
     };
-    expect(() => checkCatalog([stem, SMALL])).toThrow(/share one tempo, not 90, 120 bpm/);
+    // A stem is a section of a suite, never a sound of its own; its tempo is its suite's.
+    expect(() => checkCatalog([stem, SMALL])).toThrow(
+      'sfx: audio/catalog.json —\n' +
+        '  test-calm: its kind "stem" is not oneshot, bed, sting: a stem or a theme is a section ' +
+        "of a suite\n  test-calm: a sound of its own has no bpm: a tempo is its suite's",
+    );
+  });
+
+  it('tells each section of the motif as far as it plays it: its cell, a phrase, the whole', () => {
+    const { cell, fall, answer } = SMALL.motif;
+    const [open, round, , close] = SMALL.sections;
+    if (open === undefined || round === undefined || close === undefined) throw new Error('short');
+    expect(motifOf(SMALL, round)).toEqual([cell]);
+    expect(motifOf(SMALL, open)).toEqual([cell, fall]);
+    expect(motifOf(SMALL, close)).toEqual([cell, fall, answer]);
   });
 
   it('holds no lyric: a line is a direction in braces or a wordless voice in parentheses', () => {
@@ -295,7 +329,14 @@ describe('a suite in the catalog', () => {
     ]);
     expect(flaws({ styles: ['x'.repeat(121)], bpm: 300 })).toEqual([
       'its tempo, 300 bpm, lies outside 40–200',
-      'its motif, styles and avoid are not lists of phrases of 120 chars at most',
+      'its styles and avoid are not lists of phrases of 120 chars at most',
+    ]);
+    const unanswered = { cell: SMALL.motif.cell, fall: SMALL.motif.fall } as SuiteEntry['motif'];
+    expect(flaws({ motif: unanswered })).toEqual([
+      'its motif is no cell, fall and answer, each a phrase of 120 chars at most',
+    ]);
+    expect(withSection({ motif: 'all' as never })).toEqual([
+      'test-a: its motif has to be cell, phrase, whole: how much of it it plays',
     ]);
     expect(withSection({ bars: 2.5, name: '[A]' })).toEqual([
       'test-a: its name is no phrase of 100 chars without brackets',
@@ -320,21 +361,45 @@ describe('a suite’s cost', () => {
       sections: Array.from({ length: 5 }, (_, i) => section(`huge-${i}`, `H${i}`, 45, false)),
     };
     const { client, pieces } = answering({ music: [takeOf(SMALL, AMPS)] });
-    const bench = benchOf(client, placesIn());
-    const three = optionsOf(['--candidates', '3']);
+    const places = placesIn();
+    const bench = benchOf(client, places);
+    const three = optionsOf(['--candidates', '3', '--only', 'test-huge']);
     const jobs = planOf([huge], { sfx: {}, music: {} }, () => false, three);
     const quiet = vi.spyOn(console, 'log').mockImplementation(() => undefined);
-    const run = renderWith(jobs, { sfx: {}, music: {} }, { count: 3, candidates: '' }, bench);
-    await expect(run).rejects.toThrow(
+    const refusal =
       "sfx: the music would cost about 32400 credits, over 18000 — make a suite's takes in " +
-        'runs within it: --candidates 1 --only test-huge, and again for more, numbered on',
-    );
+      'runs within it: --candidates 1 --only test-huge, and again for more, numbered on';
+    const run = renderWith(jobs, { sfx: {}, music: {} }, { count: 3, candidates: '' }, bench);
+    await expect(run).rejects.toThrow(refusal);
+    // A dry run refuses it as well, before any account is opened.
+    const { studio, opened } = studioOf(client, places);
+    const dry = optionsOf(['--dry-run', '--candidates', '3', '--only', 'test-huge']);
+    await expect(runWith(dry, [huge], studio)).rejects.toThrow(refusal);
     quiet.mockRestore();
-    expect(pieces).toEqual([]);
+    expect([pieces, opened()]).toEqual([[], 0]);
+  });
+
+  it('prices the rest after the first take and stops over the cap, that take kept', async () => {
+    const places = placesIn();
+    // A take the dry run prices at 504 credits costs the account 10 000: two would pass the cap.
+    const { client, pieces } = answering({ music: [takeOf(SMALL, AMPS)], spend: 10_000 });
+    const { studio } = studioOf(client, places);
+    const said: string[] = [];
+    const log = vi.spyOn(console, 'log').mockImplementation((line: string) => void said.push(line));
+    const run = runWith(optionsOf(['--candidates', '2', '--only', 'test-score']), [SMALL], studio);
+    await expect(run).rejects.toThrow('sfx: that is over the 18000 the music may spend');
+    log.mockRestore();
+    expect(said).toContain(
+      'sfx: the first take of test-score cost 10000 credits (357.1 a second, 504 expected); ' +
+        'the music come to about 20000',
+    );
+    expect(pieces).toHaveLength(1);
+    expect(readTakes(places.takes, SMALL.id)?.takes.map((take) => take.n)).toEqual([1]);
   });
 
   it('is said in the plan with each of its pieces, a loop’s bars that go round', () => {
-    const jobs = planOf([SMALL], { sfx: {}, music: {} }, () => false, optionsOf([]));
+    const named = optionsOf(['--only', 'test-score']);
+    const jobs = planOf([SMALL], { sfx: {}, music: {} }, () => false, named);
     expect(planLines(jobs, 2)).toEqual([
       'sfx: music — 1 of 1 to make, 2 takes each, into takes/ for the ear, 28.0 s a take, ' +
         'about 1008 credits (cap 18000)',
@@ -361,7 +426,7 @@ const musicIn = (places: ReturnType<typeof placesIn>): { manifest: Manifest; fil
 async function suiteTakeIn(places: ReturnType<typeof placesIn>, amps = AMPS, shortMs = 0) {
   const { client } = answering({ music: [takeOf(SMALL, amps, shortMs)] });
   const bench = benchOf(client, places);
-  await runOf([SMALL], 1, bench);
+  await runOf([SMALL], 1, bench, ['--only', SMALL.id]);
   return bench;
 }
 
@@ -442,6 +507,19 @@ describe('a suite’s takes', () => {
     expect(pieces).toHaveLength(2);
     await sayOver(['--only', 'test-score'], studio);
     expect(readTakes(places.takes, SMALL.id)?.takes.map((take) => take.n)).toEqual([1, 2, 3]);
+  });
+
+  it('are made only where --only names the suite: a run of all leaves it, said', async () => {
+    const places = placesIn();
+    const { client, pieces } = answering({ music: [takeOf(SMALL, AMPS)] });
+    const { studio, opened } = studioOf(client, places);
+    for (const args of [[], ['music'], ['--candidates', '2']]) {
+      expect(await sayOver(args, studio), args.join(' ')).toContain(
+        'sfx: test-score is made only where --only names it, never by a run of everything: ' +
+          '--candidates 3 --only test-score makes its takes',
+      );
+    }
+    expect([pieces.length, opened(), existsSync(places.takes)]).toEqual([0, 0, false]);
   });
 
   it('are made again by the suite’s own command, where a piece of it fails', () => {
@@ -616,6 +694,17 @@ describe('a suite’s take kept, refused or measured anew', () => {
     expect(readTakes(quiet.takes, SMALL.id)?.takes).toHaveLength(1);
   });
 
+  it('writes its manifest before it deletes what its pieces played before', async () => {
+    const places = placesIn();
+    const bench = await suiteTakeIn(places);
+    // An old file the keep cannot delete: a folder where test-round.mp3 stood.
+    mkdirSync(join(places.dirs.music, 'test-round.mp3'), { recursive: true });
+    const before = { 'test-round': old('test-round.mp3') };
+    writeFileSync(join(places.dirs.music, 'manifest.json'), JSON.stringify(before));
+    expect(() => keepTake({ id: SMALL.id, n: 1 }, [SMALL], bench)).toThrow(/EISDIR/);
+    expect(readManifest(places, 'music')['test-round']?.file).toBe('test-round.m4a');
+  });
+
   it('is measured anew by a run that makes nothing, its entries as kept', async () => {
     const places = placesIn();
     const bench = await suiteTakeIn(places);
@@ -714,11 +803,11 @@ describe('the score in the catalog', () => {
     }
   });
 
-  it('gives every section the motif, the tempo and its key — the dawn’s own C major', () => {
+  it('gives every section the tempo and its key — the dawn’s own C major', () => {
     for (const [i, chunk] of chunksOf(SCORE).entries()) {
       const key = SCORE.sections[i]?.id === 'end-won' ? 'C major' : 'A minor';
       expect(chunk.positiveStyles, chunk.text).toEqual(
-        expect.arrayContaining([key, '90 BPM', '4/4 time', ...SCORE.motif]),
+        expect.arrayContaining([key, '90 BPM', '4/4 time']),
       );
       expect(chunk.positiveStyles.length, chunk.text).toBeLessThanOrEqual(50);
     }
@@ -749,7 +838,7 @@ describe('the score in the catalog', () => {
   });
 });
 
-describe('the score’s tempo', () => {
+describe('the score’s tempo and motif', () => {
   if (SCORE === undefined) throw new Error('audio/catalog.json holds no suite');
   const otherTempo =
     /\b(?:slow(?:ly|er|ing)?|fast(?:er)?|quick(?:er|ly)?|accelerando|ritardando|rallentando)\b/i;
@@ -765,5 +854,32 @@ describe('the score’s tempo', () => {
     expect(said).toMatch(/opening[^]*long held notes at the same tempo/i);
     expect(said).toMatch(/double-time feel at the same tempo/);
     expect(SCORE.avoid).toContain('tempo changes');
+  });
+
+  it('tells each section of the motif as far as it plays it, no further', () => {
+    const { cell, fall, answer } = SCORE.motif;
+    const told = chunksOf(SCORE).map((chunk, i) => [
+      SCORE.sections[i]?.id,
+      [cell, fall, answer].map((part) => chunk.positiveStyles.includes(part)),
+    ]);
+    expect(told).toEqual([
+      ['menu-theme', [true, true, true]],
+      ['lobby', [true, true, true]],
+      ['title', [true, true, false]], // its first phrase alone
+      ['calm', [true, false, false]], // the leap alone, never the whole melody
+      ['tense', [true, false, false]],
+      ['critical', [true, false, false]],
+      ['end-lost', [true, true, false]],
+      ['end-won', [true, true, true]],
+    ]);
+    expect(JSON.stringify(SCORE)).not.toMatch(/returns in every section/);
+  });
+
+  it('writes the motif from the fifth, with its rhythm and its cadences', () => {
+    const { cell, fall, answer } = SCORE.motif;
+    // From the fifth, not the tonic: begun on the tonic, a sixth up and a sigh down is Tristan's.
+    expect(cell).toMatch(/from the fifth, a leap up a sixth held three beats, then a sigh down/);
+    expect(fall).toMatch(/in half notes to rest on the fifth, held a whole bar: a half cadence/);
+    expect(answer).toMatch(/from the sixth, a leap up to the fourth .* full close on the tonic/);
   });
 });

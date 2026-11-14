@@ -9,7 +9,7 @@ import {
   groupOf,
   MANIFEST,
   MAX_BED_GAIN_DB,
-  musicFormatOf,
+  MUSIC_FORMAT,
   noisyTakes,
   offLength,
   PIECE_BITRATE,
@@ -132,7 +132,7 @@ describe('the entries awaiting the user’s render', () => {
  */
 function rateOf(entry: CatalogEntry): number {
   if (entry.of !== undefined) return (PIECE_BITRATE / 8) * 1.05;
-  const format = groupOf(entry) === 'sfx' ? SFX_FORMAT : musicFormatOf(entry);
+  const format = groupOf(entry) === 'sfx' ? SFX_FORMAT : MUSIC_FORMAT;
   return Number(format.split('_')[2]) * 125;
 }
 
@@ -178,7 +178,7 @@ describe.each(['sfx', 'music'] as const)('the recordings in public/%s', (group) 
     expect(listed.sort()).toEqual(rendered.map((entry) => entry.id).sort());
   });
 
-  it('name each stem’s tempo as the catalog has it, the bars the music is counted in', () => {
+  it('name a looped piece’s tempo as its suite has it, the bars the music is counted in', () => {
     for (const entry of rendered) {
       expect(manifest[entry.id]?.bpm, entry.id).toBe(entry.bpm);
     }

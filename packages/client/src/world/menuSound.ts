@@ -567,31 +567,46 @@ export interface MenuSoundProbe {
   state: MenuSoundState;
   /** where it is wanted: the menu, the lobby; null where it is not */
   place: MenuPlace | null;
-  /** a pass of a piece plays; false while none is rendered, or not yet in */
+  /**
+   * the music sounds: an element of the piece heard plays — not a pass laid for later; false
+   * while none is rendered, or not yet in
+   */
   theme: boolean;
-  /** the piece heard, by its id, once a pass of it plays: the theme, or the lobby's */
+  /** the piece heard, by its id, once its sound plays: the theme, or the lobby's */
   piece: MusicId | null;
+  /** how many of the music's elements play now: one, two while a seam or a crossing lasts */
+  sounding: number;
   hum: boolean;
   ducked: boolean;
   /** how often each of the interface's sounds has played on this page */
   played: Record<UiSound, number>;
 }
 
-/** The piece heard now, once a pass of it plays; null before, and while none is rendered. */
-function heardPiece(): Piece | null {
-  if (playing === null) return null;
-  const piece = playing.pieces[playing.heard];
-  return piece.passes.length > 0 ? piece : null;
+/** How many of `piece`'s elements play now: their play() taken, not stopped. */
+const soundingOf = (piece: Piece): number =>
+  piece.decks.filter((deck) => deck.state === 'playing').length;
+
+/** The pieces of the music as they stand: none before it starts or after it ends. */
+function piecesNow(): Piece[] {
+  const p = playing;
+  return p === null ? [] : PLACES.map((where) => p.pieces[where]);
 }
 
-/** The menu's sound as it stands, for the walkthrough. */
+/** The piece heard, once an element of it plays; null before, and while none is rendered. */
+function soundingPiece(): Piece | null {
+  const heard = playing === null ? null : playing.pieces[playing.heard];
+  return heard !== null && soundingOf(heard) > 0 ? heard : null;
+}
+
+/** The menu's sound as it stands, for the walkthrough: what sounds, not what is laid. */
 export function menuSoundProbe(): MenuSoundProbe {
-  const heard = heardPiece();
+  const heard = soundingPiece();
   return {
     state,
     place,
     theme: heard !== null,
     piece: heard?.id ?? null,
+    sounding: piecesNow().reduce((sum, piece) => sum + soundingOf(piece), 0),
     hum: playing?.hum != null,
     ducked,
     played: { ...played },

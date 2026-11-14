@@ -77,10 +77,14 @@ export const digest = (bytes: Uint8Array): string =>
 export const piece = (seconds: number, amplitude: number): Uint8Array<ArrayBuffer> =>
   wavOf(2000, [toneAfter(2000, 0, amplitude, seconds * 1000)]);
 
-/** The answers of a client of the tests' own: WAVs, which the tests decode as they are. */
+/**
+ * The answers of a client of the tests' own: WAVs, which the tests decode as they are, and what
+ * each request costs the account, credits (none unless told).
+ */
 export interface Answers {
   readonly effects?: readonly Uint8Array<ArrayBuffer>[];
   readonly music?: readonly Uint8Array<ArrayBuffer>[];
+  readonly spend?: number;
 }
 
 /** What a piece of music is asked with beside its request: the SDK's request options. */
@@ -89,7 +93,7 @@ export type Asked = { readonly timeoutInSeconds?: number } | undefined;
 /**
  * A client of the tests' own that answers each effect and each piece of music with the next of
  * its answers, round and round, and keeps the requests and what each piece was asked with; the
- * account has 50 000 credits left.
+ * account has 50 000 credits left, less what each request spends.
  */
 export function answering(answers: Answers) {
   const effects: ElevenLabs.CreateSoundEffectRequest[] = [];
@@ -99,13 +103,17 @@ export function answering(answers: Answers) {
     new Blob([list[i % list.length] ?? new Uint8Array(0)]).stream();
   const credits = { characterCount: 81_000, characterLimit: 131_000 };
   const client: SoundClient = {
-    user: { subscription: { get: () => Promise.resolve(credits) } },
+    user: { subscription: { get: () => Promise.resolve({ ...credits }) } },
     textToSoundEffects: {
-      convert: (request) => Promise.resolve(nth(answers.effects, effects.push(request) - 1)),
+      convert: (request) => {
+        credits.characterCount += answers.spend ?? 0;
+        return Promise.resolve(nth(answers.effects, effects.push(request) - 1));
+      },
     },
     music: {
       compose: (request, options) => {
         asked.push(options);
+        credits.characterCount += answers.spend ?? 0;
         return Promise.resolve(nth(answers.music, pieces.push(request) - 1));
       },
     },
@@ -139,15 +147,20 @@ export function benchOf(
   };
 }
 
-/** A quiet run of `items` through `bench`, `count` takes of each; returns its manifests. */
+/**
+ * A quiet run of `items` through `bench`, `count` takes of each, and what else `args` ask (a suite
+ * is made only where --only names it); returns its manifests.
+ */
 export async function runOf(
   items: readonly CatalogItem[],
   count: number,
   bench: Bench,
+  args: readonly string[] = [],
 ): Promise<Record<'sfx' | 'music', Manifest>> {
   const { places } = bench;
   const manifests = { sfx: readManifest(places, 'sfx'), music: readManifest(places, 'music') };
-  const jobs = planOf(items, manifests, () => false, optionsOf(['--candidates', `${count}`]));
+  const options = optionsOf(['--candidates', `${count}`, ...args]);
+  const jobs = planOf(items, manifests, () => false, options);
   const candidates = mkdtempSync(join(tmpdir(), 'escapelab-sfx-candidates-test-'));
   const quiet = vi.spyOn(console, 'log').mockImplementation(() => undefined);
   try {

@@ -295,10 +295,11 @@ describe('the lobby’s own piece and the hum, where they are rendered', () => {
     expect(streaming()).toHaveLength(1);
     await vi.advanceTimersByTimeAsync((bar - 20) * 1000);
     expect(streaming()).toHaveLength(2); // the lobby's first pass on that bar, from its start
+    expect(sound.menuSoundProbe()).toMatchObject({ piece: 'lobby', sounding: 2 }); // crossing
     lastContext().currentTime = bar + 2.1;
     await vi.advanceTimersByTimeAsync(300);
     expect(streaming()).toHaveLength(1); // the theme let go once it has faded
-    expect(sound.menuSoundProbe()).toMatchObject({ place: 'lobby', piece: 'lobby' });
+    expect(sound.menuSoundProbe()).toMatchObject({ place: 'lobby', piece: 'lobby', sounding: 1 });
     expect(audio.inUse().loop).toBe(2); // the lobby's piece and the hum
   });
 
@@ -326,6 +327,22 @@ describe('the lobby’s own piece and the hum, where they are rendered', () => {
     expect(sound.menuSoundProbe()).toMatchObject({ theme: true, hum: false });
     expect(sourcesOf(sound.HUM)).toHaveLength(0);
     expect(audio.inUse().loop).toBe(1);
+  });
+});
+
+describe('the menu’s sound as the walkthrough hears it', () => {
+  it('sounds once an element of the theme plays, not as soon as its pass is laid', async () => {
+    const page = fakeWindow();
+    const { sound } = await fresh();
+    sound.wantMenuSound('menu');
+    page.fire('keydown');
+    await vi.advanceTimersByTimeAsync(150); // its first pass laid for 10.3, its element waiting
+    expect(streaming()).toHaveLength(0);
+    expect(sound.menuSoundProbe()).toMatchObject({ theme: false, piece: null, sounding: 0 });
+    await vi.advanceTimersByTimeAsync(450);
+    expect(streaming()).toHaveLength(1);
+    const heard = { theme: true, piece: 'menu-theme', sounding: 1 };
+    expect(sound.menuSoundProbe()).toMatchObject(heard);
   });
 });
 

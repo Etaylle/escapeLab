@@ -6199,16 +6199,48 @@ async function walkMenuKeys(page) {
   }
 }
 
-/** The menu's sound off the page's probe (client world/menuSound.ts): its state, what played. */
+/**
+ * The menu's sound off the page's probe (client world/menuSound.ts): its state, what sounds — an
+ * element of the piece heard playing, not a pass laid — and what played.
+ */
 const menuSoundOf = (page) =>
   page.evaluate(
     () => globalThis.__escapelab?.menuSound ?? { state: '!! no probe', theme: false, played: {} },
   );
 
-/** What the log says of the menu's sound: its state, its theme and its hum. */
-function menuSoundText({ state, theme, hum }) {
-  const music = theme ? 'the theme playing' : 'no theme (awaiting its render?)';
-  return `${state}, ${music}, ${hum ? 'the hum' : 'no hum (awaiting its render?)'}`;
+/** The music's manifest as the page's server serves it (public/music/manifest.json); {} if none. */
+const musicListOf = (page) =>
+  page.evaluate(() =>
+    globalThis.fetch('/music/manifest.json').then(
+      (res) => (res.ok ? res.json() : {}),
+      () => ({}),
+    ),
+  );
+
+/** How long a piece listed may take to sound once wanted, ms: its file, a bar, its crossing. */
+const SOUND_WITHIN_MS = 8000;
+
+/** The menu's probe on `page` once `heard` holds of it, or as it stands after SOUND_WITHIN_MS. */
+async function menuSoundOnce(page, heard) {
+  const until = Date.now() + SOUND_WITHIN_MS;
+  let probe = await menuSoundOf(page);
+  while (!heard(probe) && Date.now() < until) {
+    await sleep(100);
+    probe = await menuSoundOf(page);
+  }
+  return probe;
+}
+
+/** What the log says of the menu's music: sounding, not rendered, or listed and never heard. */
+function themeText(theme, listed) {
+  if (theme) return 'the theme sounding';
+  return listed ? '!! the theme listed, never heard' : 'no theme (awaiting its render?)';
+}
+
+/** What the log says of the menu's sound: its state, its theme (`listed` or not) and its hum. */
+function menuSoundText({ state, theme, hum }, listed) {
+  const humSaid = hum ? 'the hum' : 'no hum (awaiting its render?)';
+  return `${state}, ${themeText(theme, listed)}, ${humSaid}`;
 }
 
 /** Whether the speaker's lamp is lit on `page`: the menu's sound waits for a gesture. */
@@ -6216,31 +6248,70 @@ const lampLit = async (page) => (await page.locator('.sound-toggle--waiting').co
 
 /**
  * The menu's sound before the first key and after it: waiting, the speaker's lamp lit, until a
- * key lets the browser's sound start — then playing, the lamp out; or the run fails.
+ * key lets the browser's sound start — then playing, the lamp out, and the theme sounding within
+ * SOUND_WITHIN_MS where the music's manifest (`list`) has it; or the run fails.
  */
-async function menuSoundAtFirstKey(page, press) {
+async function menuSoundAtFirstKey(page, press, list) {
   const before = await menuSoundOf(page);
   const litBefore = await lampLit(page);
   await press();
-  const after = await menuSoundOf(page);
+  const listed = list['menu-theme'] !== undefined;
+  const after = await menuSoundOnce(page, (probe) => !listed || probe.theme);
   const litAfter = await lampLit(page);
   console.log(
     `menu sound         before a key: ${before.state}, the speaker’s lamp ` +
-      `${litBefore ? 'lit' : '!! out'}; after it: ${menuSoundText(after)}, the lamp ` +
+      `${litBefore ? 'lit' : '!! out'}; after it: ${menuSoundText(after, listed)}, the lamp ` +
       (litAfter ? '!! still lit' : 'out'),
   );
   if (before.state !== 'waiting' || !litBefore || after.state !== 'playing' || litAfter) {
     fail(`menu sound: ${before.state} before the first key, ${after.state} after it`);
   }
+  heardWhereListed(after.theme, listed, 'the theme');
+}
+
+/** Fails where the music's manifest lists a piece (`listed`) the menu's sound never `heard`. */
+function heardWhereListed(heard, listed, what) {
+  if (listed && !heard) fail(`menu sound: ${what} is listed, and never sounded`);
 }
 
 /**
- * The lobby's sounds on the host's page — the music kept in the lobby (`lobby`, the probe read
- * there): its own piece of the score, or the theme at the lobby's weight where that awaits its
- * render — the round's chime as it came up, the ready chirp as the guest said ready — and the
- * menu's sound gone once the run has started; or the run fails.
+ * Whether this browser plays the score's pieces — AAC in .m4a, as a keep cuts them — asked once,
+ * where the music's manifest (`list`) names a piece so kept: canPlayType's answer, said; none
+ * fails the run, for the game's music would be silent in it.
  */
-async function menuSoundAfterStart(page, lobby) {
+async function checkPieceCodec(page, list) {
+  const pieces = Object.values(list).filter((entry) => entry?.file?.endsWith('.m4a'));
+  if (pieces.length === 0) {
+    console.log('music codec        no piece of the score kept yet: every recording an MP3');
+    return;
+  }
+  const answer = await page.evaluate(() =>
+    new globalThis.Audio().canPlayType('audio/mp4; codecs="mp4a.40.2"'),
+  );
+  console.log(
+    `music codec        ${pieces.length} pieces of the score as AAC in .m4a: canPlayType says ` +
+      (answer === '' ? '!! nothing' : `„${answer}"`),
+  );
+  if (answer === '') fail('music codec: this browser plays no AAC in MP4, the score’s pieces');
+}
+
+/**
+ * The menu's sound in the lobby on `page`: once the lobby's own piece sounds where the music's
+ * manifest (`list`) has it — a bar and its crossing after the doors close — else as it stands.
+ */
+const lobbySoundOf = (page, list) =>
+  list.lobby === undefined
+    ? menuSoundOf(page)
+    : menuSoundOnce(page, (probe) => probe.piece === 'lobby');
+
+/**
+ * The lobby's sounds on the host's page — the music kept in the lobby (`lobby`, the probe read
+ * there): its own piece of the score, sounding where the music's manifest (`list`) has it, or the
+ * theme at the lobby's weight where that awaits its render — the round's chime as it came up, the
+ * ready chirp as the guest said ready — and the menu's sound gone once the run has started; or
+ * the run fails.
+ */
+async function menuSoundAfterStart(page, lobby, list) {
   const { state, played } = await menuSoundOf(page);
   const { opened = 0, ready = 0 } = played;
   const kept = keptInLobby(lobby);
@@ -6251,6 +6322,7 @@ async function menuSoundAfterStart(page, lobby) {
   if (!kept || state !== 'off' || opened < 1 || ready < 1) {
     fail(`menu sound: ${lobby.state} in the lobby, ${state} in the run, ${opened}×, ${ready}×`);
   }
+  heardWhereListed(lobby.piece === 'lobby', list.lobby !== undefined, 'the lobby’s piece');
 }
 
 /** What the lobby plays, as the log says it: its own piece, or the theme at its weight. */
@@ -6270,15 +6342,18 @@ const MENU_P95_MS = 16.8;
 /**
  * menu.png: the start screen as a game's menu over its living scene — the lit lab of the first
  * mission baked for the window and drifting, the title, the menu, the profile — walked by the
- * keys (`walkMenuKeys`); its quiet window, the scene drifting, has to keep the screen's pace
- * under SHOTS_SOFTWARE_GL (MENU_P95_MS) and the gate's allowance anyway; at 1280×720 it has to
- * fit as at 1440×820 (menu-1280.png), the scene baked anew for each.
+ * keys (`walkMenuKeys`), its music heard as the music's manifest has it; its quiet window, the
+ * scene drifting, has to keep the screen's pace under SHOTS_SOFTWARE_GL (MENU_P95_MS) and the
+ * gate's allowance anyway; at 1280×720 it has to fit as at 1440×820 (menu-1280.png), the scene
+ * baked anew for each. Returns the music's manifest, which the lobby's check reads too.
  */
 async function captureMenu(page) {
+  const list = await musicListOf(page);
   const scene = await sceneBaked(page, { w: SIZES[0].width, h: SIZES[0].height });
   await capture(page, 'menu.png');
   console.log(`menu.png           ${sceneText(scene)}`);
-  await menuSoundAtFirstKey(page, () => walkMenuKeys(page));
+  await menuSoundAtFirstKey(page, () => walkMenuKeys(page), list);
+  await checkPieceCodec(page, list);
   const look = await sampleFrames(page, 'on the menu, its scene drifting', () => sleep(SAMPLE_MS));
   if (SOFTWARE_GL && look !== null && look.p95 > MENU_P95_MS) {
     fail(`menu: its window reached ${look.p95.toFixed(1)} ms p95, over ${MENU_P95_MS}`);
@@ -6290,6 +6365,7 @@ async function captureMenu(page) {
   await capture(page, 'menu-1280.png');
   await page.setViewportSize(SIZES[0]);
   await sceneBaked(page, { w: SIZES[0].width, h: SIZES[0].height });
+  return list;
 }
 
 /**
@@ -11605,12 +11681,12 @@ async function run() {
   const titleCameOn = (await host.locator('.menu h1.phosphor-title').count()) === 1;
   await host.getByPlaceholder('z. B. Anna').fill('Anna');
   await host.locator('.menu-item').first().waitFor({ timeout: 10_000 });
-  // The menu over its scene, walked by the keys, its frames, at a laptop's sizes.
-  await captureMenu(host);
+  // The menu over its scene, walked by the keys, its frames, at a laptop's sizes; its music.
+  const musicList = await captureMenu(host);
   await captureHistory(host, 'history');
   await openMissionRound(host);
-  // The lobby keeps the menu's sound at its own weight (checked as the run starts).
-  const lobbySound = await menuSoundOf(host);
+  // The lobby's music, its own piece where it is listed (checked as the run starts).
+  const lobbySound = await lobbySoundOf(host, musicList);
   await host.locator('.room-code strong').waitFor({ timeout: 10_000 });
   const code = (await host.locator('.room-code strong').innerText()).trim();
   console.log('room code:', code, `(${MISSION})`);
@@ -11682,7 +11758,7 @@ async function run() {
     { name: 'Ben', page: guest, seen: guestSeen },
   );
   await opening;
-  await menuSoundAfterStart(host, lobbySound);
+  await menuSoundAfterStart(host, lobbySound, musicList);
   await sleep(500); // presence follows the start within a tick
   if (guestSeen.view?.map == null || hostSeen.view?.map == null) {
     throw new Error('no running view on the sockets — does the client still talk on /ws?');
