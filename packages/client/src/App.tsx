@@ -60,7 +60,16 @@ import { Icon, type IconName } from './screens/Icon.js';
 import { UpdateNotice } from './screens/Install.js';
 import { JoinScreen } from './screens/Join.js';
 import { LobbyScreen } from './screens/Lobby.js';
-import { DoorWipe, doorsGoing, useDoorWipe, type Doors, type Place } from './screens/DoorWipe.js';
+import {
+  DoorWipe,
+  doorsGoing,
+  doorsThen,
+  shutterThen,
+  useDoorWipe,
+  type Doors,
+  type Place,
+  type WipeKind,
+} from './screens/DoorWipe.js';
 import { createRoomMessage, pickedMission, usePicked } from './screens/MenuPanels.js';
 import { MenuScene } from './screens/MenuScene.js';
 import { GameScreen } from './screens/Game.js';
@@ -386,6 +395,23 @@ function joinCovered(pages: PageState, editor: EditorPage): boolean {
 }
 
 /**
+ * The ways back from the pages off the join screen to it: from the booklet, the Bestenliste and
+ * „Meine Einsätze" behind the menu's shutter, from the editor behind the lab's doors
+ * (screens/DoorWipe.tsx).
+ */
+export function waysBack(
+  pages: Pick<PageState, 'setHandbook' | 'setHistory' | 'setMyRuns'>,
+  editor: Pick<EditorPage, 'close'>,
+) {
+  return {
+    handbook: () => shutterThen(() => pages.setHandbook(null)),
+    history: () => shutterThen(() => pages.setHistory(null)),
+    myRuns: () => shutterThen(() => pages.setMyRuns(false)),
+    editor: () => doorsThen(editor.close),
+  };
+}
+
+/**
  * Off any room: the join screen, and over it the editor, the booklet, the
  * Bestenliste and „Meine Einsätze". The join screen stays mounted behind them,
  * so a typed name and the picked mission are still there on the way back; the
@@ -395,6 +421,7 @@ function OffRoom(props: ScreenProps) {
   const { conn, missions, pages, editor } = props;
   const { handbook, history } = pages;
   const over = joinCovered(pages, editor);
+  const back = waysBack(pages, editor);
   return (
     <>
       <Activity mode={over ? 'hidden' : 'visible'}>
@@ -427,7 +454,7 @@ function OffRoom(props: ScreenProps) {
             missions={missions}
             reloadMissions={props.loadMissions}
             openHandbook={pages.setHandbook}
-            back={editor.close}
+            back={back.editor}
             work={editor.work}
             onWork={editor.setWork}
             greeting={editor.greeting}
@@ -441,7 +468,7 @@ function OffRoom(props: ScreenProps) {
           missions={missions}
           missionId={handbook}
           selectMission={pages.setHandbook}
-          back={() => pages.setHandbook(null)}
+          back={back.handbook}
         />
       )}
       {history !== null && (
@@ -449,7 +476,7 @@ function OffRoom(props: ScreenProps) {
           missions={missions}
           missionId={history}
           selectMission={pages.setHistory}
-          back={() => pages.setHistory(null)}
+          back={back.history}
         />
       )}
       {pages.myRuns && (
@@ -458,7 +485,7 @@ function OffRoom(props: ScreenProps) {
           loaded={conn.myRuns}
           ask={conn.askMyRuns}
           connected={conn.status === 'open'}
-          back={() => pages.setMyRuns(false)}
+          back={back.myRuns}
         />
       )}
     </>
@@ -625,6 +652,9 @@ function useMissions(): [MissionInfo[], () => void] {
   return [missions, load];
 }
 
+/** The places of the window by a room's phase, as the door wipe tells them apart. */
+const PHASE_PLACES: Readonly<Partial<Record<string, Place>>> = { lobby: 'lobby', playing: 'run' };
+
 /** Where the window is, as the door wipe tells the screens apart (screens/DoorWipe.tsx). */
 export function placeOf(conn: Pick<Connection, 'view' | 'spectatorView'>): Place {
   if (conn.spectatorView !== null) {
@@ -633,17 +663,18 @@ export function placeOf(conn: Pick<Connection, 'view' | 'spectatorView'>): Place
   if (conn.view === null) {
     return 'menu';
   }
-  return conn.view.phase === 'lobby' ? 'lobby' : 'elsewhere';
+  return PHASE_PLACES[conn.view.phase] ?? 'elsewhere';
 }
 
 /**
- * The connection as the screens draw it: between the menu and the lobby as it was before the
- * door wipe's doors began to close, until they have (screens/DoorWipe.tsx); and the doors.
+ * The connection as the screens draw it: between the menu and the lobby or a run as it was before
+ * the door wipe's doors began to close, until they have (screens/DoorWipe.tsx); and the doors, and
+ * the leaves they are.
  */
-function useWiped(live: Connection): { conn: Connection; doors: Doors } {
+function useWiped(live: Connection): { conn: Connection; doors: Doors; kind: WipeKind } {
   const reduced = useReducedMotion();
   const wipe = useDoorWipe(live, placeOf(live), reduced);
-  return { conn: wipe.value, doors: wipe.doors };
+  return { conn: wipe.value, doors: wipe.doors, kind: wipe.kind };
 }
 
 /** The profile's name as the page edits it (profileName.ts), handed to what types it. */
@@ -678,27 +709,36 @@ function Settings(props: {
 /**
  * The menus over the screens (menuLayer.ts): a room's pause menu, its booklet, the settings — by
  * the gear, a controller's Start, Esc, in a run the browser's back button too; over a run the
- * crew sees this player at the menu.
+ * crew sees this player at the menu. Off any room (`offRoom`) the settings come and go behind the
+ * menu's shutter (`shutteredMenus`).
  */
-function useRoomMenus(live: Connection): MenuLayer {
+function useRoomMenus(
+  live: Connection,
+  offRoom: boolean,
+): { layer: MenuLayer; menus: ReturnType<typeof shutteredMenus> } {
   const layer = useMenuLayer(pausePhaseOf(live));
-  usePad(layer.start);
+  const menus = shutteredMenus(layer, offRoom);
+  usePad(menus.start);
   useEscapeOpensMenu(layer);
   useHistoryGuard(layer.phase === 'run', layer.openPause);
   useMenuMark(live.view, layer.pause, live.send);
-  return layer;
+  return { layer, menus };
 }
 
-/** What `layer` holds open over the screens: the room's menus, the settings, on the line `live`. */
+/**
+ * What `layer` holds open over the screens: the room's menus, the settings — put away by
+ * `closeSettings` —, on the line `live`.
+ */
 function RoomMenus(props: {
   layer: MenuLayer;
   live: Connection;
   missions: MissionInfo[];
   profile: Profile;
+  closeSettings: () => void;
 }) {
   const { layer, live, missions, profile } = props;
   const settings = (
-    <Settings live={live} close={layer.closeSettings} profile={profile} tab={layer.tab} />
+    <Settings live={live} close={props.closeSettings} profile={profile} tab={layer.tab} />
   );
   return (
     <MenuLayers
@@ -822,13 +862,67 @@ export function ScreenArea(props: {
 }
 
 /**
+ * The menus over the screens as the top bar, a controller's Start and the settings reach them:
+ * off any room (`offRoom`) the settings come and go behind the menu's shutter
+ * (screens/DoorWipe.tsx), by the gear, Start or the account alike; in a room they open over it at
+ * once.
+ */
+export function shutteredMenus(
+  layer: Pick<MenuLayer, 'gear' | 'start' | 'openAccount' | 'closeSettings'>,
+  offRoom: boolean,
+) {
+  const behind = (run: () => void): (() => void) => (offRoom ? () => shutterThen(run) : run);
+  return {
+    gear: behind(layer.gear),
+    start: behind(layer.start),
+    openAccount: behind(layer.openAccount),
+    closeSettings: behind(layer.closeSettings),
+  };
+}
+
+/**
+ * The top bar as the app draws it (TopBar) over the connection `conn`: the running mission —
+ * the lobby names its own as its headline, so naming it twice there would be noise —, the seed a
+ * tester pinned the lobby to (?seed=), the way back to the editor, and off any room the account.
+ */
+function AppBar(props: {
+  conn: Connection;
+  layer: MenuLayer;
+  menus: ReturnType<typeof shutteredMenus>;
+  toEditor: (() => void) | null;
+  account: BarProfile | null;
+  menu: boolean;
+  covered: boolean;
+}) {
+  const { conn, layer } = props;
+  const running =
+    conn.spectatorView ?? (conn.view !== null && conn.view.phase !== 'lobby' ? conn.view : null);
+  const pinnedTo = conn.view?.phase === 'lobby' ? (conn.view.seed?.room ?? null) : null;
+  return (
+    <TopBar
+      roomCode={conn.roomCode}
+      seed={pinnedTo}
+      running={running}
+      status={conn.status}
+      toEditor={props.toEditor}
+      onGear={props.menus.gear}
+      inRoom={layer.phase !== null}
+      menu={props.menu}
+      watching={conn.watching}
+      covered={props.covered}
+      account={props.account}
+    />
+  );
+}
+
+/**
  * The app. `boot` is what the address asked for on load: the editor at
  * /editor, with a shared mission or the draft the tab kept.
  */
 export function App({ boot }: { boot: EditorBoot }) {
   const live = useGameConnection();
   // The screens draw the connection as the door wipe shows it; the rest hears it live.
-  const { conn, doors } = useWiped(live);
+  const { conn, doors, kind } = useWiped(live);
   // The crew's voice lives as long as the page: lobby, run and end screen alike.
   const voice = useVoiceMesh(live);
   // Fetched at the start, and again whenever the editor saves or deletes a mission.
@@ -844,7 +938,8 @@ export function App({ boot }: { boot: EditorBoot }) {
   // The mission editor, another page off the join screen; the booklet opens over it.
   const editor = useEditorPage(boot);
   const testRun = useTestRun(live);
-  const layer = useRoomMenus(live);
+  const offRoom = conn.view === null && conn.spectatorView === null;
+  const { layer, menus } = useRoomMenus(live, offRoom);
   const covered = anyOpen(layer);
   // The profile's one name: the bar shows it, the menu's panels and the settings type it.
   const [name, setName] = useProfileName(live.account, live.send, live.status === 'open');
@@ -855,15 +950,8 @@ export function App({ boot }: { boot: EditorBoot }) {
   // A run won on this device ends its first-run default (firstRun.ts).
   useWonMark(live.view?.phase ?? null);
   const immersive = useStage(conn, finale);
-  // Which mission is running, for the header. The lobby already has it as its
-  // headline, so naming it twice there would be noise.
-  const running =
-    conn.spectatorView ?? (conn.view !== null && conn.view.phase !== 'lobby' ? conn.view : null);
-  // A tester sees in the lobby that the room is pinned to a seed (?seed=).
-  const pinnedTo = conn.view?.phase === 'lobby' ? (conn.view.seed?.room ?? null) : null;
   const fromEditor = returnsToEditor(testRun.run, conn.roomCode, conn.view?.you.isHost === true);
 
-  const offRoom = conn.view === null && conn.spectatorView === null;
   useMenuSound(conn, editor.open);
   // The editor scrolls on a phone (styles/editor.css); the menu lies over its living scene.
   const { editing, menu } = offRoomOf(offRoom, pages, editor.open);
@@ -882,21 +970,23 @@ export function App({ boot }: { boot: EditorBoot }) {
   return (
     <div className="app">
       <div className="scanlines" aria-hidden="true" />
-      <DoorWipe doors={doors} />
-      <TopBar
-        roomCode={conn.roomCode}
-        seed={pinnedTo}
-        running={running}
-        status={conn.status}
+      <DoorWipe doors={doors} kind={kind} />
+      <AppBar
+        conn={conn}
+        layer={layer}
+        menus={menus}
         toEditor={fromEditor ? testRun.back : null}
-        onGear={layer.gear}
-        inRoom={layer.phase !== null}
+        account={offRoom ? { name, account: live.account, open: menus.openAccount } : null}
         menu={menu}
-        watching={conn.watching}
         covered={covered}
-        account={offRoom ? { name, account: live.account, open: layer.openAccount } : null}
       />
-      <RoomMenus layer={layer} live={live} missions={missions} profile={profile} />
+      <RoomMenus
+        layer={layer}
+        live={live}
+        missions={missions}
+        profile={profile}
+        closeSettings={menus.closeSettings}
+      />
       <ErrorBanner conn={live} />
       <UpdateNotice />
 
@@ -915,7 +1005,7 @@ export function App({ boot }: { boot: EditorBoot }) {
             picked={picked}
             setPicked={setPicked}
             openSettings={layer.openSettings}
-            leaving={doorsGoing(doors)}
+            leaving={doorsGoing(doors) && placeOf(live) === 'lobby'}
             name={name}
             onName={setName}
           />

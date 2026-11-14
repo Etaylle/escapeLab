@@ -49,9 +49,10 @@ export const PLAIN_LOOK: HeroLook = {
   color: '#2dd4bf',
   speaking: false,
   waveAt: null,
-  panel: false,
+  panel: null,
   card: false,
   leaving: false,
+  taken: null,
 };
 
 /** What a test may set of a painting: the motion, the menu's look, its entrance, its canvas. */
@@ -60,6 +61,8 @@ export interface PaintingAsked {
   look?: Partial<HeroLook>;
   entrance?: EntranceRun;
   canvas?: HTMLCanvasElement | null;
+  /** where the walkthrough holds the hero's beat, ms after an item is taken */
+  beatHeld?: () => number | null;
 }
 
 /** A hero's painting on fake canvases, standing at 1440 × 820, the stage at (0, 60). */
@@ -80,6 +83,7 @@ export function painting(asked: PaintingAsked = {}): HeroPainting {
     },
     look: { current: { ...PLAIN_LOOK, ...asked.look } },
     attends: { current: null },
+    picked: { current: null },
     sweep: newSweep(),
     probe: { laid: 0, drawn: { legs: 0, upper: 0 } } as HeroProbe,
     entrance: asked.entrance ?? entranceRun(false, () => null),
@@ -87,6 +91,7 @@ export function painting(asked: PaintingAsked = {}): HeroPainting {
     phase: 0.3,
     reduced: () => reduced,
     canvas: asked.canvas ?? null,
+    beatHeld: asked.beatHeld ?? (() => null),
   };
 }
 

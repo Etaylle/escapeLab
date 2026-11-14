@@ -3,7 +3,7 @@ import { crewPass } from '../pass.js';
 import { NAME_SETTLE_MS } from '../profileName.js';
 import { reducedMotion, watchMotion } from '../settings.js';
 import { useVoice } from '../voice/useVoice.js';
-import { startHero, walksIn, type HeroLook } from '../world/menu/heroStage.js';
+import { startHero, walksIn, type HeroLook, type Taken } from '../world/menu/heroStage.js';
 import { browserSceneHost } from '../world/menu/loop.js';
 import { doorsFresh, doorsMark } from './DoorWipe.js';
 
@@ -54,35 +54,39 @@ interface Props {
   name: string;
   /** the colour the profile wears (BarAccount.tsx `profileColor`) */
   color: string;
-  /** a panel lies open over the menu */
-  panel: boolean;
+  /** the item whose panel lies open over the menu; null for none */
+  panel: string | null;
   /** a run's card stands first in the menu */
   card: boolean;
   /** the menu goes for the lobby, the doors closing over it */
   leaving: boolean;
+  /** the item of the menu taken last; null for none */
+  taken: Taken | null;
 }
 
 /**
  * The hero (docs/art-bible.md „The hero"): the player's own crew figure standing large at the
- * right of the menu's stage, in front of the drifting lab, in the colour the profile wears — the
+ * right of the menu's stage, in front of the lab at night, in the colour the profile wears — the
  * top bar's avatar, its head, stands for it where the stage leaves no room — facing the menu:
- * breathing, glancing round now and then, a light across its visor while the microphone sends,
- * waving as a new name settles, the hand lamp's beam sweeping over the lab
- * behind it and holding a beat on the item the player attends to (world/menu/heroStage.ts). On
- * the first menu of a page it walks in from the stage's right edge and switches its lamp on with
- * the cold open's click; back from the lobby, and under reduced motion, it stands there. It turns
- * its head to what the player attends to — the item hovered or in the focus, else a run's card —
- * steps half a tile aside as a panel opens, and turns away toward the lab as the menu goes for
+ * breathing, looking round now and then, a light across its visor while the microphone sends,
+ * waving as a new name settles, the hand lamp's beam sweeping over the lab behind it, its light
+ * flickering once a minute (world/menu/heroStage.ts). On the first menu of a page it walks in
+ * from the stage's right edge and switches its lamp on with the cold open's click; back from the
+ * lobby, and under reduced motion, it stands there. It turns its head to what the player attends
+ * to — the item hovered or in the focus, else a run's card —, its visor catching the item's glow,
+ * and its beam to the room of the item picked out, which the scene travels to (places.ts); it
+ * steps half a tile aside as a panel opens, flares its lamp at every item taken and steps toward
+ * the menu at one that leaves it (`taken`), and turns away toward the lab as the menu goes for
  * the lobby. Its canvas lies over the stage at the stage's density, under every panel, catching
  * no pointer; it moves no more than 30 times a second, only while it shows, and holds one still
  * pose under reduced motion.
  */
-export function MenuHero({ name, color, panel, card, leaving }: Props) {
+export function MenuHero({ name, color, panel, card, leaving, taken }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wake = useRef<(() => void) | null>(null);
   const waveAt = useChangedAt(useSettled(name.trim(), NAME_SETTLE_MS));
   const speaking = useSends();
-  const asked = { color, speaking, panel, card, leaving };
+  const asked = { color, speaking, panel, card, leaving, taken };
   const look = useRef<HeroLook>({ ...asked, waveAt: null });
   useEffect(() => {
     look.current = { ...asked, waveAt: waveAt.current };

@@ -25,7 +25,7 @@ import {
 } from '../particles.js';
 import { acrossStops } from '../render/beam.js';
 import { stepped } from './hero.js';
-import { BEAM_STEP, LENS_AHEAD, type HeroLamp } from './lamp.js';
+import { BEAM_STEP, LENS_AHEAD, lightStep, type HeroLamp } from './lamp.js';
 
 /**
  * The hand lamp drawn (menu/lamp.ts): in the hero's hands, a steel torch whose lens burns warm
@@ -38,12 +38,22 @@ import { BEAM_STEP, LENS_AHEAD, type HeroLamp } from './lamp.js';
  */
 
 /** The menu's beam: as wide as this either way of its axis before its edge fades, radians. */
-export const BEAM_HALF = 0.2;
-/** How strong its light is at its strongest, on the core near the lens: a warm haze. */
-export const BEAM_LIGHT = 0.5;
-/** The dust in the beam: the world's (render/atmosphere.ts), as strong. */
+export const BEAM_HALF = 0.28;
+/**
+ * How strong its light is at its strongest, on the core near the lens, added onto the lab at
+ * night: a warm haze the dust hangs in.
+ */
+export const BEAM_LIGHT = 0.6;
+/** How strong the flare's second light over the beam is at its strongest, against the first. */
+export const FLARE_LIGHT = 0.9;
+/** The dust in the beam: the world's (render/atmosphere.ts), lit by the lamp in the dark. */
 const MOTE: readonly [number, number, number] = lift(TUNGSTEN, 0.4);
-const MOTE_ALPHA = 0.55;
+const MOTE_ALPHA = 0.9;
+/**
+ * How much larger a mote shows than in the world, its sprite soft to its rim: the menu's lab
+ * stands nearer the eye.
+ */
+const MOTE_SCALE = 4;
 
 const BARREL = css(sink(STEEL, 0.35));
 const HEAD = css(sink(STEEL, 0.12));
@@ -57,9 +67,14 @@ const GLINT = { reach: 0.14, middle: rgba(WHITE, 0.9), warm: rgba(TUNGSTEN, 0.55
 /**
  * The torch in the hands, drawn as art.ts draws what a figure holds — round its grip, pointing
  * ahead, in its own units — turned `tilt` up or down from straight ahead, its lens alight `on`
- * of the way (0 to 1).
+ * of the way (0 to 1), its glint grown as far again as it flares (`flare`, 0 to 1).
  */
-export function drawHandLamp(ctx: CanvasRenderingContext2D, tilt: number, on: number): void {
+export function drawHandLamp(
+  ctx: CanvasRenderingContext2D,
+  tilt: number,
+  on: number,
+  flare = 0,
+): void {
   ctx.save();
   ctx.rotate(tilt);
   ctx.lineJoin = 'round';
@@ -82,21 +97,21 @@ export function drawHandLamp(ctx: CanvasRenderingContext2D, tilt: number, on: nu
   ctx.fillStyle = on > 0 ? LENS_ON : LENS_OFF;
   ctx.fill();
   if (on > 0) {
-    drawGlint(ctx, on);
+    drawGlint(ctx, on, GLINT.reach * (1 + flare));
   }
   ctx.restore();
 }
 
-/** The glint of a lens alight, `on` of its strength: a small hot spot over the lens. */
-function drawGlint(ctx: CanvasRenderingContext2D, on: number): void {
-  const glint = ctx.createRadialGradient(LENS_AHEAD, 0, 0, LENS_AHEAD, 0, GLINT.reach);
+/** The glint of a lens alight, `on` of its strength: a hot spot over the lens, `reach` round. */
+function drawGlint(ctx: CanvasRenderingContext2D, on: number, reach: number): void {
+  const glint = ctx.createRadialGradient(LENS_AHEAD, 0, 0, LENS_AHEAD, 0, reach);
   glint.addColorStop(0, GLINT.middle);
   glint.addColorStop(0.3, GLINT.warm);
   glint.addColorStop(1, rgba(TUNGSTEN, 0));
   ctx.globalAlpha *= on;
   ctx.globalCompositeOperation = 'lighter';
   ctx.fillStyle = glint;
-  ctx.fillRect(LENS_AHEAD - GLINT.reach, -GLINT.reach, 2 * GLINT.reach, 2 * GLINT.reach);
+  ctx.fillRect(LENS_AHEAD - reach, -reach, 2 * reach, 2 * reach);
 }
 
 /** A canvas a beam was baked on, and its corner from the lens it shines from, device px. */
@@ -116,13 +131,15 @@ export interface SceneBeam {
   /** the master turned to the step the beam points at */
   turned: Baked | null;
   dust: Particles;
+  /** a mote's sprite, baked as the first mote shows; null before */
+  mote: HTMLCanvasElement | null;
   /** how often the beam was turned anew, for the walkthrough's probe */
   turns: number;
 }
 
 /** The beam of a scene that lays none yet, its canvases made by `make`. */
 export function sceneBeam(make: CanvasMaker): SceneBeam {
-  return { make, master: null, turned: null, dust: newParticles(7), turns: 0 };
+  return { make, master: null, turned: null, dust: newParticles(7), mote: null, turns: 0 };
 }
 
 /** How far either way of its axis the beam casts any light, radians. */
@@ -265,18 +282,43 @@ export function layBeam(
   const x = Math.round(lamp.x * frame.dpr) + turned.x;
   const y = Math.round(lamp.y * frame.dpr) + turned.y;
   ctx.globalAlpha = lamp.on;
+  ctx.globalCompositeOperation = 'lighter';
   ctx.drawImage(turned.canvas, x, y);
+  if (lamp.flare > 0) {
+    ctx.globalAlpha = lightStep(lamp.flare) * FLARE_LIGHT;
+    ctx.drawImage(turned.canvas, x, y);
+    ctx.globalAlpha = lamp.on;
+  }
+  layDust(ctx, beam, lamp, frame);
+  ctx.globalCompositeOperation = 'source-over';
   ctx.globalAlpha = 1;
-  layDust(ctx, beam.dust, lamp, frame);
+}
+
+/** How wide a mote's sprite is baked, device px: a soft round speck, drawn at a mote's size. */
+const MOTE_SPRITE = 16;
+
+/** A mote's sprite on a canvas from `make`: a speck of the lamp's light, soft to its rim. */
+function bakeMote(make: CanvasMaker): HTMLCanvasElement {
+  const canvas = make(MOTE_SPRITE, MOTE_SPRITE);
+  const g = drawOn(canvas);
+  const r = MOTE_SPRITE / 2;
+  const glow = g.createRadialGradient(r, r, 0, r, r, r);
+  glow.addColorStop(0, rgba(MOTE, 1));
+  glow.addColorStop(0.3, rgba(MOTE, 0.7));
+  glow.addColorStop(1, rgba(MOTE, 0));
+  g.fillStyle = glow;
+  g.fillRect(0, 0, MOTE_SPRITE, MOTE_SPRITE);
+  return canvas;
 }
 
 /**
  * The dust in the beam: the motes of the world's air (particles.ts), born in the cone and
- * drifting slowly, in scene tiles, each shown only inside the cone; under reduced motion none.
+ * drifting slowly, in scene tiles, each a soft speck of the lamp's light shown only inside the
+ * cone, as strong as the lamp is on; under reduced motion none.
  */
 function layDust(
   ctx: CanvasRenderingContext2D,
-  dust: Particles,
+  beam: SceneBeam,
   lamp: HeroLamp,
   { dpr, tile, now, reduced }: BeamFrame,
 ): void {
@@ -290,12 +332,14 @@ function layDust(
     halfAngle: BEAM_HALF,
     reach: lamp.reach / tile,
   };
-  stepParticles(dust, now / 1000, { ...STILL_AIR, cones: [cone] });
+  stepParticles(beam.dust, now / 1000, { ...STILL_AIR, cones: [cone] });
+  const sprite = (beam.mote ??= bakeMote(beam.make));
   const px = tile * dpr;
-  for (const mote of dust.live) {
+  for (const mote of beam.dust.live) {
     if (mote.kind === 'dust' && inCone(cone, mote.x, mote.y)) {
-      ctx.fillStyle = rgba(MOTE, MOTE_ALPHA * particleAlpha(mote) * lamp.on);
-      ctx.fillRect(mote.x * px, mote.y * px, mote.size * px, mote.size * px);
+      const size = mote.size * MOTE_SCALE * px;
+      ctx.globalAlpha = lamp.on * MOTE_ALPHA * particleAlpha(mote);
+      ctx.drawImage(sprite, mote.x * px - size / 2, mote.y * px - size / 2, size, size);
     }
   }
 }
@@ -308,6 +352,11 @@ export function freeBeam(beam: SceneBeam): void {
       baked.canvas.height = 0;
     }
   }
+  if (beam.mote !== null) {
+    beam.mote.width = 0;
+    beam.mote.height = 0;
+  }
   beam.master = null;
   beam.turned = null;
+  beam.mote = null;
 }

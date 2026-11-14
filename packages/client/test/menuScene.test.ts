@@ -20,11 +20,13 @@ import {
 } from '../src/world/menu/loop.js';
 import {
   clearShow,
+  driftCorner,
   needsPaint,
   paintShow,
   showBake,
   type SceneBake,
   type SceneShow,
+  type SceneView,
 } from '../src/world/menu/scene.js';
 import { parkedDrones, sceneViewOf } from '../src/world/menu/view.js';
 import { tileCss } from '../src/world/viewport.js';
@@ -315,7 +317,15 @@ function bakeOf(name: string): SceneBake {
     box: { left: 0, top: 0, width: 200, height: 50 },
     w: 100,
     h: 50,
+    night: false,
+    spots: {},
   };
+}
+
+/** How the drift frames `show`'s lab `driftMs` in: no place of the menu's held. */
+function drifting(show: SceneShow, driftMs: number, reduced: boolean): SceneView {
+  const progress = driftAt(driftMs, reduced);
+  return { progress, corner: show.bake === null ? { x: 0, y: 0 } : driftCorner(show.bake, progress) };
 }
 
 const noShow = (): SceneShow => ({ bake: null, from: null, since: 0, drawn: null });
@@ -326,12 +336,12 @@ describe('what the scene draws', () => {
     const show = noShow();
     const first = bakeOf('first');
     showBake(show, first, 0, true);
-    paintShow(ctx, show, SCENE_FADE_MS / 2, 0, false);
+    paintShow(ctx, show, SCENE_FADE_MS / 2, drifting(show, 0, false));
     expect(callEntries(log, 'clearRect')).toHaveLength(1);
     const half = callEntries(log, 'drawImage');
     expect(half.map((call) => call.alpha)).toEqual([0.5]);
     log.length = 0;
-    paintShow(ctx, show, SCENE_FADE_MS, 0, false);
+    paintShow(ctx, show, SCENE_FADE_MS, drifting(show, 0, false));
     expect(callEntries(log, 'clearRect')).toHaveLength(0);
     expect(callEntries(log, 'drawImage').map((call) => call.alpha)).toEqual([1]);
   });
@@ -343,12 +353,12 @@ describe('what the scene draws', () => {
     const next = bakeOf('next');
     showBake(show, before, 0, false);
     showBake(show, next, 1000, true);
-    paintShow(ctx, show, 1000 + SCENE_FADE_MS / 4, 0, false);
+    paintShow(ctx, show, 1000 + SCENE_FADE_MS / 4, drifting(show, 0, false));
     const drawn = callEntries(log, 'drawImage');
     const names = drawn.map((call) => (call.args[0] as { name: string }).name);
     expect(names).toEqual(['before', 'next']);
     expect(drawn.map((call) => call.alpha)).toEqual([1, 0.25]);
-    paintShow(ctx, show, 1000 + SCENE_FADE_MS, 0, false);
+    paintShow(ctx, show, 1000 + SCENE_FADE_MS, drifting(show, 0, false));
     expect(show.from).toBeNull();
   });
 
@@ -356,8 +366,8 @@ describe('what the scene draws', () => {
     const { ctx, log } = fakeCanvas(100, 50);
     const show = noShow();
     showBake(show, bakeOf('lab'), 0, false);
-    paintShow(ctx, show, 0, 0, false);
-    paintShow(ctx, show, 1, DRIFT_MS / 2, false);
+    paintShow(ctx, show, 0, drifting(show, 0, false));
+    paintShow(ctx, show, 1, drifting(show, DRIFT_MS / 2, false));
     const [there, back] = callEntries(log, 'drawImage').map((call) => call.args[1]);
     // At the reactor end the frame starts 100 px in, at the spawn at the box's left edge.
     expect([there, back]).toEqual([-100, -0]);
@@ -368,7 +378,7 @@ describe('what the scene draws', () => {
     expect(needsPaint(show, 0, true)).toBe(false);
     showBake(show, bakeOf('lab'), 0, false);
     expect(needsPaint(show, 0, true)).toBe(true);
-    paintShow(fakeCanvas(100, 50).ctx, show, 0, 0, true);
+    paintShow(fakeCanvas(100, 50).ctx, show, 0, drifting(show, 0, true));
     expect(needsPaint(show, 10_000, true)).toBe(false);
     expect(needsPaint(show, 10_000, false)).toBe(true);
     showBake(show, bakeOf('next'), 10_000, true);
@@ -394,9 +404,9 @@ describe('what the scene lets go', () => {
     const next = bakeOf('next');
     showBake(show, before, 0, false);
     showBake(show, next, 1000, true);
-    paintShow(fakeCanvas(100, 50).ctx, show, 1000 + SCENE_FADE_MS / 2, 0, false);
+    paintShow(fakeCanvas(100, 50).ctx, show, 1000 + SCENE_FADE_MS / 2, drifting(show, 0, false));
     expect(sizeOf(before)).toEqual([200, 50]);
-    paintShow(fakeCanvas(100, 50).ctx, show, 1000 + SCENE_FADE_MS, 0, false);
+    paintShow(fakeCanvas(100, 50).ctx, show, 1000 + SCENE_FADE_MS, drifting(show, 0, false));
     expect([sizeOf(before), sizeOf(next)]).toEqual([
       [0, 0],
       [200, 50],

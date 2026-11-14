@@ -84,6 +84,24 @@ export function driftBox(shot: SceneShot, w: number, h: number): PixelBox {
 }
 
 /**
+ * The box of the lab a canvas `w` × `h` ever shows: along `shot` (driftBox) and at each of the
+ * frames whose corners `corners` are — the menu's places (places.ts), which may reach past the
+ * lab's edge into the dark round it — in whole pixels round them all.
+ */
+export function sceneBox(
+  shot: SceneShot,
+  w: number,
+  h: number,
+  corners: readonly { x: number; y: number }[],
+): PixelBox {
+  const drift = driftBox(shot, w, h);
+  const xs = [drift.left, drift.left + drift.width - w, ...corners.map((corner) => corner.x)];
+  const ys = [drift.top, drift.top + drift.height - h, ...corners.map((corner) => corner.y)];
+  const [left, top] = [Math.min(...xs), Math.min(...ys)];
+  return { left, top, width: Math.max(...xs) + w - left, height: Math.max(...ys) + h - top };
+}
+
+/**
  * Where in `box` a frame `w` × `h` starts with the camera `progress` of the way along `shot`,
  * whole pixels: the bake is copied that far up and to the left, pixel for pixel. Always
  * within the box, the frame whole inside it.

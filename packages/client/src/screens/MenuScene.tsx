@@ -35,6 +35,9 @@ export function MenuScene({
   useEffect(() => {
     stage.current?.show(missionId);
   }, [missionId]);
+  useEffect(() => {
+    stage.current?.lobby(lobby);
+  }, [lobby]);
   return (
     <div
       className={lobby ? 'menu-backdrop menu-backdrop--lobby' : 'menu-backdrop'}

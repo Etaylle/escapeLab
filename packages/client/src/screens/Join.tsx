@@ -27,7 +27,9 @@ import {
   RoundsPanel,
   type SectionProps,
 } from './MenuPanels.js';
+import type { Taken } from '../world/menu/heroStage.js';
 import { profileColor } from './BarAccount.js';
+import { doorsThen, shutterThen } from './DoorWipe.js';
 import { MenuHero } from './MenuHero.js';
 import { useComesOn } from './phosphor.js';
 
@@ -172,11 +174,14 @@ export function BoundCard({
   send,
   waiting = null,
   giveUp = null,
+  onBack,
 }: {
   seat: Seat;
   send: Props['send'];
   waiting?: Restoring | null;
   giveUp?: (() => void) | null;
+  /** the way back taken: the menu's hero takes its beat as the doors close for the room */
+  onBack: () => void;
 }) {
   const run = seat.phase === 'playing';
   const clock = seat.leftMs === null ? '' : ` · noch ${formatLeft(seat.leftMs)}`;
@@ -194,7 +199,10 @@ export function BoundCard({
         <button
           className="primary bound-back"
           disabled={waiting !== null}
-          onClick={() => send(resumeOf(seat.code))}
+          onClick={() => {
+            onBack();
+            send(resumeOf(seat.code));
+          }}
         >
           {run ? 'Zurück zum Einsatz' : 'Zurück in den Raum'}
         </button>
@@ -302,6 +310,18 @@ function usePanel(root: RefObject<HTMLElement | null>) {
 }
 
 /**
+ * The menu left for a page of its own (`open`) by item `item`, after the hero's beat: the lab's
+ * doors before the editor, the short shutter before every other page (DoorWipe.tsx).
+ */
+export function leaveFor(item: MenuItemId, open: () => void): void {
+  if (item === 'editor') {
+    doorsThen(open, true);
+  } else {
+    shutterThen(open, true);
+  }
+}
+
+/**
  * The ways the menu's items lead off it to a page of its own: the booklet and the Bestenliste of
  * the mission `selected`, the account's runs, the editor, the settings.
  */
@@ -377,12 +397,14 @@ export function JoinScreen(props: Props) {
   const field = { typed: name, onName: props.onName };
   const section = { send, connected, name: name.trim(), field, blocked: bound !== null };
   const pages = pagesOf(props, pickedMission(missions, props.picked));
+  const [taken, setTaken] = useState<Taken | null>(null);
   const card = seat !== null && (
     <BoundCard
       seat={seat}
       send={send}
       waiting={waiting}
       giveUp={giveUpOf(waiting, props.giveUp)}
+      onBack={() => setTaken({ at: performance.now(), toward: true })}
     />
   );
   return (
@@ -394,9 +416,10 @@ export function JoinScreen(props: Props) {
       <MenuHero
         name={name}
         color={profileColor(account)}
-        panel={panel !== null}
+        panel={panel}
         card={seat !== null}
         leaving={props.leaving === true}
+        taken={taken}
       />
       <div className="menu-body" inert={panel !== null}>
         <MainMenu
@@ -406,7 +429,9 @@ export function JoinScreen(props: Props) {
           rooms={rooms.length}
           onPick={(item) => {
             take(item);
-            pages[item]?.();
+            const page = pages[item];
+            setTaken({ at: performance.now(), toward: page !== undefined });
+            if (page !== undefined) leaveFor(item, page);
           }}
         />
         <p className="menu-lead">{MENU_LEAD}</p>

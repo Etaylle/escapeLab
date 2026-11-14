@@ -2,24 +2,32 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { sessionStore } from '../editor/session.js';
 
 /**
- * The door wipe between the menu and the lobby (styles/menu.css): two leaves of the lab's sliding
+ * The door wipe before every change of the menu (styles/menu.css): two leaves of the lab's sliding
  * doors — steel lit from the top, an amber light strip and two chevrons at the seam, as the world
- * draws a door (world/art.ts `drawDoor`) — close over the screen left in CLOSE_MS, that screen
- * held on meanwhile, and open on the next in OPEN_MS. Leaving the lobby loads the page anew
- * (ws.ts `leaveRoom`): the doors shut over the lobby first (`closeDoorsThen`), stay shut while
- * the page goes, and the page loaded opens them on the menu — the tab's sessionStorage carries
- * the word. Under reduced motion the screens cut, and every other change of screen — the run's
- * start, its end, the audience's — cuts as it always did.
+ * draws a door (world/art.ts `drawDoor`) — close over the screen left, that screen held on
+ * meanwhile, and open on the next. The lab's doors (`door`, CLOSE_MS and OPEN_MS) stand between the
+ * menu and the lobby, both ways, between the menu and a run it goes back to, and before the editor
+ * and back; a short shutter of the same leaves (`shutter`, SHUTTER_MS) before a page of the menu's
+ * — the booklet, the Bestenliste, „Meine Einsätze", the settings — and on the way back. Taken from
+ * the menu, a change waits a beat first (BEAT_MS: the hero steps toward the menu and its lamp
+ * flares, screens/MenuHero.tsx) before its leaves close. Leaving the lobby loads the page anew
+ * (ws.ts `leaveRoom`): the doors shut over the lobby first (`closeDoorsThen`), stay shut while the
+ * page goes, and the page loaded opens them on the menu — the tab's sessionStorage carries the
+ * word. Under reduced motion the screens cut, and every other change of screen — the run's start,
+ * its end, the audience's — cuts as it always did.
  */
 
 /** Where the window is, as the wipe tells the screens apart. */
-export type Place = 'menu' | 'lobby' | 'elsewhere';
+export type Place = 'menu' | 'lobby' | 'run' | 'elsewhere';
 
 /**
- * The doors: closing over the screen left, shut while the page loads anew, opening on the next;
- * null while none stand.
+ * The doors: a beat before they close over the menu left for a page or the editor, closing over
+ * the screen left, shut while the page loads anew, opening on the next; null while none stand.
  */
-export type Doors = 'closing' | 'shut' | 'opening' | null;
+export type Doors = 'beat' | 'closing' | 'shut' | 'opening' | null;
+
+/** Which leaves close: the lab's doors, or the short shutter of the same art before a page. */
+export type WipeKind = 'door' | 'shutter';
 
 /** Whether `doors` close over the screen left or stand shut over it: the screen is going. */
 export function doorsGoing(doors: Doors): boolean {
@@ -29,6 +37,16 @@ export function doorsGoing(doors: Doors): boolean {
 /** How long the doors take to close over the screen left, and to open on the next, ms. */
 export const CLOSE_MS = 170;
 export const OPEN_MS = 210;
+/** How long the shutter before a page takes to close and to open, ms: 180 ms in all. */
+export const SHUTTER_MS = { close: 80, open: 100 } as const;
+/** How long the beat before a change taken from the menu lasts: its hero's step and flare, ms. */
+export const BEAT_MS = 100;
+
+/** How long each kind of leaves closes and opens, ms. */
+export const WIPE_MS: Readonly<Record<WipeKind, { close: number; open: number }>> = {
+  door: { close: CLOSE_MS, open: OPEN_MS },
+  shutter: SHUTTER_MS,
+};
 
 /** Where the tab notes that its doors shut as the page went, for the page loaded next. */
 export const DOORS_KEY = 'escapelab.doors';
@@ -39,24 +57,40 @@ export const DOORS_FRESH_MS = 10_000;
 export interface Wipe<T> {
   place: Place;
   doors: Doors;
+  /** the leaves that move: the lab's doors or the shutter */
+  kind: WipeKind;
   /** what the screen showed as the doors began to close, held on until they open; else null */
   held: { value: T } | null;
-  /** what runs once the doors have shut, where they stay shut; else null */
+  /** what runs once the leaves have shut; else null */
   after: (() => void) | null;
+  /** whether they stay shut once `after` has run: the page loads anew under them */
+  stays: boolean;
 }
 
 /** The window standing at `place`, no doors in it. */
-const standing = <T,>(place: Place): Wipe<T> => ({ place, doors: null, held: null, after: null });
+const standing = <T,>(place: Place): Wipe<T> => ({
+  place,
+  doors: null,
+  kind: 'door',
+  held: null,
+  after: null,
+  stays: false,
+});
 
-/** Whether the window going from `from` to `to` wipes: from the menu to the lobby, or back. */
+/**
+ * Whether the window going from `from` to `to` wipes: from the menu to the lobby and back, and
+ * from the menu to a run it goes back to.
+ */
 export function wipes(from: Place, to: Place): boolean {
-  return from !== to && from !== 'elsewhere' && to !== 'elsewhere';
+  const way = `${from} ${to}`;
+  return way === 'menu lobby' || way === 'lobby menu' || way === 'menu run';
 }
 
 /**
- * The wipe once the window is at `place`: as the menu and the lobby trade places the doors begin
- * to close over what showed (`last`) — over what they already hold, where they are closing — and
- * things moving less (`reduced`) or any other change of place cut. Shut, the doors stay so.
+ * The wipe once the window is at `place`: as the menu and the lobby trade places, or the menu
+ * goes back to a run, the doors begin to close over what showed (`last`) — over what they already
+ * hold, where they are closing — and things moving less (`reduced`) or any other change of place
+ * cut. Shut, the doors stay so.
  */
 export function wipeTo<T>(wipe: Wipe<T>, place: Place, last: T, reduced: boolean): Wipe<T> {
   if (place === wipe.place) {
@@ -68,26 +102,58 @@ export function wipeTo<T>(wipe: Wipe<T>, place: Place, last: T, reduced: boolean
   if (reduced || !wipes(wipe.place, place)) {
     return standing(place);
   }
-  return { place, doors: 'closing', held: wipe.held ?? { value: last }, after: null };
+  const held = wipe.held ?? { value: last };
+  return { place, doors: 'closing', kind: 'door', held, after: null, stays: false };
 }
 
 /** The doors closing over what shows (`last`) where the window stands, `after` run once shut. */
 export function closedOver<T>(wipe: Wipe<T>, last: T, after: () => void): Wipe<T> {
-  return { place: wipe.place, doors: 'closing', held: wipe.held ?? { value: last }, after };
+  const held = wipe.held ?? { value: last };
+  return { place: wipe.place, doors: 'closing', kind: 'door', held, after, stays: true };
 }
 
 /**
- * The wipe's next step as its doors arrive: closed, they open on the window's screen — or stay
- * shut, where something waits on them; open, they are gone.
+ * The leaves of `kind` closing over what shows (`last`) after a beat — a change taken from the
+ * menu (`beat`) — `after` run once they have shut, then opening on what it brought.
+ */
+export function wipedThen<T>(
+  wipe: Wipe<T>,
+  last: T,
+  after: () => void,
+  [kind, beat]: readonly [WipeKind, boolean],
+): Wipe<T> {
+  const held = wipe.held ?? { value: last };
+  const doors = beat ? 'beat' : 'closing';
+  return { place: wipe.place, doors, kind, held, after, stays: false };
+}
+
+/**
+ * The wipe's next step as its doors arrive: the beat over, they close; closed, they open on the
+ * window's screen — or stay shut, where the page loads anew under them; open, they are gone.
  */
 export function wipeOn<T>(wipe: Wipe<T>): Wipe<T> {
-  if (wipe.doors === 'closing' && wipe.after !== null) {
+  if (wipe.doors === 'beat') {
+    return { ...wipe, doors: 'closing' };
+  }
+  if (wipe.doors === 'closing' && wipe.after !== null && wipe.stays) {
     return { ...wipe, doors: 'shut', after: null };
   }
   if (wipe.doors === 'closing') {
-    return { place: wipe.place, doors: 'opening', held: null, after: null };
+    return { ...wipe, doors: 'opening', held: null, after: null };
   }
   return wipe.doors === 'opening' ? standing(wipe.place) : wipe;
+}
+
+/** How long `wipe`'s doors take to come to their next step, ms; null where they stand. */
+export function stepMs(wipe: Pick<Wipe<unknown>, 'doors' | 'kind'>): number | null {
+  const { doors, kind } = wipe;
+  if (doors === 'beat') {
+    return BEAT_MS;
+  }
+  if (doors === 'closing' || doors === 'opening') {
+    return doors === 'closing' ? WIPE_MS[kind].close : WIPE_MS[kind].open;
+  }
+  return null;
 }
 
 /**
@@ -136,19 +202,49 @@ export function noteDoors(at: number | null): void {
   }
 }
 
-/** The mounted wipe's way to shut its doors before something runs; null while none is. */
-let closer: ((after: () => void) => void) | null = null;
+/** How a mounted wipe is asked to close over the window: its leaves, a beat first, staying shut. */
+interface WipeAsk {
+  kind: WipeKind;
+  beat: boolean;
+  stays: boolean;
+}
+
+/** The mounted wipe's way to close over the window before something runs; null while none is. */
+let closer: ((after: () => void, ask: WipeAsk) => void) | null = null;
+
+/** Closes the mounted wipe's leaves as `ask` says, then runs `after`; at once where none is. */
+function closeThen(after: () => void, ask: WipeAsk): void {
+  if (closer === null) {
+    after();
+  } else {
+    closer(after, ask);
+  }
+}
 
 /**
  * Shuts the doors over the window, then runs `after` — leaving the lobby, which loads the page
  * anew under them; at once where no wipe is mounted, or things move less.
  */
 export function closeDoorsThen(after: () => void): void {
-  if (closer === null) {
-    after();
-  } else {
-    closer(after);
-  }
+  closeThen(after, { kind: 'door', beat: false, stays: true });
+}
+
+/**
+ * A change of the menu's to the editor, a page of its own, or back (`after`): the lab's doors
+ * close over the window — after the hero's beat where it is taken from the menu (`beat`) — and
+ * open on what it brought; at once where no wipe is mounted, or things move less.
+ */
+export function doorsThen(after: () => void, beat = false): void {
+  closeThen(after, { kind: 'door', beat, stays: false });
+}
+
+/**
+ * A page of the menu's opened, or put away (`after`): the short shutter closes over the window —
+ * after the hero's beat where it is taken from the menu (`beat`) — and opens on it; at once where
+ * no wipe is mounted, or things move less.
+ */
+export function shutterThen(after: () => void, beat = false): void {
+  closeThen(after, { kind: 'shutter', beat, stays: false });
 }
 
 /**
@@ -160,7 +256,7 @@ export function useDoorWipe<T>(
   value: T,
   place: Place,
   reduced: boolean,
-): { value: T; doors: Doors } {
+): { value: T; doors: Doors; kind: WipeKind } {
   const [wipe, setWipe] = useState(() => bootWipe<T>(place, doorsMark(), Date.now(), reduced));
   // The value of the last screen drawn before any doors closed: what they close over.
   const last = useRef(value);
@@ -176,29 +272,36 @@ export function useDoorWipe<T>(
   });
   useEffect(() => noteDoors(null), []);
   useEffect(() => {
-    if (wipe.doors !== 'closing' && wipe.doors !== 'opening') {
+    const ms = stepMs(wipe);
+    if (ms === null) {
       return undefined;
     }
-    const timer = setTimeout(
-      () => {
-        if (wipe.after !== null) {
-          noteDoors(Date.now());
-          wipe.after();
-        }
-        setWipe((current) => wipeOn(current));
-      },
-      wipe.doors === 'closing' ? CLOSE_MS : OPEN_MS,
-    );
+    const timer = setTimeout(() => {
+      if (wipe.doors === 'closing' && wipe.after !== null) {
+        if (wipe.stays) noteDoors(Date.now());
+        wipe.after();
+      }
+      setWipe((current) => wipeOn(current));
+    }, ms);
     return () => clearTimeout(timer);
   }, [wipe]);
   useEffect(() => {
-    closer = (after) =>
-      reduced ? after() : setWipe((current) => closedOver(current, last.current, after));
+    closer = (after, ask) => {
+      if (reduced) {
+        after();
+        return;
+      }
+      setWipe((current) =>
+        ask.stays
+          ? closedOver(current, last.current, after)
+          : wipedThen(current, last.current, after, [ask.kind, ask.beat]),
+      );
+    };
     return () => {
       closer = null;
     };
   }, [reduced]);
-  return { value: next.held === null ? value : next.held.value, doors: next.doors };
+  return { value: next.held === null ? value : next.held.value, doors: next.doors, kind: next.kind };
 }
 
 /** Chevrons pointing to the seam, as on the world's doors. */
@@ -210,13 +313,16 @@ function Chevrons() {
   );
 }
 
-/** The doors over the window while they move or stand shut; nothing while they stand open. */
-export function DoorWipe({ doors }: { doors: Doors }) {
-  if (doors === null) {
+/**
+ * The leaves over the window while they move or stand shut, the shutter's a little quicker;
+ * nothing during the beat before them, nor while they stand open.
+ */
+export function DoorWipe({ doors, kind = 'door' }: { doors: Doors; kind?: WipeKind }) {
+  if (doors === null || doors === 'beat') {
     return null;
   }
   return (
-    <div className={`door-wipe door-wipe--${doors}`} aria-hidden="true">
+    <div className={`door-wipe door-wipe--${doors} door-wipe--${kind}`} aria-hidden="true">
       <div className="door-leaf door-leaf--left">
         <Chevrons />
       </div>

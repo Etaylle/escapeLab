@@ -1,7 +1,7 @@
 import { HELD_SCALE, HELD_X, HELD_Y } from '../art.js';
 import { TAU } from '../brush.js';
 import { smooth } from '../ease.js';
-import type { HeroPlace } from './hero.js';
+import { LAMP_RAISE, type HeroPlace } from './hero.js';
 
 /**
  * The hand lamp in the hero's hands (menu/hero.ts) and its beam over the lab behind it
@@ -26,7 +26,7 @@ export const SWEEP = { low: Math.PI - 0.32, high: Math.PI + 0.48 } as const;
 /** Where the beam stands under reduced motion: across toward the menu's middle. */
 export const STILL_ANGLE = Math.PI + 0.12;
 /** How far the beam's light reaches against the hero's height, before the menu stops it. */
-export const REACH_SHARE = 1.1;
+export const REACH_SHARE = 1.45;
 /** The steps a beam is drawn at: a degree, and the lamp in the hands every three. */
 export const BEAM_STEP = TAU / 360;
 export const LAMP_STEP = 3 * BEAM_STEP;
@@ -55,7 +55,7 @@ export function tiltOf(angle: number): number {
 export function lensAt(place: HeroPlace, tilt: number, bob: number): { x: number; y: number } {
   const ahead = HELD_SCALE * LENS_AHEAD;
   const x = HELD_X + ahead * Math.cos(tilt);
-  const y = HELD_Y + ahead * Math.sin(tilt) - bob;
+  const y = HELD_Y - LAMP_RAISE.up + ahead * Math.sin(tilt) - bob;
   return { x: place.feet.x - x * place.scale, y: place.feet.y + y * place.scale };
 }
 
@@ -82,11 +82,46 @@ export interface Sweep {
   last: number | null;
   /** the beat it holds: where it points, and until when, ms; null while it sweeps */
   hold: { angle: number; until: number } | null;
+  /** where it points while it is turned to a place of the menu's (`aimSweep`); null else */
+  aim: number | null;
 }
 
 /** A sweep at its start, at the bottom of its range. */
 export function newSweep(): Sweep {
-  return { run: 0, last: null, hold: null };
+  return { run: 0, last: null, hold: null, aim: null };
+}
+
+/** How fast the beam turns to the place of the menu's item attended, radians a second. */
+export const AIM_RATE = 0.9;
+
+/**
+ * How far along its sweep (0 to 2) the beam points at `angle`, held within the sweep: on the
+ * pass it was on at `run`, up its range or back down.
+ */
+export function runAt(angle: number, run: number): number {
+  const share = (withinSweep(angle) - SWEEP.low) / (SWEEP.high - SWEEP.low);
+  let [low, high] = [0, 1];
+  for (let k = 0; k < 24; k++) {
+    const mid = (low + high) / 2;
+    [low, high] = smooth(mid) < share ? [mid, high] : [low, mid];
+  }
+  return run < 1 ? low : 2 - low;
+}
+
+/**
+ * Where the beam of `s` points at `now` while it is turned to a place of the menu's
+ * (places.ts) that shows at `angle` from the lens: on toward it, AIM_RATE at most, and held
+ * there, its sweep's clock standing meanwhile; let go, the sweep goes on from there (`stepSweep`).
+ */
+export function aimSweep(s: Sweep, now: number, angle: number): number {
+  const dt = s.last === null ? 0 : Math.max(0, now - s.last);
+  s.last = now;
+  s.hold = null;
+  const from = s.aim ?? sweepAngle(s.run);
+  const to = withinSweep(angle);
+  const step = (AIM_RATE * dt) / 1000;
+  s.aim = Math.abs(to - from) <= step ? to : from + Math.sign(to - from) * step;
+  return s.aim;
 }
 
 /** Whether a beam turning from `before` to `after` comes to `target` on the way, or onto it. */
@@ -108,6 +143,10 @@ export function withinSweep(angle: number): number {
 export function stepSweep(s: Sweep, now: number, target: number | null): number {
   const dt = s.last === null ? 0 : Math.max(0, now - s.last);
   s.last = now;
+  if (s.aim !== null) {
+    s.run = runAt(s.aim, s.run);
+    s.aim = null;
+  }
   if (s.hold !== null) {
     if (now < s.hold.until) {
       return s.hold.angle;
@@ -127,7 +166,7 @@ export function stepSweep(s: Sweep, now: number, target: number | null): number 
 /**
  * The lamp the hero holds as the scene's canvas lays its beam (lampArt.ts): its lens in the
  * window, CSS px; where the beam points; how far its light reaches, CSS px; how far it is on,
- * 0 to 1.
+ * 0 to 1, flickering as it does once a minute; how far it flares as an item is taken, 0 to 1.
  */
 export interface HeroLamp {
   x: number;
@@ -135,27 +174,57 @@ export interface HeroLamp {
   angle: number;
   reach: number;
   on: number;
+  flare: number;
 }
+
+/** The steps the lamp's light and flare are laid at: two lamps a step apart lay one beam. */
+const LIGHT_STEPS = 20;
 
 /** The lamp the page holds now — the menu's hero has one — and who listens for it. */
 let held: HeroLamp | null = null;
 const listeners = new Set<() => void>();
+/** Whether the menu's lab stands at night, its lamp the light in it (`holdNight`). */
+let night = false;
+
+/**
+ * Whether the menu's lab stands at night, its lights out and the hero's lamp the light in it
+ * (scene.ts `nightTo`): from the first frame a hero stands on the stage until the stage leaves
+ * it no room — not while the menu is only covered by a page, or gone for the lobby, which lights
+ * its scene of its own (stage.ts).
+ */
+export function labAtNight(): boolean {
+  return night;
+}
+
+/** The lab at night (`dark`) or lit; every listener hears of it where it changes. */
+export function holdNight(dark: boolean): void {
+  if (night === dark) {
+    return;
+  }
+  night = dark;
+  for (const listener of [...listeners]) {
+    listener();
+  }
+}
 
 /** The lamp the hero holds now; null while no hero stands on the stage. */
 export function heroLamp(): HeroLamp | null {
   return held;
 }
 
+/** `light` (0 to 1) at the nearest of LIGHT_STEPS steps. */
+export const lightStep = (light: number): number => Math.round(light * LIGHT_STEPS) / LIGHT_STEPS;
+
 /**
  * The beam `lamp` lays, as a key: its lens's pixel, its reach, the step it points at, how far it
- * is on — two lamps with one key lay the same beam; `none` for no lamp.
+ * is on and flares — two lamps with one key lay the same beam; `none` for no lamp.
  */
 export function lampKey(lamp: HeroLamp | null): string {
   if (lamp === null) {
     return 'none';
   }
   const [x, y, reach, step] = [lamp.x, lamp.y, lamp.reach, lamp.angle / BEAM_STEP].map(Math.round);
-  return `${x},${y} ${reach} ${step} ${lamp.on}`;
+  return `${x},${y} ${reach} ${step} ${lightStep(lamp.on)} ${lightStep(lamp.flare)}`;
 }
 
 /**
@@ -173,7 +242,7 @@ export function holdLamp(lamp: HeroLamp | null): void {
   }
 }
 
-/** Tells `changed` whenever the beam the lamp lays changes; returns what stops it. */
+/** Tells `changed` whenever the beam the lamp lays, or the night, changes; returns its stop. */
 export function watchLamp(changed: () => void): () => void {
   listeners.add(changed);
   return () => {

@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { PlayerView, SpectatorView } from '@escapelab/core';
 import { backdropOf, menuPlaceOf, placeOf } from '../src/App.js';
 import {
+  BEAT_MS,
   bootWipe,
   CLOSE_MS,
   closeDoorsThen,
@@ -13,8 +14,13 @@ import {
   DoorWipe,
   doorsGoing,
   doorsMark,
+  doorsThen,
   noteDoors,
   OPEN_MS,
+  SHUTTER_MS,
+  shutterThen,
+  stepMs,
+  wipedThen,
   wipeOn,
   wipes,
   wipeTo,
@@ -28,8 +34,10 @@ const SHEET = readFileSync(new URL('../src/styles/menu.css', import.meta.url), '
 const standing = (place: Wipe<string>['place']): Wipe<string> => ({
   place,
   doors: null,
+  kind: 'door',
   held: null,
   after: null,
+  stays: false,
 });
 
 afterEach(() => {
@@ -48,9 +56,13 @@ const lengthOf = (selector: string): number =>
   Number(/animation: [\w-]+ (\d+)ms/.exec(ruleOf(selector))?.[1]);
 
 describe('the door wipe between the menu and the lobby', () => {
-  it('wipes from the menu to the lobby and back, and nowhere else', () => {
+  it('wipes from the menu to the lobby and back, and to a run it goes back to', () => {
     expect(wipes('menu', 'lobby')).toBe(true);
     expect(wipes('lobby', 'menu')).toBe(true);
+    expect(wipes('menu', 'run')).toBe(true);
+    // A run started in the lobby opens on its own film; its end, the audience's screen cut.
+    expect(wipes('lobby', 'run')).toBe(false);
+    expect(wipes('run', 'elsewhere')).toBe(false);
     expect(wipes('lobby', 'elsewhere')).toBe(false);
     expect(wipes('elsewhere', 'lobby')).toBe(false);
     expect(wipes('menu', 'menu')).toBe(false);
@@ -59,14 +71,13 @@ describe('the door wipe between the menu and the lobby', () => {
   it('closes its doors over the screen left, held on, as the lobby comes up', () => {
     const wipe = wipeTo(standing('menu'), 'lobby', 'the menu', false);
     expect(wipe).toEqual({
-      place: 'lobby',
+      ...standing('lobby'),
       doors: 'closing',
       held: { value: 'the menu' },
-      after: null,
     });
     // Closed, the doors open on the window's own screen; open, they are gone.
     const opening = wipeOn(wipe);
-    expect(opening).toEqual({ place: 'lobby', doors: 'opening', held: null, after: null });
+    expect(opening).toEqual({ ...standing('lobby'), doors: 'opening' });
     expect(wipeOn(opening)).toEqual(standing('lobby'));
   });
 
@@ -102,17 +113,18 @@ describe('the door wipe as the lobby is left, the page loaded anew', () => {
     const leave = (): void => undefined;
     const closing = closedOver(standing('lobby'), 'the lobby', leave);
     expect(closing).toEqual({
-      place: 'lobby',
+      ...standing('lobby'),
       doors: 'closing',
       held: { value: 'the lobby' },
       after: leave,
+      stays: true,
     });
     const shut = wipeOn(closing);
     expect(shut).toEqual({
-      place: 'lobby',
+      ...standing('lobby'),
       doors: 'shut',
       held: { value: 'the lobby' },
-      after: null,
+      stays: true,
     });
     expect(wipeOn(shut)).toBe(shut);
     // The seat freed, the window is off any room before the page goes: the doors stay shut.
@@ -152,11 +164,67 @@ describe('the door wipe as the lobby is left, the page loaded anew', () => {
 
 });
 
+describe('the door wipe before a page of the menu’s', () => {
+  it('waits the hero’s beat, closes its leaves, runs what it opens, and opens on it', () => {
+    const open = vi.fn();
+    const beat = wipedThen(standing('menu'), 'the menu', open, ['shutter', true]);
+    expect(beat).toEqual({
+      ...standing('menu'),
+      doors: 'beat',
+      kind: 'shutter',
+      held: { value: 'the menu' },
+      after: open,
+    });
+    const closing = wipeOn(beat);
+    expect(closing.doors).toBe('closing');
+    const opening = wipeOn(closing);
+    expect(opening).toEqual({ ...standing('menu'), doors: 'opening', kind: 'shutter' });
+    expect(wipeOn(opening)).toEqual(standing('menu'));
+    // Asked without a beat — the way back from a page — its leaves close at once.
+    expect(wipedThen(standing('menu'), 'a page', open, ['door', false]).doors).toBe('closing');
+  });
+
+  it('times each step: the beat, the shutter’s quick leaves, the doors’ heavy ones', () => {
+    expect(stepMs({ doors: 'beat', kind: 'shutter' })).toBe(BEAT_MS);
+    expect(stepMs({ doors: 'closing', kind: 'shutter' })).toBe(SHUTTER_MS.close);
+    expect(stepMs({ doors: 'opening', kind: 'shutter' })).toBe(SHUTTER_MS.open);
+    expect(stepMs({ doors: 'closing', kind: 'door' })).toBe(CLOSE_MS);
+    expect(stepMs({ doors: 'opening', kind: 'door' })).toBe(OPEN_MS);
+    expect(stepMs({ doors: 'shut', kind: 'door' })).toBeNull();
+    expect(stepMs({ doors: null, kind: 'door' })).toBeNull();
+  });
+
+  it('keeps nothing waiting more than 250 ms on the way to a page, its shutter 120 to 200 ms', () => {
+    expect(BEAT_MS + SHUTTER_MS.close).toBeLessThanOrEqual(250);
+    const shutter = SHUTTER_MS.close + SHUTTER_MS.open;
+    expect(shutter).toBeGreaterThanOrEqual(120);
+    expect(shutter).toBeLessThanOrEqual(200);
+    // The sheet moves the shutter's leaves as long as the hook times them.
+    const timed = (state: string): number =>
+      Number(/animation-duration: (\d+)ms/.exec(ruleOf(`.door-wipe--shutter.door-wipe--${state} .door-leaf`))?.[1]);
+    expect([timed('closing'), timed('opening')]).toEqual([SHUTTER_MS.close, SHUTTER_MS.open]);
+  });
+
+  it('opens a page or the editor at once where no wipe is mounted', () => {
+    const [page, editor] = [vi.fn(), vi.fn()];
+    shutterThen(page, true);
+    doorsThen(editor, true);
+    expect([page.mock.calls.length, editor.mock.calls.length]).toEqual([1, 1]);
+  });
+});
+
 describe('the door wipe’s doors', () => {
   it('draws two leaves while its doors move, nothing while they stand open', () => {
     expect(renderToStaticMarkup(<DoorWipe doors={null} />)).toBe('');
     const closing = renderToStaticMarkup(<DoorWipe doors="closing" />);
-    expect(closing).toMatch(/^<div class="door-wipe door-wipe--closing" aria-hidden="true">/);
+    expect(closing).toMatch(
+      /^<div class="door-wipe door-wipe--closing door-wipe--door" aria-hidden="true">/,
+    );
+    // The beat before them draws nothing yet; the shutter is the same leaves.
+    expect(renderToStaticMarkup(<DoorWipe doors="beat" kind="shutter" />)).toBe('');
+    const shutter = renderToStaticMarkup(<DoorWipe doors="closing" kind="shutter" />);
+    expect(shutter).toContain('door-wipe--shutter');
+    expect(shutter.match(/class="door-leaf door-leaf--(left|right)"/g)).toHaveLength(2);
     expect(closing.match(/class="door-leaf door-leaf--(left|right)"/g)).toHaveLength(2);
     expect(closing.match(/class="door-chevrons"/g)).toHaveLength(2);
     expect(renderToStaticMarkup(<DoorWipe doors="opening" />)).toContain('door-wipe--opening');
@@ -237,7 +305,9 @@ describe('the scene behind the lobby', () => {
   it('tells the door wipe where the window is', () => {
     expect(placeOf({ view: null, spectatorView: null })).toBe('menu');
     expect(placeOf({ view: lobby, spectatorView: null })).toBe('lobby');
-    expect(placeOf({ view: running, spectatorView: null })).toBe('elsewhere');
+    expect(placeOf({ view: running, spectatorView: null })).toBe('run');
+    const won = { phase: 'won', missionId: 'notstrom' } as PlayerView;
+    expect(placeOf({ view: won, spectatorView: null })).toBe('elsewhere');
     expect(placeOf({ view: null, spectatorView: { phase: 'lobby' } as SpectatorView })).toBe(
       'elsewhere',
     );

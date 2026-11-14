@@ -166,7 +166,8 @@ const frameOf = (pose: FigurePose) => ({
   pose,
   color: '#2dd4bf',
   dpr: 1,
-  lamp: { tilt: 0, on: 1 },
+  lamp: { tilt: 0, on: 1, flare: 0 },
+  glow: false,
 });
 
 describe('the light across the hero’s visor', () => {

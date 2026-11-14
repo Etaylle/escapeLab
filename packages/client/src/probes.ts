@@ -180,6 +180,11 @@ declare global {
      * holds a device's fade (world/menu/heroStage.ts): read under `?trace=1` only, while set.
      */
     __heroHold?: number;
+    /**
+     * Where the walkthrough holds the menu's hero after an item is taken, ms after it — its step
+     * and its lamp's flare on their way (world/menu/heroStage.ts): under `?trace=1` only.
+     */
+    __heroBeat?: number;
   }
 }
 

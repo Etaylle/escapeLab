@@ -160,6 +160,7 @@ const lampAt = (x: number, y: number, angle: number, on = 1): HeroLamp => ({
   angle,
   reach: 400,
   on,
+  flare: 0,
 });
 
 describe('the lamp the page holds', () => {
@@ -222,9 +223,10 @@ describe('layBeam — the beam on the scene’s canvas', () => {
     expect(beam.turns).toBe(1);
     layBeam(scene.ctx, beam, lampAt(903, 497, Math.PI + BEAM_STEP), FRAME);
     expect(beam.turns).toBe(2);
-    expect(made).toHaveLength(2);
-    layBeam(scene.ctx, beam, { ...lampAt(903, 497, Math.PI + BEAM_STEP), reach: 300 }, FRAME);
+    // The master, its turn, and the motes' sprite, each made once.
     expect(made).toHaveLength(3);
+    layBeam(scene.ctx, beam, { ...lampAt(903, 497, Math.PI + BEAM_STEP), reach: 300 }, FRAME);
+    expect(made).toHaveLength(4);
     expect(beam.turns).toBe(3);
   });
 
@@ -271,29 +273,38 @@ describe('layBeam — the beam on the scene’s canvas', () => {
     );
     vi.unstubAllGlobals();
   });
+});
 
+describe('layBeam — the dust in the beam', () => {
   it('shows the dust in the beam only inside its cone, and none under reduced motion', () => {
     const scene = fakeCanvas(1440, 820, 'scene');
     const { beam } = fakeBeam();
+    // A mote is its soft sprite laid at its size, its middle where the mote drifts.
+    const motes = (log: readonly Entry[]): number[][] =>
+      callEntries(log, 'drawImage')
+        .filter(({ args }) => args.length === 5 && args[0] === beam.mote)
+        .map(({ args }) => {
+          const [, x = 0, y = 0, size = 0] = args as number[];
+          return [x + size / 2, y + size / 2];
+        });
     let now = 0;
     for (; now < 6000; now += 1000 / 30) {
       layBeam(scene.ctx, beam, lampAt(900, 500, Math.PI), { ...FRAME, now });
     }
-    expect(callEntries(scene.log, 'fillRect').length).toBeGreaterThan(100);
+    expect(motes(scene.log).length).toBeGreaterThan(100);
     // Turned a quarter: the motes born in the cone before lie outside it now.
     const turned = lampAt(900, 500, Math.PI / 2);
     const before = scene.log.length;
     for (const end = now + 300; now < end; now += 1000 / 30) {
       layBeam(scene.ctx, beam, turned, { ...FRAME, now });
     }
-    for (const { args } of callEntries(scene.log.slice(before), 'fillRect')) {
-      const [x = 0, y = 0] = args as number[];
+    for (const [x = 0, y = 0] of motes(scene.log.slice(before))) {
       expect(Math.abs(Math.atan2(y - turned.y, x - turned.x) - turned.angle)).toBeLessThan(0.3);
       expect(Math.hypot(x - turned.x, y - turned.y)).toBeLessThan(turned.reach);
     }
     const still = scene.log.length;
     layBeam(scene.ctx, beam, turned, { ...FRAME, now, reduced: true });
-    expect(callEntries(scene.log.slice(still), 'fillRect')).toEqual([]);
+    expect(motes(scene.log.slice(still))).toEqual([]);
   });
 });
 
@@ -307,14 +318,19 @@ describe('layBeam — the beam’s canvases', () => {
       return canvas;
     });
     layBeam(scene.ctx, beam, lampAt(900, 500, Math.PI), FRAME);
-    expect(canvases).toHaveLength(2);
+    // The master, its turn, and the motes' sprite.
+    expect(canvases).toHaveLength(3);
     layBeam(scene.ctx, beam, null, FRAME);
-    expect([beam.master, beam.turned]).toEqual([null, null]);
-    expect(canvases.map((canvas) => [canvas.width, canvas.height])).toEqual([[0, 0], [0, 0]]);
+    expect([beam.master, beam.turned, beam.mote]).toEqual([null, null, null]);
+    expect(canvases.map((canvas) => [canvas.width, canvas.height])).toEqual([
+      [0, 0],
+      [0, 0],
+      [0, 0],
+    ]);
     layBeam(scene.ctx, beam, lampAt(900, 500, Math.PI), FRAME);
-    expect(canvases).toHaveLength(4);
+    expect(canvases).toHaveLength(6);
     layBeam(scene.ctx, beam, lampAt(900, 500, Math.PI, 0), FRAME);
-    expect([beam.master, beam.turned]).toEqual([null, null]);
+    expect([beam.master, beam.turned, beam.mote]).toEqual([null, null, null]);
   });
 });
 
@@ -493,11 +509,11 @@ describe('the scene lays the hero’s beam', () => {
     expect(beams()).toBe(0);
     expect(queued.size).toBe(0);
     const baked = made.length;
-    lamps.holdLamp({ x: 120, y: 60, angle: Math.PI, reach: 80, on: 0.8 });
+    lamps.holdLamp({ x: 120, y: 60, angle: Math.PI, reach: 80, on: 0.8, flare: 0 });
     expect(queued.size).toBe(1);
     run(100);
     expect(beams()).toBe(1);
-    lamps.holdLamp({ x: 120, y: 60, angle: Math.PI + 0.2, reach: 80, on: 0.8 });
+    lamps.holdLamp({ x: 120, y: 60, angle: Math.PI + 0.2, reach: 80, on: 0.8, flare: 0 });
     run(100);
     expect(beams()).toBe(2);
     lamps.holdLamp(null);
