@@ -573,8 +573,10 @@ Why this order:
 - **1 and 2 answer what the audit and M-1 found.** Ben waits 7.7 s at the reactor and Anna
   5 s at the Notstrom door, and a third player has too little to do. Both fit the module and
   map contracts without changing a station's rules.
-- **3 and 5 make I-1 concrete.** It was waiting for a shape, and both use what we already
-  have: typing at a terminal and items carried by hand.
+- **3 and 5 grow out of I-1.** I-1 has since taken its own shape, the Zugangskontrolle (a
+  login with two factors and the run's list, `puzzles/access.ts`); the runner's door codes and
+  the card reader stay open as stations beside it, and both use what we already have: typing at
+  a terminal and items carried by hand.
 - **4 is cheap and settles N-6's open question.** Should a first run fail on time? The no-clock
   missions G-2 adds are its tool.
 - **6 and 7 deepen the talk** without new content.
