@@ -49,7 +49,7 @@ jobs:
     # Setup takes 4 to 11 minutes by runner; Blackout runs 7 minutes locally and up to 12
     # on a slow runner since the opening and the gameplay captures, 2 more since the
     # reconnect drill (a crew of three, one away 80 s), 1 more since the restart drill,
-    # Systemcheck up to 8.
+    # Systemcheck up to 8, 4 more since the Übungshalle's drill (224 s locally).
     timeout-minutes: 43
     defaults:
       run:
@@ -77,9 +77,11 @@ jobs:
           node tools/shots.mjs http://localhost:3001 shots-blackout 2>&1
           | tee shots-blackout.log
       - name: Walkthrough (Systemcheck)
-        # Runs after a failed Blackout run too: both sets of screenshots are wanted.
+        # Runs after a failed Blackout run too: both sets of screenshots are wanted. 6 minutes
+        # on main's runner (14.11.2026), up to 8 on a slow one, and the Übungshalle's drill
+        # plays first: 224 s locally, 91 of them at its Zugangskontrolle.
         if: ${{ !cancelled() }}
-        timeout-minutes: 10
+        timeout-minutes: 14
         env:
           SHOTS_MISSION: Systemcheck
           SHOTS_SERVER: packages/server/src/index.ts

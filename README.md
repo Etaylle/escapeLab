@@ -328,7 +328,9 @@ auf einem M4 mit 16 GB (14.11.2026, Last 9 bis 17) 772 s:
 | | | | | `perf` | 22,8 |
 
 `SHOTS_ONLY=screens,intro` spielte Blackout in 48 s; jede Gruppe im Lauf zieht die Mission bis
-zur Siegerkarte mit, und `SHOTS_ONLY=run` allein dauerte 262 s (den Systemcheck 85 s).
+zur Siegerkarte mit, und `SHOTS_ONLY=run` allein dauerte 262 s (den Systemcheck 85 s). Die
+Übungshalle, `hall`, kommt nur im Systemcheck dazu: 224 s (14.11.2026, Last um 19), davon 91 s an
+der Zugangskontrolle, deren Tokengerät erst zum Konto jeder Tür kommen muss.
 
 **Ton und Funkstimme:** Jeder Raum klingt nach seiner Art, die Schritte des Partners kommen von
 dort, wo er steht, und die Musik zieht mit dem Druck an — alles zur Laufzeit erzeugt
