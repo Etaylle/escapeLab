@@ -200,13 +200,6 @@ describe('„Konto löschen" in the settings', () => {
     expect(got.banner).toBeNull();
   });
 
-  it('says an account with a Kennwort takes its Ausweisnummer with it, on every device', () => {
-    const line = deleteLine({ ...ANNA, login: 'EL-7K3M-9Q2D' });
-    expect(line).toContain('Die Ausweisnummer EL-7K3M-9Q2D öffnet danach nichts mehr');
-    expect(line.endsWith('Der Dienstausweis dieses Geräts bleibt.')).toBe(true);
-    expect(deleteLine(ANNA)).not.toContain('Ausweisnummer');
-  });
-
   it('says the account is gone once it is, and shows nothing where there never was one', () => {
     expect(section(null, 'sent').html).toContain(ACCOUNT_DELETED);
     expect(section(null, 'idle').html).toBe('');
@@ -241,6 +234,15 @@ describe('„Konto löschen" in the settings', () => {
     const none = renderToStaticMarkup(<SettingsPanel onClose={noop} tab="konto" />);
     expect(none).not.toContain('Konto');
     expect(none).toContain('<legend>Lautstärke</legend>');
+  });
+});
+
+describe('deleting an account with a Kennwort', () => {
+  it('says the account takes its Ausweisnummer with it, on every device', () => {
+    const line = deleteLine({ ...ANNA, login: 'EL-7K3M-9Q2D' });
+    expect(line).toContain('Die Ausweisnummer EL-7K3M-9Q2D öffnet danach nichts mehr');
+    expect(line.endsWith('Der Dienstausweis dieses Geräts bleibt.')).toBe(true);
+    expect(deleteLine(ANNA)).not.toContain('Ausweisnummer');
   });
 });
 

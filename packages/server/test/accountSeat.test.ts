@@ -199,6 +199,9 @@ describe('a seat bound to the account', () => {
     manager.get(code).dispose();
   });
 
+});
+
+describe('the account’s run on its devices', () => {
   it('shows the account’s run on a device signed into it, and nothing to a guest', async () => {
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
     const store = freshStore();

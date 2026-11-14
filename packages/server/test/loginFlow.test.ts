@@ -201,6 +201,9 @@ describe('a Kennwort for an account', () => {
     expect(await ask(anna, change)).toEqual({ refused: CHANGED_MEANWHILE });
   });
 
+});
+
+describe('the Kennwort, kept to itself', () => {
   it('never says the Kennwort or its hash: not on the line, not in the log', async () => {
     const said = [
       vi.spyOn(console, 'log').mockImplementation(() => undefined),
@@ -309,6 +312,9 @@ describe('signing in', () => {
     }
   });
 
+});
+
+describe('the limits on signing in, over the line', () => {
   it(`locks an Ausweisnummer at ${WRONG_PER_NUMBER} wrong Kennwörter, for all`, async () => {
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
     const { server } = lab();

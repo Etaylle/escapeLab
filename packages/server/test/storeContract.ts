@@ -303,14 +303,6 @@ export function storeContract(name: string, open: () => Promise<Opened>): void {
       expect(await store.runsOfAccount(fresh.id, 10)).toEqual({ total: 0, runs: [] });
     });
 
-    it('takes a deleted account’s login with it', async () => {
-      const { store } = await open();
-      const gone = await accountFor(store, 'Anna', 'EL-7K3M-9Q2D');
-      await store.deleteAccount(gone);
-      expect(await store.findLogin('EL-7K3M-9Q2D')).toBeNull();
-      expect(await store.loginOf(gone)).toBeNull();
-    });
-
     it('takes a deleted account’s name off its runs at once, wherever they are shown', async () => {
       const { store } = await open();
       const gone = await store.getOrCreateByIdentity(identityOf('Anna'), anna);
@@ -341,6 +333,7 @@ export function storeContract(name: string, open: () => Promise<Opened>): void {
   });
 
   loginContract(name, open);
+  signInContract(name, open);
 }
 
 /** The logins and the ways in by them (store.ts `Login`, `signIn`, `signOut`), in either store. */
@@ -388,8 +381,19 @@ function loginContract(name: string, open: () => Promise<Opened>): void {
       expect(await store.replaceLoginSecret(ben, 'next', 'other')).toBe(false);
       expect(await store.loginOf(ben)).toBeNull();
     });
-  });
 
+    it('takes a deleted account’s login with it', async () => {
+      const { store } = await open();
+      const gone = await accountFor(store, 'Anna', 'EL-7K3M-9Q2D');
+      await store.deleteAccount(gone);
+      expect(await store.findLogin('EL-7K3M-9Q2D')).toBeNull();
+      expect(await store.loginOf(gone)).toBeNull();
+    });
+  });
+}
+
+/** Signing a pass in and out by the logins (store.ts `signIn`, `signOut`), in either store. */
+function signInContract(name: string, open: () => Promise<Opened>): void {
   describe(`${name}: signing in and out`, () => {
     it('leads a pass into another account, the empty one it left deleted', async () => {
       const { store } = await open();

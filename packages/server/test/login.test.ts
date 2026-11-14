@@ -118,20 +118,20 @@ describe('the Kennwort', () => {
   });
 });
 
-describe('the limits on signing in', () => {
-  /** What the guard logs: it says when an address is refused, and when an Ausweisnummer locks. */
-  let said: MockInstance<typeof console.log>;
+/** What the guard logs: it says when an address is refused, and when an Ausweisnummer locks. */
+let said: MockInstance<typeof console.log>;
 
+/** A guard on a clock of its own: `pass` moves it. */
+function guarded() {
+  let at = 1_000_000;
+  const guard = new SignInGuard(() => at);
+  return { guard, pass: (ms: number) => (at += ms) };
+}
+
+describe('the limits on signing in', () => {
   beforeEach(() => {
     said = vi.spyOn(console, 'log').mockImplementation(() => undefined);
   });
-
-  /** A guard on a clock of its own: `at` moves it. */
-  function guarded() {
-    let at = 1_000_000;
-    const guard = new SignInGuard(() => at);
-    return { guard, pass: (ms: number) => (at += ms) };
-  }
 
   it(`refuses an address after ${WRONG_PER_ADDRESS} wrong tries in a minute, others not`, () => {
     const { guard, pass } = guarded();
@@ -206,6 +206,13 @@ describe('the limits on signing in', () => {
       guard.wrong(`198.51.100.${i}`, number);
     }
     expect(guard.refusal('203.0.113.9', number)).toBeNull();
+  });
+
+});
+
+describe('the limits letting go', () => {
+  beforeEach(() => {
+    said = vi.spyOn(console, 'log').mockImplementation(() => undefined);
   });
 
   it('lets go of every address and number once its minute and its lock are over', () => {

@@ -409,6 +409,32 @@ describe.skipIf(url === '')('the store in Postgres', () => {
       }
     }, 30_000);
 
+
+    it('says why it does not open where the database cannot be reached', async () => {
+      const nowhere = new URL(url);
+      nowhere.port = '1';
+      await expect(PostgresStore.open(nowhere.toString())).rejects.toThrow(
+        /DATABASE_URL names cannot be reached: .* — check the variable$/,
+      );
+    });
+
+    it('says what to run where the database has no tables yet', async () => {
+      const bare = `${schema}_bare`;
+      await db.$executeRawUnsafe(`CREATE SCHEMA "${bare}"`);
+      try {
+        const empty = new URL(url);
+        empty.searchParams.set('schema', bare);
+        const migrate = 'pnpm --filter @escapelab/server prisma migrate deploy';
+        await expect(PostgresStore.open(empty.toString())).rejects.toThrow(
+          `are its migrations applied? (${migrate}`,
+        );
+      } finally {
+        await db.$executeRawUnsafe(`DROP SCHEMA "${bare}" CASCADE`);
+      }
+    });
+  });
+
+  describe('Postgres alone, at once with another transaction', () => {
     it('takes a second Kennwort set meanwhile only after the first, and refuses it', async () => {
       const store = await openNamed('login-lock');
       const cleo = await accountFor(store, 'Cleo');
@@ -481,27 +507,5 @@ describe.skipIf(url === '')('the store in Postgres', () => {
       expect(await store.runs()).toHaveLength(1);
     });
 
-    it('says why it does not open where the database cannot be reached', async () => {
-      const nowhere = new URL(url);
-      nowhere.port = '1';
-      await expect(PostgresStore.open(nowhere.toString())).rejects.toThrow(
-        /DATABASE_URL names cannot be reached: .* — check the variable$/,
-      );
-    });
-
-    it('says what to run where the database has no tables yet', async () => {
-      const bare = `${schema}_bare`;
-      await db.$executeRawUnsafe(`CREATE SCHEMA "${bare}"`);
-      try {
-        const empty = new URL(url);
-        empty.searchParams.set('schema', bare);
-        const migrate = 'pnpm --filter @escapelab/server prisma migrate deploy';
-        await expect(PostgresStore.open(empty.toString())).rejects.toThrow(
-          `are its migrations applied? (${migrate}`,
-        );
-      } finally {
-        await db.$executeRawUnsafe(`DROP SCHEMA "${bare}" CASCADE`);
-      }
-    });
   });
 });
