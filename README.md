@@ -12,9 +12,11 @@ Serverraum mit Terminal und Rack an zwei Pulten (`servers`), Zugangskontrolle mi
 Tokengerät an zwei Pulten (`access`).
 Layouts/Codes sind pro Partie zufällig (seeded, deterministisch replaybar), Fehler kosten
 Countdown-Zeit. **Missionen:** Tutorial (2 Spieler), Blackout im Labor (2–3 Spieler, 5 Rätsel),
-Kettenreaktion (3 Spieler, jeder startet in einem anderen verschlossenen Raum und kommt nur mit
-Hilfe heraus) und Doppelschicht (4 Spieler in **zwei getrennten Flügeln** — die Regeln jeder
-Station liegen im anderen Flügel, und erst der Druckausgleich öffnet die Schleuse dazwischen).
+die Übungshalle (2–3 Spieler, jede Station der Anlage einmal mit ihren Regeln daneben, in
+beliebiger Reihenfolge und ohne Uhr), Kettenreaktion (3 Spieler, jeder startet in einem anderen
+verschlossenen Raum und kommt nur mit Hilfe heraus) und Doppelschicht (4 Spieler in **zwei
+getrennten Flügeln** — die Regeln jeder Station liegen im anderen Flügel, und erst der
+Druckausgleich öffnet die Schleuse dazwischen).
 
 **Blackout im Labor** (2–3 Spieler, 15 Minuten auf *Normal*): ein Labor von 36 × 22 Feldern, die
 Räume etwa 9 × 7 groß als Ring — Archiv, Flur, Serverraum, Ost-Flur, Reaktor, Süd-Flur, Labor,
@@ -88,9 +90,11 @@ Archivmusik (`docs/sound.md`, Abschnitt „Lizenz“).
 wenn so viele da sind, wie die Mission braucht, und alle bestätigt haben; jede Änderung an
 Mission oder Besetzung setzt die Bestätigungen zurück; die Startplätze werden beim Start
 verlost) → Briefing-Countdown mit dem eigenen Startraum →
-Stationen in Reihenfolge finden und lösen → wenn alle gelöst sind, öffnet sich der **Notausgang**
-und das ganze Team muss ihn gemeinsam erreichen, bevor die Zeit abläuft → Endbildschirm mit
-Statistiken und persönlicher Bestzeit. **Hilfsmittel:** Klick auf die Welt setzt einen **Ping**
+Stationen in Reihenfolge finden und lösen (in einer Mission mit `order: 'free'` in beliebiger:
+jede steht offen, die Crew schaltet eine nach der anderen ein) → wenn alle gelöst sind, öffnet
+sich der **Notausgang** und das ganze Team muss ihn gemeinsam erreichen, bevor die Zeit abläuft
+(eine Mission mit `timeLimitSec: 0` hat keine Uhr und zählt die Zeit nur hoch) → Endbildschirm
+mit Statistiken und persönlicher Bestzeit. **Hilfsmittel:** Klick auf die Welt setzt einen **Ping**
 für alle (farbige Ringe, Pfeil wenn außerhalb des Bildes), `M` blendet die **Minikarte** ein,
 `N` den eigenen **Notizblock** (bleibt für den Raum gespeichert), `C` öffnet den **Schnellchat**
 (acht feste Sätze, Tasten `1`–`8`, erscheinen als Sprechblase über der Figur) — damit
@@ -150,13 +154,19 @@ der Notfälle.
 **Wenn die Leitung abreißt:** Ein laufender Einsatz bindet die Crew wie ein Match in Dota 2.
 Jeder Browser trägt einen Dienstausweis (Kennung und Geheimnis in `localStorage`), an den der
 Server den Platz bindet; der Tab merkt sich nur den Raumcode, ein Neuladen ist sofort zurück im
-Einsatz. Reißt eine Leitung ab, pausiert die Mission für alle (Uhr, Patrouillen, Notfälle), und
-die anderen sehen „Warten auf Ben · 0:12“. Nach 60 Sekunden, bei jedem weiteren Abbruch desselben
-Laufs nach 20, bietet die Karte „Ohne Ben weiter“: Die Uhr läuft wieder, und Stationen der ganzen
-Crew, Luke und Flucht zählen Ben nicht mit, bis er zurück ist. Ist nur noch eine Person verbunden,
-bietet die Karte stattdessen „Einsatz abbrechen“. Das Hauptmenü stellt einen laufenden Einsatz
-als hellen ersten Menüpunkt voran, die übrigen gedimmt („Zurück zum Einsatz“, „Einsatz
-aufgeben“), und sperrt andere Räume;
+Einsatz. Reißt eine Leitung ab, läuft der Einsatz weiter — Uhr, Patrouillen, Notfälle —, wie in
+Overcooked 2 oder Deep Rock Galactic: Bens Avatar bleibt stehen und hält, was er hielt, die
+Patrouillen übersehen ihn, die Leitstelle sagt „Bens Leitung ist weg.“, und die Crew-Leiste zeigt
+ihn grau mit „getrennt · 0:12“; kommt er zurück, spielt er sofort weiter. Nach 60 Sekunden, bei
+jedem weiteren Abbruch desselben Laufs nach 20, bietet die Leiste über der Welt „Ohne Ben weiter“:
+Stationen der ganzen Crew, Luke und Flucht zählen Ben dann nicht mit, bis er zurück ist. Ist nur
+noch eine Person verbunden, bietet sie stattdessen „Einsatz abbrechen“. Still steht ein Einsatz
+nur noch für die Wartung des Servers (Neustart, Deploy), und die wartet nur auf die, deren
+Leitung mit dem Server ging; wer schon vorher getrennt war, bleibt es. Ist niemand der Crew mehr
+verbunden, hält der Einsatz ebenso, ab dem letzten Abbruch, bis der Erste zurück ist („WARTUNG ·
+NIEMAND AUF DER LEITUNG“ auf seiner Karte); der Raum schließt nach 10 Minuten leer wie bisher.
+Das Hauptmenü stellt einen laufenden Einsatz als hellen ersten Menüpunkt voran, die übrigen
+gedimmt („Zurück zum Einsatz“, „Einsatz aufgeben“), und sperrt andere Räume;
 aufgeben gibt den Platz frei, unter der Mindestzahl der Crew endet der Lauf für alle („EINSATZ
 ABGEBROCHEN“). Ein anderes Gerät übernimmt einen getrennten Platz mit Raumcode und genau dessen
 Namen (wie bei Jackbox), sobald jemand aus der Crew es zulässt. Die eigene Seite erkennt eine
@@ -207,8 +217,12 @@ aus `packages/client/audio/catalog.json`, siehe `docs/sound.md`).
 prüft jede davon automatisch: gleiche Zeilenlängen, alles auf Bodenfeldern, eine Station pro
 Rätsel — bei einem Rätsel mit zwei Pulten (Notstrom-Kasten, Signalkette, Serverraum) je eine für
 Pult A und Pult B, mehr als vier Felder auseinander — und per Flutfüllung mit den echten
-Tür-Regeln, dass die Stationen in Reihenfolge erreichbar sind und am Ende **alle** den Notausgang
-erreichen können. Eine Plattentür kann mit `untilSolved` ein Rätsel nennen: Ist es gelöst, bleibt
+Tür-Regeln, dass die Stationen in Reihenfolge erreichbar sind (in freier Reihenfolge jede schon
+ohne eine gelöste) und am Ende **alle** den Notausgang erreichen können — nur eine Mission in
+freier Reihenfolge darf ohne enden, dann gewinnt die letzte Station den Lauf. Die Übungshalle
+(`missions/uebungshalle.json`) entsteht aus der Modulliste: Nach einem neuen Modul schreibt
+`node --import tsx ../core/test/writeHall.ts` (aus `packages/server`) sie samt Harness-Plan neu.
+Eine Plattentür kann mit `untilSolved` ein Rätsel nennen: Ist es gelöst, bleibt
 sie auch ohne Platte offen (Blackout: die Maschinenraumtür nach dem Notstrom). An jeder Station mit
 einem Pult muss außerdem — wohin ihre Regeln auch ausgelost werden — einer am Pult stehen können,
 während ein anderer sie zugleich liest, und an jeder mit zwei Pulten müssen zwei Verschiedene
@@ -291,16 +305,17 @@ selbst, wie die CI, und probt mitten in einem Einsatz den Neustart: SIGTERM, die
 „WARTUNG · Der Server startet neu" auf jeder Seite, und nach dem Neustart alle zurück im Einsatz.
 
 **Nur ein Teil des Rundgangs (Gruppen):** Jede Aufnahme des Rundgangs gehört zu genau einer von
-siebzehn Gruppen (`tools/groups.mjs`); `SHOTS_ONLY=screens,intro` spielt nur diese,
+achtzehn Gruppen (`tools/groups.mjs`); `SHOTS_ONLY=screens,intro` spielt nur diese,
 `SHOTS_SKIP=perf` alle außer diesen — der schnelle Beweis eines Teils. Vor dem Rundgang laufen die
 Proben, jede in einem Raum für sich: `editor`, `art`, `drones` (Gefahrensinn und eine Drohne aus der
 Nähe), `reconnect`, `restart` und `three` (Blackout zu dritt bis zur Signalkette, die Zielzeile mit
 jeder Hand: `three-lever`, `three-plate`, `three-hands`, `three-reader`, `three-phone-932`; der
 Systemcheck nennt sie im Log als ausgelassen) — im Systemcheck dazu die Probe des Serverraums, die
-zu `devices` gehört, und die der Zugangskontrolle, `access` (Blackout nennt beide im Log als
-ausgelassen). Der Rundgang selbst: `screens` (Menü und sein Ton, Bestenliste, Lobby, der Start aus
-ihr), `intro` (die Eröffnung bis `blackout.png`) und `run` (die Mission bis zur Siegerkarte, nach
-dem gewonnenen Systemcheck die Einsätze des Kontos und sein Löschen); im Lauf `devices` (jede Station,
+zu `devices` gehört, die der Zugangskontrolle, `access`, und `hall` (die Übungshalle bis zur
+Siegerkarte); Blackout nennt alle drei im Log als ausgelassen. Der Rundgang selbst: `screens` (Menü
+und sein Ton, Bestenliste, Lobby, der Start aus ihr), `intro` (die Eröffnung bis `blackout.png`)
+und `run` (die Mission bis zur Siegerkarte, nach dem gewonnenen Systemcheck die Einsätze des
+Kontos und sein Löschen); im Lauf `devices` (jede Station,
 auch auf dem quer gehaltenen Handy), `reading` (Quellen, Schild, Notizen der letzten Schicht,
 Notizblock, Bücher), `hud` (das Spiel in jeder Fenstergröße, Einstellungen, Steuerung, Minikarte,
 Sprint), `graphics` (Licht, Leuchten, Figuren, Kamera, Dichte 2), `audio` (Raumklang, Funk, Seite
@@ -334,7 +349,14 @@ auf einem M4 mit 16 GB (14.11.2026, Last 9 bis 17) 772 s:
 75 bis 91 s allein mit `SHOTS_ONLY=three`.
 
 `SHOTS_ONLY=screens,intro` spielte Blackout in 48 s; jede Gruppe im Lauf zieht die Mission bis
-zur Siegerkarte mit, und `SHOTS_ONLY=run` allein dauerte 262 s (den Systemcheck 85 s).
+zur Siegerkarte mit, und `SHOTS_ONLY=run` allein dauerte 262 s (den Systemcheck 85 s). Die
+Übungshalle, `hall`, kommt nur im Systemcheck dazu: 189 s im CI (14.11.2026; der Schritt brauchte
+9:42 seiner 14 Minuten), davon 45,6 s an der Zugangskontrolle, deren Tokengerät alle 15 s zum
+nächsten Konto wechselt; lokal 269 s bei Last um 30, davon 46,5 s an der Zugangskontrolle. Ihre
+Frames misst sie, während 13 von 13 Stationen scharf sind: beim Host an 21,13 zwischen zwei Reihen
+der Halle, 8 von 17 Pulten und 2 von 13 Büchern im Bild (im CI p50 16,7 ms, p95 16,8 ms über 137
+Frames), beim Publikum über die ganze Halle, alle 17 Pulte und 13 Bücher im Bild (p50 16,7 ms, p95
+16,7 ms über 121 Frames).
 
 **Zeitprüfungen unter Last:** Unter `SHOTS_SOFTWARE_GL=1` und auf einer ausgelasteten Maschine
 kommen Screenshots und Abfragen spät. Was eine Bewegung oder einen Zeitpunkt prüft, liest deshalb,
@@ -455,8 +477,9 @@ Betrieb:
   steht, schickt nur, was sich geändert hat. Für eine laufende Partie heißt ein Deploy deshalb eine
   Wartungspause von Sekunden: Die Uhr steht, die Karte sagt „WARTUNG · Der Server startet neu", die
   Seiten verbinden sich wie nach einem Abbruch neu, der neue Server stellt den Raum aus dem
-  mitgebrachten Schnappschuss wieder her, und sobald die Crew zurück ist, läuft die Uhr dort weiter,
-  wo sie stand. Auto-Deploy bleibt an, also ist jeder Push auf `main` ein Deploy; wer pusht, sieht
+  mitgebrachten Schnappschuss wieder her, und sobald zurück ist, wer beim Deploy verbunden war,
+  läuft die Uhr dort weiter, wo sie stand; wer schon vorher getrennt war, bleibt es wie zuvor.
+  Auto-Deploy bleibt an, also ist jeder Push auf `main` ein Deploy; wer pusht, sieht
   in `/health` (`rooms.running`, `rooms.players`), ob gerade gespielt wird. Ein neues Feld im
   Spielzustand braucht im Schnappschuss-Schema (`packages/core/src/snapshot.ts`) einen Vorgabewert,
   sonst verwirft der neue Build die Schnappschüsse des alten, und der Deploy beendet jeden laufenden

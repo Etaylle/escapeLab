@@ -1,5 +1,5 @@
 import type { PlayerPosition, DronePosition, SpectatorView } from '@escapelab/core';
-import { formatLeft, serverNow, timeLeft } from '../clock.js';
+import { clockText, serverNow } from '../clock.js';
 import { useServerNow } from '../hooks.js';
 import type { DeviceRun } from '../puzzles/Device.js';
 import { pressingWord } from '../puzzles/syncPress.js';
@@ -15,10 +15,11 @@ import { RelayConsole } from '../puzzles/RelayPanel.js';
 import { PuzzlePanel } from './PuzzlePanel.js';
 import { Manual } from './Manual.js';
 import { EdgeworkChip } from './EdgeworkChip.js';
-import { CreditsTable, CrewDot, crewTags, CrewTags, type CrewTag } from './Crew.js';
+import { awayFor, CreditsTable, CrewDot, crewTags, CrewTags, type CrewTag } from './Crew.js';
 import { TitleCard, titleCardOf } from './End.js';
 import { FinaleVeil } from './Game.js';
 import { Icon } from './Icon.js';
+import { standstillOf } from './Pause.js';
 import { ListenToggle, SpeakingMark } from './Voice.js';
 
 interface Props {
@@ -41,23 +42,26 @@ function elapsed(startedAt: number | null, at: number): string {
 /**
  * What the audience sees of a crew member: where the server says they stand — pulling or
  * pressing at the sync station while their press waits for the others' — what they hold and
- * carry, and whether they have read the sign.
+ * carry, whether they have read the sign, and for how long they have been away.
  */
 export function audienceTags(
   view: SpectatorView,
   player: SpectatorView['players'][number],
   pos: PlayerPosition | undefined,
 ): CrewTag[] {
-  const pressing = pressingWord(view.puzzle, player.id, serverNow());
-  const tags = crewTags(view.map, player, player.presence, pos, pressing);
+  const now = serverNow();
+  const pressing = pressingWord(view.puzzle, player.id, now);
+  const away = awayFor(view.away, player.id, now);
+  const tags = crewTags(view.map, player, player.presence, pos, pressing, away);
   return player.presence.signSeen ? [...tags, { text: 'Kennung', tone: 'sign' }] : tags;
 }
 
 /**
  * The run around the open device as the audience has it: the crew's alarms and solves, the
- * crew — of which the audience is none — and the latest alarm; it refuses nobody anything.
+ * crew the run counts — of which the audience is none — and the latest alarm; it refuses nobody
+ * anything.
  */
-function audienceRunOf(view: SpectatorView): DeviceRun {
+export function audienceRunOf(view: SpectatorView): DeviceRun {
   return {
     alarms: view.penaltySeq,
     solved: view.currentPuzzleIndex,
@@ -65,7 +69,7 @@ function audienceRunOf(view: SpectatorView): DeviceRun {
     crew: {
       you: null,
       mates: view.players
-        .filter((player) => player.connected)
+        .filter((player) => player.waived !== true)
         .map(({ id, name, color }) => ({ id, name, color })),
     },
     alarm: alarmNotice(view.events, view.alarms),
@@ -199,8 +203,9 @@ export function SpectateScreen({
   chatsRef,
   leaveRoom,
 }: Props) {
-  // The mission's clock on the server's, standing still while the run is paused (clock.ts).
-  const left = timeLeft(view, useServerNow(250));
+  // The mission's clock on the server's, standing still while the run is paused (clock.ts):
+  // the time left, or the time run where the mission has no clock.
+  const shown = clockText(view, useServerNow(250));
   // The audience sees the lights fail too, unless it came in after.
   const darkSince = useDarkSince(view.lights, view.startedAt);
 
@@ -218,9 +223,7 @@ export function SpectateScreen({
           <h1>{view.missionTitle}</h1>
         </div>
         <div className="spectate-stats">
-          {left !== null && view.phase === 'playing' && (
-            <span className="countdown">{formatLeft(left)}</span>
-          )}
+          {shown !== null && view.phase === 'playing' && <span className="countdown">{shown}</span>}
           <span className="pill">
             {view.currentPuzzleIndex}/{view.puzzleCount} Stationen · {view.penaltySeq} Alarme
           </span>
@@ -231,10 +234,9 @@ export function SpectateScreen({
         <div className="banner-result">Die Crew ist noch in der Lobby …</div>
       )}
 
-      {view.pausedFor !== null && (
+      {view.pausedAt !== null && (
         <div className="banner-result">
-          <Icon name="pause" /> Pausiert — warten auf{' '}
-          {view.pausedFor.map((member) => member.name).join(', ')}
+          <Icon name="pause" /> Wartung — {standstillOf(view)}
         </div>
       )}
 
@@ -278,7 +280,9 @@ export function SpectateScreen({
  * GameWorld renders from a player's view; an audience has no player, so we
  * hand it a stand-in whose fields it actually reads in spectator mode.
  */
-function spectatorAsPlayerView(view: SpectatorView): Parameters<typeof GameWorld>[0]['view'] {
+export function spectatorAsPlayerView(
+  view: SpectatorView,
+): Parameters<typeof GameWorld>[0]['view'] {
   return {
     phase: view.phase,
     missionId: '',
@@ -295,6 +299,8 @@ function spectatorAsPlayerView(view: SpectatorView): Parameters<typeof GameWorld
       color: p.color,
       ready: false,
       connected: p.connected,
+      // A main switch has a lever for each of the crew the run counts (render/objects.ts).
+      ...(p.waived === true ? { waived: true as const } : {}),
       isHost: false,
     })),
     palette: [],
@@ -305,7 +311,7 @@ function spectatorAsPlayerView(view: SpectatorView): Parameters<typeof GameWorld
     lights: view.lights,
     currentPuzzleIndex: view.currentPuzzleIndex,
     puzzleCount: view.puzzleCount,
-    pausedFor: view.pausedFor,
+    away: view.away,
     pausedAt: view.pausedAt,
     events: view.events,
     grade: view.grade,

@@ -53,7 +53,7 @@ export const GROUPS = [
     needs: [],
     captures: [
       'reconnect',
-      'pause-waiting.png',
+      'away-badge.png',
       'menu-bound.png',
       'continue-without.png',
       'reconnect-overlay.png',
@@ -97,6 +97,13 @@ export const GROUPS = [
       'three-reader.png',
       'three-phone-932.png',
     ],
+  },
+  {
+    // The Übungshalle played to its won card, in a Systemcheck run.
+    name: 'hall',
+    stage: 'drills',
+    needs: [],
+    captures: ['hall', 'hall-overview.png', 'hall-won.png', 'hall-*.png'],
   },
   {
     name: 'screens',

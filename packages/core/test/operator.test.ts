@@ -16,7 +16,7 @@ import {
   type Mission,
   type RunEvent,
 } from '../src/index.js';
-import { labMission, lineDrops, standing, started, T0 } from './lab.js';
+import { labMission, serverDown, standing, started, T0 } from './lab.js';
 
 /**
  * Mission control's operator answers what a run does, as a person at the desk would: the run's
@@ -182,7 +182,7 @@ describe('the operator calling the clock', () => {
   });
 
   it('stands still while paused, skips what a short run never has, and needs lines to call', () => {
-    const paused = applyAction(started(mission), lineDrops('p2', T0 + 1000));
+    const paused = applyAction(started(mission), serverDown(T0 + 1000));
     expect(clockCallDueAt(paused)).toBeNull();
     // Four minutes on the clock: no „five minutes" at the start, two minutes the first call.
     const short = started(operatorMission({ timeLimitSec: 240 }));
@@ -261,6 +261,15 @@ describe('the operator’s last word on a run', () => {
       ]);
       expect(won.events.at(-1)?.moment).toBe('won');
     }
+  });
+
+  it('debriefs a run without a clock as one with time to spare: none ran short', () => {
+    const clockless = operatorMission({ timeLimitSec: 0 });
+    // Won as late as a ten-minute clock would have had it in its last minute.
+    const solvedAt = T0 + MINUTES_10 - 30_000;
+    const won = solve(solve(started(clockless), solvedAt - 10_000), solvedAt - 5000);
+    expect(won.phase).toBe('won');
+    expect(said(won).filter(([moment]) => moment === 'won')).toEqual([['won', LINES.won.plenty]]);
   });
 
   it('says it as the crew is out, where the mission has a hatch', () => {

@@ -259,6 +259,8 @@ die Entscheidung.
 - Audit: Ben wartet 7,7 s am Reaktor auf die Sicherung, Anna 5 s vor der Notstrom-Tür. Optionen:
   Wartende lesen die nächste Quelle vor, oder eine kleine Nebenaufgabe (Ventil halten). Erst
   nach dem zweiten Playtest entscheiden.
+- Studie G-2, Rang 1 (Keep Talking, Lovers): das Nadelventil — solange eine Station offen ist,
+  wacht daneben alle 40–60 s eine Anzeige auf, die eine Hand braucht; verpasst, ein Alarm.
 
 ### T-5 Größere Räume — Status: erledigt (N-xxl, Merge 2026-11-05; Karte 36×22, Kamera reist 11,7 Kacheln, Sieg des Skripts 462 s) · Größe: L
 - Räume ~9×7 (Serverraum 11×7), Flure 4 breit, Zwei-Kachel-Türen auf den Hauptwegen, Karte
@@ -351,6 +353,9 @@ die Entscheidung.
 - Datenpunkt 2026-11-05, Karte 36×22: Die Skript-Crew gewinnt 462–502 s nach dem Blackout
   (40–43 % von 900 s übrig, davon bis 35 s Warten auf Drohnenlücken); der Harness warnt ab unter
   40 %. Vorschlag: Normal 1000 s (Entspannt/Hart skalieren mit), Entscheidung nach dem Playtest.
+- Studie G-2, Rang 4 (Escape Academy, Escape Simulator): ein Lehrgang ohne Uhr — der erste Lauf
+  einer Crew ohne Uhr, dann Übungshalle, Tutorial und Blackout, je Schritt eine neue Idee; die
+  Missionen ohne Uhr aus G-2 sind das Werkzeug dafür.
 - Plätze je Station (M-three, `core/test/hands.test.ts`), gegen die größte Crew der Mission:
   Blackout hat zu dritt überall genug (Notlicht 3, Notstrom 4, Signalkette 3, Subsysteme 3,
   Frequenz 3, Reaktorstart 4). Die Kettenreaktion (Crew von drei) gibt fünf von sechs Stationen
@@ -420,6 +425,9 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
 - Fehler aus dem Audit: ein Abbruch konnte eine pausierte Partie durch die Flucht beenden.
 - Beweis: Core-, Server-, Client-Tests; Smoke mit 70-s-Abbruch, Aufgeben, Übernahme; Harness
   `pause-waiting`, `continue-without`, `reconnect-overlay`, `rejoin-card`, `takeover`.
+- Die Pause bei Abbruch ist am 2026-11-14 auf Wunsch von Uros ersetzt worden (R-6): Der Lauf geht
+  weiter, „Ohne X weiter" steht seither in der Leiste über der Welt statt auf einer Karte, und die
+  Wartung eines Neustarts wartet nur auf die, die dabei in der Leitung waren.
 
 ### R-4 Funk zwischen Mobilnetzen — Status: wartet (Entscheidung Uros) · Größe: M
 - Ohne TURN-Server verbinden sich zwei Handys in verschiedenen Mobilnetzen meist nicht; STUN ist
@@ -431,7 +439,7 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   Laufende je eine Zeile; `/health` zählt Räume, laufende Partien, Spieler, Zuschauer, nennt
   Laufzeit und Commit (`RENDER_GIT_COMMIT`).
 
-### R-6 Kein Stillstand, wenn eine Leitung abreißt — Status: bereit (Spec `spec-R-nopause.md`, nach U-pause) · Größe: M
+### R-6 Kein Stillstand, wenn eine Leitung abreißt — Status: erledigt (R-nopause, Merge 2026-11-14, 5020329; zwei Review-Runden und zwei Deltas; Cloud-CI grün auf 4b272b7, Check und Walkthrough; Neustart wartet nur auf Plätze, die beim Versiegeln online waren; leere Leitung hält als Wartung) · Größe: M
 - Uros 2026-11-14 mit Screenshot der Karte „MISSION PAUSIERT · Warten auf uros": „Sollte man das
   Spiel im Hintergrund nicht stoppen, wenn jemand weg ist? Alles sollte gleich bleiben und danach
   fortführen." Kehrt die Dota-Pause aus R-3 um: Uhr, Patrouillen und Notfälle laufen weiter, der
@@ -440,6 +448,22 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   gesehen; Notfälle würfeln ohne seine Konsole; „Ohne X weiter" nach 60 s (später 20 s) bleibt in
   Crew-Leiste und HUD, weil Stationen zu zweit bedient werden. Vorbilder: Overcooked 2, Among Us,
   Deep Rock Galactic (die Mission läuft, der Platz bleibt offen).
+- Umgesetzt: `paused` gibt es nur noch für die Wartung; ein Abbruch hält den Avatar samt Platten und
+  Luke, Drohnen übersehen ihn, Konsolen und Ventile brauchen Hände in der Leitung, das Relais
+  würfelt für die Crew in der Leitung neu, sobald eine Leitung 5 s weg ist (ein Neuladen würfelt
+  nichts). Die Leitstelle sagt „Bens Leitung ist weg." einmal an, die Crew-Leiste graut Ben mit
+  „getrennt · 0:12", die Leiste über der Welt bietet nach 60 s (später 20 s) „Ohne Ben weiter" oder
+  allein „Einsatz abbrechen"; die Karte des Hauptmenüs zählt die Uhr herunter. Die Wartung eines
+  Neustarts wartet nur auf die Plätze, die beim SIGTERM (oder im letzten Schnappschuss) in der
+  Leitung waren; wer vorher weg war, bleibt weg wie zuvor, mit der Wartezeit seines Abbruchs — ein
+  Abbruch wird nie über einen Deploy zur Pause (Entscheidung 2026-11-14). Ist niemand der Crew mehr
+  in der Leitung, hält der Lauf ab dem letzten Abbruch als Wartung, bis der Erste zurück ist
+  („WARTUNG · NIEMAND AUF DER LEITUNG"); der Raum schließt nach 10 Minuten leer wie bisher
+  (Entscheidung 2026-11-14).
+- Beweis: Core-, Server-, Client-Tests (auch: eine Crew von zwei, beide weg, einer zurück); Smoke;
+  Harness `away-badge` (Uhr gegen die Wanduhr), `continue-without`, `rejoin-card`; der
+  Neustart-Drill mit Cem, der vor dem SIGTERM weg ist: der Einsatz läuft weiter, sobald Anna und
+  Ben zurück sind.
 
 ## Geplant (2026-11-12, Vorbilder je Punkt)
 
@@ -537,6 +561,8 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
 - Modultests über alle Crewgrößen min..max; Harness mit dritter Spielerin (Cleo) in Blackout mit
   Captures; Zielzeile nennt der dritten Person ihre Aufgabe („Cleo: Platte halten"). Eine echte
   Drei-Pulte-Station oder ein Needy-Objekt nur bei drei Spielenden erst nach Playtest-Daten.
+- Studie G-2, Rang 1 und 8: das Nadelventil als dritte Hand (T-4); das Relais, an dem je Notfall
+  ein Bedienelement ausfällt und seine Anweisung zum nächsten wandert (Spaceteam).
 - Umgesetzt (M-three): Die Modultests spielen jede Mission für jede Crewgröße durch den Reducer,
   Blackout zu zweit und zu dritt, je 200 Seeds ohne Alarm; die dritte Hand liest an Zwei-Pult-
   Stationen und läuft sonst (Teile, Schlüssel, Spind, Platten bis zur Lösung), und an jeder
@@ -554,6 +580,9 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   Among Us (ID-Code ablesen und eintippen; Reaktor mit zwei Händen an zwei Panels).
 - Dazu als eigenes Spielelement: eine Schleuse, die das Terminal fünf Sekunden öffnet, während
   die andere Person läuft (nutzt die vorhandene Bewegung).
+- Studie G-2, Rang 3 und 5: Leitstand mit Türcodes (Lethal Company: wer läuft, liest den Code an
+  der Tür, das Terminal öffnet sie für fünf Sekunden) und Kartenleser mit Gefühl (Among Us: Pult B
+  nennt die Karte, sie geht in einem gedruckten Tempofenster durch den Leser).
 - Umgesetzt als Modul `access` (`docs/gameplay.md`, „The Zugangskontrolle"): Das Terminal nennt
   die angeforderten Türen und nimmt `login`, den Token, `status` und `freigeben`; das
   Tokengerät ist je Periode an ein Konto gebunden und zeigt dessen Token mit ablaufendem
@@ -562,15 +591,17 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   ersten Tür. Falscher Token und Freigabe ohne Berechtigung sind Alarme, drei falsche Token
   sperren das Konto auf der Uhr der Station. Felder `doors`, `tokenSec`, `openSec`,
   `lockSec`. Die Tür offen zu halten, während jemand durchläuft, bleibt Fiktion, keine Regel.
-- Noch in keiner Mission: Probemission `tools/fixtures/access-probe.json`, die der Rundgang im
-  Systemcheck spielt (Gruppe `access`). Offen für N-6: ob und wo die Station in Blackout steht — mit
-  zwei Spielenden muss die Liste vor den Pulten gelesen (oder notiert) werden.
+- Steht in der Übungshalle (G-2) und in der Probemission `tools/fixtures/access-probe.json`, die
+  der Rundgang im Systemcheck spielt (Gruppe `access`). Offen für N-6: ob und wo die Station in
+  Blackout steht — mit zwei Spielenden muss die Liste vor den Pulten gelesen (oder notiert) werden.
 
 ### I-2 Firewall-Regelwerk — Status: wartet (Entscheidung Uros) · Größe: L
 - Pult A zeigt laufende Pakete (Quelle, Ziel, Port), Pult B bearbeitet die Regelliste, erste
   passende Regel gewinnt, Quelle Sicherheitsrichtlinie. Vorbilder: Hacknet und Uplink (Trace-
   Zähler, sobald man drin ist), Exapunks (Regeln im gedruckten Heft).
 - Dritter Entwurf in Reserve: Datensicherung (Plattenarray, Backup-Katalog, Rotationsplan).
+- Studie G-2, Rang 9 (Operation: Tango): beide Hälften zugleich in Bewegung — Pakete fließen an
+  Pult A, während Pult B die Regeln bearbeitet.
 
 ### S-1 Hauptmenü wie ein Spiel — Status: erledigt (S-menu, Merge 2026-11-13; zwei Review-Runden; Szene 1,07 ms je Frame, Menü-Fenster 16,7 ms p95; vier Musik-Einträge warten auf den Render) · Größe: L
 - Uros 2026-11-12 mit Screenshot: „Das soll besser werden wie echte Spiele, Main Menu." Befund
@@ -664,7 +695,7 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   Leisten und Panels im Stil des Hauptmenüs. Vorbilder: Dota 2, Hades, Celeste, Deep Rock,
   Helldivers 2, Overcooked 2.
 
-### G-2 Vorbilder-Studie und Übungshalle — Status: in Arbeit (G-testground, PR 7) · Größe: L
+### G-2 Vorbilder-Studie und Übungshalle — Status: erledigt (G-testground, Merge 2026-11-14, 0deec7d; drei Review-Runden; Cloud-CI grün auf 244bcac, Check und Walkthrough; Hallen-Drill 189 s auf dem Runner) · Größe: L
 - Uros 2026-11-14: „Minispiele und Gameplay-Elemente von wo abschauen; im Tutorial ein Testground,
   wo alle Minispiele testbar und spielbar sind; Gameplay-Verbesserung ist ein anderes Ticket."
 - `docs/gameplay-models.md`: je Vorbild (Keep Talking, Among Us, Spaceteam, We Were Here,
@@ -673,6 +704,45 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   unsere Invarianten, mit einer Rangliste von 8–10 Übernahmen als Backlog-Zeilen. Dazu Missionen
   mit freier Stationsreihenfolge und ohne Uhr, und die Mission „Übungshalle": jede Station einmal,
   Regeln daneben, aus der Modulliste erzeugt, im Harness bis zum Ende gespielt.
+- Umgesetzt: die Studie mit zehn gereihten Übernahmen und dem, was wir bewusst nicht übernehmen;
+  neu daraus G-3 bis G-6, die übrigen hängen an T-4, M-1, I-1, I-2 und N-6. Missionen mit
+  `order: 'free'`: jede Station offen, die Crew wählt, jeweils eine läuft, die Zielzeile zählt
+  die übrigen; mit `timeLimitSec: 0` ohne Uhr: die Leiste zählt hoch, weder Alarm noch Notiz
+  kostet Zeit, keine Anstöße der Leitstelle (`docs/gameplay.md`). Die Übungshalle: 40 × 33
+  Felder, dreizehn Stationen mit siebzehn Pulten (jeder Typ außer dem Relais, das nur als Notfall
+  läuft), je Station Buch und Schild in einer eigenen Nische, Licht von Anfang an, ohne Uhr,
+  Drohnen, Notfälle und Luke (die letzte Station gewinnt den Lauf), 2–3 Spielende; aus der
+  Modulliste erzeugt, im Menü mit „Jede Station zum Üben"; jeder Systemcheck-Rundgang spielt sie
+  vorab als eigene Probe (Gruppe `hall`) bis zum Sieg.
+
+### G-3 Teile aus einer Lösung — Status: wartet (Entscheidung Uros) · Größe: M
+- Studie Rang 2 (Overcooked 2, Among Us): Eine gelöste Station gibt ein Teil aus, das eine andere
+  braucht, etwa eine Sicherung oder eine Lochkarte. In freier Reihenfolge teilt sich eine Crew zu
+  dritt dann in ein Paar an der nächsten Station und eine Person, die das Teil trägt; jede Station
+  behält ihre zwei. Die Teile, ihr Tragen und ihre Ablage gibt es schon (`items`,
+  `requiredFor`), neu ist ein Teil, das erst mit einer Lösung erscheint, und die Validierung,
+  dass es seine Station erreicht. Antwortet auf T-4 und M-1, ohne eine Regel an einer Station zu
+  ändern.
+
+### G-4 Lagetafel — Status: wartet (Entscheidung Uros) · Größe: M
+- Studie Rang 6 (Phasmophobia, das Journal als Gedächtnis der Crew): eine Tafel in der Welt, an
+  die der Notizblock Mitschriften heftet („Anheften"); wer davor steht, sieht alle Zettel der
+  Runde, sonst niemand — die Sicht folgt der Anwesenheit. Angeheftet wird nur, was jemand selbst
+  mitgeschrieben hat, so wie der Notizblock die eigene Abschrift ist; eine Eingabe braucht
+  weiter zwei. Braucht ein Kartenelement `board`, eine Liste der Zettel je Runde im Server und
+  die Sicht der Tafel.
+
+### G-5 Rollentausch in einer Station — Status: wartet (Entscheidung Uros) · Größe: S
+- Studie Rang 7 (We Were Here Together): Die zweite Stufe einer Station nimmt Eingaben nur von
+  der Person, die in der ersten gelesen hat; das Gerät sagt es auf seinem Schild („Stufe 2:
+  Freigabe nur von der Prüfseite"). Ein Wächter im `apply` des Moduls als Schalter je Modul, die
+  Sichten bleiben, wie sie sind; wer liest und wer drückt, tauscht mitten im Gerät.
+
+### G-6 Anhang Laborkennung — Status: wartet (Entscheidung Uros) · Größe: S
+- Studie Rang 10 (Keep Talking, die Anhänge des Handbuchs): eine gedruckte Seite „Anhang:
+  Laborkennung", die Kennung, Kontrollleuchten und Notstromzellen einmal erklärt; jede Regel, die
+  sie liest, verweist darauf, statt sie in eigenen Worten neu zu erklären. Liegt bei jeder Quelle,
+  die eine Station mit Laborkennung abdeckt; die Handbuch-Stimmtests prüfen den Wortlaut.
 
 ### K-1 Konto wie bei Dota — Status: K-1a erledigt (K-accounts, Merge 2026-11-14; vier Review-Runden, Cloud-CI grün mit Postgres-Dienst); K-1b bereit (Entscheidung Uros 2026-11-12: eigene Konten, Google zuletzt) · Größe: L
 - Reihenfolge: **K-1a** Datenbank (Neon-Postgres, Prisma) mit Konto je Dienstausweis (Kennung,

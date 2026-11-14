@@ -1,6 +1,6 @@
 import { crewOf } from './actions.js';
 import { crewFound, findKey } from './discovery.js';
-import { consoleOf, lightsAreOut, solvedYet, stationKey } from './map.js';
+import { consoleOf, solvedYet, stationKey, stationUp } from './map.js';
 import type { Mission } from './mission.js';
 import { moduleFor, type PuzzleDef } from './puzzles/index.js';
 import type { ConsoleId } from './puzzles/module.js';
@@ -62,8 +62,9 @@ interface Hand {
 
 /**
  * The hands at the station in front of the crew, as a view tells them (PlayerView `hands`): the
- * place each of the crew the run counts holds, in crew order, and the places of the station
- * that nobody holds and the crew knows of.
+ * place each of the crew the run counts holds, in crew order — whoever is away only where their
+ * avatar holds a plate or a part still, since they have no hand free —, and the places of the
+ * station that nobody holds and the crew knows of.
  */
 export interface HandsView {
   held: Hand[];
@@ -71,18 +72,23 @@ export interface HandsView {
 }
 
 /**
- * The hands at the armed station for a crew of HANDS_FROM or more, from presence — the
- * server's word of who stands where — and the parts in hand; null for a smaller crew, and while
- * no station is armed: before the lights go out, and once the last one is solved.
+ * The hands at the station up (map.ts `stationUp`) for a crew of HANDS_FROM or more, from
+ * presence — the server's word of who stands where — and the parts in hand; null for a smaller
+ * crew, and while no station is up: before the lights go out, while a free-order run waits for
+ * its pick — every station still to solve armed, none the crew's yet —, and once the last one is
+ * solved.
  */
 export function handsOf(state: GameState): HandsView | null {
-  const def = state.mission.puzzles[state.currentPuzzleIndex];
+  const def = stationUp(state);
   const crew = crewOf(state).map((player) => player.id);
-  if (!lightsAreOut(state) || def === undefined || crew.length < HANDS_FROM) {
+  if (def === null || crew.length < HANDS_FROM) {
     return null;
   }
+  const held = crew.map((playerId) => ({ playerId, place: placeHeld(state, def, playerId) }));
+  const handFree = ({ playerId, place }: Hand): boolean =>
+    place !== null || state.away[playerId] === undefined;
   return {
-    held: crew.map((playerId) => ({ playerId, place: placeHeld(state, def, playerId) })),
+    held: held.filter(handFree),
     open: placesOf(state.mission, def.id).filter((place) => isOpen(state, def, crew, place)),
   };
 }

@@ -50,7 +50,8 @@ jobs:
     # on a slow runner since the opening and the gameplay captures, 2 more since the
     # reconnect drill (a crew of three, one away 80 s), 1 more since the restart drill,
     # 2 more since the three drill (a crew of three to the Signalkette, 75 s on a runner),
-    # Systemcheck up to 8.
+    # Systemcheck up to 8, 3 more since the Übungshalle's drill (189 s in CI): setup, 19 and 14
+    # minutes of the two steps fit into the job's 45.
     timeout-minutes: 45
     defaults:
       run:
@@ -78,9 +79,15 @@ jobs:
           node tools/shots.mjs http://localhost:3001 shots-blackout 2>&1
           | tee shots-blackout.log
       - name: Walkthrough (Systemcheck)
-        # Runs after a failed Blackout run too: both sets of screenshots are wanted.
+        # Runs after a failed Blackout run too: both sets of screenshots are wanted. 6 minutes
+        # on main's runner (14.11.2026), up to 8 on a slow one; the Übungshalle's drill, the
+        # last before the run itself, adds 189 s in CI, 45.6 of them at the Zugangskontrolle
+        # (14.11.2026: the step took 9:42 of its 14), and 269 s locally under a load of 30. Its
+        # frames are sampled with 13 of 13 stations armed: the host's at 21,13 between two rows
+        # of bays (137 frames, p95 16.8 ms, 8 of 17 beacons and 2 of 13 books in view), the
+        # audience's on the whole hall (121 frames, p95 16.7 ms, 17 of 17 and 13 of 13).
         if: ${{ !cancelled() }}
-        timeout-minutes: 10
+        timeout-minutes: 14
         env:
           SHOTS_MISSION: Systemcheck
           SHOTS_SERVER: packages/server/src/index.ts

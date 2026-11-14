@@ -25,6 +25,7 @@ import { noteKey } from './notes.js';
 import { pickLine } from './radio.js';
 import {
   CREW_COLORS,
+  type Away,
   type Credits,
   type GameState,
   type MenuPlace,
@@ -32,21 +33,21 @@ import {
   type RunEvent,
 } from './state.js';
 import { moduleFor, type PuzzleView } from './puzzles/index.js';
-import { crewOf, waitingFor } from './actions.js';
+import { crewOf, emergencyDef, hasClock } from './actions.js';
 import { gradeOf, type Grade } from './grade.js';
 import { clockStartOf, runReport } from './report.js';
 import type { ConsoleId, ManualSection, Viewer, ViewContext } from './puzzles/module.js';
-import { relayDefFor, relayModule, type RelayDef, type RelayView } from './puzzles/relay.js';
+import { relayModule, type RelayDef, type RelayView } from './puzzles/relay.js';
 import {
   backupsOf,
   consoleOf,
   doorOpen,
   intercomOf,
-  lightsAreOut,
   operatorsOf,
   platePressed,
   readersOf,
   sourceOpen,
+  stationArmed,
 } from './map.js';
 
 /**
@@ -56,7 +57,7 @@ import {
  * edgework on the sign never reach a client that is not there, so no amount
  * of DevTools digging can leak them.
  */
-export interface PlayerView {
+export interface PlayerView extends RunShape {
   phase: Phase;
   missionId: string;
   missionTitle: string;
@@ -93,27 +94,30 @@ export interface PlayerView {
   deadlineAt: number | null;
   startedAt: number | null;
   finishedAt: number | null;
+  /** seconds on the clock at the start; 0 for a mission without a clock (`clockFrom`) */
   timeLimitSec: number;
   /** whether the lights are out, and since when (epoch ms); see `Lights` */
   lights: Lights;
-  /** solved puzzles so far (== index of the current one); independent of station activation */
+  /**
+   * solved puzzles so far (== index of the current one, in the run's order); independent of
+   * station activation
+   */
   currentPuzzleIndex: number;
   puzzleCount: number;
   /**
-   * set while the run stands still for crew members away: whom it waits for, each with since
-   * when and from when the crew may go on without them (`continue-without`)
+   * the crew members away from the run — their line down, or gone to the main menu, their seat
+   * kept — oldest first, each with since when, from when the crew may go on without them
+   * (`continue-without`) and whether it has; empty while everybody is on the line, and outside
+   * a run. The run goes on meanwhile, but for the server's maintenance (`pausedAt`), which waits
+   * for those whose line went down with the server (`maintenance`)
    */
-  pausedFor: AwayView[] | null;
+  away: AwayView[];
   /**
-   * since when the run stands frozen, epoch ms; null while it runs. The mission clock stands
-   * at it — the pause moves every deadline on by its length once it is over
+   * since when the run stands frozen for the server's maintenance — a deploy or a restart put
+   * every seat away — epoch ms; null while it runs, whoever is away. The mission clock stands
+   * at it, and the pause moves every deadline on by its length once it is over
    */
   pausedAt: number | null;
-  /**
-   * the run stands frozen for the server's maintenance (pause kind `wartung`): a deploy or a
-   * restart put every seat away; left out while it runs, or stands frozen for a line dropped
-   */
-  maintenance?: true;
   /**
    * seats of the crew a new device asks to take over, each until when the ask waits for the
    * crew on the line to let it in (`takeover-answer`); left out while nobody asks
@@ -204,7 +208,7 @@ export interface TakeoverView {
   until: number;
 }
 
-/** A crew member the run waits for, away since their line dropped. */
+/** A crew member away from the run since their line dropped. */
 export interface AwayView {
   id: string;
   name: string;
@@ -214,6 +218,13 @@ export interface AwayView {
   waivableAt: number;
   /** their line closed on purpose, gone to the main menu, the seat kept; left out for a drop */
   menu?: true;
+  /** the crew went on without them (`continue-without`); left out while it misses them */
+  waived?: true;
+  /**
+   * their line went down with the server for its maintenance: a run standing still for it
+   * (`pausedAt`) waits for them; left out for a line that dropped on its own
+   */
+  maintenance?: true;
 }
 
 /**
@@ -232,6 +243,36 @@ export interface IntroView {
   lightsSec: number;
   /** who of the crew has seen enough of it this run, by player id */
   done: string[];
+}
+
+/**
+ * How a run differs from the usual chain against a clock, as every view tells it — each part
+ * left out where it does not.
+ */
+export interface RunShape {
+  /**
+   * where the mission has no clock (`timeLimitSec` 0) and its lights are out: the moment its
+   * clock counts up from, epoch ms — the lights going out, moved on by every pause since —
+   * which the screens show the time run against, standing still while the run is paused
+   */
+  clockFrom?: number;
+  /**
+   * the stations are taken in any order (`Mission['order']` 'free'): every one still to solve is
+   * armed until the crew switches one on, which is theirs until solved
+   */
+  freeOrder?: true;
+  /** the mission has no hatch (`map.exit` left out): the solve of its last station wins the run */
+  noHatch?: true;
+}
+
+/** The run's shape (`RunShape`) as the views tell it. */
+function runShapeOf(state: GameState): RunShape {
+  const from = hasClock(state.mission) ? null : state.clockFrom;
+  return {
+    ...(from === null ? {} : { clockFrom: from }),
+    ...(state.mission.order === 'free' ? { freeOrder: true } : {}),
+    ...(state.mission.map.exit === undefined ? { noHatch: true } : {}),
+  };
 }
 
 /**
@@ -288,7 +329,7 @@ export interface ManualHere {
     noteReadyAt: number | null;
     /** how many more notes there are; 0 unless this is the open station */
     notesLeft: number;
-    /** seconds the next note costs, already scaled to the difficulty */
+    /** seconds the next note costs, already scaled to the difficulty; 0 without a clock */
     costSec: number;
   }[];
 }
@@ -429,7 +470,10 @@ export interface MapView {
   labels: { text: string; x: number; y: number; kind?: RoomKind }[];
   /** the furniture on the floor: solid for every step, as walls are */
   decor: { kind: DecorKind; x: number; y: number; variant?: number }[];
-  /** labels of the rooms whose lights the solved stations have switched on, first lit first */
+  /**
+   * labels of the rooms whose lights are on, first lit first: every room of a mission whose
+   * lights stay on (`Mission['lit']`), then those the solved stations have switched on
+   */
   litRooms: string[];
   /** escape hatch; open once every puzzle is solved */
   exit: {
@@ -505,6 +549,7 @@ function gradeFor(state: GameState): Grade | null {
     budgetMs: state.mission.timeLimitSec * 1000,
     alarms: state.penaltySeq,
     hints: state.hintsUsed,
+    hatch: state.mission.map.exit !== undefined,
   });
 }
 
@@ -613,7 +658,7 @@ function sectionsOf(state: GameState, manual: ManualDef): ManualHere['sections']
         notes: index === open ? def.hints.slice(0, state.hintsRevealed) : [],
         noteReadyAt: notesLeft > 0 ? state.hintReadyAt : null,
         notesLeft,
-        costSec: state.mission.hintCostSec,
+        costSec: hasClock(state.mission) ? state.mission.hintCostSec : 0,
       },
     ];
   });
@@ -703,20 +748,19 @@ function viewerOf(state: GameState, puzzleId: string, playerId: string | null): 
 
 /**
  * The running relay emergency as one player sees it, with the def it runs on — a console for
- * each of the crew the run counts (`crewOf`), none for whom it went on without; null outside a
- * running run, whose crew the emergency no longer matches once somebody left, in valves mode
- * and between emergencies.
+ * each of the crew it was rolled for (actions.ts `emergencyDef`), none for whoever is away
+ * longer than a page takes to load anew; null outside a running run, whose crew the emergency
+ * no longer matches once somebody left, in valves mode and between emergencies.
  */
 function relayViewFor(
   state: GameState,
   playerId: string | null,
 ): { def: RelayDef; view: RelayView } | null {
-  const sabotage = state.mission.map.sabotage;
   const emergency = state.sabotage?.emergency;
-  if (state.phase !== 'playing' || sabotage === undefined || emergency === undefined) {
+  if (state.phase !== 'playing' || emergency === undefined) {
     return null;
   }
-  const def = relayDefFor(crewOf(state), sabotage);
+  const def = emergencyDef(state, emergency);
   return { def, view: relayModule.view(def, emergency, playerId, viewContext(state, null)) };
 }
 
@@ -732,12 +776,15 @@ function relayPartFor(
 /** Who a map view is for: a player, or the audience (null), which has everything in sight. */
 type MapViewer = string | null;
 
-/** A station's state on the map: solved, up now — once the lights are out — or still to come. */
+/**
+ * A station's state on the map: solved, armed — up now once the lights are out, or any still to
+ * solve while a free-order run waits for its pick (map.ts `stationArmed`) — or still to come.
+ */
 function stationStatus(state: GameState, index: number): 'done' | 'armed' | 'locked' {
   if (index < state.currentPuzzleIndex) {
     return 'done';
   }
-  return index === state.currentPuzzleIndex && lightsAreOut(state) ? 'armed' : 'locked';
+  return stationArmed(state, index) ? 'armed' : 'locked';
 }
 
 /** A station spot's look: a main switch, a fuse box, or a plain console (null). */
@@ -962,10 +1009,15 @@ function exitOf(state: GameState): MapView['exit'] {
   };
 }
 
-/** The rooms the solved stations have lit, each once, in the order they lit up. */
+/**
+ * The rooms lit, each once, in the order they lit up: in a mission whose lights stay on
+ * (`Mission['lit']`) every room the map names, from the start; then those the solved stations
+ * have lit.
+ */
 function litRoomsOf(state: GameState): string[] {
+  const named = state.mission.lit ? state.mission.map.labels.map((label) => label.text) : [];
   const solved = state.mission.puzzles.slice(0, state.currentPuzzleIndex);
-  return [...new Set(solved.flatMap((puzzle) => puzzle.lights))];
+  return [...new Set([...named, ...solved.flatMap((puzzle) => puzzle.lights)])];
 }
 
 function mapViewFor(state: GameState, viewer: MapViewer): MapView | null {
@@ -1035,7 +1087,7 @@ function mapViewFor(state: GameState, viewer: MapViewer): MapView | null {
  * revealing everything is the point — watching the halves fail to line up
  * is the fun part.
  */
-export interface SpectatorView {
+export interface SpectatorView extends RunShape {
   phase: Phase;
   /** the mission's catalog id: its booklet opens by it from the audience's menu */
   missionId: string;
@@ -1054,9 +1106,9 @@ export interface SpectatorView {
   /** the alarms so far and how many end the run, as the players see them */
   alarms: PlayerView['alarms'];
   hintsUsed: number;
-  /** whom the run waits for, as the players see it */
-  pausedFor: AwayView[] | null;
-  /** since when the run stands frozen, as the players see it */
+  /** the crew members away from the run, as the players see them */
+  away: AwayView[];
+  /** since when the run stands frozen for the server's maintenance, as the players see it */
   pausedAt: number | null;
   events: RunEvent[];
   /** why the run was called off, as the players see it; left out for any other run */
@@ -1089,28 +1141,36 @@ export interface SpectatorView {
 }
 
 /**
- * Whom the run waits for while it stands still, oldest drop first, and who of them went to the
- * main menu; null while it runs on.
+ * The crew members away from the run, oldest drop first, each with its marks (`awayMarks`);
+ * none outside a run.
  */
-function pausedFor(state: GameState): AwayView[] | null {
-  if (state.paused === null) {
-    return null;
+function awayOf(state: GameState): AwayView[] {
+  if (state.phase !== 'playing') {
+    return [];
   }
-  return waitingFor(state)
-    .flatMap((id) => {
-      const away = state.away[id];
+  return Object.entries(state.away)
+    .flatMap(([id, away]) => {
       const name = state.players.find((p) => p.id === id)?.name;
-      const menu = state.menus[id] === 'main' ? { menu: true as const } : {};
-      return away === undefined || name === undefined
-        ? []
-        : [{ id, name, since: away.since, waivableAt: away.waivableAt, ...menu }];
+      const at = { since: away.since, waivableAt: away.waivableAt };
+      return name === undefined ? [] : [{ id, name, ...at, ...awayMarks(state, id, away) }];
     })
     .sort((a, b) => a.since - b.since);
 }
 
-/** That the run stands still for the server's maintenance; nothing while it runs or waits else. */
-function maintenanceOf(state: GameState): { maintenance?: true } {
-  return state.paused?.kind === 'wartung' ? { maintenance: true } : {};
+/**
+ * What marks a crew member away: gone to the main menu, gone on without, gone with the server
+ * for its maintenance; nothing for a line that dropped.
+ */
+function awayMarks(
+  state: GameState,
+  id: string,
+  away: Away,
+): Pick<AwayView, 'menu' | 'waived' | 'maintenance'> {
+  return {
+    ...(state.menus[id] === 'main' ? { menu: true as const } : {}),
+    ...(away.waived ? { waived: true as const } : {}),
+    ...(away.maintenance === true ? { maintenance: true as const } : {}),
+  };
 }
 
 /** The seats a new device asks to take over in the run on, for its crew; nothing while none. */
@@ -1155,13 +1215,14 @@ export function viewForSpectator(state: GameState): SpectatorView {
     startedAt: state.startedAt,
     finishedAt: state.finishedAt,
     timeLimitSec: state.mission.timeLimitSec,
+    ...runShapeOf(state),
     lights: lightsOf(state),
     currentPuzzleIndex: state.currentPuzzleIndex,
     puzzleCount: state.mission.puzzles.length,
     penaltySeq: state.penaltySeq,
     alarms: alarmsOf(state),
     hintsUsed: state.hintsUsed,
-    pausedFor: pausedFor(state),
+    away: awayOf(state),
     pausedAt: state.paused?.since ?? null,
     events: [...state.events],
     ...calledOffOf(state),
@@ -1230,12 +1291,12 @@ export function viewFor(state: GameState, playerId: string): PlayerView {
     startedAt: state.startedAt,
     finishedAt: state.finishedAt,
     timeLimitSec: state.mission.timeLimitSec,
+    ...runShapeOf(state),
     lights: lightsOf(state),
     currentPuzzleIndex: state.currentPuzzleIndex,
     puzzleCount: state.mission.puzzles.length,
-    pausedFor: pausedFor(state),
+    away: awayOf(state),
     pausedAt: state.paused?.since ?? null,
-    ...maintenanceOf(state),
     ...takeoversOf(state),
     events: [...state.events],
     ...calledOffOf(state),

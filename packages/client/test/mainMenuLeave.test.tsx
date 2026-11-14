@@ -6,7 +6,7 @@ import { GUARD, guardHistory, guarded, SPENT, type GuardedWindow } from '../src/
 import { crewTags } from '../src/screens/Crew.js';
 import { GiveUpAsk, giveUpLines } from '../src/screens/GiveUp.js';
 import { hostNews, startBlocker } from '../src/screens/Lobby.js';
-import { PauseCard, wentToMenu } from '../src/screens/Pause.js';
+import { PauseCard } from '../src/screens/Pause.js';
 import { PAUSE_LABELS, pauseItems } from '../src/screens/PauseMenu.js';
 
 const noop = (): void => undefined;
@@ -67,23 +67,24 @@ describe('giving a run’s seat up from the menu', () => {
 });
 
 describe('the crew’s word of who went to the main menu', () => {
-  it('stands on the waiting card under whom it waits for', () => {
+  it('stands on no maintenance card: whoever went is not waited for there', () => {
     const away = [
       { id: 'p2', name: 'Ben', since: 1, waivableAt: 2, menu: true as const },
-      { id: 'p3', name: 'Cem', since: 1, waivableAt: 2 },
+      { id: 'p3', name: 'Cem', since: 5, waivableAt: 6, maintenance: true as const },
     ];
-    expect(wentToMenu(away)).toBe('Ben ist ins Hauptmenü gegangen.');
-    expect(wentToMenu(away.map((member) => ({ ...member, menu: true as const })))).toBe(
-      'Ben und Cem sind ins Hauptmenü gegangen.',
-    );
-    expect(wentToMenu([{ name: 'Cem' }])).toBe('');
     const view = {
-      players: [mate('p1'), mate('p2', { connected: false, menu: 'main' })],
-      pausedFor: [away[0]],
-      pausedAt: 1,
+      players: [
+        mate('p1'),
+        mate('p2', { connected: false, menu: 'main' }),
+        mate('p3', { connected: false }),
+      ],
+      away,
+      pausedAt: 5,
     } as unknown as PlayerView;
     const html = renderToStaticMarkup(<PauseCard view={view} send={noop} />);
-    expect(html).toContain('<p class="pause-gone">Ben ist ins Hauptmenü gegangen.</p>');
+    expect(html).toContain('Warten auf Cem · ');
+    expect(html).not.toContain('Ben');
+    expect(html).not.toContain('Hauptmenü');
   });
 
   it('marks them in the strip as in the main menu, not as a line down', () => {

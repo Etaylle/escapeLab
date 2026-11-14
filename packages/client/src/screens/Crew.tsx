@@ -1,6 +1,7 @@
 import {
   CREW_COLORS,
   NO_CREDITS,
+  type AwayView,
   type Credits,
   type MapView,
   type MenuPlace,
@@ -10,10 +11,28 @@ import { consoleName } from '../world/consoles.js';
 import { carriedItem } from '../world/interact.js';
 import { isArmed } from '../world/known.js';
 import { near, type Whereabouts } from '../world/presence.js';
+import { pauseClock } from './Pause.js';
 
 /** How many play a mission: „2 Spieler", or „2–3 Spieler" where the count may vary. */
 export function crewSizeText({ min, max }: { min: number; max: number }): string {
   return min === max ? `${min} Spieler` : `${min}–${max} Spieler`;
+}
+
+/** How long a mission's clock runs: „15 min", or „ohne Uhr" for one that has none. */
+export function clockSizeText(timeLimitSec: number): string {
+  return timeLimitSec === 0 ? 'ohne Uhr' : `${Math.round(timeLimitSec / 60)} min`;
+}
+
+/**
+ * A mission's clock in a line of its facts, the separator after it: „15 min ·", or „ohne Uhr
+ * ·". The minutes stand in a text node of their own, as the lines always had them: the browser
+ * shapes text node by text node, and a line with a clock lays out to the pixel as before.
+ */
+export function ClockFact({ timeLimitSec }: { timeLimitSec: number }) {
+  if (timeLimitSec === 0) {
+    return <>{clockSizeText(timeLimitSec)} ·</>;
+  }
+  return <>{Math.round(timeLimitSec / 60)} min ·</>;
 }
 
 /**
@@ -66,24 +85,23 @@ function atStation(armed: MapView['stations'][number], at: Whereabouts): string 
 }
 
 /**
- * What someone does at the armed station: „zieht" or „drückt" while their press there waits
- * for the rest of the crew (`pressing`), else that they stand at it; null away from it.
+ * What someone does at an armed station: „zieht" or „drückt" while their press there waits
+ * for the rest of the crew (`pressing`), else that they stand at it; null away from every one.
  */
 function stationTag(map: MapView | null, at: Whereabouts, pressing: string | null): CrewTag | null {
   if (pressing !== null) {
     return { text: pressing, tone: 'press' };
   }
-  // A station with two consoles is armed at both; either one has its puzzle id.
-  const armed = map?.stations.find(isArmed);
-  return armed !== undefined && at.stationId === armed.puzzleId
-    ? { text: atStation(armed, at), tone: 'pult' }
-    : null;
+  // A station with two consoles is armed at both; either one has its puzzle id. While a
+  // free-order run waits for the crew's pick, every station still to solve is armed.
+  const armed = map?.stations.find((s) => isArmed(s) && s.puzzleId === at.stationId);
+  return armed === undefined ? null : { text: atStation(armed, at), tone: 'pult' };
 }
 
 /**
  * What one crew member is doing right now: at the pause menu over the run, which the run goes
  * on under — first, since nothing else they do moves on meanwhile —, and what they do there
- * (`doing`). A member whose line is down is only that, or gone to the main menu, their seat kept.
+ * (`doing`). A member whose line is down is only that (`awayTag`).
  */
 export function crewTags(
   map: MapView | null,
@@ -91,12 +109,35 @@ export function crewTags(
   at: Whereabouts,
   pos: PlayerPosition | undefined,
   pressing: string | null = null,
+  awayMs: number | null = null,
 ): CrewTag[] {
   if (!player.connected) {
-    return [{ text: player.menu === 'main' ? 'im Hauptmenü' : 'getrennt', tone: 'away' }];
+    return [awayTag(player.menu, awayMs)];
   }
   const menu: CrewTag[] = player.menu === 'pause' ? [{ text: 'im Menü', tone: 'menu' }] : [];
   return [...menu, ...doing(map, player.id, at, pos, pressing)];
+}
+
+/**
+ * What a crew member whose line is down shows: that, or gone to the main menu, their seat kept
+ * — for how long, where the screen knows it (`awayMs`, `awayFor`).
+ */
+function awayTag(menu: MenuPlace | undefined, awayMs: number | null): CrewTag {
+  const where = menu === 'main' ? 'im Hauptmenü' : 'getrennt';
+  return { text: awayMs === null ? where : `${where} · ${pauseClock(awayMs)}`, tone: 'away' };
+}
+
+/**
+ * How long the crew member `playerId` has been away from the run at server time `now`, ms, by
+ * the view's list of those away; null for one on the line.
+ */
+export function awayFor(
+  away: readonly Pick<AwayView, 'id' | 'since'>[],
+  playerId: string,
+  now: number,
+): number | null {
+  const member = away.find((gone) => gone.id === playerId);
+  return member === undefined ? null : Math.max(0, now - member.since);
 }
 
 /**

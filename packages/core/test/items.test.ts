@@ -8,7 +8,7 @@ import {
   viewFor,
 } from '../src/index.js';
 import type { Action, GameState, Mission } from '../src/index.js';
-import { lineDrops, standing } from './lab.js';
+import { serverDown, standing } from './lab.js';
 
 /** A corridor with a crate at one end and its slot at the other. */
 const mission: Mission = parseMission({
@@ -180,15 +180,15 @@ describe('carryable items', () => {
     ).not.toBeNull();
   });
 
-  it('cannot be touched again once delivered, or while paused', () => {
+  it('cannot be touched again once delivered, or while the server’s maintenance lasts', () => {
     const delivered = run(
       [pick('p1'), { type: 'deliver-item', playerId: 'p1', itemId: 'sicherung', at: T0 + 2000 }],
       atGatedStation(),
     );
     expect(() => applyAction(delivered, pick('p2'))).toThrow(/bereits abgeliefert/);
 
-    const paused = applyAction(playing(), lineDrops('p2', T0 + 500));
-    expect(() => applyAction(paused, pick('p1'))).toThrow(/Pausiert/);
+    const paused = applyAction(playing(), serverDown(T0 + 500));
+    expect(() => applyAction(paused, pick('p1'))).toThrow(/Wartung/);
   });
 
   it('rejects an item required for a puzzle that does not exist', () => {
