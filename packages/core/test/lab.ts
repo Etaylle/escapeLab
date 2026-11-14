@@ -199,35 +199,29 @@ export function lightsOut(state: GameState, at = T0): GameState {
   return applyAction(state, { type: 'lights-out', at });
 }
 
+/** The server's report of who stands where, as the reducer takes it. */
+type PresenceReport = Omit<Extract<Action, { type: 'set-presence' }>, 'type'>;
+
+/** Nobody anywhere at T0: what `standing` reports where it is told nothing else. */
+const NOBODY_HERE: PresenceReport = {
+  stations: {},
+  manuals: {},
+  notes: {},
+  plates: {},
+  signSeen: [],
+  found: {},
+  sight: {},
+  exit: [],
+  at: T0,
+};
+
 /**
- * Who stands where, the way the server reports it from positions: what each
- * player has just found at `at` and what each has in sight (discovery.ts
- * keys, by player id).
+ * Who stands where, the way the server reports it from positions: at the station spots, the
+ * manual objects, the notes and on the plates, past the sign, on the hatch, what each player
+ * has just found at `at` and what each has in sight (discovery.ts keys, by player id).
  */
-export function standing(
-  state: GameState,
-  where: {
-    stations?: Record<string, string[]>;
-    manuals?: Record<string, string[]>;
-    notes?: Record<string, string[]>;
-    signSeen?: string[];
-    found?: Record<string, string[]>;
-    sight?: Record<string, string[]>;
-    exit?: string[];
-    at?: number;
-  },
-): GameState {
-  return applyAction(state, {
-    type: 'set-presence',
-    stations: where.stations ?? {},
-    manuals: where.manuals ?? {},
-    notes: where.notes ?? {},
-    signSeen: where.signSeen ?? [],
-    found: where.found ?? {},
-    sight: where.sight ?? {},
-    exit: where.exit ?? [],
-    at: where.at ?? T0,
-  });
+export function standing(state: GameState, where: Partial<PresenceReport>): GameState {
+  return applyAction(state, { type: 'set-presence', ...NOBODY_HERE, ...where });
 }
 
 /**

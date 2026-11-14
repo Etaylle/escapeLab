@@ -563,6 +563,25 @@ describe('Room', () => {
     room.dispose();
   });
 
+  it('says who holds a plate, by the reach that holds it, and nobody once they step off', () => {
+    const blackout = load('blackout');
+    const plate = blackout.map.plates.find((p) => p.id === 'flurplatte') ?? { x: 0, y: 0 };
+    const { room, anna, ben } = startedRoom(blackout);
+    const onPlates = () => room.snapshot().state.presence.plates;
+    expect(onPlates()).toEqual({});
+    moveTo(room, anna, plate.x, plate.y);
+    expect(onPlates()).toEqual({ flurplatte: [anna.playerId] });
+    // Pressed, the plate keeps its holder past its press reach (0.55) up to its release reach
+    // (0.75): 0.64 off, in its tile's corner, Anna still holds it.
+    placeAt(room, anna, plate.x + 0.95, plate.y + 0.95);
+    expect(onPlates()).toEqual({ flurplatte: [anna.playerId] });
+    expect(lastView(ben.messages).map?.plates[0]?.pressed).toBe(true);
+    placeAt(room, anna, plate.x + 1.7, plate.y + 0.5);
+    expect(onPlates()).toEqual({});
+    expect(lastView(ben.messages).map?.plates[0]?.pressed).toBe(false);
+    room.dispose();
+  });
+
   it('broadcasts a loss when the mission timer expires', () => {
     const { room, anna } = startedRoom();
 

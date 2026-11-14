@@ -159,6 +159,8 @@ const presenceSchema = z.looseObject({
   stations: idsBy,
   manuals: idsBy,
   notes: idsBy,
+  // kept since M-three: a snapshot from before has nobody on a plate until the crew is back
+  plates: idsBy.default({}),
   signSeen: ids,
   exit: ids,
   sight: idsBy,

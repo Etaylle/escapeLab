@@ -54,6 +54,11 @@ export interface Presence {
   manuals: Record<string, string[]>;
   /** players at each note of the last shift, by its index as text (`noteKey`) */
   notes: Record<string, string[]>;
+  /**
+   * players standing on each plate, by its id: whoever holds it pressed (`pressedPlates`, which
+   * the doors and drones go by), counted by the same reach — the hands of the crew name them
+   */
+  plates: Record<string, string[]>;
   /** players who have walked up to the edgework sign; kept for the rest of the run */
   signSeen: string[];
   /** players standing on the open exit hatch right now; nobody before the escape */
@@ -72,6 +77,7 @@ export const NOBODY_PRESENT: Presence = {
   stations: {},
   manuals: {},
   notes: {},
+  plates: {},
   signSeen: [],
   exit: [],
   sight: {},
