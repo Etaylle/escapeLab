@@ -187,14 +187,39 @@ function clockOf(client: PlayerView, at: number): Clock {
 }
 
 /**
+ * What `operator` reads at the book of the open station, standing there alone: its rules — and a
+ * Zugangskontrolle's list —; null where no open book covers the station.
+ */
+function glanceAtBook(state: GameState, operator: string): PlayerView | null {
+  const open = state.mission.puzzles[state.currentPuzzleIndex]?.id ?? '';
+  const book = state.mission.map.manuals.find((manual) => manual.puzzleIds.includes(open));
+  if (book === undefined) {
+    return null;
+  }
+  const glance = wireView(standing(state, { manuals: { [book.id]: [operator] } }), operator);
+  return glance.puzzle === null ? null : glance;
+}
+
+/**
+ * The view the reader holds: the reader's own; with nobody left to read, what the operator read
+ * at the station's book before taking console a (`glanceAtBook`) — a crew of two reads a
+ * Zugangskontrolle's list so —, and with no book open to read there, the partner's.
+ */
+function readerSees(state: GameState, roles: Roles, atB: PlayerView | null): PlayerView | null {
+  if (roles.reader !== null) {
+    return wireView(state, roles.reader);
+  }
+  return glanceAtBook(state, roles.operator) ?? atB;
+}
+
+/**
  * What the clients hold of the open puzzle at `at`: the operator's, the
- * partner's and the reader's view of it — with nobody left to read, the
- * partner's stands in — the edgework if one of them has read the sign, and
- * their clock (`clockOf`).
+ * partner's and the reader's view of it (`readerSees`), the edgework if one
+ * of them has read the sign, and their clock (`clockOf`).
  */
 function crewSees(
   state: GameState,
-  { operator, partner, reader }: Roles,
+  roles: Roles,
   at: number,
 ): { views: Perspectives<PuzzleView>; edgework: Edgework | null; clock: Clock } {
   const openAt = (client: PlayerView): PuzzleView => {
@@ -203,9 +228,10 @@ function crewSees(
     }
     return client.puzzle;
   };
+  const { operator, partner } = roles;
   const atA = wireView(state, operator);
   const atB = partner === null ? null : wireView(state, partner);
-  const atBook = reader === null ? atB : wireView(state, reader);
+  const atBook = readerSees(state, roles, atB);
   if (atBook === null) {
     throw new Error(`${state.mission.id}: nobody reads, and nobody works console b`);
   }
