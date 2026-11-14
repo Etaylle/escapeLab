@@ -13,10 +13,9 @@
  * Groups (tools/groups.mjs): every capture, and every label a skip line carries, belongs to one of
  * sixteen groups; SHOTS_ONLY and SHOTS_SKIP, each a comma-separated list of their names, pick those
  * a run plays — a quick proof of one part. The drills, each in a room of its own before the
- * walkthrough: editor, art, drones (the danger sense, a drone close by), reconnect, restart — in
- * a Systemcheck run the Serverraum's scratch mission, devices' — and access, the
- * Zugangskontrolle's scratch mission, which plays alone: only where SHOTS_ONLY names it, so that
- * Blackout's and the Systemcheck's runs stay as they were. The walkthrough's own stages:
+ * walkthrough: editor, art, drones (the danger sense, a drone close by), reconnect, restart, and
+ * in a Systemcheck run the Serverraum's scratch mission, devices', and the Zugangskontrolle's,
+ * access. The walkthrough's own stages:
  * screens (the menu and its sound, the history, the lobby, the run started from it), intro (the
  * opening to blackout.png, the cold open at density 2 with it) and run (the mission to the won
  * card: the lit rooms, the finds, the audience's way in, the escape, the end, and after the won
@@ -485,8 +484,8 @@
  * stands done. The log says how long the moves took. The mission is deleted
  * again whatever happened.
  *
- * Zugangskontrolle (SHOTS_ONLY=access, alone): the editor, opened at
- * /editor?seed=4, imports tools/fixtures/access-probe.json („Zugangsprobe",
+ * Zugangskontrolle (a Systemcheck run): the editor, opened at /editor?seed=4,
+ * imports tools/fixtures/access-probe.json („Zugangsprobe",
  * custom-zugangsprobe) and starts its test run; a second page joins by code,
  * both touch screens. The player nearer console B switches the station on at
  * the token device; the other reads the list of this shift's accounts at the
@@ -500,8 +499,10 @@
  * `login` —, the token read off the device once it shows the account with
  * four seconds left at least and sent — the first typed in two groups, the
  * next on the pad —, the door released on its key; the station has to solve
- * without an alarm. The log says how long the device kept each account
- * waiting. The mission is deleted again whatever happened.
+ * without an alarm. The device never opens on the first door's account, so
+ * the first door waits a period or two (15 s each in the probe). The log says
+ * how long the device kept each account waiting. The mission is deleted again
+ * whatever happened.
  *
  * Art (a Blackout run only): before the walkthrough, a scratch copy of
  * Blackout — custom-blackout, ten seconds of power before the lights fail,
@@ -8892,8 +8893,11 @@ const ACCESS_PLAN = JSON.parse(
 );
 /** The least a period has to have left for the drill to read its token off the device. */
 const ACCESS_READ_MS = 4000;
-/** How long the drill waits for the device to come round to an account: two periods and more. */
-const ACCESS_TURN_MS = 75_000;
+/**
+ * How long the drill waits for the device to come round to an account: it turns through three, a
+ * period each, so two periods and the one under way, and some slack.
+ */
+const ACCESS_TURN_MS = 3 * ACCESS_MISSION.puzzles[0].tokenSec * 1000 + 5000;
 
 /** The open Zugangskontrolle as `player`'s page has it; null for none. */
 function accessView(player) {
@@ -9141,15 +9145,19 @@ async function playAccess(crew) {
 }
 
 /**
- * The Zugangskontrolle, proven in a scratch mission of its own: imported through the editor at a
- * pinned seed and started as its test run, the second player joining by code, both on touch
- * screens. The player nearer console B switches the station on at the token device, the other
+ * The Zugangskontrolle, proven in a scratch mission of its own, in a Systemcheck run as the
+ * Serverraum is (Blackout says it leaves it out): imported through the editor at a pinned seed and
+ * started as its test run, the second player joining by code, both on touch screens. The player nearer console B switches the station on at the token device, the other
  * reads the list at the clipboard (access-list.png) and takes the terminal; both devices are
  * shot at laptop size (access-terminal.png, access-token.png) and on a large phone held sideways
  * (access-phone-932.png, the token device checked too); then the plan's doors are played, each
  * token read off the device. The mission is deleted again whatever happened.
  */
 async function captureAccess() {
+  if (MISSION.toLowerCase() === 'blackout') {
+    skip('access (probe)', 'Blackout plays no Zugangskontrolle: its probe plays in a Systemcheck run');
+    return;
+  }
   const crew = [];
   try {
     const host = await probePlayer('access', 'Anna', true);
@@ -12361,8 +12369,8 @@ async function captureRestart() {
 /**
  * The drills before the walkthrough, each in a room of its own, by the group each belongs to:
  * the editor, the Serverraum's scratch mission (a Systemcheck run's), the art tour, the danger
- * sense, the reconnect drill, the restart drill — and the Zugangskontrolle's scratch mission,
- * only where SHOTS_ONLY names it (its group plays alone, tools/groups.mjs).
+ * sense, the reconnect drill, the restart drill and the Zugangskontrolle's scratch mission (a
+ * Systemcheck run's).
  */
 const DRILLS = [
   ['editor', captureEditor],

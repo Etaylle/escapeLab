@@ -55,10 +55,10 @@ Konto des Laufs gebunden ist und dessen sechsstelligen Token mit einem ablaufend
 Welches Konto welche Rolle hat und welche Türen eine Rolle freigibt, steht nur auf der
 Benutzerliste des Laufs an der Quelle, jeden Lauf neu verteilt; das Gerät beginnt nie mit dem
 Konto, das die erste Tür braucht. Ein falscher Token und eine Freigabe ohne Berechtigung kosten
-einen Alarm, drei falsche Token in Folge sperren das Konto für 45 s. Noch in keiner Mission — ihr Platz folgt dem Playtest —: bewiesen im
-Kerntest und in der Probemission `tools/fixtures/access-probe.json`, die der Rundgang mit
-`SHOTS_ONLY=access` über den Editor mit festem Seed importiert und bis zur Lösung spielt, jeden
-Token vom Gerät abgelesen.
+einen Alarm, drei falsche Token in Folge sperren das Konto für 45 s. Noch in keiner Mission —
+ihr Platz folgt dem Playtest —: bewiesen im Kerntest und in der Probemission
+`tools/fixtures/access-probe.json`, die der Rundgang im Systemcheck über den Editor mit festem
+Seed importiert und bis zur Lösung spielt, jeden Token vom Gerät abgelesen.
 
 Keine Station lässt sich allein bedienen (siehe *Nie allein*), und auf *Normal* beendet der
 fünfte Alarm den Lauf — auf *Hart* der dritte, auf *Entspannt* gibt es keine Grenze.
@@ -283,9 +283,8 @@ sechzehn Gruppen (`tools/groups.mjs`); `SHOTS_ONLY=screens,intro` spielt nur die
 `SHOTS_SKIP=perf` alle außer diesen — der schnelle Beweis eines Teils. Vor dem Rundgang laufen die
 Proben, jede in einem Raum für sich: `editor`, `art`, `drones` (Gefahrensinn und eine Drohne aus der
 Nähe), `reconnect` und `restart` — im Systemcheck dazu die Probe des Serverraums, die zu `devices`
-gehört —, und nur mit `SHOTS_ONLY=access` die Probe der Zugangskontrolle, die allein spielt: Ohne
-die Variable bleibt sie wortlos aus, damit die Läufe von Blackout und Systemcheck bleiben, wie sie
-sind. Der Rundgang selbst: `screens` (Menü und sein Ton, Bestenliste, Lobby, der Start aus ihr),
+gehört, und die der Zugangskontrolle, `access` (Blackout nennt beide im Log als ausgelassen). Der
+Rundgang selbst: `screens` (Menü und sein Ton, Bestenliste, Lobby, der Start aus ihr),
 `intro` (die Eröffnung bis `blackout.png`) und `run` (die Mission bis zur Siegerkarte, nach dem
 gewonnenen Systemcheck die Einsätze des Kontos und sein Löschen); im Lauf `devices` (jede Station,
 auch auf dem quer gehaltenen Handy), `reading` (Quellen, Schild, Notizen der letzten Schicht,

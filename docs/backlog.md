@@ -395,8 +395,8 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   ersten Tür. Falscher Token und Freigabe ohne Berechtigung sind Alarme, drei falsche Token
   sperren das Konto auf der Uhr der Station. Felder `doors`, `tokenSec`, `openSec`,
   `lockSec`. Die Tür offen zu halten, während jemand durchläuft, bleibt Fiktion, keine Regel.
-- Noch in keiner Mission: Probemission `tools/fixtures/access-probe.json`, die der Rundgang nur
-  mit `SHOTS_ONLY=access` spielt. Offen für N-6: ob und wo die Station in Blackout steht — mit
+- Noch in keiner Mission: Probemission `tools/fixtures/access-probe.json`, die der Rundgang im
+  Systemcheck spielt (Gruppe `access`). Offen für N-6: ob und wo die Station in Blackout steht — mit
   zwei Spielenden muss die Liste vor den Pulten gelesen (oder notiert) werden.
 
 ### I-2 Firewall-Regelwerk — Status: wartet (Entscheidung Uros) · Größe: L

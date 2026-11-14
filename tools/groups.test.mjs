@@ -281,26 +281,10 @@ describe('planGroups — what SHOTS_ONLY and SHOTS_SKIP leave a run to play', ()
   const on = (plan) => GROUP_NAMES.filter((name) => plan.on.has(name));
   const others = (...names) => GROUP_NAMES.filter((name) => !names.includes(name));
 
-  it('plays every group without either variable but those that play alone, and says nothing', () => {
+  it('plays every group without either variable, and says nothing', () => {
     const plan = planGroups(undefined, undefined);
-    assert.deepEqual(on(plan), others('access'));
+    assert.deepEqual(on(plan), GROUP_NAMES);
     assert.deepEqual(plan.lines, []);
-  });
-
-  it('plays a group that plays alone only where SHOTS_ONLY names it, the walkthrough after it not', () => {
-    assert.deepEqual(
-      GROUPS.filter((group) => group.alone === true).map(({ name, stage }) => [name, stage]),
-      [['access', 'drills']],
-    );
-    const plan = planGroups('access', undefined);
-    assert.deepEqual(on(plan), ['access']);
-    assert.equal(reaches(plan.on, 'lobby'), false);
-    assert.ok(plan.lines.includes('group devices      skipped: SHOTS_ONLY leaves it out'));
-    const alongside = planGroups('access,editor', undefined);
-    assert.deepEqual(on(alongside), ['editor', 'access']);
-    const told = planGroups(undefined, 'access');
-    assert.deepEqual(on(told), others('access'));
-    assert.deepEqual(told.lines, ['group access       skipped: SHOTS_SKIP names it']);
   });
 
   it('plays only the groups SHOTS_ONLY names, a line for each one left out', () => {
@@ -316,7 +300,7 @@ describe('planGroups — what SHOTS_ONLY and SHOTS_SKIP leave a run to play', ()
 
   it('plays every group but those SHOTS_SKIP names, a line for each', () => {
     const plan = planGroups(undefined, 'perf, art');
-    assert.deepEqual(on(plan), others('perf', 'art', 'access'));
+    assert.deepEqual(on(plan), others('perf', 'art'));
     assert.deepEqual(plan.lines, [
       'group art          skipped: SHOTS_SKIP names it',
       'group perf         skipped: SHOTS_SKIP names it',
@@ -333,7 +317,7 @@ describe('planGroups — what SHOTS_ONLY and SHOTS_SKIP leave a run to play', ()
   it('refuses each group that needs one SHOTS_SKIP leaves out, a line each', () => {
     const plan = planGroups(undefined, 'run');
     const inRun = GROUPS.filter((group) => group.needs.includes('run')).map(({ name }) => name);
-    assert.deepEqual(on(plan), others('run', 'access', ...inRun));
+    assert.deepEqual(on(plan), others('run', ...inRun));
     const refused = (name) => `${`group ${name}`.padEnd(18)} refused: it needs run, which`;
     assert.deepEqual(
       plan.lines.filter((line) => line.includes('refused')),

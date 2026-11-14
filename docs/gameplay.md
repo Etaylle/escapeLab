@@ -366,11 +366,11 @@ alarm, the solver none), the lock and the backup rule and the room's tick throug
 the solver over 200 seeds in five variants, and the probe with its pinned plan
 (`tools/fixtures/access-plan.json`, made by `core/test/accessPlan.ts`); `client/test/
 access.test.tsx` the prompt, the keys, both devices, the list, the sounds and the type and targets
-at both consoles on three screens. The walkthrough drills the probe only where
-`SHOTS_ONLY=access` asks for it, so that Blackout's and the Systemcheck's runs stay as they are: the
-list (access-list.png), both devices (access-terminal.png, access-token.png), the terminal on a
-large phone held sideways (access-phone-932.png), then each door of the plan, the token read off
-the device.
+at both consoles on three screens. The walkthrough drills the probe in a Systemcheck run, as it
+does the Serverraum's (group `access`; `SHOTS_SKIP=access` leaves it out, and Blackout's run logs
+it as left out): the list (access-list.png), both devices (access-terminal.png,
+access-token.png), the terminal on a large phone held sideways (access-phone-932.png), then each
+door of the plan, the token read off the device.
 
 ## Captures in the notepad
 
