@@ -11,11 +11,17 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { ElevenLabs } from '@elevenlabs/elevenlabs-js';
-import { parseMission, radioLines } from '@escapelab/core';
-import { ELEVEN_FORMAT, ELEVEN_VOICE, type DesignClient } from '../scripts/elevenlabs.js';
+import { MOODS, parseMission, radioLines } from '@escapelab/core';
+import {
+  ELEVEN_FORMAT,
+  ELEVEN_VOICE,
+  type DesignClient,
+  type SpeechClient,
+} from '../scripts/elevenlabs.js';
 import {
   catalogOf,
   designPa,
+  elevenTake,
   engineOf,
   entryOf,
   fileOf,
@@ -27,6 +33,7 @@ import {
   MAX_FOLDER_BYTES,
   MISSIONS_DIR,
   modelUrl,
+  MOOD_TAGS,
   PA_VOICE,
   PAUSE_MS,
   PIPER_MODEL,
@@ -38,6 +45,8 @@ import {
   shippedLines,
   shippedMissions,
   SPOKEN_AS,
+  spokenText,
+  takesTags,
   VOICE_DIR,
   VOICES_URL,
   voiceId,
@@ -244,13 +253,14 @@ describe('the lines the script reads', () => {
     .filter((name) => name.endsWith('.json'))
     .map((name) => parseMission(JSON.parse(readFileSync(join(MISSIONS_DIR, name), 'utf8'))));
 
-  it('are every line core can put on the air, in its order, each by its speaker', () => {
+  it('are every line core can put on the air, in its order, by its speaker in its mood', () => {
     expect(missions.length).toBe(shippedMissions().length);
     for (const mission of missions) {
       const read = shippedMissions().find((each) => each.id === mission.id);
-      const core = radioLines(mission).map(({ text, speaker, when }) => ({
+      const core = radioLines(mission).map(({ text, speaker, mood, when }) => ({
         text,
         speaker,
+        mood,
         opens: when === 'start',
       }));
       expect(read && catalogOf(read), mission.id).toEqual(core);
@@ -290,23 +300,59 @@ describe('the lines the script reads', () => {
       map: { sabotage: { announce: 'Störung.' } },
     };
     expect(catalogOf(mission)).toEqual([
-      { text: 'Durchsage.', speaker: 'pa', opens: false },
-      { text: 'Los.', speaker: 'operator', opens: true },
-      { text: 'Hier.', speaker: 'operator', opens: false },
-      { text: 'Eins.', speaker: 'operator', opens: false },
-      { text: 'Raus.', speaker: 'operator', opens: false },
-      { text: 'Störung.', speaker: 'pa', opens: false },
+      { text: 'Durchsage.', speaker: 'pa', mood: null, opens: false },
+      { text: 'Los.', speaker: 'operator', mood: null, opens: true },
+      { text: 'Hier.', speaker: 'operator', mood: null, opens: false },
+      { text: 'Eins.', speaker: 'operator', mood: null, opens: false },
+      { text: 'Raus.', speaker: 'operator', mood: null, opens: false },
+      { text: 'Störung.', speaker: 'pa', mood: null, opens: false },
     ]);
     expect(catalogOf({ id: 'quiet', puzzles: [{}] })).toEqual([]);
     expect(shippedLines([mission]).get('Los.')).toEqual({
       missions: ['probe'],
       speaker: 'operator',
+      mood: null,
       opens: true,
     });
     expect(shippedLines([mission]).get('Störung.')?.speaker).toBe('pa');
     // One line, one recording: two speakers may not say the same words.
     const twice = { ...mission, map: { sabotage: { announce: 'Los.' } } };
     expect(() => shippedLines([twice])).toThrow(/„Los\." is said by the operator and the pa/);
+  });
+
+  it('give the operator’s answers their moods, and one line one mood: one recording', () => {
+    const radio = {
+      emergency: { start: 'Notfall.', cleared: 'Steht.', missed: 'Zu spät.' },
+      alarm: ['Alarm.', 'Alarm bei mir.'],
+      clock: { fiveMinutes: 'Fünf.', twoMinutes: 'Zwei.', lastMinute: 'Eine.' },
+      won: { plenty: 'Gut.', tight: 'Knapp.', lastMinute: 'Gerade so.' },
+      lost: { time: 'Dunkel.', alarms: 'Abgeworfen.', abandoned: 'Abbruch.' },
+    };
+    const moods = catalogOf({ id: 'moods', radio, puzzles: [] }).map(({ text, mood }) => [
+      text,
+      mood,
+    ]);
+    expect(moods).toEqual([
+      ['Notfall.', 'urgent'],
+      ['Steht.', 'relieved'],
+      ['Zu spät.', 'tense'],
+      ['Alarm.', 'tense'],
+      ['Alarm bei mir.', 'tense'],
+      ['Fünf.', 'pressing'],
+      ['Zwei.', 'pressing'],
+      ['Eine.', 'pressing'],
+      ['Gut.', 'warm'],
+      ['Knapp.', 'warm'],
+      ['Gerade so.', 'warm'],
+      ['Dunkel.', 'quiet'],
+      ['Abgeworfen.', 'quiet'],
+      ['Abbruch.', 'quiet'],
+    ]);
+    // The same words tense as an alarm and pressing as the clock would need two takes.
+    const torn = { id: 'torn', radio: { alarm: 'Achtung.', clock: { lastMinute: 'Achtung.' } } };
+    expect(() => shippedLines([{ ...torn, puzzles: [] }])).toThrow(
+      /„Achtung\." is said by the operator in a tense mood and the operator in a pressing mood/,
+    );
   });
 
   it('take the intro’s announcement first, as a run hears it, by the loudspeakers', () => {
@@ -316,6 +362,7 @@ describe('the lines the script reads', () => {
       expect(shippedLines().get(line), line).toEqual({
         missions: ['blackout'],
         speaker: 'pa',
+        mood: null,
         opens: false,
       });
     }
@@ -472,8 +519,13 @@ const eleven = (model: string, voiceId = ELEVEN_VOICE, pa?: string): Voice => ({
 
 describe('what a run keeps, and what it makes anew', () => {
   const TEXT = 'Reaktor läuft.';
-  const said = { text: TEXT, speaker: 'operator' } as const;
-  const line: ShippedLine = { missions: ['blackout'], speaker: 'operator', opens: false };
+  const said = { text: TEXT, speaker: 'operator', mood: null } as const;
+  const line: ShippedLine = {
+    missions: ['blackout'],
+    speaker: 'operator',
+    mood: null,
+    opens: false,
+  };
   const piper: Voice = { engine: 'piper', name: PIPER_MODEL, model: '/cache/thorsten.onnx' };
   const render = renderOf(piper, said);
   const base: Entry = {
@@ -537,7 +589,7 @@ describe('what a run keeps, and what it makes anew', () => {
   });
 
   it('tells the speakers apart under ElevenLabs alone: their voices, and how each holds', () => {
-    const pa = { text: TEXT, speaker: 'pa' } as const;
+    const pa = { text: TEXT, speaker: 'pa', mood: null } as const;
     const both = eleven('eleven_v4', ELEVEN_VOICE, 'paVoice0000000000000');
     expect(renderOf(both, said)).toBe(renderOf(eleven('eleven_v4'), said));
     expect(renderOf(both, pa)).not.toBe(renderOf(both, said));
@@ -566,7 +618,8 @@ describe('what a run keeps, and what it makes anew', () => {
     const operators = Object.values(manifest.lines).filter((e) => e.speaker === 'operator');
     expect(operators.length).toBeGreaterThan(40);
     for (const entry of operators) {
-      expect(renderOf(voice, entry), entry.text).toBe(entry.render);
+      const said = { ...entry, mood: entry.mood ?? null };
+      expect(renderOf(voice, said), entry.text).toBe(entry.render);
     }
   });
 
@@ -576,7 +629,7 @@ describe('what a run keeps, and what it makes anew', () => {
     const opening = entryOf(
       'Los.',
       900,
-      { missions: ['b', 'a'], speaker: 'operator', opens: true },
+      { missions: ['b', 'a'], speaker: 'operator', mood: null, opens: true },
       upload,
     );
     expect(opening).toEqual({
@@ -599,6 +652,18 @@ describe('what a run keeps, and what it makes anew', () => {
     ]);
     const synthetic = entryOf(TEXT, 1400, line, { file: base.file, render });
     expect(Object.keys(synthetic)).toEqual(['text', 'ms', 'missions', 'speaker', 'render', 'file']);
+    // A line said in a mood keeps it beside its speaker.
+    const tense = entryOf(TEXT, 1400, { ...line, mood: 'tense' }, { file: base.file, render });
+    expect(tense).toEqual({ ...made, mood: 'tense' });
+    expect(Object.keys(tense)).toEqual([
+      'text',
+      'ms',
+      'missions',
+      'speaker',
+      'mood',
+      'render',
+      'file',
+    ]);
   });
 
   it('names an ElevenLabs recording .mp3 and every other .m4a', () => {
@@ -613,6 +678,82 @@ describe('what a run keeps, and what it makes anew', () => {
     expect(freshOf(['--fresh=all'])).toBe('all');
     expect(freshOf(['--fresh=all', '--fresh'])).toBe('all');
     expect(() => freshOf(['--fresh=human'])).toThrow(/--fresh=human.*--fresh=all/);
+  });
+});
+
+describe('a line said in a mood', () => {
+  const TEXT = 'Alle draußen.';
+  const warm = { text: TEXT, speaker: 'operator', mood: 'warm' } as const;
+  const plain = { ...warm, mood: null };
+
+  /** ElevenLabs by `model` for both speakers, every request it gets kept, each answered. */
+  function listening(model: string) {
+    const requests: [string, ElevenLabs.BodyTextToSpeechFull][] = [];
+    const client: SpeechClient = {
+      voices: NO_CLIENT.voices,
+      textToSpeech: {
+        convert: (voiceId, request) => {
+          requests.push([voiceId, request]);
+          return Promise.resolve(new Blob([Uint8Array.from([0xff, 0xfb])]).stream());
+        },
+      },
+    };
+    const held = { model, client };
+    const speakers = {
+      operator: { ...held, voiceId: ELEVEN_VOICE, held: SPEAKER_HELD.operator },
+      pa: { ...held, voiceId: 'paVoice0000000000000', held: SPEAKER_HELD.pa },
+    };
+    return { speakers, requests };
+  }
+
+  it('asks Eleven v3 and v4 for it by an audio tag before the words, any other model not', () => {
+    expect(spokenText(TEXT, 'pressing', 'eleven_v4')).toBe('[insistent] Alle draußen.');
+    expect(spokenText(TEXT, 'quiet', 'eleven_v3')).toBe('[subdued] Alle draußen.');
+    // An older model would say the tag aloud.
+    expect(spokenText(TEXT, 'warm', 'eleven_multilingual_v2')).toBe(TEXT);
+    expect(spokenText(TEXT, 'warm', 'eleven_flash_v2_5')).toBe(TEXT);
+    expect(spokenText(TEXT, null, 'eleven_v4')).toBe(TEXT);
+    expect(['eleven_v4', 'eleven_v3', 'eleven_multilingual_v2'].map(takesTags)).toEqual([
+      true,
+      true,
+      false,
+    ]);
+  });
+
+  it('has a tag for every mood core gives a moment, one word or two in brackets', () => {
+    expect(Object.keys(MOOD_TAGS).sort()).toEqual([...new Set(Object.values(MOODS))].sort());
+    for (const tag of Object.values(MOOD_TAGS)) {
+      expect(tag).toMatch(/^\[[a-z]+( [a-z]+)?\]$/);
+    }
+  });
+
+  it('sends the tag with the words by the speaker’s voice, never to the subtitle', async () => {
+    const v4 = listening('eleven_v4');
+    await elevenTake(v4.speakers, warm);
+    await elevenTake(v4.speakers, { ...plain, speaker: 'pa' });
+    expect(v4.requests.map(([voiceId, request]) => [voiceId, request.text])).toEqual([
+      [ELEVEN_VOICE, '[warm] Alle draußen.'],
+      ['paVoice0000000000000', TEXT],
+    ]);
+    const v2 = listening('eleven_multilingual_v2');
+    await elevenTake(v2.speakers, warm);
+    expect(v2.requests.map(([, request]) => request.text)).toEqual([TEXT]);
+    await expect(elevenTake({}, warm)).rejects.toThrow(/operator has no voice yet/);
+    // The words a mission writes, which the objective bar and the manifest show, carry no tag.
+    const tagged = [...shippedLines().keys()].filter((text) => /\[[a-z ]+\]/.test(text));
+    expect(tagged).toEqual([]);
+  });
+
+  it('makes another take of a line in another mood, only where the model hears it', () => {
+    const v4 = eleven('eleven_v4');
+    const takes = [plain, warm, { ...warm, mood: 'quiet' } as const].map((said) =>
+      renderOf(v4, said),
+    );
+    expect(new Set(takes).size).toBe(3);
+    const v2 = eleven('eleven_multilingual_v2');
+    expect(renderOf(v2, warm)).toBe(renderOf(v2, plain));
+    const piper: Voice = { engine: 'piper', name: PIPER_MODEL, model: '/cache/thorsten.onnx' };
+    expect(renderOf(piper, warm)).toBe(renderOf(piper, plain));
   });
 });
 

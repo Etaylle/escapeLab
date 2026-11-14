@@ -13,12 +13,16 @@
  * the intro's announcement over the lab's loudspeakers (`intro.pa`, client world/pa.ts), then
  * every line core's `logRadio` (core/src/actions.ts) is ever handed — `radio.start` as the clock
  * starts, every `puzzles[].onSolved` as its station is solved, `radio.escape` as the hatch
- * unlocks, the loudspeakers' `map.sabotage.announce` as an emergency starts — and every
- * `puzzles[].nudges` line its `nudge` sends while a station stays quiet. Two speakers say them
+ * unlocks, the loudspeakers' `map.sabotage.announce` as an emergency starts, the operator's
+ * answers to what a run does (`radio.emergency`, `.alarm`, `.clock`, `.won`, `.lost`) — and
+ * every `puzzles[].nudges` line its `nudge` sends while a station stays quiet; a line written in
+ * two or three texts is two or three lines here, a run saying one. Two speakers say them
  * (`Speaker`): the plant's announcement system the loudspeakers' lines, mission control's
  * operator the rest; under ElevenLabs each by a voice of its own, which the manifest keeps
  * (`voices`) — the operator Helmut, the plant a voice made from a description (`PA_VOICE`,
- * --design-pa, --keep-pa) — each holding as its part asks (`SPEAKER_HELD`).
+ * --design-pa, --keep-pa) — each holding as its part asks (`SPEAKER_HELD`). The operator says
+ * the answers in a mood (`Mood`), which Eleven v3 and v4 are asked for by an audio tag before
+ * the words (`MOOD_TAGS`, `spokenText`): the subtitle and the manifest keep the words alone.
  *
  * Each is read by Piper, a neural voice that runs offline — the model VOICE_MODEL names,
  * de_DE-thorsten-high where it names none (docs/sound.md says why) — through `uv run --with
@@ -31,8 +35,8 @@
  * line's SHA-1. VOICE_ENGINE=elevenlabs has ElevenLabs voices read them (elevenlabs.ts) into
  * public/voice/<id>.mp3. public/voice/manifest.json keeps the speakers' voices as { voices:
  * { [speaker]: { voiceId, name } } } and every line as { lines: { [id]: { text, ms, missions,
- * speaker, file } } }, `file` naming its recording, with `opens: true` on a line that opens a
- * run (`radio.start`): the radio keys it with the Leitstelle's opening squelch.
+ * speaker, mood?, file } } }, `file` naming its recording, with `opens: true` on a line that
+ * opens a run (`radio.start`): the radio keys it with the Leitstelle's opening squelch.
  *
  * A synthetic recording carries `render`, a hash of what made it — the engine, the voice, its
  * settings and the words as that engine was given them — so --fresh makes anew only what the
@@ -196,29 +200,68 @@ export interface MissionLines {
 }
 
 /**
- * The keys of each group of the operator's answers, in the order core's radio.ts lists them:
- * an emergency's lines, the clock's calls, a run won by its time left, a run lost by its cause.
+ * How the operator says a line, as core's radio.ts `MOODS` has it by the moment: the first alarm
+ * and an emergency missed tense, the clock pressing, an emergency urgent and its clearing
+ * relieved, a run won warm, a run lost quiet; every other line has none.
+ */
+export type Mood = 'tense' | 'pressing' | 'urgent' | 'relieved' | 'warm' | 'quiet';
+
+/**
+ * The audio tag each mood asks Eleven v3 and v4 for: a short instruction in brackets before the
+ * words, never said and never shown — the subtitle and the manifest keep the words alone. One
+ * word each, as ElevenLabs' prompting guide asks (one or two; its own examples `[curious]`,
+ * `[sad]`, `[whispers]`): „pressing" asks for an insistent voice, „quiet" for a subdued one
+ * rather than a softer one. A tag guides the delivery and guarantees none: a take is listened to.
+ */
+export const MOOD_TAGS: Readonly<Record<Mood, string>> = {
+  tense: '[tense]',
+  pressing: '[insistent]',
+  urgent: '[urgent]',
+  relieved: '[relieved]',
+  warm: '[warm]',
+  quiet: '[subdued]',
+};
+
+/** Whether `model` reads audio tags (Eleven v3 and v4): an older one would say them aloud. */
+export function takesTags(model: string): boolean {
+  return /^eleven_v[34]/.test(model);
+}
+
+/** The words ElevenLabs is given of a line: its mood's tag before them where `model` reads it. */
+export function spokenText(text: string, mood: Mood | null, model: string): string {
+  return mood === null || !takesTags(model) ? text : `${MOOD_TAGS[mood]} ${text}`;
+}
+
+/**
+ * The keys of each group of the operator's answers, in the order core's radio.ts lists them: the
+ * clock's calls, a run won by its time left, a run lost by its cause.
  */
 const ANSWER_KEYS = {
-  emergency: ['start', 'cleared', 'missed'],
   clock: ['fiveMinutes', 'twoMinutes', 'lastMinute'],
   won: ['plenty', 'tight', 'lastMinute'],
   lost: ['time', 'alarms', 'abandoned'],
 } as const;
 
+/** A line of the operator's answers, and the mood it is said in. */
+type Answer = readonly [Line | undefined, Mood];
+
 /**
- * The operator's answers to what a run does, in core's order: an emergency as it starts and as
- * it ends, the first alarm, the clock's calls, the last word on a run won and on one lost.
+ * The operator's answers to what a run does, in core's order, each with its mood: an emergency
+ * as it starts and as it ends, the first alarm, the clock's calls, the last word on a run won
+ * and on one lost.
  */
-function answersOf(radio: RadioLines | undefined): (Line | undefined)[] {
-  const group = (name: keyof typeof ANSWER_KEYS): (Line | undefined)[] =>
-    ANSWER_KEYS[name].map((key) => radio?.[name]?.[key]);
+function answersOf(radio: RadioLines | undefined): Answer[] {
+  const group = (name: keyof typeof ANSWER_KEYS, mood: Mood): Answer[] =>
+    ANSWER_KEYS[name].map((key) => [radio?.[name]?.[key], mood] as const);
+  const emergency = radio?.emergency;
   return [
-    ...group('emergency'),
-    radio?.alarm,
-    ...group('clock'),
-    ...group('won'),
-    ...group('lost'),
+    [emergency?.['start'], 'urgent'],
+    [emergency?.['cleared'], 'relieved'],
+    [emergency?.['missed'], 'tense'],
+    [radio?.alarm, 'tense'],
+    ...group('clock', 'pressing'),
+    ...group('won', 'warm'),
+    ...group('lost', 'quiet'),
   ];
 }
 
@@ -227,14 +270,15 @@ export type PersonSource = 'human' | 'upload';
 
 /**
  * One recorded line: what it says, how long it speaks, ms, the missions that say it, who says
- * it, whether it opens a run, who made it — a person (`source`), or a voice's render (`render`,
- * a hash of what made it) — and its file in the voice folder.
+ * it and in what mood, whether it opens a run, who made it — a person (`source`), or a voice's
+ * render (`render`, a hash of what made it) — and its file in the voice folder.
  */
 export interface Entry {
   text: string;
   ms: number;
   missions: string[];
   speaker: Speaker;
+  mood?: Mood;
   opens?: true;
   source?: PersonSource;
   render?: string;
@@ -262,19 +306,24 @@ export interface Take {
 export type Fresh = 'none' | 'synthetic' | 'all';
 
 /**
- * A line the shipped missions can put on the air: the missions that say it, who says it, and
- * whether it opens a run.
+ * A line the shipped missions can put on the air: the missions that say it, who says it, the
+ * mood it is said in (null for none), and whether it opens a run.
  */
 export interface ShippedLine {
   missions: string[];
   speaker: Speaker;
+  mood: Mood | null;
   opens: boolean;
 }
 
-/** A line of a mission as the script reads it: what it says, who says it, whether it opens a run. */
+/**
+ * A line of a mission as the script reads it: what it says, who says it, the mood it is said in
+ * (null for none), whether it opens a run.
+ */
 export interface CatalogLine {
   readonly text: string;
   readonly speaker: Speaker;
+  readonly mood: Mood | null;
   readonly opens: boolean;
 }
 
@@ -286,19 +335,22 @@ export interface CatalogLine {
  * answers to what the run does (`answersOf`).
  */
 export function catalogOf(mission: MissionLines): CatalogLine[] {
-  const said = (speaker: Speaker, opens = false) => (line: Line | undefined) =>
-    (typeof line === 'string' ? [line] : (line ?? []))
-      .filter((text) => text.trim() !== '')
-      .map((text) => ({ text, speaker, opens }));
+  const said =
+    (speaker: Speaker, opens = false) =>
+    (line: Line | undefined, mood: Mood | null = null): CatalogLine[] =>
+      (typeof line === 'string' ? [line] : (line ?? []))
+        .filter((text) => text.trim() !== '')
+        .map((text) => ({ text, speaker, mood, opens }));
   const { radio, puzzles } = mission;
   const operator = said('operator');
+  const stations = puzzles.flatMap((puzzle) => [...(puzzle.nudges ?? []), puzzle.onSolved]);
   return [
-    ...(mission.intro?.pa ?? []).flatMap(said('pa')),
+    ...(mission.intro?.pa ?? []).flatMap((text) => said('pa')(text)),
     ...said('operator', true)(radio?.start),
-    ...puzzles.flatMap((puzzle) => [...(puzzle.nudges ?? []), puzzle.onSolved].flatMap(operator)),
+    ...stations.flatMap((line) => operator(line)),
     ...operator(radio?.escape),
     ...said('pa')(mission.map?.sabotage?.announce),
-    ...answersOf(radio).flatMap(operator),
+    ...answersOf(radio).flatMap(([line, mood]) => operator(line, mood)),
   ];
 }
 
@@ -429,10 +481,13 @@ export function shippedMissions(dir = MISSIONS_DIR): MissionLines[] {
 export function shippedLines(missions = shippedMissions()): Map<string, ShippedLine> {
   const lines = new Map<string, ShippedLine>();
   for (const mission of missions) {
-    for (const { text, speaker, opens } of catalogOf(mission)) {
-      const line = lines.get(text) ?? { missions: [], speaker, opens: false };
-      if (line.speaker !== speaker) {
-        throw new Error(`voice: „${text}" is said by the ${line.speaker} and the ${speaker} alike`);
+    for (const { text, speaker, mood, opens } of catalogOf(mission)) {
+      const line = lines.get(text) ?? { missions: [], speaker, mood, opens: false };
+      if (line.speaker !== speaker || line.mood !== mood) {
+        const how = (who: Speaker, as: Mood | null) =>
+          as === null ? `the ${who}` : `the ${who} in a ${as} mood`;
+        const both = `${how(line.speaker, line.mood)} and ${how(speaker, mood)}`;
+        throw new Error(`voice: „${text}" is said by ${both} alike: one line, one recording`);
       }
       if (!line.missions.includes(mission.id)) line.missions.push(mission.id);
       line.opens ||= opens;
@@ -486,6 +541,7 @@ export function entryOf(text: string, ms: number, line: ShippedLine, take: Take)
     ms,
     missions: [...line.missions].sort(),
     speaker: line.speaker,
+    ...(line.mood === null ? {} : { mood: line.mood }),
     ...(line.opens ? { opens: true as const } : {}),
     ...(take.source === undefined ? {} : { source: take.source }),
     ...(take.render === undefined ? {} : { render: take.render }),
@@ -510,6 +566,8 @@ export type Voice =
 export interface Said {
   readonly text: string;
   readonly speaker: Speaker;
+  /** how the operator says it, asked for by an audio tag (`spokenText`); null for none */
+  readonly mood: Mood | null;
 }
 
 /**
@@ -517,7 +575,7 @@ export interface Said {
  * ElevenLabs the speaker's voice, or, where the manifest names none for it yet, the speaker
  * alone, which no take was ever made by.
  */
-function madeBy(voice: Voice, { text, speaker }: Said): readonly (string | number)[] {
+function madeBy(voice: Voice, { text, speaker, mood }: Said): readonly (string | number)[] {
   if (voice.engine === 'piper') {
     return ['piper', voice.name, LENGTH_SCALE, SENTENCE_PAUSE_S, piperText(text)];
   }
@@ -528,7 +586,7 @@ function madeBy(voice: Voice, { text, speaker }: Said): readonly (string | numbe
   if (eleven === undefined) {
     return ['elevenlabs', `no voice for the ${speaker} yet`];
   }
-  const request = speechRequest(text, eleven.model, eleven.held);
+  const request = speechRequest(spokenText(text, mood, eleven.model), eleven.model, eleven.held);
   return ['elevenlabs', eleven.voiceId, JSON.stringify(request)];
 }
 
@@ -650,6 +708,22 @@ function voiceless(speaker: Speaker): string {
   );
 }
 
+/**
+ * The MP3 ElevenLabs makes of `said` by its speaker's voice among `speakers`: the words with
+ * its mood's tag before them where the model reads tags (`spokenText`), the take `renderOf`
+ * names. Fails where the speaker has no voice yet.
+ */
+export async function elevenTake(
+  speakers: Readonly<Partial<Record<Speaker, ElevenVoice>>>,
+  { text, speaker, mood }: Said,
+): Promise<Buffer> {
+  const eleven = speakers[speaker];
+  if (eleven === undefined) {
+    throw new Error(voiceless(speaker));
+  }
+  return speakEleven(eleven, spokenText(text, mood, eleven.model));
+}
+
 /** Reads the line `said`, its recording `id`, into the voice folder: its file and how long. */
 async function record(
   said: Said,
@@ -657,15 +731,11 @@ async function record(
   scratch: string,
   voice: Voice,
 ): Promise<{ file: string; ms: number }> {
-  const { text, speaker } = said;
+  const { text } = said;
   const file = fileOf(voice.engine, id);
   const path = join(VOICE_DIR, file);
   if (voice.engine === 'elevenlabs') {
-    const eleven = voice.speakers[speaker];
-    if (eleven === undefined) {
-      throw new Error(voiceless(speaker));
-    }
-    writeFileSync(path, await speakEleven(eleven, text));
+    writeFileSync(path, await elevenTake(voice.speakers, said));
     return { file, ms: durationOf(path, text) };
   }
   const raw = join(scratch, voice.engine === 'say' ? 'line.aiff' : 'line.wav');
@@ -763,7 +833,7 @@ function plan(before: Manifest, fresh: Fresh, voice: Voice): Planned[] {
   const lines = [...shippedLines()].sort(([a], [b]) => (voiceId(a) < voiceId(b) ? -1 : 1));
   return lines.map(([text, line]) => {
     const id = voiceId(text);
-    const render = renderOf(voice, { text, speaker: line.speaker });
+    const render = renderOf(voice, { text, speaker: line.speaker, mood: line.mood });
     const was = before.lines[id];
     const filed = was !== undefined && existsSync(join(VOICE_DIR, was.file));
     const kept = was !== undefined && keeps(was, text, filed, fresh, render) ? was : null;
@@ -818,7 +888,8 @@ async function main(fresh: Fresh): Promise<void> {
   const scratch = mkdtempSync(join(tmpdir(), 'escapelab-voice-'));
   try {
     const jobs = todo.map(({ text, line, id, render }) => async () => {
-      const { file, ms } = await record({ text, speaker: line.speaker }, id, scratch, voice);
+      const said = { text, speaker: line.speaker, mood: line.mood };
+      const { file, ms } = await record(said, id, scratch, voice);
       manifest.lines[id] = entryOf(text, ms, line, { file, render });
       writeManifest(manifest);
       console.log(`voice: ${id} ${(ms / 1000).toFixed(1)} s „${text}"`);

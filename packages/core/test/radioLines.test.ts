@@ -448,8 +448,8 @@ describe('the lines a mission can put on the air', () => {
       ...WON_BANDS.flatMap((band) => times('won', radio.won?.[band])),
       ...LOST_CAUSES.flatMap((cause) => times('lost', radio.lost?.[cause])),
     ]);
-    const plant = { puzzleId: null, speaker: 'pa' };
-    const operator = { puzzleId: null, speaker: 'operator' };
+    const plant = { puzzleId: null, speaker: 'pa', mood: null };
+    const operator = { puzzleId: null, speaker: 'operator', mood: null };
     expect(lines[0]).toEqual({ ...plant, text: blackout.intro?.pa[0], when: 'pa' });
     const first = (line: Line | undefined): string | undefined => variantsOf(line ?? [])[0];
     expect(lines[pa.length]).toEqual({ ...operator, text: first(radio.start), when: 'start' });
@@ -459,9 +459,9 @@ describe('the lines a mission can put on the air', () => {
     const announced = lines.findIndex((line) => line.when === 'announce');
     expect(lines[announced]).toEqual({ ...plant, text: announce, when: 'announce' });
     const last = variantsOf(radio.lost?.abandoned ?? []).at(-1);
-    expect(lines.at(-1)).toEqual({ ...operator, text: last, when: 'lost' });
+    expect(lines.at(-1)).toEqual({ ...operator, text: last, when: 'lost', mood: 'quiet' });
     const station = blackout.puzzles[0];
-    const at = { puzzleId: station?.id, speaker: 'operator' };
+    const at = { puzzleId: station?.id, speaker: 'operator', mood: null };
     const starts = variantsOf(radio.start ?? []).length;
     expect(lines.slice(pa.length + starts, pa.length + starts + 2)).toEqual(
       variantsOf(station?.nudges[0] ?? []).map((text) => ({ ...at, text, when: 'nudge' })),

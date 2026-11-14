@@ -4,6 +4,8 @@ import {
   CLOCK_CALLS,
   CLOCK_LATE_MS,
   clockCallDueAt,
+  moodOf,
+  MOODS,
   parseMission,
   radioLines,
   wonBand,
@@ -325,5 +327,22 @@ describe('the operator’s lines in the mission file', () => {
     expect(answers.every((line) => line.speaker === 'operator' && line.puzzleId === null)).toBe(
       true,
     );
+    // Each said as its moment wants it: tense, pressing, urgent, relieved, warm, quiet.
+    expect(answers.map((line) => line.mood)).toEqual([
+      'urgent',
+      'relieved',
+      'tense',
+      'tense',
+      ...['pressing', 'pressing', 'pressing', 'warm', 'warm', 'warm'],
+      ...['quiet', 'quiet', 'quiet'],
+    ]);
+    const story = radioLines(mission).filter((line) => line.when === 'start');
+    expect(story.map((line) => line.mood)).toEqual([null]);
+    expect([moodOf('nudge'), moodOf('announce'), moodOf('pa'), moodOf('clock')]).toEqual([
+      null,
+      null,
+      null,
+      MOODS.clock,
+    ]);
   });
 });

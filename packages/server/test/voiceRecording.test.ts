@@ -38,6 +38,7 @@ const first = (line: Line | undefined): string => variantsOf(line ?? '')[0] ?? '
 const START = first(blackout?.radio.start);
 const NUDGE = first(blackout?.puzzles[0]?.nudges[0]);
 const ANNOUNCED = blackout?.intro?.pa[0] ?? '';
+const ALARM = first(blackout?.radio.alarm);
 
 /** 0.75 s of a 440 Hz tone as an MP3 (64 kbit/s, made once with LAME): 0.784 s decoded. */
 const TONE_MP3 = readFileSync(new URL('fixtures/tone.mp3', import.meta.url));
@@ -245,6 +246,41 @@ describe('a take recorded on the page', () => {
     const ids = Object.keys(manifest());
     expect(ids).toEqual([...ids].sort());
     expect(readFileSync(manifestFile(), 'utf8')).toMatch(/\n$/);
+  });
+
+  it('enters a line the operator says in a mood with it, as the voice script does', async () => {
+    const id = voiceId(ALARM);
+    expect((await ask(desk(fakeConvert), post(id, toneWav(2))))?.status).toBe(200);
+    const entry = manifest()[id];
+    expect(entry).toEqual({
+      text: ALARM,
+      ms: 2000,
+      missions: ['blackout'],
+      speaker: 'operator',
+      mood: 'tense',
+      source: 'human',
+      file: `${id}.m4a`,
+    });
+    expect(Object.keys(entry ?? {})).toEqual([
+      'text',
+      'ms',
+      'missions',
+      'speaker',
+      'mood',
+      'source',
+      'file',
+    ]);
+    // A line said in no mood has none in its entry, and the opening one keeps its place.
+    await ask(desk(fakeConvert), post(voiceId(START), toneWav(1)));
+    expect(Object.keys(manifest()[voiceId(START)] ?? {})).toEqual([
+      'text',
+      'ms',
+      'missions',
+      'speaker',
+      'opens',
+      'source',
+      'file',
+    ]);
   });
 
   it('refuses an id or a source that is none, and a line no shipped mission says', async () => {

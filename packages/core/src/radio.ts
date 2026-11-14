@@ -73,6 +73,30 @@ export function speakerOf(moment: RadioMoment): Speaker {
   return PA_MOMENTS.has(moment) ? 'pa' : 'operator';
 }
 
+/**
+ * How the operator says a line, by the moment it comes at: the run's first alarm and an emergency
+ * missed tense, the clock pressing, an emergency urgent as it starts and relieved as it is
+ * cleared, a run won warm and a run lost quiet. The run's story — the start, the stations, the
+ * escape — and the plant's loudspeakers have none: they speak as they always spoke. The voice
+ * script asks ElevenLabs for a mood by an audio tag beside the words (scripts/voice.ts
+ * `MOOD_TAGS`), never in the words a subtitle shows.
+ */
+export const MOODS = {
+  alarm: 'tense',
+  clock: 'pressing',
+  emergency: 'urgent',
+  cleared: 'relieved',
+  missed: 'tense',
+  won: 'warm',
+  lost: 'quiet',
+} as const satisfies Partial<Record<RadioMoment, string>>;
+export type Mood = (typeof MOODS)[keyof typeof MOODS];
+
+/** How the operator says a line at `moment` (MOODS); null where it has no mood of its own. */
+export function moodOf(moment: RadioMoment): Mood | null {
+  return (MOODS as Partial<Record<RadioMoment, Mood>>)[moment] ?? null;
+}
+
 /** The clock's calls, the earliest first: the mission's line for each, and the time left then, s. */
 export const CLOCK_CALLS = [
   { key: 'fiveMinutes', sec: 300 },
@@ -102,18 +126,20 @@ export function wonBand(leftMs: number): WonBand {
 export const LOST_CAUSES = ['time', 'alarms', 'abandoned'] as const;
 export type LostCause = (typeof LOST_CAUSES)[number];
 
-/** One line that can be heard in a run: what it says, when, and who says it. */
+/** One line that can be heard in a run: what it says, when, who says it, and how. */
 export interface RadioLine {
   readonly text: string;
   readonly when: RadioMoment;
   /** the station a nudge or a solve's line belongs to; null for the others */
   readonly puzzleId: string | null;
   readonly speaker: Speaker;
+  /** how the operator says it (MOODS); null for a line said as every line was */
+  readonly mood: Mood | null;
 }
 
 /**
- * Every text of `line` heard at `when`, each said by whoever speaks then and each its own
- * recording; none where the mission has no such line.
+ * Every text of `line` heard at `when`, each said by whoever speaks then, as the moment wants it
+ * said, and each its own recording; none where the mission has no such line.
  */
 const textsOf = (
   line: Line | undefined,
@@ -122,7 +148,13 @@ const textsOf = (
 ): RadioLine[] =>
   line === undefined
     ? []
-    : variantsOf(line).map((text) => ({ text, when, puzzleId, speaker: speakerOf(when) }));
+    : variantsOf(line).map((text) => ({
+        text,
+        when,
+        puzzleId,
+        speaker: speakerOf(when),
+        mood: moodOf(when),
+      }));
 
 /** Every text of the lines of `said` the mission has, each heard at its moment, in their order. */
 const linesOf = (said: readonly (readonly [Line | undefined, RadioMoment])[]): RadioLine[] =>

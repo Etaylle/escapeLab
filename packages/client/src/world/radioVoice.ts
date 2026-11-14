@@ -11,7 +11,7 @@ import {
   startSample,
   type Engine,
 } from './audio.js';
-import type { Speaker } from '@escapelab/core';
+import type { Mood, Speaker } from '@escapelab/core';
 import { hold, letGo } from './audioMemory.js';
 import { duck, unduck } from './mix.js';
 import { sample, type SfxId } from './samples.js';
@@ -33,8 +33,8 @@ import { sample, type SfxId } from './samples.js';
 
 /**
  * Where the recordings lie, and their list: the voices that speak them (`voices`, the script's)
- * and every recorded line by its id (`lines`: { [id]: { text, ms, missions, speaker, opens?,
- * file } }).
+ * and every recorded line by its id (`lines`: { [id]: { text, ms, missions, speaker, mood?,
+ * opens?, file } }).
  */
 export const VOICE_BASE = '/voice/';
 export const MANIFEST_URL = `${VOICE_BASE}manifest.json`;
@@ -44,16 +44,17 @@ export type PersonSource = 'human' | 'upload';
 
 /**
  * One recorded line: what it says, how long it speaks, ms, the missions that say it, who says
- * it — the plant's loudspeakers or the operator (core radio.ts `Speaker`) — whether it opens a
- * run (a mission's `radio.start`), who made it — a person (`source`), or a synthetic voice's
- * render (`render`) — and its file under VOICE_BASE, an .m4a or an .mp3. The game plays
- * whatever the entry names, alike.
+ * it — the plant's loudspeakers or the operator (core radio.ts `Speaker`) — the mood it was
+ * asked for in (core radio.ts `MOODS`), whether it opens a run (a mission's `radio.start`),
+ * who made it — a person (`source`), or a synthetic voice's render (`render`) — and its file
+ * under VOICE_BASE, an .m4a or an .mp3. The game plays whatever the entry names, alike.
  */
 export interface VoiceEntry {
   readonly text: string;
   readonly ms: number;
   readonly missions: readonly string[];
   readonly speaker: Speaker;
+  readonly mood?: Mood;
   readonly opens?: true;
   readonly source?: PersonSource;
   readonly render?: string;

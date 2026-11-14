@@ -13,7 +13,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
-import { radioLines, type Mission, type Speaker } from '@escapelab/core';
+import { radioLines, type Mission, type Mood, type Speaker } from '@escapelab/core';
 import type { ApiResponse } from './api.js';
 import { readBody } from './body.js';
 import { switchOn } from './switches.js';
@@ -151,13 +151,15 @@ export async function decodedMs(file: string): Promise<number> {
 
 /**
  * A line a shipped mission puts on the air: what it says, the missions that say it, whether it
- * opens a run, and who speaks it — the plant's loudspeakers or the operator.
+ * opens a run, who speaks it — the plant's loudspeakers or the operator — and in what mood
+ * (null for none).
  */
 export interface ShippedLine {
   text: string;
   missions: string[];
   opens: boolean;
   speaker: Speaker;
+  mood: Mood | null;
 }
 
 /** A recording sent in: its kind, its bytes, and — for a WAV, from its header — its length. */
@@ -173,6 +175,7 @@ interface ManifestEntry {
   ms: number;
   missions: string[];
   speaker: Speaker;
+  mood?: Mood;
   opens?: true;
   source?: Source;
   file: string;
@@ -208,7 +211,8 @@ export class VoiceDesk {
     let found: ShippedLine | null = null;
     for (const mission of this.missions()) {
       for (const line of radioLines(mission).filter((said) => voiceId(said.text) === id)) {
-        found ??= { text: line.text, missions: [], opens: false, speaker: line.speaker };
+        const { text, speaker, mood } = line;
+        found ??= { text, missions: [], opens: false, speaker, mood };
         if (!found.missions.includes(mission.id)) found.missions.push(mission.id);
         found.opens ||= line.when === 'start';
       }
@@ -242,9 +246,9 @@ export class VoiceDesk {
       await this.put(input, sound.kind === 'wav', file);
       // The line's recording of the other kind, an earlier one, goes.
       rmSync(join(this.dir, file.endsWith('.mp3') ? `${id}.m4a` : `${id}.mp3`), { force: true });
-      const opening = line.opens ? { opens: true as const } : {};
-      const { text, missions, speaker } = line;
-      this.note(id, { text, ms, missions, speaker, ...opening, source, file });
+      const { text, missions, speaker, mood } = line;
+      const said = { text, ms, missions, speaker, ...(mood === null ? {} : { mood }) };
+      this.note(id, { ...said, ...(line.opens ? { opens: true as const } : {}), source, file });
       return { status: 200, body: { id, ms, source, file } };
     } finally {
       rmSync(scratch, { recursive: true, force: true });

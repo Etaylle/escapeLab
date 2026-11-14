@@ -141,6 +141,7 @@ describe('sabotage emergencies', () => {
       when: 'announce',
       puzzleId: null,
       speaker: 'pa',
+      mood: null,
     });
   });
 
