@@ -821,8 +821,8 @@ there; a runner at the screen's rate paces at 16.8, so
 40 ms stays its bound, and an escape grown dearer there still fails. The 40 ms floor
 also bounds what a regression in the pacing scene itself could hide: the pacing window is gated
 against 40 ms alone, as is every window before it (the lab lit before the blackout), and one
-that fails sets no pace. The log names both numbers, „p95 50.0 ms, allowed 66.8 (2 × pacing
-33.4)", and a line `pace` what the pacing window set.
+that fails sets no pace. The log names both numbers, „p95 50.0 ms at load 12.3, allowed 66.8
+(2 × pacing 33.4 at load 8.2)", and a line `pace` what the pacing window set.
 
 **What the timing checks read (H-sgl).** The lead's gated run — the walkthrough under
 `SHOTS_SOFTWARE_GL=1`, alone on main after a merge — had stopped judging the code: on main itself,
@@ -859,6 +859,30 @@ sideways it takes the strip's place in the folded row a moment after a solve (sc
 `StageTop`), and with device-solved.png's screenshot taking 1.2 s under load the strip was gone
 before the check looked; the radio's listener, left unheard as the run ended, then took the
 process down before its summary.
+
+Each check now reads what the page recorded on its own clock (tools/panelfade.mjs,
+tools/pageclock.mjs). The fade as played: a MutationObserver notes when the panel begins to
+leave and when it is gone, and each frame the panel's opacity and how far its fade has run on
+the fade's own clock (the animation's currentTime); the panel has to go 100 to 600 ms after it
+began to leave, inert, its opacity only falling, and show midway on a frame — a frame drawn
+between half and nine tenths into the 150-ms fade, where its ease-in has the panel at 0.86 to
+0.28, has to. Where the page drew none there, the midway frames are skipped (`panel-close
+(fade)`), the reason naming the fade's times at the frames it drew and when the panel went, and
+the held shot judges the fade; a fade that never falls still fails on a frame in its middle, as
+does a panel gone at once. meter-swing.png: the page pauses the needle's own transition 60 ms
+into its 600-ms swing as it begins — some 40 % of its way, −58° on a swing from −90° to −10.8° —
+so that the screenshot shows it on its way whenever it lands; the needle has to have swung, held
+still through the shot and stood between where it was and its reading, or past it, and the log
+names when the swing began after the probe on the page's clock. The 250 ms the shot had to be
+asked for within is gone: it timed the round trip and the poll, never the picture. The phone's
+targets are measured once the device's animations that ran have ended on the page's clock (3 s
+at most; a control measured short while one still ran is skipped, the wait named). At a sync
+station each page notes, from before the presses, when its strip first shows the station done
+and when its own press went down, so that a banner over the strip later no longer hides it; the
+log gives each page's time from its press to its strip. And every frame window's line names the
+machine's 1-minute load as it began (`os.loadavg`), the `pace` line the load its pacing window ran
+at, and the summary the load as the run began and ended — the windows themselves, the lead's
+gate, keep their budgets.
 
 **The frame in CSS pixels (N-camera).** The walkthrough's host window at 1440 × 820 now shows
 24.3 × 11.5 tiles of 58.2 px where main showed 22.2 × 10.5 of 63.7 — more tiles, each smaller —

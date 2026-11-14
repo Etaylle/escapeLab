@@ -307,6 +307,21 @@ auf einem M4 mit 16 GB (14.11.2026, Last 9 bis 17) 772 s:
 `SHOTS_ONLY=screens,intro` spielte Blackout in 48 s; jede Gruppe im Lauf zieht die Mission bis
 zur Siegerkarte mit, und `SHOTS_ONLY=run` allein dauerte 262 s (den Systemcheck 85 s).
 
+**Zeitprüfungen unter Last:** Unter `SHOTS_SOFTWARE_GL=1` und auf einer ausgelasteten Maschine
+kommen Screenshots und Abfragen spät. Was eine Bewegung oder einen Zeitpunkt prüft, liest deshalb,
+was die Seite selbst auf ihrer Uhr festhielt, nicht, wann der Rundgang nachsah: Das Ausblenden
+eines Geräts (`panel-close.png`) hält ein Beobachter auf der Seite fest — wann es zu gehen begann
+und wann es weg war, je gezeichnetem Bild Deckkraft und Stand der Blende (`tools/panelfade.mjs`);
+den Ausschlag der Nadel (`meter-swing.png`) hält die Seite 60 ms in seiner Bewegung an, bis die
+Aufnahme sitzt; die LED-Leiste einer Gleichzeit-Station merkt sich jede Seite, sobald sie die
+Station gelöst zeigt, auch wenn danach das Funkband an ihrer Stelle steht; die Bedienelemente eines
+Geräts auf dem quer gehaltenen Handy werden gemessen, wenn seine Animationen auf der Uhr der Seite
+zu Ende sind (`tools/pageclock.mjs`). Wo es unter Last nichts zu urteilen gibt — die Seite
+zeichnete in der Mitte der Blende kein Bild —, steht eine Zeile `skipped:` mit den gemessenen
+Zeiten im Log und zählt in der Zusammenfassung. Jedes Frame-Fenster nennt die 1-Minuten-Last, unter
+der es lief, die Zeile `pace` die ihres Lauffensters, und die Zusammenfassung die Last zu Beginn
+und am Ende des Laufs.
+
 **Ton und Funkstimme:** Jeder Raum klingt nach seiner Art, die Schritte des Partners kommen von
 dort, wo er steht, und die Musik zieht mit dem Druck an — alles zur Laufzeit erzeugt
 ([`docs/sound.md`](docs/sound.md)). Nur die Funksprüche der Leitstelle sind Aufnahmen

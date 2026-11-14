@@ -201,6 +201,15 @@ die Entscheidung.
     nach 572 und 2931 ms), wie bisher mit den Zeiten. lever-countdown las beide Seiten 1301 bis
     1303 ms nach dem Zug, beide „2". Die übrigen Skips sind die der Missionen (Systemcheck 16,
     Blackout 4), wie in der CI auf main.
+- Umgesetzt: Jede Zeitprüfung liest, was die Seite auf ihrer eigenen Uhr festhielt
+  (`tools/panelfade.mjs`, `tools/pageclock.mjs`). Die Blende: ein MutationObserver hält Beginn und
+  Ende fest, jedes Bild Deckkraft und Stand der Blende; ein Bild zwischen halber und neun Zehntel
+  Blende muss das Gerät halb zeigen, gab es keines, wird übersprungen (`panel-close (fade)`) mit
+  den Zeiten der gezeichneten Bilder. Die Nadel hält die Seite 60 ms in ihren Ausschlag an, bis die
+  Aufnahme sitzt. Die Ziele auf dem Handy werden gemessen, wenn die Animationen des Geräts auf der
+  Uhr der Seite zu Ende sind (höchstens 3 s, sonst übersprungen mit der Wartezeit). Die LED-Leiste
+  merkt sich jede Seite vor den Drücken. Jedes Frame-Fenster nennt die 1-Minuten-Last, unter der es
+  lief, die Zusammenfassung die zu Beginn und am Ende; kein Budget geändert.
 
 ### T-9 Tests an der Wanduhr — Status: erledigt (2026-11-13) · Größe: S
 - Zwei Tests lasen die echte Uhr und wurden unter Last rot: `certificate.test.ts` (openssl liest
