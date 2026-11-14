@@ -716,17 +716,20 @@ bar's avatar, its head, is the player's badge — the name, the colour, the acco
 for the hero where the hero is left out; the hero is the player in the scene, and waves at a new
 name.
 
-**Composition.** The menu's scene is a night shot: the lab sunk to 38 % of its light (The menu)
-and the hand lamp's beam its main light, as a key light is in a dark set. The hero stands at three
+**Composition.** The menu's scene is a night shot: the lab sunk to 38 % of its light (The menu) and
+the hand lamp's beam its main light, as a key light is in a dark set. The hero stands at three
 quarters toward the menu and holds the lamp toward it, so that the beam crosses the stage's free
 middle, where the places' rooms show (The menu's places), and ends short of the menu's column; the
 title and the menu stand on the dark left, nothing lit under the text. The hero wears its colour
-sunk 35 % for the night, and an edge of the lamp's warm light runs down its front, toward the
-menu — 0.85 strong at its strongest, only while the lamp burns, as strong as it burns
-(heroArt.ts `FRONT_RIM`); its back keeps no edge light. Of the three looks the owner was shown —
-the lamp held at rest in the dark, a cold light along its back against the lamp, the lamp held
-out further — the first stands until the owner chooses (heroArt.ts `BACK_RIM`, hero.ts
-`LAMP_RAISE`).
+sunk 35 % for the night, and an edge of the lamp's warm light runs down its front, toward the menu —
+0.85 strong at its strongest, only while the lamp burns, as strong as it burns; its back keeps no
+edge light (looks.ts `WARM_EDGE`). Of the three looks the owner was shown, the first stands until
+the owner chooses, and each is in code with the values its still was shot with (looks.ts, drawn each
+in test/menuLooks.test.ts): A, the lamp held at rest in the dark; B — `HERO_LIGHT` set to
+`COLD_BACK` —, the figure sunk 45 %, its warm edge 0.8 strong and the server room's blue, lifted
+45 % toward white, down its back at 0.75, against the lamp, whether it burns or not; C —
+`LAMP_RAISE` set to `LAMP_HELD_OUT` —, the arms raised 0.3 rad from the hold and the lamp 0.065 of
+the figure up, held out to the visor's height toward the menu, the lens and the beam with it.
 
 **Size.** The hero stands 42 % of the stage's height tall, held to 4 to 6 scene tiles — 0.9 of a
 run's tile in a window as tall (viewport.ts `tileCss`), as the drift frames a lab that fills the
