@@ -1,4 +1,4 @@
-import type { ConsoleId, MapView, Place, PlayerView } from '@escapelab/core';
+import type { ConsoleId, HandsView, MapView, Place, PlayerView } from '@escapelab/core';
 import { placeName } from '../noting.js';
 import { consoleName } from '../world/consoles.js';
 import { isArmed, known } from '../world/known.js';
@@ -49,7 +49,7 @@ function partWord(map: MapView, id: string): string | null {
 }
 
 /** The job a place gives a hand, in the map's words; null where this screen's map names none. */
-export function jobWord(map: MapView, place: Place): string | null {
+function jobWord(map: MapView, place: Place): string | null {
   switch (place.kind) {
     case 'console':
       return consoleWord(map, place.console);
@@ -60,6 +60,33 @@ export function jobWord(map: MapView, place: Place): string | null {
     case 'part':
       return partWord(map, place.id);
   }
+}
+
+/** A hand in the line: the name the view gives it, whether it is this screen's own, its job. */
+interface Job {
+  name: string;
+  mine: boolean;
+  job: string | null;
+}
+
+/**
+ * Each of the crew `held` names a hand for, by the name the view gives them and with the job of
+ * the place they hold in the words of `map`: this screen's own player first, then the rest of
+ * the crew in its order. Somebody the run no longer counts holds no hand and stands nowhere in it.
+ */
+function jobsOf(view: PlayerView, held: HandsView['held'], map: MapView): Job[] {
+  const mine = (id: string): boolean => id === view.you.id;
+  const players = [
+    ...view.players.filter((player) => mine(player.id)),
+    ...view.players.filter((player) => !mine(player.id)),
+  ];
+  return players.flatMap(({ id, name }) => {
+    const place = held.find((hand) => hand.playerId === id)?.place;
+    if (place === undefined) {
+      return [];
+    }
+    return [{ name, mine: mine(id), job: place === null ? null : jobWord(map, place) }];
+  });
 }
 
 /** One hand in the line: „Anna: Pult A"; with no job, „frei" and the places nobody holds. */
@@ -82,21 +109,14 @@ export function handsLine(view: PlayerView, map: MapView): HandsLine | null {
     return null;
   }
   const open = hands.open.flatMap((place) => jobWord(map, place) ?? []);
-  const nameOf = (id: string): string => view.players.find((p) => p.id === id)?.name ?? id;
-  const mine = (playerId: string): boolean => playerId === view.you.id;
-  const ordered = [
-    ...hands.held.filter((hand) => mine(hand.playerId)),
-    ...hands.held.filter((hand) => !mine(hand.playerId)),
-  ].map(({ playerId, place }) => ({
-    playerId,
-    job: place === null ? null : jobWord(map, place),
+  const jobs = jobsOf(view, hands.held, map);
+  const firstFree = jobs.findIndex((hand) => hand.job === null);
+  const said = jobs.map((hand, i) => ({
+    mine: hand.mine,
+    text: entry(hand.name, hand.job, i === firstFree ? open : []),
   }));
-  const firstFree = ordered.findIndex((hand) => hand.job === null);
-  const said = ordered.map((hand, i) =>
-    entry(nameOf(hand.playerId), hand.job, i === firstFree ? open : []),
-  );
   return {
-    line: said.join(' · '),
-    own: ordered[0] !== undefined && mine(ordered[0].playerId) ? (said[0] ?? null) : null,
+    line: said.map((hand) => hand.text).join(' · '),
+    own: said.find((hand) => hand.mine)?.text ?? null,
   };
 }

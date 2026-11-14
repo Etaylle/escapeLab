@@ -55,7 +55,7 @@ export function placesOf(mission: Pick<Mission, 'puzzles' | 'map'>, puzzleId: st
 const HANDS_FROM = 3;
 
 /** One of the crew at the station in front of it, and the place they hold there: null for none. */
-export interface Hand {
+interface Hand {
   playerId: string;
   place: Place | null;
 }
