@@ -11,6 +11,7 @@ import { MUSIC_LEVEL } from '../src/world/music.js';
 import {
   previewing,
   PREVIEW_FADE_S,
+  STALL_MS,
   stopPreview,
   togglePreview,
 } from '../src/world/musicPreview.js';
@@ -22,7 +23,7 @@ import {
   type FakeGain,
   type FakeNode,
 } from './fakeGraph.js';
-import { elements, fakeMedia } from './fakeMedia.js';
+import { elements, fakeMedia, type FakeAudio } from './fakeMedia.js';
 import { serveSamples } from './fakeSamples.js';
 import { buttonsOf, elementsOf, press, type Rendered } from './probe.js';
 
@@ -215,6 +216,16 @@ describe('the music’s styles', () => {
 });
 
 describe('a piece played for the ear, as the game plays it', () => {
+  /** Yalçıner's piece of `slot` played for the ear: the element it streams on, playing. */
+  async function previewed(slot: Slot): Promise<FakeAudio> {
+    togglePreview('yalciner', slot);
+    await vi.advanceTimersByTimeAsync(20);
+    expect(previewing()).toBe(`yalciner/${slot}`);
+    const element = elements.find((each) => each.src === `/music/packs/yalciner/${slot}.m4a`);
+    if (element === undefined || element.paused) throw new Error(`yalciner/${slot} plays not`);
+    return element;
+  }
+
   /** The level the stream playing `src` comes in at: its own gain, where the media meets it. */
   const levelOf = (ctx: FakeContext, src: string): FakeGain => {
     const element = elements.find((each) => each.src === src);
@@ -247,18 +258,54 @@ describe('a piece played for the ear, as the game plays it', () => {
     expect(elements.map((each) => each.src)).toEqual(['/music/packs/macleod/lobby.m4a']);
   });
 
-  it('stops where its file fails or stalls, the music let back up', async () => {
+  it('stops where its file fails, the music let back up', async () => {
     serveSamples();
-    for (const [slot, type] of [['calm', 'error'], ['tense', 'stalled']] as const) {
-      togglePreview('yalciner', slot);
-      await vi.advanceTimersByTimeAsync(20);
-      expect(previewing()).toBe(`yalciner/${slot}`);
-      elements.find((each) => each.src === `/music/packs/yalciner/${slot}.m4a`)?.fire(type);
-      expect(previewing()).toBeNull();
-      const { engine, ctx } = engineNow();
-      ctx.currentTime += 1;
-      expect(duckLevels(engine, ctx.currentTime).music).toBe(1);
-    }
+    const element = await previewed('calm');
+    element.fire('error');
+    expect(previewing()).toBeNull();
+    const { engine, ctx } = engineNow();
+    ctx.currentTime += 1;
+    expect(duckLevels(engine, ctx.currentTime).music).toBe(1);
+  });
+
+  it('plays on through a stall while it plays, and stops where it plays no further', async () => {
+    serveSamples();
+    const element = await previewed('tense');
+    // A slow line: the browser says the file stalls, and what it has plays on.
+    element.fire('stalled');
+    element.currentTime += 0.8;
+    await vi.advanceTimersByTimeAsync(STALL_MS);
+    expect(previewing()).toBe('yalciner/tense');
+    // Stalled again, and no further a second on: it plays no more.
+    expect(STALL_MS).toBe(1000);
+    element.fire('stalled');
+    await vi.advanceTimersByTimeAsync(STALL_MS - 1);
+    expect(previewing()).toBe('yalciner/tense');
+    await vi.advanceTimersByTimeAsync(1);
+    expect(previewing()).toBeNull();
+  });
+
+  it('keeps the piece played next playing where the one before it stalled', async () => {
+    serveSamples();
+    const before = await previewed('calm');
+    before.fire('stalled');
+    await previewed('tense');
+    await vi.advanceTimersByTimeAsync(STALL_MS);
+    expect(previewing()).toBe('yalciner/tense');
+  });
+
+  it('stops at a stall where it stands paused, or is paused within the second', async () => {
+    serveSamples();
+    const paused = await previewed('calm');
+    paused.pause();
+    paused.fire('stalled');
+    expect(previewing()).toBeNull();
+    const later = await previewed('tense');
+    later.fire('stalled');
+    later.currentTime += 0.3;
+    later.pause();
+    await vi.advanceTimersByTimeAsync(STALL_MS);
+    expect(previewing()).toBeNull();
   });
 
   it('goes out over PREVIEW_FADE_S as it stops', async () => {

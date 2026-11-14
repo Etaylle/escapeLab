@@ -1483,9 +1483,11 @@ take the choice the next time they start. The choice is kept on the device with 
 (`settings.ts` `music: { pack, pieces }`), never sent to the server, and „Zurücksetzen" on „Ton"
 brings the score back. A ▶ beside every piece of the Feinwahl plays it there — streamed from where
 its sound starts, at the stems' level by its gain, on a bus of its own at the Musik volume past the
-music's duck (`mix.ts` `preview`), the music pulled 24 dB down under it — until it ends, another is
-played, it is pressed again or the settings close (`musicPreview.ts`). „Nennungen" below lists the
-attribution of every piece in play, its addresses linked; `/sounds` lists every pack's.
+music's duck (`mix.ts` `preview`), the music pulled 24 dB down under it — until it ends, its file
+fails, another is played, it is pressed again or the settings close (`musicPreview.ts`). A file
+that stalls stops it only once it plays no more — paused, or no further a second on — for a browser
+says a file stalls on a slow line while it still plays from what it has. „Nennungen" below lists
+the attribution of every piece in play, its addresses linked; `/sounds` lists every pack's.
 
 **A file that cannot be had.** An installed app keeps only the score's pack; another pack's piece
 is fetched as it is first played. Where that fails — a server that answers with an error, a phone
