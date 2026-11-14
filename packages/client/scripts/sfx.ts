@@ -68,7 +68,6 @@
  *
  * Runs on Node's own TypeScript, as the voice script does: it imports nothing of the app.
  */
-import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import {
   copyFileSync,
@@ -87,6 +86,13 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { ElevenLabs } from '@elevenlabs/elevenlabs-js';
 import {
+  afconvertIn,
+  afconvertOut,
+  requireAfconvert,
+  type Decode,
+  type Encode,
+} from './afconvert.ts';
+import {
   ELEVEN_GAP_MS,
   elevenAudio,
   elevenClient,
@@ -97,10 +103,8 @@ import {
   floorOf,
   loudnessOf,
   lufsOf,
-  parseWav,
   silenceOf,
   sliceOf,
-  wavBytes,
   type Loudness,
   type Pcm,
 } from './pcm.ts';
@@ -1121,41 +1125,6 @@ export function pickTake(takes: readonly Take[]): Take {
   return best;
 }
 
-/** Decodes the recording at a path into PCM. */
-export type Decode = (path: string) => Pcm;
-/** Encodes `pcm` into the file at `path`: a piece of a suite, as AAC in an .m4a. */
-export type Encode = (pcm: Pcm, path: string) => void;
-
-/** Decodes a recording with afconvert into `scratch` and reads it back as PCM. */
-function afconvertIn(scratch: string): Decode {
-  return (path) => {
-    const wav = join(scratch, 'decoded.wav');
-    execFileSync('afconvert', ['-f', 'WAVE', '-d', 'LEI16', path, wav]);
-    try {
-      return parseWav(readFileSync(wav));
-    } finally {
-      rmSync(wav, { force: true });
-    }
-  };
-}
-
-/**
- * Encodes with afconvert, the piece written as a WAV into `scratch` first: AAC in an .m4a at
- * PIECE_BITRATE, at the encoder's best quality.
- */
-function afconvertOut(scratch: string): Encode {
-  return (pcm, path) => {
-    const wav = join(scratch, 'piece.wav');
-    writeFileSync(wav, wavBytes(pcm));
-    try {
-      const aac = ['-f', 'm4af', '-d', 'aac', '-b', String(PIECE_BITRATE), '-q', '127'];
-      execFileSync('afconvert', [...aac, wav, path]);
-    } finally {
-      rmSync(wav, { force: true });
-    }
-  };
-}
-
 /** The take of `entry` at `path`, made at `influence`, measured. */
 function takeAt(entry: CatalogEntry, path: string, influence: number, decode: Decode): Take {
   const pcm = decode(path);
@@ -1547,14 +1516,6 @@ function requireKey(): void {
       'sfx: no ElevenLabs key — run it as `pnpm --filter client sfx`, which hands node the ' +
         "repo's .env.local, or with ELEVENLABS_API_KEY set in the environment",
     );
-  }
-}
-
-function requireTools(): void {
-  try {
-    execFileSync('/usr/bin/which', ['afconvert'], { stdio: 'ignore' });
-  } catch {
-    throw new Error('sfx: afconvert is missing — it comes with macOS; measure the files on a Mac');
   }
 }
 
@@ -2253,13 +2214,13 @@ export async function runWith(
 
 async function main(options: Options): Promise<void> {
   const catalog = checkCatalog(readCatalog());
-  if (!options.dryRun) requireTools();
+  if (!options.dryRun) requireAfconvert('sfx');
   const scratch = mkdtempSync(join(tmpdir(), 'escapelab-sfx-'));
   try {
     await runWith(options, catalog, {
       places: PLACES,
       decode: afconvertIn(scratch),
-      encode: afconvertOut(scratch),
+      encode: afconvertOut(scratch, PIECE_BITRATE),
       now: () => new Date(),
       wait: pause,
       candidates: () => mkdtempSync(join(tmpdir(), 'escapelab-sfx-candidates-')),
