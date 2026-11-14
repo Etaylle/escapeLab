@@ -879,7 +879,24 @@ export class Room {
    */
   parkSeat(pass: SeatPass, accountId: string): void {
     const playerId = this.seats.seatOfPass(pass);
-    if (playerId === null || !this.hasPlayer(playerId)) {
+    if (playerId !== null) {
+      this.parkAt(playerId, accountId);
+    }
+  }
+
+  /**
+   * Every seat here bound to `accountId` but the one of the pass `staying`, parked as `parkSeat`
+   * parks it: the account's Kennwort changed on the device of that pass.
+   */
+  parkAccountSeats(accountId: string, staying: string): void {
+    for (const playerId of this.seats.seatsOfAccount(accountId, staying)) {
+      this.parkAt(playerId, accountId);
+    }
+  }
+
+  /** The seat of `playerId` parked for `accountId` (`parkSeat`); nothing for one not in play. */
+  private parkAt(playerId: string, accountId: string): void {
+    if (!this.hasPlayer(playerId)) {
       return;
     }
     this.seats.park(playerId, accountId);

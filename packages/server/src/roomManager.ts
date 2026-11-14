@@ -472,6 +472,16 @@ export class RoomManager {
   }
 
   /**
+   * Every seat bound to `accountId` but the one of the pass `staying` stays the account's, its
+   * line dropped (`Room.parkAccountSeats`): the account's Kennwort changed on that pass's device.
+   */
+  parkAccountSeats(accountId: string, staying: string): void {
+    for (const room of this.rooms.values()) {
+      room.parkAccountSeats(accountId, staying);
+    }
+  }
+
+  /**
    * Every seat `pass` holds is bound to `accountId` as well (`Room.bindAccount`), the account the
    * server found for the pass — as it sat down, came back, or signed in.
    */

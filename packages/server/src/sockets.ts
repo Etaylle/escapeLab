@@ -14,6 +14,7 @@ import {
   type Arrival,
   type Gate,
   type Limits,
+  type ParkFirst,
   type Tries,
 } from './accounts.js';
 import { MISSED_PINGS, SILENT_MS, type CutReason } from './heartbeat.js';
@@ -739,9 +740,13 @@ async function changePassword(
   msg: Extract<ClientMessage, { kind: 'change-password' }>,
   limits: Limits,
 ): Promise<ServerMessage> {
-  const changed = await lab.accounts.changePassword(msg.pass, msg.old, msg.password, limits);
-  for (const pass of changed.signedOut) {
-    lab.manager.parkSeats(pass, changed.accountId);
+  const { pass, old, password } = msg;
+  // The seats of the account's other passes are parked before the store signs those out; any of
+  // them the rooms did not know as the account's after.
+  const parkFirst = (accountId: string): void => lab.manager.parkAccountSeats(accountId, pass.id);
+  const changed = await lab.accounts.changePassword(pass, old, password, limits, parkFirst);
+  for (const other of changed.signedOut) {
+    lab.manager.parkSeats(other, changed.accountId);
   }
   return told('changed')(changed.view);
 }
@@ -775,9 +780,21 @@ const seatPassOf = (pass: CrewPass): SeatPass => ({
 });
 
 /**
+ * How the seats `pass` holds are parked for its account (`RoomManager.parkSeats`) before the
+ * store signs it out (accounts.ts `ParkFirst`): where it holds any (`parked`).
+ */
+const parkFirstOf =
+  (lab: Lab, pass: CrewPass, parked: boolean): ParkFirst =>
+  (accountId) => {
+    if (parked) {
+      lab.manager.parkSeats(seatPassOf(pass), accountId);
+    }
+  };
+
+/**
  * `pass` signed out of its account on `socket` (`AccountDesk.signOut`, rule 4): a seat it holds
- * stays the account's, its line dropped (`RoomManager.parkSeats`); the socket may speak for the
- * device's next pass.
+ * stays the account's, its line dropped (`RoomManager.parkSeats`) before the store signs the pass
+ * out; the socket may speak for the device's next pass.
  */
 async function signOut(
   lab: WithAccounts,
@@ -786,17 +803,15 @@ async function signOut(
   gate: Gate,
 ): Promise<ServerMessage> {
   const parked = lab.manager.holdsSeat(pass);
-  const accountId = await lab.accounts.signOut(pass, parked, gate);
-  if (parked && accountId !== null) {
-    lab.manager.parkSeats(seatPassOf(pass), accountId);
-  }
+  await lab.accounts.signOut(pass, parked, gate, parkFirstOf(lab, pass, parked));
   passOn(socket, null);
   return { kind: 'login', done: 'signed-out', account: null };
 }
 
 /**
  * The device of `msg` switched accounts on its new pass (`AccountDesk.switchAccount`): a seat the
- * old pass holds stays the old account's, as at a sign-out; `socket` speaks for the new pass.
+ * old pass holds stays the old account's, parked first as at a sign-out; `socket` speaks for the
+ * new pass.
  */
 async function switchAccount(
   lab: WithAccounts,
@@ -804,13 +819,12 @@ async function switchAccount(
   msg: Extract<ClientMessage, { kind: 'switch-account' }>,
   limits: Limits,
 ): Promise<ServerMessage> {
-  const parked = lab.manager.holdsSeat(msg.pass);
+  const { pass, next } = msg;
+  const parked = lab.manager.holdsSeat(pass);
   const login = { typed: msg.login, password: msg.password, parked };
-  const { arrival, left } = await lab.accounts.switchAccount(msg.pass, msg.next, login, limits);
-  if (parked && left !== null) {
-    lab.manager.parkSeats(seatPassOf(msg.pass), left);
-  }
-  passOn(socket, msg.next.id);
+  const parkFirst = parkFirstOf(lab, pass, parked);
+  const { arrival } = await lab.accounts.switchAccount(pass, next, login, limits, parkFirst);
+  passOn(socket, next.id);
   return told('switched')(arrival.view);
 }
 

@@ -6,9 +6,9 @@ import {
   checkSecret,
   HAS_LOGIN,
   isLoggedRun,
+  creditsSeat,
   LoginTaken,
   PARKED,
-  sameSecretHash,
   unlockedBy,
   type Account,
   type FinishedRun,
@@ -66,7 +66,8 @@ type Holder = Pick<Prisma.IdentityGetPayload<object>, 'subject' | 'secretHash' |
 
 /**
  * The account that held each seat of `run`: the one whose identity is the seat's pass — its id
- * and the hash of its secret both, for an id alone credits nobody — null for a seat without one.
+ * and the hash of its secret both, for an id alone credits nobody, or a seat the server parked
+ * for it (store.ts `creditsSeat`) — null for a seat without one.
  */
 function ownersOf(run: FinishedRun, identities: readonly Holder[]): (string | null)[] {
   const bySubject = new Map(identities.map((identity) => [identity.subject, identity]));
@@ -74,7 +75,7 @@ function ownersOf(run: FinishedRun, identities: readonly Holder[]): (string | nu
     const pass = run.passes[seat] ?? null;
     const identity = pass === null ? undefined : bySubject.get(pass.id);
     const shown = identity !== undefined && pass !== null;
-    const owned = shown && sameSecretHash(identity.secretHash, pass.secretHash);
+    const owned = shown && creditsSeat(identity.secretHash, pass.secretHash);
     return owned ? identity.accountId : null;
   });
 }

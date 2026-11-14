@@ -109,6 +109,62 @@ async function signedIn(server: FakeServer, name: string, number: string): Promi
   return device;
 }
 
+/** Where a store's call waits: `reached` once it is there, till `release` lets it on. */
+function waitingCall() {
+  let reach = (): void => undefined;
+  const reached = new Promise<void>((resolve) => {
+    reach = resolve;
+  });
+  let release = (): void => undefined;
+  const open = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  return { reach, reached, open, release };
+}
+
+/** `store`'s sign-out held till `release`: `before` it writes, or `after`. */
+function holdSignOut(store: JsonlStore, when: 'before' | 'after') {
+  const signOut = store.signOut.bind(store);
+  const call = waitingCall();
+  vi.spyOn(store, 'signOut').mockImplementation(async (leaving) => {
+    const left = when === 'after' ? await signOut(leaving) : null;
+    call.reach();
+    await call.open;
+    return when === 'after' ? left : signOut(leaving);
+  });
+  return call;
+}
+
+/** `store`'s sign-in held till `release`, once it is written: a switch's. */
+function holdSignIn(store: JsonlStore) {
+  const signIn = store.signIn.bind(store);
+  const call = waitingCall();
+  vi.spyOn(store, 'signIn').mockImplementation(async (...args) => {
+    const deleted = await signIn(...args);
+    call.reach();
+    await call.open;
+    return deleted;
+  });
+  return call;
+}
+
+/** `store`'s new Kennwort held till `release`, once it is written. */
+function holdChange(store: JsonlStore) {
+  const replace = store.replaceLoginSecret.bind(store);
+  const call = waitingCall();
+  vi.spyOn(store, 'replaceLoginSecret').mockImplementation(async (...args) => {
+    const signedOut = await replace(...args);
+    call.reach();
+    await call.open;
+    return signedOut;
+  });
+  return call;
+}
+
+/** The runs of the account `accountId` in `store`, by the seat it held in each. */
+const seatsOf = async (store: Store, accountId: string): Promise<number[]> =>
+  (await store.runsOfAccount(accountId, 5)).runs.map((run) => run.seat);
+
 afterEach(() => {
   vi.restoreAllMocks();
 });
@@ -449,6 +505,118 @@ describe('a seat bound to the account, its Kennwort changed on another device', 
       const annas = (await store.findByIdentity(identityOf('Phone')))?.id ?? '';
       expect((await store.runsOfAccount(annas, 5)).runs.map((run) => run.seat)).toEqual([0]);
     });
+    manager.get(code).dispose();
+  });
+});
+
+describe('a run that ends as its seat’s pass signs out', () => {
+  it('credits the account with a run that ends once the sign-out is in the store', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const store = freshStore();
+    const { server, manager } = serverOn(store);
+    const { anna, ben, code } = await runOfTwo(server);
+    const annas = (await store.findByIdentity(identityOf('Anna')))?.id ?? '';
+    const call = holdSignOut(store, 'after');
+    anna.say({ kind: 'sign-out', pass: passFor('Anna') });
+    await call.reached;
+    // The store has signed the pass out, the answer not gone yet: the run ends.
+    ben.say({ kind: 'abandon', code, pass: passFor('Ben') });
+    await vi.waitFor(async () => expect(await seatsOf(store, annas)).toEqual([0]));
+    call.release();
+    await vi.waitFor(() => expect(anna.heard.some((m) => m.kind === 'login')).toBe(true));
+    manager.get(code).dispose();
+  });
+
+  it('credits the account with a run that ends before the sign-out reaches the store', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const store = freshStore();
+    const { server, manager } = serverOn(store);
+    const { anna, ben, code } = await runOfTwo(server);
+    const annas = (await store.findByIdentity(identityOf('Anna')))?.id ?? '';
+    const call = holdSignOut(store, 'before');
+    anna.say({ kind: 'sign-out', pass: passFor('Anna') });
+    await call.reached;
+    // The seat parked first, the store not written yet: the run ends.
+    expect(ben.view.players.find((p) => p.name === 'Anna')?.connected).toBe(false);
+    ben.say({ kind: 'abandon', code, pass: passFor('Ben') });
+    await vi.waitFor(async () => expect(await seatsOf(store, annas)).toEqual([0]));
+    call.release();
+    await vi.waitFor(() => expect(anna.heard.some((m) => m.kind === 'login')).toBe(true));
+    manager.get(code).dispose();
+  });
+
+  it('credits the account with a run that ends as a new Kennwort signs its seat out', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const store = freshStore();
+    const { server, manager } = serverOn(store);
+    const { ben, code, number } = await runOfTwo(server);
+    const annas = (await store.findByIdentity(identityOf('Anna')))?.id ?? '';
+    const phone = await signedIn(server, 'Phone', number);
+    const call = holdChange(store);
+    const change: ClientMessage = {
+      kind: 'change-password',
+      pass: passFor('Phone'),
+      old: KENNWORT,
+      password: 'Neues Kennwort',
+    };
+    phone.say(change);
+    await call.reached;
+    // The laptop's pass signed out in the store, the answer not gone yet: the run ends.
+    ben.say({ kind: 'abandon', code, pass: passFor('Ben') });
+    await vi.waitFor(async () => expect(await seatsOf(store, annas)).toEqual([0]));
+    call.release();
+    await vi.waitFor(() => expect(phone.heard.some((m) => m.kind === 'login')).toBe(true));
+    manager.get(code).dispose();
+  });
+});
+
+describe('a run that ends as its seat’s pass switches away, or stays', () => {
+  it('credits the old account with a run that ends as the device switches away', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const store = freshStore();
+    const { server, manager } = serverOn(store);
+    const { anna, ben, code } = await runOfTwo(server);
+    const annas = (await store.findByIdentity(identityOf('Anna')))?.id ?? '';
+    const dan = server.connect();
+    const set = await heardAfter(
+      dan,
+      { kind: 'set-password', pass: passFor('Dan'), password: KENNWORT },
+      'login',
+    );
+    const call = holdSignIn(store);
+    anna.say({
+      kind: 'switch-account',
+      pass: passFor('Anna'),
+      next: passFor('Eva'),
+      login: set.account?.login ?? '',
+      password: KENNWORT,
+    });
+    await call.reached;
+    // The switch is in the store, its answer not gone yet: the run ends.
+    ben.say({ kind: 'abandon', code, pass: passFor('Ben') });
+    await vi.waitFor(async () => expect(await seatsOf(store, annas)).toEqual([0]));
+    call.release();
+    await vi.waitFor(() => expect(anna.heard.some((m) => m.kind === 'login')).toBe(true));
+    manager.get(code).dispose();
+  });
+
+  it('leaves the seat of the device that changes the Kennwort on its line', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const store = freshStore();
+    const { server, manager } = serverOn(store);
+    const { anna, ben, code, number } = await runOfTwo(server);
+    const phone = await signedIn(server, 'Phone', number);
+    const change: ClientMessage = {
+      kind: 'change-password',
+      pass: passFor('Anna'),
+      old: KENNWORT,
+      password: 'Neues Kennwort',
+    };
+    expect((await heardAfter(anna, change, 'login')).done).toBe('changed');
+    expect(anna.heard.some((m) => m.kind === 'left')).toBe(false);
+    expect(ben.view.players.find((p) => p.name === 'Anna')?.connected).toBe(true);
+    const told = await heardAfter(phone, { kind: 'whereami', pass: passFor('Phone') }, 'login');
+    expect(told.done).toBe('signed-out');
     manager.get(code).dispose();
   });
 });

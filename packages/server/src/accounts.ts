@@ -83,6 +83,16 @@ export const CHANGED_MEANWHILE = 'Das Kennwort wurde eben an anderer Stelle geä
 export const SIGN_OUT_LOSES =
   'Ohne Kennwort wäre dieses Konto nach dem Abmelden nicht mehr erreichbar.';
 
+/**
+ * What parks the seats of passes about to sign out, in the rooms (sockets.ts): called with their
+ * account's id right before the store signs them out, so that a run ending that moment credits
+ * the account through its parked seat (store.ts `creditsSeat`).
+ */
+export type ParkFirst = (accountId: string) => void;
+
+/** Parks nothing: where no seat is to be parked, or none is known. */
+const PARK_NOTHING: ParkFirst = () => undefined;
+
 /** A Kennwort changed (`AccountDesk.changePassword`). */
 export interface NewKennwort {
   /** the account as its owner sees it now */
@@ -258,15 +268,17 @@ export class AccountDesk {
    * (`Tries`), but counted against the pass, not the Ausweisnummer: the pass is signed in
    * already, and a lock of the number by others' guesses holds it not. Every other pass of the
    * account is signed out with it (store.ts `replaceLoginSecret`): a device the Kennwort was
-   * given away to is in no more. Refused, saying why, for a Kennwort too short or too long, an
-   * account without one (NO_LOGIN), `old` wrong (OLD_WRONG) or a try the limits hold back, a gate
-   * that lets nothing change, and a Kennwort changed meanwhile elsewhere.
+   * given away to is in no more, their seats parked first (`parkFirst`). Refused, saying why, for
+   * a Kennwort too short or too long, an account without one (NO_LOGIN), `old` wrong (OLD_WRONG)
+   * or a try the limits hold back, a gate that lets nothing change, and a Kennwort changed
+   * meanwhile elsewhere.
    */
   changePassword(
     pass: CrewPass,
     old: string,
     password: string,
     limits: Limits = NO_LIMITS,
+    parkFirst: ParkFirst = PARK_NOTHING,
   ): Promise<NewKennwort> {
     return this.serial(pass, async () => {
       if (!passwordFits(password)) {
@@ -284,6 +296,7 @@ export class AccountDesk {
         throw new GameError(OLD_WRONG);
       }
       const next = await this.derives.run(() => hashPassword(password), limits.from);
+      parkFirst(account.id);
       const signedOut = await this.store.replaceLoginSecret(account.id, kept, next, pass.id);
       if (signedOut === null) {
         throw new GameError(CHANGED_MEANWHILE);
@@ -325,11 +338,17 @@ export class AccountDesk {
 
   /**
    * `pass` signed out of its account, which stays whole (store.ts `signOut`): where it holds a
-   * seat (`parked`), its way in stays for that seat, kept under PARKED; else it is deleted. The id
-   * of the account it led into; null for none — nothing to sign out of. Refused, saying why, for
-   * an account without a Kennwort (SIGN_OUT_LOSES) and where the gate lets nothing change.
+   * seat (`parked`), its way in stays for that seat, kept under PARKED, the seat parked first
+   * (`parkFirst`); else it is deleted. The id of the account it led into; null for none — nothing
+   * to sign out of. Refused, saying why, for an account without a Kennwort (SIGN_OUT_LOSES) and
+   * where the gate lets nothing change.
    */
-  signOut(pass: CrewPass, parked: boolean, gate: Gate = OPEN): Promise<string | null> {
+  signOut(
+    pass: CrewPass,
+    parked: boolean,
+    gate: Gate = OPEN,
+    parkFirst: ParkFirst = PARK_NOTHING,
+  ): Promise<string | null> {
     return this.serial(pass, async () => {
       const account = await this.store.findByIdentity(identityOf(pass));
       if (account === null) {
@@ -341,6 +360,7 @@ export class AccountDesk {
       if (!gate.mayChange()) {
         throw new GameError(TOO_MANY_CHANGES);
       }
+      parkFirst(account.id);
       await this.store.signOut({ pass: identityOf(pass), parked });
       console.log('[escapelab] a pass signed out of its account');
       return account.id;
@@ -350,7 +370,8 @@ export class AccountDesk {
   /**
    * The device switches accounts in one go (store.ts `signIn` with a pass leaving): the new pass
    * `next` signed into the account of the Ausweisnummer `typed`, its Kennwort shown — tried as
-   * `signIn` tries it — and `pass` signed out, its way in kept for its seat where it holds one.
+   * `signIn` tries it — and `pass` signed out, its way in kept for its seat where it holds one, the
+   * seat parked first (`parkFirst`).
    * The account it signed out of is deleted where nothing is left of it. Nothing changes where the
    * try is refused, as `signIn` refuses it, or `next` is no new pass.
    */
@@ -359,6 +380,7 @@ export class AccountDesk {
     next: CrewPass,
     login: { typed: string; password: string; parked: boolean },
     limits: Limits = NO_LIMITS,
+    parkFirst: ParkFirst = PARK_NOTHING,
   ): Promise<Switched> {
     return this.serial(pass, async () => {
       if (next.id === pass.id) {
@@ -367,6 +389,9 @@ export class AccountDesk {
       const { accountId, checked } = await this.verified(login.typed, login.password, limits);
       const left = (await this.store.findByIdentity(identityOf(pass)))?.id ?? null;
       const leaving = { pass: identityOf(pass), parked: login.parked };
+      if (left !== null) {
+        parkFirst(left);
+      }
       if ((await this.store.signIn(identityOf(next), accountId, leaving, checked)) === null) {
         throw new GameError(WRONG_LOGIN);
       }

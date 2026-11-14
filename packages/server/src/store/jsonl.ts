@@ -9,9 +9,9 @@ import {
   checkSecret,
   HAS_LOGIN,
   isLoggedRun,
+  creditsSeat,
   LoginTaken,
   PARKED,
-  sameSecretHash,
   unlockedBy,
   type Account,
   type FinishedRun,
@@ -215,12 +215,13 @@ export class JsonlStore implements Store {
 
   /**
    * The account whose identity `pass` is — its id and the hash of its secret both, for an id
-   * alone credits nobody; null for none.
+   * alone credits nobody, or a seat the server parked for it (store.ts `creditsSeat`); null for
+   * none.
    */
   private ownerOf(pass: SeatPass | null): string | null {
     const known = pass === null ? undefined : this.identities.get(`${PASS}${pass.id}`);
     const shown = known !== undefined && pass !== null;
-    return shown && sameSecretHash(known.secretHash, pass.secretHash) ? known.accountId : null;
+    return shown && creditsSeat(known.secretHash, pass.secretHash) ? known.accountId : null;
   }
 
   /** `unlocked` earned by `accountId`: each Erfolg it had already keeps its first date. */

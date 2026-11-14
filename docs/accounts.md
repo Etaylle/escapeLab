@@ -108,7 +108,9 @@ or dashes, „EL" or not.
   lobby's — stays the account's (gameplay.md, „Verbindung und Wiedereintritt"): its line drops
   as a drop does („Abgemeldet: Der Platz bleibt beim Konto."), and the pass keeps its way in for
   that seat alone under 64 zeros, as above, so that the run credits the account as ever; the pass
-  itself gets in nowhere any more, and shown again it is told it signed out.
+  itself gets in nowhere any more, and shown again it is told it signed out. The seat is parked
+  before the way in, at a sign-out, a switch and a new Kennwort alike, and a run credits a seat
+  the server parked to its pass's account: one that ends in that moment counts all the same.
 - **Konto wechseln** is both in one dialog and one transaction: a new pass, minted by the
   device, signs into the other account and the old pass signs out; a wrong Kennwort changes
   nothing. After a sign-out or a switch the socket speaks for the device's next pass.

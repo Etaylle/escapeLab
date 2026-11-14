@@ -247,6 +247,16 @@ export function sameSecretHash(kept: string | null, shown: string): boolean {
 }
 
 /**
+ * Whether a run's seat, bound to the hash `seat`, credits the account of the way in of the same
+ * pass that keeps `kept`: the same hash — or a seat the server parked for the account (PARKED,
+ * which no secret's hash is): its pass signs out that moment, or signed out, and its way in,
+ * parked or about to be, is still the account's (sockets.ts parks the seats first).
+ */
+export function creditsSeat(kept: string | null, seat: string): boolean {
+  return seat === PARKED || sameSecretHash(kept, seat);
+}
+
+/**
  * Throws unless `shown` is the hash `kept` (`sameSecretHash`): PassSignedOut where `kept` is
  * PARKED, GameError(PASS_REFUSED) else.
  */

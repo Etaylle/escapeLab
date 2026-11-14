@@ -83,6 +83,13 @@ export class SeatBook {
     }
   }
 
+  /** The seats bound to `accountId` but the one of the pass `staying`, by player id. */
+  seatsOfAccount(accountId: string, staying: string): string[] {
+    return [...this.bindings]
+      .filter(([, binding]) => binding.accountId === accountId && binding.passId !== staying)
+      .map(([playerId]) => playerId);
+  }
+
   /** The seat bound to `accountId`, by player id; null for none. */
   seatOfAccount(accountId: string): string | null {
     for (const [playerId, binding] of this.bindings) {
