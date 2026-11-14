@@ -1097,6 +1097,10 @@ stands so after the shot. The walk cycle's two shots, walk-cycle-a.png and walk-
 the walk's phase for the two stretches in which the legs stand wide, and main's own Systemcheck
 missed both at load 24 to 38: they hold the world's frames the same way from the one that brought
 the walk into a stretch, the walk standing still meanwhile and its end moving on by that long.
+nudge.png waits for the Leitstelle's next line at the station that is up, given after 90 s of quiet,
+two a station; a walkthrough slowed by load let both go out on its way there and then waited 110 s
+for a third. It counts the lines since the station came up against the mission's and, where all
+went out, skips, saying when each came.
 
 Every frame window's line names the machine's 1-minute load as it began (`os.loadavg`), the `pace`
 line the load its pacing window ran at, and the summary the load as the run began and ended — the

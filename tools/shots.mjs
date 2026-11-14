@@ -281,7 +281,9 @@
  * lines, every text 15 px or more and 4.5:1 against the paper, or the run
  * fails. After the station step the crew leaves the station that is
  * up quiet until the Leitstelle names the next place (nudge.png,
- * nudge-phone.png): its line in both banners, spoken by its recording.
+ * nudge-phone.png): its line in both banners, spoken by its recording —
+ * skipped, saying when each came, where every line the station has went out
+ * on the way, as a walkthrough slowed by load lets them.
  *
  * Stepping back: the first player to step back with Esc from a station standing
  * open — the station step's operator, else the Signalkette's sender — sees the
