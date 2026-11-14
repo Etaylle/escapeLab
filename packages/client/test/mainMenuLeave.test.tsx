@@ -128,32 +128,48 @@ function browserHistory() {
         steps.splice(at + 1, steps.length, data);
         at += 1;
       },
-      back: () => {
-        at = Math.max(0, at - 1);
-        for (const listener of [...listeners]) {
-          listener();
-        }
+      replaceState: (data) => {
+        steps[at] = data;
       },
     },
     addEventListener: (_type, listener) => void listeners.add(listener),
     removeEventListener: (_type, listener) => void listeners.delete(listener),
   };
-  return { win, steps: () => steps.slice(0, at + 1), listeners };
+  /** The browser's back button: a step back, and `popstate` told. */
+  const back = (): void => {
+    at = Math.max(0, at - 1);
+    for (const listener of [...listeners]) {
+      listener();
+    }
+  };
+  return { win, back, steps: () => steps.slice(0, at + 1), listeners };
 }
 
 describe('the browser’s back button in a run', () => {
   it('opens the run’s menu instead of leaving the page, each time it is pressed', () => {
-    const { win, steps } = browserHistory();
+    const { win, back, steps } = browserHistory();
     const opened = vi.fn();
     const letGo = guardHistory(win, opened);
     expect(steps()).toEqual([null, { [GUARD]: true }]);
-    win.history.back();
+    back();
     expect(opened).toHaveBeenCalledTimes(1);
     expect(guarded(win.history.state)).toBe(true);
-    win.history.back();
+    back();
     expect(opened).toHaveBeenCalledTimes(2);
     expect(steps()).toEqual([null, { [GUARD]: true }]);
     letGo();
+    expect(guarded(win.history.state)).toBe(false);
+  });
+
+  it('lets go with no step back, which would cancel the reload of a room left', () => {
+    const { win, back, steps } = browserHistory();
+    const opened = vi.fn();
+    const letGo = guardHistory(win, opened);
+    letGo();
+    // The step stays where it stood, its mark taken off: the page goes nowhere.
+    expect(steps()).toEqual([null, null]);
+    back();
+    expect(opened).not.toHaveBeenCalled();
     expect(steps()).toEqual([null]);
   });
 

@@ -4,8 +4,10 @@ import { useEffect, useRef } from 'react';
  * The browser's back button in a run opens the run's menu (menuLayer.ts) instead of leaving the
  * page: as the run starts, the page stands one step deeper in its history — the same address, a
  * state of its own (`GUARD`); back from that step, the menu opens and the step is taken again,
- * so that the next back opens it as well. Once the run is over, or left, the step goes back where
- * it still stands on top. Closing the tab stays what it always was: a drop.
+ * so that the next back opens it as well. Once the run is over, or left, the step stays, its mark
+ * taken off: a step back there would cancel a reload under way — leaving a room reloads the page
+ * just as the run lets go, and Chromium drops a reload that a history step follows before the
+ * server answered. Closing the tab stays what it always was: a drop.
  */
 
 /** The mark of the history's step a run stands on. */
@@ -15,7 +17,7 @@ export const GUARD = 'escapelabRun';
 export interface GuardedHistory {
   readonly state: unknown;
   pushState(data: unknown, unused: string): void;
-  back(): void;
+  replaceState(data: unknown, unused: string): void;
 }
 
 /** The window as the guard uses it: its history, and its `popstate` as the history steps back. */
@@ -32,8 +34,8 @@ export function guarded(state: unknown): boolean {
 
 /**
  * Stands the page on the run's step of its history, and opens the menu (`onBack`) whenever the
- * history steps back from it, taking the step again. Returns what lets go of it: the step taken
- * back where it still stands on top.
+ * history steps back from it, taking the step again. Returns what lets go of it: the step's mark
+ * taken off where it still stands on top, with no step back.
  */
 export function guardHistory(win: GuardedWindow, onBack: () => void): () => void {
   const step = (): void => win.history.pushState({ [GUARD]: true }, '');
@@ -50,7 +52,7 @@ export function guardHistory(win: GuardedWindow, onBack: () => void): () => void
   return () => {
     win.removeEventListener('popstate', onPop);
     if (guarded(win.history.state)) {
-      win.history.back();
+      win.history.replaceState(null, '');
     }
   };
 }
