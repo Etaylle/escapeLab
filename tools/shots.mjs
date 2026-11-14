@@ -15858,7 +15858,7 @@ async function main() {
   for (const line of PLAN.lines) {
     console.log(line);
   }
-  console.log(`load               ${loadText(LOAD_AT_START)} as the run begins (1-minute average)`);
+  console.log(`load               ${LOAD_AT_START.toFixed(1)} as the run begins (1-minute average)`);
   try {
     if (SERVER_ENTRY !== null) {
       await startServer();
