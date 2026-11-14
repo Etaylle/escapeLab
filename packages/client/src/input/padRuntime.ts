@@ -35,7 +35,8 @@ import {
  * (input/focus.ts) — the D-pad or a flick of the stick moves between its controls, A presses
  * one and B steps back (Esc); a book turns its pages left and right. L1 talks while held —
  * straight to the voice (`onPadTalk`), so that it talks at a prompt holding the keys too —, Start
- * opens the settings, Select the Einsatzinfo. With `?fakepad=1` the walkthrough plays a
+ * opens the room's menu — off any room the settings — or closes it again (menuLayer.ts), Select
+ * the Einsatzinfo. With `?fakepad=1` the walkthrough plays a
  * controller of its own through `window.__escapelab.pad`. Only a controller of the standard
  * mapping is read: another one's buttons and axes would mean something else.
  */
@@ -44,9 +45,9 @@ import {
 const REPEAT_AFTER_MS = 380;
 const REPEAT_EVERY_MS = 140;
 
-/** What the controller reaches past the keys: the settings, which Start opens. */
+/** What the controller reaches past the keys: the menus, which Start opens and closes. */
 export interface PadHooks {
-  onSettings: () => void;
+  onStart: () => void;
 }
 
 /** A controller of the walkthrough's: its buttons and stick set from the page's probe. */
@@ -296,7 +297,7 @@ function inWorldDpad(button: typeof PAD_PING | typeof PAD_CHAT): void {
 function pressIn(button: PadButton): void {
   const { keys, pad } = getSettings();
   if (button === 'start') {
-    rt?.hooks.onSettings();
+    rt?.hooks.onStart();
   } else if (button === 'select') {
     tap(keys.info);
   } else if (button === 'l1') {
@@ -416,7 +417,7 @@ function poll(now: number): void {
     return;
   }
   const pad = connectedPad();
-  const next = pad === null ? AT_REST : padStateOf(pad);
+  const next = pad === null ? AT_REST : padStateOf(pad, getSettings().deadzone / 100);
   const before = rt.last;
   rt.last = next;
   const pressed = pressedSince(before, next);
@@ -512,11 +513,11 @@ export function startPad(hooks: PadHooks, search: string): () => void {
   };
 }
 
-/** The controller for the app's life: started once, Start opening the settings by `onSettings`. */
-export function usePad(onSettings: () => void): void {
-  const latest = useRef(onSettings);
-  latest.current = onSettings;
-  useEffect(() => startPad({ onSettings: () => latest.current() }, location.search), []);
+/** The controller for the app's life: started once, Start doing what `onStart` does. */
+export function usePad(onStart: () => void): void {
+  const latest = useRef(onStart);
+  latest.current = onStart;
+  useEffect(() => startPad({ onStart: () => latest.current() }, location.search), []);
 }
 
 /**

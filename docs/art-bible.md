@@ -717,6 +717,48 @@ silent. Laid apart, the light looks as it did: on the Canvas path the hero's can
 drawn before in 46 speaking frames at density 1 and at 2, but for one pixel one level off in two
 of them at 1 and in one at 2.
 
+## Chrome (ui.css, styles/lobby.css, finale.css, pause.css, settings.css)
+
+Everything round the world — the top bar, the strip under a run, the lobby's panel, the end
+screen's report, the pause menu and the settings — wears the main menu's panel: its near-black
+(`rgba(9, 14, 19, 0.97)`), a hairline of `--line-2`, corners of 14 px, the menu's shadow where it
+stands over a scene and none where it stands beside the world, whose foot a shadow would darken.
+Michroma heads it and does nothing else: the bar's name, the lobby's mission, the report's
+sections, the pause menu's title and items (the menu's own), the ask before giving a seat up and
+the settings' title; labels stay in the mono, upper case and spaced, running text in the system
+sans, at the sizes Type and targets gives. The room's code and its invite link stand as one round
+chip, the code in teal to say aloud and the link behind a hairline; beside it a chip counts the
+audience — the eye, the count, „2 Zuschauer" in its label — which the server tells the room as a
+watcher comes or goes (`audience`). The connection's lamp stays as it was. Every way out carries
+the icon set's glyph (screens/Icon.tsx: „Raum verlassen" and „Zuschauen beenden" the exit, „Zur
+Lobby" the crew), never an emoji. A phone upright keeps the logo's mark without its word, so that
+the bar never wraps.
+
+The world's canvas takes what the chrome leaves, and its zoom follows its height (Framing), so the
+chrome keeps its frame: the bar its height, the strip its 58 px on a wide window and its three rows
+of 20, 27 and 40 px under 820 px — where the menu is the gear's alone, the row having no room for a
+fourth button — and a phone held sideways its one row of 44 px. Measured against main (scratchpad
+`pause/chrome-check.mjs`, 14.11.2026) in a Systemcheck room on seed 5 under reduced motion — the
+host's laptop at 1440 × 820, 1280 × 800, 960 × 760 and 420 × 760, the guest's touch phone at 844 ×
+390, 932 × 430 and 420 × 760 — the top bar, the strip or the row and the world's canvas stand on
+the same pixels as on main at every size, its backing too, and the world's own pixels, read back
+from its canvas, differ from main's only in the pulsing halo of the station up next, 0.05 to 2.1 %
+of them, as main's differ from themselves a run later, 0.0 to 1.6 %.
+
+**The settings** stand in five tabs, as Deep Rock Galactic's and Helldivers 2's do: „Ton" (Gesamt —
+the sound switch is its mute —, Musik, Effekte, Funk and Umgebung, each a slider that ticks through
+its bus as it moves, beside a mute; the talk key), „Bild" (the text size, less motion, the light by
+WebGL or by Canvas, the full screen), „Steuerung" (the key table, the controller and its live test,
+the symbols its prompts show, the stick's dead zone from 5 to 40 %), „Zugang" (a pattern of the
+screen's dark over each crew colour but the first on the dots in the chrome — a hole, bars across
+and down, stripes, a ring, a half, a cross —, and the size of the radio's and the opening's lines
+on larger screens) and, with the pass's account, „Konto" (the name the account takes, its colour as
+the lobby chose it, „Konto löschen"). The tabs read in the labels' mono; the card keeps one height
+for every tab, so that the bar stands still while a tab's controls scroll under it, and holds the
+bar whole on a phone held sideways at 932 × 430. Every tab but „Konto" has its „Zurücksetzen" at
+its foot; every change takes at once and is kept on the device. The arrows step along the bar, Home
+and End to its ends, and a controller's D-pad opens each tab its focus comes to.
+
 ## Type and targets (styles/devices.css, test/deviceTargets.test.tsx)
 
 Every word on a device is set by its role, at the normal text size and in a laptop's 720 px of
@@ -782,7 +824,8 @@ cut short where it runs out, what the crew still has to bring after it; then the
 coloured dots, ringed while one speaks and ticked off on the hatch in the escape, what one does
 beside the dot for three seconds after it changed and no longer (`freshTags`; names and doings
 in the dots' labels); the Laborkennung's value; the clock with the alarm marks; and the
-microphone's switch, the notepad and the info panel by their icons, a fingertip each. A line on
+microphone's switch, the notepad, the info panel and the menu by their icons, a fingertip each
+(a pattern over each dot where the settings' „Farbmuster" asks for it, Chrome). A line on
 the air takes the goal's place for as long as it is up, two lines of it at most, and adds no
 height, so the zoom stands still as it comes and goes (insets.ts); an alarm or an emergency
 stands under the row while it lasts. With no strip under it the world's canvas takes the

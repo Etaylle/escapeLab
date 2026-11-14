@@ -1,5 +1,5 @@
-import { useState, useSyncExternalStore } from 'react';
-import { isMuted, setMuted } from '../world/audio.js';
+import { useSyncExternalStore } from 'react';
+import { isMuted, setMuted, subscribeMuted } from '../world/audio.js';
 import { menuSoundState, subscribeMenuSound } from '../world/menuSound.js';
 import { Icon } from './Icon.js';
 
@@ -16,10 +16,11 @@ function soundSwitch(on: boolean, waiting: boolean): { className: string; title:
 
 /**
  * The sound's quick switch: off or on — and on the menu (`menu`) lit while the menu's sound
- * waits for the first click or key (world/menuSound.ts).
+ * waits for the first click or key (world/menuSound.ts). It is the whole lab's mute, the same as
+ * the settings' „Gesamt" mute (Settings.tsx), and follows it.
  */
 export function SoundSwitch({ menu }: { menu: boolean }) {
-  const [sound, setSound] = useState(() => !isMuted());
+  const sound = !useSyncExternalStore(subscribeMuted, isMuted, isMuted);
   const state = useSyncExternalStore(subscribeMenuSound, menuSoundState, menuSoundState);
   const look = soundSwitch(sound, menu && state === 'waiting');
   return (
@@ -28,10 +29,7 @@ export function SoundSwitch({ menu }: { menu: boolean }) {
       title={look.title}
       aria-label="Ton"
       aria-pressed={sound}
-      onClick={() => {
-        setMuted(sound);
-        setSound(!sound);
-      }}
+      onClick={() => setMuted(sound)}
     >
       <Icon name={sound ? 'speaker' : 'speaker-off'} />
     </button>

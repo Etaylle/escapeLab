@@ -106,6 +106,8 @@ export interface Connection {
   /** asks the server for the runs of the pass's account (`my-runs`); stable for the page's life */
   askMyRuns: () => void;
   roomCode: string | null;
+  /** how many audience connections watch the tab's room, as the server last said (`audience`) */
+  watching: number;
   /**
    * the banner's words: a refusal of what is answered nowhere else (`ANSWERED_IN_PLACE`), there
    * until the player does the next thing — what the page streams by itself (`pos`, `clock`)
@@ -154,6 +156,12 @@ export interface Connection {
    * LEAVE_WAIT_MS without a word — the audience simply goes; the page loads anew.
    */
   leaveRoom: () => void;
+  /**
+   * Off to the main menu, the seat kept (`to-menu`, as Dota 2 disconnects): once the server has
+   * the seat off its line, or after LEAVE_WAIT_MS without a word, the page loads anew on the
+   * main menu, whose card of the room leads back (`goToMenu`).
+   */
+  toMenu: () => void;
 }
 
 /** How long leaving waits for the server to free the seat before the page loads anew, ms. */
@@ -196,6 +204,7 @@ export interface Page {
   setMyRuns: (runs: Loaded<MyRuns>) => void;
   setTakeover: (takeover: Takeover | null) => void;
   setRestoring: (restoring: Restoring | null) => void;
+  setWatching: (count: number) => void;
   setError: (message: string) => void;
   refuse: (message: string, of: ClientMessage['kind'] | null) => void;
   /** a comeback is out (tab.ts): an error now means the room or seat the tab kept is gone */
@@ -286,8 +295,8 @@ function seatNews(msg: ServerMessage, page: Page): boolean {
 }
 
 /**
- * Takes in what the line carries besides: the time, the rooms, the room's snapshots, a room on
- * its way back, refusals, and the live streams (`streamNews`).
+ * Takes in what the line carries besides: the time, the rooms, how many watch the room, the
+ * room's snapshots, a room on its way back, refusals, and the live streams (`streamNews`).
  */
 function lineNews(msg: ServerMessage, page: Page): void {
   switch (msg.kind) {
@@ -296,6 +305,9 @@ function lineNews(msg: ServerMessage, page: Page): void {
       break;
     case 'rooms':
       page.setRooms(msg.rooms);
+      break;
+    case 'audience':
+      page.setWatching(msg.count);
       break;
     case 'snapshot':
     case 'restart':
@@ -611,6 +623,38 @@ export function leaveSeat(
 }
 
 /**
+ * Off to the main menu from room `code`, the seat kept (`to-menu`): once the server says the seat
+ * is off its line (`at-menu`) — or after LEAVE_WAIT_MS without a word, a line down meanwhile
+ * holding it as a drop — the tab is in no room and the page loads anew on the main menu. What
+ * was noted there and the room's snapshot stay: the seat is the pass's still, and the menu's card
+ * of the room (`whereami`) leads back to it.
+ */
+export function goToMenu(
+  code: string,
+  listen: Connection['listen'],
+  send: (msg: ClientMessage) => void,
+  reload: () => void = () => location.reload(),
+): void {
+  // Either way out lets go of the other: the word and the wait, once.
+  const off = (): void => {
+    clearTimeout(timer);
+    stop();
+    leaveTab();
+    reload();
+  };
+  const timer = setTimeout(off, LEAVE_WAIT_MS);
+  const stop = listen({
+    message: (msg) => {
+      if (msg.kind === 'at-menu' && msg.code === code) {
+        off();
+      }
+    },
+    closed: () => undefined,
+  });
+  send({ kind: 'to-menu' });
+}
+
+/**
  * Wakes the line (`Line.wake`) on every way the page comes back: the network back (`online`),
  * the page shown again from the cache or on its tab (`pageshow`, `visibilitychange` to
  * visible), the window in focus. Returns how to stop.
@@ -694,6 +738,7 @@ type Shown = Pick<
   | 'account'
   | 'myRuns'
   | 'roomCode'
+  | 'watching'
   | 'error'
   | 'refusal'
 >;
@@ -714,6 +759,7 @@ function usePage(): { shown: Shown; page: Page; clearError: () => void } {
   const [takeover, setTakeover] = useState<Takeover | null>(null);
   const [restoring, setRestoring] = useState<Restoring | null>(null);
   const [roomCode, setRoomCode] = useState<string | null>(roomOfTab);
+  const [watching, setWatching] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [refusal, setRefusal] = useState<Refusal | null>(null);
   const resuming = useRef(false);
@@ -730,6 +776,7 @@ function usePage(): { shown: Shown; page: Page; clearError: () => void } {
     setMyRuns,
     setTakeover,
     setRestoring,
+    setWatching,
     setError,
     refuse: (message, of) => setRefusal((last) => ({ seq: (last?.seq ?? 0) + 1, message, of })),
     resuming,
@@ -739,7 +786,7 @@ function usePage(): { shown: Shown; page: Page; clearError: () => void } {
   };
   const shown = { view, spectatorView, takeover, restoring, rooms, seat, account, myRuns };
   return {
-    shown: { ...shown, roomCode, error, refusal },
+    shown: { ...shown, roomCode, watching, error, refusal },
     page,
     clearError: () => setError(null),
   };
@@ -821,6 +868,14 @@ export function useGameConnection(): Connection {
       }
       const playerId = page.seen.current?.you.id ?? null;
       leaveSeat(code, playerId, listen, (msg) => lineRef.current?.send(msg));
+    },
+    toMenu: () => {
+      const code = roomOfTab();
+      if (code === null) {
+        location.reload();
+        return;
+      }
+      goToMenu(code, listen, (msg) => lineRef.current?.send(msg));
     },
   };
 }

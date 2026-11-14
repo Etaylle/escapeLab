@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import type { ClientMessage, PlayerView, TakeoverView } from '@escapelab/core';
+import type { AwayView, ClientMessage, PlayerView, TakeoverView } from '@escapelab/core';
 import { useServerNow } from '../hooks.js';
 import { Icon } from './Icon.js';
 
@@ -146,7 +146,22 @@ export function TakeoverCard({
   );
 }
 
-/** The run standing still for crew members away, over the world of everybody on the line. */
+/**
+ * Who of those the run waits for went to the main menu on purpose, their seat kept: „Ben ist ins
+ * Hauptmenü gegangen.", „Ben und Cem sind ins Hauptmenü gegangen."; '' for none of them.
+ */
+export function wentToMenu(away: readonly Pick<AwayView, 'name' | 'menu'>[]): string {
+  const names = away.filter((member) => member.menu === true).map((member) => member.name);
+  if (names.length < 2) {
+    return names.length === 0 ? '' : `${names.join('')} ist ins Hauptmenü gegangen.`;
+  }
+  return `${names.slice(0, -1).join(', ')} und ${names.at(-1) ?? ''} sind ins Hauptmenü gegangen.`;
+}
+
+/**
+ * The run standing still for crew members away, over the world of everybody on the line — whom
+ * it waits for, and who of them went to the main menu.
+ */
 export function PauseCard({
   view,
   send,
@@ -164,6 +179,7 @@ export function PauseCard({
         <Icon name="pause" /> Warten auf {away.map((member) => member.name).join(', ')} ·{' '}
         <span className="pause-count">{pauseClock(now - since)}</span>
       </h1>
+      <MenuGone away={away} />
       <p>Uhr, Patrouillen und Notfälle stehen still.</p>
       <div className="pause-ways">
         {pauseWays(view, now).map((way) => (
@@ -175,6 +191,12 @@ export function PauseCard({
       )}
     </div>
   );
+}
+
+/** The pause card's line of who went to the main menu (`wentToMenu`); nothing for none. */
+function MenuGone({ away }: { away: readonly AwayView[] }) {
+  const said = wentToMenu(away);
+  return said === '' ? null : <p className="pause-gone">{said}</p>;
 }
 
 /** A member of the crew as a view lists them, as far as their return needs. */

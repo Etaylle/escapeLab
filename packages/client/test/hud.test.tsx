@@ -53,6 +53,7 @@ function hud(events: RunEvent[], onAir = false, edgework: Edgework | null = null
       chatsRef={{ current: [] }}
       onAir={onAir}
       onOpenInfo={() => undefined}
+      onOpenMenu={() => undefined}
       notesOpen={false}
       onToggleNotes={() => undefined}
     />,
@@ -149,12 +150,15 @@ describe('the Laborkennung in a narrow strip', () => {
     cells: 3,
   };
 
-  it('stands before the buttons, the Info button last, and carries its value ready', () => {
+  it('stands before the buttons, Info and the menu last, and carries its value ready', () => {
     const html = hud([radio('Strom weg.')], false, edgework);
     const chip = html.indexOf('<div class="edgework"');
     expect(chip).toBeGreaterThan(html.indexOf('</ul>'));
     expect(html.indexOf('class="hud-info hud-notes"')).toBeGreaterThan(chip);
-    expect(html).toMatch(/<button class="hud-info">.*?Info \[I\]<\/button><\/div><\/section>$/);
+    const info = html.indexOf(' Info [I]</button>');
+    expect(info).toBeGreaterThan(html.indexOf('class="hud-info hud-notes"'));
+    expect(html.indexOf('<button class="hud-info hud-menu">')).toBeGreaterThan(info);
+    expect(html.endsWith(' Menü [Esc]</button></div></section>')).toBe(true);
     expect(html).toContain('<span class="edgework-value" title="Laborkennung K7G3A-2; ');
   });
 
@@ -166,11 +170,33 @@ describe('the Laborkennung in a narrow strip', () => {
     expect(narrow).toMatch(/\n {2}\.hud \.edgework-value \{\s*display: block;/);
     const givesWay = /\n {2}\.hud-crew,\n {2}\.hud-radio,\n {2}\.hud \.edgework \{\s*min-width: 0;/;
     expect(narrow).toMatch(givesWay);
-    // The radio line first, then the crew; the chip's value stays whole, nothing lets it shrink.
-    expect(narrow).toMatch(/\n {2}\.hud-radio \{\s*flex-shrink: 4;\s*\}/);
+    // The chip's value stays whole, nothing lets it shrink.
     expect(narrow).not.toMatch(/\.edgework[^{]*\{[^}]*flex/);
     // Nothing in it touches the buttons: they keep their size and stay on the screen.
     expect(narrow).not.toMatch(/hud-info|hud-notes|hud-mic/);
+  });
+});
+
+describe('the strip’s crew', () => {
+  it('keeps its names as the radio line gives way first, at every width', () => {
+    const ui = readFileSync(new URL('../src/ui.css', import.meta.url), 'utf8');
+    expect(ui).toMatch(/\n\.hud-radio \{\s*flex: 0 8 auto;\s*min-width: 80px;/);
+    expect(ui).toMatch(/\n\.hud-crew \{\s*flex: 0 1 auto;/);
+  });
+});
+
+describe('the strip under 820 px', () => {
+  const UI_CSS = readFileSync(new URL('../src/ui.css', import.meta.url), 'utf8');
+  const from = UI_CSS.indexOf('@media (max-width: 820px) {\n  .hud {');
+  const grid = UI_CSS.slice(from, UI_CSS.indexOf('\n}\n', from));
+
+  it('keeps its three rows: the menu stays the gear’s in the bar, Info keeps its place', () => {
+    expect(from).toBeGreaterThan(0);
+    expect(grid).toMatch(/grid-template-rows: 20px 27px 40px;/);
+    expect(grid).toMatch(/\n {2}\.hud-menu \{\s*display: none;\s*\}/);
+    const info = /\n {2}\.hud-info:not\(\.hud-notes, \.hud-mic, \.hud-menu\) \{\s*grid-area: info;/;
+    expect(grid).toMatch(info);
+    expect(grid).not.toMatch(/last-child/);
   });
 });
 

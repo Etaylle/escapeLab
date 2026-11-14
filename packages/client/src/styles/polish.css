@@ -43,11 +43,6 @@
   .hud .edgework {
     min-width: 0;
   }
-
-  /* The radio line gives way before the crew: its words were on the banner already. */
-  .hud-radio {
-    flex-shrink: 4;
-  }
 }
 
 /* ── the run report on the end screen: each icon in its line's colour ───── */

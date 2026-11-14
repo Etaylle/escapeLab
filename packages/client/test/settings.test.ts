@@ -46,14 +46,20 @@ afterEach(() => {
 });
 
 describe('readSettings and writeSettings — kept on this device', () => {
-  it('starts from the defaults: Funk 100, Effekte 100, Musik 70, V, Normal, System', async () => {
+  it('starts from the defaults: every bus full but the music, V, Normal, System', async () => {
     const { settings } = await fresh();
     expect(settings.readSettings(memory())).toEqual({
-      volumes: { radio: 100, effects: 100, music: 70 },
+      volumes: { master: 100, music: 70, effects: 100, voice: 100, ambience: 100 },
+      muted: { music: false, effects: false, voice: false, ambience: false },
       keys: DEFAULT_KEYS,
       pad: DEFAULT_PAD,
+      deadzone: 20,
+      glyphs: 'auto',
       textSize: 'normal',
       motion: 'system',
+      light: 'auto',
+      patterns: false,
+      subtitles: 'normal',
     });
     expect(settings.readSettings(null)).toEqual(settings.DEFAULT_SETTINGS);
   });
@@ -62,11 +68,17 @@ describe('readSettings and writeSettings — kept on this device', () => {
     const { settings } = await fresh();
     const store = memory();
     const chosen = {
-      volumes: { radio: 40, effects: 85, music: 0 },
+      volumes: { master: 80, music: 0, effects: 85, voice: 40, ambience: 55 },
+      muted: { music: true, effects: false, voice: false, ambience: true },
       keys: { ...DEFAULT_KEYS, talk: 'g', interact: 'f' },
       pad: { interact: 'b', drop: 'a', notes: 'x', minimap: 'r2' },
+      deadzone: 35,
+      glyphs: 'playstation',
       textSize: 'large',
       motion: 'on',
+      light: 'canvas',
+      patterns: true,
+      subtitles: 'larger',
     } as const;
     expect(settings.writeSettings(store, chosen)).toBe(true);
     expect(JSON.parse(store.items.get('escapelab.settings') ?? 'null')).toEqual(chosen);
@@ -76,20 +88,24 @@ describe('readSettings and writeSettings — kept on this device', () => {
   it('holds a volume to 0–100, and takes a setting it cannot read at its default', async () => {
     const { settings } = await fresh();
     const odd = {
-      volumes: { radio: 140, effects: -5.4, music: 'laut' },
+      volumes: { master: 140, effects: -5.4, music: 'laut' },
+      muted: { music: 'ja', voice: 1 },
       // Two actions on one key, a key the game keeps, a button that is none.
       keys: { talk: 'w', info: 'escape' },
       pad: { notes: 'a', minimap: 'start' },
+      deadzone: 90,
+      glyphs: 'sega',
       textSize: 'riesig',
       motion: 'vielleicht',
+      light: 'laser',
+      patterns: 'gern',
+      subtitles: 'riesig',
     };
     const store = memory({ 'escapelab.settings': JSON.stringify(odd) });
     expect(settings.readSettings(store)).toEqual({
-      volumes: { radio: 100, effects: 0, music: 70 },
-      keys: DEFAULT_KEYS,
-      pad: DEFAULT_PAD,
-      textSize: 'normal',
-      motion: 'system',
+      ...settings.DEFAULT_SETTINGS,
+      volumes: { master: 100, music: 70, effects: 0, voice: 100, ambience: 0 },
+      deadzone: 40,
     });
     const rounded = memory({
       'escapelab.settings': '{"volumes":{"music":33.6},"keys":{"talk":"F4"}}',
@@ -138,6 +154,21 @@ describe('readSettings and writeSettings — kept on this device', () => {
       keys: { talk: 'b' },
       textSize: 'small',
       motion: 'off',
+    });
+  });
+});
+
+describe('settings kept before every bus had a volume', () => {
+  it('give the radio’s volume to the voice’s bus, and the effects’ to the beds too', async () => {
+    const { settings } = await fresh();
+    const kept = { volumes: { radio: 35, effects: 60, music: 20 } };
+    const store = memory({ 'escapelab.settings': JSON.stringify(kept) });
+    expect(settings.readSettings(store).volumes).toEqual({
+      master: 100,
+      music: 20,
+      effects: 60,
+      voice: 35,
+      ambience: 60,
     });
   });
 });
@@ -238,19 +269,23 @@ const aimedAt = (bus: FakeGain | undefined): number | undefined => {
 };
 
 describe('the volumes on the audio’s buses', () => {
-  it('sets each bus as a share of full — the effects on the beds too', async () => {
+  it('sets each bus as a share of full, the whole lab’s at the master', async () => {
     fakeGraph();
     const { settings, audio } = await fresh();
     const engine = audio.audioEngine();
-    settings.applyVolumes({ radio: 50, effects: 20, music: 0 });
+    settings.applyVolumes({ master: 60, music: 0, effects: 20, voice: 50, ambience: 30 });
     const buses = busesOf(engine, lastContext());
     expect(aimedAt(buses.voice)).toBe(0.5);
     expect(aimedAt(buses.announce)).toBe(0.5);
     expect(aimedAt(buses.sfx)).toBe(0.2);
-    expect(aimedAt(buses.ambience)).toBe(0.2);
+    expect(aimedAt(buses.ambience)).toBe(0.3);
     expect(aimedAt(buses.music)).toBe(0);
-    // The sound switch keeps the master gain: no volume touches it.
-    expect(buses.master?.gain.events).toEqual([]);
+    expect(aimedAt(buses.master)).toBe(0.6);
+    // The sound switch mutes the master, whatever its volume; on again, the volume holds.
+    audio.setMuted(true);
+    expect(aimedAt(buses.master)).toBe(0);
+    audio.setMuted(false);
+    expect(aimedAt(buses.master)).toBe(0.6);
   });
 
   it('builds an engine made later at the volumes already set', async () => {
@@ -262,6 +297,7 @@ describe('the volumes on the audio’s buses', () => {
     expect(buses.sfx.gain.value).toBe(1);
     expect(buses.ambience.gain.value).toBe(1);
     expect(buses.music.gain.value).toBe(0.7);
+    expect(buses.master.gain.value).toBe(1);
   });
 
   it('plays a step through the effects’ bus and the chirp through the radio’s', async () => {
@@ -310,6 +346,23 @@ describe('the look on the page’s root', () => {
       return page.properties.get('--text-scale');
     });
     expect(scales).toEqual(['0.9', '1', '1.15']);
+  });
+
+  it('sets the spoken lines’ scale and the colour patterns on the root', async () => {
+    const { settings } = await fresh();
+    const looks = (['normal', 'large', 'larger'] as const).map((subtitles) => {
+      const page = root();
+      settings.applyLook({ ...settings.DEFAULT_SETTINGS, subtitles, patterns: true }, page, false);
+      return [page.properties.get('--subtitle-scale'), page.dataset['patterns']];
+    });
+    expect(looks).toEqual([
+      ['1', 'on'],
+      ['1.25', 'on'],
+      ['1.5', 'on'],
+    ]);
+    const plain = root();
+    settings.applyLook(settings.DEFAULT_SETTINGS, plain, false);
+    expect(plain.dataset['patterns']).toBe('off');
   });
 
   it('marks the motion reduce or full: An always, Aus never, System as asked', async () => {

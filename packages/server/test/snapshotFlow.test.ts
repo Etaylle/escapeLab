@@ -10,7 +10,7 @@ import {
   type ServerMessage,
 } from '@escapelab/core';
 import { MissionCatalog } from '../src/missions.js';
-import { Room, type Sealer } from '../src/room.js';
+import { Room, type LineEnd, type Sealer } from '../src/room.js';
 import { RoomManager } from '../src/roomManager.js';
 import { open, roomKey, seal } from '../src/seal.js';
 import { serveSockets } from '../src/sockets.js';
@@ -48,7 +48,7 @@ const snapshotsOf = (heard: ServerMessage[]): Snapshot[] =>
 interface Seat {
   playerId: string;
   heard: ServerMessage[];
-  detach: (clean?: boolean) => void;
+  detach: (end?: LineEnd) => void;
 }
 
 /** What seals the lab's snapshots under KEY, as an instance's, watched. */

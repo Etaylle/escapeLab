@@ -6,6 +6,7 @@ import {
   type Credits,
   type GameState,
   type ItemState,
+  type MenuPlace,
   type Player,
   type Presence,
   type RunEvent,
@@ -64,9 +65,11 @@ export type Action =
   | { type: 'player-connected'; playerId: string; at: number }
   /**
    * a crew member's line dropped at `at`: in a run they are away (`GameState.away`), and the
-   * run stands still for them — a drop alone ends no run
+   * run stands still for them — a drop alone ends no run. With `menu` it closed on purpose, the
+   * player gone to the main menu: the seat stays theirs as after any drop, and the crew sees
+   * where they went (`GameState.menus`)
    */
-  | { type: 'player-disconnected'; playerId: string; at: number }
+  | { type: 'player-disconnected'; playerId: string; at: number; menu?: true }
   /**
    * `playerId`, on the line, goes on without `absentId`, away since a drop, once its wait is
    * over (FIRST_WAIT_MS, LATER_WAIT_MS) and two of the crew at least are on the line
@@ -84,6 +87,11 @@ export type Action =
   | { type: 'takeover-claimed'; playerId: string; at: number }
   /** the ask for the seat of `playerId` is over: let in, refused, or withdrawn */
   | { type: 'takeover-settled'; playerId: string }
+  /**
+   * `playerId`, on the line in a run, opens the pause menu over it (`open`) or closes it again:
+   * the run goes on, and the crew sees them at the menu (`GameState.menus`)
+   */
+  | { type: 'set-menu'; playerId: string; open: boolean }
   /**
    * the server goes down for maintenance at `at` — a deploy, a restart — or takes the room up
    * again from a snapshot taken then, at `waitFrom`: every seat is off the line, and a run
@@ -209,6 +217,8 @@ export function applyAction(state: GameState, action: Action): GameState {
       return takeoverClaimed(state, action);
     case 'takeover-settled':
       return takeoverSettled(state, action);
+    case 'set-menu':
+      return setMenu(state, action);
     case 'maintenance':
       return maintenance(state, action);
     case 'select-color':
@@ -236,13 +246,7 @@ export function applyAction(state: GameState, action: Action): GameState {
     case 'clock-call':
       return clockCall(state, action.at);
     case 'set-occupancy':
-      return state.phase === 'playing'
-        ? {
-            ...state,
-            pressedPlates: [...action.plates].sort(),
-            occupiedPanels: [...action.panels].sort(),
-          }
-        : state;
+      return setOccupancy(state, action);
     case 'set-presence':
       return state.phase === 'playing' ? setPresence(state, action) : state;
     case 'open-source':
@@ -399,14 +403,27 @@ function relayForCrew(state: GameState, at: number): GameState {
   return { ...state, sabotage: { ...sabotage, emergency: rolled } };
 }
 
-/** The room without `playerId`: the host's part passed on where they held it, nobody ready. */
+/**
+ * The room without `playerId`: the host's part passed on where they held it, nobody ready, and
+ * a menu they had open gone with them.
+ */
 function withoutPlayer(state: GameState, playerId: string): GameState {
   const rest = unready(state.players.filter((p) => p.id !== playerId));
-  const hostless = !rest.some((p) => p.isHost);
+  const heir = rest.some((p) => p.isHost) ? null : heirOf(rest);
   return {
     ...state,
-    players: rest.map((p, i) => (hostless && i === 0 ? { ...p, isHost: true } : p)),
+    players: rest.map((p) => (p === heir ? { ...p, isHost: true } : p)),
+    menus: menusWithout(state.menus, playerId),
   };
+}
+
+/**
+ * Who takes the host's part over from a host gone, of `rest` in the order they sat down: the
+ * longest seated of those on the line — whose start is not held back by their own line down —,
+ * else the longest seated; null for a room left empty.
+ */
+export function heirOf<P extends { connected: boolean }>(rest: readonly P[]): P | null {
+  return rest.find((p) => p.connected) ?? rest[0] ?? null;
 }
 
 function switchMission(
@@ -550,11 +567,19 @@ const NOBODY_AWAY = 'Hier fehlt niemand.';
  * A crew member's line dropped at `at`. In a run they are away from then on: the run stands
  * still for them, and the crew may go on without them once the drop's wait is over — the run's
  * first drop waits FIRST_WAIT_MS, every later one LATER_WAIT_MS. A drop alone ends no run, and
- * a line that dropped once is down: said twice, nothing counts twice.
+ * a line that dropped once is down: said twice, nothing counts twice. A menu they had open is
+ * closed with it. A line closed on purpose for the main menu (`menu`) waits as a drop does — the
+ * seat stays theirs, in a lobby too — and the crew sees where they went.
  */
-function lineDropped(state: GameState, action: { playerId: string; at: number }): GameState {
+function lineDropped(
+  state: GameState,
+  action: { playerId: string; at: number; menu?: true },
+): GameState {
   const player = findPlayer(state, action.playerId);
-  const dropped = setConnected(state, player.id, false);
+  const off = setConnected(state, player.id, false);
+  const menus = menusWithout(state.menus, player.id);
+  const gone: Record<string, MenuPlace> = action.menu === true ? { [player.id]: 'main' } : {};
+  const dropped = { ...off, menus: { ...menus, ...gone } };
   if (state.phase !== 'playing' || !player.connected) {
     return dropped;
   }
@@ -573,7 +598,8 @@ function lineDropped(state: GameState, action: { playerId: string; at: number })
  * console (`relayForCrew`).
  */
 function lineBack(state: GameState, action: { playerId: string; at: number }): GameState {
-  const back = setConnected(state, findPlayer(state, action.playerId).id, true);
+  const id = findPlayer(state, action.playerId).id;
+  const back = { ...setConnected(state, id, true), menus: menusWithout(state.menus, id) };
   if (state.phase !== 'playing') {
     return back;
   }
@@ -680,26 +706,70 @@ function takeoverSettled(state: GameState, action: { playerId: string }): GameSt
   return { ...state, away: { ...state.away, [action.playerId]: settled } };
 }
 
+/** The plates and the emergency's panels manned now, as the room reports them: only in a run. */
+function setOccupancy(
+  state: GameState,
+  action: { plates: string[]; panels: string[] },
+): GameState {
+  if (state.phase !== 'playing') {
+    return state;
+  }
+  const pressedPlates = [...action.plates].sort();
+  return { ...state, pressedPlates, occupiedPanels: [...action.panels].sort() };
+}
+
+/**
+ * A crew member opens the pause menu over the run, or closes it (`open`): the run goes on — the
+ * clock, the patrols, the emergencies — and the crew sees them at the menu (`GameState.menus`).
+ * Only a member on the line, and only in a run: anywhere else it changes nothing — nor does a
+ * menu said open that stands open, or closed that is — and a line that drops closes it
+ * (`lineDropped`).
+ */
+function setMenu(state: GameState, action: { playerId: string; open: boolean }): GameState {
+  const player = findPlayer(state, action.playerId);
+  const open = state.menus[player.id] === 'pause';
+  if (state.phase !== 'playing' || !player.connected || open === action.open) {
+    return state;
+  }
+  const menus = menusWithout(state.menus, player.id);
+  return { ...state, menus: action.open ? { ...menus, [player.id]: 'pause' } : menus };
+}
+
+/** `menus` with only the main menus kept: whoever went there, their seat kept; no pause menus. */
+function mainMenusOf(menus: Record<string, MenuPlace>): Record<string, MenuPlace> {
+  return Object.fromEntries(Object.entries(menus).filter(([, place]) => place === 'main'));
+}
+
+/** `menus` without `playerId`'s: whatever menu they had open, closed. */
+function menusWithout(
+  menus: Record<string, MenuPlace>,
+  playerId: string,
+): Record<string, MenuPlace> {
+  return Object.fromEntries(Object.entries(menus).filter(([id]) => id !== playerId));
+}
+
 /**
  * The server down for maintenance at `at`, or taking the room up again at `waitFrom`: every
  * seat is off the line. In a run each is away from `at` — whoever was away already keeps their
  * drop, and whom the run went on without stays counted out — and the run stands still for the
  * whole crew (`wartung`), its clock stopped from `at`, or from the pause it stood in already.
  * Nobody may be left behind before FIRST_WAIT_MS after `waitFrom`, however long their own drop
- * has lasted, and an ask for a seat lapses: its device went with the server. Said twice,
- * nothing more changes.
+ * has lasted, an ask for a seat lapses — its device went with the server — and every menu
+ * open over the run closes with its line; whoever went to the main menu stays gone there. Said
+ * twice, nothing more changes.
  */
 function maintenance(state: GameState, action: { at: number; waitFrom: number }): GameState {
   const players = state.players.map((p) => (p.connected ? { ...p, connected: false } : p));
   if (state.phase !== 'playing') {
-    return { ...state, players };
+    return { ...state, players, menus: mainMenusOf(state.menus) };
   }
   const waivableAt = action.waitFrom + FIRST_WAIT_MS;
   const away = Object.fromEntries(
     players.map((p) => [p.id, awayThroughMaintenance(state.away[p.id], action.at, waivableAt)]),
   );
   const since = state.paused?.since ?? action.at;
-  return { ...state, players, away, paused: { since, kind: 'wartung' } };
+  const menus = mainMenusOf(state.menus);
+  return { ...state, players, away, menus, paused: { since, kind: 'wartung' } };
 }
 
 /**
@@ -923,9 +993,11 @@ function placeSources(manuals: readonly ManualDef[], seed: number): GameState['p
  * back (`linesDown`) until it is back, or the room frees it.
  */
 function crewToStart(state: GameState): Player[] {
-  const down = state.players.filter((p) => !p.connected).map((p) => p.name);
-  if (down.length > 0) {
-    fail(`${linesDown(down)}.`);
+  const off = state.players.filter((p) => !p.connected);
+  if (off.length > 0) {
+    const inMenu = (p: Player): boolean => state.menus[p.id] === 'main';
+    const names = (ps: Player[]): string[] => ps.map((p) => p.name);
+    fail(`${seatsOff(names(off.filter((p) => !inMenu(p))), names(off.filter(inMenu)))}.`);
   }
   const crew = state.players;
   const { min, max } = state.mission.players;
@@ -956,6 +1028,29 @@ export function linesDown(names: readonly string[]): string {
     return `${whose} Leitung ist unterbrochen`;
   }
   return `Leitungen unterbrochen: ${names.join(', ')}`;
+}
+
+/**
+ * Who went to the main menu, their seat kept: „Cem ist im Hauptmenü", „Cem und Dora sind im
+ * Hauptmenü".
+ */
+export function inMainMenu(names: readonly string[]): string {
+  if (names.length < 2) {
+    return `${names.join('')} ist im Hauptmenü`;
+  }
+  return `${names.slice(0, -1).join(', ')} und ${names.at(-1) ?? ''} sind im Hauptmenü`;
+}
+
+/**
+ * What holds a start back while seats of the room are off the line: whose line is down
+ * (`linesDown`) and who went to the main menu (`inMainMenu`), the two apart by a dot.
+ */
+export function seatsOff(down: readonly string[], inMenu: readonly string[]): string {
+  const said = [
+    ...(down.length > 0 ? [linesDown(down)] : []),
+    ...(inMenu.length > 0 ? [inMainMenu(inMenu)] : []),
+  ];
+  return said.join(' · ');
 }
 
 /**
@@ -1021,6 +1116,7 @@ function startMission(
     sabotage: null,
     paused: null,
     away: {},
+    menus: {},
     drops: 0,
     calledOff: null,
     items: Object.fromEntries(
@@ -2035,6 +2131,7 @@ function backToLobby(state: GameState, action: { playerId: string }): GameState 
     sabotage: null,
     paused: null,
     away: {},
+    menus: mainMenusOf(state.menus),
     drops: 0,
     calledOff: null,
     items: {},

@@ -16,6 +16,7 @@ export type IconName =
   | 'gear'
   | 'hex'
   | 'info'
+  | 'menu'
   | 'mic'
   | 'note'
   | 'pause'
@@ -117,6 +118,8 @@ const GLYPHS: Record<IconName, ReactNode> = {
       <circle cx="8" cy="4.75" r="1" {...SOLID} />
     </>
   ),
+  // The menu: three bars, one under the next, as its items stand.
+  menu: <path d="M2.5 4h11M2.5 8h11M2.5 12h11" />,
   // A microphone: its capsule in the cradle, on a short stand.
   mic: (
     <>

@@ -561,7 +561,7 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   neben dem breitesten Panel nur 2,6 Kacheln her (3,1 bei 640 px Höhe), dort steht nur der Chip;
   der Chip behält seine kleine Figur.
 
-### U-1 Pausenmenü, Verlassen wie Dota 2, Einstellungen und Chrome — Status: in Arbeit (U-pause, PR 6) · Größe: L
+### U-1 Pausenmenü, Verlassen wie Dota 2, Einstellungen und Chrome — Status: erledigt (U-pause, Merge 2026-11-14; drei Review-Runden mit Playwright-Repros; Cloud-CI grün auf fe6222c; Rest: nach „Zum Hauptmenü" bleibt ein toter Zurück-Schritt je Tab) · Größe: L
 - Uros 2026-11-14: „Spielabbruch richtig: Der Spieler kann das Spiel nicht verlassen, wann er
   will, und ins Hauptmenü zurück. Wie Dota 2: joinen, nach Disconnect reconnecten, verlassen."
   Und: „Einstellungen im Spiel haben kein gutes UI; alles, was nicht direkt Spiel ist, Leisten,

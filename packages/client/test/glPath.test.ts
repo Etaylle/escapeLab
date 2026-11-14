@@ -9,6 +9,7 @@ import {
   type PathFacts,
 } from '../src/world/gl/path.js';
 import type { Probes } from '../src/probes.js';
+import { changeSettings, DEFAULT_SETTINGS } from '../src/settings.js';
 
 /**
  * Which way the world's light takes: the fallback table, and a world's way
@@ -132,7 +133,9 @@ describe('openLightPath — a world’s way for its light', () => {
   let opened: LightPath[];
   /** The way opened on `fake` for a page asking `search`, the world drawn on `world`. */
   function open(fake: ReturnType<typeof glCanvas>, search: string, world = worldCanvas(0, 0, 0)) {
-    vi.stubGlobal('document', { createElement: () => fake.canvas });
+    // The page's root takes the settings' look as they change (settings.ts `applyLook`).
+    const root = { dataset: {}, style: { setProperty: () => undefined } };
+    vi.stubGlobal('document', { createElement: () => fake.canvas, documentElement: root });
     const path = openLightPath(world, search);
     opened.push(path);
     return path;
@@ -144,6 +147,7 @@ describe('openLightPath — a world’s way for its light', () => {
   });
   afterEach(() => {
     opened.forEach((path) => path.dispose());
+    changeSettings(DEFAULT_SETTINGS);
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
   });
@@ -221,6 +225,22 @@ describe('openLightPath — a world’s way for its light', () => {
     expect(probe?.luma()).toBeCloseTo(0.2126 * 200 + 0.7152 * 100 + 0.0722 * 50);
     path.dispose();
     expect(window.__escapelab?.light).toBeUndefined();
+  });
+
+  it('takes the Canvas pass where the settings ask for it („Licht: Einfach"), at once', () => {
+    const path = open(glCanvas(APPLE), '');
+    expect(pathNow(path, 'canvas')).toBe('canvas');
+    expect(pathNow(path, 'auto')).toBe('gl');
+    changeSettings({ light: 'canvas' });
+    expect(pathNow(path)).toBe('canvas');
+    changeSettings({ light: 'auto' });
+    expect(pathNow(path)).toBe('gl');
+  });
+
+  it('keeps what the probe forces over the settings’ word', () => {
+    const path = open(glCanvas(APPLE), '?trace=1');
+    window.__escapelab?.light?.use('gl');
+    expect(pathNow(path, 'canvas')).toBe('gl');
   });
 
   it('never takes the layer where it has none, whatever the probe forces', () => {
