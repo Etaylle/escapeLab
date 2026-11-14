@@ -131,6 +131,9 @@ export interface PackFile {
 /** The pack the game plays until the player picks another: the game's own score. */
 export const DEFAULT_PACK = 'nachtschicht';
 
+/** Where the file `file` of a found piece of the pack `pack` lies under public/music/. */
+export const packFileOf = (pack: string, file: string): string => `packs/${pack}/${file}`;
+
 /** A crossfade's period, s: how far apart a pass and the next start. */
 export const crossfadePeriod = ({ startMs, endMs, fadeMs }: Crossfade): number =>
   (endMs - fadeMs - startMs) / 1000;

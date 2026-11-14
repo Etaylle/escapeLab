@@ -186,3 +186,20 @@
   flex: 1 1 20em;
   min-width: 0;
 }
+
+/*
+ * The music packs (world/packFile.ts): each under its title, a row a place — its play button, its
+ * facts, and under them its attribution as its licence wants it, the addresses linked.
+ */
+.sounds-pack h3 {
+  margin: 18px 0 6px;
+  font-size: 15px;
+}
+
+.sounds-credit {
+  overflow-wrap: anywhere;
+}
+
+.sounds-credit a {
+  color: var(--accent);
+}

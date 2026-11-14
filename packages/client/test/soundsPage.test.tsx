@@ -26,6 +26,8 @@ import {
   ENV_FILE,
   listingOf,
   MASKED_WITHIN_DB,
+  packKey,
+  packListingOf,
   SECTIONS,
   shellWord,
   soundsOf,
@@ -33,10 +35,13 @@ import {
   suiteListingOf,
   suitesOf,
   type CatalogSound,
+  type PackRow,
 } from '../src/sounds/listing.js';
 import { opensSounds, SOUNDS_PATH } from '../src/sounds/path.js';
+import { linked } from '../src/screens/linked.js';
 import {
   factsOf,
+  packFactsOf,
   pieceFactsOf,
   pieceRowFactsOf,
   SoundsBoard,
@@ -59,9 +64,13 @@ import {
   type PieceInfo,
   type TakeInfo,
 } from '../src/sounds/takes.js';
+import { installedPacks } from '../src/world/musicPacks.js';
+import { SLOTS } from '../src/world/packFile.js';
 import type { SampleEntry } from '../src/world/samples.js';
 import { fakeGraph, lastContext, type FakeGain, type FakeNode } from './fakeGraph.js';
 import { elements, fakeMedia } from './fakeMedia.js';
+import { foundPack, SCORE_PACK } from './fakePacks.js';
+import { elementsOf, press } from './probe.js';
 
 /**
  * The audition page (/sounds): what it lists, what it says of each recording, and the command it
@@ -220,6 +229,7 @@ describe('the board', () => {
       'mains-hum': recording(1),
     }),
     suites: [],
+    packs: [],
     takes: {},
     takesNote: null,
     playing: null,
@@ -233,6 +243,7 @@ describe('the board', () => {
       play: () => undefined,
       playTake: () => undefined,
       playPiece: () => undefined,
+      playPack: () => undefined,
       toggle: () => undefined,
       keep: () => undefined,
       envFile: () => undefined,
@@ -407,6 +418,7 @@ describe('the board’s takes', () => {
   const props = (over: Partial<BoardProps> = {}): BoardProps => ({
     sections: listingOf([CLICK, WON], { 'key-click': recording(1), won: recording(1, 10_000) }),
     suites: [],
+    packs: [],
     takes: WON_TAKES,
     takesNote: null,
     playing: null,
@@ -420,6 +432,7 @@ describe('the board’s takes', () => {
       play: () => undefined,
       playTake: () => undefined,
       playPiece: () => undefined,
+      playPack: () => undefined,
       toggle: () => undefined,
       keep: () => undefined,
       envFile: () => undefined,
@@ -558,6 +571,7 @@ const SCORE_TAKE: TakeInfo = {
 const boardOf = (over: Partial<BoardProps> = {}): BoardProps => ({
   sections: listingOf([], {}),
   suites: suiteListingOf(suitesOf(readCatalog()), {}),
+  packs: [],
   takes: {},
   takesNote: null,
   playing: null,
@@ -571,6 +585,7 @@ const boardOf = (over: Partial<BoardProps> = {}): BoardProps => ({
     play: () => undefined,
     playTake: () => undefined,
     playPiece: () => undefined,
+    playPack: () => undefined,
     toggle: () => undefined,
     keep: () => undefined,
     envFile: () => undefined,
@@ -707,6 +722,114 @@ describe('the score on the board', () => {
       expect(ended).not.toHaveBeenCalled();
       vi.advanceTimersByTime(30);
       expect([ended.mock.calls.length, element?.src]).toEqual([1, '']);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe('the music packs on the page', () => {
+  const PROBE = foundPack('probe', { critical: { loop: { bars: { bpm: 76, count: 19 } } } });
+  const listing = (): ReturnType<typeof packListingOf> =>
+    packListingOf([SCORE_PACK, PROBE], {
+      calm: { ...recording(1.8, 72_046), file: 'c.mp3' },
+      'end-won': recording(1.9, 32_026),
+    });
+
+  it('lists every pack with its piece for each place, a found one from its pack’s folder', () => {
+    const [score, probe] = listing();
+    expect(probe?.rows.map((row) => row.slot)).toEqual([...SLOTS]);
+    expect(probe?.rows[3]?.sound).toEqual({
+      file: 'packs/probe/calm.m4a',
+      ms: 70_000,
+      startMs: 0,
+      gain: 0.5,
+    });
+    // The score's pieces play as the music's manifest lists them; one unrecorded has none.
+    expect(score?.rows[3]?.sound).toEqual({ file: 'c.mp3', ms: 72_046, startMs: 0, gain: 1.8 });
+    expect(score?.rows[1]?.sound).toBeNull();
+  });
+
+  it('says of a piece its length, loudness, gain, licence, and how the game loops it', () => {
+    const [score, probe] = listing();
+    const facts = (rows: readonly PackRow[] | undefined, slot: string): string =>
+      packFactsOf(rows?.find((row) => row.slot === slot) as PackRow);
+    expect(facts(probe?.rows, 'calm')).toBe(
+      '70,0 s · Lautheit −20,0 LUFS · Verstärkung 0,50× · CC BY 4.0 · ' +
+        'Schleife ab 3,0 s alle 60,0 s, Überblendung 3,0 s',
+    );
+    expect(facts(probe?.rows, 'critical')).toContain('· Schleife: 19 Takte zu 76 bpm');
+    expect(facts(probe?.rows, 'end-won')).toBe(
+      '35,0 s · Lautheit −20,0 LUFS · Verstärkung 0,80× · CC BY 4.0 · einmal',
+    );
+    expect(facts(score?.rows, 'calm')).toBe(
+      '72,0 s · Verstärkung 1,80× · eigene Partitur · Schleife auf Takten',
+    );
+    const ending = '32,0 s · Verstärkung 1,90× · eigene Partitur · einmal';
+    expect(facts(score?.rows, 'end-won')).toBe(ending);
+    expect(facts(score?.rows, 'lobby')).toBe('keine Aufnahme: wartet auf die Partitur');
+  });
+
+  it('stand on the board after the score: each piece playable, its attribution linked', () => {
+    const playPack = vi.fn();
+    const props = boardOf({
+      packs: listing(),
+      playing: packKey('probe', 'tense'),
+      on: { ...boardOf().on, playPack },
+    });
+    const html = renderToStaticMarkup(<SoundsBoard {...props} />);
+    const packs = html.slice(html.indexOf('aria-label="Musikpakete"'));
+    expect(html.indexOf('aria-label="Partitur score"')).toBeLessThan(html.length - packs.length);
+    expect(packs).toContain('Musikpakete <span class="muted">(2)</span>');
+    expect(packs).toContain('Schicht X · probe <span class="muted">(probe · Ada Example)</span>');
+    expect(packs.match(/class="sounds-prompt sounds-credit"/g)).toHaveLength(16);
+    expect(packs).toContain(
+      '<a href="https://opengameart.org/content/probe" target="_blank" rel="noreferrer">',
+    );
+    // The score's six pieces without a recording cannot be played; the one playing says so.
+    expect(packs.match(/disabled="">Abspielen</g)).toHaveLength(6);
+    const row = /aria-pressed="true">Stopp<\/button><div class="sounds-what"><code[^>]*>tense</;
+    expect(packs).toMatch(row);
+    const found = elementsOf(() => <SoundsBoard {...props} />).filter(
+      (element) => element.type === 'button' && element.props['className'] === 'sounds-play',
+    );
+    press(found.at(-1));
+    expect(playPack).toHaveBeenCalledWith('probe', 'end-lost');
+  });
+
+  it('give the whole list of the music’s credits: every piece of every pack shipped', () => {
+    const shipped = packListingOf(installedPacks(), {});
+    const html = renderToStaticMarkup(<SoundsBoard {...boardOf({ packs: shipped })} />);
+    for (const { pack } of shipped) {
+      for (const slot of SLOTS) {
+        const credit = renderToStaticMarkup(<>{linked(pack.pieces[slot].attribution)}</>);
+        expect(html, `${pack.id} ${slot}`).toContain(credit);
+      }
+    }
+  });
+
+  it('streams a piece once, from where its sound starts, at the game’s gain', async () => {
+    fakeGraph();
+    fakeMedia();
+    vi.useFakeTimers();
+    vi.resetModules();
+    try {
+      const { auditionPack, AUDITION_LEVEL } = await import('../src/sounds/SoundsScreen.js');
+      const ended = vi.fn();
+      const sound = { file: 'packs/probe/calm.m4a', ms: 70_000, startMs: 2500, gain: 0.5 };
+      const played = auditionPack(sound, ended);
+      const element = elements.find((each) => each.src === '/music/packs/probe/calm.m4a');
+      expect([element?.currentTime, element?.loop]).toEqual([2.5, false]);
+      const source = lastContext()
+        .all<FakeNode & { mediaElement: unknown }>('media')
+        .find((node) => node.mediaElement === element);
+      const level = (source?.outputs[0] as FakeGain | undefined)?.gain.value;
+      expect(level).toBeCloseTo(AUDITION_LEVEL * 0.5, 9);
+      vi.advanceTimersByTime(20);
+      expect(element?.plays).toBe(1);
+      element?.fire('ended');
+      expect([ended.mock.calls.length, element?.src]).toEqual([1, '']);
+      expect(played).not.toBeNull();
     } finally {
       vi.useRealTimers();
     }

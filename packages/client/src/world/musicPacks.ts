@@ -1,6 +1,7 @@
 import {
   DEFAULT_PACK,
   isScore,
+  packFileOf,
   SLOTS,
   type Crossfade,
   type FoundPiece,
@@ -105,7 +106,7 @@ export function packFor(slot: Slot, chosen: MusicChoice = choice): string {
 function foundEntry(pack: string, piece: FoundPiece): MusicPiece {
   const { loop } = piece;
   const base = {
-    file: `packs/${pack}/${piece.file}`,
+    file: packFileOf(pack, piece.file),
     ms: piece.ms,
     gain: piece.gain,
     startMs: piece.startMs,
