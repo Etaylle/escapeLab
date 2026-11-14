@@ -44,7 +44,7 @@ function bakeOf(w = 400, h = 200): { bake: SceneBake; log: Entry[] } {
     h,
     night: false,
     spots: {},
-    dark: null,
+    dark: { at: { x: 0, y: 100 }, colour: '#1a1716' },
   };
   return { bake, log };
 }
@@ -57,6 +57,11 @@ describe('the lab at night', () => {
     expect(more).toEqual([]);
     expect(sunk?.op).toBe('source-atop');
     expect(sunk?.args).toEqual([0, 0, 400, 200]);
+    // The dark round the lab read again as the night has it, once the night has fallen on it.
+    const reads = callEntries(log, 'getImageData');
+    expect(reads.map((e) => e.args)).toEqual([[0, 100, 1, 1]]);
+    expect(log.at(-1)).toMatchObject({ kind: 'call', name: 'getImageData' });
+    expect(bake.dark?.colour).toBe('#000000');
     const style = log.filter((e) => e.kind === 'set' && e.name === 'fillStyle').at(-1);
     expect(style?.kind === 'set' && style.value).toBe(`rgba(0, 0, 0, ${NIGHT_SINK})`);
     expect(bake.night).toBe(true);

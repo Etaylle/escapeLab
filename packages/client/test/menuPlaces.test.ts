@@ -134,33 +134,31 @@ describe('the dark past the bake', () => {
     expect(pastBake({ x: 0, y: -20 }, [300, 200], [100, 50])).toEqual([[0, 0, 100, 20]]);
   });
 
-  /** A bake 300 × 200 holding the lab's dark, at night or lit. */
-  function darkBake(night: boolean): SceneBake {
+  /** A bake 300 × 200 holding the lab's dark in `colour`. */
+  function darkBake(colour: string): SceneBake {
     return {
       canvas: fakeCanvas(300, 200, 'bake').canvas,
       shot: { from: { x: 1, y: 1 }, to: { x: 2, y: 1 }, scale: 50 },
       box: { left: 0, top: 0, width: 300, height: 200 },
       w: 100,
       h: 50,
-      night,
+      night: true,
       spots: {},
-      dark: { lit: '#04070a', night: '#020304' },
+      dark: { at: { x: 0, y: 100 }, colour },
     };
   }
 
-  it('fills what the frame shows past the bake with the bake’s dark, as strong as the copy', () => {
-    for (const night of [false, true]) {
-      const frame = fakeCanvas(100, 50, 'frame');
-      paintBake(frame.ctx, darkBake(night), { x: -30, y: 0 }, 0.5);
-      const [fill, ...more] = callEntries(frame.log, 'fillRect');
-      expect(more).toEqual([]);
-      expect(fill?.args).toEqual([0, 0, 30, 50]);
-      expect(fill?.alpha).toBe(0.5);
-      const style = frame.log.filter((e) => e.kind === 'set' && e.name === 'fillStyle').at(-1);
-      expect(style?.kind === 'set' && style.value).toBe(night ? '#020304' : '#04070a');
-    }
+  it('fills what the frame shows past the bake with its dark, as strong as the copy', () => {
+    const frame = fakeCanvas(100, 50, 'frame');
+    paintBake(frame.ctx, darkBake('#1a1716'), { x: -30, y: 0 }, 0.5);
+    const [fill, ...more] = callEntries(frame.log, 'fillRect');
+    expect(more).toEqual([]);
+    expect(fill?.args).toEqual([0, 0, 30, 50]);
+    expect(fill?.alpha).toBe(0.5);
+    const style = frame.log.filter((e) => e.kind === 'set' && e.name === 'fillStyle').at(-1);
+    expect(style?.kind === 'set' && style.value).toBe('#1a1716');
     const within = fakeCanvas(100, 50, 'frame');
-    paintBake(within.ctx, darkBake(false), { x: 10, y: 10 }, 1);
+    paintBake(within.ctx, darkBake('#1a1716'), { x: 10, y: 10 }, 1);
     expect(callEntries(within.log, 'fillRect')).toEqual([]);
   });
 });

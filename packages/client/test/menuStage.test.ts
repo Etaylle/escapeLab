@@ -125,14 +125,27 @@ describe('a bake of the scene', () => {
   });
 
   it('reads the dark round the lab off the bake where a place looks past the lab', async () => {
-    const { bakeScene } = await import('../src/world/menu/scene.js');
+    const { bakeScene, driftCorner, pastBake } = await import('../src/world/menu/scene.js');
     const mission = parseMission(BLACKOUT);
     const drones = parkedDrones(mission);
     const lab = { missionId: 'blackout', view: sceneViewOf(mission), drones };
     const bake = bakeScene(lab, 1440, 820, 1);
-    // The fake canvas reads every pixel black.
-    expect(bake?.dark).toEqual({ lit: '#000000', night: '#000000' });
-    expect(bake?.spots['handbook']?.x).toBeLessThan(0);
+    if (bake === null) throw new Error('blackout baked no scene');
+    // Read off the middle of the box's side past the lab — the left, as far past as every
+    // side here —, not its corner, which lies further from the lab's light; the fake canvas
+    // reads it black.
+    expect(bake.dark).toEqual({
+      at: { x: 0, y: Math.floor(bake.canvas.height / 2) },
+      colour: '#000000',
+    });
+    const size = [bake.canvas.width, bake.canvas.height] as const;
+    const past = (corner: { x: number; y: number }) => pastBake(corner, size, [1440, 820]);
+    // The Archiv, in the lab's corner, looks past the bake's tile of dark; the Flur does not.
+    expect(past(bake.spots['handbook'] ?? { x: 0, y: 0 }).length).toBeGreaterThan(0);
+    expect(past(bake.spots['join'] ?? { x: -1, y: -1 })).toEqual([]);
+    for (const progress of [0, 0.5, 1]) {
+      expect(past(driftCorner(bake, progress))).toEqual([]);
+    }
     // A lab without places drifts within itself: no dark baked, none read.
     expect(bakeScene({ ...lab, missionId: 'other' }, 1440, 820, 1)?.dark).toBeNull();
   });

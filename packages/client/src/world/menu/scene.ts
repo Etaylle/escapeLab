@@ -4,7 +4,7 @@ import { worldText } from '../art.js';
 import type { CanvasMaker } from '../atlas.js';
 import { bakeable } from '../baked.js';
 import { openLightPath } from '../gl/path.js';
-import { BLACK, css, rgba, sink, type Rgb } from '../palette.js';
+import { BLACK, css, rgba } from '../palette.js';
 import * as actors from '../render/actors.js';
 import { backingSize } from '../render/backing.js';
 import { renderKit, type Frame } from '../render/frame.js';
@@ -67,10 +67,11 @@ export interface SceneBake {
   /** where on it the frame that shows each item's place starts, device px (places.ts) */
   spots: Readonly<Record<string, Spot>>;
   /**
-   * the dark round the lab as it holds it, lit and at night: what a frame that looks past its
-   * edge shows there (`paintBake`); null where no place's frame looks past the lab
+   * the dark round the lab as it holds it: where on it that is read, and its colour as it stands
+   * now, lit or at night — what a frame that looks past its edge shows there (`paintBake`); null
+   * where no place's frame looks past the lab
    */
-  dark: { lit: string; night: string } | null;
+  dark: { at: Spot; colour: string } | null;
 }
 
 /**
@@ -114,6 +115,15 @@ export function nightTo(bake: SceneBake, night: boolean): void {
   }
   g.restore();
   bake.night = night;
+  if (bake.dark !== null) {
+    bake.dark.colour = colourAt(g, bake.dark.at);
+  }
+}
+
+/** The colour of the pixel at `at` of `g`'s canvas as it stands, as a canvas takes it. */
+function colourAt(g: CanvasRenderingContext2D, at: Spot): string {
+  const { data } = g.getImageData(at.x, at.y, 1, 1);
+  return css([data[0] ?? 0, data[1] ?? 0, data[2] ?? 0]);
 }
 
 /**
@@ -239,27 +249,26 @@ function framingOf(lab: SceneLab, w: number, h: number, dpr: number): SceneFrami
 }
 
 /**
- * The dark round the lab as `g`, the bake of `box`, holds it, lit and at night: read off the
- * corner of the box that lies furthest past the lab `lab`; null where the box holds none of it.
+ * Where on a bake of `box` its dark round the lab `lab` is read, in its pixels: the middle of the
+ * side of the box that reaches furthest past the lab, where the lab's light falls on the dark as
+ * evenly as along the whole side; null where the box lies within the lab.
  */
+function darkAt(box: PixelBox, lab: PixelBox): Spot | null {
+  const [midX, midY] = [Math.floor(box.width / 2), Math.floor(box.height / 2)];
+  const sides: [number, Spot][] = [
+    [lab.left - box.left, { x: 0, y: midY }],
+    [box.left + box.width - (lab.left + lab.width), { x: box.width - 1, y: midY }],
+    [lab.top - box.top, { x: midX, y: 0 }],
+    [box.top + box.height - (lab.top + lab.height), { x: midX, y: box.height - 1 }],
+  ];
+  const [past, at] = sides.reduce((a, b) => (b[0] > a[0] ? b : a));
+  return past > 0 ? at : null;
+}
+
+/** The dark round the lab as `g`, the bake of `box`, holds it (`darkAt`); null for none. */
 function darkOf(g: CanvasRenderingContext2D, box: PixelBox, lab: PixelBox): SceneBake['dark'] {
-  const [right, bottom] = [box.left + box.width - 1, box.top + box.height - 1];
-  const corners = [
-    [box.left, box.top],
-    [right, box.top],
-    [box.left, bottom],
-    [right, bottom],
-  ] as const;
-  const [labRight, labBottom] = [lab.left + lab.width - 1, lab.top + lab.height - 1];
-  const past = ([x, y]: readonly [number, number]): number =>
-    Math.max(lab.left - x, lab.top - y, x - labRight, y - labBottom);
-  const [x, y] = corners.reduce((a, b) => (past(b) > past(a) ? b : a));
-  if (past([x, y]) <= 0) {
-    return null;
-  }
-  const { data } = g.getImageData(x - box.left, y - box.top, 1, 1);
-  const rgb: Rgb = [data[0] ?? 0, data[1] ?? 0, data[2] ?? 0];
-  return { lit: css(rgb), night: css(sink(rgb, NIGHT_SINK)) };
+  const at = darkAt(box, lab);
+  return at === null ? null : { at, colour: colourAt(g, at) };
 }
 
 /**
@@ -338,8 +347,8 @@ export function pastBake(
 
 /**
  * Copies `bake` onto `ctx`'s canvas, its frame starting at `corner`, `alpha` strong — and where
- * the frame looks past the bake, into the dark round the lab, fills that with the dark as the
- * bake holds it, at night or lit as the bake stands.
+ * the frame looks past the bake, into the dark round the lab, fills that with the dark's colour
+ * as the bake holds it now, at night or lit, which the bake's own tile of dark meets evenly.
  */
 export function paintBake(
   ctx: CanvasRenderingContext2D,
@@ -352,7 +361,7 @@ export function paintBake(
   const size = [ctx.canvas.width, ctx.canvas.height] as const;
   const past = pastBake(corner, [bake.canvas.width, bake.canvas.height], size);
   if (past.length > 0 && bake.dark !== null) {
-    ctx.fillStyle = bake.night ? bake.dark.night : bake.dark.lit;
+    ctx.fillStyle = bake.dark.colour;
     for (const [x, y, pw, ph] of past) ctx.fillRect(x, y, pw, ph);
   }
   ctx.globalAlpha = 1;
