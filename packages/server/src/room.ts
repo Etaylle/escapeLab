@@ -1,6 +1,7 @@
 import { randomInt, randomUUID } from 'node:crypto';
 import { DronePatrol } from './drones.js';
 import { SeatBook } from './seats.js';
+import type { FinishedRun } from './store/store.js';
 import {
   applyAction,
   armedStations,
@@ -63,8 +64,11 @@ import {
 
 type Listener = (msg: ServerMessage) => void;
 
-/** Hears of every run that ends in a room, won or lost, with the run's report. */
-export type RunListener = (report: RunReport) => void;
+/**
+ * Hears of every run that ends in a room, won or lost: the run's report, and the pass that held
+ * each seat of its crew as it ended (store/store.ts).
+ */
+export type RunListener = (run: FinishedRun) => void;
 
 /**
  * The kinds of client message that map 1:1 onto game actions (`act`). A yes to
@@ -674,16 +678,28 @@ export class Room {
   }
 
   /**
-   * A new seat for `name`, bound to `pass` (lobby only); its player id. A pass whose id binds a
-   * seat here under another secret is refused before anything changes (seats.ts `check`).
+   * A new seat for `name`, bound to `pass` (lobby only), in `color` where nobody wears it yet;
+   * its player id. A pass whose id binds a seat here under another secret is refused before
+   * anything changes (seats.ts `check`).
    */
-  join(name: string, pass: CrewPass): { playerId: string } {
+  join(name: string, pass: CrewPass, color?: string): { playerId: string } {
     this.seats.check(pass);
     const playerId = randomUUID();
-    this.dispatch({ type: 'player-join', playerId, name });
+    this.dispatch({
+      type: 'player-join',
+      playerId,
+      name,
+      ...(color === undefined ? {} : { color }),
+    });
     this.seats.bind(playerId, pass);
     this.log(`${this.nameOf(playerId)} joined`);
     return { playerId };
+  }
+
+  /** The name and the colour of the seat of `playerId`; null for a seat there is none of. */
+  playerOf(playerId: string): { name: string; color: string } | null {
+    const player = this.state.players.find((p) => p.id === playerId);
+    return player === undefined ? null : { name: player.name, color: player.color };
   }
 
   /** Whether the room has a seat named exactly `name`. */
@@ -2198,8 +2214,9 @@ export class Room {
   }
 
   /**
-   * The run is over: the log says how, its report goes to `onRunFinished` — but that of a ghost
-   * (`ghostEnd`) — and no seat of it is to be taken over any more.
+   * The run is over: the log says how, its report goes to `onRunFinished` with the pass that
+   * holds each seat of its crew — but that of a ghost (`ghostEnd`) — and no seat of it is to be
+   * taken over any more.
    */
   private runOver(report: RunReport): void {
     for (const seatId of [...this.claims.keys()]) {
@@ -2214,7 +2231,9 @@ export class Room {
       this.log('not counted: none of its crew but who gave it up came back after the restore');
       return;
     }
-    this.onRunFinished(report);
+    // The report's crew is the state's players, in order: p1 holds the first seat.
+    const passes = this.state.players.map((player) => this.seats.passOf(player.id));
+    this.onRunFinished({ report, passes });
   }
 
   /**

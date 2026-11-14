@@ -19,7 +19,7 @@ import {
   useMenuMark,
 } from './menuLayer.js';
 import { localStore } from './notes.js';
-import { crewPass, keepName } from './pass.js';
+import { crewPass, keepName, lastColor } from './pass.js';
 import { addProbes } from './probes.js';
 import { STATS_PATH, useJson } from './runStats.js';
 import { useRunScreen } from './runScreen.js';
@@ -40,6 +40,7 @@ import {
 import { EDITOR_PATH, sharedIn } from './editor/share.js';
 import { HandbookScreen } from './screens/Handbook.js';
 import { HistoryScreen } from './screens/History.js';
+import { MyRunsScreen } from './screens/MyRuns.js';
 import { Icon, type IconName } from './screens/Icon.js';
 import { UpdateNotice } from './screens/Install.js';
 import { JoinScreen } from './screens/Join.js';
@@ -51,6 +52,7 @@ import { GameScreen } from './screens/Game.js';
 import type { GameLine } from './screens/Line.js';
 import { EndScreen } from './screens/End.js';
 import { MenuLayers, type RoomCrew, type RoomMission } from './screens/MenuLayers.js';
+import { SettingsPanel } from './screens/Settings.js';
 import { SoundSwitch } from './screens/SoundSwitch.js';
 import { SpectateScreen } from './screens/Spectate.js';
 
@@ -249,7 +251,14 @@ function useTestRun(conn: Connection) {
       replacePath('/');
       const difficulty = firstDifficulty(hasWon(localStore()));
       conn.send(
-        createRoomMessage(crewPass(), name, missionId, window.location.search, difficulty),
+        createRoomMessage(
+          crewPass(),
+          name,
+          missionId,
+          window.location.search,
+          difficulty,
+          lastColor(),
+        ),
       );
     },
     back: (): void => {
@@ -260,15 +269,33 @@ function useTestRun(conn: Connection) {
   };
 }
 
+/**
+ * The pages off the join screen and what they show: the booklet's and the Bestenliste's
+ * missions, null while closed, and „Meine Einsätze", open or not.
+ */
+interface PageState {
+  handbook: string | null;
+  setHandbook: (missionId: string | null) => void;
+  history: string | null;
+  setHistory: (missionId: string | null) => void;
+  myRuns: boolean;
+  setMyRuns: (open: boolean) => void;
+}
+
+/** The pages off the join screen, each closed as the app comes up (`PageState`). */
+function usePages(): PageState {
+  const [handbook, setHandbook] = useState<string | null>(null);
+  const [history, setHistory] = useState<string | null>(null);
+  const [myRuns, setMyRuns] = useState(false);
+  return { handbook, setHandbook, history, setHistory, myRuns, setMyRuns };
+}
+
 interface ScreenProps {
   conn: Connection;
   missions: MissionInfo[];
   loadMissions: () => void;
   stats: MissionStats[];
-  handbook: string | null;
-  setHandbook: (missionId: string | null) => void;
-  history: string | null;
-  setHistory: (missionId: string | null) => void;
+  pages: PageState;
   editor: EditorPage;
   startTestRun: (name: string, missionId: string) => void;
   /** the end of the run on this screen: while the world plays it, the end screen waits */
@@ -280,31 +307,40 @@ interface ScreenProps {
   openSettings: () => void;
 }
 
+/** Whether a page lies over the join screen: booklet, Bestenliste, „Meine Einsätze", editor. */
+function joinCovered(pages: PageState, editor: EditorPage): boolean {
+  return pages.handbook !== null || pages.history !== null || pages.myRuns || editor.open;
+}
+
 /**
- * Off any room: the join screen, and over it the editor, the booklet and the
- * Bestenliste. The join screen stays mounted behind them, so a typed name
- * and the picked mission are still there on the way back; the editor stays
- * behind the booklet it opens.
+ * Off any room: the join screen, and over it the editor, the booklet, the
+ * Bestenliste and „Meine Einsätze". The join screen stays mounted behind them,
+ * so a typed name and the picked mission are still there on the way back; the
+ * editor stays behind the booklet it opens.
  */
 function OffRoom(props: ScreenProps) {
-  const { conn, missions, handbook, history, editor } = props;
+  const { conn, missions, pages, editor } = props;
+  const { handbook, history } = pages;
+  const over = joinCovered(pages, editor);
   return (
     <>
-      <Activity mode={handbook === null && history === null && !editor.open ? 'visible' : 'hidden'}>
+      <Activity mode={over ? 'hidden' : 'visible'}>
         <JoinScreen
           send={conn.send}
           connected={conn.status === 'open'}
           missions={missions}
           rooms={conn.rooms}
           seat={conn.seat}
+          account={conn.account}
           takeover={conn.takeover}
           restoring={conn.restoring}
           giveUp={conn.giveUp}
           stats={props.stats}
           picked={props.picked}
           onPick={props.setPicked}
-          openHandbook={props.setHandbook}
-          openHistory={props.setHistory}
+          openHandbook={pages.setHandbook}
+          openHistory={pages.setHistory}
+          openMyRuns={() => pages.setMyRuns(true)}
           openEditor={editor.show}
           openSettings={props.openSettings}
         />
@@ -314,7 +350,7 @@ function OffRoom(props: ScreenProps) {
           <EditorScreen
             missions={missions}
             reloadMissions={props.loadMissions}
-            openHandbook={props.setHandbook}
+            openHandbook={pages.setHandbook}
             back={editor.close}
             work={editor.work}
             onWork={editor.setWork}
@@ -328,16 +364,25 @@ function OffRoom(props: ScreenProps) {
         <HandbookScreen
           missions={missions}
           missionId={handbook}
-          selectMission={props.setHandbook}
-          back={() => props.setHandbook(null)}
+          selectMission={pages.setHandbook}
+          back={() => pages.setHandbook(null)}
         />
       )}
       {history !== null && (
         <HistoryScreen
           missions={missions}
           missionId={history}
-          selectMission={props.setHistory}
-          back={() => props.setHistory(null)}
+          selectMission={pages.setHistory}
+          back={() => pages.setHistory(null)}
+        />
+      )}
+      {pages.myRuns && (
+        <MyRunsScreen
+          missions={missions}
+          loaded={conn.myRuns}
+          ask={conn.askMyRuns}
+          connected={conn.status === 'open'}
+          back={() => pages.setMyRuns(false)}
         />
       )}
     </>
@@ -521,6 +566,18 @@ function useWiped(live: Connection): { conn: Connection; doors: Doors } {
   return { conn: wipe.value, doors: wipe.doors };
 }
 
+/** The settings over every screen, the pass's account with them: deleted on the line `live`. */
+function Settings({ live, close }: { live: Connection; close: () => void }) {
+  return (
+    <SettingsPanel
+      onClose={close}
+      account={live.account}
+      onDeleteAccount={() => live.send({ kind: 'delete-account', pass: crewPass() })}
+      refusal={live.refusal}
+    />
+  );
+}
+
 /** The connection's error over every screen, until it is dismissed. */
 function ErrorBanner({ conn }: { conn: Connection }) {
   if (conn.error === null) {
@@ -579,21 +636,18 @@ export function backdropOf(
     : null;
 }
 
-/** The pages over the join screen: the booklet's and the Bestenliste's missions, the editor. */
-interface Pages {
-  handbook: string | null;
-  history: string | null;
-  editor: boolean;
-}
-
 /**
  * What shows off any room (`offRoom`): the editor, where nothing lies over it — it fills the
  * window as a run does —, and the menu over its living scene, where no page lies over it.
  */
-function offRoomOf(offRoom: boolean, pages: Pages): { editing: boolean; menu: boolean } {
-  const editing = offRoom && pages.editor && pages.handbook === null;
-  const menu = offRoom && !pages.editor && pages.handbook === null && pages.history === null;
-  return { editing, menu };
+function offRoomOf(
+  offRoom: boolean,
+  pages: Pick<PageState, 'handbook' | 'history' | 'myRuns'>,
+  editor: boolean,
+): { editing: boolean; menu: boolean } {
+  const editing = offRoom && editor && pages.handbook === null;
+  const paged = pages.handbook !== null || pages.history !== null || pages.myRuns;
+  return { editing, menu: offRoom && !editor && !paged };
 }
 
 /**
@@ -622,11 +676,8 @@ export function App({ boot }: { boot: EditorBoot }) {
   const voice = useVoiceMesh(live);
   // Fetched at the start, and again whenever the editor saves or deletes a mission.
   const [missions, loadMissions] = useMissions();
-  // The handbook is a page of its own off the join screen: the mission whose
-  // booklet is open, or null.
-  const [handbook, setHandbook] = useState<string | null>(null);
-  // So is the Bestenliste: the mission whose tab is open, or null.
-  const [history, setHistory] = useState<string | null>(null);
+  // The booklet, the Bestenliste and „Meine Einsätze": pages of their own off the join screen.
+  const pages = usePages();
   // The mission picked on the join screen: its card marked, its lab in the scene behind — kept
   // in the tab, so that both come back as leaving a lobby loads the page anew.
   const [picked, setPicked] = usePicked();
@@ -661,7 +712,7 @@ export function App({ boot }: { boot: EditorBoot }) {
   const offRoom = conn.view === null && conn.spectatorView === null;
   useMenuSound(conn, editor.open);
   // The editor scrolls on a phone (styles/editor.css); the menu lies over its living scene.
-  const { editing, menu } = offRoomOf(offRoom, { handbook, history, editor: editor.open });
+  const { editing, menu } = offRoomOf(offRoom, pages, editor.open);
   const layout = layoutOf(immersive, editing, menu);
   const backdrop = backdropOf(conn, menu, pickedMission(missions, picked));
   useEffect(() => keepPath(editing), [editing]);
@@ -672,7 +723,7 @@ export function App({ boot }: { boot: EditorBoot }) {
   const screen = screenOf(conn);
   useLayoutEffect(() => {
     contentRef.current?.scrollTo(0, 0);
-  }, [handbook, history, editor.open, screen]);
+  }, [pages.handbook, pages.history, pages.myRuns, editor.open, screen]);
 
   return (
     <div className="app">
@@ -695,6 +746,7 @@ export function App({ boot }: { boot: EditorBoot }) {
         missions={missions}
         leaveRoom={live.leaveRoom}
         toMenu={live.toMenu}
+        settings={<Settings live={live} close={layer.closeSettings} />}
       />
       <ErrorBanner conn={live} />
       <UpdateNotice />
@@ -708,10 +760,7 @@ export function App({ boot }: { boot: EditorBoot }) {
               missions={missions}
               loadMissions={loadMissions}
               stats={stats.status === 'ready' ? stats.value : []}
-              handbook={handbook}
-              setHandbook={setHandbook}
-              history={history}
-              setHistory={setHistory}
+              pages={pages}
               editor={editor}
               startTestRun={testRun.start}
               finale={finale}

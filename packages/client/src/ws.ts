@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 'react';
 import type {
+  AccountView,
   ClientMessage,
   DronePosition,
   PlayerView,
@@ -9,10 +10,12 @@ import type {
   ServerMessage,
   SpectatorView,
 } from '@escapelab/core';
+import { fillEarned, forgetEarned } from './achievements.js';
 import { askForTime, clock, localNow } from './clock.js';
 import { keepConnected, wipesBanner, type Line, type LineStatus, type Retry } from './line.js';
 import { forgetNotes, localStore } from './notes.js';
-import { crewPass } from './pass.js';
+import type { Loaded } from './runStats.js';
+import { crewPass, forgetProfile, keepProfile } from './pass.js';
 import {
   dropSnapshot,
   keepSnapshot,
@@ -34,19 +37,25 @@ export interface Refusal {
 
 /**
  * What is refused where the player looks — at the device they work (its head), at the prompt
- * they pressed E on (the pill) — and not in the banner over the screen, which lies under a
- * device and away from the prompt.
+ * they pressed E on (the pill), on „Meine Einsätze" asked for its runs, in the settings asked to
+ * delete the account — and not in the banner over the screen, which lies under a device and
+ * away from the prompt, and would say it twice.
  */
 const ANSWERED_IN_PLACE: ReadonlySet<ClientMessage['kind']> = new Set([
   'puzzle-input',
   'interact',
   'open-source',
+  'my-runs',
+  'delete-account',
 ]);
 
 /** Whether a refusal of a message of kind `of` goes to the banner: none answered in place. */
 export function inBanner(of: ClientMessage['kind'] | undefined): boolean {
   return of === undefined || !ANSWERED_IN_PLACE.has(of);
 }
+
+/** The runs of the pass's account as the server sent them (`my-runs`): the newest, the count. */
+export type MyRuns = Omit<Extract<ServerMessage, { kind: 'my-runs' }>, 'kind'>;
 
 /** This device's ask for a seat by its name, waiting for the crew to let it in. */
 export interface Takeover {
@@ -90,6 +99,12 @@ export interface Connection {
    * a run on binds it, a lobby holds it; null for neither, and before the first answer
    */
   seat: Seat | null;
+  /** the pass's account as the server last told it; null before it did, and once deleted */
+  account: AccountView | null;
+  /** the runs of the pass's account, as the server last answered `askMyRuns`, or why it did not */
+  myRuns: Loaded<MyRuns>;
+  /** asks the server for the runs of the pass's account (`my-runs`); stable for the page's life */
+  askMyRuns: () => void;
   roomCode: string | null;
   /**
    * the banner's words: a refusal of what is answered nowhere else (`ANSWERED_IN_PLACE`), there
@@ -183,6 +198,8 @@ export interface Page {
   setSpectatorView: (view: SpectatorView | null) => void;
   setRooms: (rooms: RoomSummary[]) => void;
   setSeat: (seat: Seat | null) => void;
+  setAccount: (account: AccountView | null) => void;
+  setMyRuns: (runs: Loaded<MyRuns>) => void;
   setTakeover: (takeover: Takeover | null) => void;
   setRestoring: (restoring: Restoring | null) => void;
   setError: (message: string) => void;
@@ -207,8 +224,25 @@ export interface Page {
 
 /** Takes a server message in: the page's state, the room the tab keeps, the live refs. */
 export function takeIn(msg: ServerMessage, page: Page): void {
-  if (!seatNews(msg, page)) {
+  if (!seatNews(msg, page) && !accountNewsOf(msg, page)) {
     lineNews(msg, page);
+  }
+}
+
+/**
+ * Takes in what the server says of the pass's account — the account (`accountNews`), its runs —
+ * and says whether `msg` was such news.
+ */
+function accountNewsOf(msg: ServerMessage, page: Page): boolean {
+  switch (msg.kind) {
+    case 'account':
+      accountNews(msg.account, page);
+      return true;
+    case 'my-runs':
+      page.setMyRuns({ status: 'ready', value: { runs: msg.runs, total: msg.total } });
+      return true;
+    default:
+      return false;
   }
 }
 
@@ -282,6 +316,23 @@ function lineNews(msg: ServerMessage, page: Page): void {
     default:
       streamNews(msg, page);
   }
+}
+
+/**
+ * What the server says of the pass's account: its name, its colour and its Erfolge kept with the
+ * pass for the next page (pass.ts, achievements.ts) — every one of them forgotten once the
+ * account is deleted.
+ */
+function accountNews(account: AccountView | null, page: Page): void {
+  const store = localStore();
+  if (account === null) {
+    forgetProfile(store);
+    forgetEarned(store);
+  } else {
+    keepProfile(account, store);
+    fillEarned(store, account.achievements);
+  }
+  page.setAccount(account);
 }
 
 /** Takes in what the world streams past React: where everybody stands, the pings, the chat. */
@@ -386,12 +437,7 @@ function leftRoom({ code, message }: Extract<ServerMessage, { kind: 'left' }>, p
  */
 function refused(msg: Extract<ServerMessage, { kind: 'error' }>, page: Page): void {
   if (page.resuming.current) {
-    page.resuming.current = false;
-    forgetRoom(roomOfTab(), page.seen.current?.you.id ?? null);
-    page.setRoomCode(null);
-    page.setView(null);
-    page.setSpectatorView(null);
-    page.setRestoring(null);
+    comebackRefused(page);
   }
   if (msg.of === 'join-room') {
     page.setTakeover(null);
@@ -399,10 +445,26 @@ function refused(msg: Extract<ServerMessage, { kind: 'error' }>, page: Page): vo
   if (msg.of === 'resume') {
     resumeRefused(page);
   }
+  if (msg.of === 'my-runs') {
+    page.setMyRuns({ status: 'failed', reason: msg.message });
+  }
   if (inBanner(msg.of)) {
     page.setError(msg.message);
   }
   page.refuse(msg.message, msg.of ?? null);
+}
+
+/**
+ * The tab's own comeback refused: its room is gone, or its pass holds no seat there any more. The
+ * tab plays in no room from now, what it noted there gone, and the join screen comes up.
+ */
+function comebackRefused(page: Page): void {
+  page.resuming.current = false;
+  forgetRoom(roomOfTab(), page.seen.current?.you.id ?? null);
+  page.setRoomCode(null);
+  page.setView(null);
+  page.setSpectatorView(null);
+  page.setRestoring(null);
 }
 
 /**
@@ -657,6 +719,69 @@ function useLine(wiring: Wiring): MutableRefObject<Line | null> {
   return lineRef;
 }
 
+/** What the page shows of what the server said: the connection's state, as it hands it out. */
+type Shown = Pick<
+  Connection,
+  | 'view'
+  | 'spectatorView'
+  | 'takeover'
+  | 'restoring'
+  | 'rooms'
+  | 'seat'
+  | 'account'
+  | 'myRuns'
+  | 'roomCode'
+  | 'error'
+  | 'refusal'
+>;
+
+/**
+ * The page's state, as the server's messages set it (`Shown`), and the page they are taken in by
+ * (`Page`): its setters and the refs read live, the same for the page's life — and how to clear
+ * the banner's words.
+ */
+function usePage(): { shown: Shown; page: Page; clearError: () => void } {
+  const [view, setView] = useState<PlayerView | null>(null);
+  const [spectatorView, setSpectatorView] = useState<SpectatorView | null>(null);
+  const [rooms, setRooms] = useState<RoomSummary[]>([]);
+  // The card of the newest snapshot kept stands from the start, till the server says otherwise.
+  const [seat, setSeat] = useState<Seat | null>(keptSeat);
+  const [account, setAccount] = useState<AccountView | null>(null);
+  const [myRuns, setMyRuns] = useState<Loaded<MyRuns>>({ status: 'loading' });
+  const [takeover, setTakeover] = useState<Takeover | null>(null);
+  const [restoring, setRestoring] = useState<Restoring | null>(null);
+  const [roomCode, setRoomCode] = useState<string | null>(roomOfTab);
+  const [error, setError] = useState<string | null>(null);
+  const [refusal, setRefusal] = useState<Refusal | null>(null);
+  const resuming = useRef(false);
+  const resumed = useRef<string | null>(null);
+  const seen = useRef<PlayerView | null>(null);
+  const live = useLiveRefs();
+  const page: Page = {
+    setRoomCode,
+    setView,
+    setSpectatorView,
+    setRooms,
+    setSeat,
+    setAccount,
+    setMyRuns,
+    setTakeover,
+    setRestoring,
+    setError,
+    refuse: (message, of) => setRefusal((last) => ({ seq: (last?.seq ?? 0) + 1, message, of })),
+    resuming,
+    resumed,
+    seen,
+    ...live,
+  };
+  const shown = { view, spectatorView, takeover, restoring, rooms, seat, account, myRuns };
+  return {
+    shown: { ...shown, roomCode, error, refusal },
+    page,
+    clearError: () => setError(null),
+  };
+}
+
 /**
  * Owns the WebSocket for the whole app: connects, resumes the tab's room on the browser's pass
  * after a reload or a lost connection, and reconnects with backoff (`keepConnected`) — at once
@@ -665,21 +790,8 @@ function useLine(wiring: Wiring): MutableRefObject<Line | null> {
 export function useGameConnection(): Connection {
   const [status, setStatus] = useState<Connection['status']>('connecting');
   const [retry, setRetry] = useState<Retry | null>(null);
-  const [view, setView] = useState<PlayerView | null>(null);
-  const [spectatorView, setSpectatorView] = useState<SpectatorView | null>(null);
-  const [rooms, setRooms] = useState<RoomSummary[]>([]);
-  // The card of the newest snapshot kept stands from the start, till the server says otherwise.
-  const [seat, setSeat] = useState<Seat | null>(keptSeat);
-  const [takeover, setTakeover] = useState<Takeover | null>(null);
-  const [restoring, setRestoring] = useState<Restoring | null>(null);
-  const [roomCode, setRoomCode] = useState<string | null>(roomOfTab);
-  const [error, setError] = useState<string | null>(null);
-  const [refusal, setRefusal] = useState<Refusal | null>(null);
+  const { shown, page, clearError } = usePage();
   const socketRef = useRef<WebSocket | null>(null);
-  const resumingRef = useRef(false);
-  const resumedRef = useRef<string | null>(null);
-  const seenRef = useRef<PlayerView | null>(null);
-  const live = useLiveRefs();
   const listenersRef = useRef(new Set<ServerListener>());
 
   const listen = useCallback((listener: ServerListener) => {
@@ -697,65 +809,55 @@ export function useGameConnection(): Connection {
   }, []);
 
   const lineRef = useLine({
-    page: {
-      setRoomCode,
-      setView,
-      setSpectatorView,
-      setRooms,
-      setSeat,
-      setTakeover,
-      setRestoring,
-      setError,
-      refuse: (message, of) => setRefusal((last) => ({ seq: (last?.seq ?? 0) + 1, message, of })),
-      resuming: resumingRef,
-      resumed: resumedRef,
-      seen: seenRef,
-      ...live,
-    },
+    page,
     setStatus,
     setRetry,
     socket: socketRef,
     listeners: listenersRef,
   });
 
+  const { setMyRuns } = page;
+  const askMyRuns = useCallback(() => {
+    setMyRuns({ status: 'loading' });
+    lineRef.current?.send({ kind: 'my-runs', pass: crewPass() });
+  }, [lineRef, setMyRuns]);
+
+  const { positions, drones, pings, chats } = page;
   return {
     status,
     retry,
-    view,
-    spectatorView,
-    takeover,
-    restoring,
-    rooms,
-    seat,
-    roomCode,
-    error,
-    refusal,
-    ...live,
+    ...shown,
+    askMyRuns,
+    positions,
+    drones,
+    pings,
+    chats,
     send: (msg) => {
       if (wipesBanner(msg.kind)) {
-        setError(null);
+        clearError();
       }
-      noteOutgoing(msg, { resumed: resumedRef, setRestoring });
+      noteOutgoing(msg, page);
       lineRef.current?.send(msg);
     },
     listen,
     signal,
-    dismissError: () => setError(null),
+    dismissError: clearError,
     wake: () => lineRef.current?.wake(),
     giveUp: () => {
-      giveUpOffLine(lineRef.current, seenRef.current?.you.id ?? null);
-      setRoomCode(null);
-      setView(null);
-      setSeat(keptSeat());
+      giveUpOffLine(lineRef.current, page.seen.current?.you.id ?? null);
+      page.setRoomCode(null);
+      page.setView(null);
+      page.setSeat(keptSeat());
     },
     leaveRoom: () => {
       const code = roomOfTab();
-      if (code === null || spectatorView !== null) {
+      if (code === null || shown.spectatorView !== null) {
         leaveTab();
         location.reload();
         return;
       }
-      leaveSeat(code, seenRef.current?.you.id ?? null, listen, (msg) => lineRef.current?.send(msg));
+      const playerId = page.seen.current?.you.id ?? null;
+      leaveSeat(code, playerId, listen, (msg) => lineRef.current?.send(msg));
     },
     toMenu: () => {
       const code = roomOfTab();

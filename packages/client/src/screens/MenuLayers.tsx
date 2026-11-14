@@ -1,11 +1,10 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactElement } from 'react';
 import type { MissionInfo } from '@escapelab/core';
 import type { MenuLayer } from '../menuLayer.js';
 import { closeDoorsThen } from './DoorWipe.js';
 import { GiveUpAsk } from './GiveUp.js';
 import { HandbookScreen } from './Handbook.js';
 import { PauseMenu, type PauseItem } from './PauseMenu.js';
-import { SettingsPanel } from './Settings.js';
 
 /**
  * The menus over the screens, in the order they stack (menuLayer.ts): the pause menu over a room,
@@ -79,6 +78,8 @@ interface Props {
   leaveRoom: () => void;
   /** off to the main menu, the seat kept (ws.ts `toMenu`) */
   toMenu: () => void;
+  /** the settings as they stand over everything, the pass's account with them (App.tsx) */
+  settings: ReactElement;
 }
 
 /** What each of the pause menu's items does; „Einsatz aufgeben" asks first (`ask`). */
@@ -103,7 +104,7 @@ function itemActions(
  * The pause menu over the room, with the item last taken — and over it, once „Einsatz aufgeben"
  * was taken, the ask (GiveUp.tsx `GiveUpAsk`) — where it stands open.
  */
-function RoomMenu(props: Omit<Props, 'missions'>) {
+function RoomMenu(props: Omit<Props, 'missions' | 'settings'>) {
   const { layer, mission, crew } = props;
   const [last, setLast] = useState<PauseItem>('resume');
   const [asking, setAsking] = useState(false);
@@ -145,7 +146,8 @@ function RoomMenu(props: Omit<Props, 'missions'>) {
 }
 
 /** The menus over the screens, in the order they stack. */
-export function MenuLayers({ layer, mission, crew, missions, leaveRoom, toMenu }: Props) {
+export function MenuLayers(props: Props) {
+  const { layer, mission, crew, missions, leaveRoom, toMenu } = props;
   return (
     <>
       <RoomMenu
@@ -163,7 +165,7 @@ export function MenuLayers({ layer, mission, crew, missions, leaveRoom, toMenu }
           close={layer.closeHandbook}
         />
       )}
-      {layer.settings && <SettingsPanel onClose={layer.closeSettings} />}
+      {layer.settings && props.settings}
     </>
   );
 }

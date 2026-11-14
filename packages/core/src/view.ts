@@ -31,6 +31,7 @@ import {
 } from './state.js';
 import { moduleFor, type PuzzleView } from './puzzles/index.js';
 import { crewOf, waitingFor } from './actions.js';
+import { gradeOf, type Grade } from './grade.js';
 import { clockStartOf, runReport } from './report.js';
 import type { ConsoleId, ManualSection, Viewer, ViewContext } from './puzzles/module.js';
 import { relayDefFor, relayModule, type RelayDef, type RelayView } from './puzzles/relay.js';
@@ -476,38 +477,21 @@ export type MapPart = MapView['items'][number];
 /** A part somebody of the crew has found or taken up: who carries it, where it goes. */
 export type KnownPart = Extract<MapPart, { known: true }>;
 
-export interface Grade {
-  /** S, A, B or C — only awarded for a mission that was actually finished */
-  rank: 'S' | 'A' | 'B' | 'C';
-  label: string;
-}
-
 /**
- * How well the crew did: a clean run with time to spare is the top rank,
- * every alarm and every lost second pushes it down. Hints count too, but
- * more gently: they only stand between the crew and the top two ranks.
+ * The grade of a run won (grade.ts `gradeOf`): its time is the clock's, from the lights going
+ * out, the intro left out; null for a run not won.
  */
 function gradeFor(state: GameState): Grade | null {
   if (state.phase !== 'won' || state.startedAt === null || state.finishedAt === null) {
     return null;
   }
-  const budget = state.mission.timeLimitSec * 1000;
-  // The run's time is the clock's: from the lights going out, the intro left out.
   const { startedAt, lightsOutAt } = state;
-  const used = state.finishedAt - clockStartOf({ startedAt, lightsOutAt });
-  const spare = Math.max(0, 1 - used / budget);
-  const alarms = state.penaltySeq;
-  const hints = state.hintsUsed;
-  if (alarms === 0 && hints === 0 && spare >= 0.3) {
-    return { rank: 'S', label: 'Makellos — kein einziger Alarm, massig Zeit übrig' };
-  }
-  if (alarms <= 1 && hints <= 1 && spare >= 0.15) {
-    return { rank: 'A', label: 'Sauber — fast ohne Zwischenfälle' };
-  }
-  if (alarms <= 3) {
-    return { rank: 'B', label: 'Solide — es hat gewackelt, aber alle sind draußen' };
-  }
-  return { rank: 'C', label: 'Knapp vorbei an der Katastrophe' };
+  return gradeOf({
+    usedMs: state.finishedAt - clockStartOf({ startedAt, lightsOutAt }),
+    budgetMs: state.mission.timeLimitSec * 1000,
+    alarms: state.penaltySeq,
+    hints: state.hintsUsed,
+  });
 }
 
 /** The alarms so far against the mission's limit; every viewer sees the same. */

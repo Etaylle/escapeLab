@@ -1,5 +1,5 @@
 import { DIFFICULTIES, runSeconds, type Difficulty } from '@escapelab/core';
-import type { LoggedRun } from './runLog.js';
+import type { LoggedRun } from './store/store.js';
 
 /** One station across the runs of a mission at one difficulty. */
 export interface StationSummary {

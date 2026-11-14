@@ -47,7 +47,8 @@ import type { Spot } from './reach.js';
  * clock or RNG, which keeps every game deterministic and replayable.
  */
 export type Action =
-  | { type: 'player-join'; playerId: string; name: string }
+  /** `color`: the crew colour the player's account wears, worn where nobody wears it yet */
+  | { type: 'player-join'; playerId: string; name: string; color?: string }
   /**
    * a crew member's line is back at `at`: in a run they count again at once, whether the crew
    * went on without them or not, and the run goes on once it waits for nobody
@@ -458,7 +459,7 @@ function setDaily(state: GameState, action: { playerId: string; daily: boolean }
 
 function playerJoin(
   state: GameState,
-  action: { playerId: string; name: string },
+  action: { playerId: string; name: string; color?: string },
 ): GameState {
   if (state.phase !== 'lobby') {
     fail(
@@ -482,10 +483,12 @@ function playerJoin(
     unique = `${name} ${n}`;
   }
   const taken = new Set(state.players.map((p) => p.color));
+  const asked = action.color?.toLowerCase();
+  const free = CREW_COLORS.filter((c) => !taken.has(c));
   const player: Player = {
     id: action.playerId,
     name: unique,
-    color: CREW_COLORS.find((c) => !taken.has(c)) ?? CREW_COLORS[0],
+    color: free.find((c) => c === asked) ?? free[0] ?? CREW_COLORS[0],
     ready: false,
     connected: true,
     isHost: state.players.length === 0,

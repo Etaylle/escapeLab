@@ -59,7 +59,7 @@ function connect(room: Room, playerId: string, name: string): Player {
 /** A run in the corridor for `names`, the first of them its host; the room's reports kept. */
 function crew(names: string[]) {
   const reports: RunReport[] = [];
-  const room = new Room('TEST', lab, (report) => reports.push(report));
+  const room = new Room('TEST', lab, ({ report }) => reports.push(report));
   const players = names.map((name) => connect(room, room.join(name, passFor(name)).playerId, name));
   for (const player of players.slice(1)) {
     room.setReady(player.playerId, true);
