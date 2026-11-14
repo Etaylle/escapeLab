@@ -147,7 +147,7 @@
  * to their rooms (menu-place-handbook.png, menu-place-settings.png), and with nothing hovered or
  * in the focus go back to its drift (menu-place-idle.png). „Bestenliste" pressed, the hero's
  * clock held 110 ms after the press: half way through its step toward the menu, its lamp flared
- * (menu-hero-click.png); then the menu's short shutter held two thirds shut over the menu
+ * (menu-hero-click.png); then the menu's short shutter held half shut over the menu
  * (menu-shutter.png), its leaves 80 ms. „Einsatz starten" open, the hero stands half a tile
  * aside, clear of the panel (menu-hero-missions.png); as the doors close for the lobby it has
  * turned away to the lab; and in the reconnect drill's tab it looks at the run's card. At 1280×720 it stands as at 1440×820
@@ -1510,7 +1510,7 @@ async function captureHistory(page, shot, open = pressHistory) {
 const HERO_BEAT_HOLD_MS = 110;
 /** The hero's beat before the shutter closes, and the shutter's close, ms (client DoorWipe.tsx). */
 const SHUTTER = { beat: 100, close: 80 };
-/** How far into its close menu-shutter.png holds the shutter, ms: about two thirds shut. */
+/** How far into its close menu-shutter.png holds the shutter, ms: a little over half shut. */
 const SHUTTER_SHOT_MS = 55;
 
 /** In the page: holds the hero's clock `ms` after the next item taken (heroStage.ts). */
@@ -7530,7 +7530,7 @@ async function placeShot(page, { item, label, shot }) {
   await capture(page, shot);
   const after = ((Date.now() - started) / 1000).toFixed(1);
   const said = there ? `the camera at the room of „${label}" ${after} s after the hover` : '!! no room';
-  console.log(`${shot.padEnd(19)}${said}`);
+  console.log(`${shot} ${said}`);
   return there;
 }
 
