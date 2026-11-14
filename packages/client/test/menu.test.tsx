@@ -340,8 +340,16 @@ describe('the menu’s ways off it', () => {
   });
 });
 
+/** The body of the rule in menu.css whose selector is `selector`, braces left out. */
+function menuRule(selector: string): string {
+  const sheet = readFileSync(new URL('src/styles/menu.css', CLIENT), 'utf8');
+  const at = sheet.indexOf(`\n${selector} {`);
+  expect(at, selector).toBeGreaterThan(0);
+  return sheet.slice(sheet.indexOf('{', at) + 1, sheet.indexOf('}', at));
+}
+
 describe('the menu under the pointer', () => {
-  it('glows the item it points at and leaves the focus where it is, in the name typed', () => {
+  it('brightens the item it points at and leaves the focus where it is, in the name typed', () => {
     const items = menuItems(true);
     const nav = MainMenu({ items, card: null, dimmed: false, rooms: 0, onPick: noop });
     const buttons = elementsIn(nav).filter((element) => element.type === 'button');
@@ -352,10 +360,28 @@ describe('the menu under the pointer', () => {
       onPointerEnter?.({ currentTarget: { focus } });
     }
     expect(focus).not.toHaveBeenCalled();
-    // It glows all the same: the item under the pointer lights a little, the focused one fully.
+    // It brightens all the same, slowly: the item under the pointer a little, the focused one fully.
+    expect(menuRule('.menu-list .menu-item:hover:not(:disabled)')).toContain('background:');
+    expect(menuRule('.menu-list .menu-item')).toMatch(/background 0\.4s ease-out,\s+color 0\.4s/);
+  });
+
+  it('stands the item in the focus on a rail of the beam’s light, a keyboard’s focus ringed', () => {
+    const focused = menuRule('.menu-list .menu-item:focus');
+    expect(focused).toContain('border-left-color: var(--beam);');
+    // The ring of every control's keyboard focus (interaction.css) is left to show.
+    expect(focused).not.toMatch(/outline/);
+    expect(menuRule(':root')).toContain('--beam: #ffd6a8;');
+  });
+
+  it('sets nothing of the menu under the 12-px floor', () => {
     const sheet = readFileSync(new URL('src/styles/menu.css', CLIENT), 'utf8');
-    expect(sheet).toMatch(/\.menu-list \.menu-item:hover:not\(:disabled\) \{\s+background:/);
-    expect(sheet).toMatch(/\.menu-list \.menu-item:focus \{\s+border-left-color: var\(--accent\);/);
+    const sizes = [...sheet.matchAll(/font-size: (\d+(?:\.\d+)?)px;/g)].map((m) => Number(m[1]));
+    expect(sizes.length).toBeGreaterThan(8);
+    expect(sizes.filter((px) => px < 12)).toEqual([]);
+    // The lead line under the items in the title's face, spaced, at the floor itself.
+    const lead = menuRule('.menu-lead');
+    expect(lead).toContain('font-family: var(--display);');
+    expect(lead).toContain('font-size: 12px;');
   });
 });
 

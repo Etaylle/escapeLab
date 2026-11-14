@@ -507,17 +507,23 @@ The title, ESCAPELAB, is set in **Michroma** (Vernon Adams, 2011), under the **S
 1.1**, which reserves no font name: its Latin subset as Google Fonts cuts it ships with the game as
 `client/public/fonts/michroma-latin.woff2` (12 kB), its licence beside it as `michroma-OFL.txt`, and
 the page preloads it; Eurostile, Microgramma and the system's sans stand in where it cannot load. It
-stands in the phosphor's white with a green glow and comes on as a phosphor screen does, once a page
-load (intro.css `phosphor-title`); under it one line of the world, in the mono and spaced:
-„Forschungsanlage Kaltenbrunn · Zutritt nur mit Dienstausweis". The menu stands one item under the
-next in the title's face, upper case: Einsatz starten, Beitreten, Offene Runden, Handbuch,
-Bestenliste, Editor, Einstellungen. The item lit — moved to by the arrows, a controller's D-pad or a
-click — is the focus itself: a teal bar on its left, a teal light behind it, its label a step to the
-right; the ring of every other control (Interface) would only box it in, so it draws none. The
-pointer only glows the item it is over and moves no focus, so that a name being typed keeps it.
-Under the items one quiet line says how the game is played: „Am Pult die Maschine, im Buch die
-Regeln — gelöst wird nur gemeinsam, per Stimme, ein Gerät je Kopf, Rücken an Rücken." A run that
-binds the pass stands first and lit, the items under it dimmed. The account stands in the top bar,
+stands in the phosphor's white with a green glow, spaced wide as a film's title is (0.2 em), up to
+64 px on a wide screen, and comes on as a phosphor screen does, once a page load (intro.css
+`phosphor-title`); under it one thin line of the world, in the light mono, spaced wider still and
+softer than the title's white: „Forschungsanlage Kaltenbrunn · Zutritt nur mit Dienstausweis". The
+menu stands one item under the next in the title's face, upper case: Einsatz starten, Beitreten,
+Offene Runden, Handbuch, Bestenliste, Editor, Einstellungen. The item lit — moved to by the arrows,
+a controller's D-pad or a click — is the focus itself: a rail of the beam's warm light on its left
+(`--beam`, the lamp's tungsten), that light behind it, its label a step to the right, as if the
+hero's lamp had found it; the keyboard's focus rings it as well, as every control's (Interface).
+The pointer only brightens the item it is over, over 0.4 s, and moves no focus, so that a name
+being typed keeps it. Under the items one quiet line, in the title's face at the 12-px floor and
+spaced, says how the game is played: „Am Pult die Maschine, im Buch die Regeln — gelöst wird nur
+gemeinsam, per Stimme, ein Gerät je Kopf, Rücken an Rücken." From 1600 px across the column is
+wider and its items a step larger, 16.5 px, so that the menu holds its own beside a taller hero.
+Nothing of the menu is set under 12 px. A run that binds the pass stands first and lit, in a
+panel's frame — 14 px corners, the `--line-2` hairline — its head in the title's face, the items
+under it dimmed. The account stands in the top bar,
 at its end, as a game's profile does (BarAccount.tsx): the player's own figure's head as its avatar
 — the dome and the visor turned three quarters to the bar's middle, in the account's colour, in a
 dark ring 30 px across —, the name in the mono, „Ohne Namen" before one, and where the bar has the
