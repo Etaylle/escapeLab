@@ -1439,11 +1439,13 @@ function firstAlarm(state: GameState, reason: string, at: number): GameState {
 
 /**
  * The run is won at `at`, its report's last line `how`; the operator's last word on it follows,
- * by the time it left (radio.ts `wonBand`), for the end card to play.
+ * by the time it left (radio.ts `wonBand`), for the end card to play — a run without a clock
+ * ran short of none, and hears the word for time to spare.
  */
 function wonNow(state: GameState, at: number, how: string): GameState {
   const finished = logEvent(overNow(state, 'won', at), 'finish', how, at);
-  const band = wonBand((state.deadlineAt ?? at) - at);
+  const left = state.deadlineAt === null ? Number.POSITIVE_INFINITY : state.deadlineAt - at;
+  const band = wonBand(left);
   return logRadio(finished, 'won', state.mission.radio.won?.[band], at, band);
 }
 
