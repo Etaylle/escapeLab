@@ -3,9 +3,17 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { achievementsOf, utcDay } from '@escapelab/core';
-import { AccountDesk, accountRunOf, byMission, MY_RUNS } from '../src/accounts.js';
+import {
+  AccountDesk,
+  accountRunOf,
+  byMission,
+  MY_RUNS,
+  NO_LIMITS,
+  WRONG_LOGIN,
+} from '../src/accounts.js';
+import { DeriveQueue } from '../src/login.js';
 import { JsonlStore } from '../src/store/jsonl.js';
-import type { Profile, RunReportV1 } from '../src/store/store.js';
+import { LoginTaken, type Profile, type RunReportV1 } from '../src/store/store.js';
 import { passFor } from './passes.js';
 import { DAY, finished, reportOf } from './storeContract.js';
 
@@ -74,7 +82,7 @@ describe('the desk', () => {
     const pass = passFor('Anna');
     await accounts.arrive(pass, { displayName: 'Anna', colour: null });
     await store.appendRun(finished({ at: DAY }, ['Anna', null]));
-    const view = await accounts.arrive(pass, { displayName: 'Andere', colour: null });
+    const view = (await accounts.arrive(pass, { displayName: 'Andere', colour: null }))?.view;
     const earned = achievementsOf(reportOf());
     expect(view?.runs).toBe(1);
     expect(view?.achievements).toEqual({
@@ -94,6 +102,32 @@ describe('the desk', () => {
     expect(total).toBe(MY_RUNS + 1);
     expect(runs).toHaveLength(MY_RUNS);
     expect(runs[0]?.finishedAt).toBe(DAY + MY_RUNS);
+  });
+
+  it('mints the Ausweisnummer anew where the one minted is taken, five times at most', async () => {
+    const { desk: accounts, store } = desk();
+    const add = store.addLogin.bind(store);
+    const tried: string[] = [];
+    let taken = 2;
+    vi.spyOn(store, 'addLogin').mockImplementation(async (id, subject, hash) => {
+      tried.push(subject);
+      taken -= 1;
+      if (taken >= 0) {
+        throw new LoginTaken();
+      }
+      return add(id, subject, hash);
+    });
+    const view = await accounts.setPassword(passFor('Anna'), 'Kaltenbrunn 1986');
+    expect(tried).toHaveLength(3);
+    expect(view.login).toBe(tried[2]);
+    // Taken five times in a row: no login is made.
+    taken = 5;
+    tried.length = 0;
+    const ben = accounts.setPassword(passFor('Ben'), 'Kaltenbrunn 1986');
+    await expect(ben).rejects.toBeInstanceOf(LoginTaken);
+    expect(tried).toHaveLength(5);
+    expect((await accounts.arrive(passFor('Ben'), { displayName: '', colour: null }))?.view.login)
+      .toBeNull();
   });
 
   it('settles once every request under way has: a slow one, one behind it', async () => {
@@ -126,5 +160,35 @@ describe('the desk', () => {
     answer();
     await waited;
     expect(written).toEqual([{ colour: '#60a5fa' }, { displayName: 'Anna Berg' }]);
+  });
+});
+
+describe('the desk’s Kennwörter', () => {
+  it('takes a turn of the server’s for every Kennwort it keeps or checks, by address', async () => {
+    const { store } = desk();
+    const queue = new DeriveQueue();
+    const turns = vi.spyOn(queue, 'run');
+    const accounts = new AccountDesk(store, queue);
+    const limits = { ...NO_LIMITS, from: '203.0.113.7' };
+    const set = await accounts.setPassword(passFor('Anna'), 'Kaltenbrunn 1986', limits);
+    expect(turns).toHaveBeenCalledTimes(1);
+    // The present one checked, the new one kept.
+    await accounts.changePassword(passFor('Anna'), 'Kaltenbrunn 1986', 'Kaltenbrunn 1987', limits);
+    expect(turns).toHaveBeenCalledTimes(3);
+    await accounts.signIn(passFor('Phone'), set.login ?? '', 'Kaltenbrunn 1987', limits);
+    expect(turns.mock.calls.map(([, from]) => from)).toEqual(Array(4).fill('203.0.113.7'));
+  });
+
+  it('signs nobody in whose Kennwort changed between its check and its sign-in', async () => {
+    const { desk: accounts, store } = desk();
+    const set = await accounts.setPassword(passFor('Anna'), 'Kaltenbrunn 1986');
+    const number = set.login ?? '';
+    // The store finds the login keeping another Kennwort by the time the pass moves.
+    vi.spyOn(store, 'signIn').mockResolvedValue(null);
+    const signIn = accounts.signIn(passFor('Phone'), number, 'Kaltenbrunn 1986');
+    await expect(signIn).rejects.toThrow(WRONG_LOGIN);
+    const login = { typed: number, password: 'Kaltenbrunn 1986', parked: false };
+    const switched = accounts.switchAccount(passFor('Anna'), passFor('Eva'), login);
+    await expect(switched).rejects.toThrow(WRONG_LOGIN);
   });
 });

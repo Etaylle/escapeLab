@@ -1,6 +1,9 @@
 import {
   ACHIEVEMENT_IDS,
   GameError,
+  numberOf,
+  PASSWORD_SIZE,
+  passwordFits,
   reportGrade,
   runSeconds,
   utcDay,
@@ -10,11 +13,23 @@ import {
   type CrewPass,
 } from '@escapelab/core';
 import {
+  DeriveQueue,
+  hashPassword,
+  mintNumber,
+  passwordMatches,
+  type Target,
+  type Ticket,
+} from './login.js';
+import {
+  HAS_LOGIN,
+  LoginTaken,
+  PASS_REFUSED,
   secretHashOf,
   type Account,
   type PassIdentity,
   type Profile,
   type SeatedRun,
+  type SeatPass,
   type Store,
   type Unlocked,
 } from './store/store.js';
@@ -24,9 +39,9 @@ import {
  * made the first time the pass asks where it sits, takes a seat or comes back to one — and what
  * its player changes of it: the name typed in the menu's profile, the colour chosen in a lobby,
  * the account deleted — and the runs it played („Meine Einsätze"). The pass stays the key on its
- * device. Each pass's requests are carried
- * out one after the other, in the order they came: an account is made once, and no answer
- * overtakes the one before it.
+ * device; a Kennwort gives the account an Ausweisnummer besides (login.ts), with which any
+ * device's pass signs into it. Each pass's requests are carried out one after the other, in the
+ * order they came: an account is made once, and no answer overtakes the one before it.
  */
 
 /**
@@ -51,6 +66,90 @@ export const TOO_MANY_CHANGES = 'Zu viele Kontoänderungen über diese Verbindun
 
 /** A change to a profile, made — or held back: no account may be made, or no change. */
 type Changed = { view: AccountView } | { held: 'new' | 'change' };
+
+/** What a sign-in is told whose Ausweisnummer or Kennwort does not match: never which. */
+export const WRONG_LOGIN = 'Ausweisnummer oder Kennwort stimmen nicht.';
+
+/** What a new Kennwort is told whose present one was shown wrong. */
+export const OLD_WRONG = 'Das bisherige Kennwort stimmt nicht.';
+
+/** What a new Kennwort is told for an account that has none to change. */
+export const NO_LOGIN = 'Dieses Konto hat noch kein Kennwort.';
+
+/** What a new Kennwort is told where the Kennwort was changed meanwhile, elsewhere. */
+export const CHANGED_MEANWHILE = 'Das Kennwort wurde eben an anderer Stelle geändert.';
+
+/** What a sign-out is told of an account without a Kennwort, which no device would reach again. */
+export const SIGN_OUT_LOSES =
+  'Ohne Kennwort wäre dieses Konto nach dem Abmelden nicht mehr erreichbar.';
+
+/**
+ * What parks the seats of passes about to sign out, in the rooms (sockets.ts): called with their
+ * account's id right before the store signs them out, so that a run ending that moment credits
+ * the account through its parked seat (store.ts `creditsSeat`).
+ */
+export type ParkFirst = (accountId: string) => void;
+
+/** Parks nothing: where no seat is to be parked, or none is known. */
+const PARK_NOTHING: ParkFirst = () => undefined;
+
+/** A Kennwort changed (`AccountDesk.changePassword`). */
+export interface NewKennwort {
+  /** the account as its owner sees it now */
+  view: AccountView;
+  /** its id */
+  accountId: string;
+  /** the account's other passes, signed out with the change: their seats stay the account's */
+  signedOut: SeatPass[];
+}
+
+/** A device switched to another account (`AccountDesk.switchAccount`). */
+export interface Switched {
+  /** the account the new pass leads into, as its owner sees it */
+  arrival: Arrival;
+  /** the account the pass signed out of; null where it led into none */
+  left: string | null;
+}
+
+/** How often an Ausweisnummer is minted anew where the one minted is taken (`LoginTaken`). */
+const MINT_TRIES = 5;
+
+/**
+ * What a socket's tries at a Kennwort may still do now, by its address (login.ts `SignInGuard`):
+ * why a try at `on` may not go ahead now, counting nothing — null where it may; and the try taken,
+ * counted as a wrong one before its Kennwort is checked: the ticket that gives it back where the
+ * Kennwort is right, else why it may not go ahead.
+ */
+export interface Tries {
+  refusal: (on: Target) => string | null;
+  take: (on: Target) => Ticket | string;
+}
+
+/** Tries nothing limits. */
+export const UNLIMITED: Tries = {
+  refusal: () => null,
+  take: () => ({ right: () => undefined }),
+};
+
+/**
+ * What an ask of a login is held to: the socket's gate, its tries at a Kennwort, and the address
+ * it comes from, which holds so many of the server's turns at deriving one (login.ts
+ * `DeriveQueue`).
+ */
+export interface Limits {
+  gate: Gate;
+  tries: Tries;
+  from: string;
+}
+
+/** Asks of a login held to nothing, from an address nobody knows. */
+export const NO_LIMITS: Limits = { gate: OPEN, tries: UNLIMITED, from: 'unknown' };
+
+/** The account a pass came to: its id, and the account as its owner sees it. */
+export interface Arrival {
+  id: string;
+  view: AccountView;
+}
 
 /** How many of an account's runs „Meine Einsätze" lists: the newest. */
 export const MY_RUNS = 50;
@@ -98,19 +197,27 @@ export class AccountDesk {
   /** the last request of each pass under way, by the pass's id: the next waits for it */
   private readonly queues = new Map<string, Promise<unknown>>();
 
-  constructor(private readonly store: Store) {}
+  /**
+   * `derives` are the server's turns at deriving a Kennwort's key (login.ts): every hash made and
+   * every Kennwort checked here takes one.
+   */
+  constructor(
+    private readonly store: Store,
+    private readonly derives = new DeriveQueue(),
+  ) {}
 
   /**
    * The account of `pass`, found — or made, starting with `profile`, where the gate lets one be
-   * made — as its owner sees it; null where none may be made. Where a seat is taken under the
-   * name `sitting`, the account goes by that name from now on, where the gate lets it change.
+   * made — as its owner sees it, with its id; null where none may be made. Where a seat is taken
+   * under the name `sitting`, the account goes by that name from now on, where the gate lets it
+   * change.
    */
   arrive(
     pass: CrewPass,
     profile: Profile,
     sitting: string | null = null,
     gate: Gate = OPEN,
-  ): Promise<AccountView | null> {
+  ): Promise<Arrival | null> {
     return this.serial(pass, async () => {
       const account = await this.accountOf(pass, profile, gate);
       if (account === null) {
@@ -121,7 +228,188 @@ export class AccountDesk {
         same || !gate.mayChange()
           ? account
           : await this.store.updateProfile(account.id, { displayName: sitting });
-      return this.viewOf(renamed);
+      return { id: renamed.id, view: await this.viewOf(renamed) };
+    });
+  }
+
+  /**
+   * The first Kennwort of the account of `pass` — made where there was none, as `arrive` makes
+   * one — and with it the account's Ausweisnummer, minted (login.ts): the account as its owner
+   * sees it now. Refused, saying why, for a Kennwort too short or too long (PASSWORD_SIZE), for
+   * an account with one already (HAS_LOGIN), where the gate lets no account be made or none
+   * change, and where the server's turns at deriving one are taken (login.ts `DeriveQueue`).
+   */
+  setPassword(
+    pass: CrewPass,
+    password: string,
+    { gate, from }: Limits = NO_LIMITS,
+  ): Promise<AccountView> {
+    return this.serial(pass, async () => {
+      if (!passwordFits(password)) {
+        throw new GameError(PASSWORD_SIZE);
+      }
+      const account = await this.accountOf(pass, { displayName: '', colour: null }, gate);
+      if (account === null) {
+        throw new GameError(TOO_MANY_NEW);
+      }
+      if ((await this.store.loginOf(account.id)) !== null) {
+        throw new GameError(HAS_LOGIN);
+      }
+      if (!gate.mayChange()) {
+        throw new GameError(TOO_MANY_CHANGES);
+      }
+      await this.mint(account.id, await this.derives.run(() => hashPassword(password), from));
+      return this.viewOf(account);
+    });
+  }
+
+  /**
+   * A new Kennwort for the account of `pass`, its present one `old` shown — tried as a sign-in is
+   * (`Tries`), but counted against the pass, not the Ausweisnummer: the pass is signed in
+   * already, and a lock of the number by others' guesses holds it not. Every other pass of the
+   * account is signed out with it (store.ts `replaceLoginSecret`): a device the Kennwort was
+   * given away to is in no more, their seats parked first (`parkFirst`). Refused, saying why, for
+   * a Kennwort too short or too long, an account without one (NO_LOGIN), `old` wrong (OLD_WRONG)
+   * or a try the limits hold back, a gate that lets nothing change, and a Kennwort changed
+   * meanwhile elsewhere.
+   */
+  changePassword(
+    pass: CrewPass,
+    old: string,
+    password: string,
+    limits: Limits = NO_LIMITS,
+    parkFirst: ParkFirst = PARK_NOTHING,
+  ): Promise<NewKennwort> {
+    return this.serial(pass, async () => {
+      if (!passwordFits(password)) {
+        throw new GameError(PASSWORD_SIZE);
+      }
+      const account = await this.store.findByIdentity(identityOf(pass));
+      const login = account === null ? null : await this.store.loginOf(account.id);
+      if (account === null || login === null) {
+        throw new GameError(NO_LOGIN);
+      }
+      const on = { pass: pass.id };
+      this.mayTry(on, limits);
+      const kept = await this.tried(on, old, login.secretHash, limits);
+      if (kept === null) {
+        throw new GameError(OLD_WRONG);
+      }
+      const next = await this.derives.run(() => hashPassword(password), limits.from);
+      parkFirst(account.id);
+      const signedOut = await this.store.replaceLoginSecret(account.id, kept, next, pass.id);
+      if (signedOut === null) {
+        throw new GameError(CHANGED_MEANWHILE);
+      }
+      const others = signedOut.length === 1 ? 'pass' : 'passes';
+      console.log(`[escapelab] a Kennwort changed, ${signedOut.length} other ${others} signed out`);
+      return { view: await this.viewOf(account), accountId: account.id, signedOut };
+    });
+  }
+
+  /**
+   * `pass` signed into the account of the Ausweisnummer `typed`, its Kennwort `password` shown:
+   * the account it leads into from now on, as its owner sees it, with its id. The account the
+   * pass led into before is deleted where nothing is left of it (store.ts `signIn`); signed in
+   * once more, nothing changes. Refused, saying why, for a number or a Kennwort that does not
+   * match — in the same words for either (WRONG_LOGIN) — a try the limits hold back (`Tries`),
+   * a gate that lets nothing change, and where `free` throws: asked once the Kennwort is
+   * checked, right before the pass moves, as the seats it holds may have changed meanwhile.
+   */
+  signIn(
+    pass: CrewPass,
+    typed: string,
+    password: string,
+    limits: Limits = NO_LIMITS,
+    free: () => void = () => undefined,
+  ): Promise<Arrival> {
+    return this.serial(pass, async () => {
+      const { accountId, checked } = await this.verified(typed, password, limits);
+      free();
+      const deleted = await this.store.signIn(identityOf(pass), accountId, null, checked);
+      if (deleted === null) {
+        throw new GameError(WRONG_LOGIN);
+      }
+      const left = deleted.length > 0 ? ', the empty account it left deleted' : '';
+      console.log(`[escapelab] a pass signed into an account${left}`);
+      return this.arrivalOf(pass);
+    });
+  }
+
+  /**
+   * `pass` signed out of its account, which stays whole (store.ts `signOut`): where it holds a
+   * seat (`parked`), its way in stays for that seat, kept under PARKED, the seat parked first
+   * (`parkFirst`); else it is deleted. The id of the account it led into; null for none — nothing
+   * to sign out of. Refused, saying why, for an account without a Kennwort (SIGN_OUT_LOSES) and
+   * where the gate lets nothing change.
+   */
+  signOut(
+    pass: CrewPass,
+    parked: boolean,
+    gate: Gate = OPEN,
+    parkFirst: ParkFirst = PARK_NOTHING,
+  ): Promise<string | null> {
+    return this.serial(pass, async () => {
+      const account = await this.store.findByIdentity(identityOf(pass));
+      if (account === null) {
+        return null;
+      }
+      if ((await this.store.loginOf(account.id)) === null) {
+        throw new GameError(SIGN_OUT_LOSES);
+      }
+      if (!gate.mayChange()) {
+        throw new GameError(TOO_MANY_CHANGES);
+      }
+      parkFirst(account.id);
+      await this.store.signOut({ pass: identityOf(pass), parked });
+      console.log('[escapelab] a pass signed out of its account');
+      return account.id;
+    });
+  }
+
+  /**
+   * The device switches accounts in one go (store.ts `signIn` with a pass leaving): the new pass
+   * `next` signed into the account of the Ausweisnummer `typed`, its Kennwort shown — tried as
+   * `signIn` tries it — and `pass` signed out, its way in kept for its seat where it holds one, the
+   * seat parked first (`parkFirst`).
+   * The account it signed out of is deleted where nothing is left of it. Nothing changes where the
+   * try is refused, as `signIn` refuses it, or `next` is no new pass (PASS_REFUSED): one the
+   * store knows — leading into an account, or signed out of one — which only a broken client
+   * sends.
+   */
+  switchAccount(
+    pass: CrewPass,
+    next: CrewPass,
+    login: { typed: string; password: string; parked: boolean },
+    limits: Limits = NO_LIMITS,
+    parkFirst: ParkFirst = PARK_NOTHING,
+  ): Promise<Switched> {
+    return this.serial(pass, async () => {
+      if (next.id === pass.id || (await this.known(next))) {
+        throw new GameError(PASS_REFUSED);
+      }
+      const { accountId, checked } = await this.verified(login.typed, login.password, limits);
+      const left = (await this.store.findByIdentity(identityOf(pass)))?.id ?? null;
+      const leaving = { pass: identityOf(pass), parked: login.parked };
+      if (left !== null) {
+        parkFirst(left);
+      }
+      if ((await this.store.signIn(identityOf(next), accountId, leaving, checked)) === null) {
+        throw new GameError(WRONG_LOGIN);
+      }
+      console.log('[escapelab] a device switched accounts on a new pass');
+      return { arrival: await this.arrivalOf(next), left };
+    });
+  }
+
+  /**
+   * The id of the account of `pass`, found and never made; null for none. Throws GameError for a
+   * pass shown with the wrong secret.
+   */
+  accountIdOf(pass: CrewPass): Promise<string | null> {
+    return this.serial(pass, async () => {
+      const account = await this.store.findByIdentity(identityOf(pass));
+      return account?.id ?? null;
     });
   }
 
@@ -225,11 +513,122 @@ export class AccountDesk {
     return this.store.getOrCreateByIdentity(identity, profile);
   }
 
-  /** `account` as its owner sees it: with its runs counted and its Erfolge by mission. */
+  /**
+   * The account of the Ausweisnummer `typed`, its Kennwort `password` tried (`tried`), and the
+   * hash it was checked against, which a sign-in checks again as it is made (store.ts `signIn`).
+   * Refused, saying why, where either does not match — in the same words for either
+   * (WRONG_LOGIN) — and where the try is held back.
+   */
+  private async verified(
+    typed: string,
+    password: string,
+    limits: Limits,
+  ): Promise<{ accountId: string; checked: string }> {
+    const number = numberOf(typed);
+    const on = { number };
+    this.mayTry(on, limits);
+    const login = number === null ? null : await this.store.findLogin(number);
+    const right = await this.tried(on, password, login?.secretHash ?? null, limits);
+    if (right === null || login === null) {
+      throw new GameError(WRONG_LOGIN);
+    }
+    return { accountId: login.accountId, checked: right };
+  }
+
+  /**
+   * Throws, saying why, where a try at `on` may not go ahead now: the limits hold it back
+   * (`Tries`), or the gate lets nothing change — a try counts as a change, so that a socket tries
+   * so many a minute. Asked before the store is, and before any work is done.
+   */
+  private mayTry(on: Target, { gate, tries }: Limits): void {
+    const refusal = tries.refusal(on);
+    if (refusal !== null) {
+      throw new GameError(refusal);
+    }
+    if (!gate.mayChange()) {
+      throw new GameError(TOO_MANY_CHANGES);
+    }
+  }
+
+  /**
+   * A try at `on` with the Kennwort `password`, whose hash `stored` keeps (null for no login),
+   * once `mayTry` let it go ahead, in a turn of the server's (`DeriveQueue`): taken by the limits
+   * as the turn comes (`Tries.take`) — counted as a wrong one, so that tries sent at once are held
+   * to them as tries one after the other, or refused — then checked (login.ts `passwordMatches`),
+   * after the same work either way: the hash it matched, its ticket given back; null where it did
+   * not match, counted.
+   */
+  private tried(
+    on: Target,
+    password: string,
+    stored: string | null,
+    { tries, from }: Limits,
+  ): Promise<string | null> {
+    return this.derives.run(async () => {
+      const taken = tries.take(on);
+      if (typeof taken === 'string') {
+        throw new GameError(taken);
+      }
+      const right = await passwordMatches(password, stored);
+      if (!right || stored === null) {
+        return null;
+      }
+      taken.right();
+      return stored;
+    }, from);
+  }
+
+  /**
+   * A login for `accountId`, its Kennwort's hash `secretHash`, under an Ausweisnummer minted
+   * anew — again where the one minted is another login's (`LoginTaken`), MINT_TRIES times at
+   * most.
+   */
+  private async mint(accountId: string, secretHash: string): Promise<void> {
+    for (let tries = 1; ; tries += 1) {
+      try {
+        await this.store.addLogin(accountId, mintNumber(), secretHash);
+        return;
+      } catch (err) {
+        if (!(err instanceof LoginTaken) || tries >= MINT_TRIES) {
+          throw err;
+        }
+      }
+    }
+  }
+
+  /**
+   * Whether the store knows `next`: it leads into an account, signed out of one, or is shown with
+   * another secret than its way in keeps. A failing store throws.
+   */
+  private async known(next: CrewPass): Promise<boolean> {
+    try {
+      return (await this.store.findByIdentity(identityOf(next))) !== null;
+    } catch (err) {
+      if (err instanceof GameError) {
+        return true;
+      }
+      throw err;
+    }
+  }
+
+  /** The account `pass` leads into now, as its owner sees it, with its id; throws for none. */
+  private async arrivalOf(pass: CrewPass): Promise<Arrival> {
+    const account = await this.store.findByIdentity(identityOf(pass));
+    if (account === null) {
+      throw new Error('the pass signed in leads into no account — deleted meanwhile?');
+    }
+    return { id: account.id, view: await this.viewOf(account) };
+  }
+
+  /**
+   * `account` as its owner sees it: with its runs counted, its Erfolge by mission, and its
+   * Ausweisnummer where it has a Kennwort.
+   */
   private async viewOf(account: Account): Promise<AccountView> {
-    const [runs, unlocked] = await Promise.all([
+    const [runs, unlocked, login] = await Promise.all([
       this.store.runsOfAccount(account.id, 0),
       this.store.achievements(account.id),
+      this.store.loginOf(account.id),
     ]);
     return {
       name: account.displayName,
@@ -238,6 +637,7 @@ export class AccountDesk {
       runs: runs.total,
       achievements: byMission(unlocked),
       store: this.store.kind,
+      login: login?.subject ?? null,
     };
   }
 

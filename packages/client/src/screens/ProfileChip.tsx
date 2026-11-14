@@ -44,6 +44,27 @@ interface ChipProps {
 }
 
 /**
+ * The name field's text as the account (`account`) changes from `before`, where it does: the
+ * account's name while nothing was typed on this page — a name typed goes to the account
+ * instead — another account's name once the device signed into it, typed or not, and none once
+ * the account is deleted; null to leave the field as it is. Accounts are told apart by when each
+ * was made.
+ */
+export function nameFromAccount(
+  account: AccountView | null,
+  before: AccountView | null,
+  typed: boolean,
+): string | null {
+  if (account === null) {
+    return before === null ? null : '';
+  }
+  if (before !== null && before.since !== account.since) {
+    return account.name;
+  }
+  return typed || account.name === '' ? null : account.name;
+}
+
+/**
  * The player's profile at the top right of the menu's stage, the account of the browser's pass
  * (core protocol.ts `AccountView`): their figure in the colour the account wears — the one kept
  * with the pass before the server told it, the crew's first before any (pass.ts `lastColor`) —

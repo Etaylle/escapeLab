@@ -8,12 +8,22 @@ import {
   type Mission,
   type ServerMessage,
 } from '@escapelab/core';
-import type { AccountDesk, Gate } from './accounts.js';
+import {
+  UNLIMITED,
+  type AccountDesk,
+  type Arrival,
+  type Gate,
+  type Limits,
+  type ParkFirst,
+  type Tries,
+} from './accounts.js';
 import { MISSED_PINGS, SILENT_MS, type CutReason } from './heartbeat.js';
+import type { SignInGuard } from './login.js';
 import type { MissionCatalog } from './missions.js';
 import { readAddress, type Front, type Sender } from './rateLimiter.js';
 import { GAME_KINDS, type GameMessage, type LineEnd, type Room } from './room.js';
 import type { RoomManager } from './roomManager.js';
+import { PassSignedOut, secretHashOf, type SeatPass } from './store/store.js';
 
 /** What a connection needs of its socket: `ws`'s WebSocket has it. */
 export interface PlayerSocket {
@@ -49,6 +59,11 @@ export interface Lab {
   changesPerSocket?: number;
   /** who stands in front of the server, which says where a socket's address is read; none unset */
   front?: Front;
+  /**
+   * the limits on trying a Kennwort, by address, by Ausweisnummer and by pass (login.ts
+   * `SignInGuard`): one for the server; none counted where unset
+   */
+  signIns?: Pick<SignInGuard, 'refusal' | 'take'>;
 }
 
 /**
@@ -149,6 +164,17 @@ function checkPass(socket: PlayerSocket, msg: ClientMessage): void {
   }
 }
 
+/**
+ * `socket` speaks for the pass `pass` from now on — for null, for the next pass it shows — as its
+ * pass signed out, or the device switched to another (`checkPass`).
+ */
+function passOn(socket: PlayerSocket, pass: string | null): void {
+  const door = doors.get(socket);
+  if (door !== undefined) {
+    door.pass = pass;
+  }
+}
+
 /** Whether `door` may change the accounts once more now (`Lab.changesPerSocket`), counted. */
 function mayChange(lab: Lab, door: Door | undefined): boolean {
   const limit = lab.changesPerSocket;
@@ -173,6 +199,22 @@ function gateOf(lab: Lab, socket: PlayerSocket): Gate {
   return {
     mayMake: () => lab.accountsMade?.take(door?.address ?? 'unknown') ?? true,
     mayChange: () => mayChange(lab, door),
+  };
+}
+
+/** The address `socket` came from (`Door`); `unknown` for none read. */
+const fromOf = (socket: PlayerSocket): string => doors.get(socket)?.address ?? 'unknown';
+
+/** What `socket`'s tries at a Kennwort may still do (accounts.ts `Tries`): by its address. */
+function triesOf(lab: Lab, socket: PlayerSocket): Tries {
+  const guard = lab.signIns;
+  if (guard === undefined) {
+    return UNLIMITED;
+  }
+  const address = fromOf(socket);
+  return {
+    refusal: (on) => guard.refusal(address, on),
+    take: (on) => guard.take(address, on),
   };
 }
 
@@ -359,7 +401,11 @@ function send(socket: PlayerSocket, msg: ServerMessage): void {
 /** The ask for a seat each socket waits on (`Room.claim`), by how to withdraw it. */
 const asks = new WeakMap<PlayerSocket, () => void>();
 
-/** The room each socket waits for, the server about to take it up again (`hold`): how to stop. */
+/**
+ * What each socket waits for before what it asked goes again — its room, the server about to take
+ * it up again (`hold`), or the store to say the account of a resume's pass (`seatBack`): how to
+ * stop waiting. A socket that closes, or waits anew, stops.
+ */
 const holds = new WeakMap<PlayerSocket, () => void>();
 
 /** Each socket's one way to hear its room: the same for every seat it sits down on. */
@@ -392,6 +438,11 @@ const DOOR_KINDS = [
   'profile',
   'delete-account',
   'my-runs',
+  'set-password',
+  'change-password',
+  'sign-in',
+  'sign-out',
+  'switch-account',
   'tock',
 ] as const satisfies readonly ClientMessage['kind'][];
 
@@ -507,8 +558,13 @@ const ACCOUNT_AWAY = 'Das Konto ist gerade nicht erreichbar.';
 /** What a socket is told that asks after an account where the server keeps none. */
 const NO_ACCOUNTS = 'Konten führt dieser Server nicht.';
 
-/** Why `err` came, on one line, for the log. */
-const whyOf = (err: unknown): string => (err instanceof Error ? err.message : String(err));
+/** Why `err` came, on one line, for the log: a Kennwort's hash in it never shows. */
+const whyOf = (err: unknown): string =>
+  (err instanceof Error ? err.message : String(err)).replace(/scrypt\$\S+/g, 'scrypt$…');
+
+/** What a sign-in is told while a run on binds its pass. */
+export const BOUND_SIGN_IN =
+  'Ein laufender Einsatz bindet diesen Dienstausweis: Anmelden erst danach.';
 
 /**
  * The account of the pass `job` came to, told its socket once it is there (`account`): the
@@ -523,18 +579,86 @@ function tellAccount(socket: PlayerSocket, job: Promise<AccountView | null> | un
         send(socket, { kind: 'account', account });
       }
     },
-    (err: unknown) => console.error(`[escapelab] an account not told its pass: ${whyOf(err)}`),
+    (err: unknown) => {
+      if (err instanceof PassSignedOut) {
+        signedOutHere(socket);
+      } else {
+        console.error(`[escapelab] an account not told its pass: ${whyOf(err)}`);
+      }
+    },
   );
 }
 
-/** What a pass asks of its account: its name, that it go, the runs it played. */
-type AccountAsk = Extract<ClientMessage, { kind: 'profile' | 'delete-account' | 'my-runs' }>;
+/**
+ * `socket` told that its pass signed out (store.ts `PassSignedOut`) — on its device, or as its
+ * account's Kennwort changed on another: its device starts anew on a new pass, which the socket
+ * may speak for (`passOn`).
+ */
+function signedOutHere(socket: PlayerSocket): void {
+  passOn(socket, null);
+  console.log('[escapelab] a pass signed out was shown again: its device told so');
+  send(socket, { kind: 'login', done: 'signed-out', account: null });
+}
+
+/**
+ * The account `pass` came to (accounts.ts `Arrival`), told its socket as `tellAccount` does — and
+ * every seat the pass holds bound to it (`RoomManager.bindAccount`), which any other device of the
+ * account takes back from then on; `then` hears of the account after.
+ */
+function tellArrival(
+  lab: Lab,
+  socket: PlayerSocket,
+  pass: CrewPass,
+  job: Promise<Arrival | null> | undefined,
+  then: (arrival: Arrival) => void = () => undefined,
+): void {
+  const told = job?.then((arrival) => {
+    if (arrival !== null) {
+      lab.manager.bindAccount(pass, arrival.id);
+      then(arrival);
+    }
+    return arrival?.view ?? null;
+  });
+  tellAccount(socket, told);
+}
+
+/**
+ * What a pass asks of its account: its name, that it go, the runs it played — and its Kennwort
+ * set or changed, or to sign into an account (`LoginAsk`).
+ */
+type AccountAsk = Extract<
+  ClientMessage,
+  { kind: 'profile' | 'delete-account' | 'my-runs' | LoginAsk['kind'] }
+>;
+
+/**
+ * What a pass asks of a login: its Kennwort set or changed, to sign into an account or out of
+ * its own, or the device to switch accounts.
+ */
+type LoginAsk = Extract<
+  ClientMessage,
+  { kind: 'set-password' | 'change-password' | 'sign-in' | 'sign-out' | 'switch-account' }
+>;
+
+const LOGIN_KINDS = [
+  'set-password',
+  'change-password',
+  'sign-in',
+  'sign-out',
+  'switch-account',
+] as const satisfies readonly LoginAsk['kind'][];
 
 const ACCOUNT_ASKS: ReadonlySet<ClientMessage['kind']> = new Set([
   'profile',
   'delete-account',
   'my-runs',
+  ...LOGIN_KINDS,
 ] satisfies AccountAsk['kind'][]);
+
+const LOGIN_ASKS: ReadonlySet<ClientMessage['kind']> = new Set(LOGIN_KINDS);
+
+/** Whether `msg` asks something of a login (`LoginAsk`). */
+const askOfLogin = (msg: AccountAsk): msg is LoginAsk => LOGIN_ASKS.has(msg.kind);
 
 /** Whether `msg` asks something of its pass's account (`AccountAsk`). */
 const askOfAccount = (msg: ClientMessage): msg is AccountAsk => ACCOUNT_ASKS.has(msg.kind);
@@ -546,14 +670,23 @@ const askOfAccount = (msg: ClientMessage): msg is AccountAsk => ACCOUNT_ASKS.has
  * the lab's words, the log saying more.
  */
 function answerAccount(lab: Lab, socket: PlayerSocket, msg: AccountAsk): void {
-  if (lab.accounts === undefined) {
+  if (!keepsAccounts(lab)) {
     refuse(socket, null, msg, new GameError(NO_ACCOUNTS));
     return;
   }
-  // Reading the runs changes nothing; a new name or a deletion counts against the socket.
-  answerOf(lab.accounts, msg, gateOf(lab, socket)).then(
+  // Reading the runs changes nothing; a new name, a deletion or a try at a Kennwort counts
+  // against the socket.
+  const gate = gateOf(lab, socket);
+  const answer = askOfLogin(msg)
+    ? answerLogin(lab, socket, msg, { gate, tries: triesOf(lab, socket), from: fromOf(socket) })
+    : answerOf(lab.accounts, msg, gate);
+  answer.then(
     (answer) => send(socket, answer),
     (err: unknown) => {
+      if (err instanceof PassSignedOut) {
+        signedOutHere(socket);
+        return;
+      }
       if (!(err instanceof GameError)) {
         console.error(`[escapelab] ${msg.kind} not done: ${whyOf(err)}`);
       }
@@ -562,8 +695,145 @@ function answerAccount(lab: Lab, socket: PlayerSocket, msg: AccountAsk): void {
   );
 }
 
+/** A lab that keeps accounts (`Lab.accounts`). */
+type WithAccounts = Lab & { accounts: AccountDesk };
+
+/** Whether `lab` keeps accounts (`WithAccounts`). */
+const keepsAccounts = (lab: Lab): lab is WithAccounts => lab.accounts !== undefined;
+
+/** The answer that says `done` was done, the account of the pass now `account`. */
+const told =
+  (done: 'set' | 'changed' | 'signed-in' | 'switched') =>
+  (account: AccountView): ServerMessage => ({ kind: 'login', done, account });
+
+/**
+ * What the accounts of `lab` answer `msg`, an ask of a login on `socket`, with once they have done
+ * it (`answerAccount`).
+ */
+function answerLogin(
+  lab: WithAccounts,
+  socket: PlayerSocket,
+  msg: LoginAsk,
+  limits: Limits,
+): Promise<ServerMessage> {
+  const desk = lab.accounts;
+  switch (msg.kind) {
+    case 'set-password':
+      return desk.setPassword(msg.pass, msg.password, limits).then(told('set'));
+    case 'change-password':
+      return changePassword(lab, msg, limits);
+    case 'sign-in':
+      return signIn(lab, desk, msg, limits);
+    case 'sign-out':
+      return signOut(lab, socket, msg.pass, limits.gate);
+    case 'switch-account':
+      return switchAccount(lab, socket, msg, limits);
+  }
+}
+
+/**
+ * The Kennwort of the account of `msg`'s pass changed (`AccountDesk.changePassword`): every seat
+ * of the passes signed out with it stays the account's, its line dropped (`RoomManager.parkSeats`).
+ */
+async function changePassword(
+  lab: WithAccounts,
+  msg: Extract<ClientMessage, { kind: 'change-password' }>,
+  limits: Limits,
+): Promise<ServerMessage> {
+  const { pass, old, password } = msg;
+  // The seats of the account's other passes are parked before the store signs those out; any of
+  // them the rooms did not know as the account's after.
+  const parkFirst = (accountId: string): void => lab.manager.parkAccountSeats(accountId, pass.id);
+  const changed = await lab.accounts.changePassword(pass, old, password, limits, parkFirst);
+  for (const other of changed.signedOut) {
+    lab.manager.parkSeats(other, changed.accountId);
+  }
+  return told('changed')(changed.view);
+}
+
+/**
+ * The pass of `msg` signed into an account (`AccountDesk.signIn`): refused while a run on binds
+ * it — before any Kennwort is tried, and again once it is, as a run may have started meanwhile;
+ * the seats it holds — a lobby's — are the account's then.
+ */
+async function signIn(
+  lab: Lab,
+  desk: AccountDesk,
+  msg: Extract<ClientMessage, { kind: 'sign-in' }>,
+  limits: Limits,
+): Promise<ServerMessage> {
+  const free = (): void => {
+    if (lab.manager.whereIs(msg.pass)?.phase === 'playing') {
+      throw new GameError(BOUND_SIGN_IN);
+    }
+  };
+  free();
+  const arrival = await desk.signIn(msg.pass, msg.login, msg.password, limits, free);
+  lab.manager.bindAccount(msg.pass, arrival.id);
+  return told('signed-in')(arrival.view);
+}
+
+/** `pass` as its seats and its way in know it: its id, and the hash of its secret. */
+const seatPassOf = (pass: CrewPass): SeatPass => ({
+  id: pass.id,
+  secretHash: secretHashOf(pass.secret),
+});
+
+/**
+ * How the seats `pass` holds are parked for its account (`RoomManager.parkSeats`) before the
+ * store signs it out (accounts.ts `ParkFirst`): where it holds any (`parked`).
+ */
+const parkFirstOf =
+  (lab: Lab, pass: CrewPass, parked: boolean): ParkFirst =>
+  (accountId) => {
+    if (parked) {
+      lab.manager.parkSeats(seatPassOf(pass), accountId);
+    }
+  };
+
+/**
+ * `pass` signed out of its account on `socket` (`AccountDesk.signOut`, rule 4): a seat it holds
+ * stays the account's, its line dropped (`RoomManager.parkSeats`) before the store signs the pass
+ * out; the socket may speak for the device's next pass.
+ */
+async function signOut(
+  lab: WithAccounts,
+  socket: PlayerSocket,
+  pass: CrewPass,
+  gate: Gate,
+): Promise<ServerMessage> {
+  const parked = lab.manager.holdsSeat(pass);
+  await lab.accounts.signOut(pass, parked, gate, parkFirstOf(lab, pass, parked));
+  passOn(socket, null);
+  return { kind: 'login', done: 'signed-out', account: null };
+}
+
+/**
+ * The device of `msg` switched accounts on its new pass (`AccountDesk.switchAccount`): a seat the
+ * old pass holds stays the old account's, parked first as at a sign-out; `socket` speaks for the
+ * new pass.
+ */
+async function switchAccount(
+  lab: WithAccounts,
+  socket: PlayerSocket,
+  msg: Extract<ClientMessage, { kind: 'switch-account' }>,
+  limits: Limits,
+): Promise<ServerMessage> {
+  const { pass, next } = msg;
+  const parked = lab.manager.holdsSeat(pass);
+  const login = { typed: msg.login, password: msg.password, parked };
+  const parkFirst = parkFirstOf(lab, pass, parked);
+  const { arrival } = await lab.accounts.switchAccount(pass, next, login, limits, parkFirst);
+  passOn(socket, next.id);
+  return told('switched')(arrival.view);
+}
+
 /** What `desk` answers `msg` with, once it has done it (`answerAccount`). */
-function answerOf(desk: AccountDesk, msg: AccountAsk, gate: Gate): Promise<ServerMessage> {
+function answerOf(
+  desk: AccountDesk,
+  msg: Exclude<AccountAsk, LoginAsk>,
+  gate: Gate,
+): Promise<ServerMessage> {
   switch (msg.kind) {
     case 'profile':
       return desk
@@ -582,7 +852,8 @@ function answerOf(desk: AccountDesk, msg: AccountAsk, gate: Gate): Promise<Serve
 /**
  * A pass back on its seat in room `msg.code`, with the snapshot its page keeps, which a server
  * that knows the room no more takes it up again from (`RoomManager.roomFor`): at once, or once
- * the newest snapshot of the crew's is in (`hold`).
+ * the newest snapshot of the crew's is in (`hold`). The room is looked up anew each time the
+ * resume goes: after the store said the pass's account (`seatBack`) too.
  */
 function comeBack(
   lab: Lab,
@@ -591,16 +862,105 @@ function comeBack(
   msg: Extract<ClientMessage, { kind: 'resume' }>,
   again: () => void,
 ): Session | null {
+  const known = lookedUp(socket, msg);
   const room = lab.manager.roomFor(msg.code, msg.pass, msg.blob);
   if (room === null) {
     return hold(lab, socket, session, msg.code, again);
   }
-  const back = seated(socket, session, room, room.resume(msg.pass), msg.pass);
-  // A pass that comes back to a seat before it has an account starts one with the seat's name.
+  const playerId = seatBack(lab, socket, room, msg, { known, again });
+  return playerId === null ? session : backOnSeat(lab, socket, session, room, playerId, msg.pass);
+}
+
+/**
+ * `socket` back on the seat of `playerId` in `room` (`seated`), its pass's account told it — a
+ * pass that comes back to a seat before it has an account starts one with the seat's name.
+ */
+function backOnSeat(
+  lab: Lab,
+  socket: PlayerSocket,
+  session: Session | null,
+  room: Room,
+  playerId: string,
+  pass: CrewPass,
+): Session {
+  const back = seated(socket, session, room, playerId, pass);
   const seat = room.playerOf(back.playerId);
   const profile = { displayName: seat?.name ?? '', colour: seat?.color ?? null };
-  tellAccount(socket, lab.accounts?.arrive(msg.pass, profile, null, gateOf(lab, socket)));
+  tellArrival(lab, socket, pass, lab.accounts?.arrive(pass, profile, null, gateOf(lab, socket)));
   return back;
+}
+
+/**
+ * The account of a resume's pass as the store said it, for that resume to go on with (`seatBack`):
+ * the room's code and the pass it was asked for, and the account — null for none, or for none to
+ * be had.
+ */
+interface LookedUp {
+  code: string;
+  passId: string;
+  accountId: string | null;
+}
+
+/** Each socket's resume that waits for the store to say the account of its pass (`LookedUp`). */
+const lookups = new WeakMap<PlayerSocket, LookedUp>();
+
+/** The lookup `socket` waited for with `msg` (`LookedUp`), taken once; undefined for none. */
+function lookedUp(
+  socket: PlayerSocket,
+  msg: Extract<ClientMessage, { kind: 'resume' }>,
+): LookedUp | undefined {
+  const known = lookups.get(socket);
+  lookups.delete(socket);
+  const same = known?.passId === msg.pass.id && known.code === msg.code.toUpperCase();
+  return same ? known : undefined;
+}
+
+/**
+ * The seat `msg.pass` comes back to in `room`, by player id: its own — else, where seats here are
+ * bound to accounts, the seat of the pass's account, without the crew's yes (`Room.takeBack`).
+ * The account is asked of the store first (`known`), and the resume goes `again` once it said —
+ * unless the socket closed, or waits anew, first (`holds`): null meanwhile. A pass that signed
+ * out is told so instead (`signedOutHere`). Throws as `Room.resume` does where the pass comes
+ * back to neither.
+ */
+function seatBack(
+  lab: Lab,
+  socket: PlayerSocket,
+  room: Room,
+  msg: Extract<ClientMessage, { kind: 'resume' }>,
+  waiting: { known: LookedUp | undefined; again: () => void },
+): string | null {
+  const desk = lab.accounts;
+  if (room.seatOf(msg.pass) !== null || desk === undefined || !room.holdsAccounts) {
+    return room.resume(msg.pass);
+  }
+  const { known, again } = waiting;
+  if (known === undefined) {
+    let waits = true;
+    const looked = (accountId: string | null): void => {
+      if (waits) {
+        waits = false;
+        lookups.set(socket, { code: room.code, passId: msg.pass.id, accountId });
+        again();
+      }
+    };
+    const failed = (err: unknown): void => {
+      if (!(err instanceof PassSignedOut)) {
+        looked(null);
+      } else if (waits) {
+        waits = false;
+        signedOutHere(socket);
+      }
+    };
+    holds.get(socket)?.();
+    holds.set(socket, () => {
+      waits = false;
+    });
+    desk.accountIdOf(msg.pass).then(looked, failed);
+    return null;
+  }
+  const taken = known.accountId === null ? null : room.takeBack(msg.pass, known.accountId);
+  return taken ?? room.resume(msg.pass);
 }
 
 /**
@@ -656,9 +1016,18 @@ function whereAmI(
   socket: PlayerSocket,
   msg: Extract<ClientMessage, { kind: 'whereami' }>,
 ): void {
-  send(socket, { kind: 'seated', seat: lab.manager.whereIs(msg.pass) });
+  const seat = lab.manager.whereIs(msg.pass);
+  send(socket, { kind: 'seated', seat });
   const kept = { displayName: msg.name?.trim() ?? '', colour: msg.color ?? null };
-  tellAccount(socket, lab.accounts?.arrive(msg.pass, kept, null, gateOf(lab, socket)));
+  const arrival = lab.accounts?.arrive(msg.pass, kept, null, gateOf(lab, socket));
+  tellArrival(lab, socket, msg.pass, arrival, ({ id }) => {
+    // A run on with a seat of the account's — another of its devices sat down on it — is this
+    // pass's too: its card says so, as the account comes.
+    const ours = lab.manager.whereIs(msg.pass, id);
+    if (ours !== null && ours.code !== seat?.code) {
+      send(socket, { kind: 'seated', seat: ours });
+    }
+  });
 }
 
 /** The audience connection a socket opens on the room `code`: the session it had let go of. */
@@ -688,7 +1057,8 @@ function sitDown(
   const next = takeSeat(lab, socket, session, msg);
   const profile = { displayName: msg.name.trim(), colour: msg.color ?? null };
   const gate = gateOf(lab, socket);
-  tellAccount(socket, lab.accounts?.arrive(msg.pass, profile, profile.displayName, gate));
+  const arrival = lab.accounts?.arrive(msg.pass, profile, profile.displayName, gate);
+  tellArrival(lab, socket, msg.pass, arrival);
   return next;
 }
 

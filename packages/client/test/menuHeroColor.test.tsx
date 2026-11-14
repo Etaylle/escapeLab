@@ -29,6 +29,7 @@ const ANNA: AccountView = {
   runs: 3,
   achievements: {},
   store: 'database',
+  login: null,
 };
 
 /** Anna's browser, the pass keeping `color` from the last lobby. */
