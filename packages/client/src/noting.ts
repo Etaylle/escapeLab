@@ -100,8 +100,11 @@ export function notable(block: ManualBlock): block is NotableBlock {
   return block.kind === 'rules' || block.kind === 'table';
 }
 
-/** Rows of cells in columns: each padded to its column's widest, two blanks between, none after. */
-export function alignedLines(rows: readonly (readonly string[])[]): string[] {
+/**
+ * Rows of cells in columns: each padded to its column's widest, `gap` between — two blanks
+ * unless told otherwise — none after.
+ */
+export function alignedLines(rows: readonly (readonly string[])[], gap = '  '): string[] {
   const widths: number[] = [];
   for (const row of rows) {
     row.forEach((cell, i) => {
@@ -111,7 +114,7 @@ export function alignedLines(rows: readonly (readonly string[])[]): string[] {
   return rows.map((row) =>
     row
       .map((cell, i) => (i === row.length - 1 ? cell : cell.padEnd(widths[i] ?? 0)))
-      .join('  ')
+      .join(gap)
       .trimEnd(),
   );
 }
@@ -229,41 +232,33 @@ function pairedRows(block: NotableBlock & { kind: 'table' }): string[][] | null 
 }
 
 /**
- * `rows` (the head first) without a column named as an earlier one whose every cell that column
- * already gives for the cell before it: the Signalkette legend's second „Muster" — the pattern
- * of Pult B's colour, which Pult A's column pairs with that colour already. Its rows then read
- * „Zeile · Pult A · Muster · Pult B". Every other column stays.
- */
-function withoutRepeats(rows: readonly (readonly string[])[]): (readonly string[])[] {
-  const [head = [], ...body] = rows;
-  const repeats = head.flatMap((name, i) => {
-    const first = head.indexOf(name);
-    if (first === i || first < 1) {
-      return [];
-    }
-    const given = new Map(body.map((row) => [row[first - 1], row[first]]));
-    return body.every((row) => given.get(row[i - 1]) === row[i]) ? [i] : [];
-  });
-  return repeats.length === 0 ? [...rows] : rows.map((row) => without(row, repeats));
-}
-
-/**
- * A table's rows under its head as the pad sets them: as printed but for a column it already
- * gives (`withoutRepeats`), or — too long for a capture — a pair of rows a row where they pair
- * (`pairedRows`).
+ * A table's rows under its head as the pad sets them: every column as printed — the Signalkette
+ * legend's two „Muster" too, so that either console finds its row by a sign's pattern at once —
+ * or, too long for a capture, a pair of rows a row where they pair (`pairedRows`).
  */
 function tableRows(block: NotableBlock & { kind: 'table' }): (readonly string[])[] {
-  const printed = withoutRepeats([block.head, ...block.rows]);
+  const printed = [block.head, ...block.rows];
   return printed.length > CAPTURE_LINES ? (pairedRows(block) ?? printed) : printed;
+}
+
+/** `rows` aligned two blanks apart, else one, within the pad (`TABLE_WIDTH`); null for neither. */
+function fittedLines(rows: readonly (readonly string[])[]): string[] | null {
+  for (const gap of ['  ', ' ']) {
+    const lines = alignedLines(rows, gap);
+    if (lines.every((line) => line.length <= TABLE_WIDTH)) {
+      return lines;
+    }
+  }
+  return null;
 }
 
 /**
  * A printed block's lines by its template: a rules list numbered; a table of more pairs than a
  * capture has lines two to a line (the Frequenztabelle; the Morsetafel by the letters needed);
- * any other table its columns aligned under their names (the Signalkette's legend, the
- * Netzplan), its rows paired where it runs too long (`tableRows`) — or, where that runs wider
- * than the pad (`TABLE_WIDTH`), a table of sentences, a line a row, its cells parted by „ · "
- * (the Serverraum's codes).
+ * any other table its columns aligned under their names (the Netzplan; the Signalkette's legend,
+ * its five columns one blank apart to stay within the pad), its rows paired where it runs too
+ * long (`tableRows`) — or, where even one blank apart runs wider than the pad (`TABLE_WIDTH`), a
+ * table of sentences, a line a row, its cells parted by „ · " (the Serverraum's codes).
  */
 function blockLines(
   block: NotableBlock,
@@ -278,8 +273,8 @@ function blockLines(
     return { lines: twoWide(needed), form: 'table' };
   }
   const rows = tableRows(block);
-  const lines = alignedLines(rows);
-  return lines.every((line) => line.length <= TABLE_WIDTH)
+  const lines = fittedLines(rows);
+  return lines !== null
     ? { lines, form: 'table' }
     : { lines: rows.map((row) => row.join(' · ')), form: 'text' };
 }

@@ -167,6 +167,7 @@ export const GROUPS = [
       'console-*.png',
       'meter-swing.png',
       'device-solved.png',
+      'signal-grey*.png',
     ],
   },
   {

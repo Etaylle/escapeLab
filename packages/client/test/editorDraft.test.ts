@@ -186,7 +186,7 @@ describe('a puzzle’s own fields and penalty, draft ↔ JSON', () => {
     expect(draft.puzzles.map((p) => [p.type, p.penaltySec, p.fields])).toEqual([
       ['button-sync', null, { windowMs: 3500, style: 'lever' }],
       ['circuit', 30, { wires: { min: 4, max: 6 }, shorts: 3, burnoutSec: 60 }],
-      ['signal', null, { stages: 4, length: 4, legend: true, fleetingFrom: 3 }],
+      ['signal', null, { stages: 4, length: 4, legend: true, fleetingFrom: 3, greyFrom: 4 }],
       ['servers', null, { crashed: 4, trap: true }],
       ['morse', null, {}],
       ['button-sync', null, { windowMs: 3500, style: 'button' }],
@@ -213,6 +213,23 @@ describe('a puzzle’s own fields and penalty, draft ↔ JSON', () => {
     // The schema's "off" for fleetingFrom is null, and so the file says it.
     const written = draftToJson(loaded(never)) as { puzzles: Record<string, unknown>[] };
     expect(written.puzzles[0]?.['fleetingFrom']).toBeNull();
+  });
+
+  it('keeps a Signalkette without greyFrom on the last stage, and 0 as never', () => {
+    const signal = draftToJson(labFor('signal')) as { puzzles: Record<string, unknown>[] };
+    // A new Signalkette is never grey; with the legend and the key left out, the last stage is.
+    expect(signal.puzzles[0]?.['greyFrom']).toBe(0);
+    const legend = {
+      ...signal,
+      puzzles: signal.puzzles.map((p) => ({ ...without(p, 'greyFrom'), legend: true })),
+    };
+    const draft = loaded(legend);
+    expect(draft.puzzles[0]?.fields).toMatchObject({ legend: true, greyFrom: null });
+    // Written back without the key, so the schema goes on reading the last stage from it.
+    expect(draftToJson(draft)).toEqual(legend);
+    const never = { ...legend, puzzles: legend.puzzles.map((p) => ({ ...p, greyFrom: 0 })) };
+    expect(loaded(never).puzzles[0]?.fields).toMatchObject({ greyFrom: 0 });
+    expect(draftToJson(loaded(never))).toEqual(never);
   });
 
   it('turns away a puzzle field neither every puzzle nor its module knows', () => {

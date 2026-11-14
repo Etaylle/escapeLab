@@ -181,7 +181,12 @@
  * against them first — the run fails naming the seed where one differs: the
  * Notstrom-Kasten's wires, serial and readings round by round and its cuts,
  * every stage of the Signalkette at consoles with the legend (a key a row
- * and a shape; the deliberate wrong one gives figure-flinch.png), the
+ * and a shape; the deliberate wrong one gives figure-flinch.png) — its last
+ * one without colour, the sending console's device shot as it starts in the
+ * host's window (signal-grey.png) and with that window held as a large phone
+ * sideways, under a finger (signal-grey-phone-932.png): the strip grey, its
+ * signs grey at 64 px, ANZEIGE · FARBLOS lit, nothing of the colour in the
+ * device and the phone holding it whole, or the run fails — the
  * Serverraum's table and moves (servers-manual.png from its locker, the
  * host's window showing the guest reading it as pose-reading.png,
  * servers-a.png and servers-b.png from its consoles, servers-solved.png),
@@ -4678,8 +4683,8 @@ async function pressStage(sender, presser, pinned = null) {
     return view.currentPuzzleIndex > currentPuzzleIndex || (view.puzzle?.stage ?? 0) > stage;
   };
   const lamp = (page, i) => page.locator('.station-modal .signal-lamp--lit').nth(i);
-  for (const [i, token] of sequence.entries()) {
-    await presser.page.locator(keyFor(i, token)).click({ timeout: 3000 });
+  for (const [i, sign] of sequence.entries()) {
+    await presser.page.locator(keyFor(i, sign)).click({ timeout: 3000 });
     const last = i === sequence.length - 1;
     const counted = await until(
       () => (last ? through() : presser.seen.view.puzzle?.done === i + 1),
@@ -4688,8 +4693,9 @@ async function pressStage(sender, presser, pinned = null) {
     if (!counted) {
       const now = presser.seen.view.puzzle;
       throw new Error(
-        `${presser.name} pressed "${token}", sign ${i + 1} of ${sequence.length} in stage ` +
-          `${stage}, but it did not count (done ${now?.done}, last result ${now?.lastResult})`,
+        `${presser.name} pressed "${signSaid(sign)}", sign ${i + 1} of ${sequence.length} in ` +
+          `stage ${stage}, but it did not count (done ${now?.done}, last result ` +
+          `${now?.lastResult})`,
       );
     }
     // The last press clears the lamps: the next stage starts dark.
@@ -5174,6 +5180,7 @@ async function solveSignal(crew, title, pinned = null, flinch = true) {
     if (flinchHere(flinch, sending, stage, stages)) {
       await inGroup('graphics', () => captureFlinch(sending, pressing, pin?.keys[0] ?? null));
     }
+    await inGroup('devices', () => captureGreyDisplay(sending));
     const count = await pressStage(sending, pressing, pin?.keys ?? null);
     const line =
       `signal             ${sending.name} sends, ${pressing.name} presses: ` +
@@ -5210,14 +5217,215 @@ function flinchHere(flinch, sending, stage, stages) {
   return flinch && !flinchShot && (sending.traced === true || stage === stages);
 }
 
+/**
+ * A sign as a view and the plan carry it, said for the log: its id in colour („rot-kreis"), or
+ * a grey one's form and pattern („kreis/ring").
+ */
+const signSaid = (sign) => (typeof sign === 'string' ? sign : `${sign.shape}/${sign.pattern}`);
+
+/** Whether signal-grey.png was taken: a run shoots the first display without colour it meets. */
+let greyShot = false;
+
+/** Skips signal-grey.png and signal-grey-phone-932.png where no Signalkette of the run is grey. */
+function greyLeftOut() {
+  if (!greyShot) {
+    skip('signal-grey*.png', 'no Signalkette the walkthrough works here loses its colour');
+  }
+}
+
+/**
+ * How wide a grey sign has to be drawn, px: at this size every cell of its bold pattern — dot to
+ * dot, stripe to stripe, the ring across — measures 18 px or more (client SignalPanel.tsx BOLD,
+ * measured in test/signalGrey.test.tsx).
+ */
+const GREY_SIGN_PX = 64;
+
+/** Each page's CDP session that lends it a finger for a while (`asLargePhone`), kept open. */
+const touchSessions = new WeakMap();
+
+/**
+ * Runs `look` with `page` held as a large phone sideways: 932×430 under a finger, through CDP's
+ * touch on a session of the page's own — as a context made with `hasTouch` has it, which a
+ * window's context cannot be given once it is made. Gives the window its size and its mouse
+ * back after, whatever `look` did.
+ */
+async function asLargePhone(page, look) {
+  const held = page.viewportSize();
+  let cdp = touchSessions.get(page);
+  if (cdp === undefined) {
+    cdp = await page.context().newCDPSession(page);
+    touchSessions.set(page, cdp);
+  }
+  await page.setViewportSize({ width: SIZES[4].width, height: SIZES[4].height });
+  await cdp.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
+  try {
+    await sleep(500);
+    await look();
+  } finally {
+    await cdp.send('Emulation.setTouchEmulationEnabled', { enabled: false });
+    if (held !== null) {
+      await page.setViewportSize(held);
+    }
+    await sleep(300);
+  }
+}
+
+/**
+ * What the open Signalkette's device shows of a display without colour, read in the page: the
+ * strip's class, the signs it lights (none fading out), how wide each grey one is drawn, the
+ * legends that burn, every paint of a grey sign that is not a grey, the first colour's word in
+ * the device's markup and how many of its elements carry a sign's id.
+ */
+function greyDisplay() {
+  const device = document.querySelector('.station-modal .signal');
+  if (device === null) {
+    return null;
+  }
+  const lit = [...device.querySelectorAll('.signal-strip .signal-glyph')].filter(
+    ({ classList }) =>
+      !classList.contains('signal-glyph--dark') && !classList.contains('signal-glyph--fading'),
+  );
+  const grey = lit.filter(({ classList }) => classList.contains('signal-glyph--grey'));
+  const paints = grey.flatMap((glyph) => [
+    globalThis.getComputedStyle(glyph).color,
+    ...[...glyph.querySelectorAll('*')].flatMap((el) => [
+      el.getAttribute('fill'),
+      el.getAttribute('stroke'),
+    ]),
+  ]);
+  const channels = (paint) =>
+    paint.startsWith('#')
+      ? [1, 3, 5].map((at) => parseInt(paint.slice(at, at + 2), 16))
+      : (paint.match(/\d+/g) ?? []).slice(0, 3).map(Number);
+  const hued = paints.filter((paint) => {
+    if (paint === null || paint === 'none') {
+      return false;
+    }
+    const [r, g, b] = channels(paint);
+    return r !== g || g !== b;
+  });
+  const legend = (mode) =>
+    `${mode.querySelector('.device-engraving')?.textContent} · ` +
+    `${mode.querySelector('.signal-legend--lit')?.textContent ?? '–'}`;
+  return {
+    grey: device.querySelector('.signal-strip')?.classList.contains('signal-strip--grey') ?? false,
+    lit: lit.length,
+    sizes: grey.map((glyph) => Math.round(glyph.getBoundingClientRect().width)),
+    legends: [...device.querySelectorAll('.signal-mode')].map(legend),
+    hued: [...new Set(hued)],
+    word: /\b(rot|rote[mnrs]?|blau\w*|grün\w*|gruen|gelb\w*)\b/i.exec(device.outerHTML)?.[0] ??
+      null,
+    tokens: device.querySelectorAll('[data-token]').length,
+  };
+}
+
+/**
+ * What a display without colour must not show (`greyDisplay`) and a phone must not do with it
+ * (`deviceReach`, null in a window): each a test of the two, and what the log says of it.
+ */
+const GREY_WRONGS = [
+  [(seen) => !seen.grey, () => 'the strip is not grey'],
+  [(seen) => seen.sizes.length === 0, () => 'no grey sign lit'],
+  [
+    (seen) => seen.lit > seen.sizes.length,
+    (seen) => `${seen.lit - seen.sizes.length} sign(s) lit in colour`,
+  ],
+  [
+    (seen) => seen.sizes.some((px) => px < GREY_SIGN_PX),
+    () => `a grey sign under ${GREY_SIGN_PX} px`,
+  ],
+  [(seen) => !seen.legends.includes('ANZEIGE · FARBLOS'), () => 'no ANZEIGE · FARBLOS lit'],
+  [(seen) => seen.hued.length > 0, (seen) => `drawn in colour: ${seen.hued.join(', ')}`],
+  [(seen) => seen.word !== null, (seen) => `a colour named: „${seen.word}"`],
+  [(seen) => seen.tokens > 0, (seen) => `${seen.tokens} key(s) carrying a sign's id`],
+  [(_, reach) => (reach?.scroll ?? 0) > 1, (_, reach) => `it scrolls ${reach.scroll}px`],
+  [(_, reach) => (reach?.cut.length ?? 0) > 0, (_, reach) => `${reach.cut.join(', ')} cut off`],
+];
+
+/** What a look at a display without colour finds wrong, as the log says it. */
+function greyWrongs(seen, reach) {
+  if (seen === null) {
+    return ['no Signalkette open'];
+  }
+  return GREY_WRONGS.filter(([wrong]) => wrong(seen, reach)).map(([, said]) => said(seen, reach));
+}
+
+/**
+ * The open display without colour as `greyDisplay` reads it once a grey sign shows: waited for a
+ * fleeting strip's cycle at most, and past its flare as it comes on. Read before the shot, so
+ * that a shot slow under load cannot land the reading in the strip's dark pause; where no sign
+ * was lit by then, waited for and read once more.
+ */
+async function greyLit(page) {
+  const shown = page.locator('.station-modal .signal-glyph--grey:not(.signal-glyph--fading)');
+  let seen = null;
+  for (let tries = 0; tries < 2 && (seen?.sizes.length ?? 0) === 0; tries++) {
+    await shown
+      .first()
+      .waitFor({ state: 'visible', timeout: 8000 })
+      .catch(() => undefined);
+    await sleep(400);
+    seen = await page.evaluate(greyDisplay);
+  }
+  return seen;
+}
+
+/**
+ * One look at the sending console's display without colour, as `shot`: reads the device as a
+ * sign shows (`greyLit`; on a phone `deviceReach` as well), shoots, logs it, and fails the run
+ * where the display shows anything but grey signs at their size, or where its legend does not
+ * burn, or where a phone does not hold the device whole.
+ */
+async function greyLook({ page, name }, shot, where, phone) {
+  const seen = await greyLit(page);
+  const reach = phone ? await page.evaluate(deviceReach) : null;
+  await capture(page, shot);
+  const wrong = greyWrongs(seen, reach);
+  const said =
+    seen === null
+      ? 'no Signalkette open'
+      : `${seen.lit} sign(s) lit, grey at ${[...new Set(seen.sizes)].join('/') || '–'} px; ` +
+        seen.legends.join(', ');
+  const fits = reach === null ? '' : `; ${reach.controls} controls, scrolls ${reach.scroll}px`;
+  console.log(
+    `${shot.padEnd(18)} ${name} @ ${where}: ${said}${fits}` +
+      wrong.map((what) => `\n                   !! ${what}`).join(''),
+  );
+  if (wrong.length > 0) {
+    fail(`${shot}: ${wrong.join('; ')}`);
+  }
+}
+
+/**
+ * signal-grey.png and signal-grey-phone-932.png: the sending console's device as the first stage
+ * whose display has lost its colour starts (core puzzles/signal.ts `greyFrom`) — in the window
+ * as it stands, the host's 1440×820, and as a large phone held sideways (`asLargePhone`). Each
+ * has to show the strip grey, its signs grey at GREY_SIGN_PX, ANZEIGE · FARBLOS lit and nothing
+ * of the colour, and the phone the device whole (`greyLook`). Nothing in a stage in colour, or
+ * once taken.
+ */
+async function captureGreyDisplay(sender) {
+  if (greyShot || sender.seen.view.puzzle?.grey !== true) {
+    return;
+  }
+  greyShot = true;
+  const held = sender.page.viewportSize();
+  await greyLook(sender, 'signal-grey.png', `${held?.width}×${held?.height}`, false);
+  await asLargePhone(sender.page, () =>
+    greyLook(sender, 'signal-grey-phone-932.png', 'a large phone sideways', true),
+  );
+}
+
 /** A stage of the pinned Signalkette: sent from the pinned console, the pinned sequence. */
 function checkStage(sending, pin, stage) {
   const { sends, sequence } = sending.seen.view.puzzle;
-  if (sends !== pin.sends || (sequence ?? []).join(' ') !== pin.sequence.join(' ')) {
+  const shown = (sequence ?? []).map(signSaid).join(' ');
+  const pinned = pin.sequence.map(signSaid).join(' ');
+  if (sends !== pin.sends || shown !== pinned) {
     differs(
       `Signalkette, stage ${stage}`,
-      `${(sequence ?? []).join(' ')} from console ${sends}`,
-      `${pin.sequence.join(' ')} from console ${pin.sends}`,
+      `${shown} from console ${sends}`,
+      `${pinned} from console ${pin.sends}`,
     );
   }
 }
@@ -13117,12 +13325,13 @@ async function zoomHeld(steady) {
 /**
  * What the run left out by its end, each said where its group is on: the figures' flinch, the
  * panel's fade and the crew celebrating (graphics), the partner never heard to one side (audio),
- * and the solved device's shot that came late (devices).
+ * the solved device's shot that came late and a display that never lost its colour (devices).
  */
 async function runLeftOut() {
   await inGroup('graphics', graphicsLeftOut);
   await inGroup('audio', sidesLeftOut);
   await inGroup('devices', solvedShotLeftOut);
+  await inGroup('devices', greyLeftOut);
 }
 
 /** figure-flinch.png, panel-close.png and figure-celebrate.png, where the run took none. */
