@@ -437,18 +437,31 @@ export class RoomManager {
   /**
    * Where `pass` sits, as its join screen shows it: in a run on — live or paused — before
    * anything else, else in a lobby; null for neither. Only a room that binds the pass counts
-   * (`Room.binds`): one taken up again that the pass has not come back to does not.
+   * (`Room.binds`): one taken up again that the pass has not come back to does not. With the
+   * pass's account (`accountId`), a run on with a seat of the account's counts as the pass's own,
+   * whichever device sat down on it (`Room.accountRun`).
    */
-  whereIs(pass: CrewPass): Seat | null {
+  whereIs(pass: CrewPass, accountId: string | null = null): Seat | null {
     let lobby: Seat | null = null;
     for (const room of this.rooms.values()) {
-      const seat = room.seatSummary(pass);
+      const own = room.seatSummary(pass);
+      const seat = own ?? (accountId === null ? null : room.accountRun(accountId));
       if (seat?.phase === 'playing') {
         return seat;
       }
       lobby ??= seat;
     }
     return lobby;
+  }
+
+  /**
+   * Every seat `pass` holds is bound to `accountId` as well (`Room.bindAccount`), the account the
+   * server found for the pass — as it sat down, came back, or signed in.
+   */
+  bindAccount(pass: CrewPass, accountId: string): void {
+    for (const room of this.rooms.values()) {
+      room.bindAccount(pass, accountId);
+    }
   }
 
   /**

@@ -55,13 +55,19 @@ export interface SealedSnapshot extends RoomSnapshot {
   final: boolean;
 }
 
-/** A seat and the pass bound to it: its id and the SHA-256 of its secret, never the secret. */
+/**
+ * A seat and the pass bound to it — its id and the SHA-256 of its secret, never the secret — and
+ * the account that pass led into, where the server knew it: any pass of that account takes the
+ * seat back. A snapshot from before accounts held seats binds none.
+ */
 export interface SeatSnapshot {
   playerId: string;
   passId: string;
   /** the SHA-256 of the pass's secret, hex */
   hash: string;
   name: string;
+  /** the account's id, as the server's store knows it; left out for none */
+  accountId?: string;
 }
 
 /** Where a patrolling drone is on its loop, which lives outside the game (server drones.ts). */
@@ -233,6 +239,7 @@ const seatSchema = z.looseObject({
   passId: z.string().regex(/^[0-9a-f]{32}$/),
   hash: z.string().regex(/^[0-9a-f]{64}$/),
   name: z.string(),
+  accountId: z.string().min(1).max(64).exactOptional(),
 }) satisfies z.ZodType<SeatSnapshot>;
 
 const droneRuntimeSchema = z.looseObject({

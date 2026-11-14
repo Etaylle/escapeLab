@@ -555,9 +555,26 @@ function tellAccount(socket: PlayerSocket, job: Promise<AccountView | null> | un
   );
 }
 
-/** The account a pass came to (accounts.ts `Arrival`), told its socket as `tellAccount` does. */
-function tellArrival(socket: PlayerSocket, job: Promise<Arrival | null> | undefined): void {
-  tellAccount(socket, job?.then((arrival) => arrival?.view ?? null));
+/**
+ * The account `pass` came to (accounts.ts `Arrival`), told its socket as `tellAccount` does — and
+ * every seat the pass holds bound to it (`RoomManager.bindAccount`), which any other device of the
+ * account takes back from then on; `then` hears of the account after.
+ */
+function tellArrival(
+  lab: Lab,
+  socket: PlayerSocket,
+  pass: CrewPass,
+  job: Promise<Arrival | null> | undefined,
+  then: (arrival: Arrival) => void = () => undefined,
+): void {
+  const told = job?.then((arrival) => {
+    if (arrival !== null) {
+      lab.manager.bindAccount(pass, arrival.id);
+      then(arrival);
+    }
+    return arrival?.view ?? null;
+  });
+  tellAccount(socket, told);
 }
 
 /**
@@ -645,9 +662,11 @@ function answerLogin(
       if (lab.manager.whereIs(msg.pass)?.phase === 'playing') {
         return Promise.reject(new GameError(BOUND_SIGN_IN));
       }
-      return desk
-        .signIn(msg.pass, msg.login, msg.password, gate, tries)
-        .then((arrival: Arrival) => told('signed-in')(arrival.view));
+      return desk.signIn(msg.pass, msg.login, msg.password, gate, tries).then((arrival) => {
+        // The seats the pass holds — a lobby's — are the new account's from now on.
+        lab.manager.bindAccount(msg.pass, arrival.id);
+        return told('signed-in')(arrival.view);
+      });
   }
 }
 
@@ -684,16 +703,77 @@ function comeBack(
   msg: Extract<ClientMessage, { kind: 'resume' }>,
   again: () => void,
 ): Session | null {
-  const room = lab.manager.roomFor(msg.code, msg.pass, msg.blob);
+  const known = lookedUp(socket, msg);
+  const room = known?.room ?? lab.manager.roomFor(msg.code, msg.pass, msg.blob);
   if (room === null) {
     return hold(lab, socket, session, msg.code, again);
   }
-  const back = seated(socket, session, room, room.resume(msg.pass), msg.pass);
+  const playerId = seatBack(lab, socket, room, msg, { known, again });
+  if (playerId === null) {
+    return session;
+  }
+  const back = seated(socket, session, room, playerId, msg.pass);
   // A pass that comes back to a seat before it has an account starts one with the seat's name.
   const seat = room.playerOf(back.playerId);
   const profile = { displayName: seat?.name ?? '', colour: seat?.color ?? null };
-  tellArrival(socket, lab.accounts?.arrive(msg.pass, profile, null, gateOf(lab, socket)));
+  const arrival = lab.accounts?.arrive(msg.pass, profile, null, gateOf(lab, socket));
+  tellArrival(lab, socket, msg.pass, arrival);
   return back;
+}
+
+/**
+ * The account of a resume's pass as the store said it, for that resume to go on with (`seatBack`):
+ * the room it comes back to, and the account — null for none, or for none to be had.
+ */
+interface LookedUp {
+  code: string;
+  passId: string;
+  room: Room;
+  accountId: string | null;
+}
+
+/** Each socket's resume that waits for the store to say the account of its pass (`LookedUp`). */
+const lookups = new WeakMap<PlayerSocket, LookedUp>();
+
+/** The lookup `socket` waited for with `msg` (`LookedUp`), taken once; undefined for none. */
+function lookedUp(
+  socket: PlayerSocket,
+  msg: Extract<ClientMessage, { kind: 'resume' }>,
+): LookedUp | undefined {
+  const known = lookups.get(socket);
+  lookups.delete(socket);
+  const same = known?.passId === msg.pass.id && known.code === msg.code.toUpperCase();
+  return same ? known : undefined;
+}
+
+/**
+ * The seat `msg.pass` comes back to in `room`, by player id: its own — else, where seats here are
+ * bound to accounts, the seat of the pass's account, without the crew's yes (`Room.takeBack`).
+ * The account is asked of the store first (`known`), and the resume goes `again` once it said:
+ * null meanwhile. Throws as `Room.resume` does where the pass comes back to neither.
+ */
+function seatBack(
+  lab: Lab,
+  socket: PlayerSocket,
+  room: Room,
+  msg: Extract<ClientMessage, { kind: 'resume' }>,
+  waiting: { known: LookedUp | undefined; again: () => void },
+): string | null {
+  const desk = lab.accounts;
+  if (room.seatOf(msg.pass) !== null || desk === undefined || !room.holdsAccounts) {
+    return room.resume(msg.pass);
+  }
+  const { known, again } = waiting;
+  if (known === undefined) {
+    const looked = (accountId: string | null): void => {
+      lookups.set(socket, { code: room.code, passId: msg.pass.id, room, accountId });
+      again();
+    };
+    desk.accountIdOf(msg.pass).then(looked, () => looked(null));
+    return null;
+  }
+  const taken = known.accountId === null ? null : room.takeBack(msg.pass, known.accountId);
+  return taken ?? room.resume(msg.pass);
 }
 
 /**
@@ -749,9 +829,18 @@ function whereAmI(
   socket: PlayerSocket,
   msg: Extract<ClientMessage, { kind: 'whereami' }>,
 ): void {
-  send(socket, { kind: 'seated', seat: lab.manager.whereIs(msg.pass) });
+  const seat = lab.manager.whereIs(msg.pass);
+  send(socket, { kind: 'seated', seat });
   const kept = { displayName: msg.name?.trim() ?? '', colour: msg.color ?? null };
-  tellArrival(socket, lab.accounts?.arrive(msg.pass, kept, null, gateOf(lab, socket)));
+  const arrival = lab.accounts?.arrive(msg.pass, kept, null, gateOf(lab, socket));
+  tellArrival(lab, socket, msg.pass, arrival, ({ id }) => {
+    // A run on with a seat of the account's — another of its devices sat down on it — is this
+    // pass's too: its card says so, as the account comes.
+    const ours = lab.manager.whereIs(msg.pass, id);
+    if (ours !== null && ours.code !== seat?.code) {
+      send(socket, { kind: 'seated', seat: ours });
+    }
+  });
 }
 
 /** The audience connection a socket opens on the room `code`: the session it had let go of. */
@@ -781,7 +870,8 @@ function sitDown(
   const next = takeSeat(lab, socket, session, msg);
   const profile = { displayName: msg.name.trim(), colour: msg.color ?? null };
   const gate = gateOf(lab, socket);
-  tellArrival(socket, lab.accounts?.arrive(msg.pass, profile, profile.displayName, gate));
+  const arrival = lab.accounts?.arrive(msg.pass, profile, profile.displayName, gate);
+  tellArrival(lab, socket, msg.pass, arrival);
   return next;
 }
 
