@@ -180,7 +180,7 @@ die Entscheidung.
   gerundet) und `coldOpen.test.tsx` (Zielleiste und Briefing rendern nach `Date.now()`, bei Last
   über 15 wurde aus „10:59" „10:58"; jetzt eingefrorene Uhr). Regel: Tests fälschen die Zeit.
 
-### T-8 Signalkette: das Muster zählt — Status: im PR (T-signal-grey) · Größe: S
+### T-8 Signalkette: das Muster zählt — Status: erledigt (T-signal-grey, Merge 2026-11-14; zwei Review-Runden; Cloud-CI grün auf e26424b: Blackout 157 Captures; Blackout farblos ab Stufe 4) · Größe: S
 - Uros beim Spielen: „Ist das Muster ganz ohne Nutzen?" Mit Legende ja: Die Pulte zeichnen je
   Farbe ein Muster und die Legende nennt es, aber die Lösung braucht nur die Farbe; die Spalte
   ist Dekoration, die wie eine Regel aussieht.
