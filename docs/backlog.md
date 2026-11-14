@@ -380,7 +380,7 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   Captures; Zielzeile nennt der dritten Person ihre Aufgabe („Cleo: Platte halten"). Eine echte
   Drei-Pulte-Station oder ein Needy-Objekt nur bei drei Spielenden erst nach Playtest-Daten.
 
-### I-1 Zugangskontrolle mit Zwei-Faktor — Status: wartet (Entscheidung Uros: Modul zuerst, Platz in Blackout nach dem Playtest) · Größe: L
+### I-1 Zugangskontrolle mit Zwei-Faktor — Status: in Arbeit (I-access, Spec `spec-I-access.md`; Modul mit Probe-Mission, Platz in Blackout nach dem Playtest) · Größe: L
 - Pult A Login-Terminal, Pult B Token-Generator mit Code, der mit der Serveruhr alle 30 s
   wechselt (Restsekunden sichtbar), Quelle Benutzerliste mit Rollen. Vorbilder: Quadrilateral
   Cowboy (`door.open(3)`: das Terminal gibt die Tür drei Sekunden frei, jemand muss durch),
