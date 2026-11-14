@@ -8020,18 +8020,33 @@ function holdFigures({ mood, key, least }) {
   const plain = globalThis.requestAnimationFrame;
   const kept = [];
   const hold = { held: null };
+  const armed = { now: false };
   const inPose = (figure) => figure.mood === mood && Math.abs(figure[key]) >= least;
   globalThis.__figureHold = hold;
   globalThis.__figureHeld = { plain, kept };
+  // The frames asked for before the hold run as they were asked, painting once more: the hold
+  // looks only from the next on, when every frame comes through it.
+  plain.call(globalThis, () => {
+    armed.now = true;
+  });
+  const unlessHeld = (run) => (now) => {
+    if (hold.held === null) {
+      run(now);
+    } else {
+      kept.push(run);
+    }
+  };
   // Looked at as each frame is asked for: a figure's loop asks for its next one in the frame
-  // that painted it, so the frame that put it in the pose is its last.
+  // that painted it, and a frame asked for before the figure stood so runs no more.
   globalThis.requestAnimationFrame = (run) => {
-    hold.held ??= (globalThis.__escapelab?.figures ?? []).find(inPose) ?? null;
+    if (armed.now) {
+      hold.held ??= (globalThis.__escapelab?.figures ?? []).find(inPose) ?? null;
+    }
     if (hold.held !== null) {
       kept.push(run);
       return 0;
     }
-    return plain.call(globalThis, run);
+    return plain.call(globalThis, unlessHeld(run));
   };
 }
 
