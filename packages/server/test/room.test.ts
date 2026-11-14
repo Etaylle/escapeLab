@@ -650,6 +650,29 @@ describe('Room with somebody away', () => {
     room.dispose();
   });
 
+  it('holds the run while nobody is on the line, and goes on as the first is back', () => {
+    const { room, anna, ben } = startedRoom();
+    const deadline = lastView(anna.messages).deadlineAt ?? 0;
+    ben.detach();
+    vi.advanceTimersByTime(5000);
+    anna.detach();
+    const heldAt = Date.now();
+    expect(room.paused).toBe(true);
+    // The run's card on the menu says so.
+    expect(room.seatSummary(passFor('Anna'))).toMatchObject({ paused: true, nobodyOnLine: true });
+    // Nobody to run it for: the mission's time does not run out meanwhile.
+    vi.advanceTimersByTime(mission.timeLimitSec * 1000 + 60_000);
+    const annaAgain = collector();
+    room.resume(passFor('Anna'));
+    room.attach(anna.playerId, annaAgain.listen);
+    const back = lastView(annaAgain.messages);
+    expect(back).toMatchObject({ phase: 'playing', pausedAt: null });
+    expect(back.deadlineAt).toBe(deadline + (Date.now() - heldAt));
+    expect(back.away.map((away) => away.name)).toEqual(['Ben']);
+    expect(room.seatSummary(passFor('Anna'))).not.toHaveProperty('nobodyOnLine');
+    room.dispose();
+  });
+
   it('expires the mission timer with someone away, and not while the server goes down', () => {
     const { room, anna, ben } = startedRoom();
     ben.detach();
@@ -694,6 +717,21 @@ describe('RoomManager', () => {
     const detach = room.attach(player.playerId, player.listen);
     detach();
 
+    manager.sweep(Date.now() + 11 * 60 * 1000);
+    expect(() => manager.get(room.code)).toThrow(/existiert nicht/);
+  });
+
+  it('closes a run held for nobody on the line once it stood empty 10 minutes, as ever', () => {
+    const manager = new RoomManager();
+    const room = manager.create(mission);
+    const crew = fullLobby(room);
+    ready(room, crew.ben);
+    room.act(crew.anna.playerId, { kind: 'start-mission' });
+    crew.ben.detach();
+    crew.anna.detach();
+    expect(room.paused).toBe(true);
+    manager.sweep(Date.now() + 9 * 60 * 1000);
+    expect(manager.get(room.code)).toBe(room);
     manager.sweep(Date.now() + 11 * 60 * 1000);
     expect(() => manager.get(room.code)).toThrow(/existiert nicht/);
   });

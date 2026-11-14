@@ -890,9 +890,16 @@ export class Room {
       missionTitle: state.mission.title,
       phase: state.phase,
       paused: state.paused !== null,
+      ...this.standingForNobody(),
       crew: state.players.map((p) => p.name),
       leftMs: state.deadlineAt === null ? null : Math.max(0, state.deadlineAt - clock),
     };
+  }
+
+  /** That the run stands still with nobody of its crew on the line (`Seat`); nothing otherwise. */
+  private standingForNobody(): Pick<Seat, 'nobodyOnLine'> {
+    const { paused, players } = this.state;
+    return paused !== null && players.every((p) => !p.connected) ? { nobodyOnLine: true } : {};
   }
 
   /**

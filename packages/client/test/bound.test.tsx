@@ -152,6 +152,15 @@ describe('the join screen of a pass bound to a run', () => {
     expect(html).toContain('noch 12:34');
   });
 
+  it('says a run held for nobody on the line so: it goes on as the first is back', () => {
+    const held = { ...RUN, paused: true, nobodyOnLine: true as const };
+    const html = renderToStaticMarkup(<BoundCard seat={held} send={noop} />);
+    expect(html).toContain(
+      '<span class="kicker bound-kicker">WARTUNG · NIEMAND AUF DER LEITUNG</span>',
+    );
+    expect(html).toContain('noch 12:34');
+  });
+
   it('counts the clock down from the server’s answer as the run goes on, whoever is away', () => {
     expect(seatLeft(754_000, false, T0, T0)).toBe(754_000);
     expect(seatLeft(754_000, false, T0, T0 + 4_500)).toBe(749_500);

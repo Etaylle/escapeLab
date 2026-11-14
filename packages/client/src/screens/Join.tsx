@@ -175,8 +175,9 @@ export function boundLine(seat: Pick<Seat, 'missionTitle' | 'code'>): string {
 }
 
 /**
- * What the card says over where the pass sits: its room on the way back (`onItsWay`), a run on,
- * or standing still for the server's maintenance, or a lobby.
+ * What the card says over where the pass sits: its room on the way back (`onItsWay`), a lobby,
+ * a run on, or standing still — for the server's maintenance, or while nobody of the crew is on
+ * the line, until the first is back.
  */
 function kickerOf(seat: Seat, onItsWay: boolean): string {
   if (onItsWay) {
@@ -185,7 +186,10 @@ function kickerOf(seat: Seat, onItsWay: boolean): string {
   if (seat.phase === 'lobby') {
     return 'IM RAUM';
   }
-  return seat.paused ? 'WARTUNG' : 'EINSATZ LÄUFT';
+  if (!seat.paused) {
+    return 'EINSATZ LÄUFT';
+  }
+  return seat.nobodyOnLine === true ? 'WARTUNG · NIEMAND AUF DER LEITUNG' : 'WARTUNG';
 }
 
 /** What the card says at `now` while its way back has waited for the room since `since`, ms. */

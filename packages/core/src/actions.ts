@@ -61,15 +61,16 @@ export type Action =
   | { type: 'player-join'; playerId: string; name: string; color?: string }
   /**
    * a crew member's line is back at `at`: in a run they play on at once and count again,
-   * whether the crew went on without them or not; a run standing still for the server's
-   * maintenance goes on once it waits for nobody whose line went down with the server
+   * whether the crew went on without them or not; a run standing still goes on once it waits for
+   * nobody whose line went down with the server — a run held for nobody on the line at once
    */
   | { type: 'player-connected'; playerId: string; at: number }
   /**
    * a crew member's line dropped at `at`: in a run they are away (`GameState.away`), and the
-   * run goes on — a drop stands nothing still and alone ends no run. With `menu` it closed on
-   * purpose, the player gone to the main menu: the seat stays theirs as after any drop, and the
-   * crew sees where they went (`GameState.menus`)
+   * run goes on — a drop alone ends no run and stands nothing still, but for the crew's last
+   * line, after which the run holds until the first is back. With `menu` it closed on purpose,
+   * the player gone to the main menu: the seat stays theirs as after any drop, and the crew sees
+   * where they went (`GameState.menus`)
    */
   | { type: 'player-disconnected'; playerId: string; at: number; menu?: true }
   /**
@@ -616,10 +617,11 @@ const NOBODY_AWAY = 'Hier fehlt niemand.';
  * (`tickEmergency`), a page loaded anew being back sooner —; an intro the others have all seen
  * enough of ends (`introOver`). The crew may go on without them once the drop's wait
  * is over — the run's first drop waits FIRST_WAIT_MS, every later one LATER_WAIT_MS. A drop
- * stands nothing still and alone ends no run, and a line that dropped once is down: said twice,
- * nothing counts twice. A menu they had open is closed with it. A line closed on purpose for
- * the main menu (`menu`) counts as a drop — the seat stays theirs, in a lobby too — and the crew
- * sees where they went.
+ * alone ends no run and stands nothing still, but for the crew's last line: with nobody left on
+ * the line the run holds until the first of them is back (`holdForNobody`). A line that dropped
+ * once is down: said twice, nothing counts twice. A menu they had open is closed with it. A
+ * line closed on purpose for the main menu (`menu`) counts as a drop — the seat stays theirs,
+ * in a lobby too — and the crew sees where they went.
  */
 function lineDropped(
   state: GameState,
@@ -640,7 +642,20 @@ function lineDropped(
   };
   const line = awayLine(player.name, action.menu === true);
   const said = logEvent({ ...dropped, away, drops: state.drops + 1 }, 'away', line, action.at);
-  return introOver(said, action.at);
+  return introOver(holdForNobody(said, action.at), action.at);
+}
+
+/**
+ * The run held from `at` where nobody of the crew is on the line: with nobody there it runs for
+ * nobody, so it stands still as for the server's maintenance (`wartung`) — the clock, the
+ * patrols and the emergencies — until the first of the crew is back (`resumeWhenBack`), every
+ * deadline then moved on by the hold. The room still closes once it has stood empty long
+ * enough. Nothing where somebody is on the line, or the run stands still already.
+ */
+function holdForNobody(state: GameState, at: number): GameState {
+  return onTheLine(state) > 0 || state.paused !== null
+    ? state
+    : { ...state, paused: { since: at, kind: 'wartung' } };
 }
 
 /**
@@ -653,9 +668,10 @@ function awayLine(name: string, menu: boolean): string {
 
 /**
  * A crew member's line is back at `at`. In a run they play on at once and count again, whether
- * the crew went on without them or not: an emergency at the relay that has no console for them
- * is rolled anew to give them one (`relayForCrew`), and a run standing still for the server's
- * maintenance goes on once it waits for nobody (`resumeWhenBack`).
+ * the crew went on without them or not: a run standing still — for the server's maintenance,
+ * or for nobody on the line — goes on once it waits for nobody (`resumeWhenBack`), and an
+ * emergency at the relay that has no console for them is rolled anew to give them one, as the
+ * crew stands then (`relayForCrew`).
  */
 function lineBack(state: GameState, action: { playerId: string; at: number }): GameState {
   const id = findPlayer(state, action.playerId).id;
@@ -666,7 +682,7 @@ function lineBack(state: GameState, action: { playerId: string; at: number }): G
   const away = Object.fromEntries(
     Object.entries(state.away).filter(([playerId]) => playerId !== action.playerId),
   );
-  return resumeWhenBack(relayForCrew({ ...back, away }, action.at), action.at);
+  return relayForCrew(resumeWhenBack({ ...back, away }, action.at), action.at);
 }
 
 /**
@@ -695,12 +711,13 @@ function onTheLine(state: GameState): number {
 }
 
 /**
- * A run standing still for the server's maintenance goes on — every deadline moved on by the
- * pause (`thaw`) — once it misses nobody (`missing`): whoever's line went down with the server
- * back, or gone on without.
+ * A run standing still goes on — every deadline moved on by the pause (`thaw`) — once it misses
+ * nobody (`missing`), whoever's line went down with the server back or gone on without, and
+ * somebody of the crew is on the line: a run held for nobody goes on as the first is back.
  */
 function resumeWhenBack(state: GameState, at: number): GameState {
-  return state.paused !== null && missing(state).length === 0 ? thaw(state, at) : state;
+  const goes = state.paused !== null && missing(state).length === 0 && onTheLine(state) > 0;
+  return goes ? thaw(state, at) : state;
 }
 
 /**

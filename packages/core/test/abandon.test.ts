@@ -262,6 +262,19 @@ describe('giving the seat up with somebody away', () => {
     });
     expect(viewFor(left, 'p1').takeovers?.map((ask) => ask.name)).toEqual(['Cem']);
   });
+
+  it('holds on while nobody of the crew is back on the line: the run runs for nobody', () => {
+    const allGone = run(
+      [lineDrops('p1', T0 + 1000), lineDrops('p2', T0 + 2000), lineDrops('p3', T0 + 3000)],
+      three,
+    );
+    expect(allGone.paused).toEqual({ since: T0 + 3000, kind: 'wartung' });
+    const left = run([abandon('p3', T0 + 9000)], allGone);
+    expect(left.phase).toBe('playing');
+    expect(left.players.map((p) => p.id)).toEqual(['p1', 'p2']);
+    expect(left.paused).toEqual(allGone.paused);
+    expect(run([lineBack('p2', T0 + 12_000)], left).paused).toBeNull();
+  });
 });
 
 /** The emergency's tick, once a second while it runs, as the room dispatches it. */
@@ -385,14 +398,25 @@ describe('the relay as a line drops and comes back', () => {
 });
 
 describe('the relay with few on the line, a give-up, the maintenance and the end', () => {
+  /** Anna alone on the line: Ben's line down since T0 + 12 s, his grace over, Cem away. */
+  const lone = run([lineDrops('p2', T0 + 12_000), tick(T0 + 12_000 + RELAY_GRACE_MS)], cemAway);
+
   it('keeps a console for each of the crew it counts while fewer than two are on the line', () => {
-    const lone = run([lineDrops('p2', T0 + 12_000), tick(T0 + 12_000 + RELAY_GRACE_MS)], cemAway);
     expect(consoles(lone)).toEqual(new Set(['p1', 'p2', 'p3']));
+    expect(consoles(run([lineBack('p2', T0 + 18_000)], lone))).toEqual(new Set(['p1', 'p2']));
+  });
+
+  it('holds it with the run while nobody is on the line: the first back finds it as it was', () => {
     const nobody = run([lineDrops('p1', T0 + 18_000), tick(T0 + 18_000 + RELAY_GRACE_MS)], lone);
+    expect(nobody.paused).toEqual({ since: T0 + 18_000, kind: 'wartung' });
     expect(emergencyOf(nobody)).toEqual(emergencyOf(lone));
     const one = run([lineBack('p2', T0 + 24_000)], nobody);
-    expect(emergencyOf(one)).toEqual(emergencyOf(lone));
-    expect(consoles(run([lineBack('p1', T0 + 25_000)], one))).toEqual(new Set(['p1', 'p2']));
+    expect(one.paused).toBeNull();
+    expect(emergencyOf(one).controls).toEqual(emergencyOf(lone).controls);
+    // Its clocks moved on by the hold, 6 s.
+    expect(emergencyOf(one).instructions.map((i) => i.expiresAt)).toEqual(
+      emergencyOf(lone).instructions.map((i) => i.expiresAt + 6000),
+    );
   });
 
   it('rolls it for the crew the run counts again once a give-up leaves one on the line', () => {

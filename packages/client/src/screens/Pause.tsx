@@ -51,6 +51,20 @@ export function missedOf(view: Pick<PlayerView, 'away' | 'pausedAt'>): AwayView[
 }
 
 /**
+ * What a run standing still says of whom it waits for, after „Wartung —" in the audience's
+ * banner: that nobody of the crew is on the line — the run goes on as the first is back — or the
+ * names of those it waits for (`missedOf`).
+ */
+export function standstillOf(
+  view: Pick<PlayerView, 'away' | 'pausedAt'> & { players: readonly { connected: boolean }[] },
+): string {
+  if (!view.players.some((player) => player.connected)) {
+    return 'niemand auf der Leitung';
+  }
+  return `warten auf ${missedOf(view).map((member) => member.name).join(', ')}`;
+}
+
+/**
  * What the crew on the line is offered at server time `now`: for each crew member it misses
  * (`missedOf`) the way on without them once the wait for their drop is over, before that the
  * moment it will be on the maintenance card's counter; with one alone on the line, instead, the

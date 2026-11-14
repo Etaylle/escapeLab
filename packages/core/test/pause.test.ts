@@ -505,3 +505,34 @@ describe('the server’s maintenance with somebody away already', () => {
     expect(back.away['p3']?.waived).toBe(true);
   });
 });
+
+describe('the whole crew off the line', () => {
+  // Anna and Ben: Ben's line drops at +10 s, Anna's, the last, at +20 s.
+  const pair = started(consoleLab(2));
+  const LAST_AT = T0 + 20_000;
+  const benGone = applyAction(pair, lineDrops('p2', T0 + 10_000));
+  const nobody = applyAction(benGone, lineDrops('p1', LAST_AT));
+
+  it('holds the run from the moment the last line drops: nobody to run it for', () => {
+    expect(benGone.paused).toBeNull();
+    expect(nobody.paused).toEqual({ since: LAST_AT, kind: 'wartung' });
+    expect(viewForSpectator(nobody)).toMatchObject({ pausedAt: LAST_AT });
+    // Its clock stands: no call of it comes, and its end waits.
+    expect(clockCallDueAt(nobody)).toBeNull();
+    const late = applyAction(nobody, { type: 'time-expired', at: (pair.deadlineAt ?? 0) + 1 });
+    expect(late.phase).toBe('playing');
+    // Nobody went with a server: no seat holds the run up but the first back.
+    expect(Object.values(nobody.away).map((away) => away.maintenance)).toEqual([
+      undefined,
+      undefined,
+    ]);
+  });
+
+  it('goes on as the first is back, the deadline moved on by the hold; the other away', () => {
+    const back = applyAction(nobody, lineBack('p2', LAST_AT + 30_000));
+    expect(back.paused).toBeNull();
+    expect(back.deadlineAt).toBe((pair.deadlineAt ?? 0) + 30_000);
+    expect(back.away).toEqual({ p1: nobody.away['p1'] });
+    expect(viewFor(back, 'p2').pausedAt).toBeNull();
+  });
+});

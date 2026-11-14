@@ -204,9 +204,12 @@ describe('the screens around a run', () => {
     // Ben's line went down with the server; Cem's had dropped before, which waits for nobody.
     const BEN_AWAY = { id: 'p2', name: 'Ben', since: 0, waivableAt: 60_000, maintenance: true };
     const CEM_AWAY = { id: 'p3', name: 'Cem', since: -90_000, waivableAt: -30_000 };
+    // The whole crew off the line: the run holds until the first is back.
+    const nobody = watched({}).players.map((player) => ({ ...player, connected: false }));
     const states = {
       lobby: spectate(watched({ phase: 'lobby' })),
       paused: spectate(watched({ away: [CEM_AWAY, BEN_AWAY], pausedAt: 0 })),
+      held: spectate(watched({ players: nobody, away: [CEM_AWAY], pausedAt: 0 })),
       won: spectate(watched({ phase: 'won', grade: { rank: 'A', label: 'Stark' } })),
       lost: spectate(watched({ phase: 'lost' })),
     };
@@ -216,6 +219,9 @@ describe('the screens around a run', () => {
     }
     expect(iconsAsWords(states.paused)).toContain(
       '<div class="banner-result">[pause] Wartung — warten auf Ben</div>',
+    );
+    expect(iconsAsWords(states.held)).toContain(
+      '<div class="banner-result">[pause] Wartung — niemand auf der Leitung</div>',
     );
     // A run that is over shows its title card where the world was.
     expect(states.won).toContain('<h1 class="end-title-word">GESCHAFFT</h1>');

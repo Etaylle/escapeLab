@@ -261,9 +261,10 @@ export interface GameState {
   /**
    * Set while the run stands still for the server's maintenance — a deploy, a restart put every
    * seat away (actions.ts `maintenance`) — until whoever was on the line then is back, or the
-   * crew has gone on without them (`Away.maintenance`): the clock, the patrols and the
-   * emergencies stand still meanwhile. A line that drops stands nothing still. The kind is the
-   * one there is, kept as snapshots carry it.
+   * crew has gone on without them (`Away.maintenance`); and from the moment the crew's last line
+   * drops until the first of them is back (`player-disconnected`): the clock, the patrols and
+   * the emergencies stand still meanwhile. Any other line that drops stands nothing still. The
+   * kind is the one there is, kept as snapshots carry it.
    */
   paused: { since: number; kind: 'wartung' } | null;
   /**
