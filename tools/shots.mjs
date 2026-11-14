@@ -43,7 +43,10 @@
  *
  * SHOTS_MISSION names the mission card to start (default Blackout); the
  * crew is two players. Where the first station is a sync station, both
- * press it together, and the run fails unless it solves; right after the
+ * press it together, and the run fails unless it solves and each page's
+ * LED strip shows it done — as the page noted on its own clock from before
+ * the presses, so that the radio's banner over a phone's strip later hides
+ * nothing; right after the
  * presses device-solved.png catches the solved device, its status strip
  * sweeping green, before it closes itself — the run fails where any sync
  * station never shows solved, is gone before it is looked at, lies under an
@@ -58,8 +61,12 @@
  * the guest holds the plate door for the host on the way to console A where
  * needed, then both consoles are captured and the meter measures every wire
  * once; nothing is cut. The first reading that moves the needle is shot
- * within 250 ms of its probe, the needle still swinging (meter-swing.png),
- * or the run fails.
+ * with its swing held 60 ms in by the page — the needle's own transition
+ * paused there as it begins, so that a shot coming late under load still
+ * shows it on its way — and the page has to say the needle swung, stood still
+ * through the shot and on its way to the reading (meter-swing.png), or the
+ * run fails. A probe is held only once the page shows the last reading; where
+ * it does not within 3 s, the next probe tries.
  *
  * The opening: a title comes on as a phosphor screen does, once a page
  * load — the game's on the start screen, the mission's in the lobby
@@ -115,7 +122,9 @@
  * walked by the keys: an arrow down and up the items, Enter opening „Einsatz starten" with the
  * picked mission's card in the focus, Esc back on the item. Its quiet window, the scene drifting,
  * is gated like every other and under SHOTS_SOFTWARE_GL has to keep the screen's pace (16.8 ms
- * p95). At 1280×720 it has to fit as at 1440×820 (menu-1280.png), the scene baked anew for each
+ * p95) where the run keeps the gate's budget — with SHOTS_FRAME_P95_MS raised, as a proof run
+ * raises it, it is logged with its load as every window is. At 1280×720 it has to fit as at
+ * 1440×820 (menu-1280.png), the scene baked anew for each
  * size. menu-missions.png shows „Einsatz starten" open, the tutorial's card saying „Erster Einsatz?
  * Hier starten" in a line of its own and no tooltip over the cards; the mission picked comes in as
  * the scene behind. „Runde eröffnen" closes the lab's doors over the menu and opens them on the
@@ -237,7 +246,8 @@
  * Signalkette, the rack, the reactor and the relay console where an
  * emergency comes — is also shot with the phone held sideways
  * (device-phone-<station>.png): the device whole in the window, nothing of
- * it scrolling, every control in view and 44 px at least each way — the
+ * it scrolling, every control in view and 44 px at least each way once the
+ * device's opening has ended on the page's clock — the
  * first of them on a large phone too (device-phone-932-<station>.png) — or the
  * run fails. From the Signalkette on the
  * drones are awake: every walk goes from haven to haven past them — the
@@ -309,13 +319,22 @@
  * lines, every text 15 px or more and 4.5:1 against the paper, or the run
  * fails. After the station step the crew leaves the station that is
  * up quiet until the Leitstelle names the next place (nudge.png,
- * nudge-phone.png): its line in both banners, spoken by its recording.
+ * nudge-phone.png): its line in both banners, spoken by its recording —
+ * skipped, saying when each came, where every line the station has went out
+ * on the way, as a walkthrough slowed by load lets them.
  *
  * Stepping back: the first player to step back with Esc from a station standing
  * open — the station step's operator, else the Signalkette's sender — sees the
- * device fade out as it came, over 150 ms: the page notes the panel each frame
- * meanwhile, and it has to leave inert, its opacity only falling and midway on
- * a frame at least, gone within 100 to 600 ms. For the shot (panel-close.png)
+ * device fade out as it came, over 150 ms: the page records the panel on its own
+ * clock meanwhile — when it began to leave and when it was gone, as its DOM
+ * changed, and at each frame it drew the panel's opacity and how far the fade
+ * had run — and it has to leave inert, its opacity only falling, gone within
+ * 100 to 600 ms of the page's clock, and show midway on one frame at least:
+ * where none does, a frame drawn between half and nine tenths into the fade,
+ * where a fade that falls as it should has the panel midway, fails it; where
+ * the page, under load, drew no frame there, the midway frames are skipped
+ * with the times it drew them (the shot below still judges the fade). For the
+ * shot (panel-close.png)
  * the station is opened anew and stepped back from with the fade held 120 ms
  * in and the game's timer that lets the panel go kept back until it is taken —
  * a screenshot asked for at once draws the fade's first frame, the panel whole,
@@ -613,8 +632,8 @@
  * Figures: the crew stands as client world/figure.ts poses it, and four shots
  * at 1440×1000 show it. lobby-idle.png catches a lobby figure turned in a
  * glance round the room, when the figures' probe (`?trace=1`,
- * `window.__escapelab.figures`) says one is — and says so again after the
- * shot, or it is taken again on the next (figureShot). After Blackout's lever
+ * `window.__escapelab.figures`) says one is — the page holding its frames from
+ * that one through the shot — and says so again after it (figureShot). After Blackout's lever
  * the host picks up the fuse lying in the Archiv, is shot holding it before
  * the chest (figure-carry.png) and puts it down again with Q; then it walks into the aisle behind
  * the nearest shelf and stands pressed up to it (depth-behind-shelf.png): the shelf drawn again
@@ -625,7 +644,7 @@
  * the sender's world is shot the moment the alarm comes in, asked for within
  * 200 ms of it, the crew mid-flinch (figure-flinch.png). The won card, scrolled
  * back to its top so that its figures move in the window, is shot with a
- * figure in the air, before and after the shot (figure-celebrate.png), and
+ * figure in the air, held there through the shot (figure-celebrate.png), and
  * the audience's card has to show its crew celebrating too. A mission the
  * walkthrough does not take that far skips what it leaves out.
  */
@@ -633,11 +652,19 @@ import { Buffer } from 'node:buffer';
 import { spawn } from 'node:child_process';
 import { createHash, randomBytes } from 'node:crypto';
 import { createWriteStream, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { loadavg } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath, URL } from 'node:url';
 import { chromium, request } from 'playwright';
 import { lineContrast, TEXT_CONTRAST } from './contrast.mjs';
-import { AGAIN_AFTER_MS, allowanceOf, gateWindow, p95Text, paceOf } from './framegate.mjs';
+import {
+  AGAIN_AFTER_MS,
+  allowanceOf,
+  gateWindow,
+  loadText,
+  p95Text,
+  paceOf,
+} from './framegate.mjs';
 import { withOthersFrozen } from './freeze.mjs';
 import { ART_PX, bobVerdict, GLOWING, glowAtCorners, haloAgainst } from './glowcheck.mjs';
 import {
@@ -651,7 +678,7 @@ import {
   summaryText,
 } from './groups.mjs';
 import { lightWorkText } from './lightwork.mjs';
-import { fadeOf, meanLuma, midway } from './panelfade.mjs';
+import { drawnText, fadeOf, fadeVerdict, meanLuma, midway } from './panelfade.mjs';
 import { beamLight, beamPatches, beamVerdict } from './beamcheck.mjs';
 import { changedShare, sweepOf, sweepVerdict } from './sweep.mjs';
 import {
@@ -663,6 +690,14 @@ import {
   spottedOn,
   stretchOf,
 } from './patrol.mjs';
+import {
+  deviceVerdict,
+  figureHeld,
+  nudgesSpent,
+  strideHeld,
+  stripVerdict,
+  swingVerdict,
+} from './pageclock.mjs';
 import { percentile } from './percentile.mjs';
 import { decodePng } from './pixeldiff.mjs';
 import {
@@ -684,6 +719,8 @@ import { bandPowers, decibels } from './spectrum.mjs';
 const BASE = process.argv[2] ?? 'http://localhost:5173';
 const OUT = process.argv[3] ?? '/tmp/escapelab-shots';
 const MISSION = process.env.SHOTS_MISSION || 'Blackout';
+/** The p95 a window may reach where SHOTS_FRAME_P95_MS is unset, ms: the gate's own budget. */
+const DEFAULT_FRAME_P95_MS = 40;
 const FRAME_P95_MS = frameBudget(process.env.SHOTS_FRAME_P95_MS);
 /**
  * How many times slower than this machine every page runs: SHOTS_CPU_SLOWDOWN,
@@ -872,7 +909,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
  */
 function frameBudget(text) {
   if (text === undefined || text === '') {
-    return 40;
+    return DEFAULT_FRAME_P95_MS;
   }
   const ms = Number(text);
   if (!(ms > 0)) {
@@ -1344,11 +1381,15 @@ function frozenText(frozen, measured) {
 }
 
 /**
- * The p95 of the run's quiet pacing window, ms — the host pacing after the game screenshots —
- * once it is measured and within the budget (framegate.mjs `paceOf`); null before. Every gated
- * window after it may reach twice this where that is more than the budget.
+ * The run's quiet pacing window — the host pacing after the game screenshots — once it is
+ * measured and within the budget: its p95, ms, and the machine's 1-minute load as it ran
+ * (framegate.mjs `paceOf`); null before. Every gated window after it may reach twice this p95
+ * where that is more than the budget.
  */
 let runPace = null;
+
+/** The machine's 1-minute load average as the run began: the summary names it. */
+const LOAD_AT_START = loadavg()[0];
 
 /**
  * Samples a window of a page opened with `traced` (`lookAt`), every other page frozen while
@@ -1359,11 +1400,12 @@ let runPace = null;
  * pace for the windows after it. A p95 over the allowance has the window looked at once more a
  * second later, the other pages thawed in between, `again` filling it for as long as the first
  * look ran — the same scene, `quiet` itself unless that would not stay the same — and fails the
- * run only where both looks are over; the line logs both, with the allowance and why. A window
- * for information only (`gating` false) is looked at once and logged alone. A page without a
+ * run only where both looks are over; the line logs both, with the allowance and why and the
+ * machine's 1-minute load as the window began. A window for information only (`gating` false)
+ * is looked at once and logged alone, its load too. A page without a
  * trace or a window without frames fails the run. The machine's, the pages' and the sound's
- * lines are the first look's. Returns that first look — its p50, p95 and count — or null
- * where there was none.
+ * lines are the first look's. Returns that first look — its p50, p95 and count, and the load —
+ * or null where there was none.
  */
 async function sampleFrames(
   page,
@@ -1371,6 +1413,7 @@ async function sampleFrames(
   quiet,
   { gating = true, again = quiet, setsPace = false } = {},
 ) {
+  const load = loadavg()[0];
   const first = await lookAt(page, when, quiet);
   if (first === null) {
     return null;
@@ -1384,14 +1427,16 @@ async function sampleFrames(
         () => sleep(AGAIN_AFTER_MS),
       )
     : { again: null, over: false, verdict: 'for information, gating nothing' };
-  const p95s = gating ? p95Text(first, gate.again, allowed) : `p95 ${first.p95.toFixed(1)} ms`;
+  const p95s = gating
+    ? p95Text(first, gate.again, allowed, load)
+    : `p95 ${first.p95.toFixed(1)} ms at ${loadText(load)}`;
   const counts = [first, gate.again].flatMap((look) => (look === null ? [] : [look.count]));
   console.log(
     `frames             p50 ${first.p50.toFixed(1)} ms · ${p95s} (${counts.join(', ')}) ` +
       `${when}: ${gate.verdict}`,
   );
   if (setsPace && runPace === null) {
-    runPace = paceOf(first, gate);
+    runPace = paceOf(first, gate, load);
     console.log(`pace               ${paceText(runPace)}`);
   }
   console.log(`frozen             ${frozenText(first.frozen, named.get(page))}`);
@@ -1406,7 +1451,7 @@ async function sampleFrames(
   if (gate.over && gate.again !== null) {
     fail(`frame ${p95s} ${when}, over the allowance both times`);
   }
-  return first;
+  return { ...first, load };
 }
 
 /**
@@ -1428,7 +1473,8 @@ function paceText(measured) {
     return `none: the pacing window failed, so every window after it keeps ${FRAME_P95_MS} ms`;
   }
   const { text } = allowanceOf(FRAME_P95_MS, measured);
-  return `${measured.toFixed(1)} ms p95; every window after it ${text}`;
+  const pace = `${measured.p95.toFixed(1)} ms p95 at ${loadText(measured.load)}`;
+  return `${pace}; every window after it ${text}`;
 }
 
 /**
@@ -1474,11 +1520,13 @@ function soundJs(before, after, seconds) {
 
 /**
  * The run's last lines: the seconds each group played took (`groups`), then the summary — the
- * captures taken, skipped and failed, the groups played, and what failed (`summaryText`).
+ * captures taken, skipped and failed, the groups played, the machine's 1-minute load as the run
+ * began and as it ends, and what failed (`summaryText`).
  */
 function summarize() {
+  const load = { start: LOAD_AT_START, end: loadavg()[0] };
   console.log(`groups             ${spentText(timeByGroup.spent(), PLAN.on)}`);
-  console.log(`summary            ${summaryText(tally, PLAN.on)}`);
+  console.log(`summary            ${summaryText(tally, PLAN.on, load)}`);
 }
 
 /**
@@ -2224,17 +2272,55 @@ async function captureReading(page, seen, who) {
 }
 
 /**
+ * In the page, before a sync station's presses: from now on it notes on its own clock when its
+ * strip first shows station `index` done (`led-done`) and when its own press went down
+ * (`window.__stripWatch`, pageclock.mjs `StripSeen`) — however late the walkthrough looks, and
+ * whatever takes the strip's place by then: on a phone held sideways, the radio's banner takes
+ * it over in the row a moment after a solve (client screens/Game.tsx `StageTop`). The watch
+ * ends once the strip shows it done, its listeners after 20 s.
+ */
+function watchStrip(index) {
+  const t0 = globalThis.performance.now();
+  const seen = { done: null, pressed: null };
+  globalThis.__stripWatch = seen;
+  const press = (event) => {
+    seen.pressed ??= event.timeStamp - t0;
+  };
+  const look = () => {
+    const led = document.querySelector('.led-strip')?.children[index];
+    if (seen.done === null && led?.classList.contains('led-done') === true) {
+      seen.done = globalThis.performance.now() - t0;
+      watch.disconnect();
+    }
+  };
+  const watch = new globalThis.MutationObserver(look);
+  watch.observe(document.body, { subtree: true, childList: true, attributeFilter: ['class'] });
+  document.addEventListener('pointerdown', press, true);
+  globalThis.setTimeout(() => {
+    watch.disconnect();
+    document.removeEventListener('pointerdown', press, true);
+  }, 20_000);
+  look();
+}
+
+/** What `page`'s strip watch noted (watchStrip) once it saw the station done, or after `ms`. */
+async function stripSeen(page, ms) {
+  await pageHolds(page, () => globalThis.__stripWatch?.done != null, ms);
+  return page.evaluate(() => globalThis.__stripWatch ?? null);
+}
+
+/**
  * A sync station takes every press within its window: both players click
  * its button at the same moment, and the station has to solve — the run
- * moves on past it, and the LED strip moves on for both; the rooms it lights,
- * if any, come up. Throws when it does not.
+ * moves on past it, and the LED strip moves on for both, as each page noted
+ * it on its own clock (watchStrip); the rooms it lights, if any, come up.
+ * Throws when it does not.
  */
 async function pressTogether(players, station) {
   const [first] = players;
   const litBefore = first.seen.view.map.litRooms.length;
   const index = first.seen.view.currentPuzzleIndex;
-  const done = (page) => page.locator('.led-strip .led-done');
-  const doneBefore = await Promise.all(players.map(({ page }) => done(page).count()));
+  await Promise.all(players.map(({ page }) => page.evaluate(watchStrip, index)));
   await Promise.all(players.map(({ page }) => page.locator('.station-modal .big-button').click()));
   // The line that comes with the solve speaks a second after it: listen from the presses on.
   const listening = whenOn('audio', () => hearRadio(first, RADIO_LISTEN_MS));
@@ -2242,29 +2328,23 @@ async function pressTogether(players, station) {
     await inGroup('devices', () => captureSolved(first, station));
   }
   const solved = await until(() => first.seen.view.currentPuzzleIndex > index, 5000);
-  const moved = await Promise.all(
-    players.map(({ page }, i) =>
-      done(page)
-        .nth(doneBefore[i])
-        .waitFor({ state: 'attached', timeout: 5000 })
-        .then(
-          () => true,
-          () => false,
-        ),
-    ),
-  );
-  const stuck = players.filter((_, i) => !moved[i]).map(({ name }) => name);
-  if (!solved || stuck.length > 0) {
+  const seen = await Promise.all(players.map(({ page }) => stripSeen(page, 5000)));
+  const strips = stripVerdict(players.map(({ name }, i) => ({ name, seen: seen[i] })));
+  if (!solved || strips.stuck.length > 0) {
     const why = [
       ...(solved ? [] : ['the run did not move on']),
-      ...(stuck.length === 0 ? [] : [`the LED strip stood still for ${stuck.join(' and ')}`]),
+      ...(strips.stuck.length === 0 ? [] : [`the LED strip stood still (${strips.text})`]),
     ];
+    // The radio still listens on: once this throw has closed the browser its page is gone, and
+    // that error, left unheard, would end the process before the summary could name this one.
+    listening?.catch((error) => console.log(`radio voice        stopped: ${firstLine(error)}`));
     throw new Error(`both pressed "${station.title}", but it did not solve: ${why.join(', ')}`);
   }
   console.log(
     `sync               ${players.map(({ name }) => name).join(' and ')} pressed ` +
       `"${station.title}" together: solved, ` +
-      `${first.seen.view.map.litRooms.join(', ') || 'no room'} lit`,
+      `${first.seen.view.map.litRooms.join(', ') || 'no room'} lit; the strip showed it done, ` +
+      `on each page's clock: ${strips.text}`,
   );
   return { listening, lit: first.seen.view.map.litRooms.slice(litBefore) };
 }
@@ -5280,33 +5360,93 @@ async function readingIn(meter, i, end) {
   return reading();
 }
 
-/**
- * The needle's angle once it has come a third of its way from `from` to
- * `target`, or where it stands at `end` (epoch ms), whichever is first.
- */
-async function swungAThird(page, from, target, end) {
-  let at = await needleOnPage(page);
-  while ((at - from) / (target - from) < 1 / 3 && Date.now() < end) {
-    await sleep(8);
-    at = await needleOnPage(page);
-  }
-  return at;
-}
-
-/** How soon after its probe meter-swing.png is shot, at the latest, in ms. */
-const SWING_MS = 250;
+/** How far into its swing meter-swing.png holds the needle, ms: some 40 % of its way there. */
+const SWING_HOLD_MS = 60;
 /** How far a reading has to move the needle for meter-swing.png to show it, in °. */
 const SWING_DEG = 35;
-/** What the screenshot itself takes, kept free of SWING_MS, in ms. */
-const SHOT_MS = 90;
 
 /**
- * meter-swing.png: the wire just probed (`i`, its key pressed at `pressed`,
- * the needle standing at `from`) comes in, and where its reading swings the
- * needle SWING_DEG or more, the meter is shot as soon as the needle has come
- * a third of its way — within SWING_MS of the probe, the needle still on its
- * way to the reading or swinging past it. True once shot; false where the
- * reading moves the needle less, for the next probe to try.
+ * In the page, before a probe key is pressed, until releaseNeedle: the needle's first swing after
+ * the press — the transition of its turn (client styles/devices.css), taken as the turn's style
+ * changes — is paused `ms` into it, so that a shot however late finds the needle on its way;
+ * `window.__needleHold` (pageclock.mjs `NeedleHold`) notes on the page's clock when the probe
+ * went down, when the swing began and how long it runs. Its `transitionrun` would come only with
+ * the page's next frame: where that lands after the swing's 600 ms, there is nothing to hold. A
+ * swing begun before the press is never taken: the hold waits for the press.
+ */
+function holdNeedle(ms) {
+  const needle = document.querySelector('.station-modal .gauge-needle');
+  const t0 = globalThis.performance.now();
+  const hold = { pressed: null, swung: null, length: null };
+  const held = { turn: null, stop: () => undefined };
+  const press = (event) => {
+    hold.pressed ??= event.timeStamp - t0;
+  };
+  // The turn's style changing after the press is this probe's reading coming in: the swing it
+  // starts is there to be taken at once (getAnimations brings the page's style up to date).
+  const swing = () => {
+    const turn = needle.getAnimations().find((a) => a.transitionProperty === 'transform');
+    if (hold.pressed !== null && hold.swung === null && turn !== undefined) {
+      hold.swung = globalThis.performance.now() - t0;
+      hold.length = turn.effect.getComputedTiming().duration;
+      turn.pause();
+      turn.currentTime = ms;
+      held.turn = turn;
+    }
+  };
+  const watch = new globalThis.MutationObserver(swing);
+  held.stop = () => {
+    watch.disconnect();
+    document.removeEventListener('pointerdown', press, true);
+  };
+  globalThis.__needleHold = hold;
+  globalThis.__needleHeld = held;
+  document.addEventListener('pointerdown', press, true);
+  if (needle !== null) {
+    watch.observe(needle, { attributeFilter: ['style'] });
+  }
+}
+
+/**
+ * In the page: the needle held by holdNeedle swings on — where its swing is still paused: one a
+ * newer reading cancelled stays gone, played it would turn the needle back over the new one —
+ * and nothing watches it any more.
+ */
+function releaseNeedle() {
+  const held = globalThis.__needleHeld;
+  held?.stop();
+  if (held?.turn?.playState === 'paused') {
+    held.turn.play();
+  }
+  delete globalThis.__needleHeld;
+}
+
+/**
+ * Whether `check` holds in `page` within `ms`, looked at every 50 ms with `arg` — once where no
+ * time is left, as Playwright's timeout of 0 would wait forever; throws what is no wait.
+ */
+function pageHolds(page, check, ms, arg = null) {
+  if (ms <= 0) {
+    return page.evaluate(check, arg).then(Boolean);
+  }
+  return page.waitForFunction(check, arg, { timeout: ms, polling: 50 }).then(
+    () => true,
+    (error) => {
+      if (error?.name !== 'TimeoutError') {
+        throw error;
+      }
+      return false;
+    },
+  );
+}
+
+/**
+ * meter-swing.png: the wire just probed (`i`, its key pressed at `pressed`, the needle standing
+ * at `from`, its next swing held by holdNeedle) comes in, and where its reading swings the needle
+ * SWING_DEG or more, the meter is shot with the needle held SWING_HOLD_MS into its swing, and
+ * judged by what the page says it showed (pageclock.mjs `swingVerdict`): the needle swung, held
+ * still through the shot, on its way to the reading or swinging past it. True once shot; false
+ * where the reading moves the needle less, for the next probe to try.
  */
 async function captureSwing(meter, i, pressed, from) {
   const volts = await readingIn(meter, i, pressed + 3000);
@@ -5314,21 +5454,71 @@ async function captureSwing(meter, i, pressed, from) {
   if (Math.abs(target - from) < SWING_DEG) {
     return false;
   }
-  const at = await swungAThird(meter.page, from, target, pressed + SWING_MS - SHOT_MS);
-  const ms = Date.now() - pressed;
+  await pageHolds(meter.page, () => globalThis.__needleHold?.swung != null, 3000);
+  const hold = await meter.page.evaluate(() => globalThis.__needleHold ?? null);
+  const at = await needleOnPage(meter.page);
   await capture(meter.page, 'meter-swing.png');
   const after = await needleOnPage(meter.page);
-  const swinging = Math.abs(at - target) > 1 && Math.abs(at - from) > 1;
-  console.log(
-    `meter-swing.png    ${meter.name} probed wire ${i + 1}: ${volts} V; shot ${ms} ms after ` +
-      `the probe, the needle at ${at}° on its way from ${from}° to ${target.toFixed(1)}° ` +
-      `(${after}° once shot)` +
-      (swinging ? '' : ' — !! not swinging'),
-  );
-  if (ms > SWING_MS || !swinging) {
-    fail(`meter-swing.png: ${ms} ms after the probe, needle at ${at}° for ${target}°`);
+  const swing = { from, target, at, after, hold, holdMs: SWING_HOLD_MS };
+  const { faults, text } = swingVerdict(swing);
+  console.log(`meter-swing.png    ${meter.name} probed wire ${i + 1}: ${volts} V; ${text}`);
+  if (faults.length > 0) {
+    fail(`meter-swing.png: ${faults.join('; ')}`);
   }
   return true;
+}
+
+/**
+ * The needle's turn as the client gives it (CircuitPanel's angle, to a tenth of a degree) for a
+ * meter's view of the circuit (`puzzle`): at the reading of the wire probed last, at 0 V before.
+ */
+function needleShown(puzzle) {
+  const reading = puzzle?.probed == null ? null : puzzle.readings?.[puzzle.probed];
+  return Math.round(needleFor(reading ?? 0) * 10) / 10;
+}
+
+/**
+ * Waits up to 3 s for the meter's needle to be turned, in the page, to the reading of the wire
+ * probed last as the view has it (needleShown): a page slowed by load can draw the last probe's
+ * reading only after the next probe is pressed, and the next hold would take that swing for its
+ * own. Whether it was; where not, the log says so for probe `i`, which is then not held.
+ */
+async function needleCaughtUp(meter, i) {
+  const deg = needleShown(meter.seen.view.puzzle);
+  const turned = (want) => {
+    const turn = document.querySelector('.station-modal .gauge-needle')?.style.transform ?? '';
+    return Math.abs(Number(/-?\d+(?:\.\d+)?/.exec(turn)?.[0]) - want) < 0.05;
+  };
+  if (await pageHolds(meter.page, turned, 3000, deg)) {
+    return true;
+  }
+  console.log(
+    `meter-swing.png    not tried on wire ${i + 1}: 3 s on, the page had not turned its needle ` +
+      `to the last reading's ${deg}°`,
+  );
+  return false;
+}
+
+/**
+ * Probe `i` pressed with `press`, the needle's next swing held for it (holdNeedle) and let go
+ * however that went — once the page has drawn the last probe's reading (needleCaughtUp; pressed
+ * plain where it has not, for the next probe to try): meter-swing.png where its reading swings
+ * the needle far enough (captureSwing). Whether it was shot.
+ */
+async function probeHeld(meter, i, press) {
+  if (!(await needleCaughtUp(meter, i))) {
+    await press();
+    return false;
+  }
+  const from = await needleOnPage(meter.page);
+  await meter.page.evaluate(holdNeedle, SWING_HOLD_MS);
+  try {
+    const pressed = Date.now();
+    await press();
+    return await captureSwing(meter, i, pressed, from);
+  } finally {
+    await meter.page.evaluate(releaseNeedle);
+  }
 }
 
 /**
@@ -5365,15 +5555,14 @@ function reportMeasured(meter, count, swung) {
 
 /**
  * Presses wire `i`'s probe key at the meter and waits for its reading; until
- * one has been shot mid-swing (`swung`), tries meter-swing.png on this one.
- * Returns whether this one was shot. Throws where the reading stays empty.
+ * one has been shot mid-swing (`swung`), tries meter-swing.png on this one
+ * (probeHeld). Returns whether this one was shot. Throws where the reading
+ * stays empty.
  */
 async function probeWire(meter, title, i, swung) {
   const key = meter.page.locator(`.station-modal .circuit-probe[data-index="${i}"]`);
-  const from = swung ? 0 : await needleOnPage(meter.page);
-  const pressed = Date.now();
-  await key.click({ timeout: 3000 });
-  const shot = !swung && (await captureSwing(meter, i, pressed, from));
+  const press = () => key.click({ timeout: 3000 });
+  const shot = swung ? await press().then(() => false) : await probeHeld(meter, i, press);
   if (!(await until(() => meter.seen.view.puzzle?.readings?.[i] != null, 3000))) {
     throw new Error(
       `${meter.name} measured wire ${i + 1} of "${title}", but its reading stayed empty`,
@@ -5767,26 +5956,53 @@ let flinchShot = false;
 let panelCloseShot = false;
 
 /**
- * From now on, each animation frame of `page` notes the station's panel — there or not, on its
- * way out (`puzzle-modal--leaving`), inert, its opacity — until it is gone or a second has
- * passed (`window.__panelFade`, read by panelfade.mjs `fadeOf`).
+ * From now on, `page` records the station's panel on its own clock (`window.__panelFade`, read
+ * by panelfade.mjs `fadeOf`): as its DOM changes, when the panel begins to leave
+ * (`puzzle-modal--leaving`), inert or not, and when it is gone; and at each animation frame until
+ * the one that finds it gone, the panel — there or not, leaving, inert, its opacity, and how far
+ * its fade-out (`panel-down`) has run on the fade's own clock. A frame the page draws late is so
+ * judged by what it showed, not by when the walkthrough looked. A panel still there 5 s on is
+ * no longer recorded: the walkthrough reports one that never goes (it waits 3 s for it).
  */
 function recordPanelFade(page) {
   return page.evaluate(() => {
-    const samples = [];
-    globalThis.__panelFade = samples;
     const t0 = globalThis.performance.now();
-    const step = () => {
-      const modal = document.querySelector('.station-modal');
-      const panel = modal?.querySelector('.panel') ?? null;
-      samples.push({
-        t: globalThis.performance.now() - t0,
-        present: modal !== null,
-        leaving: modal?.classList.contains('puzzle-modal--leaving') ?? false,
-        inert: modal?.inert ?? false,
+    const now = () => globalThis.performance.now() - t0;
+    const lastMs = 5000;
+    const record = { left: null, gone: null, inertAtLeft: null, frames: [] };
+    globalThis.__panelFade = record;
+    const modalNow = () => document.querySelector('.station-modal');
+    const leavingNow = (modal) => modal?.classList.contains('puzzle-modal--leaving') === true;
+    const watch = new globalThis.MutationObserver(() => {
+      const modal = modalNow();
+      if (record.left === null && leavingNow(modal)) {
+        record.left = now();
+        record.inertAtLeft = modal.inert;
+      }
+      if (modal === null) {
+        record.gone = now();
+        watch.disconnect();
+      }
+    });
+    watch.observe(document.body, { subtree: true, childList: true, attributeFilter: ['class'] });
+    globalThis.setTimeout(() => watch.disconnect(), lastMs);
+    const frameOf = (modal) => {
+      const panel = modal.querySelector('.panel');
+      const fade = panel?.getAnimations().find((a) => a.animationName === 'panel-down');
+      return {
+        t: now(),
+        present: true,
+        leaving: leavingNow(modal),
+        inert: modal.inert,
         opacity: panel === null ? 0 : Number(globalThis.getComputedStyle(panel).opacity),
-      });
-      if (modal !== null && globalThis.performance.now() - t0 < 1000) {
+        fade: fade === undefined ? null : Number(fade.currentTime),
+      };
+    };
+    const gone = () => ({ t: now(), present: false, leaving: false, inert: false, opacity: 0 });
+    const step = () => {
+      const modal = modalNow();
+      record.frames.push(modal === null ? { ...gone(), fade: null } : frameOf(modal));
+      if (modal !== null && now() < lastMs) {
         globalThis.requestAnimationFrame(step);
       }
     };
@@ -5841,8 +6057,11 @@ function releasePanelFade() {
   }
 }
 
+/** A page's record of a panel that never began to leave (recordPanelFade). */
+const NO_FADE = { left: null, gone: null, inertAtLeft: null, frames: [] };
+
 /**
- * The device's fade-out as the game plays it: Esc, the page noting the panel each frame
+ * The device's fade-out as the game plays it: Esc, the page recording the panel on its own clock
  * (recordPanelFade) until it has gone, and the world shot once it has.
  */
 async function fadeOutAsPlayed(page, modal) {
@@ -5851,8 +6070,8 @@ async function fadeOutAsPlayed(page, modal) {
   await modal.waitFor({ state: 'hidden', timeout: 3000 });
   await sleep(100);
   const closed = await page.screenshot();
-  const samples = await page.evaluate(() => globalThis.__panelFade ?? []);
-  return { closed, fade: fadeOf(samples) };
+  const record = await page.evaluate(() => globalThis.__panelFade ?? null);
+  return { closed, fade: fadeOf(record ?? NO_FADE, PANEL_FADE_MS) };
 }
 
 /**
@@ -5884,11 +6103,15 @@ async function heldFadeShot(player, modal) {
 
 /**
  * panel-close.png: `player` steps back from the open station with Esc, and the device fades out
- * as it came, over 150 ms (client styles/interaction.css, screens/Game.tsx): the page notes the
- * panel each frame meanwhile — it has to leave inert, its opacity only falling and midway on a
- * frame at least, and be gone within 100 to 600 ms. Then the shot (heldFadeShot), which has to
- * lie between the panel open and gone over the panel's box; one that came after the game had
- * let the panel go is taken again, up to three times. Any of these that fails, fails the run.
+ * as it came, over 150 ms (client styles/interaction.css, screens/Game.tsx): the page records
+ * the panel on its own clock meanwhile (recordPanelFade) — it has to leave inert, its opacity
+ * only falling, be gone within 100 to 600 ms of its beginning to leave, and show midway on one
+ * frame at least, a frame drawn in the fade's middle failing it where none does (panelfade.mjs
+ * `fadeVerdict`). Then the shot (heldFadeShot),
+ * which has to lie between the panel open and gone over the panel's box; one that came after
+ * the game had let the panel go is taken again, up to three times. Any of these that fails,
+ * fails the run; where the page drew no frame in the fade's middle, its midway frames are
+ * skipped with when it drew them.
  */
 async function capturePanelClose(player, modal) {
   const { page } = player;
@@ -5914,20 +6137,35 @@ async function capturePanelClose(player, modal) {
   reportPanelClose(player, fade, held);
 }
 
-/** panel-close.png's line in the log; the run fails where the fade or its shot was wrong. */
+/**
+ * panel-close.png's line in the log, the fade's numbers on the page's clock. The run fails where
+ * the fade (panelfade.mjs `fadeVerdict`) or its shot was wrong; where the page drew no frame in
+ * the fade's middle, its frames midway are skipped (`panel-close (fade)`), the reason naming
+ * when the page drew them.
+ */
 function reportPanelClose(player, fade, held) {
-  const faded = fade.ms !== null && fade.ms >= 100 && fade.ms <= 600;
-  const fine = faded && fade.midway > 0 && fade.falling && fade.inert && held.between;
-  const gone = fade.ms === null ? '!! gone at once' : `gone in ${Math.round(fade.ms)} ms`;
+  const { faults, unjudged } = fadeVerdict(fade, PANEL_FADE_MS);
+  const gone =
+    fade.ms === null ? '!! never leaving, or never gone' : `gone in ${Math.round(fade.ms)} ms`;
+  const lumas = `luma ${held.lumas.map((l) => l.toFixed(0)).join(' → ')}`;
+  const frames =
+    fade.drawn.length === 0
+      ? 'no frame drawn as it left'
+      : `${fade.midway} of ${fade.drawn.length} frames midway (the fade at ` +
+        `${drawnText(fade.drawn)} ms)`;
   console.log(
-    `panel-close.png    ${player.name}, Esc: ${gone}, ${fade.midway} frames midway, ` +
+    `panel-close.png    ${player.name}, Esc: ${gone}, ${frames}, ` +
       `${fade.falling ? 'falling' : '!! not only falling'}, ` +
-      `${fade.inert ? 'inert' : '!! taking input'}; the shot held ${PANEL_SHOT_MS} ms in ` +
-      `${held.between ? 'midway' : '!! not midway'} ` +
-      `(luma ${held.lumas.map((l) => l.toFixed(0)).join(' → ')}), try ${held.attempt}`,
+      `${fade.inert ? 'inert' : '!! taking input'}, on the page's clock; the shot held ` +
+      `${PANEL_SHOT_MS} ms in ${held.between ? 'midway' : '!! not midway'} (${lumas}), ` +
+      `try ${held.attempt}`,
   );
-  if (!fine) {
-    fail(`panel-close.png: ${JSON.stringify(fade)}, shot midway ${held.between}`);
+  const shot = held.between ? [] : [`the shot held ${PANEL_SHOT_MS} ms in not midway (${lumas})`];
+  if (faults.length + shot.length > 0) {
+    fail(`panel-close.png: ${[...faults, ...shot].join('; ')}`);
+  }
+  if (unjudged !== null) {
+    skip('panel-close (fade)', unjudged);
   }
 }
 
@@ -6685,11 +6923,34 @@ const NUDGE_WAIT_MS = 110_000;
 /** The lines mission control sent unasked so far, as a page's view has them. */
 const nudgesOf = (seen) => (seen.view?.events ?? []).filter((event) => event.kind === 'nudge');
 
+/** Why no nudge is left to wait for at the station `view` has up (nudgesSpent), or null. */
+function spentOn({ events, missionId, currentPuzzleIndex, startedAt }) {
+  return nudgesSpent(events, nudgeLinesOf(missionId, currentPuzzleIndex), startedAt ?? 0);
+}
+
+/**
+ * How many lines the mission `id` gives the Leitstelle for its station `index`, as its file in
+ * missions/ has them; null for a mission that has none there, a custom one.
+ */
+function nudgeLinesOf(id, index) {
+  const file = fileURLToPath(new URL(`../missions/${id}.json`, import.meta.url));
+  try {
+    return JSON.parse(readFileSync(file, 'utf8')).puzzles?.[index]?.nudges?.length ?? null;
+  } catch (error) {
+    if (error?.code === 'ENOENT') {
+      return null;
+    }
+    throw error;
+  }
+}
+
 /**
  * nudge.png (nudge-phone.png on the guest's phone): with nothing open over the world, the
  * crew lets the station that is up stand quiet until the Leitstelle names the next place —
  * within its 90 s of quiet. Its line has to show in both banners and be spoken by a recording
- * from the manifest, or the run fails.
+ * from the manifest, or the run fails. Where every line the mission has for the station went
+ * out on the way there — a walkthrough slowed by load lets it stand quiet long enough — it is
+ * skipped, saying when each came (pageclock.mjs `nudgesSpent`).
  */
 async function captureNudge(players) {
   const [first] = players;
@@ -6701,8 +6962,13 @@ async function captureNudge(players) {
       await onTop.waitFor({ state: 'hidden', timeout: 3000 }).catch(() => undefined);
     }
   }
-  const before = nudgesOf(first.seen).length;
   const armed = first.seen.view.map.stations.find((s) => s.status === 'armed')?.title ?? 'none';
+  const spent = spentOn(first.seen.view);
+  if (spent !== null) {
+    skip('nudge.png', `"${armed}": ${spent}`);
+    return;
+  }
+  const before = nudgesOf(first.seen).length;
   const from = Date.now();
   if (!(await until(() => nudgesOf(first.seen).length > before, NUDGE_WAIT_MS))) {
     console.log(`nudge.png          !! no word from the Leitstelle at "${armed}" within ${seconds(NUDGE_WAIT_MS)}`);
@@ -7185,6 +7451,28 @@ const endThemeOf = (page) =>
 /** The menu's quiet window holds the screen's pace under SHOTS_SOFTWARE_GL, ms p95. */
 const MENU_P95_MS = 16.8;
 
+/**
+ * The menu's quiet window (`look`, frameWindow's) against the screen's pace under
+ * SHOTS_SOFTWARE_GL (MENU_P95_MS): over it, the run fails where it gates its windows at the
+ * gate's budget, and the window is logged for information where SHOTS_FRAME_P95_MS raised the
+ * budget for a run that proves its captures alone, its windows gating nothing — as every other
+ * window there. The line names the load the window ran at.
+ */
+function menuPace(look) {
+  if (!SOFTWARE_GL || look === null || look.p95 <= MENU_P95_MS) {
+    return;
+  }
+  const reached = `${look.p95.toFixed(2)} ms p95 at ${loadText(look.load)}, over ${MENU_P95_MS}`;
+  if (FRAME_P95_MS > DEFAULT_FRAME_P95_MS) {
+    console.log(
+      `menu               its window reached ${reached}: for information, the windows gating ` +
+        `nothing at SHOTS_FRAME_P95_MS=${FRAME_P95_MS}`,
+    );
+    return;
+  }
+  fail(`menu: its window reached ${reached}`);
+}
+
 /** The hero off the page's probe (client screens/MenuHero.tsx); null without one. */
 const heroOf = (page) => page.evaluate(() => globalThis.__escapelab?.hero ?? null);
 
@@ -7370,9 +7658,7 @@ async function captureMenu(page) {
   await menuSoundAtFirstKey(page, () => walkMenuKeys(page), list);
   await checkPieceCodec(page, list);
   const look = await frameWindow(page, 'on the menu, its scene drifting', () => sleep(SAMPLE_MS));
-  if (SOFTWARE_GL && look !== null && look.p95 > MENU_P95_MS) {
-    fail(`menu: its window reached ${look.p95.toFixed(1)} ms p95, over ${MENU_P95_MS}`);
-  }
+  menuPace(look);
   await heroLampShot(page);
   await heroHover(page);
   await captureMenuPlaces(page);
@@ -8584,6 +8870,44 @@ function deviceReach() {
   };
 }
 
+/** How long a device a phone shows gets to finish its animations before it is measured, ms. */
+const SETTLE_MS = 3000;
+
+/**
+ * In the page: waits until every animation of the open device or relay console that runs now,
+ * ends, and moves a control's box — on a control or round one: the panel's rise as it came up,
+ * from 0.98 of its size, the device's own from 0.94, a press giving — has ended, or `ms` have
+ * passed, and says how long it waited on the page's clock and which of those still ran then: a
+ * control measured mid-rise measures short. One that starts meanwhile, or moves no control — a
+ * sign of the Signalkette flaring on, a token's bar draining beside its keys — is not waited for.
+ */
+async function deviceSettled(ms) {
+  const modal = document.querySelector('.station-modal, .relay-modal');
+  const controls = [...(modal?.querySelectorAll('button, input, summary') ?? [])];
+  const t0 = globalThis.performance.now();
+  const ends = (a) => a.playState === 'running' && a.effect?.getComputedTiming().endTime < Infinity;
+  const moves = (a) => controls.some((control) => a.effect?.target?.contains(control) === true);
+  const all = modal?.getAnimations({ subtree: true }) ?? [];
+  const running = all.filter((a) => ends(a) && moves(a));
+  // An animation cancelled meanwhile, its element gone, has ended too.
+  const ended = running.map((a) =>
+    a.finished.then(
+      () => undefined,
+      () => undefined,
+    ),
+  );
+  let timer;
+  const waited = new Promise((done) => {
+    timer = globalThis.setTimeout(done, ms);
+  });
+  await Promise.race([Promise.all(ended), waited]);
+  globalThis.clearTimeout(timer);
+  const still = running
+    .filter((a) => a.playState === 'running')
+    .map((a) => a.animationName ?? a.transitionProperty ?? 'an animation');
+  return { waited: Math.round(globalThis.performance.now() - t0), still };
+}
+
 /** The station `player` has open: its id, and its console's letter where it has two. */
 function stationSlug(player) {
   const { map, puzzle } = player.seen.view;
@@ -8596,7 +8920,10 @@ function stationSlug(player) {
 /**
  * device-phone-<slug>.png: the device a phone has open — the guest's page, a touch screen —
  * with the phone held sideways: the device whole in the window, nothing of it scrolling, every
- * control in view and 44 px at least each way. The run fails where it is not so. Once a
+ * control in view and 44 px at least each way, measured once its animations ended on the page's
+ * clock (deviceSettled). The run fails where it is not so (pageclock.mjs `deviceVerdict`);
+ * where the device still rose after SETTLE_MS, a control measured short is skipped, the reason
+ * naming the wait. Once a
  * station; a window without touch is left alone. The first device the phone opens is looked at
  * on a large phone held sideways as well (device-phone-932-<slug>.png). The phone goes back to
  * how it was held.
@@ -8623,18 +8950,22 @@ async function captureDevicePhone(player, slug) {
 async function deviceOnPhone(player, slug, size) {
   const shot =
     size === SIZES[3] ? `device-phone-${slug}.png` : `device-phone-${size.width}-${slug}.png`;
-  await phoneReach(player, size, shot);
+  await phoneReach(player, size, { shot, unjudged: (why) => skip('device-phone (targets)', why) });
 }
 
 /**
  * The device `player`'s phone has open, held at `size`: the device whole in the window, nothing
- * of it scrolling, every control in view and 44 px at least each way (`deviceReach`), or the run
- * fails — shot as `shot` where one is named, and logged under `label`, the shot's name by default.
+ * of it scrolling, every control in view and 44 px at least each way (`deviceReach`), measured
+ * once its animations ended on the page's clock (deviceSettled), or the run fails (pageclock.mjs
+ * `deviceVerdict`) — shot as `shot` where one is named, and logged under `label`, the shot's name
+ * by default. Where the device still moved after SETTLE_MS, a control measured short goes to
+ * `unjudged` with why, the wait named: the caller skips it under its group's label.
  */
-async function phoneReach(player, size, shot, label = shot) {
+async function phoneReach(player, size, { shot = null, label = shot, unjudged }) {
   const { page } = player;
   await page.setViewportSize({ width: size.width, height: size.height });
   await sleep(500);
+  const settled = await page.evaluate(deviceSettled, SETTLE_MS);
   const seen = await page.evaluate(deviceReach);
   if (shot !== null) {
     await capture(page, shot);
@@ -8645,27 +8976,21 @@ async function phoneReach(player, size, shot, label = shot) {
     console.log(`${name} !! ${player.name}'s phone has no device open`);
     return;
   }
+  const rest = settled.still.length === 0 ? '' : ` — !! ${settled.still.join(', ')} still ran`;
   console.log(
     `${name} ${player.name}'s phone sideways @ ${size.width}x${size.height}: ` +
       `${seen.controls} controls, scrolls ${seen.scroll}px, ${seen.small.length} under 44 px, ` +
-      `${seen.cut.length} cut off` +
+      `${seen.cut.length} cut off; measured once settled, ${settled.waited} ms on the page's ` +
+      `clock${rest}` +
       [...seen.small, ...seen.cut].map((what) => `\n                   !! ${what}`).join(''),
   );
-  const wrong = reachWrong(seen);
-  if (wrong.length > 0) {
-    fail(`${label}: ${wrong.join('; ')}`);
+  const { faults, unjudged: why } = deviceVerdict(seen, settled);
+  if (faults.length > 0) {
+    fail(`${label}: ${faults.join('; ')}`);
   }
-}
-
-/** What a device held on a phone (`deviceReach`) does wrong: none where it stands whole. */
-function reachWrong(seen) {
-  const wrong = [
-    seen.controls === 0 && 'no control shown',
-    seen.scroll > 1 && `it scrolls ${seen.scroll}px`,
-    seen.small.length > 0 && `${seen.small.join(', ')} under 44 px`,
-    seen.cut.length > 0 && `${seen.cut.join(', ')} cut off`,
-  ];
-  return wrong.filter(Boolean);
+  if (why !== null) {
+    unjudged(`${label}: ${why}`);
+  }
 }
 
 /**
@@ -8716,47 +9041,90 @@ function figuresOn(page) {
 }
 
 /**
- * Polls the figures `page` paints every 20 ms until `pick` takes one, or
- * until `ms` have passed: that figure, or null.
+ * In the page, until releaseFrames: the animation frames go on until the page's probe shows
+ * `spec` — a crew figure in a pose (`figure`: its `mood`, its `key`, `rise` or `glance`, `least`
+ * or more either way; `window.__escapelab.figures`) or your own figure's walk in a stretch of its
+ * cycle (`gait`: walking, its phase `from` to `to`; `window.__escapelab.graphics`) — and from then
+ * the page's frames are kept back: the world and every figure stay as that frame painted them,
+ * the world's walk standing still, so that a shot however late shows them so.
+ * `window.__frameHold.held` is what the probe showed.
  */
-async function figureWhen(page, pick, ms) {
-  const end = Date.now() + ms;
-  for (;;) {
-    const found = ((await figuresOn(page)) ?? []).find(pick);
-    if (found !== undefined || Date.now() >= end) {
-      return found ?? null;
+function holdFrames(spec) {
+  const plain = globalThis.requestAnimationFrame;
+  const kept = [];
+  const hold = { held: null };
+  const armed = { now: false };
+  const figureIn = ({ mood, key, least }) => () =>
+    (globalThis.__escapelab?.figures ?? []).find(
+      (figure) => figure.mood === mood && Math.abs(figure[key]) >= least,
+    ) ?? null;
+  const gaitIn = ({ from, to }) => () => {
+    const gait = globalThis.__escapelab?.graphics?.gait;
+    return gait?.moving === true && gait.phase >= from && gait.phase <= to ? { ...gait } : null;
+  };
+  const shown = spec.gait === undefined ? figureIn(spec.figure) : gaitIn(spec.gait);
+  globalThis.__frameHold = hold;
+  globalThis.__frameHeld = { plain, kept };
+  // The frames asked for before the hold run as they were asked, painting once more: the hold
+  // looks only from the next on, when every frame comes through it.
+  plain.call(globalThis, () => {
+    armed.now = true;
+  });
+  const unlessHeld = (run) => (now) => {
+    if (hold.held === null) {
+      run(now);
+    } else {
+      kept.push(run);
     }
-    await sleep(20);
+  };
+  // Looked at as each frame is asked for: a loop asks for its next frame in the one that painted
+  // it, and a frame asked for before the probe showed `spec` runs no more once it does.
+  globalThis.requestAnimationFrame = (run) => {
+    if (armed.now) {
+      hold.held ??= shown();
+    }
+    if (hold.held !== null) {
+      kept.push(run);
+      return 0;
+    }
+    return plain.call(globalThis, unlessHeld(run));
+  };
+}
+
+/** In the page: the frames holdFrames kept back run now, and the page moves on. */
+function releaseFrames() {
+  const held = globalThis.__frameHeld;
+  if (held !== undefined) {
+    globalThis.requestAnimationFrame = held.plain;
+    delete globalThis.__frameHeld;
+    for (const run of held.kept) {
+      held.plain.call(globalThis, run);
+    }
   }
 }
 
 /**
- * A shot of `page` with one of its figures in a pose. Waits (figureWhen) for a figure `pick`
- * takes, shoots, and reads the figures again: the shot is kept where the same figure still
- * `holds` the pose within `span` ms of the first read — a pose rises and falls once, so it held
- * in between, through the shot — else the next pose is waited for, until `ms` have passed. A
- * single read can land a slow page's shot on either side of a pose. Returns the last shot (null
- * where no figure took the pose), the figure as found and as read after it, the shots taken and
- * whether the last one held.
+ * A shot of `page` with one of its figures in `pose`: the page holds its frames as a figure first
+ * stands so (holdFrames), within `ms`, then it is shot and its figures read again — the same
+ * pose where the hold held it through the shot — and the frames are let go, however that went.
+ * The walkthrough's own reads round a shot timed a slow page's figure out of its pose: at load
+ * 42 to 57 a figure read 0.142 tiles up had landed after each of four screenshots. Returns the
+ * shot (null where no figure took the pose), the figure as held and as read after the shot, and
+ * whether it still stood so.
  */
-async function figureShot(page, { pick, holds, span, ms }) {
-  const end = Date.now() + ms;
-  let last = { png: null, found: null, after: null, tries: 0, held: false };
-  while (last.tries === 0 || Date.now() < end) {
-    const found = await figureWhen(page, pick, Math.max(0, end - Date.now()));
-    if (found === null) {
-      return last;
+async function figureShot(page, { pose, ms }) {
+  await page.evaluate(holdFrames, { figure: pose });
+  try {
+    if (!(await pageHolds(page, () => globalThis.__frameHold?.held != null, ms))) {
+      return { png: null, found: null, after: null, held: false };
     }
-    const since = Date.now();
+    const found = await page.evaluate(() => globalThis.__frameHold.held);
     const png = await page.screenshot();
-    const after = ((await figuresOn(page)) ?? []).find((figure) => figure.color === found.color);
-    const held = after !== undefined && holds(after) && Date.now() - since <= span;
-    last = { png, found, after: after ?? null, tries: last.tries + 1, held };
-    if (held) {
-      return last;
-    }
+    const after = ((await figuresOn(page)) ?? []).find((f) => f.color === found.color) ?? null;
+    return { png, found, after, held: figureHeld(found, after, pose) };
+  } finally {
+    await page.evaluate(releaseFrames);
   }
-  return last;
 }
 
 /** Keeps figureShot's last shot as `name`; shoots `page` now where it took none. */
@@ -8773,34 +9141,29 @@ async function keepFigureShot(page, name, caught) {
 const GLANCE_SHOWN = 0.9;
 /** How long the lobby gets for one of its figures to look round: each does every 4 to 7 s. */
 const GLANCE_WAIT_MS = 15_000;
-/** How far apart the reads round lobby-idle.png may lie, ms: a glance stays turned for ~870. */
-const GLANCE_SPAN_MS = 800;
 
 /**
  * lobby-idle.png: the host's lobby at 1440×1000, shot while a figure of the
- * crew stands turned in a glance round the room — the figures' probe says
- * when, before and after the shot (figureShot). Fails where no figure looks
- * round within GLANCE_WAIT_MS, or none is still turned once shot.
+ * crew stands turned in a glance round the room — the page holding its frames
+ * from the one that turned it through the shot, the figures' probe saying so
+ * before and after (figureShot). Fails where no figure looks round within
+ * GLANCE_WAIT_MS, or none is still turned once shot.
  */
 async function captureLobbyIdle(page) {
   await page.setViewportSize(COLD_OPEN);
   await sleep(400);
-  const glancing = (figure) => figure.mood === 'play' && Math.abs(figure.glance) >= GLANCE_SHOWN;
   const caught = await figureShot(page, {
-    pick: glancing,
-    holds: glancing,
-    span: GLANCE_SPAN_MS,
+    pose: { mood: 'play', key: 'glance', least: GLANCE_SHOWN },
     ms: GLANCE_WAIT_MS,
   });
   await keepFigureShot(page, 'lobby-idle.png', caught);
-  const { found, after, tries, held } = caught;
+  const { found, after, held } = caught;
   console.log(
     `lobby-idle.png     Anna's lobby @ ${COLD_OPEN.width}x${COLD_OPEN.height}: ` +
       (found === null
         ? `!! no figure looked round within ${seconds(GLANCE_WAIT_MS)}`
-        : `${found.color} turned ${found.glance.toFixed(2)} rad in a glance, ` +
-          `${after?.glance.toFixed(2) ?? '?'} once shot${held ? '' : ' !! no longer turned'}, ` +
-          `shot ${tries} times`),
+        : `${found.color} turned ${found.glance.toFixed(2)} rad in a glance, held there, ` +
+          `${after?.glance.toFixed(2) ?? '?'} once shot${held ? '' : ' !! no longer turned'}`),
   );
   if (!held) {
     fail(`lobby-idle.png: no lobby figure caught turned round within ${seconds(GLANCE_WAIT_MS)}`);
@@ -10267,6 +10630,9 @@ function consolesSaid({ terminal, token, doors, device, digits, asked, read }) {
   );
 }
 
+/** The access drill's phone targets, measured short while a device still moved: skipped. */
+const accessUnjudged = (why) => skip('access (targets)', why);
+
 /**
  * access-phone-932.png: the terminal on a large phone held sideways (SIZES[4]) — both pages are
  * touch screens — whole in the window, nothing of it scrolling, every control in view and 44 px
@@ -10274,8 +10640,8 @@ function consolesSaid({ terminal, token, doors, device, digits, asked, read }) {
  * without a shot. Both go back to laptop size.
  */
 async function accessOnPhone({ terminal, token }) {
-  await phoneReach(terminal, SIZES[4], 'access-phone-932.png');
-  await phoneReach(token, SIZES[4], null, 'access token 932');
+  await phoneReach(terminal, SIZES[4], { shot: 'access-phone-932.png', unjudged: accessUnjudged });
+  await phoneReach(token, SIZES[4], { label: 'access token 932', unjudged: accessUnjudged });
   for (const { page } of [terminal, token]) {
     await page.setViewportSize({ width: SIZES[0].width, height: SIZES[0].height });
   }
@@ -10376,7 +10742,7 @@ async function releaseDoor(terminal, door) {
 async function accessDoor({ terminal, token }, { door, account }, typed) {
   const line = await accessLogin(terminal, account, typed);
   if (typed) {
-    await phoneReach(terminal, SIZES[4], null, 'access pad 932');
+    await phoneReach(terminal, SIZES[4], { label: 'access pad 932', unjudged: accessUnjudged });
     await terminal.page.setViewportSize({ width: SIZES[0].width, height: SIZES[0].height });
   }
   const { digits, waited } = await readToken(token, account);
@@ -11996,11 +12362,6 @@ async function captureLandscapeCard(guest) {
 const JUMP_SHOWN = 0.12;
 /** How long the card gets for one of its figures to be caught mid-jump: each jumps every 1.6 s. */
 const JUMP_WAIT_MS = 5000;
-/**
- * How far apart the reads round figure-celebrate.png may lie, ms: under the 800 ms a figure
- * stands between two flights, so that two reads in the air are of one flight.
- */
-const JUMP_SPAN_MS = 600;
 /** Whether figure-celebrate.png was taken: only a run played to its end has a won card. */
 let celebrateShot = false;
 
@@ -12026,7 +12387,8 @@ function figuresInView(page) {
  * figure-celebrate.png: the host's won card at 1440×1000, scrolled back to its top — „Bild
  * speichern" (captureAchievements) scrolls it down, and on a page whose card runs taller its
  * figures leave the window and stand still — and shot while a figure of the crew is high in
- * its jump and still in the air after the shot, as the figures' probe says (figureShot). Fails
+ * its jump, the page holding its frames from that one through the shot, still in the air after
+ * it as the figures' probe says (figureShot). Fails
  * where the figures do not lie in the window, a figure on the card does not celebrate, or none
  * is caught in the air within JUMP_WAIT_MS.
  */
@@ -12042,9 +12404,7 @@ async function captureCelebrate(page) {
   await sleep(500);
   const inView = await figuresInView(page);
   const caught = await figureShot(page, {
-    pick: (figure) => figure.mood === 'celebrate' && figure.rise >= JUMP_SHOWN,
-    holds: (figure) => figure.mood === 'celebrate' && figure.rise > 0,
-    span: JUMP_SPAN_MS,
+    pose: { mood: 'celebrate', key: 'rise', least: JUMP_SHOWN },
     ms: JUMP_WAIT_MS,
   });
   await keepFigureShot(page, 'figure-celebrate.png', caught);
@@ -12056,15 +12416,15 @@ async function captureCelebrate(page) {
 }
 
 /** figure-celebrate.png's line in the log; the run fails where the crew was not caught so. */
-function reportCelebrate({ found, after, tries, held }, shot, inView) {
+function reportCelebrate({ found, after, held }, shot, inView) {
   const cheering = shot.filter((figure) => figure.mood === 'celebrate').length;
   console.log(
     `figure-celebrate.png Anna's card @ ${COLD_OPEN.width}x${COLD_OPEN.height}: ` +
       (inView ? '' : '!! its figures out of the window; ') +
       (found === null
         ? '!! no figure caught in the air'
-        : `${found.color} ${found.rise.toFixed(3)} tiles up, ${after?.rise.toFixed(3) ?? '?'} ` +
-          `once shot${held ? '' : ' !! landed'}, shot ${tries} times`) +
+        : `${found.color} ${found.rise.toFixed(3)} tiles up, held there, ` +
+          `${after?.rise.toFixed(3) ?? '?'} once shot${held ? '' : ' !! landed'}`) +
       `; ${cheering} of ${shot.length} figures celebrating`,
   );
   if (!inView || !held || shot.length === 0 || cheering !== shot.length) {
@@ -16338,7 +16698,8 @@ function reportViews(pages) {
 //
 // walk-cycle-a.png, walk-cycle-b.png  the host walking out along the longest open stretch from
 //   its tile, shot as its legs stand wide one way and then the other — the probe's phase in
-//   each shot's window, half a cycle apart — or the run fails
+//   each shot's window, half a cycle apart, the page's frames held from the one that brought the
+//   walk into it through the shot — or the run fails
 // shadow-blob.png  the host standing still again, the blob of shadow under it in the light it
 //   stands in, the probe saying which
 // dust.png  in Blackout two seconds into the dark, after blackout.png — in a mission without
@@ -16482,31 +16843,60 @@ async function captureWalkCycle(player) {
   }
 }
 
-/** Holds the key out along `run`, shooting each stride window as it comes; their phases. */
+/**
+ * Stride shot `shot` of `page`'s own figure on its walk, its phase in `stride` ({ from, to }): the
+ * page holds its frames as the walk comes into the stretch (holdFrames), within `ms`, the figure
+ * is shot round it and its walk read again — the same phase where the hold held it through the
+ * shot — and the frames go on, however that went. The phase held, whether it still stood there
+ * once shot, and how long the walk stood held, ms; null where the walk never came into the
+ * stretch, or the page shows no figure of its own.
+ */
+async function strideShot(page, shot, stride, ms) {
+  await page.evaluate(holdFrames, { gait: stride });
+  try {
+    if (!(await pageHolds(page, () => globalThis.__frameHold?.held != null, ms))) {
+      return null;
+    }
+    const heldAt = Date.now();
+    const held = await page.evaluate(() => globalThis.__frameHold.held);
+    const self = await selfOn(page);
+    if (self === null) {
+      return null;
+    }
+    await shootAround(page, shot, { x: self.x, y: self.y - 0.15 }, FIGURE_SHOT);
+    const after = (await graphicsOf(page))?.gait ?? null;
+    const still = strideHeld(held, after, stride);
+    return { phase: held.phase, still, heldMs: Date.now() - heldAt };
+  } finally {
+    await page.evaluate(releaseFrames);
+  }
+}
+
+/**
+ * Holds the key out along `run`, shooting each stride window as the walk comes into it
+ * (strideShot); the walk stands still while a shot holds the page, so its end moves on by that
+ * long, and its walking time leaves it out. The phases held through their shots.
+ */
 async function walkTheStride({ page }, run) {
   const out = WALK_KEYS.get(`${run.dx},${run.dy}`);
   const ms = ((run.tiles - 0.4) / SPEED) * 1000;
   const phases = [];
+  let heldMs = 0;
   await page.keyboard.down(out);
   const start = Date.now();
   try {
     for (const [shot, from, to] of STRIDE_WINDOWS) {
-      const left = Math.max(0, start + ms - Date.now());
-      const at = await graphicsWhen(
-        page,
-        ({ gait }) => gait.moving && gait.phase >= from && gait.phase <= to,
-        left,
-      );
-      const self = at === null ? null : await selfOn(page);
-      if (self === null) {
+      const left = Math.max(0, start + heldMs + ms - Date.now());
+      const stride = await strideShot(page, shot, { from, to }, left);
+      if (stride === null) {
         break;
       }
-      await shootAround(page, shot, { x: self.x, y: self.y - 0.15 }, FIGURE_SHOT);
-      phases.push(at.gait.phase);
+      heldMs += stride.heldMs;
+      phases.push(...(stride.still ? [stride.phase] : []));
     }
   } finally {
     await page.keyboard.up(out);
-    walking.ms.set(page, (walking.ms.get(page) ?? 0) + (Date.now() - start));
+    walking.ms.set(page, (walking.ms.get(page) ?? 0) + (Date.now() - start - heldMs));
   }
   await sleep(200);
   return phases;
@@ -16825,6 +17215,7 @@ async function main() {
   for (const line of PLAN.lines) {
     console.log(line);
   }
+  console.log(`load               ${LOAD_AT_START.toFixed(1)} as the run begins (1-minute average)`);
   try {
     if (SERVER_ENTRY !== null) {
       await startServer();
