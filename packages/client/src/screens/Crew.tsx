@@ -14,6 +14,18 @@ export function clockSizeText(timeLimitSec: number): string {
   return timeLimitSec === 0 ? 'ohne Uhr' : `${Math.round(timeLimitSec / 60)} min`;
 }
 
+/**
+ * A mission's clock in a line of its facts, the separator after it: „15 min ·", or „ohne Uhr
+ * ·". The minutes stand in a text node of their own, as the lines always had them: the browser
+ * shapes text node by text node, and a line with a clock lays out to the pixel as before.
+ */
+export function ClockFact({ timeLimitSec }: { timeLimitSec: number }) {
+  if (timeLimitSec === 0) {
+    return <>{clockSizeText(timeLimitSec)} ·</>;
+  }
+  return <>{Math.round(timeLimitSec / 60)} min ·</>;
+}
+
 export interface CrewTag {
   text: string;
   tone: 'pult' | 'press' | 'read' | 'hold' | 'carry' | 'sign' | 'away';

@@ -1,8 +1,8 @@
-import { renderToStaticMarkup } from 'react-dom/server';
+import { renderToStaticMarkup, renderToString } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import type { KnownSource, KnownStation, PlayerView } from '@escapelab/core';
 import { askNoteText } from '../src/screens/Book.js';
-import { clockSizeText, crewTags } from '../src/screens/Crew.js';
+import { ClockFact, clockSizeText, crewTags } from '../src/screens/Crew.js';
 import { clockStat } from '../src/screens/End.js';
 import { StageTop, type ColdOpen } from '../src/screens/Game.js';
 import { coversArmed } from '../src/world/interact.js';
@@ -99,6 +99,13 @@ describe('a mission without a clock, on the interface', () => {
   it('says so where the menu and the lobby give a mission’s minutes', () => {
     expect(clockSizeText(0)).toBe('ohne Uhr');
     expect(clockSizeText(900)).toBe('15 min');
+  });
+
+  it('leaves a clock’s minutes a text node of their own in a line of facts, as before', () => {
+    // renderToString parts adjacent text nodes with <!-- -->. The browser shapes node by node:
+    // „15" + „ min ·" lays the line out to the pixel as before, „15 min" + „ ·" does not.
+    expect(renderToString(<ClockFact timeLimitSec={900} />)).toBe('15<!-- --> min ·');
+    expect(renderToString(<ClockFact timeLimitSec={0} />)).toBe('ohne Uhr<!-- --> ·');
   });
 
   it('gives a won run the time it took instead of what it left', () => {

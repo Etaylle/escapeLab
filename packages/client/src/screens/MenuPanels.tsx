@@ -16,7 +16,7 @@ import { recordLine } from '../runStats.js';
 import { keepInvite, tabInvite } from '../tab.js';
 import type { Takeover } from '../ws.js';
 import { uiSound } from '../world/menuSound.js';
-import { clockSizeText, crewSizeText } from './Crew.js';
+import { ClockFact, crewSizeText } from './Crew.js';
 import { CrewFigure } from './CrewFigure.js';
 import { Icon } from './Icon.js';
 import { MapThumb } from './MapThumb.js';
@@ -256,7 +256,7 @@ export function MissionCard({
         <CardHint mission={mission} first={first} />
         <span className="mission-title">{mission.title}</span>
         <span className="mission-meta">
-          {crewSizeText(mission.players)} · {clockSizeText(mission.timeLimitSec)} ·{' '}
+          {crewSizeText(mission.players)} · <ClockFact timeLimitSec={mission.timeLimitSec} />{' '}
           {mission.puzzleCount} Stationen
         </span>
         {selected && <span className="mission-sub">{mission.subtitle}</span>}
@@ -296,7 +296,7 @@ export function Prototypes({
                 onClick={() => onSelect(m.id)}
               >
                 <span className="mission-proto-title">{m.title}</span> ·{' '}
-                {crewSizeText(m.players)} · {clockSizeText(m.timeLimitSec)} ·{' '}
+                {crewSizeText(m.players)} · <ClockFact timeLimitSec={m.timeLimitSec} />{' '}
                 {m.puzzleCount} Stationen
               </button>
             </li>
