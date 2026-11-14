@@ -541,7 +541,7 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   der Host die Mission wählt, Kaffeemaschine, Tür zu Trakt C geht auf, wenn alle bereit davor
   stehen; Bewegung, Anwesenheit, Näheklang wie im Spiel.
 
-### S-3 Hauptfigur im Menü — Status: im PR (S-hero) · Größe: M
+### S-3 Hauptfigur im Menü — Status: erledigt (S-hero, Merge 2026-11-14; drei Review-Runden; Cloud-CI grün auf da61eca; Figur ab ≈ 1100 px Breite, +0,64 ms je Frame mit Strahl, Mikro-Schimmer +0,27 ms; der gemessene Software-GL-Lauf folgt nach H-4 über den ganzen main) · Größe: M
 - Uros 2026-11-13 mit dem Titelbild von God of War III: „Eine coole Hauptfigur-Animation noch vor
   der Karte, die Karte kann bleiben." Nicht dasselbe, aber das Prinzip: die Figur groß und
   lebendig im Vordergrund rechts, die Welt dahinter, das Menü links.
