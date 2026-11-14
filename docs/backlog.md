@@ -574,6 +574,18 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   1,3 ms und mehr); bei 1024 px Breite gäbe der Platz neben dem breitesten Panel nur 2,6 Kacheln her
   (3,1 bei 640 px Höhe), dort steht nur der Chip; der Chip behält seine kleine Figur.
 
+### S-4 Konto in die Leiste, Hero mit Geschichte, Tür vor jedem Menüwechsel — Status: in Arbeit (S-hero2, Spec `spec-S-hero2.md`) · Größe: M
+- Uros 2026-11-14 09:45 mit Screenshot des Menüs: Der Konto-Chip sitzt „auf dem Premium-Platz"
+  über der Bühne und gehört in die obere Leiste (Avatar, den der Nutzer setzt, oder nichts); der
+  Hero soll „cooler" werden wie das God-of-War-Titelbild (kein Gesicht, etwas Eigenes), sich bei
+  Klick auf einen Menüpunkt bewegen; die Tür-Animation vor Menüwechseln zurück; das Design besser.
+- Plan: Konto-Element in der Leiste (Kopf der eigenen Figur als Avatar, Name, Klick öffnet den
+  Konto-Reiter; hochgeladene Bilder nicht in diesem Paket); Bühne hinter dem Hero dunkler, der
+  Kegel als Hauptlicht mit Staub und Kantenlicht, Dreiviertel-Pose, Atmen, Umschauen, Lampenflackern;
+  Klick: halber Schritt, Lampe flackert auf, dann die Tür (voll zu Lobby/Editor/Lauf, kurze Blende
+  vor Panels); reduzierte Bewegung: Schnitte; Design-Durchgang (Titel, Menüpunkte, Panelrahmen,
+  Abstände, Handy); Budget ≤ 1 ms je Frame bleibt, Stills zuerst zur Auswahl.
+
 ### U-1 Pausenmenü, Verlassen wie Dota 2, Einstellungen und Chrome — Status: erledigt (U-pause, Merge 2026-11-14; drei Review-Runden mit Playwright-Repros; Cloud-CI grün auf fe6222c; Rest: nach „Zum Hauptmenü" bleibt ein toter Zurück-Schritt je Tab) · Größe: L
 - Uros 2026-11-14: „Spielabbruch richtig: Der Spieler kann das Spiel nicht verlassen, wann er
   will, und ins Hauptmenü zurück. Wie Dota 2: joinen, nach Disconnect reconnecten, verlassen."
