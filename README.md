@@ -64,27 +64,30 @@ Seed importiert und bis zur Lösung spielt, jeden Token vom Gerät abgelesen.
 Keine Station lässt sich allein bedienen (siehe *Nie allein*), und auf *Normal* beendet der
 fünfte Alarm den Lauf — auf *Hart* der dritte, auf *Entspannt* gibt es keine Grenze.
 
-**Startseite:** Ein Hauptmenü wie in einem Spiel, über dem beleuchteten Labor der gewählten
-Mission, das langsam vorbeizieht: *Einsatz starten* (die Missionskarten, „Runde eröffnen"),
-*Beitreten*, *Offene Runden*, *Handbuch*, *Bestenliste*, *Meine Einsätze*, *Editor* und
-*Einstellungen* — mit der Maus, der Tastatur (Pfeile, Enter, Esc) oder dem Controller
-(Steuerkreuz, A, B). Oben in der Leiste steht das Konto des Browsers: der Kopf der eigenen Figur
-in ihrer Farbe, der Name und, wo Platz ist, wie viele Einsätze das Konto gespielt hat; ein Klick
-öffnet „Konto" in den Einstellungen, am Handy steht nur der Kopf. Den Namen tragen die Panels ein,
-die einen Platz nehmen (*Einsatz starten*, *Beitreten*, *Offene Runden*), und „Konto" — ein Name
-für die ganze Seite. Das Konto bewahrt Name, Farbe, Erfolge und Läufe über Neustarts und Deploys
-hinweg; *Meine Einsätze* listet seine Läufe, die Einstellungen löschen es auf Wunsch
+**Startseite:** Ein Hauptmenü wie in einem Spiel, über dem nächtlichen Labor der gewählten Mission,
+das langsam vorbeizieht; rechts steht die eigene Figur mit der Handlampe, deren Kegel das Labor
+erhellt. Jeder Menüpunkt hat in Blackouts Labor einen eigenen Raum, zu dem die Kamera beim
+Darüberfahren langsam schwenkt (`docs/art-bible.md`, „The menu's places"): *Einsatz starten* (die
+Missionskarten, „Runde eröffnen"), *Beitreten*, *Offene Runden*, *Handbuch*, *Bestenliste*, *Meine
+Einsätze*, *Editor* und *Einstellungen* — mit der Maus, der Tastatur (Pfeile, Enter, Esc) oder dem
+Controller (Steuerkreuz, A, B). Oben in der Leiste steht das Konto des Browsers: der Kopf der
+eigenen Figur in ihrer Farbe, der Name und, wo Platz ist, wie viele Einsätze das Konto gespielt hat;
+ein Klick öffnet „Konto" in den Einstellungen, am Handy steht nur der Kopf. Den Namen tragen die
+Panels ein, die einen Platz nehmen (*Einsatz starten*, *Beitreten*, *Offene Runden*), und „Konto" —
+ein Name für die ganze Seite. Das Konto bewahrt Name, Farbe, Erfolge und Läufe über Neustarts und
+Deploys hinweg; *Meine Einsätze* listet seine Läufe, die Einstellungen löschen es auf Wunsch
 ([`docs/accounts.md`](docs/accounts.md)).
-*Offene Runden* listet jede Runde mit Kartenvorschau, Mission, Schwierigkeit, ihrer Crew als
-Figuren und den freien Plätzen — ein Klick auf *Beitreten* genügt, niemand muss einen Code
-weitergeben. Laufende Runden erscheinen ebenfalls, dort führt der Knopf zum Zuschauen. Unter
-*Beitreten* bleibt ein Code-Feld für direkte Verabredungen, daneben *Zuschauen*. Bindet ein
-laufender Einsatz den Dienstausweis, steht seine Karte als erster Menüpunkt da. In die Lobby
-und zurück geht es durch die Schiebetüren des Labors; ab dem ersten Klick oder Tastendruck
-spielen Titelthema und Anlagenbrummen, in der Lobby leiser weiter. Die Endkarte spielt nach
-ihrem Stinger ein eigenes Thema: hell für einen gewonnenen, ein tiefes Dröhnen für einen
-verlorenen Einsatz. Alle Musik und alle Geräusche sind mit ElevenLabs erzeugt, keine
-Archivmusik (`docs/sound.md`, Abschnitt „Lizenz“).
+*Offene Runden* listet jede Runde mit Kartenvorschau, Mission, Schwierigkeit, ihrer Crew als Figuren
+und den freien Plätzen — ein Klick auf *Beitreten* genügt, niemand muss einen Code weitergeben.
+Laufende Runden erscheinen ebenfalls, dort führt der Knopf zum Zuschauen. Unter *Beitreten* bleibt
+ein Code-Feld für direkte Verabredungen, daneben *Zuschauen*. Bindet ein laufender Einsatz den
+Dienstausweis, steht seine Karte als erster Menüpunkt da. In die Lobby, in den Editor und zurück
+geht es durch die Schiebetüren des Labors, zu *Handbuch*, *Bestenliste*, *Meine Einsätze* und den
+Einstellungen und zurück durch eine kurze Blende; ab dem ersten Klick oder Tastendruck spielen
+Titelthema und Anlagenbrummen, in der Lobby leiser weiter. Die Endkarte spielt nach ihrem Stinger
+ein eigenes Thema: hell für einen gewonnenen, ein tiefes Dröhnen für einen verlorenen Einsatz. Alle
+Musik und alle Geräusche sind mit ElevenLabs erzeugt, keine Archivmusik (`docs/sound.md`, Abschnitt
+„Lizenz“).
 
 **Ablauf einer Partie:** Lobby (Farbe wählen, **bereitmelden** — der Host kann erst starten,
 wenn so viele da sind, wie die Mission braucht, und alle bestätigt haben; jede Änderung an

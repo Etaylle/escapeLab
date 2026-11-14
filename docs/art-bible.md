@@ -496,10 +496,14 @@ notepad-captured.png and notepad-captured-phone.png show the legend and the Labo
 ## The menu (screens/Join.tsx, MainMenu.tsx, MenuPanels.tsx, world/menu/, styles/menu.css)
 
 The start screen is the game's main menu over a living scene from the world, as Half-Life 2's and
-Firewatch's are. Behind it the lab of the mission picked — lit, the power on, as the opening shows
-it before the blackout — drifts along the opening's shot, from where the shot starts to the crew's
-spawn and back in 30 s, slowing at both ends, the drones parked on their first waypoints and nobody
-in it; a mission picked anew comes in over the lab before in 600 ms. A vignette lies over it —
+Firewatch's are. Behind it the lab of the mission picked drifts along the opening's shot, from
+where the shot starts to the crew's spawn and back in 30 s, slowing at both ends, the drones parked
+on their first waypoints and nobody in it; a mission picked anew comes in over the lab before in
+600 ms. While the hero stands on the stage the lab stands at night — the opening's lit lab, the
+power on, sunk to 38 % of its light — and the hero's hand lamp is its main light (The hero);
+behind the lobby, and where the stage leaves the hero no room, it stands lit, as the opening shows
+it before the blackout. Each item of the menu has a room of the lab, which the scene's camera goes
+to as the item is hovered or given the focus (The menu's places). A vignette lies over it —
 darkest behind the menu, the edges sinking into the dark — and the page's scanlines over all;
 nothing blurs what lies behind it. Under reduced motion the scene stands still at the shot's start.
 
@@ -534,14 +538,20 @@ and a half tiles — from about 1100 px across — the player's figure stands la
 right, the hero (The hero).
 
 A panel slides in over the menu from its side in 200 ms, fading up, the menu dimmed under it; under
-reduced motion it only fades. Into the lobby and back out, the lab's sliding doors close over the
-screen in 170 ms, speeding up as a heavy door does, and open on the next in 210 ms, slowing to a
-stop: two steel leaves lit from the top, the ink edge where they meet, the amber light strip and the
-two chevrons of the world's doors at the seam (world/art.ts `drawDoor`, screens/DoorWipe.tsx).
-Leaving a lobby loads the page anew; the doors stay shut over it until the page loaded opens them,
-on the mission picked before — its card marked, its lab behind the menu — which the tab keeps.
-Under reduced motion the screens cut. The lobby keeps its layout and stands over the same scene,
-drifting on, evenly dimmed.
+reduced motion it only fades. Nothing waits on the way to a panel: it opens on the press. Into the
+lobby and back out, to a run the menu goes back to, and to the editor and back, the lab's sliding
+doors close over the screen in 170 ms, speeding up as a heavy door does, and open on the next in
+210 ms, slowing to a stop: two steel leaves lit from the top, the ink edge where they meet, the
+amber light strip and the two chevrons of the world's doors at the seam (world/art.ts `drawDoor`,
+screens/DoorWipe.tsx). Every other page of the menu's — the booklet, the Bestenliste, „Meine
+Einsätze", the settings, by their items, the gear, a controller's Start or the bar's account — comes
+and goes behind a short shutter of the same leaves: closing in 80 ms, opening in 100. Taken from the
+menu, a page's or the editor's leaves wait for the hero's beat first, 100 ms (The hero), so that a
+page stands 180 ms after the press; on the way back they close at once. In a room the settings open
+over it at once. Leaving a lobby loads the page anew; the doors stay shut over it until the page
+loaded opens them, on the mission picked before — its card marked, its lab behind the menu — which
+the tab keeps. Under reduced motion the screens cut, with no beat before them. The lobby keeps its
+layout and stands over the same scene, drifting on, evenly dimmed.
 
 Upright on a phone, 560 px across or less, the menu takes one column under the title. Held
 sideways, 500 px tall or less, the items fill the left column whole, 44 px each, the title stands
@@ -554,13 +564,14 @@ menu-phone-932.png).
 **What it costs.** The scene never runs the world's passes for a frame. Once for each size of its
 canvas it bakes the lit lab through the game's own passes — the tiles, the objects, the figures'
 pass with nobody in it, the glows, the light, on the Canvas path without a WebGL context — into one
-canvas the size of the shot's box at the shot's zoom; each frame then copies that canvas whole, at
-whole pixels, as far along as the drift has come: the copy without a source rectangle (Cost). It
-draws 30 frames a second at most, none while the tab or the canvas is hidden, and under reduced
-motion none after its still; a window resized bakes anew once it has held its size for 150 ms. On
-the Cost section's bench — this M4, the page's main thread slowed four times, the software Canvas
-path of `SHOTS_SOFTWARE_GL`, 1440 × 820 CSS pixels at density 1, Blackout's lab, the scene's way
-against every pass run each frame six rounds each, every round starting at the other — medians, ms:
+canvas the size of the box the drift and the places show at the shot's zoom (The menu's places);
+each frame then copies that canvas whole, at whole pixels, from where the camera stands: the copy
+without a source rectangle (Cost). It draws 30 frames a second at most, none while the tab or the
+canvas is hidden, and under reduced motion none after its still; a window resized bakes anew once it
+has held its size for 150 ms. On the Cost section's bench — this M4, the page's main thread slowed
+four times, the software Canvas path of `SHOTS_SOFTWARE_GL`, 1440 × 820 CSS pixels at density 1,
+Blackout's lab, the scene's way against every pass run each frame six rounds each, every round
+starting at the other — medians, ms:
 
 | Way | Work a frame, mean | p95 | Frames p95 |
 | --- | --- | --- | --- |
@@ -568,11 +579,72 @@ against every pass run each frame six rounds each, every round starting at the o
 | Every pass run each frame | 17.42 | 20.60 | 16.8 |
 
 The bake itself took 259 ms there, slowed four times, once for the size, and 44 to 73 ms in the
-walkthrough's browser at its own speed. Every pass run each frame drew at the screen's pace in four
-rounds of six and fell to 33.3 ms p95 in the other two. The walkthrough's quiet window on the menu,
-the scene drifting, held the screen's pace in Blackout and Systemcheck, with `SHOTS_SOFTWARE_GL` and
-without: 16.7 ms p50 and 16.7 to 16.8 p95, the light working out no sight a frame there
-(`lightWork`).
+walkthrough's browser at its own speed; holding the places as well (2441 × 1542 px for 1440 × 820),
+it takes 345 to 446 ms slowed four times, and the night sinks it in one pass after (The hero, its
+cost). Every pass run each frame drew at the screen's pace in four rounds of six and fell to 33.3 ms
+p95 in the other two. The walkthrough's quiet window on the menu, the scene drifting, held the
+screen's pace in Blackout and Systemcheck, with `SHOTS_SOFTWARE_GL` and without: 16.7 ms p50 and
+16.7 to 16.8 p95, the light working out no sight a frame there (`lightWork`).
+
+## The menu's places (world/menu/places.ts, camera.ts)
+
+Every item of the menu has its place: a room of the lab, framed so that its middle stands where the
+stage is free — half across the window and 55 % down, right of the menu's column and left of the
+hero. Hovered, or given the focus by the player — not the focus the menu comes up with —, an item
+sends the scene's camera there; while the item's panel lies open the camera holds its room,
+wherever the pointer goes; with nothing hovered or in the focus the scene drifts along the
+opening's shot, as it always did. The hero's lamp lights the room: its beam turns to the room's
+middle and holds there (The hero). In Blackout's lab, by its tiles (missions/blackout.json, a tile's
+middle at .5):
+
+| Item | Room | Tile x, y |
+| --- | --- | --- |
+| Einsatz starten | the Reaktor's core | 30.5, 16 |
+| Beitreten | the Flur at the Serverschott, the lab's gate | 19.5, 10 |
+| Offene Runden | the Ost-Flur's console hall, the lab's Leitstand | 28.5, 7 |
+| Handbuch | the Archiv's shelves and its book | 5.5, 3.5 |
+| Bestenliste | the Süd-Flur's notice board | 22.5, 17 |
+| Meine Einsätze | the Serverraum's lockers | 16.5, 4.5 |
+| Editor | the Labor's benches, its workshop | 14.5, 18.5 |
+| Einstellungen | the Maschinenraum's panel | 3, 16 |
+
+A room by the lab's edge — the Archiv, the Maschinenraum — shows the dark beyond it, which falls
+under the menu's column. The other missions' labs have no places yet: there the scene drifts for
+every item.
+
+**The camera.** It pans from where it stands to a place in 1.2 s for a short way, 1.1 ms more for
+each CSS px of the way, 2 s at most, easing out of where it stood and into the place, its frames at
+whole pixels. An item attended on the way turns it from wherever it has come to; going back to the
+drift it follows the drift's frame, which moves on meanwhile. Under reduced motion it cuts. Behind
+the lobby it shows the drift, and it cuts there and back, as the doors stand shut over the change.
+
+**What it costs.** A frame copies the bake from where the camera stands as it copies it from where
+the drift stands: one copy, at whole pixels; a pan costs no more than the drift (The hero, its cost
+table). The bake holds every place's frame as well as the drift's box, but only as far as the lab
+and a tile of the dark round it reach (drift.ts `labBound`, `DARK_ROUND`): where a frame looks
+further into the dark — the Archiv's, the Maschinenraum's — the frame fills what lies past the
+bake with the dark itself, read off the bake's corner once as it is baked, sunk with the lab at
+night (scene.ts `pastBake`, `paintBake`). So the dark round the lab is never baked, and the box
+grows by the lab's own rooms alone:
+
+| Window, density | The drift's box | With the places |
+| --- | --- | --- |
+| 1280 × 720, 1 | 2029 × 896, 1.8 MP | 2143 × 1354, 2.9 MP |
+| 1440 × 820, 1 | 2311 × 1020, 2.4 MP | 2441 × 1542, 3.8 MP |
+| 1920 × 1080, 1 | 3043 × 1344, 4.1 MP | 3213 × 2030, 6.5 MP |
+| 1440 × 820, 2 | 4621 × 2040, 9.4 MP | 4879 × 3082, 15.0 MP |
+
+Baking the dark as well would have asked 5.7 MP at 1440 × 820 and 22.9 at twice the density. A
+box that would not bake at the screen's density — larger than 4096 × 4096 px in area or 8192 px a
+side, as baked.ts allows every browser — bakes a quarter less dense at a time, down to 1 at the
+least, where it fell to 1 at once before. On a screen of density 2:
+
+| Window | The scene's density | main's, the drift alone |
+| --- | --- | --- |
+| 1280 × 720, 1440 × 820 | 2 | 2 |
+| 1470 × 956, 1512 × 982 | 1.75 | 2 |
+| 1728 × 1117 | 1.5 | 1 |
+| 1920 × 1080 | 1.5 | 2 |
 
 ## The hero (world/menu/hero.ts, heroArt.ts, heroStage.ts, lamp.ts, lampArt.ts, MenuHero.tsx)
 
@@ -587,6 +659,18 @@ away from the key light, which a figure's own blob is too small to give at this 
 bar's avatar, its head, is the player's badge — the name, the colour, the account — and stands
 for the hero where the hero is left out; the hero is the player in the scene, and waves at a new
 name.
+
+**Composition.** The menu's scene is a night shot: the lab sunk to 38 % of its light (The menu)
+and the hand lamp's beam its main light, as a key light is in a dark set. The hero stands at three
+quarters toward the menu and holds the lamp toward it, so that the beam crosses the stage's free
+middle, where the places' rooms show (The menu's places), and ends short of the menu's column; the
+title and the menu stand on the dark left, nothing lit under the text. The hero wears its colour
+sunk 35 % for the night, and an edge of the lamp's warm light runs down its front, toward the
+menu — 0.85 strong at its strongest, only while the lamp burns, as strong as it burns
+(heroArt.ts `FRONT_RIM`); its back keeps no edge light. Of the three looks the owner was shown —
+the lamp held at rest in the dark, a cold light along its back against the lamp, the lamp held
+out further — the first stands until the owner chooses (heroArt.ts `BACK_RIM`, hero.ts
+`LAMP_RAISE`).
 
 **Size.** The hero stands 42 % of the stage's height tall, held to 4 to 6 scene tiles — 0.9 of a
 run's tile in a window as tall (viewport.ts `tileCss`), as the drift frames a lab that fills the
@@ -637,29 +721,43 @@ and 1100 × 700, with a panel open and shut, and finds it left out at 1024 × 76
 `checkHero`).
 
 **Poses.** Standing, it breathes, its body riding a pixel over its legs; its glances are a figure's
-(Figure animation), every 4 to 7 s, turned less than half as far and in steps of 0.1 rad, its look
-kept on the menu's side; a light crosses its visor while the microphone sends, open or held; it
-waves once a new name has settled. It holds the lamp before its chest in both hands, the front arm
-raised from it for the wave. An item of the menu hovered or given the focus — the one under the
-pointer before the one in the focus — turns its head to it, 0.6 of the way from its head to the
-item, in the walk cycle's three turn steps of 150 ms; a run's card first in the menu holds its look
-while nothing else does. While a panel lies open over the menu it steps half a scene tile toward
-the stage's edge over the panel's 200 ms, easing, its legs in their cycle, and back as the panel
-goes. As the menu goes for the lobby — „Runde eröffnen", a code, a round joined — it turns away
-toward the lab in the same steps while the doors close over it. Under reduced motion it stands in
-one still pose: no breath, glance, light or wave, no head turned and no back turned; it steps aside
-at once.
+(Figure animation) at a slower rhythm of its own, one every 6 to 10 s (hero.ts `HERO_GLANCES`),
+turned less than half as far and in steps of 0.1 rad, its look kept on the menu's side; a light
+crosses its visor while the microphone sends, open or held; it waves once a new name has settled.
+Once a minute, never in its first half minute, its lamp flickers: the light dips and catches again
+over seven steps of 70 ms (hero.ts `FLICKER`), the beam with it. It holds the lamp before its chest
+in both hands, the front arm raised from it for the wave. An item of the menu hovered or given the
+focus — the one under the pointer before the one in the focus — turns its head to it, 0.6 of the
+way from its head to the item, in the walk cycle's three turn steps of 150 ms, and its visor
+catches the item's glow, a warm light across its glass (heroArt.ts `VISOR_GLOW`); a run's card
+first in the menu holds its look while nothing else does. While a panel lies open over the menu it
+steps half a scene tile toward the stage's edge over the panel's 200 ms, easing, its legs in their
+cycle, and back as the panel goes.
 
-**The beam.** The lamp throws its beam onto the lab behind the menu, laid on the scene's canvas
-over the drift's copy: a soft cone 0.4 rad across, its light falling off along it to 1.1 times the
-hero's height and ending short of the menu's column, so that it never lies over the text; a warm
-core along its middle in the lamp's tungsten, as the world's lamp beam has it (The lamp's beam);
-and the dust of particles.ts drifting through it, drawn only where it lies in the cone. It sweeps
-from the floor before the hero up across the lab and back, one pass in 12 s, slowing at both ends;
-where it comes to the line toward the item hovered or in the focus it holds there for a beat, 1 s,
-its sweep's clock standing still meanwhile. The lamp in the hero's hands tilts with it in steps of
-3°, its lens alight with a small glint at its rim. Under reduced motion the beam stands still,
-pointing a little up into the lab, without dust.
+**Its beat.** An item taken — clicked, Enter, a controller's A — flares the lamp: up in 60 ms, gone
+by 320 ms, a second light laid over the beam and the glint at its lens grown with it. An item that
+leaves the menu, for a page of its own or the editor, also takes the hero half a scene tile toward
+the menu over the step's 200 ms — no further than the menu's column lets it — and back after
+1.2 s, by when the page stands; the leaves close over it after their beat of 100 ms (The menu). As
+the menu goes for the lobby — „Runde eröffnen", a code, a round joined — it turns away toward the
+lab in the turn's steps while the doors close over it. Under reduced motion it stands in one still
+pose: no breath, glance, light, flicker or wave, no head turned, no glow on its visor, no flare, no
+step toward the menu and no back turned; it steps aside at once.
+
+**The beam.** The lamp throws its beam onto the lab behind the menu, a haze of its light laid over
+the lab at night on the scene's canvas, over the camera's copy: a soft cone 0.44 rad across, its
+light falling off along it to 1.2 times the hero's height and ending short of the menu's column, so
+that it never lies over the text; a warm core along its middle in the lamp's tungsten, 0.6 strong at
+its strongest, as the world's lamp beam has it (The lamp's beam); and the dust of particles.ts
+drifting through it, each mote a soft speck of the lamp's light, drawn only where it lies in the
+cone. It sweeps from the floor before the hero up across the lab and back, one pass in 12 s, slowing
+at both ends. An item picked out — hovered, or given the focus by the player — turns it to the
+middle of the item's room, 0.9 rad a second at most, and holds it there while the room is held (The
+menu's places); let go, it sweeps on from where it stands, the way it went. Where it comes to the
+line toward what the hero looks at without anything picked out — the focus the menu comes up with, a
+run's card — it holds a beat there, 1 s, its sweep's clock standing still meanwhile. The lamp in the
+hero's hands tilts with it in steps of 3°, its lens alight with a small glint at its rim. Under
+reduced motion the beam stands still, pointing a little up into the lab, without dust.
 
 **The entrance.** On the first menu of a page the hero walks in from beyond the stage's right edge
 over 1.2 s, slowing to a stop, its legs in the walk cycle as far as the ground it covers, and turns
@@ -668,7 +766,9 @@ quietly, as one of the menu's sounds — and the lamp comes on over the cold ope
 with it. A browser lets a page sound only after its first gesture: on a page just opened the lamp
 comes on without its click. Back from the lobby, on every later menu of the page and under reduced
 motion it stands there from the start, its lamp on. The walkthrough holds the entrance where it
-wants it for its still (`window.__heroHold`, read only under `?trace=1`).
+wants it for its still (`window.__heroHold`, read only under `?trace=1`), and the hero's clock
+110 ms after an item taken, half way through its step, its lamp flared (`window.__heroBeat`,
+menu-hero-click.png).
 
 **What it costs.** Filling the cone with its gradients every frame cost 1.3 ms a frame on the bench
 below with the radial falloff alone, 2.7 ms on a busier machine, and several times that with the
@@ -686,50 +786,52 @@ whole each frame, for 1.2 s once a page. Its loop draws 30 frames a second at mo
 tab or its canvas is hidden, and under reduced motion none after its still until something it shows
 changes. Left out as the stage is measured, and gone with the menu, the hero lets go of its lamp and
 its canvases at once, and the scene lets its beam's go, its lab drifting on through the lobby
-without them. On the menu's bench — this M4, the page's main thread slowed four times, the software
-Canvas path of `SHOTS_SOFTWARE_GL`, 1440 × 820 CSS pixels at density 1, Blackout's lab drifting, the
-scene's frame alone, with the beam, with the hero and with both, six rounds each, every round
-starting at another — medians, ms:
+without them.
 
-| Frame | Work a frame, mean | Over the scene | p95 | Frames p95 |
+The night costs a frame nothing: the bake is sunk once, in place, as the hero comes — a black laid
+over its own pixels alone — and lit again by adding it onto itself as the lobby comes (scene.ts
+`nightTo`), each a single pass over the bake. The beam is laid over the lab as a haze rather than
+added onto it as light: over a lab at night the two look alike, and adding cost the beam a quarter
+more on the bench below. Its cone is held to 0.44 rad and 1.2 times the hero's height by its cost,
+which grows with its pixels: at 0.56 rad and 1.45 times, added, the beam alone cost 1.2 ms a frame
+there. The flare lays it a second time while it lasts, 320 ms; the dust's motes are a soft sprite
+drawn at each mote's size, about 17 of them a frame. The edge light down the hero's front and the
+visor's glow are drawn into its upper layer, which is drawn anew only as the lamp's light steps
+by a twentieth, as the glow comes or goes, or as a glance turns it. A frame that looks past the
+bake into the dark round the lab fills that part with the dark (The menu's places).
+
+S-hero's bench put the beam and the hero together at +0.64 ms a frame over the scene, the scene
+alone at 1.13; the sending microphone, its light laid over the hero's layers alone (e6d09ed), at
++0.27 over the silent one, where drawing the upper layer anew for it had cost +1.88. On the menu's
+bench — this M4, the page's main thread slowed four times, the software Canvas path of
+`SHOTS_SOFTWARE_GL`, 1440 × 820 CSS pixels at density 1, Blackout's lab — main at its merge base
+and this menu ran side by side, six rounds of 6 s each, every round starting at another run, the
+machine's 1-minute load at 1.7 to 3.5 (S-hero2, 14.11.2026). Each frame times every paint the
+menu's loops make: the hero's canvas, the scene's copy, the beam over it, each canvas flushed.
+Medians of the six rounds, ms; „over the scene" is each round's frame against its own scene alone:
+
+| Frame | Work a frame, mean | Over the scene | p95 | Upper layer drawn in 6 s |
 | --- | --- | --- | --- | --- |
-| The scene alone, as main draws it | 1.13 | | 1.60 | 16.8 |
-| With the beam | 1.47 | +0.34 | 2.90 | 16.7 |
-| With the hero | 1.43 | +0.30 | 3.40 | 16.8 |
-| Both, as the menu draws | 1.77 | +0.64 | 4.30 | 16.7 |
+| main: the scene alone, lit | 1.00 | | 1.50 | |
+| main: beam and hero, microphone off | 1.82 | +0.82 | 4.35 | 19 |
+| main: beam and hero, microphone on | 2.05 | +1.05 | 4.35 | 19 |
+| The scene alone, at night | 1.04 | | 1.60 | |
+| Beam and hero, drifting, microphone off | 1.79 | +0.74 | 5.50 | 10 |
+| Beam and hero, drifting, microphone on | 2.13 | +1.08 | 5.15 | 10 |
+| A place held, its item attended | 1.50 | +0.48 | 2.65 | 0 |
+| Travelling between the Archiv and the Maschinenraum | 1.75 | +0.71 | 3.65 | 6 |
+| Travelling between the Flur and the Süd-Flur | 1.62 | +0.58 | 3.50 | 6 |
 
-Round by round the beam took +0.19 to +0.56 ms, the hero +0.11 to +0.72 and both +0.43 to +0.92.
-The hero's p95 is a layer drawn anew — about 20 times in the 6 s, at each of the lamp's steps and
-each glance's, some 2 ms of work each there — and its frames held the screen's pace. The
-walkthrough's quiet window on the menu, the hero standing and its beam sweeping over the drifting
-lab, held the screen's pace in Blackout and Systemcheck, with `SHOTS_SOFTWARE_GL` and without:
-16.7 ms p50 and 16.7 to 16.8 p95, within the menu's own gate (`MENU_P95_MS`).
-
-With the microphone sending, the same bench measured the scene, the beam and the hero together,
-the microphone off and on, each round also running the hero as it was before its visor's light
-was laid apart (e6d09ed), when that light drew the whole upper layer anew on each of the hero's
-frames; the machine's 1-minute load from other work stood at 4 to 17 meanwhile. Medians, ms:
-
-| Frame: the scene, the beam, the hero | Work a frame, mean | p95 | Upper layer drawn in 6 s |
-| --- | --- | --- | --- |
-| The scene alone | 1.07 | 1.50 | |
-| Microphone off | 1.97 | 4.50 | 19 |
-| Microphone on | 2.24 | 4.60 | 19 |
-| Microphone off, before | 1.90 | 4.30 | 18 |
-| Microphone on, before | 3.78 | 5.60 | 180 |
-
-The sending microphone costs +0.27 ms a frame over the silent one, round by round +0.10 to +0.46
-and +0.86 in the last round as the load rose, where it cost +1.88 (+1.59 to +2.15). A rerun in the
-heavy runs' exclusive window (`heavy.sh --exclusive`), the other heavy runs drained but the load
-still 4.9 to 17.2 from lighter work, scattered more and said the same: round by round a median of
-+0.24 ms with the light laid apart, +2.32 before. What is left
-is the light's band, laid on each of the hero's frames, and the canvas laid anew with it: the body
-rides up and down with the words, so the canvas is laid on each frame while the microphone sends,
-180 times in the 6 s instead of 64. Beam and hero together came to 0.90 ms over the scene with
-the microphone off and 1.17 with it on at that load; the quieter bench above put them at 0.64
-silent. Laid apart, the light looks as it did: on the Canvas path the hero's canvas matched the one
-drawn before in 46 speaking frames at density 1 and at 2, but for one pixel one level off in two
-of them at 1 and in one at 2.
+Round by round the menu's frame cost +0.01 ms over main's with the microphone off (−0.12 to
++0.38) and +0.16 with it on (−0.10 to +0.37); the sending microphone costs +0.36 here, +0.24 on
+main. A pan costs a frame less than the drift — round by round −0.16 ms between the two rooms at
+the lab's edge, whose frames fill the dark past the bake, cheaper in five rounds of six, and −0.17
+between the two within the lab, cheaper in all six: the hero's head stands turned and its beam held
+on the room, so the hero's layer and the beam's turn are drawn anew less often. The hero's p95 is
+its upper layer drawn anew, fewer times than on main, each dearer for the edge light down its
+front; the frames held the screen's pace, 16.7 to 16.8 ms p95, in every run. Before the beam was
+held to its size and laid as a haze, the same bench put it with the hero at +1.59 ms over the
+scene, +0.57 over main's: the cone at 0.56 rad and 1.45 times the hero's height, added onto the lab.
 
 ## Chrome (ui.css, styles/lobby.css, finale.css, pause.css, settings.css)
 
@@ -1136,3 +1238,10 @@ What the graphics and gameplay packages left for later, one line each:
 - Done in L-polish: a station's device fades out as it came (Interface); the controller pings
   with ◀ and opens the quick chat with ▶; the Bestenliste's mission tabs keep to one row that
   scrolls, so that the screen fits 1280 × 720 and a phone.
+- **The menu's hero, left for later** (S-hero2): the look stands at the lamp held at rest, no
+  back light, until the owner picks among the three stills (The hero, „Composition"); the
+  avatar takes a picture's source, but no picture can be uploaded yet; only Blackout's lab has
+  places, the other labs drift for every item (The menu's places); on a screen of density 2 the
+  scene bakes at 1.75 at 1470 × 956 and 1512 × 982 and at 1.5 at 1920 × 1080, where main baked
+  the drift alone at 2 — a bake in tiles would keep 2 there; and the hero's upper layer, drawn
+  anew with its edge light, puts its p95 at 5.5 ms where main's was 4.4 (The hero, its cost).
