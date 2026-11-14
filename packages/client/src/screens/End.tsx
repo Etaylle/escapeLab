@@ -70,7 +70,7 @@ export interface CardMate {
 export interface TitleCardProps {
   ending: Ending;
   missionTitle: string;
-  /** how long the run took, ms; null where it has no start or no end */
+  /** how long the run took, ms, as its screens counted it (`usedMsOf`); null without an end */
   usedMs: number | null;
   grade: Grade | null;
   crew: CardMate[];
@@ -157,17 +157,26 @@ export function alarmsCause({ count, limit }: PlayerView['alarms']): string | nu
 }
 
 /**
+ * What a won card's scene says of the crew, aloud and under it: out by the hatch — or, where the
+ * mission has none, every station done.
+ */
+const WON_SCENE = {
+  hatch: { says: 'Draußen vor dem offenen Notausgang', caption: 'Alle draußen' },
+  none: { says: 'Jede Station abgenommen', caption: 'Jede Station abgenommen' },
+} as const;
+
+/**
  * The crew on the card, side by side in their colours: won, outside on a
  * strip of pavement before the lab's open door, the light spilling out of
  * it, jumping for joy — its caption saying all are out, or where the mission
- * has no hatch, that every station is done; lost, inside in the dark, the door
- * shut, a red lamp over them — their figures slumped in its shadow (finale.css).
+ * has no hatch, that every station is done (`WON_SCENE`); lost, inside in the dark,
+ * the door shut, a red lamp over them — their figures slumped in its shadow (finale.css).
  */
 function EndScene(props: { won: boolean; crew: CardMate[]; youId: string | null; hatch: boolean }) {
   const { won, crew, youId } = props;
   const names = crew.map((mate) => mate.name).join(', ');
-  const says = won ? `Draußen vor dem offenen Notausgang: ${names}` : `Im dunklen Labor: ${names}`;
-  const caption = props.hatch ? 'Alle draußen' : 'Jede Station abgenommen';
+  const scene = props.hatch ? WON_SCENE.hatch : WON_SCENE.none;
+  const says = won ? `${scene.says}: ${names}` : `Im dunklen Labor: ${names}`;
   return (
     <div className={`end-scene end-scene--${won ? 'out' : 'in'}`} role="img" aria-label={says}>
       <div className="end-sky" />
@@ -195,7 +204,7 @@ function EndScene(props: { won: boolean; crew: CardMate[]; youId: string | null;
           </li>
         ))}
       </ul>
-      {won && <span className="end-scene-caption">{caption}</span>}
+      {won && <span className="end-scene-caption">{scene.caption}</span>}
     </div>
   );
 }
@@ -250,6 +259,7 @@ export type CardSource = Pick<
   | 'puzzleCount'
   | 'calledOff'
   | 'noHatch'
+  | 'clockFrom'
   | 'events'
 > & { players: CardMate[] };
 
@@ -258,22 +268,29 @@ export function lastWordOf(events: readonly RunEvent[]): string | null {
   return [...events].reverse().find(endsRun)?.label ?? null;
 }
 
+/**
+ * How long a run that is over took, ms, as its screens counted it: from the lights going out,
+ * what an intro took left out — and without a clock from `clockFrom`, its pauses left out as the
+ * HUD left them; null where it has no start or no end.
+ */
+function usedMsOf(view: CardSource): number | null {
+  const { startedAt, finishedAt, clockFrom } = view;
+  if (startedAt === null || finishedAt === null) {
+    return null;
+  }
+  return finishedAt - (clockFrom ?? clockStartOf({ startedAt, lightsOutAt: view.lights.outAt }));
+}
+
 /** The title card of a run that is over, seen by `youId` — null for the audience. */
 export function titleCardOf(
   view: CardSource,
   youId: string | null,
   fresh: boolean,
 ): TitleCardProps {
-  const { startedAt, finishedAt } = view;
-  // The run's time is its clock's: from the lights going out, what an intro took left out.
-  const lightsOutAt = view.lights.outAt;
   return {
     ending: endingOf(view) ?? 'lost:time',
     missionTitle: view.missionTitle,
-    usedMs:
-      startedAt === null || finishedAt === null
-        ? null
-        : finishedAt - clockStartOf({ startedAt, lightsOutAt }),
+    usedMs: usedMsOf(view),
     grade: view.grade,
     crew: view.players.map(({ id, name, color }) => ({ id, name, color })),
     hatch: view.noHatch !== true,
@@ -288,7 +305,7 @@ export function titleCardOf(
 
 /**
  * What a won run's clock came to: what it left — or, where the mission has no clock, the time
- * the run took (`usedMs`, from the lights going out).
+ * the run took (`usedMs`, as the HUD counted it, its pauses left out).
  */
 export function clockStat(view: PlayerView, usedMs: number | null): { ms: number; label: string } {
   if (view.timeLimitSec === 0) {

@@ -490,11 +490,20 @@ describe('the title card', () => {
   });
 });
 
-describe('the title card of a mission without a hatch', () => {
+describe('the title card of a mission without a hatch or a clock', () => {
   it('says every station is done, where nobody had a hatch to get out by', () => {
     const html = card(over({ noHatch: true }));
     expect(html).toContain('<span class="end-scene-caption">Jede Station abgenommen</span>');
+    expect(html).toContain('aria-label="Jede Station abgenommen: Anna, Ben"');
     expect(html).not.toContain('Alle draußen');
+    expect(html).not.toContain('Draußen vor dem offenen Notausgang');
+  });
+
+  it('counts a run without a clock as its HUD did, its pauses left out', () => {
+    // A minute's drop moved the clock's start on: 1:15 of play, not the 2:15 since the lights.
+    const clockless = { timeLimitSec: 0, deadlineAt: null, clockFrom: T0 + 60_000 };
+    const html = card(over({ ...clockless, finishedAt: T0 + 135_000 }));
+    expect(html).toContain('<span class="end-fact-value">1:15</span>');
   });
 });
 

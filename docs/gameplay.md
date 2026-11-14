@@ -187,9 +187,12 @@ lights went out, pauses left out (`clockFrom`), and never turns red; the run rep
 limit as 0 and the time from the lights to the end as ever; the levels keep it at 0. Neither an
 alarm nor a note of the last shift costs time (an alarm still counts), and mission control
 sends no nudges, as nobody is hurried. The mission cards and the lobby say „ohne Uhr", the end
-card „Zeit" instead of „Restzeit", and its top rank „keine Notiz gebraucht" instead of time to
-spare. Without a hatch (every view's `noHatch`) the third rank says every station is done, not
-that all are out, and so does the caption under the crew („Jede Station abgenommen"). The
+card „Zeit" instead of „Restzeit" — the time the HUD counted, its pauses left out, where the
+report, „Meine Einsätze" and the Bestenliste keep the time from the lights to the end, pauses
+and all, as for every run — and its top rank „keine Notiz gebraucht" instead of time to spare;
+the operator's last word is the one for time to spare. Without a hatch (every view's
+`noHatch`) the third rank says every station is done, not that all are out, and so do the
+caption under the crew and its words for a screen reader („Jede Station abgenommen"). The
 button's Einsatzuhr counts up as well, and its release reads the digits as shown, a second's
 latency allowed the other way round (core `puzzles/button.ts` `releaseInTime`). An alarm limit
 stays the mission's own (`maxAlarms`).
