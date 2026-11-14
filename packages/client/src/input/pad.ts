@@ -134,8 +134,11 @@ export interface PadState {
 /** A controller at rest: nothing held, the stick in the middle. */
 export const AT_REST: PadState = { family: 'xbox', held: new Set(), stick: { x: 0, y: 0 } };
 
-/** What a poll of `pad` says: the buttons pressed past PRESSED, the stick past the dead zone. */
-export function padStateOf(pad: GamepadLike): PadState {
+/**
+ * What a poll of `pad` says: the buttons pressed past PRESSED, the stick past `deadzone` — the
+ * settings' (Steuerung, „Stick-Totzone") as a share of the full lean, DEADZONE by default.
+ */
+export function padStateOf(pad: GamepadLike, deadzone = DEADZONE): PadState {
   const held = new Set<PadButton>();
   STANDARD_BUTTONS.forEach((button, i) => {
     const it = pad.buttons[i];
@@ -143,7 +146,8 @@ export function padStateOf(pad: GamepadLike): PadState {
       held.add(button);
     }
   });
-  return { family: padFamily(pad.id), held, stick: radial(pad.axes[0] ?? 0, pad.axes[1] ?? 0) };
+  const stick = radial(pad.axes[0] ?? 0, pad.axes[1] ?? 0, deadzone);
+  return { family: padFamily(pad.id), held, stick };
 }
 
 /** The buttons held in `now` that were not in `before`: pressed since the last poll. */

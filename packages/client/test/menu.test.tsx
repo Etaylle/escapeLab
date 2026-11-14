@@ -588,7 +588,7 @@ describe('a controller over the menu', () => {
     vi.stubGlobal('navigator', { getGamepads: () => [] });
     vi.stubGlobal('requestAnimationFrame', (run: (now: number) => void) => frames.push(run));
     vi.stubGlobal('cancelAnimationFrame', noop);
-    stop = startPad({ onSettings: noop }, '?fakepad=1');
+    stop = startPad({ onStart: noop }, '?fakepad=1');
   });
 
   afterEach(() => {

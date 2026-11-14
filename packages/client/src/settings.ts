@@ -8,49 +8,89 @@ import {
   type KeyBindings,
   type PadBindings,
 } from './input/bindings.js';
+import type { PadFamily } from './input/pad.js';
 import { setVolumes } from './world/audio.js';
 
 /**
  * The player's settings on this device, as the panel sets them (screens/Settings.tsx): how
- * loud the radio, the effects and the music play, the key for every action and the
- * controller's buttons for the four main ones (input/bindings.ts), how large the text stands,
- * and whether things move less. They are kept in the browser's storage and act where they
- * belong: on the audio's buses (world/audio.ts), on the keys the world, the screens and the
- * voice listen for and the prompts name (input/), and on the page's root — the text's scale
- * as `--text-scale`, which the HUD, the book, the devices and the notepad set their text by,
- * and the motion as `data-motion`, which every sheet's calmer rules hang on. „System" motion
- * follows the browser's own `prefers-reduced-motion`, live.
+ * loud the lab plays as a whole and each of the audio's buses — the music, the effects, the
+ * radio's voice, the rooms' beds — and which of the buses stand muted; the key for every action
+ * and the controller's buttons for the four main ones (input/bindings.ts), the stick's dead zone
+ * and the symbols the prompts give its buttons; how large the text stands, whether things move
+ * less and how the world's light is drawn; the crew's colours with a pattern each, and how large
+ * the spoken lines' words stand. They are kept in the browser's storage and act where they
+ * belong: on the audio's buses (world/audio.ts), on the keys the world, the screens and the voice
+ * listen for and the prompts name (input/), on the light (world/gl/path.ts), and on the page's
+ * root — the text's scale as `--text-scale`, which the HUD, the book, the devices and the
+ * notepad set their text by, the spoken lines' as `--subtitle-scale`, the motion as
+ * `data-motion`, which every sheet's calmer rules hang on, and the patterns as `data-patterns`.
+ * „System" motion follows the browser's own `prefers-reduced-motion`, live. The whole lab's mute
+ * is the top bar's sound switch (world/audio.ts `setMuted`), kept beside these.
  */
 
 export type TextSize = 'small' | 'normal' | 'large';
 /** Less motion: off, on, or as the browser asks („System"). */
 export type Motion = 'off' | 'on' | 'system';
+/** How the world's light is drawn: as the machine allows — WebGL where it can — or by Canvas. */
+export type LightWay = 'auto' | 'canvas';
+/** Which buttons the prompts name: the controller's own, as it reports itself, or one kind. */
+export type GlyphChoice = 'auto' | PadFamily;
+/** How large the spoken lines' words stand: the radio's banner, the opening's subtitles. */
+export type SubtitleSize = 'normal' | 'large' | 'larger';
 
-/** The three volumes, each a whole number from 0 to 100. */
+/** The five volumes, each a whole number from 0 to 100. */
 export interface Volumes {
-  /** mission control's voice and the radio's chirp */
-  radio: number;
-  /** every other sound of the lab and the devices: steps, doors, beds, alarms */
-  effects: number;
+  /** the whole lab at once, at the point the sound switch mutes (Gesamt) */
+  master: number;
   music: number;
+  /** every sound of the lab and the devices but the rooms' beds: steps, doors, alarms */
+  effects: number;
+  /** mission control's voice, the radio's chirp, the plant's loudspeakers (Funk) */
+  voice: number;
+  /** the rooms' beds: the hum, the air, the machines (Umgebung) */
+  ambience: number;
 }
+
+/** An audio bus a volume sets. */
+export type Bus = keyof Volumes;
+
+/** The buses the settings mute on their own: all but the whole lab, whose mute is the switch's. */
+export type Muted = Readonly<Record<Exclude<Bus, 'master'>, boolean>>;
 
 export interface Settings {
   volumes: Volumes;
+  muted: Muted;
   /** the key of every action, as KeyboardEvent names it, lower-cased (input/bindings.ts) */
   keys: KeyBindings;
   /** the controller's buttons for the four main actions (input/bindings.ts) */
   pad: PadBindings;
+  /** how far the stick may lean before it counts, in percent of its full lean (input/pad.ts) */
+  deadzone: number;
+  glyphs: GlyphChoice;
   textSize: TextSize;
   motion: Motion;
+  light: LightWay;
+  /** the crew's colours carry a pattern each in the chrome (styles/settings.css) */
+  patterns: boolean;
+  subtitles: SubtitleSize;
 }
 
+/** The stick's dead zone the settings allow, in percent: from a hair to a good part of it. */
+export const DEADZONE_MIN = 5;
+export const DEADZONE_MAX = 40;
+
 export const DEFAULT_SETTINGS: Settings = {
-  volumes: { radio: 100, effects: 100, music: 70 },
+  volumes: { master: 100, music: 70, effects: 100, voice: 100, ambience: 100 },
+  muted: { music: false, effects: false, voice: false, ambience: false },
   keys: DEFAULT_KEYS,
   pad: DEFAULT_PAD,
+  deadzone: 20,
+  glyphs: 'auto',
   textSize: 'normal',
   motion: 'system',
+  light: 'auto',
+  patterns: false,
+  subtitles: 'normal',
 };
 
 /** Where the settings are kept in the browser's storage. */
@@ -63,8 +103,18 @@ export const TEXT_SCALE: Readonly<Record<TextSize, number>> = {
   large: 1.15,
 };
 
+/** How large the spoken lines' words stand at each size, against their normal size. */
+export const SUBTITLE_SCALE: Readonly<Record<SubtitleSize, number>> = {
+  normal: 1,
+  large: 1.25,
+  larger: 1.5,
+};
+
 const TEXT_SIZES: readonly TextSize[] = ['small', 'normal', 'large'];
 const MOTIONS: readonly Motion[] = ['off', 'on', 'system'];
+const LIGHTS: readonly LightWay[] = ['auto', 'canvas'];
+const GLYPHS: readonly GlyphChoice[] = ['auto', 'xbox', 'playstation'];
+const SUBTITLES: readonly SubtitleSize[] = ['normal', 'large', 'larger'];
 
 /** The media query of a browser that asks for less motion. */
 export const REDUCED_MOTION = '(prefers-reduced-motion: reduce)';
@@ -111,22 +161,69 @@ function stored(store: SettingsStore | null): Record<string, unknown> | null {
   }
 }
 
+/** The first of `values` that is a volume (`volumeOf`); `fallback` where none is. */
+function firstVolume(values: readonly unknown[], fallback: number): number {
+  for (const value of values) {
+    const volume = volumeOf(value);
+    if (volume !== null) {
+      return volume;
+    }
+  }
+  return fallback;
+}
+
+/**
+ * The volumes `raw` keeps, each missing or malformed at its default. Settings kept before the
+ * buses had a volume each set the radio's voice as „radio" and the beds with the effects: they
+ * come over so.
+ */
+function readVolumes(raw: Record<string, unknown>): Volumes {
+  const kept = isRecord(raw['volumes']) ? raw['volumes'] : {};
+  const fallback = DEFAULT_SETTINGS.volumes;
+  return {
+    master: firstVolume([kept['master']], fallback.master),
+    music: firstVolume([kept['music']], fallback.music),
+    effects: firstVolume([kept['effects']], fallback.effects),
+    voice: firstVolume([kept['voice'], kept['radio']], fallback.voice),
+    ambience: firstVolume([kept['ambience'], kept['effects']], fallback.ambience),
+  };
+}
+
+/** The mutes `raw` keeps: a bus muted only where it says so in as many words. */
+function readMuted(raw: Record<string, unknown>): Muted {
+  const kept = isRecord(raw['muted']) ? raw['muted'] : {};
+  return {
+    music: kept['music'] === true,
+    effects: kept['effects'] === true,
+    voice: kept['voice'] === true,
+    ambience: kept['ambience'] === true,
+  };
+}
+
+/** The stick's dead zone `value` keeps, in percent: a number held to its range, or the default. */
+function deadzoneOf(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? Math.round(Math.min(DEADZONE_MAX, Math.max(DEADZONE_MIN, value)))
+    : DEFAULT_SETTINGS.deadzone;
+}
+
 /** The settings `store` keeps, each one missing or malformed at its default. */
 export function readSettings(store: SettingsStore | null): Settings {
   const raw = stored(store) ?? {};
-  const volumes = isRecord(raw['volumes']) ? raw['volumes'] : {};
   const fallback = DEFAULT_SETTINGS;
   return {
-    volumes: {
-      radio: volumeOf(volumes['radio']) ?? fallback.volumes.radio,
-      effects: volumeOf(volumes['effects']) ?? fallback.volumes.effects,
-      music: volumeOf(volumes['music']) ?? fallback.volumes.music,
-    },
+    volumes: readVolumes(raw),
+    muted: readMuted(raw),
     // Settings kept before every action had a key of its own named only the talk key.
     keys: readKeys(raw['keys'] ?? { talk: raw['talkKey'] }),
     pad: readPad(raw['pad']),
+    deadzone: deadzoneOf(raw['deadzone']),
+    glyphs: oneOf(raw['glyphs'], GLYPHS, fallback.glyphs),
     textSize: oneOf(raw['textSize'], TEXT_SIZES, fallback.textSize),
     motion: oneOf(raw['motion'], MOTIONS, fallback.motion),
+    light: oneOf(raw['light'], LIGHTS, fallback.light),
+    patterns: raw['patterns'] === true,
+    subtitles: oneOf(raw['subtitles'], SUBTITLES, fallback.subtitles),
   };
 }
 
@@ -156,20 +253,31 @@ export interface SettingsRoot {
 }
 
 /**
- * The look of `settings` on the page's root: the text's scale as `--text-scale`, and the
- * motion as `data-motion` — „reduce" or „full" — with the browser asking for less (`system`).
+ * The look of `settings` on the page's root: the text's scale as `--text-scale`, the spoken
+ * lines' as `--subtitle-scale`, the motion as `data-motion` — „reduce" or „full" — with the
+ * browser asking for less (`system`), and the crew's colour patterns as `data-patterns`.
  */
 export function applyLook(settings: Settings, root: SettingsRoot, system: boolean): void {
   root.style.setProperty('--text-scale', String(TEXT_SCALE[settings.textSize]));
+  root.style.setProperty('--subtitle-scale', String(SUBTITLE_SCALE[settings.subtitles]));
   root.dataset['motion'] = motionReduced(settings.motion, system) ? 'reduce' : 'full';
+  root.dataset['patterns'] = settings.patterns ? 'on' : 'off';
 }
 
-/** The volumes on the audio's buses, as shares of full. */
-export function applyVolumes(volumes: Volumes): void {
+/** A bus's volume as a share of full, nothing where the settings mute it. */
+const shareOf = (volume: number, muted: boolean): number => (muted ? 0 : volume / 100);
+
+/**
+ * The volumes on the audio's buses, as shares of full, a bus the settings mute at nothing; the
+ * whole lab's at its own, under the sound switch's mute (world/audio.ts).
+ */
+export function applyVolumes(volumes: Volumes, muted: Muted = DEFAULT_SETTINGS.muted): void {
   setVolumes({
-    radio: volumes.radio / 100,
-    effects: volumes.effects / 100,
-    music: volumes.music / 100,
+    master: volumes.master / 100,
+    music: shareOf(volumes.music, muted.music),
+    effects: shareOf(volumes.effects, muted.effects),
+    voice: shareOf(volumes.voice, muted.voice),
+    ambience: shareOf(volumes.ambience, muted.ambience),
   });
 }
 
@@ -239,7 +347,7 @@ export function watchSettings(listener: () => void): () => void {
 
 /** Applies `settings` where they act: the audio's buses, and the page's root where there is one. */
 function apply(settings: Settings): void {
-  applyVolumes(settings.volumes);
+  applyVolumes(settings.volumes, settings.muted);
   if (typeof document !== 'undefined') {
     applyLook(settings, document.documentElement, systemReduced());
   }

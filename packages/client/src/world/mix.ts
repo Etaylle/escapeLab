@@ -10,23 +10,30 @@
  *   reverb's return ──────────┘
  *   sfx, ambience after its duck, announce ── a send each ── reverb (reverb.ts)
  *
- * The settings' volumes set the buses (settings.ts): Musik the music, Effekte the effects and
- * the rooms' beds, Funk mission control's voice and the plant's loudspeakers. The master gain is
- * the sound switch. Behind it a DynamicsCompressorNode stands as a brickwall — threshold −3 dB,
- * no knee, 20:1, 1 ms attack, 100 ms release — so that effects stacked on one another never
- * clip; Web Audio raises everything after it by a makeup gain worked out from those settings
- * (`limiterMakeup`), which the trim takes back, so the mix under the threshold plays as loud as
- * before. Ducking (`duck`): mission control's voice pulls the music 8 dB and the beds 4 dB down,
- * the klaxon and the siren pull the music 6 dB down; where several pull at once the deepest
- * holds. A bus goes down over DUCK_ATTACK_S and comes back over DUCK_RELEASE_S, in straight
- * lines on the audio clock (`duckKnots`, pure).
+ * The settings' volumes set the buses (settings.ts): Musik the music, Effekte the effects,
+ * Umgebung the rooms' beds, Funk mission control's voice and the plant's loudspeakers; Gesamt
+ * sets the master gain, which the sound switch mutes (audio.ts). Behind it a
+ * DynamicsCompressorNode stands as a brickwall — threshold −3 dB, no knee, 20:1, 1 ms attack,
+ * 100 ms release — so that effects stacked on one another never clip; Web Audio raises
+ * everything after it by a makeup gain worked out from those settings (`limiterMakeup`), which
+ * the trim takes back, so the mix under the threshold plays as loud as before. Ducking (`duck`):
+ * mission control's voice pulls the music 8 dB and the beds 4 dB down, the klaxon and the siren
+ * pull the music 6 dB down; where several pull at once the deepest holds. A bus goes down over
+ * DUCK_ATTACK_S and comes back over DUCK_RELEASE_S, in straight lines on the audio clock
+ * (`duckKnots`, pure).
  */
 
-/** The three volumes on the buses, each a share of full (0 to 1). */
+/** The volumes, each a share of full (0 to 1): the master's and the buses'. */
 export interface BusVolumes {
-  readonly radio: number;
-  readonly effects: number;
+  /** the whole lab at the master gain (Gesamt), under the sound switch's mute (audio.ts) */
+  readonly master: number;
   readonly music: number;
+  /** every sound of the lab but its beds, the radio and the music (Effekte) */
+  readonly effects: number;
+  /** mission control's voice, the radio's key and the plant's loudspeakers (Funk) */
+  readonly voice: number;
+  /** the rooms' beds (Umgebung) */
+  readonly ambience: number;
 }
 
 /** The mix's nodes on one context. */
@@ -38,7 +45,7 @@ export interface Mix {
   readonly trim: GainNode;
   /** the effects (Effekte): every sound of the lab but its beds, the radio and the music */
   readonly sfx: GainNode;
-  /** the rooms' beds (Effekte), in front of their duck */
+  /** the rooms' beds (Umgebung), in front of their duck */
   readonly ambience: GainNode;
   readonly ambienceDuck: GainNode;
   /** the music (Musik), in front of its duck */
@@ -68,7 +75,7 @@ export function limiterMakeup(threshold: number, ratio: number): number {
 export const SEND_DB = { sfx: -14, ambience: -18, announce: -6 } as const;
 
 /** How quickly a bus follows its volume as a slider moves, s. */
-const VOLUME_GLIDE = 0.05;
+export const VOLUME_GLIDE = 0.05;
 
 /** A gain stage at `value` feeding `dest`. */
 function stage(ctx: BaseAudioContext, dest: AudioNode, value: number): GainNode {
@@ -107,12 +114,12 @@ export function buildMix(ctx: BaseAudioContext, volumes: BusVolumes, master: num
     limiter,
     trim,
     sfx: stage(ctx, out, volumes.effects),
-    ambience: stage(ctx, ambienceDuck, volumes.effects),
+    ambience: stage(ctx, ambienceDuck, volumes.ambience),
     ambienceDuck,
     music: stage(ctx, musicDuck, volumes.music),
     musicDuck,
-    voice: stage(ctx, out, volumes.radio),
-    announce: stage(ctx, out, volumes.radio),
+    voice: stage(ctx, out, volumes.voice),
+    announce: stage(ctx, out, volumes.voice),
     sends,
   };
   for (const [bus, db] of [
@@ -125,15 +132,18 @@ export function buildMix(ctx: BaseAudioContext, volumes: BusVolumes, master: num
   return mix;
 }
 
-/** Sets the buses to `volumes` from `now`, gliding: Funk, Effekte, Musik. */
+/**
+ * Sets the buses to `volumes` from `now`, gliding: Funk, Effekte, Umgebung, Musik; the master
+ * gain is the sound switch's to set (audio.ts).
+ */
 export function setBusVolumes(mix: Mix, volumes: BusVolumes, now: number): void {
   const set = (bus: GainNode, value: number): void => {
     bus.gain.setTargetAtTime(value, now, VOLUME_GLIDE);
   };
-  set(mix.voice, volumes.radio);
-  set(mix.announce, volumes.radio);
+  set(mix.voice, volumes.voice);
+  set(mix.announce, volumes.voice);
   set(mix.sfx, volumes.effects);
-  set(mix.ambience, volumes.effects);
+  set(mix.ambience, volumes.ambience);
   set(mix.music, volumes.music);
 }
 

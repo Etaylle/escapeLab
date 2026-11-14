@@ -216,7 +216,7 @@ describe('a test run', () => {
           running={null}
           status="open"
           toEditor={toEditor}
-          onSettings={noop}
+          onGear={noop}
         />,
       );
     expect(bar(noop)).toContain(

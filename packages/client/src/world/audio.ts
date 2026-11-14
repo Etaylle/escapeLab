@@ -26,7 +26,15 @@ import { censusOf, countGraph, type GraphCensus } from './audioCount.js';
 import { hold } from './audioMemory.js';
 import { ownSurface, stepRate, stepTake } from './footsteps.js';
 import { traceRequested } from './frameTrace.js';
-import { buildMix, duck, setBusVolumes, unduck, type BusVolumes, type Mix } from './mix.js';
+import {
+  buildMix,
+  duck,
+  setBusVolumes,
+  unduck,
+  VOLUME_GLIDE,
+  type BusVolumes,
+  type Mix,
+} from './mix.js';
 import { sample, sampleLoaded, type Sample, type SfxId } from './samples.js';
 
 type AudioContextCtor = new () => AudioContext;
@@ -173,8 +181,8 @@ let noise: AudioBuffer | null = null;
 let powerHum: Loop | 'pending' | null = null;
 let siren: Loop | null = null;
 let muted = readStoredMute();
-/** The buses' volumes: full until the settings set theirs (settings.ts, as the page starts). */
-let volumes: BusVolumes = { radio: 1, effects: 1, music: 1 };
+/** The volumes: full until the settings set theirs (settings.ts, as the page starts). */
+let volumes: BusVolumes = { master: 1, music: 1, effects: 1, voice: 1, ambience: 1 };
 /** Whether the engine's graph is counted for the walkthrough's probe (audioCount.ts). */
 let counted = false;
 let unlockArmed = false;
@@ -252,6 +260,11 @@ export function subscribeMuted(listener: () => void): () => void {
   };
 }
 
+/** The master gain: nothing while the sound switch mutes, else the whole lab's volume (Gesamt). */
+function masterLevel(): number {
+  return muted ? 0 : MASTER_LEVEL * volumes.master;
+}
+
 /**
  * Silences or restores everything at the single master gain the whole module
  * already routes through. Works before any sound has been created.
@@ -265,7 +278,7 @@ export function setMuted(next: boolean): void {
   }
   try {
     if (engine !== null) {
-      engine.master.gain.setTargetAtTime(next ? 0 : MASTER_LEVEL, engine.ctx.currentTime, 0.05);
+      engine.master.gain.setTargetAtTime(masterLevel(), engine.ctx.currentTime, VOLUME_GLIDE);
     }
   } catch {
     // Deliberately silent: muting must never break the game.
@@ -274,15 +287,17 @@ export function setMuted(next: boolean): void {
 }
 
 /**
- * Sets the three volumes, each a share of full: on the engine's buses where it is made (mix.ts
- * `setBusVolumes`) and for the engine still to come. Works before any sound has
- * been created; the mute switch stays above them all.
+ * Sets the volumes, each a share of full: the whole lab's at the master gain, under the sound
+ * switch's mute, and the buses' (mix.ts `setBusVolumes`) — on the engine where it is made and
+ * for the engine still to come. Works before any sound has been created.
  */
 export function setVolumes(next: BusVolumes): void {
   volumes = next;
   try {
     if (engine !== null) {
-      setBusVolumes(engine, next, engine.ctx.currentTime);
+      const now = engine.ctx.currentTime;
+      setBusVolumes(engine, next, now);
+      engine.master.gain.setTargetAtTime(masterLevel(), now, VOLUME_GLIDE);
     }
   } catch {
     // Deliberately silent: a volume must never break the game.
@@ -302,7 +317,12 @@ interface Play {
  * ARC_TAIL from there. Nothing while the context is held back, or where the recording is not
  * loaded; never throws.
  */
-function effect(id: SfxId, bus: 'sfx' | 'voice' | 'music', level: number, play: Play = {}): void {
+function effect(
+  id: SfxId,
+  bus: 'sfx' | 'voice' | 'music' | 'ambience',
+  level: number,
+  play: Play = {},
+): void {
   try {
     const audio = runningEngine();
     const recording = sample(id);
@@ -672,12 +692,23 @@ export function exitGrind(): void {
 const TICK_LEVEL = 0.03;
 /** A volume ticks no oftener than this, s: a slider dragged clicks along, never buzzes. */
 const TICK_GAP_S = 0.06;
-/** The bus each volume of the settings sets, and when each last ticked (audio time). */
-const TICK_BUS = { radio: 'voice', effects: 'sfx', music: 'music' } as const;
+/**
+ * The bus each volume of the settings ticks through — the whole lab's through the effects', which
+ * meets every other at the master — and when each last ticked (audio time).
+ */
+const TICK_BUS = {
+  master: 'sfx',
+  music: 'music',
+  effects: 'sfx',
+  voice: 'voice',
+  ambience: 'ambience',
+} as const;
 const ticked: Record<keyof typeof TICK_BUS, number> = {
-  radio: -Infinity,
-  effects: -Infinity,
+  master: -Infinity,
   music: -Infinity,
+  effects: -Infinity,
+  voice: -Infinity,
+  ambience: -Infinity,
 };
 
 /**
@@ -756,7 +787,7 @@ function createEngine(): Engine | null {
     if (counted) {
       countGraph(ctx);
     }
-    return { ctx, ...buildMix(ctx, volumes, muted ? 0 : MASTER_LEVEL) };
+    return { ctx, ...buildMix(ctx, volumes, masterLevel()) };
   } catch {
     return null;
   }
