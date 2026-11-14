@@ -1,4 +1,4 @@
-import { useContext, useEffect, useRef, useState } from 'react';
+import { useContext, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { ClientMessage, DronePosition, PlayerView, PuzzleView } from '@escapelab/core';
 import { beepDue, clock, clockTime, serverAt, timeLeft } from '../clock.js';
 import { useServerNow } from '../hooks.js';
@@ -372,9 +372,12 @@ export function wheelEscape(setWheel: SetWheel): (e: KeyboardEvent) => void {
   };
 }
 
-/** While the chat wheel stands open (`open`), Esc shuts it alone (`wheelEscape`). */
+/**
+ * While the chat wheel stands open (`open`), Esc shuts it alone (`wheelEscape`): taken from the
+ * frame the wheel comes in, before it is painted, so that no Esc pressed as it shows goes past it.
+ */
 function useWheelEscape(open: boolean, setWheel: SetWheel): void {
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!open) {
       return undefined;
     }

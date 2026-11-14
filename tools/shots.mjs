@@ -11552,6 +11552,7 @@ async function padOverPanel(page) {
   const menu = page.locator('.pause-menu');
   await onPad(page, 'tap', 'start');
   const opened = await settled(menu.waitFor({ timeout: 3000 }));
+  await sleep(150); // „Weiter" takes the focus once the menu is painted
   await onPad(page, 'tap', 'ddown');
   await sleep(150);
   const focused = await page.evaluate(focusShown);
