@@ -500,7 +500,7 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   CC BY. In Einstellungen → Ton: Paketwahl, Feinwahl je Platz aus allen Paketen, Vorhören,
   „Nennungen"; Wahl je Gerät in `settings.ts`.
 
-### V-3 Stimmenbesetzung: Stimmen, die sich abwechseln — Status: im PR (V-cast, Spec `spec-V-cast.md`) · Größe: M
+### V-3 Stimmenbesetzung: Stimmen, die sich abwechseln — Status: erledigt (V-cast, Merge 2026-11-14, 1ebaf24; zwei Review-Runden und zwei Deltas; Cloud-CI grün auf af1e84a, Check und Walkthrough; Render der Besetzung bleibt bei Uros: 21.592 Credits für 213 Zeilen, 25.575 mit --fresh; Spec `spec-V-cast.md`) · Größe: M
 - Uros 2026-11-14 08:05: „Ich will alles hören, und vielleicht ist cool, wenn sich sogar alle
   Stimmen abwechseln oder kombinieren; nutze das Beste und Maximum aus ElevenLabs."
 - Rollen statt Sprecher: `pa` (Anlage), `operator` (Leitstelle im Dienst, je Lauf per Seed aus
