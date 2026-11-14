@@ -13,6 +13,7 @@ import {
   SPECTRUM_WEIGHT_DB,
   spectrumGap,
   spectrumOf,
+  type Features,
 } from '../scripts/seam.js';
 
 /**
@@ -155,5 +156,66 @@ describe('the seam found', () => {
     const seam = bestSeam(features, { startMs: 2000, endMs: 39_500, fadeMs: 2000 }, 0);
     expect(seam.score).toBe(-Infinity);
     expect(MARGIN_MS).toBe(1000);
+  });
+});
+
+/** Features of the test's own: `flux` as it is, over one band of silence — no gap anywhere. */
+function fluxOnly(flux: readonly number[]): Features {
+  const frames = Float32Array.from(flux);
+  return { flux: frames, spectrum: [new Float32Array(frames.length)] };
+}
+
+/** 90 s of seeded noise in frames, whose `length` frames from `from` come round `period` later. */
+function roundAt(from: number, length: number, period: number): number[] {
+  let x = 7;
+  const flux = Array.from({ length: 9000 }, () => {
+    x = (x * 1_103_515_245 + 12_345) % 2_147_483_648;
+    return x / 2_147_483_648;
+  });
+  for (let t = from; t < from + length; t++) flux[t + period] = flux[t] ?? 0;
+  return flux;
+}
+
+/** A fade of 1 s from `startMs`, `period` frames round. */
+const fadeOf = (startMs: number, period: number) => ({
+  startMs,
+  endMs: startMs + period * HOP_MS + 1000,
+  fadeMs: 1000,
+});
+
+describe('the seam found within its bounds', () => {
+  it('never starts a loop within its first second, where the lead of a pass would not fit', () => {
+    // Round alike from half a second in — the second before it silent on both sides.
+    const flux = roundAt(0, 250, 6300);
+    for (let t = 6250; t < 6300; t++) flux[t] = 0;
+    const seam = bestSeam(fluxOnly(flux), fadeOf(1500, 6300), 1500);
+    expect(seam.startMs).toBeGreaterThanOrEqual(1000);
+  });
+
+  it('keeps its start within its reach of the plan’s, either way', () => {
+    // Alike from 6 s, and from 2 s: the plan's 4 s, sought 1 s either way, reaches neither.
+    const later = bestSeam(fluxOnly(roundAt(500, 300, 6300)), fadeOf(4000, 6300), 1000);
+    expect(later.startMs).toBeLessThanOrEqual(5000);
+    const earlier = bestSeam(fluxOnly(roundAt(100, 300, 6300)), fadeOf(4000, 6300), 1000);
+    expect(earlier.startMs).toBeGreaterThanOrEqual(3000);
+  });
+
+  it('keeps its round under the longest it is given, where the best lies past it', () => {
+    // Alike 64 s round from 4 s; planned 63 s, sought 1 s either way.
+    const features = fluxOnly(roundAt(300, 300, 6400));
+    const free = bestSeam(features, fadeOf(4000, 6300), 1000);
+    expect(free.endMs - free.fadeMs - free.startMs).toBe(64_000);
+    const kept = bestSeam(features, fadeOf(4000, 6300), 1000, [0, 63_500]);
+    expect(kept.endMs - kept.fadeMs - kept.startMs).toBeLessThanOrEqual(63_500);
+  });
+
+  it('scores music whose flux stands still by its spectra alone, never as no seam', () => {
+    const seam = bestSeam(fluxOnly(new Array(9000).fill(1)), fadeOf(2000, 6300), 0);
+    expect(seam.score).toBe(0);
+  });
+
+  it('reads silence at the floor of its levels, never below it', () => {
+    const quiet = spectrumOf({ rate: RATE, channels: [new Float32Array(RATE)] });
+    expect(new Set(quiet.flatMap((band) => [...band]))).toEqual(new Set([-90]));
   });
 });

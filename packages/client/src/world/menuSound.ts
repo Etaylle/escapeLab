@@ -410,10 +410,12 @@ function chooseAnew(p: Playing): void {
 /**
  * The piece chosen anew for `where` takes over as its file has come: heard, the theme at once and
  * the lobby's piece on the next bar, crossing with the one before over CROSSFADE_S; silent, in
- * its place as it stands. The one before plays out and is let go.
+ * its place as it stands. The one before plays out and is let go. A piece without its file does
+ * not come: one that could not be had, one passed over by another choice meanwhile and one whose
+ * sound has ended — the last two let go, their files given back (`chooseAnew`, `fetchPiece`).
  */
 function arrive(p: Playing, where: MenuPlace, fresh: Piece): void {
-  if (playing !== p || p.coming[where] !== fresh || fresh.file === null) return;
+  if (fresh.file === null) return;
   delete p.coming[where];
   const before = p.pieces[where];
   p.pieces[where] = fresh;

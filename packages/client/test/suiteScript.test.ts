@@ -580,6 +580,10 @@ const old = (file: string): ManifestEntry => ({
 });
 
 describe('keeping a suite’s take', () => {
+  it('keeps the score’s pieces in the folder of its own music pack', () => {
+    expect(pieceFileOf('calm')).toBe('packs/nachtschicht/calm.m4a');
+  });
+
   it('cuts it into its pieces where the plan puts them, each encoded and measured', async () => {
     const places = placesIn();
     const bench = await suiteTakeIn(places);

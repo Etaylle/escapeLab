@@ -236,6 +236,38 @@ describe('the plan’s rules', () => {
   });
 });
 
+describe('the plan’s rules for credits, spans and names', () => {
+  it('want an https page, a title, an author, and a span that holds something', () => {
+    const broken = plannedPack('ada', {
+      lobby: { page: 'http://opengameart.org/content/ada-lobby' },
+      calm: { title: '  ' },
+      tense: { author: '' },
+      title: { trim: [40_000, 40_000] },
+      'end-won': { trim: [-1, 34_999] },
+    });
+    expect(packFlaws(broken)).toEqual([
+      'ada/lobby: its page is no https address',
+      'ada/title: its span is empty',
+      'ada/title: it lasts 0 ms, not 30–45 s',
+      'ada/calm: it has no title',
+      'ada/tense: it has no author',
+      'ada/end-won: its span is empty',
+    ]);
+  });
+
+  it('hold a loop on bars to 60–120 s round', () => {
+    const short = plannedPack('ada', { lobby: { loop: { bars: { bpm: 120, count: 10 } } } });
+    expect(packFlaws(short)).toEqual(['ada/lobby: its bars go round in 20000 ms, not 60–120 s']);
+    const round = plannedPack('ada', { lobby: { loop: { bars: { bpm: 120, count: 40 } } } });
+    expect(packFlaws(round)).toEqual([]);
+  });
+
+  it('want a pack named by a plain word, with a title', () => {
+    const odd = { ...plannedPack('ada'), id: 'Ada X', title: ' ' };
+    expect(packFlaws(odd)).toEqual(['Ada X: its id is no plain word', 'Ada X: it has no title']);
+  });
+});
+
 describe('the attribution', () => {
   it('names the piece, its author and the page’s notice, its page, licence and edit', () => {
     const piece = plannedPiece('ada', 'calm');
@@ -619,6 +651,46 @@ describe('a pack refused', BUILDS, () => {
     const outcome = await buildPack(pack, benchOf(places, host));
     expect(outcome).toEqual({ id: 'ada', refused: ['ada/calm: it has no loop'] });
     expect(host.asked).toEqual([]);
+  });
+});
+
+describe('a pack refused for its sound', BUILDS, () => {
+  it('says a fetch that cannot reach its host, and builds nothing of that pack', async () => {
+    const places = placesIn();
+    const pack = plannedPack('ada');
+    const bench: Bench = {
+      ...benchOf(places, hostFor([pack])),
+      get: () => Promise.reject(new Error('offline')),
+    };
+    const outcome = await buildPack(pack, bench);
+    expect(outcome).toMatchObject({ id: 'ada' });
+    expect((outcome as { refused: readonly string[] }).refused[0]).toBe(
+      `ada/menu-theme: ${urlOf('ada', 'menu-theme')} could not be fetched (Error: offline)`,
+    );
+  });
+
+  it('refuses a piece that came back silent, taking back every part made before it', async () => {
+    const places = placesIn();
+    const pack = plannedPack('ada');
+    const host = hostFor([pack]);
+    host.files.set(urlOf('ada', 'tense'), tone(87, 0));
+    const outcome = await buildPack(pack, benchOf(places, host));
+    expect(outcome).toEqual({ id: 'ada', refused: ['ada/tense: it came back silent'] });
+    // Four parts were made before it, and its own: none of them is left behind.
+    expect(readdirSync(join(places.music, 'ada'))).toEqual([]);
+    expect(existsSync(join(places.packs, 'ada'))).toBe(false);
+  });
+
+  it('refuses a loop whose seam finds no music past it in its span', async () => {
+    const places = placesIn();
+    // Its loop ends where its span does: the second past the seam that is compared is not there.
+    const pack = plannedPack('ada', { calm: { loop: { crossfade: [7000, 85_000, 2000] } } });
+    expect(packFlaws(pack)).toEqual([]);
+    const outcome = await buildPack(pack, benchOf(places, hostFor([pack])));
+    expect(outcome).toEqual({
+      id: 'ada',
+      refused: ['ada/calm: no seam within reach of 80000 ms has music past it, or whole bars'],
+    });
   });
 });
 

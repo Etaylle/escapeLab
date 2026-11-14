@@ -7,9 +7,21 @@ import { changeSettings, DEFAULT_SETTINGS, getSettings } from '../src/settings.j
 import { audioEngine, type Engine } from '../src/world/audio.js';
 import { duckLevels, DUCK_DB } from '../src/world/mix.js';
 import { chosenFor, installedPacks } from '../src/world/musicPacks.js';
-import { previewing, stopPreview } from '../src/world/musicPreview.js';
+import { MUSIC_LEVEL } from '../src/world/music.js';
+import {
+  previewing,
+  PREVIEW_FADE_S,
+  stopPreview,
+  togglePreview,
+} from '../src/world/musicPreview.js';
 import { SLOTS, type Slot } from '../src/world/packFile.js';
-import { downstream, fakeGraph, type FakeContext, type FakeNode } from './fakeGraph.js';
+import {
+  downstream,
+  fakeGraph,
+  type FakeContext,
+  type FakeGain,
+  type FakeNode,
+} from './fakeGraph.js';
 import { elements, fakeMedia } from './fakeMedia.js';
 import { serveSamples } from './fakeSamples.js';
 import { buttonsOf, elementsOf, press, type Rendered } from './probe.js';
@@ -198,5 +210,49 @@ describe('the music’s styles', () => {
       const body = block.slice(block.indexOf(`\n${rule} {`)).split('}')[0] ?? '';
       expect(body, rule).toContain('min-height: 44px;');
     }
+  });
+});
+
+describe('a piece played for the ear, as the game plays it', () => {
+  /** The level the stream playing `src` comes in at: its own gain, where the media meets it. */
+  const levelOf = (ctx: FakeContext, src: string): FakeGain => {
+    const element = elements.find((each) => each.src === src);
+    const media = ctx
+      .all<FakeNode & { mediaElement: unknown }>('media')
+      .find((node) => node.mediaElement === element);
+    return media?.outputs[0] as FakeGain;
+  };
+
+  it('plays at the stems’ level by its gain, from where its sound starts', async () => {
+    serveSamples();
+    const title = installedPacks().find((pack) => pack.id === 'zhelanov')?.pieces.title;
+    if (title === undefined || !('startMs' in title)) throw new Error('no found title');
+    togglePreview('zhelanov', 'title');
+    await vi.advanceTimersByTimeAsync(0);
+    const { ctx } = engineNow();
+    const src = '/music/packs/zhelanov/title.m4a';
+    expect(levelOf(ctx, src).gain.value).toBeCloseTo(MUSIC_LEVEL * title.gain, 9);
+    expect(title.startMs).toBeGreaterThan(0);
+    const element = elements.find((each) => each.src === src);
+    expect(element?.currentTime).toBeCloseTo(title.startMs / 1000, 9);
+  });
+
+  it('plays the piece asked for last where two are pressed before the list is here', async () => {
+    serveSamples();
+    togglePreview('yalciner', 'lobby');
+    togglePreview('macleod', 'lobby');
+    await vi.advanceTimersByTimeAsync(20);
+    expect(previewing()).toBe('macleod/lobby');
+    expect(elements.map((each) => each.src)).toEqual(['/music/packs/macleod/lobby.m4a']);
+  });
+
+  it('goes out over PREVIEW_FADE_S as it stops', async () => {
+    serveSamples();
+    togglePreview('yalciner', 'tense');
+    await vi.advanceTimersByTimeAsync(20);
+    const { ctx } = engineNow();
+    const level = levelOf(ctx, '/music/packs/yalciner/tense.m4a');
+    stopPreview();
+    expect(level.gain.events.at(-1)).toEqual(['linear', 0, ctx.currentTime + PREVIEW_FADE_S]);
   });
 });

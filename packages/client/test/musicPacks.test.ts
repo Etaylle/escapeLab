@@ -220,3 +220,42 @@ describe('a found piece that cannot be had', () => {
     vi.restoreAllMocks();
   });
 });
+
+describe('the loop rules of a pack’s format', () => {
+  it('name a loop that ends past its piece, and a crossfade as long as its loop', () => {
+    expect(crossfadeFlaws({ startMs: 3000, endMs: 71_000, fadeMs: 3000 }, 70_000)).toEqual([
+      'its loop ends at 71000 ms, past its 70000 ms',
+    ]);
+    expect(crossfadeFlaws({ startMs: 3000, endMs: 6000, fadeMs: 3000 }, 70_000)).toEqual([
+      'its crossfade is as long as its loop',
+    ]);
+    expect(crossfadeFlaws({ startMs: 3000, endMs: 70_000, fadeMs: 3000 }, 70_000)).toEqual([]);
+  });
+});
+
+describe('packs of other kinds', () => {
+  /** The choice module afresh, shipping `more` beside the score. */
+  async function shipping(...more: PackFile[]) {
+    vi.resetModules();
+    const { shipPacks } = await import('./fakePacks.js');
+    shipPacks(...more);
+    const music = await import('../src/world/musicPacks.js');
+    vi.doUnmock('../src/world/packList.js');
+    return music;
+  }
+
+  it('list the score first, though another’s title comes before it', async () => {
+    const { foundPack } = await import('./fakePacks.js');
+    const music = await shipping({ ...foundPack('archiv'), title: 'Archiv' });
+    expect(music.installedPacks().map((pack) => pack.id)).toEqual(['nachtschicht', 'archiv']);
+  });
+
+  it('play a found piece that goes round on bars at its tempo, its bars counted', async () => {
+    const { foundPack } = await import('./fakePacks.js');
+    const bars = foundPack('takt', { calm: { loop: { bars: { bpm: 76, count: 19 } } } });
+    const music = await shipping(bars);
+    const entry = music.entryOf('takt', bars.pieces.calm);
+    expect(entry).toMatchObject({ bpm: 76, bars: 19, loop: true });
+    expect(entry).not.toHaveProperty('crossfade');
+  });
+});

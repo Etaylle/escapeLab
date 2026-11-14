@@ -675,10 +675,13 @@ function passOn(m: Music, track: Track, entry: MusicPiece, grid: Grid, now: numb
   layPass(m.engine.ctx, track, entry, bpm);
 }
 
-/** Whether a piece chosen anew for `track`'s stem has its file, to take over at the next pass. */
+/**
+ * Whether a piece chosen anew for `track`'s stem has its file, to take over at the next pass — a
+ * track without a pass yet has given way to it already, in place (`followChoice`).
+ */
 function takesOverNext(m: Music, track: Track): boolean {
   const coming = m.coming[track.stem];
-  return coming !== undefined && coming.file !== null && track.passes.length > 0;
+  return coming !== undefined && coming.file !== null;
 }
 
 /** The stem stops at `at` and gives its loop back: faded out, or the music is over. */
