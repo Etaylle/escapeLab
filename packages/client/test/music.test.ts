@@ -9,6 +9,7 @@ import {
   clockTension,
   CROSSFADE_S,
   layersFor,
+  loopPeriod,
   MUSIC_LEVEL,
   nextBar,
   passPeriod,
@@ -87,6 +88,16 @@ describe('the pressure the music follows', () => {
     expect(CROSSFADE_S).toBe(2);
   });
 
+  it('loops a piece of the score on the bars its manifest names, as far as its file holds', () => {
+    expect(loopPeriod({ ms: 72_000, startMs: 0 }, 90)).toBeCloseTo(24 * BAR, 9); // as it holds
+    expect(loopPeriod({ ms: 72_000, startMs: 0, bars: 20 }, 90)).toBeCloseTo(20 * BAR, 9);
+    expect(loopPeriod({ ms: 72_000, startMs: 0, bars: 24 }, 90)).toBeCloseTo(24 * BAR, 9);
+    // More bars than the file holds with its lead bar and its seam: as many as it holds.
+    expect(loopPeriod({ ms: 72_000, startMs: 0, bars: 26 }, 90)).toBeCloseTo(24 * BAR, 9);
+    // The score's stem: 24 bars round and a tail of 3, its seam inside its own sound.
+    expect(loopPeriod({ ms: 72_000, startMs: 0, bars: 24 }, 90) + BAR + SEAM_S).toBeLessThan(72);
+  });
+
   it('starts each next pass on a bar, leaving room for its lead bar and the seam', () => {
     expect(passPeriod(72.046, 90)).toBeCloseTo(24 * BAR, 9); // 64 s: 25 bars fit, one leads
     for (let seconds = 20; seconds <= 120; seconds += 0.7) {
@@ -114,72 +125,77 @@ function curveOn(param: FakeParam): { values: number[]; at: number; seconds: num
   return { values: [...(curve[1] as Float32Array)], at: curve[2] as number, seconds: curve[3] };
 }
 
+/** The blob addresses the stems' files get, in the order they are fetched. */
+let blobs: string[] = [];
+let fetched: string[] = [];
+
+/** A run's page: a fake graph and media, its clock held, every file a blob of its own. */
+function stage(): void {
+  fakeGraph();
+  fakeMedia();
+  vi.useFakeTimers();
+  vi.setSystemTime(1_000_000);
+  vi.spyOn(Math, 'random').mockReturnValue(0.5);
+  blobs = [];
+  vi.spyOn(URL, 'createObjectURL').mockImplementation(() => {
+    blobs.push(`blob:stem-${blobs.length}`);
+    return blobs.at(-1) as string;
+  });
+  vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
+}
+
+function unstage(): void {
+  vi.useRealTimers();
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+}
+
+async function music(served: Readonly<Record<string, Served>> = {}) {
+  vi.resetModules();
+  await loadedSamples(served);
+  fetched = serveSamples(served);
+  const module = await import('../src/world/music.js');
+  const audio = await import('../src/world/audio.js');
+  return { ...module, inUse: audio.inUse, claim: audio.claim, release: audio.release };
+}
+
+/** Lets the stems' files come in: their fetches and their blobs. */
+const fetchIn = async (): Promise<void> => {
+  await vi.advanceTimersByTimeAsync(0);
+};
+
+const tension = (over: Partial<Tension> = {}): Tension => ({
+  run: 1,
+  startAt: Date.now() - 1000,
+  left: 600,
+  budget: 660,
+  alarms: 0,
+  escaping: false,
+  ending: null,
+  ...over,
+});
+
+/** A stem's elements, by the blob its file came as: calm's first, tense's, critical's. */
+const decksOf = (stem: 'calm' | 'tense' | 'critical'): FakeAudio[] => {
+  const blob = `blob:stem-${['calm', 'tense', 'critical'].indexOf(stem)}`;
+  return elements.filter((element) => element.src === blob);
+};
+
+/** The level an element's sound comes in at: its stream's own gain. */
+const outOf = (ctx: FakeContext, element: FakeAudio | undefined): FakeGain => {
+  const source = ctx.all<FakeNode & { mediaElement: unknown }>('media').find(
+    (node) => node.mediaElement === element,
+  );
+  return source?.outputs[0] as FakeGain;
+};
+
+/** A stem's bus, which its fade moves: the gain its elements' levels feed. */
+const busOf = (ctx: FakeContext, element: FakeAudio | undefined): FakeGain =>
+  outOf(ctx, element).outputs[0] as FakeGain;
+
 describe('the music as it plays', () => {
-  /** The blob addresses the stems' files get, in the order they are fetched. */
-  let blobs: string[] = [];
-  let fetched: string[] = [];
-
-  beforeEach(() => {
-    fakeGraph();
-    fakeMedia();
-    vi.useFakeTimers();
-    vi.setSystemTime(1_000_000);
-    vi.spyOn(Math, 'random').mockReturnValue(0.5);
-    blobs = [];
-    vi.spyOn(URL, 'createObjectURL').mockImplementation(() => {
-      blobs.push(`blob:stem-${blobs.length}`);
-      return blobs.at(-1) as string;
-    });
-    vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
-  });
-  afterEach(() => {
-    vi.useRealTimers();
-    vi.unstubAllGlobals();
-    vi.restoreAllMocks();
-  });
-
-  async function music(served: Readonly<Record<string, Served>> = {}) {
-    vi.resetModules();
-    await loadedSamples(served);
-    fetched = serveSamples(served);
-    const module = await import('../src/world/music.js');
-    const audio = await import('../src/world/audio.js');
-    return { ...module, inUse: audio.inUse, claim: audio.claim, release: audio.release };
-  }
-
-  /** Lets the stems' files come in: their fetches and their blobs. */
-  const fetchIn = async (): Promise<void> => {
-    await vi.advanceTimersByTimeAsync(0);
-  };
-
-  const tension = (over: Partial<Tension> = {}): Tension => ({
-    run: 1,
-    startAt: Date.now() - 1000,
-    left: 600,
-    budget: 660,
-    alarms: 0,
-    escaping: false,
-    ending: null,
-    ...over,
-  });
-
-  /** A stem's elements, by the blob its file came as: calm's first, tense's, critical's. */
-  const decksOf = (stem: 'calm' | 'tense' | 'critical'): FakeAudio[] => {
-    const blob = `blob:stem-${['calm', 'tense', 'critical'].indexOf(stem)}`;
-    return elements.filter((element) => element.src === blob);
-  };
-
-  /** The level an element's sound comes in at: its stream's own gain. */
-  const outOf = (ctx: FakeContext, element: FakeAudio | undefined): FakeGain => {
-    const source = ctx.all<FakeNode & { mediaElement: unknown }>('media').find(
-      (node) => node.mediaElement === element,
-    );
-    return source?.outputs[0] as FakeGain;
-  };
-
-  /** A stem's bus, which its fade moves: the gain its elements' levels feed. */
-  const busOf = (ctx: FakeContext, element: FakeAudio | undefined): FakeGain =>
-    outOf(ctx, element).outputs[0] as FakeGain;
+  beforeEach(stage);
+  afterEach(unstage);
 
   it('plays nothing while the lab has its power, then starts under the effects', async () => {
     const m = await music();
@@ -454,5 +470,29 @@ describe('the music as it plays', () => {
       none.stopMusic();
       none.playSting('won');
     }).not.toThrow();
+  });
+});
+
+describe('a piece of the score, looped', () => {
+  beforeEach(stage);
+  afterEach(unstage);
+
+  it('starts the next pass of a piece of the score on the bars its manifest names', async () => {
+    const m = await music({ calm: { bars: 20 } });
+    m.setTension(tension());
+    await fetchIn();
+    const ctx = lastContext();
+    m.setTension(tension());
+    vi.advanceTimersByTime(300);
+    const zero = 10.3;
+    ctx.currentTime = zero + 20 * BAR - 1.2;
+    m.setTension(tension());
+    expect(decksOf('calm').filter((d) => d.plays > 0)).toHaveLength(1);
+    ctx.currentTime = zero + 20 * BAR - 0.9; // 20 bars, where its 72 s would hold 24
+    m.setTension(tension());
+    vi.advanceTimersByTime(900);
+    const [, second] = decksOf('calm');
+    expect(second?.plays).toBe(1);
+    expect(curveOn(outOf(ctx, second).gain)?.at).toBeCloseTo(zero + 21 * BAR, 9);
   });
 });

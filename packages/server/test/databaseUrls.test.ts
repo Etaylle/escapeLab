@@ -31,9 +31,9 @@ const MIGRATED = [
 ];
 
 /**
- * The migrations applied as the start script applies them (`pnpm --filter @escapelab/server
- * prisma migrate deploy`), `env` the only database variables — none the shell holds: its exit
- * code and what it said.
+ * The migrations applied as one applies them by hand (`pnpm --filter @escapelab/server prisma
+ * migrate deploy`, the package's `prisma` script), `env` the only database variables — none the
+ * shell holds: its exit code and what it said.
  */
 function deploy(env: Record<string, string>): { status: number | null; output: string } {
   const own = { ...process.env };

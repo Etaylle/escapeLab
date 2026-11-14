@@ -44,7 +44,7 @@
  * back, his seat kept all along; Gus gives his seat up and the two go on,
  * then Finn gives his up and the run ends, called off. Where TEST_DATABASE_URL
  * names a Postgres, the start script brings a server up on a schema of its own,
- * the migrations applied first, and a crew winning the tutorial there leaves the
+ * which it migrates itself first, and a crew winning the tutorial there leaves the
  * run in the database with a seat for each by account and the Erfolge it
  * earned. No answer is written down here.
  * Run with: pnpm --filter @escapelab/server smoke
@@ -3217,9 +3217,9 @@ async function colourAtTheEnd(server: ServerProcess, db: PrismaClient): Promise<
 }
 
 /**
- * Where TEST_DATABASE_URL names a Postgres the smoke may write to: the start script, as Render
- * runs it with a single direct DATABASE_URL, on a schema of the smoke's own — the migrations
- * applied before the server starts — a crew winning the tutorial there (`checkLanded`), and a
+ * Where TEST_DATABASE_URL names a Postgres the smoke may write to: the start script with a
+ * single direct DATABASE_URL, on a schema of the smoke's own — the server applying the
+ * migrations itself before it listens — a crew winning the tutorial there (`checkLanded`), and a
  * colour clicked as the server goes down (`colourAtTheEnd`); the schema is dropped after.
  * Skipped, saying so, without.
  */
@@ -3340,7 +3340,7 @@ console.log(
     'and SIGKILL, the run taken up again from the crew\'s snapshots; a deploy handing ' +
     'over from an old server still up, the run going on from its last snapshot; the ' +
     'start script passing SIGTERM on to the server; and, where TEST_DATABASE_URL names a ' +
-    'Postgres, the start script migrating it over a single URL, a won tutorial landing there ' +
+    'Postgres, the server migrating it itself over a single URL, a won tutorial landing there ' +
     'by account, a colour clicked just before SIGTERM kept, and the server started as ' +
     'Render\'s Start Command starts it migrating the database itself before it listens, a ' +
     'migration broken off stopping its start. 🎉',
