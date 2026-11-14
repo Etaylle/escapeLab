@@ -143,7 +143,6 @@ export function stageFacts(stage: HTMLElement, canvas: HTMLCanvasElement): Stage
   return {
     w: box.width,
     h: box.height,
-    windowW: window.innerWidth,
     windowH: window.innerHeight,
     phone: window.matchMedia(PHONE_QUERY).matches,
     padBottom: px(getComputedStyle(stage).paddingBottom),

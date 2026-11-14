@@ -142,8 +142,9 @@
  * „Beitreten"); „Einsatz starten" open, the hero stands half a tile aside, clear of the panel
  * (menu-hero-missions.png); as the doors close for the lobby it has turned away to the lab; and in
  * the reconnect drill's tab it looks at the run's card. At 1280×720 it stands as at 1440×820
- * (menu-hero-1280.png); at 1024×768 three tiles or so tall, beside a panel open too
- * (menu-hero-1024.png); at 899×700 and on the guest's phone, upright and sideways, it is left out.
+ * (menu-hero-1280.png); at 1100×700 three and a half tiles tall at least, beside a panel open too;
+ * at 1024×768, where the room beside the widest panel holds fewer, it is left out, the profile's
+ * figure standing for it (menu-hero-1024.png), and on the guest's phone, upright and sideways.
  * The menu's sound waits for
  * the first key, the speaker's lamp lit, and plays after it; the lobby keeps it at its weight,
  * chimes as the round comes up and chirps as Ben says ready; the run's start ends it. The won card
@@ -6658,10 +6659,10 @@ const heroCovers = (hero, clear) =>
   );
 
 /**
- * How many scene tiles tall the hero has to stand: about five at 1440×820 and 1280×720, three or
- * so at 1024×768, beside the widest panel.
+ * How many scene tiles tall the hero has to stand: about five at 1440×820 and 1280×720, and at
+ * 1100×700, beside the widest panel, three and a half at least (client hero.ts FEWEST_TILES).
  */
-const HERO_TILES = { laptop: [4.75, 5.25], narrow: [2.5, 3.3] };
+const HERO_TILES = { laptop: [4.75, 5.25], narrow: [3.5, 4.2] };
 
 /** What the log says of the hero's box as it stands (`box`) and of what it covers. */
 function heroText(hero, box, covers) {
@@ -6712,8 +6713,9 @@ async function checkHero(page, label, tiles = null) {
 }
 
 /**
- * The hero left out on `page` (`label`): below 900 px across and on a phone it stands nowhere,
- * its canvas hidden, the profile's figure standing for it — or the run fails.
+ * The hero left out on `page` (`label`): where the room beside the widest panel holds fewer than
+ * three and a half scene tiles of it, and on a phone, it stands nowhere, its canvas hidden, the
+ * profile's figure standing for it — or the run fails.
  */
 async function heroGone(page, label) {
   await sleep(300);
@@ -6727,23 +6729,25 @@ async function heroGone(page, label) {
 }
 
 /**
- * menu-hero-1024.png: at 1024×768 the hero stands three scene tiles or so tall, clear of the menu
- * and the profile — and with „Einsatz starten" open, stepped aside, clear of the panel too; at
- * 899×700 it is left out — or the run fails.
+ * At 1100×700 the hero stands three and a half scene tiles tall at least, clear of the menu and
+ * the profile — and with „Einsatz starten" open, stepped aside, clear of the panel too; at
+ * 1024×768 the room beside the widest panel holds fewer, and it is left out, the profile's figure
+ * standing for it (menu-hero-1024.png) — or the run fails.
  */
 async function heroNarrow(page) {
-  await page.setViewportSize({ width: 1024, height: 768 });
-  await sceneBaked(page, { w: 1024, h: 768 });
-  await checkHero(page, '1024x768', HERO_TILES.narrow);
-  await capture(page, 'menu-hero-1024.png');
+  await page.setViewportSize({ width: 1100, height: 700 });
+  await sceneBaked(page, { w: 1100, h: 700 });
+  await checkHero(page, '1100x700', HERO_TILES.narrow);
   await openMenuPanel(page, 'Einsatz starten');
   await page
     .waitForFunction(() => globalThis.__escapelab?.hero?.step === 1, null, { timeout: 5000 })
     .catch(() => undefined);
-  await checkHero(page, '1024x768, its panel open');
+  await checkHero(page, '1100x700, its panel open');
   await closeMenuPanel(page);
-  await page.setViewportSize({ width: 899, height: 700 });
-  await heroGone(page, '899x700');
+  await page.setViewportSize({ width: 1024, height: 768 });
+  await sceneBaked(page, { w: 1024, h: 768 });
+  await heroGone(page, '1024x768');
+  await capture(page, 'menu-hero-1024.png');
 }
 
 /**

@@ -37,7 +37,6 @@ function stage(w: number, h: number): StageFacts {
   return {
     w,
     h: h - 60,
-    windowW: w,
     windowH: h,
     phone: false,
     padBottom: Math.min(40, Math.max(18, h * 0.04)),
@@ -97,7 +96,7 @@ describe('heroPlace — how large the hero stands, and where', () => {
   });
 
   it('keeps clear of the menu’s column, the profile and the stage’s edge', () => {
-    for (const f of [DESKTOP, LAPTOP, { ...DESKTOP, w: 1100 }, { ...LAPTOP, chipBottom: 400 }]) {
+    for (const f of [DESKTOP, LAPTOP, { ...DESKTOP, w: 1180 }, { ...LAPTOP, chipBottom: 340 }]) {
       const { box } = placed(f);
       expect(box.left).toBeGreaterThanOrEqual(Math.floor(f.menuRight + CLEAR));
       expect(box.top).toBeGreaterThanOrEqual(Math.floor(f.chipBottom + CLEAR));
@@ -106,7 +105,7 @@ describe('heroPlace — how large the hero stands, and where', () => {
   });
 
   it('shrinks to the room beside the menu, and stands nowhere without any', () => {
-    const narrow = placed({ ...DESKTOP, w: 1100 });
+    const narrow = placed({ ...DESKTOP, w: 1180 });
     expect(narrow.scale).toBeLessThan(placed(DESKTOP).scale);
     expect(heroPlace({ ...DESKTOP, w: DESKTOP.menuRight + 2 * CLEAR })).toBeNull();
   });

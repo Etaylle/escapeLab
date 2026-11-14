@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
   CLEAR,
+  FEWEST_TILES,
   FIGURE_TALL,
   heroPlace,
   heroTile,
-  SMALLEST_WINDOW,
   STEP_TILES,
   type HeroPlace,
   type StageFacts,
@@ -23,11 +23,12 @@ import {
 /**
  * The hero at the sizes the menu is laid out for (world/menu/hero.ts `heroPlace`), the stage laid
  * out as the stylesheets lay it out (cascade.ts): about five scene tiles at 1280 × 720 and
- * 1440 × 820 and on a desktop, three or so at 1024 px across, smaller to 900 px and left out
- * below and on every phone; at every size nothing of it over the menu's column and its lead line,
- * the profile, or the widest panel — resting, or stepped half a tile aside for the panel — and
- * clear of the window's safe areas. The walkthrough measures the same in a browser
- * (tools/shots.mjs `checkHero`).
+ * 1440 × 820 and on a desktop; three and a half at least wherever it stands — from 1080 px across
+ * at 720 px of height, 1115 px at 820 — and left out where the room beside the widest panel holds
+ * fewer, as at 1024 px across, and on every phone; at every size nothing of it over the menu's
+ * column and its lead line, the profile, or the widest panel — resting, or stepped half a tile
+ * aside for the panel — and clear of the window's safe areas. The walkthrough measures the same
+ * in a browser (tools/shots.mjs `checkHero`).
  */
 
 const sheets = new Sheets();
@@ -80,7 +81,6 @@ function stageOn(screen: Screen, safe = { right: 0, bottom: 0 }): StageFacts {
   return {
     w: screen.width,
     h: screen.height - TOP_BAR,
-    windowW: screen.width,
     windowH: screen.height,
     phone: holds(PHONE_QUERY, screen),
     padBottom,
@@ -95,14 +95,34 @@ function stageOn(screen: Screen, safe = { right: 0, bottom: 0 }): StageFacts {
 /** A window `width` × `height` under a mouse. */
 const at = (width: number, height: number): Screen => ({ width, height, coarse: false });
 
-/** The five sizes the hero stands at: a desktop, the two laptops, 1024 px across, 900. */
-const FIVE = [at(1920, 1080), at(1440, 820), at(1280, 720), at(1024, 768), at(900, 700)];
+/**
+ * Five sizes the hero stands at: a desktop, the two laptops, a window 1180 px across, and the
+ * narrowest a window 720 px tall leaves it.
+ */
+const FIVE = [at(1920, 1080), at(1440, 820), at(1280, 720), at(1180, 820), at(1080, 720)];
 
 /** Where the hero stands on `facts`, there by the test's word. */
 function placed(facts: StageFacts): HeroPlace {
   const place = heroPlace(facts);
   if (place === null) throw new Error(`no hero on ${JSON.stringify(facts)}`);
   return place;
+}
+
+/**
+ * The narrowest window `height` tall the hero stands in, CSS px, halving the widths between 1000,
+ * where it is left out at every height, and 1600, where it stands: the wider, the more room.
+ */
+function narrowest(height: number): number {
+  let [out, stands] = [1000, 1600];
+  while (stands - out > 1) {
+    const width = Math.floor((out + stands) / 2);
+    if (heroPlace(stageOn(at(width, height))) === null) {
+      out = width;
+    } else {
+      stands = width;
+    }
+  }
+  return stands;
 }
 
 /** The hero's box on the stage resting, and stepped half a tile aside for a panel. */
@@ -121,20 +141,23 @@ describe('the hero at the menu’s sizes', () => {
     }
   });
 
-  it('shrinks to three tiles or so at 1024 px across, and smaller to 900', () => {
-    const at1024 = [at(1024, 768), at(1024, 700), at(1024, 640)].map((s) => placed(stageOn(s)));
-    for (const place of at1024) {
-      expect(place.tiles).toBeGreaterThan(2.5);
-      expect(place.tiles).toBeLessThan(3.3);
+  it('stands three and a half tiles tall at least, from the widths the art bible names', () => {
+    expect(FEWEST_TILES).toBe(3.5);
+    const heights = [600, 720, 768, 820, 900, 1080];
+    expect(heights.map(narrowest)).toEqual([1038, 1080, 1097, 1115, 1144, 1207]);
+    for (const height of heights) {
+      const place = placed(stageOn(at(narrowest(height), height)));
+      expect(place.tiles).toBeGreaterThanOrEqual(FEWEST_TILES);
+      expect(place.tiles).toBeLessThan(FEWEST_TILES + 0.05);
     }
-    const narrow = placed(stageOn(at(900, 700)));
-    expect(narrow.tiles).toBeLessThan(at1024[0]?.tiles ?? 0);
-    expect(narrow.tiles).toBeGreaterThanOrEqual(1);
   });
 
-  it('is left out below 900 px and on every phone: the profile’s figure stands for it', () => {
-    expect(SMALLEST_WINDOW).toBe(900);
-    expect(heroPlace(stageOn(at(899, 700)))).toBeNull();
+  it('is left out where it would stand smaller, and on every phone', () => {
+    // The profile's figure stands for it. At 1024 px across the room beside the widest panel
+    // holds 2.6 tiles at 768 px of height.
+    for (const screen of [at(1024, 768), at(1024, 640), at(960, 700), at(900, 700)]) {
+      expect(heroPlace(stageOn(screen)), `${screen.width}x${screen.height}`).toBeNull();
+    }
     const phones: Screen[] = [
       { width: 844, height: 390, coarse: true },
       { width: 932, height: 430, coarse: true },
@@ -149,10 +172,10 @@ describe('the hero at the menu’s sizes', () => {
     expect(heroPlace({ ...stageOn(at(1440, 820)), phone: true })).toBeNull();
   });
 
-  it('is left out where the room beside the panel holds less than a scene tile of it', () => {
-    // A window 900 px across but tall: its tiles large, the room beside the panel not.
-    expect(heroPlace(stageOn(at(900, 1400)))).toBeNull();
-    expect(heroPlace(stageOn(at(900, 700)))).not.toBeNull();
+  it('is left out where a tall window’s tiles outgrow the room beside the panel', () => {
+    // 1180 px across: 4.3 tiles at 820 px of height; 1400 px tall, its tiles larger, 3.2 of them.
+    expect(heroPlace(stageOn(at(1180, 820)))).not.toBeNull();
+    expect(heroPlace(stageOn(at(1180, 1400)))).toBeNull();
   });
 
   it('covers nothing of the menu, its lead line, the profile or a panel at the five sizes', () => {

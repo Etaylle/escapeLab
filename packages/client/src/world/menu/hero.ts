@@ -68,8 +68,7 @@ export interface StageFacts {
   /** the stage's box, the menu's, CSS px */
   w: number;
   h: number;
-  /** the window's width and height: the scene behind the stage fills it, its tile follows it */
-  windowW: number;
+  /** the window's height: the scene behind the stage fills the window, its tile follows it */
   windowH: number;
   /** a phone, held sideways or upright: the profile's figure stands for the hero */
   phone: boolean;
@@ -86,10 +85,13 @@ export interface StageFacts {
   chipBottom: number;
 }
 
-/** The narrowest window the hero stands in, CSS px: below it the profile's figure stands for it. */
-export const SMALLEST_WINDOW = 900;
-/** The smallest the hero stands, scene tiles: smaller than this it is left out. */
-export const FEWEST_TILES = 1;
+/**
+ * The fewest scene tiles the hero stands tall: where the stage leaves it room for fewer — beside
+ * the widest panel, in a window narrower than 1080 px at 720 px of height, 1115 px at 820, 1038 px
+ * at the least (docs/art-bible.md „The hero") — it is left out, and the profile's figure stands
+ * for it, as on a phone.
+ */
+export const FEWEST_TILES = 3.5;
 
 /** Where and how large the hero stands on the stage. */
 export interface HeroPlace {
@@ -152,13 +154,13 @@ function scaleIn(f: StageFacts, room: ReturnType<typeof roomOf>): number {
  * Where the hero stands on the stage `f` and how large: as tall as heroTall says — or as the
  * room beside the menu, the widest panel and under the profile allows (roomOf) — its feet in the
  * right third's middle, held inside that room, its shadow on the floor. Null where it is left
- * out: a window narrower than SMALLEST_WINDOW, a phone, no room for FEWEST_TILES of it.
+ * out: on a phone, or where that room holds fewer than FEWEST_TILES of it.
  */
 export function heroPlace(f: StageFacts): HeroPlace | null {
   const room = roomOf(f);
   const scale = scaleIn(f, room);
   const tiles = (FIGURE_TALL * scale) / heroTile(f.windowH);
-  if (f.phone || f.windowW < SMALLEST_WINDOW || !(tiles >= FEWEST_TILES)) {
+  if (f.phone || !(tiles >= FEWEST_TILES)) {
     return null;
   }
   const least = room.left + ROUNDING + HERO_BOX.front * scale;

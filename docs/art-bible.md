@@ -518,8 +518,9 @@ Under the items one quiet line says how the game is played: „Am Pult die Masch
 Regeln — gelöst wird nur gemeinsam, per Stimme, ein Gerät je Kopf, Rücken an Rücken." A run that
 binds the pass stands first and lit, the items under it dimmed. The profile stands at the top right:
 the player's own figure idling in their colour, waving once a new name has settled, the name to
-type, the colour's name, and what the account holds (ProfileChip.tsx `accountLine`). From 900 px
-across the same figure stands large at the stage's right, the hero (The hero).
+type, the colour's name, and what the account holds (ProfileChip.tsx `accountLine`). Where the
+stage leaves it room for three and a half tiles — from about 1100 px across — the same figure stands
+large at the stage's right, the hero (The hero).
 
 A panel slides in over the menu from its side in 200 ms, fading up, the menu dimmed under it; under
 reduced motion it only fades. Into the lobby and back out, the lab's sliding doors close over the
@@ -584,32 +585,44 @@ it — across, from the menu's column (its items, the run's card, the lead line)
 panel once the hero has stepped half a tile aside for it, to the stage's right edge or the window's
 safe area, 12 px clear of each; down, from under the profile to the floor that the stage's padding
 or a home bar leaves. Its feet stand five sixths across the stage, in the right third's middle,
-moved only as far as that room asks. It is left out in a window narrower than 900 px and on a phone
-held sideways or upright, where the profile's figure stands for it, and wherever the room holds
-less than a tile of it. How tall it stands, the menu laid out as menu.css lays it out:
+moved only as far as that room asks. It stands only where it can stand three and a half tiles tall
+at least (hero.ts `FEWEST_TILES`); on a phone held sideways or upright, and wherever the room holds
+fewer tiles of it, it is left out and the profile's figure stands for it. Below about 1200 px across
+the room beside the widest panel — 760 px from the stage's padding — sets its size, whatever the
+window's height, while a tile grows with that height: the taller the window, the wider it has to be
+for the hero. It stands from these widths on, from about 1100 px across on a laptop:
+
+| Window's height | Narrowest window it stands in |
+| --- | --- |
+| 600 | 1038 |
+| 720 | 1080 |
+| 768 | 1097 |
+| 820 | 1115 |
+| 900 | 1144 |
+| 1080 | 1207 |
+
+How tall it stands, the menu laid out as menu.css lays it out:
 
 | Window | Tiles | CSS px |
 | --- | --- | --- |
 | 1920 × 1080 | 5.1 | 428 |
-| 1440 × 900 | 5.0 | 353 |
+| 1440 × 900 | 5.0 | 352 |
 | 1440 × 820 | 5.0 | 319 |
-| 1366 × 768 | 5.0 | 297 |
+| 1366 × 768 | 4.9 | 297 |
 | 1280 × 720 | 4.9 | 277 |
 | 1180 × 820 | 4.3 | 275 |
 | 1100 × 700 | 3.9 | 213 |
-| 1024 × 768 | 2.6 | 154 |
-| 1024 × 640 | 3.1 | 154 |
-| 960 × 700 | 1.9 | 104 |
-| 900 × 700 | 1.0 | 57 |
+| 1080 × 720 | 3.5 | 197 |
+| 1024 × 768, 1024 × 640 | left out | |
 | Narrower, a phone | left out | |
 
-Below about 1200 px across, the room beside the widest panel — 760 px from the stage's padding —
-sets its size: at 1024 px it is 154 px tall at any height, 2.6 tiles at 768 px of height and 3.1 at
-640, for a hero of three tiles at 768 would stand under the open mission panel. The sizes test
-measures five windows off the stylesheets, the hero resting and stepped aside, against the menu's
-column, the profile, the widest panel and the safe areas (test/menuHeroSizes.test.ts); the
-walkthrough measures it in the browser at 1440 × 820, 1280 × 720 and 1024 × 768, with a panel open
-and shut (tools/shots.mjs `checkHero`).
+At 1024 px across the room beside the panel would hold a hero 154 px tall at any height, 2.6 tiles
+at 768 px of height and 3.1 at 640: too small to stand for the player beside the profile's figure.
+The sizes test measures five windows off the stylesheets, the hero resting and stepped aside,
+against the menu's column, the profile, the widest panel and the safe areas, and the widths above
+(test/menuHeroSizes.test.ts); the walkthrough measures it in the browser at 1440 × 820, 1280 × 720
+and 1100 × 700, with a panel open and shut, and finds it left out at 1024 × 768 (tools/shots.mjs
+`checkHero`).
 
 **Poses.** Standing, it breathes, its body riding a pixel over its legs; its glances are a figure's
 (Figure animation), every 4 to 7 s, turned less than half as far and in steps of 0.1 rad, its look
