@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
   ACCESS_DOORS,
@@ -26,6 +27,13 @@ import {
 } from '../src/puzzles/access.js';
 import { GameError } from '../src/errors.js';
 import { mulberry32 } from '../src/rng.js';
+import {
+  ACCESS_SEED,
+  accessPlan,
+  accessProbe,
+  playAccessProbe,
+  type AccessPlan,
+} from './accessPlan.js';
 import { AT_BOOK, AT_CONSOLE_B, AT_STATION, AUDIENCE, ELSEWHERE, lightsOut, started } from './lab.js';
 import { standing, T0 } from './lab.js';
 import { playInstance } from './solveModule.js';
@@ -509,6 +517,55 @@ describe('the backup rule, through the reducer', () => {
     expect(device?.token).not.toBe(accessOf(state, 'p2').device?.token);
     const names = accessOf(ticked, 'p3').roster?.map((entry) => entry.name);
     expect(names).toContain(device?.account);
+  });
+});
+
+describe('the harness’s scratch mission', () => {
+  const fixture = JSON.parse(
+    readFileSync(new URL('../../../tools/fixtures/access-plan.json', import.meta.url), 'utf8'),
+  ) as AccessPlan;
+
+  it('is a lab for two: the consoles apart, the list on a clipboard by the terminal, a way out', () => {
+    const mission = accessProbe();
+    expect(mission).toMatchObject({ id: 'custom-zugangsprobe', title: 'Zugangsprobe' });
+    expect(mission.players).toEqual({ min: 2, max: 2 });
+    expect(mission.puzzles).toMatchObject([
+      { type: 'access', id: 'zugang', doors: 2, tokenSec: 30, strictFrom: 2 },
+    ]);
+    const consoles = mission.map.stations.filter((s) => s.puzzleId === 'zugang');
+    expect(consoles.map((s) => s.console)).toEqual(['a', 'b']);
+    const apart = (from: { x: number; y: number }, to: { x: number; y: number }): number =>
+      Math.abs(from.x - to.x) + Math.abs(from.y - to.y);
+    const [a, b] = consoles;
+    expect(a !== undefined && b !== undefined && apart(a, b)).toBeGreaterThan(4);
+    expect(mission.map.manuals).toMatchObject([
+      { kind: 'clipboard', label: 'BENUTZERLISTE', puzzleIds: ['zugang'] },
+    ]);
+    expect(mission.map.exit).toBeDefined();
+  });
+
+  it('is solved through the reducer on its pinned seed, each door by its role’s account', () => {
+    const { state, plan } = playAccessProbe();
+    expect(state.currentPuzzleIndex).toBe(1);
+    expect(state.penaltySeq).toBe(0);
+    expect(plan.logins.map((login) => login.door)).toEqual(plan.doors);
+    for (const { door, account } of plan.logins) {
+      expect(plan.roster.find((entry) => entry.name === account)?.role).toBe(DOOR_ROLE[door]);
+    }
+  });
+
+  it('carries the solver’s own plan in tools/fixtures/access-plan.json', () => {
+    // Regenerate the file from `accessPlan()` when the probe or the module changes.
+    expect(fixture).toEqual(accessPlan());
+    expect(fixture).toMatchObject({ mission: 'custom-zugangsprobe', seed: ACCESS_SEED });
+  });
+
+  it('is solved alarm-free on every seed the harness might be pinned to', () => {
+    for (let seed = 0; seed < 50; seed++) {
+      const { state } = playAccessProbe(seed);
+      expect(state.currentPuzzleIndex, `seed ${seed}`).toBe(1);
+      expect(state.penaltySeq, `seed ${seed}`).toBe(0);
+    }
   });
 });
 

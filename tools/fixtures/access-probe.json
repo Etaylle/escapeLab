@@ -1,0 +1,64 @@
+{
+  "id": "custom-zugangsprobe",
+  "title": "Zugangsprobe",
+  "subtitle": "Terminal im Leitstand, Tokengerät in der Wache, die Benutzerliste auf dem Klemmbrett.",
+  "players": { "min": 2, "max": 2 },
+  "timeLimitSec": 600,
+  "story": {
+    "intro": "Die Zugangskontrolle gibt die Türen nur mit zwei Faktoren frei: Konto am Terminal, Token am Gerät, Rollen auf der Benutzerliste.",
+    "win": "Alle Türen freigegeben, alle sind draußen.",
+    "lose": "Die Zeit ist um."
+  },
+  "puzzles": [
+    {
+      "type": "access",
+      "id": "zugang",
+      "title": "Zugangskontrolle",
+      "doors": 2,
+      "tokenSec": 30,
+      "strictFrom": 2,
+      "hints": [
+        "Hausmeister: Erst die Tür am Terminal, dann ihre Rolle in den Berechtigungen, dann das Konto auf der Liste."
+      ],
+      "lights": ["WACHE"],
+      "onSolved": "Türen frei. Beide zum Ausgang."
+    }
+  ],
+  "map": {
+    "tiles": [
+      "###################",
+      "#........#........#",
+      "#........#........#",
+      "#.................#",
+      "#........#........#",
+      "#........#........#",
+      "###################"
+    ],
+    "spawns": [
+      { "x": 2, "y": 3 },
+      { "x": 16, "y": 3 }
+    ],
+    "stations": [
+      { "puzzleId": "zugang", "x": 4, "y": 1, "console": "a" },
+      { "puzzleId": "zugang", "x": 13, "y": 1, "console": "b" }
+    ],
+    "manuals": [
+      {
+        "id": "liste",
+        "kind": "clipboard",
+        "label": "BENUTZERLISTE",
+        "puzzleIds": ["zugang"],
+        "spots": [{ "x": 7, "y": 5 }]
+      }
+    ],
+    "labels": [
+      { "text": "LEITSTAND", "x": 4, "y": 4, "kind": "control" },
+      { "text": "WACHE", "x": 13, "y": 4, "kind": "control" }
+    ],
+    "decor": [
+      { "kind": "desk", "x": 6, "y": 1, "variant": 0 },
+      { "kind": "desk", "x": 15, "y": 1, "variant": 1 }
+    ],
+    "exit": { "x": 17, "y": 5 }
+  }
+}

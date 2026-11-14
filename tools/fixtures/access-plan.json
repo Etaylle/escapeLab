@@ -1,0 +1,14 @@
+{
+  "mission": "custom-zugangsprobe",
+  "seed": 4,
+  "doors": ["reaktor", "archiv"],
+  "roster": [
+    { "name": "huber", "role": "sicherheit" },
+    { "name": "lorenz", "role": "laborleitung" },
+    { "name": "seidel", "role": "haustechnik" }
+  ],
+  "logins": [
+    { "door": "reaktor", "account": "huber" },
+    { "door": "archiv", "account": "lorenz" }
+  ]
+}
