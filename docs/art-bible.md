@@ -499,7 +499,10 @@ The start screen is the game's main menu over a living scene from the world, as 
 Firewatch's are. Behind it the lab of the mission picked drifts along the opening's shot, from
 where the shot starts to the crew's spawn and back in 30 s, slowing at both ends, the drones parked
 on their first waypoints and nobody in it; a mission picked anew comes in over the lab before in
-600 ms. The lab stands at night — the opening's lit lab, the power on, sunk to 38 % of its light
+600 ms. A lab without places (The menu's places) shows only while the missions' cards lie open:
+with them shut the menu stands in the first lab that has places, Blackout's, so that every item
+has a room to show and the tab's last pick never leaves the menu in an empty hall
+(world/menu/places.ts `menuLab`). The lab stands at night — the opening's lit lab, the power on, sunk to 38 % of its light
 —, where the hero stands its hand lamp the main light (The hero), and as dark where the stage
 leaves the hero no room, as on a phone; behind the lobby it stands lit, as the opening shows it
 before the blackout. Each item of the menu has a room of the lab, which the scene's camera goes
@@ -556,8 +559,8 @@ and goes behind a short shutter of the same leaves: closing in 80 ms, opening in
 menu, a page's or the editor's leaves wait for the hero's beat first, 100 ms (The hero), so that a
 page stands 180 ms after the press; on the way back they close at once. In a room the settings open
 over it at once. Leaving a lobby loads the page anew; the doors stay shut over it until the page
-loaded opens them, on the mission picked before — its card marked, its lab behind the menu — which
-the tab keeps. Under reduced motion the screens cut, with no beat before them. The lobby keeps its
+loaded opens them, on the mission picked before — its card marked, its lab behind its cards —
+which the tab keeps. Under reduced motion the screens cut, with no beat before them. The lobby keeps its
 layout and stands over the same scene, drifting on, evenly dimmed.
 
 Upright on a phone, 560 px across or less, the menu takes one column under the title. Held

@@ -5,11 +5,13 @@ import {
   useLayoutEffect,
   useRef,
   useState,
+  useSyncExternalStore,
   type ReactNode,
   type Ref,
 } from 'react';
 import { traceRequested } from './world/frameTrace.js';
 import { endThemeProbe } from './world/endTheme.js';
+import { choosingNow, menuLab, watchChoosing } from './world/menu/places.js';
 import { menuSoundProbe, wantMenuSound, type MenuPlace } from './world/menuSound.js';
 import { radioCheckProbe } from './world/radioCheck.js';
 import {
@@ -805,20 +807,30 @@ export interface Backdrop {
 }
 
 /**
- * The living scene behind the screens: off any room the lab of the mission picked (`picked`),
+ * The lab behind the menu for the mission picked (`picked`) of `missions`: its own while its
+ * cards lie open and where it has places, else Blackout's (world/menu/places.ts `menuLab`).
+ */
+function useMenuLab(missions: readonly MissionInfo[], picked: string | null): string | null {
+  const choosing = useSyncExternalStore(watchChoosing, choosingNow, () => false);
+  const known = missions.map((mission) => mission.id);
+  return menuLab(pickedMission(missions, picked), known, choosing);
+}
+
+/**
+ * The living scene behind the screens: off any room the menu's lab (`lab`, `useMenuLab`),
  * shown on the menu (`menu`) and hidden under the pages over it; in the lobby the room's, behind
  * the crew room — the same scene, so that it drifts on; none in a run or for the audience.
  */
 export function backdropOf(
   conn: Pick<Connection, 'view' | 'spectatorView'>,
   menu: boolean,
-  picked: string | null,
+  lab: string | null,
 ): Backdrop | null {
   if (conn.spectatorView !== null) {
     return null;
   }
   if (conn.view === null) {
-    return { missionId: picked, shown: menu, lobby: false };
+    return { missionId: lab, shown: menu, lobby: false };
   }
   return conn.view.phase === 'lobby'
     ? { missionId: conn.view.missionId, shown: true, lobby: true }
@@ -970,8 +982,9 @@ export function App({ boot }: { boot: EditorBoot }) {
   const [missions, loadMissions] = useMissions();
   // The booklet, the Bestenliste and „Meine Einsätze": pages of their own off the join screen.
   const pages = usePages();
-  // The mission picked on the join screen: its card marked, its lab in the scene behind — kept
-  // in the tab, so that both come back as leaving a lobby loads the page anew.
+  // The mission picked on the join screen: its card marked, its lab in the scene behind its
+  // cards (`useMenuLab`) — kept in the tab, so that it comes back as leaving a lobby loads the
+  // page anew.
   const [picked, setPicked] = usePicked();
   // The join screen's cards and the host's mission strip in the lobby say each
   // mission's record; without it they say nothing.
@@ -997,7 +1010,7 @@ export function App({ boot }: { boot: EditorBoot }) {
   // The editor scrolls on a phone (styles/editor.css); the menu lies over its living scene.
   const { editing, menu } = offRoomOf(offRoom, pages, editor.open);
   const layout = layoutOf(immersive, editing, menu);
-  const backdrop = backdropOf(conn, menu, pickedMission(missions, picked));
+  const backdrop = backdropOf(conn, menu, useMenuLab(missions, picked));
   useEffect(() => keepPath(editing), [editing]);
 
   // Every screen shares one scrolling area, the booklet too; each opens at its

@@ -17,12 +17,16 @@ import {
   type Sweep,
 } from '../src/world/menu/lamp.js';
 import {
+  choosingNow,
   heldPlace,
   holdPlace,
+  menuLab,
   placeCorner,
   placesOf,
   SCENE_ANCHOR,
+  setChoosing,
   showPlace,
+  watchChoosing,
   watchPlace,
 } from '../src/world/menu/places.js';
 import {
@@ -78,6 +82,43 @@ describe('the menu’s places in Blackout’s lab', () => {
     expect(10 * 64 - corner.x).toBeCloseTo(SCENE_ANCHOR.x * 1440, 0);
     expect(4 * 64 - corner.y).toBeCloseTo(SCENE_ANCHOR.y * 820, 0);
     expect(Number.isInteger(corner.x) && Number.isInteger(corner.y)).toBe(true);
+  });
+});
+
+describe('the lab behind the menu', () => {
+  const known = ['systemcheck', 'blackout', 'uebungshalle'];
+
+  afterEach(() => setChoosing(false));
+
+  it('is the picked mission’s where it has places, else the first lab that has them', () => {
+    expect(menuLab('blackout', known, false)).toBe('blackout');
+    expect(menuLab('uebungshalle', known, false)).toBe('blackout');
+    expect(menuLab('systemcheck', known, false)).toBe('blackout');
+  });
+
+  it('is the picked mission’s own while its cards lie open, places or none', () => {
+    expect(menuLab('uebungshalle', known, true)).toBe('uebungshalle');
+    expect(menuLab('blackout', known, true)).toBe('blackout');
+  });
+
+  it('stays the picked mission’s where no lab of the server has places, and none for none', () => {
+    expect(menuLab('uebungshalle', ['uebungshalle', 'systemcheck'], false)).toBe('uebungshalle');
+    expect(menuLab(null, known, false)).toBeNull();
+  });
+
+  it('hears of the missions’ cards opening and closing, once for each change', () => {
+    const changed = vi.fn();
+    const stop = watchChoosing(changed);
+    expect(choosingNow()).toBe(false);
+    setChoosing(true);
+    setChoosing(true);
+    expect(choosingNow()).toBe(true);
+    expect(changed).toHaveBeenCalledTimes(1);
+    setChoosing(false);
+    expect(changed).toHaveBeenCalledTimes(2);
+    stop();
+    setChoosing(true);
+    expect(changed).toHaveBeenCalledTimes(2);
   });
 });
 
