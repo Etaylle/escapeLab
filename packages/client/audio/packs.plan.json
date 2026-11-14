@@ -219,7 +219,8 @@
           "trim": [27000, 122000],
           "loop": {
             "crossfade": [36000, 105000, 3000],
-            "seekMs": 8000
+            "seekMs": 8000,
+            "bpm": 90
           },
           "notes": "137.8 s at −15.5 LUFS, −13 to −16 from 0:36 to 1:50; CC0 as FreePD's catalogue lists it (freepd.com closed 2025-12-09, its archive on Hugging Face); credited anyway"
         },
@@ -330,7 +331,8 @@
           "trim": [0, 88200],
           "loop": {
             "crossfade": [5000, 74000, 3000],
-            "seekMs": 8000
+            "seekMs": 8000,
+            "bpm": 80
           },
           "notes": "88.5 s at −19.9 LUFS, 80 bpm, flat at −19 to −22; its page calls it loopable"
         },
@@ -346,7 +348,8 @@
           "trim": [47000, 142000],
           "loop": {
             "crossfade": [56000, 125000, 3000],
-            "seekMs": 8000
+            "seekMs": 8000,
+            "bpm": 76
           },
           "notes": "200.8 s at −12.6 LUFS, 76 bpm, driving at −11 to −14 from 0:52 to 2:46; „Darkling“ dips where a seam would fall"
         },

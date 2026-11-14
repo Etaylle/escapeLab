@@ -205,6 +205,13 @@ describe('the plan’s rules', () => {
     ]);
   });
 
+  it('hold a loop’s stated tempo to one music keeps', () => {
+    const fast = plannedPack('ada', {
+      calm: { loop: { crossfade: [7000, 75_000, 2000], seekMs: 3000, bpm: 400 } },
+    });
+    expect(packFlaws(fast)).toEqual(['ada/calm: its tempo of 400 bpm is none music keeps']);
+  });
+
   it('hold a planned loop to 60–120 s round, and leave its reach to the seam’s search', () => {
     const short = plannedPack('ada', { calm: { loop: { crossfade: [7000, 66_000, 2000] } } });
     expect(packFlaws(short)).toEqual(['ada/calm: it goes round in 57000 ms, not 60–120 s']);
@@ -304,6 +311,20 @@ describe('a pack built', BUILDS, () => {
     const round = loop.crossfade.endMs - loop.crossfade.fadeMs - loop.crossfade.startMs;
     expect(round).toBeGreaterThanOrEqual(60_000);
     expect(round).toBeLessThanOrEqual(63_500);
+  });
+
+  it('goes round in whole bars of a tempo the plan states', async () => {
+    const places = placesIn();
+    const pack = plannedPack('ada', {
+      calm: { loop: { crossfade: [7000, 75_000, 2000], seekMs: 3000, bpm: 120 } },
+    });
+    const made = (await buildPack(pack, benchOf(places, hostFor([pack])))) as Made;
+    const loop = (made.built.pieces.calm as FoundPiece).loop as {
+      crossfade: { startMs: number; endMs: number; fadeMs: number };
+    };
+    const round = loop.crossfade.endMs - loop.crossfade.fadeMs - loop.crossfade.startMs;
+    expect(round % 2000).toBe(0); // bars of 2 s at 120 bpm
+    expect([64_000, 66_000, 68_000]).toContain(round);
   });
 
   it('brings every piece to −19 LUFS by its gain, measured as encoded', async () => {

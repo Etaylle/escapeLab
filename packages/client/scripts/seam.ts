@@ -244,17 +244,35 @@ function bestStart(
 }
 
 /**
+ * The periods a seam may go round in, frames, from `shortest` to `longest`: every frame's — or,
+ * for music of a tempo its composer states, whole bars of `barMs` alone, each to the nearest frame,
+ * so that the beats of the two passes fall together where the flux cannot tell them.
+ */
+export function periodsOf(shortest: number, longest: number, barMs: number | null): number[] {
+  if (barMs === null) {
+    return Array.from({ length: Math.max(0, longest - shortest + 1) }, (_, i) => shortest + i);
+  }
+  const bar = barMs / HOP_MS;
+  const first = Math.ceil((shortest - 0.5) / bar);
+  const last = Math.floor((longest + 0.5) / bar);
+  return Array.from({ length: Math.max(0, last - first + 1) }, (_, i) =>
+    Math.round((first + i) * bar),
+  ).filter((period) => period >= shortest && period <= longest);
+}
+
+/**
  * `fade` with its start and its period each moved within `seekMs` of the plan's, in HOP_MS steps,
  * to where the two sides of its seam sound most alike (`seamScore`) over the fade and MARGIN_MS
- * either side — its start never under MIN_LEAD_MS, its period within `periodMs`, its length as
- * planned. With no reach, `fade` as it is, scored; −Infinity where no seam within reach finds the
- * music past it in the file.
+ * either side — its start never under MIN_LEAD_MS, its period within `periodMs` and of whole bars
+ * of `barMs` where that is given (`periodsOf`), its length as planned. With no reach, `fade` as it
+ * is, scored; −Infinity where no seam within reach finds the music past it in the file.
  */
 export function bestSeam(
   features: Features,
   fade: Crossfade,
   seekMs: number,
   periodMs: readonly [number, number] = [0, Infinity],
+  barMs: number | null = null,
 ): Seam {
   const n = Math.round((fade.fadeMs + 2 * MARGIN_MS) / HOP_MS);
   const reach = Math.round(seekMs / HOP_MS);
@@ -265,7 +283,7 @@ export function bestSeam(
   const shortest = Math.max(planned - reach, Math.ceil(periodMs[0] / HOP_MS));
   const longest = Math.min(planned + reach, Math.floor(periodMs[1] / HOP_MS));
   let best = { from: start, period: planned, score: -Infinity };
-  for (let period = shortest; period <= longest; period++) {
+  for (const period of periodsOf(shortest, longest, barMs)) {
     const found = bestStart(features, period, starts, n);
     if (found.score > best.score) best = { ...found, period };
   }

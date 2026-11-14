@@ -117,11 +117,15 @@ export type Source =
       readonly from: string;
     };
 
-/** How a planned piece loops, ms of its file: a crossfade, its end sought within `seekMs`; bars. */
+/**
+ * How a planned piece loops, ms of its file: a crossfade, its start and its round sought within
+ * `seekMs` — of whole bars of `bpm` where its composer states the tempo — or bars.
+ */
 export type PlanLoop =
   | {
       readonly crossfade: readonly [startMs: number, endMs: number, fadeMs: number];
       readonly seekMs?: number;
+      readonly bpm?: number;
     }
   | { readonly bars: { readonly bpm: number; readonly count: number } };
 
@@ -262,7 +266,9 @@ function crossfadeLoopFlaws(loop: PlanCrossfade, trim: PlanPiece['trim']): strin
   const fade = pieceCrossfade(loop, trim[0]);
   const period = crossfadePeriod(fade) * 1000;
   const flaws = within(period, LOOP_SECONDS) ? [] : [`it goes round in ${period} ms, not 60–120 s`];
-  return [...flaws, ...crossfadeFlaws(fade, trim[1] - trim[0])];
+  const tempo = loop.bpm === undefined || (loop.bpm >= 30 && loop.bpm <= 240);
+  const tempoFlaws = tempo ? [] : [`its tempo of ${loop.bpm} bpm is none music keeps`];
+  return [...flaws, ...tempoFlaws, ...crossfadeFlaws(fade, trim[1] - trim[0])];
 }
 
 /**
@@ -451,9 +457,10 @@ function keptOf(piece: PlanPiece, cut: Pcm): Kept {
   if (loop === undefined) return { loop: null, seam: null, span: [0, cutMs] };
   if ('bars' in loop) return { loop: { bars: loop.bars }, seam: null, span: [0, cutMs] };
   const planned = pieceCrossfade(loop, piece.trim[0]);
-  const found = bestSeam(featuresOf(cut), planned, loop.seekMs ?? 0, LOOP_MS);
+  const barMs = loop.bpm === undefined ? null : (4 * 60_000) / loop.bpm;
+  const found = bestSeam(featuresOf(cut), planned, loop.seekMs ?? 0, LOOP_MS, barMs);
   if (!Number.isFinite(found.score)) {
-    throw new Error(`its seam at ${planned.endMs} ms finds no music past it to compare`);
+    throw new Error(`no seam within reach of ${planned.endMs} ms has music past it, or whole bars`);
   }
   const from = Math.max(0, found.startMs - LEAD_KEPT_MS);
   const to = Math.min(cutMs, found.endMs + TAIL_MS);

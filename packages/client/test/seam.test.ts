@@ -8,6 +8,7 @@ import {
   fluxOf,
   HOP_MS,
   MARGIN_MS,
+  periodsOf,
   seamScore,
   SPECTRUM_WEIGHT_DB,
   spectrumGap,
@@ -123,6 +124,17 @@ describe('the seam found', () => {
     const features = featuresOf({ rate: RATE, channels: [both] });
     const seam = bestSeam(features, { startMs: 6000, endMs: 81_000, fadeMs: 3000 }, 4000);
     expect(seam.startMs).toBeGreaterThanOrEqual(9000);
+    expect(seam.endMs - seam.fadeMs - seam.startMs).toBe(72_000);
+  });
+
+  it('goes round in whole bars alone where the tempo is known, the beats falling together', () => {
+    expect(periodsOf(6730, 6740, null)).toEqual(Array.from({ length: 11 }, (_, i) => 6730 + i));
+    expect(periodsOf(6730, 7330, 2000)).toEqual([6800, 7000, 7200]);
+    expect(periodsOf(6000, 6400, (4 * 60_000) / 76)).toEqual([6000, 6316]); // 19, 20 bars
+    const features = featuresOf(music(100));
+    // Bars of 3 s within 3 s of 70.3: 69 and 72 s round — the chords come round on 72.
+    const planned = { startMs: 2000, endMs: 75_300, fadeMs: 3000 };
+    const seam = bestSeam(features, planned, 3000, [0, 1e6], 3000);
     expect(seam.endMs - seam.fadeMs - seam.startMs).toBe(72_000);
   });
 
