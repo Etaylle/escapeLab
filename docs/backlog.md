@@ -429,7 +429,7 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   der Host die Mission wählt, Kaffeemaschine, Tür zu Trakt C geht auf, wenn alle bereit davor
   stehen; Bewegung, Anwesenheit, Näheklang wie im Spiel.
 
-### S-3 Hauptfigur im Menü — Status: bereit (Spec `spec-S-hero.md`, nach S-audition) · Größe: M
+### S-3 Hauptfigur im Menü — Status: im PR (S-hero) · Größe: M
 - Uros 2026-11-13 mit dem Titelbild von God of War III: „Eine coole Hauptfigur-Animation noch vor
   der Karte, die Karte kann bleiben." Nicht dasselbe, aber das Prinzip: die Figur groß und
   lebendig im Vordergrund rechts, die Welt dahinter, das Menü links.
@@ -439,6 +439,11 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   ersten Menü: Hereinlaufen von rechts, Klick, Lampe an; Kopf dreht sich zum Menüpunkt, Figur
   tritt beiseite, wenn ein Panel aufgeht; ab 900 px Breite, am Handy bleibt der Chip. Kosten
   ≤ 1 ms je Frame zusammen.
+- Im PR: Figur und Kegel zusammen 0,64 ms je Frame (Figur 0,30, Kegel 0,34; Bench 4× gedrosselt,
+  Canvas-Pfad), Menü-Fenster 16,7–16,8 ms p95 bei Software-GL. Abweichend von der Spec: der Kegel
+  ist ein einmal gebackenes, je Grad gedrehtes Bild statt eines Verlaufs je Frame (der kostete
+  1,3 ms und mehr); bei 1024 px Breite steht die Figur 2,6 Kacheln hoch (3,1 bei 640 px Höhe),
+  weil der Platz neben dem breitesten Panel nicht mehr hergibt; der Chip behält seine kleine Figur.
 
 ### U-1 Pausenmenü, Verlassen wie Dota 2, Einstellungen und Chrome — Status: in Arbeit (U-pause, PR 6) · Größe: L
 - Uros 2026-11-14: „Spielabbruch richtig: Der Spieler kann das Spiel nicht verlassen, wann er
