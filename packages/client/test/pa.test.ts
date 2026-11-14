@@ -11,7 +11,7 @@ import {
   WEAK_LOW,
   weakChain,
 } from '../src/world/pa.js';
-import type { VoiceManifest } from '../src/world/radioVoice.js';
+import type { VoiceLine, VoiceManifest } from '../src/world/radioVoice.js';
 import {
   chainFrom,
   downstream,
@@ -25,15 +25,23 @@ import {
   type FakeNode,
 } from './fakeGraph.js';
 
-const FIRST = 'Durchsage der Leitstelle für Trakt C. Es ist 23 Uhr 47.';
-const SECOND = 'Reaktor in Teillast, 60 Prozent.';
-const ALERT = 'Störung im Kühlkreislauf. Relaissteuerung auf Handbetrieb.';
-const pa = { missions: ['blackout'], speaker: 'pa' } as const;
+/** The plant's lines, each said by its voice in the night's cast: the person `anlage`. */
+const plant = (text: string): VoiceLine => ({ text, person: 'anlage' });
+const FIRST = plant('Durchsage der Leitstelle für Trakt C. Es ist 23 Uhr 47.');
+const SECOND = plant('Reaktor in Teillast, 60 Prozent.');
+const ALERT = plant('Störung im Kühlkreislauf. Relaissteuerung auf Handbetrieb.');
+const pa = { missions: ['blackout'], role: 'pa', person: 'anlage' } as const;
 const MANIFEST: VoiceManifest = {
   lines: {
-    aaaaaaaaaaaa: { ...pa, text: FIRST, ms: 2000, file: 'aaaaaaaaaaaa.mp3' },
-    bbbbbbbbbbbb: { ...pa, text: SECOND, ms: 1500, file: 'bbbbbbbbbbbb.mp3' },
-    cccccccccccc: { ...pa, text: ALERT, ms: 3100, file: 'cccccccccccc.mp3' },
+    'anlage-aaaa': { ...pa, text: FIRST.text, moment: 'pa', ms: 2000, file: 'anlage-aaaa.mp3' },
+    'anlage-bbbb': { ...pa, text: SECOND.text, moment: 'pa', ms: 1500, file: 'anlage-bbbb.mp3' },
+    'anlage-cccc': {
+      ...pa,
+      text: ALERT.text,
+      moment: 'announce',
+      ms: 3100,
+      file: 'anlage-cccc.mp3',
+    },
   },
 };
 
@@ -123,7 +131,8 @@ describe('the loudspeakers on the emergency power', () => {
   });
 });
 
-describe('the announcement over the loudspeakers', () => {
+/** A fake lab for each test of the group: its sounds, its clock, the recordings served. */
+function onTheLoudspeakers(): void {
   beforeEach(() => {
     fakeGraph();
     vi.useFakeTimers();
@@ -140,25 +149,29 @@ describe('the announcement over the loudspeakers', () => {
     vi.useRealTimers();
     vi.unstubAllGlobals();
   });
+}
 
-  /** The voice and the loudspeakers, fresh, the mission's recordings loaded. */
-  async function loudspeakers() {
-    vi.resetModules();
-    const radio = await import('../src/world/radioVoice.js');
-    const pa = await import('../src/world/pa.js');
-    const audio = await import('../src/world/audio.js');
-    const memory = await import('../src/world/audioMemory.js');
-    audio.sharedAudio(); // the lab's context, made as a world makes it
-    radio.voiceForRun();
-    await vi.advanceTimersByTimeAsync(0);
-    return { radio, pa, memory };
-  }
+/** The voice and the loudspeakers, fresh, the mission's recordings loaded. */
+async function loudspeakers() {
+  vi.resetModules();
+  const radio = await import('../src/world/radioVoice.js');
+  const pa = await import('../src/world/pa.js');
+  const audio = await import('../src/world/audio.js');
+  const memory = await import('../src/world/audioMemory.js');
+  audio.sharedAudio(); // the lab's context, made as a world makes it
+  radio.voiceForRun();
+  await vi.advanceTimersByTimeAsync(0);
+  return { radio, pa, memory };
+}
 
-  /** The recordings started so far on the lab's context. */
-  const spoken = (): FakeBufferSource[] =>
-    lastContext()
-      .all<FakeBufferSource>('buffer')
-      .filter((source) => source.startedAt !== null);
+/** The recordings started so far on the lab's context. */
+const spoken = (): FakeBufferSource[] =>
+  lastContext()
+    .all<FakeBufferSource>('buffer')
+    .filter((source) => source.startedAt !== null);
+
+describe('the announcement over the loudspeakers', () => {
+  onTheLoudspeakers();
 
   it('speaks each line as its moment comes, through the loudspeakers, not the radio', async () => {
     const { pa } = await loudspeakers();
@@ -183,7 +196,7 @@ describe('the announcement over the loudspeakers', () => {
     expect(spoken()).toHaveLength(1);
     expect(pa.paProbe()).toEqual({
       playing: true,
-      lastLine: FIRST,
+      lastLine: FIRST.text,
       played: 1,
       cut: false,
       announced: 0,
@@ -193,7 +206,7 @@ describe('the announcement over the loudspeakers', () => {
     expect(spoken()).toHaveLength(1);
     await vi.advanceTimersByTimeAsync(1);
     expect(spoken()).toHaveLength(2);
-    expect(pa.paProbe().lastLine).toBe(SECOND);
+    expect(pa.paProbe().lastLine).toBe(SECOND.text);
   });
 
   it('decodes its lines as it starts, and lets each go once it has been said', async () => {
@@ -214,7 +227,24 @@ describe('the announcement over the loudspeakers', () => {
     expect(memory.decodedBytes().voice).toBe(0);
   });
 
-  it('breaks off as the power goes, mid-line, and says nothing more', async () => {
+  it('leaves out a line without a recording, and every one whose moment long passed', async () => {
+    const { pa } = await loudspeakers();
+    pa.startAnnouncement([plant('Eine Zeile ohne Aufnahme.')], Date.now());
+    await vi.advanceTimersByTimeAsync(PA_FROM_MS);
+    expect(spoken()).toEqual([]);
+    expect(pa.paProbe().lastLine).toBe('Eine Zeile ohne Aufnahme.');
+    // A screen that came in 20 s late: every line's moment long gone.
+    pa.startAnnouncement([FIRST, SECOND], Date.now() - 20_000);
+    await vi.advanceTimersByTimeAsync(20_000);
+    expect(spoken()).toEqual([]);
+    expect(pa.paProbe().played).toBe(0);
+  });
+});
+
+describe('the announcement cut short', () => {
+  onTheLoudspeakers();
+
+  it('as the power goes, mid-line, saying nothing more', async () => {
     const { pa } = await loudspeakers();
     pa.startAnnouncement([FIRST, SECOND], Date.now());
     await vi.advanceTimersByTimeAsync(PA_FROM_MS + 500);
@@ -229,20 +259,7 @@ describe('the announcement over the loudspeakers', () => {
     expect(pa.paProbe()).toMatchObject({ playing: false, cut: true });
   });
 
-  it('leaves out a line without a recording, and every one whose moment long passed', async () => {
-    const { pa } = await loudspeakers();
-    pa.startAnnouncement(['Eine Zeile ohne Aufnahme.'], Date.now());
-    await vi.advanceTimersByTimeAsync(PA_FROM_MS);
-    expect(spoken()).toEqual([]);
-    expect(pa.paProbe().lastLine).toBe('Eine Zeile ohne Aufnahme.');
-    // A screen that came in 20 s late: every line's moment long gone.
-    pa.startAnnouncement([FIRST, SECOND], Date.now() - 20_000);
-    await vi.advanceTimersByTimeAsync(20_000);
-    expect(spoken()).toEqual([]);
-    expect(pa.paProbe().played).toBe(0);
-  });
-
-  it('stops with the screen: what was laid out never comes', async () => {
+  it('with the screen: what was laid out never comes', async () => {
     const { pa } = await loudspeakers();
     pa.startAnnouncement([FIRST, SECOND], Date.now());
     await vi.advanceTimersByTimeAsync(100);
@@ -257,8 +274,12 @@ describe('the announcement over the loudspeakers', () => {
       announced: 0,
     });
   });
+});
 
-  it('says the plant’s message on the emergency power: the weak band, into the loudspeakers', async () => {
+describe('the plant’s message over the loudspeakers', () => {
+  onTheLoudspeakers();
+
+  it('sounds on the emergency power: the weak band, into the loudspeakers', async () => {
     const { pa, radio } = await loudspeakers();
     expect(radio.clipOf(ALERT)).toBeNull(); // not fetched before it is asked for
     // As it sounds it tells how long it speaks: by its recording, which the fake decodes to 1.5 s.
@@ -290,7 +311,9 @@ describe('the announcement over the loudspeakers', () => {
 
   it('stays silent without a recording, and stops with the screen, its line let go', async () => {
     const { pa, radio } = await loudspeakers();
-    expect(await pa.announce('Eine Durchsage ohne Aufnahme.')).toBeNull();
+    expect(await pa.announce(plant('Eine Durchsage ohne Aufnahme.'))).toBeNull();
+    // Nor in a voice that has no recording of it: the plant's words are the plant's.
+    expect(await pa.announce({ text: ALERT.text, person: 'helmut' })).toBeNull();
     await vi.advanceTimersByTimeAsync(0);
     expect(spoken()).toEqual([]);
     void pa.announce(ALERT);

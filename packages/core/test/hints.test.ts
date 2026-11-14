@@ -245,6 +245,7 @@ describe('mission control on the radio', () => {
         label: 'Leitstelle hier — wir hören mit.',
         seconds: null,
         moment: 'start',
+        speaker: { role: 'operator', person: 'helmut' },
       },
     ]);
   });

@@ -369,18 +369,29 @@ Frames), beim Publikum über die ganze Halle, alle 17 Pulte und 13 Bücher im Bi
 16,7 ms über 121 Frames).
 
 **Ton und Funkstimme:** Jeder Raum klingt nach seiner Art, die Schritte des Partners kommen von
-dort, wo er steht, und die Musik zieht mit dem Druck an ([`docs/sound.md`](docs/sound.md)). Zwei
-Stimmen sprechen: die Leitstelle am Funk — zum Start, nach jeder Lösung, wenn es still wird, beim
-ersten Alarm, bei fünf, zwei und einer Minute Restzeit, im Notfall, mit einem Schlusswort auf der
-Endkarte und mit einer Funkprobe in der Lobby — und die Anlage über ihre Lautsprecher. Eine Zeile
-darf zwei oder drei Fassungen haben, ein Lauf sagt eine. Die Aufnahmen liegen in
-`packages/client/public/voice/` (ElevenLabs: die Leitstelle „Helmut"). Die eigene Stimme der Anlage
-entsteht per Voice Design und wartet wie die neuen Zeilen noch auf den Render, bis dahin spricht
-Helmut die Durchsage im Intro (Befehle in `docs/sound.md`). Wer einen Funktext in
-`missions/*.json` ändert oder neu schreibt, nimmt ihn neu auf — der Test, der jede Zeile prüft,
-nennt den Befehl:
+dort, wo er steht, und die Musik zieht mit dem Druck an ([`docs/sound.md`](docs/sound.md)). Am
+Funk spricht eine Besetzung (`packages/core/src/cast.json`): die Leitstelle im Dienst — zum Start,
+nach jeder Lösung, wenn es still wird, beim ersten Alarm, im Notfall, mit dem Schlusswort eines
+gewonnenen Laufs und mit einer Funkprobe in der Lobby —, die Schichtleitung, wenn es ernst wird —
+bei fünf, zwei und einer Minute Restzeit und mit dem Schlusswort eines verlorenen Laufs —, und die
+Anlage über ihre Lautsprecher. Wer von Helmut, Laura und Ben eine Nacht in der Leitstelle hat,
+lost der Seed des Raums aus; das Banner nennt Rolle und Person („LEITSTELLE · LAURA"). Dienst hat
+nur, wessen Stimme besetzt ist: Solange Mila, die Schichtleitung, keine hat, spricht die
+Leitstelle im Dienst ihre Zeilen. Eine Zeile darf zwei oder drei Fassungen haben, ein Lauf sagt
+eine; Regieanweisungen wie `[sighs]` im Text hört nur die Aufnahme. Die Aufnahmen liegen in
+`packages/client/public/voice/`, eine je Person und Zeile (ElevenLabs, bisher nur „Helmut"); der
+Service Worker lädt sie nicht vorab. Eine Stimme kommt aus der Bibliothek des Kontos —
+`voice --previews` holt die Hörproben der sieben Stimmen, die `packages/client/scripts/casting.json`
+anbietet, kostenlos — oder aus Voice Design, `voice --design <rolle>` macht drei Proben; die Seite
+`/voices` spielt beides unter `pnpm dev` und dazu jede gerenderte Zeile, `voice --keep
+<rolle>=<stimmen-id oder n>` besetzt eine (über vorhandene Aufnahmen nur mit `--replace`), und
+`voice --plan` nennt vor jedem Render Zeilen, Zeichen und Credits je Person (Befehle und Kosten in
+`docs/sound.md`). Bis dahin hat Helmut jede Nacht und spricht die Durchsage im Intro. Wer einen
+Funktext in `missions/*.json` ändert oder neu schreibt, nimmt ihn neu auf — der Test, der jede
+Zeile prüft, nennt den Befehl:
 
 ```sh
+pnpm --filter @escapelab/client voice --plan     # was ein Render kostet, ohne Schlüssel
 VOICE_ENGINE=elevenlabs pnpm --filter @escapelab/client voice   # nur fehlende Zeilen, ElevenLabs
 pnpm --filter @escapelab/client voice            # nur fehlende Zeilen, offline (Piper über uv)
 VOICE_ENGINE=say pnpm --filter @escapelab/client voice --fresh   # ohne Netz: die Mac-Stimme Anna
@@ -464,11 +475,11 @@ Betrieb:
   hält Räume nur im Speicher — aber jede Crew trägt den Stand ihres Raums mit: 2 s nach einer Tat
   der Crew und, solange die Uhr eines Einsatzes läuft, spätestens alle 10 s samt den Standorten
   bekommt jeder Platz einen gepackten, mit `ROOM_SECRET` versiegelten Schnappschuss (Deflate,
-  AES-256-GCM; Blackout mitten im Lauf rund 8 kB, beim Laufen 44 kB je Platz und Minute), und der
-  Browser hält den neuesten in `localStorage` (`escapelab-snapshot:<Code>`). Ein Raum, dessen Uhr
-  steht, schickt nur, was sich geändert hat. Für eine laufende Partie heißt ein Deploy deshalb eine
-  Wartungspause von Sekunden: Die Uhr steht, die Karte sagt „WARTUNG · Der Server startet neu", die
-  Seiten verbinden sich wie nach einem Abbruch neu, der neue Server stellt den Raum aus dem
+  AES-256-GCM; Blackout mitten im Lauf unter 11 kB, beim Laufen rund 62 kB je Platz und Minute), und
+  der Browser hält den neuesten in `localStorage` (`escapelab-snapshot:<Code>`). Ein Raum, dessen
+  Uhr steht, schickt nur, was sich geändert hat. Für eine laufende Partie heißt ein Deploy deshalb
+  eine Wartungspause von Sekunden: Die Uhr steht, die Karte sagt „WARTUNG · Der Server startet neu",
+  die Seiten verbinden sich wie nach einem Abbruch neu, der neue Server stellt den Raum aus dem
   mitgebrachten Schnappschuss wieder her, und sobald zurück ist, wer beim Deploy verbunden war,
   läuft die Uhr dort weiter, wo sie stand; wer schon vorher getrennt war, bleibt es wie zuvor.
   Auto-Deploy bleibt an, also ist jeder Push auf `main` ein Deploy; wer pusht, sieht

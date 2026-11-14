@@ -17,15 +17,29 @@ import type { Plugin, ResolvedConfig, Rollup } from 'vite';
 const SW_FILE = 'sw.js';
 
 /**
+ * The folders of public/ the worker leaves out of its install: the radio's recordings (voice/),
+ * some 20 MB once the whole cast speaks, which the game fetches line by line as each is queued —
+ * from the browser's own cache where it has them, and offline a line missing stands in with the
+ * radio's chirp. Nor are they hashed into the worker's version: a new take brings no new worker.
+ */
+const FETCHED_AS_NEEDED: readonly string[] = ['voice/'];
+
+/** Whether the file `name` of public/ goes into the install: all but FETCHED_AS_NEEDED's. */
+export function precached(name: string): boolean {
+  return !FETCHED_AS_NEEDED.some((folder) => name.startsWith(folder));
+}
+
+/**
  * What the worker keeps at install: the page as "/", then every file of the
- * build and of public/ by its address. Not the worker itself (the browser
+ * build and of public/ by its address — but the folders the game fetches as
+ * it needs them (FETCHED_AS_NEEDED). Not the worker itself (the browser
  * fetches it on its own), not index.html under its name, no dotfiles.
  *
  * @param built the bundle's file names, as "assets/index-3f9a.js"
  * @param published the files under public/, as "icon.svg"
  */
 export function precacheFiles(built: readonly string[], published: readonly string[]): string[] {
-  const kept = [...built, ...published].filter(
+  const kept = [...built, ...published.filter(precached)].filter(
     (name) =>
       name !== SW_FILE &&
       name !== 'index.html' &&
@@ -47,6 +61,30 @@ function filesUnder(dir: string): string[] {
 
 function contentOf(file: Rollup.OutputChunk | Rollup.OutputAsset): string | Uint8Array {
   return file.type === 'chunk' ? file.code : file.source;
+}
+
+/**
+ * The worker's version: a hash of the build's files but the worker itself, and of the files of
+ * public/ it keeps at install (`precached`), each by name and content — so that a release that
+ * changes one brings a new worker, and a new take of the radio, which no install keeps, does not.
+ *
+ * @param built the bundle's files by name, as "assets/index-3f9a.js", with their content
+ * @param published the files under public/, as "icon.svg"
+ * @param read the content of a file under public/, by its name there
+ */
+export function versionOf(
+  built: Readonly<Record<string, string | Uint8Array>>,
+  published: readonly string[],
+  read: (name: string) => string | Uint8Array,
+): string {
+  const digest = createHash('sha256');
+  for (const [name, content] of Object.entries(built).sort(([a], [b]) => (a < b ? -1 : 1))) {
+    if (name !== SW_FILE) digest.update(name).update(content);
+  }
+  for (const name of published.filter(precached)) {
+    digest.update(name).update(read(name));
+  }
+  return digest.digest('hex').slice(0, 12);
 }
 
 /** The Vite plugin: emits sw.js as an entry of its own and puts PRECACHE in front of it. */
@@ -88,17 +126,11 @@ export function serviceWorker(): Plugin {
       const publicDir = config.publicDir;
       const published = filesUnder(publicDir);
       const files = precacheFiles(Object.keys(bundle), published);
-      const digest = createHash('sha256');
-      for (const name of Object.keys(bundle).sort()) {
-        const file = bundle[name];
-        if (name !== SW_FILE && file !== undefined) {
-          digest.update(name).update(contentOf(file));
-        }
-      }
-      for (const name of published) {
-        digest.update(name).update(readFileSync(join(publicDir, name)));
-      }
-      const precache = { version: digest.digest('hex').slice(0, 12), files };
+      const built = Object.fromEntries(
+        Object.entries(bundle).map(([name, file]) => [name, contentOf(file)]),
+      );
+      const read = (name: string): Uint8Array => readFileSync(join(publicDir, name));
+      const precache = { version: versionOf(built, published, read), files };
       worker.code = `"use strict";const PRECACHE=${JSON.stringify(precache)};\n${worker.code}`;
     },
   };

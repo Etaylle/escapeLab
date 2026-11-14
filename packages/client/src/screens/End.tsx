@@ -9,10 +9,11 @@ import {
   type RunEvent,
 } from '@escapelab/core';
 import { useRunPlaques } from '../achievements.js';
-import { endsRun, reportLine } from '../radio.js';
+import { endsRun, reportLine, voiceLineOf } from '../radio.js';
 import { clock } from '../runStats.js';
 import { endingOf, type Ending } from '../world/finale.js';
 import { playEnding, stopEnding } from '../world/endTheme.js';
+import type { VoiceLine } from '../world/radioVoice.js';
 import { CreditsTable } from './Crew.js';
 import { CrewFigure } from './CrewFigure.js';
 import { Icon, type IconName } from './Icon.js';
@@ -90,8 +91,8 @@ export interface TitleCardProps {
   youId: string | null;
   /** this screen played the run's end: the card comes up out of its fade */
   fresh: boolean;
-  /** the operator's last word on the run, which the card says after its sting; null for none */
-  lastWord: string | null;
+  /** the last word on the run, which the card says after its sting, by who says it; or null */
+  lastWord: VoiceLine | null;
   /** what stands under the facts: a player's plaques and „Bild speichern"; none for the audience */
   extra?: ReactNode;
 }
@@ -103,19 +104,22 @@ export interface TitleCardProps {
  * won sting swells; lost, it stands in the dark lab under the red of an
  * emergency lamp, and the lost sting sinks (music.ts `playSting`). Where this
  * screen played the end, the card comes up out of its fade with its sting, the
- * operator's last word on the run and the ending's theme after them, which go
- * with the card (world/endTheme.ts).
+ * last word on the run and the ending's theme after them, which go with the card
+ * (world/endTheme.ts).
  */
 export function TitleCard(props: TitleCardProps) {
   const { ending, fresh, lastWord } = props;
   const won = ending === 'won';
+  // The word by its parts: a card drawn again with the same word plays nothing anew.
+  const text = lastWord?.text ?? null;
+  const person = lastWord?.person ?? null;
   useEffect(() => {
     if (!fresh) {
       return undefined;
     }
-    playEnding(won ? 'won' : 'lost', lastWord);
+    playEnding(won ? 'won' : 'lost', text === null || person === null ? null : { text, person });
     return () => stopEnding();
-  }, [fresh, won, lastWord]);
+  }, [fresh, won, text, person]);
   const title = ENDING_TITLES[ending];
   const tone = won ? 'won' : ending === 'lost:alarms' ? 'alarms' : 'time';
   return (
@@ -264,9 +268,10 @@ export type CardSource = Pick<
   | 'events'
 > & { players: CardMate[] };
 
-/** The operator's last word on a run that is over, as its report has it; null for none. */
-export function lastWordOf(events: readonly RunEvent[]): string | null {
-  return [...events].reverse().find(endsRun)?.label ?? null;
+/** The last word on a run that is over, as its report has it, by who says it; null for none. */
+export function lastWordOf(events: readonly RunEvent[]): VoiceLine | null {
+  const word = [...events].reverse().find(endsRun);
+  return word === undefined ? null : voiceLineOf(word);
 }
 
 /**

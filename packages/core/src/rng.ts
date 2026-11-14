@@ -15,6 +15,28 @@ export function mulberry32(seed: number): Rng {
   };
 }
 
+/**
+ * One of `items` for `seed` at `key` — a place in the mission, `solved:<station>`, or a role of
+ * the cast, `cast:operator` — the `occurrence`-th time it is asked for: the first from the seed
+ * and the key, an FNV-1a hash of the key mixed into the seed, so that one seed always picks the
+ * same and another most often another; each later occurrence the next in turn. Undefined for
+ * no items.
+ */
+export function pickOf<T>(
+  items: readonly T[],
+  seed: number,
+  key: string,
+  occurrence = 0,
+): T | undefined {
+  let hash = 0x811c9dc5;
+  for (const char of key) {
+    hash ^= char.charCodeAt(0);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  const first = Math.floor(mulberry32((seed ^ hash) >>> 0)() * items.length);
+  return items[(first + occurrence) % items.length];
+}
+
 export function shuffle<T>(items: readonly T[], rng: Rng): T[] {
   const arr = [...items];
   for (let i = arr.length - 1; i > 0; i--) {

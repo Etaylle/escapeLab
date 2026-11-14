@@ -207,7 +207,8 @@ describe('the objective bar folded into the row', () => {
     expect(html).not.toContain('class="stage-goal"');
     expect(html).toContain(
       '<div class="stage-row"><div class="radio-banner" role="status">' +
-        '<span class="radio-banner-from">[radio] LEITSTELLE</span> — Strom weg im ganzen Trakt.' +
+        '<span class="radio-banner-from">[radio] LEITSTELLE · HELMUT</span> — ' +
+        'Strom weg im ganzen Trakt.' +
         '</div><span class="probe-crew">',
     );
     const sign = bar({ kind: 'sign' });
@@ -266,6 +267,7 @@ function annaSees(parts: Partial<PlayerView> = {}): PlayerView {
     missionTitle: 'Blackout im Labor',
     difficulty: 'normal',
     storyText: '',
+    cast: { pa: 'anlage', operator: 'helmut', lead: null },
     crewSize: { min: 2, max: 3 },
     chat: [],
     you: anna,

@@ -314,6 +314,7 @@ export function spectatorAsPlayerView(
     away: view.away,
     pausedAt: view.pausedAt,
     events: view.events,
+    cast: view.cast,
     grade: view.grade,
     penaltySeq: view.penaltySeq,
     lastPenaltySec: null,

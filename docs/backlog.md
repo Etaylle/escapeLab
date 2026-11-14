@@ -500,7 +500,7 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   CC BY. In Einstellungen → Ton: Paketwahl, Feinwahl je Platz aus allen Paketen, Vorhören,
   „Nennungen"; Wahl je Gerät in `settings.ts`.
 
-### V-3 Stimmenbesetzung: Stimmen, die sich abwechseln — Status: in Arbeit (V-cast, Spec `spec-V-cast.md`) · Größe: M
+### V-3 Stimmenbesetzung: Stimmen, die sich abwechseln — Status: erledigt (V-cast, Merge 2026-11-14, 1ebaf24; zwei Review-Runden und zwei Deltas; Cloud-CI grün auf af1e84a, Check und Walkthrough; Render der Besetzung bleibt bei Uros: 21.592 Credits für 213 Zeilen, 25.575 mit --fresh; Spec `spec-V-cast.md`) · Größe: M
 - Uros 2026-11-14 08:05: „Ich will alles hören, und vielleicht ist cool, wenn sich sogar alle
   Stimmen abwechseln oder kombinieren; nutze das Beste und Maximum aus ElevenLabs."
 - Rollen statt Sprecher: `pa` (Anlage), `operator` (Leitstelle im Dienst, je Lauf per Seed aus
@@ -510,6 +510,20 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   und nur fehlende Dateien; Seite `/voices` (nur `pnpm dev`) spielt alle Stimmproben und alle
   gerenderten Zeilen je Sprecher. Kosten: je weiterer Operator ≈ 10.000 Credits; der große
   Render wartet auf die fertige Besetzung.
+- Im PR: Besetzung als Daten (`core/src/cast.json`: Anlage; Helmut, Laura, Ben; Mila — nach
+  Uros' Bibliotheksstimmen aus der Sammlung „escapeLab"); je Raum ein `castSeed` (der gepinnte
+  Seed oder gelost), Nacht n ist `castOf(castSeed + n)`, so spricht die Funkprobe in der Lobby
+  schon, wer den nächsten Lauf hat; im Dienst ist nur, wer eine besetzte Stimme hat — Anlage und
+  Leitstelle sonst ihre erste Person, die Schichtleitung niemand: ihre Zeilen spricht die
+  Leitstelle im Dienst, das Banner nennt dann die Leitstelle; Modell je Person (Bibliotheks-
+  stimmen `eleven_v4`, Voice-Design-Stimmen `eleven_v3`). Prompts und Bibliotheksliste in
+  `client/scripts/casting.json`, nicht im Spiel. `--keep <slot>=<stimmen-id>` besetzt eine
+  Bibliotheksstimme, `--previews` holt deren Hörproben kostenlos, `--replace` ist Pflicht über
+  vorhandenen Aufnahmen; der Render ist standardmäßig der einfache Lauf (behält Helmuts 47 Takes),
+  `--fresh` die Lizenzwahl für 3.983 Credits. `public/voice` fällt aus dem Precache des Service
+  Workers. Fünf Regie-Tags in Blackout; Ordnergrenze der Aufnahmen 12 → 24 MB. Kosten: Laura,
+  Ben und Mila mit ihren Bibliotheksstimmen und die Anlage besetzt → 21.592 Credits (213 Zeilen),
+  mit `--fresh` 25.575. Offen: Wahl auf `/voices`, Keeps und Render durch Uros.
 
 ### M-1 Drei Spielende: Beweis und Sichtbarkeit — Status: erledigt (M-three, Merge 2026-11-14, a2ef8da; drei Review-Runden; Cloud-CI grün auf 347d444, Check und Walkthrough; CI-Budget um zwei Minuten angehoben) · Größe: M
 - Befund: mechanisch trägt die dritte Person (Leserin mit Regeln, Notizen und Funk an Zwei-Pult-

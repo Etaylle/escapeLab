@@ -1,4 +1,10 @@
-import { radioLines, type Mission, type MissionInfo, type RadioMoment } from '@escapelab/core';
+import {
+  radioLines,
+  sayersOf,
+  type Mission,
+  type MissionInfo,
+  type RadioMoment,
+} from '@escapelab/core';
 import {
   MANIFEST_URL,
   VOICE_BASE,
@@ -9,8 +15,8 @@ import {
 /**
  * The radio lines the /record page offers a person to speak or to replace with a file: every
  * line a shipped mission can put on the air (core's `radioLines`, from the missions the server
- * hands out — not the ones made in the editor), each with what the manifest says of its
- * recording.
+ * hands out — not the ones made in the editor), once for each person of the cast who says it
+ * (core cast.ts `sayersOf`), each with what the manifest says of its recording.
  */
 
 /** Who made a recording: a synthetic voice, a person at the page's microphone, or a file. */
@@ -23,11 +29,13 @@ export interface Recording {
   readonly file: string;
 }
 
-/** One line to speak, and the recording it has. */
+/** One line to speak, as one person of the cast says it, and the recording it has. */
 export interface RecordLine {
-  /** its recording's id: the first 12 hex digits of the SHA-1 of what it says */
+  /** its recording's id: the person's, and the first 12 hex digits of the SHA-1 of what it says */
   readonly id: string;
   readonly text: string;
+  /** whose recording it is: the person of the cast, by name */
+  readonly name: string;
   /** the titles of the missions that say it */
   readonly missions: readonly string[];
   readonly when: RadioMoment;
@@ -37,49 +45,50 @@ export interface RecordLine {
   readonly recording: Recording | null;
 }
 
+/** A line's recording as `manifest` has it under `id`; null where it has none. */
+function recordingOf(manifest: VoiceManifest, id: string): Recording | null {
+  const entry = manifest.lines[id];
+  return entry === undefined
+    ? null
+    : { ms: entry.ms, source: entry.source ?? 'synthetic', file: entry.file };
+}
+
 /**
  * Every line `missions` can put on the air, in their order and each mission's in the order a
- * run hears them — a line two missions say listed once, under both — with its recording as
- * `manifest` has it; `ids` names each line's recording.
+ * run hears them, once for each person who says it — a line two missions say listed
+ * once, under both — with its recording as `manifest` has it; `hashes` names each line's words
+ * (`voiceIds`), the person's id before it naming the recording.
  */
 export function recordLines(
   missions: readonly Mission[],
   manifest: VoiceManifest,
-  ids: ReadonlyMap<string, string>,
+  hashes: ReadonlyMap<string, string>,
 ): RecordLine[] {
   const lines = new Map<string, RecordLine>();
   for (const mission of missions) {
     for (const said of radioLines(mission)) {
-      const id = ids.get(said.text);
-      if (id === undefined) {
+      const hash = hashes.get(said.text);
+      if (hash === undefined) {
         throw new Error(`recordLines: no id for the line "${said.text}"`);
       }
-      const known = lines.get(id);
-      if (known !== undefined) {
-        const missions = [...new Set([...known.missions, mission.title])];
-        lines.set(id, { ...known, missions });
-        continue;
+      const station = mission.puzzles.find((p) => p.id === said.puzzleId)?.title ?? null;
+      for (const person of sayersOf(said.role)) {
+        const id = `${person.id}-${hash}`;
+        const known = lines.get(id);
+        const titles = [...new Set([...(known?.missions ?? []), mission.title])];
+        const { text, when } = said;
+        const recording = recordingOf(manifest, id);
+        lines.set(id, { id, text, name: person.name, missions: titles, when, station, recording });
       }
-      const puzzle = mission.puzzles.find((p) => p.id === said.puzzleId);
-      const entry = manifest.lines[id];
-      const recording: Recording | null =
-        entry === undefined
-          ? null
-          : { ms: entry.ms, source: entry.source ?? 'synthetic', file: entry.file };
-      lines.set(id, {
-        id,
-        text: said.text,
-        missions: [mission.title],
-        when: said.when,
-        station: puzzle?.title ?? null,
-        recording,
-      });
     }
   }
   return [...lines.values()];
 }
 
-/** The ids of the recordings of `texts`, as the voice script names them. */
+/**
+ * The first 12 hex digits of the SHA-1 of each of `texts`, as the voice script names a line's
+ * words in the ids of its recordings.
+ */
 export async function voiceIds(texts: readonly string[]): Promise<Map<string, string>> {
   const subtle = globalThis.crypto?.subtle;
   if (subtle === undefined) {

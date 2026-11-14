@@ -26,6 +26,7 @@ function running(parts: Partial<PlayerView> = {}): PlayerView {
     missionTitle: 'Tutorial: Systemcheck',
     difficulty: 'normal',
     storyText: 'Los.',
+    cast: { pa: 'anlage', operator: 'helmut', lead: null },
     crewSize: { min: 2, max: 2 },
     chat: [],
     you: anna,

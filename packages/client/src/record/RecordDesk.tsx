@@ -19,8 +19,11 @@ export function seconds(ms: number): string {
   return `${(Math.max(0, ms) / 1000).toFixed(1).replace('.', ',')} s`;
 }
 
-/** When a line is heard, as the page names it; a station's lines name the station. */
-const MOMENTS: Readonly<Record<RadioMoment, string>> = {
+/**
+ * When a line is heard, as the page names it beside who says it; a station's lines name the
+ * station.
+ */
+export const MOMENTS: Readonly<Record<RadioMoment, string>> = {
   pa: 'Durchsage',
   start: 'Start',
   nudge: 'Hinweis',
@@ -38,7 +41,7 @@ const MOMENTS: Readonly<Record<RadioMoment, string>> = {
 };
 
 const momentOf = (line: RecordLine): string =>
-  [MOMENTS[line.when], line.station].filter((part) => part !== null).join(' · ');
+  [line.name, MOMENTS[line.when], line.station].filter((part) => part !== null).join(' · ');
 
 /** Who made a recording, as the page names it. */
 const SOURCES: Readonly<Record<Source, string>> = {

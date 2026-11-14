@@ -136,6 +136,13 @@
   min-width: 0;
 }
 
+/* A library voice whose preview is not fetched yet stands where its play button would. */
+.sounds-missing {
+  flex: none;
+  font-size: 12px;
+  color: var(--muted);
+}
+
 /*
  * A take that, kept, would fail the game's recordings: off its length, or its floor heard — its
  * own line, and of a suite's pieces those that would.

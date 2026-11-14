@@ -27,7 +27,7 @@
     "lobby": [
       "Funkprobe, Nachtschicht. Ich höre euch laut und klar. Bisher eine ruhige Nacht im Trakt, von mir aus kann es losgehen.",
       "Kurze Funkprobe. Alle haben sich gemeldet, ihr kommt sauber bei mir an. Ich bleibe die ganze Nacht auf dieser Frequenz.",
-      "Nachtschicht, Funkprobe. Ich höre jeden von euch klar. Dann hoffen wir mal auf eine lange, langweilige Nacht."
+      "Nachtschicht, Funkprobe. Ich höre jeden von euch klar. Dann hoffen wir mal auf eine lange, langweilige Nacht. [chuckles]"
     ],
     "start": [
       "Leitstelle an Nachtschicht. Stromausfall im ganzen Trakt, ich sehe nur noch die Notzellen. Geht zuerst ans Notlicht, der Hauptschalter im Flur braucht zwei Leute.",
@@ -65,7 +65,7 @@
       ],
       "cleared": [
         "Kühlung steht wieder, die Relais halten. Weiter, wo ihr aufgehört habt.",
-        "Die Relais greifen wieder, ich habe die Kühlung zurück. Rechtzeitig, danke euch."
+        "[exhales] Die Relais greifen wieder, ich habe die Kühlung zurück. Rechtzeitig, danke euch."
       ],
       "missed": [
         "Die Kühlung ist abgesackt, das hat uns Zeit gekostet. Zurück an die Arbeit, beim nächsten Mal schneller.",
@@ -82,14 +82,14 @@
         "Reaktor läuft, Notausgang zu, alle vollzählig draußen. Das ging bis in die letzten Minuten. Geht euch aufwärmen, die Frühschicht übernimmt."
       ],
       "lastMinute": [
-        "Das war die letzte Minute, und ihr seid raus. Die Zellen waren fast leer, als der Reaktor kam. Durchatmen, Nachtschicht.",
-        "Ihr seid draußen, mit Sekunden übrig. Der Trakt hat Strom, die Proben sind gerettet, und ich atme hier auch erst mal durch."
+        "Das war die letzte Minute, und ihr seid raus. Die Zellen waren fast leer, als der Reaktor kam. [exhales] Durchatmen, Nachtschicht.",
+        "Ihr seid draußen, mit Sekunden übrig. Der Trakt hat Strom, die Proben sind gerettet, und ich atme hier auch erst mal durch. [exhales]"
       ]
     },
     "lost": {
       "time": [
         "Die Notzellen sind leer, im Trakt ist es jetzt ganz dunkel. Bleibt, wo ihr seid, die Frühschicht holt euch raus.",
-        "Das war's, die Notversorgung ist aus. Rührt nichts mehr an, die Frühschicht kommt mit Licht."
+        "[sighs] Das war's, die Notversorgung ist aus. Rührt nichts mehr an, die Frühschicht kommt mit Licht."
       ],
       "alarms": [
         "Die Sicherheitsschaltung hat zugemacht, zu viele Alarme in einer Schicht. Der Trakt bleibt dunkel, bis die Frühschicht kommt.",

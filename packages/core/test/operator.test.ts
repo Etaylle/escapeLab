@@ -107,6 +107,7 @@ describe('the operator on the run’s first alarm', () => {
       label: LINES.alarm,
       seconds: null,
       moment: 'alarm',
+      speaker: { role: 'operator', person: 'helmut' },
     });
     const more = drone(drone(first, T0 + 20_000), T0 + 30_000);
     expect(said(more)).toEqual([['alarm', LINES.alarm]]);
@@ -336,8 +337,11 @@ describe('the operator’s lines in the mission file', () => {
       ['lost', LINES.lost.alarms],
       ['lost', LINES.lost.abandoned],
     ]);
-    expect(answers.every((line) => line.speaker === 'operator' && line.puzzleId === null)).toBe(
-      true,
+    // The clock's calls and the last word on a run lost are the Schichtleitung's, the rest the
+    // Leitstelle's: every answer on the radio, none over the loudspeakers.
+    const serious = (when: string): boolean => when === 'clock' || when === 'lost';
+    expect(answers.map((line) => [line.when, line.role, line.puzzleId])).toEqual(
+      answers.map(({ when }) => [when, serious(when) ? 'lead' : 'operator', null]),
     );
     // Each said as its moment wants it: tense, pressing, urgent, relieved, warm, quiet.
     expect(answers.map((line) => line.mood)).toEqual([
@@ -410,7 +414,7 @@ describe('the lobby’s Funkprobe', () => {
         text,
         when: 'lobby',
         puzzleId: null,
-        speaker: 'operator',
+        role: 'operator',
         mood: 'calm',
       })),
     );
