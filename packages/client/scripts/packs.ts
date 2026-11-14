@@ -692,20 +692,33 @@ export async function buildPack(pack: PlanPack, bench: Bench, force = false): Pr
   const dir = join(bench.places.music, pack.id);
   mkdirSync(dir, { recursive: true });
   const before = force ? {} : piecesBefore(bench.places, pack.id);
-  let built: Built[];
-  try {
-    built = partsOf({ pack, dir, bench, before }, paths);
-  } catch (error) {
-    return { id: pack.id, refused: [error instanceof Error ? error.message : String(error)] };
-  }
+  const built = attempt(() => partsOf({ pack, dir, bench, before }, paths));
+  if (typeof built === 'string') return { id: pack.id, refused: [built] };
   const bytes = bytesOf(built.map(({ part, piece }) => part ?? join(dir, piece.file)));
-  if (bytes > PACK_CAP) {
-    for (const part of partsIn(built)) rmSync(part, { force: true });
-    const mb = (bytes / 1024 / 1024).toFixed(1);
-    return { id: pack.id, refused: [`${pack.id}: ${mb} MB, over its 9 MB — shorten its loops`] };
-  }
-  for (const { part, piece } of built) if (part !== null) renameSync(part, join(dir, piece.file));
+  if (bytes > PACK_CAP) return overCap(pack.id, built, bytes);
+  moveIn(built, dir);
   return madeOf(pack, built, bytes, bench.places);
+}
+
+/** Every part among `built` moved into `dir` under its piece's file name, all at once. */
+function moveIn(built: readonly Built[], dir: string): void {
+  for (const { part, piece } of built) if (part !== null) renameSync(part, join(dir, piece.file));
+}
+
+/** What `make` makes, or the message of the error it throws. */
+function attempt<T extends object>(make: () => T): T | string {
+  try {
+    return make();
+  } catch (error) {
+    return error instanceof Error ? error.message : String(error);
+  }
+}
+
+/** The pack `id` refused over PACK_CAP, its files `bytes` in all: every part of it taken back. */
+function overCap(id: string, built: readonly Built[], bytes: number): Outcome {
+  for (const part of partsIn(built)) rmSync(part, { force: true });
+  const mb = (bytes / 1024 / 1024).toFixed(1);
+  return { id, refused: [`${id}: ${mb} MB, over its 9 MB — shorten its loops`] };
 }
 
 /** `pack` as `built`, `bytes` in all: its pack.json written, and what the run says of it. */
