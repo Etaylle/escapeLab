@@ -1,4 +1,4 @@
-import { NUDGED, speakerOf, type RunEvent } from '@escapelab/core';
+import { NUDGED, speakerOf, type RadioMoment, type RunEvent } from '@escapelab/core';
 
 /**
  * How long a line stays on the air at least — a line spoken longer stays while it speaks
@@ -43,9 +43,45 @@ export function fromControl(event: RunEvent): boolean {
   return (event.kind === 'radio' || event.kind === 'nudge') && !fromPlant(event);
 }
 
-/** What goes on the air: mission control's lines, the plant's, and the notes the crew revealed. */
+/**
+ * Whether a line is the operator's last word on a run, won or lost: the end card says it after
+ * its sting (world/endTheme.ts), never the objective bar.
+ */
+export function endsRun(event: RunEvent): boolean {
+  return event.moment === 'won' || event.moment === 'lost';
+}
+
+/**
+ * What goes on the air: mission control's lines, the plant's, and the notes the crew revealed —
+ * but the last word on the run, which the end card has.
+ */
 function onAir(event: RunEvent): boolean {
-  return fromControl(event) || fromPlant(event) || event.kind === 'hint';
+  return (fromControl(event) || fromPlant(event) || event.kind === 'hint') && !endsRun(event);
+}
+
+/**
+ * How lines on the air rank against each other (`withNews`): the run's story — the start, a
+ * solve's line, the escape — and a note the crew asked for, highest; the calls — the first
+ * alarm, the clock, an emergency and the plant's message on it — below them; a nudge lowest.
+ */
+export const RANKS = { nudge: 0, call: 1, story: 2 } as const;
+
+/** The moments of the calls, which rank between the story and a nudge. */
+const CALLS: ReadonlySet<RadioMoment> = new Set([
+  'announce',
+  'emergency',
+  'cleared',
+  'missed',
+  'alarm',
+  'clock',
+]);
+
+/** How `event` ranks on the air (RANKS); a line kept from before moments were noted, as story. */
+export function rankOf(event: RunEvent): number {
+  if (event.kind === 'nudge') {
+    return RANKS.nudge;
+  }
+  return event.moment !== undefined && CALLS.has(event.moment) ? RANKS.call : RANKS.story;
 }
 
 /**
@@ -115,21 +151,39 @@ export function followsSolve(events: readonly RunEvent[], seen: number): boolean
   return events.slice(seen).some((event) => event.kind === 'puzzle');
 }
 
+/** A line in the bar's queue. */
+type LineNotice = Extract<Notice, { kind: 'line' }>;
+
 /**
- * The bar's queue once fresh lines came in, none on the air before `notBefore`: they replace
- * the lines still queued, the one on the air included — they are the newer news — and go on
- * the air first: the note that the sign was read waits behind them, a note up now included,
- * which comes back once they are said. The radio never waits for the note.
+ * Whether the queued `notice` stays ahead of a fresh line of `rank`: it outranks the line, or
+ * both are calls — a call waits for the one before it, so that it never speaks over it.
+ */
+const staysAhead = (notice: LineNotice, rank: number): boolean => {
+  const its = rankOf(notice.event);
+  return its > rank || (its === rank && rank === RANKS.call);
+};
+
+/**
+ * The bar's queue once fresh lines came in, none on the air before `notBefore`. Each fresh line
+ * drops the queued lines it outranks, the one on the air included, and waits behind the rest
+ * (`staysAhead`): a call — an alarm, the clock, an emergency — cuts a nudge short but waits for
+ * a line of the run's story and for another call; a line of the story replaces the older lines
+ * of the story as the newer news, and a nudge an older nudge. The note that the sign was read
+ * waits behind them all, a note up now included, which comes back once they are said. The radio
+ * never waits for the note.
  */
 export function withNews(
   queue: readonly Notice[],
   news: readonly RunEvent[],
   notBefore = 0,
 ): Notice[] {
-  return [
-    ...news.map((event): Notice => ({ kind: 'line', event, notBefore })),
-    ...queue.filter((notice) => notice.kind === 'sign'),
-  ];
+  let lines = queue.filter((notice): notice is LineNotice => notice.kind === 'line');
+  for (const event of news) {
+    const rank = rankOf(event);
+    const ahead = lines.filter((notice) => staysAhead(notice, rank));
+    lines = [...ahead, { kind: 'line', event, notBefore }];
+  }
+  return [...lines, ...queue.filter((notice) => notice.kind === 'sign')];
 }
 
 /**

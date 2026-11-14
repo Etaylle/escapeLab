@@ -222,6 +222,8 @@ const gameStateSchema = z.looseObject({
   hintReadyAt: moment,
   quietSince: moment,
   nudgesGiven: count,
+  // A snapshot of a build before the clock's calls: a call it passed by is too late, and unsaid.
+  clockCalls: count.default(0),
 }) satisfies z.ZodType<GameState>;
 
 const seatSchema = z.looseObject({

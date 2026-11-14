@@ -1,6 +1,12 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { parseMission, PA_LINES_MAX, radioLines, type Mission } from '../src/index.js';
+import {
+  parseMission,
+  PA_LINES_MAX,
+  radioLines,
+  type Mission,
+  type RadioLine,
+} from '../src/index.js';
 import { offVoice, WORLD } from './voice.js';
 
 /**
@@ -73,11 +79,50 @@ function offAir(lines: readonly string[]): string[] {
   );
 }
 
-/** Every line the operator can put on the air in `mission`, in the order a run hears them. */
+/** Whether a line is the operator's last word on a run, won or lost, which the end card says. */
+const lastWord = (line: RadioLine): boolean => line.when === 'won' || line.when === 'lost';
+
+/**
+ * Every line the operator can put on the air in `mission`, in the order a run hears them: all
+ * but the last word on the run, a debrief of its own (`lastWordsOf`).
+ */
 const textsOf = (mission: Mission): string[] =>
   radioLines(mission)
-    .filter((line) => line.speaker === 'operator')
+    .filter((line) => line.speaker === 'operator' && !lastWord(line))
     .map((line) => line.text);
+
+/** The operator's last words on a run of `mission`, won and lost. */
+const lastWordsOf = (mission: Mission, when?: 'won' | 'lost'): string[] =>
+  radioLines(mission)
+    .filter((line) => lastWord(line) && (when === undefined || line.when === when))
+    .map((line) => line.text);
+
+/**
+ * The most words the last word on a run says: a debrief of two or three sentences, which the end
+ * card has time for — under 28 words, as every new line of the operator's.
+ */
+const LAST_WORDS_MAX = 27;
+
+/** The most sentences the last word on a run has, a short call beside them. */
+const LAST_SENTENCES_MAX = 3;
+
+/**
+ * What the last word on a run must not be: longer than a debrief, and otherwise anything a line
+ * on the air must not be — a call-out included: it says how the night went, it hurries nobody.
+ */
+const LAST_CHECKS: readonly (readonly [string, (line: string) => boolean])[] = [
+  [`over ${LAST_WORDS_MAX} words`, (line) => wordsIn(line) > LAST_WORDS_MAX],
+  [`over ${LAST_SENTENCES_MAX} sentences`, (line) => sentencesIn(line) > LAST_SENTENCES_MAX],
+  [`over ${LAST_SENTENCES_MAX + 1} pieces`, (line) => piecesOf(line).length > 4],
+  ...CHECKS.filter(([what]) => !/^over /.test(what)),
+  ['calls out', (line) => line.includes('!')],
+];
+
+/** Every line of `lines` that breaks a check of the last word's rules, with what it does. */
+const offRecord = (lines: readonly string[]): string[] =>
+  lines.flatMap((line) =>
+    LAST_CHECKS.filter(([, breaks]) => breaks(line)).map(([what]) => `${what}: „${line}"`),
+  );
 
 /** Every line of the intro's announcement over the loudspeakers, in its order. */
 const announcementOf = (mission: Mission): string[] =>
@@ -282,6 +327,12 @@ describe.each(byId)('the radio in mission %s', (_id, mission) => {
     expect(offSpeaker(messagesOf(mission))).toEqual([]);
   });
 
+  it(`has a last word on the run of ${LAST_WORDS_MAX} words, a won run's in two or three sentences`, () => {
+    expect(offRecord(lastWordsOf(mission))).toEqual([]);
+    const short = lastWordsOf(mission, 'won').filter((line) => sentencesIn(line) < 2);
+    expect(short).toEqual([]);
+  });
+
   it('has every line said by its speaker: the loudspeakers the plant’s, the operator the rest', () => {
     for (const line of radioLines(mission)) {
       const plant = line.when === 'pa' || line.when === 'announce';
@@ -377,14 +428,18 @@ describe('the lines a mission can put on the air', () => {
       ...ids.flatMap(station),
       'escape',
       'announce',
+      ...['emergency', 'cleared', 'missed', 'alarm'],
+      ...['clock', 'clock', 'clock', 'won', 'won', 'won', 'lost', 'lost', 'lost'],
     ]);
     const plant = { puzzleId: null, speaker: 'pa' };
     const operator = { puzzleId: null, speaker: 'operator' };
     expect(lines[0]).toEqual({ ...plant, text: blackout.intro?.pa[0], when: 'pa' });
     expect(lines[pa.length]).toEqual({ ...operator, text: blackout.radio.start, when: 'start' });
-    expect(lines.at(-2)).toEqual({ ...operator, text: blackout.radio.escape, when: 'escape' });
+    const out = lines.findIndex((line) => line.when === 'escape');
+    expect(lines[out]).toEqual({ ...operator, text: blackout.radio.escape, when: 'escape' });
     const announce = blackout.map.sabotage?.announce;
-    expect(lines.at(-1)).toEqual({ ...plant, text: announce, when: 'announce' });
+    expect(lines[out + 1]).toEqual({ ...plant, text: announce, when: 'announce' });
+    expect(lines.at(-1)).toEqual({ ...operator, text: blackout.radio.lost?.abandoned, when: 'lost' });
     const first = blackout.puzzles[0];
     const at = { puzzleId: first?.id, speaker: 'operator' };
     expect(lines.slice(pa.length + 1, pa.length + 4)).toEqual([

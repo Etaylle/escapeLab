@@ -25,7 +25,28 @@
   },
   "radio": {
     "start": "Leitstelle an Nachtschicht. Stromausfall im ganzen Trakt, ich sehe nur noch die Notzellen. Geht zuerst ans Notlicht, der Hauptschalter im Flur braucht zwei Leute.",
-    "escape": "Reaktor läuft. Der Notausgang ist entriegelt, Nordwestecke beim Archiv. Alle raus, jetzt."
+    "escape": "Reaktor läuft. Der Notausgang ist entriegelt, Nordwestecke beim Archiv. Alle raus, jetzt.",
+    "alarm": "Bei mir ist ein Alarm aufgelaufen, das kostet uns Zeit. Ruhig bleiben, genau arbeiten.",
+    "clock": {
+      "fiveMinutes": "Noch fünf Minuten auf den Notzellen. Bleibt dran, aber hetzt nicht.",
+      "twoMinutes": "Zwei Minuten noch, dann sind die Zellen leer. Jetzt zählt jeder Handgriff.",
+      "lastMinute": "Noch eine Minute auf den Zellen. Ich bleibe dran, bis zum letzten Licht."
+    },
+    "emergency": {
+      "start": "Ich habe die Relais verloren, das müsst ihr von Hand machen. Lest euch jede Anweisung laut vor.",
+      "cleared": "Kühlung steht wieder, die Relais halten. Weiter, wo ihr aufgehört habt.",
+      "missed": "Die Kühlung ist abgesackt, das hat uns Zeit gekostet. Zurück an die Arbeit, beim nächsten Mal schneller."
+    },
+    "won": {
+      "plenty": "Der Trakt hat wieder Strom, die Zentrifugen laufen an, und ihr seid alle draußen. Mit Zeit übrig. So schreibe ich das ins Schichtbuch.",
+      "tight": "Licht im ganzen Trakt, und alle sind draußen. Knapp war das, aber die Zellen haben gereicht. Ich trage es ins Schichtbuch ein.",
+      "lastMinute": "Das war die letzte Minute, und ihr seid raus. Die Zellen waren fast leer, als der Reaktor kam. Durchatmen, Nachtschicht."
+    },
+    "lost": {
+      "time": "Die Notzellen sind leer, im Trakt ist es jetzt ganz dunkel. Bleibt, wo ihr seid, die Frühschicht holt euch raus.",
+      "alarms": "Die Sicherheitsschaltung hat zugemacht, zu viele Alarme auf einmal. Der Trakt bleibt dunkel, bis die Frühschicht kommt.",
+      "abandoned": "Mit halber Schicht geht da drinnen nichts. Ich breche ab, der Trakt bleibt bis morgen dunkel."
+    }
   },
   "chat": {
     "phrases": [

@@ -41,6 +41,7 @@ export {
 } from './snapshot.js';
 export {
   applyAction,
+  clockCallDueAt,
   crewOf,
   EMERGENCY_CLEARED,
   FIRST_WAIT_MS,
@@ -59,12 +60,19 @@ export {
   type Action,
 } from './actions.js';
 export {
+  CLOCK_CALLS,
+  CLOCK_LATE_MS,
+  LOST_CAUSES,
   RADIO_MOMENTS,
   radioLines,
   speakerOf,
+  WON_BANDS,
+  wonBand,
+  type LostCause,
   type RadioLine,
   type RadioMoment,
   type Speaker,
+  type WonBand,
 } from './radio.js';
 export {
   clockStartOf,

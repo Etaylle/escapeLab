@@ -68,6 +68,25 @@ const MS_PER_WORD = { min: 200, max: 900 } as const;
  */
 const AWAITING_RENDER: readonly string[] = [
   'Störung im Kühlkreislauf. Relaissteuerung auf Handbetrieb.',
+  'Bei mir ist ein Alarm aufgelaufen, das kostet uns Zeit. Ruhig bleiben, genau arbeiten.',
+  'Noch fünf Minuten auf den Notzellen. Bleibt dran, aber hetzt nicht.',
+  'Zwei Minuten noch, dann sind die Zellen leer. Jetzt zählt jeder Handgriff.',
+  'Noch eine Minute auf den Zellen. Ich bleibe dran, bis zum letzten Licht.',
+  'Ich habe die Relais verloren, das müsst ihr von Hand machen. Lest euch jede Anweisung laut vor.',
+  'Kühlung steht wieder, die Relais halten. Weiter, wo ihr aufgehört habt.',
+  'Die Kühlung ist abgesackt, das hat uns Zeit gekostet. Zurück an die Arbeit, beim nächsten ' +
+    'Mal schneller.',
+  'Der Trakt hat wieder Strom, die Zentrifugen laufen an, und ihr seid alle draußen. Mit Zeit ' +
+    'übrig. So schreibe ich das ins Schichtbuch.',
+  'Licht im ganzen Trakt, und alle sind draußen. Knapp war das, aber die Zellen haben ' +
+    'gereicht. Ich trage es ins Schichtbuch ein.',
+  'Das war die letzte Minute, und ihr seid raus. Die Zellen waren fast leer, als der Reaktor ' +
+    'kam. Durchatmen, Nachtschicht.',
+  'Die Notzellen sind leer, im Trakt ist es jetzt ganz dunkel. Bleibt, wo ihr seid, die ' +
+    'Frühschicht holt euch raus.',
+  'Die Sicherheitsschaltung hat zugemacht, zu viele Alarme auf einmal. Der Trakt bleibt ' +
+    'dunkel, bis die Frühschicht kommt.',
+  'Mit halber Schicht geht da drinnen nichts. Ich breche ab, der Trakt bleibt bis morgen dunkel.',
 ];
 
 const manifest = JSON.parse(readFileSync(MANIFEST_FILE, 'utf8')) as Manifest;
@@ -181,8 +200,17 @@ describe('the lines the script reads', () => {
       ['state.mission.radio.start', 'start'],
       ['solved?.onSolved', 'solved'],
       ['state.mission.radio.escape', 'escape'],
+      ['state.mission.radio.alarm', 'alarm'],
+      ['state.mission.radio.won?.[band]', 'won'],
+      ['state.mission.radio.lost?.[cause]', 'lost'],
       ['sabotage.announce', 'announce'],
+      ['state.mission.radio.emergency?.start', 'emergency'],
+      ['state.mission.radio.emergency?.cleared', 'cleared'],
+      ['line', 'missed'],
+      ['state.mission.radio.clock?.[call.key]', 'clock'],
     ]);
+    // Every call is one of those: none hides from the pattern, the function's own name aside.
+    expect(actions.match(/logRadio\(/g)).toHaveLength(calls.length + 1);
     expect(actions).toMatch(/\.nudges\[state\.nudgesGiven\]/);
     expect(actions).toMatch(/logEvent\(spoken, 'nudge', line, at, null, 'nudge'\)/);
   });

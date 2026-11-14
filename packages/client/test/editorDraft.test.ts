@@ -177,6 +177,23 @@ describe('draft ↔ JSON', () => {
     });
     expect(json.map.lamps).toHaveLength(5);
   });
+
+  it('keeps mission control’s lines the form does not show, and writes the ones it edits', () => {
+    const blackout = shipped.find(({ name }) => name === 'blackout.json')?.data as {
+      radio: Record<string, unknown>;
+    };
+    const draft = loaded(blackout);
+    expect(Object.keys(draft.radio.extra).sort()).toEqual(
+      ['alarm', 'clock', 'emergency', 'lost', 'won'].sort(),
+    );
+    expect((draftToJson(draft) as { radio: unknown }).radio).toEqual(blackout.radio);
+    const edited = { ...draft, radio: { ...draft.radio, start: 'Leitstelle an Frühschicht.' } };
+    const json = draftToJson(edited) as { radio: Record<string, unknown> };
+    expect(json.radio['start']).toBe('Leitstelle an Frühschicht.');
+    expect(json.radio['clock']).toEqual(blackout.radio['clock']);
+    // A new draft has none to keep.
+    expect(newDraft().radio).toEqual({ start: '', escape: '', extra: {} });
+  });
 });
 
 describe('a puzzle’s own fields and penalty, draft ↔ JSON', () => {

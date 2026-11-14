@@ -284,6 +284,50 @@ export const mapDefSchema = z.object({
     .default([]),
 });
 
+/** One line of mission control's on the radio, as a mission writes it. */
+const radioLine = z.string().min(1);
+
+/**
+ * Mission control's lines on the radio (radio.ts): as the clock starts and for the unlocked
+ * exit; the operator's answers to what the run does — its first alarm, whatever set it off,
+ * the clock's calls with five minutes, two and the last minute left, an emergency as it starts
+ * and as it ends, cleared in time or missed — and the last word on a run: won, by the time it
+ * left (five minutes or more, a minute or more, less), or lost, by what lost it.
+ */
+const radioSchema = z.object({
+  start: radioLine.optional(),
+  escape: radioLine.optional(),
+  alarm: radioLine.optional(),
+  clock: z
+    .object({
+      fiveMinutes: radioLine.optional(),
+      twoMinutes: radioLine.optional(),
+      lastMinute: radioLine.optional(),
+    })
+    .optional(),
+  emergency: z
+    .object({
+      start: radioLine.optional(),
+      cleared: radioLine.optional(),
+      missed: radioLine.optional(),
+    })
+    .optional(),
+  won: z
+    .object({
+      plenty: radioLine.optional(),
+      tight: radioLine.optional(),
+      lastMinute: radioLine.optional(),
+    })
+    .optional(),
+  lost: z
+    .object({
+      time: radioLine.optional(),
+      alarms: radioLine.optional(),
+      abandoned: radioLine.optional(),
+    })
+    .optional(),
+});
+
 export const missionSchema = z
   .object({
     id: z.string().min(1),
@@ -349,13 +393,8 @@ export const missionSchema = z
         pa: z.array(z.string().min(1)).max(PA_LINES_MAX).default([]),
       })
       .optional(),
-    /** mission control's lines for the moment the clock starts and for the unlocked exit */
-    radio: z
-      .object({
-        start: z.string().min(1).optional(),
-        escape: z.string().min(1).optional(),
-      })
-      .default({}),
+    /** mission control's lines on the radio: when each is said, radio.ts `radioLines` */
+    radio: radioSchema.default({}),
     /**
      * the quick chat's eight phrases, in the crew's own words (chat.ts): one slot at most each,
      * `{n}` for a number from 1 to 9 or `{name}` for one of its `names`; left out, the

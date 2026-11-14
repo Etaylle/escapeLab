@@ -226,8 +226,11 @@ export interface Draft {
   players: { min: number; max: number };
   timeLimitSec: number;
   story: { intro: string; win: string; lose: string };
-  /** mission control's lines; '' for none */
-  radio: { start: string; escape: string };
+  /**
+   * mission control's lines the form shows, '' for none; the rest — its answers to the run, the
+   * clock's calls, the last words — kept as they came
+   */
+  radio: { start: string; escape: string; extra: Record<string, unknown> };
   puzzles: DraftPuzzle[];
   map: DraftMap;
   /** listOrder, hintCostSec, hintDelaySec, maxAlarms: as they came */
@@ -332,7 +335,7 @@ export function newDraft(): Draft {
     players: { min: 2, max: 2 },
     timeLimitSec: 600,
     story: { intro: '', win: '', lose: '' },
-    radio: { start: '', escape: '' },
+    radio: { start: '', escape: '', extra: {} },
     puzzles: [newPuzzle('keypad', [])],
     map: {
       tiles: Array.from({ length: NEW_MAP.height }, () => '#'.repeat(NEW_MAP.width)),
@@ -471,7 +474,11 @@ export function draftToJson(draft: Draft): Record<string, unknown> {
     players: { ...draft.players },
     story: { ...draft.story },
     timeLimitSec: draft.timeLimitSec,
-    radio: { ...given('start', draft.radio.start), ...given('escape', draft.radio.escape) },
+    radio: {
+      ...draft.radio.extra,
+      ...given('start', draft.radio.start),
+      ...given('escape', draft.radio.escape),
+    },
     puzzles: draft.puzzles.map(puzzleJson),
     map: mapJson(draft.map),
   };
@@ -554,7 +561,9 @@ interface LooseMission {
   players: { min: number; max: number };
   timeLimitSec: number;
   story: { intro: string; win: string; lose: string };
-  radio?: { start?: string | undefined; escape?: string | undefined } | undefined;
+  radio?:
+    | { [key: string]: unknown; start?: string | undefined; escape?: string | undefined }
+    | undefined;
   puzzles: LoosePuzzle[];
   map: LooseMap;
 }
@@ -722,7 +731,11 @@ function draftOf(mission: LooseMission): Draft {
     players: { min: mission.players.min, max: mission.players.max },
     timeLimitSec: mission.timeLimitSec,
     story: { intro: mission.story.intro, win: mission.story.win, lose: mission.story.lose },
-    radio: { start: mission.radio?.start ?? '', escape: mission.radio?.escape ?? '' },
+    radio: {
+      start: mission.radio?.start ?? '',
+      escape: mission.radio?.escape ?? '',
+      extra: extraOf(mission.radio ?? {}, ['start', 'escape']),
+    },
     puzzles: mission.puzzles.map(puzzleOf),
     map: mapOf(mission.map),
     extra: extraOf(mission, [

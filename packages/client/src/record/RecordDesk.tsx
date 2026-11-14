@@ -27,6 +27,13 @@ const MOMENTS: Readonly<Record<RadioMoment, string>> = {
   solved: 'Gelöst',
   escape: 'Notausgang',
   announce: 'Durchsage im Notfall',
+  emergency: 'Notfall',
+  cleared: 'Notfall behoben',
+  missed: 'Notfall verpasst',
+  alarm: 'Erster Alarm',
+  clock: 'Restzeit',
+  won: 'Geschafft',
+  lost: 'Verloren',
 };
 
 const momentOf = (line: RecordLine): string =>

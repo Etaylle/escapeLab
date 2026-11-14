@@ -503,7 +503,7 @@
  */
 import { Buffer } from 'node:buffer';
 import { spawn } from 'node:child_process';
-import { randomBytes } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { createWriteStream, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { fileURLToPath, URL } from 'node:url';
@@ -2751,18 +2751,34 @@ const MS_PER_WORD = 200;
 /** A line's words, as the radio-line test counts them (core test/radioLines.test.ts). */
 const wordsOf = (line) => line.split(/\s+/).filter((word) => /[\p{L}\p{N}]/u.test(word)).length;
 
+/** The id of a line's recording, as the voice script names it: the first 12 hex of its SHA-1. */
+const voiceIdOf = (text) => createHash('sha1').update(text, 'utf8').digest('hex').slice(0, 12);
+
+/** The moments of the run's story on the radio; a line kept before moments were noted is one. */
+const STORY = new Set(['start', 'solved', 'escape']);
+
+/** The newest line of the run's story on `player`'s radio, as its view has it; null before one. */
+const newestStory = (player) =>
+  [...player.seen.view.events]
+    .reverse()
+    .find((e) => e.kind === 'radio' && (e.moment === undefined || STORY.has(e.moment)))?.label ??
+  null;
+
 /**
- * Listens to `player`'s radio for up to `ms` from now: the first line that
- * speaks, by its recording's id, from when to when it was heard speaking
- * (polled every 100 ms), and whether the Leitstelle opened the channel for
- * it. Null where none spoke.
+ * Listens to `player`'s radio for up to `ms` from now for the line `expected` names as it is
+ * polled — the newest line of the run's story unless told another — by its recording's id: from
+ * when to when it was heard speaking (polled every 100 ms), and whether the Leitstelle opened
+ * the channel for it. A call that speaks meanwhile — the clock, an alarm — is no line of it. Null
+ * where it never spoke.
  */
-async function hearRadio(player, ms) {
+async function hearRadio(player, ms, expected = () => newestStory(player)) {
   const end = Date.now() + ms;
   let heard = null;
   while (Date.now() < end) {
     const voice = (await soundOf(player.page))?.voice;
-    if (voice?.playing === true && (heard === null || voice.lastId === heard.id)) {
+    const line = expected();
+    const wanted = line !== null && voice?.lastId === voiceIdOf(line);
+    if (voice?.playing === true && wanted && (heard === null || voice.lastId === heard.id)) {
       heard ??= { id: voice.lastId, from: Date.now(), to: Date.now(), opened: voice.opened };
       heard.to = Date.now();
     } else if (heard !== null) {
@@ -2773,27 +2789,35 @@ async function hearRadio(player, ms) {
   return heard;
 }
 
-/**
- * The line that came over the radio (`listening`, from hearRadio): a
- * recording from the manifest the server hands out has to have spoken it —
- * what the banner says, the view's last radio line, or `expected` where given
- * — for MS_PER_WORD a word at least, a second at the least; the line that
- * opens a run after the Leitstelle's opening squelch, and no other line.
- * Fails otherwise.
- */
-async function checkRadioVoice(player, listening, after, expected = null) {
-  const heard = await listening;
-  // A page without the recordings answers with something else: no manifest, and the check fails.
-  const manifest = await player.page.evaluate(() =>
+/** The recorded lines of the manifest `page` is handed, by id; none where it has none. */
+const voiceLinesOf = (page) =>
+  page.evaluate(() =>
     globalThis
       .fetch('/voice/manifest.json')
       .then((res) => res.json())
       .then((kept) => kept.lines ?? {})
       .catch(() => ({})),
   );
-  const events = player.seen.view.events;
-  const line =
-    expected ?? [...events].reverse().find((event) => event.kind === 'radio')?.label ?? null;
+
+/**
+ * The line that came over the radio (`listening`, from hearRadio): a
+ * recording from the manifest the server hands out has to have spoken it —
+ * the newest line of the run's story as the view has it, or `expected` where
+ * given — for MS_PER_WORD a word at least, a second at the least; the line that
+ * opens a run after the Leitstelle's opening squelch, and no other line. A
+ * line the manifest has no recording of yet awaits its render: logged, it
+ * fails nothing (the voice test holds the list of those). Fails otherwise.
+ */
+async function checkRadioVoice(player, listening, after, expected = null) {
+  const heard = await listening;
+  // A page without the recordings answers with something else: no manifest, and the check fails.
+  const manifest = await voiceLinesOf(player.page);
+  const line = expected ?? newestStory(player);
+  const recorded = line === null || manifest[voiceIdOf(line)] !== undefined;
+  if (heard === null && !recorded && Object.keys(manifest).length > 0) {
+    console.log(`radio voice        ${player.name} after ${after}: „${line}" awaits its render`);
+    return;
+  }
   const entry = heard === null ? undefined : manifest[heard.id];
   const spoke = heard === null ? 0 : heard.to - heard.from;
   const words = line === null ? 0 : wordsOf(line);
@@ -4310,7 +4334,7 @@ async function signAtSpawn(players) {
  * Returns the player sign.png caught, if any.
  */
 async function coldOpen(host, guest) {
-  const opening = hearRadio(guest, 40_000);
+  const opening = hearRadio(guest, 40_000, () => startLineOf(guest));
   await captureIntroShot(host);
   await captureIntroSkip(host, guest);
   await captureOpeningLarge(guest);
@@ -4398,7 +4422,7 @@ async function captureDepth(player) {
  */
 async function firstMoments(anna, ben) {
   const intro = anna.seen.view.lights.out === false;
-  const opening = intro ? null : hearRadio(ben, 40_000);
+  const opening = intro ? null : hearRadio(ben, 40_000, () => startLineOf(ben));
   const signedEarly = intro ? await coldOpen(anna, ben) : undefined;
   await captureCarry(anna);
   await captureDepth(anna);
@@ -5868,7 +5892,7 @@ async function captureNudge(players) {
     return;
   }
   const line = nudgesOf(first.seen).at(-1).label;
-  const listening = hearRadio(first, RADIO_LISTEN_MS);
+  const listening = hearRadio(first, RADIO_LISTEN_MS, () => line);
   const banners = await Promise.all(
     players.map(({ page }) =>
       page
@@ -9692,7 +9716,51 @@ async function playBlackoutToTheEnd(host, guest, watcher) {
       `${running.stopS.map((s) => s.toFixed(2)).join('–')} s; ` +
       `${emergencies.weathered} emergencies cleared, ${emergencies.missed} missed`,
   );
+  await radioCensus(host);
   await capturePhoneCard(guest);
+}
+
+/**
+ * The lines on the air of a run won, by their moment on `player`'s view: each source once at
+ * its moment and never twice — the start once, a line for every solve but the last, the escape
+ * once, the last word once and last, no word of a run lost, the first alarm once at most, each
+ * call of the clock once at most, the plant's message and the operator's line on every
+ * emergency, and a line on every end of one — and how many of them have a recording yet.
+ * Fails on a count that is off.
+ */
+async function radioCensus(player) {
+  const { events, puzzleCount } = player.seen.view;
+  const on = (moment) => events.filter((e) => e.kind === 'radio' && e.moment === moment);
+  const count = (moment) => on(moment).length;
+  const started = events.filter((e) => e.kind === 'sabotage' && e.label !== EMERGENCY_CLEARED);
+  const cleared = events.filter((e) => e.kind === 'sabotage' && e.label === EMERGENCY_CLEARED);
+  const missed = events.filter((e) => e.kind === 'penalty' && e.label === EMERGENCY_MISSED);
+  const clocks = on('clock').map((e) => e.label);
+  const checks = [
+    ['start', count('start') === 1],
+    ['solved', count('solved') === puzzleCount - 1],
+    ['escape', count('escape') === 1],
+    ['won', count('won') === 1 && events.at(-1)?.moment === 'won'],
+    ['lost', count('lost') === 0],
+    ['alarm', count('alarm') <= 1],
+    ['clock', clocks.length <= 3 && new Set(clocks).size === clocks.length],
+    ['announce', count('announce') === started.length],
+    ['emergency', count('emergency') === started.length],
+    ['cleared', count('cleared') === cleared.length],
+    ['missed', count('missed') === missed.length],
+  ];
+  const lines = await voiceLinesOf(player.page);
+  const voiced = events.filter((e) => (e.kind === 'radio' || e.kind === 'nudge') && e.moment);
+  const recorded = voiced.filter((e) => lines[voiceIdOf(e.label)] !== undefined).length;
+  const tally = checks.map(([moment, ok]) => `${moment} ${count(moment)}${ok ? '' : ' !!'}`);
+  console.log(
+    `radio census       ${player.name}: ${tally.join(', ')}, nudge ${count('nudge')} — ` +
+      `${recorded} of ${voiced.length} lines recorded, the rest awaiting their render`,
+  );
+  const off = checks.filter(([, ok]) => !ok).map(([moment]) => moment);
+  if (off.length > 0) {
+    fail(`radio census: ${off.join(', ')} off on ${player.name}'s run`);
+  }
 }
 
 /**
@@ -10068,9 +10136,10 @@ async function captureEnd(host, watcher) {
  * theme playing, or none while it awaits its render — or the run fails.
  */
 async function checkEndMusic(page) {
-  const { asked, playing } = await endThemeOf(page);
+  const { asked, line, playing } = await endThemeOf(page);
   const theme = playing ?? 'no theme (awaiting its render?)';
-  console.log(`end music          the card asked for its ${asked} sting, then ${theme}`);
+  const word = line == null ? 'no last word' : `the last word „${line}"`;
+  console.log(`end music          the card asked for its ${asked} sting, ${word}, then ${theme}`);
   if (asked !== 'won') {
     fail(`end music: the won card asked for ${asked}`);
   }

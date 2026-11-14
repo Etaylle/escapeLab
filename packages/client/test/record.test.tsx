@@ -108,11 +108,14 @@ describe('the lines the page offers', () => {
     expect(nudge?.recording).toEqual(human);
     expect(second?.recording).toMatchObject({ source: 'upload', file: `${voiceId(SECOND)}.mp3` });
     expect(solved).toMatchObject({ when: 'solved', station: 'Notlicht', recording: null });
-    // The escape, then the loudspeakers' message as an emergency starts.
-    expect(lines.slice(-2)).toMatchObject([
+    // The escape, then the loudspeakers' message as an emergency starts, then the operator's
+    // answers to the run, the last word on a run called off the last of them.
+    const out = lines.findIndex((line) => line.when === 'escape');
+    expect(lines.slice(out, out + 2)).toMatchObject([
       { when: 'escape', station: null },
       { when: 'announce', station: null, text: blackout.map.sabotage?.announce },
     ]);
+    expect(lines.at(-1)).toMatchObject({ when: 'lost', text: blackout.radio.lost?.abandoned });
   });
 
   it('list a line two missions say once, under both', () => {
