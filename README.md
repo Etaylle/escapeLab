@@ -295,7 +295,7 @@ siebzehn Gruppen (`tools/groups.mjs`); `SHOTS_ONLY=screens,intro` spielt nur die
 `SHOTS_SKIP=perf` alle außer diesen — der schnelle Beweis eines Teils. Vor dem Rundgang laufen die
 Proben, jede in einem Raum für sich: `editor`, `art`, `drones` (Gefahrensinn und eine Drohne aus der
 Nähe), `reconnect`, `restart` und `three` (Blackout zu dritt bis zur Signalkette, die Zielzeile mit
-jeder Hand: `three-lever`, `three-plate`, `three-hands`, `three-phone-932`, `three-reader`; der
+jeder Hand: `three-lever`, `three-plate`, `three-hands`, `three-reader`, `three-phone-932`; der
 Systemcheck nennt sie im Log als ausgelassen) — im Systemcheck dazu die Probe des Serverraums, die
 zu `devices` gehört, und die der Zugangskontrolle, `access` (Blackout nennt beide im Log als
 ausgelassen). Der Rundgang selbst: `screens` (Menü und sein Ton, Bestenliste, Lobby, der Start aus
