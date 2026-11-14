@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   parseMission,
+  PASSWORD_SIZE,
   type AccountView,
   type ClientMessage,
   type Mission,
@@ -20,7 +21,6 @@ import {
 } from '../src/accounts.js';
 import {
   numberLocked,
-  PASSWORD_SIZE,
   SignInGuard,
   WRONG_PER_ADDRESS,
   WRONG_PER_NUMBER,

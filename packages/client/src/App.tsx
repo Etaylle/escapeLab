@@ -357,6 +357,8 @@ interface ScreenProps {
   setPicked: (missionId: string) => void;
   /** opens the settings, as the gear in the top bar does */
   openSettings: () => void;
+  /** opens the settings on „Konto"'s sign-in, as the menu's profile does for a guest */
+  openSignIn: () => void;
 }
 
 /** Whether a page lies over the join screen: booklet, Bestenliste, „Meine Einsätze", editor. */
@@ -395,6 +397,7 @@ function OffRoom(props: ScreenProps) {
           openMyRuns={() => pages.setMyRuns(true)}
           openEditor={editor.show}
           openSettings={props.openSettings}
+          openSignIn={props.openSignIn}
         />
       </Activity>
       {editor.open && (
@@ -623,10 +626,11 @@ function useWiped(live: Connection): { conn: Connection; doors: Doors } {
 }
 
 /**
- * The settings over every screen, the pass's account with them: named and deleted on the line
- * `live`.
+ * The settings over every screen, the pass's account with them: named, signed in and out, and
+ * deleted on the line `live` — opened on „Konto"'s sign-in where `signInFirst` says so.
  */
-function Settings({ live, close }: { live: Connection; close: () => void }) {
+function Settings(props: { live: Connection; close: () => void; signInFirst: boolean }) {
+  const { live, close, signInFirst } = props;
   return (
     <SettingsPanel
       onClose={close}
@@ -634,8 +638,32 @@ function Settings({ live, close }: { live: Connection; close: () => void }) {
       onDeleteAccount={() => live.send({ kind: 'delete-account', pass: crewPass() })}
       onName={(name) => live.send({ kind: 'profile', pass: crewPass(), name })}
       refusal={live.refusal}
+      login={live.login}
+      askLogin={live.askLogin}
+      {...(signInFirst ? { tab: 'konto', loginStep: 'sign-in' } : {})}
     />
   );
+}
+
+/**
+ * The settings opened by the menu's profile on „Konto"'s sign-in (`openSignIn`), till they close:
+ * opened any other way, they open as they always did.
+ */
+function useSignInOpening(layer: MenuLayer): { signInFirst: boolean; openSignIn: () => void } {
+  const [signInFirst, setSignInFirst] = useState(false);
+  const { settings, openSettings } = layer;
+  useEffect(() => {
+    if (!settings) {
+      setSignInFirst(false);
+    }
+  }, [settings]);
+  return {
+    signInFirst,
+    openSignIn: () => {
+      setSignInFirst(true);
+      openSettings();
+    },
+  };
 }
 
 /**
@@ -653,8 +681,14 @@ function useRoomMenus(live: Connection): MenuLayer {
 }
 
 /** What `layer` holds open over the screens: the room's menus, the settings, on the line `live`. */
-function RoomMenus(props: { layer: MenuLayer; live: Connection; missions: MissionInfo[] }) {
-  const { layer, live, missions } = props;
+function RoomMenus(props: {
+  layer: MenuLayer;
+  live: Connection;
+  missions: MissionInfo[];
+  signInFirst: boolean;
+}) {
+  const { layer, live, missions, signInFirst } = props;
+  const settings = <Settings live={live} close={layer.closeSettings} signInFirst={signInFirst} />;
   return (
     <MenuLayers
       layer={layer}
@@ -663,7 +697,7 @@ function RoomMenus(props: { layer: MenuLayer; live: Connection; missions: Missio
       missions={missions}
       leaveRoom={live.leaveRoom}
       toMenu={live.toMenu}
-      settings={<Settings live={live} close={layer.closeSettings} />}
+      settings={settings}
     />
   );
 }
@@ -800,6 +834,7 @@ export function App({ boot }: { boot: EditorBoot }) {
   const editor = useEditorPage(boot);
   const testRun = useTestRun(live);
   const layer = useRoomMenus(live);
+  const opening = useSignInOpening(layer);
   const covered = anyOpen(layer);
   const contentRef = useRef<HTMLElement>(null);
   // How the run ended, on this screen: the world plays it before the end screen opens.
@@ -847,7 +882,7 @@ export function App({ boot }: { boot: EditorBoot }) {
         watching={conn.watching}
         covered={covered}
       />
-      <RoomMenus layer={layer} live={live} missions={missions} />
+      <RoomMenus layer={layer} live={live} missions={missions} signInFirst={opening.signInFirst} />
       <ErrorBanner conn={live} />
       <UpdateNotice />
 
@@ -866,6 +901,7 @@ export function App({ boot }: { boot: EditorBoot }) {
             picked={picked}
             setPicked={setPicked}
             openSettings={layer.openSettings}
+            openSignIn={opening.openSignIn}
           />
         </VoiceContext>
       </ScreenArea>

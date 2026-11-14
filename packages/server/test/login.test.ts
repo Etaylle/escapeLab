@@ -1,16 +1,14 @@
 import type * as Crypto from 'node:crypto';
 import { scrypt, timingSafeEqual } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
+import { NUMBER_ALPHABET, numberOf, passwordFits } from '@escapelab/core';
 import {
   COST,
   fromTooMany,
   hashPassword,
   LOCK_MS,
   mintNumber,
-  NUMBER_ALPHABET,
   numberLocked,
-  numberOf,
-  passwordFits,
   passwordMatches,
   SignInGuard,
   WRONG_PER_ADDRESS,

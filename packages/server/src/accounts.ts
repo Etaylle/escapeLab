@@ -1,6 +1,9 @@
 import {
   ACHIEVEMENT_IDS,
   GameError,
+  numberOf,
+  PASSWORD_SIZE,
+  passwordFits,
   reportGrade,
   runSeconds,
   utcDay,
@@ -9,14 +12,7 @@ import {
   type AchievementId,
   type CrewPass,
 } from '@escapelab/core';
-import {
-  hashPassword,
-  mintNumber,
-  numberOf,
-  PASSWORD_SIZE,
-  passwordFits,
-  passwordMatches,
-} from './login.js';
+import { hashPassword, mintNumber, passwordMatches } from './login.js';
 import {
   HAS_LOGIN,
   LoginTaken,

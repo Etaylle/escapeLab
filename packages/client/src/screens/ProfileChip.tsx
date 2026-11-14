@@ -41,6 +41,13 @@ interface ChipProps {
   onName: (name: string) => void;
   /** the pass's account as the server told it; null before it did */
   account: AccountView | null;
+  /** opens „Konto"'s sign-in (Settings.tsx); offered to an account without a Kennwort */
+  onSignIn?: () => void;
+}
+
+/** Whether the profile offers to sign in: the server told of an account, one without a Kennwort. */
+export function offersSignIn(account: AccountView | null): boolean {
+  return account !== null && account.login === null;
 }
 
 /**
@@ -49,9 +56,10 @@ interface ChipProps {
  * with the pass before the server told it, the crew's first before any (pass.ts `lastColor`) —
  * breathing and glancing round as in the lobby, waving once the name typed beside it has stood
  * still a moment; the name, which the account takes once it stands still (Join.tsx), the
- * colour's name, and what the account holds (`accountLine`).
+ * colour's name, and what the account holds (`accountLine`) — with „Anmelden" beside it for an
+ * account without a Kennwort (`offersSignIn`), into an account of another device.
  */
-export function ProfileChip({ name, onName, account }: ChipProps) {
+export function ProfileChip({ name, onName, account, onSignIn }: ChipProps) {
   const color = account?.color ?? lastColor() ?? FIRST_COLOR;
   const settled = useSettled(name.trim(), WAVE_SETTLE_MS);
   return (
@@ -83,6 +91,11 @@ export function ProfileChip({ name, onName, account }: ChipProps) {
         </span>
       </div>
       <span className="profile-slot">{accountLine(account)}</span>
+      {onSignIn !== undefined && offersSignIn(account) && (
+        <button type="button" className="link profile-sign-in" onClick={onSignIn}>
+          Anmelden
+        </button>
+      )}
     </section>
   );
 }

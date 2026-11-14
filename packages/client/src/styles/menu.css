@@ -317,7 +317,7 @@
   border-radius: 50%;
 }
 
-/* Where an account's sign-in will sit (backlog K-1): a guest today. */
+/* What the account holds: its runs, „Gast" while the server told of none. */
 .profile-slot {
   align-self: stretch;
   display: flex;
@@ -329,6 +329,20 @@
   font-size: 11px;
   letter-spacing: 0.22em;
   text-transform: uppercase;
+}
+
+/* An account without a Kennwort: the way into an account of another device (Settings, „Konto"). */
+.profile-chip .profile-sign-in {
+  align-self: stretch;
+  padding: 0 0 0 12px;
+  border-left: 1px solid var(--line-2);
+  border-radius: 0;
+  color: var(--accent);
+  font-family: var(--mono);
+  font-size: 13px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  text-decoration: none;
 }
 
 /* ── a panel over the menu ──────────────────────────────────────────────── */
