@@ -1,9 +1,13 @@
 import { useState } from 'react';
 import type { ManualKind, MapView, PlayerView } from '@escapelab/core';
-import { useInputDevice } from '../input/device.js';
-import { glyphOf, useGlyph, type GlyphSource, type Prompt } from '../input/glyphs.js';
+import {
+  glyphOf,
+  useGlyph,
+  useGlyphSource,
+  type GlyphSource,
+  type Prompt,
+} from '../input/glyphs.js';
 import { PAD_GLYPHS, PAD_PING } from '../input/pad.js';
-import { useSettings } from '../settings.js';
 import { isArmed } from '../world/known.js';
 import { toBring } from '../world/markers.js';
 import { Icon, type IconName } from './Icon.js';
@@ -114,13 +118,12 @@ export function Legend({ map }: { map: MapView }) {
 
 /** The keys and what they do, as the settings bind them — a controller's buttons on one. */
 function KeyList() {
-  const { keys, pad } = useSettings();
-  const device = useInputDevice();
+  const source = useGlyphSource();
   return (
     <div className="info-body">
       <dl className="keylist">
         {/* A row goes by what it does: on a controller two rows can share a button (B). */}
-        {controlsOf({ keys, pad, ...device }).map(([control, what]) => (
+        {controlsOf(source).map(([control, what]) => (
           <div key={what} className="keyrow">
             <dt>{control}</dt>
             <dd>{what}</dd>

@@ -1,4 +1,4 @@
-import { getSettings, useSettings } from '../settings.js';
+import { getSettings, useSettings, type GlyphChoice } from '../settings.js';
 import {
   keyName,
   type InputAction,
@@ -98,17 +98,36 @@ export function glyphOf(prompt: Prompt, source: GlyphSource): string {
   return keyName(keyOf(prompt, source.keys));
 }
 
+/**
+ * Which buttons the prompts name: the kind the settings choose (Steuerung, „Controller-Symbole"),
+ * or — „Automatisch" — the kind the controller used last reports itself as (`reported`).
+ */
+export function familyOf(choice: GlyphChoice, reported: PadFamily): PadFamily {
+  return choice === 'auto' ? reported : choice;
+}
+
+/** What the glyphs depend on now: the bindings, the device used last, its symbols as chosen. */
+function sourceOf(
+  settings: { keys: KeyBindings; pad: PadBindings; glyphs: GlyphChoice },
+  used: { device: InputDevice; family: PadFamily },
+): GlyphSource {
+  const { keys, pad, glyphs } = settings;
+  return { keys, pad, device: used.device, family: familyOf(glyphs, used.family) };
+}
+
 /** The glyph for `prompt` now, by the settings and the device used last: for drawn text. */
 export function glyph(prompt: Prompt): string {
-  const { keys, pad } = getSettings();
-  return glyphOf(prompt, { keys, pad, ...inputDevice() });
+  return glyphOf(prompt, sourceOf(getSettings(), inputDevice()));
+}
+
+/** What the glyphs depend on, kept up to date with the settings and the device used last. */
+export function useGlyphSource(): GlyphSource {
+  return sourceOf(useSettings(), useInputDevice());
 }
 
 /** The glyph for `prompt`, kept up to date with the settings and the device used last. */
 export function useGlyph(prompt: Prompt): string {
-  const { keys, pad } = useSettings();
-  const { device, family } = useInputDevice();
-  return glyphOf(prompt, { keys, pad, device, family });
+  return glyphOf(prompt, useGlyphSource());
 }
 
 /** Whether a controller was used last: then prompts name its buttons, touch screen or not. */

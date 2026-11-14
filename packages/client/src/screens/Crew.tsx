@@ -1,4 +1,5 @@
 import {
+  CREW_COLORS,
   NO_CREDITS,
   type Credits,
   type MapView,
@@ -13,6 +14,22 @@ import { near, type Whereabouts } from '../world/presence.js';
 /** How many play a mission: „2 Spieler", or „2–3 Spieler" where the count may vary. */
 export function crewSizeText({ min, max }: { min: number; max: number }): string {
   return min === max ? `${min} Spieler` : `${min}–${max} Spieler`;
+}
+
+/**
+ * A crew member's dot in their colour — and where the settings ask for it (Zugang, „Farbmuster"),
+ * the mark of that colour over it (styles/settings.css), so that the crew stands told apart
+ * without the colour too: on a phone held sideways, where the row shows their dots alone.
+ */
+export function CrewDot({ color }: { color: string }) {
+  const at = CREW_COLORS.findIndex((crew) => crew === color.toLowerCase());
+  return (
+    <span
+      className={at < 0 ? 'crew-dot' : `crew-dot crew-dot--${at}`}
+      style={{ backgroundColor: color }}
+      aria-hidden="true"
+    />
+  );
 }
 
 export interface CrewTag {
@@ -171,7 +188,7 @@ export function CreditsTable({
             return (
               <tr key={p.id} className={p.id === youId ? 'credits-you' : undefined}>
                 <th scope="row">
-                  <span className="crew-dot" style={{ background: p.color }} aria-hidden="true" />
+                  <CrewDot color={p.color} />
                   {p.name}
                 </th>
                 {CREDIT_COLUMNS.map(([key]) => (

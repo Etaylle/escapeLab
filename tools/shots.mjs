@@ -259,7 +259,11 @@
  * that shows none either, the run fails.
  *
  * Settings, minimap, sprint: after info-panel.png the host opens the settings with the gear in
- * the top bar (settings.png) — the clock has to run on under them, Esc has to close them.
+ * the top bar and the menu under it, on „Ton" (settings.png) — the clock has to run on under them,
+ * „Gesamt"'s mute has to turn the top bar's sound switch and back, „Musik" has to mute alone
+ * (settings-ton.png), the arrows have to step along the tab bar, Esc has to close them. Ben's
+ * phone held sideways opens them off the pause menu (settings-phone-932.png): the tab bar has to
+ * stand whole and still, every tab 44 px high, the card in the window.
  * minimap-goal.png shows the world with the minimap pointing at the goal, a pulsing dot at each
  * console of the station up next, which has to show in the goal's colour on the canvas where the
  * traced page puts it (`window.__escapelab.minimap`), unless the crew stands on it. Then the host
@@ -9313,9 +9317,10 @@ async function handle(player, what, done) {
 
 /**
  * The settings, as a player opens them: in a room the gear opens the room's menu and its
- * „Einstellungen" the settings over it; off any room the gear opens them at once.
+ * „Einstellungen" the settings over it; off any room the gear opens them at once. They open on
+ * the tab opened last; `tab` („ton", „bild", „steuerung", „zugang", „konto") picks one.
  */
-async function openSettings(page) {
+async function openSettings(page, tab = null) {
   const card = page.locator('.settings-card');
   const item = page.locator('.pause-menu [data-item="settings"]');
   await page.locator('.settings-toggle').click();
@@ -9323,6 +9328,10 @@ async function openSettings(page) {
   if (await item.isVisible()) {
     await item.click();
     await card.waitFor({ timeout: 3000 });
+  }
+  if (tab !== null) {
+    await page.locator(`.settings-tab[data-tab="${tab}"]`).click();
+    await page.locator(`.settings-tab--on[data-tab="${tab}"]`).waitFor({ timeout: 2000 });
   }
 }
 
@@ -9342,9 +9351,12 @@ async function closeSettings(page) {
   return gone && (await settled(menu.waitFor({ state: 'hidden', timeout: 2000 })));
 }
 
-/** Picks the text size reading `label` („Klein", „Normal", „Groß") in the settings, then Esc. */
+/**
+ * Picks the text size reading `label` („Klein", „Normal", „Groß") in the settings' „Bild", then
+ * Esc.
+ */
 async function chooseTextSize(page, label) {
-  await openSettings(page);
+  await openSettings(page, 'bild');
   const sizes = page.locator('.settings-options[aria-label="Textgröße"]');
   await sizes.waitFor({ timeout: 3000 });
   await sizes.locator('.settings-option', { hasText: label }).click();
@@ -10265,12 +10277,13 @@ async function captureMyRuns(page) {
 }
 
 /**
- * The account of `page`'s pass deleted in the settings: „Konto löschen" asks first, saying what
- * goes (account-delete.png), „Endgültig löschen" sends it off, the settings say it is gone, and
- * Esc closes them.
+ * The account of `page`'s pass deleted in the settings' „Konto": „Konto löschen" asks first,
+ * saying what goes (account-delete.png), „Endgültig löschen" sends it off, the settings say it is
+ * gone, and Esc closes them.
  */
 async function deleteAccount(page) {
   await page.locator('.menu-item', { hasText: 'Einstellungen' }).click();
+  await page.locator('.settings-tab[data-tab="konto"]').click();
   await page.locator('.settings-account-delete').click();
   await page.locator('.settings-account-ask').waitFor({ timeout: 5000 });
   await sleep(400);
@@ -10328,17 +10341,68 @@ const settled = (promise) =>
 /** One of the settings' volumes as its row reads: „Funk 100". */
 const rowText = (text) => text.replace(/\s+/g, ' ').trim();
 
+/** Waits up to 2 s for the top bar's sound switch to stand `on`; whether it did. */
+const switchStands = (page, on) =>
+  settled(
+    page.waitForFunction(
+      (want) => document.querySelector('.sound-toggle')?.getAttribute('aria-pressed') === want,
+      String(on),
+      { timeout: 2000 },
+    ),
+  );
+
+/**
+ * „Ton"'s mutes against the top bar's sound switch, which is „Gesamt"'s: „Gesamt" pressed, the
+ * switch has to turn, and pressed again, turn back; then settings-ton.png with „Musik" muted, its
+ * row dimmed, heard again after. What was wrong.
+ */
+async function muteChecks(page) {
+  const mute = (bus) => page.locator(`.settings-mute[aria-label="${bus} stumm"]`);
+  const on = (await page.locator('.sound-toggle').getAttribute('aria-pressed')) === 'true';
+  await mute('Gesamt').click();
+  const turned = await switchStands(page, !on);
+  await mute('Gesamt').click();
+  const back = await switchStands(page, on);
+  await mute('Musik').click();
+  const dimmed = await attached(page.locator('.settings-bus--muted'), 2000);
+  await sleep(200);
+  await capture(page, 'settings-ton.png');
+  const muted = await page.locator('.settings-bus--muted .settings-label').allInnerTexts();
+  await mute('Musik').click();
+  const heard = await settled(
+    page.locator('.settings-bus--muted').waitFor({ state: 'detached', timeout: 2000 }),
+  );
+  return wrongOf([
+    [!turned, '„Gesamt" muted, the sound switch stood'],
+    [!back, '„Gesamt" heard again, the sound switch stood'],
+    [!dimmed || muted.join() !== 'Musik', `„Musik" muted dimmed ${muted.join() || 'nothing'}`],
+    [!heard, '„Musik" stayed muted'],
+  ]);
+}
+
+/** The arrows on the tab bar: → from „Ton", ← back, each tab opening as it comes; where to. */
+async function tabSteps(page) {
+  const open = () => page.locator('.settings-tab--on').getAttribute('data-tab');
+  await page.locator('.settings-tab[data-tab="ton"]').focus();
+  await page.keyboard.press('ArrowRight');
+  const right = await open();
+  await page.keyboard.press('ArrowLeft');
+  return `${right} ${await open()}`;
+}
+
 /**
  * settings.png: the gear in the top bar opens the run's menu, and its „Einstellungen" the
- * settings over the running world — the three volumes, the talk key, the text size and less
- * motion — and nothing pauses under them: the clock counts on. Esc closes them again, and the menu
- * under them. The run fails where no panel comes up, where it runs out sideways, where the clock
- * stands still under it, or where Esc leaves it open.
+ * settings over the running world, on „Ton" — the whole lab's volume and each bus's, a mute each,
+ * the talk key — and nothing pauses under them: the clock counts on. „Gesamt"'s mute is the sound
+ * switch's, „Musik" mutes alone (settings-ton.png, `muteChecks`); the arrows step along the tab
+ * bar. Esc closes them again, and the menu under them. The run fails where no panel comes up,
+ * where it runs out sideways, where the clock stands still under it, where a mute or an arrow does
+ * nothing it should, or where Esc leaves it open.
  */
 async function captureSettings(page) {
   const clock = page.locator('.stage-top .countdown');
   const ticking = await clock.isVisible();
-  if (!(await settled(openSettings(page)))) {
+  if (!(await settled(openSettings(page, 'ton')))) {
     fail('settings: the gear in the top bar and the menu under it opened no panel');
     return;
   }
@@ -10349,7 +10413,8 @@ async function captureSettings(page) {
   await capture(page, 'settings.png');
   const volumes = (await page.locator('.settings-volume').allInnerTexts()).map(rowText);
   const key = await textOf(page.locator('.settings-kbd'));
-  const lit = await page.locator('.settings-option--on').allInnerTexts();
+  const mutes = await muteChecks(page);
+  const steps = await tabSteps(page);
   const closed = await closeSettings(page);
   const stood = ticking && before === after;
   const clockSaid = !ticking
@@ -10357,15 +10422,22 @@ async function captureSettings(page) {
     : stood
       ? `!! the clock stood at ${before}`
       : `the clock ran on, ${before} → ${after}`;
+  const wrong = [
+    ...mutes,
+    ...wrongOf([
+      [stood, 'the clock stood'],
+      [steps !== 'bild ton', `→ and ← opened ${steps}`],
+      [!closed, 'Esc left it open'],
+      [over > 0, `+${over}px sideways`],
+    ]),
+  ];
   console.log(
-    `settings.png       ${volumes.join(', ')}; talk key ${key}; ${lit.join(', ')}; ` +
-      clockSaid +
-      (closed ? '; Esc closed it' : '; !! Esc left it open') +
-      (over > 0 ? `; !! +${over}px sideways` : ''),
+    `settings.png       ${volumes.join(', ')}; talk key ${key}; ${clockSaid}; ` +
+      `→ ← ${steps}; ` +
+      (wrong.length === 0 ? 'the switch is „Gesamt", „Musik" mutes alone, Esc closed it' : ''),
   );
-  const wrong = [stood && 'the clock stood', !closed && 'Esc left it open', over > 0 && 'sideways'];
-  if (wrong.some(Boolean)) {
-    fail(`settings: ${wrong.filter(Boolean).join(', ')}`);
+  if (wrong.length > 0) {
+    fail(`settings: ${wrong.join(', ')}`);
   }
 }
 
@@ -10444,7 +10516,8 @@ async function menuByEscape(page) {
  * „Weiter" in the focus, and the line that the clock runs on — and nothing stands still for it:
  * the clock counts on, and Ben's view marks Anna at the menu. Esc closes it again, and the mark
  * goes. The run fails where any of it is not so. Then the ask before giving up (leave-ask.png)
- * and the menu on Ben's phone (pause-menu-phone-932.png).
+ * and the menu on Ben's phone (pause-menu-phone-932.png), the settings off it there
+ * (settings-phone-932.png).
  */
 async function capturePauseMenu(anna, ben) {
   const page = anna.page;
@@ -10599,8 +10672,9 @@ async function turnTo932(page) {
 /**
  * pause-menu-phone-932.png: Ben's phone held sideways at 932×430 opens the pause menu by the
  * row's menu button: every item a fingertip's 44 px tall and in the window, the list scrolling
- * not at all; „Weiter" closes it again. The run fails where any of it is not so; the phone goes
- * back to the size it had.
+ * not at all; its „Einstellungen" opens the settings there (settings-phone-932.png,
+ * `captureSettingsPhone`), and „Weiter" closes it again. The run fails where any of it is not so;
+ * the phone goes back to the size it had.
  */
 async function capturePauseMenuPhone(ben) {
   const page = ben.page;
@@ -10612,6 +10686,9 @@ async function capturePauseMenuPhone(ben) {
   await capture(page, 'pause-menu-phone-932.png');
   const shown = (await page.evaluate(pauseMenuShown)) ?? NO_PAUSE_MENU;
   const wrong = [...pauseMenuFaults(shown, 44), ...wrongOf([[!opened, 'no menu came up']])];
+  if (opened) {
+    await captureSettingsPhone(page);
+  }
   await menu.locator('[data-item="resume"]').click({ timeout: 2000 }).catch(() => undefined);
   const closed = await settled(menu.waitFor({ state: 'hidden', timeout: 2000 }));
   wrong.push(...wrongOf([[!closed, '„Weiter" left it open']]));
@@ -10625,6 +10702,80 @@ async function capturePauseMenuPhone(ben) {
   }
   await page.setViewportSize(was);
   await sleep(400);
+}
+
+/**
+ * The settings as they stand in the window, read in the page (whole, as page.evaluate takes a
+ * function): each tab's name, height and whether it lies inside the bar, whether the bar
+ * scrolls, where the bar and the card lie, the window's height.
+ */
+function settingsShown() {
+  const box = (el) => el.getBoundingClientRect();
+  const bar = document.querySelector('.settings-tabs');
+  const card = document.querySelector('.settings-card');
+  if (bar === null || card === null) {
+    return null;
+  }
+  const tabs = [...bar.querySelectorAll('.settings-tab')].map((tab) => ({
+    name: tab.textContent.trim(),
+    height: Math.round(box(tab).height),
+    inside: box(tab).left >= box(bar).left - 0.5 && box(tab).right <= box(bar).right + 0.5,
+  }));
+  return {
+    tabs,
+    scrolls: bar.scrollWidth > bar.clientWidth + 1,
+    bar: { top: box(bar).top, bottom: box(bar).bottom },
+    card: { top: box(card).top, bottom: box(card).bottom },
+    height: globalThis.innerHeight,
+  };
+}
+
+/**
+ * What is wrong with the settings `shown` on a phone: a tab too small or off its bar, the bar
+ * scrolling, the bar or the card cut off by the window.
+ */
+function settingsFaults(shown) {
+  if (shown === null) {
+    return ['no settings to read'];
+  }
+  const { tabs, bar, card, height } = shown;
+  return [
+    ...tabs.filter((tab) => tab.height < 44).map((tab) => `${tab.name} ${tab.height}px`),
+    ...tabs.filter((tab) => !tab.inside).map((tab) => `${tab.name} off the bar`),
+    ...wrongOf([
+      [shown.scrolls, 'the tab bar scrolls'],
+      [bar.top < 0 || bar.bottom > height, 'the tab bar runs out of the window'],
+      [card.top < 0 || card.bottom > height + 0.5, 'the card runs out of the window'],
+    ]),
+  ];
+}
+
+/**
+ * settings-phone-932.png: „Einstellungen" off the pause menu on Ben's phone held sideways — the
+ * panel in the window, its tab bar whole and still, every tab a fingertip high, only the tab's
+ * controls scrolling under it. Esc puts it away again, back to the menu.
+ */
+async function captureSettingsPhone(page) {
+  await page.locator('.pause-menu [data-item="settings"]').click({ timeout: 2000 });
+  const card = page.locator('.settings-card');
+  if (!(await settled(card.waitFor({ timeout: 3000 })))) {
+    fail('settings-phone-932.png: „Einstellungen" in the pause menu opened no panel');
+    return;
+  }
+  await sleep(300);
+  await capture(page, 'settings-phone-932.png');
+  const shown = await page.evaluate(settingsShown);
+  await page.keyboard.press('Escape');
+  const closed = await settled(card.waitFor({ state: 'hidden', timeout: 2000 }));
+  const wrong = [...settingsFaults(shown), ...wrongOf([[!closed, 'Esc left it open']])];
+  const tabs = (shown?.tabs ?? []).map((tab) => `${tab.name} ${tab.height}`).join(', ');
+  console.log(
+    `settings-phone-932.png Ben @ 932x430: tabs ${tabs} px; ` +
+      (wrong.length === 0 ? 'the bar whole and still, the card in the window, Esc closed it' : ''),
+  );
+  if (wrong.length > 0) {
+    fail(`settings-phone-932.png: ${wrong.join(', ')}`);
+  }
 }
 
 /** A colour as '#rrggbb', from its channels. */
@@ -10836,6 +10987,8 @@ function reportSprint(name, run, sprint, walk) {
 // daily.png  the host's lobby with the Tagesschicht switched on, named by today's UTC day — the
 //   server's view has to say so — then off again, as the walkthrough plays the room's pinned
 //   seed; a mission without one skips it
+// settings-steuerung.png  the settings' „Steuerung", two steps of the controller's D-pad along
+//   the tab bar from „Ton": the focus has to open each tab it comes to
 // settings-controller.png  the settings' controller section with R1, Y and L2 held on the
 //   walkthrough's controller: those have to light up in the live test, the controller has to
 //   count as connected, and the key table has to list all twelve actions
@@ -10928,13 +11081,35 @@ function litButtons(page) {
 }
 
 /**
- * settings-controller.png: the gear opens the settings, the controller's section in view; the
- * walkthrough's controller holds R1, Y and L2 — none of them acts over a dialog — and the live
- * test has to light exactly those, the controller connected, the key table all twelve actions.
- * Esc closes the settings again: a real key, which turns the prompts back to the keys.
+ * The controller's D-pad stepping along the settings' tab bar from „Ton", two to the right: the
+ * focus goes from tab to tab, each opening as it comes. The tab it reached.
+ */
+async function padToSteering(page) {
+  await page.locator('.settings-tab[data-tab="ton"]').focus();
+  await onPad(page, 'tap', 'dright');
+  await sleep(150);
+  await onPad(page, 'tap', 'dright');
+  await sleep(150);
+  return page.locator('.settings-tab--on').getAttribute('data-tab');
+}
+
+/**
+ * settings-steuerung.png and settings-controller.png: the gear opens the settings on „Ton", the
+ * controller's D-pad steps to „Steuerung" (settings-steuerung.png, `padToSteering`), its
+ * controller's section in view; the walkthrough's controller holds R1, Y and L2 — none of them
+ * acts over a dialog — and the live test has to light exactly those, the controller connected,
+ * the key table all twelve actions. Esc closes the settings again: a real key, which turns the
+ * prompts back to the keys.
  */
 async function captureControllerSettings(page) {
-  await settled(openSettings(page));
+  await settled(openSettings(page, 'ton'));
+  const reached = await padToSteering(page);
+  await sleep(300);
+  await capture(page, 'settings-steuerung.png');
+  console.log(`settings-steuerung.png the D-pad stepped from „Ton" to „${reached}"`);
+  if (reached !== 'steuerung') {
+    fail(`settings-steuerung.png: two steps of the D-pad from „Ton" opened „${reached}"`);
+  }
   const section = page.locator('.settings-pad');
   if (!(await settled(section.waitFor({ timeout: 3000 })))) {
     fail('settings-controller.png: the settings show no controller');

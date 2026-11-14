@@ -67,6 +67,7 @@ import {
 import type { ChatLine, MapPing } from '../world/render/frame.js';
 import { startRoom } from '../world/rooms.js';
 import { PuzzlePanel } from './PuzzlePanel.js';
+import { CrewDot } from './Crew.js';
 import { useHudRow } from './hudFold.js';
 import { RowCrew, RowTools } from './HudRow.js';
 import { Icon } from './Icon.js';
@@ -789,7 +790,7 @@ export function EscapeChecklist({ mates }: { mates: Mate[] }) {
     <ul className="escape-list" aria-label={`Am Notausgang: ${out} von ${mates.length}`}>
       {mates.map((mate) => (
         <li key={mate.id} className={mate.out ? 'escape-mate escape-mate--out' : 'escape-mate'}>
-          <span className="crew-dot" style={{ background: mate.color }} aria-hidden="true" />
+          <CrewDot color={mate.color} />
           {mate.name}
           {mate.out && <Icon name="check" />}
         </li>

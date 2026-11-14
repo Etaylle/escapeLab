@@ -205,6 +205,20 @@ describe('a controller in the world', () => {
   });
 });
 
+describe('the stick’s dead zone, as the settings set it', () => {
+  it('reads a light lean past 20 % by default, and the zone set from the next poll on', () => {
+    probe().lean(0.3, 0);
+    frame();
+    expect(padSteer().x).toBeCloseTo((0.3 - 0.2) / 0.8, 9);
+    changeSettings({ deadzone: 35 });
+    frame();
+    expect(padSteer().x).toBe(0);
+    changeSettings({ deadzone: 5 });
+    frame();
+    expect(padSteer().x).toBeCloseTo((0.3 - 0.05) / 0.95, 9);
+  });
+});
+
 describe('a controller over a dialog', () => {
   const dialog = {
     closest: () => null,

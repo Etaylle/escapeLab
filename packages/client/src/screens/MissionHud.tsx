@@ -9,7 +9,7 @@ import { useVoice, type Voice } from '../voice/useVoice.js';
 import type { KnownPositions } from '../world/movement.js';
 import type { ChatLine } from '../world/render/frame.js';
 import { presenceNear } from '../world/presence.js';
-import { crewTags, CrewTags, type CrewTag } from './Crew.js';
+import { CrewDot, crewTags, CrewTags, type CrewTag } from './Crew.js';
 import { EdgeworkChip } from './EdgeworkChip.js';
 import { Icon } from './Icon.js';
 import { SpeakingMark } from './Voice.js';
@@ -184,7 +184,7 @@ export function MissionHud({
           const mine = p.id === view.you.id;
           return (
             <li key={p.id} className={mine ? 'hud-me' : ''}>
-              <span className="crew-dot" style={{ background: p.color }} aria-hidden="true" />
+              <CrewDot color={p.color} />
               <span className="hud-name">{p.name}</span>
               {voice?.state.speaking.has(p.id) === true && <SpeakingMark />}
               {tags.length > 0 ? (

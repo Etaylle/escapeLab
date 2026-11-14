@@ -1,4 +1,5 @@
 import { addProbes } from '../../probes.js';
+import { getSettings, type LightWay } from '../../settings.js';
 import { traceRequested } from '../frameTrace.js';
 import { createLightLayer, type LightLayer } from './lightLayer.js';
 import { meanLuma } from './luma.js';
@@ -96,9 +97,13 @@ export function choosePath({ asked, webgl2, lost, renderer }: PathFacts): PathCh
   return { path: 'gl', reason: 'hardware renderer' };
 }
 
-/** The way the light of `state` takes now: as forced, else as chosen; GL only with a layer. */
-export function pathNow(state: LightPath): LightPathName {
-  const path = state.forced ?? state.choice.path;
+/**
+ * The way the light of `state` takes now: as forced (the probe's `use`), else by the Canvas pass
+ * where the settings ask for it (Bild, „Licht: Einfach", settings.ts `light`), else as chosen;
+ * GL only with a layer. The settings' word takes at once, the frame after it is given.
+ */
+export function pathNow(state: LightPath, way: LightWay = getSettings().light): LightPathName {
+  const path = state.forced ?? (way === 'canvas' ? 'canvas' : state.choice.path);
   return path === 'gl' && state.layer !== null ? 'gl' : 'canvas';
 }
 

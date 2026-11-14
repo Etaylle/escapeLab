@@ -417,7 +417,7 @@ function poll(now: number): void {
     return;
   }
   const pad = connectedPad();
-  const next = pad === null ? AT_REST : padStateOf(pad);
+  const next = pad === null ? AT_REST : padStateOf(pad, getSettings().deadzone / 100);
   const before = rt.last;
   rt.last = next;
   const pressed = pressedSince(before, next);

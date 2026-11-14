@@ -19,6 +19,11 @@
    * normal size: the settings' „Textgröße" sets it on the root (settings.ts).
    */
   --text-scale: 1;
+  /*
+   * How large the spoken lines' words stand against their normal size — the radio's banner, the
+   * opening's subtitles: the settings' „Untertitel" sets it on the root (settings.ts).
+   */
+  --subtitle-scale: 1;
   font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
 }
 
@@ -1541,7 +1546,7 @@ button.link:hover {
   border-radius: 10px;
   background: #0b1519;
   color: var(--text);
-  font-size: calc(14px * var(--text-scale));
+  font-size: calc(14px * var(--text-scale) * var(--subtitle-scale));
   line-height: 1.45;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
   animation: on-air 7s ease forwards;

@@ -1,19 +1,20 @@
 import { readFileSync } from 'node:fs';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type {
-  MapView,
-  MissionInfo,
-  MissionStats,
-  PuzzleView,
-  RelayedPosition,
-  PlayerView,
-  RoomSummary,
-  SpectatorView,
+import {
+  CREW_COLORS,
+  type MapView,
+  type MissionInfo,
+  type MissionStats,
+  type PuzzleView,
+  type RelayedPosition,
+  type PlayerView,
+  type RoomSummary,
+  type SpectatorView,
 } from '@escapelab/core';
 import { RoomCode } from '../src/App.js';
 import { pressingWord } from '../src/puzzles/syncPress.js';
-import { crewSizeText, crewTags } from '../src/screens/Crew.js';
+import { CrewDot, crewSizeText, crewTags } from '../src/screens/Crew.js';
 import { presenceNear } from '../src/world/presence.js';
 import { lineup, type Place } from '../src/screens/CrewRoom.js';
 import { EndScreen } from '../src/screens/End.js';
@@ -936,6 +937,26 @@ describe('the crew strip', () => {
     const entries = html.match(/<li.*?<\/li>/g) ?? [];
     expect(entries[0]).toContain('presence-pult">am Pult B<');
     expect(entries[1]).toContain('presence-pult">am Pult<');
+  });
+});
+
+describe('a crew member’s dot', () => {
+  it('wears their colour, and the colour’s place for a pattern the settings may lay over it', () => {
+    const dots = CREW_COLORS.map((color) => renderToStaticMarkup(<CrewDot color={color} />));
+    expect(dots[0]).toBe(
+      '<span class="crew-dot crew-dot--0" style="background-color:#2dd4bf" aria-hidden="true">' +
+        '</span>',
+    );
+    expect(dots.map((dot) => /crew-dot--(\d)/.exec(dot)?.[1])).toEqual(
+      CREW_COLORS.map((_, i) => String(i)),
+    );
+    // A colour written in capitals is the same colour; one off the crew's list has no pattern.
+    expect(renderToStaticMarkup(<CrewDot color="#F472B6" />)).toContain('crew-dot crew-dot--1"');
+    expect(renderToStaticMarkup(<CrewDot color="#123456" />)).toContain('class="crew-dot"');
+  });
+
+  it('sets the colour alone inline, so that a pattern’s image stays the stylesheet’s', () => {
+    expect(renderToStaticMarkup(<CrewDot color="#fbbf24" />)).not.toContain('background:');
   });
 });
 
