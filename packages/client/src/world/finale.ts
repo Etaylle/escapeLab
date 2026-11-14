@@ -218,15 +218,21 @@ export function useFinaleSounds(cue: { ending: Ending; since: number } | null): 
   }, [ending, since]);
 }
 
-/** Renders the component again at `at`, epoch ms; nothing for null or a moment past. */
-function useRerenderAt(at: number | null): void {
+/**
+ * Renders the component again once `at`, epoch ms, has come; nothing for null or a moment past.
+ * Whether it is still to come is read as the component renders, and after every render that
+ * finds it so a timer looks again a moment past it: a timer that fires a moment early is set
+ * once more, and an effect that runs only after `at`, a long frame after its render, still
+ * renders again — either would otherwise leave the finale running for good.
+ */
+export function useRerenderAt(at: number | null): void {
   const [, setTick] = useState(0);
+  const ahead = at !== null && Date.now() < at ? at : null;
   useEffect(() => {
-    const wait = at === null ? 0 : at - Date.now();
-    if (wait <= 0) {
+    if (ahead === null) {
       return undefined;
     }
-    const timer = setTimeout(() => setTick((t) => t + 1), wait);
+    const timer = setTimeout(() => setTick((t) => t + 1), Math.max(0, ahead - Date.now() + 1));
     return () => clearTimeout(timer);
-  }, [at]);
+  });
 }
