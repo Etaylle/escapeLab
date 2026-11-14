@@ -187,7 +187,7 @@ describe('draft ↔ JSON', () => {
     };
     const draft = loaded(blackout);
     expect(Object.keys(draft.radio.extra).sort()).toEqual(
-      ['alarm', 'clock', 'emergency', 'lost', 'won'].sort(),
+      ['alarm', 'clock', 'emergency', 'lobby', 'lost', 'won'].sort(),
     );
     expect((draftToJson(draft) as { radio: unknown }).radio).toEqual(blackout.radio);
     const edited = { ...draft, radio: { ...draft.radio, start: 'Leitstelle an Frühschicht.' } };

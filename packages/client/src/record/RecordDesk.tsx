@@ -34,6 +34,7 @@ const MOMENTS: Readonly<Record<RadioMoment, string>> = {
   clock: 'Restzeit',
   won: 'Geschafft',
   lost: 'Verloren',
+  lobby: 'Funkprobe in der Lobby',
 };
 
 const momentOf = (line: RecordLine): string =>

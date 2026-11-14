@@ -118,13 +118,17 @@ describe('the lines the page offers', () => {
     expect(second?.recording).toMatchObject({ source: 'upload', file: `${voiceId(SECOND)}.mp3` });
     expect(solved).toMatchObject({ when: 'solved', station: 'Notlicht', recording: null });
     // The escape, then the loudspeakers' message as an emergency starts, then the operator's
-    // answers to the run, the last word on a run called off the last of them.
+    // answers to the run, the last word on a run called off the last of them, and the lobby's
+    // Funkprobe last of all.
     expect(of('escape')).toEqual(texts(blackout.radio.escape));
     expect(of('announce')).toEqual(texts(blackout.map.sabotage?.announce));
     const out = lines.findIndex((line) => line.when === 'announce');
     expect(lines.slice(out - 1, out + 1).map((line) => line.when)).toEqual(['escape', 'announce']);
     const last = texts(blackout.radio.lost?.abandoned).at(-1);
-    expect(lines.at(-1)).toMatchObject({ when: 'lost', station: null, text: last });
+    const probes = texts(blackout.radio.lobby);
+    expect(lines.at(-1 - probes.length)).toMatchObject({ when: 'lost', station: null, text: last });
+    expect(of('lobby')).toEqual(probes);
+    expect(lines.at(-1)).toMatchObject({ when: 'lobby', station: null, text: probes.at(-1) });
   });
 
   it('list a line two missions say once, under both', () => {

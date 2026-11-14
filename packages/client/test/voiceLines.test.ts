@@ -152,6 +152,12 @@ const AWAITING_RENDER: readonly string[] = [
   'Mit halber Schicht geht da drinnen nichts. Ich breche ab, der Trakt bleibt bis morgen dunkel.',
   'Ohne die ganze Schicht kommt ihr da nicht durch. Ich hole euch raus, wir versuchen es ' +
     'morgen neu.',
+  'Funkprobe, Nachtschicht. Ich höre euch laut und klar. Bisher eine ruhige Nacht im Trakt, ' +
+    'von mir aus kann es losgehen.',
+  'Kurze Funkprobe. Alle haben sich gemeldet, ihr kommt sauber bei mir an. Ich bleibe die ' +
+    'ganze Nacht auf dieser Frequenz.',
+  'Nachtschicht, Funkprobe. Ich höre jeden von euch klar. Dann hoffen wir mal auf eine lange, ' +
+    'langweilige Nacht.',
 ];
 
 const manifest = JSON.parse(readFileSync(MANIFEST_FILE, 'utf8')) as Manifest;
@@ -320,13 +326,14 @@ describe('the lines the script reads', () => {
     expect(() => shippedLines([twice])).toThrow(/„Los\." is said by the operator and the pa/);
   });
 
-  it('give the operator’s answers their moods, and one line one mood: one recording', () => {
+  it('give the operator’s answers and Funkprobe their moods, one line one mood', () => {
     const radio = {
       emergency: { start: 'Notfall.', cleared: 'Steht.', missed: 'Zu spät.' },
       alarm: ['Alarm.', 'Alarm bei mir.'],
       clock: { fiveMinutes: 'Fünf.', twoMinutes: 'Zwei.', lastMinute: 'Eine.' },
       won: { plenty: 'Gut.', tight: 'Knapp.', lastMinute: 'Gerade so.' },
       lost: { time: 'Dunkel.', alarms: 'Abgeworfen.', abandoned: 'Abbruch.' },
+      lobby: ['Funkprobe.', 'Kurze Funkprobe.'],
     };
     const moods = catalogOf({ id: 'moods', radio, puzzles: [] }).map(({ text, mood }) => [
       text,
@@ -347,6 +354,8 @@ describe('the lines the script reads', () => {
       ['Dunkel.', 'quiet'],
       ['Abgeworfen.', 'quiet'],
       ['Abbruch.', 'quiet'],
+      ['Funkprobe.', 'calm'],
+      ['Kurze Funkprobe.', 'calm'],
     ]);
     // The same words tense as an alarm and pressing as the clock would need two takes.
     const torn = { id: 'torn', radio: { alarm: 'Achtung.', clock: { lastMinute: 'Achtung.' } } };

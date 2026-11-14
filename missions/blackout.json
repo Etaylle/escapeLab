@@ -24,6 +24,11 @@
     ]
   },
   "radio": {
+    "lobby": [
+      "Funkprobe, Nachtschicht. Ich höre euch laut und klar. Bisher eine ruhige Nacht im Trakt, von mir aus kann es losgehen.",
+      "Kurze Funkprobe. Alle haben sich gemeldet, ihr kommt sauber bei mir an. Ich bleibe die ganze Nacht auf dieser Frequenz.",
+      "Nachtschicht, Funkprobe. Ich höre jeden von euch klar. Dann hoffen wir mal auf eine lange, langweilige Nacht."
+    ],
     "start": [
       "Leitstelle an Nachtschicht. Stromausfall im ganzen Trakt, ich sehe nur noch die Notzellen. Geht zuerst ans Notlicht, der Hauptschalter im Flur braucht zwei Leute.",
       "Leitstelle an Nachtschicht. Der Trakt ist dunkel, auf meiner Tafel brennen nur die Notzellen. Zuerst das Notlicht, den Hauptschalter im Flur legt ihr gemeinsam um.",

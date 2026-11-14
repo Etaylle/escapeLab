@@ -290,9 +290,11 @@ export const mapDefSchema = z.object({
  * exit; the operator's answers to what the run does — its first alarm, whatever set it off,
  * the clock's calls with five minutes, two and the last minute left, an emergency as it starts
  * and as it ends, cleared in time or missed — and the last word on a run: won, by the time it
- * left (five minutes or more, a minute or more, less), or lost, by what lost it.
+ * left (five minutes or more, a minute or more, less), or lost, by what lost it. Before a run,
+ * the lobby's Funkprobe once the whole crew stands ready (`lobby`).
  */
 const radioSchema = z.object({
+  lobby: lineSchema.optional(),
   start: lineSchema.optional(),
   escape: lineSchema.optional(),
   alarm: lineSchema.optional(),

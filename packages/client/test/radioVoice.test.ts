@@ -351,6 +351,20 @@ describe('a line spoken over the radio', () => {
     expect(radio.voiceProbe().lastId).toBe('bbbbbbbbbbbb');
   });
 
+  it('lets go of a line still decoding as the voice stops: nothing airs after', async () => {
+    const radio = await voice();
+    radio.preloadVoice('blackout');
+    await settle();
+    expect(radio.sayLine(LEVER_LINE)).toBe(true); // not decoded yet
+    radio.stopVoice(); // the screen goes before it is
+    await settle();
+    const clips = lastContext()
+      .all<FakeBufferSource>('buffer')
+      .filter((s) => s.buffer?.duration === 1.5);
+    expect(clips).toEqual([]);
+    expect(radio.voiceProbe().lastId).toBeNull();
+  });
+
   it('lets a line go once spoken, and decodes it anew when it comes again', async () => {
     vi.useFakeTimers();
     try {

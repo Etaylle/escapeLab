@@ -447,6 +447,7 @@ describe('the lines a mission can put on the air', () => {
       ...CLOCK_CALLS.flatMap(({ key }) => times('clock', radio.clock?.[key])),
       ...WON_BANDS.flatMap((band) => times('won', radio.won?.[band])),
       ...LOST_CAUSES.flatMap((cause) => times('lost', radio.lost?.[cause])),
+      ...times('lobby', radio.lobby),
     ]);
     const plant = { puzzleId: null, speaker: 'pa', mood: null };
     const operator = { puzzleId: null, speaker: 'operator', mood: null };
@@ -458,8 +459,14 @@ describe('the lines a mission can put on the air', () => {
     const announce = first(blackout.map.sabotage?.announce);
     const announced = lines.findIndex((line) => line.when === 'announce');
     expect(lines[announced]).toEqual({ ...plant, text: announce, when: 'announce' });
+    // Last the lobby's Funkprobe, before a run, said calm; the last word on a lost run before it.
+    const probes = variantsOf(radio.lobby ?? []);
+    expect(probes).toHaveLength(3);
     const last = variantsOf(radio.lost?.abandoned ?? []).at(-1);
-    expect(lines.at(-1)).toEqual({ ...operator, text: last, when: 'lost', mood: 'quiet' });
+    const lost = { ...operator, text: last, when: 'lost', mood: 'quiet' };
+    expect(lines.at(-1 - probes.length)).toEqual(lost);
+    const probe = { ...operator, text: probes.at(-1), when: 'lobby', mood: 'calm' };
+    expect(lines.at(-1)).toEqual(probe);
     const station = blackout.puzzles[0];
     const at = { puzzleId: station?.id, speaker: 'operator', mood: null };
     const starts = variantsOf(radio.start ?? []).length;

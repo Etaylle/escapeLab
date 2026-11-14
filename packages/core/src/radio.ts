@@ -40,7 +40,9 @@ export function pickLine(line: Line, seed: number, key: string, occurrence = 0):
  * hatch unlocks — and over the loudspeakers again, on their emergency power, as an emergency
  * starts (`announce`). The operator answers what the run does besides: an emergency as it
  * starts and as it ends, cleared in time or missed; the run's first alarm; the clock, with five
- * minutes, two and one left; and the run's end, won or lost, which the end card plays.
+ * minutes, two and one left; and the run's end, won or lost, which the end card plays. Before
+ * a run, in the lobby, the operator makes a radio check once the whole crew stands ready
+ * (`lobby`, the Funkprobe).
  */
 export const RADIO_MOMENTS = [
   'pa',
@@ -56,6 +58,7 @@ export const RADIO_MOMENTS = [
   'clock',
   'won',
   'lost',
+  'lobby',
 ] as const;
 export type RadioMoment = (typeof RADIO_MOMENTS)[number];
 
@@ -76,10 +79,10 @@ export function speakerOf(moment: RadioMoment): Speaker {
 /**
  * How the operator says a line, by the moment it comes at: the run's first alarm and an emergency
  * missed tense, the clock pressing, an emergency urgent as it starts and relieved as it is
- * cleared, a run won warm and a run lost quiet. The run's story — the start, the stations, the
- * escape — and the plant's loudspeakers have none: they speak as they always spoke. The voice
- * script asks ElevenLabs for a mood by an audio tag beside the words (scripts/voice.ts
- * `MOOD_TAGS`), never in the words a subtitle shows.
+ * cleared, a run won warm and a run lost quiet, the lobby's Funkprobe calm. The run's story — the
+ * start, the stations, the escape — and the plant's loudspeakers have none: they speak as they
+ * always spoke. The voice script asks ElevenLabs for a mood by an audio tag beside the words
+ * (scripts/voice.ts `MOOD_TAGS`), never in the words a subtitle shows.
  */
 export const MOODS = {
   alarm: 'tense',
@@ -89,6 +92,7 @@ export const MOODS = {
   missed: 'tense',
   won: 'warm',
   lost: 'quiet',
+  lobby: 'calm',
 } as const satisfies Partial<Record<RadioMoment, string>>;
 export type Mood = (typeof MOODS)[keyof typeof MOODS];
 
@@ -198,10 +202,12 @@ function answerLines(mission: Mission): RadioLine[] {
  * intro's announcement over the loudspeakers (`intro.pa`, played by each screen while the power
  * is on), then on the air `radio.start` as the clock starts (actions.ts, `logRadio`), for each
  * station the nudges `nudge` sends while it stays quiet and the line its solve brings, and
- * `radio.escape` as the hatch unlocks — then what answers the run as it goes (`answerLines`).
- * Every text of a line with several is listed, in its order, as the run may pick any (`pickLine`);
- * a line said twice is listed twice.
+ * `radio.escape` as the hatch unlocks — then what answers the run as it goes (`answerLines`),
+ * and last the lobby's Funkprobe before a run (`radio.lobby`, view.ts `radioCheck`). Every text
+ * of a line with several is listed, in its order, as the run may pick any (`pickLine`); a line
+ * said twice is listed twice.
  */
 export function radioLines(mission: Mission): RadioLine[] {
-  return [...storyLines(mission), ...answerLines(mission)];
+  const lobby = textsOf(mission.radio.lobby, 'lobby');
+  return [...storyLines(mission), ...answerLines(mission), ...lobby];
 }

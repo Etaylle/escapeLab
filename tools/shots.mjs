@@ -387,7 +387,10 @@
  * page from the blackout or the briefing's end on — has to be spoken by a
  * recording from the manifest the server hands out, saying the banner's line,
  * for 200 ms a word at least and a second at the least; the first line after
- * the Leitstelle's opening squelch, and no other line. In the
+ * the Leitstelle's opening squelch, and no other line. In the lobby, once the
+ * host can start, the host's page has to ask for the Funkprobe its view names
+ * (`window.__escapelab.radioCheck`, client world/radioCheck.ts) and put it on
+ * the air — or log that it awaits its render where the manifest has none. In the
  * escape the music's pressure has to stand at 0.8 or more, a pressure stem
  * up and the calm stem gone under the siren. Wherever the partner stands half a tile
  * or more to one side (after the blackout, at the hatch — and after the lever,
@@ -7462,12 +7465,47 @@ async function micsOn(players) {
   }
 }
 
+/** How long the host's page may take to put the Funkprobe on the air once it can start, ms. */
+const FUNKPROBE_MS = 3000;
+
+/** The lobby's Funkprobe off the page's probe (client world/radioCheck.ts); null without one. */
+const radioCheckOf = (page) => page.evaluate(() => globalThis.__escapelab?.radioCheck ?? null);
+
+/**
+ * The operator's Funkprobe, once the host can start: the host's page has to ask for the text
+ * its view names (core view.ts `radioCheck`) within FUNKPROBE_MS and put it on the air — where
+ * the manifest has no recording of it yet, it awaits its render, logged. A mission without one
+ * is left alone. Fails otherwise.
+ */
+async function checkRadioCheck(host) {
+  const expected = host.seen.view?.radioCheck;
+  if (expected === undefined) {
+    return;
+  }
+  const recorded = (await voiceLinesOf(host.page))[voiceIdOf(expected)] !== undefined;
+  const done = (probe) => probe?.asked === expected && (probe.aired || !recorded);
+  const end = Date.now() + FUNKPROBE_MS;
+  let probe = await radioCheckOf(host.page);
+  while (!done(probe) && Date.now() < end) {
+    await sleep(100);
+    probe = await radioCheckOf(host.page);
+  }
+  const asked = probe?.asked == null ? 'none' : `„${probe.asked}"`;
+  const state = probe?.aired ? 'on the air' : 'awaits its render';
+  const said = done(probe) ? state : `!! asked for ${asked}${probe?.aired ? ', on the air' : ''}`;
+  console.log(`radio check        ${host.name}: „${expected}" ${said}`);
+  if (!done(probe)) {
+    fail(`radio check: ${host.name}'s lobby did not put „${expected}" on the air`);
+  }
+}
+
 /**
  * The guest says it is ready, and the host starts once its own page has the
- * guest ready and its start button enabled; the run then has START_MS to
- * show on both pages. A start the server did not take is pressed once more,
- * logged with what the host's page said. Throws, with what both pages show,
- * when the run does not come up.
+ * guest ready and its start button enabled — its Funkprobe checked first
+ * (`checkRadioCheck`); the run then has START_MS to show on both pages. A
+ * start the server did not take is pressed once more, logged with what the
+ * host's page said. Throws, with what both pages show, when the run does not
+ * come up.
  */
 async function startRun(host, guest) {
   const from = Date.now();
@@ -7485,6 +7523,7 @@ async function startRun(host, guest) {
     // The start reads „Mission starten" only once nothing blocks it.
     const start = host.page.locator('button.lobby-start:enabled', { hasText: 'Mission starten' });
     await start.waitFor({ state: 'visible', timeout: 10_000 });
+    if (attempt === 1) await checkRadioCheck(host);
     await start.click();
     if (!(await until(started, 5000))) {
       const banner = await textOf(host.page.locator('.banner.error'));

@@ -4,11 +4,14 @@ import {
   CLOCK_CALLS,
   CLOCK_LATE_MS,
   clockCallDueAt,
+  initialState,
   moodOf,
   MOODS,
   parseMission,
   radioLines,
+  viewFor,
   wonBand,
+  type Action,
   type GameState,
   type Mission,
   type RunEvent,
@@ -344,5 +347,64 @@ describe('the operator’s lines in the mission file', () => {
       null,
       MOODS.clock,
     ]);
+  });
+});
+
+describe('the lobby’s Funkprobe', () => {
+  const PROBES = ['Funkprobe eins.', 'Funkprobe zwei.', 'Funkprobe drei.'];
+  const probing = operatorMission({ radio: { start: 'Los.', lobby: PROBES } });
+
+  /** Anna and Ben in the lobby of a room for `of`, Ben ready: Anna, the host, can start. */
+  const lobby = (of: Mission): GameState =>
+    (
+      [
+        { type: 'player-join', playerId: 'p1', name: 'Anna' },
+        { type: 'player-join', playerId: 'p2', name: 'Ben' },
+        { type: 'set-ready', playerId: 'p2', ready: true },
+      ] as Action[]
+    ).reduce(applyAction, initialState(of));
+
+  it('is in every view of the lobby, the same text for all, and in none in the run', () => {
+    const state = lobby(probing);
+    const heard = viewFor(state, 'p1').radioCheck;
+    expect(PROBES).toContain(heard);
+    expect(viewFor(state, 'p2').radioCheck).toBe(heard);
+    const run = applyAction(state, { type: 'start-mission', playerId: 'p1', at: T0, seed: 7 });
+    expect('radioCheck' in viewFor(run, 'p1')).toBe(false);
+    // A mission without one leaves it out.
+    expect('radioCheck' in viewFor(lobby(mission), 'p1')).toBe(false);
+  });
+
+  it('takes the next text each time the room comes back to its lobby', () => {
+    let state = lobby(probing);
+    const heard: (string | undefined)[] = [];
+    for (let run = 0; run < 4; run++) {
+      heard.push(viewFor(state, 'p1').radioCheck);
+      const at = T0 + run * 1_000_000;
+      const rounds: Action[] = [
+        { type: 'start-mission', playerId: 'p1', at, seed: run },
+        { type: 'time-expired', at: at + MINUTES_10 },
+        { type: 'back-to-lobby', playerId: 'p1' },
+        { type: 'set-ready', playerId: 'p2', ready: true },
+      ];
+      state = rounds.reduce(applyAction, state);
+    }
+    // Every text once before any comes again.
+    expect(new Set(heard.slice(0, 3))).toEqual(new Set(PROBES));
+    expect(heard[3]).toBe(heard[0]);
+  });
+
+  it('is the operator’s, said calm, listed after every line of the run', () => {
+    const lines = radioLines(probing);
+    expect(lines.slice(-3)).toEqual(
+      PROBES.map((text) => ({
+        text,
+        when: 'lobby',
+        puzzleId: null,
+        speaker: 'operator',
+        mood: 'calm',
+      })),
+    );
+    expect(lines.filter((line) => line.when === 'lobby')).toHaveLength(3);
   });
 });

@@ -15,8 +15,9 @@
  * starts, every `puzzles[].onSolved` as its station is solved, `radio.escape` as the hatch
  * unlocks, the loudspeakers' `map.sabotage.announce` as an emergency starts, the operator's
  * answers to what a run does (`radio.emergency`, `.alarm`, `.clock`, `.won`, `.lost`) — and
- * every `puzzles[].nudges` line its `nudge` sends while a station stays quiet; a line written in
- * two or three texts is two or three lines here, a run saying one. Two speakers say them
+ * every `puzzles[].nudges` line its `nudge` sends while a station stays quiet, and the lobby's
+ * Funkprobe (`radio.lobby`) once the crew stands ready; a line written in two or three texts is
+ * two or three lines here, a run saying one. Two speakers say them
  * (`Speaker`): the plant's announcement system the loudspeakers' lines, mission control's
  * operator the rest; under ElevenLabs each by a voice of its own, which the manifest keeps
  * (`voices`) — the operator Helmut, the plant a voice made from a description (`PA_VOICE`,
@@ -181,6 +182,7 @@ type Group = Readonly<Partial<Record<string, Line>>>;
 
 /** What the script reads of a mission's radio: the operator's lines, as core's schema has them. */
 export interface RadioLines {
+  readonly lobby?: Line;
   readonly start?: Line;
   readonly escape?: Line;
   readonly alarm?: Line;
@@ -202,9 +204,10 @@ export interface MissionLines {
 /**
  * How the operator says a line, as core's radio.ts `MOODS` has it by the moment: the first alarm
  * and an emergency missed tense, the clock pressing, an emergency urgent and its clearing
- * relieved, a run won warm, a run lost quiet; every other line has none.
+ * relieved, a run won warm, a run lost quiet, the lobby's Funkprobe calm; every other line has
+ * none.
  */
-export type Mood = 'tense' | 'pressing' | 'urgent' | 'relieved' | 'warm' | 'quiet';
+export type Mood = 'tense' | 'pressing' | 'urgent' | 'relieved' | 'warm' | 'quiet' | 'calm';
 
 /**
  * The audio tag each mood asks Eleven v3 and v4 for: a short instruction in brackets before the
@@ -220,6 +223,7 @@ export const MOOD_TAGS: Readonly<Record<Mood, string>> = {
   relieved: '[relieved]',
   warm: '[warm]',
   quiet: '[subdued]',
+  calm: '[calm]',
 };
 
 /** Whether `model` reads audio tags (Eleven v3 and v4): an older one would say them aloud. */
@@ -331,8 +335,8 @@ export interface CatalogLine {
  * Every line heard in `mission`, in the order core's `radioLines` lists them: the intro's
  * announcement over the lab's loudspeakers, line by line (client world/pa.ts), then on the air
  * the start, for each station the nudges it may get while it is up and the line its solve
- * brings, the escape; then the loudspeakers' message as an emergency starts, and the operator's
- * answers to what the run does (`answersOf`).
+ * brings, the escape; then the loudspeakers' message as an emergency starts, the operator's
+ * answers to what the run does (`answersOf`), and last the lobby's Funkprobe.
  */
 export function catalogOf(mission: MissionLines): CatalogLine[] {
   const said =
@@ -351,6 +355,7 @@ export function catalogOf(mission: MissionLines): CatalogLine[] {
     ...operator(radio?.escape),
     ...said('pa')(mission.map?.sabotage?.announce),
     ...answersOf(radio).flatMap(([line, mood]) => operator(line, mood)),
+    ...operator(radio?.lobby, 'calm'),
   ];
 }
 

@@ -356,10 +356,11 @@ export function releaseLine(text: string): void {
 /**
  * Speaks the line `text` over the radio, now — or as soon as it is decoded — cutting short one
  * still on the air: a line that opens a run after the Leitstelle's opening squelch; once spoken,
- * it is let go. True where it speaks; false where it has no recording or nothing can play — the
- * caller chirps then.
+ * it is let go. Into the radio's bus, or `into` where given: a level of the caller's on the way
+ * there (the lobby's Funkprobe, radioCheck.ts). True where it speaks; false where it has no
+ * recording or nothing can play — the caller chirps then.
  */
-export function sayLine(text: string): boolean {
+export function sayLine(text: string, into?: AudioNode): boolean {
   try {
     const id = store.ids.get(text);
     const engine = playingEngine();
@@ -367,10 +368,10 @@ export function sayLine(text: string): boolean {
     asked = id;
     const clip = store.clips.get(id);
     if (clip !== undefined) {
-      onAir(engine, id, clip);
+      onAir(engine, id, clip, into);
     } else {
       void decodeLine(id).then((decoded) => {
-        if (decoded !== null && asked === id) onAir(engine, id, decoded);
+        if (decoded !== null && asked === id) onAir(engine, id, decoded, into);
       });
     }
     return true;
@@ -381,17 +382,18 @@ export function sayLine(text: string): boolean {
 }
 
 /**
- * The line `id` on the air from now, cutting short one still on it; let go once it ends. A line
- * that opens the run lets go of the other openers decoded for it: the run has picked its own.
+ * The line `id` on the air from now into `into`, cutting short one still on it; let go once it
+ * ends. A line that opens the run lets go of the other openers decoded for it: the run has
+ * picked its own.
  */
-function onAir(engine: Engine, id: string, clip: Clip): void {
+function onAir(engine: Engine, id: string, clip: Clip, into: AudioNode = engine.voice): void {
   const now = engine.ctx.currentTime;
   const opens = store.openers.has(id);
   if (opens) {
     for (const other of store.openers) if (other !== id) dropLine(other);
   }
   speaking?.cut(now);
-  const line = speak(engine, id, clip, now + LOOKAHEAD, opens);
+  const line = speak(engine, id, clip, now + LOOKAHEAD, opens, into);
   speaking = line;
   lastId = id;
   lastOpened = opens;
@@ -417,12 +419,19 @@ export function airtimeMs(text: string): number | null {
 }
 
 /**
- * The line `id` keyed at `at`: the opening where it `opens` a run, the squelch, speech over its
- * static, the tail; the lab ducks.
+ * The line `id` keyed at `at` into `into`: the opening where it `opens` a run, the squelch,
+ * speech over its static, the tail; the lab ducks.
  */
-function speak(engine: Engine, id: string, clip: Clip, at: number, opens: boolean): Speaking {
+function speak(
+  engine: Engine,
+  id: string,
+  clip: Clip,
+  at: number,
+  opens: boolean,
+  into: AudioNode,
+): Speaking {
   const { ctx } = engine;
-  const radio = radioChain(ctx, engine.voice, VOICE_LEVEL);
+  const radio = radioChain(ctx, into, VOICE_LEVEL);
   const keyed = opens ? at + OPEN_S : at;
   const start = keyed + KEY_S;
   const end = start + clip.buffer.duration;
@@ -483,8 +492,9 @@ function openChannel(
   return keySound(ctx, 'radio-open', dest, at);
 }
 
-/** Cuts a line still on the air: the game screen is gone. */
+/** Cuts a line still on the air, and one asked for and still decoding: the screen is gone. */
 export function stopVoice(): void {
+  asked = null;
   try {
     const engine = playingEngine();
     if (engine !== null) speaking?.cut(engine.ctx.currentTime);
