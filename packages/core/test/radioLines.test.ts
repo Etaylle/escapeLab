@@ -417,6 +417,17 @@ describe('the operator’s answers in Blackout', () => {
       expect(line).not.toMatch(/auf einmal|zugleich|gleichzeitig|auf einen Schlag/i);
     }
   });
+
+  it('says of an emergency cleared only what holds after a slip at the consoles too', () => {
+    // A wrong switch at a relay console costs time (actions.ts `handleEmergencyInput`), and the
+    // crew can clear the emergency in time after it: no take may say that it cost nothing.
+    const cleared = variantsOf(radio?.emergency?.cleared ?? []);
+    expect(cleared.length).toBeGreaterThanOrEqual(2);
+    const costless = /keine Zeit|nichts gekostet|nichts verloren|ohne (Zeit)?verlust|umsonst/i;
+    for (const line of cleared) {
+      expect(line).not.toMatch(costless);
+    }
+  });
 });
 
 describe.each(['blackout', 'systemcheck'])('the Leitstelle through %s', (id) => {

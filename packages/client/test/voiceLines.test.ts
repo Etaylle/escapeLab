@@ -117,7 +117,7 @@ const AWAITING_RENDER: readonly string[] = [
   'Notfall in der Kühlung, die Relais müssen von Hand geschaltet werden. Jeder sagt laut, was ' +
     'auf seinem Pult steht.',
   'Kühlung steht wieder, die Relais halten. Weiter, wo ihr aufgehört habt.',
-  'Die Relais greifen wieder, ich habe die Kühlung zurück. Das hat uns keine Zeit gekostet.',
+  'Die Relais greifen wieder, ich habe die Kühlung zurück. Rechtzeitig, danke euch.',
   'Die Kühlung ist abgesackt, das hat uns Zeit gekostet. Zurück an die Arbeit, beim nächsten ' +
     'Mal schneller.',
   'Zu spät, die Notversorgung musste die Kühlung abfangen. Das kostet Zeit, weiter.',

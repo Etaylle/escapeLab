@@ -681,9 +681,9 @@ pnpm --filter @escapelab/client voice --keep-pa <the id beside the one kept>   #
 VOICE_ENGINE=elevenlabs pnpm --filter @escapelab/client voice --fresh          # every line, 100
 ```
 
-The design reads the previews' 179 characters, billed once for the three; the render 9,700
+The design reads the previews' 179 characters, billed once for the three; the render 9,692
 characters, tags included, at most a credit each (the API bills text to speech below that): the
-48 new lines 5,349, the operator's 47 lines of 2026-10-25 again 3,983, and the five lines of the
+48 new lines 5,341, the operator's 47 lines of 2026-10-25 again 3,983, and the five lines of the
 announcement, now in the plant's voice, 368. A render reads the account's plan first, free of
 charge, and a take made on a paid plan carries it in its render, so that `--fresh` on the paid
 plan makes anew every take made before without it — the 47 lines whose licence the repo cannot
@@ -760,7 +760,7 @@ VOICE_SAMPLES_DIR=~/Desktop pnpm --filter @escapelab/client voice \
 VOICE_ENGINE=elevenlabs pnpm --filter @escapelab/client voice --fresh   # every line, both voices
 ```
 
-Every shipped line read once is 9,700 characters, and a run that stops short spends nothing
+Every shipped line read once is 9,692 characters, and a run that stops short spends nothing
 twice. Made on the free plan, ElevenLabs asks for attribution and allows no commercial use
 (Lizenz, below).
 
@@ -1238,7 +1238,7 @@ lines before Helmut did, are build tools that never ship.
 What the sound packages left for later, one line each, the newest first:
 
 - **The plant's voice and 48 lines await the render** (V-voices): the Voice Design, the voice
-  kept and every line read anew, 179 and 9,700 characters; the commands are under „A voice on
+  kept and every line read anew, 179 and 9,692 characters; the commands are under „A voice on
   the radio". Until then the new lines show their words on the objective bar and in the
   Einsatzprotokoll, the operator's keyed with the radio's chirp, the plant's message, the last
   word and the Funkprobe silent, and the announcement keeps Helmut's takes.
