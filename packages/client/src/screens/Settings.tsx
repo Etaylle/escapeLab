@@ -113,14 +113,14 @@ function talkBack(keys: KeyBindings): KeyBindings {
 
 /**
  * What a tab's „Zurücksetzen" puts back, from the settings as they stand (`now`): „Ton" every
- * volume, every mute and the talk key; „Bild" the text, the motion and the light; „Steuerung"
- * the keys, the controller, its symbols and the dead zone; „Zugang" the patterns and the
- * spoken lines' size. „Konto" holds no setting.
+ * volume, every mute, the talk key and the music — its pack, the pieces picked cleared; „Bild" the
+ * text, the motion and the light; „Steuerung" the keys, the controller, its symbols and the dead
+ * zone; „Zugang" the patterns and the spoken lines' size. „Konto" holds no setting.
  */
 export function resetOf(tab: SettingsTab, now: Settings): Partial<Settings> {
   const d = DEFAULT_SETTINGS;
   const parts: Record<SettingsTab, Partial<Settings>> = {
-    ton: { volumes: d.volumes, muted: d.muted, keys: talkBack(now.keys) },
+    ton: { volumes: d.volumes, muted: d.muted, keys: talkBack(now.keys), music: d.music },
     bild: { textSize: d.textSize, motion: d.motion, light: d.light },
     steuerung: { keys: DEFAULT_KEYS, pad: DEFAULT_PAD, glyphs: d.glyphs, deadzone: d.deadzone },
     zugang: { patterns: d.patterns, subtitles: d.subtitles },

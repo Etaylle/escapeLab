@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
@@ -7,6 +7,7 @@ import {
   DIRS,
   FOLDER_CAPS,
   groupOf,
+  keptFiles,
   MANIFEST,
   MAX_BED_GAIN_DB,
   MUSIC_FORMAT,
@@ -213,11 +214,11 @@ describe.each(['sfx', 'music'] as const)('the recordings in public/%s', (group) 
     expect(heard, `floors over ${AUDIBLE_FLOOR_DBFS} dBFS — ${remedy}`).toEqual([]);
   });
 
-  /** The recordings in the folder now: an MP3 as ElevenLabs made it, a suite's piece as AAC. */
-  const filed = (): string[] =>
-    existsSync(DIRS[group])
-      ? readdirSync(DIRS[group]).filter((name) => /\.(?:mp3|m4a)$/.test(name))
-      : [];
+  /**
+   * The recordings in the folder now: an MP3 as ElevenLabs made it, a suite's piece as AAC — the
+   * music's with the score's own pack (sfx.ts SCORE_DIR).
+   */
+  const filed = (): string[] => keptFiles(DIRS[group], group);
   /** The bytes `files` of the folder take. */
   const bytesOf = (files: readonly string[]): number =>
     files.reduce((sum, file) => sum + statSync(join(DIRS[group], file)).size, 0);

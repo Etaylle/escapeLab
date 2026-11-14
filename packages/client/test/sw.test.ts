@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { precacheFiles } from '../src/sw/build.js';
 import { routeOf } from '../src/sw/routes.js';
+import { DEFAULT_PACK } from '../src/world/packFile.js';
 
 const ORIGIN = 'https://lab.test';
 
@@ -71,6 +72,22 @@ describe('the precache list', () => {
 
   it('leaves out dotfiles, whatever folder they lie in', () => {
     expect(precacheFiles(['.vite/manifest.json'], ['.DS_Store', 'icons/.hidden'])).toEqual(['/']);
+  });
+
+  it('keeps the default pack’s music, every other pack left to be fetched as it plays', () => {
+    expect(DEFAULT_PACK).toBe('nachtschicht');
+    const published = [
+      'music/won.mp3',
+      'music/packs/nachtschicht/calm.mp3',
+      'music/packs/yalciner/calm.m4a',
+      'music/packs/macleod/end-won.m4a',
+      'music/packs/nachtschichtx/calm.m4a',
+    ];
+    expect(precacheFiles([], published)).toEqual([
+      '/',
+      '/music/packs/nachtschicht/calm.mp3',
+      '/music/won.mp3',
+    ]);
   });
 });
 

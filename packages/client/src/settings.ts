@@ -10,6 +10,13 @@ import {
 } from './input/bindings.js';
 import type { PadFamily } from './input/pad.js';
 import { setVolumes } from './world/audio.js';
+import {
+  DEFAULT_CHOICE,
+  packById,
+  setMusicChoice,
+  type MusicChoice,
+} from './world/musicPacks.js';
+import { SLOTS, type Slot } from './world/packFile.js';
 
 /**
  * The player's settings on this device, as the panel sets them (screens/Settings.tsx): how
@@ -18,9 +25,11 @@ import { setVolumes } from './world/audio.js';
  * and the controller's buttons for the four main ones (input/bindings.ts), the stick's dead zone
  * and the symbols the prompts give its buttons; how large the text stands, whether things move
  * less and how the world's light is drawn; the crew's colours with a pattern each, and how large
- * the spoken lines' words stand. They are kept in the browser's storage and act where they
- * belong: on the audio's buses (world/audio.ts), on the keys the world, the screens and the voice
- * listen for and the prompts name (input/), on the light (world/gl/path.ts), and on the page's
+ * the spoken lines' words stand; the music pack and the pieces picked for single places of the
+ * music. They are kept in the browser's storage and act where they belong: on the audio's buses
+ * (world/audio.ts), on the music (world/musicPacks.ts), on the keys the world, the screens and
+ * the voice listen for and the prompts name (input/), on the light (world/gl/path.ts), and on the
+ * page's
  * root — the text's scale as `--text-scale`, which the HUD, the book, the devices and the
  * notepad set their text by, the spoken lines' as `--subtitle-scale`, the motion as
  * `data-motion`, which every sheet's calmer rules hang on, and the patterns as `data-patterns`.
@@ -73,6 +82,8 @@ export interface Settings {
   /** the crew's colours carry a pattern each in the chrome (styles/settings.css) */
   patterns: boolean;
   subtitles: SubtitleSize;
+  /** the music pack, and the pieces picked for single places of the music (world/musicPacks.ts) */
+  music: MusicChoice;
 }
 
 /** The stick's dead zone the settings allow, in percent: from a hair to a good part of it. */
@@ -91,6 +102,7 @@ export const DEFAULT_SETTINGS: Settings = {
   light: 'auto',
   patterns: false,
   subtitles: 'normal',
+  music: DEFAULT_CHOICE,
 };
 
 /** Where the settings are kept in the browser's storage. */
@@ -207,6 +219,22 @@ function deadzoneOf(value: unknown): number {
     : DEFAULT_SETTINGS.deadzone;
 }
 
+/**
+ * The music `value` keeps: a pack the game ships, else the default; and for each place a pack
+ * the game ships that holds a piece for it — any other is let go, as a pack no longer shipped.
+ */
+function readMusic(value: unknown): MusicChoice {
+  const kept = isRecord(value) ? value : {};
+  const pack = typeof kept['pack'] === 'string' && packById(kept['pack']) !== null;
+  const picked = isRecord(kept['pieces']) ? kept['pieces'] : {};
+  const pieces: Partial<Record<Slot, string>> = {};
+  for (const slot of SLOTS) {
+    const id = picked[slot];
+    if (typeof id === 'string' && packById(id)?.pieces[slot] !== undefined) pieces[slot] = id;
+  }
+  return { pack: pack ? String(kept['pack']) : DEFAULT_CHOICE.pack, pieces };
+}
+
 /** The settings `store` keeps, each one missing or malformed at its default. */
 export function readSettings(store: SettingsStore | null): Settings {
   const raw = stored(store) ?? {};
@@ -224,6 +252,7 @@ export function readSettings(store: SettingsStore | null): Settings {
     light: oneOf(raw['light'], LIGHTS, fallback.light),
     patterns: raw['patterns'] === true,
     subtitles: oneOf(raw['subtitles'], SUBTITLES, fallback.subtitles),
+    music: readMusic(raw['music']),
   };
 }
 
@@ -345,9 +374,13 @@ export function watchSettings(listener: () => void): () => void {
   };
 }
 
-/** Applies `settings` where they act: the audio's buses, and the page's root where there is one. */
+/**
+ * Applies `settings` where they act: the audio's buses, the music's choice, and the page's root
+ * where there is one.
+ */
 function apply(settings: Settings): void {
   applyVolumes(settings.volumes, settings.muted);
+  setMusicChoice(settings.music);
   if (typeof document !== 'undefined') {
     applyLook(settings, document.documentElement, systemReduced());
   }

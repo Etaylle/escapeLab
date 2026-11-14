@@ -1,8 +1,10 @@
 import { claim, EFFECTS_LEVEL, LOOKAHEAD, playingEngine, release } from '../audio.js';
 import { closeStream, openStream, startStream, type Stream } from '../audioStream.js';
 import { MUSIC_LEVEL } from '../music.js';
+import { slotEntry } from '../musicPacks.js';
 import { holdMusic, musicFrom } from '../musicTurn.js';
-import { MUSIC_BASE, musicEntry, musicListed, type MusicId } from '../samples.js';
+import type { Slot } from '../packFile.js';
+import { MUSIC_BASE, musicListed } from '../samples.js';
 
 /**
  * The opening's music: the score's title (audio/catalog.json `title`, the motif's first phrase
@@ -19,8 +21,11 @@ import { MUSIC_BASE, musicEntry, musicListed, type MusicId } from '../samples.js
  * opening plays without music. Nothing here throws.
  */
 
-/** The opening's piece of the score, by its id in the music's manifest (audio/catalog.json). */
-export const TITLE: MusicId = 'title';
+/**
+ * The opening's piece, by its place in the music (packFile.ts SLOTS): the score's title, or the
+ * music pack's the player picked (musicPacks.ts).
+ */
+export const TITLE: Slot = 'title';
 
 /** Where the cue lies, and its list: { file, ms, peak, hash } (scripts/introCue.ts). */
 export const CUE_BASE = '/intro/';
@@ -76,12 +81,13 @@ function cueListed(): Promise<CueManifest | null> {
 }
 
 /**
- * What the opening plays: the score's title where the music's manifest names it, at the stems'
- * level times its gain; else the older cue, at CUE_PEAK by its peak; null where there is neither.
+ * What the opening plays: the title of the music chosen where it has one — a pack's, or the
+ * score's where the music's manifest names it — at the stems' level times its gain; else the
+ * older cue, at CUE_PEAK by its peak; null where there is neither.
  */
 async function sourceOf(): Promise<Source | null> {
   await musicListed();
-  const title = musicEntry(TITLE);
+  const title = slotEntry(TITLE);
   if (title !== null) {
     const url = `${MUSIC_BASE}${title.file}`;
     const level = MUSIC_LEVEL * title.gain;

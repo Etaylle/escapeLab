@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, sep } from 'node:path';
 import type { Plugin, ResolvedConfig, Rollup } from 'vite';
+import { DEFAULT_PACK } from '../world/packFile.js';
 
 /**
  * Build time only, for vite.config.ts; the app never imports this.
@@ -17,9 +18,18 @@ import type { Plugin, ResolvedConfig, Rollup } from 'vite';
 const SW_FILE = 'sw.js';
 
 /**
+ * The music packs a player may pick besides the game's own score (world/packFile.ts
+ * DEFAULT_PACK): some 7 to 9 MB each, fetched as they play and never at install — a phone that
+ * installs the page fetches the music it plays, not every pack the game has. Nor does the worker
+ * keep them as they play: a streamed piece is asked for in ranges, which a cache refuses.
+ */
+const ON_DEMAND = new RegExp(`^music/packs/(?!${DEFAULT_PACK}/)`);
+
+/**
  * What the worker keeps at install: the page as "/", then every file of the
  * build and of public/ by its address. Not the worker itself (the browser
- * fetches it on its own), not index.html under its name, no dotfiles.
+ * fetches it on its own), not index.html under its name, no dotfiles, and no
+ * music pack but the default one (ON_DEMAND).
  *
  * @param built the bundle's file names, as "assets/index-3f9a.js"
  * @param published the files under public/, as "icon.svg"
@@ -29,6 +39,7 @@ export function precacheFiles(built: readonly string[], published: readonly stri
     (name) =>
       name !== SW_FILE &&
       name !== 'index.html' &&
+      !ON_DEMAND.test(name) &&
       !name.split('/').some((part) => part.startsWith('.')),
   );
   return ['/', ...kept.sort().map((name) => `/${name}`)];

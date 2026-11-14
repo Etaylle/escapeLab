@@ -1,29 +1,32 @@
 import { claim, LOOKAHEAD, playingEngine, release } from './audio.js';
 import { closeStream, openStream, startStream, type Stream } from './audioStream.js';
 import { MUSIC_LEVEL, playSting } from './music.js';
+import { slotEntry } from './musicPacks.js';
 import { holdMusic } from './musicTurn.js';
+import type { Slot } from './packFile.js';
 import { airtimeMs, preloadLines, releaseLine, sayLine, stopVoice } from './radioVoice.js';
-import { MUSIC_BASE, musicEntry, type MusicId } from './samples.js';
+import { MUSIC_BASE } from './samples.js';
 
 /**
  * The end card's sound (screens/End.tsx `TitleCard`, docs/sound.md „The end cards"): the run's
  * sting first (music.ts `playSting`), then the operator's last word on the run over the radio
  * (core actions.ts `wonNow`, `lostNow`) where it has a recording, then the ending's theme half a
  * second after whichever came last — for a run won `end-won`, the title theme's motif resolved
- * into a brighter key, for a run lost `end-lost`, a low, slow drone — 32 s each, played once,
- * not looped. The theme streams on the music's bus at the stems' level, so the Leitstelle's
- * voice pulls it down as it does the run's music (mix.ts `DUCK_DB`), and takes one voice of the
- * budget while it plays (audio.ts `CAPS`). It goes with the card, fading out over END_FADE_S and
- * holding the bus until then (musicTurn.ts), so the lobby's theme comes in only after it, and
- * the last word with it. An ending whose theme is not rendered yet plays the sting and the word
- * alone; nothing plays while the context is held back. Nothing here throws.
+ * into a brighter key, for a run lost `end-lost`, a low, slow drone — or the endings of the music
+ * pack the player picked (musicPacks.ts), played once, never looped, whatever loop its piece may
+ * name. The theme streams on the music's bus at the stems' level, so the Leitstelle's voice pulls
+ * it down as it does the run's music (mix.ts `DUCK_DB`), and takes one voice of the budget while it
+ * plays (audio.ts `CAPS`). It goes with the card, fading out over END_FADE_S and holding the bus
+ * until then (musicTurn.ts), so the lobby's theme comes in only after it, and the last word with
+ * it. An ending whose theme is not rendered yet plays the sting and the word alone; nothing plays
+ * while the context is held back. Nothing here throws.
  */
 
-/** Each ending's theme, by its id in the catalog and the music's manifest. */
+/** Each ending's theme, by its place in the music (packFile.ts SLOTS, audio/catalog.json). */
 export const THEMES = {
   won: 'end-won',
   lost: 'end-lost',
-} as const satisfies Readonly<Record<'won' | 'lost', MusicId>>;
+} as const satisfies Readonly<Record<'won' | 'lost', Slot>>;
 /** The last word comes this long after the sting has ended, s, and the theme after the word. */
 export const THEME_GAP_S = 0.5;
 /** The theme goes with its card over this long, s. */
@@ -99,7 +102,7 @@ function letGo(theme: Playing): void {
 function startTheme(ending: 'won' | 'lost', at: number): void {
   try {
     const engine = playingEngine();
-    const entry = musicEntry(THEMES[ending]);
+    const entry = slotEntry(THEMES[ending]);
     if (engine === null || entry === null || playing !== null || !claim({ voice: 1 })) return;
     const { ctx } = engine;
     const file = `${MUSIC_BASE}${entry.file}`;
@@ -161,7 +164,7 @@ export interface EndThemeProbe {
   /** the operator's last word the card asked for; null where none, or no card is up */
   line: string | null;
   /** the theme playing or due; null where none is — not rendered yet, played out, or gone */
-  playing: MusicId | null;
+  playing: Slot | null;
 }
 
 /** The end card's sound as it stands, for the walkthrough. */

@@ -77,6 +77,13 @@ export function serveSamples(
     fetched.push(url);
     if (url === '/sfx/manifest.json') return Promise.resolve(Response.json(manifest(SFX_IDS)));
     if (url === '/music/manifest.json') return Promise.resolve(Response.json(manifest(MUSIC_IDS)));
+    // A music pack's piece (fakePacks.ts): served whole, or failed where `served` says so.
+    const pack = /^\/music\/(packs\/[\w-]+\/[\w-]+)\.(?:m4a|mp3)$/.exec(url)?.[1];
+    if (pack !== undefined) {
+      const status = served[pack]?.status ?? 200;
+      const body = status === 200 ? `sample:${pack}:1:2` : null;
+      return Promise.resolve(new Response(body, { status }));
+    }
     const id = /^\/(?:sfx|music)\/([\w-]+)\.mp3$/.exec(url)?.[1];
     const status = id === undefined ? 404 : (served[id]?.status ?? 200);
     const channels = served[id ?? '']?.channels ?? 1;
