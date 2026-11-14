@@ -93,8 +93,8 @@ export const GROUPS = [
       'three-lever.png',
       'three-plate.png',
       'three-hands.png',
-      'three-phone-932.png',
       'three-reader.png',
+      'three-phone-932.png',
     ],
   },
   {
