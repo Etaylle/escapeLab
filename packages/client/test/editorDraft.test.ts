@@ -139,8 +139,9 @@ describe('a new draft', () => {
   });
 
   it('offers every module that stands at a station, and no relay', () => {
-    expect(STATION_TYPES).toHaveLength(12);
+    expect(STATION_TYPES).toHaveLength(13);
     expect(STATION_TYPES).toContain('servers');
+    expect(STATION_TYPES).toContain('access');
     expect(STATION_TYPES).not.toContain('relay');
   });
 });

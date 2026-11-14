@@ -174,12 +174,12 @@ die Entscheidung.
   ist der Lauf identisch zu vorher (per Aufrufgraph geprüft). Gemessene Kosten je Gruppe in der
   README.
 
-### H-4 Das Software-GL-Gate urteilt wieder — Status: im PR (H-sgl) · Größe: S
-- Der gemessene Lauf des Leads (Rundgang unter `SHOTS_SOFTWARE_GL=1`, allein auf main nach einem
-  Merge) scheiterte auf unverändertem main: der Systemcheck an panel-close.png in 5 von 6 Läufen
-  und zweimal an der letzten Gleichzeit-Station, Blackout an meter-swing.png, panel-close.png und
-  43-px-Zielen eines Handy-Geräts (Last 8–90). Jede dieser Prüfungen nahm, wann ein Screenshot
-  oder eine Abfrage zurückkam, als Zeit der Seite.
+### H-4 Der gemessene Lauf unter Software-GL urteilt wieder — Status: im PR (H-sgl, Spec `spec-H-sgl.md`) · Größe: M
+- Befund 2026-11-14: Der Lauf mit `SHOTS_SOFTWARE_GL=1` scheitert auf main selbst — Systemcheck am
+  Panel-Ausblend-Check in 5 von 6 Läufen und am letzten Sync-Check, Blackout an meter-swing,
+  panel-close und einem 43-px-Ziel am Handy, der Notstrom-Kasten seit Tagen. Jeder dieser Checks
+  liest die Latenz des Screenshots, als wäre sie die Zeit der Animation; so entscheidet die Last,
+  nicht der Code, und das Tor für Pakete mit Zeichenarbeit je Frame (S-hero) steht offen.
 - Gemessen auf main 997275c, je zwei Läufe unter Software-GL bei der Last, die da war (1-Minuten-Last
   alle 20 s; Tabelle in der Art-Bible, Cost, „What the timing checks read"):
   - panel-close.png, die Blende wie gespielt: gescheitert in 3 von 4 Läufen (Last im Mittel 45, 26
@@ -485,13 +485,24 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   Captures; Zielzeile nennt der dritten Person ihre Aufgabe („Cleo: Platte halten"). Eine echte
   Drei-Pulte-Station oder ein Needy-Objekt nur bei drei Spielenden erst nach Playtest-Daten.
 
-### I-1 Zugangskontrolle mit Zwei-Faktor — Status: in Arbeit (I-access, Spec `spec-I-access.md`; Modul mit Probe-Mission, Platz in Blackout nach dem Playtest) · Größe: L
+### I-1 Zugangskontrolle mit Zwei-Faktor — Status: erledigt (I-access, Merge 2026-11-14; drei Review-Runden; Cloud-CI grün auf 4136fa0; Modul mit Probe-Mission und Drill im Systemcheck-Lauf, Platz in Blackout nach dem Playtest, N-6) · Größe: L
 - Pult A Login-Terminal, Pult B Token-Generator mit Code, der mit der Serveruhr alle 30 s
   wechselt (Restsekunden sichtbar), Quelle Benutzerliste mit Rollen. Vorbilder: Quadrilateral
   Cowboy (`door.open(3)`: das Terminal gibt die Tür drei Sekunden frei, jemand muss durch),
   Among Us (ID-Code ablesen und eintippen; Reaktor mit zwei Händen an zwei Panels).
 - Dazu als eigenes Spielelement: eine Schleuse, die das Terminal fünf Sekunden öffnet, während
   die andere Person läuft (nutzt die vorhandene Bewegung).
+- Umgesetzt als Modul `access` (`docs/gameplay.md`, „The Zugangskontrolle"): Das Terminal nennt
+  die angeforderten Türen und nimmt `login`, den Token, `status` und `freigeben`; das
+  Tokengerät ist je Periode an ein Konto gebunden und zeigt dessen Token mit ablaufendem
+  Balken; welches Konto welche Rolle hat und welche Türen eine Rolle freigibt, steht nur auf der
+  Benutzerliste des Laufs, jeden Lauf neu verteilt, und das Gerät beginnt nie mit dem Konto der
+  ersten Tür. Falscher Token und Freigabe ohne Berechtigung sind Alarme, drei falsche Token
+  sperren das Konto auf der Uhr der Station. Felder `doors`, `tokenSec`, `openSec`,
+  `lockSec`. Die Tür offen zu halten, während jemand durchläuft, bleibt Fiktion, keine Regel.
+- Noch in keiner Mission: Probemission `tools/fixtures/access-probe.json`, die der Rundgang im
+  Systemcheck spielt (Gruppe `access`). Offen für N-6: ob und wo die Station in Blackout steht — mit
+  zwei Spielenden muss die Liste vor den Pulten gelesen (oder notiert) werden.
 
 ### I-2 Firewall-Regelwerk — Status: wartet (Entscheidung Uros) · Größe: L
 - Pult A zeigt laufende Pakete (Quelle, Ziel, Port), Pult B bearbeitet die Regelliste, erste

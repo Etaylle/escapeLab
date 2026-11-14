@@ -261,6 +261,23 @@ export {
   type Service,
 } from './puzzles/servers.js';
 export {
+  ACCESS_DOORS,
+  ACCESS_ROLES,
+  ACCOUNT_PATTERN,
+  doorName,
+  ROLE_NAMES,
+  TOKEN_DIGITS,
+  TOKEN_FIGURE,
+  type AccessAccount,
+  type AccessDevice,
+  type AccessDoor,
+  type AccessDoorRow,
+  type AccessLock,
+  type AccessLogLine,
+  type AccessOpening,
+  type AccessTerminal,
+} from './puzzles/access.js';
+export {
   CHAT_PHRASE_COUNT,
   DEFAULT_CHAT_PHRASES,
   phraseShown,
