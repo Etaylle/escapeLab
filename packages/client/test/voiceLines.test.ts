@@ -17,11 +17,19 @@ import {
   type SoundClient,
   type SpeechClient,
 } from '../scripts/elevenlabs.js';
-import { inService, readRoster, ROLE_HELD, type Roster } from '../scripts/cast.js';
+import {
+  DESIGN_TEXT,
+  inService,
+  readRoster,
+  ROLE_HELD,
+  type Roster,
+} from '../scripts/cast.js';
 import {
   canRead,
   catalogOf,
   charactersOf,
+  costsOf,
+  CREDITS_PER_CHARACTER,
   elevenTake,
   elevenVoiceOf,
   engineOf,
@@ -42,7 +50,9 @@ import {
   PIPER_MODEL,
   piperText,
   plan,
+  plannedVoice,
   planOf,
+  planReport,
   readManifest,
   renderOf,
   sayText,
@@ -954,6 +964,110 @@ describe('a run over the cast', () => {
     const words = 'Probe läuft an.'.length * 2 + 'Noch eine Probeminute.'.length;
     expect(charactersOf({ engine: 'say' }, all)).toBe(words);
     expect(charactersOf(both, [])).toBe(0);
+  });
+});
+
+describe('the plan of a run (--plan)', () => {
+  /** A start, a nudge in a mood's moment, and a clock call: three lines no mission says. */
+  const probe: MissionLines = {
+    id: 'probe',
+    radio: {
+      start: 'Probe läuft an.',
+      alarm: 'Probealarm.',
+      clock: { lastMinute: 'Probeminute.' },
+    },
+    puzzles: [],
+  };
+  const lines = shippedLines([probe]);
+  /** Helmut and Marta kept, Jonas and the Schichtleitung without a voice yet. */
+  const kept: Roster = {
+    ...roster,
+    operator: roster.operator.map((p) =>
+      p.id === 'marta' ? { ...p, voiceId: 'martaVoice0000000000', model: 'eleven_v3' } : p,
+    ),
+  };
+
+  it('counts for each person the lines made now and their credits, or design and lines', () => {
+    const costs = costsOf(kept, { lines: {} }, 'synthetic', undefined, lines);
+    const of = (slot: string) => costs.find((cost) => cost.slot === slot);
+    // Helmut on v4 and Marta on v3 read the start as written and the alarm with its mood's tag.
+    const theirs = 'Probe läuft an.'.length + '[tense] Probealarm.'.length;
+    expect(of('operator:helmut')).toMatchObject({ model: 'eleven_v4', make: 2, skip: 0 });
+    expect(of('operator:helmut')?.characters).toBe(theirs);
+    expect(of('operator:marta')).toMatchObject({ model: 'eleven_v3', make: 2, characters: theirs });
+    // Jonas has no voice yet: his design, then the Leitstelle's two lines on Eleven v3.
+    expect(of('operator:jonas')).toEqual({
+      slot: 'operator:jonas',
+      name: 'Jonas',
+      model: null,
+      make: 0,
+      characters: 0,
+      skip: 0,
+      design: DESIGN_TEXT.operator.length,
+      later: { lines: 2, characters: theirs },
+    });
+    // The Schichtleitung's call, pressing, once her voice is kept.
+    expect(of('lead')?.later).toEqual({ lines: 1, characters: '[insistent] Probeminute.'.length });
+    expect(costs.map((cost) => cost.slot)).toEqual([
+      'pa',
+      'operator:helmut',
+      'operator:marta',
+      'operator:jonas',
+      'lead',
+    ]);
+  });
+
+  it('skips what is made as the run would make it, and tells what --fresh would make', () => {
+    const voice = plannedVoice(kept);
+    const planned = plan({ lines: {} }, 'synthetic', voice, kept, lines);
+    const file = readdirSync(VOICE_DIR).find((name) => name.endsWith('.mp3')) ?? '';
+    const done: Manifest = {
+      lines: Object.fromEntries(
+        planned.map(({ id, text, line, person, render }) => [
+          id,
+          entryOf(text, 1000, line, person.id, { file, render }),
+        ]),
+      ),
+    };
+    const helmut = costsOf(kept, done, 'synthetic', undefined, lines)[1];
+    expect(helmut).toMatchObject({ slot: 'operator:helmut', make: 0, characters: 0, skip: 2 });
+    // The shipped manifest: Helmut's takes were made before the paid plan named itself.
+    const shipped = costsOf(roster, manifest, 'synthetic')[1];
+    const unasked = costsOf(roster, manifest, 'none')[1];
+    expect(shipped?.skip).toBe(0);
+    expect((unasked?.skip ?? 0) + (unasked?.make ?? 0)).toBe(shipped?.make);
+  });
+
+  it('prints each person’s line, the kept cast now, the whole cast with every voice kept', () => {
+    const costs = costsOf(kept, { lines: {} }, 'synthetic', undefined, lines);
+    const report = planReport(costs, 'synthetic');
+    expect(CREDITS_PER_CHARACTER).toBe(1);
+    expect(report[0]).toMatch(/plan of `voice --fresh` .*paid plan.*nothing is asked/);
+    expect(report).toHaveLength(costs.length + 3);
+    expect(report[2]).toMatch(/operator:helmut +Helmut +eleven_v4 +2 lines, 34 credits; 0 made/);
+    expect(report[4]).toMatch(/operator:jonas +Jonas +no voice yet: its design 228 credits/);
+    const now = 34 * 2;
+    expect(report.at(-2)).toBe(`voice: now, the kept cast: 4 lines, ${now} credits`);
+    const designs = DESIGN_TEXT.pa.length + DESIGN_TEXT.operator.length + DESIGN_TEXT.lead.length;
+    const said = ['Probe läuft an.', '[tense] Probealarm.', '[insistent] Probeminute.'];
+    const later = said.reduce((sum, text) => sum + text.length, 0);
+    expect(report.at(-1)).toBe(
+      `voice: every voice kept: 3 designs (${designs} credits) and 7 lines ` +
+        `(${now + later} credits), ${designs + now + later} credits in all`,
+    );
+    expect(planReport(costs, 'none')[0]).toMatch(/plan of `voice` /);
+    expect(planReport(costs, 'all')[0]).toMatch(/plan of `voice --fresh=all` /);
+  });
+
+  it('asks ElevenLabs for nothing: its voices have no client to call', async () => {
+    const voice = plannedVoice(kept, 'eleven_multilingual_v2');
+    expect(voice.plan).toBe('paid');
+    expect(Object.values(voice.persons).map((each) => each.model)).toEqual([
+      'eleven_multilingual_v2',
+      'eleven_multilingual_v2',
+    ]);
+    const client = voice.persons['helmut']?.client;
+    await expect(client?.voices.getAll()).rejects.toThrow(/--plan asks ElevenLabs for nothing/);
   });
 });
 

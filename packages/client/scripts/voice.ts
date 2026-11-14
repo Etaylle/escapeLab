@@ -91,11 +91,11 @@ import {
   type ElevenVoice,
   type SoundClient,
   type SpeechClient,
-  type VoiceInfo,
 } from './elevenlabs.ts';
 import {
   CAST_FILE,
   DESIGN_TEXT,
+  DESIGNED_READS,
   designVoice,
   inService,
   keepVoice,
@@ -111,6 +111,7 @@ import {
   type RadioMoment,
   type Role,
   type Roster,
+  type Slot,
 } from './cast.ts';
 
 /** Who reads the lines: Piper, the Mac's own voice, or an ElevenLabs voice. */
@@ -877,13 +878,13 @@ export function writeManifest(manifest: Manifest, file = MANIFEST_FILE): void {
 }
 
 /**
- * The ElevenLabs voice of every person `roster` keeps one for, found among the account's
- * `voices`, reading by `override` where ELEVENLABS_MODEL names one, else by the model the roster
- * names for them, holding as their role asks (`ROLE_HELD`).
+ * The ElevenLabs voice of every person `roster` keeps one for, as `find` finds it on the account,
+ * reading by `override` where ELEVENLABS_MODEL names one, else by the model the roster names for
+ * them, holding as their role asks (`ROLE_HELD`).
  */
 function castVoices(
   roster: Roster,
-  voices: readonly VoiceInfo[],
+  find: (voiceId: string) => string,
   client: SpeechClient,
   override: string | undefined,
 ): Record<string, ElevenVoice> {
@@ -891,7 +892,7 @@ function castVoices(
     ROLES.flatMap((role) =>
       roster[role].flatMap((person) => {
         if (person.voiceId === undefined) return [];
-        const { voiceId } = resolveVoice(voices, person.voiceId);
+        const voiceId = find(person.voiceId);
         const model = override ?? person.model ?? ELEVEN_MODEL;
         return [[person.id, { client, voiceId, model, held: ROLE_HELD[role] }] as const];
       }),
@@ -911,7 +912,9 @@ export async function elevenVoiceOf(
   const asking = { tag: 'voice', what: "tell the account's plan" };
   const { tier } = await elevenAsk(() => client.user.subscription.get(), asking);
   const plan = planOf(tier);
-  const persons = castVoices(roster, await accountVoices(client), client, override);
+  const voices = await accountVoices(client);
+  const find = (voiceId: string): string => resolveVoice(voices, voiceId).voiceId;
+  const persons = castVoices(roster, find, client, override);
   const read = Object.entries(persons).map(([person, { model }]) => `${person} ${model}`);
   const name = `${read.join(', ') || 'nobody'} (the ${plan} plan)`;
   return { engine: 'elevenlabs', name, persons, plan };
@@ -1010,6 +1013,133 @@ export function charactersOf(voice: Voice, todo: readonly Planned[]): number {
     const reads = modelFor(model, line.said);
     return sum + spokenText(line.said, line.mood, reads).length;
   }, 0);
+}
+
+/** What a character of text to speech costs at most, credits: the rate --plan counts at. */
+export const CREDITS_PER_CHARACTER = 1;
+
+/** A client for the plan, which asks ElevenLabs for nothing: any call fails, saying so. */
+const NO_CALL: SpeechClient = {
+  voices: { getAll: () => Promise.reject(new Error('voice: --plan asks ElevenLabs for nothing')) },
+  textToSpeech: {
+    convert: () => Promise.reject(new Error('voice: --plan asks ElevenLabs for nothing')),
+  },
+};
+
+/** ElevenLabs as --plan takes it: the roster's voices as kept, on a paid plan, never asked. */
+type Eleven = Extract<Voice, { engine: 'elevenlabs' }>;
+
+/**
+ * The voices a render would read with, as the roster keeps them — reading by `override` where
+ * ELEVENLABS_MODEL names one — on the paid plan the account holds, which a render reads off it
+ * and a dry run cannot: nothing is asked of anybody.
+ */
+export function plannedVoice(roster: Roster, override?: string): Eleven {
+  const persons = castVoices(roster, (voiceId) => voiceId, NO_CALL, override);
+  return { engine: 'elevenlabs', name: 'the cast as kept', persons, plan: 'paid' };
+}
+
+/**
+ * What --plan says of one person of the cast: their name on the command line and the model their
+ * voice reads with — null where they have none yet — the lines a run makes for them now, their
+ * characters, and those it skips, made as it would make them; and for a person without a voice
+ * what its design reads, and every line of their role once it is kept, on Eleven v3.
+ */
+export interface Cost {
+  readonly slot: string;
+  readonly name: string;
+  readonly model: string | null;
+  readonly make: number;
+  readonly characters: number;
+  readonly skip: number;
+  readonly design: number;
+  readonly later: { readonly lines: number; readonly characters: number };
+}
+
+/** What a person with a voice kept makes once every voice is kept: nothing beside what is now. */
+const NOTHING_LATER = { lines: 0, characters: 0 } as const;
+
+/** What a person without a voice yet costs: its design, and their role's lines once it is kept. */
+function unvoicedCost(slot: Slot, lines: ReadonlyMap<string, ShippedLine>): Cost {
+  const theirs = [...lines.values()].filter((line) => line.role === slot.role);
+  const spoken = (line: ShippedLine): number =>
+    spokenText(line.said, line.mood, DESIGNED_READS).length;
+  const characters = theirs.reduce((sum, line) => sum + spoken(line), 0);
+  return {
+    slot: slot.name,
+    name: slot.person.name,
+    model: null,
+    make: 0,
+    characters: 0,
+    skip: 0,
+    design: DESIGN_TEXT[slot.role].length,
+    later: { lines: theirs.length, characters },
+  };
+}
+
+/**
+ * What every person of `roster` costs a run that asks `fresh` of the recordings `before` (a dry
+ * run of `main`, `plannedVoice`): the kept cast's lines to make now, the rest by their design and
+ * their lines.
+ */
+export function costsOf(
+  roster: Roster,
+  before: Manifest,
+  fresh: Fresh,
+  override?: string,
+  lines = shippedLines(),
+): Cost[] {
+  const voice = plannedVoice(roster, override);
+  const planned = plan(before, fresh, voice, roster, lines);
+  const todo = toMake(voice, planned);
+  return slotsOf(roster).map((slot) => {
+    const id = slot.person.id;
+    const eleven = voice.persons[id];
+    if (eleven === undefined) return unvoicedCost(slot, lines);
+    const mine = todo.filter((each) => each.person.id === id);
+    const skip = planned.filter((each) => each.person.id === id && each.kept !== null).length;
+    const { name } = slot.person;
+    const said = { slot: slot.name, name, model: eleven.model, make: mine.length, skip };
+    return { ...said, characters: charactersOf(voice, mine), design: 0, later: NOTHING_LATER };
+  });
+}
+
+/** A count as --plan says it: „3,817". */
+const counted = (n: number): string => n.toLocaleString('en-US');
+
+/** What --plan says of one person: the lines and credits now, or their design and lines later. */
+function costLine({ slot, name, model, make, characters, skip, design, later }: Cost): string {
+  const who = `${slot.padEnd(16)} ${name.padEnd(10)}`;
+  if (model === null) {
+    const after = `${counted(later.lines)} lines, ${counted(later.characters)} credits`;
+    return `voice:   ${who} no voice yet: its design ${counted(design)} credits, then ${after}`;
+  }
+  const now = `${counted(make)} lines, ${counted(characters * CREDITS_PER_CHARACTER)} credits`;
+  return `voice:   ${who} ${model.padEnd(10)} ${now}; ${counted(skip)} made as they are, kept`;
+}
+
+/**
+ * What --plan prints of `costs`: what it assumes, a line for each person, what the kept cast
+ * costs now and what the whole cast costs once every voice is kept — designs and lines.
+ */
+export function planReport(costs: readonly Cost[], fresh: Fresh): string[] {
+  const asked = fresh === 'none' ? 'voice' : `voice --fresh${fresh === 'all' ? '=all' : ''}`;
+  const sum = (of: (cost: Cost) => number): number =>
+    costs.reduce((total, cost) => total + of(cost), 0);
+  const now = sum((cost) => cost.characters) * CREDITS_PER_CHARACTER;
+  const designs = sum((cost) => cost.design);
+  const later = sum((cost) => cost.later.characters) * CREDITS_PER_CHARACTER;
+  const lines = sum((cost) => cost.make + cost.later.lines);
+  return [
+    `voice: the plan of \`${asked}\` under ElevenLabs on the paid plan, at most ` +
+      `${CREDITS_PER_CHARACTER} credit a character; nothing is asked of ElevenLabs`,
+    ...costs.map(costLine),
+    `voice: now, the kept cast: ${counted(sum((cost) => cost.make))} lines, ` +
+      `${counted(now)} credits`,
+    `voice: every voice kept: ${costs.filter((cost) => cost.model === null).length} designs ` +
+      `(${counted(designs)} credits) and ${counted(lines)} lines (${counted(now + later)} ` +
+      `credits), ${counted(designs + now + later)} credits in all`,
+  ];
 }
 
 /**
@@ -1154,6 +1284,17 @@ async function keep(asked: string | undefined): Promise<void> {
   );
 }
 
+/**
+ * --plan [--fresh]: what that run would make, by whom, and what it costs — no key, no client, no
+ * tool: the roster, the manifest and the files alone.
+ */
+function planned(fresh: Fresh): Promise<void> {
+  const override = process.env.ELEVENLABS_MODEL || undefined;
+  const costs = costsOf(readRoster(), readManifest(), fresh, override);
+  for (const line of planReport(costs, fresh)) console.log(line);
+  return Promise.resolve();
+}
+
 /** --list-voices: the ElevenLabs account's voices, one a line. */
 async function listVoices(): Promise<void> {
   loadApiKey();
@@ -1185,6 +1326,7 @@ async function sample(wanted: string | undefined, text: string | undefined): Pro
 
 /** What the command line asks for, by its first switch that names something else than the lines. */
 const COMMANDS: Readonly<Record<string, (args: readonly string[], at: number) => Promise<void>>> = {
+  '--plan': (args) => planned(freshOf(args)),
   '--list-voices': () => listVoices(),
   '--sample': (args, at) => sample(args[at + 1], args[at + 2]),
   '--design': (args, at) => design(args[at + 1]),
