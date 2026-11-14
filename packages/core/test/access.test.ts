@@ -9,6 +9,7 @@ import {
   parseMission,
   puzzleDefSchema,
   puzzleDueAt,
+  ROLE_NAMES,
   stationKey,
   viewFor,
 } from '../src/index.js';
@@ -38,6 +39,8 @@ import { standing, T0 } from './lab.js';
 import { playInstance } from './solveModule.js';
 
 const SEEDS = 200;
+/** Runs enough to tell the device's turns apart: each holds the first door's account 40–60 %. */
+const TURN_SEEDS = 600;
 
 const defOf = (over: Record<string, unknown> = {}): AccessDef =>
   puzzleDefSchema.parse({ type: 'access', id: 'zk', title: 'Zugangskontrolle', ...over }) as AccessDef;
@@ -123,6 +126,25 @@ const ticked = (state: AccessState, at: number): AccessState =>
 /** Whether `json` holds `token` as a run of digits of its own, quoted or bare. */
 const holdsToken = (json: string, token: string): boolean =>
   new RegExp(`(?<!\\d)${token}(?!\\d)`).test(json);
+
+/**
+ * What the terminal's view at `state` gives away: the token on the device, a role by its key or
+ * its name, an account but the one in its session or prompt, a door it does not ask for.
+ */
+function terminalLeaks(state: AccessState): string[] {
+  const json = JSON.stringify(seen(state, AT_STATION));
+  const token = seen(state, AT_CONSOLE_B).device?.token ?? '?';
+  const typed = new Set([state.session, state.prompt]);
+  const unasked = ACCESS_DOORS.filter((door) => !state.needed.includes(door));
+  const words = [
+    ...ACCESS_ROLES.map((role) => JSON.stringify(role)),
+    ...Object.values(ROLE_NAMES),
+    ...state.accounts.map((entry) => entry.name).filter((name) => !typed.has(name)),
+    ...unasked.flatMap((door) => [JSON.stringify(door), doorName(door)]),
+  ];
+  const leaked = words.filter((word) => json.includes(word));
+  return holdsToken(json, token) ? [token, ...leaked] : leaked;
+}
 
 const refusal = (run: () => unknown): string => {
   try {
@@ -233,14 +255,21 @@ describe('the views', () => {
     const view = seen(state, AT_STATION);
     expect(view).toMatchObject({ role: 'terminal', device: null, roster: null });
     expect(view.terminal?.doors).toEqual(state.needed.map((door) => ({ door, released: false })));
-    const json = JSON.stringify(view);
-    expect(holdsToken(json, device?.token ?? '?')).toBe(false);
-    for (const { name, role } of state.accounts) {
-      expect(json).not.toContain(name);
-      expect(json).not.toContain(quoted(role));
-    }
-    for (const door of ACCESS_DOORS.filter((d) => !state.needed.includes(d))) {
-      expect(json).not.toContain(door.toUpperCase());
+    expect(terminalLeaks(state)).toEqual([]);
+  });
+
+  it(`show the terminal no more with a session open, nor once its door is out, for ${SEEDS} seeds`, () => {
+    for (let seed = 0; seed < SEEDS; seed++) {
+      const run = fresh(DEF, seed);
+      const [door] = run.needed;
+      if (door === undefined) {
+        throw new Error(`seed ${seed}: no door asked for`);
+      }
+      const session = loggedInAs(run, accountFor(run, door));
+      expect(terminalLeaks(session), `seed ${seed}, logged in`).toEqual([]);
+      const out = send(session, { cmd: 'freigeben', door }, inPeriod(session, session.period));
+      expect(out.state.released).toEqual([door]);
+      expect(terminalLeaks(out.state), `seed ${seed}, released`).toEqual([]);
     }
   });
 
@@ -489,6 +518,23 @@ describe('the list', () => {
       expect(tried.penalty, `seed ${seed}`).toBe('Zugangskontrolle: keine Berechtigung');
       // The crew that reads the list goes through the same seed without one.
       expect(playInstance(DEF, seed)).toBe(6);
+    }
+  });
+
+  it(`is needed at every turn: the first door’s account comes second or third at even odds`, () => {
+    const turns = Array.from({ length: TURN_SEEDS }, (_, seed) => {
+      const state = fresh(DEF, seed);
+      const [door] = state.needed;
+      if (door === undefined) {
+        throw new Error(`seed ${seed}: no door asked for`);
+      }
+      return periodOf(state, accountFor(state, door));
+    });
+    const share = (turn: number): number => turns.filter((t) => t === turn).length / TURN_SEEDS;
+    expect(share(0)).toBe(0);
+    for (const turn of [1, 2]) {
+      expect(share(turn), `turn ${turn}`).toBeGreaterThanOrEqual(0.4);
+      expect(share(turn), `turn ${turn}`).toBeLessThanOrEqual(0.6);
     }
   });
 });

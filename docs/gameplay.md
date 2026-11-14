@@ -370,7 +370,8 @@ the Leitstand, the token device in the Wache, the list on a clipboard by the ter
   can carry it to the consoles. The printed page names no role's doors; which account a door
   needs is only decidable at the list. The device never opens on the account the terminal's
   first door needs, so a crew that logs in whatever it shows first, without the list, takes an
-  alarm at that door in every run.
+  alarm at that door in every run; it brings that account second or third at even odds, so a crew
+  that waits for a later turn instead takes one in about half the runs.
 - **The rules.** A login opens a session only with its account's token of the period it arrives
   in; the session stays open until the next login. A wrong token is a Fehlquittierung, an alarm;
   the third in a row for an account locks it for `lockSec` (45 s) on the station's clock, as the
@@ -386,16 +387,18 @@ the Leitstand, the token device in the Wache, the list on a clipboard by the ter
   while somebody else stands at the token device or at an open list.
 
 `core/test/access.test.ts` holds the token (pure and exact to the period), the instance, the views
-by presence, every rule, `status`, the list's need (over 200 seeds a crew without it takes an
-alarm, the solver none), the lock and the backup rule and the room's tick through the reducer,
-the solver over 200 seeds in five variants, and the probe with its pinned plan
-(`tools/fixtures/access-plan.json`, made by `core/test/accessPlan.ts`); `client/test/
-access.test.tsx` the prompt, the keys, both devices, the list, the sounds and the type and targets
-at both consoles on three screens. The walkthrough drills the probe in a Systemcheck run, as it
-does the Serverraum's (group `access`; `SHOTS_SKIP=access` leaves it out, and Blackout's run logs
-it as left out): the list (access-list.png), both devices (access-terminal.png,
-access-token.png), the terminal on a large phone held sideways (access-phone-932.png), then each
-door of the plan, the token read off the device.
+by presence (the terminal's also with a session open and after a release), every rule, `status`,
+the list's need (over 200 seeds a crew without it takes an alarm, the solver none; over 600 the
+first door's account comes second and third about equally often), the lock and the backup rule
+and the room's tick through the reducer, the solver over 200 seeds in five variants, and the
+probe with its pinned plan (`tools/fixtures/access-plan.json`, made by
+`core/test/accessPlan.ts`); `client/test/access.test.tsx` the prompt, the keys, both devices,
+the list, the sounds and the type and targets at both consoles on three screens. The
+walkthrough drills the probe in a Systemcheck run, as it does the Serverraum's (group `access`;
+`SHOTS_SKIP=access` leaves it out, and Blackout's run logs it as left out): the list
+(access-list.png), both devices (access-terminal.png, access-token.png), the terminal on a large
+phone held sideways (access-phone-932.png), then each door of the plan, the token read off the
+device.
 
 ## Captures in the notepad
 

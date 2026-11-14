@@ -21,13 +21,14 @@ import { costOf, labDocument, spelled, type TypePlate } from './printed.js';
  * it moves on to the next account of the run's list. Which account holds which role, and which
  * doors each role may release, is the run's own list, read at a source and nowhere else: the
  * account a door needs comes from the list, its token from the device, and the terminal has
- * neither. The device never opens on the account the terminal's first door needs, so a crew that
- * has not read the list logs in a wrong one. A login opens a session only with the token the
- * device shows for that account in the period it arrives in. A wrong token is an alarm, and the
- * third in a row for an account locks it for `lockSec` seconds on the station's clock; a token of
- * the period just gone is turned back without one. A session releases each door its role may
- * release once, any other with an alarm. Solved once every door the terminal asked for is
- * released.
+ * neither. The device never opens on the account the terminal's first door needs and brings it
+ * second or third at even odds, so a crew that has not read the list logs in a wrong one at
+ * whatever turn of the device it picks, in half the runs or more. A login opens a session only
+ * with the token the device shows for that account in the period it arrives in. A wrong token is
+ * an alarm, and the third in a row for an account locks it for `lockSec` seconds on the station's
+ * clock; a token of the period just gone is turned back without one. A session releases each
+ * door its role may release once, any other with an alarm. Solved once every door the terminal
+ * asked for is released.
  */
 
 /** The roles of the lab's service accounts, as the list names them. */
@@ -483,16 +484,19 @@ function dealAccounts(rng: Rng): AccessAccount[] {
 }
 
 /**
- * The order the token device turns through the accounts in, a period each — never opening on
- * `first`, the account the terminal's first door needs: a crew that logs in whatever the device
- * shows, without the list, takes a wrong account to that door.
+ * The order the token device turns through the accounts in, a period each: never opening on
+ * `first`, the account the terminal's first door needs, and bringing it at any later turn at even
+ * odds (the second or the third). A crew that logs in what the device shows at a turn of its
+ * choosing, without the list, takes a wrong account to that door in half the runs or more.
  */
 function rotationAvoiding(accounts: readonly AccessAccount[], first: string, rng: Rng): string[] {
-  const turned = shuffle(
-    accounts.map((entry) => entry.name),
-    rng,
-  );
-  return turned[0] === first ? [...turned.slice(1), first] : turned;
+  const others = accounts.map((entry) => entry.name).filter((name) => name !== first);
+  if (others.length === accounts.length) {
+    throw new Error(`access: the first door's account ${first} is not on the run's list`);
+  }
+  const turned = shuffle(others, rng);
+  const at = 1 + Math.floor(rng() * turned.length);
+  return [...turned.slice(0, at), first, ...turned.slice(at)];
 }
 
 // --- the printed document ------------------------------------------------------------------
@@ -682,8 +686,8 @@ export const accessModule: PuzzleModule<AccessDef, AccessState, AccessInput, Acc
   /**
    * The run's list of ACCOUNTS accounts, each holding another of the roles and its own doors; the
    * doors the terminal asks for, each another account's; the token device turning through the
-   * accounts in an order of its own that never opens on the first door's. The tokens' periods
-   * count from the moment the station comes on.
+   * accounts in an order of its own that never opens on the first door's account and brings it
+   * second or third at even odds. The tokens' periods count from the moment the station comes on.
    */
   init(def, rng, ctx) {
     const accounts = dealAccounts(rng);
@@ -776,10 +780,10 @@ export const accessModule: PuzzleModule<AccessDef, AccessState, AccessInput, Acc
   },
 
   /**
-   * The terminal names the doors, the list the account of each door's role, the device its
-   * token while it is bound to it. The first door not yet released goes to the account whose
-   * role the printed table names: released where that account's session is open, else logged
-   * in, and its token typed once the device shows that account — until then the crew waits.
+   * The terminal names the doors, the run's list the account whose role releases each, the
+   * device that account's token while it is bound to it. The first door not yet released goes to
+   * that account: released where its session is open, else logged in, and its token typed once
+   * the device shows it — until then the crew waits.
    */
   solve(def, views) {
     const seen = seenBy(def, views);
