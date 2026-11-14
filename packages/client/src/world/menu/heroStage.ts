@@ -45,7 +45,7 @@ import {
   type Sweep,
 } from './lamp.js';
 import { runScene, type SceneHost } from './loop.js';
-import { holdPlace, SCENE_ANCHOR } from './places.js';
+import { holdPlace, placeShown, SCENE_ANCHOR } from './places.js';
 import { uiSound } from '../menuSound.js';
 
 /**
@@ -515,10 +515,6 @@ function canvasBox(place: HeroPlace, entrance: Entrance, on: HeroPainting): Stag
 }
 
 /**
- * The hero's step aside at `now`: half a scene tile toward the stage's edge while a panel lies
- * open over the menu (`panel`), back as it goes — a new step from wherever the last has come to.
- */
-/**
  * How far toward the menu the hero steps after an item was taken that leaves the menu
  * (`Taken.toward`), figure units, below 0: half a scene tile — no further than the menu's column
  * and CLEAR leave it — for TOWARD_MS after it was taken; 0 else, and under reduced motion.
@@ -532,6 +528,11 @@ function towardOf(on: HeroPainting, place: HeroPlace, now: number): number {
   return -Math.min(stepOf(place, on.standing), room);
 }
 
+/**
+ * The hero's step at `now`: half a scene tile toward the stage's edge while a panel lies open
+ * over the menu (`panel`), else toward the menu after an item taken that leaves it (`towardOf`),
+ * back as either goes — a new step from wherever the last has come to.
+ */
 function stepNow(on: HeroPainting, place: HeroPlace, now: number) {
   const { react } = on;
   const reduced = on.reduced();
@@ -678,16 +679,17 @@ function placeTarget(on: HeroPainting): string | null {
 
 /**
  * Where the beam of `on`'s hero points at `now` from its lens at `from` in the window, and whether
- * it holds there: turned to the room of the place the scene travels to, and held once it has come
- * there (lamp.ts `aimSweep`) — the lamp lights the room it arrives in —, else along its sweep,
- * holding a beat where it comes to the item attended.
+ * it holds there: turned to the room of the place the scene's camera travels to (places.ts
+ * `placeShown`), and held once it has come there (lamp.ts `aimSweep`) — the lamp lights the room
+ * it arrives in —, else along its sweep, holding a beat where it comes to the item attended; so
+ * in a lab without places it sweeps on, whatever is picked out.
  */
 function beamAngle(
   on: HeroPainting,
   from: { x: number; y: number },
   now: number,
 ): { angle: number; holding: boolean } {
-  if (placeTarget(on) !== null) {
+  if (placeShown() !== null) {
     const toward = withinSweep(angleTo(from, placeAnchor()));
     const angle = aimSweep(on.sweep, now, toward);
     return { angle, holding: angle === toward };
@@ -744,7 +746,7 @@ function probePose(
     facing: motion.facing,
     beam: {
       ...{ lens: lamp.lens, reach, angle: lamp.angle, holding: lamp.holding },
-      ...{ room: placeTarget(on), on: lamp.on, flare: lamp.flare },
+      ...{ room: placeShown(), on: lamp.on, flare: lamp.flare },
     },
     glow: !on.reduced() && on.attends.current !== null,
     entrance: { walks: run.walks, ms: run.since === null ? null : run.last, done: run.done },

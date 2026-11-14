@@ -361,17 +361,18 @@ function spanOf([first, ...path]: Corner[]): { far: number; step: number } {
 }
 
 /**
- * The stage over Blackout's lab at 1440 × 820 after its lab has come in, things moving less or
- * not: `bake` the canvas of its drift's piece, the one its frames of the drift copy.
+ * The stage over Blackout's lab — or mission `missionId`'s, here with Blackout's map — at
+ * 1440 × 820 after its lab has come in, things moving less or not: `bake` the canvas of its
+ * drift's piece, the one its frames of the drift copy.
  */
-async function staged(reduced: boolean) {
+async function staged(reduced: boolean, missionId = 'blackout') {
   const { openStage } = await import('../src/world/menu/stage.js');
   const places = await import('../src/world/menu/places.js');
   const page = framesByHand();
   const scene = sceneCanvas([1440, 820]);
   const motion = motionByHand(reduced);
   const stage = openStage(scene.canvas, motion);
-  stage.show('blackout');
+  stage.show(missionId);
   await settled();
   page.run(1000);
   const bake = lastCopied(scene);
@@ -452,6 +453,33 @@ describe('the scene’s places', () => {
     expect(restBaked(sizes)).toBeGreaterThan(0);
     lamps.holdLamp(null);
     stage.close();
+  });
+
+  it('tells the hero’s lamp the place it goes to once its pieces are baked, none after', async () => {
+    const { page, stage, places } = await staged(false);
+    places.holdPlace('handbook');
+    page.run(1000 / 60);
+    expect(places.placeShown()).toBeNull();
+    await framesAndSteps(page);
+    expect(places.placeShown()).toBe('handbook');
+    places.holdPlace(null);
+    page.run(100);
+    expect(places.placeShown()).toBeNull();
+    places.holdPlace('handbook');
+    await framesAndSteps(page);
+    stage.close();
+    expect(places.placeShown()).toBeNull();
+    places.holdPlace(null);
+  });
+
+  it('tells the hero’s lamp no place in a lab without places, which drifts for every item', async () => {
+    const { page, stage, places } = await staged(false, 'systemcheck');
+    places.holdPlace('handbook');
+    await framesAndSteps(page);
+    page.run(500);
+    expect(places.placeShown()).toBeNull();
+    stage.close();
+    places.holdPlace(null);
   });
 
   it('travels to the place held over 1.2 to 2 s, holds it, and travels back', async () => {

@@ -793,13 +793,15 @@ that it never lies over the text; a warm core along its middle in the lamp's tun
 its strongest, as the world's lamp beam has it (The lamp's beam); and the dust of particles.ts
 drifting through it, each mote a soft speck of the lamp's light, drawn only where it lies in the
 cone. It sweeps from the floor before the hero up across the lab and back, one pass in 12 s, slowing
-at both ends. An item picked out — hovered, or given the focus by the player — turns it to the
-middle of the item's room, 0.9 rad a second at most, and holds it there while the room is held (The
-menu's places); let go, it sweeps on from where it stands, the way it went. Where it comes to the
-line toward what the hero looks at without anything picked out — the focus the menu comes up with, a
-run's card — it holds a beat there, 1 s, its sweep's clock standing still meanwhile. The lamp in the
-hero's hands tilts with it in steps of 3°, its lens alight with a small glint at its rim. Under
-reduced motion the beam stands still, pointing a little up into the lab, without dust.
+at both ends. An item picked out — hovered, or given the focus by the player — turns it, as the
+scene's camera sets out for the item's room, to the middle of that room, 0.9 rad a second at most,
+and holds it there while the room is held (The menu's places); let go, it sweeps on from where it
+stands, the way it went. In a lab without places it sweeps on whatever is picked out, as the scene
+drifts on (places.ts `placeShown`). Where it comes to the line toward what the hero looks at without
+anything picked out — the focus the menu comes up with, a run's card — it holds a beat there, 1 s,
+its sweep's clock standing still meanwhile. The lamp in the hero's hands tilts with it in steps of
+3°, its lens alight with a small glint at its rim. Under reduced motion the beam stands still,
+pointing a little up into the lab, without dust.
 
 **The entrance.** On the first menu of a page the hero walks in from beyond the stage's right edge
 over 1.2 s, slowing to a stop, its legs in the walk cycle as far as the ground it covers, and turns
@@ -866,18 +868,21 @@ Medians of the six rounds, ms; „over the scene" is each round's frame against 
 | Travelling between the Flur and the Süd-Flur | 1.62 | +0.58 | 3.50 | 6 |
 
 Round by round the menu's frame cost +0.01 ms over main's with the microphone off (−0.12 to +0.38)
-and +0.16 with it on (−0.10 to +0.37); the sending microphone costs +0.36 here, +0.24 on main. A pan
-costs a frame less than the drift — round by round −0.16 ms between the two rooms at the lab's edge,
-whose frames fill the dark past the bake, cheaper in five rounds of six, and −0.17 between the two
-within the lab, cheaper in all six: the hero's head stands turned and its beam held on the room, so
-the hero's layer and the beam's turn are drawn anew less often; a rerun of the places' runs on the
-dark's colour as it is now read (load 2.0 to 2.8) put the edge rooms' pan at −0.05 ms against the
-drift, cheaper in five rounds of six, the inner one at −0.16 and an edge room held at −0.28, each
-cheaper in all six. The hero's p95 is its upper layer drawn anew, fewer times than on main, each
-dearer for the edge light down its front; the frames held the screen's pace, 16.7 to 16.8 ms p95, in
-every run. Before the beam was held to its size and laid as a haze, the same bench put it with the
-hero at +1.59 ms over the scene, +0.57 over main's: the cone at 0.56 rad and 1.45 times the hero's
-height, added onto the lab.
+and +0.16 with it on (−0.10 to +0.37); the sending microphone costs +0.36 here, +0.24 on main. With
+the microphone on the beam and the hero cost +1.08 ms over the scene, over the 1 ms the package's
+spec gives them: main's own cost +1.05 there, and the 0.03 ms between the two medians lies well
+within the rounds' spread against main, so the menu misses the budget with the microphone on by as
+much as main does — within main's noise, not within the budget. A pan costs a frame less than the
+drift — round by round −0.16 ms between the two rooms at the lab's edge, whose frames fill the dark
+past the bake, cheaper in five rounds of six, and −0.17 between the two within the lab, cheaper in
+all six: the hero's head stands turned and its beam held on the room, so the hero's layer and the
+beam's turn are drawn anew less often; a rerun of the places' runs on the dark's colour as it is now
+read (load 2.0 to 2.8) put the edge rooms' pan at −0.05 ms against the drift, cheaper in five rounds
+of six, the inner one at −0.16 and an edge room held at −0.28, each cheaper in all six. The hero's
+p95 is its upper layer drawn anew, fewer times than on main, each dearer for the edge light down its
+front; the frames held the screen's pace, 16.7 to 16.8 ms p95, in every run. Before the beam was
+held to its size and laid as a haze, the same bench put it with the hero at +1.59 ms over the scene,
++0.57 over main's: the cone at 0.56 rad and 1.45 times the hero's height, added onto the lab.
 
 ## Chrome (ui.css, styles/lobby.css, finale.css, pause.css, settings.css)
 

@@ -8,7 +8,7 @@ import { heroTile } from './hero.js';
 import { heroLamp, lampKey, watchLamp } from './lamp.js';
 import { freeBeam, layBeam, sceneBeam, type SceneBeam } from './lampArt.js';
 import { browserSceneHost, runScene } from './loop.js';
-import { heldPlace, watchPlace } from './places.js';
+import { heldPlace, showPlace, watchPlace } from './places.js';
 import {
   bakeScene,
   clearShow,
@@ -270,8 +270,8 @@ function layLamp(ctx: CanvasRenderingContext2D, state: StageState, now: number, 
 
 /**
  * One frame of the scene on `ctx` at `now`: each lab it shows at night, or lit behind the lobby;
- * the camera at the drift or on its way to a place, a cut under less motion (`still`); the
- * lab copied from there, the beam over it.
+ * the camera at the drift or on its way to a place, a cut under less motion (`still`), the place
+ * told to the hero's lamp (places.ts `showPlace`); the lab copied from there, the beam over it.
  */
 function drawFrame(ctx: CanvasRenderingContext2D, state: StageState, now: number, still: boolean) {
   const { show, camera, probe } = state;
@@ -281,6 +281,7 @@ function drawFrame(ctx: CanvasRenderingContext2D, state: StageState, now: number
   }
   const progress = driftAt(now - state.driftFrom, still);
   const aim = placeNow(state);
+  showPlace(aim);
   const goal = show.bake === null ? { x: 0, y: 0 } : goalCorner(show.bake, aim, progress);
   const corner = cameraAt(camera, [aim, goal], now, [densityOf(ctx.canvas), still]);
   paintShow(ctx, show, now, { progress, corner });
@@ -383,6 +384,7 @@ export function openStage(canvas: HTMLCanvasElement, motion: StageMotion): Scene
     },
     close() {
       closed = true;
+      showPlace(null);
       state.rest?.baker.drop();
       state.rest = null;
       loop.stop();

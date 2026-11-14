@@ -21,6 +21,7 @@ import {
   placeCorner,
   placesOf,
   SCENE_ANCHOR,
+  showPlace,
   watchPlace,
 } from '../src/world/menu/places.js';
 import {
@@ -364,6 +365,8 @@ describe('the hero’s beam turned to a place', () => {
     vi.stubGlobal('window', { devicePixelRatio: 1, innerWidth: 1440, innerHeight: 820 });
     const on = painting();
     on.picked.current = 'handbook';
+    // The scene's camera on its way to the Archiv, as the stage tells it.
+    showPlace('handbook');
     const paint = heroPainter(on, 0);
     for (let now = 0; now <= 4000; now += 1000 / 30) paint(now);
     const beam = on.probe.beam;
@@ -373,6 +376,31 @@ describe('the hero’s beam turned to a place', () => {
     // Aimed from the lamp's grip, a little behind the lens the probe tells of.
     expect(beam.angle).toBeCloseTo(Math.min(SWEEP.high, Math.max(SWEEP.low, toward)), 1);
     expect(beam.angle).toBeLessThan(SWEEP.high);
+    expect(beam.room).toBe('handbook');
+    vi.unstubAllGlobals();
+    holdLamp(null);
+    holdPlace(null);
+    showPlace(null);
+  });
+
+  it('sweeps on where the scene shows no place for the item picked, as in a lab without any', () => {
+    vi.stubGlobal('Path2D', FakePath2D);
+    vi.stubGlobal('window', { devicePixelRatio: 1, innerWidth: 1440, innerHeight: 820 });
+    const swept = (picked: string | null): number[] => {
+      const on = painting();
+      on.picked.current = picked;
+      const paint = heroPainter(on, 0);
+      const angles: number[] = [];
+      for (let now = 0; now <= 6000; now += 1000 / 30) {
+        paint(now);
+        angles.push(on.probe.beam?.angle ?? Number.NaN);
+      }
+      return angles;
+    };
+    const idle = swept(null);
+    // The Archiv picked out, the scene drifting on: the beam's sweep as it is with nothing picked.
+    expect(swept('handbook')).toEqual(idle);
+    expect(new Set(idle.slice(-60)).size).toBeGreaterThan(10);
     vi.unstubAllGlobals();
     holdLamp(null);
     holdPlace(null);

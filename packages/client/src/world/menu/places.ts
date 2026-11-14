@@ -76,6 +76,23 @@ export function holdPlace(item: string | null): void {
   }
 }
 
+/** The item whose place the scene's camera stands at or travels to now (`showPlace`). */
+let shown: string | null = null;
+
+/**
+ * The item whose place the scene's camera stands at or travels to now (stage.ts): the place held,
+ * once the pieces of the bake it shows are baked; null for the drift — and in a lab without
+ * places, which drifts for every item.
+ */
+export function placeShown(): string | null {
+  return shown;
+}
+
+/** The scene's camera stands at or travels to the place of `item` now; null: the drift. */
+export function showPlace(item: string | null): void {
+  shown = item;
+}
+
 /** Tells `changed` whenever the place held changes; returns what stops it. */
 export function watchPlace(changed: () => void): () => void {
   listeners.add(changed);
