@@ -271,7 +271,28 @@ export interface ScientistOpts {
    * the tall things a figure may stand behind (render/actors.ts, drawNameTag); drawn by default
    */
   named?: boolean;
+  /** which of its parts are drawn (FigureLayer); all of it when left out */
+  layer?: FigureLayer;
 }
+
+/**
+ * Which parts of a figure a drawing lays: all of it; or, for a cache that lets the body breathe
+ * over its legs without drawing either anew (world/menu/heroArt.ts), the legs with the shadow
+ * and the ring under them, or everything over the legs — the arms, the pack, the body, the
+ * visor, what the hands hold and the name. Laid over each other, the two make the whole figure,
+ * one outline round the union of its parts. The light crossing the visor of somebody speaking
+ * can be laid alone (`shimmer`), over the rest drawn without it, so that it moves on without
+ * the rest drawn anew.
+ */
+export type FigureLayer = 'all' | 'legs' | 'upper' | 'shimmer';
+
+/** What a drawing of each layer lays besides the figure's parts: what it stands in, its name. */
+const LAYS: Readonly<Record<FigureLayer, { under: boolean; name: boolean }>> = {
+  all: { under: true, name: true },
+  legs: { under: true, name: false },
+  upper: { under: false, name: true },
+  shimmer: { under: false, name: false },
+};
 
 /** The light a figure stands in, for its shadow. */
 export type Ground = 'lit' | 'dark' | 'plain';
@@ -321,8 +342,8 @@ const BACK_SHOULDER: readonly [number, number] = [-0.15, -0.62];
 const HOLD_FRONT: readonly [number, number] = [0.12, -0.44];
 const HOLD_BACK: readonly [number, number] = [0.06, -0.5];
 /** Where a held item sits, before the chest in the hands, and its share of its floor size. */
-const HELD_X = 0.43;
-const HELD_Y = -0.44;
+export const HELD_X = 0.43;
+export const HELD_Y = -0.44;
 export const HELD_SCALE = 0.6;
 const DISCONNECTED_ALPHA = 0.45;
 /** Visor glass: steel with a cold sheen. */
@@ -521,11 +542,23 @@ function drawVisorGlints(ctx: CanvasRenderingContext2D, w: number, light: number
 }
 
 /**
- * Visor on the side the figure looks to. Looking toward the camera (down)
- * widens and lowers it; away (up) narrows and raises it — the vertical part
- * of the look. A glance away from the figure's way (`facing`) slides it back
- * across the dome; a dimmed visor loses its glints; while the figure speaks
- * a light sweeps across it.
+ * Where the visor sits on the side the figure looks to, body space: its front edge `x`, its
+ * middle `cy`, its width `w`. Looking toward the camera (down) widens and lowers it; away (up)
+ * narrows and raises it — the vertical part of the look. A glance away from the figure's way
+ * (`facing`) slides it back across the dome.
+ */
+function visorAt(pose: FigurePose, facing: number): { x: number; cy: number; w: number } {
+  const s = Math.sin(pose.look);
+  return {
+    x: VISOR_FRONT - VISOR_SLIDE * (1 - Math.cos(pose.look - facing)),
+    cy: DOME_Y + 0.02 + 0.025 * s,
+    w: 0.3 + 0.05 * Math.max(0, s) - 0.1 * Math.max(0, -s),
+  };
+}
+
+/**
+ * Visor on the side the figure looks to (visorAt): dark glass in its outline, its rim and
+ * glints — lost as it dims — and while the figure speaks a light sweeping across it.
  */
 function drawVisor(
   ctx: CanvasRenderingContext2D,
@@ -533,10 +566,7 @@ function drawVisor(
   facing: number,
   outline: string,
 ): void {
-  const s = Math.sin(pose.look);
-  const w = 0.3 + 0.05 * Math.max(0, s) - 0.1 * Math.max(0, -s);
-  const x = VISOR_FRONT - VISOR_SLIDE * (1 - Math.cos(pose.look - facing));
-  const cy = DOME_Y + 0.02 + 0.025 * s;
+  const { x, cy, w } = visorAt(pose, facing);
   const r = VISOR_H / 2;
   // Visor-local space: front edge at x = 0, vertical center at y = 0.
   ctx.translate(x, cy);
@@ -558,6 +588,17 @@ function drawVisor(
   if (pose.shimmer !== null) {
     drawShimmer(ctx, w, pose.shimmer);
   }
+  ctx.translate(-x, -cy);
+}
+
+/** The light crossing the visor of somebody speaking, alone, where drawVisor lays it. */
+function drawVisorLight(ctx: CanvasRenderingContext2D, pose: FigurePose, facing: number): void {
+  if (pose.shimmer === null) {
+    return;
+  }
+  const { x, cy, w } = visorAt(pose, facing);
+  ctx.translate(x, cy);
+  drawShimmer(ctx, w, pose.shimmer);
   ctx.translate(-x, -cy);
 }
 
@@ -628,40 +669,65 @@ function drawHeld(
 }
 
 /**
- * Arms, legs and their boots, backpack, body and visor, and what the hands
- * hold. Turns the figure to the side it looks to, bows it as the pose says
- * and leans it into the way it walks (figure.ts leanOf); leaves the
- * transform changed, so callers wrap it in save/restore. The legs stand as
- * `stride` has them; `bob` raises the body over them (negative is up).
+ * The outline pass of `layer`'s parts, at twice the outline width: the fill pass covers the
+ * inner half, leaving one continuous outline round the union of arms, legs, backpack and body.
+ * Facing-right space; `bob` raises the body over the legs.
  */
-function drawScientistFigure(
+function strokeFigure(
   ctx: CanvasRenderingContext2D,
-  o: ScientistOpts,
-  colors: BodyColors,
   stride: Stride,
   bob: number,
   pose: FigurePose,
+  layer: FigureLayer,
 ): void {
   const paths = getScientistPaths();
-  const { back, front } = stride;
-  ctx.scale(Math.cos(pose.look) < 0 ? -1 : 1, 1);
-  ctx.rotate(leanOf(o.facing, o.moving) + pose.bow);
-  ctx.lineJoin = 'round';
-  // Outline pass at twice the outline width; the fill pass covers the inner half, leaving
-  // one continuous outline around the union of arms, legs, backpack and body.
-  ctx.lineWidth = OUTLINE_W * 2;
-  ctx.strokeStyle = colors.outline;
-  if (pose.arms !== null) {
+  if (layer !== 'legs' && pose.arms !== null) {
     ctx.translate(0, bob);
     drawArms(ctx, pose.arms, pose.holding, null);
     ctx.translate(0, -bob);
   }
-  legAt(ctx, back, null);
-  legAt(ctx, front, null);
-  strokePathAt(ctx, paths.pack, 0, bob);
-  strokePathAt(ctx, paths.body, 0, bob);
-  legAt(ctx, back, [colors.shade, colors.outline]);
-  legAt(ctx, front, [o.color, colors.pack]);
+  if (layer !== 'upper') {
+    legAt(ctx, stride.back, null);
+    legAt(ctx, stride.front, null);
+  }
+  if (layer !== 'legs') {
+    strokePathAt(ctx, paths.pack, 0, bob);
+    strokePathAt(ctx, paths.body, 0, bob);
+  }
+}
+
+/**
+ * The legs filled over the outline pass, the back one in the shade. Drawing the parts over the
+ * legs alone (`upper`), the legs' shapes are cut out of the outline pass instead, as their fills
+ * cut it in the whole figure: laid over the legs, the outline runs round both as one.
+ */
+function fillLegs(
+  ctx: CanvasRenderingContext2D,
+  stride: Stride,
+  [color, colors]: readonly [string, BodyColors],
+  layer: FigureLayer,
+): void {
+  if (layer !== 'upper') {
+    legAt(ctx, stride.back, [colors.shade, colors.outline]);
+    legAt(ctx, stride.front, [color, colors.pack]);
+    return;
+  }
+  const op = ctx.globalCompositeOperation;
+  ctx.globalCompositeOperation = 'destination-out';
+  legAt(ctx, stride.back, [PROP_EDGE, PROP_EDGE]);
+  legAt(ctx, stride.front, [PROP_EDGE, PROP_EDGE]);
+  ctx.globalCompositeOperation = op;
+}
+
+/** Arms, backpack, body and visor filled, and what the hands hold: body space, raised `bob`. */
+function fillUpper(
+  ctx: CanvasRenderingContext2D,
+  o: ScientistOpts,
+  colors: BodyColors,
+  bob: number,
+  pose: FigurePose,
+): void {
+  const paths = getScientistPaths();
   ctx.translate(0, bob);
   if (pose.arms !== null) {
     drawArms(ctx, pose.arms, pose.holding, colors);
@@ -674,6 +740,40 @@ function drawScientistFigure(
   drawVisor(ctx, pose, o.facing, colors.outline);
   if (pose.holding && o.held !== undefined) {
     drawHeld(ctx, o.held, pose, colors);
+  }
+}
+
+/**
+ * Arms, legs and their boots, backpack, body and visor, and what the hands
+ * hold — those of them `o.layer` asks for. Turns the figure to the side it
+ * looks to, bows it as the pose says and leans it into the way it walks
+ * (figure.ts leanOf); leaves the transform changed, so callers wrap it in
+ * save/restore. The legs stand as `stride` has them; `bob` raises the body
+ * over them (negative is up).
+ */
+function drawScientistFigure(
+  ctx: CanvasRenderingContext2D,
+  o: ScientistOpts,
+  colors: BodyColors,
+  stride: Stride,
+  bob: number,
+  pose: FigurePose,
+): void {
+  const layer = o.layer ?? 'all';
+  ctx.scale(Math.cos(pose.look) < 0 ? -1 : 1, 1);
+  ctx.rotate(leanOf(o.facing, o.moving) + pose.bow);
+  if (layer === 'shimmer') {
+    ctx.translate(0, bob);
+    drawVisorLight(ctx, pose, o.facing);
+    return;
+  }
+  ctx.lineJoin = 'round';
+  ctx.lineWidth = OUTLINE_W * 2;
+  ctx.strokeStyle = colors.outline;
+  strokeFigure(ctx, stride, bob, pose, layer);
+  fillLegs(ctx, stride, [o.color, colors], layer);
+  if (layer !== 'legs') {
+    fillUpper(ctx, o, colors, bob, pose);
   }
 }
 
@@ -724,29 +824,42 @@ export function drawFigureShadow(
   softEllipse(ctx, dx, dy, rx, ry, BLACK, alpha, 'source-over');
 }
 
+/** What a figure stands in: its shadow, the ring under your own. */
+function drawUnder(
+  ctx: CanvasRenderingContext2D,
+  o: ScientistOpts,
+  pose: FigurePose,
+  stride: Stride,
+): void {
+  drawFigureShadow(ctx, o.ground ?? 'plain', [pose.shadow, stride.bob]);
+  if (o.isYou) drawYouRing(ctx);
+}
+
 /**
  * Anchor: FEET CENTER. Body ~0.62 tile wide, ~0.85 tile tall. Stands as
  * `o.pose` says (figure.ts) — off the ground and squashed or stretched about
  * its feet, its shadow shrinking under it as it rises — at rest without one;
  * walks as its cycle says (strideAt), over a shadow of the light it stands in.
+ * `o.layer` draws only the legs and what lies under them, only the rest, or
+ * only the light across its visor (FigureLayer).
  */
 export function drawScientist(ctx: CanvasRenderingContext2D, o: ScientistOpts): void {
   // Resolved first so an invalid color throws before anything is drawn.
   const colors = bodyColors(o.color);
   const pose = o.pose ?? restingPose(o.facing);
+  const lays = LAYS[o.layer ?? 'all'];
   ctx.save();
   try {
     if (!o.connected) ctx.globalAlpha *= DISCONNECTED_ALPHA;
     // The body is highest while the legs pass each other and back down at full stride.
     const stride = strideAt(o.walkPhase, o.moving);
-    drawFigureShadow(ctx, o.ground ?? 'plain', [pose.shadow, stride.bob]);
-    if (o.isYou) drawYouRing(ctx);
+    if (lays.under) drawUnder(ctx, o, pose, stride);
     ctx.save();
     ctx.translate(0, -pose.rise);
     ctx.scale(1 / pose.stretch, pose.stretch);
     drawScientistFigure(ctx, o, colors, stride, stride.bob - pose.bob, pose);
     ctx.restore();
-    if (o.named !== false) {
+    if (o.named !== false && lays.name) {
       drawHaloText(ctx, o.name, 0, NAME_Y, (o.text ?? TILE_TEXT).name, NAME_COLOR, 'bottom');
     }
   } finally {
