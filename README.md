@@ -150,12 +150,15 @@ der Notfälle.
 **Wenn die Leitung abreißt:** Ein laufender Einsatz bindet die Crew wie ein Match in Dota 2.
 Jeder Browser trägt einen Dienstausweis (Kennung und Geheimnis in `localStorage`), an den der
 Server den Platz bindet; der Tab merkt sich nur den Raumcode, ein Neuladen ist sofort zurück im
-Einsatz. Reißt eine Leitung ab, pausiert die Mission für alle (Uhr, Patrouillen, Notfälle), und
-die anderen sehen „Warten auf Ben · 0:12“. Nach 60 Sekunden, bei jedem weiteren Abbruch desselben
-Laufs nach 20, bietet die Karte „Ohne Ben weiter“: Die Uhr läuft wieder, und Stationen der ganzen
-Crew, Luke und Flucht zählen Ben nicht mit, bis er zurück ist. Ist nur noch eine Person verbunden,
-bietet die Karte stattdessen „Einsatz abbrechen“. Das Hauptmenü stellt einen laufenden Einsatz
-als hellen ersten Menüpunkt voran, die übrigen gedimmt („Zurück zum Einsatz“, „Einsatz
+Einsatz. Reißt eine Leitung ab, läuft der Einsatz weiter — Uhr, Patrouillen, Notfälle —, wie in
+Overcooked 2 oder Deep Rock Galactic: Bens Avatar bleibt stehen und hält, was er hielt, die
+Patrouillen übersehen ihn, die Leitstelle sagt „Bens Leitung ist weg.“, und die Crew-Leiste zeigt
+ihn grau mit „getrennt · 0:12“; kommt er zurück, spielt er sofort weiter. Nach 60 Sekunden, bei
+jedem weiteren Abbruch desselben Laufs nach 20, bietet die Leiste über der Welt „Ohne Ben weiter“:
+Stationen der ganzen Crew, Luke und Flucht zählen Ben dann nicht mit, bis er zurück ist. Ist nur
+noch eine Person verbunden, bietet sie stattdessen „Einsatz abbrechen“. Still steht ein Einsatz
+nur noch für die Wartung des Servers (Neustart, Deploy). Das Hauptmenü stellt einen laufenden
+Einsatz als hellen ersten Menüpunkt voran, die übrigen gedimmt („Zurück zum Einsatz“, „Einsatz
 aufgeben“), und sperrt andere Räume;
 aufgeben gibt den Platz frei, unter der Mindestzahl der Crew endet der Lauf für alle („EINSATZ
 ABGEBROCHEN“). Ein anderes Gerät übernimmt einen getrennten Platz mit Raumcode und genau dessen

@@ -369,6 +369,8 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
 - Fehler aus dem Audit: ein Abbruch konnte eine pausierte Partie durch die Flucht beenden.
 - Beweis: Core-, Server-, Client-Tests; Smoke mit 70-s-Abbruch, Aufgeben, Übernahme; Harness
   `pause-waiting`, `continue-without`, `reconnect-overlay`, `rejoin-card`, `takeover`.
+- Die Pause bei Abbruch ist am 2026-11-14 auf Wunsch von Uros ersetzt worden (R-6): Der Lauf geht
+  weiter, „Ohne X weiter" steht seither in der Leiste über der Welt statt auf einer Karte.
 
 ### R-4 Funk zwischen Mobilnetzen — Status: wartet (Entscheidung Uros) · Größe: M
 - Ohne TURN-Server verbinden sich zwei Handys in verschiedenen Mobilnetzen meist nicht; STUN ist
@@ -380,7 +382,7 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   Laufende je eine Zeile; `/health` zählt Räume, laufende Partien, Spieler, Zuschauer, nennt
   Laufzeit und Commit (`RENDER_GIT_COMMIT`).
 
-### R-6 Kein Stillstand, wenn eine Leitung abreißt — Status: bereit (Spec `spec-R-nopause.md`, nach U-pause) · Größe: M
+### R-6 Kein Stillstand, wenn eine Leitung abreißt — Status: erledigt (R-nopause) · Größe: M
 - Uros 2026-11-14 mit Screenshot der Karte „MISSION PAUSIERT · Warten auf uros": „Sollte man das
   Spiel im Hintergrund nicht stoppen, wenn jemand weg ist? Alles sollte gleich bleiben und danach
   fortführen." Kehrt die Dota-Pause aus R-3 um: Uhr, Patrouillen und Notfälle laufen weiter, der
@@ -389,6 +391,14 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   gesehen; Notfälle würfeln ohne seine Konsole; „Ohne X weiter" nach 60 s (später 20 s) bleibt in
   Crew-Leiste und HUD, weil Stationen zu zweit bedient werden. Vorbilder: Overcooked 2, Among Us,
   Deep Rock Galactic (die Mission läuft, der Platz bleibt offen).
+- Umgesetzt: `paused` gibt es nur noch für die Wartung; ein Abbruch hält den Avatar samt Platten
+  und Luke, Drohnen übersehen ihn, Konsolen und Ventile brauchen Hände in der Leitung, das Relais
+  würfelt für die Crew in der Leitung neu. Die Leitstelle sagt „Bens Leitung ist weg." einmal an,
+  die Crew-Leiste graut Ben mit „getrennt · 0:12", die Leiste über der Welt bietet nach 60 s (später
+  20 s) „Ohne Ben weiter" oder allein „Einsatz abbrechen"; die Karte des Hauptmenüs zählt die Uhr
+  herunter. Die Wartung wartet weiter auf jeden Platz, auch auf einen, der vor dem Neustart weg war.
+- Beweis: Core-, Server-, Client-Tests; Smoke; Harness `away-badge` (Uhr gegen die Wanduhr),
+  `continue-without`, `rejoin-card`; der Neustart-Drill unverändert.
 
 ## Geplant (2026-11-12, Vorbilder je Punkt)
 
