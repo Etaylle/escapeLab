@@ -203,22 +203,26 @@ die Entscheidung.
     Blackout 4), wie in der CI auf main.
 - Umgesetzt: Jede Zeitprüfung liest, was die Seite auf ihrer eigenen Uhr festhielt
   (`tools/panelfade.mjs`, `tools/pageclock.mjs`). Die Blende: ein MutationObserver hält Beginn und
-  Ende fest, jedes Bild Deckkraft und Stand der Blende; ein Bild zwischen halber und neun Zehntel
-  Blende muss das Gerät halb zeigen, gab es keines, wird übersprungen (`panel-close (fade)`) mit
-  den Zeiten der gezeichneten Bilder. Die Nadel hält die Seite 60 ms in ihren Ausschlag an, bis die
-  Aufnahme sitzt. Die Ziele auf dem Handy werden gemessen, wenn die Animationen des Geräts auf der
-  Uhr der Seite zu Ende sind (höchstens 3 s, sonst übersprungen mit der Wartezeit). Die LED-Leiste
-  merkt sich jede Seite vor den Drücken. Die Beweisläufe fanden sechs weitere Stellen derselben Art:
-  Die Nadel hielt den späten Ausschlag der vorigen Probe fest (jetzt nur einen zu einer neuen
-  Ablesung); figure-celebrate.png fand die Figur nach vier Aufnahmen gelandet (Last 42–57), und
-  walk-cycle verfehlte auch auf main ohne Software-GL beide Schrittfenster (Last 24–38) — für die
-  Aufnahmen der Figuren und des Schritts hält die Seite ihre Bilder an, bis die Aufnahme sitzt;
-  eine Blende, während der die Seite gar kein Bild zeichnete, galt als Blende ohne Animation (jetzt
+  Ende fest, jedes Bild bis zum Ende Deckkraft und Stand der Blende; mindestens ein Bild muss das
+  Gerät halb zeigen, wie auf main. Zeigt keines es so, scheitert die Prüfung an einem Bild zwischen
+  halber und neun Zehntel Blende; gab es dort keines, wird übersprungen (`panel-close (fade)`) mit
+  den Zeiten der gezeichneten Bilder. Die Nadel hält die Seite 60 ms in ihren Ausschlag an, sobald
+  sich ihre Drehung nach dem Druck ändert (MutationObserver; `transitionrun` kommt erst mit dem
+  nächsten Bild, unter Last nach dem Ausschlag), bis die Aufnahme sitzt. Die Ziele auf dem Handy
+  werden gemessen, wenn die Animationen des Geräts auf der Uhr der Seite zu Ende sind (höchstens
+  3 s, sonst übersprungen mit der Wartezeit). Die LED-Leiste merkt sich jede Seite vor den Drücken.
+  Die Beweisläufe fanden sechs weitere Stellen derselben Art: Die Nadel hielt den späten Ausschlag
+  der vorigen Probe fest (jetzt wartet der Rundgang, bis die Nadel auf der letzten Ablesung steht);
+  figure-celebrate.png fand die Figur nach vier Aufnahmen gelandet (Last 42–57), und walk-cycle
+  verfehlte auch auf main ohne Software-GL beide Schrittfenster (Last 24–38) — für die Aufnahmen der
+  Figuren und des Schritts hält die Seite ihre Bilder an, bis die Aufnahme sitzt; eine Blende,
+  während der die Seite gar kein Bild zeichnete, galt als Blende ohne Animation (jetzt
   übersprungen); und das Tempo des Menüs unter Software-GL (16,8 ms) entschied auch in Beweisläufen
   mit angehobenem Budget (Last 158) — es gilt jetzt, wo der Lauf das Budget des Gates hat, sonst
-  steht es im Log; nudge.png wartete auf eine dritte Meldung, wo der langsame Lauf beide der
-  Station schon unterwegs verbraucht hatte — jetzt übersprungen, mit den Zeiten der beiden. Jedes Frame-Fenster nennt die 1-Minuten-Last, unter der es lief, die
-  Zusammenfassung die zu Beginn und am Ende; kein Budget geändert.
+  steht es im Log; nudge.png wartete auf eine dritte Meldung, wo der langsame Lauf beide der Station
+  schon unterwegs verbraucht hatte — jetzt übersprungen, mit den Zeiten der beiden. Jedes
+  Frame-Fenster nennt die 1-Minuten-Last, unter der es lief, die Zusammenfassung die zu Beginn und
+  am Ende; kein Budget geändert.
 
 ### T-9 Tests an der Wanduhr — Status: erledigt (2026-11-13) · Größe: S
 - Zwei Tests lasen die echte Uhr und wurden unter Last rot: `certificate.test.ts` (openssl liest

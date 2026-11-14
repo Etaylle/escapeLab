@@ -1067,24 +1067,32 @@ process down before its summary.
 
 Each check now reads what the page recorded on its own clock (tools/panelfade.mjs,
 tools/pageclock.mjs). The fade as played: a MutationObserver notes when the panel begins to leave
-and when it is gone, and each frame the panel's opacity and how far its fade has run on the fade's
-own clock (the animation's currentTime); the panel has to go 100 to 600 ms after it began to leave,
-inert, its opacity only falling, and show midway on a frame — a frame drawn between half and nine
-tenths into the 150-ms fade, where its ease-in has the panel at 0.86 to 0.28, has to. Where the page
-drew none there — or, in one Blackout run, none at all while the panel left — the midway frames are
-skipped (`panel-close (fade)`), the reason naming the fade's times at the frames it drew and when
-the panel went, and the held shot judges the fade; a fade that never falls still fails on a frame in
-its middle, as does a panel gone at once. meter-swing.png: the page pauses the needle's own
-transition 60 ms into its 600-ms swing as it begins — some 40 % of its way, −58° on a swing from
-−90° to −10.8° — so that the screenshot shows it on its way whenever it lands; the needle has to
-have swung, held still through the shot and stood between where it was and its reading, or past it,
-and the log names when the page noted the swing after the probe, on its clock — the swing's event,
-which comes with the page's next frame (the transition's own start time read 2.8 s before the probe
-in one run, no clock to trust). The hold takes only a swing to a new reading — the needle's inline
-turn changed since the hold began: in the first Blackout proof run the last probe's swing announced
-itself only with the page's next frame, after the hold was on, and was held while the probe's own
-ran free (−74° read before the shot, −7° after it). The 250 ms the shot had to be asked for within
-is gone: it timed the round trip and the poll, never the picture.
+and when it is gone, and each frame until it is gone the panel's opacity and how far its fade has
+run on the fade's own clock (the animation's currentTime); the panel has to go 100 to 600 ms after
+it began to leave, inert, its opacity only falling, and show midway on one frame at least, as main's
+check asked. Where no frame does, a frame drawn between half and nine tenths into the 150-ms fade,
+where its ease-in has the panel at 0.86 to 0.28, fails it; where the page drew none there — or, in
+one Blackout run, none at all while the panel left — the midway frames are skipped (`panel-close
+(fade)`), the reason naming the fade's times at the frames it drew and when the panel went, and the
+held shot judges the fade. A fade that never falls still fails on a frame in its middle, as does a
+panel gone at once. meter-swing.png: the page pauses the needle's own transition 60 ms into its
+600-ms swing as the swing begins — some 40 % of its way, −58° on a swing from −90° to −10.8° — so
+that the screenshot shows it on its way whenever it lands; the needle has to have swung, held still
+through the shot and stood between where it was and its reading, or past it, and the log names when
+the swing began after the probe, on the page's clock. The hold is armed by the probe's press and
+takes the swing as the needle's turn changes: a MutationObserver on the needle's style, the
+transition taken at once with `getAnimations()`. The transition's own event, `transitionrun`, comes
+only with the page's next frame, and where that frame came after the swing's 600 ms there was
+nothing left to hold: on a scratch page whose frame came 800 ms late, the hold armed by the event
+failed as never swung, the hold armed by the style held the needle at −58°. Before the hold goes on,
+the walkthrough waits for the needle to stand at the last probe's reading (3 s at most; a probe it
+does not stand at by then is pressed unheld and logged, and the next one tries): in the first
+Blackout proof run the last probe's swing showed itself only once the hold was on and was held while
+the probe's own ran free (−74° read before the shot, −7° after it). Let go, the swing plays on only
+where it is still paused: on the scratch page, a swing a newer reading had cancelled, played again,
+swung the needle from −90° once more while its reading stood at −30°. The transition's own start
+time read 2.8 s before the probe in one run, no clock to trust. The 250 ms the shot had to be asked
+for within is gone: it timed the round trip and the poll, never the picture.
 
 The phone's targets are measured once the animations on or round its controls have ended on the
 page's clock (3 s at most; a control measured short while one still ran is skipped, the wait named;
@@ -1095,14 +1103,18 @@ strip. The crew figures' pose shots, lobby-idle.png and figure-celebrate.png, re
 probe before and after a screenshot that, at load 42 to 57, outlasted a jump: four shots found the
 figure landed. The page now holds its animation frames from the one that put a figure in the pose
 until the shot is taken, every figure's canvas keeping that frame, and the probe has to say it still
-stands so after the shot. The walk cycle's two shots, walk-cycle-a.png and walk-cycle-b.png, polled
-the walk's phase for the two stretches in which the legs stand wide, and main's own Systemcheck
-missed both at load 24 to 38: they hold the world's frames the same way from the one that brought
-the walk into a stretch, the walk standing still meanwhile and its end moving on by that long.
-nudge.png waits for the Leitstelle's next line at the station that is up, given after 90 s of quiet,
-two a station; a walkthrough slowed by load let both go out on its way there and then waited 110 s
-for a third. It counts the lines since the station came up against the mission's and, where all
-went out, skips, saying when each came.
+stands so after the shot. The hold looks only from the frame after those already asked for, and a
+frame asked for before the figure stood so runs no more once it does: put on while a figure already
+stood in its pose, the hold as first built let the next frame paint it once more in 20 holds of 20
+on a scratch page with two figures on loops of their own, the hold as it is in 0 of 30. The walk
+cycle's two shots, walk-cycle-a.png and walk-cycle-b.png, polled the walk's phase for the two
+stretches in which the legs stand wide, and main's own Systemcheck missed both at load 24 to 38:
+they hold the world's frames the same way from the one that brought the walk into a stretch, the
+walk standing still meanwhile and its end moving on by that long. nudge.png waits for the
+Leitstelle's next line at the station that is up, given after 90 s of quiet, two a station; a
+walkthrough slowed by load let both go out on its way there and then waited 110 s for a third. It
+counts the lines since the station came up against the mission's and, where all went out, skips,
+saying when each came.
 
 Every frame window's line names the machine's 1-minute load as it began (`os.loadavg`), the `pace`
 line the load its pacing window ran at, and the summary the load as the run began and ended — the
