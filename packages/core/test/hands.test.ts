@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { applyAction, parseMission, placesOf, viewFor } from '../src/index.js';
+import { applyAction, moduleFor, parseMission, placesOf, viewFor } from '../src/index.js';
 import type { GameState, Mission, PlayerView } from '../src/index.js';
 import { chamberLab, consoleLab, handsTaken, lightsOut, standing, started, T0 } from './lab.js';
 
@@ -116,9 +116,10 @@ describe('a place for every hand', () => {
     });
   });
 
-  it('the console lab of three as it stands: its box after the chain takes two', () => {
-    // A lab for the station of two consoles; the wiring box after it keeps the backup rule's
-    // two, which every test built on the lab relies on.
+  it('the console lab of three as it stands, the labs\' one exception: its box takes two', () => {
+    // Kept as it is (M-three, the lead's call; backlog N-6): a lab for the station of two
+    // consoles, whose wiring box after the chain keeps the backup rule's two places — console and
+    // book — for a crew of three. Eight test files feed on the lab as it stands.
     expect(handsAt(doppelpultDrei)).toEqual({ kette: 3, kabel: 2 });
   });
 });
@@ -213,5 +214,76 @@ describe('the hands at the station in front of the crew', () => {
     expect(handsIn(carried)?.open).not.toContainEqual(key);
     const used = { ...both, items: { ...both.items, schluessel: { ...lying, delivered: true } } };
     expect(handsIn(used)?.open).not.toContainEqual(key);
+  });
+});
+
+/** Every key of `value`, however deep. */
+function keysOf(value: unknown, out = new Set<string>()): Set<string> {
+  if (Array.isArray(value)) {
+    value.forEach((item) => keysOf(item, out));
+  } else if (value !== null && typeof value === 'object') {
+    for (const [key, item] of Object.entries(value)) {
+      out.add(key);
+      keysOf(item, out);
+    }
+  }
+  return out;
+}
+
+/** Every string in `value`, however deep. */
+function stringsOf(value: unknown, out: string[] = []): string[] {
+  if (typeof value === 'string') {
+    out.push(value);
+  } else if (Array.isArray(value)) {
+    value.forEach((item) => stringsOf(item, out));
+  } else if (value !== null && typeof value === 'object') {
+    Object.values(value).forEach((item) => stringsOf(item, out));
+  }
+  return out;
+}
+
+/** What the hands may carry: who, and places by kind, console and id — nothing else. */
+const HAND_KEYS = new Set(['held', 'open', 'playerId', 'place', 'kind', 'console', 'id']);
+
+describe('what the hands carry', () => {
+  it('places alone, as ids: the rules reach the reader alone, whoever the hands name', () => {
+    const working = standing(atStation('signalkette'), {
+      stations: { signalkette: ['p1'], 'signalkette/b': ['p2'] },
+      manuals: { klemmbrett: ['p3'] },
+      found: { p3: ['source:klemmbrett'] },
+    });
+    const state = applyAction(working, { type: 'interact', playerId: 'p1', at: T0 + 10 });
+    const def = blackout.puzzles.find((p) => p.id === 'signalkette');
+    if (state.puzzleState === null || def === undefined) {
+      throw new Error('the Signalkette is not switched on');
+    }
+    // Every sentence of the printed rules long enough to tell apart.
+    const rules = stringsOf(moduleFor(def.type).manual(def)).filter((s) => s.length >= 24);
+    expect(rules.length).toBeGreaterThan(0);
+    for (const id of ['p1', 'p2', 'p3']) {
+      const view = viewFor(state, id);
+      expect([...keysOf(view.hands)].filter((key) => !HAND_KEYS.has(key)), id).toEqual([]);
+      const wire = JSON.stringify(view);
+      const read = rules.filter((rule) => wire.includes(JSON.stringify(rule).slice(1, -1)));
+      expect(read.length > 0, id).toBe(id === 'p3');
+    }
+  });
+
+  it('name no source or part nobody has found, at any of Blackout\'s stations', () => {
+    const unfound = /aktenschrank|schluessel|spind|klemmbrett|buch-archiv|ersatzsicherung/;
+    for (const def of blackout.puzzles) {
+      const state = atStation(def.id);
+      for (const id of ['p1', 'p2', 'p3']) {
+        const hands = JSON.stringify(viewFor(state, id).hands ?? null);
+        expect(hands, `${def.id} ${id}`).not.toMatch(unfound);
+      }
+    }
+  });
+
+  it('name a key found nowhere while nobody has come across its cabinet', () => {
+    const keyOnly = standing(atStation('frequenz'), { found: { p2: ['item:schluessel'] } });
+    for (const id of ['p1', 'p2', 'p3']) {
+      expect(JSON.stringify(viewFor(keyOnly, id).hands), id).not.toContain('schluessel');
+    }
   });
 });

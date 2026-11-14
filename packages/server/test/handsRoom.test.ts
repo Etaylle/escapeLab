@@ -32,6 +32,15 @@ function blackoutForThree(): { room: Room; anna: Member; ben: Member; cleo: Memb
 const placeOf = (viewer: Member, member: Member) =>
   lastView(viewer).hands?.held.find((hand) => hand.playerId === member.playerId)?.place;
 
+/** Blackout's plate in the Flur, which holds the Maschinenraum's door until the Notstrom. */
+function flurplatte(): { id: string; x: number; y: number } {
+  const plate = blackoutMission().map.plates.find((p) => p.id === 'flurplatte');
+  if (plate === undefined) {
+    throw new Error('Blackout has no Flur plate');
+  }
+  return plate;
+}
+
 describe('the hands in a room', () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -48,12 +57,22 @@ describe('the hands in a room', () => {
     room.dispose();
   });
 
+  it('counts nobody on a plate nobody holds yet from 0.64 off: it is pressed from 0.55', () => {
+    const { room, anna, ben } = blackoutRun();
+    const plate = flurplatte();
+    // Two tiles north of it first, then to 0.64 off its middle from there: the walk never
+    // crosses the plate's own tile, so its press reach alone decides — not its release reach.
+    walkTo(room, anna, plate.x + 0.5, plate.y - 2 + 0.5);
+    expect(room.snapshot().state.presence.plates).toEqual({});
+    walkTo(room, anna, plate.x + 0.5, plate.y + 0.5 - 0.64);
+    expect(lastView(ben).map?.plates.find((p) => p.id === plate.id)?.pressed).toBe(false);
+    expect(room.snapshot().state.presence.plates).toEqual({});
+    room.dispose();
+  });
+
   it('tells every view of three who holds the plate, and that nobody does once they step off', () => {
     const { room, anna, ben, cleo } = blackoutForThree();
-    const plate = blackoutMission().map.plates.find((p) => p.id === 'flurplatte');
-    if (plate === undefined) {
-      throw new Error('Blackout has no Flur plate');
-    }
+    const plate = flurplatte();
     expect(placeOf(ben, anna)).toBeNull();
     walkTo(room, anna, plate.x + 0.5, plate.y + 0.5);
     for (const viewer of [anna, ben, cleo]) {
