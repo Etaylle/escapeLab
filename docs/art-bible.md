@@ -824,6 +824,42 @@ against 40 ms alone, as is every window before it (the lab lit before the blacko
 that fails sets no pace. The log names both numbers, „p95 50.0 ms, allowed 66.8 (2 × pacing
 33.4)", and a line `pace` what the pacing window set.
 
+**What the timing checks read (H-sgl).** The lead's gated run — the walkthrough under
+`SHOTS_SOFTWARE_GL=1`, alone on main after a merge — had stopped judging the code: on main itself,
+at loads of 8 to 90, the Systemcheck failed panel-close.png in five runs of six and ended at its
+last sync station twice, and Blackout lost meter-swing.png, panel-close.png and a phone device's
+targets at 43 px. Each of those checks read when a screenshot or a poll came back as if it were
+when the page drew, and under software GL a page with a station open draws at a fraction of the
+screen's pace while the machine's load adds hundreds of ms to every round trip and every
+screenshot. Main 997275c, its checks as they were with their numbers logged, frame windows for
+information (`SHOTS_FRAME_P95_MS=1000`), two runs each — the load is the 1-minute average every
+20 s over the run:
+
+| Check | Systemcheck 1 (load 12–138, mean 45) | Blackout 1 (5–103, mean 26) | Systemcheck 2 (4–15, mean 7) | Blackout 2 (7–35, mean 15) |
+| --- | --- | --- | --- | --- |
+| panel-close.png, the fade as played | failed: the page drew the fade's first frame 98 ms after the panel began to leave and its next 215 ms after; the panel was gone at 152 — main read „gone in 124 ms, 0 frames midway" | failed: frames 30 and 847 ms after, the panel gone at 152 — main read „gone in 815 ms, 0 frames midway" | passed: frames 0, 0, 17 and 50 ms into the fade, the last at 0.95 its one frame midway; gone at 152 | failed: frames 125 and 708 ms after, the panel gone at 167 — main read „gone in 571 ms, 0 frames midway" |
+| panel-close.png, the shot held 120 ms in | midway (luma 33 → 48 → 73) | midway (34 → 46 → 59) | midway (33 → 48 → 73) | midway (35 → 45 → 58) |
+| meter-swing.png | – | passed, wrongly: read at −52.4° 186 ms after the probe, but the shot was done 763 ms after it and shows the needle at rest at −10.8°; its 600-ms swing had begun 248 ms after the click | – | passed: read at −31.4° 171 ms after the probe, the shot done 553 ms after it, the needle past its reading at −8.2° |
+| device-phone-*.png, the targets | – | every control 44 px, the rise over (notstrom-b's „Kabel 1 messen" 76.56 × 44.00) | – | failed: signalkette-a's „Zurücktreten" and „Notizen" 43.38 px high on layouts of 44, the device's opening 50 ms in |
+| the strip at a sync station | moved, Ben's row folded, no banner yet | moved | moved, Ben's row folded | moved, the radio's banner up on both pages after the reactor |
+| device-solved.png | shot 447 ms after it showed solved | skipped: shot 570 ms after, its close at 572 | shot 460 ms after | skipped: shot 2912 ms after, its close at 2931 |
+| lever-countdown | read 1301 to 1303 ms into the pull, both „2" | 1301 to 1302, both „2" | 1301 to 1302, both „2" | 1301 to 1302, both „2" |
+
+The 43 px are every control of a device scaled at once — in the second Blackout run „Zurücktreten"
+134.78 × 43.38 and „Notizen" 130.14 × 43.38 on layouts of 137 × 44 and 132 × 44, in the hero
+builder's runs 75 × 43, 133 × 43 and 129 × 43: the device's opening, the panel's rise (`panel-up`,
+from 0.98 of its size, styles/interaction.css) and the device's own (`device-open`, from 0.94,
+styles/devices.css), 150 ms each, 50 ms in when measured. Under load the page draws an
+animation's first frames late, and a measurement before them reads it at its start: on a page
+with the game's stylesheet a 75 × 44 control reads 73.50 × 43.12 as the panel's rise begins and
+75.00 × 44.00 once it ended, and every other device of these runs measured 44 px with its opening
+over. The layout is a real 44 px; the check was wrong. The Synchronkalibrierung's crash („the LED
+strip stood still for Ben", the signal builder's runs) was the radio's banner: on a phone held
+sideways it takes the strip's place in the folded row a moment after a solve (screens/Game.tsx
+`StageTop`), and with device-solved.png's screenshot taking 1.2 s under load the strip was gone
+before the check looked; the radio's listener, left unheard as the run ended, then took the
+process down before its summary.
+
 **The frame in CSS pixels (N-camera).** The walkthrough's host window at 1440 × 820 now shows
 24.3 × 11.5 tiles of 58.2 px where main showed 22.2 × 10.5 of 63.7 — more tiles, each smaller —
 and at density 2 the same 24.3 × 11.5 where main drew the whole 27-tile width (Framing). Its

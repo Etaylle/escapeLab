@@ -174,6 +174,34 @@ die Entscheidung.
   ist der Lauf identisch zu vorher (per Aufrufgraph geprüft). Gemessene Kosten je Gruppe in der
   README.
 
+### H-4 Das Software-GL-Gate urteilt wieder — Status: im PR (H-sgl) · Größe: S
+- Der gemessene Lauf des Leads (Rundgang unter `SHOTS_SOFTWARE_GL=1`, allein auf main nach einem
+  Merge) scheiterte auf unverändertem main: der Systemcheck an panel-close.png in 5 von 6 Läufen
+  und zweimal an der letzten Gleichzeit-Station, Blackout an meter-swing.png, panel-close.png und
+  43-px-Zielen eines Handy-Geräts (Last 8–90). Jede dieser Prüfungen nahm, wann ein Screenshot
+  oder eine Abfrage zurückkam, als Zeit der Seite.
+- Gemessen auf main 997275c, je zwei Läufe unter Software-GL bei der Last, die da war (1-Minuten-Last
+  alle 20 s; Tabelle in der Art-Bible, Cost, „What the timing checks read"):
+  - panel-close.png, die Blende wie gespielt: gescheitert in 3 von 4 Läufen (Last im Mittel 45, 26
+    und 15). Die Seite zeichnete das erste Bild der Blende und das nächste 117, 817 und 583 ms
+    auseinander, das Gerät war nach ihrer eigenen Uhr dazwischen weg, 152 bis 167 ms nach Beginn;
+    main las die Lücke als Blende („gone in 124 / 815 / 571 ms", kein Bild in der Mitte). Bestanden
+    nur bei Last 7, mit einem Bild bei 0,95 als einzigem in der Mitte. Der angehaltene Schuss war
+    jedes Mal mittig.
+  - meter-swing.png: bestand zweimal, einmal fälschlich — 186 ms nach der Probe bei −52,4° gelesen,
+    der Screenshot erst 763 ms nach der Probe fertig, die Nadel darauf in Ruhe bei −10,8°.
+  - device-phone-signalkette-a.png: gescheitert einmal, „Zurücktreten" und „Notizen" 43,38 px hoch
+    bei 44 px Layout — das Öffnen des Geräts (`panel-up` ab 0,98, `device-open` ab 0,94, je 150 ms)
+    beim Messen erst 50 ms weit. Das Layout ist echt 44 px; die Prüfung lag falsch.
+  - Die letzte Gleichzeit-Station (Systemcheck, Läufe des Signal-Bauers): auf dem quer gehaltenen
+    Handy nimmt das Funkband die Stelle der LED-Leiste ein; kam die Prüfung spät, war die Leiste
+    weg, und der unbehandelte Funk-Lauscher beendete den Prozess vor der Zusammenfassung. In diesen
+    vier Läufen bewegte sich die Leiste rechtzeitig.
+  - device-solved.png: zweimal übersprungen (Schuss 570 und 2912 ms nach „gelöst", das Gerät zu
+    nach 572 und 2931 ms), wie bisher mit den Zeiten. lever-countdown las beide Seiten 1301 bis
+    1303 ms nach dem Zug, beide „2". Die übrigen Skips sind die der Missionen (Systemcheck 16,
+    Blackout 4), wie in der CI auf main.
+
 ### T-9 Tests an der Wanduhr — Status: erledigt (2026-11-13) · Größe: S
 - Zwei Tests lasen die echte Uhr und wurden unter Last rot: `certificate.test.ts` (openssl liest
   seine Uhr zweimal, ein Lauf über eine Sekundengrenze machte aus 825 Tagen 825,00001; jetzt
