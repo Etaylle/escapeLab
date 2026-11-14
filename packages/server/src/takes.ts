@@ -8,8 +8,12 @@ import { switchOn } from './switches.js';
  * The music's takes, for the client's /sounds page to play before one is kept: the client's
  * scripts/sfx.ts makes them (`--candidates`) into packages/client/takes/<id>/<n>.mp3, each
  * entry's listed in its folder's index.json, and keeps one (`--keep`). GET /takes/ answers every
- * entry's list by its id, GET /takes/<id>/<n>.mp3 the take itself. Only with ALLOW_TAKES=1, as
- * `pnpm dev` sets it: without, every address under /takes answers 404 — never the page in its
+ * entry's list by its id, GET /takes/<id>/<n>.mp3 the take itself. Beside them the samples of the
+ * radio's voices, for the client's /voices page to play before one is kept: scripts/voice.ts
+ * `--design` makes them into takes/voices/<slot>/<n>.mp3 — a role's folder (`pa`), or a role's
+ * and a person's (`operator-marta`) — listed alike; GET /takes/voices/ answers every person's
+ * list by their folder, GET /takes/voices/<slot>/<n>.mp3 the sample. Only with ALLOW_TAKES=1,
+ * as `pnpm dev` sets it: without, every address under /takes answers 404 — never the page in its
  * place — so a production server serves no take.
  */
 
@@ -19,13 +23,19 @@ const ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const TAKE_PATH = /^\/takes\/([a-z0-9]+(?:-[a-z0-9]+)*)\/([1-9]\d*\.mp3)$/;
 /** Each entry's list of its takes, in its folder. */
 const LIST = 'index.json';
+/** The folder of the voices' samples, among the takes. */
+const VOICES = 'voices';
+/** A person's folder of samples: their role (`pa`), or their role and id (`operator-marta`). */
+const SLOT = /^[a-z]+(?:-[a-z]+)?$/;
+/** A sample's address: its person's folder, then its number as the file's name. */
+const SAMPLE_PATH = /^\/takes\/voices\/([a-z]+(?:-[a-z]+)?)\/([1-9]\d*\.mp3)$/;
 
 /**
  * Whether the server serves the takes: with ALLOW_TAKES=1, as `pnpm dev` sets it; not with 0 or
  * unset. Throws for anything else, so that a misspelt switch is not mistaken for either.
  */
 export function takesAllowed(env: NodeJS.ProcessEnv): boolean {
-  const does = 'liefert die Takes der Musik an die Seite /sounds, ohne bleibt /takes leer';
+  const does = 'liefert Takes und Stimmproben an /sounds und /voices, ohne bleibt /takes leer';
   return switchOn(env, 'ALLOW_TAKES', does);
 }
 
@@ -38,19 +48,15 @@ export class TakesShelf {
    * does not read as JSON is said on the console and left out.
    */
   lists(): Record<string, unknown> {
-    const ids = existsSync(this.dir) ? readdirSync(this.dir).filter((name) => ID.test(name)) : [];
-    const lists: Record<string, unknown> = {};
-    for (const id of ids.sort()) {
-      const file = join(this.dir, id, LIST);
-      if (!existsSync(file)) continue;
-      try {
-        lists[id] = JSON.parse(readFileSync(file, 'utf8')) as unknown;
-      } catch (err) {
-        const reason = err instanceof Error ? err.message : String(err);
-        console.error(`[escapelab] takes/${id}/${LIST} could not be read: ${reason}`);
-      }
-    }
-    return lists;
+    return listsIn(this.dir, ID, 'takes');
+  }
+
+  /**
+   * Every person's list of voice samples by their folder (`pa`, `operator-marta`), as
+   * scripts/voice.ts writes it; one that does not read as JSON is said and left out.
+   */
+  samples(): Record<string, unknown> {
+    return listsIn(join(this.dir, VOICES), SLOT, `takes/${VOICES}`);
   }
 
   /**
@@ -71,6 +77,26 @@ export class TakesShelf {
       return null;
     }
   }
+}
+
+/**
+ * The lists in the folders of `dir` whose names `named` takes, by the folder: each its
+ * index.json as read; one that does not read is said on the console as `<where>/<folder>/...`.
+ */
+function listsIn(dir: string, named: RegExp, where: string): Record<string, unknown> {
+  const folders = existsSync(dir) ? readdirSync(dir).filter((name) => named.test(name)) : [];
+  const lists: Record<string, unknown> = {};
+  for (const folder of folders.sort()) {
+    const file = join(dir, folder, LIST);
+    if (!existsSync(file)) continue;
+    try {
+      lists[folder] = JSON.parse(readFileSync(file, 'utf8')) as unknown;
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : String(err);
+      console.error(`[escapelab] ${where}/${folder}/${LIST} could not be read: ${reason}`);
+    }
+  }
+  return lists;
 }
 
 /** A take as one look found it: its file, and its size in bytes. */
@@ -167,10 +193,18 @@ function askedUnderTakes(req: IncomingMessage): string | null {
   return under && (req.method === 'GET' || req.method === 'HEAD') ? path : null;
 }
 
-/** The take the address `path` names on `shelf`; null where there is none. */
+/** The take or the voice sample the address `path` names on `shelf`; null where there is none. */
 function takeFileAt(shelf: TakesShelf, path: string): TakeFile | null {
   const [, id, name] = TAKE_PATH.exec(path) ?? [];
-  return id === undefined || name === undefined ? null : shelf.take(id, name);
+  if (id !== undefined && name !== undefined) return shelf.take(id, name);
+  const [, slot, sample] = SAMPLE_PATH.exec(path) ?? [];
+  return slot === undefined || sample === undefined ? null : shelf.take(join(VOICES, slot), sample);
+}
+
+/** The lists the address `path` asks for: the takes', the voices' samples', or neither (null). */
+function listsAt(shelf: TakesShelf, path: string): Record<string, unknown> | null {
+  if (path === '/takes' || path === '/takes/') return shelf.lists();
+  return path === `/takes/${VOICES}` || path === `/takes/${VOICES}/` ? shelf.samples() : null;
 }
 
 /**
@@ -188,15 +222,16 @@ export function serveTakes(
   }
   if (shelf === null) {
     send(res, { status: 404, body: { error: 'Takes liefert der Server nur mit ALLOW_TAKES=1.' } });
-  } else if (path === '/takes' || path === '/takes/') {
-    send(res, { status: 200, body: shelf.lists() });
+    return true;
+  }
+  const lists = listsAt(shelf, path);
+  const take = lists === null ? takeFileAt(shelf, path) : null;
+  if (lists !== null) {
+    send(res, { status: 200, body: lists });
+  } else if (take === null) {
+    send(res, { status: 404, body: { error: `Unter ${path} liegt kein Take.` } });
   } else {
-    const take = takeFileAt(shelf, path);
-    if (take === null) {
-      send(res, { status: 404, body: { error: `Unter ${path} liegt kein Take.` } });
-    } else {
-      sendTake(take, req, res);
-    }
+    sendTake(take, req, res);
   }
   return true;
 }

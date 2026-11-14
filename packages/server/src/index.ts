@@ -57,7 +57,7 @@ const VOICE_DIR = fileURLToPath(new URL('../../client/public/voice', import.meta
 const voiceDesk = recordingAllowed(process.env)
   ? new VoiceDesk(VOICE_DIR, () => catalog.all.filter((m) => !catalog.isCustom(m.id)))
   : null;
-// The music's takes, for the client's /sounds page to play before one is kept: ALLOW_TAKES=1 only.
+// The music's takes and the voices' samples, for /sounds and /voices to play: ALLOW_TAKES=1 only.
 const TAKES_DIR = fileURLToPath(new URL('../../client/takes', import.meta.url));
 const takes = takesAllowed(process.env) ? new TakesShelf(TAKES_DIR) : null;
 // Where finished runs and the accounts are kept: Postgres at DATABASE_URL — its migrations
@@ -173,7 +173,7 @@ httpServer.listen(PORT, () => {
     console.log(`[escapelab] ALLOW_RECORD=1: POST /voice/:id saves recordings to ${VOICE_DIR}`);
   }
   if (takes !== null) {
-    console.log(`[escapelab] ALLOW_TAKES=1: GET /takes/ serves the music's takes in ${TAKES_DIR}`);
+    console.log(`[escapelab] ALLOW_TAKES=1: GET /takes/ serves takes and samples in ${TAKES_DIR}`);
   }
   if (site.available) {
     for (const url of lanUrls(PORT, tls.on)) {

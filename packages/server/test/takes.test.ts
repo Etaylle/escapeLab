@@ -195,6 +195,76 @@ describe('the dev server, with ALLOW_TAKES=1', () => {
   });
 });
 
+describe('the voices’ samples, with ALLOW_TAKES=1', () => {
+  /** A person's list of samples, as scripts/voice.ts --design writes it. */
+  const samplesOf = (role: string, person: string) => ({
+    role,
+    person,
+    samples: [{ n: 2, file: '2.mp3', seconds: 9.2, generatedVoiceId: 'preview12000000000' }],
+  });
+
+  /** The music's shelf with the voices' samples beside: the plant's and Marta's, and strays. */
+  function withVoices(): TakesShelf {
+    const shelf = shelfIn();
+    for (const [slot, role, person] of [
+      ['pa', 'pa', 'anlage'],
+      ['operator-marta', 'operator', 'marta'],
+    ] as const) {
+      mkdirSync(join(shelf.dir, 'voices', slot), { recursive: true });
+      const list = JSON.stringify(samplesOf(role, person));
+      writeFileSync(join(shelf.dir, 'voices', slot, 'index.json'), list);
+      writeFileSync(join(shelf.dir, 'voices', slot, '2.mp3'), TAKE);
+    }
+    mkdirSync(join(shelf.dir, 'voices', 'Operator Marta'));
+    writeFileSync(join(shelf.dir, 'voices', 'Operator Marta', 'index.json'), '{}');
+    return shelf;
+  }
+
+  const route =
+    (shelf: TakesShelf | null) =>
+    (req: IncomingMessage, res: ServerResponse): boolean =>
+      serveTakes(shelf, req, res);
+
+  it('lists every person’s samples by their folder, apart from the music’s takes', async () => {
+    const shelf = withVoices();
+    const sent = await ask(route(shelf), request('/takes/voices/'));
+    expect(sent?.status).toBe(200);
+    expect(json(sent)).toEqual({
+      'operator-marta': samplesOf('operator', 'marta'),
+      pa: samplesOf('pa', 'anlage'),
+    });
+    expect(json(await ask(route(shelf), request('/takes/voices')))).toEqual(json(sent));
+    // The music's lists stay the music's.
+    expect(Object.keys(json(await ask(route(shelf), request('/takes/'))) as object)).toEqual([
+      'end-won',
+      'menu-theme',
+    ]);
+    const none = new TakesShelf(join(tmpdir(), 'escapelab-takes-none-made'));
+    expect(json(await ask(route(none), request('/takes/voices/')))).toEqual({});
+  });
+
+  it('sends a sample as audio, and nothing beside the samples under /takes/voices', async () => {
+    const shelf = withVoices();
+    const sent = await ask(route(shelf), request('/takes/voices/operator-marta/2.mp3'));
+    expect([sent?.status, sent?.headers['content-type']]).toEqual([200, 'audio/mpeg']);
+    expect(sent?.body.equals(TAKE)).toBe(true);
+    for (const url of [
+      '/takes/voices/operator-marta/1.mp3',
+      '/takes/voices/operator-marta/index.json',
+      '/takes/voices/Operator Marta/2.mp3',
+      '/takes/voices/operator-marta/../pa/2.mp3',
+      '/takes/voices/operator/marta/2.mp3',
+      '/takes/voices/../menu-theme/2.mp3',
+    ]) {
+      expect((await ask(route(shelf), request(url)))?.status, url).toBe(404);
+    }
+    // A production server serves none of them.
+    for (const url of ['/takes/voices/', '/takes/voices/pa/2.mp3']) {
+      expect((await ask(route(null), request(url)))?.status, url).toBe(404);
+    }
+  });
+});
+
 describe('a take in spans, with ALLOW_TAKES=1', () => {
   const size = TAKE.length;
 

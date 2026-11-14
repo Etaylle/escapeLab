@@ -23,7 +23,7 @@ export function seconds(ms: number): string {
  * When a line is heard, as the page names it beside who says it; a station's lines name the
  * station.
  */
-const MOMENTS: Readonly<Record<RadioMoment, string>> = {
+export const MOMENTS: Readonly<Record<RadioMoment, string>> = {
   pa: 'Durchsage',
   start: 'Start',
   nudge: 'Hinweis',
