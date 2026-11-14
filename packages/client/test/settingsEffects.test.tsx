@@ -1,6 +1,7 @@
 import type * as React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { MusicSettings } from '../src/screens/MusicSettings.js';
 import { SettingsPanel } from '../src/screens/Settings.js';
 import { previewing, stopPreview, togglePreview } from '../src/world/musicPreview.js';
 import { fakeGraph } from './fakeGraph.js';
@@ -8,19 +9,32 @@ import { fakeMedia } from './fakeMedia.js';
 import { serveSamples } from './fakeSamples.js';
 
 /**
- * The settings panel gone while a piece plays for the ear (screens/Settings.tsx): it stops,
- * however the panel went — not only by its own way out. The tests run without a page, where React
- * runs no effect; so the panel's effects are kept as it renders, run, and taken back as a page
- * taking the panel away would.
+ * What the settings do once they stand on a page and as they leave it (screens/Settings.tsx,
+ * MusicSettings.tsx). The tests run without a page, where React runs no effect and draws nothing
+ * anew; so the effects are kept as a component renders, run, and taken back as a page would, and
+ * every state set is noted.
  */
 
 type Effect = () => void | (() => void);
 
 const effects: Effect[] = [];
+/** Every value a component's state was set to, in order. */
+const sets: unknown[] = [];
 
 vi.mock('react', async (importOriginal) => {
   const react = await importOriginal<typeof React>();
-  return { ...react, useEffect: (effect: Effect) => void effects.push(effect) };
+  return {
+    ...react,
+    useEffect: (effect: Effect) => void effects.push(effect),
+    useState: <S,>(initial: S | (() => S)) => {
+      const [state, set] = react.useState(initial);
+      const noted = (next: React.SetStateAction<S>): void => {
+        sets.push(next);
+        set(next);
+      };
+      return [state, noted] as const;
+    },
+  };
 });
 
 beforeEach(() => {
@@ -28,6 +42,7 @@ beforeEach(() => {
   fakeMedia();
   vi.useFakeTimers();
   effects.length = 0;
+  sets.length = 0;
 });
 
 afterEach(() => {
@@ -59,5 +74,24 @@ describe('the settings panel taken away', () => {
     expect(previewing()).toBe('yalciner/calm');
     for (const back of takeBack) back();
     expect(previewing()).toBeNull();
+  });
+});
+
+describe('the music block before the music’s list is here', () => {
+  it('asks for it as it comes, and is drawn anew once it is here', async () => {
+    serveSamples();
+    renderToStaticMarkup(<MusicSettings />);
+    mount();
+    expect(sets).toEqual([]);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(sets).toEqual([true]);
+  });
+
+  it('is drawn anew by nothing once it has gone', async () => {
+    serveSamples();
+    renderToStaticMarkup(<MusicSettings />);
+    for (const back of mount()) back();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(sets).toEqual([]);
   });
 });

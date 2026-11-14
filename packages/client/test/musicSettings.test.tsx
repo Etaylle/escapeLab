@@ -246,6 +246,20 @@ describe('a piece played for the ear, as the game plays it', () => {
     expect(elements.map((each) => each.src)).toEqual(['/music/packs/macleod/lobby.m4a']);
   });
 
+  it('stops where its file fails or stalls, the music let back up', async () => {
+    serveSamples();
+    for (const [slot, type] of [['calm', 'error'], ['tense', 'stalled']] as const) {
+      togglePreview('yalciner', slot);
+      await vi.advanceTimersByTimeAsync(20);
+      expect(previewing()).toBe(`yalciner/${slot}`);
+      elements.find((each) => each.src === `/music/packs/yalciner/${slot}.m4a`)?.fire(type);
+      expect(previewing()).toBeNull();
+      const { engine, ctx } = engineNow();
+      ctx.currentTime += 1;
+      expect(duckLevels(engine, ctx.currentTime).music).toBe(1);
+    }
+  });
+
   it('goes out over PREVIEW_FADE_S as it stops', async () => {
     serveSamples();
     togglePreview('yalciner', 'tense');
@@ -254,5 +268,26 @@ describe('a piece played for the ear, as the game plays it', () => {
     const level = levelOf(ctx, '/music/packs/yalciner/tense.m4a');
     stopPreview();
     expect(level.gain.events.at(-1)).toEqual(['linear', 0, ctx.currentTime + PREVIEW_FADE_S]);
+  });
+});
+
+describe('a piece of the score that awaits its render', () => {
+  it('offers no ▶ and is named in no Nennung: what plays there is another’s', async () => {
+    vi.resetModules();
+    serveSamples({ lobby: { listed: false }, title: { listed: false } });
+    const server = await import('react-dom/server');
+    await (await import('../src/world/samples.js')).musicListed();
+    const view = await import('../src/screens/MusicSettings.js');
+    const { installedPacks: shipped } = await import('../src/world/musicPacks.js');
+    const score = { pack: 'nachtschicht', pieces: {} };
+    const lobby = server.renderToStaticMarkup(
+      <view.SlotPicker slot="lobby" packs={shipped()} chosen={score} />,
+    );
+    expect(lobby).toContain('aria-label="Zwischenspiel anhören" disabled=""');
+    expect(lobby).not.toContain('aria-label="One Last Try anhören" disabled=""');
+    const block = server.renderToStaticMarkup(<view.MusicSettings />);
+    expect(block.match(/data-credit="/g)).toHaveLength(SLOTS.length - 2);
+    expect(block).not.toContain('Zwischenspiel');
+    expect(block).not.toContain('Eröffnung');
   });
 });

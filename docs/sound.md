@@ -262,14 +262,14 @@ take, on a copy of the client, wrote its manifest entry to the digit as the rend
 A take of a suite is kept whole (`--keep score=<n>`): decoded, cut where the plan puts each piece,
 each piece's edges faded over 10 ms, encoded by afconvert as AAC at 160 kbit/s into
 `public/music/packs/nachtschicht/<piece>.m4a` — as a part first, every piece measured as encoded,
-then all moved in at
-once — and listed with the suite's hash, the gain that brings it to −19 LUFS, a loop's bars and its
-suite; only then, the manifest naming the pieces, the file each piece played before is deleted where
-no other entry plays it, and so are the suite's other takes. It refuses, besides the refusals above
-and before anything moves, a piece named alone („a piece of score, kept whole: --keep score=<n>"), a
-take more than a second off its plan's length — its pieces would not lie where the plan put them —
-and a take a piece of which came back silent, taking back every part it had encoded. A piece of a
-suite is never made or kept alone: `--only calm` is refused as well, naming `--only score`.
+then all moved in at once — and listed with the suite's hash, the gain that brings it to −19 LUFS, a
+loop's bars and its suite; only then, the manifest naming the pieces, the file each piece played
+before is deleted where no other entry plays it, and so are the suite's other takes. It refuses,
+besides the refusals above and before anything moves, a piece named alone („a piece of score, kept
+whole: --keep score=<n>"), a take more than a second off its plan's length — its pieces would not
+lie where the plan put them — and a take a piece of which came back silent, taking back every part
+it had encoded. A piece of a suite is never made or kept alone: `--only calm` is refused as well,
+naming `--only score`.
 
 **What a take costs**, at the dry run's 18 credits a second of music:
 
@@ -304,18 +304,18 @@ intercom ─────── send −14 dB ─┘   a crew voice over the stat
 ```
 
 Musik sets the music and the preview, Effekte the effects, Umgebung the rooms' beds, Funk the radio
-and the loudspeakers (`settings.ts` `applyVolumes`, `mix.ts` `setBusVolumes`), each muted on its own by its
-button there; Gesamt sets the master gain, which the sound switch mutes (`isMuted()`) — the switch
-is Gesamt's mute. Settings kept before Umgebung had its own volume give it the Effekte's, and the
-old radio volume becomes Funk's. Behind it stands a brickwall, a DynamicsCompressorNode at
+and the loudspeakers (`settings.ts` `applyVolumes`, `mix.ts` `setBusVolumes`), each muted on its own
+by its button there; Gesamt sets the master gain, which the sound switch mutes (`isMuted()`) — the
+switch is Gesamt's mute. Settings kept before Umgebung had its own volume give it the Effekte's, and
+the old radio volume becomes Funk's. Behind it stands a brickwall, a DynamicsCompressorNode at
 threshold −3 dB, no knee, 20:1, 1 ms attack and 100 ms release, so that effects stacked on one
 another never clip. Web Audio puts a makeup gain behind every compressor, worked out from its own
 curve — its gain at full scale, inverted and raised to 0.6: +1.71 dB for these settings — which the
 trim takes back (`limiterMakeup`), so that whatever stays under the threshold plays exactly as loud
-as before the brickwall. The devices' own sounds (`puzzles/sounds.ts`) go into the effects' bus
-like every other effect — the meter's hum and the colour tones the game pitches, and the device hum
-while a panel stands open, too: the Effekte volume and the sound switch reach them there, the bus's
-send carries them into the room's reverb, and the brickwall covers them with the rest
+as before the brickwall. The devices' own sounds (`puzzles/sounds.ts`) go into the effects' bus like
+every other effect — the meter's hum and the colour tones the game pitches, and the device hum while
+a panel stands open, too: the Effekte volume and the sound switch reach them there, the bus's send
+carries them into the room's reverb, and the brickwall covers them with the rest
 (`test/deviceMix.test.ts` follows their chains into the real mix).
 
 **Ducking.** Mission control's voice pulls the music 8 dB and the beds 4 dB down while it is on
@@ -1334,20 +1334,21 @@ workshop of its own: opening the editor fades it out over 0.6 s, and leaving it 
 back at once (App.tsx `menuPlaceOf`).
 
 **The theme** (`menu-theme`) is the score's main theme, 93.3 s in A minor at 90 bpm like the run's
-three — felt piano states the motif, chamber strings answer, a wordless voice enters once, no
-drums (Score, above); until the score is kept, the older theme of 60 s. It streams from its file on
-two elements as the stems do (`audioStream.ts`), into the music's bus at the stems' level, and
-loops on the bars its manifest names, 32: each next pass starts a bar before it is heard, caught up
+three — felt piano states the motif, chamber strings answer, a wordless voice enters once, no drums
+(Score, above); until the score is kept, the older theme of 60 s. It streams from its file on two
+elements as the stems do (`audioStream.ts`), into the music's bus at the stems' level, and loops on
+the bars its manifest names, 32: each next pass starts a bar before it is heard, caught up
 meanwhile, and comes in over the seam's 3 s as the last goes out under it, equal in power (music.ts
-`loopPeriod`, `SEAM_IN`, `SEAM_OUT`). Another music pack's theme plays in its place where the
-player picked one, round by its crossfade (Musikpakete), and the lobby's piece likewise. **The hum** (`bed-facility`) is a bed: the facility at night
-heard from its entrance hall, transformers and ventilation far down the corridors, looped on the
-rooms' bus at 0.02 — a little under a room's bed — where it is rendered: its takes of 2026-11-13
-came back near silent and it awaits a render at full level, which the menu waits for in silence;
-no bed is ever brought up more than +12 dB (`samples.ts` `BED_GAIN_MAX`). It is a 10 s seamless
-loop, as every room bed of the lab is: a bed lasts 30 s at most in the catalog, and a 30 s bed at
-128 kbit/s (480 kB) would not fit the effects' folder, held to 3 MB. The music takes a loop of the
-budget while a piece of it is heard, the hum one while it plays, and both give them back as they go.
+`loopPeriod`, `SEAM_IN`, `SEAM_OUT`). Another music pack's theme plays in its place where the player
+picked one, round by its crossfade (Musikpakete), and the lobby's piece likewise. **The hum**
+(`bed-facility`) is a bed: the facility at night heard from its entrance hall, transformers and
+ventilation far down the corridors, looped on the rooms' bus at 0.02 — a little under a room's bed —
+where it is rendered: its takes of 2026-11-13 came back near silent and it awaits a render at full
+level, which the menu waits for in silence; no bed is ever brought up more than +12 dB (`samples.ts`
+`BED_GAIN_MAX`). It is a 10 s seamless loop, as every room bed of the lab is: a bed lasts 30 s at
+most in the catalog, and a 30 s bed at 128 kbit/s (480 kB) would not fit the effects' folder, held
+to 3 MB. The music takes a loop of the budget while a piece of it is heard, the hum one while it
+plays, and both give them back as they go.
 
 **The lobby** has a piece of its own where the score is kept: `lobby`, the motif again, thinner —
 solo piano, a solo cello answering once, a faint arpeggiated synth — 61.3 s, 20 bars round. As the
@@ -1433,11 +1434,11 @@ plays none (tools/shots.mjs `menuSoundAtFirstKey`, `checkPieceCodec`, `menuSound
 ## Musikpakete (`packFile.ts`, `musicPacks.ts`, `scripts/packs.ts`)
 
 The music's eight places — the menu's theme, the lobby's piece, the opening's title, the run's three
-stems and the end cards' two themes — are filled from music packs, which the settings' „Ton" lets the
-player choose under „Musik": a pack whole, and in „Feinwahl" any place from another pack. The game's
-own score is the pack `nachtschicht` and plays until another is picked; the other four are music by
-people, found by the scouts of 2026-11-14 and kept in the repository because their licences let the
-files be passed on — CC0, CC BY 3.0 and CC BY 4.0, nothing else (Lizenz, below).
+stems and the end cards' two themes — are filled from music packs, which the settings' „Ton" lets
+the player choose under „Musik": a pack whole, and in „Feinwahl" any place from another pack. The
+game's own score is the pack `nachtschicht` and plays until another is picked; the other four are
+music by people, found by the scouts of 2026-11-14 and kept in the repository because their licences
+let the files be passed on — CC0, CC BY 3.0 and CC BY 4.0, nothing else (Lizenz, below).
 
 | Pack | Title | Composers | Files |
 | --- | --- | --- | --- |
@@ -1451,17 +1452,17 @@ files be passed on — CC0, CC BY 3.0 and CC BY 4.0, nothing else (Lizenz, below
 format): the id, the title in the world's voice — a shift's record — the composers, and one piece
 for each of the eight places. Every piece carries its credit: title, author, the page it came from,
 its licence and the attribution as that licence wants it, ending „bearbeitet: Schnitt, Schleife,
-Pegel", for every found piece is cut, looped and levelled. A found piece says how it plays: its file,
-`public/music/packs/<id>/<place>.m4a` (AAC at 128 kbit/s), its length, where its sound starts, its
-loudness before the gain and the gain that brings it to the score's −19 LUFS, and its loop —
-`{ "crossfade": { startMs, endMs, fadeMs } }`, or `{ "bars": { bpm, count } }` as the score loops —
-or `null` for a place played once. A piece of the score names its manifest entry instead
-(`"score": "calm"`), so that the score's render and keep (Takes und Auswahl) fill its pack without
-touching the pack. The client bundles every pack.json there is (`packList.ts`, Vite's
-`import.meta.glob`): a pack added is in the settings, in the game and on `/sounds` with no other
-change. The service worker keeps the score's pack for a phone offline with the rest of the game;
-another pack's files are fetched as they are first played and not kept (`sw/build.ts`), for a
-stream's ranged answers cannot be cached and four packs would add some 32 MB to an install.
+Pegel", for every found piece is cut, looped and levelled. A found piece says how it plays: its
+file, `public/music/packs/<id>/<place>.m4a` (AAC at 128 kbit/s), its length, where its sound starts,
+its loudness before the gain and the gain that brings it to the score's −19 LUFS, and its loop — `{
+"crossfade": { startMs, endMs, fadeMs } }`, or `{ "bars": { bpm, count } }` as the score loops — or
+`null` for a place played once. A piece of the score names its manifest entry instead (`"score":
+"calm"`), so that the score's render and keep (Takes und Auswahl) fill its pack without touching the
+pack. The client bundles every pack.json there is (`packList.ts`, Vite's `import.meta.glob`): a pack
+added is in the settings, in the game and on `/sounds` with no other change. The service worker
+keeps the score's pack for a phone offline with the rest of the game; another pack's files are
+fetched as they are first played and not kept (`sw/build.ts`), for a stream's ranged answers cannot
+be cached and four packs would add some 32 MB to an install.
 
 **Loops by crossfade.** Found music has no bars anybody wrote down, so its loop is a seam: a pass
 plays from the file's start; from `endMs − fadeMs` it goes out over `fadeMs` on the equal-power
@@ -1549,8 +1550,8 @@ source under its own credit, as `cheremisinov` does for its tense and critical s
 plan names the page, and a folder under `takes/packs/` with a part of the file's name, which the
 script finds once the file lies there; a dry run says what is still missing. The pack `panchout`
 („Schicht F · Raumstation": Clement Panchout's Space Horror layers for the stems, his „Time Flies",
-„Round Glasses" and „The Whispering Shadows Dungeon" for the title and the endings, Hitctrl's „Adrift on
-the Currents of Time" and „Beyond the Stars" for the menu and the lobby) waits for it:
+„Round Glasses" and „The Whispering Shadows Dungeon" for the title and the endings, Hitctrl's
+„Adrift on the Currents of Time" and „Beyond the Stars" for the menu and the lobby) waits for it:
 
 ```sh
 # 1. in a browser: https://clement-panchout.itch.io/yet-another-free-music-pack — „Download Now",
@@ -1576,19 +1577,21 @@ licence.
 read and held to its rules, every file fetched once, a failed fetch said and its pack built no
 further, a download by hand found where the plan puts it, the seam and a stated tempo's whole bars,
 the gain to −19 LUFS as encoded, the cap, the dry run. `test/packsPlay.test.ts` plays a pack of the
-test's own beside the score: its stems round by their crossfade, equal in power, a pack picked mid-run
-taking over at the loop point, the menu's theme at once and the lobby's piece on the next bar, its
-endings once and never round, its title for the opening, and the menu's probe saying a preview and
-the music under it. `test/musicPacks.test.ts` holds the shipped packs to the format — every place
-filled, every credit as its licence wants it, the files where pack.json names them within the cap,
-loops of 1.5 s and more 60–120 s round, −19 LUFS by a gain of +20 dB at most — and the choice to what
-plays; `test/musicSettings.test.tsx` the settings' block — the packs and the Feinwahl changing what
-plays, a preview on its bus with the music 24 dB under it and stopped every way it goes, the
-Nennungen of the pieces in play, 14-px text and 44-px presses; `test/soundsPage.test.tsx` the packs
-on `/sounds`. The walkthrough's drill `music`, a capture group of its own and on by default, opens a
-menu page of its own: `settings-music.png`, another pack's theme heard within 8 s of its press, a
-preview with the music at least 20 dB down and gone with the settings, the block fitting a phone held
-sideways, and the pack kept across a reload until „Zurücksetzen" brings the score back.
+test's own beside the score: its stems round by their crossfade, equal in power, a pack picked
+mid-run taking over at the loop point, the menu's theme at once and the lobby's piece on the next
+bar, its endings once and never round, its title for the opening, and the menu's probe saying a
+preview and the music under it. `test/musicPacks.test.ts` holds the shipped packs to the format —
+every place filled, every credit as its licence wants it, the files where pack.json names them
+within the cap, loops of 1.5 s and more 60–120 s round, −19 LUFS by a gain of +20 dB at most — and
+the choice to what plays; `test/musicSettings.test.tsx` the settings' block — the packs and the
+Feinwahl changing what plays, a preview on its bus with the music 24 dB under it and stopped every
+way it goes, the Nennungen of the pieces in play, 14-px text and 44-px presses;
+`test/soundsPage.test.tsx` the packs on `/sounds`. The walkthrough's drill `music`, a capture group
+of its own and on by default, opens a menu page of its own in the Systemcheck run — Blackout's skips
+it, for it needs no mission: `settings-music.png` with the Nennungen of the pieces the music's
+manifest has, another pack's theme heard within 8 s of its press, a preview with the music at least
+20 dB down and gone with the settings, the block fitting a phone held sideways, and the pack kept
+across a reload until „Zurücksetzen" brings the score back.
 
 **Attributions**, as each pack carries them and the settings and `/sounds` show them:
 
@@ -1610,7 +1613,7 @@ sideways, and the pack kept across a reload until „Zurücksetzen" brings the s
 - `title`: „Amadines“ – Sergey Cheremisinov · https://freemusicarchive.org/music/Sergey_Cheremisinov/way-to-silence/amadines/ · Creative Commons Attribution 4.0 International: https://creativecommons.org/licenses/by/4.0/ · bearbeitet: Schnitt, Schleife, Pegel
 - `calm`: „Mindful Choice“ – Sergey Cheremisinov · https://freemusicarchive.org/music/Sergey_Cheremisinov/metamorphoses/mindful-choice/ · Creative Commons Attribution 4.0 International: https://creativecommons.org/licenses/by/4.0/ · bearbeitet: Schnitt, Schleife, Pegel
 - `tense`: „Under Suspicion“ – Lee Rosevere · https://freemusicarchive.org/music/lee-rosevere/music-for-podcasts-serious/under-suspicion/ · Creative Commons Attribution 4.0 International: https://creativecommons.org/licenses/by/4.0/ · bearbeitet: Schnitt, Schleife, Pegel
-- `critical`: „Cornfield Chase“ – Rafael Krux · https://huggingface.co/datasets/Youmiel/FreePD-Data · CC0 1.0 Universal: https://creativecommons.org/publicdomain/zero/1.0/ · bearbeitet: Schnitt, Schleife, Pegel
+- `critical`: „Cornfield Chase“ – Rafael Krux · https://huggingface.co/datasets/Youmiel/FreePD-Data/blob/main/pieces.csv#L83 · CC0 1.0 Universal: https://creativecommons.org/publicdomain/zero/1.0/ · bearbeitet: Schnitt, Schleife, Pegel
 - `end-won`: „Limitless“ – Sergey Cheremisinov · https://freemusicarchive.org/music/Sergey_Cheremisinov/slow-light/limitless-1/ · Creative Commons Attribution 4.0 International: https://creativecommons.org/licenses/by/4.0/ · bearbeitet: Schnitt, Schleife, Pegel
 - `end-lost`: „Last Moon Last Stars“ – Sergey Cheremisinov · https://freemusicarchive.org/music/Sergey_Cheremisinov/metamorphoses/last-moon-last-stars/ · Creative Commons Attribution 4.0 International: https://creativecommons.org/licenses/by/4.0/ · bearbeitet: Schnitt, Schleife, Pegel
 
@@ -1705,8 +1708,10 @@ its line as the record of where it came from. Three things to know:
   credit him, and the claim is released within 72 hours of a dispute once the credit is there.
   The other composers' pages say nothing of Content ID; İlker Yalçıner can be asked.
 - **„Cornfield Chase".** FreePD, which published Rafael Krux's music as CC0, closed on 2025-12-09;
-  the piece comes from its archive on Hugging Face (`Youmiel/FreePD-Data`), a weaker record of the
-  dedication than the composer's own page would be.
+  the piece comes from its archive on Hugging Face (`Youmiel/FreePD-Data`), whose `pieces.csv` —
+  FreePD's own catalogue, `freepd.com/agent/pieces.txt` — records the CC0 dedication on line 83, and
+  the credit names that line. It was kept as CC0 on 2026-11-14, as that catalogue has it, though a
+  record kept by another than the composer is weaker than his own page would be.
 - **Extra terms.** Kevin MacLeod sells a licence without credit beside CC BY, and Clement
   Panchout, whose pack waits, forbids reselling his music and training AI on it; neither limits a
   game that credits them, and no other composer here adds terms.

@@ -104,9 +104,9 @@
     "critical": {
       "title": "Cornfield Chase",
       "author": "Rafael Krux",
-      "source": "https://huggingface.co/datasets/Youmiel/FreePD-Data",
+      "source": "https://huggingface.co/datasets/Youmiel/FreePD-Data/blob/main/pieces.csv#L83",
       "licence": "CC0",
-      "attribution": "„Cornfield Chase“ – Rafael Krux · https://huggingface.co/datasets/Youmiel/FreePD-Data · CC0 1.0 Universal: https://creativecommons.org/publicdomain/zero/1.0/ · bearbeitet: Schnitt, Schleife, Pegel",
+      "attribution": "„Cornfield Chase“ – Rafael Krux · https://huggingface.co/datasets/Youmiel/FreePD-Data/blob/main/pieces.csv#L83 · CC0 1.0 Universal: https://creativecommons.org/publicdomain/zero/1.0/ · bearbeitet: Schnitt, Schleife, Pegel",
       "file": "critical.m4a",
       "ms": 67830,
       "startMs": 0,

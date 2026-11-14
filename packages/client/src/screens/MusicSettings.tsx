@@ -1,13 +1,15 @@
-import { useState, useSyncExternalStore } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import { changeSettings, getSettings, useSettings } from '../settings.js';
 import {
   chosenFor,
+  entryOf,
   installedPacks,
   packFor,
   type MusicChoice,
 } from '../world/musicPacks.js';
 import { previewing, subscribePreview, togglePreview } from '../world/musicPreview.js';
 import { SLOTS, type PackFile, type Slot } from '../world/packFile.js';
+import { musicListed } from '../world/samples.js';
 import { Icon } from './Icon.js';
 import { linked } from './linked.js';
 
@@ -17,9 +19,11 @@ import { linked } from './linked.js';
  * lobby on the next bar, in a run at the stems' next loop point (world/musicPacks.ts); „Feinwahl",
  * for each place of the music the piece of any pack, the pack's own unless another is picked; a
  * ▶ beside each piece plays it here, the music under it pulled down, until it ends, another is
- * played, its ▶ is pressed again or the settings close (world/musicPreview.ts); and „Nennungen",
- * every piece in play with its attribution as its licence wants it, its addresses linked. The
- * choice is kept on this device (settings.ts `music`) and the tab's „Zurücksetzen" puts it back.
+ * played, its ▶ is pressed again or the settings close (world/musicPreview.ts) — none beside a
+ * piece of the score that awaits its render; and „Nennungen", every piece in play with its
+ * attribution as its licence wants it, its addresses linked — what plays in a place whose piece
+ * awaits its render is named in another's, or is the game's own. The choice is kept on this device
+ * (settings.ts `music`) and the tab's „Zurücksetzen" puts it back.
  */
 
 /** What each place of the music is called here. */
@@ -55,6 +59,23 @@ function usePreviewing(): string | null {
   return useSyncExternalStore(subscribePreview, previewing, previewing);
 }
 
+/**
+ * The block drawn anew once the music's list is here: from then on it is known which pieces of
+ * the score have a recording, to be played and named, and which await their render.
+ */
+function useMusicListed(): void {
+  const [, setListed] = useState(false);
+  useEffect(() => {
+    let live = true;
+    void musicListed().then(() => {
+      if (live) setListed(true);
+    });
+    return () => {
+      live = false;
+    };
+  }, []);
+}
+
 /** The packs, one to press, the one in force lit: its name, its composers below it. */
 function PackPicker({ packs, chosen }: { packs: readonly PackFile[]; chosen: MusicChoice }) {
   return (
@@ -80,8 +101,17 @@ function PackPicker({ packs, chosen }: { packs: readonly PackFile[]; chosen: Mus
   );
 }
 
+/** What the ▶ beside a piece plays: the piece of `slot` in `pack`, called `title`. */
+interface Playable {
+  readonly pack: string;
+  readonly slot: Slot;
+  readonly title: string;
+  /** whether it has a recording to play: none where a piece of the score awaits its render */
+  readonly had: boolean;
+}
+
 /** The ▶ beside a piece: it plays the piece for the ear, or stops it where it plays. */
-function PlayButton({ pack, slot, title }: { pack: string; slot: Slot; title: string }) {
+function PlayButton({ pack, slot, title, had }: Playable) {
   const playing = usePreviewing() === `${pack}/${slot}`;
   return (
     <button
@@ -89,6 +119,7 @@ function PlayButton({ pack, slot, title }: { pack: string; slot: Slot; title: st
       className="music-play"
       aria-pressed={playing}
       aria-label={playing ? `${title} anhalten` : `${title} anhören`}
+      disabled={!had}
       onClick={() => togglePreview(pack, slot)}
     >
       <Icon name={playing ? 'pause' : 'play'} />
@@ -120,7 +151,12 @@ export function SlotPicker(props: { slot: Slot; packs: readonly PackFile[]; chos
               >
                 {`${piece.title} · ${piece.author} · ${pack.title}${own}`}
               </button>
-              <PlayButton pack={pack.id} slot={slot} title={piece.title} />
+              <PlayButton
+                pack={pack.id}
+                slot={slot}
+                title={piece.title}
+                had={entryOf(pack.id, piece) !== null}
+              />
             </div>
           );
         })}
@@ -129,16 +165,23 @@ export function SlotPicker(props: { slot: Slot; packs: readonly PackFile[]; chos
   );
 }
 
-/** „Nennungen": every piece in play, with its place and its attribution. */
+/**
+ * „Nennungen": every piece in play, with its place and its attribution — none for a place whose
+ * piece of the score awaits its render, where another's plays or none.
+ */
 function Credits({ chosen }: { chosen: MusicChoice }) {
+  const playing = SLOTS.flatMap((slot) => {
+    const { piece, entry } = chosenFor(slot, chosen);
+    return entry === null ? [] : [{ slot, piece }];
+  });
   return (
     <div className="music-credits">
       <h3 className="music-credits-head">Nennungen</h3>
       <ul>
-        {SLOTS.map((slot) => (
+        {playing.map(({ slot, piece }) => (
           <li key={slot} data-credit={slot}>
             <span className="music-credit-slot">{SLOT_NAMES[slot]}</span>
-            <span className="music-credit-text">{linked(chosenFor(slot, chosen).piece.attribution)}</span>
+            <span className="music-credit-text">{linked(piece.attribution)}</span>
           </li>
         ))}
       </ul>
@@ -150,6 +193,7 @@ function Credits({ chosen }: { chosen: MusicChoice }) {
 export function MusicSettings() {
   const { music } = useSettings();
   const [fine, setFine] = useState(false);
+  useMusicListed();
   const packs = installedPacks();
   return (
     <fieldset className="settings-group settings-music">

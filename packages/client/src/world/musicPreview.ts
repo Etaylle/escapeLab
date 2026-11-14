@@ -11,8 +11,9 @@ import { MUSIC_BASE, musicListed } from './samples.js';
  * MusicSettings.tsx), the ▶ beside it — streamed from where its sound starts, at the stems' level
  * by its gain, on the preview's bus at the Musik volume (mix.ts), the music playing pulled down
  * under it as long as it plays. One at a time: another piece played stops it, and so does its
- * own ▶ pressed again, its end, or the settings closing (`stopPreview`). The press is the
- * gesture the browser wants: the context is made or woken within it. Nothing here throws.
+ * own ▶ pressed again, its end, its file failing or stalling, or the settings closing
+ * (`stopPreview`). The press is the gesture the browser wants: the context is made or woken
+ * within it. Nothing here throws.
  */
 
 /** How long a piece played for the ear takes to go when it is stopped, s. */
@@ -111,8 +112,12 @@ function play(engine: Engine, key: string, pack: string, slot: Slot): void {
   duck(engine, 'preview', now, Infinity, now);
   const mine: Playing = { key, engine, stream };
   playing = mine;
-  stream.element.addEventListener('ended', () => playing === mine && stopPreview(), {
-    once: true,
-  });
+  // Its end stops it, and so does a file that fails or stalls: the music comes back up.
+  const over = (): void => {
+    if (playing === mine) stopPreview();
+  };
+  for (const type of ['ended', 'error', 'stalled']) {
+    stream.element.addEventListener(type, over, { once: true });
+  }
   told();
 }

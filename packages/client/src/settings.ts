@@ -29,8 +29,7 @@ import { SLOTS, type Slot } from './world/packFile.js';
  * music. They are kept in the browser's storage and act where they belong: on the audio's buses
  * (world/audio.ts), on the music (world/musicPacks.ts), on the keys the world, the screens and
  * the voice listen for and the prompts name (input/), on the light (world/gl/path.ts), and on the
- * page's
- * root — the text's scale as `--text-scale`, which the HUD, the book, the devices and the
+ * page's root — the text's scale as `--text-scale`, which the HUD, the book, the devices and the
  * notepad set their text by, the spoken lines' as `--subtitle-scale`, the motion as
  * `data-motion`, which every sheet's calmer rules hang on, and the patterns as `data-patterns`.
  * „System" motion follows the browser's own `prefers-reduced-motion`, live. The whole lab's mute

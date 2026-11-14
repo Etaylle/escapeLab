@@ -306,12 +306,12 @@ selbst, wie die CI, und probt mitten in einem Einsatz den Neustart: SIGTERM, die
 neunzehn Gruppen (`tools/groups.mjs`); `SHOTS_ONLY=screens,intro` spielt nur diese,
 `SHOTS_SKIP=perf` alle außer diesen — der schnelle Beweis eines Teils. Vor dem Rundgang laufen die
 Proben, jede in einem Raum für sich: `editor`, `art`, `drones` (Gefahrensinn und eine Drohne aus der
-Nähe), `reconnect`, `restart`, `three` (Blackout zu dritt bis zur Signalkette, die Zielzeile mit
+Nähe), `reconnect`, `restart` und `three` (Blackout zu dritt bis zur Signalkette, die Zielzeile mit
 jeder Hand: `three-lever`, `three-plate`, `three-hands`, `three-reader`, `three-phone-932`; der
-Systemcheck nennt sie im Log als ausgelassen) und `music` (die Musikpakete in den Einstellungen auf
-einer eigenen Menüseite: ein anderes Paket hörbar, Vorhören, nach dem Neuladen behalten) — im
-Systemcheck dazu die Probe des Serverraums, die zu `devices` gehört, die der Zugangskontrolle,
-`access`, und `hall` (die Übungshalle bis zur Siegerkarte); Blackout nennt alle drei im Log als
+Systemcheck nennt sie im Log als ausgelassen) — im Systemcheck dazu die Probe des Serverraums, die
+zu `devices` gehört, die der Zugangskontrolle, `access`, `hall` (die Übungshalle bis zur
+Siegerkarte) und `music` (die Musikpakete in den Einstellungen auf einer eigenen Menüseite: ein
+anderes Paket hörbar, Vorhören, nach dem Neuladen behalten); Blackout nennt alle vier im Log als
 ausgelassen. Der Rundgang selbst: `screens` (Menü und sein Ton, Bestenliste, Lobby, der Start aus
 ihr), `intro` (die Eröffnung bis `blackout.png`) und `run` (die Mission bis zur Siegerkarte, nach
 dem gewonnenen Systemcheck die Einsätze des Kontos und sein Löschen); im Lauf `devices` (jede
@@ -333,8 +333,8 @@ Notizblock von `reading` auslöst, und der Info-Knopf von `hud` nach einem unter
 Schild, ebenfalls `reading`, wo niemand am Schild startet. Ohne beide Variablen spielt er alles wie
 bisher; die Zusammenfassung nennt die gespielten Gruppen, die Zeile `groups` davor die Sekunden
 jeder Gruppe — was ihre eigenen Schritte brauchten, bei `run` mit allen Wegen und Lösungen der
-Mission. Ein voller Blackout-Rundgang dauerte auf einem M4 mit 16 GB (14.11.2026, Last 9
-bis 17) 772 s:
+Mission. Ein voller Blackout-Rundgang dauerte auf einem M4 mit 16 GB (14.11.2026, Last 9 bis 17)
+772 s:
 
 | Gruppe | s | Gruppe | s | Gruppe | s |
 | --- | --- | --- | --- | --- | --- |
@@ -346,8 +346,8 @@ bis 17) 772 s:
 | `three` | 92,5 | | | `perf` | 22,8 |
 
 `three` kam danach dazu (M-three): 92,5 s im vollen Rundgang desselben Tages bei Last 7 bis 31,
-75 bis 91 s allein mit `SHOTS_ONLY=three`. `music` (M-packs): 9,7 s allein mit `SHOTS_ONLY=music`
-bei Last um 20.
+75 bis 91 s allein mit `SHOTS_ONLY=three`. `music` (M-packs) spielt nur im Systemcheck: 4,9 s im CI,
+9,7 s allein mit `SHOTS_ONLY=music` bei Last um 20.
 
 `SHOTS_ONLY=screens,intro` spielte Blackout in 48 s; jede Gruppe im Lauf zieht die Mission bis
 zur Siegerkarte mit, und `SHOTS_ONLY=run` allein dauerte 262 s (den Systemcheck 85 s). Die

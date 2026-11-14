@@ -14509,6 +14509,18 @@ const SCORE_PACK = 'nachtschicht';
 /** How far the music has to stand under a piece played for the ear: its 24 dB, 4 dB to spare. */
 const PREVIEW_DUCKED = 10 ** (-20 / 20);
 
+/** The places of the music a pack fills, by the music's ids for them (client packFile.ts). */
+const MUSIC_PLACES = [
+  'menu-theme',
+  'lobby',
+  'title',
+  'calm',
+  'tense',
+  'critical',
+  'end-won',
+  'end-lost',
+];
+
 /** In the page: the packs „Musik" lists, in their order — each one's id, and whether it is lit. */
 const packsListed = () =>
   [...document.querySelectorAll('.settings-music .music-pack')].map((button) => ({
@@ -14557,10 +14569,11 @@ async function wakeMenuSound(page, heard) {
 
 /**
  * settings-music.png: the settings opened on „Ton" over the menu, scrolled to „Musik" — the packs
- * shipped, the score's lit, the Feinwahl's button and the Nennungen of the eight pieces in play.
- * Returns the packs listed (`packsListed`) and what was wrong.
+ * shipped, the score's lit, the Feinwahl's button and the Nennungen of the score's pieces in play:
+ * those the music's manifest (`list`) has a recording of. Returns the packs listed (`packsListed`)
+ * and what was wrong.
  */
-async function musicBlockShot(page) {
+async function musicBlockShot(page, list) {
   if (!(await settled(openSettings(page, 'ton')))) {
     return { packs: [], wrong: ['the gear opened no settings'] };
   }
@@ -14575,10 +14588,11 @@ async function musicBlockShot(page) {
     `settings-music.png ${packs.length} packs (${packs.map((pack) => pack.id).join(', ')}), ` +
       `${lit || '!! none'} lit; ${credits} Nennungen`,
   );
+  const playing = MUSIC_PLACES.filter((place) => list[place] !== undefined).length;
   const wrong = wrongOf([
     [packs.length < 2, `${packs.length} packs listed`],
     [lit !== SCORE_PACK, `${lit || 'none'} lit, not the score`],
-    [credits !== 8, `${credits} Nennungen, not the eight pieces in play`],
+    [credits !== playing, `${credits} Nennungen, not the ${playing} pieces in play`],
   ]);
   return { packs, wrong };
 }
@@ -14725,8 +14739,8 @@ async function musicReset(page, listed) {
 
 /**
  * The music packs (client screens/MusicSettings.tsx, world/musicPacks.ts), a drill on a menu page
- * of its own: a key wakes the menu's sound, the score's theme sounding where the music's manifest
- * lists it; the settings on „Ton", scrolled to „Musik" (settings-music.png, `musicBlockShot`);
+ * of its own, in a Systemcheck run — Blackout's skips it, for it needs no mission: a key wakes the
+ * menu's sound, the score's theme sounding where the music's manifest lists it; the settings on „Ton", scrolled to „Musik" (settings-music.png, `musicBlockShot`);
  * another pack pressed sounds at once (`packSwitch`); a ▶ in the Feinwahl plays its piece over the
  * music pulled down (`previewDucks`); on a phone held sideways the block fits (`musicOnPhone`); Esc
  * stops the piece with the settings (`previewStops`); the pack picked plays again after a reload
@@ -14734,18 +14748,24 @@ async function musicReset(page, listed) {
  * of it is not so.
  */
 async function captureMusicPacks() {
+  if (MISSION.toLowerCase() === 'blackout') {
+    const why = 'the music packs need no mission: their drill plays in a Systemcheck run';
+    skip('settings-music.png', why);
+    return;
+  }
   const context = await browser.newContext({ viewport: SIZES[0] });
   try {
     const page = await openPage(context, 'music');
     page.on('pageerror', (e) => console.log('[music error]', e.message));
     await page.goto(traced(BASE));
     await page.locator('.menu-item').first().waitFor({ timeout: 10_000 });
-    const listed = (await musicListOf(page))['menu-theme'] !== undefined;
+    const list = await musicListOf(page);
+    const listed = list['menu-theme'] !== undefined;
     const first = await wakeMenuSound(page, (probe) => !listed || probe.theme);
     const wrong = wrongOf([
       [listed && first.pack !== SCORE_PACK, `the menu began with ${first.pack ?? 'nothing'}`],
     ]);
-    const shot = await musicBlockShot(page);
+    const shot = await musicBlockShot(page, list);
     wrong.push(...shot.wrong);
     const { picked, wrong: switched } = await packSwitch(page, shot.packs);
     wrong.push(...switched);
