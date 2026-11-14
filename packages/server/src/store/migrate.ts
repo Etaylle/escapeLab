@@ -4,7 +4,9 @@ import { fileURLToPath } from 'node:url';
 /**
  * The database's migrations, applied by the server itself before it opens the store (store.ts
  * `readyStore`): a Start Command that starts `node` straight, as Render's does, runs no script
- * before it, so the server runs the server package's Prisma CLI as the start script would.
+ * before it, so the server runs the server package's Prisma CLI — the only one to run it as the
+ * server starts: `pnpm run start` runs none before it, for Prisma's own lines name the database's
+ * host, and the server's log never does (`shownLines`).
  */
 
 /** The server package, where the Prisma CLI finds the schema and the migrations. */
@@ -55,15 +57,29 @@ export function defaultDirectUrl(env: NodeJS.ProcessEnv): void {
 const DATABASE_URL_SHAPE = /\b(?:postgres(?:ql)?|prisma(?:\+postgres)?):\/\/\S+/gi;
 
 /**
+ * The database server as Prisma's connection errors name it — P1000 to P1003, „… database
+ * server at `host:5432`", P1002's „at `host`:`5432`" — which the log never shows.
+ */
+const SERVER_SHAPE = /\bat `[^`]*`(?::`[^`]*`)?/g;
+
+/** The database user as Prisma's errors name it — P1000's credentials, P1010's denial. */
+const USER_SHAPE = /\b(credentials for|User) `[^`]*`/g;
+
+/**
  * What the CLI said, line by line, as the log may show it: no empty line, not the line naming
- * the datasource's database and host, and no database URL.
+ * the datasource's database and host, and no database URL, server or user.
  */
 export function shownLines(output: string): string[] {
   return output
     .split('\n')
     .map((line) => line.trim())
     .filter((line) => line !== '' && !line.startsWith('Datasource '))
-    .map((line) => line.replace(DATABASE_URL_SHAPE, '<database URL>'));
+    .map((line) =>
+      line
+        .replace(DATABASE_URL_SHAPE, '<database URL>')
+        .replace(SERVER_SHAPE, 'at `<host>`')
+        .replace(USER_SHAPE, '$1 `<user>`'),
+    );
 }
 
 /**

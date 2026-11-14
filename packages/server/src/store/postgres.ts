@@ -366,7 +366,7 @@ export class PostgresStore implements Store {
       await clients.close();
       throw new Error(
         `the database's runs cannot be read: ${oneLine(err)} — are its migrations applied? ` +
-          '(pnpm --filter @escapelab/server prisma migrate deploy, as the start script does)',
+          '(pnpm --filter @escapelab/server prisma migrate deploy, as the server runs it)',
       );
     }
     return store;
