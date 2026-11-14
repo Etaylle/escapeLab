@@ -5,6 +5,7 @@ import {
   inService,
   parseMission,
   radioLines,
+  shownText,
   variantsOf,
   type Line,
   type Mission,
@@ -120,7 +121,9 @@ describe('the lines the page offers', () => {
       })),
     );
     // Every text of a line is a line to record: the start's three, in their order.
-    const texts = (line: Line | undefined): readonly string[] => variantsOf(line ?? '');
+    // As the page shows them: a line's audio tags are its recording's alone.
+    const texts = (line: Line | undefined): readonly string[] =>
+      variantsOf(line ?? '').map(shownText);
     const of = (when: string): string[] =>
       lines.filter((line) => line.when === when).map((line) => line.text);
     expect(of('start')).toEqual(texts(blackout.radio.start));

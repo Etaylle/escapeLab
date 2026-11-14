@@ -6,6 +6,7 @@ import {
   parseMission,
   PA_LINES_MAX,
   radioLines,
+  shownText,
   variantsOf,
   WON_BANDS,
   type Line,
@@ -580,7 +581,9 @@ describe('the lines a mission can put on the air', () => {
     const plant = { puzzleId: null, role: 'pa', mood: null };
     const operator = { puzzleId: null, role: 'operator', mood: null };
     expect(lines[0]).toEqual({ ...plant, text: blackout.intro?.pa[0], when: 'pa' });
-    const first = (line: Line | undefined): string | undefined => variantsOf(line ?? [])[0];
+    // As a run shows them: a line's audio tags are its recording's alone.
+    const first = (line: Line | undefined): string | undefined =>
+      variantsOf(line ?? []).map(shownText)[0];
     expect(lines[pa.length]).toEqual({ ...operator, text: first(radio.start), when: 'start' });
     const out = lines.findIndex((line) => line.when === 'escape');
     expect(lines[out]).toEqual({ ...operator, text: first(radio.escape), when: 'escape' });
@@ -588,9 +591,9 @@ describe('the lines a mission can put on the air', () => {
     const announced = lines.findIndex((line) => line.when === 'announce');
     expect(lines[announced]).toEqual({ ...plant, text: announce, when: 'announce' });
     // Last the lobby's Funkprobe, before a run, said calm; the last word on a lost run before it.
-    const probes = variantsOf(radio.lobby ?? []);
+    const probes = variantsOf(radio.lobby ?? []).map(shownText);
     expect(probes).toHaveLength(3);
-    const last = variantsOf(radio.lost?.abandoned ?? []).at(-1);
+    const last = variantsOf(radio.lost?.abandoned ?? []).map(shownText).at(-1);
     const lost = { ...operator, role: 'lead', text: last, when: 'lost', mood: 'quiet' };
     expect(lines.at(-1 - probes.length)).toEqual(lost);
     const probe = { ...operator, text: probes.at(-1), when: 'lobby', mood: 'calm' };
@@ -599,7 +602,11 @@ describe('the lines a mission can put on the air', () => {
     const at = { puzzleId: station?.id, role: 'operator', mood: null };
     const starts = variantsOf(radio.start ?? []).length;
     expect(lines.slice(pa.length + starts, pa.length + starts + 2)).toEqual(
-      variantsOf(station?.nudges[0] ?? []).map((text) => ({ ...at, text, when: 'nudge' })),
+      variantsOf(station?.nudges[0] ?? []).map((text) => ({
+        ...at,
+        text: shownText(text),
+        when: 'nudge',
+      })),
     );
   });
 
