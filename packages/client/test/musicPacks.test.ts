@@ -107,6 +107,10 @@ describe('the packs shipped', () => {
     for (const pack of found) {
       const dir = `${PACKS_DIR}${pack.id}/`;
       const named = piecesOf(pack).map(([, piece]) => piece.file);
+      // Each piece says what its file was made from: the script makes no file anew for nothing.
+      expect(piecesOf(pack).map(([, piece]) => piece.build), pack.id).toEqual(
+        new Array(8).fill(expect.stringMatching(/^[0-9a-f]{16}$/)),
+      );
       expect(readdirSync(dir).sort(), pack.id).toEqual([...named].sort());
       const bytes = named.reduce((sum, file) => sum + statSync(`${dir}${file}`).size, 0);
       expect(bytes, pack.id).toBeLessThanOrEqual(PACK_CAP);

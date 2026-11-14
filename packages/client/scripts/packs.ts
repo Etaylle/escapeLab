@@ -5,6 +5,7 @@
  *   pnpm --filter @escapelab/client packs                    every pack of the plan
  *   pnpm --filter @escapelab/client packs -- --dry-run        what it would fetch, and from where
  *   pnpm --filter @escapelab/client packs -- --only macleod   that pack alone (a list: a,b)
+ *   pnpm --filter @escapelab/client packs -- --force          every piece made anew
  *
  * audio/packs.plan.json names each pack — its id, its name in the world's voice, its composers —
  * and for each of the music's eight places (src/world/packFile.ts SLOTS) one piece: where its file
@@ -19,11 +20,15 @@
  * public/music/packs/<pack>/<slot>.m4a and measures it as encoded — its length, where its sound
  * starts, its loudness as BS.1770 has it (pcm.ts `lufsOf`) and the gain that brings it to the
  * score's −19 LUFS (sfx.ts SUITE_TARGET); and writes audio/packs/<pack>/pack.json, the attribution
- * each licence wants with every piece, and prints the attribution block. A pack is built whole or
- * not at all: its pieces are encoded as parts, then moved in together; a pack that misses a piece —
- * a fetch that failed, a manual file not there yet, a rule the plan breaks — or passes PACK_CAP is
- * said with what to do, and the run goes on with the next and fails at its end. Nothing is ever
- * skipped in silence, and nothing here asks a paid service for anything.
+ * each licence wants with every piece, and prints the attribution block. A piece whose file was
+ * made from what the plan says of its sound now and from the same source (its `build` hash) is kept
+ * as it is, its credit taken anew from the plan; only the rest is made anew — or every piece, with
+ * --force — and an encode of the same PCM comes out as the same bytes (mp4.ts), so that git keeps
+ * nothing new for a file nothing changed. A pack is built whole or not at all: its pieces are
+ * encoded as parts, then moved in together; a pack that misses a piece — a fetch that failed, a
+ * manual file not there yet, a rule the plan breaks — or passes PACK_CAP is said with what to do,
+ * and the run goes on with the next and fails at its end. Nothing is ever skipped in silence, and
+ * nothing here asks a paid service for anything.
  *
  * The game's own score is the pack `nachtschicht`, which the sound script keeps (sfx.ts
  * `--keep score=<n>`); its pack.json names the music's manifest and is not built here.
@@ -56,6 +61,7 @@ import {
   ONCE_SECONDS,
   playedOnce,
   SLOTS,
+  type Credit,
   type Crossfade,
   type FoundPiece,
   type Licence,
@@ -191,19 +197,21 @@ export interface Options {
   readonly dryRun: boolean;
   /** the packs to build; every one of the plan where empty */
   readonly only: readonly string[];
+  /** every piece made anew, whether what it is made from changed or not */
+  readonly force: boolean;
 }
 
-/** The options `args` give: --dry-run, --only a,b. */
+/** The options `args` give: --dry-run, --only a,b, --force. */
 export function optionsOf(args: readonly string[]): Options {
   const only: string[] = [];
-  let dryRun = false;
+  const flags = new Set<string>();
   for (let i = 0; i < args.length; i++) {
-    const arg = args[i];
-    if (arg === '--dry-run') dryRun = true;
+    const arg = args[i] ?? '';
+    if (arg === '--dry-run' || arg === '--force') flags.add(arg);
     else if (arg === '--only') only.push(...(args[++i] ?? '').split(',').filter(Boolean));
-    else throw new Error(`packs: no such option ${arg ?? ''} — --dry-run, --only <pack,…>`);
+    else throw new Error(`packs: no such option ${arg} — --dry-run, --only <pack,…>, --force`);
   }
-  return { dryRun, only };
+  return { dryRun: flags.has('--dry-run'), only, force: flags.has('--force') };
 }
 
 // --- the plan -------------------------------------------------------------------------------
@@ -422,13 +430,51 @@ export async function haveSource(source: Source, takes: string, get: Bench['get'
   return { path, fetched: true };
 }
 
+// --- what a piece is made from --------------------------------------------------------------
+
+/** What the script makes every piece by, beside its plan: when one changes, so may its file. */
+const BUILD_SETTINGS = {
+  bitrate: PACK_BITRATE,
+  edgeMs: EDGE_MS,
+  lufs: TARGET_LUFS,
+  leadMs: LEAD_MS,
+  tailMs: TAIL_MS,
+  leadKeptMs: LEAD_KEPT_MS,
+} as const;
+
+/** `value` as JSON, every object's keys in order: the same for the same data, however written. */
+function canonical(value: unknown): string {
+  return JSON.stringify(value, (_key, entry: unknown) =>
+    entry !== null && typeof entry === 'object' && !Array.isArray(entry)
+      ? Object.fromEntries(Object.entries(entry).sort(([a], [b]) => (a < b ? -1 : 1)))
+      : entry,
+  );
+}
+
+/**
+ * What a piece's file is made from, hashed: what `piece`'s plan says of its sound — its span, its
+ * loop, its fades — the settings the script makes it by, and its source's bytes. Its credit is no
+ * part of it: a title, an author or a licence corrected changes pack.json, never the file.
+ */
+export function buildHashOf(piece: PlanPiece, source: Uint8Array): string {
+  const { trim, loop = null, fades = null } = piece;
+  const said = canonical({ trim, loop, fades, settings: BUILD_SETTINGS });
+  return createHash('sha1').update(said).update(source).digest('hex').slice(0, 16);
+}
+
+/** The credit `piece` carries into pack.json: its title, author, page, licence and attribution. */
+function creditOf(piece: PlanPiece): Credit {
+  const { title, author, page: source, licence } = piece;
+  return { title, author, source, licence, attribution: attributionOf(piece) };
+}
+
 // --- building a piece -----------------------------------------------------------------------
 
 /** How a piece measured once encoded, and how it loops. */
 export interface Built {
   readonly piece: FoundPiece;
-  /** where its part lies until the pack moves in */
-  readonly part: string;
+  /** where its part lies until the pack moves in; null for a piece kept as it was */
+  readonly part: string | null;
   /** how alike a crossfade's two sides sound, as seam.ts scores it; null without one */
   readonly seam: number | null;
 }
@@ -491,17 +537,19 @@ function cutOf(plan: PlanPiece, pcm: Pcm): Pcm {
   return fadedOf(span, plan.fades?.inMs ?? 0, plan.fades?.outMs ?? 0);
 }
 
+/** What a piece is built into: the place it fills, its part's path, and its build hash. */
+interface Making {
+  readonly slot: Slot;
+  readonly part: string;
+  readonly build: string;
+}
+
 /**
- * `plan`'s piece for `slot` from its decoded file `pcm`: its span cut out, its seam found, encoded
- * into `part` and measured as encoded.
+ * `plan`'s piece from its decoded file `pcm`, as `making` says: its span cut out, its seam found,
+ * encoded into its part and measured as encoded.
  */
-export function buildPiece(
-  slot: Slot,
-  plan: PlanPiece,
-  pcm: Pcm,
-  part: string,
-  bench: Bench,
-): Built {
+export function buildPiece(plan: PlanPiece, pcm: Pcm, making: Making, bench: Bench): Built {
+  const { slot, part, build } = making;
   const cut = cutOf(plan, pcm);
   const { loop, seam, span: [from, to] } = keptOf(plan, cut);
   bench.encode(sliceOf(cut, from, to, EDGE_MS), part);
@@ -510,29 +558,30 @@ export function buildPiece(
   const loudness = lufsOf(encoded);
   const startMs = loop === null && measured.leadMs > LEAD_MS ? Math.floor(measured.leadMs) : 0;
   const piece: FoundPiece = {
-    title: plan.title,
-    author: plan.author,
-    source: plan.page,
-    licence: plan.licence,
-    attribution: attributionOf(plan),
+    ...creditOf(plan),
     file: `${slot}.m4a`,
     ms: measured.ms,
     startMs,
     loudness: Number(loudness.toFixed(2)),
     gain: gainTo(loudness),
     loop,
+    build,
   };
   return { piece, part, seam };
 }
 
 // --- building a pack ------------------------------------------------------------------------
 
-/** A pack built: its pack.json, the bytes its files take, and how alike each seam sounds. */
+/**
+ * A pack built: its pack.json, the bytes its files take, how alike each seam made anew sounds, and
+ * the places whose pieces were kept as they were.
+ */
 export interface Made {
   readonly id: string;
   readonly built: PackFile;
   readonly bytes: number;
   readonly seams: Readonly<Partial<Record<Slot, number>>>;
+  readonly kept: readonly Slot[];
 }
 
 /** A pack as a run left it: built, or refused with why, a line each. */
@@ -553,31 +602,66 @@ async function sourcesOf(
   return { paths, missing };
 }
 
-/** `pack`'s piece for `slot` decoded from `path` and built into a part in `dir`, or why not. */
-function partOf(pack: PlanPack, slot: Slot, path: string, dir: string, bench: Bench): Built {
-  const part = join(dir, `${slot}.part.m4a`);
+/**
+ * What a run builds a pack with: the pack, the folder its files go into, the bench, and the
+ * pieces its pack.json held before — none where the run makes every piece anew.
+ */
+interface Job {
+  readonly pack: PlanPack;
+  readonly dir: string;
+  readonly bench: Bench;
+  readonly before: Readonly<Partial<Record<Slot, FoundPiece>>>;
+}
+
+/** The found pieces of the pack `id` as its pack.json holds them; none where it has none. */
+function piecesBefore(places: Places, id: string): Partial<Record<Slot, FoundPiece>> {
+  const path = join(places.packs, id, 'pack.json');
+  if (!existsSync(path)) return {};
+  const file = JSON.parse(readFileSync(path, 'utf8')) as PackFile;
+  return Object.fromEntries(
+    Object.entries(file.pieces).filter(([, piece]) => 'file' in piece),
+  ) as Partial<Record<Slot, FoundPiece>>;
+}
+
+/** The piece of `slot` decoded from `path` and built into a part, as `making` says; or why not. */
+function partOf(job: Job, path: string, making: Making): Built {
+  const { pack, bench } = job;
   try {
-    return buildPiece(slot, pack.pieces[slot], bench.decode(path), part, bench);
+    return buildPiece(pack.pieces[making.slot], bench.decode(path), making, bench);
   } catch (error) {
-    rmSync(part, { force: true });
+    rmSync(making.part, { force: true });
     const why = error instanceof Error ? error.message : String(error);
-    throw new Error(`${pack.id}/${slot}: ${why}`);
+    throw new Error(`${pack.id}/${making.slot}: ${why}`);
   }
 }
 
-/** Every piece of `pack` built as a part into `dir`; a failure takes every part back. */
-function partsOf(
-  pack: PlanPack,
-  paths: ReadonlyMap<Slot, string>,
-  dir: string,
-  bench: Bench,
-): Built[] {
+/**
+ * The piece of `slot` from its source at `path`: kept as it was where its file is there and was
+ * made from what it would be made from now (`buildHashOf`), its credit taken anew from the plan;
+ * else built into a part.
+ */
+function pieceOf(job: Job, slot: Slot, path: string): Built {
+  const plan = job.pack.pieces[slot];
+  const build = buildHashOf(plan, readFileSync(path));
+  const was = job.before[slot];
+  if (was?.build === build && existsSync(join(job.dir, was.file))) {
+    return { piece: { ...was, ...creditOf(plan) }, part: null, seam: null };
+  }
+  return partOf(job, path, { slot, part: join(job.dir, `${slot}.part.m4a`), build });
+}
+
+/** The parts among `built`: the files made anew, not yet moved in. */
+const partsIn = (built: readonly Built[]): string[] =>
+  built.flatMap(({ part }) => (part === null ? [] : [part]));
+
+/** Every piece of `job`'s pack, kept or built as a part; a failure takes every part back. */
+function partsOf(job: Job, paths: ReadonlyMap<Slot, string>): Built[] {
   const built: Built[] = [];
   try {
-    for (const slot of SLOTS) built.push(partOf(pack, slot, paths.get(slot) ?? '', dir, bench));
+    for (const slot of SLOTS) built.push(pieceOf(job, slot, paths.get(slot) ?? ''));
     return built;
   } catch (error) {
-    for (const { part } of built) rmSync(part, { force: true });
+    for (const part of partsIn(built)) rmSync(part, { force: true });
     throw error;
   }
 }
@@ -595,38 +679,46 @@ const bytesOf = (paths: readonly string[]): number =>
   paths.reduce((sum, path) => sum + statSync(path).size, 0);
 
 /**
- * `pack` built whole: every source had once, every piece cut, encoded and measured as a part,
- * then — within PACK_CAP — moved in together and its pack.json written; else refused, the parts
- * taken back and nothing of the pack changed.
+ * `pack` built whole: every source had once, every piece kept as it was or cut, encoded and
+ * measured as a part — every one anew where `force` says — then, within PACK_CAP, the parts moved
+ * in together and its pack.json written; else refused, the parts taken back and nothing of the
+ * pack changed.
  */
-export async function buildPack(pack: PlanPack, bench: Bench): Promise<Outcome> {
+export async function buildPack(pack: PlanPack, bench: Bench, force = false): Promise<Outcome> {
   const flaws = packFlaws(pack);
   if (flaws.length > 0) return { id: pack.id, refused: flaws };
   const { paths, missing } = await sourcesOf(pack, bench);
   if (missing.length > 0) return { id: pack.id, refused: missing };
   const dir = join(bench.places.music, pack.id);
   mkdirSync(dir, { recursive: true });
+  const before = force ? {} : piecesBefore(bench.places, pack.id);
   let built: Built[];
   try {
-    built = partsOf(pack, paths, dir, bench);
+    built = partsOf({ pack, dir, bench, before }, paths);
   } catch (error) {
     return { id: pack.id, refused: [error instanceof Error ? error.message : String(error)] };
   }
-  const bytes = bytesOf(built.map(({ part }) => part));
+  const bytes = bytesOf(built.map(({ part, piece }) => part ?? join(dir, piece.file)));
   if (bytes > PACK_CAP) {
-    for (const { part } of built) rmSync(part, { force: true });
+    for (const part of partsIn(built)) rmSync(part, { force: true });
     const mb = (bytes / 1024 / 1024).toFixed(1);
     return { id: pack.id, refused: [`${pack.id}: ${mb} MB, over its 9 MB — shorten its loops`] };
   }
-  for (const { part, piece } of built) renameSync(part, join(dir, piece.file));
+  for (const { part, piece } of built) if (part !== null) renameSync(part, join(dir, piece.file));
+  return madeOf(pack, built, bytes, bench.places);
+}
+
+/** `pack` as `built`, `bytes` in all: its pack.json written, and what the run says of it. */
+function madeOf(pack: PlanPack, built: readonly Built[], bytes: number, places: Places): Made {
   const file = packFileOf(pack, built);
-  const home = join(bench.places.packs, pack.id);
+  const home = join(places.packs, pack.id);
   mkdirSync(home, { recursive: true });
   writeFileSync(join(home, 'pack.json'), `${JSON.stringify(file, null, 2)}\n`);
   const seams = Object.fromEntries(
     built.flatMap(({ seam }, i) => (seam === null ? [] : [[SLOTS[i], seam]])),
   );
-  return { id: pack.id, built: file, bytes, seams };
+  const kept = SLOTS.filter((_, i) => built[i]?.part === null);
+  return { id: pack.id, built: file, bytes, seams, kept };
 }
 
 // --- what a run says ------------------------------------------------------------------------
@@ -656,12 +748,16 @@ function pieceLine(slot: Slot, piece: FoundPiece, seam: number | undefined): str
   return `  ${slot}  ${credit}: ${seconds(piece.ms)} s, ${level}, ${loopSaid(piece.loop, seam)}`;
 }
 
-/** What a run says of a pack it built: a line each piece, and its size. */
-export function builtLines({ built, bytes, seams }: Made): string[] {
+/** What a run says of a pack it built: its size, a line each piece, those kept as they were. */
+export function builtLines({ built, bytes, seams, kept }: Made): string[] {
   const kb = (bytes / 1024).toFixed(0);
+  const same = kept.length === 0 ? '' : `, ${kept.length} of 8 pieces kept as they were`;
   return [
-    `packs: ${built.id} built, ${kb} kB in public/music/packs/${built.id}/`,
-    ...SLOTS.map((slot) => pieceLine(slot, built.pieces[slot] as FoundPiece, seams[slot])),
+    `packs: ${built.id} built, ${kb} kB in public/music/packs/${built.id}/${same}`,
+    ...SLOTS.map((slot) => {
+      const line = pieceLine(slot, built.pieces[slot] as FoundPiece, seams[slot]);
+      return kept.includes(slot) ? `${line}, kept` : line;
+    }),
   ];
 }
 
@@ -702,7 +798,7 @@ export async function runWith(options: Options, plan: Plan, bench: Bench): Promi
   }
   const outcomes: Outcome[] = [];
   for (const pack of asked) {
-    const outcome = await buildPack(pack, bench);
+    const outcome = await buildPack(pack, bench, options.force);
     outcomes.push(outcome);
     sayOutcome(outcome);
   }

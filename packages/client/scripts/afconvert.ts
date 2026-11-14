@@ -1,14 +1,16 @@
 /**
  * The Mac's own converter, as the sound script (sfx.ts) and the pack script (packs.ts) use it: a
- * recording decoded into PCM through a WAV in a scratch folder, and PCM encoded as AAC in an .m4a.
- * afconvert comes with macOS and reads MP3, AAC, WAV, AIFF, FLAC and Ogg Vorbis; nothing is
- * installed for it.
+ * recording decoded into PCM through a WAV in a scratch folder, and PCM encoded as AAC in an .m4a,
+ * the times afconvert stamps into it set to zero (mp4.ts), so that the same PCM always comes out
+ * as the same bytes. afconvert comes with macOS and reads MP3, AAC, WAV, AIFF, FLAC and Ogg Vorbis;
+ * nothing is installed for it.
  *
  * Runs on Node's own TypeScript, as the scripts do: it imports nothing of the app.
  */
 import { execFileSync } from 'node:child_process';
 import { readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { timeless } from './mp4.ts';
 import { parseWav, wavBytes, type Pcm } from './pcm.ts';
 
 /** Decodes the recording at a path into PCM. */
@@ -31,7 +33,7 @@ export function afconvertIn(scratch: string): Decode {
 
 /**
  * Encodes with afconvert, the PCM written as a WAV into `scratch` first: AAC in an .m4a at
- * `bitrate`, bit/s, at the encoder's best quality.
+ * `bitrate`, bit/s, at the encoder's best quality, the moment of its encoding left out.
  */
 export function afconvertOut(scratch: string, bitrate: number): Encode {
   return (pcm, path) => {
@@ -40,6 +42,7 @@ export function afconvertOut(scratch: string, bitrate: number): Encode {
     try {
       const aac = ['-f', 'm4af', '-d', 'aac', '-b', String(bitrate), '-q', '127'];
       execFileSync('afconvert', [...aac, wav, path]);
+      writeFileSync(path, timeless(readFileSync(path)));
     } finally {
       rmSync(wav, { force: true });
     }

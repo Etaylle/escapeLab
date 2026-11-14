@@ -99,7 +99,9 @@ export interface Credit {
 /**
  * A piece found and built by the pack script: its file in the pack's folder, how long it lasts and
  * where its sound starts, ms, its loudness before the gain, LUFS, the gain that brings it to the
- * score's, and how it loops — null for a piece played once.
+ * score's, how it loops — null for a piece played once — and what its file was made from, hashed
+ * (`build`): what the plan says of its sound and its source's bytes, so that the script makes the
+ * file anew only where either changed.
  */
 export interface FoundPiece extends Credit {
   readonly file: string;
@@ -108,6 +110,7 @@ export interface FoundPiece extends Credit {
   readonly loudness: number;
   readonly gain: number;
   readonly loop: Loop | null;
+  readonly build: string;
 }
 
 /** A piece of the game's own score, played as the music's manifest lists it under `score`. */

@@ -22,7 +22,8 @@
           "endMs": 73140,
           "fadeMs": 5000
         }
-      }
+      },
+      "build": "83e9779c998f2856"
     },
     "lobby": {
       "title": "One Last Try",
@@ -41,7 +42,8 @@
           "endMs": 72000,
           "fadeMs": 5000
         }
-      }
+      },
+      "build": "7ab9e1eb2ed69fa0"
     },
     "title": {
       "title": "Looking For... Answers",
@@ -54,7 +56,8 @@
       "startMs": 198,
       "loudness": -30.13,
       "gain": 3.6006,
-      "loop": null
+      "loop": null,
+      "build": "0abf461cb4d44330"
     },
     "calm": {
       "title": "Investigation Theme",
@@ -73,7 +76,8 @@
           "endMs": 78500,
           "fadeMs": 3000
         }
-      }
+      },
+      "build": "498714e38cb3783f"
     },
     "tense": {
       "title": "Investigation Theme II (Alternative)",
@@ -92,7 +96,8 @@
           "endMs": 64410,
           "fadeMs": 3000
         }
-      }
+      },
+      "build": "117149e123770f1c"
     },
     "critical": {
       "title": "Continuum",
@@ -111,7 +116,8 @@
           "endMs": 73040,
           "fadeMs": 3000
         }
-      }
+      },
+      "build": "d64183fe735026ae"
     },
     "end-won": {
       "title": "Darkness Falls In",
@@ -124,7 +130,8 @@
       "startMs": 59,
       "loudness": -18.36,
       "gain": 0.9292,
-      "loop": null
+      "loop": null,
+      "build": "1af1cb9e3540af74"
     },
     "end-lost": {
       "title": "Farewell, My Friend",
@@ -137,7 +144,8 @@
       "startMs": 0,
       "loudness": -29.77,
       "gain": 3.4565,
-      "loop": null
+      "loop": null,
+      "build": "83640ff9607e85df"
     }
   }
 }

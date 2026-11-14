@@ -56,6 +56,7 @@ export function foundPack(
     loudness: -20,
     gain: once.has(slot) ? 0.8 : 0.5,
     loop: once.has(slot) ? null : { crossfade: ROUND },
+    build: `${id}-${slot}`,
     ...pieces[slot],
   });
   return {

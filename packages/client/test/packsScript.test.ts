@@ -4,6 +4,7 @@ import {
   mkdtempSync,
   readdirSync,
   readFileSync,
+  rmSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -13,6 +14,7 @@ import { lufsOf, parseWav, wavBytes, type Pcm } from '../scripts/pcm.js';
 import {
   allowedUrl,
   attributionOf,
+  buildHashOf,
   buildPack,
   optionsOf,
   PACK_CAP,
@@ -144,12 +146,14 @@ afterEach(() => {
 });
 
 describe('the command line', () => {
-  it('takes a dry run and the packs to build, and refuses anything else', () => {
-    expect(optionsOf([])).toEqual({ dryRun: false, only: [] });
+  it('takes a dry run, the packs to build and a forced build, and refuses anything else', () => {
+    expect(optionsOf([])).toEqual({ dryRun: false, only: [], force: false });
     expect(optionsOf(['--dry-run', '--only', 'macleod,zhelanov'])).toEqual({
       dryRun: true,
       only: ['macleod', 'zhelanov'],
+      force: false,
     });
+    expect(optionsOf(['--force'])).toMatchObject({ dryRun: false, force: true });
     expect(() => optionsOf(['--keep'])).toThrow('no such option --keep');
   });
 
@@ -392,6 +396,130 @@ describe('a pack built', BUILDS, () => {
   });
 });
 
+/** A bench on `bench` that counts the pieces it encodes, by their places. */
+function counting(bench: Bench): { bench: Bench; encoded: string[] } {
+  const encoded: string[] = [];
+  const encode: Bench['encode'] = (pcm, path) => {
+    encoded.push(path.split('/').pop()?.replace('.part.m4a', '') ?? path);
+    bench.encode(pcm, path);
+  };
+  return { bench: { ...bench, encode }, encoded };
+}
+
+/** The bytes of every file of pack `id` in `places`, by name. */
+const filesOf = (places: Places, id: string): Record<string, string> =>
+  Object.fromEntries(
+    readdirSync(join(places.music, id)).map((name) => [
+      name,
+      readFileSync(join(places.music, id, name)).toString('base64'),
+    ]),
+  );
+
+describe('a pack built again', BUILDS, () => {
+  it('keeps every piece made from the same plan and source, its credit taken anew', async () => {
+    const places = placesIn();
+    const pack = plannedPack('ada');
+    const host = hostFor([pack]);
+    await buildPack(pack, benchOf(places, host));
+    const files = filesOf(places, 'ada');
+    const before = read(join(places.packs, 'ada', 'pack.json'));
+    const corrected = plannedPack('ada', {
+      calm: { title: 'Calm, corrected', licence: 'CC BY 3.0', notes: 'read again' },
+    });
+    const run = counting(benchOf(places, host));
+    const made = (await buildPack(corrected, run.bench)) as Made;
+    expect(run.encoded).toEqual([]);
+    expect(made.kept).toEqual([...SLOTS]);
+    expect(filesOf(places, 'ada')).toEqual(files);
+    const calm = made.built.pieces.calm as FoundPiece;
+    expect(calm).toEqual({
+      ...before.pieces.calm,
+      title: 'Calm, corrected',
+      licence: 'CC BY 3.0',
+      attribution: attributionOf(corrected.pieces.calm),
+    });
+    expect(read(join(places.packs, 'ada', 'pack.json'))).toEqual(made.built);
+  });
+
+  it('makes anew only the piece whose span, loop, fades or source changed', async () => {
+    const places = placesIn();
+    const pack = plannedPack('ada');
+    const host = hostFor([pack]);
+    await buildPack(pack, benchOf(places, host));
+    const changed = plannedPack('ada', {
+      lobby: { trim: [6000, 85_000] },
+      'end-won': { fades: { outMs: 3000 } },
+    });
+    const run = counting(benchOf(places, host));
+    const made = (await buildPack(changed, run.bench)) as Made;
+    expect(run.encoded.sort()).toEqual(['end-won', 'lobby']);
+    expect(made.kept).toEqual(SLOTS.filter((slot) => !['lobby', 'end-won'].includes(slot)));
+    // A source of other bytes is another source: its piece is made anew.
+    const source = join(places.takes, sourceFile(urlOf('ada', 'calm')));
+    writeFileSync(source, wavOf(RATE, [tone(87, 0.2)]));
+    const again = counting(benchOf(places, host));
+    await buildPack(changed, again.bench);
+    expect(again.encoded).toEqual(['calm']);
+    expect(said.filter((line) => line.includes('kept'))).toEqual([]);
+  });
+
+  it('makes a piece anew whose file is gone, and every piece where the run forces it', async () => {
+    const places = placesIn();
+    const pack = plannedPack('ada');
+    const host = hostFor([pack]);
+    await buildPack(pack, benchOf(places, host));
+    rmSync(join(places.music, 'ada', 'tense.m4a'));
+    const run = counting(benchOf(places, host));
+    await buildPack(pack, run.bench);
+    expect(run.encoded).toEqual(['tense']);
+    const forced = counting(benchOf(places, host));
+    const outcomes = await runWith(optionsOf(['--force']), { packs: [pack] }, forced.bench);
+    expect(forced.encoded).toEqual([...SLOTS]);
+    expect((outcomes[0] as Made).kept).toEqual([]);
+  });
+
+  it('says which pieces it kept as they were', async () => {
+    const places = placesIn();
+    const pack = plannedPack('ada');
+    const host = hostFor([pack]);
+    await runWith(optionsOf([]), { packs: [pack] }, benchOf(places, host));
+    expect(said.filter((line) => line.endsWith(', kept'))).toEqual([]);
+    said = [];
+    await runWith(optionsOf([]), { packs: [pack] }, benchOf(places, host));
+    expect(said[0]).toMatch(/^packs: ada built, \d+ kB in public\/music\/packs\/ada\//);
+    expect(said[0]).toMatch(/, 8 of 8 pieces kept as they were$/);
+    expect(said.filter((line) => line.endsWith(', kept'))).toHaveLength(8);
+  });
+});
+
+describe('what a piece is made from', () => {
+  const piece = plannedPiece('ada', 'calm');
+  const source = Uint8Array.from([1, 2, 3]);
+
+  it('changes with its span, loop, fades and source bytes', () => {
+    const hash = buildHashOf(piece, source);
+    expect(hash).toMatch(/^[0-9a-f]{16}$/);
+    expect(buildHashOf({ ...piece, trim: [5000, 85_001] }, source)).not.toBe(hash);
+    expect(buildHashOf({ ...piece, loop: { crossfade: [7000, 75_000, 2500] } }, source)).not.toBe(
+      hash,
+    );
+    expect(buildHashOf({ ...piece, fades: { outMs: 100 } }, source)).not.toBe(hash);
+    expect(buildHashOf(piece, Uint8Array.from([1, 2, 4]))).not.toBe(hash);
+  });
+
+  it('keeps to its credit and its notes, and to how its plan is written', () => {
+    const hash = buildHashOf(piece, source);
+    const credited = { ...piece, title: 'x', author: 'y', page: 'https://z' };
+    expect(buildHashOf({ ...credited, licence: 'CC0' }, source)).toBe(hash);
+    expect(buildHashOf({ ...credited, notice: 'n', notes: 'm' }, source)).toBe(hash);
+    const reordered = JSON.parse(
+      JSON.stringify({ loop: { seekMs: 2000, crossfade: [7000, 75_000, 2000] }, trim: piece.trim }),
+    ) as Pick<PlanPiece, 'loop' | 'trim'>;
+    const sought = { ...piece, loop: { crossfade: [7000, 75_000, 2000] as const, seekMs: 2000 } };
+    expect(buildHashOf({ ...piece, ...reordered }, source)).toBe(buildHashOf(sought, source));
+  });
+});
+
 describe('a pack refused', BUILDS, () => {
   it('says a fetch that failed, builds nothing of that pack and the rest as asked', async () => {
     const places = placesIn();
@@ -461,7 +589,7 @@ describe('a pack refused', BUILDS, () => {
         writeFileSync(path, padded);
       },
     };
-    const outcome = await buildPack(pack, fat);
+    const outcome = await buildPack(pack, fat, true);
     expect(outcome).toMatchObject({
       id: 'ada',
       refused: [expect.stringContaining('over its 9 MB')],
