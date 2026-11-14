@@ -333,6 +333,53 @@ describe('button: the solver on the clock', () => {
   });
 });
 
+describe('button: a mission without a clock, its clock counting the time run', () => {
+  const letGo = [{ by: 'operator', input: { kind: 'release' } }];
+  /** A move's context where the clock counts up to `elapsedSec`, none left on it. */
+  const upAt = (edgework: Edgework, elapsedSec: number): PuzzleContext => ({
+    ...ctx(edgework, 0),
+    elapsedSec,
+  });
+  const release = (state: ButtonState, edgework: Edgework, elapsedSec: number) =>
+    buttonModule.apply(def, state, { kind: 'release' }, 'op', upAt(edgework, elapsedSec));
+
+  it.each<[StripColour, number, string, boolean]>([
+    ['blau', 124, '02:04', true],
+    ['blau', 125, '02:05, a second after 02:04', true],
+    ['blau', 123, '02:03, a second before 02:04', false],
+    ['blau', 240, '04:00 — the digit may stand anywhere', true],
+    ['weiß', 61, '01:01', true],
+    ['weiß', 120, '02:00, a second after 01:59', true],
+    ['weiß', 123, '02:03', false],
+    ['gelb', 6, '00:06, a second after 00:05', true],
+    ['gelb', 4, '00:04', false],
+    ['rot', 0, '00:00, the clock just started', false],
+    ['rot', 1, '00:01', true],
+  ])('a %s strip %i s into the run (%s): solved %s', (strip, sec, _clock, solved) => {
+    const edgework = lab(0);
+    const held = apply(button('blau', 'ABBRUCH', strip), 'hold', edgework).state;
+    const result = release(held, edgework, sec);
+    expect(result.solved).toBe(solved);
+    expect(result.penalty).toBe(solved ? null : 'Knopf zur falschen Zeit losgelassen');
+  });
+
+  it('lets the solver go on exactly the seconds a release counts, for every strip', () => {
+    const edgework = lab(0);
+    for (const strip of ['blau', 'weiß', 'gelb', 'rot'] as const) {
+      const held = apply(button('blau', 'ABBRUCH', strip), 'hold', edgework).state;
+      const digit = RELEASE_DIGIT[strip];
+      for (let sec = 0; sec <= 600; sec++) {
+        const counts = shows(sec, digit) || (sec > 0 && shows(sec - 1, digit));
+        const moment = `${strip} at ${clock(sec)}`;
+        const aid = { transcript: [], remainingSec: 0, elapsedSec: sec };
+        const moves = buttonModule.solve(def, viewsOf(held, edgework), edgework, aid);
+        expect(moves, moment).toEqual(counts ? letGo : []);
+        expect(release(held, edgework, sec).solved, moment).toBe(counts);
+      }
+    }
+  });
+});
+
 describe('button: inputs, views and solver', () => {
   it('accepts the three moves and nothing else', () => {
     const ok = (input: unknown) => buttonModule.inputSchema.safeParse(input).success;

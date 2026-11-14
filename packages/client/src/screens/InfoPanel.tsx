@@ -8,7 +8,7 @@ import {
   type Prompt,
 } from '../input/glyphs.js';
 import { PAD_GLYPHS, PAD_PING } from '../input/pad.js';
-import { isArmed } from '../world/known.js';
+import { armedGoal } from '../world/known.js';
 import { toBring } from '../world/markers.js';
 import { Icon, type IconName } from './Icon.js';
 
@@ -146,7 +146,7 @@ function KeyList() {
 export function InfoPanel({ view, onClose }: Props) {
   const [tab, setTab] = useState<Tab>('auftrag');
   const closeKey = useGlyph('close');
-  const armed = view.map?.stations.find(isArmed);
+  const armed = view.map === null ? null : armedGoal(view, view.map);
   const pending = view.map === null ? [] : toBring(view.map);
   const escaping = view.map?.exit?.open === true;
 
@@ -192,7 +192,7 @@ export function InfoPanel({ view, onClose }: Props) {
                 <dd>
                   {escaping
                     ? 'Notausgang — alle gemeinsam hin'
-                    : (view.puzzle?.title ?? armed?.title ?? '—')}
+                    : (view.puzzle?.title ?? armed ?? '—')}
                 </dd>
               </div>
               <div>

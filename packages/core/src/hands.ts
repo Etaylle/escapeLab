@@ -1,6 +1,6 @@
 import { crewOf } from './actions.js';
 import { crewFound, findKey } from './discovery.js';
-import { consoleOf, lightsAreOut, solvedYet, stationKey } from './map.js';
+import { consoleOf, solvedYet, stationKey, stationUp } from './map.js';
 import type { Mission } from './mission.js';
 import { moduleFor, type PuzzleDef } from './puzzles/index.js';
 import type { ConsoleId } from './puzzles/module.js';
@@ -71,14 +71,16 @@ export interface HandsView {
 }
 
 /**
- * The hands at the armed station for a crew of HANDS_FROM or more, from presence — the
- * server's word of who stands where — and the parts in hand; null for a smaller crew, and while
- * no station is armed: before the lights go out, and once the last one is solved.
+ * The hands at the station up (map.ts `stationUp`) for a crew of HANDS_FROM or more, from
+ * presence — the server's word of who stands where — and the parts in hand; null for a smaller
+ * crew, and while no station is up: before the lights go out, while a free-order run waits for
+ * its pick — every station still to solve armed, none the crew's yet —, and once the last one is
+ * solved.
  */
 export function handsOf(state: GameState): HandsView | null {
-  const def = state.mission.puzzles[state.currentPuzzleIndex];
+  const def = stationUp(state);
   const crew = crewOf(state).map((player) => player.id);
-  if (!lightsAreOut(state) || def === undefined || crew.length < HANDS_FROM) {
+  if (def === null || crew.length < HANDS_FROM) {
     return null;
   }
   return {
