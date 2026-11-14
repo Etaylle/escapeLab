@@ -33,20 +33,21 @@ import { DESKTOP_STAGE, painting, placedOn } from './heroPage.js';
  * the glow of the item it looks at — and nothing of it on a figure of the world.
  */
 
-/** A bake of `w` × `h` on a fake canvas, as the scene keeps it. */
-function bakeOf(w = 400, h = 200): { bake: SceneBake; log: Entry[] } {
+/** A bake of `w` × `h` in one piece on a fake canvas, as the scene keeps it. */
+function bakeOf(w = 400, h = 200): { bake: SceneBake; log: Entry[]; canvas: HTMLCanvasElement } {
   const { canvas, log } = fakeCanvas(w, h, 'bake');
+  const box = { left: 0, top: 0, width: w, height: h };
   const bake: SceneBake = {
-    canvas,
     shot: { from: { x: 1, y: 1 }, to: { x: 2, y: 1 }, scale: 50 },
-    box: { left: 0, top: 0, width: w, height: h },
+    box,
+    pieces: [{ box, canvas, failed: false }],
     w: w / 2,
     h,
     night: false,
     spots: {},
     dark: { at: { x: 0, y: 100 }, colour: '#1a1716' },
   };
-  return { bake, log };
+  return { bake, log, canvas };
 }
 
 describe('the lab at night', () => {
@@ -71,12 +72,12 @@ describe('the lab at night', () => {
   });
 
   it('lights it again by adding it onto itself until its light is back', () => {
-    const { bake, log } = bakeOf();
+    const { bake, log, canvas } = bakeOf();
     nightTo(bake, true);
     log.length = 0;
     nightTo(bake, false);
     const added = callEntries(log, 'drawImage');
-    expect(added.every((e) => e.op === 'lighter' && e.args[0] === bake.canvas)).toBe(true);
+    expect(added.every((e) => e.op === 'lighter' && e.args[0] === canvas)).toBe(true);
     // Each copy adds its share of what stands: the light multiplied back to before the night.
     const times = added.reduce((light, e) => light * (1 + e.alpha), 1);
     expect(times).toBeCloseTo(1 / (1 - NIGHT_SINK), 6);
@@ -86,9 +87,9 @@ describe('the lab at night', () => {
   it('falls and lifts over the whole canvas, whatever the passes left on its context', () => {
     // The world's passes leave the bake's context moved to the box's corner and half strong.
     for (const night of [true, false]) {
-      const { bake, log } = bakeOf();
+      const { bake, log, canvas } = bakeOf();
       bake.night = !night;
-      const g = bake.canvas.getContext('2d');
+      const g = canvas.getContext('2d');
       g?.setTransform(1, 0, 0, 1, 65, 65);
       if (g !== null) g.globalAlpha = 0.5;
       log.length = 0;

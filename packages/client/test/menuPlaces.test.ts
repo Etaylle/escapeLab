@@ -26,6 +26,7 @@ import {
 import {
   paintBake,
   pastBake,
+  restOf,
   sceneBacking,
   type SceneBake,
   type SceneLab,
@@ -111,14 +112,69 @@ describe('the box the scene bakes', () => {
     expect(box.width * box.height).toBeGreaterThan(drift.width * drift.height);
   });
 
-  it('bakes at the screen’s density where the lab fits, a quarter less at a time where not', () => {
+  it('bakes at the screen’s density where the drift fits, a quarter less at a time where not', () => {
     expect(sceneBacking(LAB, 1440, 820, 1).dpr).toBe(1);
-    expect(sceneBacking(LAB, 1440, 820, 2).dpr).toBe(2);
-    const wide = sceneBacking(LAB, 1920, 1080, 2);
-    expect(wide.dpr).toBeGreaterThan(1);
-    expect(wide.dpr).toBeLessThan(2);
-    expect((wide.dpr * 4) % 1).toBe(0);
-    expect(wide.w).toBe(Math.round(1920 * wide.dpr));
+    // The places' pieces are baked apart: density 2 wherever the drift's box takes it.
+    for (const [w, h] of [[1440, 820], [1512, 982], [1920, 1080], [834, 1194], [1366, 1024]]) {
+      expect(sceneBacking(LAB, w ?? 0, h ?? 0, 2).dpr).toBe(2);
+    }
+    const tall = sceneBacking(LAB, 1728, 1117, 2);
+    expect(tall.dpr).toBeGreaterThan(1);
+    expect(tall.dpr).toBeLessThan(2);
+    expect((tall.dpr * 4) % 1).toBe(0);
+    expect(tall.w).toBe(Math.round(1728 * tall.dpr));
+  });
+});
+
+describe('the rest of a bake', () => {
+  it('cuts what lies past the drift into pieces a canvas and a short step hold', () => {
+    const box = { left: 0, top: 0, width: 6000, height: 4000 };
+    const drift = { left: 1000, top: 1500, width: 4000, height: 1000 };
+    const rest = restOf(box, drift);
+    const area = rest.reduce((all, piece) => all + piece.width * piece.height, 0);
+    expect(area).toBe(6000 * 4000 - 4000 * 1000);
+    expect(rest.every((piece) => piece.width * piece.height <= 1024 * 1024)).toBe(true);
+    // The band above, 6000 × 1500, in as few pieces as fit: nine.
+    expect(rest.filter((piece) => piece.top === 0)).toHaveLength(9);
+  });
+
+  /** A bake 300 × 200 in two pieces side by side, the right one's canvas `right`. */
+  function twoPieces(right: HTMLCanvasElement | null): SceneBake {
+    return {
+      shot: { from: { x: 1, y: 1 }, to: { x: 2, y: 1 }, scale: 50 },
+      box: { left: 0, top: 0, width: 300, height: 200 },
+      pieces: [
+        { box: { left: 0, top: 0, width: 150, height: 200 }, canvas: fakeCanvas(150, 200).canvas, failed: false },
+        { box: { left: 150, top: 0, width: 150, height: 200 }, canvas: right, failed: false },
+      ],
+      w: 100,
+      h: 50,
+      night: false,
+      spots: {},
+      dark: { at: { x: 0, y: 100 }, colour: null },
+    };
+  }
+
+  it('copies only the pieces the frame shows, each whole at its place', () => {
+    const right = fakeCanvas(150, 200).canvas;
+    const bake = twoPieces(right);
+    const within = fakeCanvas(100, 50, 'frame');
+    paintBake(within.ctx, bake, { x: 10, y: 10 }, 1);
+    expect(callEntries(within.log, 'drawImage').map((e) => e.args)).toEqual([
+      [bake.pieces[0]?.canvas, -10, -10],
+    ]);
+    const across = fakeCanvas(100, 50, 'frame');
+    paintBake(across.ctx, bake, { x: 120, y: 10 }, 1);
+    expect(callEntries(across.log, 'drawImage').map((e) => e.args)).toEqual([
+      [bake.pieces[0]?.canvas, -120, -10],
+      [right, 30, -10],
+    ]);
+  });
+
+  it('fills nothing past the bake before its dark is read', () => {
+    const frame = fakeCanvas(100, 50, 'frame');
+    paintBake(frame.ctx, twoPieces(null), { x: -30, y: 0 }, 1);
+    expect(callEntries(frame.log, 'fillRect')).toEqual([]);
   });
 });
 
@@ -134,12 +190,13 @@ describe('the dark past the bake', () => {
     expect(pastBake({ x: 0, y: -20 }, [300, 200], [100, 50])).toEqual([[0, 0, 100, 20]]);
   });
 
-  /** A bake 300 × 200 holding the lab's dark in `colour`. */
+  /** A bake 300 × 200 in one piece, holding the lab's dark in `colour`. */
   function darkBake(colour: string): SceneBake {
+    const box = { left: 0, top: 0, width: 300, height: 200 };
     return {
-      canvas: fakeCanvas(300, 200, 'bake').canvas,
       shot: { from: { x: 1, y: 1 }, to: { x: 2, y: 1 }, scale: 50 },
-      box: { left: 0, top: 0, width: 300, height: 200 },
+      box,
+      pieces: [{ box, canvas: fakeCanvas(300, 200, 'bake').canvas, failed: false }],
       w: 100,
       h: 50,
       night: true,

@@ -309,12 +309,13 @@ describe('the browser’s side of the loop', () => {
   });
 });
 
-/** A bake for a canvas 100 × 50 of the scene's lab, its box twice as wide. */
+/** A bake for a canvas 100 × 50 of the scene's lab, its box twice as wide, in one piece. */
 function bakeOf(name: string): SceneBake {
+  const box = { left: 0, top: 0, width: 200, height: 50 };
   return {
-    canvas: fakeCanvas(200, 50, name).canvas,
     shot: { from: { x: 3, y: 1 }, to: { x: 1, y: 1 }, scale: 50 },
-    box: { left: 0, top: 0, width: 200, height: 50 },
+    box,
+    pieces: [{ box, canvas: fakeCanvas(200, 50, name).canvas, failed: false }],
     w: 100,
     h: 50,
     night: false,
@@ -372,7 +373,7 @@ describe('what the scene draws', () => {
     paintShow(ctx, show, 1, drifting(show, DRIFT_MS / 2, false));
     const [there, back] = callEntries(log, 'drawImage').map((call) => call.args[1]);
     // At the reactor end the frame starts 100 px in, at the spawn at the box's left edge.
-    expect([there, back]).toEqual([-100, -0]);
+    expect([there, back]).toEqual([-100, 0]);
   });
 
   it('draws a still lab once under reduced motion, and again only for a new one', () => {
@@ -397,7 +398,10 @@ describe('what the scene draws', () => {
 });
 
 /** The size of `bake`'s canvas: 0 × 0 once it is freed. */
-const sizeOf = (bake: SceneBake): [number, number] => [bake.canvas.width, bake.canvas.height];
+const sizeOf = (bake: SceneBake): [number, number] => {
+  const canvas = bake.pieces[0]?.canvas;
+  return [canvas?.width ?? -1, canvas?.height ?? -1];
+};
 
 describe('what the scene lets go', () => {
   it('frees the lab before once the one picked anew has come in over it', () => {

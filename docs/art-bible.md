@@ -563,10 +563,11 @@ menu-phone-932.png).
 
 **What it costs.** The scene never runs the world's passes for a frame. Once for each size of its
 canvas it bakes the lit lab through the game's own passes — the tiles, the objects, the figures'
-pass with nobody in it, the glows, the light, on the Canvas path without a WebGL context — into one
-canvas the size of the box the drift and the places show at the shot's zoom (The menu's places);
-each frame then copies that canvas whole, at whole pixels, from where the camera stands: the copy
-without a source rectangle (Cost). It draws 30 frames a second at most, none while the tab or the
+pass with nobody in it, the glows, the light, on the Canvas path without a WebGL context — in
+pieces at the shot's zoom: first the drift's box, on one canvas, as it was baked before the menu
+had places, then the rest of the box the places show (The menu's places); each frame then copies
+each piece it shows whole, at whole pixels, from where the camera stands: the copy without a
+source rectangle (Cost). It draws 30 frames a second at most, none while the tab or the
 canvas is hidden, and under reduced motion none after its still; a window resized bakes anew once it
 has held its size for 150 ms. On the Cost section's bench — this M4, the page's main thread slowed
 four times, the software Canvas path of `SHOTS_SOFTWARE_GL`, 1440 × 820 CSS pixels at density 1,
@@ -579,12 +580,12 @@ starting at the other — medians, ms:
 | Every pass run each frame | 17.42 | 20.60 | 16.8 |
 
 The bake itself took 259 ms there, slowed four times, once for the size, and 44 to 73 ms in the
-walkthrough's browser at its own speed; holding the places as well (2441 × 1542 px for 1440 × 820),
-it takes 345 to 446 ms slowed four times, and the night sinks it in one pass after (The hero, its
-cost). Every pass run each frame drew at the screen's pace in four rounds of six and fell to 33.3 ms
-p95 in the other two. The walkthrough's quiet window on the menu, the scene drifting, held the
-screen's pace in Blackout and Systemcheck, with `SHOTS_SOFTWARE_GL` and without: 16.7 ms p50 and
-16.7 to 16.8 p95, the light working out no sight a frame there (`lightWork`).
+walkthrough's browser at its own speed; the drift's piece is that bake still, and the night sinks
+it in one pass after (The hero, its cost). Every pass run each frame drew at the screen's pace in
+four rounds of six and fell to 33.3 ms p95 in the other two. The walkthrough's quiet window on the
+menu, the scene drifting, held the screen's pace in Blackout and Systemcheck, with
+`SHOTS_SOFTWARE_GL` and without: 16.7 ms p50 and 16.7 to 16.8 p95, the light working out no sight a
+frame there (`lightWork`).
 
 ## The menu's places (world/menu/places.ts, camera.ts)
 
@@ -619,13 +620,14 @@ drift it follows the drift's frame, which moves on meanwhile. Under reduced moti
 the lobby it shows the drift, and it cuts there and back, as the doors stand shut over the change.
 
 **What it costs.** A frame copies the bake from where the camera stands as it copies it from where
-the drift stands: one copy, at whole pixels; a pan costs no more than the drift (The hero, its cost
-table). The bake holds every place's frame as well as the drift's box, but only as far as the lab
-and a tile of the dark round it reach (drift.ts `labBound`, `DARK_ROUND`): where a frame looks
-further into the dark — the Archiv's, the Maschinenraum's, the Reaktor's — the frame fills what lies
-past the bake with the dark's colour as the bake holds it (scene.ts `pastBake`, `paintBake`): read
-off the bake once as it is baked, at the middle of a side that lies past the lab, and again each
-time the night falls or lifts. The dark round the lab is one colour as the passes leave it, 26, 23,
+the drift stands: each piece of it the frame shows, whole, at whole pixels — the drift's piece
+alone while the drift goes on, at a place the pieces its frame falls on; a pan costs no more than
+the drift (The hero, its cost table). The bake holds every place's frame as well as the drift's box, but only
+as far as the lab and a tile of the dark round it reach (drift.ts `labBound`, `DARK_ROUND`): where a
+frame looks further into the dark — the Archiv's, the Maschinenraum's, the Reaktor's — the frame
+fills what lies past the bake with the dark's colour as the bake holds it (scene.ts `pastBake`,
+`layDark`): read off the piece that holds it once that piece is baked, at the middle of a side that
+lies past the lab, and again each time the night falls or lifts. The dark round the lab is one colour as the passes leave it, 26, 23,
 22 lit and 10, 9, 8 at night, on every side, at the box's corners and in the void within the lab's
 extent alike (measured at 1280 × 720, 1440 × 820 and 1920 × 1080), so the fill meets the baked tile
 to the level. The night has to fall on the whole canvas in its own pixels: laid under the transform
@@ -643,17 +645,41 @@ alone:
 | 1920 × 1080, 1 | 3043 × 1344, 4.1 MP | 3213 × 2030, 6.5 MP |
 | 1440 × 820, 2 | 4621 × 2040, 9.4 MP | 4879 × 3082, 15.0 MP |
 
-Baking the dark as well would have asked 5.7 MP at 1440 × 820 and 22.9 at twice the density. A
-box that would not bake at the screen's density — larger than 4096 × 4096 px in area or 8192 px a
-side, as baked.ts allows every browser — bakes a quarter less dense at a time, down to 1 at the
-least, where it fell to 1 at once before. On a screen of density 2:
+Baking the dark as well would have asked 5.7 MP at 1440 × 820 and 22.9 at twice the density. The
+box is baked in pieces (scene.ts `bakeScene`, `restBaker`): the drift's box first, as main baked
+the whole scene and at the density main chose for it — the screen's, or where that box would be
+too large to bake, larger than 4096 × 4096 px in area or 8192 px a side as baked.ts allows every
+browser, a quarter less dense at a time where main fell to 1 at once; then the rest of the box, cut
+into pieces of a megapixel at most, each on a canvas of its own, a piece a frame once the hero's
+lamp is on — after the first menu's entrance — or, where no hero stands, as on a phone, once a
+place is first asked for. The camera goes to a place only once the pieces its frame falls on are
+baked. The bake keeps its kit — the map baked whole, the sprites — for the rest for 5 s, and lets
+it go then where nothing has asked for the rest. On a screen of density 2:
 
-| Window | The scene's density | main's, the drift alone |
-| --- | --- | --- |
-| 1280 × 720, 1440 × 820 | 2 | 2 |
-| 1470 × 956, 1512 × 982 | 1.75 | 2 |
-| 1728 × 1117 | 1.5 | 1 |
-| 1920 × 1080 | 1.5 | 2 |
+| Window | The scene's density | main's | The drift's piece | The rest | The rest's memory |
+| --- | --- | --- | --- | --- | --- |
+| 1280 × 720 | 2 | 2 | 7.3 MP | 4.3 MP in 7 pieces | 17 MB |
+| 1440 × 820 | 2 | 2 | 9.4 MP | 5.6 MP in 8 pieces | 22 MB |
+| 1440 × 900 | 2 | 2 | 11.4 MP | 6.7 MP in 9 pieces | 27 MB |
+| 1470 × 956 | 2 | 2 | 12.8 MP | 7.6 MP in 9 pieces | 30 MB |
+| 1512 × 982 | 2 | 2 | 13.5 MP | 8.0 MP in 10 pieces | 32 MB |
+| 1680 × 1050 | 2 | 2 | 15.5 MP | 9.2 MP in 10 pieces | 37 MB |
+| 1728 × 1117 | 1.75 | 1 | 13.1 MP | 7.7 MP in 9 pieces | 31 MB |
+| 1920 × 1080 | 2 | 2 | 16.3 MP | 9.7 MP in 12 pieces | 39 MB |
+| 2560 × 1440 | 1.75 | 1 | 14.7 MP | 6.2 MP in 8 pieces | 25 MB |
+| 768 × 1024, an iPad upright | 2 | 2 | 13.6 MP | 8.8 MP in 10 pieces | 35 MB |
+| 834 × 1194, an iPad Air upright | 2 | 2 | 16.3 MP | 9.7 MP in 11 pieces | 39 MB |
+| 1024 × 1366, an iPad Pro upright | 1.75 | 1 | 13.7 MP | 6.8 MP in 8 pieces | 27 MB |
+| 1366 × 1024, an iPad Pro sideways | 2 | 2 | 14.7 MP | 8.7 MP in 10 pieces | 35 MB |
+
+In the walkthrough's browser at its own speed, interleaved with main's bake six rounds (the
+machine's load about 4), the drift's piece took as long as main's whole bake — medians 65 against
+60 ms at 1440 × 820 at density 1, 166 against 166 at density 2, 237 against 241 at 1512 × 982 and
+270 against 252 at 1920 × 1080, both at 2. The rest took 58, 197, 295 and 331 ms there, almost all
+in its first piece: the light of the rooms the drift never shows — their ceiling lights and the
+glow round them — baked whole as the first piece reaches them, 45, 157, 198 and 198 ms; each piece
+after it 1 to 10 ms. So the rest asks one frame about as long as the first bake did, once, after
+the hero's lamp is on; the frames after it copy what they show as before, piece by piece.
 
 ## The hero (world/menu/hero.ts, heroArt.ts, heroStage.ts, lamp.ts, lampArt.ts, MenuHero.tsx)
 
