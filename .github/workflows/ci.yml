@@ -50,7 +50,7 @@ jobs:
     # on a slow runner since the opening and the gameplay captures, 2 more since the
     # reconnect drill (a crew of three, one away 80 s), 1 more since the restart drill,
     # 2 more since the three drill (a crew of three to the Signalkette, 75 s on a runner),
-    # Systemcheck up to 8, 3 more since the Übungshalle's drill (182 s locally): setup, 19 and 14
+    # Systemcheck up to 8, 3 more since the Übungshalle's drill (163 s in CI): setup, 19 and 14
     # minutes of the two steps fit into the job's 45.
     timeout-minutes: 45
     defaults:
@@ -81,8 +81,9 @@ jobs:
       - name: Walkthrough (Systemcheck)
         # Runs after a failed Blackout run too: both sets of screenshots are wanted. 6 minutes
         # on main's runner (14.11.2026), up to 8 on a slow one; the Übungshalle's drill, the
-        # last before the run itself, adds 182 s locally (208 s in CI while its token device
-        # turned every 30 s: the step took 9:34 then).
+        # last before the run itself, added 163 s in CI while it sampled its frames at the sign
+        # (the step took 9:04 then); sampling the host's between two rows of armed bays and the
+        # audience's on the whole hall, it took 269 s locally under a load of 30.
         if: ${{ !cancelled() }}
         timeout-minutes: 14
         env:
