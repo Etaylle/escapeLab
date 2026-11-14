@@ -10,7 +10,7 @@ import type {
 } from '@escapelab/core';
 import { formatLeft } from '../clock.js';
 import { useNow } from '../hooks.js';
-import { crewPass, keepName, lastColor, lastName } from '../pass.js';
+import { crewPass, lastColor, lastName } from '../pass.js';
 import { dropSnapshot, resumeOf } from '../snapshots.js';
 import type { Restoring, Takeover } from '../ws.js';
 import { GiveUpButton } from './GiveUp.js';
@@ -27,9 +27,9 @@ import {
   RoundsPanel,
   type SectionProps,
 } from './MenuPanels.js';
+import { profileColor } from './BarAccount.js';
 import { MenuHero } from './MenuHero.js';
 import { useComesOn } from './phosphor.js';
-import { FIRST_COLOR, ProfileChip, WAVE_SETTLE_MS } from './ProfileChip.js';
 
 interface Props {
   send: (msg: ClientMessage) => void;
@@ -45,6 +45,9 @@ interface Props {
   takeover?: Takeover | null;
   /** the pass's account as the server told it (ws.ts); null or left out before it did */
   account?: AccountView | null;
+  /** the profile's name as the page edits it (profileName.ts): the panels type it anew */
+  name: string;
+  onName: (name: string) => void;
   /**
    * the room the card went back to, while the server waits to take it up again (ws.ts
    * `Restoring`); null or left out for none
@@ -84,68 +87,6 @@ export const MENU_SUBTITLE = 'Forschungsanlage Kaltenbrunn · Zutritt nur mit Di
 export const MENU_LEAD =
   'Am Pult die Maschine, im Buch die Regeln — gelöst wird nur gemeinsam, per Stimme, ' +
   'ein Gerät je Kopf, Rücken an Rücken.';
-
-/** How long a typed name stands still before the account takes it, ms: as the figure waits. */
-export const NAME_SETTLE_MS = WAVE_SETTLE_MS;
-
-/**
- * The name field's text as the account (`account`) changes from `before`, where it does: the
- * account's name while nothing was typed on this page — a name typed goes to the account
- * instead — and none once the account is deleted; null to leave the field as it is.
- */
-export function nameFromAccount(
-  account: AccountView | null,
-  before: AccountView | null,
-  typed: boolean,
-): string | null {
-  if (account === null) {
-    return before === null ? null : '';
-  }
-  return typed || account.name === '' ? null : account.name;
-}
-
-/**
- * The name field's text: starting with the name the pass keeps, kept again as it is typed, and
- * the account's name where nothing was typed yet (`nameFromAccount`). A name typed goes to the
- * account (`profile`) once it has stood still NAME_SETTLE_MS, where the line is up and the
- * account goes by another.
- */
-function useProfileName(
-  account: AccountView | null,
-  send: Props['send'],
-  connected: boolean,
-): [string, (name: string) => void] {
-  const [name, setName] = useState(() => lastName());
-  const typed = useRef(false);
-  const told = useRef<AccountView | null>(null);
-  useEffect(() => {
-    const next = nameFromAccount(account, told.current, typed.current);
-    told.current = account;
-    if (next !== null) {
-      typed.current = false;
-      setName(next);
-    }
-  }, [account]);
-  useEffect(() => {
-    const wanted = name.trim();
-    if (!typed.current || !connected || account?.name === wanted) {
-      return undefined;
-    }
-    const timer = setTimeout(
-      () => send({ kind: 'profile', pass: crewPass(), name: wanted }),
-      NAME_SETTLE_MS,
-    );
-    return () => clearTimeout(timer);
-    // `send` is stable for the lifetime of the connection.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [name, connected, account]);
-  const type = (next: string): void => {
-    typed.current = true;
-    setName(next);
-    keepName(next);
-  };
-  return [name, type];
-}
 
 /** What the device kept of its account: the name and the colour its next account starts with. */
 export interface KeptProfile {
@@ -321,16 +262,16 @@ export function panelOnArrival(): PanelId | null {
 }
 
 /**
- * Where the focus goes in the menu: on the name while there is none to sit down under; else on
- * the item last taken — the run's way back or the first item where none was.
+ * Where the focus goes in the menu: on the item last taken — the run's way back or the first item
+ * where none was. A panel that seats the pass takes it to the name where there is none yet
+ * (MenuPanels.tsx `NameField`).
  */
 export function focusMenu(
   root: Pick<HTMLElement, 'querySelector'> | null,
   item: MenuItemId | null,
-  named: boolean,
 ): void {
   const at = item === null ? '.bound-back:not([disabled]), .menu-item' : `[data-item="${item}"]`;
-  root?.querySelector<HTMLElement>(named ? at : '.profile-name')?.focus({ preventScroll: true });
+  root?.querySelector<HTMLElement>(at)?.focus({ preventScroll: true });
 }
 
 /**
@@ -338,16 +279,14 @@ export function focusMenu(
  * again with the focus back on that item. As the menu comes up — the page loaded, the
  * Bestenliste or the booklet put away — the focus stands where `focusMenu` says.
  */
-function usePanel(root: RefObject<HTMLElement | null>, named: boolean) {
+function usePanel(root: RefObject<HTMLElement | null>) {
   const [panel, setPanel] = useState<PanelId | null>(panelOnArrival);
   // The menu has come up on the invite: no other menu of this page opens on it again.
   useEffect(() => inviteArrived(), []);
   const last = useRef<MenuItemId | null>(null);
-  const isNamed = useRef(named);
-  isNamed.current = named;
   useEffect(() => {
     if (panel === null) {
-      focusMenu(root.current, last.current, isNamed.current);
+      focusMenu(root.current, last.current);
     }
   }, [panel, root]);
   return {
@@ -416,34 +355,27 @@ function Panels({
 }
 
 /**
- * The colour the profile shows (ProfileChip.tsx), which the hero wears: the account's, the one
- * the pass kept from a lobby before the server told one, the crew's first before any.
- */
-function profileColor(account: AccountView | null): string {
-  return account?.color ?? lastColor() ?? FIRST_COLOR;
-}
-
-/**
  * The start screen as a game's main menu: the game's title over the living scene of the
- * mission picked (screens/MenuScene.tsx) and a line of the world under it, the profile at the
- * top right, the player's own figure standing large at the right (screens/MenuHero.tsx), and
- * the menu — the card of where the pass sits first, then „Einsatz starten", „Beitreten",
- * „Offene Runden", the booklet, the Bestenliste, „Meine Einsätze", the editor and the settings
- * — the install offer and the HTTPS hint as quiet lines under it. An item with a panel opens it
- * over the menu (MenuPanels.tsx), the rest open their page. A run that binds the pass dims every
- * item but its card, and one line says why no other room opens.
+ * mission picked (screens/MenuScene.tsx) and a line of the world under it, the player's own
+ * figure standing large at the right (screens/MenuHero.tsx) — the account itself stands in the
+ * top bar (BarAccount.tsx) — and the menu — the card of where the pass sits first, then
+ * „Einsatz starten", „Beitreten", „Offene Runden", the booklet, the Bestenliste, „Meine
+ * Einsätze", the editor and the settings — the install offer and the HTTPS hint as quiet lines
+ * under it. An item with a panel opens it over the menu (MenuPanels.tsx), the profile's name at
+ * the head of each that seats the pass; the rest open their page. A run that binds the pass dims
+ * every item but its card, and one line says why no other room opens.
  */
 export function JoinScreen(props: Props) {
-  const { send, connected, missions, rooms, seat = null, restoring = null } = props;
+  const { send, connected, missions, rooms, seat = null, restoring = null, name } = props;
   const account = props.account ?? null;
-  const [name, setName] = useProfileName(account, send, connected);
   const root = useRef<HTMLDivElement>(null);
-  const { panel, take, close } = usePanel(root, name.trim() !== '');
+  const { panel, take, close } = usePanel(root);
   const comesOn = useComesOn('start');
   const waiting = waitingOf(seat, restoring);
   const bound = boundTo(seat, waiting);
   useDoor(send, connected);
-  const section = { send, connected, name: name.trim(), blocked: bound !== null };
+  const field = { typed: name, onName: props.onName };
+  const section = { send, connected, name: name.trim(), field, blocked: bound !== null };
   const pages = pagesOf(props, pickedMission(missions, props.picked));
   const card = seat !== null && (
     <BoundCard
@@ -459,7 +391,6 @@ export function JoinScreen(props: Props) {
         <h1 className={comesOn ? 'menu-title phosphor-title' : 'menu-title'}>ESCAPELAB</h1>
         <p className="menu-sub">{MENU_SUBTITLE}</p>
       </header>
-      <ProfileChip name={name} onName={setName} account={account} />
       <MenuHero
         name={name}
         color={profileColor(account)}

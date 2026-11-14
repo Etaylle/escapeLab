@@ -193,6 +193,7 @@ describe('the mission panel for a first crew', () => {
         send={noop}
         connected
         name="Anna"
+        field={{ typed: 'Anna', onName: noop }}
         blocked={false}
         missions={[blackout, tutorial]}
         stats={[]}

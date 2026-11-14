@@ -32,7 +32,7 @@ export const DESKTOP_STAGE: StageFacts = {
   safeBottom: 0,
   menuRight: 512,
   panelRight: 832,
-  chipBottom: 115,
+  ceiling: 49.2,
 };
 
 /** Where the hero stands on `facts`, there by the test's word. */
@@ -196,19 +196,16 @@ export interface HeroOnPage {
 
 /**
  * The menu's hero started on a fake page in a window `w` × `h` — the stage under the top bar laid
- * out as menu.css lays it out, its menu's column and its profile, `focused` the element in the
+ * out as menu.css lays it out, its padding and its menu's column, `focused` the element in the
  * focus — under `?trace=1`, standing there from the start, its canvas shown. Stubs the page's
  * globals: `vi.unstubAllGlobals()` after.
  */
 export function heroOnPage(w: number, h: number, focused: FakeItem | null = null): HeroOnPage {
   const size = { w, h };
   const pad = (): number => clamp(20, 0.05 * size.w, 80);
-  const chip = (): ReturnType<typeof rect> =>
-    rect(size.w - pad() - 260, TOP_BAR + clamp(22, 0.06 * size.h, 60), 260, 66);
   const [onWindow, onStage] = [listening(), listening()];
   const parts: Record<string, unknown> = {
     '.menu-body': { getBoundingClientRect: () => rect(pad(), TOP_BAR + 200, 440, 400) },
-    '.profile-chip': { getBoundingClientRect: chip },
   };
   const stage = {
     getBoundingClientRect: () => rect(0, TOP_BAR, size.w, size.h - TOP_BAR),
@@ -247,6 +244,7 @@ export function heroOnPage(w: number, h: number, focused: FakeItem | null = null
     },
   });
   vi.stubGlobal('getComputedStyle', () => ({
+    paddingTop: `${clamp(22, 0.06 * size.h, 60)}px`,
     paddingLeft: `${pad()}px`,
     paddingRight: `${pad()}px`,
     paddingBottom: `${clamp(18, 0.04 * size.h, 40)}px`,

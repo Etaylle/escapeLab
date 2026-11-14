@@ -75,6 +75,8 @@ function joinScreen(
     <JoinScreen
       send={send}
       connected
+      name="Ben"
+      onName={noop}
       missions={[blackout]}
       rooms={[]}
       seat={seat}
@@ -114,6 +116,7 @@ function opensRound(seat: Seat | null, restoring: Restoring | null = null): bool
       send={noop}
       connected
       name="Ben"
+      field={{ typed: 'Ben', onName: noop }}
       blocked={blocked !== null}
       missions={[blackout]}
       stats={[]}

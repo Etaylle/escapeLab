@@ -68,10 +68,12 @@ fünfte Alarm den Lauf — auf *Hart* der dritte, auf *Entspannt* gibt es keine 
 Mission, das langsam vorbeizieht: *Einsatz starten* (die Missionskarten, „Runde eröffnen"),
 *Beitreten*, *Offene Runden*, *Handbuch*, *Bestenliste*, *Meine Einsätze*, *Editor* und
 *Einstellungen* — mit der Maus, der Tastatur (Pfeile, Enter, Esc) oder dem Controller
-(Steuerkreuz, A, B). Oben rechts steht das Profil, das Konto des Browsers: Name, Farbe, die eigene
-Figur, die winkt, sobald der Name sich ändert, und wie viele Einsätze das Konto gespielt hat. Das
-Konto bewahrt Name, Farbe, Erfolge und Läufe über Neustarts und Deploys hinweg; *Meine
-Einsätze* listet seine Läufe, die Einstellungen löschen es auf Wunsch
+(Steuerkreuz, A, B). Oben in der Leiste steht das Konto des Browsers: der Kopf der eigenen Figur
+in ihrer Farbe, der Name und, wo Platz ist, wie viele Einsätze das Konto gespielt hat; ein Klick
+öffnet „Konto" in den Einstellungen, am Handy steht nur der Kopf. Den Namen tragen die Panels ein,
+die einen Platz nehmen (*Einsatz starten*, *Beitreten*, *Offene Runden*), und „Konto" — ein Name
+für die ganze Seite. Das Konto bewahrt Name, Farbe, Erfolge und Läufe über Neustarts und Deploys
+hinweg; *Meine Einsätze* listet seine Läufe, die Einstellungen löschen es auf Wunsch
 ([`docs/accounts.md`](docs/accounts.md)).
 *Offene Runden* listet jede Runde mit Kartenvorschau, Mission, Schwierigkeit, ihrer Crew als
 Figuren und den freien Plätzen — ein Klick auf *Beitreten* genügt, niemand muss einen Code

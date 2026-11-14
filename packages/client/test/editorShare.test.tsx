@@ -18,7 +18,7 @@ import {
 } from '../src/editor/session.js';
 import { readShared, SHARE_MAX_BYTES, sharedIn, shareLink } from '../src/editor/share.js';
 import { keepName, lastName } from '../src/pass.js';
-import { JoinScreen } from '../src/screens/Join.js';
+import { useProfileName } from '../src/profileName.js';
 
 const noop = (): void => undefined;
 
@@ -226,7 +226,7 @@ describe('a test run', () => {
     expect(bar(null)).not.toContain('topbar-editor');
   });
 
-  it('starts with the name the join screen keeps', () => {
+  it('starts with the name the menu keeps', () => {
     const items = new Map<string, string>();
     const localStorage = {
       getItem: (key: string) => items.get(key) ?? null,
@@ -237,20 +237,13 @@ describe('a test run', () => {
     expect(lastName()).toBe('');
     keepName('Anna');
     expect(lastName()).toBe('Anna');
-    const join = renderToStaticMarkup(
-      <JoinScreen
-        send={noop}
-        connected
-        missions={[]}
-        rooms={[]}
-        stats={[]}
-        picked={null}
-        onPick={noop}
-        openHandbook={noop}
-        openHistory={noop}
-      />,
-    );
-    expect(join).toContain('value="Anna"');
+    let started = '';
+    function Probe() {
+      [started] = useProfileName(null, noop, true);
+      return null;
+    }
+    renderToStaticMarkup(<Probe />);
+    expect(started).toBe('Anna');
     keepName('  ');
     expect(lastName()).toBe('');
   });

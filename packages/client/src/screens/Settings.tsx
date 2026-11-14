@@ -28,7 +28,7 @@ import type { Refusal } from '../ws.js';
 import { ControlSettings, KeyTable } from './ControlSettings.js';
 import { Icon } from './Icon.js';
 import { ProfileFields } from './ProfileFields.js';
-import { runsText } from './ProfileChip.js';
+import { runsText } from './BarAccount.js';
 import { Choice, Slider } from './SettingsParts.js';
 
 /**
@@ -505,8 +505,8 @@ interface PanelProps {
   account?: AccountView | null;
   /** asks the server to delete the account (`delete-account`) */
   onDeleteAccount?: () => void;
-  /** the account takes the name typed in „Konto" (`profile`) */
-  onName?: (name: string) => void;
+  /** the profile's name as the page edits it (profileName.ts): „Konto" types it anew */
+  profile?: { name: string; onName: (name: string) => void };
   /** the server's latest refusal on the line (ws.ts `Connection.refusal`) */
   refusal?: Refusal | null;
   /** the tab the panel opens on; the last one opened on this page by default */
@@ -536,7 +536,11 @@ function AccountTab(props: Required<Pick<PanelProps, 'onDeleteAccount'>> & Panel
   }, [step]);
   return (
     <>
-      <ProfileFields account={account} onName={props.onName ?? (() => undefined)} />
+      <ProfileFields
+        account={account}
+        name={props.profile?.name ?? ''}
+        onName={props.profile?.onName ?? (() => undefined)}
+      />
       <AccountSection
         account={account}
         step={step}

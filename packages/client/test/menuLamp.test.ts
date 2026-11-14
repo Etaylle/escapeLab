@@ -50,7 +50,7 @@ const DESKTOP: StageFacts = {
   safeBottom: 0,
   menuRight: 512,
   panelRight: 832,
-  chipBottom: 115,
+  ceiling: 49.2,
 };
 
 const PLACE = (() => {

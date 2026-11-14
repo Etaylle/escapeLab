@@ -517,11 +517,15 @@ right; the ring of every other control (Interface) would only box it in, so it d
 pointer only glows the item it is over and moves no focus, so that a name being typed keeps it.
 Under the items one quiet line says how the game is played: „Am Pult die Maschine, im Buch die
 Regeln — gelöst wird nur gemeinsam, per Stimme, ein Gerät je Kopf, Rücken an Rücken." A run that
-binds the pass stands first and lit, the items under it dimmed. The profile stands at the top right:
-the player's own figure idling in their colour, waving once a new name has settled, the name to
-type, the colour's name, and what the account holds (ProfileChip.tsx `accountLine`). Where the
-stage leaves it room for three and a half tiles — from about 1100 px across — the same figure stands
-large at the stage's right, the hero (The hero).
+binds the pass stands first and lit, the items under it dimmed. The account stands in the top bar,
+at its end, as a game's profile does (BarAccount.tsx): the player's own figure's head as its avatar
+— the dome and the visor turned three quarters to the bar's middle, in the account's colour, in a
+dark ring 30 px across —, the name in the mono, „Ohne Namen" before one, and where the bar has the
+room, from 1100 px across, the runs the account played; a press opens the settings' „Konto". The
+name is typed at the head of every panel that seats the pass and in „Konto", one name for the page.
+On a phone the avatar stands alone, a fingertip's target. Where the stage leaves it room for three
+and a half tiles — from about 1100 px across — the player's figure stands large at the stage's
+right, the hero (The hero).
 
 A panel slides in over the menu from its side in 200 ms, fading up, the menu dimmed under it; under
 reduced motion it only fades. Into the lobby and back out, the lab's sliding doors close over the
@@ -533,9 +537,9 @@ on the mission picked before — its card marked, its lab behind the menu — wh
 Under reduced motion the screens cut. The lobby keeps its layout and stands over the same scene,
 drifting on, evenly dimmed.
 
-Upright on a phone, 560 px across or less, the menu takes one column, the profile under the title.
-Held sideways, 500 px tall or less, the items fill the left column whole, 44 px each, the title and
-the profile stand at the right over the scene, and a panel takes the stage. Every control on the
+Upright on a phone, 560 px across or less, the menu takes one column under the title. Held
+sideways, 500 px tall or less, the items fill the left column whole, 44 px each, the title stands
+at the right over the scene, and a panel takes the stage. Every control on the
 menu and its panels is a target, 36 px under a pointer and 44 under a finger, and a phone's notch
 and home bar stay clear (`test/menuLayout.test.tsx`); the walkthrough measures the guest's phone
 upright and sideways at 932 × 430, 844 × 390, 750 × 369 and 667 × 375 (menu-phone.png,
@@ -569,14 +573,14 @@ without: 16.7 ms p50 and 16.7 to 16.8 p95, the light working out no sight a fram
 The menu's foreground belongs to the player's own crew figure. It stands large at the stage's
 right in front of the drifting lab, as the hero of God of War III's title screen stands before its
 world, the menu at the left — not a copy of anything: the lab's night-shift worker in the colour
-the profile shows, with the hand lamp. It is drawn with the world's own vector drawing and poses
+the account wears, with the hand lamp. It is drawn with the world's own vector drawing and poses
 (art.ts `drawScientist`, figure.ts `figurePose`), facing the menu at three quarters, on a canvas of
 its own at the stage's density. It stands on the scene's floor: under its boots a figure's shadow
 as a lit room throws it, and round them a soft drop shadow thrown a little to the bottom right,
-away from the key light, which a figure's own blob is too small to give at this size. The profile
-keeps its small figure: it is the player's badge — the name, the colour, the account — and
-stands for the hero where the hero is left out; the hero is the player in the scene. Both wave at
-a new name.
+away from the key light, which a figure's own blob is too small to give at this size. The top
+bar's avatar, its head, is the player's badge — the name, the colour, the account — and stands
+for the hero where the hero is left out; the hero is the player in the scene, and waves at a new
+name.
 
 **Size.** The hero stands 42 % of the stage's height tall, held to 4 to 6 scene tiles — 0.9 of a
 run's tile in a window as tall (viewport.ts `tileCss`), as the drift frames a lab that fills the
@@ -584,14 +588,15 @@ window; a lab too small to fill it the drift zooms in on until it covers the win
 `sceneShot`), and the hero does not grow with that zoom — and to the room the stage leaves
 it — across, from the menu's column (its items, the run's card, the lead line) and from the widest
 panel once the hero has stepped half a tile aside for it, to the stage's right edge or the window's
-safe area, 12 px clear of each; down, from under the profile to the floor that the stage's padding
-or a home bar leaves. Its feet stand five sixths across the stage, in the right third's middle,
-moved only as far as that room asks. It stands only where it can stand three and a half tiles tall
-at least (hero.ts `FEWEST_TILES`); on a phone held sideways or upright, and wherever the room holds
-fewer tiles of it, it is left out and the profile's figure stands for it. Below about 1200 px across
-the room beside the widest panel — 760 px from the stage's padding — sets its size, whatever the
-window's height, while a tile grows with that height: the taller the window, the wider it has to be
-for the hero. It stands from these widths on, from about 1100 px across on a laptop:
+safe area, 12 px clear of each; down, from under the stage's padding at its top to the floor that
+the stage's padding or a home bar leaves. Its feet stand five sixths across the stage, in the
+right third's middle, moved only as far as that room asks. It stands only where it can stand
+three and a half tiles tall at least (hero.ts `FEWEST_TILES`); on a phone held sideways or upright,
+and wherever the room holds fewer tiles of it, it is left out and the bar's avatar stands for it.
+Below about 1200 px across the room beside the widest panel — 760 px from the stage's padding —
+sets its size, whatever the window's height, while a tile grows with that height: the taller the
+window, the wider it has to be for the hero. It stands from these widths on, from about 1100 px
+across on a laptop:
 
 | Window's height | Narrowest window it stands in |
 | --- | --- |
@@ -618,10 +623,10 @@ How tall it stands, the menu laid out as menu.css lays it out:
 | Narrower, a phone | left out | |
 
 At 1024 px across the room beside the panel would hold a hero 154 px tall at any height, 2.6 tiles
-at 768 px of height and 3.1 at 640: too small to stand for the player beside the profile's figure.
+at 768 px of height and 3.1 at 640: too small to stand for the player beside the bar's avatar.
 The sizes test measures five windows off the stylesheets, the hero resting and stepped aside,
-against the menu's column, the profile, the widest panel and the safe areas, and the widths above
-(test/menuHeroSizes.test.ts); the walkthrough measures it in the browser at 1440 × 820, 1280 × 720
+against the menu's column, the stage's top, the widest panel and the safe areas, and the widths
+above (test/menuHeroSizes.test.ts); the walkthrough measures it in the browser at 1440 × 820, 1280 × 720
 and 1100 × 700, with a panel open and shut, and finds it left out at 1024 × 768 (tools/shots.mjs
 `checkHero`).
 

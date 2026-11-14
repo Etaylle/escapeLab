@@ -48,7 +48,7 @@ export const GLANCE_SHARE = 0.45;
  * draw it on every frame.
  */
 export const GLANCE_STEP = 0.1;
-/** What the hero keeps clear of the menu's column, the profile and the stage's edge, CSS px. */
+/** What the hero keeps clear of the menu's column and the stage's edges, CSS px. */
 export const CLEAR = 12;
 /** Where along the stage the hero's feet stand where it has the room: the right third's middle. */
 export const RIGHT_THIRD = 5 / 6;
@@ -70,7 +70,7 @@ export interface StageFacts {
   h: number;
   /** the window's height: the scene behind the stage fills the window, its tile follows it */
   windowH: number;
-  /** a phone, held sideways or upright: the profile's figure stands for the hero */
+  /** a phone, held sideways or upright: the top bar's avatar stands for the hero */
   phone: boolean;
   /** the stage's padding at the bottom: the floor the hero stands on */
   padBottom: number;
@@ -81,14 +81,14 @@ export interface StageFacts {
   menuRight: number;
   /** where the widest panel over the menu ends, from the stage's left */
   panelRight: number;
-  /** where the profile ends, from the stage's top */
-  chipBottom: number;
+  /** where the room over the hero ends, from the stage's top: the stage's padding there */
+  ceiling: number;
 }
 
 /**
  * The fewest scene tiles the hero stands tall: where the stage leaves it room for fewer — beside
  * the widest panel, in a window narrower than 1080 px at 720 px of height, 1115 px at 820, 1038 px
- * at the least (docs/art-bible.md „The hero") — it is left out, and the profile's figure stands
+ * at the least (docs/art-bible.md „The hero") — it is left out, and the top bar's avatar stands
  * for it, as on a phone.
  */
 export const FEWEST_TILES = 3.5;
@@ -130,7 +130,7 @@ export function heroTall(h: number, windowH: number): number {
  * The room the stage `f` leaves the hero, CSS px: across, from where its box may start resting
  * to where it may end stepped aside — clear of the menu's column resting, of the widest panel
  * stepped half a tile aside (STEP_TILES), of the stage's edge and its safe area — and down, from
- * the profile to the floor the stage's padding and its safe area leave.
+ * the stage's padding at its top to the floor the stage's padding and its safe area leave.
  */
 function roomOf(f: StageFacts): { left: number; right: number; floor: number; step: number } {
   const step = STEP_TILES * heroTile(f.windowH);
@@ -146,14 +146,14 @@ const ROUNDING = 1;
 /** The most CSS px a figure unit the room `room` on the stage `f` leaves the hero. */
 function scaleIn(f: StageFacts, room: ReturnType<typeof roomOf>): number {
   const across = (room.right - room.left - 2 * ROUNDING) / (HERO_BOX.front + HERO_BOX.back);
-  const down = (room.floor - (f.chipBottom + CLEAR)) / (HERO_BOX.top + HERO_BOX.bottom);
+  const down = (room.floor - (f.ceiling + CLEAR)) / (HERO_BOX.top + HERO_BOX.bottom);
   return Math.min(heroTall(f.h, f.windowH) / FIGURE_TALL, across, down);
 }
 
 /**
  * Where the hero stands on the stage `f` and how large: as tall as heroTall says — or as the
- * room beside the menu, the widest panel and under the profile allows (roomOf) — its feet in the
- * right third's middle, held inside that room, its shadow on the floor. Null where it is left
+ * room beside the menu and the widest panel, under the stage's top, allows (roomOf) — its feet in
+ * the right third's middle, held inside that room, its shadow on the floor. Null where it is left
  * out: on a phone, or where that room holds fewer than FEWEST_TILES of it.
  */
 export function heroPlace(f: StageFacts): HeroPlace | null {

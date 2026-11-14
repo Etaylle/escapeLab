@@ -13,6 +13,7 @@ import {
   markedAtMenu,
   menuNews,
   NOTHING_OPEN,
+  settingsOpen,
   pausePhaseOf,
   startPressed,
   usePause,
@@ -290,11 +291,20 @@ describe('opening the pause menu', () => {
     expect(gearOpens(NOTHING_OPEN, null)).toEqual({ ...NOTHING_OPEN, settings: true });
   });
 
+  it('opens the settings on „Konto" from the bar’s account, on the last tab from the gear', () => {
+    expect(settingsOpen(NOTHING_OPEN, 'konto')).toEqual({
+      ...NOTHING_OPEN,
+      settings: true,
+      tab: 'konto',
+    });
+    expect(settingsOpen({ ...NOTHING_OPEN, tab: 'konto' }, null).tab).toBeNull();
+  });
+
   it('is a controller’s Start, which closes whatever stands open again', () => {
     const open = startPressed(NOTHING_OPEN, 'lobby');
     expect(open).toEqual({ ...NOTHING_OPEN, pause: true });
     expect(startPressed(open, 'lobby')).toEqual(NOTHING_OPEN);
-    const deep = { pause: true, settings: true, handbook: 'blackout' };
+    const deep = { pause: true, settings: true, tab: 'konto' as const, handbook: 'blackout' };
     expect(startPressed(deep, 'run')).toEqual(NOTHING_OPEN);
     expect(startPressed(NOTHING_OPEN, null)).toEqual({ ...NOTHING_OPEN, settings: true });
   });

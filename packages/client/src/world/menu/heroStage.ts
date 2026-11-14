@@ -97,7 +97,7 @@ export interface HeroProbe {
 
 /** What the hero shows besides the clock, as the menu has it on each render. */
 export interface HeroLook {
-  /** the colour the profile shows */
+  /** the colour the profile wears (screens/BarAccount.tsx `profileColor`) */
   color: string;
   /** the microphone is on and sends */
   speaking: boolean;
@@ -135,22 +135,22 @@ function panelRightOf(stage: HTMLElement, box: DOMRect, bodyLeft: number): numbe
 export function stageFacts(stage: HTMLElement, canvas: HTMLCanvasElement): StageFacts | null {
   const box = stage.getBoundingClientRect();
   const body = stage.querySelector('.menu-body')?.getBoundingClientRect();
-  const chip = stage.querySelector('.profile-chip')?.getBoundingClientRect();
-  if (body === undefined || chip === undefined || box.width === 0 || box.height === 0) {
+  if (body === undefined || box.width === 0 || box.height === 0) {
     return null;
   }
   const safe = getComputedStyle(canvas);
+  const padding = getComputedStyle(stage);
   return {
     w: box.width,
     h: box.height,
     windowH: window.innerHeight,
     phone: window.matchMedia(PHONE_QUERY).matches,
-    padBottom: px(getComputedStyle(stage).paddingBottom),
+    padBottom: px(padding.paddingBottom),
     safeRight: px(safe.marginRight),
     safeBottom: px(safe.marginBottom),
     menuRight: body.right - box.left,
     panelRight: panelRightOf(stage, box, body.left),
-    chipBottom: chip.bottom - box.top,
+    ceiling: px(padding.paddingTop),
   };
 }
 
@@ -189,8 +189,8 @@ export interface Standing {
 }
 
 /**
- * Measures the stage the hero's canvas stands on, and again whenever it or the profile change
- * size or the window does: the hero placed anew, `changed` told.
+ * Measures the stage the hero's canvas stands on, and again whenever it changes size or the
+ * window does: the hero placed anew, `changed` told.
  */
 function watchStage(
   canvas: HTMLCanvasElement,
@@ -214,8 +214,6 @@ function watchStage(
   };
   const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure);
   observer?.observe(stage);
-  const chip = stage.querySelector('.profile-chip');
-  if (chip !== null) observer?.observe(chip);
   window.addEventListener('resize', measure);
   measure();
   return () => {

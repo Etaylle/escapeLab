@@ -69,6 +69,7 @@ function missionPanel(missions: MissionInfo[], send: (msg: ClientMessage) => voi
       send={send}
       connected
       name="Anna"
+      field={{ typed: 'Anna', onName: noop }}
       blocked={false}
       missions={missions}
       stats={[]}

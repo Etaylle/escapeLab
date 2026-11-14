@@ -90,6 +90,7 @@ export const GROUPS = [
     needs: [],
     captures: [
       'menu.png',
+      'menu-account.png',
       'menu-hero.png',
       'menu-hero-hover.png',
       'menu-1280.png',

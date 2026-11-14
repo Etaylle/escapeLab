@@ -6,7 +6,6 @@ import type { MissionInfo, Seat } from '@escapelab/core';
 import { WORLD, offVoice } from '../../core/test/voice.js';
 import { startPad, type PadProbe } from '../src/input/padRuntime.js';
 import { forgetProfile, keepProfile, lastColor, lastName, PASS_KEY } from '../src/pass.js';
-import { wavesAnew } from '../src/screens/CrewFigure.js';
 import { DIALOGS } from '../src/input/focus.js';
 import {
   focusMenu,
@@ -29,11 +28,20 @@ import {
   inviteArrived,
   JoinPanel,
   keptPick,
+  NAME_MISSING,
+  NameField,
   PICKED_KEY,
   pickedMission,
   usePicked,
 } from '../src/screens/MenuPanels.js';
-import { FIRST_COLOR, ProfileChip } from '../src/screens/ProfileChip.js';
+import {
+  Avatar,
+  BarAccount,
+  barBadge,
+  barName,
+  FIRST_COLOR,
+  profileColor,
+} from '../src/screens/BarAccount.js';
 import { takeIn } from '../src/ws.js';
 import { page as connectionPage, storage } from './page.js';
 
@@ -85,6 +93,7 @@ function joinField(): string {
       send={noop}
       connected
       name="Anna"
+      field={{ typed: 'Anna', onName: noop }}
       blocked={false}
       takeover={null}
       waiting={false}
@@ -101,6 +110,8 @@ function menu(seat: Seat | null = null, rooms = 0): string {
     <JoinScreen
       send={noop}
       connected
+      name="Anna"
+      onName={noop}
       missions={[blackout]}
       rooms={Array.from({ length: rooms }, (_, i) => ({
         ...room,
@@ -213,9 +224,9 @@ describe('the menu', () => {
     expect(html).toContain('value="QX7R"');
     // The menu waits under its panel: neither the keys nor a controller reach it.
     expect(html).toContain('<div class="menu-body" inert="">');
-    // The profile's name stays within reach beside it: the panel is no modal, the name not inert.
+    // The profile's name stands at the panel's head, within reach: the panel is no modal.
     expect(html).not.toContain('aria-modal');
-    expect(html.indexOf('class="profile-name"')).toBeLessThan(html.indexOf('class="menu-body"'));
+    expect(html).toMatch(/menu-panel--join.*<\/header><label class="menu-name">.*value="Anna"/);
     // A controller is held in the panel all the same.
     expect(DIALOGS.split(', ')).toContain('[role="dialog"]');
     // A menu has come up on it: the next this page shows — after a room closed — opens on nothing.
@@ -299,23 +310,33 @@ describe('the menu’s ways off it', () => {
     expect(Object.keys(none)).toEqual([]);
   });
 
-  it('stands the focus in the name as the menu comes up without one, else on its item', () => {
+  it('stands the focus on the item last taken as the menu comes up, the first where none was', () => {
     const focused: string[] = [];
     const root = {
       querySelector: (selector: string) => ({
         focus: ({ preventScroll }: FocusOptions) => focused.push(`${selector} ${preventScroll}`),
       }),
     } as unknown as Pick<HTMLElement, 'querySelector'>;
-    focusMenu(root, null, false);
-    focusMenu(root, 'history', false);
-    focusMenu(root, null, true);
-    focusMenu(root, 'history', true);
+    focusMenu(root, null);
+    focusMenu(root, 'history');
     expect(focused).toEqual([
-      '.profile-name true',
-      '.profile-name true',
       '.bound-back:not([disabled]), .menu-item true',
       '[data-item="history"] true',
     ]);
+  });
+
+  it('takes a panel’s focus to the name where there is none yet, else leaves it to the panel', () => {
+    const field = (typed: string): string =>
+      renderToStaticMarkup(<NameField typed={typed} onName={noop} />);
+    expect(field('')).toContain('data-focus="true"');
+    expect(field('  ')).toContain('data-focus="true"');
+    expect(field('Anna')).not.toContain('data-focus');
+    // A field no password manager takes for a login, as the old profile's was.
+    for (const attribute of ['name="crew-name"', 'autoComplete="off"', 'spellCheck="false"']) {
+      expect(field('Anna').toLowerCase()).toContain(attribute.toLowerCase());
+    }
+    expect(field('')).toContain('placeholder="z. B. Anna"');
+    expect(NAME_MISSING).toMatch(/Namen eintragen/);
   });
 });
 
@@ -367,6 +388,7 @@ describe('a panel over the menu', () => {
         send={noop}
         connected
         name="Anna"
+        field={{ typed: 'Anna', onName: noop }}
         blocked={false}
         takeover={null}
         waiting={false}
@@ -395,36 +417,53 @@ describe('a panel over the menu', () => {
   });
 });
 
-describe('the profile', () => {
-  it('shows the figure, the name to type, the colour kept, and a guest before an account', () => {
+describe('the account in the top bar', () => {
+  it('shows the avatar and the name, and no runs for a guest', () => {
     stubWindow('', '#f472b6');
-    const html = renderToStaticMarkup(<ProfileChip name="Anna" onName={noop} account={null} />);
-    const chip = '<section class="profile-chip" aria-label="Profil">';
-    expect(html.startsWith(`${chip}<canvas class="seat-figure"`)).toBe(true);
-    const field = html.match(/<input class="profile-name"[^>]*>/)?.[0] ?? '';
-    expect(field).toContain('value="Anna"');
-    expect(field).toContain('placeholder="z. B. Anna"');
-    expect(field).toContain('aria-label="Name"');
-    expect(field).toContain('autoComplete="off"');
-    expect(html).toContain('style="background:#f472b6"');
-    expect(html).toContain('Pink</span>');
-    expect(html).toContain('<span class="profile-slot">Gast</span>');
+    const html = renderToStaticMarkup(<BarAccount name="Anna" account={null} onOpen={noop} />);
+    expect(html).toBe(
+      '<button class="bar-account" aria-label="Konto: Anna" title="Konto: Anna">' +
+        '<canvas class="avatar" aria-hidden="true"></canvas>' +
+        '<span class="bar-account-name">Anna</span></button>',
+    );
+    // The avatar wears the colour the pass kept from the last lobby.
+    expect(profileColor(null)).toBe('#f472b6');
   });
 
-  it('waves once a new name has settled, as a figure waves at its player saying ready', () => {
-    const named = (wave: string, ready = false) => ({ ready, wave });
-    expect(wavesAnew(named('Ann'), named('Anna'))).toBe(true);
-    expect(wavesAnew(named('Anna'), named('Anna'))).toBe(false);
-    expect(wavesAnew(named('Anna'), named('Anna', true))).toBe(true);
-    expect(wavesAnew(named('Anna', true), named('Anna', true))).toBe(false);
-    expect(wavesAnew(named('Anna', true), named('Anna'))).toBe(false);
+  it('says so where no name is typed yet, and how many runs an account played', () => {
+    expect(barName('  ')).toBe('Ohne Namen');
+    expect(barName(' Anna ')).toBe('Anna');
+    const account = { name: 'Anna', color: null, since: 0, runs: 0, achievements: {} };
+    const told = { ...account, store: 'database' as const };
+    expect(barBadge(null)).toBeNull();
+    expect(barBadge(told)).toBeNull();
+    expect(barBadge({ ...told, runs: 1 })).toBe('1 Einsatz');
+    const html = renderToStaticMarkup(
+      <BarAccount name="" account={{ ...told, runs: 3 }} onOpen={noop} />,
+    );
+    expect(html).toContain('aria-label="Konto: Ohne Namen, 3 Einsätze"');
+    expect(html).toContain('<span class="bar-account-badge">3 Einsätze</span>');
+  });
+
+  it('opens „Konto" at a press', () => {
+    const open = vi.fn();
+    const button = BarAccount({ name: 'Anna', account: null, onOpen: open });
+    (button.props as { onClick: () => void }).onClick();
+    expect(open).toHaveBeenCalledTimes(1);
+  });
+
+  it('takes a picture of the player’s own where one is given, the figure’s head else', () => {
+    expect(renderToStaticMarkup(<Avatar color="#2dd4bf" src="/a.png" />)).toContain(
+      '<img class="avatar" src="/a.png" alt=""/>',
+    );
+    expect(renderToStaticMarkup(<Avatar color="#2dd4bf" />)).toBe(
+      '<canvas class="avatar" aria-hidden="true"></canvas>',
+    );
   });
 
   it('wears the crew’s first colour before any was worn', () => {
     stubWindow();
-    const html = renderToStaticMarkup(<ProfileChip name="" onName={noop} account={null} />);
-    expect(html).toContain(`style="background:${FIRST_COLOR}"`);
-    expect(html).toContain('Türkis</span>');
+    expect(profileColor(null)).toBe(FIRST_COLOR);
   });
 
   it('keeps the account’s name and colour with the pass, no colour but a crew colour', () => {

@@ -566,7 +566,8 @@ describe('the menu’s missions and rounds', () => {
    */
   function joinScreen(missions: MissionInfo[], rooms: RoomSummary[] = [], raw = false): string {
     vi.stubGlobal('window', { location: { search: '' } });
-    const section = { send: noop, connected: true, name: 'Anna', blocked: false };
+    const field = { typed: 'Anna', onName: noop };
+    const section = { send: noop, connected: true, name: 'Anna', field, blocked: false };
     const html = renderToStaticMarkup(
       <>
         <MissionPanel

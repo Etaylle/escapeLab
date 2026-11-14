@@ -2,14 +2,15 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { AccountView } from '@escapelab/core';
 import { PASS_KEY } from '../src/pass.js';
+import { FIRST_COLOR, profileColor } from '../src/screens/BarAccount.js';
 import { JoinScreen } from '../src/screens/Join.js';
-import { FIRST_COLOR } from '../src/screens/ProfileChip.js';
 import { storage } from './page.js';
 
 /**
- * The hero in the colour the profile shows (screens/Join.tsx, MenuHero.tsx): the account's,
- * where the server told one; else the one the pass kept from a lobby; else the crew's first.
- * The hero stands in for itself here as a mark of the colour it is handed.
+ * The hero in the colour the profile wears, as the top bar's avatar does (screens/Join.tsx,
+ * MenuHero.tsx, BarAccount.tsx `profileColor`): the account's, where the server told one; else
+ * the one the pass kept from a lobby; else the crew's first. The hero stands in for itself here
+ * as a mark of the colour it is handed.
  */
 
 vi.mock('../src/screens/MenuHero.js', async () => {
@@ -40,7 +41,7 @@ function browser(color: string | null): void {
   vi.stubGlobal('sessionStorage', storage(new Map()));
 }
 
-/** The start screen with `account` told, and the colours its profile and its hero wear. */
+/** The start screen with `account` told, and the colours the bar's avatar and its hero wear. */
 function colours(account: AccountView | null): {
   profile: string | undefined;
   hero: string | undefined;
@@ -49,6 +50,8 @@ function colours(account: AccountView | null): {
     <JoinScreen
       send={noop}
       connected
+      name="Anna"
+      onName={noop}
       missions={[]}
       rooms={[]}
       seat={null}
@@ -62,10 +65,7 @@ function colours(account: AccountView | null): {
       openSettings={noop}
     />,
   );
-  return {
-    profile: /class="profile-dot" style="background:([^";]+)/.exec(html)?.[1],
-    hero: /data-hero="([^"]+)"/.exec(html)?.[1],
-  };
+  return { profile: profileColor(account), hero: /data-hero="([^"]+)"/.exec(html)?.[1] };
 }
 
 afterEach(() => {

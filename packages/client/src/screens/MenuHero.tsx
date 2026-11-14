@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState, type RefObject } from 'react';
 import { crewPass } from '../pass.js';
+import { NAME_SETTLE_MS } from '../profileName.js';
 import { reducedMotion, watchMotion } from '../settings.js';
 import { useVoice } from '../voice/useVoice.js';
 import { startHero, walksIn, type HeroLook } from '../world/menu/heroStage.js';
 import { browserSceneHost } from '../world/menu/loop.js';
 import { doorsFresh, doorsMark } from './DoorWipe.js';
-import { WAVE_SETTLE_MS } from './ProfileChip.js';
 
 /** Whether this page came back from the lobby through the doors; null before it was asked. */
 let cameBackOnPage: boolean | null = null;
@@ -50,9 +50,9 @@ function useSends(): boolean {
 
 /** What the menu hands its hero. */
 interface Props {
-  /** the name typed in the profile: the hero waves as a new one settles */
+  /** the profile's name (profileName.ts): the hero waves as a new one settles */
   name: string;
-  /** the colour the profile shows */
+  /** the colour the profile wears (BarAccount.tsx `profileColor`) */
   color: string;
   /** a panel lies open over the menu */
   panel: boolean;
@@ -64,10 +64,10 @@ interface Props {
 
 /**
  * The hero (docs/art-bible.md „The hero"): the player's own crew figure standing large at the
- * right of the menu's stage, in front of the drifting lab, in the colour the profile shows — the
- * profile's own small figure stays, standing for it where the stage leaves no room — facing the
- * menu: breathing, glancing round now and then, a light across its visor while the microphone
- * sends, waving as a new name settles in the profile, the hand lamp's beam sweeping over the lab
+ * right of the menu's stage, in front of the drifting lab, in the colour the profile wears — the
+ * top bar's avatar, its head, stands for it where the stage leaves no room — facing the menu:
+ * breathing, glancing round now and then, a light across its visor while the microphone sends,
+ * waving as a new name settles, the hand lamp's beam sweeping over the lab
  * behind it and holding a beat on the item the player attends to (world/menu/heroStage.ts). On
  * the first menu of a page it walks in from the stage's right edge and switches its lamp on with
  * the cold open's click; back from the lobby, and under reduced motion, it stands there. It turns
@@ -80,7 +80,7 @@ interface Props {
 export function MenuHero({ name, color, panel, card, leaving }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wake = useRef<(() => void) | null>(null);
-  const waveAt = useChangedAt(useSettled(name.trim(), WAVE_SETTLE_MS));
+  const waveAt = useChangedAt(useSettled(name.trim(), NAME_SETTLE_MS));
   const speaking = useSends();
   const asked = { color, speaking, panel, card, leaving };
   const look = useRef<HeroLook>({ ...asked, waveAt: null });

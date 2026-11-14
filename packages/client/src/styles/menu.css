@@ -1,5 +1,5 @@
 /* ══ the menu over its living scene ══════════════════════════════════════════
- * screens/Join.tsx, MainMenu.tsx, MenuPanels.tsx, ProfileChip.tsx, MenuScene.tsx, world/menu/.
+ * screens/Join.tsx, MainMenu.tsx, MenuPanels.tsx, MenuScene.tsx, MenuHero.tsx, world/menu/.
  * Behind the join screen's content, over the whole window, the lit lab of the mission picked
  * drifts along the opening's shot; a vignette lies over it, darker behind the menu, the page's
  * scanlines over all (ui.css). The screens' area is a stacking context of its own, so that the
@@ -70,7 +70,7 @@
     rgba(5, 8, 12, 0.22);
 }
 
-/* ── the stage: the title, the profile, the menu ────────────────────────── */
+/* ── the stage: the title, the menu; the account stands in the top bar ─── */
 
 .menu {
   /* How wide a panel over the menu grows at most: the hero keeps clear of it (MenuHero.tsx). */
@@ -80,11 +80,11 @@
   min-width: 0;
   height: 100%;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: auto minmax(0, 1fr);
   grid-template-areas:
-    'head chip'
-    'body body';
+    'head'
+    'body';
   column-gap: 32px;
   row-gap: clamp(16px, 4.5vh, 44px);
   padding: clamp(22px, 6vh, 60px) max(clamp(20px, 5vw, 80px), env(safe-area-inset-right))
@@ -268,75 +268,10 @@
   font-size: 13px;
 }
 
-/* ── the profile, at the stage's top right ──────────────────────────────── */
-
-.profile-chip {
-  grid-area: chip;
-  align-self: start;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 6px 14px 6px 8px;
-  border: 1px solid var(--line-2);
-  border-radius: 14px;
-  background: rgba(9, 14, 19, 0.9);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
-}
-
-.profile-chip .seat-figure {
-  flex: none;
-  width: 46px;
-  height: 54px;
-}
-
-.profile-who {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-}
-
-.profile-name {
-  width: 168px;
-  padding: 6px 9px;
-  background: rgba(5, 8, 12, 0.7);
-  font-size: 15px;
-}
-
-.profile-color {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  color: var(--muted);
-  font-family: var(--mono);
-  font-size: 11.5px;
-  letter-spacing: 0.08em;
-}
-
-.profile-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-}
-
-/* Where an account's sign-in will sit (backlog K-1): a guest today. */
-.profile-slot {
-  align-self: stretch;
-  display: flex;
-  align-items: center;
-  padding-left: 12px;
-  border-left: 1px solid var(--line-2);
-  color: var(--muted);
-  font-family: var(--mono);
-  font-size: 11px;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
-}
-
 /* ── the hero, standing large at the stage's right ──────────────────────── */
 
-/* screens/MenuHero.tsx places and sizes its canvas on the stage, clear of the menu's column, the
-   profile and the widest panel; it lies under every panel and catches no pointer. Its margins
+/* screens/MenuHero.tsx places and sizes its canvas on the stage, clear of the menu's column and
+   the widest panel; it lies under every panel and catches no pointer. Its margins
    carry the window's safe areas to the script, which keeps the hero clear of them: placed by
    its left and top, a canvas's right and bottom margins move nothing. */
 .menu-hero {
@@ -395,6 +330,27 @@
 
 .menu-panel p {
   margin: 0 0 12px;
+}
+
+/* The profile's name at the head of a panel that seats the pass (MenuPanels.tsx `NameField`). */
+.menu-name {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 14px;
+}
+
+.menu-name-label {
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+.menu-name-field {
+  width: min(100%, 240px);
 }
 
 .menu-panel-actions {
@@ -470,15 +426,9 @@
 
 /* ── a phone held upright ───────────────────────────────────────────────── */
 
-/* One column: the title, the profile under it, the menu under that, a panel over the menu. */
+/* One column: the title, the menu under it, a panel over the menu. */
 @media (max-width: 560px) {
   .menu {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto auto minmax(0, 1fr);
-    grid-template-areas:
-      'head'
-      'chip'
-      'body';
     row-gap: 18px;
     padding: 24px max(18px, env(safe-area-inset-right)) max(18px, env(safe-area-inset-bottom))
       max(18px, env(safe-area-inset-left));
@@ -495,10 +445,6 @@
     letter-spacing: 0.16em;
   }
 
-  .profile-chip {
-    justify-self: start;
-  }
-
   .menu-body {
     width: 100%;
   }
@@ -508,17 +454,16 @@
 
 /*
  * The menu takes the left column whole, one item a fingertip's height under the next; the title
- * and the profile stand at the right over the scene, which shows beside the menu. A panel takes
- * the stage whole. What the column cannot hold — the card of a run that binds the pass, the
- * quiet lines — scrolls in it.
+ * stands at the right over the scene, which shows beside the menu. A panel takes the stage whole.
+ * What the column cannot hold — the card of a run that binds the pass, the quiet lines — scrolls
+ * in it.
  */
 @media (orientation: landscape) and (max-height: 500px) {
   .menu {
     grid-template-columns: minmax(0, 330px) minmax(0, 1fr);
-    grid-template-rows: auto auto minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
     grid-template-areas:
       'body head'
-      'body chip'
       'body .';
     column-gap: 24px;
     row-gap: 10px;
@@ -540,21 +485,6 @@
     font-size: 11px;
     line-height: 1.5;
     letter-spacing: 0.14em;
-  }
-
-  /* The profile keeps to its column: the name's field gives way where the window is narrow. */
-  .profile-chip {
-    justify-self: end;
-    max-width: 100%;
-  }
-
-  .profile-who {
-    flex: 1 1 auto;
-  }
-
-  .profile-name {
-    width: 100%;
-    max-width: 168px;
   }
 
   .menu-body {
