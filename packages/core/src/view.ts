@@ -520,15 +520,29 @@ function gradeFor(state: GameState): Grade | null {
   const alarms = state.penaltySeq;
   const hints = state.hintsUsed;
   if (alarms === 0 && hints === 0 && spare >= 0.3) {
-    return { rank: 'S', label: 'Makellos — kein einziger Alarm, massig Zeit übrig' };
+    return { rank: 'S', label: flawlessLabel(state.mission) };
   }
   if (alarms <= 1 && hints <= 1 && spare >= 0.15) {
     return { rank: 'A', label: 'Sauber — fast ohne Zwischenfälle' };
   }
   if (alarms <= 3) {
-    return { rank: 'B', label: 'Solide — es hat gewackelt, aber alle sind draußen' };
+    return { rank: 'B', label: solidLabel(state.mission) };
   }
   return { rank: 'C', label: 'Knapp vorbei an der Katastrophe' };
+}
+
+/** The top rank in words: time to spare where a clock ran, no note bought where none did. */
+function flawlessLabel(mission: Mission): string {
+  return hasClock(mission)
+    ? 'Makellos — kein einziger Alarm, massig Zeit übrig'
+    : 'Makellos — kein einziger Alarm, keine Notiz gebraucht';
+}
+
+/** The third rank in words: the crew out through the hatch, or every station done without one. */
+function solidLabel(mission: Mission): string {
+  return mission.map.exit === undefined
+    ? 'Solide — es hat gewackelt, aber jede Station ist abgenommen'
+    : 'Solide — es hat gewackelt, aber alle sind draußen';
 }
 
 /**

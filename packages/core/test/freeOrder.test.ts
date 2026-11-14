@@ -359,7 +359,24 @@ describe('a mission without a clock', () => {
     expect(out.phase).toBe('won');
     expect(report.timeLimitSec).toBe(0);
     expect(runSeconds(report)).toBe(3 * 3600);
-    expect(viewFor(out, 'p1').grade?.rank).toBe('S');
+    // Time to spare would be a word too many: nothing ran out.
+    expect(viewFor(out, 'p1').grade).toEqual({
+      rank: 'S',
+      label: 'Makellos — kein einziger Alarm, keine Notiz gebraucht',
+    });
+  });
+
+  it('grades a run without a hatch in words it can bear: nobody had to get out', () => {
+    const noHatch = started(freeLab({ map: { ...freeLab().map, exit: undefined } }));
+    const won = ['eins', 'zwei', 'drei'].reduce((state, id) => take(state, id, T0 + 1000), noHatch);
+    // Two alarms, as a drone or a wrong move would have cost: the third rank.
+    const shaky = { ...won, penaltySeq: 2 };
+    expect(viewFor(shaky, 'p1').grade).toEqual({
+      rank: 'B',
+      label: 'Solide — es hat gewackelt, aber jede Station ist abgenommen',
+    });
+    const throughTheHatch = viewFor({ ...shaky, mission: freeLab() }, 'p1').grade;
+    expect(throughTheHatch?.label).toBe('Solide — es hat gewackelt, aber alle sind draußen');
   });
 
   it('gives the notes of the last shift for no time, and mission control names no place', () => {
