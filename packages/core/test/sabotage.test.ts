@@ -122,9 +122,10 @@ describe('sabotage emergencies', () => {
 
   it('has the plant’s loudspeakers say so as it starts, every time, where the mission gives a word', () => {
     const first = applyAction(playing(announcing), { type: 'sabotage-start', at: T0 + 1000 });
+    const announce = { kind: 'radio', label: ANNOUNCE, seconds: null, moment: 'announce' } as const;
     expect(first.events.slice(-2)).toEqual([
       { at: T0 + 1000, kind: 'sabotage', label: 'Notfall: KÜHLUNG AUSGEFALLEN', seconds: null },
-      { at: T0 + 1000, kind: 'radio', label: ANNOUNCE, seconds: null, moment: 'announce' },
+      { at: T0 + 1000, ...announce, speaker: { role: 'pa', person: 'anlage' } },
     ]);
     const cleared = applyAction(first, { type: 'sabotage-cleared', at: T0 + 9000 });
     const second = applyAction(cleared, { type: 'sabotage-start', at: T0 + 200_000 });
@@ -136,13 +137,8 @@ describe('sabotage emergencies', () => {
     // Without a message the loudspeakers stay quiet.
     const quiet = applyAction(playing(), { type: 'sabotage-start', at: T0 + 1000 });
     expect(quiet.events.filter((e) => e.kind === 'radio' && e.at > T0)).toEqual([]);
-    expect(radioLines(announcing).at(-1)).toEqual({
-      text: ANNOUNCE,
-      when: 'announce',
-      puzzleId: null,
-      speaker: 'pa',
-      mood: null,
-    });
+    const message = { text: ANNOUNCE, when: 'announce', puzzleId: null, role: 'pa', mood: null };
+    expect(radioLines(announcing).at(-1)).toEqual(message);
   });
 
   it('never starts twice or outside a running mission', () => {

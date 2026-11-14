@@ -1,5 +1,8 @@
+import { readdirSync, statSync } from 'node:fs';
+import { join, sep } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { precacheFiles } from '../src/sw/build.js';
+import { precached, precacheFiles, versionOf } from '../src/sw/build.js';
 import { routeOf } from '../src/sw/routes.js';
 
 const ORIGIN = 'https://lab.test';
@@ -71,6 +74,45 @@ describe('the precache list', () => {
 
   it('leaves out dotfiles, whatever folder they lie in', () => {
     expect(precacheFiles(['.vite/manifest.json'], ['.DS_Store', 'icons/.hidden'])).toEqual(['/']);
+  });
+
+  it('leaves out every recording of the radio: the game fetches each as it queues it', () => {
+    const publicDir = fileURLToPath(new URL('../public', import.meta.url));
+    const published = readdirSync(publicDir, { recursive: true, encoding: 'utf8' })
+      .filter((name) => statSync(join(publicDir, name)).isFile())
+      .map((name) => name.split(sep).join('/'));
+    const voices = published.filter((name) => name.startsWith('voice/'));
+    expect(voices.length).toBeGreaterThan(50);
+    expect(voices).toContain('voice/manifest.json');
+    const files = precacheFiles([], published);
+    expect(files.filter((file) => file.startsWith('/voice/'))).toEqual([]);
+    // Everything else of public/ stays in: the lab's sounds, the music, the icons.
+    expect(files).toHaveLength(published.length - voices.length + 1);
+    const names = ['voice/helmut-1.mp3', 'voices.svg', 'sfx/a.mp3'];
+    expect(names.map(precached)).toEqual([false, true, true]);
+    // Not precached, a recording is the browser's to fetch, never the worker's.
+    const line = { method: 'GET', url: `${ORIGIN}/voice/helmut-1.mp3` };
+    expect(routeOf(line, ORIGIN, new Set(files))).toBeNull();
+  });
+
+  it('versions the worker by the build and what it keeps, never by a take of the radio', () => {
+    const built = { 'assets/index-1.js': 'code', 'sw.js': 'worker', 'index.html': '<html>' };
+    const published = {
+      'icon.svg': '<svg/>',
+      'voice/helmut-1.mp3': 'take',
+      'voice/manifest.json': '{}',
+    };
+    const version = (files: Record<string, string>, app: Record<string, string> = built): string =>
+      versionOf(app, Object.keys(files), (name) => files[name] ?? '');
+    const first = version(published);
+    expect(first).toMatch(/^[0-9a-f]{12}$/);
+    // A new take of the radio, a new voice's lines, a new list of them: the same worker.
+    const takes = { 'voice/helmut-1.mp3': 'take again', 'voice/laura-1.mp3': 'hers' };
+    expect(version({ ...published, ...takes, 'voice/manifest.json': '{"lines":{}}' })).toBe(first);
+    // An icon or the app changed: a new one; the worker's own file is not its version's.
+    expect(version({ ...published, 'icon.svg': '<svg></svg>' })).not.toBe(first);
+    expect(version(published, { ...built, 'assets/index-1.js': 'code 2' })).not.toBe(first);
+    expect(version(published, { ...built, 'sw.js': 'worker 2' })).toBe(first);
   });
 });
 

@@ -1,15 +1,45 @@
 import { z } from 'zod';
 import type { Mission } from './mission.js';
-import { mulberry32 } from './rng.js';
+import { pickOf } from './rng.js';
 
 /**
  * A line as a mission writes it: one text, or two or three to choose from, so that a run hears
- * one take and a rematch most often another (`pickLine`). Each text is its own recording.
+ * one take and a rematch most often another (`pickLine`). Each text is its own recording, and
+ * may carry ElevenLabs' audio tags for its delivery (`shownText`).
  */
 export type Line = string | readonly string[];
 
+/**
+ * An audio tag in a line as written: a direction in square brackets — „[sighs]", „[exhales]" —
+ * that the voice script hands ElevenLabs with the words and that nobody reads (`shownText`).
+ */
+const AUDIO_TAG = /\s*\[[^[\]]+\]\s*/g;
+
+/** Punctuation that closes up to the word before it, where a tag stood between them. */
+const CLOSING = /^[,.!?;:]/;
+
+/**
+ * A line as it is shown and spoken of — on the objective bar, in the Einsatzprotokoll, in the
+ * lobby — its audio tags taken out with the space around them: a tag at either end leaves
+ * nothing, one between two words a single space, one before a comma or a stop none. The
+ * recording is found by this text, said by whoever speaks it; only its render hears the tags.
+ */
+export function shownText(text: string): string {
+  const spaced = text.replace(AUDIO_TAG, (tag: string, at: number, whole: string) => {
+    const rest = whole.slice(at + tag.length);
+    return at === 0 || rest === '' || CLOSING.test(rest) ? '' : ' ';
+  });
+  return spaced.replace(/ {2,}/g, ' ').trim();
+}
+
+/** A text of a line: something to say once its audio tags are taken out. */
+const textSchema = z
+  .string()
+  .min(1)
+  .refine((text) => shownText(text) !== '', 'Ein Funkspruch nur aus Regieanweisungen sagt nichts.');
+
 /** A line in a mission file: a text, or a list of two or three, none of them empty. */
-export const lineSchema = z.union([z.string().min(1), z.array(z.string().min(1)).min(2).max(3)]);
+export const lineSchema = z.union([textSchema, z.array(textSchema).min(2).max(3)]);
 
 /** Every text `line` may say, in its order. */
 export function variantsOf(line: Line): readonly string[] {
@@ -19,30 +49,24 @@ export function variantsOf(line: Line): readonly string[] {
 /**
  * The text a run says of `line` at `key` — its place in the mission: `solved:<station>`,
  * `clock:lastMinute`, … — the `occurrence`-th time it comes in the run (an emergency's lines
- * come once for each emergency): the first from the run's `seed` and the key, an FNV-1a hash of
- * it mixed into the seed, so that one seed always picks the same and another most often other
- * takes; each later occurrence the next text in turn, so that a run repeats none before it must.
+ * come once for each emergency): the first from the run's `seed` and the key (rng.ts `pickOf`),
+ * so that one seed always picks the same and another most often other takes; each later
+ * occurrence the next text in turn, so that a run repeats none before it must. As written, its
+ * audio tags with it.
  */
 export function pickLine(line: Line, seed: number, key: string, occurrence = 0): string {
-  const texts = variantsOf(line);
-  let hash = 0x811c9dc5;
-  for (const char of key) {
-    hash ^= char.charCodeAt(0);
-    hash = Math.imul(hash, 0x01000193);
-  }
-  const first = Math.floor(mulberry32((seed ^ hash) >>> 0)() * texts.length);
-  return texts[(first + occurrence) % texts.length] ?? '';
+  return pickOf(variantsOf(line), seed, key, occurrence) ?? '';
 }
 
 /**
  * When a line is heard: over the lab's loudspeakers while the intro keeps the power on (`pa`),
  * then on the radio — as the clock starts, while a station stays quiet, as it is solved, as the
  * hatch unlocks — and over the loudspeakers again, on their emergency power, as an emergency
- * starts (`announce`). The operator answers what the run does besides: an emergency as it
- * starts and as it ends, cleared in time or missed; the run's first alarm; the clock, with five
+ * starts (`announce`). The radio answers what the run does besides: an emergency as it starts
+ * and as it ends, cleared in time or missed; the run's first alarm; the clock, with five
  * minutes, two and one left; and the run's end, won or lost, which the end card plays. Before
- * a run, in the lobby, the operator makes a radio check once the whole crew stands ready
- * (`lobby`, the Funkprobe).
+ * a run, in the lobby, the Leitstelle makes a radio check once the whole crew stands ready
+ * (`lobby`, the Funkprobe). Who speaks at each: `roleOf`.
  */
 export const RADIO_MOMENTS = [
   'pa',
@@ -63,26 +87,59 @@ export const RADIO_MOMENTS = [
 export type RadioMoment = (typeof RADIO_MOMENTS)[number];
 
 /**
- * Who says a line: the plant's announcement system over its loudspeakers (`pa`), a building's
- * voice, or mission control's operator on the radio (`operator`), a person on the night shift.
+ * Who says a line, as a part of the cast (cast.ts): the plant's announcement system over its
+ * loudspeakers (`pa`), a building's voice; the Leitstelle on duty on the radio (`operator`), a
+ * person on the night shift; or the Schichtleitung (`lead`), a second voice that cuts in on the
+ * radio when it gets serious.
  */
-export type Speaker = 'pa' | 'operator';
+export const ROLES = ['pa', 'operator', 'lead'] as const;
+export type Role = (typeof ROLES)[number];
 
-/** The moments the plant's loudspeakers speak at; the operator speaks at every other. */
-const PA_MOMENTS: ReadonlySet<RadioMoment> = new Set(['pa', 'announce']);
+/**
+ * Who speaks at each moment: the loudspeakers the announcement and the plant's message on an
+ * emergency; the Schichtleitung the clock's calls and the last word on a run lost; the
+ * Leitstelle every other line — the story, the nudges, the answers, the debriefing of a run won
+ * and the lobby's Funkprobe.
+ */
+const ROLE_AT: Readonly<Record<RadioMoment, Role>> = {
+  pa: 'pa',
+  start: 'operator',
+  nudge: 'operator',
+  solved: 'operator',
+  escape: 'operator',
+  announce: 'pa',
+  emergency: 'operator',
+  cleared: 'operator',
+  missed: 'operator',
+  alarm: 'operator',
+  clock: 'lead',
+  won: 'operator',
+  lost: 'lead',
+  lobby: 'operator',
+};
 
-/** Who speaks at `moment`. */
-export function speakerOf(moment: RadioMoment): Speaker {
-  return PA_MOMENTS.has(moment) ? 'pa' : 'operator';
+/** The role that speaks at `moment`. */
+export function roleOf(moment: RadioMoment): Role {
+  return ROLE_AT[moment];
 }
 
 /**
- * How the operator says a line, by the moment it comes at: the run's first alarm and an emergency
- * missed tense, the clock pressing, an emergency urgent as it starts and relieved as it is
- * cleared, a run won warm and a run lost quiet, the lobby's Funkprobe calm. The run's story — the
- * start, the stations, the escape — and the plant's loudspeakers have none: they speak as they
- * always spoke. The voice script asks ElevenLabs for a mood by an audio tag beside the words
- * (scripts/voice.ts `MOOD_TAGS`), never in the words a subtitle shows.
+ * Who said a line in a run: the role, and the person of the night's cast who fills it
+ * (cast.ts `castOf`) — by their id in the roster, never their voice.
+ */
+export interface Speaker {
+  readonly role: Role;
+  readonly person: string;
+}
+
+/**
+ * How a line on the radio is said, by the moment it comes at: the run's first alarm and an
+ * emergency missed tense, the clock pressing, an emergency urgent as it starts and relieved as
+ * it is cleared, a run won warm and a run lost quiet, the lobby's Funkprobe calm — whoever of
+ * the cast says it. The run's story — the start, the stations, the escape — and the plant's
+ * loudspeakers have none: they speak as they always spoke. The voice script asks ElevenLabs for
+ * a mood by an audio tag beside the words (scripts/voice.ts `MOOD_TAGS`), never in the words a
+ * subtitle shows.
  */
 export const MOODS = {
   alarm: 'tense',
@@ -96,7 +153,7 @@ export const MOODS = {
 } as const satisfies Partial<Record<RadioMoment, string>>;
 export type Mood = (typeof MOODS)[keyof typeof MOODS];
 
-/** How the operator says a line at `moment` (MOODS); null where it has no mood of its own. */
+/** How a line at `moment` is said (MOODS); null where it has no mood of its own. */
 export function moodOf(moment: RadioMoment): Mood | null {
   return (MOODS as Partial<Record<RadioMoment, Mood>>)[moment] ?? null;
 }
@@ -130,20 +187,23 @@ export function wonBand(leftMs: number): WonBand {
 export const LOST_CAUSES = ['time', 'alarms', 'abandoned'] as const;
 export type LostCause = (typeof LOST_CAUSES)[number];
 
-/** One line that can be heard in a run: what it says, when, who says it, and how. */
+/**
+ * One line that can be heard in a run: what it says — as shown, its audio tags taken out — when,
+ * which role says it, and how.
+ */
 export interface RadioLine {
   readonly text: string;
   readonly when: RadioMoment;
   /** the station a nudge or a solve's line belongs to; null for the others */
   readonly puzzleId: string | null;
-  readonly speaker: Speaker;
-  /** how the operator says it (MOODS); null for a line said as every line was */
+  readonly role: Role;
+  /** how it is said (MOODS); null for a line said as every line was */
   readonly mood: Mood | null;
 }
 
 /**
- * Every text of `line` heard at `when`, each said by whoever speaks then, as the moment wants it
- * said, and each its own recording; none where the mission has no such line.
+ * Every text of `line` heard at `when`, each as shown, said by the role that speaks then, as the
+ * moment wants it said, and each its own recording; none where the mission has no such line.
  */
 const textsOf = (
   line: Line | undefined,
@@ -153,10 +213,10 @@ const textsOf = (
   line === undefined
     ? []
     : variantsOf(line).map((text) => ({
-        text,
+        text: shownText(text),
         when,
         puzzleId,
-        speaker: speakerOf(when),
+        role: roleOf(when),
         mood: moodOf(when),
       }));
 

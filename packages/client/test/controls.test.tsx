@@ -34,6 +34,7 @@ function viewWith(items: Item[]): PlayerView {
     missionTitle: 'Blackout im Labor',
     difficulty: 'normal',
     storyText: '',
+    cast: { pa: 'anlage', operator: 'helmut', lead: null },
     crewSize: { min: 2, max: 3 },
     chat: [],
     you,

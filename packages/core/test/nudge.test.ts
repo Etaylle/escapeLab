@@ -65,6 +65,7 @@ describe('mission control watching a quiet station', () => {
       label: FIRST[0],
       seconds: null,
       moment: 'nudge',
+      speaker: { role: 'operator', person: 'helmut' },
     });
     expect(spoken.nudgesGiven).toBe(1);
   });
@@ -162,6 +163,7 @@ describe('what mission control says unasked', () => {
       label: FIRST[0],
       seconds: null,
       moment: 'nudge',
+      speaker: { role: 'operator', person: 'helmut' },
     };
     expect(viewFor(spoken, 'p1').events.at(-1)).toEqual(line);
     expect(viewForSpectator(spoken).events.at(-1)).toEqual(line);

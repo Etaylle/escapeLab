@@ -3080,18 +3080,30 @@ const MS_PER_WORD = 200;
 /** A line's words, as the radio-line test counts them (core test/radioLines.test.ts). */
 const wordsOf = (line) => line.split(/\s+/).filter((word) => /[\p{L}\p{N}]/u.test(word)).length;
 
-/** The id of a line's recording, as the voice script names it: the first 12 hex of its SHA-1. */
-const voiceIdOf = (text) => createHash('sha1').update(text, 'utf8').digest('hex').slice(0, 12);
+/**
+ * A line on the air as the recordings name it: its words, and the person of the night's cast who
+ * says them (core cast.ts) — each person has a recording of their own; null for no event.
+ */
+const airLineOf = (event) =>
+  event === undefined ? null : { label: event.label, person: event.speaker.person };
 
-/** The moments of the run's story on the radio; a line kept before moments were noted is one. */
+/**
+ * The id of a line's recording, as the voice script names it: the person's, and the first 12
+ * hex of the SHA-1 of its words.
+ */
+const voiceIdOf = ({ label, person }) =>
+  `${person}-${createHash('sha1').update(label, 'utf8').digest('hex').slice(0, 12)}`;
+
+/** The moments of the run's story on the radio. */
 const STORY = new Set(['start', 'solved', 'escape']);
 
 /** The newest line of the run's story on `player`'s radio, as its view has it; null before one. */
 const newestStory = (player) =>
-  [...player.seen.view.events]
-    .reverse()
-    .find((e) => e.kind === 'radio' && (e.moment === undefined || STORY.has(e.moment)))?.label ??
-  null;
+  airLineOf(
+    [...player.seen.view.events]
+      .reverse()
+      .find((e) => e.kind === 'radio' && STORY.has(e.moment)),
+  );
 
 /** Whether the radio `voice` speaks the recording of `line` now; never where there is no line. */
 const speaks = (voice, line) =>
@@ -3144,23 +3156,34 @@ async function checkRadioVoice(player, listening, after, expected = null) {
   // A page without the recordings answers with something else: no manifest, and the check fails.
   const manifest = await voiceLinesOf(player.page);
   const line = expected ?? newestStory(player);
+  const text = bannerOf(line);
   if (awaitsRender(heard, line, manifest)) {
-    console.log(`radio voice        ${player.name} after ${after}: „${line}" awaits its render`);
+    console.log(`radio voice        ${player.name} after ${after}: „${text}" awaits its render`);
     return;
   }
   const entry = heard === null ? undefined : manifest[heard.id];
   const spoke = heard === null ? 0 : heard.to - heard.from;
-  const words = line === null ? 0 : wordsOf(line);
+  const words = text === null ? 0 : wordsOf(text);
   const opens = entry?.opens === true;
   const keyedRight = heard !== null && heard.opened === opens;
   const heardAs = { heard, entry, opens, spoke, words, keyedRight };
   const said = heard === null ? '!! no line spoke' : heardText(heardAs);
-  console.log(`radio voice        ${player.name} after ${after}: ${said}; the banner: „${line}"`);
+  console.log(`radio voice        ${player.name} after ${after}: ${said}; the banner: „${text}"`);
   const plausible = spoke >= Math.max(1000, words * MS_PER_WORD);
-  if (entry === undefined || entry.text !== line || !plausible || !keyedRight) {
-    fail(`radio voice after ${after}: ${heard?.id ?? 'nothing'} spoke ${spoke} ms for „${line}"`);
+  if (!saidByTheirs(entry, line) || !plausible || !keyedRight) {
+    fail(`radio voice after ${after}: ${heard?.id ?? 'nothing'} spoke ${spoke} ms for „${text}"`);
   }
 }
+
+/** The words a radio line `line` shows on the banner; null where there is none. */
+const bannerOf = (line) => line?.label ?? null;
+
+/**
+ * Whether `entry`, the recording the page played, is `line` as the person of the night's cast
+ * says it, whoever that is: their recording, their words.
+ */
+const saidByTheirs = (entry, line) =>
+  entry !== undefined && entry.text === bannerOf(line) && entry.person === line?.person;
 
 /**
  * Whether the line `line` that nobody `heard` awaits its render: the manifest the page is
@@ -3188,7 +3211,7 @@ function heardText({ heard, entry, opens, spoke, words, keyedRight }) {
 
 /** The run's first line on the radio, as `player`'s view has it; null before it came. */
 const startLineOf = (player) =>
-  player.seen.view.events.find((event) => event.kind === 'radio')?.label ?? null;
+  airLineOf(player.seen.view.events.find((event) => event.kind === 'radio'));
 
 /** How many times the partner's side was told apart, of the checks that could. */
 const sides = { checked: 0 };
@@ -6814,12 +6837,12 @@ async function captureNudge(players) {
     fail(`nudge.png: no word from the Leitstelle within ${seconds(NUDGE_WAIT_MS)}`);
     return;
   }
-  const line = nudgesOf(first.seen).at(-1).label;
+  const line = airLineOf(nudgesOf(first.seen).at(-1));
   const listening = hearRadio(first, RADIO_LISTEN_MS, () => line);
   const banners = await Promise.all(
     players.map(({ page }) =>
       page
-        .locator('.radio-banner', { hasText: line })
+        .locator('.radio-banner', { hasText: line.label })
         .waitFor({ state: 'visible', timeout: 3000 })
         .then(
           () => true,
@@ -6834,7 +6857,7 @@ async function captureNudge(players) {
   const shown = players.map(({ name }, i) => `${name} ${banners[i] ? 'up' : '!! missing'}`);
   console.log(
     `nudge.png          the Leitstelle at "${armed}" after ${seconds(Date.now() - from)} of ` +
-      `quiet waited for: „${line}"; banner ${shown.join(', ')}`,
+      `quiet waited for: „${line.label}" (${line.person}); banner ${shown.join(', ')}`,
   );
   if (!banners.every(Boolean)) {
     fail('nudge.png: the Leitstelle\'s line is not in every banner');
@@ -8976,15 +8999,20 @@ const FUNKPROBE_MS = 3000;
 
 /** The lobby's Funkprobe off the page's probe (client world/radioCheck.ts); none asked without. */
 const radioCheckOf = (page) =>
-  page.evaluate(() => globalThis.__escapelab?.radioCheck ?? { asked: null, aired: false });
+  page.evaluate(
+    () => globalThis.__escapelab?.radioCheck ?? { asked: null, by: null, aired: false },
+  );
 
 /**
- * How the Funkprobe `probe` stands against the text `expected`, `recorded` or not, as the log
- * says it: on the air, awaiting its render, or — marked „!!" — not what it should be.
+ * How the Funkprobe `probe` stands against the text `expected` by `person`, `recorded` or not,
+ * as the log says it: on the air, awaiting its render, or — marked „!!" — not what it should be.
  */
-function funkprobeState(probe, expected, recorded) {
+function funkprobeState(probe, expected, person, recorded) {
   if (probe.asked !== expected) {
     return `!! asked for ${probe.asked === null ? 'none' : `„${probe.asked}"`}`;
+  }
+  if (probe.by !== person) {
+    return `!! asked of ${probe.by ?? 'nobody'}`;
   }
   if (probe.aired) {
     return 'on the air';
@@ -8994,24 +9022,26 @@ function funkprobeState(probe, expected, recorded) {
 
 /**
  * The operator's Funkprobe, once the host can start: the host's page has to ask for the text
- * its view names (core view.ts `radioCheck`) within FUNKPROBE_MS and put it on the air — where
- * the manifest has no recording of it yet, it awaits its render, logged. A mission without one
- * is left alone. Fails otherwise.
+ * its view names (core view.ts `radioCheck`) of the operator on duty for the run to come (the
+ * view's `cast`) within FUNKPROBE_MS and put it on the air — where the manifest has no recording
+ * of it yet, it awaits its render, logged. A mission without one is left alone. Fails otherwise.
  */
 async function checkRadioCheck(host) {
   const expected = host.seen.view.radioCheck;
   if (expected === undefined) {
     return;
   }
-  const recorded = (await voiceLinesOf(host.page))[voiceIdOf(expected)] !== undefined;
-  const now = async () => funkprobeState(await radioCheckOf(host.page), expected, recorded);
+  const person = host.seen.view.cast.operator;
+  const id = voiceIdOf({ label: expected, person });
+  const recorded = (await voiceLinesOf(host.page))[id] !== undefined;
+  const now = async () => funkprobeState(await radioCheckOf(host.page), expected, person, recorded);
   const end = Date.now() + FUNKPROBE_MS;
   let state = await now();
   while (state.startsWith('!!') && Date.now() < end) {
     await sleep(100);
     state = await now();
   }
-  console.log(`radio check        ${host.name}: „${expected}" ${state}`);
+  console.log(`radio check        ${host.name}: „${expected}" by ${person} ${state}`);
   if (state.startsWith('!!')) {
     fail(`radio check: ${host.name}'s lobby did not put „${expected}" on the air`);
   }
@@ -11731,8 +11761,9 @@ async function radioCensus(player) {
     ['missed', count('missed') === missed.length],
   ];
   const lines = await voiceLinesOf(player.page);
+  // Whoever of the night's cast says a line, it is counted by its moment and found by its person.
   const voiced = events.filter((e) => (e.kind === 'radio' || e.kind === 'nudge') && e.moment);
-  const recorded = voiced.filter((e) => lines[voiceIdOf(e.label)] !== undefined).length;
+  const recorded = voiced.filter((e) => lines[voiceIdOf(airLineOf(e))] !== undefined).length;
   const tally = checks.map(([moment, ok]) => `${moment} ${count(moment)}${ok ? '' : ' !!'}`);
   console.log(
     `radio census       ${player.name}: ${tally.join(', ')}, nudge ${count('nudge')} — ` +

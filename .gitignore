@@ -10,7 +10,8 @@ packages/server/cert/
 packages/server/data/
 # Missions saved from the editor: made on this server, not shipped.
 missions/custom/
-# The music's takes (scripts/sfx.ts --candidates): they wait here for the ear, never shipped.
+# The music's takes (scripts/sfx.ts --candidates) and the voices' samples (scripts/voice.ts
+# --design, takes/voices/): they wait here for the ear, never shipped.
 packages/client/takes/
 
 # local secrets (ElevenLabs key)
