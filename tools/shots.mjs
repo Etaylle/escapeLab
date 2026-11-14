@@ -664,6 +664,8 @@ import { bandPowers, decibels } from './spectrum.mjs';
 const BASE = process.argv[2] ?? 'http://localhost:5173';
 const OUT = process.argv[3] ?? '/tmp/escapelab-shots';
 const MISSION = process.env.SHOTS_MISSION || 'Blackout';
+/** The p95 a window may reach where SHOTS_FRAME_P95_MS is unset, ms: the gate's own budget. */
+const DEFAULT_FRAME_P95_MS = 40;
 const FRAME_P95_MS = frameBudget(process.env.SHOTS_FRAME_P95_MS);
 /**
  * How many times slower than this machine every page runs: SHOTS_CPU_SLOWDOWN,
@@ -839,7 +841,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
  */
 function frameBudget(text) {
   if (text === undefined || text === '') {
-    return 40;
+    return DEFAULT_FRAME_P95_MS;
   }
   const ms = Number(text);
   if (!(ms > 0)) {
@@ -7098,6 +7100,28 @@ const endThemeOf = (page) =>
 /** The menu's quiet window holds the screen's pace under SHOTS_SOFTWARE_GL, ms p95. */
 const MENU_P95_MS = 16.8;
 
+/**
+ * The menu's quiet window (`look`, frameWindow's) against the screen's pace under
+ * SHOTS_SOFTWARE_GL (MENU_P95_MS): over it, the run fails where it gates its windows at the
+ * gate's budget, and the window is logged for information where SHOTS_FRAME_P95_MS raised the
+ * budget for a run that proves its captures alone, its windows gating nothing — as every other
+ * window there. The line names the load the window ran at.
+ */
+function menuPace(look) {
+  if (!SOFTWARE_GL || look === null || look.p95 <= MENU_P95_MS) {
+    return;
+  }
+  const reached = `${look.p95.toFixed(2)} ms p95 at ${loadText(look.load)}, over ${MENU_P95_MS}`;
+  if (FRAME_P95_MS > DEFAULT_FRAME_P95_MS) {
+    console.log(
+      `menu               its window reached ${reached}: for information, the windows gating ` +
+        `nothing at SHOTS_FRAME_P95_MS=${FRAME_P95_MS}`,
+    );
+    return;
+  }
+  fail(`menu: its window reached ${reached}`);
+}
+
 /** The hero off the page's probe (client screens/MenuHero.tsx); null without one. */
 const heroOf = (page) => page.evaluate(() => globalThis.__escapelab?.hero ?? null);
 
@@ -7246,10 +7270,7 @@ async function captureMenu(page) {
   await menuSoundAtFirstKey(page, () => walkMenuKeys(page), list);
   await checkPieceCodec(page, list);
   const look = await frameWindow(page, 'on the menu, its scene drifting', () => sleep(SAMPLE_MS));
-  if (SOFTWARE_GL && look !== null && look.p95 > MENU_P95_MS) {
-    const reached = `${look.p95.toFixed(1)} ms p95 at ${loadText(look.load)}`;
-    fail(`menu: its window reached ${reached}, over ${MENU_P95_MS}`);
-  }
+  menuPace(look);
   await heroLampShot(page);
   await heroBeamBeat(page);
   await overflow(page, 'menu @ 1440x820');
