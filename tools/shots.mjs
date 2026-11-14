@@ -5033,11 +5033,11 @@ const SWING_HOLD_MS = 60;
 const SWING_DEG = 35;
 
 /**
- * In the page, before a probe key is pressed, until releaseNeedle: the needle's next swing —
- * the transition of its turn (client styles/devices.css) — is paused `ms` into it, so that a
- * shot however late finds the needle on its way; `window.__needleHold` (pageclock.mjs
- * `NeedleHold`) notes on the page's clock when the probe went down, when the swing began and
- * how long it runs.
+ * In the page, before a probe key is pressed, until releaseNeedle: the needle's next swing to a
+ * new reading — the transition of its turn (client styles/devices.css) — is paused `ms` into it,
+ * so that a shot however late finds the needle on its way; `window.__needleHold` (pageclock.mjs
+ * `NeedleHold`) notes on the page's clock when the probe went down, when the swing began and how
+ * long it runs.
  */
 function holdNeedle(ms) {
   const needle = document.querySelector('.station-modal .gauge-needle');
@@ -5047,11 +5047,14 @@ function holdNeedle(ms) {
   const press = (event) => {
     hold.pressed ??= event.timeStamp - t0;
   };
+  // Where the needle was headed as the hold began: a swing there is the last probe's, whose event
+  // comes with the page's next frame, late under load; this probe's turns the needle anew.
+  const before = needle?.style.transform ?? null;
   const swing = () => {
     const turn = needle.getAnimations().find((a) => a.transitionProperty === 'transform');
-    if (hold.swung === null && turn !== undefined) {
-      // The event comes with the page's next frame, late under load: the swing's own start
-      // time, on the document's timeline (the clock performance.now() reads), says when it began.
+    if (hold.swung === null && turn !== undefined && needle.style.transform !== before) {
+      // The swing's own start time, on the document's timeline — the clock performance.now()
+      // reads — says when it began, however late its event came.
       hold.swung = (turn.startTime ?? globalThis.performance.now()) - t0;
       hold.length = turn.effect.getComputedTiming().duration;
       turn.pause();
