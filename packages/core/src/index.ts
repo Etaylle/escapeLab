@@ -261,7 +261,6 @@ export {
   ACCESS_DOORS,
   ACCESS_ROLES,
   ACCOUNT_PATTERN,
-  DOOR_ROLE,
   doorName,
   ROLE_NAMES,
   TOKEN_DIGITS,
@@ -273,7 +272,6 @@ export {
   type AccessLock,
   type AccessLogLine,
   type AccessOpening,
-  type AccessSession,
   type AccessTerminal,
 } from './puzzles/access.js';
 export {

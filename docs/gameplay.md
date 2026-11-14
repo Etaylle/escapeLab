@@ -338,29 +338,32 @@ the Leitstand, the token device in the Wache, the list on a clipboard by the ter
   token is a pure function of the run's seed, the account and the period (`tokenOf`, no TOTP
   library); the periods count from the moment the station came on, and the room ticks it at each
   period's end (`dueAt`), the module harness as well.
-- **The source** holds both halves of the lookup: the printed Berechtigungen — the one role that
-  may release each door, the same in every run — and the run's list of three accounts with their
-  roles (one of the four roles stays unheld), shown under the rules once the station is on, as
-  the maze's walls are, with „Notieren" beside it („Benutzerliste · Konten" on the probe's
-  clipboard), so that a crew of two can carry it to the consoles. Which account a door needs is
-  only decidable there: door, role, account.
+- **The source** holds the whole lookup, dealt anew every run: the list of three accounts, each
+  with its role (one of the four roles stays unheld) and the two doors that role may release —
+  no door to two —, shown under the rules once the station is on, as the maze's walls are, with
+  „Notieren" beside it („Benutzerliste · Konten" on the probe's clipboard), so that a crew of two
+  can carry it to the consoles. The printed page names no role's doors; which account a door
+  needs is only decidable at the list. The device never opens on the account the terminal's
+  first door needs, so a crew that logs in whatever it shows first, without the list, takes an
+  alarm at that door in every run.
 - **The rules.** A login opens a session only with its account's token of the period it arrives
   in; the session stays open until the next login. A wrong token is a Fehlquittierung, an alarm;
-  the third in a row for an account locks it for `lockSec` (45 s) of the mission clock — a pause
-  stops the lock with the clock —, the prompt closing. A token of the period just gone — typed as
-  the bar ran out — is turned back without an alarm, the log saying the period changed. A session
-  releases each door of its role once, the door standing open for `openSec` (5 s; whoever passes
-  through is fiction, not a rule); a release its role may not make is an alarm as well. From the
-  release `strictFrom` (2) on, Sicherheitsstufe 2: the terminal names the session by its role
-  alone — on its session line, at login and at `status` —, so only the printed table tells which
-  doors it may release; before that, `status` lists them. A `strictFrom` past the doors never
-  comes. Solved once every door the terminal asked for is released.
+  the third in a row for an account locks it for `lockSec` (45 s) on the station's clock, as the
+  periods run — the alarms' time off the mission clock takes none off the lock —, the prompt
+  closing. A token of the period just gone — typed as the bar ran out — is turned back without an
+  alarm, the log saying the period changed. A session releases each door of its role once, the
+  door standing open for `openSec` (5 s; whoever passes through is fiction, not a rule); a
+  release the list does not give its role is an alarm as well, the terminal saying no more than
+  „Keine Berechtigung für diese Tür". `status` names the session as typed and the doors still
+  asked for, never what a session may release. Solved once every door the terminal asked for is
+  released.
 - **Nobody alone.** The reducer's backup rule holds as at every station: a command counts only
   while somebody else stands at the token device or at an open list.
 
 `core/test/access.test.ts` holds the token (pure and exact to the period), the instance, the views
-by presence, every rule, Sicherheitsstufe 2, the backup rule and the room's tick through the
-reducer, the solver over 200 seeds in five variants, and the probe with its pinned plan
+by presence, every rule, `status`, the list's need (over 200 seeds a crew without it takes an
+alarm, the solver none), the lock and the backup rule and the room's tick through the reducer,
+the solver over 200 seeds in five variants, and the probe with its pinned plan
 (`tools/fixtures/access-plan.json`, made by `core/test/accessPlan.ts`); `client/test/
 access.test.tsx` the prompt, the keys, both devices, the list, the sounds and the type and targets
 at both consoles on three screens. The walkthrough drills the probe only where

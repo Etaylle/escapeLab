@@ -116,8 +116,7 @@ const VARIANTS: Record<string, object[]> = {
     { tokenSec: 15, openSec: 3, lockSec: 120, penaltySec: 1 },
     { tokenSec: 60, openSec: 15, lockSec: 15 },
     { doors: 1 },
-    { doors: 3, strictFrom: 3 },
-    { strictFrom: 1 },
+    { doors: 3 },
   ],
 };
 

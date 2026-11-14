@@ -4,16 +4,15 @@ import {
   ACCESS_DOORS,
   ACCESS_ROLES,
   applyAction,
-  DOOR_ROLE,
+  doorName,
   generateEdgework,
   parseMission,
   puzzleDefSchema,
   puzzleDueAt,
-  ROLE_NAMES,
   stationKey,
   viewFor,
 } from '../src/index.js';
-import type { ConsoleId, GameState, PuzzleContext, Viewer } from '../src/index.js';
+import type { AccessDoor, ConsoleId, GameState, PuzzleContext, Viewer } from '../src/index.js';
 import {
   ACCOUNT_NAMES,
   accessModule,
@@ -83,9 +82,9 @@ function send(
   return accessModule.apply(def, state, input, 'op', ctx(at, 'a', left));
 }
 
-/** The account the list gives the role that may release `door`. */
-function accountFor(state: AccessState, door: AccessState['needed'][number]): string {
-  const account = state.accounts.find((entry) => entry.role === DOOR_ROLE[door])?.name;
+/** The account the list gives `door`: the one whose role may release it. */
+function accountFor(state: AccessState, door: AccessDoor): string {
+  const account = state.accounts.find((entry) => entry.doors.includes(door))?.name;
   if (account === undefined) {
     throw new Error(`nobody on the list may release ${door}`);
   }
@@ -115,6 +114,15 @@ function loggedInAs(state: AccessState, account: string, def: AccessDef = DEF): 
   expect(opened.penalty).toBeNull();
   return opened.state;
 }
+
+/** When the room ticks the station next (`dueAt`), and the station as the tick finds it at `at`. */
+const dueAt = (state: AccessState): number | null => accessModule.dueAt?.(DEF, state) ?? null;
+const ticked = (state: AccessState, at: number): AccessState =>
+  accessModule.expire?.(DEF, state, at) ?? state;
+
+/** Whether `json` holds `token` as a run of digits of its own, quoted or bare. */
+const holdsToken = (json: string, token: string): boolean =>
+  new RegExp(`(?<!\\d)${token}(?!\\d)`).test(json);
 
 const refusal = (run: () => unknown): string => {
   try {
@@ -172,21 +180,38 @@ describe('the token', () => {
 });
 
 describe('an instance', () => {
-  it(`deals a list of three accounts, the device's turn and the doors, for ${SEEDS} seeds`, () => {
+  it(`deals a list of three accounts with their doors, the doors asked for, for ${SEEDS} seeds`, () => {
     for (let seed = 0; seed < SEEDS; seed++) {
       const def = defOf({ doors: 1 + (seed % 3) });
       const state = fresh(def, seed);
       const names = state.accounts.map((entry) => entry.name);
       const roles = state.accounts.map((entry) => entry.role);
+      const doors = state.accounts.flatMap((entry) => entry.doors);
       expect(names.every((name) => (ACCOUNT_NAMES as readonly string[]).includes(name))).toBe(true);
       expect([...names].sort()).toEqual(names);
       expect(new Set(names).size).toBe(3);
       expect(new Set(roles).size).toBe(3);
+      // Two doors to each account's role, none to two, each in the order the list names them.
+      expect(new Set(doors).size).toBe(6);
+      for (const entry of state.accounts) {
+        expect(entry.doors).toEqual(ACCESS_DOORS.filter((door) => entry.doors.includes(door)));
+        expect(entry.doors).toHaveLength(2);
+      }
       expect([...state.rotation].sort()).toEqual(names);
       expect(state.needed).toHaveLength(def.doors);
-      const neededRoles = state.needed.map((door) => DOOR_ROLE[door]);
-      expect(new Set(neededRoles).size).toBe(def.doors);
-      expect(neededRoles.every((role) => roles.includes(role))).toBe(true);
+      const owners = state.needed.map((door) => accountFor(state, door));
+      expect(new Set(owners).size).toBe(def.doors);
+      // The device never opens on the account the terminal's first door needs.
+      expect(boundIn(state, 0)).not.toBe(owners[0]);
+    }
+  });
+
+  it('gives a door to another role from run to run: no door has a role of its own', () => {
+    for (const door of ACCESS_DOORS) {
+      const roles = Array.from({ length: 60 }, (_, seed) =>
+        fresh(DEF, seed).accounts.find((entry) => entry.doors.includes(door))?.role,
+      );
+      expect(new Set(roles.filter((role) => role !== undefined)).size, door).toBeGreaterThan(2);
     }
   });
 
@@ -209,10 +234,13 @@ describe('the views', () => {
     expect(view).toMatchObject({ role: 'terminal', device: null, roster: null });
     expect(view.terminal?.doors).toEqual(state.needed.map((door) => ({ door, released: false })));
     const json = JSON.stringify(view);
-    expect(json).not.toContain(quoted(device?.token ?? '?'));
+    expect(holdsToken(json, device?.token ?? '?')).toBe(false);
     for (const { name, role } of state.accounts) {
       expect(json).not.toContain(name);
       expect(json).not.toContain(quoted(role));
+    }
+    for (const door of ACCESS_DOORS.filter((d) => !state.needed.includes(d))) {
+      expect(json).not.toContain(door.toUpperCase());
     }
   });
 
@@ -238,16 +266,11 @@ describe('the views', () => {
     expect(others.filter((entry) => json.includes(entry.name))).toEqual([]);
   });
 
-  it('show the list at a source, never a door or a token', () => {
+  it('show the list at a source — accounts, roles and their doors —, never a token', () => {
     const view = seen(state, AT_BOOK);
     expect(view).toMatchObject({ role: null, terminal: null, device: null });
     expect(view.roster).toEqual(state.accounts);
-    const json = JSON.stringify(view);
-    expect(json).not.toContain(quoted(device?.token ?? '?'));
-    for (const door of ACCESS_DOORS) {
-      expect(json).not.toContain(quoted(door));
-      expect(json).not.toContain(door.toUpperCase());
-    }
+    expect(holdsToken(JSON.stringify(view), device?.token ?? '?')).toBe(false);
   });
 
   it('show nothing away from them, and the audience all of it', () => {
@@ -313,13 +336,16 @@ describe('the login', () => {
     expect(result.state.log.at(-1)).toMatchObject({ tag: 'fail', text: 'Token falsch (1/3)' });
   });
 
-  it('locks the account at the third wrong token in a row, for lockSec on the station’s clock', () => {
+  /** Three wrong tokens in a row for `account` at `at`: the third's outcome, and the lift. */
+  const lockedOut = () => {
     const wrong = { token: tokenOf(state.seed, account, period + 7) };
-    const first = send(asked, wrong, at).state;
-    const second = send(first, wrong, at).state;
-    const third = send(second, wrong, at);
+    const second = send(send(asked, wrong, at).state, wrong, at).state;
+    return { third: send(second, wrong, at), until: at + 45_000 };
+  };
+
+  it('locks the account at the third wrong token in a row, for lockSec on the station’s clock', () => {
+    const { third, until } = lockedOut();
     expect(third.penalty).toBe('Zugangskontrolle: Konto gesperrt');
-    const until = at + 45_000;
     expect(third.state).toMatchObject({
       prompt: null,
       misses: { [account]: 0 },
@@ -327,19 +353,21 @@ describe('the login', () => {
     });
     expect(third.state.log.at(-1)?.text).toBe(`Token falsch: ${account} für 45 s gesperrt`);
     expect(seen(third.state, AT_STATION).terminal?.locks).toEqual([{ account, until }]);
-    // The room ticks the station as the lock lifts — after this period's end, before the
-    // next's — so that every view drops it then.
-    const turn = state.epoch + (period + 1) * PERIOD_MS;
-    expect(accessModule.dueAt?.(DEF, third.state)).toBe(turn);
-    const turned = accessModule.expire?.(DEF, third.state, turn) ?? third.state;
-    expect(accessModule.dueAt?.(DEF, turned)).toBe(until);
-    expect(accessModule.expire?.(DEF, turned, until - 1)?.locks).toEqual({ [account]: until });
-    expect(accessModule.expire?.(DEF, turned, until)?.locks).toEqual({});
     // However little the mission clock has left: the lock runs on the station's own.
     const stillLocked = () => send(third.state, { cmd: 'login', account }, until - 1, DEF, 1);
     expect(refusal(stillLocked)).toBe(`Konto ${account} gesperrt.`);
     const lifted = send(third.state, { cmd: 'login', account }, until, DEF, 600);
     expect(lifted.state).toMatchObject({ prompt: account, locks: {} });
+  });
+
+  it('ticks the room as a lock lifts — after this period’s end, before the next’s', () => {
+    const { third, until } = lockedOut();
+    const turn = state.epoch + (period + 1) * PERIOD_MS;
+    expect(dueAt(third.state)).toBe(turn);
+    const turned = ticked(third.state, turn);
+    expect(dueAt(turned)).toBe(until);
+    expect(ticked(turned, until - 1).locks).toEqual({ [account]: until });
+    expect(ticked(turned, until).locks).toEqual({});
   });
 
   it('locks only at three in a row: a session opened in between starts the count over', () => {
@@ -382,10 +410,14 @@ describe('a release', () => {
     );
   });
 
-  it('raises an alarm for a door the session’s role may not release', () => {
+  it('raises an alarm for a door the list does not give the session, and says no more', () => {
     const result = send(session, { cmd: 'freigeben', door: second }, at);
-    expect(result.penalty).toBe('Zugangskontrolle: Freigabe verweigert');
+    expect(result.penalty).toBe('Zugangskontrolle: keine Berechtigung');
     expect(result.state.released).toEqual([]);
+    expect(result.state.log.at(-1)).toMatchObject({
+      tag: 'fail',
+      text: 'Keine Berechtigung für diese Tür',
+    });
   });
 
   it('turns away a door the terminal does not ask for, and any door without a session', () => {
@@ -406,46 +438,58 @@ describe('a release', () => {
   });
 });
 
-describe('Sicherheitsstufe 2', () => {
+describe('status', () => {
   const state = fresh(DEF, 9);
   const [door, second] = state.needed;
   if (door === undefined || second === undefined) {
     throw new Error('the instance asks for fewer than two doors');
   }
-  const role = DOOR_ROLE[door];
   const account = accountFor(state, door);
+  const asked = state.needed.map(doorName).join(', ');
 
-  it('names the session by its account before strictFrom, its doors with it', () => {
+  it('names no session, then the login waiting for its token, with the doors asked for', () => {
+    const idle = send(state, { cmd: 'status' }, T0 + 1).state;
+    expect(idle.log.at(-1)?.text).toBe(`Keine Sitzung offen; angefordert: ${asked}`);
+    const waiting = send(send(state, { cmd: 'login', account }, T0 + 1).state, { cmd: 'status' }, T0 + 2);
+    expect(waiting.state.log.at(-1)?.text).toBe(
+      `Anmeldung ${account}: Token erwartet; angefordert: ${asked}`,
+    );
+  });
+
+  it('names the session as typed and the doors still asked for, never what it may release', () => {
     const session = loggedInAs(state, account);
-    expect(seen(session, AT_STATION).terminal).toMatchObject({ session: { account }, strict: false });
-    const shown = send(session, { cmd: 'status' }, inPeriod(session, session.period)).state;
-    const doors = ACCESS_DOORS.filter((d) => DOOR_ROLE[d] === role).map((d) => d.toUpperCase());
-    expect(shown.log.at(-1)?.text).toBe(`Sitzung ${account}: gibt ${doors.join(', ')} frei`);
+    expect(seen(session, AT_STATION).terminal?.session).toBe(account);
+    const at = inPeriod(session, session.period);
+    const said = send(session, { cmd: 'status' }, at).state.log.at(-1)?.text ?? '';
+    expect(said).toBe(`Sitzung ${account} offen; angefordert: ${asked}`);
+    const own = state.accounts.find((entry) => entry.name === account)?.doors ?? [];
+    for (const other of own.filter((d) => !state.needed.includes(d))) {
+      expect(said).not.toContain(doorName(other));
+    }
+    const one = send(session, { cmd: 'freigeben', door }, at).state;
+    const after = send(one, { cmd: 'status' }, at).state.log.at(-1)?.text;
+    expect(after).toBe(`Sitzung ${account} offen; angefordert: ${doorName(second)}`);
   });
+});
 
-  it('names the session by its role alone from strictFrom on, in the log and at status', () => {
-    const one = send(loggedInAs(state, account), { cmd: 'freigeben', door }, T0 + 1).state;
-    const next = accountFor(one, second);
-    const nextRole = DOOR_ROLE[second];
-    const session = loggedInAs(one, next);
-    const terminal = seen(session, AT_STATION).terminal;
-    expect(terminal).toMatchObject({ session: { role: nextRole }, strict: true });
-    expect(JSON.stringify(terminal?.session)).not.toContain(next);
-    const roleWord = ROLE_NAMES[nextRole].toUpperCase();
-    expect(session.log.at(-1)?.text).toBe(`Sitzung ${roleWord} offen`);
-    const shown = send(session, { cmd: 'status' }, inPeriod(session, session.period)).state;
-    expect(shown.log.at(-1)?.text).toBe(`Sitzung ${roleWord}`);
-  });
-
-  it('holds from the first release with strictFrom 1, and never past the last door', () => {
-    const strict = defOf({ strictFrom: 1 });
-    const first = loggedInAs(fresh(strict, 9), account, strict);
-    expect(seen(first, AT_STATION, strict).terminal).toMatchObject({ strict: true });
-    const never = defOf({ doors: 1, strictFrom: 2 });
-    const single = fresh(never, 9);
-    const [only] = single.needed;
-    const opened = loggedInAs(single, accountFor(single, only ?? door), never);
-    expect(seen(opened, AT_STATION, never).terminal).toMatchObject({ strict: false });
+describe('the list', () => {
+  it(`is needed: logging in what the device shows first takes an alarm, for ${SEEDS} seeds`, () => {
+    for (let seed = 0; seed < SEEDS; seed++) {
+      const state = fresh(DEF, seed);
+      const [door] = state.needed;
+      const shown = seen(state, AT_CONSOLE_B).device;
+      if (door === undefined || shown === null) {
+        throw new Error(`seed ${seed}: no door asked for, or no device`);
+      }
+      const at = inPeriod(state, 0);
+      const asked = send(state, { cmd: 'login', account: shown.account }, at).state;
+      const opened = send(asked, { token: shown.token }, at);
+      expect(opened.penalty, `seed ${seed}`).toBeNull();
+      const tried = send(opened.state, { cmd: 'freigeben', door }, at);
+      expect(tried.penalty, `seed ${seed}`).toBe('Zugangskontrolle: keine Berechtigung');
+      // The crew that reads the list goes through the same seed without one.
+      expect(playInstance(DEF, seed)).toBe(6);
+    }
   });
 });
 
@@ -498,8 +542,8 @@ describe('the backup rule, through the reducer', () => {
     const atList = login(open({ manuals: { liste: ['p3'] } }));
     for (const state of [atDevice, atList]) {
       const terminal = viewFor(state, 'p1').puzzle;
-      expect(terminal?.kind === 'access' ? terminal.terminal?.log.at(-1)?.text : null).toBe(
-        'Keine Sitzung offen',
+      expect(terminal?.kind === 'access' ? terminal.terminal?.log.at(-1)?.text : null).toMatch(
+        /^Keine Sitzung offen; angefordert: [A-Z]+, [A-Z]+$/,
       );
     }
   });
@@ -556,7 +600,7 @@ describe('the harness’s scratch mission', () => {
     expect(mission).toMatchObject({ id: 'custom-zugangsprobe', title: 'Zugangsprobe' });
     expect(mission.players).toEqual({ min: 2, max: 2 });
     expect(mission.puzzles).toMatchObject([
-      { type: 'access', id: 'zugang', doors: 2, tokenSec: 30, strictFrom: 2 },
+      { type: 'access', id: 'zugang', doors: 2, tokenSec: 15 },
     ]);
     const consoles = mission.map.stations.filter((s) => s.puzzleId === 'zugang');
     expect(consoles.map((s) => s.console)).toEqual(['a', 'b']);
@@ -576,7 +620,7 @@ describe('the harness’s scratch mission', () => {
     expect(state.penaltySeq).toBe(0);
     expect(plan.logins.map((login) => login.door)).toEqual(plan.doors);
     for (const { door, account } of plan.logins) {
-      expect(plan.roster.find((entry) => entry.name === account)?.role).toBe(DOOR_ROLE[door]);
+      expect(plan.roster.find((entry) => entry.name === account)?.doors).toContain(door);
     }
   });
 
@@ -599,8 +643,8 @@ describe('the solver', () => {
   const variants = [
     {},
     { doors: 1 },
-    { doors: 3, strictFrom: 1 },
-    { tokenSec: 15, strictFrom: 3 },
+    { doors: 3 },
+    { tokenSec: 15, lockSec: 15 },
     { tokenSec: 60 },
   ];
 

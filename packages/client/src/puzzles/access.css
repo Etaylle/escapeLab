@@ -10,7 +10,7 @@
 
 /* ── the terminal ───────────────────────────────────────────────────── */
 
-/* The machine's line at the top of the glass, its Sicherheitsstufe at the right. */
+/* The machine's line at the top of the glass, its make at the right. */
 .access-head {
   display: flex;
   justify-content: space-between;
@@ -19,15 +19,6 @@
   color: var(--phosphor-dim);
   font-size: calc(var(--type-label) * var(--text-scale));
   letter-spacing: 2px;
-}
-
-/* Stufe 2 in inverse video: the terminal names a session by its role alone now. */
-.access-level--2 {
-  padding: 0 6px;
-  background: var(--phosphor);
-  color: var(--crt-ink);
-  text-shadow: none;
-  box-shadow: 0 0 8px var(--phosphor-glow);
 }
 
 .access-doors {

@@ -18,22 +18,23 @@ import { costOf, labDocument, spelled, type TypePlate } from './printed.js';
  * `login <konto>`, the token that login asks for, `status` and `freigeben <tür>`; console b is a
  * token device that shows the account it is bound to this period, that account's six-digit
  * token and a bar draining to the next period — every `tokenSec` seconds on the server's clock
- * it moves on to the next account of the run's list. Which role may release which door is
- * printed and the same in every run; which account holds which role is the run's own list, read
- * at a source. A login opens a session only with the token the device shows for that account in
- * the period it arrives in: the account comes from the list, the token from the device, and the
- * terminal has neither. A wrong token is an alarm, and the third in a row for an account locks
- * it for `lockSec` seconds on the station's clock; a token of the period just gone is turned back
- * without one. A session releases each door of its role once, any other with an alarm; from
- * release `strictFrom` on the terminal names the session by its role alone, so only the printed
- * table tells what it may release. Solved once every door the terminal asked for is released.
+ * it moves on to the next account of the run's list. Which account holds which role, and which
+ * doors each role may release, is the run's own list, read at a source and nowhere else: the
+ * account a door needs comes from the list, its token from the device, and the terminal has
+ * neither. The device never opens on the account the terminal's first door needs, so a crew that
+ * has not read the list logs in a wrong one. A login opens a session only with the token the
+ * device shows for that account in the period it arrives in. A wrong token is an alarm, and the
+ * third in a row for an account locks it for `lockSec` seconds on the station's clock; a token of
+ * the period just gone is turned back without one. A session releases each door its role may
+ * release once, any other with an alarm. Solved once every door the terminal asked for is
+ * released.
  */
 
-/** The roles of the lab's service accounts, as the printed Berechtigungen list them. */
+/** The roles of the lab's service accounts, as the list names them. */
 export const ACCESS_ROLES = ['haustechnik', 'laborleitung', 'sicherheit', 'it'] as const;
 export type AccessRole = (typeof ACCESS_ROLES)[number];
 
-/** A role as the list, the terminal and the printed table name it. */
+/** A role as the list names it. */
 export const ROLE_NAMES: Readonly<Record<AccessRole, string>> = {
   haustechnik: 'Haustechnik',
   laborleitung: 'Laborleitung',
@@ -41,7 +42,7 @@ export const ROLE_NAMES: Readonly<Record<AccessRole, string>> = {
   it: 'IT-Betrieb',
 };
 
-/** The secured doors, two for every role, in the printed table's order. */
+/** The secured doors a run deals out to the roles on its list, in the order the list names them. */
 export const ACCESS_DOORS = [
   'werkstatt',
   'lager',
@@ -54,24 +55,11 @@ export const ACCESS_DOORS = [
 ] as const;
 export type AccessDoor = (typeof ACCESS_DOORS)[number];
 
-/** The printed Berechtigungen: the one role that may release each door, the same in every run. */
-export const DOOR_ROLE: Readonly<Record<AccessDoor, AccessRole>> = {
-  werkstatt: 'haustechnik',
-  lager: 'haustechnik',
-  labor: 'laborleitung',
-  archiv: 'laborleitung',
-  schleuse: 'sicherheit',
-  reaktor: 'sicherheit',
-  serverraum: 'it',
-  funkraum: 'it',
-};
-
-/** A door as the terminal and the printed table name it: WERKSTATT. */
+/** A door as the terminal and the list name it: WERKSTATT. */
 export const doorName = (door: AccessDoor): string => door.toUpperCase();
 
-/** The doors a role may release, in the printed order. */
-const doorsOf = (role: AccessRole): AccessDoor[] =>
-  ACCESS_DOORS.filter((door) => DOOR_ROLE[door] === role);
+/** How many doors a role on a run's list may release; no door belongs to two. */
+const DOORS_PER_ROLE = 2;
 
 /** The service accounts a run's list draws its names from; the printed log uses none of them. */
 export const ACCOUNT_NAMES = [
@@ -106,21 +94,18 @@ const defSchema = z.strictObject({
   tokenSec: z.number().int().min(15).max(60).default(30),
   /** seconds a released door stands open */
   openSec: z.number().int().min(3).max(15).default(5),
-  /** seconds of the mission clock an account stays locked after three wrong tokens in a row */
+  /** seconds an account stays locked after three wrong tokens in a row */
   lockSec: z.number().int().min(15).max(120).default(45),
-  /**
-   * the release (1-based) from which on the terminal names a session by its role alone; one past
-   * the doors means never
-   */
-  strictFrom: z.number().int().min(1).max(ACCOUNTS).default(2),
   penaltySec: z.number().int().positive().default(20),
 });
 export type AccessDef = z.infer<typeof defSchema>;
 
-/** An account of the run's list. */
+/** An account of the run's list: its role, and the doors that role may release in this run. */
 export interface AccessAccount {
   name: string;
   role: AccessRole;
+  /** in the order of ACCESS_DOORS */
+  doors: AccessDoor[];
 }
 
 /** One line of the terminal's log: `[ OK ] Sitzung huber offen`, `[FEHL] Token falsch (1/3)`. */
@@ -146,7 +131,7 @@ export interface AccessState {
   epoch: number;
   /** the period the views show; the clock's ticks and every move bring it up to date */
   period: number;
-  /** the run's list: each account with its role, in the list's order */
+  /** the run's list: each account with its role and its doors, in the list's order */
   accounts: AccessAccount[];
   /** the accounts' names in the order the token device turns through them, a period each */
   rotation: string[];
@@ -188,9 +173,6 @@ export interface AccessDoorRow {
   released: boolean;
 }
 
-/** The open session as the terminal names it: by its account, at Sicherheitsstufe 2 by its role. */
-export type AccessSession = { account: string } | { role: AccessRole };
-
 /** A locked account on the terminal, and when its lock lifts (epoch ms, the station's clock). */
 export interface AccessLock {
   account: string;
@@ -201,12 +183,11 @@ export interface AccessLock {
 export interface AccessTerminal {
   doors: AccessDoorRow[];
   open: AccessOpening | null;
-  session: AccessSession | null;
+  /** the account whose session is open, as it was typed; null for none */
+  session: string | null;
   prompt: string | null;
   locks: AccessLock[];
   log: AccessLogLine[];
-  /** Sicherheitsstufe 2: the session is named by its role alone */
-  strict: boolean;
 }
 
 /** What the token device shows: its account this period, the token, and when both move on. */
@@ -280,17 +261,13 @@ export function boundIn(state: Pick<AccessState, 'rotation'>, period: number): s
 
 // --- the rules -----------------------------------------------------------------------------
 
-/** Sicherheitsstufe 2: the release under way is `strictFrom` or later. */
-const strictNow = (def: AccessDef, state: AccessState): boolean =>
-  state.released.length + 1 >= def.strictFrom;
-
-/** The role of `account` on the run's list. */
-function roleOf(state: AccessState, account: string): AccessRole {
+/** `account` as the run's list has it: its role and its doors. */
+function listed(state: AccessState, account: string): AccessAccount {
   const found = state.accounts.find((entry) => entry.name === account);
   if (found === undefined) {
     throw new Error(`access: "${account}" is not on the run's list`);
   }
-  return found.role;
+  return found;
 }
 
 /** `state` with `lines` logged at its end, the log cut to its last ACCESS_LOG_LINES. */
@@ -308,11 +285,6 @@ function caughtUp(def: AccessDef, state: AccessState, at: number): AccessState {
   const period = Math.max(state.period, periodAt(def, state, at));
   const held = Object.entries(state.locks).filter(([, until]) => at < until);
   return { ...state, period, locks: Object.fromEntries(held) };
-}
-
-/** A session as the terminal names it now: by its account, or at Sicherheitsstufe 2 by role. */
-function sessionAs(def: AccessDef, state: AccessState, account: string): string {
-  return strictNow(def, state) ? ROLE_NAMES[roleOf(state, account)].toUpperCase() : account;
 }
 
 /** `login <konto>`: the prompt asks for the account's token; an open session closes. */
@@ -369,7 +341,7 @@ function tokenTyped(def: AccessDef, state: AccessState, token: string, at: numbe
   if (token === tokenOf(state.seed, account, state.period)) {
     const open = { ...state, session: account, prompt: null };
     const reset = { ...open, misses: { ...state.misses, [account]: 0 } };
-    const text = `Sitzung ${sessionAs(def, state, account)} offen`;
+    const text = `Sitzung ${account} offen`;
     return { state: logged(reset, [{ tag: 'ok', text }]), penalty: null };
   }
   const late = state.period > 0 && token === tokenOf(state.seed, account, state.period - 1);
@@ -380,23 +352,28 @@ function tokenTyped(def: AccessDef, state: AccessState, token: string, at: numbe
   return missed(def, state, account, at);
 }
 
-/** `status`: the session as the terminal names it — before Sicherheitsstufe 2 with its doors. */
-function statusShown(def: AccessDef, state: AccessState): Outcome {
-  const { session, prompt } = state;
-  if (session === null) {
-    const text = prompt === null ? 'Keine Sitzung offen' : `Anmeldung ${prompt}: Token erwartet`;
-    return { state: logged(state, [{ tag: 'info', text }]), penalty: null };
+/** The session as `status` names it: the account typed, the one a token is asked for, or none. */
+function sessionSaid({ session, prompt }: AccessState): string {
+  if (session !== null) {
+    return `Sitzung ${session} offen`;
   }
-  const named = sessionAs(def, state, session);
-  const doors = doorsOf(roleOf(state, session)).map(doorName).join(', ');
-  const text = strictNow(def, state) ? `Sitzung ${named}` : `Sitzung ${named}: gibt ${doors} frei`;
+  return prompt === null ? 'Keine Sitzung offen' : `Anmeldung ${prompt}: Token erwartet`;
+}
+
+/**
+ * `status`: the session and the doors the terminal still asks for — never what a session may
+ * release: that stands on the list alone.
+ */
+function statusShown(state: AccessState): Outcome {
+  const left = state.needed.filter((door) => !state.released.includes(door)).map(doorName);
+  const text = `${sessionSaid(state)}; angefordert: ${left.join(', ')}`;
   return { state: logged(state, [{ tag: 'info', text }]), penalty: null };
 }
 
 /**
  * `freigeben <tür>`: a door the terminal asked for and has not released, by the open session —
- * released and standing open for `openSec` seconds where the session's role may release it, an
- * alarm where it may not.
+ * released and standing open for `openSec` seconds where the list gives the session's role that
+ * door, an alarm where it does not, the terminal saying no more than that.
  */
 function releasing(def: AccessDef, state: AccessState, door: AccessDoor, at: number): Outcome {
   const name = doorName(door);
@@ -409,11 +386,11 @@ function releasing(def: AccessDef, state: AccessState, door: AccessDoor, at: num
   if (state.session === null) {
     fail('Keine Sitzung offen.');
   }
-  if (DOOR_ROLE[door] !== roleOf(state, state.session)) {
-    const text = `${name}: Freigabe verweigert`;
+  if (!listed(state, state.session).doors.includes(door)) {
+    const text = 'Keine Berechtigung für diese Tür';
     return {
       state: logged(state, [{ tag: 'fail', text }]),
-      penalty: 'Zugangskontrolle: Freigabe verweigert',
+      penalty: 'Zugangskontrolle: keine Berechtigung',
     };
   }
   const opened: AccessState = {
@@ -440,7 +417,7 @@ function worked(
     case 'login':
       return loggingIn(now, input.account);
     case 'status':
-      return statusShown(def, now);
+      return statusShown(now);
     case 'freigeben':
       return releasing(def, now, input.door, ctx.at);
   }
@@ -448,20 +425,15 @@ function worked(
 
 // --- the views -----------------------------------------------------------------------------
 
-/** The terminal as it stands: its doors, the session as it names it, its prompt, locks and log. */
-function terminalOf(def: AccessDef, state: AccessState): AccessTerminal {
-  const strict = strictNow(def, state);
-  const { session } = state;
-  const named: AccessSession | null =
-    session === null ? null : strict ? { role: roleOf(state, session) } : { account: session };
+/** The terminal as it stands: its doors, its session, its prompt, its locks and its log. */
+function terminalOf(state: AccessState): AccessTerminal {
   return {
     doors: state.needed.map((door) => ({ door, released: state.released.includes(door) })),
     open: state.open === null ? null : { ...state.open },
-    session: named,
+    session: state.session,
     prompt: state.prompt,
     locks: Object.entries(state.locks).map(([account, until]) => ({ account, until })),
     log: state.log.map((line) => ({ ...line })),
-    strict,
   };
 }
 
@@ -487,18 +459,40 @@ const pick = <T>(items: readonly T[], rng: Rng): T => {
   return item;
 };
 
-/** The run's list: ACCOUNTS of the roles, each held by a name of its own, sorted by name. */
+/** `doors` in the order of ACCESS_DOORS, the order the list names them in. */
+const inListOrder = (doors: readonly AccessDoor[]): AccessDoor[] =>
+  ACCESS_DOORS.filter((door) => doors.includes(door));
+
+/**
+ * The run's list: ACCOUNTS of the roles, each held by a name of its own and given
+ * DOORS_PER_ROLE of the secured doors to release — no door to two —, sorted by name.
+ */
 function dealAccounts(rng: Rng): AccessAccount[] {
   const roles = shuffle(ACCESS_ROLES, rng).slice(0, ACCOUNTS);
   const names = shuffle(ACCOUNT_NAMES, rng);
+  const doors = shuffle(ACCESS_DOORS, rng);
   const accounts = roles.map((role, i) => {
     const name = names[i];
     if (name === undefined) {
       throw new Error(`access: ${ACCOUNTS} accounts, but only ${names.length} names`);
     }
-    return { name, role };
+    const own = inListOrder(doors.slice(i * DOORS_PER_ROLE, (i + 1) * DOORS_PER_ROLE));
+    return { name, role, doors: own };
   });
   return accounts.sort((a, b) => (a.name < b.name ? -1 : 1));
+}
+
+/**
+ * The order the token device turns through the accounts in, a period each — never opening on
+ * `first`, the account the terminal's first door needs: a crew that logs in whatever the device
+ * shows, without the list, takes a wrong account to that door.
+ */
+function rotationAvoiding(accounts: readonly AccessAccount[], first: string, rng: Rng): string[] {
+  const turned = shuffle(
+    accounts.map((entry) => entry.name),
+    rng,
+  );
+  return turned[0] === first ? [...turned.slice(1), first] : turned;
 }
 
 // --- the printed document ------------------------------------------------------------------
@@ -511,30 +505,24 @@ const PURPOSE =
 
 const BUILD =
   'Pult A ist das Terminal: Es nennt die Türen, die es freigeben soll, und nimmt Befehle an. ' +
-  'Pult B ist das Tokengerät: Es zeigt das Konto, an das es gebunden ist, den Token dieses ' +
-  'Kontos aus sechs Ziffern und einen Balken bis zum nächsten Wechsel. Die Benutzerliste nennt ' +
-  'die Rolle jedes Kontos.';
+  'Pult B, das Tokengerät, zeigt ein Konto, den Token dieses Kontos und einen Balken bis zum ' +
+  'Wechsel. Welches Konto welche Rolle hat und welche Türen eine Rolle freigibt, steht nur auf ' +
+  'der Benutzerliste der Schicht.';
 
 /** Betrieb: the device's periods, the login and the session, the faults, their cost, the lock. */
 function operationText(def: AccessDef): string {
   return (
     `Alle ${def.tokenSec} Sekunden wechselt das Gerät zum nächsten Konto und dessen neuem ` +
-    'Token. Eine Anmeldung verlangt Konto und Token; die Sitzung bleibt offen bis zur ' +
-    `nächsten und gibt jede Tür ihrer Rolle für ${def.openSec} Sekunden frei. Ein falscher ` +
-    'Token und eine Freigabe ohne Berechtigung sind Fehlquittierungen: Die Überwachung meldet ' +
-    `Alarm und zieht ${costOf(def.penaltySec)} ab. Nach ${spelled(MISSES_TO_LOCK)} falschen ` +
-    `Token in Folge bleibt das Konto ${def.lockSec} Sekunden gesperrt.`
+    'Token. Eine Anmeldung verlangt Konto und Token; die Sitzung bleibt bis zur nächsten offen ' +
+    `und gibt jede Tür ihrer Rolle für ${def.openSec} Sekunden frei. Ein falscher Token und ` +
+    'eine Freigabe ohne Berechtigung sind Fehlquittierungen: Die Überwachung meldet Alarm und ' +
+    `zieht ${costOf(def.penaltySec)} ab. ${capitalised(spelled(MISSES_TO_LOCK))} falsche ` +
+    `Token in Folge sperren das Konto ${def.lockSec} Sekunden.`
   );
 }
 
-/** The printed Berechtigungen: each role and the doors it may release. */
-function permissionsTable(): ManualBlock {
-  return {
-    kind: 'table',
-    head: ['Rolle', 'gibt frei'],
-    rows: ACCESS_ROLES.map((role) => [ROLE_NAMES[role], doorsOf(role).map(doorName).join(', ')]),
-  };
-}
+/** A word as it opens a sentence: „drei" → „Drei". */
+const capitalised = (word: string): string => word.charAt(0).toUpperCase() + word.slice(1);
 
 /** The drawing of the token device with its bar; the client draws it under this name. */
 export const TOKEN_FIGURE = 'access-token';
@@ -544,23 +532,13 @@ const COMMANDS: ManualBlock = {
   head: ['Befehl am Terminal', 'Wirkung'],
   rows: [
     ['login <konto>', 'meldet ein Konto an; das Terminal fragt nach dem Token'],
-    ['status', 'nennt die offene Sitzung, vor Sicherheitsstufe 2 mit ihren Türen'],
+    ['status', 'nennt die offene Sitzung und die Türen, die noch anstehen'],
     ['freigeben <tür>', 'gibt eine angeforderte Tür für die offene Sitzung frei'],
   ],
 };
 
-/** The release from which on Sicherheitsstufe 2 holds, as the rules count it: „zweite". */
-const ORDINALS: Readonly<Record<number, string>> = { 1: 'erste', 2: 'zweite', 3: 'dritte' };
-
-/** The terminal's law: the token, the period, the lock, Sicherheitsstufe 2 where it comes. */
+/** The terminal's law: the token, the period, the lock, the list's word on every door. */
 function rulesOf(def: AccessDef): ManualBlock {
-  const strict =
-    def.strictFrom > def.doors
-      ? []
-      : [
-          `Wenn die ${ORDINALS[def.strictFrom] ?? `${def.strictFrom}.`} Freigabe ansteht, gilt ` +
-            'Sicherheitsstufe 2: Das Terminal nennt die Sitzung nur noch mit ihrer Rolle.',
-        ];
   return {
     kind: 'rules',
     items: [
@@ -569,17 +547,21 @@ function rulesOf(def: AccessDef): ManualBlock {
         'keine Fehlquittierung.',
       `Wenn für ein Konto ${spelled(MISSES_TO_LOCK)} Token in Folge falsch sind, sperrt das ` +
         `Terminal das Konto für ${def.lockSec} Sekunden.`,
-      ...strict,
+      'Wenn die Benutzerliste der Rolle einer Sitzung eine Tür nicht gibt, verweigert das ' +
+        'Terminal deren Freigabe.',
       'Wenn jede angeforderte Tür einmal freigegeben ist, ist der Auftrag des Terminals erledigt.',
     ],
   };
 }
 
-/** The printed log: the door, its role, the account on the list, the wait, the release. */
+/**
+ * The printed log: the door, what the list of that shift said of it, the wait for the account,
+ * the release — that shift's list, not a rule: every shift's is dealt anew.
+ */
 function logLines(def: AccessDef): string[] {
   return [
-    '03:10 Terminal fordert WERKSTATT an; laut Berechtigungen gibt sie die Haustechnik frei.',
-    '03:10 Benutzerliste: Haustechnik hat das Konto meier.',
+    '03:10 Terminal fordert WERKSTATT an.',
+    '03:10 Benutzerliste jener Schicht: WERKSTATT gibt die Haustechnik frei, Konto meier.',
     '03:11 login meier; das Tokengerät zeigt noch ein anderes Konto.',
     '03:11 Gerät wechselt auf meier: Token 405 217 angenommen, Sitzung offen.',
     `03:12 freigeben werkstatt: WERKSTATT ${def.openSec} s offen.`,
@@ -587,19 +569,12 @@ function logLines(def: AccessDef): string[] {
 }
 
 const WORKSHOP: readonly string[] = [
-  'Die Uhr im Gerät geht eine Spur nach: Der neue Token erscheint erst kurz nach dem Wechsel, ' +
-    'und einer aus der letzten Sekunde des Balkens kommt oft zu spät.',
+  'Die Uhr im Gerät geht eine Spur nach: Ein Token aus der letzten Sekunde des Balkens kommt ' +
+    'oft zu spät.',
+  'Die Benutzerliste gilt eine Schicht lang.',
 ];
 
 // --- the solver ----------------------------------------------------------------------------
-
-/** Whether the terminal's session is `account`'s, named by the account or by its `role`. */
-function sessionIs(session: AccessSession | null, account: string, role: AccessRole): boolean {
-  if (session === null) {
-    return false;
-  }
-  return 'account' in session ? session.account === account : session.role === role;
-}
 
 const atTerminal = (input: AccessInput): Move<AccessInput> => ({ by: 'operator', input });
 
@@ -627,11 +602,11 @@ function seenBy(def: AccessDef, { operator, partner, reader }: Perspectives<Acce
   return { terminal: operator.terminal, device, roster };
 }
 
-/** The account the list gives the role the printed table names for `door`. */
+/** The account the list gives `door`: the one whose role may release it. */
 function accountOn(def: AccessDef, roster: readonly AccessAccount[], door: AccessDoor): string {
-  const account = roster.find((entry) => entry.role === DOOR_ROLE[door])?.name;
+  const account = roster.find((entry) => entry.doors.includes(door))?.name;
   if (account === undefined) {
-    throw new Error(`access "${def.id}": ${door} asks for a role nobody on the list has`);
+    throw new Error(`access "${def.id}": ${door} is no door of any account on the list`);
   }
   return account;
 }
@@ -641,7 +616,7 @@ function accountOn(def: AccessDef, roster: readonly AccessAccount[], door: Acces
  * open, else its login, else its token once the device shows that account — or a wait.
  */
 function movesFor({ terminal, device }: Seen, door: AccessDoor, account: string) {
-  if (sessionIs(terminal.session, account, DOOR_ROLE[door])) {
+  if (terminal.session === account) {
     return [atTerminal({ cmd: 'freigeben', door })];
   }
   if (terminal.prompt !== account) {
@@ -700,37 +675,21 @@ export const accessModule: PuzzleModule<AccessDef, AccessState, AccessInput, Acc
       max: 120,
       default: 45,
     },
-    {
-      key: 'strictFrom',
-      label: 'Sicherheitsstufe 2 ab Freigabe',
-      help:
-        'Ab dieser Freigabe nennt das Terminal die Sitzung nur mit ihrer Rolle; liegt sie über ' +
-        'der Zahl der Türen, nie.',
-      kind: 'int',
-      min: 1,
-      max: ACCOUNTS,
-      default: 2,
-    },
   ],
   defSchema,
   inputSchema,
 
   /**
-   * The run's list of ACCOUNTS accounts, each holding another of the roles; the token device
-   * turning through them in an order of its own; the doors the terminal asks for, each of another
-   * account's role. The tokens' periods count from the moment the station comes on.
+   * The run's list of ACCOUNTS accounts, each holding another of the roles and its own doors; the
+   * doors the terminal asks for, each another account's; the token device turning through the
+   * accounts in an order of its own that never opens on the first door's. The tokens' periods
+   * count from the moment the station comes on.
    */
   init(def, rng, ctx) {
     const accounts = dealAccounts(rng);
-    const rotation = shuffle(
-      accounts.map((entry) => entry.name),
-      rng,
-    );
-    const roles = shuffle(
-      accounts.map((entry) => entry.role),
-      rng,
-    ).slice(0, def.doors);
-    const needed = roles.map((role) => pick(doorsOf(role), rng));
+    const asking = shuffle(accounts, rng).slice(0, def.doors);
+    const needed = asking.map((entry) => pick(entry.doors, rng));
+    const rotation = rotationAvoiding(accounts, asking[0]?.name ?? '', rng);
     const fresh: AccessState = {
       type: 'access',
       seed: Math.floor(rng() * 2 ** 32),
@@ -779,9 +738,11 @@ export const accessModule: PuzzleModule<AccessDef, AccessState, AccessInput, Acc
     return {
       kind: 'access',
       role,
-      terminal: role === 'terminal' || audience ? terminalOf(def, state) : null,
+      terminal: role === 'terminal' || audience ? terminalOf(state) : null,
       device: role === 'token' || audience ? deviceOf(def, state) : null,
-      roster: viewer.reading ? state.accounts.map((entry) => ({ ...entry })) : null,
+      roster: viewer.reading
+        ? state.accounts.map((entry) => ({ ...entry, doors: [...entry.doors] }))
+        : null,
     };
   },
 
@@ -800,7 +761,6 @@ export const accessModule: PuzzleModule<AccessDef, AccessState, AccessInput, Acc
       build: BUILD,
       operation: operationText(def),
       law: [
-        { heading: 'Berechtigungen', blocks: [permissionsTable()] },
         {
           heading: 'Anmeldung und Sperre',
           blocks: [

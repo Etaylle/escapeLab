@@ -17,13 +17,13 @@ import {
   type AccessLock,
   type AccessLogLine,
   type AccessOpening,
-  type AccessSession,
   type AccessTerminal,
   type ConsoleId,
   type ManualBlock,
+  type ManualSection,
 } from '@escapelab/core';
 import { serverNow } from '../clock.js';
-import { alignedLines, type Taken } from '../noting.js';
+import { blockTaken, type Taken } from '../noting.js';
 import { Block } from '../screens/Manual.js';
 import { TalkButton } from '../screens/Voice.js';
 import { consoleName } from '../world/consoles.js';
@@ -177,13 +177,8 @@ export function doorStatus(
     : { text: 'ANGEFORDERT', tone: 'asked' };
 }
 
-/** The session as the terminal's line names it: its account, at Stufe 2 its role; „—" for none. */
-export function sessionWord(session: AccessSession | null): string {
-  if (session === null) {
-    return '—';
-  }
-  return 'account' in session ? session.account : ROLE_NAMES[session.role].toUpperCase();
-}
+/** The session as the terminal's line names it: its account as typed; „—" for none. */
+export const sessionWord = (session: string | null): string => session ?? '—';
 
 /** The doors the terminal asks for, each with its state, a door just released glowing up. */
 function Doors(props: { terminal: AccessTerminal; now: number; fresh: AccessDoor | null }) {
@@ -274,8 +269,8 @@ function freshDoor(change: AccessChange | null): AccessDoor | null {
 }
 
 /**
- * The terminal's glass: its head — the machine and its Sicherheitsstufe —, the doors, the
- * session, the log and, under it, whatever is given to stand at its foot: the prompt.
+ * The terminal's glass: its head, the doors, the session, the log and, under it, whatever is
+ * given to stand at its foot: the prompt.
  */
 function Screen(props: {
   terminal: AccessTerminal;
@@ -289,9 +284,7 @@ function Screen(props: {
     <div className={`servers-crt access-crt${change === null ? ' servers-crt--boot' : ''}`}>
       <p className="access-head">
         <span>ZUGANGSKONTROLLE</span>
-        <span className={terminal.strict ? 'access-level access-level--2' : 'access-level'}>
-          {terminal.strict ? 'STUFE 2' : 'STUFE 1'}
-        </span>
+        <span>ZK-2</span>
       </p>
       <Doors terminal={terminal} now={now} fresh={freshDoor(change)} />
       <Session terminal={terminal} now={now} />
@@ -306,7 +299,7 @@ function Screen(props: {
  * every door it asks for — or, while the prompt asks for a token, a numeric pad with the key
  * that takes a digit back.
  */
-export function Keys(props: {
+function Keys(props: {
   doors: readonly AccessDoor[];
   prompting: boolean;
   put: (key: AccessKey) => void;
@@ -599,30 +592,31 @@ function TokenDevice({ puzzle, device }: { puzzle: AccessPuzzle; device: AccessD
 
 // --- the list at a source --------------------------------------------------------------------
 
-/** The run's list as its page prints it: each account and its role. */
-export function rosterBlock(roster: readonly AccessAccount[]): Extract<ManualBlock, { kind: 'table' }> {
+/** The run's list as its page prints it: each account, its role and the doors that role frees. */
+function rosterBlock(roster: readonly AccessAccount[]): Extract<ManualBlock, { kind: 'table' }> {
   return {
     kind: 'table',
-    head: ['Konto', 'Rolle'],
-    rows: roster.map((entry) => [entry.name, ROLE_NAMES[entry.role]]),
+    head: ['Konto', 'Rolle', 'gibt frei'],
+    rows: roster.map((entry) => [
+      entry.name,
+      ROLE_NAMES[entry.role],
+      entry.doors.map(doorName).join(', '),
+    ]),
   };
 }
 
 /**
- * The list as the notepad takes it down, its columns aligned under their names: the source's
- * „Konten" — „Benutzerliste · Konten" on the probe's clipboard.
+ * The list as the notepad takes it down, as it takes a printed table (noting.ts `blockTaken`):
+ * the source's „Konten" — „Benutzerliste · Konten" on the probe's clipboard —, a row a line
+ * where its columns run wider than the pad.
  */
 export function rosterTaken(station: { index: number }, roster: readonly AccessAccount[]): Taken {
-  const { head, rows } = rosterBlock(roster);
-  return {
-    part: 'Konten',
-    key: `${station.index}/konten`,
-    lines: alignedLines([head, ...rows]),
-    form: 'table',
-  };
+  const block = rosterBlock(roster);
+  const section: ManualSection = { heading: 'Konten', blocks: [block] };
+  return blockTaken(station, [section], section, block);
 }
 
-/** The list of this shift's accounts and their roles, the notepad's „Notieren" beside it. */
+/** The list of this shift's accounts, their roles and doors, the notepad's „Notieren" beside it. */
 function Roster({ roster, index }: { roster: readonly AccessAccount[]; index: number }) {
   return (
     <section className="access-roster" aria-label="Benutzerliste">
@@ -632,7 +626,7 @@ function Roster({ roster, index }: { roster: readonly AccessAccount[]; index: nu
   );
 }
 
-/** The list at a source covering the station: the run's accounts with their roles. */
+/** The list at a source covering the station: the run's accounts, their roles and doors. */
 export function AccessList({ puzzle }: ReaderProps<'access'>) {
   return puzzle.roster === null ? null : <Roster roster={puzzle.roster} index={puzzle.index} />;
 }

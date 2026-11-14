@@ -15,10 +15,9 @@
       "id": "zugang",
       "title": "Zugangskontrolle",
       "doors": 2,
-      "tokenSec": 30,
-      "strictFrom": 2,
+      "tokenSec": 15,
       "hints": [
-        "Hausmeister: Erst die Tür am Terminal, dann ihre Rolle in den Berechtigungen, dann das Konto auf der Liste."
+        "Hausmeister: Erst die Tür am Terminal, dann auf der Benutzerliste das Konto, dessen Rolle sie freigibt."
       ],
       "lights": ["WACHE"],
       "onSolved": "Türen frei. Beide zum Ausgang."

@@ -1,14 +1,14 @@
 {
   "mission": "custom-zugangsprobe",
   "seed": 4,
-  "doors": ["reaktor", "archiv"],
+  "doors": ["funkraum", "reaktor"],
   "roster": [
-    { "name": "huber", "role": "sicherheit" },
-    { "name": "lorenz", "role": "laborleitung" },
-    { "name": "seidel", "role": "haustechnik" }
+    { "name": "huber", "role": "sicherheit", "doors": ["archiv", "funkraum"] },
+    { "name": "lorenz", "role": "laborleitung", "doors": ["werkstatt", "lager"] },
+    { "name": "seidel", "role": "haustechnik", "doors": ["schleuse", "reaktor"] }
   ],
   "logins": [
-    { "door": "reaktor", "account": "huber" },
-    { "door": "archiv", "account": "lorenz" }
+    { "door": "funkraum", "account": "huber" },
+    { "door": "reaktor", "account": "seidel" }
   ]
 }

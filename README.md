@@ -52,11 +52,10 @@ importiert und bis zur Lösung spielt.
 ein Terminal wie das des Serverraums, das die freizugebenden Türen nennt und `login <konto>`, den
 Token, `status` und `freigeben <tür>` annimmt; Pult B ein Tokengerät, das je Periode (30 s) an ein
 Konto des Laufs gebunden ist und dessen sechsstelligen Token mit einem ablaufenden Balken zeigt.
-Welche Rolle welche Tür freigibt, steht gedruckt im Handbuch, welches Konto welche Rolle hat, nur
-auf der Benutzerliste des Laufs an der Quelle. Ein falscher Token und eine Freigabe ohne
-Berechtigung kosten einen Alarm, drei falsche Token in Folge sperren das Konto für 45 s
-Einsatzzeit, und ab der zweiten Freigabe (Sicherheitsstufe 2) nennt das Terminal die Sitzung nur
-noch mit ihrer Rolle. Noch in keiner Mission — ihr Platz folgt dem Playtest —: bewiesen im
+Welches Konto welche Rolle hat und welche Türen eine Rolle freigibt, steht nur auf der
+Benutzerliste des Laufs an der Quelle, jeden Lauf neu verteilt; das Gerät beginnt nie mit dem
+Konto, das die erste Tür braucht. Ein falscher Token und eine Freigabe ohne Berechtigung kosten
+einen Alarm, drei falsche Token in Folge sperren das Konto für 45 s. Noch in keiner Mission — ihr Platz folgt dem Playtest —: bewiesen im
 Kerntest und in der Probemission `tools/fixtures/access-probe.json`, die der Rundgang mit
 `SHOTS_ONLY=access` über den Editor mit festem Seed importiert und bis zur Lösung spielt, jeden
 Token vom Gerät abgelesen.

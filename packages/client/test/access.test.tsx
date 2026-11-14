@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { AccessTerminal, ConsoleId, PuzzleView } from '@escapelab/core';
+import type { AccessAccount, AccessTerminal, ConsoleId, PuzzleView } from '@escapelab/core';
 import type { MissionTime } from '../src/clock.js';
 import { NotepadContext } from '../src/noting.js';
 import { elementsOf, Sheets, type Screen, type Styled } from './cascade.js';
@@ -154,7 +154,7 @@ describe('the terminal', () => {
     }
     expect(html.match(/<span class="access-door-status">ANGEFORDERT<\/span>/g)).toHaveLength(2);
     expect(html).toContain('data-session="—"');
-    expect(html).toContain('<span class="access-level">STUFE 1</span>');
+    expect(html).toContain('<p class="access-head"><span>ZUGANGSKONTROLLE</span><span>ZK-2</span></p>');
     expect(html).toContain('[INFO]</span> Angefordert: ');
     expect(html).not.toContain('access-digits');
     expect(html).not.toContain('access-roster');
@@ -173,13 +173,14 @@ describe('the terminal', () => {
     expect(doorStatus({ ...row, released: false }, null, 0).text).toBe('ANGEFORDERT');
   });
 
-  it('names the session by its account, at Stufe 2 by its role', () => {
+  it('names the session by the account typed, and nothing of its role', () => {
     expect(sessionWord(null)).toBe('—');
-    expect(sessionWord({ account: 'huber' })).toBe('huber');
-    expect(sessionWord({ role: 'it' })).toBe('IT-BETRIEB');
-    const strict = panel(atTerminal({ strict: true, session: { role: 'haustechnik' } }));
-    expect(strict).toContain('<span class="access-level access-level--2">STUFE 2</span>');
-    expect(strict).toContain('data-session="HAUSTECHNIK"');
+    expect(sessionWord('huber')).toBe('huber');
+    const open = panel(atTerminal({ session: 'huber' }));
+    expect(open).toContain('data-session="huber"><span class="access-session-label">SITZUNG</span> huber');
+    for (const role of ['Haustechnik', 'Laborleitung', 'Sicherheitsdienst', 'IT-Betrieb']) {
+      expect(open.toLowerCase()).not.toContain(role.toLowerCase());
+    }
   });
 
   it('asks for the token with a numeric pad in place of the doors, the keyboard numeric too', () => {
@@ -236,33 +237,39 @@ describe('the audience and the list', () => {
       { who: null, operating: true, seat: null },
     ) as Access;
     expect(view).toMatchObject({ terminal: null, device: null });
-    const html = panel({ ...audience, roster: [{ name: 'huber', role: 'it' }] });
+    const roster = [{ name: 'huber', role: 'it', doors: ['serverraum', 'funkraum'] }] as const;
+    const html = panel({ ...audience, roster: roster.map((entry) => ({ ...entry, doors: [...entry.doors] })) });
     expect(html).toContain('aria-label="Pult A"');
     expect(html).toContain('aria-label="Pult B"');
     expect(html).toContain('access-digits');
-    expect(html).toContain('<td>huber</td><td>IT-Betrieb</td>');
+    expect(html).toContain('<td>huber</td><td>IT-Betrieb</td><td>SERVERRAUM, FUNKRAUM</td>');
     expect(html).not.toContain('servers-input');
   });
 
   it('gives a source the list of this shift’s accounts, the notepad’s „Notieren" beside it', () => {
-    const roster = [
-      { name: 'berger', role: 'sicherheit' },
-      { name: 'huber', role: 'it' },
-    ] as const;
-    const view = { ...seen(null), roster: [...roster] };
+    const roster: AccessAccount[] = [
+      { name: 'berger', role: 'sicherheit', doors: ['labor', 'schleuse'] },
+      { name: 'huber', role: 'it', doors: ['werkstatt', 'serverraum'] },
+    ];
+    const view = { ...seen(null), roster };
     const html = renderToStaticMarkup(
       <NotepadContext value={{ noteDown: () => false, toggle: noop }}>
         <AccessList puzzle={view} />
       </NotepadContext>,
     );
     expect(html).toContain('Benutzerliste dieser Schicht');
-    expect(html).toContain('<td>berger</td><td>Sicherheitsdienst</td>');
+    expect(html).toContain('<td>berger</td><td>Sicherheitsdienst</td><td>LABOR, SCHLEUSE</td>');
     expect(html).toContain('note-down-word">Notieren');
+    // Wider than the pad aligned: a row a line, its cells parted, as a printed table of its width.
     expect(rosterTaken({ index: 2 }, roster)).toEqual({
       part: 'Konten',
-      key: '2/konten',
-      lines: ['Konto   Rolle', 'berger  Sicherheitsdienst', 'huber   IT-Betrieb'],
-      form: 'table',
+      key: '2/Konten',
+      lines: [
+        'Konto · Rolle · gibt frei',
+        'berger · Sicherheitsdienst · LABOR, SCHLEUSE',
+        'huber · IT-Betrieb · WERKSTATT, SERVERRAUM',
+      ],
+      form: 'text',
     });
     expect(renderToStaticMarkup(<AccessList puzzle={seen('a')} />)).toBe('');
   });

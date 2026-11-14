@@ -390,11 +390,11 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
 - Umgesetzt als Modul `access` (`docs/gameplay.md`, „The Zugangskontrolle"): Das Terminal nennt
   die angeforderten Türen und nimmt `login`, den Token, `status` und `freigeben`; das
   Tokengerät ist je Periode an ein Konto gebunden und zeigt dessen Token mit ablaufendem
-  Balken; gedruckt steht, welche Rolle welche Tür freigibt, auf der Benutzerliste des Laufs,
-  welches Konto welche Rolle hat. Falscher Token und Freigabe ohne Berechtigung sind Alarme,
-  drei falsche Token sperren das Konto auf der Einsatzuhr, ab Sicherheitsstufe 2 nennt das
-  Terminal die Sitzung nur mit ihrer Rolle. Felder `doors`, `tokenSec`, `openSec`, `lockSec`,
-  `strictFrom`. Die Tür offen zu halten, während jemand durchläuft, bleibt Fiktion, keine Regel.
+  Balken; welches Konto welche Rolle hat und welche Türen eine Rolle freigibt, steht nur auf der
+  Benutzerliste des Laufs, jeden Lauf neu verteilt, und das Gerät beginnt nie mit dem Konto der
+  ersten Tür. Falscher Token und Freigabe ohne Berechtigung sind Alarme, drei falsche Token
+  sperren das Konto auf der Uhr der Station. Felder `doors`, `tokenSec`, `openSec`,
+  `lockSec`. Die Tür offen zu halten, während jemand durchläuft, bleibt Fiktion, keine Regel.
 - Noch in keiner Mission: Probemission `tools/fixtures/access-probe.json`, die der Rundgang nur
   mit `SHOTS_ONLY=access` spielt. Offen für N-6: ob und wo die Station in Blackout steht — mit
   zwei Spielenden muss die Liste vor den Pulten gelesen (oder notiert) werden.
