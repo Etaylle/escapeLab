@@ -210,6 +210,19 @@ async function leave(tx: Tx, { pass, parked }: Leaving): Promise<string | null> 
 }
 
 /**
+ * Whether the login of `accountId` keeps `checked` in `tx`, its row locked till the end (FOR
+ * UPDATE, for which Prisma has no call): a Kennwort changed at once waits for the sign-in, then
+ * signs its pass out with the rest (`signOutOthers`); one changed before is seen.
+ */
+async function stillKept(tx: Tx, accountId: string, checked: string): Promise<boolean> {
+  const rows = await tx.$queryRaw<{ secret_hash: string | null }[]>`
+    SELECT secret_hash FROM identities
+    WHERE account_id = ${accountId}::uuid AND provider = 'login'
+    FOR UPDATE`;
+  return rows[0]?.secret_hash === checked;
+}
+
+/**
  * Every pass that leads into `accountId` but `staying` signed out in `tx`, its way in kept under
  * PARKED (store.ts `replaceLoginSecret`) — each row locked first (FOR UPDATE, for which Prisma has
  * no call), so that none moves to another account meanwhile: those passes, with the hashes their
@@ -795,9 +808,17 @@ export class PostgresStore implements Store {
     );
   }
 
-  signIn(pass: PassIdentity, accountId: string, leaving: Leaving | null): Promise<string[]> {
+  signIn(
+    pass: PassIdentity,
+    accountId: string,
+    leaving: Leaving | null,
+    checked: string,
+  ): Promise<string[] | null> {
     return onceMore(this.clients, (db) =>
       db.$transaction(async (tx) => {
+        if (!(await stillKept(tx, accountId, checked))) {
+          return null;
+        }
         const left = [await pointPass(tx, pass, accountId)];
         if (leaving !== null) {
           left.push(await leave(tx, leaving));

@@ -192,11 +192,19 @@ export interface Store {
   /**
    * `pass` leads into `accountId` from now on — its way in made where it had none — and the pass
    * `leaving`, where given, signs out (`Leaving`). Every account either of them led into before
-   * that nothing is left of — no way in, no run, no Erfolg — is deleted. All in one go; returns
-   * the ids of the accounts deleted. Throws GameError for a pass shown with the wrong secret,
-   * changing nothing.
+   * that nothing is left of — no way in, no run, no Erfolg — is deleted. All in one go, and only
+   * where the account's login still keeps `checked`, the hash its Kennwort was checked against: a
+   * Kennwort changed at once signs the pass out with the rest (`replaceLoginSecret`), or it signs
+   * nobody in. Returns the ids of the accounts deleted; null, changing nothing, where the login
+   * keeps `checked` no more — changed meanwhile, or gone. Throws GameError for a pass shown with
+   * the wrong secret, changing nothing.
    */
-  signIn(pass: PassIdentity, accountId: string, leaving: Leaving | null): Promise<string[]>;
+  signIn(
+    pass: PassIdentity,
+    accountId: string,
+    leaving: Leaving | null,
+    checked: string,
+  ): Promise<string[] | null>;
   /**
    * The pass of `leaving` signs out (`Leaving`); the account it led into stays whole. Returns that
    * account's id; null where the pass led nowhere. Throws GameError for a pass shown with the

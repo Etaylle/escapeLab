@@ -26,7 +26,6 @@ import {
   PASS_REFUSED,
   secretHashOf,
   type Account,
-  type Login,
   type PassIdentity,
   type Profile,
   type SeatedRun,
@@ -301,8 +300,11 @@ export class AccountDesk {
     limits: Limits = NO_LIMITS,
   ): Promise<Arrival> {
     return this.serial(pass, async () => {
-      const login = await this.verified(typed, password, limits);
-      const deleted = await this.store.signIn(identityOf(pass), login.accountId, null);
+      const { accountId, checked } = await this.verified(typed, password, limits);
+      const deleted = await this.store.signIn(identityOf(pass), accountId, null, checked);
+      if (deleted === null) {
+        throw new GameError(WRONG_LOGIN);
+      }
       const left = deleted.length > 0 ? ', the empty account it left deleted' : '';
       console.log(`[escapelab] a pass signed into an account${left}`);
       return this.arrivalOf(pass);
@@ -350,10 +352,12 @@ export class AccountDesk {
       if (next.id === pass.id) {
         throw new GameError(PASS_REFUSED);
       }
-      const found = await this.verified(login.typed, login.password, limits);
+      const { accountId, checked } = await this.verified(login.typed, login.password, limits);
       const left = (await this.store.findByIdentity(identityOf(pass)))?.id ?? null;
       const leaving = { pass: identityOf(pass), parked: login.parked };
-      await this.store.signIn(identityOf(next), found.accountId, leaving);
+      if ((await this.store.signIn(identityOf(next), accountId, leaving, checked)) === null) {
+        throw new GameError(WRONG_LOGIN);
+      }
       console.log('[escapelab] a device switched accounts on a new pass');
       return { arrival: await this.arrivalOf(next), left };
     });
@@ -471,11 +475,16 @@ export class AccountDesk {
   }
 
   /**
-   * The login of the Ausweisnummer `typed`, its Kennwort `password` tried (`tried`). Refused,
-   * saying why, where either does not match — in the same words for either (WRONG_LOGIN) — and
-   * where the try is held back.
+   * The account of the Ausweisnummer `typed`, its Kennwort `password` tried (`tried`), and the
+   * hash it was checked against, which a sign-in checks again as it is made (store.ts `signIn`).
+   * Refused, saying why, where either does not match — in the same words for either
+   * (WRONG_LOGIN) — and where the try is held back.
    */
-  private async verified(typed: string, password: string, limits: Limits): Promise<Login> {
+  private async verified(
+    typed: string,
+    password: string,
+    limits: Limits,
+  ): Promise<{ accountId: string; checked: string }> {
     const number = numberOf(typed);
     const on = { number };
     this.mayTry(on, limits);
@@ -484,7 +493,7 @@ export class AccountDesk {
     if (right === null || login === null) {
       throw new GameError(WRONG_LOGIN);
     }
-    return login;
+    return { accountId: login.accountId, checked: right };
   }
 
   /**

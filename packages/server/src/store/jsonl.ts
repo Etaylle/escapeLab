@@ -372,7 +372,15 @@ export class JsonlStore implements Store {
     return signedOut;
   }
 
-  async signIn(pass: PassIdentity, accountId: string, leaving: Leaving | null): Promise<string[]> {
+  async signIn(
+    pass: PassIdentity,
+    accountId: string,
+    leaving: Leaving | null,
+    checked: string,
+  ): Promise<string[] | null> {
+    if (this.loginIn(accountId)?.secretHash !== checked) {
+      return null;
+    }
     this.account(accountId);
     // Both passes checked before anything changes: a pass refused changes nothing.
     const before = this.shown(pass)?.accountId ?? null;

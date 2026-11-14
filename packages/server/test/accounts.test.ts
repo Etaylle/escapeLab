@@ -3,7 +3,13 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { achievementsOf, utcDay } from '@escapelab/core';
-import { AccountDesk, accountRunOf, byMission, MY_RUNS } from '../src/accounts.js';
+import {
+  AccountDesk,
+  accountRunOf,
+  byMission,
+  MY_RUNS,
+  WRONG_LOGIN,
+} from '../src/accounts.js';
 import { DeriveQueue } from '../src/login.js';
 import { JsonlStore } from '../src/store/jsonl.js';
 import { LoginTaken, type Profile, type RunReportV1 } from '../src/store/store.js';
@@ -169,5 +175,18 @@ describe('the desk’s Kennwörter', () => {
     expect(turns).toHaveBeenCalledTimes(3);
     await accounts.signIn(passFor('Phone'), set.login ?? '', 'Kaltenbrunn 1987');
     expect(turns).toHaveBeenCalledTimes(4);
+  });
+
+  it('signs nobody in whose Kennwort changed between its check and its sign-in', async () => {
+    const { desk: accounts, store } = desk();
+    const set = await accounts.setPassword(passFor('Anna'), 'Kaltenbrunn 1986');
+    const number = set.login ?? '';
+    // The store finds the login keeping another Kennwort by the time the pass moves.
+    vi.spyOn(store, 'signIn').mockResolvedValue(null);
+    const signIn = accounts.signIn(passFor('Phone'), number, 'Kaltenbrunn 1986');
+    await expect(signIn).rejects.toThrow(WRONG_LOGIN);
+    const login = { typed: number, password: 'Kaltenbrunn 1986', parked: false };
+    const switched = accounts.switchAccount(passFor('Anna'), passFor('Eva'), login);
+    await expect(switched).rejects.toThrow(WRONG_LOGIN);
   });
 });

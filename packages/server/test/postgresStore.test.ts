@@ -3,12 +3,14 @@ import { PrismaClient, type Prisma } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, inject, it, vi } from 'vitest';
 import { NO_CREDITS } from '@escapelab/core';
 import { PostgresStore } from '../src/store/postgres.js';
-import { HAS_LOGIN, type Store } from '../src/store/store.js';
+import { HAS_LOGIN, PassSignedOut, type Store } from '../src/store/store.js';
+import { passFor } from './passes.js';
 import {
   accountFor,
   DAY,
   finished,
   identityOf,
+  kennwortOf,
   reportOf,
   storeContract,
   withAccounts,
@@ -467,7 +469,7 @@ describe.skipIf(url === '')('the store in Postgres', () => {
         await tx.run.create({ data: bensRun(guest) });
       });
       await landing.done;
-      const signing = store.signIn(identityOf('Ben'), anna, null);
+      const signing = store.signIn(identityOf('Ben'), anna, null, kennwortOf('Anna'));
       try {
         await waitsForLock('signin-lock');
       } finally {
@@ -506,6 +508,56 @@ describe.skipIf(url === '')('the store in Postgres', () => {
       expect(seats.map((seat) => [seat.seatName, seat.accountId])).toEqual([['', null]]);
       expect(await store.runs()).toHaveLength(1);
     });
+  });
 
+  describe('Postgres alone, a Kennwort changed as a pass signs in', () => {
+    /** The login row of `accountId`, its Kennwort replaced by `next` in `tx`. */
+    const replaceIn = (tx: Prisma.TransactionClient, accountId: string, next: string) =>
+      tx.identity.updateMany({
+        where: { accountId, provider: 'login' },
+        data: { secretHash: next },
+      });
+
+    it('signs no pass in by a Kennwort that is being changed', async () => {
+      const store = await openNamed('change-first');
+      const anna = await accountFor(store, 'Anna', 'EL-7K3M-9Q2D');
+      // The Kennwort is being changed: the login's row held, the new hash not committed yet.
+      const changing = heldOpen(async (tx) => {
+        await replaceIn(tx, anna, 'next');
+      });
+      await changing.done;
+      const signing = store.signIn(identityOf('Ben'), anna, null, kennwortOf('Anna'));
+      try {
+        await waitsForLock('change-first');
+      } finally {
+        changing.release();
+        await changing.committed;
+      }
+      expect(await signing).toBeNull();
+      expect(await store.findByIdentity(identityOf('Ben'))).toBeNull();
+    });
+
+    it('signs a pass out that signed in as the Kennwort was changed', async () => {
+      const store = await openNamed('sign-in-first');
+      const anna = await accountFor(store, 'Anna', 'EL-7K3M-9Q2D');
+      // Ben's pass signs in: the login's row held, his way in not committed yet.
+      const signing = heldOpen(async (tx) => {
+        await tx.$queryRaw`SELECT 1 FROM identities WHERE account_id = ${anna}::uuid FOR UPDATE`;
+        const ben = identityOf('Ben');
+        await tx.identity.create({ data: { ...ben, accountId: anna } });
+      });
+      await signing.done;
+      const annas = passFor('Anna').id;
+      const changing = store.replaceLoginSecret(anna, kennwortOf('Anna'), 'next', annas);
+      try {
+        await waitsForLock('sign-in-first');
+      } finally {
+        signing.release();
+        await signing.committed;
+      }
+      expect((await changing)?.map((pass) => pass.id)).toEqual([passFor('Ben').id]);
+      const shown = store.findByIdentity(identityOf('Ben'));
+      await expect(shown).rejects.toBeInstanceOf(PassSignedOut);
+    });
   });
 });
