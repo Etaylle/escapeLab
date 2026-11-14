@@ -1,5 +1,13 @@
-import { applyAction, consoleFind, findKey, initialState, parseMission } from '../src/index.js';
-import type { Action, GameState, Mission } from '../src/index.js';
+import {
+  applyAction,
+  consoleFind,
+  findKey,
+  initialState,
+  moduleFor,
+  parseMission,
+  placesOf,
+} from '../src/index.js';
+import type { Action, GameState, Mission, PuzzleDef } from '../src/index.js';
 
 export const T0 = 1_000_000;
 
@@ -89,6 +97,73 @@ export function consoleLab(crew = 2, id = 'doppelpult'): Mission {
       exit: { x: 14, y: 2 },
     },
   });
+}
+
+/** Where the chamber's box's rules may lie: inside its door, beside the box, or outside it. */
+export const INSIDE = { x: 7, y: 3 };
+export const OUTSIDE = { x: 2, y: 3 };
+
+/**
+ * Two rooms: the west one with the spawns, the sign and a plate, the east one with the wiring
+ * box behind a door that only the plate holds open — until the box is solved, then it stays
+ * open. Each source of the box's rules lies on the spots given. Unparsed, so that a test may
+ * hold the validation to it.
+ *
+ *   0123456789
+ * 0 ##########
+ * 1 #....#...#   sign (2,1); box (7,1)
+ * 2 #........#   spawns (1,1) (1,2) (1,3); plate (3,2); door (5,2)
+ * 3 #....#...#   inside (7,3), outside (2,3)
+ * 4 ##########
+ */
+export function chamber(
+  crew: number,
+  sources: { x: number; y: number }[][],
+  opensBy: object = { kind: 'plate', plateId: 'platte', untilSolved: 'kabel' },
+): object {
+  const labels = ['HANDBUCH', 'TAFEL'];
+  return {
+    id: 'kammer',
+    title: 'Kammer',
+    players: { min: crew, max: crew },
+    story: { intro: 'i', win: 'w', lose: 'l' },
+    timeLimitSec: 600,
+    puzzles: [{ type: 'wiring', id: 'kabel', title: 'Kabel' }],
+    map: {
+      tiles: ['##########', '#....#...#', '#........#', '#....#...#', '##########'],
+      spawns: [
+        { x: 1, y: 1 },
+        { x: 1, y: 2 },
+        { x: 1, y: 3 },
+      ],
+      doors: [{ id: 'tuer', x: 5, y: 2, opensBy }],
+      plates: [{ id: 'platte', x: 3, y: 2, label: 'HALTEN' }],
+      stations: [{ puzzleId: 'kabel', x: 7, y: 1 }],
+      manuals: sources.map((spots, i) => ({
+        id: `quelle-${i}`,
+        kind: 'book',
+        label: labels[i] ?? 'HANDBUCH',
+        puzzleIds: ['kabel'],
+        spots,
+      })),
+      edgeworkSign: { x: 2, y: 1 },
+    },
+  };
+}
+
+/** The chamber for a crew of three, its box's rules inside the door: one of them holds the plate. */
+export function chamberLab(): Mission {
+  return parseMission({ ...chamber(3, [[INSIDE]]), id: 'kammer-drei' });
+}
+
+/**
+ * How many of a crew of `crew` the station of `def` puts to work at once: a hand for each of
+ * its places (core hands.ts `placesOf`) — where the whole crew works the panel, every one of
+ * them at it, besides its other places.
+ */
+export function handsTaken(mission: Mission, def: PuzzleDef, crew: number): number {
+  const places = placesOf(mission, def.id).length;
+  return moduleFor(def.type).wholeCrew ? places - 1 + crew : places;
 }
 
 /** `playerId`'s line drops at `at`, as the room hears it go. */
