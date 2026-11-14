@@ -226,16 +226,17 @@
  * station type once, with the moves the plan carries (core's test/hallPlan.ts keeps them the
  * solvers' own); the draw and the Laborkennung have to be the plan's. As the briefing ends an
  * audience joins: hall-overview.png is its world, the whole hall lit from the start, every
- * station in its bay — or the run fails. Both walk past the sign, where the host's frames are
- * sampled for information while every station stands armed, a beacon over each. Then, station by
- * station in the plan's order — the host at it or at its console A, the guest by its book or at
- * console B, both at the one the whole crew presses — the host's device has to open on what the
- * plan pins, is shot as it opens (hall-<type>.png), and the plan's moves are made on the devices
- * as a hand makes them, the button held until the clock counting up shows the plan's digit, a
- * token read off the guest's device as it comes round; every station has to solve without an
- * alarm. The hall has no hatch: its last station wins the run, every station counted, and
- * hall-won.png is the won card — GESCHAFFT on the host's and the audience's, its grade in the
- * words of a run without a clock.
+ * station in its bay — or the run fails. Both walk past the sign; the host's frames are sampled
+ * for information among the bays (23,9) while every station stands armed, a beacon over each
+ * console, the log counting the beacons and books in view. Then, station by station in the
+ * plan's order — the host at it or at its console A, the guest by its book or at console B, both
+ * at the one the whole crew presses — the host's device has to open on what the plan pins, is
+ * shot as it opens (hall-<type>.png), and the plan's moves are made on the devices as a hand
+ * makes them, the button held until the clock counting up shows the plan's digit, a token read
+ * off the guest's device as it comes round; every station has to solve without an alarm. The
+ * hall has no hatch: its last station wins the run, every station counted, and hall-won.png is
+ * the won card — GESCHAFFT on the host's and the audience's, its grade in the words of a run
+ * without a clock.
  *
  * Notes of the last shift: after the lever, the host walks up to the nearest
  * note the crew has found and presses E; note.png shows its slip, which has
@@ -11912,9 +11913,55 @@ function reportOverview(map) {
 }
 
 /**
+ * Where the drill samples the host's frames while every station stands armed: among the second
+ * row of bays, where the host's window frames most of the hall's beacons and books — at the
+ * sign it rests against the south wall, one beacon in view.
+ */
+const HALL_SAMPLE_AT = { x: 23, y: 9 };
+
+/**
+ * What the host's window frames now of the hall's beacons — one over each console of an armed
+ * station — and of its books, as the log says it: the middles of their tiles on the world's
+ * canvas (`worldOnPage`); null without a camera.
+ */
+async function hallFramed(page) {
+  const world = await worldOnPage(page);
+  const box = await page.locator('.world-canvas').first().boundingBox();
+  if (world === null || box === null) {
+    return null;
+  }
+  const inBox = ({ x, y }) =>
+    x >= box.x && x <= box.x + box.width && y >= box.y && y <= box.y + box.height;
+  const framed = (spots) =>
+    spots.filter(({ x, y }) => inBox(world.toPage(x + 0.5, y + 0.5))).length;
+  const { stations, manuals } = HALL_MISSION.map;
+  const books = manuals.flatMap((manual) => manual.spots);
+  return (
+    `${framed(stations)} of ${stations.length} beacons and ${framed(books)} of ${books.length} ` +
+    'books in view'
+  );
+}
+
+/**
+ * The host's frames sampled for information at HALL_SAMPLE_AT while every station stands armed,
+ * the log saying what the window frames (`hallFramed`). Throws where the host finds no way there.
+ */
+async function sampleArmedHall(host) {
+  const at = HALL_SAMPLE_AT;
+  const there = await walkNear(host.page, host.seen, at);
+  if (!there || !(await stepTo(host.page, host.seen, at.x + 0.5, at.y + 0.5))) {
+    throw new Error(`${host.name} found no way to ${at.x},${at.y} in the hall`);
+  }
+  await sleep(1500); // the camera settles behind the walk
+  const framed = (await hallFramed(host.page)) ?? 'no camera to say what is in view';
+  const when = `at ${at.x},${at.y} in the hall, every station armed, ${framed}`;
+  await sampleFrames(host.page, when, () => pace(host, SAMPLE_MS), { gating: false });
+}
+
+/**
  * The Übungshalle on its pinned seed to the won card: the draw the plan's; both past the
- * Laborkennung; the host's frames sampled there for information while every station stands
- * armed, a beacon over each console; every station in the plan's order (`playHallStation`), the
+ * Laborkennung; the host's frames sampled for information among the bays while every station
+ * stands armed (`sampleArmedHall`); every station in the plan's order (`playHallStation`), the
  * last of them winning the run (`hallWon`). Logs how long the stations took and the run.
  */
 async function playHall(crew, watcher) {
@@ -11926,8 +11973,7 @@ async function playHall(crew, watcher) {
     throw new Error(`the walkthrough knows no way to work ${types}: give HALL_CONTROLS its keys`);
   }
   await passTheSign(crew);
-  const when = 'in the hall at its sign, every station armed';
-  await sampleFrames(host.page, when, () => pace(host, SAMPLE_MS), { gating: false });
+  await sampleArmedHall(host);
   const from = Date.now();
   for (const station of HALL_PLAN.stations) {
     await playHallStation(crew, station);
