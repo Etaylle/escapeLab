@@ -10,6 +10,7 @@ import type {
   PuzzleInput,
   PuzzleView,
   ServerRow,
+  ShownSign,
 } from '../src/index.js';
 import { lightsOut, standing, started, T0 } from './lab.js';
 
@@ -30,10 +31,13 @@ interface Spot {
   y: number;
 }
 
-/** A stage of the Signalkette: who sends, what, and the keys the other console presses. */
+/**
+ * A stage of the Signalkette: who sends, what its display shows — each sign in its colour, or
+ * in a grey stage by its form and pattern alone — and the keys the other console presses.
+ */
 interface SignalStage {
   sends: 'a' | 'b';
-  sequence: string[];
+  sequence: ShownSign[];
   keys: { row: number; shape: string }[];
 }
 

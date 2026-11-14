@@ -6,6 +6,7 @@ import {
   applyAction,
   armedStations,
   canSee,
+  clockCallDueAt,
   consoleFind,
   crewOf,
   dailySeed,
@@ -302,6 +303,8 @@ export class Room {
   private puzzleTimer: NodeJS.Timeout | null = null;
   /** lets mission control speak up once the station that is up has stayed quiet */
   private nudgeTimer: NodeJS.Timeout | null = null;
+  /** lets mission control call the time left as the clock comes down to the next call */
+  private clockCallTimer: NodeJS.Timeout | null = null;
   /**
    * since when each thing has stood in each player's lamp cone, by player id
    * (core discovery.ts): a look held long enough finds it
@@ -2074,6 +2077,30 @@ export class Room {
   }
 
   /**
+   * Mission control calls the time left: the room asks once `clockCallDueAt` has come — the
+   * clock down to five minutes, two, the last — and the reducer says the call. Armed afresh
+   * after every dispatch, so a penalty that moves the deadline moves it; none runs while paused
+   * or once every call is behind the run.
+   */
+  private reconcileClockCall(): void {
+    if (this.clockCallTimer !== null) {
+      clearTimeout(this.clockCallTimer);
+      this.clockCallTimer = null;
+    }
+    const due = clockCallDueAt(this.state);
+    if (due === null) {
+      return;
+    }
+    this.clockCallTimer = setTimeout(
+      () => {
+        this.clockCallTimer = null;
+        this.dispatch({ type: 'clock-call', at: Date.now() });
+      },
+      Math.max(0, due - Date.now()),
+    );
+  }
+
+  /**
    * Fixed-rate patrol simulation: the patrols of a mission with drones are out while its run is
    * in the dark, and move while it runs; a pause stands them still where they are, as it stands
    * the clock still. With the lights on, or the run over, there are none.
@@ -2169,13 +2196,15 @@ export class Room {
 
   /**
    * Every timer of the run armed afresh from the game as it stands — the deadline, the lights,
-   * the open puzzle's clock, mission control's nudge, the patrols, the emergencies — or let go.
+   * the open puzzle's clock, mission control's nudge and its calls of the clock, the patrols,
+   * the emergencies — or let go.
    */
   private reconcileClocks(): void {
     this.reconcileTimer();
     this.reconcileLights();
     this.reconcilePuzzleClock();
     this.reconcileNudge();
+    this.reconcileClockCall();
     this.reconcileDroneTimer();
     this.reconcileSabotage();
     this.reconcileRelayTick();
@@ -2294,6 +2323,7 @@ export class Room {
       this.lightsTimer,
       this.puzzleTimer,
       this.nudgeTimer,
+      this.clockCallTimer,
       this.positionsTimer,
       this.keepaliveTimer,
       this.sabotageTimer,
@@ -2307,6 +2337,7 @@ export class Room {
     this.lightsTimer = null;
     this.puzzleTimer = null;
     this.nudgeTimer = null;
+    this.clockCallTimer = null;
     this.positionsTimer = null;
     this.keepaliveTimer = null;
     this.sabotageTimer = null;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { applyAction, initialState, parseMission, viewFor } from '../src/index.js';
+import { applyAction, initialState, parseMission, radioLines, viewFor } from '../src/index.js';
 import type { Action, GameState, Mission } from '../src/index.js';
 
 /** Two chambers with an emergency valve in each, plus two stations. */
@@ -43,7 +43,7 @@ function run(actions: Action[], from: GameState): GameState {
   return actions.reduce(applyAction, from);
 }
 
-function playing(): GameState {
+function playing(of: Mission = mission): GameState {
   return run(
     [
       { type: 'player-join', playerId: 'p1', name: 'Anna' },
@@ -51,9 +51,19 @@ function playing(): GameState {
       { type: 'set-ready', playerId: 'p2', ready: true },
       { type: 'start-mission', playerId: 'p1', at: T0, seed: 1 },
     ],
-    initialState(mission),
+    initialState(of),
   );
 }
+
+/** The mission, its emergency given a message for the plant's loudspeakers. */
+const ANNOUNCE = 'Störung im Kühlkreislauf. Relais auf Handbetrieb.';
+const announcing: Mission = parseMission({
+  ...JSON.parse(JSON.stringify(mission)),
+  map: {
+    ...JSON.parse(JSON.stringify(mission.map)),
+    sabotage: { ...JSON.parse(JSON.stringify(mission.map.sabotage)), announce: ANNOUNCE },
+  },
+});
 
 describe('sabotage emergencies', () => {
   it('starts with a deadline and shows up in every view', () => {
@@ -108,6 +118,31 @@ describe('sabotage emergencies', () => {
     expect(expired.deadlineAt).toBe(before - 60_000);
     expect(expired.penaltySeq).toBe(1);
     expect(expired.phase).toBe('playing');
+  });
+
+  it('has the plant’s loudspeakers say so as it starts, every time, where the mission gives a word', () => {
+    const first = applyAction(playing(announcing), { type: 'sabotage-start', at: T0 + 1000 });
+    expect(first.events.slice(-2)).toEqual([
+      { at: T0 + 1000, kind: 'sabotage', label: 'Notfall: KÜHLUNG AUSGEFALLEN', seconds: null },
+      { at: T0 + 1000, kind: 'radio', label: ANNOUNCE, seconds: null, moment: 'announce' },
+    ]);
+    const cleared = applyAction(first, { type: 'sabotage-cleared', at: T0 + 9000 });
+    const second = applyAction(cleared, { type: 'sabotage-start', at: T0 + 200_000 });
+    const said = (state: GameState) => state.events.filter((e) => e.moment === 'announce');
+    expect(said(cleared)).toHaveLength(1);
+    expect(said(second).map((e) => e.at)).toEqual([T0 + 1000, T0 + 200_000]);
+    // A start that changes nothing says nothing either.
+    expect(said(applyAction(second, { type: 'sabotage-start', at: T0 + 201_000 }))).toHaveLength(2);
+    // Without a message the loudspeakers stay quiet.
+    const quiet = applyAction(playing(), { type: 'sabotage-start', at: T0 + 1000 });
+    expect(quiet.events.filter((e) => e.kind === 'radio' && e.at > T0)).toEqual([]);
+    expect(radioLines(announcing).at(-1)).toEqual({
+      text: ANNOUNCE,
+      when: 'announce',
+      puzzleId: null,
+      speaker: 'pa',
+      mood: null,
+    });
   });
 
   it('never starts twice or outside a running mission', () => {

@@ -84,7 +84,12 @@ describe('the plates in the devices’ heads', () => {
 
   it('tells the two consoles of a station apart', () => {
     const twoConsoles = plates.filter((plate) => plate.console === 'b');
-    expect(twoConsoles.map((plate) => plate.type).sort()).toEqual(['circuit', 'servers', 'signal']);
+    expect(twoConsoles.map((plate) => plate.type).sort()).toEqual([
+      'access',
+      'circuit',
+      'servers',
+      'signal',
+    ]);
     for (const b of twoConsoles) {
       const a = plates.find((plate) => plate.type === b.type && plate.console === 'a');
       expect(a?.text).not.toBe(b.text);

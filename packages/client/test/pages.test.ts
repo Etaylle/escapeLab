@@ -582,7 +582,10 @@ describe('Blackout’s manuals at every text size, a page at a time and as a spr
     const pages = paginate([signal], size, { spread });
     const legend = pages.find((page) => page.fragments.some((f) => f.kind === 'table'));
     const kinds = legend?.fragments.map((f) => (f.kind === 'figure' ? f.of : f.kind)) ?? [];
-    expect(kinds.slice(-3)).toEqual(['heading', PATTERN_FIGURE, 'table']);
+    // Its heading, the drawing of the patterns and the table, on one page; the log may follow.
+    const at = kinds.indexOf(PATTERN_FIGURE);
+    expect(kinds.slice(at - 1, at + 2)).toEqual(['heading', PATTERN_FIGURE, 'table']);
+    expect(legend?.fragments[at - 1]).toEqual({ kind: 'heading', text: 'Legende' });
     const rows = fragmentsOf(pages, 'table').flatMap((t) => (t.kind === 'table' ? t.rows : []));
     expect(rows).toHaveLength(4);
   });

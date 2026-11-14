@@ -5,6 +5,7 @@ import type { Edgework } from './edgework.js';
 import type { Mission } from './mission.js';
 import type { PuzzleState } from './puzzles/index.js';
 import type { RelayState } from './puzzles/relay.js';
+import type { RadioMoment } from './radio.js';
 
 export type Phase = 'lobby' | 'playing' | 'won' | 'lost';
 
@@ -40,6 +41,12 @@ export interface RunEvent {
   label: string;
   /** seconds lost, for penalty and hint lines */
   seconds: number | null;
+  /**
+   * on a line heard in the run (`radio`, `nudge`): the moment that brought it, which says who
+   * speaks it and how it ranks on the air (radio.ts); left out on every other line, and on the
+   * lines of a run kept before it was noted
+   */
+  moment?: RadioMoment;
 }
 
 /**
@@ -290,6 +297,11 @@ export interface GameState {
   quietSince: number | null;
   /** lines mission control has sent about the station that is up; back to 0 with the next */
   nudgesGiven: number;
+  /**
+   * how many of the clock's calls (radio.ts `CLOCK_CALLS`) are behind the run, said or passed
+   * by: the next one is due once the time left comes down to it (actions.ts `clockCallDueAt`)
+   */
+  clockCalls: number;
 }
 
 /**
@@ -344,5 +356,6 @@ export function initialState(
     hintReadyAt: null,
     quietSince: null,
     nudgesGiven: 0,
+    clockCalls: 0,
   };
 }

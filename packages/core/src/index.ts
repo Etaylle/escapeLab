@@ -41,6 +41,7 @@ export {
 } from './snapshot.js';
 export {
   applyAction,
+  clockCallDueAt,
   crewOf,
   EMERGENCY_CLEARED,
   FIRST_WAIT_MS,
@@ -58,7 +59,27 @@ export {
   waitingFor,
   type Action,
 } from './actions.js';
-export { radioLines, type RadioLine, type RadioMoment } from './radio.js';
+export {
+  CLOCK_CALLS,
+  CLOCK_LATE_MS,
+  LOST_CAUSES,
+  moodOf,
+  MOODS,
+  pickLine,
+  RADIO_MOMENTS,
+  radioLines,
+  speakerOf,
+  variantsOf,
+  WON_BANDS,
+  wonBand,
+  type Line,
+  type LostCause,
+  type Mood,
+  type RadioLine,
+  type RadioMoment,
+  type Speaker,
+  type WonBand,
+} from './radio.js';
 export {
   clockStartOf,
   runReport,
@@ -235,10 +256,13 @@ export {
 export { SIMON_COLORS, type SimonColor } from './puzzles/simon.js';
 export { LEVER_FIGURE } from './puzzles/buttonSync.js';
 export {
+  greySignLabel,
   PATTERN_FIGURE,
   SIGNAL_PATTERNS,
   TOKENS,
   tokenLabel,
+  type GreySign,
+  type ShownSign,
   type SignalPattern,
   type SignalToken,
 } from './puzzles/signal.js';
@@ -257,6 +281,23 @@ export {
   type ServerRow,
   type Service,
 } from './puzzles/servers.js';
+export {
+  ACCESS_DOORS,
+  ACCESS_ROLES,
+  ACCOUNT_PATTERN,
+  doorName,
+  ROLE_NAMES,
+  TOKEN_DIGITS,
+  TOKEN_FIGURE,
+  type AccessAccount,
+  type AccessDevice,
+  type AccessDoor,
+  type AccessDoorRow,
+  type AccessLock,
+  type AccessLogLine,
+  type AccessOpening,
+  type AccessTerminal,
+} from './puzzles/access.js';
 export {
   CHAT_PHRASE_COUNT,
   DEFAULT_CHAT_PHRASES,

@@ -4,6 +4,7 @@ import {
   moduleFor,
   type DecorKind,
   type FieldSpec,
+  type Line,
   type ManualKind,
   type PuzzleDef,
   type RoomKind,
@@ -46,6 +47,7 @@ export const MODULE_NAMES: Readonly<Record<StationType, { title: string; kind: s
   signal: { title: 'Signalkette', kind: 'Signalkette' },
   circuit: { title: 'Sicherungskasten', kind: 'Sicherungskasten' },
   servers: { title: 'Serverraum', kind: 'Serverraum' },
+  access: { title: 'Zugangskontrolle', kind: 'Zugangskontrolle' },
   'button-sync': { title: 'Synchronschaltung', kind: 'Synchronschaltung' },
 };
 
@@ -95,10 +97,10 @@ export interface DraftPuzzle {
    * mission control's lines for a station left quiet, up to two; the form shows none, and
    * the file keeps what it had
    */
-  nudges: string[];
+  nudges: Line[];
   lights: string[];
-  /** '' for none */
-  onSolved: string;
+  /** '' for none; the form shows the first of several texts (`firstText`) */
+  onSolved: Line;
   /** what a wrong move costs, in seconds; null for the module's own default */
   penaltySec: number | null;
   /**
@@ -226,12 +228,40 @@ export interface Draft {
   players: { min: number; max: number };
   timeLimitSec: number;
   story: { intro: string; win: string; lose: string };
-  /** mission control's lines; '' for none */
-  radio: { start: string; escape: string };
+  /**
+   * mission control's lines the form shows, '' for none; the rest — its answers to the run, the
+   * clock's calls, the last words — kept as they came
+   */
+  radio: { start: Line; escape: Line; extra: Record<string, unknown> };
   puzzles: DraftPuzzle[];
   map: DraftMap;
   /** listOrder, hintCostSec, hintDelaySec, maxAlarms: as they came */
   extra: Record<string, unknown>;
+}
+
+// ── lines ────────────────────────────────────────────────────────────────
+
+/** A line as a field of the form shows it: its first text, '' for none. */
+export function firstText(line: Line): string {
+  return typeof line === 'string' ? line : (line[0] ?? '');
+}
+
+/**
+ * `line` with `text` as its first text, the others it lists kept as they came: the form edits
+ * one text, the file keeps the takes a mission gives beside it. '' leaves no line.
+ */
+export function withFirstText(line: Line, text: string): Line {
+  return typeof line === 'string' || text === '' ? text : [text, ...line.slice(1)];
+}
+
+/** What a field says under a line of several texts: how many more the file keeps; else none. */
+export function moreTexts(line: Line): string | undefined {
+  const more = typeof line === 'string' ? 0 : line.length - 1;
+  if (more === 0) {
+    return undefined;
+  }
+  const others = more === 1 ? 'eine weitere Fassung' : `${more} weitere Fassungen`;
+  return `Dazu ${others} in der Datei; ein Lauf sagt eine.`;
 }
 
 // ── ids ──────────────────────────────────────────────────────────────────
@@ -332,7 +362,7 @@ export function newDraft(): Draft {
     players: { min: 2, max: 2 },
     timeLimitSec: 600,
     story: { intro: '', win: '', lose: '' },
-    radio: { start: '', escape: '' },
+    radio: { start: '', escape: '', extra: {} },
     puzzles: [newPuzzle('keypad', [])],
     map: {
       tiles: Array.from({ length: NEW_MAP.height }, () => '#'.repeat(NEW_MAP.width)),
@@ -471,7 +501,11 @@ export function draftToJson(draft: Draft): Record<string, unknown> {
     players: { ...draft.players },
     story: { ...draft.story },
     timeLimitSec: draft.timeLimitSec,
-    radio: { ...given('start', draft.radio.start), ...given('escape', draft.radio.escape) },
+    radio: {
+      ...draft.radio.extra,
+      ...given('start', draft.radio.start),
+      ...given('escape', draft.radio.escape),
+    },
     puzzles: draft.puzzles.map(puzzleJson),
     map: mapJson(draft.map),
   };
@@ -496,9 +530,9 @@ interface LoosePuzzle {
   id: string;
   title: string;
   hints?: string[] | undefined;
-  nudges?: string[] | undefined;
+  nudges?: Line[] | undefined;
   lights?: string[] | undefined;
-  onSolved?: string | undefined;
+  onSolved?: Line | undefined;
   penaltySec?: number | undefined;
 }
 
@@ -554,7 +588,9 @@ interface LooseMission {
   players: { min: number; max: number };
   timeLimitSec: number;
   story: { intro: string; win: string; lose: string };
-  radio?: { start?: string | undefined; escape?: string | undefined } | undefined;
+  radio?:
+    | { [key: string]: unknown; start?: Line | undefined; escape?: Line | undefined }
+    | undefined;
   puzzles: LoosePuzzle[];
   map: LooseMap;
 }
@@ -722,7 +758,11 @@ function draftOf(mission: LooseMission): Draft {
     players: { min: mission.players.min, max: mission.players.max },
     timeLimitSec: mission.timeLimitSec,
     story: { intro: mission.story.intro, win: mission.story.win, lose: mission.story.lose },
-    radio: { start: mission.radio?.start ?? '', escape: mission.radio?.escape ?? '' },
+    radio: {
+      start: mission.radio?.start ?? '',
+      escape: mission.radio?.escape ?? '',
+      extra: extraOf(mission.radio ?? {}, ['start', 'escape']),
+    },
     puzzles: mission.puzzles.map(puzzleOf),
     map: mapOf(mission.map),
     extra: extraOf(mission, [

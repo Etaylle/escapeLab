@@ -47,7 +47,12 @@
       },
       {
         "sends": "b",
-        "sequence": ["gelb-quadrat", "gelb-dreieck", "gelb-quadrat", "gelb-kreis"],
+        "sequence": [
+          {"shape": "quadrat", "pattern": "ring"},
+          {"shape": "dreieck", "pattern": "ring"},
+          {"shape": "quadrat", "pattern": "ring"},
+          {"shape": "kreis", "pattern": "ring"}
+        ],
         "keys": [
           {"row": 4, "shape": "quadrat"},
           {"row": 4, "shape": "dreieck"},

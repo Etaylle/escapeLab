@@ -2,7 +2,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { LOOKAHEAD } from '../src/world/audio.js';
 import { DUCK_DB } from '../src/world/mix.js';
 import { MUSIC_LEVEL } from '../src/world/music.js';
-import { downstream, fakeGraph, lastContext, type FakeGain, type FakeNode } from './fakeGraph.js';
+import { KEY_S, TAIL_S, type VoiceManifest } from '../src/world/radioVoice.js';
+import {
+  downstream,
+  fakeGraph,
+  lastContext,
+  type FakeBufferSource,
+  type FakeGain,
+  type FakeNode,
+} from './fakeGraph.js';
 import { elements, fakeMedia, type FakeAudio } from './fakeMedia.js';
 import { loadedSamples, serveSamples, type Served } from './fakeSamples.js';
 
@@ -19,16 +27,46 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-/** The modules afresh, the recordings served as `served` says: the themes 32 s each. */
+/** The operator's last word on a won run, and its recording of 3 s in the voice's list. */
+const LAST_WORD = 'Alle draußen, und der Trakt hat wieder Strom.';
+const VOICE: VoiceManifest = {
+  lines: {
+    aaaaaaaaaaaa: {
+      text: LAST_WORD,
+      ms: 3000,
+      missions: ['blackout'],
+      speaker: 'operator',
+      file: 'aaaaaaaaaaaa.mp3',
+    },
+  },
+};
+
+/** The voice's files the page asked for, in order. */
+const voiceAsked: string[] = [];
+
+/** The voice's list and its recordings, as the static site serves them; nothing else. */
+function serveVoice(url: string): Promise<unknown> {
+  if (url.startsWith('/voice/')) voiceAsked.push(url);
+  if (url === '/voice/manifest.json') return Promise.resolve(Response.json(VOICE));
+  if (url.startsWith('/voice/')) return Promise.resolve(new Response('mp3'));
+  return Promise.resolve(new Response(null, { status: 404 }));
+}
+
+/**
+ * The modules afresh, the recordings served as `served` says: the themes 32 s each, and the
+ * voice's list of the last word, its recordings fetched as a run's start fetches them.
+ */
 async function fresh(served: Readonly<Record<string, Served>> = {}) {
   vi.resetModules();
   const recordings = { 'end-won': { seconds: 32 }, 'end-lost': { seconds: 32 }, ...served };
   await loadedSamples(recordings);
-  serveSamples(recordings);
+  serveSamples(recordings, serveVoice);
   const end = await import('../src/world/endTheme.js');
   const audio = await import('../src/world/audio.js');
   const turn = await import('../src/world/musicTurn.js');
-  return { end, audio, turn };
+  const radio = await import('../src/world/radioVoice.js');
+  radio.voiceForRun();
+  return { end, audio, turn, radio };
 }
 
 /** Lets the music's manifest come in. */
@@ -60,12 +98,12 @@ describe('the end card’s music', () => {
     expect(theme?.plays).toBe(0);
     vi.advanceTimersByTime(200);
     expect(theme?.plays).toBe(1);
-    expect(end.endThemeProbe()).toEqual({ asked: 'won', playing: 'end-won' });
+    expect(end.endThemeProbe()).toEqual({ asked: 'won', line: null, playing: 'end-won' });
     // Played once through: let go, its voice given back.
     theme?.fire('ended');
     expect(theme?.src).toBe('');
     expect(audio.inUse().voice).toBe(0);
-    expect(end.endThemeProbe()).toEqual({ asked: 'won', playing: null });
+    expect(end.endThemeProbe()).toEqual({ asked: 'won', line: null, playing: null });
   });
 
   it('plays a theme to its true end once, never round again, the bus free after it', async () => {
@@ -114,7 +152,7 @@ describe('the end card’s music', () => {
     vi.advanceTimersByTime(end.END_FADE_S * 1000 + 100);
     expect(theme?.src).toBe('');
     expect(audio.inUse().voice).toBe(0);
-    expect(end.endThemeProbe()).toEqual({ asked: null, playing: null });
+    expect(end.endThemeProbe()).toEqual({ asked: null, line: null, playing: null });
   });
 
   it('starts no theme for a card gone before its sting ended, nor while asleep', async () => {
@@ -138,5 +176,72 @@ describe('the end card’s music', () => {
     const engine = audio.audioEngine() as unknown as { music: FakeNode };
     expect(downstream(outOf(elements[1])).has(engine.music)).toBe(true);
     expect(DUCK_DB.music.voice).toBe(-8);
+  });
+});
+
+describe('the operator’s last word on the end card', () => {
+  /**
+   * How long the last word keeps the air, s: the key, its recording as decoded while the sting
+   * plays — the fake decodes every line to 1.5 s, where the manifest says 3 — and the tail.
+   */
+  const AIR_S = KEY_S + 1.5 + TAIL_S;
+
+  it('comes 0.5 s after the sting, over the radio, and the theme 0.5 s after it', async () => {
+    const { end, radio } = await fresh();
+    await fetchIn();
+    voiceAsked.length = 0;
+    end.playEnding('won', LAST_WORD);
+    await fetchIn();
+    // Its recording fetched and decoded as the card comes up, while the sting plays.
+    expect(voiceAsked).toEqual(['/voice/aaaaaaaaaaaa.mp3']);
+    expect(radio.clipOf(LAST_WORD)).not.toBeNull();
+    expect(end.endThemeProbe()).toEqual({ asked: 'won', line: LAST_WORD, playing: 'end-won' });
+    const theme = elements[1];
+    // The sting ends 10 s past the look-ahead; the word comes half a second later.
+    await vi.advanceTimersByTimeAsync((LOOKAHEAD + 10.5) * 1000 - 50);
+    expect(radio.voiceProbe().lastId).toBeNull();
+    await vi.advanceTimersByTimeAsync(100);
+    expect(radio.voiceProbe().lastId).toBe('aaaaaaaaaaaa');
+    // The theme waits for the word, and half a second more.
+    await vi.advanceTimersByTimeAsync((AIR_S + 0.5) * 1000 - 150);
+    expect(theme?.plays).toBe(0);
+    await vi.advanceTimersByTimeAsync(200);
+    expect(theme?.plays).toBe(1);
+  });
+
+  it('leaves the theme on the sting’s time where the word has no recording, and says nothing', async () => {
+    const { end, radio } = await fresh();
+    await fetchIn();
+    end.playEnding('won', 'Eine Zeile ohne Aufnahme.');
+    await fetchIn();
+    const theme = elements[1];
+    await vi.advanceTimersByTimeAsync((LOOKAHEAD + 10.6) * 1000);
+    expect(theme?.plays).toBe(1);
+    expect(radio.voiceProbe().lastId).toBeNull();
+  });
+
+  it('never brings the word once the card has gone, and breaks it off where it speaks', async () => {
+    const gone = await fresh();
+    await fetchIn();
+    gone.end.playEnding('lost', LAST_WORD);
+    await fetchIn();
+    expect(gone.radio.clipOf(LAST_WORD)).not.toBeNull();
+    gone.end.stopEnding();
+    // Gone with the card: its recording let go before it was ever said.
+    expect(gone.radio.clipOf(LAST_WORD)).toBeNull();
+    await vi.advanceTimersByTimeAsync(20_000);
+    expect(gone.radio.voiceProbe().lastId).toBeNull();
+    expect(gone.end.endThemeProbe()).toEqual({ asked: null, line: null, playing: null });
+    elements.length = 0;
+    const cut = await fresh();
+    await fetchIn();
+    cut.end.playEnding('won', LAST_WORD);
+    await fetchIn();
+    await vi.advanceTimersByTimeAsync((LOOKAHEAD + 10.6) * 1000);
+    const ctx = lastContext();
+    const word = ctx.all<FakeBufferSource>('buffer').find((s) => s.buffer?.duration === 1.5);
+    expect(word?.startedAt).not.toBeNull();
+    cut.end.stopEnding();
+    expect(word?.stoppedAt).toBeLessThan((word?.startedAt ?? 0) + 1.5);
   });
 });
