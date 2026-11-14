@@ -12,6 +12,7 @@ import { firstDifficulty, hasWon, useWonMark } from './firstRun.js';
 import { useHistoryGuard } from './historyGuard.js';
 import { usePad } from './input/padRuntime.js';
 import {
+  anyOpen,
   PauseContext,
   pausePhaseOf,
   useEscapeOpensMenu,
@@ -168,6 +169,8 @@ interface TopBarProps {
   menu?: boolean;
   /** how many watch the room (ws.ts `watching`): a chip beside its code */
   watching?: number;
+  /** a menu stands over the screens (menuLayer.ts `anyOpen`): the bar takes nothing meanwhile */
+  covered?: boolean;
 }
 
 /**
@@ -179,7 +182,7 @@ export function TopBar(props: TopBarProps) {
   const { roomCode, seed, running, status, toEditor, onGear } = props;
   const gear = props.inRoom === true ? 'Menü' : 'Einstellungen';
   return (
-    <header className="topbar">
+    <header className="topbar" inert={props.covered}>
       <span className="logo">
         <Icon name="hex" /> <span className="logo-word">ESCAPELAB</span>
       </span>
@@ -761,6 +764,7 @@ export function App({ boot }: { boot: EditorBoot }) {
   const editor = useEditorPage(boot);
   const testRun = useTestRun(live);
   const layer = useRoomMenus(live);
+  const covered = anyOpen(layer);
   const contentRef = useRef<HTMLElement>(null);
   // How the run ended, on this screen: the world plays it before the end screen opens.
   const finale = useFinale(live.view ?? live.spectatorView);
@@ -805,12 +809,14 @@ export function App({ boot }: { boot: EditorBoot }) {
         inRoom={layer.phase !== null}
         menu={menu}
         watching={conn.watching}
+        covered={covered}
       />
       <RoomMenus layer={layer} live={live} missions={missions} />
       <ErrorBanner conn={live} />
       <UpdateNotice />
 
-      <main ref={contentRef} className={`content ${layout}`}>
+      {/* Under a menu the screens take nothing: a controller and Tab stay in the menu. */}
+      <main ref={contentRef} className={`content ${layout}`} inert={covered}>
         {backdrop !== null && <MenuScene {...backdrop} />}
         <VoiceContext value={voice}>
           <PauseContext value={{ open: layer.pause, show: layer.openPause }}>

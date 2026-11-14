@@ -47,12 +47,20 @@ export function gearOpens(layers: Layers, phase: PausePhase | null): Layers {
 }
 
 /**
+ * Whether a menu stands over the screens — the pause menu, the settings, the booklet: then the
+ * screens under it, the top bar and the room, take nothing (App.tsx `inert`), and a controller
+ * and the Tab key stay in the menu.
+ */
+export function anyOpen(layers: Layers): boolean {
+  return layers.pause || layers.settings || layers.handbook !== null;
+}
+
+/**
  * A controller's Start: whatever menu stands open closes, and the run goes on; with none open,
  * the room's pause menu opens — off any room, the settings.
  */
 export function startPressed(layers: Layers, phase: PausePhase | null): Layers {
-  const open = layers.pause || layers.settings || layers.handbook !== null;
-  return open ? NOTHING_OPEN : gearOpens(NOTHING_OPEN, phase);
+  return anyOpen(layers) ? NOTHING_OPEN : gearOpens(NOTHING_OPEN, phase);
 }
 
 /** The menus over the screens, and the ways to open and close them. */
@@ -73,22 +81,58 @@ export interface MenuLayer extends Layers {
   closeHandbook: () => void;
 }
 
+/** A control the focus can go back to: one still on the page. */
+interface Focusable {
+  readonly isConnected: boolean;
+  focus(options?: FocusOptions): void;
+}
+
+/**
+ * Where the focus goes once the menus over the screens are all closed: back to the control that
+ * had it as the first came (`opener`), still on the page — but in a run it stays with the world,
+ * whose keys a button in the focus would take: Space would press it again.
+ */
+export function focusBackTo(opener: Focusable | null, phase: PausePhase | null): Focusable | null {
+  return opener !== null && opener.isConnected && phase !== 'run' ? opener : null;
+}
+
+/** The control in the focus now; null without one, or without a page. */
+function focusedNow(): HTMLElement | null {
+  const active = typeof document === 'undefined' ? null : document.activeElement;
+  return active instanceof HTMLElement ? active : null;
+}
+
 /**
  * The menus over the screens at `phase` (`pausePhaseOf`). The room changing under the pause
  * menu — a run started or over, a lobby left — takes it down, with the booklet opened from it;
- * the settings stay where they were opened.
+ * the settings stay where they were opened. The control that had the focus as the first menu
+ * came gets it back once the last goes (`focusBackTo`).
  */
 export function useMenuLayer(phase: PausePhase | null): MenuLayer {
   const [layers, setLayers] = useState<Layers>(NOTHING_OPEN);
+  const opener = useRef<HTMLElement | null>(null);
   useEffect(() => {
     setLayers((now) => ({ ...now, pause: false, handbook: null }));
   }, [phase]);
-  const patch = (part: Partial<Layers>): void => setLayers((now) => ({ ...now, ...part }));
+  const open = anyOpen(layers);
+  useEffect(() => {
+    if (!open) {
+      focusBackTo(opener.current, phase)?.focus({ preventScroll: true });
+      opener.current = null;
+    }
+  }, [open, phase]);
+  const change = (to: (now: Layers) => Layers): void => {
+    if (!open) {
+      opener.current = focusedNow();
+    }
+    setLayers(to);
+  };
+  const patch = (part: Partial<Layers>): void => change((now) => ({ ...now, ...part }));
   return {
     ...layers,
     phase,
-    gear: () => setLayers((now) => gearOpens(now, phase)),
-    start: () => setLayers((now) => startPressed(now, phase)),
+    gear: () => change((now) => gearOpens(now, phase)),
+    start: () => change((now) => startPressed(now, phase)),
     openPause: () => patch({ pause: phase !== null }),
     closePause: () => setLayers(NOTHING_OPEN),
     openSettings: () => patch({ settings: true }),

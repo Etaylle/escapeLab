@@ -2,9 +2,12 @@ import { readFileSync } from 'node:fs';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import type { ManualHere, PlayerView } from '@escapelab/core';
-import { roomMission } from '../src/App.js';
+import { roomMission, TopBar } from '../src/App.js';
+import { menuScope } from '../src/input/focus.js';
 import {
+  anyOpen,
   escapeOpensMenu,
+  focusBackTo,
   gearOpens,
   markedAtMenu,
   menuNews,
@@ -171,6 +174,64 @@ describe('the pause menu', () => {
       title: 'Blackout im Labor',
     });
     expect(roomMission({ view: null, spectatorView: null })).toBeNull();
+  });
+});
+
+describe('the screens under a menu', () => {
+  it('take nothing while the pause menu, the settings or the booklet stand open', () => {
+    expect(anyOpen(NOTHING_OPEN)).toBe(false);
+    expect(anyOpen({ ...NOTHING_OPEN, pause: true })).toBe(true);
+    expect(anyOpen({ ...NOTHING_OPEN, settings: true })).toBe(true);
+    expect(anyOpen({ ...NOTHING_OPEN, handbook: 'blackout' })).toBe(true);
+  });
+
+  it('leave the top bar inert under it', () => {
+    vi.stubGlobal('window', { location: { origin: 'http://lab', pathname: '/' } });
+    const bar = (covered: boolean): string =>
+      renderToStaticMarkup(
+        <TopBar
+          roomCode="ABCD"
+          seed={null}
+          running={null}
+          status="open"
+          toEditor={null}
+          onGear={noop}
+          covered={covered}
+        />,
+      );
+    expect(bar(true)).toMatch(/^<header class="topbar" inert="">/);
+    expect(bar(false)).toMatch(/^<header class="topbar">/);
+    vi.unstubAllGlobals();
+  });
+
+  it('keep a controller in the menu: a device’s dialog in the inert room is passed over', () => {
+    /** A dialog as menuScope reads it: shown, its class, under an inert part or not. */
+    const dialog = (name: string, inert: boolean) => ({
+      name,
+      closest: (selector: string) => (selector === '[inert]' && inert ? {} : null),
+      getClientRects: () => ({ length: 1 }),
+      classList: { contains: (c: string) => c === name },
+    });
+    // The menus stand before <main> in the page: the device's dialog comes after the menu's.
+    const menu = dialog('pause-menu', false);
+    const device = dialog('station-modal', true);
+    const page = { querySelectorAll: () => [menu, device], querySelector: () => null };
+    expect(menuScope(page as unknown as Document)).toBe(menu);
+  });
+});
+
+describe('the focus as the menus close', () => {
+  it('goes back to the control that had it, still on the page — off a run', () => {
+    const gear = { isConnected: true, focus: vi.fn() };
+    expect(focusBackTo(gear, 'lobby')).toBe(gear);
+    expect(focusBackTo(gear, 'audience')).toBe(gear);
+    expect(focusBackTo(gear, null)).toBe(gear);
+    expect(focusBackTo({ ...gear, isConnected: false }, 'lobby')).toBeNull();
+    expect(focusBackTo(null, 'lobby')).toBeNull();
+  });
+
+  it('stays with the world in a run, where a button in the focus would take Space', () => {
+    expect(focusBackTo({ isConnected: true, focus: vi.fn() }, 'run')).toBeNull();
   });
 });
 
