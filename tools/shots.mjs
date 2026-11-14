@@ -243,9 +243,10 @@
  * station type once, with the moves the plan carries (core's test/hallPlan.ts keeps them the
  * solvers' own); the draw and the Laborkennung have to be the plan's. As the briefing ends an
  * audience joins: hall-overview.png is its world, the whole hall lit from the start, every
- * station in its bay — or the run fails. Both walk past the sign; the host's frames are sampled
- * for information among the bays (23,9) while every station stands armed, a beacon over each
- * console, the log counting the beacons and books in view. Then, station by station in the
+ * station in its bay — or the run fails. Both walk past the sign; while every station stands
+ * armed, a beacon over each console, the host's frames are sampled for information between two
+ * rows of bays (21,13) and the audience's on the whole hall, each log line counting the stations
+ * armed and the beacons and books in view. Then, station by station in the
  * plan's order — the host at it or at its console A, the guest by its book or at console B, both
  * at the one the whole crew presses — the host's device has to open on what the plan pins, is
  * shot as it opens (hall-<type>.png), and the plan's moves are made on the devices as a hand
@@ -12296,7 +12297,8 @@ async function hallCard(host, watcher) {
 async function watchTheHall(context, code) {
   const page = await openPage(context, 'hall audience');
   const seen = eavesdrop(page);
-  await page.goto(paged(BASE));
+  // Traced: the drill samples the audience's frames on the armed hall (`sampleArmedAudience`).
+  await page.goto(traced(BASE));
   await byCode(page, code, true);
   await page.locator('.spectate').waitFor({ timeout: 10_000 });
   await sleep(1200); // the world drawn, the panels in
@@ -12323,14 +12325,16 @@ function reportOverview(map) {
 }
 
 /**
- * Where the drill samples the host's frames while every station stands armed: among the second
- * row of bays, where the host's window frames most of the hall's beacons and books — at the
- * sign it rests against the south wall, one beacon in view.
+ * Where the drill samples the host's frames while every station stands armed: between the
+ * second and the third row of bays, seven tiles apart, so that a player's window — some twenty
+ * tiles by eleven and a half on a laptop — frames the consoles of both rows. In a row's own
+ * aisle it frames that row's alone, at the sign by the south wall one beacon; the log counts
+ * what it framed. The audience's window frames the whole hall (`sampleArmedAudience`).
  */
-const HALL_SAMPLE_AT = { x: 23, y: 9 };
+const HALL_SAMPLE_AT = { x: 21, y: 13 };
 
 /**
- * What the host's window frames now of the hall's beacons — one over each console of an armed
+ * What `page`'s window frames now of the hall's beacons — one over each console of an armed
  * station — and of its books, as the log says it: the middles of their tiles on the world's
  * canvas (`worldOnPage`); null without a camera.
  */
@@ -12352,7 +12356,7 @@ async function hallFramed(page) {
   );
 }
 
-/** How many of the hall's stations the host's view has armed, each counted once. */
+/** How many of the hall's stations `view` has armed, each counted once. */
 const armedOf = (view) =>
   new Set((view.map?.stations ?? []).filter((s) => s.status === 'armed').map((s) => s.puzzleId))
     .size;
@@ -12377,10 +12381,23 @@ async function sampleArmedHall(host) {
 }
 
 /**
+ * The audience's frames sampled for information while every station stands armed: its window the
+ * whole hall, every beacon and book in view — the most the armed hall puts on one screen — the
+ * log saying what they were measured under, as the host's (`sampleArmedHall`).
+ */
+async function sampleArmedAudience(watcher) {
+  const framed = (await hallFramed(watcher.page)) ?? 'no camera to say what is in view';
+  const armed = `${armedOf(watcher.seen.view)} of ${HALL_PLAN.stations.length} stations armed`;
+  const when = `the audience's whole hall, ${armed}, ${framed}`;
+  await sampleFrames(watcher.page, when, () => sleep(SAMPLE_MS), { gating: false });
+}
+
+/**
  * The Übungshalle on its pinned seed to the won card: the draw the plan's; both past the
- * Laborkennung; the host's frames sampled for information among the bays while every station
- * stands armed (`sampleArmedHall`); every station in the plan's order (`playHallStation`), the
- * last of them winning the run (`hallWon`). Logs how long the stations took and the run.
+ * Laborkennung; the frames of the host among the bays and of the audience on the whole hall
+ * sampled for information while every station stands armed (`sampleArmedHall`,
+ * `sampleArmedAudience`); every station in the plan's order (`playHallStation`), the last of
+ * them winning the run (`hallWon`). Logs how long the stations took and the run.
  */
 async function playHall(crew, watcher) {
   const { host } = crew;
@@ -12392,6 +12409,7 @@ async function playHall(crew, watcher) {
   }
   await passTheSign(crew);
   await sampleArmedHall(host);
+  await sampleArmedAudience(watcher);
   const from = Date.now();
   for (const station of HALL_PLAN.stations) {
     await playHallStation(crew, station);
