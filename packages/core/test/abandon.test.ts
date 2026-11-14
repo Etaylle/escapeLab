@@ -138,11 +138,16 @@ const pick = (playerId: string): Action => ({
 
 describe('giving the seat up in a run', () => {
   it('leaves its crew, which goes on above the mission’s smallest', () => {
-    const atStation = standing(three, { stations: { eins: ['p1', 'p3'] }, signSeen: ['p3'] });
+    const atStation = standing(three, {
+      stations: { eins: ['p1', 'p3'] },
+      plates: { platte: ['p2', 'p3'] },
+      signSeen: ['p3'],
+    });
     const left = run([abandon('p3', T0 + 1000, { x: 2.5, y: 1.5 })], atStation);
     expect(left.phase).toBe('playing');
     expect(left.players.map((p) => p.id)).toEqual(['p1', 'p2']);
     expect(left.presence.stations).toEqual({ eins: ['p1'] });
+    expect(left.presence.plates).toEqual({ platte: ['p2'] });
     expect(left.presence.signSeen).toEqual([]);
     expect(crewOf(left).map((p) => p.id)).toEqual(['p1', 'p2']);
     expect(viewFor(left, 'p1').players.map((p) => p.name)).toEqual(['Anna', 'Ben']);

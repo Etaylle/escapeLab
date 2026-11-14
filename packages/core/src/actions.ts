@@ -131,8 +131,8 @@ export type Action =
   | { type: 'clock-call'; at: number }
   | { type: 'set-occupancy'; plates: string[]; panels: string[] }
   /**
-   * who stands at which station spot (by `stationKey`), manual object and
-   * note (by `noteKey`), who has seen the sign (stays seen), what each
+   * who stands at which station spot (by `stationKey`), manual object, note
+   * (by `noteKey`) and plate, who has seen the sign (stays seen), what each
    * player has just found at `at` (discovery.ts; stays found), what each has
    * in sight right now (discovery.ts `inSight`) and who stands on the exit
    * hatch
@@ -142,6 +142,7 @@ export type Action =
       stations: Record<string, string[]>;
       manuals: Record<string, string[]>;
       notes: Record<string, string[]>;
+      plates: Record<string, string[]>;
       signSeen: string[];
       found: Record<string, FindKey[]>;
       sight: Record<string, FindKey[]>;
@@ -368,7 +369,10 @@ function leaveRun(
   );
 }
 
-/** Where everybody stands, `playerId` nowhere: at no station, source or note, not on the hatch. */
+/**
+ * Where everybody stands, `playerId` nowhere: at no station, source or note, on no plate, not on
+ * the hatch.
+ */
 function presenceWithout(presence: Presence, playerId: string): Presence {
   const off = (byId: Record<string, string[]>): Record<string, string[]> =>
     Object.fromEntries(
@@ -380,6 +384,7 @@ function presenceWithout(presence: Presence, playerId: string): Presence {
     stations: off(presence.stations),
     manuals: off(presence.manuals),
     notes: off(presence.notes),
+    plates: off(presence.plates),
     signSeen: presence.signSeen.filter((p) => p !== playerId),
     exit: presence.exit.filter((p) => p !== playerId),
     sight: Object.fromEntries(Object.entries(presence.sight).filter(([id]) => id !== playerId)),
@@ -962,6 +967,7 @@ function setPresence(
       stations: tidy(action.stations),
       manuals: tidy(action.manuals),
       notes: tidy(action.notes),
+      plates: tidy(action.plates),
       signSeen: [...new Set([...state.presence.signSeen, ...action.signSeen])].sort(),
       exit: inEscapePhase(state) ? [...new Set(action.exit)].sort() : [],
       sight: tidy(action.sight),
