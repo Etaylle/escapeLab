@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { DOORS_FRESH_MS, DOORS_KEY } from '../src/screens/DoorWipe.js';
 import { GAIT_CYCLE, HOLD } from '../src/world/figure.js';
 import {
   CLICK_AFTER_MS,
@@ -15,6 +16,7 @@ import {
 } from '../src/world/menu/hero.js';
 import { FakePath2D } from './fakeCanvas.js';
 import { painting } from './heroPage.js';
+import { storage } from './page.js';
 
 /**
  * The hero's entrance (world/menu/hero.ts `entranceAt`, heroStage.ts): on the first menu of a
@@ -206,5 +208,36 @@ describe('the hero’s entrance on the stage', () => {
     expect(later(false, false)).toBe(true);
     page.paint(0);
     expect(later(false, false)).toBe(false);
+  });
+});
+
+describe('a page come back from the lobby through the doors', () => {
+  beforeEach(() => {
+    vi.resetModules();
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  /** The tab, its doors' note made `ago` ms before now (none for null), as a fresh page has it. */
+  async function tab(ago: number | null) {
+    const kept = new Map(ago === null ? [] : [[DOORS_KEY, String(Date.now() - ago)]]);
+    vi.stubGlobal('window', { sessionStorage: storage(kept) });
+    const { cameBack } = await import('../src/screens/MenuHero.js');
+    return { kept, cameBack };
+  }
+
+  it('finds the hero there from the start, asked once as its first menu comes up', async () => {
+    const { kept, cameBack } = await tab(900);
+    expect(cameBack()).toBe(true);
+    // The doors open on the menu and their note goes with them: the page's answer stays.
+    kept.delete(DOORS_KEY);
+    expect(cameBack()).toBe(true);
+  });
+
+  it('lets the hero walk in on a page opened anew, or come back too late', async () => {
+    expect((await tab(null)).cameBack()).toBe(false);
+    vi.resetModules();
+    expect((await tab(DOORS_FRESH_MS + 50)).cameBack()).toBe(false);
   });
 });

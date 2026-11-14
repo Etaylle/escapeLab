@@ -14,7 +14,7 @@ let cameBackOnPage: boolean | null = null;
  * Whether this page came back from the lobby through the doors (DoorWipe.tsx): asked once a
  * page, as its first menu comes up and before the doors' note goes with the doors.
  */
-function cameBack(): boolean {
+export function cameBack(): boolean {
   cameBackOnPage ??= doorsFresh(doorsMark(), Date.now());
   return cameBackOnPage;
 }

@@ -14,7 +14,7 @@ import {
 import { heroPainter, type HeroPainting } from '../src/world/menu/heroStage.js';
 import { holdLamp } from '../src/world/menu/lamp.js';
 import { FakePath2D } from './fakeCanvas.js';
-import { DESKTOP_STAGE, painting, placedOn } from './heroPage.js';
+import { DESKTOP_STAGE, FakeItem, heroOnPage, painting, placedOn } from './heroPage.js';
 
 /**
  * The hero's reactions to the menu (world/menu/hero.ts, heroStage.ts): its head turned a little
@@ -142,7 +142,43 @@ describe('the hero’s head on the stage', () => {
     run(paint, 400, 400);
     expect(on.probe.look?.at).toBe('join');
   });
+});
 
+describe('the hero’s head as the player walks the menu, on the stage', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    holdLamp(null);
+  });
+
+  it('turns to the item in the focus, to one hovered before it, and back as the focus goes', () => {
+    const [join, rounds] = [new FakeItem('join', 286), new FakeItem('rounds', 340)];
+    const page = heroOnPage(1440, 820);
+    page.play(300);
+    expect(page.probe().attends).toBeNull();
+    page.fire('focusin', join);
+    page.play(2 * TURN_MS);
+    expect(page.probe().attends).toBe('join');
+    expect(page.probe().look?.at).toBe('join');
+    page.fire('pointerover', rounds);
+    page.play(2 * TURN_MS);
+    expect(page.probe().look?.at).toBe('rounds');
+    // The pointer gone, the item in the focus holds the head again.
+    page.fire('pointerleave');
+    page.play(2 * TURN_MS);
+    expect(page.probe().look?.at).toBe('join');
+    page.fire('focusout', join);
+    page.play(2 * TURN_MS);
+    expect(page.probe().attends).toBeNull();
+    expect(page.probe().look).toBeNull();
+    page.run.stop();
+  });
+
+  it('looks at the item in the focus from the start, where the menu comes up with one', () => {
+    const page = heroOnPage(1440, 820, new FakeItem('rounds', 340));
+    page.play(2 * TURN_MS);
+    expect(page.probe().look?.at).toBe('rounds');
+    page.run.stop();
+  });
 });
 
 describe('the hero stepping aside and turning away on the stage', () => {
