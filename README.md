@@ -318,7 +318,10 @@ auf einem M4 mit 16 GB (14.11.2026, Last 9 bis 17) 772 s:
 | `drones` | 8,2 | `run` | 292,3 | `graphics` | 51,9 |
 | `reconnect` | 114,4 | `devices` | 17,7 | `audio` | 86,9 |
 | `restart` | 10,8 | | | `voice` | 3,4 |
-| | | | | `perf` | 22,8 |
+| `three` | 92,5 | | | `perf` | 22,8 |
+
+`three` kam danach dazu (M-three): 92,5 s im vollen Rundgang desselben Tages bei Last 7 bis 31,
+75 bis 91 s allein mit `SHOTS_ONLY=three`.
 
 `SHOTS_ONLY=screens,intro` spielte Blackout in 48 s; jede Gruppe im Lauf zieht die Mission bis
 zur Siegerkarte mit, und `SHOTS_ONLY=run` allein dauerte 262 s (den Systemcheck 85 s).

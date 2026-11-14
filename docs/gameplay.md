@@ -241,7 +241,7 @@ phone held sideways the row keeps the own job alone as a chip beside the goal (â
 Klemmbrett"); while a device is open the line gives way to its Laborkennung row, keeping its
 place. Nothing moves. For a crew of two nothing changes (`client/test/hands.test.tsx`).
 
-**The drill.** The walkthrough's three drill (`SHOTS_ONLY=three`, about 85 s on a laptop) plays
+**The drill.** The walkthrough's three drill (`SHOTS_ONLY=three`, 75 to 100 s on a laptop) plays
 Blackout for Anna, Ben and Cleo in a room of its own on the plan's seed: all three throw the main
 switch (three-lever.png); Ben reads the book while Cleo holds HALTEN, Anna cuts the box and Ben
 measures (three-plate.png, Cleo's screen); Cleo reads the clipboard while Anna and Ben work the

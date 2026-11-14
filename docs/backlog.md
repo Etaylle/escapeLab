@@ -472,7 +472,7 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   steht; die Zielzeile nennt ab drei Spielenden jede Hand, die eigene zuerst („Cleo: Klemmbrett ·
   Anna: Pult A · Ben: Pult B", frei: „Cleo: frei — Handbuch, HALTEN"), das quer gehaltene Handy
   die eigene als Chip. Harness-Probe `three`: Anna, Ben und Cleo bis zur Signalkette, fünf
-  Captures, etwa 85 s. Kettenreaktion und Doppelschicht: siehe N-6.
+  Captures, 75 bis 100 s. Kettenreaktion und Doppelschicht: siehe N-6.
 
 ### I-1 Zugangskontrolle mit Zwei-Faktor — Status: erledigt (I-access, Merge 2026-11-14; drei Review-Runden; Cloud-CI grün auf 4136fa0; Modul mit Probe-Mission und Drill im Systemcheck-Lauf, Platz in Blackout nach dem Playtest, N-6) · Größe: L
 - Pult A Login-Terminal, Pult B Token-Generator mit Code, der mit der Serveruhr alle 30 s
