@@ -635,7 +635,10 @@ export function goToMenu(
   send: (msg: ClientMessage) => void,
   reload: () => void = () => location.reload(),
 ): void {
+  // Either way out lets go of the other: the word and the wait, once.
   const off = (): void => {
+    clearTimeout(timer);
+    stop();
     leaveTab();
     reload();
   };
@@ -643,8 +646,6 @@ export function goToMenu(
   const stop = listen({
     message: (msg) => {
       if (msg.kind === 'at-menu' && msg.code === code) {
-        clearTimeout(timer);
-        stop();
         off();
       }
     },

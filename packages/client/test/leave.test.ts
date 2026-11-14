@@ -128,11 +128,15 @@ describe('going to the main menu from a room', () => {
   });
 
   it('loads anew all the same without a word, the line down meanwhile', () => {
-    const { session, reload } = bensWayToMenu();
+    const { session, reload, hear, listeners } = bensWayToMenu();
     vi.advanceTimersByTime(LEAVE_WAIT_MS - 1);
     expect(reload).not.toHaveBeenCalled();
     vi.advanceTimersByTime(1);
     expect(reload).toHaveBeenCalledOnce();
     expect(session.has('escapelab-session')).toBe(false);
+    // It stops listening as it goes: the word coming late loads nothing anew a second time.
+    expect(listeners.size).toBe(0);
+    hear({ kind: 'at-menu', code: 'QX7R' });
+    expect(reload).toHaveBeenCalledOnce();
   });
 });
