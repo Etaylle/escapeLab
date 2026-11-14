@@ -3,8 +3,9 @@ import type { CanvasMaker } from '../atlas.js';
 import { softEllipse } from '../brush.js';
 import { HOLD, type FigurePose } from '../figure.js';
 import { BLACK, css, lift, parseHex, sink, TUNGSTEN } from '../palette.js';
-import { LAMP_RAISE, type HeroMotion, type HeroPlace, type StageBox } from './hero.js';
+import type { HeroMotion, HeroPlace, StageBox } from './hero.js';
 import { drawHandLamp } from './lampArt.js';
+import { HERO_LIGHT, LAMP_RAISE } from './looks.js';
 
 /**
  * The hero drawn (menu/hero.ts, screens/MenuHero.tsx): the crew figure as art.ts draws it, the
@@ -144,27 +145,24 @@ function poseOf(frame: HeroFrame, layer: FigureLayer): FigurePose {
   return { ...pose, bob: 0, shimmer: lightApart ? null : pose.shimmer };
 }
 
-/**
- * How far the hero's colour sinks in the lab at night (scene.ts `nightTo`): the lamp in its
- * hands, not the room, lights it.
- */
-export const HERO_NIGHT = 0.35;
-/** The lamp's warm light along the hero's front edge, toward the menu, at its strongest. */
-export const FRONT_RIM: EdgeLight = { rgb: lift(TUNGSTEN, 0.15), alpha: 0.85 };
 /** The glow of the item the hero looks at, as its visor catches it: the beam's warm light. */
 export const VISOR_GLOW: EdgeLight = { rgb: lift(TUNGSTEN, 0.2), alpha: 0.55 };
-/** The lab's cold light along its back edge, at its strongest; null for none. */
-export const BACK_RIM: EdgeLight | null = null;
 
-/** The hero's colour `color` in the lab at night (HERO_NIGHT). */
+/**
+ * The hero's colour `color` in the lab at night, sunk as the look has it (looks.ts `HERO_LIGHT`):
+ * the lamp in its hands, not the room, lights it.
+ */
 function nightColor(color: string): string {
-  return css(sink(parseHex(color), HERO_NIGHT));
+  return css(sink(parseHex(color), HERO_LIGHT.night));
 }
 
-/** The light on the hero's edges with its lamp `on` of the way (0 to 1): the front's with it. */
+/**
+ * The light on the hero's edges with its lamp `on` of the way (0 to 1), as the look has it: the
+ * front's with the lamp, the back's, where the look has one, whatever the lamp does.
+ */
 function rimOf(on: number): Rim {
-  const front = on <= 0 ? null : { ...FRONT_RIM, alpha: FRONT_RIM.alpha * on };
-  return { front, back: BACK_RIM };
+  const { front, back } = HERO_LIGHT;
+  return { front: on <= 0 ? null : { ...front, alpha: front.alpha * on }, back };
 }
 
 /** The figure as `frame` has it, drawn on `ctx` whole or as `layer` says, its feet at `at`. */

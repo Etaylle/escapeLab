@@ -12731,10 +12731,13 @@ async function judgeLogin(page, shot, what, numberAt = 18) {
   }
 }
 
-/** „Konto" opened in `page`'s settings off the menu. */
+/**
+ * „Konto" opened in `page`'s settings off the menu, as a player opens it: by the account in the
+ * top bar (BarAccount.tsx), behind the menu's shutter, on its own tab.
+ */
 async function openKonto(page) {
-  await page.locator('.menu-item', { hasText: 'Einstellungen' }).click();
-  await page.locator('.settings-tab[data-tab="konto"]').click();
+  await page.locator('.bar-account').click();
+  await page.locator('.settings-tab--on[data-tab="konto"]').waitFor({ timeout: 5000 });
   await page.locator('.settings-login').waitFor({ timeout: 10_000 });
 }
 

@@ -1,7 +1,8 @@
 import { HELD_SCALE, HELD_X, HELD_Y } from '../art.js';
 import { TAU } from '../brush.js';
 import { smooth } from '../ease.js';
-import { LAMP_RAISE, type HeroPlace } from './hero.js';
+import type { HeroPlace } from './hero.js';
+import { LAMP_RAISE } from './looks.js';
 
 /**
  * The hand lamp in the hero's hands (menu/hero.ts) and its beam over the lab behind it

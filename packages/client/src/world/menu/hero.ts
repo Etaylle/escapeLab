@@ -11,6 +11,7 @@ import {
 import { smooth } from '../ease.js';
 import { SHOT_WIDE } from '../intro/shot.js';
 import { tileCss } from '../viewport.js';
+import { LAMP_RAISE } from './looks.js';
 
 /**
  * The hero (docs/art-bible.md „The hero"): the player's own crew figure standing large at the
@@ -210,12 +211,6 @@ export const STANDING_STILL: HeroMotion = {
   facing: HERO_FACING,
   look: null,
 };
-
-/**
- * How far the hero holds its lamp up from the chest, toward the menu: its arms raised this far,
- * radians, and the lamp in its hands this far up, figure units.
- */
-export const LAMP_RAISE = { arms: 0, up: 0 } as const;
 
 /** How far the hero's head turns toward what the player attends to: a little, not all the way. */
 export const LOOK_SHARE = 0.6;

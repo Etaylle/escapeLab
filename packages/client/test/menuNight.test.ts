@@ -3,8 +3,6 @@ import { drawScientist } from '../src/world/art.js';
 import { restingPose } from '../src/world/figure.js';
 import { HERO_FACING } from '../src/world/menu/hero.js';
 import {
-  FRONT_RIM,
-  HERO_NIGHT,
   heroCanvas,
   paintHero,
   VISOR_GLOW,
@@ -13,6 +11,7 @@ import {
 } from '../src/world/menu/heroArt.js';
 import { holdLamp, watchLamp, type HeroLamp } from '../src/world/menu/lamp.js';
 import { FLARE_LIGHT, layBeam, sceneBeam } from '../src/world/menu/lampArt.js';
+import { HERO_LIGHT } from '../src/world/menu/looks.js';
 import { NIGHT_SINK, nightTo, type SceneBake } from '../src/world/menu/scene.js';
 import { css, parseHex, rgba, sink } from '../src/world/palette.js';
 import { callEntries, fakeCanvas, FakeGradient, FakePath2D, type Entry } from './fakeCanvas.js';
@@ -209,8 +208,9 @@ describe('the hero in the lab at night', () => {
     );
 
   it('wears its colour sunk for the night, and an edge of its lamp’s light while it burns', () => {
+    const { front } = HERO_LIGHT;
     const lit = painted(1, false);
-    const night = css(sink(parseHex('#2dd4bf'), HERO_NIGHT));
+    const night = css(sink(parseHex('#2dd4bf'), HERO_LIGHT.night));
     expect(bodyStops(lit)).toContain(night);
     const rim = (log: Entry[]): number =>
       log.filter(
@@ -218,9 +218,9 @@ describe('the hero in the lab at night', () => {
           e.kind === 'set' &&
           e.name === 'strokeStyle' &&
           e.value instanceof FakeGradient &&
-          e.value.stops.some(([, colour]) => colour === rgba(FRONT_RIM.rgb, FRONT_RIM.alpha)),
+          e.value.stops.some(([, colour]) => colour === rgba(front.rgb, front.alpha)),
       ).length;
-    expect(FRONT_RIM.alpha).toBeGreaterThan(0.5);
+    expect(front.alpha).toBeGreaterThan(0.5);
     expect(rim(lit)).toBeGreaterThan(0);
     // With its lamp out no edge is drawn at all: nothing clipped to the body for it.
     const out = painted(0, false);
