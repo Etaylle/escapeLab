@@ -426,19 +426,22 @@ describe('spentText — the line before the summary', () => {
 describe('summaryText — the summary’s words', () => {
   const on = new Set(['intro', 'screens']);
 
-  it('names the groups played in the table’s order, and ends with what failed', () => {
+  const load = { start: 9.84, end: 14.2 };
+
+  it('names the groups played in the table’s order and the load, and ends with what failed', () => {
     const tally = { taken: 26, skipped: 1, failures: ['menu.png: off', 'frames: slow'] };
     assert.equal(
-      summaryText(tally, on),
-      '26 captures taken, 1 skipped, 2 failed (groups screens, intro) — ' +
-        'menu.png: off; frames: slow',
+      summaryText(tally, on, load),
+      '26 captures taken, 1 skipped, 2 failed (groups screens, intro; load 9.8 as it began, ' +
+        '14.2 as it ended) — menu.png: off; frames: slow',
     );
   });
 
-  it('ends with the groups played where nothing failed', () => {
+  it('ends with the groups played and the load where nothing failed', () => {
     assert.equal(
-      summaryText({ taken: 3, skipped: 0, failures: [] }, on),
-      '3 captures taken, 0 skipped, 0 failed (groups screens, intro)',
+      summaryText({ taken: 3, skipped: 0, failures: [] }, on, load),
+      '3 captures taken, 0 skipped, 0 failed (groups screens, intro; load 9.8 as it began, ' +
+        '14.2 as it ended)',
     );
   });
 });

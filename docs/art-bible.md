@@ -1026,8 +1026,103 @@ there; a runner at the screen's rate paces at 16.8, so
 40 ms stays its bound, and an escape grown dearer there still fails. The 40 ms floor
 also bounds what a regression in the pacing scene itself could hide: the pacing window is gated
 against 40 ms alone, as is every window before it (the lab lit before the blackout), and one
-that fails sets no pace. The log names both numbers, „p95 50.0 ms, allowed 66.8 (2 × pacing
-33.4)", and a line `pace` what the pacing window set.
+that fails sets no pace. The log names both numbers, „p95 50.0 ms at load 12.3, allowed 66.8
+(2 × pacing 33.4 at load 8.2)", and a line `pace` what the pacing window set.
+
+**What the timing checks read (H-sgl).** The lead's gated run — the walkthrough under
+`SHOTS_SOFTWARE_GL=1`, alone on main after a merge — had stopped judging the code: on main itself,
+at loads of 8 to 90, the Systemcheck failed panel-close.png in five runs of six and ended at its
+last sync station twice, and Blackout lost meter-swing.png, panel-close.png and a phone device's
+targets at 43 px. Each of those checks read when a screenshot or a poll came back as if it were
+when the page drew, and under software GL a page with a station open draws at a fraction of the
+screen's pace while the machine's load adds hundreds of ms to every round trip and every
+screenshot. Main 997275c, its checks as they were with their numbers logged, frame windows for
+information (`SHOTS_FRAME_P95_MS=1000`), two runs each — the load is the 1-minute average every
+20 s over the run:
+
+| Check | Systemcheck 1 (load 12–138, mean 45) | Blackout 1 (5–103, mean 26) | Systemcheck 2 (4–15, mean 7) | Blackout 2 (7–35, mean 15) |
+| --- | --- | --- | --- | --- |
+| panel-close.png, the fade as played | failed: the page drew the fade's first frame 98 ms after the panel began to leave and its next 215 ms after; the panel was gone at 152 — main read „gone in 124 ms, 0 frames midway" | failed: frames 30 and 847 ms after, the panel gone at 152 — main read „gone in 815 ms, 0 frames midway" | passed: frames 0, 0, 17 and 50 ms into the fade, the last at 0.95 its one frame midway; gone at 152 | failed: frames 125 and 708 ms after, the panel gone at 167 — main read „gone in 571 ms, 0 frames midway" |
+| panel-close.png, the shot held 120 ms in | midway (luma 33 → 48 → 73) | midway (34 → 46 → 59) | midway (33 → 48 → 73) | midway (35 → 45 → 58) |
+| meter-swing.png | – | passed, wrongly: read at −52.4° 186 ms after the probe, but the shot was done 763 ms after it and shows the needle at rest at −10.8°; its 600-ms swing had begun 248 ms after the click | – | passed: read at −31.4° 171 ms after the probe, the shot done 553 ms after it, the needle past its reading at −8.2° |
+| device-phone-*.png, the targets | – | every control 44 px, the rise over (notstrom-b's „Kabel 1 messen" 76.56 × 44.00) | – | failed: signalkette-a's „Zurücktreten" and „Notizen" 43.38 px high on layouts of 44, the device's opening 50 ms in |
+| the strip at a sync station | moved, Ben's row folded, no banner yet | moved | moved, Ben's row folded | moved, the radio's banner up on both pages after the reactor |
+| device-solved.png | shot 447 ms after it showed solved | skipped: shot 570 ms after, its close at 572 | shot 460 ms after | skipped: shot 2912 ms after, its close at 2931 |
+| lever-countdown | read 1301 to 1303 ms into the pull, both „2" | 1301 to 1302, both „2" | 1301 to 1302, both „2" | 1301 to 1302, both „2" |
+
+The 43 px are every control of a device scaled at once — in the second Blackout run „Zurücktreten"
+134.78 × 43.38 and „Notizen" 130.14 × 43.38 on layouts of 137 × 44 and 132 × 44, in the hero
+builder's runs 75 × 43, 133 × 43 and 129 × 43: the device's opening, the panel's rise (`panel-up`,
+from 0.98 of its size, styles/interaction.css) and the device's own (`device-open`, from 0.94,
+styles/devices.css), 150 ms each, 50 ms in when measured. Under load the page draws an
+animation's first frames late, and a measurement before them reads it at its start: on a page
+with the game's stylesheet a 75 × 44 control reads 73.50 × 43.12 as the panel's rise begins and
+75.00 × 44.00 once it ended, and every other device of these runs measured 44 px with its opening
+over. The layout is a real 44 px; the check was wrong. The Synchronkalibrierung's crash („the LED
+strip stood still for Ben", the signal builder's runs) was the radio's banner: on a phone held
+sideways it takes the strip's place in the folded row a moment after a solve (screens/Game.tsx
+`StageTop`), and with device-solved.png's screenshot taking 1.2 s under load the strip was gone
+before the check looked; the radio's listener, left unheard as the run ended, then took the
+process down before its summary.
+
+Each check now reads what the page recorded on its own clock (tools/panelfade.mjs,
+tools/pageclock.mjs). The fade as played: a MutationObserver notes when the panel begins to leave
+and when it is gone, and each frame until it is gone the panel's opacity and how far its fade has
+run on the fade's own clock (the animation's currentTime); the panel has to go 100 to 600 ms after
+it began to leave, inert, its opacity only falling, and show midway on one frame at least, as main's
+check asked. Where no frame does, a frame drawn between half and nine tenths into the 150-ms fade,
+where its ease-in has the panel at 0.86 to 0.28, fails it; where the page drew none there — or, in
+one Blackout run, none at all while the panel left — the midway frames are skipped (`panel-close
+(fade)`), the reason naming the fade's times at the frames it drew and when the panel went, and the
+held shot judges the fade. A fade that never falls still fails on a frame in its middle, as does a
+panel gone at once. meter-swing.png: the page pauses the needle's own transition 60 ms into its
+600-ms swing as the swing begins — some 40 % of its way, −58° on a swing from −90° to −10.8° — so
+that the screenshot shows it on its way whenever it lands; the needle has to have swung, held still
+through the shot and stood between where it was and its reading, or past it, and the log names when
+the swing began after the probe, on the page's clock. The hold is armed by the probe's press and
+takes the swing as the needle's turn changes: a MutationObserver on the needle's style, the
+transition taken at once with `getAnimations()`. The transition's own event, `transitionrun`, comes
+only with the page's next frame, and where that frame came after the swing's 600 ms there was
+nothing left to hold: on a scratch page whose frame came 800 ms late, the hold armed by the event
+failed as never swung, the hold armed by the style held the needle at −58°. Before the hold goes on,
+the walkthrough waits for the needle to stand at the last probe's reading (3 s at most; a probe it
+does not stand at by then is pressed unheld and logged, and the next one tries): in the first
+Blackout proof run the last probe's swing showed itself only once the hold was on and was held while
+the probe's own ran free (−74° read before the shot, −7° after it). Let go, the swing plays on only
+where it is still paused: on the scratch page, a swing a newer reading had cancelled, played again,
+swung the needle from −90° once more while its reading stood at −30°. The transition's own start
+time read 2.8 s before the probe in one run, no clock to trust. The 250 ms the shot had to be asked
+for within is gone: it timed the round trip and the poll, never the picture.
+
+The phone's targets are measured once the animations on or round its controls have ended on the
+page's clock (3 s at most; a control measured short while one still ran is skipped, the wait named;
+a token's bar draining beside its keys moves none). At a sync station each page notes, from before
+the presses, when its strip first shows the station done and when its own press went down, so that a
+banner over the strip later no longer hides it; the log gives each page's time from its press to its
+strip. The crew figures' pose shots, lobby-idle.png and figure-celebrate.png, read the figures'
+probe before and after a screenshot that, at load 42 to 57, outlasted a jump: four shots found the
+figure landed. The page now holds its animation frames from the one that put a figure in the pose
+until the shot is taken, every figure's canvas keeping that frame, and the probe has to say it still
+stands so after the shot. The hold looks only from the frame after those already asked for, and a
+frame asked for before the figure stood so runs no more once it does: put on while a figure already
+stood in its pose, the hold as first built let the next frame paint it once more in 20 holds of 20
+on a scratch page with two figures on loops of their own, the hold as it is in 0 of 30. The walk
+cycle's two shots, walk-cycle-a.png and walk-cycle-b.png, polled the walk's phase for the two
+stretches in which the legs stand wide, and main's own Systemcheck missed both at load 24 to 38:
+they hold the world's frames the same way from the one that brought the walk into a stretch, the
+walk standing still meanwhile and its end moving on by that long. nudge.png waits for the
+Leitstelle's next line at the station that is up, given after 90 s of quiet, two a station; a
+walkthrough slowed by load let both go out on its way there and then waited 110 s for a third. It
+counts the lines since the station came up against the mission's and, where all went out, skips,
+saying when each came.
+
+Every frame window's line names the machine's 1-minute load as it began (`os.loadavg`), the `pace`
+line the load its pacing window ran at, and the summary the load as the run began and ended — the
+windows themselves, the lead's gate, keep their budgets. The menu's own pace under software GL, 16.8
+ms p95, was the one window that gated in a proof run too, whose `SHOTS_FRAME_P95_MS=1000` leaves
+every other window for information: in one Blackout run it failed at a p95 just over 16.8 ms with
+the load at 158. It gates where the run keeps the gate's budget and is logged with its load where
+the budget is raised.
 
 **The frame in CSS pixels (N-camera).** The walkthrough's host window at 1440 × 820 now shows
 24.3 × 11.5 tiles of 58.2 px where main showed 22.2 × 10.5 of 63.7 — more tiles, each smaller —

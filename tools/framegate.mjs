@@ -8,7 +8,9 @@
  * it is. A p95 over it has the window looked at once more, after a pause, the same scene for as
  * long, and fails only where that look is over the allowance too: a runner without a GPU
  * stalls now and then for reasons of its own, and a handful of slow frames in one window is its
- * hiccup; slow frames in two windows in a row are the game's.
+ * hiccup; slow frames in two windows in a row are the game's. Each window's line names the
+ * machine's 1-minute load as it ran, and the pace the load it was measured at: a window that
+ * fails carries the load it failed under.
  */
 
 /** How long the gate waits before it looks at a window over the budget again, ms. */
@@ -21,20 +23,30 @@ export const PACE_FACTOR = 2;
 const ms = (value) => String(Number(value.toFixed(1)));
 
 /**
+ * The machine's 1-minute load average as the log names it: „load 12.3".
+ *
+ * @param {number} load os.loadavg()'s first
+ * @returns {string}
+ */
+export const loadText = (load) => `load ${load.toFixed(1)}`;
+
+/**
  * What a gated window may reach at p95, ms, and why, in the log's words: the budget, or
  * PACE_FACTOR times the p95 of the run's pacing window (`pacing`), whichever is more — the
  * budget alone where no pacing window was measured yet (null), as for that window itself.
  *
  * @param {number} budget the p95 a window may always reach, ms (SHOTS_FRAME_P95_MS)
- * @param {number | null} pacing the p95 of the run's pacing window, ms; null before it
- * @returns {{ ms: number, text: string }} the allowance, and „allowed 66.8 (2 × pacing 33.4)"
+ * @param {{ p95: number, load: number } | null} pacing the run's pacing window: its p95, ms,
+ *   and the machine's 1-minute load as it ran (`paceOf`); null before it
+ * @returns {{ ms: number, text: string }} the allowance, and „allowed 66.8 (2 × pacing 33.4 at
+ *   load 8.2)"
  */
 export function allowanceOf(budget, pacing) {
   if (pacing === null) {
     return { ms: budget, text: `allowed ${budget.toFixed(1)} (no pacing measured yet)` };
   }
-  const paced = PACE_FACTOR * pacing;
-  const why = `${PACE_FACTOR} × pacing ${pacing.toFixed(1)}`;
+  const paced = PACE_FACTOR * pacing.p95;
+  const why = `${PACE_FACTOR} × pacing ${pacing.p95.toFixed(1)} at ${loadText(pacing.load)}`;
   return paced > budget
     ? { ms: paced, text: `allowed ${paced.toFixed(1)} (${why})` }
     : { ms: budget, text: `allowed ${budget.toFixed(1)} (${why} is less)` };
@@ -69,31 +81,35 @@ export async function gateWindow(first, allowed, measure, pause) {
 }
 
 /**
- * A gated window's p95s as its log line prints them, with what it was allowed and why:
- * „p95 50.0 ms, allowed 66.8 (2 × pacing 33.4), again 48.1 ms".
+ * A gated window's p95s as its log line prints them, with the machine's load as it ran and what
+ * it was allowed and why: „p95 50.0 ms at load 12.3, allowed 66.8 (2 × pacing 33.4 at load 8.2),
+ * again 48.1 ms".
  *
  * @param {{ p95: number }} first the window's first look
  * @param {{ p95: number } | null} again its second look; null for none
  * @param {{ text: string }} allowance what `allowanceOf` allowed it
+ * @param {number} load the machine's 1-minute load as the window ran
  * @returns {string}
  */
-export function p95Text(first, again, allowance) {
+export function p95Text(first, again, allowance, load) {
   const second = again === null ? '' : `, again ${again.p95.toFixed(1)} ms`;
-  return `p95 ${first.p95.toFixed(1)} ms, ${allowance.text}${second}`;
+  return `p95 ${first.p95.toFixed(1)} ms at ${loadText(load)}, ${allowance.text}${second}`;
 }
 
 /**
- * The run's pace, as its pacing window measured it, p95 in ms: the look the gate's verdict
- * rests on — the second where the first was over — or null where the window failed, since a
- * pace over the budget is no pace to measure the run's other windows against.
+ * The run's pace, as its pacing window measured it: the p95 of the look the gate's verdict
+ * rests on — the second where the first was over — in ms, with the machine's 1-minute load as
+ * the window ran (`load`); or null where the window failed, since a pace over the budget is no
+ * pace to measure the run's other windows against.
  *
  * @param {{ p95: number }} first the pacing window's first look
  * @param {{ again: { p95: number } | null, over: boolean }} gate what `gateWindow` made of it
- * @returns {number | null}
+ * @param {number} load the machine's 1-minute load as the window ran
+ * @returns {{ p95: number, load: number } | null}
  */
-export function paceOf(first, gate) {
+export function paceOf(first, gate, load) {
   if (gate.over) {
     return null;
   }
-  return (gate.again ?? first).p95;
+  return { p95: (gate.again ?? first).p95, load };
 }
