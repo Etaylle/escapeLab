@@ -333,6 +333,16 @@ describe('free order: while the crew picks', () => {
     expect(intercomOf(atEins)).toEqual([]);
     expect(intercomOf(switchOn(fresh, 'eins', T0 + 1000))).toEqual(['p1', 'p2']);
   });
+
+  it('names a crew of three no hands until a station is on, then the hands at that one', () => {
+    const spawns = [...freeLab().map.spawns, { x: 2, y: 2 }];
+    const trio = freeLab({ players: { min: 3, max: 3 }, map: { ...freeLab().map, spawns } });
+    const atEins = standing(started(trio), { stations: { eins: ['p1', 'p2', 'p3'] } });
+    expect(viewFor(atEins, 'p1').hands).toBeUndefined();
+    const on = applyAction(atEins, { type: 'interact', playerId: 'p1', at: T0 + 1000 });
+    const held = viewFor(on, 'p1').hands?.held.map((hand) => hand.place?.kind ?? null);
+    expect(held).toEqual(['console', 'console', 'console']);
+  });
 });
 
 describe('a mission without a clock', () => {
