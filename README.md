@@ -295,7 +295,7 @@ voller Blackout-Rundgang dauerte auf einem M4 mit 16 GB (14.11.2026, Last 9 bis 
 | | | | | `perf` | 22,8 |
 
 `SHOTS_ONLY=screens,intro` spielte Blackout in 48 s; jede Gruppe im Lauf zieht die Mission bis
-zur Siegerkarte mit (`run` und die Abschnitte davor).
+zur Siegerkarte mit, und `SHOTS_ONLY=run` allein dauerte 262 s (den Systemcheck 85 s).
 
 **Ton und Funkstimme:** Jeder Raum klingt nach seiner Art, die Schritte des Partners kommen von
 dort, wo er steht, und die Musik zieht mit dem Druck an — alles zur Laufzeit erzeugt

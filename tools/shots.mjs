@@ -32,10 +32,10 @@
  * frame windows in screens' and intro's steps come only where that group is on as well. Without
  * either variable every group plays, as before; the summary names the groups played, the line
  * before it the seconds each took. On this Mac (an M4 with 16 GB, 2026-11-14) a full Blackout run
- * took 772 s: run 292, reconnect 114, audio 87, reading 66, graphics 52, hud 33, screens 25, perf
- * 23, art 19, devices 18, intro 12, restart 11, drones 8, editor 8 and voice 3 s;
- * SHOTS_ONLY=screens,intro took 48 s, and a group within the run costs the mission played to its
- * end besides.
+ * took 772 s: run 292, reconnect 114, audio 87, reading 66, graphics 52, hud 33, screens 25,
+ * perf 23, art 19, devices 18, intro 12, restart 11, drones 8, editor 8 and voice 3 s;
+ * SHOTS_ONLY=screens,intro took 48 s, and SHOTS_ONLY=run, the floor of a group within the run,
+ * 262 s (the Systemcheck 85 s).
  *
  * SHOTS_MISSION names the mission card to start (default Blackout); the
  * crew is two players. Where the first station is a sync station, both
