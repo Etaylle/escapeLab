@@ -11653,13 +11653,12 @@ async function hallCard(host, watcher) {
 }
 
 /**
- * hall-overview.png: an audience joins by the room's code from the menu as the run begins — its
- * world the whole hall, lit from the start, every station in its bay, the crew at the entrance;
- * the run fails where its view misses a station or leaves a room unlit. Returns the audience:
- * its context, its page and what its socket hears.
+ * hall-overview.png: an audience in `context` joins by the room's code from the menu as the run
+ * begins — its world the whole hall, lit from the start, every station in its bay, the crew at
+ * the entrance; the run fails where its view misses a station or leaves a room unlit. Returns the
+ * audience: its page and what its socket hears.
  */
-async function watchTheHall(code) {
-  const context = await browser.newContext({ viewport: COLD_OPEN });
+async function watchTheHall(context, code) {
   const page = await openPage(context, 'hall audience');
   const seen = eavesdrop(page);
   await page.goto(paged(BASE));
@@ -11668,7 +11667,7 @@ async function watchTheHall(code) {
   await sleep(1200); // the world drawn, the panels in
   await capture(page, 'hall-overview.png');
   reportOverview(seen.view?.map ?? { stations: [], litRooms: [] });
-  return { context, page, seen };
+  return { page, seen };
 }
 
 /**
@@ -11748,25 +11747,26 @@ async function captureHall() {
     skip('hall', 'the Systemcheck run plays the Übungshalle');
     return;
   }
-  const pages = [];
+  const contexts = [];
   try {
     const host = await drillPlayer('Anna');
+    contexts.push(host.context);
     const guest = await drillPlayer('Ben');
-    pages.push(host, guest);
+    contexts.push(guest.context);
     const code = await openHallRoom(host);
     await joinByCode(guest, code);
     await guest.page.locator('.lobby').waitFor({ timeout: 10_000 });
     await startRun(host, guest);
     // Past the briefing's countdown, as in the walkthrough.
     await sleep(Math.max(0, host.seen.view.startedAt + 4200 - Date.now()));
-    const watcher = await watchTheHall(code);
-    pages.push(watcher);
-    await playHall({ host, guest }, watcher);
+    const audience = await browser.newContext({ viewport: COLD_OPEN });
+    contexts.push(audience);
+    await playHall({ host, guest }, await watchTheHall(audience, code));
   } catch (err) {
     console.log(`hall               !! ${firstLine(err)}`);
     fail(`hall: ${firstLine(err)}`);
   } finally {
-    for (const { context } of pages) {
+    for (const context of contexts) {
       await context.close();
     }
   }
