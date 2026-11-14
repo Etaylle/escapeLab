@@ -11,12 +11,12 @@
  *     node tools/shots.mjs [baseUrl] [outDir]
  *
  * Groups (tools/groups.mjs): every capture, and every label a skip line carries, belongs to one of
- * seventeen groups; SHOTS_ONLY and SHOTS_SKIP, each a comma-separated list of their names, pick
+ * eighteen groups; SHOTS_ONLY and SHOTS_SKIP, each a comma-separated list of their names, pick
  * those a run plays — a quick proof of one part. The drills, each in a room of its own before the
  * walkthrough: editor, art, drones (the danger sense, a drone close by), reconnect, restart, three
  * (Blackout for a crew of three through the Signalkette) — and in a Systemcheck run the
- * Serverraum's scratch mission, devices', and the Zugangskontrolle's, access. The walkthrough's
- * own stages:
+ * Serverraum's scratch mission, devices', the Zugangskontrolle's, access, and hall (the
+ * Übungshalle played to its won card). The walkthrough's own stages:
  * screens (the menu and its sound, the history, the lobby, the run started from it), intro (the
  * opening to blackout.png, the cold open at density 2 with it) and run (the mission to the won
  * card: the lit rooms, the finds, the audience's way in, the escape, the end, and after the won
@@ -246,6 +246,24 @@
  * and how many alarms it cost. Blackout leads on to no other mission. In a
  * Blackout run the Serverraum's scratch mission below is left to the
  * Systemcheck's: Blackout's own Serverraum takes its captures.
+ *
+ * The Übungshalle's drill (hall), in a Systemcheck run: a room of its own on the seed
+ * tools/fixtures/hall-plan.json pins, opened from the menu, is played to the won card, every
+ * station type once, with the moves the plan carries (core's test/hallPlan.ts keeps them the
+ * solvers' own); the draw and the Laborkennung have to be the plan's. As the briefing ends an
+ * audience joins: hall-overview.png is its world, the whole hall lit from the start, every
+ * station in its bay — or the run fails. Both walk past the sign; while every station stands
+ * armed, a beacon over each console, the host's frames are sampled for information between two
+ * rows of bays (21,13) and the audience's on the whole hall, each log line counting the stations
+ * armed and the beacons and books in view. Then, station by station in the
+ * plan's order — the host at it or at its console A, the guest by its book or at console B, both
+ * at the one the whole crew presses — the host's device has to open on what the plan pins, is
+ * shot as it opens (hall-<type>.png), and the plan's moves are made on the devices as a hand
+ * makes them, the button held until the clock counting up shows the plan's digit, a token read
+ * off the guest's device as it comes round; every station has to solve without an alarm. The
+ * hall has no hatch: its last station wins the run, every station counted, and hall-won.png is
+ * the won card — GESCHAFFT on the host's and the audience's, its grade in the words of a run
+ * without a clock.
  *
  * Notes of the last shift: after the lever, the host walks up to the nearest
  * note the crew has found and presses E; note.png shows its slip, which has
@@ -725,6 +743,19 @@ const SERVER_UP_MS = 60_000;
 /** How far a frame's mean luma on the light layer may lie from the Canvas pass's, as a share. */
 const LUMA_TOLERANCE = 0.1;
 /**
+ * The Übungshalle's drill as core's test/hallPlan.ts makes it on the seed it pins: who starts
+ * where, the Laborkennung, and every station in the order the crew takes it — what its console
+ * opens on and the moves that solve it. Node cannot load core's TypeScript, so the plan is
+ * carried; core's hall.test.ts keeps it the solvers' own.
+ */
+const HALL_PLAN = JSON.parse(
+  readFileSync(fileURLToPath(new URL('fixtures/hall-plan.json', import.meta.url)), 'utf8'),
+);
+/** The Übungshalle as its mission file has it: where each station's consoles and book stand. */
+const HALL_MISSION = JSON.parse(
+  readFileSync(fileURLToPath(new URL('../missions/uebungshalle.json', import.meta.url)), 'utf8'),
+);
+/**
  * The seed the host's room is pinned to (`?seed=`, taken by a server with
  * ALLOW_SEED=1 as `pnpm dev` and CI set it), so that who starts where, where
  * the sources lie and every station repeat from run to run. SHOTS_SEED
@@ -937,13 +968,16 @@ function seedFor(text, pinned) {
   return Number(text);
 }
 
-/** `url` with `?seed=` where this run has a seed: the room the host opens there is pinned to it. */
-function seeded(url) {
-  if (SEED === null) {
+/**
+ * `url` with `?seed=` where there is a seed — this run's, or `seed`: the room the host opens there
+ * is pinned to it.
+ */
+function seeded(url, seed = SEED) {
+  if (seed === null) {
     return url;
   }
   const withSeed = new URL(url);
-  withSeed.searchParams.set('seed', String(SEED));
+  withSeed.searchParams.set('seed', String(seed));
   return withSeed.href;
 }
 
@@ -10034,10 +10068,13 @@ const ACCESS_PLAN = JSON.parse(
 /** The least a period has to have left for the drill to read its token off the device. */
 const ACCESS_READ_MS = 4000;
 /**
- * How long the drill waits for the device to come round to an account: it turns through three, a
- * period each, so two periods and the one under way, and some slack.
+ * How long a drill waits for a device of `periodSec` seconds a period to come round to an
+ * account: it turns through three, a period each, so two periods and the one under way, and some
+ * slack.
  */
-const ACCESS_TURN_MS = 3 * ACCESS_MISSION.puzzles[0].tokenSec * 1000 + 5000;
+const turnMsOf = (periodSec) => 3 * periodSec * 1000 + 5000;
+/** How long the drill waits for the probe's device to come round to an account. */
+const ACCESS_TURN_MS = turnMsOf(ACCESS_MISSION.puzzles[0].tokenSec);
 
 /** The open Zugangskontrolle as `player`'s page has it; null for none. */
 function accessView(player) {
@@ -10179,17 +10216,17 @@ async function accessLogin(terminal, account, typed) {
 }
 
 /**
- * The token device watched until it shows `account` with ACCESS_READ_MS left at least, then its
- * six digits read off the display — the view's token, or the run fails. Returns them and how long
- * the device took to come round.
+ * The token device watched — `turnMs` at most, the probe's turn by default — until it shows
+ * `account` with ACCESS_READ_MS left at least, then its six digits read off the display — the
+ * view's token, or the run fails. Returns them and how long the device took to come round.
  */
-async function readToken(token, account) {
+async function readToken(token, account, turnMs = ACCESS_TURN_MS) {
   const from = Date.now();
   const ready = () => {
     const device = accessView(token)?.device ?? null;
     return device?.account === account && device.endsAt - Date.now() > ACCESS_READ_MS;
   };
-  if (!(await until(ready, ACCESS_TURN_MS))) {
+  if (!(await until(ready, turnMs))) {
     throw new Error(`${token.name}'s device came round to ${account} with no time to read`);
   }
   await sleep(300); // the display takes the period's token
@@ -12202,6 +12239,565 @@ async function playPinnedOut(anna, ben, watcher) {
     }
   } finally {
     await stopHatchDust();
+  }
+}
+
+// ── the Übungshalle's drill: every station type once, in any order, without a clock ──────────
+//
+// A room of its own, before the walkthrough, in a Systemcheck run (a Blackout run leaves it to
+// that one): Anna opens a round of the Übungshalle on the seed tools/fixtures/hall-plan.json is
+// made for, Ben joins by its code, and the run starts, lit and without an intro. Past the briefing
+// an audience joins (hall-overview.png), both walk past the sign, every station is played in the
+// plan's order (hall-<type>.png), and the last one wins the run (hall-won.png). Any step that
+// fails, fails the run.
+
+/** How long a move of the hall's plan gets for its effect to reach the mover's page, ms. */
+const HALL_MOVE_MS = 3000;
+/** How long the hall's button is held at most for the digit its release waits for, ms. */
+const HOLD_FOR_DIGIT_MS = 12_000;
+/** The top rank's words for a run without a clock (core grade.ts), as the won card prints them. */
+const CLOCKLESS_TOP = 'keine Notiz gebraucht';
+
+/**
+ * Fails the drill where the Übungshalle deals other than its pinned plan holds: the hall or one
+ * of its modules changed since the plan was written.
+ */
+function hallDiffers(what, shown, pinned) {
+  throw new Error(
+    `Übungshalle seed ${HALL_PLAN.seed} no longer deals the pinned ${what}: ${shown} instead of ` +
+      `${pinned} — write tools/fixtures/hall-plan.json anew (core test/writeHall.ts)`,
+  );
+}
+
+/**
+ * The control on an open device that makes an input of the hall's plan, by station type: a
+ * selector inside the device, from the input and the mover's view of the puzzle — a wire stands
+ * where the view lists its id. The button and the Rechnernetz have drivers of their own
+ * (HALL_DRIVERS).
+ */
+const HALL_CONTROLS = {
+  'button-sync': () => '.big-button',
+  wiring: ({ wireId }, puzzle) =>
+    `.wiring-wire >> nth=${puzzle.wires.findIndex((wire) => wire.id === wireId)}`,
+  keypad: ({ keyIndex }) => `.keypad-key >> nth=${keyIndex}`,
+  switches: ({ check, switchIndex }) =>
+    check === true ? '.switches-check' : `.switches-item >> nth=${switchIndex}`,
+  simon: ({ color }) => `.simon-key.simon-${color}`,
+  maze: ({ dir }) => `.maze-btn--${['up', 'right', 'down', 'left'][dir]}`,
+  memory: ({ position }) => `.memory-key >> nth=${position}`,
+  morse: ({ transmit, tune }) =>
+    transmit === true
+      ? '.morse-send'
+      : `button[aria-label="Frequenz ${tune < 0 ? 'runter' : 'hoch'}"]`,
+  signal: ({ press }) => `button.signal-key[data-token="${press}"]`,
+  circuit: ({ probe, cut }) =>
+    probe === undefined
+      ? `.circuit-board [data-index="${cut}"]`
+      : `.circuit-probe[data-index="${probe}"]`,
+};
+
+/**
+ * A move of the hall's button on the host's device, as a hand makes it: a press is a click; a
+ * hold keeps the pointer down on the button until the view says it is held; the release lets it
+ * up once the device's clock — the time run, in the hall — shows the digit the plan lets go on.
+ * Throws where the hold does not take or the digit never comes.
+ */
+async function buttonMove(host, station, { kind }) {
+  const { page, name } = host;
+  const face = page.locator('.station-modal .button-face');
+  if (kind === 'press') {
+    await face.click({ timeout: HALL_MOVE_MS });
+    return;
+  }
+  if (kind === 'hold') {
+    await face.hover({ timeout: HALL_MOVE_MS });
+    await page.mouse.down();
+    if (!(await until(() => host.seen.view.puzzle?.holding === true, HALL_MOVE_MS))) {
+      throw new Error(`${name} holds the button of "${station.title}", but it is not held`);
+    }
+    return;
+  }
+  const digit = String(station.releaseAt);
+  const shows = (wanted) =>
+    document.querySelector('.station-modal .button-clock-time')?.textContent?.includes(wanted) ===
+    true;
+  const wait = { timeout: HOLD_FOR_DIGIT_MS, polling: 50 };
+  if (!(await settled(page.waitForFunction(shows, digit, wait)))) {
+    throw new Error(`the clock at "${station.title}" showed no ${digit} while ${name} held on`);
+  }
+  await page.mouse.up();
+}
+
+/** Who makes a move: the host the operator's, the guest the partner's, both the whole crew's. */
+const moversOf = ({ host, guest }, { by }) =>
+  by === 'everyone' ? [host, guest] : [by === 'partner' ? guest : host];
+
+/**
+ * A move of the hall's plan on the devices of its movers at once — the control HALL_CONTROLS
+ * names clicked on each — then its effect in a mover's view, or the solve. Throws where none
+ * shows.
+ */
+async function deviceMove(crew, station, move) {
+  const movers = moversOf(crew, move);
+  const index = crew.host.seen.view.currentPuzzleIndex;
+  const before = movers.map((player) => JSON.stringify(player.seen.view.puzzle));
+  const control = HALL_CONTROLS[station.type];
+  await Promise.all(
+    movers.map(({ page, seen }) =>
+      page
+        .locator('.station-modal')
+        .locator(control(move.input, seen.view.puzzle))
+        .click({ timeout: HALL_MOVE_MS }),
+    ),
+  );
+  const shown = () =>
+    crew.host.seen.view.currentPuzzleIndex > index ||
+    movers.some((player, i) => JSON.stringify(player.seen.view.puzzle) !== before[i]);
+  if (!(await until(shown, HALL_MOVE_MS))) {
+    const who = movers.map((player) => player.name).join(' and ');
+    throw new Error(`${who} at "${station.title}": ${JSON.stringify(move.input)} changed nothing`);
+  }
+}
+
+/**
+ * A move of the hall's Zugangskontrolle on the devices, as the crew makes it: a login on the
+ * terminal's key, the account typed; a token read off the guest's device once it shows the
+ * account the prompt asks for (`readToken`) — the device's, not the plan's digits, which were the
+ * solver's on its own clock — and sent on the pad; a door released on its key. Throws where the
+ * guest holds no device or a step does not take.
+ */
+async function accessMove({ host, guest }, input) {
+  if (input.cmd === 'login') {
+    await accessLogin(host, input.account, false);
+    return;
+  }
+  if (input.cmd === 'freigeben') {
+    await releaseDoor(host, input.door);
+    return;
+  }
+  const device = accessView(guest)?.device ?? null;
+  if (device === null) {
+    throw new Error(`${guest.name} holds no token device at the Zugangskontrolle`);
+  }
+  const account = accessView(host)?.terminal?.prompt;
+  const { digits } = await readToken(guest, account, turnMsOf(device.periodSec));
+  await sendToken(host, digits, false);
+}
+
+/**
+ * The stations whose moves are not a control clicked on their device: the button, held on the
+ * clock (`buttonMove`), the Rechnernetz, its commands put together on the terminal's keys and
+ * its switches thrown at the rack (`serversMove`), and the Zugangskontrolle (`accessMove`).
+ */
+const HALL_DRIVERS = {
+  button: ({ host }, station, move) => buttonMove(host, station, move.input),
+  servers: ({ host, guest }, _station, move) =>
+    serversMove({ terminal: host, rack: guest }, move, false),
+  access: (crew, _station, move) => accessMove(crew, move.input),
+};
+
+/** How the walkthrough makes a move at a station of `type`; null for a type it knows no way of. */
+function driverOf(type) {
+  if (type in HALL_DRIVERS) {
+    return HALL_DRIVERS[type];
+  }
+  return type in HALL_CONTROLS ? deviceMove : null;
+}
+
+/** The tile a target stands on: a station's (first) console, or the source itself. */
+const tileOfTarget = (target) => (target.of === 'station' ? target.consoles[0] : target);
+
+/**
+ * Where the crew works a station of the hall, from the hall's file: the host at its console A —
+ * the only one, where it has one — and the guest at console B where it has two, at the same
+ * console where the whole crew presses (the plan's moves are everyone's), else by its book: the
+ * station's backup.
+ */
+function hallPlaces(station) {
+  const [a, b] = HALL_MISSION.map.stations.filter((spot) => spot.puzzleId === station.id);
+  const at = (spot) => consoleTarget({ ...spot, title: station.title });
+  if (b !== undefined) {
+    return { host: at(a), guest: at(b) };
+  }
+  if (station.moves.some((move) => move.by === 'everyone')) {
+    return { host: at(a), guest: at(a) };
+  }
+  const book = HALL_MISSION.map.manuals.find((manual) => manual.puzzleIds.includes(station.id));
+  return { host: at(a), guest: sourceTarget({ ...book, ...book.spots[0] }) };
+}
+
+/** `player` opens the device at `target` with E; throws where none comes up. */
+async function openDevice(player, target) {
+  if (!(await interactUntil(player, player.page.locator('.station-modal'), target))) {
+    const at = `${player.name} stands at ${targetSaid(target)}`;
+    throw new Error(`${at}, but no .station-modal after ${TRIES}`);
+  }
+}
+
+/**
+ * The crew at its places for a station of the hall (`hallPlaces`), both walking there at once,
+ * and the device open: the host's E switches the station on, the guest's opens console B or the
+ * whole crew's button — or the guest by the book has to be counted there. Throws where a walk
+ * or a device fails.
+ */
+async function manHallStation({ host, guest }, station) {
+  const places = hallPlaces(station);
+  const walks = [
+    [host, places.host],
+    [guest, places.guest],
+  ];
+  const there = await Promise.all(
+    walks.map(([player, target]) => walkNear(player.page, player.seen, tileOfTarget(target))),
+  );
+  const stuck = walks.filter((_, i) => !there[i]);
+  if (stuck.length > 0) {
+    const said = stuck.map(([player, target]) => `${player.name} to ${targetSaid(target)}`);
+    throw new Error(`no way through the hall: ${said.join(', ')}`);
+  }
+  await openDevice(host, places.host);
+  if (places.guest.of === 'station') {
+    await openDevice(guest, places.guest);
+  } else if (!(await until(() => presentAt(guest.seen.view, places.guest), CATCH_UP_MS))) {
+    const at = `${guest.name} stands by ${targetSaid(places.guest)}`;
+    throw new Error(`${at}, but is not counted there`);
+  }
+}
+
+/**
+ * What the host's device opens on, field by field as the plan pins it (`opens`), once the page
+ * shows it; the walkthrough fails naming the seed where it differs.
+ */
+async function checkOpens(host, station) {
+  const fields = Object.keys(station.opens);
+  const shown = () => JSON.stringify(fields.map((key) => host.seen.view.puzzle?.[key] ?? null));
+  const pinned = JSON.stringify(Object.values(station.opens));
+  if (!(await until(() => shown() === pinned, HALL_MOVE_MS))) {
+    hallDiffers(`"${station.title}"`, shown(), pinned);
+  }
+}
+
+/** Both devices gone once a station is solved — each closes itself — or the walkthrough throws. */
+async function devicesClosed(players, station) {
+  for (const { name, page } of players) {
+    const gone = page.locator('.station-modal').waitFor({ state: 'hidden', timeout: 3000 });
+    if (!(await settled(gone))) {
+      throw new Error(`${name}'s device stayed open after "${station.title}" was solved`);
+    }
+  }
+}
+
+/**
+ * A station of the hall as the plan takes it: the crew at its places, the device open
+ * (`manHallStation`), what the host's device opens on held to the plan, the device shot as it
+ * opens (hall-<type>.png), the plan's moves made (`driverOf`), and the station solved without an
+ * alarm — or the run fails; then both pages caught up and both devices closed by themselves.
+ */
+async function playHallStation(crew, station) {
+  const { host, guest } = crew;
+  const index = host.seen.view.currentPuzzleIndex;
+  const alarms = host.seen.view.penaltySeq;
+  await manHallStation(crew, station);
+  await checkOpens(host, station);
+  await sleep(300); // past the device's fade-in
+  const shot = `hall-${station.type}.png`;
+  await capture(host.page, shot);
+  const from = Date.now();
+  const drive = driverOf(station.type);
+  for (const move of station.moves) {
+    await drive(crew, station, move);
+    await sleep(120);
+  }
+  if (!(await until(() => host.seen.view.currentPuzzleIndex > index, 5000))) {
+    throw new Error(`the plan's moves are made at "${station.title}", but it did not solve`);
+  }
+  const raised = host.seen.view.penaltySeq - alarms;
+  console.log(
+    `${`${shot} `.padEnd(19)}${host.name} and ${guest.name} at "${station.title}": ` +
+      `${station.moves.length} moves in ${seconds(Date.now() - from)}, solved, ` +
+      (raised === 0 ? 'no alarm' : `!! ${raised} alarm(s)`),
+  );
+  if (raised > 0) {
+    fail(`${shot}: "${station.title}" solved with ${raised} alarm(s)`);
+  }
+  await viewsCaughtUp([host, guest]);
+  await devicesClosed([host, guest], station);
+}
+
+/** Who starts where, as the plan has the draw; the walkthrough fails naming the seed where not. */
+function checkHallDraw({ host, guest }) {
+  for (const [player, pinned] of [
+    [host, HALL_PLAN.spawns.host],
+    [guest, HALL_PLAN.spawns.guest],
+  ]) {
+    const at = player.seen.view.map.yourSpawn;
+    if (at.x !== pinned.x || at.y !== pinned.y) {
+      hallDiffers(`start of ${player.name}`, `${at.x},${at.y}`, `${pinned.x},${pinned.y}`);
+    }
+  }
+}
+
+/**
+ * Both walk up to the Laborkennung at the entrance, as the plan has them before the first
+ * station; both views have to name its serial then, the plan's.
+ */
+async function passTheSign({ host, guest }) {
+  const sign = HALL_MISSION.map.edgeworkSign;
+  const crew = [host, guest];
+  const there = await Promise.all(crew.map((p) => walkNear(p.page, p.seen, sign)));
+  if (!there.every(Boolean)) {
+    throw new Error(`no way to the Laborkennung at ${sign.x},${sign.y} for the whole crew`);
+  }
+  const serials = () => crew.map((p) => p.seen.view.edgework?.serial ?? 'none');
+  const read = () => serials().every((serial) => serial === HALL_PLAN.serial);
+  if (!(await until(read, CATCH_UP_MS))) {
+    hallDiffers('Laborkennung', serials().join(' and '), HALL_PLAN.serial);
+  }
+  console.log(
+    `sign               ${host.name} and ${guest.name} read ${HALL_PLAN.serial} at the sign`,
+  );
+}
+
+/**
+ * The hall has no hatch: its last station wins the run, every station counted, and its won card
+ * comes up (`hallCard`). Throws where the run is not won with it.
+ */
+async function hallWon(host, watcher) {
+  const won = () => host.seen.view.phase === 'won';
+  if (!(await until(won, 5000))) {
+    throw new Error('every station of the hall is solved, but the run was not won');
+  }
+  const { currentPuzzleIndex, puzzleCount } = host.seen.view;
+  console.log(
+    `hall               the last station won the run: ${currentPuzzleIndex} of ${puzzleCount} ` +
+      'stations counted, no hatch to reach',
+  );
+  if (currentPuzzleIndex !== puzzleCount) {
+    fail(`hall: ${currentPuzzleIndex} of ${puzzleCount} stations counted at the win`);
+  }
+  await hallCard(host, watcher);
+}
+
+/** The text `locator` shows once it is there, or null where it never comes. */
+async function textOnceThere(locator) {
+  return (await attached(locator, 6000)) ? textOf(locator) : null;
+}
+
+/**
+ * hall-won.png: the host's won card once it is out of the white — its word, the time the run took
+ * and its grade, the top rank in the words of a run without a clock — and the audience's card;
+ * the run fails unless both say GESCHAFFT and the grade is a clockless run's. Throws where no
+ * card comes up.
+ */
+async function hallCard(host, watcher) {
+  const card = host.page.locator('.end-title');
+  if (!(await attached(card, 6000))) {
+    throw new Error('the hall was won, but no title card came up');
+  }
+  await sleep(1700); // past the card's way out of the white
+  await capture(host.page, 'hall-won.png');
+  const says = await textOf(card.locator('.end-title-word'));
+  const facts = (await textOf(card.locator('.end-facts')))?.replace(/\s+/g, ' ') ?? 'none';
+  const audience = await textOnceThere(watcher.page.locator('.spectate .end-title-word'));
+  console.log(
+    `hall-won.png       ${host.name}: "${says}", "${facts}"; ` +
+      `the audience's card "${audience ?? '!! none'}"`,
+  );
+  if (says !== 'GESCHAFFT' || audience !== 'GESCHAFFT' || !facts.includes(CLOCKLESS_TOP)) {
+    fail(`hall-won.png: "${says}", "${facts}", the audience's card "${audience}"`);
+  }
+}
+
+/**
+ * hall-overview.png: an audience in `context` joins by the room's code from the menu as the run
+ * begins — its world the whole hall, lit from the start, every station in its bay, the crew at
+ * the entrance; the run fails where its view misses a station or leaves a room unlit. Returns the
+ * audience: its page and what its socket hears.
+ */
+async function watchTheHall(context, code) {
+  const page = await openPage(context, 'hall audience');
+  const seen = eavesdrop(page);
+  // Traced: the drill samples the audience's frames on the armed hall (`sampleArmedAudience`).
+  await page.goto(traced(BASE));
+  await byCode(page, code, true);
+  await page.locator('.spectate').waitFor({ timeout: 10_000 });
+  await sleep(1200); // the world drawn, the panels in
+  await capture(page, 'hall-overview.png');
+  reportOverview(seen.view?.map ?? { stations: [], litRooms: [] });
+  return { page, seen };
+}
+
+/**
+ * hall-overview.png's line in the log, from the audience's map: how many of the hall's
+ * stations it shows, how many of its rooms lit; the run fails where one is missing.
+ */
+function reportOverview(map) {
+  const stations = new Set(map.stations.map((spot) => spot.puzzleId)).size;
+  const lit = map.litRooms.length;
+  const rooms = HALL_MISSION.map.labels.length;
+  console.log(
+    `hall-overview.png  the audience @ ${COLD_OPEN.width}x${COLD_OPEN.height}: ${stations} of ` +
+      `${HALL_PLAN.stations.length} stations, ${lit} of ${rooms} rooms lit`,
+  );
+  if (stations !== HALL_PLAN.stations.length || lit !== rooms) {
+    fail(`hall-overview.png: ${stations} stations, ${lit} of ${rooms} rooms lit`);
+  }
+}
+
+/**
+ * Where the drill samples the host's frames while every station stands armed: between the
+ * second and the third row of bays, seven tiles apart, so that a player's window — some twenty
+ * tiles by eleven and a half on a laptop — frames the consoles of both rows. In a row's own
+ * aisle it frames that row's alone, at the sign by the south wall one beacon; the log counts
+ * what it framed. The audience's window frames the whole hall (`sampleArmedAudience`).
+ */
+const HALL_SAMPLE_AT = { x: 21, y: 13 };
+
+/**
+ * What `page`'s window frames now of the hall's beacons — one over each console of an armed
+ * station — and of its books, as the log says it: the middles of their tiles on the world's
+ * canvas (`worldOnPage`); null without a camera.
+ */
+async function hallFramed(page) {
+  const world = await worldOnPage(page);
+  const box = await page.locator('.world-canvas').first().boundingBox();
+  if (world === null || box === null) {
+    return null;
+  }
+  const inBox = ({ x, y }) =>
+    x >= box.x && x <= box.x + box.width && y >= box.y && y <= box.y + box.height;
+  const framed = (spots) =>
+    spots.filter(({ x, y }) => inBox(world.toPage(x + 0.5, y + 0.5))).length;
+  const { stations, manuals } = HALL_MISSION.map;
+  const books = manuals.flatMap((manual) => manual.spots);
+  return (
+    `${framed(stations)} of ${stations.length} beacons and ${framed(books)} of ${books.length} ` +
+    'books in view'
+  );
+}
+
+/** How many of the hall's stations `view` has armed, each counted once. */
+const armedOf = (view) =>
+  new Set((view.map?.stations ?? []).filter((s) => s.status === 'armed').map((s) => s.puzzleId))
+    .size;
+
+/**
+ * The host's frames sampled for information at HALL_SAMPLE_AT while every station stands armed,
+ * the log saying what they were measured under: the stations armed and what the window frames
+ * (`hallFramed`) — its line counting the frames as every window does. Throws where the host
+ * finds no way there.
+ */
+async function sampleArmedHall(host) {
+  const at = HALL_SAMPLE_AT;
+  const there = await walkNear(host.page, host.seen, at);
+  if (!there || !(await stepTo(host.page, host.seen, at.x + 0.5, at.y + 0.5))) {
+    throw new Error(`${host.name} found no way to ${at.x},${at.y} in the hall`);
+  }
+  await sleep(1500); // the camera settles behind the walk
+  const framed = (await hallFramed(host.page)) ?? 'no camera to say what is in view';
+  const armed = `${armedOf(host.seen.view)} of ${HALL_PLAN.stations.length} stations armed`;
+  const when = `at ${at.x},${at.y} in the hall, ${armed}, ${framed}`;
+  await sampleFrames(host.page, when, () => pace(host, SAMPLE_MS), { gating: false });
+}
+
+/**
+ * The audience's frames sampled for information while every station stands armed: its window the
+ * whole hall, every beacon and book in view — the most the armed hall puts on one screen — the
+ * log saying what they were measured under, as the host's (`sampleArmedHall`).
+ */
+async function sampleArmedAudience(watcher) {
+  const framed = (await hallFramed(watcher.page)) ?? 'no camera to say what is in view';
+  const armed = `${armedOf(watcher.seen.view)} of ${HALL_PLAN.stations.length} stations armed`;
+  const when = `the audience's whole hall, ${armed}, ${framed}`;
+  await sampleFrames(watcher.page, when, () => sleep(SAMPLE_MS), { gating: false });
+}
+
+/**
+ * The Übungshalle on its pinned seed to the won card: the draw the plan's; both past the
+ * Laborkennung; the frames of the host among the bays and of the audience on the whole hall
+ * sampled for information while every station stands armed (`sampleArmedHall`,
+ * `sampleArmedAudience`); every station in the plan's order (`playHallStation`), the last of
+ * them winning the run (`hallWon`). Logs how long the stations took and the run.
+ */
+async function playHall(crew, watcher) {
+  const { host } = crew;
+  checkHallDraw(crew);
+  const unknown = HALL_PLAN.stations.filter((station) => driverOf(station.type) === null);
+  if (unknown.length > 0) {
+    const types = unknown.map((station) => station.type).join(', ');
+    throw new Error(`the walkthrough knows no way to work ${types}: give HALL_CONTROLS its keys`);
+  }
+  await passTheSign(crew);
+  await sampleArmedHall(host);
+  await sampleArmedAudience(watcher);
+  const from = Date.now();
+  for (const station of HALL_PLAN.stations) {
+    await playHallStation(crew, station);
+  }
+  const took = Date.now() - from;
+  await hallWon(host, watcher);
+  const { startedAt, finishedAt, penaltySeq } = host.seen.view;
+  console.log(
+    `hall               won: ${HALL_PLAN.stations.length} stations in ${seconds(took)}, the run ` +
+      `${seconds(finishedAt - startedAt)} from its start, ${penaltySeq} alarm(s) ` +
+      `(seed ${HALL_PLAN.seed})`,
+  );
+}
+
+/**
+ * Anna opens a round of the Übungshalle from the menu, her page asking for the seed the plan
+ * pins. Returns the room's code; throws where the room is not pinned to that seed — a server
+ * takes one only with ALLOW_SEED=1.
+ */
+async function openHallRoom(host) {
+  // Traced: the drill samples the host's frames (`playHall`).
+  await host.page.goto(seeded(traced(BASE), HALL_PLAN.seed));
+  await typeName(host.page, host.name);
+  await openRound(host.page, HALL_MISSION.title);
+  await host.page.locator('.room-code strong').waitFor({ timeout: 10_000 });
+  const code = (await host.page.locator('.room-code strong').innerText()).trim();
+  await host.page.locator('.room-seed').waitFor({ timeout: 3000 }).catch(() => undefined);
+  const seed = await textOf(host.page.locator('.room-seed'));
+  if (seed !== `Seed ${HALL_PLAN.seed}`) {
+    const said = `room ${code} is not pinned to seed ${HALL_PLAN.seed} (${seed})`;
+    throw new Error(`${said} — the server takes one only with ALLOW_SEED=1`);
+  }
+  console.log(`hall               „${HALL_MISSION.title}" in room ${code}, seed ${HALL_PLAN.seed}`);
+  return code;
+}
+
+/**
+ * The Übungshalle's drill (hall): in a Systemcheck run, Anna opens the hall's room on the plan's
+ * seed (`openHallRoom`), Ben joins by its code and the run starts; past the briefing an audience
+ * joins (`watchTheHall`), and the hall is played to its won card (`playHall`). A Blackout run
+ * leaves it to the Systemcheck's. Every page it opened is closed again, however it ends.
+ */
+async function captureHall() {
+  if (MISSION.toLowerCase() === 'blackout') {
+    skip('hall', 'the Systemcheck run plays the Übungshalle');
+    return;
+  }
+  const contexts = [];
+  try {
+    const host = await drillPlayer('Anna');
+    contexts.push(host.context);
+    const guest = await drillPlayer('Ben');
+    contexts.push(guest.context);
+    const code = await openHallRoom(host);
+    await joinByCode(guest, code);
+    await guest.page.locator('.lobby').waitFor({ timeout: 10_000 });
+    await startRun(host, guest);
+    // Past the briefing's countdown, as in the walkthrough.
+    await sleep(Math.max(0, host.seen.view.startedAt + 4200 - Date.now()));
+    const audience = await browser.newContext({ viewport: COLD_OPEN });
+    contexts.push(audience);
+    await playHall({ host, guest }, await watchTheHall(audience, code));
+  } catch (err) {
+    console.log(`hall               !! ${firstLine(err)}`);
+    fail(`hall: ${firstLine(err)}`);
+  } finally {
+    for (const context of contexts) {
+      await context.close();
+    }
   }
 }
 
@@ -14544,7 +15140,8 @@ async function captureThree() {
  * The drills before the walkthrough, each in a room of its own, by the group each belongs to:
  * the editor, the Serverraum's scratch mission (a Systemcheck run's), the art tour, the danger
  * sense, the reconnect drill, the restart drill, the Zugangskontrolle's scratch mission (a
- * Systemcheck run's) and the three drill.
+ * Systemcheck run's), the three drill (a Blackout run's) and the Übungshalle (a Systemcheck
+ * run's).
  */
 const DRILLS = [
   ['editor', captureEditor],
@@ -14555,6 +15152,7 @@ const DRILLS = [
   ['restart', captureRestart],
   ['access', captureAccess],
   ['three', captureThree],
+  ['hall', captureHall],
 ];
 
 /**

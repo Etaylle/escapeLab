@@ -16,7 +16,7 @@ import { recordLine } from '../runStats.js';
 import { keepInvite, tabInvite } from '../tab.js';
 import type { Takeover } from '../ws.js';
 import { uiSound } from '../world/menuSound.js';
-import { crewSizeText } from './Crew.js';
+import { ClockFact, crewSizeText } from './Crew.js';
 import { CrewFigure } from './CrewFigure.js';
 import { Icon } from './Icon.js';
 import { MapThumb } from './MapThumb.js';
@@ -254,12 +254,34 @@ export function MenuPanel({
   );
 }
 
+/** On the Übungshalle's card, over its title, for every device: what the hall is for. */
+export const HALL_HINT = 'Jede Station zum Üben';
+
+/** The Übungshalle's id, as core's test/hall.ts makes the mission. */
+const HALL_ID = 'uebungshalle';
+
+/** The Übungshalle among the missions, by its id: a mission of the editor's may take its name. */
+export function isPracticeHall(mission: Pick<MissionInfo, 'id'>): boolean {
+  return mission.id === HALL_ID;
+}
+
+/**
+ * The line of its own over a card's title: „Erster Einsatz? Hier starten" on the tutorial's
+ * while this device has seen no run won (`first`), what the Übungshalle is for on its card,
+ * always (HALL_HINT); none on any other.
+ */
+function CardHint({ mission, first }: { mission: MissionInfo; first: boolean }) {
+  if (first) {
+    return <span className="mission-first">{FIRST_RUN_HINT}</span>;
+  }
+  return isPracticeHall(mission) ? <span className="mission-hall">{HALL_HINT}</span> : null;
+}
+
 /**
  * One mission to pick: its map, its name and one line of facts; the picked
  * one spells out its subtitle too. Once the mission has been played, a line
- * says its best time and win rate. The tutorial's card says „Erster Einsatz?
- * Hier starten" in a line of its own while this device has seen no run won
- * (`first`).
+ * says its best time and win rate. A line over the title may say what the
+ * card is for (`CardHint`).
  */
 export function MissionCard({
   mission,
@@ -284,10 +306,10 @@ export function MissionCard({
     >
       <MapThumb tiles={mission.tiles} height={64} />
       <span className="mission-text">
-        {first && <span className="mission-first">{FIRST_RUN_HINT}</span>}
+        <CardHint mission={mission} first={first} />
         <span className="mission-title">{mission.title}</span>
         <span className="mission-meta">
-          {crewSizeText(mission.players)} · {Math.round(mission.timeLimitSec / 60)} min ·{' '}
+          {crewSizeText(mission.players)} · <ClockFact timeLimitSec={mission.timeLimitSec} />{' '}
           {mission.puzzleCount} Stationen
         </span>
         {selected && <span className="mission-sub">{mission.subtitle}</span>}
@@ -327,7 +349,7 @@ export function Prototypes({
                 onClick={() => onSelect(m.id)}
               >
                 <span className="mission-proto-title">{m.title}</span> ·{' '}
-                {crewSizeText(m.players)} · {Math.round(m.timeLimitSec / 60)} min ·{' '}
+                {crewSizeText(m.players)} · <ClockFact timeLimitSec={m.timeLimitSec} />{' '}
                 {m.puzzleCount} Stationen
               </button>
             </li>

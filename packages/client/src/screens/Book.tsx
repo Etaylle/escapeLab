@@ -54,6 +54,13 @@ export function SectionReader({
   return puzzle !== null && readerIn(puzzle, section) ? <ReaderPanel puzzle={puzzle} /> : null;
 }
 
+/** What asking for the next note says: its price where the mission has a clock to take it off. */
+export function askNoteText(costSec: number): string {
+  return costSec === 0
+    ? 'Notiz der letzten Schicht erbitten'
+    : `Notiz der letzten Schicht erbitten · −${costSec} s`;
+}
+
 /**
  * Counts down to the next note, then asks for it at the price it names. The note is ready at a
  * moment the server set, counted on its clock (clock.ts), and standing still while the run is
@@ -73,9 +80,7 @@ function AskNote({
   const wait = section.noteReadyAt === null ? 0 : Math.ceil((section.noteReadyAt - now) / 1000);
   return (
     <button className="note-ask" disabled={wait > 0} onClick={onAsk}>
-      {wait > 0
-        ? `Notiz in ${wait} s`
-        : `Notiz der letzten Schicht erbitten · −${section.costSec} s`}
+      {wait > 0 ? `Notiz in ${wait} s` : askNoteText(section.costSec)}
     </button>
   );
 }

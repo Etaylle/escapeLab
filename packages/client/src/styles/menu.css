@@ -382,13 +382,21 @@
   container: missions / inline-size;
 }
 
-/* The tutorial's card says it in a line of its own, over its title: nothing stuck over it. */
-.mission-first {
+/*
+ * The tutorial's card says it in a line of its own, over its title: nothing stuck over it.
+ * The Übungshalle's says what it is for the same way, in the calmer accent.
+ */
+.mission-first,
+.mission-hall {
   color: var(--warn);
   font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
+}
+
+.mission-hall {
+  color: var(--accent);
 }
 
 .join-with-code {

@@ -19,7 +19,7 @@ import { useVoice } from '../voice/useVoice.js';
 import { crewSpeaks, uiSound } from '../world/menuSound.js';
 import { lobbyRadio } from '../world/radioCheck.js';
 import { preloadSamples } from '../world/samples.js';
-import { crewSizeText } from './Crew.js';
+import { clockSizeText, crewSizeText } from './Crew.js';
 import { CrewRoom } from './CrewRoom.js';
 import { closeDoorsThen } from './DoorWipe.js';
 import { Icon } from './Icon.js';
@@ -102,7 +102,7 @@ function MissionHead({ view, info, picker, earned }: HeadProps) {
         ))}
       <p className="lobby-facts">
         <span>
-          <Icon name="clock" /> {Math.round(view.timeLimitSec / 60)} min
+          <Icon name="clock" /> {clockSizeText(view.timeLimitSec)}
         </span>
         <span>
           <Icon name="crew" /> {crewSizeText(view.crewSize)}
