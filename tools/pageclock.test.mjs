@@ -1,6 +1,12 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { deviceVerdict, figureHeld, stripVerdict, swingVerdict } from './pageclock.mjs';
+import {
+  deviceVerdict,
+  figureHeld,
+  strideHeld,
+  stripVerdict,
+  swingVerdict,
+} from './pageclock.mjs';
 
 describe('stripVerdict — a sync station’s strip, as each page noted it', () => {
   it('names when each page showed the station done after its own press', () => {
@@ -147,5 +153,24 @@ describe('figureHeld — a figure held in its pose through its shot', () => {
   it('fails a figure held out of its pose, however still it stood', () => {
     const low = { ...up, rise: 0.05 };
     assert.equal(figureHeld(low, { ...low }, jump), false);
+  });
+});
+
+describe('strideHeld — your walk held in a stride through its shot', () => {
+  const wide = { from: 0.18, to: 0.32 };
+  const held = { phase: 0.24, moving: true };
+
+  it('holds a walk still in its stretch as the page held it', () => {
+    assert.equal(strideHeld(held, { ...held }, wide), true);
+  });
+
+  it('fails one a frame moved, one stopped, one out of the stretch, and one with no probe', () => {
+    assert.equal(strideHeld(held, { ...held, phase: 0.29 }, wide), false);
+    assert.equal(strideHeld(held, { ...held, moving: false }, wide), false);
+    for (const phase of [0.1, 0.4]) {
+      const out = { phase, moving: true };
+      assert.equal(strideHeld(out, { ...out }, wide), false);
+    }
+    assert.equal(strideHeld(held, null, wide), false);
   });
 });

@@ -108,6 +108,26 @@ export function figureHeld(found, after, { mood, key, least }) {
 }
 
 /**
+ * Whether your figure's walk held in `stride` for its shot (shots.mjs `strideShot`) — `held` as
+ * the page held it, `after` as the graphics probe gave it once shot, null without one — still
+ * stood there: walking, its phase `from` to `to`, and as held, no frame having moved it.
+ *
+ * @param {{ phase: number, moving: boolean }} held
+ * @param {{ phase: number, moving: boolean } | null} after
+ * @param {{ from: number, to: number }} stride
+ * @returns {boolean}
+ */
+export function strideHeld(held, after, { from, to }) {
+  return (
+    after !== null &&
+    after.moving &&
+    after.phase >= from &&
+    after.phase <= to &&
+    after.phase === held.phase
+  );
+}
+
+/**
  * What a phone showed of its open device (shots.mjs `deviceReach`): how far it scrolls, px; its
  * controls shown; those under a fingertip's 44 px either way and those cut off, in words.
  *

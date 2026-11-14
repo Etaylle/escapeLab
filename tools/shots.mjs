@@ -644,7 +644,13 @@ import {
   spottedOn,
   stretchOf,
 } from './patrol.mjs';
-import { deviceVerdict, figureHeld, stripVerdict, swingVerdict } from './pageclock.mjs';
+import {
+  deviceVerdict,
+  figureHeld,
+  strideHeld,
+  stripVerdict,
+  swingVerdict,
+} from './pageclock.mjs';
 import { percentile } from './percentile.mjs';
 import { decodePng } from './pixeldiff.mjs';
 import {
@@ -15011,7 +15017,8 @@ async function strideShot(page, shot, stride, ms) {
     }
     await shootAround(page, shot, { x: self.x, y: self.y - 0.15 }, FIGURE_SHOT);
     const after = (await graphicsOf(page))?.gait ?? null;
-    return { phase: held.phase, still: after?.phase === held.phase, heldMs: Date.now() - heldAt };
+    const still = strideHeld(held, after, stride);
+    return { phase: held.phase, still, heldMs: Date.now() - heldAt };
   } finally {
     await page.evaluate(releaseFrames);
   }
