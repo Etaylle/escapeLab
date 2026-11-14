@@ -7448,15 +7448,21 @@ async function phoneReach(player, size, shot, label = shot) {
       `${seen.cut.length} cut off` +
       [...seen.small, ...seen.cut].map((what) => `\n                   !! ${what}`).join(''),
   );
+  const wrong = reachWrong(seen);
+  if (wrong.length > 0) {
+    fail(`${label}: ${wrong.join('; ')}`);
+  }
+}
+
+/** What a device held on a phone (`deviceReach`) does wrong: none where it stands whole. */
+function reachWrong(seen) {
   const wrong = [
     seen.controls === 0 && 'no control shown',
     seen.scroll > 1 && `it scrolls ${seen.scroll}px`,
     seen.small.length > 0 && `${seen.small.join(', ')} under 44 px`,
     seen.cut.length > 0 && `${seen.cut.join(', ')} cut off`,
   ];
-  if (wrong.some(Boolean)) {
-    fail(`${label}: ${wrong.filter(Boolean).join('; ')}`);
-  }
+  return wrong.filter(Boolean);
 }
 
 /**
@@ -8960,22 +8966,34 @@ async function captureAccessConsoles({ terminal, token }) {
   await sleep(1400); // past the panels' fade-in and the terminal's boot scroll
   await capture(terminal.page, 'access-terminal.png');
   await capture(token.page, 'access-token.png');
-  const doors = accessView(terminal)?.terminal?.doors.map((row) => row.door) ?? [];
-  const device = accessView(token)?.device ?? null;
-  const digits = await textOf(token.page.locator('.station-modal .access-digits'));
+  const doors = doorsAsked(terminal);
+  const device = tokenDevice(token);
+  const digits = (await textOf(token.page.locator('.station-modal .access-digits'))) ?? '';
   const asked = JSON.stringify(doors) === JSON.stringify(ACCESS_PLAN.doors);
-  const read = digits?.replace(/\s+/g, '') === device?.token;
-  console.log(
-    `access-terminal.png ${terminal.name} at ${seatOf(terminal)}: asks for ${doors.join(', ')}` +
-      `${asked ? '' : ' !! not the plan’s doors'}; access-token.png ${token.name}: ` +
-      `${device?.account ?? '?'} „${digits ?? '?'}"${read ? '' : ' !! not the view’s token'}`,
-  );
+  const read = digits.replace(/\s+/g, '') === device?.token;
+  console.log(consolesSaid({ terminal, token, doors, device, digits, asked, read }));
   if (!asked) {
     fail(`access: seed ${ACCESS_PLAN.seed} asks for other doors than access-plan.json names`);
   }
   if (!read) {
     fail(`access: the device shows „${digits}", its view says ${device?.token}`);
   }
+}
+
+/** The doors `player`'s terminal asks for, in its order; none where it shows no terminal. */
+const doorsAsked = (player) =>
+  accessView(player)?.terminal?.doors.map((row) => row.door) ?? [];
+
+/** The token device `player` has open: its account, token and period's end; null for none. */
+const tokenDevice = (player) => accessView(player)?.device ?? null;
+
+/** The log's line for both devices as shot (`captureAccessConsoles`). */
+function consolesSaid({ terminal, token, doors, device, digits, asked, read }) {
+  return (
+    `access-terminal.png ${terminal.name} at ${seatOf(terminal)}: asks for ${doors.join(', ')}` +
+    `${asked ? '' : ' !! not the plan’s doors'}; access-token.png ${token.name}: ` +
+    `${device?.account ?? '?'} „${digits}"${read ? '' : ' !! not the view’s token'}`
+  );
 }
 
 /**

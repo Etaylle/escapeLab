@@ -396,21 +396,30 @@ const label = (name) => `group ${name}`.padEnd(18);
 /** The groups that play alone: only where SHOTS_ONLY names them. */
 const ALONE = GROUPS.filter((group) => group.alone === true).map((group) => group.name);
 
+/** The groups a run plays where SHOTS_ONLY names none: every group but those that play alone. */
+const UNASKED = GROUP_NAMES.filter((name) => !ALONE.includes(name));
+
+/**
+ * Whether a plan says nothing of `name`: a group that plays alone, in a run SHOTS_ONLY names no
+ * group for (`asked`) and SHOTS_SKIP does not name it in (`left`).
+ */
+const unsaid = (name, asked, left) =>
+  asked.length === 0 && ALONE.includes(name) && !left.has(name);
+
 /**
  * The log's line for each group a plan leaves out or pulls in: skipped, as SHOTS_ONLY or
  * SHOTS_SKIP have it; refused, for want of a group SHOTS_SKIP leaves out; pulled in, by the
- * group that needs it. A group that plays alone, left out of a run SHOTS_ONLY names nothing for
- * (`unasked`), goes without a word unless SHOTS_SKIP names it.
+ * group that needs it — none for a group that plays alone and was not asked for (`unsaid`).
  */
-function planLines({ on, left, pulled, refused, unasked }) {
-  return GROUP_NAMES.flatMap((name) => {
+function planLines({ on, left, pulled, refused, asked }) {
+  return GROUP_NAMES.filter((name) => !unsaid(name, asked, left)).flatMap((name) => {
     if (refused.has(name)) {
       return [`${label(name)} refused: it needs ${refused.get(name)}, which SHOTS_SKIP leaves out`];
     }
     if (pulled.has(name)) {
       return [`${label(name)} pulled in: ${pulled.get(name)} needs it`];
     }
-    if (on.has(name) || (unasked.has(name) && !left.has(name))) {
+    if (on.has(name)) {
       return [];
     }
     const why = left.has(name) ? 'SHOTS_SKIP names it' : 'SHOTS_ONLY leaves it out';
@@ -429,14 +438,13 @@ function planLines({ on, left, pulled, refused, unasked }) {
 export function planGroups(only, skip) {
   const asked = groupNames('SHOTS_ONLY', only);
   const left = new Set(groupNames('SHOTS_SKIP', skip));
-  const unasked = new Set(asked.length > 0 ? [] : ALONE);
-  const chosen = asked.length > 0 ? asked : GROUP_NAMES.filter((name) => !unasked.has(name));
+  const chosen = asked.length > 0 ? asked : UNASKED;
   const on = new Set(chosen.filter((name) => !left.has(name)));
   const pulled = new Map();
   const refused = new Map();
   pullIn(on, left, pulled);
   refuse(on, refused);
-  const lines = planLines({ on, left, pulled, refused, unasked });
+  const lines = planLines({ on, left, pulled, refused, asked });
   if (on.size === 0) {
     const none =
       `SHOTS_ONLY "${only ?? ''}" and SHOTS_SKIP "${skip ?? ''}" leave no group to play: ` +
