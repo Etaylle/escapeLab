@@ -33,7 +33,16 @@ import {
   VOICE_ID,
   voiceless,
 } from '../scripts/cast.js';
-import { choiceOf } from '../scripts/voice.js';
+import {
+  choiceOf,
+  dropTakes,
+  entryOf,
+  readManifest,
+  refuseStale,
+  remakeCharacters,
+  shippedLines,
+  staleTakes,
+} from '../scripts/voice.js';
 
 /**
  * The cast's voices before they are kept (scripts/cast.ts): every person named on the command
@@ -352,6 +361,57 @@ describe('a library voice kept as the person’s voice (--keep)', () => {
     for (const wrong of [undefined, 'lead', 'lead=', 'lead=0', 'lead=../voice', '=2']) {
       expect(() => choiceOf(wrong), String(wrong)).toThrow(/--keep takes a person and a sample/);
     }
+  });
+});
+
+describe('a new voice over takes the person has (--replace)', () => {
+  inScratch();
+  const manifest = readManifest();
+  const helmut = slotOf(roster, 'operator:helmut');
+  const other = { voice: '5KvpaGteYkNayiswuX2h' };
+
+  it('finds the takes a voice made of each person, and what making them anew costs', () => {
+    const his = staleTakes(manifest, 'helmut');
+    expect(his).toHaveLength(47);
+    expect(remakeCharacters(his)).toBe(3983);
+    // The announcement's five, in Helmut's voice under the plant's name, and nobody else's.
+    const plant = staleTakes(manifest, 'anlage');
+    expect([plant.length, remakeCharacters(plant)]).toEqual([5, 368]);
+    expect(staleTakes(manifest, 'laura')).toEqual([]);
+    // A person's own recording is no voice's: it stays whatever voice is kept.
+    const [id = '', take] = his[0] ?? [];
+    const line = shippedLines().get(take?.text ?? '');
+    const byHand = { file: take?.file ?? '', source: 'human' } as const;
+    const said = line === undefined ? [] : [entryOf(line.said, 1000, line, 'helmut', byHand)];
+    const human = Object.fromEntries(said.map((entry) => [id, entry]));
+    expect(Object.keys(human)).toHaveLength(1);
+    expect(staleTakes({ lines: human }, 'helmut')).toEqual([]);
+  });
+
+  it('refuses, before asking anything, to make takes stale without --replace', () => {
+    const his = staleTakes(manifest, 'helmut');
+    expect(() => refuseStale(helmut, other, his, false)).toThrow(
+      'voice: Helmut has 47 takes by the voice they have now, 3,983 characters to make anew in ' +
+        'another — keep it all the same with --replace, which drops them for the next render ' +
+        'to make: pnpm --filter @escapelab/client voice --keep operator:helmut=' +
+        '5KvpaGteYkNayiswuX2h --replace',
+    );
+    expect(() => refuseStale(helmut, { sample: 2 }, his, false)).toThrow(/operator:helmut=2/);
+    // With --replace, for the voice they have, or for nobody's takes: kept.
+    expect(() => refuseStale(helmut, other, his, true)).not.toThrow();
+    expect(() => refuseStale(helmut, { voice: 'g1jpii0iyvtRs8fqXsd1' }, his, false)).not.toThrow();
+    expect(() => refuseStale(laura, { sample: 2 }, [], false)).not.toThrow();
+  });
+
+  it('drops the stale takes from the list and their files, and nothing else', () => {
+    const plant = staleTakes(manifest, 'anlage');
+    const files = plant.map(([, entry]) => join(dir, entry.file));
+    for (const file of files) copyFileSync(CAST_FILE, file);
+    const left = dropTakes(manifest, plant, dir);
+    expect(Object.keys(left.lines)).toHaveLength(Object.keys(manifest.lines).length - 5);
+    expect(Object.values(left.lines).some((entry) => entry.person === 'anlage')).toBe(false);
+    expect(files.filter((file) => existsSync(file))).toEqual([]);
+    expect(staleTakes(left, 'helmut')).toHaveLength(47);
   });
 });
 

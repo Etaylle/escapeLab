@@ -11,6 +11,7 @@
  *   pnpm --filter @escapelab/client voice --design <slot>   three Voice-Design samples of a person
  *   pnpm --filter @escapelab/client voice --keep <slot>=<n> one of them kept as the person's voice
  *   pnpm --filter @escapelab/client voice --keep <slot>=<voice id>  … or a library voice
+ *   pnpm --filter @escapelab/client voice --keep <slot>=… --replace  … over takes it has
  *
  * Every line a shipped mission (missions/*.json) has heard, as core's `radioLines` lists them:
  * the intro's announcement over the lab's loudspeakers (`intro.pa`, client world/pa.ts), then
@@ -1323,16 +1324,76 @@ export function choiceOf(asked: string | undefined): { slot: string; choice: Cho
   );
 }
 
-/** --keep <slot>=<n | voice id>: that voice kept as the person's, in the roster. */
-async function keep(asked: string | undefined): Promise<void> {
+/** A person's takes in the list, by their ids: the ones a voice made. */
+export type Takes = readonly (readonly [string, Entry])[];
+
+/** The takes of the person `person` in `manifest` a voice made: a new voice makes them stale. */
+export function staleTakes(manifest: Manifest, person: string): Takes {
+  return Object.entries(manifest.lines).filter(
+    ([, entry]) => entry.person === person && entry.render !== undefined,
+  );
+}
+
+/**
+ * What making `takes` anew costs, characters: each shipped line's words as a voice that reads
+ * tags is given them, its mood's tag and its own included; a take of no line, its words.
+ */
+export function remakeCharacters(takes: Takes, lines = shippedLines()): number {
+  return takes.reduce((sum, [, { text }]) => {
+    const line = lines.get(text);
+    const said = line === undefined ? text : spokenText(line.said, line.mood, TAG_MODEL);
+    return sum + said.length;
+  }, 0);
+}
+
+/**
+ * Refuses, before anything is asked, to keep a new voice for the person `slot` names while
+ * `takes` of theirs are made by the voice they have — the keep would make them stale — unless
+ * `replace` says so; a library voice that is theirs already makes nothing stale. Says what goes
+ * stale, what making it anew costs, and how to keep anyway.
+ */
+export function refuseStale(slot: Slot, choice: Choice, takes: Takes, replace: boolean): void {
+  const same = 'voice' in choice && choice.voice === slot.person.voiceId;
+  if (takes.length === 0 || replace || same) return;
+  const value = 'sample' in choice ? choice.sample : choice.voice;
+  throw new Error(
+    `voice: ${slot.person.name} has ${takes.length} takes by the voice they have now, ` +
+      `${counted(remakeCharacters(takes))} characters to make anew in another — keep it all ` +
+      `the same with --replace, which drops them for the next render to make: ` +
+      `${RUN} --keep ${slot.name}=${value} --replace`,
+  );
+}
+
+/** Drops `takes` from `manifest` and their files from `dir`; the list as it is left. */
+export function dropTakes(manifest: Manifest, takes: Takes, dir = VOICE_DIR): Manifest {
+  const dropped = new Set(takes.map(([id]) => id));
+  for (const [, entry] of takes) rmSync(join(dir, entry.file), { force: true });
+  const lines = Object.entries(manifest.lines).filter(([id]) => !dropped.has(id));
+  return { lines: Object.fromEntries(lines) };
+}
+
+/**
+ * --keep <slot>=<n | voice id> [--replace]: that voice kept as the person's, in the roster; with
+ * --replace, their takes by the voice they had dropped for the next render to make anew.
+ */
+async function keep(asked: string | undefined, replace: boolean): Promise<void> {
   const { slot: name, choice } = choiceOf(asked);
   const slot = slotOf(readRoster(), name);
+  const before = readManifest();
+  const takes = staleTakes(before, slot.person.id);
+  refuseStale(slot, choice, takes, replace);
   loadApiKey();
   const client = await elevenClient();
   const kept =
     'sample' in choice
       ? await keepVoice(client, slot, choice.sample)
       : await keepLibraryVoice(client, slot, choice.voice);
+  if (replace && kept.voiceId !== slot.person.voiceId && takes.length > 0) {
+    writeManifest(dropTakes(before, takes));
+    const characters = counted(remakeCharacters(takes));
+    const dropped = `${takes.length} takes of ${kept.name}`;
+    console.log(`voice: --replace dropped ${dropped}: ${characters} characters to make anew`);
+  }
   console.log(
     `voice: ${kept.name} speaks with ${kept.voiceId ?? ''} (${kept.model ?? ''}), kept in ` +
       `${CAST_FILE}: on duty in every build of this roster, so their lines are made before it ` +
@@ -1395,7 +1456,7 @@ const COMMANDS: Readonly<Record<string, (args: readonly string[], at: number) =>
   '--list-voices': () => listVoices(),
   '--sample': (args, at) => sample(args[at + 1], args[at + 2]),
   '--design': (args, at) => design(args[at + 1]),
-  '--keep': (args, at) => keep(args[at + 1]),
+  '--keep': (args, at) => keep(args[at + 1], args.includes('--replace')),
   '--previews': () => previews(),
 };
 

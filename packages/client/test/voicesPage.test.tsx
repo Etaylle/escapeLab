@@ -342,6 +342,20 @@ describe('the library voices on the page', () => {
     expect(html).toContain(renderCommandFor(ENV));
   });
 
+  it('keeps over takes the person has with --replace, saying so, and plainly where none', () => {
+    const ben = offer('aTTiK3YzK3dXETpuDE2h', 'Casual', 'operator:ben');
+    const kept = offer('5KvpaGteYkNayiswuX2h', 'Distinctive', 'operator:helmut');
+    const library = [...LIBRARY, ben, kept];
+    const keeping = { 'operator:helmut': kept.voiceId, 'operator:ben': ben.voiceId };
+    const html = board({ library, keeping });
+    // Helmut has two takes a voice made (and one by hand, which stays): they go stale.
+    expect(html).toContain(keepCommandFor('operator:helmut', kept.voiceId, ENV, true));
+    expect(html).toContain('Mit --replace gibt Helmut die 2 Aufnahmen der bisherigen Stimme ab');
+    // Ben has none: his keep needs nothing more.
+    expect(html).toContain(`${keepCommandFor('operator:ben', ben.voiceId, ENV)}</pre>`);
+    expect(html.match(/Mit --replace gibt/g)).toHaveLength(1);
+  });
+
   it('says that the desk speaks for the Schichtleitung while it has no voice', () => {
     const note = 'Bis hier eine Stimme besetzt ist, spricht die Leitstelle im Dienst diese Zeilen.';
     expect(board().match(new RegExp(note, 'g'))).toHaveLength(1);

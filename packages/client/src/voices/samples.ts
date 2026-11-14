@@ -199,9 +199,17 @@ export function designCommandFor(slot: string, envFile: string): string {
 /** What --keep keeps for a person: a sample of theirs by its number, or a library voice by id. */
 export type KeepChoice = number | string;
 
-/** The command that keeps `choice` as the voice of the person `slot` names (--keep). */
-export function keepCommandFor(slot: string, choice: KeepChoice, envFile: string): string {
-  return `${scriptWith(envFile)} --keep ${slot}=${choice}`;
+/**
+ * The command that keeps `choice` as the voice of the person `slot` names (--keep); with
+ * --replace where takes of theirs by the voice they have would go stale.
+ */
+export function keepCommandFor(
+  slot: string,
+  choice: KeepChoice,
+  envFile: string,
+  replace = false,
+): string {
+  return `${scriptWith(envFile)} --keep ${slot}=${choice}${replace ? ' --replace' : ''}`;
 }
 
 /** The command that fetches the library voices' previews for the page, free of charge. */

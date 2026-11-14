@@ -193,6 +193,13 @@ function chosenName(choice: KeepChoice, library: readonly LibraryVoice[]): strin
   return `„${library.find((voice) => voice.voiceId === choice)?.name ?? choice}“`;
 }
 
+/** How many takes of the person `slot` names a voice made: a new voice makes them stale. */
+function takesOf({ slot, board }: OfSlot): number {
+  const { id } = slot.person;
+  const all = board.lines.flatMap((group) => group.lines);
+  return all.filter(({ entry }) => entry.person === id && entry.source === undefined).length;
+}
+
 /** The command that keeps the voice chosen, and the one that has the lines made after it. */
 function KeepCommand({ slot, board, choice }: OfSlot & { choice: KeepChoice }) {
   const { name } = slot.person;
@@ -200,13 +207,21 @@ function KeepCommand({ slot, board, choice }: OfSlot & { choice: KeepChoice }) {
     typeof choice === 'number'
       ? 'im Konto und in der Besetzung — ohne Credits, aber mit einem Stimmplatz des Kontos:'
       : 'in der Besetzung — ohne Credits, die Stimme ist schon im Konto:';
+  const stale = takesOf({ slot, board });
+  const command = keepCommandFor(slot.name, choice, board.envFile, stale > 0);
   return (
     <div className="sounds-keep-command">
       <p className="muted">
         {`Im Ordner packages/client macht dieser Befehl ${chosenName(choice, board.library)} ` +
           `zur Stimme von ${name}, ${where}`}
       </p>
-      <pre className="sounds-cli">{keepCommandFor(slot.name, choice, board.envFile)}</pre>
+      <pre className="sounds-cli">{command}</pre>
+      {stale > 0 ? (
+        <p className="muted">
+          {`Mit --replace gibt ${name} die ${stale} Aufnahmen der bisherigen Stimme ab; der ` +
+            'Befehl darunter macht sie in der neuen.'}
+        </p>
+      ) : null}
       <p className="muted">
         {`Mit dieser Besetzung hat ${name} Dienst; die Zeilen dazu macht vor dem Einchecken ` +
           'dieser Befehl:'}
