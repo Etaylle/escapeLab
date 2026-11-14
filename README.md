@@ -291,14 +291,16 @@ selbst, wie die CI, und probt mitten in einem Einsatz den Neustart: SIGTERM, die
 „WARTUNG · Der Server startet neu" auf jeder Seite, und nach dem Neustart alle zurück im Einsatz.
 
 **Nur ein Teil des Rundgangs (Gruppen):** Jede Aufnahme des Rundgangs gehört zu genau einer von
-sechzehn Gruppen (`tools/groups.mjs`); `SHOTS_ONLY=screens,intro` spielt nur diese,
+siebzehn Gruppen (`tools/groups.mjs`); `SHOTS_ONLY=screens,intro` spielt nur diese,
 `SHOTS_SKIP=perf` alle außer diesen — der schnelle Beweis eines Teils. Vor dem Rundgang laufen die
 Proben, jede in einem Raum für sich: `editor`, `art`, `drones` (Gefahrensinn und eine Drohne aus der
-Nähe), `reconnect` und `restart` — im Systemcheck dazu die Probe des Serverraums, die zu `devices`
-gehört, und die der Zugangskontrolle, `access` (Blackout nennt beide im Log als ausgelassen). Der
-Rundgang selbst: `screens` (Menü und sein Ton, Bestenliste, Lobby, der Start aus ihr),
-`intro` (die Eröffnung bis `blackout.png`) und `run` (die Mission bis zur Siegerkarte, nach dem
-gewonnenen Systemcheck die Einsätze des Kontos und sein Löschen); im Lauf `devices` (jede Station,
+Nähe), `reconnect`, `restart` und `three` (Blackout zu dritt bis zur Signalkette, die Zielzeile mit
+jeder Hand: `three-lever`, `three-plate`, `three-hands`, `three-phone-932`, `three-reader`; der
+Systemcheck nennt sie im Log als ausgelassen) — im Systemcheck dazu die Probe des Serverraums, die
+zu `devices` gehört, und die der Zugangskontrolle, `access` (Blackout nennt beide im Log als
+ausgelassen). Der Rundgang selbst: `screens` (Menü und sein Ton, Bestenliste, Lobby, der Start aus
+ihr), `intro` (die Eröffnung bis `blackout.png`) und `run` (die Mission bis zur Siegerkarte, nach
+dem gewonnenen Systemcheck die Einsätze des Kontos und sein Löschen); im Lauf `devices` (jede Station,
 auch auf dem quer gehaltenen Handy), `reading` (Quellen, Schild, Notizen der letzten Schicht,
 Notizblock, Bücher), `hud` (das Spiel in jeder Fenstergröße, Einstellungen, Steuerung, Minikarte,
 Sprint), `graphics` (Licht, Leuchten, Figuren, Kamera, Dichte 2), `audio` (Raumklang, Funk, Seite
@@ -326,7 +328,10 @@ auf einem M4 mit 16 GB (14.11.2026, Last 9 bis 17) 772 s:
 | `drones` | 8,2 | `run` | 292,3 | `graphics` | 51,9 |
 | `reconnect` | 114,4 | `devices` | 17,7 | `audio` | 86,9 |
 | `restart` | 10,8 | | | `voice` | 3,4 |
-| | | | | `perf` | 22,8 |
+| `three` | 92,5 | | | `perf` | 22,8 |
+
+`three` kam danach dazu (M-three): 92,5 s im vollen Rundgang desselben Tages bei Last 7 bis 31,
+75 bis 91 s allein mit `SHOTS_ONLY=three`.
 
 `SHOTS_ONLY=screens,intro` spielte Blackout in 48 s; jede Gruppe im Lauf zieht die Mission bis
 zur Siegerkarte mit, und `SHOTS_ONLY=run` allein dauerte 262 s (den Systemcheck 85 s).

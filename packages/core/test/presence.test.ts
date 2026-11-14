@@ -78,6 +78,7 @@ describe('presence from the server', () => {
       stations: { kabel: ['p2', 'p1'], code: [] },
       manuals: { terminal: ['p3'] },
       notes: { '0': ['p3', 'p1', 'p3'], '1': [] },
+      plates: { tuerplatte: ['p3', 'p2'], kameraplatte: [] },
       signSeen: ['p2'],
       sight: { p1: ['source:terminal', 'note:0', 'note:0'], p2: [] },
     });
@@ -85,6 +86,7 @@ describe('presence from the server', () => {
       stations: { kabel: ['p1', 'p2'] },
       manuals: { terminal: ['p3'] },
       notes: { '0': ['p1', 'p3'] },
+      plates: { tuerplatte: ['p2', 'p3'] },
       signSeen: ['p2'],
       exit: [],
       sight: { p1: ['note:0', 'source:terminal'] },
@@ -94,7 +96,11 @@ describe('presence from the server', () => {
   });
 
   it('starts every run, rematch and lobby with nobody anywhere and nobody past the sign', () => {
-    const seen = standing(started(twoBooks), { manuals: { terminal: ['p1'] }, signSeen: ['p1'] });
+    const seen = standing(started(twoBooks), {
+      manuals: { terminal: ['p1'] },
+      plates: { tuerplatte: ['p2'] },
+      signSeen: ['p1'],
+    });
     const lost = applyAction(seen, { type: 'time-expired', at: T0 + 600_000 });
     const rematch: Action[] = [
       { type: 'set-ready', playerId: 'p2', ready: true },
@@ -102,7 +108,15 @@ describe('presence from the server', () => {
       { type: 'rematch', playerId: 'p1', at: T0 + 700_000, seed: 3 },
     ];
     const again = rematch.reduce(applyAction, lost);
-    const empty = { stations: {}, manuals: {}, notes: {}, signSeen: [], exit: [], sight: {} };
+    const empty = {
+      stations: {},
+      manuals: {},
+      notes: {},
+      plates: {},
+      signSeen: [],
+      exit: [],
+      sight: {},
+    };
     expect(again.presence).toEqual(empty);
     expect(applyAction(lost, { type: 'back-to-lobby', playerId: 'p1' }).presence).toEqual(empty);
   });
