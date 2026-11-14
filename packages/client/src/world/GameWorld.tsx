@@ -353,11 +353,35 @@ function pressKey(
     if (!e.repeat) {
       job(loop, setWheel);
     }
-  } else if (key === 'escape') {
-    setWheel(null);
   } else {
     pressChatDigit(loop, key, e, setWheel);
   }
+}
+
+/**
+ * Esc over the open chat wheel, as the page hears it while the wheel stands open — capturing:
+ * the wheel shuts, and the key goes no further, so that the Esc that shut it opens nothing else,
+ * not the run's menu (screens/Game.tsx `escapeStep`).
+ */
+export function wheelEscape(setWheel: SetWheel): (e: KeyboardEvent) => void {
+  return (e) => {
+    if (e.key === 'Escape') {
+      e.stopPropagation();
+      setWheel(null);
+    }
+  };
+}
+
+/** While the chat wheel stands open (`open`), Esc shuts it alone (`wheelEscape`). */
+function useWheelEscape(open: boolean, setWheel: SetWheel): void {
+  useEffect(() => {
+    if (!open) {
+      return undefined;
+    }
+    const onKey = wheelEscape(setWheel);
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [open, setWheel]);
 }
 
 /**
@@ -1188,6 +1212,7 @@ function useWorld(props: Props): WorldState {
   useFinaleSounds(finale);
   const refs = { canvasRef, controlsRef, simRef, interactRef, dropRef };
   useWorldLoop({ props, refs, live, alarm: alarmRef, setWheel, setControlsReach });
+  useWheelEscape(wheel !== null, setWheel);
   return { refs, live, tip, alarmClass, wheel, setWheel, controlsReach };
 }
 

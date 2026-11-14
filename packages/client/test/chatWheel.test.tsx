@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { DEFAULT_CHAT_PHRASES, parseMission } from '@escapelab/core';
 import {
   ChatWheel,
@@ -10,6 +10,7 @@ import {
   type Wheel,
   type WheelMove,
 } from '../src/world/ChatWheel.js';
+import { wheelEscape } from '../src/world/GameWorld.js';
 import { elementsOf, press, type Rendered } from './probe.js';
 
 /**
@@ -147,5 +148,19 @@ describe('the chat wheel under a controller’s A', () => {
     const { elements, moves } = wheelAt(PHRASES as NonNullable<Wheel>);
     press(choices(elements)[1]);
     expect(moves).toEqual([{ said: { phrase: 1 }, wheel: null }]);
+  });
+});
+
+describe('Esc over the open chat wheel', () => {
+  it('shuts the wheel alone: the key goes no further, to open the run’s menu', () => {
+    const setWheel = vi.fn();
+    const stopPropagation = vi.fn();
+    const onKey = wheelEscape(setWheel);
+    onKey({ key: 'Escape', stopPropagation } as unknown as KeyboardEvent);
+    expect(setWheel).toHaveBeenCalledWith(null);
+    expect(stopPropagation).toHaveBeenCalledOnce();
+    onKey({ key: 'c', stopPropagation } as unknown as KeyboardEvent);
+    expect(setWheel).toHaveBeenCalledOnce();
+    expect(stopPropagation).toHaveBeenCalledOnce();
   });
 });
