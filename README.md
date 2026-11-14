@@ -465,7 +465,7 @@ Betrieb:
   hält Räume nur im Speicher — aber jede Crew trägt den Stand ihres Raums mit: 2 s nach einer Tat
   der Crew und, solange die Uhr eines Einsatzes läuft, spätestens alle 10 s samt den Standorten
   bekommt jeder Platz einen gepackten, mit `ROOM_SECRET` versiegelten Schnappschuss (Deflate,
-  AES-256-GCM; Blackout mitten im Lauf rund 8 kB, beim Laufen 44 kB je Platz und Minute), und der
+  AES-256-GCM; Blackout mitten im Lauf rund 10 kB, beim Laufen sechs je Platz und Minute), und der
   Browser hält den neuesten in `localStorage` (`escapelab-snapshot:<Code>`). Ein Raum, dessen Uhr
   steht, schickt nur, was sich geändert hat. Für eine laufende Partie heißt ein Deploy deshalb eine
   Wartungspause von Sekunden: Die Uhr steht, die Karte sagt „WARTUNG · Der Server startet neu", die
