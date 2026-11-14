@@ -123,13 +123,17 @@ store in one line either way.
 - **Render:** either the two variables Neon's integration sets — `DATABASE_URL` through Neon's
   pooler for the server's queries, `DATABASE_URL_UNPOOLED` direct for the migrations, as Prisma's
   schema engine does not go through PgBouncer — or `DATABASE_URL` alone, Neon's direct connection,
-  which then does for both: the schema's `directUrl` is `DATABASE_URL_UNPOOLED`, and the server
-  package's `prisma` script, through which the start script migrates, hands the CLI
-  `DATABASE_URL` for it where it is unset or empty. The pooled URL takes no flag: Neon's pooler
-  runs PgBouncer 1.24, which keeps prepared statements in transaction mode, and Prisma advises
-  against `pgbouncer=true` from 1.21 on. The start script applies the migrations first: README,
-  „Hosting auf Render" — there too what a start does with Neon away (P1001) or after a migration
-  that broke off (P3009, `prisma migrate resolve`).
+  which then does for both: the schema's `directUrl` is `DATABASE_URL_UNPOOLED`, and where it is
+  unset or empty the server sets it to `DATABASE_URL` as it starts, as the server package's
+  `prisma` script does for the CLI run by hand. The pooled URL takes no flag: Neon's pooler runs
+  PgBouncer 1.24, which keeps prepared statements in transaction mode, and Prisma advises against
+  `pgbouncer=true` from 1.21 on. The server applies the migrations itself before it opens the
+  store and listens (`src/store/migrate.ts`, its CLI's lines in the log as `migrate: …`, no URL
+  and no host among them), whatever started it: Render's Start Command, `node` straight in
+  `packages/server` with no script before it, or `pnpm run start`, which applies them once
+  before. Where they do not apply, it ends with `not started: the migrations did not apply (P…)`
+  and exit code 1, before it listens: README, „Hosting auf Render" — there too what a start does
+  with Neon away (P1001) or after a migration that broke off (P3009, `prisma migrate resolve`).
 - **A connection lost:** Neon closes a connection that stood idle for five minutes. The pool
   hands out none idle for more than a minute (`max_idle_connection_lifetime=60`, unless
   `DATABASE_URL` sets its own), and a request whose connection the database closed all the same

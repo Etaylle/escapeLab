@@ -167,6 +167,13 @@ die Entscheidung.
   nennt beide Werte. Tests in tools/framegate; Header-Kommentar und art-bible ergänzen.
 - Langfristig: Flucht-Main-Thread billiger (Licht/Dunkel-Pässe, halbe Frame), siehe Audit-Addenda.
 
+### H-3 Capture-Gruppen im Harness — Status: erledigt (H-quick, Merge 2026-11-14) · Größe: S
+- `tools/groups.mjs` nennt 15 Gruppen; `SHOTS_ONLY=screens,intro` beweist ein Menü-Paket in
+  48 s statt 12 min, `SHOTS_SKIP=run` lässt den Lauf aus; jeder Schritt läuft unter dem Gate
+  seiner Gruppe, ein voller Lauf scheitert an einem falsch eingeordneten Capture. Ohne Variablen
+  ist der Lauf identisch zu vorher (per Aufrufgraph geprüft). Gemessene Kosten je Gruppe in der
+  README.
+
 ### T-9 Tests an der Wanduhr — Status: erledigt (2026-11-13) · Größe: S
 - Zwei Tests lasen die echte Uhr und wurden unter Last rot: `certificate.test.ts` (openssl liest
   seine Uhr zweimal, ein Lauf über eine Sekundengrenze machte aus 825 Tagen 825,00001; jetzt

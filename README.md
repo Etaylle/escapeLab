@@ -265,6 +265,46 @@ steht im Log. Mit `SHOTS_SERVER=packages/server/src/index.ts` startet der Rundga
 selbst, wie die CI, und probt mitten in einem Einsatz den Neustart: SIGTERM, die Karte
 „WARTUNG · Der Server startet neu" auf jeder Seite, und nach dem Neustart alle zurück im Einsatz.
 
+**Nur ein Teil des Rundgangs (Gruppen):** Jede Aufnahme des Rundgangs gehört zu genau einer von
+fünfzehn Gruppen (`tools/groups.mjs`); `SHOTS_ONLY=screens,intro` spielt nur diese,
+`SHOTS_SKIP=perf` alle außer diesen — der schnelle Beweis eines Teils. Vor dem Rundgang laufen die
+Proben, jede in einem Raum für sich: `editor`, `art`, `drones` (Gefahrensinn und eine Drohne aus der
+Nähe), `reconnect` und `restart` — im Systemcheck dazu die Probe des Serverraums, die zu `devices`
+gehört. Der Rundgang selbst: `screens` (Menü und sein Ton, Bestenliste, Lobby, der Start aus ihr),
+`intro` (die Eröffnung bis `blackout.png`) und `run` (die Mission bis zur Siegerkarte, nach dem
+gewonnenen Systemcheck die Einsätze des Kontos und sein Löschen); im Lauf `devices` (jede Station,
+auch auf dem quer gehaltenen Handy), `reading` (Quellen, Schild, Notizen der letzten Schicht,
+Notizblock, Bücher), `hud` (das Spiel in jeder Fenstergröße, Einstellungen, Steuerung, Minikarte,
+Sprint), `graphics` (Licht, Leuchten, Figuren, Kamera, Dichte 2), `audio` (Raumklang, Funk, Seite
+des Partners, Musik), `voice` (Mikrofone, Sprechverbindungen) und `perf` (die Frame-Fenster). Die
+Gruppen im Lauf brauchen `run` und ziehen ihn mit; `SHOTS_SKIP=run` lehnt sie ab. Jede ausgelassene,
+abgelehnte oder mitgezogene Gruppe steht zu Beginn mit einer Zeile im Log, und was sie aufgenommen
+hätte, zählt weder als übersprungen noch als fehlgeschlagen. Der Rundgang spielt nur so weit, wie
+die gewählten Gruppen reichen: `screens` allein endet, sobald der Lauf gestartet ist, `intro` nach
+`blackout.png`. Eine Aufnahme oder Prüfung gehört zur Gruppe des Schritts, der sie macht — jeder
+Lauf hält jede Aufnahme an die Gruppe ihres Schritts, so prüft jeder volle Lauf die Tabelle —, und
+wo der Schritt einer anderen Gruppe gehört, kommt sie nur mit dieser: die Frame-Fenster von `perf`
+im Menü (`screens`), in der Eröffnung (`intro`: der Vorspann, das beleuchtete Labor und sein Blick
+bei Dichte 2) und bei Dichte 2 am Pult und in der Flucht (`graphics`), die Sprechverbindungen von
+`voice` nach dem Neuladen des Gast-Handys, das der Notizblock von `reading` auslöst, und der
+Info-Knopf von `hud` nach einem unterwegs gelesenen Schild, ebenfalls `reading`, wo niemand am
+Schild startet. Ohne beide Variablen spielt er alles wie bisher; die Zusammenfassung nennt die
+gespielten Gruppen, die Zeile `groups` davor die Sekunden jeder Gruppe — was ihre eigenen Schritte
+brauchten, bei `run` mit allen Wegen und Lösungen der Mission. Ein voller Blackout-Rundgang dauerte
+auf einem M4 mit 16 GB (14.11.2026, Last 9 bis 17) 772 s:
+
+| Gruppe | s | Gruppe | s | Gruppe | s |
+| --- | --- | --- | --- | --- | --- |
+| `editor` | 7,5 | `screens` | 25,0 | `reading` | 65,9 |
+| `art` | 19,0 | `intro` | 12,3 | `hud` | 33,2 |
+| `drones` | 8,2 | `run` | 292,3 | `graphics` | 51,9 |
+| `reconnect` | 114,4 | `devices` | 17,7 | `audio` | 86,9 |
+| `restart` | 10,8 | | | `voice` | 3,4 |
+| | | | | `perf` | 22,8 |
+
+`SHOTS_ONLY=screens,intro` spielte Blackout in 48 s; jede Gruppe im Lauf zieht die Mission bis
+zur Siegerkarte mit, und `SHOTS_ONLY=run` allein dauerte 262 s (den Systemcheck 85 s).
+
 **Ton und Funkstimme:** Jeder Raum klingt nach seiner Art, die Schritte des Partners kommen von
 dort, wo er steht, und die Musik zieht mit dem Druck an — alles zur Laufzeit erzeugt
 ([`docs/sound.md`](docs/sound.md)). Nur die Funksprüche der Leitstelle sind Aufnahmen
@@ -386,8 +426,9 @@ Betrieb:
   per `exec` durch `pnpm --filter @escapelab/server start`, und das durch
   `node --import tsx src/index.ts`, also steht weder eine Shell noch die tsx-CLI dazwischen.
   Wer pnpm ganz aus dem Weg haben will, trägt als Start Command direkt
-  `cd packages/server && exec node --import tsx src/index.ts` ein — dann aber laufen die
-  Migrationen der Datenbank nicht (siehe unten). Ob es ankommt, zeigt das Log
+  `cd packages/server && exec node --import tsx src/index.ts` ein — das geht genauso: Vor dem
+  Server läuft dann zwar kein Script, aber er wendet die Migrationen der Datenbank selbst an,
+  bevor er sie öffnet und lauscht (siehe unten). Ob es ankommt, zeigt das Log
   der alten Instanz beim ersten Deploy: Es muss `[escapelab] SIGTERM: going down for a restart`
   enthalten, dann je Raum `going down for a restart, snapshot seq …` — fehlt die Zeile, hat
   Render die Instanz ohne Wort beendet. Die Logs im Dashboard reichen 7 Tage zurück;
@@ -429,26 +470,29 @@ sonst, auch nicht im Repo:
   Verbindung (nicht „pooled") für Prisma wählen und die Zeichenkette als `DATABASE_URL`
   eintragen. Ohne `DATABASE_URL_UNPOOLED` nehmen auch die Migrationen sie.
 
-Der Start (`pnpm run start`) wendet dann zuerst die Migrationen an (`pnpm --filter
-@escapelab/server prisma migrate deploy`, aus `packages/server/prisma/migrations/`, über
-`DATABASE_URL_UNPOOLED`, sonst über `DATABASE_URL`) und startet den Server erst danach; scheitert
-die Migration, startet er nicht. Den Prisma-Client erzeugt `pnpm install`, einmal, über die
-postinstall des Servers (das Build Command bleibt, wie es ist). Welcher Speicher läuft, sagt das
-Start-Log in einer Zeile:
+Bevor der Server die Datenbank öffnet und lauscht, wendet er selbst die Migrationen an (`prisma
+migrate deploy` aus `packages/server/prisma/migrations/`, über `DATABASE_URL_UNPOOLED`, sonst
+über `DATABASE_URL`) — gleich, ob ihn `pnpm run start` startet, das sie vorher schon einmal
+anwendet, oder Renders direktes Start Command, vor dem kein Script läuft. Das Log zeigt, was die
+Prisma-CLI sagt, Zeile für Zeile als `[escapelab] migrate: …`, ohne Zeichenkette und Host der
+Datenbank; scheitert die Migration, endet der Server mit `not started: the migrations did not
+apply (P…)` und Exit-Code 1, bevor er lauscht. Den Prisma-Client erzeugt `pnpm install`, einmal,
+über die postinstall des Servers (das Build Command bleibt, wie es ist). Welcher Speicher läuft,
+sagt das Start-Log in einer Zeile:
 `store: Postgres at DATABASE_URL: …` oder `store: run log …, accounts in memory until the server
 stops (no DATABASE_URL)`.
 
 - **Neon nicht erreichbar.** Dann scheitert schon die Migration, mit `Error: P1001: Can't reach
-  database server at …`, und der Server startet nicht. Sein eigenes `not started: …` steht nur im
-  Log, wo er die Datenbank nach der Migration nicht öffnen kann oder ohne sie gestartet wurde
-  (Start Command ohne pnpm, siehe oben). Eine alte Instanz, die weiterspielt, gibt es nur bei
-  einem Deploy, weil Render erst auf eine gesunde neue umschaltet. Bei einem Neustart oder wenn
-  der Free-Plan aus dem Schlaf aufwacht, gibt es keine: Dann ist das Spiel weg, bis Neon wieder
-  antwortet und ein Start gelingt.
+  database server at …` und `not started: the migrations did not apply (P1001)`, und der Server
+  startet nicht. Eine alte Instanz, die weiterspielt, gibt es nur bei einem Deploy, weil Render
+  erst auf eine gesunde neue umschaltet. Bei einem Neustart oder wenn der Free-Plan aus dem
+  Schlaf aufwacht, gibt es keine: Dann ist das Spiel weg, bis Neon wieder antwortet und ein
+  Start gelingt.
 - **Eine Migration bricht mittendrin ab** (Deploy abgebrochen, Instanz beendet, Fehler im SQL).
   Postgres nimmt ihre Änderungen zurück, denn Prisma führt jede Migration in einer Transaktion
   aus. Prisma vermerkt sie aber als gescheitert, und jeder weitere Start bricht ab mit `Error:
-  P3009 … migrate found failed migrations in the target database`, der Server startet nicht.
+  P3009 … migrate found failed migrations in the target database` und `not started: the
+  migrations did not apply (P3009)`, der Server startet nicht.
   Lösen lässt sich das nur von einem eigenen Rechner aus, mit der direkten Neon-Zeichenkette
   (dem Wert von `DATABASE_URL_UNPOOLED`, wo Render beide hat) allein in dieser Shell und dem
   Namen der Migration aus der Meldung:

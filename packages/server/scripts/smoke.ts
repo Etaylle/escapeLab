@@ -3262,11 +3262,69 @@ async function runOnPostgres(): Promise<void> {
   }
 }
 
+/** The port of the server as Render's Start Command starts it (`renderStartCommand`). */
+const RENDER_PORT = DATABASE_PORT + 1;
+
+/** Where in `lines` the first that holds `text` stands; -1 for none. */
+const lineOf = (lines: readonly string[], text: string): number =>
+  lines.findIndex((line) => line.includes(text));
+
+/**
+ * Where TEST_DATABASE_URL names a Postgres: the server as Render's Start Command starts it —
+ * `node` straight in packages/server, no script before it — on a schema of the smoke's own with
+ * DATABASE_URL alone: it applies the migrations itself before it listens. Then, a migration
+ * broken off as a deploy cut short leaves it, the next start stops before it listens, saying
+ * P3009; no line names the database's URL or host. Skipped, saying so, without.
+ */
+async function renderStartCommand(): Promise<void> {
+  const base = process.env['TEST_DATABASE_URL'];
+  if (base === undefined || base === '') {
+    console.log("– Render's Start Command on Postgres skipped: TEST_DATABASE_URL unset");
+    return;
+  }
+  const schema = `smoke_${randomBytes(4).toString('hex')}`;
+  const at = new URL(base);
+  at.searchParams.set('schema', schema);
+  const env = { DATABASE_URL: at.toString(), DATABASE_URL_UNPOOLED: '' };
+  const db = new PrismaClient({ datasourceUrl: at.toString() });
+  const name = "Render's Start Command on Postgres";
+  try {
+    const first = new ServerProcess(name, RENDER_PORT, 'entry', env);
+    await first.up();
+    const applied = lineOf(first.lines, 'migrate: All migrations have been successfully applied');
+    const listening = lineOf(first.lines, '[escapelab] server on');
+    assert(applied >= 0 && applied < listening, 'it applied the migrations before it listened');
+    await first.logs('store: Postgres', 'it keeps the runs and the accounts in Postgres');
+    first.kill('SIGTERM');
+    await first.exited;
+    await db.$executeRawUnsafe(
+      `UPDATE "${schema}"._prisma_migrations SET finished_at = NULL WHERE migration_name =
+         (SELECT max(migration_name) FROM "${schema}"._prisma_migrations)`,
+    );
+    const second = new ServerProcess(`${name}, a migration broken off`, RENDER_PORT, 'entry', env);
+    const ended = await second.exited;
+    await second.logs('not started: the migrations did not apply (P3009)', 'it says P3009');
+    assert(
+      ended.code === 1 && lineOf(second.lines, '[escapelab] server on') < 0,
+      `a migration broken off stops the start before it listens (exit ${ended.code})`,
+    );
+    const said = [...first.lines, ...second.lines];
+    assert(
+      said.every((line) => !line.includes('postgresql://') && !line.includes(at.host)),
+      "no line names the database's URL or host",
+    );
+  } finally {
+    await db.$executeRawUnsafe(`DROP SCHEMA IF EXISTS "${schema}" CASCADE`);
+    await db.$disconnect();
+  }
+}
+
 const restarted = await restartBySigterm();
 await restartBySigkill(restarted.server, restarted.crew);
 await handover();
 await startScript();
 await runOnPostgres();
+await renderStartCommand();
 
 rmSync(runsDir, { recursive: true, force: true });
 console.log(
@@ -3283,6 +3341,8 @@ console.log(
     'over from an old server still up, the run going on from its last snapshot; the ' +
     'start script passing SIGTERM on to the server; and, where TEST_DATABASE_URL names a ' +
     'Postgres, the start script migrating it over a single URL, a won tutorial landing there ' +
-    'by account, and a colour clicked just before SIGTERM kept. 🎉',
+    'by account, a colour clicked just before SIGTERM kept, and the server started as ' +
+    'Render\'s Start Command starts it migrating the database itself before it listens, a ' +
+    'migration broken off stopping its start. 🎉',
 );
 process.exit(0);
