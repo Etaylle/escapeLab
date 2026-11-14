@@ -1517,18 +1517,19 @@ writes `pack.json` and prints the pack's attribution block.
 **Built once.** Every found piece in pack.json carries what its file was made from, hashed
 (`build`): what the plan says of its sound — its span, its loop, its fades — the script's settings
 and its source's bytes. A run keeps every piece whose hash is unchanged and whose file is there,
-taking only its credit anew from the plan, so that a title, an author or a licence corrected
-changes pack.json and never a file; only a piece whose sound changed is made anew, or every piece
-with `--force`. afconvert writes the moment it encodes into each .m4a — the creation and
-modification times of the movie, the track and the media — so that two encodes of the same audio
-differ in those bytes alone; the script sets them to zero (`scripts/mp4.ts`), and a piece made
-anew from what it was made from comes out byte for byte the same, which git keeps nothing new for.
-Each re-encode that changed a file would otherwise stay in the history for good, some 1 MB a piece.
-On 2026-11-14 every pack was rebuilt from its plan into a scratch folder: 28 of the 32 files came
-out the same, their times aside, and the four of `cheremisinov` that did not — the menu's theme, the
-critical stem and both endings, encoded that morning from slightly different audio, their
-measurements the same to the hundredth — were made anew once, so that every file is now what its
-plan makes.
+taking only its credit anew from the plan, so that a title, an author or a licence corrected changes
+pack.json and never a file; only a piece whose sound changed is made anew, or every piece with
+`--force`. afconvert writes the moment it encodes into each .m4a — the creation and modification
+times of the movie, the track and the media — so that two encodes of the same audio differ in those
+bytes alone; the script sets them to zero (`scripts/mp4.ts`), and a piece made anew from what it was
+made from comes out byte for byte the same. Where the file already there holds the same audio, the
+times zeroed in both, the new part is dropped and the file kept as it is — even one encoded before
+the times were zeroed — so `--force` on unchanged audio writes nothing at all. Each re-encode that
+changed a file would otherwise stay in the history for good, some 1 MB a piece. On 2026-11-14 every
+pack was rebuilt from its plan into a scratch folder: 28 of the 32 files came out the same, their
+times aside, and the four of `cheremisinov` that did not — the menu's theme, the critical stem and
+both endings, encoded that morning from slightly different audio, their measurements the same to the
+hundredth — were made anew once, so that every file is now what its plan makes.
 
 ```sh
 # in packages/client

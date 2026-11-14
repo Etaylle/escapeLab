@@ -527,6 +527,59 @@ describe('a pack built again', BUILDS, () => {
   });
 });
 
+/** A box of `kind` around `body`, as an MP4 lays one out. */
+function boxOf(kind: string, body: Uint8Array): Uint8Array {
+  const out = new Uint8Array(8 + body.length);
+  new DataView(out.buffer).setUint32(0, out.length);
+  out.set([...kind].map((c) => c.charCodeAt(0)), 4);
+  out.set(body, 8);
+  return out;
+}
+
+let stamps = 0;
+
+/** `wav` in a file laid out as afconvert lays an .m4a out, its movie's times the encode's count. */
+function stamped(wav: Uint8Array): Uint8Array {
+  stamps += 1;
+  const header = new Uint8Array(100);
+  new DataView(header.buffer).setUint32(4, stamps); // created
+  new DataView(header.buffer).setUint32(8, stamps); // modified
+  return Uint8Array.from([...boxOf('moov', boxOf('mvhd', header)), ...boxOf('mdat', wav)]);
+}
+
+/** The WAV in a file `stamped` made; a source, a WAV as it is. */
+function unstamped(bytes: Uint8Array): Uint8Array {
+  const data = Buffer.from(bytes).indexOf('mdat', 0, 'latin1');
+  return data < 0 ? bytes : bytes.slice(data + 4);
+}
+
+describe('a pack made anew with --force', BUILDS, () => {
+  it('keeps every file whose audio came out the same, its old times and all', async () => {
+    const places = placesIn();
+    const pack = plannedPack('ada');
+    const host = hostFor([pack]);
+    const bench: Bench = {
+      ...benchOf(places, host),
+      encode: (pcm, path) => writeFileSync(path, stamped(wavBytes(pcm))),
+      decode: (path) => parseWav(unstamped(readFileSync(path))),
+    };
+    await buildPack(pack, bench);
+    const files = filesOf(places, 'ada');
+    // Every piece encoded again: other times, the same audio — not one file written.
+    await buildPack(pack, bench, true);
+    expect(filesOf(places, 'ada')).toEqual(files);
+    // A piece whose sound did change is written.
+    host.files.set(urlOf('ada', 'calm'), tone(87, 0.2));
+    rmSync(join(places.takes, sourceFile(urlOf('ada', 'calm'))));
+    await buildPack(pack, bench, true);
+    const now = filesOf(places, 'ada');
+    expect(Object.keys(now).filter((name) => now[name] !== files[name])).toEqual(['calm.m4a']);
+    expect(readdirSync(join(places.music, 'ada')).some((name) => name.includes('.part'))).toBe(
+      false,
+    );
+  });
+});
+
 describe('what a piece is made from', () => {
   const piece = plannedPiece('ada', 'calm');
   const source = Uint8Array.from([1, 2, 3]);

@@ -76,6 +76,7 @@ import {
   type Decode,
   type Encode,
 } from './afconvert.ts';
+import { timeless } from './mp4.ts';
 import { fadedOf, loudnessOf, lufsOf, msOf, sliceOf, type Pcm } from './pcm.ts';
 import { bestSeam, featuresOf } from './seam.ts';
 
@@ -700,9 +701,25 @@ export async function buildPack(pack: PlanPack, bench: Bench, force = false): Pr
   return madeOf(pack, built, bytes, bench.places);
 }
 
-/** Every part among `built` moved into `dir` under its piece's file name, all at once. */
+/**
+ * Every part among `built` moved into `dir` under its piece's file name, all at once — but where
+ * the file there holds the same audio, the times afconvert stamps aside (mp4.ts), the part goes
+ * and the file stays as it is: a piece made anew from what it was made from writes nothing.
+ */
 function moveIn(built: readonly Built[], dir: string): void {
-  for (const { part, piece } of built) if (part !== null) renameSync(part, join(dir, piece.file));
+  for (const { part, piece } of built) {
+    if (part === null) continue;
+    const file = join(dir, piece.file);
+    if (sameAudio(part, file)) rmSync(part, { force: true });
+    else renameSync(part, file);
+  }
+}
+
+/** Whether `file` is there and holds the bytes of `part`, every stamped time zeroed in both. */
+function sameAudio(part: string, file: string): boolean {
+  if (!existsSync(file)) return false;
+  const [made, kept] = [part, file].map((path) => Buffer.from(timeless(readFileSync(path))));
+  return made !== undefined && kept !== undefined && made.equals(kept);
 }
 
 /** What `make` makes, or the message of the error it throws. */
