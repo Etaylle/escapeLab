@@ -36,6 +36,7 @@ import {
   relayModule,
   shiftRelay,
   type RelayDef,
+  type RelaySabotage,
   type RelayState,
 } from './puzzles/relay.js';
 import {
@@ -393,41 +394,58 @@ function presenceWithout(presence: Presence, playerId: string): Presence {
 }
 
 /**
- * An emergency at the relay under way, rolled anew for the consoles it has now
- * (`relayCrewOf`) — once they changed: somebody's line dropped or is back, somebody left, or
- * the server's maintenance took every line; nothing where they did not. Its deadline, and what
- * it completed and missed, are kept. A run standing still rolls it as of the moment it stopped,
- * so that its instructions' clocks start as it goes on (`thaw`).
+ * An emergency at the relay under way, rolled anew for the consoles it has at `at`
+ * (`relayCrewOf`) — once they changed: a line down RELAY_GRACE_MS or back, somebody left or
+ * gone on without; nothing where they did not, a page loaded anew included. Its deadline, and
+ * what it completed and missed, are kept. A run standing still for the server's maintenance
+ * is rolled as of the moment it stopped — the crew as it stood then, whoever has come back
+ * since — so that its instructions' clocks start as it goes on (`thaw`), and a crew back on the
+ * line finds it as it was.
  */
 function relayForCrew(state: GameState, at: number): GameState {
   const sabotage = state.sabotage;
   const emergency = sabotage?.emergency;
-  if (sabotage === null || emergency === undefined || sameConsoles(state, emergency)) {
+  const now = state.paused?.since ?? at;
+  const crew = relayCrewOf(state, now);
+  if (sabotage === null || emergency === undefined || sameConsoles(crew, emergency)) {
     return state;
   }
-  const fresh = openEmergency(state, state.paused?.since ?? at);
+  const fresh = openEmergency(state, crew, now);
   const { endsAt, completed, missed } = emergency;
   const rolled = { ...fresh, endsAt, completed, missed };
   return { ...state, sabotage: { ...sabotage, emergency: rolled } };
 }
 
-/** Whether `emergency` has a console for every one of the relay's crew now, and no other. */
-function sameConsoles(state: GameState, emergency: RelayState): boolean {
+/** Whether `emergency` has a console for every one of `crew`, and no other. */
+function sameConsoles(crew: readonly Player[], emergency: RelayState): boolean {
   const owners = new Set(emergency.controls.map((control) => control.ownerId));
-  const crew = relayCrewOf(state);
   return crew.length === owners.size && crew.every((player) => owners.has(player.id));
 }
 
 /**
- * Who has a console at the relay in an emergency: the crew the run counts (`crewOf`) on the
- * line — whoever is away has none, whether the crew went on without them or not. With fewer
- * than two of them on the line, where no console is worked anyway, the crew the run counts:
- * an emergency takes two consoles at least, and every one of them is somebody's.
+ * How long a line may be down before an emergency at the relay is rolled anew without its
+ * console, ms: a page loaded anew is back sooner and rolls nothing; a line down longer loses
+ * its console at the emergency's next tick (`tickEmergency`).
  */
-export function relayCrewOf(state: GameState): Player[] {
+export const RELAY_GRACE_MS = 5000;
+
+/**
+ * Who has a console at the relay in an emergency at `at`: the crew the run counts (`crewOf`) on
+ * the line, or off it for less than RELAY_GRACE_MS — whoever is away longer has none, whether
+ * the crew went on without them or not. With fewer than two of them, where no console is
+ * worked anyway, the crew the run counts: an emergency takes two consoles at least, and every
+ * one of them is somebody's.
+ */
+function relayCrewOf(state: GameState, at: number): Player[] {
   const crew = crewOf(state);
-  const on = crew.filter((player) => player.connected);
+  const on = crew.filter((player) => atTheConsole(state, player, at));
   return on.length >= 2 ? on : crew;
+}
+
+/** Whether `player` is on the line at `at`, or was less than RELAY_GRACE_MS ago. */
+function atTheConsole(state: GameState, player: Player, at: number): boolean {
+  const since = state.away[player.id]?.since;
+  return player.connected || (since !== undefined && at - since < RELAY_GRACE_MS);
 }
 
 /**
@@ -593,9 +611,10 @@ const NOBODY_AWAY = 'Hier fehlt niemand.';
 /**
  * A crew member's line dropped at `at`. In a run they are away from then on, and the run goes
  * on: mission control says so on the air once (`awayLine`); their avatar stands where it stood
- * and holds what it held, the patrols do not see it, their console counts as unmanned and an
- * emergency at the relay is rolled anew without it (`relayForCrew`); an intro the others have
- * all seen enough of ends (`introOver`). The crew may go on without them once the drop's wait
+ * and holds what it held, the patrols do not see it, their console counts as unmanned — at the
+ * relay too, which an emergency loses once the line has been down RELAY_GRACE_MS
+ * (`tickEmergency`), a page loaded anew being back sooner —; an intro the others have all seen
+ * enough of ends (`introOver`). The crew may go on without them once the drop's wait
  * is over — the run's first drop waits FIRST_WAIT_MS, every later one LATER_WAIT_MS. A drop
  * stands nothing still and alone ends no run, and a line that dropped once is down: said twice,
  * nothing counts twice. A menu they had open is closed with it. A line closed on purpose for
@@ -621,7 +640,7 @@ function lineDropped(
   };
   const line = awayLine(player.name, action.menu === true);
   const said = logEvent({ ...dropped, away, drops: state.drops + 1 }, 'away', line, action.at);
-  return introOver(relayForCrew(said, action.at), action.at);
+  return introOver(said, action.at);
 }
 
 /**
@@ -634,9 +653,9 @@ function awayLine(name: string, menu: boolean): string {
 
 /**
  * A crew member's line is back at `at`. In a run they play on at once and count again, whether
- * the crew went on without them or not: an emergency at the relay is rolled anew to give them a
- * console (`relayForCrew`), and a run standing still for the server's maintenance goes on once
- * it waits for nobody (`resumeWhenBack`).
+ * the crew went on without them or not: an emergency at the relay that has no console for them
+ * is rolled anew to give them one (`relayForCrew`), and a run standing still for the server's
+ * maintenance goes on once it waits for nobody (`resumeWhenBack`).
  */
 function lineBack(state: GameState, action: { playerId: string; at: number }): GameState {
   const id = findPlayer(state, action.playerId).id;
@@ -688,8 +707,8 @@ function resumeWhenBack(state: GameState, at: number): GameState {
  * `playerId`, on the line, goes on without `absentId`: away since a drop whose wait is over,
  * and two of the crew at least on the line — one alone could work no station with two
  * consoles. The absent keep their seat and are counted out until they are back (`crewOf`); at
- * the relay they have no console already, being away (`relayCrewOf`). A run standing still for
- * the server's maintenance goes on once it waits for nobody else.
+ * the relay they have no console, or lose it at the emergency's next tick (`relayCrewOf`). A
+ * run standing still for the server's maintenance goes on once it waits for nobody else.
  */
 function continueWithout(
   state: GameState,
@@ -809,9 +828,9 @@ function menusWithout(
  * away already stays away as they were, their wait unchanged, whom the run went on without
  * counted out — a drop never turns into a pause by way of a deploy. An ask for a seat lapses —
  * its device went with the server — and every menu open over the run closes with its line;
- * whoever went to the main menu stays gone there. An emergency at the relay is rolled for the
- * crew the run counts, nobody being on the line (`relayForCrew`). Said twice, nothing more
- * changes.
+ * whoever went to the main menu stays gone there. An emergency at the relay stands still with
+ * the run, its consoles those of the crew as it stood (`relayForCrew`). Said twice, nothing
+ * more changes.
  */
 function maintenance(state: GameState, action: { at: number; waitFrom: number }): GameState {
   const players = state.players.map((p) => (p.connected ? { ...p, connected: false } : p));
@@ -824,8 +843,7 @@ function maintenance(state: GameState, action: { at: number; waitFrom: number })
   );
   const since = state.paused?.since ?? action.at;
   const menus = mainMenusOf(state.menus);
-  const down = { ...state, players, away, menus, paused: { since, kind: 'wartung' as const } };
-  return relayForCrew(down, action.at);
+  return { ...state, players, away, menus, paused: { since, kind: 'wartung' as const } };
 }
 
 /**
@@ -1525,7 +1543,7 @@ function startSabotage(state: GameState, action: { at: number }): GameState {
       puzzleState: null,
       sabotage:
         sabotage.mode === 'relay'
-          ? { endsAt, emergency: openEmergency(state, action.at) }
+          ? { endsAt, emergency: openEmergency(state, relayCrewOf(state, action.at), action.at) }
           : { endsAt },
     },
     'sabotage',
@@ -1561,43 +1579,56 @@ function clearSabotage(state: GameState, at: number): GameState {
   return logRadio(cleared, 'cleared', line, at, '', emergenciesSoFar(state) - 1);
 }
 
-/**
- * The relay emergency's def, a console for each of the relay's crew (`relayCrewOf`): rebuilt
- * from the game whenever needed, never stored.
- */
-function emergencyDef(state: GameState): RelayDef {
+/** The mission's sabotage block a relay emergency runs on; throws for a mission without one. */
+function relaySabotageOf(state: GameState): RelaySabotage {
   const sabotage = state.mission.map.sabotage;
   if (sabotage === undefined) {
     throw new Error(`mission "${state.mission.id}" has no sabotage to run a relay emergency`);
   }
-  return relayDefFor(relayCrewOf(state), sabotage);
+  return sabotage;
+}
+
+/**
+ * The def an emergency at the relay under way runs on: a console for each of the crew it was
+ * rolled for (`relayForCrew`), in the crew's order — rebuilt from the game whenever needed,
+ * never stored.
+ */
+export function emergencyDef(state: GameState, emergency: RelayState): RelayDef {
+  const owners = new Set(emergency.controls.map((control) => control.ownerId));
+  const crew = state.players.filter((player) => owners.has(player.id));
+  return relayDefFor(crew, relaySabotageOf(state));
 }
 
 /** Emergencies roll on their own stream, salted with the moment they start. */
 const EMERGENCY_STREAM = 0x52454c41;
 
-/** A relay emergency's consoles and first instructions, rolled from the run's seed. */
-function openEmergency(state: GameState, at: number): RelayState {
+/**
+ * A relay emergency's consoles, one for each of `crew`, and its first instructions, rolled
+ * from the run's seed.
+ */
+function openEmergency(state: GameState, crew: readonly Player[], at: number): RelayState {
   const rng = mulberry32(((state.seed ?? 0) ^ EMERGENCY_STREAM ^ at) >>> 0);
-  return relayModule.init(emergencyDef(state), rng, puzzleContext(state, at, null));
+  const def = relayDefFor(crew, relaySabotageOf(state));
+  return relayModule.init(def, rng, puzzleContext(state, at, null));
 }
 
-/** Instructions run out on the clock; each that did is a miss and is replaced. */
+/**
+ * Once a second while an emergency at the relay runs: its consoles follow the crew on the line
+ * — a line down RELAY_GRACE_MS loses its own (`relayForCrew`) — and instructions that ran out
+ * on the clock are misses, each replaced.
+ */
 function tickEmergency(state: GameState, action: { at: number }): GameState {
-  const emergency = state.sabotage?.emergency;
-  if (
-    state.phase !== 'playing' ||
-    state.paused !== null ||
-    state.sabotage === null ||
-    emergency === undefined
-  ) {
+  if (state.phase !== 'playing' || state.paused !== null) {
     return state;
   }
-  const aged = expireRelay(emergencyDef(state), emergency, action.at);
-  if (aged === emergency) {
-    return state;
+  const rolled = relayForCrew(state, action.at);
+  const { sabotage } = rolled;
+  const emergency = sabotage?.emergency;
+  if (sabotage === null || emergency === undefined) {
+    return rolled;
   }
-  return { ...state, sabotage: { ...state.sabotage, emergency: aged } };
+  const aged = expireRelay(emergencyDef(rolled, emergency), emergency, action.at);
+  return aged === emergency ? rolled : { ...rolled, sabotage: { ...sabotage, emergency: aged } };
 }
 
 /**
@@ -1621,7 +1652,7 @@ function handleEmergencyInput(
     fail('Ungültige Eingabe.');
   }
   const player = findPlayer(state, action.playerId);
-  const def = emergencyDef(state);
+  const def = emergencyDef(state, emergency);
   const ctx = puzzleContext(state, action.at, null);
   const result = relayModule.apply(def, emergency, input.data, player.id, ctx);
   const next = { ...state, sabotage: { ...sabotage, emergency: result.state } };

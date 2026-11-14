@@ -463,10 +463,11 @@ describe('the server’s maintenance with somebody away already', () => {
     expect(() => applyAction(annaBack, callOff('p1', T0 + 69_999))).toThrow(
       'Die Wartezeit läuft noch.',
     );
-    expect(applyAction(annaBack, callOff('p1', T0 + 70_000)).calledOff).toBe('Abgebrochen ohne p2.');
+    const off = applyAction(annaBack, callOff('p1', T0 + 70_000));
+    expect(off.calledOff).toBe('Abgebrochen ohne p2.');
   });
 
-  it('waits only for whoever was on the line, each until back: a drop in it holds nothing up', () => {
+  it('waits for whoever was on the line until each is back: a drop in it holds nothing up', () => {
     const down = applyAction(running, maintenance(DOWN_AT));
     const annaGone = run([lineBack('p1', DOWN_AT + 5000), lineDrops('p1', DOWN_AT + 6000)], down);
     expect(annaGone.paused).toEqual(down.paused);

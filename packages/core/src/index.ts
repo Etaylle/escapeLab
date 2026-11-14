@@ -57,6 +57,7 @@ export {
   nudgeDueAt,
   POWER_OUT,
   puzzleDueAt,
+  RELAY_GRACE_MS,
   seatsOff,
   TAKEOVER_WAIT_MS,
   type Action,

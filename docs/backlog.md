@@ -403,15 +403,15 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   gesehen; Notfälle würfeln ohne seine Konsole; „Ohne X weiter" nach 60 s (später 20 s) bleibt in
   Crew-Leiste und HUD, weil Stationen zu zweit bedient werden. Vorbilder: Overcooked 2, Among Us,
   Deep Rock Galactic (die Mission läuft, der Platz bleibt offen).
-- Umgesetzt: `paused` gibt es nur noch für die Wartung; ein Abbruch hält den Avatar samt Platten
-  und Luke, Drohnen übersehen ihn, Konsolen und Ventile brauchen Hände in der Leitung, das Relais
-  würfelt für die Crew in der Leitung neu. Die Leitstelle sagt „Bens Leitung ist weg." einmal an,
-  die Crew-Leiste graut Ben mit „getrennt · 0:12", die Leiste über der Welt bietet nach 60 s (später
-  20 s) „Ohne Ben weiter" oder allein „Einsatz abbrechen"; die Karte des Hauptmenüs zählt die Uhr
-  herunter. Die Wartung eines Neustarts wartet nur auf die Plätze, die beim SIGTERM (oder im
-  letzten Schnappschuss) in der Leitung waren; wer vorher weg war, bleibt weg wie zuvor, mit der
-  Wartezeit seines Abbruchs — ein Abbruch wird nie über einen Deploy zur Pause (Entscheidung
-  2026-11-14).
+- Umgesetzt: `paused` gibt es nur noch für die Wartung; ein Abbruch hält den Avatar samt Platten und
+  Luke, Drohnen übersehen ihn, Konsolen und Ventile brauchen Hände in der Leitung, das Relais
+  würfelt für die Crew in der Leitung neu, sobald eine Leitung 5 s weg ist (ein Neuladen würfelt
+  nichts). Die Leitstelle sagt „Bens Leitung ist weg." einmal an, die Crew-Leiste graut Ben mit
+  „getrennt · 0:12", die Leiste über der Welt bietet nach 60 s (später 20 s) „Ohne Ben weiter" oder
+  allein „Einsatz abbrechen"; die Karte des Hauptmenüs zählt die Uhr herunter. Die Wartung eines
+  Neustarts wartet nur auf die Plätze, die beim SIGTERM (oder im letzten Schnappschuss) in der
+  Leitung waren; wer vorher weg war, bleibt weg wie zuvor, mit der Wartezeit seines Abbruchs — ein
+  Abbruch wird nie über einen Deploy zur Pause (Entscheidung 2026-11-14).
 - Beweis: Core-, Server-, Client-Tests; Smoke; Harness `away-badge` (Uhr gegen die Wanduhr),
   `continue-without`, `rejoin-card`; der Neustart-Drill mit Cem, der vor dem SIGTERM weg ist: der
   Einsatz läuft weiter, sobald Anna und Ben zurück sind.

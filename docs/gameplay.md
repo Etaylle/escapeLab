@@ -511,9 +511,11 @@ back plays on at once, in the run as it stands. Meanwhile their avatar stands wh
 holds what it held — a plate stays down under it, and on the open hatch it counts as out —, the
 patrols do not see it, so the crew is not punished for a body that cannot move, and its console
 counts as unmanned: a station with two consoles still takes two of the crew on the line, and an
-emergency at the relay is rolled without the consoles of whoever is away — anew, once, as a line
-drops while one runs, and again as they are back; with fewer than two of the crew on the line,
-where no console is worked anyway, it keeps one for each of the crew the run counts. Mission
+emergency at the relay is rolled without the consoles of whoever is away — anew, once, at its
+first tick after a line has been down 5 s while one runs, and again as they are back; a page
+loaded anew is back sooner and rolls nothing, its console and every clock as they were. With
+fewer than two of the crew on the line, where no console is worked anyway, it keeps one for each
+of the crew the run counts; the server's maintenance stands it still as it is. Mission
 control says it on the air once — „Bens Leitung ist weg.", for the main menu „Ben hat sich
 abgemeldet." — and the crew strip greys Ben, his time away counting up („getrennt · 0:12", „im
 Hauptmenü · 0:12"); no card stands over the world. The stations the whole crew presses, the hatch

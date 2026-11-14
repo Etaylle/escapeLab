@@ -33,11 +33,11 @@ import {
   type RunEvent,
 } from './state.js';
 import { moduleFor, type PuzzleView } from './puzzles/index.js';
-import { crewOf, relayCrewOf } from './actions.js';
+import { crewOf, emergencyDef } from './actions.js';
 import { gradeOf, type Grade } from './grade.js';
 import { clockStartOf, runReport } from './report.js';
 import type { ConsoleId, ManualSection, Viewer, ViewContext } from './puzzles/module.js';
-import { relayDefFor, relayModule, type RelayDef, type RelayView } from './puzzles/relay.js';
+import { relayModule, type RelayDef, type RelayView } from './puzzles/relay.js';
 import {
   backupsOf,
   consoleOf,
@@ -710,20 +710,19 @@ function viewerOf(state: GameState, puzzleId: string, playerId: string | null): 
 
 /**
  * The running relay emergency as one player sees it, with the def it runs on — a console for
- * each of the relay's crew (`relayCrewOf`), none for whoever is away; null outside a running
- * run, whose crew the emergency no longer matches once somebody left, in valves mode and
- * between emergencies.
+ * each of the crew it was rolled for (actions.ts `emergencyDef`), none for whoever is away
+ * longer than a page takes to load anew; null outside a running run, whose crew the emergency
+ * no longer matches once somebody left, in valves mode and between emergencies.
  */
 function relayViewFor(
   state: GameState,
   playerId: string | null,
 ): { def: RelayDef; view: RelayView } | null {
-  const sabotage = state.mission.map.sabotage;
   const emergency = state.sabotage?.emergency;
-  if (state.phase !== 'playing' || sabotage === undefined || emergency === undefined) {
+  if (state.phase !== 'playing' || emergency === undefined) {
     return null;
   }
-  const def = relayDefFor(relayCrewOf(state), sabotage);
+  const def = emergencyDef(state, emergency);
   return { def, view: relayModule.view(def, emergency, playerId, viewContext(state, null)) };
 }
 
