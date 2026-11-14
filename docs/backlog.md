@@ -506,10 +506,10 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   Skript `scripts/packs.ts` baut ein Paket aus `audio/packs.plan.json` (Naht der Schleife gesucht,
   −19 LUFS, AAC 128 kbit/s, höchstens 9 MiB); die Probe `music` im Rundgang hört ein anderes Paket,
   das Vorhören und das Behalten nach dem Neuladen.
-- Offen: `panchout` wartet auf den Download von itch.io von Hand und auf ein Stück über 60 s für
-  die letzte Minute (Befehle in `docs/sound.md`, „Musikpakete"); weitere Pakete bis zu den zehn
-  gewünschten (FreePD-CC0, ein Paket der besten Stücke je Platz), je etwa 8 MB im Repo; Pixabay und
-  Pakete mit eigener Lizenz nur lokal.
+- Offen: `panchout` wartet auf den Download von itch.io von Hand, „Unrecord" statt „Space Horror
+  Boss" für die letzte Minute (Befehle in `docs/sound.md`, „Musikpakete"); weitere Pakete bis zu den
+  zehn gewünschten (FreePD-CC0, ein Paket der besten Stücke je Platz), je etwa 8 MB im Repo; Pixabay
+  und Pakete mit eigener Lizenz nur lokal.
 
 ### V-3 Stimmenbesetzung: Stimmen, die sich abwechseln — Status: erledigt (V-cast, Merge 2026-11-14, 1ebaf24; zwei Review-Runden und zwei Deltas; Cloud-CI grün auf af1e84a, Check und Walkthrough; Render der Besetzung bleibt bei Uros: 21.592 Credits für 213 Zeilen, 25.575 mit --fresh; Spec `spec-V-cast.md`) · Größe: M
 - Uros 2026-11-14 08:05: „Ich will alles hören, und vielleicht ist cool, wenn sich sogar alle

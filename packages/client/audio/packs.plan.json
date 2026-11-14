@@ -605,20 +605,20 @@
         },
         "critical": {
           "source": {
-            "manual": "panchout/Space Horror Boss",
+            "manual": "panchout/Unrecord",
             "from": "https://clement-panchout.itch.io/yet-another-free-music-pack"
           },
           "page": "https://clement-panchout.itch.io/yet-another-free-music-pack",
-          "title": "Space Horror Boss",
+          "title": "Unrecord",
           "author": "Clement Panchout",
           "licence": "CC BY 4.0",
           "notice": "Music by Clement Panchout – www.clementpanchout.com",
-          "trim": [0, 90000],
+          "trim": [0, 73000],
           "loop": {
-            "crossfade": [4000, 73000, 3000],
-            "seekMs": 8000
+            "crossfade": [3000, 71000, 3000],
+            "seekMs": 2000
           },
-          "notes": "a 9.2 MB WAV, unmeasured: some 52 s if 16-bit at 44.1 kHz, too short to go round 60 s — the owner decides"
+          "notes": "unmeasured, about 74 s; in the place of „Space Horror Boss“, whose some 52 s cannot go round 60 s (decided 2026-11-14); the run says its length if the span misses it"
         },
         "end-won": {
           "source": {

@@ -1739,21 +1739,23 @@ source under its own credit, as `cheremisinov` does for its tense and critical s
 **Downloads by hand.** itch.io serves no file without a browser, so its sources are `manual`: the
 plan names the page, and a folder under `takes/packs/` with a part of the file's name, which the
 script finds once the file lies there; a dry run says what is still missing. The pack `panchout`
-(„Schicht F · Raumstation": Clement Panchout's Space Horror layers for the stems, his „Time Flies",
-„Round Glasses" and „The Whispering Shadows Dungeon" for the title and the endings, Hitctrl's
-„Adrift on the Currents of Time" and „Beyond the Stars" for the menu and the lobby) waits for it:
+(„Schicht F · Raumstation": Clement Panchout's Space Horror layers for the calm and tense stems
+and his „Unrecord" for the critical one, his „Time Flies", „Round Glasses" and „The Whispering
+Shadows Dungeon" for the title and the endings, Hitctrl's „Adrift on the Currents of Time" and
+„Beyond the Stars" for the menu and the lobby) waits for it:
 
 ```sh
 # 1. in a browser: https://clement-panchout.itch.io/yet-another-free-music-pack — „Download Now",
-#    and from the pack the three Space Horror WAVs (Exploration, Tense, Boss) into
-#    packages/client/takes/packs/panchout/ of the main checkout
+#    and from the pack the WAVs „Space Horror Exploration", „Space Horror Tense" and „Unrecord"
+#    into packages/client/takes/packs/panchout/ of the main checkout
 # 2. in packages/client
 node scripts/packs.ts --dry-run --only panchout   # every place had
 node scripts/packs.ts --only panchout
 ```
 
-Its critical place needs a decision first: „Space Horror Boss" runs some 52 s by its file's size,
-under a loop's 60 s, and the script refuses its span until the plan gives it a piece long enough.
+Its critical place takes „Unrecord", some 74 s, for „Space Horror Boss" runs some 52 s by its
+file's size, under a loop's 60. The three spans are planned unmeasured, and a run says a file's
+length where a span misses it; any piece of the pack can take a place in the plan.
 
 **Kept out of the repository.** Music under Pixabay's Content License — it forbids distributing a
 file „on a standalone basis", in substantially the form it has there, which files in a public
@@ -1918,9 +1920,8 @@ lines before Helmut did, are build tools that never ship.
 
 What the sound packages left for later, one line each, the newest first:
 
-- **The pack `panchout` waits for a download by hand** (M-packs): the three Space Horror WAVs
-  from itch.io and a piece for its critical place, for the Boss's 52 s is under a loop's 60
-  (Musikpakete, „Downloads by hand").
+- **The pack `panchout` waits for a download by hand** (M-packs): two Space Horror WAVs and
+  „Unrecord" from itch.io (Musikpakete, „Downloads by hand").
 - **More packs** (M-packs): the owner asked for up to ten; a CC0 pack from FreePD's archive and a
   pack of the best piece per place are the next candidates, each some 8 MB more in the repository —
   the Feinwahl already lets any place take any pack's piece.
