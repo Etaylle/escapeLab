@@ -3,7 +3,8 @@
  * skips belongs to exactly one group, by its file name or by the label its skip line carries;
  * a name the walkthrough builds from a value stands here as a pattern, `*` for the value.
  * SHOTS_ONLY and SHOTS_SKIP pick the groups a run plays (`planGroups`): a group that needs
- * another pulls it in, unless SHOTS_SKIP leaves that one out, which refuses the group. The
+ * another pulls it in, unless SHOTS_SKIP leaves that one out, which refuses the group; a group
+ * that plays alone (`alone`) plays only where SHOTS_ONLY names it. The
  * walkthrough goes only as far as the groups on reach (`reaches`), and the time each group took
  * is counted as it goes (`groupClock`). Each step runs under its group's gate (`stepGates`), and
  * a capture its step's group does not file fails the run (`misfiled`).
@@ -19,7 +20,9 @@ export const STAGES = ['drills', 'lobby', 'opening', 'run'];
 
 /**
  * The groups in the order the walkthrough meets them: each with the stage it reaches to, the
- * groups it needs, and its captures and skip labels.
+ * groups it needs, and its captures and skip labels. A group marked `alone` is a drill of a
+ * module no shipped mission has yet: a run plays it only where SHOTS_ONLY names it, so that
+ * Blackout's and the Systemcheck's runs stay as they are.
  */
 export const GROUPS = [
   {
@@ -68,6 +71,14 @@ export const GROUPS = [
     stage: 'drills',
     needs: [],
     captures: ['restart', 'restart-maintenance.png', 'restart-recovered.png'],
+  },
+  {
+    // The Zugangskontrolle's scratch mission: in no shipped mission until N-6 places it.
+    name: 'access',
+    stage: 'drills',
+    needs: [],
+    alone: true,
+    captures: ['access-list.png', 'access-terminal.png', 'access-token.png', 'access-phone-932.png'],
   },
   {
     name: 'screens',
@@ -382,12 +393,16 @@ function refuse(on, refused) {
 /** Pads a log line's label to the walkthrough's column, as its other lines are. */
 const label = (name) => `group ${name}`.padEnd(18);
 
+/** The groups that play alone: only where SHOTS_ONLY names them. */
+const ALONE = GROUPS.filter((group) => group.alone === true).map((group) => group.name);
+
 /**
  * The log's line for each group a plan leaves out or pulls in: skipped, as SHOTS_ONLY or
  * SHOTS_SKIP have it; refused, for want of a group SHOTS_SKIP leaves out; pulled in, by the
- * group that needs it.
+ * group that needs it. A group that plays alone, left out of a run SHOTS_ONLY names nothing for
+ * (`unasked`), goes without a word unless SHOTS_SKIP names it.
  */
-function planLines({ on, left, pulled, refused }) {
+function planLines({ on, left, pulled, refused, unasked }) {
   return GROUP_NAMES.flatMap((name) => {
     if (refused.has(name)) {
       return [`${label(name)} refused: it needs ${refused.get(name)}, which SHOTS_SKIP leaves out`];
@@ -395,7 +410,7 @@ function planLines({ on, left, pulled, refused }) {
     if (pulled.has(name)) {
       return [`${label(name)} pulled in: ${pulled.get(name)} needs it`];
     }
-    if (on.has(name)) {
+    if (on.has(name) || (unasked.has(name) && !left.has(name))) {
       return [];
     }
     const why = left.has(name) ? 'SHOTS_SKIP names it' : 'SHOTS_ONLY leaves it out';
@@ -404,22 +419,24 @@ function planLines({ on, left, pulled, refused }) {
 }
 
 /**
- * The groups a run plays: those SHOTS_ONLY names (`only`), or every group where it is unset,
- * less those SHOTS_SKIP names (`skip`); a group that needs another pulls it in, unless SHOTS_SKIP
- * names that one, which refuses the group. Returns the groups on and the log's lines, one for
- * each group skipped, refused or pulled in. Throws for a name no group has, and where nothing is
- * left to play — its message the plan's lines first, the refusals that emptied it among them.
+ * The groups a run plays: those SHOTS_ONLY names (`only`), or where it is unset every group but
+ * those that play alone, less those SHOTS_SKIP names (`skip`); a group that needs another pulls
+ * it in, unless SHOTS_SKIP names that one, which refuses the group. Returns the groups on and the
+ * log's lines, one for each group skipped, refused or pulled in — none for a group that plays
+ * alone and was not asked for. Throws for a name no group has, and where nothing is left to
+ * play — its message the plan's lines first, the refusals that emptied it among them.
  */
 export function planGroups(only, skip) {
   const asked = groupNames('SHOTS_ONLY', only);
   const left = new Set(groupNames('SHOTS_SKIP', skip));
-  const chosen = asked.length > 0 ? asked : GROUP_NAMES;
+  const unasked = new Set(asked.length > 0 ? [] : ALONE);
+  const chosen = asked.length > 0 ? asked : GROUP_NAMES.filter((name) => !unasked.has(name));
   const on = new Set(chosen.filter((name) => !left.has(name)));
   const pulled = new Map();
   const refused = new Map();
   pullIn(on, left, pulled);
   refuse(on, refused);
-  const lines = planLines({ on, left, pulled, refused });
+  const lines = planLines({ on, left, pulled, refused, unasked });
   if (on.size === 0) {
     const none =
       `SHOTS_ONLY "${only ?? ''}" and SHOTS_SKIP "${skip ?? ''}" leave no group to play: ` +
