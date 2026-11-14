@@ -175,3 +175,31 @@ describe('the close code of a restart', () => {
     expect(own).toEqual([]);
   });
 });
+
+describe('the asks of a login', () => {
+  const pass = { id: 'a1'.repeat(16), secret: '0f'.repeat(32) };
+  const say = (msg: object): unknown => parseClientMessage(JSON.stringify(msg));
+
+  it('carry an Ausweisnummer and a Kennwort as typed, for the server to read', () => {
+    const signIn = { kind: 'sign-in', pass, login: ' el 7k3m 9q2d ', password: 'x' };
+    expect(say(signIn)).toEqual(signIn);
+    const change = { kind: 'change-password', pass, old: 'alt', password: 'ä'.repeat(512) };
+    expect(say(change)).toEqual(change);
+    expect(say({ kind: 'set-password', pass, password: '12345678' })).toMatchObject({ pass });
+  });
+
+  it('carry no Kennwort longer than 512 and no Ausweisnummer longer than 32, nor none', () => {
+    for (const msg of [
+      { kind: 'sign-in', pass, login: 'E'.repeat(33), password: 'x' },
+      { kind: 'sign-in', pass, login: '', password: 'x' },
+      { kind: 'sign-in', pass, login: 'EL-7K3M-9Q2D', password: '' },
+      { kind: 'set-password', pass, password: 'x'.repeat(513) },
+      { kind: 'change-password', pass, password: 'x'.repeat(8) },
+      { kind: 'set-password', password: 'x'.repeat(8) },
+    ]) {
+      expect(() => say(msg), JSON.stringify(msg).slice(0, 80)).toThrow(
+        /Unbekanntes Nachrichtenformat/,
+      );
+    }
+  });
+});

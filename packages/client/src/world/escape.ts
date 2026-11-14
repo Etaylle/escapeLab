@@ -73,10 +73,13 @@ export interface Mate {
   out: boolean;
 }
 
-/** The checklist of the escape: the connected crew in its order, ticked off on the hatch. */
+/**
+ * The checklist of the escape: the crew the run counts in its order — whoever is away too, until
+ * it goes on without them — ticked off on the hatch, an avatar whose line is down where it stands.
+ */
 export function escapeChecklist(players: PlayerView['players'], exit: Exit): Mate[] {
   return players
-    .filter((player) => player.connected)
+    .filter((player) => player.waived !== true)
     .map(({ id, name, color }) => ({ id, name, color, out: exit.atExit.includes(id) }));
 }
 

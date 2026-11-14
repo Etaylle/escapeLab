@@ -153,3 +153,66 @@ describe('Room with a drone that wakes held still', () => {
     room.dispose();
   });
 });
+
+describe('Room with a drone and a crew member away', () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  /**
+   * Anna and Ben in `run`, the first station solved — the patrol awake, from (1,2) towards
+   * (7,2) — Anna at (3,2) in its way and Ben by the station; each with a hand to drop their line.
+   */
+  function awake(run: Mission) {
+    const room = new Room('TEST', run);
+    const anna = { ...room.join('Anna', passFor('Anna')), ...collector() };
+    const ben = { ...room.join('Ben', passFor('Ben')), ...collector() };
+    const drop = {
+      anna: room.attach(anna.playerId, anna.listen),
+      ben: room.attach(ben.playerId, ben.listen),
+    };
+    room.setReady(ben.playerId, true);
+    room.act(anna.playerId, { kind: 'start-mission' });
+    walkTo(room, ben, 2.5, 1.5);
+    walkTo(room, anna, 2.5, 2.5);
+    pressE(room, ben);
+    room.act(anna.playerId, { kind: 'puzzle-input', input: { press: true } });
+    room.act(ben.playerId, { kind: 'puzzle-input', input: { press: true } });
+    return { room, anna, ben, drop };
+  }
+
+  it('flies on, and sees nobody whose line is down: a body that cannot move costs nothing', () => {
+    const { room, anna, ben, drop } = awake(mission);
+    walkTo(room, anna, 3.5, 2.5);
+    drop.anna();
+    const from = lastPositions(ben.messages).drones['wache'];
+    vi.advanceTimersByTime(3000);
+    expect(lastPositions(ben.messages).drones['wache']?.x).not.toBe(from?.x);
+    expect(lastView(ben.messages).penaltySeq).toBe(0);
+    expect(lastView(ben.messages).away.map((away) => away.name)).toEqual(['Anna']);
+    room.dispose();
+  });
+
+  it('stays held while an avatar whose line is down stands on its plate', () => {
+    const { room, anna, ben, drop } = awake(heldMission);
+    walkTo(room, ben, 3.5, 1.5);
+    expect(lastView(ben.messages).map?.plates[0]?.pressed).toBe(true);
+    drop.ben();
+    const audience = collector();
+    room.attachSpectator(audience.listen);
+    vi.advanceTimersByTime(3000);
+    expect(lastView(anna.messages).map?.plates[0]?.pressed).toBe(true);
+    expect(lastPositions(audience.messages).drones['wache']).toMatchObject({
+      x: 1.5,
+      y: 2.5,
+      frozen: true,
+    });
+    // Back on the line and off the plate, Ben lets it go, and the patrol flies.
+    room.resume(passFor('Ben'));
+    room.attach(ben.playerId, ben.listen);
+    walkTo(room, ben, 5.5, 1.5);
+    expect(lastView(anna.messages).map?.plates[0]?.pressed).toBe(false);
+    vi.advanceTimersByTime(500);
+    expect(lastPositions(audience.messages).drones['wache']).toMatchObject({ frozen: false });
+    room.dispose();
+  });
+});

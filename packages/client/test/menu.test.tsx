@@ -208,7 +208,7 @@ describe('the menu', () => {
     const nav = html.slice(html.indexOf('<nav'), html.indexOf('</nav>'));
     const lit = '<nav class="menu-list menu-list--bound" aria-label="Hauptmenü">';
     expect(nav.startsWith(`${lit}<section class="bound bound--run">`)).toBe(true);
-    expect(nav).toContain('EINSATZ PAUSIERT');
+    expect(nav).toContain('<span class="kicker bound-kicker">WARTUNG</span>');
     expect(html).toContain('<p class="bound-line">');
     // A lobby's seat stands first too, but binds nothing: the menu stays lit.
     const lobby = menu({ ...run, phase: 'lobby', paused: false, leftMs: null });
@@ -490,7 +490,7 @@ describe('the account in the top bar', () => {
     expect(barName('  ')).toBe('Ohne Namen');
     expect(barName(' Anna ')).toBe('Anna');
     const account = { name: 'Anna', color: null, since: 0, runs: 0, achievements: {} };
-    const told = { ...account, store: 'database' as const };
+    const told = { ...account, store: 'database' as const, login: null };
     expect(barBadge(null)).toBeNull();
     expect(barBadge(told)).toBeNull();
     expect(barBadge({ ...told, runs: 1 })).toBe('1 Einsatz');

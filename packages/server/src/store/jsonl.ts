@@ -2,17 +2,22 @@ import { randomUUID } from 'node:crypto';
 import { appendFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { RunReport } from '@escapelab/core';
+import { GameError, type RunReport } from '@escapelab/core';
 import { RunStats } from '../runStats.js';
 import {
   aliasOf,
   checkSecret,
+  HAS_LOGIN,
   isLoggedRun,
-  sameSecretHash,
+  creditsSeat,
+  LoginTaken,
+  PARKED,
   unlockedBy,
   type Account,
   type FinishedRun,
+  type Leaving,
   type LoggedRun,
+  type Login,
   type PassIdentity,
   type Profile,
   type SeatedRun,
@@ -111,8 +116,17 @@ function loadRuns(file: string): { runs: LoggedRun[]; problems: string[] } {
 }
 
 /** An identity's key in memory: its provider and its subject. */
-const keyOf = (identity: Pick<PassIdentity, 'provider' | 'subject'>): string =>
+const keyOf = (identity: { provider: string; subject: string }): string =>
   `${identity.provider}:${identity.subject}`;
+
+/** What the key of a pass's way in starts with (`keyOf`): its provider. */
+const PASS = 'pass:';
+
+/** What the key of a login in memory starts with (`keyOf`): its provider. */
+const LOGIN = 'login:';
+
+/** The key of the login of the Ausweisnummer `subject` in memory (`keyOf`). */
+const loginKeyOf = (subject: string): string => `${LOGIN}${subject}`;
 
 /** A run's key in memory: its room and its start, which name it. */
 const runKeyOf = (run: RunReport): string => `${run.roomCode}|${run.startedAt}`;
@@ -201,12 +215,13 @@ export class JsonlStore implements Store {
 
   /**
    * The account whose identity `pass` is — its id and the hash of its secret both, for an id
-   * alone credits nobody; null for none.
+   * alone credits nobody, or a seat the server parked for it (store.ts `creditsSeat`); null for
+   * none.
    */
   private ownerOf(pass: SeatPass | null): string | null {
-    const known = pass === null ? undefined : this.identities.get(`pass:${pass.id}`);
+    const known = pass === null ? undefined : this.identities.get(`${PASS}${pass.id}`);
     const shown = known !== undefined && pass !== null;
-    return shown && sameSecretHash(known.secretHash, pass.secretHash) ? known.accountId : null;
+    return shown && creditsSeat(known.secretHash, pass.secretHash) ? known.accountId : null;
   }
 
   /** `unlocked` earned by `accountId`: each Erfolg it had already keeps its first date. */
@@ -287,6 +302,11 @@ export class JsonlStore implements Store {
   }
 
   async deleteAccount(accountId: string): Promise<void> {
+    this.drop(accountId);
+  }
+
+  /** The account of `accountId` gone (`deleteAccount`): its name off its runs, the rest deleted. */
+  private drop(accountId: string): void {
     for (const { run, seat } of this.seated.get(accountId) ?? []) {
       this.unseat(run, seat);
     }
@@ -298,6 +318,132 @@ export class JsonlStore implements Store {
     }
     this.earned.delete(accountId);
     this.seated.delete(accountId);
+  }
+
+  async loginOf(accountId: string): Promise<Login | null> {
+    return this.loginIn(accountId);
+  }
+
+  /** The login of `accountId` (`loginOf`), read at once: a write that checks it awaits nothing. */
+  private loginIn(accountId: string): Login | null {
+    for (const [key, identity] of this.identities) {
+      if (identity.accountId === accountId && key.startsWith(LOGIN)) {
+        return { accountId, subject: key.slice(LOGIN.length), secretHash: identity.secretHash };
+      }
+    }
+    return null;
+  }
+
+  /** Whether the login of `accountId` keeps the hash `checked` (`signIn`); never without one. */
+  private keeps(accountId: string, checked: string): boolean {
+    return this.loginIn(accountId)?.secretHash === checked;
+  }
+
+  async findLogin(subject: string): Promise<Login | null> {
+    const known = this.identities.get(loginKeyOf(subject));
+    return known === undefined ? null : { ...known, subject };
+  }
+
+  async addLogin(accountId: string, subject: string, secretHash: string): Promise<void> {
+    this.account(accountId);
+    if (this.loginIn(accountId) !== null) {
+      throw new GameError(HAS_LOGIN);
+    }
+    if (this.identities.has(loginKeyOf(subject))) {
+      throw new LoginTaken();
+    }
+    this.identities.set(loginKeyOf(subject), { accountId, secretHash });
+  }
+
+  async replaceLoginSecret(
+    accountId: string,
+    kept: string,
+    next: string,
+    staying: string,
+  ): Promise<SeatPass[] | null> {
+    const login = this.loginIn(accountId);
+    if (login === null || login.secretHash !== kept) {
+      return null;
+    }
+    this.identities.set(loginKeyOf(login.subject), { accountId, secretHash: next });
+    const signedOut: SeatPass[] = [];
+    for (const [key, known] of this.identities) {
+      const id = key.slice(PASS.length);
+      const other = key.startsWith(PASS) && id !== staying && known.secretHash !== PARKED;
+      if (other && known.accountId === accountId) {
+        signedOut.push({ id, secretHash: known.secretHash });
+        this.identities.set(key, { accountId, secretHash: PARKED });
+      }
+    }
+    return signedOut;
+  }
+
+  async signIn(
+    pass: PassIdentity,
+    accountId: string,
+    leaving: Leaving | null,
+    checked: string,
+  ): Promise<string[] | null> {
+    if (!this.keeps(accountId, checked)) {
+      return null;
+    }
+    this.account(accountId);
+    // Both passes checked before anything changes: a pass refused changes nothing.
+    const before = this.shown(pass)?.accountId ?? null;
+    const left = leaving === null ? null : this.shown(leaving.pass);
+    this.identities.set(keyOf(pass), { accountId, secretHash: pass.secretHash });
+    if (leaving !== null) {
+      this.leave(leaving);
+    }
+    return [before, left?.accountId ?? null].flatMap((id) =>
+      id !== null && id !== accountId && this.dropIfEmpty(id) ? [id] : [],
+    );
+  }
+
+  async signOut(leaving: Leaving): Promise<string | null> {
+    const known = this.shown(leaving.pass);
+    this.leave(leaving);
+    return known?.accountId ?? null;
+  }
+
+  /**
+   * What memory keeps of the way in of `pass`; undefined for none. Throws GameError for a pass
+   * shown with the wrong secret.
+   */
+  private shown(pass: PassIdentity): { accountId: string; secretHash: string } | undefined {
+    const known = this.identities.get(keyOf(pass));
+    if (known !== undefined) {
+      checkSecret(known.secretHash, pass.secretHash);
+    }
+    return known;
+  }
+
+  /** `leaving` signed out: the pass's way in deleted, or kept for its seat alone (`Leaving`). */
+  private leave({ pass, parked }: Leaving): void {
+    const known = this.identities.get(keyOf(pass));
+    if (known === undefined) {
+      return;
+    }
+    if (parked) {
+      this.identities.set(keyOf(pass), { accountId: known.accountId, secretHash: PARKED });
+    } else {
+      this.identities.delete(keyOf(pass));
+    }
+  }
+
+  /**
+   * The account of `accountId` deleted where nothing is left of it — no way in, no run, no
+   * Erfolg; whether it was.
+   */
+  private dropIfEmpty(accountId: string): boolean {
+    const ways = [...this.identities.values()].some((known) => known.accountId === accountId);
+    const runs = (this.seated.get(accountId) ?? []).length;
+    const earned = this.earned.get(accountId)?.size ?? 0;
+    if (ways || runs > 0 || earned > 0 || !this.accounts.has(accountId)) {
+      return false;
+    }
+    this.drop(accountId);
+    return true;
   }
 
   /**

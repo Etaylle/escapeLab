@@ -132,8 +132,9 @@
  * „Raum verlassen", out of it — shut over the lobby, the page loaded anew, open on the menu — none
  * asking more than 400 ms. The audience types the room's code in small letters into „Beitreten"
  * (menu-join.png): it has to stand in capitals, in a field no browser fills from its passwords. In
- * the reconnect drill a new tab of Anna's browser, her run standing paused, opens the menu on the
- * run's card, first and lit, every other item dimmed (menu-bound.png). The hero — the player's own
+ * the reconnect drill a new tab of Anna's browser, her run going on while Ben is away, opens the
+ * menu on the run's card, its clock running, first and lit, every other item dimmed
+ * (menu-bound.png). The hero — the player's own
  * figure standing large at the stage's right (client screens/MenuHero.tsx) — has to stand there at
  * 1440×820 and at 1280×720 about five of the scene's tiles tall, its canvas clear of the menu's
  * column, its lead line and the title, or the run fails. menu-hero.png shows it with its hand
@@ -196,10 +197,17 @@
  * unless Blackout opens on both pages with the power on. Then a second tab of
  * the host's browser opens „Meine Einsätze" off the menu (my-runs.png): the
  * Systemcheck just won leads the list with its crew and a rank, the page fits
- * a phone sideways. Its settings delete the account at the second word
- * (account-delete.png the first answered), the top bar's account says it has
- * no name and no runs, and „Meine Einsätze" lists nothing more — or the run
- * fails.
+ * a phone sideways. Its settings' „Konto" sets a Kennwort, the Ausweisnummer
+ * minted shown large (account-password.png); the guest's tab sets one too. A
+ * second browser of the guest's — another device — signs into the host's
+ * account from its „Konto"'s „Anmelden" (account-signin.png) and finds the run
+ * in „Meine Einsätze" with the host's seat marked, then switches to the
+ * guest's account (account-switch.png) on a new pass and finds the guest's
+ * seat marked — each Ausweis readable, its texts 12 px or more and 4.5:1, its
+ * way on in sight. Then the host's settings delete the account at the second
+ * word (account-delete.png the first answered), the top bar's account says it
+ * has no name and no runs, and „Meine Einsätze" lists nothing more — or the
+ * run fails.
  *
  * Blackout on its pinned seed is played to the won card too, with the
  * answers tools/fixtures/blackout-plan.json carries (core's
@@ -580,24 +588,27 @@
  *
  * Reconnect (a Blackout run only): before the walkthrough, a room of its own for three —
  * Anna, Ben and Cem, each in a browser context of its own, the microphones on, the opening
- * skipped. Ben's network goes (`context.setOffline`): Anna's page has to wait for him
- * (pause-waiting.png) and offer the way on without him 60 s into the pause, 3 s late at most;
- * she presses it, and the clock has to run again (continue-without.png). Ben's own page has to
- * say its line is lost, the next try counted, and offer its three ways on
- * (reconnect-overlay.png). His network back, Anna's page has to say „Ben ist zurück"
- * (back-toast.png) and the voice links have to come up again. A new tab of Ben's browser has to
- * open on the run's card (rejoin-card.png) and go back to the run, his first tab told that the
- * seat went to the other; his network gone once more, a phone named Ben asks for the seat by
- * the room's code and his name, Anna's pause card asks her (takeover-ask.png) and she lets it
- * in; it has to sit down, and his browser, back, has to be refused (takeover.png). Any
- * step that fails, fails the run; the log says how long the drill took.
+ * skipped. Ben's network goes (`context.setOffline`): no card may stand over Anna's world — her
+ * crew strip has to grey Ben, counting his time away (away-badge.png) —, her clock has to run on
+ * as the wall's clock does, 2 s apart at most over the minute, and her bar has to offer the way
+ * on without him 60 s into his absence, 3 s late at most; she presses it, and the clock runs on
+ * (continue-without.png). Ben's own page has to say its line is lost, the next try counted, and
+ * offer its three ways on (reconnect-overlay.png). His network back, Anna's page has to say „Ben
+ * ist zurück" (back-toast.png) and the voice links have to come up again. A new tab of Ben's
+ * browser has to open on the run's card (rejoin-card.png) and go back to the run, his first tab
+ * told that the seat went to the other; his network gone once more, a phone named Ben asks for
+ * the seat by the room's code and his name, Anna's card at the top asks her (takeover-ask.png)
+ * and she lets it in; it has to sit down, and his browser, back, has to be refused
+ * (takeover.png). Any step that fails, fails the run; the log says how long the drill took.
  *
  * Restart (a Blackout run that owns its server, SHOTS_SERVER): after the reconnect drill, the
- * same crew of three in a room of its own; the server gets SIGTERM, as Render sends it before a
- * deploy, and has to exit 0, every page's own card saying „WARTUNG · Der Server startet neu"
- * (restart-maintenance.png); started again on the same port with the same ROOM_SECRET, every
- * page has to be back in the run within 15 s (restart-recovered.png), the clock where it
- * stood. Where the run does not own its server, the drill is skipped, the reason logged.
+ * same crew of three in a room of its own; Cem's tab goes first, and Anna's page has to see him
+ * away. The server gets SIGTERM, as Render sends it before a deploy, and has to exit 0, the own
+ * cards of Anna and Ben saying „WARTUNG · Der Server startet neu" (restart-maintenance.png);
+ * started again on the same port with the same ROOM_SECRET, both have to be back in the run
+ * within 15 s, the clock going on where it stood, without waiting for Cem, whom Anna's strip
+ * still greys (restart-recovered.png); Cem's tab back, he has to be back in the run. Where the
+ * run does not own its server, the drill is skipped, the reason logged.
  *
  * Figures: the crew stands as client world/figure.ts poses it, and four shots
  * at 1440×1000 show it. lobby-idle.png catches a lobby figure turned in a
@@ -8127,9 +8138,10 @@ function sayHeroAtCard(looks) {
 }
 
 /**
- * menu-bound.png: a new tab of Anna's browser while her run stands paused for Ben — the menu
- * opens on the run's card, „EINSATZ PAUSIERT", first and lit, every other item dimmed, the line
- * that no other room opens under it; or the run fails. The tab is closed again.
+ * menu-bound.png: a new tab of Anna's browser while Ben is away from her run, which goes on — the
+ * menu opens on the run's card, „EINSATZ LÄUFT", its clock counting down as the run's does,
+ * first and lit, every other item dimmed, the line that no other room opens under it; or the
+ * run fails. The tab is closed again.
  */
 async function captureBound(anna) {
   const page = await openPage(anna.context, 'drill Anna tab');
@@ -8144,14 +8156,24 @@ async function captureBound(anna) {
       () => document.querySelector('.menu-list')?.firstElementChild?.matches('.bound') === true,
     );
     const line = await textOf(page.locator('.bound-line'));
+    const left = clockSeconds(await textOf(card.locator('.bound-facts')));
     const looks = await heroLooksAtCard(page);
     await capture(page, 'menu-bound.png');
+    await sleep(2200);
+    const later = clockSeconds(await textOf(card.locator('.bound-facts')));
     console.log(
       `menu-bound.png     Anna's new tab: „${kicker}" ${first ? 'first' : '!! not first'}, ` +
-        `the rest ${dimmed ? 'dimmed' : '!! lit'}; „${line}"`,
+        `the rest ${dimmed ? 'dimmed' : '!! lit'}; „${line}"; its clock ${left} s → ${later} s`,
     );
-    if (kicker !== 'EINSATZ PAUSIERT' || !first || !dimmed || line === null) {
-      fail(`menu-bound.png: „${kicker}", first ${first}, dimmed ${dimmed}, line „${line}"`);
+    const wrong = wrongOf([
+      [kicker !== 'EINSATZ LÄUFT', `„${kicker}"`],
+      [!first, 'the card not first'],
+      [!dimmed, 'the rest lit'],
+      [line === null, 'no line of the run'],
+      [left === null || later === null || left - later < 1, `its clock ${left} → ${later}`],
+    ]);
+    if (wrong.length > 0) {
+      fail(`menu-bound.png: ${wrong.join(', ')}`);
     }
     sayHeroAtCard(looks);
   } finally {
@@ -12151,7 +12173,7 @@ async function playToTheEnd(host, guest, watcher, pinned) {
   await captureEnd(host, watcher);
   await capturePhoneCard(guest);
   await captureNextMission(host, guest);
-  await captureAccount(host);
+  await captureAccount(host, guest);
 }
 
 /** What the first row of „Meine Einsätze" has to say of the Systemcheck just won. */
@@ -12165,12 +12187,13 @@ const WON_ROW = [/Systemcheck/, /Geschafft/, /Anna/, /Ben/];
  * the first answered), the top bar's account says it has no name and no runs, and „Meine
  * Einsätze" lists nothing any more. The run fails wherever that does not hold.
  */
-async function captureAccount(host) {
+async function captureAccount(host, guest) {
   const page = await openPage(host.page.context(), 'host tab');
   try {
     await page.goto(paged(BASE));
     const row = await captureMyRuns(page);
     await page.locator('.history-back').click();
+    await captureLogin(page, host, guest);
     await deleteAccount(page);
     const said = await page.locator('.bar-account').getAttribute('aria-label');
     await page.locator('.menu-item', { hasText: 'Meine Einsätze' }).click();
@@ -12219,6 +12242,248 @@ async function captureMyRuns(page) {
     fail(`my-runs: first row "${row}", ranked ${ranked}, ${over}px sideways on a phone`);
   }
   return row;
+}
+
+/** The Kennwort the walkthrough's accounts take (`captureLogin`). */
+const KENNWORT = 'Kaltenbrunn 1986';
+
+/**
+ * What „Konto"'s Ausweis shows on `page`, read off it: the size of its smallest text and of the
+ * Ausweisnummer, the least contrast of its texts against what they stand on, the lowest of its
+ * controls, whether its last control stands within the settings' view, and how far the card runs
+ * out sideways.
+ */
+function loginLook(page) {
+  return page.evaluate(() => {
+    const style = (el) => globalThis.getComputedStyle(el);
+    const luminance = (color) => {
+      const [r, g, b] = (color.match(/[\d.]+/g) ?? []).slice(0, 3).map((c) => {
+        const v = Number(c) / 255;
+        return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+      });
+      return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    };
+    // What a text stands on: the nearest ground with a colour of its own.
+    const groundOf = (el) => {
+      for (let at = el; at !== null; at = at.parentElement) {
+        const ground = style(at).backgroundColor;
+        if (!/rgba\([^)]*,\s*0\)$/.test(ground) && ground !== 'transparent') {
+          return luminance(ground);
+        }
+      }
+      return 0;
+    };
+    const shown = (el) => el.getBoundingClientRect().height > 0;
+    const section = document.querySelector('.settings-login');
+    const texts = [...section.querySelectorAll('p, span, code, button')].filter(
+      (el) => shown(el) && el.textContent.trim() !== '',
+    );
+    const contrast = Math.min(
+      ...texts.map((el) => {
+        const [light, dark] = [luminance(style(el).color), groundOf(el)].sort((a, b) => b - a);
+        return (light + 0.05) / (dark + 0.05);
+      }),
+    );
+    const number = section.querySelector('.settings-login-big, .settings-login-code');
+    const controls = [...section.querySelectorAll('button, input')].filter(shown);
+    const last = controls.at(-1)?.getBoundingClientRect();
+    const view = document.querySelector('.settings-body').getBoundingClientRect();
+    const card = document.querySelector('.settings-card');
+    return {
+      smallest: Math.min(...texts.map((el) => Number.parseFloat(style(el).fontSize))),
+      number: number === null ? null : Number.parseFloat(style(number).fontSize),
+      contrast,
+      lowest: Math.min(...controls.map((el) => Math.round(el.getBoundingClientRect().height))),
+      inView: last !== undefined && last.bottom <= view.bottom + 0.5,
+      sideways: card.scrollWidth - card.clientWidth,
+    };
+  });
+}
+
+/**
+ * What falls short in `look` (`loginLook`): a text under 12 px or under 4.5:1, the Ausweisnummer
+ * under `numberAt` px, a control under `target` px, its way on below the fold, the card out
+ * sideways; none where nothing does.
+ */
+function loginFaults(look, target, numberAt) {
+  return [
+    look.smallest >= 12 ? '' : `!! text at ${look.smallest} px`,
+    look.number === null || look.number >= numberAt ? '' : `!! the number at ${look.number} px`,
+    look.contrast >= 4.5 ? '' : `!! contrast ${look.contrast.toFixed(1)}:1`,
+    look.lowest >= target ? '' : `!! a control ${look.lowest} px tall`,
+    look.inView ? '' : '!! its way on below the fold',
+    look.sideways <= 0 ? '' : `!! +${look.sideways}px sideways`,
+  ].filter((fault) => fault !== '');
+}
+
+/**
+ * Captures `page` as `shot` and judges its Ausweis (`loginLook`, `loginFaults`): its texts at 12
+ * px or more and 4.5:1, the Ausweisnummer at `numberAt` px or more where it shows, every control a
+ * target of 36 px — 44 under a finger — its last one in sight, nothing out sideways; or the run
+ * fails. `what` says what it shows, for the log.
+ */
+async function judgeLogin(page, shot, what, numberAt = 18) {
+  await sleep(300);
+  await capture(page, shot);
+  const look = await loginLook(page);
+  const touch = await page.evaluate(() => globalThis.matchMedia('(pointer: coarse)').matches);
+  const faults = loginFaults(look, touch ? 44 : 36, numberAt);
+  const { width, height } = page.viewportSize();
+  const number = look.number === null ? '' : `, the number ${look.number} px`;
+  console.log(
+    `${`${shot} `.padEnd(19)}${what} @ ${width}x${height}: smallest ${look.smallest} px` +
+      `${number}, contrast ${look.contrast.toFixed(1)}:1, controls ${look.lowest} px` +
+      faults.map((fault) => `; ${fault}`).join(''),
+  );
+  if (faults.length > 0) {
+    fail(`${shot}: ${faults.join('; ')}`);
+  }
+}
+
+/** „Konto" opened in `page`'s settings off the menu. */
+async function openKonto(page) {
+  await page.locator('.menu-item', { hasText: 'Einstellungen' }).click();
+  await page.locator('.settings-tab[data-tab="konto"]').click();
+  await page.locator('.settings-login').waitFor({ timeout: 10_000 });
+}
+
+/**
+ * A first Kennwort for the account of `page`'s pass in „Konto": typed twice and set, the
+ * Ausweisnummer minted shown large till „Notiert" — captured as `shot` where given. Returns the
+ * Ausweisnummer; null where none came.
+ */
+async function setKennwort(page, shot = null) {
+  await openKonto(page);
+  await page.locator('[data-login="set"]').click();
+  await page.locator('input[name="password"]').fill(KENNWORT);
+  await page.locator('input[name="again"]').fill(KENNWORT);
+  await page.locator('.settings-login-send').click();
+  const big = page.locator('.settings-login-big');
+  if (!(await attached(big, 15_000))) {
+    return null;
+  }
+  const number = (await big.textContent())?.trim() ?? null;
+  if (shot !== null) {
+    await judgeLogin(page, shot, `the Ausweisnummer ${number} minted`, 24);
+  }
+  await page.locator('.settings-login-noted').click();
+  await page.keyboard.press('Escape');
+  await page.locator('.settings-card').waitFor({ state: 'hidden', timeout: 3000 });
+  return number;
+}
+
+/** The first row of „Meine Einsätze" on `page`, and the seat marked in it; null where none came. */
+async function firstRun(page) {
+  await page.locator('.menu-item', { hasText: 'Meine Einsätze' }).click();
+  const first = page.locator('.my-runs-table tbody tr').first();
+  if (!(await attached(first, 10_000))) {
+    await page.locator('.history-back').click();
+    return null;
+  }
+  const row = (await first.innerText()).replace(/\s+/g, ' ').trim();
+  const you = (await first.locator('.my-runs-you').textContent())?.trim() ?? null;
+  await page.locator('.history-back').click();
+  return { row, you };
+}
+
+/**
+ * The Ausweis of the won Systemcheck's accounts: the host's tab `page` sets a Kennwort
+ * (account-password.png, the number large), a tab of the guest's browser sets one too; a second
+ * browser of the guest's — another device, a guest of its own — signs into the host's account by
+ * „Konto"'s „Anmelden" (account-signin.png, the form filled) and finds the run with the host's
+ * seat marked in „Meine Einsätze", then switches to the guest's account in one go
+ * (account-switch.png, the form filled) on a new pass and finds the guest's seat marked. The run
+ * fails wherever that does not hold.
+ */
+async function captureLogin(page, host, guest) {
+  const hosts = await setKennwort(page, 'account-password.png');
+  const tab = await openPage(guest.page.context(), 'guest tab');
+  const guests = await (async () => {
+    await tab.goto(paged(BASE));
+    return setKennwort(tab).finally(() => tab.close());
+  })();
+  if (hosts === null || guests === null) {
+    fail(`account-password: no Ausweisnummer minted (host ${hosts}, guest ${guests})`);
+    return;
+  }
+  const device = await browser.newContext({ viewport: SIZES[0] });
+  try {
+    const other = await openPage(device, 'guest device');
+    await other.goto(paged(BASE));
+    await signInOn(other, hosts, host.name);
+    await switchOn(other, guests, guest.name);
+  } finally {
+    await device.close();
+  }
+}
+
+/**
+ * What is wrong with `run`, the first row of „Meine Einsätze" (`firstRun`), where it should be the
+ * won Systemcheck (WON_ROW) with `name`'s seat marked; '' where nothing is.
+ */
+function wrongRun(run, name) {
+  if (run === null) {
+    return '!! „Meine Einsätze" lists nothing';
+  }
+  if (!WON_ROW.every((part) => part.test(run.row))) {
+    return `!! the first row "${run.row}"`;
+  }
+  return run.you === name ? '' : `!! ${run.you ?? 'nobody'} marked, not ${name}`;
+}
+
+/** Logs `label`'s line — what was seen, then each fault — and fails the run where any came. */
+function judged(label, seen, faults) {
+  const wrong = faults.filter((fault) => fault !== '');
+  console.log(`${label.padEnd(19)}${seen}${wrong.map((fault) => `; ${fault}`).join('')}`);
+  if (wrong.length > 0) {
+    fail(`${label}: ${wrong.join('; ')}`);
+  }
+}
+
+/**
+ * `page`, a device of its own, signs into the account of `number` by „Konto"'s „Anmelden"
+ * (account-signin.png) and finds the run with `name`'s seat marked; or the run fails.
+ */
+async function signInOn(page, number, name) {
+  await openKonto(page);
+  await page.locator('[data-login="sign-in"]').click();
+  await page.locator('.settings-login input[name="number"]').fill(number.toLowerCase());
+  await page.locator('.settings-login input[name="password"]').fill(KENNWORT);
+  await judgeLogin(page, 'account-signin.png', `${number} typed in`);
+  await page.locator('.settings-login-send').click();
+  const signed = await attached(page.getByText('Angemeldet.'), 15_000);
+  await page.keyboard.press('Escape');
+  const run = await firstRun(page);
+  judged('account-signin', `signed into ${number}; „Meine Einsätze" marks ${run?.you}`, [
+    signed ? '' : '!! not signed in',
+    wrongRun(run, name),
+  ]);
+}
+
+/**
+ * `page` switches to the account of `number` in „Konto" (account-switch.png): the page loads
+ * anew on a new pass, and „Meine Einsätze" marks `name`'s seat; or the run fails.
+ */
+async function switchOn(page, number, name) {
+  const passOf = () =>
+    page.evaluate(() => JSON.parse(globalThis.localStorage.getItem('escapelab-pass')).id);
+  const before = await passOf();
+  await openKonto(page);
+  await page.locator('[data-login="switch"]').click();
+  await page.locator('.settings-login input[name="number"]').fill(number);
+  await page.locator('.settings-login input[name="password"]').fill(KENNWORT);
+  await judgeLogin(page, 'account-switch.png', `${number} typed in`);
+  const loaded = settled(page.waitForEvent('load', { timeout: 15_000 }));
+  await page.locator('.settings-login-send').click();
+  const anew = await loaded;
+  await page.locator('.menu-item').first().waitFor({ timeout: 10_000 });
+  const fresh = (await passOf()) !== before;
+  const run = await firstRun(page);
+  judged('account-switch', `switched to ${number}; „Meine Einsätze" marks ${run?.you}`, [
+    anew ? '' : '!! not loaded anew',
+    fresh ? '' : '!! on the same pass',
+    wrongRun(run, name),
+  ]);
 }
 
 /**
@@ -12271,7 +12536,10 @@ async function playPinnedOut(anna, ben, watcher) {
     } else if (mission === 'blackout' && SEED === BLACKOUT_PLAN.seed) {
       await playBlackoutToTheEnd(anna, ben, watcher);
       skip('next-mission.png', 'Blackout leads on to no other mission');
-      skip('my-runs.png', 'taken after the won Systemcheck, with account-delete.png');
+      for (const shot of ['my-runs.png', 'account-password.png', 'account-signin.png']) {
+        skip(shot, 'taken after the won Systemcheck, with account-delete.png');
+      }
+      skip('account-switch.png', 'taken after the won Systemcheck, with account-delete.png');
     } else if (mission === 'blackout') {
       skip('escape.png', `seed ${SEED} is not the one tools/fixtures/blackout-plan.json pins`);
     }
@@ -13163,16 +13431,21 @@ function boundShown() {
   };
 }
 
-/** Whether `seen`'s latest view has the run waiting for `name`, gone to the main menu. */
-const waitsAtMenu = (seen, name) =>
-  seen.view?.pausedFor?.some((member) => member.name === name && member.menu === true) === true;
+/** Whether `seen`'s latest view has `name` away from the run, gone to the main menu. */
+const awayAtMenu = (seen, name) =>
+  seen.view?.away?.some((member) => member.name === name && member.menu === true) === true;
+
+/** Whether `seen`'s latest view has mission control say on the air that `name` signed off. */
+const signedOff = (seen, name) =>
+  seen.view?.events?.some((e) => e.kind === 'away' && e.label === `${name} hat sich abgemeldet.`);
 
 /**
  * menu-bound-after-leave.png: „Zum Hauptmenü" on `ben`'s menu over the run closes the line on
  * purpose — the doors shut, the page comes back on the main menu with the run's card first and
  * lit, „Zurück zum Einsatz" in the focus and „Einsatz aufgeben" after it —, while `anna`'s run
- * waits, her card saying „<name> ist ins Hauptmenü gegangen."; „Zurück zum Einsatz" takes the
- * page back into the run, which goes on. The run fails where any of it is not so.
+ * goes on, her crew strip saying „im Hauptmenü" by the name and mission control on the air that
+ * <name> signed off; „Zurück zum Einsatz" takes the page back into the run. The run fails where
+ * any of it is not so.
  */
 async function captureLeaveToMenu(ben, anna) {
   const page = ben.page;
@@ -13182,29 +13455,31 @@ async function captureLeaveToMenu(ben, anna) {
   }
   await page.locator('.pause-menu [data-item="main-menu"]').click();
   const there = await settled(page.locator('.menu-list .bound--run').waitFor({ timeout: 15_000 }));
-  const waited = await until(() => waitsAtMenu(anna.seen, ben.name), 5000);
-  const said = await textOf(anna.page.locator('.overlay.pause .pause-gone'));
+  const gone = await until(() => awayAtMenu(anna.seen, ben.name), 5000);
   await sleep(600);
+  const said = await lineOf(anna.page.locator('.hud-crew li.hud-away', { hasText: ben.name }));
+  const aired = signedOff(anna.seen, ben.name) === true;
   const shown = await page.evaluate(boundShown);
   await capture(page, 'menu-bound-after-leave.png');
   await page.locator('.bound-back').click({ timeout: 2000 }).catch(() => undefined);
   const back = await settled(page.locator('.stage').waitFor({ timeout: 15_000 }));
-  const going = await until(() => anna.seen.view?.pausedFor === null, 10_000);
+  const going = await until(() => !awayIn(anna.seen, ben.name), 10_000);
   console.log(
     `menu-bound-after-leave.png ${ben.name}'s menu: the run's card ` +
       `${shown.first ? 'first' : '!! not first'}, ways ${shown.ways.join(' · ')}; ` +
-      `${anna.name}'s card „${said}"; ` +
-      `„Zurück zum Einsatz" ${back && going ? 'took it back, the run going on' : '!! did not'}`,
+      `${anna.name}'s strip „${said}", ${aired ? 'the air saying so' : '!! nothing on the air'}; ` +
+      `„Zurück zum Einsatz" ${back && going ? 'took it back, playing on' : '!! did not'}`,
   );
   const wrong = wrongOf([
     [!there, 'no card of the run on the main menu'],
     [!shown.first, 'the card not first'],
     [!shown.focused, 'the way back not in the focus'],
     [shown.ways.join('|') !== 'Zurück zum Einsatz|Einsatz aufgeben', `ways ${shown.ways}`],
-    [!waited, `${anna.name}’s run waits for nobody gone to the main menu`],
-    [said !== `${ben.name} ist ins Hauptmenü gegangen.`, `${anna.name}’s card says „${said}"`],
+    [!gone, `${anna.name}’s run has nobody gone to the main menu`],
+    [!/im Hauptmenü · \d+:\d\d/.test(said ?? ''), `${anna.name}’s strip says „${said}"`],
+    [!aired, `nothing on the air of ${ben.name} signing off`],
     [!back, 'the way back did not open the run'],
-    [!going, 'the run did not go on'],
+    [!going, `${ben.name} still away`],
   ]);
   if (wrong.length > 0) {
     fail(`menu-bound-after-leave.png: ${wrong.join(', ')}`);
@@ -14280,22 +14555,25 @@ async function captureDroneClose(player) {
 // A room of its own, before the walkthrough: Anna opens Blackout, Ben and Cem join, all three
 // switch their microphones on and skip the opening. Ben's network goes (`context.setOffline`):
 // his page finds its line dead and says so over the world (reconnect-overlay.png); the server,
-// whose pings Ben's browser still answers, cuts his silent socket, and the pause card on
-// Anna's page counts (pause-waiting.png); 60 s into the pause it offers the way on without
-// him, Anna presses it and the clock runs again (continue-without.png). Ben's network back,
-// his page is back on its pass at once and Anna's says so (back-toast.png); the voice links
-// come up again. Ben in a new tab of his browser finds the run's card on the join screen and
-// goes back (rejoin-card.png), his first tab told the seat went to the other. Ben's network
-// goes once more, a phone named Ben asks for his seat by the room's code and his name, Anna's
-// pause card asks her (takeover-ask.png), she lets it in, and his browser, back, is refused
+// whose pings Ben's browser still answers, cuts his silent socket, and the run goes on: no card
+// over Anna's world, her crew strip greys Ben and counts his time away (away-badge.png), her
+// clock runs on as the wall's does; 60 s into his absence her bar offers the way on without him,
+// Anna presses it and the clock runs on (continue-without.png). Ben's network back, his page is
+// back on its pass at once and Anna's says so (back-toast.png); the voice links come up again.
+// Ben in a new tab of his browser finds the run's card on the join screen and goes back
+// (rejoin-card.png), his first tab told the seat went to the other. Ben's network goes once
+// more, a phone named Ben asks for his seat by the room's code and his name, Anna's card at the
+// top asks her (takeover-ask.png), she lets it in, and his browser, back, is refused
 // (takeover.png). Any step that fails, fails the run.
 
 /** How long the drill waits for what one step brings, ms. */
 const DRILL_STEP_MS = 40_000;
 /** The run's first drop lets the crew go on after this long (core FIRST_WAIT_MS), ms. */
 const DRILL_WAIT_MS = 60_000;
-/** How far past the minute the button may come: the card's margin and a poll, ms. */
+/** How far past the minute the button may come: the bar's margin and a poll, ms. */
 const DRILL_BUTTON_SLACK_MS = 3000;
+/** How far the run's clock may stray from the wall's over Ben's minute away: two reads, s. */
+const DRILL_CLOCK_SLACK_S = 2;
 
 /** A player of the drill: a page of its own in a context of its own, its socket listened in on. */
 async function drillPlayer(name) {
@@ -14371,9 +14649,30 @@ async function drillCrew() {
   return { code, anna, ben, cem, crew };
 }
 
-/** Whether `page` shows the pause card waiting for `name`. */
-const waitingFor = (page, name) =>
-  page.locator('.overlay.pause:not(.line-lost) h1', { hasText: `Warten auf ${name}` }).count();
+/** Whether `seen`'s latest view has `name` away from the run, the seat kept. */
+const awayIn = (seen, name) => seen.view?.away?.some((member) => member.name === name) === true;
+
+/** A clock as the bar or a card reads it, „mm:ss", in seconds; null for none. */
+function clockSeconds(text) {
+  const parts = /(\d+):(\d\d)/.exec(text ?? '');
+  return parts === null ? null : Number(parts[1]) * 60 + Number(parts[2]);
+}
+
+/** The run's clock on `page`'s bar, in seconds, and the wall's time it was read at, epoch ms. */
+async function clockRead(page) {
+  const wall = Date.now();
+  return { wall, clock: clockSeconds(await textOf(page.locator('.stage-top .countdown'))) };
+}
+
+/**
+ * How far the run's clock on `page` ran since `from` (`clockRead`), against the wall's clock:
+ * both in seconds; the clock's null where either read found none.
+ */
+async function clockRan(page, from) {
+  const now = await clockRead(page);
+  const ran = from.clock === null || now.clock === null ? null : from.clock - now.clock;
+  return { clock: ran, wall: (now.wall - from.wall) / 1000 };
+}
 
 /** Polls `check` (async) until it holds or `ms` have passed; whether it held. */
 async function untilAsync(check, ms) {
@@ -14389,10 +14688,23 @@ async function untilAsync(check, ms) {
   }
 }
 
+/**
+ * Fails the run where a card stood over Anna's world for Ben's drop, her strip did not count his
+ * time away, or her clock did not run on as the wall's did while he was away (`clockRan`).
+ */
+function judgeAway(badge, card, ran) {
+  if (card > 0 || !/getrennt · \d+:\d\d/.test(badge ?? '')) {
+    fail(`away-badge.png: ${card} card(s) over the world, the strip says „${badge}"`);
+  }
+  if (ran.clock === null || Math.abs(ran.clock - ran.wall) > DRILL_CLOCK_SLACK_S) {
+    fail(`away-badge.png: the clock ran ${ran.clock} s while ${seconds(ran.wall * 1000)} went by`);
+  }
+}
+
 /** Fails the run where the way on came off the minute, or the clock stood after the press. */
 function judgeWayOn(offeredAfter, before, after) {
   if (offeredAfter < DRILL_WAIT_MS || offeredAfter > DRILL_WAIT_MS + DRILL_BUTTON_SLACK_MS) {
-    fail(`continue-without: the way on came ${seconds(offeredAfter)} into the pause, not at 60 s`);
+    fail(`continue-without: the way on came ${seconds(offeredAfter)} into Ben’s drop, not at 60 s`);
   }
   if (before === null || before === after) {
     fail(`continue-without.png: the clock stands at ${before} after the press`);
@@ -14400,37 +14712,59 @@ function judgeWayOn(offeredAfter, before, after) {
 }
 
 /**
- * Ben's network goes: his page's own card, the server's cut, Anna's pause card and its counter,
- * the way on 60 s into the pause, the clock running again once Anna pressed it.
+ * Anna's way on without Ben in her bar, once a minute of his absence is over, pressed: when it
+ * came, and how far her clock had run since `from` by then (`clockRan`).
+ */
+async function annaGoesOn(anna, from) {
+  const button = anna.page.locator('.away-offer .pause-go-on', { hasText: 'Ohne Ben weiter' });
+  await button.waitFor({ state: 'visible', timeout: DRILL_WAIT_MS + DRILL_STEP_MS });
+  const offered = Date.now();
+  const ran = await clockRan(anna.page, from);
+  await button.click();
+  const waived = () => anna.seen.view?.away?.some((m) => m.name === 'Ben' && m.waived) === true;
+  if (!(await until(waived, 5000))) {
+    throw new Error('the run did not go on without Ben after the press');
+  }
+  return { offered, ran };
+}
+
+/** What a locator's text says on one line, its line breaks as spaces; null for none. */
+async function lineOf(locator) {
+  return (await textOf(locator))?.replace(/\s+/g, ' ') ?? null;
+}
+
+/**
+ * Ben's network goes: his page's own card, the server's cut; on Anna's page no card, her strip
+ * greying Ben and counting his time away, her clock running on as the wall's does; the way on in
+ * her bar a minute into his absence, the clock running on once Anna pressed it.
  */
 async function benAway({ anna, ben }) {
   const off = Date.now();
   await ben.context.setOffline(true);
-  if (!(await untilAsync(async () => (await waitingFor(anna.page, 'Ben')) > 0, DRILL_STEP_MS))) {
-    throw new Error(`Anna’s page never waited for Ben, ${seconds(Date.now() - off)} offline`);
+  if (!(await until(() => awayIn(anna.seen, 'Ben'), DRILL_STEP_MS))) {
+    throw new Error(`Anna’s page never saw Ben away, ${seconds(Date.now() - off)} offline`);
   }
-  const pausedAt = anna.seen.view?.pausedAt ?? Date.now();
+  const since = anna.seen.view?.away?.find((member) => member.name === 'Ben')?.since ?? off;
+  const from = await clockRead(anna.page);
   await sleep(2500);
-  const count = await textOf(anna.page.locator('.pause-count'));
-  await capture(anna.page, 'pause-waiting.png');
+  const badge = await lineOf(anna.page.locator('.hud-crew li.hud-away'));
+  const card = await anna.page.locator('.overlay.pause').count();
+  await capture(anna.page, 'away-badge.png');
   await captureBound(anna);
-  const button = anna.page.locator('.pause-go-on', { hasText: 'Ohne Ben weiter' });
-  await button.waitFor({ state: 'visible', timeout: DRILL_WAIT_MS + DRILL_STEP_MS });
-  const offeredAfter = Date.now() - pausedAt;
-  await button.click();
-  if (!(await until(() => anna.seen.view?.pausedFor === null, 5000))) {
-    throw new Error('the run did not go on without Ben after the press');
-  }
+  const { offered, ran } = await annaGoesOn(anna, from);
+  const offeredAfter = offered - since;
   await sleep(600);
   const before = await textOf(anna.page.locator('.countdown'));
   await sleep(2200);
   const after = await textOf(anna.page.locator('.countdown'));
   await capture(anna.page, 'continue-without.png');
   console.log(
-    `pause-waiting.png  Anna waits for Ben, the counter at ${count}, ` +
-      `${seconds(pausedAt - off)} after his network went; the way on after ` +
-      `${seconds(offeredAfter)} of pause; continue-without.png the clock ${before} → ${after}`,
+    `away-badge.png     Ben away ${seconds(since - off)} after his network went: Anna's strip ` +
+      `„${badge}", ${card} card(s); her clock ran ${ran.clock} s in ${seconds(ran.wall * 1000)}; ` +
+      `the way on after ${seconds(offeredAfter)}; continue-without.png the clock ` +
+      `${before} → ${after}`,
   );
+  judgeAway(badge, card, ran);
   judgeWayOn(offeredAfter, before, after);
   return off;
 }
@@ -14510,8 +14844,8 @@ async function benRejoins({ ben }) {
 }
 
 /**
- * A phone named Ben asks for his seat by the room's code and his name: Anna's pause card has
- * to ask her, whose seat and with the time left (takeover-ask.png), and she lets it in.
+ * A phone named Ben asks for his seat by the room's code and his name: Anna's card at the top
+ * has to ask her, whose seat and with the time left (takeover-ask.png), and she lets it in.
  */
 async function annaLetsIn(anna, phone, code) {
   await joinByCode(phone, code);
@@ -14529,14 +14863,14 @@ async function annaLetsIn(anna, phone, code) {
  */
 async function benTakenOver({ code, anna }, tab) {
   await tab.context.setOffline(true);
-  if (!(await untilAsync(async () => (await waitingFor(anna.page, 'Ben')) > 0, DRILL_STEP_MS))) {
-    throw new Error('Anna’s page never waited for Ben the second time');
+  if (!(await until(() => awayIn(anna.seen, 'Ben'), DRILL_STEP_MS))) {
+    throw new Error('Anna’s page never saw Ben away the second time');
   }
   const phone = await drillPlayer('Ben');
   try {
     await annaLetsIn(anna, phone, code);
     await phone.page.locator('.stage').waitFor({ timeout: 10_000 });
-    const on = await until(() => anna.seen.view?.pausedFor === null, 5000);
+    const on = await until(() => !awayIn(anna.seen, 'Ben'), 5000);
     await tab.context.setOffline(false);
     const refusal = tab.page.locator('.banner.error', { hasText: 'anderen Gerät' });
     const refused = await refusal.waitFor({ timeout: DRILL_STEP_MS }).then(
@@ -14550,7 +14884,7 @@ async function benTakenOver({ code, anna }, tab) {
     await capture(tab.page, 'takeover.png');
     console.log(
       `takeover.png       a phone named Ben, let in, sits down on his seat` +
-        (on ? ', the run on' : ' — !! the run still waits') +
+        (on ? ', back on the line' : ' — !! Ben still away') +
         `; his browser back: „${words ?? 'nothing said'}"`,
     );
     if (!on || !refused) {
@@ -14654,14 +14988,16 @@ async function captureReconnect() {
 // ── the server the run owns, and the restart drill ────────────────────────────────────────────
 //
 // Where the run owns its server (SHOTS_SERVER), a room of its own after the reconnect drill:
-// Anna, Ben and Cem in Blackout's dark. The server gets SIGTERM, as Render sends it before a
-// deploy replaces the instance: it stands the run still, hands every page the room's last
-// snapshot and closes its socket with 1012, and exits 0. Every page's own card says the server
-// restarts (restart-maintenance.png). Started again on the same port with the same ROOM_SECRET,
-// the server knows no room: the pages resume with their snapshots, the room is taken up again,
-// and every page is back in the run within RESTART_BACK_MS (restart-recovered.png), the clock
-// where it stood. Skipped, the reason logged, where the run does not own its server or plays
-// another mission.
+// Anna, Ben and Cem in Blackout's dark. Cem's tab goes first, and the run goes on without him.
+// The server gets SIGTERM, as Render sends it before a deploy replaces the instance: it stands
+// the run still, hands every page on the line the room's last snapshot and closes its socket
+// with 1012, and exits 0. Anna's and Ben's own cards say the server restarts
+// (restart-maintenance.png). Started again on the same port with the same ROOM_SECRET, the
+// server knows no room: their pages resume with their snapshots, the room is taken up again, and
+// both are back in the run within RESTART_BACK_MS, the clock going on where it stood — the
+// restart waits for nobody whose line had dropped before it, and Anna's strip still greys Cem
+// (restart-recovered.png). Cem's tab back, he plays on in the run. Skipped, the reason logged,
+// where the run does not own its server or plays another mission.
 
 /** The server the run started (`startServer`), and how it ended; null while it owns none. */
 let owned = null;
@@ -14749,18 +15085,38 @@ const restartCard = (player) =>
     .locator('.line-lost h1', { hasText: 'WARTUNG · Der Server startet neu' })
     .isVisible();
 
-/** Whether `player`'s page is back in the run: no card of its line, the run on and not waiting. */
+/**
+ * Whether `player`'s page is back in the run: no card of its line, the run on and no more
+ * standing still for the server's maintenance.
+ */
 async function backInTheRun(player) {
   const view = player.seen.view;
   const card = await player.page.locator('.line-lost').count();
-  return card === 0 && view?.phase === 'playing' && view.pausedFor === null;
+  return card === 0 && view?.phase === 'playing' && view.pausedAt === null;
 }
 
 /**
- * SIGTERM for the server the run owns: it exits 0, and every page's own card says the server
- * restarts (restart-maintenance.png). Returns when the server went down.
+ * Cem's tab goes before the restart — on to a page of the server's that is no game, /health, its
+ * socket closed and the tab's room kept — and Anna's page has to see him away: a seat whose line
+ * dropped before the server went down.
  */
-async function serverDown({ anna, crew }) {
+async function cemGoesFirst({ anna, cem }) {
+  const gone = Date.now();
+  await cem.page.goto(new URL('/health', BASE).href);
+  if (!(await until(() => awayIn(anna.seen, 'Cem'), DRILL_STEP_MS))) {
+    throw new Error('Anna’s page never saw Cem away before the restart');
+  }
+  cem.seen.view = null;
+  const took = seconds(Date.now() - gone);
+  console.log(`restart            Cem's tab gone: Anna's page has him away in ${took}`);
+}
+
+/**
+ * SIGTERM for the server the run owns: it exits 0, and the own card of every page still on the
+ * line — Anna's and Ben's — says the server restarts (restart-maintenance.png). Returns when the
+ * server went down.
+ */
+async function serverDown({ anna, ben }) {
   const clock = await textOf(anna.page.locator('.countdown'));
   const sent = Date.now();
   const end = await stopServer('SIGTERM');
@@ -14769,7 +15125,7 @@ async function serverDown({ anna, crew }) {
     fail(`restart: the server ended ${JSON.stringify(end)} on SIGTERM, not exit 0`);
   }
   const shown = await untilAsync(
-    async () => (await Promise.all(crew.map(restartCard))).every(Boolean),
+    async () => (await Promise.all([anna, ben].map(restartCard))).every(Boolean),
     DRILL_STEP_MS,
   );
   const retry = await textOf(anna.page.locator('.line-lost .line-retry'));
@@ -14777,36 +15133,58 @@ async function serverDown({ anna, crew }) {
   console.log(
     `restart-maintenance.png SIGTERM: the server exits ${end?.code} in ${seconds(took)}, the ` +
       `clock at ${clock}; ` +
-      (shown ? `every page: „WARTUNG · Der Server startet neu", „${retry}"` : '!! not all'),
+      (shown ? `Anna's and Ben's: „WARTUNG · Der Server startet neu", „${retry}"` : '!! not'),
   );
   if (!shown) {
-    fail('restart-maintenance.png: not every page says the server restarts');
+    fail('restart-maintenance.png: the pages of Anna and Ben do not both say it restarts');
   }
   return { clock };
 }
 
 /**
- * The server started again on the same port, the same ROOM_SECRET: every page back in the run
- * within RESTART_BACK_MS (restart-recovered.png), the clock going again where it stood.
+ * The server started again on the same port, the same ROOM_SECRET: Anna and Ben back in the run
+ * within RESTART_BACK_MS, the clock going on where it stood, though Cem is not back — Anna's
+ * strip greying him (restart-recovered.png).
  */
-async function serverBack({ anna, crew }, { clock }) {
+async function serverBack({ anna, ben }, { clock }) {
   await startServer();
   const up = Date.now();
   const back = await untilAsync(
-    async () => (await Promise.all(crew.map(backInTheRun))).every(Boolean),
+    async () => (await Promise.all([anna, ben].map(backInTheRun))).every(Boolean),
     RESTART_BACK_MS,
   );
   const took = Date.now() - up;
   await sleep(1200);
   const after = await textOf(anna.page.locator('.countdown'));
+  const cem = await lineOf(anna.page.locator('.hud-crew li.hud-away'));
   await capture(anna.page, 'restart-recovered.png');
   console.log(
     `restart-recovered.png ` +
-      (back ? `every page back in the run ${seconds(took)} after the server was up` : '!! not') +
-      `; the clock ${clock} → ${after}`,
+      (back ? `Anna and Ben back in the run ${seconds(took)} after the server was up` : '!! not') +
+      `, Cem still away („${cem}"); the clock ${clock} → ${after}`,
+  );
+  if (!back || !awayIn(anna.seen, 'Cem')) {
+    fail(`restart-recovered.png: the run did not go on without Cem within ${seconds(took)}`);
+  }
+  if (after === clock) {
+    fail(`restart-recovered.png: the clock stands at ${after} after the restart`);
+  }
+}
+
+/** Cem's tab back on the room: he plays on in the run, and Anna's page has nobody away. */
+async function cemBack({ anna, cem }) {
+  const from = Date.now();
+  await cem.page.goto(traced(BASE));
+  const back = await untilAsync(
+    async () => (await backInTheRun(cem)) && !awayIn(anna.seen, 'Cem'),
+    DRILL_STEP_MS,
+  );
+  console.log(
+    `restart            Cem's tab back: ` +
+      (back ? `in the run after ${seconds(Date.now() - from)}` : '!! not back in the run'),
   );
   if (!back) {
-    fail(`restart-recovered.png: not every page back in the run within ${seconds(took)}`);
+    fail('restart: Cem’s tab did not come back into the run that went on');
   }
 }
 
@@ -14828,8 +15206,10 @@ async function captureRestart() {
   try {
     const drill = await drillCrew();
     contexts.push(...drill.crew.map(({ context }) => context));
+    await cemGoesFirst(drill);
     const before = await serverDown(drill);
     await serverBack(drill, before);
+    await cemBack(drill);
   } catch (err) {
     console.log(`restart            !! ${firstLine(err)}`);
     fail(`restart: ${firstLine(err)}`);

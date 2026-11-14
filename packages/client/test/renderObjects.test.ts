@@ -116,7 +116,7 @@ describe('objects — the lab’s things, in tile space', () => {
     );
   });
 
-  it('hides a locked station in the dark; a main switch has a lever per connected player', () => {
+  it('hides a locked station in the dark; a main switch has a lever per member counted', () => {
     type Station = Parameters<typeof lab>[0]['stations'];
     const stations: Station = [
       {
@@ -166,7 +166,7 @@ describe('objects — the lab’s things, in tile space', () => {
     const frame = frameWith({ map: lab({ stations }), light: leftOnly, players, pulse: 0.3 });
     const log = drawn(frame);
     expect(strip(drawnAt(log, 2.5, 1.5))).toEqual(
-      recording((c) => drawLeverBox(c, { status: 'armed', pulse: 0.3, levers: 2 })),
+      recording((c) => drawLeverBox(c, { status: 'armed', pulse: 0.3, levers: 3 })),
     );
     const kasten = { status: 'armed' as const, pulse: 0.3, console: 'b' as const };
     expect(strip(drawnAt(log, 7.5, 1.5))).toEqual(
@@ -417,6 +417,30 @@ describe('objects — the lab’s things, in tile space', () => {
     );
     const won = drawn({ ...frame, ending: { lit: 0.1, pull: 0, dark: 0 }, whole: 0.1 });
     expect(strip(drawnAt(won, 1.5, 1.5))).toEqual(strip(drawnAt(powered, 1.5, 1.5)));
+  });
+});
+
+describe('objects — a main switch’s levers, somebody away', () => {
+  it('stands a lever for whoever is away, until the run goes on without them', () => {
+    const lever = {
+      puzzleId: 'licht',
+      x: 2,
+      y: 1,
+      title: 'Notlicht',
+      status: 'armed' as const,
+      look: 'lever' as const,
+      found: false,
+      known: true as const,
+    };
+    const ben = player('p2', 'Ben', '#f0f', false);
+    const map = lab({ stations: [lever] });
+    const at = (players: ReturnType<typeof player>[]) =>
+      strip(drawnAt(drawn(frameWith({ map, players, pulse: 0.3 })), 2.5, 1.5));
+    const levers = (count: number) =>
+      recording((c) => drawLeverBox(c, { status: 'armed', pulse: 0.3, levers: count }));
+    const anna = player('p1', 'Anna', '#fff');
+    expect(at([anna, ben])).toEqual(levers(2));
+    expect(at([anna, { ...ben, waived: true as const }])).toEqual(levers(1));
   });
 });
 

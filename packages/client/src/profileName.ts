@@ -15,7 +15,9 @@ export const NAME_SETTLE_MS = 600;
 /**
  * The name field's text as the account (`account`) changes from `before`, where it does: the
  * account's name while nothing was typed on this page — a name typed goes to the account
- * instead — and none once the account is deleted; null to leave the field as it is.
+ * instead — another account's name once the device signed into it, typed or not, and none once
+ * the account is deleted; null to leave the field as it is. Accounts are told apart by when each
+ * was made.
  */
 export function nameFromAccount(
   account: AccountView | null,
@@ -24,6 +26,9 @@ export function nameFromAccount(
 ): string | null {
   if (account === null) {
     return before === null ? null : '';
+  }
+  if (before !== null && before.since !== account.since) {
+    return account.name;
   }
   return typed || account.name === '' ? null : account.name;
 }
@@ -43,7 +48,8 @@ export function nameToTake(
 
 /**
  * The profile's name: starting with the name the pass keeps, kept again as it is typed, and the
- * account's name where nothing was typed yet (`nameFromAccount`). A name typed goes to the
+ * account's name where nothing was typed yet — another account's once the device signed into it
+ * (`nameFromAccount`). A name typed goes to the
  * account (`profile`) once it has stood still NAME_SETTLE_MS, where the line is up and the
  * account goes by another (`nameToTake`); an emptied field leaves the account its name.
  */

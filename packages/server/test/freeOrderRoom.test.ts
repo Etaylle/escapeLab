@@ -200,7 +200,7 @@ describe('a free-order run without a clock, sealed and taken up again', () => {
     const again = Room.restore(open(blob, 'TEST', KEY), Date.now());
     const [back] = [rejoin(again, { name: 'Anna' }), rejoin(again, { name: 'Ben' })];
     // Both back: the time run counts on from where it stood, the downtime left out.
-    expect(lastView(back).pausedFor).toBeNull();
+    expect(lastView(back)).toMatchObject({ pausedAt: null, away: [] });
     expect(lastView(back).clockFrom).toBe((kept.state.clockFrom ?? 0) + DOWNTIME_MS);
     expect(lastView(back).currentPuzzleIndex).toBe(1);
     again.dispose();

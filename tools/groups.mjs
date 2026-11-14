@@ -53,7 +53,7 @@ export const GROUPS = [
     needs: [],
     captures: [
       'reconnect',
-      'pause-waiting.png',
+      'away-badge.png',
       'menu-bound.png',
       'continue-without.png',
       'reconnect-overlay.png',
@@ -179,6 +179,9 @@ export const GROUPS = [
       'won-landscape.png',
       'next-mission.png',
       'my-runs.png',
+      'account-password.png',
+      'account-signin.png',
+      'account-switch.png',
       'account-delete.png',
     ],
   },

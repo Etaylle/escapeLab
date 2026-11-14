@@ -37,13 +37,13 @@ function lobby(count: number): GameState {
 
 const LEFT_AT = T0 + 10_000;
 const running = started(mission);
-/** Ben (p2) went to the main menu: the run waits for him as for a drop. */
+/** Ben (p2) went to the main menu: the run goes on, his seat kept as after a drop. */
 const waiting = applyAction(running, toMenu('p2', LEFT_AT));
 
 describe('a line closed for the main menu', () => {
-  it('stands the run still as a drop does, with the same wait before the crew may go on', () => {
+  it('counts as a drop: the run goes on, with the same wait before the crew may go on', () => {
     const dropped = applyAction(running, lineDrops('p2', LEFT_AT));
-    expect(waiting.paused).toEqual(dropped.paused);
+    expect(waiting.paused).toBeNull();
     expect(waiting.away).toEqual(dropped.away);
     expect(waiting.away['p2']?.waivableAt).toBe(LEFT_AT + FIRST_WAIT_MS);
     expect(waiting.players.find((p) => p.id === 'p2')?.connected).toBe(false);
@@ -51,13 +51,15 @@ describe('a line closed for the main menu', () => {
 
   it('tells the crew where the player went, and nothing of the kind for a drop', () => {
     expect(waiting.menus).toEqual({ p2: 'main' });
-    expect(viewFor(waiting, 'p1').pausedFor).toEqual([
+    expect(viewFor(waiting, 'p1').away).toEqual([
       { id: 'p2', name: 'p2', since: LEFT_AT, waivableAt: LEFT_AT + FIRST_WAIT_MS, menu: true },
     ]);
     expect(viewFor(waiting, 'p3').players.map((p) => p.menu ?? '')).toEqual(['', 'main', '']);
+    expect(waiting.events.at(-1)).toMatchObject({ label: 'p2 hat sich abgemeldet.' });
     const dropped = applyAction(running, lineDrops('p2', LEFT_AT));
-    expect(viewFor(dropped, 'p1').pausedFor?.[0]?.menu).toBeUndefined();
+    expect(viewFor(dropped, 'p1').away[0]?.menu).toBeUndefined();
     expect(dropped.menus).toEqual({});
+    expect(dropped.events.at(-1)).toMatchObject({ label: 'p2s Leitung ist weg.' });
   });
 
   it('is over once the player is back on the line, the run going on', () => {

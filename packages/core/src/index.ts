@@ -26,7 +26,6 @@ export {
   type GameState,
   type ItemState,
   type MenuPlace,
-  type PauseKind,
   type Player,
   type Phase,
   type Presence,
@@ -58,9 +57,9 @@ export {
   nudgeDueAt,
   POWER_OUT,
   puzzleDueAt,
+  RELAY_GRACE_MS,
   seatsOff,
   TAKEOVER_WAIT_MS,
-  waitingFor,
   type Action,
 } from './actions.js';
 export {
@@ -233,6 +232,13 @@ export {
 } from './discovery.js';
 export { type MapDef } from './mission.js';
 export {
+  NUMBER_ALPHABET,
+  numberOf,
+  PASSWORD_SIZE,
+  passwordFits,
+  writtenNumber,
+} from './login.js';
+export {
   parseClientMessage,
   clientMessageSchema,
   crewPassSchema,
@@ -248,6 +254,7 @@ export {
   type AccountRun,
   type AccountStore,
   type AccountView,
+  type LoginDone,
   type RtcSignal,
   type ClientMessage,
   type CrewPass,

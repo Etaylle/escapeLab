@@ -112,6 +112,34 @@ describe('mission control speaking up unasked (a nudge)', () => {
   });
 });
 
+describe('mission control’s word that a crew member is gone (a line dropped)', () => {
+  const gone = event('away', 500, 'Bens Leitung ist weg.');
+
+  it('goes on the air once, a banner from the Leitstelle, as a call', () => {
+    expect(labels(radioNews([event('puzzle', 900), gone], 0, NOW))).toEqual([gone.label]);
+    expect(bannerFrom(gone)).toBe('LEITSTELLE');
+    expect(airIcon(gone)).toBe('radio');
+    expect(fromControl(gone)).toBe(true);
+    expect(rankOf(gone)).toBe(RANKS.call);
+    // A call waits for the run's story and cuts a nudge short: nothing of the story is dropped.
+    const story: Notice = { kind: 'line', event: event('radio', 600, 'Strom weg.'), notBefore: 0 };
+    const nudge: Notice = { kind: 'line', event: event('nudge', 700), notBefore: 0 };
+    const queue = withNews([story, nudge], [gone]);
+    expect(queue.map((notice) => (notice.kind === 'line' ? notice.event.label : ''))).toEqual([
+      'Strom weg.',
+      gone.label,
+    ]);
+  });
+
+  it('stands in the run report and on the radio strip as the Leitstelle’s', () => {
+    expect(reportLine(gone)).toBe('Bens Leitung ist weg.');
+    expect(tickerLine(gone, undefined, false)).toEqual({
+      icon: 'radio',
+      text: 'Leitstelle: Bens Leitung ist weg.',
+    });
+  });
+});
+
 describe('the plant’s loudspeakers on their emergency power (an emergency’s message)', () => {
   const message: RunEvent = {
     at: NOW - 500,

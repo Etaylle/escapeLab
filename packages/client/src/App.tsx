@@ -685,10 +685,11 @@ interface Profile {
 
 /**
  * The settings over every screen, opened on `tab` (the one shown last where null), the pass's
- * account with them: its name the page's own (`profile`), deleted on the line `live`.
+ * account with them: its name the page's own (`profile`), signed in and out, and deleted on the
+ * line `live`.
  */
 export function Settings(props: {
-  live: Pick<Connection, 'account' | 'send' | 'refusal'>;
+  live: Pick<Connection, 'account' | 'send' | 'refusal' | 'login' | 'askLogin'>;
   close: () => void;
   profile: Profile;
   tab: SettingsTab | null;
@@ -701,6 +702,8 @@ export function Settings(props: {
       onDeleteAccount={() => live.send({ kind: 'delete-account', pass: crewPass() })}
       profile={profile}
       refusal={live.refusal}
+      login={live.login}
+      askLogin={live.askLogin}
       {...(tab === null ? {} : { tab })}
     />
   );
@@ -734,7 +737,15 @@ export function RoomMenus(props: {
   menus: ShutteredMenus;
   live: Pick<
     Connection,
-    'view' | 'spectatorView' | 'account' | 'send' | 'refusal' | 'leaveRoom' | 'toMenu'
+    | 'view'
+    | 'spectatorView'
+    | 'account'
+    | 'send'
+    | 'refusal'
+    | 'login'
+    | 'askLogin'
+    | 'leaveRoom'
+    | 'toMenu'
   >;
   missions: MissionInfo[];
   profile: Profile;

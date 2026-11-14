@@ -1,7 +1,7 @@
 /*
  * The connection and the way back to a run: where the browser's pass sits, over the join
- * screen's form (screens/Join.tsx BoundCard); the run standing still for crew members away and
- * their return (screens/Pause.tsx).
+ * screen's form (screens/Join.tsx BoundCard); crew members away, the ways on without them and
+ * their return, and the run standing still for the server's maintenance (screens/Pause.tsx).
  */
 
 /* A way that ends something for good: calling the run off, giving the seat up. */
@@ -75,7 +75,37 @@ button.danger:hover:not(:disabled) {
   font-size: 13px;
 }
 
-/* ── the pause for crew members away ─────────────────────────────────── */
+/* ── crew members away, and the maintenance's standstill ─────────────── */
+
+/* Away from the run, their seat kept: greyed in the crew strip, their time away counting up. */
+.hud-crew li.hud-away,
+.row-mate--away {
+  opacity: 0.6;
+}
+
+.hud-away .crew-dot,
+.row-mate--away .crew-dot {
+  filter: grayscale(1);
+}
+
+/*
+ * The way on without somebody away, under the bar's clock while the run goes on: a row of its own
+ * that lets the world take every press but on its buttons, as the bar does (ui.css .stage-top).
+ */
+.away-offer {
+  flex: 0 0 100%;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.away-offer button {
+  padding: 6px 12px;
+  font-size: calc(13px * var(--text-scale));
+  pointer-events: auto;
+}
 
 .pause-count {
   font-family: var(--mono);

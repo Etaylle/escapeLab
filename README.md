@@ -77,19 +77,22 @@ eigenen Figur in ihrer Farbe, der Name und, wo Platz ist, wie viele Einsätze da
 ein Klick öffnet „Konto" in den Einstellungen, am Handy steht nur der Kopf. Den Namen tragen die
 Panels ein, die einen Platz nehmen (*Einsatz starten*, *Beitreten*, *Offene Runden*), und „Konto" —
 ein Name für die ganze Seite. Das Konto bewahrt Name, Farbe, Erfolge und Läufe über Neustarts und
-Deploys hinweg; *Meine Einsätze* listet seine Läufe, die Einstellungen löschen es auf Wunsch
-([`docs/accounts.md`](docs/accounts.md)).
-*Offene Runden* listet jede Runde mit Kartenvorschau, Mission, Schwierigkeit, ihrer Crew als Figuren
-und den freien Plätzen — ein Klick auf *Beitreten* genügt, niemand muss einen Code weitergeben.
-Laufende Runden erscheinen ebenfalls, dort führt der Knopf zum Zuschauen. Unter *Beitreten* bleibt
-ein Code-Feld für direkte Verabredungen, daneben *Zuschauen*. Bindet ein laufender Einsatz den
-Dienstausweis, steht seine Karte als erster Menüpunkt da. In die Lobby, in den Editor und zurück
-geht es durch die Schiebetüren des Labors, zu *Handbuch*, *Bestenliste*, *Meine Einsätze* und den
-Einstellungen und zurück durch eine kurze Blende; ab dem ersten Klick oder Tastendruck spielen
-Titelthema und Anlagenbrummen, in der Lobby leiser weiter. Die Endkarte spielt nach ihrem Stinger
-ein eigenes Thema: hell für einen gewonnenen, ein tiefes Dröhnen für einen verlorenen Einsatz. Alle
-Musik und alle Geräusche sind mit ElevenLabs erzeugt, keine Archivmusik (`docs/sound.md`, Abschnitt
-„Lizenz“).
+Deploys hinweg; *Meine Einsätze* listet seine Läufe, die Einstellungen löschen es auf Wunsch. Mit
+einem Kennwort (Einstellungen, „Konto") bekommt es eine Ausweisnummer wie `EL-7K3M-9Q2D`, mit der
+sich jedes Gerät dort anmeldet: Einsätze, Erfolge und ein laufender Platz folgen dem Konto;
+„Abmelden" lässt das Gerät als Gast neu beginnen, „Konto wechseln" meldet in einem Schritt um, und
+ein neues Kennwort meldet alle anderen Geräte ab. Ein vergessenes Kennwort lässt sich nicht
+wiederherstellen ([`docs/accounts.md`](docs/accounts.md)). *Offene Runden* listet jede Runde mit
+Kartenvorschau, Mission, Schwierigkeit, ihrer Crew als Figuren und den freien Plätzen — ein Klick
+auf *Beitreten* genügt, niemand muss einen Code weitergeben. Laufende Runden erscheinen ebenfalls,
+dort führt der Knopf zum Zuschauen. Unter *Beitreten* bleibt ein Code-Feld für direkte
+Verabredungen, daneben *Zuschauen*. Bindet ein laufender Einsatz den Dienstausweis, steht seine
+Karte als erster Menüpunkt da. In die Lobby, in den Editor und zurück geht es durch die Schiebetüren
+des Labors, zu *Handbuch*, *Bestenliste*, *Meine Einsätze* und den Einstellungen und zurück durch
+eine kurze Blende; ab dem ersten Klick oder Tastendruck spielen Titelthema und Anlagenbrummen, in
+der Lobby leiser weiter. Die Endkarte spielt nach ihrem Stinger ein eigenes Thema: hell für einen
+gewonnenen, ein tiefes Dröhnen für einen verlorenen Einsatz. Alle Musik und alle Geräusche sind mit
+ElevenLabs erzeugt, keine Archivmusik (`docs/sound.md`, Abschnitt „Lizenz“).
 
 **Ablauf einer Partie:** Lobby (Farbe wählen, **bereitmelden** — der Host kann erst starten,
 wenn so viele da sind, wie die Mission braucht, und alle bestätigt haben; jede Änderung an
@@ -159,19 +162,26 @@ der Notfälle.
 **Wenn die Leitung abreißt:** Ein laufender Einsatz bindet die Crew wie ein Match in Dota 2.
 Jeder Browser trägt einen Dienstausweis (Kennung und Geheimnis in `localStorage`), an den der
 Server den Platz bindet; der Tab merkt sich nur den Raumcode, ein Neuladen ist sofort zurück im
-Einsatz. Reißt eine Leitung ab, pausiert die Mission für alle (Uhr, Patrouillen, Notfälle), und
-die anderen sehen „Warten auf Ben · 0:12“. Nach 60 Sekunden, bei jedem weiteren Abbruch desselben
-Laufs nach 20, bietet die Karte „Ohne Ben weiter“: Die Uhr läuft wieder, und Stationen der ganzen
-Crew, Luke und Flucht zählen Ben nicht mit, bis er zurück ist. Ist nur noch eine Person verbunden,
-bietet die Karte stattdessen „Einsatz abbrechen“. Das Hauptmenü stellt einen laufenden Einsatz
-als hellen ersten Menüpunkt voran, die übrigen gedimmt („Zurück zum Einsatz“, „Einsatz
-aufgeben“), und sperrt andere Räume;
+Einsatz. Reißt eine Leitung ab, läuft der Einsatz weiter — Uhr, Patrouillen, Notfälle —, wie in
+Overcooked 2 oder Deep Rock Galactic: Bens Avatar bleibt stehen und hält, was er hielt, die
+Patrouillen übersehen ihn, die Leitstelle sagt „Bens Leitung ist weg.“, und die Crew-Leiste zeigt
+ihn grau mit „getrennt · 0:12“; kommt er zurück, spielt er sofort weiter. Nach 60 Sekunden, bei
+jedem weiteren Abbruch desselben Laufs nach 20, bietet die Leiste über der Welt „Ohne Ben weiter“:
+Stationen der ganzen Crew, Luke und Flucht zählen Ben dann nicht mit, bis er zurück ist. Ist nur
+noch eine Person verbunden, bietet sie stattdessen „Einsatz abbrechen“. Still steht ein Einsatz
+nur noch für die Wartung des Servers (Neustart, Deploy), und die wartet nur auf die, deren
+Leitung mit dem Server ging; wer schon vorher getrennt war, bleibt es. Ist niemand der Crew mehr
+verbunden, hält der Einsatz ebenso, ab dem letzten Abbruch, bis der Erste zurück ist („WARTUNG ·
+NIEMAND AUF DER LEITUNG“ auf seiner Karte); der Raum schließt nach 10 Minuten leer wie bisher.
+Das Hauptmenü stellt einen laufenden Einsatz als hellen ersten Menüpunkt voran, die übrigen
+gedimmt („Zurück zum Einsatz“, „Einsatz aufgeben“), und sperrt andere Räume;
 aufgeben gibt den Platz frei, unter der Mindestzahl der Crew endet der Lauf für alle („EINSATZ
 ABGEBROCHEN“). Ein anderes Gerät übernimmt einen getrennten Platz mit Raumcode und genau dessen
-Namen (wie bei Jackbox), sobald jemand aus der Crew es zulässt. Die eigene Seite erkennt eine
-tote Leitung nach 5 Sekunden ohne Uhrantwort, 20 Sekunden Stille oder 8 Sekunden ohne offene
-Verbindung, verbindet sofort neu und zeigt bis dahin „VERBINDUNG VERLOREN“ mit Versuch und
-Wartezeit. Einzelheiten: `docs/gameplay.md`, „Verbindung und Wiedereintritt“.
+Namen (wie bei Jackbox), sobald jemand aus der Crew es zulässt; ein Gerät, das im Konto des
+Platzes angemeldet ist, holt ihn ohne Zustimmung über seine Karte zurück. Die eigene Seite
+erkennt eine tote Leitung nach 5 Sekunden ohne Uhrantwort, 20 Sekunden Stille oder 8 Sekunden
+ohne offene Verbindung, verbindet sofort neu und zeigt bis dahin „VERBINDUNG VERLOREN“ mit
+Versuch und Wartezeit. Einzelheiten: `docs/gameplay.md`, „Verbindung und Wiedereintritt“.
 
 **Pausenmenü und Verlassen:** Im Raum öffnen Esc, das Zahnrad oben, die Start-Taste des
 Controllers oder „Menü“ in der Leiste das Pausenmenü — Weiter, Einstellungen, Handbuch und die
@@ -314,7 +324,8 @@ zu `devices` gehört, die der Zugangskontrolle, `access`, und `hall` (die Übung
 Siegerkarte); Blackout nennt alle drei im Log als ausgelassen. Der Rundgang selbst: `screens` (Menü
 und sein Ton, Bestenliste, Lobby, der Start aus ihr), `intro` (die Eröffnung bis `blackout.png`)
 und `run` (die Mission bis zur Siegerkarte, nach dem gewonnenen Systemcheck die Einsätze des
-Kontos und sein Löschen); im Lauf `devices` (jede Station,
+Kontos, sein Kennwort, die Anmeldung auf einem zweiten Gerät, der Kontowechsel und sein Löschen);
+im Lauf `devices` (jede Station,
 auch auf dem quer gehaltenen Handy), `reading` (Quellen, Schild, Notizen der letzten Schicht,
 Notizblock, Bücher), `hud` (das Spiel in jeder Fenstergröße, Einstellungen, Steuerung, Minikarte,
 Sprint), `graphics` (Licht, Leuchten, Figuren, Kamera, Dichte 2), `audio` (Raumklang, Funk, Seite
@@ -458,8 +469,9 @@ Betrieb:
   steht, schickt nur, was sich geändert hat. Für eine laufende Partie heißt ein Deploy deshalb eine
   Wartungspause von Sekunden: Die Uhr steht, die Karte sagt „WARTUNG · Der Server startet neu", die
   Seiten verbinden sich wie nach einem Abbruch neu, der neue Server stellt den Raum aus dem
-  mitgebrachten Schnappschuss wieder her, und sobald die Crew zurück ist, läuft die Uhr dort weiter,
-  wo sie stand. Auto-Deploy bleibt an, also ist jeder Push auf `main` ein Deploy; wer pusht, sieht
+  mitgebrachten Schnappschuss wieder her, und sobald zurück ist, wer beim Deploy verbunden war,
+  läuft die Uhr dort weiter, wo sie stand; wer schon vorher getrennt war, bleibt es wie zuvor.
+  Auto-Deploy bleibt an, also ist jeder Push auf `main` ein Deploy; wer pusht, sieht
   in `/health` (`rooms.running`, `rooms.players`), ob gerade gespielt wird. Ein neues Feld im
   Spielzustand braucht im Schnappschuss-Schema (`packages/core/src/snapshot.ts`) einen Vorgabewert,
   sonst verwirft der neue Build die Schnappschüsse des alten, und der Deploy beendet jeden laufenden

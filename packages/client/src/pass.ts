@@ -143,3 +143,42 @@ export function keepProfile(
 export function forgetProfile(store: NoteStore | null = localStore()): void {
   keepOrHold(store, { ...keptPass(store), name: '', color: null });
 }
+
+/** A new pass, minted now and kept nowhere yet: a switch of accounts sends it (`adoptPass`). */
+export function mintPass(): CrewPass {
+  return { id: randomHex(16), secret: randomHex(32) };
+}
+
+/**
+ * `pass` the browser's pass from now on, in place of the one it had — the device signed out, or
+ * switched accounts — with the name and the colour of `account` beside it, none for a guest.
+ */
+export function adoptPass(
+  pass: CrewPass,
+  account: Pick<AccountView, 'name' | 'color'> | null,
+  store: NoteStore | null = localStore(),
+): void {
+  const color = account?.color ?? null;
+  const worn = color !== null && COLOR.test(color) ? color : null;
+  keepOrHold(store, { ...pass, name: account?.name ?? '', color: worn });
+}
+
+/**
+ * Calls `reload` once another tab of the browser has put another pass in place of the one this
+ * page started on (`adoptPass`): signed out, or switched — this page's line speaks for a pass the
+ * browser holds no more. Returns how to stop.
+ */
+export function followPass(
+  win: Pick<Window, 'addEventListener' | 'removeEventListener'>,
+  reload: () => void,
+  store: NoteStore | null = localStore(),
+): () => void {
+  const started = keptPass(store).id;
+  const changed = (event: StorageEvent): void => {
+    if (event.key === PASS_KEY && keptPass(store).id !== started) {
+      reload();
+    }
+  };
+  win.addEventListener('storage', changed);
+  return () => win.removeEventListener('storage', changed);
+}

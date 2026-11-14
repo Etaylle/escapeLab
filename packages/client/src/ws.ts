@@ -2,7 +2,9 @@ import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 
 import type {
   AccountView,
   ClientMessage,
+  CrewPass,
   DronePosition,
+  LoginDone,
   PlayerView,
   RoomSummary,
   RtcSignal,
@@ -15,9 +17,10 @@ import { askForTime, clock, localNow } from './clock.js';
 import { keepConnected, wipesBanner, type Line, type LineStatus, type Retry } from './line.js';
 import { forgetNotes, localStore } from './notes.js';
 import type { Loaded } from './runStats.js';
-import { crewPass, forgetProfile, keepProfile } from './pass.js';
+import { adoptPass, crewPass, followPass, forgetProfile, keepProfile, mintPass } from './pass.js';
 import {
   dropSnapshot,
+  dropSnapshots,
   keepSnapshot,
   keptSeat,
   keptSnapshot,
@@ -38,8 +41,8 @@ export interface Refusal {
 /**
  * What is refused where the player looks — at the device they work (its head), at the prompt
  * they pressed E on (the pill), on „Meine Einsätze" asked for its runs, in the settings asked to
- * delete the account — and not in the banner over the screen, which lies under a device and
- * away from the prompt, and would say it twice.
+ * delete the account or to do something of its login — and not in the banner over the screen,
+ * which lies under a device and away from the prompt, and would say it twice.
  */
 const ANSWERED_IN_PLACE: ReadonlySet<ClientMessage['kind']> = new Set([
   'puzzle-input',
@@ -47,6 +50,11 @@ const ANSWERED_IN_PLACE: ReadonlySet<ClientMessage['kind']> = new Set([
   'open-source',
   'my-runs',
   'delete-account',
+  'set-password',
+  'change-password',
+  'sign-in',
+  'sign-out',
+  'switch-account',
 ]);
 
 /** Whether a refusal of a message of kind `of` goes to the banner: none answered in place. */
@@ -56,6 +64,23 @@ export function inBanner(of: ClientMessage['kind'] | undefined): boolean {
 
 /** The runs of the pass's account as the server sent them (`my-runs`): the newest, the count. */
 export type MyRuns = Omit<Extract<ServerMessage, { kind: 'my-runs' }>, 'kind'>;
+
+/** The server's latest answer to an ask of a login (`login`), counted up: what was done. */
+export interface LoginNews {
+  seq: number;
+  done: LoginDone;
+}
+
+/**
+ * What the page asks of a login for the browser's pass (`Connection.askLogin`): a Kennwort set or
+ * changed, a sign-in, a sign-out, or a switch of accounts — which mints the device's next pass.
+ */
+export type LoginAsk =
+  | { kind: 'set-password'; password: string }
+  | { kind: 'change-password'; old: string; password: string }
+  | { kind: 'sign-in'; login: string; password: string }
+  | { kind: 'sign-out' }
+  | { kind: 'switch-account'; login: string; password: string };
 
 /** This device's ask for a seat by its name, waiting for the crew to let it in. */
 export interface Takeover {
@@ -105,6 +130,10 @@ export interface Connection {
   myRuns: Loaded<MyRuns>;
   /** asks the server for the runs of the pass's account (`my-runs`); stable for the page's life */
   askMyRuns: () => void;
+  /** the server's latest answer to an ask of a login (`askLogin`); null before the first */
+  login: LoginNews | null;
+  /** asks something of a login on the browser's pass (`LoginAsk`); stable for the page's life */
+  askLogin: (ask: LoginAsk) => void;
   roomCode: string | null;
   /** how many audience connections watch the tab's room, as the server last said (`audience`) */
   watching: number;
@@ -207,6 +236,12 @@ export interface Page {
   setWatching: (count: number) => void;
   setError: (message: string) => void;
   refuse: (message: string, of: ClientMessage['kind'] | null) => void;
+  /** an answer to an ask of a login came (`LoginNews`) */
+  noteLogin: (done: LoginDone) => void;
+  /** the pass a switch of accounts sent as the device's next (`askLogin`); null for none */
+  nextPass: MutableRefObject<CrewPass | null>;
+  /** the page loads anew: on a new pass, the device signed out or switched accounts */
+  startOver: () => void;
   /** a comeback is out (tab.ts): an error now means the room or seat the tab kept is gone */
   resuming: MutableRefObject<boolean>;
   /**
@@ -240,6 +275,9 @@ function accountNewsOf(msg: ServerMessage, page: Page): boolean {
   switch (msg.kind) {
     case 'account':
       accountNews(msg.account, page);
+      return true;
+    case 'login':
+      loginNews(msg, page);
       return true;
     case 'my-runs':
       page.setMyRuns({ status: 'ready', value: { runs: msg.runs, total: msg.total } });
@@ -339,6 +377,39 @@ function accountNews(account: AccountView | null, page: Page): void {
     fillEarned(store, account.achievements);
   }
   page.setAccount(account);
+}
+
+/**
+ * What the server answers an ask of a login: the account as it stands now — signed into another,
+ * the Erfolge the device keeps are that account's — or, where the device signed out or switched
+ * accounts, the page anew on its next pass (`startOver`).
+ */
+function loginNews(msg: Extract<ServerMessage, { kind: 'login' }>, page: Page): void {
+  page.noteLogin(msg.done);
+  if (msg.done === 'signed-out') {
+    startOver(mintPass(), null, page);
+  } else if (msg.done === 'switched') {
+    startOver(page.nextPass.current ?? mintPass(), msg.account, page);
+  } else {
+    if (msg.done === 'signed-in') {
+      forgetEarned(localStore());
+    }
+    accountNews(msg.account, page);
+  }
+}
+
+/**
+ * The device on `next`, its pass from now on — with the name and the colour of `account`, its
+ * account, none for a guest: the Erfolge, the rooms' snapshots and the tab's room of the pass it
+ * had go, as their seats wait for that one's account, and the page loads anew.
+ */
+function startOver(next: CrewPass, account: AccountView | null, page: Page): void {
+  const store = localStore();
+  adoptPass(next, account, store);
+  forgetEarned(store);
+  dropSnapshots(store);
+  leaveTab();
+  page.startOver();
 }
 
 /** Takes in what the world streams past React: where everybody stands, the pings, the chat. */
@@ -520,9 +591,13 @@ function watching(code: string, page: Page): void {
 
 /**
  * What the page says back at once to `msg`, if anything: let in by the crew on a seat by its
- * name, this device's pass holds the seat now, and it resumes it.
+ * name, this device's pass holds the seat now, and it resumes it; signed into an account, it
+ * asks where it sits anew — a run on of the account's binds it now.
  */
 export function replyTo(msg: ServerMessage): ClientMessage | null {
+  if (msg.kind === 'login' && msg.done === 'signed-in') {
+    return { kind: 'whereami', pass: crewPass() };
+  }
   return msg.kind === 'takeover-allowed' ? resumeOf(msg.code) : null;
 }
 
@@ -737,6 +812,7 @@ type Shown = Pick<
   | 'seat'
   | 'account'
   | 'myRuns'
+  | 'login'
   | 'roomCode'
   | 'watching'
   | 'error'
@@ -762,9 +838,11 @@ function usePage(): { shown: Shown; page: Page; clearError: () => void } {
   const [watching, setWatching] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [refusal, setRefusal] = useState<Refusal | null>(null);
+  const [login, setLogin] = useState<LoginNews | null>(null);
   const resuming = useRef(false);
   const resumed = useRef<string | null>(null);
   const seen = useRef<PlayerView | null>(null);
+  const nextPass = useRef<CrewPass | null>(null);
   const live = useLiveRefs();
   const page: Page = {
     setRoomCode,
@@ -779,17 +857,45 @@ function usePage(): { shown: Shown; page: Page; clearError: () => void } {
     setWatching,
     setError,
     refuse: (message, of) => setRefusal((last) => ({ seq: (last?.seq ?? 0) + 1, message, of })),
+    noteLogin: (done) => setLogin((last) => ({ seq: (last?.seq ?? 0) + 1, done })),
+    nextPass,
+    startOver: () => location.reload(),
     resuming,
     resumed,
     seen,
     ...live,
   };
-  const shown = { view, spectatorView, takeover, restoring, rooms, seat, account, myRuns };
+  const shown = { view, spectatorView, takeover, restoring, rooms, seat, account, myRuns, login };
   return {
     shown: { ...shown, roomCode, watching, error, refusal },
     page,
     clearError: () => setError(null),
   };
+}
+
+/**
+ * The asks of a login on `line`, for the browser's pass (`LoginAsk`) — a switch of accounts with
+ * the pass it mints for the device, kept in `nextPass` till the server answers. Another tab's
+ * switch or sign-out puts another pass in this browser: the page loads anew on it (`followPass`).
+ */
+function useAskLogin(
+  line: MutableRefObject<Line | null>,
+  nextPass: MutableRefObject<CrewPass | null>,
+): (ask: LoginAsk) => void {
+  useEffect(() => followPass(window, () => location.reload()), []);
+  return useCallback(
+    (ask: LoginAsk) => {
+      const pass = crewPass();
+      if (ask.kind === 'switch-account') {
+        const next = mintPass();
+        nextPass.current = next;
+        line.current?.send({ ...ask, pass, next });
+        return;
+      }
+      line.current?.send({ ...ask, pass });
+    },
+    [line, nextPass],
+  );
 }
 
 /**
@@ -831,6 +937,7 @@ export function useGameConnection(): Connection {
     setMyRuns({ status: 'loading' });
     lineRef.current?.send({ kind: 'my-runs', pass: crewPass() });
   }, [lineRef, setMyRuns]);
+  const askLogin = useAskLogin(lineRef, page.nextPass);
 
   const { positions, drones, pings, chats } = page;
   return {
@@ -838,6 +945,7 @@ export function useGameConnection(): Connection {
     retry,
     ...shown,
     askMyRuns,
+    askLogin,
     positions,
     drones,
     pings,

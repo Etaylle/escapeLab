@@ -118,8 +118,9 @@ export function boundLine(seat: Pick<Seat, 'missionTitle' | 'code'>): string {
 }
 
 /**
- * What the card says over where the pass sits: its room on the way back (`onItsWay`), a run on,
- * or standing paused, or a lobby.
+ * What the card says over where the pass sits: its room on the way back (`onItsWay`), a lobby,
+ * a run on, or standing still — for the server's maintenance, or while nobody of the crew is on
+ * the line, until the first is back.
  */
 function kickerOf(seat: Seat, onItsWay: boolean): string {
   if (onItsWay) {
@@ -128,7 +129,10 @@ function kickerOf(seat: Seat, onItsWay: boolean): string {
   if (seat.phase === 'lobby') {
     return 'IM RAUM';
   }
-  return seat.paused ? 'EINSATZ PAUSIERT' : 'EINSATZ LÄUFT';
+  if (!seat.paused) {
+    return 'EINSATZ LÄUFT';
+  }
+  return seat.nobodyOnLine === true ? 'WARTUNG · NIEMAND AUF DER LEITUNG' : 'WARTUNG';
 }
 
 /** What the card says at `now` while its way back has waited for the room since `since`, ms. */
@@ -163,11 +167,36 @@ function wayOut(seat: Seat, send: Props['send'], instead: (() => void) | null): 
 }
 
 /**
+ * What the run's clock on its card shows at `now`, ms left, of `leftMs` as the server answered at
+ * `heardAt` (both by this page's clock): counting down as the run goes on, whoever is away;
+ * standing where it was while the run stands still (`paused`) — for the server's maintenance,
+ * or for nobody on the line. A `now` read a moment before the answer was noted counts as none of
+ * the run's time, never as time given back.
+ */
+export function seatLeft(leftMs: number, paused: boolean, heardAt: number, now: number): number {
+  return paused ? leftMs : Math.max(0, leftMs - Math.max(0, now - heardAt));
+}
+
+/**
+ * The run's clock on its card, „ · noch 12:34", read anew with every answer of the server
+ * (`seatLeft`).
+ */
+function SeatClock({ seat, leftMs }: { seat: Seat; leftMs: number }) {
+  const now = useNow(250);
+  const [heard, setHeard] = useState(() => ({ seat, at: Date.now() }));
+  if (heard.seat !== seat) {
+    setHeard({ seat, at: Date.now() });
+  }
+  return <>{` · noch ${formatLeft(seatLeft(leftMs, seat.paused, heard.at, now))}`}</>;
+}
+
+/**
  * Where the browser's pass sits, the menu's first item and lit (`Seat`): the mission, the room's
- * code, the crew and the clock as the server showed it, the way back and the way out — from a
- * run on „Einsatz aufgeben" at a second press, from a lobby as free as leaving it always was.
- * While the way back waits for the room (`waiting`), the card says for how long, and only the
- * way out is open — `giveUp`, where it is given; the game opens once the room is back.
+ * code, the crew and the clock as the server showed it — running on while the run does
+ * (`SeatClock`) —, the way back and the way out — from a run on „Einsatz aufgeben" at a second
+ * press, from a lobby as free as leaving it always was. While the way back waits for the room
+ * (`waiting`), the card says for how long, and only the way out is open — `giveUp`, where it is
+ * given; the game opens once the room is back.
  */
 export function BoundCard({
   seat,
@@ -184,7 +213,6 @@ export function BoundCard({
   onBack: () => void;
 }) {
   const run = seat.phase === 'playing';
-  const clock = seat.leftMs === null ? '' : ` · noch ${formatLeft(seat.leftMs)}`;
   const leave = wayOut(seat, send, giveUp);
   return (
     <section className={`bound${run ? ' bound--run' : ''}`}>
@@ -192,7 +220,8 @@ export function BoundCard({
       <h2 className="bound-title">{seat.missionTitle}</h2>
       <p className="bound-facts">
         Raum {seat.code}
-        {clock} · {seat.crew.join(', ')}
+        {seat.leftMs !== null && <SeatClock seat={seat} leftMs={seat.leftMs} />} ·{' '}
+        {seat.crew.join(', ')}
       </p>
       {waiting !== null && <RestoringLine since={waiting.since} />}
       <div className="bound-actions">

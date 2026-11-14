@@ -210,6 +210,7 @@ describe('the menu laid out', () => {
       runs: 3,
       achievements: {},
       store: 'database' as const,
+      login: null,
     };
     const nodes = elementsOf(
       renderToStaticMarkup(

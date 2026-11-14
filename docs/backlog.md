@@ -385,6 +385,9 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
 - Fehler aus dem Audit: ein Abbruch konnte eine pausierte Partie durch die Flucht beenden.
 - Beweis: Core-, Server-, Client-Tests; Smoke mit 70-s-Abbruch, Aufgeben, Übernahme; Harness
   `pause-waiting`, `continue-without`, `reconnect-overlay`, `rejoin-card`, `takeover`.
+- Die Pause bei Abbruch ist am 2026-11-14 auf Wunsch von Uros ersetzt worden (R-6): Der Lauf geht
+  weiter, „Ohne X weiter" steht seither in der Leiste über der Welt statt auf einer Karte, und die
+  Wartung eines Neustarts wartet nur auf die, die dabei in der Leitung waren.
 
 ### R-4 Funk zwischen Mobilnetzen — Status: wartet (Entscheidung Uros) · Größe: M
 - Ohne TURN-Server verbinden sich zwei Handys in verschiedenen Mobilnetzen meist nicht; STUN ist
@@ -396,7 +399,7 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   Laufende je eine Zeile; `/health` zählt Räume, laufende Partien, Spieler, Zuschauer, nennt
   Laufzeit und Commit (`RENDER_GIT_COMMIT`).
 
-### R-6 Kein Stillstand, wenn eine Leitung abreißt — Status: bereit (Spec `spec-R-nopause.md`, nach U-pause) · Größe: M
+### R-6 Kein Stillstand, wenn eine Leitung abreißt — Status: erledigt (R-nopause, Merge 2026-11-14, 5020329; zwei Review-Runden und zwei Deltas; Cloud-CI grün auf 4b272b7, Check und Walkthrough; Neustart wartet nur auf Plätze, die beim Versiegeln online waren; leere Leitung hält als Wartung) · Größe: M
 - Uros 2026-11-14 mit Screenshot der Karte „MISSION PAUSIERT · Warten auf uros": „Sollte man das
   Spiel im Hintergrund nicht stoppen, wenn jemand weg ist? Alles sollte gleich bleiben und danach
   fortführen." Kehrt die Dota-Pause aus R-3 um: Uhr, Patrouillen und Notfälle laufen weiter, der
@@ -405,6 +408,22 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   gesehen; Notfälle würfeln ohne seine Konsole; „Ohne X weiter" nach 60 s (später 20 s) bleibt in
   Crew-Leiste und HUD, weil Stationen zu zweit bedient werden. Vorbilder: Overcooked 2, Among Us,
   Deep Rock Galactic (die Mission läuft, der Platz bleibt offen).
+- Umgesetzt: `paused` gibt es nur noch für die Wartung; ein Abbruch hält den Avatar samt Platten und
+  Luke, Drohnen übersehen ihn, Konsolen und Ventile brauchen Hände in der Leitung, das Relais
+  würfelt für die Crew in der Leitung neu, sobald eine Leitung 5 s weg ist (ein Neuladen würfelt
+  nichts). Die Leitstelle sagt „Bens Leitung ist weg." einmal an, die Crew-Leiste graut Ben mit
+  „getrennt · 0:12", die Leiste über der Welt bietet nach 60 s (später 20 s) „Ohne Ben weiter" oder
+  allein „Einsatz abbrechen"; die Karte des Hauptmenüs zählt die Uhr herunter. Die Wartung eines
+  Neustarts wartet nur auf die Plätze, die beim SIGTERM (oder im letzten Schnappschuss) in der
+  Leitung waren; wer vorher weg war, bleibt weg wie zuvor, mit der Wartezeit seines Abbruchs — ein
+  Abbruch wird nie über einen Deploy zur Pause (Entscheidung 2026-11-14). Ist niemand der Crew mehr
+  in der Leitung, hält der Lauf ab dem letzten Abbruch als Wartung, bis der Erste zurück ist
+  („WARTUNG · NIEMAND AUF DER LEITUNG"); der Raum schließt nach 10 Minuten leer wie bisher
+  (Entscheidung 2026-11-14).
+- Beweis: Core-, Server-, Client-Tests (auch: eine Crew von zwei, beide weg, einer zurück); Smoke;
+  Harness `away-badge` (Uhr gegen die Wanduhr), `continue-without`, `rejoin-card`; der
+  Neustart-Drill mit Cem, der vor dem SIGTERM weg ist: der Einsatz läuft weiter, sobald Anna und
+  Ben zurück sind.
 
 ## Geplant (2026-11-12, Vorbilder je Punkt)
 
@@ -685,7 +704,7 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   sie liest, verweist darauf, statt sie in eigenen Worten neu zu erklären. Liegt bei jeder Quelle,
   die eine Station mit Laborkennung abdeckt; die Handbuch-Stimmtests prüfen den Wortlaut.
 
-### K-1 Konto wie bei Dota — Status: K-1a erledigt (K-accounts, Merge 2026-11-14; vier Review-Runden, Cloud-CI grün mit Postgres-Dienst); K-1b bereit (Entscheidung Uros 2026-11-12: eigene Konten, Google zuletzt) · Größe: L
+### K-1 Konto wie bei Dota — Status: K-1a erledigt (K-accounts, Merge 2026-11-14; vier Review-Runden, Cloud-CI grün mit Postgres-Dienst); K-1c erledigt (K-login); K-1b zuletzt (Entscheidung Uros 2026-11-12: eigene Konten, Google zuletzt) · Größe: L
 - Reihenfolge: **K-1a** Datenbank (Neon-Postgres, Prisma) mit Konto je Dienstausweis (Kennung,
   Anzeigename, Farbe, Erfolge), Läufe und Bestenliste in der Datenbank statt der Datei, die
   Render bei jedem Deploy löscht, „Meine Einsätze"; ohne `DATABASE_URL` weiter Datei und Gast
@@ -710,13 +729,21 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   Erfolge je Konto.
 - Alternative mit eigenen Konten (Name und Passwort, `crypto.scrypt`, Neon-Postgres,
   Wiederherstellungscodes statt E-Mail): mehr Code, mehr Angriffsfläche, kein Dritter.
-- **K-1c** An- und Abmelden, Konto wechseln — Status: bereit (Spec `spec-K-login.md`, nach
-  U-pause) · Größe: M. Uros 2026-11-14: „Bei Konten sollte man sich an- und abmelden oder wechseln
-  können." Ausweisnummer vom Server geprägt (lesbar, ohne 0/O/1/I), Kennwort vom Spieler gesetzt
-  (`crypto.scrypt`, 8–128 Zeichen, kein E-Mail, noch keine Wiederherstellung), „Anmelden" zeigt
-  den Dienstausweis des Geräts auf das Konto um, „Abmelden" prägt einen neuen Ausweis (Gast), der
-  Platz im Einsatz folgt dem Konto (Wiedereintritt von jedem angemeldeten Gerät ohne Übernahme);
-  Limits je Adresse und je Ausweisnummer. Google (K-1b) bleibt zuletzt.
+- **K-1c** An- und Abmelden, Konto wechseln — Status: erledigt (K-login, Merge 2026-11-14,
+  3267fed; zwei Review-Runden mit Sonden-Koffer und ein Delta; Cloud-CI grün auf 84116c5, Check
+  und Walkthrough; Server-Suite auf Postgres 17 ohne Skips; Spec `spec-K-login.md`) · Größe: M. Uros 2026-11-14: „Bei Konten sollte man sich an- und abmelden
+  oder wechseln können." Ausweisnummer vom Server geprägt (`EL-7K3M-9Q2D`, ohne 0/O/1/I),
+  Kennwort vom Spieler gesetzt (`crypto.scrypt` N 2^15, r 8, p 1, Salz je Kennwort, Vergleich in
+  konstanter Zeit, 8–128 Zeichen, kein E-Mail, noch keine Wiederherstellung — der Reiter sagt es),
+  „Anmelden" in „Konto" zeigt den Dienstausweis des Geräts auf das Konto um (leeres Gastkonto
+  gelöscht), „Abmelden" prägt einen neuen Ausweis (Gast), „Konto wechseln" beides in einem
+  Schritt, ein neues Kennwort meldet alle anderen Geräte ab; der Platz im Einsatz folgt dem Konto
+  (Wiedereintritt von jedem angemeldeten Gerät ohne Übernahme, auch nach einem Neustart aus dem
+  Snapshot); Limits im Speicher, jeder Versuch vor dem scrypt gezählt: 60 Versuche je Adresse und
+  Minute (richtige zählen nicht), jedes 5. falsche Kennwort sperrt die Ausweisnummer, 60 s und
+  dann je doppelt so lang bis 3600 s, bis ein richtiges oder eine ruhige Stunde; 4 Kennwörter
+  zugleich auf dem Server, 32 warten, eine Adresse hält höchstens die Hälfte der Plätze
+  (`docs/accounts.md`, „Sign in"). Google (K-1b) bleibt zuletzt.
 
 ## Nur lokal
 

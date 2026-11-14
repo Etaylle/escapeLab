@@ -361,3 +361,102 @@
   font-family: var(--mono);
   font-size: 13px;
 }
+
+/*
+ * „Konto"'s Ausweis (LoginSection.tsx): why a Kennwort, the Ausweisnummer to copy, the ways — to
+ * set the Kennwort, to change it, to sign in, to switch, to sign out — each a form of its own.
+ */
+.settings-login-why {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--text);
+}
+
+.settings-login-number {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin: 0;
+  font-size: 14px;
+}
+
+.settings-login-code {
+  font-family: var(--mono);
+  font-size: 18px;
+  letter-spacing: 0.08em;
+  color: var(--text);
+  user-select: all;
+}
+
+.settings-login-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.settings-card .settings-login-actions button,
+.settings-card .settings-login-copy {
+  min-height: var(--target);
+  padding: 7px 12px;
+  font-family: var(--mono);
+  font-size: 13px;
+}
+
+.settings-login-done {
+  color: var(--accent);
+}
+
+/* The way on, in white on the panel's teal: 5.5:1, where the shared primary stands at 4.4:1. */
+.settings-login-actions button.primary {
+  color: #fff;
+}
+
+/* A form, or the ask before a sign-out: framed as the deletion's ask is, in the panel's line. */
+.settings-login-form {
+  display: grid;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--line-2);
+  border-radius: 6px;
+}
+
+.settings-login-field {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.settings-login-field input {
+  min-height: var(--target);
+}
+
+.settings-login-refused,
+.settings-login-plain {
+  color: #fbbf24;
+}
+
+/* The Ausweisnummer just minted, large: noted once, then it stands in the Ausweis. */
+.settings-login-minted {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--accent-dark);
+  border-radius: 6px;
+}
+
+.settings-login-minted .settings-note {
+  font-size: 13px;
+  color: var(--text);
+}
+
+.settings-login-big {
+  font-family: var(--mono);
+  font-size: 28px;
+  letter-spacing: 0.12em;
+  color: var(--text);
+  user-select: all;
+}

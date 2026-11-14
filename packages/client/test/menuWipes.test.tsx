@@ -51,8 +51,8 @@ const noop = (): void => undefined;
 
 /** The line off any room, as the menus over the screens hear it. */
 const LINE = {
-  ...{ view: null, spectatorView: null, account: null, refusal: null },
-  ...{ send: noop, leaveRoom: noop, toMenu: noop },
+  ...{ view: null, spectatorView: null, account: null, refusal: null, login: null },
+  ...{ send: noop, askLogin: noop, leaveRoom: noop, toMenu: noop },
 };
 
 /** The page's profile: no name typed yet. */
@@ -66,6 +66,7 @@ const ANNA: AccountView = {
   runs: 3,
   achievements: {},
   store: 'database',
+  login: null,
 };
 
 /** The one wipe asked for since the last: its leaves, what it runs, and whether after a beat. */
