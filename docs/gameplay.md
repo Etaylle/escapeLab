@@ -489,11 +489,15 @@ the next, the door-dark dim behind it, nothing blurred. Off any room the gear op
 once. The list: „Weiter", „Einstellungen", „Handbuch" (the mission's booklet over the room), then
 the room's ways out — „Zum Hauptmenü" and „Einsatz aufgeben" in a run, „Zum Hauptmenü" and „Raum
 verlassen" in a lobby, „Zuschauen beenden" for the audience. The arrows or the D-pad step between
-the items, round at the ends; Enter or A takes one; Esc, B or „Weiter" closes the menu. Opening it
-pauses nothing: the clock, the patrols and the emergencies run on — a run stands still only for a
-line down, as above —, the line under the list says so in a run, and the crew's strip marks the
-player „im Menü" for as long as it stands open (`pause-menu`, core `set-menu` and `menus`);
-meanwhile the avatar stands. Under reduced motion the menu cuts in.
+the items, round at the ends; Enter or A takes one; Esc, B or „Weiter" closes the menu, and the
+control that had the focus before has it again — in a lobby or the audience; in a run the focus
+stays with the world. While a menu stands open, nothing under it takes a key, a press or the
+controller (the screens are `inert`). Opening it pauses nothing: the clock, the patrols and the
+emergencies run on — a run stands still only for a line down, as above —, the line under the list
+says so in a run, and the crew's strip marks the player „im Menü" for as long as it stands open — a
+phone's row, which shows a doing only for three seconds after it changed, for those (`pause-menu`,
+core `set-menu` and `menus`; six marks at once and one more a second, as the voice's signals are
+allowed). Meanwhile the avatar stands. Under reduced motion the menu cuts in.
 
 **The ways out**, as Dota 2 has them:
 
