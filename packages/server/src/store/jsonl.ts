@@ -333,6 +333,11 @@ export class JsonlStore implements Store {
     return null;
   }
 
+  /** Whether the login of `accountId` keeps the hash `checked` (`signIn`); never without one. */
+  private keeps(accountId: string, checked: string): boolean {
+    return this.loginIn(accountId)?.secretHash === checked;
+  }
+
   async findLogin(subject: string): Promise<Login | null> {
     const known = this.identities.get(loginKeyOf(subject));
     return known === undefined ? null : { ...known, subject };
@@ -378,7 +383,7 @@ export class JsonlStore implements Store {
     leaving: Leaving | null,
     checked: string,
   ): Promise<string[] | null> {
-    if (this.loginIn(accountId)?.secretHash !== checked) {
+    if (!this.keeps(accountId, checked)) {
       return null;
     }
     this.account(accountId);
