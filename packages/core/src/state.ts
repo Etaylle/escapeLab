@@ -119,6 +119,13 @@ export interface Away {
    * line to let it in (actions.ts `takeover-claimed`); left out while nobody asks
    */
   claimUntil?: number;
+  /**
+   * their line went down with the server for its maintenance (actions.ts `maintenance`): a run
+   * standing still for it waits for them until they are back or the crew goes on without them;
+   * left out for a line that dropped on its own, before the maintenance or after, which stands
+   * nothing still
+   */
+  maintenance?: true;
 }
 
 export interface ItemState {
@@ -253,9 +260,10 @@ export interface GameState {
   sabotage: { endsAt: number; emergency?: RelayState } | null;
   /**
    * Set while the run stands still for the server's maintenance — a deploy, a restart put every
-   * seat away (actions.ts `maintenance`) — until the crew is back or has gone on without whoever
-   * is not: the clock, the patrols and the emergencies stand still meanwhile. A line that drops
-   * stands nothing still. The kind is the one there is, kept as snapshots carry it.
+   * seat away (actions.ts `maintenance`) — until whoever was on the line then is back, or the
+   * crew has gone on without them (`Away.maintenance`): the clock, the patrols and the
+   * emergencies stand still meanwhile. A line that drops stands nothing still. The kind is the
+   * one there is, kept as snapshots carry it.
    */
   paused: { since: number; kind: 'wartung' } | null;
   /**

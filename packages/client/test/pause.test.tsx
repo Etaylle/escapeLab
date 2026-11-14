@@ -10,6 +10,7 @@ import {
   awayWays,
   backLine,
   CLOCK_MARGIN_MS,
+  missedOf,
   missesSomebody,
   PauseCard,
   pauseClock,
@@ -43,16 +44,20 @@ function away(parts: Partial<PlayerView> = {}): PlayerView {
   } as PlayerView;
 }
 
-/** The same run standing still since T0 for the server's maintenance, Cem not back yet. */
-const restarted = (parts: Partial<PlayerView> = {}): PlayerView => away({ pausedAt: T0, ...parts });
+/** The same run standing still since T0 for the server's maintenance, Cem gone with it. */
+const restarted = (parts: Partial<PlayerView> = {}): PlayerView =>
+  away({ pausedAt: T0, away: [{ ...CEM, maintenance: true }], ...parts });
+
+/** Anna away since T0, as Cem is. */
+const ANNA: AwayView = { ...CEM, id: 'p1', name: 'Anna' };
 
 /** Ben alone on the line, Anna away since T0. */
 const alone = (parts: Partial<PlayerView> = {}): PlayerView =>
-  away({
-    players: [mate('p1', 'Anna', false), mate('p2', 'Ben')],
-    away: [{ ...CEM, id: 'p1', name: 'Anna' }],
-    ...parts,
-  });
+  away({ players: [mate('p1', 'Anna', false), mate('p2', 'Ben')], away: [ANNA], ...parts });
+
+/** Ben alone on the line in a run standing still since T0, Anna gone with the server. */
+const aloneRestarted = (): PlayerView =>
+  alone({ pausedAt: T0, away: [{ ...ANNA, maintenance: true }] });
 
 describe('the counter of time away', () => {
   it('counts in minutes and seconds, whole seconds down', () => {
@@ -90,9 +95,9 @@ describe('the ways on without somebody away', () => {
         mate('p5', 'Emil', false),
       ],
       away: [
-        CEM,
-        { id: 'p4', name: 'Dora', since: T0 + 30_000, waivableAt: T0 + 50_000 },
-        { id: 'p5', name: 'Emil', since: T0, waivableAt: T0, waived: true },
+        { ...CEM, maintenance: true },
+        { id: 'p4', name: 'Dora', since: T0, waivableAt: T0 + 50_000, maintenance: true },
+        { id: 'p5', name: 'Emil', since: T0, waivableAt: T0, waived: true, maintenance: true },
       ],
       pausedAt: T0,
     });
@@ -102,10 +107,22 @@ describe('the ways on without somebody away', () => {
     ]);
   });
 
+  it('offers, while the run stands still, only the ways for whom the maintenance waits for', () => {
+    // Dora's line dropped before the server went down: the run goes on without waiting for her.
+    const dora: AwayView = { id: 'p4', name: 'Dora', since: T0 - 90_000, waivableAt: T0 - 30_000 };
+    const players = [...restarted().players, mate('p4', 'Dora', false)];
+    const both = restarted({ players, away: [dora, { ...CEM, maintenance: true }] });
+    expect(missedOf(both).map((member) => member.name)).toEqual(['Cem']);
+    expect(awayWays(both, T0 + 10_000)).toEqual([{ kind: 'go-on-at', name: 'Cem', at: '1:00' }]);
+    const going = { ...both, pausedAt: null };
+    expect(missedOf(going).map((member) => member.name)).toEqual(['Dora', 'Cem']);
+    const lone = aloneRestarted();
+    const doraToo = { ...lone, away: [dora, ...lone.away] };
+    expect(awayWays(doraToo, T0 + 10_000)).toEqual([{ kind: 'call-off-at', at: '1:00' }]);
+  });
+
   it('offers one alone on the line never the way on, only the run called off', () => {
-    expect(awayWays(alone({ pausedAt: T0 }), T0 + 10_000)).toEqual([
-      { kind: 'call-off-at', at: '1:00' },
-    ]);
+    expect(awayWays(aloneRestarted(), T0 + 10_000)).toEqual([{ kind: 'call-off-at', at: '1:00' }]);
     expect(awayWays(alone(), T0 + 61_000)).toEqual([{ kind: 'call-off' }]);
   });
 
@@ -181,7 +198,7 @@ describe('the maintenance card', () => {
   it('calls the run off at a press for the one alone', () => {
     vi.spyOn(clock, 'now').mockReturnValue(T0 + 61_000);
     const sent: ClientMessage[] = [];
-    const card = () => <PauseCard view={alone({ pausedAt: T0 })} send={(msg) => sent.push(msg)} />;
+    const card = () => <PauseCard view={aloneRestarted()} send={(msg) => sent.push(msg)} />;
     const elements = elementsOf(card);
     expect(buttonsOf(elements, 'pause-go-on')).toEqual([]);
     press(buttonsOf(elements, 'pause-call-off')[0]);
@@ -263,7 +280,7 @@ describe('the game screen of a run with somebody away', () => {
   });
 
   it('lays the maintenance card over the world, and the bar offers nothing beside it', () => {
-    const html = screen({ pausedAt: T0 }, T0 + 61_000);
+    const html = screen({ pausedAt: T0, away: [{ ...CEM, maintenance: true }] }, T0 + 61_000);
     expect(html).toContain('<span class="kicker">WARTUNG</span>');
     expect(html).not.toContain('away-offer');
   });

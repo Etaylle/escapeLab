@@ -439,8 +439,9 @@ export class Room {
 
   /**
    * The room `snapshot` keeps, taken up again at `now` (`snapshot`): the game as it stood — a
-   * run standing still for the whole crew, every seat off the line and the crew not to be gone
-   * on without before FIRST_WAIT_MS from now (core `maintenance`) — every seat bound to its pass
+   * run standing still for the whole crew, every seat off the line, and whoever was on the line
+   * as it was taken waited for, not to be gone on without before FIRST_WAIT_MS from now (core
+   * `maintenance`); whoever was away then stays away as before — every seat bound to its pass
    * again, and whatever the room kept beside the game. Its timers run again from the due times
    * the game and what it kept say: a run's once the pause is over, the lobby's seats' at once.
    * Nobody is on the line yet: the room is empty from `now`. `ties` are what the constructor
@@ -470,8 +471,9 @@ export class Room {
 
   /**
    * Everything a server needs to take this room up again (`restore`), as of `now` (core
-   * snapshot.ts): the room's facts, the game — a run standing still for the whole crew from now
-   * — and its seats, and what the room keeps beside the game. The room itself goes on as it was.
+   * snapshot.ts): the room's facts, the game — a run standing still for the whole crew from now,
+   * waiting for whoever is on the line now — and its seats, and what the room keeps beside the
+   * game. The room itself goes on as it was.
    */
   snapshot(now = Date.now()): RoomSnapshot {
     const { state } = this;
@@ -513,8 +515,9 @@ export class Room {
     });
     this.seats.restore(snapshot.seats, snapshot.lostPasses);
     refill(this.positions, keeping.positions);
-    // Every seat off the line from now, as the run waits for it from now (core `maintenance`): a
-    // lobby seat's wait counts neither the downtime nor how long the lobby stood quiet before.
+    // Every seat off the line from now, as the room takes it: a lobby seat's wait counts neither
+    // the downtime nor how long the lobby stood quiet before. A run keeps its drops in the game
+    // (core `maintenance`).
     refill(this.lostAt, Object.fromEntries(this.state.players.map((p) => [p.id, now])));
     refill(this.askAgainAt, keeping.askAgainAt);
     refill(this.lastPingAt, keeping.lastPingAt);
@@ -698,8 +701,9 @@ export class Room {
 
   /**
    * The server goes down for a restart at `now` (shutdown.ts): a run on stands still for the
-   * whole crew, every seat away (core `maintenance`) — the crew's views say so — and every seat
-   * on the line is sent the room's last snapshot, sealed as this instance's last of it (`final`),
+   * whole crew, every seat away, until whoever is on the line now is back (core `maintenance`) —
+   * the crew's views say so — and every seat on the line is sent the room's last snapshot, sealed
+   * as this instance's last of it (`final`),
    * as `restart {blob, seq, at}`; none of a run that is over. No snapshot of the room goes out
    * after it. Returns the snapshot's seq and the seats told; null where none was.
    */
@@ -1008,8 +1012,9 @@ export class Room {
 
   /**
    * The player of `playerId` back on the line, at once: they play on in the run as it stands,
-   * and a run standing still for the server's maintenance goes on once it waits for nobody
-   * (core `player-connected`). Says for the log how long their line was away.
+   * and a run standing still for the server's maintenance goes on once it waits for nobody whose
+   * line went down with the server (core `player-connected`). Says for the log how long their
+   * line was away.
    */
   private back(playerId: string): string {
     this.settleClaim(playerId, 'back');

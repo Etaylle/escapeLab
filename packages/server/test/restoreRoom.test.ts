@@ -712,7 +712,7 @@ describe('a seat whose line dropped while the run went on', () => {
     expect(anna.view.away).toEqual([]);
   });
 
-  it('stays away in the crew’s snapshots: a room taken up from one waits for it', () => {
+  it('stays away in the crew’s snapshots: a room taken up from one goes on without it', () => {
     const old = server();
     const { code, anna, ben } = crewOn(old);
     const benId = ben.view.you.id;
@@ -722,21 +722,24 @@ describe('a seat whose line dropped while the run went on', () => {
     const last = blobOf(anna);
     expect(last.at).toBeGreaterThan(dropAt);
     const { state } = open(last.blob, code, KEY);
+    // Ben's drop as it was; Anna, on the line, gone with the server the snapshot stands for.
     expect(state.away[benId]).toEqual({
       since: dropAt,
-      waivableAt: last.at + FIRST_WAIT_MS,
+      waivableAt: dropAt + FIRST_WAIT_MS,
       waived: false,
     });
+    expect(state.away[anna.view.you.id]).toMatchObject({ since: last.at, maintenance: true });
     expect(state.paused).toEqual({ since: last.at, kind: 'wartung' });
-    // The old server gone without a word: a new one takes the room up from Anna's newest.
+    // The old server gone without a word: a new one takes the room up from Anna's newest, and
+    // the run goes on with Anna back, Ben away as before.
     vi.advanceTimersByTime(5000);
     const fresh = server();
     const annaBack = resume(fresh.line, 'Anna', code, last.blob);
     vi.advanceTimersByTime(HANDOVER_MS);
     expect(annaBack.view).toMatchObject({
       phase: 'playing',
-      pausedAt: last.at,
-      away: [{ name: 'Ben', since: dropAt }],
+      pausedAt: null,
+      away: [{ name: 'Ben', since: dropAt, waivableAt: dropAt + FIRST_WAIT_MS }],
     });
     const benBack = resume(fresh.line, 'Ben', code);
     for (const socket of [annaBack, benBack]) {

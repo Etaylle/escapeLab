@@ -71,16 +71,15 @@ describe('a room’s snapshot', () => {
     const drone = keeping.drones?.['flurwache'];
     expect(drone).toBeDefined();
     expect([drone?.x, drone?.y]).not.toEqual([10.5, 11.5]);
-    // Every seat off the line, the run standing still for the whole crew from now.
+    // Every seat off the line, the run standing still for the whole crew from now, waiting for
+    // both, gone with the server.
     expect(state.players.map((p) => [p.name, p.connected])).toEqual([
       ['Anna', false],
       ['Ben', false],
     ]);
     expect(state.paused).toEqual({ since: at, kind: 'wartung' });
-    expect(Object.values(state.away)).toEqual([
-      { since: at, waivableAt: at + FIRST_WAIT_MS, waived: false },
-      { since: at, waivableAt: at + FIRST_WAIT_MS, waived: false },
-    ]);
+    const gone = { since: at, waivableAt: at + FIRST_WAIT_MS, waived: false, maintenance: true };
+    expect(Object.values(state.away)).toEqual([gone, gone]);
     expect(kept.seats.map(({ name, passId }) => [name, passId])).toEqual([
       ['Anna', passFor('Anna').id],
       ['Ben', passFor('Ben').id],
@@ -205,8 +204,40 @@ describe('a room taken up again from its snapshot', () => {
     const ben = kept.state.players.find((p) => p.name === 'Ben');
     expect(lastView(anna)).toMatchObject({
       pausedAt: at,
-      away: [{ id: ben?.id, name: 'Ben', since: at, waivableAt: restoredAt + FIRST_WAIT_MS }],
+      away: [
+        {
+          id: ben?.id,
+          name: 'Ben',
+          since: at,
+          waivableAt: restoredAt + FIRST_WAIT_MS,
+          maintenance: true,
+        },
+      ],
     });
+    restored.dispose();
+  });
+
+  it('goes on once whoever was on the line is back, a seat away before staying as it was', () => {
+    const { room, anna, ben } = blackoutMidway();
+    ben.detach();
+    const dropAt = Date.now();
+    vi.advanceTimersByTime(5000);
+    const at = Date.now();
+    room.goDown(at);
+    const kept = JSON.parse(JSON.stringify(room.snapshot(at))) as RoomSnapshot;
+    anna.detach();
+    room.dispose();
+    vi.advanceTimersByTime(DOWNTIME_MS);
+    const restored = Room.restore(kept, Date.now());
+    vi.advanceTimersByTime(3000);
+    const back = rejoin(restored, anna);
+    const view = lastView(back);
+    expect(view).toMatchObject({
+      pausedAt: null,
+      away: [{ name: 'Ben', since: dropAt, waivableAt: dropAt + FIRST_WAIT_MS }],
+    });
+    expect(view.away[0]).not.toHaveProperty('maintenance');
+    expect(restored.paused).toBe(false);
     restored.dispose();
   });
 });

@@ -61,7 +61,7 @@ export type Action =
   /**
    * a crew member's line is back at `at`: in a run they play on at once and count again,
    * whether the crew went on without them or not; a run standing still for the server's
-   * maintenance goes on once it waits for nobody
+   * maintenance goes on once it waits for nobody whose line went down with the server
    */
   | { type: 'player-connected'; playerId: string; at: number }
   /**
@@ -96,7 +96,8 @@ export type Action =
   /**
    * the server goes down for maintenance at `at` — a deploy, a restart — or takes the room up
    * again from a snapshot taken then, at `waitFrom`: every seat is off the line, and a run
-   * stands still for the whole crew (`wartung`) until it is back
+   * stands still for the whole crew (`wartung`) until whoever was on the line at `at` is back;
+   * whoever was away already stays away as before
    */
   | { type: 'maintenance'; at: number; waitFrom: number }
   | { type: 'select-color'; playerId: string; color: string }
@@ -650,13 +651,14 @@ function lineBack(state: GameState, action: { playerId: string; at: number }): G
 }
 
 /**
- * Whom the crew misses: the members away it has not gone on without, by player id — whom the
- * stations the whole crew presses and the hatch wait for, and a run standing still for the
- * server's maintenance too.
+ * Whom the crew misses, by player id: the members away it has not gone on without — while the
+ * run stands still for the server's maintenance, only those whose line went down with the
+ * server (`Away.maintenance`), whom it waits for; whoever was away before stays away as before.
  */
 function missing(state: GameState): string[] {
+  const standing = state.paused !== null;
   return Object.entries(state.away)
-    .filter(([, away]) => !away.waived)
+    .filter(([, away]) => !away.waived && (!standing || away.maintenance === true))
     .map(([playerId]) => playerId);
 }
 
@@ -675,7 +677,8 @@ function onTheLine(state: GameState): number {
 
 /**
  * A run standing still for the server's maintenance goes on — every deadline moved on by the
- * pause (`thaw`) — once it misses nobody: the crew back, or gone on without whoever is not.
+ * pause (`thaw`) — once it misses nobody (`missing`): whoever's line went down with the server
+ * back, or gone on without.
  */
 function resumeWhenBack(state: GameState, at: number): GameState {
   return state.paused !== null && missing(state).length === 0 ? thaw(state, at) : state;
@@ -744,8 +747,15 @@ function takeoverSettled(state: GameState, action: { playerId: string }): GameSt
   if (away?.claimUntil === undefined) {
     return state;
   }
-  const settled = { since: away.since, waivableAt: away.waivableAt, waived: away.waived };
-  return { ...state, away: { ...state.away, [action.playerId]: settled } };
+  return { ...state, away: { ...state.away, [action.playerId]: unasked(away) } };
+}
+
+/** `away` with no ask for their seat waiting: everything else about it as it is. */
+function unasked(away: Away): Away {
+  const { since, waivableAt, waived, maintenance } = away;
+  return maintenance === true
+    ? { since, waivableAt, waived, maintenance }
+    : { since, waivableAt, waived };
 }
 
 /** The plates and the emergency's panels manned now, as the room reports them: only in a run. */
@@ -792,15 +802,16 @@ function menusWithout(
 
 /**
  * The server down for maintenance at `at`, or taking the room up again at `waitFrom`: every
- * seat is off the line. In a run each is away from `at` — whoever was away already keeps their
- * drop, and whom the run went on without stays counted out — and the run stands still for the
- * whole crew (`wartung`), its clock stopped from `at`, or from the pause it stood in already,
- * until it misses nobody (`resumeWhenBack`): whoever dropped before it is waited for with the
- * rest. Nobody may be left behind before FIRST_WAIT_MS after `waitFrom`, however long their own
- * drop has lasted, an ask for a seat lapses — its device went with the server — and every menu
- * open over the run closes with its line; whoever went to the main menu stays gone there. An
- * emergency at the relay is rolled for the crew the run counts, nobody being on the line
- * (`relayForCrew`). Said twice, nothing more changes.
+ * seat is off the line. In a run whoever was on the line is away from `at`, gone with the server
+ * (`Away.maintenance`), and the run stands still for the whole crew (`wartung`), its clock
+ * stopped from `at`, or from the pause it stood in already, until it misses none of them
+ * (`resumeWhenBack`), none to be left behind before FIRST_WAIT_MS after `waitFrom`. Whoever was
+ * away already stays away as they were, their wait unchanged, whom the run went on without
+ * counted out — a drop never turns into a pause by way of a deploy. An ask for a seat lapses —
+ * its device went with the server — and every menu open over the run closes with its line;
+ * whoever went to the main menu stays gone there. An emergency at the relay is rolled for the
+ * crew the run counts, nobody being on the line (`relayForCrew`). Said twice, nothing more
+ * changes.
  */
 function maintenance(state: GameState, action: { at: number; waitFrom: number }): GameState {
   const players = state.players.map((p) => (p.connected ? { ...p, connected: false } : p));
@@ -818,15 +829,21 @@ function maintenance(state: GameState, action: { at: number; waitFrom: number })
 }
 
 /**
- * A seat away through maintenance: away from `at`, or since its own drop, its ask for a takeover
- * lapsed; waited for until `waivableAt` at least, unless the run went on without it.
+ * A seat away through maintenance, its ask for a takeover lapsed. One with no drop on record —
+ * on the line, since a run's seat off the line is always away — goes with the server at `at`,
+ * not to be gone on without before `waivableAt`; one gone with it before, by a maintenance said
+ * twice or taken up again, is waited for until `waivableAt` at least, unless the run went on
+ * without it. One whose line dropped on its own stays as it was.
  */
 function awayThroughMaintenance(was: Away | undefined, at: number, waivableAt: number): Away {
   if (was === undefined) {
-    return { since: at, waivableAt, waived: false };
+    return { since: at, waivableAt, waived: false, maintenance: true };
   }
-  const kept = { since: was.since, waivableAt: was.waivableAt, waived: was.waived };
-  return kept.waived ? kept : { ...kept, waivableAt: Math.max(kept.waivableAt, waivableAt) };
+  const kept = unasked(was);
+  if (kept.maintenance !== true || kept.waived) {
+    return kept;
+  }
+  return { ...kept, waivableAt: Math.max(kept.waivableAt, waivableAt) };
 }
 
 /**
@@ -1629,8 +1646,9 @@ function shiftSabotage(
 /**
  * A run standing still for the server's maintenance goes on at `at` (`resumeWhenBack`).
  * Everything with a deadline is shifted by the time it stood still, so a deploy never costs the
- * crew the clock; an intro the crew said it had seen enough of while it waited ends as it goes
- * on (`introOver`).
+ * crew the clock; whoever is still away is away as after a drop of their own (`ownDrop`), and
+ * an intro the crew said it had seen enough of while it waited ends as it goes on
+ * (`introOver`).
  */
 function thaw(state: GameState, at: number): GameState {
   if (state.paused === null) {
@@ -1640,6 +1658,7 @@ function thaw(state: GameState, at: number): GameState {
   const resumed: GameState = {
     ...state,
     paused: null,
+    away: Object.fromEntries(Object.entries(state.away).map(([id, gone]) => [id, ownDrop(gone)])),
     lightsDueAt: later(state.lightsDueAt, frozen),
     deadlineAt: later(state.deadlineAt, frozen),
     sabotage: state.sabotage === null ? null : shiftSabotage(state.sabotage, frozen),
@@ -1647,6 +1666,16 @@ function thaw(state: GameState, at: number): GameState {
     quietSince: later(state.quietSince, frozen),
   };
   return introOver(resumed, at);
+}
+
+/**
+ * `away` as after a drop of their own: the mark of the maintenance they went with gone, so that
+ * the next one finds them away already (`awayThroughMaintenance`); an ask for their seat kept.
+ */
+function ownDrop({ since, waivableAt, waived, claimUntil }: Away): Away {
+  return claimUntil === undefined
+    ? { since, waivableAt, waived }
+    : { since, waivableAt, waived, claimUntil };
 }
 
 /** A moment of the run (epoch ms) moved on by `ms`, as a pause moves it; none stays none. */

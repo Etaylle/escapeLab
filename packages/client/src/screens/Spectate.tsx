@@ -19,6 +19,7 @@ import { awayFor, CreditsTable, CrewDot, crewTags, CrewTags, type CrewTag } from
 import { TitleCard, titleCardOf } from './End.js';
 import { FinaleVeil } from './Game.js';
 import { Icon } from './Icon.js';
+import { missedOf } from './Pause.js';
 import { ListenToggle, SpeakingMark } from './Voice.js';
 
 interface Props {
@@ -237,10 +238,7 @@ export function SpectateScreen({
       {view.pausedAt !== null && (
         <div className="banner-result">
           <Icon name="pause" /> Wartung — warten auf{' '}
-          {view.away
-            .filter((member) => member.waived !== true)
-            .map((member) => member.name)
-            .join(', ')}
+          {missedOf(view).map((member) => member.name).join(', ')}
         </div>
       )}
 

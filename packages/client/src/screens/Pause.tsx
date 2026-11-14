@@ -8,8 +8,9 @@ import { Icon } from './Icon.js';
  * The run goes on without stopping for anybody: once the wait for a drop is over (core
  * FIRST_WAIT_MS, LATER_WAIT_MS) the crew strip offers the way on without them — or, with one
  * alone still on the line, the way to call the run off (`AwayOffer`). Only the server's
- * maintenance stands a run still: its card over the world says whom it waits for and for how
- * long, counted on the server's clock, with the same ways and when they come (`PauseCard`).
+ * maintenance stands a run still: its card over the world says whom it waits for — whoever's
+ * line went down with the server — and for how long, counted on the server's clock, with the
+ * same ways for them and when they come (`PauseCard`).
  * Somebody the run went on without who is back is said for a moment („Ben ist zurück"). A new
  * device asking for the seat of somebody away is let in, or not, by whoever on the line answers
  * first — on the maintenance card, or on a card of its own at the top while the run goes on.
@@ -38,16 +39,28 @@ export type AwayWay =
   | { kind: 'call-off-at'; at: string };
 
 /**
- * What the crew on the line is offered at server time `now`: for each crew member it misses —
- * away, and not gone on without — the way on without them once the wait for their drop is
- * over, before that the moment it will be on the maintenance card's counter; with one alone on
- * the line, instead, the way to call the run off once the first of those waits is over.
+ * Whom the crew misses, as the view lists them: everybody away it has not gone on without —
+ * while the run stands still for the server's maintenance, only those whose line went down with
+ * the server, whom it waits for (core `missing`); whoever was away before stays away as before.
+ */
+export function missedOf(view: Pick<PlayerView, 'away' | 'pausedAt'>): AwayView[] {
+  const standing = view.pausedAt !== null;
+  return view.away.filter(
+    (member) => member.waived !== true && (!standing || member.maintenance === true),
+  );
+}
+
+/**
+ * What the crew on the line is offered at server time `now`: for each crew member it misses
+ * (`missedOf`) the way on without them once the wait for their drop is over, before that the
+ * moment it will be on the maintenance card's counter; with one alone on the line, instead, the
+ * way to call the run off once the first of those waits is over.
  */
 export function awayWays(
   view: Pick<PlayerView, 'away' | 'pausedAt' | 'players'>,
   now: number,
 ): AwayWay[] {
-  const missed = view.away.filter((member) => member.waived !== true);
+  const missed = missedOf(view);
   if (missed.length === 0) {
     return [];
   }
@@ -135,8 +148,8 @@ function TakeoverAsks({
 }
 
 /**
- * A new device asks for the seat of somebody the run went on without: the run goes on, and
- * the ask stands at the top of the world, out of the way of the bar.
+ * A new device asks for the seat of somebody away while the run goes on: the ask stands at the
+ * top of the world, out of the way of the bar.
  */
 export function TakeoverCard({
   asks,
@@ -154,21 +167,9 @@ export function TakeoverCard({
 }
 
 /**
- * Who of those the run waits for went to the main menu on purpose, their seat kept: „Ben ist ins
- * Hauptmenü gegangen.", „Ben und Cem sind ins Hauptmenü gegangen."; '' for none of them.
- */
-export function wentToMenu(away: readonly Pick<AwayView, 'name' | 'menu'>[]): string {
-  const names = away.filter((member) => member.menu === true).map((member) => member.name);
-  if (names.length < 2) {
-    return names.length === 0 ? '' : `${names.join('')} ist ins Hauptmenü gegangen.`;
-  }
-  return `${names.slice(0, -1).join(', ')} und ${names.at(-1) ?? ''} sind ins Hauptmenü gegangen.`;
-}
-
-/**
  * The run standing still for the server's maintenance — a deploy, a restart — over the world of
- * everybody back on the line: whom it waits for, and who of them went to the main menu, with
- * the ways on once they come. A line that drops stands nothing still, and has no card.
+ * everybody back on the line: whom it waits for (`missedOf`), with the ways on once they come.
+ * A line that drops stands nothing still, and has no card.
  */
 export function PauseCard({
   view,
@@ -178,7 +179,7 @@ export function PauseCard({
   send: (msg: ClientMessage) => void;
 }) {
   const now = useServerNow(250);
-  const missed = view.away.filter((member) => member.waived !== true);
+  const missed = missedOf(view);
   const since = view.pausedAt ?? now;
   return (
     <div className="overlay pause" role="status">
@@ -187,7 +188,6 @@ export function PauseCard({
         <Icon name="pause" /> Warten auf {missed.map((member) => member.name).join(', ')} ·{' '}
         <span className="pause-count">{pauseClock(now - since)}</span>
       </h1>
-      <MenuGone away={missed} />
       <p>Uhr, Patrouillen und Notfälle stehen still.</p>
       <div className="pause-ways">
         {awayWays(view, now).map((way) => (
@@ -243,12 +243,6 @@ export function offerFor(
   send: (msg: ClientMessage) => void,
 ): ReactNode {
   return missesSomebody(view) ? <AwayOffer view={view} send={send} /> : null;
-}
-
-/** The pause card's line of who went to the main menu (`wentToMenu`); nothing for none. */
-function MenuGone({ away }: { away: readonly AwayView[] }) {
-  const said = wentToMenu(away);
-  return said === '' ? null : <p className="pause-gone">{said}</p>;
 }
 
 /** A member of the crew as a view lists them, as far as their return needs. */

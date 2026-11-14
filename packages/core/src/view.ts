@@ -25,6 +25,7 @@ import { noteKey } from './notes.js';
 import { pickLine } from './radio.js';
 import {
   CREW_COLORS,
+  type Away,
   type Credits,
   type GameState,
   type MenuPlace,
@@ -103,7 +104,8 @@ export interface PlayerView {
    * the crew members away from the run — their line down, or gone to the main menu, their seat
    * kept — oldest first, each with since when, from when the crew may go on without them
    * (`continue-without`) and whether it has; empty while everybody is on the line, and outside
-   * a run. The run goes on meanwhile, but for the server's maintenance (`pausedAt`)
+   * a run. The run goes on meanwhile, but for the server's maintenance (`pausedAt`), which waits
+   * for those whose line went down with the server (`maintenance`)
    */
   away: AwayView[];
   /**
@@ -214,6 +216,11 @@ export interface AwayView {
   menu?: true;
   /** the crew went on without them (`continue-without`); left out while it misses them */
   waived?: true;
+  /**
+   * their line went down with the server for its maintenance: a run standing still for it
+   * (`pausedAt`) waits for them; left out for a line that dropped on its own
+   */
+  maintenance?: true;
 }
 
 /**
@@ -1089,8 +1096,8 @@ export interface SpectatorView {
 }
 
 /**
- * The crew members away from the run, oldest drop first: who of them went to the main menu,
- * and whom the crew went on without; none outside a run.
+ * The crew members away from the run, oldest drop first, each with its marks (`awayMarks`);
+ * none outside a run.
  */
 function awayOf(state: GameState): AwayView[] {
   if (state.phase !== 'playing') {
@@ -1099,13 +1106,26 @@ function awayOf(state: GameState): AwayView[] {
   return Object.entries(state.away)
     .flatMap(([id, away]) => {
       const name = state.players.find((p) => p.id === id)?.name;
-      const menu = state.menus[id] === 'main' ? { menu: true as const } : {};
-      const waived = away.waived ? { waived: true as const } : {};
-      return name === undefined
-        ? []
-        : [{ id, name, since: away.since, waivableAt: away.waivableAt, ...menu, ...waived }];
+      const at = { since: away.since, waivableAt: away.waivableAt };
+      return name === undefined ? [] : [{ id, name, ...at, ...awayMarks(state, id, away) }];
     })
     .sort((a, b) => a.since - b.since);
+}
+
+/**
+ * What marks a crew member away: gone to the main menu, gone on without, gone with the server
+ * for its maintenance; nothing for a line that dropped.
+ */
+function awayMarks(
+  state: GameState,
+  id: string,
+  away: Away,
+): Pick<AwayView, 'menu' | 'waived' | 'maintenance'> {
+  return {
+    ...(state.menus[id] === 'main' ? { menu: true as const } : {}),
+    ...(away.waived ? { waived: true as const } : {}),
+    ...(away.maintenance === true ? { maintenance: true as const } : {}),
+  };
 }
 
 /** The seats a new device asks to take over in the run on, for its crew; nothing while none. */

@@ -311,25 +311,36 @@ describe('a new run', () => {
   });
 });
 
-describe('the server’s maintenance', () => {
-  const DOWN_AT = T0 + 30_000;
-  const maintenance = (at: number, waitFrom = at): Action => ({
-    type: 'maintenance',
-    at,
-    waitFrom,
-  });
+const DOWN_AT = T0 + 30_000;
+const maintenance = (at: number, waitFrom = at): Action => ({ type: 'maintenance', at, waitFrom });
+const takeover = (playerId: string, at: number): Action => ({
+  type: 'takeover-claimed',
+  playerId,
+  at,
+});
 
+describe('the server’s maintenance', () => {
   it('stands a run still for the whole crew, every seat away, till the crew is back', () => {
     const down = applyAction(running, maintenance(DOWN_AT));
     expect(down.players.map((p) => p.connected)).toEqual([false, false, false]);
     expect(down.paused).toEqual({ since: DOWN_AT, kind: 'wartung' });
-    const away = { since: DOWN_AT, waivableAt: DOWN_AT + FIRST_WAIT_MS, waived: false };
+    const away = {
+      since: DOWN_AT,
+      waivableAt: DOWN_AT + FIRST_WAIT_MS,
+      waived: false,
+      maintenance: true,
+    };
     expect(down.away).toEqual({ p1: away, p2: away, p3: away });
     // Nobody dropped: no later wait is made shorter for it, and nothing is said on the air.
     expect(down.drops).toBe(0);
     expect(down.events).toEqual(running.events);
     expect(viewFor(down, 'p1').pausedAt).toBe(DOWN_AT);
-    expect(viewFor(down, 'p1').away.map((member) => member.name)).toEqual(['Anna', 'Ben', 'Cem']);
+    const gone = viewFor(down, 'p1').away.map((member) => [member.name, member.maintenance]);
+    expect(gone).toEqual([
+      ['Anna', true],
+      ['Ben', true],
+      ['Cem', true],
+    ]);
     expect(viewForSpectator(down).pausedAt).toBe(DOWN_AT);
     // Every move is refused meanwhile.
     expect(() => applyAction(down, { type: 'interact', playerId: 'p1', at: DOWN_AT })).toThrow(
@@ -364,36 +375,36 @@ describe('the server’s maintenance', () => {
     expect(on.paused).toBeNull();
   });
 
-  it('keeps a drop made before it, and waits for that one with the rest', () => {
-    const down = applyAction(gone, maintenance(DOWN_AT));
-    expect(down.paused).toEqual({ since: DOWN_AT, kind: 'wartung' });
-    expect(down.away['p3']).toEqual({
-      since: DROP_AT,
-      waivableAt: DOWN_AT + FIRST_WAIT_MS,
-      waived: false,
-    });
-    const twoBack = run([lineBack('p1', DOWN_AT + 9000), lineBack('p2', DOWN_AT + 9000)], down);
-    expect(twoBack.paused).toEqual({ since: DOWN_AT, kind: 'wartung' });
-    expect(applyAction(twoBack, lineBack('p3', DOWN_AT + 12_000)).paused).toBeNull();
-  });
-
-  it('keeps whom the run went on without counted out, and waits only for the rest', () => {
-    const on = applyAction(gone, goOn('p1', 'p3', DROP_AT + FIRST_WAIT_MS));
-    const later = DROP_AT + FIRST_WAIT_MS + 5000;
-    const downOn = applyAction(on, maintenance(later));
-    expect(downOn.away['p3']).toEqual(on.away['p3']);
-    expect(downOn.paused).toEqual({ since: later, kind: 'wartung' });
-    const back = run([lineBack('p1', later + 9000), lineBack('p2', later + 9000)], downOn);
-    expect(back.paused).toBeNull();
-    expect(back.away['p3']?.waived).toBe(true);
+  it('marks nobody once the run goes on: the next one finds whoever is still away away', () => {
+    const down = applyAction(running, maintenance(DOWN_AT));
+    const back = run([lineBack('p1', DOWN_AT + 5000), lineBack('p2', DOWN_AT + 5000)], down);
+    const on = applyAction(back, goOn('p1', 'p3', DOWN_AT + FIRST_WAIT_MS));
+    expect(on.paused).toBeNull();
+    const cem = { since: DOWN_AT, waivableAt: DOWN_AT + FIRST_WAIT_MS, waived: true };
+    expect(on.away).toEqual({ p3: cem });
+    expect(viewFor(on, 'p1').away[0]).not.toHaveProperty('maintenance');
+    const again = applyAction(on, maintenance(DOWN_AT + 100_000));
+    expect(again.away['p3']).toEqual(cem);
+    const twoBack = run(
+      [lineBack('p1', DOWN_AT + 110_000), lineBack('p2', DOWN_AT + 110_000)],
+      again,
+    );
+    expect(twoBack.paused).toBeNull();
   });
 
   it('lets a new device’s ask for a seat lapse: the device went with the server', () => {
-    const asked = applyAction(gone, { type: 'takeover-claimed', playerId: 'p3', at: DROP_AT });
+    const asked = applyAction(gone, takeover('p3', DROP_AT));
     expect(asked.away['p3']?.claimUntil).toBeDefined();
     const down = applyAction(asked, maintenance(DOWN_AT));
     expect(down.away['p3']).not.toHaveProperty('claimUntil');
     expect(viewFor(down, 'p1')).not.toHaveProperty('takeovers');
+    // An ask made while the run stands still waits for its answer; settled, the seat is waited
+    // for as before.
+    const annaBack = applyAction(down, lineBack('p1', DOWN_AT + 5000));
+    const askedNow = applyAction(annaBack, takeover('p2', DOWN_AT + 6000));
+    const settled = applyAction(askedNow, { type: 'takeover-settled', playerId: 'p2' });
+    expect(settled.away['p2']).toEqual(down.away['p2']);
+    expect(applyAction(settled, lineBack('p3', DOWN_AT + 7000)).paused).not.toBeNull();
   });
 
   it('takes every seat off the line outside a run, and nothing else', () => {
@@ -406,5 +417,90 @@ describe('the server’s maintenance', () => {
       ...lobby,
       players: lobby.players.map((player) => ({ ...player, connected: false })),
     });
+  });
+});
+
+describe('the server’s maintenance with somebody away already', () => {
+  it('leaves their drop as it was, and goes on once the rest is back', () => {
+    const down = applyAction(gone, maintenance(DOWN_AT));
+    expect(down.paused).toEqual({ since: DOWN_AT, kind: 'wartung' });
+    expect(down.away['p3']).toEqual(gone.away['p3']);
+    const marked = viewFor(down, 'p1').away.map((member) => [member.name, member.maintenance]);
+    expect(marked).toEqual([
+      ['Cem', undefined],
+      ['Anna', true],
+      ['Ben', true],
+    ]);
+    const twoBack = run([lineBack('p1', DOWN_AT + 9000), lineBack('p2', DOWN_AT + 9000)], down);
+    expect(twoBack.paused).toBeNull();
+    expect(twoBack.deadlineAt).toBe((running.deadlineAt ?? 0) + 9000);
+    expect(twoBack.away).toEqual({ p3: gone.away['p3'] });
+    // Cem's wait is the one of his drop, the downtime in it.
+    expect(() => applyAction(twoBack, goOn('p1', 'p3', DROP_AT + FIRST_WAIT_MS - 1))).toThrow(
+      'Die Wartezeit läuft noch.',
+    );
+    expect(applyAction(twoBack, goOn('p1', 'p3', DROP_AT + FIRST_WAIT_MS)).away['p3']).toEqual({
+      ...gone.away['p3'],
+      waived: true,
+    });
+  });
+
+  it('lets the one back alone play on, and call the run off once the drop’s wait is over', () => {
+    // Anna and Ben; Ben drops at +10 s, the server goes down at +40 s, Anna is back at +55 s.
+    const pair = started(consoleLab(2));
+    const benGone = applyAction(pair, lineDrops('p2', T0 + 10_000));
+    const down = applyAction(benGone, maintenance(T0 + 40_000));
+    const annaBack = applyAction(down, lineBack('p1', T0 + 55_000));
+    expect(annaBack.paused).toBeNull();
+    expect(annaBack.deadlineAt).toBe((pair.deadlineAt ?? 0) + 15_000);
+    expect(viewFor(annaBack, 'p1')).toMatchObject({
+      pausedAt: null,
+      away: [{ id: 'p2', since: T0 + 10_000, waivableAt: T0 + 70_000 }],
+    });
+    expect(() => applyAction(annaBack, goOn('p1', 'p2', T0 + 70_000))).toThrow(
+      'Allein läuft kein Einsatz weiter.',
+    );
+    expect(() => applyAction(annaBack, callOff('p1', T0 + 69_999))).toThrow(
+      'Die Wartezeit läuft noch.',
+    );
+    expect(applyAction(annaBack, callOff('p1', T0 + 70_000)).calledOff).toBe('Abgebrochen ohne p2.');
+  });
+
+  it('waits only for whoever was on the line, each until back: a drop in it holds nothing up', () => {
+    const down = applyAction(running, maintenance(DOWN_AT));
+    const annaGone = run([lineBack('p1', DOWN_AT + 5000), lineDrops('p1', DOWN_AT + 6000)], down);
+    expect(annaGone.paused).toEqual(down.paused);
+    expect(annaGone.away['p1']).toEqual({
+      since: DOWN_AT + 6000,
+      waivableAt: DOWN_AT + 6000 + FIRST_WAIT_MS,
+      waived: false,
+    });
+    const rest = run([lineBack('p2', DOWN_AT + 8000), lineBack('p3', DOWN_AT + 8000)], annaGone);
+    expect(rest.paused).toBeNull();
+    expect(rest.away).toEqual({ p1: annaGone.away['p1'] });
+  });
+
+  it('is called off by the one back alone only once the wait for whom it waits for is over', () => {
+    // Cem's drop's wait is over at +70 s; Ben, on the line as the server went, is waited for
+    // until a minute after it.
+    const down = applyAction(gone, maintenance(DOWN_AT));
+    const annaBack = applyAction(down, lineBack('p1', DROP_AT + FIRST_WAIT_MS));
+    expect(() => applyAction(annaBack, callOff('p1', DROP_AT + FIRST_WAIT_MS))).toThrow(
+      'Die Wartezeit läuft noch.',
+    );
+    const off = applyAction(annaBack, callOff('p1', DOWN_AT + FIRST_WAIT_MS));
+    expect(off.phase).toBe('lost');
+    expect(off.calledOff).toBe('Abgebrochen ohne Ben.');
+  });
+
+  it('keeps whom the run went on without counted out, and waits only for the rest', () => {
+    const on = applyAction(gone, goOn('p1', 'p3', DROP_AT + FIRST_WAIT_MS));
+    const later = DROP_AT + FIRST_WAIT_MS + 5000;
+    const downOn = applyAction(on, maintenance(later));
+    expect(downOn.away['p3']).toEqual(on.away['p3']);
+    expect(downOn.paused).toEqual({ since: later, kind: 'wartung' });
+    const back = run([lineBack('p1', later + 9000), lineBack('p2', later + 9000)], downOn);
+    expect(back.paused).toBeNull();
+    expect(back.away['p3']?.waived).toBe(true);
   });
 });

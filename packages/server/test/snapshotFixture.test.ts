@@ -59,6 +59,21 @@ describe('a snapshot of the build before', () => {
     expect(opened.state.presence.plates).toEqual({});
   });
 
+  it('marks nobody gone with the server: its run goes on as the first of the crew is back', () => {
+    const away = Object.values(BUILD_BEFORE.state.away);
+    expect(away.length).toBe(2);
+    expect(away.some((member) => 'maintenance' in member)).toBe(false);
+    const line = new FakeServer();
+    const manager = new RoomManager(undefined, false, null, KEY, 'later');
+    serveSockets(line, { catalog: missions, manager });
+    const anna = line.connect();
+    const blob = seal(BUILD_BEFORE, BUILD_BEFORE.code, KEY);
+    anna.say({ kind: 'resume', code: BUILD_BEFORE.code, pass: passFor('Anna'), blob });
+    vi.advanceTimersByTime(HANDOVER_MS);
+    expect(anna.view).toMatchObject({ phase: 'playing', pausedAt: null });
+    expect(anna.view.away.map((member) => member.name)).toEqual(['Ben']);
+  });
+
   it('lets keys this build does not know pass through, wherever they stand', () => {
     const later = {
       ...BUILD_BEFORE,

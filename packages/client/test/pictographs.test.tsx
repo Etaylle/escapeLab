@@ -201,10 +201,12 @@ describe('the screens around a run', () => {
   });
 
   it('show the audience every state of a run under the game’s icons', () => {
-    const BEN_AWAY = { id: 'p2', name: 'Ben', since: 0, waivableAt: 60_000 };
+    // Ben's line went down with the server; Cem's had dropped before, which waits for nobody.
+    const BEN_AWAY = { id: 'p2', name: 'Ben', since: 0, waivableAt: 60_000, maintenance: true };
+    const CEM_AWAY = { id: 'p3', name: 'Cem', since: -90_000, waivableAt: -30_000 };
     const states = {
       lobby: spectate(watched({ phase: 'lobby' })),
-      paused: spectate(watched({ away: [BEN_AWAY], pausedAt: 0 })),
+      paused: spectate(watched({ away: [CEM_AWAY, BEN_AWAY], pausedAt: 0 })),
       won: spectate(watched({ phase: 'won', grade: { rank: 'A', label: 'Stark' } })),
       lost: spectate(watched({ phase: 'lost' })),
     };
