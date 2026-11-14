@@ -17,7 +17,7 @@
   gap: 12px;
   margin: 0;
   color: var(--phosphor-dim);
-  font-size: calc(var(--type-label) * var(--text-scale));
+  font-size: calc(var(--type-body) * var(--text-scale));
   letter-spacing: 2px;
 }
 
@@ -169,7 +169,7 @@
 }
 
 .access-account-label {
-  font-size: calc(var(--type-label) * var(--text-scale));
+  font-size: calc(var(--type-body) * var(--text-scale));
   letter-spacing: 2px;
   opacity: 0.75;
 }

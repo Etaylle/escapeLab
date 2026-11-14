@@ -387,14 +387,15 @@ describe('the words on its devices', () => {
       floor: 14,
       nodes: [...terminal, ...device],
       classes: [
+        'access-head',
         'access-door',
         'access-session-line',
         'servers-line',
+        'access-account-label',
         'access-account-name',
         'access-left',
       ],
     },
-    { floor: 12, nodes: [...terminal, ...device], classes: ['access-head', 'access-account-label'] },
   ];
 
   it.each(SCREENS)('read the token in large digits, the rest of the face 14 px, on $name', ({

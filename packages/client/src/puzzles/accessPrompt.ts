@@ -17,7 +17,7 @@ type AccessInput = PuzzleInputOf<'access'>;
 
 /** The terminal's commands, as its keys and its prompt take them. */
 export const ACCESS_COMMANDS = ['login', 'status', 'freigeben'] as const;
-export type AccessCommand = (typeof ACCESS_COMMANDS)[number];
+type AccessCommand = (typeof ACCESS_COMMANDS)[number];
 
 const isCommand = (word: string): word is AccessCommand =>
   ACCESS_COMMANDS.some((cmd) => cmd === word);
@@ -37,7 +37,7 @@ const TOKEN = new RegExp(`^\\d{${TOKEN_DIGITS}}$`);
  * A line as a token: its digits, the blanks the device groups them by dropped („405 217" is
  * 405217); null for a line that is not six digits.
  */
-export function tokenIn(line: string): string | null {
+function tokenIn(line: string): string | null {
   const digits = line.replace(/\s+/g, '');
   return TOKEN.test(digits) ? digits : null;
 }
