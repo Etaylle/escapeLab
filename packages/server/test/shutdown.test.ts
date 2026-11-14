@@ -169,18 +169,14 @@ describe('the start script', () => {
 
   /**
    * The repo's start script run by `sh`, as pnpm runs it, with a pnpm of its own on the PATH that
-   * notes each call with its process id and answers a migration with `migrateExit`: the calls, the
-   * shell's own process id first, and how the script ended.
+   * notes each call with its process id: the calls, the shell's own process id first, and how the
+   * script ended.
    */
-  function startWith(env: Record<string, string>, migrateExit = 0) {
+  function startWith(env: Record<string, string>) {
     const dir = mkdtempSync(join(tmpdir(), 'escapelab-start-'));
     const log = join(dir, 'calls');
     const pnpm = join(dir, 'pnpm');
-    writeFileSync(
-      pnpm,
-      '#!/bin/sh\necho "pnpm $$ $*" >> "$LOG"\n' +
-        `case "$*" in *"migrate deploy"*) exit ${migrateExit};; esac\n`,
-    );
+    writeFileSync(pnpm, '#!/bin/sh\necho "pnpm $$ $*" >> "$LOG"\n');
     chmodSync(pnpm, 0o755);
     const run = spawnSync('sh', ['-c', `echo "shell $$" >> "$LOG"; ${root}`], {
       env: { PATH: `${dir}:${process.env['PATH'] ?? ''}`, LOG: log, ...env },
@@ -200,18 +196,11 @@ describe('the start script', () => {
     expect(status).toBe(0);
   });
 
-  it('applies the migrations first where DATABASE_URL is set, and stops where they fail', () => {
-    const migrated = startWith({ DATABASE_URL: 'set' });
-    const shell = migrated.calls[0]?.split(' ')[1];
-    const migration = migrated.calls[1]?.split(' ');
-    expect(migration?.slice(2).join(' ')).toBe('--filter @escapelab/server prisma migrate deploy');
-    expect(migration?.[1]).not.toBe(shell);
-    expect(migrated.calls[2]).toBe(`pnpm ${shell} --filter @escapelab/server start`);
-    expect(migrated.calls).toHaveLength(3);
-    const failed = startWith({ DATABASE_URL: 'set' }, 1);
-    expect(failed.calls.slice(1).map((call) => call.split(' ').slice(2).join(' '))).toEqual([
-      '--filter @escapelab/server prisma migrate deploy',
-    ]);
-    expect(failed.status).toBe(1);
+  it('runs no migration of its own where DATABASE_URL is set: the server migrates itself', () => {
+    // Prisma's own lines would name the database's host; the server's log never does.
+    const { calls, status } = startWith({ DATABASE_URL: 'set', DATABASE_URL_UNPOOLED: 'set' });
+    const shell = calls[0]?.split(' ')[1];
+    expect(calls).toEqual([`shell ${shell}`, `pnpm ${shell} --filter @escapelab/server start`]);
+    expect(status).toBe(0);
   });
 });

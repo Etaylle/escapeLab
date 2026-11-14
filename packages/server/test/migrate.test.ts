@@ -119,6 +119,39 @@ describe('the migrations as the server applies them', () => {
       'Error: P1013: The provided database string is invalid: <database URL> x',
     ]);
   });
+
+  it("names no server, port or user where Prisma's connection errors name them", () => {
+    const host = 'ep-quiet-lab-123456.eu-central-1.aws.neon.tech';
+    const said = [
+      `Error: P1001: Can't reach database server at \`${host}:5432\``,
+      `Please make sure your database server is running at \`${host}:5432\`.`,
+      `Error: P1000: Authentication failed against database server at \`${host}\`, the ` +
+        'provided database credentials for `anna` are not valid.',
+      `Error: P1002: The database server at \`${host}\`:\`5432\` was reached but timed out.`,
+      'Error: P1010: User `anna` was denied access on the database `lab`',
+    ].join('\n');
+    expect(shownLines(said)).toEqual([
+      "Error: P1001: Can't reach database server at `<host>`",
+      'Please make sure your database server is running at `<host>`.',
+      'Error: P1000: Authentication failed against database server at `<host>`, the provided ' +
+        'database credentials for `<user>` are not valid.',
+      'Error: P1002: The database server at `<host>` was reached but timed out.',
+      'Error: P1010: User `<user>` was denied access on the database `lab`',
+    ]);
+  });
+
+  it('logs a database it cannot reach without its host or its user (P1001)', async () => {
+    const said = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    // Nobody listens on port 1: the CLI as the server runs it fails at once.
+    const nowhere = 'postgresql://anna@127.0.0.1:1/lab';
+    const env = { ...process.env, DATABASE_URL: nowhere, DATABASE_URL_UNPOOLED: nowhere };
+    await expect(migrate(env)).rejects.toThrow('the migrations did not apply (P1001)');
+    const lines = said.mock.calls.map(([line]) => String(line));
+    expect(lines).toContain(
+      "[escapelab] migrate: Error: P1001: Can't reach database server at `<host>`",
+    );
+    expect(lines.filter((line) => /127\.0\.0\.1|anna|:\/\//.test(line))).toEqual([]);
+  });
 });
 
 describe.skipIf(url === null)('the migrations in Postgres', () => {
