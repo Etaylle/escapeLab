@@ -465,7 +465,7 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
 - Studie G-2, Rang 1 und 8: das Nadelventil als dritte Hand (T-4); das Relais, an dem je Notfall
   ein Bedienelement ausfällt und seine Anweisung zum nächsten wandert (Spaceteam).
 
-### I-1 Zugangskontrolle mit Zwei-Faktor — Status: in Arbeit (I-access, Spec `spec-I-access.md`; Modul mit Probe-Mission, Platz in Blackout nach dem Playtest) · Größe: L
+### I-1 Zugangskontrolle mit Zwei-Faktor — Status: erledigt (I-access, Merge 2026-11-14; drei Review-Runden; Cloud-CI grün auf 4136fa0; Modul mit Probe-Mission und Drill im Systemcheck-Lauf, Platz in Blackout nach dem Playtest, N-6) · Größe: L
 - Pult A Login-Terminal, Pult B Token-Generator mit Code, der mit der Serveruhr alle 30 s
   wechselt (Restsekunden sichtbar), Quelle Benutzerliste mit Rollen. Vorbilder: Quadrilateral
   Cowboy (`door.open(3)`: das Terminal gibt die Tür drei Sekunden frei, jemand muss durch),
@@ -475,6 +475,17 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
 - Studie G-2, Rang 3 und 5: Leitstand mit Türcodes (Lethal Company: wer läuft, liest den Code an
   der Tür, das Terminal öffnet sie für fünf Sekunden) und Kartenleser mit Gefühl (Among Us: Pult B
   nennt die Karte, sie geht in einem gedruckten Tempofenster durch den Leser).
+- Umgesetzt als Modul `access` (`docs/gameplay.md`, „The Zugangskontrolle"): Das Terminal nennt
+  die angeforderten Türen und nimmt `login`, den Token, `status` und `freigeben`; das
+  Tokengerät ist je Periode an ein Konto gebunden und zeigt dessen Token mit ablaufendem
+  Balken; welches Konto welche Rolle hat und welche Türen eine Rolle freigibt, steht nur auf der
+  Benutzerliste des Laufs, jeden Lauf neu verteilt, und das Gerät beginnt nie mit dem Konto der
+  ersten Tür. Falscher Token und Freigabe ohne Berechtigung sind Alarme, drei falsche Token
+  sperren das Konto auf der Uhr der Station. Felder `doors`, `tokenSec`, `openSec`,
+  `lockSec`. Die Tür offen zu halten, während jemand durchläuft, bleibt Fiktion, keine Regel.
+- Steht in der Übungshalle (G-2) und in der Probemission `tools/fixtures/access-probe.json`, die
+  der Rundgang im Systemcheck spielt (Gruppe `access`). Offen für N-6: ob und wo die Station in
+  Blackout steht — mit zwei Spielenden muss die Liste vor den Pulten gelesen (oder notiert) werden.
 
 ### I-2 Firewall-Regelwerk — Status: wartet (Entscheidung Uros) · Größe: L
 - Pult A zeigt laufende Pakete (Quelle, Ziel, Port), Pult B bearbeitet die Regelliste, erste
@@ -563,8 +574,8 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   neu daraus G-3 bis G-6, die übrigen hängen an T-4, M-1, I-1, I-2 und N-6. Missionen mit
   `order: 'free'`: jede Station offen, die Crew wählt, jeweils eine läuft, die Zielzeile zählt
   die übrigen; mit `timeLimitSec: 0` ohne Uhr: die Leiste zählt hoch, weder Alarm noch Notiz
-  kostet Zeit, keine Anstöße der Leitstelle (`docs/gameplay.md`). Die Übungshalle: 40 × 26
-  Felder, zwölf Stationen mit fünfzehn Pulten (jeder Typ außer dem Relais, das nur als Notfall
+  kostet Zeit, keine Anstöße der Leitstelle (`docs/gameplay.md`). Die Übungshalle: 40 × 33
+  Felder, dreizehn Stationen mit siebzehn Pulten (jeder Typ außer dem Relais, das nur als Notfall
   läuft), je Station Buch und Schild in einer eigenen Nische, Licht von Anfang an, ohne Uhr,
   Drohnen, Notfälle und Luke (die letzte Station gewinnt den Lauf), 2–3 Spielende; aus der
   Modulliste erzeugt, im Menü mit „Jede Station zum Üben"; jeder Systemcheck-Rundgang spielt sie

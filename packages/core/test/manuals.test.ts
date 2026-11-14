@@ -115,6 +115,12 @@ const VARIANTS: Record<string, object[]> = {
   ],
   servers: [{ penaltySec: 45 }, { crashed: 5, trap: false }],
   circuit: [{ wires: { min: 4, max: 4 } }, { shorts: 2, burnoutSec: 90 }, { shorts: 5 }],
+  access: [
+    { tokenSec: 15, openSec: 3, lockSec: 120, penaltySec: 1 },
+    { tokenSec: 60, openSec: 15, lockSec: 15 },
+    { doors: 1 },
+    { doors: 3 },
+  ],
 };
 
 /** Defs, by a label, for the modules that need more than a type, an id and a title. */

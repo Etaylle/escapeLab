@@ -108,6 +108,10 @@ const NOTES: Readonly<Partial<Record<PuzzleDef['type'], readonly string[]>>> = {
     'Einweisung: Zuerst den Dienst mit E50 vom Strom nehmen, dann von NETZ aus in der Folge ' +
       'des Netzplans hochfahren.',
   ],
+  access: [
+    'Einweisung: Erst die Tür am Terminal, dann auf der Benutzerliste das Konto, dessen Rolle ' +
+      'sie freigibt. Den Token erst, wenn das Tokengerät dieses Konto zeigt.',
+  ],
 };
 
 /** A machine as its printed page's title line names it: „Signalkette, Typ SK-4 (Baujahr 1986)". */

@@ -6,6 +6,7 @@ import type {
   PuzzleContext,
   PuzzleDef,
   PuzzleInput,
+  PuzzleState,
   SolveAid,
   Viewer,
   ViewContext,
@@ -17,8 +18,12 @@ const T0 = 1_000_000;
 const MAX_MOVES = 500;
 /** The mission clock as an instance starts. */
 const START_SEC = 600;
-/** Far longer than any module waits for the clock; past that the solver is stuck. */
-export const MAX_IDLE_SEC = 60;
+/**
+ * Far longer than any module waits for the clock; past that the solver is stuck. The longest
+ * wait is the Zugangskontrolle's: its token device comes round to an account two of its longest
+ * periods (60 s) after it left it, one second more where the period turned as the login went in.
+ */
+export const MAX_IDLE_SEC = 150;
 /**
  * One player at the station — at console a where it has two, with a second
  * player at console b — and one at a manual object that covers it.
@@ -30,6 +35,13 @@ const AT_A: Viewer = { playerId: OPERATOR, operating: true, reading: false, cons
 const AT_B: Viewer = { playerId: PARTNER, operating: true, reading: false, console: 'b' };
 const AT_BOOK: Viewer = { playerId: READER, operating: false, reading: true, console: null };
 
+/** `state` at `at`, ticked as the room ticks the open puzzle once its clock is due (`dueAt`). */
+function tickedAt(def: PuzzleDef, state: PuzzleState, at: number): PuzzleState {
+  const puzzleModule = moduleFor(def.type);
+  const due = puzzleModule.dueAt?.(def, state) ?? null;
+  return due !== null && due <= at ? (puzzleModule.expire?.(def, state, at) ?? state) : state;
+}
+
 /**
  * Plays one instance of a puzzle the way a perfect crew would: one player
  * works the station, the other reads its rules at a manual object, and at a
@@ -39,9 +51,11 @@ const AT_BOOK: Viewer = { playerId: READER, operating: false, reading: true, con
  * it. Every move it picks goes through the input schema and `apply`, as a
  * client's would: an operator move from the player at console a, a partner
  * move from the player at console b, an `everyone` move from every player
- * at the station (at a station with one console, both players). The clock
- * stands still while the crew moves; when the solver waits, it runs on a
- * second and the solver is asked again. Throws on an alarm, on a partner
+ * at the station (at a station with one console, both players). Every round
+ * is a second of the module's clock, and the puzzle is ticked as the room
+ * ticks it once its `dueAt` has come; the mission clock stands still while
+ * the crew moves, and when the solver waits it runs on a second and the
+ * solver is asked again. Throws on an alarm, on a partner
  * move at a station with one console, on MAX_IDLE_SEC seconds without a
  * move and on running out of moves. Returns the number of moves taken.
  */
@@ -106,6 +120,8 @@ export function playInstance(def: PuzzleDef, seed: number): number {
   let moves = 0;
   let idle = 0;
   for (let round = 1; moves < MAX_MOVES; round++) {
+    const at = T0 + round * 1000;
+    state = tickedAt(def, state, at);
     const seen = (viewer: Viewer): View => puzzleModule.view(def, state, viewer, viewCtx);
     const views: Perspectives<View> = {
       operator: seen(AT_A),
@@ -125,7 +141,7 @@ export function playInstance(def: PuzzleDef, seed: number): number {
     for (const move of next) {
       moves += 1;
       transcript.push({ ...move, before: views });
-      if (play(move, T0 + round * 1000)) {
+      if (play(move, at)) {
         return moves;
       }
     }

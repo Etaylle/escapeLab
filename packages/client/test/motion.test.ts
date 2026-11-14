@@ -84,6 +84,12 @@ describe('the devices, with reduced motion', () => {
     }
   });
 
+  it('stands the token bar still at the share left, a step each second', () => {
+    const bar = rules.find((rule) => rule.selectors.includes('.access-bar-fill'));
+    expect(bar?.declarations.get('animation')).toBe('none');
+    expect(bar?.declarations.get('transform')).toBe('scaleX(var(--bar-left))');
+  });
+
   it('flashes an alarm and a bump once, still, where they would shake', () => {
     const strip = animationOf('.device--alarm-odd .device-strip-led');
     expect(strip).toBe('strip-calm-odd 120ms step-end');

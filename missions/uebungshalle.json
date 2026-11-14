@@ -106,6 +106,14 @@
       "hints": [
         "Einweisung: Zuerst den Dienst mit E50 vom Strom nehmen, dann von NETZ aus in der Folge des Netzplans hochfahren."
       ]
+    },
+    {
+      "type": "access",
+      "id": "access",
+      "title": "Zugangskontrolle",
+      "hints": [
+        "Einweisung: Erst die Tür am Terminal, dann auf der Benutzerliste das Konto, dessen Rolle sie freigibt. Den Token erst, wenn das Tokengerät dieses Konto zeigt."
+      ]
     }
   ],
   "map": {
@@ -135,9 +143,16 @@
       "#......................................#",
       "#......................................#",
       "#......................................#",
+      "#......................................#",
+      "#......................................#",
+      "#......................................#",
+      "#......................................#",
+      "#......................................#",
+      "#......................................#",
+      "#......................................#",
       "########################################"
     ],
-    "spawns": [{ "x": 17, "y": 23 }, { "x": 20, "y": 23 }, { "x": 23, "y": 23 }],
+    "spawns": [{ "x": 17, "y": 30 }, { "x": 20, "y": 30 }, { "x": 23, "y": 30 }],
     "stations": [
       { "puzzleId": "button-sync", "x": 3, "y": 2 },
       { "puzzleId": "wiring", "x": 12, "y": 2 },
@@ -153,10 +168,12 @@
       { "puzzleId": "circuit", "x": 21, "y": 16, "console": "a" },
       { "puzzleId": "circuit", "x": 26, "y": 16, "console": "b" },
       { "puzzleId": "servers", "x": 30, "y": 16, "console": "a" },
-      { "puzzleId": "servers", "x": 35, "y": 16, "console": "b" }
+      { "puzzleId": "servers", "x": 35, "y": 16, "console": "b" },
+      { "puzzleId": "access", "x": 3, "y": 23, "console": "a" },
+      { "puzzleId": "access", "x": 8, "y": 23, "console": "b" }
     ],
     "labels": [
-      { "text": "ÜBUNGSHALLE", "x": 20, "y": 22 },
+      { "text": "ÜBUNGSHALLE", "x": 20, "y": 29 },
       { "text": "SYNCHRONTASTER · ST-2", "x": 5, "y": 5 },
       { "text": "BRÜCKENKASTEN · NB-6", "x": 14, "y": 5 },
       { "text": "ZEICHENTASTENFELD · ZT-4", "x": 23, "y": 5 },
@@ -168,7 +185,8 @@
       { "text": "DRUCKKNOPF · DK-1", "x": 5, "y": 19 },
       { "text": "SIGNALKETTE · SK-4", "x": 14, "y": 18 },
       { "text": "SICHERUNGSKASTEN · SP-12", "x": 23, "y": 18 },
-      { "text": "RECHNERNETZ · RN-6", "x": 32, "y": 18 }
+      { "text": "RECHNERNETZ · RN-6", "x": 32, "y": 18 },
+      { "text": "ZUGANGSKONTROLLE · ZK-2", "x": 5, "y": 25 }
     ],
     "decor": [
       { "kind": "desk", "x": 9, "y": 2 },
@@ -182,7 +200,8 @@
       { "kind": "desk", "x": 9, "y": 16 },
       { "kind": "desk", "x": 16, "y": 20 },
       { "kind": "desk", "x": 25, "y": 20 },
-      { "kind": "desk", "x": 34, "y": 20 }
+      { "kind": "desk", "x": 34, "y": 20 },
+      { "kind": "desk", "x": 7, "y": 27 }
     ],
     "manuals": [
       {
@@ -268,15 +287,22 @@
         "label": "ANLEITUNG RECHNERNETZ",
         "puzzleIds": ["servers"],
         "spots": [{ "x": 33, "y": 20 }]
+      },
+      {
+        "id": "anleitung-access",
+        "kind": "book",
+        "label": "ANLEITUNG ZUGANGSKONTROLLE",
+        "puzzleIds": ["access"],
+        "spots": [{ "x": 6, "y": 27 }]
       }
     ],
     "notes": [
       {
         "x": 23,
-        "y": 25,
+        "y": 32,
         "text": "Übungshalle · Jede Station steht offen; die Regeln liegen daneben"
       }
     ],
-    "edgeworkSign": { "x": 17, "y": 24 }
+    "edgeworkSign": { "x": 17, "y": 31 }
   }
 }

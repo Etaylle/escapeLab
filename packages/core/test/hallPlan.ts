@@ -1,4 +1,11 @@
-import { applyAction, moduleFor, parseMission, stationKey, viewFor } from '../src/index.js';
+import {
+  applyAction,
+  moduleFor,
+  parseMission,
+  puzzleDueAt,
+  stationKey,
+  viewFor,
+} from '../src/index.js';
 import type {
   Action,
   GameState,
@@ -21,7 +28,10 @@ import { standing, started, T0 } from './lab.js';
  * tools/fixtures/hall-plan.json holds this plan, hall.test.ts keeps it the solvers' own, and
  * the walkthrough checks each instance in the browser against it before it plays the moves.
  * Player p1 is the host, who joins first, and works every station — console a where it has
- * two; p2, the guest, reads its rules or works console b. Each round is a second on the clock.
+ * two, having read its rules at the book as it came on; p2, the guest, reads its rules or works
+ * console b. Each round is a second on the clock, the open station ticked as the room ticks it.
+ * The Zugangskontrolle's tokens hang on that clock: a token of the plan is the one the device
+ * showed the solver, and the walkthrough types the one its device shows instead.
  */
 
 export const HALL_SEED = 26;
@@ -96,6 +106,7 @@ const OPENS: Readonly<Partial<Record<PuzzleDef['type'], readonly string[]>>> = {
   signal: ['sends', 'sequence'],
   circuit: ['wires'],
   servers: ['rows'],
+  access: ['terminal'],
 };
 
 const CREW = ['p1', 'p2'] as const;
@@ -161,9 +172,62 @@ function opensOf(def: PuzzleDef, view: PuzzleView): Record<string, unknown> {
   return Object.fromEntries(fields.map((key) => [key, structuredClone(shown[key])]));
 }
 
+/** `state` at `at`, its open station ticked as the room ticks it once its clock is due. */
+export function ticked(state: GameState, at: number): GameState {
+  const due = puzzleDueAt(state);
+  return due !== null && due <= at ? applyAction(state, { type: 'puzzle-tick', at }) : state;
+}
+
 /**
- * One station from its switch-on to its solve at the round `round`: the round after it, and
- * what it took.
+ * The rules of a station with two consoles as the host reads them at its book as it comes on,
+ * before taking console a, the guest at console b meanwhile: the Zugangskontrolle's list is read
+ * so. Null for a station with one console, whose rules the guest reads at the book throughout.
+ */
+function glanceAtBook(state: GameState, def: PuzzleDef): PuzzleView | null {
+  const book = state.mission.map.manuals.find((m) => m.puzzleIds.includes(def.id));
+  if (moduleFor(def.type).consoles !== 2 || book === undefined) {
+    return null;
+  }
+  const consoleB = stationKey({ puzzleId: def.id, console: 'b' });
+  const places = { stations: { [consoleB]: ['p2'] }, manuals: { [book.id]: ['p1'] } };
+  return puzzleOf(viewFor(standing(state, places), 'p1'));
+}
+
+/** A station's play so far: the moves, the crew's transcript, the digit the button goes on. */
+interface Played {
+  moves: Move<PuzzleInput>[];
+  transcript: SolveAid<PuzzleInput, PuzzleView>['transcript'];
+  releaseAt: number | null;
+}
+
+/**
+ * One round of the crew at the station `def` at `time`: the solver's moves on the views the crew
+ * holds — the host's console, the guest's at console b where there are two, the rules as `read`
+ * at the book or as the guest reads them there — noted in `played`; the state after them.
+ */
+function roundAt(
+  state: GameState,
+  def: PuzzleDef,
+  time: number,
+  { read, played }: { read: PuzzleView | null; played: Played },
+): GameState {
+  const operator = puzzleOf(viewFor(state, 'p1'));
+  const other = puzzleOf(viewFor(state, 'p2'));
+  const two = moduleFor(def.type).consoles === 2;
+  const views = { operator, ...(two ? { partner: other } : {}), reader: read ?? other };
+  const aid = { transcript: played.transcript, ...clockAid(state, time) };
+  const made = moduleFor(def.type).solve(def, views, viewFor(state, 'p1').edgework, aid);
+  if (operator.kind === 'button' && operator.strip !== null) {
+    played.releaseAt = releaseDigit(operator.strip);
+  }
+  played.transcript.push(...made.map((move) => ({ ...move, before: views })));
+  played.moves.push(...made);
+  return inputs(made, time).reduce(applyAction, state);
+}
+
+/**
+ * One station from its switch-on to its solve at the round `round`, the station ticked as the
+ * room ticks it: the round after it, and what it took.
  */
 function playStation(
   state: GameState,
@@ -173,25 +237,12 @@ function playStation(
   const index = state.currentPuzzleIndex;
   let next = switchOn(state, def, T0 + round * 1000);
   const opens = opensOf(def, puzzleOf(viewFor(next, 'p1')));
-  const moves: Move<PuzzleInput>[] = [];
-  const transcript: SolveAid<PuzzleInput, PuzzleView>['transcript'] = [];
-  let releaseAt: number | null = null;
-  const two = moduleFor(def.type).consoles === 2;
+  const played: Played = { moves: [], transcript: [], releaseAt: null };
+  const crew = { read: glanceAtBook(next, def), played };
   let at = round;
   for (; next.currentPuzzleIndex === index && at < round + 600; at++) {
     const time = T0 + at * 1000;
-    const operator = puzzleOf(viewFor(next, 'p1'));
-    const other = puzzleOf(viewFor(next, 'p2'));
-    const views = { operator, ...(two ? { partner: other } : {}), reader: other };
-    const edgework = viewFor(next, 'p1').edgework;
-    const aid = { transcript, ...clockAid(next, time) };
-    const made = moduleFor(def.type).solve(def, views, edgework, aid);
-    if (operator.kind === 'button' && operator.strip !== null) {
-      releaseAt = releaseDigit(operator.strip);
-    }
-    transcript.push(...made.map((move) => ({ ...move, before: views })));
-    moves.push(...made);
-    next = inputs(made, time).reduce(applyAction, next);
+    next = roundAt(ticked(next, time), def, time, crew);
     if (next.penaltySeq > 0) {
       throw new Error(`hall plan: an alarm at "${def.id}" on seed ${next.seed}`);
     }
@@ -199,6 +250,7 @@ function playStation(
   if (next.currentPuzzleIndex === index) {
     throw new Error(`hall plan: "${def.id}" stays unsolved after 600 rounds`);
   }
+  const { moves, releaseAt } = played;
   const station = { id: def.id, type: def.type, title: def.title, opens, moves, releaseAt };
   return { state: next, round: at + 1, station };
 }

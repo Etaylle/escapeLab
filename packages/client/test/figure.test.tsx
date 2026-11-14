@@ -10,6 +10,7 @@ import {
   SERVICES,
   serviceName,
   SIGNAL_PATTERNS,
+  TOKEN_FIGURE,
   type ManualBlock,
 } from '@escapelab/core';
 import { Figure } from '../src/screens/Figure.js';
@@ -29,6 +30,7 @@ const SAYS: Record<string, RegExp> = {
   signal: /^Zwei Pulte nebeneinander/,
   circuit: /^Sicherungskasten und Prüfpult: links 5 Kabel.*Zeigerinstrument über 5 Zifferntasten/,
   servers: /^Dienste und Rack: 6 Kästen .*Pfeil von jeder Abhängigkeit.*Rack mit 6 Einschüben/,
+  access: /^Terminal und Tokengerät: links ein Bildschirm mit Türliste.*rechts ein Tokengerät/,
 };
 
 function drawing(of: string): { html: string; label: string } {
@@ -157,6 +159,30 @@ describe('Figure', () => {
     const arrows = /<path class="services-arrows" d="([^"]*)"><\/path>/.exec(html)?.[1] ?? '';
     expect(arrows.match(/M/g)).toHaveLength(2 * dependencies);
     expect(html.match(/<rect x="284"/g)).toHaveLength(6);
+  });
+
+  it('draws the token device the Zugangskontrolle’s rules show beside the token’s rules', () => {
+    const def = puzzleDefSchema.parse({ type: 'access', id: 'z', title: 'Z' });
+    const figures = moduleFor(def.type)
+      .manual(def)
+      .flatMap((section) => section.blocks)
+      .filter((block) => block.kind === 'figure');
+    expect(figures).toEqual([
+      { kind: 'figure', of: 'access', caption: 'Abb. 1 — Terminal und Tokengerät' },
+      { kind: 'figure', of: TOKEN_FIGURE, caption: 'Abb. 2 — Tokengerät mit Balken' },
+    ]);
+    const { html, label } = drawing(TOKEN_FIGURE);
+    expect(html).toMatch(/^<svg class="figure" viewBox="0 0 376 140" role="img" aria-label="/);
+    expect(label).toMatch(/^Tokengerät: Anzeige mit der Zeile KONTO meier, dem Token 405 217/);
+    expect(label).not.toBe(drawing('access').label);
+    expect(html).not.toContain(`>${TOKEN_FIGURE}</text>`);
+    expect(html).not.toMatch(/#[0-9a-f]{3,8}\b|rgba?\(/i);
+    const lettering = [...html.matchAll(/<text[^>]*>([^<]*)<\/text>/g)].map((m) => m[1]);
+    expect(lettering).toEqual(['ZK-2 TOKEN', 'KONTO meier', '405 217', '17 s']);
+    // A bar of fifteen segments, nine of them lit: what is left of the period.
+    const segments = html.match(/<rect [^>]*height="10.5"[^>]*>/g) ?? [];
+    expect(segments).toHaveLength(15);
+    expect(segments.filter((rect) => rect.includes('fill-opacity="0.7"'))).toHaveLength(9);
   });
 
   it('frames a device it has no drawing for, naming its type, and never throws', () => {

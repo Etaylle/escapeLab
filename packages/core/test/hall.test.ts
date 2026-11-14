@@ -1,9 +1,9 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { applyAction, checkMission, moduleFor, viewFor } from '../src/index.js';
-import type { Action, GameState, Move, PuzzleInput } from '../src/index.js';
+import type { Action, GameState, Move, PuzzleInput, PuzzleView } from '../src/index.js';
 import { hallMission, machineOf, stationTypes } from './hall.js';
-import { crewAt, hall, HALL_SEED, hallPlan, walkOrder } from './hallPlan.js';
+import { crewAt, hall, HALL_SEED, hallPlan, ticked, walkOrder } from './hallPlan.js';
 import type { HallPlan, HallStation } from './hallPlan.js';
 import { standing, started, T0 } from './lab.js';
 
@@ -114,10 +114,54 @@ function momentOf(move: Move<PuzzleInput>, station: HallStation, at: number, fro
   return release && station.releaseAt !== null ? whenShowing(station.releaseAt, at, from) : at;
 }
 
+/** A move of the plan as it is made: the state by then, its moment and its input. */
+interface Made {
+  state: GameState;
+  at: number;
+  input: PuzzleInput;
+}
+
+type AccessView = Extract<PuzzleView, { kind: 'access' }>;
+
+/** The open Zugangskontrolle as `playerId` holds it in `state`; null where none is open. */
+function accessOf(state: GameState, playerId: string): AccessView | null {
+  const view = viewFor(state, playerId).puzzle;
+  return view?.kind === 'access' ? view : null;
+}
+
+/**
+ * A token of the plan as the walkthrough types it, due at `at`: the station ticked a second at a
+ * time until the guest's token device shows the account the host's prompt asks for, then the
+ * token the device shows — the plan's digits were the solver's, on its own clock.
+ */
+function tokenWhenShown(state: GameState, at: number): Made {
+  for (let now = at; now < at + 10 * 60_000; now += 1000) {
+    const next = ticked(state, now);
+    const device = accessOf(next, 'p2')?.device ?? null;
+    if (device !== null && device.account === accessOf(next, 'p1')?.terminal?.prompt) {
+      return { state: next, at: now, input: { token: device.token } };
+    }
+  }
+  throw new Error('the token device never came round to the account the prompt asks for');
+}
+
+/**
+ * The plan's `move` at `station` as the walkthrough makes it, due at `at`: a token once the device
+ * shows the account it is for (`tokenWhenShown`), a release once the clock shows its digit, every
+ * other move as it stands — the station ticked as the room ticks it up to then.
+ */
+function madeAt(state: GameState, move: Move<PuzzleInput>, station: HallStation, at: number): Made {
+  if ('token' in move.input) {
+    return tokenWhenShown(state, at);
+  }
+  const now = momentOf(move, station, at, state.clockFrom ?? T0);
+  return { state: ticked(state, now), at: now, input: move.input };
+}
+
 /**
  * The plan's `station` worked through the reducer from `at` on, as the walkthrough works it:
- * the crew at its places, p1's E, then every move a second after the one before. Returns the
- * state after it and the time of its last move.
+ * the crew at its places, p1's E, then every move a second after the one before (`madeAt`).
+ * Returns the state after it and the time of its last move.
  */
 function worked(
   state: GameState,
@@ -132,8 +176,9 @@ function worked(
   let next = applyAction(here, { type: 'interact', playerId: 'p1', at });
   let now = at;
   for (const move of station.moves) {
-    now = momentOf(move, station, now + 1000, next.clockFrom ?? T0);
-    next = inputs([move], now).reduce(applyAction, next);
+    const made = madeAt(next, move, station, now + 1000);
+    now = made.at;
+    next = inputs([{ ...move, input: made.input }], now).reduce(applyAction, made.state);
   }
   return { state: next, at: now };
 }

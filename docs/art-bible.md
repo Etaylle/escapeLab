@@ -577,7 +577,8 @@ height at least:
 A taller window adds a little to each (0.3 to 0.8 px for every 100 px of height, up to 12, 13,
 15 and 22 px), and the text size multiplies all of it (0.9, 1, 1.15). Readouts that are the
 device's one figure keep their own size: the radio's frequency 32 px, the relay's instruction
-24 px and its seconds 26 px. Words drawn in an SVG grow with their drawing: the Netzplan's
+24 px and its seconds 26 px, the token device's six digits twice the readout (36 px at least,
+28.8 on a phone held sideways), the unlit segments „888 888" faint behind them. Words drawn in an SVG grow with their drawing: the Netzplan's
 names stand 11 units high (12 at most at the large text size, as much as their box holds right
 of its LED), the meter's scale 11 units, 13 on a phone, where its dial is drawn smaller.
 
@@ -670,8 +671,9 @@ the machine does in a column of their own beside it — the head has no row to s
 engraved line, which the rack's and the meter's tabs paid for by 11 to 17 px of scrolling —
 the bezel slimmer; every control in reach without scrolling,
 and a list that runs long scrolls in its own box — the terminal's log, kept at its newest line.
-The terminal's keys stand in a column beside its screen, the rack's units a fingertip high with
-the Netzplan beside them, the meter's smaller dial beside its keys and paper, the Signalkette's
+The terminal's keys stand in a column beside its screen — the Zugangskontrolle's too, its numeric
+pad there while it asks for a token, and its token device's display beside the TERMINAL lamp —,
+the rack's units a fingertip high with the Netzplan beside them, the meter's smaller dial beside its keys and paper, the Signalkette's
 keys lower with the done lamps beside the status row, the radio's lamp beside its dial. The way
 back and the notepad hang as steel tabs under the chassis. The relay console stands in two
 columns: the emergency, its procedure and the instruction to read out on the left, the
