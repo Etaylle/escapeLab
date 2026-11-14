@@ -506,10 +506,18 @@ describe('the scene’s places under reduced motion and behind the lobby', () =>
     stage.close();
   });
 
+  it('stands at night with no hero on the stage, as on a phone, sunk once', async () => {
+    const { page, stage, bake } = await staged(false);
+    const sinks = (): string[] =>
+      callEntries(drawnBy(bake), 'fillRect').flatMap(({ op }) => (op === 'source-atop' ? [op] : []));
+    expect(sinks()).toHaveLength(1);
+    page.run(1000);
+    expect(sinks()).toHaveLength(1);
+    stage.close();
+  });
+
   it('shows the drift lit behind the lobby, cut there and back under the doors', async () => {
     const { page, scene, stage, bake, places } = await staged(false);
-    const lamps = await import('../src/world/menu/lamp.js');
-    lamps.holdNight(true);
     places.holdPlace('history');
     await framesAndSteps(page);
     page.run(2500);
@@ -531,7 +539,6 @@ describe('the scene’s places under reduced motion and behind the lobby', () =>
     stage.lobby(false);
     page.run(100);
     expect(corners(scene, bake, out)[0]).toEqual(there);
-    lamps.holdNight(false);
     stage.close();
   });
 });

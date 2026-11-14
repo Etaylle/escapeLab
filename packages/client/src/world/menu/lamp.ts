@@ -194,29 +194,6 @@ const LIGHT_STEPS = 20;
 /** The lamp the page holds now — the menu's hero has one — and who listens for it. */
 let held: HeroLamp | null = null;
 const listeners = new Set<() => void>();
-/** Whether the menu's lab stands at night, its lamp the light in it (`holdNight`). */
-let night = false;
-
-/**
- * Whether the menu's lab stands at night, its lights out and the hero's lamp the light in it
- * (scene.ts `nightTo`): from the first frame a hero stands on the stage until the stage leaves
- * it no room — not while the menu is only covered by a page, or gone for the lobby, which lights
- * its scene of its own (stage.ts).
- */
-export function labAtNight(): boolean {
-  return night;
-}
-
-/** The lab at night (`dark`) or lit; every listener hears of it where it changes. */
-export function holdNight(dark: boolean): void {
-  if (night === dark) {
-    return;
-  }
-  night = dark;
-  for (const listener of [...listeners]) {
-    listener();
-  }
-}
 
 /** The lamp the hero holds now; null while no hero stands on the stage. */
 export function heroLamp(): HeroLamp | null {
@@ -253,7 +230,7 @@ export function holdLamp(lamp: HeroLamp | null): void {
   }
 }
 
-/** Tells `changed` whenever the beam the lamp lays, or the night, changes; returns its stop. */
+/** Tells `changed` whenever the beam the lamp lays changes; returns its stop. */
 export function watchLamp(changed: () => void): () => void {
   listeners.add(changed);
   return () => {

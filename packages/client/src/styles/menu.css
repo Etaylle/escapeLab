@@ -116,7 +116,8 @@
   white-space: nowrap;
 }
 
-/* The sign at the gate under it, a thin line: the light mono, softer than the title's white. */
+/* The sign at the gate under it, a thin line: the light mono, softer than the title's white —
+   4.5:1 at least over the lab at night wherever it lies over it (docs/art-bible.md, The menu). */
 .menu-sub {
   margin: 14px 0 0;
   font-family: var(--mono);
@@ -124,7 +125,7 @@
   font-weight: 300;
   letter-spacing: 0.28em;
   text-transform: uppercase;
-  color: rgba(198, 186, 165, 0.78);
+  color: #d0c5b2;
   text-shadow: 0 1px 2px #000;
 }
 
@@ -258,11 +259,12 @@
   margin: 0;
 }
 
-/* How the game is played, one quiet line under the items: the title's face, small and spaced. */
+/* How the game is played, one quiet line under the items: the title's face, small and spaced, a
+   step lighter than the muted grey, so that it holds 4.5:1 over the lab at night (the art bible). */
 .menu-lead {
   margin: 4px 0 0;
   max-width: 40em;
-  color: var(--muted);
+  color: #b4c3cf;
   font-family: var(--display);
   font-size: 12px;
   letter-spacing: 0.05em;

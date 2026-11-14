@@ -499,10 +499,10 @@ The start screen is the game's main menu over a living scene from the world, as 
 Firewatch's are. Behind it the lab of the mission picked drifts along the opening's shot, from
 where the shot starts to the crew's spawn and back in 30 s, slowing at both ends, the drones parked
 on their first waypoints and nobody in it; a mission picked anew comes in over the lab before in
-600 ms. While the hero stands on the stage the lab stands at night — the opening's lit lab, the
-power on, sunk to 38 % of its light — and the hero's hand lamp is its main light (The hero);
-behind the lobby, and where the stage leaves the hero no room, it stands lit, as the opening shows
-it before the blackout. Each item of the menu has a room of the lab, which the scene's camera goes
+600 ms. The lab stands at night — the opening's lit lab, the power on, sunk to 38 % of its light
+—, where the hero stands its hand lamp the main light (The hero), and as dark where the stage
+leaves the hero no room, as on a phone; behind the lobby it stands lit, as the opening shows it
+before the blackout. Each item of the menu has a room of the lab, which the scene's camera goes
 to as the item is hovered or given the focus (The menu's places). A vignette lies over it —
 darkest behind the menu, the edges sinking into the dark — and the page's scanlines over all;
 nothing blurs what lies behind it. Under reduced motion the scene stands still at the shot's start.
@@ -519,23 +519,30 @@ menu stands one item under the next in the title's face, upper case: Einsatz sta
 Offene Runden, Handbuch, Bestenliste, Editor, Einstellungen. The item lit — moved to by the arrows,
 a controller's D-pad or a click — is the focus itself: a rail of the beam's warm light on its left
 (`--beam`, the lamp's tungsten), that light behind it, its label a step to the right, as if the
-hero's lamp had found it; the keyboard's focus rings it as well, as every control's (Interface).
-The pointer only brightens the item it is over, over 0.4 s, and moves no focus, so that a name
-being typed keeps it. Under the items one quiet line, in the title's face at the 12-px floor and
-spaced, says how the game is played: „Am Pult die Maschine, im Buch die Regeln — gelöst wird nur
-gemeinsam, per Stimme, ein Gerät je Kopf, Rücken an Rücken." From 1600 px across the column is
-wider and its items a step larger, 16.5 px, so that the menu holds its own beside a taller hero.
-Nothing of the menu is set under 12 px. A run that binds the pass stands first and lit, in a
+hero's lamp had found it; the keyboard's focus rings it as well, as every control's (Interface). The
+pointer only brightens the item it is over, over 0.4 s, and moves no focus, so that a name being
+typed keeps it. Under the items one quiet line, in the title's face at the 12-px floor and spaced,
+says how the game is played: „Am Pult die Maschine, im Buch die Regeln — gelöst wird nur gemeinsam,
+per Stimme, ein Gerät je Kopf, Rücken an Rücken." Where the vignette's dark does not reach under
+them — an upright phone, a tablet, a narrower window — both quiet lines lie over the lab, and each
+holds 4.5:1 (WCAG 2.2) against the lightest pixel of it at night: the sign in #d0c5b2, the line in
+#b4c3cf, a step lighter than the panels' muted grey, in which the line fell to 2.79:1 over the lab
+at night on an upright phone and 3.96:1 at 1024 × 768, to 1.0 over the lab lit. Measured with the
+text made clear, every 750 ms across the drift's 30 s, in ten windows from 360 × 740 to 1440 × 820
+and the phones held sideways, the line stood at 5.24:1 at the least (420 × 760) and the sign at
+5.07:1 (932 × 430); the walkthrough measures both at menu.png, menu-hero-1024.png and menu-phone.png
+and fails a line under 4.5:1 at any pixel (shots.mjs `checkMenuLines`). From 1600 px across the
+column is wider and its items a step larger, 16.5 px, so that the menu holds its own beside a taller
+hero. Nothing of the menu is set under 12 px. A run that binds the pass stands first and lit, in a
 panel's frame — 14 px corners, the `--line-2` hairline — its head in the title's face, the items
-under it dimmed. The account stands in the top bar,
-at its end, as a game's profile does (BarAccount.tsx): the player's own figure's head as its avatar
-— the dome and the visor turned three quarters to the bar's middle, in the account's colour, in a
-dark ring 30 px across —, the name in the mono, „Ohne Namen" before one, and where the bar has the
-room, from 1100 px across, the runs the account played; a press opens the settings' „Konto". The
-name is typed at the head of every panel that seats the pass and in „Konto", one name for the page.
-On a phone the avatar stands alone, a fingertip's target. Where the stage leaves it room for three
-and a half tiles — from about 1100 px across — the player's figure stands large at the stage's
-right, the hero (The hero).
+under it dimmed. The account stands in the top bar, at its end, as a game's profile does
+(BarAccount.tsx): the player's own figure's head as its avatar — the dome and the visor turned three
+quarters to the bar's middle, in the account's colour, in a dark ring 30 px across —, the name in
+the mono, „Ohne Namen" before one, and where the bar has the room, from 1100 px across, the runs the
+account played; a press opens the settings' „Konto". The name is typed at the head of every panel
+that seats the pass and in „Konto", one name for the page. On a phone the avatar stands alone, a
+fingertip's target. Where the stage leaves it room for three and a half tiles — from about 1100 px
+across — the player's figure stands large at the stage's right, the hero (The hero).
 
 A panel slides in over the menu from its side in 200 ms, fading up, the menu dimmed under it; under
 reduced motion it only fades. Nothing waits on the way to a panel: it opens on the press. Into the
@@ -823,17 +830,18 @@ changes. Left out as the stage is measured, and gone with the menu, the hero let
 its canvases at once, and the scene lets its beam's go, its lab drifting on through the lobby
 without them.
 
-The night costs a frame nothing: the bake is sunk once, in place, as the hero comes — a black laid
-over its own pixels alone — and lit again by adding it onto itself as the lobby comes (scene.ts
-`nightTo`), each a single pass over the bake. The beam is laid over the lab as a haze rather than
-added onto it as light: over a lab at night the two look alike, and adding cost the beam a quarter
-more on the bench below. Its cone is held to 0.44 rad and 1.2 times the hero's height by its cost,
-which grows with its pixels: at 0.56 rad and 1.45 times, added, the beam alone cost 1.2 ms a frame
-there. The flare lays it a second time while it lasts, 320 ms; the dust's motes are a soft sprite
-drawn at each mote's size, about 17 of them a frame. The edge light down the hero's front and the
-visor's glow are drawn into its upper layer, which is drawn anew only as the lamp's light steps
-by a twentieth, as the glow comes or goes, or as a glance turns it. A frame that looks past the
-bake into the dark round the lab fills that part with the dark's colour (The menu's places).
+The night costs a frame nothing: each piece of the bake is sunk once, in place, as it is first shown
+or baked — a black laid over its own pixels alone — and lit again by adding it onto itself as the
+lobby comes (scene.ts `nightTo`), each a single pass over the piece. The beam is laid over the lab
+as a haze rather than added onto it as light: over a lab at night the two look alike, and adding
+cost the beam a quarter more on the bench below. Its cone is held to 0.44 rad and 1.2 times the
+hero's height by its cost, which grows with its pixels: at 0.56 rad and 1.45 times, added, the beam
+alone cost 1.2 ms a frame there. The flare lays it a second time while it lasts, 320 ms; the dust's
+motes are a soft sprite drawn at each mote's size, about 17 of them a frame. The edge light down the
+hero's front and the visor's glow are drawn into its upper layer, which is drawn anew only as the
+lamp's light steps by a twentieth, as the glow comes or goes, or as a glance turns it. A frame that
+looks past the bake into the dark round the lab fills that part with the dark's colour (The menu's
+places).
 
 S-hero's bench put the beam and the hero together at +0.64 ms a frame over the scene, the scene
 alone at 1.13; the sending microphone, its light laid over the hero's layers alone (e6d09ed), at

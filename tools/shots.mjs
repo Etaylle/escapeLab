@@ -625,6 +625,7 @@ import { createWriteStream, mkdirSync, readFileSync, writeFileSync } from 'node:
 import { join, resolve } from 'node:path';
 import { fileURLToPath, URL } from 'node:url';
 import { chromium, request } from 'playwright';
+import { lineContrast, TEXT_CONTRAST } from './contrast.mjs';
 import { AGAIN_AFTER_MS, allowanceOf, gateWindow, p95Text, paceOf } from './framegate.mjs';
 import { withOthersFrozen } from './freeze.mjs';
 import { ART_PX, bobVerdict, GLOWING, glowAtCorners, haloAgainst } from './glowcheck.mjs';
@@ -7278,11 +7279,47 @@ async function heroNarrow(page) {
   await sceneBaked(page, { w: 1024, h: 768 });
   await heroGone(page, '1024x768');
   await capture(page, 'menu-hero-1024.png');
+  await checkMenuLines(page, 'menu-hero-1024.png');
 }
 
 /**
- * menu.png: the start screen as a game's menu over its living scene — the lit lab of the first
- * mission baked for the window and drifting, the title, the menu, the bar's account — walked by
+ * The menu's quiet lines over the scene on `page` as it stands — the sign under the title and the
+ * line under the items: each one's text made clear, its box shot, and its colour laid over each
+ * pixel behind it (contrast.mjs `lineContrast`); fails the run where a line lies out of the window
+ * or under TEXT_CONTRAST at any pixel. The drift moves the lab behind them: this is one moment of
+ * it (docs/art-bible.md, The menu, has the whole drift measured).
+ */
+async function checkMenuLines(page, label) {
+  for (const line of ['.menu-sub', '.menu-lead']) {
+    const el = page.locator(line).first();
+    const box = await el.boundingBox();
+    const view = page.viewportSize();
+    if (box === null || view === null || box.y < 0 || box.y + box.height > view.height) {
+      fail(`${label}: ${line} lies out of the window (${JSON.stringify(box)})`);
+      continue;
+    }
+    const colour = await el.evaluate((node) => globalThis.getComputedStyle(node).color);
+    const clear = await page.addStyleTag({
+      content: `${line} { color: transparent !important; text-shadow: none !important; }`,
+    });
+    const png = await page.screenshot({ clip: box, type: 'png' });
+    await clear.evaluate((node) => node.remove());
+    const { worst, lightest } = lineContrast(colour, decodePng(png, line).rgba);
+    const verdict = worst >= TEXT_CONTRAST ? '' : ` (!! under ${TEXT_CONTRAST}:1)`;
+    console.log(
+      `${'lines'.padEnd(19)}${label} ${line}: ${worst.toFixed(2)}:1 at its lightest pixel ` +
+        `(${lightest.toFixed(4)})${verdict}`,
+    );
+    if (worst < TEXT_CONTRAST) {
+      fail(`${label}: ${line} stands at ${worst.toFixed(2)}:1 over the scene`);
+    }
+  }
+}
+
+/**
+ * menu.png: the start screen as a game's menu over its living scene — the lab of the first
+ * mission at night, baked for the window and drifting, the title, the menu, the bar's account —
+ * walked by
  * the keys (`walkMenuKeys`), its music heard as the music's manifest has it; its quiet window, the
  * scene drifting, has to keep the screen's pace under SHOTS_SOFTWARE_GL (MENU_P95_MS) and the
  * gate's allowance anyway; at 1280×720 it has to fit as at 1440×820 (menu-1280.png), the scene
@@ -7294,6 +7331,7 @@ async function captureMenu(page) {
   await heroArrived(page);
   await capture(page, 'menu.png');
   console.log(`menu.png           ${sceneText(scene)}`);
+  await checkMenuLines(page, 'menu.png');
   await checkHero(page, '1440x820', HERO_TILES.laptop);
   await menuSoundAtFirstKey(page, () => walkMenuKeys(page), list);
   await checkPieceCodec(page, list);
@@ -15309,6 +15347,7 @@ async function guestJoins(code) {
 async function guestMenu(guest) {
   await sceneBaked(guest);
   await capture(guest, 'menu-phone.png');
+  await checkMenuLines(guest, 'menu-phone.png');
   await checkMenuPhones(guest);
   await captureHistory(guest, 'history-phone.png');
 }

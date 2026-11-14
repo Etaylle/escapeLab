@@ -5,7 +5,7 @@ import { censusTrace, lightCensus, type LightCensus } from '../render/census.js'
 import { cameraAt, newCamera, travelling, type SceneCamera } from './camera.js';
 import { driftAt } from './drift.js';
 import { heroTile } from './hero.js';
-import { heroLamp, labAtNight, lampKey, watchLamp } from './lamp.js';
+import { heroLamp, lampKey, watchLamp } from './lamp.js';
 import { freeBeam, layBeam, sceneBeam, type SceneBeam } from './lampArt.js';
 import { browserSceneHost, runScene } from './loop.js';
 import { heldPlace, watchPlace } from './places.js';
@@ -36,7 +36,7 @@ import {
  * once the pieces it shows are baked (places.ts, camera.ts) —, coming in over the lab before,
  * and baked anew once the canvas has held a new size for a moment; over it
  * the beam of the lamp the menu's hero holds, where one does (lamp.ts, lampArt.ts), the lab sunk
- * to night while a hero stands on the stage (scene.ts `nightTo`). Under reduced motion the loop
+ * to night but behind the lobby (scene.ts `nightTo`). Under reduced motion the loop
  * stops once the still is drawn, until a lab is baked anew, the hero's lamp moves, the place
  * changes — a cut — or the motion does. Under `?trace=1` the walkthrough reads the frames off the
  * page as it does a run's (frameTrace.ts), what the scene shows (`SceneProbe`), and what its light
@@ -207,8 +207,11 @@ function stageState(): StageState {
   return { show, probe, beam, camera, ...begun };
 }
 
-/** Whether the lab stands at night now: a hero has made it so, and no lobby stands over it. */
-const nightNow = (state: StageState): boolean => labAtNight() && !state.behindLobby;
+/**
+ * Whether the lab stands at night now: on the menu, where a hero stands or none, as on a phone —
+ * not behind the lobby, which lights it.
+ */
+const nightNow = (state: StageState): boolean => !state.behindLobby;
 
 /** The item whose place the menu asks for now; none behind the lobby. */
 const placeAsked = (state: StageState): string | null =>
@@ -266,8 +269,8 @@ function layLamp(ctx: CanvasRenderingContext2D, state: StageState, now: number, 
 }
 
 /**
- * One frame of the scene on `ctx` at `now`: each lab it shows at night or lit, as the hero has
- * it; the camera at the drift or on its way to a place, a cut under less motion (`still`); the
+ * One frame of the scene on `ctx` at `now`: each lab it shows at night, or lit behind the lobby;
+ * the camera at the drift or on its way to a place, a cut under less motion (`still`); the
  * lab copied from there, the beam over it.
  */
 function drawFrame(ctx: CanvasRenderingContext2D, state: StageState, now: number, still: boolean) {

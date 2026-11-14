@@ -33,7 +33,6 @@ import { freeHero, heroCanvas, paintHero, type HeroCanvas } from './heroArt.js';
 import {
   aimSweep,
   holdLamp,
-  holdNight,
   LAMP_STEP,
   lightStep,
   lensAt,
@@ -794,11 +793,9 @@ export function heroPainter(on: HeroPainting, since: number): (now: number) => b
     holdPlace(placeTarget(on));
     if (place === null) {
       leaveOut(on.hero);
-      holdNight(false);
       return false;
     }
     shownOnPage = true;
-    holdNight(true);
     const look = on.look.current;
     const reduced = on.reduced();
     const entrance = entranceNow(on, place, now);
@@ -923,7 +920,6 @@ export function startHero(
       probePlace(probe, standing);
       if (standing.place === null) {
         leaveOut(hero);
-        holdNight(false);
       }
       loop.wake();
     }),

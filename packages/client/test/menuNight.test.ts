@@ -11,25 +11,18 @@ import {
   type HeroCanvas,
   type HeroFrame,
 } from '../src/world/menu/heroArt.js';
-import { heroPainter } from '../src/world/menu/heroStage.js';
-import {
-  holdLamp,
-  holdNight,
-  labAtNight,
-  watchLamp,
-  type HeroLamp,
-} from '../src/world/menu/lamp.js';
+import { holdLamp, watchLamp, type HeroLamp } from '../src/world/menu/lamp.js';
 import { FLARE_LIGHT, layBeam, sceneBeam } from '../src/world/menu/lampArt.js';
 import { NIGHT_SINK, nightTo, type SceneBake } from '../src/world/menu/scene.js';
 import { css, parseHex, rgba, sink } from '../src/world/palette.js';
 import { callEntries, fakeCanvas, FakeGradient, FakePath2D, type Entry } from './fakeCanvas.js';
-import { DESKTOP_STAGE, painting, placedOn } from './heroPage.js';
+import { DESKTOP_STAGE, placedOn } from './heroPage.js';
 
 /**
  * The menu's lab at night and the light in it (docs/art-bible.md „The hero"): the lab baked sunk
- * to night once, in place, while a hero stands on the stage, and lit again for the lobby or a
- * stage without one; the beam laid as light added onto it, its motes and its flare; the hero in
- * its colour sunk for the night, an edge of its lamp's light down its front, its visor catching
+ * to night once, in place, and lit again for the lobby (test/menuStage.test.ts has the stage keep
+ * it so); the beam laid over it as a haze of the lamp's light, its motes and its flare; the hero
+ * in its colour sunk for the night, an edge of its lamp's light down its front, its visor catching
  * the glow of the item it looks at — and nothing of it on a figure of the world.
  */
 
@@ -103,7 +96,7 @@ describe('the lab at night', () => {
   });
 });
 
-describe('the night the hero holds', () => {
+describe('the lamp the hero holds', () => {
   beforeEach(() => {
     vi.stubGlobal('Path2D', FakePath2D);
     vi.stubGlobal('window', { devicePixelRatio: 1, innerWidth: 1440, innerHeight: 820 });
@@ -111,26 +104,6 @@ describe('the night the hero holds', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     holdLamp(null);
-    holdNight(false);
-  });
-
-  it('falls with the hero standing on the stage, and lifts where the stage leaves it none', () => {
-    const on = painting();
-    heroPainter(on, 0)(100);
-    expect(labAtNight()).toBe(true);
-    on.standing.place = null;
-    heroPainter(on, 0)(200);
-    expect(labAtNight()).toBe(false);
-  });
-
-  it('tells the scene only as it falls or lifts', () => {
-    const told = vi.fn();
-    const stop = watchLamp(told);
-    holdNight(true);
-    holdNight(true);
-    holdNight(false);
-    stop();
-    expect(told).toHaveBeenCalledTimes(2);
   });
 
   it('tells the scene of a flare of the lamp alone', () => {
