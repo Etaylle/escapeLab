@@ -11,11 +11,12 @@
  *     node tools/shots.mjs [baseUrl] [outDir]
  *
  * Groups (tools/groups.mjs): every capture, and every label a skip line carries, belongs to one of
- * sixteen groups; SHOTS_ONLY and SHOTS_SKIP, each a comma-separated list of their names, pick those
- * a run plays — a quick proof of one part. The drills, each in a room of its own before the
- * walkthrough: editor, art, drones (the danger sense, a drone close by), reconnect, restart, and
- * in a Systemcheck run the Serverraum's scratch mission, devices', and the Zugangskontrolle's,
- * access. The walkthrough's own stages:
+ * seventeen groups; SHOTS_ONLY and SHOTS_SKIP, each a comma-separated list of their names, pick
+ * those a run plays — a quick proof of one part. The drills, each in a room of its own before the
+ * walkthrough: editor, art, drones (the danger sense, a drone close by), reconnect, restart, three
+ * (Blackout for a crew of three through the Signalkette) — and in a Systemcheck run the
+ * Serverraum's scratch mission, devices', and the Zugangskontrolle's, access. The walkthrough's
+ * own stages:
  * screens (the menu and its sound, the history, the lobby, the run started from it), intro (the
  * opening to blackout.png, the cold open at density 2 with it) and run (the mission to the won
  * card: the lit rooms, the finds, the audience's way in, the escape, the end, and after the won
@@ -130,7 +131,23 @@
  * asking more than 400 ms. The audience types the room's code in small letters into „Beitreten"
  * (menu-join.png): it has to stand in capitals, in a field no browser fills from its passwords. In
  * the reconnect drill a new tab of Anna's browser, her run standing paused, opens the menu on the
- * run's card, first and lit, every other item dimmed (menu-bound.png). The menu's sound waits for
+ * run's card, first and lit, every other item dimmed (menu-bound.png). The hero — the player's own
+ * figure standing large at the stage's right (client screens/MenuHero.tsx) — has to stand there at
+ * 1440×820 and at 1280×720 about five of the scene's tiles tall, its canvas clear of the menu's
+ * column, its lead line and the profile, or the run fails. menu-hero.png shows it with its hand
+ * lamp on, the beam laid over the scene and ending short of the menu's column; with „Beitreten"
+ * hovered the beam has to hold a beat pointing at it within two passes of its sweep. On the first
+ * menu of a page it walks in: a page of its own holds it 600 ms into its walk, as the pause trick
+ * holds a device's fade (menu-hero-entrance.png), its lamp off; a key wakes the menu's sound, and
+ * let go, the hero has to stop, click the cold open's click and switch its lamp on. Hovered, an
+ * item turns the hero's head to it (menu-hero-hover.png, the beam holding its beat on
+ * „Beitreten"); „Einsatz starten" open, the hero stands half a tile aside, clear of the panel
+ * (menu-hero-missions.png); as the doors close for the lobby it has turned away to the lab; and in
+ * the reconnect drill's tab it looks at the run's card. At 1280×720 it stands as at 1440×820
+ * (menu-hero-1280.png); at 1100×700 three and a half tiles tall at least, beside a panel open too;
+ * at 1024×768, where the room beside the widest panel holds fewer, it is left out, the profile's
+ * figure standing for it (menu-hero-1024.png), and on the guest's phone, upright and sideways.
+ * The menu's sound waits for
  * the first key, the speaker's lamp lit, and plays after it; the lobby keeps it at its weight,
  * chimes as the round comes up and chirps as Ben says ready; the run's start ends it. The won card
  * asks for its sting and its theme (end music), which go as the next run opens.
@@ -3359,15 +3376,31 @@ async function letThrough(walker, holder, target) {
 }
 
 /**
- * Tiles beside `station` for `count` players to stand on, one each: floor
- * within reach of it, neither a plate, another station nor furniture,
- * nearest first.
+ * The tiles where a note of the last shift lies or is read, by key — E there reads the note
+ * rather than working what stands beside it: round every note `players`' views show, and every
+ * note of Blackout's file where the run plays it, found or not.
  */
-function spotsBy(station, map, count) {
+function noteTiles(players) {
+  const filed = MISSION.toLowerCase() === 'blackout' ? BLACKOUT.map.notes : [];
+  const shown = players.flatMap((player) => player.seen.view?.map?.notes ?? []);
+  return new Set(
+    [...filed, ...shown].flatMap(({ x, y }) =>
+      [[0, 0], ...NEIGHBOURS].map(([dx, dy]) => `${x + dx},${y + dy}`),
+    ),
+  );
+}
+
+/**
+ * Tiles beside `station` for `count` players to stand on, one each: floor
+ * within reach of it, neither a plate, another station, furniture nor one of
+ * `notes` (`noteTiles`), nearest first.
+ */
+function spotsBy(station, map, count, notes) {
   const taken = new Set([
     ...map.plates.map((p) => `${p.x},${p.y}`),
     ...map.stations.map((s) => `${s.x},${s.y}`),
     ...furniture(map),
+    ...notes,
   ]);
   const spots = [];
   for (let dy = -1; dy <= 1; dy++) {
@@ -3385,8 +3418,9 @@ function spotsBy(station, map, count) {
 /**
  * Brings the whole crew to `station`: whoever cannot reach it is let through
  * a plate door by somebody who can, then each stands on a spot of its own
- * beside it, so that whoever held a plate steps off it and its door shuts,
- * as the steps after expect. Throws where somebody cannot get there.
+ * beside it — none where E would read a note instead (`noteTiles`) — so that
+ * whoever held a plate steps off it and its door shuts, as the steps after
+ * expect. Throws where somebody cannot get there.
  */
 async function gatherAt(station, players) {
   const free = players.filter((player) => stepsTo(player.seen, station) !== Infinity);
@@ -3398,7 +3432,7 @@ async function gatherAt(station, players) {
       throw new Error(`${walker.name} found no way to the station at ${station.x},${station.y}`);
     }
   }
-  const spots = spotsBy(station, players[0].seen.view.map, players.length);
+  const spots = spotsBy(station, players[0].seen.view.map, players.length, noteTiles(players));
   for (const [i, player] of players.entries()) {
     const spot = spots[i] ?? station;
     const there =
@@ -5211,10 +5245,12 @@ async function manBothConsoles(players) {
  * it solves. With `pinned` — the stages a pinned seed deals — every stage's
  * sending console and sequence have to be the pinned ones, and the keys
  * pressed are the pinned ones: at consoles with the legend a key is a row and
- * a shape, which only the printed legend ties to a sign. Throws with the step
- * that failed, naming the seed where a stage differs from its pin.
+ * a shape, which only the printed legend ties to a sign. Where `walkthrough`,
+ * the walkthrough's own shots come at its stages (`stageShots`); a drill
+ * takes none of them. Throws with the step that failed, naming the seed where
+ * a stage differs from its pin.
  */
-async function solveSignal(crew, title, pinned = null) {
+async function solveSignal(crew, title, pinned = null, walkthrough = true) {
   const roleOf = (player) => player.seen.view.puzzle?.role ?? null;
   const roles = () => crew.map((p) => `${p.name} ${roleOf(p)}`).join(', ');
   await until(() => crew.every((p) => roleOf(p) !== null), 3000);
@@ -5245,11 +5281,9 @@ async function solveSignal(crew, title, pinned = null) {
     if (pin !== null) {
       checkStage(sending, pin, stage);
     }
-    // The run's one deliberate alarm: where the traced host sends, or at the last stage.
-    if (!flinchShot && (sending.traced === true || stage === stages)) {
-      await inGroup('graphics', () => captureFlinch(sending, pressing, pin?.keys[0] ?? null));
+    if (walkthrough) {
+      await stageShots(sending, pressing, pin, stage === stages);
     }
-    await inGroup('devices', () => captureGreyDisplay(sending));
     const count = await pressStage(sending, pressing, pin?.keys ?? null);
     const line =
       `signal             ${sending.name} sends, ${pressing.name} presses: ` +
@@ -5275,6 +5309,18 @@ async function solveSignal(crew, title, pinned = null) {
     console.log(`${line} through, roles swapped`);
     [sending, pressing] = [pressing, sending];
   }
+}
+
+/**
+ * What the walkthrough shoots at a stage of the Signalkette before it is pressed: the run's one
+ * deliberate alarm (figure-flinch.png), once — where the traced host sends, or at the `last`
+ * stage — and the first display without colour (`captureGreyDisplay`).
+ */
+async function stageShots(sending, pressing, pin, last) {
+  if (!flinchShot && (sending.traced === true || last)) {
+    await inGroup('graphics', () => captureFlinch(sending, pressing, pin?.keys[0] ?? null));
+  }
+  await inGroup('devices', () => captureGreyDisplay(sending));
 }
 
 /**
@@ -5306,8 +5352,9 @@ const touchSessions = new WeakMap();
 /**
  * Runs `look` with `page` held as a large phone sideways: 932×430 under a finger, through CDP's
  * touch on a session of the page's own — as a context made with `hasTouch` has it, which a
- * window's context cannot be given once it is made. Gives the window its size and its mouse
- * back after, whatever `look` did.
+ * window's context cannot be given once it is made — and a resize after the touch, which the
+ * HUD's fold into its row reads (client screens/hudFold.ts). Gives the window its size and its
+ * mouse back after, whatever `look` did.
  */
 async function asLargePhone(page, look) {
   const held = page.viewportSize();
@@ -5319,6 +5366,7 @@ async function asLargePhone(page, look) {
   await page.setViewportSize({ width: SIZES[4].width, height: SIZES[4].height });
   await cdp.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
   try {
+    await page.evaluate(() => globalThis.dispatchEvent(new globalThis.Event('resize')));
     await sleep(500);
     await look();
   } finally {
@@ -6922,6 +6970,136 @@ const endThemeOf = (page) =>
 /** The menu's quiet window holds the screen's pace under SHOTS_SOFTWARE_GL, ms p95. */
 const MENU_P95_MS = 16.8;
 
+/** The hero off the page's probe (client screens/MenuHero.tsx); null without one. */
+const heroOf = (page) => page.evaluate(() => globalThis.__escapelab?.hero ?? null);
+
+/**
+ * In the page: the hero's canvas, where it shows, and what the hero has to keep clear of — the
+ * menu's column, its lead line, the profile and a panel open over the menu — each a box in the
+ * window's CSS px; null for what is not there.
+ */
+function heroRoom() {
+  const box = (selector) => {
+    const el = document.querySelector(selector);
+    if (el === null) {
+      return null;
+    }
+    const { left, top, right, bottom } = el.getBoundingClientRect();
+    return { left, top, right, bottom };
+  };
+  return {
+    canvas: box('.menu-hero:not([hidden])'),
+    clear: {
+      menu: box('.menu-body'),
+      lead: box('.menu-lead'),
+      profile: box('.profile-chip'),
+      panel: box('.menu-panel'),
+    },
+  };
+}
+
+/** Whether the boxes `a` and `b` overlap. */
+const overlap = (a, b) =>
+  a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+
+/** What the hero's canvas covers of `clear` (heroRoom): their names, none where it covers none. */
+const heroCovers = (hero, clear) =>
+  Object.entries(clear).flatMap(([name, box]) =>
+    box !== null && overlap(hero, box) ? [name] : [],
+  );
+
+/**
+ * How many scene tiles tall the hero has to stand: about five at 1440×820 and 1280×720, and at
+ * 1100×700, beside the widest panel, three and a half at least (client hero.ts FEWEST_TILES).
+ */
+const HERO_TILES = { laptop: [4.75, 5.25], narrow: [3.5, 4.2] };
+
+/** What the log says of the hero's box as it stands (`box`) and of what it covers. */
+function heroText(hero, box, covers) {
+  const [left, top, right, bottom] = [box.left, box.top, box.right, box.bottom].map(Math.round);
+  const where = `${left}–${right} × ${top}–${bottom}`;
+  const clear = covers.length === 0 ? 'clear of the menu, its lead line and the profile' : '';
+  return (
+    `${hero.tiles.toFixed(2)} scene tiles tall, standing ${where} px, ` +
+    (clear === '' ? `!! over ${covers.join(', ')}` : clear)
+  );
+}
+
+/**
+ * The hero on `page` with what it has to keep clear of (heroRoom), where it stands on the stage;
+ * null, logged as `label` and the run failed, where it does not.
+ */
+async function heroStanding(page, label) {
+  const hero = await heroOf(page);
+  const room = await page.evaluate(heroRoom);
+  if (hero?.shown === true && room.canvas !== null && hero.box !== null) {
+    const { left, top, width, height } = hero.box;
+    const drawn = { left, top, right: left + width, bottom: top + height };
+    return { hero, room: { ...room, hero: drawn } };
+  }
+  console.log(`hero               ${label}: !! not standing (${JSON.stringify(hero)})`);
+  fail(`hero @ ${label}: not standing on the stage`);
+  return null;
+}
+
+/**
+ * The hero on `page` (`label`, the window's size): it has to stand there — as many of the scene's
+ * tiles tall as `tiles` says (HERO_TILES), where it says — nothing of it over the menu, its lead
+ * line, the profile or a panel open; else the run fails.
+ */
+async function checkHero(page, label, tiles = null) {
+  const standing = await heroStanding(page, label);
+  if (standing === null) {
+    return null;
+  }
+  const { hero, room } = standing;
+  const covers = heroCovers(room.hero, room.clear);
+  console.log(`hero               ${label}: ${heroText(hero, room.hero, covers)}`);
+  const off = tiles !== null && (hero.tiles < tiles[0] || hero.tiles > tiles[1]);
+  if (covers.length > 0 || off) {
+    fail(`hero @ ${label}: ${hero.tiles.toFixed(2)} tiles, over [${covers.join(', ')}]`);
+  }
+  return hero;
+}
+
+/**
+ * The hero left out on `page` (`label`): where the room beside the widest panel holds fewer than
+ * three and a half scene tiles of it, and on a phone, it stands nowhere, its canvas hidden, the
+ * profile's figure standing for it — or the run fails.
+ */
+async function heroGone(page, label) {
+  await sleep(300);
+  const hero = await heroOf(page);
+  const hidden = (await page.locator('.menu-hero[hidden]').count()) === 1;
+  const gone = hero?.shown !== true && hidden;
+  console.log(`hero               ${label}: ${gone ? 'left out' : '!! standing'}`);
+  if (!gone) {
+    fail(`hero @ ${label}: standing where it is left out`);
+  }
+}
+
+/**
+ * At 1100×700 the hero stands three and a half scene tiles tall at least, clear of the menu and
+ * the profile — and with „Einsatz starten" open, stepped aside, clear of the panel too; at
+ * 1024×768 the room beside the widest panel holds fewer, and it is left out, the profile's figure
+ * standing for it (menu-hero-1024.png) — or the run fails.
+ */
+async function heroNarrow(page) {
+  await page.setViewportSize({ width: 1100, height: 700 });
+  await sceneBaked(page, { w: 1100, h: 700 });
+  await checkHero(page, '1100x700', HERO_TILES.narrow);
+  await openMenuPanel(page, 'Einsatz starten');
+  await page
+    .waitForFunction(() => globalThis.__escapelab?.hero?.step === 1, null, { timeout: 5000 })
+    .catch(() => undefined);
+  await checkHero(page, '1100x700, its panel open');
+  await closeMenuPanel(page);
+  await page.setViewportSize({ width: 1024, height: 768 });
+  await sceneBaked(page, { w: 1024, h: 768 });
+  await heroGone(page, '1024x768');
+  await capture(page, 'menu-hero-1024.png');
+}
+
 /**
  * menu.png: the start screen as a game's menu over its living scene — the lit lab of the first
  * mission baked for the window and drifting, the title, the menu, the profile — walked by the
@@ -6933,22 +7111,184 @@ const MENU_P95_MS = 16.8;
 async function captureMenu(page) {
   const list = await musicListOf(page);
   const scene = await sceneBaked(page, { w: SIZES[0].width, h: SIZES[0].height });
+  await heroArrived(page);
   await capture(page, 'menu.png');
   console.log(`menu.png           ${sceneText(scene)}`);
+  await checkHero(page, '1440x820', HERO_TILES.laptop);
   await menuSoundAtFirstKey(page, () => walkMenuKeys(page), list);
   await checkPieceCodec(page, list);
   const look = await frameWindow(page, 'on the menu, its scene drifting', () => sleep(SAMPLE_MS));
   if (SOFTWARE_GL && look !== null && look.p95 > MENU_P95_MS) {
     fail(`menu: its window reached ${look.p95.toFixed(1)} ms p95, over ${MENU_P95_MS}`);
   }
+  await heroLampShot(page);
+  await heroBeamBeat(page);
   await overflow(page, 'menu @ 1440x820');
   await page.setViewportSize({ width: 1280, height: 720 });
   await sceneBaked(page, { w: 1280, h: 720 });
   await overflow(page, 'menu @ 1280x720');
   await capture(page, 'menu-1280.png');
+  await checkHero(page, '1280x720', HERO_TILES.laptop);
+  await capture(page, 'menu-hero-1280.png');
+  await heroNarrow(page);
   await page.setViewportSize(SIZES[0]);
   await sceneBaked(page, { w: SIZES[0].width, h: SIZES[0].height });
+  await captureHeroEntrance();
   return list;
+}
+
+/** How long the hero's entrance takes at most: its walk, the click and the lamp, and a margin. */
+const HERO_ENTRANCE_MS = 1850 + 3000;
+
+/** In the page: whether the hero's entrance is over — its lamp on — or there was none. */
+const entranceOver = () => globalThis.__escapelab?.hero?.entrance?.done !== false;
+
+/** Waits for the hero on `page` to have walked in and switched its lamp on; logs where not. */
+async function heroArrived(page) {
+  const over = await page.waitForFunction(entranceOver, null, { timeout: HERO_ENTRANCE_MS }).then(
+    () => true,
+    () => false,
+  );
+  if (!over) {
+    const entrance = JSON.stringify((await heroOf(page))?.entrance);
+    console.log(`hero               !! still entering: ${entrance}`);
+  }
+}
+
+/** How far into its walk menu-hero-entrance.png holds the hero, ms: half way. */
+const HERO_HOLD_MS = 600;
+
+/** In the page, from its first moment: holds the hero's entrance `ms` into it (heroStage.ts). */
+function holdHero(ms) {
+  globalThis.__heroHold = ms;
+}
+
+/** In the page: lets the hero's entrance go on from where it was held. */
+function releaseHero() {
+  delete globalThis.__heroHold;
+}
+
+/** In the page: the hero held in its walk — its entrance where it is held, its lamp off. */
+const heroHeld = (ms) => {
+  const hero = globalThis.__escapelab?.hero;
+  return hero?.entrance?.ms === ms && hero.beam?.on === 0 && hero.shown === true;
+};
+
+/** Whether the hero `hero` (its probe) has walked in and switched its lamp on. */
+const heroLit = (hero) => hero?.entrance?.done === true && hero.beam?.on === 1;
+
+/** Whether the menu's sound (`sound`, its probe) has clicked the cold open's click. */
+const lampClicked = (sound) => (sound.played?.lamp ?? 0) > 0;
+
+/** What the log says of the hero let go: its entrance over, the click heard as the lamp came on. */
+function arrivalText(hero, sound, ms) {
+  const lamp = heroLit(hero) ? `its lamp on ${ms} ms later` : '!! its lamp never on';
+  const click = lampClicked(sound) ? 'the cold open’s click heard' : '!! no click heard';
+  return `held ${HERO_HOLD_MS} ms into its walk, its lamp off; let go, ${lamp}, ${click}`;
+}
+
+/**
+ * menu-hero-entrance.png: a page of its own, its hero held HERO_HOLD_MS into its walk in from the
+ * stage's right edge (holdHero, as the pause trick holds a device's fade), its lamp off; a key
+ * wakes the menu's sound, and let go the hero has to stop, click the cold open's click and switch
+ * its lamp on — or the run fails.
+ */
+async function captureHeroEntrance() {
+  const context = await browser.newContext({ viewport: SIZES[0] });
+  try {
+    await context.addInitScript(holdHero, HERO_HOLD_MS);
+    const page = await openPage(context, 'entrance');
+    page.on('pageerror', (e) => console.log('[entrance error]', e.message));
+    await page.goto(traced(BASE));
+    await sceneBaked(page, { w: SIZES[0].width, h: SIZES[0].height });
+    const held = await page
+      .waitForFunction(heroHeld, HERO_HOLD_MS, { timeout: 10_000 })
+      .then(
+        () => true,
+        () => false,
+      );
+    await capture(page, 'menu-hero-entrance.png');
+    await page.keyboard.press('Shift');
+    await page.waitForFunction(() => globalThis.__escapelab?.menuSound?.state === 'playing');
+    await sleep(1000);
+    const letGo = Date.now();
+    await page.evaluate(releaseHero);
+    await heroArrived(page);
+    const [hero, sound] = [await heroOf(page), await menuSoundOf(page)];
+    console.log(`menu-hero-entrance.png ${arrivalText(hero, sound, Date.now() - letGo)}`);
+    if (!held || !heroLit(hero) || !lampClicked(sound)) {
+      fail('menu-hero-entrance.png: not held in its walk, no lamp on, or no click');
+    }
+  } finally {
+    await context.close();
+  }
+}
+
+/** The scene's probe says the hero's beam lies on it, and the hero's that its lamp is on. */
+const lampOn = () =>
+  globalThis.__escapelab?.scene?.beam?.laid === true &&
+  globalThis.__escapelab?.hero?.beam?.on === 1;
+
+/** How long the beam may take to come to an item hovered, ms: two passes and a beat. */
+const BEAM_BEAT_WITHIN_MS = 26_000;
+
+/** What the log says of the hero's beam (`beam`, its probe) and the menu's column (`menu`). */
+function beamText(beam, menu) {
+  const [x, y, reach] = [beam.lens.x, beam.lens.y, beam.reach].map(Math.round);
+  const gap = menu === null ? null : Math.round(beam.lens.x - beam.reach - menu.right);
+  const short = gap === null ? '!! no menu' : `${gap} px short of the menu`;
+  return `its beam ${reach} px long from (${x}, ${y}), ${short}`;
+}
+
+/**
+ * menu-hero.png: the hero at 1440×820 with its hand lamp on, the beam laid over the scene and
+ * ending short of the menu's column — or the run fails.
+ */
+async function heroLampShot(page) {
+  const lit = await page.waitForFunction(lampOn, null, { timeout: 10_000 }).then(
+    () => true,
+    () => false,
+  );
+  await capture(page, 'menu-hero.png');
+  const beam = (await heroOf(page))?.beam ?? null;
+  const { clear } = await page.evaluate(heroRoom);
+  const shown = lit && beam !== null;
+  console.log(`menu-hero.png      ${shown ? beamText(beam, clear.menu) : '!! no lamp on'}`);
+  const over = !shown || clear.menu === null || beam.lens.x - beam.reach < clear.menu.right;
+  if (over) {
+    fail('menu-hero.png: no lamp on, or its beam reaching over the menu');
+  }
+}
+
+/** In the page: whether the hero looks at „Beitreten", hovered, its beam holding a beat on it. */
+const beatOnJoin = () => {
+  const probe = globalThis.__escapelab?.hero;
+  return probe?.look?.at === 'join' && probe.beam?.holding === true;
+};
+
+/**
+ * menu-hero-hover.png: „Beitreten" hovered, the hero's head turned to it and its beam holding a
+ * beat on it within two passes of its sweep (BEAM_BEAT_WITHIN_MS), or the run fails; the pointer
+ * goes off the menu after.
+ */
+async function heroBeamBeat(page) {
+  const started = Date.now();
+  await page.locator('.menu-item', { hasText: 'Beitreten' }).hover();
+  const beat = await page
+    .waitForFunction(beatOnJoin, null, { timeout: BEAM_BEAT_WITHIN_MS, polling: 50 })
+    .then(
+      () => true,
+      () => false,
+    );
+  await capture(page, 'menu-hero-hover.png');
+  const turned = (await heroOf(page))?.look?.turned ?? 0;
+  const after = ((Date.now() - started) / 1000).toFixed(1);
+  const said = beat ? `held a beat on BEITRETEN ${after} s after the hover` : '!! no beat';
+  console.log(`menu-hero-hover.png its head turned ${turned.toFixed(2)} rad, its beam ${said}`);
+  await page.mouse.move(2, 2);
+  if (!beat) {
+    fail('hero beam: it never held a beat on the item hovered');
+  }
 }
 
 /**
@@ -6970,10 +7310,14 @@ async function openMissionRound(page) {
   await inGroup('screens', () => pickedAndOpened(page, open), open);
 }
 
-/** menu-missions.png: the mission cards of „Einsatz starten" on a first run (checkFirstRunCard). */
+/**
+ * menu-missions.png: the mission cards of „Einsatz starten" on a first run (checkFirstRunCard),
+ * and the menu's hero stepped aside for the panel (menu-hero-missions.png, `heroStepShot`).
+ */
 async function shootMissions(page) {
   await sleep(300);
   await capture(page, 'menu-missions.png');
+  await heroStepShot(page);
   await checkFirstRunCard(page);
 }
 
@@ -6985,6 +7329,25 @@ async function pickedAndOpened(page, open) {
   const scene = await sceneBaked(page, { missionId: MISSION.toLowerCase() });
   console.log(`menu-missions.png  ${MISSION} picked: ${sceneText(scene)}`);
   await captureDoors(page, open);
+}
+
+/**
+ * menu-hero-missions.png: with „Einsatz starten" open the hero has to stand half a tile aside,
+ * nothing of it under the panel — or the run fails.
+ */
+async function heroStepShot(page) {
+  const stepped = await page
+    .waitForFunction(() => globalThis.__escapelab?.hero?.step === 1, null, { timeout: 5000 })
+    .then(
+      () => true,
+      () => false,
+    );
+  await capture(page, 'menu-hero-missions.png');
+  const hero = await checkHero(page, '1440x820, its panel open');
+  console.log(`menu-hero-missions.png ${stepped ? 'stepped half a tile aside' : '!! not aside'}`);
+  if (!stepped || hero === null) {
+    fail('menu-hero-missions.png: the hero did not step aside for the panel');
+  }
 }
 
 /** The door wipe's close, ms (client screens/DoorWipe.tsx `CLOSE_MS`). */
@@ -7056,11 +7419,13 @@ async function shootHeldDoors(page, open) {
   const shut = (await doorShut(page)) ?? 0;
   const menu = await page.locator('.menu').count();
   const lobby = await page.locator('.lobby').count();
+  const hero = await heroOf(page);
   await capture(page, 'menu-to-lobby.png');
   await page.evaluate(releaseDoors);
   await page.locator('.lobby').waitFor({ timeout: 10_000 });
   await page.locator('.door-wipe').waitFor({ state: 'detached', timeout: 5000 });
-  return { came, shut, held: menu === 1 && lobby === 0 };
+  const away = hero?.leaving === true && Math.sin(hero.facing) < 0;
+  return { came, shut, held: menu === 1 && lobby === 0, away };
 }
 
 /** Whether the scene `after` is the scene `before` drifting on: the same lab, more frames drawn. */
@@ -7071,9 +7436,10 @@ const driftsOn = (before, after) =>
   after.paints > before.paints;
 
 /** What the log says of the held doors and of the scene behind the lobby once they have gone. */
-function doorShotText({ came, shut, held }, before, after, behind) {
+function doorShotText({ came, shut, held, away }, before, after, behind) {
   const over = held ? 'the menu' : '!! the lobby';
-  const doors = came ? `${Math.round(shut * 100)} % shut over ${over}` : '!! no doors';
+  const hero = away ? ', its hero turned away to the lab' : ', !! its hero not turned away';
+  const doors = came ? `${Math.round(shut * 100)} % shut over ${over}${hero}` : '!! no doors';
   const scene = driftsOn(before, after)
     ? `${after.missionId}'s lab drifting on (${before.paints} → ${after.paints} frames)`
     : '!! a scene anew';
@@ -7094,8 +7460,8 @@ async function captureDoors(page, open) {
   const after = await sceneOf(page);
   const behind = (await page.locator('.menu-backdrop--lobby:visible').count()) === 1;
   console.log(`menu-to-lobby.png  ${doorShotText(held, before, after, behind)}`);
-  if (!held.came || !held.held || !driftsOn(before, after) || !behind) {
-    fail('menu-to-lobby.png: no doors over the menu, or no scene drifting on behind the lobby');
+  if (!held.came || !held.held || !held.away || !driftsOn(before, after) || !behind) {
+    fail('menu-to-lobby.png: no doors over the menu, no hero turned, or no scene drifting on');
   }
 }
 
@@ -7257,6 +7623,7 @@ async function judgeMenuLayout(page, label, upright) {
  */
 async function checkMenuPhones(page) {
   await judgeMenuLayout(page, 'menu-phone.png', true);
+  await heroGone(page, 'menu-phone.png');
   for (const { width, height, shot } of MENU_SIDEWAYS) {
     await page.setViewportSize({ width, height });
     const scene = await sceneBaked(page, { w: width, h: height });
@@ -7264,6 +7631,7 @@ async function checkMenuPhones(page) {
       await capture(page, shot);
     }
     await judgeMenuLayout(page, shot ?? `menu @ ${width}x${height}`, false);
+    await heroGone(page, `${width}x${height}`);
     if (scene?.baked?.w !== width) {
       fail(`menu @ ${width}x${height}: no scene beside the menu (${sceneText(scene)})`);
     }
@@ -7351,6 +7719,28 @@ async function watchFromMenu(page, code) {
   await page.locator('.join-with-code button', { hasText: 'Zuschauen' }).click();
 }
 
+/** Whether the hero on `page`, once it has walked in, looks at the run's card first in the menu. */
+async function heroLooksAtCard(page) {
+  await heroArrived(page);
+  return page
+    .waitForFunction(() => globalThis.__escapelab?.hero?.look?.at === 'card', null, {
+      timeout: 3000,
+    })
+    .then(
+      () => true,
+      () => false,
+    );
+}
+
+/** Logs whether the hero in the drill's tab looks at the run's card (`looks`); fails where not. */
+function sayHeroAtCard(looks) {
+  const said = looks ? 'looks at the run’s card' : '!! does not look at the run’s card';
+  console.log(`hero               in the drill's tab ${said}`);
+  if (!looks) {
+    fail('menu-bound.png: the hero does not look at the run’s card');
+  }
+}
+
 /**
  * menu-bound.png: a new tab of Anna's browser while her run stands paused for Ben — the menu
  * opens on the run's card, „EINSATZ PAUSIERT", first and lit, every other item dimmed, the line
@@ -7369,6 +7759,7 @@ async function captureBound(anna) {
       () => document.querySelector('.menu-list')?.firstElementChild?.matches('.bound') === true,
     );
     const line = await textOf(page.locator('.bound-line'));
+    const looks = await heroLooksAtCard(page);
     await capture(page, 'menu-bound.png');
     console.log(
       `menu-bound.png     Anna's new tab: „${kicker}" ${first ? 'first' : '!! not first'}, ` +
@@ -7377,6 +7768,7 @@ async function captureBound(anna) {
     if (kicker !== 'EINSATZ PAUSIERT' || !first || !dimmed || line === null) {
       fail(`menu-bound.png: „${kicker}", first ${first}, dimmed ${dimmed}, line „${line}"`);
     }
+    sayHeroAtCard(looks);
   } finally {
     await page.close();
   }
@@ -10242,15 +10634,11 @@ async function measureRound(meter, box, round, r) {
 }
 
 /**
- * The Notstrom-Kasten to the end, as the pinned seed wires it: the meter at
- * console B reads every wire still live and the box at console A cuts the
- * one the rules name — round after round, the readings and the cuts the
- * plan pins. Fails naming the seed where the box's wires, the serial or a
- * round's readings differ.
+ * The Notstrom-Kasten to the end, as the pinned seed wires it: both walk back to their console
+ * and open it — the meter's phone held sideways shot on the way (devices) — and the box is cut
+ * as the plan pins it (`cutAsPinned`).
  */
 async function finishNotstrom(box, meter) {
-  const pin = BLACKOUT_PLAN.notstrom;
-  const index = box.seen.view.currentPuzzleIndex;
   for (const [player, side] of [
     [box, 'a'],
     [meter, 'b'],
@@ -10261,6 +10649,15 @@ async function finishNotstrom(box, meter) {
     await openPanel(player, side);
   }
   await inGroup('devices', () => captureDevicePhone(meter, stationSlug(meter)));
+  await cutAsPinned(box, meter);
+}
+
+/**
+ * The open fuse box's wires from the top and the Laborkennung's serial, as the box's and the
+ * meter's views show them; fails naming the seed where either is not what the plan pins.
+ */
+function pinnedBox(box, meter) {
+  const pin = BLACKOUT_PLAN.notstrom;
   const wires = (box.seen.view.puzzle?.wires ?? []).map((wire) => wire.colour).join(', ');
   if (wires !== pin.wires.join(', ')) {
     differs('fuse box', wires, pin.wires.join(', '));
@@ -10269,6 +10666,19 @@ async function finishNotstrom(box, meter) {
   if (serial !== BLACKOUT_PLAN.serial) {
     differs('Laborkennung', serial, BLACKOUT_PLAN.serial);
   }
+  return { wires, serial };
+}
+
+/**
+ * The open Notstrom-Kasten worked as the pinned seed wires it: the meter at console B reads
+ * every wire still live and the box at console A cuts the one the rules name — round after
+ * round, the readings and the cuts the plan pins — until it solves. Fails naming the seed where
+ * the box's wires, the serial or a round's readings differ.
+ */
+async function cutAsPinned(box, meter) {
+  const pin = BLACKOUT_PLAN.notstrom;
+  const index = box.seen.view.currentPuzzleIndex;
+  const { wires, serial } = pinnedBox(box, meter);
   for (const [r, round] of pin.rounds.entries()) {
     await measureRound(meter, box, round, r);
     const cut = box.page.locator(`.station-modal .circuit-board [data-index="${round.cut}"]`);
@@ -13205,30 +13615,33 @@ async function joinByCode(player, code) {
 }
 
 /**
- * The drill's crew in Blackout's dark: Anna opens the room, Ben and Cem join and say yes,
- * the microphones on, the run started, the opening skipped by all three.
+ * A drill's room: Anna opens a round of the mission from the menu at `url`, and `guests` join
+ * it by its code, each to the lobby. Returns the room's code.
  */
-async function drillCrew() {
-  const anna = await drillPlayer('Anna');
-  const ben = await drillPlayer('Ben');
-  const cem = await drillPlayer('Cem');
-  const crew = [anna, ben, cem];
-  await anna.page.goto(traced(BASE));
+async function drillRoom(anna, guests, url) {
+  await anna.page.goto(url);
   await anna.page.getByPlaceholder('z. B. Anna').fill('Anna');
   await openRound(anna.page, MISSION);
   await anna.page.locator('.room-code strong').waitFor({ timeout: 10_000 });
   const code = (await anna.page.locator('.room-code strong').innerText()).trim();
-  for (const player of [ben, cem]) {
+  for (const player of guests) {
     await joinByCode(player, code);
     await player.page.locator('.lobby').waitFor({ timeout: 10_000 });
   }
-  await micsOn(crew);
-  for (const player of [ben, cem]) {
+  return code;
+}
+
+/**
+ * A drill's run: `guests` say yes, Anna starts it, and the whole `crew` skips the opening, on
+ * into Blackout's dark. Throws where somebody never stands ready or the lights stay on.
+ */
+async function drillStart(anna, guests, crew) {
+  for (const player of guests) {
     await clickText(player.page, 'Ich bin bereit');
   }
-  const ready = () => anna.seen.view?.players?.filter((p) => p.ready).length === 2;
+  const ready = () => anna.seen.view?.players?.filter((p) => p.ready).length === guests.length;
   if (!(await until(ready, 10_000))) {
-    throw new Error('Ben and Cem never stood ready on Anna’s page');
+    throw new Error(`${guests.map((p) => p.name).join(' and ')} never stood ready on Anna’s page`);
   }
   await clickText(anna.page, 'Mission starten');
   for (const { page } of crew) {
@@ -13242,6 +13655,20 @@ async function drillCrew() {
     throw new Error('the drill’s lights never went out');
   }
   await sleep(2500); // past the title of the blackout
+}
+
+/**
+ * The drill's crew in Blackout's dark: Anna opens the room, Ben and Cem join and say yes,
+ * the microphones on, the run started, the opening skipped by all three.
+ */
+async function drillCrew() {
+  const anna = await drillPlayer('Anna');
+  const ben = await drillPlayer('Ben');
+  const cem = await drillPlayer('Cem');
+  const crew = [anna, ben, cem];
+  const code = await drillRoom(anna, [ben, cem], traced(BASE));
+  await micsOn(crew);
+  await drillStart(anna, [ben, cem], crew);
   return { code, anna, ben, cem, crew };
 }
 
@@ -13718,11 +14145,339 @@ async function captureRestart() {
   }
 }
 
+// ── the three drill: Blackout for a crew of three (backlog M-1) ─────────────────────────────
+//
+// A room of its own after the restart drill, pinned to the plan's seed: Anna opens Blackout,
+// Ben and Cleo join and say yes, all three skip the opening — Anna in the Archiv, Ben at the
+// Flur's west end, Cleo at its east end. Notlicht: all three walk to the main switch and open
+// its panel — three-lever.png, Anna's: a lamp lit over each of the three levers, the plate
+// saying „NUR ZU DRITT" — and throw together. Notstrom: Ben reads the book in the Archiv first
+// while Cleo stands on the plate HALTEN; Anna walks through the door it holds to the box, Ben to
+// the meter — three-plate.png, Cleo's screen: the hands line „Cleo: HALTEN · Anna: Pult A · Ben:
+// Pult B", the door held — and the box is cut as the plan pins it. Signalkette: Cleo walks to
+// the clipboard, Anna to console A, Ben to console B — three-hands.png, Anna's screen naming all
+// three; three-phone-932.png, Cleo's page as a large phone held sideways, her own job alone as
+// the row's chip; three-reader.png, Cleo's screen with the clipboard's rules open while A and B
+// are manned — and the chain is worked as the plan pins it. Then Cleo and Ben give their seats
+// up from the menu, the run is called off on Anna's page, and Anna leaves the room. Each hands
+// shot has to say its words whole in the window, at the HUD's smallest size or more, the phone's
+// row its rules too (`capturePhoneGame`); the lever and the reader are held to what lever.png
+// and reading.png are. No frame window is sampled: three pages on one runner would make it lie.
+// Any step that fails, fails the run; a run on another mission or seed skips the drill.
+
+/** The smallest the HUD's words may be, CSS px (docs/foundation-audit.md, N-readability). */
+const HUD_MIN_PX = 12;
+
+/**
+ * The drill's crew in Blackout's dark: Anna opens the room pinned to the plan's seed, Ben and
+ * Cleo join and say yes, all three skip the opening. Anna and Ben have to start where the plan
+ * puts the host and the guest — Cleo takes the third start.
+ */
+async function threeCrew() {
+  const anna = await drillPlayer('Anna');
+  const ben = await drillPlayer('Ben');
+  const cleo = await drillPlayer('Cleo');
+  const crew = [anna, ben, cleo];
+  await drillRoom(anna, [ben, cleo], seeded(traced(BASE)));
+  await drillStart(anna, [ben, cleo], crew);
+  const { host, guest } = BLACKOUT_PLAN.spawns;
+  const spot = (at) => `${at?.x},${at?.y}`;
+  const drawn = [anna, ben].map((player) => spot(player.seen.view?.map?.yourSpawn)).join(' · ');
+  if (drawn !== `${spot(host)} · ${spot(guest)}`) {
+    differs('starts of Anna and Ben', drawn, `${spot(host)} · ${spot(guest)}`);
+  }
+  return { anna, ben, cleo, crew };
+}
+
+/**
+ * three-lever.png: the main switch's panel on Anna's page with all three at it — a lamp lit
+ * over every lever, the plate saying the switch takes three, Anna's own name under the first
+ * lever — or the run fails.
+ */
+async function captureThreeLever(anna, crew) {
+  const modal = anna.page.locator('.station-modal');
+  const lit = () => modal.locator('.lever-unit--here').count();
+  await untilAsync(async () => (await lit()) === crew, CATCH_UP_MS);
+  const here = await lit();
+  const plate = await textOf(modal.locator('.lever-plate'));
+  const names = await modal.locator('.lever-name').allInnerTexts();
+  await capture(anna.page, 'three-lever.png');
+  const said = `"${plate}", ${here} of ${crew} lamps lit, names ${names.join(', ') || '!! none'}`;
+  console.log(`three-lever.png    Anna: ${said}`);
+  if (here !== crew || plate?.includes('NUR ZU DRITT') !== true || names[0] !== 'Anna') {
+    fail(`three-lever.png: ${said}`);
+  }
+}
+
+/**
+ * Notlicht for three: all three at the main switch (`gatherAt`), its panel open on every page
+ * (three-lever.png on Anna's), then all three throw at once, and it has to solve.
+ */
+async function threeAtTheLever({ anna, crew }) {
+  const lever = armedAt(anna, null);
+  await gatherAt(lever, crew);
+  for (const player of crew) {
+    await openPanel(player, null);
+  }
+  await captureThreeLever(anna, crew.length);
+  const index = anna.seen.view.currentPuzzleIndex;
+  await Promise.all(crew.map(({ page }) => page.locator('.station-modal .big-button').click()));
+  if (!(await until(() => crew.every((player) => solvedPast(player, index)), 5000))) {
+    throw new Error(`all three threw "${lever.title}" together, but it did not solve`);
+  }
+  console.log(`three              Anna, Ben and Cleo threw "${lever.title}" together: solved`);
+  await panelsClosed(crew);
+}
+
+/** Every station panel of `crew`'s pages closed — a solved one closes itself — or throws. */
+async function panelsClosed(crew) {
+  await Promise.all(
+    crew.map(({ page }) =>
+      page.locator('.station-modal').waitFor({ state: 'hidden', timeout: CATCH_UP_MS }),
+    ),
+  );
+}
+
+/**
+ * What `page` shows of the hands (`selector`: the line under the goal, or the row's chip): its
+ * words, their size in CSS px, and whether they stand whole in the window — inside it, none of
+ * them cut short. Null where the page shows none.
+ */
+function handsShown(page, selector) {
+  return page.evaluate((hands) => {
+    const el = document.querySelector(hands);
+    if (el === null) {
+      return null;
+    }
+    const box = el.getBoundingClientRect();
+    const inside = box.width > 0 && box.left >= 0 && box.right <= globalThis.innerWidth + 0.5;
+    return {
+      text: el.textContent ?? '',
+      px: Number.parseFloat(globalThis.getComputedStyle(el).fontSize),
+      whole: inside && el.scrollWidth <= el.clientWidth + 1,
+    };
+  }, selector);
+}
+
+/**
+ * `shot`, taken by `take` once `player`'s page says `words` in its hands (`selector`) — the
+ * server's word of who stands where reaches the page a moment after the step — and held to what
+ * the HUD's words are held to: whole in the window, HUD_MIN_PX or more. Fails the run where the
+ * page never says them, or not so.
+ */
+async function handsShot(player, shot, selector, words, take) {
+  const say = async () => (await handsShown(player.page, selector))?.text === words;
+  await untilAsync(say, CATCH_UP_MS);
+  await take();
+  const { said, ok } = handsSaid(await handsShown(player.page, selector), words);
+  console.log(`${shot.padEnd(18)} ${player.name}: ${said}`);
+  if (!ok) {
+    fail(`${shot}: the hands say ${said}, not „${words}" whole at ${HUD_MIN_PX} px or more`);
+  }
+}
+
+/** What the log says of `shown` (`handsShown`), and whether it says `words` as it should. */
+function handsSaid(shown, words) {
+  if (shown === null) {
+    return { said: '!! nothing', ok: false };
+  }
+  return {
+    said: `„${shown.text}", ${shown.px} px${shown.whole ? '' : ', !! cut short'}`,
+    ok: shown.text === words && shown.whole && shown.px >= HUD_MIN_PX,
+  };
+}
+
+/** `reader` walks up to `source` and reads it: its pages open a while, then put down. */
+async function readThrough(reader, source) {
+  if (!(await walkNear(reader.page, reader.seen, source))) {
+    throw new Error(`${reader.name} found no way to the ${source.label}`);
+  }
+  const overlay = reader.page.locator('.reading-modal');
+  if (!(await interactUntil(reader, overlay, sourceTarget(source)))) {
+    throw new Error(`${reader.name} stands at the ${source.label}, but no .reading-modal opened`);
+  }
+  await sleep(1500); // a look at the pages
+  await reader.page.keyboard.press('Escape');
+  await overlay.waitFor({ state: 'hidden', timeout: 3000 });
+}
+
+/** Each of `seats` — a player and the armed station's console they work — walks up to it. */
+async function toConsoles(seats) {
+  const there = await Promise.all(
+    seats.map(([player, side]) => standOn(player, atConsole(player, side))),
+  );
+  const stuck = seats.filter((_, i) => !there[i]).map(([player, side]) => `${player.name} ${side}`);
+  if (stuck.length > 0) {
+    throw new Error(`no way to the armed station's consoles for ${stuck.join(' and ')}`);
+  }
+}
+
+/**
+ * The Notstrom for three: Ben reads the book first while Cleo stands on the plate that holds
+ * the Maschinenraum's door; Anna walks through it to the box, Ben to the meter — three-plate.png
+ * on Cleo's page, the door held — and the box is cut as the plan pins it (`cutAsPinned`).
+ */
+async function threeAtTheNotstrom({ anna, ben, cleo, crew }) {
+  await viewsCaughtUp(crew);
+  const plate = mapOf(cleo).plates.find((p) => !p.freezesDrone);
+  const door = BLACKOUT.map.doors.find((d) => d.opensBy.plateId === plate?.id);
+  if (plate === undefined || door === undefined) {
+    throw new Error('Blackout has no plate that holds a door');
+  }
+  await Promise.all([holdPlate(cleo, plate), readThrough(ben, pinnedSource('book'))]);
+  await toConsoles([
+    [anna, 'a'],
+    [ben, 'b'],
+  ]);
+  const words = `Cleo: ${plate.label} · Anna: Pult A · Ben: Pult B`;
+  await handsShot(cleo, 'three-plate.png', '.stage-hands', words, async () => {
+    await capture(cleo.page, 'three-plate.png');
+    await overflow(cleo.page, 'three-plate @ 1440x820');
+  });
+  if (mapOf(cleo).doors.find((d) => d.id === door.id)?.open !== true) {
+    fail(`three-plate.png: Cleo holds "${plate.label}", but the door ${door.id} shows shut`);
+  }
+  await openPanel(anna, 'a');
+  await openPanel(ben, 'b');
+  await cutAsPinned(anna, ben);
+  await panelsClosed(crew);
+}
+
+/**
+ * three-reader.png: Cleo opens the clipboard's rules while Anna and Ben stand at consoles A and
+ * B — her view has to name them there — held to what reading.png is: no page running past its
+ * sheet, the panel not running out sideways; then she puts them down.
+ */
+async function captureThreeReader({ anna, ben, cleo }, clipboard) {
+  const overlay = cleo.page.locator('.reading-modal');
+  if (!(await interactUntil(cleo, overlay, sourceTarget(clipboard)))) {
+    throw new Error(`Cleo stands at the ${clipboard.label}, but no .reading-modal opened`);
+  }
+  await sleep(400); // past the page's fade-in
+  const at = (player) =>
+    cleo.seen.view.hands?.held.find((hand) => hand.playerId === player.seen.view.you.id)?.place;
+  const manned = [anna, ben].map((player) => at(player)?.console ?? '!! none').join(' and ');
+  await capture(cleo.page, 'three-reader.png');
+  const over = await sideways(cleo.page, '.reading-modal .panel');
+  const running = await pagesRunningOver(cleo.page);
+  console.log(
+    `three-reader.png   Cleo at the ${clipboard.label}, Anna and Ben at ${manned}: ` +
+      `${running} page(s) run over, panel ${over > 0 ? `!! +${over}px sideways` : 'fits sideways'}`,
+  );
+  if (manned !== 'a and b' || over > 0 || running > 0) {
+    fail(`three-reader.png: consoles ${manned}, ${running} page(s) over, ${over}px sideways`);
+  }
+  await cleo.page.keyboard.press('Escape');
+  await overlay.waitFor({ state: 'hidden', timeout: 3000 });
+}
+
+/**
+ * The Signalkette for three: Cleo walks to the clipboard, Anna to console A, Ben to console B —
+ * three-hands.png on Anna's page, three-phone-932.png on Cleo's held as a phone, three-reader.png
+ * — and the chain is worked as the plan pins it, without the walkthrough's alarm.
+ */
+async function threeAtTheSignalkette(drill) {
+  const { anna, ben, cleo, crew } = drill;
+  await viewsCaughtUp(crew);
+  const clipboard = pinnedSource('clipboard');
+  const title = armedAt(anna, 'a').title;
+  const [atClipboard] = await Promise.all([
+    standOn(cleo, workSpot(cleo, clipboard)),
+    toConsoles([
+      [anna, 'a'],
+      [ben, 'b'],
+    ]),
+  ]);
+  if (!atClipboard) {
+    throw new Error(`Cleo found no way to the ${clipboard.label}`);
+  }
+  await foundWherePinned(cleo, clipboard);
+  const job = 'Cleo: Klemmbrett';
+  const all = `Anna: Pult A · Ben: Pult B · ${job}`;
+  await handsShot(anna, 'three-hands.png', '.stage-hands', all, () =>
+    capture(anna.page, 'three-hands.png'),
+  );
+  await asLargePhone(cleo.page, () =>
+    handsShot(cleo, 'three-phone-932.png', '.hands-chip', job, () =>
+      capturePhoneGame(cleo.page, 'three-phone-932.png', "Cleo's phone sideways"),
+    ),
+  );
+  await captureThreeReader(drill, clipboard);
+  await openPanel(anna, 'a');
+  await openPanel(ben, 'b');
+  await solveSignal([anna, ben], title, BLACKOUT_PLAN.signalkette.stages, false);
+}
+
+/**
+ * The room given up: Cleo and Ben give their seats up from the card of the run on the menu of a
+ * new tab („Einsatz aufgeben", at a second press) — with one fewer than the smallest crew left,
+ * the run is called off on Anna's page — and Anna leaves the room from its end. Throws where a
+ * step never comes.
+ */
+async function threeGiveUp({ anna, ben, cleo }) {
+  for (const player of [cleo, ben]) {
+    // A new tab of the player's browser: the run's own tab would go straight back into it.
+    const tab = await openPage(player.context, `drill ${player.name} tab`);
+    await tab.goto(traced(BASE));
+    const card = tab.locator('.bound--run');
+    await card.waitFor({ state: 'visible', timeout: DRILL_STEP_MS });
+    const giveUp = card.locator('button.give-up');
+    await giveUp.click();
+    await giveUp.click();
+    await card.waitFor({ state: 'detached', timeout: DRILL_STEP_MS });
+  }
+  if (!(await until(() => anna.seen.view?.phase === 'lost', DRILL_STEP_MS))) {
+    throw new Error(`Cleo and Ben gave up, but Anna's run goes on (${anna.seen.view?.phase})`);
+  }
+  const leave = anna.page.locator('button', { hasText: 'Raum verlassen' });
+  await leave.waitFor({ state: 'visible', timeout: DRILL_STEP_MS });
+  await leave.click();
+  await anna.page.locator('.menu-item').first().waitFor({ timeout: DRILL_STEP_MS });
+  console.log(
+    `three              Cleo and Ben gave their seats up, the run was called off ` +
+      `(„${anna.seen.view?.calledOff ?? '!! no word why'}"), Anna left the room`,
+  );
+}
+
+/**
+ * The three drill (see above): Blackout for three through the Signalkette on the plan's seed,
+ * the room given up after. Skipped for any other mission or seed; the contexts closed whatever
+ * happened.
+ */
+async function captureThree() {
+  if (MISSION.toLowerCase() !== 'blackout') {
+    skip('three', `the three drill plays Blackout; this run plays ${MISSION}`);
+    return;
+  }
+  if (SEED !== BLACKOUT_PLAN.seed) {
+    skip('three', `the drill plays seed ${BLACKOUT_PLAN.seed}, which the plan pins, not ${SEED}`);
+    return;
+  }
+  const from = Date.now();
+  const contexts = [];
+  try {
+    const drill = await threeCrew();
+    contexts.push(...drill.crew.map(({ context }) => context));
+    await threeAtTheLever(drill);
+    await threeAtTheNotstrom(drill);
+    await threeAtTheSignalkette(drill);
+    await threeGiveUp(drill);
+  } catch (err) {
+    console.log(`three              !! ${firstLine(err)}`);
+    fail(`three: ${firstLine(err)}`);
+  } finally {
+    for (const context of contexts) {
+      await context.close();
+    }
+    console.log(`three              the drill took ${seconds(Date.now() - from)}`);
+  }
+}
+
 /**
  * The drills before the walkthrough, each in a room of its own, by the group each belongs to:
  * the editor, the Serverraum's scratch mission (a Systemcheck run's), the art tour, the danger
- * sense, the reconnect drill, the restart drill and the Zugangskontrolle's scratch mission (a
- * Systemcheck run's).
+ * sense, the reconnect drill, the restart drill, the Zugangskontrolle's scratch mission (a
+ * Systemcheck run's) and the three drill.
  */
 const DRILLS = [
   ['editor', captureEditor],
@@ -13732,6 +14487,7 @@ const DRILLS = [
   ['reconnect', captureReconnect],
   ['restart', captureRestart],
   ['access', captureAccess],
+  ['three', captureThree],
 ];
 
 /**

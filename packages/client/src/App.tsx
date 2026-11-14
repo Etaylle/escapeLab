@@ -57,7 +57,7 @@ import { Icon, type IconName } from './screens/Icon.js';
 import { UpdateNotice } from './screens/Install.js';
 import { JoinScreen } from './screens/Join.js';
 import { LobbyScreen } from './screens/Lobby.js';
-import { DoorWipe, useDoorWipe, type Doors, type Place } from './screens/DoorWipe.js';
+import { DoorWipe, doorsGoing, useDoorWipe, type Doors, type Place } from './screens/DoorWipe.js';
 import { createRoomMessage, pickedMission, usePicked } from './screens/MenuPanels.js';
 import { MenuScene } from './screens/MenuScene.js';
 import { GameScreen } from './screens/Game.js';
@@ -359,6 +359,8 @@ interface ScreenProps {
   openSettings: () => void;
   /** opens the settings on „Konto"'s sign-in, as the menu's profile does for a guest */
   openSignIn: () => void;
+  /** the doors close over the screen for the next, or stand shut: the menu's hero turns away */
+  leaving: boolean;
 }
 
 /** Whether a page lies over the join screen: booklet, Bestenliste, „Meine Einsätze", editor. */
@@ -398,6 +400,7 @@ function OffRoom(props: ScreenProps) {
           openEditor={editor.show}
           openSettings={props.openSettings}
           openSignIn={props.openSignIn}
+          leaving={props.leaving}
         />
       </Activity>
       {editor.open && (
@@ -902,6 +905,7 @@ export function App({ boot }: { boot: EditorBoot }) {
             setPicked={setPicked}
             openSettings={layer.openSettings}
             openSignIn={opening.openSignIn}
+            leaving={doorsGoing(doors)}
           />
         </VoiceContext>
       </ScreenArea>

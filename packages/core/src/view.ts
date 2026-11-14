@@ -12,6 +12,7 @@ import {
   type Find,
 } from './discovery.js';
 import type { Edgework } from './edgework.js';
+import { handsOf, type HandsView } from './hands.js';
 import type {
   DecorKind,
   ManualDef,
@@ -150,6 +151,12 @@ export interface PlayerView {
    * stands at none of those places
    */
   intercom?: string[];
+  /**
+   * the hands at the station in front of the crew (hands.ts `handsOf`): the place each of the
+   * crew holds there — a console, a source, a plate, a part in hand — and the places nobody holds
+   * that the crew knows of. Left out for a crew of two, and while no station is armed
+   */
+  hands?: HandsView;
   /** the manual objects this player stands at, open or still closed: what can be done there */
   sourcesHere: SourceHere[];
   /** the open manual objects this player stands at, with the rules of every puzzle they cover */
@@ -1241,6 +1248,7 @@ export function viewFor(state: GameState, playerId: string): PlayerView {
     edgework: presence.signSeen ? state.edgework : null,
     presence,
     ...intercomFor(state, playerId),
+    ...handsFor(state),
     sourcesHere: sourcesHereFor(state, playerId),
     manualsHere: manualsHereFor(state, playerId),
     noteHere: noteHereFor(state, playerId),
@@ -1276,6 +1284,12 @@ function radioCheckOf(state: GameState): Pick<PlayerView, 'radioCheck'> {
 function intercomFor(state: GameState, playerId: string): Pick<PlayerView, 'intercom'> {
   const on = intercomOf(state);
   return on.includes(playerId) ? { intercom: on } : {};
+}
+
+/** The hands at the armed station (hands.ts `handsOf`); nothing for a crew of two, or none armed. */
+function handsFor(state: GameState): Pick<PlayerView, 'hands'> {
+  const hands = handsOf(state);
+  return hands === null ? {} : { hands };
 }
 
 /** The Erfolge of a run that is over, read off its report; none while it runs or before it. */
