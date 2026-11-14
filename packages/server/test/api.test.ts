@@ -17,6 +17,8 @@ import {
 import { apiResponse, serveRuns, statsResponse, type RunsExport } from '../src/api.js';
 import { MissionCatalog } from '../src/missions.js';
 import { RunStats } from '../src/runStats.js';
+import { JsonlStore } from '../src/store/jsonl.js';
+import { DAY, reportOf } from './storeContract.js';
 
 const shipped = new MissionCatalog(fileURLToPath(new URL('../../../missions', import.meta.url)));
 
@@ -250,8 +252,12 @@ function get(url: string, authorization?: string): IncomingMessage {
 describe('GET /runs.jsonl', () => {
   const dir = mkdtempSync(join(tmpdir(), 'escapelab-runs-route-'));
   const file = join(dir, 'runs.jsonl');
-  writeFileSync(file, '{"version":1,"missionId":"a"}\n{"version":1,"missionId":"b"}\n');
-  const withToken: RunsExport = { file, token: 'geheim-42' };
+  const lines = [reportOf(), reportOf({ mission: 'systemcheck', at: DAY + 1 })]
+    .map((report) => `${JSON.stringify(report)}\n`)
+    .join('');
+  writeFileSync(file, lines);
+  const store = JsonlStore.open(file);
+  const withToken: RunsExport = { store, token: 'geheim-42' };
 
   async function ask(runs: RunsExport, req: IncomingMessage): Promise<Answer> {
     const { res, answered } = fakeResponse();
@@ -262,7 +268,7 @@ describe('GET /runs.jsonl', () => {
   it('is not there while RUNS_TOKEN is unset or empty, whatever the request carries', async () => {
     for (const token of [undefined, '']) {
       for (const authorization of [undefined, 'Bearer ', 'Bearer geheim-42']) {
-        const answer = await ask({ file, token }, get('/runs.jsonl', authorization));
+        const answer = await ask({ store, token }, get('/runs.jsonl', authorization));
         expect(answer).toEqual({ status: 404, headers: {}, body: '' });
       }
     }
@@ -280,7 +286,7 @@ describe('GET /runs.jsonl', () => {
     }
   });
 
-  it('hands the log out for the token', async () => {
+  it('hands the runs out for the token, a report a line', async () => {
     for (const authorization of ['Bearer geheim-42', 'bearer  geheim-42']) {
       const answer = await ask(withToken, get('/runs.jsonl?fresh=1', authorization));
       expect(answer.status).toBe(200);
@@ -289,9 +295,15 @@ describe('GET /runs.jsonl', () => {
     }
   });
 
-  it('hands out an empty log until the first run has finished', async () => {
-    const before = { file: join(dir, 'noch-leer', 'runs.jsonl'), token: 'geheim-42' };
-    const answer = await ask(before, get('/runs.jsonl', 'Bearer geheim-42'));
+  it('hands out every run whatever the query asks: it picks no mission', async () => {
+    const answer = await ask(withToken, get('/runs.jsonl?mission=systemcheck', 'Bearer geheim-42'));
+    expect(answer.body).toBe(readFileSync(file, 'utf8'));
+  });
+
+  it('hands out nothing until the first run has finished', async () => {
+    const empty = JsonlStore.open(join(dir, 'noch-leer', 'runs.jsonl'));
+    const asked = get('/runs.jsonl', 'Bearer geheim-42');
+    const answer = await ask({ store: empty, token: 'geheim-42' }, asked);
     expect(answer).toMatchObject({ status: 200, body: '' });
   });
 

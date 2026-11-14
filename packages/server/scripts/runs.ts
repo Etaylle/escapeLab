@@ -8,7 +8,7 @@
  */
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { DEFAULT_RUNS_LOG, parseRuns } from '../src/runLog.js';
+import { DEFAULT_RUNS_LOG, parseRuns } from '../src/store/jsonl.js';
 import { formatSummary, summarize } from '../src/runSummary.js';
 
 function fail(message: string): never {

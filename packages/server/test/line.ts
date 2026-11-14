@@ -1,5 +1,6 @@
 import { EventEmitter } from 'node:events';
 import type { ClientMessage, PlayerView, ServerMessage } from '@escapelab/core';
+import type { Sender } from '../src/rateLimiter.js';
 
 /** How long a pong takes to come back, ms: the line's round trip. */
 export const ROUND_TRIP_MS = 40;
@@ -76,15 +77,18 @@ export class FakeSocket extends EventEmitter {
   }
 }
 
+/** The request a client opens its socket with, from this machine unless a test says otherwise. */
+export const FROM_HERE: Sender = { headers: {}, socket: { remoteAddress: '127.0.0.1' } };
+
 /** The WebSocket server and its open sockets, as `ws` keeps them. */
 export class FakeServer extends EventEmitter {
   readonly clients = new Set<FakeSocket>();
 
-  /** A client connects. */
-  connect(): FakeSocket {
+  /** A client connects, with the request `sender` opened its socket with. */
+  connect(sender: Sender = FROM_HERE): FakeSocket {
     const socket = new FakeSocket(this);
     this.clients.add(socket);
-    this.emit('connection', socket);
+    this.emit('connection', socket, sender);
     return socket;
   }
 }

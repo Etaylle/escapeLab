@@ -1,11 +1,7 @@
-import { appendFileSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import type { Difficulty, RunOutcome, RunReport } from '@escapelab/core';
-import type { RunReportV1 } from '../src/runLog.js';
-import { loadRunStats, logRun, RunStats, TOP_RUNS } from '../src/runStats.js';
+import { RunStats, TOP_RUNS } from '../src/runStats.js';
+import type { RunReportV1 } from '../src/store/store.js';
 
 /** Noon UTC, so that the day is the same in every time zone the tests run in. */
 const DAY = Date.UTC(2026, 9, 20, 12, 0);
@@ -210,105 +206,5 @@ describe('the stats index', () => {
     statsOf(stats)?.top[0]?.crew.push('Eindringling');
     statsOf(stats)?.top.pop();
     expect(statsOf(stats)?.top).toEqual([expect.objectContaining({ crew: ['Anna', 'Ben'] })]);
-  });
-});
-
-describe('loadRunStats', () => {
-  let dir = '';
-  beforeEach(() => {
-    dir = mkdtempSync(join(tmpdir(), 'escapelab-stats-'));
-  });
-
-  it('starts empty where there is no log yet', () => {
-    const logged = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    try {
-      expect(loadRunStats(join(dir, 'runs.jsonl')).runs).toBe(0);
-      expect(logged).not.toHaveBeenCalled();
-    } finally {
-      logged.mockRestore();
-    }
-  });
-
-  it('reads a log of both versions, as the server shipped it', () => {
-    const fixture = fileURLToPath(new URL('./fixtures/runs.jsonl', import.meta.url));
-    const stats = loadRunStats(fixture);
-    expect(stats.runs).toBe(7);
-    expect(statsOf(stats, 'systemcheck')).toMatchObject({
-      runs: 4,
-      wins: 2,
-      bestSeconds: 300,
-      medianSeconds: 330,
-      top: [
-        { crew: [], seconds: 300, alarms: 1 },
-        { crew: ['Anna', 'Ben'], seconds: 360, alarms: 3 },
-      ],
-    });
-    expect(statsOf(stats, 'blackout', 'hart')?.top).toMatchObject([{ crew: ['Cleo', 'Dan'] }]);
-  });
-
-  it('leaves out each line that holds no run, and says which', () => {
-    const file = join(dir, 'runs.jsonl');
-    const good = JSON.stringify(run({ seconds: 300 }));
-    // A run of the Tagesschicht starting at no moment has no day to be ranked on.
-    const dayless = JSON.stringify({ ...run({ seconds: 300 }), daily: true, startedAt: 7 });
-    const never = dayless.replace('"startedAt":7', '"startedAt":1e999');
-    writeFileSync(file, `${good}\n{"version":2,\n${good}\n{"version":9}\n${never}\n`);
-    const logged = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    try {
-      expect(loadRunStats(file).runs).toBe(2);
-      expect(logged.mock.calls.map(([line]) => String(line))).toEqual([
-        expect.stringMatching(/runs\.jsonl:2: not JSON .*\(the Bestenliste leaves it out\)$/),
-        expect.stringMatching(/runs\.jsonl:4: not a run report .*\(the Bestenliste leaves it ou/),
-        expect.stringMatching(/runs\.jsonl:5: not a run report .*\(the Bestenliste leaves it ou/),
-      ]);
-    } finally {
-      logged.mockRestore();
-    }
-  });
-
-  it('starts empty, saying why, where the log cannot be read', () => {
-    const logged = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    try {
-      // A directory where the log should be.
-      expect(loadRunStats(dir).runs).toBe(0);
-      expect(logged).toHaveBeenCalledWith(expect.stringContaining('the Bestenliste starts empty'));
-    } finally {
-      logged.mockRestore();
-    }
-  });
-});
-
-describe('logRun', () => {
-  let dir = '';
-  beforeEach(() => {
-    dir = mkdtempSync(join(tmpdir(), 'escapelab-stats-'));
-  });
-
-  it('counts each run as it is logged, and never reads the log again', () => {
-    const file = join(dir, 'runs.jsonl');
-    writeFileSync(file, `${JSON.stringify(run({ seconds: 300 }))}\n`);
-    const stats = loadRunStats(file);
-    // Whatever else lands in the log afterwards is not counted ...
-    appendFileSync(file, `${JSON.stringify(run({ seconds: 100, at: DAY + 1 }))}\n`);
-    expect(stats.runs).toBe(1);
-    // ... only what goes through the server's own listener, which logs it first.
-    logRun(file, stats)(run({ seconds: 200, at: DAY + 2, crew: ['Cleo'] }));
-    expect(stats.runs).toBe(2);
-    expect(readFileSync(file, 'utf8').trimEnd().split('\n')).toHaveLength(3);
-    expect(statsOf(stats)?.top.map((entry) => entry.crew)).toEqual([['Cleo'], ['Anna', 'Ben']]);
-  });
-
-  it('leaves a run it could not log out of the stats as well', () => {
-    const blocker = join(dir, 'datei');
-    writeFileSync(blocker, 'kein Ordner');
-    const stats = new RunStats();
-    const logged = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    try {
-      logRun(join(blocker, 'runs.jsonl'), stats)(run({ seconds: 300 }));
-      expect(logged).toHaveBeenCalledOnce();
-      expect(stats.runs).toBe(0);
-    } finally {
-      logged.mockRestore();
-    }
   });
 });

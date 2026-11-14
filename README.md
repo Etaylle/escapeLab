@@ -52,9 +52,13 @@ fünfte Alarm den Lauf — auf *Hart* der dritte, auf *Entspannt* gibt es keine 
 
 **Startseite:** Ein Hauptmenü wie in einem Spiel, über dem beleuchteten Labor der gewählten
 Mission, das langsam vorbeizieht: *Einsatz starten* (die Missionskarten, „Runde eröffnen"),
-*Beitreten*, *Offene Runden*, *Handbuch*, *Bestenliste*, *Editor* und *Einstellungen* — mit der
-Maus, der Tastatur (Pfeile, Enter, Esc) oder dem Controller (Steuerkreuz, A, B). Oben rechts
-steht das Profil: Name, Farbe und die eigene Figur, die winkt, sobald der Name sich ändert.
+*Beitreten*, *Offene Runden*, *Handbuch*, *Bestenliste*, *Meine Einsätze*, *Editor* und
+*Einstellungen* — mit der Maus, der Tastatur (Pfeile, Enter, Esc) oder dem Controller
+(Steuerkreuz, A, B). Oben rechts steht das Profil, das Konto des Browsers: Name, Farbe, die eigene
+Figur, die winkt, sobald der Name sich ändert, und wie viele Einsätze das Konto gespielt hat. Das
+Konto bewahrt Name, Farbe, Erfolge und Läufe über Neustarts und Deploys hinweg; *Meine
+Einsätze* listet seine Läufe, die Einstellungen löschen es auf Wunsch
+([`docs/accounts.md`](docs/accounts.md)).
 *Offene Runden* listet jede Runde mit Kartenvorschau, Mission, Schwierigkeit, ihrer Crew als
 Figuren und den freien Plätzen — ein Klick auf *Beitreten* genügt, niemand muss einen Code
 weitergeben. Laufende Runden erscheinen ebenfalls, dort führt der Knopf zum Zuschauen. Unter
@@ -222,6 +226,13 @@ pnpm lint         # eslint, zero warnings
 pnpm --filter @escapelab/server smoke   # Ende-zu-Ende über echte WebSockets
 ```
 
+Die Tests des Speichers in Postgres laufen gegen `TEST_DATABASE_URL` (eine Datenbank, in die sie
+schreiben dürfen): Je Lauf legen sie dort ein eigenes Schema an, migrieren es und löschen es am
+Ende; die CI stellt dafür einen Postgres-16-Container bereit. Ohne die Variable sagt eine Zeile am
+Ende des Testlaufs, dass sie übersprungen wurden — mit dem Befehl, der sie per docker startet. Der
+Smoke-Test spielt mit gesetzter Variable zusätzlich ein Tutorial auf einem Server, den das
+Start-Script mit Migration auf einem eigenen Schema startet.
+
 **Zuschauen:** Wer den Raumcode eingibt und auf *Zuschauen* klickt, sieht das ganze Labor ohne
 Dunkelheit, alle Figuren, die Drohnenkegel — **und die offene Station von allen Seiten**: Pult,
 Regeln und Wandplan zugleich, dazu für jede Figur, ob sie am Pult steht, liest oder die Kennung
@@ -231,8 +242,8 @@ merkt vor den Spielenden, wo die Ansage schiefgeht. Zuschauer können nichts aus
 **Nach der Runde:** Der Endbildschirm zeigt einen Rang von S bis C aus Alarmen und Restzeit, die
 **Beiträge** jedes Crewmitglieds (bedient, gelesen, gefunden, geliefert, Alarme, Notizen) und ein
 Einsatzprotokoll (wann welche Station fiel, jeder Alarm mit Grund und Kosten, Notfälle, eingesetzte
-Teile). Dazu führt dieses Gerät eine kleine Historie je Mission (Läufe, geschaffte Läufe,
-Bestzeit, bester Rang). **Nochmal:** Alle bestätigen gleichberechtigt auf dem Endbildschirm, und sobald das letzte Ja
+Teile). Jeder Lauf kommt ins Konto jedes Crewmitglieds: *Meine Einsätze* im Hauptmenü listet
+Mission, Datum, Ausgang, Zeit, Crew und Rang, die Bestenliste vergleicht alle Crews. **Nochmal:** Alle bestätigen gleichberechtigt auf dem Endbildschirm, und sobald das letzte Ja
 da ist, startet derselbe Einsatz von selbst — ohne Umweg über die Lobby und ohne dass jemand
 der Startknopf-Mensch sein muss. Fehlt jemand (Verbindung weg), wartet der Neustart auf die
 Rückkehr. Über die Lobby geht es weiterhin, wenn Mission oder Schwierigkeit sich ändern sollen.
@@ -307,19 +318,22 @@ Adresse, also HTTPS oder `localhost`: die App auf den Startbildschirm legen, der
 die LAN-Adresse per http fehlen sie still; nur die Startseite sagt in einer Zeile, dass es
 ohne HTTPS kein Mikrofon gibt.
 
-**Laufprotokoll (ohne Datenbank):** Jeder beendete Lauf, gewonnen oder verloren, hängt seinen
-Bericht als eine Zeile JSON an eine Datei an; jede Revanche bekommt ihre eigene Zeile. Darin
-stehen Mission, Schwierigkeit, Zeitlimit und Alarmgrenze, Crew-Größe und gezogene Startplätze,
-Start, Ende und Ausgang (`won`, `lost:time`, `lost:alarms`), je Station wann sie dran war und
+**Laufprotokoll (die Datei, wo keine Datenbank ist):** Jeder beendete Lauf, gewonnen oder
+verloren, kommt als Bericht in den Speicher des Servers; jede Revanche als eigener Lauf. Mit
+`DATABASE_URL` ist das die Datenbank (siehe „Hosting auf Render" und
+[`docs/accounts.md`](docs/accounts.md)), ohne hängt der Server den Bericht als eine Zeile JSON an
+eine Datei an — der Rückfall für die Entwicklung, das LAN und die CI; geschrieben wird immer nur
+an eine der beiden Stellen. Im Bericht stehen Mission, Schwierigkeit, Zeitlimit und Alarmgrenze,
+die Crew mit den Namen, unter denen sie spielte, und ihren gezogenen Startplätzen, Start, Ende und
+Ausgang (`won`, `lost:time`, `lost:alarms`, `lost:abandoned`), je Station wann sie dran war und
 wann sie fiel, die Sekunden dazwischen, ihre Alarme und Notizen, dazu die Notfälle, alle Alarme
-nach Ursache und die Beiträge. Namen kommen nicht hinein, die Crew heißt `p1` bis `pn`. Kann
-der Server nicht schreiben (Platte voll, falscher Pfad), steht das im Server-Log, und das Spiel
-läuft weiter.
+nach Ursache und die Beiträge (`p1` bis `pn`). Kann der Server einen Lauf nicht ablegen (Platte
+voll, falscher Pfad, Datenbank weg), steht das im Server-Log, und das Spiel läuft weiter.
 
 | Variable | Wirkung |
 | --- | --- |
-| `RUNS_LOG` | Pfad der Protokolldatei, am besten absolut. Ohne: `packages/server/data/runs.jsonl`. Fehlende Ordner legt der Server an. |
-| `RUNS_TOKEN` | Gibt `GET /runs.jsonl` frei, nur mit dem Header `Authorization: Bearer <RUNS_TOKEN>`. Ohne Token antwortet die Route 404. |
+| `RUNS_LOG` | Pfad der Protokolldatei ohne Datenbank, am besten absolut. Ohne: `packages/server/data/runs.jsonl`. Fehlende Ordner legt der Server an. |
+| `RUNS_TOKEN` | Gibt `GET /runs.jsonl` frei — alle abgelegten Läufe, ältester zuerst, aus der Datei oder der Datenbank —, nur mit dem Header `Authorization: Bearer <RUNS_TOKEN>`. Ohne Token antwortet die Route 404. |
 
 ```sh
 RUNS_TOKEN=… RUNS_LOG=/var/lib/escapelab/runs.jsonl pnpm start
@@ -329,7 +343,8 @@ pnpm --filter @escapelab/server runs runs.jsonl   # Tabelle zum Balancing
 
 Die Tabelle zeigt je Mission und Schwierigkeit Läufe, Siegquote und mittlere Dauer (Median),
 je Station die mittleren Sekunden und Alarme und die drei langsamsten Stationen. Ohne
-Dateiangabe liest `runs` die Datei aus `RUNS_LOG` bzw. die Standarddatei.
+Dateiangabe liest `runs` die Datei aus `RUNS_LOG` bzw. die Standarddatei; mit Datenbank holt man
+die Läufe per `GET /runs.jsonl` und gibt `runs` die geladene Datei.
 
 ## Hosting auf Render
 
@@ -371,7 +386,8 @@ Betrieb:
   per `exec` durch `pnpm --filter @escapelab/server start`, und das durch
   `node --import tsx src/index.ts`, also steht weder eine Shell noch die tsx-CLI dazwischen.
   Wer pnpm ganz aus dem Weg haben will, trägt als Start Command direkt
-  `cd packages/server && exec node --import tsx src/index.ts` ein. Ob es ankommt, zeigt das Log
+  `cd packages/server && exec node --import tsx src/index.ts` ein — dann aber laufen die
+  Migrationen der Datenbank nicht (siehe unten). Ob es ankommt, zeigt das Log
   der alten Instanz beim ersten Deploy: Es muss `[escapelab] SIGTERM: going down for a restart`
   enthalten, dann je Raum `going down for a restart, snapshot seq …` — fehlt die Zeile, hat
   Render die Instanz ohne Wort beendet. Die Logs im Dashboard reichen 7 Tage zurück;
@@ -396,8 +412,58 @@ Betrieb:
   SIGTERM, auch beim Einschlafen des Free-Plans — wartet nie. Vor einem Push lohnt `/health`
   trotzdem: Jeder Deploy hält laufende Partien für Sekunden an.
 
+**Konten und Läufe in der Datenbank.** Render Free löscht die Platte bei jedem Deploy und jedem
+Neustart — ohne Datenbank fangen Laufprotokoll, Bestenliste, „Meine Einsätze" und alle Erfolge
+dann von vorn an, und die Konten leben nur im Speicher, bis der Server stoppt. Mit
+`DATABASE_URL` hält der Server Konten, Läufe und Erfolge in Postgres
+([`docs/accounts.md`](docs/accounts.md)); eine kostenlose Datenbank gibt es bei Neon
+(neon.tech). Render kennt sie auf einem von zwei Wegen, beide unter „Environment" und nirgends
+sonst, auch nicht im Repo:
+
+- **Neons Integration** setzt zwei Variablen: `DATABASE_URL`, die gepoolte Verbindung über Neons
+  Pooler (Host mit `-pooler`), für die Abfragen des Servers, und `DATABASE_URL_UNPOOLED`, die
+  direkte, für die Migrationen, denn Prismas Schema-Engine geht nicht über PgBouncer. Ein Zusatz
+  wie `pgbouncer=true` gehört nicht in die gepoolte: Neons Pooler (PgBouncer 1.24) hält Prepared
+  Statements, und Prisma rät ab PgBouncer 1.21 davon ab.
+- **Von Hand** reicht `DATABASE_URL` allein: Projekt anlegen, im Dialog „Connect" die direkte
+  Verbindung (nicht „pooled") für Prisma wählen und die Zeichenkette als `DATABASE_URL`
+  eintragen. Ohne `DATABASE_URL_UNPOOLED` nehmen auch die Migrationen sie.
+
+Der Start (`pnpm run start`) wendet dann zuerst die Migrationen an (`pnpm --filter
+@escapelab/server prisma migrate deploy`, aus `packages/server/prisma/migrations/`, über
+`DATABASE_URL_UNPOOLED`, sonst über `DATABASE_URL`) und startet den Server erst danach; scheitert
+die Migration, startet er nicht. Den Prisma-Client erzeugt `pnpm install`, einmal, über die
+postinstall des Servers (das Build Command bleibt, wie es ist). Welcher Speicher läuft, sagt das
+Start-Log in einer Zeile:
+`store: Postgres at DATABASE_URL: …` oder `store: run log …, accounts in memory until the server
+stops (no DATABASE_URL)`.
+
+- **Neon nicht erreichbar.** Dann scheitert schon die Migration, mit `Error: P1001: Can't reach
+  database server at …`, und der Server startet nicht. Sein eigenes `not started: …` steht nur im
+  Log, wo er die Datenbank nach der Migration nicht öffnen kann oder ohne sie gestartet wurde
+  (Start Command ohne pnpm, siehe oben). Eine alte Instanz, die weiterspielt, gibt es nur bei
+  einem Deploy, weil Render erst auf eine gesunde neue umschaltet. Bei einem Neustart oder wenn
+  der Free-Plan aus dem Schlaf aufwacht, gibt es keine: Dann ist das Spiel weg, bis Neon wieder
+  antwortet und ein Start gelingt.
+- **Eine Migration bricht mittendrin ab** (Deploy abgebrochen, Instanz beendet, Fehler im SQL).
+  Postgres nimmt ihre Änderungen zurück, denn Prisma führt jede Migration in einer Transaktion
+  aus. Prisma vermerkt sie aber als gescheitert, und jeder weitere Start bricht ab mit `Error:
+  P3009 … migrate found failed migrations in the target database`, der Server startet nicht.
+  Lösen lässt sich das nur von einem eigenen Rechner aus, mit der direkten Neon-Zeichenkette
+  (dem Wert von `DATABASE_URL_UNPOOLED`, wo Render beide hat) allein in dieser Shell und dem
+  Namen der Migration aus der Meldung:
+
+  ```sh
+  DATABASE_URL='…' pnpm --filter @escapelab/server prisma migrate resolve \
+    --rolled-back 20261113135816_accounts
+  ```
+
+  Danach die Ursache beheben und neu deployen: Der nächste Start wendet die Migration erneut an.
+
 | Wo | Name | Wirkung |
 | --- | --- | --- |
+| Render-Umgebung | `DATABASE_URL` | Die Postgres-Datenbank (Neon) für Konten, Läufe und Erfolge, gepoolt oder direkt; ohne: Datei und Konten im Speicher (siehe oben). |
+| Render-Umgebung | `DATABASE_URL_UNPOOLED` | Die direkte Verbindung derselben Datenbank für die Migrationen, von Neons Integration neben die gepoolte `DATABASE_URL` gesetzt; ohne: Die Migrationen nehmen `DATABASE_URL`. |
 | Render-Umgebung | `RUNS_TOKEN` | Gibt das Laufprotokoll per `GET /runs.jsonl` frei (siehe oben). |
 | Render-Umgebung | `ROOM_SECRET` | Schlüssel der Schnappschüsse (SHA-256 davon für AES-256-GCM): im Dashboard unter „Environment" als Variable anlegen, 32 oder mehr zufällige Zeichen, etwa `openssl rand -hex 32`, und nie ändern — ein neuer Schlüssel öffnet die alten Schnappschüsse nicht. Ohne ihn macht der Server bei jedem Start einen eigenen Schlüssel, das Start-Log sagt `ROOM_SECRET unset … rooms will not survive a restart`, und kein Raum überlebt einen Neustart; mit weniger als 32 Zeichen startet er nicht. Der Deploy, mit dem er dazukommt, trägt die laufenden Räume noch nicht hinüber. |
 
