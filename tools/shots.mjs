@@ -30,7 +30,11 @@
  * the room, starting the run, skipping the opening or walking on, as the next one needs. A
  * capture or a check belongs to the group of the step that takes it; the frame windows in
  * screens' and intro's steps come only where that group is on as well. Without either variable
- * every group plays, as before; the summary names the groups played.
+ * every group plays, as before; the summary names the groups played, the line before it the
+ * seconds each took. On this Mac (an M4 with 16 GB, 2026-11-14) a full Blackout run took 772 s:
+ * run 292, reconnect 114, audio 87, reading 66, graphics 52, hud 33, screens 25, perf 23, art 19,
+ * devices 18, intro 12, restart 11, drones 8, editor 8 and voice 3 s; SHOTS_ONLY=screens,intro
+ * took 48 s, and a group within the run costs the mission played to its end besides.
  *
  * SHOTS_MISSION names the mission card to start (default Blackout); the
  * crew is two players. Where the first station is a sync station, both
@@ -534,7 +538,7 @@ import { chromium, request } from 'playwright';
 import { AGAIN_AFTER_MS, allowanceOf, gateWindow, p95Text, paceOf } from './framegate.mjs';
 import { withOthersFrozen } from './freeze.mjs';
 import { ART_PX, bobVerdict, GLOWING, glowAtCorners, haloAgainst } from './glowcheck.mjs';
-import { GROUP_NAMES, groupOf, planGroups, reaches } from './groups.mjs';
+import { GROUP_NAMES, groupClock, groupOf, planGroups, reaches, spentText } from './groups.mjs';
 import { lightWorkText } from './lightwork.mjs';
 import { fadeOf, meanLuma, midway } from './panelfade.mjs';
 import { beamLight, beamPatches, beamVerdict } from './beamcheck.mjs';
@@ -619,6 +623,8 @@ const AUDIO_OFF = audioOff(process.env.SHOTS_AUDIO_OFF);
  * where SHOTS_SKIP names that one. `lines` say which groups the run leaves out or pulls in.
  */
 const PLAN = planGroups(process.env.SHOTS_ONLY, process.env.SHOTS_SKIP);
+/** The time each group of the run takes (`inGroup`), for the line before the summary. */
+const timeByGroup = groupClock();
 /**
  * The server the run starts and owns, SHOTS_SERVER=<entry>: node runs the entry — one in
  * TypeScript with the tsx loader — from packages/server, on BASE's port with ALLOW_SEED=1 and TLS
@@ -908,19 +914,25 @@ function groupOn(name) {
 }
 
 /**
- * Runs `step` where the group `name` is on in this run; where the group is off, runs
- * `otherwise` instead, nothing by default. Returns what ran.
+ * Runs `step` where the group `name` is on in this run, its time counted to the group — a step
+ * of another group within it counting to that one; where the group is off, runs `otherwise`
+ * instead, nothing by default. Returns what ran.
  */
 async function inGroup(name, step, otherwise = () => undefined) {
   if (!groupOn(name)) {
     return otherwise();
   }
-  return step();
+  timeByGroup.enter(name);
+  try {
+    return await step();
+  } finally {
+    timeByGroup.leave();
+  }
 }
 
 /**
- * Starts `start` where the group `name` is on — work going on beside the steps — and returns
- * what it returns; where the group is off, `otherwise`.
+ * Starts `start` where the group `name` is on — work going on beside the steps, its time counted
+ * to none — and returns what it returns; where the group is off, `otherwise`.
  */
 function whenOn(name, start, otherwise = null) {
   return groupOn(name) ? start() : otherwise;
@@ -1329,12 +1341,13 @@ function soundJs(before, after, seconds) {
 }
 
 /**
- * The run's last line: the captures taken, skipped and failed, what failed, and the groups
- * played.
+ * The run's last lines: the seconds each group played took (`groups`), then the summary — the
+ * captures taken, skipped and failed, what failed, and the groups played.
  */
 function summarize() {
   const { skipped, failures } = tally;
   const played = GROUP_NAMES.filter((name) => PLAN.on.has(name)).join(', ');
+  console.log(`groups             ${spentText(timeByGroup.spent(), PLAN.on)}`);
   console.log(
     `summary            ${tally.taken} captures taken, ${skipped} skipped, ${failures.length} ` +
       `failed${failures.length === 0 ? '' : ` — ${failures.join('; ')}`} (groups ${played})`,
@@ -11923,8 +11936,9 @@ async function run() {
 /**
  * The walkthrough, stage by stage as far as the groups on reach (tools/groups.mjs `reaches`):
  * the menu and the lobby to the started run (`lobbyStage`), the mission's opening
- * (`openingStage`), and the run to its end (`runStage`). A stage's own steps are its group's —
- * screens, intro, run; where that is off, the stage only leads on to a later one.
+ * (`openingStage`), and the run to its end (`runStage`). A stage's own steps count to its
+ * group — screens, intro, run — where that is on; where it is not, the stage only leads on to a
+ * later one, and its time counts to none.
  */
 async function walkthrough() {
   if (!reaches(PLAN.on, 'lobby')) {
@@ -11940,7 +11954,7 @@ async function walkthrough() {
   }
 }
 
-/** Plays `stage`: the group `name`'s where that is on, a way on to a later stage where not. */
+/** Plays `stage`, its time counted to the group `name` where that is on, to none where not. */
 function asStage(name, stage) {
   return inGroup(name, stage, stage);
 }

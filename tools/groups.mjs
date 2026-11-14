@@ -4,7 +4,8 @@
  * a name the walkthrough builds from a value stands here as a pattern, `*` for the value.
  * SHOTS_ONLY and SHOTS_SKIP pick the groups a run plays (`planGroups`): a group that needs
  * another pulls it in, unless SHOTS_SKIP leaves that one out, which refuses the group. The
- * walkthrough goes only as far as the groups on reach (`reaches`).
+ * walkthrough goes only as far as the groups on reach (`reaches`), and the time each group took
+ * is counted as it goes (`groupClock`).
  */
 
 /**
@@ -394,4 +395,45 @@ export function planGroups(only, skip) {
 export function reaches(on, stage) {
   const at = STAGES.indexOf(stage);
   return GROUPS.some((group) => on.has(group.name) && STAGES.indexOf(group.stage) >= at);
+}
+
+/**
+ * A clock of the time each group takes: `enter` a group as its step begins and `leave` it as the
+ * step ends, a step within a step counting to the inner one; time spent in none counts to null.
+ * `spent` gives ms by group so far. `now` reads the time in ms.
+ */
+export function groupClock(now = Date.now) {
+  const spent = new Map();
+  const open = [];
+  let since = now();
+  const charge = () => {
+    const at = now();
+    const group = open.at(-1) ?? null;
+    spent.set(group, (spent.get(group) ?? 0) + (at - since));
+    since = at;
+  };
+  return {
+    enter(group) {
+      charge();
+      open.push(group);
+    },
+    leave() {
+      charge();
+      open.pop();
+    },
+    spent() {
+      charge();
+      return new Map(spent);
+    },
+  };
+}
+
+/**
+ * The seconds each group of `on` took (`spent`, ms by group as `groupClock` gives them), in the
+ * table's order, then the time spent in none of them: the setup and the walks between.
+ */
+export function spentText(spent, on) {
+  const of = (group) => `${((spent.get(group) ?? 0) / 1000).toFixed(1)} s`;
+  const groups = GROUP_NAMES.filter((name) => on.has(name)).map((name) => `${name} ${of(name)}`);
+  return `${groups.join(', ')}; outside them ${of(null)}`;
 }
