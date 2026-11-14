@@ -434,7 +434,7 @@ export async function haveSource(source: Source, takes: string, get: Bench['get'
 // --- what a piece is made from --------------------------------------------------------------
 
 /** What the script makes every piece by, beside its plan: when one changes, so may its file. */
-const BUILD_SETTINGS = {
+export const BUILD_SETTINGS = {
   bitrate: PACK_BITRATE,
   edgeMs: EDGE_MS,
   lufs: TARGET_LUFS,
@@ -454,12 +454,16 @@ function canonical(value: unknown): string {
 
 /**
  * What a piece's file is made from, hashed: what `piece`'s plan says of its sound — its span, its
- * loop, its fades — the settings the script makes it by, and its source's bytes. Its credit is no
+ * loop, its fades — the `settings` the script makes it by, and its source's bytes. Its credit is no
  * part of it: a title, an author or a licence corrected changes pack.json, never the file.
  */
-export function buildHashOf(piece: PlanPiece, source: Uint8Array): string {
+export function buildHashOf(
+  piece: PlanPiece,
+  source: Uint8Array,
+  settings: Readonly<Record<string, number>> = BUILD_SETTINGS,
+): string {
   const { trim, loop = null, fades = null } = piece;
-  const said = canonical({ trim, loop, fades, settings: BUILD_SETTINGS });
+  const said = canonical({ trim, loop, fades, settings });
   return createHash('sha1').update(said).update(source).digest('hex').slice(0, 16);
 }
 

@@ -504,21 +504,21 @@ describe('a pack’s file that cannot be had', () => {
   });
 });
 
-describe('a pack’s stems as they change hands', () => {
-  /** The test's fetch, the probe's calm held back until `release` lets it come. */
-  function holdProbeCalm(): { release: () => void } {
-    const served = globalThis.fetch;
-    let release = (): void => undefined;
-    vi.stubGlobal('fetch', (url: string) =>
-      url.endsWith('packs/probe/calm.m4a')
-        ? new Promise((done) => {
-            release = () => done(served(url));
-          })
-        : served(url),
-    );
-    return { release: () => release() };
-  }
+/** The test's fetch, the file at `address` held back until `release` lets it come. */
+function holdFile(address: string): { release: () => void } {
+  const served = globalThis.fetch;
+  let release = (): void => undefined;
+  vi.stubGlobal('fetch', (url: string) =>
+    url === address
+      ? new Promise((done) => {
+          release = () => done(served(url));
+        })
+      : served(url),
+  );
+  return { release: () => release() };
+}
 
+describe('a pack’s stems as they change hands', () => {
   it('cross at their seam over their own fade, not the score’s three seconds', async () => {
     const slow = { crossfade: { startMs: 5000, endMs: 70_000, fadeMs: 5000 } };
     const { music, packs } = await fresh({}, foundPack('slow', { calm: { loop: slow } }));
@@ -542,7 +542,7 @@ describe('a pack’s stems as they change hands', () => {
     const ctx = lastContext();
     music.setTension(tension());
     vi.advanceTimersByTime(300);
-    const held = holdProbeCalm();
+    const held = holdFile('/music/packs/probe/calm.m4a');
     ctx.currentTime = 20;
     packs.setMusicChoice({ pack: 'probe', pieces: {} });
     music.setTension(tension());
@@ -646,5 +646,63 @@ describe('the menu’s pieces as they change hands', () => {
     await vi.advanceTimersByTimeAsync(3000);
     expect(fetched).toContain('/music/menu-theme.mp3');
     expect(sound.menuSoundProbe()).toMatchObject({ theme: true, pack: 'probe' });
+  });
+});
+
+describe('a choice taken back, and one made mid-fade', () => {
+  it('drops the piece chosen anew as the choice goes back to the one playing', async () => {
+    const { music, packs } = await fresh();
+    music.setTension(tension());
+    await fetchIn();
+    const ctx = lastContext();
+    music.setTension(tension());
+    vi.advanceTimersByTime(300);
+    ctx.currentTime = 20;
+    packs.setMusicChoice({ pack: 'probe', pieces: {} });
+    music.setTension(tension());
+    await fetchIn();
+    packs.setMusicChoice({ pack: 'nachtschicht', pieces: {} });
+    music.setTension(tension());
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith(blobOf('packs/probe/calm.m4a'));
+    // At the score's loop point the score goes round on: the piece dropped takes nothing over.
+    ctx.currentTime = 10.3 + 24 * BAR - 0.9;
+    music.setTension(tension());
+    expect(music.musicProbe().pieces.calm).toBe('nachtschicht/calm');
+  });
+
+  it('keeps the fade in progress where a stem changes hands in place', async () => {
+    const { music, packs } = await fresh();
+    holdFile('/music/calm.mp3');
+    music.setTension(tension());
+    await fetchIn();
+    const ctx = lastContext();
+    music.setTension(tension()); // the score's calm comes in over 10.3–12.3 s, its file not had
+    ctx.currentTime = 11;
+    packs.setMusicChoice({ pack: 'probe', pieces: {} });
+    music.setTension(tension());
+    expect(music.musicProbe().pieces.calm).toBe('probe/calm'); // in its place: it has no pass
+    await fetchIn();
+    music.setTension(tension());
+    const [calm] = decksOf('packs/probe/calm.m4a');
+    const end = expect.closeTo(10.3 + CROSSFADE_S, 9);
+    expect(lastFade(after(ctx, calm))).toEqual({ start: 11, end, to: 1 });
+  });
+
+  it('counts no bars on the menu under a theme that goes round by its crossfade', async () => {
+    const page = fakeWindow();
+    const { sound, packs } = await freshMenu();
+    packs.setMusicChoice({ pack: 'probe', pieces: {} });
+    sound.wantMenuSound('menu');
+    page.fire('keydown');
+    await vi.advanceTimersByTimeAsync(600);
+    const ctx = lastContext();
+    ctx.currentTime = 14.5; // off every bar the score's 90 bpm would count from its start
+    sound.wantMenuSound('lobby');
+    await vi.advanceTimersByTimeAsync(150);
+    const [lobby] = decksOf('packs/probe/lobby.m4a');
+    expect(lastFade(after(ctx, lobby).outputs[0] as FakeGain)).toMatchObject({
+      start: expect.closeTo(14.8, 9),
+      to: 1,
+    });
   });
 });

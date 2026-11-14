@@ -86,6 +86,19 @@ describe('an .m4a made timeless', () => {
     expect([...out.slice(at, at + 8)]).toEqual(new Array(8).fill(0));
   });
 
+  it('reads a box whose size takes 64 bits, as a large file’s does', () => {
+    const inner = box('mvhd', stamped(0, 88));
+    const large = new Uint8Array(16 + inner.length);
+    const view = new DataView(large.buffer);
+    view.setUint32(0, 1); // its size follows the kind, in 64 bits
+    large.set([...'moov'].map((c) => c.charCodeAt(0)), 4);
+    view.setBigUint64(8, BigInt(large.length));
+    large.set(inner, 16);
+    const out = timeless(large);
+    const at = bodyOf(out, 'mvhd') + 4;
+    expect([...out.slice(at, at + 8)]).toEqual(new Array(8).fill(0));
+  });
+
   it('stops at a box that claims less than its own header, leaving the rest as it was', () => {
     const broken = Uint8Array.from([0, 0, 0, 4]); // a size of 4: under the 8 its header takes
     const file = Uint8Array.from([...broken, ...box('moov', box('mvhd', stamped(0, 88)))]);

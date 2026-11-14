@@ -14,6 +14,7 @@ import { lufsOf, parseWav, wavBytes, type Pcm } from '../scripts/pcm.js';
 import {
   allowedUrl,
   attributionOf,
+  BUILD_SETTINGS,
   buildHashOf,
   buildPack,
   optionsOf,
@@ -83,9 +84,13 @@ function plannedPack(id: string, pieces: Partial<Record<Slot, Change>> = {}): Pl
   return { id, title: 'Schicht X · Probe', composers: ['Ada Example'], pieces: all };
 }
 
+/** The temporary folders the test's runs were given: let go after each test. */
+let roots: string[] = [];
+
 /** Folders of a run's own, in a temporary folder. */
 function placesIn(): Places {
   const root = mkdtempSync(join(tmpdir(), 'escapelab-packs-test-'));
+  roots.push(root);
   return {
     plan: join(root, 'packs.plan.json'),
     packs: join(root, 'audio-packs'),
@@ -143,6 +148,8 @@ beforeEach(() => {
 afterEach(() => {
   vi.restoreAllMocks();
   process.exitCode = 0;
+  for (const root of roots) rmSync(root, { recursive: true, force: true });
+  roots = [];
 });
 
 describe('the command line', () => {
@@ -595,6 +602,12 @@ describe('what a piece is made from', () => {
     expect(buildHashOf(piece, Uint8Array.from([1, 2, 4]))).not.toBe(hash);
   });
 
+  it('changes with the settings the script makes it by', () => {
+    const hash = buildHashOf(piece, source);
+    expect(buildHashOf(piece, source, BUILD_SETTINGS)).toBe(hash);
+    expect(buildHashOf(piece, source, { ...BUILD_SETTINGS, bitrate: 96_000 })).not.toBe(hash);
+  });
+
   it('keeps to its credit and its notes, and to how its plan is written', () => {
     const hash = buildHashOf(piece, source);
     const credited = { ...piece, title: 'x', author: 'y', page: 'https://z' };
@@ -687,6 +700,22 @@ describe('a piece downloaded by hand', BUILDS, () => {
     });
     const names = readdirSync(join(places.music, 'ada'));
     expect(names.some((name) => name.includes('.part'))).toBe(false);
+    expect(readFileSync(join(places.packs, 'ada', 'pack.json'), 'utf8')).toBe(before);
+  });
+
+  it('counts the files it keeps against the cap beside those it makes anew', async () => {
+    const places = placesIn();
+    const pack = plannedPack('ada');
+    await buildPack(pack, benchOf(places, hostFor([pack])));
+    // Seven of the eight files kept as they are, each a seventh of the cap and more.
+    for (const slot of SLOTS.filter((each) => each !== 'calm')) {
+      const file = join(places.music, 'ada', `${slot}.m4a`);
+      writeFileSync(file, Buffer.concat([readFileSync(file), Buffer.alloc(PACK_CAP / 7)]));
+    }
+    const before = readFileSync(join(places.packs, 'ada', 'pack.json'), 'utf8');
+    const changed = plannedPack('ada', { calm: { trim: [6000, 85_000] } });
+    const outcome = await buildPack(changed, benchOf(places, hostFor([changed])));
+    expect(outcome).toMatchObject({ refused: [expect.stringContaining('over its 9 MB')] });
     expect(readFileSync(join(places.packs, 'ada', 'pack.json'), 'utf8')).toBe(before);
   });
 

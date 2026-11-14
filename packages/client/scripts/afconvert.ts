@@ -17,6 +17,13 @@ import { parseWav, wavBytes, type Pcm } from './pcm.ts';
 export type Decode = (path: string) => Pcm;
 /** Encodes `pcm` into the file at `path`, as AAC in an .m4a. */
 export type Encode = (pcm: Pcm, path: string) => void;
+/** Runs the converter with `args`, its input and its output the last two. */
+export type Convert = (args: readonly string[]) => void;
+
+/** The Mac's afconvert, run with `args`. */
+const afconvert: Convert = (args) => {
+  execFileSync('afconvert', [...args]);
+};
 
 /** Decodes a recording with afconvert into `scratch` and reads it back as PCM. */
 export function afconvertIn(scratch: string): Decode {
@@ -32,16 +39,15 @@ export function afconvertIn(scratch: string): Decode {
 }
 
 /**
- * Encodes with afconvert, the PCM written as a WAV into `scratch` first: AAC in an .m4a at
- * `bitrate`, bit/s, at the encoder's best quality, the moment of its encoding left out.
+ * Encodes with afconvert — or `convert` — the PCM written as a WAV into `scratch` first: AAC in an
+ * .m4a at `bitrate`, bit/s, at the encoder's best quality, the moment of its encoding left out.
  */
-export function afconvertOut(scratch: string, bitrate: number): Encode {
+export function afconvertOut(scratch: string, bitrate: number, convert = afconvert): Encode {
   return (pcm, path) => {
     const wav = join(scratch, 'piece.wav');
     writeFileSync(wav, wavBytes(pcm));
     try {
-      const aac = ['-f', 'm4af', '-d', 'aac', '-b', String(bitrate), '-q', '127'];
-      execFileSync('afconvert', [...aac, wav, path]);
+      convert(['-f', 'm4af', '-d', 'aac', '-b', String(bitrate), '-q', '127', wav, path]);
       writeFileSync(path, timeless(readFileSync(path)));
     } finally {
       rmSync(wav, { force: true });

@@ -210,7 +210,9 @@ describe('the seam found within its bounds', () => {
   });
 
   it('scores music whose flux stands still by its spectra alone, never as no seam', () => {
-    const seam = bestSeam(fluxOnly(new Array(9000).fill(1)), fadeOf(2000, 6300), 0);
+    // A flux of 0.1 throughout, sought a second either way: in some of its windows the variance
+    // rounds to a trace above nothing, which is no beat.
+    const seam = bestSeam(fluxOnly(new Array(9000).fill(0.1)), fadeOf(2000, 6300), 1000);
     expect(seam.score).toBe(0);
   });
 
