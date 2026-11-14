@@ -105,6 +105,13 @@
   border-top: 1px solid var(--line);
 }
 
+/* A tab's „Zurücksetzen", in the mono of the panel's other buttons. */
+.settings-foot .settings-reset {
+  padding: 7px 12px;
+  font-family: var(--mono);
+  font-size: 13px;
+}
+
 .settings-foot .settings-reset,
 .settings-card .settings-option,
 .settings-card .settings-rebind {
@@ -272,14 +279,6 @@
   color: var(--accent);
   border-color: var(--accent);
   box-shadow: 0 0 10px var(--accent-glow);
-}
-
-/* The talk key as a keycap, and the button that rebinds it. */
-.settings-key {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 12px;
 }
 
 .settings-kbd {
