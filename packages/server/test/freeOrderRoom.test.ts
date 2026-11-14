@@ -152,8 +152,13 @@ describe('a free-order run without a clock, sealed while the crew picks', () => 
 
   it('keeps the order taken, the pick and the clock’s start, and its clock stood still', () => {
     const { room, anna, ben } = running(freeLab(0));
-    // Drei first: it swaps places with Eins at the run's first, and once solved the crew picks.
+    // Drei first: it swaps places with Eins at the run's first, and is the crew's until solved.
     switchOn(room, anna, ben, 11);
+    const keptOn = { ...room.snapshot(Date.now()), instance: 'frei', final: false };
+    const on = open(seal(keptOn, 'TEST', KEY), 'TEST', KEY).state;
+    expect(on.mission.puzzles.map((p) => p.id)).toEqual(['drei', 'zwei', 'eins']);
+    expect([on.currentPuzzleIndex, on.picked]).toEqual([0, true]);
+    // Solved, the crew picks again.
     pressTogether(room, anna, ben);
     const kept = room.snapshot(Date.now());
     room.dispose();
