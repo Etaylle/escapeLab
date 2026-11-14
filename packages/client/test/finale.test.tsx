@@ -489,6 +489,14 @@ describe('the title card', () => {
   });
 });
 
+describe('the title card of a mission without a hatch', () => {
+  it('says every station is done, where nobody had a hatch to get out by', () => {
+    const html = card(over({ noHatch: true }));
+    expect(html).toContain('<span class="end-scene-caption">Jede Station abgenommen</span>');
+    expect(html).not.toContain('Alle draußen');
+  });
+});
+
 describe('the game screen while the world plays the end', () => {
   const game = (view: PlayerView, finale: Parameters<typeof GameScreen>[0]['finale']): string =>
     renderToStaticMarkup(

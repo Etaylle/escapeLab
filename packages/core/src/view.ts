@@ -229,6 +229,8 @@ export interface RunShape {
    * armed until the crew switches one on, which is theirs until solved
    */
   freeOrder?: true;
+  /** the mission has no hatch (`map.exit` left out): the solve of its last station wins the run */
+  noHatch?: true;
 }
 
 /** The run's shape (`RunShape`) as the views tell it. */
@@ -237,6 +239,7 @@ function runShapeOf(state: GameState): RunShape {
   return {
     ...(from === null ? {} : { clockFrom: from }),
     ...(state.mission.order === 'free' ? { freeOrder: true } : {}),
+    ...(state.mission.map.exit === undefined ? { noHatch: true } : {}),
   };
 }
 

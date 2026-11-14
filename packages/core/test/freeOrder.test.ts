@@ -419,13 +419,15 @@ describe('a mission without a hatch', () => {
     expect(throughTheHatch?.label).toBe('Solide — es hat gewackelt, aber alle sind draußen');
   });
 
-  it('says so in its report, which grades the run as its end card did', () => {
+  it('says so in every view and its report, which grades the run as its end card did', () => {
     const spotted = (state: GameState, at: number): GameState =>
       applyAction(state, { type: 'drone-spotted', at, penaltySec: 15, playerId: 'p1' });
     const solveAll = (state: GameState): GameState =>
       ['eins', 'zwei', 'drei'].reduce((next, id) => take(next, id, T0 + 2000), state);
     const noHatch = started(freeLab({ map: { ...freeLab().map, exit: undefined } }));
     const won = solveAll(spotted(spotted(noHatch, T0 + 500), T0 + 600));
+    expect(viewFor(won, 'p1').noHatch).toBe(true);
+    expect(viewForSpectator(won).noHatch).toBe(true);
     const report = runReport(won, 'ABCD');
     expect(report.noHatch).toBe(true);
     expect(reportGrade(report)).toEqual(viewFor(won, 'p1').grade);
@@ -437,6 +439,7 @@ describe('a mission without a hatch', () => {
       at: T0 + 3000,
     });
     expect(escaped.phase).toBe('won');
+    expect(viewFor(escaped, 'p1')).not.toHaveProperty('noHatch');
     expect(runReport(escaped, 'ABCD')).not.toHaveProperty('noHatch');
   });
 });

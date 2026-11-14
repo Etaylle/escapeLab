@@ -74,6 +74,11 @@ export interface TitleCardProps {
   usedMs: number | null;
   grade: Grade | null;
   crew: CardMate[];
+  /**
+   * whether the mission has a hatch to get out by: a run won says all are out; without one, as
+   * in the Übungshalle, that every station is done
+   */
+  hatch: boolean;
   /** stations solved, and how many the mission has */
   stations: { solved: number; total: number };
   /** the run's alarms against the limit: a run lost on them says so */
@@ -116,7 +121,7 @@ export function TitleCard(props: TitleCardProps) {
     >
       <span className="end-title-mission">{props.missionTitle}</span>
       <h1 className="end-title-word">{title}</h1>
-      <EndScene won={won} crew={props.crew} youId={props.youId} />
+      <EndScene won={won} crew={props.crew} youId={props.youId} hatch={props.hatch} />
       <EndFacts
         usedMs={props.usedMs}
         grade={props.grade}
@@ -151,12 +156,15 @@ export function alarmsCause({ count, limit }: PlayerView['alarms']): string | nu
 /**
  * The crew on the card, side by side in their colours: won, outside on a
  * strip of pavement before the lab's open door, the light spilling out of
- * it, jumping for joy; lost, inside in the dark, the door shut, a red lamp
- * over them — their figures slumped in its shadow (finale.css).
+ * it, jumping for joy — its caption saying all are out, or where the mission
+ * has no hatch, that every station is done; lost, inside in the dark, the door
+ * shut, a red lamp over them — their figures slumped in its shadow (finale.css).
  */
-function EndScene({ won, crew, youId }: { won: boolean; crew: CardMate[]; youId: string | null }) {
+function EndScene(props: { won: boolean; crew: CardMate[]; youId: string | null; hatch: boolean }) {
+  const { won, crew, youId } = props;
   const names = crew.map((mate) => mate.name).join(', ');
   const says = won ? `Draußen vor dem offenen Notausgang: ${names}` : `Im dunklen Labor: ${names}`;
+  const caption = props.hatch ? 'Alle draußen' : 'Jede Station abgenommen';
   return (
     <div className={`end-scene end-scene--${won ? 'out' : 'in'}`} role="img" aria-label={says}>
       <div className="end-sky" />
@@ -184,7 +192,7 @@ function EndScene({ won, crew, youId }: { won: boolean; crew: CardMate[]; youId:
           </li>
         ))}
       </ul>
-      {won && <span className="end-scene-caption">Alle draußen</span>}
+      {won && <span className="end-scene-caption">{caption}</span>}
     </div>
   );
 }
@@ -238,6 +246,7 @@ export type CardSource = Pick<
   | 'currentPuzzleIndex'
   | 'puzzleCount'
   | 'calledOff'
+  | 'noHatch'
 > & { players: CardMate[] };
 
 /** The title card of a run that is over, seen by `youId` — null for the audience. */
@@ -258,6 +267,7 @@ export function titleCardOf(
         : finishedAt - clockStartOf({ startedAt, lightsOutAt }),
     grade: view.grade,
     crew: view.players.map(({ id, name, color }) => ({ id, name, color })),
+    hatch: view.noHatch !== true,
     stations: { solved: view.currentPuzzleIndex, total: view.puzzleCount },
     alarms: view.alarms,
     calledOff: view.calledOff ?? null,

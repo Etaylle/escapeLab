@@ -187,7 +187,8 @@ limit as 0 and the time from the lights to the end as ever; the levels keep it a
 alarm nor a note of the last shift costs time (an alarm still counts), and mission control
 sends no nudges, as nobody is hurried. The mission cards and the lobby say „ohne Uhr", the end
 card „Zeit" instead of „Restzeit", and its top rank „keine Notiz gebraucht" instead of time to
-spare; without a hatch the third rank says every station is done, not that all are out. The
+spare. Without a hatch (every view's `noHatch`) the third rank says every station is done, not
+that all are out, and so does the caption under the crew („Jede Station abgenommen"). The
 button's Einsatzuhr counts up as well, and its release reads the digits as shown, a second's
 latency allowed the other way round (core `puzzles/button.ts` `releaseInTime`). An alarm limit
 stays the mission's own (`maxAlarms`).
