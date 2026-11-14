@@ -341,10 +341,14 @@ describe('what the join screen asks as it comes up', () => {
     expect(seat).toEqual(RUN);
   });
 
-  it('asks for the rooms and where the pass sits', () => {
-    expect(doorAsks(PASS)).toEqual([
+  it('asks for the rooms and where the pass sits, with what the device kept of its account', () => {
+    expect(doorAsks(PASS, { name: ' ', color: null })).toEqual([
       { kind: 'list-rooms' },
       { kind: 'whereami', pass: PASS },
+    ]);
+    expect(doorAsks(PASS, { name: ' Anna ', color: '#a78bfa' })).toEqual([
+      { kind: 'list-rooms' },
+      { kind: 'whereami', pass: PASS, name: 'Anna', color: '#a78bfa' },
     ]);
   });
 });

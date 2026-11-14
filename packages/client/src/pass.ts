@@ -1,13 +1,13 @@
-import { crewPassSchema, type CrewPass } from '@escapelab/core';
+import { crewPassSchema, type AccountView, type CrewPass } from '@escapelab/core';
 import { localStore, type NoteStore } from './notes.js';
 
 /**
  * The browser's crew pass (Dienstausweis, core protocol.ts `CrewPass`): an id and a secret
  * minted once per browser profile and kept in its local storage, so that every tab, a
- * relaunched home-screen app and a restarted browser show the same pass — and with it the name
- * last typed on the join screen and the crew colour last worn in a lobby, which the menu's
- * profile shows. Rooms are joined, opened and resumed with it; the server binds
- * each seat to it, so a seat comes back to whichever socket shows it.
+ * relaunched home-screen app and a restarted browser show the same pass. Rooms are joined,
+ * opened and resumed with it; the server binds each seat to it, so a seat comes back to whichever
+ * socket shows it, and keeps an account for it (core protocol.ts `AccountView`), whose name and
+ * colour the pass keeps beside it, as the menu's profile last showed them.
  */
 
 /** Where the browser keeps its pass. */
@@ -15,8 +15,8 @@ export const PASS_KEY = 'escapelab-pass';
 
 /**
  * The pass as the browser keeps it: the pass itself, the name last typed with it, and the crew
- * colour last worn in a lobby — the menu's profile shows it (screens/ProfileChip.tsx); null
- * before any.
+ * colour its account wears — the menu's profile shows it (screens/ProfileChip.tsx); null before
+ * one was chosen.
  */
 export interface KeptPass extends CrewPass {
   name: string;
@@ -110,25 +110,36 @@ export function lastName(store: NoteStore | null = localStore()): string {
 
 /** Keeps `name` with the pass for next time; a blank one keeps none. */
 export function keepName(name: string, store: NoteStore | null = localStore()): void {
-  const next = { ...keptPass(store), name: name.trim() === '' ? '' : name };
-  if (!keep(store, next)) {
-    unkept = next;
-  }
+  keepOrHold(store, { ...keptPass(store), name: name.trim() === '' ? '' : name });
 }
 
-/** The crew colour last worn in a lobby, kept with the pass; null before any. */
+/** The crew colour the pass's account wears, kept with the pass; null before one was chosen. */
 export function lastColor(store: NoteStore | null = localStore()): string | null {
   return keptPass(store).color;
 }
 
-/** Keeps `color`, worn in a lobby, with the pass; anything but a crew colour keeps nothing. */
-export function keepColor(color: string, store: NoteStore | null = localStore()): void {
-  const kept = keptPass(store);
-  if (!COLOR.test(color) || kept.color === color) {
-    return;
-  }
-  const next = { ...kept, color };
+/** Keeps `next` as the browser's pass, or for the page's life where the browser refuses. */
+function keepOrHold(store: NoteStore | null, next: KeptPass): void {
   if (!keep(store, next)) {
     unkept = next;
   }
+}
+
+/**
+ * Keeps what the server says of the pass's account (`account`) with the pass, for the menu's
+ * profile to start from next time: its name, and its colour once it has one — anything but a
+ * crew colour keeps the one there was.
+ */
+export function keepProfile(
+  account: Pick<AccountView, 'name' | 'color'>,
+  store: NoteStore | null = localStore(),
+): void {
+  const kept = keptPass(store);
+  const color = account.color !== null && COLOR.test(account.color) ? account.color : kept.color;
+  keepOrHold(store, { ...kept, name: account.name, color });
+}
+
+/** The account deleted: the pass keeps no name and no colour any more, and stays the key here. */
+export function forgetProfile(store: NoteStore | null = localStore()): void {
+  keepOrHold(store, { ...keptPass(store), name: '', color: null });
 }

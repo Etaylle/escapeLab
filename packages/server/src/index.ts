@@ -12,17 +12,19 @@ import {
   type Health,
   type RunsExport,
 } from './api.js';
+import { AccountDesk } from './accounts.js';
 import { customMissions, serveCustomMissions } from './customMissions.js';
 import { dailySalt } from './dailySalt.js';
 import { HEARTBEAT_MS, startHeartbeat } from './heartbeat.js';
 import { MissionCatalog } from './missions.js';
 import { RoomManager, seedsAllowed } from './roomManager.js';
-import { DEFAULT_RUNS_LOG } from './runLog.js';
-import { loadRunStats, logRun } from './runStats.js';
 import { roomKey, roomKeyLogLine } from './seal.js';
+import { frontOf, RateLimiter } from './rateLimiter.js';
 import { onSignal } from './shutdown.js';
-import { serveSockets } from './sockets.js';
+import { ACCOUNT_CHANGES_PER_SOCKET, ACCOUNTS_MADE_PER_MINUTE, serveSockets } from './sockets.js';
 import { StaticSite } from './static.js';
+import { DEFAULT_RUNS_LOG } from './store/jsonl.js';
+import { openStore, recordRuns, type Store } from './store/store.js';
 import { serveTakes, takesAllowed, TakesShelf } from './takes.js';
 import { createWebServer, lanUrls, tlsLogLine, tlsSetup } from './tls.js';
 import { recordingAllowed, serveVoiceRecording, VoiceDesk } from './voiceRecording.js';
@@ -38,7 +40,8 @@ const MISSIONS_DIR =
   process.env['MISSIONS_DIR'] ?? fileURLToPath(new URL('../../../missions', import.meta.url));
 // An empty RUNS_LOG counts as unset, like an empty RUNS_TOKEN.
 const RUNS_LOG = process.env['RUNS_LOG'] || DEFAULT_RUNS_LOG;
-const runs: RunsExport = { file: RUNS_LOG, token: process.env['RUNS_TOKEN'] };
+/** How long the server waits for the runs still being kept before it exits all the same, ms. */
+const KEEPING_MS = 5000;
 // https where packages/server/cert/ (or TLS_CERT and TLS_KEY) holds a pair, else http.
 const tls = tlsSetup(process.env);
 
@@ -46,6 +49,8 @@ const tls = tlsSetup(process.env);
 const CUSTOM_MISSIONS_DIR = process.env['CUSTOM_MISSIONS_DIR'] || join(MISSIONS_DIR, 'custom');
 const catalog = new MissionCatalog(MISSIONS_DIR, CUSTOM_MISSIONS_DIR);
 const editing = customMissions(catalog);
+// Every limiter lets go of the addresses its window has passed, written to or not since.
+editing.limiter.sweepEveryWindow();
 const site = new StaticSite(fileURLToPath(new URL('../../client/dist', import.meta.url)));
 // A person's recordings of the radio lines (the client's /record page): with ALLOW_RECORD=1 only.
 const VOICE_DIR = fileURLToPath(new URL('../../client/public/voice', import.meta.url));
@@ -55,8 +60,11 @@ const voiceDesk = recordingAllowed(process.env)
 // The music's takes, for the client's /sounds page to play before one is kept: ALLOW_TAKES=1 only.
 const TAKES_DIR = fileURLToPath(new URL('../../client/takes', import.meta.url));
 const takes = takesAllowed(process.env) ? new TakesShelf(TAKES_DIR) : null;
-// The Bestenliste: read from the log once, then counted run by run as they are logged.
-const stats = loadRunStats(RUNS_LOG);
+// Where finished runs and the accounts are kept: Postgres at DATABASE_URL, else the run log
+// file and the accounts in memory. The Bestenliste is counted from it once, then run by run.
+const store = await storeOrExit();
+const recorder = recordRuns(store);
+const runs: RunsExport = { store, token: process.env['RUNS_TOKEN'] };
 // The Tagesschicht's salt: DAILY_SALT, else packages/server/data/daily-salt, made once and kept.
 const daily = dailySalt(process.env);
 // The key the rooms' snapshots are sealed with: ROOM_SECRET's, else one of this boot alone.
@@ -66,7 +74,7 @@ const sealing = roomKey(process.env);
 const instanceId = randomUUID();
 // A room pinned to a seed repeats its runs: for the walkthrough and bug reports, not for play.
 const manager = new RoomManager(
-  logRun(RUNS_LOG, stats),
+  recorder.record,
   seedsAllowed(process.env),
   daily.salt,
   sealing.key,
@@ -83,7 +91,7 @@ const health: Health = {
 const jsonFor = (url: string): ApiResponse | null =>
   healthResponse(catalog, health, url) ??
   apiResponse(catalog, url) ??
-  statsResponse(stats, catalog, url);
+  statsResponse(store.stats(), catalog, url);
 
 const httpServer = createWebServer(tls, (req, res) => {
   if (serveRuns(runs, req, res)) {
@@ -114,7 +122,19 @@ const httpServer = createWebServer(tls, (req, res) => {
 });
 
 const wss = new WebSocketServer({ server: httpServer, path: '/ws' });
-const served = serveSockets(wss, { catalog, manager });
+// Every pass has its account in the store, found or made as it comes to the door: one pass a
+// socket, so many new accounts a minute from an address, so many changes a minute on a socket.
+const accountsMade = new RateLimiter(ACCOUNTS_MADE_PER_MINUTE, 60_000);
+accountsMade.sweepEveryWindow();
+const desk = new AccountDesk(store);
+const served = serveSockets(wss, {
+  catalog,
+  manager,
+  accounts: desk,
+  accountsMade,
+  changesPerSocket: ACCOUNT_CHANGES_PER_SOCKET,
+  front: frontOf(process.env),
+});
 // A socket gone silent is found out and closed, so that the room pauses for its player; the
 // log names the room and the seat of each socket it cuts.
 startHeartbeat(wss, HEARTBEAT_MS, served.cut);
@@ -129,7 +149,7 @@ const goDown = onSignal({
   },
   sockets: () => wss.clients,
   manager,
-  exit: (code) => process.exit(code),
+  exit: (code) => void keepThenExit(code),
 });
 process.on('SIGTERM', goDown);
 process.on('SIGINT', goDown);
@@ -142,8 +162,9 @@ httpServer.listen(PORT, () => {
   const download = runs.token
     ? 'GET /runs.jsonl takes RUNS_TOKEN'
     : 'RUNS_TOKEN unset: no download';
-  console.log(`[escapelab] finished runs go to ${RUNS_LOG} (${download})`);
-  console.log(`[escapelab] GET /stats ranks the ${stats.runs} runs logged so far`);
+  console.log(`[escapelab] store: ${store.description}`);
+  const kept = store.stats().runs;
+  console.log(`[escapelab] GET /stats ranks the ${kept} runs kept so far (${download})`);
   console.log(`[escapelab] Tagesschicht: ${DAILY_SALT_FROM[daily.from]}`);
   console.log(`[escapelab] ${roomKeyLogLine(sealing)}`);
   console.log(`[escapelab] this boot is instance ${instanceId}: its snapshots name it`);
@@ -161,3 +182,34 @@ httpServer.listen(PORT, () => {
     console.log('[escapelab] kein Client-Build gefunden — im Dev-Modus läuft Vite auf 5173');
   }
 });
+
+/**
+ * The store the environment names (store/store.ts `openStore`); the process exits 1, saying why,
+ * where it cannot be opened.
+ */
+async function storeOrExit(): Promise<Store> {
+  try {
+    return await openStore(process.env, RUNS_LOG);
+  } catch (err) {
+    const why = err instanceof Error ? err.message : String(err);
+    console.error(`[escapelab] not started: ${why}`);
+    process.exit(1);
+  }
+}
+
+/**
+ * The process exits with `code` once the runs and the changes to the accounts still being kept
+ * are — a colour still settling kept at once — and the store has let go: KEEPING_MS at the
+ * latest, for a database that does not answer keeps no deploy waiting.
+ */
+async function keepThenExit(code: number): Promise<void> {
+  const late = new Promise<void>((resolve) => setTimeout(resolve, KEEPING_MS).unref());
+  served.keepColours();
+  try {
+    const kept = Promise.all([recorder.settled(), desk.settled()]);
+    await Promise.race([kept.then(() => store.close()), late]);
+  } catch (err) {
+    console.error(`[escapelab] the store did not close cleanly: ${String(err)}`);
+  }
+  process.exit(code);
+}

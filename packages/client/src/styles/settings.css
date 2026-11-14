@@ -139,3 +139,37 @@
 .settings-note {
   color: var(--muted);
 }
+
+/* The pass's account: what it holds, and „Konto löschen" — a step from being done. */
+.settings-account-facts {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text);
+}
+
+.settings-account-delete {
+  justify-self: start;
+  padding: 7px 12px;
+  font-family: var(--mono);
+  font-size: 13px;
+}
+
+.settings-account-ask {
+  display: grid;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid #7f1d1d;
+  border-radius: 6px;
+}
+
+.settings-account-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.settings-account-actions .danger {
+  padding: 7px 12px;
+  font-family: var(--mono);
+  font-size: 13px;
+}
