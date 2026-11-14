@@ -1064,47 +1064,47 @@ before the check looked; the radio's listener, left unheard as the run ended, th
 process down before its summary.
 
 Each check now reads what the page recorded on its own clock (tools/panelfade.mjs,
-tools/pageclock.mjs). The fade as played: a MutationObserver notes when the panel begins to
-leave and when it is gone, and each frame the panel's opacity and how far its fade has run on
-the fade's own clock (the animation's currentTime); the panel has to go 100 to 600 ms after it
-began to leave, inert, its opacity only falling, and show midway on a frame — a frame drawn
-between half and nine tenths into the 150-ms fade, where its ease-in has the panel at 0.86 to
-0.28, has to. Where the page drew none there — or, in one Blackout run, none at all while the
-panel left — the midway frames are skipped (`panel-close (fade)`), the reason naming the fade's
-times at the frames it drew and when the panel went, and the held shot judges the fade; a fade that never falls still fails on a frame in its middle, as
-does a panel gone at once. meter-swing.png: the page pauses the needle's own transition 60 ms
-into its 600-ms swing as it begins — some 40 % of its way, −58° on a swing from −90° to −10.8° —
-so that the screenshot shows it on its way whenever it lands; the needle has to have swung, held
-still through the shot and stood between where it was and its reading, or past it, and the log
-names when the page noted the swing after the probe, on its clock — the swing's event, which
-comes with the page's next frame (the transition's own start time read 2.8 s before the probe in
-one run, no clock to trust).
-The hold takes only a swing to a new reading — the needle's inline turn changed since the hold
-began: in the first Blackout proof run the last probe's swing announced itself only with the
-page's next frame, after the hold was on, and was held while the probe's own ran free (−74° read
-before the shot, −7° after it). The 250 ms the shot had to be asked for within is gone: it timed
-the round trip and the poll, never the picture. The phone's targets are measured once the
-animations on or round its controls have ended on the page's clock (3 s at most; a control
-measured short while one still ran is skipped, the wait named; a token's bar draining beside
-its keys moves none). At a sync station each page notes, from before the presses, when its
-strip first shows the station done and when its own press went down, so that a banner over the
-strip later no longer hides it; the log gives each page's time from its press to its strip. The
-crew figures' pose shots, lobby-idle.png and figure-celebrate.png, read the figures' probe before
-and after a screenshot that, at load 42 to 57, outlasted a jump: four shots found the figure
-landed. The page now holds its animation frames from the one that put a figure in the pose until
-the shot is taken, every figure's canvas keeping that frame, and the probe has to say it still
-stands so after the shot. The walk cycle's two shots, walk-cycle-a.png and walk-cycle-b.png,
-polled the walk's phase for the two stretches in which the legs stand wide, and main's own
-Systemcheck missed both at load 24 to 38: they hold the world's frames the same way from the
-one that brought the walk into a stretch, the walk standing still meanwhile and its end moving
-on by that long. And every frame window's line names the
-machine's 1-minute load as it began (`os.loadavg`), the `pace` line the load its pacing window ran
-at, and the summary the load as the run began and ended — the windows themselves, the lead's
-gate, keep their budgets. The menu's own pace under software GL, 16.8 ms p95, was the one window
-that gated in a proof run too, whose `SHOTS_FRAME_P95_MS=1000` leaves every other window for
-information: in one Blackout run it failed at a p95 just over 16.8 ms with the load at 158. It
-gates where the run keeps the gate's budget and is logged with its load where the budget is
-raised.
+tools/pageclock.mjs). The fade as played: a MutationObserver notes when the panel begins to leave
+and when it is gone, and each frame the panel's opacity and how far its fade has run on the fade's
+own clock (the animation's currentTime); the panel has to go 100 to 600 ms after it began to leave,
+inert, its opacity only falling, and show midway on a frame — a frame drawn between half and nine
+tenths into the 150-ms fade, where its ease-in has the panel at 0.86 to 0.28, has to. Where the page
+drew none there — or, in one Blackout run, none at all while the panel left — the midway frames are
+skipped (`panel-close (fade)`), the reason naming the fade's times at the frames it drew and when
+the panel went, and the held shot judges the fade; a fade that never falls still fails on a frame in
+its middle, as does a panel gone at once. meter-swing.png: the page pauses the needle's own
+transition 60 ms into its 600-ms swing as it begins — some 40 % of its way, −58° on a swing from
+−90° to −10.8° — so that the screenshot shows it on its way whenever it lands; the needle has to
+have swung, held still through the shot and stood between where it was and its reading, or past it,
+and the log names when the page noted the swing after the probe, on its clock — the swing's event,
+which comes with the page's next frame (the transition's own start time read 2.8 s before the probe
+in one run, no clock to trust). The hold takes only a swing to a new reading — the needle's inline
+turn changed since the hold began: in the first Blackout proof run the last probe's swing announced
+itself only with the page's next frame, after the hold was on, and was held while the probe's own
+ran free (−74° read before the shot, −7° after it). The 250 ms the shot had to be asked for within
+is gone: it timed the round trip and the poll, never the picture.
+
+The phone's targets are measured once the animations on or round its controls have ended on the
+page's clock (3 s at most; a control measured short while one still ran is skipped, the wait named;
+a token's bar draining beside its keys moves none). At a sync station each page notes, from before
+the presses, when its strip first shows the station done and when its own press went down, so that a
+banner over the strip later no longer hides it; the log gives each page's time from its press to its
+strip. The crew figures' pose shots, lobby-idle.png and figure-celebrate.png, read the figures'
+probe before and after a screenshot that, at load 42 to 57, outlasted a jump: four shots found the
+figure landed. The page now holds its animation frames from the one that put a figure in the pose
+until the shot is taken, every figure's canvas keeping that frame, and the probe has to say it still
+stands so after the shot. The walk cycle's two shots, walk-cycle-a.png and walk-cycle-b.png, polled
+the walk's phase for the two stretches in which the legs stand wide, and main's own Systemcheck
+missed both at load 24 to 38: they hold the world's frames the same way from the one that brought
+the walk into a stretch, the walk standing still meanwhile and its end moving on by that long.
+
+Every frame window's line names the machine's 1-minute load as it began (`os.loadavg`), the `pace`
+line the load its pacing window ran at, and the summary the load as the run began and ended — the
+windows themselves, the lead's gate, keep their budgets. The menu's own pace under software GL, 16.8
+ms p95, was the one window that gated in a proof run too, whose `SHOTS_FRAME_P95_MS=1000` leaves
+every other window for information: in one Blackout run it failed at a p95 just over 16.8 ms with
+the load at 158. It gates where the run keeps the gate's budget and is logged with its load where
+the budget is raised.
 
 **The frame in CSS pixels (N-camera).** The walkthrough's host window at 1440 × 820 now shows
 24.3 × 11.5 tiles of 58.2 px where main showed 22.2 × 10.5 of 63.7 — more tiles, each smaller —
