@@ -379,7 +379,8 @@ describe('a line spoken over the radio', () => {
       ctx.currentTime = 11.6; // past its end at 11.58
       await vi.advanceTimersByTimeAsync((1.58 + TAIL_S + 0.2) * 1000);
       expect(radio.clipOf(LEVER_LINE)).toBeNull();
-      expect(decodedBytes().voice).toBe(1.5 * 22050 * 4); // the opening line still kept
+      // The opening line went as this one came on the air: the run's start is behind it.
+      expect(decodedBytes().voice).toBe(0);
       expect(radio.sayLine(LEVER_LINE)).toBe(true); // its file still here
       await vi.advanceTimersByTimeAsync(0);
       expect(radio.voiceProbe()).toMatchObject({ lastId: 'aaaaaaaaaaaa' });
@@ -489,6 +490,26 @@ describe('the lines that may open a run', () => {
   });
   afterEach(() => {
     vi.unstubAllGlobals();
+  });
+
+  it('go when the run’s start goes by unheard; a page that came late decodes none', async () => {
+    vi.resetModules();
+    await (await import('../src/world/samples.js')).preloadSamples();
+    const radio = await import('../src/world/radioVoice.js');
+    const { decodedBytes } = await import('../src/world/audioMemory.js');
+    radio.preloadVoice('blackout');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(decodedBytes().voice).toBe(2 * 1.5 * 22050 * 4);
+    // The run picked a take with no recording yet: it chirps, and neither recorded one is needed.
+    expect(radio.sayLine('Leitstelle an Nachtschicht. Eine Fassung ohne Aufnahme.')).toBe(false);
+    expect(radio.clipOf(START_LINE)).toBeNull();
+    expect(radio.clipOf(OTHER_START)).toBeNull();
+    expect(decodedBytes().voice).toBe(0);
+    // A page that comes in after the start fetches the lines and decodes no opening one.
+    radio.preloadVoice('blackout', false);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(decodedBytes().voice).toBe(0);
+    expect(radio.recordedMs(START_LINE)).toBe(2500);
   });
 
   it('are all decoded at the run’s start, and the others let go as the run’s own airs', async () => {

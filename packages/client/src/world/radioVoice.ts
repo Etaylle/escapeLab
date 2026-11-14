@@ -286,16 +286,17 @@ function peakOf(buffer: AudioBuffer): number {
 }
 
 /**
- * At a run's start: every line of the mission `missionId` is fetched — kept compressed — and the
- * lines that may open the run decoded, so that the one the run picks comes the moment the lights
- * fail; the others are let go as it airs (`onAir`).
+ * At a run's start: every line of the mission `missionId` is fetched — kept compressed — and,
+ * while the run's start is `ahead`, the lines that may open the run decoded, so that the one the
+ * run picks comes the moment the lights fail; they are let go as soon as the start is behind it
+ * (`startBehind`). A page that comes in later decodes none of them.
  */
-export function preloadVoice(missionId: string): void {
+export function preloadVoice(missionId: string, ahead = true): void {
   manifest()
     .then((loaded) => {
       for (const [id, entry] of Object.entries(loaded?.lines ?? {})) {
         if (!entry.missions.includes(missionId)) continue;
-        if (entry.opens === true) void decodeLine(id);
+        if (entry.opens === true && ahead) void decodeLine(id);
         else void bytesOf(id);
       }
     })
@@ -358,13 +359,17 @@ export function releaseLine(text: string): void {
  * still on the air: a line that opens a run after the Leitstelle's opening squelch; once spoken,
  * it is let go. Into the radio's bus, or `into` where given: a level of the caller's on the way
  * there (the lobby's Funkprobe, radioCheck.ts). True where it speaks; false where it has no
- * recording or nothing can play — the caller chirps then.
+ * recording or nothing can play — the caller chirps then, and the run's start is behind it: the
+ * lines decoded to open the run go (`startBehind`).
  */
 export function sayLine(text: string, into?: AudioNode): boolean {
   try {
     const id = store.ids.get(text);
     const engine = playingEngine();
-    if (id === undefined || engine === null || !store.files.has(id)) return false;
+    if (id === undefined || engine === null || !store.files.has(id)) {
+      startBehind(null);
+      return false;
+    }
     asked = id;
     const clip = store.clips.get(id);
     if (clip !== undefined) {
@@ -382,16 +387,23 @@ export function sayLine(text: string, into?: AudioNode): boolean {
 }
 
 /**
+ * The run's start is behind it — a line comes after it, or the start itself, said as `said` or
+ * gone by unheard (null): a take without a recording, nothing to play it on. Every line decoded
+ * to open the run is let go but `said`.
+ */
+function startBehind(said: string | null): void {
+  for (const id of store.openers) if (id !== said) dropLine(id);
+}
+
+/**
  * The line `id` on the air from now into `into`, cutting short one still on it; let go once it
- * ends. A line that opens the run lets go of the other openers decoded for it: the run has
- * picked its own.
+ * ends. Whatever comes on the air, the run's start is behind it: the openers decoded for it go,
+ * but the one that airs now where it opens the run (`startBehind`).
  */
 function onAir(engine: Engine, id: string, clip: Clip, into: AudioNode = engine.voice): void {
   const now = engine.ctx.currentTime;
   const opens = store.openers.has(id);
-  if (opens) {
-    for (const other of store.openers) if (other !== id) dropLine(other);
-  }
+  startBehind(id);
   speaking?.cut(now);
   const line = speak(engine, id, clip, now + LOOKAHEAD, opens, into);
   speaking = line;

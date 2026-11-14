@@ -382,6 +382,8 @@ describe('the Leitstelle over Blackout’s loudspeakers', () => {
     for (const message of messages) {
       expect(wordsIn(message), message).toBeLessThanOrEqual(10);
       expect(message).not.toMatch(/\bLeitstelle\b/);
+      // A state, never an order: no sentence ends on an infinitive as an instruction does.
+      expect(message, message).not.toMatch(/\b\p{Ll}+(?:en|ern|eln)\.(?:\s|$)/u);
     }
   });
 
@@ -405,6 +407,14 @@ describe('the operator’s answers in Blackout', () => {
     const causes = /Drohne|Kamera|gesehen|erwischt|Eingabe|falsch|vertippt|nachfrag|genau|hetz/i;
     for (const line of alarms) {
       expect(line).not.toMatch(causes);
+    }
+  });
+
+  it('says of a run lost to alarms that they added up, not that they came at once', () => {
+    const lost = variantsOf(radio?.lost?.alarms ?? []);
+    expect(lost.length).toBeGreaterThanOrEqual(1);
+    for (const line of lost) {
+      expect(line).not.toMatch(/auf einmal|zugleich|gleichzeitig|auf einen Schlag/i);
     }
   });
 });
@@ -434,7 +444,58 @@ describe.each(['blackout', 'systemcheck'])('the Leitstelle through %s', (id) => 
   });
 });
 
+/** A text's words, lowercased, its punctuation left out. */
+const wordSet = (text: string): Set<string> =>
+  new Set(
+    text
+      .toLowerCase()
+      .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+      .split(/\s+/)
+      .filter((word) => word !== ''),
+  );
+
+/** How many of their words two texts share: the shared ones over all of them (Jaccard). */
+function sharedWords(a: string, b: string): number {
+  const first = wordSet(a);
+  const second = wordSet(b);
+  const both = [...first].filter((word) => second.has(word)).length;
+  return both / (first.size + second.size - both);
+}
+
+/**
+ * The most two takes of one line may share: past it, a take says the other's words again in
+ * another order rather than something of its own.
+ */
+const SHARED_MAX = 0.6;
+
+/** Every line of `mission` that may come on the air, each as written: one text or several. */
+const writtenLines = (mission: Mission): Line[] => {
+  const { radio } = mission;
+  const groups = [radio.clock, radio.emergency, radio.won, radio.lost];
+  const lines: (Line | undefined)[] = [
+    ...[radio.lobby, radio.start, radio.escape, radio.alarm, mission.map.sabotage?.announce],
+    ...groups.flatMap((group) => Object.values(group ?? {})),
+    ...mission.puzzles.flatMap((puzzle) => [...puzzle.nudges, puzzle.onSolved]),
+  ];
+  return lines.filter((line): line is Line => line !== undefined);
+};
+
 describe('the lines a mission can put on the air', () => {
+  it('give a line several takes only where each says something of its own', () => {
+    const alike = missions.flatMap((mission) =>
+      writtenLines(mission).flatMap((line) => {
+        const texts = variantsOf(line);
+        return texts.flatMap((text, i) =>
+          texts
+            .slice(i + 1)
+            .filter((other) => sharedWords(text, other) >= SHARED_MAX)
+            .map((other) => `${mission.id}: „${text}" and „${other}"`),
+        );
+      }),
+    );
+    expect(alike).toEqual([]);
+  });
+
   it('come in the order a run hears them, each with its moment and its station', () => {
     const blackout = missions.find((m) => m.id === 'blackout');
     if (blackout === undefined) throw new Error('missions/blackout.json is missing');

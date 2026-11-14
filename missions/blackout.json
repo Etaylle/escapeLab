@@ -65,7 +65,7 @@
       ],
       "cleared": [
         "Kühlung steht wieder, die Relais halten. Weiter, wo ihr aufgehört habt.",
-        "Die Relais greifen wieder, die Kühlung ist stabil. Zurück an eure Station."
+        "Die Relais greifen wieder, ich habe die Kühlung zurück. Das hat uns keine Zeit gekostet."
       ],
       "missed": [
         "Die Kühlung ist abgesackt, das hat uns Zeit gekostet. Zurück an die Arbeit, beim nächsten Mal schneller.",
@@ -92,8 +92,8 @@
         "Das war's, die Notversorgung ist aus. Rührt nichts mehr an, die Frühschicht kommt mit Licht."
       ],
       "alarms": [
-        "Die Sicherheitsschaltung hat zugemacht, zu viele Alarme auf einmal. Der Trakt bleibt dunkel, bis die Frühschicht kommt.",
-        "Zu viele Alarme, die Anlage hat die Notversorgung abgeworfen. Für heute bleibt der Trakt dunkel."
+        "Die Sicherheitsschaltung hat zugemacht, zu viele Alarme in einer Schicht. Der Trakt bleibt dunkel, bis die Frühschicht kommt.",
+        "Die Anlage hat jeden Alarm mitgezählt, beim letzten hat sie den Trakt abgeschaltet. Lasst alles, wie es ist, die Frühschicht sieht sich das an."
       ],
       "abandoned": [
         "Mit halber Schicht geht da drinnen nichts. Ich breche ab, der Trakt bleibt bis morgen dunkel.",
@@ -312,8 +312,8 @@
       "afterSolved": 3,
       "announce": [
         "Störung im Kühlkreislauf. Relaissteuerung auf Handbetrieb.",
-        "Achtung, Kühlkreislauf gestört. Relais nur noch von Hand.",
-        "Kühlkreislauf außer Betrieb. Relais im Handbetrieb schalten."
+        "Kühlkreislauf gestört, Temperatur im Trakt steigt. Relaissteuerung auf Handbetrieb.",
+        "Kühlkreislauf außer Betrieb. Automatische Relaissteuerung ausgefallen, Handbetrieb aktiv."
       ]
     },
     "drones": [
@@ -358,11 +358,11 @@
       "nudges": [
         [
           "Der Hauptschalter fürs Notlicht hängt mitten im Flur, unter der roten Lampe.",
-          "Das Notlicht schaltet ihr im Flur, der Hauptschalter hängt in der Mitte unter der roten Lampe."
+          "Den Hauptschalter im Flur legt keiner allein um, ihr müsst gemeinsam ziehen."
         ],
         [
           "Wer noch im Archiv ist: durch die Südtür in den Flur, dann ein Stück nach Osten zum Hauptschalter.",
-          "Aus dem Archiv geht es durch die Südtür in den Flur, der Hauptschalter liegt dann ein Stück östlich."
+          "Wer am Ostende vom Flur steht: Richtung Westen bis zur Mitte, dort hängt der Hauptschalter."
         ]
       ],
       "style": "lever",
@@ -380,11 +380,11 @@
       "nudges": [
         [
           "Die Anleitung zum Notstrom hängt im Archiv, auf der Ostseite.",
-          "Für den Notstrom hängt die Anleitung an der Ostseite vom Archiv."
+          "Ohne die Anleitung aus dem Archiv ratet ihr am Kasten nur herum, sie steht dort auf der Ostseite."
         ],
         [
           "Das Prüfpult steht am Westende vom Flur, der Kasten im Maschinenraum hinter der Plattentür, einer bleibt auf der Platte.",
-          "Der Kasten steht im Maschinenraum hinter der Plattentür, das Prüfpult am Westende vom Flur, und einer hält die Platte."
+          "Die Tür zum Maschinenraum geht nur auf, solange jemand auf der Platte davor steht, dahinter wartet der Kasten."
         ]
       ],
       "wires": { "min": 4, "max": 6 },
@@ -397,7 +397,7 @@
       "lights": ["MASCHINENRAUM"],
       "onSolved": [
         "Notstrom läuft, die Tür zum Maschinenraum bleibt offen. Als Nächstes die Signalkette: ein Pult im Flur, eins im Maschinenraum.",
-        "Der Notstrom hält, die Tür zum Maschinenraum bleibt offen. Dann die Signalkette, ein Pult im Flur und eins im Maschinenraum."
+        "Der Notstrom hält, die Maschinenraumtür bleibt jetzt offen. Für die Signalkette liegt ein Klemmbrett im Flur, gearbeitet wird an zwei Pulten."
       ]
     },
     {
@@ -407,12 +407,9 @@
       "nudges": [
         [
           "Das Klemmbrett zur Signalkette liegt im Flur, an der Südwand.",
-          "Für die Signalkette liegt ein Klemmbrett im Flur, an der Südwand."
+          "Auf dem Klemmbrett im Flur steht, wie die Signalkette zu lesen ist, es liegt an der Südwand."
         ],
-        [
-          "Pult A der Signalkette steht am Ostende vom Flur, Pult B im Maschinenraum in der Südostecke.",
-          "Die Signalkette hat zwei Pulte, Pult A am Ostende vom Flur und Pult B im Maschinenraum, Südostecke."
-        ]
+        "Pult A der Signalkette steht am Ostende vom Flur, Pult B im Maschinenraum in der Südostecke."
       ],
       "stages": 4,
       "length": 4,
@@ -425,7 +422,7 @@
       "lights": ["SERVERRAUM"],
       "onSolved": [
         "Schott zum Serverraum ist offen, drinnen Terminal und Rack. Die Drohne ist wach, die Kameraplatte davor legt sie still.",
-        "Das Schott zum Serverraum geht auf, drinnen warten Terminal und Rack. Vorsicht, die Drohne ist wach, die Kameraplatte davor hält sie an."
+        "Das Schott zum Serverraum ist auf, die Unterlagen liegen im Spind darin. Die Kameraplatte davor hält die Drohne an."
       ]
     },
     {
@@ -435,12 +432,9 @@
       "nudges": [
         [
           "Die Unterlagen für Terminal und Rack liegen im Spind, mitten zwischen den beiden.",
-          "Zwischen Terminal und Rack steht ein Spind, darin liegt, was ihr für beide braucht."
+          "Macht zuerst den Spind in der Mitte vom Serverraum auf, ohne seine Unterlagen kommt ihr an Terminal und Rack nicht weiter."
         ],
-        [
-          "Das Terminal steht an der Westwand vom Serverraum, das Rack gegenüber an der Ostwand, je einer an jedes.",
-          "Im Serverraum braucht es zwei, einen am Terminal an der Westwand und einen am Rack an der Ostwand."
-        ]
+        "Das Terminal steht an der Westwand vom Serverraum, das Rack gegenüber an der Ostwand, je einer an jedes."
       ],
       "crashed": 4,
       "trap": true,
@@ -452,7 +446,7 @@
       "lights": ["LABOR"],
       "onSolved": [
         "Server laufen, die Labortür ist offen, drinnen fliegt eine Drohne. Den Aktenschrank im Labor öffnet nur der Schlüssel.",
-        "Die Server sind oben, und die Labortür ist offen, aber drinnen kreist eine Drohne. Den Aktenschrank dort öffnet nur der Schlüssel."
+        "Server oben, Labortür offen, im Labor patrouilliert eine Drohne. Den Schlüssel zum Aktenschrank holt ihr noch aus dem Serverraum."
       ]
     },
     {
@@ -460,14 +454,8 @@
       "id": "frequenz",
       "title": "Frequenz-Abgleich",
       "nudges": [
-        [
-          "Der Schlüssel zum Aktenschrank liegt im Serverraum, in der Nordostecke über dem Rack.",
-          "Den Schlüssel für den Aktenschrank findet ihr im Serverraum, oben in der Nordostecke beim Rack."
-        ],
-        [
-          "Das Funkpult steht im Labor in der Südwestecke, der Aktenschrank im selben Raum.",
-          "Funkpult und Aktenschrank stehen beide im Labor, das Pult in der Südwestecke."
-        ]
+        "Der Schlüssel zum Aktenschrank liegt im Serverraum, in der Nordostecke über dem Rack.",
+        "Das Funkpult steht im Labor in der Südwestecke, der Aktenschrank im selben Raum."
       ],
       "hints": [
         "Funkraum: Das Wort beginnt nach der langen Pause. Drei Buchstaben genügen, dann steht die Frequenz in der Tabelle."
@@ -475,7 +463,7 @@
       "lights": ["REAKTOR"],
       "onSolved": [
         "Frequenz steht, ich höre euch klar. Der Reaktor ist offen, ohne Ersatzsicherung bleibt er aber tot.",
-        "Ich hab euch klar auf der Frequenz. Der Reaktorraum ist offen, aber ohne Ersatzsicherung springt da nichts an."
+        "Ich hab euch klar auf der Frequenz. Die Ersatzsicherung für den Reaktor liegt im Archiv, bringt sie rüber."
       ]
     },
     {
@@ -483,14 +471,8 @@
       "id": "reaktorstart",
       "title": "Reaktor-Neustart",
       "nudges": [
-        [
-          "Die Ersatzsicherung für den Reaktor liegt im Archiv, in der Südostecke.",
-          "Eine Ersatzsicherung liegt im Archiv, ganz hinten in der Südostecke."
-        ],
-        [
-          "Schalter und Sicherungsplatz sitzen im Reaktor ganz hinten an der Ostwand, dort kommt die Sicherung rein.",
-          "Die Sicherung gehört in den Reaktorraum an die Ostwand, gleich neben den Schalter."
-        ]
+        "Die Ersatzsicherung für den Reaktor liegt im Archiv, in der Südostecke.",
+        "Schalter und Sicherungsplatz sitzen im Reaktor ganz hinten an der Ostwand, dort kommt die Sicherung rein."
       ],
       "windowMs": 3500
     }

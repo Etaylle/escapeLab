@@ -21,6 +21,7 @@ import {
   fromPlant,
   noticeMs,
   radioNews,
+  startAhead,
   voiced,
   withNews,
   type Notice,
@@ -406,9 +407,11 @@ function useNotices(view: PlayerView, gates: NoticeGates): Notice | null {
   const [shown, setShown] = useState<Notice | null>(null);
   const briefingEnds = (view.startedAt ?? 0) + BRIEFING_MS;
 
+  // The takes that may open the run are decoded only while its start is still to come.
+  const ahead = startAhead(view.events, Date.now());
   useEffect(() => {
-    preloadVoice(view.missionId);
-  }, [view.missionId, view.startedAt]);
+    preloadVoice(view.missionId, ahead);
+  }, [view.missionId, view.startedAt, ahead]);
   useEffect(
     () => () => {
       stopVoice();

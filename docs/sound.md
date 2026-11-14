@@ -606,9 +606,10 @@ seed and the line's place in the mission (`pickLine`: an FNV-1a hash of the plac
 hears the same and a rematch most often other takes; a moment that comes again in a run — the
 next emergency — takes the next text in turn, and the lobby's Funkprobe the next one each time
 the room comes back to its lobby. Every text is its own recording, named by its words as before.
-Blackout's 24 lines are 78 texts now: the five of the announcement and three of the plant's
-message, three Funkproben, three starts, two escapes, two for each of the twelve nudges and five
-solves, and the 28 answers above; with the other missions' 28, 106 lines.
+Blackout's 24 lines are 72 texts now: the five of the announcement and three of the plant's
+message, three Funkproben, three starts, two escapes, two for each of its five solves, 18 for its
+twelve nudges — a second take only where it says something the first does not, never the same
+words in another order — and the 28 answers above; with the other missions' 28, 100 lines.
 
 **Moods** (core `radio.ts` `MOODS`, `scripts/voice.ts` `MOOD_TAGS`). The operator says each
 answer in the mood of its moment, which Eleven v3 and v4 are asked for by an audio tag before
@@ -665,26 +666,28 @@ voice, each reading a few of the loudspeakers' own lines (179 characters), into
 account and names it in the manifest, without credits but taking one of the account's voice
 slots. Until one is kept, a render of the plant's lines refuses to start and says so.
 
-**The render.** The agents write the lines and may not spend the account's credits: the 54 lines
+**The render.** The agents write the lines and may not spend the account's credits: the 48 lines
 V-voices added await their render, the voice test listing them (`AWAITING_RENDER`, to be emptied
-as they come), and are silent meanwhile: the objective bar and the Einsatzprotokoll show their
-words, the Funkprobe and the last word on the end card say nothing. In the main checkout, once
-V-voices is merged — its `.env.local` holds the key, never printed — in this order:
+as they come). Meanwhile the objective bar and the Einsatzprotokoll show their words, and what is
+heard depends on where they come: the operator's lines on the bar key the radio's chirp, as every
+line without a recording does; the plant's message, the last word on the end card and the
+Funkprobe are silent. In the main checkout, once V-voices is merged — its `.env.local` holds the
+key, never printed — in this order:
 
 ```sh
 VOICE_SAMPLES_DIR=~/Desktop pnpm --filter @escapelab/client voice --design-pa  # 3 previews of the plant
 pnpm --filter @escapelab/client voice --keep-pa <the id beside the one kept>   # its voice, no credits
-VOICE_ENGINE=elevenlabs pnpm --filter @escapelab/client voice --fresh          # every line, 106
+VOICE_ENGINE=elevenlabs pnpm --filter @escapelab/client voice --fresh          # every line, 100
 ```
 
-The design reads the previews' 179 characters, billed once for the three; the render 9,987
+The design reads the previews' 179 characters, billed once for the three; the render 9,700
 characters, tags included, at most a credit each (the API bills text to speech below that): the
-54 new lines 5,636, the operator's 47 lines of 2026-10-25 again 3,983, and the five lines of the
+48 new lines 5,349, the operator's 47 lines of 2026-10-25 again 3,983, and the five lines of the
 announcement, now in the plant's voice, 368. A render reads the account's plan first, free of
 charge, and a take made on a paid plan carries it in its render, so that `--fresh` on the paid
 plan makes anew every take made before without it — the 47 lines whose licence the repo cannot
 tell (Lizenz, below) — and a run without `--fresh` keeps them. After it the voice test names the
-`intro.lightsSec` the announcement's new lengths want in `missions/blackout.json`, and the 106
+`intro.lightsSec` the announcement's new lengths want in `missions/blackout.json`, and the 100
 recordings, some 8 MB at the 52 recorded lines' 870 bytes a character, are committed.
 
 ```sh
@@ -727,7 +730,7 @@ render cut short goes on where it stopped and spends nothing twice, and the list
 after every line. A recording no line needs any more is deleted. The files are committed (52
 lines, 3.6 MB; the longest speaks 10.8 s in 127 kB); `test/voiceLines.test.ts` fails, naming the
 command, when a shipped line has no recording but those awaiting their render, when a file is
-over 200 kB or the folder over 12 MB — raised from 150 kB and 6 MB for V-voices' 106 lines,
+over 200 kB or the folder over 12 MB — raised from 150 kB and 6 MB for V-voices' 100 lines,
 some 8 MB, the longest of 163 characters some 13 s and 155 kB at ElevenLabs' 12 kB a second —
 and when a recording takes less than 200 ms or more than 900 ms a word.
 
@@ -756,7 +759,7 @@ VOICE_SAMPLES_DIR=~/Desktop pnpm --filter @escapelab/client voice \
 VOICE_ENGINE=elevenlabs pnpm --filter @escapelab/client voice --fresh   # every line, both voices
 ```
 
-Every shipped line read once is 9,987 characters, and a run that stops short spends nothing
+Every shipped line read once is 9,700 characters, and a run that stops short spends nothing
 twice. Made on the free plan, ElevenLabs asks for attribution and allows no commercial use
 (Lizenz, below).
 
@@ -785,8 +788,8 @@ curl -L -o ~/.cache/escapelab-piper/de_DE-thorsten-high.onnx.json \
   https://huggingface.co/rhasspy/piper-voices/resolve/5041a7a49ae5b3a0f30e6837769eb03fdbb231bd/de/de_DE/thorsten/high/de_DE-thorsten-high.onnx.json
 ```
 
-At a run's start the mission's lines are fetched and kept as they came, compressed — Blackout's 78
-texts some 6.3 MB once all are recorded, 1.8 MB of them today, every text of a line since a run's
+At a run's start the mission's lines are fetched and kept as they came, compressed — Blackout's 72
+texts some 6 MB once all are recorded, 1.8 MB of them today, every text of a line since a run's
 pick is drawn as it comes — and the line that opens the run decoded, so that it comes the moment the
 lights fail; any other line is decoded as it comes over the air, from its file in memory, in one
 channel at 22.05 kHz (a few tens of milliseconds), spoken and let go, so that a page keeps a line or
@@ -1188,7 +1191,7 @@ synthesised by the game as it plays.
 | 82 effects and beds | `public/sfx/` | ElevenLabs text to sound effects | 2026-10-26 to 2026-11-04 | paid Creator plan: commercial use, no credit |
 | 5 pieces of music: 3 stems, 2 stings | `public/music/` | Eleven Music | 2026-10-26 | paid Creator plan, Eleven Music's terms (below) |
 | The opening's cue | `public/intro/title.mp3` | Eleven Music | 2026-10-26 | as the music |
-| 52 lines of the Leitstelle, 54 more awaiting their render | `public/voice/` | ElevenLabs text to speech: the library voice „Helmut", and the plant's voice made with Voice Design once it is | 47 on 2026-10-25, 5 on 2026-10-26 | see below |
+| 52 lines of the Leitstelle, 48 more awaiting their render | `public/voice/` | ElevenLabs text to speech: the library voice „Helmut", and the plant's voice made with Voice Design once it is | 47 on 2026-10-25, 5 on 2026-10-26 | see below |
 | Kalam, the notepad's hand | `public/fonts/` | Indian Type Foundry, 2014 | shipped since 2026-11-01 | SIL Open Font License 1.1, its text beside it |
 | Michroma, the title's face | `public/fonts/` | Vernon Adams, 2011 | shipped since 2026-11-13 | SIL Open Font License 1.1, its text beside it |
 | Caveat, the last shift's hand | Google Fonts, loaded by the page | Pablo Impallari | not shipped | SIL Open Font License 1.1 |
@@ -1226,12 +1229,13 @@ lines before Helmut did, are build tools that never ship.
 
 What the sound packages left for later, one line each, the newest first:
 
-- **The plant's voice and 54 lines await the render** (V-voices): the Voice Design, the voice
-  kept and every line read anew, 179 and 9,987 characters; the commands are under „A voice on
-  the radio". Until then the new lines are silent, their words on the objective bar and in the
-  Einsatzprotokoll, and the announcement keeps Helmut's takes.
+- **The plant's voice and 48 lines await the render** (V-voices): the Voice Design, the voice
+  kept and every line read anew, 179 and 9,700 characters; the commands are under „A voice on
+  the radio". Until then the new lines show their words on the objective bar and in the
+  Einsatzprotokoll, the operator's keyed with the radio's chirp, the plant's message, the last
+  word and the Funkprobe silent, and the announcement keeps Helmut's takes.
 - **A run fetches every text of its mission's lines** (V-voices): which text a run says is
-  drawn as its moment comes, so a run's start fetches them all — Blackout's 78 some 6.3 MB
+  drawn as its moment comes, so a run's start fetches them all — Blackout's 72 some 6 MB
   compressed once recorded, where its 24 lines took 1.8 MB. Fetching only what the run may
   still say would need the pick before the moment, which the client cannot make without the
   run's seed, and that seed gives every instance away.

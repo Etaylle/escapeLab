@@ -77,52 +77,47 @@ const MS_PER_WORD = { min: 200, max: 900 } as const;
 
 /**
  * The shipped lines written before the user could record them — the agents that write them may
- * not spend the account's credits — which play silent meanwhile, the objective bar showing them:
- * to be emptied as the render (docs/sound.md) makes them. Any other line without a recording
- * fails, and so does a line here that has one now.
+ * not spend the account's credits — which are heard meanwhile as any line without a recording
+ * is: the operator's on the objective bar keyed with the radio's chirp, the plant's message, the
+ * last word on the end card and the Funkprobe silent, the words shown all the same. To be emptied
+ * as the render (docs/sound.md) makes them. Any other line without a recording fails, and so does
+ * a line here that has one now.
  */
 const AWAITING_RENDER: readonly string[] = [
   'Leitstelle an Nachtschicht. Der Trakt ist dunkel, auf meiner Tafel brennen nur die ' +
     'Notzellen. Zuerst das Notlicht, den Hauptschalter im Flur legt ihr gemeinsam um.',
   'Leitstelle an Nachtschicht. Im ganzen Trakt ist das Netz weg, die Notzellen halten noch. ' +
     'Als Erstes das Notlicht, der Hauptschalter im Flur geht nur gemeinsam.',
-  'Das Notlicht schaltet ihr im Flur, der Hauptschalter hängt in der Mitte unter der roten Lampe.',
-  'Aus dem Archiv geht es durch die Südtür in den Flur, der Hauptschalter liegt dann ein Stück ' +
-    'östlich.',
+  'Den Hauptschalter im Flur legt keiner allein um, ihr müsst gemeinsam ziehen.',
+  'Wer am Ostende vom Flur steht: Richtung Westen bis zur Mitte, dort hängt der Hauptschalter.',
   'Notlicht brennt, ich sehe euch wieder auf meiner Tafel. Weiter mit dem Notstrom: Anleitung ' +
     'im Archiv, Kasten im Maschinenraum, Prüfpult im Flur.',
-  'Für den Notstrom hängt die Anleitung an der Ostseite vom Archiv.',
-  'Der Kasten steht im Maschinenraum hinter der Plattentür, das Prüfpult am Westende vom Flur, ' +
-    'und einer hält die Platte.',
-  'Der Notstrom hält, die Tür zum Maschinenraum bleibt offen. Dann die Signalkette, ein Pult ' +
-    'im Flur und eins im Maschinenraum.',
-  'Für die Signalkette liegt ein Klemmbrett im Flur, an der Südwand.',
-  'Die Signalkette hat zwei Pulte, Pult A am Ostende vom Flur und Pult B im Maschinenraum, ' +
-    'Südostecke.',
-  'Das Schott zum Serverraum geht auf, drinnen warten Terminal und Rack. Vorsicht, die Drohne ' +
-    'ist wach, die Kameraplatte davor hält sie an.',
-  'Zwischen Terminal und Rack steht ein Spind, darin liegt, was ihr für beide braucht.',
-  'Im Serverraum braucht es zwei, einen am Terminal an der Westwand und einen am Rack an der ' +
-    'Ostwand.',
-  'Die Server sind oben, und die Labortür ist offen, aber drinnen kreist eine Drohne. Den ' +
-    'Aktenschrank dort öffnet nur der Schlüssel.',
-  'Den Schlüssel für den Aktenschrank findet ihr im Serverraum, oben in der Nordostecke beim Rack.',
-  'Funkpult und Aktenschrank stehen beide im Labor, das Pult in der Südwestecke.',
-  'Ich hab euch klar auf der Frequenz. Der Reaktorraum ist offen, aber ohne Ersatzsicherung ' +
-    'springt da nichts an.',
-  'Eine Ersatzsicherung liegt im Archiv, ganz hinten in der Südostecke.',
-  'Die Sicherung gehört in den Reaktorraum an die Ostwand, gleich neben den Schalter.',
+  'Ohne die Anleitung aus dem Archiv ratet ihr am Kasten nur herum, sie steht dort auf der ' +
+    'Ostseite.',
+  'Die Tür zum Maschinenraum geht nur auf, solange jemand auf der Platte davor steht, dahinter ' +
+    'wartet der Kasten.',
+  'Der Notstrom hält, die Maschinenraumtür bleibt jetzt offen. Für die Signalkette liegt ein ' +
+    'Klemmbrett im Flur, gearbeitet wird an zwei Pulten.',
+  'Auf dem Klemmbrett im Flur steht, wie die Signalkette zu lesen ist, es liegt an der Südwand.',
+  'Das Schott zum Serverraum ist auf, die Unterlagen liegen im Spind darin. Die Kameraplatte ' +
+    'davor hält die Drohne an.',
+  'Macht zuerst den Spind in der Mitte vom Serverraum auf, ohne seine Unterlagen kommt ihr an ' +
+    'Terminal und Rack nicht weiter.',
+  'Server oben, Labortür offen, im Labor patrouilliert eine Drohne. Den Schlüssel zum ' +
+    'Aktenschrank holt ihr noch aus dem Serverraum.',
+  'Ich hab euch klar auf der Frequenz. Die Ersatzsicherung für den Reaktor liegt im Archiv, ' +
+    'bringt sie rüber.',
   'Reaktor ist am Netz, der Notausgang ist auf, Nordwestecke beim Archiv. Raus da, alle zusammen!',
   'Störung im Kühlkreislauf. Relaissteuerung auf Handbetrieb.',
-  'Achtung, Kühlkreislauf gestört. Relais nur noch von Hand.',
-  'Kühlkreislauf außer Betrieb. Relais im Handbetrieb schalten.',
+  'Kühlkreislauf gestört, Temperatur im Trakt steigt. Relaissteuerung auf Handbetrieb.',
+  'Kühlkreislauf außer Betrieb. Automatische Relaissteuerung ausgefallen, Handbetrieb aktiv.',
   'Ich habe die Relais verloren, das müsst ihr von Hand machen. Lest euch jede Anweisung laut vor.',
   'Die Kühlung kippt, und ich komme von hier nicht an die Relais. Sagt euch jede Anweisung ' +
     'laut an und bestätigt sie.',
   'Notfall in der Kühlung, die Relais müssen von Hand geschaltet werden. Jeder sagt laut, was ' +
     'auf seinem Pult steht.',
   'Kühlung steht wieder, die Relais halten. Weiter, wo ihr aufgehört habt.',
-  'Die Relais greifen wieder, die Kühlung ist stabil. Zurück an eure Station.',
+  'Die Relais greifen wieder, ich habe die Kühlung zurück. Das hat uns keine Zeit gekostet.',
   'Die Kühlung ist abgesackt, das hat uns Zeit gekostet. Zurück an die Arbeit, beim nächsten ' +
     'Mal schneller.',
   'Zu spät, die Notversorgung musste die Kühlung abfangen. Das kostet Zeit, weiter.',
@@ -151,10 +146,10 @@ const AWAITING_RENDER: readonly string[] = [
   'Die Notzellen sind leer, im Trakt ist es jetzt ganz dunkel. Bleibt, wo ihr seid, die ' +
     'Frühschicht holt euch raus.',
   'Das war\'s, die Notversorgung ist aus. Rührt nichts mehr an, die Frühschicht kommt mit Licht.',
-  'Die Sicherheitsschaltung hat zugemacht, zu viele Alarme auf einmal. Der Trakt bleibt ' +
+  'Die Sicherheitsschaltung hat zugemacht, zu viele Alarme in einer Schicht. Der Trakt bleibt ' +
     'dunkel, bis die Frühschicht kommt.',
-  'Zu viele Alarme, die Anlage hat die Notversorgung abgeworfen. Für heute bleibt der Trakt ' +
-    'dunkel.',
+  'Die Anlage hat jeden Alarm mitgezählt, beim letzten hat sie den Trakt abgeschaltet. Lasst ' +
+    'alles, wie es ist, die Frühschicht sieht sich das an.',
   'Mit halber Schicht geht da drinnen nichts. Ich breche ab, der Trakt bleibt bis morgen dunkel.',
   'Ohne die ganze Schicht kommt ihr da nicht durch. Ich hole euch raus, wir versuchen es ' +
     'morgen neu.',
@@ -395,8 +390,8 @@ describe('the lines the script reads', () => {
     }
     const nudges = (blackout?.puzzles ?? []).flatMap((p) => p.nudges ?? []);
     expect(nudges).toHaveLength(12);
-    // Each of them in two texts, every text a line of its own to record.
-    expect(nudges.flatMap(textsOf)).toHaveLength(24);
+    // Half of them in a second text that says something of its own, every text a line to record.
+    expect(nudges.flatMap(textsOf)).toHaveLength(18);
     for (const text of nudges.flatMap(textsOf)) {
       expect(shippedLines().get(text)?.missions, text).toEqual(['blackout']);
     }

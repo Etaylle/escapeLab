@@ -16,6 +16,7 @@ import {
   RANKS,
   rankOf,
   reportLine,
+  startAhead,
   voiced,
   withNews,
   type Notice,
@@ -47,6 +48,19 @@ describe('radioNews — which lines get a banner', () => {
       (kind) => event(kind, 500),
     );
     expect(radioNews(events, 0, NOW)).toEqual([]);
+  });
+
+  it('has the run’s start ahead until it is said and no news any more', () => {
+    const start = (msAgo: number): RunEvent => ({
+      ...event('radio', msAgo, 'Los.'),
+      moment: 'start',
+    });
+    expect(startAhead([], NOW)).toBe(true);
+    expect(startAhead([event('radio', 60_000, 'Durchsage.')], NOW)).toBe(true);
+    // Said a moment ago, it is still to come on a page that has not aired it yet.
+    expect(startAhead([start(NEWS_MS)], NOW)).toBe(true);
+    // A page that comes in after that never hears it.
+    expect(startAhead([start(NEWS_MS + 1)], NOW)).toBe(false);
   });
 
   it('does not replay old lines to a client that joins late or reconnects', () => {

@@ -122,6 +122,16 @@ export function airIcon(event: RunEvent): 'note' | 'radio' {
 }
 
 /**
+ * Whether the run's start is still to come on the air for a page that sees `events` at `now`:
+ * not said yet, or said so lately that it is news still (`radioNews`). A page that comes in
+ * later never hears it, and decodes none of the takes that may open the run (radioVoice.ts).
+ */
+export function startAhead(events: readonly RunEvent[], now: number): boolean {
+  const start = events.find((event) => event.moment === 'start');
+  return start === undefined || now - start.at <= NEWS_MS;
+}
+
+/**
  * Lines on the air among the events after the first `seen`, oldest first.
  * The run report only grows while a run lasts, so a count is enough to tell
  * old from new; `now` (epoch ms, compared with the server's `at`) weeds out

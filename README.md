@@ -260,9 +260,11 @@ Stimmen sprechen: die Leitstelle am Funk — zum Start, nach jeder Lösung, wenn
 ersten Alarm, bei fünf, zwei und einer Minute Restzeit, im Notfall, mit einem Schlusswort auf der
 Endkarte und mit einer Funkprobe in der Lobby — und die Anlage über ihre Lautsprecher. Eine Zeile
 darf zwei oder drei Fassungen haben, ein Lauf sagt eine. Die Aufnahmen liegen in
-`packages/client/public/voice/` (ElevenLabs: die Leitstelle „Helmut", die Anlage eine eigene, per
-Voice Design gemachte Stimme). Wer einen Funktext in `missions/*.json` ändert oder neu schreibt,
-nimmt ihn neu auf — der Test, der jede Zeile prüft, nennt den Befehl:
+`packages/client/public/voice/` (ElevenLabs: die Leitstelle „Helmut"). Die eigene Stimme der Anlage
+entsteht per Voice Design und wartet wie die neuen Zeilen noch auf den Render, bis dahin spricht
+Helmut die Durchsage im Intro (Befehle in `docs/sound.md`). Wer einen Funktext in
+`missions/*.json` ändert oder neu schreibt, nimmt ihn neu auf — der Test, der jede Zeile prüft,
+nennt den Befehl:
 
 ```sh
 VOICE_ENGINE=elevenlabs pnpm --filter @escapelab/client voice   # nur fehlende Zeilen, ElevenLabs
