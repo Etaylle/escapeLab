@@ -142,7 +142,19 @@ const KEY = roomKey({ ROOM_SECRET: 'f00d'.repeat(16) }).key;
 /** How long the server is down between the snapshot and the room taken up again, ms. */
 const DOWNTIME_MS = 30_000;
 
-describe('a free-order run without a clock, sealed while the crew picks', () => {
+/** `room` as it stands, sealed as a server going down would seal it: the room kept, the blob. */
+function sealedNow(room: Room) {
+  const kept = room.snapshot(Date.now());
+  return { kept, blob: seal({ ...kept, instance: 'frei', final: true }, 'TEST', KEY) };
+}
+
+/** The stations the last view of `walker` has armed, in map order. */
+const armedIn = (walker: Walker): string[] =>
+  (lastView(walker).map?.stations ?? []).flatMap((s) =>
+    'status' in s && s.status === 'armed' ? [s.puzzleId] : [],
+  );
+
+describe('a free-order run without a clock, sealed and taken up again', () => {
   beforeEach(() => {
     vi.useFakeTimers();
   });
@@ -150,19 +162,36 @@ describe('a free-order run without a clock, sealed while the crew picks', () => 
     vi.useRealTimers();
   });
 
-  it('keeps the order taken, the pick and the clock’s start, and its clock stood still', () => {
+  it('keeps a pick under way — the order, the station up, its instance — to be finished', () => {
     const { room, anna, ben } = running(freeLab(0));
     // Drei first: it swaps places with Eins at the run's first, and is the crew's until solved.
     switchOn(room, anna, ben, 11);
-    const keptOn = { ...room.snapshot(Date.now()), instance: 'frei', final: false };
-    const on = open(seal(keptOn, 'TEST', KEY), 'TEST', KEY).state;
-    expect(on.mission.puzzles.map((p) => p.id)).toEqual(['drei', 'zwei', 'eins']);
-    expect([on.currentPuzzleIndex, on.picked]).toEqual([0, true]);
-    // Solved, the crew picks again.
-    pressTogether(room, anna, ben);
-    const kept = room.snapshot(Date.now());
+    const { kept, blob } = sealedNow(room);
     room.dispose();
-    const blob = seal({ ...kept, instance: 'frei', final: true }, 'TEST', KEY);
+    const { state } = open(blob, 'TEST', KEY);
+    expect(state.mission.puzzles.map((p) => p.id)).toEqual(['drei', 'zwei', 'eins']);
+    expect([state.currentPuzzleIndex, state.picked]).toEqual([0, true]);
+    expect(state.puzzleState).toEqual(kept.state.puzzleState);
+    vi.advanceTimersByTime(DOWNTIME_MS);
+    const again = Room.restore(open(blob, 'TEST', KEY), Date.now());
+    const [annaBack, benBack] = [rejoin(again, { name: 'Anna' }), rejoin(again, { name: 'Ben' })];
+    // Back on: Drei still up and the crew's, the other two waiting for its solve.
+    expect(lastView(annaBack).puzzle?.title).toBe('Drei');
+    expect(armedIn(annaBack)).toEqual(['drei']);
+    // Solved, the pick is given back: both still to solve stand armed for the next one.
+    pressTogether(again, annaBack, benBack);
+    expect(lastView(annaBack).currentPuzzleIndex).toBe(1);
+    expect(armedIn(annaBack)).toEqual(['eins', 'zwei']);
+    again.dispose();
+  });
+
+  it('keeps the crew picking between stations, its clock standing still meanwhile', () => {
+    const { room, anna, ben } = running(freeLab(0));
+    // Drei taken and solved: the crew picks its next.
+    switchOn(room, anna, ben, 11);
+    pressTogether(room, anna, ben);
+    const { kept, blob } = sealedNow(room);
+    room.dispose();
     const { state } = open(blob, 'TEST', KEY);
     expect(state.mission.puzzles.map((p) => p.id)).toEqual(['drei', 'zwei', 'eins']);
     expect([state.currentPuzzleIndex, state.picked]).toEqual([1, false]);
