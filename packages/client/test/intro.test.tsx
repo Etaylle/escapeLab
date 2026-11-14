@@ -393,7 +393,7 @@ function viewOf(parts: Partial<PlayerView> = {}): PlayerView {
     lights: { out: false, outAt: null },
     currentPuzzleIndex: 0,
     puzzleCount: 6,
-    pausedFor: null,
+    away: [],
     pausedAt: null,
     events: [],
     grade: null,

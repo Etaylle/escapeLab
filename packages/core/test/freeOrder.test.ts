@@ -16,7 +16,16 @@ import {
   viewForSpectator,
 } from '../src/index.js';
 import type { GameState, Mission } from '../src/index.js';
-import { everyConsole, labMission, openLab, standing, started, T0 } from './lab.js';
+import {
+  everyConsole,
+  labMission,
+  lineBack,
+  lineDrops,
+  openLab,
+  standing,
+  started,
+  T0,
+} from './lab.js';
 
 /**
  * A corridor lab of three stations the whole crew presses — Eins (3,1), Zwei (7,1), Drei
@@ -371,12 +380,11 @@ describe('a mission without a clock', () => {
   });
 
   it('moves the clock’s start on by a pause, so that it stands still meanwhile', () => {
-    const away = applyAction(running, {
-      type: 'player-disconnected',
-      playerId: 'p2',
-      at: T0 + 10_000,
-    });
-    const back = applyAction(away, { type: 'player-connected', playerId: 'p2', at: T0 + 40_000 });
+    // A line that drops stands nothing still; the whole crew off the line holds the run.
+    const benGone = applyAction(running, lineDrops('p2', T0 + 5000));
+    expect(benGone.clockFrom).toBe(T0);
+    const nobody = applyAction(benGone, lineDrops('p1', T0 + 10_000));
+    const back = applyAction(nobody, lineBack('p2', T0 + 40_000));
     expect(back.clockFrom).toBe(T0 + 30_000);
   });
 

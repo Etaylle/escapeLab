@@ -78,11 +78,12 @@ export interface DroneRuntime {
 /**
  * What a room keeps beside the game (server room.ts), as far as it outlasts the room's
  * connections. Left out: the connections themselves, and when each closed, since a room taken
- * up again waits for every seat from then; a new device's ask for a seat, which lapses with its
- * device; the glances of the crew's lamps, since a look begun before a pause starts anew after
- * it; the mission the host's yes named for the next run, which only the end of a run has, and
- * no ended run is taken up again; and whatever the timers and the stream of positions work out
- * anew from the game and from what is kept here.
+ * up again counts every seat off the line from then — a run keeps its drops in the game; a new
+ * device's ask for a seat, which lapses with its device; the glances of the crew's lamps, since
+ * a look begun before a pause starts anew after it; the mission the host's yes named for the
+ * next run, which only the end of a run has, and no ended run is taken up again; and whatever
+ * the timers and the stream of positions work out anew from the game and from what is kept
+ * here.
  */
 export interface RoomKeeping {
   /** where every member of the crew stands, by player id */
@@ -141,6 +142,9 @@ const awaySchema = z.looseObject({
   waivableAt: z.number(),
   waived: z.boolean(),
   claimUntil: z.number().exactOptional(),
+  // A snapshot of a build before R-nopause marks nobody gone with the server: its run waits for
+  // nobody and goes on as the first of the crew is back, the others coming back into it.
+  maintenance: z.literal(true).exactOptional(),
 });
 
 const runEventSchema = z.looseObject({
@@ -207,7 +211,8 @@ const gameStateSchema = z.looseObject({
   sabotage: z
     .looseObject({ endsAt: z.number(), emergency: typed<RelayState>().exactOptional() })
     .nullable(),
-  paused: z.looseObject({ since: z.number(), kind: z.enum(['away', 'wartung']) }).nullable(),
+  // A snapshot is taken through the maintenance (room.ts `snapshot`): a run's pause is always it.
+  paused: z.looseObject({ since: z.number(), kind: z.literal('wartung') }).nullable(),
   away: z.record(z.string(), awaySchema),
   // A snapshot from before the pause menu holds no menus: nobody has one open.
   menus: z.record(z.string(), z.enum(['pause', 'main'])).default({}),

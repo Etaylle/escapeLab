@@ -36,11 +36,13 @@ export function fromPlant(event: RunEvent): boolean {
 }
 
 /**
- * Whether a line is mission control's: a scripted one, or one it sent unasked because the
- * station that is up stayed quiet (a nudge).
+ * Whether a line is mission control's: a scripted one, one it sent unasked because the station
+ * that is up stayed quiet (a nudge), or its word that a crew member is gone from the run — whose
+ * line dropped, or who went to the main menu (`away`, core actions.ts `player-disconnected`).
  */
 export function fromControl(event: RunEvent): boolean {
-  return (event.kind === 'radio' || event.kind === 'nudge') && !fromPlant(event);
+  const said = event.kind === 'radio' || event.kind === 'nudge' || event.kind === 'away';
+  return said && !fromPlant(event);
 }
 
 /**
@@ -62,7 +64,8 @@ function onAir(event: RunEvent): boolean {
 /**
  * How lines on the air rank against each other (`withNews`): the run's story — the start, a
  * solve's line, the escape — and a note the crew asked for, highest; the calls — the first
- * alarm, the clock, an emergency and the plant's message on it — below them; a nudge lowest.
+ * alarm, the clock, an emergency and the plant's message on it, a crew member gone — below them;
+ * a nudge lowest.
  */
 export const RANKS = { nudge: 0, call: 1, story: 2 } as const;
 
@@ -81,13 +84,15 @@ export function rankOf(event: RunEvent): number {
   if (event.kind === 'nudge') {
     return RANKS.nudge;
   }
-  return event.moment !== undefined && CALLS.has(event.moment) ? RANKS.call : RANKS.story;
+  const call = event.kind === 'away' || (event.moment !== undefined && CALLS.has(event.moment));
+  return call ? RANKS.call : RANKS.story;
 }
 
 /**
  * Whether a line on the air is spoken: mission control's are, over the radio (world/
  * radioVoice.ts), and the plant's over its loudspeakers (world/pa.ts), where a recording of it
- * exists; a note of the last shift is read, never heard.
+ * exists — none does of the word that a crew member is gone, which names them; a note of the
+ * last shift is read, never heard.
  */
 export function voiced(event: RunEvent): boolean {
   return fromControl(event) || fromPlant(event);

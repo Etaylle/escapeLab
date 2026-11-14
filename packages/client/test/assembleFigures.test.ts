@@ -60,7 +60,7 @@ function viewWith(items: Item[]): PlayerView {
     timeLimitSec: 600,
     currentPuzzleIndex: 0,
     puzzleCount: 1,
-    pausedFor: null,
+    away: [],
     pausedAt: null,
     events: [],
     grade: null,

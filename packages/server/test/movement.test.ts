@@ -260,12 +260,12 @@ describe('Room movement', () => {
     const { room, anna, ben } = started();
     walkTo(room, anna, BY_THE_SCHOTT.x, BY_THE_SCHOTT.y);
     anna.detach();
-    expect(lastView(ben).pausedFor?.map((away) => away.name)).toEqual(['Anna']);
+    expect(lastView(ben).away.map((away) => away.name)).toEqual(['Anna']);
 
     const back: Walker = { playerId: anna.playerId, messages: [] };
     room.resume(passFor('Anna'));
     room.attach(anna.playerId, (m) => back.messages.push(m));
-    expect(lastView(back).pausedFor).toBeNull();
+    expect(lastView(back).away).toEqual([]);
     const kept = lastPositions(back);
     expect(kept.run).toBe(runOf(back));
     expect(kept.players[anna.playerId]).toMatchObject(BY_THE_SCHOTT);

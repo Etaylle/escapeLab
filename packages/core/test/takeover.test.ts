@@ -25,8 +25,8 @@ describe('a new device asking for a seat whose line is down', () => {
     for (const id of ['p1', 'p2']) {
       expect(viewFor(asked, id).takeovers).toEqual([{ id: 'p3', name: 'p3', until }]);
     }
-    // The run still waits for p3: the ask lets nobody in by itself.
-    expect(viewFor(asked, 'p1').pausedFor?.map((away) => away.id)).toEqual(['p3']);
+    // p3 is still away: the ask lets nobody in by itself.
+    expect(viewFor(asked, 'p1').away.map((away) => away.id)).toEqual(['p3']);
   });
 
   it('is gone from every view once settled, and settles nothing where none waits', () => {
