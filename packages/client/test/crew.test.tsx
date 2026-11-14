@@ -27,7 +27,12 @@ import {
   stepTo,
 } from '../src/screens/Lobby.js';
 import { MissionHud } from '../src/screens/MissionHud.js';
-import { audienceTags, SpectateScreen } from '../src/screens/Spectate.js';
+import {
+  audienceRunOf,
+  audienceTags,
+  SpectateScreen,
+  spectatorAsPlayerView,
+} from '../src/screens/Spectate.js';
 import { iconsAsWords, mapWith, PICTOGRAPH } from './fixtures.js';
 
 const noop = (): void => undefined;
@@ -1164,6 +1169,23 @@ describe('the audience', () => {
     };
     expect(audienceTags(view, gone, undefined)).toEqual([{ text: 'getrennt · 1:05', tone: 'away' }]);
     vi.useRealTimers();
+  });
+
+  it('counts the crew the run counts at a lever, whoever is away, as the crew does', () => {
+    const away = { ...watchedBen, connected: false };
+    const waived = { ...watch(ben, false), id: 'p3', name: 'Cem', connected: false };
+    const view: SpectatorView = {
+      ...finished(),
+      phase: 'playing',
+      players: [watchedAnna, away, { ...waived, waived: true }],
+    };
+    expect(audienceRunOf(view).crew.mates.map((mate) => mate.name)).toEqual(['Anna', 'Ben']);
+    const world = spectatorAsPlayerView(view);
+    expect(world.players.map((p) => [p.name, p.connected, p.waived ?? false])).toEqual([
+      ['Anna', true, false],
+      ['Ben', false, false],
+      ['Cem', false, true],
+    ]);
   });
 
   it('sees the credits in place of the station once the run is over', () => {

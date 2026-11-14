@@ -77,19 +77,19 @@ describe('Room emergencies', () => {
     room.act(ben.playerId, { kind: 'puzzle-input', input: { press: true } });
   }
 
-  /** Lobby, mission start, and the two station solves that arm emergencies. */
+  /** Lobby, mission start, and the two station solves that arm emergencies; Ben's line's end. */
   function midMission() {
     const room = new Room('TEST', mission);
     const anna = { ...room.join('Anna', passFor('Anna')), ...collector() };
     const ben = { ...room.join('Ben', passFor('Ben')), ...collector() };
     room.attach(anna.playerId, anna.listen);
-    room.attach(ben.playerId, ben.listen);
+    const dropBen = room.attach(ben.playerId, ben.listen);
     ready(room, ben);
     room.act(anna.playerId, { kind: 'start-mission' });
     for (const x of [2, 4]) {
       solveAt(room, x, anna, ben);
     }
-    return { room, anna, ben };
+    return { room, anna, ben, dropBen };
   }
 
   it('fires an emergency once enough stations are done', () => {
@@ -119,6 +119,23 @@ describe('Room emergencies', () => {
       1,
     );
     expect(lastView(anna.messages).map?.sabotage).not.toBeNull();
+    room.dispose();
+  });
+
+  it('takes a hand on the line at each valve: an avatar whose line is down mans none', () => {
+    const { room, anna, ben, dropBen } = midMission();
+    vi.advanceTimersByTime(61_000);
+    moveTo(room, ben, 7, 2);
+    dropBen();
+    moveTo(room, anna, 1, 2);
+    const panels = lastView(anna.messages).map?.sabotage?.panels;
+    expect(panels?.map((p) => [p.id, p.occupied])).toEqual([
+      ['links', true],
+      ['rechts', false],
+    ]);
+    // Back on the line where his avatar stood, Ben mans it, and the emergency is over.
+    room.resume(passFor('Ben'));
+    expect(lastView(anna.messages).map?.sabotage).toBeNull();
     room.dispose();
   });
 

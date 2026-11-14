@@ -37,9 +37,9 @@
  * charged, before both throw theirs within the window; on the end screen a
  * guest's or an unknown choice of the next mission is refused, and the
  * host's yes naming Blackout opens it, with the power on. Last a crew of
- * three plays Blackout: Finn's line drops for 70 s, the others go on without
- * him once the minute is over, and he is back on his pass, counted in at once
- * with no pause for it; Gus's line drops and a phone asks for his seat by
+ * three plays Blackout: Finn's line drops for 70 s and the run goes on, the
+ * others going on without him once the minute is over, and he is back on his
+ * pass, counted in at once; Gus's line drops and a phone asks for his seat by
  * his name: Eva lets it in, his old pass refused; Finn goes to the main menu and comes
  * back, his seat kept all along; Gus gives his seat up and the two go on,
  * then Finn gives his up and the run ends, called off. Where TEST_DATABASE_URL

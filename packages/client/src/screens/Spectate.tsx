@@ -60,7 +60,7 @@ export function audienceTags(
  * crew the run counts — of which the audience is none — and the latest alarm; it refuses nobody
  * anything.
  */
-function audienceRunOf(view: SpectatorView): DeviceRun {
+export function audienceRunOf(view: SpectatorView): DeviceRun {
   return {
     alarms: view.penaltySeq,
     solved: view.currentPuzzleIndex,
@@ -284,7 +284,9 @@ export function SpectateScreen({
  * GameWorld renders from a player's view; an audience has no player, so we
  * hand it a stand-in whose fields it actually reads in spectator mode.
  */
-function spectatorAsPlayerView(view: SpectatorView): Parameters<typeof GameWorld>[0]['view'] {
+export function spectatorAsPlayerView(
+  view: SpectatorView,
+): Parameters<typeof GameWorld>[0]['view'] {
   return {
     phase: view.phase,
     missionId: '',
