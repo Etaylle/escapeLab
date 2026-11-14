@@ -354,6 +354,16 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   Laufende je eine Zeile; `/health` zählt Räume, laufende Partien, Spieler, Zuschauer, nennt
   Laufzeit und Commit (`RENDER_GIT_COMMIT`).
 
+### R-6 Kein Stillstand, wenn eine Leitung abreißt — Status: bereit (Spec `spec-R-nopause.md`, nach U-pause) · Größe: M
+- Uros 2026-11-14 mit Screenshot der Karte „MISSION PAUSIERT · Warten auf uros": „Sollte man das
+  Spiel im Hintergrund nicht stoppen, wenn jemand weg ist? Alles sollte gleich bleiben und danach
+  fortführen." Kehrt die Dota-Pause aus R-3 um: Uhr, Patrouillen und Notfälle laufen weiter, der
+  Platz bleibt gebunden, wer zurückkommt, spielt sofort weiter; die Pausenkarte bleibt nur für die
+  Wartung (R-2). Der Ausgefallene steht still, hält, was er hielt, und wird von Patrouillen nicht
+  gesehen; Notfälle würfeln ohne seine Konsole; „Ohne X weiter" nach 60 s (später 20 s) bleibt in
+  Crew-Leiste und HUD, weil Stationen zu zweit bedient werden. Vorbilder: Overcooked 2, Among Us,
+  Deep Rock Galactic (die Mission läuft, der Platz bleibt offen).
+
 ## Geplant (2026-11-12, Vorbilder je Punkt)
 
 ### V-1 Zwei Stimmen und eine Leitstelle, die reagiert — Status: bereit (nur lokal: Render der Zeilen) · Größe: M
@@ -537,6 +547,13 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   Erfolge je Konto.
 - Alternative mit eigenen Konten (Name und Passwort, `crypto.scrypt`, Neon-Postgres,
   Wiederherstellungscodes statt E-Mail): mehr Code, mehr Angriffsfläche, kein Dritter.
+- **K-1c** An- und Abmelden, Konto wechseln — Status: bereit (Spec `spec-K-login.md`, nach
+  U-pause) · Größe: M. Uros 2026-11-14: „Bei Konten sollte man sich an- und abmelden oder wechseln
+  können." Ausweisnummer vom Server geprägt (lesbar, ohne 0/O/1/I), Kennwort vom Spieler gesetzt
+  (`crypto.scrypt`, 8–128 Zeichen, kein E-Mail, noch keine Wiederherstellung), „Anmelden" zeigt
+  den Dienstausweis des Geräts auf das Konto um, „Abmelden" prägt einen neuen Ausweis (Gast), der
+  Platz im Einsatz folgt dem Konto (Wiedereintritt von jedem angemeldeten Gerät ohne Übernahme);
+  Limits je Adresse und je Ausweisnummer. Google (K-1b) bleibt zuletzt.
 
 ## Nur lokal
 
