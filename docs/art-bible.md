@@ -868,14 +868,16 @@ leave and when it is gone, and each frame the panel's opacity and how far its fa
 the fade's own clock (the animation's currentTime); the panel has to go 100 to 600 ms after it
 began to leave, inert, its opacity only falling, and show midway on a frame — a frame drawn
 between half and nine tenths into the 150-ms fade, where its ease-in has the panel at 0.86 to
-0.28, has to. Where the page drew none there, the midway frames are skipped (`panel-close
-(fade)`), the reason naming the fade's times at the frames it drew and when the panel went, and
-the held shot judges the fade; a fade that never falls still fails on a frame in its middle, as
+0.28, has to. Where the page drew none there — or, at load 15 in one run, none at all while the
+panel left — the midway frames are skipped (`panel-close (fade)`), the reason naming the fade's
+times at the frames it drew and when the panel went, and the held shot judges the fade; a fade that never falls still fails on a frame in its middle, as
 does a panel gone at once. meter-swing.png: the page pauses the needle's own transition 60 ms
 into its 600-ms swing as it begins — some 40 % of its way, −58° on a swing from −90° to −10.8° —
 so that the screenshot shows it on its way whenever it lands; the needle has to have swung, held
 still through the shot and stood between where it was and its reading, or past it, and the log
-names when the swing began after the probe on the page's clock, from the swing's own start time.
+names when the page noted the swing after the probe, on its clock — the swing's event, which
+comes with the page's next frame (the transition's own start time read 2.8 s before the probe in
+one run, no clock to trust).
 The hold takes only a swing to a new reading — the needle's inline turn changed since the hold
 began: in the first Blackout proof run the last probe's swing announced itself only with the
 page's next frame, after the hold was on, and was held while the probe's own ran free (−74° read
