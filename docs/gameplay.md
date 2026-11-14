@@ -499,7 +499,8 @@ run, or back in its audience (`spectate`), at once.
 server's maintenance, the join screen opens on the run's card instead of the form (`whereami`,
 asked as the screen comes up): the mission, the room's code, the crew and the clock as the server
 last showed it — counting down as the run goes on, whoever is away; standing where it was while
-the maintenance stands the run still („WARTUNG") — with „Zurück zum Einsatz" and
+the maintenance stands the run still („WARTUNG"), or nobody of the crew is on the line („WARTUNG ·
+NIEMAND AUF DER LEITUNG") — with „Zurück zum Einsatz" and
 „Einsatz aufgeben" (a second press within 4 s confirms it). Opening or joining another room is
 refused, naming the run. A seat in a lobby shows its card too, and „Raum verlassen" leaves it as
 before; a finished run binds nobody.
@@ -528,8 +529,16 @@ the escape count the crew without him; a station with two consoles still takes t
 member left on the line the way on is never offered; after the same wait the bar offers „Einsatz
 abbrechen" instead, which ends the run lost (`lost:abandoned`, „EINSATZ ABGEBROCHEN"). A waived
 member who comes back counts again at once, and the others read „Ben ist zurück"; one not waived
-simply plays on. A drop alone ends no run — with the whole crew off the line the run runs on all
-the same, until its room closes for standing empty 10 minutes.
+simply plays on. A drop alone ends no run.
+
+**The whole crew off the line.** With nobody of the crew on the line there is nobody to run the
+run for: from the moment the last line drops it holds as for the server's maintenance (`wartung`)
+— the clock, the patrols and the emergencies stand still — and goes on as soon as the first of
+the crew is back, every deadline moved on by the hold; whoever is still away stays away as after
+their drop. The run's card on the main menu says „WARTUNG · NIEMAND AUF DER LEITUNG", the
+audience's banner „Wartung — niemand auf der Leitung"; nobody on the line sees a card, since the
+first back finds the run going on. The room still closes once it has stood empty 10 minutes,
+held or not, and a seat given up meanwhile leaves the hold as it is.
 
 **Giving the run up.** „Einsatz aufgeben", on the run's card or on the card of a line lost, gives
 the seat up for good: what they carried goes down where they stood (on their start where the

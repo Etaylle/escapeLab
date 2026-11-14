@@ -158,9 +158,11 @@ jedem weiteren Abbruch desselben Laufs nach 20, bietet die Leiste über der Welt
 Stationen der ganzen Crew, Luke und Flucht zählen Ben dann nicht mit, bis er zurück ist. Ist nur
 noch eine Person verbunden, bietet sie stattdessen „Einsatz abbrechen“. Still steht ein Einsatz
 nur noch für die Wartung des Servers (Neustart, Deploy), und die wartet nur auf die, deren
-Leitung mit dem Server ging; wer schon vorher getrennt war, bleibt es. Das Hauptmenü stellt
-einen laufenden Einsatz als hellen ersten Menüpunkt voran, die übrigen gedimmt („Zurück zum
-Einsatz“, „Einsatz aufgeben“), und sperrt andere Räume;
+Leitung mit dem Server ging; wer schon vorher getrennt war, bleibt es. Ist niemand der Crew mehr
+verbunden, hält der Einsatz ebenso, ab dem letzten Abbruch, bis der Erste zurück ist („WARTUNG ·
+NIEMAND AUF DER LEITUNG“ auf seiner Karte); der Raum schließt nach 10 Minuten leer wie bisher.
+Das Hauptmenü stellt einen laufenden Einsatz als hellen ersten Menüpunkt voran, die übrigen
+gedimmt („Zurück zum Einsatz“, „Einsatz aufgeben“), und sperrt andere Räume;
 aufgeben gibt den Platz frei, unter der Mindestzahl der Crew endet der Lauf für alle („EINSATZ
 ABGEBROCHEN“). Ein anderes Gerät übernimmt einen getrennten Platz mit Raumcode und genau dessen
 Namen (wie bei Jackbox), sobald jemand aus der Crew es zulässt. Die eigene Seite erkennt eine

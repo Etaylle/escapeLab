@@ -411,10 +411,14 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   allein „Einsatz abbrechen"; die Karte des Hauptmenüs zählt die Uhr herunter. Die Wartung eines
   Neustarts wartet nur auf die Plätze, die beim SIGTERM (oder im letzten Schnappschuss) in der
   Leitung waren; wer vorher weg war, bleibt weg wie zuvor, mit der Wartezeit seines Abbruchs — ein
-  Abbruch wird nie über einen Deploy zur Pause (Entscheidung 2026-11-14).
-- Beweis: Core-, Server-, Client-Tests; Smoke; Harness `away-badge` (Uhr gegen die Wanduhr),
-  `continue-without`, `rejoin-card`; der Neustart-Drill mit Cem, der vor dem SIGTERM weg ist: der
-  Einsatz läuft weiter, sobald Anna und Ben zurück sind.
+  Abbruch wird nie über einen Deploy zur Pause (Entscheidung 2026-11-14). Ist niemand der Crew mehr
+  in der Leitung, hält der Lauf ab dem letzten Abbruch als Wartung, bis der Erste zurück ist
+  („WARTUNG · NIEMAND AUF DER LEITUNG"); der Raum schließt nach 10 Minuten leer wie bisher
+  (Entscheidung 2026-11-14).
+- Beweis: Core-, Server-, Client-Tests (auch: eine Crew von zwei, beide weg, einer zurück); Smoke;
+  Harness `away-badge` (Uhr gegen die Wanduhr), `continue-without`, `rejoin-card`; der
+  Neustart-Drill mit Cem, der vor dem SIGTERM weg ist: der Einsatz läuft weiter, sobald Anna und
+  Ben zurück sind.
 
 ## Geplant (2026-11-12, Vorbilder je Punkt)
 
