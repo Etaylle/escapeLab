@@ -351,3 +351,12 @@
   color: var(--text);
   background: rgba(13, 20, 27, 0.9);
 }
+
+/*
+ * An open device lays its Laborkennung row over the bar's lower lines (screens/WorldModal.tsx):
+ * the hands give way to it meanwhile, keeping their place, so that nothing in the bar moves.
+ * The device's partner LED names who backs its player up.
+ */
+.game:has(.station-modal) .stage-hands {
+  visibility: hidden;
+}

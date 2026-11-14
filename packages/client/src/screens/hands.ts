@@ -7,9 +7,9 @@ import { isArmed, known } from '../world/known.js';
  * The hands line under the goal for a crew of three or more (Game.tsx `goalOf`): what each of
  * the crew does at the station in front of it, from the view's `hands` — the server's word of
  * who stands where, never a position guessed on this screen — in the map's words, this
- * screen's own player first: „Cleo: Klemmbrett · Anna: Pult A · Ben: Pult B". A hand without a
- * place names the places nobody holds: „Cleo: frei — Handbuch, HALTEN". Names and devices, in
- * the world's voice. Pure.
+ * screen's own player first: „Cleo: Klemmbrett · Anna: Pult A · Ben: Pult B". The first hand
+ * without a place names the places nobody holds: „Cleo: frei — Handbuch, HALTEN · Anna: frei".
+ * Names and devices, in the world's voice. Pure.
  */
 
 /** The hands line: every hand in it, and the own one alone — the phone row's chip; null for none. */
@@ -72,8 +72,9 @@ function entry(name: string, job: string | null, open: readonly string[]): strin
 
 /**
  * The hands line of `view` in the words of `map`: this screen's player first, then the rest of
- * the crew in its order; null where the view names no hands — for a crew of two, and while no
- * station is up.
+ * the crew in its order. The places nobody holds stand once, beside the first hand without a
+ * place — this screen's own where it has none — and every later one says „frei" alone. Null
+ * where the view names no hands: for a crew of two, and while no station is up.
  */
 export function handsLine(view: PlayerView, map: MapView): HandsLine | null {
   const hands = view.hands;
@@ -82,13 +83,20 @@ export function handsLine(view: PlayerView, map: MapView): HandsLine | null {
   }
   const open = hands.open.flatMap((place) => jobWord(map, place) ?? []);
   const nameOf = (id: string): string => view.players.find((p) => p.id === id)?.name ?? id;
-  const entries = hands.held.map(({ playerId, place }) => ({
-    mine: playerId === view.you.id,
-    said: entry(nameOf(playerId), place === null ? null : jobWord(map, place), open),
+  const mine = (playerId: string): boolean => playerId === view.you.id;
+  const ordered = [
+    ...hands.held.filter((hand) => mine(hand.playerId)),
+    ...hands.held.filter((hand) => !mine(hand.playerId)),
+  ].map(({ playerId, place }) => ({
+    playerId,
+    job: place === null ? null : jobWord(map, place),
   }));
-  const ordered = [...entries.filter((e) => e.mine), ...entries.filter((e) => !e.mine)];
+  const firstFree = ordered.findIndex((hand) => hand.job === null);
+  const said = ordered.map((hand, i) =>
+    entry(nameOf(hand.playerId), hand.job, i === firstFree ? open : []),
+  );
   return {
-    line: ordered.map((e) => e.said).join(' · '),
-    own: entries.find((e) => e.mine)?.said ?? null,
+    line: said.join(' · '),
+    own: ordered[0] !== undefined && mine(ordered[0].playerId) ? (said[0] ?? null) : null,
   };
 }

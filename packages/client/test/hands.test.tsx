@@ -102,6 +102,12 @@ describe('the hands line', () => {
     expect(lineOf(held, 'p1')).toBe('Anna: Pult A · Ben: Pult B · Cleo: HALTEN');
   });
 
+  it('names the open places once, beside the first hand without a place', () => {
+    const one = three('notstrom', { stations: { 'notstrom/b': ['p2'] } });
+    expect(lineOf(one, 'p3')).toBe('Cleo: frei — Pult A, HALTEN · Anna: frei · Ben: Pult B');
+    expect(lineOf(one, 'p2')).toBe('Ben: Pult B · Anna: frei — Pult A, HALTEN · Cleo: frei');
+  });
+
   it('puts the whole crew at the main switch, and names it to whoever is not there yet', () => {
     const all = three('notlicht', { stations: { notlicht: ['p1', 'p2', 'p3'] } });
     expect(lineOf(all, 'p1')).toBe(
@@ -181,6 +187,11 @@ describe('the hands on the objective bar', () => {
     expect(html.indexOf('hands-chip')).toBeLessThan(html.indexOf('probe-crew'));
     const css = readFileSync(new URL('../src/styles/gameplay.css', import.meta.url), 'utf8');
     expect(css).toMatch(/\.stage-row \.stage-hands \{\s*display: none;/);
+  });
+
+  it('give way to an open device, whose Laborkennung row lies over them, keeping their place', () => {
+    const css = readFileSync(new URL('../src/styles/gameplay.css', import.meta.url), 'utf8');
+    expect(css).toMatch(/\.game:has\(\.station-modal\) \.stage-hands \{\s*visibility: hidden;/);
   });
 
   it('leave the bar of a crew of two as it was', () => {
