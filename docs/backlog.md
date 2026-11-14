@@ -452,7 +452,7 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   Vorschlagsliste mit Hörlinks sucht ein Agent; Einbau (Schleifennaht auf dem Takt, −19 LUFS)
   als kleines Paket M-2, sobald Uros gewählt hat.
 
-### V-3 Stimmenbesetzung: Stimmen, die sich abwechseln — Status: in Arbeit (V-cast, Spec `spec-V-cast.md`) · Größe: M
+### V-3 Stimmenbesetzung: Stimmen, die sich abwechseln — Status: im PR (V-cast, Spec `spec-V-cast.md`) · Größe: M
 - Uros 2026-11-14 08:05: „Ich will alles hören, und vielleicht ist cool, wenn sich sogar alle
   Stimmen abwechseln oder kombinieren; nutze das Beste und Maximum aus ElevenLabs."
 - Rollen statt Sprecher: `pa` (Anlage), `operator` (Leitstelle im Dienst, je Lauf per Seed aus
@@ -462,6 +462,15 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   und nur fehlende Dateien; Seite `/voices` (nur `pnpm dev`) spielt alle Stimmproben und alle
   gerenderten Zeilen je Sprecher. Kosten: je weiterer Operator ≈ 10.000 Credits; der große
   Render wartet auf die fertige Besetzung.
+- Im PR: Besetzung als Daten (`core/src/cast.json`: Anlage; Helmut, Marta, Jonas; Kessler); je
+  Raum ein `castSeed` (der gepinnte Seed oder gelost), Nacht n ist `castOf(castSeed + n)`, so
+  spricht die Funkprobe in der Lobby schon, wer den nächsten Lauf hat; im Dienst ist nur, wer
+  eine Stimme hat (sonst die erste Person der Rolle), damit keine Nacht auf einen Render wartet;
+  Modell je Person (Helmut `eleven_v4`, Voice-Design-Stimmen `eleven_v3`); fünf Regie-Tags in
+  Blackout; Ordnergrenze der Aufnahmen 12 → 24 MB. Kosten laut `--plan --fresh`: je weiterer
+  Operator 228 Credits Design und 7.917 für seine 80 Zeilen, die ganze Besetzung 26.371 (vier
+  Designs 796, 260 Zeilen 25.575). Offen: Designs, Wahl auf `/voices` und Render durch Uros;
+  ob `public/voice/` aus dem Precache des Service Workers fällt (mit allen Stimmen ≈ 20,5 MB).
 
 ### M-1 Drei Spielende: Beweis und Sichtbarkeit — Status: bereit · Größe: M
 - Befund: mechanisch trägt die dritte Person (Leserin mit Regeln, Notizen und Funk an Zwei-Pult-
