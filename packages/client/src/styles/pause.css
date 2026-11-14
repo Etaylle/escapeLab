@@ -169,6 +169,14 @@
   .pause-menu-line {
     font-size: 14px;
   }
+
+  /*
+   * The main menu's column gives its „Einstellungen" up here, the gear right over it (menu.css);
+   * the pause menu's five items fit, and keep it.
+   */
+  .pause-menu .menu-list li:has(> .menu-item[data-item='settings']) {
+    display: list-item;
+  }
 }
 
 /* ── less motion: the menu cuts in ──────────────────────────────────────── */

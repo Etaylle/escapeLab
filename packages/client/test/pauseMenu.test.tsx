@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import type { ManualHere, PlayerView } from '@escapelab/core';
@@ -149,6 +150,19 @@ describe('the pause menu', () => {
       />,
     );
     expect(html).toMatch(/^<div class="overlay pause-menu"[^>]* inert=""/);
+  });
+
+  it('keeps „Einstellungen" on a phone held sideways, where the main menu gives it up', () => {
+    const styles = (name: string): string =>
+      readFileSync(new URL(`../src/styles/${name}.css`, import.meta.url), 'utf8');
+    const settingsItem = ".menu-list li:has(> .menu-item[data-item='settings'])";
+    const sideways = (css: string): string =>
+      css.slice(css.indexOf('@media (orientation: landscape) and (max-height: 500px) {'));
+    const menu = sideways(styles('menu'));
+    expect(menu.slice(menu.indexOf(settingsItem))).toMatch(/^[^}]*\{\s*display: none;/);
+    const pause = sideways(styles('pause'));
+    const kept = pause.slice(pause.indexOf(`.pause-menu ${settingsItem}`));
+    expect(kept).toMatch(/^[^}]*\{\s*display: list-item;/);
   });
 
   it('names the room’s mission: the run’s, the lobby’s, the audience’s', () => {
