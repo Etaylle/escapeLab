@@ -1,58 +1,25 @@
-import { useEffect, useRef, useState } from 'react';
 import type { AccountView } from '@escapelab/core';
-import { keepName, lastColor, lastName } from '../pass.js';
+import { accountLine, profileColor } from './BarAccount.js';
 import { colorName } from './CrewRoom.js';
-import { accountLine, FIRST_COLOR, nameFromAccount, WAVE_SETTLE_MS } from './ProfileChip.js';
 
 /**
- * The name the account is to take from the field reading `name`: the name typed (`typed`),
- * trimmed — none while nothing was typed, where it is empty, or where the account goes by it.
- */
-export function nameToTake(
-  typed: boolean,
-  name: string,
-  account: AccountView | null,
-): string | null {
-  const wanted = name.trim();
-  return !typed || wanted === '' || account?.name === wanted ? null : wanted;
-}
-
-/**
- * The profile in the settings' „Konto", as the menu's chip holds it (ProfileChip.tsx, Join.tsx):
- * the name the account goes by — kept with the pass as it is typed, and taken by the account
- * once it has stood still WAVE_SETTLE_MS (`onName`, the `profile` message), from the next room
- * on; the account's own as it comes (`nameFromAccount`), another's once the device signed into
- * it —, the colour the lobby chose, and what the account holds.
+ * The profile in the settings' „Konto": the name the account goes by — the page's one name
+ * (profileName.ts), which the menu's panels type as well and the top bar shows; the account takes
+ * it once it has stood still, from the next room on —, the colour the lobby chose, and what the
+ * account holds.
  */
 export function ProfileFields({
   account,
+  name,
   onName,
 }: {
   account: AccountView | null;
+  /** the profile's name as typed */
+  name: string;
+  /** the name typed anew */
   onName: (name: string) => void;
 }) {
-  const [name, setName] = useState(() => account?.name || lastName());
-  const typed = useRef(false);
-  const told = useRef(account);
-  const tell = useRef(onName);
-  tell.current = onName;
-  useEffect(() => {
-    const next = nameFromAccount(account, told.current, typed.current);
-    told.current = account;
-    if (next !== null) {
-      typed.current = false;
-      setName(next);
-    }
-  }, [account]);
-  useEffect(() => {
-    const wanted = nameToTake(typed.current, name, account);
-    if (wanted === null) {
-      return undefined;
-    }
-    const timer = setTimeout(() => tell.current(wanted), WAVE_SETTLE_MS);
-    return () => clearTimeout(timer);
-  }, [name, account]);
-  const color = account?.color ?? lastColor() ?? FIRST_COLOR;
+  const color = profileColor(account);
   return (
     <fieldset className="settings-group settings-profile">
       <legend>Profil</legend>
@@ -65,11 +32,7 @@ export function ProfileFields({
           placeholder="z. B. Anna"
           autoComplete="off"
           spellCheck={false}
-          onChange={(e) => {
-            typed.current = true;
-            setName(e.target.value);
-            keepName(e.target.value);
-          }}
+          onChange={(e) => onName(e.target.value)}
         />
       </label>
       <p className="settings-note">Gilt ab dem nächsten Raum.</p>

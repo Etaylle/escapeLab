@@ -273,6 +273,31 @@ export interface ScientistOpts {
   named?: boolean;
   /** which of its parts are drawn (FigureLayer); all of it when left out */
   layer?: FigureLayer;
+  /**
+   * light on its body's edges, as the menu's hero stands lit by its own lamp
+   * (world/menu/heroArt.ts); none when left out, as every figure of the world stands
+   */
+  rim?: Rim;
+  /**
+   * a light its visor catches across its front, as the menu's hero catches the glow of the item
+   * it looks at; none when left out or null
+   */
+  visorGlow?: EdgeLight | null;
+}
+
+/** A light on a figure's edge: its colour and how strong it is where it is strongest. */
+export interface EdgeLight {
+  rgb: Rgb;
+  alpha: number;
+}
+
+/**
+ * Light on a figure's body's edges: `front` along the edge toward where it looks and over the
+ * front of its dome, `back` along the edge behind it; null for none.
+ */
+export interface Rim {
+  front: EdgeLight | null;
+  back: EdgeLight | null;
 }
 
 /**
@@ -557,14 +582,28 @@ function visorAt(pose: FigurePose, facing: number): { x: number; cy: number; w: 
 }
 
 /**
- * Visor on the side the figure looks to (visorAt): dark glass in its outline, its rim and
- * glints — lost as it dims — and while the figure speaks a light sweeping across it.
+ * A light the visor's glass catches (`glow`), strongest at its front edge and gone toward its
+ * back, over the visor's path as it stands. Visor-local space, `w` wide.
+ */
+function drawVisorGlow(ctx: CanvasRenderingContext2D, w: number, glow: EdgeLight): void {
+  const g = ctx.createLinearGradient(0, 0, -w, 0);
+  g.addColorStop(0, rgba(glow.rgb, glow.alpha));
+  g.addColorStop(0.55, rgba(glow.rgb, glow.alpha * 0.25));
+  g.addColorStop(1, rgba(glow.rgb, 0));
+  ctx.fillStyle = g;
+  ctx.fill();
+}
+
+/**
+ * Visor on the side the figure looks to (visorAt): dark glass in its outline, a light it catches
+ * (`glow`), its rim and glints — lost as it dims — and while the figure speaks a light sweeping
+ * across it.
  */
 function drawVisor(
   ctx: CanvasRenderingContext2D,
   pose: FigurePose,
-  facing: number,
-  outline: string,
+  [facing, outline]: readonly [number, string],
+  glow: EdgeLight | null,
 ): void {
   const { x, cy, w } = visorAt(pose, facing);
   const r = VISOR_H / 2;
@@ -583,6 +622,9 @@ function drawVisor(
     ctx.fillStyle = VISOR_DIM;
     ctx.fill();
     ctx.globalAlpha = alpha;
+  }
+  if (glow !== null) {
+    drawVisorGlow(ctx, w, glow);
   }
   drawVisorGlints(ctx, w, 1 - pose.dim);
   if (pose.shimmer !== null) {
@@ -719,6 +761,54 @@ function fillLegs(
   ctx.globalCompositeOperation = op;
 }
 
+/** How wide a rim of light lies inside the body's outline at its strongest, and its glow, tiles. */
+const RIM_W = 0.022;
+const RIM_GLOW_W = 0.065;
+/**
+ * Where a rim's light runs out, body space, from the body's side where it is strongest — down
+ * its edge from the dome's widest — across to the body's middle, the dome's top in between.
+ */
+const RIM_FROM: readonly [number, number] = [BODY_HALF_W, -0.42];
+const RIM_TO: readonly [number, number] = [0.02, -0.5];
+
+/**
+ * Light along the body's edge on one side (`side` 1 its front, -1 its back), inside its outline:
+ * a thin bright band over a wider faint glow, strongest at that side of the dome and gone toward
+ * the other side's foot. Body space.
+ */
+function drawRimSide(ctx: CanvasRenderingContext2D, light: EdgeLight, side: 1 | -1): void {
+  const { body } = getScientistPaths();
+  const g = ctx.createLinearGradient(
+    side * RIM_FROM[0],
+    RIM_FROM[1],
+    side * RIM_TO[0],
+    RIM_TO[1],
+  );
+  g.addColorStop(0, rgba(light.rgb, light.alpha));
+  g.addColorStop(0.55, rgba(light.rgb, light.alpha * 0.35));
+  g.addColorStop(1, rgba(light.rgb, 0));
+  ctx.strokeStyle = g;
+  ctx.lineWidth = 2 * RIM_GLOW_W;
+  const alpha = ctx.globalAlpha;
+  ctx.globalAlpha = alpha * 0.35;
+  ctx.stroke(body);
+  ctx.globalAlpha = alpha;
+  ctx.lineWidth = 2 * RIM_W;
+  ctx.stroke(body);
+}
+
+/** The rim of light `rim` along the body's edges, inside its outline (Rim); none for none. */
+function drawRim(ctx: CanvasRenderingContext2D, rim: Rim): void {
+  if (rim.front === null && rim.back === null) {
+    return;
+  }
+  ctx.save();
+  ctx.clip(getScientistPaths().body);
+  if (rim.front !== null) drawRimSide(ctx, rim.front, 1);
+  if (rim.back !== null) drawRimSide(ctx, rim.back, -1);
+  ctx.restore();
+}
+
 /** Arms, backpack, body and visor filled, and what the hands hold: body space, raised `bob`. */
 function fillUpper(
   ctx: CanvasRenderingContext2D,
@@ -737,7 +827,10 @@ function fillUpper(
   ctx.fillStyle = cachedGradient(ctx, buildBodyGradient, o.color);
   ctx.fill(paths.body);
   drawBodyHighlight(ctx);
-  drawVisor(ctx, pose, o.facing, colors.outline);
+  if (o.rim !== undefined) {
+    drawRim(ctx, o.rim);
+  }
+  drawVisor(ctx, pose, [o.facing, colors.outline], o.visorGlow ?? null);
   if (pose.holding && o.held !== undefined) {
     drawHeld(ctx, o.held, pose, colors);
   }

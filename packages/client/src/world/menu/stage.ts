@@ -2,20 +2,27 @@ import { addProbes } from '../../probes.js';
 import { domCanvas } from '../atlas.js';
 import { frameTrace, traceRequested } from '../frameTrace.js';
 import { censusTrace, lightCensus, type LightCensus } from '../render/census.js';
+import { cameraAt, newCamera, travelling, type SceneCamera } from './camera.js';
 import { driftAt } from './drift.js';
 import { heroTile } from './hero.js';
 import { heroLamp, lampKey, watchLamp } from './lamp.js';
-import { freeBeam, layBeam, sceneBeam } from './lampArt.js';
+import { freeBeam, layBeam, sceneBeam, type SceneBeam } from './lampArt.js';
 import { browserSceneHost, runScene } from './loop.js';
+import { heldPlace, showPlace, watchPlace } from './places.js';
 import {
   bakeScene,
   clearShow,
   freeCanvas,
+  goalCorner,
   needsPaint,
+  nightTo,
   paintShow,
+  placeReady,
+  restBaker,
   sceneBacking,
   sceneLab,
   showBake,
+  type RestBaker,
   type SceneBake,
   type SceneLab,
   type SceneShow,
@@ -23,23 +30,39 @@ import {
 
 /**
  * The menu's scene on its canvas (screens/MenuScene.tsx): the lab of the mission asked for,
- * fetched and baked (scene.ts), drawn by the scene's loop (loop.ts) as the drift goes —
- * coming in over the lab before — and baked anew once the canvas has held a new size for a
- * moment; over it the beam of the lamp the menu's hero holds, where one does (lamp.ts,
- * lampArt.ts). Under reduced motion the loop stops once the still is drawn, until a lab is baked
- * anew, the hero's lamp moves or the motion changes. Under `?trace=1` the walkthrough reads the
- * frames off the page as it does a run's (frameTrace.ts), what the scene shows (`SceneProbe`),
- * and what its light worked out a frame (render/census.ts): no sight ever — a frame copies its
- * bake — and a bake only as one is made.
+ * fetched and baked (scene.ts) — the drift's box at once, what the places show besides a piece a
+ * frame once the hero's lamp is on or a place is first asked for —, drawn by the scene's loop
+ * (loop.ts) as the drift goes — or the camera travels to the place of the menu's item attended,
+ * once the pieces it shows are baked (places.ts, camera.ts) —, coming in over the lab before,
+ * and baked anew once the canvas has held a new size for a moment; over it
+ * the beam of the lamp the menu's hero holds, where one does (lamp.ts, lampArt.ts), the lab sunk
+ * to night but behind the lobby (scene.ts `nightTo`). Under reduced motion the loop
+ * stops once the still is drawn, until a lab is baked anew, the hero's lamp moves, the place
+ * changes — a cut — or the motion does. Under `?trace=1` the walkthrough reads the frames off the
+ * page as it does a run's (frameTrace.ts), what the scene shows (`SceneProbe`), and what its light
+ * worked out a frame (render/census.ts): no sight ever — a frame copies its bake — and a bake
+ * only as one is made.
  */
 
 /** How long the canvas's box holds still before the scene is baked anew for it, ms. */
 const SETTLE_MS = 150;
 
+/**
+ * How long a bake keeps its kit for its rest, ms, where nothing asks for the rest: past the first
+ * menu's entrance, its lamp coming on; a phone, which asks for it only as the focus moves, lets
+ * the kit go and bakes the rest with a kit of its own then.
+ */
+const KIT_KEPT_MS = 5000;
+
 /** The scene on its canvas: what it shows, and its end. */
 export interface SceneStage {
   /** brings mission `missionId`'s lab in over the one shown; null keeps that one */
   show(missionId: string | null): void;
+  /**
+   * the scene stands behind the lobby (`behind`), which lights its lab — no night there — and
+   * shows the drift; the camera cuts there and back, as the doors stand shut over the change
+   */
+  lobby(behind: boolean): void;
   close(): void;
 }
 
@@ -57,6 +80,13 @@ export interface SceneProbe {
   paints: number;
   /** the hero's beam: laid on the last frame drawn, and turned anew so often so far */
   beam: { laid: boolean; turns: number };
+  /** the camera: the item whose place it goes to or stands at — null for the drift — and
+   * whether it is on its way there */
+  camera: { aimed: string | null; travelling: boolean };
+  /** whether the lab stood at night at the last frame drawn */
+  night: boolean;
+  /** the pieces of the bake shown, and how many of them are baked so far */
+  pieces: { all: number; baked: number };
 }
 
 /** The canvas's size changes: the scene is baked anew once it has held still SETTLE_MS. */
@@ -141,16 +171,24 @@ export interface StageMotion {
   watch: (changed: () => void) => () => void;
 }
 
-/**
- * Opens the scene on `canvas`: nothing shows until a mission is asked for; `motion` says,
- * frame by frame, whether the player asked for less motion — the drift then stands still.
- */
-export function openStage(canvas: HTMLCanvasElement, motion: StageMotion): SceneStage {
-  const ctx = canvas.getContext('2d');
-  if (ctx === null) {
-    return { show: () => undefined, close: () => undefined };
-  }
-  const show: SceneShow = { bake: null, from: null, since: 0, drawn: null };
+/** What the scene keeps between its frames. */
+interface StageState {
+  show: SceneShow;
+  probe: SceneProbe;
+  beam: SceneBeam;
+  camera: SceneCamera;
+  /** when the drift began, ms (performance.now) */
+  driftFrom: number;
+  /** the light and the place the last frame was drawn with (`sceneKey`); null before any */
+  drawnWith: string | null;
+  /** the scene stands behind the lobby: lit, and drifting */
+  behindLobby: boolean;
+  /** what bakes the rest of the bake shown — a step asked for, or not — while any waits */
+  rest: { baker: RestBaker; asked: boolean; begun: boolean } | null;
+}
+
+/** A stage's state before its first lab. */
+function stageState(): StageState {
   const probe: SceneProbe = {
     missionId: null,
     baked: null,
@@ -158,36 +196,146 @@ export function openStage(canvas: HTMLCanvasElement, motion: StageMotion): Scene
     progress: 0,
     paints: 0,
     beam: { laid: false, turns: 0 },
+    camera: { aimed: null, travelling: false },
+    night: false,
+    pieces: { all: 0, baked: 0 },
   };
-  const census = lightCensus();
+  const show = { bake: null, from: null, since: 0, drawn: null };
+  const camera = newCamera();
   const beam = sceneBeam(domCanvas);
+  const begun = { driftFrom: 0, drawnWith: null, behindLobby: false, rest: null };
+  return { show, probe, beam, camera, ...begun };
+}
+
+/**
+ * Whether the lab stands at night now: on the menu, where a hero stands or none, as on a phone —
+ * not behind the lobby, which lights it.
+ */
+const nightNow = (state: StageState): boolean => !state.behindLobby;
+
+/** The item whose place the menu asks for now; none behind the lobby. */
+const placeAsked = (state: StageState): string | null =>
+  state.behindLobby ? null : heldPlace();
+
+/** The item whose place the scene goes to now: the one asked for, once its pieces are baked. */
+const placeNow = (state: StageState): string | null => {
+  const asked = placeAsked(state);
+  return state.show.bake !== null && placeReady(state.show.bake, asked) ? asked : null;
+};
+
+/** What a frame is drawn with besides the clock: the hero's beam, the night, the place. */
+const sceneKey = (state: StageState): string =>
+  `${lampKey(heroLamp())} ${nightNow(state)} ${placeNow(state)}`;
+
+/**
+ * Whether the rest of the bake shown is to be baked now: once the hero's lamp is on — after the
+ * first menu's entrance, the drift's piece shown — or a place is asked for, as on a phone, which
+ * bakes only the drift's piece until the focus moves.
+ */
+const restWanted = (state: StageState): boolean =>
+  (heroLamp()?.on ?? 0) > 0 || placeAsked(state) !== null;
+
+/**
+ * The rest of `bake` — `lab`'s at `dpr` — to be baked for `state`, the rest before let go; the kit
+ * the bake kept let go after KIT_KEPT_MS where nothing has asked for the rest by then.
+ */
+function beginRest(state: StageState, [lab, bake]: [SceneLab, SceneBake], dpr: number): void {
+  state.rest?.baker.drop();
+  const rest = { baker: restBaker(lab, bake, dpr), asked: false, begun: false };
+  state.rest = rest;
+  setTimeout(() => {
+    if (!rest.begun) rest.baker.drop();
+  }, KIT_KEPT_MS);
+}
+
+/** Notes on the probe how many of the pieces of the bake shown are baked so far. */
+function probePieces(state: StageState): void {
+  const pieces = state.show.bake?.pieces ?? [];
+  const baked = pieces.filter(({ canvas }) => canvas !== null).length;
+  state.probe.pieces = { all: pieces.length, baked };
+}
+
+/** Device px a CSS px of `canvas`: 1 while it has no box. */
+const densityOf = (canvas: HTMLCanvasElement): number =>
+  canvas.clientWidth > 0 ? canvas.width / canvas.clientWidth : 1;
+
+/** Lays the hero's beam over the lab just drawn on `ctx`, as its lamp is now. */
+function layLamp(ctx: CanvasRenderingContext2D, state: StageState, now: number, still: boolean) {
+  const lamp = heroLamp();
+  const dpr = densityOf(ctx.canvas);
+  const tile = heroTile(ctx.canvas.clientHeight);
+  layBeam(ctx, state.beam, lamp, { dpr, tile, now, reduced: still });
+  state.probe.beam = { laid: lamp !== null && lamp.on > 0, turns: state.beam.turns };
+}
+
+/**
+ * One frame of the scene on `ctx` at `now`: each lab it shows at night, or lit behind the lobby;
+ * the camera at the drift or on its way to a place, a cut under less motion (`still`), the place
+ * told to the hero's lamp (places.ts `showPlace`); the lab copied from there, the beam over it.
+ */
+function drawFrame(ctx: CanvasRenderingContext2D, state: StageState, now: number, still: boolean) {
+  const { show, camera, probe } = state;
+  const night = nightNow(state);
+  for (const bake of [show.bake, show.from]) {
+    if (bake !== null) nightTo(bake, night);
+  }
+  const progress = driftAt(now - state.driftFrom, still);
+  const aim = placeNow(state);
+  showPlace(aim);
+  const goal = show.bake === null ? { x: 0, y: 0 } : goalCorner(show.bake, aim, progress);
+  const corner = cameraAt(camera, [aim, goal], now, [densityOf(ctx.canvas), still]);
+  paintShow(ctx, show, now, { progress, corner });
+  layLamp(ctx, state, now, still);
+  state.drawnWith = sceneKey(state);
+  Object.assign(probe, { paints: probe.paints + 1, progress, night });
+  probe.camera = { aimed: camera.aimed, travelling: travelling(camera) };
+}
+
+/**
+ * Opens the scene on `canvas`: nothing shows until a mission is asked for; `motion` says,
+ * frame by frame, whether the player asked for less motion — the drift then stands still.
+ */
+export function openStage(canvas: HTMLCanvasElement, motion: StageMotion): SceneStage {
+  const ctx = canvas.getContext('2d');
+  if (ctx === null) {
+    return { show: () => undefined, lobby: () => undefined, close: () => undefined };
+  }
+  const state = stageState();
+  const { show, probe, beam } = state;
+  const census = lightCensus();
   let lab: SceneLab | null = null;
   let wanted: string | null = null;
   let closed = false;
-  let driftFrom = 0;
-  let laidBeam: string | null = null;
 
-  // Lays the hero's beam over the lab just drawn, as its lamp is now.
-  const lay = (now: number, still: boolean): void => {
-    const lamp = heroLamp();
-    const dpr = canvas.clientWidth > 0 ? canvas.width / canvas.clientWidth : 1;
-    const tile = heroTile(canvas.clientHeight);
-    layBeam(ctx, beam, lamp, { dpr, tile, now, reduced: still });
-    laidBeam = lampKey(lamp);
-    probe.beam = { laid: lamp !== null && lamp.on > 0, turns: beam.turns };
+  // Bakes the next piece of the bake's rest in a task of its own, after the frame; once the
+  // piece is in, the loop wakes for a place it may have readied, and asks for the next.
+  const stepRest = (): void => {
+    const rest = state.rest;
+    if (rest === null || closed) return;
+    rest.asked = false;
+    rest.begun = true;
+    if (!rest.baker.step()) state.rest = null;
+    probePieces(state);
+    loop.wake();
+  };
+  const askRest = (): void => {
+    const rest = state.rest;
+    if (rest === null || rest.asked || !restWanted(state)) return;
+    rest.asked = true;
+    setTimeout(stepRest, 0);
   };
 
   // Draws a frame where one is due; says whether the next would draw anything.
   const paint = (now: number): boolean => {
     const still = motion.reduced();
-    const relit = show.bake !== null && lampKey(heroLamp()) !== laidBeam;
-    if (needsPaint(show, now, still) || relit) {
-      paintShow(ctx, show, now, now - driftFrom, still);
-      lay(now, still);
-      probe.paints += 1;
-      probe.progress = driftAt(now - driftFrom, still);
+    // A new light or place draws a frame of its own; the camera travels only while the drift
+    // moves, and cuts under less motion.
+    const changed = show.bake !== null && sceneKey(state) !== state.drawnWith;
+    if (needsPaint(show, now, still) || changed) {
+      drawFrame(ctx, state, now, still);
       traced.drawn();
     }
+    askRest();
     return needsPaint(show, now, still);
   };
 
@@ -200,13 +348,16 @@ export function openStage(canvas: HTMLCanvasElement, motion: StageMotion): Scene
     if (lab === null || size === null || (!fade && bakedFor(show.bake, size))) return;
     fitCanvas(canvas, size);
     const from = performance.now();
-    const bake = bakeScene(lab, size.w, size.h, size.dpr);
+    const bake = bakeScene(lab, size.w, size.h, size.dpr, true);
     const now = performance.now();
     probe.bakeMs = now - from;
     if (bake === null) return;
     census.bakes += 1;
-    if (show.bake === null) driftFrom = now;
+    if (show.bake === null) state.driftFrom = now;
+    state.camera = newCamera();
+    beginRest(state, [lab, bake], size.dpr);
     showBake(show, bake, now, fade);
+    probePieces(state);
     probe.missionId = lab.missionId;
     probe.baked = { w: bake.w, h: bake.h, boxW: bake.box.width, boxH: bake.box.height };
     loop.wake();
@@ -215,6 +366,7 @@ export function openStage(canvas: HTMLCanvasElement, motion: StageMotion): Scene
   const unwatch = onSettledResize(canvas, () => rebake(false));
   const unwatchMotion = motion.watch(() => loop.wake());
   const unwatchLamp = watchLamp(() => loop.wake());
+  const unwatchPlace = watchPlace(() => loop.wake());
   return {
     show(missionId) {
       wanted = missionId;
@@ -225,12 +377,21 @@ export function openStage(canvas: HTMLCanvasElement, motion: StageMotion): Scene
         rebake(true);
       });
     },
+    lobby(behind) {
+      if (behind !== state.behindLobby) state.camera = newCamera();
+      state.behindLobby = behind;
+      loop.wake();
+    },
     close() {
       closed = true;
+      showPlace(null);
+      state.rest?.baker.drop();
+      state.rest = null;
       loop.stop();
       unwatch();
       unwatchMotion();
       unwatchLamp();
+      unwatchPlace();
       traced.drop();
       clearShow(show);
       freeBeam(beam);

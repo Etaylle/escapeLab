@@ -15,8 +15,8 @@ export const PASS_KEY = 'escapelab-pass';
 
 /**
  * The pass as the browser keeps it: the pass itself, the name last typed with it, and the crew
- * colour its account wears — the menu's profile shows it (screens/ProfileChip.tsx); null before
- * one was chosen.
+ * colour its account wears — the top bar's account shows it (screens/BarAccount.tsx); null
+ * before one was chosen.
  */
 export interface KeptPass extends CrewPass {
   name: string;

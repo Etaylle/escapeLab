@@ -42,6 +42,8 @@ describe('a page without https', () => {
         <JoinScreen
           send={noop}
           connected
+          name="Anna"
+          onName={noop}
           missions={[]}
           rooms={[]}
           stats={[]}

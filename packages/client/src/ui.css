@@ -170,6 +170,76 @@ body {
   margin-left: auto;
 }
 
+/*
+ * The account off any room (screens/BarAccount.tsx), first at the bar's far end: the avatar — the
+ * figure's head in the account's colour, in a ring —, the name, and the runs where the bar has the
+ * room; a press opens „Konto". A target as tall as the bar's own reach under a finger, its height
+ * reaching into the bar's padding, which keeps the bar's height.
+ */
+.bar-account {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  min-width: var(--target);
+  min-height: var(--target);
+  margin: -2px 0 -2px auto;
+  padding: 3px 14px 3px 4px;
+  border-radius: 999px;
+  background: rgba(9, 14, 19, 0.9);
+  font-family: var(--mono);
+  font-size: 13px;
+  letter-spacing: 1px;
+  white-space: nowrap;
+}
+
+.bar-account ~ .sound-toggle {
+  margin-left: 0;
+}
+
+.avatar {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 30%, #1f2d39, #0a1016 72%);
+  box-shadow: inset 0 0 0 1px var(--line-2);
+}
+
+.bar-account-name {
+  max-width: 16ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bar-account-badge {
+  padding: 1px 8px;
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 12px;
+  letter-spacing: 0.5px;
+}
+
+/* The runs only where the bar has the room for them: „Konto" says them anyway. */
+@media (max-width: 1100px) {
+  .bar-account-badge {
+    display: none;
+  }
+}
+
+/* A phone, upright or held sideways: the avatar alone, a fingertip wide. */
+@media (max-width: 560px), (orientation: landscape) and (max-height: 500px) {
+  .bar-account {
+    justify-content: center;
+    padding: 3px;
+  }
+
+  .bar-account-name,
+  .bar-account-badge {
+    display: none;
+  }
+}
+
 .conn {
   font-size: 12px;
   letter-spacing: 1px;

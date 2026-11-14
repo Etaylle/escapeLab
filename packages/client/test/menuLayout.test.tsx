@@ -2,6 +2,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { MissionInfo, RoomSummary, Seat } from '@escapelab/core';
 import { PASS_KEY } from '../src/pass.js';
+import { BarAccount } from '../src/screens/BarAccount.js';
 import { JoinScreen } from '../src/screens/Join.js';
 import { MissionPanel, RoundsPanel } from '../src/screens/MenuPanels.js';
 import { elementsOf, Sheets, type Screen, type Styled } from './cascade.js';
@@ -9,12 +10,12 @@ import { storage } from './page.js';
 
 /**
  * The menu as the stylesheets lay it out, read the way the bundle orders them (cascade.ts): on a
- * laptop and a desktop the title and the profile over the menu; on a phone upright one column,
- * the profile under the title; on a phone held sideways the menu left, the title and the profile
- * right over the scene, a panel over all of it; every control on the menu and its panels a
- * target — 36 px under a pointer, 44 under a finger — and a phone's safe area kept clear. Whether
- * it all fits a window only a browser measures: the walkthrough does (tools/shots.mjs
- * `checkMenuPhones`).
+ * laptop and a desktop the title over the menu, the account in the top bar; on a phone upright
+ * one column; on a phone held sideways the menu left, the title right over the scene, a panel
+ * over all of it; every control on the menu, its panels and the bar's account a target — 36 px
+ * under a pointer, 44 under a finger —, the account's avatar alone on a phone, and a phone's safe
+ * area kept clear. Whether it all fits a window only a browser measures: the walkthrough does
+ * (tools/shots.mjs `checkMenuPhones`).
  */
 
 const sheets = new Sheets();
@@ -95,6 +96,8 @@ function menu(seat: Seat | null, search = ''): Styled[] {
       <JoinScreen
         send={noop}
         connected
+        name="Anna"
+        onName={noop}
         missions={MISSIONS}
         rooms={[ROOM]}
         seat={seat}
@@ -113,7 +116,8 @@ function menu(seat: Seat | null, search = ''): Styled[] {
 /** „Einsatz starten" and „Offene Runden" over the menu, as its panels stand in it. */
 function panels(): Styled[] {
   stubWindow();
-  const section = { send: noop, connected: true, name: 'Anna', blocked: false };
+  const field = { typed: 'Anna', onName: noop };
+  const section = { send: noop, connected: true, name: 'Anna', field, blocked: false };
   return elementsOf(
     renderToStaticMarkup(
       <div className="menu">
@@ -164,26 +168,29 @@ function shortOf(nodes: readonly Styled[], screen: Screen, target: number): stri
 }
 
 describe('the menu laid out', () => {
-  it('stands the title and the profile over the menu on a laptop and a desktop', () => {
-    const stage = first(menu(null), 'menu');
+  it('stands the title over the menu on a laptop and a desktop, nothing beside it', () => {
+    const nodes = menu(null);
+    const stage = first(nodes, 'menu');
     for (const screen of [LAPTOP, DESKTOP]) {
-      expect(valueOf(stage, 'grid-template-areas', screen)).toBe("'head chip' 'body body'");
+      expect(valueOf(stage, 'grid-template-areas', screen)).toBe("'head' 'body'");
     }
+    // The account stands in the top bar now, not on the stage over the scene.
+    expect(nodes.some((node) => node.classes.some((name) => name.startsWith('profile')))).toBe(
+      false,
+    );
   });
 
-  it('takes one column on a phone upright, the profile under the title', () => {
+  it('takes one column on a phone upright, the menu under the title', () => {
     const stage = first(menu(null), 'menu');
-    expect(valueOf(stage, 'grid-template-areas', UPRIGHT)).toBe("'head' 'chip' 'body'");
+    expect(valueOf(stage, 'grid-template-areas', UPRIGHT)).toBe("'head' 'body'");
     expect(valueOf(stage, 'grid-template-columns', UPRIGHT)).toBe('minmax(0, 1fr)');
   });
 
-  it('keeps the menu left on a phone held sideways, the title and the profile right', () => {
+  it('keeps the menu left on a phone held sideways, the title right', () => {
     const nodes = menu(null);
     const stage = first(nodes, 'menu');
     for (const screen of [SIDEWAYS, SMALL]) {
-      expect(valueOf(stage, 'grid-template-areas', screen)).toBe(
-        "'body head' 'body chip' 'body .'",
-      );
+      expect(valueOf(stage, 'grid-template-areas', screen)).toBe("'body head' 'body .'");
       expect(valueOf(first(nodes, 'menu-head'), 'justify-self', screen)).toBe('end');
       expect(valueOf(first(nodes, 'menu-body'), 'overflow-y', screen)).toBe('auto');
       expect(sheets.length(first(nodes, 'menu-item'), 'min-height', screen)).toBe(44);
@@ -192,6 +199,40 @@ describe('the menu laid out', () => {
     const panel = first(panels(), 'menu-panel');
     expect(valueOf(panel, 'grid-area', SMALL)).toBe('1 / 1 / -1 / -1');
     expect(valueOf(panel, 'grid-area', UPRIGHT)).toBe('body');
+  });
+
+  it('makes the bar’s account a target, its avatar alone on a phone, its runs from 1100 px', () => {
+    stubWindow();
+    const account = {
+      name: 'Anna',
+      color: '#a78bfa',
+      since: 0,
+      runs: 3,
+      achievements: {},
+      store: 'database' as const,
+      login: null,
+    };
+    const nodes = elementsOf(
+      renderToStaticMarkup(
+        <header className="topbar">
+          <BarAccount name="Anna" account={account} onOpen={noop} />
+        </header>,
+      ),
+    );
+    const button = first(nodes, 'bar-account');
+    for (const { screen, target } of SCREENS) {
+      expect(sheets.length(button, 'min-height', screen), `${screen.width}`).toBe(target);
+      expect(sheets.length(button, 'min-width', screen), `${screen.width}`).toBe(target);
+    }
+    const [name, badge] = [first(nodes, 'bar-account-name'), first(nodes, 'bar-account-badge')];
+    for (const screen of [UPRIGHT, SIDEWAYS, SMALL]) {
+      expect([sheets.hidden(name, screen), sheets.hidden(badge, screen)]).toEqual([true, true]);
+    }
+    expect([sheets.hidden(name, DESKTOP), sheets.hidden(badge, DESKTOP)]).toEqual([false, false]);
+    // A laptop's bar keeps the name; the runs go, „Konto" says them.
+    expect([sheets.hidden(name, LAPTOP), sheets.hidden(badge, LAPTOP)]).toEqual([false, false]);
+    expect(sheets.hidden(badge, { width: 1024, height: 768, coarse: false })).toBe(true);
+    expect(sheets.length(first(nodes, 'avatar'), 'width', DESKTOP)).toBe(30);
   });
 
   it('keeps a phone’s notch and its home bar clear of the menu', () => {

@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { createRef } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ManualHere, PlayerView } from '@escapelab/core';
 import { roomMission, ScreenArea, TopBar } from '../src/App.js';
 import { menuScope } from '../src/input/focus.js';
@@ -13,9 +13,12 @@ import {
   markedAtMenu,
   menuNews,
   NOTHING_OPEN,
+  settingsOpen,
   pausePhaseOf,
   startPressed,
+  useMenuLayer,
   usePause,
+  type MenuLayer,
 } from '../src/menuLayer.js';
 import { crewTags } from '../src/screens/Crew.js';
 import { escapeStep, escapeStepUnder } from '../src/screens/Game.js';
@@ -284,6 +287,50 @@ describe('the focus as the menus close', () => {
   });
 });
 
+/**
+ * The menus `useMenuLayer` holds off any room once each of `steps` was taken, one a render —
+ * as a press re-renders the app.
+ */
+function layerAfter(steps: readonly ((layer: MenuLayer) => void)[]): MenuLayer {
+  const seen: MenuLayer[] = [];
+  function Probe() {
+    const layer = useMenuLayer(null);
+    seen.push(layer);
+    steps[seen.length - 1]?.(layer);
+    return null;
+  }
+  renderToStaticMarkup(<Probe />);
+  const last = seen.at(-1);
+  if (last === undefined) throw new Error('the menus never came up');
+  return last;
+}
+
+describe('the settings as the bar’s account and the gear open them', () => {
+  beforeEach(() => {
+    // A page whose focus stands on nothing of its own.
+    vi.stubGlobal('HTMLElement', class {});
+    vi.stubGlobal('document', { activeElement: null });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('opens „Konto" from the account', () => {
+    const layer = layerAfter([(menus) => menus.openAccount()]);
+    expect([layer.settings, layer.tab]).toEqual([true, 'konto']);
+  });
+
+  it('closes them without the tab, so the gear opens them on the one shown last', () => {
+    const after = layerAfter([
+      (menus) => menus.openAccount(),
+      (menus) => menus.closeSettings(),
+      (menus) => menus.gear(),
+    ]);
+    expect([after.settings, after.tab]).toEqual([true, null]);
+  });
+});
+
 describe('opening the pause menu', () => {
   it('is the gear’s in a room, and the settings’ off any room', () => {
     expect(gearOpens(NOTHING_OPEN, 'run')).toEqual({ ...NOTHING_OPEN, pause: true });
@@ -291,11 +338,20 @@ describe('opening the pause menu', () => {
     expect(gearOpens(NOTHING_OPEN, null)).toEqual({ ...NOTHING_OPEN, settings: true });
   });
 
+  it('opens the settings on „Konto" from the bar’s account, on the last tab from the gear', () => {
+    expect(settingsOpen(NOTHING_OPEN, 'konto')).toEqual({
+      ...NOTHING_OPEN,
+      settings: true,
+      tab: 'konto',
+    });
+    expect(settingsOpen({ ...NOTHING_OPEN, tab: 'konto' }, null).tab).toBeNull();
+  });
+
   it('is a controller’s Start, which closes whatever stands open again', () => {
     const open = startPressed(NOTHING_OPEN, 'lobby');
     expect(open).toEqual({ ...NOTHING_OPEN, pause: true });
     expect(startPressed(open, 'lobby')).toEqual(NOTHING_OPEN);
-    const deep = { pause: true, settings: true, handbook: 'blackout' };
+    const deep = { pause: true, settings: true, tab: 'konto' as const, handbook: 'blackout' };
     expect(startPressed(deep, 'run')).toEqual(NOTHING_OPEN);
     expect(startPressed(NOTHING_OPEN, null)).toEqual({ ...NOTHING_OPEN, settings: true });
   });

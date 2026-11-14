@@ -6,8 +6,11 @@ import { traceRequested } from '../frameTrace.js';
 import { MAX_DENSITY } from '../render/backing.js';
 import {
   AWAY_FACING,
+  CLEAR,
   entranceAt,
   FIGURE_TALL,
+  flareAt,
+  flickerAt,
   headAt,
   heroPlace,
   heroPose,
@@ -18,6 +21,7 @@ import {
   STEP_TILES,
   stepped,
   steppingAt,
+  TOWARD_MS,
   type Entrance,
   type HeroMotion,
   type HeroPlace,
@@ -27,17 +31,21 @@ import {
 } from './hero.js';
 import { freeHero, heroCanvas, paintHero, type HeroCanvas } from './heroArt.js';
 import {
+  aimSweep,
   holdLamp,
   LAMP_STEP,
+  lightStep,
   lensAt,
   newSweep,
   reachOf,
   stepSweep,
   STILL_ANGLE,
   tiltOf,
+  withinSweep,
   type Sweep,
 } from './lamp.js';
 import { runScene, type SceneHost } from './loop.js';
+import { holdPlace, placeShown, SCENE_ANCHOR } from './places.js';
 import { uiSound } from '../menuSound.js';
 
 /**
@@ -76,15 +84,21 @@ export interface HeroProbe {
   facing: number;
   /**
    * its lamp's beam: its lens in the window and how far its light reaches, CSS px; where it
-   * points, holding a beat or sweeping; how far it is on
+   * points, holding — a beat on the item attended, or on the room of the place it is turned to
+   * once it has come there (`room`, the item's; null while it sweeps) — or sweeping; how far it
+   * is on, and how far it flares
    */
   beam: {
     lens: { x: number; y: number };
     reach: number;
     angle: number;
     holding: boolean;
+    room: string | null;
     on: number;
+    flare: number;
   } | null;
+  /** its visor catches the glow of the item it looks at */
+  glow: boolean;
   /**
    * its entrance on the first menu of a page: whether it walks in, how far in it is, ms — null
    * before its first step — and whether it is over, the lamp on
@@ -97,18 +111,32 @@ export interface HeroProbe {
 
 /** What the hero shows besides the clock, as the menu has it on each render. */
 export interface HeroLook {
-  /** the colour the profile shows */
+  /** the colour the profile wears (screens/BarAccount.tsx `profileColor`) */
   color: string;
   /** the microphone is on and sends */
   speaking: boolean;
   /** when the name last settled anew, ms by the page's clock; null for never */
   waveAt: number | null;
-  /** a panel lies open over the menu: the hero steps aside for it */
-  panel: boolean;
+  /**
+   * the item whose panel lies open over the menu (MainMenu.tsx `PanelId`): the hero steps aside
+   * for it, the scene holds the item's place; null for none
+   */
+  panel: string | null;
   /** a run's card stands first in the menu: the hero looks at it while nothing else holds it */
   card: boolean;
   /** the menu goes for the lobby, the doors closing over it: the hero turns away to the lab */
   leaving: boolean;
+  /** the item of the menu taken last: its lamp flares, it steps toward the menu; null for none */
+  taken: Taken | null;
+}
+
+/**
+ * An item of the menu taken: when, ms by the page's clock, and whether it leaves the menu — for a
+ * page, the editor or a run, the leaves closing over it — or opens a panel over it.
+ */
+export interface Taken {
+  at: number;
+  toward: boolean;
 }
 
 /** A phone held sideways or upright, as menu.css lays the menu out for it. */
@@ -135,22 +163,22 @@ function panelRightOf(stage: HTMLElement, box: DOMRect, bodyLeft: number): numbe
 export function stageFacts(stage: HTMLElement, canvas: HTMLCanvasElement): StageFacts | null {
   const box = stage.getBoundingClientRect();
   const body = stage.querySelector('.menu-body')?.getBoundingClientRect();
-  const chip = stage.querySelector('.profile-chip')?.getBoundingClientRect();
-  if (body === undefined || chip === undefined || box.width === 0 || box.height === 0) {
+  if (body === undefined || box.width === 0 || box.height === 0) {
     return null;
   }
   const safe = getComputedStyle(canvas);
+  const padding = getComputedStyle(stage);
   return {
     w: box.width,
     h: box.height,
     windowH: window.innerHeight,
     phone: window.matchMedia(PHONE_QUERY).matches,
-    padBottom: px(getComputedStyle(stage).paddingBottom),
+    padBottom: px(padding.paddingBottom),
     safeRight: px(safe.marginRight),
     safeBottom: px(safe.marginBottom),
     menuRight: body.right - box.left,
     panelRight: panelRightOf(stage, box, body.left),
-    chipBottom: chip.bottom - box.top,
+    ceiling: px(padding.paddingTop),
   };
 }
 
@@ -189,8 +217,8 @@ export interface Standing {
 }
 
 /**
- * Measures the stage the hero's canvas stands on, and again whenever it or the profile change
- * size or the window does: the hero placed anew, `changed` told.
+ * Measures the stage the hero's canvas stands on, and again whenever it changes size or the
+ * window does: the hero placed anew, `changed` told.
  */
 function watchStage(
   canvas: HTMLCanvasElement,
@@ -214,8 +242,6 @@ function watchStage(
   };
   const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure);
   observer?.observe(stage);
-  const chip = stage.querySelector('.profile-chip');
-  if (chip !== null) observer?.observe(chip);
   window.addEventListener('resize', measure);
   measure();
   return () => {
@@ -246,17 +272,38 @@ export function attendedOf(target: EventTarget | null): Attended | null {
   return { id, x: box.left + box.width / 2, y: box.top + box.height / 2 };
 }
 
+/** What of the menu the player attends to now. */
+export interface Attention {
+  /** the item or card attended: the one the pointer is over, else the one in the focus */
+  attended: Attended | null;
+  /**
+   * the item the player picked out — the one the pointer is over, else the one the focus was
+   * moved to since the menu came up, not the one the menu put it on —, whose place the scene
+   * shows (places.ts); null for none, or a run's card
+   */
+  picked: string | null;
+}
+
+/** The item `hovered`, else `focused` once the focus has `moved`; never a run's card. */
+function pickedOf(hovered: Attended | null, focused: Attended | null, moved: boolean) {
+  const picked = hovered ?? (moved ? focused : null);
+  return picked === null || picked.id === 'card' ? null : picked.id;
+}
+
 /**
  * Follows what of the menu on `stage` the player attends to — the item or card the pointer is
- * over, else the one in the focus — and tells `changed` of it as it changes.
+ * over, else the one in the focus — and what the player picked out (`Attention`), and tells
+ * `changed` of it as it changes. The focus the menu stands on as it comes up is not picked out:
+ * the scene drifts until the player moves the focus or the pointer.
  */
-function watchAttention(
-  stage: HTMLElement,
-  changed: (attended: Attended | null) => void,
-): () => void {
+function watchAttention(stage: HTMLElement, changed: (attention: Attention) => void): () => void {
   let hovered: Attended | null = null;
-  let focused: Attended | null = null;
-  const tell = (): void => changed(hovered ?? focused);
+  let focused: Attended | null = attendedOf(document.activeElement);
+  let first: string | null | undefined = focused?.id;
+  let moved = false;
+  const tell = (): void => {
+    changed({ attended: hovered ?? focused, picked: pickedOf(hovered, focused, moved) });
+  };
   const over = (e: Event): void => {
     hovered = attendedOf(e.target);
     tell();
@@ -267,6 +314,8 @@ function watchAttention(
   };
   const focus = (e: Event): void => {
     focused = attendedOf(e.target);
+    first ??= focused?.id ?? null;
+    moved ||= (focused?.id ?? null) !== first;
     tell();
   };
   const blurred = (): void => {
@@ -280,7 +329,6 @@ function watchAttention(
     ['focusout', blurred],
   ] as const;
   for (const [type, listener] of events) stage.addEventListener(type, listener);
-  focused = attendedOf(document.activeElement);
   tell();
   return () => {
     for (const [type, listener] of events) stage.removeEventListener(type, listener);
@@ -300,6 +348,8 @@ export interface HeroPainting {
   look: { readonly current: HeroLook };
   /** what of the menu the player attends to now; null for nothing */
   attends: { current: Attended | null };
+  /** the item the player picked out (`Attention`); null for none */
+  picked: { current: string | null };
   sweep: Sweep;
   probe: HeroProbe;
   /** its entrance on the first menu of a page (`walksIn`), as far as it has come */
@@ -312,6 +362,8 @@ export interface HeroPainting {
   reduced: () => boolean;
   /** what the hero's canvas is put on: the stage's box it covers (placeCanvas) */
   canvas: HTMLCanvasElement | null;
+  /** where the walkthrough holds its beat, ms after an item is taken (`walkthroughBeat`) */
+  beatHeld: () => number | null;
 }
 
 /** A hero's entrance as it goes: whether it walks in, since when, what it has come to. */
@@ -350,6 +402,27 @@ export function walkthroughHold(): number | null {
   }
   const held = window.__heroHold;
   return typeof held === 'number' ? held : null;
+}
+
+/**
+ * Where the walkthrough holds the hero's beat as an item of the menu is taken, ms after it — its
+ * step and its lamp's flare caught on their way (menu-hero-click.png) — under `?trace=1`; null
+ * for none.
+ */
+export function walkthroughBeat(): number | null {
+  if (!traceRequested(location.search)) {
+    return null;
+  }
+  const held = window.__heroBeat;
+  return typeof held === 'number' ? held : null;
+}
+
+/**
+ * The page's clock `now` as the hero goes by it: stopped `held` ms after the item `taken` was,
+ * where the walkthrough holds the hero's beat there; else `now`.
+ */
+function heroClock(now: number, taken: Taken | null, held: number | null): number {
+  return taken === null || held === null ? now : Math.min(now, taken.at + held);
 }
 
 /** Whether a hero has shown on this page yet: walked in, or stood there from the start. */
@@ -429,23 +502,42 @@ function stepOf(place: HeroPlace, standing: Standing): number {
 
 /**
  * The box the hero's canvas covers: its place's and the room to step aside into, on to the
- * stage's right edge as it walks in.
+ * stage's right edge as it walks in, and the room to step toward the menu while it does.
  */
-function canvasBox(place: HeroPlace, entrance: Entrance, standing: Standing): StageBox {
+function canvasBox(place: HeroPlace, entrance: Entrance, on: HeroPainting): StageBox {
   const { box } = place;
+  const { standing, react } = on;
   const room = Math.ceil(stepOf(place, standing) * place.scale);
   const width = entrance.motion.moving ? standing.stageW - box.left : box.width + room;
-  return { ...box, width: Math.max(box.width, width) };
+  const grown = { ...box, width: Math.max(box.width, width) };
+  const toward = react.step.to < 0 || react.stepped < 0;
+  return toward ? { ...grown, left: grown.left - room, width: grown.width + room } : grown;
 }
 
 /**
- * The hero's step aside at `now`: half a scene tile toward the stage's edge while a panel lies
- * open over the menu (`panel`), back as it goes — a new step from wherever the last has come to.
+ * How far toward the menu the hero steps after an item was taken that leaves the menu
+ * (`Taken.toward`), figure units, below 0: half a scene tile — no further than the menu's column
+ * and CLEAR leave it — for TOWARD_MS after it was taken; 0 else, and under reduced motion.
+ */
+function towardOf(on: HeroPainting, place: HeroPlace, now: number): number {
+  const taken = on.look.current.taken;
+  if (on.reduced() || taken === null || !taken.toward || now - taken.at >= TOWARD_MS) {
+    return 0;
+  }
+  const room = Math.max(0, place.box.left - (on.standing.menuRight + CLEAR)) / place.scale;
+  return -Math.min(stepOf(place, on.standing), room);
+}
+
+/**
+ * The hero's step at `now`: half a scene tile toward the stage's edge while a panel lies open
+ * over the menu (`panel`), else toward the menu after an item taken that leaves it (`towardOf`),
+ * back as either goes — a new step from wherever the last has come to.
  */
 function stepNow(on: HeroPainting, place: HeroPlace, now: number) {
   const { react } = on;
   const reduced = on.reduced();
-  const to = on.look.current.panel ? stepOf(place, on.standing) : 0;
+  const aside = on.look.current.panel !== null ? stepOf(place, on.standing) : 0;
+  const to = aside > 0 ? aside : towardOf(on, place, now);
   if (react.step.to !== to) {
     const from = steppingAt(react.step, now, reduced).offset;
     react.step = { from, to, since: now };
@@ -549,21 +641,75 @@ interface LampFrame {
   tilt: number;
   /** its lens in the window, CSS px */
   lens: { x: number; y: number };
+  /** held: a beat on the item attended, or on the room of the place it has come to */
   holding: boolean;
-  /** how far it is on, 0 to 1 */
+  /** how far it is on, 0 to 1, flickering as it does once a minute */
   on: number;
+  /** how far it flares as an item is taken, 0 to 1 */
+  flare: number;
+}
+
+/**
+ * How strong the lamp of `on`'s hero burns at `now`, up `since`: as far as its entrance has
+ * switched it on (`lit`), dipping as it flickers once a minute; flaring where an item was taken
+ * (hero.ts `flareAt`) — at the steps its beam is laid at, and steady under reduced motion.
+ */
+function lampLight(on: HeroPainting, lit: number, [now, since]: readonly [number, number]) {
+  const reduced = on.reduced();
+  const taken = on.look.current.taken;
+  const flare = reduced || taken === null ? 0 : flareAt(now - taken.at);
+  return {
+    on: lightStep(lit * flickerAt(now - since, on.phase, reduced)),
+    flare: lightStep(flare),
+  };
+}
+
+/** Where the menu's places show in the window (places.ts SCENE_ANCHOR): the scene fills it. */
+function placeAnchor(): { x: number; y: number } {
+  return { x: SCENE_ANCHOR.x * window.innerWidth, y: SCENE_ANCHOR.y * window.innerHeight };
+}
+
+/**
+ * The place the scene shows for the hero `on` (places.ts): that of the item whose panel lies
+ * open, else of the one the player picked out; null for the drift.
+ */
+function placeTarget(on: HeroPainting): string | null {
+  return on.look.current.panel ?? on.picked.current;
+}
+
+/**
+ * Where the beam of `on`'s hero points at `now` from its lens at `from` in the window, and whether
+ * it holds there: turned to the room of the place the scene's camera travels to (places.ts
+ * `placeShown`), and held once it has come there (lamp.ts `aimSweep`) — the lamp lights the room
+ * it arrives in —, else along its sweep, holding a beat where it comes to the item attended; so
+ * in a lab without places it sweeps on, whatever is picked out.
+ */
+function beamAngle(
+  on: HeroPainting,
+  from: { x: number; y: number },
+  now: number,
+): { angle: number; holding: boolean } {
+  if (placeShown() !== null) {
+    const toward = withinSweep(angleTo(from, placeAnchor()));
+    const angle = aimSweep(on.sweep, now, toward);
+    return { angle, holding: angle === toward };
+  }
+  const attended = on.attends.current;
+  const angle = stepSweep(on.sweep, now, attended === null ? null : angleTo(from, attended));
+  return { angle, holding: on.sweep.hold !== null };
 }
 
 /**
  * Where the lamp of `on`'s hero points at `now`, placed `placed` and standing `offset` figure
- * units right of it with its body `bob` up: along its sweep, holding a beat where it comes to the
- * item attended — or still under reduced motion — turned in the hands to the nearest of its
- * steps; on as far as `lit`.
+ * units right of it with its body `bob` up: turned to a place's room, or along its sweep
+ * (`beamAngle`) — still under reduced motion — turned in the hands to the nearest of its steps;
+ * burning as `light` says (`lampLight`).
  */
 function lampAt(
   on: HeroPainting,
-  [placed, bob, lit, offset]: readonly [HeroPlace, number, number, number],
+  [placed, bob, offset]: readonly [HeroPlace, number, number],
   now: number,
+  light: { on: number; flare: number },
 ): LampFrame {
   const { at } = on.standing;
   const reduced = on.reduced();
@@ -571,13 +717,12 @@ function lampAt(
   const place = { ...placed, feet: { x: placed.feet.x + shift, y: placed.feet.y } };
   const grip = lensAt(place, tiltOf(STILL_ANGLE), bob);
   const from = { x: grip.x + at.x, y: grip.y + at.y };
-  const attended = on.attends.current;
-  const target = attended === null ? null : angleTo(from, attended);
-  const angle = reduced ? STILL_ANGLE : stepSweep(on.sweep, now, target);
+  const { angle, holding } = reduced
+    ? { angle: STILL_ANGLE, holding: false }
+    : beamAngle(on, from, now);
   const tilt = stepped(tiltOf(angle), LAMP_STEP);
   const lens = lensAt(place, tilt, bob);
-  const holding = !reduced && on.sweep.hold !== null;
-  return { angle, tilt, lens: { x: lens.x + at.x, y: lens.y + at.y }, holding, on: lit };
+  return { angle, tilt, lens: { x: lens.x + at.x, y: lens.y + at.y }, holding, ...light };
 }
 
 /**
@@ -599,7 +744,11 @@ function probePose(
     attends: on.attends.current?.id ?? null,
     leaving: on.look.current.leaving,
     facing: motion.facing,
-    beam: { lens: lamp.lens, reach, angle: lamp.angle, holding: lamp.holding, on: lamp.on },
+    beam: {
+      ...{ lens: lamp.lens, reach, angle: lamp.angle, holding: lamp.holding },
+      ...{ room: placeShown(), on: lamp.on, flare: lamp.flare },
+    },
+    glow: !on.reduced() && on.attends.current !== null,
     entrance: { walks: run.walks, ms: run.since === null ? null : run.last, done: run.done },
     drawn: { ...on.hero.drawn },
   });
@@ -640,8 +789,10 @@ function leaveOut(hero: HeroCanvas): void {
  * something it shows changes and wakes it.
  */
 export function heroPainter(on: HeroPainting, since: number): (now: number) => boolean {
-  return (now) => {
+  return (frameAt) => {
+    const now = heroClock(frameAt, on.look.current.taken, on.beatHeld());
     const { place } = on.standing;
+    holdPlace(placeTarget(on));
     if (place === null) {
       leaveOut(on.hero);
       return false;
@@ -653,19 +804,21 @@ export function heroPainter(on: HeroPainting, since: number): (now: number) => b
     const motion = motionNow(on, place, entrance, now);
     const cues = { phase: on.phase, speaking: look.speaking, waveAt: look.waveAt, reduced };
     const pose = heroPose(cues, [now, since], motion);
-    const lamp = lampAt(on, [place, pose.bob, entrance.lamp, motion.offset], now);
-    const box = canvasBox(place, entrance, on.standing);
+    const light = lampLight(on, entrance.lamp, [now, since]);
+    const lamp = lampAt(on, [place, pose.bob, motion.offset], now, light);
+    const box = canvasBox(place, entrance, on);
     if (on.canvas !== null) {
       placeCanvas(on.canvas, box);
     }
     const dpr = Math.min(MAX_DENSITY, window.devicePixelRatio || 1);
-    const frame = { place, box, pose, motion, color: look.color, dpr, lamp: lamp };
+    const glow = !reduced && on.attends.current !== null;
+    const frame = { place, box, pose, motion, color: look.color, dpr, lamp, glow };
     if (paintHero(on.hero, frame)) {
       on.probe.laid += 1;
     }
     const lensX = lamp.lens.x - on.standing.at.x;
     const reach = reachOf(FIGURE_TALL * place.scale, lensX, on.standing.menuRight);
-    holdLamp({ ...lamp.lens, angle: lamp.angle, reach, on: lamp.on });
+    holdLamp({ ...lamp.lens, angle: lamp.angle, reach, on: lamp.on, flare: lamp.flare });
     probePose(on, [pose, motion], lamp, reach);
     return !reduced || !entrance.done;
   };
@@ -689,6 +842,7 @@ function emptyProbe(): HeroProbe {
     leaving: false,
     facing: HERO_FACING,
     beam: null,
+    glow: false,
     entrance: { walks: false, ms: null, done: true },
     laid: 0,
     drawn: { legs: 0, upper: 0 },
@@ -752,11 +906,15 @@ export function startHero(
   const probe = emptyProbe();
   const standing: Standing = { place: null, at: { x: 0, y: 0 }, menuRight: 0, stageW: 0, tile: 0 };
   const attends: { current: Attended | null } = { current: null };
+  const picked: { current: string | null } = { current: null };
   const phase = figurePhase(pass);
   const entrance = entranceRun(walksIn, walkthroughHold);
   const react = stillReactions();
   const sweep = newSweep();
-  const on = { hero, standing, look, attends, sweep, probe, phase, entrance, react, canvas };
+  const on = {
+    ...{ hero, standing, look, attends, picked, sweep, probe },
+    ...{ phase, entrance, react, canvas, beatHeld: walkthroughBeat },
+  };
   const loop = runScene(heroPainter({ ...on, reduced: motion.reduced }, performance.now()), host);
   const unprobe = probed(probe);
   const unwatch = [
@@ -767,8 +925,9 @@ export function startHero(
       }
       loop.wake();
     }),
-    watchAttention(stage, (attended) => {
-      attends.current = attended;
+    watchAttention(stage, (attention) => {
+      attends.current = attention.attended;
+      picked.current = attention.picked;
       loop.wake();
     }),
     motion.watch(() => loop.wake()),
@@ -780,6 +939,7 @@ export function startHero(
       unwatch.forEach((stop) => stop());
       unprobe();
       leaveOut(hero);
+      holdPlace(null);
     },
   };
 }

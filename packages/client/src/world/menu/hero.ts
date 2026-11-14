@@ -6,6 +6,7 @@ import {
   shownFacing,
   TURN_MS,
   type FigurePose,
+  type Glances,
 } from '../figure.js';
 import { smooth } from '../ease.js';
 import { SHOT_WIDE } from '../intro/shot.js';
@@ -48,7 +49,7 @@ export const GLANCE_SHARE = 0.45;
  * draw it on every frame.
  */
 export const GLANCE_STEP = 0.1;
-/** What the hero keeps clear of the menu's column, the profile and the stage's edge, CSS px. */
+/** What the hero keeps clear of the menu's column and the stage's edges, CSS px. */
 export const CLEAR = 12;
 /** Where along the stage the hero's feet stand where it has the room: the right third's middle. */
 export const RIGHT_THIRD = 5 / 6;
@@ -70,7 +71,7 @@ export interface StageFacts {
   h: number;
   /** the window's height: the scene behind the stage fills the window, its tile follows it */
   windowH: number;
-  /** a phone, held sideways or upright: the profile's figure stands for the hero */
+  /** a phone, held sideways or upright: the top bar's avatar stands for the hero */
   phone: boolean;
   /** the stage's padding at the bottom: the floor the hero stands on */
   padBottom: number;
@@ -81,14 +82,14 @@ export interface StageFacts {
   menuRight: number;
   /** where the widest panel over the menu ends, from the stage's left */
   panelRight: number;
-  /** where the profile ends, from the stage's top */
-  chipBottom: number;
+  /** where the room over the hero ends, from the stage's top: the stage's padding there */
+  ceiling: number;
 }
 
 /**
  * The fewest scene tiles the hero stands tall: where the stage leaves it room for fewer — beside
  * the widest panel, in a window narrower than 1080 px at 720 px of height, 1115 px at 820, 1038 px
- * at the least (docs/art-bible.md „The hero") — it is left out, and the profile's figure stands
+ * at the least (docs/art-bible.md „The hero") — it is left out, and the top bar's avatar stands
  * for it, as on a phone.
  */
 export const FEWEST_TILES = 3.5;
@@ -130,7 +131,7 @@ export function heroTall(h: number, windowH: number): number {
  * The room the stage `f` leaves the hero, CSS px: across, from where its box may start resting
  * to where it may end stepped aside — clear of the menu's column resting, of the widest panel
  * stepped half a tile aside (STEP_TILES), of the stage's edge and its safe area — and down, from
- * the profile to the floor the stage's padding and its safe area leave.
+ * the stage's padding at its top to the floor the stage's padding and its safe area leave.
  */
 function roomOf(f: StageFacts): { left: number; right: number; floor: number; step: number } {
   const step = STEP_TILES * heroTile(f.windowH);
@@ -146,14 +147,14 @@ const ROUNDING = 1;
 /** The most CSS px a figure unit the room `room` on the stage `f` leaves the hero. */
 function scaleIn(f: StageFacts, room: ReturnType<typeof roomOf>): number {
   const across = (room.right - room.left - 2 * ROUNDING) / (HERO_BOX.front + HERO_BOX.back);
-  const down = (room.floor - (f.chipBottom + CLEAR)) / (HERO_BOX.top + HERO_BOX.bottom);
+  const down = (room.floor - (f.ceiling + CLEAR)) / (HERO_BOX.top + HERO_BOX.bottom);
   return Math.min(heroTall(f.h, f.windowH) / FIGURE_TALL, across, down);
 }
 
 /**
  * Where the hero stands on the stage `f` and how large: as tall as heroTall says — or as the
- * room beside the menu, the widest panel and under the profile allows (roomOf) — its feet in the
- * right third's middle, held inside that room, its shadow on the floor. Null where it is left
+ * room beside the menu and the widest panel, under the stage's top, allows (roomOf) — its feet in
+ * the right third's middle, held inside that room, its shadow on the floor. Null where it is left
  * out: on a phone, or where that room holds fewer than FEWEST_TILES of it.
  */
 export function heroPlace(f: StageFacts): HeroPlace | null {
@@ -210,6 +211,12 @@ export const STANDING_STILL: HeroMotion = {
   look: null,
 };
 
+/**
+ * How far the hero holds its lamp up from the chest, toward the menu: its arms raised this far,
+ * radians, and the lamp in its hands this far up, figure units.
+ */
+export const LAMP_RAISE = { arms: 0, up: 0 } as const;
+
 /** How far the hero's head turns toward what the player attends to: a little, not all the way. */
 export const LOOK_SHARE = 0.6;
 /** Where its head is, from its feet, figure units: up, and ahead to the menu's side. */
@@ -258,7 +265,8 @@ export interface Step {
 /**
  * How the hero steps aside `step` at `now`: walking from `step.from` to `step.to` over STEP_MS,
  * easing in and out, its legs in their cycle as far as the ground it covers, facing as it does;
- * standing where it came to after. Under reduced motion it stands there at once.
+ * standing where it came to after — and all along a step to where it stands. Under reduced
+ * motion it stands there at once.
  */
 export function steppingAt(
   step: Step,
@@ -269,7 +277,7 @@ export function steppingAt(
   const covered = (step.to - step.from) * smooth(u);
   return {
     offset: step.from + covered,
-    moving: u < 1,
+    moving: u < 1 && step.to !== step.from,
     walk: gaitStep(0, Math.abs(covered)),
   };
 }
@@ -314,6 +322,54 @@ export function entranceAt(ms: number, from: number): Entrance {
   return { motion: STANDING_STILL, clicked: lit >= 0, lamp, done: lamp >= 1 };
 }
 
+/** The hero looks round less often than a crew member does: once every 6 to 10 s. */
+export const HERO_GLANCES: Glances = { slotMs: 8000, jitterMs: 2000 };
+
+/**
+ * The flare of the hero's lamp as an item of the menu is taken: up in FLARE_UP_MS, down again by
+ * FLARE_MS, laid as a second light over the beam (lampArt.ts).
+ */
+export const FLARE_MS = 320;
+const FLARE_UP_MS = 60;
+
+/** How strong the lamp's flare is `ms` after an item was taken, 0 to 1; none out of its time. */
+export function flareAt(ms: number): number {
+  if (!(ms >= 0)) {
+    return 0;
+  }
+  const down = (ms - FLARE_UP_MS) / (FLARE_MS - FLARE_UP_MS);
+  return ms < FLARE_UP_MS ? smooth(ms / FLARE_UP_MS) : 1 - smooth(down);
+}
+
+/**
+ * How long the hero holds its half step toward the menu after an item was taken that leaves the
+ * menu for a page or the editor, ms: through the beat and the leaves closing over it, and longer —
+ * a menu come back finds it standing in its place again.
+ */
+export const TOWARD_MS = 1200;
+
+/** Once a minute the hero's lamp flickers: its light dipping and catching again, step by step. */
+export const FLICKER_EVERY_MS = 60_000;
+/** Where in its minute the flicker comes, ms, its phase on from there: never in the first 30 s. */
+const FLICKER_FROM_MS = 30_000;
+/** The lamp's light at each step of the flicker, FLICKER_STEP_MS each. */
+export const FLICKER = [0.35, 0.9, 0.15, 0.75, 0.4, 1, 0.6] as const;
+export const FLICKER_STEP_MS = 70;
+
+/**
+ * How far the hero's lamp is on `t` ms after the hero came up, its own offset `phase` (0 to 1) into
+ * the minute's rhythm: the flicker's step where one plays, else 1; never under reduced motion.
+ */
+export function flickerAt(t: number, phase: number, reduced: boolean): number {
+  const from = FLICKER_FROM_MS + phase * (FLICKER_EVERY_MS - FLICKER_FROM_MS - 1000);
+  const into = t - from;
+  if (reduced || into < 0) {
+    return 1;
+  }
+  const step = Math.floor((into % FLICKER_EVERY_MS) / FLICKER_STEP_MS);
+  return FLICKER[step] ?? 1;
+}
+
 /** What the hero's pose follows besides the clock. */
 export interface HeroCues {
   /** its own offset into its loops (figure.ts figurePhase of the pass's id) */
@@ -353,13 +409,15 @@ export function heroPose(
     walk: motion.walk,
     task: null,
     reduced: cues.reduced,
+    glances: HERO_GLANCES,
   });
   const waving = motion.moving ? 0 : (pose.arms?.front ?? 0);
   const glance = stepped((pose.look - motion.facing) * GLANCE_SHARE, GLANCE_STEP);
+  const held = { front: HOLD.front + LAMP_RAISE.arms, back: HOLD.back + LAMP_RAISE.arms };
   return {
     ...pose,
     look: motion.look ?? motion.facing + glance,
-    arms: { front: Math.max(HOLD.front, waving), back: HOLD.back },
+    arms: { front: Math.max(held.front, waving), back: held.back },
     holding: true,
   };
 }

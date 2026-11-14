@@ -33,7 +33,6 @@ import { framesPage, heroOnPage, painting } from './heroPage.js';
 /** The menu's stage in a window `w` × `h`, as menu.css lays it out at 1440 × 820 and 1280 × 720. */
 function stage(w: number, h: number): StageFacts {
   const pad = Math.min(80, Math.max(20, w * 0.05));
-  const top = Math.min(60, Math.max(22, h * 0.06));
   return {
     w,
     h: h - 60,
@@ -44,7 +43,7 @@ function stage(w: number, h: number): StageFacts {
     safeBottom: 0,
     menuRight: pad + 440,
     panelRight: pad + Math.min(w - 2 * pad, 760),
-    chipBottom: top + 66,
+    ceiling: Math.min(60, Math.max(22, h * 0.06)),
   };
 }
 
@@ -95,11 +94,11 @@ describe('heroPlace — how large the hero stands, and where', () => {
     expect(shadow).toBeCloseTo(DESKTOP.h - DESKTOP.padBottom, 6);
   });
 
-  it('keeps clear of the menu’s column, the profile and the stage’s edge', () => {
-    for (const f of [DESKTOP, LAPTOP, { ...DESKTOP, w: 1180 }, { ...LAPTOP, chipBottom: 340 }]) {
+  it('keeps clear of the menu’s column and the stage’s top and edge', () => {
+    for (const f of [DESKTOP, LAPTOP, { ...DESKTOP, w: 1180 }, { ...LAPTOP, ceiling: 340 }]) {
       const { box } = placed(f);
       expect(box.left).toBeGreaterThanOrEqual(Math.floor(f.menuRight + CLEAR));
-      expect(box.top).toBeGreaterThanOrEqual(Math.floor(f.chipBottom + CLEAR));
+      expect(box.top).toBeGreaterThanOrEqual(Math.floor(f.ceiling + CLEAR));
       expect(box.left + box.width).toBeLessThanOrEqual(Math.ceil(f.w - CLEAR));
     }
   });
@@ -164,10 +163,15 @@ function fakeHero(): { hero: HeroCanvas; log: Entry[] } {
 const posed = (bob: number): FigurePose => ({ ...heroPose(ANNA, [0, 0]), bob });
 
 /** The lamp in the hero's hands, straight ahead and alight. */
-const LAMP = { tilt: 0, on: 1 };
+const LAMP = { tilt: 0, on: 1, flare: 0 };
 
 /** A frame of the hero standing in `place`, its canvas on its place's box. */
-const standingIn = (place: HeroPlace) => ({ place, box: place.box, motion: STANDING_STILL });
+const standingIn = (place: HeroPlace) => ({
+  place,
+  box: place.box,
+  motion: STANDING_STILL,
+  glow: false,
+});
 
 describe('paintHero — laid from two layers, the breath drawing no figure anew', () => {
   beforeEach(() => {
@@ -205,7 +209,7 @@ describe('paintHero — laid from two layers, the breath drawing no figure anew'
     expect(hero.drawn).toEqual({ legs: 1, upper: 2 });
     paintHero(hero, { ...frame, color: '#f472b6' });
     expect(hero.drawn).toEqual({ legs: 2, upper: 3 });
-    paintHero(hero, { ...frame, color: '#f472b6', lamp: { tilt: 0.1, on: 1 } });
+    paintHero(hero, { ...frame, color: '#f472b6', lamp: { tilt: 0.1, on: 1, flare: 0 } });
     expect(hero.drawn).toEqual({ legs: 2, upper: 4 });
   });
 
