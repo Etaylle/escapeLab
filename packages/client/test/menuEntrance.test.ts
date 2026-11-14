@@ -153,13 +153,6 @@ describe('the hero’s entrance on the stage', () => {
     expect(on.hero.drawn).toEqual({ legs: 1, upper: 1 });
   });
 
-  it('puts its canvas on a box anew only where its box changes, not on every frame', async () => {
-    const { paint, canvas } = await stage(true);
-    for (let now = 0; now < ENTRANCE_MS + 1000; now += 1000 / 30) paint(now);
-    // Its four sides once widened for the walk in, and once on its box and the room beside it.
-    expect(canvas.written).toBe(8);
-  });
-
   it('holds its lamp off until the click, which sounds once, and then on', async () => {
     const { paint, clicks, lamp } = await stage(true);
     for (let now = 0; now < WALK_IN_MS + CLICK_AFTER_MS - 50; now += 1000 / 30) paint(now);
@@ -226,6 +219,25 @@ describe('the hero’s entrance on the stage', () => {
     expect(later(false, false)).toBe(true);
     page.paint(0);
     expect(later(false, false)).toBe(false);
+  });
+});
+
+describe('the hero’s canvas on the stage', () => {
+  beforeEach(() => {
+    vi.resetModules();
+    vi.stubGlobal('Path2D', FakePath2D);
+    vi.stubGlobal('window', { devicePixelRatio: 1 });
+    vi.stubGlobal('location', { search: '' });
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('is put on a box anew only where its box changes, not on every frame', async () => {
+    const { paint, canvas } = await stage(true);
+    for (let now = 0; now < ENTRANCE_MS + 1000; now += 1000 / 30) paint(now);
+    // Its four sides once widened for the walk in, and once on its box and the room beside it.
+    expect(canvas.written).toBe(8);
   });
 });
 

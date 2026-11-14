@@ -253,25 +253,6 @@ describe('layBeam — the beam on the scene’s canvas', () => {
     expect(made).toEqual([]);
   });
 
-  it('lets its canvases go once no lamp is alight, and bakes anew for the next', () => {
-    const scene = fakeCanvas(1440, 820, 'scene');
-    const canvases: HTMLCanvasElement[] = [];
-    const beam = sceneBeam((w, h) => {
-      const { canvas } = fakeCanvas(w, h);
-      canvases.push(canvas);
-      return canvas;
-    });
-    layBeam(scene.ctx, beam, lampAt(900, 500, Math.PI), FRAME);
-    expect(canvases).toHaveLength(2);
-    layBeam(scene.ctx, beam, null, FRAME);
-    expect([beam.master, beam.turned]).toEqual([null, null]);
-    expect(canvases.map((canvas) => [canvas.width, canvas.height])).toEqual([[0, 0], [0, 0]]);
-    layBeam(scene.ctx, beam, lampAt(900, 500, Math.PI), FRAME);
-    expect(canvases).toHaveLength(4);
-    layBeam(scene.ctx, beam, lampAt(900, 500, Math.PI, 0), FRAME);
-    expect([beam.master, beam.turned]).toEqual([null, null]);
-  });
-
   it('bakes a warm cone no stronger than BEAM_LIGHT, fading out along its reach', () => {
     vi.stubGlobal('Path2D', FakePath2D);
     const scene = fakeCanvas(1440, 820, 'scene');
@@ -313,6 +294,27 @@ describe('layBeam — the beam on the scene’s canvas', () => {
     const still = scene.log.length;
     layBeam(scene.ctx, beam, turned, { ...FRAME, now, reduced: true });
     expect(callEntries(scene.log.slice(still), 'fillRect')).toEqual([]);
+  });
+});
+
+describe('layBeam — the beam’s canvases', () => {
+  it('lets them go once no lamp is alight, and bakes anew for the next', () => {
+    const scene = fakeCanvas(1440, 820, 'scene');
+    const canvases: HTMLCanvasElement[] = [];
+    const beam = sceneBeam((w, h) => {
+      const { canvas } = fakeCanvas(w, h);
+      canvases.push(canvas);
+      return canvas;
+    });
+    layBeam(scene.ctx, beam, lampAt(900, 500, Math.PI), FRAME);
+    expect(canvases).toHaveLength(2);
+    layBeam(scene.ctx, beam, null, FRAME);
+    expect([beam.master, beam.turned]).toEqual([null, null]);
+    expect(canvases.map((canvas) => [canvas.width, canvas.height])).toEqual([[0, 0], [0, 0]]);
+    layBeam(scene.ctx, beam, lampAt(900, 500, Math.PI), FRAME);
+    expect(canvases).toHaveLength(4);
+    layBeam(scene.ctx, beam, lampAt(900, 500, Math.PI, 0), FRAME);
+    expect([beam.master, beam.turned]).toEqual([null, null]);
   });
 });
 
