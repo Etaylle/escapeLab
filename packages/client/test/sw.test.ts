@@ -1,5 +1,8 @@
+import { readdirSync, statSync } from 'node:fs';
+import { join, sep } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { precacheFiles } from '../src/sw/build.js';
+import { precached, precacheFiles } from '../src/sw/build.js';
 import { routeOf } from '../src/sw/routes.js';
 
 const ORIGIN = 'https://lab.test';
@@ -71,6 +74,25 @@ describe('the precache list', () => {
 
   it('leaves out dotfiles, whatever folder they lie in', () => {
     expect(precacheFiles(['.vite/manifest.json'], ['.DS_Store', 'icons/.hidden'])).toEqual(['/']);
+  });
+
+  it('leaves out every recording of the radio: the game fetches each as it queues it', () => {
+    const publicDir = fileURLToPath(new URL('../public', import.meta.url));
+    const published = readdirSync(publicDir, { recursive: true, encoding: 'utf8' })
+      .filter((name) => statSync(join(publicDir, name)).isFile())
+      .map((name) => name.split(sep).join('/'));
+    const voices = published.filter((name) => name.startsWith('voice/'));
+    expect(voices.length).toBeGreaterThan(50);
+    expect(voices).toContain('voice/manifest.json');
+    const files = precacheFiles([], published);
+    expect(files.filter((file) => file.startsWith('/voice/'))).toEqual([]);
+    // Everything else of public/ stays in: the lab's sounds, the music, the icons.
+    expect(files).toHaveLength(published.length - voices.length + 1);
+    const names = ['voice/helmut-1.mp3', 'voices.svg', 'sfx/a.mp3'];
+    expect(names.map(precached)).toEqual([false, true, true]);
+    // Not precached, a recording is the browser's to fetch, never the worker's.
+    const line = { method: 'GET', url: `${ORIGIN}/voice/helmut-1.mp3` };
+    expect(routeOf(line, ORIGIN, new Set(files))).toBeNull();
   });
 });
 

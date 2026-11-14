@@ -17,15 +17,29 @@ import type { Plugin, ResolvedConfig, Rollup } from 'vite';
 const SW_FILE = 'sw.js';
 
 /**
+ * The folders of public/ the worker leaves out of its install: the radio's recordings (voice/),
+ * some 20 MB once the whole cast speaks, which the game fetches line by line as each is queued —
+ * from the browser's own cache where it has them, and offline a line missing stands in with the
+ * radio's chirp. Nor are they hashed into the worker's version: a new take brings no new worker.
+ */
+const FETCHED_AS_NEEDED: readonly string[] = ['voice/'];
+
+/** Whether the file `name` of public/ goes into the install: all but FETCHED_AS_NEEDED's. */
+export function precached(name: string): boolean {
+  return !FETCHED_AS_NEEDED.some((folder) => name.startsWith(folder));
+}
+
+/**
  * What the worker keeps at install: the page as "/", then every file of the
- * build and of public/ by its address. Not the worker itself (the browser
+ * build and of public/ by its address — but the folders the game fetches as
+ * it needs them (FETCHED_AS_NEEDED). Not the worker itself (the browser
  * fetches it on its own), not index.html under its name, no dotfiles.
  *
  * @param built the bundle's file names, as "assets/index-3f9a.js"
  * @param published the files under public/, as "icon.svg"
  */
 export function precacheFiles(built: readonly string[], published: readonly string[]): string[] {
-  const kept = [...built, ...published].filter(
+  const kept = [...built, ...published.filter(precached)].filter(
     (name) =>
       name !== SW_FILE &&
       name !== 'index.html' &&
@@ -86,7 +100,7 @@ export function serviceWorker(): Plugin {
         this.error('index.html is not in the bundle yet: this plugin has to run after the HTML');
       }
       const publicDir = config.publicDir;
-      const published = filesUnder(publicDir);
+      const published = filesUnder(publicDir).filter(precached);
       const files = precacheFiles(Object.keys(bundle), published);
       const digest = createHash('sha256');
       for (const name of Object.keys(bundle).sort()) {
