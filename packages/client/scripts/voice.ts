@@ -480,20 +480,30 @@ export function shippedMissions(dir = MISSIONS_DIR): MissionLines[] {
 }
 
 /**
- * Every shipped line, by what it says: the missions that say it, who says it, and whether it
- * opens a run. Fails where two speakers would say the same words: a line has one recording.
+ * Why `said` cannot share the recording of `line`, the shipped line of the same words: another
+ * speaker says it, or in another mood — one line, one recording. Null where it can.
+ */
+function clash(line: ShippedLine, said: CatalogLine): string | null {
+  if (line.speaker === said.speaker && line.mood === said.mood) return null;
+  const how = (who: Speaker, as: Mood | null): string =>
+    as === null ? `the ${who}` : `the ${who} in a ${as} mood`;
+  const both = `${how(line.speaker, line.mood)} and ${how(said.speaker, said.mood)}`;
+  return `voice: „${said.text}" is said by ${both} alike: one line, one recording`;
+}
+
+/**
+ * Every shipped line, by what it says: the missions that say it, who says it and in what mood,
+ * and whether it opens a run. Fails where two speakers, or two moods, would say the same words
+ * (`clash`): a line has one recording.
  */
 export function shippedLines(missions = shippedMissions()): Map<string, ShippedLine> {
   const lines = new Map<string, ShippedLine>();
   for (const mission of missions) {
-    for (const { text, speaker, mood, opens } of catalogOf(mission)) {
+    for (const said of catalogOf(mission)) {
+      const { text, speaker, mood, opens } = said;
       const line = lines.get(text) ?? { missions: [], speaker, mood, opens: false };
-      if (line.speaker !== speaker || line.mood !== mood) {
-        const how = (who: Speaker, as: Mood | null) =>
-          as === null ? `the ${who}` : `the ${who} in a ${as} mood`;
-        const both = `${how(line.speaker, line.mood)} and ${how(speaker, mood)}`;
-        throw new Error(`voice: „${text}" is said by ${both} alike: one line, one recording`);
-      }
+      const refused = clash(line, said);
+      if (refused !== null) throw new Error(refused);
       if (!line.missions.includes(mission.id)) line.missions.push(mission.id);
       line.opens ||= opens;
       lines.set(text, line);

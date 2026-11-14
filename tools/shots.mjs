@@ -2767,6 +2767,10 @@ const newestStory = (player) =>
     .find((e) => e.kind === 'radio' && (e.moment === undefined || STORY.has(e.moment)))?.label ??
   null;
 
+/** Whether the radio `voice` speaks the recording of `line` now; never where there is no line. */
+const speaks = (voice, line) =>
+  voice?.playing === true && line !== null && voice.lastId === voiceIdOf(line);
+
 /**
  * Listens to `player`'s radio for up to `ms` from now for the line `expected` names as it is
  * polled — the newest line of the run's story unless told another — by its recording's id: from
@@ -2779,9 +2783,7 @@ async function hearRadio(player, ms, expected = () => newestStory(player)) {
   let heard = null;
   while (Date.now() < end) {
     const voice = (await soundOf(player.page))?.voice;
-    const line = expected();
-    const wanted = line !== null && voice?.lastId === voiceIdOf(line);
-    if (voice?.playing === true && wanted && (heard === null || voice.lastId === heard.id)) {
+    if (speaks(voice, expected()) && (heard === null || voice.lastId === heard.id)) {
       heard ??= { id: voice.lastId, from: Date.now(), to: Date.now(), opened: voice.opened };
       heard.to = Date.now();
     } else if (heard !== null) {
@@ -7468,8 +7470,23 @@ async function micsOn(players) {
 /** How long the host's page may take to put the Funkprobe on the air once it can start, ms. */
 const FUNKPROBE_MS = 3000;
 
-/** The lobby's Funkprobe off the page's probe (client world/radioCheck.ts); null without one. */
-const radioCheckOf = (page) => page.evaluate(() => globalThis.__escapelab?.radioCheck ?? null);
+/** The lobby's Funkprobe off the page's probe (client world/radioCheck.ts); none asked without. */
+const radioCheckOf = (page) =>
+  page.evaluate(() => globalThis.__escapelab?.radioCheck ?? { asked: null, aired: false });
+
+/**
+ * How the Funkprobe `probe` stands against the text `expected`, `recorded` or not, as the log
+ * says it: on the air, awaiting its render, or — marked „!!" — not what it should be.
+ */
+function funkprobeState(probe, expected, recorded) {
+  if (probe.asked !== expected) {
+    return `!! asked for ${probe.asked === null ? 'none' : `„${probe.asked}"`}`;
+  }
+  if (probe.aired) {
+    return 'on the air';
+  }
+  return recorded ? '!! not on the air' : 'awaits its render';
+}
 
 /**
  * The operator's Funkprobe, once the host can start: the host's page has to ask for the text
@@ -7478,23 +7495,20 @@ const radioCheckOf = (page) => page.evaluate(() => globalThis.__escapelab?.radio
  * is left alone. Fails otherwise.
  */
 async function checkRadioCheck(host) {
-  const expected = host.seen.view?.radioCheck;
+  const expected = host.seen.view.radioCheck;
   if (expected === undefined) {
     return;
   }
   const recorded = (await voiceLinesOf(host.page))[voiceIdOf(expected)] !== undefined;
-  const done = (probe) => probe?.asked === expected && (probe.aired || !recorded);
+  const now = async () => funkprobeState(await radioCheckOf(host.page), expected, recorded);
   const end = Date.now() + FUNKPROBE_MS;
-  let probe = await radioCheckOf(host.page);
-  while (!done(probe) && Date.now() < end) {
+  let state = await now();
+  while (state.startsWith('!!') && Date.now() < end) {
     await sleep(100);
-    probe = await radioCheckOf(host.page);
+    state = await now();
   }
-  const asked = probe?.asked == null ? 'none' : `„${probe.asked}"`;
-  const state = probe?.aired ? 'on the air' : 'awaits its render';
-  const said = done(probe) ? state : `!! asked for ${asked}${probe?.aired ? ', on the air' : ''}`;
-  console.log(`radio check        ${host.name}: „${expected}" ${said}`);
-  if (!done(probe)) {
+  console.log(`radio check        ${host.name}: „${expected}" ${state}`);
+  if (state.startsWith('!!')) {
     fail(`radio check: ${host.name}'s lobby did not put „${expected}" on the air`);
   }
 }

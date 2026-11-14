@@ -277,9 +277,7 @@ export function applyAction(state: GameState, action: Action): GameState {
     case 'escaped':
       return handleEscaped(state, action);
     case 'time-expired':
-      return state.phase === 'playing' && state.paused === null
-        ? lostNow(state, action.at)
-        : state;
+      return timeExpired(state, action.at);
     case 'back-to-lobby':
       return backToLobby(state, action);
     case 'abandon':
@@ -1288,6 +1286,11 @@ function wonNow(state: GameState, at: number, how: string): GameState {
   const finished = logEvent(overNow(state, 'won', at), 'finish', how, at);
   const band = wonBand((state.deadlineAt ?? at) - at);
   return logRadio(finished, 'won', state.mission.radio.won?.[band], at, band);
+}
+
+/** The clock has run out at `at`: a run that plays, and does not stand still, is lost. */
+function timeExpired(state: GameState, at: number): GameState {
+  return state.phase === 'playing' && state.paused === null ? lostNow(state, at) : state;
 }
 
 /**
