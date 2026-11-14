@@ -234,7 +234,8 @@ export class AccountDesk {
       if (account === null || login === null) {
         throw new GameError(NO_LOGIN);
       }
-      const kept = await this.tried(login.subject, old, login.secretHash, gate, tries);
+      this.mayTry(login.subject, gate, tries);
+      const kept = await this.tried(login.subject, old, login.secretHash, tries);
       if (kept === null) {
         throw new GameError(OLD_WRONG);
       }
@@ -445,8 +446,9 @@ export class AccountDesk {
     tries: Tries,
   ): Promise<Login> {
     const number = numberOf(typed);
+    this.mayTry(number, gate, tries);
     const login = number === null ? null : await this.store.findLogin(number);
-    const right = await this.tried(number, password, login?.secretHash ?? null, gate, tries);
+    const right = await this.tried(number, password, login?.secretHash ?? null, tries);
     if (right === null || login === null) {
       throw new GameError(WRONG_LOGIN);
     }
@@ -454,19 +456,12 @@ export class AccountDesk {
   }
 
   /**
-   * A try at the Kennwort `password` of the Ausweisnummer `number` (null for none readable), whose
-   * hash `stored` keeps (null for no login): the hash it matched, counted right; null, counted
-   * wrong, where it did not — after the same work either way (login.ts `passwordMatches`).
-   * Refused before it is tried, saying why, where the limits hold it back (`Tries`) or the gate
-   * lets nothing change: a try counts as a change, so that a socket tries so many a minute.
+   * Throws, saying why, where a try at the Kennwort of the Ausweisnummer `number` (null for none
+   * readable) may not go ahead now: the limits hold it back (`Tries`), or the gate lets nothing
+   * change — a try counts as a change, so that a socket tries so many a minute. Asked before the
+   * store is, and before any work is done.
    */
-  private async tried(
-    number: string | null,
-    password: string,
-    stored: string | null,
-    gate: Gate,
-    tries: Tries,
-  ): Promise<string | null> {
+  private mayTry(number: string | null, gate: Gate, tries: Tries): void {
     const refusal = tries.refusal(number);
     if (refusal !== null) {
       throw new GameError(refusal);
@@ -474,6 +469,20 @@ export class AccountDesk {
     if (!gate.mayChange()) {
       throw new GameError(TOO_MANY_CHANGES);
     }
+  }
+
+  /**
+   * A try at the Kennwort `password` of the Ausweisnummer `number` (null for none readable), whose
+   * hash `stored` keeps (null for no login), once `mayTry` let it go ahead: the hash it matched,
+   * counted right; null, counted wrong, where it did not — after the same work either way (login.ts
+   * `passwordMatches`).
+   */
+  private async tried(
+    number: string | null,
+    password: string,
+    stored: string | null,
+    tries: Tries,
+  ): Promise<string | null> {
     const right = await passwordMatches(password, stored);
     if (!right || number === null || stored === null) {
       tries.wrong(number);

@@ -333,7 +333,7 @@ describe('the limits on signing in, over the line', () => {
 
   it(`refuses an address after ${WRONG_PER_ADDRESS} wrong tries; a neighbour gets in`, async () => {
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
-    const { server } = lab();
+    const { server, store } = lab();
     const { number } = await annaWithKennwort(server);
     const guesser = server.connect(from('192.168.1.66'));
     const pass = passFor('Mallory');
@@ -341,10 +341,13 @@ describe('the limits on signing in, over the line', () => {
       const login = `EL-GGGG-GG${'23456789ABCDEFGH'.charAt(i)}2`;
       await ask(guesser, { kind: 'sign-in', pass, login, password: KENNWORT });
     }
+    // Refused before the store is asked, or any Kennwort tried.
+    const looked = vi.spyOn(store, 'findLogin');
     const right = { kind: 'sign-in', pass, login: number, password: KENNWORT } as const;
     expect(await ask(guesser, right)).toMatchObject({
       refused: expect.stringMatching(/^Zu viele falsche Anmeldungen von dieser Adresse/),
     });
+    expect(looked).not.toHaveBeenCalled();
     const neighbour = server.connect(from('192.168.1.67'));
     const theirs = { ...right, pass: passFor('Ben') };
     expect(await ask(neighbour, theirs)).toMatchObject({ done: 'signed-in' });
