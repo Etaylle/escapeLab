@@ -250,11 +250,6 @@ describe('a take recorded on the page', () => {
       source: 'human',
       file: `${id}.m4a`,
     });
-    // A line of the loudspeakers is entered as the plant's voice's.
-    const pa = idOf('anlage', ANNOUNCED);
-    expect((await ask(desk(fakeConvert), post(pa, toneWav(0.8))))?.status).toBe(200);
-    const plant = { text: ANNOUNCED, role: 'pa', person: 'anlage', moment: 'pa' };
-    expect(manifest()[pa]).toMatchObject({ ...plant, source: 'human' });
     const ids = Object.keys(manifest());
     expect(ids).toEqual([...ids].sort());
     expect(readFileSync(manifestFile(), 'utf8')).toMatch(/\n$/);
@@ -275,30 +270,13 @@ describe('a take recorded on the page', () => {
       source: 'human',
       file: `${id}.m4a`,
     });
-    expect(Object.keys(entry ?? {})).toEqual([
-      'text',
-      'ms',
-      'missions',
-      'role',
-      'person',
-      'moment',
-      'mood',
-      'source',
-      'file',
-    ]);
+    const keys = (said: Record<string, unknown> | undefined): string =>
+      Object.keys(said ?? {}).join(' ');
+    expect(keys(entry)).toBe('text ms missions role person moment mood source file');
     // A line said in no mood has none in its entry, and the opening one keeps its place.
     await ask(desk(fakeConvert), post(his(START), toneWav(1)));
-    expect(Object.keys(manifest()[his(START)] ?? {})).toEqual([
-      'text',
-      'ms',
-      'missions',
-      'role',
-      'person',
-      'moment',
-      'opens',
-      'source',
-      'file',
-    ]);
+    const opening = manifest()[his(START)];
+    expect(keys(opening)).toBe('text ms missions role person moment opens source file');
   });
 
   it('refuses an id or a source that is none, and a line no shipped mission says', async () => {
@@ -313,17 +291,6 @@ describe('a take recorded on the page', () => {
     const nobody = await ask(desk(), post('helmut-0123456789ab', toneWav(0.2)));
     expect(nobody?.status).toBe(404);
     expect(String(nobody?.body['error'])).toMatch(/helmut-0123456789ab/);
-    // Nor a line as somebody says it who is not in service for it: Marta has no voice yet, and
-    // the clock's calls are the Schichtleitung's.
-    const clock = first(blackout?.radio.clock?.lastMinute);
-    for (const off of [idOf('marta', START), his(clock)]) {
-      expect((await ask(desk(), post(off, toneWav(0.2))))?.status, off).toBe(404);
-    }
-    expect((await ask(desk(fakeConvert), post(idOf('kessler', clock), toneWav(0.2))))?.status).toBe(
-      200,
-    );
-    rmSync(join(dir, `${idOf('kessler', clock)}.m4a`));
-    writeFileSync(manifestFile(), '{"lines":{}}\n');
     expect(readdirSync(dir)).toEqual(['manifest.json']);
   });
 
@@ -378,6 +345,27 @@ describe('a take recorded on the page', () => {
     expect([a?.status, b?.status]).toEqual([200, 200]);
     expect(manifest()[his(START)]?.['ms']).toBe(400);
     expect(manifest()[his(NUDGE)]?.['ms']).toBe(500);
+  });
+});
+
+describe('a take of the cast in service', () => {
+  it('enters a line of the loudspeakers as the plant’s voice’s', async () => {
+    const pa = idOf('anlage', ANNOUNCED);
+    expect((await ask(desk(fakeConvert), post(pa, toneWav(0.8))))?.status).toBe(200);
+    const plant = { text: ANNOUNCED, role: 'pa', person: 'anlage', moment: 'pa' };
+    expect(manifest()[pa]).toMatchObject({ ...plant, source: 'human' });
+  });
+
+  it('refuses a line as somebody says it who is not in service for it', async () => {
+    // Marta has no voice yet, and the clock's calls are the Schichtleitung's.
+    const clock = first(blackout?.radio.clock?.lastMinute);
+    for (const off of [idOf('marta', START), his(clock)]) {
+      expect((await ask(desk(), post(off, toneWav(0.2))))?.status, off).toBe(404);
+    }
+    expect(readdirSync(dir)).toEqual(['manifest.json']);
+    const kessler = idOf('kessler', clock);
+    expect((await ask(desk(fakeConvert), post(kessler, toneWav(0.2))))?.status).toBe(200);
+    expect(manifest()[kessler]).toMatchObject({ role: 'lead', person: 'kessler', moment: 'clock' });
   });
 });
 

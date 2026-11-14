@@ -9,7 +9,7 @@ import {
   type FakeGain,
   type FakeNode,
 } from './fakeGraph.js';
-import { serveSamples } from './fakeSamples.js';
+import { serveVoice } from './fakeSamples.js';
 
 /**
  * The Funkprobe, said by Marta, the operator on duty for the run to come (the view's `cast`) —
@@ -31,45 +31,40 @@ const MANIFEST: VoiceManifest = {
   },
 };
 
+/** The lobby's radio, its sound made and woken as a click in the lobby makes and wakes it. */
+async function lobby() {
+  vi.resetModules();
+  await (await import('../src/world/samples.js')).preloadSamples();
+  (await import('../src/world/audio.js')).audioEngine();
+  return import('../src/world/radioCheck.js');
+}
+
+/** Lets the fetches and the decoding settle. */
+const settle = (): Promise<void> => vi.advanceTimersByTimeAsync(0).then(() => undefined);
+
+/** The Funkprobe's speech as it was played: the fake decodes every line to 1.5 s. */
+const speech = (): FakeBufferSource[] =>
+  lastContext()
+    .all<FakeBufferSource>('buffer')
+    .filter((source) => source.buffer?.duration === 1.5);
+
+/** The level the Funkprobe goes through, between the radio's chain and the radio's bus. */
+const levelOf = (source: FakeBufferSource | undefined): FakeGain =>
+  chainFrom(source as FakeBufferSource)[9] as unknown as FakeGain;
+
 describe('the operator’s Funkprobe in the lobby', () => {
   let fetched: string[] = [];
 
   beforeEach(() => {
     fakeGraph();
     fetched = [];
-    serveSamples({}, (url: string) => {
-      fetched.push(url);
-      const json = (): Promise<VoiceManifest> => Promise.resolve(MANIFEST);
-      const arrayBuffer = (): Promise<ArrayBuffer> => Promise.resolve(new ArrayBuffer(8));
-      return Promise.resolve({ ok: true, status: 200, json, arrayBuffer });
-    });
+    serveVoice(MANIFEST, fetched);
   });
   afterEach(() => {
     vi.useRealTimers();
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
   });
-
-  /** The lobby's radio, its sound made and woken as a click in the lobby makes and wakes it. */
-  async function lobby() {
-    vi.resetModules();
-    await (await import('../src/world/samples.js')).preloadSamples();
-    (await import('../src/world/audio.js')).audioEngine();
-    return import('../src/world/radioCheck.js');
-  }
-
-  /** Lets the fetches and the decoding settle. */
-  const settle = (): Promise<void> => vi.advanceTimersByTimeAsync(0).then(() => undefined);
-
-  /** The Funkprobe's speech as it was played: the fake decodes every line to 1.5 s. */
-  const speech = (): FakeBufferSource[] =>
-    lastContext()
-      .all<FakeBufferSource>('buffer')
-      .filter((source) => source.buffer?.duration === 1.5);
-
-  /** The level the Funkprobe goes through, between the radio's chain and the radio's bus. */
-  const levelOf = (source: FakeBufferSource | undefined): FakeGain =>
-    chainFrom(source as FakeBufferSource)[9] as unknown as FakeGain;
 
   it('says nothing before every seat is ready, then the Funkprobe, and only once', async () => {
     vi.useFakeTimers();

@@ -28,7 +28,7 @@ import {
   type FakeNode,
   type FakeShaper,
 } from './fakeGraph.js';
-import { serveSamples } from './fakeSamples.js';
+import { serveVoice } from './fakeSamples.js';
 
 /** A line as Helmut says it, the operator on duty these tests hear. */
 const helmut = (text: string): VoiceLine => ({ text, person: 'helmut' });
@@ -107,6 +107,16 @@ function distortionAt(peak: number): number {
   return Math.hypot(...[2, 3, 4, 5, 6, 7, 8, 9].map(harmonic)) / harmonic(1);
 }
 
+/** The radio's voice, loaded anew with the samples it plays with. */
+async function voice() {
+  vi.resetModules();
+  await (await import('../src/world/samples.js')).preloadSamples();
+  return import('../src/world/radioVoice.js');
+}
+
+/** Lets the fetches and the decoding settle. */
+const settle = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
+
 describe('the radio’s chain', () => {
   it('runs high-pass 300 Hz, low-pass 3.4 kHz, each fourth order, and a light shaper', () => {
     const ctx = new FakeContext();
@@ -181,23 +191,12 @@ describe('a line spoken over the radio', () => {
     fakeGraph();
     fetched = [];
     // The squelches' recordings as the samples serve them; mission control's lines as here.
-    serveSamples({}, (url: string) => {
-      fetched.push(url);
-      const json = (): Promise<VoiceManifest> => Promise.resolve(MANIFEST);
-      const arrayBuffer = (): Promise<ArrayBuffer> => Promise.resolve(new ArrayBuffer(8));
-      return Promise.resolve({ ok: true, status: 200, json, arrayBuffer });
-    });
+    serveVoice(MANIFEST, fetched);
   });
   afterEach(() => {
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
   });
-
-  async function voice() {
-    vi.resetModules();
-    await (await import('../src/world/samples.js')).preloadSamples();
-    return import('../src/world/radioVoice.js');
-  }
 
   /** The recordings of `id` played on `ctx`, by when they start. */
   const keysOf = (ctx: ReturnType<typeof lastContext>, id: string): number[] =>
@@ -205,9 +204,6 @@ describe('a line spoken over the radio', () => {
       .all<FakeBufferSource>('buffer')
       .filter((s) => s.buffer?.tag === id)
       .map((s) => s.startedAt as number);
-
-  /** Lets the fetches and the decoding settle. */
-  const settle = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
 
   /** The ducks of the engine the radio plays on (mix.ts). */
   async function ducks(): Promise<{ musicDuck: FakeGain; ambienceDuck: FakeGain }> {
@@ -239,29 +235,6 @@ describe('a line spoken over the radio', () => {
     expect(fetched).toHaveLength(3);
     expect(radio.clipOf(BEIDE)).toBeNull(); // queued: fetched, not decoded
     expect(radio.clipOf(LEVER_LINE)).toBeNull(); // never queued: never fetched
-  });
-
-  it('finds a line by who says it and its words: the same words in two voices, two', async () => {
-    const radio = await voice();
-    radio.voiceForRun();
-    await settle();
-    const hers = { text: LEVER_LINE.text, person: 'marta' };
-    radio.fetchLines([hers]);
-    await settle();
-    expect(fetched).toEqual(['/voice/manifest.json', '/voice/marta-aaaa.mp3']);
-    expect(radio.recordedMs(hers)).toBe(2200);
-    expect(radio.recordedMs(LEVER_LINE)).toBe(2000);
-    expect(await radio.sayLine(hers)).not.toBeNull();
-    expect(radio.voiceProbe().lastId).toBe('marta-aaaa');
-    expect(await radio.sayLine(LEVER_LINE)).not.toBeNull();
-    expect(radio.voiceProbe().lastId).toBe('aaaaaaaaaaaa');
-    // Nobody else's recording stands in for a voice that has none: the caller chirps.
-    const his = { text: LEVER_LINE.text, person: 'jonas' };
-    expect([radio.recordedMs(his), radio.airtimeMs(his), await radio.sayLine(his)]).toEqual([
-      null,
-      null,
-      null,
-    ]);
   });
 
   it('keeps the files of the last few lines, as they came, and none of a run before', async () => {
@@ -577,6 +550,42 @@ describe('a line spoken over the radio', () => {
   });
 });
 
+describe('a line by who says it', () => {
+  let fetched: string[] = [];
+
+  beforeEach(() => {
+    fakeGraph();
+    fetched = [];
+    serveVoice(MANIFEST, fetched);
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('is found by its person and its words: the same words in two voices, two files', async () => {
+    const radio = await voice();
+    radio.voiceForRun();
+    await settle();
+    const hers = { text: LEVER_LINE.text, person: 'marta' };
+    radio.fetchLines([hers]);
+    await settle();
+    expect(fetched).toEqual(['/voice/manifest.json', '/voice/marta-aaaa.mp3']);
+    expect(radio.recordedMs(hers)).toBe(2200);
+    expect(radio.recordedMs(LEVER_LINE)).toBe(2000);
+    expect(await radio.sayLine(hers)).not.toBeNull();
+    expect(radio.voiceProbe().lastId).toBe('marta-aaaa');
+    expect(await radio.sayLine(LEVER_LINE)).not.toBeNull();
+    expect(radio.voiceProbe().lastId).toBe('aaaaaaaaaaaa');
+    // Nobody else's recording stands in for a voice that has none: the caller chirps.
+    const his = { text: LEVER_LINE.text, person: 'jonas' };
+    expect([radio.recordedMs(his), radio.airtimeMs(his), await radio.sayLine(his)]).toEqual([
+      null,
+      null,
+      null,
+    ]);
+  });
+});
+
 describe('the lines that may open a run', () => {
   /** Blackout opens on one of two starts, each recorded: the run picks one (core `pickLine`). */
   const OTHER_START = helmut('Leitstelle an Nachtschicht. Der Trakt ist dunkel.');
@@ -600,29 +609,22 @@ describe('the lines that may open a run', () => {
   beforeEach(() => {
     fakeGraph();
     asked = [];
-    serveSamples({}, (url: string) => {
-      asked.push(url);
-      const json = (): Promise<VoiceManifest> => Promise.resolve(OPENERS);
-      const arrayBuffer = (): Promise<ArrayBuffer> => Promise.resolve(new ArrayBuffer(8));
-      return Promise.resolve({ ok: true, status: 200, json, arrayBuffer });
-    });
+    serveVoice(OPENERS, asked);
   });
   afterEach(() => {
     vi.unstubAllGlobals();
   });
 
   it('come as any line does: the take the run picked, fetched as it queues, no other', async () => {
-    vi.resetModules();
-    await (await import('../src/world/samples.js')).preloadSamples();
-    const radio = await import('../src/world/radioVoice.js');
+    const radio = await voice();
     const { decodedBytes } = await import('../src/world/audioMemory.js');
     radio.voiceForRun();
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await settle();
     expect(asked).toEqual(['/voice/manifest.json']);
     expect(decodedBytes().voice).toBe(0);
     // The run picked the other take: its event names it, and only its file comes.
     radio.fetchLines([OTHER_START]);
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await settle();
     expect(asked).toEqual(['/voice/manifest.json', '/voice/dddddddddddd.mp3']);
     expect(await radio.sayLine(OTHER_START)).toBe(
       Math.round((OPEN_S + KEY_S + 1.5 + TAIL_S) * 1000),

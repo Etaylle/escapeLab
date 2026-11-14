@@ -66,9 +66,12 @@ describe('the persons of the cast, as the command line names them', () => {
   });
 });
 
-describe('a person’s voice, made from their prompt (Voice Design)', () => {
-  let dir = '';
-  let cast = '';
+/** The scratch folder a test's samples go to, and the copy of the roster a keep writes. */
+let dir = '';
+let cast = '';
+
+/** A scratch folder with a copy of the roster for each test of the group, gone after it. */
+function inScratch(): void {
   beforeEach(() => {
     dir = mkdtempSync(join(tmpdir(), 'escapelab-cast-'));
     cast = join(dir, 'cast.json');
@@ -77,35 +80,39 @@ describe('a person’s voice, made from their prompt (Voice Design)', () => {
   afterEach(() => {
     rmSync(dir, { recursive: true, force: true });
   });
+}
 
-  /** A client of the test's own: three samples a time, a voice made of one; what it was asked. */
-  function designer(voiceId = 'madeVoice00000000000') {
-    const asked: unknown[] = [];
-    let round = 0;
-    const client: DesignClient = {
-      textToVoice: {
-        design: (request: ElevenLabs.VoiceDesignRequestModel) => {
-          asked.push(request);
-          round += 1;
-          const previews = [1, 2, 3].map((n) => ({
-            audioBase64: Buffer.from(`mp3 ${round}.${n}`).toString('base64'),
-            generatedVoiceId: `preview${round}${n}00000000000`,
-            mediaType: 'audio/mpeg',
-            durationSecs: 9 + n / 10,
-          }));
-          return Promise.resolve({ previews, text: request.text ?? '' });
-        },
-        create: (request: ElevenLabs.BodyCreateANewVoiceFromVoicePreviewV1TextToVoicePost) => {
-          asked.push(request);
-          return Promise.resolve({ voiceId, name: request.voiceName });
-        },
+/** A client of the test's own: three samples a time, a voice made of one; what it was asked. */
+function designer(voiceId = 'madeVoice00000000000') {
+  const asked: unknown[] = [];
+  let round = 0;
+  const client: DesignClient = {
+    textToVoice: {
+      design: (request: ElevenLabs.VoiceDesignRequestModel) => {
+        asked.push(request);
+        round += 1;
+        const previews = [1, 2, 3].map((n) => ({
+          audioBase64: Buffer.from(`mp3 ${round}.${n}`).toString('base64'),
+          generatedVoiceId: `preview${round}${n}00000000000`,
+          mediaType: 'audio/mpeg',
+          durationSecs: 9 + n / 10,
+        }));
+        return Promise.resolve({ previews, text: request.text ?? '' });
       },
-    };
-    return { client, asked };
-  }
+      create: (request: ElevenLabs.BodyCreateANewVoiceFromVoicePreviewV1TextToVoicePost) => {
+        asked.push(request);
+        return Promise.resolve({ voiceId, name: request.voiceName });
+      },
+    },
+  };
+  return { client, asked };
+}
 
-  const marta = slotOf(roster, 'operator:marta');
-  const NOW = (): Date => new Date('2026-11-14T08:00:00.000Z');
+const marta = slotOf(roster, 'operator:marta');
+const NOW = (): Date => new Date('2026-11-14T08:00:00.000Z');
+
+describe('a person’s voice, made from their prompt (Voice Design)', () => {
+  inScratch();
 
   it('asks once for three samples, from the person’s prompt and the role’s text', async () => {
     const { client, asked } = designer();
@@ -157,6 +164,10 @@ describe('a person’s voice, made from their prompt (Voice Design)', () => {
     }
     expect(DESIGN_TEXT.lead).toMatch(/Noch fünf Minuten/);
   });
+});
+
+describe('a sample kept as the person’s voice (--keep)', () => {
+  inScratch();
 
   it('keeps a sample as the person’s voice, in the roster, reading with Eleven v3', async () => {
     const { client, asked } = designer();
@@ -216,6 +227,7 @@ describe('a person’s voice, made from their prompt (Voice Design)', () => {
     expect(readSamples(join(dir, 'operator-marta'))?.kept).toBeUndefined();
   });
 
+  // Last, after every design and keep above.
   it('leaves the samples to a folder git ignores, and makes no real client doing any of it', () => {
     const ignored = readFileSync(new URL('../../../.gitignore', import.meta.url), 'utf8');
     expect(SAMPLES_DIR).toMatch(/packages\/client\/takes\/voices$/);
