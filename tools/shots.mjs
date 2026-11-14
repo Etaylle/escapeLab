@@ -7840,17 +7840,21 @@ function deviceReach() {
 const SETTLE_MS = 3000;
 
 /**
- * In the page: waits until every animation of the open device or relay console that runs now
- * and ends has ended — the panel's rise as it came up, from 0.98 of its size, a press giving —
- * or `ms` have passed, and says how long it waited on the page's clock and which of those still
- * ran then: a control measured mid-rise measures short. One that starts meanwhile, a sign of the
- * Signalkette flaring on, is not waited for.
+ * In the page: waits until every animation of the open device or relay console that runs now,
+ * ends, and moves a control's box — on a control or round one: the panel's rise as it came up,
+ * from 0.98 of its size, the device's own from 0.94, a press giving — has ended, or `ms` have
+ * passed, and says how long it waited on the page's clock and which of those still ran then: a
+ * control measured mid-rise measures short. One that starts meanwhile, or moves no control — a
+ * sign of the Signalkette flaring on, a token's bar draining beside its keys — is not waited for.
  */
 async function deviceSettled(ms) {
   const modal = document.querySelector('.station-modal, .relay-modal');
+  const controls = [...(modal?.querySelectorAll('button, input, summary') ?? [])];
   const t0 = globalThis.performance.now();
   const ends = (a) => a.playState === 'running' && a.effect?.getComputedTiming().endTime < Infinity;
-  const running = (modal?.getAnimations({ subtree: true }) ?? []).filter(ends);
+  const moves = (a) => controls.some((control) => a.effect?.target?.contains(control) === true);
+  const all = modal?.getAnimations({ subtree: true }) ?? [];
+  const running = all.filter((a) => ends(a) && moves(a));
   // An animation cancelled meanwhile, its element gone, has ended too.
   const ended = running.map((a) =>
     a.finished.then(
