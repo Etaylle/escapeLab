@@ -263,6 +263,19 @@ describe('giving the seat up with somebody away', () => {
     expect(viewFor(left, 'p1').takeovers?.map((ask) => ask.name)).toEqual(['Cem']);
   });
 
+  it('holds the run once the last on the line gives the seat up, till the first is back', () => {
+    // Ben and Cem away; Anna, the last on the line, gives her seat up from the pause menu.
+    const two = run([lineDrops('p2', T0 + 1000), lineDrops('p3', T0 + 2000)], three);
+    expect(two.paused).toBeNull();
+    const left = run([abandon('p1', T0 + 5000)], two);
+    expect(left.phase).toBe('playing');
+    expect(left.players.map((p) => p.id)).toEqual(['p2', 'p3']);
+    expect(left.paused).toEqual({ since: T0 + 5000, kind: 'wartung' });
+    const back = run([lineBack('p2', T0 + 25_000)], left);
+    expect(back.paused).toBeNull();
+    expect(back.deadlineAt).toBe((three.deadlineAt ?? 0) + 20_000);
+  });
+
   it('holds on while nobody of the crew is back on the line: the run runs for nobody', () => {
     const allGone = run(
       [lineDrops('p1', T0 + 1000), lineDrops('p2', T0 + 2000), lineDrops('p3', T0 + 3000)],

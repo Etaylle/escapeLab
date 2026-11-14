@@ -305,8 +305,10 @@ export function applyAction(state: GameState, action: Action): GameState {
  * who left — decided before anything else, an emergency at the relay included, is worked out
  * for a crew that small. Otherwise it goes on, at once where it stood still for the server's
  * maintenance and only them; but with fewer than the smallest crew on the line it counts again
- * whoever it went on without (`waitAgain`), rather than running on with too few counted. An
- * emergency at the relay under way is rolled anew for the consoles then (`relayForCrew`).
+ * whoever it went on without (`waitAgain`), rather than running on with too few counted, and
+ * with nobody left on the line it holds until the first is back, as after the last line's drop
+ * (`holdForNobody`). An emergency at the relay under way is rolled anew for the consoles then
+ * (`relayForCrew`).
  */
 function abandon(
   state: GameState,
@@ -323,7 +325,8 @@ function abandon(
     return lostNow({ ...left, paused: null, calledOff: line }, action.at, line);
   }
   const counted = onTheLine(left) < min ? waitAgain(left, action.at) : left;
-  return resumeWhenBack(relayForCrew(counted, action.at), action.at);
+  const going = resumeWhenBack(relayForCrew(counted, action.at), action.at);
+  return holdForNobody(going, action.at);
 }
 
 /**
@@ -646,11 +649,12 @@ function lineDropped(
 }
 
 /**
- * The run held from `at` where nobody of the crew is on the line: with nobody there it runs for
- * nobody, so it stands still as for the server's maintenance (`wartung`) — the clock, the
- * patrols and the emergencies — until the first of the crew is back (`resumeWhenBack`), every
- * deadline then moved on by the hold. The room still closes once it has stood empty long
- * enough. Nothing where somebody is on the line, or the run stands still already.
+ * The run held from `at` where nobody of the crew is on the line — the last line dropped, or the
+ * last on it gave the seat up: with nobody there it runs for nobody, so it stands still as for
+ * the server's maintenance (`wartung`) — the clock, the patrols and the emergencies — until the
+ * first of the crew is back (`resumeWhenBack`), every deadline then moved on by the hold. The
+ * room still closes once it has stood empty long enough. Nothing where somebody is on the line,
+ * or the run stands still already.
  */
 function holdForNobody(state: GameState, at: number): GameState {
   return onTheLine(state) > 0 || state.paused !== null

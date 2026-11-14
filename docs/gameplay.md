@@ -662,12 +662,12 @@ stays with the world. While a menu stands open, nothing under it takes a key, a 
 controller: the screens are `inert`, and what they listen for on the window hears nothing either —
 the world's keys, the notepad's, the lever's, the arrows of a book, the opening's Space (App.tsx
 `ScreenArea`, hooks.ts `useKeys`); the talk key alone talks on. Opening it pauses nothing: the
-clock, the patrols and the emergencies run on — a run stands still only for the server's
-maintenance, as above —, the line under the list says so in a run, and the crew's strip marks the
-player „im Menü" for as long as it stands open — a phone's row, which shows a doing only for three
-seconds after it changed, for those (`pause-menu`, core `set-menu` and `menus`; six marks at once
-and one more a second, as the voice's signals are allowed). Meanwhile the avatar stands. Under
-reduced motion the menu cuts in.
+clock, the patrols and the emergencies run on — a run stands still only for the server's maintenance
+and while nobody of the crew is on the line, as above —, the line under the list says so in a run,
+and the crew's strip marks the player „im Menü" for as long as it stands open — a phone's row, which
+shows a doing only for three seconds after it changed, for those (`pause-menu`, core `set-menu` and
+`menus`; six marks at once and one more a second, as the voice's signals are allowed). Meanwhile the
+avatar stands. Under reduced motion the menu cuts in.
 
 **The ways out**, as Dota 2 has them:
 
@@ -675,8 +675,10 @@ reduced motion the menu cuts in.
   and the server logs `left to the main menu, the seat kept` where a drop logs a drop. The run goes
   on as after a drop: mission control says „Ben hat sich abgemeldet.", the crew strip „im
   Hauptmenü · 0:12" by his name, and the bar offers „Ohne Ben weiter" after the same wait as for
-  a drop (60 s the first time, 20 s later). The page loads anew on the main menu, the run's card
-  first and lit: „Zurück zum Einsatz" — the way back a drop takes — and „Einsatz aufgeben".
+  a drop (60 s the first time, 20 s later). Only when nobody of the crew is left on the line does
+  the run hold — whoever leaves last stalls nobody, and the room's 10-minute close caps it — until
+  the first one is back. The page loads anew on the main menu, the run's card first and lit:
+  „Zurück zum Einsatz" — the way back a drop takes — and „Einsatz aufgeben".
 - „Einsatz aufgeben" asks once, as Overcooked 2 does: a card says what it means in the world's
   words — „Der Platz wird aufgegeben und lässt sich nicht zurückholen." and „Der Einsatz läuft
   mit 2 Plätzen weiter.", or below the mission's least crew „Mit 1 Platz liegt der Einsatz unter

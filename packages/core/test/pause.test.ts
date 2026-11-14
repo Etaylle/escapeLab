@@ -391,7 +391,9 @@ describe('the server’s maintenance', () => {
     );
     expect(twoBack.paused).toBeNull();
   });
+});
 
+describe('the server’s maintenance, a seat’s ask and a lobby', () => {
   it('lets a new device’s ask for a seat lapse: the device went with the server', () => {
     const asked = applyAction(gone, takeover('p3', DROP_AT));
     expect(asked.away['p3']?.claimUntil).toBeDefined();
