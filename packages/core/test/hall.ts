@@ -81,7 +81,7 @@ const NOTES: Readonly<Partial<Record<PuzzleDef['type'], readonly string[]>>> = {
     'Einweisung: Nach einem Alarm gilt die nächste Zeile, und die Stufe beginnt von vorn.',
   ],
   maze: [
-    'Einweisung: Nur der Schaltplan zeigt die Wände, das Pult nur den Prüfkopf. Vom Ziel ' +
+    'Einweisung: Nur der Schaltplan zeigt die Wände, das Pult nur Prüfkopf und Ziel. Vom Ziel ' +
       'rückwärts ist der Weg kurz.',
   ],
   memory: [
@@ -113,6 +113,15 @@ const NOTES: Readonly<Partial<Record<PuzzleDef['type'], readonly string[]>>> = {
       'sie freigibt.',
     'Einweisung: Den Token erst eingeben, wenn das Tokengerät dieses Konto zeigt.',
   ],
+};
+
+/**
+ * What a station of the hall sets beside its module's defaults, by type: the Zugangskontrolle's
+ * token device turns every 15 s, the shortest period the module takes — a practice waits a
+ * quarter of a minute for an account, not half a minute.
+ */
+const FIELDS: Readonly<Partial<Record<PuzzleDef['type'], Readonly<Record<string, unknown>>>>> = {
+  access: { tokenSec: 15 },
 };
 
 /** A machine as its printed page's title line names it: „Signalkette, Typ SK-4 (Baujahr 1986)". */
@@ -160,7 +169,13 @@ function bayOf(type: PuzzleDef['type'], n: number) {
   const origin = bayOrigin(n);
   const book = `anleitung-${type}`;
   return {
-    puzzle: { type, id: type, title: machine.name, hints: [...(NOTES[type] ?? [])] },
+    puzzle: {
+      type,
+      id: type,
+      title: machine.name,
+      ...FIELDS[type],
+      hints: [...(NOTES[type] ?? [])],
+    },
     stations: plan.consoles.map(({ console, ...spot }) => ({
       puzzleId: type,
       ...at(origin, spot),
