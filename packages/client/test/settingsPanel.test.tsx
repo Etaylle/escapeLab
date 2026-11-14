@@ -330,8 +330,10 @@ describe('the settings’ styles', () => {
   const css = readFileSync(new URL('../src/styles/settings.css', import.meta.url), 'utf8');
 
   it('keep the tab bar whole and still while the tab’s controls scroll under it', () => {
-    expect(css).toMatch(/\n\.settings-card \{[^}]*max-height: calc\(100dvh - 32px\);/);
-    expect(css).toMatch(/\n\.settings-card \{[^}]*overflow: hidden;/);
+    // One height for every tab: the bar stays where the pointer pressed it.
+    const card = css.slice(css.indexOf('\n.settings-card {')).split('}')[0] ?? '';
+    expect(card).toContain('\n  height: min(680px, calc(100dvh - 32px));');
+    expect(card).toContain('overflow: hidden;');
     expect(css).toMatch(/\n\.settings-tabs \{[^}]*flex: none;/);
     expect(css).toMatch(/\n\.settings-body \{[^}]*overflow-y: auto;/);
     expect(css).not.toMatch(/\.settings-tabs \{[^}]*overflow/);

@@ -20,15 +20,16 @@
 /*
  * The card in tabs (Settings.tsx): its head in the title's face, the tab bar in the labels' mono,
  * the tab's controls scrolling under the bar where they run long, and the tab's „Zurücksetzen" at
- * its foot. A phone held sideways, 932 × 430 and smaller, keeps the bar whole and scrolls only the
- * controls.
+ * its foot. One height for every tab, so that the bar stands still from tab to tab — a card that
+ * shrank under the pointer pressing a tab would end the press on the dim, which closes it. A
+ * phone held sideways, 932 × 430 and smaller, keeps the bar whole and scrolls only the controls.
  */
 .settings-card {
   display: flex;
   flex-direction: column;
   width: 100%;
   max-width: 640px;
-  max-height: calc(100dvh - 32px);
+  height: min(680px, calc(100dvh - 32px));
   overflow: hidden;
   padding: 0;
   cursor: auto;

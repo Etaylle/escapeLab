@@ -10380,14 +10380,21 @@ async function muteChecks(page) {
   ]);
 }
 
-/** The arrows on the tab bar: → from „Ton", ← back, each tab opening as it comes; where to. */
+/**
+ * The arrows on the tab bar: → from „Ton", ← back, each tab opening as it comes, the bar standing
+ * still meanwhile; the tabs they opened, and „moved" where the bar did.
+ */
 async function tabSteps(page) {
   const open = () => page.locator('.settings-tab--on').getAttribute('data-tab');
+  const bar = page.locator('.settings-tabs');
   await page.locator('.settings-tab[data-tab="ton"]').focus();
+  const before = await bar.boundingBox();
   await page.keyboard.press('ArrowRight');
   const right = await open();
+  const after = await bar.boundingBox();
   await page.keyboard.press('ArrowLeft');
-  return `${right} ${await open()}`;
+  const moved = before?.y === after?.y ? '' : ' moved';
+  return `${right} ${await open()}${moved}`;
 }
 
 /**
