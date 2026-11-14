@@ -5133,13 +5133,20 @@ async function escapeWorld(page) {
   }
 }
 
-/** Steps `player` back from the open station `modal` with Esc: the first time, panel-close.png. */
+/**
+ * Steps `player` back from the open station `modal` with Esc: the first time, panel-close.png. A
+ * sync station's panel closes on its own once solved; Esc over the world alone would open the
+ * pause menu, so it goes only to a panel still up, and closes the menu again where the panel went
+ * meanwhile (`escapeWorld`).
+ */
 async function stepBack(player, modal) {
   if (!panelCloseShot && (await modal.isVisible())) {
     await capturePanelClose(player, modal);
     return;
   }
-  await player.page.keyboard.press('Escape');
+  if (await modal.isVisible()) {
+    await escapeWorld(player.page);
+  }
   await modal.waitFor({ state: 'hidden', timeout: 3000 });
 }
 
