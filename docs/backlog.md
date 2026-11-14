@@ -174,6 +174,16 @@ die Entscheidung.
   ist der Lauf identisch zu vorher (per Aufrufgraph geprüft). Gemessene Kosten je Gruppe in der
   README.
 
+### H-4 Der gemessene Lauf unter Software-GL urteilt wieder — Status: in Arbeit (H-sgl, Spec `spec-H-sgl.md`) · Größe: M
+- Befund 2026-11-14: Der Lauf mit `SHOTS_SOFTWARE_GL=1` scheitert auf main selbst — Systemcheck am
+  Panel-Ausblend-Check in 5 von 6 Läufen und am letzten Sync-Check, Blackout an meter-swing,
+  panel-close und einem 43-px-Ziel am Handy, der Notstrom-Kasten seit Tagen. Jeder dieser Checks
+  liest die Latenz des Screenshots, als wäre sie die Zeit der Animation; so entscheidet die Last,
+  nicht der Code, und das Tor für Pakete mit Zeichenarbeit je Frame (S-hero) steht offen.
+- Plan: jeden Check die Zeit der Seite lesen lassen (eigene Uhr, Animation API, gehaltenes
+  Standbild), sonst mit benanntem Grund und gemessener Latenz überspringen, nie still; das 43-px-
+  Ziel an der Ursache beheben; Frame-Fenster nennen die Last, unter der sie liefen.
+
 ### T-9 Tests an der Wanduhr — Status: erledigt (2026-11-13) · Größe: S
 - Zwei Tests lasen die echte Uhr und wurden unter Last rot: `certificate.test.ts` (openssl liest
   seine Uhr zweimal, ein Lauf über eine Sekundengrenze machte aus 825 Tagen 825,00001; jetzt
