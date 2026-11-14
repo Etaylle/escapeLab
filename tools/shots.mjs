@@ -42,7 +42,10 @@
  *
  * SHOTS_MISSION names the mission card to start (default Blackout); the
  * crew is two players. Where the first station is a sync station, both
- * press it together, and the run fails unless it solves; right after the
+ * press it together, and the run fails unless it solves and each page's
+ * LED strip shows it done — as the page noted on its own clock from before
+ * the presses, so that the radio's banner over a phone's strip later hides
+ * nothing; right after the
  * presses device-solved.png catches the solved device, its status strip
  * sweeping green, before it closes itself — the run fails where any sync
  * station never shows solved, is gone before it is looked at, lies under an
@@ -205,7 +208,8 @@
  * Signalkette, the rack, the reactor and the relay console where an
  * emergency comes — is also shot with the phone held sideways
  * (device-phone-<station>.png): the device whole in the window, nothing of
- * it scrolling, every control in view and 44 px at least each way — the
+ * it scrolling, every control in view and 44 px at least each way once the
+ * device's opening has ended on the page's clock — the
  * first of them on a large phone too (device-phone-932-<station>.png) — or the
  * run fails. From the Signalkette on the
  * drones are awake: every walk goes from haven to haven past them — the
