@@ -581,7 +581,7 @@ import {
   spottedOn,
   stretchOf,
 } from './patrol.mjs';
-import { stripVerdict, swingVerdict } from './pageclock.mjs';
+import { deviceVerdict, stripVerdict, swingVerdict } from './pageclock.mjs';
 import { percentile } from './percentile.mjs';
 import { decodePng } from './pixeldiff.mjs';
 import {
@@ -7791,6 +7791,40 @@ function deviceReach() {
   };
 }
 
+/** How long a device a phone shows gets to finish its animations before it is measured, ms. */
+const SETTLE_MS = 3000;
+
+/**
+ * In the page: waits until every animation of the open device or relay console that runs now
+ * and ends has ended — the panel's rise as it came up, from 0.98 of its size, a press giving —
+ * or `ms` have passed, and says how long it waited on the page's clock and which of those still
+ * ran then: a control measured mid-rise measures short. One that starts meanwhile, a sign of the
+ * Signalkette flaring on, is not waited for.
+ */
+async function deviceSettled(ms) {
+  const modal = document.querySelector('.station-modal, .relay-modal');
+  const t0 = globalThis.performance.now();
+  const ends = (a) => a.playState === 'running' && a.effect?.getComputedTiming().endTime < Infinity;
+  const running = (modal?.getAnimations({ subtree: true }) ?? []).filter(ends);
+  // An animation cancelled meanwhile, its element gone, has ended too.
+  const ended = running.map((a) =>
+    a.finished.then(
+      () => undefined,
+      () => undefined,
+    ),
+  );
+  let timer;
+  const waited = new Promise((done) => {
+    timer = globalThis.setTimeout(done, ms);
+  });
+  await Promise.race([Promise.all(ended), waited]);
+  globalThis.clearTimeout(timer);
+  const still = running
+    .filter((a) => a.playState === 'running')
+    .map((a) => a.animationName ?? a.transitionProperty ?? 'an animation');
+  return { waited: Math.round(globalThis.performance.now() - t0), still };
+}
+
 /** The station `player` has open: its id, and its console's letter where it has two. */
 function stationSlug(player) {
   const { map, puzzle } = player.seen.view;
@@ -7803,7 +7837,10 @@ function stationSlug(player) {
 /**
  * device-phone-<slug>.png: the device a phone has open — the guest's page, a touch screen —
  * with the phone held sideways: the device whole in the window, nothing of it scrolling, every
- * control in view and 44 px at least each way. The run fails where it is not so. Once a
+ * control in view and 44 px at least each way, measured once its animations ended on the page's
+ * clock (deviceSettled). The run fails where it is not so (pageclock.mjs `deviceVerdict`);
+ * where the device still rose after SETTLE_MS, a control measured short is skipped, the reason
+ * naming the wait. Once a
  * station; a window without touch is left alone. The first device the phone opens is looked at
  * on a large phone held sideways as well (device-phone-932-<slug>.png). The phone goes back to
  * how it was held.
@@ -7831,6 +7868,7 @@ async function deviceOnPhone(player, slug, size) {
   const { page } = player;
   await page.setViewportSize({ width: size.width, height: size.height });
   await sleep(500);
+  const settled = await page.evaluate(deviceSettled, SETTLE_MS);
   const seen = await page.evaluate(deviceReach);
   const shot =
     size === SIZES[3] ? `device-phone-${slug}.png` : `device-phone-${size.width}-${slug}.png`;
@@ -7841,20 +7879,20 @@ async function deviceOnPhone(player, slug, size) {
     console.log(`${name} !! ${player.name}'s phone has no device open`);
     return;
   }
+  const rest = settled.still.length === 0 ? '' : ` — !! ${settled.still.join(', ')} still ran`;
   console.log(
     `${name} ${player.name}'s phone sideways @ ${size.width}x${size.height}: ` +
       `${seen.controls} controls, scrolls ${seen.scroll}px, ${seen.small.length} under 44 px, ` +
-      `${seen.cut.length} cut off` +
+      `${seen.cut.length} cut off; measured once settled, ${settled.waited} ms on the page's ` +
+      `clock${rest}` +
       [...seen.small, ...seen.cut].map((what) => `\n                   !! ${what}`).join(''),
   );
-  const wrong = [
-    seen.controls === 0 && 'no control shown',
-    seen.scroll > 1 && `it scrolls ${seen.scroll}px`,
-    seen.small.length > 0 && `${seen.small.join(', ')} under 44 px`,
-    seen.cut.length > 0 && `${seen.cut.join(', ')} cut off`,
-  ];
-  if (wrong.some(Boolean)) {
-    fail(`${shot}: ${wrong.filter(Boolean).join('; ')}`);
+  const { faults, unjudged } = deviceVerdict(seen, settled);
+  if (faults.length > 0) {
+    fail(`${shot}: ${faults.join('; ')}`);
+  }
+  if (unjudged !== null) {
+    skip('device-phone (targets)', `${shot}: ${unjudged}`);
   }
 }
 

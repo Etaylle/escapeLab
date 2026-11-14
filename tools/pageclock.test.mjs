@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { stripVerdict, swingVerdict } from './pageclock.mjs';
+import { deviceVerdict, stripVerdict, swingVerdict } from './pageclock.mjs';
 
 describe('stripVerdict — a sync station’s strip, as each page noted it', () => {
   it('names when each page showed the station done after its own press', () => {
@@ -82,5 +82,46 @@ describe('swingVerdict — meter-swing.png, the needle held mid-swing by the pag
   it('says where no press was seen on the page', () => {
     const text = swingVerdict(swing({ hold: { ...held, pressed: null } })).text;
     assert.match(text, /began 217 ms into the hold, no probe seen/);
+  });
+});
+
+describe('deviceVerdict — a device a phone shows sideways, measured once it settled', () => {
+  const fine = { scroll: 0, controls: 6, small: [], cut: [] };
+  const still = { waited: 12, still: [] };
+
+  it('passes a device whole in the window with every control a fingertip’s 44 px', () => {
+    assert.deepEqual(deviceVerdict(fine, still), { faults: [], unjudged: null });
+  });
+
+  it('fails a short control measured once nothing moved any more, and the rest as before', () => {
+    const seen = {
+      scroll: 12,
+      controls: 0,
+      small: ['„Kabel 1 messen" 75×43'],
+      cut: ['„Notizen" 129×44'],
+    };
+    assert.deepEqual(deviceVerdict(seen, still), {
+      faults: [
+        'no control shown',
+        'it scrolls 12px',
+        '„Kabel 1 messen" 75×43 under 44 px',
+        '„Notizen" 129×44 cut off',
+      ],
+      unjudged: null,
+    });
+  });
+
+  it('leaves a control measured short while the panel still rose unjudged, naming the wait', () => {
+    const seen = { ...fine, small: ['„Zurücktreten" 133×43'] };
+    assert.deepEqual(deviceVerdict(seen, { waited: 3004, still: ['panel-up'] }), {
+      faults: [],
+      unjudged:
+        '„Zurücktreten" 133×43 measured under 44 px while panel-up still ran, 3004 ms into ' +
+        "the wait on the page's clock: not judged",
+    });
+    assert.deepEqual(deviceVerdict(fine, { waited: 3004, still: ['panel-up'] }), {
+      faults: [],
+      unjudged: null,
+    });
   });
 });

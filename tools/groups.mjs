@@ -147,6 +147,7 @@ export const GROUPS = [
       'lever-countdown.png',
       'lever-countdown-partner.png',
       'device-phone-*.png',
+      'device-phone (targets)',
       'device-phone-relay',
       'station',
       'station.png',

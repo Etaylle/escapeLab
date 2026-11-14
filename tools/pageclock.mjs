@@ -85,3 +85,40 @@ function swingText({ hold, holdMs, way, at, after, moved, onItsWay }) {
     (onItsWay ? '' : ' — !! not swinging')
   );
 }
+
+/**
+ * What a phone showed of its open device (shots.mjs `deviceReach`): how far it scrolls, px; its
+ * controls shown; those under a fingertip's 44 px either way and those cut off, in words.
+ *
+ * @typedef {{ scroll: number, controls: number, small: string[], cut: string[] }} DeviceSeen
+ */
+
+/**
+ * The verdict on a device a phone shows sideways (`seen`, measured once its animations ended or
+ * the wait ran out — `settled`, shots.mjs `deviceSettled`: how long it waited on the page's
+ * clock, and the animations still running then): no control shown, a device that scrolls, a
+ * control under 44 px or cut off is a fault. Where animations still ran, a control measured
+ * short is not judged — the panel's rise may still have scaled it — and why names the wait.
+ *
+ * @param {DeviceSeen} seen
+ * @param {{ waited: number, still: string[] }} settled
+ * @returns {{ faults: string[], unjudged: string | null }}
+ */
+export function deviceVerdict(seen, settled) {
+  const rising = settled.still.length > 0;
+  const faults = [
+    seen.controls === 0 ? 'no control shown' : null,
+    seen.scroll > 1 ? `it scrolls ${seen.scroll}px` : null,
+    seen.small.length > 0 && !rising ? `${seen.small.join(', ')} under 44 px` : null,
+    seen.cut.length > 0 ? `${seen.cut.join(', ')} cut off` : null,
+  ].filter((fault) => fault !== null);
+  return { faults, unjudged: rising ? shortUnjudged(seen.small, settled) : null };
+}
+
+/** Why controls measured short while the device still moved go unjudged; null for none. */
+function shortUnjudged(small, { waited, still }) {
+  return small.length === 0
+    ? null
+    : `${small.join(', ')} measured under 44 px while ${still.join(', ')} still ran, ` +
+        `${waited} ms into the wait on the page's clock: not judged`;
+}
