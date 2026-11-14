@@ -17,6 +17,7 @@ import {
   useEscapeOpensMenu,
   useMenuLayer,
   useMenuMark,
+  type MenuLayer,
 } from './menuLayer.js';
 import { localStore } from './notes.js';
 import { crewPass, keepName, lastColor } from './pass.js';
@@ -578,6 +579,36 @@ function Settings({ live, close }: { live: Connection; close: () => void }) {
   );
 }
 
+/**
+ * The menus over the screens (menuLayer.ts): a room's pause menu, its booklet, the settings — by
+ * the gear, a controller's Start, Esc, in a run the browser's back button too; over a run the
+ * crew sees this player at the menu.
+ */
+function useRoomMenus(live: Connection): MenuLayer {
+  const layer = useMenuLayer(pausePhaseOf(live));
+  usePad(layer.start);
+  useEscapeOpensMenu(layer);
+  useHistoryGuard(layer.phase === 'run', layer.openPause);
+  useMenuMark(live.view, layer.pause, live.send);
+  return layer;
+}
+
+/** What `layer` holds open over the screens: the room's menus, the settings, on the line `live`. */
+function RoomMenus(props: { layer: MenuLayer; live: Connection; missions: MissionInfo[] }) {
+  const { layer, live, missions } = props;
+  return (
+    <MenuLayers
+      layer={layer}
+      mission={roomMission(live)}
+      crew={roomCrew(live)}
+      missions={missions}
+      leaveRoom={live.leaveRoom}
+      toMenu={live.toMenu}
+      settings={<Settings live={live} close={layer.closeSettings} />}
+    />
+  );
+}
+
 /** The connection's error over every screen, until it is dismissed. */
 function ErrorBanner({ conn }: { conn: Connection }) {
   if (conn.error === null) {
@@ -687,14 +718,7 @@ export function App({ boot }: { boot: EditorBoot }) {
   // The mission editor, another page off the join screen; the booklet opens over it.
   const editor = useEditorPage(boot);
   const testRun = useTestRun(live);
-  // The menus over the screens (menuLayer.ts): a room's pause menu, its booklet, the settings —
-  // by the gear, a controller's Start, Esc, in a run the browser's back button too; over a run
-  // the crew sees this player at the menu.
-  const layer = useMenuLayer(pausePhaseOf(live));
-  usePad(layer.start);
-  useEscapeOpensMenu(layer);
-  useHistoryGuard(layer.phase === 'run', layer.openPause);
-  useMenuMark(live.view, layer.pause, live.send);
+  const layer = useRoomMenus(live);
   const contentRef = useRef<HTMLElement>(null);
   // How the run ended, on this screen: the world plays it before the end screen opens.
   const finale = useFinale(live.view ?? live.spectatorView);
@@ -739,15 +763,7 @@ export function App({ boot }: { boot: EditorBoot }) {
         inRoom={layer.phase !== null}
         menu={menu}
       />
-      <MenuLayers
-        layer={layer}
-        mission={roomMission(live)}
-        crew={roomCrew(live)}
-        missions={missions}
-        leaveRoom={live.leaveRoom}
-        toMenu={live.toMenu}
-        settings={<Settings live={live} close={layer.closeSettings} />}
-      />
+      <RoomMenus layer={layer} live={live} missions={missions} />
       <ErrorBanner conn={live} />
       <UpdateNotice />
 
