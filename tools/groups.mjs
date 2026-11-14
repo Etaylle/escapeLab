@@ -85,6 +85,19 @@ export const GROUPS = [
     ],
   },
   {
+    name: 'three',
+    stage: 'drills',
+    needs: [],
+    captures: [
+      'three',
+      'three-lever.png',
+      'three-plate.png',
+      'three-hands.png',
+      'three-reader.png',
+      'three-phone-932.png',
+    ],
+  },
+  {
     // The music packs in the settings' „Ton", on a menu page of its own (client MusicSettings.tsx).
     name: 'music',
     stage: 'drills',
