@@ -7,11 +7,14 @@ import {
   askForTime,
   beepDue,
   clock,
+  clockText,
   formatLeft,
+  formatRun,
   ROUND_TRIPS,
   serverAt,
   serverClock,
   timeLeft,
+  timeRun,
 } from '../src/clock.js';
 import { StageTop, type ColdOpen } from '../src/screens/Game.js';
 import { mapWith } from './fixtures.js';
@@ -87,6 +90,30 @@ describe('the mission’s clock', () => {
     expect(formatLeft(300_000)).toBe('05:00');
     expect(formatLeft(299_001)).toBe('05:00');
     expect(formatLeft(-20)).toBe('00:00');
+  });
+});
+
+describe('the clock of a mission without one', () => {
+  const from = 100_000;
+
+  it('counts the time run up from the moment the view names, in whole seconds gone', () => {
+    const counting = { deadlineAt: null, pausedAt: null, clockFrom: from };
+    expect(timeRun(counting, from + 61_999)).toBe(61_999);
+    expect(clockText(counting, from + 61_999)).toBe('01:01');
+    expect(formatRun(999)).toBe('00:00');
+    expect(formatRun(-20)).toBe('00:00');
+  });
+
+  it('stands still while the run is paused', () => {
+    const paused = { deadlineAt: null, pausedAt: from + 30_000, clockFrom: from };
+    expect(clockText(paused, from + 90_000)).toBe('00:30');
+  });
+
+  it('counts down where a deadline stands, and shows nothing with neither', () => {
+    const both = { deadlineAt: from + 60_000, pausedAt: null, clockFrom: from };
+    expect(clockText(both, from)).toBe('01:00');
+    expect(timeRun(both, from)).toBeNull();
+    expect(clockText({ deadlineAt: null, pausedAt: null }, from)).toBeNull();
   });
 });
 
@@ -281,6 +308,17 @@ describe('the objective bar’s clock', () => {
     expect(clockReads(view)).toBe('05:01');
     vi.setSystemTime(truth + 20_000);
     expect(clockReads(view)).toBe('05:01');
+  });
+
+  it('counts the time run where the mission has no clock', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(truth);
+    offsetBy(0);
+    const clockFrom = truth - 75_400;
+    const view = { ...running(truth), deadlineAt: null, timeLimitSec: 0, clockFrom };
+    expect(clockReads(view)).toBe('01:15');
+    vi.setSystemTime(truth + 2_000);
+    expect(clockReads(view)).toBe('01:17');
   });
 });
 

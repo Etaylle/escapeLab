@@ -98,6 +98,13 @@ export const GROUPS = [
     ],
   },
   {
+    // The Übungshalle played to its won card, in a Systemcheck run.
+    name: 'hall',
+    stage: 'drills',
+    needs: [],
+    captures: ['hall', 'hall-overview.png', 'hall-won.png', 'hall-*.png'],
+  },
+  {
     // The music packs in the settings' „Ton", on a menu page of its own (client MusicSettings.tsx).
     name: 'music',
     stage: 'drills',

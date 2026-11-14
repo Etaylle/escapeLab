@@ -164,6 +164,16 @@ describe('achievementsOf — the seven plaques of a won run', () => {
   });
 });
 
+describe('achievementsOf — a run its last solve won, in a mission without a hatch', () => {
+  it('gives it none of the hatch’s two plaques: there was no hatch to reach', () => {
+    const atTheLast = clean({ noHatch: true });
+    expect(earns('unter-acht-minuten', atTheLast)).toBe(false);
+    expect(earns('erste-schicht', atTheLast)).toBe(false);
+    const others = ACHIEVEMENT_IDS.filter((id) => id !== 'unter-acht-minuten');
+    expect(achievementsOf(atTheLast)).toEqual(others.filter((id) => id !== 'erste-schicht'));
+  });
+});
+
 describe('the view of a finished run', () => {
   it('carries the plaques its report earns, and none while it runs', () => {
     const lab = labMission([{ type: 'wiring', id: 'nur', title: 'Nur' }]);
@@ -186,8 +196,8 @@ describe('the view of a finished run', () => {
       at: T0 + 45_000,
       input: move?.input,
     });
-    // No notes, no drones, no Serverraum on this map: those plaques stay out.
-    const earned = ['ohne-alarm', 'unter-acht-minuten', 'erster-versuch', 'erste-schicht'];
+    // No notes, no drones, no Serverraum on this map, and no hatch: its last solve won the run.
+    const earned = ['ohne-alarm', 'erster-versuch'];
     expect(viewFor(won, 'p1').achievements).toEqual(earned);
     expect(viewFor(won, 'p2').achievements).toEqual(earned);
   });

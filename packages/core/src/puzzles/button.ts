@@ -1,7 +1,13 @@
 import { z } from 'zod';
 import { indicatorLit, type Edgework } from '../edgework.js';
 import type { Rng } from '../rng.js';
-import { commonDefShape, type ApplyResult, type PuzzleModule } from './module.js';
+import {
+  commonDefShape,
+  type ApplyResult,
+  type PuzzleContext,
+  type PuzzleModule,
+  type SolveAid,
+} from './module.js';
 import { costOf, labDocument, type TypePlate } from './printed.js';
 
 /**
@@ -122,7 +128,8 @@ const RELEASE_RULES: ReleaseRule[] = [
 ];
 const RELEASE_OTHERWISE = 1;
 
-const releaseDigit = (strip: StripColour): number =>
+/** The digit the second list names for a strip: the clock has to show it as the button goes. */
+export const releaseDigit = (strip: StripColour): number =>
   RELEASE_RULES.find((rule) => rule.strip === strip)?.digit ?? RELEASE_OTHERWISE;
 
 const releaseWords = (digit: number): string =>
@@ -171,23 +178,49 @@ function clockText(remainingSec: number): string {
   return `${String(min).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
 }
 
+/** The mission clock as it reads: the seconds it shows, and whether it counts them up. */
+interface Reading {
+  sec: number;
+  /** the time run, where the mission has no clock; else the time left, counting down */
+  up: boolean;
+}
+
+/** The mission clock as a move reads it: counting up where the mission has no clock. */
+const readingAt = (ctx: Pick<PuzzleContext, 'remainingSec' | 'elapsedSec'>): Reading =>
+  ctx.elapsedSec === undefined
+    ? { sec: ctx.remainingSec, up: false }
+    : { sec: ctx.elapsedSec, up: true };
+
+/** The mission clock as the solver's aid reads it; null where it has none to read. */
+function readingOfAid(
+  aid: Pick<SolveAid<ButtonInput, ButtonView>, 'remainingSec' | 'elapsedSec'> | undefined,
+): Reading | null {
+  if (aid?.elapsedSec !== undefined) {
+    return { sec: aid.elapsedSec, up: true };
+  }
+  const left = aid?.remainingSec ?? null;
+  return left === null ? null : { sec: left, up: false };
+}
+
 /**
- * Whether letting go with `remainingSec` on the clock counts for `digit`.
+ * Whether letting go with the clock at `clock` counts for `digit`.
  * The operator lets go on what their screen shows, and the release reaches
  * the server up to a second later (network latency), when the clock may
- * already read one second less. So the digit counts if the clock shows it
+ * already have moved on a second: one less where it counts down, one more
+ * where it counts the time run. So the digit counts if the clock shows it
  * now or showed it one second ago.
  */
-function releaseInTime(digit: number, remainingSec: number): boolean {
-  return [remainingSec, remainingSec + 1].some((sec) => clockText(sec).includes(String(digit)));
+function releaseInTime(digit: number, clock: Reading): boolean {
+  const before = clock.up ? clock.sec - 1 : clock.sec + 1;
+  return [clock.sec, before].some((sec) => sec >= 0 && clockText(sec).includes(String(digit)));
 }
 
 /**
  * The solver's half of the release: whether letting go now counts, judged
  * the way `release` judges it. Never without a lit strip or a clock to read.
  */
-const timeToLetGo = (strip: StripColour | null, remainingSec: number | null): boolean =>
-  strip !== null && remainingSec !== null && releaseInTime(releaseDigit(strip), remainingSec);
+const timeToLetGo = (strip: StripColour | null, clock: Reading | null): boolean =>
+  strip !== null && clock !== null && releaseInTime(releaseDigit(strip), clock);
 
 function pick<T>(items: readonly [T, ...T[]], rng: Rng): T {
   return items[Math.floor(rng() * items.length)] ?? items[0];
@@ -229,12 +262,12 @@ function hold(state: ButtonState, move: Move): ApplyResult<ButtonState> {
     : wrong(state, 'held', 'Knopf gehalten statt kurz gedrückt');
 }
 
-function release(state: ButtonState, remainingSec: number): ApplyResult<ButtonState> {
+function release(state: ButtonState, clock: Reading): ApplyResult<ButtonState> {
   if (!state.holding) {
     // Late: an alarm already let the button go, or it was never held.
     return unchanged(state);
   }
-  return releaseInTime(releaseDigit(state.strip), remainingSec)
+  return releaseInTime(releaseDigit(state.strip), clock)
     ? { state: { ...state, holding: false }, solved: true, penalty: null }
     : wrong(state, 'wrong-time', 'Knopf zur falschen Zeit losgelassen');
 }
@@ -263,7 +296,7 @@ export const buttonModule: PuzzleModule<ButtonDef, ButtonState, ButtonInput, But
       case 'hold':
         return hold(state, moveFor(state, ctx.edgework));
       case 'release':
-        return release(state, ctx.remainingSec);
+        return release(state, readingAt(ctx));
     }
   },
 
@@ -323,7 +356,7 @@ export const buttonModule: PuzzleModule<ButtonDef, ButtonState, ButtonInput, But
       throw new Error(`button "${def.id}": solving needs the operator's view of the button`);
     }
     if (operator.holding) {
-      return timeToLetGo(operator.strip, aid?.remainingSec ?? null)
+      return timeToLetGo(operator.strip, readingOfAid(aid))
         ? [{ by: 'operator', input: { kind: 'release' } }]
         : [];
     }

@@ -182,6 +182,8 @@ const gameStateSchema = z.looseObject({
   difficulty: z.enum(DIFFICULTIES),
   players: z.array(playerSchema),
   currentPuzzleIndex: count,
+  // Snapshots from before free order carry no pick: their runs are chains, which never pick.
+  picked: z.boolean().default(false),
   puzzleState: typed<PuzzleState>().nullable(),
   seed: z.number().nullable(),
   roomSeed: z.number().nullable(),
@@ -218,6 +220,8 @@ const gameStateSchema = z.looseObject({
   lightsOutAt: moment,
   lightsDueAt: moment,
   deadlineAt: moment,
+  // Snapshots from before clockless missions carry none: only such a mission reads it.
+  clockFrom: moment.default(null),
   finishedAt: moment,
   penaltySeq: count,
   lastPenaltySec: z.number().nullable(),
