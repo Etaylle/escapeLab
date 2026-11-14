@@ -2,9 +2,11 @@
 
 An account is what the game keeps of a player across runs, restarts and deploys: the name and
 the crew colour they chose, the runs they played and the Erfolge those runs earned („Konten wie
-bei Dota", backlog K-1a). Signing in with Google comes later (K-1b) as one more way into the same
-account. Code: `packages/server/src/{accounts.ts,store/}`, `packages/server/prisma/`, and in the
-client `pass.ts`, `achievements.ts`, `screens/{ProfileChip,MyRuns,Settings}.tsx`.
+bei Dota", backlog K-1a). With a Kennwort it gets an Ausweisnummer, and any device signs into it
+(K-1c, „Sign in" below). Signing in with Google comes last (K-1b) as one more way into the same
+account. Code: `packages/server/src/{accounts.ts,login.ts,store/}`, `packages/server/prisma/`,
+`packages/core/src/login.ts`, and in the client `pass.ts`, `achievements.ts`,
+`screens/{ProfileChip,MyRuns,Settings,LoginSection}.tsx`.
 
 ## One account per crew pass
 
@@ -14,7 +16,8 @@ Wiedereintritt"): an id and a secret minted once. The first time a pass asks whe
 one (`resume`), the server finds its account through the identity `pass`/`<pass id>` — or makes
 one. The identity keeps a SHA-256 of the pass's secret, never the secret; a pass shown with
 another secret is refused („Dieser Ausweis gilt hier nicht."). Seating never waits for the
-store: the account comes to the socket a moment later (`account`).
+store: the account comes to the socket a moment later (`account`), and the seat is bound to it
+then. A pass leads into one account; an account has a pass for every device signed into it.
 
 - **Name.** Typed in the menu's profile; once it has stood still for 0.6 s the account takes it
   (`profile`). A seat taken under a name gives the account that name, so the seat's name and the
@@ -25,9 +28,10 @@ store: the account comes to the socket a moment later (`account`).
 - **Profile.** The chip at the top right of the menu shows the account: its name, its colour and
   the figure in it, and „Konto · 3 Einsätze" — „Gast" while the server has told of none (line
   down, store away).
-- **The key stays on the device.** No sign-in, no password, no e-mail: the pass is the key. A
-  browser whose storage is cleared mints a new pass and with it gets a new account; the old one
-  stays where it was, out of reach.
+- **The pass is the device's key.** Without a Kennwort it is the account's only way in: a browser
+  whose storage is cleared mints a new pass and with it gets a new account; the old one stays
+  where it was, out of reach. With a Kennwort, any device's pass signs into the account
+  („Sign in").
 - **One pass a socket, so many new accounts an address.** A socket speaks for the first pass it
   shows; another is refused there („Diese Verbindung gehört schon einem anderen
   Dienstausweis."). An address may make 60 new accounts a minute; past that a pass without one
@@ -53,6 +57,59 @@ store: the account comes to the socket a moment later (`account`).
   every other such. A limiter forgets an address once its minute has passed — at the next
   check, or by its timer — and keeps no key longer than 64 characters.
 
+## Sign in
+
+In the settings' „Konto" (its section „Ausweis") an account without a Kennwort reads what one
+gives it — „Mit Ausweisnummer und Kennwort holt dieses Konto seine Einsätze und Erfolge auf jedes
+Gerät." — and offers „Kennwort setzen" and „Anmelden"; the menu's profile offers „Anmelden" to
+such an account too, opening „Konto" on it. The first Kennwort, typed twice, makes the server
+mint the account's Ausweisnummer: „EL-", then eight characters of digits and capitals without 0,
+O, 1 and I in two fours (`EL-7K3M-9Q2D`), each drawn from the system's CSPRNG, minted anew where
+one is taken. It is shown once large until „Notiert", and in „Konto" from then on, with a button
+to copy it. It is read however it is typed: any case, spaces or dashes, „EL" or not.
+
+- **The Kennwort** has 8 to 128 characters, counted as typed, and nothing else asked of it. It
+  is NFKC-normalised — the same umlaut from any keyboard — and kept as `scrypt$N$r$p$salt$hash`
+  (N 2^15, r 8, p 1, a random 16-byte salt, a 32-byte key, hex), compared in constant time;
+  never logged, never sent back, and a store error that names its hash is logged with the hash
+  cut. „Kennwort ändern" asks for the present one and replaces it only where it is still the one
+  checked. There is no e-mail and no recovery: „Konto" says plainly that a forgotten Kennwort
+  on a lost device loses the account.
+- **Anmelden** re-points the device's pass to the account. The account the pass led into before
+  is deleted where nothing is left of it — no way in, no run, no Erfolg; one that played runs
+  stays, its names in the Bestenliste, out of reach (the sign-in says so first). The device's
+  Erfolge are the new account's from then on, and the join screen asks where it sits anew. A
+  sign-in is refused while a run on binds the pass („Ein laufender Einsatz bindet diesen
+  Dienstausweis: Anmelden erst danach."), before any Kennwort is tried; a lobby seat goes along.
+  Signing in again, as a page sends it twice, changes nothing.
+- **Wrong** is one answer for a wrong Ausweisnummer and a wrong Kennwort: „Ausweisnummer oder
+  Kennwort stimmen nicht." — and every try costs the same scrypt work, a number nobody holds
+  included, so neither the words nor the time tell which numbers are given.
+- **Abmelden**, offered to an account with a Kennwort only — without one it would be out of reach
+  for good, and the server refuses it („Ohne Kennwort wäre dieses Konto nach dem Abmelden nicht
+  mehr erreichbar.") — lets the device's pass go of the account, which stays whole and waits for
+  its Kennwort: the pass's way in is deleted. The device mints a new pass, a guest's, forgets the
+  Erfolge, the rooms' snapshots and the tab's room of the old one, and loads anew; another tab
+  of the browser that sees the pass change loads anew too. A seat the pass held — a run's, or a
+  lobby's — stays the account's (gameplay.md, „Verbindung und Wiedereintritt"): its line drops
+  as a drop does („Abgemeldet: Der Platz bleibt beim Konto."), and the pass keeps its way in for
+  that seat alone under the hash of a secret nobody holds, so that the run credits the account
+  as ever; the pass itself gets in nowhere any more.
+- **Konto wechseln** is both in one dialog and one transaction: a new pass, minted by the
+  device, signs into the other account and the old pass signs out; a wrong Kennwort changes
+  nothing.
+
+| Limit | Counts | Kept | Lets go |
+| --- | --- | --- | --- |
+| 10 wrong tries a minute | wrong Ausweisnummern and Kennwörter from an address — Cloudflare's `cf-connecting-ip` behind Render, else the socket's own, as above | in memory | once the oldest is a minute old |
+| 5 wrong Kennwörter, then 60 s locked | per Ausweisnummer, from any address, a number nobody holds too | in memory | at a right Kennwort, and as the lock ends |
+| 30 changes a minute | every try, a Kennwort set or changed, a sign-out (the socket's changes, as above) | per socket | after a minute |
+
+Only wrong tries count against an address and a number: thirty right sign-ins of a lecture behind
+one NAT go through in the same minute, and a try refused counts nothing, so no limit holds an
+address or a number longer than a minute after the wrong tries stop. The log says when an address
+is refused or a number locks, naming neither, and a restart forgets the limits.
+
 ## What is kept
 
 With `DATABASE_URL` the server keeps everything in Postgres (`packages/server/prisma/
@@ -61,12 +118,13 @@ schema.prisma`, tables in snake_case):
 | Table | What it holds |
 | --- | --- |
 | `accounts` | the display name, the colour, when the account was made and last seen |
-| `identities` | provider `pass`, the pass's id, the hash of its secret, the account |
+| `identities` | a way in: provider `pass` — a device's pass id, the SHA-256 of its secret — or `login` — the account's Ausweisnummer, the scrypt hash of its Kennwort, one an account at most; the account |
 | `runs` | the report of each finished run (core `report.ts`) without names, and the columns the Bestenliste ranks by: mission, difficulty, outcome, duration, alarms, crew size, Tagesschicht, seed, room code, start and end; each run once, by its room code and its start |
 | `run_members` | a seat of each run: its place in the crew, what it did, the account of the pass that held it where it had one, and only then the name played under |
 | `achievements` | an account, the plaque by mission („blackout:ohne-alarm"), the end of the run that first earned it |
 
-No e-mail address, no password, no IP address, nothing from Google.
+No e-mail address, no Kennwort — only its scrypt hash —, no IP address, nothing from Google. A
+login is a row of `identities` like a pass's: no table of its own, no migration.
 
 ## Runs and Erfolge
 
@@ -76,9 +134,14 @@ accounts, each once, dated by the first run that earned it. A seat counts for an
 where its pass showed the account's secret: the room hands over each seat's pass id with the
 hash of the secret the seat was bound with, and an id alone credits nobody. A seat taken over by
 another device (the crew's yes to an „Übernahme") is that device's pass's from then on: the run,
-its Erfolge and the seat's name go to the claiming pass's account. A seat without an account keeps
-no name: its account was deleted while the run went on, or none was made, and no account could
-take the name off again. A run is kept once: a room taken up again from a snapshot made before
+its Erfolge and the seat's name go to the claiming pass's account; so is a seat a device of the
+account took back without a yes (gameplay.md, „Verbindung und Wiedereintritt"), and a seat whose
+pass signed out credits the account still by the way in kept for it („Sign in"). A seat without
+an account keeps no name: its account was deleted while the run went on, or none was made, and no
+account could take the name off again. A sign-in locks the account it leaves in the database
+before it counts what is left of it: a run landing at that moment with a seat for it keeps the
+seat, and one whose account went while it was written is written once more without it (the log:
+`an account of the crew of … went meanwhile: asked again`). A run is kept once: a room taken up again from a snapshot made before
 its end may finish it a second time, and the log says `run of … in room … kept already` — the
 unique key on room and start, no other (`runs_once`). Where this server's Bestenliste did not
 count that run yet — another instance kept it during a deploy, or the write landed while its
@@ -99,8 +162,8 @@ cache did not know it, or knows it first from this very run.
 ## Deleting an account
 
 In the settings, „Konto löschen" asks first, saying what goes and what stays; „Endgültig löschen"
-sends `delete-account`. The server deletes the account, its identities, its Erfolge and its seats
-in the runs. The runs stay — the Bestenliste keeps their times and counts — without its name: its
+sends `delete-account`. The server deletes the account, its identities — every device's pass and
+its login, so the Ausweisnummer opens nothing any more —, its Erfolge and its seats in the runs. The runs stay — the Bestenliste keeps their times and counts — without its name: its
 seat is gone, the crew shows the others, and the Bestenliste takes the name off the runs the
 account held, reading no other. The device forgets
 the name, the colour and the Erfolge it kept; the pass stays, and the next visit to the menu
@@ -145,7 +208,8 @@ store in one line either way.
   running on it have ended, never earlier — asked again after `$disconnect`, Prisma throws
   „Engine is not yet connected" uncaught and the process ends. A connection that could not be
   opened (P1001, P1002) is asked again of the same client. A refusal, a unique key say, is never
-  asked again. A paused Neon takes seconds to wake and open a connection, past the 2 s Prisma
+  asked again — but a run's seat for an account that went meanwhile (P2003), written once more
+  without it („Runs and Erfolge"). A paused Neon takes seconds to wake and open a connection, past the 2 s Prisma
   gives a transaction to start: the run's transaction waits up to 15 s, and one that did not
   start in time is asked once more as well (`did not start the transaction in time (P2028):
   asked again`).

@@ -575,7 +575,7 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   mit freier Stationsreihenfolge und ohne Uhr, und die Mission „Übungshalle": jede Station einmal,
   Regeln daneben, aus der Modulliste erzeugt, im Harness bis zum Ende gespielt.
 
-### K-1 Konto wie bei Dota — Status: K-1a erledigt (K-accounts, Merge 2026-11-14; vier Review-Runden, Cloud-CI grün mit Postgres-Dienst); K-1b bereit (Entscheidung Uros 2026-11-12: eigene Konten, Google zuletzt) · Größe: L
+### K-1 Konto wie bei Dota — Status: K-1a erledigt (K-accounts, Merge 2026-11-14; vier Review-Runden, Cloud-CI grün mit Postgres-Dienst); K-1c erledigt (K-login); K-1b zuletzt (Entscheidung Uros 2026-11-12: eigene Konten, Google zuletzt) · Größe: L
 - Reihenfolge: **K-1a** Datenbank (Neon-Postgres, Prisma) mit Konto je Dienstausweis (Kennung,
   Anzeigename, Farbe, Erfolge), Läufe und Bestenliste in der Datenbank statt der Datei, die
   Render bei jedem Deploy löscht, „Meine Einsätze"; ohne `DATABASE_URL` weiter Datei und Gast
@@ -600,13 +600,18 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   Erfolge je Konto.
 - Alternative mit eigenen Konten (Name und Passwort, `crypto.scrypt`, Neon-Postgres,
   Wiederherstellungscodes statt E-Mail): mehr Code, mehr Angriffsfläche, kein Dritter.
-- **K-1c** An- und Abmelden, Konto wechseln — Status: bereit (Spec `spec-K-login.md`, nach
-  U-pause) · Größe: M. Uros 2026-11-14: „Bei Konten sollte man sich an- und abmelden oder wechseln
-  können." Ausweisnummer vom Server geprägt (lesbar, ohne 0/O/1/I), Kennwort vom Spieler gesetzt
-  (`crypto.scrypt`, 8–128 Zeichen, kein E-Mail, noch keine Wiederherstellung), „Anmelden" zeigt
-  den Dienstausweis des Geräts auf das Konto um, „Abmelden" prägt einen neuen Ausweis (Gast), der
-  Platz im Einsatz folgt dem Konto (Wiedereintritt von jedem angemeldeten Gerät ohne Übernahme);
-  Limits je Adresse und je Ausweisnummer. Google (K-1b) bleibt zuletzt.
+- **K-1c** An- und Abmelden, Konto wechseln — Status: erledigt (K-login, Spec
+  `spec-K-login.md`) · Größe: M. Uros 2026-11-14: „Bei Konten sollte man sich an- und abmelden
+  oder wechseln können." Ausweisnummer vom Server geprägt (`EL-7K3M-9Q2D`, ohne 0/O/1/I),
+  Kennwort vom Spieler gesetzt (`crypto.scrypt` N 2^15, r 8, p 1, Salz je Kennwort, Vergleich in
+  konstanter Zeit, 8–128 Zeichen, kein E-Mail, noch keine Wiederherstellung — der Reiter sagt es),
+  „Anmelden" in „Konto" und am Profil des Menüs zeigt den Dienstausweis des Geräts auf das Konto
+  um (leeres Gastkonto gelöscht), „Abmelden" prägt einen neuen Ausweis (Gast), „Konto wechseln"
+  beides in einem Schritt; der Platz im Einsatz folgt dem Konto (Wiedereintritt von jedem
+  angemeldeten Gerät ohne Übernahme, auch nach einem Neustart aus dem Snapshot); Limits im
+  Speicher: 10 falsche Versuche je Adresse und Minute, 5 falsche je Ausweisnummer, dann 60 s
+  Sperre — nur falsche zählen, damit ein Hörsaal hinter einem NAT sich anmeldet
+  (`docs/accounts.md`, „Sign in"). Google (K-1b) bleibt zuletzt.
 
 ## Nur lokal
 
