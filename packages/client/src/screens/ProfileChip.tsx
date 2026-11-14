@@ -45,6 +45,27 @@ interface ChipProps {
   onSignIn?: () => void;
 }
 
+/**
+ * The name field's text as the account (`account`) changes from `before`, where it does: the
+ * account's name while nothing was typed on this page — a name typed goes to the account
+ * instead — another account's name once the device signed into it, typed or not, and none once
+ * the account is deleted; null to leave the field as it is. Accounts are told apart by when each
+ * was made.
+ */
+export function nameFromAccount(
+  account: AccountView | null,
+  before: AccountView | null,
+  typed: boolean,
+): string | null {
+  if (account === null) {
+    return before === null ? null : '';
+  }
+  if (before !== null && before.since !== account.since) {
+    return account.name;
+  }
+  return typed || account.name === '' ? null : account.name;
+}
+
 /** Whether the profile offers to sign in: the server told of an account, one without a Kennwort. */
 export function offersSignIn(account: AccountView | null): boolean {
   return account !== null && account.login === null;

@@ -28,7 +28,7 @@ import {
   type SectionProps,
 } from './MenuPanels.js';
 import { useComesOn } from './phosphor.js';
-import { ProfileChip, WAVE_SETTLE_MS } from './ProfileChip.js';
+import { nameFromAccount, ProfileChip, WAVE_SETTLE_MS } from './ProfileChip.js';
 
 interface Props {
   send: (msg: ClientMessage) => void;
@@ -86,22 +86,6 @@ export const MENU_LEAD =
 
 /** How long a typed name stands still before the account takes it, ms: as the figure waits. */
 export const NAME_SETTLE_MS = WAVE_SETTLE_MS;
-
-/**
- * The name field's text as the account (`account`) changes from `before`, where it does: the
- * account's name while nothing was typed on this page — a name typed goes to the account
- * instead — and none once the account is deleted; null to leave the field as it is.
- */
-export function nameFromAccount(
-  account: AccountView | null,
-  before: AccountView | null,
-  typed: boolean,
-): string | null {
-  if (account === null) {
-    return before === null ? null : '';
-  }
-  return typed || account.name === '' ? null : account.name;
-}
 
 /**
  * The name field's text: starting with the name the pass keeps, kept again as it is typed, and

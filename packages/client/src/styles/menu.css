@@ -497,6 +497,21 @@
 
   .profile-chip {
     justify-self: start;
+    flex-wrap: wrap;
+    row-gap: 6px;
+  }
+
+  /*
+   * What the account holds and the sign-in take a line each under the profile: the chip keeps to
+   * the phone's width.
+   */
+  .profile-slot,
+  .profile-chip .profile-sign-in {
+    flex-basis: 100%;
+    padding: 6px 0 0;
+    border-left: none;
+    border-top: 1px solid var(--line-2);
+    text-align: left;
   }
 
   .menu-body {

@@ -4,9 +4,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { AccountView } from '@escapelab/core';
 import { ACHIEVEMENTS_KEY, fillEarned, readEarned } from '../src/achievements.js';
 import { lastColor, lastName, PASS_KEY } from '../src/pass.js';
-import { nameFromAccount } from '../src/screens/Join.js';
 import { createRoomMessage, joinMessage } from '../src/screens/MenuPanels.js';
-import { accountLine, ProfileChip, runsText } from '../src/screens/ProfileChip.js';
+import { accountLine, nameFromAccount, ProfileChip, runsText } from '../src/screens/ProfileChip.js';
 import { nameToTake, ProfileFields } from '../src/screens/ProfileFields.js';
 import {
   ACCOUNT_DELETED,
@@ -90,6 +89,11 @@ describe('the profile, as the account', () => {
     expect(nameFromAccount({ ...ANNA, name: '' }, null, false)).toBeNull();
     expect(nameFromAccount(null, null, false)).toBeNull();
     expect(nameFromAccount(null, ANNA, true)).toBe('');
+    // Signed into another account — made at another moment — the field takes its name, typed too.
+    const bens = { ...ANNA, name: 'Ben', since: ANNA.since + 1 };
+    expect(nameFromAccount(bens, ANNA, true)).toBe('Ben');
+    expect(nameFromAccount({ ...bens, name: '' }, ANNA, true)).toBe('');
+    expect(nameFromAccount({ ...ANNA, name: 'Anna B.' }, ANNA, true)).toBeNull();
   });
 
   it('asks a seat in the account’s colour, opened or joined', () => {
@@ -196,13 +200,20 @@ describe('„Konto löschen" in the settings', () => {
     expect(got.banner).toBeNull();
   });
 
+  it('says an account with a Kennwort takes its Ausweisnummer with it, on every device', () => {
+    const line = deleteLine({ ...ANNA, login: 'EL-7K3M-9Q2D' });
+    expect(line).toContain('Die Ausweisnummer EL-7K3M-9Q2D öffnet danach nichts mehr');
+    expect(line.endsWith('Der Dienstausweis dieses Geräts bleibt.')).toBe(true);
+    expect(deleteLine(ANNA)).not.toContain('Ausweisnummer');
+  });
+
   it('says the account is gone once it is, and shows nothing where there never was one', () => {
     expect(section(null, 'sent').html).toContain(ACCOUNT_DELETED);
     expect(section(null, 'idle').html).toBe('');
   });
 
   it('names what deleting takes and leaves, by the runs played', () => {
-    const kept = { store: 'database' } as const;
+    const kept = { store: 'database', login: null } as const;
     expect(deleteLine({ ...kept, runs: 0 })).toBe(
       'Löscht Name, Farbe und Erfolge des Kontos. Der Dienstausweis dieses Geräts bleibt.',
     );
@@ -211,11 +222,13 @@ describe('„Konto löschen" in the settings', () => {
   });
 
   it('says the run log keeps the name where the server keeps one, and no database', () => {
-    const line = deleteLine({ runs: 3, store: 'run-log' });
+    const line = deleteLine({ runs: 3, store: 'run-log', login: null });
     expect(line).toContain('nimmt den Namen aus der Bestenliste dieses Servers.');
     expect(line).toContain('Sein Laufprotokoll behält ihn und führt ihn nach einem Neustart');
     expect(line).not.toContain('Einsätzen');
-    expect(deleteLine({ runs: 0, store: 'run-log' })).toBe(deleteLine({ ...ANNA, runs: 0 }));
+    expect(deleteLine({ runs: 0, store: 'run-log', login: null })).toBe(
+      deleteLine({ ...ANNA, runs: 0 }),
+    );
     expect(section({ ...ANNA, store: 'run-log' }, 'asked').html).toContain('Laufprotokoll');
   });
 

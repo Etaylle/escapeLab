@@ -409,27 +409,35 @@ export function accountFacts(account: AccountView): string {
 /** What deleting the account leaves on this device, whatever the server keeps. */
 const PASS_STAYS = 'Der Dienstausweis dieses Geräts bleibt.';
 
+/** What deleting an account with a Kennwort takes besides: its Ausweisnummer opens it no more. */
+const NUMBER_GOES = (login: string): string =>
+  `Die Ausweisnummer ${login} öffnet danach nichts mehr, auf keinem Gerät.`;
+
 /**
  * What deleting the account deletes, and what it leaves, said before it is done: where the
  * server keeps a run log (`AccountStore`), the log keeps the name, and so does the Bestenliste
- * once the server starts anew.
+ * once the server starts anew; an account with a Kennwort loses its Ausweisnummer with it.
  */
-export function deleteLine(account: Pick<AccountView, 'runs' | 'store'>): string {
-  const { runs, store } = account;
+export function deleteLine(account: Pick<AccountView, 'runs' | 'store' | 'login'>): string {
+  const goes = account.login === null ? '' : ` ${NUMBER_GOES(account.login)}`;
+  return `${deletesWhat(account)}${goes} ${PASS_STAYS}`;
+}
+
+/** What deleting the account takes off it and its runs (`deleteLine`): by runs and store. */
+function deletesWhat({ runs, store }: Pick<AccountView, 'runs' | 'store'>): string {
   if (runs === 0) {
-    return `Löscht Name, Farbe und Erfolge des Kontos. ${PASS_STAYS}`;
+    return 'Löscht Name, Farbe und Erfolge des Kontos.';
   }
   if (store === 'run-log') {
     return (
       'Löscht Name, Farbe und Erfolge des Kontos und nimmt den Namen aus der Bestenliste dieses ' +
-      'Servers. Sein Laufprotokoll behält ihn und führt ihn nach einem Neustart wieder auf. ' +
-      PASS_STAYS
+      'Servers. Sein Laufprotokoll behält ihn und führt ihn nach einem Neustart wieder auf.'
     );
   }
   const where = runs === 1 ? 'seinem Einsatz' : `seinen ${runs} Einsätzen`;
   return (
     `Löscht Name, Farbe und Erfolge des Kontos und nimmt den Namen aus ${where}; die ` +
-    `Einsätze bleiben in der Bestenliste. ${PASS_STAYS}`
+    'Einsätze bleiben in der Bestenliste.'
   );
 }
 

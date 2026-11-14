@@ -413,6 +413,7 @@
 .settings-login-field {
   display: grid;
   gap: 4px;
+  margin: 0;
   font-size: 13px;
   color: var(--muted);
 }
@@ -433,6 +434,11 @@
   padding: 12px;
   border: 1px solid var(--accent-dark);
   border-radius: 6px;
+}
+
+.settings-login-minted .settings-note {
+  font-size: 13px;
+  color: var(--text);
 }
 
 .settings-login-big {
