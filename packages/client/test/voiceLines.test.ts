@@ -236,8 +236,8 @@ describe('the recorded lines', () => {
     expect(recordings.filter((name) => !named.has(name)), REMEDY).toEqual([]);
   });
 
-  it('keeps every file under 200 kB and the folder under 12 MB, room for MP3', () => {
-    expect([MAX_FILE_BYTES, MAX_FOLDER_BYTES]).toEqual([200 * 1024, 12 * 1024 * 1024]);
+  it('keeps every file under 200 kB and the folder under 24 MB, room for MP3', () => {
+    expect([MAX_FILE_BYTES, MAX_FOLDER_BYTES]).toEqual([200 * 1024, 24 * 1024 * 1024]);
     const sizes = recordings.map((name) => statSync(join(VOICE_DIR, name)).size);
     for (const [i, size] of sizes.entries()) {
       expect(size, `${recordings[i]} is ${size} bytes`).toBeLessThanOrEqual(MAX_FILE_BYTES);
@@ -245,15 +245,18 @@ describe('the recorded lines', () => {
     expect(sizes.reduce((sum, size) => sum + size, 0)).toBeLessThanOrEqual(MAX_FOLDER_BYTES);
   });
 
-  it('has room for every recording the cast in service needs, at the bytes a character', () => {
-    // The lines awaiting their render, recorded as the others are, still fit the caps.
+  it('has room for every recording of the whole cast at the bytes a character', () => {
+    // The lines awaiting their render, and every person of the roster's, still fit the caps.
     const entries = Object.values(manifest.lines);
     const bytes = entries.reduce((sum, e) => sum + statSync(join(VOICE_DIR, e.file)).size, 0);
     const perCharacter = bytes / entries.reduce((sum, e) => sum + e.text.length, 0);
-    const longest = Math.max(...needed.map(({ text }) => text.length));
-    const all = needed.reduce((sum, { text }) => sum + text.length, 0);
+    const lines = [...shippedLines()];
+    const longest = Math.max(...lines.map(([text]) => text.length));
+    const all = lines.reduce((sum, [text, { role }]) => sum + text.length * roster[role].length, 0);
     expect(longest * perCharacter, 'the longest line').toBeLessThanOrEqual(MAX_FILE_BYTES);
-    expect(all * perCharacter, 'every recording').toBeLessThanOrEqual(MAX_FOLDER_BYTES);
+    expect(all * perCharacter, 'every recording of the cast').toBeLessThanOrEqual(MAX_FOLDER_BYTES);
+    // Over the cap that held one voice's lines: the cast needs its room.
+    expect(all * perCharacter).toBeGreaterThan(12 * 1024 * 1024);
   });
 
   it('knows how long each line speaks, and finds it by who says it and its words', () => {

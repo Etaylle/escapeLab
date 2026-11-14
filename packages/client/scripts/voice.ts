@@ -146,8 +146,12 @@ export const BITRATE = 48000;
  * words at the operator's pace, some 13 s.
  */
 export const MAX_FILE_BYTES = 200 * 1024;
-/** The most the folder may take, bytes: 12 MB, room for every line as ElevenLabs' MP3. */
-export const MAX_FOLDER_BYTES = 12 * 1024 * 1024;
+/**
+ * The most the folder may take, bytes: 24 MB, room for the whole cast's lines as ElevenLabs' MP3
+ * — three operators, the plant and the Schichtleitung, 260 recordings, some 20.5 MB at the 867
+ * bytes a character the recordings take (12 MB held one voice's 100 lines).
+ */
+export const MAX_FOLDER_BYTES = 24 * 1024 * 1024;
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 /** The shipped missions. */
@@ -1251,7 +1255,7 @@ function finish(manifest: Manifest, made: number): void {
   if (over.length > 0) process.exitCode = 1;
 }
 
-/** --design <slot>: three samples of a person's voice, each said with its file, and how to keep one. */
+/** --design <slot>: three samples of a person's voice, each with its file, and how to keep one. */
 async function design(asked: string | undefined): Promise<void> {
   const slot = slotOf(readRoster(), asked);
   loadApiKey();
