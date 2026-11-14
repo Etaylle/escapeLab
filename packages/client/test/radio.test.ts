@@ -15,8 +15,11 @@ import {
   radioNews,
   RANKS,
   rankOf,
+  radioName,
   reportLine,
+  speakerOf,
   voiced,
+  voiceLineOf,
   withNews,
   type Notice,
 } from '../src/radio.js';
@@ -73,7 +76,8 @@ describe('radioNews — which lines get a banner', () => {
   });
 
   it('names mission control on its lines and the last shift on a revealed note', () => {
-    expect(bannerFrom(event('radio', 0))).toBe('LEITSTELLE');
+    // A line kept from before the cast: the Leitstelle's, its first person's — whose it was.
+    expect(bannerFrom(event('radio', 0))).toBe('LEITSTELLE · HELMUT');
     expect(bannerFrom(event('hint', 0))).toBe('Notiz der letzten Schicht');
   });
 
@@ -91,7 +95,7 @@ describe('mission control speaking up unasked (a nudge)', () => {
 
   it('goes on the air like any of its lines: a banner from the Leitstelle, spoken', () => {
     expect(labels(radioNews([event('puzzle', 900), nudge], 0, NOW))).toEqual([nudge.label]);
-    expect(bannerFrom(nudge)).toBe('LEITSTELLE');
+    expect(bannerFrom(nudge)).toBe('LEITSTELLE · HELMUT');
     expect(fromControl(nudge)).toBe(true);
     expect(voiced(nudge)).toBe(true);
     expect(voiced(event('hint', 0))).toBe(false);
@@ -138,7 +142,7 @@ describe('the plant’s loudspeakers on their emergency power (an emergency’s 
     expect([fromPlant(start), fromControl(start), bannerFrom(start)]).toEqual([
       false,
       true,
-      'LEITSTELLE',
+      'LEITSTELLE · HELMUT',
     ]);
     expect(fromPlant(event('radio', 0))).toBe(false);
   });
@@ -266,7 +270,62 @@ describe('the operator’s answers on the air, by rank', () => {
     ]);
     const ended = [event('finish', 100), won];
     expect(radioNews(ended, 0, NOW)).toEqual([]);
-    expect(lastWordOf([said('escape', 'raus'), event('finish', 0), won])).toBe(won.label);
+    expect(lastWordOf([said('escape', 'raus'), event('finish', 0), won])).toEqual({
+      text: won.label,
+      person: 'helmut',
+    });
     expect(lastWordOf([said('escape', 'raus')])).toBeNull();
+    // A run lost: the Schichtleitung's word, by the person the night's cast named.
+    const hers = { ...lost, speaker: { role: 'lead', person: 'kessler' } } as const;
+    expect(lastWordOf([event('finish', 0), hers])).toEqual({ text: lost.label, person: 'kessler' });
+  });
+});
+
+describe('who speaks on the air', () => {
+  /** A line at `moment` said by `person` of the night's cast, as the reducer logs it. */
+  type Moment = NonNullable<RunEvent['moment']>;
+  const by = (moment: Moment, person: string, label: string = moment): RunEvent => ({
+    ...event(moment === 'nudge' ? 'nudge' : 'radio', 0, label),
+    moment,
+    speaker: { role: moment === 'clock' || moment === 'lost' ? 'lead' : 'operator', person },
+  });
+
+  it('names the person of the night’s cast in the banner, beside the role', () => {
+    expect(bannerFrom(by('solved', 'marta'))).toBe('LEITSTELLE · MARTA');
+    expect(bannerFrom(by('nudge', 'jonas'))).toBe('LEITSTELLE · JONAS');
+    expect(bannerFrom(by('clock', 'kessler'))).toBe('SCHICHTLEITUNG · KESSLER');
+    // The plant's loudspeakers are no person: their banner says what they are.
+    const plant = { role: 'pa', person: 'anlage' } as const;
+    const message: RunEvent = { ...event('radio', 0), moment: 'announce', speaker: plant };
+    expect(bannerFrom(message)).toBe('DURCHSAGE');
+    // Somebody the roster does not know: the role alone.
+    expect(bannerFrom(by('start', 'niemand'))).toBe('LEITSTELLE');
+  });
+
+  it('asks the voice for the recording of whoever said it', () => {
+    expect(voiceLineOf(by('solved', 'marta', 'Notstrom steht.'))).toEqual({
+      text: 'Notstrom steht.',
+      person: 'marta',
+    });
+    // A line of a run kept before the cast: the role's first person, whose recordings it had.
+    const old = (moment?: Moment) =>
+      speakerOf({ ...event('radio', 0), ...(moment === undefined ? {} : { moment }) });
+    expect([old('start'), old('announce'), old('clock'), old(undefined)]).toEqual([
+      { role: 'operator', person: 'helmut' },
+      { role: 'pa', person: 'anlage' },
+      { role: 'lead', person: 'kessler' },
+      { role: 'operator', person: 'helmut' },
+    ]);
+  });
+
+  it('reads on the HUD’s radio strip as the Leitstelle’s or the Schichtleitung’s', () => {
+    expect(radioName(by('clock', 'kessler'))).toBe('Schichtleitung');
+    expect(tickerLine(by('clock', 'kessler', 'Noch zwei Minuten.'), undefined, false)).toEqual({
+      icon: 'radio',
+      text: 'Schichtleitung: Noch zwei Minuten.',
+    });
+    expect(tickerLine(by('solved', 'marta', 'Weiter.'), undefined, false)?.text).toBe(
+      'Leitstelle: Weiter.',
+    );
   });
 });

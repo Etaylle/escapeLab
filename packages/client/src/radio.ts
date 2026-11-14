@@ -1,4 +1,14 @@
-import { NUDGED, roleOf, type RadioMoment, type RunEvent } from '@escapelab/core';
+import {
+  NUDGED,
+  personOf,
+  roleOf,
+  ROSTER,
+  type RadioMoment,
+  type Role,
+  type RunEvent,
+  type Speaker,
+} from '@escapelab/core';
+import type { VoiceLine } from './world/radioVoice.js';
 
 /**
  * How long a line stays on the air at least — a line spoken longer stays while it speaks
@@ -44,8 +54,24 @@ export function fromControl(event: RunEvent): boolean {
 }
 
 /**
- * Whether a line is the operator's last word on a run, won or lost: the end card says it after
- * its sting (world/endTheme.ts), never the objective bar.
+ * Who says a line on the air: the role and the person its event names (core cast.ts
+ * `speakerAt`); a line of a run kept before the cast, the role's first person, whose recordings
+ * it had then.
+ */
+export function speakerOf(event: RunEvent): Speaker {
+  if (event.speaker !== undefined) return event.speaker;
+  const role = event.moment === undefined ? 'operator' : roleOf(event.moment);
+  return { role, person: ROSTER[role][0]?.id ?? '' };
+}
+
+/** A line on the air as the voice is asked for it: its words, said by whoever says them. */
+export function voiceLineOf(event: RunEvent): VoiceLine {
+  return { text: event.label, person: speakerOf(event).person };
+}
+
+/**
+ * Whether a line is the last word on a run, won or lost: the end card says it after its sting
+ * (world/endTheme.ts), never the objective bar.
  */
 export function endsRun(event: RunEvent): boolean {
   return event.moment === 'won' || event.moment === 'lost';
@@ -105,12 +131,31 @@ export function reportLine(event: RunEvent): string {
   return fromPlant(event) ? `${ANNOUNCED}: ${event.label}` : event.label;
 }
 
-/** Who a line on the air is from, as the banner names them. */
+/** What the banner calls each role: the plant's loudspeakers, the desk, the shift's lead. */
+const ROLE_BANNER: Readonly<Record<Role, string>> = {
+  pa: 'DURCHSAGE',
+  operator: 'LEITSTELLE',
+  lead: 'SCHICHTLEITUNG',
+};
+
+/**
+ * Who a line on the air is from, as the banner names them: the plant's loudspeakers by what
+ * they are, the radio by its role and the person of the night's cast — „LEITSTELLE · MARTA",
+ * „SCHICHTLEITUNG · KESSLER" — and a note by the last shift.
+ */
 export function bannerFrom(event: RunEvent): string {
   if (event.kind === 'hint') {
     return LAST_SHIFT;
   }
-  return fromPlant(event) ? 'DURCHSAGE' : 'LEITSTELLE';
+  const { role, person } = speakerOf(event);
+  const name = personOf(person)?.name;
+  if (role === 'pa' || name === undefined) return ROLE_BANNER[role];
+  return `${ROLE_BANNER[role]} · ${name.toLocaleUpperCase('de-DE')}`;
+}
+
+/** What the radio strip calls whoever is on the radio: the desk, or the shift's lead. */
+export function radioName(event: RunEvent): string {
+  return speakerOf(event).role === 'lead' ? 'Schichtleitung' : 'Leitstelle';
 }
 
 /**

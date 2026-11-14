@@ -13,15 +13,24 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
-import { radioLines, type Mission, type Mood, type Role } from '@escapelab/core';
+import {
+  inService,
+  radioLines,
+  type Mission,
+  type Mood,
+  type RadioLine,
+  type RadioMoment,
+  type Role,
+} from '@escapelab/core';
 import type { ApiResponse } from './api.js';
 import { readBody } from './body.js';
 import { switchOn } from './switches.js';
 
 /**
- * A person's voice for mission control (the client's /record page): POST /voice/:id takes a
- * recording of the radio line whose id it names — the first 12 hex digits of the SHA-1 of what
- * the line says, as the client's voice script names its recordings — of 8 MB at most: a take
+ * A person's voice for the radio's cast (the client's /record page): POST /voice/:id takes a
+ * recording of the radio line whose id it names — the id of the person of the cast who says it
+ * and the first 12 hex digits of the SHA-1 of what the line says, as the client's voice script
+ * names its recordings (`marta-0123456789ab`) — of 8 MB at most: a take
  * the page recorded (a PCM WAV, `source: 'human'`), or a file put there (`?source=upload`: an
  * MP3, an M4A or a WAV). An MP3 or an M4A is kept as it is, a WAV converted to AAC; either goes
  * into the client's public/voice/ under the line's id, and the manifest's entry for the line
@@ -150,15 +159,17 @@ export async function decodedMs(file: string): Promise<number> {
 }
 
 /**
- * A line a shipped mission puts on the air: what it says, the missions that say it, whether it
- * opens a run, who speaks it — the plant's loudspeakers or the operator — and in what mood
- * (null for none).
+ * A line a shipped mission puts on the air, as one person of the cast says it: what it says, the
+ * missions that say it, whether it opens a run, the role and the person who speak it, the moment
+ * it is heard at, and in what mood (null for none).
  */
 export interface ShippedLine {
   text: string;
   missions: string[];
   opens: boolean;
-  speaker: Role;
+  role: Role;
+  person: string;
+  moment: RadioMoment;
   mood: Mood | null;
 }
 
@@ -174,17 +185,16 @@ interface ManifestEntry {
   text: string;
   ms: number;
   missions: string[];
-  speaker: Role;
+  role: Role;
+  person: string;
+  moment: RadioMoment;
   mood?: Mood;
   opens?: true;
   source?: Source;
   file: string;
 }
 
-/**
- * The manifest as the voice script writes it: the voices that speak the lines (kept as they
- * are), and every recorded line by its id.
- */
+/** The manifest as the voice script writes it: every recorded line by its id. */
 interface Manifest {
   [key: string]: unknown;
   lines: Record<string, ManifestEntry>;
@@ -206,15 +216,21 @@ export class VoiceDesk {
     private readonly measure: Measure = decodedMs,
   ) {}
 
-  /** The shipped line whose recording has the id `id`; null where no mission says it. */
+  /**
+   * The shipped line whose recording has the id `id`, as the person it names says it; null where
+   * no mission says it, or nobody of the cast in service for its role is that person.
+   */
   line(id: string): ShippedLine | null {
+    const [, person = '', hash = ''] = VOICE_ID.exec(id) ?? [];
+    const says = (said: RadioLine): boolean =>
+      voiceId(said.text) === hash && inService(said.role).some((p) => p.id === person);
     let found: ShippedLine | null = null;
     for (const mission of this.missions()) {
-      for (const line of radioLines(mission).filter((said) => voiceId(said.text) === id)) {
-        const { text, role, mood } = line;
-        found ??= { text, missions: [], opens: false, speaker: role, mood };
+      for (const line of radioLines(mission).filter(says)) {
+        const { text, role, mood, when } = line;
+        found ??= { text, missions: [], opens: false, role, person, moment: when, mood };
         if (!found.missions.includes(mission.id)) found.missions.push(mission.id);
-        found.opens ||= line.when === 'start';
+        found.opens ||= when === 'start';
       }
     }
     found?.missions.sort();
@@ -246,8 +262,8 @@ export class VoiceDesk {
       await this.put(input, sound.kind === 'wav', file);
       // The line's recording of the other kind, an earlier one, goes.
       rmSync(join(this.dir, file.endsWith('.mp3') ? `${id}.m4a` : `${id}.mp3`), { force: true });
-      const { text, missions, speaker, mood } = line;
-      const said = { text, ms, missions, speaker, ...(mood === null ? {} : { mood }) };
+      const { text, missions, role, person, moment, mood } = line;
+      const said = { text, ms, missions, role, person, moment, ...(mood === null ? {} : { mood }) };
       this.note(id, { ...said, ...(line.opens ? { opens: true as const } : {}), source, file });
       return { status: 200, body: { id, ms, source, file } };
     } finally {
@@ -277,10 +293,7 @@ export class VoiceDesk {
     }
   }
 
-  /**
-   * Writes `entry` into the manifest's lines, which it keeps in the order of their ids; the rest
-   * of the manifest — the voices — stays as it is.
-   */
+  /** Writes `entry` into the manifest's lines, which it keeps in the order of their ids. */
   private note(id: string, entry: ManifestEntry): void {
     const file = join(this.dir, 'manifest.json');
     const manifest: Manifest = existsSync(file)
@@ -294,7 +307,8 @@ export class VoiceDesk {
 }
 
 const VOICE_PATH = /^\/voice\/([^/]+)$/;
-const VOICE_ID = /^[0-9a-f]{12}$/;
+/** A recording's id: the person's, then the first 12 hex digits of the SHA-1 of the line. */
+const VOICE_ID = /^([a-z]+)-([0-9a-f]{12})$/;
 
 /**
  * Answers POST /voice/:id — with `desk` null, as without ALLOW_RECORD=1, a 404 — and returns
@@ -328,7 +342,8 @@ export function serveVoiceRecording(
  */
 function sourceOf(segment: string, query: URLSearchParams): Source | ApiResponse {
   if (!VOICE_ID.test(segment)) {
-    const error = `„${segment}" ist keine Kennung eines Funkspruchs: zwölf Hex-Ziffern.`;
+    const shape = 'Person, Bindestrich, zwölf Hex-Ziffern';
+    const error = `„${segment}" ist keine Kennung eines Funkspruchs: ${shape}.`;
     return { status: 400, body: { error } };
   }
   const asked = query.get('source') ?? 'human';

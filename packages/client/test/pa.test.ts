@@ -11,7 +11,7 @@ import {
   WEAK_LOW,
   weakChain,
 } from '../src/world/pa.js';
-import type { VoiceManifest } from '../src/world/radioVoice.js';
+import type { VoiceLine, VoiceManifest } from '../src/world/radioVoice.js';
 import {
   chainFrom,
   downstream,
@@ -25,15 +25,23 @@ import {
   type FakeNode,
 } from './fakeGraph.js';
 
-const FIRST = 'Durchsage der Leitstelle für Trakt C. Es ist 23 Uhr 47.';
-const SECOND = 'Reaktor in Teillast, 60 Prozent.';
-const ALERT = 'Störung im Kühlkreislauf. Relaissteuerung auf Handbetrieb.';
-const pa = { missions: ['blackout'], speaker: 'pa' } as const;
+/** The plant's lines, each said by its voice in the night's cast: the person `anlage`. */
+const plant = (text: string): VoiceLine => ({ text, person: 'anlage' });
+const FIRST = plant('Durchsage der Leitstelle für Trakt C. Es ist 23 Uhr 47.');
+const SECOND = plant('Reaktor in Teillast, 60 Prozent.');
+const ALERT = plant('Störung im Kühlkreislauf. Relaissteuerung auf Handbetrieb.');
+const pa = { missions: ['blackout'], role: 'pa', person: 'anlage' } as const;
 const MANIFEST: VoiceManifest = {
   lines: {
-    aaaaaaaaaaaa: { ...pa, text: FIRST, ms: 2000, file: 'aaaaaaaaaaaa.mp3' },
-    bbbbbbbbbbbb: { ...pa, text: SECOND, ms: 1500, file: 'bbbbbbbbbbbb.mp3' },
-    cccccccccccc: { ...pa, text: ALERT, ms: 3100, file: 'cccccccccccc.mp3' },
+    'anlage-aaaa': { ...pa, text: FIRST.text, moment: 'pa', ms: 2000, file: 'anlage-aaaa.mp3' },
+    'anlage-bbbb': { ...pa, text: SECOND.text, moment: 'pa', ms: 1500, file: 'anlage-bbbb.mp3' },
+    'anlage-cccc': {
+      ...pa,
+      text: ALERT.text,
+      moment: 'announce',
+      ms: 3100,
+      file: 'anlage-cccc.mp3',
+    },
   },
 };
 
@@ -183,7 +191,7 @@ describe('the announcement over the loudspeakers', () => {
     expect(spoken()).toHaveLength(1);
     expect(pa.paProbe()).toEqual({
       playing: true,
-      lastLine: FIRST,
+      lastLine: FIRST.text,
       played: 1,
       cut: false,
       announced: 0,
@@ -193,7 +201,7 @@ describe('the announcement over the loudspeakers', () => {
     expect(spoken()).toHaveLength(1);
     await vi.advanceTimersByTimeAsync(1);
     expect(spoken()).toHaveLength(2);
-    expect(pa.paProbe().lastLine).toBe(SECOND);
+    expect(pa.paProbe().lastLine).toBe(SECOND.text);
   });
 
   it('decodes its lines as it starts, and lets each go once it has been said', async () => {
@@ -231,7 +239,7 @@ describe('the announcement over the loudspeakers', () => {
 
   it('leaves out a line without a recording, and every one whose moment long passed', async () => {
     const { pa } = await loudspeakers();
-    pa.startAnnouncement(['Eine Zeile ohne Aufnahme.'], Date.now());
+    pa.startAnnouncement([plant('Eine Zeile ohne Aufnahme.')], Date.now());
     await vi.advanceTimersByTimeAsync(PA_FROM_MS);
     expect(spoken()).toEqual([]);
     expect(pa.paProbe().lastLine).toBe('Eine Zeile ohne Aufnahme.');
@@ -290,7 +298,9 @@ describe('the announcement over the loudspeakers', () => {
 
   it('stays silent without a recording, and stops with the screen, its line let go', async () => {
     const { pa, radio } = await loudspeakers();
-    expect(await pa.announce('Eine Durchsage ohne Aufnahme.')).toBeNull();
+    expect(await pa.announce(plant('Eine Durchsage ohne Aufnahme.'))).toBeNull();
+    // Nor in a voice that has no recording of it: the plant's words are the plant's.
+    expect(await pa.announce({ text: ALERT.text, person: 'helmut' })).toBeNull();
     await vi.advanceTimersByTimeAsync(0);
     expect(spoken()).toEqual([]);
     void pa.announce(ALERT);

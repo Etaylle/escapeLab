@@ -11,7 +11,7 @@ import {
   startSample,
   type Engine,
 } from './audio.js';
-import type { Mood, Role } from '@escapelab/core';
+import type { Mood, RadioMoment, Role } from '@escapelab/core';
 import { hold, letGo } from './audioMemory.js';
 import { duck, unduck } from './mix.js';
 import { sample, type SfxId } from './samples.js';
@@ -34,9 +34,9 @@ import { sample, type SfxId } from './samples.js';
  */
 
 /**
- * Where the recordings lie, and their list: the voices that speak them (`voices`, the script's)
- * and every recorded line by its id (`lines`: { [id]: { text, ms, missions, speaker, mood?,
- * opens?, file } }).
+ * Where the recordings lie, and their list: every recorded line by its id (`lines`: { [id]: {
+ * text, ms, missions, role, person, moment, mood?, opens?, source?, render?, model?, file } }),
+ * one for each person of the cast who says it (scripts/voice.ts).
  */
 export const VOICE_BASE = '/voice/';
 export const MANIFEST_URL = `${VOICE_BASE}manifest.json`;
@@ -46,20 +46,24 @@ export type PersonSource = 'human' | 'upload';
 
 /**
  * One recorded line: what it says, how long it speaks, ms, the missions that say it, who says
- * it — the plant's loudspeakers or the operator (core radio.ts `Role`) — the mood it was
- * asked for in (core radio.ts `MOODS`), whether it opens a run (a mission's `radio.start`),
- * who made it — a person (`source`), or a synthetic voice's render (`render`) — and its file
- * under VOICE_BASE, an .m4a or an .mp3. The game plays whatever the entry names, alike.
+ * it — the role (core radio.ts `Role`) and the person of the cast (core cast.ts) — the moment it
+ * comes at, the mood it was asked for in (core radio.ts `MOODS`), whether it opens a run (a
+ * mission's `radio.start`), who made it — a person (`source`), or a synthetic voice's render
+ * (`render`) and the model that read it — and its file under VOICE_BASE, an .m4a or an .mp3.
+ * The game plays whatever the entry names, alike.
  */
 export interface VoiceEntry {
   readonly text: string;
   readonly ms: number;
   readonly missions: readonly string[];
-  readonly speaker: Role;
+  readonly role: Role;
+  readonly person: string;
+  readonly moment: RadioMoment;
   readonly mood?: Mood;
   readonly opens?: true;
   readonly source?: PersonSource;
   readonly render?: string;
+  readonly model?: string;
   readonly file: string;
 }
 
@@ -139,9 +143,21 @@ export function radioChain(ctx: BaseAudioContext, dest: AudioNode, level: number
   return { input, filters, shaper, out };
 }
 
-/** The manifest as lines to ids: a line on the air is found by what it says. */
+/**
+ * A line as the voice is asked for it: its words as shown, and the person of the cast who says
+ * them (core radio.ts `Speaker`) — each person has a recording of their own.
+ */
+export interface VoiceLine {
+  readonly text: string;
+  readonly person: string;
+}
+
+/** What the voice finds a line's recording by: who says it, and its words. */
+export const lineKey = ({ person, text }: VoiceLine): string => `${person}\n${text}`;
+
+/** The manifest as lines to ids: a line on the air is found by who says it and its words. */
 export function idsOf(manifest: VoiceManifest): Map<string, string> {
-  return new Map(Object.entries(manifest.lines).map(([id, entry]) => [entry.text, id]));
+  return new Map(Object.entries(manifest.lines).map(([id, entry]) => [lineKey(entry), id]));
 }
 
 /** The recordings that open a run, by id: the radio keys them with the Leitstelle's opening. */
@@ -329,24 +345,27 @@ export function voiceReady(): Promise<void> {
   return manifest().then(() => undefined);
 }
 
-/** The decoded recording of the line `text`, where it is decoded; null otherwise. */
-export function clipOf(text: string): Clip | null {
-  const id = store.ids.get(text);
+/** The id of the recording of `line`; undefined where the manifest has none. */
+const idOf = (line: VoiceLine): string | undefined => store.ids.get(lineKey(line));
+
+/** The decoded recording of `line`, where it is decoded; null otherwise. */
+export function clipOf(line: VoiceLine): Clip | null {
+  const id = idOf(line);
   return id === undefined ? null : (store.clips.get(id) ?? null);
 }
 
 /**
- * The recording of the line `text`, decoded now where it is not yet (once, however often
- * asked) and counted until it is let go (`releaseLine`); null where it has none, or it failed.
+ * The recording of `line`, decoded now where it is not yet (once, however often asked) and
+ * counted until it is let go (`releaseLine`); null where it has none, or it failed.
  */
-export function lineClip(text: string): Promise<Clip | null> {
-  const id = store.ids.get(text);
+export function lineClip(line: VoiceLine): Promise<Clip | null> {
+  const id = idOf(line);
   return id === undefined ? Promise.resolve(null) : decodeLine(id);
 }
 
-/** How long the line `text` speaks by the manifest, ms; null before it, or without a recording. */
-export function recordedMs(text: string): number | null {
-  const id = store.ids.get(text);
+/** How long `line` speaks by the manifest, ms; null before it, or without a recording. */
+export function recordedMs(line: VoiceLine): number | null {
+  const id = idOf(line);
   return id === undefined ? null : (store.ms.get(id) ?? null);
 }
 
@@ -355,12 +374,12 @@ export function recordedMs(text: string): number | null {
  * decoded only as it goes on the air (`sayLine`, pa.ts `announce`) — so that a line the queue
  * drops before its turn leaves nothing decoded.
  */
-export function fetchLines(texts: readonly string[]): void {
-  if (texts.length === 0) return;
+export function fetchLines(lines: readonly VoiceLine[]): void {
+  if (lines.length === 0) return;
   manifest()
     .then(() => {
-      for (const text of texts) {
-        const id = store.ids.get(text);
+      for (const line of lines) {
+        const id = idOf(line);
         if (id !== undefined) void bytesOf(id);
       }
     })
@@ -372,21 +391,21 @@ export function fetchLines(texts: readonly string[]): void {
  * (endTheme.ts) — each decoded now where it is not yet, its file here already or fetched first,
  * so that it speaks on its moment; whoever asked lets it go (`releaseLine`) where it is not said.
  */
-export function preloadLines(texts: readonly string[]): void {
-  if (texts.length === 0) return;
+export function preloadLines(lines: readonly VoiceLine[]): void {
+  if (lines.length === 0) return;
   manifest()
     .then(() => {
-      for (const text of texts) {
-        const id = store.ids.get(text);
+      for (const line of lines) {
+        const id = idOf(line);
         if (id !== undefined) void decodeLine(id);
       }
     })
     .catch(() => undefined);
 }
 
-/** The line `text` heard and done with (the loudspeakers', pa.ts): what it held let go. */
-export function releaseLine(text: string): void {
-  const id = store.ids.get(text);
+/** `line` heard and done with (the loudspeakers', pa.ts): what it held let go. */
+export function releaseLine(line: VoiceLine): void {
+  const id = idOf(line);
   if (id !== undefined) release(id);
 }
 
@@ -396,17 +415,18 @@ function release(id: string): void {
 }
 
 /**
- * Speaks the line `text` over the radio — now where it is decoded, else as soon as it is —
- * cutting short one still on the air: a line that opens a run after the Leitstelle's opening
- * squelch; once spoken, it is let go. Into the radio's bus, or `into` where given: a level of the
- * caller's on the way there (the lobby's Funkprobe, radioCheck.ts). Resolves as it goes on the
- * air, with how long it keeps it, ms, by its recording as decoded (`airtimeMs`); with null where
- * it never does — it has no recording, nothing can play, its recording failed, or a line asked
- * for after it or the voice stopping (`stopVoice`) made it moot: the caller chirps then.
+ * Speaks `line` over the radio, by the recording of the person who says it — now where it is
+ * decoded, else as soon as it is — cutting short one still on the air: a line that opens a run
+ * after the Leitstelle's opening squelch; once spoken, it is let go. Into the radio's bus, or
+ * `into` where given: a level of the caller's on the way there (the lobby's Funkprobe,
+ * radioCheck.ts). Resolves as it goes on the air, with how long it keeps it, ms, by its recording
+ * as decoded (`airtimeMs`); with null where it never does — it has no recording, nothing can
+ * play, its recording failed, or a line asked for after it or the voice stopping (`stopVoice`)
+ * made it moot: the caller chirps then.
  */
-export function sayLine(text: string, into?: AudioNode): Promise<number | null> {
+export function sayLine(line: VoiceLine, into?: AudioNode): Promise<number | null> {
   try {
-    const id = store.ids.get(text);
+    const id = idOf(line);
     const engine = playingEngine();
     if (id === undefined || engine === null || !store.files.has(id)) return Promise.resolve(null);
     const ask: Ask = { id };
@@ -462,12 +482,12 @@ function saidOut(line: Speaking): void {
 }
 
 /**
- * How long the line `text` keeps the air when it is spoken, ms: the Leitstelle's opening where
- * it opens a run, the key, its recording — as decoded, or by the manifest — the tail. Null where
- * it has no recording.
+ * How long `line` keeps the air when it is spoken, ms: the Leitstelle's opening where it opens a
+ * run, the key, its recording — as decoded, or by the manifest — the tail. Null where it has no
+ * recording.
  */
-export function airtimeMs(text: string): number | null {
-  const id = store.ids.get(text);
+export function airtimeMs(line: VoiceLine): number | null {
+  const id = idOf(line);
   if (id === undefined) return null;
   const clip = store.clips.get(id);
   const seconds = clip?.buffer.duration ?? (store.ms.get(id) ?? NaN) / 1000;

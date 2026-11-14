@@ -4,6 +4,7 @@ import { typing } from '../../hooks.js';
 import { addProbes } from '../../probes.js';
 import { traceRequested } from '../frameTrace.js';
 import { cutAnnouncement, paProbe, startAnnouncement, stopAnnouncement } from '../pa.js';
+import type { VoiceLine } from '../radioVoice.js';
 import { cueProbe, CUE_FADE_S, startCue, stopCue } from './cue.js';
 import {
   bangAt,
@@ -139,12 +140,17 @@ function useKeptCue(view: PlayerView): React.MutableRefObject<{
 }
 
 /**
- * The announcement and the music of the opening that began at `since`: from its start, the
- * music only for a player still watching; both stop with the run or the screen.
+ * The announcement and the music of the opening that began at `since`: from its start — its
+ * lines `pa` said by `person`, the plant's voice of the night's cast — the music only for a
+ * player still watching; both stop with the run or the screen.
  */
-function useOpeningSound(kept: React.MutableRefObject<{ cue: IntroCue | null }>, pa: string[]) {
-  const lines = useRef(pa);
-  lines.current = pa;
+function useOpeningSound(
+  kept: React.MutableRefObject<{ cue: IntroCue | null }>,
+  pa: readonly string[],
+  person: string,
+) {
+  const lines = useRef<readonly VoiceLine[]>([]);
+  lines.current = pa.map((text) => ({ text, person }));
   const since = kept.current.cue?.lightsSec == null ? null : kept.current.cue.since;
   useEffect(() => {
     const cue = kept.current.cue;
@@ -210,7 +216,7 @@ export function useIntro(view: PlayerView, send: (msg: ClientMessage) => void): 
   const kept = useKeptCue(view);
   const tell = useRef(send);
   tell.current = send;
-  useOpeningSound(kept, view.intro?.pa ?? []);
+  useOpeningSound(kept, view.intro?.pa ?? [], view.cast.pa);
   const latestView = useRef(view);
   latestView.current = view;
   const skip = useCallback(() => {

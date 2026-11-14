@@ -13,6 +13,7 @@ import {
   shaperCurve,
   SPEECH_PEAK,
   TAIL_S,
+  type VoiceLine,
   type VoiceManifest,
 } from '../src/world/radioVoice.js';
 import {
@@ -29,52 +30,62 @@ import {
 } from './fakeGraph.js';
 import { serveSamples } from './fakeSamples.js';
 
-const LEVER_LINE =
+/** A line as Helmut says it, the operator on duty these tests hear. */
+const helmut = (text: string): VoiceLine => ({ text, person: 'helmut' });
+const LEVER_LINE = helmut(
   'Notlicht steht, danke. Jetzt der Notstrom: Die Anleitung dafür hängt im Archiv, der ' +
-  'Kasten ist im Maschinenraum, das Prüfpult im Flur.';
-const START_LINE = 'Leitstelle an Nachtschicht. Stromausfall im ganzen Trakt.';
+    'Kasten ist im Maschinenraum, das Prüfpult im Flur.',
+);
+const START_LINE = helmut('Leitstelle an Nachtschicht. Stromausfall im ganzen Trakt.');
+const BEIDE = helmut('Beide hin.');
 /** Two more lines of the run, for the files a page keeps (FILES_KEPT). */
-const FOURTH = 'Der Kasten steht im Maschinenraum.';
-const FIFTH = 'Die Pulte stehen im Flur.';
+const FOURTH = helmut('Der Kasten steht im Maschinenraum.');
+const FIFTH = helmut('Die Pulte stehen im Flur.');
+/** What every one of Helmut's recordings here is: the Leitstelle's, in Blackout. */
+const HIS = { missions: ['blackout'], role: 'operator', person: 'helmut' } as const;
 const MANIFEST: VoiceManifest = {
   lines: {
     // A file a person put on the /record page, an MP3: the radio plays whatever the entry names.
     aaaaaaaaaaaa: {
-      text: LEVER_LINE,
+      ...HIS,
+      text: LEVER_LINE.text,
       ms: 2000,
-      missions: ['blackout'],
-      speaker: 'operator',
+      moment: 'solved',
       source: 'upload',
       file: 'aaaaaaaaaaaa.mp3',
     },
     bbbbbbbbbbbb: {
-      text: 'Beide hin.',
+      ...HIS,
+      text: BEIDE.text,
       ms: 900,
       missions: ['systemcheck'],
-      speaker: 'operator',
+      moment: 'nudge',
       file: 'bbbbbbbbbbbb.m4a',
     },
     cccccccccccc: {
-      text: START_LINE,
+      ...HIS,
+      text: START_LINE.text,
       ms: 2500,
-      missions: ['blackout'],
-      speaker: 'operator',
+      moment: 'start',
       opens: true,
       file: 'cccccccccccc.m4a',
     },
     ffffffffffff: {
-      text: FOURTH,
+      ...HIS,
+      text: FOURTH.text,
       ms: 2000,
-      missions: ['blackout'],
-      speaker: 'operator',
+      moment: 'nudge',
       file: 'ffffffffffff.m4a',
     },
-    abcdefabcdef: {
-      text: FIFTH,
-      ms: 1800,
-      missions: ['blackout'],
-      speaker: 'operator',
-      file: 'abcdefabcdef.m4a',
+    abcdefabcdef: { ...HIS, text: FIFTH.text, ms: 1800, moment: 'nudge', file: 'abcdefabcdef.m4a' },
+    // The lever's line as Marta says it, on the nights she has the desk: a recording of her own.
+    'marta-aaaa': {
+      ...HIS,
+      person: 'marta',
+      text: LEVER_LINE.text,
+      ms: 2200,
+      moment: 'solved',
+      file: 'marta-aaaa.mp3',
     },
   },
 };
@@ -222,22 +233,45 @@ describe('a line spoken over the radio', () => {
     expect(fetched).toHaveLength(2);
     expect(radio.VOICE_RATE).toBe(22050);
     expect(decodedBytes().voice).toBe(1.5 * 22050 * 4);
-    radio.fetchLines(['Beide hin.', 'Etwas ohne Aufnahme.']);
+    radio.fetchLines([BEIDE, helmut('Etwas ohne Aufnahme.')]);
     await settle();
     expect(fetched.at(-1)).toBe('/voice/bbbbbbbbbbbb.m4a');
     expect(fetched).toHaveLength(3);
-    expect(radio.clipOf('Beide hin.')).toBeNull(); // queued: fetched, not decoded
+    expect(radio.clipOf(BEIDE)).toBeNull(); // queued: fetched, not decoded
     expect(radio.clipOf(LEVER_LINE)).toBeNull(); // never queued: never fetched
+  });
+
+  it('finds a line by who says it and its words: the same words in two voices, two', async () => {
+    const radio = await voice();
+    radio.voiceForRun();
+    await settle();
+    const hers = { text: LEVER_LINE.text, person: 'marta' };
+    radio.fetchLines([hers]);
+    await settle();
+    expect(fetched).toEqual(['/voice/manifest.json', '/voice/marta-aaaa.mp3']);
+    expect(radio.recordedMs(hers)).toBe(2200);
+    expect(radio.recordedMs(LEVER_LINE)).toBe(2000);
+    expect(await radio.sayLine(hers)).not.toBeNull();
+    expect(radio.voiceProbe().lastId).toBe('marta-aaaa');
+    expect(await radio.sayLine(LEVER_LINE)).not.toBeNull();
+    expect(radio.voiceProbe().lastId).toBe('aaaaaaaaaaaa');
+    // Nobody else's recording stands in for a voice that has none: the caller chirps.
+    const his = { text: LEVER_LINE.text, person: 'jonas' };
+    expect([radio.recordedMs(his), radio.airtimeMs(his), await radio.sayLine(his)]).toEqual([
+      null,
+      null,
+      null,
+    ]);
   });
 
   it('keeps the files of the last few lines, as they came, and none of a run before', async () => {
     const radio = await voice();
     radio.voiceForRun();
     await settle();
-    const lines = [LEVER_LINE, 'Beide hin.', START_LINE];
-    const again = async (text: string): Promise<string[]> => {
+    const lines = [LEVER_LINE, BEIDE, START_LINE];
+    const again = async (line: VoiceLine): Promise<string[]> => {
       const before = fetched.length;
-      radio.fetchLines([text]);
+      radio.fetchLines([line]);
       await settle();
       return fetched.slice(before);
     };
@@ -249,7 +283,7 @@ describe('a line spoken over the radio', () => {
     expect(radio.FILES_KEPT).toBe(4);
     radio.fetchLines([FOURTH, FIFTH]);
     await settle();
-    expect(await again('Beide hin.')).toEqual(['/voice/bbbbbbbbbbbb.m4a']);
+    expect(await again(BEIDE)).toEqual(['/voice/bbbbbbbbbbbb.m4a']);
     expect(await again(FIFTH)).toEqual([]);
     // A new run lets the files of the last one go.
     radio.voiceForRun();
@@ -364,7 +398,7 @@ describe('a line spoken over the radio', () => {
     expect(radio.airtimeMs(LEVER_LINE)).toBe(Math.round((KEY_S + 1.5 + TAIL_S) * 1000));
     expect(radio.airtimeMs(START_LINE)).toBe(Math.round((OPEN_S + KEY_S + 1.5 + TAIL_S) * 1000));
     expect(radio.airtimeMs(START_LINE)).toBe(2130);
-    expect(radio.airtimeMs('Eine Zeile aus dem Editor.')).toBeNull();
+    expect(radio.airtimeMs(helmut('Eine Zeile aus dem Editor.'))).toBeNull();
   });
 
   it('cuts a line short for a newer one, leaves one without a recording to the chirp', async () => {
@@ -374,13 +408,13 @@ describe('a line spoken over the radio', () => {
     await radio.sayLine(LEVER_LINE);
     const ctx = lastContext();
     ctx.currentTime = 11;
-    expect(await radio.sayLine('Beide hin.')).not.toBeNull();
+    expect(await radio.sayLine(BEIDE)).not.toBeNull();
     const clips = ctx.all<FakeBufferSource>('buffer').filter((s) => s.buffer?.duration === 1.5);
     const [first, second] = clips;
     expect(first?.stoppedAt).toBeCloseTo(11.1, 9);
     expect(second?.startedAt).toBeCloseTo(11.08, 9);
     expect(radio.voiceProbe().lastId).toBe('bbbbbbbbbbbb');
-    expect(await radio.sayLine('Eine Zeile aus dem Editor.')).toBeNull();
+    expect(await radio.sayLine(helmut('Eine Zeile aus dem Editor.'))).toBeNull();
   });
 
   it('speaks only the newest of two lines asked for while the first still decoded', async () => {
@@ -388,7 +422,7 @@ describe('a line spoken over the radio', () => {
     radio.voiceForRun();
     await settle();
     const first = radio.sayLine(LEVER_LINE);
-    const second = radio.sayLine('Beide hin.'); // before the first is decoded
+    const second = radio.sayLine(BEIDE); // before the first is decoded
     expect(await first).toBeNull(); // made moot: it never goes on the air…
     expect(radio.clipOf(LEVER_LINE)).toBeNull(); // …and what it decoded is let go
     expect(await second).toBe(Math.round((KEY_S + 1.5 + TAIL_S) * 1000));
@@ -463,10 +497,10 @@ describe('a line spoken over the radio', () => {
     for (const source of firstTime) source.end();
     expect(radio.clipOf(LEVER_LINE)).not.toBeNull();
     // A newer line cuts the second short: as its sound ends it goes, and the newer once said.
-    await radio.sayLine('Beide hin.');
+    await radio.sayLine(BEIDE);
     endAll(ctx);
     expect(radio.clipOf(LEVER_LINE)).toBeNull();
-    expect(radio.clipOf('Beide hin.')).toBeNull();
+    expect(radio.clipOf(BEIDE)).toBeNull();
   });
 
   it('says nothing before a gesture woke the sound, nor anything not loaded', async () => {
@@ -545,15 +579,15 @@ describe('a line spoken over the radio', () => {
 
 describe('the lines that may open a run', () => {
   /** Blackout opens on one of two starts, each recorded: the run picks one (core `pickLine`). */
-  const OTHER_START = 'Leitstelle an Nachtschicht. Der Trakt ist dunkel.';
+  const OTHER_START = helmut('Leitstelle an Nachtschicht. Der Trakt ist dunkel.');
   const OPENERS: VoiceManifest = {
     lines: {
       ...MANIFEST.lines,
       dddddddddddd: {
-        text: OTHER_START,
+        ...HIS,
+        text: OTHER_START.text,
         ms: 2000,
-        missions: ['blackout'],
-        speaker: 'operator',
+        moment: 'start',
         opens: true,
         file: 'dddddddddddd.mp3',
       },

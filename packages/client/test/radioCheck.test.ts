@@ -11,17 +11,23 @@ import {
 } from './fakeGraph.js';
 import { serveSamples } from './fakeSamples.js';
 
-const PROBE = 'Funkprobe, Nachtschicht. Ich höre euch laut und klar.';
+/**
+ * The Funkprobe, said by Marta, the operator on duty for the run to come (the view's `cast`) —
+ * and Helmut's recording of the same words, which this lobby does not hear.
+ */
+const WORDS = 'Funkprobe, Nachtschicht. Ich höre euch laut und klar.';
+const PROBE = { text: WORDS, person: 'marta' };
+const take = {
+  text: WORDS,
+  ms: 3000,
+  missions: ['blackout'],
+  role: 'operator',
+  moment: 'lobby',
+} as const;
 const MANIFEST: VoiceManifest = {
   lines: {
-    dddddddddddd: {
-      text: PROBE,
-      ms: 3000,
-      missions: ['blackout'],
-      speaker: 'operator',
-      mood: 'calm',
-      file: 'dddddddddddd.mp3',
-    },
+    'marta-dddd': { ...take, person: 'marta', mood: 'calm', file: 'marta-dddd.mp3' },
+    'helmut-dddd': { ...take, person: 'helmut', mood: 'calm', file: 'helmut-dddd.mp3' },
   },
 };
 
@@ -72,11 +78,13 @@ describe('the operator’s Funkprobe in the lobby', () => {
     radio.update(undefined, false);
     await settle();
     expect(fetched).toEqual([]);
-    expect(radioCheckProbe()).toEqual({ asked: null, aired: false });
+    expect(radioCheckProbe()).toEqual({ asked: null, by: null, aired: false });
     radio.update(PROBE, false);
     await settle();
     expect(speech()).toHaveLength(1);
-    expect(radioCheckProbe()).toEqual({ asked: PROBE, aired: true });
+    expect(radioCheckProbe()).toEqual({ asked: WORDS, by: 'marta', aired: true });
+    // In the voice of the operator on duty: her recording, not another's of the same words.
+    expect(fetched).toEqual(['/voice/manifest.json', '/voice/marta-dddd.mp3']);
     // Somebody is not ready after all, then is again: the lobby has heard it.
     radio.update(undefined, false);
     radio.update(PROBE, false);
@@ -171,16 +179,21 @@ describe('the operator’s Funkprobe in the lobby', () => {
     await settle();
     // No audio context made for it: the page has had no gesture to make one in.
     expect(FakeContext.made).toEqual([]);
-    expect(radioCheckProbe()).toEqual({ asked: PROBE, aired: false });
+    expect(radioCheckProbe()).toEqual({ asked: WORDS, by: 'marta', aired: false });
   });
 
   it('stays silent without a recording, and before a gesture woke the sound', async () => {
     vi.useFakeTimers();
     const { lobbyRadio, radioCheckProbe } = await lobby();
-    lobbyRadio().update('Eine Funkprobe ohne Aufnahme.', false);
+    lobbyRadio().update({ text: 'Eine Funkprobe ohne Aufnahme.', person: 'marta' }, false);
     await settle();
     // Asked for, and not on the air: the walkthrough says it awaits its render.
-    expect(radioCheckProbe()).toEqual({ asked: 'Eine Funkprobe ohne Aufnahme.', aired: false });
+    const unrecorded = { asked: 'Eine Funkprobe ohne Aufnahme.', by: 'marta', aired: false };
+    expect(radioCheckProbe()).toEqual(unrecorded);
+    // Nor in another's voice where the operator on duty has no recording of it.
+    lobbyRadio().update({ text: WORDS, person: 'jonas' }, false);
+    await settle();
+    expect(speech()).toEqual([]);
     const ctx = lastContext();
     expect(ctx.all<FakeBufferSource>('buffer').filter((s) => s.startedAt !== null)).toEqual([]);
     // Nothing of it stays wired to the radio's bus: its level was let go at once.

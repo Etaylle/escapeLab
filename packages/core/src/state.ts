@@ -317,7 +317,7 @@ export interface GameState {
   clockCalls: number;
 }
 
-/** What a room's nights are staffed from: the seed the server `drawn`, else the pinned one, or 0. */
+/** What a room's nights are staffed from: the seed `drawn` by the server, else the pinned one. */
 const castSeedOf = (roomSeed: number | null, drawn: number | undefined): number =>
   drawn ?? roomSeed ?? 0;
 

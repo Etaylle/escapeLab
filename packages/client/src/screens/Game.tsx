@@ -19,6 +19,7 @@ import {
   followsSolve,
   radioNews,
   voiced,
+  voiceLineOf,
   withNews,
   type Notice,
 } from '../radio.js';
@@ -401,7 +402,7 @@ function useNotices(view: PlayerView, gates: NoticeGates): Notice | null {
     const notBefore = followsSolve(view.events, seen.current) ? now + AFTER_SOLVE_MS : 0;
     seen.current = view.events.length;
     if (news.length > 0) {
-      fetchLines(news.filter(voiced).map((event) => event.label));
+      fetchLines(news.filter(voiced).map(voiceLineOf));
       setQueue((queued) => withNews(queued, news, notBefore));
     }
   }, [view.events]);

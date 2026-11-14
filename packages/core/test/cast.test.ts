@@ -48,7 +48,7 @@ const VOICED: Roster = {
 };
 
 describe('the roster in cast.json', () => {
-  it('names the plant’s voice, three for the Leitstelle and the Schichtleitung, every id its own', () => {
+  it('names the plant’s voice, three Leitstellen and the Schichtleitung, every id its own', () => {
     expect(ROSTER.pa.map((p) => p.id)).toEqual(['anlage']);
     expect(ROSTER.operator.map((p) => p.id)).toEqual(['helmut', 'marta', 'jonas']);
     expect(ROSTER.lead.map((p) => p.id)).toEqual(['kessler']);
@@ -302,7 +302,7 @@ describe('a line heard in a run', () => {
 });
 
 describe('a room’s nights', () => {
-  it('are staffed from the pinned seed in a pinned room, else from the seed the server drew', () => {
+  it('are staffed from the pinned seed in a pinned room, else from the server’s draw', () => {
     expect(initialState(mission).castSeed).toBe(0);
     expect(initialState(mission, 5150).castSeed).toBe(5150);
     expect(initialState(mission, null, 'normal', 77).castSeed).toBe(77);

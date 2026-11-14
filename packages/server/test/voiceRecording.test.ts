@@ -122,37 +122,43 @@ const upload = (id: string, file: Buffer): IncomingMessage =>
 
 let dir = '';
 const manifestFile = (): string => join(dir, 'manifest.json');
-/** The manifest as the folder holds it: its voices, and its lines by id. */
+/** The manifest as the folder holds it: its lines by id. */
 interface Kept {
-  voices: Record<string, unknown>;
   lines: Record<string, Record<string, unknown>>;
 }
 const kept = (): Kept => JSON.parse(readFileSync(manifestFile(), 'utf8')) as Kept;
 const manifest = (): Kept['lines'] => kept().lines;
-/** The voices the manifest names, which a recording leaves as they are. */
-const VOICES = { operator: { voiceId: 'g1jpii0iyvtRs8fqXsd1', name: 'Helmut' } };
+
+/** The id of `text` as `person` says it, as the voice script names its recordings. */
+const idOf = (person: string, text: string): string => `${person}-${voiceId(text)}`;
+/** The line as Helmut says it, the Leitstelle in service. */
+const his = (text: string): string => idOf('helmut', text);
 
 beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), 'escapelab-voice-test-'));
-  const start = voiceId(START);
+  const start = his(START);
   const lines = {
     [start]: {
       text: START,
       ms: 9000,
       missions: ['blackout'],
-      speaker: 'operator',
+      role: 'operator',
+      person: 'helmut',
+      moment: 'start',
       opens: true,
       file: `${start}.m4a`,
     },
-    ffffffffffff: {
+    'helmut-ffffffffffff': {
       text: 'Eine andere Zeile.',
       ms: 1200,
       missions: ['systemcheck'],
-      speaker: 'operator',
-      file: 'ffffffffffff.m4a',
+      role: 'operator',
+      person: 'helmut',
+      moment: 'nudge',
+      file: 'helmut-ffffffffffff.m4a',
     },
   };
-  writeFileSync(manifestFile(), `${JSON.stringify({ voices: VOICES, lines }, null, 2)}\n`);
+  writeFileSync(manifestFile(), `${JSON.stringify({ lines }, null, 2)}\n`);
 });
 
 afterEach(() => {
@@ -174,7 +180,7 @@ describe('the switch for recordings', () => {
   });
 
   it('answers 404 to a recording or a file while it is off, and leaves the folder be', async () => {
-    for (const req of [post(voiceId(START), toneWav(0.5)), upload(voiceId(START), TONE_MP3)]) {
+    for (const req of [post(his(START), toneWav(0.5)), upload(his(START), TONE_MP3)]) {
       const answer = await ask(null, req);
       expect(answer?.status).toBe(404);
       expect(String(answer?.body['error'])).toMatch(/ALLOW_RECORD=1/);
@@ -183,17 +189,17 @@ describe('the switch for recordings', () => {
   });
 
   it('takes only POST /voice/:id: the recordings themselves stay the static site’s', async () => {
-    expect(await ask(desk(), request('GET', `/voice/${voiceId(START)}.m4a`))).toBeNull();
+    expect(await ask(desk(), request('GET', `/voice/${his(START)}.m4a`))).toBeNull();
     expect(await ask(desk(), request('GET', '/voice/manifest.json'))).toBeNull();
     expect(await ask(desk(), request('POST', '/missions/custom', [toneWav(0.1)]))).toBeNull();
-    const deeper = request('POST', `/voice/${voiceId(START)}/x`, [toneWav(0.1)]);
+    const deeper = request('POST', `/voice/${his(START)}/x`, [toneWav(0.1)]);
     expect(await ask(null, deeper)).toBeNull();
   });
 });
 
 describe('a take recorded on the page', () => {
   it('is converted into the folder under its line’s id, the manifest naming a person', async () => {
-    const id = voiceId(START);
+    const id = his(START);
     const answer = await ask(desk(), post(id, toneWav(0.6)));
     expect(answer).toEqual({
       status: 200,
@@ -210,53 +216,61 @@ describe('a take recorded on the page', () => {
       text: START,
       ms: 600,
       missions: ['blackout'],
-      speaker: 'operator',
+      role: 'operator',
+      person: 'helmut',
+      moment: 'start',
       opens: true,
       source: 'human',
       file: `${id}.m4a`,
     });
-    expect(manifest()['ffffffffffff']).toEqual({
+    expect(manifest()['helmut-ffffffffffff']).toEqual({
       text: 'Eine andere Zeile.',
       ms: 1200,
       missions: ['systemcheck'],
-      speaker: 'operator',
-      file: 'ffffffffffff.m4a',
+      role: 'operator',
+      person: 'helmut',
+      moment: 'nudge',
+      file: 'helmut-ffffffffffff.m4a',
     });
-    // The voices the script keeps stay as they were.
-    expect(kept().voices).toEqual(VOICES);
+    expect(Object.keys(kept())).toEqual(['lines']);
     expect(readdirSync(dir).sort()).toEqual([`${id}.m4a`, 'manifest.json']);
   });
 
   it('enters a shipped line the manifest does not list yet, in the order of the ids', async () => {
-    const id = voiceId(NUDGE);
+    const id = his(NUDGE);
     const answer = await ask(desk(fakeConvert), post(id, toneWav(1.25)));
     expect(answer?.status).toBe(200);
     expect(manifest()[id]).toEqual({
       text: NUDGE,
       ms: 1250,
       missions: ['blackout'],
-      speaker: 'operator',
+      role: 'operator',
+      person: 'helmut',
+      moment: 'nudge',
       source: 'human',
       file: `${id}.m4a`,
     });
-    // A line of the loudspeakers is entered as theirs.
-    const pa = voiceId(ANNOUNCED);
+    // A line of the loudspeakers is entered as the plant's voice's.
+    const pa = idOf('anlage', ANNOUNCED);
     expect((await ask(desk(fakeConvert), post(pa, toneWav(0.8))))?.status).toBe(200);
-    expect(manifest()[pa]).toMatchObject({ text: ANNOUNCED, speaker: 'pa', source: 'human' });
+    const plant = { text: ANNOUNCED, role: 'pa', person: 'anlage', moment: 'pa' };
+    expect(manifest()[pa]).toMatchObject({ ...plant, source: 'human' });
     const ids = Object.keys(manifest());
     expect(ids).toEqual([...ids].sort());
     expect(readFileSync(manifestFile(), 'utf8')).toMatch(/\n$/);
   });
 
   it('enters a line the operator says in a mood with it, as the voice script does', async () => {
-    const id = voiceId(ALARM);
+    const id = his(ALARM);
     expect((await ask(desk(fakeConvert), post(id, toneWav(2))))?.status).toBe(200);
     const entry = manifest()[id];
     expect(entry).toEqual({
       text: ALARM,
       ms: 2000,
       missions: ['blackout'],
-      speaker: 'operator',
+      role: 'operator',
+      person: 'helmut',
+      moment: 'alarm',
       mood: 'tense',
       source: 'human',
       file: `${id}.m4a`,
@@ -265,18 +279,22 @@ describe('a take recorded on the page', () => {
       'text',
       'ms',
       'missions',
-      'speaker',
+      'role',
+      'person',
+      'moment',
       'mood',
       'source',
       'file',
     ]);
     // A line said in no mood has none in its entry, and the opening one keeps its place.
-    await ask(desk(fakeConvert), post(voiceId(START), toneWav(1)));
-    expect(Object.keys(manifest()[voiceId(START)] ?? {})).toEqual([
+    await ask(desk(fakeConvert), post(his(START), toneWav(1)));
+    expect(Object.keys(manifest()[his(START)] ?? {})).toEqual([
       'text',
       'ms',
       'missions',
-      'speaker',
+      'role',
+      'person',
+      'moment',
       'opens',
       'source',
       'file',
@@ -284,21 +302,33 @@ describe('a take recorded on the page', () => {
   });
 
   it('refuses an id or a source that is none, and a line no shipped mission says', async () => {
-    for (const wrong of ['manifest.json', voiceId(START).toUpperCase(), '..']) {
+    // A line's id names the person who says it: the words' digits alone name nobody's recording.
+    for (const wrong of ['manifest.json', his(START).toUpperCase(), '..', voiceId(START)]) {
       expect((await ask(desk(), post(wrong, toneWav(0.2))))?.status, wrong).toBe(400);
     }
-    const strange = request('POST', `/voice/${voiceId(START)}?source=robot`, [toneWav(0.2)]);
+    const strange = request('POST', `/voice/${his(START)}?source=robot`, [toneWav(0.2)]);
     const refused = await ask(desk(), strange);
     expect(refused?.status).toBe(400);
     expect(String(refused?.body['error'])).toMatch(/source=robot.*source=upload/);
-    const nobody = await ask(desk(), post('0123456789ab', toneWav(0.2)));
+    const nobody = await ask(desk(), post('helmut-0123456789ab', toneWav(0.2)));
     expect(nobody?.status).toBe(404);
-    expect(String(nobody?.body['error'])).toMatch(/0123456789ab/);
+    expect(String(nobody?.body['error'])).toMatch(/helmut-0123456789ab/);
+    // Nor a line as somebody says it who is not in service for it: Marta has no voice yet, and
+    // the clock's calls are the Schichtleitung's.
+    const clock = first(blackout?.radio.clock?.lastMinute);
+    for (const off of [idOf('marta', START), his(clock)]) {
+      expect((await ask(desk(), post(off, toneWav(0.2))))?.status, off).toBe(404);
+    }
+    expect((await ask(desk(fakeConvert), post(idOf('kessler', clock), toneWav(0.2))))?.status).toBe(
+      200,
+    );
+    rmSync(join(dir, `${idOf('kessler', clock)}.m4a`));
+    writeFileSync(manifestFile(), '{"lines":{}}\n');
     expect(readdirSync(dir)).toEqual(['manifest.json']);
   });
 
   it('refuses more than 8 MB, as declared or as it streams in', async () => {
-    const id = voiceId(START);
+    const id = his(START);
     const big = Buffer.alloc(MAX_RECORDING_BYTES + 1);
     expect((await ask(desk(), request('POST', `/voice/${id}`, [big])))?.status).toBe(413);
     const halves = [big.subarray(0, 5_000_000), big.subarray(5_000_000)];
@@ -311,7 +341,7 @@ describe('a take recorded on the page', () => {
   });
 
   it('refuses a WAV that is no PCM, saying what is wrong', async () => {
-    const id = voiceId(START);
+    const id = his(START);
     const float = toneWav(0.2);
     float.writeUInt16LE(3, 20);
     const empty = toneWav(0);
@@ -330,10 +360,10 @@ describe('a take recorded on the page', () => {
     };
     const before = readFileSync(manifestFile(), 'utf8');
     const logged = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    const answer = await ask(desk(broken), post(voiceId(START), toneWav(0.3)));
+    const answer = await ask(desk(broken), post(his(START), toneWav(0.3)));
     expect(answer?.status).toBe(500);
     expect(String(answer?.body['error'])).toMatch(/Fehler -50/);
-    expect(logged).toHaveBeenCalledWith(expect.stringMatching(/POST \/voice\/\w+ failed/));
+    expect(logged).toHaveBeenCalledWith(expect.stringMatching(/POST \/voice\/[\w-]+ failed/));
     logged.mockRestore();
     expect(readdirSync(dir)).toEqual(['manifest.json']);
     expect(readFileSync(manifestFile(), 'utf8')).toBe(before);
@@ -342,18 +372,18 @@ describe('a take recorded on the page', () => {
   it('saves two recordings sent at once one after the other: the manifest keeps both', async () => {
     const shared = desk(fakeConvert);
     const [a, b] = await Promise.all([
-      ask(shared, post(voiceId(START), toneWav(0.4))),
-      ask(shared, post(voiceId(NUDGE), toneWav(0.5))),
+      ask(shared, post(his(START), toneWav(0.4))),
+      ask(shared, post(his(NUDGE), toneWav(0.5))),
     ]);
     expect([a?.status, b?.status]).toEqual([200, 200]);
-    expect(manifest()[voiceId(START)]?.['ms']).toBe(400);
-    expect(manifest()[voiceId(NUDGE)]?.['ms']).toBe(500);
+    expect(manifest()[his(START)]?.['ms']).toBe(400);
+    expect(manifest()[his(NUDGE)]?.['ms']).toBe(500);
   });
 });
 
 describe('a file put on the page', () => {
   it('keeps an MP3 as it came, its decoded length noted, the line’s earlier M4A gone', async () => {
-    const id = voiceId(START);
+    const id = his(START);
     writeFileSync(join(dir, `${id}.m4a`), 'the synthetic voice');
     const answer = await ask(desk(), upload(id, TONE_MP3));
     const ms = HAS_AFCONVERT ? 784 : 1234;
@@ -364,7 +394,9 @@ describe('a file put on the page', () => {
       text: START,
       ms,
       missions: ['blackout'],
-      speaker: 'operator',
+      role: 'operator',
+      person: 'helmut',
+      moment: 'start',
       opens: true,
       source: 'upload',
       file: `${id}.mp3`,
@@ -372,7 +404,7 @@ describe('a file put on the page', () => {
   });
 
   it('keeps an M4A as it came, and lets go of an MP3 the line had before', async () => {
-    const id = voiceId(NUDGE);
+    const id = his(NUDGE);
     const work = mkdtempSync(join(tmpdir(), 'escapelab-m4a-'));
     try {
       const wav = join(work, 'tone.wav');
@@ -395,13 +427,13 @@ describe('a file put on the page', () => {
   });
 
   it('converts a WAV, as a take, but names it a file put there', async () => {
-    const id = voiceId(START);
+    const id = his(START);
     const answer = await ask(desk(fakeConvert), upload(id, toneWav(0.8)));
     expect(answer?.body).toEqual({ id, ms: 800, source: 'upload', file: `${id}.m4a` });
   });
 
   it('turns away WebM, which afconvert cannot read, and whatever is no audio', async () => {
-    const id = voiceId(START);
+    const id = his(START);
     const webm = Buffer.from([0x1a, 0x45, 0xdf, 0xa3, 0x9f, 0x42, 0x86, 0x81]);
     const answers = await Promise.all(
       [webm, Buffer.from('not audio at all')].map((bytes) => ask(desk(), upload(id, bytes))),
@@ -418,7 +450,7 @@ describe('a file put on the page', () => {
     const before = readFileSync(manifestFile(), 'utf8');
     const deaf: Measure = () => Promise.reject(new Error('Couldn’t open input file'));
     const broken = Buffer.concat([Buffer.from('ID3'), Buffer.alloc(64)]);
-    const answer = await ask(desk(fakeConvert, deaf), upload(voiceId(START), broken));
+    const answer = await ask(desk(fakeConvert, deaf), upload(his(START), broken));
     expect(answer?.status).toBe(400);
     expect(answer?.body['error']).toBe('Die Datei ließ sich nicht lesen: Couldn’t open input file');
     expect(readdirSync(dir)).toEqual(['manifest.json']);

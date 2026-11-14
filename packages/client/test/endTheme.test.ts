@@ -27,16 +27,27 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-/** The operator's last word on a won run, and its recording of 3 s in the voice's list. */
-const LAST_WORD = 'Alle draußen, und der Trakt hat wieder Strom.';
+/**
+ * The last word on a run, Helmut's recording of 3 s in the voice's list, and the same words in
+ * Kessler's voice: each person has a recording of their own.
+ */
+const WORDS = 'Alle draußen, und der Trakt hat wieder Strom.';
+const LAST_WORD = { text: WORDS, person: 'helmut' };
+const HERS = { text: WORDS, person: 'kessler' };
+const said = { text: WORDS, ms: 3000, missions: ['blackout'], moment: 'won' } as const;
 const VOICE: VoiceManifest = {
   lines: {
-    aaaaaaaaaaaa: {
-      text: LAST_WORD,
-      ms: 3000,
-      missions: ['blackout'],
-      speaker: 'operator',
-      file: 'aaaaaaaaaaaa.mp3',
+    'helmut-aaaaaaaaaaaa': {
+      ...said,
+      role: 'operator',
+      person: 'helmut',
+      file: 'helmut-aaaaaaaaaaaa.mp3',
+    },
+    'kessler-aaaaaaaaaaaa': {
+      ...said,
+      role: 'lead',
+      person: 'kessler',
+      file: 'kessler-aaaaaaaaaaaa.mp3',
     },
   },
 };
@@ -179,7 +190,7 @@ describe('the end card’s music', () => {
   });
 });
 
-describe('the operator’s last word on the end card', () => {
+describe('the last word on the end card', () => {
   /**
    * How long the last word keeps the air, s: the key, its recording as decoded while the sting
    * plays — the fake decodes every line to 1.5 s, where the manifest says 3 — and the tail.
@@ -193,15 +204,16 @@ describe('the operator’s last word on the end card', () => {
     end.playEnding('won', LAST_WORD);
     await fetchIn();
     // Its recording fetched and decoded as the card comes up, while the sting plays.
-    expect(voiceAsked).toEqual(['/voice/aaaaaaaaaaaa.mp3']);
+    expect(voiceAsked).toEqual(['/voice/helmut-aaaaaaaaaaaa.mp3']);
     expect(radio.clipOf(LAST_WORD)).not.toBeNull();
-    expect(end.endThemeProbe()).toEqual({ asked: 'won', line: LAST_WORD, playing: 'end-won' });
+    expect(radio.clipOf(HERS)).toBeNull();
+    expect(end.endThemeProbe()).toEqual({ asked: 'won', line: WORDS, playing: 'end-won' });
     const theme = elements[1];
     // The sting ends 10 s past the look-ahead; the word comes half a second later.
     await vi.advanceTimersByTimeAsync((LOOKAHEAD + 10.5) * 1000 - 50);
     expect(radio.voiceProbe().lastId).toBeNull();
     await vi.advanceTimersByTimeAsync(100);
-    expect(radio.voiceProbe().lastId).toBe('aaaaaaaaaaaa');
+    expect(radio.voiceProbe().lastId).toBe('helmut-aaaaaaaaaaaa');
     // The theme waits for the word, and half a second more.
     await vi.advanceTimersByTimeAsync((AIR_S + 0.5) * 1000 - 150);
     expect(theme?.plays).toBe(0);
@@ -212,12 +224,24 @@ describe('the operator’s last word on the end card', () => {
   it('leaves the theme on the sting’s time where the word has no recording, and says nothing', async () => {
     const { end, radio } = await fresh();
     await fetchIn();
-    end.playEnding('won', 'Eine Zeile ohne Aufnahme.');
+    end.playEnding('won', { text: 'Eine Zeile ohne Aufnahme.', person: 'helmut' });
     await fetchIn();
     const theme = elements[1];
     await vi.advanceTimersByTimeAsync((LOOKAHEAD + 10.6) * 1000);
     expect(theme?.plays).toBe(1);
     expect(radio.voiceProbe().lastId).toBeNull();
+  });
+
+  it('says it in its speaker’s voice: the Schichtleitung’s recording on a run lost', async () => {
+    const { end, radio } = await fresh();
+    await fetchIn();
+    voiceAsked.length = 0;
+    end.playEnding('lost', HERS);
+    await fetchIn();
+    expect(voiceAsked).toEqual(['/voice/kessler-aaaaaaaaaaaa.mp3']);
+    expect([radio.clipOf(HERS) === null, radio.clipOf(LAST_WORD) === null]).toEqual([false, true]);
+    await vi.advanceTimersByTimeAsync((LOOKAHEAD + 10.6) * 1000);
+    expect(radio.voiceProbe().lastId).toBe('kessler-aaaaaaaaaaaa');
   });
 
   it('never brings the word once the card has gone, and breaks it off where it speaks', async () => {

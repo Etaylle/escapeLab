@@ -180,11 +180,18 @@ describe('starting from the lobby', () => {
     const probe = { radioCheck: 'Kurze Funkprobe.' };
     expect(radioCheckDue(annaSees([anna, ben], probe))).toBeUndefined();
     expect(radioCheckDue(annaSees([anna], probe))).toBeUndefined();
-    expect(radioCheckDue(annaSees([anna, { ...ben, ready: true }], probe))).toBe(
-      'Kurze Funkprobe.',
-    );
+    expect(radioCheckDue(annaSees([anna, { ...ben, ready: true }], probe))).toEqual({
+      text: 'Kurze Funkprobe.',
+      person: 'helmut',
+    });
     // A mission without one stays quiet.
     expect(radioCheckDue(annaSees([anna, { ...ben, ready: true }]))).toBeUndefined();
+  });
+
+  it('has the Funkprobe said by the operator on duty for the run to come', () => {
+    const cast = { pa: 'anlage', operator: 'marta', lead: 'kessler' };
+    const ready = annaSees([anna, { ...ben, ready: true }], { radioCheck: 'Funkprobe.', cast });
+    expect(radioCheckDue(ready)).toEqual({ text: 'Funkprobe.', person: 'marta' });
   });
 });
 

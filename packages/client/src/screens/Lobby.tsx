@@ -18,6 +18,7 @@ import { recordParts } from '../runStats.js';
 import { useVoice } from '../voice/useVoice.js';
 import { crewSpeaks, uiSound } from '../world/menuSound.js';
 import { lobbyRadio } from '../world/radioCheck.js';
+import type { VoiceLine } from '../world/radioVoice.js';
 import { preloadSamples } from '../world/samples.js';
 import { crewSizeText } from './Crew.js';
 import { CrewRoom } from './CrewRoom.js';
@@ -63,12 +64,15 @@ export function startBlocker(view: Pick<PlayerView, 'crewSize' | 'players'>): st
 
 /**
  * The operator's Funkprobe (the view's `radioCheck`) once every seat is ready and the host can
- * start; undefined before, and where the mission has none.
+ * start, said by the operator on duty for the next run (the view's `cast`); undefined before,
+ * and where the mission has none.
  */
 export function radioCheckDue(
-  view: Pick<PlayerView, 'crewSize' | 'players' | 'radioCheck'>,
-): string | undefined {
-  return startBlocker(view) === null ? view.radioCheck : undefined;
+  view: Pick<PlayerView, 'crewSize' | 'players' | 'radioCheck' | 'cast'>,
+): VoiceLine | undefined {
+  const text = view.radioCheck;
+  if (text === undefined || startBlocker(view) !== null) return undefined;
+  return { text, person: view.cast.operator };
 }
 
 /** A story up to this many characters fits the two lines the panel shows of it. */
@@ -486,9 +490,15 @@ function useLobbySound(view: PlayerView): void {
  */
 function useRadioCheck(view: PlayerView): void {
   const talking = (useVoice()?.state.speaking.size ?? 0) > 0;
-  const text = radioCheckDue(view);
+  const due = radioCheckDue(view);
+  // By its parts: a lobby drawn again with the same Funkprobe asks for nothing anew.
+  const text = due?.text;
+  const person = due?.person;
   const [radio] = useState(lobbyRadio);
-  useEffect(() => radio.update(text, talking), [radio, text, talking]);
+  useEffect(() => {
+    const line = text === undefined || person === undefined ? undefined : { text, person };
+    radio.update(line, talking);
+  }, [radio, text, person, talking]);
   useEffect(() => () => radio.end(), [radio]);
 }
 

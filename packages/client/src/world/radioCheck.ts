@@ -1,13 +1,15 @@
 import { liveEngine, outlet } from './audio.js';
 import { DUCK_ATTACK_S, DUCK_RELEASE_S } from './mix.js';
-import { sayLine, stopVoice, voiceReady } from './radioVoice.js';
+import { sayLine, stopVoice, voiceReady, type VoiceLine } from './radioVoice.js';
 
 /**
  * The operator's Funkprobe in the lobby: once every seat is ready and the host can start, the
  * line the view brings (core view.ts `radioCheck`, the mission's `radio.lobby`) comes over the
- * radio as a run's lines do (radioVoice.ts) — once while the lobby lasts, however often the crew
- * stands ready again; the next lobby, after a run, hears the mission's next text. While anybody
- * of the crew speaks it stands UNDER_CREW_DB down, under their voices, as the menu's theme does
+ * radio as a run's lines do (radioVoice.ts), said by the operator on duty for the next run (the
+ * view's `cast`), so that the crew hears the one it then has — once while the lobby lasts,
+ * however often the crew stands ready again; the next lobby, after a run, hears the mission's
+ * next text. While anybody of the crew speaks it stands UNDER_CREW_DB down, under their voices,
+ * as the menu's theme does
  * (menuSound.ts `crewSpeaks`); it is cut as the lobby goes. Silent while it has no recording, or
  * before a gesture woke the sound: it plays only on the audio context a gesture made and woke
  * (audio.ts `liveEngine`), never making one itself — a page reloaded into a ready lobby hears
@@ -25,11 +27,13 @@ export const LET_GO_MS = 250;
 export interface RadioCheckProbe {
   /** the Funkprobe a lobby asked for last; null before any */
   readonly asked: string | null;
+  /** the operator it was asked of, by their id in the cast; null before any */
+  readonly by: string | null;
   /** whether it went on the air: not while it has no recording, nor before the sound woke */
   readonly aired: boolean;
 }
 
-let probe: RadioCheckProbe = { asked: null, aired: false };
+let probe: RadioCheckProbe = { asked: null, by: null, aired: false };
 
 export function radioCheckProbe(): RadioCheckProbe {
   return probe;
@@ -38,10 +42,11 @@ export function radioCheckProbe(): RadioCheckProbe {
 /** The lobby's radio: told how the crew stands, and that the lobby goes. */
 export interface LobbyRadio {
   /**
-   * The crew as it stands now: the Funkprobe's text once every seat is ready and the host can
-   * start (undefined before), and whether anybody of the crew speaks.
+   * The crew as it stands now: the Funkprobe once every seat is ready and the host can start —
+   * its words, said by the operator on duty (undefined before) — and whether anybody of the crew
+   * speaks.
    */
-  update(text: string | undefined, talking: boolean): void;
+  update(line: VoiceLine | undefined, talking: boolean): void;
   /** The lobby goes: the Funkprobe cut where it speaks, its level let go, nothing asked left. */
   end(): void;
 }
@@ -61,8 +66,8 @@ function steer(level: GainNode, talking: boolean): void {
 
 /**
  * A lobby's radio, for the lobby screen to keep while it shows: it says the Funkprobe the first
- * time `update` brings its text, once, and after `end` — React's own unmount and mount again
- * included — as a lobby of its own would.
+ * time `update` brings it, once, and after `end` — React's own unmount and mount again included —
+ * as a lobby of its own would.
  */
 export function lobbyRadio(): LobbyRadio {
   let said = false;
@@ -70,10 +75,10 @@ export function lobbyRadio(): LobbyRadio {
   /** the Funkprobe asked for and not yet on the air, made moot by `end` */
   let asked: object | null = null;
   let level: GainNode | null = null;
-  const say = (text: string): void => {
+  const say = (line: VoiceLine): void => {
     const ask = {};
     asked = ask;
-    probe = { asked: text, aired: false };
+    probe = { asked: line.text, by: line.person, aired: false };
     void voiceReady().then(() => {
       const engine = liveEngine();
       if (asked !== ask || engine === null) return;
@@ -81,9 +86,9 @@ export function lobbyRadio(): LobbyRadio {
       // The level stands from the ask on, so that the lobby's end cuts a Funkprobe still decoding.
       const under = outlet(engine.ctx, engine.voice, levelFor(talking));
       level = under;
-      void sayLine(text, under).then((aired) => {
+      void sayLine(line, under).then((aired) => {
         if (aired !== null) {
-          probe = { asked: text, aired: true };
+          probe = { asked: line.text, by: line.person, aired: true };
           return;
         }
         if (level === under) level = null;
@@ -92,12 +97,12 @@ export function lobbyRadio(): LobbyRadio {
     });
   };
   return {
-    update(text, speaking) {
+    update(line, speaking) {
       if (speaking !== talking && level !== null) steer(level, speaking);
       talking = speaking;
-      if (text === undefined || said) return;
+      if (line === undefined || said) return;
       said = true;
-      say(text);
+      say(line);
     },
     end() {
       said = false;
