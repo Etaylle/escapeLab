@@ -8,7 +8,8 @@ neue Missionen brauchen keinen Code.
 (`switches`), Speicherbank (`memory`), Frequenz-Abgleich mit Farblegende (`simon`), Morsefunk
 (`morse`), der Knopf (`button`), unsichtbares Labyrinth (`maze`), Synchron-Knöpfe (`button-sync`),
 Signalkette an zwei Pulten (`signal`), Sicherungskasten und Prüfpult an zwei Pulten (`circuit`),
-Serverraum mit Terminal und Rack an zwei Pulten (`servers`).
+Serverraum mit Terminal und Rack an zwei Pulten (`servers`), Zugangskontrolle mit Terminal und
+Tokengerät an zwei Pulten (`access`).
 Layouts/Codes sind pro Partie zufällig (seeded, deterministisch replaybar), Fehler kosten
 Countdown-Zeit. **Missionen:** Tutorial (2 Spieler), Blackout im Labor (2–3 Spieler, 5 Rätsel),
 Kettenreaktion (3 Spieler, jeder startet in einem anderen verschlossenen Raum und kommt nur mit
@@ -46,6 +47,19 @@ Abhängigkeiten per restart); E50 ist Quarantäne: Strom aus, nie starten, sonst
 weiteren Dienst. Bewiesen im Kerntest, in Blackout und in der Probemission
 `tools/fixtures/servers-probe.json`, die der Systemcheck-Rundgang über den Editor mit festem Seed
 importiert und bis zur Lösung spielt.
+
+**Zugangskontrolle** (`access`): eine Anmeldung mit zwei Faktoren unter laufender Uhr. Pult A ist
+ein Terminal wie das des Serverraums, das die freizugebenden Türen nennt und `login <konto>`, den
+Token, `status` und `freigeben <tür>` annimmt; Pult B ein Tokengerät, das je Periode (30 s) an ein
+Konto des Laufs gebunden ist und dessen sechsstelligen Token mit einem ablaufenden Balken zeigt.
+Welche Rolle welche Tür freigibt, steht gedruckt im Handbuch, welches Konto welche Rolle hat, nur
+auf der Benutzerliste des Laufs an der Quelle. Ein falscher Token und eine Freigabe ohne
+Berechtigung kosten einen Alarm, drei falsche Token in Folge sperren das Konto für 45 s
+Einsatzzeit, und ab der zweiten Freigabe (Sicherheitsstufe 2) nennt das Terminal die Sitzung nur
+noch mit ihrer Rolle. Noch in keiner Mission — ihr Platz folgt dem Playtest —: bewiesen im
+Kerntest und in der Probemission `tools/fixtures/access-probe.json`, die der Rundgang mit
+`SHOTS_ONLY=access` über den Editor mit festem Seed importiert und bis zur Lösung spielt, jeden
+Token vom Gerät abgelesen.
 
 Keine Station lässt sich allein bedienen (siehe *Nie allein*), und auf *Normal* beendet der
 fünfte Alarm den Lauf — auf *Hart* der dritte, auf *Entspannt* gibt es keine Grenze.
@@ -266,11 +280,13 @@ selbst, wie die CI, und probt mitten in einem Einsatz den Neustart: SIGTERM, die
 „WARTUNG · Der Server startet neu" auf jeder Seite, und nach dem Neustart alle zurück im Einsatz.
 
 **Nur ein Teil des Rundgangs (Gruppen):** Jede Aufnahme des Rundgangs gehört zu genau einer von
-fünfzehn Gruppen (`tools/groups.mjs`); `SHOTS_ONLY=screens,intro` spielt nur diese,
+sechzehn Gruppen (`tools/groups.mjs`); `SHOTS_ONLY=screens,intro` spielt nur diese,
 `SHOTS_SKIP=perf` alle außer diesen — der schnelle Beweis eines Teils. Vor dem Rundgang laufen die
 Proben, jede in einem Raum für sich: `editor`, `art`, `drones` (Gefahrensinn und eine Drohne aus der
 Nähe), `reconnect` und `restart` — im Systemcheck dazu die Probe des Serverraums, die zu `devices`
-gehört. Der Rundgang selbst: `screens` (Menü und sein Ton, Bestenliste, Lobby, der Start aus ihr),
+gehört —, und nur mit `SHOTS_ONLY=access` die Probe der Zugangskontrolle, die allein spielt: Ohne
+die Variable bleibt sie wortlos aus, damit die Läufe von Blackout und Systemcheck bleiben, wie sie
+sind. Der Rundgang selbst: `screens` (Menü und sein Ton, Bestenliste, Lobby, der Start aus ihr),
 `intro` (die Eröffnung bis `blackout.png`) und `run` (die Mission bis zur Siegerkarte, nach dem
 gewonnenen Systemcheck die Einsätze des Kontos und sein Löschen); im Lauf `devices` (jede Station,
 auch auf dem quer gehaltenen Handy), `reading` (Quellen, Schild, Notizen der letzten Schicht,

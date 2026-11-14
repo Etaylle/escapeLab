@@ -380,13 +380,24 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   Captures; Zielzeile nennt der dritten Person ihre Aufgabe („Cleo: Platte halten"). Eine echte
   Drei-Pulte-Station oder ein Needy-Objekt nur bei drei Spielenden erst nach Playtest-Daten.
 
-### I-1 Zugangskontrolle mit Zwei-Faktor — Status: wartet (Entscheidung Uros: Modul zuerst, Platz in Blackout nach dem Playtest) · Größe: L
+### I-1 Zugangskontrolle mit Zwei-Faktor — Status: im PR (I-access; Platz in Blackout nach dem Playtest, N-6) · Größe: L
 - Pult A Login-Terminal, Pult B Token-Generator mit Code, der mit der Serveruhr alle 30 s
   wechselt (Restsekunden sichtbar), Quelle Benutzerliste mit Rollen. Vorbilder: Quadrilateral
   Cowboy (`door.open(3)`: das Terminal gibt die Tür drei Sekunden frei, jemand muss durch),
   Among Us (ID-Code ablesen und eintippen; Reaktor mit zwei Händen an zwei Panels).
 - Dazu als eigenes Spielelement: eine Schleuse, die das Terminal fünf Sekunden öffnet, während
   die andere Person läuft (nutzt die vorhandene Bewegung).
+- Umgesetzt als Modul `access` (`docs/gameplay.md`, „The Zugangskontrolle"): Das Terminal nennt
+  die angeforderten Türen und nimmt `login`, den Token, `status` und `freigeben`; das
+  Tokengerät ist je Periode an ein Konto gebunden und zeigt dessen Token mit ablaufendem
+  Balken; gedruckt steht, welche Rolle welche Tür freigibt, auf der Benutzerliste des Laufs,
+  welches Konto welche Rolle hat. Falscher Token und Freigabe ohne Berechtigung sind Alarme,
+  drei falsche Token sperren das Konto auf der Einsatzuhr, ab Sicherheitsstufe 2 nennt das
+  Terminal die Sitzung nur mit ihrer Rolle. Felder `doors`, `tokenSec`, `openSec`, `lockSec`,
+  `strictFrom`. Die Tür offen zu halten, während jemand durchläuft, bleibt Fiktion, keine Regel.
+- Noch in keiner Mission: Probemission `tools/fixtures/access-probe.json`, die der Rundgang nur
+  mit `SHOTS_ONLY=access` spielt. Offen für N-6: ob und wo die Station in Blackout steht — mit
+  zwei Spielenden muss die Liste vor den Pulten gelesen (oder notiert) werden.
 
 ### I-2 Firewall-Regelwerk — Status: wartet (Entscheidung Uros) · Größe: L
 - Pult A zeigt laufende Pakete (Quelle, Ziel, Port), Pult B bearbeitet die Regelliste, erste
