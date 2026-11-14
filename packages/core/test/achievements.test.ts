@@ -153,14 +153,6 @@ describe('achievementsOf — the seven plaques of a won run', () => {
     expect(earns('erste-schicht', clean({ outcome: 'lost:time' }))).toBe(false);
   });
 
-  it('gives a run its last solve won none of the hatch’s two: there was no hatch to reach', () => {
-    const atTheLast = clean({ noHatch: true });
-    expect(earns('unter-acht-minuten', atTheLast)).toBe(false);
-    expect(earns('erste-schicht', atTheLast)).toBe(false);
-    const others = ACHIEVEMENT_IDS.filter((id) => id !== 'unter-acht-minuten');
-    expect(achievementsOf(atTheLast)).toEqual(others.filter((id) => id !== 'erste-schicht'));
-  });
-
   it('names every plaque in a few words, without praise', () => {
     for (const id of ACHIEVEMENT_IDS) {
       const { title, line } = achievement(id);
@@ -169,6 +161,16 @@ describe('achievementsOf — the seven plaques of a won run', () => {
       expect(`${title} ${line}`, id).not.toMatch(/super|toll|bravo|glückwunsch|klasse|perfekt|!/i);
     }
     expect(() => achievement('nirgends' as AchievementId)).toThrow(/no plaque "nirgends"/);
+  });
+});
+
+describe('achievementsOf — a run its last solve won, in a mission without a hatch', () => {
+  it('gives it none of the hatch’s two plaques: there was no hatch to reach', () => {
+    const atTheLast = clean({ noHatch: true });
+    expect(earns('unter-acht-minuten', atTheLast)).toBe(false);
+    expect(earns('erste-schicht', atTheLast)).toBe(false);
+    const others = ACHIEVEMENT_IDS.filter((id) => id !== 'unter-acht-minuten');
+    expect(achievementsOf(atTheLast)).toEqual(others.filter((id) => id !== 'erste-schicht'));
   });
 });
 
