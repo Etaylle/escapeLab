@@ -51,7 +51,7 @@ class FakeConnection {
   readonly transceivers: Transceiver[] = [];
   readonly candidates: object[] = [];
 
-  constructor() {
+  constructor(readonly config: { iceServers: object[] }) {
     FakeConnection.made.push(this);
   }
 
@@ -160,7 +160,7 @@ class Wire {
     mesh.attach((to, signal) => {
       this.sent.push({ from: id, to, signal });
       this.queue.push({ from: id, to, signal });
-    }, '');
+    });
     this.pages.set(id, mesh);
     return mesh;
   }
@@ -366,6 +366,47 @@ describe('the voice links between the pages', () => {
     await wire.settle();
     expect(anna.probe().links).toEqual(['b']);
     expect(wire.kinds('a').filter((kind) => kind === 'offer')).toHaveLength(2);
+  });
+
+  it('waits twice as long after each failure in a row, naming whom no link reaches', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'performance'] });
+    const anna = wire.join('a');
+    anna.receive({ kind: 'ice-servers', servers: [{ urls: 'stun:stun.example.org:3478' }] });
+    anna.receive(crewView('a', BOTH));
+    await wire.settle();
+    expect(FakeConnection.made[0]?.config.iceServers).toEqual([
+      { urls: 'stun:stun.example.org:3478' },
+    ]);
+    expect(anna.probe().ice).toEqual(['stun:stun.example.org:3478']);
+    expect(anna.getState().unreachable).toEqual(new Set());
+    FakeConnection.made[0]?.becomes('failed');
+    expect(anna.getState().unreachable).toEqual(new Set(['b']));
+    // The first wait is 3 s, the second 6 s.
+    vi.advanceTimersByTime(3100);
+    expect(anna.probe().links).toEqual(['b']);
+    FakeConnection.made[1]?.becomes('failed');
+    vi.advanceTimersByTime(5900);
+    expect(anna.probe().links).toEqual([]);
+    vi.advanceTimersByTime(200);
+    expect(anna.probe().links).toEqual(['b']);
+    expect(anna.getState().unreachable).toEqual(new Set(['b']));
+    // Up again: nobody is unreachable, and the next failure waits 3 s once more.
+    FakeConnection.made[2]?.becomes('connected');
+    expect(anna.getState().unreachable).toEqual(new Set());
+    FakeConnection.made[2]?.becomes('failed');
+    vi.advanceTimersByTime(3100);
+    expect(anna.probe().links).toEqual(['b']);
+  });
+
+  it('makes a link anew that stays disconnected after it was up', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'performance'] });
+    const [anna] = await linked();
+    FakeConnection.made[0]?.becomes('disconnected');
+    vi.advanceTimersByTime(5000);
+    expect(anna.probe().states).toEqual({ b: 'disconnected' });
+    vi.advanceTimersByTime(1100);
+    expect(anna.probe().links).toEqual([]);
+    expect(anna.getState().unreachable).toEqual(new Set(['b']));
   });
 
   it('close the link of a player who left the room', async () => {

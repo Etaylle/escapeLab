@@ -7,7 +7,10 @@
  * Every prompt names its key from here (input/glyphs.ts), never by itself.
  */
 
-/** What the player does: walking and sprinting, the actions, and talking held down. */
+/**
+ * What the player does: walking and sprinting, the actions — writing to the crew among them,
+ * whose field screens/TypedChat.tsx opens —, and talking held down.
+ */
 export const ACTIONS = [
   'up',
   'down',
@@ -19,6 +22,7 @@ export const ACTIONS = [
   'notes',
   'minimap',
   'chat',
+  'write',
   'info',
   'talk',
 ] as const;
@@ -67,6 +71,7 @@ export const ACTION_NAMES: Readonly<Record<InputAction, string>> = {
   notes: 'Notizblock',
   minimap: 'Minikarte',
   chat: 'Schnellchat',
+  write: 'Nachricht schreiben',
   info: 'Einsatzinfo',
   talk: 'Sprechen (halten)',
 };
@@ -85,6 +90,7 @@ export const DEFAULT_KEYS: KeyBindings = {
   notes: 'n',
   minimap: 'm',
   chat: 'c',
+  write: 't',
   info: 'i',
   talk: 'v',
 };

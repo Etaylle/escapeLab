@@ -10,6 +10,8 @@ import {
   sayPhrase,
   SERVICES,
   slotValues,
+  TYPED_MAX,
+  typedLine,
   viewFor,
 } from '../src/index.js';
 import { labMission, started } from './lab.js';
@@ -146,5 +148,34 @@ describe('the quick chat in a view and on the wire', () => {
     }
     expect(said({ kind: 'chat', phrase: 7, value: '' })).toThrow();
     expect(said({ kind: 'chat', phrase: 7, value: 'X'.repeat(17) })).toThrow();
+  });
+});
+
+describe('a typed line', () => {
+  it('tidies its spaces and takes control characters and direction marks out', () => {
+    expect(typedLine('  Bin   am\tPult B\n ')).toBe('Bin am Pult B');
+    expect(typedLine('Kabel\u0000 3 \u202Edrei')).toBe('Kabel 3 drei');
+  });
+
+  it('refuses a line with nothing left, and one over 120 characters as the player counts them', () => {
+    for (const empty of ['', '   ', '\n\t', '\u0007\u2066']) {
+      expect(() => typedLine(empty), JSON.stringify(empty)).toThrow('leere Nachricht');
+    }
+    expect(TYPED_MAX).toBe(120);
+    // Each umlaut and emoji counts once, however JavaScript stores it.
+    const full = 'ä'.repeat(100) + '🔦'.repeat(20);
+    expect(typedLine(full)).toBe(full);
+    expect(() => typedLine(full + 'x')).toThrow('Höchstens 120 Zeichen');
+    // Spaces tidied away count for nothing.
+    expect(typedLine(`  ${'a'.repeat(120)}   `)).toHaveLength(120);
+  });
+
+  it('goes on the wire as text, nothing heavier than four times the most a line may be', () => {
+    expect(parseClientMessage(JSON.stringify({ kind: 'say', text: 'Hallo' }))).toEqual({
+      kind: 'say',
+      text: 'Hallo',
+    });
+    const heavy = JSON.stringify({ kind: 'say', text: 'a'.repeat(TYPED_MAX * 4 + 1) });
+    expect(() => parseClientMessage(heavy)).toThrow();
   });
 });

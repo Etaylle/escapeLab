@@ -14211,7 +14211,7 @@ function reportSprint(name, run, sprint, walk) {
 //   D-pad along the tab bar from „Ton": the focus has to open each tab it comes to
 // settings-controller.png  the settings' controller section with R1, Y and L2 held on the
 //   walkthrough's controller: those have to light up in the live test, the controller has to
-//   count as connected, and the key table has to list all twelve actions
+//   count as connected, and the key table has to list all thirteen actions
 // gamepad-prompts.png  the host beside the nearest source or the station up, the controller used
 //   last: the HUD's buttons have to name its buttons (X, View); a key pressed has to turn them
 //   back (N, I)
@@ -14364,7 +14364,7 @@ async function captureSteering(page) {
  * settings-controller.png: the gear opens the settings on „Steuerung", its controller's section
  * in view; the walkthrough's controller holds R1, Y and L2 — none of them acts over a dialog —
  * and the live test has to light exactly those, the controller connected, the key table all
- * twelve actions. Esc closes the settings again: a real key, which turns the prompts back to the
+ * thirteen actions. Esc closes the settings again: a real key, which turns the prompts back to the
  * keys.
  */
 async function captureControllerSettings(page) {
@@ -14393,7 +14393,7 @@ async function captureControllerSettings(page) {
       `${actions} actions with their keys; ${closed ? 'Esc closed it' : '!! still open'}`,
   );
   const lights = [...lit].sort().join(' ') === [...held].sort().join(' ');
-  if (!lights || !status?.startsWith('Verbunden') || actions !== 12 || !closed) {
+  if (!lights || !status?.startsWith('Verbunden') || actions !== 13 || !closed) {
     fail(`settings-controller.png: lit ${lit.join(' ')}, "${status}", ${actions} actions`);
   }
 }

@@ -244,6 +244,7 @@ function voiceOf(state: Partial<VoiceState>): VoiceMesh {
     listening: false,
     speaking: new Set(),
     intercom: new Set(),
+    unreachable: new Set(),
     ...state,
   };
   return { subscribe: () => noop, getState: () => full } as Pick<

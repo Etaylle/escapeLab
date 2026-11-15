@@ -35,6 +35,7 @@ const INTERFACE: Record<string, string> = {
   'client/src/screens/MenuPanels.tsx': 'the menu’s panels: the missions, a room’s code, the rounds',
   'client/src/screens/MyRuns.tsx': '„Meine Einsätze": the account’s runs, beside the Bestenliste',
   'client/src/screens/Spectate.tsx': 'the audience’s screen',
+  'client/src/screens/TypedChat.tsx': 'the typed chat: its field and the crew’s own lines',
   'client/src/screens/Voice.tsx': 'the microphone’s switches',
   'core/src/chat.ts': 'the quick chat: the crew’s own words, not the lab’s',
 };

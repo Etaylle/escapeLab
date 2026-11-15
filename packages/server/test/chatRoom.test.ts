@@ -84,3 +84,54 @@ describe('Room quick chat', () => {
     room.dispose();
   });
 });
+
+describe('Room typed lines', () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it('passes a line on tidied, with its sender, to the crew and the audience alike', () => {
+    const { room, anna, ben } = joined(blackout);
+    const audience: ServerMessage[] = [];
+    room.attachSpectator((m) => audience.push(m));
+    room.say(anna.playerId, '  Bin   am Pult B ');
+    const line = { kind: 'chat', playerId: anna.playerId, text: 'Bin am Pult B' };
+    for (const messages of [anna.messages, ben.messages, audience]) {
+      expect(messages.filter((m) => m.kind === 'chat')).toEqual([line]);
+    }
+    room.dispose();
+  });
+
+  it('refuses an empty line, one over 120 characters, and one from outside the crew', () => {
+    const { room, anna, ben } = joined(blackout);
+    expect(() => room.say(anna.playerId, ' \n ')).toThrow('leere Nachricht');
+    expect(() => room.say(anna.playerId, 'x'.repeat(121))).toThrow('Höchstens 120 Zeichen');
+    expect(() => room.say('audience-1', 'Hallo')).toThrow('nur die Crew');
+    expect(ben.messages.filter((m) => m.kind === 'chat')).toEqual([]);
+    room.say(anna.playerId, 'x'.repeat(120));
+    expect(ben.messages.filter((m) => m.kind === 'chat')).toHaveLength(1);
+    room.dispose();
+  });
+
+  it('holds each sender to three lines at once and one every 2 s after, and says so', () => {
+    const { room, anna, ben } = joined(blackout);
+    for (const text of ['eins', 'zwei', 'drei']) {
+      room.say(anna.playerId, text);
+    }
+    expect(() => room.say(anna.playerId, 'vier')).toThrow('Nicht so schnell');
+    // Ben's allowance is his own.
+    room.say(ben.playerId, 'ich auch');
+    vi.advanceTimersByTime(1900);
+    expect(() => room.say(anna.playerId, 'vier')).toThrow('Nicht so schnell');
+    vi.advanceTimersByTime(200);
+    room.say(anna.playerId, 'vier');
+    const names = { [anna.playerId]: 'Anna', [ben.playerId]: 'Ben' };
+    expect(heard(ben.messages, names)).toEqual([
+      'Anna: eins',
+      'Anna: zwei',
+      'Anna: drei',
+      'Ben: ich auch',
+      'Anna: vier',
+    ]);
+    room.dispose();
+  });
+});

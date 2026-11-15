@@ -21,7 +21,7 @@ export function useVoiceMesh(conn: Pick<Connection, 'listen' | 'signal'>): Voice
   const [mesh] = useState(() => new VoiceMesh());
   const { listen, signal } = conn;
   useEffect(() => {
-    mesh.attach(signal, location.search);
+    mesh.attach(signal);
     const stop = listen({ message: (msg) => mesh.receive(msg), closed: () => mesh.disconnected() });
     const dropProbe = traceRequested(location.search)
       ? addProbes({

@@ -275,6 +275,8 @@ export {
   type AccountStore,
   type AccountView,
   type LoginDone,
+  iceServersSchema,
+  type IceServer,
   type RtcSignal,
   type ClientMessage,
   type CrewPass,
@@ -339,6 +341,8 @@ export {
   phraseShown,
   phrasesOf,
   sayPhrase,
+  TYPED_MAX,
+  typedLine,
   slotValues,
   type ChatPhrase,
 } from './chat.js';

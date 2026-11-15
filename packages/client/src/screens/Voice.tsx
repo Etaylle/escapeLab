@@ -107,6 +107,38 @@ export function MicSetup() {
   );
 }
 
+/** The names in German order: „Ben", „Ben und Cara", „Ben, Cara und Dana". */
+function listed(names: readonly string[]): string {
+  const last = names.at(-1) ?? '';
+  return names.length < 2 ? last : `${names.slice(0, -1).join(', ')} und ${last}`;
+}
+
+/**
+ * The line for crew members no voice link reaches (mesh.ts `VoiceState.unreachable`), by
+ * name: „Keine Sprechverbindung zu Ben"; null while every link is up or on its way.
+ */
+export function noLinkLine(names: readonly string[]): string | null {
+  if (names.length === 0) {
+    return null;
+  }
+  return `Keine Sprechverbindung zu ${listed(names)} — neuer Versuch läuft.`;
+}
+
+/**
+ * Whom of `players` no voice link reaches, in one quiet line — apart from the microphone's
+ * own: a link down is no microphone missing, and the voice keeps trying. Nothing otherwise.
+ */
+export function NoLink({ players }: { players: readonly { id: string; name: string }[] }) {
+  const unreachable = useVoice()?.state.unreachable;
+  const names = players.filter((p) => unreachable?.has(p.id) === true).map((p) => p.name);
+  const line = noLinkLine(names);
+  return line === null ? null : (
+    <p className="voice-nolink" role="status">
+      {line}
+    </p>
+  );
+}
+
 /** Who speaks: the microphone beside their name. */
 export function SpeakingMark() {
   return (

@@ -48,6 +48,12 @@ export function draw(ctx: CanvasRenderingContext2D, frame: Frame): void {
 export const PING_LIFETIME_MS = 3200;
 /** How long a chat line's bubble stays up, ms. */
 export const CHAT_LIFETIME_MS = 4200;
+/** How wide a speech bubble's text runs before it breaks into another row, in CSS px. */
+const BUBBLE_WIDTH = 220;
+/** How far one row of a bubble stands under the one before, in CSS px. */
+const BUBBLE_ROW = 16;
+/** The most rows a bubble holds. */
+const BUBBLE_ROWS = 3;
 /** How long „… entdeckt" stays over a find of this player's that matters (finds.ts), s. */
 export const CAPTION_SECONDS = 2;
 /** How far round your figure the edge arrows keep off, in tiles. */
@@ -451,15 +457,17 @@ function drawBubble(
   const view = frame.viewport;
   const k = textPx(1, view);
   const tip = sy + 16 * view.dpr;
-  const { text } = line;
   ctx.font = `600 ${BUBBLE_PX * k}px system-ui, sans-serif`;
-  const tw = ctx.measureText(text).width + 18 * k;
+  const rows = bubbleRows(ctx, line.text, BUBBLE_WIDTH * k);
+  const tw = Math.max(...rows.map((row) => ctx.measureText(row).width)) + 18 * k;
+  // One row stands 22 px tall, each further one adds BUBBLE_ROW; the bubble grows upward.
+  const extra = (rows.length - 1) * BUBBLE_ROW * k;
   const age = (frame.perf - line.at) / CHAT_LIFETIME_MS;
   const under = ctx.globalAlpha;
   ctx.globalAlpha = under * (age > 0.8 ? (1 - age) / 0.2 : 1);
   ctx.fillStyle = C.bubble;
   ctx.beginPath();
-  ctx.roundRect(sx - tw / 2, tip - 28 * k, tw, 22 * k, 7 * k);
+  ctx.roundRect(sx - tw / 2, tip - 28 * k - extra, tw, 22 * k + extra, 7 * k);
   ctx.fill();
   ctx.beginPath();
   ctx.moveTo(sx - 5 * k, tip - 7 * k);
@@ -468,8 +476,38 @@ function drawBubble(
   ctx.closePath();
   ctx.fill();
   ctx.fillStyle = C.bubbleInk;
-  ctx.fillText(text, sx, tip - 12 * k);
+  rows.forEach((row, i) => {
+    ctx.fillText(row, sx, tip - 12 * k - extra + i * BUBBLE_ROW * k);
+  });
   ctx.globalAlpha = under;
+}
+
+/**
+ * A bubble's text in rows of `width` at most, broken between words — a word longer than a row
+ * stands alone in one —, BUBBLE_ROWS of them at most, the last cut with „…" where more is left:
+ * a typed line runs to 120 characters, a phrase fits one row.
+ */
+function bubbleRows(
+  ctx: Pick<CanvasRenderingContext2D, 'measureText'>,
+  text: string,
+  width: number,
+): string[] {
+  const rows: string[] = [];
+  for (const word of text.split(' ')) {
+    const last = rows.at(-1);
+    const longer = last === undefined ? word : `${last} ${word}`;
+    if (last !== undefined && ctx.measureText(longer).width <= width) {
+      rows[rows.length - 1] = longer;
+    } else {
+      rows.push(word);
+    }
+  }
+  if (rows.length <= BUBBLE_ROWS) {
+    return rows;
+  }
+  const kept = rows.slice(0, BUBBLE_ROWS);
+  kept[BUBBLE_ROWS - 1] = `${kept[BUBBLE_ROWS - 1] ?? ''} …`;
+  return kept;
 }
 
 /**

@@ -38,6 +38,7 @@ Controller), the rest is fixed.
 | Minikarte | M | Y/△ |
 | Ping für alle | a click on the world | D-pad ◀: the floor the lamp points at |
 | Schnellchat | C, then 1–8 (fixed); a phrase with a slot, then 1–9 | D-pad ▶, then the D-pad to a phrase and A, and to a slot's value and A |
+| Nachricht schreiben | T, then Enter to send, Esc to drop it | — (a controller types nothing) |
 | Einsatzinfo | I | Select |
 | Sprechen (push-to-talk) | V, held (at the terminal V types; its FUNK key talks) | L1, held |
 | Blättern beim Lesen | ← → (fixed) | D-pad ◀ ▶ |
@@ -103,11 +104,48 @@ place and the slot's value; the server fills it in (`sayPhrase`) and refuses a p
 the mission does not have. The bubble over the speaker and the HUD's line show it as said:
 „Anna: Kabel 3" (`world/ChatWheel.tsx`, `client/test/chatWheel.test.tsx`; chat-slot.png).
 
+## Typed chat
+
+A crew member can type a line to the crew, in the lobby and in a run (`screens/TypedChat.tsx`).
+In the lobby the room's last eight lines and the field stand in the mission panel under the
+microphone; T (as bound) puts the focus in the field, Esc takes it out. In a run the field opens
+over the world's foot with T or the ✎ button beside the quick chat's — on a touch screen just
+left of the cluster, outside its four, so that its reach stays as it is — and shuts the wheel;
+it closes as the line goes out, with Esc (which then opens no menu) or once it loses the focus.
+The T is kept from the field it opens. While the field has the focus every key types there: the
+world, the run's keys and the talk key leave a text field alone, and a controller's button lets
+go of it first. The client sends `say` with the text; the server tidies it — control characters
+and direction marks out, each run of spaces one space, none at the ends (core `chat.ts`
+`typedLine`) — refuses an empty line, one over 120 characters (as the player counts them), one
+from anyone not in the crew, and a sender past three lines at once and one every 2 s after
+(„Nicht so schnell — gleich noch einmal."), and passes it on as a `chat` line with its sender to
+everyone a quick-chat phrase reaches, the audience included. Nothing keeps it: the page holds
+the room's last eight lines, phrases and typed lines alike, until it is in another room
+(`chatLog.ts`). It shows as a phrase does, over the speaker — a long line in up to three rows,
+cut with „…" — and in the HUD's line, and in the log, each name in its crew colour.
+
 ## The station's intercom
 
 Between the places of the armed station — its consoles and the open sources that cover it — the
 crew hears each other in full however far apart, walls or not; everywhere else the voice fades
 with distance and walls as before. The device's PARTNER LED then reads „Ben · Pult B · Funk".
+
+## Voice links over the internet
+
+The voice goes from browser to browser (WebRTC, `voice/mesh.ts`); the game's server only passes
+the signals on. Each socket is told first thing which ICE servers the links go by (`ice-servers`,
+server `iceServers.ts`): the JSON list in `ICE_SERVERS`, or public STUN (Google's and
+Cloudflare's) where it is unset; `[]` keeps the voice to one network. STUN tells a browser the
+address the internet sees it under, which gets through most home routers; behind a symmetric NAT
+— some mobile, campus and office networks — only a TURN server relaying the sound gets a link up,
+named with its username and credential (`{"urls":"turn:turn.example.org:3478","username":"…",
+"credential":"…"}`). A wrong list stops the server's start, saying what is wrong. A link that
+fails, does not come up within 15 s or stays `disconnected` for 6 s is made anew by the lower id,
+after 3 s, then twice as long each time in a row up to 30 s; until it is up, the lobby's panel
+and the world say „Keine Sprechverbindung zu Ben — neuer Versuch läuft.", apart from the
+microphone's own line. Each end sets the Opus parameters in the description from the other end
+before it sets it — forward error correction, DTX, mono, 32 kbit/s — which is what its encoder
+sends by (`voice/opus.ts`).
 
 ## Finding things
 

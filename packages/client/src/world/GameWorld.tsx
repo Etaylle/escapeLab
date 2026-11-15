@@ -9,7 +9,8 @@ import { NO_STEER } from '../input/pad.js';
 import { onPadPing, padSteer } from '../input/padRuntime.js';
 import { addProbes, type MinimapProbe } from '../probes.js';
 import type { CoachMark } from '../puzzles/coach.js';
-import { TalkButton } from '../screens/Voice.js';
+import { WorldChat } from '../screens/TypedChat.js';
+import { NoLink, TalkButton } from '../screens/Voice.js';
 import { getSettings, TEXT_SCALE, useReducedMotion, useSettings } from '../settings.js';
 import { VoiceContext } from '../voice/useVoice.js';
 import type { Connection } from '../ws.js';
@@ -992,6 +993,8 @@ interface ControlsProps {
   view: PlayerView;
   wheel: Wheel;
   setWheel: SetWheel;
+  /** opens the field for a line to the crew (screens/TypedChat.tsx) */
+  setWriting: (open: boolean) => void;
 }
 
 /** A way to walk or the sprint held while a finger is down on its control, let go as it lifts. */
@@ -1115,11 +1118,12 @@ function thumbClass(awake: boolean, carrying: boolean): string {
  * With a keyboard only the chat's handle shows; the key on a button shows only where there are
  * keys.
  */
-function WorldControls({ refs, live, view, wheel, setWheel }: ControlsProps) {
+function WorldControls({ refs, live, view, wheel, setWheel, setWriting }: ControlsProps) {
   /** what this player carries now; while there is something, a touch screen offers to drop it */
   const load = view.map === null ? undefined : carriedItem(view.map, view.you.id);
   const interactGlyph = useGlyph('interact');
   const chatGlyph = useGlyph('chat');
+  const writeGlyph = useGlyph('write');
   const wake = useClusterWake();
   const press: Press = (move, down) => {
     const sim = refs.simRef.current;
@@ -1152,6 +1156,14 @@ function WorldControls({ refs, live, view, wheel, setWheel }: ControlsProps) {
           aria-expanded={wheel !== null}
         >
           💬<span className="world-key"> [{chatGlyph}]</span>
+        </button>
+        {/* Beside the quick chat's handle, outside the cluster's four (world.css). */}
+        <button
+          className="world-write"
+          aria-label="Nachricht schreiben"
+          onClick={() => setWriting(true)}
+        >
+          ✎<span className="world-key"> [{writeGlyph}]</span>
         </button>
         {/* Held to talk, on a touch screen with the microphone on; the talk key on a keyboard. */}
         <TalkButton className="world-talk">🎤</TalkButton>
@@ -1263,6 +1275,14 @@ function RedEdge({ view, ending }: { view: PlayerView; ending: boolean }) {
 export function GameWorld(props: Props) {
   const { spectator } = props;
   const { refs, live, tip, alarmClass, wheel, setWheel, controlsReach } = useWorld(props);
+  const [writing, setWriting] = useState(false);
+  // One box over the world's foot at a time: the field shuts the quick chat's wheel.
+  const write = (open: boolean): void => {
+    if (open) {
+      setWheel(null);
+    }
+    setWriting(open);
+  };
   return (
     // An alarm strobes over the world and shakes the camera (alarm.ts, finale.css).
     <div className={alarmClass === '' ? 'world-wrap' : `world-wrap ${alarmClass}`}>
@@ -1271,6 +1291,7 @@ export function GameWorld(props: Props) {
         className={`world-canvas ${spectator ? 'world-canvas--wide' : ''}`}
       />
       {!spectator && <RedEdge view={props.view} ending={props.finale != null} />}
+      {!spectator && <NoLink players={props.view.players} />}
       {tip !== null && (
         // Just above the control cluster, wherever it reaches: never on the
         // avatar under the objective bar, nor on the minimap.
@@ -1285,6 +1306,7 @@ export function GameWorld(props: Props) {
           view={props.view}
           wheel={wheel}
           setWheel={setWheel}
+          setWriting={write}
         />
       )}
       {wheel !== null && (
@@ -1292,6 +1314,14 @@ export function GameWorld(props: Props) {
           phrases={props.view.chat}
           wheel={wheel}
           onMove={(move) => moveWheel(props.send, setWheel, move)}
+        />
+      )}
+      {!spectator && (
+        <WorldChat
+          players={props.view.players}
+          send={props.send}
+          open={writing}
+          setOpen={write}
         />
       )}
     </div>

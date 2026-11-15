@@ -5,6 +5,7 @@ import {
   type AccountView,
   type ClientMessage,
   type CrewPass,
+  type IceServer,
   type Mission,
   type ServerMessage,
 } from '@escapelab/core';
@@ -64,6 +65,8 @@ export interface Lab {
    * `SignInGuard`): one for the server; none counted where unset
    */
   signIns?: Pick<SignInGuard, 'refusal' | 'take'>;
+  /** the ICE servers each socket is told first thing (iceServers.ts); nothing told where unset */
+  iceServers?: IceServer[];
 }
 
 /**
@@ -310,6 +313,9 @@ export function serveSockets(server: SocketServer, lab: Lab): Served {
     sessions.set(socket, () => session);
     const address = addressOf(lab, request, noteForwarded);
     doors.set(socket, { address, pass: null, changes: [] });
+    if (lab.iceServers !== undefined) {
+      send(socket, { kind: 'ice-servers', servers: lab.iceServers });
+    }
     const take = (msg: ClientMessage): void => {
       try {
         checkPass(socket, msg);
@@ -1236,10 +1242,13 @@ function step(
   s.room.updatePosition(s.playerId, msg.run, { x, y, facing, moving }, msg.t);
 }
 
-/** What the player of `s` says to the rest of the room: a ping, a chat, a voice signal, a yes. */
+/**
+ * What the player of `s` says to the rest of the room: a ping, a chat or a typed line, a voice
+ * signal, a yes.
+ */
 function toTheOthers(
   s: Session,
-  msg: Extract<ClientMessage, { kind: 'ping' | 'chat' | 'rtc' | 'takeover-answer' }>,
+  msg: Extract<ClientMessage, { kind: 'ping' | 'chat' | 'say' | 'rtc' | 'takeover-answer' }>,
 ): void {
   switch (msg.kind) {
     case 'ping':
@@ -1247,6 +1256,9 @@ function toTheOthers(
       return;
     case 'chat':
       s.room.chat(s.playerId, msg.phrase, msg.value);
+      return;
+    case 'say':
+      s.room.say(s.playerId, msg.text);
       return;
     case 'rtc':
       s.room.relaySignal(s.playerId, msg.to, msg.signal);

@@ -132,3 +132,28 @@ export function sayPhrase(phrase: ChatPhrase, value: string | undefined): string
 export function phraseShown(phrase: ChatPhrase): string {
   return phrase.text.replace(NUMBER_SLOT, '…').replace(NAME_SLOT, '…');
 }
+
+/**
+ * A typed line to the crew: the longest it may be, in characters as the player counts them,
+ * after its spaces are tidied (`typedLine`).
+ */
+export const TYPED_MAX = 120;
+
+/** Control characters and the marks that turn the writing's direction: never part of a line. */
+const UNSEEN = /[\p{Cc}\u202A-\u202E\u2066-\u2069]/gu;
+
+/**
+ * A typed line as the crew reads it: control characters and direction marks out, every run of
+ * spaces one space, none at either end. Fails for a line with nothing left and for one over
+ * TYPED_MAX characters.
+ */
+export function typedLine(text: string): string {
+  const line = text.replace(UNSEEN, ' ').replace(/\s+/gu, ' ').trim();
+  if (line === '') {
+    fail('Eine leere Nachricht geht nicht raus.');
+  }
+  if ([...line].length > TYPED_MAX) {
+    fail(`Höchstens ${TYPED_MAX} Zeichen pro Nachricht.`);
+  }
+  return line;
+}

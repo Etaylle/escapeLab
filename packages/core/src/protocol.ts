@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { AchievementId } from './achievements.js';
-import { CHAT_PHRASE_COUNT } from './chat.js';
+import { CHAT_PHRASE_COUNT, TYPED_MAX } from './chat.js';
 import { DIFFICULTIES, type Difficulty } from './difficulty.js';
 import type { Grade } from './grade.js';
 import { MAX_NOTES } from './notes.js';
@@ -41,6 +41,32 @@ export const rtcSignalSchema = z
   .refine((signal) => JSON.stringify(signal).length <= RTC_SIGNAL_MAX);
 
 export type RtcSignal = z.infer<typeof rtcSignalSchema>;
+
+/** A STUN or TURN address as RTCIceServer takes it: `stun:`, `stuns:`, `turn:` or `turns:`. */
+const iceUrlSchema = z.string().regex(/^(stuns?|turns?):\S+$/, 'stun:, stuns:, turn: or turns:');
+
+/**
+ * One ICE server for the voice's links, as RTCIceServer takes it: a TURN server needs the
+ * username and the credential it hands out, or the browser refuses the whole list.
+ */
+const iceServerSchema = z
+  .object({
+    urls: z.union([iceUrlSchema, z.array(iceUrlSchema).min(1)]),
+    username: z.string().min(1).optional(),
+    credential: z.string().min(1).optional(),
+  })
+  .strict()
+  .refine(
+    (server) =>
+      [server.urls].flat().every((url) => url.startsWith('stun')) ||
+      (server.username !== undefined && server.credential !== undefined),
+    'a turn: or turns: address needs a username and a credential',
+  );
+
+/** The ICE servers the voice's links go by (server iceServers.ts): an empty list for a LAN. */
+export const iceServersSchema = z.array(iceServerSchema).max(8);
+
+export type IceServer = z.infer<typeof iceServerSchema>;
 
 /** The largest seed a room can be pinned to: a seed is 32 bits wide, as the PRNG takes it. */
 export const SEED_MAX = 0xffff_ffff;
@@ -293,6 +319,11 @@ export const clientMessageSchema = z.discriminatedUnion('kind', [
       .max(CHAT_PHRASE_COUNT - 1),
     value: z.string().min(1).max(16).optional(),
   }),
+  /**
+   * a line typed to the crew: the server tidies it and refuses an empty one or one too long
+   * (chat.ts `typedLine`); what weighs more than this never gets that far
+   */
+  z.object({ kind: z.literal('say'), text: z.string().max(TYPED_MAX * 4) }),
   z.object({ kind: z.literal('back-to-lobby') }),
   z.object({ kind: z.literal('rematch') }),
   /** on without the crew member away by id, once the wait for their drop is over */
@@ -577,10 +608,12 @@ export type ServerMessage =
       drones: Record<string, DronePosition>;
     }
   | { kind: 'ping'; playerId: string; x: number; y: number }
-  /** a quick-chat phrase somebody said, its slot filled in: „Kabel 3" */
+  /** a quick-chat phrase somebody said, its slot filled in („Kabel 3"), or a line they typed */
   | { kind: 'chat'; playerId: string; text: string }
   /** a voice signal from another member of the room, as they sent it */
   | { kind: 'rtc'; from: string; signal: RtcSignal }
+  /** the ICE servers the voice's links go by, first thing on every socket (server iceServers.ts) */
+  | { kind: 'ice-servers'; servers: IceServer[] }
   /** a refusal, and the kind of message it refuses (`of`) — left out where none could be read */
   | { kind: 'error'; message: string; of?: ClientMessage['kind'] };
 
