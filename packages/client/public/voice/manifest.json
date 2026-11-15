@@ -15,14 +15,14 @@
     },
     "anlage-1d6e6f98882a": {
       "text": "Reaktor in Teillast, 60 Prozent. Die Zentrifugen laufen bis 6 Uhr durch.",
-      "ms": 6191,
+      "ms": 5956,
       "missions": [
         "blackout"
       ],
       "role": "pa",
       "person": "anlage",
       "moment": "pa",
-      "render": "3c5e5641c282",
+      "render": "e9ccc3f293e1",
       "model": "eleven_v4",
       "file": "anlage-1d6e6f98882a.mp3"
     },
@@ -93,14 +93,14 @@
     },
     "anlage-db81476a48b2": {
       "text": "Netzlast im Trakt 96 Prozent, Notstrom in Bereitschaft.",
-      "ms": 4989,
+      "ms": 4911,
       "missions": [
         "blackout"
       ],
       "role": "pa",
       "person": "anlage",
       "moment": "pa",
-      "render": "e094e9b6f005",
+      "render": "dddf4f85bc5c",
       "model": "eleven_v4",
       "file": "anlage-db81476a48b2.mp3"
     },
