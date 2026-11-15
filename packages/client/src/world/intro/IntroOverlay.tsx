@@ -121,9 +121,8 @@ export function IntroOverlay({
   const phase = introPhase(cue, now);
   const black = blackAt(cue, now);
   const title = titleAt(cue, now);
-  // Each line as long as the plant's voice of the night's cast says it.
-  const timed = (text: string) => ({ text, ms: recordedMs({ text, person: view.cast.pa }) });
-  const lines = (view.intro?.pa ?? []).map(timed);
+  // Each line as long as its speaker's recording of it says it.
+  const lines = (view.intro?.pa ?? []).map((line) => ({ text: line.text, ms: recordedMs(line) }));
   const watching = phase === 'shot';
   const subtitle = watching ? subtitleAt(paSchedule(lines), now - cue.since) : null;
   return (

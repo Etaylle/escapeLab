@@ -237,16 +237,19 @@ export interface AwayView {
 
 /**
  * A mission's intro as every screen plays it (client world/intro/): the location card's lines,
- * what the plant's loudspeakers say, when the lights fail by themselves, and who of the crew
- * has seen enough of it — the skip each screen counts.
+ * what the plant's loudspeakers say and who says each line, when the lights fail by themselves,
+ * and who of the crew has seen enough of it — the skip each screen counts.
  */
 export interface IntroView {
   /** the wing of the plant the run plays in; '' where the mission names none */
   place: string;
   /** the card's last line, the shift and the time; '' where the mission names none */
   time: string;
-  /** mission control's announcement over the lab's loudspeakers, line by line */
-  pa: string[];
+  /**
+   * what the lab's loudspeakers say, line by line: the words and the person of the roster who
+   * says them, by id — the one the line names, else the plant's voice on duty that night
+   */
+  pa: { text: string; person: string }[];
   /** seconds from the start until the lights fail by themselves */
   lightsSec: number;
   /** who of the crew has seen enough of it this run, by player id */
@@ -605,7 +608,8 @@ function introOf(state: GameState): Pick<PlayerView, 'intro'> {
     return {};
   }
   const { place = '', time = '', pa, lightsSec } = intro;
-  const shown = pa.map(shownText);
+  const plant = castFor(state).pa;
+  const shown = pa.map(({ text, by }) => ({ text: shownText(text), person: by ?? plant }));
   return { intro: { place, time, pa: shown, lightsSec, done: [...state.introDone] } };
 }
 

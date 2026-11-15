@@ -1,6 +1,6 @@
 import {
   radioLines,
-  sayersOf,
+  sayersOfLine,
   type Mission,
   type MissionInfo,
   type RadioMoment,
@@ -16,7 +16,7 @@ import {
  * The radio lines the /record page offers a person to speak or to replace with a file: every
  * line a shipped mission can put on the air (core's `radioLines`, from the missions the server
  * hands out — not the ones made in the editor), once for each person of the cast who says it
- * (core cast.ts `sayersOf`), each with what the manifest says of its recording.
+ * (core cast.ts `sayersOfLine`), each with what the manifest says of its recording.
  */
 
 /** Who made a recording: a synthetic voice, a person at the page's microphone, or a file. */
@@ -72,7 +72,7 @@ export function recordLines(
         throw new Error(`recordLines: no id for the line "${said.text}"`);
       }
       const station = mission.puzzles.find((p) => p.id === said.puzzleId)?.title ?? null;
-      for (const person of sayersOf(said.role)) {
+      for (const person of sayersOfLine(said)) {
         const id = `${person.id}-${hash}`;
         const known = lines.get(id);
         const titles = [...new Set([...(known?.missions ?? []), mission.title])];

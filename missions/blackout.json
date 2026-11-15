@@ -12,15 +12,21 @@
   },
   "timeLimitSec": 900,
   "intro": {
-    "lightsSec": 32.7,
+    "lightsSec": 32.2,
     "place": "Trakt C",
     "time": "Nachtschicht · 23:47",
     "pa": [
-      "Durchsage der Leitstelle für Trakt C. Es ist 23 Uhr 47, die Nachtschicht hat übernommen.",
+      {
+        "text": "Durchsage der Leitstelle für Trakt C. Es ist 23 Uhr 47, die Nachtschicht hat übernommen.",
+        "by": "helmut"
+      },
       "Reaktor in Teillast, 60 Prozent. Die Zentrifugen laufen bis 6 Uhr durch.",
-      "Netzlast im Trakt 96 Prozent, Notstrom in Bereitschaft.",
-      "Die Spätschicht gibt Dosimeter und Schlüssel bitte an der Pforte ab.",
-      "Herr Haller, bitte die Leitstelle anrufen. Herr Haller, bitte die Leitstelle anrufen."
+      {
+        "text": "Schichtleitung an Leitstelle. Die Netzlast gefällt mir nicht, Helmut. Wer ist heute Nacht im Trakt?",
+        "by": "mila"
+      },
+      { "text": "Nur die Nachtschicht. Zwei Leute, vielleicht drei.", "by": "helmut" },
+      "Netzlast im Trakt 96 Prozent, Notstrom in Bereitschaft."
     ]
   },
   "radio": {

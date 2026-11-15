@@ -1,6 +1,13 @@
 import { z } from 'zod';
 import rosterFile from './cast.json' with { type: 'json' };
-import { ROLES, roleOf, type RadioMoment, type Role, type Speaker } from './radio.js';
+import {
+  ROLES,
+  roleOf,
+  type RadioLine,
+  type RadioMoment,
+  type Role,
+  type Speaker,
+} from './radio.js';
 import { pickOf } from './rng.js';
 import type { GameState } from './state.js';
 
@@ -103,6 +110,19 @@ export function speakingFor(role: Role, roster: Roster = ROSTER): Role {
  */
 export function sayersOf(role: Role, roster: Roster = ROSTER): readonly Person[] {
   return inService(speakingFor(role, roster), roster);
+}
+
+/**
+ * Everybody who says `line` on some night: the person it names (`RadioLine.by`), or else
+ * everybody who says its role's lines (`sayersOf`) — the persons who need a recording of it.
+ */
+export function sayersOfLine(
+  line: Pick<RadioLine, 'role' | 'by'>,
+  roster: Roster = ROSTER,
+): readonly Person[] {
+  if (line.by === null) return sayersOf(line.role, roster);
+  const person = personOf(line.by, roster);
+  return person === undefined ? [] : [person];
 }
 
 /**

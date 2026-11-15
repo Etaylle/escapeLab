@@ -364,7 +364,12 @@ const START = 5_000_000;
 const intro: IntroView = {
   place: 'Trakt C',
   time: 'Nachtschicht · 23:47',
-  pa: ['Durchsage der Leitstelle für Trakt C. Es ist 23 Uhr 47, die Nachtschicht hat übernommen.'],
+  pa: [
+    {
+      text: 'Durchsage der Leitstelle für Trakt C. Es ist 23 Uhr 47, die Nachtschicht hat übernommen.',
+      person: 'helmut',
+    },
+  ],
   lightsSec: LIGHTS_SEC,
   done: [],
 };

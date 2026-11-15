@@ -111,7 +111,7 @@ import {
   roleOf,
   ROLES,
   SAMPLES_DIR,
-  sayersOf,
+  sayersOfLine,
   slotOf,
   slotsOf,
   VOICE_ID,
@@ -189,10 +189,16 @@ export interface RadioLines {
   readonly lost?: Group;
 }
 
+/**
+ * A line of the intro over the loudspeakers, as core's mission.ts `paLineSchema` takes it: its
+ * words alone, said by the plant, or its words and the person of the roster who says them.
+ */
+export type PaLine = string | { readonly text: string; readonly by?: string | null };
+
 /** What the script reads of a mission: its id, its intro's announcement and its radio lines. */
 export interface MissionLines {
   readonly id: string;
-  readonly intro?: { readonly pa?: readonly string[] };
+  readonly intro?: { readonly pa?: readonly PaLine[] };
   readonly radio?: RadioLines;
   readonly puzzles: readonly { readonly onSolved?: Line; readonly nudges?: readonly Line[] }[];
   readonly map?: { readonly sabotage?: { readonly announce?: Line } };
@@ -362,12 +368,14 @@ export type Fresh = 'none' | 'synthetic' | 'all';
 
 /**
  * A line the shipped missions can put on the air: the missions that say it, the role that says
- * it, the moment it is first heard at, its mood (null for none), whether it opens a run, and how
- * it is written — its audio tags with it — for the render.
+ * it and the person it names (`by`, null for the role's persons), the moment it is first heard
+ * at, its mood (null for none), whether it opens a run, and how it is written — its audio tags
+ * with it — for the render.
  */
 export interface ShippedLine {
   missions: string[];
   role: Role;
+  by: string | null;
   moment: RadioMoment;
   mood: Mood | null;
   opens: boolean;
@@ -376,12 +384,14 @@ export interface ShippedLine {
 
 /**
  * A line of a mission as the script reads it: what it says as shown, how it is written, the
- * role that says it, the moment it is heard at, its mood (null for none), whether it opens a run.
+ * role that says it and the person it names (null for none: whoever fills the role), the moment
+ * it is heard at, its mood (null for none), whether it opens a run.
  */
 export interface CatalogLine {
   readonly text: string;
   readonly said: string;
   readonly role: Role;
+  readonly by: string | null;
   readonly moment: RadioMoment;
   readonly mood: Mood | null;
   readonly opens: boolean;
@@ -397,14 +407,21 @@ const heardAt =
         text: shownText(said),
         said,
         role: roleOf(moment),
+        by: null,
         moment,
         mood: MOOD_AT[moment] ?? null,
         opens: moment === 'start',
       }));
 
+/** The intro's line `line` over the loudspeakers, by the person it names where it names one. */
+const paLine = (line: PaLine): CatalogLine[] => {
+  const { text, by = null } = typeof line === 'string' ? { text: line } : line;
+  return heardAt('pa')(text).map((said) => ({ ...said, by }));
+};
+
 /**
  * Every line heard in `mission`, in the order core's `radioLines` lists them: the intro's
- * announcement over the lab's loudspeakers, line by line (client world/pa.ts), then on the air
+ * lines over the lab's loudspeakers, each by its speaker (client world/pa.ts), then on the air
  * the start, for each station the nudges it may get while it is up and the line its solve
  * brings, the escape; then the loudspeakers' message as an emergency starts, the answers to what
  * the run does (`answersOf`), and last the lobby's Funkprobe.
@@ -416,7 +433,7 @@ export function catalogOf(mission: MissionLines): CatalogLine[] {
     ...heardAt('solved')(puzzle.onSolved),
   ]);
   return [
-    ...(mission.intro?.pa ?? []).flatMap((said) => heardAt('pa')(said)),
+    ...(mission.intro?.pa ?? []).flatMap(paLine),
     ...heardAt('start')(radio?.start),
     ...stations,
     ...heardAt('escape')(radio?.escape),
@@ -551,19 +568,26 @@ export function shippedMissions(dir = MISSIONS_DIR): MissionLines[] {
     .map((name) => JSON.parse(readFileSync(join(dir, name), 'utf8')) as MissionLines);
 }
 
+/** Whether `said` is the line `line` again: the same speaker, mood and writing. */
+const alike = (line: ShippedLine, said: CatalogLine): boolean =>
+  line.role === said.role &&
+  line.by === said.by &&
+  line.mood === said.mood &&
+  line.said === said.said;
+
 /**
  * Why `said` cannot share the recordings of `line`, the shipped line of the same words: another
- * role says it, or in another mood, or it is written with other audio tags — one line, one
- * recording a person. Null where it can.
+ * role or person says it, or in another mood, or it is written with other audio tags — one line,
+ * one recording a person. Null where it can.
  */
 function clash(line: ShippedLine, said: CatalogLine): string | null {
-  if (line.role === said.role && line.mood === said.mood && line.said === said.said) return null;
-  const how = (who: Role, as: Mood | null, written: string): string => {
-    const mood = as === null ? '' : ` in a ${as} mood`;
-    return `the ${who}${mood}${written === said.text ? '' : ` as „${written}"`}`;
+  if (alike(line, said)) return null;
+  const how = ({ role, by, mood, said: written }: ShippedLine | CatalogLine): string => {
+    const as = mood === null ? '' : ` in a ${mood} mood`;
+    const who = by === null ? role : `${role} by ${by}`;
+    return `the ${who}${as}${written === said.text ? '' : ` as „${written}"`}`;
   };
-  const was = how(line.role, line.mood, line.said);
-  const both = `${was} and ${how(said.role, said.mood, said.said)}`;
+  const both = `${how(line)} and ${how(said)}`;
   return `voice: „${said.text}" is said by ${both} alike: one line, one recording`;
 }
 
@@ -577,8 +601,9 @@ export function shippedLines(missions = shippedMissions()): Map<string, ShippedL
   const lines = new Map<string, ShippedLine>();
   for (const mission of missions) {
     for (const said of catalogOf(mission)) {
-      const { text, role, moment, mood, opens } = said;
-      const line = lines.get(text) ?? { missions: [], role, moment, mood, opens, said: said.said };
+      const { text, role, by, moment, mood, opens } = said;
+      const first = { missions: [], role, by, moment, mood, opens, said: said.said };
+      const line = lines.get(text) ?? first;
       const refused = clash(line, said);
       if (refused !== null) throw new Error(refused);
       if (!line.missions.includes(mission.id)) line.missions.push(mission.id);
@@ -981,8 +1006,8 @@ const saidBy = (text: string, line: ShippedLine, person: string): Said => ({
 });
 
 /**
- * Every shipped line as each person who says it says it (`sayersOf`), in the order of their ids,
- * each with what it keeps of `before`.
+ * Every shipped line as each person who says it says it (`sayersOfLine`), in the order of their
+ * ids, each with what it keeps of `before`.
  */
 export function plan(
   before: Manifest,
@@ -992,7 +1017,7 @@ export function plan(
   lines = shippedLines(),
 ): Planned[] {
   const planned = [...lines].flatMap(([text, line]) =>
-    sayersOf(roster, line.role).map((person): Planned => {
+    sayersOfLine(roster, line).map((person): Planned => {
       const id = lineId(person.id, text);
       const render = renderOf(voice, saidBy(text, line, person.id));
       const had = before.lines[id];
@@ -1081,9 +1106,13 @@ export interface Cost {
 /** Nothing: no lines, no characters. */
 const NO_LINES: Lines = { lines: 0, characters: 0 };
 
-/** What a person without a voice yet costs: its design, and their role's lines once it is kept. */
+/** Whether `slot`'s person says `line` once every voice is kept: theirs by name, or by role. */
+const saysOnceKept = (slot: Slot, line: ShippedLine): boolean =>
+  line.by === null ? line.role === slot.role : line.by === slot.person.id;
+
+/** What a person without a voice yet costs: its design, and their lines once it is kept. */
 function unvoicedCost(slot: Slot, lines: ReadonlyMap<string, ShippedLine>): Cost {
-  const theirs = [...lines.values()].filter((line) => line.role === slot.role);
+  const theirs = [...lines.values()].filter((line) => saysOnceKept(slot, line));
   const spoken = (line: ShippedLine): number =>
     spokenText(line.said, line.mood, DESIGNED_READS).length;
   const characters = theirs.reduce((sum, line) => sum + spoken(line), 0);
@@ -1121,7 +1150,7 @@ export function costsOf(
     if (eleven === undefined) return unvoicedCost(slot, lines);
     const mine = todo.filter((each) => each.person.id === id);
     const skip = planned.filter((each) => each.person.id === id && each.kept !== null).length;
-    const theirs = mine.filter((each) => each.line.role !== slot.role);
+    const theirs = mine.filter((each) => !saysOnceKept(slot, each.line));
     const standIn = { lines: theirs.length, characters: charactersOf(voice, theirs) };
     const { name } = slot.person;
     const said = { slot: slot.name, name, model: eleven.model, make: mine.length, skip, standIn };

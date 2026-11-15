@@ -4,6 +4,7 @@ import { decorIssues } from './decor.js';
 import { MAX_NOTES, NOTE_TEXT_MAX, noteSpot } from './notes.js';
 import { moduleFor, puzzleDefSchema, type PuzzleDef } from './puzzles/index.js';
 import { RELAY_MAX_PLAYERS } from './puzzles/relay.js';
+import { personOf } from './cast.js';
 import { lineSchema } from './radio.js';
 import {
   canGather,
@@ -35,6 +36,24 @@ export const INTRO_MAX_SEC = 40;
 
 /** How many lines the plant's loudspeakers may say in an intro. */
 export const PA_LINES_MAX = 6;
+
+/**
+ * A line of the intro over the lab's loudspeakers: its words, and who says it — `by` a person of
+ * the roster (cast.json), whatever role they hold, the same on every night; left out (or a bare
+ * string), the plant's announcement system, its voice on duty that night. Parsed, always both.
+ */
+export const paLineSchema = z.union([
+  z.string().min(1).transform((text) => ({ text, by: null })),
+  z.strictObject({
+    text: z.string().min(1),
+    by: z
+      .string()
+      .refine((id) => personOf(id) !== undefined, 'by: names nobody of the roster (cast.json)')
+      .nullable()
+      .default(null),
+  }),
+]);
+export type PaLine = z.output<typeof paLineSchema>;
 
 /**
  * The order a mission's stations are taken in: 'chain', one after the other as the file lists
@@ -401,7 +420,8 @@ export const missionSchema = z
      * `intro-done`). Meanwhile each screen shows the opening: a location card,
      * the place under the plant's name and the shift with its time, then a slow
      * shot over the lit lab while the plant's loudspeakers say `pa`, line by
-     * line (client world/intro/). Left out, the lights are out from the start.
+     * line, each by its speaker (client world/intro/). Left out, the lights are
+     * out from the start.
      */
     intro: z
       .object({
@@ -410,8 +430,8 @@ export const missionSchema = z
         place: z.string().min(1).optional(),
         /** the card's last line: the shift and the time („Nachtschicht · 23:47") */
         time: z.string().min(1).optional(),
-        /** mission control's announcement over the lab's loudspeakers, line by line */
-        pa: z.array(z.string().min(1)).max(PA_LINES_MAX).default([]),
+        /** what the lab's loudspeakers say, line by line, each by its speaker (`paLineSchema`) */
+        pa: z.array(paLineSchema).max(PA_LINES_MAX).default([]),
       })
       .optional(),
     /** mission control's lines on the radio: when each is said, radio.ts `radioLines` */

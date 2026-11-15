@@ -20,9 +20,10 @@ import { offVoice, WORLD } from './voice.js';
  * short, factual and still human — a call sign where it belongs, what is seen, what is next,
  * no praise chatter. A line on the air is anything the reducer can put there (`radioLines`):
  * `radio.start` as the clock starts, each station's `nudges` and `onSolved`, `radio.escape` as
- * the hatch unlocks. The intro's announcement over the lab's loudspeakers (`pa`) is the same
- * desk making a plant's routine announcement, to the plant's own people: its own length, else
- * the radio's rules, and never a word to the crew.
+ * the hatch unlocks. The intro's announcement over the lab's loudspeakers (`pa`) is the plant
+ * making a routine announcement, to the plant's own people: its own length, else the radio's
+ * rules, and never a word to the crew. A line of the intro a person of the cast says (`by`) is
+ * that person talking to a colleague, as on the radio, and keeps the radio's rules.
  */
 
 /** The most words one line says, its call sign aside. */
@@ -105,14 +106,18 @@ function offAir(lines: readonly string[]): string[] {
 /** Whether a line is the operator's last word on a run, won or lost, which the end card says. */
 const lastWord = (line: RadioLine): boolean => line.when === 'won' || line.when === 'lost';
 
+/** Whether a line is the plant's own, over its loudspeakers: no person of the cast named. */
+const plants = (line: RadioLine): boolean => line.role === 'pa' && line.by === null;
+
 /**
  * Every line the radio can put on the air in `mission` — the Leitstelle's and the
- * Schichtleitung's, a control room either way — in the order a run hears them: all but the last
- * word on the run, a debrief of its own (`lastWordsOf`).
+ * Schichtleitung's, a control room either way, and what a person of them says in the intro —
+ * in the order a run hears them: all but the last word on the run, a debrief of its own
+ * (`lastWordsOf`).
  */
 const textsOf = (mission: Mission): string[] =>
   radioLines(mission)
-    .filter((line) => line.role !== 'pa' && !lastWord(line))
+    .filter((line) => !plants(line) && !lastWord(line))
     .map((line) => line.text);
 
 /** The operator's last words on a run of `mission`, won and lost. */
@@ -148,10 +153,14 @@ const offRecord = (lines: readonly string[]): string[] =>
     LAST_CHECKS.filter(([, breaks]) => breaks(line)).map(([what]) => `${what}: „${line}"`),
   );
 
-/** Every line of the intro's announcement over the loudspeakers, in its order. */
+/** Every line of the intro over the loudspeakers, whoever says it, in its order. */
+const openingOf = (mission: Mission): RadioLine[] =>
+  radioLines(mission).filter((line) => line.when === 'pa');
+
+/** Every line of the intro's announcement the plant itself says, in its order. */
 const announcementOf = (mission: Mission): string[] =>
-  radioLines(mission)
-    .filter((line) => line.when === 'pa')
+  openingOf(mission)
+    .filter(plants)
     .map((line) => line.text);
 
 /** Every message the loudspeakers say after the blackout, on their emergency power. */
@@ -415,11 +424,14 @@ describe.each(byId)('the radio in mission %s', (_id, mission) => {
 
 describe('the Leitstelle over Blackout’s loudspeakers', () => {
   const blackout = missions.find((m) => m.id === 'blackout');
-  const lines = blackout === undefined ? [] : announcementOf(blackout);
+  const opening = blackout === undefined ? [] : openingOf(blackout);
+  const lines = opening.map((line) => line.text);
 
-  it('makes the shift’s announcement in four to six lines', () => {
+  it('makes the shift’s opening in four to six lines, the plant reading between its people', () => {
     expect(lines.length).toBeGreaterThanOrEqual(4);
     expect(lines.length).toBeLessThanOrEqual(Math.min(6, PA_LINES_MAX));
+    expect(opening.map((line) => line.by)).toEqual(['helmut', null, 'mila', 'helmut', null]);
+    expect(blackout === undefined ? [] : announcementOf(blackout)).toHaveLength(2);
   });
 
   it('says, on its emergency power, as the emergency starts what fails: a few words, no more', () => {
@@ -434,13 +446,15 @@ describe('the Leitstelle over Blackout’s loudspeakers', () => {
     }
   });
 
-  it('opens with who speaks and the time, and gives its own people a routine word', () => {
+  it('opens with who speaks and the time, and ends on the plant’s reading the blackout cuts', () => {
     expect(lines[0]).toMatch(/^Durchsage der Leitstelle\b/);
     expect(lines[0]).toMatch(/\b23 Uhr 47\b/);
     expect(blackout?.intro?.time).toMatch(/23:47$/);
-    // The page the blackout cuts off: said twice, as a page is.
-    const [page, again] = (lines.at(-1) ?? '').split(/(?<=\.)\s+/);
-    expect(page).toBe(again);
+    // The Schichtleitung asks the desk by name, and the desk answers.
+    expect(lines[2]).toMatch(/^Schichtleitung an Leitstelle\..*\bHelmut\b/);
+    // The last line is the plant's, on the load the lights then fail under.
+    expect(opening.at(-1)?.by).toBeNull();
+    expect(lines.at(-1)).toMatch(/^Netzlast\b.*\bNotstrom\b/);
   });
 });
 
@@ -581,9 +595,11 @@ describe('the lines a mission can put on the air', () => {
       ...LOST_CAUSES.flatMap((cause) => times('lost', radio.lost?.[cause])),
       ...times('lobby', radio.lobby),
     ]);
-    const plant = { puzzleId: null, role: 'pa', mood: null };
-    const operator = { puzzleId: null, role: 'operator', mood: null };
-    expect(lines[0]).toEqual({ ...plant, text: blackout.intro?.pa[0], when: 'pa' });
+    const plant = { puzzleId: null, role: 'pa', by: null, mood: null };
+    const operator = { puzzleId: null, role: 'operator', by: null, mood: null };
+    const helmut = { ...plant, by: 'helmut', text: blackout.intro?.pa[0]?.text, when: 'pa' };
+    expect(lines[0]).toEqual(helmut);
+    expect(lines[1]).toEqual({ ...plant, text: blackout.intro?.pa[1]?.text, when: 'pa' });
     // As a run shows them: a line's audio tags are its recording's alone.
     const first = (line: Line | undefined): string | undefined =>
       variantsOf(line ?? []).map(shownText)[0];
@@ -602,7 +618,7 @@ describe('the lines a mission can put on the air', () => {
     const probe = { ...operator, text: probes.at(-1), when: 'lobby', mood: 'calm' };
     expect(lines.at(-1)).toEqual(probe);
     const station = blackout.puzzles[0];
-    const at = { puzzleId: station?.id, role: 'operator', mood: null };
+    const at = { puzzleId: station?.id, role: 'operator', by: null, mood: null };
     const starts = variantsOf(radio.start ?? []).length;
     expect(lines.slice(pa.length + starts, pa.length + starts + 2)).toEqual(
       variantsOf(station?.nudges[0] ?? []).map((text) => ({

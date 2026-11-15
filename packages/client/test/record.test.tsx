@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   sayersOf,
+  sayersOfLine,
   parseMission,
   radioLines,
   shownText,
@@ -83,39 +84,47 @@ const MANIFEST: VoiceManifest = {
   },
 };
 
-/** Who says `line` (core cast.ts `sayersOf`): Helmut at the desk and for the lead, the plant. */
-const sayerOf = (line: RadioLine) => sayersOf(line.role)[0];
+/** Every recording `lines` need, by id, once each: each line by everybody who says it. */
+const idsFor = (lines: readonly RadioLine[]): string[] => [
+  ...new Set(lines.flatMap((line) => sayersOfLine(line).map((p) => lineId(p.id, line.text)))),
+];
+
+/** The Leitstelle's persons who say its lines: every operator, each with a voice kept. */
+const OPERATORS = sayersOf('operator').length;
 
 describe('the lines the page offers', () => {
   it('are every line of the missions, in their order and each mission’s run order', () => {
     const lines = recordLines([systemcheck, blackout], MANIFEST, ids);
-    const texts = [...radioLines(systemcheck), ...radioLines(blackout)].map((line) => line.text);
-    expect(lines.map((line) => line.text)).toEqual(texts);
     const said = [...radioLines(systemcheck), ...radioLines(blackout)];
-    expect(lines.map((line) => line.id)).toEqual(
-      said.map((line) => lineId(sayerOf(line)?.id ?? '', line.text)),
-    );
+    expect(OPERATORS).toBe(3);
+    expect(lines.map((line) => line.id)).toEqual(idsFor(said));
+    const texts = [...new Set(said.map((line) => line.text))];
+    expect([...new Set(lines.map((line) => line.text))]).toEqual(texts);
     expect(lines[0]).toMatchObject({ when: 'start', station: null, missions: [systemcheck.title] });
-    // Each by whoever says it: the plant's voice, the Leitstelle on duty — and the
-    // Schichtleitung's by the Leitstelle too, while it has no voice.
+    // Each by whoever says it: the plant's voice, every operator of the Leitstelle, Mila for the
+    // Schichtleitung — and an opening line by the person it names, whatever role they hold.
     const names = new Set(lines.map((line) => `${line.when}:${line.name}`));
-    expect(names).toContain('pa:Durchsage');
-    expect(names).toContain('start:Helmut');
-    expect(names).toContain('clock:Helmut');
-    expect(names).toContain('lost:Helmut');
-    expect([...names].filter((name) => name.endsWith(':Mila'))).toEqual([]);
+    for (const name of ['pa:Durchsage', 'pa:Helmut', 'pa:Mila', 'start:Laura', 'start:Ben']) {
+      expect(names).toContain(name);
+    }
+    expect(names).toContain('clock:Mila');
+    expect(names).toContain('lost:Mila');
+    expect([...names].filter((name) => /^(clock|lost):(?!Mila)/.test(name))).toEqual([]);
+    expect(names).not.toContain('pa:Laura');
   });
 
   it('say of each where it comes over the air and what recording it has, in which file', () => {
     const lines = recordLines([blackout], MANIFEST, ids);
-    // The intro's announcement over the loudspeakers comes first: here, with no recording.
+    // The intro's lines over the loudspeakers come first, each by its speaker: here, with no
+    // recording.
     const pa = blackout.intro?.pa ?? [];
     expect(pa).toHaveLength(5);
+    const names: Readonly<Record<string, string>> = { helmut: 'Helmut', mila: 'Mila' };
     expect(lines.slice(0, pa.length)).toEqual(
-      pa.map((text) => ({
-        id: lineId('anlage', text),
+      pa.map(({ text, by }) => ({
+        id: lineId(by ?? 'anlage', text),
         text,
-        name: 'Durchsage',
+        name: by === null ? 'Durchsage' : names[by],
         missions: [blackout.title],
         when: 'pa',
         station: null,
@@ -126,8 +135,9 @@ describe('the lines the page offers', () => {
     // As the page shows them: a line's audio tags are its recording's alone.
     const texts = (line: Line | undefined): readonly string[] =>
       variantsOf(line ?? '').map(shownText);
-    const of = (when: string): string[] =>
-      lines.filter((line) => line.when === when).map((line) => line.text);
+    const of = (when: string): string[] => [
+      ...new Set(lines.filter((line) => line.when === when).map((line) => line.text)),
+    ];
     expect(of('start')).toEqual(texts(blackout.radio.start));
     const byText = (text: string) => lines.find((line) => line.text === text);
     const [start, nudge, second] = [START, NUDGE, SECOND].map(byText);
@@ -156,7 +166,8 @@ describe('the lines the page offers', () => {
     expect(lines.slice(out - 1, out + 1).map((line) => line.when)).toEqual(['escape', 'announce']);
     const last = texts(blackout.radio.lost?.abandoned).at(-1);
     const probes = texts(blackout.radio.lobby);
-    expect(lines.at(-1 - probes.length)).toMatchObject({ when: 'lost', station: null, text: last });
+    const before = lines.at(-1 - probes.length * OPERATORS);
+    expect(before).toMatchObject({ when: 'lost', station: null, text: last });
     expect(of('lobby')).toEqual(probes);
     expect(lines.at(-1)).toMatchObject({ when: 'lobby', station: null, text: probes.at(-1) });
   });
@@ -164,7 +175,7 @@ describe('the lines the page offers', () => {
   it('list a line two missions say once, under both', () => {
     const copy = { ...blackout, id: 'blackout-copy', title: 'Blackout, noch einmal' };
     const lines = recordLines([blackout, copy], MANIFEST, ids);
-    expect(lines).toHaveLength(radioLines(blackout).length);
+    expect(lines).toHaveLength(idsFor(radioLines(blackout)).length);
     expect(lines[0]?.missions).toEqual([blackout.title, 'Blackout, noch einmal']);
   });
 });

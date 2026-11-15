@@ -415,6 +415,7 @@ describe('the lobby’s Funkprobe', () => {
         when: 'lobby',
         puzzleId: null,
         role: 'operator',
+        by: null,
         mood: 'calm',
       })),
     );

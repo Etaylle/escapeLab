@@ -10,6 +10,7 @@ import {
   ROLES,
   ROSTER,
   sayersOf as coreSayersOf,
+  sayersOfLine as coreSayersOfLine,
   shownText as coreShownText,
 } from '@escapelab/core';
 import {
@@ -24,6 +25,7 @@ import {
   readRoster,
   ROLE_HELD,
   sayersOf,
+  sayersOfLine,
   type Person,
   type Roster,
 } from '../scripts/cast.js';
@@ -100,95 +102,45 @@ const MS_PER_WORD = { min: 200, max: 900 } as const;
  * The shipped lines written before the user could record them — the agents that write them may
  * not spend the account's credits — which are heard meanwhile as any line without a recording
  * is: the radio's on the objective bar keyed with the radio's chirp, the plant's message, the
- * last word on the end card and the Funkprobe silent, the words shown all the same. To be emptied
- * as the render (docs/sound.md) makes them, for every person in service who says them. Any other
- * line without a recording fails, and so does a line here that every one of them has now.
+ * last word on the end card, the Funkprobe and a line of the opening silent, the words shown all
+ * the same. To be emptied as the render (docs/sound.md) makes them, for every person who says
+ * them. Any other line without a recording fails, and so does a line here that every one of them
+ * has now. Today the opening's two lines between the Schichtleitung and the Leitstelle (V-3).
  */
 const AWAITING_RENDER: readonly string[] = [
-  'Leitstelle an Nachtschicht. Der Trakt ist dunkel, auf meiner Tafel brennen nur die ' +
-    'Notzellen. Zuerst das Notlicht, den Hauptschalter im Flur legt ihr gemeinsam um.',
-  'Leitstelle an Nachtschicht. Im ganzen Trakt ist das Netz weg, die Notzellen halten noch. ' +
-    'Als Erstes das Notlicht, der Hauptschalter im Flur geht nur gemeinsam.',
-  'Den Hauptschalter im Flur legt keiner allein um, ihr müsst gemeinsam ziehen.',
-  'Wer am Ostende vom Flur steht: Richtung Westen bis zur Mitte, dort hängt der Hauptschalter.',
-  'Notlicht brennt, ich sehe euch wieder auf meiner Tafel. Weiter mit dem Notstrom: Anleitung ' +
-    'im Archiv, Kasten im Maschinenraum, Prüfpult im Flur.',
-  'Ohne die Anleitung aus dem Archiv ratet ihr am Kasten nur herum, sie steht dort auf der ' +
-    'Ostseite.',
-  'Die Tür zum Maschinenraum geht nur auf, solange jemand auf der Platte davor steht, dahinter ' +
-    'wartet der Kasten.',
-  'Der Notstrom hält, die Maschinenraumtür bleibt jetzt offen. Für die Signalkette liegt ein ' +
-    'Klemmbrett im Flur, gearbeitet wird an zwei Pulten.',
-  'Auf dem Klemmbrett im Flur steht, wie die Signalkette zu lesen ist, es liegt an der Südwand.',
-  'Das Schott zum Serverraum ist auf, die Unterlagen liegen im Spind darin. Die Kameraplatte ' +
-    'davor hält die Drohne an.',
-  'Macht zuerst den Spind in der Mitte vom Serverraum auf, ohne seine Unterlagen kommt ihr an ' +
-    'Terminal und Rack nicht weiter.',
-  'Server oben, Labortür offen, im Labor patrouilliert eine Drohne. Den Schlüssel zum ' +
-    'Aktenschrank holt ihr noch aus dem Serverraum.',
-  'Ich hab euch klar auf der Frequenz. Die Ersatzsicherung für den Reaktor liegt im Archiv, ' +
-    'bringt sie rüber.',
-  'Reaktor ist am Netz, der Notausgang ist auf, Nordwestecke beim Archiv. Raus da, alle zusammen!',
-  'Störung im Kühlkreislauf. Relaissteuerung auf Handbetrieb.',
-  'Kühlkreislauf gestört, Temperatur im Trakt steigt. Relaissteuerung auf Handbetrieb.',
-  'Kühlkreislauf außer Betrieb. Automatische Relaissteuerung ausgefallen, Handbetrieb aktiv.',
-  'Ich habe die Relais verloren, das müsst ihr von Hand machen. Lest euch jede Anweisung laut vor.',
-  'Die Kühlung kippt, und ich komme von hier nicht an die Relais. Sagt euch jede Anweisung ' +
-    'laut an und bestätigt sie.',
-  'Notfall in der Kühlung, die Relais müssen von Hand geschaltet werden. Jeder sagt laut, was ' +
-    'auf seinem Pult steht.',
-  'Kühlung steht wieder, die Relais halten. Weiter, wo ihr aufgehört habt.',
-  'Die Relais greifen wieder, ich habe die Kühlung zurück. Rechtzeitig, danke euch.',
-  'Die Kühlung ist abgesackt, das hat uns Zeit gekostet. Zurück an die Arbeit, beim nächsten ' +
-    'Mal schneller.',
-  'Zu spät, die Notversorgung musste die Kühlung abfangen. Das kostet Zeit, weiter.',
-  'Bei mir ist ein Alarm aufgelaufen, das hat uns Zeit gekostet. Einer ist kein Beinbruch, ' +
-    'aber die Anlage zählt jeden mit.',
-  'Alarm auf meiner Tafel, die Uhr ist gerade gesprungen. Kurz sammeln, dann weiter, Nachtschicht.',
-  'Da ging ein Alarm raus, ich sehe ihn hier. Das war der erste heute Nacht, bei mehr wird es eng.',
-  'Noch fünf Minuten auf den Notzellen. Bleibt dran, aber hetzt nicht.',
-  'Die Notzellen machen noch fünf Minuten. Das reicht, wenn ihr euch aufteilt.',
-  'Zwei Minuten noch, dann sind die Zellen leer. Jetzt zählt jeder Handgriff.',
-  'Noch zwei Minuten auf der Notversorgung. Keine Umwege mehr.',
-  'Noch eine Minute auf den Zellen. Ich bleibe dran, bis zum letzten Licht.',
-  'Letzte Minute, die Zellen sind fast leer. Jetzt oder gar nicht, Nachtschicht.',
-  'Der Trakt hat wieder Strom, die Zentrifugen laufen an, und ihr seid alle draußen. Mit Zeit ' +
-    'übrig. So schreibe ich das ins Schichtbuch.',
-  'Alle draußen, und die Notzellen hätten noch eine Weile gehalten. Ihr habt den Reaktor ' +
-    'zurückgeholt, ohne lange zu suchen. Gute Nacht, Nachtschicht.',
-  'Licht im ganzen Trakt, und alle sind draußen. Knapp war das, aber die Zellen haben ' +
-    'gereicht. Ich trage es ins Schichtbuch ein.',
-  'Reaktor läuft, Notausgang zu, alle vollzählig draußen. Das ging bis in die letzten Minuten. ' +
-    'Geht euch aufwärmen, die Frühschicht übernimmt.',
-  'Das war die letzte Minute, und ihr seid raus. Die Zellen waren fast leer, als der Reaktor ' +
-    'kam. Durchatmen, Nachtschicht.',
-  'Ihr seid draußen, mit Sekunden übrig. Der Trakt hat Strom, die Proben sind gerettet, und ' +
-    'ich atme hier auch erst mal durch.',
-  'Die Notzellen sind leer, im Trakt ist es jetzt ganz dunkel. Bleibt, wo ihr seid, die ' +
-    'Frühschicht holt euch raus.',
-  'Das war\'s, die Notversorgung ist aus. Rührt nichts mehr an, die Frühschicht kommt mit Licht.',
-  'Die Sicherheitsschaltung hat zugemacht, zu viele Alarme in einer Schicht. Der Trakt bleibt ' +
-    'dunkel, bis die Frühschicht kommt.',
-  'Die Anlage hat jeden Alarm mitgezählt, beim letzten hat sie den Trakt abgeschaltet. Lasst ' +
-    'alles, wie es ist, die Frühschicht sieht sich das an.',
-  'Mit halber Schicht geht da drinnen nichts. Ich breche ab, der Trakt bleibt bis morgen dunkel.',
-  'Ohne die ganze Schicht kommt ihr da nicht durch. Ich hole euch raus, wir versuchen es ' +
-    'morgen neu.',
-  'Funkprobe, Nachtschicht. Ich höre euch laut und klar. Bisher eine ruhige Nacht im Trakt, ' +
-    'von mir aus kann es losgehen.',
-  'Kurze Funkprobe. Alle haben sich gemeldet, ihr kommt sauber bei mir an. Ich bleibe die ' +
-    'ganze Nacht auf dieser Frequenz.',
-  'Nachtschicht, Funkprobe. Ich höre jeden von euch klar. Dann hoffen wir mal auf eine lange, ' +
-    'langweilige Nacht.',
+  'Schichtleitung an Leitstelle. Die Netzlast gefällt mir nicht, Helmut. Wer ist heute Nacht im ' +
+    'Trakt?',
+  'Nur die Nachtschicht. Zwei Leute, vielleicht drei.',
 ];
 
 const manifest = readManifest();
 const recordings = readdirSync(VOICE_DIR).filter((name) => /\.(m4a|mp3)$/.test(name));
 const roster = readRoster();
 
+/** A person of the roster without a voice kept. */
+const unvoiced = ({ id, name, character }: Person): Person => ({ id, name, character });
+
+/**
+ * The roster as it stood before the cast's render, for the tests whose point is a cast part of
+ * which has no voice: Helmut's kept alone.
+ */
+const HELMUT_ALONE: Roster = {
+  pa: roster.pa.map(unvoiced),
+  operator: roster.operator.map((p) => (p.id === 'helmut' ? p : unvoiced(p))),
+  lead: roster.lead.map(unvoiced),
+};
+
+/** That roster with Laura's voice kept besides Helmut's, Ben and Mila without one yet. */
+const LAURA_KEPT: Roster = {
+  ...HELMUT_ALONE,
+  operator: HELMUT_ALONE.operator.map((p) =>
+    p.id === 'laura' ? { ...p, voiceId: 'lauraVoice0000000000', model: 'eleven_v3' } : p,
+  ),
+};
+
 /** Every recording a shipped line needs: the line as each person who says it says it. */
 const needed = [...shippedLines()].flatMap(([text, line]) =>
-  sayersOf(roster, line.role).map(({ id: person }) => ({
+  sayersOfLine(roster, line).map(({ id: person }) => ({
     text,
     line,
     person,
@@ -227,7 +179,7 @@ describe('the recorded lines', () => {
     for (const text of AWAITING_RENDER) {
       const line = shipped.get(text);
       expect(line, `„${text}" is no shipped line: take it off AWAITING_RENDER`).toBeDefined();
-      const persons = line === undefined ? [] : sayersOf(roster, line.role);
+      const persons = line === undefined ? [] : sayersOfLine(roster, line);
       const all = persons.every(({ id }) => manifest.lines[lineId(id, text)] !== undefined);
       expect(all, `„${text}" has its recordings now: take it off AWAITING_RENDER`).toBe(false);
     }
@@ -256,7 +208,8 @@ describe('the recorded lines', () => {
     const perCharacter = bytes / entries.reduce((sum, e) => sum + e.text.length, 0);
     const lines = [...shippedLines()];
     const longest = Math.max(...lines.map(([text]) => text.length));
-    const all = lines.reduce((sum, [text, { role }]) => sum + text.length * roster[role].length, 0);
+    const sayers = (line: ShippedLine): number => (line.by === null ? roster[line.role].length : 1);
+    const all = lines.reduce((sum, [text, line]) => sum + text.length * sayers(line), 0);
     expect(longest * perCharacter, 'the longest line').toBeLessThanOrEqual(MAX_FILE_BYTES);
     expect(all * perCharacter, 'every recording of the cast').toBeLessThanOrEqual(MAX_FOLDER_BYTES);
     // Over the cap that held one voice's lines: the cast needs its room.
@@ -273,13 +226,16 @@ describe('the recorded lines', () => {
     const blackout = shippedMissions().find((mission) => mission.id === 'blackout');
     const starts = textsOf(blackout?.radio?.start);
     expect(starts).toHaveLength(3);
+    const operators = sayersOf(roster, 'operator').map(({ id }) => id);
+    expect(operators).toEqual(['helmut', 'laura', 'ben']);
     for (const start of starts) {
       expect(start).toMatch(/^Leitstelle an Nachtschicht\./);
-      const recorded = !AWAITING_RENDER.includes(start);
-      const helmut = lineKey({ text: start, person: 'helmut' });
-      expect(ids.get(helmut)).toBe(recorded ? lineId('helmut', start) : undefined);
-      // Another person's voice finds nothing of his.
-      expect(ids.get(lineKey({ text: start, person: 'laura' }))).toBeUndefined();
+      // Each operator's own take, by their id and the words.
+      for (const person of operators) {
+        expect(ids.get(lineKey({ text: start, person }))).toBe(lineId(person, start));
+      }
+      // A voice that says none of the Leitstelle's lines finds nothing of theirs.
+      expect(ids.get(lineKey({ text: start, person: 'anlage' }))).toBeUndefined();
     }
   });
 
@@ -287,8 +243,9 @@ describe('the recorded lines', () => {
     const starts = shippedMissions().flatMap((mission) => textsOf(mission.radio?.start));
     expect(starts.length).toBeGreaterThanOrEqual(4);
     const recorded = starts.filter((text) => !AWAITING_RENDER.includes(text));
+    const operators = sayersOf(roster, 'operator');
     expect([...openersOf(manifest)].sort()).toEqual(
-      recorded.map((text) => lineId('helmut', text)).sort(),
+      recorded.flatMap((text) => operators.map(({ id }) => lineId(id, text))).sort(),
     );
     for (const [text, { opens }] of shippedLines()) {
       expect(opens, text).toBe(starts.includes(text));
@@ -300,20 +257,26 @@ describe('the cast the script reads', () => {
   it('is core’s roster, read as a file: the same persons, the same in service, as core', () => {
     expect(roster).toEqual(JSON.parse(JSON.stringify(ROSTER)));
     const ids = (persons: readonly { id: string }[]) => persons.map(({ id }) => id).join(' ');
-    const voiced: Roster = {
-      ...roster,
-      operator: roster.operator.map((p) => ({ ...p, voiceId: `${p.id}Voice00000` })),
-    };
-    const led: Roster = { ...roster, lead: [{ ...roster.lead[0]!, voiceId: 'leadVoice000' }] };
-    for (const cast of [roster, voiced, led]) {
+    for (const cast of [roster, HELMUT_ALONE, LAURA_KEPT]) {
       for (const role of ROLES) {
         expect(ids(inService(cast, role)), role).toBe(ids(coreInService(role, cast)));
         expect(ids(sayersOf(cast, role)), role).toBe(ids(coreSayersOf(role, cast)));
+        for (const by of [null, 'helmut', 'mila', 'nobody']) {
+          const line = { role, by };
+          expect(ids(sayersOfLine(cast, line)), `${role} ${by}`).toBe(
+            ids(coreSayersOfLine(line, cast)),
+          );
+        }
       }
     }
-    expect(ids(inService(voiced, 'operator'))).toBe('helmut laura ben');
-    // The shipped roster: no Schichtleitung with a voice, so the desk says its lines.
-    expect([ids(inService(roster, 'lead')), ids(sayersOf(roster, 'lead'))]).toEqual(['', 'helmut']);
+    // The shipped roster: every voice kept, Mila says the Schichtleitung's lines.
+    expect(ids(inService(roster, 'operator'))).toBe('helmut laura ben');
+    expect([ids(inService(roster, 'lead')), ids(sayersOf(roster, 'lead'))]).toEqual(['mila', 'mila']);
+    // Without a Schichtleitung's voice, the desk says its lines.
+    const desk = [ids(inService(LAURA_KEPT, 'lead')), ids(sayersOf(LAURA_KEPT, 'lead'))];
+    expect(desk).toEqual(['', 'helmut laura']);
+    // A line that names its speaker is theirs alone, whatever role they hold, voice or none.
+    expect(ids(sayersOfLine(HELMUT_ALONE, { role: 'pa', by: 'mila' }))).toBe('mila');
   });
 
   it('is the roster’s alone: the list names the model of every take, and no voice', () => {
@@ -337,19 +300,21 @@ describe('the lines the script reads', () => {
     expect(missions.length).toBe(shippedMissions().length);
     for (const mission of missions) {
       const read = shippedMissions().find((each) => each.id === mission.id);
-      const core = radioLines(mission).map(({ text, role, mood, when }) => ({
+      const core = radioLines(mission).map(({ text, role, by, mood, when }) => ({
         text,
         role,
+        by,
         moment: when,
         mood,
         opens: when === 'start',
       }));
-      const script = (read ? catalogOf(read) : []).map(({ text, role, moment, mood, opens }) => ({
-        text,
-        role,
-        moment,
-        mood,
-        opens,
+      const script = (read ? catalogOf(read) : []).map((line) => ({
+        text: line.text,
+        role: line.role,
+        by: line.by,
+        moment: line.moment,
+        mood: line.mood,
+        opens: line.opens,
       }));
       expect(script, mission.id).toEqual(core);
     }
@@ -419,15 +384,20 @@ describe('the lines the script reads', () => {
 
   it('take the intro’s announcement first, as a run hears it, by the loudspeakers', () => {
     const blackout = shippedMissions().find((m) => m.id === 'blackout');
+    const opening = (blackout === undefined ? [] : catalogOf(blackout)).slice(0, 5);
+    expect(opening.map(({ moment }) => moment)).toEqual(['pa', 'pa', 'pa', 'pa', 'pa']);
     expect(blackout?.intro?.pa).toHaveLength(5);
-    for (const line of blackout?.intro?.pa ?? []) {
-      expect(shippedLines().get(line), line).toEqual({
+    // Over the loudspeakers each line by its speaker: Helmut and Mila by name, the plant by none.
+    const speakers = ['helmut', null, 'mila', 'helmut', null];
+    for (const [i, { text }] of opening.entries()) {
+      expect(shippedLines().get(text), text).toEqual({
         missions: ['blackout'],
         role: 'pa',
+        by: speakers[i],
         moment: 'pa',
         mood: null,
         opens: false,
-        said: line,
+        said: text,
       });
     }
     const nudges = (blackout?.puzzles ?? []).flatMap((p) => p.nudges ?? []);
@@ -457,21 +427,24 @@ describe('a line’s role, as the script reads it', () => {
   it('is the plant’s, the Schichtleitung’s or the Leitstelle’s, by its moment', () => {
     const mission = {
       id: 'probe',
-      intro: { pa: ['Durchsage.'] },
+      intro: { pa: ['Durchsage.', { text: 'Hier Mila.', by: 'mila' }, { text: 'Hier Anlage.' }] },
       radio: { start: 'Los.', escape: 'Raus.', clock: { lastMinute: 'Eine.' } },
       puzzles: [{ nudges: ['Hier.'], onSolved: 'Eins.' }, {}],
       map: { sabotage: { announce: 'Störung.' } },
     };
-    const said = (text: string, role: string, moment: string, opens = false) => ({
+    const said = (text: string, role: string, moment: string, opens = false, by = null) => ({
       text,
       said: text,
       role,
+      by,
       moment,
       mood: moment === 'clock' ? 'pressing' : null,
       opens,
     });
     expect(catalogOf(mission)).toEqual([
       said('Durchsage.', 'pa', 'pa'),
+      { ...said('Hier Mila.', 'pa', 'pa'), by: 'mila' },
+      said('Hier Anlage.', 'pa', 'pa'),
       said('Los.', 'operator', 'start', true),
       said('Hier.', 'operator', 'nudge'),
       said('Eins.', 'operator', 'solved'),
@@ -483,6 +456,7 @@ describe('a line’s role, as the script reads it', () => {
     expect(shippedLines([mission]).get('Los.')).toEqual({
       missions: ['probe'],
       role: 'operator',
+      by: null,
       moment: 'start',
       mood: null,
       opens: true,
@@ -492,29 +466,57 @@ describe('a line’s role, as the script reads it', () => {
     // One line, one recording a person: two roles may not say the same words.
     const twice = { ...mission, map: { sabotage: { announce: 'Los.' } } };
     expect(() => shippedLines([twice])).toThrow(/„Los\." is said by the operator and the pa/);
+    // Nor two persons: a line that names its speaker is theirs alone.
+    const helmut = { ...mission, intro: { pa: [{ text: 'Hier Mila.', by: 'helmut' }] } };
+    expect(() => shippedLines([mission, helmut])).toThrow(
+      /„Hier Mila\." is said by the pa by mila and the pa by helmut/,
+    );
   });
 });
 
 describe('the announcement over Blackout’s loudspeakers, as recorded', () => {
-  const blackout = shippedMissions().find((mission) => mission.id === 'blackout') as
-    | { intro?: { lightsSec?: number; pa?: string[] } }
-    | undefined;
-  const lines = blackout?.intro?.pa ?? [];
+  const blackout = shippedMissions().find((mission) => mission.id === 'blackout');
+  const lightsSec = (blackout?.intro as { lightsSec?: number } | undefined)?.lightsSec;
+  const lines = (blackout === undefined ? [] : catalogOf(blackout)).filter(
+    (line) => line.moment === 'pa',
+  );
   const plant = inService(roster, 'pa')[0]?.id ?? '';
-  const ms = lines.map((text) => manifest.lines[lineId(plant, text)]?.ms ?? Number.NaN);
+  /** Each line's recording by its speaker, null while it awaits its render; NaN for none else. */
+  const recorded = lines.map(({ text, by }) => {
+    const ms = manifest.lines[lineId(by ?? plant, text)]?.ms;
+    if (ms !== undefined) return ms;
+    return AWAITING_RENDER.includes(text) ? null : Number.NaN;
+  });
+  // As the opening plays it: a line awaiting its render at the pace of its words.
+  const schedule = paSchedule(lines.map(({ text }, i) => ({ text, ms: recorded[i] ?? null })));
+  const ms = schedule.map((line) => line.ms);
+
+  it('is a scene in three voices: Helmut opens it, the plant reads, Mila asks him', () => {
+    expect(plant).toBe('anlage');
+    expect(lines.map(({ by }) => by ?? plant)).toEqual([
+      'helmut',
+      'anlage',
+      'mila',
+      'helmut',
+      'anlage',
+    ]);
+    // Helmut's opening line keeps his take of 2026-10-25, now filed under his name.
+    const opening = manifest.lines[lineId('helmut', lines[0]?.text ?? '')];
+    expect(opening).toMatchObject({ role: 'pa', person: 'helmut', moment: 'pa', ms: 7471 });
+    expect(manifest.lines[lineId(plant, lines[0]?.text ?? '')]).toBeUndefined();
+  });
 
   it('speaks half a minute at most', () => {
-    expect(plant).toBe('anlage');
     expect(ms.every(Number.isFinite), REMEDY).toBe(true);
     expect(ms.reduce((sum, each) => sum + each, 0)).toBeLessThanOrEqual(30_000);
   });
 
   it('lets the lights fail by themselves 4 s past its end, cutting its last line off', () => {
     const due = lightsSecFor(ms);
-    expect(blackout?.intro?.lightsSec, `missions/blackout.json: intro.lightsSec ${due}`).toBe(due);
-    const last = paSchedule(lines.map((text, i) => ({ text, ms: ms[i] ?? null }))).at(-1);
+    expect(lightsSec, `missions/blackout.json: intro.lightsSec ${due}`).toBe(due);
+    const last = schedule.at(-1);
     const into = due * 1000 - (last?.at ?? 0);
-    // Well into the last line, the page said once, and well before its end.
+    // Well into the last line, and well before its end.
     expect(into).toBeGreaterThanOrEqual(1000);
     expect(into).toBeLessThanOrEqual((last?.ms ?? 0) - 1000);
   });
@@ -640,20 +642,13 @@ const eleven = (
   persons: { helmut: voiceOf(voiceId, model), ...others },
 });
 
-/** The roster with Laura's voice kept besides Helmut's, Ben and Mila without one yet. */
-const LAURA_KEPT: Roster = {
-  ...roster,
-  operator: roster.operator.map((p) =>
-    p.id === 'laura' ? { ...p, voiceId: 'lauraVoice0000000000', model: 'eleven_v3' } : p,
-  ),
-};
-
 describe('what a run keeps, and what it makes anew', () => {
   const TEXT = 'Reaktor läuft.';
   const said: Said = { text: TEXT, said: TEXT, person: 'helmut', mood: null };
   const line: ShippedLine = {
     missions: ['blackout'],
     role: 'operator',
+    by: null,
     moment: 'solved',
     mood: null,
     opens: false,
@@ -747,18 +742,25 @@ describe('what a run keeps, and what it makes anew', () => {
     expect(renderOf(piper, hers)).toBe(render);
   });
 
-  it('makes nothing of Helmut’s anew for the cast: each take keeps its render and model', () => {
-    const voice = eleven('eleven_v4');
+  it('makes nothing of a take anew for the cast: each keeps its person’s render and model', () => {
+    const paid = plannedVoice(roster);
+    const free: Voice = { ...paid, plan: 'free' };
     const entries = Object.values(manifest.lines);
-    expect(entries.length).toBeGreaterThan(40);
-    // Every take of the list was his on Eleven v4, the plant's five among them: its render is his.
+    expect(entries.length).toBeGreaterThan(200);
+    // Every take is its person's on Eleven v4: the cast's render on the paid plan, and Helmut's
+    // of 2026-10-25 on the free one — his opening line among them, filed under his name.
+    const before: string[] = [];
     for (const entry of entries) {
-      const mood = entry.mood ?? null;
-      const his = { text: entry.text, said: entry.text, person: 'helmut', mood };
-      expect(renderOf(voice, his), entry.text).toBe(entry.render);
+      const said = shippedLines().get(entry.text)?.said ?? entry.text;
+      const take = { text: entry.text, said, person: entry.person, mood: entry.mood ?? null };
+      const renders = [renderOf(paid, take), renderOf(free, take)];
+      expect(renders, `${entry.person} „${entry.text}"`).toContain(entry.render);
+      if (entry.render === renders[1]) before.push(entry.person);
       expect(entry.model, entry.text).toBe('eleven_v4');
-      expect(modelOf(voice, his)).toBe('eleven_v4');
+      expect(modelOf(paid, take)).toBe('eleven_v4');
     }
+    expect(before).toHaveLength(48);
+    expect(new Set(before)).toEqual(new Set(['helmut']));
   });
 
   it('writes an entry with its role, person and moment, its file and a person or a render', () => {
@@ -802,18 +804,24 @@ describe('what a run keeps, and what it makes anew', () => {
     const free = eleven('eleven_v4');
     const paid = eleven('eleven_v4', HELMUT, 'paid');
     expect(renderOf(paid, said)).not.toBe(renderOf(free, said));
-    // The takes of before name no plan: the free plan keeps them under --fresh, the paid one
-    // makes them anew — those of 2026-10-25 among them — and keeps them without it.
-    for (const entry of Object.values(manifest.lines)) {
+    // Helmut's takes of 2026-10-25 name no plan: the free plan keeps them under --fresh, the paid
+    // one makes them anew and keeps them without it; the cast's render, the other way round.
+    const his = eleven('eleven_v4', HELMUT, 'free');
+    const before = Object.values(manifest.lines).filter((entry) => {
       const mood = entry.mood ?? null;
       const take = { text: entry.text, said: entry.text, person: 'helmut', mood };
-      const under = (voice: Voice, fresh: Fresh) =>
-        keeps(entry, entry.text, true, fresh, renderOf(voice, take));
-      expect([under(free, 'synthetic'), under(paid, 'synthetic'), under(paid, 'none')]).toEqual([
-        true,
-        false,
-        true,
-      ]);
+      return entry.person === 'helmut' && entry.render === renderOf(his, take);
+    });
+    expect(before).toHaveLength(48);
+    const cast = plannedVoice(roster);
+    for (const entry of Object.values(manifest.lines)) {
+      const said = shippedLines().get(entry.text)?.said ?? entry.text;
+      const take = { text: entry.text, said, person: entry.person, mood: entry.mood ?? null };
+      const under = (plan: Plan, fresh: Fresh) =>
+        keeps(entry, entry.text, true, fresh, renderOf({ ...cast, plan }, take));
+      const made = [under('free', 'synthetic'), under('paid', 'synthetic'), under('paid', 'none')];
+      const old = before.includes(entry);
+      expect(made, entry.text).toEqual([old, !old, true]);
     }
     // Piper and the Mac know no plan.
     expect(renderOf(piper, said)).toBe(render);
@@ -1010,11 +1018,12 @@ describe('the plan of a run (--plan)', () => {
     };
     const helmut = costsOf(kept, done, 'synthetic', undefined, lines)[1];
     expect(helmut).toMatchObject({ slot: 'operator:helmut', make: 0, characters: 0, skip: 3 });
-    // The shipped manifest: Helmut's takes were made before the paid plan named itself.
+    // The shipped manifest: 48 of Helmut's takes were made before the paid plan named itself,
+    // which --fresh makes anew; his others the cast's render made as it would make them.
     const shipped = costsOf(roster, manifest, 'synthetic')[1];
     const unasked = costsOf(roster, manifest, 'none')[1];
-    expect(shipped?.skip).toBe(0);
-    expect((unasked?.skip ?? 0) + (unasked?.make ?? 0)).toBe(shipped?.make);
+    expect((shipped?.make ?? 0) - (unasked?.make ?? 0)).toBe(48);
+    expect((unasked?.skip ?? 0) - (shipped?.skip ?? 0)).toBe(48);
   });
 
   it('prints each person’s line, the kept cast now, the whole cast with every voice kept', () => {
@@ -1058,16 +1067,20 @@ describe('the plan of a run (--plan)', () => {
 
 describe('the lines that wait for a voice', () => {
   it('name the commands that give one, with --replace where takes of the person are there', () => {
+    // The roster before the cast's render, Helmut's voice alone kept: Mila's line in the
+    // opening, hers by name, waits for her voice; the takes of hers there make it a --replace.
     const voice = eleven('eleven_v4');
-    const planned = plan(manifest, 'none', voice, roster);
-    const said = waitingFor(voice, planned, roster, manifest);
-    // The plant's three new lines wait; its five takes there are Helmut's voice under its name.
+    const planned = plan(manifest, 'none', voice, HELMUT_ALONE);
+    const said = waitingFor(voice, planned, HELMUT_ALONE, manifest);
     expect(said).toHaveLength(1);
-    expect(said[0]).toContain('voice: Durchsage (pa) has no voice yet');
-    expect(said[0]).toContain('voice --keep pa=<voice id> --replace');
-    expect(said[0]).toMatch(/\(3 lines wait\)$/);
+    expect(said[0]).toContain('voice: Mila (lead) has no voice yet');
+    expect(said[0]).toContain('voice --keep lead=<voice id> --replace');
+    expect(said[0]).toMatch(/\(1 line wait\)$/);
     // Without takes of theirs there, the keep it names needs nothing more.
-    expect(waitingFor(voice, planned, roster, { lines: {} })[0]).not.toContain('--replace');
+    expect(waitingFor(voice, planned, HELMUT_ALONE, { lines: {} })[0]).not.toContain('--replace');
+    // The shipped roster keeps every voice: nothing waits for one.
+    const cast = plannedVoice(roster);
+    expect(waitingFor(cast, plan(manifest, 'none', cast, roster), roster, manifest)).toEqual([]);
   });
 });
 
@@ -1075,12 +1088,12 @@ describe('a plain run, and what --fresh would make beside it', () => {
   it('keeps Helmut’s takes of before, and names what --fresh would make anew, with credits', () => {
     const plain = costsOf(roster, manifest, 'none');
     const fresh = costsOf(roster, manifest, 'synthetic');
-    expect(plain.find((cost) => cost.slot === 'operator:helmut')?.skip).toBe(47);
+    expect(plain.find((cost) => cost.slot === 'operator:helmut')?.skip).toBe(81);
     const beside = freshBeside(plain, fresh);
-    expect(beside).toEqual({ lines: 47, characters: 3983 });
+    expect(beside).toEqual({ lines: 48, characters: 4071 });
     expect(planReport(plain, 'none', beside).at(-1)).toBe(
-      'voice: --fresh would make 47 takes anew besides, made before the paid plan named ' +
-        'itself: 3,983 credits, which licence them as the rest (docs/sound.md, „Lizenz")',
+      'voice: --fresh would make 48 takes anew besides, made before the paid plan named ' +
+        'itself: 4,071 credits, which licence them as the rest (docs/sound.md, „Lizenz")',
     );
     // Every voice kept, no design is said; under --fresh, or where it would make nothing more,
     // nothing is said of it.
@@ -1184,6 +1197,7 @@ describe('a line’s own audio tags', () => {
         text: 'Alle draußen. Durchatmen.',
         said: TAGGED,
         role: 'operator',
+        by: null,
         moment: 'won',
         mood: 'warm',
         opens: false,

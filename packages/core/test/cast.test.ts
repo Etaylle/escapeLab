@@ -14,6 +14,7 @@ import {
   ROSTER,
   rosterSchema,
   sayersOf,
+  sayersOfLine,
   shownText,
   speakerAt,
   speakingFor,
@@ -129,9 +130,12 @@ describe('who is on duty', () => {
     expect(new Set(seeds.map((seed) => castOf(seed, none).lead))).toEqual(new Set([null]));
     expect(inService('lead', none)).toEqual([]);
     expect(inService('operator', VOICED).map((p) => p.id)).toEqual(['helmut', 'laura', 'ben']);
-    // The shipped roster: Helmut's voice is the one kept so far, and he has every night.
+    // The shipped roster keeps every voice: the three operators share the nights, the plant and
+    // Mila have every one.
+    const operators = new Set(seeds.map((seed) => castOf(seed).operator));
+    expect(operators).toEqual(new Set(['helmut', 'laura', 'ben']));
     for (const seed of seeds) {
-      expect(castOf(seed)).toEqual({ pa: 'anlage', operator: 'helmut', lead: null });
+      expect(castOf(seed)).toMatchObject({ pa: 'anlage', lead: 'mila' });
     }
   });
 
@@ -221,7 +225,13 @@ function castMission(): Mission {
   const json = JSON.parse(JSON.stringify(lab));
   return parseMission({
     ...json,
-    intro: { lightsSec: 3, pa: ['Durchsage für Trakt C. [pause] Es ist 23 Uhr 47.'] },
+    intro: {
+      lightsSec: 3,
+      pa: [
+        'Durchsage für Trakt C. [pause] Es ist 23 Uhr 47.',
+        { text: '[calm] Hier spricht Mila.', by: 'mila' },
+      ],
+    },
     radio: LINES,
     map: {
       ...json.map,
@@ -275,15 +285,14 @@ describe('a line heard in a run', () => {
       ['alarm', { role: 'operator', person: 'helmut' }],
       ['announce', { role: 'pa', person: 'anlage' }],
       ['emergency', { role: 'operator', person: 'helmut' }],
-      // The Schichtleitung has no voice yet: the desk says its lines.
-      ['clock', { role: 'operator', person: 'helmut' }],
-      ['lost', { role: 'operator', person: 'helmut' }],
+      ['clock', { role: 'lead', person: 'mila' }],
+      ['lost', { role: 'lead', person: 'mila' }],
     ]);
     // Every other line of the report names nobody.
     const rest = run.events.filter((event) => event.moment === undefined);
     expect(rest.length).toBeGreaterThan(0);
     expect(rest.every((event) => !('speaker' in event))).toBe(true);
-    expect(viewFor(run, 'p1').cast).toEqual({ pa: 'anlage', operator: 'helmut', lead: null });
+    expect(viewFor(run, 'p1').cast).toEqual({ pa: 'anlage', operator: 'helmut', lead: 'mila' });
   });
 
   it('shows its words without the audio tags, which only its recording hears', () => {
@@ -293,7 +302,8 @@ describe('a line heard in a run', () => {
     expect(heard.find((event) => event.moment === 'lost')?.label).toBe('Die Zeit ist um.');
     expect(viewFor(lobby(), 'p1').radioCheck).toBe('Funkprobe, Nachtschicht.');
     expect(viewFor(started(mission), 'p1').intro?.pa).toEqual([
-      'Durchsage für Trakt C. Es ist 23 Uhr 47.',
+      { text: 'Durchsage für Trakt C. Es ist 23 Uhr 47.', person: 'anlage' },
+      { text: 'Hier spricht Mila.', person: 'mila' },
     ]);
     const texts = radioLines(mission).map((line) => line.text);
     expect(texts.filter((text) => /[[\]]/.test(text))).toEqual([]);
@@ -317,7 +327,27 @@ describe('a line heard in a run', () => {
     }
     // What a view says of the cast is the role and the person's id, and nothing else.
     const lost = viewFor(run, 'p1').events.at(-1);
-    expect(JSON.stringify(lost?.speaker)).toBe('{"role":"operator","person":"helmut"}');
+    expect(JSON.stringify(lost?.speaker)).toBe('{"role":"lead","person":"mila"}');
+  });
+
+  it('names who says each line over the loudspeakers: the one it names, else the plant', () => {
+    // The same on every night, whoever is on duty: a person of the roster, whatever their role.
+    for (const castSeed of [0, 1, 2, 3, 4, 5]) {
+      const start = { type: 'start-mission', playerId: 'p1', at: T0, seed: 7 } as const;
+      const run = applyAction(lobby(castSeed), start);
+      const said = viewFor(run, 'p1').intro?.pa.map(({ person }) => person);
+      expect(said).toEqual([castFor(run).pa, 'mila']);
+    }
+    const lines = radioLines(mission).filter((line) => line.when === 'pa');
+    expect(lines.map(({ role, by }) => [role, by])).toEqual([
+      ['pa', null],
+      ['pa', 'mila'],
+    ]);
+    expect(lines.map((line) => sayersOfLine(line).map((p) => p.id))).toEqual([['anlage'], ['mila']]);
+    // A line names a person of the roster, or the mission is refused.
+    const stranger = { ...JSON.parse(JSON.stringify(mission)), intro: { lightsSec: 3, pa: [] } };
+    stranger.intro.pa = [{ text: 'Hier spricht Haller.', by: 'haller' }];
+    expect(() => parseMission(stranger)).toThrow(/names nobody of the roster/);
   });
 });
 
