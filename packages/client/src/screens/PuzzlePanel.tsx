@@ -58,6 +58,7 @@ function StationDevice({ puzzle, run, send, mission, onStepBack = null }: Puzzle
         mission={mission}
         crew={run.crew}
         refused={refused}
+        solved={feel.solved}
       />
     </Device>
   );

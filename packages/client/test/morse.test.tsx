@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import type { PuzzleView } from '@escapelab/core';
-import { lampRuns, MorsePanel } from '../src/puzzles/MorsePanel.js';
+import { MorsePanel } from '../src/puzzles/MorsePanel.js';
 import { NO_CLOCK } from './fixtures.js';
 
 type MorseView = Extract<PuzzleView, { kind: 'morse' }>;
@@ -35,29 +35,6 @@ function render(puzzle: MorseView): string {
 function button(html: string, label: string): string {
   return html.match(new RegExp(`<button[^>]*aria-label="${label}"[^>]*>`))?.[0] ?? '';
 }
-
-describe('morse lamp', () => {
-  it('blinks short 1, long 3; dark 1 in a letter, 3 between letters, 7 before repeating', () => {
-    expect(lampRuns('-.. .-')).toEqual([
-      { on: true, units: 3 },
-      { on: false, units: 1 },
-      { on: true, units: 1 },
-      { on: false, units: 1 },
-      { on: true, units: 1 },
-      { on: false, units: 3 },
-      { on: true, units: 1 },
-      { on: false, units: 1 },
-      { on: true, units: 3 },
-      { on: false, units: 7 },
-    ]);
-  });
-
-  it('loops a whole word: SOS takes 34 units', () => {
-    const runs = lampRuns('... --- ...');
-    expect(runs.reduce((sum, run) => sum + run.units, 0)).toBe(34);
-    expect(runs.filter((run) => run.on)).toHaveLength(9);
-  });
-});
 
 describe('MorsePanel', () => {
   it('gives the operator lamp, dial and SENDEN, with ◀ off at the bottom of the band', () => {

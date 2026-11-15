@@ -50,7 +50,7 @@ const LINES = {
   simon: 'Die Lampe blinkt die Folge; ↻ spielt sie noch einmal ab.',
   maze: 'Jeder Pfeil geht ein Feld; die Wände zeigt nur der Plan.',
   memory: 'Nach jedem Druck notieren: Position und Beschriftung.',
-  morse: 'Nach der langen Pause beginnt das Wort von vorn.',
+  morse: 'Nach der langen Pause mit dem Rauschen beginnt das Wort von vorn.',
   button: {
     touch: 'Kurz tippen drückt, länger halten hält den Knopf.',
     mouse: 'Kurz klicken drückt, länger halten hält den Knopf.',
