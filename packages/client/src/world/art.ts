@@ -283,6 +283,22 @@ export interface ScientistOpts {
    * it looks at; none when left out or null
    */
   visorGlow?: EdgeLight | null;
+  /**
+   * what it wears over its body, as the menu's hero and its companion wear the plant's workwear
+   * (world/menu/outfits.ts); nothing when left out, as every figure of the world stands
+   */
+  wear?: Wear;
+}
+
+/**
+ * What a figure wears, drawn in its body's space — facing right, the feet at the origin, raised
+ * with the breath — over its body's fill: `body` clipped to the body, under the rim's light, so
+ * that the body's outline and its rim run round it as round the body; `over` over the visor,
+ * unclipped, for what sits on the head or hangs below the body.
+ */
+export interface Wear {
+  body: (ctx: CanvasRenderingContext2D) => void;
+  over: (ctx: CanvasRenderingContext2D) => void;
 }
 
 /** A light on a figure's edge: its colour and how strong it is where it is strongest. */
@@ -809,7 +825,10 @@ function drawRim(ctx: CanvasRenderingContext2D, rim: Rim): void {
   ctx.restore();
 }
 
-/** Arms, backpack, body and visor filled, and what the hands hold: body space, raised `bob`. */
+/**
+ * Arms, backpack, body and visor filled, what the figure wears over them (`Wear`), and what the
+ * hands hold: body space, raised `bob`.
+ */
 function fillUpper(
   ctx: CanvasRenderingContext2D,
   o: ScientistOpts,
@@ -827,10 +846,17 @@ function fillUpper(
   ctx.fillStyle = cachedGradient(ctx, buildBodyGradient, o.color);
   ctx.fill(paths.body);
   drawBodyHighlight(ctx);
+  if (o.wear !== undefined) {
+    ctx.save();
+    ctx.clip(paths.body);
+    o.wear.body(ctx);
+    ctx.restore();
+  }
   if (o.rim !== undefined) {
     drawRim(ctx, o.rim);
   }
   drawVisor(ctx, pose, [o.facing, colors.outline], o.visorGlow ?? null);
+  o.wear?.over(ctx);
   if (pose.holding && o.held !== undefined) {
     drawHeld(ctx, o.held, pose, colors);
   }
