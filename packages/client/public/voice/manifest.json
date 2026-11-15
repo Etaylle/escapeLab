@@ -1792,6 +1792,19 @@
       "model": "eleven_v4",
       "file": "helmut-a05a06d81e0a.mp3"
     },
+    "helmut-a1ac9af3ae35": {
+      "text": "Nur die Nachtschicht. Zwei Leute, vielleicht drei.",
+      "ms": 3553,
+      "missions": [
+        "blackout"
+      ],
+      "role": "pa",
+      "person": "helmut",
+      "moment": "pa",
+      "render": "14a5e31e6fc1",
+      "model": "eleven_v4",
+      "file": "helmut-a1ac9af3ae35.mp3"
+    },
     "helmut-a242523a34e9": {
       "text": "Speicherkern an die Schleusenwand, Schaltplan im Nordwesten.",
       "ms": 4127,
@@ -3356,6 +3369,19 @@
       "render": "181642172e66",
       "model": "eleven_v4",
       "file": "mila-7ac7978ad8d9.mp3"
+    },
+    "mila-98a64f5a625f": {
+      "text": "Schichtleitung an Leitstelle. Die Netzlast gefällt mir nicht, Helmut. Wer ist heute Nacht im Trakt?",
+      "ms": 5721,
+      "missions": [
+        "blackout"
+      ],
+      "role": "pa",
+      "person": "mila",
+      "moment": "pa",
+      "render": "9b1f364d703b",
+      "model": "eleven_v4",
+      "file": "mila-98a64f5a625f.mp3"
     },
     "mila-a418f852f99d": {
       "text": "Die Notzellen machen noch fünf Minuten. Das reicht, wenn ihr euch aufteilt.",

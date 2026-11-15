@@ -1506,8 +1506,8 @@ pnpm --filter @escapelab/client intro-cue --dry-run   # what it would compose an
 pnpm --filter @escapelab/client intro-cue             # the cue; says what it cost
 ```
 
-After the render of Mila's line and Helmut's answer the voice test names the `lightsSec` to set
-(today 32.2 s, two lines at the subtitles' pace), and the two lines come off `AWAITING_RENDER`.
+Mila's line and Helmut's answer were rendered on 15.11.2026 (149 credits); `lightsSec` stands at
+31.6 s since, 4 s past the scene's 27.6 s, and `AWAITING_RENDER` is empty.
 
 `test/pa.test.ts` holds the chain and the lines' timing, the cut and a line left out, the
 emergency power's band and dropouts, a message decoded as it comes and let go once said;

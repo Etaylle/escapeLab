@@ -107,11 +107,7 @@ const MS_PER_WORD = { min: 200, max: 900 } as const;
  * them. Any other line without a recording fails, and so does a line here that every one of them
  * has now. Today the opening's two lines between the Schichtleitung and the Leitstelle (V-3).
  */
-const AWAITING_RENDER: readonly string[] = [
-  'Schichtleitung an Leitstelle. Die Netzlast gefällt mir nicht, Helmut. Wer ist heute Nacht im ' +
-    'Trakt?',
-  'Nur die Nachtschicht. Zwei Leute, vielleicht drei.',
-];
+const AWAITING_RENDER: readonly string[] = [];
 
 const manifest = readManifest();
 const recordings = readdirSync(VOICE_DIR).filter((name) => /\.(m4a|mp3)$/.test(name));
@@ -1067,11 +1063,20 @@ describe('the plan of a run (--plan)', () => {
 
 describe('the lines that wait for a voice', () => {
   it('name the commands that give one, with --replace where takes of the person are there', () => {
-    // The roster before the cast's render, Helmut's voice alone kept: Mila's line in the
-    // opening, hers by name, waits for her voice; the takes of hers there make it a --replace.
+    // The roster before the cast's render, Helmut's voice alone kept, and the recordings before
+    // the opening's: Mila's line in the opening, hers by name, waits for her voice; the takes
+    // of hers there make it a --replace.
     const voice = eleven('eleven_v4');
-    const planned = plan(manifest, 'none', voice, HELMUT_ALONE);
-    const said = waitingFor(voice, planned, HELMUT_ALONE, manifest);
+    const hers = lineId(
+      'mila',
+      'Schichtleitung an Leitstelle. Die Netzlast gefällt mir nicht, Helmut. Wer ist heute ' +
+        'Nacht im Trakt?',
+    );
+    const lines = Object.fromEntries(Object.entries(manifest.lines).filter(([id]) => id !== hers));
+    expect(Object.keys(lines)).toHaveLength(Object.keys(manifest.lines).length - 1);
+    const before = { ...manifest, lines };
+    const planned = plan(before, 'none', voice, HELMUT_ALONE);
+    const said = waitingFor(voice, planned, HELMUT_ALONE, before);
     expect(said).toHaveLength(1);
     expect(said[0]).toContain('voice: Mila (lead) has no voice yet');
     expect(said[0]).toContain('voice --keep lead=<voice id> --replace');
@@ -1088,7 +1093,7 @@ describe('a plain run, and what --fresh would make beside it', () => {
   it('keeps Helmut’s takes of before, and names what --fresh would make anew, with credits', () => {
     const plain = costsOf(roster, manifest, 'none');
     const fresh = costsOf(roster, manifest, 'synthetic');
-    expect(plain.find((cost) => cost.slot === 'operator:helmut')?.skip).toBe(81);
+    expect(plain.find((cost) => cost.slot === 'operator:helmut')?.skip).toBe(82);
     const beside = freshBeside(plain, fresh);
     expect(beside).toEqual({ lines: 48, characters: 4071 });
     expect(planReport(plain, 'none', beside).at(-1)).toBe(
