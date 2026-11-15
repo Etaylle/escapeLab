@@ -226,13 +226,19 @@ describe('layBeam — the beam on the scene’s canvas', () => {
     layBeam(scene.ctx, beam, lampAt(900, 500, Math.PI), FRAME);
     layBeam(scene.ctx, beam, lampAt(903, 497, Math.PI + 0.3 * BEAM_STEP), FRAME);
     expect(beam.turns).toBe(1);
+    const lit = beam.lit?.key;
     layBeam(scene.ctx, beam, lampAt(903, 497, Math.PI + BEAM_STEP), FRAME);
     expect(beam.turns).toBe(2);
+    // The cone's soft light turns only every third degree.
+    expect(beam.lit?.key).toBe(lit);
+    layBeam(scene.ctx, beam, lampAt(903, 497, Math.PI + 2 * BEAM_STEP), FRAME);
+    expect(beam.lit?.key).not.toBe(lit);
     // The haze's and the light's masters, their turns, and the motes' sprite, each made once.
     expect(made).toHaveLength(5);
+    expect(beam.turns).toBe(3);
     layBeam(scene.ctx, beam, { ...lampAt(903, 497, Math.PI + BEAM_STEP), reach: 300 }, FRAME);
     expect(made).toHaveLength(7);
-    expect(beam.turns).toBe(3);
+    expect(beam.turns).toBe(4);
   });
 
   it('lays a beam on the slant from a box no larger than one pointing straight across', () => {

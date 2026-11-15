@@ -271,6 +271,21 @@ function turnMaster(make: CanvasMaker, master: Baked, angle: number, into: Baked
   return { canvas, x: box.x, y: box.y, key: `${master.key} ${angle}`, spread: master.spread };
 }
 
+/**
+ * The steps the cone's light is turned in: three of the haze's, as a light this soft and wide
+ * shows no step of a degree, and turning it, larger than the haze, is the beam's dearest step.
+ */
+const LIGHT_STEP = 3 * BEAM_STEP;
+
+/** `beam`'s light, its master `master`, turned to the step of LIGHT_STEP nearest `angle`. */
+function turnLight(beam: SceneBeam, master: Baked, angle: number): Baked {
+  const step = stepped(angle, LIGHT_STEP);
+  if (beam.lit?.key !== `${master.key} ${step}`) {
+    beam.lit = turnMaster(beam.make, master, step, beam.lit);
+  }
+  return beam.lit;
+}
+
 /** Lets `baked`'s canvas go at once, where there is one. */
 function letGo(baked: Baked | null): void {
   if (baked !== null) {
@@ -281,8 +296,8 @@ function letGo(baked: Baked | null): void {
 
 /**
  * The beam of `lamp` at a density of `dpr`, from `beam`'s sprites — its haze and its light, each
- * baked anew for a new reach, turned anew for a new step of the sweep; null where it reaches
- * nowhere.
+ * baked anew for a new reach, turned anew for a new step of the sweep, the light's three degrees;
+ * null where it reaches nowhere.
  */
 function turnedFor(beam: SceneBeam, lamp: HeroLamp, dpr: number): [Baked, Baked] | null {
   const r = Math.round(lamp.reach * dpr);
@@ -296,12 +311,11 @@ function turnedFor(beam: SceneBeam, lamp: HeroLamp, dpr: number): [Baked, Baked]
     beam.lightMaster = bakeMaster(beam.make, r, LIGHT);
   }
   const angle = stepped(lamp.angle, BEAM_STEP);
-  if (beam.turned?.key !== `${beam.master.key} ${angle}` || beam.lit === null) {
+  if (beam.turned?.key !== `${beam.master.key} ${angle}`) {
     beam.turned = turnMaster(beam.make, beam.master, angle, beam.turned);
-    beam.lit = turnMaster(beam.make, beam.lightMaster, angle, beam.lit);
     beam.turns += 1;
   }
-  return [beam.turned, beam.lit];
+  return [beam.turned, turnLight(beam, beam.lightMaster, lamp.angle)];
 }
 
 /** What the scene's frame lays the beam by: its density, a scene tile, the clock, the motion. */
