@@ -110,7 +110,9 @@ describe('a crew member away from a run', () => {
     ]);
     expect(view.pausedAt).toBeNull();
     const said = view.events.filter((event) => event.kind === 'away');
-    const desk = { role: 'operator', person: 'helmut' };
+    // Whoever of the Leitstelle the room's cast put on duty this night says it.
+    expect(['helmut', 'laura', 'ben']).toContain(view.cast.operator);
+    const desk = { role: 'operator', person: view.cast.operator };
     expect(said).toEqual([
       { at: dropAt, kind: 'away', label: 'Cems Leitung ist weg.', seconds: null, speaker: desk },
     ]);
