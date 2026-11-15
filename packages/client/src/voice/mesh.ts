@@ -1,7 +1,8 @@
-import type { PlayerPosition, RtcSignal, ServerMessage } from '@escapelab/core';
+import type { IceServer, PlayerPosition, RtcSignal, ServerMessage } from '@escapelab/core';
 import { audioEngine, sharedAudio } from '../world/audio.js';
 import { doorsShut } from '../world/light.js';
 import { dropPath, LINK_RAMP_S, switchPath, voicePath, type VoicePath } from './intercom.js';
+import { speechOpus } from './opus.js';
 import {
   crewGain,
   heard,
@@ -27,7 +28,10 @@ import {
  * player's own included, says who speaks. A spectator who listens in opens a
  * receive-only link to each player and hears everyone in full; nothing comes
  * back over it. The microphone is asked for on a click only; until then, and
- * without one, a player still hears the crew.
+ * without one, a player still hears the crew. The links find their way by the ICE servers the
+ * game's server names (`ice-servers`, server iceServers.ts): public STUN unless it names others.
+ * A link that does not come up, or drops, is made anew after a wait that doubles each time; the
+ * screens name whom no link reaches (`VoiceState.unreachable`).
  */
 
 /** Sends a voice signal to one member of the room. */
@@ -55,6 +59,11 @@ export interface VoiceState {
    * on it with them (rules.ts `onIntercom`) whose link is up
    */
   readonly intercom: ReadonlySet<string>;
+  /**
+   * the peers whose link has failed since it was last up, by id: no voice reaches them now, and
+   * the link is made anew after a wait
+   */
+  readonly unreachable: ReadonlySet<string>;
 }
 
 /** What the walkthrough reads off a traced page (probes.ts). */
@@ -76,6 +85,10 @@ export interface VoiceProbe {
   readonly gains: Record<string, number>;
   /** whom this player hears over the station's intercom, by player id (`VoiceState`) */
   readonly intercom: string[];
+  /** the peers no link reaches now (`VoiceState`) */
+  readonly unreachable: string[];
+  /** the ICE servers' addresses the links go by, as the server named them */
+  readonly ice: string[];
 }
 
 /**
@@ -110,6 +123,8 @@ interface Link {
   /** when it was made (performance.now()), to give one up that never connects */
   readonly since: number;
   connected: boolean;
+  /** since when it has been down after it was up (performance.now()); null while it is not */
+  downSince: number | null;
   /** what this end sends on: the microphone goes there once it is on */
   sender: RTCRtpSender | null;
   hearing: Hearing | null;
@@ -129,16 +144,21 @@ interface Positions {
 const TICK_MS = 50;
 /** A link not connected this long after it was made is given up, in ms. */
 const CONNECT_WITHIN_MS = 15_000;
-/** How long the opener waits before opening a link again after one failed, in ms. */
+/** How long the opener waits to open a link again after one failed, in ms; doubled each time. */
 const RETRY_AFTER_MS = 3000;
+/** The longest wait before a link is opened again, in ms. */
+const RETRY_MAX_MS = 30_000;
+/**
+ * A link down this long after it was up is made anew, in ms: the browser lets it be
+ * `disconnected` for good at times, never `failed`.
+ */
+const DOWN_WITHIN_MS = 6000;
 /** The most spectators one player's voice goes to at once. */
 const MAX_AUDIENCE = 6;
 /** Samples a level is read from: some 40 ms at 48 kHz, more than the gap between two reads. */
 const LEVEL_SAMPLES = 2048;
 /** How fast a volume follows the avatars, in s: the time constant of its glide. */
 const VOLUME_GLIDE = 0.12;
-/** A public STUN server for play over the internet, asked for with `?stun=1`. */
-const STUN: RTCIceServer[] = [{ urls: 'stun:stun.l.google.com:19302' }];
 /** What a voice wants of the microphone: the browser's echo, noise and level handling. */
 const VOICE_INPUT: MediaTrackConstraints = {
   echoCancellation: true,
@@ -195,6 +215,20 @@ function remember(key: string, value: string | null): void {
   }
 }
 
+/** An ICE server as the browser takes it: without the fields the server left out. */
+function iceServerOf({ urls, username, credential }: IceServer): RTCIceServer {
+  return {
+    urls,
+    ...(username === undefined ? {} : { username }),
+    ...(credential === undefined ? {} : { credential }),
+  };
+}
+
+/** The wait before the `failures`th failed link to one peer is opened again, in ms. */
+export function retryWait(failures: number): number {
+  return Math.min(RETRY_AFTER_MS * 2 ** Math.max(0, failures - 1), RETRY_MAX_MS);
+}
+
 /** A candidate as it goes over the socket. */
 function candidateOf(candidate: RTCIceCandidate): IceCandidate {
   return {
@@ -234,6 +268,8 @@ export class VoiceMesh {
   private readonly links = new Map<string, Link>();
   /** when a link that failed may be opened again (performance.now()), by peer */
   private readonly retryAt = new Map<string, number>();
+  /** how often the link to a peer has failed since it was last up, by peer: the wait doubles */
+  private readonly failures = new Map<string, number>();
   /** the run's map, its shut doors and who is on the intercom, for how loud each voice sounds */
   private room: (VoiceRoom & { readonly run: number | null }) | null = null;
   private positions: Positions = { run: null, players: {} };
@@ -253,6 +289,7 @@ export class VoiceMesh {
     listening: false,
     speaking: new Set(),
     intercom: new Set(),
+    unreachable: new Set(),
   };
   private readonly subscribers = new Set<() => void>();
 
@@ -268,13 +305,11 @@ export class VoiceMesh {
   readonly getState = (): VoiceState => this.state;
 
   /**
-   * Starts the voice for this page: signals go out by `send`, `?stun=1` in
-   * `search` adds a public STUN server, and a microphone this tab had on
+   * Starts the voice for this page: signals go out by `send`, and a microphone this tab had on
    * before a reload comes back — where the browser allows it without asking.
    */
-  attach(send: SendSignal, search: string): void {
+  attach(send: SendSignal): void {
     this.sendSignal = send;
-    this.iceServers = new URLSearchParams(search).get('stun') === '1' ? STUN : [];
     this.update({ mic: micBlocker() ?? 'off', open: recall(OPEN_KEY) === '1' });
     if (recall(MIC_KEY) === '1') {
       this.micAgain();
@@ -336,6 +371,10 @@ export class VoiceMesh {
         break;
       case 'rtc':
         this.take(msg.from, msg.signal);
+        break;
+      case 'ice-servers':
+        // Before any view: every link this socket brings goes by them.
+        this.iceServers = msg.servers.map(iceServerOf);
         break;
       default:
         break;
@@ -435,6 +474,8 @@ export class VoiceMesh {
       speaking: [...this.state.speaking],
       gains: Object.fromEntries(gains),
       intercom: [...this.state.intercom],
+      unreachable: [...this.state.unreachable],
+      ice: this.iceServers.flatMap((server) => [server.urls].flat()),
     };
   }
 
@@ -479,6 +520,10 @@ export class VoiceMesh {
     for (const peer of [...this.retryAt.keys()].filter((id) => !this.seen.has(id))) {
       this.retryAt.delete(peer);
     }
+    for (const peer of [...this.failures.keys()].filter((id) => !this.seen.has(id))) {
+      this.failures.delete(peer);
+    }
+    this.sayUnreachable();
     this.keepTicking();
   }
 
@@ -523,7 +568,7 @@ export class VoiceMesh {
       return;
     }
     this.enqueue(link, async () => {
-      await link.pc.setRemoteDescription({ type: 'offer', sdp });
+      await link.pc.setRemoteDescription({ type: 'offer', sdp: speechOpus(sdp) });
       const [transceiver] = link.pc.getTransceivers();
       if (transceiver !== undefined) {
         transceiver.direction = kind === 'crew' ? 'sendrecv' : 'sendonly';
@@ -551,7 +596,7 @@ export class VoiceMesh {
       this.enqueue(link, async () => {
         // An answer to an offer this end no longer waits for changes nothing.
         if (link.pc.signalingState === 'have-local-offer') {
-          await link.pc.setRemoteDescription({ type: 'answer', sdp: signal.sdp });
+          await link.pc.setRemoteDescription({ type: 'answer', sdp: speechOpus(signal.sdp) });
         }
       });
       return;
@@ -580,6 +625,7 @@ export class VoiceMesh {
       offering,
       since: performance.now(),
       connected: false,
+      downSince: null,
       sender: null,
       hearing: null,
       queue: Promise.resolve(),
@@ -596,16 +642,28 @@ export class VoiceMesh {
         this.guarded(() => this.hear(link, streams[0] ?? new MediaStream([track])));
       }
     };
-    pc.onconnectionstatechange = () => {
-      if (pc.connectionState === 'connected') {
-        link.connected = true;
-        this.hearIntercom();
-      } else if (pc.connectionState === 'failed') {
-        this.fail(link);
-      }
-    };
+    pc.onconnectionstatechange = () => this.stateChanged(link);
     this.keepTicking();
     return link;
+  }
+
+  /**
+   * The link's state changed: up — no failure counts any more —, down for a moment (`tick`
+   * makes it anew should it stay down), or failed.
+   */
+  private stateChanged(link: Link): void {
+    const state = link.pc.connectionState;
+    if (state === 'connected') {
+      link.connected = true;
+      link.downSince = null;
+      this.failures.delete(link.peer);
+      this.sayUnreachable();
+      this.hearIntercom();
+    } else if (state === 'disconnected') {
+      link.downSince ??= performance.now();
+    } else if (state === 'failed') {
+      this.fail(link);
+    }
   }
 
   /** Sends a signal for `link`, unless it was closed or replaced meanwhile. */
@@ -622,16 +680,34 @@ export class VoiceMesh {
       .catch(() => this.fail(link));
   }
 
-  /** A link that broke down closes; whoever opened it tries again after a wait. */
+  /**
+   * A link that broke down closes and counts as a failure; whoever opened it tries again after a
+   * wait that doubles with each failure in a row (`retryWait`). A spectator's audience is not
+   * counted: nobody on this page waits for its voice.
+   */
   private fail(link: Link): void {
     if (link.closed) {
       return;
     }
     this.close(link.peer);
-    if (link.offering) {
-      this.retryAt.set(link.peer, performance.now() + RETRY_AFTER_MS);
+    if (link.kind !== 'audience') {
+      const failures = (this.failures.get(link.peer) ?? 0) + 1;
+      this.failures.set(link.peer, failures);
+      if (link.offering) {
+        this.retryAt.set(link.peer, performance.now() + retryWait(failures));
+      }
+      this.sayUnreachable();
     }
     this.keepTicking();
+  }
+
+  /** Tells the screens whom no link reaches now (`VoiceState.unreachable`), on a change. */
+  private sayUnreachable(): void {
+    const now = [...this.failures.keys()].sort();
+    const was = this.state.unreachable;
+    if (now.length !== was.size || now.some((peer) => !was.has(peer))) {
+      this.update({ unreachable: new Set(now) });
+    }
   }
 
   /** The microphone goes out on `sender`: now, or once it is on. */
@@ -726,6 +802,8 @@ export class VoiceMesh {
       this.close(peer);
     }
     this.retryAt.clear();
+    this.failures.clear();
+    this.sayUnreachable();
     this.keepTicking();
   }
 
@@ -816,11 +894,15 @@ export class VoiceMesh {
     }
   }
 
-  /** Gives up links that never came up, opens failed ones again, then levels and volumes. */
+  /**
+   * Gives up links that never came up or stayed down, opens failed ones again, then levels and
+   * volumes.
+   */
   private tick(): void {
     const now = performance.now();
     for (const link of [...this.links.values()]) {
-      if (!link.connected && now - link.since > CONNECT_WITHIN_MS) {
+      const never = !link.connected && now - link.since > CONNECT_WITHIN_MS;
+      if (never || (link.downSince !== null && now - link.downSince > DOWN_WITHIN_MS)) {
         this.fail(link);
       }
     }

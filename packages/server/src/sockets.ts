@@ -5,6 +5,7 @@ import {
   type AccountView,
   type ClientMessage,
   type CrewPass,
+  type IceServer,
   type Mission,
   type ServerMessage,
 } from '@escapelab/core';
@@ -64,6 +65,8 @@ export interface Lab {
    * `SignInGuard`): one for the server; none counted where unset
    */
   signIns?: Pick<SignInGuard, 'refusal' | 'take'>;
+  /** the ICE servers each socket is told first thing (iceServers.ts); nothing told where unset */
+  iceServers?: IceServer[];
 }
 
 /**
@@ -310,6 +313,9 @@ export function serveSockets(server: SocketServer, lab: Lab): Served {
     sessions.set(socket, () => session);
     const address = addressOf(lab, request, noteForwarded);
     doors.set(socket, { address, pass: null, changes: [] });
+    if (lab.iceServers !== undefined) {
+      send(socket, { kind: 'ice-servers', servers: lab.iceServers });
+    }
     const take = (msg: ClientMessage): void => {
       try {
         checkPass(socket, msg);

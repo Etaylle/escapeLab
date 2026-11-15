@@ -143,8 +143,11 @@ und klingen nach Nähe: bis 4 Kacheln voll, bis 10 Kacheln leiser werdend, durch
 — nie ganz stumm. An der aktiven Station — an ihren Pulten und den offenen Quellen dazu — hört
 man sich dagegen über ihre Sprechanlage voll, wie weit auch immer; die PARTNER-Lampe am Gerät
 zeigt dann „· Funk“. Wer spricht, steht in einem Ring. Zuschauer können mithören, nicht sprechen.
-Ohne Mikrofon hört man die Crew trotzdem. Das Mikrofon braucht HTTPS (oder `localhost`); übers
-Internet hilft `?stun=1` in der Adresse.
+Ohne Mikrofon hört man die Crew trotzdem. Das Mikrofon braucht HTTPS (oder `localhost`). Den Weg
+übers Internet suchen die Browser über die ICE-Server, die der Server nennt (`ICE_SERVERS`, siehe
+unten; ohne: öffentliches STUN). Kommt eine Verbindung nicht zustande oder reißt sie ab, baut der
+Browser sie nach 3 s neu auf, dann nach 6, 12, 24 und höchstens 30 s, und Lobby und Welt sagen
+„Keine Sprechverbindung zu Ben“, bis sie steht.
 
 **Tragen:** Manche Stationen bleiben tot, bis ein Gegenstand bei ihnen eingesetzt wurde — die
 Ersatzsicherung liegt im Archiv und muss quer durchs Labor in den Reaktor —, und manche Regeln
@@ -635,6 +638,7 @@ stops (no DATABASE_URL)`.
 | Render-Umgebung | `DATABASE_URL` | Die Postgres-Datenbank (Neon) für Konten, Läufe und Erfolge, gepoolt oder direkt; ohne: Datei und Konten im Speicher (siehe oben). |
 | Render-Umgebung | `DATABASE_URL_UNPOOLED` | Die direkte Verbindung derselben Datenbank für die Migrationen, von Neons Integration neben die gepoolte `DATABASE_URL` gesetzt; ohne: Die Migrationen nehmen `DATABASE_URL`. |
 | Render-Umgebung | `RUNS_TOKEN` | Gibt das Laufprotokoll per `GET /runs.jsonl` frei (siehe oben). |
+| Render-Umgebung | `ICE_SERVERS` | Die ICE-Server der Sprechverbindungen als JSON-Liste von RTCIceServer-Objekten; jeder Socket bekommt sie als Erstes. Ohne: öffentliches STUN von Google und Cloudflare; `[]` nur fürs LAN. STUN sagt dem Browser, unter welcher Adresse ihn das Internet sieht — das reicht durch die meisten Heimrouter. Hinter einem symmetrischen NAT (manche Mobilfunk-, Uni- und Firmennetze) kommt eine Verbindung nur über einen TURN-Server zustande, der den Ton weiterreicht; er braucht Benutzername und Kennwort, etwa `[{"urls":"stun:stun.l.google.com:19302"},{"urls":["turn:turn.example.org:3478","turns:turn.example.org:5349"],"username":"…","credential":"…"}]`. Eine falsche Liste hält den Start an und sagt, was nicht stimmt; das Start-Log nennt die Adressen, nie die Zugangsdaten. |
 | Render-Umgebung | `ROOM_SECRET` | Schlüssel der Schnappschüsse (SHA-256 davon für AES-256-GCM): im Dashboard unter „Environment" als Variable anlegen, 32 oder mehr zufällige Zeichen, etwa `openssl rand -hex 32`, und nie ändern — ein neuer Schlüssel öffnet die alten Schnappschüsse nicht. Ohne ihn macht der Server bei jedem Start einen eigenen Schlüssel, das Start-Log sagt `ROOM_SECRET unset … rooms will not survive a restart`, und kein Raum überlebt einen Neustart; mit weniger als 32 Zeichen startet er nicht. Der Deploy, mit dem er dazukommt, trägt die laufenden Räume noch nicht hinüber. |
 
 ## Architektur in einem Satz

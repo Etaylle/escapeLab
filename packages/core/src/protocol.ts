@@ -42,6 +42,32 @@ export const rtcSignalSchema = z
 
 export type RtcSignal = z.infer<typeof rtcSignalSchema>;
 
+/** A STUN or TURN address as RTCIceServer takes it: `stun:`, `stuns:`, `turn:` or `turns:`. */
+const iceUrlSchema = z.string().regex(/^(stuns?|turns?):\S+$/, 'stun:, stuns:, turn: or turns:');
+
+/**
+ * One ICE server for the voice's links, as RTCIceServer takes it: a TURN server needs the
+ * username and the credential it hands out, or the browser refuses the whole list.
+ */
+const iceServerSchema = z
+  .object({
+    urls: z.union([iceUrlSchema, z.array(iceUrlSchema).min(1)]),
+    username: z.string().min(1).optional(),
+    credential: z.string().min(1).optional(),
+  })
+  .strict()
+  .refine(
+    (server) =>
+      [server.urls].flat().every((url) => url.startsWith('stun')) ||
+      (server.username !== undefined && server.credential !== undefined),
+    'a turn: or turns: address needs a username and a credential',
+  );
+
+/** The ICE servers the voice's links go by (server iceServers.ts): an empty list for a LAN. */
+export const iceServersSchema = z.array(iceServerSchema).max(8);
+
+export type IceServer = z.infer<typeof iceServerSchema>;
+
 /** The largest seed a room can be pinned to: a seed is 32 bits wide, as the PRNG takes it. */
 export const SEED_MAX = 0xffff_ffff;
 
@@ -581,6 +607,8 @@ export type ServerMessage =
   | { kind: 'chat'; playerId: string; text: string }
   /** a voice signal from another member of the room, as they sent it */
   | { kind: 'rtc'; from: string; signal: RtcSignal }
+  /** the ICE servers the voice's links go by, first thing on every socket (server iceServers.ts) */
+  | { kind: 'ice-servers'; servers: IceServer[] }
   /** a refusal, and the kind of message it refuses (`of`) — left out where none could be read */
   | { kind: 'error'; message: string; of?: ClientMessage['kind'] };
 

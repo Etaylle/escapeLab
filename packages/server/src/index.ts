@@ -16,6 +16,7 @@ import { AccountDesk } from './accounts.js';
 import { customMissions, serveCustomMissions } from './customMissions.js';
 import { dailySalt } from './dailySalt.js';
 import { HEARTBEAT_MS, startHeartbeat } from './heartbeat.js';
+import { iceLogLine, iceServers, type IceSetup } from './iceServers.js';
 import { SignInGuard } from './login.js';
 import { MissionCatalog } from './missions.js';
 import { RoomManager, seedsAllowed } from './roomManager.js';
@@ -45,6 +46,8 @@ const RUNS_LOG = process.env['RUNS_LOG'] || DEFAULT_RUNS_LOG;
 const KEEPING_MS = 5000;
 // https where packages/server/cert/ (or TLS_CERT and TLS_KEY) holds a pair, else http.
 const tls = tlsSetup(process.env);
+// The voice's ICE servers: ICE_SERVERS's list, else public STUN; a wrong list stops the start.
+const ice = iceOrExit();
 
 // Missions made in the editor: missions/custom/ beside the shipped ones (not in the repo).
 const CUSTOM_MISSIONS_DIR = process.env['CUSTOM_MISSIONS_DIR'] || join(MISSIONS_DIR, 'custom');
@@ -142,6 +145,7 @@ const served = serveSockets(wss, {
   changesPerSocket: ACCOUNT_CHANGES_PER_SOCKET,
   front: frontOf(process.env),
   signIns,
+  iceServers: ice.servers,
 });
 // A socket gone silent is found out and closed, so that the room pauses for its player; the
 // log names the room and the seat of each socket it cuts.
@@ -167,6 +171,7 @@ httpServer.listen(PORT, () => {
   const scheme = tls.on ? 'https' : 'http';
   console.log(`[escapelab] server on ${scheme}://localhost:${PORT} (ws: /ws, missions: ${ids})`);
   console.log(`[escapelab] ${tlsLogLine(tls)}`);
+  console.log(`[escapelab] ${iceLogLine(ice)}`);
   const download = runs.token
     ? 'GET /runs.jsonl takes RUNS_TOKEN'
     : 'RUNS_TOKEN unset: no download';
@@ -190,6 +195,16 @@ httpServer.listen(PORT, () => {
     console.log('[escapelab] kein Client-Build gefunden — im Dev-Modus läuft Vite auf 5173');
   }
 });
+
+/** The voice's ICE servers (iceServers.ts); the process exits 1, saying why, for a wrong list. */
+function iceOrExit(): IceSetup {
+  try {
+    return iceServers(process.env);
+  } catch (error) {
+    console.error(`[escapelab] ${error instanceof Error ? error.message : String(error)}`);
+    process.exit(1);
+  }
+}
 
 /**
  * The store the environment names, migrated and opened (store/store.ts `readyStore`); the

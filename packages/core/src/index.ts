@@ -275,6 +275,8 @@ export {
   type AccountStore,
   type AccountView,
   type LoginDone,
+  iceServersSchema,
+  type IceServer,
   type RtcSignal,
   type ClientMessage,
   type CrewPass,

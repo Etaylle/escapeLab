@@ -109,6 +109,23 @@ Between the places of the armed station — its consoles and the open sources th
 crew hears each other in full however far apart, walls or not; everywhere else the voice fades
 with distance and walls as before. The device's PARTNER LED then reads „Ben · Pult B · Funk".
 
+## Voice links over the internet
+
+The voice goes from browser to browser (WebRTC, `voice/mesh.ts`); the game's server only passes
+the signals on. Each socket is told first thing which ICE servers the links go by (`ice-servers`,
+server `iceServers.ts`): the JSON list in `ICE_SERVERS`, or public STUN (Google's and
+Cloudflare's) where it is unset; `[]` keeps the voice to one network. STUN tells a browser the
+address the internet sees it under, which gets through most home routers; behind a symmetric NAT
+— some mobile, campus and office networks — only a TURN server relaying the sound gets a link up,
+named with its username and credential (`{"urls":"turn:turn.example.org:3478","username":"…",
+"credential":"…"}`). A wrong list stops the server's start, saying what is wrong. A link that
+fails, does not come up within 15 s or stays `disconnected` for 6 s is made anew by the lower id,
+after 3 s, then twice as long each time in a row up to 30 s; until it is up, the lobby's panel
+and the world say „Keine Sprechverbindung zu Ben — neuer Versuch läuft.", apart from the
+microphone's own line. Each end sets the Opus parameters in the description from the other end
+before it sets it — forward error correction, DTX, mono, 32 kbit/s — which is what its encoder
+sends by (`voice/opus.ts`).
+
 ## Finding things
 
 A player finds a source, note, part, the sign or an armed console within 2 tiles in sight, or

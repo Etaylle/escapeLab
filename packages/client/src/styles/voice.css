@@ -145,3 +145,29 @@
 .spectate-listen[aria-pressed='true'] {
   color: var(--accent);
 }
+
+/* ── a link that does not come up: whom no voice reaches, by name ───────── */
+
+/*
+ * One quiet line in the lobby's panel under the microphone's row, and over the world under
+ * the bar in a run (GameWorld.tsx): amber, as a thing that is being tried again, not red.
+ */
+.voice-nolink {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.3;
+  color: var(--warn);
+}
+
+.world-wrap > .voice-nolink {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 4;
+  max-width: calc(100% - 28px);
+  padding: 4px 10px;
+  border-radius: 8px;
+  background: rgba(7, 11, 15, 0.85);
+  pointer-events: none;
+}

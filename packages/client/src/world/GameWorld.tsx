@@ -9,7 +9,7 @@ import { NO_STEER } from '../input/pad.js';
 import { onPadPing, padSteer } from '../input/padRuntime.js';
 import { addProbes, type MinimapProbe } from '../probes.js';
 import type { CoachMark } from '../puzzles/coach.js';
-import { TalkButton } from '../screens/Voice.js';
+import { NoLink, TalkButton } from '../screens/Voice.js';
 import { getSettings, TEXT_SCALE, useReducedMotion, useSettings } from '../settings.js';
 import { VoiceContext } from '../voice/useVoice.js';
 import type { Connection } from '../ws.js';
@@ -1271,6 +1271,7 @@ export function GameWorld(props: Props) {
         className={`world-canvas ${spectator ? 'world-canvas--wide' : ''}`}
       />
       {!spectator && <RedEdge view={props.view} ending={props.finale != null} />}
+      {!spectator && <NoLink players={props.view.players} />}
       {tip !== null && (
         // Just above the control cluster, wherever it reaches: never on the
         // avatar under the objective bar, nor on the minimap.

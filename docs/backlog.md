@@ -429,10 +429,11 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   weiter, „Ohne X weiter" steht seither in der Leiste über der Welt statt auf einer Karte, und die
   Wartung eines Neustarts wartet nur auf die, die dabei in der Leitung waren.
 
-### R-4 Funk zwischen Mobilnetzen — Status: wartet (Entscheidung Uros) · Größe: M
-- Ohne TURN-Server verbinden sich zwei Handys in verschiedenen Mobilnetzen meist nicht; STUN ist
-  nur mit `?stun=1` an. Optionen: STUN standardmäßig, TURN über einen kostenlosen Dienst oder
-  den Render-Server selbst (Datenvolumen). Erst entscheiden, wenn R-3 steht.
+### R-4 Funk zwischen Mobilnetzen — Status: teils erledigt (C-talk, 2026-11-15) · Größe: M
+- Ohne TURN-Server verbinden sich zwei Handys in verschiedenen Mobilnetzen meist nicht. Seit
+  C-talk ist STUN standardmäßig an (`?stun=1` ist weg); die ICE-Server nennt der Server
+  (`ICE_SERVERS`), ein TURN-Dienst kommt per Render-Dashboard dazu, ohne Code. Offen: welcher
+  TURN-Dienst (Entscheidung Uros).
 
 ### R-5 Sichtbarkeit — Status: erledigt (R-reconnect, Merge 2026-11-12) · Größe: S
 - Server loggt Beitritt, Wiederverbinden, Abbruch, Abweisung, Weiter-ohne, Aufgeben, Übernahme,

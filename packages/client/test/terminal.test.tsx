@@ -329,6 +329,7 @@ describe('the talk key at the terminal', () => {
       listening: false,
       speaking: new Set(),
       intercom: new Set(),
+      unreachable: new Set(),
     };
     const mesh = {
       subscribe: () => noop,
