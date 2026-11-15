@@ -3,7 +3,9 @@
     {
       "id": "anlage",
       "name": "Durchsage",
-      "character": "Die Lautsprecher der Anlage in Trakt C: Uhrzeit, Lasten und Störungen, bei Tag und Nacht in derselben Stimme."
+      "character": "Die Lautsprecher der Anlage in Trakt C: Uhrzeit, Lasten und Störungen, bei Tag und Nacht in derselben Stimme.",
+      "voiceId": "OCDYul75SEKSUI3jtFCT",
+      "model": "eleven_v4"
     }
   ],
   "operator": [
@@ -17,19 +19,25 @@
     {
       "id": "laura",
       "name": "Laura",
-      "character": "Kam aus der Netzwarte des Kraftwerks in die Leitstelle. Spricht ruhig und gleichmäßig, wird nie laut und zählt lieber mit, als zu raten."
+      "character": "Kam aus der Netzwarte des Kraftwerks in die Leitstelle. Spricht ruhig und gleichmäßig, wird nie laut und zählt lieber mit, als zu raten.",
+      "voiceId": "Qy4b2JlSGxY7I9M9Bqxb",
+      "model": "eleven_v4"
     },
     {
       "id": "ben",
       "name": "Ben",
-      "character": "Jüngster Disponent der Leitstelle, seit dem Frühjahr im Nachtdienst. Spricht locker und schnell, wie unter Kollegen am Funk."
+      "character": "Jüngster Disponent der Leitstelle, seit dem Frühjahr im Nachtdienst. Spricht locker und schnell, wie unter Kollegen am Funk.",
+      "voiceId": "aTTiK3YzK3dXETpuDE2h",
+      "model": "eleven_v4"
     }
   ],
   "lead": [
     {
       "id": "mila",
       "name": "Mila",
-      "character": "Schichtleiterin der Nacht, jung für den Posten und sich ihrer Sache sicher. Meldet sich auf dem Funk erst, wenn die Zeit knapp wird oder eine Schicht verloren ist, dann kurz und bestimmt."
+      "character": "Schichtleiterin der Nacht, jung für den Posten und sich ihrer Sache sicher. Meldet sich auf dem Funk erst, wenn die Zeit knapp wird oder eine Schicht verloren ist, dann kurz und bestimmt.",
+      "voiceId": "dCnu06FiOZma2KVNUoPZ",
+      "model": "eleven_v4"
     }
   ]
 }

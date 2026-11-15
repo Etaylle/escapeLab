@@ -1,69 +1,1173 @@
 {
   "lines": {
+    "anlage-108b14bdd7cb": {
+      "text": "Störung im Kühlkreislauf. Relaissteuerung auf Handbetrieb.",
+      "ms": 4441,
+      "missions": [
+        "blackout"
+      ],
+      "role": "pa",
+      "person": "anlage",
+      "moment": "announce",
+      "render": "2dc65e0a8372",
+      "model": "eleven_v4",
+      "file": "anlage-108b14bdd7cb.mp3"
+    },
     "anlage-1d6e6f98882a": {
       "text": "Reaktor in Teillast, 60 Prozent. Die Zentrifugen laufen bis 6 Uhr durch.",
-      "ms": 6191,
+      "ms": 5956,
       "missions": [
         "blackout"
       ],
       "role": "pa",
       "person": "anlage",
       "moment": "pa",
-      "render": "3c5e5641c282",
+      "render": "e9ccc3f293e1",
       "model": "eleven_v4",
       "file": "anlage-1d6e6f98882a.mp3"
     },
     "anlage-2fec42b4a1b0": {
       "text": "Die Spätschicht gibt Dosimeter und Schlüssel bitte an der Pforte ab.",
-      "ms": 4284,
+      "ms": 4127,
       "missions": [
         "blackout"
       ],
       "role": "pa",
       "person": "anlage",
       "moment": "pa",
-      "render": "a015b3c2e2cc",
+      "render": "8bf9b74ad025",
       "model": "eleven_v4",
       "file": "anlage-2fec42b4a1b0.mp3"
     },
     "anlage-559d72aae03f": {
       "text": "Durchsage der Leitstelle für Trakt C. Es ist 23 Uhr 47, die Nachtschicht hat übernommen.",
-      "ms": 7471,
+      "ms": 7079,
       "missions": [
         "blackout"
       ],
       "role": "pa",
       "person": "anlage",
       "moment": "pa",
-      "render": "60a71604dc19",
+      "render": "a891b6ae3a61",
       "model": "eleven_v4",
       "file": "anlage-559d72aae03f.mp3"
     },
+    "anlage-784c192e1b4d": {
+      "text": "Kühlkreislauf gestört, Temperatur im Trakt steigt. Relaissteuerung auf Handbetrieb.",
+      "ms": 5956,
+      "missions": [
+        "blackout"
+      ],
+      "role": "pa",
+      "person": "anlage",
+      "moment": "announce",
+      "render": "40f24af68750",
+      "model": "eleven_v4",
+      "file": "anlage-784c192e1b4d.mp3"
+    },
+    "anlage-aaf1402ec3ae": {
+      "text": "Kühlkreislauf außer Betrieb. Automatische Relaissteuerung ausgefallen, Handbetrieb aktiv.",
+      "ms": 6348,
+      "missions": [
+        "blackout"
+      ],
+      "role": "pa",
+      "person": "anlage",
+      "moment": "announce",
+      "render": "b651de02338d",
+      "model": "eleven_v4",
+      "file": "anlage-aaf1402ec3ae.mp3"
+    },
     "anlage-d1ae33eb0de5": {
       "text": "Herr Haller, bitte die Leitstelle anrufen. Herr Haller, bitte die Leitstelle anrufen.",
-      "ms": 5721,
+      "ms": 5799,
       "missions": [
         "blackout"
       ],
       "role": "pa",
       "person": "anlage",
       "moment": "pa",
-      "render": "f51b8ffbadd2",
+      "render": "8c5515a34c3d",
       "model": "eleven_v4",
       "file": "anlage-d1ae33eb0de5.mp3"
     },
     "anlage-db81476a48b2": {
       "text": "Netzlast im Trakt 96 Prozent, Notstrom in Bereitschaft.",
-      "ms": 4989,
+      "ms": 4911,
       "missions": [
         "blackout"
       ],
       "role": "pa",
       "person": "anlage",
       "moment": "pa",
-      "render": "e094e9b6f005",
+      "render": "dddf4f85bc5c",
       "model": "eleven_v4",
       "file": "anlage-db81476a48b2.mp3"
+    },
+    "ben-02ed4d6ee051": {
+      "text": "Server laufen, die Labortür ist offen, drinnen fliegt eine Drohne. Den Aktenschrank im Labor öffnet nur der Schlüssel.",
+      "ms": 7549,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "ben",
+      "moment": "solved",
+      "render": "a7193ce1c2cb",
+      "model": "eleven_v4",
+      "file": "ben-02ed4d6ee051.mp3"
+    },
+    "ben-03c57f9885a6": {
+      "text": "Den Hauptschalter im Flur legt keiner allein um, ihr müsst gemeinsam ziehen.",
+      "ms": 4519,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "ben",
+      "moment": "nudge",
+      "render": "b64e185deb7d",
+      "model": "eleven_v4",
+      "file": "ben-03c57f9885a6.mp3"
+    },
+    "ben-05ae54bef8de": {
+      "text": "Macht zuerst den Spind in der Mitte vom Serverraum auf, ohne seine Unterlagen kommt ihr an Terminal und Rack nicht weiter.",
+      "ms": 6844,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "ben",
+      "moment": "nudge",
+      "render": "227defb6e336",
+      "model": "eleven_v4",
+      "file": "ben-05ae54bef8de.mp3"
+    },
+    "ben-06d3d209c3a1": {
+      "text": "Wer noch in der Kontrolle steckt: Die Platte im Leitstand vor der Tür hält sie auf.",
+      "ms": 4754,
+      "missions": [
+        "systemcheck"
+      ],
+      "role": "operator",
+      "person": "ben",
+      "moment": "nudge",
+      "render": "9a86fbfb01c4",
+      "model": "eleven_v4",
+      "file": "ben-06d3d209c3a1.mp3"
+    },
+    "ben-075e89ba063b": {
+      "text": "Leitstelle an Nachtschicht. Stromausfall im ganzen Trakt, ich sehe nur noch die Notzellen. Geht zuerst ans Notlicht, der Hauptschalter im Flur braucht zwei Leute.",
+      "ms": 9404,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "ben",
+      "moment": "start",
+      "opens": true,
+      "render": "b5b4cac866b9",
+      "model": "eleven_v4",
+      "file": "ben-075e89ba063b.mp3"
+    },
+    "ben-1776e2357724": {
+      "text": "Die Synchronkalibrierung steht bei den Spulen, ganz im Osten hinter dem offenen Schott.",
+      "ms": 4833,
+      "missions": [
+        "systemcheck"
+      ],
+      "role": "operator",
+      "person": "ben",
+      "moment": "nudge",
+      "render": "a34a029bfc0a",
+      "model": "eleven_v4",
+      "file": "ben-1776e2357724.mp3"
+    },
+    "ben-1c32b49724ca": {
+      "text": "Notausgang offen, Schleusenmitte. Alle vier hin.",
+      "ms": 3396,
+      "missions": [
+        "doppelschicht"
+      ],
+      "role": "operator",
+      "person": "ben",
+      "moment": "escape",
+      "render": "775112df6c37",
+      "model": "eleven_v4",
+      "file": "ben-1c32b49724ca.mp3"
+    },
+    "ben-20844d2dafb4": {
+      "text": "Der Hauptschalter fürs Notlicht hängt mitten im Flur, unter der roten Lampe.",
+      "ms": 4441,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "ben",
+      "moment": "nudge",
+      "render": "4d52403b48c3",
+      "model": "eleven_v4",
+      "file": "ben-20844d2dafb4.mp3"
+    },
+    "ben-222d3f3a3601": {
+      "text": "Signal steht. Als Nächstes die Kontrolle: Die Platte hält die Tür offen, die Unterlagen liegen im Spind daneben.",
+      "ms": 7314,
+      "missions": [
+        "systemcheck"
+      ],
+      "role": "operator",
+      "person": "ben",
+      "moment": "solved",
+      "render": "4d949b67e29b",
+      "model": "eleven_v4",
+      "file": "ben-222d3f3a3601.mp3"
+    },
+    "ben-22f2d6d8fa13": {
+      "text": "Alle in den Kern. Flurplatte öffnet das Messlabor.",
+      "ms": 3631,
+      "missions": [
+        "kettenreaktion"
+      ],
+      "role": "operator",
+      "person": "ben",
+      "moment": "solved",
+      "render": "803eaf64aa50",
+      "model": "eleven_v4",
+      "file": "ben-22f2d6d8fa13.mp3"
+    },
+    "ben-254093cbcc07": {
+      "text": "Schleuse offen. Alle vier zum Not-Aus, Westwand.",
+      "ms": 3631,
+      "missions": [
+        "doppelschicht"
+      ],
+      "role": "operator",
+      "person": "ben",
+      "moment": "solved",
+      "render": "920ad561d129",
+      "model": "eleven_v4",
+      "file": "ben-254093cbcc07.mp3"
+    },
+    "ben-271f4a79a98c": {
+      "text": "Die Tür zum Maschinenraum geht nur auf, solange jemand auf der Platte davor steht, dahinter wartet der Kasten.",
+      "ms": 6687,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "ben",
+      "moment": "nudge",
+      "render": "080beaadb704",
+      "model": "eleven_v4",
+      "file": "ben-271f4a79a98c.mp3"
+    },
+    "ben-2b3ce9cae36e": {
+      "text": "Ich habe die Relais verloren, das müsst ihr von Hand machen. Lest euch jede Anweisung laut vor.",
+      "ms": 5486,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "ben",
+      "moment": "emergency",
+      "mood": "urgent",
+      "render": "1048962d78b8",
+      "model": "eleven_v4",
+      "file": "ben-2b3ce9cae36e.mp3"
+    },
+    "ben-31d7ced11ae5": {
+      "text": "Server oben, Labortür offen, im Labor patrouilliert eine Drohne. Den Schlüssel zum Aktenschrank holt ihr noch aus dem Serverraum.",
+      "ms": 8046,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "ben",
+      "moment": "solved",
+      "render": "06979e3da69f",
+      "model": "eleven_v4",
+      "file": "ben-31d7ced11ae5.mp3"
+    },
+    "ben-337030d21e78": {
+      "text": "Leitungsnetz am Westende vom Flur, Kühlmittel zum Kern.",
+      "ms": 3866,
+      "missions": [
+        "kettenreaktion"
+      ],
+      "role": "operator",
+      "person": "ben",
+      "moment": "solved",
+      "render": "1fc994b3515e",
+      "model": "eleven_v4",
+      "file": "ben-337030d21e78.mp3"
+    },
+    "ben-35c25227f2f1": {
+      "text": "Die Unterlagen für Terminal und Rack liegen im Spind, mitten zwischen den beiden.",
+      "ms": 4676,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "ben",
+      "moment": "nudge",
+      "render": "9f9e5bd574ba",
+      "model": "eleven_v4",
+      "file": "ben-35c25227f2f1.mp3"
+    },
+    "ben-3818bbb52b0a": {
+      "text": "Der Leitstand hat Licht. Jetzt die Signalprobe, zu zweit: Ein Pult zeigt die Zeichen, am anderen drückt ihr sie nach.",
+      "ms": 7811,
+      "missions": [
+        "systemcheck"
+      ],
+      "role": "operator",
+      "person": "ben",
+      "moment": "solved",
+      "render": "baaba7b803ed",
+      "model": "eleven_v4",
+      "file": "ben-3818bbb52b0a.mp3"
+    },
+    "ben-3d87fba381b2": {
+      "text": "Notausgang offen, Westende vom Flur. Alle drei hin.",
+      "ms": 3866,
+      "missions": [
+        "kettenreaktion"
+      ],
+      "role": "operator",
+      "person": "ben",
+      "moment": "escape",
+      "render": "8f28a2d2f79b",
+      "model": "eleven_v4",
+      "file": "ben-3d87fba381b2.mp3"
+    },
+    "ben-410fa7b4f1db": {
+      "text": "Das Funkpult steht im Labor in der Südwestecke, der Aktenschrank im selben Raum.",
+      "ms": 4911,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "ben",
+      "moment": "nudge",
+      "render": "6184f5ed57c0",
+      "model": "eleven_v4",
+      "file": "ben-410fa7b4f1db.mp3"
+    },
+    "ben-4933b4ca1fd9": {
+      "text": "Stellt euch beide an das Pult mit den zwei Griffen, rechts oben im Leitstand.",
+      "ms": 4441,
+      "missions": [
+        "systemcheck"
+      ],
+      "role": "operator",
+      "person": "ben",
+      "moment": "nudge",
+      "render": "e270da5a39e4",
+      "model": "eleven_v4",
+      "file": "ben-4933b4ca1fd9.mp3"
+    },
+    "ben-4b0655169a01": {
+      "text": "Zu spät, die Notversorgung musste die Kühlung abfangen. Das kostet Zeit, weiter.",
+      "ms": 5564,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "ben",
+      "moment": "missed",
+      "mood": "tense",
+      "render": "6d59b62324d7",
+      "model": "eleven_v4",
+      "file": "ben-4b0655169a01.mp3"
+    },
+    "ben-4b13203073f8": {
+      "text": "Die Unterlagen liegen im Spind neben der Kontrolltür, lest sie dem vor, der drinnen an den Kabeln steht.",
+      "ms": 6113,
+      "missions": [
+        "systemcheck"
+      ],
+      "role": "operator",
+      "person": "ben",
+      "moment": "nudge",
+      "render": "dcd22707b5c3",
+      "model": "eleven_v4",
+      "file": "ben-4b13203073f8.mp3"
+    },
+    "ben-4b80e545cab0": {
+      "text": "Die Kühlung ist abgesackt, das hat uns Zeit gekostet. Zurück an die Arbeit, beim nächsten Mal schneller.",
+      "ms": 6113,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "ben",
+      "moment": "missed",
+      "mood": "tense",
+      "render": "aad2ce2c04ac",
+      "model": "eleven_v4",
+      "file": "ben-4b80e545cab0.mp3"
+    },
+    "ben-4f5494825480": {
+      "text": "Pult A der Signalkette steht am Ostende vom Flur, Pult B im Maschinenraum in der Südostecke.",
+      "ms": 6269,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "ben",
+      "moment": "nudge",
+      "render": "adf045479b09",
+      "model": "eleven_v4",
+      "file": "ben-4f5494825480.mp3"
+    },
+    "ben-5d1ab414fef4": {
+      "text": "Reaktor läuft. Der Notausgang ist entriegelt, Nordwestecke beim Archiv. Alle raus, jetzt.",
+      "ms": 6191,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "ben",
+      "moment": "escape",
+      "render": "f75e28d26516",
+      "model": "eleven_v4",
+      "file": "ben-5d1ab414fef4.mp3"
+    },
+    "ben-609b7c8d04b3": {
+      "text": "Der Trakt hat wieder Strom, die Zentrifugen laufen an, und ihr seid alle draußen. Mit Zeit übrig. So schreibe ich das ins Schichtbuch.",
+      "ms": 8202,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "ben",
+      "moment": "won",
+      "mood": "warm",
+      "render": "3c19cd8ed509",
+      "model": "eleven_v4",
+      "file": "ben-609b7c8d04b3.mp3"
+    },
+    "ben-60de97dc17ff": {
+      "text": "Das war die letzte Minute, und ihr seid raus. Die Zellen waren fast leer, als der Reaktor kam. Durchatmen, Nachtschicht.",
+      "ms": 9091,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "ben",
+      "moment": "won",
+      "mood": "warm",
+      "render": "b7d4f50fe666",
+      "model": "eleven_v4",
+      "file": "ben-60de97dc17ff.mp3"
+    },
+    "ben-63b85185d3f6": {
+      "text": "Tastenfeld im Westflügel, Südostecke. Regeln im Nordosten.",
+      "ms": 4754,
+      "missions": [
+        "doppelschicht"
+      ],
+      "role": "operator",
+      "person": "ben",
+      "moment": "solved",
+      "render": "95b49bc4f704",
+      "model": "eleven_v4",
+      "file": "ben-63b85185d3f6.mp3"
+    },
+    "ben-63cca31e662b": {
+      "text": "Reaktor läuft, Notausgang zu, alle vollzählig draußen. Das ging bis in die letzten Minuten. Geht euch aufwärmen, die Frühschicht übernimmt.",
+      "ms": 8673,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "ben",
+      "moment": "won",
+      "mood": "warm",
+      "render": "d8aadde87bb1",
+      "model": "eleven_v4",
+      "file": "ben-63cca31e662b.mp3"
+    },
+    "ben-6552b388f95a": {
+      "text": "Schalter und Sicherungsplatz sitzen im Reaktor ganz hinten an der Ostwand, dort kommt die Sicherung rein.",
+      "ms": 6113,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "ben",
+      "moment": "nudge",
+      "render": "16a787604257",
+      "model": "eleven_v4",
+      "file": "ben-6552b388f95a.mp3"
+    },
+    "ben-69b599d72ccd": {
+      "text": "Wer am Ostende vom Flur steht: Richtung Westen bis zur Mitte, dort hängt der Hauptschalter.",
+      "ms": 5642,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "ben",
+      "moment": "nudge",
+      "render": "2f41c25c9d07",
+      "model": "eleven_v4",
+      "file": "ben-69b599d72ccd.mp3"
+    },
+    "ben-6a2a8f414b37": {
+      "text": "Kühlung steht wieder, die Relais halten. Weiter, wo ihr aufgehört habt.",
+      "ms": 4519,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "ben",
+      "moment": "cleared",
+      "mood": "relieved",
+      "render": "1ae563c687b4",
+      "model": "eleven_v4",
+      "file": "ben-6a2a8f414b37.mp3"
+    },
+    "ben-6b1eb79786bd": {
+      "text": "Notstrom zuerst: Kasten im Ostflügel, Regeln im Südwesten.",
+      "ms": 4754,
+      "missions": [
+        "doppelschicht"
+      ],
+      "role": "operator",
+      "person": "ben",
+      "moment": "start",
+      "opens": true,
+      "render": "22115391da29",
+      "model": "eleven_v4",
+      "file": "ben-6b1eb79786bd.mp3"
+    },
+    "ben-73527b94a56c": {
+      "text": "Alle draußen, und die Notzellen hätten noch eine Weile gehalten. Ihr habt den Reaktor zurückgeholt, ohne lange zu suchen. Gute Nacht, Nachtschicht.",
+      "ms": 8516,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "ben",
+      "moment": "won",
+      "mood": "warm",
+      "render": "c1d62f369aac",
+      "model": "eleven_v4",
+      "file": "ben-73527b94a56c.mp3"
+    },
+    "ben-745e0b1db6bd": {
+      "text": "Leitstelle an Nachtschicht. Im ganzen Trakt ist das Netz weg, die Notzellen halten noch. Als Erstes das Notlicht, der Hauptschalter im Flur geht nur gemeinsam.",
+      "ms": 9718,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "ben",
+      "moment": "start",
+      "opens": true,
+      "render": "ec3dfd3b338a",
+      "model": "eleven_v4",
+      "file": "ben-745e0b1db6bd.mp3"
+    },
+    "ben-78885b2579ba": {
+      "text": "Frequenz steht, ich höre euch klar. Der Reaktor ist offen, ohne Ersatzsicherung bleibt er aber tot.",
+      "ms": 6269,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "ben",
+      "moment": "solved",
+      "render": "ba650d76a38f",
+      "model": "eleven_v4",
+      "file": "ben-78885b2579ba.mp3"
+    },
+    "ben-7c8343fceedc": {
+      "text": "Leitstand offen. Freigabecode dort, Regeln im Messlabor.",
+      "ms": 4362,
+      "missions": [
+        "kettenreaktion"
+      ],
+      "role": "operator",
+      "person": "ben",
+      "moment": "solved",
+      "render": "6dd6a2c4a69e",
+      "model": "eleven_v4",
+      "file": "ben-7c8343fceedc.mp3"
+    },
+    "ben-7cf7ab52533d": {
+      "text": "Das Prüfpult steht am Westende vom Flur, der Kasten im Maschinenraum hinter der Plattentür, einer bleibt auf der Platte.",
+      "ms": 7393,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "ben",
+      "moment": "nudge",
+      "render": "fd884e7a7854",
+      "model": "eleven_v4",
+      "file": "ben-7cf7ab52533d.mp3"
+    },
+    "ben-817d23810d00": {
+      "text": "Resonator offen. Station dahinter, durch die Westtür.",
+      "ms": 3788,
+      "missions": [
+        "kettenreaktion"
+      ],
+      "role": "operator",
+      "person": "ben",
+      "moment": "solved",
+      "render": "301c475b4798",
+      "model": "eleven_v4",
+      "file": "ben-817d23810d00.mp3"
+    },
+    "ben-8849fe962d54": {
+      "text": "Das Terminal steht an der Westwand vom Serverraum, das Rack gegenüber an der Ostwand, je einer an jedes.",
+      "ms": 6766,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "ben",
+      "moment": "nudge",
+      "render": "321cf9624f7c",
+      "model": "eleven_v4",
+      "file": "ben-8849fe962d54.mp3"
+    },
+    "ben-8b10933ddf2f": {
+      "text": "Schott zum Serverraum ist offen, drinnen Terminal und Rack. Die Drohne ist wach, die Kameraplatte davor legt sie still.",
+      "ms": 7628,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "ben",
+      "moment": "solved",
+      "render": "ceb1f4bc8e1c",
+      "model": "eleven_v4",
+      "file": "ben-8b10933ddf2f.mp3"
+    },
+    "ben-8f10dc1c71d9": {
+      "text": "Leitstelle an Schulungsgruppe. Nur eine Übung, bei euch ist noch alles aus. Geht beide zur Initialisierung und legt die Hebel gleichzeitig um.",
+      "ms": 8359,
+      "missions": [
+        "systemcheck"
+      ],
+      "role": "operator",
+      "person": "ben",
+      "moment": "start",
+      "opens": true,
+      "render": "3bf0eda23c97",
+      "model": "eleven_v4",
+      "file": "ben-8f10dc1c71d9.mp3"
+    },
+    "ben-91aa63cd0d29": {
+      "text": "Notlicht steht, danke. Jetzt der Notstrom: Die Anleitung dafür hängt im Archiv, der Kasten ist im Maschinenraum, das Prüfpult im Flur.",
+      "ms": 9482,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "ben",
+      "moment": "solved",
+      "render": "88ccab4f6fbd",
+      "model": "eleven_v4",
+      "file": "ben-91aa63cd0d29.mp3"
+    },
+    "ben-922917db41dc": {
+      "text": "Das Klemmbrett zur Signalkette liegt im Flur, an der Südwand.",
+      "ms": 3788,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "ben",
+      "moment": "nudge",
+      "render": "ac9ea15108c4",
+      "model": "eleven_v4",
+      "file": "ben-922917db41dc.mp3"
+    },
+    "ben-997eda98f143": {
+      "text": "Systeme laufen. Der Notausgang ist entriegelt, oben im Leitstand an der Nordwand. Beide raus, jetzt.",
+      "ms": 6609,
+      "missions": [
+        "systemcheck"
+      ],
+      "role": "operator",
+      "person": "ben",
+      "moment": "escape",
+      "render": "e929408772d7",
+      "model": "eleven_v4",
+      "file": "ben-997eda98f143.mp3"
+    },
+    "ben-9dc804d5a806": {
+      "text": "Der Hebel für die Initialisierung hängt im Leitstand an der Nordwand, rechts.",
+      "ms": 4598,
+      "missions": [
+        "systemcheck"
+      ],
+      "role": "operator",
+      "person": "ben",
+      "moment": "nudge",
+      "render": "e99e79246a42",
+      "model": "eleven_v4",
+      "file": "ben-9dc804d5a806.mp3"
+    },
+    "ben-9f5039973bf5": {
+      "text": "Kühlbank im Westflügel, Westwand. Regeln im Südosten.",
+      "ms": 4441,
+      "missions": [
+        "doppelschicht"
+      ],
+      "role": "operator",
+      "person": "ben",
+      "moment": "solved",
+      "render": "1e8cc4d02047",
+      "model": "eleven_v4",
+      "file": "ben-9f5039973bf5.mp3"
+    },
+    "ben-9f756efbf1b6": {
+      "text": "Der Schlüssel zum Aktenschrank liegt im Serverraum, in der Nordostecke über dem Rack.",
+      "ms": 4754,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "ben",
+      "moment": "nudge",
+      "render": "2630a59310db",
+      "model": "eleven_v4",
+      "file": "ben-9f756efbf1b6.mp3"
+    },
+    "ben-a05a06d81e0a": {
+      "text": "Die Unterlagen zur Signalprobe liegen im Spind, oben links im Leitstand.",
+      "ms": 4441,
+      "missions": [
+        "systemcheck"
+      ],
+      "role": "operator",
+      "person": "ben",
+      "moment": "nudge",
+      "render": "e060d02d4d88",
+      "model": "eleven_v4",
+      "file": "ben-a05a06d81e0a.mp3"
+    },
+    "ben-a242523a34e9": {
+      "text": "Speicherkern an die Schleusenwand, Schaltplan im Nordwesten.",
+      "ms": 3788,
+      "missions": [
+        "doppelschicht"
+      ],
+      "role": "operator",
+      "person": "ben",
+      "moment": "solved",
+      "render": "753ea2972b19",
+      "model": "eleven_v4",
+      "file": "ben-a242523a34e9.mp3"
+    },
+    "ben-a44bb07156c6": {
+      "text": "Die Relais greifen wieder, ich habe die Kühlung zurück. Rechtzeitig, danke euch.",
+      "ms": 6034,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "ben",
+      "moment": "cleared",
+      "mood": "relieved",
+      "render": "4e2c1943fd45",
+      "model": "eleven_v4",
+      "file": "ben-a44bb07156c6.mp3"
+    },
+    "ben-a4926baec4a2": {
+      "text": "Wer noch im Archiv ist: durch die Südtür in den Flur, dann ein Stück nach Osten zum Hauptschalter.",
+      "ms": 6113,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "ben",
+      "moment": "nudge",
+      "render": "1417a1eaa521",
+      "model": "eleven_v4",
+      "file": "ben-a4926baec4a2.mp3"
+    },
+    "ben-a7a4fd0abde0": {
+      "text": "Funkpult im Ostflügel, Ostwand. Regeln im Südwesten.",
+      "ms": 4441,
+      "missions": [
+        "doppelschicht"
+      ],
+      "role": "operator",
+      "person": "ben",
+      "moment": "solved",
+      "render": "23a05fba3ad2",
+      "model": "eleven_v4",
+      "file": "ben-a7a4fd0abde0.mp3"
+    },
+    "ben-a9c2f1ff20e8": {
+      "text": "Leitstelle an Nachtschicht. Der Trakt ist dunkel, auf meiner Tafel brennen nur die Notzellen. Zuerst das Notlicht, den Hauptschalter im Flur legt ihr gemeinsam um.",
+      "ms": 10266,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "ben",
+      "moment": "start",
+      "opens": true,
+      "render": "dad68f3bd0f4",
+      "model": "eleven_v4",
+      "file": "ben-a9c2f1ff20e8.mp3"
+    },
+    "ben-aa8b2a98cdfa": {
+      "text": "Notlicht brennt, ich sehe euch wieder auf meiner Tafel. Weiter mit dem Notstrom: Anleitung im Archiv, Kasten im Maschinenraum, Prüfpult im Flur.",
+      "ms": 9874,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "ben",
+      "moment": "solved",
+      "render": "dae7770005ba",
+      "model": "eleven_v4",
+      "file": "ben-aa8b2a98cdfa.mp3"
+    },
+    "ben-aeb80233368a": {
+      "text": "Ich hab euch klar auf der Frequenz. Die Ersatzsicherung für den Reaktor liegt im Archiv, bringt sie rüber.",
+      "ms": 5721,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "ben",
+      "moment": "solved",
+      "render": "d41a80adb693",
+      "model": "eleven_v4",
+      "file": "ben-aeb80233368a.mp3"
+    },
+    "ben-b026b38b6ad9": {
+      "text": "Die Anleitung zum Notstrom hängt im Archiv, auf der Ostseite.",
+      "ms": 3866,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "ben",
+      "moment": "nudge",
+      "render": "f017063d51ba",
+      "model": "eleven_v4",
+      "file": "ben-b026b38b6ad9.mp3"
+    },
+    "ben-b39afab437ff": {
+      "text": "Kurze Funkprobe. Alle haben sich gemeldet, ihr kommt sauber bei mir an. Ich bleibe die ganze Nacht auf dieser Frequenz.",
+      "ms": 6687,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "ben",
+      "moment": "lobby",
+      "mood": "calm",
+      "render": "25e883219e47",
+      "model": "eleven_v4",
+      "file": "ben-b39afab437ff.mp3"
+    },
+    "ben-b780a958285b": {
+      "text": "Ihr seid draußen, mit Sekunden übrig. Der Trakt hat Strom, die Proben sind gerettet, und ich atme hier auch erst mal durch.",
+      "ms": 8594,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "ben",
+      "moment": "won",
+      "mood": "warm",
+      "render": "edb1345ae5e9",
+      "model": "eleven_v4",
+      "file": "ben-b780a958285b.mp3"
+    },
+    "ben-c5745897bc41": {
+      "text": "Reaktor ist am Netz, der Notausgang ist auf, Nordwestecke beim Archiv. Raus da, alle zusammen!",
+      "ms": 6269,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "ben",
+      "moment": "escape",
+      "render": "c69b1d57d4b1",
+      "model": "eleven_v4",
+      "file": "ben-c5745897bc41.mp3"
+    },
+    "ben-c68c7357a96d": {
+      "text": "Ohne die Anleitung aus dem Archiv ratet ihr am Kasten nur herum, sie steht dort auf der Ostseite.",
+      "ms": 5642,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "ben",
+      "moment": "nudge",
+      "render": "218747534836",
+      "model": "eleven_v4",
+      "file": "ben-c68c7357a96d.mp3"
+    },
+    "ben-c8221a4f161f": {
+      "text": "Alarm auf meiner Tafel, die Uhr ist gerade gesprungen. Kurz sammeln, dann weiter, Nachtschicht.",
+      "ms": 5486,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "ben",
+      "moment": "alarm",
+      "mood": "tense",
+      "render": "b5cdf7208548",
+      "model": "eleven_v4",
+      "file": "ben-c8221a4f161f.mp3"
+    },
+    "ben-cbfc00e89853": {
+      "text": "Die Ersatzsicherung für den Reaktor liegt im Archiv, in der Südostecke.",
+      "ms": 4284,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "ben",
+      "moment": "nudge",
+      "render": "e3ad2696a18e",
+      "model": "eleven_v4",
+      "file": "ben-cbfc00e89853.mp3"
+    },
+    "ben-ceb43276953b": {
+      "text": "Notstrom läuft, die Tür zum Maschinenraum bleibt offen. Als Nächstes die Signalkette: ein Pult im Flur, eins im Maschinenraum.",
+      "ms": 8281,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "ben",
+      "moment": "solved",
+      "render": "af80e16a4e31",
+      "model": "eleven_v4",
+      "file": "ben-ceb43276953b.mp3"
+    },
+    "ben-d075a01de508": {
+      "text": "Da ging ein Alarm raus, ich sehe ihn hier. Das war der erste heute Nacht, bei mehr wird es eng.",
+      "ms": 5721,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "ben",
+      "moment": "alarm",
+      "mood": "tense",
+      "render": "418b4ec64913",
+      "model": "eleven_v4",
+      "file": "ben-d075a01de508.mp3"
+    },
+    "ben-d28c73aa87a3": {
+      "text": "Die Kühlung kippt, und ich komme von hier nicht an die Relais. Sagt euch jede Anweisung laut an und bestätigt sie.",
+      "ms": 6531,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "ben",
+      "moment": "emergency",
+      "mood": "urgent",
+      "render": "87d114f98c6f",
+      "model": "eleven_v4",
+      "file": "ben-d28c73aa87a3.mp3"
+    },
+    "ben-d5e769ffd5cf": {
+      "text": "Funkprobe, Nachtschicht. Ich höre euch laut und klar. Bisher eine ruhige Nacht im Trakt, von mir aus kann es losgehen.",
+      "ms": 7706,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "ben",
+      "moment": "lobby",
+      "mood": "calm",
+      "render": "a6c010bf1f4a",
+      "model": "eleven_v4",
+      "file": "ben-d5e769ffd5cf.mp3"
+    },
+    "ben-d6b1ce9ed9c7": {
+      "text": "Die Pulte der Signalprobe stehen im Leitstand an der Südwand, eins links, eins rechts.",
+      "ms": 5564,
+      "missions": [
+        "systemcheck"
+      ],
+      "role": "operator",
+      "person": "ben",
+      "moment": "nudge",
+      "render": "75482a8e3055",
+      "model": "eleven_v4",
+      "file": "ben-d6b1ce9ed9c7.mp3"
+    },
+    "ben-da0643d71f10": {
+      "text": "Der Notstrom hält, die Maschinenraumtür bleibt jetzt offen. Für die Signalkette liegt ein Klemmbrett im Flur, gearbeitet wird an zwei Pulten.",
+      "ms": 8908,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "ben",
+      "moment": "solved",
+      "render": "16f8f607e165",
+      "model": "eleven_v4",
+      "file": "ben-da0643d71f10.mp3"
+    },
+    "ben-e036051a6037": {
+      "text": "Druckknopf im Westflügel, Nordseite. Regeln im Nordosten.",
+      "ms": 4598,
+      "missions": [
+        "doppelschicht"
+      ],
+      "role": "operator",
+      "person": "ben",
+      "moment": "solved",
+      "render": "82b2e38fd839",
+      "model": "eleven_v4",
+      "file": "ben-e036051a6037.mp3"
+    },
+    "ben-e120fa80d160": {
+      "text": "Auf dem Klemmbrett im Flur steht, wie die Signalkette zu lesen ist, es liegt an der Südwand.",
+      "ms": 5799,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "ben",
+      "moment": "nudge",
+      "render": "983fc0264195",
+      "model": "eleven_v4",
+      "file": "ben-e120fa80d160.mp3"
+    },
+    "ben-e250574f6877": {
+      "text": "Licht im ganzen Trakt, und alle sind draußen. Knapp war das, aber die Zellen haben gereicht. Ich trage es ins Schichtbuch ein.",
+      "ms": 8124,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "ben",
+      "moment": "won",
+      "mood": "warm",
+      "render": "0c854f61be1e",
+      "model": "eleven_v4",
+      "file": "ben-e250574f6877.mp3"
+    },
+    "ben-e291391e6b9b": {
+      "text": "Platten in Archiv und Messlabor öffnen die Schleuse. Erste Station im Flur.",
+      "ms": 5329,
+      "missions": [
+        "kettenreaktion"
+      ],
+      "role": "operator",
+      "person": "ben",
+      "moment": "start",
+      "opens": true,
+      "render": "b4715907e9f8",
+      "model": "eleven_v4",
+      "file": "ben-e291391e6b9b.mp3"
+    },
+    "ben-e753b688f370": {
+      "text": "Weiter im Pumpenraum, Südost. Regeln wieder im Archiv.",
+      "ms": 4362,
+      "missions": [
+        "kettenreaktion"
+      ],
+      "role": "operator",
+      "person": "ben",
+      "moment": "solved",
+      "render": "4174615e3dac",
+      "model": "eleven_v4",
+      "file": "ben-e753b688f370.mp3"
+    },
+    "ben-e97199e31d42": {
+      "text": "Die Kabelprüfung steht in der Kontrolle hinter der Westtür, einer hält die Platte, einer geht rein.",
+      "ms": 5564,
+      "missions": [
+        "systemcheck"
+      ],
+      "role": "operator",
+      "person": "ben",
+      "moment": "nudge",
+      "render": "5360e765e73a",
+      "model": "eleven_v4",
+      "file": "ben-e97199e31d42.mp3"
+    },
+    "ben-ebca2bf3c28d": {
+      "text": "Notfall in der Kühlung, die Relais müssen von Hand geschaltet werden. Jeder sagt laut, was auf seinem Pult steht.",
+      "ms": 5956,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "ben",
+      "moment": "emergency",
+      "mood": "urgent",
+      "render": "165bacf2b794",
+      "model": "eleven_v4",
+      "file": "ben-ebca2bf3c28d.mp3"
+    },
+    "ben-f2b0b314349d": {
+      "text": "Bei mir ist ein Alarm aufgelaufen, das hat uns Zeit gekostet. Einer ist kein Beinbruch, aber die Anlage zählt jeden mit.",
+      "ms": 7393,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "ben",
+      "moment": "alarm",
+      "mood": "tense",
+      "render": "2ab99e5c4b04",
+      "model": "eleven_v4",
+      "file": "ben-f2b0b314349d.mp3"
+    },
+    "ben-f749cb97778b": {
+      "text": "Das Schott zum Serverraum ist auf, die Unterlagen liegen im Spind darin. Die Kameraplatte davor hält die Drohne an.",
+      "ms": 7001,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "ben",
+      "moment": "solved",
+      "render": "5540b9969255",
+      "model": "eleven_v4",
+      "file": "ben-f749cb97778b.mp3"
+    },
+    "ben-fc75d2ced4a6": {
+      "text": "Kabel stimmen, das Schott zu den Spulen ist offen. Einer hält die Platte, bis der andere draußen ist, dann nach Osten.",
+      "ms": 7158,
+      "missions": [
+        "systemcheck"
+      ],
+      "role": "operator",
+      "person": "ben",
+      "moment": "solved",
+      "render": "b0fad4af09a4",
+      "model": "eleven_v4",
+      "file": "ben-fc75d2ced4a6.mp3"
+    },
+    "ben-fe74238e0b28": {
+      "text": "Nachtschicht, Funkprobe. Ich höre jeden von euch klar. Dann hoffen wir mal auf eine lange, langweilige Nacht.",
+      "ms": 7706,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "ben",
+      "moment": "lobby",
+      "mood": "calm",
+      "render": "5203ed568b02",
+      "model": "eleven_v4",
+      "file": "ben-fe74238e0b28.mp3"
     },
     "helmut-02ed4d6ee051": {
       "text": "Server laufen, die Labortür ist offen, drinnen fliegt eine Drohne. Den Aktenschrank im Labor öffnet nur der Schlüssel.",
@@ -77,6 +1181,32 @@
       "render": "e10aebc8672a",
       "model": "eleven_v4",
       "file": "helmut-02ed4d6ee051.mp3"
+    },
+    "helmut-03c57f9885a6": {
+      "text": "Den Hauptschalter im Flur legt keiner allein um, ihr müsst gemeinsam ziehen.",
+      "ms": 4833,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "helmut",
+      "moment": "nudge",
+      "render": "3438b173b324",
+      "model": "eleven_v4",
+      "file": "helmut-03c57f9885a6.mp3"
+    },
+    "helmut-05ae54bef8de": {
+      "text": "Macht zuerst den Spind in der Mitte vom Serverraum auf, ohne seine Unterlagen kommt ihr an Terminal und Rack nicht weiter.",
+      "ms": 7314,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "helmut",
+      "moment": "nudge",
+      "render": "12d69e8c14a2",
+      "model": "eleven_v4",
+      "file": "helmut-05ae54bef8de.mp3"
     },
     "helmut-06d3d209c3a1": {
       "text": "Wer noch in der Kontrolle steckt: Die Platte im Leitstand vor der Tür hält sie auf.",
@@ -183,6 +1313,46 @@
       "model": "eleven_v4",
       "file": "helmut-254093cbcc07.mp3"
     },
+    "helmut-271f4a79a98c": {
+      "text": "Die Tür zum Maschinenraum geht nur auf, solange jemand auf der Platte davor steht, dahinter wartet der Kasten.",
+      "ms": 7236,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "helmut",
+      "moment": "nudge",
+      "render": "c9b2f00fc4b7",
+      "model": "eleven_v4",
+      "file": "helmut-271f4a79a98c.mp3"
+    },
+    "helmut-2b3ce9cae36e": {
+      "text": "Ich habe die Relais verloren, das müsst ihr von Hand machen. Lest euch jede Anweisung laut vor.",
+      "ms": 5721,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "helmut",
+      "moment": "emergency",
+      "mood": "urgent",
+      "render": "fa27f0600efb",
+      "model": "eleven_v4",
+      "file": "helmut-2b3ce9cae36e.mp3"
+    },
+    "helmut-31d7ced11ae5": {
+      "text": "Server oben, Labortür offen, im Labor patrouilliert eine Drohne. Den Schlüssel zum Aktenschrank holt ihr noch aus dem Serverraum.",
+      "ms": 8829,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "helmut",
+      "moment": "solved",
+      "render": "5a2fcd616cd3",
+      "model": "eleven_v4",
+      "file": "helmut-31d7ced11ae5.mp3"
+    },
     "helmut-337030d21e78": {
       "text": "Leitungsnetz am Westende vom Flur, Kühlmittel zum Kern.",
       "ms": 4362,
@@ -261,6 +1431,20 @@
       "model": "eleven_v4",
       "file": "helmut-4933b4ca1fd9.mp3"
     },
+    "helmut-4b0655169a01": {
+      "text": "Zu spät, die Notversorgung musste die Kühlung abfangen. Das kostet Zeit, weiter.",
+      "ms": 5878,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "helmut",
+      "moment": "missed",
+      "mood": "tense",
+      "render": "3923022a33c6",
+      "model": "eleven_v4",
+      "file": "helmut-4b0655169a01.mp3"
+    },
     "helmut-4b13203073f8": {
       "text": "Die Unterlagen liegen im Spind neben der Kontrolltür, lest sie dem vor, der drinnen an den Kabeln steht.",
       "ms": 6609,
@@ -273,6 +1457,20 @@
       "render": "9177cd53b6a7",
       "model": "eleven_v4",
       "file": "helmut-4b13203073f8.mp3"
+    },
+    "helmut-4b80e545cab0": {
+      "text": "Die Kühlung ist abgesackt, das hat uns Zeit gekostet. Zurück an die Arbeit, beim nächsten Mal schneller.",
+      "ms": 6609,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "helmut",
+      "moment": "missed",
+      "mood": "tense",
+      "render": "83171f3d8dda",
+      "model": "eleven_v4",
+      "file": "helmut-4b80e545cab0.mp3"
     },
     "helmut-4f5494825480": {
       "text": "Pult A der Signalkette steht am Ostende vom Flur, Pult B im Maschinenraum in der Südostecke.",
@@ -300,6 +1498,34 @@
       "model": "eleven_v4",
       "file": "helmut-5d1ab414fef4.mp3"
     },
+    "helmut-609b7c8d04b3": {
+      "text": "Der Trakt hat wieder Strom, die Zentrifugen laufen an, und ihr seid alle draußen. Mit Zeit übrig. So schreibe ich das ins Schichtbuch.",
+      "ms": 8673,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "helmut",
+      "moment": "won",
+      "mood": "warm",
+      "render": "9bf60dd75be4",
+      "model": "eleven_v4",
+      "file": "helmut-609b7c8d04b3.mp3"
+    },
+    "helmut-60de97dc17ff": {
+      "text": "Das war die letzte Minute, und ihr seid raus. Die Zellen waren fast leer, als der Reaktor kam. Durchatmen, Nachtschicht.",
+      "ms": 9874,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "helmut",
+      "moment": "won",
+      "mood": "warm",
+      "render": "6443bee32099",
+      "model": "eleven_v4",
+      "file": "helmut-60de97dc17ff.mp3"
+    },
     "helmut-63b85185d3f6": {
       "text": "Tastenfeld im Westflügel, Südostecke. Regeln im Nordosten.",
       "ms": 5251,
@@ -312,6 +1538,20 @@
       "render": "daf0a65dd959",
       "model": "eleven_v4",
       "file": "helmut-63b85185d3f6.mp3"
+    },
+    "helmut-63cca31e662b": {
+      "text": "Reaktor läuft, Notausgang zu, alle vollzählig draußen. Das ging bis in die letzten Minuten. Geht euch aufwärmen, die Frühschicht übernimmt.",
+      "ms": 9482,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "helmut",
+      "moment": "won",
+      "mood": "warm",
+      "render": "5f8fd7abf1f3",
+      "model": "eleven_v4",
+      "file": "helmut-63cca31e662b.mp3"
     },
     "helmut-6552b388f95a": {
       "text": "Schalter und Sicherungsplatz sitzen im Reaktor ganz hinten an der Ostwand, dort kommt die Sicherung rein.",
@@ -326,6 +1566,33 @@
       "model": "eleven_v4",
       "file": "helmut-6552b388f95a.mp3"
     },
+    "helmut-69b599d72ccd": {
+      "text": "Wer am Ostende vom Flur steht: Richtung Westen bis zur Mitte, dort hängt der Hauptschalter.",
+      "ms": 6269,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "helmut",
+      "moment": "nudge",
+      "render": "5086c5937588",
+      "model": "eleven_v4",
+      "file": "helmut-69b599d72ccd.mp3"
+    },
+    "helmut-6a2a8f414b37": {
+      "text": "Kühlung steht wieder, die Relais halten. Weiter, wo ihr aufgehört habt.",
+      "ms": 4754,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "helmut",
+      "moment": "cleared",
+      "mood": "relieved",
+      "render": "57e3c9fc2d26",
+      "model": "eleven_v4",
+      "file": "helmut-6a2a8f414b37.mp3"
+    },
     "helmut-6b1eb79786bd": {
       "text": "Notstrom zuerst: Kasten im Ostflügel, Regeln im Südwesten.",
       "ms": 5251,
@@ -339,6 +1606,34 @@
       "render": "514c2d7484ae",
       "model": "eleven_v4",
       "file": "helmut-6b1eb79786bd.mp3"
+    },
+    "helmut-73527b94a56c": {
+      "text": "Alle draußen, und die Notzellen hätten noch eine Weile gehalten. Ihr habt den Reaktor zurückgeholt, ohne lange zu suchen. Gute Nacht, Nachtschicht.",
+      "ms": 8986,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "helmut",
+      "moment": "won",
+      "mood": "warm",
+      "render": "4b7a670b3436",
+      "model": "eleven_v4",
+      "file": "helmut-73527b94a56c.mp3"
+    },
+    "helmut-745e0b1db6bd": {
+      "text": "Leitstelle an Nachtschicht. Im ganzen Trakt ist das Netz weg, die Notzellen halten noch. Als Erstes das Notlicht, der Hauptschalter im Flur geht nur gemeinsam.",
+      "ms": 10606,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "helmut",
+      "moment": "start",
+      "opens": true,
+      "render": "3634f5297a27",
+      "model": "eleven_v4",
+      "file": "helmut-745e0b1db6bd.mp3"
     },
     "helmut-78885b2579ba": {
       "text": "Frequenz steht, ich höre euch klar. Der Reaktor ist offen, ohne Ersatzsicherung bleibt er aber tot.",
@@ -536,6 +1831,20 @@
       "model": "eleven_v4",
       "file": "helmut-a242523a34e9.mp3"
     },
+    "helmut-a44bb07156c6": {
+      "text": "Die Relais greifen wieder, ich habe die Kühlung zurück. Rechtzeitig, danke euch.",
+      "ms": 6191,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "helmut",
+      "moment": "cleared",
+      "mood": "relieved",
+      "render": "d5988616835e",
+      "model": "eleven_v4",
+      "file": "helmut-a44bb07156c6.mp3"
+    },
     "helmut-a4926baec4a2": {
       "text": "Wer noch im Archiv ist: durch die Südtür in den Flur, dann ein Stück nach Osten zum Hauptschalter.",
       "ms": 6922,
@@ -562,6 +1871,46 @@
       "model": "eleven_v4",
       "file": "helmut-a7a4fd0abde0.mp3"
     },
+    "helmut-a9c2f1ff20e8": {
+      "text": "Leitstelle an Nachtschicht. Der Trakt ist dunkel, auf meiner Tafel brennen nur die Notzellen. Zuerst das Notlicht, den Hauptschalter im Flur legt ihr gemeinsam um.",
+      "ms": 10919,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "helmut",
+      "moment": "start",
+      "opens": true,
+      "render": "30097883fd0a",
+      "model": "eleven_v4",
+      "file": "helmut-a9c2f1ff20e8.mp3"
+    },
+    "helmut-aa8b2a98cdfa": {
+      "text": "Notlicht brennt, ich sehe euch wieder auf meiner Tafel. Weiter mit dem Notstrom: Anleitung im Archiv, Kasten im Maschinenraum, Prüfpult im Flur.",
+      "ms": 10841,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "helmut",
+      "moment": "solved",
+      "render": "7c89a6552c7a",
+      "model": "eleven_v4",
+      "file": "helmut-aa8b2a98cdfa.mp3"
+    },
+    "helmut-aeb80233368a": {
+      "text": "Ich hab euch klar auf der Frequenz. Die Ersatzsicherung für den Reaktor liegt im Archiv, bringt sie rüber.",
+      "ms": 6348,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "helmut",
+      "moment": "solved",
+      "render": "e9025964dba4",
+      "model": "eleven_v4",
+      "file": "helmut-aeb80233368a.mp3"
+    },
     "helmut-b026b38b6ad9": {
       "text": "Die Anleitung zum Notstrom hängt im Archiv, auf der Ostseite.",
       "ms": 4284,
@@ -574,6 +1923,74 @@
       "render": "248129959c0c",
       "model": "eleven_v4",
       "file": "helmut-b026b38b6ad9.mp3"
+    },
+    "helmut-b39afab437ff": {
+      "text": "Kurze Funkprobe. Alle haben sich gemeldet, ihr kommt sauber bei mir an. Ich bleibe die ganze Nacht auf dieser Frequenz.",
+      "ms": 7079,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "helmut",
+      "moment": "lobby",
+      "mood": "calm",
+      "render": "53365ea10cbc",
+      "model": "eleven_v4",
+      "file": "helmut-b39afab437ff.mp3"
+    },
+    "helmut-b780a958285b": {
+      "text": "Ihr seid draußen, mit Sekunden übrig. Der Trakt hat Strom, die Proben sind gerettet, und ich atme hier auch erst mal durch.",
+      "ms": 9326,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "helmut",
+      "moment": "won",
+      "mood": "warm",
+      "render": "03c35e8779e6",
+      "model": "eleven_v4",
+      "file": "helmut-b780a958285b.mp3"
+    },
+    "helmut-c5745897bc41": {
+      "text": "Reaktor ist am Netz, der Notausgang ist auf, Nordwestecke beim Archiv. Raus da, alle zusammen!",
+      "ms": 6687,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "helmut",
+      "moment": "escape",
+      "render": "3e84e5305d38",
+      "model": "eleven_v4",
+      "file": "helmut-c5745897bc41.mp3"
+    },
+    "helmut-c68c7357a96d": {
+      "text": "Ohne die Anleitung aus dem Archiv ratet ihr am Kasten nur herum, sie steht dort auf der Ostseite.",
+      "ms": 6191,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "helmut",
+      "moment": "nudge",
+      "render": "4c6bec92a804",
+      "model": "eleven_v4",
+      "file": "helmut-c68c7357a96d.mp3"
+    },
+    "helmut-c8221a4f161f": {
+      "text": "Alarm auf meiner Tafel, die Uhr ist gerade gesprungen. Kurz sammeln, dann weiter, Nachtschicht.",
+      "ms": 5956,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "helmut",
+      "moment": "alarm",
+      "mood": "tense",
+      "render": "81edf6901e68",
+      "model": "eleven_v4",
+      "file": "helmut-c8221a4f161f.mp3"
     },
     "helmut-cbfc00e89853": {
       "text": "Die Ersatzsicherung für den Reaktor liegt im Archiv, in der Südostecke.",
@@ -601,6 +2018,48 @@
       "model": "eleven_v4",
       "file": "helmut-ceb43276953b.mp3"
     },
+    "helmut-d075a01de508": {
+      "text": "Da ging ein Alarm raus, ich sehe ihn hier. Das war der erste heute Nacht, bei mehr wird es eng.",
+      "ms": 6191,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "helmut",
+      "moment": "alarm",
+      "mood": "tense",
+      "render": "d9b9e341ad98",
+      "model": "eleven_v4",
+      "file": "helmut-d075a01de508.mp3"
+    },
+    "helmut-d28c73aa87a3": {
+      "text": "Die Kühlung kippt, und ich komme von hier nicht an die Relais. Sagt euch jede Anweisung laut an und bestätigt sie.",
+      "ms": 6766,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "helmut",
+      "moment": "emergency",
+      "mood": "urgent",
+      "render": "7972b8db1ba5",
+      "model": "eleven_v4",
+      "file": "helmut-d28c73aa87a3.mp3"
+    },
+    "helmut-d5e769ffd5cf": {
+      "text": "Funkprobe, Nachtschicht. Ich höre euch laut und klar. Bisher eine ruhige Nacht im Trakt, von mir aus kann es losgehen.",
+      "ms": 7889,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "helmut",
+      "moment": "lobby",
+      "mood": "calm",
+      "render": "802952da4477",
+      "model": "eleven_v4",
+      "file": "helmut-d5e769ffd5cf.mp3"
+    },
     "helmut-d6b1ce9ed9c7": {
       "text": "Die Pulte der Signalprobe stehen im Leitstand an der Südwand, eins links, eins rechts.",
       "ms": 6034,
@@ -614,6 +2073,19 @@
       "model": "eleven_v4",
       "file": "helmut-d6b1ce9ed9c7.mp3"
     },
+    "helmut-da0643d71f10": {
+      "text": "Der Notstrom hält, die Maschinenraumtür bleibt jetzt offen. Für die Signalkette liegt ein Klemmbrett im Flur, gearbeitet wird an zwei Pulten.",
+      "ms": 9718,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "helmut",
+      "moment": "solved",
+      "render": "f0276664604b",
+      "model": "eleven_v4",
+      "file": "helmut-da0643d71f10.mp3"
+    },
     "helmut-e036051a6037": {
       "text": "Druckknopf im Westflügel, Nordseite. Regeln im Nordosten.",
       "ms": 4911,
@@ -626,6 +2098,33 @@
       "render": "ebc449b6ad97",
       "model": "eleven_v4",
       "file": "helmut-e036051a6037.mp3"
+    },
+    "helmut-e120fa80d160": {
+      "text": "Auf dem Klemmbrett im Flur steht, wie die Signalkette zu lesen ist, es liegt an der Südwand.",
+      "ms": 6113,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "helmut",
+      "moment": "nudge",
+      "render": "b96e7f9b8b2f",
+      "model": "eleven_v4",
+      "file": "helmut-e120fa80d160.mp3"
+    },
+    "helmut-e250574f6877": {
+      "text": "Licht im ganzen Trakt, und alle sind draußen. Knapp war das, aber die Zellen haben gereicht. Ich trage es ins Schichtbuch ein.",
+      "ms": 8438,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "helmut",
+      "moment": "won",
+      "mood": "warm",
+      "render": "ebbc3d7b4db2",
+      "model": "eleven_v4",
+      "file": "helmut-e250574f6877.mp3"
     },
     "helmut-e291391e6b9b": {
       "text": "Platten in Archiv und Messlabor öffnen die Schleuse. Erste Station im Flur.",
@@ -667,6 +2166,47 @@
       "model": "eleven_v4",
       "file": "helmut-e97199e31d42.mp3"
     },
+    "helmut-ebca2bf3c28d": {
+      "text": "Notfall in der Kühlung, die Relais müssen von Hand geschaltet werden. Jeder sagt laut, was auf seinem Pult steht.",
+      "ms": 6687,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "helmut",
+      "moment": "emergency",
+      "mood": "urgent",
+      "render": "bc1a413da28e",
+      "model": "eleven_v4",
+      "file": "helmut-ebca2bf3c28d.mp3"
+    },
+    "helmut-f2b0b314349d": {
+      "text": "Bei mir ist ein Alarm aufgelaufen, das hat uns Zeit gekostet. Einer ist kein Beinbruch, aber die Anlage zählt jeden mit.",
+      "ms": 7811,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "helmut",
+      "moment": "alarm",
+      "mood": "tense",
+      "render": "4709a286121f",
+      "model": "eleven_v4",
+      "file": "helmut-f2b0b314349d.mp3"
+    },
+    "helmut-f749cb97778b": {
+      "text": "Das Schott zum Serverraum ist auf, die Unterlagen liegen im Spind darin. Die Kameraplatte davor hält die Drohne an.",
+      "ms": 7889,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "helmut",
+      "moment": "solved",
+      "render": "f4a04f644722",
+      "model": "eleven_v4",
+      "file": "helmut-f749cb97778b.mp3"
+    },
     "helmut-fc75d2ced4a6": {
       "text": "Kabel stimmen, das Schott zu den Spulen ist offen. Einer hält die Platte, bis der andere draußen ist, dann nach Osten.",
       "ms": 7628,
@@ -679,6 +2219,1253 @@
       "render": "837c95e4f4ab",
       "model": "eleven_v4",
       "file": "helmut-fc75d2ced4a6.mp3"
+    },
+    "helmut-fe74238e0b28": {
+      "text": "Nachtschicht, Funkprobe. Ich höre jeden von euch klar. Dann hoffen wir mal auf eine lange, langweilige Nacht.",
+      "ms": 8359,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "helmut",
+      "moment": "lobby",
+      "mood": "calm",
+      "render": "f1af88d0c13d",
+      "model": "eleven_v4",
+      "file": "helmut-fe74238e0b28.mp3"
+    },
+    "laura-02ed4d6ee051": {
+      "text": "Server laufen, die Labortür ist offen, drinnen fliegt eine Drohne. Den Aktenschrank im Labor öffnet nur der Schlüssel.",
+      "ms": 8359,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "laura",
+      "moment": "solved",
+      "render": "638e8104e26d",
+      "model": "eleven_v4",
+      "file": "laura-02ed4d6ee051.mp3"
+    },
+    "laura-03c57f9885a6": {
+      "text": "Den Hauptschalter im Flur legt keiner allein um, ihr müsst gemeinsam ziehen.",
+      "ms": 4676,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "laura",
+      "moment": "nudge",
+      "render": "2397d6160ad6",
+      "model": "eleven_v4",
+      "file": "laura-03c57f9885a6.mp3"
+    },
+    "laura-05ae54bef8de": {
+      "text": "Macht zuerst den Spind in der Mitte vom Serverraum auf, ohne seine Unterlagen kommt ihr an Terminal und Rack nicht weiter.",
+      "ms": 7236,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "laura",
+      "moment": "nudge",
+      "render": "678b6e10f3b5",
+      "model": "eleven_v4",
+      "file": "laura-05ae54bef8de.mp3"
+    },
+    "laura-06d3d209c3a1": {
+      "text": "Wer noch in der Kontrolle steckt: Die Platte im Leitstand vor der Tür hält sie auf.",
+      "ms": 5251,
+      "missions": [
+        "systemcheck"
+      ],
+      "role": "operator",
+      "person": "laura",
+      "moment": "nudge",
+      "render": "12a00a3e4c35",
+      "model": "eleven_v4",
+      "file": "laura-06d3d209c3a1.mp3"
+    },
+    "laura-075e89ba063b": {
+      "text": "Leitstelle an Nachtschicht. Stromausfall im ganzen Trakt, ich sehe nur noch die Notzellen. Geht zuerst ans Notlicht, der Hauptschalter im Flur braucht zwei Leute.",
+      "ms": 10527,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "laura",
+      "moment": "start",
+      "opens": true,
+      "render": "14d775a7ac0b",
+      "model": "eleven_v4",
+      "file": "laura-075e89ba063b.mp3"
+    },
+    "laura-1776e2357724": {
+      "text": "Die Synchronkalibrierung steht bei den Spulen, ganz im Osten hinter dem offenen Schott.",
+      "ms": 5486,
+      "missions": [
+        "systemcheck"
+      ],
+      "role": "operator",
+      "person": "laura",
+      "moment": "nudge",
+      "render": "2b3af3351162",
+      "model": "eleven_v4",
+      "file": "laura-1776e2357724.mp3"
+    },
+    "laura-1c32b49724ca": {
+      "text": "Notausgang offen, Schleusenmitte. Alle vier hin.",
+      "ms": 3788,
+      "missions": [
+        "doppelschicht"
+      ],
+      "role": "operator",
+      "person": "laura",
+      "moment": "escape",
+      "render": "753877086f96",
+      "model": "eleven_v4",
+      "file": "laura-1c32b49724ca.mp3"
+    },
+    "laura-20844d2dafb4": {
+      "text": "Der Hauptschalter fürs Notlicht hängt mitten im Flur, unter der roten Lampe.",
+      "ms": 4989,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "laura",
+      "moment": "nudge",
+      "render": "025d8daf7387",
+      "model": "eleven_v4",
+      "file": "laura-20844d2dafb4.mp3"
+    },
+    "laura-222d3f3a3601": {
+      "text": "Signal steht. Als Nächstes die Kontrolle: Die Platte hält die Tür offen, die Unterlagen liegen im Spind daneben.",
+      "ms": 8438,
+      "missions": [
+        "systemcheck"
+      ],
+      "role": "operator",
+      "person": "laura",
+      "moment": "solved",
+      "render": "3026ab916d6b",
+      "model": "eleven_v4",
+      "file": "laura-222d3f3a3601.mp3"
+    },
+    "laura-22f2d6d8fa13": {
+      "text": "Alle in den Kern. Flurplatte öffnet das Messlabor.",
+      "ms": 4127,
+      "missions": [
+        "kettenreaktion"
+      ],
+      "role": "operator",
+      "person": "laura",
+      "moment": "solved",
+      "render": "d56f5f1eee73",
+      "model": "eleven_v4",
+      "file": "laura-22f2d6d8fa13.mp3"
+    },
+    "laura-254093cbcc07": {
+      "text": "Schleuse offen. Alle vier zum Not-Aus, Westwand.",
+      "ms": 4206,
+      "missions": [
+        "doppelschicht"
+      ],
+      "role": "operator",
+      "person": "laura",
+      "moment": "solved",
+      "render": "762e8ee5c935",
+      "model": "eleven_v4",
+      "file": "laura-254093cbcc07.mp3"
+    },
+    "laura-271f4a79a98c": {
+      "text": "Die Tür zum Maschinenraum geht nur auf, solange jemand auf der Platte davor steht, dahinter wartet der Kasten.",
+      "ms": 7314,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "laura",
+      "moment": "nudge",
+      "render": "20d26b4bec24",
+      "model": "eleven_v4",
+      "file": "laura-271f4a79a98c.mp3"
+    },
+    "laura-2b3ce9cae36e": {
+      "text": "Ich habe die Relais verloren, das müsst ihr von Hand machen. Lest euch jede Anweisung laut vor.",
+      "ms": 5564,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "laura",
+      "moment": "emergency",
+      "mood": "urgent",
+      "render": "30cff99c84e3",
+      "model": "eleven_v4",
+      "file": "laura-2b3ce9cae36e.mp3"
+    },
+    "laura-31d7ced11ae5": {
+      "text": "Server oben, Labortür offen, im Labor patrouilliert eine Drohne. Den Schlüssel zum Aktenschrank holt ihr noch aus dem Serverraum.",
+      "ms": 8751,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "laura",
+      "moment": "solved",
+      "render": "8089beff349a",
+      "model": "eleven_v4",
+      "file": "laura-31d7ced11ae5.mp3"
+    },
+    "laura-337030d21e78": {
+      "text": "Leitungsnetz am Westende vom Flur, Kühlmittel zum Kern.",
+      "ms": 4284,
+      "missions": [
+        "kettenreaktion"
+      ],
+      "role": "operator",
+      "person": "laura",
+      "moment": "solved",
+      "render": "8e198bedf966",
+      "model": "eleven_v4",
+      "file": "laura-337030d21e78.mp3"
+    },
+    "laura-35c25227f2f1": {
+      "text": "Die Unterlagen für Terminal und Rack liegen im Spind, mitten zwischen den beiden.",
+      "ms": 5146,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "laura",
+      "moment": "nudge",
+      "render": "41740e087ca8",
+      "model": "eleven_v4",
+      "file": "laura-35c25227f2f1.mp3"
+    },
+    "laura-3818bbb52b0a": {
+      "text": "Der Leitstand hat Licht. Jetzt die Signalprobe, zu zweit: Ein Pult zeigt die Zeichen, am anderen drückt ihr sie nach.",
+      "ms": 8594,
+      "missions": [
+        "systemcheck"
+      ],
+      "role": "operator",
+      "person": "laura",
+      "moment": "solved",
+      "render": "58a03daa7a9f",
+      "model": "eleven_v4",
+      "file": "laura-3818bbb52b0a.mp3"
+    },
+    "laura-3d87fba381b2": {
+      "text": "Notausgang offen, Westende vom Flur. Alle drei hin.",
+      "ms": 4284,
+      "missions": [
+        "kettenreaktion"
+      ],
+      "role": "operator",
+      "person": "laura",
+      "moment": "escape",
+      "render": "3fc61255f9cf",
+      "model": "eleven_v4",
+      "file": "laura-3d87fba381b2.mp3"
+    },
+    "laura-410fa7b4f1db": {
+      "text": "Das Funkpult steht im Labor in der Südwestecke, der Aktenschrank im selben Raum.",
+      "ms": 5407,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "laura",
+      "moment": "nudge",
+      "render": "d1e00b71b58a",
+      "model": "eleven_v4",
+      "file": "laura-410fa7b4f1db.mp3"
+    },
+    "laura-4933b4ca1fd9": {
+      "text": "Stellt euch beide an das Pult mit den zwei Griffen, rechts oben im Leitstand.",
+      "ms": 4833,
+      "missions": [
+        "systemcheck"
+      ],
+      "role": "operator",
+      "person": "laura",
+      "moment": "nudge",
+      "render": "7ea7d47ba551",
+      "model": "eleven_v4",
+      "file": "laura-4933b4ca1fd9.mp3"
+    },
+    "laura-4b0655169a01": {
+      "text": "Zu spät, die Notversorgung musste die Kühlung abfangen. Das kostet Zeit, weiter.",
+      "ms": 5799,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "laura",
+      "moment": "missed",
+      "mood": "tense",
+      "render": "8fd60126c82b",
+      "model": "eleven_v4",
+      "file": "laura-4b0655169a01.mp3"
+    },
+    "laura-4b13203073f8": {
+      "text": "Die Unterlagen liegen im Spind neben der Kontrolltür, lest sie dem vor, der drinnen an den Kabeln steht.",
+      "ms": 6426,
+      "missions": [
+        "systemcheck"
+      ],
+      "role": "operator",
+      "person": "laura",
+      "moment": "nudge",
+      "render": "0e644f28ce25",
+      "model": "eleven_v4",
+      "file": "laura-4b13203073f8.mp3"
+    },
+    "laura-4b80e545cab0": {
+      "text": "Die Kühlung ist abgesackt, das hat uns Zeit gekostet. Zurück an die Arbeit, beim nächsten Mal schneller.",
+      "ms": 6766,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "laura",
+      "moment": "missed",
+      "mood": "tense",
+      "render": "2469fa82a310",
+      "model": "eleven_v4",
+      "file": "laura-4b80e545cab0.mp3"
+    },
+    "laura-4f5494825480": {
+      "text": "Pult A der Signalkette steht am Ostende vom Flur, Pult B im Maschinenraum in der Südostecke.",
+      "ms": 6922,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "laura",
+      "moment": "nudge",
+      "render": "e5a3b3141318",
+      "model": "eleven_v4",
+      "file": "laura-4f5494825480.mp3"
+    },
+    "laura-5d1ab414fef4": {
+      "text": "Reaktor läuft. Der Notausgang ist entriegelt, Nordwestecke beim Archiv. Alle raus, jetzt.",
+      "ms": 6844,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "laura",
+      "moment": "escape",
+      "render": "1b4d788eb68d",
+      "model": "eleven_v4",
+      "file": "laura-5d1ab414fef4.mp3"
+    },
+    "laura-609b7c8d04b3": {
+      "text": "Der Trakt hat wieder Strom, die Zentrifugen laufen an, und ihr seid alle draußen. Mit Zeit übrig. So schreibe ich das ins Schichtbuch.",
+      "ms": 8751,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "laura",
+      "moment": "won",
+      "mood": "warm",
+      "render": "da55dc3cf376",
+      "model": "eleven_v4",
+      "file": "laura-609b7c8d04b3.mp3"
+    },
+    "laura-60de97dc17ff": {
+      "text": "Das war die letzte Minute, und ihr seid raus. Die Zellen waren fast leer, als der Reaktor kam. Durchatmen, Nachtschicht.",
+      "ms": 10031,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "laura",
+      "moment": "won",
+      "mood": "warm",
+      "render": "e570d18e8b1c",
+      "model": "eleven_v4",
+      "file": "laura-60de97dc17ff.mp3"
+    },
+    "laura-63b85185d3f6": {
+      "text": "Tastenfeld im Westflügel, Südostecke. Regeln im Nordosten.",
+      "ms": 5251,
+      "missions": [
+        "doppelschicht"
+      ],
+      "role": "operator",
+      "person": "laura",
+      "moment": "solved",
+      "render": "f1ccb379b4b7",
+      "model": "eleven_v4",
+      "file": "laura-63b85185d3f6.mp3"
+    },
+    "laura-63cca31e662b": {
+      "text": "Reaktor läuft, Notausgang zu, alle vollzählig draußen. Das ging bis in die letzten Minuten. Geht euch aufwärmen, die Frühschicht übernimmt.",
+      "ms": 9404,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "laura",
+      "moment": "won",
+      "mood": "warm",
+      "render": "a3bba9022afe",
+      "model": "eleven_v4",
+      "file": "laura-63cca31e662b.mp3"
+    },
+    "laura-6552b388f95a": {
+      "text": "Schalter und Sicherungsplatz sitzen im Reaktor ganz hinten an der Ostwand, dort kommt die Sicherung rein.",
+      "ms": 6687,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "laura",
+      "moment": "nudge",
+      "render": "9ddbe999197a",
+      "model": "eleven_v4",
+      "file": "laura-6552b388f95a.mp3"
+    },
+    "laura-69b599d72ccd": {
+      "text": "Wer am Ostende vom Flur steht: Richtung Westen bis zur Mitte, dort hängt der Hauptschalter.",
+      "ms": 6191,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "laura",
+      "moment": "nudge",
+      "render": "3225439c61e4",
+      "model": "eleven_v4",
+      "file": "laura-69b599d72ccd.mp3"
+    },
+    "laura-6a2a8f414b37": {
+      "text": "Kühlung steht wieder, die Relais halten. Weiter, wo ihr aufgehört habt.",
+      "ms": 4911,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "laura",
+      "moment": "cleared",
+      "mood": "relieved",
+      "render": "9624017a016b",
+      "model": "eleven_v4",
+      "file": "laura-6a2a8f414b37.mp3"
+    },
+    "laura-6b1eb79786bd": {
+      "text": "Notstrom zuerst: Kasten im Ostflügel, Regeln im Südwesten.",
+      "ms": 5329,
+      "missions": [
+        "doppelschicht"
+      ],
+      "role": "operator",
+      "person": "laura",
+      "moment": "start",
+      "opens": true,
+      "render": "50b704bf650f",
+      "model": "eleven_v4",
+      "file": "laura-6b1eb79786bd.mp3"
+    },
+    "laura-73527b94a56c": {
+      "text": "Alle draußen, und die Notzellen hätten noch eine Weile gehalten. Ihr habt den Reaktor zurückgeholt, ohne lange zu suchen. Gute Nacht, Nachtschicht.",
+      "ms": 8673,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "laura",
+      "moment": "won",
+      "mood": "warm",
+      "render": "af9cb5da0023",
+      "model": "eleven_v4",
+      "file": "laura-73527b94a56c.mp3"
+    },
+    "laura-745e0b1db6bd": {
+      "text": "Leitstelle an Nachtschicht. Im ganzen Trakt ist das Netz weg, die Notzellen halten noch. Als Erstes das Notlicht, der Hauptschalter im Flur geht nur gemeinsam.",
+      "ms": 10841,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "laura",
+      "moment": "start",
+      "opens": true,
+      "render": "3353868c0b10",
+      "model": "eleven_v4",
+      "file": "laura-745e0b1db6bd.mp3"
+    },
+    "laura-78885b2579ba": {
+      "text": "Frequenz steht, ich höre euch klar. Der Reaktor ist offen, ohne Ersatzsicherung bleibt er aber tot.",
+      "ms": 7314,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "laura",
+      "moment": "solved",
+      "render": "ef0d6e418da7",
+      "model": "eleven_v4",
+      "file": "laura-78885b2579ba.mp3"
+    },
+    "laura-7c8343fceedc": {
+      "text": "Leitstand offen. Freigabecode dort, Regeln im Messlabor.",
+      "ms": 4754,
+      "missions": [
+        "kettenreaktion"
+      ],
+      "role": "operator",
+      "person": "laura",
+      "moment": "solved",
+      "render": "930612bc1782",
+      "model": "eleven_v4",
+      "file": "laura-7c8343fceedc.mp3"
+    },
+    "laura-7cf7ab52533d": {
+      "text": "Das Prüfpult steht am Westende vom Flur, der Kasten im Maschinenraum hinter der Plattentür, einer bleibt auf der Platte.",
+      "ms": 8046,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "laura",
+      "moment": "nudge",
+      "render": "618728414884",
+      "model": "eleven_v4",
+      "file": "laura-7cf7ab52533d.mp3"
+    },
+    "laura-817d23810d00": {
+      "text": "Resonator offen. Station dahinter, durch die Westtür.",
+      "ms": 4284,
+      "missions": [
+        "kettenreaktion"
+      ],
+      "role": "operator",
+      "person": "laura",
+      "moment": "solved",
+      "render": "8435b3599056",
+      "model": "eleven_v4",
+      "file": "laura-817d23810d00.mp3"
+    },
+    "laura-8849fe962d54": {
+      "text": "Das Terminal steht an der Westwand vom Serverraum, das Rack gegenüber an der Ostwand, je einer an jedes.",
+      "ms": 7158,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "laura",
+      "moment": "nudge",
+      "render": "c08cfc03b78e",
+      "model": "eleven_v4",
+      "file": "laura-8849fe962d54.mp3"
+    },
+    "laura-8b10933ddf2f": {
+      "text": "Schott zum Serverraum ist offen, drinnen Terminal und Rack. Die Drohne ist wach, die Kameraplatte davor legt sie still.",
+      "ms": 8673,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "laura",
+      "moment": "solved",
+      "render": "625cf495a1bb",
+      "model": "eleven_v4",
+      "file": "laura-8b10933ddf2f.mp3"
+    },
+    "laura-8f10dc1c71d9": {
+      "text": "Leitstelle an Schulungsgruppe. Nur eine Übung, bei euch ist noch alles aus. Geht beide zur Initialisierung und legt die Hebel gleichzeitig um.",
+      "ms": 9561,
+      "missions": [
+        "systemcheck"
+      ],
+      "role": "operator",
+      "person": "laura",
+      "moment": "start",
+      "opens": true,
+      "render": "f65a7dbf8f1e",
+      "model": "eleven_v4",
+      "file": "laura-8f10dc1c71d9.mp3"
+    },
+    "laura-91aa63cd0d29": {
+      "text": "Notlicht steht, danke. Jetzt der Notstrom: Die Anleitung dafür hängt im Archiv, der Kasten ist im Maschinenraum, das Prüfpult im Flur.",
+      "ms": 10919,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "laura",
+      "moment": "solved",
+      "render": "9ac1a73c2f25",
+      "model": "eleven_v4",
+      "file": "laura-91aa63cd0d29.mp3"
+    },
+    "laura-922917db41dc": {
+      "text": "Das Klemmbrett zur Signalkette liegt im Flur, an der Südwand.",
+      "ms": 4206,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "laura",
+      "moment": "nudge",
+      "render": "17297d547167",
+      "model": "eleven_v4",
+      "file": "laura-922917db41dc.mp3"
+    },
+    "laura-997eda98f143": {
+      "text": "Systeme laufen. Der Notausgang ist entriegelt, oben im Leitstand an der Nordwand. Beide raus, jetzt.",
+      "ms": 7393,
+      "missions": [
+        "systemcheck"
+      ],
+      "role": "operator",
+      "person": "laura",
+      "moment": "escape",
+      "render": "193d1bbbe4e9",
+      "model": "eleven_v4",
+      "file": "laura-997eda98f143.mp3"
+    },
+    "laura-9dc804d5a806": {
+      "text": "Der Hebel für die Initialisierung hängt im Leitstand an der Nordwand, rechts.",
+      "ms": 5329,
+      "missions": [
+        "systemcheck"
+      ],
+      "role": "operator",
+      "person": "laura",
+      "moment": "nudge",
+      "render": "12c739860de5",
+      "model": "eleven_v4",
+      "file": "laura-9dc804d5a806.mp3"
+    },
+    "laura-9f5039973bf5": {
+      "text": "Kühlbank im Westflügel, Westwand. Regeln im Südosten.",
+      "ms": 4989,
+      "missions": [
+        "doppelschicht"
+      ],
+      "role": "operator",
+      "person": "laura",
+      "moment": "solved",
+      "render": "9999442c000f",
+      "model": "eleven_v4",
+      "file": "laura-9f5039973bf5.mp3"
+    },
+    "laura-9f756efbf1b6": {
+      "text": "Der Schlüssel zum Aktenschrank liegt im Serverraum, in der Nordostecke über dem Rack.",
+      "ms": 5329,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "laura",
+      "moment": "nudge",
+      "render": "08d2ccde4c87",
+      "model": "eleven_v4",
+      "file": "laura-9f756efbf1b6.mp3"
+    },
+    "laura-a05a06d81e0a": {
+      "text": "Die Unterlagen zur Signalprobe liegen im Spind, oben links im Leitstand.",
+      "ms": 4911,
+      "missions": [
+        "systemcheck"
+      ],
+      "role": "operator",
+      "person": "laura",
+      "moment": "nudge",
+      "render": "6ac6ac3c30b0",
+      "model": "eleven_v4",
+      "file": "laura-a05a06d81e0a.mp3"
+    },
+    "laura-a242523a34e9": {
+      "text": "Speicherkern an die Schleusenwand, Schaltplan im Nordwesten.",
+      "ms": 4284,
+      "missions": [
+        "doppelschicht"
+      ],
+      "role": "operator",
+      "person": "laura",
+      "moment": "solved",
+      "render": "1d262388e277",
+      "model": "eleven_v4",
+      "file": "laura-a242523a34e9.mp3"
+    },
+    "laura-a44bb07156c6": {
+      "text": "Die Relais greifen wieder, ich habe die Kühlung zurück. Rechtzeitig, danke euch.",
+      "ms": 6348,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "laura",
+      "moment": "cleared",
+      "mood": "relieved",
+      "render": "2c1385f0ffcf",
+      "model": "eleven_v4",
+      "file": "laura-a44bb07156c6.mp3"
+    },
+    "laura-a4926baec4a2": {
+      "text": "Wer noch im Archiv ist: durch die Südtür in den Flur, dann ein Stück nach Osten zum Hauptschalter.",
+      "ms": 6844,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "laura",
+      "moment": "nudge",
+      "render": "f5a2a17c04ff",
+      "model": "eleven_v4",
+      "file": "laura-a4926baec4a2.mp3"
+    },
+    "laura-a7a4fd0abde0": {
+      "text": "Funkpult im Ostflügel, Ostwand. Regeln im Südwesten.",
+      "ms": 4989,
+      "missions": [
+        "doppelschicht"
+      ],
+      "role": "operator",
+      "person": "laura",
+      "moment": "solved",
+      "render": "1da3878346b1",
+      "model": "eleven_v4",
+      "file": "laura-a7a4fd0abde0.mp3"
+    },
+    "laura-a9c2f1ff20e8": {
+      "text": "Leitstelle an Nachtschicht. Der Trakt ist dunkel, auf meiner Tafel brennen nur die Notzellen. Zuerst das Notlicht, den Hauptschalter im Flur legt ihr gemeinsam um.",
+      "ms": 11389,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "laura",
+      "moment": "start",
+      "opens": true,
+      "render": "5abfa1aeda3a",
+      "model": "eleven_v4",
+      "file": "laura-a9c2f1ff20e8.mp3"
+    },
+    "laura-aa8b2a98cdfa": {
+      "text": "Notlicht brennt, ich sehe euch wieder auf meiner Tafel. Weiter mit dem Notstrom: Anleitung im Archiv, Kasten im Maschinenraum, Prüfpult im Flur.",
+      "ms": 10998,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "laura",
+      "moment": "solved",
+      "render": "069f6a123129",
+      "model": "eleven_v4",
+      "file": "laura-aa8b2a98cdfa.mp3"
+    },
+    "laura-aeb80233368a": {
+      "text": "Ich hab euch klar auf der Frequenz. Die Ersatzsicherung für den Reaktor liegt im Archiv, bringt sie rüber.",
+      "ms": 6034,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "laura",
+      "moment": "solved",
+      "render": "264bcd706e76",
+      "model": "eleven_v4",
+      "file": "laura-aeb80233368a.mp3"
+    },
+    "laura-b026b38b6ad9": {
+      "text": "Die Anleitung zum Notstrom hängt im Archiv, auf der Ostseite.",
+      "ms": 4284,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "laura",
+      "moment": "nudge",
+      "render": "a33d6e3aa530",
+      "model": "eleven_v4",
+      "file": "laura-b026b38b6ad9.mp3"
+    },
+    "laura-b39afab437ff": {
+      "text": "Kurze Funkprobe. Alle haben sich gemeldet, ihr kommt sauber bei mir an. Ich bleibe die ganze Nacht auf dieser Frequenz.",
+      "ms": 7236,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "laura",
+      "moment": "lobby",
+      "mood": "calm",
+      "render": "5ed7a0e47970",
+      "model": "eleven_v4",
+      "file": "laura-b39afab437ff.mp3"
+    },
+    "laura-b780a958285b": {
+      "text": "Ihr seid draußen, mit Sekunden übrig. Der Trakt hat Strom, die Proben sind gerettet, und ich atme hier auch erst mal durch.",
+      "ms": 9247,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "laura",
+      "moment": "won",
+      "mood": "warm",
+      "render": "d312bd863900",
+      "model": "eleven_v4",
+      "file": "laura-b780a958285b.mp3"
+    },
+    "laura-c5745897bc41": {
+      "text": "Reaktor ist am Netz, der Notausgang ist auf, Nordwestecke beim Archiv. Raus da, alle zusammen!",
+      "ms": 6844,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "laura",
+      "moment": "escape",
+      "render": "8b62e45be9cd",
+      "model": "eleven_v4",
+      "file": "laura-c5745897bc41.mp3"
+    },
+    "laura-c68c7357a96d": {
+      "text": "Ohne die Anleitung aus dem Archiv ratet ihr am Kasten nur herum, sie steht dort auf der Ostseite.",
+      "ms": 6191,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "laura",
+      "moment": "nudge",
+      "render": "f9f9a100c964",
+      "model": "eleven_v4",
+      "file": "laura-c68c7357a96d.mp3"
+    },
+    "laura-c8221a4f161f": {
+      "text": "Alarm auf meiner Tafel, die Uhr ist gerade gesprungen. Kurz sammeln, dann weiter, Nachtschicht.",
+      "ms": 5956,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "laura",
+      "moment": "alarm",
+      "mood": "tense",
+      "render": "0b05c4a44994",
+      "model": "eleven_v4",
+      "file": "laura-c8221a4f161f.mp3"
+    },
+    "laura-cbfc00e89853": {
+      "text": "Die Ersatzsicherung für den Reaktor liegt im Archiv, in der Südostecke.",
+      "ms": 4754,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "laura",
+      "moment": "nudge",
+      "render": "c1b7b0f71c23",
+      "model": "eleven_v4",
+      "file": "laura-cbfc00e89853.mp3"
+    },
+    "laura-ceb43276953b": {
+      "text": "Notstrom läuft, die Tür zum Maschinenraum bleibt offen. Als Nächstes die Signalkette: ein Pult im Flur, eins im Maschinenraum.",
+      "ms": 9639,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "laura",
+      "moment": "solved",
+      "render": "44202977b871",
+      "model": "eleven_v4",
+      "file": "laura-ceb43276953b.mp3"
+    },
+    "laura-d075a01de508": {
+      "text": "Da ging ein Alarm raus, ich sehe ihn hier. Das war der erste heute Nacht, bei mehr wird es eng.",
+      "ms": 6191,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "laura",
+      "moment": "alarm",
+      "mood": "tense",
+      "render": "a85ce73b37b3",
+      "model": "eleven_v4",
+      "file": "laura-d075a01de508.mp3"
+    },
+    "laura-d28c73aa87a3": {
+      "text": "Die Kühlung kippt, und ich komme von hier nicht an die Relais. Sagt euch jede Anweisung laut an und bestätigt sie.",
+      "ms": 6766,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "laura",
+      "moment": "emergency",
+      "mood": "urgent",
+      "render": "28c79c31a0e2",
+      "model": "eleven_v4",
+      "file": "laura-d28c73aa87a3.mp3"
+    },
+    "laura-d5e769ffd5cf": {
+      "text": "Funkprobe, Nachtschicht. Ich höre euch laut und klar. Bisher eine ruhige Nacht im Trakt, von mir aus kann es losgehen.",
+      "ms": 8124,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "laura",
+      "moment": "lobby",
+      "mood": "calm",
+      "render": "7c65c506c056",
+      "model": "eleven_v4",
+      "file": "laura-d5e769ffd5cf.mp3"
+    },
+    "laura-d6b1ce9ed9c7": {
+      "text": "Die Pulte der Signalprobe stehen im Leitstand an der Südwand, eins links, eins rechts.",
+      "ms": 6113,
+      "missions": [
+        "systemcheck"
+      ],
+      "role": "operator",
+      "person": "laura",
+      "moment": "nudge",
+      "render": "8b03f9a8c632",
+      "model": "eleven_v4",
+      "file": "laura-d6b1ce9ed9c7.mp3"
+    },
+    "laura-da0643d71f10": {
+      "text": "Der Notstrom hält, die Maschinenraumtür bleibt jetzt offen. Für die Signalkette liegt ein Klemmbrett im Flur, gearbeitet wird an zwei Pulten.",
+      "ms": 9482,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "laura",
+      "moment": "solved",
+      "render": "ac13c5061abf",
+      "model": "eleven_v4",
+      "file": "laura-da0643d71f10.mp3"
+    },
+    "laura-e036051a6037": {
+      "text": "Druckknopf im Westflügel, Nordseite. Regeln im Nordosten.",
+      "ms": 4911,
+      "missions": [
+        "doppelschicht"
+      ],
+      "role": "operator",
+      "person": "laura",
+      "moment": "solved",
+      "render": "fd0941f0b89b",
+      "model": "eleven_v4",
+      "file": "laura-e036051a6037.mp3"
+    },
+    "laura-e120fa80d160": {
+      "text": "Auf dem Klemmbrett im Flur steht, wie die Signalkette zu lesen ist, es liegt an der Südwand.",
+      "ms": 6426,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "laura",
+      "moment": "nudge",
+      "render": "7d8147d75bd1",
+      "model": "eleven_v4",
+      "file": "laura-e120fa80d160.mp3"
+    },
+    "laura-e250574f6877": {
+      "text": "Licht im ganzen Trakt, und alle sind draußen. Knapp war das, aber die Zellen haben gereicht. Ich trage es ins Schichtbuch ein.",
+      "ms": 8594,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "laura",
+      "moment": "won",
+      "mood": "warm",
+      "render": "34ec6e0de76a",
+      "model": "eleven_v4",
+      "file": "laura-e250574f6877.mp3"
+    },
+    "laura-e291391e6b9b": {
+      "text": "Platten in Archiv und Messlabor öffnen die Schleuse. Erste Station im Flur.",
+      "ms": 5799,
+      "missions": [
+        "kettenreaktion"
+      ],
+      "role": "operator",
+      "person": "laura",
+      "moment": "start",
+      "opens": true,
+      "render": "578c5839bcab",
+      "model": "eleven_v4",
+      "file": "laura-e291391e6b9b.mp3"
+    },
+    "laura-e753b688f370": {
+      "text": "Weiter im Pumpenraum, Südost. Regeln wieder im Archiv.",
+      "ms": 4754,
+      "missions": [
+        "kettenreaktion"
+      ],
+      "role": "operator",
+      "person": "laura",
+      "moment": "solved",
+      "render": "71d37a051f48",
+      "model": "eleven_v4",
+      "file": "laura-e753b688f370.mp3"
+    },
+    "laura-e97199e31d42": {
+      "text": "Die Kabelprüfung steht in der Kontrolle hinter der Westtür, einer hält die Platte, einer geht rein.",
+      "ms": 6034,
+      "missions": [
+        "systemcheck"
+      ],
+      "role": "operator",
+      "person": "laura",
+      "moment": "nudge",
+      "render": "19025703d0ba",
+      "model": "eleven_v4",
+      "file": "laura-e97199e31d42.mp3"
+    },
+    "laura-ebca2bf3c28d": {
+      "text": "Notfall in der Kühlung, die Relais müssen von Hand geschaltet werden. Jeder sagt laut, was auf seinem Pult steht.",
+      "ms": 6609,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "laura",
+      "moment": "emergency",
+      "mood": "urgent",
+      "render": "a93e7cd5d1cf",
+      "model": "eleven_v4",
+      "file": "laura-ebca2bf3c28d.mp3"
+    },
+    "laura-f2b0b314349d": {
+      "text": "Bei mir ist ein Alarm aufgelaufen, das hat uns Zeit gekostet. Einer ist kein Beinbruch, aber die Anlage zählt jeden mit.",
+      "ms": 8202,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "laura",
+      "moment": "alarm",
+      "mood": "tense",
+      "render": "65781a6b458b",
+      "model": "eleven_v4",
+      "file": "laura-f2b0b314349d.mp3"
+    },
+    "laura-f749cb97778b": {
+      "text": "Das Schott zum Serverraum ist auf, die Unterlagen liegen im Spind darin. Die Kameraplatte davor hält die Drohne an.",
+      "ms": 7549,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "laura",
+      "moment": "solved",
+      "render": "b2521531ca4a",
+      "model": "eleven_v4",
+      "file": "laura-f749cb97778b.mp3"
+    },
+    "laura-fc75d2ced4a6": {
+      "text": "Kabel stimmen, das Schott zu den Spulen ist offen. Einer hält die Platte, bis der andere draußen ist, dann nach Osten.",
+      "ms": 8124,
+      "missions": [
+        "systemcheck"
+      ],
+      "role": "operator",
+      "person": "laura",
+      "moment": "solved",
+      "render": "115d143ba1b5",
+      "model": "eleven_v4",
+      "file": "laura-fc75d2ced4a6.mp3"
+    },
+    "laura-fe74238e0b28": {
+      "text": "Nachtschicht, Funkprobe. Ich höre jeden von euch klar. Dann hoffen wir mal auf eine lange, langweilige Nacht.",
+      "ms": 8673,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "laura",
+      "moment": "lobby",
+      "mood": "calm",
+      "render": "b693fecb9336",
+      "model": "eleven_v4",
+      "file": "laura-fe74238e0b28.mp3"
+    },
+    "mila-0b906ec5925c": {
+      "text": "Zwei Minuten noch, dann sind die Zellen leer. Jetzt zählt jeder Handgriff.",
+      "ms": 4833,
+      "missions": [
+        "blackout"
+      ],
+      "role": "lead",
+      "person": "mila",
+      "moment": "clock",
+      "mood": "pressing",
+      "render": "ca68a7acad83",
+      "model": "eleven_v4",
+      "file": "mila-0b906ec5925c.mp3"
+    },
+    "mila-1d49e433b65f": {
+      "text": "Die Anlage hat jeden Alarm mitgezählt, beim letzten hat sie den Trakt abgeschaltet. Lasst alles, wie es ist, die Frühschicht sieht sich das an.",
+      "ms": 8046,
+      "missions": [
+        "blackout"
+      ],
+      "role": "lead",
+      "person": "mila",
+      "moment": "lost",
+      "mood": "quiet",
+      "render": "624551a55da2",
+      "model": "eleven_v4",
+      "file": "mila-1d49e433b65f.mp3"
+    },
+    "mila-51981aa40b84": {
+      "text": "Noch eine Minute auf den Zellen. Ich bleibe dran, bis zum letzten Licht.",
+      "ms": 4598,
+      "missions": [
+        "blackout"
+      ],
+      "role": "lead",
+      "person": "mila",
+      "moment": "clock",
+      "mood": "pressing",
+      "render": "18b8425d5558",
+      "model": "eleven_v4",
+      "file": "mila-51981aa40b84.mp3"
+    },
+    "mila-539535fd1e1e": {
+      "text": "Die Notzellen sind leer, im Trakt ist es jetzt ganz dunkel. Bleibt, wo ihr seid, die Frühschicht holt euch raus.",
+      "ms": 6844,
+      "missions": [
+        "blackout"
+      ],
+      "role": "lead",
+      "person": "mila",
+      "moment": "lost",
+      "mood": "quiet",
+      "render": "9ec4f98e9d9e",
+      "model": "eleven_v4",
+      "file": "mila-539535fd1e1e.mp3"
+    },
+    "mila-5fa45405acd6": {
+      "text": "Noch zwei Minuten auf der Notversorgung. Keine Umwege mehr.",
+      "ms": 3631,
+      "missions": [
+        "blackout"
+      ],
+      "role": "lead",
+      "person": "mila",
+      "moment": "clock",
+      "mood": "pressing",
+      "render": "155addda1e15",
+      "model": "eleven_v4",
+      "file": "mila-5fa45405acd6.mp3"
+    },
+    "mila-7ac7978ad8d9": {
+      "text": "Ohne die ganze Schicht kommt ihr da nicht durch. Ich hole euch raus, wir versuchen es morgen neu.",
+      "ms": 5251,
+      "missions": [
+        "blackout"
+      ],
+      "role": "lead",
+      "person": "mila",
+      "moment": "lost",
+      "mood": "quiet",
+      "render": "181642172e66",
+      "model": "eleven_v4",
+      "file": "mila-7ac7978ad8d9.mp3"
+    },
+    "mila-a418f852f99d": {
+      "text": "Die Notzellen machen noch fünf Minuten. Das reicht, wenn ihr euch aufteilt.",
+      "ms": 4441,
+      "missions": [
+        "blackout"
+      ],
+      "role": "lead",
+      "person": "mila",
+      "moment": "clock",
+      "mood": "pressing",
+      "render": "764cf4fb42d4",
+      "model": "eleven_v4",
+      "file": "mila-a418f852f99d.mp3"
+    },
+    "mila-ca4ebf87b8ae": {
+      "text": "Letzte Minute, die Zellen sind fast leer. Jetzt oder gar nicht, Nachtschicht.",
+      "ms": 4911,
+      "missions": [
+        "blackout"
+      ],
+      "role": "lead",
+      "person": "mila",
+      "moment": "clock",
+      "mood": "pressing",
+      "render": "c08e41e604d8",
+      "model": "eleven_v4",
+      "file": "mila-ca4ebf87b8ae.mp3"
+    },
+    "mila-dea08ca54548": {
+      "text": "Das war's, die Notversorgung ist aus. Rührt nichts mehr an, die Frühschicht kommt mit Licht.",
+      "ms": 6609,
+      "missions": [
+        "blackout"
+      ],
+      "role": "lead",
+      "person": "mila",
+      "moment": "lost",
+      "mood": "quiet",
+      "render": "51efc61bb6ce",
+      "model": "eleven_v4",
+      "file": "mila-dea08ca54548.mp3"
+    },
+    "mila-e8f6c87e6489": {
+      "text": "Noch fünf Minuten auf den Notzellen. Bleibt dran, aber hetzt nicht.",
+      "ms": 4441,
+      "missions": [
+        "blackout"
+      ],
+      "role": "lead",
+      "person": "mila",
+      "moment": "clock",
+      "mood": "pressing",
+      "render": "3b63d587c49f",
+      "model": "eleven_v4",
+      "file": "mila-e8f6c87e6489.mp3"
+    },
+    "mila-ef0a4d567cbb": {
+      "text": "Die Sicherheitsschaltung hat zugemacht, zu viele Alarme in einer Schicht. Der Trakt bleibt dunkel, bis die Frühschicht kommt.",
+      "ms": 6922,
+      "missions": [
+        "blackout"
+      ],
+      "role": "lead",
+      "person": "mila",
+      "moment": "lost",
+      "mood": "quiet",
+      "render": "9c8d9d855592",
+      "model": "eleven_v4",
+      "file": "mila-ef0a4d567cbb.mp3"
+    },
+    "mila-f0c6761a24c1": {
+      "text": "Mit halber Schicht geht da drinnen nichts. Ich breche ab, der Trakt bleibt bis morgen dunkel.",
+      "ms": 5486,
+      "missions": [
+        "blackout"
+      ],
+      "role": "lead",
+      "person": "mila",
+      "moment": "lost",
+      "mood": "quiet",
+      "render": "cd048a5de646",
+      "model": "eleven_v4",
+      "file": "mila-f0c6761a24c1.mp3"
     }
   }
 }
