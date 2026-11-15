@@ -5,6 +5,7 @@ import { reducedMotion, watchMotion } from '../settings.js';
 import { useVoice } from '../voice/useVoice.js';
 import { startHero, walksIn, type HeroLook, type Taken } from '../world/menu/heroStage.js';
 import { browserSceneHost } from '../world/menu/loop.js';
+import { visitOutfits } from '../world/menu/outfits.js';
 import { doorsFresh, doorsMark } from './DoorWipe.js';
 
 /** Whether this page came back from the lobby through the doors; null before it was asked. */
@@ -77,12 +78,16 @@ interface Props {
  * and its beam to the room of the item picked out, which the scene travels to (places.ts); it
  * steps half a tile aside as a panel opens, flares its lamp at every item taken and steps toward
  * the menu at one that leaves it (`taken`), and turns away toward the lab as the menu goes for
- * the lobby. Its canvas lies over the stage at the stage's density, under every panel, catching
+ * the lobby. It wears the plant's workwear, and a companion of the crew stands smaller behind it
+ * where the stage has room for both, another outfit and another crew colour, a clipboard in its
+ * hands — each visit of the menu another pair of outfits (world/menu/outfits.ts). Its canvas lies
+ * over the stage at the stage's density, the companion's under it, under every panel, catching
  * no pointer; it moves no more than 30 times a second, only while it shows, and holds one still
  * pose under reduced motion.
  */
 export function MenuHero({ name, color, panel, card, leaving, taken }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const companionRef = useRef<HTMLCanvasElement>(null);
   const wake = useRef<(() => void) | null>(null);
   const waveAt = useChangedAt(useSettled(name.trim(), NAME_SETTLE_MS));
   const speaking = useSends();
@@ -99,12 +104,18 @@ export function MenuHero({ name, color, panel, card, leaving, taken }: Props) {
     }
     const motion = { reduced: reducedMotion, watch: watchMotion };
     const hero = [look, crewPass().id, walksIn(reducedMotion(), cameBack())] as const;
-    const started = startHero(canvas, hero, browserSceneHost(canvas), motion);
+    const dress = { outfits: visitOutfits(), companion: companionRef.current };
+    const started = startHero(canvas, hero, browserSceneHost(canvas), [motion, dress]);
     wake.current = started?.wake ?? null;
     return () => {
       wake.current = null;
       started?.stop();
     };
   }, []);
-  return <canvas ref={canvasRef} className="menu-hero" aria-hidden="true" hidden />;
+  return (
+    <>
+      <canvas ref={companionRef} className="menu-companion" aria-hidden="true" hidden />
+      <canvas ref={canvasRef} className="menu-hero" aria-hidden="true" hidden />
+    </>
+  );
 }

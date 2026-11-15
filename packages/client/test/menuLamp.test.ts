@@ -207,7 +207,12 @@ describe('layBeam — the beam on the scene’s canvas', () => {
     const scene = fakeCanvas(1440, 820, 'scene');
     const { beam } = fakeBeam();
     layBeam(scene.ctx, beam, lampAt(900.4, 500.6, Math.PI, 0.75), FRAME);
-    const [laid] = callEntries(scene.log, 'drawImage');
+    const [lit, laid] = callEntries(scene.log, 'drawImage');
+    // The cone's light on the lab first, then the haze over it, each from its lens's pixel.
+    expect(lit?.args[0]).toBe(beam.lit?.canvas);
+    expect(lit?.alpha).toBe(0.75);
+    expect(lit?.op).toBe('color-dodge');
+    expect(laid?.op).toBe('source-over');
     expect(laid?.args).toHaveLength(3);
     expect(laid?.alpha).toBe(0.75);
     expect(Number.isInteger(laid?.args[1])).toBe(true);
@@ -221,13 +226,19 @@ describe('layBeam — the beam on the scene’s canvas', () => {
     layBeam(scene.ctx, beam, lampAt(900, 500, Math.PI), FRAME);
     layBeam(scene.ctx, beam, lampAt(903, 497, Math.PI + 0.3 * BEAM_STEP), FRAME);
     expect(beam.turns).toBe(1);
+    const lit = beam.lit?.key;
     layBeam(scene.ctx, beam, lampAt(903, 497, Math.PI + BEAM_STEP), FRAME);
     expect(beam.turns).toBe(2);
-    // The master, its turn, and the motes' sprite, each made once.
-    expect(made).toHaveLength(3);
-    layBeam(scene.ctx, beam, { ...lampAt(903, 497, Math.PI + BEAM_STEP), reach: 300 }, FRAME);
-    expect(made).toHaveLength(4);
+    // The cone's soft light turns only every third degree.
+    expect(beam.lit?.key).toBe(lit);
+    layBeam(scene.ctx, beam, lampAt(903, 497, Math.PI + 2 * BEAM_STEP), FRAME);
+    expect(beam.lit?.key).not.toBe(lit);
+    // The haze's and the light's masters, their turns, and the motes' sprite, each made once.
+    expect(made).toHaveLength(5);
     expect(beam.turns).toBe(3);
+    layBeam(scene.ctx, beam, { ...lampAt(903, 497, Math.PI + BEAM_STEP), reach: 300 }, FRAME);
+    expect(made).toHaveLength(7);
+    expect(beam.turns).toBe(4);
   });
 
   it('lays a beam on the slant from a box no larger than one pointing straight across', () => {
@@ -246,7 +257,7 @@ describe('layBeam — the beam on the scene’s canvas', () => {
     expect(areaAt(SWEEP.low)).toBeLessThan(across * 1.1);
   });
 
-  it('lays nothing without a lamp, or with a lamp not on', () => {
+  it('lays nothing — no light on the lab, no haze — without a lamp, or with a lamp not on', () => {
     const scene = fakeCanvas(1440, 820, 'scene');
     const { beam, made } = fakeBeam();
     layBeam(scene.ctx, beam, null, FRAME);
@@ -318,19 +329,21 @@ describe('layBeam — the beam’s canvases', () => {
       return canvas;
     });
     layBeam(scene.ctx, beam, lampAt(900, 500, Math.PI), FRAME);
-    // The master, its turn, and the motes' sprite.
-    expect(canvases).toHaveLength(3);
+    // The haze's and the light's masters, their turns, and the motes' sprite.
+    expect(canvases).toHaveLength(5);
     layBeam(scene.ctx, beam, null, FRAME);
-    expect([beam.master, beam.turned, beam.mote]).toEqual([null, null, null]);
-    expect(canvases.map((canvas) => [canvas.width, canvas.height])).toEqual([
-      [0, 0],
-      [0, 0],
-      [0, 0],
-    ]);
+    const sprites = (): unknown[] => [
+      ...[beam.master, beam.turned, beam.lightMaster, beam.lit],
+      beam.mote,
+    ];
+    expect(sprites()).toEqual([null, null, null, null, null]);
+    expect(canvases.map((canvas) => [canvas.width, canvas.height])).toEqual(
+      Array.from({ length: 5 }, () => [0, 0]),
+    );
     layBeam(scene.ctx, beam, lampAt(900, 500, Math.PI), FRAME);
-    expect(canvases).toHaveLength(6);
+    expect(canvases).toHaveLength(10);
     layBeam(scene.ctx, beam, lampAt(900, 500, Math.PI, 0), FRAME);
-    expect([beam.master, beam.turned, beam.mote]).toEqual([null, null, null]);
+    expect(sprites()).toEqual([null, null, null, null, null]);
   });
 });
 
@@ -505,7 +518,8 @@ describe('the scene lays the hero’s beam', () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
     run(1000);
     const beams = (): number =>
-      callEntries(scene.log, 'drawImage').filter((e) => e.alpha === 0.8).length;
+      callEntries(scene.log, 'drawImage').filter((e) => e.alpha === 0.8 && e.op === 'source-over')
+        .length;
     expect(beams()).toBe(0);
     expect(queued.size).toBe(0);
     const baked = made.length;
@@ -523,8 +537,10 @@ describe('the scene lays the hero’s beam', () => {
     expect(beams()).toBe(2);
     // The beam's canvases go with the lamp: the lobby's scene drifts on without them.
     const sprites = made.slice(baked);
-    expect(sprites).toHaveLength(2);
-    expect(sprites.map((canvas) => [canvas.width, canvas.height])).toEqual([[0, 0], [0, 0]]);
+    expect(sprites).toHaveLength(4);
+    expect(sprites.map((canvas) => [canvas.width, canvas.height])).toEqual(
+      Array.from({ length: 4 }, () => [0, 0]),
+    );
     reduced = false;
     stage.close();
   });

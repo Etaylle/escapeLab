@@ -40,7 +40,9 @@ async function drawnWith(set: (looks: typeof Looks) => Partial<typeof Looks> = (
   const pose = heroPose({ phase: 0.3, speaking: false, waveAt: null, reduced: true }, [0, 0]);
   const lamp = { tilt: 0, on: 1, flare: 0 };
   const box = place.box;
-  paintHero(hero, { place, box, motion: STANDING_STILL, pose, color: '#2dd4bf', dpr: 1, lamp, glow: false });
+  const kit = { glow: false, outfit: 'coat', figure: 'hero' } as const;
+  const motion = STANDING_STILL;
+  paintHero(hero, { place, box, motion, pose, color: '#2dd4bf', dpr: 1, lamp, ...kit });
   const [legs = [], upper = []] = layers;
   return { legs, upper, arms: pose.arms, lens: lensAt(place, 0, 0) };
 }

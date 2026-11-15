@@ -12,6 +12,7 @@ import {
   type HeroRun,
 } from '../src/world/menu/heroStage.js';
 import { newSweep } from '../src/world/menu/lamp.js';
+import type { OutfitPair } from '../src/world/menu/outfits.js';
 import type { SceneHost } from '../src/world/menu/loop.js';
 import { fakeCanvas, FakePath2D } from './fakeCanvas.js';
 
@@ -55,6 +56,9 @@ export const PLAIN_LOOK: HeroLook = {
   taken: null,
 };
 
+/** What the hero and its companion wear where a test sets nothing. */
+export const PLAIN_OUTFITS: OutfitPair = { hero: 'coat', companion: 'suit' };
+
 /** What a test may set of a painting: the motion, the menu's look, its entrance, its canvas. */
 export interface PaintingAsked {
   reduced?: boolean;
@@ -87,6 +91,7 @@ export function painting(asked: PaintingAsked = {}): HeroPainting {
       menuRight: DESKTOP_STAGE.menuRight,
       stageW: DESKTOP_STAGE.w,
       tile: heroTile(DESKTOP_STAGE.windowH),
+      companion: null,
     },
     look: { current: { ...PLAIN_LOOK, ...asked.look } },
     attends: { current: null },
@@ -98,6 +103,8 @@ export function painting(asked: PaintingAsked = {}): HeroPainting {
     phase: 0.3,
     reduced: () => reduced,
     canvas,
+    outfits: PLAIN_OUTFITS,
+    companion: null,
     beatHeld,
   };
 }
@@ -267,7 +274,8 @@ export function heroOnPage(w: number, h: number, focused: FakeItem | null = null
   const frames = framesPage();
   const look = { current: PLAIN_LOOK };
   const motion = { reduced: () => false, watch: () => () => undefined };
-  const run = startHero(canvas, [look, 'p1', false], frames.host, motion);
+  const dress = { outfits: PLAIN_OUTFITS, companion: null };
+  const run = startHero(canvas, [look, 'p1', false], frames.host, [motion, dress]);
   if (run === null) {
     throw new Error('no hero started');
   }

@@ -9,6 +9,12 @@ import {
   type HeroPlace,
   type StageFacts,
 } from '../src/world/menu/hero.js';
+import {
+  COMPANION_ASIDE,
+  COMPANION_BACK,
+  COMPANION_SHARE,
+  pairPlace,
+} from '../src/world/menu/companion.js';
 import { PHONE_QUERY } from '../src/world/menu/heroStage.js';
 import {
   elementsOf,
@@ -206,5 +212,49 @@ describe('the hero at the menu’s sizes', () => {
     expect(facts.panelRight).toBeCloseTo(72 + 760, 6);
     expect(facts.padBottom).toBeCloseTo(32.8, 6);
     expect(FIGURE_TALL * placed(facts).scale).toBeGreaterThan(300);
+  });
+});
+
+describe('the hero’s companion beside it', () => {
+  /** Where the hero and its companion stand on `screen`, and the stage there. */
+  const pairOn = (screen: Screen) => {
+    const facts = stageOn(screen);
+    return { facts, ...pairPlace(facts) };
+  };
+
+  it('stands smaller and further back, beside the hero’s back, the two clear of the edge', () => {
+    for (const screen of [at(1920, 1080), at(1470, 810), at(1440, 900), at(1280, 720)]) {
+      const { facts, hero, companion } = pairOn(screen);
+      const size = `${screen.width}x${screen.height}`;
+      if (hero === null || companion === null) throw new Error(`no companion at ${size}`);
+      expect(companion.scale, size).toBeCloseTo(COMPANION_SHARE * hero.scale, 6);
+      expect(hero.feet.y - companion.feet.y, size).toBeCloseTo(COMPANION_BACK * hero.scale, 6);
+      expect(companion.feet.x - hero.feet.x, size).toBeCloseTo(COMPANION_ASIDE * hero.scale, 6);
+      const step = STEP_TILES * heroTile(facts.windowH);
+      const right = companion.box.left + companion.box.width + step;
+      expect(right, size).toBeLessThanOrEqual(facts.w - CLEAR);
+      expect(companion.box.top, size).toBeGreaterThanOrEqual(facts.ceiling + CLEAR);
+      // The hero moved left with it no further than its own room lets it stand.
+      expect(hero.box.left, size).toBeGreaterThanOrEqual(Math.floor(facts.menuRight + CLEAR));
+      const panel = Math.floor(facts.panelRight + CLEAR);
+      expect(hero.box.left + step, size).toBeGreaterThanOrEqual(panel);
+    }
+  });
+
+  it('moves the hero only as far left as the companion asks, nowhere it is left out', () => {
+    const wide = pairOn(at(2560, 1080));
+    expect(wide.hero).toEqual(heroPlace(wide.facts));
+    const narrow = pairOn(at(1180, 820));
+    expect(narrow.companion).toBeNull();
+    expect(narrow.hero).toEqual(heroPlace(narrow.facts));
+  });
+
+  it('is left out below 1337 px across at 820 px of height, 1270 at 720, and on a phone', () => {
+    expect(pairOn(at(1336, 820)).companion).toBeNull();
+    expect(pairOn(at(1337, 820)).companion).not.toBeNull();
+    expect(pairOn(at(1269, 720)).companion).toBeNull();
+    expect(pairOn(at(1270, 720)).companion).not.toBeNull();
+    const phone = pairOn({ width: 932, height: 430, coarse: true });
+    expect([phone.hero, phone.companion]).toEqual([null, null]);
   });
 });

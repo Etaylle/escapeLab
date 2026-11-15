@@ -147,7 +147,8 @@
  * figure standing large at the stage's right (client screens/MenuHero.tsx) — has to stand there at
  * 1440×820 and at 1280×720 about five of the scene's tiles tall, its canvas clear of the menu's
  * column, its lead line and the title, or the run fails. menu-hero.png shows it with its hand
- * lamp on in the lab at night, the beam laid over the scene and ending short of the menu's
+ * lamp on in the lab at night, in the plant's workwear, a companion of the crew behind it where
+ * the stage has room, the beam lighting the lab in its cone and ending short of the menu's
  * column. On the first menu of a page it walks in: a page of its own holds it 600 ms into its
  * walk, as the pause trick holds a device's fade (menu-hero-entrance.png), its lamp off; a key
  * wakes the menu's sound, and let go, the hero has to stop, click the cold open's click and
@@ -7823,7 +7824,7 @@ function beamText(beam, menu) {
 }
 
 /**
- * menu-hero.png: the hero at 1440×820 with its hand lamp on, the beam laid over the scene and
+ * menu-hero.png: the hero at 1440×820 with its hand lamp on, the beam lighting the scene and
  * ending short of the menu's column — or the run fails.
  */
 async function heroLampShot(page) {

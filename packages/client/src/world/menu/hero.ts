@@ -169,15 +169,28 @@ export function heroPlace(f: StageFacts): HeroPlace | null {
   const most = room.right - ROUNDING - HERO_BOX.back * scale;
   const x = Math.min(most, Math.max(least, f.w * RIGHT_THIRD));
   const y = room.floor - HERO_BOX.bottom * scale;
-  const left = Math.floor(x - HERO_BOX.front * scale);
-  const top = Math.floor(y - HERO_BOX.top * scale);
-  const box = {
+  return { scale, feet: { x, y }, box: figureBox({ x, y }, scale), tiles };
+}
+
+/** The box of whole CSS px round a figure whose feet stand at `feet`, `scale` px a figure unit. */
+export function figureBox(feet: Spot, scale: number): StageBox {
+  const left = Math.floor(feet.x - HERO_BOX.front * scale);
+  const top = Math.floor(feet.y - HERO_BOX.top * scale);
+  return {
     left,
     top,
-    width: Math.ceil(x + HERO_BOX.back * scale) - left,
-    height: Math.ceil(y + HERO_BOX.bottom * scale) - top,
+    width: Math.ceil(feet.x + HERO_BOX.back * scale) - left,
+    height: Math.ceil(feet.y + HERO_BOX.bottom * scale) - top,
   };
-  return { scale, feet: { x, y }, box, tiles };
+}
+
+/**
+ * The furthest left the feet of a hero `scale` CSS px a figure unit may stand on the stage `f`,
+ * CSS px: its box clear of the menu's column resting and of the widest panel stepped aside, as
+ * heroPlace holds it.
+ */
+export function leftmostFeet(f: StageFacts, scale: number): number {
+  return roomOf(f).left + ROUNDING + HERO_BOX.front * scale;
 }
 
 /** How long the hero takes to walk in from the stage's right edge on the first menu of a page. */

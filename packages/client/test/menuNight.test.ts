@@ -129,7 +129,7 @@ const lampOf = (on = 1, flare = 0): HeroLamp => ({
 const FRAME = { dpr: 1, tile: 64, now: 0, reduced: false };
 
 describe('the beam over the lab at night', () => {
-  it('lays its haze over the lab, the motes as well, and a second haze as it flares', () => {
+  it('lights the lab in its cone, its haze and motes over it, a second haze as it flares', () => {
     const scene = fakeCanvas(1440, 820, 'scene');
     const beam = sceneBeam((w, h) => fakeCanvas(w, h).canvas);
     for (let now = 0; now < 3000; now += 1000 / 30) {
@@ -137,7 +137,12 @@ describe('the beam over the lab at night', () => {
     }
     const laid = callEntries(scene.log, 'drawImage');
     expect(laid.length).toBeGreaterThan(90);
-    expect(laid.every((e) => e.op === 'source-over')).toBe(true);
+    // The cone's light alone is laid as a colour dodge, the lab's own pixels lit; never read back.
+    const lit = laid.filter((e) => e.op === 'color-dodge');
+    expect(lit.every((e) => e.args[0] === beam.lit?.canvas)).toBe(true);
+    expect(lit.length).toBe(laid.filter((e) => e.args[0] === beam.turned?.canvas).length);
+    expect(laid.every((e) => e.op === 'source-over' || e.op === 'color-dodge')).toBe(true);
+    expect(callEntries(scene.log, 'getImageData')).toEqual([]);
     expect(laid.some((e) => e.args[0] === beam.mote)).toBe(true);
     scene.log.length = 0;
     layBeam(scene.ctx, beam, lampOf(1, 0.5), { ...FRAME, now: 3000 });
@@ -187,7 +192,8 @@ describe('the hero in the lab at night', () => {
     const motion = { offset: 0, moving: false, walk: 0, facing: HERO_FACING, look: null };
     const pose = { ...restingPose(HERO_FACING), arms: { front: 1.35, back: 1.45 }, holding: true };
     const lamp = { tilt: 0, on, flare: 0 };
-    return { place, box: place.box, motion, pose, color: '#2dd4bf', dpr: 1, lamp, glow };
+    const kit = { outfit: 'coat', figure: 'hero' } as const;
+    return { place, box: place.box, motion, pose, color: '#2dd4bf', dpr: 1, lamp, glow, ...kit };
   }
 
   /** What one frame of the hero (`frameOf`) draws. */
@@ -222,10 +228,12 @@ describe('the hero in the lab at night', () => {
       ).length;
     expect(front.alpha).toBeGreaterThan(0.5);
     expect(rim(lit)).toBeGreaterThan(0);
-    // With its lamp out no edge is drawn at all: nothing clipped to the body for it.
+    // With its lamp out no edge is drawn at all: nothing clipped to the body for it — the body
+    // is clipped once alone, for what the hero wears over it (outfits.ts).
     const out = painted(0, false);
     expect(rim(out)).toBe(0);
-    expect(callEntries(out, 'clip')).toHaveLength(0);
+    expect(callEntries(out, 'clip')).toHaveLength(1);
+    expect(callEntries(lit, 'clip')).toHaveLength(2);
   });
 
   it('catches the glow of the item it looks at on its visor', () => {
