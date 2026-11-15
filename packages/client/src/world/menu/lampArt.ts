@@ -26,6 +26,7 @@ import {
 import { acrossStops } from '../render/beam.js';
 import { stepped } from './hero.js';
 import { BEAM_STEP, LENS_AHEAD, lightStep, type HeroLamp } from './lamp.js';
+import { NIGHT_SINK } from './scene.js';
 
 /**
  * The hand lamp drawn (menu/lamp.ts): in the hero's hands, a steel torch whose lens burns warm
@@ -34,9 +35,11 @@ import { BEAM_STEP, LENS_AHEAD, lightStep, type HeroLamp } from './lamp.js';
  * its reach, the dust motes of the world's air drifting in it (particles.ts). The beam is turned
  * once for each degree of its sweep from a sprite baked once for its reach — a conic gradient
  * across, the lamp's falloff along (render/beam.ts profiles the world's beams so) — and laid
- * each frame whole at whole pixels, the copy the software canvas makes fastest: laid over the lab
- * as a haze of the lamp's light, which over a lab at night looks as light added onto it would, at
- * a fifth less of the beam's cost.
+ * each frame whole at whole pixels, the copy the software canvas makes fastest. It lays two
+ * sprites of one cone: its light on what it falls on — the lab at night brought back toward its
+ * lit self inside the cone, a colour dodge that divides each pixel by what the night left of it,
+ * so the light multiplies the lab's own pixels and reads none back — and over it a haze of the
+ * lamp's light, the lit air the dust hangs in.
  */
 
 /**
@@ -45,10 +48,19 @@ import { BEAM_STEP, LENS_AHEAD, lightStep, type HeroLamp } from './lamp.js';
  */
 export const BEAM_HALF = 0.22;
 /**
- * How strong its light is at its strongest, on the core near the lens, laid over the lab at
- * night: a warm haze the dust hangs in.
+ * How strong its haze is at its strongest, on the core near the lens, laid over the lab at
+ * night: a warm haze the dust hangs in, thin enough that the lab its light falls on shows
+ * through.
  */
-export const BEAM_LIGHT = 0.6;
+export const BEAM_LIGHT = 0.36;
+/**
+ * How far the cone's light brings the lab back at its strongest, on its core near the lens: as
+ * far as the night sank it (scene.ts NIGHT_SINK), so that there the lab stands as lit as behind
+ * the lobby, falling off across the cone and along its reach as the haze does.
+ */
+export const CONE_LIGHT = 1;
+/** How wide the cone's light is either way of its axis before its edge fades, radians. */
+export const LIGHT_HALF = 0.34;
 /** How strong the flare's second light over the beam is at its strongest, against the first. */
 export const FLARE_LIGHT = 0.9;
 /** The dust in the beam: the world's (render/atmosphere.ts), lit by the lamp in the dark. */
@@ -126,15 +138,20 @@ interface Baked {
   y: number;
   /** what it was baked for: the master's reach, a turn's step and the master it came from */
   key: string;
+  /** how far either way of its axis it casts any light, radians */
+  spread: number;
 }
 
-/** The menu's beam as the scene keeps it between frames: its master, its turn, its dust. */
+/** The menu's beam as the scene keeps it between frames: its masters, their turns, its dust. */
 export interface SceneBeam {
   make: CanvasMaker;
-  /** the beam pointing right, as long as the lamp reaches, baked once for its reach */
+  /** the beam's haze pointing right, as long as the lamp reaches, baked once for its reach */
   master: Baked | null;
   /** the master turned to the step the beam points at */
   turned: Baked | null;
+  /** the cone's light on the lab, baked and turned as the haze is (`CONE_LIGHT`) */
+  lightMaster: Baked | null;
+  lit: Baked | null;
   dust: Particles;
   /** a mote's sprite, baked as the first mote shows; null before */
   mote: HTMLCanvasElement | null;
@@ -144,11 +161,9 @@ export interface SceneBeam {
 
 /** The beam of a scene that lays none yet, its canvases made by `make`. */
 export function sceneBeam(make: CanvasMaker): SceneBeam {
-  return { make, master: null, turned: null, dust: newParticles(7), mote: null, turns: 0 };
+  const sprites = { master: null, turned: null, lightMaster: null, lit: null };
+  return { make, ...sprites, dust: newParticles(7), mote: null, turns: 0 };
 }
-
-/** How far either way of its axis the beam casts any light, radians. */
-const SPREAD = beamSpread(BEAM_HALF);
 
 /** The 2D context of `canvas`, there by the canvas's word. */
 function drawOn(canvas: HTMLCanvasElement): CanvasRenderingContext2D {
@@ -160,17 +175,41 @@ function drawOn(canvas: HTMLCanvasElement): CanvasRenderingContext2D {
 }
 
 /**
- * The beam pointing right from a lens at its canvas's left middle, `r` device px long, on a
- * canvas from `make`: a conic gradient across — the core and its flanks (world/beam.ts) — of the
- * lamp's warm light at BEAM_LIGHT, cut down along its reach as your lamp's beam falls off.
+ * A cone a master is baked as: as wide as `half` either way of its axis before its edge fades,
+ * radians, in `paint` — as strong as the cone is across at each point (0 to 1).
  */
-function bakeMaster(make: CanvasMaker, r: number): Baked {
-  const h = Math.ceil(2 * r * Math.sin(SPREAD)) + 2;
+interface Cone {
+  half: number;
+  paint: (share: number) => string;
+}
+
+/** The haze: the lamp's warm light at BEAM_LIGHT, as wide as the beam. */
+const HAZE: Cone = { half: BEAM_HALF, paint: (share) => rgba(GLOW_RGB, share * BEAM_LIGHT) };
+
+/**
+ * The cone's light on the lab, laid as a colour dodge: a grey of the night's own strength, which
+ * divides a pixel by 1 - NIGHT_SINK where it is laid whole — the lab as lit — and by less as the
+ * cone fades; wider than the haze (LIGHT_HALF), as a torch's spill lights more than its beam.
+ */
+const NIGHT_GREY = Math.round(255 * NIGHT_SINK);
+const LIGHT: Cone = {
+  half: LIGHT_HALF,
+  paint: (share) => rgba([NIGHT_GREY, NIGHT_GREY, NIGHT_GREY], share * CONE_LIGHT),
+};
+
+/**
+ * `cone` pointing right from a lens at its canvas's left middle, `r` device px long, on a canvas
+ * from `make`: a conic gradient across — the core and its flanks (world/beam.ts) — in its paint,
+ * cut down along its reach as your lamp's beam falls off.
+ */
+function bakeMaster(make: CanvasMaker, r: number, cone: Cone): Baked {
+  const spread = beamSpread(cone.half);
+  const h = Math.ceil(2 * r * Math.sin(spread)) + 2;
   const canvas = make(Math.ceil(r) + 1, h);
   const g = drawOn(canvas);
   const across = g.createConicGradient(-Math.PI, 0, h / 2);
-  for (const [offset, share] of acrossStops(BEAM_HALF, (off) => beamAcross(off, BEAM_HALF))) {
-    across.addColorStop(offset, rgba(GLOW_RGB, share * BEAM_LIGHT));
+  for (const [offset, share] of acrossStops(cone.half, (off) => beamAcross(off, cone.half))) {
+    across.addColorStop(offset, cone.paint(share));
   }
   g.fillStyle = across;
   g.fillRect(0, 0, canvas.width, h);
@@ -181,22 +220,26 @@ function bakeMaster(make: CanvasMaker, r: number): Baked {
   }
   g.fillStyle = along;
   g.fillRect(0, 0, canvas.width, h);
-  return { canvas, x: 0, y: -h / 2, key: `${Math.round(r)}` };
+  return { canvas, x: 0, y: -h / 2, key: `${Math.round(r)}`, spread };
 }
 
 /** How many points along its arc a beam's box is found from. */
 const ARC_POINTS = 12;
 
 /**
- * The box of whole device px round a beam `r` long pointing at `angle` from its lens: the lens
- * and its arc — what the beam lights, and no more — so that a beam pointing on the slant is laid
- * from a box no larger than one pointing straight across.
+ * The box of whole device px round a beam `r` long, `spread` either way, pointing at `angle` from
+ * its lens: the lens and its arc — what the beam lights, and no more — so that a beam pointing on
+ * the slant is laid from a box no larger than one pointing straight across.
  */
-function wedgeBox(angle: number, r: number): { x: number; y: number; w: number; h: number } {
+function wedgeBox(
+  angle: number,
+  r: number,
+  spread: number,
+): { x: number; y: number; w: number; h: number } {
   const xs = [0];
   const ys = [0];
   for (let k = 0; k <= ARC_POINTS; k++) {
-    const t = angle - SPREAD + (2 * SPREAD * k) / ARC_POINTS;
+    const t = angle - spread + (2 * spread * k) / ARC_POINTS;
     xs.push(Math.cos(t) * r);
     ys.push(Math.sin(t) * r);
   }
@@ -211,7 +254,7 @@ function wedgeBox(angle: number, r: number): { x: number; y: number; w: number; 
  * turns faster.
  */
 function turnMaster(make: CanvasMaker, master: Baked, angle: number, into: Baked | null): Baked {
-  const box = wedgeBox(angle, master.canvas.width - 1);
+  const box = wedgeBox(angle, master.canvas.width - 1, master.spread);
   const canvas = into?.canvas ?? make(box.w, box.h);
   if (canvas.width !== box.w || canvas.height !== box.h) {
     canvas.width = box.w;
@@ -225,31 +268,40 @@ function turnMaster(make: CanvasMaker, master: Baked, angle: number, into: Baked
   g.imageSmoothingEnabled = false;
   g.drawImage(master.canvas, 0, master.y);
   g.imageSmoothingEnabled = true;
-  return { canvas, x: box.x, y: box.y, key: `${master.key} ${angle}` };
+  return { canvas, x: box.x, y: box.y, key: `${master.key} ${angle}`, spread: master.spread };
+}
+
+/** Lets `baked`'s canvas go at once, where there is one. */
+function letGo(baked: Baked | null): void {
+  if (baked !== null) {
+    baked.canvas.width = 0;
+    baked.canvas.height = 0;
+  }
 }
 
 /**
- * The beam of `lamp` at a density of `dpr`, from `beam`'s sprites: the master baked anew for a
- * new reach, turned anew for a new step of the sweep; null where it reaches nowhere.
+ * The beam of `lamp` at a density of `dpr`, from `beam`'s sprites — its haze and its light, each
+ * baked anew for a new reach, turned anew for a new step of the sweep; null where it reaches
+ * nowhere.
  */
-function turnedFor(beam: SceneBeam, lamp: HeroLamp, dpr: number): Baked | null {
+function turnedFor(beam: SceneBeam, lamp: HeroLamp, dpr: number): [Baked, Baked] | null {
   const r = Math.round(lamp.reach * dpr);
   if (r < 2) {
     return null;
   }
-  if (beam.master?.key !== `${r}`) {
-    if (beam.master !== null) {
-      beam.master.canvas.width = 0;
-      beam.master.canvas.height = 0;
-    }
-    beam.master = bakeMaster(beam.make, r);
+  if (beam.master?.key !== `${r}` || beam.lightMaster === null) {
+    letGo(beam.master);
+    letGo(beam.lightMaster);
+    beam.master = bakeMaster(beam.make, r, HAZE);
+    beam.lightMaster = bakeMaster(beam.make, r, LIGHT);
   }
   const angle = stepped(lamp.angle, BEAM_STEP);
-  if (beam.turned?.key !== `${beam.master.key} ${angle}`) {
+  if (beam.turned?.key !== `${beam.master.key} ${angle}` || beam.lit === null) {
     beam.turned = turnMaster(beam.make, beam.master, angle, beam.turned);
+    beam.lit = turnMaster(beam.make, beam.lightMaster, angle, beam.lit);
     beam.turns += 1;
   }
-  return beam.turned;
+  return [beam.turned, beam.lit];
 }
 
 /** What the scene's frame lays the beam by: its density, a scene tile, the clock, the motion. */
@@ -266,7 +318,8 @@ export interface BeamFrame {
 
 /**
  * Lays the beam of the hero's `lamp` over `ctx` — the scene's canvas, the lab copied on it — at
- * whole pixels, as strong as the lamp is on, and the dust drifting in it. Without a lamp alight
+ * whole pixels, as strong as the lamp is on: its light on the lab, the haze over it, and the dust
+ * drifting in it. Without a lamp alight
  * it lays nothing and lets its canvases go: no hero stands on the stage, or the menu has gone for
  * the lobby, whose scene drifts on.
  */
@@ -280,13 +333,17 @@ export function layBeam(
     freeBeam(beam);
     return;
   }
-  const turned = turnedFor(beam, lamp, frame.dpr);
-  if (turned === null) {
+  const sprites = turnedFor(beam, lamp, frame.dpr);
+  if (sprites === null) {
     return;
   }
-  const x = Math.round(lamp.x * frame.dpr) + turned.x;
-  const y = Math.round(lamp.y * frame.dpr) + turned.y;
+  const [turned, lit] = sprites;
+  const [lensX, lensY] = [Math.round(lamp.x * frame.dpr), Math.round(lamp.y * frame.dpr)];
+  const [x, y] = [lensX + turned.x, lensY + turned.y];
   ctx.globalAlpha = lamp.on;
+  ctx.globalCompositeOperation = 'color-dodge';
+  ctx.drawImage(lit.canvas, lensX + lit.x, lensY + lit.y);
+  ctx.globalCompositeOperation = 'source-over';
   ctx.drawImage(turned.canvas, x, y);
   if (lamp.flare > 0) {
     ctx.globalAlpha = lightStep(lamp.flare) * FLARE_LIGHT;
@@ -349,17 +406,14 @@ function layDust(
 
 /** Lets the beam's canvases go at once. */
 export function freeBeam(beam: SceneBeam): void {
-  for (const baked of [beam.master, beam.turned]) {
-    if (baked !== null) {
-      baked.canvas.width = 0;
-      baked.canvas.height = 0;
-    }
-  }
+  [beam.master, beam.turned, beam.lightMaster, beam.lit].forEach(letGo);
   if (beam.mote !== null) {
     beam.mote.width = 0;
     beam.mote.height = 0;
   }
   beam.master = null;
   beam.turned = null;
+  beam.lightMaster = null;
+  beam.lit = null;
   beam.mote = null;
 }

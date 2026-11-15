@@ -93,9 +93,10 @@ export interface SceneBake {
 
 /**
  * How far the lab sinks at night, the menu's hero standing in it with its lamp: its light cut
- * to little more than a third — which the bake added onto itself brings back (`nightTo`).
+ * to about a quarter, so that the lamp's cone lights it back (lampArt.ts `CONE_LIGHT`) — which the
+ * bake added onto itself brings back behind the lobby (`nightTo`).
  */
-export const NIGHT_SINK = 0.62;
+export const NIGHT_SINK = 0.74;
 
 /**
  * Adds `g`'s canvas onto itself until its light is `times` as strong: doubled at each whole

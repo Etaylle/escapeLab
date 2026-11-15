@@ -129,7 +129,7 @@ const lampOf = (on = 1, flare = 0): HeroLamp => ({
 const FRAME = { dpr: 1, tile: 64, now: 0, reduced: false };
 
 describe('the beam over the lab at night', () => {
-  it('lays its haze over the lab, the motes as well, and a second haze as it flares', () => {
+  it('lights the lab in its cone, its haze and motes over it, a second haze as it flares', () => {
     const scene = fakeCanvas(1440, 820, 'scene');
     const beam = sceneBeam((w, h) => fakeCanvas(w, h).canvas);
     for (let now = 0; now < 3000; now += 1000 / 30) {
@@ -137,7 +137,12 @@ describe('the beam over the lab at night', () => {
     }
     const laid = callEntries(scene.log, 'drawImage');
     expect(laid.length).toBeGreaterThan(90);
-    expect(laid.every((e) => e.op === 'source-over')).toBe(true);
+    // The cone's light alone is laid as a colour dodge, the lab's own pixels lit; never read back.
+    const lit = laid.filter((e) => e.op === 'color-dodge');
+    expect(lit.every((e) => e.args[0] === beam.lit?.canvas)).toBe(true);
+    expect(lit.length).toBe(laid.filter((e) => e.args[0] === beam.turned?.canvas).length);
+    expect(laid.every((e) => e.op === 'source-over' || e.op === 'color-dodge')).toBe(true);
+    expect(callEntries(scene.log, 'getImageData')).toEqual([]);
     expect(laid.some((e) => e.args[0] === beam.mote)).toBe(true);
     scene.log.length = 0;
     layBeam(scene.ctx, beam, lampOf(1, 0.5), { ...FRAME, now: 3000 });
