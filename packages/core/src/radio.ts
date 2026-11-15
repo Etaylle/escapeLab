@@ -197,6 +197,11 @@ export interface RadioLine {
   /** the station a nudge or a solve's line belongs to; null for the others */
   readonly puzzleId: string | null;
   readonly role: Role;
+  /**
+   * the person of the roster who says it on every night, whatever role they hold (the intro's
+   * `pa` lines may name one); null for the role's person on duty (cast.ts `sayersOfLine`)
+   */
+  readonly by: string | null;
   /** how it is said (MOODS); null for a line said as every line was */
   readonly mood: Mood | null;
 }
@@ -217,6 +222,7 @@ const textsOf = (
         when,
         puzzleId,
         role: roleOf(when),
+        by: null,
         mood: moodOf(when),
       }));
 
@@ -225,11 +231,14 @@ const linesOf = (said: readonly (readonly [Line | undefined, RadioMoment])[]): R
   said.flatMap(([line, when]) => textsOf(line, when));
 
 /**
- * The run's story as it is heard: the intro's announcement over the loudspeakers, the start,
- * for each station its nudges and the line its solve brings, the escape.
+ * The run's story as it is heard: the intro's lines over the loudspeakers, each by the person it
+ * names where it names one, the start, for each station its nudges and the line its solve
+ * brings, the escape.
  */
 function storyLines(mission: Mission): RadioLine[] {
-  const pa = (mission.intro?.pa ?? []).flatMap((text) => textsOf(text, 'pa'));
+  const pa = (mission.intro?.pa ?? []).flatMap(({ text, by }) =>
+    textsOf(text, 'pa').map((line) => ({ ...line, by })),
+  );
   const stations = mission.puzzles.flatMap((puzzle) => [
     ...puzzle.nudges.flatMap((line) => textsOf(line, 'nudge', puzzle.id)),
     ...textsOf(puzzle.onSolved, 'solved', puzzle.id),

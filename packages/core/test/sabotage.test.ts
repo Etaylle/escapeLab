@@ -137,7 +137,14 @@ describe('sabotage emergencies', () => {
     // Without a message the loudspeakers stay quiet.
     const quiet = applyAction(playing(), { type: 'sabotage-start', at: T0 + 1000 });
     expect(quiet.events.filter((e) => e.kind === 'radio' && e.at > T0)).toEqual([]);
-    const message = { text: ANNOUNCE, when: 'announce', puzzleId: null, role: 'pa', mood: null };
+    const message = {
+      text: ANNOUNCE,
+      when: 'announce',
+      puzzleId: null,
+      role: 'pa',
+      by: null,
+      mood: null,
+    };
     expect(radioLines(announcing).at(-1)).toEqual(message);
   });
 

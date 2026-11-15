@@ -147,16 +147,15 @@ function useKeptCue(view: PlayerView): React.MutableRefObject<{
 
 /**
  * The announcement and the music of the opening that began at `since`: from its start — its
- * lines `pa` said by `person`, the plant's voice of the night's cast — the music only for a
- * player still watching; both stop with the run or the screen.
+ * lines `pa`, each said by its speaker (core view.ts `IntroView`) — the music only for a player
+ * still watching; both stop with the run or the screen.
  */
 function useOpeningSound(
   kept: React.MutableRefObject<{ cue: IntroCue | null }>,
-  pa: readonly string[],
-  person: string,
+  pa: readonly VoiceLine[],
 ) {
   const lines = useRef<readonly VoiceLine[]>([]);
-  lines.current = pa.map((text) => ({ text, person }));
+  lines.current = pa;
   const since = kept.current.cue?.lightsSec == null ? null : kept.current.cue.since;
   useEffect(() => {
     const cue = kept.current.cue;
@@ -227,7 +226,7 @@ export function useIntro(view: PlayerView, send: (msg: ClientMessage) => void): 
   const kept = useKeptCue(view);
   const tell = useRef(send);
   tell.current = send;
-  useOpeningSound(kept, view.intro?.pa ?? [], view.cast.pa);
+  useOpeningSound(kept, view.intro?.pa ?? []);
   const latestView = useRef(view);
   latestView.current = view;
   const skip = useCallback(() => {

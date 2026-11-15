@@ -37,7 +37,10 @@ const blackout = missions.find((mission) => mission.id === 'blackout');
 const first = (line: Line | undefined): string => variantsOf(line ?? '')[0] ?? '';
 const START = first(blackout?.radio.start);
 const NUDGE = first(blackout?.puzzles[0]?.nudges[0]);
-const ANNOUNCED = blackout?.intro?.pa[0] ?? '';
+/** The intro's lines over the loudspeakers: the plant's own, and those a person of the cast says. */
+const PA = blackout?.intro?.pa ?? [];
+const ANNOUNCED = PA.find((line) => line.by === null)?.text ?? '';
+const HIS_ANNOUNCEMENT = PA.find((line) => line.by === 'helmut')?.text ?? '';
 const ALARM = first(blackout?.radio.alarm);
 
 /** 0.75 s of a 440 Hz tone as an MP3 (64 kbit/s, made once with LAME): 0.784 s decoded. */
@@ -356,16 +359,30 @@ describe('a take of the cast in service', () => {
     expect(manifest()[pa]).toMatchObject({ ...plant, source: 'human' });
   });
 
+  it('enters a line of the loudspeakers a person says as theirs alone, never the plant’s', async () => {
+    expect(HIS_ANNOUNCEMENT).toMatch(/^Durchsage der Leitstelle\b/);
+    const plants = idOf('anlage', HIS_ANNOUNCEMENT);
+    expect((await ask(desk(fakeConvert), post(plants, toneWav(0.8))))?.status).toBe(404);
+    expect((await ask(desk(fakeConvert), post(his(HIS_ANNOUNCEMENT), toneWav(0.8))))?.status).toBe(
+      200,
+    );
+    const helmut = { text: HIS_ANNOUNCEMENT, role: 'pa', person: 'helmut', moment: 'pa' };
+    expect(manifest()[his(HIS_ANNOUNCEMENT)]).toMatchObject(helmut);
+    expect(manifest()[plants]).toBeUndefined();
+  });
+
   it('refuses a line as somebody says it who says none of its role’s lines', async () => {
-    // Laura has no voice yet, nor has the Schichtleitung: Helmut says its calls meanwhile.
+    // The plant says no line of the Leitstelle's; with the Schichtleitung's voice kept, the
+    // Leitstelle says none of its calls.
     const clock = first(blackout?.radio.clock?.lastMinute);
-    for (const off of [idOf('laura', START), idOf('mila', clock)]) {
+    for (const off of [idOf('anlage', START), his(clock)]) {
       expect((await ask(desk(), post(off, toneWav(0.2))))?.status, off).toBe(404);
     }
     expect(readdirSync(dir)).toEqual(['manifest.json']);
-    expect((await ask(desk(fakeConvert), post(his(clock), toneWav(0.2))))?.status).toBe(200);
-    const call = { role: 'lead', person: 'helmut', moment: 'clock' };
-    expect(manifest()[his(clock)]).toMatchObject(call);
+    const hers = idOf('mila', clock);
+    expect((await ask(desk(fakeConvert), post(hers, toneWav(0.2))))?.status).toBe(200);
+    const call = { role: 'lead', person: 'mila', moment: 'clock' };
+    expect(manifest()[hers]).toMatchObject(call);
   });
 });
 

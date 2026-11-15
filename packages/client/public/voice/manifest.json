@@ -26,32 +26,6 @@
       "model": "eleven_v4",
       "file": "anlage-1d6e6f98882a.mp3"
     },
-    "anlage-2fec42b4a1b0": {
-      "text": "Die Spätschicht gibt Dosimeter und Schlüssel bitte an der Pforte ab.",
-      "ms": 4284,
-      "missions": [
-        "blackout"
-      ],
-      "role": "pa",
-      "person": "anlage",
-      "moment": "pa",
-      "render": "a015b3c2e2cc",
-      "model": "eleven_v4",
-      "file": "anlage-2fec42b4a1b0.mp3"
-    },
-    "anlage-559d72aae03f": {
-      "text": "Durchsage der Leitstelle für Trakt C. Es ist 23 Uhr 47, die Nachtschicht hat übernommen.",
-      "ms": 7471,
-      "missions": [
-        "blackout"
-      ],
-      "role": "pa",
-      "person": "anlage",
-      "moment": "pa",
-      "render": "60a71604dc19",
-      "model": "eleven_v4",
-      "file": "anlage-559d72aae03f.mp3"
-    },
     "anlage-784c192e1b4d": {
       "text": "Kühlkreislauf gestört, Temperatur im Trakt steigt. Relaissteuerung auf Handbetrieb.",
       "ms": 5956,
@@ -77,19 +51,6 @@
       "render": "b651de02338d",
       "model": "eleven_v4",
       "file": "anlage-aaf1402ec3ae.mp3"
-    },
-    "anlage-d1ae33eb0de5": {
-      "text": "Herr Haller, bitte die Leitstelle anrufen. Herr Haller, bitte die Leitstelle anrufen.",
-      "ms": 5721,
-      "missions": [
-        "blackout"
-      ],
-      "role": "pa",
-      "person": "anlage",
-      "moment": "pa",
-      "render": "f51b8ffbadd2",
-      "model": "eleven_v4",
-      "file": "anlage-d1ae33eb0de5.mp3"
     },
     "anlage-db81476a48b2": {
       "text": "Netzlast im Trakt 96 Prozent, Notstrom in Bereitschaft.",
@@ -1485,6 +1446,19 @@
       "model": "eleven_v4",
       "file": "helmut-4f5494825480.mp3"
     },
+    "helmut-559d72aae03f": {
+      "text": "Durchsage der Leitstelle für Trakt C. Es ist 23 Uhr 47, die Nachtschicht hat übernommen.",
+      "ms": 7471,
+      "missions": [
+        "blackout"
+      ],
+      "role": "pa",
+      "person": "helmut",
+      "moment": "pa",
+      "render": "60a71604dc19",
+      "model": "eleven_v4",
+      "file": "helmut-559d72aae03f.mp3"
+    },
     "helmut-5d1ab414fef4": {
       "text": "Reaktor läuft. Der Notausgang ist entriegelt, Nordwestecke beim Archiv. Alle raus, jetzt.",
       "ms": 6687,
@@ -1817,6 +1791,19 @@
       "render": "10cc2ed26c95",
       "model": "eleven_v4",
       "file": "helmut-a05a06d81e0a.mp3"
+    },
+    "helmut-a1ac9af3ae35": {
+      "text": "Nur die Nachtschicht. Zwei Leute, vielleicht drei.",
+      "ms": 3553,
+      "missions": [
+        "blackout"
+      ],
+      "role": "pa",
+      "person": "helmut",
+      "moment": "pa",
+      "render": "14a5e31e6fc1",
+      "model": "eleven_v4",
+      "file": "helmut-a1ac9af3ae35.mp3"
     },
     "helmut-a242523a34e9": {
       "text": "Speicherkern an die Schleusenwand, Schaltplan im Nordwesten.",
@@ -3382,6 +3369,19 @@
       "render": "181642172e66",
       "model": "eleven_v4",
       "file": "mila-7ac7978ad8d9.mp3"
+    },
+    "mila-98a64f5a625f": {
+      "text": "Schichtleitung an Leitstelle. Die Netzlast gefällt mir nicht, Helmut. Wer ist heute Nacht im Trakt?",
+      "ms": 5721,
+      "missions": [
+        "blackout"
+      ],
+      "role": "pa",
+      "person": "mila",
+      "moment": "pa",
+      "render": "9b1f364d703b",
+      "model": "eleven_v4",
+      "file": "mila-98a64f5a625f.mp3"
     },
     "mila-a418f852f99d": {
       "text": "Die Notzellen machen noch fünf Minuten. Das reicht, wenn ihr euch aufteilt.",

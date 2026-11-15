@@ -575,6 +575,13 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   Workers. Fünf Regie-Tags in Blackout; Ordnergrenze der Aufnahmen 12 → 24 MB. Kosten: Laura,
   Ben und Mila mit ihren Bibliotheksstimmen und die Anlage besetzt → 21.592 Credits (213 Zeilen),
   mit `--fresh` 25.575. Offen: Wahl auf `/voices`, Keeps und Render durch Uros.
+- 2026-11-15 (V-opening): Uros hat die Besetzung gerendert (8f1914c, 260 Aufnahmen). Blackouts
+  Eröffnung ist jetzt eine Szene in drei Stimmen: Eine Zeile von `intro.pa` darf ihre Sprecherin
+  nennen (`{ "text": …, "by": "mila" }`, eine Person des Rosters, jede Nacht dieselbe), sonst
+  spricht die Anlage. Helmut eröffnet (sein Take vom 2026-10-25, unter seinem Namen abgelegt), die
+  Anlage liest, Mila fragt, Helmut antwortet, die Anlage schließt; Spätschicht und Herr Haller
+  sind gestrichen. Offen bei Uros: Milas Frage und Helmuts Antwort rendern (2 Zeilen,
+  149 Credits), danach `intro.lightsSec` laut Stimmentest setzen und `AWAITING_RENDER` leeren.
 
 ### M-1 Drei Spielende: Beweis und Sichtbarkeit — Status: erledigt (M-three, Merge 2026-11-14, a2ef8da; drei Review-Runden; Cloud-CI grün auf 347d444, Check und Walkthrough; CI-Budget um zwei Minuten angehoben) · Größe: M
 - Befund: mechanisch trägt die dritte Person (Leserin mit Regeln, Notizen und Funk an Zwei-Pult-

@@ -339,13 +339,13 @@ describe('who speaks on the air', () => {
       person: 'laura',
     });
     // A line of a run kept before the cast: the role that speaks it now, its first in service —
-    // the Schichtleitung's by the desk, Helmut, while it has no voice.
+    // the Schichtleitung's by Mila, whose voice is kept.
     const old = (moment?: Moment) =>
       speakerOf({ ...event('radio', 0), ...(moment === undefined ? {} : { moment }) });
     expect([old('start'), old('announce'), old('clock'), old(undefined)]).toEqual([
       { role: 'operator', person: 'helmut' },
       { role: 'pa', person: 'anlage' },
-      { role: 'operator', person: 'helmut' },
+      { role: 'lead', person: 'mila' },
       { role: 'operator', person: 'helmut' },
     ]);
   });

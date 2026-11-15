@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ROSTER, type Roster } from '@escapelab/core';
+import { ROSTER, type Person, type Roster } from '@escapelab/core';
 import { readRoster, slotsOf as scriptSlots } from '../scripts/cast.js';
 import { readManifest } from '../scripts/voice.js';
 import { opensVoices, VOICES_PATH } from '../src/voices/path.js';
@@ -95,12 +95,20 @@ const LIBRARY: readonly LibraryVoice[] = [
   offer('dCnu06FiOZma2KVNUoPZ', 'Confident', 'lead', false),
 ];
 
-/** The roster as the page reads it, Laura's voice kept besides Helmut's. */
+/** A person of the roster without a voice kept. */
+const unvoiced = ({ id, name, character }: Person): Person => ({ id, name, character });
+
+/**
+ * The roster as the page reads it, for its states with a voice and without: as it stood before
+ * the cast's render, Helmut's voice kept, and Laura's besides.
+ */
 const KEPT: Roster = {
-  ...ROSTER,
-  operator: ROSTER.operator.map((p) =>
-    p.id === 'laura' ? { ...p, voiceId: 'lauraVoice0000000000', model: 'eleven_v3' } : p,
-  ),
+  pa: ROSTER.pa.map(unvoiced),
+  operator: ROSTER.operator.map((p) => {
+    if (p.id === 'laura') return { ...p, voiceId: 'lauraVoice0000000000', model: 'eleven_v3' };
+    return p.id === 'helmut' ? p : unvoiced(p);
+  }),
+  lead: ROSTER.lead.map(unvoiced),
 };
 
 const board = (props: Partial<VoicesBoardProps> = {}): string =>

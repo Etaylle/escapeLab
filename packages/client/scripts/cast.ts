@@ -173,6 +173,19 @@ export function sayersOf(roster: Roster, role: Role): readonly Person[] {
 }
 
 /**
+ * Everybody who says a line of `role` that names `by` — or none (null) — as core's `sayersOfLine`:
+ * the person it names, whatever role they hold, or else everybody who says the role's lines.
+ */
+export function sayersOfLine(
+  roster: Roster,
+  { role, by }: { readonly role: Role; readonly by: string | null },
+): readonly Person[] {
+  if (by === null) return sayersOf(roster, role);
+  const person = ROLES.flatMap((each) => roster[each]).find(({ id }) => id === by);
+  return person === undefined ? [] : [person];
+}
+
+/**
  * How each role's ElevenLabs voice holds: the Leitstelle and the Schichtleitung as every line
  * was read before; the plant steadier, a building's system that says every line alike (on Eleven
  * v3, its Robust setting: elevenlabs.ts `voiceSettings`).

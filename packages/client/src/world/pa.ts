@@ -136,7 +136,7 @@ interface Speaking {
   readonly stop: (at: number) => void;
 }
 
-/** An announcement under way on this screen: its lines, each said by the plant's voice. */
+/** An announcement under way on this screen: its lines, each said by its speaker. */
 interface Announcement {
   readonly lines: readonly VoiceLine[];
   timers: ReturnType<typeof setTimeout>[];
@@ -164,7 +164,7 @@ const weak: { speaking: Speaking | null; asked: Ask | null; said: number } = {
 };
 
 /**
- * Starts the announcement `lines` — each said by the plant's voice of the night's cast — on a
+ * Starts the announcement `lines` — each said by its speaker (core view.ts `IntroView`) — on a
  * sequence that began at `since` (epoch ms): once the voice manifest is here, every line is
  * decoded (radioVoice.ts `preloadLines`) and put in its place on the sequence's clock by its
  * length, and each speaks as its moment comes, then is let go. One already under way stops.

@@ -753,11 +753,15 @@ voices alone:
 
 | Role | Person | Who they are | Voice | Library voices offered |
 | --- | --- | --- | --- | --- |
-| `pa` | Durchsage (`anlage`) | the plant's loudspeakers, a building's voice | none kept: Helmut's five takes | „Nastassja", „Lana Weiss - Soft and Sweet" |
+| `pa` | Durchsage (`anlage`) | the plant's loudspeakers, a building's voice | „Nastassja" (`OCDYul75SEKSUI3jtFCT`), `eleven_v4` | that one, and „Lana Weiss - Soft and Sweet" |
 | `operator` | Helmut | the senior night operator, deep and slow | „Helmut - German Epic Trailer Voice" (`g1jpii0iyvtRs8fqXsd1`), `eleven_v4` | that one, and „Helmut - Distinctive and Authentic" |
-| `operator` | Laura | from the plant's grid control room, calm and even | none kept | „Laura - Calm and Smooth" |
-| `operator` | Ben | the youngest operator, quick and casual | none kept | „Ben - Effortless and Casual" |
-| `lead` | Mila | the night's shift supervisor, young and sure of herself | none kept | „Mila - Confident and Opinionated" |
+| `operator` | Laura | from the plant's grid control room, calm and even | „Laura - Calm and Smooth" (`Qy4b2JlSGxY7I9M9Bqxb`), `eleven_v4` | that one |
+| `operator` | Ben | the youngest operator, quick and casual | „Ben - Effortless and Casual" (`aTTiK3YzK3dXETpuDE2h`), `eleven_v4` | that one |
+| `lead` | Mila | the night's shift supervisor, young and sure of herself | „Mila - Confident and Opinionated" (`dCnu06FiOZma2KVNUoPZ`), `eleven_v4` | that one |
+
+Every voice is kept since the cast's render of 2026-11-15 (8f1914c): 260 recordings, the plant
+saying its own lines, Helmut, Laura and Ben a third of the nights each, Mila the Schichtleitung's
+twelve lines.
 
 Three decisions shape the cast; each was made so, not left so:
 
@@ -770,11 +774,12 @@ Three decisions shape the cast; each was made so, not left so:
   operator who then has the run, and a rematch, past the lobby, is the next night. A snapshot of a
   room from before the cast is staffed from 0 on.
 - **A person is on duty only once their voice is kept** (`inService`). Where none of a role has
-  one, the plant and the Leitstelle keep their first person, whose recordings the game has —
-  Helmut, and the plant's five takes in his voice — and the Schichtleitung nobody: its moments go
+  one, the plant and the Leitstelle keep their first person, whose recordings the game had before
+  the cast's render — and the Schichtleitung nobody: its moments go
   to the Leitstelle on duty (`speakingFor`), whose banner they carry, and every person who says a
-  role's lines needs a recording of each (`sayersOf`). No night's lines wait for a render, and
-  today Helmut has every night and the Schichtleitung's twelve lines too. A keep puts its person on
+  role's lines needs a recording of each (`sayersOf`). No night's lines wait for a render. A
+  line may also name its speaker (the opening's, below): then that person alone says it on
+  every night, whatever role they hold (`sayersOfLine`). A keep puts its person on
   duty as soon as the roster has the voice, so their lines are made before it is committed: the
   voice test holds everybody who says a line to its recording.
 - **The model is the person's.** Helmut reads on `eleven_v4`, which keeps the render of every
@@ -794,9 +799,9 @@ keyed with the chirp, as one without a recording is. Under ElevenLabs a person r
 voice the roster keeps for them, held as their role asks (`ROLE_HELD`: the Leitstelle and the
 Schichtleitung stability 0.5 and similarity 0.75 as every line was read before; the plant
 steadier, 0.8, which Eleven v3 takes as its Robust setting). Under Piper or the Mac's voice every
-person shares the one voice. The 52 recordings of before are Helmut's — 47 of the Leitstelle and
-the announcement's five, filed under the plant's name until its voice is kept; each was checked to
-be his Eleven v4 take before its model was written into the list.
+person shares the one voice. 48 recordings are Helmut's of 2026-10-25, made before the paid plan
+named itself: 47 of the Leitstelle and the opening's first line, filed under his name; each was
+checked to be his Eleven v4 take before its model was written into the list.
 
 **Hearing a voice before it is kept** (`scripts/cast.ts`, the page `/voices`). A person gets a
 voice one of two ways. A library voice of the account: `--previews` fetches the preview ElevenLabs
@@ -819,8 +824,8 @@ Either refuses, before it asks anything, to give a person a new voice while take
 theirs exist — it says how many and what making them anew costs — unless `--replace` is given:
 then it drops those takes from the list and their files for the next render to make in the new
 voice (a recording a person made stays; a library voice that is theirs already makes nothing
-stale). The plant's five takes are Helmut's voice under its name, so its first keep needs
-`--replace`; so does any new voice for Helmut. The page `/voices`, which no menu links to, in the
+stale). A new voice for Helmut needs `--replace`, as does one for anybody whose takes are there.
+The page `/voices`, which no menu links to, in the
 shape of `/sounds`, lists each role and who can fill it — their character, the voice kept, where
 the desk speaks for a Schichtleitung without one — and under each person the library voices
 offered for them with their previews (`GET /takes/voices/library/`, the dev server reading
@@ -841,30 +846,30 @@ voice that a library voice costs nothing to keep and a design its text, and ever
 role once one is kept; then the kept cast's sum and the whole cast's, every voice kept; and for a
 plain run what `--fresh` would make beside it. It assumes the paid plan the account holds, which
 a render reads off it. A plain render keeps every take there and makes what is missing — Helmut's
-47 takes of 2026-10-25 with them; `--fresh` makes those anew besides, which settles their licence
-(Lizenz, below). Today's `--plan`, and the cast the owner proposed, with the plant's voice kept
-over its five takes (`--replace`):
+48 takes of 2026-10-25 with them; `--fresh` makes those anew besides, which settles their licence
+(Lizenz, below). Today's `--plan` (2026-11-15, after the opening became a scene, below):
 
-| | Today | Laura, Ben, Mila, the plant kept |
+| | Made, kept | To make, plain |
 | --- | --- | --- |
-| Helmut | 45 lines, 5,160 credits — 12 of them, 1,226, the Schichtleitung's | 33 lines, 3,934 |
-| Laura, Ben | no voice yet | 80 lines, 7,917 each |
-| Mila | no voice yet: the desk speaks for her | 12 lines, 1,226 |
-| Durchsage | no voice yet: Helmut's five takes | 8 lines, 598 |
-| the render, plain | 5,160 credits | 21,592 credits, 213 lines |
-| with `--fresh` | 9,143 credits | 25,575 credits, 260 lines |
+| Durchsage | 5 lines | none |
+| Helmut | 81 lines | 1 line, 50 credits: „Nur die Nachtschicht. …" |
+| Laura, Ben | 80 lines each | none |
+| Mila | 12 lines | 1 line, 99 credits: „Schichtleitung an Leitstelle. …" |
+| the render, plain | | 2 lines, 149 credits |
+| `--fresh` besides | | 48 takes, 4,071 credits |
 
 A further operator costs one render of the Leitstelle's lines: 7,917 credits for its 80 lines,
 moods and tags included, and 228 more where their voice is designed rather than a library voice.
 The big render waits for the final cast: a voice kept anew after its lines are made makes them
 anew, every credit again.
 
-**The render.** The agents write the lines and may not spend the account's credits: the 48 lines
-V-voices added and every line of a voice not yet kept await the owner, the voice test listing
-the texts (`AWAITING_RENDER`, to be emptied as they come for everyone who says them). Meanwhile
+**The render.** The agents write the lines and may not spend the account's credits: a line they
+add awaits the owner, the voice test listing the texts (`AWAITING_RENDER`, to be emptied as they
+come for everyone who says them) — today the opening's two lines between Mila and Helmut. Meanwhile
 the objective bar and the Einsatzprotokoll show their words, and what is heard depends on where
 they come: the radio's lines on the bar key the radio's chirp, as every line without a recording
-does; the plant's message, the last word on the end card and the Funkprobe are silent. In the main
+does; the plant's message, the last word on the end card, the Funkprobe and a line of the opening
+are silent. In the main
 checkout, whose `.env.local` holds the key — never printed — in this order:
 
 ```sh
@@ -879,7 +884,7 @@ pnpm --filter @escapelab/client voice --keep operator:ben=aTTiK3YzK3dXETpuDE2h
 pnpm --filter @escapelab/client voice --keep lead=dCnu06FiOZma2KVNUoPZ
 pnpm --filter @escapelab/client voice --keep pa=<voice id or n> --replace   # drops Helmut's 5
 pnpm --filter @escapelab/client voice --plan        # 0 credits: the render's credits, to the last
-VOICE_ENGINE=elevenlabs pnpm --filter @escapelab/client voice   # 21,592 for that cast, plain
+VOICE_ENGINE=elevenlabs pnpm --filter @escapelab/client voice   # what is missing, plain
 ```
 
 The render reads the account's plan first, free of charge. It makes the kept cast's lines only,
@@ -887,8 +892,8 @@ and of those only what is missing or stale by its render: a person without a voi
 the commands that give them one — `--replace` in them where takes of theirs are there — and a run
 cut short goes on where it stopped. An argument the script does not take is refused before anything
 runs, whatever its shape, with the list of the switches it takes, so `--plna`, `-plan` or a bare
-`plan` never falls through to a render. The plain run keeps Helmut's 47 takes of 2026-10-25;
-`--fresh` on the paid plan makes them anew besides — 3,983 credits, 25,575 in all for that cast —
+`plan` never falls through to a render. The plain run keeps Helmut's 48 takes of 2026-10-25;
+`--fresh` on the paid plan makes them anew besides — 4,071 credits —
 which licences them as the rest (Lizenz, below), and so does a new voice for Helmut, kept with
 `--replace` (`--keep operator:helmut=5KvpaGteYkNayiswuX2h --replace` keeps „Helmut - Distinctive and
 Authentic"). After the render the voice test names the `intro.lightsSec` the announcement's new
@@ -1415,16 +1420,27 @@ playing, the music's streams and their timing, the room's reverb and the brickwa
 ## The opening: loudspeakers and a cue (`pa.ts`, `intro/cue.ts`)
 
 A mission with an intro opens with the lab's power on (`world/intro/sequence.ts`), and while
-the camera runs across the lit lab the Leitstelle's routine shift-change announcement comes over
-the wing's loudspeakers in the plant's own voice (The cast, above), recorded with the radio's
-lines by the voice script — the intro's `pa` lines, a run's first, listed in the manifest like
-every other — and never on the air. Blackout's, in full:
+the camera runs across the lit lab the shift change comes over the wing's loudspeakers, recorded
+with the radio's lines by the voice script — the intro's `pa` lines, a run's first, listed in the
+manifest like every other — and never on the air. A line is the plant's own, in its voice on duty
+(The cast, above), or names who says it (`{ "text": …, "by": "helmut" }`, core mission.ts
+`paLineSchema`): a person of the roster, whatever role they hold, the same on every night
+whoever is on duty, so that the opening is a scene. The view carries each line's words and its
+speaker's id (core view.ts `IntroView`), and the client asks for the recording by both, as for
+the radio's lines; the voice script makes it for that person, with their voice, model and hold.
+Blackout's, in full (2026-11-15, the owner's text), Helmut's, the plant's, Mila's, Helmut's, the
+plant's:
 
 > Durchsage der Leitstelle für Trakt C. Es ist 23 Uhr 47, die Nachtschicht hat übernommen.
 > Reaktor in Teillast, 60 Prozent. Die Zentrifugen laufen bis 6 Uhr durch.
+> Schichtleitung an Leitstelle. Die Netzlast gefällt mir nicht, Helmut. Wer ist heute Nacht im Trakt?
+> Nur die Nachtschicht. Zwei Leute, vielleicht drei.
 > Netzlast im Trakt 96 Prozent, Notstrom in Bereitschaft.
-> Die Spätschicht gibt Dosimeter und Schlüssel bitte an der Pforte ab.
-> Herr Haller, bitte die Leitstelle anrufen. Herr Haller, bitte die Leitstelle anrufen.
+
+Helmut's first line is his take of 2026-10-25, filed under his name; the plant's two are its
+render of 2026-11-15; Mila's line and Helmut's answer await the render. The plant's lines keep the
+loudspeakers' guard (core `test/radioLines.test.ts`: no word to the crew, no „Wer" as a stage
+direction); the lines a person says keep the radio's, as a colleague talking to another.
 
 **The loudspeakers.** A horn on a wall, not a handset: a high-pass at 300 Hz and a low-pass at
 5 kHz, each second order (Butterworth), the direct sound straight out — no squelch, no static,
@@ -1451,8 +1467,9 @@ share of its line by length. A line whose recording is not loaded yet is left ou
 still shown, and a screen that comes in late skips the lines whose moment passed. The lights fail
 by themselves 4 s past the whole announcement's length (`LIGHTS_AFTER_SPEECH_MS`;
 `intro.lightsSec`, which `test/voiceLines.test.ts` holds to the recordings and names where it
-does not fit): with the 3 s before the first line and the pauses between, that falls into the
-last line — the page said twice — and the power under the loudspeakers goes with the lights, the
+does not fit; a line awaiting its render counts at the subtitles' pace, 450 ms a word): with the
+3 s before the first line and the pauses between, that falls into the last line — the plant's
+reading of the grid's load — and the power under the loudspeakers goes with the lights, the
 line breaking off mid-word. A player who skips hears the rest of the announcement as the room's
 sound, without the subtitles, until the lights fail on their screen.
 
@@ -1489,9 +1506,8 @@ pnpm --filter @escapelab/client intro-cue --dry-run   # what it would compose an
 pnpm --filter @escapelab/client intro-cue             # the cue; says what it cost
 ```
 
-The announcement's five lines are 368 characters. Helmut read them on 2026-10-26; the render
-under „A voice on the radio" has the plant's voice read them anew, after which the voice test
-names the `lightsSec` to set.
+Mila's line and Helmut's answer were rendered on 15.11.2026 (149 credits); `lightsSec` stands at
+31.6 s since, 4 s past the scene's 27.6 s, and `AWAITING_RENDER` is empty.
 
 `test/pa.test.ts` holds the chain and the lines' timing, the cut and a line left out, the
 emergency power's band and dropouts, a message decoded as it comes and let go once said;
@@ -1851,7 +1867,7 @@ licence is used.
 | The score: 8 pieces cut from one suite, `score` | `public/music/packs/nachtschicht/*.m4a` | Eleven Music, `music_v2_5`, a composition plan | awaits the user's render | as the music; once kept, it replaces the pieces of the row above but for the stings |
 | 32 pieces in four music packs: `yalciner`, `cheremisinov`, `macleod`, `zhelanov` | `public/music/packs/<pack>/*.m4a` | İlker Yalçıner, Sergey Cheremisinov, Lee Rosevere, Rafael Krux, Kevin MacLeod, Alexandr Zhelanov; from OpenGameArt, the Free Music Archive, incompetech and FreePD's archive on Hugging Face | fetched, cut and levelled 2026-11-14 | CC BY 4.0 with the attribution each pack carries; Alexandr Zhelanov's „Behind the Universe" CC BY 3.0, Rafael Krux's „Cornfield Chase" CC0 (below) |
 | The opening's cue | `public/intro/title.mp3` | Eleven Music | 2026-10-26 | as the music; the score's `title` plays in its place once kept |
-| 52 recordings by Helmut, 47 of the Leitstelle and the announcement's five; the cast's other voices and 48 lines awaiting their render | `public/voice/` | ElevenLabs text to speech: the library voice „Helmut", and the cast's other voices once they are kept — library voices of the owner's pick (casting.json) or made with Voice Design | 47 on 2026-10-25, 5 on 2026-10-26 | see below |
+| 258 recordings of the cast: 48 by Helmut of before, 47 of the Leitstelle and the opening's first line; the rest by the cast's library voices; two lines of the opening awaiting their render | `public/voice/` | ElevenLabs text to speech: the library voices of the owner's pick (casting.json) | 48 on 2026-10-25, the rest on 2026-11-15 | see below |
 | Kalam, the notepad's hand | `public/fonts/` | Indian Type Foundry, 2014 | shipped since 2026-11-01 | SIL Open Font License 1.1, its text beside it |
 | Michroma, the title's face | `public/fonts/` | Vernon Adams, 2011 | shipped since 2026-11-13 | SIL Open Font License 1.1, its text beside it |
 | Caveat, the last shift's hand | Google Fonts, loaded by the page | Pablo Impallari | not shipped | SIL Open Font License 1.1 |
@@ -1873,15 +1889,15 @@ words alone: no recording is given to the model to follow, and no composer, game
 named to it (Score, above). Its pieces are then as free as the rest of the music: commercial use as
 long as EscapeLab stays an Indie Game, no credit needed.
 
-**The Leitstelle's 47 lines of 2026-10-25** were recorded the evening before that record, when the
-voice section of this document still reckoned with the free plan and its credit. The repo does not
+**Helmut's 48 lines of 2026-10-25** — the Leitstelle's 47 and the opening's first — were
+recorded the evening before that record, when the voice section of this document still reckoned with the free plan and its credit. The repo does not
 say which plan the account held then. Recorded on the free plan, they need the credit
 „elevenlabs.io" and may not be used commercially; recorded on the paid plan, they are as free as the
-rest. Recording them again settles it, 3,983 characters, every line by the same voice: the
+rest. Recording them again settles it, 4,071 characters, every line by the same voice: the
 cast's render under `--fresh` does, or a new voice for Helmut kept with `--replace` (A voice on the
 radio, „The render"); a plain render keeps them. A take made on a paid plan carries
 the plan in its render, so that `--fresh` on the paid plan makes anew every take made before
-without it, those 47 among them, and a run on the free plan would make anew the paid plan's —
+without it, those 48 among them, and a run on the free plan would make anew the paid plan's —
 run `--fresh` on the paid plan alone. A library voice — Helmut's and the owner's other picks in
 casting.json — can carry conditions of its own, which its page in the Voice Library names; a voice
 made with Voice Design from the cast's own descriptions is the account's own.
@@ -1928,14 +1944,10 @@ What the sound packages left for later, one line each, the newest first:
 - **A pack's piece given up stays given up** (M-packs): a found piece whose file once failed plays
   the score's piece until the page is loaded anew, even where the connection comes back
   (Musikpakete, „A file that cannot be had").
-- **The cast's voices and their lines await the owner** (V-cast, V-voices): the library voices'
-  previews and `/voices` free, a keep each (free, `--replace` over the plant's five takes), then
-  one plain render of the kept cast's lines — 21,592 credits for Laura, Ben and Mila by their
-  library voices and the plant kept, 3,983 more under `--fresh` for Helmut's licence; the
-  commands are under „A voice on the radio". Until then Helmut has every night and says the
-  Schichtleitung's calls, the new lines show their words on the objective bar and in the
-  Einsatzprotokoll, the radio's keyed with the chirp, the plant's message, the last word and the
-  Funkprobe silent, and the announcement keeps Helmut's takes.
+- **Two lines of the opening await the owner** (V-3, 2026-11-15): Mila's question and Helmut's
+  answer, 149 credits in a plain render (The opening, above); then `intro.lightsSec` from the
+  voice test and `AWAITING_RENDER` emptied. Helmut's 48 takes of 2026-10-25 keep their licence
+  question until a render under `--fresh` (4,071 credits) makes them anew.
 - **The score, rendered and kept by ear** (M-music): three takes in two runs, about 26,500
   credits at the script's rate (22,080 at ElevenLabs' 900 a minute); the commands are under „Takes
   und Auswahl". Then `AWAITING_RENDER` loses the eight pieces.
