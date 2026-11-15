@@ -43,6 +43,8 @@ export interface PanelProps<K extends PuzzleKind> {
    * that answers it where the press was made as well as in its head: the terminal's prompt
    */
   refused?: Refusal | null;
+  /** whether the crew has solved it, for a device that falls silent then: the Morse key's tone */
+  solved?: boolean;
 }
 
 export type Panel<K extends PuzzleKind> = ComponentType<PanelProps<K>>;
