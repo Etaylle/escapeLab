@@ -1,9 +1,18 @@
 import { addProbes } from '../../probes.js';
 import { domCanvas } from '../atlas.js';
 import { TAU } from '../brush.js';
-import { figurePhase, shownFacing, TURN_MS, type FigurePose, type Turn } from '../figure.js';
+import {
+  figurePhase,
+  gaitStep,
+  shownFacing,
+  TURN_MS,
+  type FigurePose,
+  type Turn,
+} from '../figure.js';
 import { traceRequested } from '../frameTrace.js';
+import { CREW } from '../palette.js';
 import { MAX_DENSITY } from '../render/backing.js';
+import { companionFacing, companionLook, companionPlace } from './companion.js';
 import {
   AWAY_FACING,
   CLEAR,
@@ -29,7 +38,7 @@ import {
   type StageFacts,
   type Step,
 } from './hero.js';
-import { freeHero, heroCanvas, paintHero, type HeroCanvas } from './heroArt.js';
+import { freeHero, heroCanvas, paintHero, type HeroCanvas, type HeroFrame } from './heroArt.js';
 import {
   aimSweep,
   holdLamp,
@@ -45,6 +54,7 @@ import {
   type Sweep,
 } from './lamp.js';
 import { runScene, type SceneHost } from './loop.js';
+import { companionColor, type OutfitPair } from './outfits.js';
 import { holdPlace, placeShown, SCENE_ANCHOR } from './places.js';
 import { uiSound } from '../menuSound.js';
 
@@ -107,6 +117,13 @@ export interface HeroProbe {
   /** how often its canvas changed, and each of its layers was drawn anew */
   laid: number;
   drawn: { legs: number; upper: number };
+  /** what the hero and its companion wear on this visit of the menu (outfits.ts) */
+  outfits: OutfitPair;
+  /**
+   * the companion beside it: its canvas's box in the window, CSS px, and its colour; null where
+   * the stage leaves it no room
+   */
+  companion: { box: StageBox; color: string } | null;
 }
 
 /** What the hero shows besides the clock, as the menu has it on each render. */
@@ -214,6 +231,17 @@ export interface Standing {
   stageW: number;
   /** a scene tile, CSS px: the hero steps aside half of one */
   tile: number;
+  /** where its companion stands (companion.ts); null where it stands nowhere */
+  companion: HeroPlace | null;
+}
+
+/** Notes on `standing` where the hero and its companion stand on the stage `facts` measured. */
+function standOn(standing: Standing, facts: StageFacts | null): void {
+  standing.place = facts === null ? null : heroPlace(facts);
+  standing.companion = facts === null ? null : companionPlace(standing.place, facts);
+  standing.menuRight = facts?.menuRight ?? 0;
+  standing.stageW = facts?.w ?? 0;
+  standing.tile = facts === null ? 0 : heroTile(facts.windowH);
 }
 
 /**
@@ -230,13 +258,9 @@ function watchStage(
     return () => undefined;
   }
   const measure = (): void => {
-    const facts = stageFacts(stage, canvas);
     const box = stage.getBoundingClientRect();
-    standing.place = facts === null ? null : heroPlace(facts);
+    standOn(standing, stageFacts(stage, canvas));
     standing.at = { x: box.left, y: box.top };
-    standing.menuRight = facts?.menuRight ?? 0;
-    standing.stageW = facts?.w ?? 0;
-    standing.tile = facts === null ? 0 : heroTile(facts.windowH);
     placeCanvas(canvas, standing.place === null ? null : standing.place.box);
     changed();
   };
@@ -364,6 +388,17 @@ export interface HeroPainting {
   canvas: HTMLCanvasElement | null;
   /** where the walkthrough holds its beat, ms after an item is taken (`walkthroughBeat`) */
   beatHeld: () => number | null;
+  /** what it and its companion wear on this visit of the menu */
+  outfits: OutfitPair;
+  /** its companion's canvas, where the menu gives it one */
+  companion: CompanionCanvas | null;
+}
+
+/** The companion's canvas as the hero's painter keeps it: its layers, and its own offset. */
+export interface CompanionCanvas {
+  hero: HeroCanvas;
+  /** its own offset into its loops: its breath and its looks go apart from the hero's */
+  phase: number;
 }
 
 /** A hero's entrance as it goes: whether it walks in, since when, what it has come to. */
@@ -777,9 +812,98 @@ function probeBox(probe: HeroProbe, { place, at }: Standing, offset: number): vo
  * The hero gone from the stage — left out where the stage leaves it no room, or gone with the
  * menu: its lamp let go, so that the scene lays no beam, and its canvases with it.
  */
-function leaveOut(hero: HeroCanvas): void {
+function leaveOut(hero: HeroCanvas, companion: CompanionCanvas | null): void {
   holdLamp(null);
   freeHero(hero);
+  if (companion !== null) {
+    sendAway(companion);
+  }
+}
+
+/** The companion gone from the stage: its canvas hidden, its canvases let go. */
+function sendAway(companion: CompanionCanvas): void {
+  freeHero(companion.hero);
+  placeCanvas(companion.hero.canvas, null);
+}
+
+/** How strong the hero's lamp lights its companion's edge, against the hero's own. */
+const COMPANION_LIGHT = 0.5;
+/** Where along the beam the companion looks, of its reach: at what the beam shows. */
+const BEAM_MIDDLE = 0.6;
+
+/**
+ * Where the companion of `on`'s hero, placed `place`, looks at `now`, facing `facing`, the hero's
+ * lamp as `lamp` holds it out (`reach` long): at the middle of the beam while the lamp burns, now
+ * and then at its clipboard (companion.ts `companionLook`).
+ */
+function companionLookAt(
+  on: HeroPainting,
+  [place, offset, facing]: readonly [HeroPlace, number, number],
+  [lamp, reach]: readonly [LampFrame, number],
+  [now, since, phase]: readonly [number, number, number],
+): number {
+  const head = headAt(place, offset);
+  const from = { x: head.x + on.standing.at.x, y: head.y + on.standing.at.y };
+  const middle = {
+    x: lamp.lens.x + Math.cos(lamp.angle) * reach * BEAM_MIDDLE,
+    y: lamp.lens.y + Math.sin(lamp.angle) * reach * BEAM_MIDDLE,
+  };
+  const beam = lamp.on > 0 ? angleTo(from, middle) : null;
+  return companionLook([now - since, phase], facing, beam, on.reduced());
+}
+
+/**
+ * How the companion of `on`'s hero, placed `place`, moves at `now`, the hero moving `hero`: it
+ * steps aside with the hero as a panel opens — as far across the stage, its legs in their cycle —
+ * not toward the menu; turns away with it as the menu goes; stands while the hero walks in.
+ */
+function companionMotion(on: HeroPainting, place: HeroPlace, hero: HeroMotion, now: number) {
+  const heroScale = on.standing.place?.scale ?? place.scale;
+  const stepping = steppingAt(on.react.step, now, on.reduced());
+  const offset = (Math.max(0, stepping.offset) * heroScale) / place.scale;
+  const leaving = on.look.current.leaving && !on.reduced();
+  const facing = companionFacing(hero.facing, leaving);
+  const moving = stepping.moving && stepping.offset > 0;
+  return { offset, moving, walk: gaitStep(0, offset), facing, look: null };
+}
+
+/**
+ * Paints the companion of `on`'s hero, where the stage has room for it beside the hero, as the
+ * hero stands at `now` (`hero`, its motion; `lamp`, its lamp `reach` long), its canvas put on its
+ * box; let go where it has no room.
+ */
+function paintCompanion(
+  on: HeroPainting,
+  [hero, lamp, reach]: readonly [HeroMotion, LampFrame, number],
+  [now, since, dpr]: readonly [number, number, number],
+): void {
+  const mate = on.companion;
+  const place = on.standing.companion;
+  if (mate === null || place === null) {
+    if (mate !== null) sendAway(mate);
+    on.probe.companion = null;
+    return;
+  }
+  const motion = companionMotion(on, place, hero, now);
+  const look = companionLookAt(on, [place, motion.offset, motion.facing], [lamp, reach], [
+    now,
+    since,
+    mate.phase,
+  ]);
+  const cues = { phase: mate.phase, speaking: false, waveAt: null, reduced: on.reduced() };
+  const pose = heroPose(cues, [now, since], { ...motion, look });
+  const room = Math.ceil(STEP_TILES * on.standing.tile);
+  const box = { ...place.box, width: place.box.width + room };
+  placeCanvas(mate.hero.canvas, box);
+  const color = companionColor(on.look.current.color, CREW);
+  const light = { tilt: 0, on: lightStep(lamp.on * COMPANION_LIGHT), flare: 0 };
+  const frame: HeroFrame = { place, box, pose, motion, color, dpr, lamp: light, glow: false, ...{
+    outfit: on.outfits.companion,
+    figure: 'companion',
+  } };
+  paintHero(mate.hero, frame);
+  const { at } = on.standing;
+  on.probe.companion = { box: { ...box, left: box.left + at.x, top: box.top + at.y }, color };
 }
 
 /**
@@ -794,7 +918,7 @@ export function heroPainter(on: HeroPainting, since: number): (now: number) => b
     const { place } = on.standing;
     holdPlace(placeTarget(on));
     if (place === null) {
-      leaveOut(on.hero);
+      leaveOut(on.hero, on.companion);
       return false;
     }
     shownOnPage = true;
@@ -812,20 +936,23 @@ export function heroPainter(on: HeroPainting, since: number): (now: number) => b
     }
     const dpr = Math.min(MAX_DENSITY, window.devicePixelRatio || 1);
     const glow = !reduced && on.attends.current !== null;
-    const frame = { place, box, pose, motion, color: look.color, dpr, lamp, glow };
+    const outfit = on.outfits.hero;
+    const frame: HeroFrame = { ...{ place, box, pose, motion, color: look.color, dpr, lamp, glow },
+      ...{ outfit, figure: 'hero' } };
     if (paintHero(on.hero, frame)) {
       on.probe.laid += 1;
     }
     const lensX = lamp.lens.x - on.standing.at.x;
     const reach = reachOf(FIGURE_TALL * place.scale, lensX, on.standing.menuRight);
     holdLamp({ ...lamp.lens, angle: lamp.angle, reach, on: lamp.on, flare: lamp.flare });
+    paintCompanion(on, [motion, lamp, reach], [now, since, dpr]);
     probePose(on, [pose, motion], lamp, reach);
     return !reduced || !entrance.done;
   };
 }
 
 /** The hero as it stands for the probe: nothing shown yet. */
-function emptyProbe(): HeroProbe {
+function emptyProbe(outfits: OutfitPair): HeroProbe {
   return {
     shown: false,
     tiles: 0,
@@ -846,6 +973,8 @@ function emptyProbe(): HeroProbe {
     entrance: { walks: false, ms: null, done: true },
     laid: 0,
     drawn: { legs: 0, upper: 0 },
+    outfits,
+    companion: null,
   };
 }
 
@@ -877,6 +1006,24 @@ function probed(probe: HeroProbe): () => void {
   });
 }
 
+/**
+ * What the hero and its companion wear on a visit of the menu, and the companion's canvas, under
+ * the hero's on the stage; null where the menu gives it none.
+ */
+export interface Dress {
+  outfits: OutfitPair;
+  companion: HTMLCanvasElement | null;
+}
+
+/** The companion's canvas of `dress`, its layers made as the hero's; null for none. */
+function companionOf(dress: Dress, pass: string): CompanionCanvas | null {
+  const hero = dress.companion === null ? null : heroCanvas(dress.companion, domCanvas);
+  if (hero !== null) {
+    hero.canvas.hidden = true;
+  }
+  return hero === null ? null : { hero, phase: figurePhase(`${pass} companion`) };
+}
+
 /** A hero started on its canvas: what wakes its loop, and its end. */
 export interface HeroRun {
   wake: () => void;
@@ -889,22 +1036,29 @@ export interface HeroRun {
  * the motion, what the player attends to or what the menu hands it (`look`) change; measured
  * with no room left for it, it lets its lamp and its canvases go at once, as it does stopped.
  * `pass` is the browser's pass's id: the hero's own offset into its loops; `walksIn` whether it
- * walks in on this menu, or stands there from the start. Null where the browser gives no 2D
- * canvas.
+ * walks in on this menu, or stands there from the start; `dress` what it and its companion wear,
+ * and the companion's canvas. Null where the browser gives no 2D canvas.
  */
 export function startHero(
   canvas: HTMLCanvasElement,
   [look, pass, walksIn]: readonly [{ readonly current: HeroLook }, string, boolean],
   host: SceneHost,
-  motion: { reduced: () => boolean; watch: (changed: () => void) => () => void },
+  [motion, dress]: readonly [
+    { reduced: () => boolean; watch: (changed: () => void) => () => void },
+    Dress,
+  ],
 ): HeroRun | null {
   const hero = heroCanvas(canvas, domCanvas);
   const stage = canvas.parentElement;
   if (hero === null || stage === null) {
     return null;
   }
-  const probe = emptyProbe();
-  const standing: Standing = { place: null, at: { x: 0, y: 0 }, menuRight: 0, stageW: 0, tile: 0 };
+  const probe = emptyProbe(dress.outfits);
+  const standing: Standing = {
+    ...{ place: null, at: { x: 0, y: 0 }, menuRight: 0, stageW: 0, tile: 0 },
+    companion: null,
+  };
+  const companion = companionOf(dress, pass);
   const attends: { current: Attended | null } = { current: null };
   const picked: { current: string | null } = { current: null };
   const phase = figurePhase(pass);
@@ -914,6 +1068,7 @@ export function startHero(
   const on = {
     ...{ hero, standing, look, attends, picked, sweep, probe },
     ...{ phase, entrance, react, canvas, beatHeld: walkthroughBeat },
+    ...{ outfits: dress.outfits, companion },
   };
   const loop = runScene(heroPainter({ ...on, reduced: motion.reduced }, performance.now()), host);
   const unprobe = probed(probe);
@@ -921,7 +1076,7 @@ export function startHero(
     watchStage(canvas, standing, () => {
       probePlace(probe, standing);
       if (standing.place === null) {
-        leaveOut(hero);
+        leaveOut(hero, companion);
       }
       loop.wake();
     }),
@@ -938,7 +1093,7 @@ export function startHero(
       loop.stop();
       unwatch.forEach((stop) => stop());
       unprobe();
-      leaveOut(hero);
+      leaveOut(hero, companion);
       holdPlace(null);
     },
   };

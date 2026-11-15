@@ -192,7 +192,8 @@ describe('the hero in the lab at night', () => {
     const motion = { offset: 0, moving: false, walk: 0, facing: HERO_FACING, look: null };
     const pose = { ...restingPose(HERO_FACING), arms: { front: 1.35, back: 1.45 }, holding: true };
     const lamp = { tilt: 0, on, flare: 0 };
-    return { place, box: place.box, motion, pose, color: '#2dd4bf', dpr: 1, lamp, glow };
+    const kit = { outfit: 'coat', figure: 'hero' } as const;
+    return { place, box: place.box, motion, pose, color: '#2dd4bf', dpr: 1, lamp, glow, ...kit };
   }
 
   /** What one frame of the hero (`frameOf`) draws. */
@@ -227,10 +228,12 @@ describe('the hero in the lab at night', () => {
       ).length;
     expect(front.alpha).toBeGreaterThan(0.5);
     expect(rim(lit)).toBeGreaterThan(0);
-    // With its lamp out no edge is drawn at all: nothing clipped to the body for it.
+    // With its lamp out no edge is drawn at all: nothing clipped to the body for it — the body
+    // is clipped once alone, for what the hero wears over it (outfits.ts).
     const out = painted(0, false);
     expect(rim(out)).toBe(0);
-    expect(callEntries(out, 'clip')).toHaveLength(0);
+    expect(callEntries(out, 'clip')).toHaveLength(1);
+    expect(callEntries(lit, 'clip')).toHaveLength(2);
   });
 
   it('catches the glow of the item it looks at on its visor', () => {

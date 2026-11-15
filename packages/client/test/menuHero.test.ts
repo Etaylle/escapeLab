@@ -17,11 +17,12 @@ import {
   type StageFacts,
 } from '../src/world/menu/hero.js';
 import { heroCanvas, paintHero, type HeroCanvas } from '../src/world/menu/heroArt.js';
+import { companionPlace } from '../src/world/menu/companion.js';
 import { heroPainter, type HeroPainting } from '../src/world/menu/heroStage.js';
 import { heroLamp, holdLamp } from '../src/world/menu/lamp.js';
 import { runScene } from '../src/world/menu/loop.js';
 import { callEntries, callsOf, fakeCanvas, FakePath2D, type Entry } from './fakeCanvas.js';
-import { framesPage, heroOnPage, painting } from './heroPage.js';
+import { DESKTOP_STAGE, framesPage, heroOnPage, painting } from './heroPage.js';
 
 /**
  * The hero on the menu's stage (world/menu/hero.ts, heroArt.ts, screens/MenuHero.tsx): as tall
@@ -171,6 +172,8 @@ const standingIn = (place: HeroPlace) => ({
   box: place.box,
   motion: STANDING_STILL,
   glow: false,
+  outfit: 'coat' as const,
+  figure: 'hero' as const,
 });
 
 describe('paintHero — laid from two layers, the breath drawing no figure anew', () => {
@@ -329,6 +332,62 @@ describe('heroPainter — the hero’s loop', () => {
     paint(700);
     expect(on.hero.drawn).toEqual({ legs: 2, upper: 2 });
     expect(canvases.every((canvas) => canvas.width > 1 && canvas.height > 1)).toBe(true);
+  });
+});
+
+describe('heroPainter — the hero’s companion', () => {
+  beforeEach(() => {
+    vi.stubGlobal('Path2D', FakePath2D);
+    vi.stubGlobal('window', { devicePixelRatio: 1 });
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    holdLamp(null);
+  });
+
+  /** A painting at 1440 × 820 with a companion's canvas beside the hero, standing where it may. */
+  function withCompanion(reduced: boolean) {
+    const on = paintingOf(reduced);
+    const canvas = Object.assign(fakeCanvas(0, 0, 'companion').canvas, { hidden: true, style: {} });
+    const mate = heroCanvas(canvas, (w, h) => fakeCanvas(w, h).canvas);
+    if (mate === null) throw new Error('no companion canvas');
+    on.companion = { hero: mate, phase: 0.7 };
+    on.standing.companion = companionPlace(on.standing.place, DESKTOP_STAGE);
+    return { on, mate, canvas };
+  }
+
+  it('stands beside the hero in another crew colour and another outfit', () => {
+    const { on, mate, canvas } = withCompanion(false);
+    heroPainter(on, 0)(500);
+    expect(canvas.hidden).toBe(false);
+    expect(mate.drawn).toEqual({ legs: 1, upper: 1 });
+    expect(on.probe.companion?.color).not.toBe(on.look.current.color);
+    expect(on.outfits.companion).not.toBe(on.outfits.hero);
+  });
+
+  it('is left out, its canvases let go, where the stage leaves it no room beside the hero', () => {
+    const { on, mate, canvas } = withCompanion(false);
+    const paint = heroPainter(on, 0);
+    paint(500);
+    on.standing.companion = null;
+    paint(600);
+    expect(canvas.hidden).toBe(true);
+    expect(on.probe.companion).toBeNull();
+    expect(sizesOf([mate.canvas, mate.legs.canvas, mate.upper.canvas])).toEqual([
+      [0, 0],
+      [0, 0],
+      [0, 0],
+    ]);
+    // The hero stands on, its lamp still held out to the scene.
+    expect(on.hero.canvas.width).toBeGreaterThan(1);
+    expect(heroLamp()).not.toBeNull();
+  });
+
+  it('holds still under reduced motion, as the hero does', () => {
+    const { on, mate } = withCompanion(true);
+    const paint = heroPainter(on, 0);
+    for (let now = 0; now < 20_000; now += 500) paint(now);
+    expect(mate.drawn).toEqual({ legs: 1, upper: 1 });
   });
 });
 

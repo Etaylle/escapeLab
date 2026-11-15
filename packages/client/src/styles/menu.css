@@ -292,8 +292,10 @@
 /* screens/MenuHero.tsx places and sizes its canvas on the stage, clear of the menu's column and
    the widest panel; it lies under every panel and catches no pointer. Its margins
    carry the window's safe areas to the script, which keeps the hero clear of them: placed by
-   its left and top, a canvas's right and bottom margins move nothing. */
-.menu-hero {
+   its left and top, a canvas's right and bottom margins move nothing. The hero's companion
+   stands behind it: its canvas comes first, under the hero's. */
+.menu-hero,
+.menu-companion {
   position: absolute;
   margin: 0 env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) 0;
   pointer-events: none;

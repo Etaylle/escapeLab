@@ -80,8 +80,8 @@ const REPLAY: Record<string, (r: Replay, args: number[]) => void> = {
   arcTo: (r, [x1, y1, x2, y2]) => {
     r.path.push(onCanvas(r.m, x1, y1), onCanvas(r.m, x2, y2));
   },
-  clip: (r) => {
-    r.clip = r.path;
+  clip: (r, args) => {
+    r.clip = args.length === 0 ? r.path : null;
   },
   fill: (r) => {
     if (r.clip !== null) r.lights.push([r.clip, r.path]);
@@ -91,7 +91,8 @@ const REPLAY: Record<string, (r: Replay, args: number[]) => void> = {
 /**
  * The light across the visor in a recorded drawing — the outline it is clipped to and the band
  * filled within it, as points where they fall on the canvas — replayed from the transforms the
- * drawing asked for: a figure's drawing clips nothing else.
+ * drawing asked for: a figure's drawing clips no other path it lays; the body it clips to by its
+ * own Path2D, for the light on its edges and what it wears (outfits.ts), is no light's.
  */
 function lightsIn(log: readonly Entry[]): number[][][][] {
   const replay: Replay = { m: IDENTITY, kept: [], path: [], clip: null, lights: [] };
@@ -168,6 +169,8 @@ const frameOf = (pose: FigurePose) => ({
   dpr: 1,
   lamp: { tilt: 0, on: 1, flare: 0 },
   glow: false,
+  outfit: 'coat' as const,
+  figure: 'hero' as const,
 });
 
 describe('the light across the hero’s visor', () => {

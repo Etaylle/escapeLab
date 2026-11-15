@@ -1,11 +1,19 @@
-import { drawScientist, HELD_SCALE, type EdgeLight, type FigureLayer, type Rim } from '../art.js';
+import {
+  drawHeldSheet,
+  drawScientist,
+  HELD_SCALE,
+  type EdgeLight,
+  type FigureLayer,
+  type Rim,
+} from '../art.js';
 import type { CanvasMaker } from '../atlas.js';
 import { softEllipse } from '../brush.js';
 import { HOLD, type FigurePose } from '../figure.js';
-import { BLACK, css, lift, parseHex, sink, TUNGSTEN } from '../palette.js';
+import { BLACK, css, lift, parseHex, sink, STEEL, TUNGSTEN } from '../palette.js';
 import type { HeroMotion, HeroPlace, StageBox } from './hero.js';
 import { drawHandLamp } from './lampArt.js';
 import { HERO_LIGHT, LAMP_RAISE } from './looks.js';
+import { wearOf, type Outfit } from './outfits.js';
 
 /**
  * The hero drawn (menu/hero.ts, screens/MenuHero.tsx): the crew figure as art.ts draws it, the
@@ -71,7 +79,24 @@ export interface HeroFrame {
   lamp: { tilt: number; on: number; flare: number };
   /** its visor catches the glow of the item it looks at */
   glow: boolean;
+  /** what it wears (outfits.ts) */
+  outfit: Outfit;
+  /**
+   * which figure it is: the hero, its lamp in its hands; or its companion, a clipboard in its
+   * hands, standing back from the lamp and sunk a step further for it (COMPANION_NIGHT)
+   */
+  figure: MenuFigure;
 }
+
+/** The menu's figures: the hero, and the companion behind it (companion.ts). */
+export type MenuFigure = 'hero' | 'companion';
+
+/** How far the companion's colour and its wear sink at night, standing back from the lamp. */
+export const COMPANION_NIGHT = 0.5;
+
+/** How far `figure`'s colour and its wear sink at night. */
+const nightOf = (figure: MenuFigure): number =>
+  figure === 'hero' ? HERO_LIGHT.night : COMPANION_NIGHT;
 
 /** The hero's canvas `canvas`, its layers made by `make`; null where the browser gives no 2D. */
 export function heroCanvas(canvas: HTMLCanvasElement, make: CanvasMaker): HeroCanvas | null {
@@ -123,13 +148,14 @@ function lightInLayer(pose: FigurePose): boolean {
 function layerKey(which: FigureLayer, frame: HeroFrame, size: string): string {
   const { pose } = frame;
   if (which === 'legs') {
-    return `${size} ${frame.color} ${frame.motion.facing} ${pose.shadow}`;
+    return `${size} ${frame.color} ${frame.figure} ${frame.motion.facing} ${pose.shadow}`;
   }
   const arms = pose.arms === null ? '-' : `${pose.arms.front},${pose.arms.back}`;
   const light = lightInLayer(pose) ? pose.shimmer : null;
   const parts = [pose.look, light, arms, pose.holding, pose.dim, pose.bow, frame.glow];
   const { tilt, on, flare } = frame.lamp;
-  return `${size} ${frame.color} ${frame.motion.facing} ${parts.join(' ')} ${tilt} ${on} ${flare}`;
+  const lamp = `${tilt} ${on} ${flare} ${frame.outfit} ${frame.figure}`;
+  return `${size} ${frame.color} ${frame.motion.facing} ${parts.join(' ')} ${lamp}`;
 }
 
 /**
@@ -149,11 +175,12 @@ function poseOf(frame: HeroFrame, layer: FigureLayer): FigurePose {
 export const VISOR_GLOW: EdgeLight = { rgb: lift(TUNGSTEN, 0.2), alpha: 0.55 };
 
 /**
- * The hero's colour `color` in the lab at night, sunk as the look has it (looks.ts `HERO_LIGHT`):
- * the lamp in its hands, not the room, lights it.
+ * A figure's colour `color` in the lab at night, sunk `night`: the hero's as the look has it
+ * (looks.ts `HERO_LIGHT`) — the lamp in its hands, not the room, lights it — its companion's
+ * further (`nightOf`).
  */
-function nightColor(color: string): string {
-  return css(sink(parseHex(color), HERO_LIGHT.night));
+function nightColor(color: string, night: number): string {
+  return css(sink(parseHex(color), night));
 }
 
 /**
@@ -165,12 +192,48 @@ function rimOf(on: number): Rim {
   return { front: on <= 0 ? null : { ...front, alpha: front.alpha * on }, back };
 }
 
+/** The clipboard's board: hardboard, a steel clip at its top. */
+const BOARD = css(sink([120, 92, 60], COMPANION_NIGHT));
+const CLIP = css(sink(STEEL, COMPANION_NIGHT));
+
+/**
+ * A clipboard as a figure holds it, in its own units round its grip (art.ts `held`): the board,
+ * a sheet on it (art.ts drawHeldSheet), the clip over the sheet's top.
+ */
+function drawClipboard(ctx: CanvasRenderingContext2D): void {
+  ctx.save();
+  ctx.rotate(-0.12);
+  ctx.fillStyle = BOARD;
+  ctx.fillRect(-0.26, -0.36, 0.52, 0.66);
+  ctx.restore();
+  drawHeldSheet(ctx);
+  ctx.save();
+  ctx.rotate(-0.12);
+  ctx.fillStyle = CLIP;
+  ctx.fillRect(-0.09, -0.39, 0.18, 0.08);
+  ctx.restore();
+}
+
+/**
+ * What `frame`'s hands hold, drawn round its grip: the hero's lamp as it is turned and lit, the
+ * companion's clipboard.
+ */
+function drawHeldOf(held: CanvasRenderingContext2D, frame: HeroFrame): void {
+  if (frame.figure === 'companion') {
+    drawClipboard(held);
+    return;
+  }
+  const { tilt, on, flare } = frame.lamp;
+  held.translate(0, -LAMP_RAISE.up / HELD_SCALE);
+  drawHandLamp(held, tilt, on, flare);
+}
+
 /** The figure as `frame` has it, drawn on `ctx` whole or as `layer` says, its feet at `at`. */
 function drawFigure(ctx: CanvasRenderingContext2D, frame: HeroFrame, layer: FigureLayer): void {
-  const { tilt, on, flare } = frame.lamp;
+  const { on } = frame.lamp;
   const { motion } = frame;
   drawScientist(ctx, {
-    color: nightColor(frame.color),
+    color: nightColor(frame.color, nightOf(frame.figure)),
     name: '',
     facing: motion.facing,
     moving: motion.moving,
@@ -181,12 +244,10 @@ function drawFigure(ctx: CanvasRenderingContext2D, frame: HeroFrame, layer: Figu
     ground: 'lit',
     named: false,
     layer,
-    held: (held) => {
-      held.translate(0, -LAMP_RAISE.up / HELD_SCALE);
-      drawHandLamp(held, tilt, on, flare);
-    },
+    held: (held) => drawHeldOf(held, frame),
     rim: rimOf(on),
     visorGlow: frame.glow ? VISOR_GLOW : null,
+    wear: wearOf(frame.outfit, nightOf(frame.figure)),
   });
 }
 

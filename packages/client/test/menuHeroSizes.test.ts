@@ -9,6 +9,7 @@ import {
   type HeroPlace,
   type StageFacts,
 } from '../src/world/menu/hero.js';
+import { COMPANION_ASIDE, companionPlace } from '../src/world/menu/companion.js';
 import { PHONE_QUERY } from '../src/world/menu/heroStage.js';
 import {
   elementsOf,
@@ -206,5 +207,41 @@ describe('the hero at the menu’s sizes', () => {
     expect(facts.panelRight).toBeCloseTo(72 + 760, 6);
     expect(facts.padBottom).toBeCloseTo(32.8, 6);
     expect(FIGURE_TALL * placed(facts).scale).toBeGreaterThan(300);
+  });
+});
+
+describe('the hero’s companion beside it', () => {
+  /** Where the companion stands on `screen`, beside the hero there; null for nowhere. */
+  const companionOn = (screen: Screen) => {
+    const facts = stageOn(screen);
+    return { facts, hero: heroPlace(facts), place: companionPlace(heroPlace(facts), facts) };
+  };
+
+  it('stands smaller, behind the hero at its back, clear of the edge stepped aside', () => {
+    for (const screen of [at(1920, 1080), at(1440, 820), at(1280, 720), at(1440, 900)]) {
+      const { facts, hero, place } = companionOn(screen);
+      const size = `${screen.width}x${screen.height}`;
+      if (hero === null || place === null) throw new Error(`no companion at ${size}`);
+      expect(place.scale, size).toBeLessThan(hero.scale);
+      expect(place.feet.y, size).toBeLessThan(hero.feet.y);
+      expect(place.feet.x - hero.feet.x, size).toBeGreaterThanOrEqual(
+        COMPANION_ASIDE.least * hero.scale,
+      );
+      const step = STEP_TILES * heroTile(facts.windowH);
+      expect(place.box.left + place.box.width + step, size).toBeLessThanOrEqual(facts.w - CLEAR);
+      expect(place.box.left, size).toBeGreaterThan(facts.panelRight + CLEAR);
+      expect(place.box.top, size).toBeGreaterThanOrEqual(facts.ceiling + CLEAR);
+    }
+  });
+
+  it('is left out below 1259 px across at 820 px of height, 1200 at 720, and on a phone', () => {
+    expect(companionOn(at(1258, 820)).place).toBeNull();
+    expect(companionOn(at(1259, 820)).place).not.toBeNull();
+    expect(companionOn(at(1199, 720)).place).toBeNull();
+    expect(companionOn(at(1200, 720)).place).not.toBeNull();
+    expect(companionOn(at(1180, 820)).hero).not.toBeNull();
+    expect(companionOn(at(1180, 820)).place).toBeNull();
+    expect(companionOn({ width: 932, height: 430, coarse: true }).place).toBeNull();
+    expect(companionPlace(null, stageOn(at(1440, 820)))).toBeNull();
   });
 });
