@@ -89,7 +89,7 @@ describe('mission control watching a quiet station', () => {
     expect(nudge(pressed, T0 + 120_000)).toBe(pressed);
   });
 
-  it('counts no move the station turned away: alone at it, the quiet goes on', () => {
+  it('counts no move the station turned away: after an invalid one, the quiet goes on', () => {
     const state = started(readFirst);
     const alone = applyAction(standing(state, { stations: { tasten: ['p1'] } }), {
       type: 'interact',
@@ -103,7 +103,7 @@ describe('mission control watching a quiet station', () => {
         at: T0 + 50_000,
         input: { press: 0 },
       }),
-    ).toThrow(/Eingabe gesperrt/);
+    ).toThrow('Ungültige Eingabe.');
     expect(nudgeDueAt(alone)).toBe(T0 + 100_000);
   });
 

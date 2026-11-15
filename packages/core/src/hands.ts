@@ -15,7 +15,7 @@ import type { GameState } from './state.js';
 export type Place =
   /** one of its consoles: 'a' at a station with one, the whole crew's panel included */
   | { kind: 'console'; console: ConsoleId }
-  /** a manual object covering it, where somebody reads its rules (map.ts `backupsOf`) */
+  /** a manual object covering it, where somebody reads its rules (map.ts `readersOf`) */
   | { kind: 'source'; id: string }
   /** the plate of a door it keeps open until it is solved (`untilSolved`), by the plate's id */
   | { kind: 'plate'; id: string }

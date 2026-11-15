@@ -40,7 +40,6 @@ import { clockStartOf, runReport } from './report.js';
 import type { ConsoleId, ManualSection, Viewer, ViewContext } from './puzzles/module.js';
 import { relayModule, type RelayDef, type RelayView } from './puzzles/relay.js';
 import {
-  backupsOf,
   consoleOf,
   doorOpen,
   intercomOf,
@@ -49,6 +48,7 @@ import {
   readersOf,
   sourceOpen,
   stationArmed,
+  stationKey,
 } from './map.js';
 
 /**
@@ -724,25 +724,27 @@ function puzzleViewFor(state: GameState, playerId: string | null): PuzzleView | 
     manual: viewer.reading ? puzzleModule.manual(def) : null,
     console: viewer.console,
     plate: viewer.console === null ? null : puzzleModule.plate(def, viewer.console),
-    backup: puzzleModule.wholeCrew ? null : backupFor(state, def.id, playerId),
+    atOtherConsole:
+      puzzleModule.consoles === 2 ? atOtherConsole(state, def.id, viewer.console) : null,
   };
 }
 
 /**
- * Who lets `playerId`'s inputs at the open station of `puzzleId` count, by
- * id and name, and where they stand; null for the audience, away from the
- * station and while nobody backs them up.
+ * Who of the crew stands at the console of the open station of `puzzleId` other than `at`, the
+ * viewer's, by id and name — the first of them; null for a viewer at neither console.
  */
-function backupFor(
+function atOtherConsole(
   state: GameState,
   puzzleId: string,
-  playerId: string | null,
-): PuzzleView['backup'] {
-  const [first] = playerId === null ? [] : backupsOf(state, puzzleId, playerId);
-  const name = state.players.find((p) => p.id === first?.playerId)?.name;
-  return first === undefined || name === undefined
-    ? null
-    : { playerId: first.playerId, name, where: first.where };
+  at: ConsoleId | null,
+): PuzzleView['atOtherConsole'] {
+  if (at === null) {
+    return null;
+  }
+  const other: ConsoleId = at === 'a' ? 'b' : 'a';
+  const there = state.presence.stations[stationKey({ puzzleId, console: other })] ?? [];
+  const first = state.players.find((p) => p.id === there[0]);
+  return first === undefined ? null : { playerId: first.id, name: first.name };
 }
 
 /** Who looks at the open puzzle `puzzleId` from where; the audience sees it from everywhere. */

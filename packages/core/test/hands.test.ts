@@ -127,8 +127,8 @@ describe('a place for every hand', () => {
 
   it('the console lab of three as it stands, the labs\' one exception: its box takes two', () => {
     // Kept as it is (M-three, the lead's call; backlog N-6): a lab for the station of two
-    // consoles, whose wiring box after the chain keeps the backup rule's two places — console and
-    // book — for a crew of three. Eight test files feed on the lab as it stands.
+    // consoles, whose wiring box after the chain keeps its two places — console and book — for
+    // a crew of three. Eight test files feed on the lab as it stands.
     expect(handsAt(doppelpultDrei)).toEqual({ kette: 3, kabel: 2 });
   });
 });

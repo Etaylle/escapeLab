@@ -12,7 +12,6 @@ import {
   crewsOf,
   reachability,
   tileKey,
-  twoAtOnce,
   type Spot,
 } from './reach.js';
 
@@ -960,12 +959,11 @@ interface Stage {
   when: string;
 }
 
-/** A station of `puzzle` can be reached and worked by two at the `stage` it is open at. */
+/** A station of `puzzle` can be reached and worked at the `stage` it is open at. */
 function checkStation(check: MapCheck, stage: Stage, puzzle: PuzzleDef): void {
   const spots = check.map.stations.filter((s) => s.puzzleId === puzzle.id);
   if (spots.length > 0) {
     checkReachable(check, stage, puzzle, spots);
-    checkBackup(check, stage, puzzle, spots);
   }
 }
 
@@ -1032,36 +1030,6 @@ function consoleOutOfReach(atA: number[], atB: number[]): string | null {
     return null;
   }
   return 'nobody but the player at console a can reach console b';
-}
-
-/**
- * Nobody works a station alone: at a station with one console, wherever its
- * rules are drawn to, one player can stand at it while another stands at a
- * source covering it — lockers and cabinets alike, which other checks see
- * opened. A station with two consoles has its second player at the other
- * console; one the whole crew works needs nobody to read. What nobody can
- * reach at all, other checks report.
- */
-function checkBackup(check: MapCheck, stage: Stage, puzzle: PuzzleDef, spots: StationDef[]): void {
-  const { wholeCrew, consoles } = moduleFor(puzzle.type);
-  const [station] = spots;
-  const someone = (spot: Spot): boolean => stage.reach.some((tiles) => canStandAt(tiles, spot));
-  if (wholeCrew || consoles === 2 || station === undefined || !someone(station)) {
-    return;
-  }
-  const pair = twoAtOnce(check.map, stage.crew, stage.solved);
-  const sources = check.map.manuals.filter((manual) => manual.puzzleIds.includes(puzzle.id));
-  // Each source lies on one of its spots; one source that pairs up there is enough.
-  const alone = sources.flatMap((manual) => {
-    const spot = manual.spots.find((s) => someone(s) && !pair(station, s));
-    return spot === undefined ? [] : [`${manual.label} at ${spot.x},${spot.y}`];
-  });
-  if (sources.length > 0 && alone.length === sources.length) {
-    check.issue(
-      `map: station "${puzzle.id}" and its rules (${alone.join(', ')}) are never reachable ` +
-        'by two different players at once — the crew would be alone',
-    );
-  }
 }
 
 /**

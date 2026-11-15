@@ -15,8 +15,8 @@ import { passFor } from './passes.js';
  * 3 #############
  */
 const mission: Mission = parseMission({
-  id: 'zweitperson',
-  title: 'Zweitperson',
+  id: 'einzeln',
+  title: 'Einzeln',
   players: { min: 2, max: 2 },
   story: { intro: 'i', win: 'w', lose: 'l' },
   timeLimitSec: 600,
@@ -40,9 +40,6 @@ const mission: Mission = parseMission({
   },
 });
 
-/** What the keypad, a station of one console, says to a move nobody backs up. */
-const ALONE = 'Eingabe gesperrt: Bei den Regeln steht niemand.';
-
 function lastView(walker: Walker) {
   const last = walker.messages.filter((m) => m.kind === 'view').at(-1);
   if (last === undefined || last.kind !== 'view') {
@@ -51,7 +48,7 @@ function lastView(walker: Walker) {
   return last.view;
 }
 
-describe('Room: nobody works a station alone', () => {
+describe('Room: one player works a station alone', () => {
   beforeEach(() => vi.useFakeTimers());
   afterEach(() => vi.useRealTimers());
 
@@ -89,38 +86,25 @@ describe('Room: nobody works a station alone', () => {
     return move.input;
   }
 
-  it('refuses a press while the reader is away, without an alarm, and takes it on return', () => {
+  it('takes a press while the reader is away, without an alarm', () => {
     const { room, anna, ben } = inPlace();
-    const atTheBook = { playerId: ben.playerId, name: 'Ben', where: 'HANDBUCH' };
-    expect(lastView(anna).puzzle?.backup).toEqual(atTheBook);
     const press = nextPress(anna);
 
     // Ben walks off towards the keypad, out of reach of the book and not yet at the station.
     walkTo(room, ben, 7.5, 1.5);
     expect(lastView(ben).presence).toMatchObject({ stationId: null, manualId: null });
-    expect(lastView(anna).puzzle?.backup).toBeNull();
-    expect(() => room.act(anna.playerId, { kind: 'puzzle-input', input: press })).toThrow(ALONE);
-    expect(lastView(anna)).toMatchObject({
-      penaltySeq: 0,
-      puzzle: { kind: 'keypad', litCount: 0 },
-    });
-
-    // Back at the book, the same press counts.
-    walkTo(room, ben, 10.5, 2.5);
-    expect(lastView(anna).puzzle?.backup).toEqual(atTheBook);
     room.act(anna.playerId, { kind: 'puzzle-input', input: press });
     expect(lastView(ben)).toMatchObject({ penaltySeq: 0, puzzle: { kind: 'keypad', litCount: 1 } });
     room.dispose();
   });
 
-  it('does not count a second player at the same station', () => {
+  it('takes a press from a second player at the same station', () => {
     const { room, anna, ben } = inPlace();
     walkTo(room, ben, 5.5, 1.5);
     expect(lastView(ben).presence).toMatchObject({ stationId: 'code', manualId: null });
-    expect(lastView(anna).puzzle?.backup).toBeNull();
-    expect(() =>
-      room.act(ben.playerId, { kind: 'puzzle-input', input: nextPress(anna) }),
-    ).toThrow(ALONE);
+    room.act(ben.playerId, { kind: 'puzzle-input', input: nextPress(anna) });
+    const lit = { penaltySeq: 0, puzzle: { kind: 'keypad', litCount: 1 } };
+    expect(lastView(anna)).toMatchObject(lit);
     room.dispose();
   });
 });
