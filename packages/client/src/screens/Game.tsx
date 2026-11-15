@@ -630,11 +630,11 @@ function useDeviceCoach(puzzle: PuzzleView): CoachMark | null {
 const TAKES_NOTHING = (): void => undefined;
 
 /**
- * The open station over the world: its device, which names it on its plate
- * and says on its LED strip who backs this player up and on its chassis how
- * to step back — and, the first time, the line that says what its controls
- * do, under the Laborkennung's row, where it covers neither the serial nor
- * the device. Stepped back from (`leaving`), it fades out as it came and
+ * The open station over the world: its device, which names it on its plate,
+ * says on its LED strip who works the other console where it has two and on
+ * its chassis how to step back — and, the first time, the line that says
+ * what its controls do, under the Laborkennung's row, where it covers neither
+ * the serial nor the device. Stepped back from (`leaving`), it fades out as it came and
  * takes nothing more: no key, no press, no step back reaches the run.
  */
 export function StationModal({

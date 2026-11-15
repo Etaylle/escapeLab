@@ -11,7 +11,6 @@ import {
   DEPENDS_ON,
   SERVICES,
   serviceName,
-  type ConsoleId,
   type PuzzleInputOf,
   type RackUnit,
   type ServerLed,
@@ -231,13 +230,9 @@ export function serversSounds(change: ServersChange): void {
   }
 }
 
-/** Whether somebody stands at the other console: the backup the view names stands there. */
+/** Whether somebody stands at the other console, as the view names them. */
 function otherManned(puzzle: ServersPuzzle): boolean {
-  if (puzzle.console === null) {
-    return false;
-  }
-  const other: ConsoleId = puzzle.console === 'a' ? 'b' : 'a';
-  return puzzle.backup?.where === consoleName(other);
+  return puzzle.atOtherConsole !== null;
 }
 
 /**

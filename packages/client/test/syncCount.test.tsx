@@ -61,7 +61,7 @@ function station(
     manual: null,
     console: you === null ? null : 'a',
     plate: you === null ? null : 'Der Hauptschalter schaltet Licht und Grundversorgung zu',
-    backup: null,
+    atOtherConsole: null,
     ...fields,
   };
 }

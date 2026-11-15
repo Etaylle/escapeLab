@@ -180,37 +180,48 @@ describe('the device frame', () => {
 describe('the partner LED', () => {
   /** Nobody on the station's intercom with this player. */
   const NOBODY: ReadonlySet<string> = new Set();
-  const BEN_AT_B = { playerId: 'p2', name: 'Ben', where: 'Pult B' };
+  const BEN = { playerId: 'p2', name: 'Ben' };
 
-  it('burns green with who backs this player up, and where', () => {
-    const backed = { ...seen('maze'), backup: { playerId: 'p2', name: 'Ben', where: 'SPIND' } };
-    expect(partnerLed(backed, NOBODY)).toEqual({
+  it('burns green with who works the other console of a station with two, and which', () => {
+    const atA = { ...seen('circuit'), atOtherConsole: BEN };
+    expect(partnerLed(atA, NOBODY)).toEqual({
       tone: 'green',
       label: 'PARTNER',
-      detail: 'Ben · SPIND',
+      detail: 'Ben · Pult B',
     });
-    expect(panel(backed)).toContain(
+    expect(panel(atA)).toContain(
       '<li class="device-led device-led--green">' +
         '<span class="device-lamp device-lamp--green" aria-hidden="true"></span>' +
         '<span class="device-led-label">PARTNER</span>' +
-        '<span class="device-led-detail">Ben · SPIND</span></li>',
+        '<span class="device-led-detail">Ben · Pult B</span></li>',
     );
-    const atA = { ...seen('circuit'), backup: BEN_AT_B };
-    expect(partnerLed(atA, NOBODY)?.detail).toBe('Ben · Pult B');
+  });
+
+  it('stays dark while nobody stands at the other console', () => {
+    expect(partnerLed(seen('circuit'), NOBODY)).toEqual({
+      tone: 'off',
+      label: 'PARTNER',
+      detail: 'niemand an Pult B',
+    });
+    expect(partnerLed(seen('signal', true, {}, 'b'), NOBODY)?.detail).toBe('niemand an Pult A');
+    expect(panel(seen('circuit'))).toContain('<li class="device-led device-led--off">');
+  });
+
+  it('is none at a station of one console, whoever reads its rules', () => {
+    expect(partnerLed(seen('maze'), NOBODY)).toBeNull();
+    expect(panel(seen('maze'))).not.toContain('device-led');
   });
 
   it('adds „· Funk“ while the station’s intercom carries the partner’s voice', () => {
-    const atA = { ...seen('circuit'), backup: BEN_AT_B };
+    const atA = { ...seen('circuit'), atOtherConsole: BEN };
     expect(partnerLed(atA, new Set(['p2']))).toEqual({
       tone: 'green',
       label: 'PARTNER',
       detail: 'Ben · Pult B · Funk',
     });
-    // Somebody else on it says nothing of the partner, and a red LED has nobody to carry.
+    // Somebody else on it says nothing of the partner, and a dark LED has nobody to carry.
     expect(partnerLed(atA, new Set(['p3']))?.detail).toBe('Ben · Pult B');
-    expect(partnerLed(seen('circuit'), new Set(['p2']))?.detail).toBe(
-      'niemand an Pult B oder bei den Regeln',
-    );
+    expect(partnerLed(seen('circuit'), new Set(['p2']))?.detail).toBe('niemand an Pult B');
     // The device as the game frames it, the page's voice telling whom the intercom carries.
     const state = { intercom: new Set(['p2']) };
     const voice = { subscribe: () => () => undefined, getState: () => state };
@@ -222,21 +233,6 @@ describe('the partner LED', () => {
     expect(html).toContain('<span class="device-led-detail">Ben · Pult B · Funk</span>');
     expect(html.match(/Funk/g)).toHaveLength(1);
     expect(panel(atA)).not.toContain('Funk');
-  });
-
-  it('burns red with where somebody has to stand while nobody does', () => {
-    expect(partnerLed(seen('maze'), NOBODY)).toEqual({
-      tone: 'red',
-      label: 'KEIN PARTNER',
-      detail: 'niemand bei den Regeln',
-    });
-    expect(partnerLed(seen('circuit'), NOBODY)?.detail).toBe(
-      'niemand an Pult B oder bei den Regeln',
-    );
-    expect(partnerLed(seen('signal', true, {}, 'b'), NOBODY)?.detail).toBe(
-      'niemand an Pult A oder bei den Regeln',
-    );
-    expect(panel(seen('maze'))).toContain('<li class="device-led device-led--red">');
   });
 
   it('is not there where the whole crew presses, nor for the audience', () => {
@@ -1370,14 +1366,11 @@ describe('the Serverraum', () => {
 
   it('lights RACK at the terminal and TERMINAL at the rack while somebody stands there', () => {
     expect(lampBy(panel(at('a')), 'RACK')).toBe('off');
-    const atRack = { playerId: 'p2', name: 'Ben', where: 'Pult B' };
-    expect(lampBy(panel({ ...at('a'), backup: atRack }), 'RACK')).toBe('green');
-    // Somebody at the rules lets the inputs count, but stands at no console.
-    const reading = { playerId: 'p2', name: 'Ben', where: 'SPIND' };
-    expect(lampBy(panel({ ...at('a'), backup: reading }), 'RACK')).toBe('off');
-    const atTerminal = { playerId: 'p1', name: 'Anna', where: 'Pult A' };
-    expect(lampBy(panel({ ...at('b'), backup: atTerminal }), 'TERMINAL')).toBe('green');
-    expect(lampBy(panel({ ...at('b'), backup: reading }), 'TERMINAL')).toBe('off');
+    const atRack = { playerId: 'p2', name: 'Ben' };
+    expect(lampBy(panel({ ...at('a'), atOtherConsole: atRack }), 'RACK')).toBe('green');
+    const atTerminal = { playerId: 'p1', name: 'Anna' };
+    expect(lampBy(panel({ ...at('b'), atOtherConsole: atTerminal }), 'TERMINAL')).toBe('green');
+    expect(lampBy(panel(at('b')), 'TERMINAL')).toBe('off');
   });
 
   it('shows the audience the terminal’s screen and the rack side by side, nothing to press', () => {

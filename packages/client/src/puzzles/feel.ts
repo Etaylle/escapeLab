@@ -251,7 +251,7 @@ export interface Change<V> {
 }
 
 /** A view's fields that tell where people stand, not what the device does — and its rules. */
-const AROUND = new Set(['backup', 'here', 'manual']);
+const AROUND = new Set(['atOtherConsole', 'here', 'manual']);
 
 /** What a view shows of the device itself, to compare: who stands where left out. */
 export function deviceState(view: PuzzleView): string {

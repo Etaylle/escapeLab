@@ -247,7 +247,7 @@ describe('an alarm at an open device', () => {
 describe('a press the server refuses at an open device', () => {
   const refusal = {
     seq: 3,
-    message: 'Eingabe gesperrt: Am anderen Pult und bei den Regeln steht niemand.',
+    message: 'Am sendenden Pult steht niemand.',
     of: 'puzzle-input' as const,
   };
 

@@ -18,7 +18,6 @@ import {
   type AccessLogLine,
   type AccessOpening,
   type AccessTerminal,
-  type ConsoleId,
   type ManualBlock,
   type ManualSection,
 } from '@escapelab/core';
@@ -154,13 +153,9 @@ export function accessSounds(change: AccessChange): void {
 
 // --- the terminal ----------------------------------------------------------------------------
 
-/** Whether somebody stands at the other console: the backup the view names stands there. */
+/** Whether somebody stands at the other console, as the view names them. */
 function otherManned(puzzle: AccessPuzzle): boolean {
-  if (puzzle.console === null) {
-    return false;
-  }
-  const other: ConsoleId = puzzle.console === 'a' ? 'b' : 'a';
-  return puzzle.backup?.where === consoleName(other);
+  return puzzle.atOtherConsole !== null;
 }
 
 /** A door's state on the terminal: asked for, standing open with its seconds, or released. */

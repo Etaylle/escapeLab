@@ -245,10 +245,6 @@
   color: #bbf7d0;
 }
 
-.device-led--red .device-led-label {
-  color: #fecaca;
-}
-
 /* What the LED reports, on a small dark label beside it. */
 .device-led-detail {
   min-width: 0;
@@ -296,11 +292,6 @@
   box-shadow:
     0 0 0 2px #0b0f13,
     0 0 10px 2px rgba(251, 191, 36, 0.6);
-}
-
-/* Nobody backs this console up: the red LED throbs until somebody does. */
-.device-led--red .device-lamp {
-  animation: device-throb 1.2s ease-in-out infinite;
 }
 
 @keyframes device-throb {
@@ -604,7 +595,6 @@ button.feel-reject {
 }
 
 :where([data-motion='reduce']) {
-  .device-led--red .device-lamp,
   .circuit-short .device-lamp--red {
     animation: none;
   }

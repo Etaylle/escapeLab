@@ -869,7 +869,7 @@ function mainSwitch(presses: { by: string; at: number }[], parts: object = {}): 
     manual: null,
     console: null,
     plate: null,
-    backup: null,
+    atOtherConsole: null,
     ...parts,
   };
 }
