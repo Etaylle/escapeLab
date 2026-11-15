@@ -447,6 +447,20 @@ sign's colour back through the patterns the legend prints beside the colours, an
 plays the last stage from the plan with grey signs and shoots it (signal-grey.png in the host's
 window, signal-grey-phone-932.png on a large phone).
 
+## The Funkfeuer's lamp and tone
+
+At the Funkfeuer (`morse`) the operator's lamp spells the word in Morse on a loop, and each
+blink sounds as a tone of its length, both on one schedule (docs/sound.md, The Funkfeuer's key):
+a unit of 250 ms, short one, long three, one dark between the signals of a letter, five between
+letters — wider than the standard three, so that the letters stand apart to the ear — and ten
+before the repeat, with a short hiss of the carrier four units before the word's first signal.
+The tone is a help, not the carrier of the word: the lamp keeps blinking with reduced motion,
+with the sound off and before the browser lets the page sound, and the device's line names the
+long pause and its hiss (`coach.ts`). The tone falls silent as the panel closes or the station
+is solved. Nothing transcribes the dots and dashes on screen: reading them is the operator's
+work, the word's frequency the partner's at the Frequenztabelle. The puzzle itself is the
+core's, unchanged: the same sixteen words, the same pattern, the same penalty.
+
 ## The Serverraum's cabling diagram
 
 The rack (console B) shows the Netzplan as a cabling diagram derived from `DEPENDS_ON`

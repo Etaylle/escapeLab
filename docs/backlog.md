@@ -595,6 +595,12 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   Anlage liest, Mila fragt, Helmut antwortet, die Anlage schließt; Spätschicht und Herr Haller
   sind gestrichen. Offen bei Uros: Milas Frage und Helmuts Antwort rendern (2 Zeilen,
   149 Credits), danach `intro.lightsSec` laut Stimmentest setzen und `AWAITING_RENDER` leeren.
+- 2026-11-15 (P-morse-tone): Das Funkfeuer hat einen Ton. Jedes Blinken klingt als Sinus von
+  650 Hz genau so lang wie es (5 ms Rampen, Pegel 0,025 in den Effekt-Bus), Lampe und Ton auf
+  einem Fahrplan auf der Audio-Uhr (`puzzles/morseKey.ts`), gemessen höchstens 5,7 ms
+  auseinander; vor jeder Wiederholung ein leises Trägerrauschen, Buchstabenlücke 5 statt
+  3 Einheiten, Wortpause 10. Stumm, vor der Freigabe des Tons und gelöst: nur die Lampe. Offen:
+  Uros hört es an (Pegel, Tonhöhe, ob die Lücke 5 trägt).
 
 ### M-1 Drei Spielende: Beweis und Sichtbarkeit — Status: erledigt (M-three, Merge 2026-11-14, a2ef8da; drei Review-Runden; Cloud-CI grün auf 347d444, Check und Walkthrough; CI-Budget um zwei Minuten angehoben) · Größe: M
 - Befund: mechanisch trägt die dritte Person (Leserin mit Regeln, Notizen und Funk an Zwei-Pult-

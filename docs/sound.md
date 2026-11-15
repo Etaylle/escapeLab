@@ -4,11 +4,12 @@ The lab is heard the way it is seen: rooms with a sound and an answer of their o
 you can locate in the dark by their steps on the floor they walk, a person on the radio, and
 music that tightens as the clock runs out. Every sound is a recording: mission control's lines
 (below), and the effects, the rooms' beds and the music, which ElevenLabs made from the catalog
-`packages/client/audio/catalog.json`. Four things are still made at runtime, because the game
+`packages/client/audio/catalog.json`. Five things are still made at runtime, because the game
 sets them as they play: the radio's chain and the static under its voice, the rooms' answers
 (their impulse responses, `reverb.ts`), the meter's hum, whose pitch is the voltage it reads,
-and the colour game's tones, one pitch a colour, as long as the game holds them
-(`puzzles/sounds.ts`). The Morse device is a lamp and makes no tone. The countdown's beep is a
+the colour game's tones, one pitch a colour, as long as the game holds them
+(`puzzles/sounds.ts`), and the Funkfeuer's key, a tone as long as each blink of its lamp
+(`puzzles/morseKey.ts`, The Funkfeuer's key below). The countdown's beep is a
 recording whose speed — and so its pitch — rises with each second gone; as recorded, it ticks
 each whole second of a sync station's window too (`countTick`, docs/gameplay.md). Code:
 `packages/client/src/world/` — `audio.ts` (the effects and the budget), `mix.ts` (the buses,
@@ -314,10 +315,11 @@ another never clip. Web Audio puts a makeup gain behind every compressor, worked
 curve — its gain at full scale, inverted and raised to 0.6: +1.71 dB for these settings — which the
 trim takes back (`limiterMakeup`), so that whatever stays under the threshold plays exactly as loud
 as before the brickwall. The devices' own sounds (`puzzles/sounds.ts`) go into the effects' bus like
-every other effect — the meter's hum and the colour tones the game pitches, and the device hum while
-a panel stands open, too: the Effekte volume and the sound switch reach them there, the bus's send
-carries them into the room's reverb, and the brickwall covers them with the rest
-(`test/deviceMix.test.ts` follows their chains into the real mix).
+every other effect — the meter's hum and the colour tones the game pitches, the Funkfeuer's key, and
+the device hum while a panel stands open, too: the Effekte volume and the sound switch reach them
+there, the bus's send carries them into the room's reverb, and the brickwall covers them with the
+rest (`test/deviceMix.test.ts` follows their chains into the real mix, `test/morseKey.test.ts`
+the key's).
 
 **Ducking.** Mission control's voice pulls the music 8 dB and the beds 4 dB down while it is on
 the air — from its opening squelch where it opens a run, else from its first word — and the
@@ -605,6 +607,34 @@ opens with (`paperSwish`, cut at 0.1 s, before the board's clack), the notepad l
 whole sound, and a terminal's screen changing the display's tick (`step-tick`). A body walked
 into a wall thuds once a push (`wall-thud`, `wallBump`), its steps silent while it stands. The
 drone warning (`danger.ts`) keeps the ping's recording (`ping`) until L-1 renders one of its own.
+
+## The Funkfeuer's key (`puzzles/morseKey.ts`)
+
+At the Funkfeuer's console the lamp's word is heard as well as seen, because by the lamp alone
+it was hard to read. Each blink sounds as a tone of exactly its length: a sine at 650 Hz, where
+a radio operator's sidetone sits, its gain ramped up over the first 5 ms of the blink and down
+over its last 5 ms, so that it never clicks, into an outlet at 0.025 into the effects' bus —
+the sine's peak there about 6 dB under an effect's, its RMS a few dB over the device hum. A
+unit stays 250 ms (a short signal one, a long one three, one dark between the signals of a
+letter), but letters stand five units apart, not the standard three: at this speed the gap
+inside a letter is long enough to be heard as a pause of its own, and three of it read only as
+a longer one. The word repeats after ten dark units, and four units before its first signal a
+short hiss of the carrier marks its start — the shared noise through a band round 2.5 kHz
+(Q 0.8), 15 ms up, 60 ms held, 120 ms down, quiet, and no Morse. The lamp keeps the long
+pause for a page without sound.
+
+Lamp and tone come from one schedule, the loop in Morse units (`morseLoop`, pure), on one
+clock. Where the page's sound runs, that is the audio clock: the tones and the hiss are laid on
+it 0.4 s ahead, every edge reckoned from the loop's origin and none from the edge before it, and
+the lamp turns by a timer aimed at each edge as heard — the audio time of the sample at the
+speaker (`getOutputTimestamp`, else the current time less the output latency) — so that the
+lamp lights as the tone reaches the ear, not some 30 ms before it. Over three loops of DIODE in
+Chromium the lamp's class changed at most 5.7 ms from its tone's edge. Nothing is laid while
+the sound switch mutes, so a page whose sound is off makes no node of it; where the context
+does not run, or stops running, the lamp goes on by the page's clock, unheard, and a sound
+already due is dropped, never crammed in late. Closing the panel stops it at once: the key's
+outlet falls to nothing over 5 ms and every source laid stops with it. A solved station's key
+falls silent; its lamp goes on.
 
 ## A voice on the radio (`radioVoice.ts`, `scripts/voice.ts`)
 
@@ -1381,7 +1411,13 @@ change on the next bar crossing over 2 s, a late element caught up, the critical
 minute and the escape, the alarm's push and sting, a stem kept waiting for the budget, a file asked
 for again, the endings and the drain, the streamed stings), `test/sounds.test.ts` (each device's
 recording, the alarm after a buzz or an arc, the meter's hum and the colour tones still made, the
-device hum's loop), `test/coldOpen.test.tsx`, `test/finale.test.tsx` and `test/putDown.test.tsx`
+device hum's loop), `test/morseKey.test.ts` (the loop's signals and gaps, the letter gap five
+times the signal gap, the hiss once a loop before the word only, every event laid once however
+the run is cut; over three loops each tone starting and stopping with its blink, as long as it,
+ramped inside its length and into the effects' bus; nothing laid while muted or after the switch
+mutes it, before the context runs or after it stops — the lamp keyed on by the page —, a closed
+key's sources stopped within 5 ms and its outlet unwired, a solved one silent while its lamp goes
+on), `test/coldOpen.test.tsx`, `test/finale.test.tsx` and `test/putDown.test.tsx`
 (the effects on the audio clock, the hatch's grind and its landing, a recording that failed made up
 by nothing, the mute ahead of the brickwall) and `test/audioKit.test.ts` (the budget, a recording
 within it, the loops, the census); `core/test/radioLines.test.ts` checks the lines themselves,
@@ -1928,7 +1964,8 @@ its line as the record of where it came from. Three things to know:
   game that credits them, and no other composer here adds terms.
 
 **Made as the game plays.** The radio's chain and the static under its voice, the rooms' answers
-(their impulse responses, `reverb.ts`), the meter's hum and the colour game's tones are synthesised
+(their impulse responses, `reverb.ts`), the meter's hum, the colour game's tones and the
+Funkfeuer's key and hiss are synthesised
 by the game's own code and carry no one else's rights. Piper and its voices, which recorded the
 lines before Helmut did, are build tools that never ship.
 
