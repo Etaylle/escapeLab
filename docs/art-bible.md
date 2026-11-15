@@ -703,8 +703,10 @@ held the screen's pace, 16.8 ms p95, in every run, and a first run beside the mu
 2.5 to 10.6) put the five within −0.02 and +0.11. That session put the pan between the edge rooms
 over the drift in both builds, +0.31 ms with one canvas and +0.35 in pieces, where the bench below,
 at the load of 1.7 to 3.5, put it under: the pan's frames fill the dark past the bake, and their
-cost moves with the machine's load. To run it again, alone on the machine: from the session's
-scratchpad/hero2/bench/, `heavy.sh --exclusive <label> ./run-split.sh` builds both pages — the
+cost moves with the machine's load. As it ran, alone on the machine — its scripts lay in the
+session's scratch folder, which the machine's restart of 14.11.2026 cleared, and are to be
+written anew for another run —: from scratchpad/hero2/bench/,
+`heavy.sh --exclusive <label> ./run-split.sh` builds both pages — the
 one-canvas bake from old-tree (c01dbbd), the branch's from an export of its HEAD (build-split.sh,
 REV to pick another) — and runs ten runs a round, each build with the scene alone, the hero and its
 beam drifting, a place held, the pan between the edge rooms and between two inner ones, six rounds
@@ -987,8 +989,9 @@ with these figures. Look B's back light costs the small cone +0.05 and +0.08 ms,
 three rounds of six: within the bench's noise. The frames held the screen's pace, 16.8 ms p95, in
 every run. At this load the shipped cone with the microphone on came to +0.97 ms, under the spec's
 1 ms, where the bench above put it at +1.08: the hero's numbers move with the load as the pan's do
-(The menu's places). To run it again, alone on the machine: from the session's
-scratchpad/hero2/bench/, `heavy.sh --exclusive <label> ./run-looks.sh` builds the four variants
+(The menu's places). As it ran, alone on the machine — its scripts went with the same scratch
+folder —: from scratchpad/hero2/bench/,
+`heavy.sh --exclusive <label> ./run-looks.sh` builds the four variants
 (look-smallA-<rev> to look-bigB-<rev>, exports of the branch at REV, its HEAD unless set, with the
 cone or the look switched) and runs the twelve runs a round;
 `python3 looks-stats.py bench-looks.log` reads the rounds.

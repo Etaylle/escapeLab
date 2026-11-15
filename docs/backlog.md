@@ -527,7 +527,7 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   Vorschlagsliste mit Hörlinks sucht ein Agent; Einbau (Schleifennaht auf dem Takt, −19 LUFS)
   als kleines Paket M-2, sobald Uros gewählt hat.
 
-### M-2 Musikpakete, wählbar in den Einstellungen — Status: im PR (M-packs, Spec `spec-M-packs.md`) · Größe: L
+### M-2 Musikpakete, wählbar in den Einstellungen — Status: erledigt (M-packs, Merge 2026-11-15, 62e12fb; Review mergebar auf b8869ba; Cloud-CI grün auf 62e12fb; fünf Pakete, weitere offen; Spec `spec-M-packs.md`) · Größe: L
 - Uros 2026-11-14 09:35: „Builde mir von allen Kombinationen Musikpakete, die ich im Spielmenü
   aussuchen kann: Paket 1, 2, 3 …, und je Platz einstellbar." Drei Suchagenten fanden am Morgen
   Kandidaten für alle acht Plätze (OpenGameArt, Free Music Archive, FreePD-Archiv, incompetech,
@@ -690,7 +690,7 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   1,3 ms und mehr); bei 1024 px Breite gäbe der Platz neben dem breitesten Panel nur 2,6 Kacheln her
   (3,1 bei 640 px Höhe), dort steht nur der Chip; der Chip behält seine kleine Figur.
 
-### S-4 Konto in die Leiste, Hero mit Geschichte, Tür vor jedem Menüwechsel — Status: im PR (S-hero2) · Größe: M
+### S-4 Konto in die Leiste, Hero mit Geschichte, Tür vor jedem Menüwechsel — Status: erledigt (S-hero2, Merge 2026-11-14, PR #21 und #23; danach S-menu-lab, PR #24: das Menü bleibt im Labor mit Plätzen; S-outfits, PR #25: Lichtkegel beleuchtet das Labor, Arbeitskleidung, Begleiter; Cloud-CI grün auf 25e39b8) · Größe: M
 - Uros 2026-11-14 09:45 mit Screenshot des Menüs: Der Konto-Chip sitzt „auf dem Premium-Platz"
   über der Bühne und gehört in die obere Leiste (Avatar, den der Nutzer setzt, oder nichts); der
   Hero soll „cooler" werden wie das God-of-War-Titelbild (kein Gesicht, etwas Eigenes), sich bei
