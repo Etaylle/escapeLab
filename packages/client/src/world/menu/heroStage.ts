@@ -12,7 +12,7 @@ import {
 import { traceRequested } from '../frameTrace.js';
 import { CREW } from '../palette.js';
 import { MAX_DENSITY } from '../render/backing.js';
-import { companionFacing, companionLook, companionPlace } from './companion.js';
+import { companionFacing, companionLook, pairPlace } from './companion.js';
 import {
   AWAY_FACING,
   CLEAR,
@@ -21,7 +21,6 @@ import {
   flareAt,
   flickerAt,
   headAt,
-  heroPlace,
   heroPose,
   heroTile,
   HERO_FACING,
@@ -235,13 +234,18 @@ export interface Standing {
   companion: HeroPlace | null;
 }
 
-/** Notes on `standing` where the hero and its companion stand on the stage `facts` measured. */
+/**
+ * Notes on `standing` where the hero and its companion stand on the stage `facts` measured: the
+ * two moved left together where the companion asks it (companion.ts pairPlace).
+ */
 function standOn(standing: Standing, facts: StageFacts | null): void {
-  standing.place = facts === null ? null : heroPlace(facts);
-  standing.companion = facts === null ? null : companionPlace(standing.place, facts);
-  standing.menuRight = facts?.menuRight ?? 0;
-  standing.stageW = facts?.w ?? 0;
-  standing.tile = facts === null ? 0 : heroTile(facts.windowH);
+  if (facts === null) {
+    Object.assign(standing, { place: null, companion: null, menuRight: 0, stageW: 0, tile: 0 });
+    return;
+  }
+  const { hero, companion } = pairPlace(facts);
+  const across = { menuRight: facts.menuRight, stageW: facts.w, tile: heroTile(facts.windowH) };
+  Object.assign(standing, { place: hero, companion, ...across });
 }
 
 /**
@@ -828,28 +832,21 @@ function sendAway(companion: CompanionCanvas): void {
 
 /** How strong the hero's lamp lights its companion's edge, against the hero's own. */
 const COMPANION_LIGHT = 0.5;
-/** Where along the beam the companion looks, of its reach: at what the beam shows. */
-const BEAM_MIDDLE = 0.6;
-
 /**
  * Where the companion of `on`'s hero, placed `place`, looks at `now`, facing `facing`, the hero's
- * lamp as `lamp` holds it out (`reach` long): at the middle of the beam while the lamp burns, now
- * and then at its clipboard (companion.ts `companionLook`).
+ * lamp `on` (0 to 1): toward where the menu's places show — the room the beam lights, its head
+ * held there — now and then down at its clipboard (companion.ts `companionLook`).
  */
 function companionLookAt(
   on: HeroPainting,
   [place, offset, facing]: readonly [HeroPlace, number, number],
-  [lamp, reach]: readonly [LampFrame, number],
+  lampOn: number,
   [now, since, phase]: readonly [number, number, number],
 ): number {
   const head = headAt(place, offset);
   const from = { x: head.x + on.standing.at.x, y: head.y + on.standing.at.y };
-  const middle = {
-    x: lamp.lens.x + Math.cos(lamp.angle) * reach * BEAM_MIDDLE,
-    y: lamp.lens.y + Math.sin(lamp.angle) * reach * BEAM_MIDDLE,
-  };
-  const beam = lamp.on > 0 ? angleTo(from, middle) : null;
-  return companionLook([now - since, phase], facing, beam, on.reduced());
+  const scene = lampOn > 0 ? angleTo(from, placeAnchor()) : null;
+  return companionLook([now - since, phase], facing, scene, on.reduced());
 }
 
 /**
@@ -869,12 +866,12 @@ function companionMotion(on: HeroPainting, place: HeroPlace, hero: HeroMotion, n
 
 /**
  * Paints the companion of `on`'s hero, where the stage has room for it beside the hero, as the
- * hero stands at `now` (`hero`, its motion; `lamp`, its lamp `reach` long), its canvas put on its
- * box; let go where it has no room.
+ * hero stands at `now` (`hero`, its motion; `lamp`, its lamp), its canvas put on its box; let go
+ * where it has no room.
  */
 function paintCompanion(
   on: HeroPainting,
-  [hero, lamp, reach]: readonly [HeroMotion, LampFrame, number],
+  [hero, lamp]: readonly [HeroMotion, LampFrame],
   [now, since, dpr]: readonly [number, number, number],
 ): void {
   const mate = on.companion;
@@ -885,11 +882,8 @@ function paintCompanion(
     return;
   }
   const motion = companionMotion(on, place, hero, now);
-  const look = companionLookAt(on, [place, motion.offset, motion.facing], [lamp, reach], [
-    now,
-    since,
-    mate.phase,
-  ]);
+  const stands = [place, motion.offset, motion.facing] as const;
+  const look = companionLookAt(on, stands, lamp.on, [now, since, mate.phase]);
   const cues = { phase: mate.phase, speaking: false, waveAt: null, reduced: on.reduced() };
   const pose = heroPose(cues, [now, since], { ...motion, look });
   const room = Math.ceil(STEP_TILES * on.standing.tile);
@@ -945,7 +939,7 @@ export function heroPainter(on: HeroPainting, since: number): (now: number) => b
     const lensX = lamp.lens.x - on.standing.at.x;
     const reach = reachOf(FIGURE_TALL * place.scale, lensX, on.standing.menuRight);
     holdLamp({ ...lamp.lens, angle: lamp.angle, reach, on: lamp.on, flare: lamp.flare });
-    paintCompanion(on, [motion, lamp, reach], [now, since, dpr]);
+    paintCompanion(on, [motion, lamp], [now, since, dpr]);
     probePose(on, [pose, motion], lamp, reach);
     return !reduced || !entrance.done;
   };

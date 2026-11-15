@@ -17,7 +17,7 @@ import {
   type StageFacts,
 } from '../src/world/menu/hero.js';
 import { heroCanvas, paintHero, type HeroCanvas } from '../src/world/menu/heroArt.js';
-import { companionPlace } from '../src/world/menu/companion.js';
+import { pairPlace } from '../src/world/menu/companion.js';
 import { heroPainter, type HeroPainting } from '../src/world/menu/heroStage.js';
 import { heroLamp, holdLamp } from '../src/world/menu/lamp.js';
 import { runScene } from '../src/world/menu/loop.js';
@@ -352,7 +352,9 @@ describe('heroPainter — the hero’s companion', () => {
     const mate = heroCanvas(canvas, (w, h) => fakeCanvas(w, h).canvas);
     if (mate === null) throw new Error('no companion canvas');
     on.companion = { hero: mate, phase: 0.7 };
-    on.standing.companion = companionPlace(on.standing.place, DESKTOP_STAGE);
+    const pair = pairPlace(DESKTOP_STAGE);
+    on.standing.place = pair.hero;
+    on.standing.companion = pair.companion;
     return { on, mate, canvas };
   }
 
@@ -388,6 +390,16 @@ describe('heroPainter — the hero’s companion', () => {
     const paint = heroPainter(on, 0);
     for (let now = 0; now < 20_000; now += 500) paint(now);
     expect(mate.drawn).toEqual({ legs: 1, upper: 1 });
+  });
+
+  it('turns its head only to its clipboard and back, its upper layer drawn but a few times', () => {
+    const { on, mate } = withCompanion(false);
+    const paint = heroPainter(on, 0);
+    // A minute and a half as the loop draws it, the beam sweeping all the while.
+    for (let now = 0; now < 90_000; now += 1000 / 30) paint(now);
+    // Two turns of its head every 9 s, and its glances of its own: never the beam's every step.
+    expect(mate.drawn.upper).toBeLessThan(60);
+    expect(mate.drawn.upper).toBeGreaterThan(10);
   });
 });
 

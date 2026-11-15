@@ -843,51 +843,56 @@ wants it for its still (`window.__heroHold`, read only under `?trace=1`), and th
 110 ms after an item taken, half way through its step, its lamp flared (`window.__heroBeat`,
 menu-hero-click.png).
 
-**Outfits.** The hero and its companion wear the workwear of the Forschungsanlage Kaltenbrunn in
-the 1980s, four outfits of the plant's own (world/menu/outfits.ts), drawn over the crew figure
-in its own manner — flat shapes, a thin edge a step darker, the figure's rim light over them, the
-cloth sunk for the night as the body is: the lab coat, white, open down the front, its lapel
-folded, a pen in the breast pocket, the plant's red-striped badge clipped on, its hem over the
-tops of the legs; the protective suit, the suit in the body's colour, a pale hood over the dome
-closed by a drawstring, the hood's black rubber seal round the visor, a filter at the chin and the
-plant's yellow warning tape round the waist; the technician's overall, a white hard hat with an
-orange reflector band, its brim over the visor, a leather belt with a brass buckle, a pouch at the
-front hip and a spanner at the back; the night watch, a navy jacket open at the front with a
-silver reflector band and brass buttons, a peaked cap with a brass badge, the plant's keys on a
-ring at the hip. Every outfit leaves the front of the body under the visor and the legs in the
-player's colour, which the test reads off the shapes each lays (test/menuOutfits.test.ts); body
-space faces the way the figure looks, so walking in, turned away or with the lamp raised, the
-wear turns with the figure. Each visit of the menu — each time it comes up with its hero, as a
-page loaded anew coming back from a lobby or a run does — dresses the two in the next of the twelve pairs
-of two outfits, each outfit with the one after it, then with the one two after, then three, so
-that from one visit to the next both change and the two never wear the same; the pair shown is
-kept in the browser's storage (`escapelab.menuOutfits`), the first visit's picked by chance, and a
-private window that refuses the storage picks by chance each time. Nothing hovered changes it.
+**Outfits.** The hero and its companion wear the workwear of the Forschungsanlage Kaltenbrunn in the
+1980s, four outfits of the plant's own (world/menu/outfits.ts), drawn over the crew figure in its
+own manner — flat shapes, a thin edge a step darker, the figure's rim light over them, the cloth
+sunk for the night as the body is: the lab coat, white, open down the front, its lapel folded, a pen
+in the breast pocket, the plant's red-striped badge clipped on, its hem over the tops of the legs;
+the protective suit, the suit in the body's colour, a pale hood over the dome closed by a
+drawstring, the hood's black rubber seal round the visor, a filter at the chin and the plant's
+yellow warning tape round the waist; the technician's overall, a white hard hat with an orange
+reflector band, its brim over the visor, a leather belt with a brass buckle, a pouch at the front
+hip and a spanner at the back; the night watch, a navy jacket open at the front with a silver
+reflector band and brass buttons, a peaked cap with a brass badge, the plant's keys on a ring at the
+hip. Every outfit leaves the front of the body under the visor and the legs in the player's colour,
+which the test reads off the shapes each lays (test/menuOutfits.test.ts); body space faces the way
+the figure looks, so walking in, turned away or with the lamp raised, the wear turns with the
+figure. Each visit of the menu — each time it comes up with its hero, as a page loaded anew coming
+back from a lobby or a run does — dresses the two in the next of the twelve pairs of two outfits,
+each outfit with the one after it, then with the one two after, then three, so that from one visit
+to the next both change and the two never wear the same; the pair shown is kept in the browser's
+storage (`escapelab.menuOutfits`), the first visit's picked by chance, and a private window that
+refuses the storage picks by chance each time. Nothing hovered changes it.
 
 **The companion.** A second figure of the crew stands with the hero where the stage has room for
-both (world/menu/companion.ts): 0.62 of its size, half a figure of the hero back up the floor and
-0.2 to 0.42 of one to the right, at the hero's back, its canvas under the hero's — over the
-hero's shoulder, its clipboard clear of the hero's dome. It wears another outfit than the hero and
-the crew colour furthest round the colour wheel from the player's, sunk half for the night, a
-step darker than the hero (heroArt.ts `COMPANION_NIGHT`), the hero's lamp lighting its edge at
-half strength. It breathes and glances as the hero does, on its own phase; it looks at the middle
-of what the beam shows, in the hero's glance's steps, and for 2.6 s of every 9 down at its
-clipboard; it steps aside with the hero as a panel opens and turns away with it as the menu goes
-for the lobby; it stands while the hero walks in. It keeps clear of the stage's right edge and
-safe area stepped aside, as the hero does, and stands only where it can stand that far right of
-the hero and under the stage's top: from 1200 px across at 720 px of height, 1259 at 820, 1382
-at 900 and 1659 at 1080 — never on a phone, nor where the hero is left out (the sizes test,
+both (world/menu/companion.ts `pairPlace`): 0.58 of its size, 0.7 of a figure of the hero back up
+the floor and 0.42 of one to the right, beside the hero's back, its canvas under the hero's — its
+whole head, its body and its clipboard clear of the hero's dome, the hero's pack the most of it the
+hero hides. Where the stage's right edge leaves no room for it, the two move left together by what
+it needs, the hero no further than its own room lets it stand (hero.ts `leftmostFeet`), clear of the
+menu's column resting and of the widest panel stepped aside. It wears another outfit than the hero
+and the crew colour furthest round the colour wheel from the player's, sunk half for the night, a
+step darker than the hero (heroArt.ts `COMPANION_NIGHT`), the hero's lamp lighting its edge at half
+strength. It breathes as the hero does, on its own phase; it looks toward where the menu's places
+show, the room the beam lights, in the hero's glance's steps, its head held there, and for 2.6 s of
+every 9 down at its clipboard — two turns of its head in each 9 s, so that its upper layer is drawn
+anew no more often; it steps aside with the hero as a panel opens and turns away with it as the menu
+goes for the lobby; it stands while the hero walks in. It keeps clear of the stage's right edge and
+safe area stepped aside, as the hero does, and stands only where the two fit so and its head stays
+under the stage's top: from 1270 px across at 720 px of height, 1337 at 820, 1390 at 900 and 1511 at
+1080 — never on a phone, nor where the hero is left out (the sizes test,
 test/menuHeroSizes.test.ts). Under reduced motion it stands still, as the hero does.
 
-**The lit cone.** At night the lab sinks to 26 % of its light, and the lamp lights it back where
-its cone falls: a second sprite of the cone, baked and turned with the haze, laid as a colour
-dodge in a grey of the night's own strength — each pixel divided by what the night left of it,
-the lab as lit at the cone's core near the lens, falling off across the cone and along its reach
-as the haze does (lampArt.ts `LIGHT`, `CONE_LIGHT`). Its light spreads wider than the haze, 0.34
-rad either way before its edge fades, as a torch's spill lights more than its beam, and reaches no
-further, short of the menu's column. The light multiplies the lab's own pixels in one copy and
-reads none back; it follows the beam's sweep and turn by the same degree's steps, stands still
-under reduced motion, and is laid only while the lamp burns, as strong as it burns.
+**The lit cone.** At night the lab sinks to 26 % of its light, and the lamp lights it back where its
+cone falls: a second sprite of the cone, baked and turned with the haze, laid as a colour dodge in a
+grey of the night's own strength — each pixel divided by what the night left of it, the lab as lit
+at the cone's core near the lens, falling off across the cone and along its reach as the haze does
+(lampArt.ts `LIGHT`, `CONE_LIGHT`). Its light spreads wider than the haze, 0.34 rad either way
+before its edge fades, as a torch's spill lights more than its beam, and reaches no further, short
+of the menu's column. The light multiplies the lab's own pixels in one copy and reads none back; it
+follows the beam's sweep and turn in steps of three degrees — soft and wide, it shows no step of
+one, and turning it, larger than the haze, is the beam's dearest step —, stands still under reduced
+motion, and is laid only while the lamp burns, as strong as it burns.
 
 **What it costs.** Filling the cone with its gradients every frame cost 1.3 ms a frame on the bench
 below with the radial falloff alone, 2.7 ms on a busier machine, and several times that with the
@@ -988,15 +993,18 @@ scratchpad/hero2/bench/, `heavy.sh --exclusive <label> ./run-looks.sh` builds th
 cone or the look switched) and runs the twelve runs a round;
 `python3 looks-stats.py bench-looks.log` reads the rounds.
 
-The outfits, the companion and the lit cone were read once against their base (4fad2bd), the
-builds swapped in turn under one server, two rounds each, at 1440 × 820 at density 1 on the
-software Canvas path, the main thread slowed four times, the machine's 1-minute load at 4.0 to
-8.3 (S-outfits, 15.11.2026): the frames held the screen's pace, 16.7 to 16.8 ms p95, in both;
-each loop's paint, timed round its animation frame's callback, came to 0.07 to 0.12 ms on
-average on the base and 0.09 to 0.20 with the three, and its p95 in the stretch where the hero's
-upper layer was drawn anew most from 0.7 to 0.9 ms to 2.0 to 2.1 — the companion's layers drawn
-anew beside the hero's as its look follows the beam. That reading times the scripts' calls; the
-software canvas may raster after them, which the menu's bench (above) takes in and this did not.
+The outfits, the companion and the lit cone were read once against their base (4fad2bd), the builds
+swapped in turn under one server, two rounds each, at 1440 × 820 at density 1 on the software Canvas
+path, the main thread slowed four times, the machine's 1-minute load at 4.0 to 8.3 (S-outfits,
+15.11.2026): the frames held the screen's pace, 16.7 to 16.8 ms p95, in both; each loop's paint,
+timed round its animation frame's callback, came to 0.07 to 0.12 ms on average on the base and 0.09
+to 0.20 with the three, and its p95 in the stretch where the beam turned most from 0.7 to 0.9 ms to
+2.0 to 2.1 — each degree turning the cone's wide light as well as the haze, and the companion's look
+following the beam. With the light turned every third degree and the companion's head held between
+its glances at its clipboard, the same reading at a load of 7.7 to 13.7 put the paint at 0.08 to
+0.12 ms on the base and 0.07 to 0.16 with the three, the busiest stretch's p95 at 0.7 to 0.9 and 0.7
+to 1.0. That reading times the scripts' calls; the software canvas may raster after them, which the
+menu's bench (above) takes in and this did not.
 
 ## Chrome (ui.css, styles/lobby.css, finale.css, pause.css, settings.css)
 
