@@ -22,11 +22,6 @@ Kooperatives Multiplayer-Escape-Spiel (Studienprojekt, FH-Themengruppe Schefer-W
   Regeln enthält, ist tragbar. Ausnahme: feste Topologie, die für jeden Seed gleich ist (der
   Netzplan des Serverraums, die BRAUCHT-Spalte), darf an den Pulten stehen; Regeln, die mit der
   Instanz variieren, bleiben an den Quellen.
-- Niemand bedient eine Station allein: Eine Eingabe zählt nur, solange ein zweites
-  Crewmitglied am anderen Pult oder an einer geöffneten Quelle der Station steht (`backupsOf`
-  in `core/src/map.ts`, vom Reducer durchgesetzt; ausgenommen Stationen, an denen die ganze Crew
-  drückt), und die Validierung beweist für jede Crew, dass zwei Verschiedene zugleich dort
-  stehen können.
 - Missionen sind Daten (`missions/*.json`, zod-validiert). Eine Plattentür hält nur, solange
   jemand auf der Platte steht — nennt sie mit `untilSolved` ein Rätsel, bleibt sie nach dessen
   Lösung offen. Ein Rätseltyp ist ein Modul unter `core/src/puzzles/<typ>.ts` nach dem Vertrag

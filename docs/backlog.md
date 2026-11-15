@@ -447,6 +447,22 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
 - Offen: NAT-Durchgang ist lokal nicht beweisbar (localhost); ein Test über zwei Netze, und ob
   ein TURN-Dienst nötig wird (R-4).
 
+### R-alone Keine zweite Person mehr nötig — Status: im Branch R-alone (2026-11-15) · Größe: M
+- Entscheidung Uros am 2026-11-15 auf die Frage mit den Alternativen: „Regel ganz weg". Die
+  Architektur-Invariante „Niemand bedient eine Station allein" entfällt: Eine Eingabe zählt, wer
+  sonst auch wo steht. `backupsOf`, die Abweisung „Eingabe gesperrt: … steht niemand" und der
+  Beweis der Validierung, dass zwei Verschiedene zugleich an Station und Quelle stehen können,
+  sind weg; die rote LED „KEIN PARTNER" auch.
+- Bleibt: Stationen mit zwei Pulten bleiben eine Instanz mit zwei Hälften, ihre Module verlangen
+  weiter die zweite Person, wo ihre Eingaben es tun („Am sendenden Pult steht niemand.", „Am Rack
+  steht niemand.", „Am Prüfpult steht niemand."), und die Validierung zwei Verschiedene an den
+  Pulten; die PARTNER-LED nennt dort, wer am anderen Pult steht (`atOtherConsole`, „· Funk"
+  mit der Stationssprechanlage). Stationen der ganzen Crew, Plattentüren, Schlüssel, Sicherung
+  und die Sicht nach Anwesenheit bleiben, wie sie sind; die Sprechanlage (`intercomOf`) auch.
+- Offen für Uros: An einer Station mit einem Pult kann jetzt eine Person allein zwischen Pult und
+  Quelle pendeln, während die andere nichts tut; ob Blackout dafür neue Gründe zum Teilen
+  braucht, zeigt der Playtest (T-4, N-6).
+
 ### R-5 Sichtbarkeit — Status: erledigt (R-reconnect, Merge 2026-11-12) · Größe: S
 - Server loggt Beitritt, Wiederverbinden, Abbruch, Abweisung, Weiter-ohne, Aufgeben, Übernahme,
   Laufende je eine Zeile; `/health` zählt Räume, laufende Partien, Spieler, Zuschauer, nennt
@@ -763,19 +779,17 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
 ### G-3 Teile aus einer Lösung — Status: wartet (Entscheidung Uros) · Größe: M
 - Studie Rang 2 (Overcooked 2, Among Us): Eine gelöste Station gibt ein Teil aus, das eine andere
   braucht, etwa eine Sicherung oder eine Lochkarte. In freier Reihenfolge teilt sich eine Crew zu
-  dritt dann in ein Paar an der nächsten Station und eine Person, die das Teil trägt; jede Station
-  behält ihre zwei. Die Teile, ihr Tragen und ihre Ablage gibt es schon (`items`,
-  `requiredFor`), neu ist ein Teil, das erst mit einer Lösung erscheint, und die Validierung,
-  dass es seine Station erreicht. Antwortet auf T-4 und M-1, ohne eine Regel an einer Station zu
-  ändern.
+  dritt dann in ein Paar an der nächsten Station und eine Person, die das Teil trägt. Die Teile,
+  ihr Tragen und ihre Ablage gibt es schon (`items`, `requiredFor`), neu ist ein Teil, das erst
+  mit einer Lösung erscheint, und die Validierung, dass es seine Station erreicht. Antwortet auf
+  T-4 und M-1, ohne eine Regel an einer Station zu ändern.
 
 ### G-4 Lagetafel — Status: wartet (Entscheidung Uros) · Größe: M
 - Studie Rang 6 (Phasmophobia, das Journal als Gedächtnis der Crew): eine Tafel in der Welt, an
   die der Notizblock Mitschriften heftet („Anheften"); wer davor steht, sieht alle Zettel der
   Runde, sonst niemand — die Sicht folgt der Anwesenheit. Angeheftet wird nur, was jemand selbst
-  mitgeschrieben hat, so wie der Notizblock die eigene Abschrift ist; eine Eingabe braucht
-  weiter zwei. Braucht ein Kartenelement `board`, eine Liste der Zettel je Runde im Server und
-  die Sicht der Tafel.
+  mitgeschrieben hat, so wie der Notizblock die eigene Abschrift ist. Braucht ein Kartenelement
+  `board`, eine Liste der Zettel je Runde im Server und die Sicht der Tafel.
 
 ### G-5 Rollentausch in einer Station — Status: wartet (Entscheidung Uros) · Größe: S
 - Studie Rang 7 (We Were Here Together): Die zweite Stufe einer Station nimmt Eingaben nur von

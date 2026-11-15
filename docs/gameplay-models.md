@@ -13,11 +13,8 @@ core, server and client, L several systems, XL a new layer of the game.
 
 ## Our invariants, the yardstick
 
-Every borrowing has to survive five rules of `CLAUDE.md`:
+Every borrowing has to survive four rules of `CLAUDE.md`:
 
-- **Two consoles or a reader.** Nobody works a station alone. An input counts only while a
-  second crew member stands at the other console or at an open source of the station
-  (`backupsOf`). Stations the whole crew presses together are the only exception.
 - **Views by presence.** What a player sees follows from where they stand, never from a role.
   The instance reaches only the players at the console. The rules reach only the players at a
   source, and the Laborkennung only those who read the sign.
@@ -55,9 +52,9 @@ so even the needy side keeps the talking going.
 
 **Our invariants.** A needy object stands at a fixed spot and wakes while a station is open.
 Its gauge shows only to whoever stands at it, which keeps views by presence. It is no station:
-like a plate, it is a chore for one person, not a puzzle for two. That is a deliberate,
-documented exception to „two consoles or a reader". A Knobs-like variant keeps the rule: what
-the needle means is printed at a source, and venting it right takes a reader. Its page holds
+like a plate, it is a chore for one person, not a puzzle for two. A Knobs-like variant needs
+the rules: what the needle means is printed at a source, and venting it right takes reading
+them. Its page holds
 the table, never the setting. A missed answer is an alarm, so it uses the existing penalty
 path.
 
@@ -485,8 +482,7 @@ decision, and it shows what is still unknown.
 **Our invariants.** Our notepad holds each player's own writing and captures from the sources
 (`noting.ts`), kept per player. A Lagetafel would be a board in the world where captures are
 pinned for everybody standing at it. It would be a place, so views stay by presence. It holds
-only what the crew pinned. A pinned capture of rules is the player's copy, as the notepad is,
-and input still needs a second person.
+only what the crew pinned. A pinned capture of rules is the player's copy, as the notepad is.
 
 **Size.** M (G-4): a map element `board`, a server list of pinned captures per run, the
 notepad's „Anheften", a view of the board's pins for whoever stands there.
@@ -557,7 +553,7 @@ waits, the third player, the first run) against its size.
 
 | # | Borrowing | From | Backlog | Size |
 | --- | --- | --- | --- | --- |
-| 1 | **Needy valve:** while a station is open, a gauge nearby wakes every 40–60 s and needs one hand; missed, an alarm — a chore for one, the documented exception to „two consoles or a reader", as a plate is | Keep Talking (needy), Lovers (too few hands) | T-4, M-1 | M |
+| 1 | **Needy valve:** while a station is open, a gauge nearby wakes every 40–60 s and needs one hand; missed, an alarm — a chore for one, as a plate is | Keep Talking (needy), Lovers (too few hands) | T-4, M-1 | M |
 | 2 | **Parts out of a solve:** a solved station puts out a part that another station needs; in free order the crew splits into a pair and a runner | Overcooked 2 (chains), Among Us (two-part tasks) | G-3 (new) | M |
 | 3 | **Leitstand with door codes:** a terminal shows drones and doors only at its keyboard; the runner reads a door's code, the operator opens it for five seconds | Lethal Company (terminal) | I-1 | L |
 | 4 | **A course without a clock:** a crew's first run without a clock, then the hall, the tutorial and Blackout, one idea added per step | Escape Academy (pacing), Escape Simulator (optional timer) | N-6 | S |

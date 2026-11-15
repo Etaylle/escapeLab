@@ -6,7 +6,7 @@ Stand: 2026-10-23 · Version 1.1
 
 EscapeLab ist ein kooperatives Escape Room Spiel im Browser für mindestens zwei Personen an
 getrennten Geräten im selben Netz. Die Crew befreit sich aus einem verdunkelten Labor, indem
-sie Stationen löst, die nur gemeinsam zu bedienen sind. Dieses Dokument legt fest, was das
+sie gemeinsam Stationen löst. Dieses Dokument legt fest, was das
 Produkt tut und was nicht, priorisiert nach MoSCoW (Must, Should, Could, Won't). Es gilt für
 den Referenz Level „Blackout im Labor" und die Plattform, auf der er läuft.
 
