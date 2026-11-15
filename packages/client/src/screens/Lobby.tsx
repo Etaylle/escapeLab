@@ -27,6 +27,7 @@ import { Icon } from './Icon.js';
 import { MapThumb } from './MapThumb.js';
 import { phosphorClass, useComesOn } from './phosphor.js';
 import { plaqueCount } from './Plaques.js';
+import { LobbyChat } from './TypedChat.js';
 import { MicSetup, NoLink } from './Voice.js';
 
 type Send = (msg: ClientMessage) => void;
@@ -611,6 +612,7 @@ export function LobbyScreen({ view, send, leaveRoom, missions, stats }: Props) {
         />
         <MicSetup />
         <NoLink players={view.players} />
+        <LobbyChat players={view.players} send={send} />
         <HostNews players={view.players} />
         <StartArea view={view} send={send} />
         <div className="lobby-foot">

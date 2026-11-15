@@ -20,8 +20,8 @@ interface Props {
 type Tab = 'auftrag' | 'karte' | 'steuerung';
 
 /**
- * The ping and the quick chat: by the mouse and the digits on keys — a phrase with a slot,
- * „Kabel …", filled by a second digit; on a controller the D-pad's ◀ pings where the lamp
+ * The ping, the quick chat and a typed line: by the mouse, the digits and the write key on keys
+ * — a phrase with a slot, „Kabel …", filled by a second digit; on a controller the D-pad's ◀ pings where the lamp
  * points, its ▶ opens the chat to pick a phrase from with the D-pad, and a slot's value too.
  */
 function signalRows(
@@ -32,6 +32,8 @@ function signalRows(
     return [
       ['Klick auf die Welt', 'Ping für alle setzen'],
       [`${g('chat')}, dann 1–8, bei „…" noch 1–9`, 'Schnellchat'],
+      // voice: interface — the key list, naming the crew a line goes to
+      [g('write'), 'Nachricht an die Crew schreiben'],
     ];
   }
   return [

@@ -131,7 +131,7 @@ describe('the settings panel', () => {
     for (const legend of ['Tastenbelegung', 'Controller', 'Controller-Symbole']) {
       expect(html).toContain(`<legend>${legend}</legend>`);
     }
-    expect(html.match(/class="settings-kbd"/g)).toHaveLength(12);
+    expect(html.match(/class="settings-kbd"/g)).toHaveLength(13);
     expect(lit(html)).toEqual(['Automatisch']);
     expect(sliders(html)).toEqual(['Stick-Totzone 20']);
     // A touch screen keeps its buttons; the game's own keys keep their task.

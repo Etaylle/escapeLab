@@ -341,6 +341,8 @@ export {
   phraseShown,
   phrasesOf,
   sayPhrase,
+  TYPED_MAX,
+  typedLine,
   slotValues,
   type ChatPhrase,
 } from './chat.js';

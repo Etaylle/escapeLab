@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { AchievementId } from './achievements.js';
-import { CHAT_PHRASE_COUNT } from './chat.js';
+import { CHAT_PHRASE_COUNT, TYPED_MAX } from './chat.js';
 import { DIFFICULTIES, type Difficulty } from './difficulty.js';
 import type { Grade } from './grade.js';
 import { MAX_NOTES } from './notes.js';
@@ -319,6 +319,11 @@ export const clientMessageSchema = z.discriminatedUnion('kind', [
       .max(CHAT_PHRASE_COUNT - 1),
     value: z.string().min(1).max(16).optional(),
   }),
+  /**
+   * a line typed to the crew: the server tidies it and refuses an empty one or one too long
+   * (chat.ts `typedLine`); what weighs more than this never gets that far
+   */
+  z.object({ kind: z.literal('say'), text: z.string().max(TYPED_MAX * 4) }),
   z.object({ kind: z.literal('back-to-lobby') }),
   z.object({ kind: z.literal('rematch') }),
   /** on without the crew member away by id, once the wait for their drop is over */
@@ -603,7 +608,7 @@ export type ServerMessage =
       drones: Record<string, DronePosition>;
     }
   | { kind: 'ping'; playerId: string; x: number; y: number }
-  /** a quick-chat phrase somebody said, its slot filled in: „Kabel 3" */
+  /** a quick-chat phrase somebody said, its slot filled in („Kabel 3"), or a line they typed */
   | { kind: 'chat'; playerId: string; text: string }
   /** a voice signal from another member of the room, as they sent it */
   | { kind: 'rtc'; from: string; signal: RtcSignal }

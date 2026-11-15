@@ -435,6 +435,18 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   (`ICE_SERVERS`), ein TURN-Dienst kommt per Render-Dashboard dazu, ohne Code. Offen: welcher
   TURN-Dienst (Entscheidung Uros).
 
+### C-talk Sprechverbindung übers Internet, getippter Chat — Status: im Branch C-talk (2026-11-15) · Größe: M
+- Uros meldet am 2026-11-15 „voice funktioniert nicht" auf escapelab.onrender.com. Ursache im
+  Code: ohne `?stun=1` keine ICE-Server, also nur Host-Kandidaten — zwischen zwei Netzen kommt
+  keine Verbindung zustande. Jetzt nennt der Server die ICE-Server (`ICE_SERVERS`, sonst
+  öffentliches STUN); eine Verbindung, die scheitert, nicht kommt oder 6 s abgerissen bleibt,
+  wird nach 3/6/12/24/30 s neu aufgebaut, und Lobby und Welt sagen „Keine Sprechverbindung zu
+  Ben". Opus mit FEC, DTX, mono, 32 kbit/s.
+- Getippter Chat in Lobby und Lauf: `T` oder ✎, 120 Zeichen, drei auf einmal und eine je 2 s,
+  Sprechblase, HUD-Zeile und die letzten acht Zeilen im Log (`docs/gameplay.md` „Typed chat").
+- Offen: NAT-Durchgang ist lokal nicht beweisbar (localhost); ein Test über zwei Netze, und ob
+  ein TURN-Dienst nötig wird (R-4).
+
 ### R-5 Sichtbarkeit — Status: erledigt (R-reconnect, Merge 2026-11-12) · Größe: S
 - Server loggt Beitritt, Wiederverbinden, Abbruch, Abweisung, Weiter-ohne, Aufgeben, Übernahme,
   Laufende je eine Zeile; `/health` zählt Räume, laufende Partien, Spieler, Zuschauer, nennt

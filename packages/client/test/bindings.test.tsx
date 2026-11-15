@@ -34,9 +34,9 @@ const plain = (key: string, mods: Partial<KeyboardEvent> = {}) => ({
 });
 
 describe('the binding map', () => {
-  it('binds every action to a key of its own, W A S D, Shift, E, Q, N, M, C, I and V', () => {
+  it('binds every action to a key of its own, W A S D, Shift, E, Q, N, M, C, T, I and V', () => {
     expect(ACTIONS.map((action) => keyName(DEFAULT_KEYS[action])).join(' ')).toBe(
-      'W S A D Shift E Q N M C I V',
+      'W S A D Shift E Q N M C T I V',
     );
     expect(new Set(Object.values(DEFAULT_KEYS)).size).toBe(ACTIONS.length);
   });
@@ -117,7 +117,7 @@ describe('rebinding in the settings', () => {
       (el) => el.props['className'] === 'settings-kbd',
     );
     expect(keycaps.map((el) => el.props['children'])).toEqual([
-      ...['W', 'S', 'A', 'D', 'Shift', 'F', 'Q', 'N', 'M', 'C', 'I', 'G'],
+      ...['W', 'S', 'A', 'D', 'Shift', 'F', 'Q', 'N', 'M', 'C', 'T', 'I', 'G'],
     ]);
     const panel = elementsOf(() => <SettingsPanel onClose={() => undefined} tab="steuerung" />);
     press(buttonsOf(panel, 'settings-reset')[0]);

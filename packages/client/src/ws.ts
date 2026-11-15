@@ -13,6 +13,7 @@ import type {
   SpectatorView,
 } from '@escapelab/core';
 import { fillEarned, forgetEarned } from './achievements.js';
+import { logLine, logRoom } from './chatLog.js';
 import { askForTime, clock, localNow } from './clock.js';
 import { keepConnected, wipesBanner, type Line, type LineStatus, type Retry } from './line.js';
 import { forgetNotes, localStore } from './notes.js';
@@ -159,7 +160,10 @@ export interface Connection {
   drones: MutableRefObject<Record<string, DronePosition>>;
   /** Map pings, newest last; the render loop drains expired ones itself. */
   pings: MutableRefObject<{ playerId: string; x: number; y: number; at: number }[]>;
-  /** Quick-chat lines as said, slots filled in; newest last, drained by the render loop. */
+  /**
+   * Chat lines as said — quick-chat phrases, slots filled in, and typed lines —; newest last,
+   * drained by the render loop.
+   */
   chats: MutableRefObject<{ playerId: string; text: string; at: number }[]>;
   send: (msg: ClientMessage) => void;
   /**
@@ -294,6 +298,7 @@ function accountNewsOf(msg: ServerMessage, page: Page): boolean {
 function seatNews(msg: ServerMessage, page: Page): boolean {
   switch (msg.kind) {
     case 'joined':
+      logRoom(msg.code);
       page.resuming.current = false;
       page.resumed.current = null;
       keepTab({ code: msg.code, watching: false });
@@ -309,6 +314,7 @@ function seatNews(msg: ServerMessage, page: Page): boolean {
       page.setTakeover(null);
       return true;
     case 'left':
+      logRoom(null);
       leftRoom(msg, page);
       return true;
     case 'seated':
@@ -427,6 +433,7 @@ function streamNews(msg: ServerMessage, page: Page): void {
     case 'chat': {
       const { playerId, text } = msg;
       page.chats.current.push({ playerId, text, at: performance.now() });
+      logLine(playerId, text);
       break;
     }
   }

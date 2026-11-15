@@ -1242,10 +1242,13 @@ function step(
   s.room.updatePosition(s.playerId, msg.run, { x, y, facing, moving }, msg.t);
 }
 
-/** What the player of `s` says to the rest of the room: a ping, a chat, a voice signal, a yes. */
+/**
+ * What the player of `s` says to the rest of the room: a ping, a chat or a typed line, a voice
+ * signal, a yes.
+ */
 function toTheOthers(
   s: Session,
-  msg: Extract<ClientMessage, { kind: 'ping' | 'chat' | 'rtc' | 'takeover-answer' }>,
+  msg: Extract<ClientMessage, { kind: 'ping' | 'chat' | 'say' | 'rtc' | 'takeover-answer' }>,
 ): void {
   switch (msg.kind) {
     case 'ping':
@@ -1253,6 +1256,9 @@ function toTheOthers(
       return;
     case 'chat':
       s.room.chat(s.playerId, msg.phrase, msg.value);
+      return;
+    case 'say':
+      s.room.say(s.playerId, msg.text);
       return;
     case 'rtc':
       s.room.relaySignal(s.playerId, msg.to, msg.signal);

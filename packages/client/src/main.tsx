@@ -18,6 +18,7 @@ import './styles/finale.css';
 import './styles/coldopen.css';
 import './styles/editor.css';
 import './styles/voice.css';
+import './styles/chat.css';
 import './styles/world.css';
 import './styles/lobby.css';
 import './styles/devices.css';

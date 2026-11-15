@@ -30,6 +30,7 @@ import {
   runReport,
   runSeconds,
   sayPhrase,
+  typedLine,
   SNAPSHOT_EVERY_MS,
   SNAPSHOT_LIVE_MS,
   SNAPSHOT_MAX,
@@ -134,6 +135,9 @@ const POSITIONS_KEEPALIVE_MS = 1000;
 const PING_COOLDOWN_MS = 700;
 /** Same idea for quick chat, a little slower so it stays readable. */
 const CHAT_COOLDOWN_MS = 1200;
+/** Typed lines a player may send at once, and how many more come free each second: one in 2 s. */
+const TYPED_BURST = 3;
+const TYPED_PER_SEC = 0.5;
 /**
  * Voice signals one member may send at once, and how many more come free
  * each second: a voice link takes an offer or answer and a handful of
@@ -348,6 +352,8 @@ export class Room {
   private readonly lastChatAt = new Map<string, number>();
   /** each member's voice signals still allowed, and when that was last worked out (epoch ms) */
   private readonly signalAllowance = new Map<string, Allowance>();
+  /** typed lines, by player: kept no longer than the room (`say`) */
+  private readonly typedAllowance = new Map<string, Allowance>();
   /** each seat's marks of its pause menu still allowed (`MENU_MARK_BURST`) */
   private readonly menuAllowance = new Map<string, Allowance>();
   private drones: DronePatrol | null = null;
@@ -1440,6 +1446,26 @@ export class Room {
     this.lastChatAt.set(playerId, now);
     for (const listener of this.audience) {
       listener({ kind: 'chat', playerId, text });
+    }
+  }
+
+  /**
+   * A line a crew member typed (core chat.ts `typedLine`): tidied, and fanned out with its sender
+   * to everyone the quick chat reaches, as said — never kept. Refused from anyone not in the
+   * crew, empty, over TYPED_MAX characters, or past the sender's allowance of TYPED_BURST at
+   * once and one every 1 / TYPED_PER_SEC s after: a line typed is not dropped without a word.
+   */
+  say(playerId: string, text: string): void {
+    if (this.playerOf(playerId) === null) {
+      // voice: interface — the room's refusal, not the lab's, names the crew
+      throw new GameError('Schreiben kann nur die Crew.');
+    }
+    const line = typedLine(text);
+    if (!takeAllowance(this.typedAllowance, playerId, Date.now(), TYPED_BURST, TYPED_PER_SEC)) {
+      throw new GameError('Nicht so schnell — gleich noch einmal.');
+    }
+    for (const listener of this.audience) {
+      listener({ kind: 'chat', playerId, text: line });
     }
   }
 

@@ -1,0 +1,103 @@
+/* ══ a line typed to the crew (screens/TypedChat.tsx) ══
+ * The room's last lines over a field and its button: in the lobby a part of the mission panel,
+ * in a run a box over the world's foot, left of the quick chat's wheel, that opens with the
+ * write key or the ✎ button. Each name stands in its crew colour.
+ */
+
+.typed-chat {
+  display: grid;
+  gap: 6px;
+}
+
+.typed-chat-log {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: calc(13px * var(--text-scale));
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.typed-chat-who {
+  font-weight: 700;
+}
+
+.typed-chat-empty {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.typed-chat-form {
+  display: flex;
+  gap: 6px;
+}
+
+.typed-chat-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 7px 10px;
+  font-size: 16px;
+}
+
+.typed-chat-form button {
+  flex: none;
+  padding: 7px 12px;
+  font-size: 14px;
+}
+
+/* The lobby's: a few lines, scrolled to the newest. */
+.typed-chat--lobby .typed-chat-log {
+  max-height: 8.5em;
+  overflow-y: auto;
+}
+
+/* The run's: over the world's foot, clear of the cluster on a touch screen. */
+.typed-chat--world {
+  position: absolute;
+  left: 14px;
+  bottom: 104px;
+  z-index: 6;
+  width: min(420px, calc(100% - 28px));
+  padding: 10px;
+  background: rgba(7, 11, 15, 0.95);
+  border: 1px solid var(--line-2);
+  border-radius: 12px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55);
+}
+
+@media (pointer: coarse) {
+  .typed-chat--world {
+    bottom: calc(var(--cluster-reach) + 8px);
+  }
+}
+
+/*
+ * The ✎ button: beside the quick chat's handle on a keyboard; on a touch screen out of the
+ * cluster's four, left of the chat's cell in its top row, so that the cluster keeps its reach.
+ */
+.world-write {
+  min-height: 52px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  font-family: var(--mono);
+  font-weight: 700;
+  background: rgba(26, 38, 48, 0.8);
+}
+
+@media (pointer: coarse) {
+  .world-thumb {
+    position: relative;
+  }
+
+  .world-thumb > .world-write {
+    position: absolute;
+    top: 0;
+    right: calc(100% + var(--cluster-gap));
+    display: grid;
+    place-items: center;
+    font-size: 22px;
+  }
+}

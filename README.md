@@ -132,8 +132,9 @@ sich der **Notausgang** und das ganze Team muss ihn gemeinsam erreichen, bevor d
 mit Statistiken und persönlicher Bestzeit. **Hilfsmittel:** Klick auf die Welt setzt einen **Ping**
 für alle (farbige Ringe, Pfeil wenn außerhalb des Bildes), `M` blendet die **Minikarte** ein,
 `N` den eigenen **Notizblock** (bleibt für den Raum gespeichert), `C` öffnet den **Schnellchat**
-(acht feste Sätze, Tasten `1`–`8`, erscheinen als Sprechblase über der Figur) — damit
-funktioniert das Spiel auch ohne Voice-Chat.
+(acht feste Sätze, Tasten `1`–`8`, erscheinen als Sprechblase über der Figur), `T` öffnet ein
+Feld für eine **getippte Nachricht** an die Crew (höchstens 120 Zeichen, auch in der Lobby; auf
+dem Handy ✎ neben dem Schnellchat) — damit funktioniert das Spiel auch ohne Voice-Chat.
 
 **Sprechen:** In der Lobby lässt sich das **Mikrofon** aktivieren (nie von selbst); dann geht
 die Stimme hinaus, solange `V` gedrückt bleibt — auf dem Handy die 🎤-Taste; die Leiste schaltet
