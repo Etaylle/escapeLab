@@ -539,7 +539,7 @@ describe('the list', () => {
   });
 });
 
-describe('the backup rule, through the reducer', () => {
+describe('the Zugangskontrolle through the reducer', () => {
   const mission = parseMission({
     id: 'zugang',
     title: 'Zugang',
@@ -579,14 +579,11 @@ describe('the backup rule, through the reducer', () => {
       input: { cmd: 'status' },
     });
 
-  it('turns a command away while nobody stands at the token device or the list', () => {
-    expect(() => login(open({}))).toThrow(/Eingabe gesperrt: Am anderen Pult/);
-  });
-
-  it('takes it with somebody at the token device, or at the list', () => {
+  it('takes a command with nobody else at the token device or the list, as with them there', () => {
+    const alone = login(open({}));
     const atDevice = login(open({ stations: { [consoleB]: ['p2'] } }));
     const atList = login(open({ manuals: { liste: ['p3'] } }));
-    for (const state of [atDevice, atList]) {
+    for (const state of [alone, atDevice, atList]) {
       const terminal = viewFor(state, 'p1').puzzle;
       expect(terminal?.kind === 'access' ? terminal.terminal?.log.at(-1)?.text : null).toMatch(
         /^Keine Sitzung offen; angefordert: [A-Z]+, [A-Z]+$/,

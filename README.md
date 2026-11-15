@@ -63,8 +63,8 @@ ihr Platz folgt dem Playtest —: bewiesen im Kerntest und in der Probemission
 `tools/fixtures/access-probe.json`, die der Rundgang im Systemcheck über den Editor mit festem
 Seed importiert und bis zur Lösung spielt, jeden Token vom Gerät abgelesen.
 
-Keine Station lässt sich allein bedienen (siehe *Nie allein*), und auf *Normal* beendet der
-fünfte Alarm den Lauf — auf *Hart* der dritte, auf *Entspannt* gibt es keine Grenze.
+Auf *Normal* beendet der fünfte Alarm den Lauf — auf *Hart* der dritte, auf *Entspannt* gibt es
+keine Grenze.
 
 **Startseite:** Ein Hauptmenü wie in einem Spiel, über dem beleuchteten Labor der gewählten
 Mission, das langsam vorbeizieht: *Einsatz starten* (die Missionskarten, „Runde eröffnen"),
@@ -181,10 +181,10 @@ Zettel von Leuten aus dem Labor („Nachtschicht: …“, „Admin: …“), nie
 oder Sie, keine Spieler, Crew oder Partner, keine Imperative und Regieanweisungen; ein Verstoß nennt
 den Satz.
 
-**Nie allein:** Eine Eingabe am Pult zählt nur, solange noch jemand am anderen Pult oder bei den
-Regeln dieser Station steht — sonst wird sie ohne Alarm abgewiesen. Der Kopf des Pults nennt die
-zweite Person („Mit Ben bei: SPIND“, „Mit Ben an Pult B“) oder warnt, dass sie fehlt. Ausgenommen
-sind Stationen, an denen die ganze Crew gemeinsam drückt.
+**Wer wo steht:** Eine Eingabe am Pult zählt, wer sonst auch wo steht — wer allein an einer
+Station mit einem Pult steht, bedient sie. Eine Station mit zwei Pulten braucht weiter zwei an
+ihren Pulten, wo ihr Modul es verlangt, und ihr Kopf nennt, wer am anderen Pult steht
+(„PARTNER Ben · Pult B“); an Stationen, an denen die ganze Crew drückt, drücken alle.
 
 **Schwierigkeit:** Der Host wählt in der Lobby zwischen *Entspannt*, *Normal* und *Hart* — das
 skaliert Zeitbudget, alle Zeitstrafen, Drohnentempo und -reichweite sowie Häufigkeit und Dauer

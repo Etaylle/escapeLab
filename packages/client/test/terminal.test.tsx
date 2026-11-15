@@ -38,7 +38,7 @@ const terminalView = {
   title: 'Serverraum',
   manual: null,
   console: 'a',
-  backup: null,
+  atOtherConsole: null,
 } as unknown as Extract<PuzzleView, { kind: 'servers' }>;
 
 /** A thing on the fake page that can hold the focus: the body, the prompt, the notepad's text. */

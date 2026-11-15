@@ -175,7 +175,7 @@ const maze: PuzzleView = {
   manual: null,
   console: 'a',
   plate: 'Das Pult steuert den Prüfkopf durch die Kabelschächte',
-  backup: null,
+  atOtherConsole: null,
 };
 
 describe('stepping back from a device', () => {

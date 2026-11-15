@@ -323,6 +323,27 @@ function inputsFor(moves: Move<PuzzleInput>[], roles: Roles, crew: string[], at:
   );
 }
 
+/** `state` with `manuals` naming who stands at the manual objects; the rest stands as it stood. */
+function atManuals(state: GameState, manuals: GameState['presence']['manuals']): GameState {
+  const { stations, notes, plates, signSeen, exit, sight } = state.presence;
+  return standing(state, { stations, manuals, notes, plates, signSeen, exit, sight });
+}
+
+/**
+ * The moves into `state`: at a station of one console, which its operator works by its own,
+ * with the reader stepped off the rules while they go in — nobody but the operator anywhere
+ * near it —, and back at the rules after.
+ */
+function movesIn(state: GameState, def: PuzzleDef, moves: Action[]): GameState {
+  const { consoles, wholeCrew } = moduleFor(def.type);
+  if (wholeCrew || consoles === 2 || moves.length === 0) {
+    return moves.reduce(applyAction, state);
+  }
+  const { manuals } = state.presence;
+  const done = moves.reduce(applyAction, atManuals(state, {}));
+  return done.phase === 'playing' && done.puzzleState !== null ? atManuals(done, manuals) : done;
+}
+
 /** `state` at `at`, its open puzzle ticked as the room ticks it once its clock is due. */
 function ticked(state: GameState, at: number): GameState {
   const due = puzzleDueAt(state);
@@ -333,7 +354,8 @@ function ticked(state: GameState, at: number): GameState {
  * A whole mission through the reducer for a crew of `size`: the crew walks
  * past the sign, then at every station the operator's, the partner's and the
  * reader's views go to the solver, with the crew's transcript of the puzzle
- * and the clock, and every move goes back as puzzle-inputs. Each round is a
+ * and the clock, and every move goes back as puzzle-inputs — at a station of
+ * one console with the operator alone at it (`movesIn`). Each round is a
  * second on the clock, the open puzzle ticked as the room ticks it once it is
  * due; a solver that waits only lets it run, up to MAX_IDLE_SEC rounds in a
  * row. Stops once the last station is solved; getting out is the server's
@@ -372,7 +394,7 @@ function playMission(
       throw new Error(`${mission.id}/${def.id} (seed ${seed}): no move in ${MAX_IDLE_SEC} s`);
     }
     transcript.push(...moves.map((move) => ({ ...move, before: views })));
-    state = inputsFor(moves, roles, crew, at).reduce(applyAction, state);
+    state = movesIn(state, def, inputsFor(moves, roles, crew, at));
   }
   return { state, atWork: working };
 }

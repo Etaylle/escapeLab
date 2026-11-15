@@ -42,7 +42,6 @@ import {
   type RelayState,
 } from './puzzles/relay.js';
 import {
-  backupsOf,
   consoleOf,
   operatorsOf,
   picking,
@@ -1833,21 +1832,8 @@ function expireSabotage(state: GameState, action: { at: number }): GameState {
 }
 
 /**
- * What a station answers a move nobody backs up with: where it finds nobody — at the other
- * console, where it has two (`consoles`), and at the rules.
- */
-function unbacked(consoles: 2 | undefined): string {
-  return consoles === 2
-    ? 'Eingabe gesperrt: Am anderen Pult und bei den Regeln steht niemand.'
-    : 'Eingabe gesperrt: Bei den Regeln steht niemand.';
-}
-
-/**
  * One move at the open puzzle, interpreted by that puzzle's module, from the
- * console the player stands at. It counts only with a second person there:
- * another crew member at the station's other console or at the rules —
- * except where the whole crew works the panel. Alone, it is turned away
- * without an alarm.
+ * console the player stands at, whoever else stands where.
  */
 function handlePuzzleInput(
   state: GameState,
@@ -1867,9 +1853,6 @@ function handlePuzzleInput(
     fail('Eingabe nur am Pult.');
   }
   const puzzleModule = moduleFor(def.type);
-  if (!puzzleModule.wholeCrew && backupsOf(state, def.id, player.id).length === 0) {
-    fail(unbacked(puzzleModule.consoles));
-  }
   const input = puzzleModule.inputSchema.safeParse(action.input);
   if (!input.success) {
     fail('Ungültige Eingabe.');

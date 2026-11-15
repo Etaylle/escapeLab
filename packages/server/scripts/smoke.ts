@@ -1662,21 +1662,14 @@ const LABOR_CORNER: Tile = besides(labortuer, 4, -1, 'in the Labor east of its d
  * cabinet and of the panel, and out of the Labor drone's sight.
  */
 const AWAY_FROM_THE_CABINET: Tile = besides(labortuer, -2, 0, 'west of the Labor door');
-/** What the radio panel, a station of one console, says to a move nobody backs up. */
-const ALONE = 'Eingabe gesperrt: Bei den Regeln steht niemand.';
-
 /**
- * Nobody works a station alone: the operator's panel names the reader at
- * the cabinet as backup; with the reader stepped away it names nobody and
- * the next input is turned away; back at the cabinet, the reader backs the
- * operator up again.
+ * A station of one console takes its operator's input with nobody else there: the reader
+ * walks off out of reach of the cabinet and the panel, the solver's first move goes in from the
+ * radio panel and counts — the dial turns, or the station solves — without an alarm; then the
+ * reader walks back to the cabinet for the rest.
  */
 async function readerStepsAway(op: TestClient, rd: TestClient): Promise<void> {
   const cabinet = sourceOf(FREQUENZ);
-  const name = rd.view?.you.name ?? fail(`${rd.label}: no view yet`);
-  const backedBy = (v: PlayerView): boolean =>
-    v.puzzle?.backup?.name === name && v.puzzle.backup.where === cabinet.label;
-  await op.expectView(`names ${name} at the ${cabinet.label} as backup`, backedBy);
   const [move] = nextMoves(FREQUENZ);
   if (move === undefined) {
     fail('the solver has no first move at the radio panel');
@@ -1684,15 +1677,17 @@ async function readerStepsAway(op: TestClient, rd: TestClient): Promise<void> {
   for (const to of [LABOR_CORNER, AWAY_FROM_THE_CABINET]) {
     await walkTo(rd, to);
   }
-  await op.expectView('names no backup with the reader away', (v) =>
-    v.puzzle?.kind === 'morse' && v.puzzle.backup === null);
+  await rd.expectView('stands away from the cabinet and the panel', (v) =>
+    v.presence.manualId === null && v.presence.stationId === null);
+  const before = op.view ?? fail(`${op.label}: no view yet`);
+  const dial = before.puzzle?.kind === 'morse' ? before.puzzle.dial : null;
   op.send({ kind: 'puzzle-input', input: move.input });
-  const refused = await op.expect('refusal with nobody at the rules', isError);
-  assert(refused.message === ALONE, 'an input with nobody at the rules is turned away');
+  await op.expectView('takes the move with nobody else at the station or its rules', (v) =>
+    v.penaltySeq === before.penaltySeq &&
+    (v.currentPuzzleIndex > FREQUENZ || (v.puzzle?.kind === 'morse' && v.puzzle.dial !== dial)));
   for (const to of [LABOR_CORNER, placeOf(cabinet.id)]) {
     await walkTo(rd, to);
   }
-  await op.expectView(`names ${name} as backup again`, backedBy);
 }
 
 async function solveSync(): Promise<void> {

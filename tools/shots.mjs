@@ -188,8 +188,8 @@
  * fails.
  *
  * The Systemcheck on its pinned seed is played to the end: after the
- * Signalprobe the guest holds the Kontrolle's plate beside the locker — the
- * rules — while the host cuts the wiring box's wire; the seed pins the box,
+ * Signalprobe the guest holds the Kontrolle's plate beside the locker, its
+ * door open, while the host cuts the wiring box's wire; the seed pins the box,
  * so the walkthrough carries its answer (PINNED_WIRING) and fails, naming the
  * seed, where the box shows other wires. Both press the Synchronkalibrierung
  * together, the hatch opens and the siren sounds: the guest steps onto the
@@ -275,8 +275,8 @@
  * armed, a beacon over each console, the host's frames are sampled for information between two
  * rows of bays (21,13) and the audience's on the whole hall, each log line counting the stations
  * armed and the beacons and books in view. Then, station by station in the
- * plan's order — the host at it or at its console A, the guest by its book or at console B, both
- * at the one the whole crew presses — the host's device has to open on what the plan pins, is
+ * plan's order — the host at it alone or at its console A, the guest at console B, both at the
+ * one the whole crew presses — the host's device has to open on what the plan pins, is
  * shot as it opens (hall-<type>.png), and the plan's moves are made on the devices as a hand
  * makes them, the button held until the clock counting up shows the plan's digit, a token read
  * off the guest's device as it comes round; every station has to solve without an alarm. The
@@ -9175,7 +9175,7 @@ async function captureLobbyIdle(page) {
 
 /**
  * The guest searches the nearest closed locker it can walk to — opened, a locker is a source a
- * player can back a station from (core map.ts `backupsOf`), as the Systemcheck's Kabelprüfung
+ * player reads a station's rules at (core map.ts `readersOf`), as the Systemcheck's Kabelprüfung
  * wants — and locker.png, reading's, shows it before it, „Durchsuchen" on offer; the find has to
  * reach the HUD line. Lockers lie undiscovered at first, so where they are comes from the
  * audience's view.
@@ -12120,7 +12120,7 @@ async function radioCensus(player) {
 
 /**
  * The Kabelprüfung as the pinned seed draws it: `holder` stands on the
- * Kontrolle's plate, beside the locker whose rules make it the backup, while
+ * Kontrolle's plate, beside the locker, holding its door open while
  * `cutter` walks through to the box, opens it and cuts the pinned wire.
  * Throws, naming the seed, where the box shows other wires than pinned.
  */
@@ -12149,14 +12149,13 @@ async function cutPinnedWire(cutter, holder, pinned) {
         'draw the box for the seed anew and update PINNED_WIRING',
     );
   }
-  const backed = await until(() => cutter.seen.view.puzzle?.backup != null, 3000);
   const index = cutter.seen.view.currentPuzzleIndex;
   await modal.locator(`button[aria-label^="Kabel ${pinned.cut},"]`).click({ timeout: 3000 });
   if (!(await until(() => cutter.seen.view.currentPuzzleIndex > index, 5000))) {
     const alarms = cutter.seen.view.alarms.count;
     throw new Error(
       `${cutter.name} cut wire ${pinned.cut} of "${box.title}", but it did not solve ` +
-        `(${backed ? 'backed up' : `no backup at ${holder.name}'s plate`}, ${alarms} alarm(s))`,
+        `(${alarms} alarm(s))`,
     );
   }
   console.log(
@@ -13111,8 +13110,8 @@ const tileOfTarget = (target) => (target.of === 'station' ? target.consoles[0] :
 /**
  * Where the crew works a station of the hall, from the hall's file: the host at its console A —
  * the only one, where it has one — and the guest at console B where it has two, at the same
- * console where the whole crew presses (the plan's moves are everyone's), else by its book: the
- * station's backup.
+ * console where the whole crew presses (the plan's moves are everyone's), else nowhere: the host
+ * works a station of one console alone, the guest staying where they stand (null).
  */
 function hallPlaces(station) {
   const [a, b] = HALL_MISSION.map.stations.filter((spot) => spot.puzzleId === station.id);
@@ -13123,8 +13122,7 @@ function hallPlaces(station) {
   if (station.moves.some((move) => move.by === 'everyone')) {
     return { host: at(a), guest: at(a) };
   }
-  const book = HALL_MISSION.map.manuals.find((manual) => manual.puzzleIds.includes(station.id));
-  return { host: at(a), guest: sourceTarget({ ...book, ...book.spots[0] }) };
+  return { host: at(a), guest: null };
 }
 
 /** `player` opens the device at `target` with E; throws where none comes up. */
@@ -13136,17 +13134,16 @@ async function openDevice(player, target) {
 }
 
 /**
- * The crew at its places for a station of the hall (`hallPlaces`), both walking there at once,
- * and the device open: the host's E switches the station on, the guest's opens console B or the
- * whole crew's button — or the guest by the book has to be counted there. Throws where a walk
- * or a device fails.
+ * The crew at its places for a station of the hall (`hallPlaces`), walking there at once, and
+ * the device open: the host's E switches the station on, the guest's opens console B or the
+ * whole crew's button where the guest has a place. Throws where a walk or a device fails.
  */
 async function manHallStation({ host, guest }, station) {
   const places = hallPlaces(station);
   const walks = [
     [host, places.host],
     [guest, places.guest],
-  ];
+  ].filter(([, target]) => target !== null);
   const there = await Promise.all(
     walks.map(([player, target]) => walkNear(player.page, player.seen, tileOfTarget(target))),
   );
@@ -13156,11 +13153,8 @@ async function manHallStation({ host, guest }, station) {
     throw new Error(`no way through the hall: ${said.join(', ')}`);
   }
   await openDevice(host, places.host);
-  if (places.guest.of === 'station') {
+  if (places.guest !== null) {
     await openDevice(guest, places.guest);
-  } else if (!(await until(() => presentAt(guest.seen.view, places.guest), CATCH_UP_MS))) {
-    const at = `${guest.name} stands by ${targetSaid(places.guest)}`;
-    throw new Error(`${at}, but is not counted there`);
   }
 }
 

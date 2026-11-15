@@ -21,7 +21,7 @@ function view(pattern: string | null, dial: number): MorseView {
     manual: null,
     console: 'a',
     plate: 'Das Funkfeuer meldet das Labor bei der Leitstelle',
-    backup: null,
+    atOtherConsole: null,
   };
 }
 

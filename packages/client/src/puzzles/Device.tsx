@@ -22,9 +22,9 @@ export type LampTone = 'off' | 'green' | 'red' | 'amber';
 /** One LED of a device's strip: its colour, the word engraved beside it, and what it reports. */
 export interface DeviceLed {
   tone: LampTone;
-  /** the engraved word: „PARTNER", „KEIN PARTNER" */
+  /** the engraved word: „PARTNER" */
   label: string;
-  /** printed beside the word — the partner's name and place, where someone has to stand */
+  /** printed beside the word — who stands at the other console, and where */
   detail: string | null;
 }
 
@@ -238,36 +238,31 @@ function stationModule(puzzle: PuzzleView) {
 }
 
 /**
- * The LED that says whether this player's inputs count: green with who
- * backs them up and where — „Ben · Pult B", „Ben · SPIND" — and „· Funk"
- * after it while the station's intercom carries their voice (`intercom`,
- * voice/mesh.ts `VoiceState`); or red with where the station finds nobody.
- * None where the whole crew works the station, and none for the audience,
- * who stands at no console.
+ * The LED of a console at a station with two that says who works the other one: green with
+ * their name and the console — „Ben · Pult B" — and „· Funk" after it while the station's
+ * intercom carries their voice (`intercom`, voice/mesh.ts `VoiceState`); dark with „niemand an
+ * Pult B" while nobody stands there. None at a station with one console, and none for the
+ * audience or a reader, who stand at no console.
  */
 export function partnerLed(puzzle: PuzzleView, intercom: ReadonlySet<string>): DeviceLed | null {
-  const station = stationModule(puzzle);
-  if (station === null || station.wholeCrew || puzzle.console === null) {
+  if (stationModule(puzzle)?.consoles !== 2 || puzzle.console === null) {
     return null;
   }
-  const { backup } = puzzle;
-  if (backup !== null) {
-    const funk = intercom.has(backup.playerId) ? ' · Funk' : '';
-    return { tone: 'green', label: 'PARTNER', detail: `${backup.name} · ${backup.where}${funk}` };
+  const where = consoleName(OTHER[puzzle.console]);
+  const partner = puzzle.atOtherConsole;
+  if (partner === null) {
+    return { tone: 'off', label: 'PARTNER', detail: `niemand an ${where}` };
   }
-  const where =
-    station.consoles === 2
-      ? `an ${consoleName(OTHER[puzzle.console])} oder bei den Regeln`
-      : 'bei den Regeln';
-  return { tone: 'red', label: 'KEIN PARTNER', detail: `niemand ${where}` };
+  const funk = intercom.has(partner.playerId) ? ' · Funk' : '';
+  return { tone: 'green', label: 'PARTNER', detail: `${partner.name} · ${where}${funk}` };
 }
 
 /**
  * The frame for the open puzzle: its paragraph and title on the plate, the
  * console this player works where the station has two — the view names
  * console a at a station with one as well, the module tells them apart —
- * what the machine there does, and the partner LED, which says whether the
- * station's intercom carries the partner (`intercom`).
+ * what the machine there does, and at a station with two the partner LED, which says who
+ * works the other console and whether the station's intercom carries them (`intercom`).
  */
 export function deviceOf(
   puzzle: PuzzleView,

@@ -59,8 +59,7 @@ export interface PuzzleContext {
   /**
    * ids of the players at an open manual object covering the station, from
    * presence — the mover too, if they stand at one; empty in `init` and in
-   * emergencies. The reducer already refused the move unless somebody else
-   * stands here or at the other console (except where the whole crew works it).
+   * emergencies.
    */
   readers: string[];
 }
@@ -231,13 +230,11 @@ export interface PuzzleViewCommon {
    */
   plate: string | null;
   /**
-   * The second person who lets the viewer's inputs count: another crew member
-   * at the station's other console or at an open manual object covering it —
-   * by id and name — and where: the console („Pult B") or the object's label
-   * („SPIND"). Null while nobody backs the viewer up, and for the audience,
-   * for players away from the station and where the whole crew works it.
+   * Who of the crew stands at the other console of a station with two, by id and name — the
+   * first of them, should more stand there. Null while nobody does, at a station with one
+   * console, for the audience and for players at neither console.
    */
-  backup: { playerId: string; name: string; where: string } | null;
+  atOtherConsole: { playerId: string; name: string } | null;
 }
 
 /** What every module owns, whether it stands at a station or runs as an emergency. */

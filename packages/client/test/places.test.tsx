@@ -91,7 +91,7 @@ function maze(index: number, cells: number[] | null): PuzzleView {
     manual: null,
     console: null,
     plate: null,
-    backup: null,
+    atOtherConsole: null,
   };
 }
 
@@ -606,7 +606,7 @@ describe('the station frame', () => {
       manual: null,
       console: 'b',
       plate: 'Pult B tauscht Zeichen mit Pult A aus',
-      backup: null,
+      atOtherConsole: null,
     };
     const consoles = mapWith({
       stations: [
@@ -691,27 +691,10 @@ describe('the station frame', () => {
     );
   });
 
-  it('says on its LED strip who backs this player up, and where', () => {
-    const atMaze: PuzzleView = { ...maze(2, null), console: 'a' };
-    const atSpind = { playerId: 'p2', name: 'Ben', where: 'SPIND' };
-    const backed = stationFrame({ ...atMaze, backup: atSpind });
-    expect(backed).toContain(
-      '<li class="device-led device-led--green">' +
-        '<span class="device-lamp device-lamp--green" aria-hidden="true"></span>' +
-        '<span class="device-led-label">PARTNER</span>' +
-        '<span class="device-led-detail">Ben · SPIND</span></li>',
-    );
-    expect(backed).not.toContain('modal-note');
-  });
-
-  it('warns on its LED strip while nobody backs this player up, and where to stand', () => {
-    const alone = stationFrame({ ...maze(2, null), console: 'a', backup: null });
-    expect(alone).toContain(
-      '<li class="device-led device-led--red">' +
-        '<span class="device-lamp device-lamp--red" aria-hidden="true"></span>' +
-        '<span class="device-led-label">KEIN PARTNER</span>' +
-        '<span class="device-led-detail">niemand bei den Regeln</span></li>',
-    );
+  it('lights no LED at a station of one console, with nobody else about', () => {
+    const alone = stationFrame({ ...maze(2, null), console: 'a', atOtherConsole: null });
+    expect(alone).not.toContain('device-led');
+    expect(alone).not.toContain('modal-note');
   });
 
   it('says nothing about it where the whole crew presses, nor over a book', () => {
@@ -734,7 +717,7 @@ describe('the station frame', () => {
       manual: null,
       console: 'a',
       plate: 'Der Taster sichert Schaltungen für das ganze Labor',
-      backup: null,
+      atOtherConsole: null,
     };
     expect(stationFrame(reactor)).toContain(
       '<span class="device-plate-paragraph">§5</span>' +

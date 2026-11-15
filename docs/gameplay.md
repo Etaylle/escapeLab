@@ -128,7 +128,8 @@ cut with „…" — and in the HUD's line, and in the log, each name in its cre
 
 Between the places of the armed station — its consoles and the open sources that cover it — the
 crew hears each other in full however far apart, walls or not; everywhere else the voice fades
-with distance and walls as before. The device's PARTNER LED then reads „Ben · Pult B · Funk".
+with distance and walls as before. At a station with two consoles the device's PARTNER LED then
+reads „Ben · Pult B · Funk".
 
 ## Voice links over the internet
 
@@ -320,13 +321,14 @@ every shipped mission and lab:
 | Reaktor-Neustart | the switch, for the whole crew; the SICHERUNG | 4 | the third carries the fuse in, then all three press |
 
 The module tests play every mission for every crew size from `players.min` to `players.max`
-through the reducer (`core/test/modules.test.ts`), 200 seeds each without an alarm. With a third
-hand the roles follow the stations: at two consoles p1 works A, p2 works B and p3 reads; at one,
-p1 works, p2 reads and p3 runs the errands — the parts, a cabinet's key, a shut source, the plates
-the station's doors need — so that the first two never leave their places; at a whole-crew
-station everyone presses. As each station is switched on, exactly as many of the crew are at
-work as it has places, up to the crew. Kettenreaktion (three) and the Doppelschicht (four) give
-most of their stations two places only (backlog N-6).
+through the reducer (`core/test/modules.test.ts`), 200 seeds each without an alarm; at a station
+of one console the moves go in with the reader stepped off the rules, the operator alone at it.
+With a third hand the roles follow the stations: at two consoles p1 works A, p2 works B and p3
+reads; at one, p1 works, p2 reads and p3 runs the errands — the parts, a cabinet's key, a shut
+source, the plates the station's doors need — so that the first two never leave their places; at
+a whole-crew station everyone presses. As each station is switched on, exactly as many of the
+crew are at work as it has places, up to the crew. Kettenreaktion (three) and the Doppelschicht
+(four) give most of their stations two places only (backlog N-6).
 
 **The hands line.** For a crew of three or more the goal line names, under its title, each hand's
 job at the station in front of the crew, from the view's `hands` (core `handsOf`): where the server
@@ -552,14 +554,14 @@ the Leitstand, the token device in the Wache, the list on a clipboard by the ter
   „Keine Berechtigung für diese Tür". `status` names the session as typed and the doors still
   asked for, never what a session may release. Solved once every door the terminal asked for is
   released.
-- **Nobody alone.** The reducer's backup rule holds as at every station: a command counts only
-  while somebody else stands at the token device or at an open list.
+- **Alone at the terminal.** A command counts as at every station, whoever else stands where:
+  one at the terminal alone types, though only the token device shows the tokens.
 
 `core/test/access.test.ts` holds the token (pure and exact to the period), the instance, the views
 by presence (the terminal's also with a session open and after a release), every rule, `status`,
 the list's need (over 200 seeds a crew without it takes an alarm, the solver none; over 600 the
-first door's account comes second and third about equally often), the lock and the backup rule
-and the room's tick through the reducer, the solver over 200 seeds in five variants, and the
+first door's account comes second and third about equally often), the lock, a command typed
+alone and the room's tick through the reducer, the solver over 200 seeds in five variants, and the
 probe with its pinned plan (`tools/fixtures/access-plan.json`, made by
 `core/test/accessPlan.ts`); `client/test/access.test.tsx` the prompt, the keys, both devices,
 the list, the sounds and the type and targets at both consoles on three screens. The

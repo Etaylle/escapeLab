@@ -292,7 +292,7 @@ const terminalView: PuzzleView = {
   title: 'Serverraum',
   manual: null,
   console: 'a',
-  backup: null,
+  atOtherConsole: null,
 } as unknown as PuzzleView;
 
 describe('„Notieren" at the Serverraum terminal', () => {

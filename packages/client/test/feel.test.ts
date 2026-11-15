@@ -257,13 +257,13 @@ describe('a change at a device', () => {
     manual: null,
     console: 'a',
     plate: 'Der Taster sichert Schaltungen für das ganze Labor',
-    backup: null,
+    atOtherConsole: null,
     ...fields,
   });
 
   it('is told by what the device shows, not by who stands where', () => {
-    const atSpind = { playerId: 'p2', name: 'Ben', where: 'SPIND' };
-    expect(deviceState(sync({ here: 2, backup: atSpind }))).toBe(
+    const atB = { playerId: 'p2', name: 'Ben' };
+    expect(deviceState(sync({ here: 2, atOtherConsole: atB }))).toBe(
       deviceState(sync()),
     );
     expect(deviceState(sync({ pressedCount: 1 }))).not.toBe(deviceState(sync()));

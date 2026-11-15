@@ -7,7 +7,7 @@ Stand: Commit 9a536a7 vom 2026-11-07; 461 Commits an 17 Tagen seit 2026-10-11, d
 EscapeLab ist ein kooperatives Browser-Escape-Spiel: Zwei bis drei Personen an getrennten Geräten befreien sich gegen einen Countdown aus einem verdunkelten Labor.
 
 - Stationen haben bis zu zwei Pulte an verschiedenen Orten, jedes zeigt nur seinen Teil der Maschine. Die Regeln liegen anderswo, im Handbuch, Spind oder Aktenschrank.
-- Eine Eingabe zählt nur, solange eine zweite Person am anderen Pult oder an einer Regelquelle steht. Abgesprochen wird per Sprachchat.
+- Wer am Pult steht, bedient es, auch allein; nur Stationen mit zwei Pulten und solche für die ganze Crew brauchen mehrere zugleich. Abgesprochen wird per Sprachchat.
 - Fehler kosten Zeit. Gewonnen ist, wenn alle Stationen gelöst sind und die ganze Crew den Notausgang erreicht.
 - Referenz ist „Blackout im Labor“: 2 bis 3 Spielende, 900 s auf Normal, 36×22 Felder, sechs Stationen (Notlicht-Hebel, Notstrom, Signalkette, Serverraum, Funk, Reaktorstart).
 
@@ -26,8 +26,7 @@ Invarianten aus CLAUDE.md:
 1. `core` bleibt pur: Zeit kommt als Feld `at` in der Aktion, Zufall als Seed im Zustand.
 2. Der Server entscheidet, Clients senden nur Absichten.
 3. Sichten folgen der Anwesenheit am Pult oder an der Quelle, nicht einer Rolle; Tests prüfen per Negativ-Assertion, dass nichts Fremdes mitgeht.
-4. Niemand bedient allein; die Validierung beweist, dass zwei Verschiedene zugleich dort stehen können.
-5. Rätseltypen sind Module mit Vertrag; Handbücher enthalten Regeln, nie Antworten, und jedes Modul liefert `solve()`, mit dem Eigenschaftstests die Lösbarkeit beweisen.
+4. Rätseltypen sind Module mit Vertrag; Handbücher enthalten Regeln, nie Antworten, und jedes Modul liefert `solve()`, mit dem Eigenschaftstests die Lösbarkeit beweisen.
 
 Quellen: CLAUDE.md, README.md, package.json-Dateien, packages/core/src/puzzles/index.ts.
 

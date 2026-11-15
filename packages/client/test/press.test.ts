@@ -177,7 +177,7 @@ describe('E the server decides', () => {
     press.pressE(world, 100);
     const refusal = {
       kind: 'error' as const,
-      message: 'Eingabe gesperrt.',
+      message: 'Ungültige Eingabe.',
       of: 'puzzle-input' as const,
     };
     press.hearAnswer(world.sim.presses, refusal, 200);

@@ -38,7 +38,7 @@ function lever(fields: Partial<SyncView> = {}): SyncView {
     manual: null,
     console: 'a',
     plate: 'Der Hauptschalter schaltet Licht und Grundversorgung zu',
-    backup: null,
+    atOtherConsole: null,
     ...fields,
   };
 }

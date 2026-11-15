@@ -9,6 +9,7 @@ import {
   nudgeDueAt,
   parseMission,
   runReport,
+  stationKey,
   viewFor,
   viewForSpectator,
 } from '../src/index.js';
@@ -218,7 +219,7 @@ describe('going on without somebody away', () => {
     expect(won.phase).toBe('won');
   });
 
-  it('keeps the rules of a station with two consoles: a move nobody backs is turned away', () => {
+  it('keeps the rules of a station with two consoles: no press while nobody sends', () => {
     const lab = consoleLab(3);
     const away = applyAction(started(lab), lineDrops('p3', DROP_AT));
     const at = DROP_AT + 500;
@@ -227,13 +228,13 @@ describe('going on without somebody away', () => {
       playerId: 'p1',
       at,
     });
-    expect(() =>
-      applyAction(open, { type: 'puzzle-input', playerId: 'p1', at, input: { kind: 'send' } }),
-    ).toThrow(/Eingabe gesperrt/);
-    const on = applyAction(open, goOn('p1', 'p3', DROP_AT + FIRST_WAIT_MS));
-    expect(() =>
-      applyAction(on, { type: 'puzzle-input', playerId: 'p1', at, input: { kind: 'send' } }),
-    ).toThrow(/Eingabe gesperrt/);
+    const atB = { stations: { [stationKey({ puzzleId: 'kette', console: 'b' })]: ['p1'] } };
+    const input = { press: 'rot-kreis' };
+    const press: Action = { type: 'puzzle-input', playerId: 'p1', at, input };
+    const alone = standing(open, atB);
+    expect(() => applyAction(alone, press)).toThrow('Am sendenden Pult steht niemand.');
+    const on = applyAction(alone, goOn('p1', 'p3', DROP_AT + FIRST_WAIT_MS));
+    expect(() => applyAction(on, press)).toThrow('Am sendenden Pult steht niemand.');
   });
 
   it('counts them in again the moment they are back', () => {
