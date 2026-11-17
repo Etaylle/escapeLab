@@ -169,12 +169,12 @@ describe('the script', () => {
       {
         kind: 'gap',
         gap: 'abgang',
-        comment: 'Last Kühlkreis: Leuchtbild nach Tabelle 2 des Betriebsbuchs',
+        comment: 'Last Kühlkreis: Leuchtbild, Tabelle 2 im Betriebsbuch',
       },
       {
         kind: 'code',
         text: 'impuls abgang -> A',
-        comment: 'Leistungsschalter schließt auf den markierten Stufen der Leiter',
+        comment: 'Leistungsschalter des Abgangs: auf den markierten Stufen',
       },
     ]);
   });

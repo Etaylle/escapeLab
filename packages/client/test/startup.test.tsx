@@ -166,7 +166,7 @@ describe('the consoles', () => {
     const html = panel(atTerminal());
     expect(html).toContain('AS-86 Anlaufskript, Stufe 1 von 2');
     expect(html).toMatch(/abgang = <span class="startup-value startup-value--open">\?<\/span>/);
-    expect(html).toContain('Leuchtbild nach Tabelle 2 des Betriebsbuchs');
+    expect(html).toContain('Leuchtbild, Tabelle 2 im Betriebsbuch');
     expect(html).not.toMatch(/startup-lamp--(gruen|gelb|rot)/);
     expect(html).toContain('SCHALTFELD B');
     expect(html).toContain('<input');
@@ -219,7 +219,7 @@ describe('the script as listed', () => {
       (m[1] ?? '').replace(/<[^>]+>/g, ''),
     );
     expect(texts.filter((text) => text.length > 72)).toEqual([]);
-    const hint = /^# Last [^:]+: Leuchtbild nach Tabelle 2 des Betriebsbuchs$/;
+    const hint = /^# Last [^:]+: Leuchtbild, Tabelle 2 im Betriebsbuch$/;
     expect(texts.filter((text) => hint.test(text))).toHaveLength(1);
     expect(texts).toContain('abgang = ?');
   });
@@ -397,7 +397,7 @@ describe('the stylesheet', () => {
       'minmax(0, 1fr)',
     );
     expect(columns(SCREENS[0]?.screen ?? { width: 0, height: 0, coarse: false })).toBe(
-      'minmax(0, 1fr) auto',
+      'minmax(0, 1fr) 21rem',
     );
   });
 });

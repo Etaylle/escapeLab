@@ -437,7 +437,7 @@ export function scriptOf(def: StartupDef, stage: number, load: StartupLoad): Sta
   const board = across(typingConsole(stage)).toUpperCase();
   const comments: Record<StartupGap, string> = {
     sperre: `gestörter Abgang: rote Kontrollleuchte an Schaltfeld ${board}`,
-    abgang: `Last ${LOAD_NAMES[load]}: Leuchtbild nach Tabelle 2 des Betriebsbuchs`,
+    abgang: `Last ${LOAD_NAMES[load]}: Leuchtbild, Tabelle 2 im Betriebsbuch`,
   };
   const gaps = gapsOf(stage).map(
     (gap): StartupScriptLine => ({ kind: 'gap', gap, comment: comments[gap] }),
@@ -449,7 +449,7 @@ export function scriptOf(def: StartupDef, stage: number, load: StartupLoad): Sta
     {
       kind: 'code',
       text: `impuls abgang -> ${board}`,
-      comment: 'Leistungsschalter schließt auf den markierten Stufen der Leiter',
+      comment: 'Leistungsschalter des Abgangs: auf den markierten Stufen',
     },
   ];
 }

@@ -36,7 +36,8 @@
 
 .startup-device {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  /* The Schaltfeld as wide as its four feeders and its ladder; the terminal the rest. */
+  grid-template-columns: minmax(0, 1fr) 21rem;
   align-items: start;
   gap: 14px;
 }
@@ -127,8 +128,9 @@
 
 .startup-feeders {
   display: grid;
-  flex: 1 1 auto;
-  grid-template-columns: repeat(4, minmax(4.2em, 1fr));
+  flex: 1 1 0;
+  min-width: 0;
+  grid-template-columns: repeat(4, minmax(3.9em, 1fr));
   gap: 6px;
 }
 

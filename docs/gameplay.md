@@ -602,7 +602,7 @@ Betriebsbuch in the west room), and its bay in the Übungshalle.
 - **The script** (`zeige` lists the stage and its open gaps in the log) names the load the stage
   starts — Netzeinspeisung, Notstromschiene, Kühlkreis, Lüftung, Beleuchtung, one of its own each
   stage — and has the gap `abgang`, from stage 2 on also `sperre`. Its comments are the hints:
-  „Last Kühlkreis: Leuchtbild nach Tabelle 2 des Betriebsbuchs", „gestörter Abgang: rote
+  „Last Kühlkreis: Leuchtbild, Tabelle 2 im Betriebsbuch", „gestörter Abgang: rote
   Kontrollleuchte an Schaltfeld A". `setze <lücke> <wert>` (or the script's own `abgang = 2`)
   sets a gap, `start` runs the script; Tab completes a command and, after `setze`, a gap of the
   script; the keys put the same lines together. `npm` and whatever follows it the terminal
