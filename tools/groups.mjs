@@ -86,6 +86,20 @@ export const GROUPS = [
     ],
   },
   {
+    // The Paketfilter's scratch mission, played in a Systemcheck run as the Zugangskontrolle's is.
+    name: 'firewall',
+    stage: 'drills',
+    needs: [],
+    captures: [
+      'firewall (probe)',
+      'firewall-policy.png',
+      'firewall-phone-932.png',
+      'firewall-headers.png',
+      'firewall-gate.png',
+      'firewall (targets)',
+    ],
+  },
+  {
     name: 'three',
     stage: 'drills',
     needs: [],
