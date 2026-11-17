@@ -305,6 +305,22 @@ describe('the terminal', () => {
     expect(fixed.state.refused).toBeNull();
   });
 
+  it('takes a change of one value of two as a new try, an alarm again', () => {
+    // Stage 2: sperre and abgang, both wrong, refused; then sperre right, abgang still wrong.
+    const first = sentAt(fresh(), T0);
+    const up = send(first, { breaker: target(first) }, 'b', T0 + TRAVEL_MS).state;
+    const right = rightValues(up.stages[1] ?? fail());
+    const set = (s: StartupState, gap: 'sperre' | 'abgang', value: number) =>
+      send(s, { cmd: 'setze', gap, value }, 'b', T0 + 10_000).state;
+    const wrong = set(set(up, 'sperre', otherThan(right.sperre)), 'abgang', otherThan(right.abgang));
+    const refused = send(wrong, { cmd: 'start' }, 'b', T0 + 10_000);
+    expect(refused.penalty).not.toBeNull();
+    const half = set(refused.state, 'sperre', right.sperre);
+    expect(send(half, { cmd: 'start' }, 'b', T0 + 11_000).penalty).toBe(
+      'Anlaufsteuerung: Skript passt nicht',
+    );
+  });
+
   it('takes no input from away from the consoles', () => {
     const away = () => startupModule.apply(DEF, fresh(), { cmd: 'zeige' }, 'rd', ctx(T0, null));
     expect(thrown(away)).toBe('Eingabe nur am Pult.');
@@ -482,3 +498,7 @@ describe('the probe', () => {
     expect(state.penaltySeq).toBe(0);
   });
 });
+
+function fail(): never {
+  throw new Error('no such stage');
+}

@@ -42,12 +42,11 @@
   min-width: 0;
 }
 
-/* The audience: the terminal and the Schaltfeld side by side, the Schaltfeld as wide as its
-   feeders and its ladder. */
+/* The audience: the terminal over the Schaltfeld, as the spectator's column beside the lab is
+   a narrow one. */
 .startup-device--watched {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 22rem;
-  align-items: start;
+  grid-template-columns: minmax(0, 1fr);
   gap: 14px;
 }
 
@@ -66,8 +65,27 @@
 }
 
 .startup-line {
-  overflow: hidden;
   white-space: pre;
+}
+
+/* A comment is a clue: it wraps onto a further row rather than lose a word at the glass's edge. */
+.startup-line.startup-line--comment {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* The terminal's keys in a column beside its glass, so that the device stays within a laptop's
+   height; under it in a narrow column (below). */
+.servers.startup-terminal {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 15.5rem;
+  align-items: start;
+  gap: 10px;
+}
+
+.startup-terminal > .servers-bezel {
+  flex-direction: column;
+  align-items: stretch;
 }
 
 .startup-line--comment,
@@ -96,11 +114,12 @@
   letter-spacing: 1px;
 }
 
-/* Three lines of the log, scrolling at the newest: the prompt stays put as lines come in. */
+/* The log's last three entries (StartupPanel.tsx), each whole: room for three lines at least,
+   so that the prompt stays put as lines come in. */
 .startup-crt .startup-log {
   min-height: calc(3 * 1.35em);
-  max-height: calc(3 * 1.35em);
-  overflow-y: auto;
+  max-height: none;
+  overflow: visible;
 }
 
 .startup-idle {
@@ -344,9 +363,9 @@
   }
 }
 
-/* A phone held upright, or a narrow column: the audience's two parts one over the other. */
+/* A phone held upright, or a narrow column: the terminal's keys under its glass. */
 @media (max-width: 560px) {
-  .startup-device--watched {
+  .servers.startup-terminal {
     grid-template-columns: minmax(0, 1fr);
   }
 
@@ -374,14 +393,48 @@
     display: none;
   }
 
+  /* The make and the bezel's lamp give way for room: the device's head names the partner. */
+  .startup-status > .startup-make,
+  .startup-terminal .servers-link {
+    display: none;
+  }
+
+  /* The script set close, its rows still apart: room for a later stage's longer script. */
+  .startup-crt .startup-script {
+    line-height: 1.15;
+  }
+
+  /* The script's heading and its line without a comment tell nothing to look up: room. */
+  .startup-script > .startup-line--plain {
+    display: none;
+  }
+
+  .servers.startup-terminal {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  /* A little wider than the Serverraum's: three keys and four to a row, one row fewer. */
+  .servers.startup-terminal > .servers-bezel {
+    width: 14rem;
+  }
+
+  .startup-terminal .servers-key {
+    min-width: 44px;
+  }
+
   .startup-status {
     padding-block: 2px;
   }
 
+  /* The newest entry alone, whole: what the last command came to is always in view. */
   .startup-crt .startup-log {
     min-height: 0;
-    max-height: calc(2 * 1.25em);
-    overflow-y: auto;
+    max-height: none;
+    overflow: visible;
+  }
+
+  .startup-crt .startup-log > .servers-line:not(:last-child) {
+    display: none;
   }
 
   .startup-board {
@@ -400,10 +453,10 @@
   }
 
   .startup-step {
-    height: 7px;
+    height: 5px;
   }
 
   .startup-ladder-box {
-    --pitch: 10px;
+    --pitch: 8px;
   }
 }

@@ -22,8 +22,8 @@ import { warmUp } from './rooms.js';
  * screens' phosphor green and the racks' cold blue, faint, in the dark too;
  * the reactor core's pulsing orange; the amber beacon turning over the
  * hatch through the escape; and a start pulse running in a cable duct.
- * A light shows where the world shows its spot — seen this run, and while the lab has its power only in the room it
- * lights round you — as objects do. How strongly each burns at a moment,
+ * A light shows where the world shows its spot — seen this run, and while the lab has its
+ * power only in the room it lights round you — as objects do. How strongly each burns at a moment,
  * pulse and flicker worked out, is gl/pack.ts's `strengthAt`.
  */
 
@@ -55,8 +55,8 @@ export interface LightSource {
   standby?: number;
   /**
    * it moves from frame to frame — a start pulse running in its duct —: the Canvas pass lays its
-   * glow from one sprite where it stands, unclipped, instead of baking a pool for each spot
-   * (render/glow.ts); left out for a light that stands still
+   * glow from one sprite where it stands, clipped where a wall or a shut door is near, instead
+   * of baking a pool for each spot (render/glow.ts); left out for a light that stands still
    */
   moving?: true;
 }

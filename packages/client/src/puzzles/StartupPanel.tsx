@@ -191,27 +191,40 @@ const valueWord = (value: number | null): string => (value === null ? '?' : `[${
 export function listed(script: readonly StartupScriptLine[]): ListedLine[] {
   return script.flatMap((line): ListedLine[] => {
     if (line.kind === 'comment') {
-      return [line];
+      return [{ ...line, clue: false }];
     }
     const own: ListedLine =
-      line.kind === 'gap' ? { kind: 'gap', gap: line.gap } : { kind: 'code', text: line.text };
-    return line.comment === null ? [own] : [{ kind: 'comment', text: line.comment }, own];
+      line.kind === 'gap'
+        ? { kind: 'gap', gap: line.gap }
+        : { kind: 'code', text: line.text, clue: line.comment !== null };
+    return line.comment === null ? [own] : [{ kind: 'comment', text: line.comment, clue: true }, own];
   });
 }
 
 /** A line of the script as listed: a comment, a command or a gap, each on a line of its own. */
 export type ListedLine =
-  | { kind: 'comment'; text: string }
-  | { kind: 'code'; text: string }
+  /** `clue`: it explains the line under it; the script's heading does not */
+  | { kind: 'comment'; text: string; clue: boolean }
+  /** `clue`: it carries a comment; `lade anlauf.cfg` does not */
+  | { kind: 'code'; text: string; clue: boolean }
   | { kind: 'gap'; gap: StartupGap };
+
+/**
+ * A line's classes: a comment's, and — for the heading and a command without a comment, which
+ * tell nothing to look up — the plain one a phone held sideways leaves out for room.
+ */
+function lineClass(line: Exclude<ListedLine, { kind: 'gap' }>): string {
+  const comment = line.kind === 'comment' ? ' startup-line--comment' : '';
+  return `startup-line${comment}${line.clue ? '' : ' startup-line--plain'}`;
+}
 
 /** One line of the script: a comment, a command, or a gap with what it holds. */
 function ScriptLine({ line, terminal }: { line: ListedLine; terminal: StartupTerminal }) {
   if (line.kind === 'comment') {
-    return <li className="startup-line startup-line--comment">{`# ${line.text}`}</li>;
+    return <li className={lineClass(line)}>{`# ${line.text}`}</li>;
   }
   if (line.kind === 'code') {
-    return <li className="startup-line">{line.text}</li>;
+    return <li className={lineClass(line)}>{line.text}</li>;
   }
   const value = terminal.values[line.gap] ?? null;
   return (
@@ -235,6 +248,9 @@ function Script({ terminal }: { terminal: StartupTerminal }) {
   );
 }
 
+/** How many of the log's last lines the glass shows: the newest always whole at the foot. */
+const LOG_SHOWN = 3;
+
 /** The log's last lines, the newest at the foot. */
 function Log({ log }: { log: StartupLogLine[] }) {
   const list = useRef<HTMLOListElement>(null);
@@ -246,7 +262,7 @@ function Log({ log }: { log: StartupLogLine[] }) {
   }, [log]);
   return (
     <ol ref={list} className="servers-log startup-log" aria-label="Protokoll" aria-live="polite">
-      {log.map((line, i) => (
+      {log.slice(-LOG_SHOWN).map((line, i) => (
         <li
           key={line.n}
           className={`servers-line servers-line--${line.tag}`}

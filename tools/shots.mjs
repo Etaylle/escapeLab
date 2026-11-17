@@ -10978,6 +10978,12 @@ async function captureDuct(audience) {
   }
   await sleep(Math.max(0, ductPulse(audience).sentAt + 1500 - Date.now()));
   await capture(audience.page, 'startup-duct.png');
+  for (const size of [SIZES[3], SIZES[4]]) {
+    await audience.page.setViewportSize({ width: size.width, height: size.height });
+    await sleep(300);
+    await startupFits(audience, `startup audience ${size.width}`);
+  }
+  await audience.page.setViewportSize({ width: SIZES[0].width, height: SIZES[0].height });
   const panel = await audience.page.locator('.station-modal').count();
   console.log(
     `startup-duct.png   the audience's world, the pulse in the duct` +
@@ -10987,6 +10993,48 @@ async function captureDuct(audience) {
 
 /** The startup drill's phone targets, measured short while a device still moved: skipped. */
 const startupUnjudged = (why) => skip('startup (targets)', why);
+
+/**
+ * In the page: what of the open Anlaufsteuerung does not fit — the device's frame past the
+ * window's top or foot, a script line wider than its row (a clue cut at the glass's edge), the
+ * log's newest entry out of its box —, each as a line for the log; none where all fits.
+ */
+function startupMisfits() {
+  const out = [];
+  const panel = document.querySelector('.station-modal .panel, .startup--watched');
+  const frame = panel?.getBoundingClientRect();
+  if (frame !== undefined && document.querySelector('.station-modal .panel') !== null) {
+    if (frame.top < -1 || frame.bottom > globalThis.innerHeight + 1) {
+      out.push(`panel ${Math.round(frame.top)}..${Math.round(frame.bottom)} in ${globalThis.innerHeight}`);
+    }
+  }
+  for (const line of document.querySelectorAll('.startup-line')) {
+    if (line.scrollWidth > line.clientWidth + 1) {
+      out.push(`„${line.textContent.trim().slice(0, 30)}" ${line.scrollWidth} in ${line.clientWidth}`);
+    }
+  }
+  const log = document.querySelector('.startup-log');
+  const newest = log?.querySelector('.servers-line:last-child');
+  if (log && newest) {
+    const [a, b] = [log.getBoundingClientRect(), newest.getBoundingClientRect()];
+    if (b.top < a.top - 1 || b.bottom > a.bottom + 1 || b.height === 0) {
+      out.push(`newest log entry ${Math.round(b.top)}..${Math.round(b.bottom)} out of its box`);
+    }
+  }
+  return out;
+}
+
+/** `player`'s Anlaufsteuerung at `label`'s size held to fit whole (`startupMisfits`): logged, failed. */
+async function startupFits(player, label) {
+  const misfits = await player.page.evaluate(startupMisfits);
+  console.log(
+    `${label.padEnd(18)} ${player.name}: ${misfits.length === 0 ? 'whole, every line in its row' : '!!'}` +
+      misfits.map((m) => `\n                   !! ${m}`).join(''),
+  );
+  if (misfits.length > 0) {
+    fail(`${label}: ${misfits.join('; ')}`);
+  }
+}
 
 /** A laptop's smallest window the devices are held to: both parts of the device whole in it. */
 const STARTUP_LAPTOP = { width: 1280, height: 720 };
@@ -11002,13 +11050,31 @@ async function captureStartupConsoles({ typer, board }) {
   await sleep(1400); // past the panels' fade-in
   await capture(typer.page, 'startup-terminal.png');
   const laptop = { unjudged: startupUnjudged };
-  await phoneReach(typer, STARTUP_LAPTOP, { ...laptop, label: 'startup terminal 1280' });
-  await phoneReach(board, STARTUP_LAPTOP, { ...laptop, label: 'startup board 1280' });
+  for (const [player, part] of [[typer, 'terminal'], [board, 'board']]) {
+    await phoneReach(player, STARTUP_LAPTOP, { ...laptop, label: `startup ${part} 1280` });
+    await startupFits(player, `startup ${part} 1280`);
+    await phoneReach(player, SIZES[3], { ...laptop, label: `startup ${part} 844` });
+    await startupFits(player, `startup ${part} 844`);
+  }
   await phoneReach(typer, SIZES[4], { shot: 'startup-phone-932.png', unjudged: startupUnjudged });
+  await startupFits(typer, 'startup terminal 932');
   await phoneReach(board, SIZES[4], { label: 'startup board 932', unjudged: startupUnjudged });
+  await startupFits(board, 'startup board 932');
   for (const { page } of [typer, board]) {
     await page.setViewportSize({ width: SIZES[0].width, height: SIZES[0].height });
   }
+  await sleep(300);
+}
+
+/**
+ * A later stage's terminal — its script one gap longer — held to a phone sideways at 844×390,
+ * whole and every line in its row, then back to laptop size.
+ */
+async function startupOnPhone(typer, stage) {
+  const label = `startup stage ${stage} 844`;
+  await phoneReach(typer, SIZES[3], { label, unjudged: startupUnjudged });
+  await startupFits(typer, label);
+  await typer.page.setViewportSize({ width: SIZES[0].width, height: SIZES[0].height });
   await sleep(300);
 }
 
@@ -11030,6 +11096,8 @@ async function startupStage(crew, stage, first) {
   }
   if (first) {
     await captureStartupConsoles({ typer, board });
+  } else {
+    await startupOnPhone(typer, stage.stage);
   }
   lines.push(await startupCommand(typer, { cmd: 'start' }, false));
   if (first) {

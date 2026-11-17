@@ -235,4 +235,28 @@ describe('glow — a start pulse running in its duct', () => {
     );
     expect(sprites.length).toBeGreaterThan(0);
   });
+
+  it('clips its glow where a wall lies within its reach, and spares the clip in the open', () => {
+    const T = 1_700_000_000_000;
+    const pulseOn = (tiles: { x: number; y: number }[]) => [
+      {
+        puzzleId: 'anlauf',
+        tiles,
+        pulse: { sentAt: T, arrivesAt: T + 3000, diesAt: T + 6000, reversed: false },
+      },
+    ];
+    // Beside the lab's walls: the clip of what it sees from its spot.
+    const walled = frameWith({ map: lab({ conduits: pulseOn([{ x: 1, y: 2 }, { x: 2, y: 2 }]) }) });
+    const near = drawn({ ...walled, serverNow: T + 100, time: 1.8 });
+    expect(callsOf(near.log, 'clip').length).toBeGreaterThan(0);
+    // The middle of a hall 15 tiles wide: nothing within its reach to stop it.
+    const hall = mapWith({
+      width: 15,
+      height: 11,
+      tiles: ['#'.repeat(15), ...Array(9).fill(`#${'.'.repeat(13)}#`), '#'.repeat(15)],
+      conduits: pulseOn([{ x: 7, y: 5 }, { x: 8, y: 5 }]),
+    });
+    const open = drawn(frameWith({ map: hall, serverNow: T + 100, time: 1.8 }));
+    expect(callsOf(open.log, 'clip')).toEqual([]);
+  });
 });

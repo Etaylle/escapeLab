@@ -14,6 +14,8 @@
       "type": "startup",
       "id": "anlauf",
       "title": "Anlaufsteuerung",
+      "travelSec": 10,
+      "windowSec": 5,
       "hints": [
         "Schichtführung: Die Last steht im Skript, das Leuchtbild in Tabelle 2, die Leuchten am Schaltfeld der Gegenseite."
       ],

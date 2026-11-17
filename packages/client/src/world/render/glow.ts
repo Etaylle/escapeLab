@@ -14,7 +14,7 @@ import {
 import { drawWallPropGlow, glows } from '../wallProps.js';
 import * as atmosphere from './atmosphere.js';
 import { layBake } from './bakes.js';
-import { clipOf, shutKey } from './clips.js';
+import { clipNeeded, clipOf, shutKey } from './clips.js';
 import { inTiles, profiled, toScreen, type Frame } from './frame.js';
 import { glowsWithLight, onLayer } from './light.js';
 import { fillPool, poolStops, steadyOf, steadyPart } from './pools.js';
@@ -107,7 +107,8 @@ function drawPools(ctx: CanvasRenderingContext2D, frame: Frame, pools: Pools): v
 /**
  * A moving light's glow where it stands this frame, from one radial sprite of its reach and
  * colour at whole pixels (radial.ts), under the clip of what it sees from there (clips.ts, kept
- * a spot): no bake for each spot it passes, and no light through a wall or a shut door.
+ * a spot) where a wall or a shut door lies within its reach: no bake for each spot it passes,
+ * and no light through a wall or a shut door.
  */
 function layMoving(
   ctx: CanvasRenderingContext2D,
@@ -118,9 +119,13 @@ function layMoving(
   const [sx, sy] = toScreen(frame, source.x, source.y);
   const reach = source.reach * frame.camera.scale;
   ctx.save();
-  inTiles(ctx, frame);
-  ctx.clip(clipOf(frame, source, shut));
-  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  if (clipNeeded(frame, source, shut)) {
+    inTiles(ctx, frame);
+    ctx.clip(clipOf(frame, source, shut));
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+  } else {
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+  }
   drawRadial(ctx, frame.kit.radials, poolStops(source.colour), [sx, sy, reach], frame);
   ctx.restore();
 }

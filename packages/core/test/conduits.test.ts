@@ -63,6 +63,14 @@ describe('the validation of a duct', () => {
     ]);
   });
 
+  it('asks no duct of an Anlaufsteuerung that has no station on the map', () => {
+    const data = structuredClone(probe) as unknown as { puzzles: object[] };
+    data.puzzles.push({ type: 'startup', id: 'ohne', title: 'Ohne Pult' });
+    const issues = issuesOf(data);
+    expect(issues).toContainEqual(expect.stringContaining('no station for puzzle "ohne"'));
+    expect(issues.filter((issue) => issue.includes('"ohne" (startup) has no cable duct'))).toEqual([]);
+  });
+
   it('takes an end on a console’s diagonal as beside it', () => {
     // (5,2) touches console a at (4,1) by its corner only.
     expect(issuesOf(withDuct({ tiles: row(2, 5, 13) }))).toEqual([]);
@@ -167,7 +175,7 @@ describe('the pulse in the duct', () => {
   it('runs from console a’s end in stage 1, in every view and the audience’s alike', () => {
     const at = T0 + 2000;
     const state = sent(manned(), 'p1', at);
-    const pulse = { sentAt: at, arrivesAt: at + 6000, diesAt: at + 9000, reversed: false };
+    const pulse = { sentAt: at, arrivesAt: at + 10_000, diesAt: at + 15_000, reversed: false };
     expect(viewFor(state, 'p1').map?.conduits[0]?.pulse).toEqual(pulse);
     expect(viewFor(state, 'p2').map?.conduits[0]?.pulse).toEqual(pulse);
     expect(viewForSpectator(state).map?.conduits[0]?.pulse).toEqual(pulse);
@@ -179,11 +187,11 @@ describe('the pulse in the duct', () => {
     const up = applyAction(first, {
       type: 'puzzle-input',
       playerId: 'p2',
-      at: T0 + 8000,
+      at: T0 + 12_000,
       input: { breaker: feeder },
     });
     expect(viewFor(up, 'p1').map?.conduits[0]?.pulse).toBeNull();
-    const second = sent(up, 'p2', T0 + 20_000);
+    const second = sent(up, 'p2', T0 + 30_000);
     expect(viewFor(second, 'p1').map?.conduits[0]?.pulse).toMatchObject({ reversed: true });
   });
 
@@ -214,7 +222,7 @@ describe('the pulse in the duct', () => {
 
   it('dies on the clock as the window closes, the station ticked', () => {
     const state = sent(manned(), 'p1', T0 + 2000);
-    const ticked = applyAction(state, { type: 'puzzle-tick', at: T0 + 11_500 });
+    const ticked = applyAction(state, { type: 'puzzle-tick', at: T0 + 17_500 });
     expect(viewFor(ticked, 'p1').map?.conduits[0]?.pulse).toBeNull();
   });
 });

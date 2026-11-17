@@ -405,20 +405,43 @@ describe('the stylesheet', () => {
     }
   });
 
-  it('lists each script line on one row, cut rather than wrapped, the log three lines high', () => {
+  it('keeps a command on its row and wraps a clue, never cutting one; hides only plain lines', () => {
     const nodes = station(atTerminal());
-    const line = nodes.find((n) => n.classes.includes('startup-line')) ?? fail();
-    expect(sheets.declared(line, 'white-space', laptop)?.value).toBe('pre');
-    const log = nodes.find((n) => n.classes.includes('startup-log')) ?? fail();
-    expect(sheets.declared(log, 'max-height', laptop)?.value).toBe('calc(3 * 1.35em)');
+    const lines = nodes.filter((n) => n.classes.includes('startup-line'));
+    const code = lines.find((n) => !n.classes.includes('startup-line--comment')) ?? fail();
+    expect(sheets.declared(code, 'white-space', laptop)?.value).toBe('pre');
+    const clues = lines.filter(
+      (n) => n.classes.includes('startup-line--comment') && !n.classes.includes('startup-line--plain'),
+    );
+    expect(clues).toHaveLength(2);
+    for (const clue of clues) {
+      expect(sheets.declared(clue, 'white-space', sideways)?.value).toBe('pre-wrap');
+      expect(sheets.declared(clue, 'overflow', sideways)).toBeUndefined();
+      expect(sheets.hidden(clue, sideways)).toBe(false);
+    }
+    const plain = lines.filter((n) => n.classes.includes('startup-line--plain'));
+    expect(plain.map((n) => n.text.trim())).toEqual([
+      '# AS-86 Anlaufskript, Stufe 1 von 2',
+      'lade anlauf.cfg',
+    ]);
+    expect(plain.every((n) => sheets.hidden(n, sideways) && !sheets.hidden(n, laptop))).toBe(true);
   });
 
-  it('sets the audience’s two parts side by side, one over the other in a narrow column', () => {
+  it('shows the log’s last three entries whole, no box to scroll them out of view', () => {
+    const many = Array.from({ length: 6 }, (_, i) => ({ n: i + 1, tag: 'info' as const, text: `l${i}` }));
+    const nodes = station(atTerminal({ log: many }));
+    const entries = nodes.filter((n) => n.classes.includes('servers-line'));
+    expect(entries.map((n) => n.parent?.classes.includes('startup-log'))).toHaveLength(3);
+    const log = nodes.find((n) => n.classes.includes('startup-log')) ?? fail();
+    expect(sheets.declared(log, 'max-height', laptop)?.value).toBe('none');
+  });
+
+  it('sets the audience’s two parts one over the other, its column beside the lab narrow', () => {
     const view = { ...atTerminal(), board: atBoard().board, role: null, console: null };
     const device = station(view).find((n) => n.classes.includes('startup-device--watched'));
     const columns = (screen: Screen): string | undefined =>
       sheets.declared(device ?? fail(), 'grid-template-columns', screen)?.value;
-    expect(columns(laptop)).toBe('minmax(0, 1fr) 22rem');
-    expect(columns(SCREENS[1]?.screen ?? laptop)).toBe('minmax(0, 1fr)');
+    expect(columns(laptop)).toBe('minmax(0, 1fr)');
+    expect(columns(sideways)).toBe('minmax(0, 1fr)');
   });
 });
