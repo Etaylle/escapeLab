@@ -344,7 +344,9 @@ function roomsPart(frame: Frame): BakePart {
   const { map, kit, lit } = frame;
   const { name, light } = frame.red === 1 ? TINTS[1] : TINTS[0];
   const layer = layerOf(kit, map, light);
-  const of = `${name}|${[...lit.keys()].join('\n')}|${map.tiles.join('/')}`;
+  // Each room by name and brightness: a floor burning brighter on the same tiles bakes anew.
+  const rooms = [...lit].map(([label, room]) => `${label}*${room.brightness}`);
+  const of = `${name}|${rooms.join('\n')}|${map.tiles.join('/')}`;
   const box = bakeBox(map, [...lit.values()].flatMap((room) => room.tiles), []);
   return {
     bake: { name: 'rooms', of, box },
@@ -352,7 +354,9 @@ function roomsPart(frame: Frame): BakePart {
       for (const room of lit.values()) {
         g.save();
         g.clip(room.path);
-        drawPools(g, layer, map);
+        for (let i = 0; i < room.brightness; i++) {
+          drawPools(g, layer, map);
+        }
         g.restore();
       }
     },
@@ -373,10 +377,13 @@ function drawRoomsApart(ctx: CanvasRenderingContext2D, frame: Frame): void {
       const layer = layerOf(kit, map, light);
       const box = bakeBox(map, room.tiles, []);
       ctx.globalAlpha = share;
-      layBake(ctx, frame, { name: `room:${label}:${name}`, of: room.path, box }, (g) => {
-        g.clip(room.path);
-        drawPools(g, layer, map);
-      });
+      // A room burning n times as bright is laid n times, as n rooms lit at once would be.
+      for (let i = 0; i < room.brightness; i++) {
+        layBake(ctx, frame, { name: `room:${label}:${name}`, of: room.path, box }, (g) => {
+          g.clip(room.path);
+          drawPools(g, layer, map);
+        });
+      }
     });
   }
   ctx.globalAlpha = 1;

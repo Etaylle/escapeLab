@@ -86,7 +86,8 @@ const RACK = { kind: 'rack' as const, x: 7, y: 3 };
 
 /** A lit room of one tile at (x, 2), long lit, its clip a stand-in path named `path`. */
 function room(x: number, path: string): LitRoom {
-  return { tiles: [{ x, y: 2 }], path: { path } as unknown as Path2D, since: -Infinity };
+  const clip = { path } as unknown as Path2D;
+  return { tiles: [{ x, y: 2 }], path: clip, since: -Infinity, brightness: 1 };
 }
 
 /** Where in `log` the grade `wash` is filled over the picture: the fill after its colour is set. */
@@ -216,7 +217,8 @@ describe('light — the darkness over the picture, and what cuts it open', () =>
       path: { path: 'room' } as unknown as Path2D,
     };
     const tiles = [1, 2, 3, 4].map((x) => ({ x, y: 2 }));
-    const coming = { tiles, path: { path: 'labor' } as unknown as Path2D, since: 10 - 0.25 };
+    const path = { path: 'labor' } as unknown as Path2D;
+    const coming = { tiles, path, since: 10 - 0.25, brightness: 1 };
     const parts = { time: 10, scene: { lit: true, cover: 0 }, light: lightWith({ room }) };
     drawn(withKit(overlay, warm, { ...parts, lit: new Map([['LABOR', coming]]) }));
     const keep = 1 - warmUp(250);
@@ -344,7 +346,8 @@ describe('light — the darkness over the picture, and what cuts it open', () =>
     const path = { path: 'labor' } as unknown as Path2D;
     const fills = (since: number): Filled[] => {
       const dark = fakeCanvas(800, 600);
-      drawn(withKit(dark, warm, { time: 10, lit: new Map([['LABOR', { tiles, path, since }]]) }));
+      const lit = new Map([['LABOR', { tiles, path, since, brightness: 1 }]]);
+      drawn(withKit(dark, warm, { time: 10, lit }));
       const [round, ...over] = fillsOf(dark.log);
       // The dark is filled round the room's tile, in whole pixels.
       expect(round?.rects).toEqual([
@@ -379,6 +382,34 @@ describe('light — the darkness over the picture, and what cuts it open', () =>
     const laid = callEntries(log, 'drawImage').find((e) => e.args[0] === labor.canvas);
     expect(laid?.alpha).toBeCloseTo(warmUp(250));
     expect(frame.kit.bakes.entries.has('rooms')).toBe(false);
+  });
+
+  it('lays a room burning twice as bright twice, and leaves the dark two names lit leave', () => {
+    const flur = { ...room(2, 'flur'), brightness: 2 };
+    const up = withKit(overlay, warm, { time: 10, lit: new Map([['FLUR', flur]]) });
+    drawn(up);
+    const pools = callEntries(bakeOf(up, 'rooms').log, 'drawImage');
+    expect(pools.map((e) => [e.args[0], e.op])).toEqual([
+      [warm.canvas, 'lighter'],
+      [warm.canvas, 'lighter'],
+    ]);
+    // A quarter of a second in: its bake laid twice at the strength of the moment, and the
+    // darkness over it as deep as over a floor two names light at once.
+    const coming = { ...flur, since: 10 - 0.25 };
+    const frame = withKit(overlay, warm, { time: 10, red: 0.5, lit: new Map([['FLUR', coming]]) });
+    const log = drawn(frame);
+    const bake = bakeOf(frame, 'room:FLUR:warm');
+    const laid = callEntries(log, 'drawImage').filter((e) => e.args[0] === bake.canvas);
+    expect(laid.map((e) => e.alpha)).toEqual([0.5 * warmUp(250), 0.5 * warmUp(250)]);
+    const darkOf = (lit: Frame['lit']): Filled[] => {
+      const dark = fakeCanvas(800, 600);
+      drawn(withKit(dark, warm, { time: 10, red: 0.5, lit }));
+      return fillsOf(dark.log);
+    };
+    const one = { ...coming, brightness: 1 };
+    expect(darkOf(new Map([['FLUR', coming]]))).toEqual(
+      darkOf(new Map([['FLUR', one], ['ARCHIV', one]])),
+    );
   });
 
   it('adds the lit rooms, the steady glows and the open hatch up: one copy for them all', () => {
@@ -428,6 +459,21 @@ describe('light — the darkness over the picture, and what cuts it open', () =>
     const again = frame.kit.bakes.entries.get('steady')?.baked;
     expect(again).not.toBe(first);
     expect(again?.canvas).toBe(first?.canvas);
+  });
+
+  it('bakes the lit rooms anew as a room’s brightness changes on the same tiles', () => {
+    const lab = new Map([['FLUR', room(2, 'flur')]]);
+    const frame = withKit(overlay, warm, { time: 10, lit: lab });
+    drawn(frame);
+    const pools = (): number =>
+      callsOf(bakeOf(frame, 'rooms').log, 'drawImage').filter((args) => args[0] === warm.canvas)
+        .length;
+    expect(pools()).toBe(1);
+    drawn(frame);
+    expect(pools()).toBe(1);
+    // The same tiles burning twice as bright: baked anew, its pools laid twice.
+    drawn({ ...frame, lit: new Map([['FLUR', { ...room(2, 'flur'), brightness: 2 }]]) });
+    expect(pools()).toBe(3);
   });
 
   it('keeps the hatch’s glow apart while it grinds open, at the strength of the moment', () => {

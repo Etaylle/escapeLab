@@ -477,8 +477,11 @@ export interface MapView {
   discoveries: Discovery[];
   /** the emergency lamps, on the floor or on a wall beside it; they glow once the lights are out */
   lamps: { x: number; y: number }[];
-  /** room names, each with the kind of room it names, where the mission gives one */
-  labels: { text: string; x: number; y: number; kind?: RoomKind }[];
+  /**
+   * room names, each with the kind of room it names and how brightly its floor's ceiling lights
+   * burn once lit (`Mission` labels' `brightness`), where the mission gives them
+   */
+  labels: { text: string; x: number; y: number; kind?: RoomKind; brightness?: number }[];
   /** the furniture on the floor: solid for every step, as walls are */
   decor: { kind: DecorKind; x: number; y: number; variant?: number }[];
   /**
@@ -1068,6 +1071,7 @@ function mapViewFor(state: GameState, viewer: MapViewer): MapView | null {
       x: l.x,
       y: l.y,
       ...(l.kind === undefined ? {} : { kind: l.kind }),
+      ...(l.brightness === undefined ? {} : { brightness: l.brightness }),
     })),
     decor: map.decor.map((piece) => ({
       kind: piece.kind,

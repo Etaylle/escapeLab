@@ -90,7 +90,7 @@ import { PING_LIFETIME_MS } from './render/overlays.js';
 import { drawFrame } from './render/pipeline.js';
 import { passProfile, profileRequested } from './render/profile.js';
 import { noteLabels } from './labelFade.js';
-import { lightsHeld, roomArea, roomsComingOn } from './rooms.js';
+import { bringsLight, lightsHeld, roomOn, roomsComingOn, type RoomOn } from './rooms.js';
 import {
   follow,
   followOthers,
@@ -816,26 +816,31 @@ function lightWhenClear(loop: Loop, map: WorldMap): void {
   }
 }
 
-/** Rooms coming on now: the relay's click, and their lights warming up from this moment. */
+/**
+ * Rooms coming on now: their lights warming up from this moment, and the relay's click where
+ * they bring light — none for names whose floor another name lit already.
+ */
 function warmUpRooms(loop: Loop, map: WorldMap, rooms: readonly string[]): void {
   if (rooms.length === 0) {
     return;
   }
-  for (const room of rooms) {
-    lightRoom(loop, map, room, loop.sim.time);
+  const on = rooms.map((room) => lightRoom(loop, map, room, loop.sim.time));
+  if (bringsLight(on)) {
+    lightsOnClick();
   }
-  lightsOnClick();
 }
 
 /**
  * The lights of `room` are on, since `since` (sim time): its tiles, as a
  * set and as a path of their rows — and seen, whatever lies there, from
- * now on this run.
+ * now on this run. A room whose floor another name has lit already adds no
+ * tiles of its own, and is on since that one (rooms.ts `roomOn`). Returns
+ * what came on.
  */
-function lightRoom(loop: Loop, map: WorldMap, room: string, since: number): void {
+function lightRoom(loop: Loop, map: WorldMap, room: string, since: number): RoomOn {
   const { sim } = loop;
-  const tiles = map.labels.filter((l) => l.text === room).flatMap((l) => roomArea(map, l));
-  const keys = new Set(tiles.map((tile) => `${tile.x},${tile.y}`));
+  const on = roomOn(map, room, sim.lit, since);
+  const keys = new Set(on.tiles.map((tile) => `${tile.x},${tile.y}`));
   const path = new Path2D();
   for (const run of runsOf(keys)) {
     path.rect(run.x, run.y, run.length, 1);
@@ -845,7 +850,8 @@ function lightRoom(loop: Loop, map: WorldMap, room: string, since: number): void
     sim.litTiles.add(key);
     seen.add(key);
   }
-  sim.lit.set(room, { tiles, path, since });
+  sim.lit.set(room, { ...on, path });
+  return on;
 }
 
 /** The pings still showing at `perf`; one this screen has not shown yet blips. */
