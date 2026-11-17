@@ -1024,7 +1024,8 @@ export function makeWallTile(powered = false): HTMLCanvasElement {
 // ---- Station -------------------------------------------------------------------------
 
 export interface StationOpts {
-  status: 'done' | 'armed' | 'locked';
+  /** 'out': out of service for the whole run — dark as a locked one, a tag hung over it */
+  status: 'done' | 'armed' | 'locked' | 'out';
   /** 0..1 looping pulse driven by the caller */
   pulse: number;
   /** which console of a two-console station this is, lettered on it; null at a station with one */
@@ -1087,6 +1088,17 @@ interface StationLook {
   badgeInk: string;
 }
 
+/** A station that is not up: locked for now, or out of service for the run. */
+const DARK_LOOK: StationLook = {
+  deskTop: css(sink(LABEL, 0.78)),
+  deskFront: css(sink(LABEL, 0.85)),
+  bezel: css(sink(LABEL, 0.88)),
+  screen: css(sink(LABEL, 0.83)),
+  keys: rgba(WHITE, 0.06),
+  led: css(sink(LABEL, 0.6)),
+  badgeInk: IDLE_LABEL,
+};
+
 const STATION_LOOKS: Readonly<Record<StationStatus, StationLook>> = {
   armed: {
     deskTop: steel(0.68),
@@ -1106,15 +1118,8 @@ const STATION_LOOKS: Readonly<Record<StationStatus, StationLook>> = {
     led: css(DONE_GREEN),
     badgeInk: PROP_EDGE,
   },
-  locked: {
-    deskTop: css(sink(LABEL, 0.78)),
-    deskFront: css(sink(LABEL, 0.85)),
-    bezel: css(sink(LABEL, 0.88)),
-    screen: css(sink(LABEL, 0.83)),
-    keys: rgba(WHITE, 0.06),
-    led: css(sink(LABEL, 0.6)),
-    badgeInk: IDLE_LABEL,
-  },
+  locked: DARK_LOOK,
+  out: DARK_LOOK,
 };
 
 /** A console's letter, on a disc over the monitor's top-right corner. */
@@ -1280,7 +1285,7 @@ function drawStationScreen(
 ): void {
   if (status === 'armed') drawArmedScreen(ctx, wave);
   else if (status === 'done') drawCheckGlyph(ctx);
-  else drawLockGlyph(ctx);
+  else if (status === 'locked') drawLockGlyph(ctx);
   // Faint glass glare in the upper-left corner.
   ctx.beginPath();
   ctx.moveTo(SCREEN_X + 0.03, SCREEN_Y + 0.015);
@@ -1289,6 +1294,53 @@ function drawStationScreen(
   ctx.closePath();
   ctx.fillStyle = rgba(WHITE, 0.04);
   ctx.fill();
+}
+
+/** What the tag of a station out of service reads, as its label under the device has it. */
+export const OUT_OF_SERVICE_TAG = 'AUSSER BETRIEB';
+
+const TAG_PAPER = css(sink(AMBER, 0.1));
+const TAG_INK = css(sink(AMBER, 0.8));
+
+/**
+ * The tag hung over a device out of service: an amber card on a string, askew across its
+ * front, two lines of print on it — its words stand under the device (OUT_OF_SERVICE_TAG).
+ */
+function drawOutTag(ctx: CanvasRenderingContext2D): void {
+  ctx.save();
+  ctx.translate(0, -0.16);
+  ctx.rotate(-0.14);
+  ctx.beginPath();
+  ctx.moveTo(-0.13, -0.07);
+  ctx.lineTo(0, -0.2);
+  ctx.lineTo(0.13, -0.07);
+  ctx.lineWidth = 0.014;
+  ctx.strokeStyle = rgba(WHITE, 0.45);
+  ctx.stroke();
+  ctx.beginPath();
+  roundRectPath(ctx, -0.21, -0.08, 0.42, 0.19, 0.025);
+  ctx.fillStyle = TAG_PAPER;
+  ctx.fill();
+  ctx.lineWidth = OUTLINE;
+  ctx.strokeStyle = PROP_EDGE;
+  ctx.stroke();
+  ctx.fillStyle = TAG_INK;
+  ctx.fillRect(-0.15, -0.035, 0.3, 0.032);
+  ctx.fillRect(-0.11, 0.03, 0.22, 0.032);
+  ctx.restore();
+}
+
+/**
+ * Anchor: TILE CENTER. The tag's words under a device out of service, as a source carries its
+ * name: as far as this player has found the console (`found`), its top at `at`.
+ */
+export function drawOutLabel(
+  ctx: CanvasRenderingContext2D,
+  o: { at: number | null; found: number; text: WorldText },
+): void {
+  ctx.save();
+  drawFoundLabel(ctx, OUT_OF_SERVICE_TAG, { ...o, color: IDLE_LABEL });
+  ctx.restore();
 }
 
 /** One console of a two-console station: its letter on a disc in the status color. */
@@ -1311,7 +1363,7 @@ function drawConsoleBadge(ctx: CanvasRenderingContext2D, look: StationLook, id: 
 
 /** Anchor: TILE CENTER. A small console/terminal with glowing screen; armed = teal glow
  * (strength follows pulse) and terminal lines; done = dim green check on screen; locked =
- * grey, small lock glyph. A console of a two-console station carries its letter on a
+ * grey, small lock glyph; out of service = grey, its screen blank, a tag over it. A console of a two-console station carries its letter on a
  * disc, whatever its status. No title: the operator stands right above the console, and
  * the objective bar names the station. */
 export function drawStation(ctx: CanvasRenderingContext2D, o: StationOpts): void {
@@ -1326,7 +1378,8 @@ export function drawStation(ctx: CanvasRenderingContext2D, o: StationOpts): void
     drawStationCabinet(ctx, look, o.status === 'armed' ? 0.35 + 0.65 * wave : 0.85);
     drawStationMonitor(ctx, look);
     drawStationScreen(ctx, o.status, wave);
-    drawTube(ctx, [SCREEN_X, SCREEN_Y, SCREEN_W, SCREEN_H], o.tube);
+    if (o.status === 'out') drawOutTag(ctx);
+    else drawTube(ctx, [SCREEN_X, SCREEN_Y, SCREEN_W, SCREEN_H], o.tube);
     if (o.console !== null) drawConsoleBadge(ctx, look, o.console);
   } finally {
     ctx.restore();
@@ -1411,6 +1464,7 @@ export function drawFusebox(ctx: CanvasRenderingContext2D, o: StationOpts): void
     drawBoltSign(ctx);
     ctx.fillStyle = VENT;
     for (let i = 0; i < 3; i++) ctx.fillRect(-0.24, -0.33 + i * 0.03, 0.2, 0.012);
+    if (o.status === 'out') drawOutTag(ctx);
     if (o.console !== null) drawConsoleBadge(ctx, look, o.console);
   } finally {
     ctx.restore();
@@ -1490,6 +1544,7 @@ export function drawLeverBox(ctx: CanvasRenderingContext2D, o: LeverBoxOpts): vo
     for (let i = 0; i < n; i++) {
       drawLeverInSlot(ctx, -0.22 + (0.44 * i) / (n - 1), o.status === 'done', armed);
     }
+    if (o.status === 'out') drawOutTag(ctx);
     ctx.globalAlpha *= armed ? 0.35 + 0.65 * wave : 0.85;
     ctx.fillStyle = look.led;
     ctx.beginPath();

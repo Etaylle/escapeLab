@@ -1,4 +1,4 @@
-import type { KnownPart, MapPart } from '@escapelab/core';
+import { consoleFind, type KnownPart, type MapPart } from '@escapelab/core';
 import {
   drawDoor,
   drawEmergencyLamp,
@@ -6,6 +6,7 @@ import {
   drawFusebox,
   drawLeverBox,
   drawManualObject,
+  drawOutLabel,
   drawPinnedNote,
   drawPlate,
   drawSign,
@@ -25,12 +26,13 @@ import {
   type CarryableOpts,
 } from '../hazards.js';
 import { opensCabinet } from '../interact.js';
-import { statusOf } from '../known.js';
+import { isOut, showsUnlit, statusOf } from '../known.js';
 import { noteMount } from '../notes.js';
 import { inTiles, profiled, type Frame } from './frame.js';
 import { drawGlow, namedThing, type Named } from './highlight.js';
 import {
   labelAt,
+  stationLabelKey,
   looseAndShown,
   propLabels,
   SIGN,
@@ -62,7 +64,7 @@ export function draw(ctx: CanvasRenderingContext2D, frame: Frame): void {
   profiled(frame.kit, 'props', ctx, () => props.drawFloor(ctx, frame));
   drawDoors(ctx, frame);
   drawGlowUnder(ctx, frame, named);
-  drawStations(ctx, frame);
+  drawStations(ctx, frame, labels);
   drawManuals(ctx, frame, labels);
   drawNotes(ctx, frame);
   drawFixtures(ctx, frame, labels);
@@ -83,7 +85,7 @@ function occludeThings(ctx: CanvasRenderingContext2D, frame: Frame, labels: Plac
       .filter((manual) => sourceShows(frame, manual))
       .map((m) => ({ x: m.x + 0.5, y: m.y + 0.5, top: 0.62 + sourceRise(m.kind) })),
     ...map.stations
-      .filter((s) => statusOf(s) !== 'locked' || light.shown(s.x, s.y))
+      .filter((s) => showsUnlit(s) || light.shown(s.x, s.y))
       .map((s) => ({ x: s.x + 0.5, y: s.y + 0.5, top: 0.62 })),
     ...map.items
       .filter((item) => looseAndShown(frame, item))
@@ -145,12 +147,12 @@ function drawDoors(ctx: CanvasRenderingContext2D, frame: Frame): void {
  * A main switch has a lever for each of the crew the run counts — whoever is away too, until it
  * goes on without them; a circuit's box is a fuse box. A locked station shows where light fell.
  */
-function drawStations(ctx: CanvasRenderingContext2D, frame: Frame): void {
+function drawStations(ctx: CanvasRenderingContext2D, frame: Frame, labels: PlacedLabels): void {
   const { map, light, pulse } = frame;
   const levers = frame.players.filter((p) => p.waived !== true).length;
   for (const station of map.stations) {
     const status = statusOf(station);
-    if (status !== 'locked' || light.shown(station.x, station.y)) {
+    if (showsUnlit(station) || light.shown(station.x, station.y)) {
       const look = {
         status,
         pulse,
@@ -163,7 +165,15 @@ function drawStations(ctx: CanvasRenderingContext2D, frame: Frame): void {
           : station.look === 'fusebox'
             ? () => drawFusebox(ctx, look)
             : () => drawStation(ctx, look);
-      at(ctx, station.x + 0.5, station.y + 0.5, draw);
+      at(ctx, station.x + 0.5, station.y + 0.5, () => {
+        draw();
+        if (isOut(station)) {
+          // Its tag's words, as far as this player has found the console.
+          const place = labelAt(labels, stationLabelKey(station), LABEL_BELOW);
+          const found = frame.labels(consoleFind(station));
+          drawOutLabel(ctx, { at: place, found, text: frame.text });
+        }
+      });
     }
   }
 }

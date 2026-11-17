@@ -637,15 +637,19 @@ function sourcesAt(state: GameState, playerId: string): ManualDef[] {
 
 /**
  * Where one player stands. Next to two stations or manual objects at once,
- * the one of the current puzzle wins.
+ * the one of the current puzzle wins. A station or a source out of service this run is no
+ * place to stand at: there is nothing to work or read.
  */
 function presenceOf(state: GameState, playerId: string): PlayerPresence {
   const current = state.mission.puzzles[state.currentPuzzleIndex]?.id;
+  const resting = outOfService(state);
   const stations = [...new Set(state.mission.map.stations.map((s) => s.puzzleId))].filter(
-    (id) => consoleOf(state, id, playerId) !== null,
+    (id) => !resting.has(id) && consoleOf(state, id, playerId) !== null,
   );
   const stationId = stations.find((id) => id === current) ?? stations[0] ?? null;
-  const manuals = sourcesAt(state, playerId).filter((m) => sourceOpen(state, m));
+  const manuals = sourcesAt(state, playerId).filter(
+    (m) => sourceOpen(state, m) && !sourceOutOfService(state, m),
+  );
   const manual =
     manuals.find((m) => current !== undefined && m.puzzleIds.includes(current)) ?? manuals[0];
   return {

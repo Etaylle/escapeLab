@@ -1,7 +1,13 @@
-import type { MapPart, MapSource } from '@escapelab/core';
-import { LABEL_BELOW, plateCaption, SIGN_LABEL_BELOW, textBox } from '../art.js';
+import { consoleFind, type MapPart, type MapSource } from '@escapelab/core';
+import {
+  LABEL_BELOW,
+  OUT_OF_SERVICE_TAG,
+  plateCaption,
+  SIGN_LABEL_BELOW,
+  textBox,
+} from '../art.js';
 import { coversArmed } from '../interact.js';
-import { known } from '../known.js';
+import { isOut, known } from '../known.js';
 import { placeLabels, type PlacedLabels, type PropLabel } from '../labelLayout.js';
 import { toScreen, type Frame } from './frame.js';
 
@@ -85,6 +91,23 @@ function sourceLabels(frame: Frame): Labelled[] {
     }));
 }
 
+/** What a station's label is placed by: its tile, as a station of two consoles stands twice. */
+export const stationLabelKey = (station: { x: number; y: number }): string =>
+  `station:${station.x},${station.y}`;
+
+/** The tags of the stations out of service, as far as this player has found each console. */
+function outOfServiceLabels(frame: Frame): Labelled[] {
+  return frame.map.stations.filter(isOut).map((station) => ({
+    key: stationLabelKey(station),
+    words: OUT_OF_SERVICE_TAG,
+    x: station.x + 0.5,
+    y: station.y + 0.5,
+    below: LABEL_BELOW,
+    rank: RANK.quiet,
+    alpha: frame.labels(consoleFind(station)),
+  }));
+}
+
 /** The sign's label as far as this player has found it — whole once read — and the parts'. */
 function signAndPartLabels(frame: Frame): Labelled[] {
   const { map } = frame;
@@ -119,13 +142,17 @@ function signAndPartLabels(frame: Frame): Labelled[] {
 }
 
 /**
- * The labels of the things `frame` shows, by key `plate:id`, `manual:id`, `sign`, `item:id`;
+ * The labels of the things `frame` shows, by key `plate:id`, `manual:id`, `station:x,y` (the tag
+ * of one out of service), `sign`, `item:id`;
  * none for a thing not found yet.
  */
 function labelled(frame: Frame): Labelled[] {
-  return [...plateLabels(frame), ...sourceLabels(frame), ...signAndPartLabels(frame)].filter(
-    (label) => label.alpha > 0,
-  );
+  return [
+    ...plateLabels(frame),
+    ...sourceLabels(frame),
+    ...outOfServiceLabels(frame),
+    ...signAndPartLabels(frame),
+  ].filter((label) => label.alpha > 0);
 }
 
 /** The labels of the things `frame` shows, placed clear of each other; `ctx` measures them. */

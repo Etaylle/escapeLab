@@ -1,4 +1,5 @@
-import { findKey, type Find } from '@escapelab/core';
+import { consoleFind, findKey, type Find } from '@escapelab/core';
+import { isOut } from './known.js';
 import type { WorldMap } from './render/frame.js';
 
 /**
@@ -24,12 +25,16 @@ export function labelClock(run: number | null): LabelClock {
   return { run, since: new Map() };
 }
 
-/** What of `map` with a name or a call this player has found: sources, notes, parts, the sign. */
+/**
+ * What of `map` with a name or a call this player has found: sources, notes, parts, the sign —
+ * and the consoles out of service, whose tag reads under them.
+ */
 export function foundIn(map: WorldMap): Find[] {
   return [
     ...map.manuals.filter((m) => m.found).map((m): Find => ({ of: 'source', id: m.id })),
     ...map.notes.filter((n) => n.found).map((n): Find => ({ of: 'note', index: n.index })),
     ...map.items.filter((i) => i.found).map((i): Find => ({ of: 'item', id: i.id })),
+    ...map.stations.filter((s) => isOut(s) && s.found).map((s) => consoleFind(s)),
     ...(map.edgeworkSign?.found === true ? [{ of: 'sign' } as const] : []),
   ];
 }

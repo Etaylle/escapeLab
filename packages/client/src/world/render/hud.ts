@@ -1,6 +1,6 @@
 import { isHorizontalDoor } from '../doors.js';
 import { carriedItem, coversArmed } from '../interact.js';
-import { isArmed, known } from '../known.js';
+import { isArmed, isOut, known } from '../known.js';
 import {
   ALARM,
   AMBER,
@@ -268,19 +268,20 @@ function drawPlates(ctx: CanvasRenderingContext2D, map: WorldMap, layout: Minima
 
 /**
  * The stations the crew knows of, the armed one bright — one merely in sight stays off the
- * map — and the sources the crew has come across, bright where they print its rules.
+ * map — and the sources the crew has come across, bright where they print its rules. A station
+ * out of service this run and a source that prints only such a station's rules stay off it.
  */
 function drawStationsAndSources(
   ctx: CanvasRenderingContext2D,
   map: WorldMap,
   { ox, oy, cell }: MinimapLayout,
 ): void {
-  for (const station of map.stations.filter(known)) {
+  for (const station of map.stations.filter(known).filter((s) => !isOut(s))) {
     ctx.fillStyle =
       station.status === 'armed' ? C.teal : station.status === 'done' ? C.done : C.locked;
     ctx.fillRect(ox + station.x * cell, oy + station.y * cell, cell, cell);
   }
-  for (const manual of map.manuals.filter((m) => m.known)) {
+  for (const manual of map.manuals.filter(known).filter((m) => m.outOfService !== true)) {
     ctx.fillStyle = coversArmed(map, manual) ? C.read : C.unread;
     ctx.fillRect(ox + manual.x * cell, oy + manual.y * cell, cell, cell);
   }
