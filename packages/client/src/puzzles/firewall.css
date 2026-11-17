@@ -258,6 +258,33 @@ button.firewall-card {
   text-align: center;
 }
 
+/* The wave held: the packets dim where they stand, HALT across the lines. */
+.firewall-scope {
+  position: relative;
+}
+
+.firewall-scope--held .firewall-track,
+.firewall-scope--held .firewall-card {
+  opacity: 0.45;
+}
+
+.firewall-held {
+  position: absolute;
+  top: 40%;
+  right: 10px;
+  left: 10px;
+  margin: 0;
+  padding: 4px 0;
+  border-top: 2px solid var(--scope-mark);
+  border-bottom: 2px solid var(--scope-mark);
+  background: rgba(3, 8, 13, 0.75);
+  color: var(--scope-mark);
+  font-weight: 700;
+  letter-spacing: 8px;
+  text-align: center;
+  pointer-events: none;
+}
+
 /* ── the bezel ──────────────────────────────────────────────────────── */
 
 .firewall-bezel {

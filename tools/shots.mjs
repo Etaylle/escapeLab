@@ -11180,7 +11180,7 @@ async function captureFirewall() {
  */
 async function firewallHeld(gate) {
   const status = gate.page.locator('.station-modal .firewall-status');
-  const says = 'Am Analysepult steht niemand.';
+  const says = 'Analysepult unbesetzt · Pakete halten';
   const held = await until(() => (firewallView(gate)?.vacant ?? []).join() === 'b', 3000);
   const text = (await textOf(status)) ?? '';
   fwSaid(`${gate.name} at the Sperrpult alone: „${text}"${held ? '' : ' !! not held'}`);

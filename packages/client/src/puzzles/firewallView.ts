@@ -95,7 +95,7 @@ export function statusOf(puzzle: FirewallPuzzle, now: number): string {
   }
   const [vacant] = puzzle.vacant;
   if (vacant !== undefined) {
-    return `Halt: Am ${PULT_NAMES[vacant]} steht niemand.`;
+    return `${PULT_NAMES[vacant]} unbesetzt · Pakete halten`;
   }
   const t = puzzle.clock === null ? 0 : waveMsAt(puzzle.clock, now);
   const packets = puzzle.packets ?? [];

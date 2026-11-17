@@ -173,9 +173,9 @@ describe('the status line', () => {
 
   it('says whose console stands empty while the wave holds, as the other modules word it', () => {
     const held = { ...seen('a', MID), vacant: ['b' as const] };
-    expect(view.statusOf(held, T0 + MID)).toBe('Halt: Am Analysepult steht niemand.');
+    expect(view.statusOf(held, T0 + MID)).toBe('Analysepult unbesetzt · Pakete halten');
     const away = { ...held, vacant: ['a' as const] };
-    expect(view.statusOf(away, T0 + MID)).toBe('Halt: Am Sperrpult steht niemand.');
+    expect(view.statusOf(away, T0 + MID)).toBe('Sperrpult unbesetzt · Pakete halten');
   });
 });
 
@@ -218,6 +218,11 @@ describe('the Sperrpult', () => {
     const frozen = panel(held);
     expect(frozen).toContain(`--fall-delay:${(first?.enterMs ?? 0) - MID}ms`);
     expect(frozen).toContain('firewall-track--held');
+    const left = panel({ ...held, vacant: ['b'] });
+    expect(left).toContain('firewall-scope firewall-scope--held');
+    expect(left).toContain('>HALT</p>');
+    expect(left).toContain('Analysepult unbesetzt · Pakete halten');
+    expect(html).not.toContain('firewall-scope--held');
   });
 });
 

@@ -147,12 +147,18 @@ function Status({ puzzle, now }: { puzzle: FirewallPuzzle; now: number }) {
 
 /**
  * The scope: five lines numbered from the left over the Kern, each with what `lane` puts on it.
- * A line of the Sperrpult is a key that sets the gate there; the Analysepult's are plain.
+ * A line of the Sperrpult is a key that sets the gate there; the Analysepult's are plain. While
+ * the wave holds (`held`), the packets dim where they stand under HALT across the lines.
  */
-function Scope({ lane }: { lane: (line: number) => ReactNode }) {
+function Scope({ lane, held }: { lane: (line: number) => ReactNode; held: boolean }) {
   return (
-    <div className="firewall-scope">
+    <div className={`firewall-scope${held ? ' firewall-scope--held' : ''}`}>
       <div className="firewall-lines">{LINES.map((line) => lane(line))}</div>
+      {held && (
+        <p className="firewall-held" aria-hidden>
+          HALT
+        </p>
+      )}
       <div className="firewall-kern" aria-hidden>
         KERN
       </div>
@@ -250,6 +256,7 @@ function Sperrpult({ puzzle, send }: { puzzle: FirewallPuzzle; send: Send }) {
     <div className="firewall firewall--gate">
       <Status puzzle={puzzle} now={now} />
       <Scope
+        held={puzzle.vacant.length > 0}
         lane={(line) => (
           <GateLine
             key={line}
@@ -413,6 +420,7 @@ function Analysepult({ puzzle, send }: { puzzle: FirewallPuzzle; send: Send }) {
     <div className="firewall firewall--analysis">
       <Status puzzle={puzzle} now={now} />
       <Scope
+        held={puzzle.vacant.length > 0}
         lane={(line) => (
           <CardLine
             key={line}
@@ -447,6 +455,7 @@ function Watched({ puzzle }: { puzzle: FirewallPuzzle }) {
       <h4 className="servers-console-name">{consoleName('b')}</h4>
       <Status puzzle={puzzle} now={now} />
       <Scope
+        held={puzzle.vacant.length > 0}
         lane={(line) => (
           <CardLine
             key={line}

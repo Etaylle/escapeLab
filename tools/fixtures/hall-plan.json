@@ -34,17 +34,13 @@
       "title": "Paketfilter",
       "opens": { "waves": 2, "fallMs": 10000 },
       "moves": [
-        { "by": "partner", "input": { "mark": "1-1" } },
+        { "by": "partner", "input": { "mark": "1-3" } },
         { "by": "operator", "input": { "trip": 0 } },
         { "by": "partner", "input": { "mark": "1-5" } },
-        { "by": "operator", "input": { "trip": 3 } },
-        { "by": "partner", "input": { "mark": "1-7" } },
         { "by": "operator", "input": { "trip": 2 } },
-        { "by": "partner", "input": { "mark": "2-1" } },
-        { "by": "operator", "input": { "trip": 4 } },
-        { "by": "partner", "input": { "mark": "2-5" } },
-        { "by": "operator", "input": { "trip": 0 } },
-        { "by": "partner", "input": { "mark": "2-7" } },
+        { "by": "partner", "input": { "mark": "2-2" } },
+        { "by": "operator", "input": { "trip": 2 } },
+        { "by": "partner", "input": { "mark": "2-3" } },
         { "by": "operator", "input": { "trip": 1 } }
       ],
       "releaseAt": null

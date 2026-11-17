@@ -356,15 +356,16 @@ function drawnHeader(rule: number, digit: number, rng: Rng): FirewallHeader {
 }
 
 /**
- * A header that `rule` decides (BASE_RULE: the Grundregel) — and, as a `decoy`, one a rule that
- * drops fits too, further down the list: only the policy's order lets it through. Throws where
- * none comes in DRAW_TRIES draws: the rules leave no such packet.
+ * A header that `rule` decides (BASE_RULE: the Grundregel) — and for a decoy, one that one of
+ * the rules `caught` drops fits too, further down the list: only the policy's order lets it
+ * through. Throws where none comes in DRAW_TRIES draws: the rules leave no such packet.
  */
-function headerFor(rule: number, decoy: boolean, digit: number, rng: Rng): FirewallHeader {
+function headerFor(rule: number, caught: readonly number[] | null, digit: number, rng: Rng) {
   for (let i = 0; i < DRAW_TRIES; i++) {
     const header = drawnHeader(rule, digit, rng);
-    const fits = decidingRule(header, digit) === rule;
-    if (fits && (!decoy || fitsADropRule(header, digit))) {
+    const decided = decidingRule(header, digit) === rule;
+    const decoy = caught?.some((drop) => FIREWALL_POLICY[drop]?.fits(header, digit)) ?? true;
+    if (decided && decoy) {
       return header;
     }
   }
@@ -377,7 +378,8 @@ const exercisedBy = (state: Pick<FirewallState, 'exercised'>, verdict: FirewallV
 
 /**
  * The deciding rules of a wave's packets, `hostile` of them dropping: the instance's rules
- * that drop in turn, then a decoy decided by one that lets through, then the rest of those and
+ * that drop in turn, then a decoy decided by one that lets through where a rule in play that
+ * drops stands further down (DECOY_DROPS) — the Wartungsnetz's always can —, then the rest and
  * the Grundregel in turn — each list taken on from where the wave before left it, so that the
  * waves together exercise every rule of the instance.
  */
@@ -387,7 +389,8 @@ function rulesOfWave(state: FirewallState, count: number, hostile: number, wave:
   const kinds = [...passes, BASE_RULE];
   const at = <T>(list: readonly T[], i: number): T => list[i % list.length] as T;
   const hostiles = Array.from({ length: hostile }, (_, i) => at(drops, wave * hostile + i));
-  const decoy = at(passes, wave);
+  const decoys = passes.filter((rule) => DECOY_DROPS[rule]?.some((drop) => drops.includes(drop)));
+  const decoy = at(decoys, wave);
   const others = Array.from({ length: count - hostile - 1 }, (_, i) => at(kinds, wave + i + 1));
   return { hostiles, decoy, others };
 }
@@ -409,6 +412,7 @@ export function dealWave(def: FirewallDef, state: FirewallState, wave: number): 
   const rng = mulberry32((state.seed + wave * 7919) >>> 0);
   const hostile = 2 + (rng() < 0.5 ? 1 : 0);
   const { hostiles, decoy, others } = rulesOfWave(state, def.packets, hostile, wave);
+  const drops = exercisedBy(state, 'sperren');
   const slots = shuffle(
     [
       ...hostiles.map((rule) => ({ rule, decoy: false })),
@@ -421,7 +425,7 @@ export function dealWave(def: FirewallDef, state: FirewallState, wave: number): 
   const placed: FirewallPacket[] = [];
   let enterMs = FIREWALL_PAUSE_MS;
   for (const [n, slot] of slots.entries()) {
-    const header = headerFor(slot.rule, slot.decoy, state.digit, rng);
+    const header = headerFor(slot.rule, slot.decoy ? drops : null, state.digit, rng);
     const line = lineFor(placed, enterMs, fallMs, rng);
     const hostileHere = verdictOfRule(slot.rule) === 'sperren';
     placed.push({ id: `${wave + 1}-${n + 1}`, line, enterMs, header, hostile: hostileHere });
@@ -431,20 +435,26 @@ export function dealWave(def: FirewallDef, state: FirewallState, wave: number): 
 }
 
 /**
- * The rules an instance's packets are decided by: `rules` of the six, one that drops and one
- * that lets through among them at least, in the policy's order.
+ * The order the numbered rules come into play as `rules` grows (0-based): the four simplest
+ * first — the Wartungsnetz, the remote ports, the Labornetz over TCP, UDP at large —, then the
+ * name service's exception, and the Laborkennung's digit last. A first run at the default
+ * reads the whole page but meets no packet that turns on the sign or on a port pair.
  */
-function exercisedRules(def: FirewallDef, rng: Rng): number[] {
-  const numbered = FIREWALL_POLICY.map((_, i) => i);
-  const drops = shuffle(numbered.filter((i) => verdictOfRule(i) === 'sperren'), rng);
-  const passes = shuffle(numbered.filter((i) => verdictOfRule(i) === 'durchlassen'), rng);
-  const [drop, pass] = [drops[0], passes[0]];
-  if (drop === undefined || pass === undefined) {
-    throw new Error('firewall: the policy needs a rule that drops and one that lets through');
-  }
-  const rest = shuffle([...drops.slice(1), ...passes.slice(1)], rng).slice(0, def.rules - 2);
-  return [drop, pass, ...rest].sort((a, b) => a - b);
-}
+const RULES_IN_PLAY: readonly number[] = [0, 1, 2, 5, 4, 3];
+
+/** The rules an instance's packets are decided by: the first `rules` of RULES_IN_PLAY. */
+const exercisedRules = (def: FirewallDef): number[] =>
+  RULES_IN_PLAY.slice(0, def.rules).sort((a, b) => a - b);
+
+/**
+ * The rules that drop further down the list than a rule that lets through, by that rule: what
+ * makes a packet of it a decoy — only the order lets it through.
+ */
+const DECOY_DROPS: Readonly<Record<number, readonly number[]>> = {
+  0: [1, 3, 5],
+  2: [3],
+  4: [5],
+};
 
 /** The station going on as `state`: no alarm, no solve. */
 const going = (state: FirewallState): ApplyResult<FirewallState> => ({
@@ -732,7 +742,9 @@ export const firewallModule: PuzzleModule<FirewallDef, FirewallState, FirewallIn
       {
         key: 'rules',
         label: 'Regeln im Spiel',
-        help: 'So viele der sechs Regeln der Richtlinie entscheiden über die Pakete der Station.',
+        help:
+          'So viele der sechs Regeln entscheiden über die Pakete: erst 1, 2, 3 und 6, dann 5, ' +
+          'zuletzt 4, die die Laborkennung liest.',
         kind: 'int',
         min: 3,
         max: 6,
@@ -747,7 +759,7 @@ export const firewallModule: PuzzleModule<FirewallDef, FirewallState, FirewallIn
      * time 0 until both consoles are manned.
      */
     init(def, rng, ctx) {
-      const exercised = exercisedRules(def, rng);
+      const exercised = exercisedRules(def);
       const blank: FirewallState = {
         type: 'firewall',
         seed: Math.floor(rng() * 2 ** 32),

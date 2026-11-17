@@ -138,6 +138,26 @@ describe('the Sicherheitsrichtlinie', () => {
   });
 });
 
+describe('the rules in play', () => {
+  it('are by default the four simplest: 1, 2, 3 and 6; then 5; the Laborkennung’s 4 last', () => {
+    const inPlay = (rules: number) => fresh(1, defOf({ rules })).exercised.map((r) => r + 1);
+    expect(inPlay(3)).toEqual([1, 2, 3]);
+    expect(fresh(1).exercised.map((r) => r + 1)).toEqual([1, 2, 3, 6]);
+    expect(inPlay(5)).toEqual([1, 2, 3, 5, 6]);
+    expect(inPlay(6)).toEqual([1, 2, 3, 4, 5, 6]);
+  });
+
+  it(`never decide a default packet by the Laborkennung or a port pair, for ${SEEDS} seeds`, () => {
+    for (let seed = 0; seed < SEEDS; seed++) {
+      const state = fresh(seed);
+      const decided = [0, 1, 2].flatMap((wave) =>
+        dealWave(DEF, state, wave).map((p) => decidingRule(p.header, state.digit)),
+      );
+      expect(decided.filter((rule) => rule === 3 || rule === 4), `seed ${seed}`).toEqual([]);
+    }
+  });
+});
+
 describe('a wave', () => {
   it(`has two or three hostile packets, by the policy, and a decoy, for ${SEEDS} seeds`, () => {
     for (let seed = 0; seed < SEEDS; seed++) {
@@ -149,9 +169,12 @@ describe('a wave', () => {
         const policy = hostileByPolicy(packet.header, EDGEWORK);
         expect(packet.hostile, `seed ${seed} ${packet.id}`).toBe(policy);
       }
-      // a packet only the order lets through: a rule that drops fits it further down
-      const decoys = state.packets.filter((p) => !p.hostile && fitsADropRule(p.header, 4));
+      // a packet only the order lets through: a rule in play that drops fits it further down
+      const drops = state.exercised.filter((r) => FIREWALL_POLICY[r]?.verdict === 'sperren');
+      const caught = (h: FirewallHeader) => drops.some((r) => FIREWALL_POLICY[r]?.fits(h, 4));
+      const decoys = state.packets.filter((p) => !p.hostile && caught(p.header));
       expect(decoys.length, `seed ${seed}`).toBeGreaterThan(0);
+      expect(decoys.every((p) => fitsADropRule(p.header, 4))).toBe(true);
     }
   });
 
