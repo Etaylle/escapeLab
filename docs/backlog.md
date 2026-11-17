@@ -679,7 +679,8 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   Laborkennung. Wellen zu 5–9 Paketen, zwei oder drei davon zu sperren, jede mit einem
   Lockvogel, den nur die Reihenfolge durchlässt; ein falsch gesperrtes und ein feindliches Paket
   im Kern sind ein Alarm, die Welle beginnt neu — höchstens ein Alarm je Welle. Die Welle läuft
-  nur, solange beide Pulte besetzt sind. Felder `waves`, `packets`, `fallSec`, `rules`. Dafür neu
+  nur, solange beide Pulte besetzt sind. Felder `waves`, `packets`, `fallSec`, `rules`; ein erster
+  Lauf mit `rules` 4 trifft nur die Regeln 1, 2, 3 und 6, die Laborkennung erst ab 6. Dafür neu
   im Modulvertrag: `elapse`, eine Station auf der Uhr und der Anwesenheit an ihren Pulten.
 - Steht in der Übungshalle (G-2) und in der Probemission `tools/fixtures/firewall-probe.json`,
   die der Rundgang im Systemcheck spielt (Gruppe `firewall`). In Blackout kommt sie mit dem

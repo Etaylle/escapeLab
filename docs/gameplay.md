@@ -605,8 +605,13 @@ binder, the Laborkennung between them), and with its bay in the Übungshalle.
   53 or 67 passes, any other UDP is dropped — and the Grundregel: anything else passes. The same
   for every seed and state, printable; the headers stand only at console B, what they mean only
   in the policy. `rules` (3–6, default 4) says how many of the six an instance's packets are
-  decided by, one that drops and one that passes among them at least; every wave carries a
-  decoy — a packet a rule further down would drop, which only the order lets through.
+  decided by, always in one order: the four simplest first — 1, 2, 3 and 6 —, then 5, the name
+  service's exception, and last 4, the Laborkennung's digit. A first run at the default reads
+  the whole page but meets no packet that turns on the sign or on a port pair; that reading
+  load, six rules first-match against packets falling for 14 s, is the lab's heaviest. Every
+  wave carries a decoy — a packet a rule in play further down would drop, which only the order
+  lets through. The default's three waves take about two minutes on the clock (118 s median
+  over 200 seeds for the solver, 98–126 s), the moves never shortening a wave.
 - **A wave** is `packets` packets (5–9, default 7), two or three of them hostile, coming on one
   after another a quarter of a fall apart, each on a line nothing came onto for half a fall, and
   each `fallSec` seconds (8–20, default 14) from the top into the Kern. Positions are a pure
@@ -619,18 +624,26 @@ binder, the Laborkennung between them), and with its bay in the Übungshalle.
   alarm at most: the fault calls it off, and a fresh wave with new packets starts after a breath
   of 4 s, as every wave does. A trip that hits nothing is no fault.
 - **Needs two.** A wave runs only while both consoles are manned, and holds — the packets frozen
-  where they stand — while one stands empty or the run stands still; the device says „Halt: Am
-  Analysepult steht niemand." (or the Sperrpult), as the other two-console modules word it. The
-  partner LED names who stands at the other console. A crew of three has its third read the
-  policy at the source while B marks; with two, B reads first — the Notieren beside the rules
-  takes them into the notepad — and marks from it.
+  and dimmed where they stand under HALT across the scope — while one stands empty or the run
+  stands still; the status line says „Analysepult unbesetzt · Pakete halten" (or the
+  Sperrpult), and a trip refused then „Am Analysepult steht niemand.", as the other two-console
+  modules word it. The partner LED names who stands at the other console. A crew of three has
+  its third read the policy at the source while B marks; with two, B walks to the policy — the
+  wave holds meanwhile, which is the intended way to read — and may take the rules into the
+  notepad with the Notieren beside them.
 
 The module is the first whose station runs on the clock and on its consoles' presence: its
 `elapse` (core `puzzles/module.ts`) brings the station to the moment of every action — before a
 move, so that a trip meets the packets where the server's clock has them, and after every
 action, so that a change of presence, a pause for the server's maintenance or the switch-on holds
-or frees the wave at once (`actions.ts` `clocked`). An alarm the clock runs into is charged to
-nobody, a solve on the clock advances the run. The solver reads the moment the crew looks
+or frees the wave at once (`actions.ts` `clocked`) — only for the armed station, and for no
+module without one. A crew that stands still is woken all the same: the module's `dueAt` names
+the next packet coming on, the next attack reaching the Kern or the wave's clean end, and the
+room arms one timer for it after every dispatch (`puzzle-tick`, as for a sync press running
+out), none while paused and none once solved. An alarm the clock runs into is charged to
+nobody, a solve on the clock advances the run. A snapshot holds a wave in flight at its
+moment, as a pause does; after a restore it goes on from there once both consoles are manned
+again (`server/test/firewallRoom.test.ts`). The solver reads the moment the crew looks
 (`SolveAid.at`). Sounds (docs/sound.md): the gate's step, the trip's thunk, a pop for a packet
 taken out, a blip as one reaches the Kern, a chime for a clean wave; the fault's klaxon and the
 solve's chord are the kit's.
