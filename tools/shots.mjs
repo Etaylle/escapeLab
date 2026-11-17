@@ -269,9 +269,10 @@
  * The Übungshalle's drill (hall), in a Systemcheck run: a room of its own on the seed
  * tools/fixtures/hall-plan.json pins, opened from the menu, is played to the won card, every
  * station type once, with the moves the plan carries (core's test/hallPlan.ts keeps them the
- * solvers' own); the draw and the Laborkennung have to be the plan's. As the briefing ends an
- * audience joins: hall-overview.png is its world, the whole hall lit from the start, every
- * station in its bay — or the run fails. Both walk past the sign; while every station stands
+ * solvers' own); the draw and the Laborkennung have to be the plan's. As the briefing ends,
+ * hall-player.png is the host's own world, lit the way a player's light takes — the run fails
+ * where it burns to a white sheet (`seeTheHall`) — and an audience joins: hall-overview.png is
+ * its world, the whole hall lit from the start, every station in its bay — or the run fails. Both walk past the sign; while every station stands
  * armed, a beacon over each console, the host's frames are sampled for information between two
  * rows of bays (21,13) and the audience's on the whole hall, each log line counting the stations
  * armed and the beacons and books in view. Then, station by station in the
@@ -13322,6 +13323,37 @@ async function watchTheHall(context, code) {
 }
 
 /**
+ * The brightest a player's world in the lit hall may be, its canvas's mean luma 0–255 (client
+ * gl/luma.ts): lit once, the host's world at the entrance measured 126 on the M4's GL path and on
+ * the Canvas pass alike (2026-11-17); each of the hall's fourteen names lighting its one floor
+ * again burnt it to a white sheet at HALL_WHITE_LUMA.
+ */
+const HALL_PLAYER_LUMA_MAX = 180;
+/** The mean luma of the white sheet a player's hall once was, 0–255, for the log's line. */
+const HALL_WHITE_LUMA = 234;
+
+/**
+ * hall-player.png: the host's own world in the hall past the briefing — a player's, on the way
+ * its light takes on this machine (the audience lights the hall another way, whole) — and its
+ * mean luma; the run fails where the world burns to a white sheet (over HALL_PLAYER_LUMA_MAX) or
+ * the page has no light probe to read it.
+ */
+async function seeTheHall(host) {
+  await framesOf(host.page, 3);
+  await capture(host.page, 'hall-player.png');
+  const light = await lightOf(host.page);
+  const luma = await canvasLuma(host.page);
+  const said = luma === null ? 'no luma read' : `mean luma ${luma.toFixed(0)}`;
+  console.log(
+    `hall-player.png    ${host.name} in the hall on the ${light?.path ?? 'unknown'} path: ${said}` +
+      ` (at most ${HALL_PLAYER_LUMA_MAX}; the white sheet ~${HALL_WHITE_LUMA})`,
+  );
+  if (luma === null || luma > HALL_PLAYER_LUMA_MAX) {
+    fail(`hall-player.png: ${host.name}'s world in the lit hall, ${said} — a white sheet`);
+  }
+}
+
+/**
  * hall-overview.png's line in the log, from the audience's map: how many of the hall's
  * stations it shows, how many of its rooms lit; the run fails where one is missing.
  */
@@ -13483,6 +13515,7 @@ async function captureHall() {
     await startRun(host, guest);
     // Past the briefing's countdown, as in the walkthrough.
     await sleep(Math.max(0, host.seen.view.startedAt + 4200 - Date.now()));
+    await seeTheHall(host);
     const audience = await browser.newContext({ viewport: COLD_OPEN });
     contexts.push(audience);
     await playHall({ host, guest }, await watchTheHall(audience, code));
