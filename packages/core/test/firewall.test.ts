@@ -328,6 +328,9 @@ describe('the clock', () => {
     expect(firewallModule.dueAt?.(DEF, all)).toBe(arrives(all, hostile) + TRIP_GRACE_MS);
   });
 
+});
+
+describe('the clock, standing still', () => {
   it('never goes back in time: a moment before the hold counts as the hold’s', () => {
     const state = at(running(), T0 + 8000).state;
     const held = at(state, T0 + 9000, { a: ['op'], b: [] }).state;
@@ -424,6 +427,9 @@ describe('a trip', () => {
     expect(done.state).toMatchObject({ waiting: true, heldAt: when });
   });
 
+});
+
+describe('a late trip', () => {
   it('takes the attack behind a packet just through, never the one let through', () => {
     const state = running();
     const benign = state.packets.find((p) => !p.hostile);
@@ -581,27 +587,45 @@ describe('the views', () => {
   });
 });
 
-describe('the Paketfilter through the reducer', () => {
-  const mission = firewallProbe();
-  const consoleB = stationKey({ puzzleId: 'filter', console: 'b' });
-  const both = { stations: { filter: ['p1'], [consoleB]: ['p2'] } };
-  /** The station on at T0 + 500, p1 at console a, p2 at b from T0 + 1000. */
-  const manned = (seed = 3): GameState => {
-    const atA = standing(lightsOut(started(mission, seed)), {
-      stations: { filter: ['p1'] },
-      signSeen: ['p1', 'p2'],
-    });
-    const on = applyAction(atA, { type: 'interact', playerId: 'p1', at: T0 + 500 });
-    return standing(on, { ...both, at: T0 + 1000 });
-  };
-  /** The same, the Freigabe pressed at T0 + 1000: the first wave runs from then. */
-  const open = (seed = 3): GameState => {
-    const input = { start: true };
-    const move = { type: 'puzzle-input' as const, playerId: 'p1', at: T0 + 1000, input };
-    return applyAction(manned(seed), move);
-  };
-  const fw = (state: GameState): FirewallState => state.puzzleState as FirewallState;
+const mission = firewallProbe();
+const consoleB = stationKey({ puzzleId: 'filter', console: 'b' });
+const both = { stations: { filter: ['p1'], [consoleB]: ['p2'] } };
+/** The station on at T0 + 500, p1 at console a, p2 at b from T0 + 1000. */
+const manned = (seed = 3): GameState => {
+  const atA = standing(lightsOut(started(mission, seed)), {
+    stations: { filter: ['p1'] },
+    signSeen: ['p1', 'p2'],
+  });
+  const on = applyAction(atA, { type: 'interact', playerId: 'p1', at: T0 + 500 });
+  return standing(on, { ...both, at: T0 + 1000 });
+};
+/** The same, the Freigabe pressed at T0 + 1000: the first wave runs from then. */
+const open = (seed = 3): GameState => {
+  const input = { start: true };
+  const move = { type: 'puzzle-input' as const, playerId: 'p1', at: T0 + 1000, input };
+  return applyAction(manned(seed), move);
+};
+const fw = (state: GameState): FirewallState => state.puzzleState as FirewallState;
 
+/**
+ * A run, and a moment just after its first hostile packet reached the Kern with no tick since,
+ * at which a packet the policy lets through is the lowest on its line; null where the seed
+ * deals none.
+ */
+const lateTrip = (seed: number) => {
+  const state = open(seed);
+  const { packets, startedAt } = fw(state);
+  const fall = 10_000;
+  const hostile = packets.find((p) => p.hostile);
+  const at = startedAt + (hostile?.enterMs ?? 0) + fall + TRIP_GRACE_MS + 200;
+  const falling = (p: (typeof packets)[number]) =>
+    startedAt + p.enterMs <= at && at < startedAt + p.enterMs + fall;
+  const lowest = (l: number) => packets.find((p) => p.line === l && falling(p));
+  const line = [0, 1, 2, 3, 4].find((l) => lowest(l)?.hostile === false);
+  return line === undefined ? null : { state, at, line };
+};
+
+describe('the Paketfilter through the reducer', () => {
   it('starts the wave on the Freigabe, both manned, and holds it as one is left', () => {
     expect(fw(manned())).toMatchObject({ heldAt: T0 + 500, waiting: true, vacant: [] });
     const state = open();
@@ -627,24 +651,6 @@ describe('the Paketfilter through the reducer', () => {
     expect(fw(back)).toMatchObject({ heldAt: null, vacant: [], startedAt: T0 + 31_000 });
   });
 
-  /**
-   * A run, and a moment just after its first hostile packet reached the Kern with no tick since,
-   * at which a packet the policy lets through is the lowest on its line; null where the seed
-   * deals none.
-   */
-  const lateTrip = (seed: number) => {
-    const state = open(seed);
-    const { packets, startedAt } = fw(state);
-    const fall = 10_000;
-    const hostile = packets.find((p) => p.hostile);
-    const at = startedAt + (hostile?.enterMs ?? 0) + fall + TRIP_GRACE_MS + 200;
-    const falling = (p: (typeof packets)[number]) =>
-      startedAt + p.enterMs <= at && at < startedAt + p.enterMs + fall;
-    const lowest = (l: number) => packets.find((p) => p.line === l && falling(p));
-    const line = [0, 1, 2, 3, 4].find((l) => lowest(l)?.hostile === false);
-    return line === undefined ? null : { state, at, line };
-  };
-
   it('brings the station to a move’s moment first: the Kern is the alarm, the move none', () => {
     const late = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(lateTrip).find((found) => found !== null);
     if (late === undefined || late === null) {
@@ -660,6 +666,9 @@ describe('the Paketfilter through the reducer', () => {
     expect(fw(after).event).toMatchObject({ kind: 'fault' });
   });
 
+});
+
+describe('the Paketfilter through the reducer, on its own', () => {
   it('charges a hostile packet in the Kern on the room’s tick, to nobody', () => {
     const state = open();
     const first = fw(state).packets.findIndex((p) => p.hostile);
