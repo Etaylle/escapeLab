@@ -13,7 +13,7 @@ import {
 } from '@escapelab/core';
 import { NotepadContext } from '../src/noting.js';
 import { TEXT_SCALE } from '../src/settings.js';
-import { elementsOf, Sheets, type Screen, type Styled } from './cascade.js';
+import { elementsOf, lengthOf, Sheets, type Screen, type Styled } from './cascade.js';
 import { deviceRun, lcg, mapWith, NO_CLOCK } from './fixtures.js';
 
 vi.mock('../src/puzzles/sounds.js', async (importOriginal) => {
@@ -92,6 +92,20 @@ const allMarked = (state: PuzzleState): PuzzleState => {
   const fw = state as Extract<PuzzleState, { type: 'firewall' }>;
   return { ...fw, marks: fw.packets.slice(0, fw.entered).map((p) => p.id) };
 };
+
+/** The markup of the key that is packet `id`'s card in `html`; empty where it has none. */
+function cardOf(html: string, id: string): string {
+  const cards = html.split('class="firewall-card');
+  const from = cards.find((card) => card.includes(`data-packet="${id}"`)) ?? '';
+  return from.split('</button>')[0] ?? '';
+}
+
+/** The two lines the card of packet `id` prints in `html`, each as its parts read together. */
+function printed(html: string, id: string): string[] {
+  const fields = cardOf(html, id).split('class="firewall-field').slice(1);
+  // each field's markup runs into the tag that opens what follows it
+  return fields.map((field) => field.slice(field.indexOf('>') + 1).replace(/<[^>]*(>|$)|✓/g, ''));
+}
 
 const panel = (puzzle: Firewall): string =>
   renderToStaticMarkup(
@@ -254,8 +268,10 @@ describe('the Analysepult', () => {
     const live = view.onTheLines(puzzle, T0 + MID);
     expect(html.match(/<button[^>]*class="firewall-card/g)).toHaveLength(live.length);
     for (const blip of live) {
-      expect(html).toContain(`>${blip.header?.source}<`);
-      expect(html).toContain(`data-packet="${blip.id}"`);
+      expect(printed(html, blip.id)).toEqual([
+        blip.header?.source,
+        `${blip.header?.port}/${blip.header?.protocol}`,
+      ]);
     }
     expect(html.match(/aria-pressed="true"/g)).toHaveLength(live.length);
     expect(html).not.toContain('SPERREN');
@@ -294,11 +310,19 @@ describe('the sounds of a change', () => {
   });
 });
 
-describe('the type and the targets on a phone held sideways', () => {
+/** Phones held upright, the smallest to the largest. */
+const UPRIGHT: Screen[] = [
+  { width: 360, height: 640, coarse: true },
+  { width: 390, height: 844, coarse: true },
+  { width: 430, height: 932, coarse: true },
+];
+
+describe('the type and the targets on a phone, held sideways or upright', () => {
   const sheets = new Sheets();
   const PHONES: Screen[] = [
     { width: 844, height: 390, coarse: true },
     { width: 932, height: 430, coarse: true },
+    ...UPRIGHT,
   ];
 
   /** The device of the Paketfilter at console `seat` as the station modal shows it. */
@@ -432,6 +456,107 @@ describe('the scope’s geometry', () => {
     }
   });
 
+  /** The audience's scope, its cards on the lines. */
+  function watched(): Styled[] {
+    clockAt(MID);
+    return elementsOf(panel(seen(null, MID)));
+  }
+
+  /** The lines and a card among `nodes`. */
+  function scopeOf(nodes: Styled[]): { lines: Styled; card: Styled } {
+    const lines = nodes.find((n) => n.classes.includes('firewall-lines'));
+    const card = nodes.find((n) => n.classes.includes('firewall-card'));
+    if (lines === undefined || card === undefined) {
+      throw new Error('expected the lines and a card');
+    }
+    return { lines, card };
+  }
+
+  it.each(UPRIGHT)(
+    'holds two cards of four lines on one line of a phone held upright at $width',
+    (screen) => {
+      for (const { lines, card } of [scopeOf(cards()), scopeOf(watched())]) {
+        for (const scale of Object.values(TEXT_SCALE)) {
+          const scaled = new ScaledSheets(scale);
+          const high = scaled.length(lines, 'height', screen);
+          const item = scaled.length(card, 'min-height', screen);
+          expect(item, `scale ${scale}`).toBeGreaterThanOrEqual(44);
+          // four lines at 1.1, 1 px of padding and the 1 px border over and under them
+          const font = scaled.fontSize(card, screen);
+          expect(scaled.declared(card, 'line-height', screen)?.value).toBe('1.1');
+          expect(4 * 1.1 * font + 2 + 2, `scale ${scale}`).toBeLessThanOrEqual(item + 0.01);
+          expect((high - item) * SAME_LINE_GAP, `scale ${scale}`).toBeGreaterThanOrEqual(
+            item - 0.01,
+          );
+        }
+      }
+    },
+  );
+
+  it.each(UPRIGHT)('sets five lines side by side in a window $width wide', (screen) => {
+    const sheets = new Sheets();
+    for (const seat of ['a', 'b'] as const) {
+      clockAt(MID);
+      const nodes = elementsOf(panel(seen(seat, MID)));
+      for (const row of ['firewall-lines', 'firewall-numbers']) {
+        const grid = nodes.find((n) => n.classes.includes(row));
+        if (grid === undefined) {
+          throw new Error(`expected ${row}`);
+        }
+        const columns = sheets.declared(grid, 'grid-template-columns', screen)?.value ?? '';
+        const [, least = ''] = /^repeat\(5, minmax\((.+), 1fr\)\)$/.exec(columns) ?? [];
+        expect(least, columns).not.toBe('');
+        // every text size the settings offer: a line's least width grows with a card's type
+        for (const scale of Object.values(TEXT_SCALE)) {
+          const scaled = new ScaledSheets(scale);
+          const em = scaled.fontSize(grid, screen);
+          const column = lengthOf(least, { screen, em, custom: () => undefined });
+          const gap = scaled.length(grid, 'gap', screen);
+          // the station's frame takes 29 px of each side at these widths (devices.css: the
+          // modal's 10, the panel's 6, the face's 10; firewall.css: the bezel's 8, the scope 8
+          // into it, its own 3): the lines at their least, with their gaps, stand in the rest
+          expect(5 * column + 4 * gap, `${row} ${seat} ${scale}`).toBeLessThanOrEqual(
+            screen.width - 2 * 29,
+          );
+          // a line is a finger wide at least, and a card's holds five figures of its type
+          // (0.602 em each in the device's face), its border and its padding
+          expect(column).toBeGreaterThanOrEqual(seat === 'b' ? 5 * 0.602 * em + 6 : 44);
+          expect(column).toBeGreaterThanOrEqual(44);
+        }
+      }
+    }
+  });
+
+  it('breaks a card into four lines upright only, the stroke gone, the mark inside its edge', () => {
+    const sheets = new Sheets();
+    const nodes = cards();
+    const part = nodes.find((n) => n.classes.includes('firewall-part'));
+    const stroke = nodes.find((n) => n.classes.includes('firewall-stroke'));
+    clockAt(MID);
+    const marked = elementsOf(panel(seen('b', MID, allMarked))).find((n) =>
+      n.classes.includes('firewall-card--marked'),
+    );
+    if (part === undefined || stroke === undefined || marked === undefined) {
+      throw new Error('expected a part, a stroke and a marked card');
+    }
+    const shown = (node: Styled, screen: Screen) => sheets.declared(node, 'display', screen)?.value;
+    for (const screen of UPRIGHT) {
+      expect(shown(part, screen)).toBe('block');
+      expect(shown(stroke, screen)).toBe('none');
+      // nothing of the mark's room taken from the header's width, its ring inside the border
+      expect(sheets.length(marked, 'padding-right', screen)).toBe(2);
+      expect(sheets.declared(marked, 'box-shadow', screen)?.value).toMatch(/^inset /);
+    }
+    const others: Screen[] = [
+      { width: 1280, height: 720, coarse: false },
+      { width: 844, height: 390, coarse: true },
+    ];
+    for (const screen of others) {
+      expect(shown(part, screen)).toBeUndefined();
+      expect(shown(stroke, screen)).toBeUndefined();
+    }
+  });
+
   it('numbers the lines over them, where no card ever covers a number', () => {
     const nodes = cards();
     const numbers = nodes.filter((n) => n.classes.includes('firewall-line-no'));
@@ -479,10 +604,35 @@ describe('what the scope draws', () => {
     const puzzle = seen('b', MID, allMarked);
     const html = panel(puzzle);
     const [first] = view.onTheLines(puzzle, T0 + MID);
-    expect(html).toContain(`>${first?.header?.port}/${first?.header?.protocol}<`);
+    const header = first?.header;
+    expect(printed(html, first?.id ?? '')).toEqual([
+      header?.source,
+      `${header?.port}/${header?.protocol}`,
+    ]);
     const cardsHtml = html.split('class="firewall-card').slice(1);
     expect(cardsHtml.length).toBeGreaterThan(0);
     expect(cardsHtml.every((card) => card.includes('class="firewall-tick">✓<'))).toBe(true);
+  });
+
+  it('sets each line of a card in two parts: the Quelle broken after its network', () => {
+    clockAt(MID);
+    const puzzle = seen('b', MID);
+    const html = panel(puzzle);
+    const live = view.onTheLines(puzzle, T0 + MID);
+    expect(live.length).toBeGreaterThan(0);
+    for (const blip of live) {
+      const card = cardOf(html, blip.id);
+      const parts = [...card.matchAll(/class="firewall-part">([^<]*)</g)].map((m) => m[1] ?? '');
+      const [net = '', host = '', port, protocol] = parts;
+      const source = blip.header?.source ?? '';
+      // „141.7" over „.9.98": the network's two numbers, then the rest, its dot leading
+      expect(net).toBe(source.split('.').slice(0, 2).join('.'));
+      expect(net + host).toBe(source);
+      expect(host.startsWith('.')).toBe(true);
+      expect([port, protocol]).toEqual([String(blip.header?.port), blip.header?.protocol]);
+      // no part longer than five figures: what a 360 px phone's line holds at the largest text
+      expect(Math.max(...parts.map((part) => part.length))).toBeLessThanOrEqual(5);
+    }
   });
 
   it('shows the Freigabe key only as a press while the wave waits, BEREIT across the scope', () => {
@@ -564,7 +714,7 @@ describe('the scope held', () => {
     // the bar's top where the numbers' row begins, as high as that row
     const value = (node: Styled | undefined, property: string, screen: Screen = PHONE) =>
       node === undefined ? undefined : sheets.declared(node, property, screen)?.value;
-    for (const screen of [PHONE, { width: 1280, height: 720, coarse: false }]) {
+    for (const screen of [PHONE, { width: 1280, height: 720, coarse: false }, ...UPRIGHT]) {
       expect(value(bar, 'top', screen)).toBe('var(--pad-top)');
       expect(value(scope, 'padding', screen)).toMatch(/^var\(--pad-top\) /);
     }

@@ -399,3 +399,137 @@ button.firewall-card {
     padding: var(--pad-top) 8px 4px;
   }
 }
+
+/*
+ * A phone held upright, 360 to 430 px wide: the five lines share the window's width, some 60 px
+ * each at 360, so the Analysepult's card breaks each of its two lines in two (FirewallPanel.tsx
+ * `HeaderLines`) — the Quelle's network, the rest of it, the port, the protocol, at most five
+ * figures a line and nothing left out — and wears its mark inside its own edge, the tick beside
+ * the protocol. The room is in the height: the scope takes what the window leaves once the
+ * Laborkennung, the device's head, its keys and the tabs under it have theirs (--scope-rest),
+ * and never less than two cards of a line need (8/3 of a card, as above).
+ */
+@media (orientation: portrait) and (max-width: 720px) {
+  .firewall {
+    --scope-height: clamp(130px, calc(100dvh - var(--scope-rest)), 340px);
+    /* what stands round the Sperrpult's lines at 360 px, two rows of keys with it: 488 px, 70 of
+       them type that grows with the text's size */
+    --scope-rest: calc(430px + 70px * var(--text-scale));
+    gap: 4px;
+  }
+
+  /*
+   * Room for its longest word, a wave called off, in three rows at 360 px: the scope under it
+   * keeps its place whatever the device says, and a card its place under a thumb.
+   */
+  .firewall-status {
+    min-height: 4.05em;
+  }
+
+  .firewall--analysis {
+    /* four lines of its type at 1.1, 1 px of padding and the 1 px border over and under them */
+    --item-h: max(44px, calc(4.4em + 4px));
+    --scope-fit: calc(var(--item-h) * 8 / 3 + 1px);
+    --scope-height: max(var(--scope-fit), min(calc(100dvh - var(--scope-rest)), 340px));
+    /* round the Analysepult's lines at 360 px, its one row of keys with it: 435 px */
+    --scope-rest: calc(376px + 70px * var(--text-scale));
+  }
+
+  .firewall--watched .firewall-lines {
+    --scope-height: max(var(--scope-fit), clamp(140px, 32vh, 240px));
+  }
+
+  /*
+   * No row of the device's to spare, nor a pixel of its width: the head keeps its plate and its
+   * lamp, the bezel is slimmer, and the scope reaches into the bezel's sides.
+   */
+  .device.device--firewall {
+    padding: 14px 8px 12px;
+  }
+
+  .device--firewall .device-purpose {
+    display: none;
+  }
+
+  .firewall-scope {
+    --pad-top: 6px;
+    margin-inline: -8px;
+    padding: var(--pad-top) 3px 4px;
+  }
+
+  .firewall-lines,
+  .firewall-numbers {
+    grid-template-columns: repeat(5, minmax(44px, 1fr));
+    gap: 3px;
+  }
+
+  /* A card's line holds five figures of its type whatever the room: 3.1em, its edge and padding. */
+  .firewall--analysis .firewall-lines,
+  .firewall--analysis .firewall-numbers {
+    grid-template-columns: repeat(5, minmax(max(44px, calc(3.1em + 6px)), 1fr));
+  }
+
+  .firewall-held {
+    right: 3px;
+    left: 3px;
+  }
+
+  .firewall-card {
+    right: 0;
+    left: 0;
+    padding: 1px 2px;
+    line-height: 1.1;
+    white-space: normal;
+  }
+
+  /* A part too wide for a card — a face wider than the device's own — wraps, never cut. */
+  .firewall-part {
+    display: block;
+    overflow-wrap: anywhere;
+  }
+
+  .firewall-stroke {
+    display: none;
+  }
+
+  /*
+   * The mark inside the card's edge, where the line's own edge cuts nothing of it — and kept
+   * under the finger that set it: a touch screen holds a key's hover until the next tap.
+   */
+  .firewall-card--marked,
+  button.firewall-card--marked:hover:not(:disabled) {
+    padding-right: 2px;
+    border-width: 1px;
+    border-color: var(--scope-mark);
+    box-shadow:
+      inset 0 0 0 2px var(--scope-mark),
+      inset 0 0 8px rgba(255, 200, 97, 0.5);
+  }
+
+  .firewall-card .firewall-tick {
+    top: auto;
+    right: 4px;
+    bottom: 2px;
+    transform: none;
+  }
+
+  .firewall-card--cursor {
+    outline-offset: -3px;
+  }
+
+  /* The keys in two rows under a thumb: ◀ SPERREN ▶, then FREIGABE, the lamp and the talk key. */
+  .firewall-bezel {
+    gap: 8px;
+  }
+
+  .firewall-trip {
+    flex: 1 0 50%;
+    min-width: 44px;
+  }
+
+  .firewall-arm {
+    min-width: 44px;
+    padding-inline: 8px;
+  }
+}
+

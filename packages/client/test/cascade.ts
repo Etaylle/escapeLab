@@ -429,7 +429,7 @@ interface Quantity {
   px: boolean;
 }
 
-const NUMBER = String.raw`(-?\d*\.?\d+)(px|vh|vw|em|rem|cqw|cqh|%)?`;
+const NUMBER = String.raw`(-?\d*\.?\d+)(px|dvh|vh|vw|em|rem|cqw|cqh|%)?`;
 const FUNCTION = String.raw`(calc|min|max|clamp|var)\(`;
 const TOKEN = new RegExp(String.raw`\s*(?:${NUMBER}|${FUNCTION}|(--[\w-]+)|([-+*/(),]))`, 'y');
 
@@ -558,6 +558,8 @@ class Parser {
       '': { n, px: false },
       px: { n, px: true },
       vh: { n: (n * screen.height) / 100, px: true },
+      // a screen here has no bars that come and go: the dynamic height is the window's
+      dvh: { n: (n * screen.height) / 100, px: true },
       vw: { n: (n * screen.width) / 100, px: true },
       em: { n: n * em, px: true },
       rem: { n: n * 16, px: true },

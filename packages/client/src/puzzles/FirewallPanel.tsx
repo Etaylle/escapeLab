@@ -405,12 +405,34 @@ function Sperrpult({ puzzle, send }: { puzzle: FirewallPuzzle; send: Send }) {
 
 // --- console b: the Analysepult ---------------------------------------------------------------
 
-/** A header as a card prints it, in two lines: the Quelle, then port and protocol, „67/UDP". */
+/**
+ * Where a Quelle breaks on a card too narrow for it: before the dot after its network, the
+ * first two of its four numbers — „141.7" over „.9.98", nothing left out.
+ */
+function sourceParts(source: string): [string, string] {
+  const numbers = source.split('.');
+  const net = numbers.slice(0, 2).join('.');
+  return [net, source.slice(net.length)];
+}
+
+/**
+ * A header as a card prints it, in two lines: the Quelle, then port and protocol, „67/UDP". Each
+ * line is set in two parts, which a phone held upright sets under each other (firewall.css): the
+ * Quelle's network and the rest of it, the port and the protocol, the stroke between them gone.
+ */
 function HeaderLines({ header }: { header: FirewallHeader }) {
+  const [net, host] = sourceParts(header.source);
   return (
     <>
-      <span className="firewall-field firewall-source">{header.source}</span>
-      <span className="firewall-field firewall-port">{`${header.port}/${header.protocol}`}</span>
+      <span className="firewall-field firewall-source">
+        <span className="firewall-part">{net}</span>
+        <span className="firewall-part">{host}</span>
+      </span>
+      <span className="firewall-field firewall-port">
+        <span className="firewall-part">{header.port}</span>
+        <span className="firewall-stroke">/</span>
+        <span className="firewall-part">{header.protocol}</span>
+      </span>
     </>
   );
 }
