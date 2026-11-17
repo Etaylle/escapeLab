@@ -743,6 +743,7 @@ function checkSabotage({ map, issue, requireFloor }: MapCheck, minPlayers: numbe
 
 /** Every item lies on the floor and has somewhere to go: its drop-off, or its cabinet's lock. */
 function checkItems({ map, puzzleIds, pools, issue, requireFloor }: MapCheck): void {
+  const stations = new Set([...puzzleIds, ...pools.keys()]);
   const itemIds = new Set(map.items.map((i) => i.id));
   if (itemIds.size !== map.items.length) {
     issue('map: item ids must be unique');
@@ -764,8 +765,7 @@ function checkItems({ map, puzzleIds, pools, issue, requireFloor }: MapCheck): v
     } else {
       requireFloor(`drop-off of item "${item.id}"`, item.deliverTo.x, item.deliverTo.y);
     }
-    const { requiredFor } = item;
-    if (requiredFor !== undefined && !puzzleIds.has(requiredFor) && !pools.has(requiredFor)) {
+    if (item.requiredFor !== undefined && !stations.has(item.requiredFor)) {
       issue(`map: item "${item.id}" is required for unknown puzzle "${item.requiredFor}"`);
     }
   }

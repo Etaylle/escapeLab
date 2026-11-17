@@ -2323,7 +2323,7 @@ function handleInteract(state: GameState, action: { playerId: string; at: number
   const index = stationToSwitchOn(state, action.playerId);
   const def = state.mission.puzzles[index];
   if (def === undefined || !stationArmed(state, index)) {
-    fail(atStationOutOfService(state, action.playerId) ? OUT_OF_SERVICE : NOTHING_TO_SWITCH_ON);
+    fail(nothingToSwitchOn(state, action.playerId));
   }
   const missing = missingItemsFor(state, def.id);
   if (missing.length > 0) {
@@ -2347,7 +2347,12 @@ function stationToSwitchOn(state: GameState, playerId: string): number {
   );
 }
 
-const NOTHING_TO_SWITCH_ON = 'Hier gibt es nichts zu aktivieren.';
+/** What E is told where it switches nothing on: at a console out of service, its tag. */
+function nothingToSwitchOn(state: GameState, playerId: string): string {
+  return atStationOutOfService(state, playerId)
+    ? OUT_OF_SERVICE
+    : 'Hier gibt es nichts zu aktivieren.';
+}
 
 /** Whether `playerId` stands at a console of a station out of service this run. */
 export function atStationOutOfService(state: GameState, playerId: string): boolean {

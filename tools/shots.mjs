@@ -16296,14 +16296,10 @@ const spotsSaid = (view, puzzleId) => {
 };
 
 /**
- * A station of the probe as the plan takes it, the host alone at its one console: the device
- * open, what it opens on held to the plan, the plan's moves made (`driverOf`), and the station
- * solved without an alarm; then both pages caught up and the device closed by itself.
+ * The host at the console of the probe's station `station`, its device open: the station has to
+ * stand armed on the host's map, and the device to open on what the plan pins. Throws where not.
  */
-async function playRotationStation(crew, run, station) {
-  const { host, guest } = crew;
-  const index = host.seen.view.currentPuzzleIndex;
-  const alarms = host.seen.view.penaltySeq;
+async function openRotationDevice(host, run, station) {
   const spot = host.seen.view.map.stations.find((s) => s.puzzleId === station.id);
   if (spot?.status !== 'armed') {
     throw new Error(`"${station.title}" is not armed for ${host.name}: ${spot?.status ?? 'unseen'}`);
@@ -16319,6 +16315,18 @@ async function playRotationStation(crew, run, station) {
   if (!(await until(() => shown() === pinned, HALL_MOVE_MS))) {
     rotationDiffers(run, `"${station.title}"`, shown(), pinned);
   }
+}
+
+/**
+ * A station of the probe as the plan takes it, the host alone at its one console: the device
+ * open on what the plan pins (`openRotationDevice`), the plan's moves made (`driverOf`), and the
+ * station solved without an alarm; then both pages caught up and the device closed by itself.
+ */
+async function playRotationStation(crew, run, station) {
+  const { host, guest } = crew;
+  const index = host.seen.view.currentPuzzleIndex;
+  const alarms = host.seen.view.penaltySeq;
+  await openRotationDevice(host, run, station);
   const from = Date.now();
   const drive = driverOf(station.type);
   for (const move of station.moves) {
@@ -16380,10 +16388,39 @@ function outBesideLive(run) {
     .sort((a, b) => Math.abs(a.x - live.x) - Math.abs(b.x - live.x))[0];
 }
 
+/** How many tags of a station out of service stand whole under their consoles on `page`. */
+async function tagsOnScreen(page) {
+  const names = (await page.evaluate(() => globalThis.__escapelab?.labels ?? null)) ?? [];
+  const whole = (name) => name.text === OUT_OF_SERVICE_TAG && name.onScreen && name.alpha > 0.99;
+  return names.filter(whole).length;
+}
+
+/** E where `player` stands, at a console out of service: whether it opened a device after all. */
+async function pressOpensDevice({ page, seen }) {
+  await page.keyboard.press('e');
+  await sleep(400);
+  return (await page.locator('.station-modal').isVisible()) || seen.view.puzzle !== null;
+}
+
+/**
+ * `player` at the book of the station out of service `puzzleId`: what its view says of the book
+ * — 'out of service, no page' as it has to, or what it says instead.
+ */
+async function bookOutOfService({ page, seen }, puzzleId) {
+  const book = ROTATION_MISSION.map.manuals.find((m) => m.puzzleIds[0] === puzzleId);
+  const here = () => seen.view.sourcesHere.find((source) => source.id === book.id);
+  const there = await walkNear(page, seen, book.spots[0]);
+  if (!there || !(await until(() => here() !== undefined, CATCH_UP_MS))) {
+    return { label: book.label, said: 'not reached' };
+  }
+  const dead = here().outOfService === true && seen.view.manualsHere.length === 0;
+  return { label: book.label, said: dead ? 'out of service, no page' : 'gives pages' };
+}
+
 /**
  * rotation-out-of-service-<drawn>.png: `player` stands at the console out of service beside the
  * live one — its tag's words have to stand under it on the page, E there has to open nothing —
- * and at the book of a station out of service, which has to say so and give no page.
+ * and at the book of that station, which has to say so and give no page.
  */
 async function captureOutOfService(player, run) {
   const { page, seen, name } = player;
@@ -16392,28 +16429,20 @@ async function captureOutOfService(player, run) {
     throw new Error(`no way for ${name} to the console at ${spot.x},${spot.y}`);
   }
   await sleep(600); // the camera settles, the tag's words are up
-  const names = (await page.evaluate(() => globalThis.__escapelab?.labels ?? null)) ?? [];
-  const tags = names.filter((n) => n.text === OUT_OF_SERVICE_TAG && n.onScreen && n.alpha > 0.99);
-  await page.keyboard.press('e');
-  await sleep(400);
-  const opened = (await page.locator('.station-modal').isVisible()) || seen.view.puzzle !== null;
+  const tags = await tagsOnScreen(page);
+  const opened = await pressOpensDevice(player);
   const shot = `rotation-out-of-service-${run.drawn}.png`;
   await capture(page, shot);
-  const book = ROTATION_MISSION.map.manuals.find((m) => m.puzzleIds[0] === spot.puzzleId);
-  const [at] = book.spots;
-  const there = await walkNear(page, seen, at);
-  const here = () => seen.view.sourcesHere.find((source) => source.id === book.id);
-  const counted = there && (await until(() => here() !== undefined, CATCH_UP_MS));
-  const dead = counted && here().outOfService === true && seen.view.manualsHere.length === 0;
+  const book = await bookOutOfService(player, spot.puzzleId);
+  const sound = tags > 0 && !opened && book.said === 'out of service, no page';
   console.log(
     `${`${shot} `.padEnd(19)}${name} at the console of "${spot.puzzleId}": ` +
-      `${tags.length} tag(s) „${OUT_OF_SERVICE_TAG}" on screen, E ` +
+      `${tags} tag(s) „${OUT_OF_SERVICE_TAG}" on screen, E ` +
       `${opened ? '!! opened a device' : 'opens nothing'}; „${book.label}" ` +
-      (dead ? 'out of service, no page' : `!! ${counted ? 'gives pages' : 'not reached'}`),
+      `${sound ? '' : '!! '}${book.said}`,
   );
-  if (tags.length === 0 || opened || !dead) {
-    fail(`${shot}: ${tags.length} tag(s), E ${opened ? 'opened a device' : 'opened nothing'}, ` +
-      `the book ${dead ? 'out of service' : 'not out of service'}`);
+  if (!sound) {
+    fail(`${shot}: ${tags} tag(s), E opened ${opened ? 'a device' : 'nothing'}, ${book.said}`);
   }
 }
 

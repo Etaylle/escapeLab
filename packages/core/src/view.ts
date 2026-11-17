@@ -871,10 +871,13 @@ function stationsOnMap(state: GameState, viewer: MapViewer): MapView['stations']
     if (known || status === 'armed') {
       return [{ ...spot, title: def?.title ?? s.puzzleId, status, found, known: true }];
     }
-    const tagged = status === 'out' ? { out: true as const } : {};
-    return seen ? [{ ...spot, ...tagged, ...GLIMPSE }] : [];
+    return seen ? [{ ...spot, ...tagOf(status), ...GLIMPSE }] : [];
   });
 }
+
+/** What a glimpse tells of a station's status: the tag on one out of service, else nothing. */
+const tagOf = (status: KnownStation['status']): { out?: true } =>
+  status === 'out' ? { out: true } : {};
 
 /** What a map view says of a thing as far as its viewer is concerned. */
 interface Sighted {
