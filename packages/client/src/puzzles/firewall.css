@@ -14,8 +14,9 @@
   /*
    * The room the lines are given, and what comes down them: a point here, a card of two lines at
    * the Analysepult. Two packets of one line come 0.6 of a fall apart at least (core firewall.ts
-   * SAME_LINE_GAP), so the line less a card has to hold a card in 0.6 of its length: the lines
-   * stand 8/3 of a card high at least (`.firewall-lines`), whatever the room and the text's scale.
+   * SAME_LINE_GAP), so the line less a card has to hold a card in 0.6 of its length: 8/3 of a
+   * card at least, which every room here holds at the largest text the settings offer (a phone's
+   * 148 px against 130 needed; firewall.test.tsx measures it on four screens and three scales).
    */
   --scope-height: clamp(160px, 42vh, 300px);
   --item-h: 22px;
@@ -65,7 +66,7 @@
   display: grid;
   grid-template-columns: repeat(5, minmax(44px, 1fr));
   gap: 6px;
-  height: max(var(--scope-height), calc(var(--item-h) * 8 / 3));
+  height: var(--scope-height);
 }
 
 .firewall--analysis .firewall-lines,
