@@ -197,7 +197,9 @@ export function listed(script: readonly StartupScriptLine[]): ListedLine[] {
       line.kind === 'gap'
         ? { kind: 'gap', gap: line.gap }
         : { kind: 'code', text: line.text, clue: line.comment !== null };
-    return line.comment === null ? [own] : [{ kind: 'comment', text: line.comment, clue: true }, own];
+    const comment: ListedLine | null =
+      line.comment === null ? null : { kind: 'comment', text: line.comment, clue: true };
+    return comment === null ? [own] : [comment, own];
   });
 }
 

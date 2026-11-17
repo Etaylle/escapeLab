@@ -10994,41 +10994,50 @@ async function captureDuct(audience) {
 /** The startup drill's phone targets, measured short while a device still moved: skipped. */
 const startupUnjudged = (why) => skip('startup (targets)', why);
 
-/**
- * In the page: what of the open Anlaufsteuerung does not fit — the device's frame past the
- * window's top or foot, a script line wider than its row (a clue cut at the glass's edge), the
- * log's newest entry out of its box —, each as a line for the log; none where all fits.
- */
-function startupMisfits() {
-  const out = [];
-  const panel = document.querySelector('.station-modal .panel, .startup--watched');
-  const frame = panel?.getBoundingClientRect();
-  if (frame !== undefined && document.querySelector('.station-modal .panel') !== null) {
-    if (frame.top < -1 || frame.bottom > globalThis.innerHeight + 1) {
-      out.push(`panel ${Math.round(frame.top)}..${Math.round(frame.bottom)} in ${globalThis.innerHeight}`);
-    }
-  }
-  for (const line of document.querySelectorAll('.startup-line')) {
-    if (line.scrollWidth > line.clientWidth + 1) {
-      out.push(`„${line.textContent.trim().slice(0, 30)}" ${line.scrollWidth} in ${line.clientWidth}`);
-    }
-  }
-  const log = document.querySelector('.startup-log');
-  const newest = log?.querySelector('.servers-line:last-child');
-  if (log && newest) {
-    const [a, b] = [log.getBoundingClientRect(), newest.getBoundingClientRect()];
-    if (b.top < a.top - 1 || b.bottom > a.bottom + 1 || b.height === 0) {
-      out.push(`newest log entry ${Math.round(b.top)}..${Math.round(b.bottom)} out of its box`);
-    }
-  }
-  return out;
+/** In the page: the device's frame past the window's top or foot, as a line; none where whole. */
+function panelMisfit() {
+  const frame = document.querySelector('.station-modal .panel')?.getBoundingClientRect();
+  const height = globalThis.innerHeight;
+  const out = frame !== undefined && (frame.top < -1 || frame.bottom > height + 1);
+  return out ? [`panel ${Math.round(frame.top)}..${Math.round(frame.bottom)} in ${height}`] : [];
 }
 
-/** `player`'s Anlaufsteuerung at `label`'s size held to fit whole (`startupMisfits`): logged, failed. */
+/** In the page: every script line wider than its row — a clue cut at the glass's edge. */
+function lineMisfits() {
+  return [...document.querySelectorAll('.startup-line')]
+    .filter((line) => line.scrollWidth > line.clientWidth + 1)
+    .map((line) => {
+      const said = line.textContent.trim().slice(0, 30);
+      return `„${said}" ${line.scrollWidth} in ${line.clientWidth}`;
+    });
+}
+
+/** In the page: the log's newest entry out of its box, or of no height; none where in view. */
+function logMisfit() {
+  const log = document.querySelector('.startup-log');
+  const newest = log?.querySelector('.servers-line:last-child') ?? null;
+  if (log === null || newest === null) {
+    return [];
+  }
+  const [box, entry] = [log.getBoundingClientRect(), newest.getBoundingClientRect()];
+  const out = entry.top < box.top - 1 || entry.bottom > box.bottom + 1 || entry.height === 0;
+  return out ? [`newest log entry ${Math.round(entry.top)}..${Math.round(entry.bottom)} cut`] : [];
+}
+
+/**
+ * `player`'s open Anlaufsteuerung held to fit whole at its window's size: its frame within the
+ * window, no script line wider than its row, the log's newest entry in view. Logged; a misfit
+ * fails the run under `label`.
+ */
 async function startupFits(player, label) {
-  const misfits = await player.page.evaluate(startupMisfits);
+  const misfits = [
+    ...(await player.page.evaluate(panelMisfit)),
+    ...(await player.page.evaluate(lineMisfits)),
+    ...(await player.page.evaluate(logMisfit)),
+  ];
+  const said = misfits.length === 0 ? 'whole, every line in its row' : '!!';
   console.log(
-    `${label.padEnd(18)} ${player.name}: ${misfits.length === 0 ? 'whole, every line in its row' : '!!'}` +
+    `${label.padEnd(18)} ${player.name}: ${said}` +
       misfits.map((m) => `\n                   !! ${m}`).join(''),
   );
   if (misfits.length > 0) {

@@ -68,7 +68,8 @@ describe('the validation of a duct', () => {
     data.puzzles.push({ type: 'startup', id: 'ohne', title: 'Ohne Pult' });
     const issues = issuesOf(data);
     expect(issues).toContainEqual(expect.stringContaining('no station for puzzle "ohne"'));
-    expect(issues.filter((issue) => issue.includes('"ohne" (startup) has no cable duct'))).toEqual([]);
+    const asked = issues.filter((issue) => issue.includes('"ohne" (startup) has no cable duct'));
+    expect(asked).toEqual([]);
   });
 
   it('takes an end on a console’s diagonal as beside it', () => {

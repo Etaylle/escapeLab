@@ -405,13 +405,14 @@ describe('the stylesheet', () => {
     }
   });
 
-  it('keeps a command on its row and wraps a clue, never cutting one; hides only plain lines', () => {
+  it('keeps a command on its row and wraps a clue, never cut; hides only plain lines', () => {
     const nodes = station(atTerminal());
     const lines = nodes.filter((n) => n.classes.includes('startup-line'));
     const code = lines.find((n) => !n.classes.includes('startup-line--comment')) ?? fail();
     expect(sheets.declared(code, 'white-space', laptop)?.value).toBe('pre');
+    const has = (n: Styled, name: string) => n.classes.includes(name);
     const clues = lines.filter(
-      (n) => n.classes.includes('startup-line--comment') && !n.classes.includes('startup-line--plain'),
+      (n) => has(n, 'startup-line--comment') && !has(n, 'startup-line--plain'),
     );
     expect(clues).toHaveLength(2);
     for (const clue of clues) {
@@ -428,7 +429,11 @@ describe('the stylesheet', () => {
   });
 
   it('shows the log’s last three entries whole, no box to scroll them out of view', () => {
-    const many = Array.from({ length: 6 }, (_, i) => ({ n: i + 1, tag: 'info' as const, text: `l${i}` }));
+    const many = Array.from({ length: 6 }, (_, i) => ({
+      n: i + 1,
+      tag: 'info' as const,
+      text: `l${i}`,
+    }));
     const nodes = station(atTerminal({ log: many }));
     const entries = nodes.filter((n) => n.classes.includes('servers-line'));
     expect(entries.map((n) => n.parent?.classes.includes('startup-log'))).toHaveLength(3);

@@ -1314,7 +1314,7 @@ flags, 1440 × 600, six rotated rounds, medians, ms):
 | Scene | Work before | Work after | Frames before → after |
 | --- | --- | --- | --- |
 | Blackout's dark Flur, main → branch (no duct) | 11.53, 14.10 | 12.66, 14.00 | 16.8 → 16.8 |
-| The Anlaufprobe's duct, a start pulse running (before: none) | 12.38, 15.10 | 13.52, 15.50 | 16.8 → 16.8 |
+| The Anlaufprobe's duct, a start pulse running (before: none), at a load of 2 | 7.38, 9.10 | 7.38, 9.10 | 16.8 → 16.7 |
 | The Übungshalle at (14, 25): an access bay on main → the startup bay | 18.54, 23.20 | 14.10, 19.30 | 33.4 → 16.8 |
 | The Übungshalle, its duct taken out → in | 12.24, 14.60 | 11.83, 15.60 | 16.8 → 16.8 |
 
@@ -1323,11 +1323,10 @@ The Flur's paired differences change sign from round to round and between two ru
 running pulse first cost +0.7 ms paired with 34 bake frames on its first pass along a duct, about
 1.6 ms dearer each: the glow pass baked a clipped pool for every quarter-tile spot. A light that
 moves (`LightSource.moving`) is now laid from one radial sprite where it stands (render/glow.ts
-`layMoving`): no bake frame left, +1.34 ms mean paired (+0.45 to +2.96 a round) and +0.5 at p95,
-the sprite's copy added onto the picture and its core, measured before review round 1 put it
-under the clip of its spot (clips.ts, a sight worked out once a quarter-tile spot and kept); a
-rerun with the clip at a load of 6 to 10 ranged −12 to +13 ms a round and says nothing, so the
-clip's share is not measured. The
+`layMoving`), under the clip of what it sees from there only where a wall or a shut door lies
+within its reach (clips.ts `clipNeeded`, a tile scan kept a spot): no bake frame left over six
+rounds, and at a quiet moment (load 1.6 to 2.7) +0.18 ms mean paired (−0.04 to +0.21 a round) and
++0.4 at p95, the sprite's copy added onto the picture and its core. The
 Übungshalle came +1.55 ms dearer against main where the new bay stands, in five rounds of six,
 the per-pass split in the bay's station, book, desk and their light (objects +1.0, light +0.7,
 darkness +0.6, beacons +0.4); an access bay of main's own in the same place costs as much or more

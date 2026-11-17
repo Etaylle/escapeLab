@@ -170,7 +170,9 @@ describe('the terminal’s prompt and keys', () => {
 
   it('puts each key’s word into the line', () => {
     const { tree } = panel('a');
-    const keys = tree.filter((node) => node.type === 'button' && node.props['data-feel'] === 'blip');
+    const keys = tree.filter(
+      (node) => node.type === 'button' && node.props['data-feel'] === 'blip',
+    );
     const word = (node: Node): string => {
       (node.props.onClick as (() => void) | undefined)?.();
       return String(lineSet(lineSetter(), 'setze abgang '));

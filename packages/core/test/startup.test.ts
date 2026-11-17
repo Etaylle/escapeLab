@@ -286,6 +286,35 @@ describe('the terminal', () => {
     );
   });
 
+  it('takes no input from away from the consoles', () => {
+    const away = () => startupModule.apply(DEF, fresh(), { cmd: 'zeige' }, 'rd', ctx(T0, null));
+    expect(thrown(away)).toBe('Eingabe nur am Pult.');
+  });
+
+  it('counts a wrong sperre as a wrong value too', () => {
+    const state = sentAt(fresh(), T0);
+    const up = send(state, { breaker: target(state) }, 'b', T0 + TRAVEL_MS).state;
+    const set = setRight(up, T0 + 10_000);
+    const value = otherThan(set.values.sperre ?? 1);
+    const wrong = send(set, { cmd: 'setze', gap: 'sperre', value }, 'b', T0 + 10_000);
+    expect(send(wrong.state, { cmd: 'start' }, 'b', T0 + 10_000).penalty).toBe(
+      'Anlaufsteuerung: Skript passt nicht',
+    );
+  });
+
+  it('locks the script while a pulse is on its way, zeige aside', () => {
+    const state = sentAt(fresh(), T0);
+    expect(thrown(() => send(state, { cmd: 'setze', gap: 'abgang', value: 1 }, 'a', T0 + 1))).toBe(
+      'Ein Impuls ist unterwegs; das Skript ist gesperrt.',
+    );
+    expect(thrown(() => send(state, { cmd: 'start' }, 'a', T0 + 1))).toBe(
+      'Ein Impuls ist unterwegs; das Skript ist gesperrt.',
+    );
+    expect(send(state, { cmd: 'zeige' }, 'a', T0 + 1).penalty).toBeNull();
+  });
+});
+
+describe('a start refused', () => {
   it('turns the same refused values away without another alarm, takes new ones', () => {
     const state = fresh();
     const right = target(setRight(state, T0));
@@ -312,40 +341,14 @@ describe('the terminal', () => {
     const right = rightValues(up.stages[1] ?? fail());
     const set = (s: StartupState, gap: 'sperre' | 'abgang', value: number) =>
       send(s, { cmd: 'setze', gap, value }, 'b', T0 + 10_000).state;
-    const wrong = set(set(up, 'sperre', otherThan(right.sperre)), 'abgang', otherThan(right.abgang));
+    const halfWrong = set(up, 'sperre', otherThan(right.sperre));
+    const wrong = set(halfWrong, 'abgang', otherThan(right.abgang));
     const refused = send(wrong, { cmd: 'start' }, 'b', T0 + 10_000);
     expect(refused.penalty).not.toBeNull();
     const half = set(refused.state, 'sperre', right.sperre);
     expect(send(half, { cmd: 'start' }, 'b', T0 + 11_000).penalty).toBe(
       'Anlaufsteuerung: Skript passt nicht',
     );
-  });
-
-  it('takes no input from away from the consoles', () => {
-    const away = () => startupModule.apply(DEF, fresh(), { cmd: 'zeige' }, 'rd', ctx(T0, null));
-    expect(thrown(away)).toBe('Eingabe nur am Pult.');
-  });
-
-  it('counts a wrong sperre as a wrong value too', () => {
-    const state = sentAt(fresh(), T0);
-    const up = send(state, { breaker: target(state) }, 'b', T0 + TRAVEL_MS).state;
-    const set = setRight(up, T0 + 10_000);
-    const value = otherThan(set.values.sperre ?? 1);
-    const wrong = send(set, { cmd: 'setze', gap: 'sperre', value }, 'b', T0 + 10_000);
-    expect(send(wrong.state, { cmd: 'start' }, 'b', T0 + 10_000).penalty).toBe(
-      'Anlaufsteuerung: Skript passt nicht',
-    );
-  });
-
-  it('locks the script while a pulse is on its way, zeige aside', () => {
-    const state = sentAt(fresh(), T0);
-    expect(thrown(() => send(state, { cmd: 'setze', gap: 'abgang', value: 1 }, 'a', T0 + 1))).toBe(
-      'Ein Impuls ist unterwegs; das Skript ist gesperrt.',
-    );
-    expect(thrown(() => send(state, { cmd: 'start' }, 'a', T0 + 1))).toBe(
-      'Ein Impuls ist unterwegs; das Skript ist gesperrt.',
-    );
-    expect(send(state, { cmd: 'zeige' }, 'a', T0 + 1).penalty).toBeNull();
   });
 });
 

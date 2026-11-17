@@ -381,7 +381,8 @@
 /*
  * A phone held sideways: the live part alone, the idle part's plate left out — the status
  * strip names where the script runs —, the script tight, the log two lines high, the lamps
- * and the ladder a little smaller, so that the device stands in the window's height; every control still a fingertip.
+ * and the ladder a little smaller, so that the device stands in the window's height; every
+ * control still a fingertip.
  */
 @media (pointer: coarse) and (orientation: landscape) and (max-height: 500px) {
   .startup-device {
