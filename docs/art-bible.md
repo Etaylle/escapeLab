@@ -1312,19 +1312,24 @@ flags, 1440 × 600, six rotated rounds, medians, ms):
 | Scene | Work before | Work after | Frames before → after |
 | --- | --- | --- | --- |
 | Blackout's dark Flur, main → branch (no duct) | 11.53, 14.10 | 12.66, 14.00 | 16.8 → 16.8 |
-| The Anlaufprobe's duct, a start pulse running (before: none) | 7.23, 9.60 | 8.94, 10.70 | 16.8 → 16.8 |
+| The Anlaufprobe's duct, a start pulse running (before: none) | 12.38, 15.10 | 13.52, 15.50 | 16.8 → 16.8 |
+| The Übungshalle at (14, 25): an access bay on main → the startup bay | 18.54, 23.20 | 14.10, 19.30 | 33.4 → 16.8 |
 | The Übungshalle, its duct taken out → in | 12.24, 14.60 | 11.83, 15.60 | 16.8 → 16.8 |
 
 The Flur's paired differences change sign from round to round and between two runs (+1.04 to
 −2.99): no cost without a duct. The duct itself is baked with the floor and costs no frame. A
-running pulse costs +0.7 ms paired (+1.2 at p95): it is no steady light, so the glow pass bakes
-its pool anew at each quarter-tile step on its first pass along a duct — 34 frames about 1.6 ms
-dearer —, and a later pulse along the same duct uses the bakes again. The Übungshalle as a whole
-came +1.55 ms dearer against main in five rounds of six; a per-pass split puts it in the new bay
-— its station, book, desk and their light (objects +1.0, light +0.7, darkness +0.6, beacons
-+0.4) —, not in the duct: one more station of the hall, as each one is. The noise is large here
-(one build ranged 7 to 15 ms between rounds, under a load of 3 to 12); no WebGL or real-GPU
-measurement was taken. Bench: scratchpad startup/bench/ (bench.ts, run.mjs, prof.mjs).
+running pulse first cost +0.7 ms paired with 34 bake frames on its first pass along a duct, about
+1.6 ms dearer each: the glow pass baked a clipped pool for every quarter-tile spot. A light that
+moves (`LightSource.moving`) is now laid from one radial sprite where it stands, unclipped over
+its tile and a half (render/glow.ts `layMoving`): no bake frame left, +1.34 ms mean paired (+0.45
+to +2.96 a round) and +0.5 at p95, the sprite's copy added onto the picture and its core. The
+Übungshalle came +1.55 ms dearer against main where the new bay stands, in five rounds of six,
+the per-pass split in the bay's station, book, desk and their light (objects +1.0, light +0.7,
+darkness +0.6, beacons +0.4); an access bay of main's own in the same place costs as much or more
+(the startup bay −1.07 mean paired, five rounds of six): one more bay of the hall, as each one is.
+The noise is large here (one build ranged 7 to 22 ms between rounds, under a load of 2.6 to 12);
+no WebGL or real-GPU measurement was taken. Bench: scratchpad startup/bench/ (bench.ts, run.mjs,
+prof.mjs; `node run.mjs 6 probe`, `node run.mjs 6 bay`).
 
 **What a window measures (M-ciwin).** CI's escape window read 49.9 to 50 ms p95 on both looks in
 three runs, while one client's frame of the scene comes to 16.8 ms on the bench above, its main

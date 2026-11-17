@@ -604,8 +604,12 @@ Betriebsbuch in the west room), and its bay in the Übungshalle.
   stage — and has the gap `abgang`, from stage 2 on also `sperre`. Its comments are the hints:
   „Last Kühlkreis: Leuchtbild, Tabelle 2 im Betriebsbuch", „gestörter Abgang: rote
   Kontrollleuchte an Schaltfeld A". `setze <lücke> <wert>` (or the script's own `abgang = 2`)
-  sets a gap, `start` runs the script; Tab completes a command and, after `setze`, a gap of the
-  script; the keys put the same lines together. `npm` and whatever follows it the terminal
+  sets a gap — the value then stands bracketed and underlined, `abgang = [2]`, told from the
+  script's own text —, `start` runs the script; Tab completes a command and, after `setze`, a
+  gap of the script; the keys put the same lines together. Every comment stands on a line of its
+  own over the line it explains, so that the terminal lists its script unwrapped; the device's
+  panel takes up to 1000 px for terminal and Schaltfeld side by side, and stands whole at
+  1280 × 720 and on a phone held sideways. `npm` and whatever follows it the terminal
   answers itself, without a fault: „? npm: unbekannter Befehl — AS-86, Baujahr 1986". Once
   `zeige` has answered last, the line under the prompt names the typed steps the stage still
   takes: „Eingabe: setze abgang <nr> · start".
