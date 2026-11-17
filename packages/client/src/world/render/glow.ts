@@ -15,9 +15,10 @@ import { drawWallPropGlow, glows } from '../wallProps.js';
 import * as atmosphere from './atmosphere.js';
 import { layBake } from './bakes.js';
 import { clipOf, shutKey } from './clips.js';
-import { inTiles, profiled, type Frame } from './frame.js';
+import { inTiles, profiled, toScreen, type Frame } from './frame.js';
 import { glowsWithLight, onLayer } from './light.js';
-import { fillPool, steadyOf, steadyPart } from './pools.js';
+import { fillPool, poolStops, steadyOf, steadyPart } from './pools.js';
+import { drawRadial } from './radial.js';
 
 /**
  * What glows and moves in the lab — the glowing marks on the walls and the
@@ -94,9 +95,26 @@ function drawPools(ctx: CanvasRenderingContext2D, frame: Frame, pools: Pools): v
   }
   for (const source of pools.sources.filter((s) => !steady.includes(s))) {
     ctx.globalAlpha = strengthAt(source, frame.time * 1000);
-    layLive(ctx, frame, source, shut);
+    if (source.moving === true) {
+      layMoving(ctx, frame, source);
+    } else {
+      layLive(ctx, frame, source, shut);
+    }
   }
   ctx.globalAlpha = 1;
+}
+
+/**
+ * A moving light's glow where it stands this frame, from one radial sprite at whole pixels
+ * (radial.ts) — no bake for each spot it passes, and no clip: it reaches a tile and a half.
+ */
+function layMoving(ctx: CanvasRenderingContext2D, frame: Frame, source: LightSource): void {
+  const [sx, sy] = toScreen(frame, source.x, source.y);
+  const reach = source.reach * frame.camera.scale;
+  ctx.save();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  drawRadial(ctx, frame.kit.radials, poolStops(source.colour), [sx, sy, reach], frame);
+  ctx.restore();
 }
 
 /** One turn of the beacon over the hatch, s: its two beams sweep slower than anybody walks. */

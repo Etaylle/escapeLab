@@ -53,6 +53,12 @@ export interface LightSource {
    * (gl/sources.ts). Left out for a light awake
    */
   standby?: number;
+  /**
+   * it moves from frame to frame — a start pulse running in its duct —: the Canvas pass lays its
+   * glow from one sprite where it stands, unclipped, instead of baking a pool for each spot
+   * (render/glow.ts); left out for a light that stands still
+   */
+  moving?: true;
 }
 
 /** Up to how far a room's power is on for a light in it still to be asleep. */
@@ -242,7 +248,8 @@ export function pulseSources(frame: Frame): LightSource[] {
     }
     const swell = spot.arrived ? PULSE_WAITING : PULSE_RUNNING;
     const pulse = { ...(frame.reduced ? PULSE_CALM : swell) };
-    return [{ x: spot.x, y: spot.y, colour: colourOf(AMBER), ...PULSE_LIGHT, pulse }];
+    const colour = colourOf(AMBER);
+    return [{ x: spot.x, y: spot.y, colour, ...PULSE_LIGHT, pulse, moving: true }];
   });
 }
 
