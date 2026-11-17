@@ -321,6 +321,15 @@ there, the bus's send carries them into the room's reverb, and the brickwall cov
 rest (`test/deviceMix.test.ts` follows their chains into the real mix, `test/morseKey.test.ts`
 the key's).
 
+**The Paketfilter** (gameplay.md) asks for no recording of its own: its gate steps with the dial's
+detent (`dialDetent`), its SPERREN goes down with the big button's thunk (`buttonThunk`), a card
+marked blips as a terminal's key does (`typeBlip`), a packet taken out of its line pops
+(`lampPop`), one reaching the Kern blips once, however many reach it together, and a clean wave
+chimes (`stageChime`); a fault's klaxon and the solve's chord are the kit's (Device.tsx). One
+short sound a change at most, a voice each from the budget like every effect, none on the
+audience's screen; nothing of it lasts or loops, so the five lines' motion — a CSS animation each
+packet, no frame loop — costs the audio nothing per frame.
+
 **Ducking.** Mission control's voice pulls the music 8 dB and the beds 4 dB down while it is on
 the air — from its opening squelch where it opens a run, else from its first word — and the
 klaxon, the alarm's sting and the siren pull the music 6 dB down while they sound, and a piece the
