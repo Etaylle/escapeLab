@@ -84,9 +84,10 @@ export function useKeys(keys: readonly string[], onKey: (key: string) => void): 
   handler.current = onKey;
   const covered = useRef(false);
   covered.current = usePause().open;
-  const wanted = keys.join(' ');
+  // Joined on a line break, not a space: the space bar is a key of its own (' ').
+  const wanted = keys.join('\n');
   useEffect(() => {
-    const listened = new Set(wanted.split(' '));
+    const listened = new Set(wanted.split('\n'));
     const onDown = (e: KeyboardEvent): void => {
       if (!keyTaken(listened, e, typing(), covered.current)) {
         return;

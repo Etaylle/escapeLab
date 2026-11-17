@@ -48,6 +48,7 @@ export const MODULE_NAMES: Readonly<Record<StationType, { title: string; kind: s
   circuit: { title: 'Sicherungskasten', kind: 'Sicherungskasten' },
   servers: { title: 'Serverraum', kind: 'Serverraum' },
   access: { title: 'Zugangskontrolle', kind: 'Zugangskontrolle' },
+  firewall: { title: 'Paketfilter', kind: 'Paketfilter' },
   'button-sync': { title: 'Synchronschaltung', kind: 'Synchronschaltung' },
 };
 

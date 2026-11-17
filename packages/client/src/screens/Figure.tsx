@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import {
   LEVER_FIGURE,
+  LINES_FIGURE,
   PATTERN_FIGURE,
   SIGNAL_PATTERNS,
   TOKEN_FIGURE,
@@ -815,6 +816,90 @@ function AccessToken() {
   );
 }
 
+/** The x of line `i` (0–4) of the Paketfilter's five, from `left`, `gap` units apart. */
+const lineX = (left: number, gap: number, i: number): number => left + i * gap;
+
+/**
+ * Five lines running down into the Kern, `gap` apart from `left`, between `top` and `kern`:
+ * the Kern a bar across their feet, lettered KERN.
+ */
+function PacketLines(props: { left: number; gap: number; top: number; kern: number }) {
+  const { left, gap, top, kern } = props;
+  const right = lineX(left, gap, 4);
+  return (
+    <>
+      {[0, 1, 2, 3, 4].map((i) => (
+        <path key={i} d={`M${lineX(left, gap, i)} ${top}V${kern}`} strokeDasharray="2 3" />
+      ))}
+      <rect x={left - 10} y={kern} width={right - left + 20} height={10} rx={2} {...TINT} />
+      <Mark x={(left + right) / 2} y={kern + 8} size={7}>
+        KERN
+      </Mark>
+    </>
+  );
+}
+
+/**
+ * The Paketfilter's two consoles: the Sperrpult with its five lines, a few plain points on them
+ * and the gate over the Kern; the Analysepult with the same lines, each packet a card of three
+ * lines of print.
+ */
+function Firewall() {
+  const cards: [number, number][] = [
+    [0, 30],
+    [2, 64],
+    [3, 40],
+  ];
+  return (
+    <>
+      <Housing x={8} width={150} />
+      <PacketLines left={30} gap={26} top={18} kern={112} />
+      {cards.map(([line, y]) => (
+        <circle key={line} cx={lineX(30, 26, line)} cy={y + 10} r={4} {...GLOW} />
+      ))}
+      <rect x={lineX(30, 26, 2) - 9} y={98} width={18} height={8} rx={1.5} strokeWidth={1.6} />
+      <Housing x={176} width={192} />
+      <PacketLines left={196} gap={38} top={18} kern={112} />
+      {cards.map(([line, y]) => (
+        <g key={line}>
+          <rect x={lineX(196, 38, line) - 16} y={y} width={32} height={22} rx={2} />
+          {[6, 11, 16].map((dy) => (
+            <Lettering key={dy} x={lineX(196, 38, line) - 12} y={y + dy} width={22} />
+          ))}
+        </g>
+      ))}
+    </>
+  );
+}
+
+/**
+ * The Sperrpult's lines close up, as the policy's drawing shows them: five lines numbered from
+ * the left, two points coming down, one of them ringed and ticked as a mark makes it, and the
+ * gate standing over the Kern under the ringed one's line.
+ */
+function FirewallLines() {
+  const left = 98;
+  const gap = 45;
+  return (
+    <>
+      {[0, 1, 2, 3, 4].map((i) => (
+        <Mark key={i} x={lineX(left, gap, i)} y={14} size={9}>
+          {i + 1}
+        </Mark>
+      ))}
+      <PacketLines left={left} gap={gap} top={20} kern={118} />
+      <circle cx={lineX(left, gap, 1)} cy={44} r={5} {...GLOW} />
+      <circle cx={lineX(left, gap, 3)} cy={76} r={5} {...GLOW} />
+      <circle cx={lineX(left, gap, 3)} cy={76} r={10} strokeWidth={1.6} />
+      <path d={`M${lineX(left, gap, 3) + 12} ${70}l3 4l6 -8`} strokeWidth={1.6} />
+      <rect x={lineX(left, gap, 3) - 14} y={102} width={28} height={10} rx={2} strokeWidth={1.8} />
+      <Mark x={lineX(left, gap, 3) + 22} y={110} size={7} anchor="start">
+        SPERRE
+      </Mark>
+    </>
+  );
+}
+
 /** A device without a drawing: an empty frame naming its type, so its pages still print. */
 function Frame({ of }: { of: string }) {
   return (
@@ -835,11 +920,15 @@ interface Drawing {
 
 /**
  * Every module the core knows has its drawing, and so have the Signalkette's
- * key of patterns, the main switch a sync station may be built as and the
- * Zugangskontrolle's token device close up.
+ * key of patterns, the main switch a sync station may be built as, the
+ * Zugangskontrolle's token device close up and the Paketfilter's lines.
  */
 const DRAWINGS: Record<
-  PuzzleDef['type'] | typeof PATTERN_FIGURE | typeof LEVER_FIGURE | typeof TOKEN_FIGURE,
+  | PuzzleDef['type']
+  | typeof PATTERN_FIGURE
+  | typeof LEVER_FIGURE
+  | typeof TOKEN_FIGURE
+  | typeof LINES_FIGURE,
   Drawing
 > = {
   wiring: {
@@ -924,6 +1013,18 @@ const DRAWINGS: Record<
       'Terminal und Tokengerät: links ein Bildschirm mit Türliste und Eingabezeile über einer ' +
       'Tastenreihe, rechts ein Tokengerät mit Kontozeile, Token und Balken',
     draw: Access,
+  },
+  firewall: {
+    label:
+      'Sperrpult und Analysepult: links 5 Leitungen mit Punkten zum Kern und einer Sperre ' +
+      'darüber, rechts dieselben 5 Leitungen, jedes Paket eine Karte mit 3 Zeilen',
+    draw: Firewall,
+  },
+  [LINES_FIGURE]: {
+    label:
+      'Leitungen 1 bis 5 bis hinunter zum Kern, 2 Pakete als Punkte, eines mit Ring und ' +
+      'Haken, darunter die Sperre auf seiner Leitung',
+    draw: FirewallLines,
   },
   [TOKEN_FIGURE]: {
     label:

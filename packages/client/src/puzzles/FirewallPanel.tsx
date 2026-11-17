@@ -1,0 +1,470 @@
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import type { FirewallBlip, FirewallHeader } from '@escapelab/core';
+import { serverNow } from '../clock.js';
+import { useKeys } from '../hooks.js';
+import { TalkButton } from '../screens/Voice.js';
+import { consoleName } from '../world/consoles.js';
+import { cssVars, type Change } from './feel.js';
+import {
+  BURST_MS,
+  cursorStep,
+  LINES,
+  lowestOn,
+  nextChange,
+  onTheLines,
+  progressOf,
+  statusOf,
+  waveMsAt,
+  type FirewallPuzzle,
+} from './firewallView.js';
+import type { PanelProps } from './index.js';
+import { Link } from './ServersPanel.js';
+import { dialDetent, lampPop, stageChime, typeBlip } from './sounds.js';
+import { useNowUntil } from './syncPress.js';
+import './firewall.css';
+
+/**
+ * FirewallPanel.tsx: the Paketfilter at its two consoles, one scope each — five lines running
+ * down into the Kern, the packets coming down them as the server's clock moves them. Console a,
+ * the Sperrpult, shows each packet as a plain point, ringed and ticked where console b marked
+ * it, and a gate under the lines that steps from line to line and trips; console b, the
+ * Analysepult, shows the same packets as cards with their headers, each a key that sets or takes
+ * back its mark. A packet glides down by a CSS animation timed from the view (`Falling`) — under
+ * reduced motion it steps once a second — and stands still while the wave is held; a drop shows
+ * once the server has made it. The audience sees the Analysepult's scope.
+ */
+
+type Send = PanelProps<'firewall'>['send'];
+type Clock = NonNullable<FirewallPuzzle['clock']>;
+
+/** The keys that step the gate and trip it, and step the Analysepult's cursor and mark. */
+const LEFT = ['arrowleft', 'a'];
+const RIGHT = ['arrowright', 'd'];
+const PRESS = [' ', 'enter'];
+
+// --- what a change sounds like ---------------------------------------------------------------
+
+/**
+ * What a change sounds like: a packet taken out of its line popping, a clean wave chiming; a
+ * fault's klaxon is the kit's, and so is the solve's chord.
+ */
+export function firewallSounds(change: Change<FirewallPuzzle>): void {
+  const { before, after } = change;
+  if (after.event === null || after.event.n === before.event?.n) {
+    return;
+  }
+  if (after.event.kind === 'drop') {
+    lampPop();
+  } else if (after.event.kind === 'cleared') {
+    stageChime();
+  }
+}
+
+/**
+ * The render's moment on the server's clock, rendered anew as the device next shows something
+ * of its own accord (`nextChange`); a blip each time a packet reaches the Kern, where `audible`.
+ */
+function useScopeNow(puzzle: FirewallPuzzle, audible: boolean): number {
+  const now = useNowUntil(nextChange(puzzle, serverNow()));
+  const seen = useRef<{ wave: number; ids: string[] }>({ wave: puzzle.wave, ids: [] });
+  const onNow = onTheLines(puzzle, now)
+    .map((blip) => blip.id)
+    .join(' ');
+  const { wave, packets } = puzzle;
+  useEffect(() => {
+    const ids = onNow === '' ? [] : onNow.split(' ');
+    const was = seen.current;
+    const through = (packets ?? []).filter(
+      (blip) => was.ids.includes(blip.id) && !blip.dropped && !ids.includes(blip.id),
+    );
+    if (audible && was.wave === wave && through.length > 0) {
+      typeBlip();
+    }
+    seen.current = { wave, ids };
+  }, [onNow, audible, wave, packets]);
+  return now;
+}
+
+// --- the scope -------------------------------------------------------------------------------
+
+/**
+ * A packet on its way down its line: a CSS animation from the top into the Kern over the fall,
+ * timed as it mounts from where the wave stands — so that renders after it move nothing — and
+ * paused where the wave is held. One per packet and wave clock (`key`).
+ */
+function Falling(props: { blip: FirewallBlip; clock: Clock; fallMs: number; children: ReactNode }) {
+  const { blip, clock, fallMs, children } = props;
+  const [delay] = useState(() => blip.enterMs - waveMsAt(clock, serverNow()));
+  const style = cssVars({
+    '--fall-ms': `${fallMs}ms`,
+    '--fall-delay': `${delay}ms`,
+    '--fall-steps': Math.round(fallMs / 1000),
+  });
+  const held = clock.heldAt === null ? '' : ' firewall-track--held';
+  return (
+    <span className={`firewall-track${held}`} style={style}>
+      {children}
+    </span>
+  );
+}
+
+/** A packet just taken out of its line, bursting where it was as the server dropped it. */
+function Burst(props: { blip: FirewallBlip; clock: Clock; fallMs: number; at: number }) {
+  const { blip, clock, fallMs, at } = props;
+  const down = progressOf(blip, at - clock.startedAt, fallMs);
+  return (
+    <span className="firewall-burst" style={cssVars({ '--down': down.toFixed(3) })} aria-hidden />
+  );
+}
+
+/** The packets of `line` the scope draws at `now`: those on it, and the one just dropped. */
+function onLine(puzzle: FirewallPuzzle, live: readonly FirewallBlip[], line: number, now: number) {
+  const { event } = puzzle;
+  const burst =
+    event?.kind === 'drop' && event.line === line && now < event.at + BURST_MS
+      ? (puzzle.packets ?? []).find((blip) => blip.dropped && blip.line === line) ?? null
+      : null;
+  return { falling: live.filter((blip) => blip.line === line), burst };
+}
+
+/** The status line over the scope, in the lab's words; its own live region. */
+function Status({ puzzle, now }: { puzzle: FirewallPuzzle; now: number }) {
+  const held = puzzle.vacant.length > 0 ? ' firewall-status--held' : '';
+  return (
+    <p className={`firewall-status${held}`} role="status">
+      <span className="device-engraving">PF-5</span> {statusOf(puzzle, now)}
+    </p>
+  );
+}
+
+/**
+ * The scope: five lines numbered from the left over the Kern, each with what `lane` puts on it.
+ * A line of the Sperrpult is a key that sets the gate there; the Analysepult's are plain.
+ */
+function Scope({ lane }: { lane: (line: number) => ReactNode }) {
+  return (
+    <div className="firewall-scope">
+      <div className="firewall-lines">{LINES.map((line) => lane(line))}</div>
+      <div className="firewall-kern" aria-hidden>
+        KERN
+      </div>
+    </div>
+  );
+}
+
+// --- console a: the Sperrpult -----------------------------------------------------------------
+
+/** A packet as the Sperrpult shows it: a point; ringed and ticked where console b marked it. */
+function Blip({ blip }: { blip: FirewallBlip }) {
+  return (
+    <span
+      className={`firewall-blip${blip.marked ? ' firewall-blip--marked' : ''}`}
+      data-packet={blip.id}
+      data-marked={blip.marked}
+    >
+      {blip.marked && <span className="firewall-tick">✓</span>}
+    </span>
+  );
+}
+
+/** A line's key as it is named: its number, and whether its lowest packet wears a ring. */
+function lineLabel(live: readonly FirewallBlip[], line: number): string {
+  const ringed = lowestOn(live, line)?.marked === true;
+  return `Leitung ${line + 1}${ringed ? ', unterstes Paket markiert' : ''}`;
+}
+
+/** One line of the Sperrpult: a key setting the gate on it, its packets, the gate where it is. */
+function GateLine(props: {
+  puzzle: FirewallPuzzle;
+  live: readonly FirewallBlip[];
+  line: number;
+  gate: number;
+  now: number;
+  onPick: (line: number) => void;
+}) {
+  const { puzzle, live, line, gate, now, onPick } = props;
+  const { falling, burst } = onLine(puzzle, live, line, now);
+  const clock = puzzle.clock;
+  const here = gate === line;
+  return (
+    <button
+      type="button"
+      className={`firewall-line${here ? ' firewall-line--gate' : ''}`}
+      data-line={line}
+      data-feel="detent"
+      aria-label={lineLabel(live, line)}
+      aria-pressed={here}
+      onClick={() => onPick(line)}
+    >
+      <span className="firewall-line-no">{line + 1}</span>
+      {clock !== null &&
+        falling.map((blip) => (
+          <Falling
+            key={`${blip.id}:${clock.startedAt}:${clock.heldAt}`}
+            blip={blip}
+            clock={clock}
+            fallMs={puzzle.fallMs}
+          >
+            <Blip blip={blip} />
+          </Falling>
+        ))}
+      {clock !== null && burst !== null && puzzle.event !== null && (
+        <Burst blip={burst} clock={clock} fallMs={puzzle.fallMs} at={puzzle.event.at} />
+      )}
+      {here && <span className="firewall-gate" aria-hidden />}
+    </button>
+  );
+}
+
+/**
+ * Console a, the Sperrpult: the scope of points, the gate under its lines — set by a tap on a
+ * line, stepped by ◀ ▶, ← → or A D — and SPERREN, which trips it (space or enter too). The gate
+ * is this console's own; only the trip goes to the server, with its line.
+ */
+function Sperrpult({ puzzle, send }: { puzzle: FirewallPuzzle; send: Send }) {
+  const now = useScopeNow(puzzle, true);
+  const live = onTheLines(puzzle, now);
+  const [gate, setGate] = useState(2);
+  const step = (by: number): void =>
+    setGate((at) => Math.min(LINES.length - 1, Math.max(0, at + by)));
+  const trip = useRef<HTMLButtonElement>(null);
+  useKeys([...LEFT, ...RIGHT, ...PRESS], (key) => {
+    if (PRESS.includes(key)) {
+      trip.current?.click();
+      return;
+    }
+    dialDetent();
+    step(LEFT.includes(key) ? -1 : 1);
+  });
+  return (
+    <div className="firewall firewall--gate">
+      <Status puzzle={puzzle} now={now} />
+      <Scope
+        lane={(line) => (
+          <GateLine
+            key={line}
+            puzzle={puzzle}
+            live={live}
+            line={line}
+            gate={gate}
+            now={now}
+            onPick={setGate}
+          />
+        )}
+      />
+      <div className="firewall-bezel">
+        <button
+          type="button"
+          className="firewall-step"
+          data-feel="detent"
+          aria-label="Sperre nach links"
+          onClick={() => step(-1)}
+        >
+          ◀
+        </button>
+        <button
+          ref={trip}
+          type="button"
+          className="firewall-trip"
+          data-feel="thunk"
+          onClick={() => send({ trip: gate })}
+        >
+          SPERREN
+        </button>
+        <button
+          type="button"
+          className="firewall-step"
+          data-feel="detent"
+          aria-label="Sperre nach rechts"
+          onClick={() => step(1)}
+        >
+          ▶
+        </button>
+        <Link name="ANALYSE" manned={puzzle.atOtherConsole !== null} />
+        <TalkButton className="servers-talk firewall-talk">FUNK</TalkButton>
+      </div>
+    </div>
+  );
+}
+
+// --- console b: the Analysepult ---------------------------------------------------------------
+
+/** A header as a card prints it, a line each: Quelle, Port, Protokoll. */
+function HeaderLines({ header }: { header: FirewallHeader }) {
+  return (
+    <>
+      <span className="firewall-field firewall-source">{header.source}</span>
+      <span className="firewall-field">
+        <span className="firewall-key">PORT</span> {header.port}
+      </span>
+      <span className="firewall-field firewall-protocol">{header.protocol}</span>
+    </>
+  );
+}
+
+/** A packet as the Analysepult shows it: a card with its header, ringed and ticked once marked. */
+function Card(props: { blip: FirewallBlip; cursor: boolean; onMark: (() => void) | null }) {
+  const { blip, cursor, onMark } = props;
+  const classes = [
+    'firewall-card',
+    blip.marked ? 'firewall-card--marked' : null,
+    cursor ? 'firewall-card--cursor' : null,
+  ].filter(Boolean);
+  const header = blip.header;
+  const said =
+    header === null ? blip.id : `${header.source}, Port ${header.port}, ${header.protocol}`;
+  const face = (
+    <>
+      {header !== null && <HeaderLines header={header} />}
+      {blip.marked && <span className="firewall-tick">✓</span>}
+    </>
+  );
+  if (onMark === null) {
+    return (
+      <span className={classes.join(' ')} data-packet={blip.id} data-marked={blip.marked}>
+        {face}
+      </span>
+    );
+  }
+  return (
+    <button
+      type="button"
+      className={classes.join(' ')}
+      data-packet={blip.id}
+      data-marked={blip.marked}
+      data-feel="blip"
+      aria-label={`${said}${blip.marked ? ', markiert' : ''}`}
+      aria-pressed={blip.marked}
+      onClick={onMark}
+    >
+      {face}
+    </button>
+  );
+}
+
+/** One line of the Analysepult's scope: its number and its packets as cards. */
+function CardLine(props: {
+  puzzle: FirewallPuzzle;
+  live: readonly FirewallBlip[];
+  line: number;
+  now: number;
+  cursor: string | null;
+  mark: ((id: string) => void) | null;
+}) {
+  const { puzzle, live, line, now, cursor, mark } = props;
+  const { falling, burst } = onLine(puzzle, live, line, now);
+  const clock = puzzle.clock;
+  return (
+    <div className="firewall-line firewall-line--cards" data-line={line}>
+      <span className="firewall-line-no">{line + 1}</span>
+      {clock !== null &&
+        falling.map((blip) => (
+          <Falling
+            key={`${blip.id}:${clock.startedAt}:${clock.heldAt}`}
+            blip={blip}
+            clock={clock}
+            fallMs={puzzle.fallMs}
+          >
+            <Card
+              blip={blip}
+              cursor={cursor === blip.id}
+              onMark={mark === null ? null : () => mark(blip.id)}
+            />
+          </Falling>
+        ))}
+      {clock !== null && burst !== null && puzzle.event !== null && (
+        <Burst blip={burst} clock={clock} fallMs={puzzle.fallMs} at={puzzle.event.at} />
+      )}
+    </div>
+  );
+}
+
+/**
+ * Console b, the Analysepult: the scope of cards, each a key that sets or takes back its mark;
+ * ← → step a cursor over them, space or enter marks the packet under it.
+ */
+function Analysepult({ puzzle, send }: { puzzle: FirewallPuzzle; send: Send }) {
+  const now = useScopeNow(puzzle, true);
+  const live = onTheLines(puzzle, now);
+  const [cursor, setCursor] = useState<string | null>(null);
+  const shown = live.some((blip) => blip.id === cursor) ? cursor : null;
+  const mark = (id: string): void => send({ mark: id });
+  useKeys([...LEFT, ...RIGHT, ...PRESS], (key) => {
+    if (PRESS.includes(key)) {
+      if (shown !== null) {
+        mark(shown);
+      }
+      return;
+    }
+    setCursor(cursorStep(live, shown, LEFT.includes(key) ? -1 : 1));
+  });
+  return (
+    <div className="firewall firewall--analysis">
+      <Status puzzle={puzzle} now={now} />
+      <Scope
+        lane={(line) => (
+          <CardLine
+            key={line}
+            puzzle={puzzle}
+            live={live}
+            line={line}
+            now={now}
+            cursor={shown}
+            mark={mark}
+          />
+        )}
+      />
+      <div className="firewall-bezel">
+        <Link name="SPERRE" manned={puzzle.atOtherConsole !== null} />
+        <TalkButton className="servers-talk firewall-talk">FUNK</TalkButton>
+      </div>
+    </div>
+  );
+}
+
+// --- the audience ----------------------------------------------------------------------------
+
+/**
+ * The scope as the audience sees it: the Analysepult's cards with their headers and marks —
+ * all the Sperrpult shows besides is its own gate.
+ */
+function Watched({ puzzle }: { puzzle: FirewallPuzzle }) {
+  const now = useScopeNow(puzzle, false);
+  const live = onTheLines(puzzle, now);
+  return (
+    <section className="firewall firewall--analysis firewall--watched" aria-label={consoleName('b')}>
+      <h4 className="servers-console-name">{consoleName('b')}</h4>
+      <Status puzzle={puzzle} now={now} />
+      <Scope
+        lane={(line) => (
+          <CardLine
+            key={line}
+            puzzle={puzzle}
+            live={live}
+            line={line}
+            now={now}
+            cursor={null}
+            mark={null}
+          />
+        )}
+      />
+    </section>
+  );
+}
+
+/**
+ * Paketfilter at one console: the Sperrpult at a, the Analysepult at b; the audience sees the
+ * cards with their marks (`Watched`). Away from them nothing of the instance stands here.
+ */
+export function FirewallPanel({ puzzle, send }: PanelProps<'firewall'>) {
+  if (puzzle.role === 'gate') {
+    return <Sperrpult puzzle={puzzle} send={send} />;
+  }
+  if (puzzle.role === 'analysis') {
+    return <Analysepult puzzle={puzzle} send={send} />;
+  }
+  if (puzzle.packets !== null) {
+    return <Watched puzzle={puzzle} />;
+  }
+  return <p className="muted">Dieses Pult ist nicht angeschlossen.</p>;
+}
