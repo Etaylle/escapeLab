@@ -16,6 +16,7 @@ import type {
   PuzzleInput,
   PuzzleView,
 } from '../src/index.js';
+import { dealWave } from '../src/puzzles/firewall.js';
 import { lightsOut, standing, started, T0 } from './lab.js';
 
 /**
@@ -24,7 +25,8 @@ import { lightsOut, standing, started, T0 } from './lab.js';
  * two browsers: both walk past the Laborkennung, Anna (p1) switches the station on at the
  * Sperrpult, Ben (p2) reads the Sicherheitsrichtlinie in its binder and takes the Analysepult,
  * and the waves run. Node cannot load core's TypeScript, so tools/fixtures/firewall-plan.json
- * carries what this run deals — every wave's packets as the Analysepult shows them — and the
+ * carries what this run may deal — every wave's packets as the Analysepult shows them and which
+ * of them the policy drops, the probe's own waves and those a fault would call in — and the
  * solver's moves in their order; firewall.test.ts keeps it the solver's own and proves it
  * solves the station through the reducer without an alarm. The harness plays the moves against
  * its pages, not against the plan's seconds: a mark once its packet is on the Analysepult, a
@@ -33,12 +35,16 @@ import { lightsOut, standing, started, T0 } from './lab.js';
 
 export const FIREWALL_SEED = 4;
 
-/** A packet of the plan as the Analysepult shows it. */
+/** A packet of the plan as the Analysepult shows it, and whether the policy drops it. */
 export interface FirewallPlanPacket {
   id: string;
   line: number;
   header: FirewallHeader;
+  hostile: boolean;
 }
+
+/** Waves the plan deals beyond the probe's own: as many faults as a drill may survive. */
+export const SPARE_WAVES = 3;
 
 /** What the probe deals on its pinned seed, and the solver's moves on it. */
 export interface FirewallPlan {
@@ -46,7 +52,10 @@ export interface FirewallPlan {
   seed: number;
   /** the Laborkennung the crew reads at the sign */
   serial: string;
-  /** every wave's packets, in the order they come onto the lines */
+  /**
+   * every wave the run may deal — the probe's own and SPARE_WAVES more, which a fault calls in —
+   * with its packets in the order they come onto the lines
+   */
   waves: FirewallPlanPacket[][];
   /** the solver's moves, oldest first */
   moves: Move<PuzzleInput>[];
@@ -109,14 +118,23 @@ function ticked(state: GameState, at: number): GameState {
   return due !== null && due <= at ? applyAction(state, { type: 'puzzle-tick', at }) : state;
 }
 
-/** Every packet of `view` not in `waves` yet, under its wave, as the Analysepult shows it. */
-function noted(waves: FirewallPlanPacket[][], view: FirewallView): void {
-  const wave = (waves[view.wave - 1] ??= []);
-  for (const blip of view.packets ?? []) {
-    if (blip.header !== null && !wave.some((packet) => packet.id === blip.id)) {
-      wave.push({ id: blip.id, line: blip.line, header: { ...blip.header } });
-    }
+/**
+ * Every wave the run on `state` may deal, as the module deals it: the def's own and SPARE_WAVES
+ * more, a fault calling the next one in.
+ */
+function wavesOf(def: PuzzleDef, state: GameState): FirewallPlanPacket[][] {
+  const station = state.puzzleState;
+  if (def.type !== 'firewall' || station?.type !== 'firewall') {
+    throw new Error('firewall probe: no Paketfilter armed to deal its waves');
   }
+  return Array.from({ length: def.waves + SPARE_WAVES }, (_, wave) =>
+    dealWave(def, station, wave).map(({ id, line, header, hostile }) => ({
+      id,
+      line,
+      header: { ...header },
+      hostile,
+    })),
+  );
 }
 
 /**
@@ -132,7 +150,7 @@ export function playFirewallProbe(seed = FIREWALL_SEED): { state: GameState; pla
     mission: mission.id,
     seed,
     serial: state.edgework?.serial ?? '',
-    waves: [],
+    waves: wavesOf(def, state),
     moves: [],
   };
   for (let second = 1; state.currentPuzzleIndex === 0 && second < 600; second++) {
@@ -142,7 +160,6 @@ export function playFirewallProbe(seed = FIREWALL_SEED): { state: GameState; pla
       break;
     }
     const views = { operator: firewallOf(state, 'p1'), partner: firewallOf(state, 'p2') };
-    noted(plan.waves, views.partner);
     const moves = moduleFor(def.type).solve(
       def,
       { ...views, reader: views.partner },

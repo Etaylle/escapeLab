@@ -41,9 +41,20 @@ const GAP_MIN = 0.22;
 const GAP_SPREAD = 0.1;
 /**
  * How far apart two packets of one line come onto it at least, as a share of a fall: a packet
- * behind another has at least this much of its fall left once the one ahead is through.
+ * behind another has at least this much of its fall left once the one ahead is through, and two
+ * on one line never overlap on the smallest scope a console draws (client firewall.css: a phone's
+ * 130 px less a 44 px card leaves 86 px, of which 0.6 is 52).
  */
-const SAME_LINE_GAP = 0.5;
+export const SAME_LINE_GAP = 0.6;
+
+/**
+ * How long after a packet reaches the Kern line a trip still takes it, ms, before the Kern's fault
+ * is judged: a console draws the packets from its own reading of the server's clock, so a trip
+ * lands half a round trip after what its player saw — on a free host's 100–250 ms round trips and
+ * a frame or two of input, up to about 200 ms; 300 ms leaves room, and is a tenth of what a
+ * packet takes to cross its last tenth of the line at the shortest fall.
+ */
+export const TRIP_GRACE_MS = 300;
 
 /** How many tries a packet of a given deciding rule gets to be drawn. */
 const DRAW_TRIES = 400;
@@ -203,9 +214,10 @@ export interface FirewallEvent {
   n: number;
   /**
    * drop: a hostile packet dropped; void: a trip that hit nothing; fault: a wave called off on a
-   * fault; cleared: a clean wave, the next one coming; done: the last clean wave
+   * fault; cleared: a clean wave, the next one coming; done: the last clean wave; armed: a wave
+   * started on the Freigabe key
    */
-  kind: 'drop' | 'void' | 'fault' | 'cleared' | 'done';
+  kind: 'drop' | 'void' | 'fault' | 'cleared' | 'done' | 'armed';
   /** epoch ms on the server's clock */
   at: number;
   /** the line a trip went to; null for what the clock did */
@@ -238,6 +250,11 @@ export interface FirewallState {
   heldAt: number | null;
   /** the consoles nobody stood at when the clock last looked */
   vacant: ConsoleId[];
+  /**
+   * the wave waits at its time 0 for the Freigabe key at console a: the first, and every wave
+   * after a fault; one after a clean wave follows on its own
+   */
+  waiting: boolean;
   event: FirewallEvent | null;
 }
 
@@ -246,6 +263,8 @@ const inputSchema = z.union([
   z.strictObject({ trip: z.number().int().min(0).max(FIREWALL_LINES - 1) }),
   /** a mark set or taken back, at console b */
   z.strictObject({ mark: z.string().min(1).max(16) }),
+  /** the Freigabe key at console a: the waiting wave starts */
+  z.strictObject({ start: z.literal(true) }),
 ]);
 export type FirewallInput = z.infer<typeof inputSchema>;
 
@@ -276,6 +295,8 @@ export interface FirewallView {
   clock: { startedAt: number; heldAt: number | null } | null;
   /** the consoles standing empty, which hold the wave */
   vacant: ConsoleId[];
+  /** the wave waits for the Freigabe key at console a */
+  waiting: boolean;
   /** the packets come onto the lines so far — at a console and for the audience */
   packets: FirewallBlip[] | null;
   event: FirewallEvent | null;
@@ -293,10 +314,23 @@ const waveMs = (state: FirewallState, at: number): number =>
 const arrivalMs = (def: FirewallDef, packet: FirewallPacket): number =>
   packet.enterMs + fallMsOf(def);
 
-/** Whether `packet` is on its line at wave time `t`: come on, not dropped, not through. */
-function falling(def: FirewallDef, state: FirewallState, packet: FirewallPacket, t: number) {
-  return packet.enterMs <= t && t < arrivalMs(def, packet) && !state.dropped.includes(packet.id);
+/**
+ * Whether `packet` is on its line at wave time `t`: come on, not dropped, not through — `grace`
+ * ms past its arrival counting as not through yet.
+ */
+function falling(
+  def: FirewallDef,
+  state: FirewallState,
+  packet: FirewallPacket,
+  { t, grace }: { t: number; grace: number },
+): boolean {
+  const on = packet.enterMs <= t && t < arrivalMs(def, packet) + grace;
+  return on && !state.dropped.includes(packet.id);
 }
+
+/** When a hostile packet's arrival is judged a fault, ms of the wave's time: after the grace. */
+const judgedMs = (def: FirewallDef, packet: FirewallPacket): number =>
+  arrivalMs(def, packet) + TRIP_GRACE_MS;
 
 /** The first hostile packet still to be dropped, by its arrival; undefined for none. */
 function nextHostile(def: FirewallDef, state: FirewallState): FirewallPacket | undefined {
@@ -309,9 +343,17 @@ function lastThrough(def: FirewallDef, state: FirewallState): number {
   return Math.max(0, ...state.packets.filter((p) => !p.hostile).map((p) => arrivalMs(def, p)));
 }
 
-/** The lowest packet on `line` at wave time `t`: the one longest on it; undefined for none. */
+/**
+ * The lowest packet on `line` at wave time `t` as a trip finds it: the one longest on it — a
+ * hostile one just through still within TRIP_GRACE_MS, whose fault is not judged yet; one the
+ * policy lets through is in the Kern once through, as every console shows it. Undefined for none.
+ */
 function lowestOn(def: FirewallDef, state: FirewallState, line: number, t: number) {
-  return state.packets.find((p) => p.line === line && falling(def, state, p, t));
+  const onLine = (p: FirewallPacket): boolean => {
+    const grace = p.hostile ? TRIP_GRACE_MS : 0;
+    return p.line === line && falling(def, state, p, { t, grace });
+  };
+  return state.packets.find(onLine);
 }
 
 /** `state` with the device's next report. */
@@ -335,7 +377,14 @@ const pick = <T>(items: readonly T[], rng: Rng): T => {
 };
 
 /** The heads of the addresses outside the lab's networks; 10.6. is the guests' network. */
-const FOREIGN_HEADS: readonly string[] = ['10.6.', '31.14.', '62.80.', '85.12.', '141.7.', '193.4.'];
+const FOREIGN_HEADS: readonly string[] = [
+  '10.6.',
+  '31.14.',
+  '62.80.',
+  '85.12.',
+  '141.7.',
+  '193.4.',
+];
 
 /** A sender's address in `head`'s network: 10.4.2.17. */
 function addressIn(head: string, rng: Rng): string {
@@ -463,17 +512,23 @@ const going = (state: FirewallState): ApplyResult<FirewallState> => ({
   penalty: null,
 });
 
-/** A fresh wave from `from` (epoch ms), running or held as the one before was. */
-function nextWave(def: FirewallDef, state: FirewallState, from: number): FirewallState {
-  const fresh = { ...state, dealt: state.dealt + 1, entered: 0, marks: [], dropped: [] };
-  const startedAt = from;
-  const heldAt = state.heldAt === null ? null : from;
-  return { ...fresh, packets: dealWave(def, fresh, state.dealt), startedAt, heldAt };
+/**
+ * A fresh wave from `from` (epoch ms): `waiting` for the Freigabe key, held at its time 0 —
+ * else running, or held as the one before was.
+ */
+function nextWave(def: FirewallDef, state: FirewallState, from: number, waiting: boolean) {
+  const fresh = { ...state, dealt: state.dealt + 1, entered: 0, marks: [], dropped: [], waiting };
+  const heldAt = state.heldAt === null && !waiting ? null : from;
+  const packets = dealWave(def, fresh, state.dealt);
+  return { ...fresh, packets, startedAt: from, heldAt };
 }
 
-/** A fault at `at`: the alarm, and the wave called off for a fresh one. */
+/**
+ * A fault at `at`: the alarm, and the wave called off for a fresh one, which waits for the
+ * Freigabe key — so that a crew standing still takes one alarm at most.
+ */
 function faulted(def: FirewallDef, state: FirewallState, at: number, penalty: string) {
-  const called = reported(nextWave(def, state, at), 'fault', at);
+  const called = reported(nextWave(def, state, at, true), 'fault', at);
   return { state: called, solved: false, penalty };
 }
 
@@ -483,14 +538,15 @@ function clean(def: FirewallDef, state: FirewallState, at: number): ApplyResult<
   if (counted.cleared >= def.waves) {
     return { state: reported(counted, 'done', at), solved: true, penalty: null };
   }
-  return going(reported(nextWave(def, counted, at), 'cleared', at));
+  return going(reported(nextWave(def, counted, at, false), 'cleared', at));
 }
 
 const KERN_HIT = 'Paketfilter: Angriff im Kern';
 const WRONG_DROP = 'Paketfilter: zulässiges Paket gesperrt';
 
 /**
- * The running wave up to `at`: a hostile packet in the Kern by then is a fault at its arrival; a
+ * The running wave up to `at`: a hostile packet in the Kern by then is a fault, judged
+ * TRIP_GRACE_MS after its arrival; a
  * wave whose hostile packets are all dropped is clean once the last other one is through; the
  * packets come on by then counted. Only one of a fault and a clean wave at a time: the next comes
  * with the next look.
@@ -498,8 +554,8 @@ const WRONG_DROP = 'Paketfilter: zulässiges Paket gesperrt';
 function ranTo(def: FirewallDef, state: FirewallState, at: number): ApplyResult<FirewallState> {
   const t = waveMs(state, at);
   const hostile = nextHostile(def, state);
-  if (hostile !== undefined && arrivalMs(def, hostile) <= t) {
-    return faulted(def, state, state.startedAt + arrivalMs(def, hostile), KERN_HIT);
+  if (hostile !== undefined && judgedMs(def, hostile) <= t) {
+    return faulted(def, state, state.startedAt + judgedMs(def, hostile), KERN_HIT);
   }
   const through = lastThrough(def, state);
   if (hostile === undefined && through <= t) {
@@ -515,17 +571,17 @@ const vacantOf = (atConsoles: PuzzleContext['atConsoles']): ConsoleId[] =>
   (['a', 'b'] as const).filter((side) => atConsoles[side].length === 0);
 
 /**
- * The wave held at `at` where a console stands empty, going on where both are manned again —
- * its time moved on by the hold —, and the empty consoles noted; `state` itself where nothing
- * changed.
+ * The wave held at `at` where a console stands empty or it waits for the Freigabe key, going on
+ * where both are manned again and it does not wait — its time moved on by the hold —, and the
+ * empty consoles noted; `state` itself where nothing changed.
  */
 function staffed(state: FirewallState, vacant: ConsoleId[], at: number): FirewallState {
-  const held = state.heldAt !== null;
+  const hold = vacant.length > 0 || state.waiting;
   const same = vacant.join() === state.vacant.join();
-  if (held === vacant.length > 0 && same) {
+  if ((state.heldAt !== null) === hold && same) {
     return state;
   }
-  if (vacant.length > 0) {
+  if (hold) {
     return { ...state, vacant, heldAt: state.heldAt ?? at };
   }
   const heldAt = state.heldAt ?? at;
@@ -534,12 +590,30 @@ function staffed(state: FirewallState, vacant: ConsoleId[], at: number): Firewal
 
 // --- the moves -----------------------------------------------------------------------------
 
-/** What a trip refused while the wave stands still says: whose console stands empty. */
+/**
+ * What a trip or a Freigabe refused while the wave stands still says: whose console stands
+ * empty, or that the wave waits for its Freigabe.
+ */
 function holdText(state: FirewallState): string {
   if (state.vacant.includes('b')) {
     return 'Am Analysepult steht niemand.';
   }
-  return state.vacant.includes('a') ? 'Am Sperrpult steht niemand.' : 'Die Welle steht still.';
+  if (state.vacant.includes('a')) {
+    return 'Am Sperrpult steht niemand.';
+  }
+  return state.waiting ? 'Die Welle wartet auf die Freigabe.' : 'Die Welle steht still.';
+}
+
+/** The Freigabe key at `at`: the waiting wave starts from its time 0, both consoles manned. */
+function armed(state: FirewallState, at: number) {
+  if (!state.waiting) {
+    fail('Die Welle läuft schon.');
+  }
+  if (state.vacant.length > 0) {
+    fail(holdText(state));
+  }
+  const started = { ...state, waiting: false, heldAt: null, startedAt: at };
+  return going(reported(started, 'armed', at));
 }
 
 /**
@@ -564,10 +638,18 @@ function tripped(def: FirewallDef, state: FirewallState, line: number, at: numbe
   return done ? clean(def, dropped, at) : going(dropped);
 }
 
+/** A mark from console b, the only one that sets marks (`marked`). */
+function marking(def: FirewallDef, state: FirewallState, id: string, ctx: PuzzleContext) {
+  if (ctx.console !== 'b') {
+    fail('Markierungen setzt nur das Analysepult.');
+  }
+  return marked(def, state, id, ctx.at);
+}
+
 /** A mark on packet `id` set or taken back at `at`: only on a packet that is on its line. */
 function marked(def: FirewallDef, state: FirewallState, id: string, at: number) {
   const packet = state.packets.slice(0, state.entered).find((p) => p.id === id);
-  if (packet === undefined || !falling(def, state, packet, waveMs(state, at))) {
+  if (packet === undefined || !falling(def, state, packet, { t: waveMs(state, at), grace: 0 })) {
     fail('Dieses Paket ist nicht in der Leitung.');
   }
   const marks = state.marks.includes(id)
@@ -607,24 +689,24 @@ export const LINES_FIGURE = 'firewall-lines';
 
 const PURPOSE =
   'Der Paketfilter steht zwischen dem Außennetz und dem Kern des Rechnernetzes; seit dem ' +
-  'Vorfall von 2019 prüft ihn jede Schicht von Hand.';
+  'Vorfall von 2019 prüft ihn jede Schicht selbst.';
 
 const BUILD =
   'Pult A, das Sperrpult, zeigt fünf Leitungen, auf denen Pakete als Punkte zum Kern laufen, ' +
-  'und eine Sperre, die das unterste Paket einer Leitung herausnimmt. Pult B, das ' +
-  'Analysepult, zeigt dieselben Pakete mit Quelle, Port und Protokoll und markiert sie; eine ' +
-  'Markierung trägt am Sperrpult einen Ring. Was zu sperren ist, sagt allein die ' +
-  'Sicherheitsrichtlinie: Die erste Regel, die passt, entscheidet.';
+  'eine Sperre, die das unterste Paket einer Leitung herausnimmt, und die Freigabe-Taste, die ' +
+  'eine Welle scharf schaltet. Pult B, das Analysepult, zeigt dieselben Pakete mit Quelle, ' +
+  'Port und Protokoll und markiert sie; ein markiertes Paket trägt am Sperrpult einen Ring.';
 
 /** Betrieb: the waves, a packet's fall, the faults and their cost, the end. */
 function operationText(def: FirewallDef): string {
   const waves = spelled(def.waves);
   return (
     `Die Pakete kommen in Wellen zu ${spelled(def.packets)}, jedes ${def.fallSec} Sekunden ` +
-    'unterwegs. Sauber ist eine Welle, wenn jedes zu sperrende Paket draußen ist und jedes ' +
-    'andere im Kern. Ein gesperrtes Paket, das passieren durfte, und ein ' +
-    'zu sperrendes im Kern sind Fehlquittierungen: Die Überwachung meldet Alarm und zieht ' +
-    `${costOf(def.penaltySec)} ab, und eine neue Welle beginnt. Nach ` +
+    'unterwegs; nach einer sauberen Welle folgt die nächste von selbst. Sauber ist eine Welle, ' +
+    'wenn jedes zu sperrende Paket draußen ist und jedes andere im Kern. Ein gesperrtes Paket, ' +
+    'das passieren durfte, und ein zu sperrendes im Kern sind Fehlquittierungen: Die ' +
+    `Überwachung meldet Alarm und zieht ${costOf(def.penaltySec)} ab; die neue Welle wartet ` +
+    'auf Freigabe. Nach ' +
     `${def.waves === 1 ? 'einer sauberen Welle' : `${waves} sauberen Wellen`} ist der Kern frei.`
   );
 }
@@ -638,6 +720,16 @@ const NETWORKS: ManualBlock = {
     ['Fremdnetz', 'jede andere Adresse'],
   ],
 };
+
+/** The drawing beside the networks: the lines, a ringed packet and the gate. */
+const LINES_DRAWING: ManualBlock = {
+  kind: 'figure',
+  of: LINES_FIGURE,
+  caption: 'Abb. 2 — Leitungen, Ring und Sperre',
+};
+
+/** The heading straight over the rules: how they are read. */
+export const RULES_HEADING = 'Die erste Regel, die passt, entscheidet';
 
 const POLICY_RULES: ManualBlock = {
   kind: 'rules',
@@ -677,9 +769,10 @@ function consolesSeen(def: FirewallDef, { operator, partner }: Perspectives<Fire
 }
 
 /**
- * The crew's moves at `at` judging by `judge`: console b marks every packet on its line that it
+ * The crew's moves at `at` judging by `judge`: console a presses the Freigabe where the wave
+ * waits for it, both consoles manned; console b marks every packet on its line that it
  * judges hostile and has not marked, and takes back a mark it judges wrong; console a trips
- * every line whose lowest packet wears a ring. Nothing while the wave stands still.
+ * every line whose lowest packet wears a ring. Nothing else while the wave stands still.
  */
 export function firewallMoves(
   def: FirewallDef,
@@ -689,6 +782,9 @@ export function firewallMoves(
   judge: FirewallJudge,
 ): Move<FirewallInput>[] {
   const { clock, gate, analysis } = consolesSeen(def, views);
+  if (views.operator.waiting && views.operator.vacant.length === 0) {
+    return [{ by: 'operator', input: { start: true } }];
+  }
   if (clock.heldAt !== null) {
     return [];
   }
@@ -756,7 +852,7 @@ export const firewallModule: PuzzleModule<FirewallDef, FirewallState, FirewallIn
 
     /**
      * The rules the instance exercises, the Laborkennung's digit and the first wave, held at its
-     * time 0 until both consoles are manned.
+     * time 0 until both consoles are manned and the Freigabe key starts it.
      */
     init(def, rng, ctx) {
       const exercised = exercisedRules(def);
@@ -774,27 +870,26 @@ export const firewallModule: PuzzleModule<FirewallDef, FirewallState, FirewallIn
         startedAt: ctx.at,
         heldAt: ctx.at,
         vacant: ['a', 'b'],
+        waiting: true,
         event: null,
       };
-      return nextWave(def, blank, ctx.at);
+      return nextWave(def, blank, ctx.at, true);
     },
 
     apply(def, state, input, _playerId, ctx) {
-      if ('trip' in input) {
-        if (ctx.console !== 'a') {
-          fail('Sperren kann nur das Sperrpult.');
-        }
-        return tripped(def, state, input.trip, ctx.at);
+      if ('mark' in input) {
+        return marking(def, state, input.mark, ctx);
       }
-      if (ctx.console !== 'b') {
-        fail('Markierungen setzt nur das Analysepult.');
+      if (ctx.console !== 'a') {
+        fail('Sperre und Freigabe bedient nur das Sperrpult.');
       }
-      return marked(def, state, input.mark, ctx.at);
+      return 'trip' in input ? tripped(def, state, input.trip, ctx.at) : armed(state, ctx.at);
     },
 
     /**
-     * While the wave runs: the next packet coming on, the next hostile packet reaching the Kern,
-     * or once every hostile packet is dropped the wave's clean end.
+     * While the wave runs: the next packet coming on, the next hostile packet's arrival judged
+     * after the grace, or once every hostile packet is dropped the wave's clean end; none while
+     * it is held or waits for the Freigabe.
      */
     dueAt(def, state) {
       if (state.heldAt !== null) {
@@ -804,7 +899,7 @@ export const firewallModule: PuzzleModule<FirewallDef, FirewallState, FirewallIn
       const hostile = nextHostile(def, state);
       const due = [
         ...(next === undefined ? [] : [next.enterMs]),
-        hostile === undefined ? lastThrough(def, state) : arrivalMs(def, hostile),
+        hostile === undefined ? lastThrough(def, state) : judgedMs(def, hostile),
       ];
       return state.startedAt + Math.min(...due);
     },
@@ -836,6 +931,7 @@ export const firewallModule: PuzzleModule<FirewallDef, FirewallState, FirewallIn
         fallMs: fallMsOf(def),
         clock: seen ? { startedAt: state.startedAt, heldAt: state.heldAt } : null,
         vacant: seen ? [...state.vacant] : [],
+        waiting: state.waiting,
         packets: seen ? blipsOf(state, role === 'analysis' || audience) : null,
         event: seen && state.event !== null ? { ...state.event } : null,
       };
@@ -856,14 +952,8 @@ export const firewallModule: PuzzleModule<FirewallDef, FirewallState, FirewallIn
         build: BUILD,
         operation: operationText(def),
         law: [
-          {
-            heading: 'Sicherheitsrichtlinie',
-            blocks: [
-              { kind: 'figure', of: LINES_FIGURE, caption: 'Abb. 2 — Leitungen, Ring und Sperre' },
-              NETWORKS,
-              POLICY_RULES,
-            ],
-          },
+          { heading: 'Sicherheitsrichtlinie', blocks: [LINES_DRAWING, NETWORKS] },
+          { heading: RULES_HEADING, blocks: [POLICY_RULES] },
         ],
         log: LOG,
         workshop: WORKSHOP,

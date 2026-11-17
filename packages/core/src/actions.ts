@@ -216,9 +216,24 @@ function requireHost(state: GameState, playerId: string): void {
  */
 export function applyAction(state: GameState, action: Action): GameState {
   const before = action.type === 'puzzle-input' ? clocked(state, action.at) : state;
+  if (overtaken(state, before)) {
+    // The clock raised an alarm or solved the station by the move's moment: the move was made
+    // on what has gone since, and counts for nothing — a victory is never answered with a
+    // refusal, and an alarm never lost with one.
+    return before;
+  }
   const after = reduced(before, action);
   return 'at' in action ? clocked(after, action.at) : after;
 }
+
+/**
+ * Whether bringing the station to a move's moment (`clocked`) raised an alarm, solved it or ended
+ * the run.
+ */
+const overtaken = (state: GameState, clocked: GameState): boolean =>
+  clocked.penaltySeq !== state.penaltySeq ||
+  clocked.currentPuzzleIndex !== state.currentPuzzleIndex ||
+  clocked.phase !== state.phase;
 
 function reduced(state: GameState, action: Action): GameState {
   switch (action.type) {
@@ -1956,7 +1971,8 @@ function clocked(state: GameState, at: number): GameState {
   }
   const { def, puzzleState, elapse } = open;
   const manned = state.paused === null ? consolesManned(state, def) : { a: [], b: [] };
-  const result = elapse(def, puzzleState, { ...puzzleContext(state, at, null), atConsoles: manned });
+  const ctx = { ...puzzleContext(state, at, null), atConsoles: manned };
+  const result = elapse(def, puzzleState, ctx);
   if (result.state === puzzleState) {
     return state;
   }

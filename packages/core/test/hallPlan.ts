@@ -18,6 +18,8 @@ import type {
   SolveAid,
 } from '../src/index.js';
 import { releaseDigit } from '../src/puzzles/button.js';
+import { dealWave } from '../src/puzzles/firewall.js';
+import { SPARE_WAVES } from './firewallPlan.js';
 import { hallMission } from './hall.js';
 import { standing, started, T0 } from './lab.js';
 
@@ -55,6 +57,11 @@ export interface HallStation {
   moves: Move<PuzzleInput>[];
   /** for the button held: the digit the clock shows as it is let go; null for any other */
   releaseAt: number | null;
+  /**
+   * for the Paketfilter: the ids of the packets the policy drops in every wave it may deal, its
+   * own and those a fault calls in — the walkthrough marks by them what its page shows
+   */
+  hostile?: string[];
 }
 
 export interface HallPlan {
@@ -237,6 +244,7 @@ function playStation(
 ): { state: GameState; round: number; station: HallStation } {
   const index = state.currentPuzzleIndex;
   let next = switchOn(state, def, T0 + round * 1000);
+  const dealt = next.puzzleState;
   const opens = opensOf(def, puzzleOf(viewFor(next, 'p1')));
   const played: Played = { moves: [], transcript: [], releaseAt: null };
   const crew = { read: glanceAtBook(next, def), played };
@@ -254,7 +262,15 @@ function playStation(
     throw new Error(`hall plan: "${def.id}" stays unsolved after 600 rounds`);
   }
   const { moves, releaseAt } = played;
-  const station = { id: def.id, type: def.type, title: def.title, opens, moves, releaseAt };
+  const station = {
+    id: def.id,
+    type: def.type,
+    title: def.title,
+    opens,
+    moves,
+    releaseAt,
+    ...hostileOf(def, dealt),
+  };
   return { state: next, round: at + 1, station };
 }
 
@@ -279,6 +295,18 @@ export function playHall(seed = HALL_SEED): { state: GameState; stations: HallSt
     stations.push(played.station);
   }
   return { state, stations };
+}
+
+/**
+ * For the Paketfilter armed as `dealt`, the ids of the packets the policy drops in every wave it
+ * may deal — its own and SPARE_WAVES a fault would call in —; nothing for any other station.
+ */
+function hostileOf(def: PuzzleDef, dealt: GameState['puzzleState']): { hostile?: string[] } {
+  if (def.type !== 'firewall' || dealt?.type !== 'firewall') {
+    return {};
+  }
+  const waves = Array.from({ length: def.waves + SPARE_WAVES }, (_, i) => dealWave(def, dealt, i));
+  return { hostile: waves.flat().flatMap((p) => (p.hostile ? [p.id] : [])) };
 }
 
 /** The hall on `seed`, as the walkthrough plays it: who starts where, every station's moves. */

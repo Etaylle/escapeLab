@@ -7,60 +7,195 @@
       {
         "id": "1-1",
         "line": 4,
-        "header": { "source": "10.9.0.69", "port": 514, "protocol": "UDP" }
+        "header": { "source": "10.9.0.69", "port": 514, "protocol": "UDP" },
+        "hostile": false
       },
       {
         "id": "1-2",
         "line": 0,
-        "header": { "source": "193.4.8.23", "port": 21, "protocol": "UDP" }
+        "header": { "source": "193.4.8.23", "port": 21, "protocol": "UDP" },
+        "hostile": true
       },
       {
         "id": "1-3",
         "line": 3,
-        "header": { "source": "193.4.2.19", "port": 3389, "protocol": "UDP" }
+        "header": { "source": "193.4.2.19", "port": 3389, "protocol": "UDP" },
+        "hostile": true
       },
       {
         "id": "1-4",
         "line": 2,
-        "header": { "source": "62.80.7.31", "port": 23, "protocol": "UDP" }
+        "header": { "source": "62.80.7.31", "port": 23, "protocol": "UDP" },
+        "hostile": true
       },
       {
         "id": "1-5",
         "line": 4,
-        "header": { "source": "31.14.5.49", "port": 80, "protocol": "TCP" }
+        "header": { "source": "31.14.5.49", "port": 80, "protocol": "TCP" },
+        "hostile": false
       },
-      { "id": "1-6", "line": 0, "header": { "source": "10.4.3.46", "port": 25, "protocol": "TCP" } }
+      {
+        "id": "1-6",
+        "line": 0,
+        "header": { "source": "10.4.3.46", "port": 25, "protocol": "TCP" },
+        "hostile": false
+      }
     ],
     [
       {
         "id": "2-1",
         "line": 0,
-        "header": { "source": "62.80.3.35", "port": 110, "protocol": "TCP" }
+        "header": { "source": "62.80.3.35", "port": 110, "protocol": "TCP" },
+        "hostile": false
       },
       {
         "id": "2-2",
         "line": 4,
-        "header": { "source": "10.9.7.44", "port": 135, "protocol": "UDP" }
+        "header": { "source": "10.9.7.44", "port": 135, "protocol": "UDP" },
+        "hostile": false
       },
       {
         "id": "2-3",
         "line": 3,
-        "header": { "source": "141.7.2.53", "port": 23, "protocol": "UDP" }
+        "header": { "source": "141.7.2.53", "port": 23, "protocol": "UDP" },
+        "hostile": true
       },
       {
         "id": "2-4",
-        "line": 2,
-        "header": { "source": "10.4.5.89", "port": 587, "protocol": "TCP" }
+        "line": 1,
+        "header": { "source": "10.4.5.89", "port": 587, "protocol": "TCP" },
+        "hostile": false
       },
       {
         "id": "2-5",
-        "line": 1,
-        "header": { "source": "85.12.0.59", "port": 80, "protocol": "UDP" }
+        "line": 2,
+        "header": { "source": "85.12.0.59", "port": 80, "protocol": "UDP" },
+        "hostile": true
       },
-      { "id": "2-6", "line": 3, "header": { "source": "10.9.8.63", "port": 21, "protocol": "TCP" } }
+      {
+        "id": "2-6",
+        "line": 4,
+        "header": { "source": "10.9.8.63", "port": 21, "protocol": "TCP" },
+        "hostile": false
+      }
+    ],
+    [
+      {
+        "id": "3-1",
+        "line": 4,
+        "header": { "source": "85.12.5.3", "port": 161, "protocol": "UDP" },
+        "hostile": true
+      },
+      {
+        "id": "3-2",
+        "line": 3,
+        "header": { "source": "10.6.1.70", "port": 23, "protocol": "TCP" },
+        "hostile": true
+      },
+      {
+        "id": "3-3",
+        "line": 2,
+        "header": { "source": "10.9.6.69", "port": 993, "protocol": "UDP" },
+        "hostile": false
+      },
+      {
+        "id": "3-4",
+        "line": 1,
+        "header": { "source": "10.9.1.14", "port": 67, "protocol": "UDP" },
+        "hostile": false
+      },
+      {
+        "id": "3-5",
+        "line": 0,
+        "header": { "source": "10.4.5.47", "port": 636, "protocol": "TCP" },
+        "hostile": false
+      },
+      {
+        "id": "3-6",
+        "line": 4,
+        "header": { "source": "193.4.0.25", "port": 23, "protocol": "TCP" },
+        "hostile": true
+      }
+    ],
+    [
+      {
+        "id": "4-1",
+        "line": 0,
+        "header": { "source": "10.4.0.12", "port": 25, "protocol": "TCP" },
+        "hostile": false
+      },
+      {
+        "id": "4-2",
+        "line": 1,
+        "header": { "source": "31.14.1.93", "port": 636, "protocol": "UDP" },
+        "hostile": true
+      },
+      {
+        "id": "4-3",
+        "line": 2,
+        "header": { "source": "141.7.8.18", "port": 23, "protocol": "TCP" },
+        "hostile": true
+      },
+      {
+        "id": "4-4",
+        "line": 3,
+        "header": { "source": "10.9.6.76", "port": 53, "protocol": "UDP" },
+        "hostile": false
+      },
+      {
+        "id": "4-5",
+        "line": 4,
+        "header": { "source": "10.6.8.22", "port": 25, "protocol": "TCP" },
+        "hostile": false
+      },
+      {
+        "id": "4-6",
+        "line": 2,
+        "header": { "source": "10.9.1.73", "port": 3128, "protocol": "UDP" },
+        "hostile": false
+      }
+    ],
+    [
+      {
+        "id": "5-1",
+        "line": 3,
+        "header": { "source": "10.4.6.10", "port": 69, "protocol": "TCP" },
+        "hostile": false
+      },
+      {
+        "id": "5-2",
+        "line": 0,
+        "header": { "source": "10.9.3.4", "port": 993, "protocol": "TCP" },
+        "hostile": false
+      },
+      {
+        "id": "5-3",
+        "line": 1,
+        "header": { "source": "10.9.7.91", "port": 5432, "protocol": "UDP" },
+        "hostile": false
+      },
+      {
+        "id": "5-4",
+        "line": 4,
+        "header": { "source": "62.80.0.29", "port": 23, "protocol": "UDP" },
+        "hostile": true
+      },
+      {
+        "id": "5-5",
+        "line": 3,
+        "header": { "source": "141.7.6.42", "port": 445, "protocol": "TCP" },
+        "hostile": false
+      },
+      {
+        "id": "5-6",
+        "line": 2,
+        "header": { "source": "10.6.3.64", "port": 80, "protocol": "UDP" },
+        "hostile": true
+      }
     ]
   ],
   "moves": [
+    { "by": "operator", "input": { "start": true } },
     { "by": "partner", "input": { "mark": "1-2" } },
     { "by": "operator", "input": { "trip": 0 } },
     { "by": "partner", "input": { "mark": "1-3" } },
@@ -70,6 +205,6 @@
     { "by": "partner", "input": { "mark": "2-3" } },
     { "by": "operator", "input": { "trip": 3 } },
     { "by": "partner", "input": { "mark": "2-5" } },
-    { "by": "operator", "input": { "trip": 1 } }
+    { "by": "operator", "input": { "trip": 2 } }
   ]
 }
