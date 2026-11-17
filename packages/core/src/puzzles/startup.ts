@@ -558,7 +558,8 @@ const LOG: readonly string[] = [
 ];
 
 const WORKSHOP: readonly string[] = [
-  'Die Leiter zählt nicht vor: Nur das Licht im Bodenkanal verrät, wie weit der Impuls ist.',
+  'Das Terminal zählt nicht mit: Am Skriptpult verrät nur das Licht im Bodenkanal, wie weit ' +
+    'der Impuls ist.',
   'Das Terminal stammt von 1986 und kennt nur seine drei Befehle.',
 ];
 
