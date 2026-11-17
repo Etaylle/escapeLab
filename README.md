@@ -69,7 +69,8 @@ Sperre das unterste Paket einer Leitung heraus, Pult B, das Analysepult, sieht Q
 Protokoll und markiert die Pakete — eine Markierung trägt am Sperrpult einen Ring. Was zu sperren
 ist, sagt allein die gedruckte Sicherheitsrichtlinie: die erste passende ihrer sechs Regeln, eine
 liest die Laborkennung. Ein falsch gesperrtes Paket und ein feindliches im Kern kosten einen Alarm,
-und die Welle beginnt neu; die Welle läuft nur, solange beide Pulte besetzt sind. Noch in keiner
+und die neue Welle wartet auf die Freigabe am Sperrpult — wer stillsteht, verliert höchstens einen
+Alarm; die Welle läuft nur, solange beide Pulte besetzt sind. Noch in keiner
 Mission — in Blackout kommt sie als Tor des Serverraums —: bewiesen im Kerntest, in der
 Übungshalle und in der Probemission `tools/fixtures/firewall-probe.json`, die der Rundgang im
 Systemcheck über den Editor mit festem Seed importiert und bis zur Lösung spielt.

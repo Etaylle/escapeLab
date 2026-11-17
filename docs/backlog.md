@@ -678,7 +678,8 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   Sicherheitsrichtlinie entscheidet mit der ersten passenden ihrer sechs Regeln, eine liest die
   Laborkennung. Wellen zu 5–9 Paketen, zwei oder drei davon zu sperren, jede mit einem
   Lockvogel, den nur die Reihenfolge durchlässt; ein falsch gesperrtes und ein feindliches Paket
-  im Kern sind ein Alarm, die Welle beginnt neu — höchstens ein Alarm je Welle. Die Welle läuft
+  im Kern sind ein Alarm; die neue Welle wartet wie die erste auf die Freigabe am Sperrpult — eine
+  Crew, die stillsteht, verliert höchstens einen Alarm. Die Welle läuft
   nur, solange beide Pulte besetzt sind. Felder `waves`, `packets`, `fallSec`, `rules`; ein erster
   Lauf mit `rules` 4 trifft nur die Regeln 1, 2, 3 und 6, die Laborkennung erst ab 6. Dafür neu
   im Modulvertrag: `elapse`, eine Station auf der Uhr und der Anwesenheit an ihren Pulten.
