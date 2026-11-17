@@ -23,6 +23,7 @@ import type {
 } from './mission.js';
 import { castFor, type Cast } from './cast.js';
 import { noteKey } from './notes.js';
+import { conduitsOnMap, type ConduitView } from './conduits.js';
 import { pickLine, shownText } from './radio.js';
 import {
   CREW_COLORS,
@@ -482,6 +483,11 @@ export interface MapView {
    * burn once lit (`Mission` labels' `brightness`), where the mission gives them
    */
   labels: { text: string; x: number; y: number; kind?: RoomKind; brightness?: number }[];
+  /**
+   * the cable ducts in the floor, each with the start pulse running in it now — a light of the
+   * world, seen where a figure has sight of it, as the doors are (conduits.ts)
+   */
+  conduits: ConduitView[];
   /** the furniture on the floor: solid for every step, as walls are */
   decor: { kind: DecorKind; x: number; y: number; variant?: number }[];
   /**
@@ -1073,6 +1079,7 @@ function mapViewFor(state: GameState, viewer: MapViewer): MapView | null {
       ...(l.kind === undefined ? {} : { kind: l.kind }),
       ...(l.brightness === undefined ? {} : { brightness: l.brightness }),
     })),
+    conduits: conduitsOnMap(state),
     decor: map.decor.map((piece) => ({
       kind: piece.kind,
       x: piece.x,

@@ -135,6 +135,12 @@ export interface FrameLight {
    * power, nobody carries one, so only in your room
    */
   crewShown: (x: number, y: number) => boolean;
+  /**
+   * whether light falls on the tile at (x, y) right now — some lamp of the crew's, a drone's
+   * eye, an emergency lamp, the open hatch, a lit room through a door, your room while the lab
+   * has its power: where a figure has sight; everything for the audience
+   */
+  inSight: (x: number, y: number) => boolean;
 }
 
 /** Where the minimap sits on the canvas, device pixels: its corner, cell and size. */
@@ -240,6 +246,11 @@ export interface Frame {
   time: number;
   /** the wall clock, epoch ms: doors sliding, the hatch, an alarm, the deadline */
   now: number;
+  /**
+   * the server's clock, epoch ms (clock.ts `serverNow`): what the server times itself and every
+   * screen shows alike — a start pulse in its duct
+   */
+  serverNow: number;
   /** the page's clock, ms (performance.now()): pings and chat lines */
   perf: number;
   /** the beat the lab's objects pulse with, 0 to 1 */

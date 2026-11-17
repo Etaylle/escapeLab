@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { chatSchema } from './chat.js';
+import { conduitIssues } from './conduits.js';
 import { decorIssues } from './decor.js';
 import { MAX_NOTES, NOTE_TEXT_MAX, noteSpot } from './notes.js';
 import { moduleFor, puzzleDefSchema, type PuzzleDef } from './puzzles/index.js';
@@ -321,6 +322,19 @@ export const mapDefSchema = z.object({
       }),
     )
     .default([]),
+  /**
+   * Cable ducts in the floor, each joining the two consoles of an Anlaufsteuerung (`startup`):
+   * its tiles from one end to the other, each beside the last, under floor, walls and doors
+   * alike, an end beside each console. The start pulse's light runs along it (conduits.ts).
+   */
+  conduits: z
+    .array(
+      z.object({
+        puzzleId: z.string().min(1),
+        tiles: z.array(z.tuple([coord, coord])).min(2),
+      }),
+    )
+    .default([]),
 });
 
 /**
@@ -536,6 +550,7 @@ function validateMap(mission: MissionParts, ctx: z.RefinementCtx): void {
   checkKeys(check);
   checkSign(check, stations);
   decorIssues(map, floor).forEach(issue);
+  conduitIssues(map, mission.puzzles).forEach(({ path, message }) => check.issueAt(path, message));
   checkSolvable(check, mission, stations);
 }
 

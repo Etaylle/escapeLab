@@ -89,6 +89,7 @@ describe('the plates in the devices’ heads', () => {
       'circuit',
       'servers',
       'signal',
+      'startup',
     ]);
     for (const b of twoConsoles) {
       const a = plates.find((plate) => plate.type === b.type && plate.console === 'a');

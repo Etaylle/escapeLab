@@ -71,6 +71,11 @@ const LINES = {
     mouse: 'Schreiben oder klicken: login, status, freigeben — Token: Pult B.',
   },
   'access-token': 'Konto und Token ablesen, solange der Balken läuft.',
+  'startup-terminal': {
+    touch: 'Tippen: zeige, setze, start — Leuchten am Gegenpult.',
+    mouse: 'Schreiben: zeige, setze, start — Leuchten am Gegenpult.',
+  },
+  'startup-board': 'Der Schalter zählt nur auf den markierten Stufen der Leiter.',
 } as const satisfies Record<string, Line>;
 
 type Device = keyof typeof LINES;
@@ -90,19 +95,14 @@ function partOf(kind: string, role: string | null): Device | null {
  * is its window's, nor for the Serverraum's rack, whose switches and LEDs say it all.
  */
 function deviceOf(puzzle: PuzzleView): Device | null {
-  switch (puzzle.kind) {
-    case 'button-sync':
-      return puzzle.style === 'lever' ? 'lever' : null;
-    case 'circuit':
-    case 'signal':
-    case 'servers':
-    case 'access':
-      return partOf(puzzle.kind, puzzle.role);
-    case 'relay':
-      return null;
-    default:
-      return puzzle.kind;
+  if (puzzle.kind === 'button-sync') {
+    return puzzle.style === 'lever' ? 'lever' : null;
   }
+  if (puzzle.kind === 'relay') {
+    return null;
+  }
+  // A station with two consoles names the part of its console: its view's role.
+  return 'role' in puzzle ? partOf(puzzle.kind, puzzle.role) : puzzle.kind;
 }
 
 /**

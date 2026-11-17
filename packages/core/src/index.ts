@@ -17,6 +17,13 @@ export {
   type RoomKind,
 } from './mission.js';
 export { decorTiles, walkable } from './reach.js';
+export {
+  conduitIssues,
+  type ConduitDef,
+  type ConduitIssue,
+  type ConduitPulse,
+  type ConduitView,
+} from './conduits.js';
 export { MAX_NOTES, NOTE_TEXT_MAX, noteKey, noteSpot } from './notes.js';
 export {
   initialState,
@@ -335,6 +342,31 @@ export {
   type AccessOpening,
   type AccessTerminal,
 } from './puzzles/access.js';
+export {
+  FAULT_PICTURE,
+  FEEDERS,
+  LADDER_FIGURE,
+  LAMP_WORDS,
+  LOAD_NAMES,
+  LOAD_PICTURES,
+  PULSE_GRACE_MS,
+  pulseTimes,
+  SHOWN_PREFIX,
+  STARTUP_GAPS,
+  STARTUP_LOADS,
+  type LampColour,
+  type LampPicture,
+  type StartupBoard,
+  type StartupClosed,
+  type StartupFeeder,
+  type StartupGap,
+  type StartupLoad,
+  type StartupLogLine,
+  type StartupOutcome,
+  type StartupPulse,
+  type StartupScriptLine,
+  type StartupTerminal,
+} from './puzzles/startup.js';
 export {
   CHAT_PHRASE_COUNT,
   DEFAULT_CHAT_PHRASES,

@@ -93,8 +93,17 @@ function labFor(type: StationType): Draft {
       stations,
       manuals: moduleFor(type).wholeCrew ? [] : [book],
       edgeworkSign: { x: 10, y: 1 },
+      // An Anlaufsteuerung wants its duct, from beside console a to beside console b.
+      ...(type === 'startup'
+        ? { conduits: [{ puzzleId: puzzle.id, tiles: ductRow(4, 2, 9) }] }
+        : {}),
     },
   };
+}
+
+/** The tiles of row `y` from `x0` to `x1`. */
+function ductRow(y: number, x0: number, x1: number): { x: number; y: number }[] {
+  return Array.from({ length: x1 - x0 + 1 }, (_, i) => ({ x: x0 + i, y }));
 }
 
 describe('slugOf and customIdOf', () => {
@@ -145,9 +154,10 @@ describe('a new draft', () => {
   });
 
   it('offers every module that stands at a station, and no relay', () => {
-    expect(STATION_TYPES).toHaveLength(13);
+    expect(STATION_TYPES).toHaveLength(14);
     expect(STATION_TYPES).toContain('servers');
     expect(STATION_TYPES).toContain('access');
+    expect(STATION_TYPES).toContain('startup');
     expect(STATION_TYPES).not.toContain('relay');
   });
 });
@@ -183,6 +193,22 @@ describe('draft ↔ JSON', () => {
       panels: [],
     });
     expect(json.map.lamps).toHaveLength(5);
+  });
+
+  it('keeps the ducts it does not draw, and the validator holds them to their consoles', () => {
+    const hall = shipped.find(({ name }) => name === 'uebungshalle.json')?.data;
+    const draft = loaded(hall);
+    const json = draftToJson(draft) as { map: { conduits: unknown[] } };
+    expect(json.map.conduits).toEqual([
+      { puzzleId: 'startup', tiles: [[12, 24], [13, 24], [14, 24], [15, 24], [16, 24], [17, 24]] },
+    ]);
+    const moved = draft.map.stations.map((s) =>
+      s.puzzleId === 'startup' && s.console === 'b' ? { ...s, x: s.x + 2 } : s,
+    );
+    const checked = checkMission(draftToJson({ ...draft, map: { ...draft.map, stations: moved } }));
+    expect(checked.ok ? [] : checked.issues).toEqual([
+      expect.stringMatching(/^map\.conduits\.0\.tiles: .*console b \(19,23\): lay its tiles/),
+    ]);
   });
 
   it('keeps mission control’s lines the form does not show, and writes the ones it edits', () => {

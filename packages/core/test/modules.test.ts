@@ -69,6 +69,9 @@ const own = [
   { type: 'signal', id: 'signalkette-farblos', fields: { legend: true, greyFrom: 1 }, moves: [16] },
   // two doors, each a login, its token and the release
   { type: 'access', id: 'zugangskontrolle', moves: [6] },
+  // two stages: a value set, the start and the breaker; then two values, the start, the breaker
+  { type: 'startup', id: 'anlaufsteuerung', moves: [7] },
+  { type: 'startup', id: 'anlaufsteuerung-drei', fields: { stages: 3 }, moves: [11] },
 ].map(({ type, id, fields = {}, moves }) => {
   const def = puzzleDefSchema.parse({ type, id, title: id, ...fields });
   return [id, def, moves] as const;

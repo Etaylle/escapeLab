@@ -1,0 +1,22 @@
+{
+  "mission": "custom-anlaufprobe",
+  "seed": 5,
+  "stages": [
+    {
+      "stage": 1,
+      "types": "a",
+      "load": "kuehlung",
+      "feeders": [["rot", "aus"], ["gelb", "gelb"], ["gruen", "gelb"], ["aus", "gelb"]],
+      "values": { "abgang": 2 },
+      "breaker": 2
+    },
+    {
+      "stage": 2,
+      "types": "b",
+      "load": "notstrom",
+      "feeders": [["gelb", "gelb"], ["rot", "aus"], ["gruen", "aus"], ["gelb", "aus"]],
+      "values": { "sperre": 2, "abgang": 4 },
+      "breaker": 4
+    }
+  ]
+}

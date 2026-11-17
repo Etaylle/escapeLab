@@ -5,17 +5,20 @@ controls on keys and on a controller, the quick chat, the station's intercom, fi
 walks of Blackout's lab, stations in any order, runs without a clock and the Übungshalle, the
 first win at the stations the whole crew presses, a crew of three, the Erfolge, the Tagesschicht,
 the picture of a run, the danger sense, the Serverraum's cabling diagram, typing at its terminal,
-the Zugangskontrolle, what the notepad takes down and what happens when a line drops. Code:
+the Zugangskontrolle, the Anlaufsteuerung, what the notepad takes down and what happens when a
+line drops. Code:
 `packages/client/src/input/` (bindings, controller, prompts), `client/src/achievements.ts` and
 `screens/{Plaques,ShareButton,ControlSettings}.tsx`,
 `screens/shareCard.ts`, `world/{labelFade,finds,danger,ChatWheel}.ts(x)`,
 `puzzles/RackDiagram.tsx`, `puzzles/{prompt.ts,ServersPanel.tsx}`,
-`puzzles/{AccessPanel.tsx,accessPrompt.ts}`,
+`puzzles/{AccessPanel.tsx,accessPrompt.ts}`, `puzzles/{StartupPanel.tsx,startupPrompt.ts}`,
+`world/{conduits,ductArt}.ts`,
 `puzzles/{SyncCount.tsx,syncPress.ts}`, `voice/{rules,intercom}.ts`, `noting.ts`, `notes.ts`,
 `screens/{Notepad,NoteButton}.tsx`, `pass.ts`, `line.ts`, `ws.ts`, `screens/hands.ts`,
 `screens/{Join,Pause,Line,GiveUp}.tsx`, `clock.ts`; in the core `chat.ts`, `discovery.ts`,
 `achievements.ts`, `daily.ts`, `hands.ts`, `mission.ts` (`order`, `lit`), `map.ts` (`intercomOf`,
 `stationUp`), `puzzles/servers.ts` (`serviceDiagram`), `puzzles/access.ts`,
+`puzzles/startup.ts`, `conduits.ts`,
 `puzzles/buttonSync.ts` and `actions.ts` (a line that drops, the maintenance, `takeUp`,
 `hasClock`), the hall in `test/hall.ts`; in the server `room.ts`, `seats.ts`, `heartbeat.ts`.
 
@@ -237,11 +240,12 @@ latency allowed the other way round (core `puzzles/button.ts` `releaseInTime`). 
 stays the mission's own (`maxAlarms`).
 
 **The Übungshalle** (`missions/uebungshalle.json`, 40 × 33 tiles, 2–3 players) has one station
-of every type the lab knows, thirteen with seventeen consoles — every module but the relay,
+of every type the lab knows, fourteen with nineteen consoles — every module but the relay,
 which runs only as an emergency. Each stands in a bay of its own, four abreast in four rows: the
 station, its book on the floor five tiles beside it with a desk, and a sign naming the machine
 and its type („SIGNALKETTE · SK-4"); a station with two consoles has both in its bay, five tiles
-apart — the validation keeps one player from standing at both — and its book under them. The
+apart — the validation keeps one player from standing at both — and its book under them; the
+Anlaufsteuerung's cable duct runs along the row under its consoles. The
 crew starts at the entrance, beside the notice board („Übungshalle · Jede Station steht offen;
 die Regeln liegen daneben") and the Laborkennung. Free order, no clock, no alarm limit, no
 drones, no emergencies, no intro: its lights burn from the start (`lit: true` lights every room
@@ -262,7 +266,8 @@ fourteen times over, to a white sheet), the overview from the audience (`hall-ov
 station's device as it opens (`hall-<type>.png`) and the won card (`hall-won.png`). The
 plan's host reads a two-console station's rules at its book as it comes on, then takes console a;
 at the Zugangskontrolle the walkthrough types the token its device shows, not the plan's, which
-hung on the plan's own clock.
+hung on the plan's own clock, and at the Anlaufsteuerung it closes each breaker once the ladder
+shows the pulse on its marked steps.
 
 ## The first win
 
@@ -572,6 +577,98 @@ walkthrough drills the probe in a Systemcheck run, as it does the Serverraum's (
 (access-list.png), both devices (access-terminal.png, access-token.png), the terminal on a large
 phone held sideways (access-phone-932.png), then each door of the plan, the token read off the
 device.
+
+## The Anlaufsteuerung
+
+A start script, a pulse through the floor and a breaker in time (`startup`, backlog I-3), after
+the light-beam rooms of Portal 2's co-op and We Were Here — one side routes, the other sees where
+it lands — and Quadrilateral Cowboy's typed line that makes the world move. No shipped mission has
+it yet — the lead's next package puts it into Blackout as the second station, the emergency
+generator's start —; it ships with its probe mission, `tools/fixtures/startup-probe.json`
+(„Anlaufprobe": a console in each of two rooms, the duct between them under the wall, the
+Betriebsbuch in the west room), and its bay in the Übungshalle.
+
+- **Both consoles are the same device**: a terminal of the Serverraum's make — its screen,
+  prompt, keys and FUNK key, typed as above — beside a Schaltfeld of four feeders (Abgänge), each
+  two control lamps over a breaker, and an LED ladder with a step a second (`travelSec` +
+  `windowSec`), its top `windowSec` steps marked. The stages (`stages`, 2–3) alternate the sides:
+  in the odd ones console A's terminal runs the script and console B's Schaltfeld takes the
+  pulse, in the even ones the other way round. At a console the live part fills the device; the
+  idle one is a plate's line over it that shows nothing of the instance and says where the stage
+  runs („TERMINAL B · IN RUHE · SKRIPT AN PULT A", „SCHALTFELD A · IN RUHE · AUFGESCHALTET: B"),
+  so that in stage 2 nobody waits at the wrong half; the live Schaltfeld's plate reads
+  „SCHALTFELD B · AUFGESCHALTET" in amber, its breakers closed in earlier stages standing closed.
+  A status strip over all, headed by the make (ANLAUFSTEUERUNG AS-86), says the stage and what
+  the last pulse came to in the device's words. The ladder's marked steps carry a bracket and
+  FENSTER over them, as the book draws them.
+- **The script** (`zeige` lists the stage and its open gaps in the log) names the load the stage
+  starts — Netzeinspeisung, Notstromschiene, Kühlkreis, Lüftung, Beleuchtung, one of its own each
+  stage — and has the gap `abgang`, from stage 2 on also `sperre`. Its comments are the hints:
+  „Kühlkreis: Leuchtbild in Tabelle 2, Betriebsbuch", „gestört: rote Leuchte an Schaltfeld A",
+  „Schalter im Fenster der Leiter". `setze <lücke> <wert>` (or the script's own
+  `abgang = 2`) sets a gap — the value then stands bracketed and underlined, `abgang = [2]`,
+  told from the script's own text —, `start` runs the script; Tab completes a command and, after
+  `setze`, a gap of the script; the keys put the same lines together. Every comment stands on a
+  line of its own over the line it explains — a comment wraps, a command or a gap keeps its row
+  —; the log shows its last three entries whole (a phone held sideways its newest, or the hint
+  in its place), and a refused start stays in the status strip until the next `start`; the
+  device stands whole at 1280 × 720 and on a phone held sideways. The script loads
+  with a log line naming the three commands. `npm` and whatever follows it the terminal
+  answers itself, without a fault: „? npm: unbekannter Befehl — AS-86, Baujahr 1986". Once
+  `zeige` has answered last, the line under the prompt names the typed steps the stage still
+  takes: „Eingabe: setze abgang <nr> · start".
+- **The facts and the rule lie apart.** The lamps burn only at the other console's Schaltfeld:
+  three feeders show the pictures of three loads, the fourth red over dark, faulty. Which picture
+  a load has stands only in the book's Tabelle 2 (grün over dunkel the Netzeinspeisung, gelb over
+  dunkel the Notstromschiene, gelb over gelb the Kühlkreis, grün over gelb the Lüftung, dunkel
+  over gelb the Beleuchtung, rot over dunkel gestört) — four of the five carry yellow, so one
+  lamp never decides. One lookup a stage; a crew that sets the first feeder that is not red takes
+  an alarm in most runs. Every lens has its colour's word engraved under it.
+- **The pulse.** `start` needs every gap set and somebody else at the other console's Schaltfeld
+  („Am Schaltfeld der Gegenseite steht niemand."); with a value that does not fit the Schaltfeld
+  it is a Fehlquittierung, the values staying — the log says a value does not fit, never which —;
+  the same refused values started again are turned away without another alarm („Werte
+  unverändert: …"). Otherwise the pulse goes off: the terminal says
+  „IMPULS UNTERWEGS" and counts nothing down; the other console's ladder fills a step a second,
+  the pulse's hum rising with it, and after `travelSec` (6 s) it stands `windowSec` (3 s) on the
+  marked steps, on the server's clock (`dueAt`: the arrival, then the end and its grace). The
+  breaker of the feeder the script named has to close then: the stage runs up, the breaker
+  latching home with the relay's clack. The ladder goes dark at the window's end on every screen,
+  and the server still takes the right breaker for `PULSE_GRACE_MS` (500 ms) after it — half a
+  round trip's slack for a press made while the window still showed. A moment early the ladder
+  drops the pulse („Impuls verworfen"), late it dies („Impuls verfallen"), neither an alarm; any other breaker kills it with one. Either way the
+  script has to be started again. Solved after the last stage.
+- **The duct in the world** (`map.conduits[]`: `{ puzzleId, tiles: [[x, y], …] }`) runs from
+  beside one console to beside the other, tile by orthogonal tile, under floor, walls and doors —
+  the validation turns away another module's puzzle, a second duct for a station, a gap, a tile
+  twice, a tile over the void and an end beside no console, and wants one at every
+  Anlaufsteuerung — its messages say what to lay or move in the mission file, as the editor has
+  no tool for ducts. It is baked with the floor, a dark
+  channel with a steel grating. While a pulse runs, its light travels along it at the pulse's
+  speed, a quarter tile at a step, toward the console taking it, then waits at the far end; every
+  view of the map carries the pulse's times (`conduitsOnMap`) and the client works the spot out
+  from them on the server's clock (`world/conduits.ts` `pulseSpot`), an amber light of the frame
+  (`sourcesOf`) that shows where light falls on its tile now, or its room is lit, and never
+  under a wall or a shut door: the pulse leaving one room is seen there, its arrival in the
+  other. The times reach every player, as a door's state does: the light is the world's, the
+  typing side started the pulse and could count the seconds anyway, and nothing of the instance
+  is in them. The editor keeps the ducts a file brings and follows a
+  rename; it has no tool to draw one yet.
+
+`core/test/startup.test.ts` holds the deal, the script, the views by presence, every refusal, the
+window to the millisecond (the breaker a millisecond early drops the pulse, the window's first
+and last millisecond run the stage up, its end lets the pulse die), the needs-two rule, the
+solver over 200 seeds in four variants, the crew without the book (an alarm in more than 60 % of
+200 seeds) and the probe with its pinned plan (`tools/fixtures/startup-plan.json`, made by
+`core/test/startupPlan.ts`); `core/test/conduits.test.ts` the ducts' validation and the pulse in
+the map's views through the reducer; `client/test/startup.test.tsx` the prompt, the ladder, both
+consoles, the status strip, the sounds and the type and targets on three screens;
+`client/test/conduits.test.ts` the duct's tiles, its bake, the pulse's spot and its light. The
+walkthrough drills the probe in a Systemcheck run (group `startup`; `SHOTS_SKIP=startup` leaves
+it out, and Blackout's run logs it as left out): the terminal (startup-terminal.png), the
+terminal on a large phone held sideways (startup-phone-932.png), the pulse in the duct from the
+audience (startup-duct.png) and the Schaltfeld with the pulse on its marked steps
+(startup-ladder.png), then both stages to the solve.
 
 ## Captures in the notepad
 
