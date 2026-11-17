@@ -718,6 +718,7 @@ import {
   stripVerdict,
   swingVerdict,
 } from './pageclock.mjs';
+import { HALL_WAYS, unworked, waysMatch } from './hallWays.mjs';
 import { percentile } from './percentile.mjs';
 import { decodePng } from './pixeldiff.mjs';
 import {
@@ -13593,6 +13594,25 @@ function driverOf(type) {
   return type in HALL_CONTROLS ? deviceMove : null;
 }
 
+/**
+ * The stations of the hall the crew works by following their pages, not move by move: the
+ * Paketfilter, marking what the plan's `hostile` names (`followFirewall`).
+ */
+const HALL_FOLLOWERS = {
+  firewall: ({ host, guest }, station) =>
+    followFirewall({ gate: host, analysis: guest }, new Set(station.hostile ?? [])),
+};
+
+// The walkthrough's tables are the hall's ways (tools/hallWays.mjs), or it stops as it loads.
+const MISWORKED = waysMatch(HALL_WAYS, {
+  controls: Object.keys(HALL_CONTROLS),
+  drivers: Object.keys(HALL_DRIVERS),
+  followers: Object.keys(HALL_FOLLOWERS),
+});
+if (MISWORKED.length > 0) {
+  throw new Error(`the hall's ways and the walkthrough's tables differ: ${MISWORKED.join('; ')}`);
+}
+
 /** The tile a target stands on: a station's (first) console, or the source itself. */
 const tileOfTarget = (target) => (target.of === 'station' ? target.consoles[0] : target);
 
@@ -13671,14 +13691,12 @@ async function devicesClosed(players, station) {
 }
 
 /**
- * The plan's moves at a station of the hall, each as its type makes it (`driverOf`) — but the
- * Paketfilter's, where the crew follows its pages to the solve, marking what the plan's
- * `hostile` names (`followFirewall`).
+ * The plan's moves at a station of the hall, each as its type makes it (`driverOf`) — but where
+ * the crew follows the device's pages to the solve (`HALL_FOLLOWERS`).
  */
 async function playHallMoves(crew, station) {
-  if (station.hostile !== undefined) {
-    const pair = { gate: crew.host, analysis: crew.guest };
-    await followFirewall(pair, new Set(station.hostile));
+  if (HALL_WAYS[station.type] === 'follow') {
+    await HALL_FOLLOWERS[station.type](crew, station);
     return;
   }
   const drive = driverOf(station.type);
@@ -13951,10 +13969,10 @@ async function sampleArmedAudience(watcher) {
 async function playHall(crew, watcher) {
   const { host } = crew;
   checkHallDraw(crew);
-  const unknown = HALL_PLAN.stations.filter((station) => driverOf(station.type) === null);
+  const unknown = unworked(HALL_PLAN.stations.map((station) => station.type));
   if (unknown.length > 0) {
-    const types = unknown.map((station) => station.type).join(', ');
-    throw new Error(`the walkthrough knows no way to work ${types}: give HALL_CONTROLS its keys`);
+    const types = unknown.join(', ');
+    throw new Error(`the walkthrough knows no way to work ${types}: give tools/hallWays.mjs it`);
   }
   await passTheSign(crew);
   await sampleArmedHall(host);
