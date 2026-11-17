@@ -10943,10 +10943,14 @@ async function turnToPolicy(reader, overlay) {
   return shows();
 }
 
-/** The policy's rules as `reader`'s view holds the printed page; none where it holds no policy. */
+/**
+ * The policy's rules as `reader`'s view holds the printed page — under the heading that says how
+ * they are read, straight after the Sicherheitsrichtlinie's —; none where it holds no policy.
+ */
 function policyRules(reader) {
   const manual = firewallView(reader)?.manual ?? [];
-  const section = manual.find((part) => part.heading === 'Sicherheitsrichtlinie');
+  const policy = manual.findIndex((part) => part.heading === 'Sicherheitsrichtlinie');
+  const section = policy === -1 ? undefined : manual[policy + 1];
   return section?.blocks.find((block) => block.kind === 'rules')?.items ?? [];
 }
 
