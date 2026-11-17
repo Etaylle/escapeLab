@@ -238,7 +238,7 @@ function roundAt(
  * One station from its switch-on to its solve at the round `round`, the station ticked as the
  * room ticks it: the round after it, and what it took.
  */
-function playStation(
+export function playStation(
   state: GameState,
   def: PuzzleDef,
   round: number,

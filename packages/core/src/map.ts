@@ -2,6 +2,7 @@ import { startsClosed, type ManualDef, type MapDef } from './mission.js';
 import type { PuzzleDef } from './puzzles/index.js';
 import type { ConsoleId } from './puzzles/module.js';
 import { tileKey, walkable, type Spot } from './reach.js';
+import { drawnOf, restsIn, stationCount } from './rotation.js';
 import type { GameState } from './state.js';
 
 /**
@@ -24,10 +25,25 @@ export function platePressed(state: GameState, plateId: string): boolean {
   return state.pressedPlates.includes(plateId);
 }
 
-/** Whether the crew has solved `puzzleId`: it comes before the current one, or the run is won. */
+/** How many stations the run has: the mission's, every pool counted as the one it drew. */
+export function stationsOfRun(state: GameState): number {
+  return stationCount(state.mission.puzzles);
+}
+
+/** The puzzles out of service this run, by id: the members of a pool the seed did not draw. */
+export function outOfService(state: GameState): Set<string> {
+  return new Set(state.mission.puzzles.filter((p) => restsIn(state.drawn, p)).map((p) => p.id));
+}
+
+/**
+ * Whether the crew has solved `puzzleId` — or, for a pool's id, the station the run drew for
+ * it: it comes before the current one, or the run is won. A station out of service never is.
+ */
 export function solvedYet(state: GameState, puzzleId: string): boolean {
-  const index = state.mission.puzzles.findIndex((p) => p.id === puzzleId);
-  return index >= 0 && (state.phase === 'won' || index < state.currentPuzzleIndex);
+  const id = drawnOf(state.drawn, puzzleId);
+  const index = state.mission.puzzles.findIndex((p) => p.id === id);
+  const ofRun = index >= 0 && index < stationsOfRun(state);
+  return ofRun && (state.phase === 'won' || index < state.currentPuzzleIndex);
 }
 
 /**
@@ -130,7 +146,7 @@ export function picking(state: GameState): boolean {
  */
 export function stationArmed(state: GameState, index: number): boolean {
   const { currentPuzzleIndex: current } = state;
-  if (!lightsAreOut(state) || index < current || index >= state.mission.puzzles.length) {
+  if (!lightsAreOut(state) || index < current || index >= stationsOfRun(state)) {
     return false;
   }
   return index === current || picking(state);
@@ -190,7 +206,7 @@ export function emergenciesDue(state: GameState): boolean {
     lightsAreOut(state) &&
     sabotage !== undefined &&
     solved >= sabotage.afterSolved &&
-    solved < state.mission.puzzles.length
+    solved < stationsOfRun(state)
   );
 }
 

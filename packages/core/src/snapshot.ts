@@ -203,6 +203,8 @@ const gameStateSchema = z.looseObject({
   runs: count,
   // A snapshot of a build before the cast: its nights are staffed from 0 on.
   castSeed: z.number().default(0),
+  // A snapshot of a build before the pools: its mission has none, and its run drew nothing.
+  drawn: z.record(z.string(), z.string()).default({}),
   edgework: edgeworkSchema.nullable(),
   pressedPlates: ids,
   occupiedPanels: ids,

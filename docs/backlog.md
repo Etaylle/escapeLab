@@ -709,6 +709,29 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   Anlauf des Notstromaggregats, wo heute der Notstromkasten steht) im nächsten Paket des Leads.
   Der Editor behält Kanäle, zeichnet aber keine.
 
+### B-1 Wechselplatz — Status: im PR (B-rotation) · Größe: M
+- Entscheidung Uros 2026-11-17: Blackout bekommt zwei feste IT-Stationen (Anlaufsteuerung,
+  I-startup; Paketfilter, I-firewall). Damit der Einsatz nicht länger wird und der zweite Lauf
+  nicht der erste ist, wechseln sich drei heutige Stationen an einem Platz ab: Signalkette,
+  Funkfeuer und Notstromkasten. Ein Lauf hat eine davon, der Seed lost sie aus.
+- Umgesetzt als Mechanismus, ohne eine ausgelieferte Mission zu ändern (`docs/gameplay.md`,
+  „Stations that take turns"): Rätsel mit demselben `pool` sind Alternativen, der Start lost je
+  Pool eines aus (`core/src/rotation.ts`), die anderen stehen außer Betrieb — dunkles Pult mit
+  Schild „AUSSER BETRIEB", keine Instanz in keiner Sicht, Quellen ohne Seite, Teile nicht
+  ausgelegt. Türen und Teile nennen den Pool; jede Zählung zählt ihn als eine Station; die
+  Validierung beweist jede Auslosung und nennt die, die scheitert. Bericht mit `drawn`,
+  Schnappschuss mit der Auslosung, Feld „Wechselplatz" im Editor.
+- Beweis: Probemission `tools/fixtures/rotation-probe.json` („Wechselprobe"), Kern-, Server- und
+  Client-Tests, und im Systemcheck-Rundgang die Gruppe `rotation`: zwei Seeds mit
+  verschiedener Auslosung, je ein Bild am Pult außer Betrieb, ein Lauf bis zur Sieg-Karte
+  (68 s lokal bei Last 4 bis 10).
+- Offen, bewusst nicht in diesem Paket: Bestenlisten je Auslosung (eine Tafel mischt die
+  Auslosungen); die Mitglieder eines Pools müssen in der Datei nicht nebeneinander stehen, weil
+  der Schnappschuss die Mission eines Laufs wie eine Datei prüft.
+- Nächstes Paket (Lead): Blackout mit dem Wechselplatz neu ketten — notlicht → Anlaufsteuerung
+  → Paketfilter (öffnet das Serverschott) → Serverraum → Wechselplatz aus Signalkette, Funkfeuer
+  und Notstromkasten (öffnet die Reaktortüren) → reaktorstart.
+
 ### S-1 Hauptmenü wie ein Spiel — Status: erledigt (S-menu, Merge 2026-11-13; zwei Review-Runden; Szene 1,07 ms je Frame, Menü-Fenster 16,7 ms p95; vier Musik-Einträge warten auf den Render) · Größe: L
 - Uros 2026-11-12 mit Screenshot: „Das soll besser werden wie echte Spiele, Main Menu." Befund
   im Bild: eine Karte auf leerer Seite, Systemschrift, kein Ton, keine Figuren, ein nativer

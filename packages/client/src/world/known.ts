@@ -35,10 +35,26 @@ export function armedGoal(
   return armed[0]?.title ?? null;
 }
 
+/** A station out of service this run: dark, a tag on it, nothing to work. */
+export function isOut(station: MapStation): boolean {
+  return statusOf(station) === 'out';
+}
+
+/**
+ * Whether a station's spot shows wherever it stands: one up or done does, as the objective and
+ * its trail; one locked or out of service only where light has fallen on it.
+ */
+export function showsUnlit(station: MapStation): boolean {
+  return station.known && (station.status === 'armed' || station.status === 'done');
+}
+
 /**
  * A station spot's status as the view tells it. One merely seen tells none: it stands there
- * as a locked one does.
+ * as a locked one does — or, a tag on it, out of service.
  */
 export function statusOf(station: MapStation): KnownStation['status'] {
-  return station.known ? station.status : 'locked';
+  if (station.known) {
+    return station.status;
+  }
+  return station.out === true ? 'out' : 'locked';
 }

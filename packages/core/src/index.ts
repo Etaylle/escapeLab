@@ -59,6 +59,9 @@ export {
   LATER_WAIT_MS,
   linesDown,
   missingItemsFor,
+  OUT_OF_SERVICE,
+  SOURCE_OUT_OF_SERVICE,
+  atStationOutOfService,
   NOTE_READ,
   NUDGE_QUIET_MS,
   NUDGED,
@@ -231,7 +234,17 @@ export {
   readersOf,
   stationKey,
   intercomOf,
+  outOfService,
+  stationsOfRun,
 } from './map.js';
+export {
+  drawPools,
+  everyDraw,
+  poolsOf,
+  runOrder,
+  stationCount,
+  type Draw,
+} from './rotation.js';
 export { placesOf, type HandsView, type Place } from './hands.js';
 export { canSee, sightFrom, visibleTiles, type Sight, type SightMap } from './sight.js';
 export {

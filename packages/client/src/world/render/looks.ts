@@ -23,7 +23,8 @@ export function tubeAt(frame: Frame, x: number, y: number): Tube {
 /**
  * How `manual` looks this frame, its label's top at `place`: one nobody has found as what it
  * is, shut, holding nothing; one the crew knows of whole, named as far as this player has found
- * it — and only then lit up where it prints the armed station's rules.
+ * it — and only then lit up where it prints the armed station's rules, or tagged where it
+ * prints only the rules of stations out of service.
  */
 export function sourceLook(
   frame: Frame,
@@ -38,6 +39,8 @@ export function sourceLook(
     return { ...look, labelAt: place };
   }
   const active = found > 0 && coversArmed(frame.map, manual);
-  return { ...look, label: manual.label, active, opened: manual.opened, labelAt: place };
+  // Out of service, the consoles' tag hangs on it too, once this player has found it.
+  const out = found > 0 && manual.outOfService === true;
+  return { ...look, label: manual.label, active, opened: manual.opened, labelAt: place, out };
 }
 

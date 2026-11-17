@@ -24,13 +24,16 @@ Kooperatives Multiplayer-Escape-Spiel (Studienprojekt, FH-Themengruppe Schefer-W
   Instanz variieren, bleiben an den Quellen.
 - Missionen sind Daten (`missions/*.json`, zod-validiert). Eine Plattentür hält nur, solange
   jemand auf der Platte steht — nennt sie mit `untilSolved` ein Rätsel, bleibt sie nach dessen
-  Lösung offen. Ein Rätseltyp ist ein Modul unter `core/src/puzzles/<typ>.ts` nach dem Vertrag
-  in `core/src/puzzles/module.ts` (Schema, Zustand, Eingaben, Sicht nach Anwesenheit,
-  gedrucktes Handbuch, `solve`) plus je ein Eintrag in `core/src/puzzles/index.ts` und
-  `client/src/puzzles/index.ts` (Panel). Sonst ändert sich nichts: Das Protokoll kennt nur
-  `puzzle-input`; der Reducer kennt daneben nur die Uhr der scharfen Station — `dueAt` mit
-  `expire` oder `elapse` (Pakete, die fallen, solange beide Pulte besetzt sind), beides optional
-  —, die der Raum zum fälligen Zeitpunkt weckt (`puzzle-tick`).
+  Lösung offen. Rätsel mit demselben `pool` teilen sich einen Wechselplatz: Der Start lost je
+  Lauf aus dem Seed genau eines aus (`core/src/rotation.ts`), die anderen sind außer Betrieb —
+  nie scharf, ohne Instanz in jeder Sicht —, Türen nennen den Pool statt eines Mitglieds, und
+  die Validierung beweist jede mögliche Auslosung. Ein Rätseltyp ist ein Modul unter
+  `core/src/puzzles/<typ>.ts` nach dem Vertrag in `core/src/puzzles/module.ts` (Schema,
+  Zustand, Eingaben, Sicht nach Anwesenheit, gedrucktes Handbuch, `solve`) plus je ein Eintrag
+  in `core/src/puzzles/index.ts` und `client/src/puzzles/index.ts` (Panel). Sonst ändert sich
+  nichts: Das Protokoll kennt nur `puzzle-input`; der Reducer kennt daneben nur die Uhr der
+  scharfen Station — `dueAt` mit `expire` oder `elapse` (Pakete, die fallen, solange beide Pulte
+  besetzt sind), beides optional —, die der Raum zum fälligen Zeitpunkt weckt (`puzzle-tick`).
 - Das Handbuch eines Moduls (`manual()`) enthält Regeln, nie Antworten, und hängt weder vom Seed
   noch vom Zustand ab — es ist druckbar. Jedes Modul liefert `solve()` über die Sichten von Pult
   und Lese-Objekt; Eigenschaftstests beweisen damit, dass die Crew aus ihren Sichten jede

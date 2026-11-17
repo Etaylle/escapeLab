@@ -53,6 +53,19 @@ function puzzleChoices(draft: Draft): Choice[] {
   return draft.puzzles.map((p, i) => ({ value: p.id, label: `${i + 1}. ${p.title || p.id}` }));
 }
 
+/**
+ * What a door or a part may wait for: a puzzle — or a Wechselplatz, for whichever of its
+ * stations the run has (core rotation.ts).
+ */
+export function placeChoices(draft: Draft): Choice[] {
+  const named = draft.puzzles.map((p) => p.pool.trim()).filter((pool) => pool !== '');
+  const pools = [...new Set(named)];
+  return [
+    ...puzzleChoices(draft),
+    ...pools.map((pool) => ({ value: pool, label: `Wechselplatz ${pool}` })),
+  ];
+}
+
 /** The fields the forms show the validator's words beside, by the end of their path. */
 const INLINE = ['.id', '.label', '.text', '.puzzleIds', '.puzzleId', '.plateId'];
 
@@ -152,7 +165,7 @@ function DoorForm({ index, props }: { index: number; props: ThingProps }) {
         <SelectField
           label="Rätsel"
           value={opens.puzzleId}
-          choices={[NONE, ...puzzleChoices(draft)]}
+          choices={[NONE, ...placeChoices(draft)]}
           onChange={(puzzleId) => set({ ...door, opensBy: { kind: 'puzzle', puzzleId } })}
           issues={messagesAt(validation, `${at}.opensBy.puzzleId`)}
         />
@@ -168,7 +181,7 @@ function DoorForm({ index, props }: { index: number; props: ThingProps }) {
           <SelectField
             label="Bleibt offen, sobald gelöst ist"
             value={opens.untilSolved}
-            choices={[NONE, ...puzzleChoices(draft)]}
+            choices={[NONE, ...placeChoices(draft)]}
             onChange={(untilSolved) => set({ ...door, opensBy: { ...opens, untilSolved } })}
           />
         </>
@@ -389,7 +402,7 @@ function ItemForm({ index, props }: { index: number; props: ThingProps }) {
           <SelectField
             label="Nötig für"
             value={item.requiredFor}
-            choices={[NONE, ...puzzleChoices(draft)]}
+            choices={[NONE, ...placeChoices(draft)]}
             onChange={(requiredFor) => set({ ...item, requiredFor })}
           />
         </>

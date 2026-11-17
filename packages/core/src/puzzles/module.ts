@@ -173,6 +173,12 @@ export interface PuzzleDefCommon {
   lights: string[];
   /** mission control's radio line once the puzzle is solved: one text, or two or three */
   onSolved?: Line | undefined;
+  /**
+   * the Wechselplatz it shares, by the pool's id: the puzzles of one pool are alternatives, of
+   * which a run has the one its seed draws (rotation.ts) — the others are out of service for
+   * that run; left out for a station every run has
+   */
+  pool?: string | undefined;
 }
 
 /**
@@ -186,6 +192,7 @@ export const commonDefShape = {
   nudges: z.array(lineSchema).max(2).default([]),
   lights: z.array(z.string().min(1)).default([]),
   onSolved: lineSchema.optional(),
+  pool: z.string().min(1).optional(),
 };
 
 /** An object schema whose output is the def — zod can only discriminate on `type` in those. */

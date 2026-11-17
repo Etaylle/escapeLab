@@ -1,5 +1,6 @@
 import {
   canSee,
+  SOURCE_OUT_OF_SERVICE,
   type KnownPart,
   type KnownSource,
   type KnownStation,
@@ -9,7 +10,8 @@ import {
 } from '@escapelab/core';
 import { inputDevice } from '../input/device.js';
 import { glyph } from '../input/glyphs.js';
-import { isArmed, known } from './known.js';
+import { OUT_OF_SERVICE_TAG } from './art.js';
+import { isArmed, isOut, known } from './known.js';
 import { doorsShut } from './light.js';
 import { noteMount } from './notes.js';
 
@@ -44,7 +46,11 @@ export type ContextAction = (
   | { kind: 'read' | 'open'; manualId: string; label: string; x: number; y: number }
   /** a note of the last shift the server counts this player at: E reads it, for nothing */
   | { kind: 'note'; index: number; label: string; x: number; y: number }
-  /** a locked cabinet without its key in hand: the prompt names what is missing, E does nothing */
+  /**
+   * a thing E does nothing at, the prompt saying why: a locked cabinet without its key in hand
+   * names what is missing; a station out of service this run reads its tag, and a source that
+   * prints only such a station's rules says so
+   */
   | { kind: 'locked'; label: string; x: number; y: number }
 ) & { subject: Subject };
 
@@ -68,7 +74,7 @@ export function carryLine(label: string): string {
   return `📦 ${label} — [${glyph('drop')}] ablegen`;
 }
 
-type Source = Pick<SourceHere, 'id' | 'kind' | 'opened' | 'needsKey'>;
+type Source = Pick<SourceHere, 'id' | 'kind' | 'opened' | 'needsKey' | 'outOfService'>;
 
 /** What `playerId` carries right now: an item in their hands, not yet set in its place. */
 export function carriedItem(map: Pick<MapView, 'items'>, playerId: string): KnownPart | undefined {
@@ -95,7 +101,8 @@ export function opensCabinet(map: Pick<MapView, 'manuals'>, itemId: string): boo
 
 /**
  * E at a manual object: read it once it is open, search a closed locker,
- * unlock a cabinet with its key in hand — or learn which key is missing.
+ * unlock a cabinet with its key in hand — or learn which key is missing. One out of service
+ * this run only says so, open or shut.
  */
 function sourceAction(
   map: MapView,
@@ -105,6 +112,9 @@ function sourceAction(
 ): ContextAction {
   const subject: Subject = { of: 'manual', id: manual.id };
   const at = { x: manual.x + 0.5, y: manual.y - 0.55, subject };
+  if (source.outOfService === true) {
+    return { kind: 'locked', label: SOURCE_OUT_OF_SERVICE, ...at };
+  }
   if (source.opened) {
     return { kind: 'read', manualId: manual.id, label: 'Lesen', ...at };
   }
@@ -158,6 +168,29 @@ function facesConsole(
 }
 
 /**
+ * The consoles out of service this player faces: each reads its tag, and E does nothing there.
+ */
+function outOfServiceActions(
+  map: MapView,
+  self: { x: number; y: number },
+  dist: (x: number, y: number) => number,
+): { action: ContextAction; d: number }[] {
+  return map.stations
+    .filter(known)
+    .filter((station) => isOut(station) && facesConsole(map, self, station))
+    .map(({ x, y }) => ({
+      action: {
+        kind: 'locked',
+        label: OUT_OF_SERVICE_TAG,
+        x: x + 0.5,
+        y: y - 0.55,
+        subject: { of: 'station', x, y },
+      },
+      d: dist(x + 0.5, y + 0.5),
+    }));
+}
+
+/**
  * What pressing E would do where the player stands. A carried part goes in
  * first at its drop-off; otherwise the nearest of a loose part, the armed
  * station, a manual object and a note the server already counts this player
@@ -167,8 +200,8 @@ function facesConsole(
  * hands work a station like empty ones, open (`stationOpen`) or shut; only
  * with free hands does a loose part at the player's feet come before
  * switching a station on, because the server picks it up first. A key goes
- * into its cabinet by unlocking it. A locked cabinet only speaks up when
- * nothing else is in reach.
+ * into its cabinet by unlocking it. A locked cabinet, a station out of service and a source of
+ * one only speak up when nothing else is in reach.
  */
 export function contextAction(
   map: MapView,
@@ -232,6 +265,7 @@ export function contextAction(
       d: dist(x + 0.5, y + 0.5),
     });
   }
+  candidates.push(...outOfServiceActions(map, self, dist));
   const locked = (candidate: { action: ContextAction }): number =>
     Number(candidate.action.kind === 'locked');
   const nearest = candidates

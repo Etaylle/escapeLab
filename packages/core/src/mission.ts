@@ -7,6 +7,7 @@ import { moduleFor, puzzleDefSchema, type PuzzleDef } from './puzzles/index.js';
 import { RELAY_MAX_PLAYERS } from './puzzles/relay.js';
 import { personOf } from './cast.js';
 import { lineSchema } from './radio.js';
+import { drawInWords, everyDraw, poolsOf, stationCount, stationsIn } from './rotation.js';
 import {
   canGather,
   canStandAt,
@@ -144,9 +145,13 @@ export const mapDefSchema = z.object({
           z.object({
             kind: z.literal('plate'),
             plateId: z.string().min(1),
-            /** a puzzle id: once that puzzle is solved, the door stays open without the plate */
+            /**
+             * a puzzle id, or a pool's (rotation.ts): once that puzzle — the pool's drawn one —
+             * is solved, the door stays open without the plate
+             */
             untilSolved: z.string().min(1).optional(),
           }),
+          /** `puzzleId`: a puzzle's id, or a pool's for whichever of its stations the run has */
           z.object({ kind: z.literal('puzzle'), puzzleId: z.string().min(1) }),
         ]),
       }),
@@ -288,6 +293,7 @@ export const mapDefSchema = z.object({
         x: coord,
         y: coord,
         deliverTo: tile.optional(),
+        /** a puzzle id, or a pool's for whichever of its stations the run has */
         requiredFor: z.string().min(1).optional(),
       }),
     )
@@ -501,6 +507,8 @@ export const missionSchema = z
 interface MapCheck {
   map: MapDef;
   puzzleIds: Set<string>;
+  /** the mission's pools (rotation.ts): each pool's id with its members' ids */
+  pools: Map<string, string[]>;
   issue: (message: string) => void;
   issueAt: (path: (string | number)[], message: string) => void;
   floor: (x: number, y: number) => boolean;
@@ -522,6 +530,7 @@ function validateMap(mission: MissionParts, ctx: z.RefinementCtx): void {
   const check: MapCheck = {
     map,
     puzzleIds: new Set(mission.puzzles.map((p) => p.id)),
+    pools: poolsOf(mission.puzzles),
     issue,
     issueAt: (path, message) => ctx.addIssue({ code: 'custom', message, path }),
     floor,
@@ -537,11 +546,12 @@ function validateMap(mission: MissionParts, ctx: z.RefinementCtx): void {
   }
   const stations = mission.puzzles.filter((p) => p.type !== 'relay');
   checkStations(check, stations);
+  checkPools(check, mission.puzzles);
   checkPlates(check);
   checkDoors(check);
   checkSabotage(check, mission.players.min);
   checkItems(check);
-  checkDrones(check, mission.puzzles.length);
+  checkDrones(check, stationCount(mission.puzzles));
   checkLamps(check);
   checkNotes(check);
   checkLights(check, stations);
@@ -638,6 +648,66 @@ function checkOneConsole(issue: MapCheck['issue'], puzzleId: string, spots: Stat
   }
 }
 
+/** The one key a snapshot's records drop as they are read back (zod), so no pool may have it. */
+const UNKEPT_KEY = '__proto__';
+
+/**
+ * A pool is a choice: two members at least, under an id no puzzle has — a door naming it means
+ * whichever of them the run draws — and one a snapshot keeps the draw under.
+ */
+function checkPools({ pools, puzzleIds, issueAt }: MapCheck, puzzles: PuzzleDef[]): void {
+  puzzles.forEach((puzzle, i) => {
+    const members = puzzle.pool === undefined ? undefined : pools.get(puzzle.pool);
+    if (puzzle.pool === undefined || members === undefined) {
+      return;
+    }
+    if (members.length < 2) {
+      issueAt(
+        ['puzzles', i, 'pool'],
+        `pool "${puzzle.pool}" has "${puzzle.id}" alone — stations take turns from two on; ` +
+          'give another puzzle the same pool, or leave it out',
+      );
+    }
+    if (puzzleIds.has(puzzle.pool)) {
+      issueAt(
+        ['puzzles', i, 'pool'],
+        `pool "${puzzle.pool}" is also a puzzle's id — give the pool an id of its own`,
+      );
+    }
+    if (puzzle.pool === UNKEPT_KEY) {
+      issueAt(
+        ['puzzles', i, 'pool'],
+        `pool "${puzzle.pool}": a snapshot keeps no draw under that name — give it another id`,
+      );
+    }
+  });
+}
+
+/**
+ * Whether `ref` names a station every run has: a puzzle outside the pools, or a pool. A member
+ * of a pool is out of service in most runs, and whatever waited for it would wait for good.
+ */
+function everyRunHas({ puzzleIds, pools }: MapCheck, ref: string): boolean {
+  return pools.has(ref) || (puzzleIds.has(ref) && poolOfMember(pools, ref) === undefined);
+}
+
+/** The pool `puzzleId` is a member of, by the pool's id; undefined outside the pools. */
+function poolOfMember(pools: MapCheck['pools'], puzzleId: string): string | undefined {
+  return [...pools].find(([, members]) => members.includes(puzzleId))?.[0];
+}
+
+/** What a door naming `ref` is told where no run, or not every run, has such a station. */
+function doorRefIssue(check: MapCheck, doorId: string, ref: string): string | null {
+  if (everyRunHas(check, ref)) {
+    return null;
+  }
+  const pool = poolOfMember(check.pools, ref);
+  return pool === undefined
+    ? `map: door "${doorId}" references unknown puzzle "${ref}"`
+    : `map: door "${doorId}" waits for puzzle "${ref}", which takes turns in pool "${pool}" and ` +
+        `is out of service in other runs — name the pool "${pool}" instead`;
+}
+
 function checkPlates({ map, issue, requireFloor }: MapCheck): void {
   if (new Set(map.plates.map((p) => p.id)).size !== map.plates.length) {
     issue('map: plate ids must be unique');
@@ -647,7 +717,8 @@ function checkPlates({ map, issue, requireFloor }: MapCheck): void {
   }
 }
 
-function checkDoors({ map, puzzleIds, issue, requireFloor }: MapCheck): void {
+function checkDoors(check: MapCheck): void {
+  const { map, issue, requireFloor } = check;
   const plateIds = new Set(map.plates.map((p) => p.id));
   const doorIds = new Set(map.doors.map((d) => d.id));
   if (doorIds.size !== map.doors.length) {
@@ -657,21 +728,35 @@ function checkDoors({ map, puzzleIds, issue, requireFloor }: MapCheck): void {
     requireFloor(`door "${door.id}"`, door.x, door.y);
     const { opensBy } = door;
     if (opensBy.kind === 'puzzle') {
-      if (!puzzleIds.has(opensBy.puzzleId)) {
-        issue(`map: door "${door.id}" references unknown puzzle "${opensBy.puzzleId}"`);
+      const problem = doorRefIssue(check, door.id, opensBy.puzzleId);
+      if (problem !== null) {
+        issue(problem);
       }
       continue;
     }
     if (!plateIds.has(opensBy.plateId)) {
       issue(`map: door "${door.id}" references unknown plate "${opensBy.plateId}"`);
     }
-    if (opensBy.untilSolved !== undefined && !puzzleIds.has(opensBy.untilSolved)) {
-      issue(
-        `map: door "${door.id}" stays open once unknown puzzle "${opensBy.untilSolved}" ` +
-          'is solved — name a puzzle of this mission in untilSolved',
-      );
+    if (opensBy.untilSolved !== undefined) {
+      checkUntilSolved(check, door.id, opensBy.untilSolved);
     }
   }
+}
+
+/** A plate door's `untilSolved` names a station every run has: a puzzle, or a pool. */
+function checkUntilSolved(check: MapCheck, doorId: string, ref: string): void {
+  if (everyRunHas(check, ref)) {
+    return;
+  }
+  const pool = poolOfMember(check.pools, ref);
+  check.issue(
+    pool === undefined
+      ? `map: door "${doorId}" stays open once unknown puzzle "${ref}" ` +
+          'is solved — name a puzzle of this mission in untilSolved'
+      : `map: door "${doorId}" stays open once puzzle "${ref}" is solved, which takes turns in ` +
+          `pool "${pool}" and is out of service in other runs — name the pool "${pool}" in ` +
+          'untilSolved instead',
+  );
 }
 
 function checkSabotage({ map, issue, requireFloor }: MapCheck, minPlayers: number): void {
@@ -692,7 +777,8 @@ function checkSabotage({ map, issue, requireFloor }: MapCheck, minPlayers: numbe
 }
 
 /** Every item lies on the floor and has somewhere to go: its drop-off, or its cabinet's lock. */
-function checkItems({ map, puzzleIds, issue, requireFloor }: MapCheck): void {
+function checkItems({ map, puzzleIds, pools, issue, requireFloor }: MapCheck): void {
+  const stations = new Set([...puzzleIds, ...pools.keys()]);
   const itemIds = new Set(map.items.map((i) => i.id));
   if (itemIds.size !== map.items.length) {
     issue('map: item ids must be unique');
@@ -714,7 +800,7 @@ function checkItems({ map, puzzleIds, issue, requireFloor }: MapCheck): void {
     } else {
       requireFloor(`drop-off of item "${item.id}"`, item.deliverTo.x, item.deliverTo.y);
     }
-    if (item.requiredFor !== undefined && !puzzleIds.has(item.requiredFor)) {
+    if (item.requiredFor !== undefined && !stations.has(item.requiredFor)) {
       issue(`map: item "${item.id}" is required for unknown puzzle "${item.requiredFor}"`);
     }
   }
@@ -898,19 +984,38 @@ function checkSign({ map, issue, requireFloor }: MapCheck, stations: PuzzleDef[]
 }
 
 /**
- * Solvability for every crew the mission takes — any count of players from
+ * Solvability for every run the mission can have: for every draw of its pools (rotation.ts) —
+ * the one there is without pools — the stations that run has (`stationsIn`) are proven for
+ * every crew (`checkDraw`); the stations out of service are walked by nobody, and open no door.
+ * An issue names the draw it holds for.
+ */
+function checkSolvable(
+  check: MapCheck,
+  mission: Pick<MissionParts, 'players' | 'order'>,
+  stations: PuzzleDef[],
+): void {
+  if (check.map.spawns.length < mission.players.max) {
+    return;
+  }
+  for (const draw of everyDraw(stations)) {
+    const drawn = drawInWords(draw);
+    const issue = (message: string): void =>
+      check.issue(drawn === '' ? message : `${message} — in a run with ${drawn}`);
+    checkDraw({ ...check, issue }, mission, stationsIn(stations, draw));
+  }
+}
+
+/**
+ * Solvability of one draw for every crew the mission takes — any count of players from
  * min to max, starting on any choice of that many spawns — walked the way
  * the game opens doors: station by station in a chain, every station from
  * the start in free order. Reports the first crew that gets stuck.
  */
-function checkSolvable(
+function checkDraw(
   check: MapCheck,
   { players, order }: Pick<MissionParts, 'players' | 'order'>,
   stations: PuzzleDef[],
 ): void {
-  if (check.map.spawns.length < players.max) {
-    return;
-  }
   const walk = order === 'free' ? walkFree : walkStations;
   for (const crew of crewsOf(check.map.spawns, players.min, players.max)) {
     const stuck: string[] = [];
@@ -949,6 +1054,9 @@ function walkStations(check: MapCheck, crew: Spot[], stations: PuzzleDef[]): voi
       checkSource(check, stage.reach, manual, puzzle.id);
     }
     solved.add(puzzle.id);
+    if (puzzle.pool !== undefined) {
+      solved.add(puzzle.pool); // a door naming the pool opens with whichever station was drawn
+    }
   }
 }
 

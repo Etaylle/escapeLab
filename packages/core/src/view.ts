@@ -35,7 +35,7 @@ import {
   type RunEvent,
 } from './state.js';
 import { moduleFor, type PuzzleView } from './puzzles/index.js';
-import { crewOf, emergencyDef, hasClock } from './actions.js';
+import { crewOf, emergencyDef, hasClock, sourceOutOfService } from './actions.js';
 import { gradeOf, type Grade } from './grade.js';
 import { clockStartOf, runReport } from './report.js';
 import type { ConsoleId, ManualSection, Viewer, ViewContext } from './puzzles/module.js';
@@ -45,12 +45,15 @@ import {
   doorOpen,
   intercomOf,
   operatorsOf,
+  outOfService,
   platePressed,
   readersOf,
   sourceOpen,
   stationArmed,
   stationKey,
+  stationsOfRun,
 } from './map.js';
+import { namesStation } from './rotation.js';
 
 /**
  * What a single player is allowed to see. Asymmetric information is enforced
@@ -318,6 +321,11 @@ export interface SourceHere {
   opened: boolean;
   /** the item that unlocks it, by id — a cabinet's key; null for everything else */
   needsKey: string | null;
+  /**
+   * it prints only the rules of stations out of service this run (rotation.ts): there is
+   * nothing to read, search or unlock at it; left out for every other
+   */
+  outOfService?: true;
 }
 
 /**
@@ -429,10 +437,21 @@ export interface MapView {
         x: number;
         y: number;
         title: string;
-        status: 'done' | 'armed' | 'locked';
+        /**
+         * 'out' for a station out of service this run, another of its pool drawn in its place
+         * (rotation.ts): dark for the whole run, with nothing to switch on
+         */
+        status: 'done' | 'armed' | 'locked' | 'out';
       } & StationSpotLook &
         Known)
-    | ({ puzzleId: string; x: number; y: number } & StationSpotLook & Glimpse)
+    | ({
+        puzzleId: string;
+        x: number;
+        y: number;
+        /** a tag hangs on it: out of service this run, as its status says once it is known */
+        out?: true;
+      } & StationSpotLook &
+        Glimpse)
   )[];
   /**
    * the manual objects of the run this player can make out: whole where the crew has come
@@ -448,11 +467,14 @@ export interface MapView {
         x: number;
         y: number;
         label: string;
+        /** the stations of the run whose rules it prints; none where it is out of service */
         puzzleIds: string[];
         /** readable: always, for a locker or cabinet once opened */
         opened: boolean;
         /** a cabinet's key, by item id; null for everything else */
         needsKey: string | null;
+        /** it prints only the rules of stations out of service this run; left out otherwise */
+        outOfService?: true;
       } & Known)
     | ({ id: string; kind: ManualKind; x: number; y: number } & Glimpse)
   )[];
@@ -631,15 +653,19 @@ function sourcesAt(state: GameState, playerId: string): ManualDef[] {
 
 /**
  * Where one player stands. Next to two stations or manual objects at once,
- * the one of the current puzzle wins.
+ * the one of the current puzzle wins. A station or a source out of service this run is no
+ * place to stand at: there is nothing to work or read.
  */
 function presenceOf(state: GameState, playerId: string): PlayerPresence {
   const current = state.mission.puzzles[state.currentPuzzleIndex]?.id;
+  const resting = outOfService(state);
   const stations = [...new Set(state.mission.map.stations.map((s) => s.puzzleId))].filter(
-    (id) => consoleOf(state, id, playerId) !== null,
+    (id) => !resting.has(id) && consoleOf(state, id, playerId) !== null,
   );
   const stationId = stations.find((id) => id === current) ?? stations[0] ?? null;
-  const manuals = sourcesAt(state, playerId).filter((m) => sourceOpen(state, m));
+  const manuals = sourcesAt(state, playerId).filter(
+    (m) => sourceOpen(state, m) && !sourceOutOfService(state, m),
+  );
   const manual =
     manuals.find((m) => current !== undefined && m.puzzleIds.includes(current)) ?? manuals[0];
   return {
@@ -660,13 +686,17 @@ function sourcesHereFor(state: GameState, playerId: string): SourceHere[] {
     label: m.label,
     opened: sourceOpen(state, m),
     needsKey: m.needsKey ?? null,
+    ...(sourceOutOfService(state, m) ? { outOfService: true as const } : {}),
   }));
 }
 
-/** The rules of every puzzle a manual object covers; the open station's with its notes. */
+/**
+ * The rules of every station of the run a manual object covers; the open station's with its
+ * notes. A station out of service has no page in it.
+ */
 function sectionsOf(state: GameState, manual: ManualDef): ManualHere['sections'] {
   const open = state.puzzleState === null ? undefined : state.currentPuzzleIndex;
-  return state.mission.puzzles.flatMap((def, index) => {
+  return state.mission.puzzles.slice(0, stationsOfRun(state)).flatMap((def, index) => {
     if (!manual.puzzleIds.includes(def.id)) {
       return [];
     }
@@ -691,7 +721,7 @@ function manualsHereFor(state: GameState, playerId: string): ManualHere[] {
     return [];
   }
   return sourcesAt(state, playerId)
-    .filter((m) => sourceOpen(state, m))
+    .filter((m) => sourceOpen(state, m) && !sourceOutOfService(state, m))
     .map((m) => ({ id: m.id, label: m.label, kind: m.kind, sections: sectionsOf(state, m) }));
 }
 
@@ -728,7 +758,7 @@ function puzzleViewFor(state: GameState, playerId: string | null): PuzzleView | 
   return {
     ...puzzleModule.view(def, state.puzzleState, viewer, viewContext(state, def.id)),
     index: state.currentPuzzleIndex,
-    total: state.mission.puzzles.length,
+    total: stationsOfRun(state),
     title: def.title,
     manual: viewer.reading ? puzzleModule.manual(def) : null,
     console: viewer.console,
@@ -802,9 +832,13 @@ type MapViewer = string | null;
 
 /**
  * A station's state on the map: solved, armed — up now once the lights are out, or any still to
- * solve while a free-order run waits for its pick (map.ts `stationArmed`) — or still to come.
+ * solve while a free-order run waits for its pick (map.ts `stationArmed`) —, still to come, or
+ * out of service for the whole run, standing after the run's own (rotation.ts `runOrder`).
  */
-function stationStatus(state: GameState, index: number): 'done' | 'armed' | 'locked' {
+function stationStatus(state: GameState, index: number): KnownStation['status'] {
+  if (index >= stationsOfRun(state)) {
+    return 'out';
+  }
   if (index < state.currentPuzzleIndex) {
     return 'done';
   }
@@ -826,7 +860,7 @@ function stationLook(
 /**
  * Every station spot this viewer can make out: whole the armed station's, the objective every
  * view shares, and a spot the crew has found; of any other only what it is and where, while it
- * is in sight.
+ * is in sight — and the tag on it, where it is out of service.
  */
 function stationsOnMap(state: GameState, viewer: MapViewer): MapView['stations'] {
   const sighting = sightingFor(state, viewer);
@@ -846,9 +880,13 @@ function stationsOnMap(state: GameState, viewer: MapViewer): MapView['stations']
     if (known || status === 'armed') {
       return [{ ...spot, title: def?.title ?? s.puzzleId, status, found, known: true }];
     }
-    return seen ? [{ ...spot, ...GLIMPSE }] : [];
+    return seen ? [{ ...spot, ...tagOf(status), ...GLIMPSE }] : [];
   });
 }
+
+/** What a glimpse tells of a station's status: the tag on one out of service, else nothing. */
+const tagOf = (status: KnownStation['status']): { out?: true } =>
+  status === 'out' ? { out: true } : {};
 
 /** What a map view says of a thing as far as its viewer is concerned. */
 interface Sighted {
@@ -897,6 +935,7 @@ function sightingFor(state: GameState, viewer: MapViewer): (find: Find) => Sight
  */
 function manualsOnMap(state: GameState, viewer: MapViewer): MapView['manuals'] {
   const sighting = sightingFor(state, viewer);
+  const resting = outOfService(state);
   return state.mission.map.manuals.flatMap((m): MapView['manuals'] => {
     const place = state.places[m.id];
     if (place === undefined) {
@@ -905,8 +944,10 @@ function manualsOnMap(state: GameState, viewer: MapViewer): MapView['manuals'] {
     const where = { id: m.id, kind: m.kind, x: place.x, y: place.y };
     const { seen, found, known } = sighting({ of: 'source', id: m.id });
     if (known) {
-      const rules = { label: m.label, puzzleIds: [...m.puzzleIds], needsKey: m.needsKey ?? null };
-      return [{ ...where, ...rules, opened: sourceOpen(state, m), found, known }];
+      const puzzleIds = m.puzzleIds.filter((id) => !resting.has(id));
+      const rules = { label: m.label, puzzleIds, needsKey: m.needsKey ?? null };
+      const out = puzzleIds.length === 0 ? { outOfService: true as const } : {};
+      return [{ ...where, ...rules, opened: sourceOpen(state, m), ...out, found, known }];
     }
     return seen ? [{ ...where, ...GLIMPSE }] : [];
   });
@@ -956,8 +997,9 @@ function dropOffOf(
 
 /** The station a part is for, and how many stations come before it; null for none. */
 function stationFor(state: GameState, def: PartDef): { title: string; ahead: number } | null {
-  const index = state.mission.puzzles.findIndex((p) => p.id === def.requiredFor);
-  const station = state.mission.puzzles[index];
+  const ofRun = state.mission.puzzles.slice(0, stationsOfRun(state));
+  const index = ofRun.findIndex((p) => namesStation(def.requiredFor, p));
+  const station = ofRun[index];
   return station === undefined
     ? null
     : { title: station.title, ahead: index - state.currentPuzzleIndex };
@@ -1003,6 +1045,9 @@ function taken(state: GameState, def: PartDef): boolean {
 function itemsOnMap(state: GameState, viewer: MapViewer): MapView['items'] {
   const sighting = sightingFor(state, viewer);
   return state.mission.map.items.flatMap((def): MapView['items'] => {
+    if (state.items[def.id] === undefined) {
+      return []; // not put out this run: the part of a station out of service
+    }
     const where = partSpot(state, def);
     const { seen, found, known } = sighting({ of: 'item', id: def.id });
     if (known || taken(state, def)) {
@@ -1022,7 +1067,7 @@ function exitOf(state: GameState): MapView['exit'] {
   if (exit === undefined) {
     return null;
   }
-  const open = state.currentPuzzleIndex >= state.mission.puzzles.length;
+  const open = state.currentPuzzleIndex >= stationsOfRun(state);
   const unlocked = state.events.find((event) => event.kind === 'escape');
   return {
     x: exit.x,
@@ -1246,7 +1291,7 @@ export function viewForSpectator(state: GameState): SpectatorView {
     ...runShapeOf(state),
     lights: lightsOf(state),
     currentPuzzleIndex: state.currentPuzzleIndex,
-    puzzleCount: state.mission.puzzles.length,
+    puzzleCount: stationsOfRun(state),
     penaltySeq: state.penaltySeq,
     alarms: alarmsOf(state),
     hintsUsed: state.hintsUsed,
@@ -1323,7 +1368,7 @@ export function viewFor(state: GameState, playerId: string): PlayerView {
     ...runShapeOf(state),
     lights: lightsOf(state),
     currentPuzzleIndex: state.currentPuzzleIndex,
-    puzzleCount: state.mission.puzzles.length,
+    puzzleCount: stationsOfRun(state),
     away: awayOf(state),
     pausedAt: state.paused?.since ?? null,
     ...takeoversOf(state),

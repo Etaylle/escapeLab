@@ -51,6 +51,11 @@ const HINTS = [0, 1, 2] as const;
 /** Under the type list: what picking another does to the fields below. */
 export const RETYPE_NOTE = 'Eine andere Art setzt die Einstellungen auf ihre Vorgaben zurück.';
 
+/** Under the Wechselplatz: what sharing one does, and what leaving it empty means. */
+export const POOL_NOTE =
+  'Rätsel mit demselben Wechselplatz wechseln sich ab: Je Einsatz ist eines davon in Betrieb, ' +
+  'die anderen stehen außer Betrieb. Leer = steht in jedem Einsatz.';
+
 interface FormProps {
   draft: Draft;
   index: number;
@@ -91,7 +96,7 @@ function HintFields({
   ));
 }
 
-function PuzzleForm({ draft, index, validation, onChange, onRemove }: FormProps) {
+export function PuzzleForm({ draft, index, validation, onChange, onRemove }: FormProps) {
   const puzzle = draft.puzzles[index];
   if (puzzle === undefined) {
     return null;
@@ -126,6 +131,15 @@ function PuzzleForm({ draft, index, validation, onChange, onRemove }: FormProps)
         id={inputId(`${path}.title`)}
         onChange={(title) => set({ ...puzzle, title })}
         issues={at('title')}
+      />
+      <TextField
+        label="Wechselplatz"
+        value={puzzle.pool}
+        placeholder="keiner"
+        note={POOL_NOTE}
+        id={inputId(`${path}.pool`)}
+        onChange={(pool) => set({ ...puzzle, pool })}
+        issues={at('pool')}
       />
       <FormHead title="Einstellungen" where={MODULE_NAMES[puzzle.type].kind} />
       <ModuleForm draft={draft} index={index} validation={validation} onChange={onChange} />

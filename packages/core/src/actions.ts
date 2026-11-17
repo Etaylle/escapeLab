@@ -44,12 +44,15 @@ import {
 import {
   consoleOf,
   operatorsOf,
+  outOfService,
   picking,
   readersOf,
   sourceOpen,
   stationArmed,
   stationKey,
+  stationsOfRun,
 } from './map.js';
+import { drawPools, namesStation, partsHeldBack, runOrder, type Draw } from './rotation.js';
 import type { Spot } from './reach.js';
 
 /**
@@ -1255,6 +1258,13 @@ function runSeed(state: GameState, rolled: number, daily: DailyStart | null): nu
   return state.roomSeed === null ? rolled : (state.roomSeed + state.runs) >>> 0;
 }
 
+/** The mission as a run of `drawn` takes it (rotation.ts `runOrder`); itself without pools. */
+function missionOfRun(mission: Mission, drawn: Draw): Mission {
+  return Object.keys(drawn).length === 0
+    ? mission
+    : { ...mission, puzzles: runOrder(mission.puzzles, drawn) };
+}
+
 function startMission(
   state: GameState,
   action: { playerId: string; at: number; seed: number; daily?: DailyStart },
@@ -1267,9 +1277,14 @@ function startMission(
   const { map, intro } = state.mission;
   const daily = dailyOfRun(state, action.daily);
   const seed = runSeed(state, action.seed, daily);
+  // Each pool's station is drawn anew: the run's own stand first, those out of service after.
+  const drawn = drawPools(state.mission.puzzles, seed);
+  const heldBack = partsHeldBack(state.mission.puzzles, map, drawn);
   const started: GameState = {
     ...state,
     phase: 'playing',
+    mission: missionOfRun(state.mission, drawn),
+    drawn,
     players: drawSpawns(crew, map.spawns, seed),
     currentPuzzleIndex: 0,
     picked: false,
@@ -1296,10 +1311,12 @@ function startMission(
     drops: 0,
     calledOff: null,
     items: Object.fromEntries(
-      map.items.map((item) => [
-        item.id,
-        { x: item.x + 0.5, y: item.y + 0.5, carriedBy: null, delivered: false },
-      ]),
+      map.items
+        .filter((item) => !heldBack.has(item.id))
+        .map((item) => [
+          item.id,
+          { x: item.x + 0.5, y: item.y + 0.5, carriedBy: null, delivered: false },
+        ]),
     ),
     events: [],
     startedAt: action.at,
@@ -1423,7 +1440,7 @@ function requirePlaying(
 export function inEscapePhase(state: GameState): boolean {
   return (
     state.phase === 'playing' &&
-    state.currentPuzzleIndex >= state.mission.puzzles.length &&
+    state.currentPuzzleIndex >= stationsOfRun(state) &&
     state.mission.map.exit !== undefined
   );
 }
@@ -1446,7 +1463,7 @@ function advance(state: GameState, at: number): GameState {
   );
   const logged = logRadio(reported, 'solved', solved?.onSolved, at, solved?.id);
   const nextIndex = state.currentPuzzleIndex + 1;
-  if (nextIndex >= state.mission.puzzles.length) {
+  if (nextIndex >= stationsOfRun(state)) {
     if (state.mission.map.exit !== undefined) {
       // All systems online — but the lab is only beaten once everyone is out.
       const unlocked = logEvent(
@@ -2220,9 +2237,33 @@ function deliverItem(
 
 /** Items a station still waits for before it can be switched on. */
 export function missingItemsFor(state: GameState, puzzleId: string): string[] {
+  const station = state.mission.puzzles.find((def) => def.id === puzzleId);
+  if (station === undefined) {
+    return [];
+  }
   return state.mission.map.items
-    .filter((def) => def.requiredFor === puzzleId && state.items[def.id]?.delivered !== true)
+    .filter(
+      (def) =>
+        namesStation(def.requiredFor, station) && state.items[def.id]?.delivered !== true,
+    )
     .map((def) => def.label);
+}
+
+/** What a station out of service answers whoever tries it, as its tag reads. */
+export const OUT_OF_SERVICE = 'Außer Betrieb.';
+/** What a source answers that prints only the rules of stations out of service. */
+export const SOURCE_OUT_OF_SERVICE = 'Zu einer Anlage außer Betrieb.';
+
+/**
+ * Whether a manual object is out of service this run: every puzzle it covers is (map.ts
+ * `outOfService`). One that also covers a station of the run stays as it is.
+ */
+export function sourceOutOfService(
+  state: GameState,
+  source: Pick<ManualDef, 'puzzleIds'>,
+): boolean {
+  const resting = outOfService(state);
+  return source.puzzleIds.every((id) => resting.has(id));
 }
 
 /** The locker or cabinet a player stands at, while it is still closed. */
@@ -2233,6 +2274,9 @@ function closedSourceAt(state: GameState, playerId: string, manualId: string): M
   }
   if (!(state.presence.manuals[source.id] ?? []).includes(playerId)) {
     fail('Nur direkt davor.');
+  }
+  if (sourceOutOfService(state, source)) {
+    fail(SOURCE_OUT_OF_SERVICE);
   }
   return source;
 }
@@ -2351,7 +2395,7 @@ function handleInteract(state: GameState, action: { playerId: string; at: number
   const index = stationToSwitchOn(state, action.playerId);
   const def = state.mission.puzzles[index];
   if (def === undefined || !stationArmed(state, index)) {
-    fail('Hier gibt es nichts zu aktivieren.');
+    fail(nothingToSwitchOn(state, action.playerId));
   }
   const missing = missingItemsFor(state, def.id);
   if (missing.length > 0) {
@@ -2373,6 +2417,18 @@ function stationToSwitchOn(state: GameState, playerId: string): number {
   return state.mission.puzzles.findIndex(
     (def, index) => index >= current && consoleOf(state, def.id, playerId) !== null,
   );
+}
+
+/** What E is told where it switches nothing on: at a console out of service, its tag. */
+function nothingToSwitchOn(state: GameState, playerId: string): string {
+  return atStationOutOfService(state, playerId)
+    ? OUT_OF_SERVICE
+    : 'Hier gibt es nichts zu aktivieren.';
+}
+
+/** Whether `playerId` stands at a console of a station out of service this run. */
+export function atStationOutOfService(state: GameState, playerId: string): boolean {
+  return [...outOfService(state)].some((id) => consoleOf(state, id, playerId) !== null);
 }
 
 /**
@@ -2430,6 +2486,7 @@ function backToLobby(state: GameState, action: { playerId: string }): GameState 
     puzzleState: null,
     seed: null,
     daily: null,
+    drawn: {},
     edgework: null,
     pressedPlates: [],
     occupiedPanels: [],

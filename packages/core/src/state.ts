@@ -6,6 +6,7 @@ import type { Mission } from './mission.js';
 import type { PuzzleState } from './puzzles/index.js';
 import type { RelayState } from './puzzles/relay.js';
 import type { RadioMoment, Speaker } from './radio.js';
+import type { Draw } from './rotation.js';
 
 export type Phase = 'lobby' | 'playing' | 'won' | 'lost';
 
@@ -201,7 +202,9 @@ export interface GameState {
   phase: Phase;
   /**
    * already scaled to `difficulty` — downstream code just reads the numbers; in a free-order
-   * run its puzzles stand in the run's order, the solved ones first (`currentPuzzleIndex`)
+   * run its puzzles stand in the run's order, the solved ones first (`currentPuzzleIndex`),
+   * and in a run of a mission with pools the stations out of service stand last, after the
+   * run's own (rotation.ts `runOrder`, `stationCount`)
    */
   mission: Mission;
   difficulty: Difficulty;
@@ -246,6 +249,11 @@ export interface GameState {
    * that the Funkprobe is said by the operator who then has the run.
    */
   castSeed: number;
+  /**
+   * the station this run has at each Wechselplatz, by the pool's id (rotation.ts): drawn from
+   * the seed by start-mission; empty for a mission without pools, and in the lobby
+   */
+  drawn: Draw;
   /** serial, lamps and cells of this run; rolled from the seed by start-mission */
   edgework: Edgework | null;
   /**
@@ -405,6 +413,7 @@ export function initialState(
     daily: null,
     runs: 0,
     castSeed: castSeedOf(roomSeed, castSeed),
+    drawn: {},
     edgework: null,
     pressedPlates: [],
     occupiedPanels: [],

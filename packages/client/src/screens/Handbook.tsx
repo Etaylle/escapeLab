@@ -125,6 +125,17 @@ export function Handbook({ manual }: { manual: MissionManual }) {
 }
 
 /**
+ * What the page of a station at a Wechselplatz says of its turn: which other machines stand at
+ * the same place, and that a shift has one of them in service.
+ */
+export function turnsNote(others: readonly string[]): string {
+  return (
+    `Wechselplatz mit ${others.join(', ')}: Je Schicht ist eine dieser Anlagen in Betrieb, ` +
+    'die anderen tragen das Schild AUSSER BETRIEB.'
+  );
+}
+
+/**
  * A station's chapter, under where its rules lie in the lab — or, for a station the whole
  * crew works and no source covers, what it takes to switch.
  */
@@ -137,6 +148,9 @@ function Chapter({ station }: { station: MissionManualStation }) {
     <section className="handbook-chapter">
       <h2>{`§${station.index + 1} — ${station.title}`}</h2>
       <p className="handbook-crew">{where}</p>
+      {station.takesTurnsWith !== undefined && (
+        <p className="handbook-crew">{turnsNote(station.takesTurnsWith)}</p>
+      )}
       <Manual sections={station.manual} />
     </section>
   );

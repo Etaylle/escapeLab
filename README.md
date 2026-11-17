@@ -357,16 +357,17 @@ selbst, wie die CI, und probt mitten in einem Einsatz den Neustart: SIGTERM, die
 „WARTUNG · Der Server startet neu" auf jeder Seite, und nach dem Neustart alle zurück im Einsatz.
 
 **Nur ein Teil des Rundgangs (Gruppen):** Jede Aufnahme des Rundgangs gehört zu genau einer von
-einundzwanzig Gruppen (`tools/groups.mjs`); `SHOTS_ONLY=screens,intro` spielt nur diese,
+zweiundzwanzig Gruppen (`tools/groups.mjs`); `SHOTS_ONLY=screens,intro` spielt nur diese,
 `SHOTS_SKIP=perf` alle außer diesen — der schnelle Beweis eines Teils. Vor dem Rundgang laufen die
 Proben, jede in einem Raum für sich: `editor`, `art`, `drones` (Gefahrensinn und eine Drohne aus der
 Nähe), `reconnect`, `restart` und `three` (Blackout zu dritt bis zur Signalkette, die Zielzeile mit
 jeder Hand: `three-lever`, `three-plate`, `three-hands`, `three-reader`, `three-phone-932`; der
 Systemcheck nennt sie im Log als ausgelassen) — im Systemcheck dazu die Probe des Serverraums, die
 zu `devices` gehört, die der Zugangskontrolle, `access`, die der Anlaufsteuerung, `startup`, die des
-Paketfilters, `firewall`, `hall` (die Übungshalle bis zur Siegerkarte) und `music` (die Musikpakete
+Paketfilters, `firewall`, `hall` (die Übungshalle bis zur Siegerkarte), `rotation` (die
+Wechselprobe auf zwei Seeds, siehe unten) und `music` (die Musikpakete
 in den Einstellungen auf einer eigenen Menüseite: ein anderes Paket hörbar, Vorhören, nach dem
-Neuladen behalten); Blackout nennt alle sechs im Log als ausgelassen. Der Rundgang selbst: `screens`
+Neuladen behalten); Blackout nennt alle sieben im Log als ausgelassen. Der Rundgang selbst: `screens`
 (Menü und sein Ton, Bestenliste, Lobby, der Start aus ihr), `intro` (die Eröffnung bis
 `blackout.png`) und `run` (die Mission bis zur Siegerkarte, nach dem gewonnenen Systemcheck die
 Einsätze des Kontos, sein Kennwort, die Anmeldung auf einem zweiten Gerät, der Kontowechsel und sein
@@ -405,6 +406,17 @@ s:
 mit `SHOTS_ONLY=firewall` bei Last um 4 (17.11.2026), und die Übungshalle braucht an ihrem
 Paketfilter 55,1 s dazu. `music` (M-packs) spielt nur im Systemcheck: 4,9 s im CI,
 9,7 s allein mit `SHOTS_ONLY=music` bei Last um 20.
+
+`rotation` (B-rotation) spielt nur im Systemcheck: Die Probemission
+`tools/fixtures/rotation-probe.json` („Wechselprobe") hat an ihrem mittleren Platz einen
+Wechselplatz aus drei Stationen, von denen der Seed je Lauf eine auslost (`docs/gameplay.md`,
+„Stations that take turns"). Der Rundgang importiert sie über den Editor und startet sie auf zwei
+Seeds mit verschiedener Auslosung (`tools/fixtures/rotation-plan.json`): In jedem Raum wird die
+erste Station gelöst, jedes Pult außer Betrieb muss auf der Karte so stehen, sein Schild „AUSSER
+BETRIEB" unter ihm, E öffnet dort nichts, und sein Buch gibt keine Seite
+(`rotation-out-of-service-<ausgeloste Station>.png`); der zweite Raum wird bis zur Siegerkarte
+gespielt (`rotation-won.png`), die ausgeloste Station öffnet die Tür des Wechselplatzes. 68 s
+allein mit `SHOTS_ONLY=rotation` bei Last 4 bis 10 (17.11.2026).
 
 `SHOTS_ONLY=screens,intro` spielte Blackout in 48 s; jede Gruppe im Lauf zieht die Mission bis
 zur Siegerkarte mit, und `SHOTS_ONLY=run` allein dauerte 262 s (den Systemcheck 85 s). Die

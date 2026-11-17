@@ -135,6 +135,13 @@ export const GROUPS = [
     captures: ['hall', 'hall-player.png', 'hall-overview.png', 'hall-won.png', 'hall-*.png'],
   },
   {
+    // The Wechselplatz's scratch mission on two seeds, in a Systemcheck run.
+    name: 'rotation',
+    stage: 'drills',
+    needs: [],
+    captures: ['rotation', 'rotation-out-of-service-*.png', 'rotation-won.png'],
+  },
+  {
     // The music packs in the settings' „Ton", on a menu page of its own (client MusicSettings.tsx).
     name: 'music',
     stage: 'drills',
