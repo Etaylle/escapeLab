@@ -41,12 +41,12 @@
             {
               "kind": "gap",
               "gap": "abgang",
-              "comment": "Last Lüftung: Leuchtbild, Tabelle 2 im Betriebsbuch"
+              "comment": "Lüftung: Leuchtbild in Tabelle 2, Betriebsbuch"
             },
             {
               "kind": "code",
               "text": "impuls abgang -> B",
-              "comment": "Leistungsschalter des Abgangs: auf den markierten Stufen"
+              "comment": "Schalter im Fenster der Leiter"
             }
           ],
           "gaps": ["abgang"],

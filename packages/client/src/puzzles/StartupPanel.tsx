@@ -111,7 +111,16 @@ export function promptHint(terminal: StartupTerminal): string | null {
     return null;
   }
   const open = terminal.gaps.filter((gap) => (terminal.values[gap] ?? null) === null);
-  return `Eingabe: ${[...open.map((gap) => `setze ${gap} <nr>`), 'start'].join(' · ')}`;
+  return open.length === 0 ? 'Eingabe: start' : `Eingabe: setze ${open.join('|')} <nr> · start`;
+}
+
+/**
+ * Whether the log's last verdict — its newest line that is no mere information — is a refusal:
+ * the status strip keeps it in view until the next `start`, after which a pulse or another
+ * verdict stands there.
+ */
+export function refusedLast(log: readonly StartupLogLine[]): boolean {
+  return [...log].reverse().find((line) => line.tag !== 'info')?.tag === 'fail';
 }
 
 /** The console whose Schaltfeld takes this stage's pulse. */
@@ -122,21 +131,35 @@ const armedConsole = (puzzle: StartupPuzzle): ConsoleId => other(puzzle.types);
  * pulse is doing or came to last.
  */
 export function statusOf(puzzle: StartupPuzzle): string {
-  const { stage, stages, types, terminal, board, last } = puzzle;
-  const head = `Stufe ${stage}/${stages}`;
-  const lastWords = last === null ? 'Bereit' : OUTCOME_WORDS[last];
-  if (puzzle.role === 'board' && board !== null) {
-    const pulse = board.pulse;
-    if (pulse === null) {
-      const armed = armedConsole(puzzle).toUpperCase();
-      return `${head} · Schaltfeld ${armed} aufgeschaltet · ${lastWords}`;
-    }
-    return `${head} · ${pulse.arrived ? 'Impuls auf den markierten Stufen' : 'Impuls kommt'}`;
+  const head = `Stufe ${puzzle.stage}/${puzzle.stages}`;
+  const { board } = puzzle;
+  const words =
+    puzzle.role === 'board' && board !== null ? boardWords(puzzle, board) : terminalWords(puzzle);
+  return `${head} · ${words}`;
+}
+
+/** What the strip says past the stage of the pulse it last sent, or of the last outcome. */
+const lastWords = ({ last }: StartupPuzzle): string =>
+  last === null ? 'Bereit' : OUTCOME_WORDS[last];
+
+/** The strip at the live Schaltfeld: the pulse coming in, on the window, or the last outcome. */
+function boardWords(puzzle: StartupPuzzle, board: StartupBoard): string {
+  const { pulse } = board;
+  if (pulse === null) {
+    const armed = armedConsole(puzzle).toUpperCase();
+    return `Schaltfeld ${armed} aufgeschaltet · ${lastWords(puzzle)}`;
   }
+  return pulse.arrived ? 'Impuls auf den markierten Stufen' : 'Impuls kommt';
+}
+
+/** The strip at the terminal: a pulse off, a start refused, or where the script runs. */
+function terminalWords(puzzle: StartupPuzzle): string {
+  const { terminal, types } = puzzle;
   if (terminal?.sent === true) {
-    return `${head} · Impuls unterwegs zu Schaltfeld ${other(types).toUpperCase()}`;
+    return `Impuls unterwegs zu Schaltfeld ${other(types).toUpperCase()}`;
   }
-  return `${head} · Skript an ${consoleName(types)} · ${lastWords}`;
+  const refused = terminal !== null && refusedLast(terminal.log);
+  return `Skript an ${consoleName(types)} · ${refused ? 'Anlauf verweigert' : lastWords(puzzle)}`;
 }
 
 // --- what a change sounds like -------------------------------------------------------------

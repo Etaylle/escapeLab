@@ -336,12 +336,11 @@ const manned = (ctx: PuzzleContext, side: ConsoleId, playerId: string): boolean 
 /** What a `zeige` line of the log opens on: the terminal's prompt reads it (client). */
 export const SHOWN_PREFIX = 'zeige: ';
 
-/** `zeige`: the log names the stage, its load and the gaps still open. */
+/** `zeige`: the log names the stage and the gaps still open; the script names its load. */
 function shown(state: StartupState): Outcome {
   const open = gapsOf(state.stage).filter((gap) => state.values[gap] === undefined);
   const gaps = open.length === 0 ? 'alle Lücken gesetzt' : `offen: ${open.join(', ')}`;
-  const load = LOAD_NAMES[dealNow(state).load];
-  const text = `${SHOWN_PREFIX}Stufe ${state.stage + 1}, ${load}, ${gaps}`;
+  const text = `${SHOWN_PREFIX}Stufe ${state.stage + 1}, ${gaps}`;
   return { state: logged(state, [{ tag: 'info', text }]), penalty: null };
 }
 
@@ -462,8 +461,8 @@ function breaker(def: StartupDef, state: StartupState, feeder: number, ctx: Puzz
 export function scriptOf(def: StartupDef, stage: number, load: StartupLoad): StartupScriptLine[] {
   const board = across(typingConsole(stage)).toUpperCase();
   const comments: Record<StartupGap, string> = {
-    sperre: `gestörter Abgang: rote Kontrollleuchte an Schaltfeld ${board}`,
-    abgang: `Last ${LOAD_NAMES[load]}: Leuchtbild, Tabelle 2 im Betriebsbuch`,
+    sperre: `gestört: rote Leuchte an Schaltfeld ${board}`,
+    abgang: `${LOAD_NAMES[load]}: Leuchtbild in Tabelle 2, Betriebsbuch`,
   };
   const gaps = gapsOf(stage).map(
     (gap): StartupScriptLine => ({ kind: 'gap', gap, comment: comments[gap] }),
@@ -475,7 +474,7 @@ export function scriptOf(def: StartupDef, stage: number, load: StartupLoad): Sta
     {
       kind: 'code',
       text: `impuls abgang -> ${board}`,
-      comment: 'Leistungsschalter des Abgangs: auf den markierten Stufen',
+      comment: 'Schalter im Fenster der Leiter',
     },
   ];
 }

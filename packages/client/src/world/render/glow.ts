@@ -122,10 +122,8 @@ function layMoving(
   if (clipNeeded(frame, source, shut)) {
     inTiles(ctx, frame);
     ctx.clip(clipOf(frame, source, shut));
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-  } else {
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
   }
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
   drawRadial(ctx, frame.kit.radials, poolStops(source.colour), [sx, sy, reach], frame);
   ctx.restore();
 }

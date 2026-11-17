@@ -604,13 +604,15 @@ Betriebsbuch in the west room), and its bay in the Übungshalle.
 - **The script** (`zeige` lists the stage and its open gaps in the log) names the load the stage
   starts — Netzeinspeisung, Notstromschiene, Kühlkreis, Lüftung, Beleuchtung, one of its own each
   stage — and has the gap `abgang`, from stage 2 on also `sperre`. Its comments are the hints:
-  „Last Kühlkreis: Leuchtbild, Tabelle 2 im Betriebsbuch", „gestörter Abgang: rote
-  Kontrollleuchte an Schaltfeld A". `setze <lücke> <wert>` (or the script's own `abgang = 2`)
-  sets a gap — the value then stands bracketed and underlined, `abgang = [2]`, told from the
-  script's own text —, `start` runs the script; Tab completes a command and, after `setze`, a
-  gap of the script; the keys put the same lines together. Every comment stands on a line of its
-  own over the line it explains, each line one row, cut rather than wrapped; the log keeps three
-  lines; the device stands whole at 1280 × 720 and on a phone held sideways. The script loads
+  „Kühlkreis: Leuchtbild in Tabelle 2, Betriebsbuch", „gestört: rote Leuchte an Schaltfeld A",
+  „Schalter im Fenster der Leiter". `setze <lücke> <wert>` (or the script's own
+  `abgang = 2`) sets a gap — the value then stands bracketed and underlined, `abgang = [2]`,
+  told from the script's own text —, `start` runs the script; Tab completes a command and, after
+  `setze`, a gap of the script; the keys put the same lines together. Every comment stands on a
+  line of its own over the line it explains — a comment wraps, a command or a gap keeps its row
+  —; the log shows its last three entries whole (a phone held sideways its newest, or the hint
+  in its place), and a refused start stays in the status strip until the next `start`; the
+  device stands whole at 1280 × 720 and on a phone held sideways. The script loads
   with a log line naming the three commands. `npm` and whatever follows it the terminal
   answers itself, without a fault: „? npm: unbekannter Befehl — AS-86, Baujahr 1986". Once
   `zeige` has answered last, the line under the prompt names the typed steps the stage still

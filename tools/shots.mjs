@@ -10895,10 +10895,15 @@ function startupDealt(typer, board, stage) {
 /** The step a command takes as it shows in `player`'s view, or the station's solve. */
 function startupTook(player, input) {
   const terminal = startupView(player)?.terminal ?? null;
-  if (input.cmd === 'setze') {
-    return terminal?.values[input.gap] === input.value;
+  if (terminal === null) {
+    return false;
   }
-  return terminal?.sent === true;
+  const took = {
+    setze: () => terminal.values[input.gap] === input.value,
+    zeige: () => (terminal.log.at(-1)?.text ?? '').startsWith('zeige:'),
+    start: () => terminal.sent,
+  };
+  return took[input.cmd]();
 }
 
 /** `setze <gap> <value>` typed at the prompt, Tab completing the command and the gap. */
@@ -11012,14 +11017,22 @@ function lineMisfits() {
     });
 }
 
+/** In the page: the log's newest entry and the log's box, where the log shows; null where not. */
+function newestLogged() {
+  const log = document.querySelector('.startup-log');
+  const newest = log?.querySelector('.servers-line:last-child');
+  const box = log?.getBoundingClientRect();
+  // A log left out for the hint under the prompt (a phone held sideways) holds nothing to see.
+  return newest && box && box.height > 0 ? { box, entry: newest.getBoundingClientRect() } : null;
+}
+
 /** In the page: the log's newest entry out of its box, or of no height; none where in view. */
 function logMisfit() {
-  const log = document.querySelector('.startup-log');
-  const newest = log?.querySelector('.servers-line:last-child') ?? null;
-  if (log === null || newest === null) {
+  const seen = newestLogged();
+  if (seen === null) {
     return [];
   }
-  const [box, entry] = [log.getBoundingClientRect(), newest.getBoundingClientRect()];
+  const { box, entry } = seen;
   const out = entry.top < box.top - 1 || entry.bottom > box.bottom + 1 || entry.height === 0;
   return out ? [`newest log entry ${Math.round(entry.top)}..${Math.round(entry.bottom)} cut`] : [];
 }
@@ -11033,7 +11046,8 @@ async function startupFits(player, label) {
   const misfits = [
     ...(await player.page.evaluate(panelMisfit)),
     ...(await player.page.evaluate(lineMisfits)),
-    ...(await player.page.evaluate(logMisfit)),
+    // The page has neither helper: both go in as source, the first declared for the second.
+    ...(await player.page.evaluate(`(() => { ${newestLogged}\nreturn (${logMisfit})(); })()`)),
   ];
   const said = misfits.length === 0 ? 'whole, every line in its row' : '!!';
   console.log(
@@ -11076,15 +11090,54 @@ async function captureStartupConsoles({ typer, board }) {
 }
 
 /**
- * A later stage's terminal — its script one gap longer — held to a phone sideways at 844×390,
- * whole and every line in its row, then back to laptop size.
+ * `typer`'s terminal held to a phone sideways at 844×390 and 932×430 as it stands — whole, every
+ * line in its row, the newest log entry in view (`startupFits`) —, then back to laptop size.
  */
-async function startupOnPhone(typer, stage) {
-  const label = `startup stage ${stage} 844`;
-  await phoneReach(typer, SIZES[3], { label, unjudged: startupUnjudged });
-  await startupFits(typer, label);
+async function startupOnPhones(typer, label) {
+  for (const size of [SIZES[3], SIZES[4]]) {
+    const at = `${label} ${size.width}`;
+    await phoneReach(typer, size, { label: at, unjudged: startupUnjudged });
+    await startupFits(typer, at);
+  }
   await typer.page.setViewportSize({ width: SIZES[0].width, height: SIZES[0].height });
   await sleep(300);
+}
+
+/**
+ * A later stage's tallest moments on a phone, made on purpose: `zeige` with both gaps open —
+ * the hint under the prompt naming them —, then a start with a wrong `abgang`, refused with an
+ * alarm, and `zeige` again — the status strip still saying the start was refused. Each held to
+ * both phones (`startupOnPhones`). The refusal is the drill's one alarm.
+ */
+async function startupRefusal(typer, stage) {
+  await startupCommand(typer, { cmd: 'zeige' }, false);
+  await startupOnPhones(typer, `startup stage ${stage.stage} zeige`);
+  const wrong = { ...stage.values, abgang: (stage.values.abgang % 4) + 1 };
+  for (const [gap, value] of Object.entries(wrong)) {
+    await startupCommand(typer, { cmd: 'setze', gap, value }, false);
+  }
+  const modal = typer.page.locator('.station-modal');
+  await modal.locator('.servers-key[data-cmd="start"]').click();
+  await modal.locator('.servers-key--enter').click();
+  const refused = () => startupView(typer)?.terminal?.log.at(-1)?.tag === 'fail';
+  if (!(await until(refused, 3000))) {
+    throw new Error(`${typer.name}'s wrong start was not refused: „${lastLogged(typer)}"`);
+  }
+  await startupCommand(typer, { cmd: 'zeige' }, false);
+  const status = (await textOf(modal.locator('.startup-status'))) ?? '';
+  if (!status.includes('Anlauf verweigert')) {
+    fail(`startup: after zeige the status strip no longer says the start was refused: „${status}"`);
+  }
+  await startupOnPhones(typer, `startup stage ${stage.stage} refused`);
+}
+
+/** The stage's values set at `typer`'s terminal — the first stage's first typed —; the lines. */
+async function startupSettings(typer, stage, first) {
+  const lines = [];
+  for (const [i, [gap, value]] of Object.entries(stage.values).entries()) {
+    lines.push(await startupCommand(typer, { cmd: 'setze', gap, value }, first && i === 0));
+  }
+  return lines;
 }
 
 /**
@@ -11099,14 +11152,12 @@ async function startupStage(crew, stage, first) {
   if (!startupDealt(typer, board, stage)) {
     fail(`startup: seed ${STARTUP_PLAN.seed} deals stage ${stage.stage} unlike startup-plan.json`);
   }
-  const lines = [];
-  for (const [i, [gap, value]] of Object.entries(stage.values).entries()) {
-    lines.push(await startupCommand(typer, { cmd: 'setze', gap, value }, first && i === 0));
+  if (!first) {
+    await startupRefusal(typer, stage);
   }
+  const lines = await startupSettings(typer, stage, first);
   if (first) {
     await captureStartupConsoles({ typer, board });
-  } else {
-    await startupOnPhone(typer, stage.stage);
   }
   lines.push(await startupCommand(typer, { cmd: 'start' }, false));
   if (first) {
@@ -11119,7 +11170,8 @@ async function startupStage(crew, stage, first) {
 
 /**
  * The plan's stages played at both consoles, the sides swapping; the station has to solve on the
- * last without an alarm. The log says how long it took and how long each pulse travelled.
+ * last with no alarm but the refusal each later stage makes on purpose (`startupRefusal`). The
+ * log says how long it took and how long each pulse travelled.
  */
 async function playStartup(crew) {
   const alarms = crew.a.seen.view.alarms.count;
@@ -11130,12 +11182,13 @@ async function playStartup(crew) {
   }
   const solved = await until(() => crew.a.seen.view.currentPuzzleIndex > 0, 3000);
   const raised = crew.a.seen.view.alarms.count - alarms;
+  const meant = STARTUP_PLAN.stages.length - 1;
   console.log(
     `startup            ${said.length} stages in ${seconds(Date.now() - from)} ` +
       `(${said.join('; ')}): ${solved ? 'solved' : '!! not solved'}, ` +
-      (raised === 0 ? 'no alarm' : `!! ${raised} alarm(s)`),
+      (raised === meant ? `${raised} alarm(s), the refusals meant` : `!! ${raised} alarm(s)`),
   );
-  if (!solved || raised > 0) {
+  if (!solved || raised !== meant) {
     fail(`startup: the plan ended ${solved ? 'solved' : 'unsolved'} with ${raised} alarm(s)`);
   }
 }

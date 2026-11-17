@@ -4,7 +4,6 @@ import {
   FAULT_PICTURE,
   FEEDERS,
   generateEdgework,
-  LOAD_NAMES,
   LOAD_PICTURES,
   PULSE_GRACE_MS,
   puzzleDefSchema,
@@ -165,17 +164,17 @@ describe('the script', () => {
       {
         kind: 'gap',
         gap: 'sperre',
-        comment: 'gestörter Abgang: rote Kontrollleuchte an Schaltfeld A',
+        comment: 'gestört: rote Leuchte an Schaltfeld A',
       },
       {
         kind: 'gap',
         gap: 'abgang',
-        comment: 'Last Kühlkreis: Leuchtbild, Tabelle 2 im Betriebsbuch',
+        comment: 'Kühlkreis: Leuchtbild in Tabelle 2, Betriebsbuch',
       },
       {
         kind: 'code',
         text: 'impuls abgang -> A',
-        comment: 'Leistungsschalter des Abgangs: auf den markierten Stufen',
+        comment: 'Schalter im Fenster der Leiter',
       },
     ]);
   });
@@ -245,7 +244,7 @@ describe('the terminal', () => {
       'Dieses Terminal hat in dieser Stufe kein Skript.',
     );
     expect(send(state, { cmd: 'zeige' }, 'a', T0).state.log.at(-1)?.text).toBe(
-      'zeige: Stufe 1, ' + LOAD_NAMES[state.stages[0]?.load ?? 'netz'] + ', offen: abgang',
+      'zeige: Stufe 1, offen: abgang',
     );
   });
 

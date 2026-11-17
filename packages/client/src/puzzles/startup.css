@@ -74,6 +74,11 @@
   overflow-wrap: anywhere;
 }
 
+/* The audience's column beside the lab is narrow: its feeders share what it has. */
+.startup-device--watched .startup-feeders {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
 /* The terminal's keys in a column beside its glass, so that the device stays within a laptop's
    height; under it in a narrow column (below). */
 .servers.startup-terminal {
@@ -400,9 +405,25 @@
     display: none;
   }
 
+  /* The hint under the prompt on one row: it names the steps, the script holds the clues. */
+  .startup-crt .startup-hint {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
   /* The script set close, its rows still apart: room for a later stage's longer script. */
   .startup-crt .startup-script {
-    line-height: 1.15;
+    line-height: 1.1;
+  }
+
+  .servers-crt.startup-crt {
+    gap: 3px;
+    padding: 5px 8px;
+  }
+
+  .startup-crt .servers-prompt {
+    padding-top: 2px;
   }
 
   /* The script's heading and its line without a comment tell nothing to look up: room. */
@@ -414,9 +435,20 @@
     grid-template-columns: minmax(0, 1fr) auto;
   }
 
-  /* A little wider than the Serverraum's: three keys and four to a row, one row fewer. */
+  /* A little wider than the Serverraum's, the send key narrower: the commands and the send key
+     on one row, the gaps and the feeders on two. */
   .servers.startup-terminal > .servers-bezel {
-    width: 14rem;
+    width: 16rem;
+  }
+
+  .startup-terminal .servers-key--enter {
+    min-width: 48px;
+  }
+
+  /* While the hint names the steps, the log's newest line gives way to it: the status strip
+     keeps a refusal in view. */
+  .startup-crt:has(.startup-hint) .startup-log {
+    display: none;
   }
 
   .startup-terminal .servers-key {
@@ -424,7 +456,7 @@
   }
 
   .startup-status {
-    padding-block: 2px;
+    padding-block: 0;
   }
 
   /* The newest entry alone, whole: what the last command came to is always in view. */

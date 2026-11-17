@@ -170,7 +170,7 @@ describe('the consoles', () => {
     const html = panel(atTerminal());
     expect(html).toContain('AS-86 Anlaufskript, Stufe 1 von 2');
     expect(html).toMatch(/abgang = <span class="startup-value startup-value--open">\?<\/span>/);
-    expect(html).toContain('Leuchtbild, Tabelle 2 im Betriebsbuch');
+    expect(html).toContain('Leuchtbild in Tabelle 2, Betriebsbuch');
     expect(html).not.toMatch(/startup-lamp--(gruen|gelb|rot)/);
     expect(html).toContain('SCHALTFELD B');
     expect(html).toContain('<input');
@@ -231,14 +231,14 @@ describe('the script as listed', () => {
       (m[1] ?? '').replace(/<[^>]+>/g, ''),
     );
     expect(texts.filter((text) => text.length > 72)).toEqual([]);
-    const hint = /^# Last [^:]+: Leuchtbild, Tabelle 2 im Betriebsbuch$/;
+    const hint = /^# [^:]+: Leuchtbild in Tabelle 2, Betriebsbuch$/;
     expect(texts.filter((text) => hint.test(text))).toHaveLength(1);
     expect(texts).toContain('abgang = ?');
   });
 });
 
 describe('the prompt’s hint and the Schaltfeld’s plate', () => {
-  const shown = { n: 9, tag: 'info' as const, text: 'zeige: Stufe 1, Kühlkreis, offen: abgang' };
+  const shown = { n: 9, tag: 'info' as const, text: 'zeige: Stufe 1, offen: abgang' };
 
   it('names the typed steps once zeige has answered last, the gaps still open first', () => {
     const log = atTerminal().terminal?.log ?? [];
@@ -248,6 +248,9 @@ describe('the prompt’s hint and the Schaltfeld’s plate', () => {
     expect(panel(after)).toContain('Eingabe: setze abgang &lt;nr&gt; · start');
     const set = atTerminal({ log: [...log, shown], values: { abgang: 2 } });
     expect(promptHint(set.terminal ?? fail())).toBe('Eingabe: start');
+    // Two gaps open: one row's worth, the gaps joined.
+    const two = atTerminal({ log: [...log, shown], gaps: ['sperre', 'abgang'], values: {} });
+    expect(promptHint(two.terminal ?? fail())).toBe('Eingabe: setze sperre|abgang <nr> · start');
   });
 
   it('marks the Schaltfeld taking the pulse, and names it on the one at rest', () => {
@@ -270,6 +273,19 @@ describe('the status strip', () => {
     );
     expect(statusOf({ ...atBoard(), last: 'verworfen' })).toBe(
       'Stufe 1/2 · Schaltfeld B aufgeschaltet · Impuls verworfen: Schalter vor dem Fenster',
+    );
+  });
+
+  it('keeps a refused start in view until the next start, whatever zeige logs after it', () => {
+    const log = atTerminal().terminal?.log ?? [];
+    const refusal = { n: 8, tag: 'fail' as const, text: 'Anlauf verweigert: ein Wert passt nicht' };
+    const shown = { n: 9, tag: 'info' as const, text: 'zeige: Stufe 1, offen: abgang' };
+    expect(statusOf(atTerminal({ log: [...log, refusal, shown] }))).toBe(
+      'Stufe 1/2 · Skript an Pult A · Anlauf verweigert',
+    );
+    const sent = { n: 10, tag: 'ok' as const, text: 'Impuls an Schaltfeld B unterwegs' };
+    expect(statusOf(atTerminal({ log: [...log, refusal, shown, sent] }))).toBe(
+      'Stufe 1/2 · Skript an Pult A · Bereit',
     );
   });
 
