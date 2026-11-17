@@ -7,6 +7,7 @@ import { TalkButton } from '../screens/Voice.js';
 import { consoleName } from '../world/consoles.js';
 import { cssVars, type Change } from './feel.js';
 import {
+  armable,
   BURST_MS,
   cursorStep,
   fallKey,
@@ -291,14 +292,18 @@ function GateLine(props: {
   );
 }
 
-/** The Sperrpult's keys under its scope: ◀, SPERREN, ▶, FREIGABE, the lamp and the talk key. */
+/**
+ * The Sperrpult's keys under its scope: ◀, SPERREN, ▶, FREIGABE — pressable only where the wave
+ * can start (`armable`) —, the lamp and the talk key.
+ */
 function GateKeys(props: {
   puzzle: FirewallPuzzle;
+  now: number;
   step: (by: number) => void;
   trip: () => void;
   arm: () => void;
 }) {
-  const { puzzle, step, trip, arm } = props;
+  const { puzzle, now, step, trip, arm } = props;
   return (
     <div className="firewall-bezel">
       <button
@@ -326,7 +331,7 @@ function GateKeys(props: {
         type="button"
         className="firewall-arm"
         data-feel="thunk"
-        disabled={!puzzle.waiting}
+        disabled={!armable(puzzle, now)}
         onClick={arm}
       >
         FREIGABE
@@ -338,10 +343,23 @@ function GateKeys(props: {
 }
 
 /**
+ * Space or enter at the Sperrpult: the trip while the wave runs; the Freigabe while it waits,
+ * where it can start (`armable`) — never in the second after a fault, when the key may still be
+ * a late trip's; nothing otherwise.
+ */
+function pressed(puzzle: FirewallPuzzle, trip: () => void, arm: () => void): void {
+  if (!puzzle.waiting) {
+    trip();
+  } else if (armable(puzzle, serverNow())) {
+    arm();
+  }
+}
+
+/**
  * Console a, the Sperrpult: the scope of points, the gate under its lines — set by a tap on a
  * line, stepped by ◀ ▶, ← → or the keys that walk left and right (`useSteps`) —, SPERREN, which
  * trips it, and FREIGABE, which starts a waiting wave; space or enter press the one of the two
- * the wave stands for. The gate is this console's own; only the trip goes to the server, with
+ * the wave stands for (`pressed`). The gate is this console's own; only the trip goes to the server, with
  * its line.
  */
 function Sperrpult({ puzzle, send }: { puzzle: FirewallPuzzle; send: Send }) {
@@ -356,7 +374,7 @@ function Sperrpult({ puzzle, send }: { puzzle: FirewallPuzzle; send: Send }) {
   const { left, right } = useSteps();
   useKeys([...left, ...right, ...PRESS], (key) => {
     if (PRESS.includes(key)) {
-      (puzzle.waiting ? arm : trip)();
+      pressed(puzzle, trip, arm);
       return;
     }
     dialDetent();
@@ -380,7 +398,7 @@ function Sperrpult({ puzzle, send }: { puzzle: FirewallPuzzle; send: Send }) {
           />
         )}
       />
-      <GateKeys puzzle={puzzle} step={step} trip={trip} arm={arm} />
+      <GateKeys puzzle={puzzle} now={now} step={step} trip={trip} arm={arm} />
     </div>
   );
 }

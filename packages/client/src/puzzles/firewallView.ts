@@ -50,12 +50,38 @@ export function progressOf(blip: FirewallBlip, t: number, fallMs: number): numbe
 }
 
 /**
+ * How long after a fault the Freigabe stays shut, ms: a trip hammered on space a moment too late
+ * never starts the next wave the instant its fault lands.
+ */
+export const ARM_LOCK_MS = 1000;
+
+/** When the Freigabe shut by a fault opens again (server epoch ms); null where none shut it. */
+function armLockEnd(puzzle: FirewallPuzzle): number | null {
+  const { event } = puzzle;
+  return puzzle.waiting && event?.kind === 'fault' ? event.at + ARM_LOCK_MS : null;
+}
+
+/**
+ * Whether the Freigabe can be pressed at `now`: the wave waits, both consoles are manned, and a
+ * fault that called the wave off lies ARM_LOCK_MS behind.
+ */
+export function armable(puzzle: FirewallPuzzle, now: number): boolean {
+  const unlocks = armLockEnd(puzzle);
+  return puzzle.waiting && puzzle.vacant.length === 0 && (unlocks === null || now >= unlocks);
+}
+
+/**
  * The next moment (server epoch ms) after `now` at which the device shows something else of its
- * own accord: a packet reaching the Kern, a burst gone, the next whole second of the breath
- * before a wave's first packet. Null while the wave stands still and nothing is due.
+ * own accord: the Freigabe opening after a fault, a packet reaching the Kern, a burst gone, the
+ * next whole second of the breath before a wave's first packet. Null while the wave stands still
+ * and nothing is due.
  */
 export function nextChange(puzzle: FirewallPuzzle, now: number): number | null {
   const { clock, packets, event } = puzzle;
+  const unlocks = armLockEnd(puzzle);
+  if (unlocks !== null && unlocks > now) {
+    return unlocks;
+  }
   if (clock === null || packets === null || clock.heldAt !== null) {
     return null;
   }

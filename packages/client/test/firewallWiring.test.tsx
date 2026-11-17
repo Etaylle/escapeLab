@@ -226,6 +226,19 @@ describe('the Sperrpult’s controls', () => {
     press(tree, 'firewall-arm');
     expect(sent.at(-1)).toEqual({ start: true });
   });
+
+  it('gives no Freigabe on space in the second after a fault, nor with the Analysepult empty', () => {
+    const sent: Input[] = [];
+    const fault = { n: 3, kind: 'fault' as const, at: T0 + MID - 500, line: null };
+    render({ ...seen('a', true), event: fault }, sent);
+    key(' ');
+    render({ ...seen('a', true), vacant: ['b'] }, sent);
+    key('enter');
+    expect(sent).toEqual([]);
+    render({ ...seen('a', true), event: { ...fault, at: T0 + MID - 1500 } }, sent);
+    key(' ');
+    expect(sent).toEqual([{ start: true }]);
+  });
 });
 
 describe('the Analysepult’s controls', () => {

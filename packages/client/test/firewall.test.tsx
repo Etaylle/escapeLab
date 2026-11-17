@@ -384,7 +384,6 @@ class ScaledSheets extends Sheets {
 }
 
 describe('the scope’s geometry', () => {
-  const sheets = new Sheets();
   const SCREENS: Screen[] = [
     { width: 1280, height: 720, coarse: false },
     { width: 1440, height: 820, coarse: false },
@@ -572,5 +571,40 @@ describe('the scope held', () => {
     expect(rowHeight).toBe('1.2');
     expect(sheets.declared(bar, 'line-height', PHONE)?.value).toBe('1.2');
     expect(sheets.declared(bar, 'padding', PHONE)?.value).toBe('0');
+  });
+});
+
+describe('the Freigabe', () => {
+  const ready = (): Firewall => ({
+    ...seen('a', 0),
+    waiting: true,
+    clock: { startedAt: T0, heldAt: T0 },
+    packets: [],
+  });
+  const fault = { n: 4, kind: 'fault' as const, at: T0, line: null };
+
+  it('opens a second after a fault, never while the Analysepult stands empty', () => {
+    expect(view.armable(ready(), T0)).toBe(true);
+    const called = { ...ready(), event: fault };
+    expect(view.armable(called, T0 + 999)).toBe(false);
+    expect(view.armable(called, T0 + 1000)).toBe(true);
+    expect(view.ARM_LOCK_MS).toBe(1000);
+    expect(view.armable({ ...ready(), vacant: ['b'] }, T0 + 5000)).toBe(false);
+    expect(view.armable({ ...ready(), waiting: false }, T0)).toBe(false);
+    // the device renders anew as it opens
+    expect(view.nextChange(called, T0 + 200)).toBe(T0 + 1000);
+  });
+
+  it('stands as a key to press only while it is open', () => {
+    clockAt(500);
+    const shut = panel({ ...ready(), event: fault });
+    expect(shut).toMatch(/<button[^>]*class="firewall-arm"[^>]*disabled/);
+    clockAt(1500);
+    expect(panel({ ...ready(), event: fault })).not.toMatch(
+      /<button[^>]*class="firewall-arm"[^>]*disabled/,
+    );
+    expect(panel({ ...ready(), vacant: ['b'] })).toMatch(
+      /<button[^>]*class="firewall-arm"[^>]*disabled/,
+    );
   });
 });
