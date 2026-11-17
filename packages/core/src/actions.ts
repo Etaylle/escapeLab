@@ -208,7 +208,33 @@ function requireHost(state: GameState, playerId: string): void {
   }
 }
 
+/**
+ * The game after `action`. A station that runs on the clock and on its consoles' presence
+ * (`elapse`) is brought to the moment of every action that names one: before a move there, so
+ * that the move meets the station as it stands then, and after every action, so that a change
+ * of presence, a pause or the station's switch-on holds or frees it at once.
+ */
 export function applyAction(state: GameState, action: Action): GameState {
+  const before = action.type === 'puzzle-input' ? clocked(state, action.at) : state;
+  if (overtaken(state, before)) {
+    // The clock raised an alarm or solved the station by the move's moment: the move was made
+    // on what has gone since, and counts for nothing — a victory is never answered with a
+    // refusal, and an alarm never lost with one.
+    return before;
+  }
+  const after = reduced(before, action);
+  return 'at' in action ? clocked(after, action.at) : after;
+}
+
+/**
+ * Whether bringing the station to a move's moment (`clocked`) raised an alarm or solved it — the
+ * only ways the clock ends a run there too.
+ */
+const overtaken = (state: GameState, clocked: GameState): boolean =>
+  clocked.penaltySeq !== state.penaltySeq ||
+  clocked.currentPuzzleIndex !== state.currentPuzzleIndex;
+
+function reduced(state: GameState, action: Action): GameState {
   switch (action.type) {
     case 'player-join':
       return playerJoin(state, action);
@@ -997,8 +1023,13 @@ function presentAtConsoles(state: GameState, from: ConsoleId | null): PuzzleCont
   if (from === null || open === undefined || moduleFor(open.type).consoles !== 2) {
     return { a: [], b: [] };
   }
+  return consolesManned(state, open);
+}
+
+/** Who stands at each console of the station of `def`, by presence. */
+function consolesManned(state: GameState, def: PuzzleDef): PuzzleContext['atConsoles'] {
   const at = (console: ConsoleId): string[] => [
-    ...(state.presence.stations[stationKey({ puzzleId: open.id, console })] ?? []),
+    ...(state.presence.stations[stationKey({ puzzleId: def.id, console })] ?? []),
   ];
   return { a: at('a'), b: at('b') };
 }
@@ -1873,18 +1904,23 @@ function handlePuzzleInput(
   return result.solved ? advance(creditWorkers(next, def, player.id), action.at) : next;
 }
 
-/** The open puzzle and its def while a run is on and not paused; null otherwise. */
-function openPuzzleOf(state: GameState): { def: PuzzleDef; puzzleState: PuzzleState } | null {
+/**
+ * The armed puzzle and its def while a run is on, paused or not: the station up
+ * (`currentPuzzleIndex`, in the run's own order) once it is switched on — its state made by its
+ * own module; null between stations, before the switch-on and outside a run.
+ */
+function armedPuzzleOf(state: GameState): { def: PuzzleDef; puzzleState: PuzzleState } | null {
   const def = state.mission.puzzles[state.currentPuzzleIndex];
-  if (
-    state.phase !== 'playing' ||
-    state.paused !== null ||
-    state.puzzleState === null ||
-    def === undefined
-  ) {
+  const puzzleState = state.puzzleState;
+  if (state.phase !== 'playing' || puzzleState === null || def?.type !== puzzleState.type) {
     return null;
   }
-  return { def, puzzleState: state.puzzleState };
+  return { def, puzzleState };
+}
+
+/** The open puzzle and its def while a run is on and not paused; null otherwise. */
+function openPuzzleOf(state: GameState): { def: PuzzleDef; puzzleState: PuzzleState } | null {
+  return state.paused === null ? armedPuzzleOf(state) : null;
 }
 
 /**
@@ -1912,12 +1948,48 @@ function tickPuzzle(state: GameState, at: number): GameState {
 }
 
 /**
+ * The armed station during a run, paused or not, where its module has an `elapse`; else null —
+ * nothing more to do for any other module, and none before a station is switched on.
+ */
+function elapsingStation(state: GameState) {
+  const armed = armedPuzzleOf(state);
+  const elapse = armed === null ? undefined : moduleFor(armed.def.type).elapse;
+  return armed === null || elapse === undefined ? null : { ...armed, elapse };
+}
+
+/**
+ * The open station brought to `at` by its module's `elapse` where it has one: the station held
+ * while one of its consoles stands empty — every console counted empty while the run stands
+ * still —, an alarm the clock ran into charged to nobody, a solve on the clock advancing the run.
+ * The same state where the module has no `elapse` or nothing changed.
+ */
+function clocked(state: GameState, at: number): GameState {
+  const open = elapsingStation(state);
+  if (open === null) {
+    return state;
+  }
+  const { def, puzzleState, elapse } = open;
+  const manned = state.paused === null ? consolesManned(state, def) : { a: [], b: [] };
+  const ctx = { ...puzzleContext(state, at, null), atConsoles: manned };
+  const result = elapse(def, puzzleState, ctx);
+  if (result.state === puzzleState) {
+    return state;
+  }
+  const next = { ...state, puzzleState: result.state };
+  if (result.penalty !== null) {
+    return applyPenalty(next, result.penaltySec ?? def.penaltySec, at, result.penalty);
+  }
+  return result.solved ? advance(creditWorkers(next, def, null), at) : next;
+}
+
+/**
  * A solved station counts for whoever worked it: the player whose input
  * solved it — at a station with two consoles everybody at either console,
- * since it takes both of them to work it.
+ * since it takes both of them to work it; nobody where the clock solved a station of one.
  */
-function creditWorkers(state: GameState, def: PuzzleDef, playerId: string): GameState {
-  const workers = moduleFor(def.type).consoles === 2 ? operatorsOf(state, def.id) : [playerId];
+function creditWorkers(state: GameState, def: PuzzleDef, playerId: string | null): GameState {
+  const own = playerId === null ? [] : [playerId];
+  const workers = moduleFor(def.type).consoles === 2 ? operatorsOf(state, def.id) : own;
   return workers.reduce((next, id) => credited(next, id, 'operated'), state);
 }
 

@@ -124,15 +124,21 @@ const NOTES: Readonly<Partial<Record<PuzzleDef['type'], readonly string[]>>> = {
     'Einweisung: Der Schalter zählt erst, wenn der Impuls auf den markierten Stufen der ' +
       'Leiter steht.',
   ],
+  firewall: [
+    'Einweisung: Die Richtlinie von oben lesen; die erste passende Regel gilt, die übrigen nicht.',
+    'Einweisung: Gesperrt wird nur, was am Sperrpult einen Ring trägt.',
+  ],
 };
 
 /**
  * What a station of the hall sets beside its module's defaults, by type: the Zugangskontrolle's
  * token device turns every 15 s, the shortest period the module takes — a practice waits a
- * quarter of a minute for an account, not half a minute.
+ * quarter of a minute for an account, not half a minute; the Paketfilter runs two waves of
+ * packets 10 s on their way — a practice learns the policy, it does not stand a shift.
  */
 const FIELDS: Readonly<Partial<Record<PuzzleDef['type'], Readonly<Record<string, unknown>>>>> = {
   access: { tokenSec: 15 },
+  firewall: { waves: 2, fallSec: 10 },
 };
 
 /** A machine as its printed page's title line names it: „Signalkette, Typ SK-4 (Baujahr 1986)". */

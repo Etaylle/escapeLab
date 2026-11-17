@@ -87,6 +87,7 @@ describe('the plates in the devices’ heads', () => {
     expect(twoConsoles.map((plate) => plate.type).sort()).toEqual([
       'access',
       'circuit',
+      'firewall',
       'servers',
       'signal',
       'startup',

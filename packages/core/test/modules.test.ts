@@ -28,7 +28,9 @@ import type {
 } from '../src/index.js';
 import { startsClosed, type ManualDef } from '../src/mission.js';
 import { handsTaken, labs, lightsOut, started, standing, T0 } from './lab.js';
-import { MAX_IDLE_SEC, playInstance } from './solveModule.js';
+import { serialLastDigit } from '../src/edgework.js';
+import { firewallMoves, fitsADropRule, type FirewallJudge } from '../src/puzzles/firewall.js';
+import { MAX_IDLE_SEC, playInstance, type Solver } from './solveModule.js';
 
 const SEEDS = 200;
 /** Instance runs of the modules checked on their own, beyond the missions. */
@@ -84,6 +86,53 @@ describe.each(own)('%s on its own', (_id, def, moves) => {
       taken.add(playInstance(def, seed));
     }
     expect([...taken].sort()).toEqual(moves);
+  });
+});
+
+describe('the Paketfilter on its own', () => {
+  const def = puzzleDefSchema.parse({ type: 'firewall', id: 'paketfilter', title: 'Paketfilter' });
+  /** A crew at the Paketfilter that marks by `judge` in place of the Sicherheitsrichtlinie. */
+  const crewJudging = (judge: FirewallJudge): Solver => (d, views, edgework, aid) => {
+    if (d.type !== 'firewall' || edgework === null || aid?.at === undefined) {
+      throw new Error('a crew at the Paketfilter needs its def, the Laborkennung and the moment');
+    }
+    const seen = views as Perspectives<Extract<PuzzleView, { kind: 'firewall' }>>;
+    return firewallMoves(d, seen, edgework, aid.at, judge);
+  };
+  /**
+   * Crews that never read the policy: marking every packet, marking none, and marking whatever
+   * a rule that drops fits — the rules read as a list of reasons to drop, not in their order.
+   */
+  const guesses: [string, FirewallJudge][] = [
+    ['every packet', () => true],
+    ['no packet', () => false],
+    ['every reason to drop, in no order', (h, ew) => fitsADropRule(h, serialLastDigit(ew))],
+  ];
+
+  it(`is solved by the policy through the harness without an alarm, for ${SEEDS} seeds`, () => {
+    for (let seed = 0; seed < SEEDS; seed++) {
+      expect(playInstance(def, seed)).toBeGreaterThan(0);
+    }
+  });
+
+  it(`takes an alarm in most seeds from a crew that learned half the page, of ${SEEDS}`, () => {
+    // „the Wartungsnetz passes, the rest of UDP drops": rules 1 and 6 alone, no order kept
+    const half: FirewallJudge = (h) => !h.source.startsWith('10.9.') && h.protocol === 'UDP';
+    let alarms = 0;
+    for (let seed = 0; seed < SEEDS; seed++) {
+      try {
+        playInstance(def, seed, crewJudging(half));
+      } catch (error) {
+        alarms += /alarm/.test(String(error)) ? 1 : 0;
+      }
+    }
+    expect(alarms).toBeGreaterThanOrEqual(SEEDS * 0.9);
+  });
+
+  it.each(guesses)('takes an alarm in every seed from a crew marking %s', (_name, judge) => {
+    for (let seed = 0; seed < SEEDS; seed++) {
+      expect(() => playInstance(def, seed, crewJudging(judge)), `seed ${seed}`).toThrow(/alarm/);
+    }
   });
 });
 
@@ -354,6 +403,22 @@ function ticked(state: GameState, at: number): GameState {
 }
 
 /**
+ * Whether the tick that brought the run to this round solved its station, or ended the run: the
+ * Paketfilter's last wave is clean on the clock, as its last packet is through.
+ */
+const solvedOnTheClock = (state: GameState): boolean =>
+  state.puzzleState === null || state.phase !== 'playing';
+
+/** The rounds in a row without a move after one that made `moves`; throws past MAX_IDLE_SEC. */
+function idleAfter(idle: number, moves: readonly Move<PuzzleInput>[], label: string): number {
+  const now = moves.length === 0 ? idle + 1 : 0;
+  if (now > MAX_IDLE_SEC) {
+    throw new Error(`${label}: no move in ${MAX_IDLE_SEC} s`);
+  }
+  return now;
+}
+
+/**
  * A whole mission through the reducer for a crew of `size`: the crew walks
  * past the sign, then at every station the operator's, the partner's and the
  * reader's views go to the solver, with the crew's transcript of the puzzle
@@ -389,13 +454,13 @@ function playMission(
       working.push(atWork(before, state, def));
     }
     state = ticked(state, at);
+    if (solvedOnTheClock(state)) {
+      continue;
+    }
     const roles = rolesAt(def, crew);
     const { views, edgework, clock } = crewSees(state, roles, at);
-    const moves = moduleFor(def.type).solve(def, views, edgework, { transcript, ...clock });
-    idle = moves.length === 0 ? idle + 1 : 0;
-    if (idle > MAX_IDLE_SEC) {
-      throw new Error(`${mission.id}/${def.id} (seed ${seed}): no move in ${MAX_IDLE_SEC} s`);
-    }
+    const moves = moduleFor(def.type).solve(def, views, edgework, { transcript, ...clock, at });
+    idle = idleAfter(idle, moves, `${mission.id}/${def.id} (seed ${seed})`);
     transcript.push(...moves.map((move) => ({ ...move, before: views })));
     state = movesIn(state, def, inputsFor(moves, roles, crew, at));
   }

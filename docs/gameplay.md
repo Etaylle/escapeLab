@@ -5,22 +5,23 @@ controls on keys and on a controller, the quick chat, the station's intercom, fi
 walks of Blackout's lab, stations in any order, runs without a clock and the Übungshalle, the
 first win at the stations the whole crew presses, a crew of three, the Erfolge, the Tagesschicht,
 the picture of a run, the danger sense, the Serverraum's cabling diagram, typing at its terminal,
-the Zugangskontrolle, the Anlaufsteuerung, what the notepad takes down and what happens when a
-line drops. Code:
+the Zugangskontrolle, the Anlaufsteuerung, the Paketfilter, what the notepad takes down and what
+happens when a line drops. Code:
 `packages/client/src/input/` (bindings, controller, prompts), `client/src/achievements.ts` and
 `screens/{Plaques,ShareButton,ControlSettings}.tsx`,
 `screens/shareCard.ts`, `world/{labelFade,finds,danger,ChatWheel}.ts(x)`,
 `puzzles/RackDiagram.tsx`, `puzzles/{prompt.ts,ServersPanel.tsx}`,
 `puzzles/{AccessPanel.tsx,accessPrompt.ts}`, `puzzles/{StartupPanel.tsx,startupPrompt.ts}`,
-`world/{conduits,ductArt}.ts`,
+`world/{conduits,ductArt}.ts`, `puzzles/{FirewallPanel.tsx,firewallView.ts}`,
 `puzzles/{SyncCount.tsx,syncPress.ts}`, `voice/{rules,intercom}.ts`, `noting.ts`, `notes.ts`,
 `screens/{Notepad,NoteButton}.tsx`, `pass.ts`, `line.ts`, `ws.ts`, `screens/hands.ts`,
 `screens/{Join,Pause,Line,GiveUp}.tsx`, `clock.ts`; in the core `chat.ts`, `discovery.ts`,
 `achievements.ts`, `daily.ts`, `hands.ts`, `mission.ts` (`order`, `lit`), `map.ts` (`intercomOf`,
 `stationUp`), `puzzles/servers.ts` (`serviceDiagram`), `puzzles/access.ts`,
-`puzzles/startup.ts`, `conduits.ts`,
+`puzzles/startup.ts`, `conduits.ts`, `puzzles/firewall.ts`,
 `puzzles/buttonSync.ts` and `actions.ts` (a line that drops, the maintenance, `takeUp`,
-`hasClock`), the hall in `test/hall.ts`; in the server `room.ts`, `seats.ts`, `heartbeat.ts`.
+`hasClock`, `clocked`), the hall in `test/hall.ts`; in the server `room.ts`, `seats.ts`,
+`heartbeat.ts`.
 
 ## Controls
 
@@ -254,7 +255,9 @@ practice ends — no siren, no run back across the hall, whose lit floor the esc
 only wash out. The last shift's notes at each station say how its machine is learned, never an
 instance's answer. Each station takes its module's defaults, but for the Zugangskontrolle's token
 device, which turns every 15 s, the module's shortest period: a practice waits less for an
-account. The menu's card, known by the hall's id, says „Jede Station zum Üben" over its title.
+account; and the Paketfilter, two waves of packets 10 s on their way: a practice learns the
+policy, it does not stand a shift. The menu's card, known by the hall's id, says „Jede Station
+zum Üben" over its title.
 The hall is made from the module registry (`core/test/hall.ts`): a module added there fails
 `core/test/hall.test.ts` until the hall is written anew, with the walkthrough's plan, by
 `node --import tsx ../core/test/writeHall.ts` from `packages/server`.
@@ -266,8 +269,9 @@ fourteen times over, to a white sheet), the overview from the audience (`hall-ov
 station's device as it opens (`hall-<type>.png`) and the won card (`hall-won.png`). The
 plan's host reads a two-console station's rules at its book as it comes on, then takes console a;
 at the Zugangskontrolle the walkthrough types the token its device shows, not the plan's, which
-hung on the plan's own clock, and at the Anlaufsteuerung it closes each breaker once the ladder
-shows the pulse on its marked steps.
+hung on the plan's own clock, at the Anlaufsteuerung it closes each breaker once the ladder
+shows the pulse on its marked steps, and at the Paketfilter it makes each mark and trip once its
+pages allow it, then waits for the last packets to reach the Kern.
 
 ## The first win
 
@@ -669,6 +673,123 @@ it out, and Blackout's run logs it as left out): the terminal (startup-terminal.
 terminal on a large phone held sideways (startup-phone-932.png), the pulse in the duct from the
 audience (startup-duct.png) and the Schaltfeld with the pulse on its marked steps
 (startup-ladder.png), then both stages to the solve.
+
+## The Paketfilter
+
+Two halves in motion at once (`firewall`, backlog I-2, study rank 9): packets come down, one
+person can drop them, only the other can tell which are hostile — and says so by marking them,
+not by calling them out. After Operation: Tango's agent and hacker, Hacknet's and Uplink's
+traces, and Among Us's short tactile tasks; a design of the lab's own — five lines and a gate,
+plain points and header cards, no arcade formation, sprite or sound. Soft real time: slow
+packets, whole lines, generous windows; the talk and the marks decide, not reflexes. No shipped
+mission has it yet — the lead's next package puts it into Blackout as the Serverraum's gate, its
+solve opening the Serverschott —; it ships with its probe, `tools/fixtures/firewall-probe.json`
+(„Filterprobe": the Sperrpult in the Leitstand, the Analysepult in the Wache, the policy in a
+binder, the Laborkennung between them), and with its bay in the Übungshalle.
+
+- **Console A, the Sperrpult**, a scope of five lines numbered from the left, running down into the
+  Kern. The packets come down them as plain points — no header anywhere at this console —, a packet
+  marked at console B wearing a ring and a tick (never the colour alone). A gate stands under one
+  line: a tap on a line sets it there, ◀ ▶, ← → or the keys that walk left and right (A D unless
+  rebound) step it; SPERREN trips it, and the server drops the lowest packet on that line at its own
+  moment. FREIGABE starts a waiting wave — never while the Analysepult stands empty, nor in the
+  second after a fault, when space may still be a late trip's —; space or enter press whichever of
+  the two the wave stands for. The gate is the console's own; only the trip goes to the server, with
+  its line. The lines' numbers stand over the lines, where no packet covers them.
+- **Console B, the Analysepult**, the same scope with the same packets at the same places, each as a
+  card of its header in two lines — the Quelle over port and protocol, „67/UDP", 14 px at least, two
+  lines of its type high, 44 px at least, at every text size the settings offer —, a marked card
+  wearing a tick and a heavier border. A tap on a card, or a cursor stepped with ← → and space or
+  enter, sets or takes back its mark. It drops nothing.
+- **The source** is the module's printed page, the Sicherheitsrichtlinie: three networks (Labornetz
+  10.4.x.x, Wartungsnetz 10.9.x.x, everything else Fremdnetz) and six numbered rules, the first that
+  fits deciding — the Wartungsnetz passes, ports 23 and 3389 are dropped, the Labornetz over TCP
+  passes, a port ending on the Laborkennung's last digit is dropped, UDP to 53 or 67 passes, any
+  other UDP is dropped — and the Grundregel: anything else passes. The same for every seed and
+  state, printable; the headers stand only at console B, what they mean only in the policy. `rules`
+  (3–6, default 4) says how many of the six an instance's packets are decided by, always in one
+  order: the four simplest first — 1, 2, 3 and 6 —, then 5, the name service's exception, and last
+  4, the Laborkennung's digit. A first run at the default reads the whole page but meets no packet
+  that turns on the sign or on a port pair; that reading load, six rules first-match against packets
+  falling for 14 s, is the lab's heaviest. Every wave carries a decoy — a packet a rule in play
+  further down would drop, which only the order lets through: within rules 1, 2, 3 and 6 only a
+  Wartungsnetz packet can be one, caught further down by rule 2 in one wave and rule 6 in the next
+  (a Labornetz decoy would need rule 4). Every wave also carries a trap, one of four the simplest
+  rules set, in an order the seed draws, so that one wave's differs from the next: the Labornetz
+  over TCP on a port that looks like trouble (rule 3 passes it), the Labornetz over UDP (rule 6
+  drops it, friendly as it looks), the Wartungsnetz on port 23 or 3389 (rule 1 passes it before rule
+  2) and the Labornetz over TCP on 23 or 3389 (rule 2 drops it before rule 3); a crew that learned
+  only „the Wartungsnetz passes, the rest of UDP drops" takes an alarm in most seeds. The default's
+  three waves take about two minutes on the clock (118 s median over 200 seeds for the solver,
+  98–126 s), the moves never shortening a wave.
+- **A wave** is `packets` packets (5–9, default 7), two or three of them hostile, coming on one
+  after another a quarter of a fall apart, each on a line nothing came onto for 0.6 of a fall —
+  so that two cards of a line never overlap on the smallest scope, a phone's 130 px —, and each
+  `fallSec` seconds (8–20, default 14) from the top into the Kern, the first 4 s after the wave
+  starts. The first wave waits for the Freigabe („Bereit · Welle 1 starten"), so a crew reads the
+  policy before anything falls; after a clean wave the next follows on its own. Positions are a
+  pure function of the wave's start and the server's clock; the room ticks the station as a
+  packet comes on and as a hostile one would reach the Kern. A wave is clean once every hostile
+  packet was dropped and every other reached the Kern; `waves` (1–4, default 3) clean waves solve
+  the station, the last on the clock as its last packet goes through.
+- **Faults.** A packet dropped that the policy lets through, and a hostile one reaching the Kern,
+  are a Fehlquittierung, an alarm — one reaching the Kern is charged to nobody, and the banner
+  calls it „Angriff im Kern", not a Fehlversuch. A wave costs one alarm at most: the fault calls
+  it off, and the fresh wave waits for the Freigabe, so a crew standing still loses one alarm at
+  most, ever (a property test from any moment over ten minutes). A trip that hits nothing is no
+  fault. A console draws the packets from its own reading of the server's clock, so a trip lands
+  half a round trip after what was seen: for 300 ms after a marked packet reaches the Kern line a
+  trip still takes it (`TRIP_GRACE_MS`), and only then is the Kern's fault judged. The grace is
+  for a mark's honest late trip and nothing else: an unmarked packet is in the Kern once through,
+  so a Sperrpult alone that trips in the grace learns nothing of the policy (a property test: in
+  100 seeds × 3 waves not one packet dropped). A move the clock overtook — the station
+  solved, or an alarm raised, by the move's moment — counts for nothing and is refused by none.
+- **Needs two.** A wave runs only while both consoles are manned, and holds — the packets frozen
+  where they stand, the Sperrpult's points dimmed, the Analysepult's cards as readable as ever
+  (marks go on during a hold), HALT over the lines' numbers, never across a card — while one stands
+  empty or the run stands still; the status line says „Analysepult unbesetzt · Pakete halten" (or
+  the Sperrpult; „Pakete halten" alone while the run stands still, never that the viewer's own
+  console is empty), and a trip refused then „Am Analysepult steht niemand.", as the other
+  two-console modules word it. The partner LED names who stands at the other console. A crew of
+  three has its third read the policy at the source while B marks; with two, B walks to the policy —
+  the wave holds meanwhile, which is the intended way to read — and may take the rules into the
+  notepad with the Notieren beside them.
+
+The module is the first whose station runs on the clock and on its consoles' presence: its
+`elapse` (core `puzzles/module.ts`) brings the station to the moment of every action — before a
+move, so that a trip meets the packets where the server's clock has them, and after every
+action, so that a change of presence, a pause for the server's maintenance or the switch-on holds
+or frees the wave at once (`actions.ts` `clocked`) — only for the armed station, and for no
+module without one. A crew that stands still is woken all the same: the module's `dueAt` names
+the next packet coming on, the next attack reaching the Kern or the wave's clean end, and the
+room arms one timer for it after every dispatch (`puzzle-tick`, as for a sync press running
+out), none while paused and none once solved. An alarm the clock runs into is charged to
+nobody, a solve on the clock advances the run. A snapshot holds a wave in flight at its
+moment, as a pause does; after a restore it goes on from there once both consoles are manned
+again (`server/test/firewallRoom.test.ts`). The solver reads the moment the crew looks
+(`SolveAid.at`). Sounds (docs/sound.md): the gate's step, the trip's thunk, a pop for a packet
+taken out, a blip as one reaches the Kern, a chime for a clean wave; the fault's klaxon and the
+solve's chord are the kit's.
+
+`core/test/firewall.test.ts` holds the policy's first-match rule, the waves (two or three hostile
+by the policy, a decoy in each, the rules exercised, 0.6 of a fall apart on a line), the clock on a
+fake clock with a second's slack at the boundaries, what a trip hits, the one-alarm-per-wave cap,
+the hold while a console stands empty or the server is down, the views (no header at A, no
+packet still to come and no hostility anywhere), the reducer's tick and the probe with its plan
+(`tools/fixtures/firewall-plan.json`, made by `core/test/firewallPlan.ts`); `modules.test.ts` the
+solver alarm-free over 200 seeds, and crews marking every packet, none, or every reason to drop in
+no order each taking an alarm in all of them; `client/test/firewall.test.tsx` both devices, the
+scope's clock and status line, reduced motion, the sounds, and the type and targets on phones
+held sideways at 844 and 932, and that two cards of a line never overlap there;
+`client/test/firewallWiring.test.tsx` presses every control through the components.
+`server/test/firewallRoom.test.ts` lets an idle crew meet the Kern alarm on the room's own timer.
+The walkthrough drills the probe in a Systemcheck run (group `firewall`; `SHOTS_SKIP=firewall`
+leaves it out, Blackout's run logs it as left out), following the pages, never the plan's
+seconds: FREIGABE where a wave waits, a mark on every packet the plan says the policy drops — in
+any wave the run may deal, a called-off one included —, a trip under every ring
+(firewall-policy.png, firewall-phone-932.png, firewall-headers.png, firewall-gate.png), and once
+mid-wave the Sperrpult's player walks off: the held Analysepult, every card drawn whole
+(firewall-held.png).
 
 ## Captures in the notepad
 

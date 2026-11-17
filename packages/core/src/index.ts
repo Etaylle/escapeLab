@@ -368,6 +368,17 @@ export {
   type StartupTerminal,
 } from './puzzles/startup.js';
 export {
+  FIREWALL_LINES,
+  FIREWALL_PAUSE_MS,
+  KERN_HIT,
+  LINES_FIGURE,
+  SAME_LINE_GAP,
+  TRIP_GRACE_MS,
+  type FirewallBlip,
+  type FirewallEvent,
+  type FirewallHeader,
+} from './puzzles/firewall.js';
+export {
   CHAT_PHRASE_COUNT,
   DEFAULT_CHAT_PHRASES,
   phraseShown,

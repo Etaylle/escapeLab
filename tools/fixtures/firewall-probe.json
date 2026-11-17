@@ -1,0 +1,65 @@
+{
+  "id": "custom-filterprobe",
+  "title": "Filterprobe",
+  "subtitle": "Sperrpult im Leitstand, Analysepult in der Wache, die Sicherheitsrichtlinie im Ordner.",
+  "players": { "min": 2, "max": 2 },
+  "timeLimitSec": 600,
+  "story": {
+    "intro": "Der Paketfilter lässt nur durch, was die Sicherheitsrichtlinie erlaubt: Kopfdaten am Analysepult, Sperre am Sperrpult.",
+    "win": "Der Kern ist frei, alle sind draußen.",
+    "lose": "Die Zeit ist um."
+  },
+  "puzzles": [
+    {
+      "type": "firewall",
+      "id": "filter",
+      "title": "Paketfilter",
+      "waves": 2,
+      "packets": 6,
+      "fallSec": 10,
+      "hints": [
+        "Hausmeister: Die Richtlinie von oben lesen; die erste passende Regel gilt, die übrigen nicht."
+      ],
+      "lights": ["WACHE"],
+      "onSolved": "Kern frei. Beide zum Ausgang."
+    }
+  ],
+  "map": {
+    "tiles": [
+      "###################",
+      "#........#........#",
+      "#........#........#",
+      "#.................#",
+      "#........#........#",
+      "#........#........#",
+      "###################"
+    ],
+    "spawns": [
+      { "x": 2, "y": 3 },
+      { "x": 16, "y": 3 }
+    ],
+    "stations": [
+      { "puzzleId": "filter", "x": 4, "y": 1, "console": "a" },
+      { "puzzleId": "filter", "x": 13, "y": 1, "console": "b" }
+    ],
+    "manuals": [
+      {
+        "id": "richtlinie",
+        "kind": "book",
+        "label": "SICHERHEITSRICHTLINIE",
+        "puzzleIds": ["filter"],
+        "spots": [{ "x": 7, "y": 5 }]
+      }
+    ],
+    "labels": [
+      { "text": "LEITSTAND", "x": 4, "y": 4, "kind": "control" },
+      { "text": "WACHE", "x": 13, "y": 4, "kind": "control" }
+    ],
+    "decor": [
+      { "kind": "desk", "x": 6, "y": 1, "variant": 0 },
+      { "kind": "desk", "x": 15, "y": 1, "variant": 1 }
+    ],
+    "edgeworkSign": { "x": 10, "y": 3 },
+    "exit": { "x": 17, "y": 5 }
+  }
+}

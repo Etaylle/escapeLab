@@ -76,6 +76,14 @@ const LINES = {
     mouse: 'Schreiben: zeige, setze, start — Leuchten am Gegenpult.',
   },
   'startup-board': 'Der Schalter zählt nur auf den markierten Stufen der Leiter.',
+  'firewall-gate': {
+    touch: 'Leitung antippen, SPERREN nimmt deren unterstes Paket heraus.',
+    mouse: 'Leitung anklicken, SPERREN nimmt deren unterstes Paket heraus.',
+  },
+  'firewall-analysis': {
+    touch: 'Paket antippen setzt oder löscht den Ring am Sperrpult.',
+    mouse: 'Paket anklicken setzt oder löscht den Ring am Sperrpult.',
+  },
 } as const satisfies Record<string, Line>;
 
 type Device = keyof typeof LINES;

@@ -15,6 +15,7 @@ import { circuitModule } from './circuit.js';
 import { serversModule } from './servers.js';
 import { accessModule } from './access.js';
 import { startupModule } from './startup.js';
+import { firewallModule } from './firewall.js';
 
 /**
  * Every puzzle type that stands at a station. Adding one is a file in this
@@ -36,6 +37,7 @@ const STATION_MODULES = [
   serversModule,
   accessModule,
   startupModule,
+  firewallModule,
 ] as const;
 
 /** Every module the game knows: the stations and the relay, which only runs as an emergency. */

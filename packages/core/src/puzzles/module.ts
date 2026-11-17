@@ -7,7 +7,11 @@ import type { Rng } from '../rng.js';
  * The contract every puzzle type implements. A module owns its type end to
  * end — mission-file shape, runtime state, the inputs a client may send, the
  * place-filtered view, the printed manual and a solver — so adding a type is
- * one file in this folder plus one entry in ./index.ts.
+ * one file in this folder plus one entry in ./index.ts. A station that runs on
+ * the clock adds what is optional: `dueAt`, when the room has to wake it, and
+ * `expire` for what runs out — or `elapse`, where the clock also raises alarms
+ * and holds on who stands at its consoles. The reducer asks a module for none
+ * of them that leaves them out, and for none while its station is not armed.
  */
 
 export interface ManualSection {
@@ -139,6 +143,12 @@ export interface SolveAid<Input, View> {
    * show them (`PuzzleContext.elapsedSec`); left out where it counts down
    */
   elapsedSec?: number;
+  /**
+   * the moment the crew looks, epoch ms on the server's clock: for a module whose views carry
+   * moments rather than positions (the Paketfilter's packets); left out where the caller has
+   * no such clock
+   */
+  at?: number;
 }
 
 /** Fields every puzzle def carries; the reducer and the views rely on them. */
@@ -308,6 +318,17 @@ export interface PuzzleModule<
   dueAt?(def: Def, state: State): number | null;
   /** The state at `at`, with whatever ran out by then gone; `state` itself where nothing did. */
   expire?(def: Def, state: State, at: number): State;
+  /**
+   * For a module whose station runs on the clock and on who stands at its consoles — packets
+   * falling only while both are manned —, the station brought to `ctx.at`: whatever came due by
+   * then, an alarm the clock ran into and whether that finished the station, then the station
+   * held or going on as `ctx.atConsoles` has its consoles manned (both empty while the run stands
+   * still). The reducer calls it after every action at the open station and before every move
+   * there, so that `apply` takes the station as it stands at the move's moment; the room ticks it
+   * once `dueAt` has come. Returns `state` itself where nothing changed. Left out where nothing
+   * runs on the clock, or only what `expire` drops.
+   */
+  elapse?(def: Def, state: State, ctx: PuzzleContext): ApplyResult<State>;
   /** place-filtered projection — THE place where asymmetry is enforced for this module */
   view(def: Def, state: State, viewer: Viewer, ctx: ViewContext): View;
   /**

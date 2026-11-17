@@ -51,8 +51,9 @@ jobs:
     # reconnect drill (a crew of three, one away 80 s), 1 more since the restart drill,
     # 2 more since the three drill (a crew of three to the Signalkette, 75 s on a runner),
     # Systemcheck up to 8, 3 more since the Übungshalle's drill (189 s in CI) and 5 s since the
-    # music drill (4.9 s in CI): setup, 19 and 14 minutes of the two steps fit into the job's 45.
-    timeout-minutes: 45
+    # music drill (4.9 s in CI), its step now given 20 for three drills to come (below): setup
+    # (11 at most), 19 and 20 minutes of the two steps fit into the job's 52.
+    timeout-minutes: 52
     defaults:
       run:
         # Named, bash runs with -o pipefail: a walkthrough piped through tee
@@ -85,9 +86,13 @@ jobs:
         # (14.11.2026: the step took 9:42 of its 14), and 269 s locally under a load of 30. Its
         # frames are sampled with 13 of 13 stations armed: the host's at 21,13 between two rows
         # of bays (137 frames, p95 16.8 ms, 8 of 17 beacons and 2 of 13 books in view), the
-        # audience's on the whole hall (121 frames, p95 16.7 ms, 17 of 17 and 13 of 13).
+        # audience's on the whole hall (121 frames, p95 16.7 ms, 17 of 17 and 13 of 13). Three
+        # drills come in on 17.11.2026: the Paketfilter's probe and its bay in the hall, about
+        # 127 s (71.4 s and 55.1 s locally at a load of 4), the rotation's about 68 s and the
+        # start-up station's about 45 s — 240 s on the 9:42 used, 13:42, against a slow runner's
+        # third more: 18:16. The step is given 20.
         if: ${{ !cancelled() }}
-        timeout-minutes: 14
+        timeout-minutes: 20
         env:
           SHOTS_MISSION: Systemcheck
           SHOTS_SERVER: packages/server/src/index.ts

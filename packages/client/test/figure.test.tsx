@@ -4,6 +4,7 @@ import {
   DEPENDS_ON,
   LADDER_FIGURE,
   LEVER_FIGURE,
+  LINES_FIGURE,
   MODULES,
   moduleFor,
   PATTERN_FIGURE,
@@ -33,6 +34,7 @@ const SAYS: Record<string, RegExp> = {
   servers: /^Dienste und Rack: 6 Kästen .*Pfeil von jeder Abhängigkeit.*Rack mit 6 Einschüben/,
   access: /^Terminal und Tokengerät: links ein Bildschirm mit Türliste.*rechts ein Tokengerät/,
   startup: /^Terminal und Schaltfeld: links ein Bildschirm mit Skriptzeilen.*LED-Leiter/,
+  firewall: /^Sperrpult und Analysepult: links 5 Leitungen.*rechts dieselben 5 Leitungen/,
 };
 
 function drawing(of: string): { html: string; label: string } {
@@ -195,6 +197,30 @@ describe('Figure', () => {
       expect(html).toContain('stroke-dasharray="5 4"');
       expect(html).toContain(`>${of}</text>`);
     }
+  });
+});
+
+describe('the Paketfilter’s drawings', () => {
+  it('draws the Paketfilter’s lines: five, a ringed and ticked packet, the gate', () => {
+    const def = puzzleDefSchema.parse({ type: 'firewall', id: 'f', title: 'F' });
+    const figures = moduleFor(def.type)
+      .manual(def)
+      .flatMap((section) => section.blocks)
+      .filter((block) => block.kind === 'figure');
+    expect(figures).toEqual([
+      { kind: 'figure', of: 'firewall', caption: 'Abb. 1 — Sperrpult und Analysepult' },
+      { kind: 'figure', of: LINES_FIGURE, caption: 'Abb. 2 — Leitungen, Ring und Sperre' },
+    ]);
+    const { html, label } = drawing(LINES_FIGURE);
+    expect(label).toMatch(/^Leitungen 1 bis 5 .*eines mit Ring und Haken/);
+    expect(html).not.toContain(`>${LINES_FIGURE}</text>`);
+    expect(html).not.toMatch(/#[0-9a-f]{3,8}\b|rgba?\(/i);
+    const lettering = [...html.matchAll(/<text[^>]*>([^<]*)<\/text>/g)].map((m) => m[1]);
+    expect(lettering).toEqual(['1', '2', '3', '4', '5', 'KERN', 'SPERRE']);
+    // five lines down to the Kern, two packets, one ring round one of them
+    expect(html.match(/stroke-dasharray="2 3"/g)).toHaveLength(5);
+    expect(html.match(/<circle [^>]*r="5"/g)).toHaveLength(2);
+    expect(html.match(/<circle [^>]*r="10"/g)).toHaveLength(1);
   });
 });
 
