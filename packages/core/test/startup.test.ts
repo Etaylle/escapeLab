@@ -6,6 +6,7 @@ import {
   generateEdgework,
   LOAD_NAMES,
   LOAD_PICTURES,
+  PULSE_GRACE_MS,
   puzzleDefSchema,
   STARTUP_LOADS,
 } from '../src/index.js';
@@ -222,7 +223,7 @@ describe('the views', () => {
     expect(view.board).not.toBeNull();
   });
 
-  it('tell the typing side that a pulse is off, and only the board side when it was sent', () => {
+  it('tell the typing side that a pulse is off, and the Schaltfeld also when it was sent', () => {
     const state = sentAt(fresh(), T0);
     const terminal = seen(state, AT_STATION).terminal;
     expect(terminal?.sent).toBe(true);
@@ -277,7 +278,36 @@ describe('the terminal', () => {
     expect(result.penalty).toBe('Anlaufsteuerung: Skript passt nicht');
     expect(result.state.pulse).toBeNull();
     expect(result.state.values.abgang).toBe(otherThan(right));
-    expect(result.state.log.at(-1)).toMatchObject({ tag: 'fail' });
+    expect(result.state.log.at(-1)).toEqual(
+      expect.objectContaining({
+        tag: 'fail',
+        text: 'Anlauf verweigert: ein Wert passt nicht zu Schaltfeld B',
+      }),
+    );
+  });
+
+  it('turns the same refused values away without another alarm, takes new ones', () => {
+    const state = fresh();
+    const right = target(setRight(state, T0));
+    const set = (s: StartupState, value: number) =>
+      send(s, { cmd: 'setze', gap: 'abgang', value }, 'a', T0).state;
+    const first = send(set(state, otherThan(right)), { cmd: 'start' }, 'a', T0);
+    expect(first.penalty).not.toBeNull();
+    expect(thrown(() => send(first.state, { cmd: 'start' }, 'a', T0 + 1000))).toBe(
+      'Werte unverändert: Das Skript passt nicht zum Schaltfeld der Gegenseite.',
+    );
+    // Another wrong value is another try: an alarm again.
+    const other = [1, 2, 3, 4].find((v) => v !== right && v !== otherThan(right)) ?? 1;
+    const second = send(set(first.state, other), { cmd: 'start' }, 'a', T0 + 2000);
+    expect(second.penalty).toBe('Anlaufsteuerung: Skript passt nicht');
+    const fixed = send(set(first.state, right), { cmd: 'start' }, 'a', T0 + 2000);
+    expect(fixed.penalty).toBeNull();
+    expect(fixed.state.refused).toBeNull();
+  });
+
+  it('takes no input from away from the consoles', () => {
+    const away = () => startupModule.apply(DEF, fresh(), { cmd: 'zeige' }, 'rd', ctx(T0, null));
+    expect(thrown(away)).toBe('Eingabe nur am Pult.');
   });
 
   it('counts a wrong sperre as a wrong value too', () => {
@@ -332,10 +362,19 @@ describe('the window', () => {
     }
   });
 
-  it('lets the pulse die as the window closes: no alarm, and nothing left to close on', () => {
-    const late = () => send(state, { breaker: feeder }, 'b', dies);
+  it('still takes the right breaker in the grace after the window, a wrong one as a fault', () => {
+    for (const at of [dies, dies + PULSE_GRACE_MS - 1]) {
+      expect(send(state, { breaker: feeder }, 'b', at).state.stage, String(at - dies)).toBe(1);
+    }
+    const wrong = send(state, { breaker: otherThan(feeder) }, 'b', dies + 100);
+    expect(wrong.penalty).toBe('Anlaufsteuerung: falscher Leistungsschalter');
+  });
+
+  it('lets the pulse die once the grace is over: no alarm, and nothing left to close on', () => {
+    const late = () => send(state, { breaker: feeder }, 'b', dies + PULSE_GRACE_MS);
     expect(thrown(late)).toBe('Kein Impuls auf der Leitung.');
-    const aged = startupModule.expire?.(DEF, state, dies);
+    expect(startupModule.expire?.(DEF, state, dies + PULSE_GRACE_MS - 1)?.pulse).not.toBeNull();
+    const aged = startupModule.expire?.(DEF, state, dies + PULSE_GRACE_MS);
     expect(aged?.pulse).toBeNull();
     expect(aged?.last).toBe('verfallen');
     expect(aged?.log.at(-1)?.text).toBe('Impuls verfallen');
@@ -364,7 +403,8 @@ describe('the window', () => {
     expect(startupModule.expire?.(DEF, state, arrives - 1)).toBe(state);
     const arrived = startupModule.expire?.(DEF, state, arrives);
     expect(arrived?.pulse).toEqual({ sentAt: T0, arrived: true });
-    expect(arrived === undefined ? null : startupModule.dueAt?.(DEF, arrived)).toBe(dies);
+    const due = arrived === undefined ? null : startupModule.dueAt?.(DEF, arrived);
+    expect(due).toBe(dies + PULSE_GRACE_MS);
   });
 
   it('is solved once the last stage runs up', () => {

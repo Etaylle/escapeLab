@@ -72,8 +72,8 @@ const LINES = {
   },
   'access-token': 'Konto und Token ablesen, solange der Balken läuft.',
   'startup-terminal': {
-    touch: 'Tippen oder antippen: zeige, setze, start — Leuchten drüben.',
-    mouse: 'Schreiben oder klicken: zeige, setze, start — Leuchten drüben.',
+    touch: 'Tippen: zeige, setze, start — Leuchten am Gegenpult.',
+    mouse: 'Schreiben: zeige, setze, start — Leuchten am Gegenpult.',
   },
   'startup-board': 'Der Schalter zählt nur auf den markierten Stufen der Leiter.',
 } as const satisfies Record<string, Line>;

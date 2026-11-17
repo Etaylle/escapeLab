@@ -12,7 +12,7 @@ import {
 } from '../src/world/conduits.js';
 import { drawDuct } from '../src/world/ductArt.js';
 import { AMBER } from '../src/world/palette.js';
-import { glowSources, pulseSources } from '../src/world/sources.js';
+import { glowSources, pulseSources, sourcesOf } from '../src/world/sources.js';
 import { callsOf, fakeCanvas } from './fakeCanvas.js';
 import { mapWith } from './fixtures.js';
 import { frameWith, lightWith, TILES } from './frames.js';
@@ -39,8 +39,8 @@ function duct(pulse: Partial<NonNullable<ConduitView['pulse']>> | null = {}): Co
   };
 }
 
-const lab = (conduits: ConduitView[]): MapView =>
-  mapWith({ width: 10, height: 6, tiles: TILES, conduits });
+const lab = (conduits: ConduitView[], doors: MapView['doors'] = []): MapView =>
+  mapWith({ width: 10, height: 6, tiles: TILES, conduits, doors });
 
 describe('the duct’s tiles', () => {
   it('give each tile the sides its channel leaves by, a bend at a corner', () => {
@@ -115,24 +115,49 @@ describe('the pulse’s spot', () => {
 
 describe('the pulse’s light', () => {
   it('burns amber where a figure has sight of its tile, swelling on the window', () => {
-    const frame = frameWith({ map: lab([duct()]), now: T + 1000 });
+    const frame = frameWith({ map: lab([duct()]), serverNow: T + 1000 });
     const [source] = pulseSources(frame);
     expect(source).toMatchObject({ x: 2.5, y: 2.5, colour: [...AMBER], pulse: { periodMs: 240 } });
     expect(glowSources(frame)).toContainEqual(source);
-    const waiting = pulseSources({ ...frame, now: T + 8000 });
+    const waiting = pulseSources({ ...frame, serverNow: T + 8000 });
     expect(waiting[0]?.pulse?.periodMs).toBe(700);
   });
 
   it('shows nowhere out of sight — but in a lit room —, and never without a pulse', () => {
     const light = lightWith({ inSight: () => false });
-    const blind = frameWith({ map: lab([duct()]), now: T + 1000, light });
+    const blind = frameWith({ map: lab([duct()]), serverNow: T + 1000, light });
     expect(pulseSources(blind)).toEqual([]);
     expect(pulseSources({ ...blind, litTiles: new Set(['2,2']) })).toHaveLength(1);
-    expect(pulseSources(frameWith({ map: lab([duct(null)]), now: T + 1000 }))).toEqual([]);
+    expect(pulseSources(frameWith({ map: lab([duct(null)]), serverNow: T + 1000 }))).toEqual([]);
+  });
+
+  it('stands where the server’s clock puts it, whatever the wall clock says', () => {
+    const frame = frameWith({ map: lab([duct()]), now: T + 5000, serverNow: T + 1000 });
+    expect(pulseSources(frame)[0]).toMatchObject({ x: 2.5, y: 2.5 });
+  });
+
+  it('is no light under a wall or a shut door, on either light path', () => {
+    // At T + 4 s the pulse stands on (5,2): walled there, then a door shut, then open.
+    const walled = TILES.map((line, y) =>
+      y === 2 ? `${line.slice(0, 5)}#${line.slice(6)}` : line,
+    );
+    const at = { serverNow: T + 4000 };
+    const walledMap = mapWith({ width: 10, height: 6, tiles: walled, conduits: [duct()] });
+    const wall = frameWith({ map: walledMap, ...at });
+    const door = (open: boolean) =>
+      frameWith({ map: lab([duct()], [{ id: 'tuer', x: 5, y: 2, open }]), ...at });
+    const amber = (sources: readonly { colour: readonly number[] }[]) =>
+      sources.filter((s) => s.colour.join() === AMBER.join());
+    for (const frame of [wall, door(false)]) {
+      expect(pulseSources(frame)).toEqual([]);
+      expect(amber(glowSources(frame))).toEqual([]);
+      expect(amber(sourcesOf(frame))).toEqual([]);
+    }
+    expect(pulseSources(door(true))).toHaveLength(1);
   });
 
   it('swells slowly and shallowly where the player asked for less motion', () => {
-    const frame = frameWith({ map: lab([duct()]), now: T + 1000, reduced: true });
+    const frame = frameWith({ map: lab([duct()]), serverNow: T + 1000, reduced: true });
     expect(pulseSources(frame)[0]?.pulse).toEqual({ periodMs: 2000, depth: 0.1 });
   });
 });

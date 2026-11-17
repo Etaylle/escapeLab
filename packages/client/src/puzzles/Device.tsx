@@ -487,7 +487,11 @@ function syncDone(last: Extract<PuzzleView, { kind: 'button-sync' }>): PuzzleVie
 function keypadDone(last: Extract<PuzzleView, { kind: 'keypad' }>): PuzzleView {
   return last.keys === null
     ? last
-    : { ...last, keys: last.keys.map((key) => ({ ...key, lit: true })), litCount: last.keys.length };
+    : {
+        ...last,
+        keys: last.keys.map((key) => ({ ...key, lit: true })),
+        litCount: last.keys.length,
+      };
 }
 
 /** How a kind of station stands done. */

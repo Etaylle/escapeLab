@@ -215,13 +215,19 @@ describe('glow — a start pulse running in its duct', () => {
     const tiles = [1, 2, 3, 4].map((x) => ({ x, y: 2 }));
     const pulse = { sentAt: T, arrivesAt: T + 3000, diesAt: T + 6000, reversed: false };
     const conduits = [{ puzzleId: 'anlauf', tiles, pulse }];
-    const frame = frameWith({ map: lab({ conduits }), now: T + 1000, time: 1.8 });
-    const before = frameWith({ map: lab(), now: T + 1000, time: 1.8 });
+    const frame = frameWith({ map: lab({ conduits }), serverNow: T + 1000, time: 1.8 });
+    const before = frameWith({ map: lab(), serverNow: T + 1000, time: 1.8 });
     drawn(before);
     const { log } = drawn(frame);
     expect(poolsOf(frame).map(([name]) => name)).toEqual(poolsOf(before).map(([name]) => name));
+    // Along its whole first pass, a draw every 100 ms: not one bake more than the first draw's.
+    const baked = frame.kit.census.bakes;
+    for (let ms = 1100; ms < 6000; ms += 100) {
+      drawn({ ...frame, serverNow: T + ms });
+    }
+    expect(frame.kit.census.bakes).toBe(baked);
     // A step on, the same: no pool baked for the spot it has reached.
-    drawn({ ...frame, now: T + 2000 });
+    drawn({ ...frame, serverNow: T + 2000 });
     expect(poolsOf(frame).map(([name]) => name)).toEqual(poolsOf(before).map(([name]) => name));
     // Its glow is a sprite of its amber laid on at whole pixels, its core over it.
     const sprites = callsOf(log, 'drawImage').filter(([image]) =>

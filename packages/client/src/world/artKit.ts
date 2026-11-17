@@ -135,7 +135,8 @@ function dressKey(map: DressMap, missionId: string): string {
     .filter((s) => s.known && s.look === 'fusebox')
     .map((s) => [s.x, s.y]);
   const ducts = (map.conduits ?? []).map((c) => c.tiles);
-  const parts = [map.tiles, map.labels, doors, map.lamps, map.decor, plates, exit, fuseBoxes, ducts];
+  const things = [map.lamps, map.decor, plates, exit, fuseBoxes, ducts];
+  const parts = [map.tiles, map.labels, doors, ...things];
   return JSON.stringify([missionId, ...parts]);
 }
 

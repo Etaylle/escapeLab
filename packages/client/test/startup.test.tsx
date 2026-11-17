@@ -82,7 +82,7 @@ afterEach(() => {
 });
 
 describe('the terminal’s prompt', () => {
-  it('reads zeige and start alone, setze with a gap and a feeder, and the script’s own form', () => {
+  it('reads zeige and start alone, setze with a gap and a feeder, the script’s own form', () => {
     expect(lineOf('zeige')).toEqual({ input: { cmd: 'zeige' } });
     expect(lineOf('  START ')).toEqual({ input: { cmd: 'start' } });
     expect(lineOf('setze abgang 2')).toEqual({ input: { cmd: 'setze', gap: 'abgang', value: 2 } });
@@ -128,20 +128,24 @@ describe('the terminal’s prompt', () => {
 describe('the ladder', () => {
   const pulse = { sentAt: NOW };
 
-  it('lights a step a second from the pulse’s sending, all of them at the most', () => {
+  it('lights a step a second from the pulse’s sending, dark at the window’s end', () => {
     expect(ladderLit(null, NOW, 9)).toBe(0);
     expect(ladderLit(pulse, NOW - 5, 9)).toBe(1);
     expect(ladderLit(pulse, NOW, 9)).toBe(1);
     expect(ladderLit(pulse, NOW + 999, 9)).toBe(1);
     expect(ladderLit(pulse, NOW + 1000, 9)).toBe(2);
-    expect(ladderLit(pulse, NOW + 60_000, 9)).toBe(9);
+    expect(ladderLit(pulse, NOW + 8999, 9)).toBe(9);
+    // The window's end: dark on every screen, whatever grace the server still allows.
+    expect(ladderLit(pulse, NOW + 9000, 9)).toBe(0);
+    expect(ladderLit(pulse, NOW + 60_000, 9)).toBe(0);
   });
 
-  it('names the moment the next step lights, none once the ladder is full', () => {
+  it('names the moment the ladder changes next — a step, then the dark —, none once dark', () => {
     expect(nextStepAt(null, NOW, 9)).toBeNull();
     expect(nextStepAt(pulse, NOW, 9)).toBe(NOW + 1000);
     expect(nextStepAt(pulse, NOW + 1500, 9)).toBe(NOW + 2000);
-    expect(nextStepAt(pulse, NOW + 8000, 9)).toBeNull();
+    expect(nextStepAt(pulse, NOW + 8000, 9)).toBe(NOW + 9000);
+    expect(nextStepAt(pulse, NOW + 9000, 9)).toBeNull();
   });
 
   it('hums higher with every step', () => {
@@ -187,7 +191,7 @@ describe('the consoles', () => {
     for (const colour of colours) {
       expect(html).toContain(`startup-lamp--${colour}`);
     }
-    expect(html).toContain('Skript läuft an Pult A');
+    expect(html).toContain('TERMINAL B · IN RUHE · SKRIPT AN PULT A');
     expect(html).not.toContain('Anlaufskript');
     expect(html).not.toContain('<input');
     expect(html.match(/data-breaker="/g)).toHaveLength(4);
@@ -375,29 +379,38 @@ describe.each(CONSOLES)('$name', ({ nodes }) => {
 });
 
 describe('the stylesheet', () => {
-  it('leaves the idle part out on a phone held sideways, the live one across the width', () => {
-    const sideways = SCREENS[2]?.screen ?? { width: 0, height: 0, coarse: true };
-    const laptop = SCREENS[0]?.screen ?? { width: 0, height: 0, coarse: false };
-    const idle = station(atTerminal()).find((n) => n.classes.includes('startup-board--idle'));
-    if (idle === undefined) {
-      throw new Error('no idle Schaltfeld rendered');
+  const sideways = SCREENS[2]?.screen ?? { width: 0, height: 0, coarse: true };
+  const laptop = SCREENS[0]?.screen ?? { width: 0, height: 0, coarse: false };
+
+  it('reduces the idle part to its plate, left out on a phone held sideways', () => {
+    for (const view of [atTerminal(), atBoard()]) {
+      const nodes = station(view);
+      const idle = nodes.filter((n) => n.classes.includes('startup-idle'));
+      expect(idle).toHaveLength(1);
+      expect(sheets.hidden(idle[0] ?? fail(), sideways)).toBe(true);
+      expect(sheets.hidden(idle[0] ?? fail(), laptop)).toBe(false);
+      // The live part only: one glass or one Schaltfeld.
+      const live = (n: Styled) =>
+        n.classes.includes('startup-crt') || n.classes.includes('startup-board');
+      const parts = nodes.filter(live);
+      expect(parts).toHaveLength(1);
     }
-    expect(sheets.hidden(idle, sideways)).toBe(true);
-    expect(sheets.hidden(idle, laptop)).toBe(false);
   });
 
-  it('stacks terminal over Schaltfeld on a phone held upright, side by side on a laptop', () => {
-    const device = station(atTerminal()).find((n) => n.classes.includes('startup-device'));
-    if (device === undefined) {
-      throw new Error('no device rendered');
-    }
+  it('lists each script line on one row, cut rather than wrapped, the log three lines high', () => {
+    const nodes = station(atTerminal());
+    const line = nodes.find((n) => n.classes.includes('startup-line')) ?? fail();
+    expect(sheets.declared(line, 'white-space', laptop)?.value).toBe('pre');
+    const log = nodes.find((n) => n.classes.includes('startup-log')) ?? fail();
+    expect(sheets.declared(log, 'max-height', laptop)?.value).toBe('calc(3 * 1.35em)');
+  });
+
+  it('sets the audience’s two parts side by side, one over the other in a narrow column', () => {
+    const view = { ...atTerminal(), board: atBoard().board, role: null, console: null };
+    const device = station(view).find((n) => n.classes.includes('startup-device--watched'));
     const columns = (screen: Screen): string | undefined =>
-      sheets.declared(device, 'grid-template-columns', screen)?.value;
-    expect(columns(SCREENS[1]?.screen ?? { width: 0, height: 0, coarse: true })).toBe(
-      'minmax(0, 1fr)',
-    );
-    expect(columns(SCREENS[0]?.screen ?? { width: 0, height: 0, coarse: false })).toBe(
-      'minmax(0, 1fr) 21rem',
-    );
+      sheets.declared(device ?? fail(), 'grid-template-columns', screen)?.value;
+    expect(columns(laptop)).toBe('minmax(0, 1fr) 22rem');
+    expect(columns(SCREENS[1]?.screen ?? laptop)).toBe('minmax(0, 1fr)');
   });
 });

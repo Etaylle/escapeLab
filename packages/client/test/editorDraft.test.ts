@@ -93,8 +93,17 @@ function labFor(type: StationType): Draft {
       stations,
       manuals: moduleFor(type).wholeCrew ? [] : [book],
       edgeworkSign: { x: 10, y: 1 },
+      // An Anlaufsteuerung wants its duct, from beside console a to beside console b.
+      ...(type === 'startup'
+        ? { conduits: [{ puzzleId: puzzle.id, tiles: ductRow(4, 2, 9) }] }
+        : {}),
     },
   };
+}
+
+/** The tiles of row `y` from `x0` to `x1`. */
+function ductRow(y: number, x0: number, x1: number): { x: number; y: number }[] {
+  return Array.from({ length: x1 - x0 + 1 }, (_, i) => ({ x: x0 + i, y }));
 }
 
 describe('slugOf and customIdOf', () => {
@@ -198,7 +207,7 @@ describe('draft ↔ JSON', () => {
     );
     const checked = checkMission(draftToJson({ ...draft, map: { ...draft.map, stations: moved } }));
     expect(checked.ok ? [] : checked.issues).toEqual([
-      expect.stringMatching(/^map\.conduits\.0\.tiles: .*beside console b \(19,23\)$/),
+      expect.stringMatching(/^map\.conduits\.0\.tiles: .*console b \(19,23\): lay its tiles/),
     ]);
   });
 

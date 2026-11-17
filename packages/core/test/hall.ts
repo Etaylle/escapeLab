@@ -117,7 +117,8 @@ const NOTES: Readonly<Partial<Record<PuzzleDef['type'], readonly string[]>>> = {
     'Einweisung: Erst die Tür am Terminal, dann auf der Benutzerliste das Konto, dessen Rolle ' +
       'sie freigibt.',
     'Einweisung: Den Token erst eingeben, wenn das Tokengerät dieses Konto zeigt.',
-  ],  startup: [
+  ],
+  startup: [
     'Einweisung: Die Last steht im Skript, das Leuchtbild jeder Last in Tabelle 2, die ' +
       'Leuchten am Schaltfeld der Gegenseite.',
     'Einweisung: Der Schalter zählt erst, wenn der Impuls auf den markierten Stufen der ' +

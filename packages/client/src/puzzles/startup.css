@@ -1,11 +1,12 @@
 /* ══ Anlaufsteuerung: a terminal beside a Schaltfeld ═══════════════════════
  * StartupPanel.tsx. Both consoles are the same device: a terminal of the
  * Serverraum's make — it wears styles/servers.css's green screen, prompt,
- * keys and FUNK key — beside a Schaltfeld of dark steel with four feeders,
+ * keys and FUNK key — and a Schaltfeld of dark steel with four feeders,
  * each two control lamps over a breaker, and an LED ladder whose top steps
- * are marked. Side by side where the window is wide, one over the other on a
- * phone held upright. This sheet loads before servers.css, so whatever it
- * sets on the shared classes it sets two classes deep.
+ * are marked. At a console the live part fills the device and the idle one
+ * is a plate's line over it; the audience sees both live parts side by side.
+ * This sheet loads before servers.css, so whatever it sets on the shared
+ * classes it sets two classes deep.
  */
 
 /* Terminal and Schaltfeld side by side want more than a device's usual 680 px: the script's
@@ -35,23 +36,27 @@
 }
 
 .startup-device {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+/* The audience: the terminal and the Schaltfeld side by side, the Schaltfeld as wide as its
+   feeders and its ladder. */
+.startup-device--watched {
   display: grid;
-  /* The Schaltfeld as wide as its four feeders and its ladder; the terminal the rest. */
-  grid-template-columns: minmax(0, 1fr) 21rem;
+  grid-template-columns: minmax(0, 1fr) 22rem;
   align-items: start;
   gap: 14px;
 }
 
 /* ── the terminal ───────────────────────────────────────────────────── */
 
-.startup-head {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  margin: 0;
-  color: var(--phosphor-dim);
-  font-size: calc(var(--type-body) * var(--text-scale));
-  letter-spacing: 2px;
+/* The make, at the head of the status strip. */
+.startup-make {
+  color: #9fb0bb;
+  letter-spacing: 1px;
 }
 
 .startup-script {
@@ -61,7 +66,8 @@
 }
 
 .startup-line {
-  overflow-wrap: anywhere;
+  overflow: hidden;
+  white-space: pre;
 }
 
 .startup-line--comment,
@@ -90,18 +96,15 @@
   letter-spacing: 1px;
 }
 
-/* Room for the log's lines, so that the prompt stays put as lines come in. */
+/* Three lines of the log, scrolling at the newest: the prompt stays put as lines come in. */
 .startup-crt .startup-log {
   min-height: calc(3 * 1.35em);
+  max-height: calc(3 * 1.35em);
+  overflow-y: auto;
 }
 
 .startup-idle {
   margin: 0;
-  color: var(--phosphor-dim);
-}
-
-.startup-terminal--idle .startup-crt {
-  min-height: 8em;
 }
 
 /* The keys' legends as large as the glass's words: a fingertip's word. */
@@ -113,6 +116,7 @@
 
 .startup-board {
   display: flex;
+  max-width: 36rem;
   flex-wrap: wrap;
   align-items: stretch;
   gap: 12px;
@@ -213,7 +217,7 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: flex-start;
   width: 100%;
   min-width: var(--target);
   min-height: calc(var(--target) + 22px);
@@ -233,7 +237,7 @@
 
 .startup-bat {
   position: absolute;
-  top: 26px;
+  top: 40px;
   left: 50%;
   width: 12px;
   height: 18px;
@@ -246,7 +250,7 @@
 .startup-breaker:active:not(:disabled) .startup-bat,
 .startup-breaker.feel-pressed .startup-bat,
 .startup-breaker--closed .startup-bat {
-  translate: -50% -18px;
+  translate: -50% -14px;
 }
 
 .startup-breaker:focus-visible {
@@ -257,6 +261,36 @@
 .startup-feeder-no {
   font-size: calc(var(--type-body) * var(--text-scale));
   font-weight: 700;
+}
+
+/* The ladder and its window: FENSTER over it, a bracket beside the marked steps, as the book
+   draws it. */
+.startup-ladder-box {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+
+.startup-window-word {
+  color: #ffd27a;
+  font-size: calc(var(--type-body) * var(--text-scale));
+  letter-spacing: 1px;
+}
+
+.startup-ladder-row {
+  display: flex;
+  gap: 4px;
+}
+
+/* The bracket: as tall as the marked steps (10 px and a 3 px gap each), from the ladder's top. */
+.startup-window {
+  width: 6px;
+  height: calc(var(--marked) * var(--pitch, 13px) - 3px);
+  margin-top: 4px;
+  border: 2px solid #ffd27a;
+  border-left: 0;
 }
 
 /* The ladder: a column of LEDs from the foot up, the window's steps framed at its top. */
@@ -310,9 +344,9 @@
   }
 }
 
-/* A phone held upright, or a narrow column: the terminal over the Schaltfeld. */
+/* A phone held upright, or a narrow column: the audience's two parts one over the other. */
 @media (max-width: 560px) {
-  .startup-device {
+  .startup-device--watched {
     grid-template-columns: minmax(0, 1fr);
   }
 
@@ -326,19 +360,17 @@
 }
 
 /*
- * A phone held sideways: the live part alone across the width — the idle one shows nothing to
- * read —, the script tight, the log two lines high, the lamps and the ladder a little smaller,
- * so that the device stands in the window's height; every control still a fingertip.
+ * A phone held sideways: the live part alone, the idle part's plate left out — the status
+ * strip names where the script runs —, the script tight, the log two lines high, the lamps
+ * and the ladder a little smaller, so that the device stands in the window's height; every control still a fingertip.
  */
 @media (pointer: coarse) and (orientation: landscape) and (max-height: 500px) {
   .startup-device {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 8px;
+    gap: 6px;
   }
 
-  /* The idle part shows nothing to read or press: the live one takes the whole width. */
-  .startup-device > .startup-board--idle,
-  .startup-device > .startup-terminal--idle {
+  /* The idle part's plate: the status strip says where the script runs already. */
+  .startup-device > .startup-idle {
     display: none;
   }
 
@@ -369,5 +401,9 @@
 
   .startup-step {
     height: 7px;
+  }
+
+  .startup-ladder-box {
+    --pitch: 10px;
   }
 }

@@ -86,6 +86,13 @@ const STARTUP_LOG_LINES = 6;
 /** Milliseconds in a second: the def counts in seconds, the clock in milliseconds. */
 const MS_PER_SEC = 1000;
 
+/**
+ * How long after the window's end the server still takes the right breaker, ms: half a round
+ * trip's slack for a press made while the ladder still showed the window. The ladder goes dark
+ * at the window's end on every screen; a wrong breaker in the slack is a fault as ever.
+ */
+export const PULSE_GRACE_MS = 500;
+
 const defSchema = z.strictObject({
   type: z.literal('startup'),
   ...commonDefShape,
@@ -140,6 +147,8 @@ export interface StartupState {
   /** the breakers closed in time, a stage each */
   closed: StartupClosed[];
   last: StartupOutcome | null;
+  /** the values of the last start turned away this stage; null since none was, or a pulse went */
+  refused: Partial<Record<StartupGap, number>> | null;
   log: StartupLogLine[];
   logged: number;
 }
@@ -298,7 +307,8 @@ const boardName = (side: ConsoleId): string => `Schaltfeld ${side.toUpperCase()}
 function loadedLine(def: StartupDef, stage: number, deal: StartupStage): Omit<StartupLogLine, 'n'> {
   const pult = typingConsole(stage).toUpperCase();
   const load = LOAD_NAMES[deal.load];
-  const text = `Pult ${pult}: Skript Stufe ${stage + 1}/${def.stages} geladen, ${load}`;
+  const loaded = `Skript Stufe ${stage + 1}/${def.stages} geladen, ${load}`;
+  const text = `Pult ${pult}: ${loaded}; Befehle zeige, setze, start`;
   return { tag: 'info', text };
 }
 
@@ -311,7 +321,7 @@ function caughtUp(def: StartupDef, state: StartupState, at: number): StartupStat
     return state;
   }
   const { arrivesAt, diesAt } = pulseTimes(def, pulse);
-  if (at >= diesAt) {
+  if (at >= diesAt + PULSE_GRACE_MS) {
     const dead = { ...state, pulse: null, last: 'verfallen' as const };
     return logged(dead, [{ tag: 'info', text: 'Impuls verfallen' }]);
   }
@@ -359,15 +369,30 @@ function started(state: StartupState, playerId: string, ctx: PuzzleContext): Out
   }
   const right = rightValues(dealNow(state));
   if (gapsOf(state.stage).some((gap) => state.values[gap] !== right[gap])) {
-    const text = `Anlauf verweigert: Werte passen nicht zu ${boardName(board)}`;
-    return {
-      state: logged(state, [{ tag: 'fail', text }]),
-      penalty: 'Anlaufsteuerung: Skript passt nicht',
-    };
+    return refusedStart(state, board);
   }
-  const sent = { ...state, pulse: { sentAt: ctx.at, arrived: false }, last: null };
+  const pulse = { sentAt: ctx.at, arrived: false };
+  const sent = { ...state, pulse, last: null, refused: null };
   const text = `Impuls an ${boardName(board)} unterwegs`;
   return { state: logged(sent, [{ tag: 'ok', text }]), penalty: null };
+}
+
+/**
+ * A start whose values do not fit the other Schaltfeld: an alarm, the values noted — the same
+ * values started again are turned away without another, as nothing has changed. The terminal
+ * says that a value does not fit, never which.
+ */
+function refusedStart(state: StartupState, board: ConsoleId): Outcome {
+  const tried = gapsOf(state.stage).map((gap) => state.values[gap]);
+  const again = gapsOf(state.stage).map((gap) => state.refused?.[gap]);
+  if (tried.every((value, i) => value === again[i])) {
+    fail('Werte unverändert: Das Skript passt nicht zum Schaltfeld der Gegenseite.');
+  }
+  const text = `Anlauf verweigert: ein Wert passt nicht zu ${boardName(board)}`;
+  return {
+    state: logged({ ...state, refused: { ...state.values } }, [{ tag: 'fail', text }]),
+    penalty: 'Anlaufsteuerung: Skript passt nicht',
+  };
 }
 
 /** A command at the terminal: only the typing console's runs a script, and not under a pulse. */
@@ -395,6 +420,7 @@ function ranUp(def: StartupDef, state: StartupState, feeder: number): StartupSta
     pulse: null,
     closed: [...state.closed, { console: board, feeder }],
     last: 'angelaufen',
+    refused: null,
   };
   const next = state.stages[state.stage + 1];
   const lines = [{ tag: 'ok' as const, text }];
@@ -640,6 +666,7 @@ export const startupModule: PuzzleModule<StartupDef, StartupState, StartupInput,
       pulse: null,
       closed: [],
       last: null,
+      refused: null,
       log: [],
       logged: 0,
     };
@@ -666,7 +693,7 @@ export const startupModule: PuzzleModule<StartupDef, StartupState, StartupInput,
       return null;
     }
     const { arrivesAt, diesAt } = pulseTimes(def, state.pulse);
-    return state.pulse.arrived ? diesAt : arrivesAt;
+    return state.pulse.arrived ? diesAt + PULSE_GRACE_MS : arrivesAt;
   },
 
   expire(def, state, at) {

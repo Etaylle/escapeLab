@@ -96,7 +96,7 @@ function drawPools(ctx: CanvasRenderingContext2D, frame: Frame, pools: Pools): v
   for (const source of pools.sources.filter((s) => !steady.includes(s))) {
     ctx.globalAlpha = strengthAt(source, frame.time * 1000);
     if (source.moving === true) {
-      layMoving(ctx, frame, source);
+      layMoving(ctx, frame, source, shut);
     } else {
       layLive(ctx, frame, source, shut);
     }
@@ -105,13 +105,21 @@ function drawPools(ctx: CanvasRenderingContext2D, frame: Frame, pools: Pools): v
 }
 
 /**
- * A moving light's glow where it stands this frame, from one radial sprite at whole pixels
- * (radial.ts) — no bake for each spot it passes, and no clip: it reaches a tile and a half.
+ * A moving light's glow where it stands this frame, from one radial sprite of its reach and
+ * colour at whole pixels (radial.ts), under the clip of what it sees from there (clips.ts, kept
+ * a spot): no bake for each spot it passes, and no light through a wall or a shut door.
  */
-function layMoving(ctx: CanvasRenderingContext2D, frame: Frame, source: LightSource): void {
+function layMoving(
+  ctx: CanvasRenderingContext2D,
+  frame: Frame,
+  source: LightSource,
+  shut: string,
+): void {
   const [sx, sy] = toScreen(frame, source.x, source.y);
   const reach = source.reach * frame.camera.scale;
   ctx.save();
+  inTiles(ctx, frame);
+  ctx.clip(clipOf(frame, source, shut));
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   drawRadial(ctx, frame.kit.radials, poolStops(source.colour), [sx, sy, reach], frame);
   ctx.restore();

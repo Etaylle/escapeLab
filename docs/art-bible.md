@@ -352,13 +352,15 @@ floor over its marks and under the walls and the furniture (tileCache.ts `drawDu
 costs nothing a frame; under a wall it runs hidden. No floor mark lies on it. While a pulse runs,
 its light travels along the duct at the pulse's speed, a quarter tile a step, from the console
 that sent it toward the one taking it, then waits at the far end through the ladder's window:
-an amber light of the frame (sources.ts `pulseSources`, reach 1.5 tiles, 0.6 strong), flickering
-as it runs (240 ms, 0.3 deep) and swelling as it waits (700 ms, 0.55), a slow shallow swell under
-less motion; the glow pass lays a bright core of AMBER lifted over it. It shows where light falls
-on its tile now — your lamp, the crew's, an emergency lamp — or its room is lit, so the pulse
-leaving one room is seen there and its arrival in the other. Its spot is a pure function of the
-times every view carries (`pulseSpot`): every screen shows it at the same place. While no pulse
-runs nothing is added to a frame. Captures `startup-duct.png` (the audience's world, the pulse
+an amber light of the frame (sources.ts `pulseSources`, reach 1.5 tiles, 0.6 strong), a quick
+shallow swell as it runs (240 ms, 0.3 deep) and a slower deeper one as it waits (700 ms, 0.55), a
+slow shallow swell under less motion; the glow pass lays it from one radial sprite under the clip
+of what it sees from its spot, and a bright core of AMBER lifted over it. It shows where light
+falls on its tile now — your lamp, the crew's, an emergency lamp — or its room is lit, and never
+under a wall or a shut door, so the pulse leaving one room is seen there and its arrival in the
+other. Its spot is a pure function of the times every view carries, read on the server's clock
+(`pulseSpot`, `Frame.serverNow`): every screen shows it at the same place. While no pulse runs
+`pulseSources` returns at once with nothing, and nothing more is drawn. Captures `startup-duct.png` (the audience's world, the pulse
 in the duct) and `hall-startup.png`.
 
 ## Graphics 2's references

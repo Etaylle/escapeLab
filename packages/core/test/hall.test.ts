@@ -167,7 +167,8 @@ function breakerWhenOnLadder(state: GameState, at: number, input: PuzzleInput): 
 /**
  * The plan's `move` at `station` as the walkthrough makes it, due at `at`: a token once the device
  * shows the account it is for (`tokenWhenShown`), a breaker once the pulse stands on the ladder
- * (`breakerWhenOnLadder`), a release once the clock shows its digit, every other move as it stands — the station ticked as the room ticks it up to then.
+ * (`breakerWhenOnLadder`), a release once the clock shows its digit, every other move as it
+ * stands — the station ticked as the room ticks it up to then.
  */
 function madeAt(state: GameState, move: Move<PuzzleInput>, station: HallStation, at: number): Made {
   if ('token' in move.input) {

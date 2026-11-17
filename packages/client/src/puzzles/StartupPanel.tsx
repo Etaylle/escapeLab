@@ -78,22 +78,23 @@ const other = (side: ConsoleId): ConsoleId => (side === 'a' ? 'b' : 'a');
 
 // --- the ladder ----------------------------------------------------------------------------
 
-/** One step of the ladder a second: how many are lit at `now`, from the pulse's sending on. */
+/**
+ * One step of the ladder a second: how many are lit at `now`, from the pulse's sending on — none
+ * once its last step's second is over, the window's end, whatever grace the server still allows.
+ */
 export function ladderLit(pulse: Pick<StartupPulse, 'sentAt'> | null, now: number, steps: number) {
-  if (pulse === null) {
-    return 0;
-  }
-  return Math.min(steps, Math.floor(Math.max(0, now - pulse.sentAt) / 1000) + 1);
+  const elapsed = pulse === null ? -1 : Math.max(0, now - pulse.sentAt);
+  return elapsed < 0 || elapsed >= steps * 1000 ? 0 : Math.floor(elapsed / 1000) + 1;
 }
 
-/** The moment the next step lights; null once all are lit, and without a pulse. */
+/** The moment the ladder changes next — a step lighting, or all going dark —; null once dark. */
 export function nextStepAt(
   pulse: Pick<StartupPulse, 'sentAt'> | null,
   now: number,
   steps: number,
 ): number | null {
   const lit = ladderLit(pulse, now, steps);
-  return pulse === null || lit >= steps ? null : pulse.sentAt + lit * 1000;
+  return pulse === null || lit === 0 ? null : pulse.sentAt + lit * 1000;
 }
 
 /** The pitch, as a meter's volts, the pulse's hum takes on the ladder's `lit`-th step. */
@@ -392,10 +393,6 @@ function Glass(props: { terminal: StartupTerminal; children?: ReactNode }) {
   const { terminal, children } = props;
   return (
     <div className="servers-crt startup-crt">
-      <p className="startup-head">
-        <span>ANLAUFSTEUERUNG</span>
-        <span>AS-86</span>
-      </p>
       <Script terminal={terminal} />
       {terminal.sent && <p className="startup-sent">IMPULS UNTERWEGS</p>}
       <Log log={terminal.log} />
@@ -471,17 +468,12 @@ function Terminal(props: {
 }
 
 /** The terminal of a console whose Schaltfeld is live: its glass dark but for one line. */
-function IdleTerminal({ types }: { types: ConsoleId }) {
+function IdleTerminal({ puzzle }: { puzzle: StartupPuzzle }) {
+  const here = (puzzle.console ?? armedConsole(puzzle)).toUpperCase();
   return (
-    <div className="servers servers--terminal startup-terminal startup-terminal--idle">
-      <div className="servers-crt startup-crt">
-        <p className="startup-head">
-          <span>ANLAUFSTEUERUNG</span>
-          <span>AS-86</span>
-        </p>
-        <p className="startup-idle">{`Skript läuft an ${consoleName(types)}`}</p>
-      </div>
-    </div>
+    <p className="startup-armed startup-idle">
+      {`TERMINAL ${here} · IN RUHE · SKRIPT AN ${consoleName(puzzle.types).toUpperCase()}`}
+    </p>
   );
 }
 
@@ -499,15 +491,6 @@ function Lamp({ colour, place }: { colour: LampColour; place: 'oben' | 'unten' }
       <span className="startup-lamp-word" aria-hidden="true">
         {LAMP_WORDS[colour]}
       </span>
-    </span>
-  );
-}
-
-/** A control lamp of the idle Schaltfeld: its lens dark, nothing engraved to read. */
-function DarkLamp() {
-  return (
-    <span className="startup-lamp-cell">
-      <span className="startup-lamp startup-lamp--aus" aria-hidden="true" />
     </span>
   );
 }
@@ -531,21 +514,26 @@ function Ladder(props: {
   }, [lit, audible]);
   const from = steps - marked;
   return (
-    <ol className="startup-ladder" aria-label={`LED-Leiter: ${lit} von ${steps} Stufen`}>
-      {Array.from({ length: steps }, (_, i) => steps - 1 - i).map((step) => (
-        <li
-          key={step}
-          className={[
-            'startup-step',
-            step >= from ? 'startup-step--marked' : '',
-            step < lit ? 'startup-step--lit' : '',
-          ]
-            .filter(Boolean)
-            .join(' ')}
-        />
-      ))}
-    </ol>
+    <div className="startup-ladder-box" style={cssVars({ '--marked': marked })}>
+      <span className="startup-window-word" aria-hidden="true">
+        FENSTER
+      </span>
+      <div className="startup-ladder-row">
+        <ol className="startup-ladder" aria-label={`LED-Leiter: ${lit} von ${steps} Stufen`}>
+          {Array.from({ length: steps }, (_, i) => steps - 1 - i).map((step) => (
+            <li key={step} className={stepClass(step, from, lit)} />
+          ))}
+        </ol>
+        <span className="startup-window" aria-hidden="true" />
+      </div>
+    </div>
   );
+}
+
+/** A step's classes: marked where it lies in the window, lit where the pulse has reached it. */
+function stepClass(step: number, from: number, lit: number): string {
+  const marked = step >= from ? ' startup-step--marked' : '';
+  return `startup-step${marked}${step < lit ? ' startup-step--lit' : ''}`;
 }
 
 /** A breaker: a lever thrown up to close, its feeder's number under it. */
@@ -579,6 +567,7 @@ function Board(props: {
 }) {
   const { puzzle, board, send, audible } = props;
   const armed = armedConsole(puzzle).toUpperCase();
+  const closed = closedAt(puzzle.closed, armedConsole(puzzle));
   return (
     <div className="startup-board">
       <p className="startup-armed startup-armed--live">{`SCHALTFELD ${armed} · AUFGESCHALTET`}</p>
@@ -589,7 +578,7 @@ function Board(props: {
             <Lamp colour={lamps[1]} place="unten" />
             <Breaker
               feeder={feeder}
-              closed={false}
+              closed={closed.includes(feeder)}
               onClose={send === null ? null : () => send({ breaker: feeder })}
             />
           </div>
@@ -615,30 +604,14 @@ export function idlePlate(puzzle: StartupPuzzle): string {
 
 /** The Schaltfeld of a console whose terminal is live: its lamps dark, its breakers at rest. */
 function IdleBoard({ puzzle }: { puzzle: StartupPuzzle }) {
-  const closed = closedAt(puzzle.closed, puzzle.console);
-  const feeders = Array.from({ length: FEEDERS }, (_, i) => i + 1);
-  return (
-    <div className="startup-board startup-board--idle">
-      <p className="startup-armed">{idlePlate(puzzle)}</p>
-      <div className="startup-feeders" role="group" aria-label="Abgänge in Ruhe">
-        {feeders.map((feeder) => (
-          <div key={feeder} className="startup-feeder" data-feeder={feeder}>
-            <DarkLamp />
-            <DarkLamp />
-            <Breaker feeder={feeder} closed={closed.includes(feeder)} onClose={null} />
-          </div>
-        ))}
-      </div>
-      <Ladder {...puzzle.ladder} pulse={null} audible={false} />
-    </div>
-  );
+  return <p className="startup-armed startup-idle">{idlePlate(puzzle)}</p>;
 }
 
 /** The device's status strip: the stage, what is live here and what the pulse came to. */
 function Status({ puzzle }: { puzzle: StartupPuzzle }) {
   return (
     <p className="startup-status" role="status">
-      {statusOf(puzzle)}
+      <span className="startup-make">ANLAUFSTEUERUNG AS-86</span> {statusOf(puzzle)}
     </p>
   );
 }
@@ -650,7 +623,7 @@ function BoardConsole(props: { puzzle: StartupPuzzle; board: StartupBoard; send:
     <div className="startup startup--board servers">
       <Status puzzle={puzzle} />
       <div className="startup-device">
-        <IdleTerminal types={puzzle.types} />
+        <IdleTerminal puzzle={puzzle} />
         <Board puzzle={puzzle} board={board} send={send} audible />
       </div>
       <div className="servers-bezel startup-bezel">
@@ -669,7 +642,7 @@ function Watched(props: { puzzle: StartupPuzzle; terminal: StartupTerminal; boar
   return (
     <div className="startup startup--watched servers">
       <Status puzzle={puzzle} />
-      <div className="startup-device">
+      <div className="startup-device startup-device--watched">
         <section className="servers-console" aria-label={consoleName(puzzle.types)}>
           <h4 className="servers-console-name">{consoleName(puzzle.types)}</h4>
           <Glass terminal={terminal} />

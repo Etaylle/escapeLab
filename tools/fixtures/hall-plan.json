@@ -52,7 +52,13 @@
           "gaps": ["abgang"],
           "values": { "abgang": null },
           "sent": false,
-          "log": [{ "n": 1, "tag": "info", "text": "Pult A: Skript Stufe 1/2 geladen, Lüftung" }]
+          "log": [
+            {
+              "n": 1,
+              "tag": "info",
+              "text": "Pult A: Skript Stufe 1/2 geladen, Lüftung; Befehle zeige, setze, start"
+            }
+          ]
         }
       },
       "moves": [

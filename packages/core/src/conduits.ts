@@ -13,7 +13,9 @@ import type { GameState } from './state.js';
  * The cable ducts in the floor (`map.conduits`): each runs from one console of an
  * Anlaufsteuerung to the other, tile by orthogonally adjacent tile, under floor, walls and
  * doors alike, and carries its start pulse — the world sees the pulse's light travel along it
- * (client world/render/conduits.ts), where a figure has sight of the tiles.
+ * (client world/conduits.ts, sources.ts), where a figure has sight of the tiles. Every station of
+ * the module needs its duct: the light running in it is the typing side's word that the pulse
+ * is off and the other side's that it comes.
  */
 
 /** A duct as the map file has it: its station's puzzle, and its tiles from one end to the other. */
@@ -93,7 +95,8 @@ function endsIssue(map: MapDef, duct: ConduitDef): string | null {
   return joins([first, last], a, b)
     ? null
     : `the duct ends at ${first.join(',')} and ${last.join(',')} — put one end beside ` +
-        `console a (${a.x},${a.y}) and the other beside console b (${b.x},${b.y})`;
+        `console a (${a.x},${a.y}) and the other beside console b (${b.x},${b.y}): lay its ` +
+        'tiles anew in the mission file, or move the consoles back beside its ends';
 }
 
 /** Whether the ends `[first, last]` lie one beside console `a`, the other beside `b`. */
@@ -127,6 +130,29 @@ function ductIssue(
  * steps, each tile once, from beside one console to beside the other.
  */
 export function conduitIssues(map: MapDef, puzzles: readonly PuzzleDef[]): ConduitIssue[] {
+  return [...ductIssues(map, puzzles), ...missingDucts(map, puzzles)];
+}
+
+/**
+ * Every Anlaufsteuerung of the mission with its stations on the map but no duct: one issue
+ * each, saying where to lay one — the editor has no tool for it, the mission file has.
+ */
+function missingDucts(map: MapDef, puzzles: readonly PuzzleDef[]): ConduitIssue[] {
+  const ducted = new Set(map.conduits.map((duct) => duct.puzzleId));
+  const placed = (id: string): boolean => map.stations.some((s) => s.puzzleId === id);
+  return puzzles
+    .filter((p) => p.type === 'startup' && placed(p.id) && !ducted.has(p.id))
+    .map((p) => ({
+      path: ['map', 'conduits'],
+      message:
+        `map: station "${p.id}" (startup) has no cable duct — add one to map.conduits, its ` +
+        'tiles from beside console a to beside console b; the editor has no tool for it, the ' +
+        'mission file takes it',
+    }));
+}
+
+/** Every issue with the ducts the map lists. */
+function ductIssues(map: MapDef, puzzles: readonly PuzzleDef[]): ConduitIssue[] {
   return map.conduits.flatMap((duct, i): ConduitIssue[] => {
     const at = (issue: ConduitIssue): ConduitIssue => ({
       path: ['map', 'conduits', i, ...issue.path],
@@ -163,7 +189,12 @@ function pulseIn(state: GameState, duct: ConduitDef): ConduitPulse | null {
   return { sentAt: pulse.sentAt, ...times, reversed: runsBack(state.mission.map, duct, stage) };
 }
 
-/** The map's ducts as every view carries them: their tiles, and the pulse in each now. */
+/**
+ * The map's ducts as every view carries them: their tiles, and the pulse in each now. The
+ * pulse's times reach every player, as the doors' state does: the light is the world's, and the
+ * typing side, which started the pulse, could count the seconds anyway; nothing of the instance
+ * is in them.
+ */
 export function conduitsOnMap(state: GameState): ConduitView[] {
   const { map } = state.mission;
   return map.conduits.map((duct) => ({

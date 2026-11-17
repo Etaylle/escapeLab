@@ -246,6 +246,11 @@ export interface Frame {
   time: number;
   /** the wall clock, epoch ms: doors sliding, the hatch, an alarm, the deadline */
   now: number;
+  /**
+   * the server's clock, epoch ms (clock.ts `serverNow`): what the server times itself and every
+   * screen shows alike — a start pulse in its duct
+   */
+  serverNow: number;
   /** the page's clock, ms (performance.now()): pings and chat lines */
   perf: number;
   /** the beat the lab's objects pulse with, 0 to 1 */

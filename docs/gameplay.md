@@ -593,12 +593,14 @@ Betriebsbuch in the west room), and its bay in the Übungshalle.
   two control lamps over a breaker, and an LED ladder with a step a second (`travelSec` +
   `windowSec`), its top `windowSec` steps marked. The stages (`stages`, 2–3) alternate the sides:
   in the odd ones console A's terminal runs the script and console B's Schaltfeld takes the
-  pulse, in the even ones the other way round. The part that is not live stands idle and shows
-  nothing of the instance: a dark glass („Skript läuft an Pult A"), dark lamps and the breakers
-  closed in earlier stages. A plate over each Schaltfeld says whether it takes this stage's pulse
-  („SCHALTFELD B · AUFGESCHALTET", amber) or rests and which one does („SCHALTFELD A · IN RUHE ·
-  AUFGESCHALTET: B"), so that in stage 2 nobody waits at the wrong half. A status strip over both
-  says the stage and what the last pulse came to in the device's words.
+  pulse, in the even ones the other way round. At a console the live part fills the device; the
+  idle one is a plate's line over it that shows nothing of the instance and says where the stage
+  runs („TERMINAL B · IN RUHE · SKRIPT AN PULT A", „SCHALTFELD A · IN RUHE · AUFGESCHALTET: B"),
+  so that in stage 2 nobody waits at the wrong half; the live Schaltfeld's plate reads
+  „SCHALTFELD B · AUFGESCHALTET" in amber, its breakers closed in earlier stages standing closed.
+  A status strip over all, headed by the make (ANLAUFSTEUERUNG AS-86), says the stage and what
+  the last pulse came to in the device's words. The ladder's marked steps carry a bracket and
+  FENSTER over them, as the book draws them.
 - **The script** (`zeige` lists the stage and its open gaps in the log) names the load the stage
   starts — Netzeinspeisung, Notstromschiene, Kühlkreis, Lüftung, Beleuchtung, one of its own each
   stage — and has the gap `abgang`, from stage 2 on also `sperre`. Its comments are the hints:
@@ -607,9 +609,9 @@ Betriebsbuch in the west room), and its bay in the Übungshalle.
   sets a gap — the value then stands bracketed and underlined, `abgang = [2]`, told from the
   script's own text —, `start` runs the script; Tab completes a command and, after `setze`, a
   gap of the script; the keys put the same lines together. Every comment stands on a line of its
-  own over the line it explains, so that the terminal lists its script unwrapped; the device's
-  panel takes up to 1000 px for terminal and Schaltfeld side by side, and stands whole at
-  1280 × 720 and on a phone held sideways. `npm` and whatever follows it the terminal
+  own over the line it explains, each line one row, cut rather than wrapped; the log keeps three
+  lines; the device stands whole at 1280 × 720 and on a phone held sideways. The script loads
+  with a log line naming the three commands. `npm` and whatever follows it the terminal
   answers itself, without a fault: „? npm: unbekannter Befehl — AS-86, Baujahr 1986". Once
   `zeige` has answered last, the line under the prompt names the typed steps the stage still
   takes: „Eingabe: setze abgang <nr> · start".
@@ -622,24 +624,33 @@ Betriebsbuch in the west room), and its bay in the Übungshalle.
   an alarm in most runs. Every lens has its colour's word engraved under it.
 - **The pulse.** `start` needs every gap set and somebody else at the other console's Schaltfeld
   („Am Schaltfeld der Gegenseite steht niemand."); with a value that does not fit the Schaltfeld
-  it is a Fehlquittierung, the values staying. Otherwise the pulse goes off: the terminal says
+  it is a Fehlquittierung, the values staying — the log says a value does not fit, never which —;
+  the same refused values started again are turned away without another alarm („Werte
+  unverändert: …"). Otherwise the pulse goes off: the terminal says
   „IMPULS UNTERWEGS" and counts nothing down; the other console's ladder fills a step a second,
   the pulse's hum rising with it, and after `travelSec` (6 s) it stands `windowSec` (3 s) on the
-  marked steps, on the server's clock (`dueAt`: the arrival, then the end). The breaker of the
-  feeder the script named has to close then: the stage runs up, the breaker latching home with
-  the relay's clack. A moment early the ladder drops the pulse („Impuls verworfen"), late it dies
-  („Impuls verfallen"), neither an alarm; any other breaker kills it with one. Either way the
+  marked steps, on the server's clock (`dueAt`: the arrival, then the end and its grace). The
+  breaker of the feeder the script named has to close then: the stage runs up, the breaker
+  latching home with the relay's clack. The ladder goes dark at the window's end on every screen,
+  and the server still takes the right breaker for `PULSE_GRACE_MS` (500 ms) after it — half a
+  round trip's slack for a press made while the window still showed. A moment early the ladder
+  drops the pulse („Impuls verworfen"), late it dies („Impuls verfallen"), neither an alarm; any other breaker kills it with one. Either way the
   script has to be started again. Solved after the last stage.
 - **The duct in the world** (`map.conduits[]`: `{ puzzleId, tiles: [[x, y], …] }`) runs from
   beside one console to beside the other, tile by orthogonal tile, under floor, walls and doors —
   the validation turns away another module's puzzle, a second duct for a station, a gap, a tile
-  twice, a tile over the void and an end beside no console. It is baked with the floor, a dark
+  twice, a tile over the void and an end beside no console, and wants one at every
+  Anlaufsteuerung — its messages say what to lay or move in the mission file, as the editor has
+  no tool for ducts. It is baked with the floor, a dark
   channel with a steel grating. While a pulse runs, its light travels along it at the pulse's
   speed, a quarter tile at a step, toward the console taking it, then waits at the far end; every
   view of the map carries the pulse's times (`conduitsOnMap`) and the client works the spot out
-  from them (`world/conduits.ts` `pulseSpot`), an amber light of the frame (`sourcesOf`) that
-  shows where light falls on its tile now, or its room is lit: the pulse leaving one room is seen
-  there, its arrival in the other. The editor keeps the ducts a file brings and follows a
+  from them on the server's clock (`world/conduits.ts` `pulseSpot`), an amber light of the frame
+  (`sourcesOf`) that shows where light falls on its tile now, or its room is lit, and never
+  under a wall or a shut door: the pulse leaving one room is seen there, its arrival in the
+  other. The times reach every player, as a door's state does: the light is the world's, the
+  typing side started the pulse and could count the seconds anyway, and nothing of the instance
+  is in them. The editor keeps the ducts a file brings and follows a
   rename; it has no tool to draw one yet.
 
 `core/test/startup.test.ts` holds the deal, the script, the views by presence, every refusal, the

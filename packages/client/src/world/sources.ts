@@ -21,8 +21,8 @@ import { warmUp } from './rooms.js';
  * emergency lamps' pulsing red while their rooms are dark; the wall
  * screens' phosphor green and the racks' cold blue, faint, in the dark too;
  * the reactor core's pulsing orange; the amber beacon turning over the
- * hatch through the escape; and a start pulse running in a cable duct. A light shows where the world shows its spot —
- * seen this run, and while the lab has its power only in the room it
+ * hatch through the escape; and a start pulse running in a cable duct.
+ * A light shows where the world shows its spot — seen this run, and while the lab has its power only in the room it
  * lights round you — as objects do. How strongly each burns at a moment,
  * pulse and flicker worked out, is gl/pack.ts's `strengthAt`.
  */
@@ -231,19 +231,27 @@ const PULSE_WAITING = { periodMs: 700, depth: 0.55 } as const;
 /** Where the player asked for less motion: a slow, shallow swell, running or waiting. */
 const PULSE_CALM = { periodMs: 2000, depth: 0.1 } as const;
 
+/** Whether the duct runs hidden at (x, y): under a wall, or a door shut over it. */
+function underCover(map: Frame['map'], x: number, y: number): boolean {
+  const shut = map.doors.some((door) => door.x === x && door.y === y && !door.open);
+  return shut || map.tiles[y]?.charAt(x) === '#';
+}
+
 /**
  * The start pulses running in the cable ducts (conduits.ts), each where it stands now on the
- * server's clock — where a figure has sight of its tile, or its room is lit: the pulse leaving
- * one room is seen there, its arrival in the other. None while no pulse runs.
+ * server's clock — where a figure has sight of its tile, or its room is lit, and never under a
+ * wall or a shut door, where the duct runs hidden: the pulse leaving one room is seen there, its
+ * arrival in the other. None while no pulse runs: the list returns at once.
  */
 export function pulseSources(frame: Frame): LightSource[] {
   return frame.map.conduits.flatMap((conduit): LightSource[] => {
-    const spot = pulseSpot(conduit, frame.now);
+    const spot = pulseSpot(conduit, frame.serverNow);
     if (spot === null) {
       return [];
     }
     const [x, y] = [Math.floor(spot.x), Math.floor(spot.y)];
-    if (!frame.light.inSight(x, y) && !frame.litTiles.has(`${x},${y}`)) {
+    const seen = frame.light.inSight(x, y) || frame.litTiles.has(`${x},${y}`);
+    if (!seen || underCover(frame.map, x, y)) {
       return [];
     }
     const swell = spot.arrived ? PULSE_WAITING : PULSE_RUNNING;
