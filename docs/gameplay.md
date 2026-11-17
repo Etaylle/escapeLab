@@ -262,6 +262,73 @@ plan's host reads a two-console station's rules at its book as it comes on, then
 at the Zugangskontrolle the walkthrough types the token its device shows, not the plan's, which
 hung on the plan's own clock.
 
+## Stations that take turns
+
+A puzzle may name a **pool** (`pool: "wechselplatz"`, a short id; the editor's field
+„Wechselplatz"). The puzzles of one pool are alternatives for one place: a run has exactly one
+of them, the others are **out of service** for that run. So a mission can hold more stations
+than a run is long, and a second run is not the first one again.
+
+**The draw.** The start draws one member per pool from the run's seed and the pool's id alone
+(core `rotation.ts` `drawPools`: `pickOf` over the members sorted by id), whatever order the file
+or a run has them in and at any difficulty: the same seed has the same stations, the
+Tagesschicht gives every crew the day's, and a rematch draws anew from its new seed. The state
+keeps the draw (`GameState.drawn`, by pool id), and the run's `mission.puzzles` stand in the
+run's order: its own stations first — a pool standing where its first member stands in the
+file, as the drawn one — and the stations out of service after them (`runOrder`), so that
+`currentPuzzleIndex` stays the count of solved stations. In a chain the pool takes one place in
+the order; in free order the drawn station stands open with the rest. The file need not keep a
+pool's members next to each other: a snapshot checks a run's mission as a file, and a run's
+order has to pass.
+
+**What names a pool.** A door's `opensBy.puzzleId` and `untilSolved`, and a part's
+`requiredFor`, may name a pool instead of a puzzle: „once this place is solved", „the station
+the run has here waits for it". Everything that counts solved stations counts a pool as one:
+the lobby's and the cards' station count, the dots on the objective bar, a drone's
+`activeAfterSolved` (the validation holds it below the stations of a run), the emergencies'
+`afterSolved`, the hatch, the report. A station's own things name the member: its consoles
+(`map.stations`), its sources (`manuals.puzzleIds`), a part only it needs, its `lights`,
+`hints`, `nudges` and `onSolved`. The validation refuses a door that waits for a single member —
+it would stay shut in most runs — and names the pool to use; a pool needs two members at least
+and an id no puzzle has.
+
+**Out of service.** A station out of service is never armed and never solved, takes no input
+and has no instance: no view carries its rules, its notes or mission control's lines about it
+(`core/test/rotation.test.ts` holds that with `JSON.stringify` on every view, wherever its
+player stands). Its console stands dark, a tag hung across it and „AUSSER BETRIEB" under it
+once this player has found it; in sight from afar it already wears the tag (`MapView.stations`:
+status `'out'`, a glimpse's `out`). The E prompt there reads the same and opens nothing; the
+server answers a forged E with „Außer Betrieb.". A source that prints only the rules of
+stations out of service says „Zu einer Anlage außer Betrieb", gives no page and cannot be
+searched or unlocked (`outOfService` on the source); one that also covers a station of the run
+stays as it is and shows only that station's pages. A part only such a station waits for, and
+the key of a cabinet that holds only such rules, are not put out. Neither the goal line, the
+arrows nor the minimap ever show a station out of service or its source, and a player standing
+at one counts at no station. The printable Handbuch prints every member: it knows no seed.
+
+**The validation** proves every run the mission can have: each proof — reach for every crew
+size and choice of spawns, two different players at two consoles, sources and keys — runs once
+per possible draw, on the stations that run has, a pool's door opening with the one drawn. An
+issue ends with the draw it holds for: „— in a run with pool "wechselplatz" drawing
+"notstrom"".
+
+**The report** names the drawn station per pool (`drawn`, left out for a mission without pools;
+the version stays 2, as for every field added since) and lists the stations of the run alone.
+The Bestenliste and „Meine Einsätze" keep one board a mission and difficulty: runs of different
+draws stand on it together, so a board mixes stations of unequal length — worth a board per
+draw only once a shipped mission shows the spread. A snapshot keeps the draw; one from before
+the pools has none and restores as before.
+
+**The proof.** No shipped mission has a pool yet. `tools/fixtures/rotation-probe.json`
+(„Wechselprobe") is a chain of three places whose middle one is a pool of the Funkfeuer (one
+console), the Signalkette and the Notstromkasten (two each), with a door the pool opens. Every
+Systemcheck walkthrough plays it on two seeds that draw different stations (group `rotation`,
+`tools/fixtures/rotation-plan.json` from `core/test/rotationPlan.ts`, written anew by
+`node --import tsx ../core/test/writeRotation.ts` from `packages/server`): in each room the
+first station is solved, every console out of service found and held to the draw, and the page
+shot at one beside the live console (`rotation-out-of-service-<drawn>.png`); the second room is
+played to its won card (`rotation-won.png`).
+
 ## The first win
 
 Both missions open on a main switch the whole crew throws together, and Blackout ends on a

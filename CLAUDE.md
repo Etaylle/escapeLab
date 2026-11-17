@@ -24,7 +24,10 @@ Kooperatives Multiplayer-Escape-Spiel (Studienprojekt, FH-Themengruppe Schefer-W
   Instanz variieren, bleiben an den Quellen.
 - Missionen sind Daten (`missions/*.json`, zod-validiert). Eine Plattentür hält nur, solange
   jemand auf der Platte steht — nennt sie mit `untilSolved` ein Rätsel, bleibt sie nach dessen
-  Lösung offen. Ein Rätseltyp ist ein Modul unter `core/src/puzzles/<typ>.ts` nach dem Vertrag
+  Lösung offen. Rätsel mit demselben `pool` teilen sich einen Wechselplatz: Der Start lost je
+  Lauf aus dem Seed genau eines aus (`core/src/rotation.ts`), die anderen sind außer Betrieb —
+  nie scharf, ohne Instanz in jeder Sicht —, Türen nennen den Pool statt eines Mitglieds, und
+  die Validierung beweist jede mögliche Auslosung. Ein Rätseltyp ist ein Modul unter `core/src/puzzles/<typ>.ts` nach dem Vertrag
   in `core/src/puzzles/module.ts` (Schema, Zustand, Eingaben, Sicht nach Anwesenheit,
   gedrucktes Handbuch, `solve`) plus je ein Eintrag in `core/src/puzzles/index.ts` und
   `client/src/puzzles/index.ts` (Panel). Sonst ändert sich nichts: Reducer und Protokoll kennen
