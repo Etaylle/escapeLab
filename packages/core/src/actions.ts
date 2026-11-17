@@ -208,7 +208,19 @@ function requireHost(state: GameState, playerId: string): void {
   }
 }
 
+/**
+ * The game after `action`. A station that runs on the clock and on its consoles' presence
+ * (`elapse`) is brought to the moment of every action that names one: before a move there, so
+ * that the move meets the station as it stands then, and after every action, so that a change
+ * of presence, a pause or the station's switch-on holds or frees it at once.
+ */
 export function applyAction(state: GameState, action: Action): GameState {
+  const before = action.type === 'puzzle-input' ? clocked(state, action.at) : state;
+  const after = reduced(before, action);
+  return 'at' in action ? clocked(after, action.at) : after;
+}
+
+function reduced(state: GameState, action: Action): GameState {
   switch (action.type) {
     case 'player-join':
       return playerJoin(state, action);
@@ -997,8 +1009,13 @@ function presentAtConsoles(state: GameState, from: ConsoleId | null): PuzzleCont
   if (from === null || open === undefined || moduleFor(open.type).consoles !== 2) {
     return { a: [], b: [] };
   }
+  return consolesManned(state, open);
+}
+
+/** Who stands at each console of the station of `def`, by presence. */
+function consolesManned(state: GameState, def: PuzzleDef): PuzzleContext['atConsoles'] {
   const at = (console: ConsoleId): string[] => [
-    ...(state.presence.stations[stationKey({ puzzleId: open.id, console })] ?? []),
+    ...(state.presence.stations[stationKey({ puzzleId: def.id, console })] ?? []),
   ];
   return { a: at('a'), b: at('b') };
 }
@@ -1911,13 +1928,48 @@ function tickPuzzle(state: GameState, at: number): GameState {
   return aged === undefined || aged === open.puzzleState ? state : { ...state, puzzleState: aged };
 }
 
+/** The open station during a run, paused or not, where its module has an `elapse`; else null. */
+function elapsingStation(state: GameState) {
+  const def = state.mission.puzzles[state.currentPuzzleIndex];
+  if (state.phase !== 'playing' || state.puzzleState === null || def === undefined) {
+    return null;
+  }
+  const { elapse } = moduleFor(def.type);
+  return elapse === undefined ? null : { def, puzzleState: state.puzzleState, elapse };
+}
+
+/**
+ * The open station brought to `at` by its module's `elapse` where it has one: the station held
+ * while one of its consoles stands empty — every console counted empty while the run stands
+ * still —, an alarm the clock ran into charged to nobody, a solve on the clock advancing the run.
+ * The same state where the module has no `elapse` or nothing changed.
+ */
+function clocked(state: GameState, at: number): GameState {
+  const open = elapsingStation(state);
+  if (open === null) {
+    return state;
+  }
+  const { def, puzzleState, elapse } = open;
+  const manned = state.paused === null ? consolesManned(state, def) : { a: [], b: [] };
+  const result = elapse(def, puzzleState, { ...puzzleContext(state, at, null), atConsoles: manned });
+  if (result.state === puzzleState) {
+    return state;
+  }
+  const next = { ...state, puzzleState: result.state };
+  if (result.penalty !== null) {
+    return applyPenalty(next, result.penaltySec ?? def.penaltySec, at, result.penalty);
+  }
+  return result.solved ? advance(creditWorkers(next, def, null), at) : next;
+}
+
 /**
  * A solved station counts for whoever worked it: the player whose input
  * solved it — at a station with two consoles everybody at either console,
- * since it takes both of them to work it.
+ * since it takes both of them to work it; nobody where the clock solved a station of one.
  */
-function creditWorkers(state: GameState, def: PuzzleDef, playerId: string): GameState {
-  const workers = moduleFor(def.type).consoles === 2 ? operatorsOf(state, def.id) : [playerId];
+function creditWorkers(state: GameState, def: PuzzleDef, playerId: string | null): GameState {
+  const own = playerId === null ? [] : [playerId];
+  const workers = moduleFor(def.type).consoles === 2 ? operatorsOf(state, def.id) : own;
   return workers.reduce((next, id) => credited(next, id, 'operated'), state);
 }
 

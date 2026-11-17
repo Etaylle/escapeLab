@@ -43,6 +43,55 @@ function tickedAt(def: PuzzleDef, state: PuzzleState, at: number): PuzzleState {
 }
 
 /**
+ * Who sends a move by `by`, each from the console they stand at: at a station with two consoles
+ * the operator at a and the partner at b, at one with one `crew` at it; throws for a partner move
+ * there.
+ */
+function sendersOf(
+  by: Move<PuzzleInput>['by'],
+  twoConsoles: boolean,
+  crew: readonly string[],
+  label: string,
+): [string, ConsoleId][] {
+  if (by === 'operator') {
+    return [[OPERATOR, 'a']];
+  }
+  if (by === 'partner') {
+    if (!twoConsoles) {
+      throw new Error(`${label}: a partner move at a station with one console`);
+    }
+    return [[PARTNER, 'b']];
+  }
+  return twoConsoles
+    ? [
+        [OPERATOR, 'a'],
+        [PARTNER, 'b'],
+      ]
+    : crew.map((id): [string, ConsoleId] => [id, 'a']);
+}
+
+/** What the crew sees: console a's view (the station's), console b's where there is one, the book's. */
+function perspectivesOf<View>(seen: (viewer: Viewer) => View, twoConsoles: boolean) {
+  const views: Perspectives<View> = {
+    operator: seen(AT_A),
+    ...(twoConsoles ? { partner: seen(AT_B) } : {}),
+    reader: seen(AT_BOOK),
+  };
+  return views;
+}
+
+/** The seconds waited in a row after one more without a move; throws past MAX_IDLE_SEC. */
+function waitedOn(idle: number, label: string): number {
+  if (idle === MAX_IDLE_SEC) {
+    throw new Error(`${label}: the solver found no move in ${MAX_IDLE_SEC} s`);
+  }
+  return idle + 1;
+}
+
+/** The solver the harness asks: the module's own, unless a test hands it another crew's. */
+export type Solver = ReturnType<typeof moduleFor>['solve'];
+
+/**
  * Plays one instance of a puzzle the way a perfect crew would: one player
  * works the station, the other reads its rules at a manual object, and at a
  * station with two consoles a third player works console b. The module's
@@ -55,12 +104,15 @@ function tickedAt(def: PuzzleDef, state: PuzzleState, at: number): PuzzleState {
  * is a second of the module's clock, and the puzzle is ticked as the room
  * ticks it once its `dueAt` has come; the mission clock stands still while
  * the crew moves, and when the solver waits it runs on a second and the
- * solver is asked again. Throws on an alarm, on a partner
+ * solver is asked again; a station that runs on its consoles' presence is brought to every
+ * moment as the reducer brings it (`elapse`), both consoles manned. A test may hand in another
+ * crew's `solver` in place of the module's. Throws on an alarm, on a partner
  * move at a station with one console, on MAX_IDLE_SEC seconds without a
  * move and on running out of moves. Returns the number of moves taken.
  */
-export function playInstance(def: PuzzleDef, seed: number): number {
+export function playInstance(def: PuzzleDef, seed: number, solver?: Solver): number {
   const puzzleModule = moduleFor(def.type);
+  const solve = solver ?? puzzleModule.solve;
   type View = ReturnType<typeof puzzleModule.view>;
   const twoConsoles = puzzleModule.consoles === 2;
   const crew = twoConsoles ? [OPERATOR, PARTNER, READER] : [OPERATOR, READER];
@@ -82,28 +134,30 @@ export function playInstance(def: PuzzleDef, seed: number): number {
   const viewCtx: ViewContext = { edgework, alarms: 0, crew, operators };
   let state = puzzleModule.init(def, mulberry32(seed), ctx(T0, null));
   const transcript: SolveAid<PuzzleInput, View>['transcript'] = [];
-  /** Who sends a move, each from the console they stand at. */
-  const senders = (by: Move<PuzzleInput>['by']): [string, ConsoleId][] => {
-    if (by === 'operator') {
-      return [[OPERATOR, 'a']];
+  const senders = (by: Move<PuzzleInput>['by']) =>
+    sendersOf(by, twoConsoles, crew, `${def.id} (seed ${seed})`);
+  /**
+   * Where the station runs on its consoles' presence (`elapse`), the station brought to `at` as
+   * the reducer brings it, both consoles manned: true once that solved it; throws on its alarm.
+   */
+  const elapsed = (at: number): boolean => {
+    const result = puzzleModule.elapse?.(def, state, { ...ctx(at, null), atConsoles });
+    if (result === undefined) {
+      return false;
     }
-    if (by === 'partner') {
-      if (!twoConsoles) {
-        throw new Error(`${def.id} (seed ${seed}): a partner move at a station with one console`);
-      }
-      return [[PARTNER, 'b']];
+    if (result.penalty !== null) {
+      throw new Error(`${def.id} (seed ${seed}): alarm "${result.penalty}" on the clock`);
     }
-    return twoConsoles
-      ? [
-          [OPERATOR, 'a'],
-          [PARTNER, 'b'],
-        ]
-      : crew.map((id): [string, ConsoleId] => [id, 'a']);
+    state = result.state;
+    return result.solved;
   };
   /** One move through the input schema and `apply`, from each of its senders. */
   const play = (move: Move<PuzzleInput>, at: number): boolean => {
     for (const [playerId, from] of senders(move.by)) {
       const input = puzzleModule.inputSchema.parse(move.input);
+      if (elapsed(at)) {
+        return true;
+      }
       const result = puzzleModule.apply(def, state, input, playerId, ctx(at, from));
       if (result.penalty !== null) {
         const made = `${JSON.stringify(move.input)} from ${playerId}`;
@@ -122,18 +176,14 @@ export function playInstance(def: PuzzleDef, seed: number): number {
   for (let round = 1; moves < MAX_MOVES; round++) {
     const at = T0 + round * 1000;
     state = tickedAt(def, state, at);
+    if (elapsed(at)) {
+      return moves;
+    }
     const seen = (viewer: Viewer): View => puzzleModule.view(def, state, viewer, viewCtx);
-    const views: Perspectives<View> = {
-      operator: seen(AT_A),
-      ...(twoConsoles ? { partner: seen(AT_B) } : {}),
-      reader: seen(AT_BOOK),
-    };
-    const next = puzzleModule.solve(def, views, signRead, { transcript, remainingSec });
+    const views = perspectivesOf(seen, twoConsoles);
+    const next = solve(def, views, signRead, { transcript, remainingSec, at });
     if (next.length === 0) {
-      if (idle === MAX_IDLE_SEC) {
-        throw new Error(`${def.id} (seed ${seed}): the solver found no move in ${MAX_IDLE_SEC} s`);
-      }
-      idle += 1;
+      idle = waitedOn(idle, `${def.id} (seed ${seed})`);
       remainingSec -= 1;
       continue;
     }
