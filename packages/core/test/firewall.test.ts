@@ -446,12 +446,14 @@ describe('a trip', () => {
     const line = state.packets[i]?.line ?? 0;
     const lower = state.packets.some((p, j) => j < i && p.line === line);
     expect(lower, 'the first hostile packet is the first on its line').toBe(false);
-    const late = moved(state, arrives(state, i) + TRIP_GRACE_MS - 100, 'a', { trip: line });
+    // half a slow round trip after the packet reached the line on the server's clock
+    const late = moved(state, arrives(state, i) + 200, 'a', { trip: line });
     expect(late.penalty).toBeNull();
     expect(late.state.dropped).toEqual([state.packets[i]?.id]);
-    const tooLate = at(state, arrives(state, i) + TRIP_GRACE_MS + 100);
+    expect(at(state, arrives(state, i) + 200).penalty).toBeNull();
+    const tooLate = at(state, arrives(state, i) + 400);
     expect(tooLate.penalty).toBe('Paketfilter: Angriff im Kern');
-    expect(at(state, arrives(state, i) + TRIP_GRACE_MS - 100).penalty).toBeNull();
+    expect(TRIP_GRACE_MS).toBe(300);
   });
 
   it('is turned away at console b, and while the Analysepult stands empty', () => {
