@@ -211,10 +211,10 @@
       { "x": 25, "y": 18 }
     ],
     "labels": [
-      { "text": "ARCHIV", "x": 5, "y": 3, "kind": "archive" },
+      { "text": "ARCHIV", "x": 5, "y": 3, "kind": "archive", "brightness": 2 },
       { "text": "SERVERRAUM", "x": 16, "y": 4, "kind": "server" },
-      { "text": "FLUR", "x": 6, "y": 10, "kind": "corridor" },
-      { "text": "FLUR", "x": 23, "y": 10, "kind": "corridor" },
+      { "text": "FLUR", "x": 6, "y": 10, "kind": "corridor", "brightness": 2 },
+      { "text": "FLUR", "x": 23, "y": 10, "kind": "corridor", "brightness": 2 },
       { "text": "OST-FLUR", "x": 29, "y": 5, "kind": "corridor" },
       { "text": "MASCHINENRAUM", "x": 4, "y": 16, "kind": "machine" },
       { "text": "LABOR", "x": 15, "y": 16, "kind": "lab" },

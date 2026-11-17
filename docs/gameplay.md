@@ -256,7 +256,9 @@ The hall is made from the module registry (`core/test/hall.ts`): a module added 
 `node --import tsx ../core/test/writeHall.ts` from `packages/server`.
 Every Systemcheck walkthrough plays it before its own run, a drill in a room of its own (group
 `hall`, `tools/groups.mjs`), to the won card from that plan (`tools/fixtures/hall-plan.json`,
-made by `core/test/hallPlan.ts`): the overview from the audience (`hall-overview.png`), every
+made by `core/test/hallPlan.ts`): the host's own world past the briefing (`hall-player.png`,
+failing outside a mean luma of 70 to 180: the hall's fourteen room names once lit its one floor
+fourteen times over, to a white sheet), the overview from the audience (`hall-overview.png`), every
 station's device as it opens (`hall-<type>.png`) and the won card (`hall-won.png`). The
 plan's host reads a two-console station's rules at its book as it comes on, then takes console a;
 at the Zugangskontrolle the walkthrough types the token its device shows, not the plan's, which

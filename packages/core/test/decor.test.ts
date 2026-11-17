@@ -9,7 +9,7 @@ import {
   viewFor,
   viewForSpectator,
 } from '../src/index.js';
-import type { Action, GameState, Mission } from '../src/index.js';
+import type { Action, GameState, Mission, MissionCheck } from '../src/index.js';
 import { canGather, reachability, tileKey } from '../src/reach.js';
 
 /**
@@ -205,7 +205,26 @@ describe('decor — solid for every step', () => {
     expect(canGather(boxedIn, boxedIn.spawns, new Set(), station)).toBe(false);
   });
 
-  it('shows the furniture and each room’s kind in every player’s map', () => {
+  it('takes a floor’s brightness of 1 or 2 on a label, and refuses 0, 3 or a fraction', () => {
+    const raw = JSON.parse(
+      readFileSync(new URL('../../../missions/blackout.json', import.meta.url), 'utf8'),
+    ) as { map: { labels: { text: string; brightness?: number }[] } };
+    const withArchiv = (brightness: number): MissionCheck => {
+      const labels = raw.map.labels.map((l) => (l.text === 'ARCHIV' ? { ...l, brightness } : l));
+      return checkMission({ ...raw, map: { ...raw.map, labels } });
+    };
+    expect(withArchiv(1).ok).toBe(true);
+    expect(withArchiv(2).ok).toBe(true);
+    for (const wrong of [0, 3, 1.5]) {
+      const checked = withArchiv(wrong);
+      expect(checked.ok).toBe(false);
+      expect(checked.ok ? [] : checked.issues).toEqual([
+        expect.stringMatching(/^map\.labels\.0\.brightness: /),
+      ]);
+    }
+  });
+
+  it('shows the furniture, each room’s kind and its floor’s brightness in a player’s map', () => {
     const shipped = parseMission(
       JSON.parse(readFileSync(new URL('../../../missions/blackout.json', import.meta.url), 'utf8')),
     );
@@ -220,6 +239,9 @@ describe('decor — solid for every step', () => {
     const view = viewFor(state, 'p1');
     expect(view.map?.decor).toHaveLength(shipped.map.decor.length);
     expect(view.map?.labels.find((l) => l.text === 'ARCHIV')?.kind).toBe('archive');
+    // The Flur and the Archiv, one floor two names lit at once, burn twice; the Labor its own.
+    expect(view.map?.labels.find((l) => l.text === 'ARCHIV')?.brightness).toBe(2);
+    expect(view.map?.labels.find((l) => l.text === 'LABOR')).not.toHaveProperty('brightness');
     // The Notstrom-Kasten still to come shows only where in sight: the audience sees it all.
     const stations = viewForSpectator(state).map?.stations ?? [];
     const box = stations.find((s) => s.puzzleId === 'notstrom' && s.console === 'a');

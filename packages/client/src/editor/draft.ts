@@ -142,6 +142,8 @@ export interface DraftLabel {
   y: number;
   /** the kind of room it names; '' for a plain one */
   kind: RoomKind | '';
+  /** how brightly its floor's ceiling lights burn, as the file gives it; none for a room's own */
+  brightness?: number;
 }
 
 /** A piece of furniture: solid, on a floor tile of its own. */
@@ -452,7 +454,13 @@ function mapJson(map: DraftMap): Record<string, unknown> {
       y: s.y,
       ...given('console', s.console),
     })),
-    labels: map.labels.map((l) => ({ text: l.text, x: l.x, y: l.y, ...given('kind', l.kind) })),
+    labels: map.labels.map((l) => ({
+      text: l.text,
+      x: l.x,
+      y: l.y,
+      ...given('kind', l.kind),
+      ...given('brightness', l.brightness),
+    })),
     decor: map.decor.map((d) => ({
       kind: d.kind,
       x: d.x,
@@ -551,7 +559,15 @@ interface LooseMap {
     | undefined;
   plates?: { id: string; x: number; y: number; label?: string | undefined }[] | undefined;
   stations: { puzzleId: string; x: number; y: number; console?: 'a' | 'b' | undefined }[];
-  labels?: { text: string; x: number; y: number; kind?: RoomKind | undefined }[] | undefined;
+  labels?:
+    | {
+        text: string;
+        x: number;
+        y: number;
+        kind?: RoomKind | undefined;
+        brightness?: number | undefined;
+      }[]
+    | undefined;
   decor?: { kind: DecorKind; x: number; y: number; variant?: number | undefined }[] | undefined;
   manuals?:
     | {
@@ -719,7 +735,13 @@ function listsOf(map: LooseMap): DraftLists {
   return {
     doors: (map.doors ?? []).map(doorOf),
     plates: (map.plates ?? []).map((p) => ({ id: p.id, x: p.x, y: p.y, label: p.label ?? '' })),
-    labels: (map.labels ?? []).map((l) => ({ text: l.text, x: l.x, y: l.y, kind: l.kind ?? '' })),
+    labels: (map.labels ?? []).map((l) => ({
+      text: l.text,
+      x: l.x,
+      y: l.y,
+      kind: l.kind ?? '',
+      ...given('brightness', l.brightness),
+    })),
     decor: (map.decor ?? []).map((d) => ({
       kind: d.kind,
       x: d.x,
