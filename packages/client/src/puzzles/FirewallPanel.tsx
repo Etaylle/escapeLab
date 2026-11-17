@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { FirewallBlip, FirewallHeader } from '@escapelab/core';
 import { serverNow } from '../clock.js';
 import { useKeys } from '../hooks.js';
+import { useSettings } from '../settings.js';
 import { TalkButton } from '../screens/Voice.js';
 import { consoleName } from '../world/consoles.js';
 import { cssVars, type Change } from './feel.js';
@@ -37,10 +38,17 @@ import './firewall.css';
 type Send = PanelProps<'firewall'>['send'];
 type Clock = NonNullable<FirewallPuzzle['clock']>;
 
-/** The keys that step the gate and trip it, and step the Analysepult's cursor and mark. */
-const LEFT = ['arrowleft', 'a'];
-const RIGHT = ['arrowright', 'd'];
+/** The keys that trip the gate, and mark the packet under the Analysepult's cursor. */
 const PRESS = [' ', 'enter'];
+
+/**
+ * The keys that step the gate and the Analysepult's cursor: the arrows, and the keys the
+ * settings walk left and right with (A and D unless rebound).
+ */
+function useSteps(): { left: string[]; right: string[] } {
+  const { keys } = useSettings();
+  return { left: ['arrowleft', keys.left], right: ['arrowright', keys.right] };
+}
 
 // --- what a change sounds like ---------------------------------------------------------------
 
@@ -218,7 +226,8 @@ function GateLine(props: {
 
 /**
  * Console a, the Sperrpult: the scope of points, the gate under its lines — set by a tap on a
- * line, stepped by ◀ ▶, ← → or A D — and SPERREN, which trips it (space or enter too). The gate
+ * line, stepped by ◀ ▶, ← → or the keys that walk left and right (`useSteps`) — and SPERREN,
+ * which trips it (space or enter too). The gate
  * is this console's own; only the trip goes to the server, with its line.
  */
 function Sperrpult({ puzzle, send }: { puzzle: FirewallPuzzle; send: Send }) {
@@ -228,13 +237,14 @@ function Sperrpult({ puzzle, send }: { puzzle: FirewallPuzzle; send: Send }) {
   const step = (by: number): void =>
     setGate((at) => Math.min(LINES.length - 1, Math.max(0, at + by)));
   const trip = useRef<HTMLButtonElement>(null);
-  useKeys([...LEFT, ...RIGHT, ...PRESS], (key) => {
+  const { left, right } = useSteps();
+  useKeys([...left, ...right, ...PRESS], (key) => {
     if (PRESS.includes(key)) {
       trip.current?.click();
       return;
     }
     dialDetent();
-    step(LEFT.includes(key) ? -1 : 1);
+    step(left.includes(key) ? -1 : 1);
   });
   return (
     <div className="firewall firewall--gate">
@@ -389,14 +399,15 @@ function Analysepult({ puzzle, send }: { puzzle: FirewallPuzzle; send: Send }) {
   const [cursor, setCursor] = useState<string | null>(null);
   const shown = live.some((blip) => blip.id === cursor) ? cursor : null;
   const mark = (id: string): void => send({ mark: id });
-  useKeys([...LEFT, ...RIGHT, ...PRESS], (key) => {
+  const { left, right } = useSteps();
+  useKeys([...left, ...right, ...PRESS], (key) => {
     if (PRESS.includes(key)) {
       if (shown !== null) {
         mark(shown);
       }
       return;
     }
-    setCursor(cursorStep(live, shown, LEFT.includes(key) ? -1 : 1));
+    setCursor(cursorStep(live, shown, left.includes(key) ? -1 : 1));
   });
   return (
     <div className="firewall firewall--analysis">

@@ -11002,17 +11002,14 @@ async function firewallMark({ gate, analysis }, id, shots) {
     throw new Error(`packet ${id} never came onto ${analysis.name}'s Analysepult`);
   }
   const card = analysis.page.locator(`.station-modal .firewall-card[data-packet="${id}"]`);
-  if (shots.headers) {
-    shots.headers = false;
-    await capture(analysis.page, 'firewall-headers.png');
-    const cards = await analysis.page.locator('.station-modal .firewall-card').count();
-    fwSaid(`firewall-headers.png ${analysis.name}'s Analysepult: ${cards} cards on the lines`);
-  }
-  for (let tries = 0; tries < 3 && !(await firewallMarked(gate, id)); tries++) {
+  await headersShot(analysis, shots);
+  // A tap that missed the moving card is tried again; one that took is never repeated, so that
+  // no second tap takes the mark back.
+  for (let tries = 0; tries < 3 && !firewallMarked(gate, id); tries++) {
     await tapMoving(analysis, card);
     await until(() => firewallMarked(gate, id), 1500);
   }
-  if (!(await firewallMarked(gate, id))) {
+  if (!firewallMarked(gate, id)) {
     throw new Error(`${analysis.name} marked ${id}, but ${gate.name}'s Sperrpult shows no ring`);
   }
   const from = Date.now();
@@ -11027,8 +11024,25 @@ async function firewallMark({ gate, analysis }, id, shots) {
   return ms;
 }
 
+/** How many cards the headers' shot waits for on the lines, at the latest mark at the latest. */
+const HEADERS_CARDS = 3;
+
+/**
+ * firewall-headers.png, at the first mark with HEADERS_CARDS cards on the lines or at the last
+ * mark of the plan (`shots.lastMark`), whichever comes first: the Analysepult with its cards.
+ */
+async function headersShot(analysis, shots) {
+  const cards = await analysis.page.locator('.station-modal .firewall-card').count();
+  if (!shots.headers || (cards < HEADERS_CARDS && !shots.lastMark)) {
+    return;
+  }
+  shots.headers = false;
+  await capture(analysis.page, 'firewall-headers.png');
+  fwSaid(`firewall-headers.png ${analysis.name}'s Analysepult: ${cards} cards on the lines`);
+}
+
 /** Whether `gate`'s view shows packet `id` marked. */
-const firewallMarked = async (gate, id) =>
+const firewallMarked = (gate, id) =>
   firewallView(gate)?.packets?.some((p) => p.id === id && p.marked) === true;
 
 /**
@@ -11054,12 +11068,16 @@ async function firewallTrip(gate, line) {
   }
 }
 
+/** No shot at all: the hall's Paketfilter, shot as its device opens. */
+const NO_FIREWALL_SHOTS = Object.freeze({ headers: false, gate: false, lastMark: false });
+
 /**
  * A move of the plan at the Paketfilter — a mark at the Analysepult, a trip at the Sperrpult —
- * as the pages allow it (`firewallMark`, `firewallTrip`); the first mark shoots the cards and
- * the first ring the Sperrpult where `shots` asks for them. Returns a mark's ms to its ring.
+ * as the pages allow it (`firewallMark`, `firewallTrip`); a mark shoots the cards
+ * (`headersShot`) and the first ring the Sperrpult where `shots` asks for them. Returns a
+ * mark's ms to its ring.
  */
-async function firewallMove(crew, input, shots = { headers: false, gate: false }) {
+async function firewallMove(crew, input, shots = NO_FIREWALL_SHOTS) {
   if ('mark' in input) {
     return firewallMark(crew, input.mark, shots);
   }
@@ -11075,9 +11093,11 @@ async function firewallMove(crew, input, shots = { headers: false, gate: false }
 async function playFirewall(crew) {
   const alarms = crew.gate.seen.view.alarms.count;
   const from = Date.now();
-  const shots = { headers: true, gate: true };
+  const shots = { headers: true, gate: true, lastMark: false };
   const rings = [];
-  for (const move of FIREWALL_PLAN.moves) {
+  const last = FIREWALL_PLAN.moves.findLastIndex((move) => 'mark' in move.input);
+  for (const [i, move] of FIREWALL_PLAN.moves.entries()) {
+    shots.lastMark = i === last;
     const ms = await firewallMove(crew, move.input, shots);
     rings.push(...(ms === null ? [] : [ms]));
   }
