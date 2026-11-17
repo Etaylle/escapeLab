@@ -86,6 +86,20 @@ export const GROUPS = [
     ],
   },
   {
+    // The Anlaufsteuerung's scratch mission, played in a Systemcheck run as the Zugangskontrolle's.
+    name: 'startup',
+    stage: 'drills',
+    needs: [],
+    captures: [
+      'startup (probe)',
+      'startup-terminal.png',
+      'startup-ladder.png',
+      'startup-duct.png',
+      'startup-phone-932.png',
+      'startup (targets)',
+    ],
+  },
+  {
     name: 'three',
     stage: 'drills',
     needs: [],

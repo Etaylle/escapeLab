@@ -11,12 +11,13 @@
  *     node tools/shots.mjs [baseUrl] [outDir]
  *
  * Groups (tools/groups.mjs): every capture, and every label a skip line carries, belongs to one of
- * eighteen groups; SHOTS_ONLY and SHOTS_SKIP, each a comma-separated list of their names, pick
+ * twenty groups; SHOTS_ONLY and SHOTS_SKIP, each a comma-separated list of their names, pick
  * those a run plays — a quick proof of one part. The drills, each in a room of its own before the
  * walkthrough: editor, art, drones (the danger sense, a drone close by), reconnect, restart, three
  * (Blackout for a crew of three through the Signalkette) — and in a Systemcheck run the
- * Serverraum's scratch mission, devices', the Zugangskontrolle's, access, and hall (the
- * Übungshalle played to its won card). The walkthrough's own stages:
+ * Serverraum's scratch mission, devices', the Zugangskontrolle's, access, the
+ * Anlaufsteuerung's, startup, and hall (the Übungshalle played to its won card). The
+ * walkthrough's own stages:
  * screens (the menu and its sound, the history, the lobby, the run started from it), intro (the
  * opening to blackout.png, the cold open at density 2 with it) and run (the mission to the won
  * card: the lit rooms, the finds, the audience's way in, the escape, the end, and after the won
@@ -592,6 +593,22 @@
  * the first door waits a period or two (15 s each in the probe). The log says
  * how long the device kept each account waiting. The mission is deleted again
  * whatever happened.
+ *
+ * Anlaufsteuerung (a Systemcheck run): the editor, opened at /editor?seed=5,
+ * imports tools/fixtures/startup-probe.json („Anlaufprobe",
+ * custom-anlaufprobe) and starts its test run; a second page joins by code,
+ * both touch screens, and a third watches as the audience. The player nearer
+ * console B switches the station on at its Schaltfeld, the other takes the
+ * terminal of console A; each stage has to deal what
+ * tools/fixtures/startup-plan.json says. The first value is typed, Tab
+ * completing `setze` and the gap, the rest put together on the keys; before
+ * `start` the terminal is shot at laptop size (startup-terminal.png) and on a
+ * large phone held sideways — whole, nothing scrolling, every control 44 px
+ * (startup-phone-932.png), the Schaltfeld the same —; the audience's world
+ * catches the pulse in the duct (startup-duct.png), and the Schaltfeld its
+ * ladder with the pulse on the marked steps (startup-ladder.png), where the
+ * plan's breaker closes. The second stage swaps the sides; the station has to
+ * solve without an alarm. The mission is deleted again whatever happened.
  *
  * Art (a Blackout run only): before the walkthrough, a scratch copy of
  * Blackout — custom-blackout, ten seconds of power before the lights fail,
@@ -10825,6 +10842,265 @@ async function captureAccess() {
   }
 }
 
+/**
+ * The Anlaufsteuerung's scratch mission (tools/fixtures/startup-probe.json, „Anlaufprobe",
+ * custom-anlaufprobe) and what its pinned seed deals stage by stage (startup-plan.json): the load
+ * each script starts, the lamps of the Schaltfeld that takes its pulse, the values core's solver
+ * sets and the breaker it closes. The moments are in no plan — they hang on the server's
+ * clock —: the drill closes each breaker once the ladder shows the pulse on its marked steps, as
+ * the player there would. Core's test of the module keeps the plan the solver's own.
+ */
+const STARTUP_FILE = fileURLToPath(new URL('fixtures/startup-probe.json', import.meta.url));
+const STARTUP_MISSION = JSON.parse(readFileSync(STARTUP_FILE, 'utf8'));
+const STARTUP_PLAN = JSON.parse(
+  readFileSync(fileURLToPath(new URL('fixtures/startup-plan.json', import.meta.url)), 'utf8'),
+);
+/** How long the drill waits for a pulse to stand on the ladder's marked steps: its travel, more. */
+const STARTUP_ARRIVAL_MS = 15_000;
+
+/** The open Anlaufsteuerung as `player`'s page has it; null for none. */
+function startupView(player) {
+  const puzzle = player.seen.view?.puzzle ?? null;
+  return puzzle?.kind === 'startup' ? puzzle : null;
+}
+
+/**
+ * `player` walks to console `letter` of the probe and opens its panel with E — at console B the
+ * first E switches the station on — and the panel has to show its live `role` this stage: the
+ * terminal or the board. Throws where it does not.
+ */
+async function manStartup(player, letter, role) {
+  const spot = player.seen.view.map.stations.find((station) => station.console === letter);
+  if (!(await walkNear(player.page, player.seen, spot))) {
+    throw new Error(`${player.name} found no way to console ${letter} at ${spot.x},${spot.y}`);
+  }
+  const modal = player.page.locator('.station-modal');
+  if (!(await interactUntil(player, modal, consoleTarget(spot)))) {
+    throw new Error(`${player.name} stands at console ${letter}, but no .station-modal`);
+  }
+  if (!(await until(() => startupView(player)?.role === role, 3000))) {
+    throw new Error(`${player.name}'s console ${letter} shows no live ${role}`);
+  }
+}
+
+/** Whether `player`'s view shows the plan's `stage` as dealt: its load and its lamps. */
+function startupDealt(typer, board, stage) {
+  const lamps = startupView(board)?.board?.feeders.map((feeder) => feeder.lamps);
+  const load = startupView(typer)?.terminal?.load;
+  return load === stage.load && JSON.stringify(lamps) === JSON.stringify(stage.feeders);
+}
+
+/** The step a command takes as it shows in `player`'s view, or the station's solve. */
+function startupTook(player, input) {
+  const terminal = startupView(player)?.terminal ?? null;
+  if (input.cmd === 'setze') {
+    return terminal?.values[input.gap] === input.value;
+  }
+  return terminal?.sent === true;
+}
+
+/**
+ * A command of the plan at `player`'s terminal — `typed`: letter by letter, Tab completing the
+ * command and the gap, else put together on the bezel's keys — and Enter or ⏎; it has to show
+ * in the view: the value in its gap, the pulse sent. Returns the line as sent.
+ */
+async function startupCommand(player, input, typed) {
+  const { page } = player;
+  const modal = page.locator('.station-modal');
+  if (typed && input.cmd === 'setze') {
+    await page.keyboard.type('se', { delay: 40 });
+    await page.keyboard.press('Tab');
+    await page.keyboard.type(input.gap.slice(0, 1), { delay: 40 });
+    await page.keyboard.press('Tab');
+    await page.keyboard.type(String(input.value), { delay: 40 });
+  } else {
+    await modal.locator(`.servers-key[data-cmd="${input.cmd}"]`).click();
+    if (input.cmd === 'setze') {
+      await modal.locator(`.servers-key[data-gap="${input.gap}"]`).click();
+      await modal.locator(`.startup-key[data-feeder="${input.value}"]`).click();
+    }
+  }
+  const line = await modal.locator('.servers-input').inputValue();
+  await (typed ? page.keyboard.press('Enter') : modal.locator('.servers-key--enter').click());
+  if (!(await until(() => startupTook(player, input), 3000))) {
+    const last = startupView(player)?.terminal?.log.at(-1)?.text ?? 'nothing';
+    throw new Error(`${player.name} sent „${line}", but it did not take: „${last}"`);
+  }
+  return line;
+}
+
+/**
+ * The plan's breaker at `player`'s Schaltfeld, closed once the ladder shows the pulse on its
+ * marked steps — the view says so — and the stage has to run up, or the station solve. With
+ * `shot`, the Schaltfeld is caught first, the pulse on the ladder. Returns the seconds waited.
+ */
+async function startupBreaker(player, feeder, shot = null) {
+  const from = Date.now();
+  const index = player.seen.view.currentPuzzleIndex;
+  const stage = startupView(player)?.stage;
+  const onLadder = () => startupView(player)?.board?.pulse?.arrived === true;
+  if (!(await until(onLadder, STARTUP_ARRIVAL_MS))) {
+    throw new Error(`${player.name}'s ladder never showed the pulse on its marked steps`);
+  }
+  if (shot !== null) {
+    await capture(player.page, shot);
+  }
+  await player.page.locator(`.station-modal .startup-breaker[data-breaker="${feeder}"]`).click();
+  const ranUp = () =>
+    player.seen.view.currentPuzzleIndex > index || startupView(player)?.stage !== stage;
+  if (!(await until(ranUp, 3000))) {
+    const last = startupView(player)?.last ?? 'nothing';
+    throw new Error(`${player.name} closed breaker ${feeder}, but the stage stays: ${last}`);
+  }
+  return Date.now() - from;
+}
+
+/** The pulse in the probe's duct as `player`'s view of the map has it; null for none. */
+const ductPulse = (player) => player.seen.view?.map?.conduits?.[0]?.pulse ?? null;
+
+/**
+ * startup-duct.png: the audience's world, the pulse running in the duct between the two rooms —
+ * no panel in its way —, caught a second and a half after its sending; the view has to carry it.
+ */
+async function captureDuct(audience) {
+  if (!(await until(() => ductPulse(audience) !== null, 3000))) {
+    throw new Error("the audience's map carries no pulse in the duct");
+  }
+  await sleep(Math.max(0, ductPulse(audience).sentAt + 1500 - Date.now()));
+  await capture(audience.page, 'startup-duct.png');
+  const panel = await audience.page.locator('.station-modal').count();
+  console.log(
+    `startup-duct.png   the audience's world, the pulse in the duct` +
+      (panel === 0 ? '' : ' !! a panel over it'),
+  );
+}
+
+/** The startup drill's phone targets, measured short while a device still moved: skipped. */
+const startupUnjudged = (why) => skip('startup (targets)', why);
+
+/**
+ * startup-terminal.png and startup-phone-932.png: the live terminal at laptop size with the
+ * first stage's script, then on a large phone held sideways (SIZES[4]) — whole, nothing
+ * scrolling, every control 44 px —, the live Schaltfeld held the same way on its page, checked
+ * without a shot. Both go back to laptop size.
+ */
+async function captureStartupConsoles({ typer, board }) {
+  await sleep(1400); // past the panels' fade-in
+  await capture(typer.page, 'startup-terminal.png');
+  await phoneReach(typer, SIZES[4], { shot: 'startup-phone-932.png', unjudged: startupUnjudged });
+  await phoneReach(board, SIZES[4], { label: 'startup board 932', unjudged: startupUnjudged });
+  for (const { page } of [typer, board]) {
+    await page.setViewportSize({ width: SIZES[0].width, height: SIZES[0].height });
+  }
+  await sleep(300);
+}
+
+/**
+ * One stage of the plan at both consoles: its values set and the script started at the typing
+ * console — the first stage's first value typed, the rest on the keys —, the breaker closed at
+ * the other once the pulse stands on the ladder (`startupBreaker`), the first caught there
+ * (startup-ladder.png). In the first the audience catches the pulse in the duct on its way.
+ * Returns the stage as the log says it.
+ */
+async function startupStage(crew, stage, first) {
+  const [typer, board] = stage.types === 'a' ? [crew.a, crew.b] : [crew.b, crew.a];
+  if (!startupDealt(typer, board, stage)) {
+    fail(`startup: seed ${STARTUP_PLAN.seed} deals stage ${stage.stage} unlike startup-plan.json`);
+  }
+  const lines = [];
+  for (const [i, [gap, value]] of Object.entries(stage.values).entries()) {
+    lines.push(await startupCommand(typer, { cmd: 'setze', gap, value }, first && i === 0));
+  }
+  if (first) {
+    await captureStartupConsoles({ typer, board });
+  }
+  lines.push(await startupCommand(typer, { cmd: 'start' }, false));
+  if (first) {
+    await captureDuct(crew.audience);
+  }
+  const waited = await startupBreaker(board, stage.breaker, first ? 'startup-ladder.png' : null);
+  const after = `Schalter ${stage.breaker} nach ${seconds(waited)}`;
+  return `Stufe ${stage.stage}: „${lines.join('", „')}", ${after}`;
+}
+
+/**
+ * The plan's stages played at both consoles, the sides swapping; the station has to solve on the
+ * last without an alarm. The log says how long it took and how long each pulse travelled.
+ */
+async function playStartup(crew) {
+  const alarms = crew.a.seen.view.alarms.count;
+  const from = Date.now();
+  const said = [];
+  for (const [i, stage] of STARTUP_PLAN.stages.entries()) {
+    said.push(await startupStage(crew, stage, i === 0));
+  }
+  const solved = await until(() => crew.a.seen.view.currentPuzzleIndex > 0, 3000);
+  const raised = crew.a.seen.view.alarms.count - alarms;
+  console.log(
+    `startup            ${said.length} stages in ${seconds(Date.now() - from)} ` +
+      `(${said.join('; ')}): ${solved ? 'solved' : '!! not solved'}, ` +
+      (raised === 0 ? 'no alarm' : `!! ${raised} alarm(s)`),
+  );
+  if (!solved || raised > 0) {
+    fail(`startup: the plan ended ${solved ? 'solved' : 'unsolved'} with ${raised} alarm(s)`);
+  }
+}
+
+/**
+ * The Anlaufsteuerung, proven in a scratch mission of its own, in a Systemcheck run as the
+ * Zugangskontrolle is (Blackout says it leaves it out): imported through the editor at a pinned
+ * seed and started as its test run, the second player joining by code, both on touch screens,
+ * and a third page watching as the audience. The player nearer console B switches the station
+ * on at its Schaltfeld, the other takes console A's terminal; the first stage's terminal is shot
+ * at laptop size (startup-terminal.png) and on a large phone held sideways
+ * (startup-phone-932.png, the Schaltfeld checked too), the audience's world with the pulse in the
+ * duct (startup-duct.png) and the Schaltfeld with the pulse on its ladder (startup-ladder.png).
+ * Every stage of the plan is played to the solve. The mission is deleted again whatever happened.
+ */
+async function captureStartup() {
+  if (MISSION.toLowerCase() === 'blackout') {
+    const why = 'Blackout plays no Anlaufsteuerung: its probe plays in a Systemcheck run';
+    skip('startup (probe)', why);
+    return;
+  }
+  const pages = [];
+  const from = Date.now();
+  try {
+    const host = await probePlayer('startup', 'Anna', true);
+    pages.push(host);
+    const room = { drill: 'startup', file: STARTUP_FILE, mission: STARTUP_MISSION };
+    const code = await openProbeRoom(host, { ...room, seed: STARTUP_PLAN.seed });
+    const guest = await probePlayer('startup', 'Ben', true);
+    pages.push(guest);
+    await joinProbeRoom(guest, code);
+    const audience = await probePlayer('startup', 'Zuschauer');
+    pages.push(audience);
+    await audience.page.goto(paged(BASE));
+    await typeName(audience.page, audience.name);
+    await byCode(audience.page, code, true);
+    await startRun(host, guest);
+    // Past the briefing's countdown, as in the walkthrough.
+    await sleep(Math.max(0, host.seen.view.startedAt + 4200 - Date.now()));
+    const [a, b] = probeSeats([host, guest]);
+    await manStartup(b, 'b', 'board');
+    await manStartup(a, 'a', 'terminal');
+    await playStartup({ a, b, audience });
+  } catch (err) {
+    console.log(`startup            !! ${firstLine(err)}`);
+    fail(`startup: ${firstLine(err)}`);
+  } finally {
+    for (const { context } of pages) {
+      await context.close();
+    }
+    const api = await request.newContext({ baseURL: BASE });
+    const gone = await api.delete(`/missions/custom/${STARTUP_MISSION.id}`).catch(() => null);
+    const status = gone?.status() ?? 'none';
+    console.log(`startup            ${STARTUP_MISSION.id} deleted again: ${status}`);
+    console.log(`startup            the drill took ${seconds(Date.now() - from)}`);
+    await api.dispose();
+  }
+}
+
 /** Holds the keys towards (tx, ty) as long as the avatar takes to walk there in a line. */
 async function walkStraight(player, tx, ty) {
   const at = whereIs(player.seen);
@@ -13085,15 +13361,32 @@ async function accessMove({ host, guest }, input) {
 }
 
 /**
+ * A move of the hall's Anlaufsteuerung at its mover's console — the host's console A, the
+ * guest's B —: a command put together on the terminal's keys (`startupCommand`), a breaker closed
+ * once the ladder shows the pulse on its marked steps (`startupBreaker`), not at the plan's moment,
+ * which was the solver's on its own clock.
+ */
+async function startupMove(crew, move) {
+  const [player] = moversOf(crew, move);
+  if ('breaker' in move.input) {
+    await startupBreaker(player, move.input.breaker);
+    return;
+  }
+  await startupCommand(player, move.input, false);
+}
+
+/**
  * The stations whose moves are not a control clicked on their device: the button, held on the
  * clock (`buttonMove`), the Rechnernetz, its commands put together on the terminal's keys and
- * its switches thrown at the rack (`serversMove`), and the Zugangskontrolle (`accessMove`).
+ * its switches thrown at the rack (`serversMove`), the Zugangskontrolle (`accessMove`) and the
+ * Anlaufsteuerung (`startupMove`).
  */
 const HALL_DRIVERS = {
   button: ({ host }, station, move) => buttonMove(host, station, move.input),
   servers: ({ host, guest }, _station, move) =>
     serversMove({ terminal: host, rack: guest }, move, false),
   access: (crew, _station, move) => accessMove(crew, move.input),
+  startup: (crew, _station, move) => startupMove(crew, move),
 };
 
 /** How the walkthrough makes a move at a station of `type`; null for a type it knows no way of. */
@@ -16230,9 +16523,10 @@ async function captureThree() {
 /**
  * The drills before the walkthrough, each in a room of its own, by the group each belongs to:
  * the editor, the Serverraum's scratch mission (a Systemcheck run's), the art tour, the danger
- * sense, the reconnect drill, the restart drill, the Zugangskontrolle's scratch mission (a
- * Systemcheck run's), the three drill (a Blackout run's), the Übungshalle (a Systemcheck run's)
- * and the music packs in the settings, on a menu of their own.
+ * sense, the reconnect drill, the restart drill, the Zugangskontrolle's and the
+ * Anlaufsteuerung's scratch missions (a Systemcheck run's), the three drill (a Blackout run's),
+ * the Übungshalle (a Systemcheck run's) and the music packs in the settings, on a menu of their
+ * own.
  */
 const DRILLS = [
   ['editor', captureEditor],
@@ -16242,6 +16536,7 @@ const DRILLS = [
   ['reconnect', captureReconnect],
   ['restart', captureRestart],
   ['access', captureAccess],
+  ['startup', captureStartup],
   ['three', captureThree],
   ['hall', captureHall],
   ['music', captureMusicPacks],
