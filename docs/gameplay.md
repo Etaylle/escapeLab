@@ -1009,7 +1009,7 @@ return.
 **The restart.** A deploy, or a restart of the server, ends no run. Two seconds after a deed of the
 crew's, and every 10 s at the latest while a run's clock runs, where everybody stands with it, every
 seat on the line is handed the room's snapshot, packed and sealed with the server's key
-(`ROOM_SECRET`, Deflate and AES-256-GCM, the room's code bound in; under 11 kB for Blackout mid-way);
+(`ROOM_SECRET`, Deflate and AES-256-GCM, the room's code bound in; under 12.5 kB for Blackout mid-way);
 a room whose clock stands sends only what changed, and its browser keeps the newest in
 `localStorage` (`escapelab-snapshot:<code>`) beside what the join screen's card shows of the room.
 On SIGTERM the server stands every run still — the maintenance pause (`wartung`), every seat away —

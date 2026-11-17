@@ -176,13 +176,19 @@ describe('a room taken up again from its snapshot', () => {
     const round = (n: number): number => Math.round(n * 100) / 100;
     expect(patrolOf(was)).toEqual([round(stood.x), round(stood.y)]);
     expect(patrolOf(now)).toEqual(patrolOf(was));
-    // On together: the patrol flies on, the first emergency comes, Ben walks a few tiles.
-    for (const [step, x] of [[500, 28], [20_000, 27], [30_000, 26]] as const) {
+    // On together: the patrol flies on, Ben walks a few tiles — and so on until the run's next
+    // emergency comes, a good two minutes after the Paketfilter by the schedule.
+    const onTogether = (step: number, x: number): void => {
       vi.advanceTimersByTime(step);
       walkTo(was.room, was.ben, x + 0.5, 9.5);
       walkTo(now.room, now.ben, x + 0.5, 9.5);
       expect(views(now)).toEqual(views(was));
       expect(lastPositions(now.anna).drones).toEqual(lastPositions(was.anna).drones);
+    };
+    onTogether(500, 28);
+    onTogether(20_000, 27);
+    for (let i = 0; i < 20 && lastView(was.anna).map?.sabotage == null; i++) {
+      onTogether(10_000, 26 + (i % 2));
     }
     const emergencies = lastView(now.anna).events.filter((e) => e.kind === 'sabotage');
     expect(emergencies.map((e) => e.label)).toEqual(['Notfall: KÜHLKREISLAUF — RELAIS VON HAND']);

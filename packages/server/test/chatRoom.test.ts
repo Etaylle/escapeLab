@@ -44,15 +44,15 @@ describe('Room quick chat', () => {
   beforeEach(() => vi.useFakeTimers());
   afterEach(() => vi.useRealTimers());
 
-  it('says a phrase to everybody with its slot filled in: „Kabel 3", „Dienst DNS"', () => {
+  it('says a phrase to everybody with its slot filled in: „Nummer 3", „Dienst DNS"', () => {
     const { room, anna, ben } = joined(blackout);
     const names = { [anna.playerId]: 'Anna', [ben.playerId]: 'Ben' };
-    room.chat(anna.playerId, placeOf(blackout, 'Kabel {n}'), '3');
+    room.chat(anna.playerId, placeOf(blackout, 'Nummer {n}'), '3');
     vi.advanceTimersByTime(1500);
     room.chat(ben.playerId, placeOf(blackout, 'Dienst {name}'), 'DNS');
     room.chat(anna.playerId, 0, undefined);
     expect(heard(ben.messages, names)).toEqual([
-      'Anna: Kabel 3',
+      'Anna: Nummer 3',
       'Ben: Dienst DNS',
       'Anna: Hier rüber!',
     ]);
@@ -62,8 +62,8 @@ describe('Room quick chat', () => {
 
   it('refuses a value the slot does not take, says nothing and keeps the cooldown free', () => {
     const { room, anna, ben } = joined(blackout);
-    const wire = placeOf(blackout, 'Kabel {n}');
-    expect(() => room.chat(anna.playerId, wire, '0')).toThrow('„Kabel …" nimmt nur');
+    const wire = placeOf(blackout, 'Nummer {n}');
+    expect(() => room.chat(anna.playerId, wire, '0')).toThrow('„Nummer …" nimmt nur');
     expect(() => room.chat(anna.playerId, wire, undefined)).toThrow('nimmt nur');
     expect(() => room.chat(anna.playerId, 0, '3')).toThrow('keine Lücke');
     expect(() => room.chat(anna.playerId, 8, undefined)).toThrow(

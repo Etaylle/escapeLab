@@ -63,10 +63,12 @@ describe('a room’s sealed snapshot', () => {
     expect(seal(kept, kept.code, KEY)).not.toBe(blob);
   });
 
-  it('holds Blackout mid-way packed, in under 11 kB: a fraction of its JSON', () => {
+  it('holds Blackout mid-way packed, in under 12.5 kB: a fraction of its JSON', () => {
     // 7.9 kB when this was 10 kB; 10.20 kB with the seats away (R-nopause), 10.25 kB with the
-    // radio's cast — a speaker on each line said, the room's castSeed: 52 bytes. A kilobyte's room.
-    expect(blob.length).toBeLessThan(11 * 1024);
+    // radio's cast — a speaker on each line said, the room's castSeed: 52 bytes; 11.33 kB with
+    // Blackout's eight stations, the two out of service kept with the run's mission, its duct
+    // and its six notes (B-blackout2). A kilobyte's room; the wire takes 256 kB (SNAPSHOT_MAX).
+    expect(blob.length).toBeLessThan(12.5 * 1024);
     expect(blob.length).toBeLessThan(JSON.stringify(kept).length / 2);
   });
 
