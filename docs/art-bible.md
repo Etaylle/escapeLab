@@ -53,6 +53,10 @@ the picture down to (Camera).
 
 In the dark a material is drawn in `night(colour)`: darker and colder — the flashlight finds
 it, the ceiling lights show it warm. A wall's face takes the light of the room it looks into.
+A floor lights once, whatever its names: where several labels name one floor — Blackout's Flur
+under FLUR and ARCHIV, the Übungshalle's hall under fourteen — its ceiling lights come on with
+the first of them, and the others add nothing (client rooms.ts `roomLights`); added once per name,
+the hall's burnt to a white sheet.
 
 ## Light rule
 

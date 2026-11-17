@@ -63,6 +63,43 @@ export function roomArea(map: RoomMap, from: Spot): Spot[] {
   return [...area.values()];
 }
 
+/** What the lights of a room add, where they come on (`roomLights`). */
+export interface RoomLights {
+  /** the tiles they reach that no room lit before reaches: none for a floor lit already */
+  tiles: Spot[];
+  /** the room lit before on whose floor a label of this name stands, the first; null for none */
+  same: string | null;
+}
+
+/**
+ * What the lights of the room `room` add to the rooms lit already (`lit`, by name: the tiles
+ * each lights): the area of every label of that name (`roomArea`) whose floor no room lit before
+ * lights. A floor that several names label — the Übungshalle's one hall under its fourteen,
+ * Blackout's Flur under FLUR and ARCHIV — is lit once, by the first of them to come on: each of
+ * the others lights nothing more, where adding its ceiling lights again would burn the floor
+ * white. `same` names that first room.
+ */
+export function roomLights(
+  map: Pick<MapView, 'tiles' | 'doors' | 'labels'>,
+  room: string,
+  lit: ReadonlyMap<string, { tiles: readonly Spot[] }>,
+): RoomLights {
+  const litBy = new Map<string, string>();
+  for (const [name, { tiles }] of lit) {
+    for (const tile of tiles) {
+      const at = key(tile.x, tile.y);
+      litBy.set(at, litBy.get(at) ?? name);
+    }
+  }
+  const spots = map.labels.filter((label) => label.text === room);
+  const litBefore = (spot: Spot): string | undefined => litBy.get(key(spot.x, spot.y));
+  const same = spots.map(litBefore).find((name) => name !== undefined) ?? null;
+  const tiles = spots
+    .filter((spot) => litBefore(spot) === undefined)
+    .flatMap((spot) => roomArea(map, spot));
+  return { tiles, same };
+}
+
 /** A room lit whole: its tiles by key, and as runs along their rows. */
 export interface RoomLight {
   keys: ReadonlySet<string>;
