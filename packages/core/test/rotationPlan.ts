@@ -48,19 +48,23 @@ export function probeSeeds(): { played: number; other: number } {
   };
 }
 
-/** A room of the walkthrough: its seed, the station it draws and the ones out of service. */
+/**
+ * A room of the walkthrough: its seed, the station it draws, the ones out of service, and the
+ * stations it plays there with their moves.
+ */
 export interface ProbeRun {
   seed: number;
   drawn: string;
   outOfService: string[];
+  stations: HallStation[];
 }
 
 export interface RotationPlan {
   mission: string;
   pool: string;
-  /** the room played to the won card: its draw, and every station of the run with its moves */
-  played: ProbeRun & { stations: HallStation[] };
-  /** the room that draws another station: started, looked at and left */
+  /** the room played to the won card: its draw, and every station of the run */
+  played: ProbeRun;
+  /** the room that draws another station: its first station played, looked at and left */
   other: ProbeRun;
 }
 
@@ -83,12 +87,13 @@ export function playProbe(seed: number): { state: GameState; stations: HallStati
   return { state, stations };
 }
 
-/** What a run of the probe on `seed` draws. */
-function runOf(seed: number): ProbeRun {
+/** What a run of the probe on `seed` draws, and the first `count` of its stations as played. */
+function runOf(seed: number, count: number): ProbeRun {
   const mission = rotationProbe();
   const drawn = drawPools(mission.puzzles, seed)[PROBE_POOL] ?? '';
   const members = mission.puzzles.filter((p) => p.pool === PROBE_POOL).map((p) => p.id);
-  return { seed, drawn, outOfService: members.filter((id) => id !== drawn) };
+  const stations = playProbe(seed).stations.slice(0, count);
+  return { seed, drawn, outOfService: members.filter((id) => id !== drawn), stations };
 }
 
 /** The plan the walkthrough plays, from the probe, the draw and the solvers. */
@@ -97,7 +102,7 @@ export function rotationPlan(): RotationPlan {
   return {
     mission: rotationProbe().id,
     pool: PROBE_POOL,
-    played: { ...runOf(seeds.played), stations: playProbe(seeds.played).stations },
-    other: runOf(seeds.other),
+    played: runOf(seeds.played, Infinity),
+    other: runOf(seeds.other, 1),
   };
 }

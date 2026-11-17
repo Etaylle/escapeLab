@@ -74,5 +74,31 @@
       }
     ]
   },
-  "other": { "seed": 5, "drawn": "signalkette", "outOfService": ["funkfeuer", "notstrom"] }
+  "other": {
+    "seed": 5,
+    "drawn": "signalkette",
+    "outOfService": ["funkfeuer", "notstrom"],
+    "stations": [
+      {
+        "id": "tastenfeld",
+        "type": "keypad",
+        "title": "Zeichentastenfeld",
+        "opens": {
+          "keys": [
+            { "glyph": "¿", "lit": false },
+            { "glyph": "Ҋ", "lit": false },
+            { "glyph": "₪", "lit": false },
+            { "glyph": "∂", "lit": false }
+          ]
+        },
+        "moves": [
+          { "by": "operator", "input": { "keyIndex": 3 } },
+          { "by": "operator", "input": { "keyIndex": 1 } },
+          { "by": "operator", "input": { "keyIndex": 0 } },
+          { "by": "operator", "input": { "keyIndex": 2 } }
+        ],
+        "releaseAt": null
+      }
+    ]
+  }
 }

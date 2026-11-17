@@ -11,12 +11,13 @@
  *     node tools/shots.mjs [baseUrl] [outDir]
  *
  * Groups (tools/groups.mjs): every capture, and every label a skip line carries, belongs to one of
- * eighteen groups; SHOTS_ONLY and SHOTS_SKIP, each a comma-separated list of their names, pick
+ * twenty groups; SHOTS_ONLY and SHOTS_SKIP, each a comma-separated list of their names, pick
  * those a run plays — a quick proof of one part. The drills, each in a room of its own before the
  * walkthrough: editor, art, drones (the danger sense, a drone close by), reconnect, restart, three
  * (Blackout for a crew of three through the Signalkette) — and in a Systemcheck run the
- * Serverraum's scratch mission, devices', the Zugangskontrolle's, access, and hall (the
- * Übungshalle played to its won card). The walkthrough's own stages:
+ * Serverraum's scratch mission, devices', the Zugangskontrolle's, access, hall (the
+ * Übungshalle played to its won card) and rotation (the Wechselplatz's scratch mission on two
+ * seeds). The walkthrough's own stages:
  * screens (the menu and its sound, the history, the lobby, the run started from it), intro (the
  * opening to blackout.png, the cold open at density 2 with it) and run (the mission to the won
  * card: the lit rooms, the finds, the audience's way in, the escape, the end, and after the won
@@ -592,6 +593,18 @@
  * the first door waits a period or two (15 s each in the probe). The log says
  * how long the device kept each account waiting. The mission is deleted again
  * whatever happened.
+ *
+ * Wechselplatz (a Systemcheck run): the editor, opened at /editor?seed=<seed>, imports
+ * tools/fixtures/rotation-probe.json („Wechselprobe", custom-wechselprobe) — a chain of three
+ * places whose middle one is a pool of three stations — and starts its test run, once on each
+ * of the two seeds tools/fixtures/rotation-plan.json pins, which draw different stations. In
+ * each room the first station is played by the plan; Ben walks past every console out of
+ * service, each of which has to stand so on his map with the drawn one armed and three stations
+ * counted, and stands at one beside the live console (rotation-out-of-service-<drawn>.png): its
+ * tag's words have to stand under it, E has to open nothing there, and its book has to be out
+ * of service without a page. The second room is played to its won card (rotation-won.png): the
+ * drawn station has to open the door the pool opens. The mission is deleted again whatever
+ * happened, and the log says how long the drill took.
  *
  * Art (a Blackout run only): before the walkthrough, a scratch copy of
  * Blackout — custom-blackout, ten seconds of power before the lights fail,
@@ -16227,12 +16240,276 @@ async function captureThree() {
   }
 }
 
+// ── the Wechselplatz's drill: a station slot the seed fills from a pool ──────────────────────
+//
+// Two rooms of the scratch mission tools/fixtures/rotation-probe.json („Wechselprobe"), in a
+// Systemcheck run (a Blackout run leaves it to that one), on the two seeds
+// tools/fixtures/rotation-plan.json pins: each draws another station for the probe's middle
+// place. In each the first station is played, which arms the drawn one and lights the room; Ben
+// walks past every console out of service and stands at one beside the live console
+// (rotation-out-of-service-<drawn>.png), where E opens nothing; the second room is played to its
+// won card (rotation-won.png). Any step that fails, fails the run.
+
+const ROTATION_FILE = fileURLToPath(new URL('fixtures/rotation-probe.json', import.meta.url));
+const ROTATION_MISSION = JSON.parse(readFileSync(ROTATION_FILE, 'utf8'));
+const ROTATION_PLAN = JSON.parse(
+  readFileSync(fileURLToPath(new URL('fixtures/rotation-plan.json', import.meta.url)), 'utf8'),
+);
+/** What the tag of a station out of service reads (client world/art.ts). */
+const OUT_OF_SERVICE_TAG = 'AUSSER BETRIEB';
+
+/**
+ * Fails the drill where the probe deals other than its pinned plan holds: the probe, the draw or
+ * one of its modules changed since the plan was written.
+ */
+function rotationDiffers(run, what, shown, pinned) {
+  throw new Error(
+    `Wechselprobe seed ${run.seed} no longer deals the pinned ${what}: ${shown} instead of ` +
+      `${pinned} — write tools/fixtures/rotation-plan.json anew (core test/writeRotation.ts)`,
+  );
+}
+
+/**
+ * A room of the probe on `run`'s seed: Anna imports it through the editor and starts its test
+ * run, Ben joins by the code on a traced page — the drill reads the names under things off it —
+ * and the run starts, both past the briefing. Their contexts go into `contexts` as they open.
+ */
+async function rotationRoom(run, contexts) {
+  const host = await probePlayer('rotation', 'Anna');
+  contexts.push(host.context);
+  const room = { drill: 'rotation', file: ROTATION_FILE, mission: ROTATION_MISSION };
+  const code = await openProbeRoom(host, { ...room, seed: run.seed });
+  const guest = await probePlayer('rotation', 'Ben');
+  contexts.push(guest.context);
+  await joinByCode(guest, code);
+  await guest.page.locator('.lobby').waitFor({ timeout: 10_000 });
+  await startRun(host, guest);
+  // Past the briefing's countdown, as in the walkthrough.
+  await sleep(Math.max(0, host.seen.view.startedAt + 4200 - Date.now()));
+  return { host, guest };
+}
+
+/** The status of every spot of the station `puzzleId` on `view`'s map; 'unseen' for none told. */
+const spotsSaid = (view, puzzleId) => {
+  const spots = (view.map?.stations ?? []).filter((spot) => spot.puzzleId === puzzleId);
+  return spots.length === 0 ? ['unseen'] : spots.map((spot) => spot.status ?? 'glimpsed');
+};
+
+/**
+ * A station of the probe as the plan takes it, the host alone at its one console: the device
+ * open, what it opens on held to the plan, the plan's moves made (`driverOf`), and the station
+ * solved without an alarm; then both pages caught up and the device closed by itself.
+ */
+async function playRotationStation(crew, run, station) {
+  const { host, guest } = crew;
+  const index = host.seen.view.currentPuzzleIndex;
+  const alarms = host.seen.view.penaltySeq;
+  const spot = host.seen.view.map.stations.find((s) => s.puzzleId === station.id);
+  if (spot?.status !== 'armed') {
+    throw new Error(`"${station.title}" is not armed for ${host.name}: ${spot?.status ?? 'unseen'}`);
+  }
+  const target = consoleTarget({ ...spot, title: station.title });
+  if (!(await walkNear(host.page, host.seen, tileOfTarget(target)))) {
+    throw new Error(`no way for ${host.name} to ${targetSaid(target)}`);
+  }
+  await openDevice(host, target);
+  const fields = Object.keys(station.opens);
+  const shown = () => JSON.stringify(fields.map((key) => host.seen.view.puzzle?.[key] ?? null));
+  const pinned = JSON.stringify(Object.values(station.opens));
+  if (!(await until(() => shown() === pinned, HALL_MOVE_MS))) {
+    rotationDiffers(run, `"${station.title}"`, shown(), pinned);
+  }
+  const from = Date.now();
+  const drive = driverOf(station.type);
+  for (const move of station.moves) {
+    await drive(crew, station, move);
+    await sleep(120);
+  }
+  if (!(await until(() => host.seen.view.currentPuzzleIndex > index, 5000))) {
+    throw new Error(`the plan's moves are made at "${station.title}", but it did not solve`);
+  }
+  const raised = host.seen.view.penaltySeq - alarms;
+  console.log(
+    `rotation           seed ${run.seed}: ${host.name} at "${station.title}", ` +
+      `${station.moves.length} moves in ${seconds(Date.now() - from)}, solved, ` +
+      (raised === 0 ? 'no alarm' : `!! ${raised} alarm(s)`),
+  );
+  if (raised > 0) {
+    fail(`rotation: "${station.title}" solved with ${raised} alarm(s) on seed ${run.seed}`);
+  }
+  await viewsCaughtUp([host, guest]);
+  await devicesClosed([host], station);
+}
+
+/** The spots of the stations out of service in `run`, from the probe's file, in map order. */
+const outSpots = (run) =>
+  ROTATION_MISSION.map.stations.filter((spot) => run.outOfService.includes(spot.puzzleId));
+
+/**
+ * `player` walks up to every console out of service in `run`, which finds each; then every one
+ * of them has to stand out of service on the player's map and the drawn station armed — or the
+ * drill fails, naming what the map says instead.
+ */
+async function findOutOfService(player, run) {
+  for (const spot of outSpots(run)) {
+    if (!(await walkNear(player.page, player.seen, spot))) {
+      throw new Error(`no way for ${player.name} to the console at ${spot.x},${spot.y}`);
+    }
+  }
+  const view = () => player.seen.view;
+  const out = () => run.outOfService.every((id) => spotsSaid(view(), id).every((s) => s === 'out'));
+  const live = () => spotsSaid(view(), run.drawn).every((status) => status === 'armed');
+  const told = await until(() => out() && live(), CATCH_UP_MS);
+  const said = [run.drawn, ...run.outOfService]
+    .map((id) => `${id} ${spotsSaid(view(), id).join('/')}`)
+    .join(', ');
+  console.log(
+    `rotation           seed ${run.seed} draws "${run.drawn}": ${player.name}'s map has ${said}; ` +
+      `${view().currentPuzzleIndex} of ${view().puzzleCount} stations solved`,
+  );
+  if (!told || view().puzzleCount !== ROTATION_PLAN.played.stations.length) {
+    fail(`rotation: seed ${run.seed} — ${said}, ${view().puzzleCount} stations counted`);
+  }
+}
+
+/** The console out of service in `run` nearest the drawn station's, on the consoles' row. */
+function outBesideLive(run) {
+  const live = ROTATION_MISSION.map.stations.find((spot) => spot.puzzleId === run.drawn);
+  return outSpots(run)
+    .filter((spot) => spot.y === live.y)
+    .sort((a, b) => Math.abs(a.x - live.x) - Math.abs(b.x - live.x))[0];
+}
+
+/**
+ * rotation-out-of-service-<drawn>.png: `player` stands at the console out of service beside the
+ * live one — its tag's words have to stand under it on the page, E there has to open nothing —
+ * and at the book of a station out of service, which has to say so and give no page.
+ */
+async function captureOutOfService(player, run) {
+  const { page, seen, name } = player;
+  const spot = outBesideLive(run);
+  if (!(await walkNear(page, seen, spot))) {
+    throw new Error(`no way for ${name} to the console at ${spot.x},${spot.y}`);
+  }
+  await sleep(600); // the camera settles, the tag's words are up
+  const names = (await page.evaluate(() => globalThis.__escapelab?.labels ?? null)) ?? [];
+  const tags = names.filter((n) => n.text === OUT_OF_SERVICE_TAG && n.onScreen && n.alpha > 0.99);
+  await page.keyboard.press('e');
+  await sleep(400);
+  const opened = (await page.locator('.station-modal').isVisible()) || seen.view.puzzle !== null;
+  const shot = `rotation-out-of-service-${run.drawn}.png`;
+  await capture(page, shot);
+  const book = ROTATION_MISSION.map.manuals.find((m) => m.puzzleIds[0] === spot.puzzleId);
+  const [at] = book.spots;
+  const there = await walkNear(page, seen, at);
+  const here = () => seen.view.sourcesHere.find((source) => source.id === book.id);
+  const counted = there && (await until(() => here() !== undefined, CATCH_UP_MS));
+  const dead = counted && here().outOfService === true && seen.view.manualsHere.length === 0;
+  console.log(
+    `${`${shot} `.padEnd(19)}${name} at the console of "${spot.puzzleId}": ` +
+      `${tags.length} tag(s) „${OUT_OF_SERVICE_TAG}" on screen, E ` +
+      `${opened ? '!! opened a device' : 'opens nothing'}; „${book.label}" ` +
+      (dead ? 'out of service, no page' : `!! ${counted ? 'gives pages' : 'not reached'}`),
+  );
+  if (tags.length === 0 || opened || !dead) {
+    fail(`${shot}: ${tags.length} tag(s), E ${opened ? 'opened a device' : 'opened nothing'}, ` +
+      `the book ${dead ? 'out of service' : 'not out of service'}`);
+  }
+}
+
+/**
+ * One room of the probe as far as its Wechselplatz: opened on `run`'s seed (`rotationRoom`), its
+ * first station played, the consoles out of service found and held to the plan's draw
+ * (`findOutOfService`), and the capture (`captureOutOfService`). Returns the crew.
+ */
+async function rotationAsDrawn(run, contexts) {
+  const crew = await rotationRoom(run, contexts);
+  const [first] = run.stations;
+  await playRotationStation(crew, run, first);
+  await findOutOfService(crew.guest, run);
+  await captureOutOfService(crew.guest, run);
+  return crew;
+}
+
+/**
+ * rotation-won.png: the rest of the played room's stations by the plan — the drawn one has to
+ * open the pool's door — and the last one wins the run, every station of the run counted and no
+ * more; the host's won card. Throws where the run is not won.
+ */
+async function rotationToTheEnd(crew, run) {
+  const { host } = crew;
+  const [, drawn, ...rest] = run.stations;
+  await playRotationStation(crew, run, drawn);
+  const door = () => host.seen.view.map?.doors[0]?.open === true;
+  if (!(await until(door, CATCH_UP_MS))) {
+    throw new Error(`"${drawn.title}" is solved, but the door its pool opens stays shut`);
+  }
+  for (const station of rest) {
+    await playRotationStation(crew, run, station);
+  }
+  if (!(await until(() => host.seen.view.phase === 'won', 5000))) {
+    throw new Error('every station of the run is solved, but the run was not won');
+  }
+  if (!(await attached(host.page.locator('.end-title'), 6000))) {
+    throw new Error('the Wechselprobe was won, but no title card came up');
+  }
+  await sleep(1700); // past the card's way out of the white
+  await capture(host.page, 'rotation-won.png');
+  const { currentPuzzleIndex, puzzleCount } = host.seen.view;
+  const says = await textOf(host.page.locator('.end-title .end-title-word'));
+  console.log(
+    `rotation-won.png   seed ${run.seed}: "${says}", ${currentPuzzleIndex} of ${puzzleCount} ` +
+      `stations counted, the door opened by "${drawn.id}" for its pool`,
+  );
+  if (says !== 'GESCHAFFT' || currentPuzzleIndex !== puzzleCount || puzzleCount !== 3) {
+    fail(`rotation-won.png: "${says}", ${currentPuzzleIndex} of ${puzzleCount} stations`);
+  }
+}
+
+/**
+ * The Wechselplatz's drill (rotation): in a Systemcheck run, the probe's room on the plan's
+ * other seed as far as its Wechselplatz, then the room on the played seed, which draws another
+ * station, to its won card. A Blackout run leaves it to the Systemcheck's. Every page it opened
+ * is closed again and the mission deleted, however it ends; the log says how long it took.
+ */
+async function captureRotation() {
+  if (MISSION.toLowerCase() === 'blackout') {
+    skip('rotation', 'Blackout has no Wechselplatz: its probe plays in a Systemcheck run');
+    return;
+  }
+  const from = Date.now();
+  const contexts = [];
+  try {
+    const { other, played } = ROTATION_PLAN;
+    if (other.drawn === played.drawn) {
+      throw new Error(`both seeds of the plan draw "${played.drawn}"`);
+    }
+    await rotationAsDrawn(other, contexts);
+    await rotationToTheEnd(await rotationAsDrawn(played, contexts), played);
+  } catch (err) {
+    console.log(`rotation           !! ${firstLine(err)}`);
+    fail(`rotation: ${firstLine(err)}`);
+  } finally {
+    for (const context of contexts) {
+      await context.close();
+    }
+    const api = await request.newContext({ baseURL: BASE });
+    const gone = await api.delete(`/missions/custom/${ROTATION_MISSION.id}`).catch(() => null);
+    await api.dispose();
+    console.log(
+      `rotation           ${ROTATION_MISSION.id} deleted again: ${gone?.status() ?? 'none'}; ` +
+        `the drill took ${seconds(Date.now() - from)}`,
+    );
+  }
+}
+
 /**
  * The drills before the walkthrough, each in a room of its own, by the group each belongs to:
  * the editor, the Serverraum's scratch mission (a Systemcheck run's), the art tour, the danger
  * sense, the reconnect drill, the restart drill, the Zugangskontrolle's scratch mission (a
- * Systemcheck run's), the three drill (a Blackout run's), the Übungshalle (a Systemcheck run's)
- * and the music packs in the settings, on a menu of their own.
+ * Systemcheck run's), the three drill (a Blackout run's), the Übungshalle (a Systemcheck run's),
+ * the Wechselplatz's scratch mission (a Systemcheck run's) and the music packs in the settings, on
+ * a menu of their own.
  */
 const DRILLS = [
   ['editor', captureEditor],
@@ -16244,6 +16521,7 @@ const DRILLS = [
   ['access', captureAccess],
   ['three', captureThree],
   ['hall', captureHall],
+  ['rotation', captureRotation],
   ['music', captureMusicPacks],
 ];
 
