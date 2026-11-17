@@ -1,5 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
-import { EMERGENCY_CLEARED, type Phase, type PlayerView, type RunEvent } from '@escapelab/core';
+import {
+  EMERGENCY_CLEARED,
+  KERN_HIT,
+  type Phase,
+  type PlayerView,
+  type RunEvent,
+} from '@escapelab/core';
 
 /**
  * The world answering an alarm — any penalty: the picture strobes red twice,
@@ -13,18 +19,20 @@ import { EMERGENCY_CLEARED, type Phase, type PlayerView, type RunEvent } from '@
  */
 
 /**
- * The run report's lines for the two alarms no station sets off, as core's reducer writes them
- * (DRONE_ALARM, EMERGENCY_MISSED in core/src/actions.ts); every other alarm is a wrong move.
+ * The run report's lines for the alarms no move sets off, as core's reducer writes them
+ * (DRONE_ALARM, EMERGENCY_MISSED in core/src/actions.ts), and what the banner calls each: a
+ * drone, an emergency, an attack the Paketfilter's clock let into the Kern. Every other alarm is
+ * a wrong move.
  */
-const DRONE_REASON = 'Von einer Drohne erfasst';
-const EMERGENCY_REASON = 'Notfall nicht rechtzeitig behoben';
+const UNMOVED: Readonly<Record<string, string>> = {
+  'Von einer Drohne erfasst': 'Drohne',
+  'Notfall nicht rechtzeitig behoben': 'Notfall',
+  [KERN_HIT]: 'Angriff im Kern',
+};
 
-/** What set an alarm off, from its line in the run report: a drone, an emergency, a wrong move. */
+/** What set an alarm off, from its line in the run report: as UNMOVED names it, or a wrong move. */
 export function alarmCause(reason: string): string {
-  if (reason === DRONE_REASON) {
-    return 'Drohne';
-  }
-  return reason === EMERGENCY_REASON ? 'Notfall' : 'Fehlversuch';
+  return Object.hasOwn(UNMOVED, reason) ? (UNMOVED[reason] ?? 'Fehlversuch') : 'Fehlversuch';
 }
 
 /**

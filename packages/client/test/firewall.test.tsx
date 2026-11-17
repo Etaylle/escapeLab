@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   FIREWALL_PAUSE_MS,
   generateEdgework,
+  SAME_LINE_GAP,
   moduleFor,
   puzzleDefSchema,
   type ConsoleId,
@@ -25,7 +26,8 @@ vi.mock('../src/puzzles/sounds.js', async (importOriginal) => {
 });
 
 const sounds = await import('../src/puzzles/sounds.js');
-const { FirewallPanel, firewallSounds } = await import('../src/puzzles/FirewallPanel.js');
+const { FirewallPanel, firewallSounds, onLine } = await import('../src/puzzles/FirewallPanel.js');
+const { keysIn, keysOf } = await import('../src/hooks.js');
 const view = await import('../src/puzzles/firewallView.js');
 const { StationModal } = await import('../src/screens/Game.js');
 
@@ -39,7 +41,10 @@ const MID = 12_000;
 const DEF = puzzleDefSchema.parse({ type: 'firewall', id: 'pf', title: 'Paketfilter' });
 const FALL_MS = 14_000;
 
-/** The station's state `ms` into its first wave, both consoles manned from T0. */
+/**
+ * The station's state `ms` into its first wave, both consoles manned from T0 and the Freigabe
+ * pressed then.
+ */
 function stateAt(ms: number): PuzzleState {
   const station = moduleFor(DEF.type);
   const rng = lcg(7);
@@ -50,20 +55,26 @@ function stateAt(ms: number): PuzzleState {
     remainingSec: 600,
     at,
     crew: ['p1', 'p2'],
-    console: null,
+    console: manned ? ('a' as const) : null,
     atConsoles: manned ? { a: ['p1'], b: ['p2'] } : { a: [], b: [] },
     readers: [],
   });
   const fresh = station.init(DEF, rng, ctx(T0, false));
-  const started = station.elapse?.(DEF, fresh, ctx(T0, true)).state ?? fresh;
+  const manned = station.elapse?.(DEF, fresh, ctx(T0, true)).state ?? fresh;
+  const started = station.apply(DEF, manned, { start: true }, 'p1', ctx(T0, true)).state;
   return station.elapse?.(DEF, started, ctx(T0 + ms, true)).state ?? started;
 }
 
 /** The Paketfilter `ms` into its wave as console `seat` shows it; null for the audience. */
-function seen(seat: ConsoleId | null, ms: number, change: (s: PuzzleState) => PuzzleState = (s) => s) {
+function seen(
+  seat: ConsoleId | null,
+  ms: number,
+  change: (s: PuzzleState) => PuzzleState = (s) => s,
+) {
   const station = moduleFor(DEF.type);
   const state = change(stateAt(ms));
-  const viewer = { playerId: seat === null ? null : 'p1', operating: seat !== null, reading: false, console: seat };
+  const playerId = seat === null ? null : 'p1';
+  const viewer = { playerId, operating: seat !== null, reading: false, console: seat };
   const shown = station.view(DEF, state, viewer, {
     edgework: generateEdgework(lcg(7)),
     alarms: 0,
@@ -162,11 +173,15 @@ describe('the status line', () => {
     expect(view.statusOf(running, T0 + MID)).toBe('Welle 1 von 3 · 0 gesperrt');
   });
 
-  it('says what called a wave off, and that a clean wave goes on', () => {
+  it('waits for the Freigabe, says what called a wave off, and that a clean wave goes on', () => {
     const at = { ...seen('a', 0), packets: [] };
-    const fault = { ...at, event: { n: 2, kind: 'fault' as const, at: T0, line: null } };
-    expect(view.statusOf(fault, T0)).toBe('Fehlquittierung: Welle abgebrochen. Neue Welle in 4 s.');
-    const clean = { ...at, wave: 2, cleared: 1, event: { n: 3, kind: 'cleared' as const, at: T0, line: null } };
+    const ready = { ...at, waiting: true };
+    expect(view.statusOf(ready, T0)).toBe('Bereit · Welle 1 starten');
+    const fault = { ...ready, event: { n: 2, kind: 'fault' as const, at: T0, line: null } };
+    const called = 'Fehlquittierung: Welle abgebrochen. Neue Welle wartet auf Freigabe.';
+    expect(view.statusOf(fault, T0)).toBe(called);
+    const cleared = { n: 3, kind: 'cleared' as const, at: T0, line: null };
+    const clean = { ...at, wave: 2, cleared: 1, event: cleared };
     expect(view.statusOf(clean, T0)).toBe('Welle 1 sauber. Welle 2 in 4 s.');
     expect(FIREWALL_PAUSE_MS).toBe(4000);
   });
@@ -174,8 +189,12 @@ describe('the status line', () => {
   it('says whose console stands empty while the wave holds, as the other modules word it', () => {
     const held = { ...seen('a', MID), vacant: ['b' as const] };
     expect(view.statusOf(held, T0 + MID)).toBe('Analysepult unbesetzt · Pakete halten');
-    const away = { ...held, vacant: ['a' as const] };
+    const away = { ...seen('b', MID), vacant: ['a' as const] };
     expect(view.statusOf(away, T0 + MID)).toBe('Sperrpult unbesetzt · Pakete halten');
+    // never that the viewer's own console stands empty: the run stands still, for maintenance
+    const paused = { ...held, vacant: ['a' as const, 'b' as const] };
+    expect(view.statusOf(paused, T0 + MID)).toBe('Pakete halten');
+    expect(view.statusOf({ ...held, vacant: ['a' as const] }, T0 + MID)).toBe('Pakete halten');
   });
 });
 
@@ -302,7 +321,10 @@ describe('the type and the targets on a phone held sideways', () => {
   }
 
   const px = (node: Styled, properties: string[], screen: Screen): number =>
-    Math.max(0, ...properties.map((p) => sheets.length(node, p, screen)).filter((n) => !Number.isNaN(n)));
+    Math.max(
+      0,
+      ...properties.map((p) => sheets.length(node, p, screen)).filter((n) => !Number.isNaN(n)),
+    );
 
   it.each(['a', 'b'] as const)('makes every control at console %s 44 px', (seat) => {
     const nodes = station(seat);
@@ -312,7 +334,9 @@ describe('the type and the targets on a phone held sideways', () => {
       );
       expect(controls.length).toBeGreaterThan(0);
       const short = controls.filter(
-        (n) => px(n, ['min-height', 'height'], screen) < 44 || px(n, ['min-width', 'width'], screen) < 44,
+        (n) =>
+          px(n, ['min-height', 'height'], screen) < 44 ||
+          px(n, ['min-width', 'width'], screen) < 44,
       );
       const cards = short.filter((n) => n.classes.includes('firewall-card'));
       // a card spans its line: as wide as the line's 88 px column, less its margins
@@ -340,6 +364,126 @@ describe('the type and the targets on a phone held sideways', () => {
   it('steps the packets once a second under reduced motion, from the same stylesheet', () => {
     const css = readFileSync(new URL('../src/puzzles/firewall.css', import.meta.url), 'utf8');
     const calm = css.slice(css.indexOf(":where([data-motion='reduce'])"));
-    expect(calm).toMatch(/\.firewall-track \{\s*animation-timing-function: steps\(var\(--fall-steps\), end\);/);
+    // each step taken as its second begins: a packet is never drawn higher than it is
+    expect(calm).toMatch(
+      /\.firewall-track \{\s*animation-timing-function: steps\(var\(--fall-steps\), start\);/,
+    );
+  });
+});
+
+describe('the scope’s geometry', () => {
+  const sheets = new Sheets();
+  const SCREENS: Screen[] = [
+    { width: 1280, height: 720, coarse: false },
+    { width: 1440, height: 820, coarse: false },
+    { width: 844, height: 390, coarse: true },
+    { width: 932, height: 430, coarse: true },
+  ];
+
+  /** The Analysepult as the station modal shows it, its cards on the lines. */
+  function cards(): Styled[] {
+    clockAt(MID);
+    return elementsOf(
+      renderToStaticMarkup(
+        <NotepadContext value={{ noteDown: () => true, toggle: noop }}>
+          <StationModal
+            puzzle={seen('b', MID)}
+            run={deviceRun()}
+            map={mapWith({})}
+            edgework={null}
+            mission={NO_CLOCK}
+            send={noop}
+            onStepBack={noop}
+          />
+        </NotepadContext>,
+      ),
+    );
+  }
+
+  it.each(SCREENS)('never lays two cards of one line over each other at $width', (screen) => {
+    const nodes = cards();
+    const lines = nodes.find((n) => n.classes.includes('firewall-lines'));
+    const card = nodes.find((n) => n.classes.includes('firewall-card'));
+    if (lines === undefined || card === undefined) {
+      throw new Error('expected the lines and a card');
+    }
+    const high = sheets.length(lines, 'height', screen);
+    const item = sheets.length(card, 'min-height', screen);
+    expect(item).toBeGreaterThanOrEqual(44);
+    // two packets of a line come SAME_LINE_GAP of a fall apart, the track the line less a card
+    expect((high - item) * SAME_LINE_GAP).toBeGreaterThanOrEqual(item);
+  });
+
+  it('numbers the lines over them, where no card ever covers a number', () => {
+    const nodes = cards();
+    const numbers = nodes.filter((n) => n.classes.includes('firewall-line-no'));
+    expect(numbers.map((n) => n.text)).toEqual(['1', '2', '3', '4', '5']);
+    expect(numbers.every((n) => n.parent?.classes.includes('firewall-numbers'))).toBe(true);
+  });
+});
+
+describe('what the scope draws', () => {
+  it('draws no packet the server dropped, and bursts only where a drop was reported', () => {
+    clockAt(MID);
+    const puzzle = seen('a', MID);
+    const [first] = view.onTheLines(puzzle, T0 + MID);
+    if (first === undefined) {
+      throw new Error('expected a packet on the lines');
+    }
+    const out = (b: (typeof first)) => (b.id === first.id ? { ...b, dropped: true } : b);
+    const dropped = (puzzle.packets ?? []).map(out);
+    const after = { ...puzzle, packets: dropped };
+    expect(view.onTheLines(after, T0 + MID).map((b) => b.id)).not.toContain(first.id);
+    const report = (kind: 'drop' | 'void') => ({ n: 9, kind, at: T0 + MID, line: first.line });
+    const live = view.onTheLines(after, T0 + MID);
+    const burstOf = (kind: 'drop' | 'void') =>
+      onLine({ ...after, event: report(kind) }, live, first.line, T0 + MID + 100).burst;
+    expect(burstOf('drop')?.id).toBe(first.id);
+    expect(burstOf('void')).toBeUndefined();
+    const late = onLine({ ...after, event: report('drop') }, live, first.line, T0 + MID + 700);
+    expect(late.burst).toBeUndefined();
+  });
+
+  it('starts every fall anew as the page comes back into view', () => {
+    const puzzle = seen('a', MID);
+    const [blip] = puzzle.packets ?? [];
+    const clock = puzzle.clock;
+    if (blip === undefined || clock === null) {
+      throw new Error('expected a packet and a clock');
+    }
+    expect(view.fallKey(blip, clock, 0)).toBe(view.fallKey(blip, clock, 0));
+    expect(view.fallKey(blip, clock, 1)).not.toBe(view.fallKey(blip, clock, 0));
+    expect(view.fallKey(blip, { ...clock, heldAt: T0 }, 0)).not.toBe(view.fallKey(blip, clock, 0));
+  });
+
+  it('prints a card in two lines, Quelle over port and protocol, marked with its tick', () => {
+    clockAt(MID);
+    const puzzle = seen('b', MID, allMarked);
+    const html = panel(puzzle);
+    const [first] = view.onTheLines(puzzle, T0 + MID);
+    expect(html).toContain(`>${first?.header?.port}/${first?.header?.protocol}<`);
+    const cardsHtml = html.split('class="firewall-card').slice(1);
+    expect(cardsHtml.length).toBeGreaterThan(0);
+    expect(cardsHtml.every((card) => card.includes('class="firewall-tick">✓<'))).toBe(true);
+  });
+
+  it('shows the Freigabe key only as a press while the wave waits, BEREIT across the scope', () => {
+    clockAt(MID);
+    const running = panel(seen('a', MID));
+    expect(running).toMatch(/<button[^>]*class="firewall-arm"[^>]*disabled/);
+    expect(running).not.toContain('>BEREIT<');
+    const clock = { startedAt: T0, heldAt: T0 };
+    const waiting = panel({ ...seen('a', MID), waiting: true, clock });
+    expect(waiting).not.toMatch(/<button[^>]*class="firewall-arm"[^>]*disabled/);
+    expect(waiting).toContain('>FREIGABE<');
+    expect(waiting).toContain('>BEREIT<');
+  });
+});
+
+describe('the keys a console listens for', () => {
+  it('keeps the space bar a key of its own beside enter and the arrows', () => {
+    const heard = keysIn(keysOf([' ', 'enter', 'arrowleft', 'a']));
+    expect([...heard].sort()).toEqual([' ', 'a', 'arrowleft', 'enter']);
+    expect(keysIn(keysOf(['arrowleft', 'a']))).toEqual(keysIn(keysOf(['arrowleft', 'a'])));
   });
 });

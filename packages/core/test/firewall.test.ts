@@ -45,7 +45,12 @@ import { lightsOut, standing, started, T0 } from './lab.js';
 const SEEDS = 200;
 
 const defOf = (over: Record<string, unknown> = {}): FirewallDef =>
-  puzzleDefSchema.parse({ type: 'firewall', id: 'pf', title: 'Paketfilter', ...over }) as FirewallDef;
+  puzzleDefSchema.parse({
+    type: 'firewall',
+    id: 'pf',
+    title: 'Paketfilter',
+    ...over,
+  }) as FirewallDef;
 
 const DEF = defOf();
 const FALL_MS = DEF.fallSec * 1000;
@@ -90,7 +95,12 @@ function moved(state: FirewallState, when: number, console: ConsoleId, input: Fi
 }
 
 const view = (state: FirewallState, viewer: Viewer): FirewallView =>
-  firewallModule.view(DEF, state, viewer, { edgework: EDGEWORK, alarms: 0, crew: [], operators: [] });
+  firewallModule.view(DEF, state, viewer, {
+    edgework: EDGEWORK,
+    alarms: 0,
+    crew: [],
+    operators: [],
+  });
 
 /**
  * The station manned at T0 and its first wave started on the Freigabe key then: running from
@@ -196,7 +206,7 @@ describe('a wave', () => {
     }
   });
 
-  it(`is decided by the rules the instance exercises, which its waves cover, for ${SEEDS} seeds`, () => {
+  it(`is decided by the instance's rules, which its waves cover, for ${SEEDS} seeds`, () => {
     for (let seed = 0; seed < SEEDS; seed++) {
       const rules = 3 + (seed % 4);
       const def = defOf({ rules });
@@ -298,7 +308,7 @@ describe('the clock', () => {
     );
   });
 
-  it('charges a wave one alarm at most: the rest of its hostile packets never reach the Kern', () => {
+  it('charges a wave one alarm at most: its other attacks never reach the Kern', () => {
     let state = running();
     const end = arrives(state, state.packets.length - 1);
     let alarms = 0;
@@ -310,7 +320,7 @@ describe('the clock', () => {
     expect(alarms).toBe(1);
   });
 
-  it('is ticked at the next packet coming on, the next hostile one in the Kern, or the clean end', () => {
+  it('is ticked at the next packet coming on, the next attack judged, or the clean end', () => {
     const state = running();
     expect(firewallModule.dueAt?.(DEF, state)).toBe(enters(state, 0));
     const all = at(state, enters(state, state.packets.length - 1)).state;
@@ -377,7 +387,8 @@ function dropAll(state: FirewallState): FirewallState {
     const lower = now.packets.find(
       (p) => p.line === packet.line && p.enterMs < packet.enterMs && !now.dropped.includes(p.id),
     );
-    const free = lower === undefined ? when : Math.max(when, now.startedAt + lower.enterMs + FALL_MS);
+    const through = lower === undefined ? when : now.startedAt + lower.enterMs + FALL_MS;
+    const free = Math.max(when, through);
     return moved(now, free + 1, 'a', { trip: packet.line }).state;
   }, state);
 }
@@ -556,7 +567,7 @@ describe('the views', () => {
     }
   });
 
-  it('show the policy and everybody away nothing of the instance, the audience the consoles', () => {
+  it('show the policy and everybody away nothing, the audience the consoles', () => {
     const { marked } = markedWave();
     for (const viewer of [AT_BOOK, ELSEWHERE]) {
       const away = view({ ...marked, event: { n: 1, kind: 'drop', at: T0, line: 0 } }, viewer);
@@ -584,7 +595,8 @@ describe('the Paketfilter through the reducer', () => {
   /** The same, the Freigabe pressed at T0 + 1000: the first wave runs from then. */
   const open = (seed = 3): GameState => {
     const input = { start: true };
-    return applyAction(manned(seed), { type: 'puzzle-input', playerId: 'p1', at: T0 + 1000, input });
+    const move = { type: 'puzzle-input' as const, playerId: 'p1', at: T0 + 1000, input };
+    return applyAction(manned(seed), move);
   };
   const fw = (state: GameState): FirewallState => state.puzzleState as FirewallState;
 
@@ -597,7 +609,8 @@ describe('the Paketfilter through the reducer', () => {
     const gate = viewFor(left, 'p1').puzzle;
     expect(gate?.kind === 'firewall' && gate.vacant).toEqual(['b']);
     const input = { trip: 0 };
-    const trip = () => applyAction(left, { type: 'puzzle-input', playerId: 'p1', at: T0 + 4000, input });
+    const move = { type: 'puzzle-input' as const, playerId: 'p1', at: T0 + 4000, input };
+    const trip = () => applyAction(left, move);
     expect(trip).toThrow('Am Analysepult steht niemand.');
   });
 

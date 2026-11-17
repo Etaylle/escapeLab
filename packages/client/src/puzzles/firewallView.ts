@@ -74,28 +74,49 @@ const breathLeft = (t: number): number => Math.max(0, Math.ceil((FIREWALL_PAUSE_
 
 /** What the breath before a wave's first packet says, after the event that began it. */
 function breathText(puzzle: FirewallPuzzle, seconds: number): string {
-  const kind = puzzle.event?.kind ?? null;
-  if (kind === 'fault') {
-    return `Fehlquittierung: Welle abgebrochen. Neue Welle in ${seconds} s.`;
-  }
-  if (kind === 'cleared') {
+  if (puzzle.event?.kind === 'cleared') {
     return `Welle ${puzzle.cleared} sauber. Welle ${puzzle.wave} in ${seconds} s.`;
   }
   return `Welle ${puzzle.wave} von ${puzzle.waves} in ${seconds} s.`;
 }
 
 /**
+ * What a held wave says: the console standing empty where it is the other one — the viewer's
+ * own is manned by the viewer; both empty, or the viewer's own, is the run standing still, which
+ * holds the packets too. Null while the consoles are manned.
+ */
+function holdText(puzzle: FirewallPuzzle): string | null {
+  const { vacant } = puzzle;
+  if (vacant.length === 0) {
+    return null;
+  }
+  const [empty] = vacant;
+  const other = vacant.length === 1 && empty !== undefined && empty !== puzzle.console;
+  return other ? `${PULT_NAMES[empty]} unbesetzt · Pakete halten` : 'Pakete halten';
+}
+
+/** What a wave waiting for the Freigabe key says: after a fault, that it was called off. */
+function waitText(puzzle: FirewallPuzzle): string {
+  return puzzle.event?.kind === 'fault'
+    ? 'Fehlquittierung: Welle abgebrochen. Neue Welle wartet auf Freigabe.'
+    : `Bereit · Welle ${puzzle.wave} starten`;
+}
+
+/**
  * The device's status line at `now`, in the lab's words: the Kern free once every wave is clean;
- * the hold and whose console stands empty; the breath before a wave and what began it; else the
- * wave under way and the packets taken out of it.
+ * the hold and whose console stands empty; the wait for the Freigabe key; the breath before a
+ * wave and what began it; else the wave under way and the packets taken out of it.
  */
 export function statusOf(puzzle: FirewallPuzzle, now: number): string {
   if (puzzle.event?.kind === 'done') {
     return 'Kern frei: alle Wellen sauber.';
   }
-  const [vacant] = puzzle.vacant;
-  if (vacant !== undefined) {
-    return `${PULT_NAMES[vacant]} unbesetzt · Pakete halten`;
+  const held = holdText(puzzle);
+  if (held !== null) {
+    return held;
+  }
+  if (puzzle.waiting) {
+    return waitText(puzzle);
   }
   const t = puzzle.clock === null ? 0 : waveMsAt(puzzle.clock, now);
   const packets = puzzle.packets ?? [];
@@ -104,6 +125,15 @@ export function statusOf(puzzle: FirewallPuzzle, now: number): string {
   }
   const dropped = packets.filter((blip) => blip.dropped).length;
   return `Welle ${puzzle.wave} von ${puzzle.waves} · ${dropped} gesperrt`;
+}
+
+/**
+ * What a packet's fall is keyed by: the packet, the wave's clock, and how often the page came
+ * back into view (`shown`) — a hidden tab runs no CSS animation, so one that shows again starts
+ * every fall anew from where the wave stands then, never from where it stood as it mounted.
+ */
+export function fallKey(blip: FirewallBlip, clock: Clock, shown: number): string {
+  return `${blip.id}:${clock.startedAt}:${clock.heldAt}:${shown}`;
 }
 
 /**

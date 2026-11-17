@@ -70,7 +70,7 @@ function sendersOf(
     : crew.map((id): [string, ConsoleId] => [id, 'a']);
 }
 
-/** What the crew sees: console a's view (the station's), console b's where there is one, the book's. */
+/** What the crew sees: console a's view, console b's where there is one, the book's. */
 function perspectivesOf<View>(seen: (viewer: Viewer) => View, twoConsoles: boolean) {
   const views: Perspectives<View> = {
     operator: seen(AT_A),

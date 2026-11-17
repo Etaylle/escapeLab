@@ -338,7 +338,10 @@ export {
 export {
   FIREWALL_LINES,
   FIREWALL_PAUSE_MS,
+  KERN_HIT,
   LINES_FIGURE,
+  SAME_LINE_GAP,
+  TRIP_GRACE_MS,
   type FirewallBlip,
   type FirewallEvent,
   type FirewallHeader,

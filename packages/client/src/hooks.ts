@@ -75,6 +75,15 @@ export function keyTaken(
 }
 
 /**
+ * `keys` as one text, which stays the same from render to render where they do — joined on a
+ * line break, not a space: the space bar is a key of its own (' ').
+ */
+export const keysOf = (keys: readonly string[]): string => keys.join('\n');
+
+/** The keys `keysOf` put together, as a set to look a key up in. */
+export const keysIn = (wanted: string): ReadonlySet<string> => new Set(wanted.split('\n'));
+
+/**
  * Calls `onKey` with the key, lower-cased, when one of `keys` goes down —
  * not while typing, not on auto-repeat, not with a modifier the browser owns,
  * not while a menu stands over the screens (menuLayer.ts `usePause`; `keyTaken`).
@@ -84,10 +93,9 @@ export function useKeys(keys: readonly string[], onKey: (key: string) => void): 
   handler.current = onKey;
   const covered = useRef(false);
   covered.current = usePause().open;
-  // Joined on a line break, not a space: the space bar is a key of its own (' ').
-  const wanted = keys.join('\n');
+  const wanted = keysOf(keys);
   useEffect(() => {
-    const listened = new Set(wanted.split('\n'));
+    const listened = keysIn(wanted);
     const onDown = (e: KeyboardEvent): void => {
       if (!keyTaken(listened, e, typing(), covered.current)) {
         return;

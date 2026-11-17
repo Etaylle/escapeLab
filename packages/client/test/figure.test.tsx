@@ -199,7 +199,7 @@ describe('Figure', () => {
 });
 
 describe('the Paketfilter’s drawings', () => {
-  it('draws the Paketfilter’s lines the policy shows: five, a ringed and ticked packet, the gate', () => {
+  it('draws the Paketfilter’s lines: five, a ringed and ticked packet, the gate', () => {
     const def = puzzleDefSchema.parse({ type: 'firewall', id: 'f', title: 'F' });
     const figures = moduleFor(def.type)
       .manual(def)

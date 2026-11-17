@@ -9,6 +9,7 @@ import { cssVars, type Change } from './feel.js';
 import {
   BURST_MS,
   cursorStep,
+  fallKey,
   LINES,
   lowestOn,
   nextChange,
@@ -28,18 +29,41 @@ import './firewall.css';
  * FirewallPanel.tsx: the Paketfilter at its two consoles, one scope each — five lines running
  * down into the Kern, the packets coming down them as the server's clock moves them. Console a,
  * the Sperrpult, shows each packet as a plain point, ringed and ticked where console b marked
- * it, and a gate under the lines that steps from line to line and trips; console b, the
+ * it, a gate under the lines that steps from line to line and trips, and the Freigabe key that
+ * starts a waiting wave; console b, the
  * Analysepult, shows the same packets as cards with their headers, each a key that sets or takes
  * back its mark. A packet glides down by a CSS animation timed from the view (`Falling`) — under
- * reduced motion it steps once a second — and stands still while the wave is held; a drop shows
- * once the server has made it. The audience sees the Analysepult's scope.
+ * reduced motion it steps once a second, never ahead of the truth — and stands still while the
+ * wave is held; a drop shows once the server has made it. The audience sees the Analysepult's
+ * scope.
  */
 
 type Send = PanelProps<'firewall'>['send'];
 type Clock = NonNullable<FirewallPuzzle['clock']>;
 
-/** The keys that trip the gate, and mark the packet under the Analysepult's cursor. */
+/**
+ * The keys that trip the gate — or give a waiting wave its Freigabe — and mark the packet under
+ * the Analysepult's cursor.
+ */
 const PRESS = [' ', 'enter'];
+
+/**
+ * How often the page came back into view since the device opened: a hidden tab runs no CSS
+ * animation, so each return starts every packet's fall anew (`fallKey`).
+ */
+function useShownAgain(): number {
+  const [shown, setShown] = useState(0);
+  useEffect(() => {
+    const back = (): void => {
+      if (document.visibilityState === 'visible') {
+        setShown((n) => n + 1);
+      }
+    };
+    document.addEventListener('visibilitychange', back);
+    return () => document.removeEventListener('visibilitychange', back);
+  }, []);
+  return shown;
+}
 
 /**
  * The keys that step the gate and the Analysepult's cursor: the arrows, and the keys the
@@ -98,7 +122,7 @@ function useScopeNow(puzzle: FirewallPuzzle, audible: boolean): number {
 /**
  * A packet on its way down its line: a CSS animation from the top into the Kern over the fall,
  * timed as it mounts from where the wave stands — so that renders after it move nothing — and
- * paused where the wave is held. One per packet and wave clock (`key`).
+ * paused where the wave is held. One per packet, wave clock and return to view (`fallKey`).
  */
 function Falling(props: { blip: FirewallBlip; clock: Clock; fallMs: number; children: ReactNode }) {
   const { blip, clock, fallMs, children } = props;
@@ -125,19 +149,54 @@ function Burst(props: { blip: FirewallBlip; clock: Clock; fallMs: number; at: nu
   );
 }
 
-/** The packets of `line` the scope draws at `now`: those on it, and the one just dropped. */
-function onLine(puzzle: FirewallPuzzle, live: readonly FirewallBlip[], line: number, now: number) {
+/**
+ * The packets of `line` the scope draws at `now`: those on it, and the one the server just
+ * dropped there — a burst only after a drop, never after any other report.
+ */
+export function onLine(
+  puzzle: FirewallPuzzle,
+  live: readonly FirewallBlip[],
+  line: number,
+  now: number,
+) {
   const { event } = puzzle;
-  const burst =
-    event?.kind === 'drop' && event.line === line && now < event.at + BURST_MS
-      ? (puzzle.packets ?? []).find((blip) => blip.dropped && blip.line === line) ?? null
-      : null;
-  return { falling: live.filter((blip) => blip.line === line), burst };
+  const fresh = event?.kind === 'drop' && event.line === line && now < event.at + BURST_MS;
+  const dropped = (puzzle.packets ?? []).find((blip) => blip.dropped && blip.line === line);
+  return { falling: live.filter((blip) => blip.line === line), burst: fresh ? dropped : undefined };
+}
+
+/** What a line draws: its packets, each in what `face` makes of it, and the burst of a drop. */
+function LineContents(props: {
+  puzzle: FirewallPuzzle;
+  live: readonly FirewallBlip[];
+  line: number;
+  now: number;
+  shown: number;
+  face: (blip: FirewallBlip) => ReactNode;
+}) {
+  const { puzzle, live, line, now, shown, face } = props;
+  const { falling, burst } = onLine(puzzle, live, line, now);
+  const { clock, event } = puzzle;
+  if (clock === null) {
+    return null;
+  }
+  return (
+    <>
+      {falling.map((blip) => (
+        <Falling key={fallKey(blip, clock, shown)} blip={blip} clock={clock} fallMs={puzzle.fallMs}>
+          {face(blip)}
+        </Falling>
+      ))}
+      {burst !== undefined && event !== null && (
+        <Burst blip={burst} clock={clock} fallMs={puzzle.fallMs} at={event.at} />
+      )}
+    </>
+  );
 }
 
 /** The status line over the scope, in the lab's words; its own live region. */
 function Status({ puzzle, now }: { puzzle: FirewallPuzzle; now: number }) {
-  const held = puzzle.vacant.length > 0 ? ' firewall-status--held' : '';
+  const held = puzzle.vacant.length > 0 || puzzle.waiting ? ' firewall-status--held' : '';
   return (
     <p className={`firewall-status${held}`} role="status">
       <span className="device-engraving">PF-5</span> {statusOf(puzzle, now)}
@@ -145,18 +204,34 @@ function Status({ puzzle, now }: { puzzle: FirewallPuzzle; now: number }) {
   );
 }
 
+/** The word across a scope that stands still: HALT while a console is empty, BEREIT waiting. */
+const bannerOf = (puzzle: FirewallPuzzle): string | null => {
+  if (puzzle.vacant.length > 0) {
+    return 'HALT';
+  }
+  return puzzle.waiting ? 'BEREIT' : null;
+};
+
 /**
- * The scope: five lines numbered from the left over the Kern, each with what `lane` puts on it.
- * A line of the Sperrpult is a key that sets the gate there; the Analysepult's are plain. While
- * the wave holds (`held`), the packets dim where they stand under HALT across the lines.
+ * The scope: the lines' numbers over five lines into the Kern, each line with what `lane` puts
+ * on it. A line of the Sperrpult is a key that sets the gate there; the Analysepult's are plain.
+ * While the wave stands still the packets dim where they stand under its word (`bannerOf`).
  */
-function Scope({ lane, held }: { lane: (line: number) => ReactNode; held: boolean }) {
+function Scope({ lane, puzzle }: { lane: (line: number) => ReactNode; puzzle: FirewallPuzzle }) {
+  const banner = bannerOf(puzzle);
   return (
-    <div className={`firewall-scope${held ? ' firewall-scope--held' : ''}`}>
+    <div className={`firewall-scope${banner === null ? '' : ' firewall-scope--held'}`}>
+      <div className="firewall-numbers" aria-hidden>
+        {LINES.map((line) => (
+          <span key={line} className="firewall-line-no">
+            {line + 1}
+          </span>
+        ))}
+      </div>
       <div className="firewall-lines">{LINES.map((line) => lane(line))}</div>
-      {held && (
+      {banner !== null && (
         <p className="firewall-held" aria-hidden>
-          HALT
+          {banner}
         </p>
       )}
       <div className="firewall-kern" aria-hidden>
@@ -194,11 +269,10 @@ function GateLine(props: {
   line: number;
   gate: number;
   now: number;
+  shown: number;
   onPick: (line: number) => void;
 }) {
-  const { puzzle, live, line, gate, now, onPick } = props;
-  const { falling, burst } = onLine(puzzle, live, line, now);
-  const clock = puzzle.clock;
+  const { live, line, gate, onPick } = props;
   const here = gate === line;
   return (
     <button
@@ -210,43 +284,78 @@ function GateLine(props: {
       aria-pressed={here}
       onClick={() => onPick(line)}
     >
-      <span className="firewall-line-no">{line + 1}</span>
-      {clock !== null &&
-        falling.map((blip) => (
-          <Falling
-            key={`${blip.id}:${clock.startedAt}:${clock.heldAt}`}
-            blip={blip}
-            clock={clock}
-            fallMs={puzzle.fallMs}
-          >
-            <Blip blip={blip} />
-          </Falling>
-        ))}
-      {clock !== null && burst !== null && puzzle.event !== null && (
-        <Burst blip={burst} clock={clock} fallMs={puzzle.fallMs} at={puzzle.event.at} />
-      )}
+      <LineContents {...props} face={(blip) => <Blip blip={blip} />} />
       {here && <span className="firewall-gate" aria-hidden />}
     </button>
   );
 }
 
+/** The Sperrpult's keys under its scope: ◀, SPERREN, ▶, FREIGABE, the lamp and the talk key. */
+function GateKeys(props: {
+  puzzle: FirewallPuzzle;
+  step: (by: number) => void;
+  trip: () => void;
+  arm: () => void;
+}) {
+  const { puzzle, step, trip, arm } = props;
+  return (
+    <div className="firewall-bezel">
+      <button
+        type="button"
+        className="firewall-step"
+        data-feel="detent"
+        aria-label="Sperre nach links"
+        onClick={() => step(-1)}
+      >
+        ◀
+      </button>
+      <button type="button" className="firewall-trip" data-feel="thunk" onClick={trip}>
+        SPERREN
+      </button>
+      <button
+        type="button"
+        className="firewall-step"
+        data-feel="detent"
+        aria-label="Sperre nach rechts"
+        onClick={() => step(1)}
+      >
+        ▶
+      </button>
+      <button
+        type="button"
+        className="firewall-arm"
+        data-feel="thunk"
+        disabled={!puzzle.waiting}
+        onClick={arm}
+      >
+        FREIGABE
+      </button>
+      <Link name="ANALYSE" manned={puzzle.atOtherConsole !== null} />
+      <TalkButton className="servers-talk firewall-talk">FUNK</TalkButton>
+    </div>
+  );
+}
+
 /**
  * Console a, the Sperrpult: the scope of points, the gate under its lines — set by a tap on a
- * line, stepped by ◀ ▶, ← → or the keys that walk left and right (`useSteps`) — and SPERREN,
- * which trips it (space or enter too). The gate
- * is this console's own; only the trip goes to the server, with its line.
+ * line, stepped by ◀ ▶, ← → or the keys that walk left and right (`useSteps`) —, SPERREN, which
+ * trips it, and FREIGABE, which starts a waiting wave; space or enter press the one of the two
+ * the wave stands for. The gate is this console's own; only the trip goes to the server, with
+ * its line.
  */
 function Sperrpult({ puzzle, send }: { puzzle: FirewallPuzzle; send: Send }) {
   const now = useScopeNow(puzzle, true);
+  const shown = useShownAgain();
   const live = onTheLines(puzzle, now);
   const [gate, setGate] = useState(2);
   const step = (by: number): void =>
     setGate((at) => Math.min(LINES.length - 1, Math.max(0, at + by)));
-  const trip = useRef<HTMLButtonElement>(null);
+  const trip = (): void => send({ trip: gate });
+  const arm = (): void => send({ start: true });
   const { left, right } = useSteps();
   useKeys([...left, ...right, ...PRESS], (key) => {
     if (PRESS.includes(key)) {
-      trip.current?.click();
+      (puzzle.waiting ? arm : trip)();
       return;
     }
     dialDetent();
@@ -256,7 +365,7 @@ function Sperrpult({ puzzle, send }: { puzzle: FirewallPuzzle; send: Send }) {
     <div className="firewall firewall--gate">
       <Status puzzle={puzzle} now={now} />
       <Scope
-        held={puzzle.vacant.length > 0}
+        puzzle={puzzle}
         lane={(line) => (
           <GateLine
             key={line}
@@ -265,56 +374,24 @@ function Sperrpult({ puzzle, send }: { puzzle: FirewallPuzzle; send: Send }) {
             line={line}
             gate={gate}
             now={now}
+            shown={shown}
             onPick={setGate}
           />
         )}
       />
-      <div className="firewall-bezel">
-        <button
-          type="button"
-          className="firewall-step"
-          data-feel="detent"
-          aria-label="Sperre nach links"
-          onClick={() => step(-1)}
-        >
-          ◀
-        </button>
-        <button
-          ref={trip}
-          type="button"
-          className="firewall-trip"
-          data-feel="thunk"
-          onClick={() => send({ trip: gate })}
-        >
-          SPERREN
-        </button>
-        <button
-          type="button"
-          className="firewall-step"
-          data-feel="detent"
-          aria-label="Sperre nach rechts"
-          onClick={() => step(1)}
-        >
-          ▶
-        </button>
-        <Link name="ANALYSE" manned={puzzle.atOtherConsole !== null} />
-        <TalkButton className="servers-talk firewall-talk">FUNK</TalkButton>
-      </div>
+      <GateKeys puzzle={puzzle} step={step} trip={trip} arm={arm} />
     </div>
   );
 }
 
 // --- console b: the Analysepult ---------------------------------------------------------------
 
-/** A header as a card prints it, a line each: Quelle, Port, Protokoll. */
+/** A header as a card prints it, in two lines: the Quelle, then port and protocol, „67/UDP". */
 function HeaderLines({ header }: { header: FirewallHeader }) {
   return (
     <>
       <span className="firewall-field firewall-source">{header.source}</span>
-      <span className="firewall-field">
-        <span className="firewall-key">PORT</span> {header.port}
-      </span>
-      <span className="firewall-field firewall-protocol">{header.protocol}</span>
+      <span className="firewall-field firewall-port">{`${header.port}/${header.protocol}`}</span>
     </>
   );
 }
@@ -359,39 +436,27 @@ function Card(props: { blip: FirewallBlip; cursor: boolean; onMark: (() => void)
   );
 }
 
-/** One line of the Analysepult's scope: its number and its packets as cards. */
+/** One line of the Analysepult's scope: its packets as cards. */
 function CardLine(props: {
   puzzle: FirewallPuzzle;
   live: readonly FirewallBlip[];
   line: number;
   now: number;
+  shown: number;
   cursor: string | null;
   mark: ((id: string) => void) | null;
 }) {
-  const { puzzle, live, line, now, cursor, mark } = props;
-  const { falling, burst } = onLine(puzzle, live, line, now);
-  const clock = puzzle.clock;
+  const { line, cursor, mark } = props;
+  const face = (blip: FirewallBlip): ReactNode => (
+    <Card
+      blip={blip}
+      cursor={cursor === blip.id}
+      onMark={mark === null ? null : () => mark(blip.id)}
+    />
+  );
   return (
     <div className="firewall-line firewall-line--cards" data-line={line}>
-      <span className="firewall-line-no">{line + 1}</span>
-      {clock !== null &&
-        falling.map((blip) => (
-          <Falling
-            key={`${blip.id}:${clock.startedAt}:${clock.heldAt}`}
-            blip={blip}
-            clock={clock}
-            fallMs={puzzle.fallMs}
-          >
-            <Card
-              blip={blip}
-              cursor={cursor === blip.id}
-              onMark={mark === null ? null : () => mark(blip.id)}
-            />
-          </Falling>
-        ))}
-      {clock !== null && burst !== null && puzzle.event !== null && (
-        <Burst blip={burst} clock={clock} fallMs={puzzle.fallMs} at={puzzle.event.at} />
-      )}
+      <LineContents {...props} face={face} />
     </div>
   );
 }
@@ -402,6 +467,7 @@ function CardLine(props: {
  */
 function Analysepult({ puzzle, send }: { puzzle: FirewallPuzzle; send: Send }) {
   const now = useScopeNow(puzzle, true);
+  const shownAgain = useShownAgain();
   const live = onTheLines(puzzle, now);
   const [cursor, setCursor] = useState<string | null>(null);
   const shown = live.some((blip) => blip.id === cursor) ? cursor : null;
@@ -420,7 +486,7 @@ function Analysepult({ puzzle, send }: { puzzle: FirewallPuzzle; send: Send }) {
     <div className="firewall firewall--analysis">
       <Status puzzle={puzzle} now={now} />
       <Scope
-        held={puzzle.vacant.length > 0}
+        puzzle={puzzle}
         lane={(line) => (
           <CardLine
             key={line}
@@ -428,6 +494,7 @@ function Analysepult({ puzzle, send }: { puzzle: FirewallPuzzle; send: Send }) {
             live={live}
             line={line}
             now={now}
+            shown={shownAgain}
             cursor={shown}
             mark={mark}
           />
@@ -449,13 +516,17 @@ function Analysepult({ puzzle, send }: { puzzle: FirewallPuzzle; send: Send }) {
  */
 function Watched({ puzzle }: { puzzle: FirewallPuzzle }) {
   const now = useScopeNow(puzzle, false);
+  const shown = useShownAgain();
   const live = onTheLines(puzzle, now);
   return (
-    <section className="firewall firewall--analysis firewall--watched" aria-label={consoleName('b')}>
+    <section
+      className="firewall firewall--analysis firewall--watched"
+      aria-label={consoleName('b')}
+    >
       <h4 className="servers-console-name">{consoleName('b')}</h4>
       <Status puzzle={puzzle} now={now} />
       <Scope
-        held={puzzle.vacant.length > 0}
+        puzzle={puzzle}
         lane={(line) => (
           <CardLine
             key={line}
@@ -463,6 +534,7 @@ function Watched({ puzzle }: { puzzle: FirewallPuzzle }) {
             live={live}
             line={line}
             now={now}
+            shown={shown}
             cursor={null}
             mark={null}
           />

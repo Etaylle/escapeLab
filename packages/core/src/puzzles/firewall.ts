@@ -541,7 +541,8 @@ function clean(def: FirewallDef, state: FirewallState, at: number): ApplyResult<
   return going(reported(nextWave(def, counted, at, false), 'cleared', at));
 }
 
-const KERN_HIT = 'Paketfilter: Angriff im Kern';
+/** The run report's line for an attack the clock let into the Kern: nobody moved. */
+export const KERN_HIT = 'Paketfilter: Angriff im Kern';
 const WRONG_DROP = 'Paketfilter: zulässiges Paket gesperrt';
 
 /**

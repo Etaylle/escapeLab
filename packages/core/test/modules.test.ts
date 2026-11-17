@@ -103,7 +103,7 @@ describe('the Paketfilter on its own', () => {
   const guesses: [string, FirewallJudge][] = [
     ['every packet', () => true],
     ['no packet', () => false],
-    ['every reason to drop, in no order', (h, edgework) => fitsADropRule(h, serialLastDigit(edgework))],
+    ['every reason to drop, in no order', (h, ew) => fitsADropRule(h, serialLastDigit(ew))],
   ];
 
   it(`is solved by the policy through the harness without an alarm, for ${SEEDS} seeds`, () => {

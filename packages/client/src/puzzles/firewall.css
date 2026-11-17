@@ -11,8 +11,13 @@
   --scope-dim: rgba(185, 230, 255, 0.5);
   --scope-faint: rgba(185, 230, 255, 0.18);
   --scope-mark: #ffc861;
-  --scope-height: clamp(150px, 42vh, 300px);
-  /* the height of what comes down a line: a point here, a card at the Analysepult */
+  /*
+   * The lines' height, and what comes down them: a point here, a card of two lines at the
+   * Analysepult. Two packets of one line come 0.6 of a fall apart at least (core firewall.ts
+   * SAME_LINE_GAP), so the line less a card has to hold a card in 0.6 of its length: 160 px less
+   * 44 leaves 116, of which 0.6 is 70 (a phone's 130 px: 52).
+   */
+  --scope-height: clamp(160px, 42vh, 300px);
   --item-h: 22px;
   display: flex;
   flex-direction: column;
@@ -24,7 +29,7 @@
 }
 
 .firewall--analysis {
-  --item-h: 60px;
+  --item-h: 44px;
 }
 
 .firewall-status {
@@ -60,8 +65,19 @@
   height: var(--scope-height);
 }
 
-.firewall--analysis .firewall-lines {
-  grid-template-columns: repeat(5, minmax(88px, 1fr));
+.firewall--analysis .firewall-lines,
+.firewall--analysis .firewall-numbers {
+  grid-template-columns: repeat(5, minmax(100px, 1fr));
+}
+
+/* The lines' numbers, over the lines: no packet coming down ever covers one. */
+.firewall-numbers {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(44px, 1fr));
+  gap: 6px;
+  color: var(--scope-dim);
+  line-height: 1.2;
+  text-align: center;
 }
 
 /* A line: a dashed rule down its middle; at the Sperrpult a key that sets the gate on it. */
@@ -74,7 +90,12 @@
   border: 0;
   border-radius: 6px;
   background:
-    linear-gradient(90deg, transparent calc(50% - 1px), var(--scope-faint) 0 calc(50% + 1px), transparent 0)
+    linear-gradient(
+        90deg,
+        transparent calc(50% - 1px),
+        var(--scope-faint) 0 calc(50% + 1px),
+        transparent 0
+      )
       center / 100% 8px repeat-y,
     rgba(255, 255, 255, 0.02);
   color: inherit;
@@ -90,13 +111,6 @@ button.firewall-line {
   background-color: rgba(185, 230, 255, 0.07);
 }
 
-.firewall-line-no {
-  position: absolute;
-  top: 2px;
-  left: 6px;
-  color: var(--scope-dim);
-  line-height: 1;
-}
 
 /* The gate: a bar across the foot of its line, its ends drawn up as brackets. */
 .firewall-gate {
@@ -215,9 +229,16 @@ button.firewall-card {
 }
 
 .firewall-card .firewall-tick {
-  top: 4px;
+  top: 50%;
   right: 6px;
   left: auto;
+  transform: translateY(-50%);
+}
+
+/* A marked card wears its tick and a heavier border, never the colour alone. */
+.firewall-card--marked {
+  padding-right: 20px;
+  border-width: 2px;
 }
 
 .firewall-card--cursor {
@@ -295,7 +316,8 @@ button.firewall-card {
 }
 
 .firewall-step,
-.firewall-trip {
+.firewall-trip,
+.firewall-arm {
   min-width: 44px;
   min-height: 44px;
   border: 0;
@@ -317,8 +339,22 @@ button.firewall-card {
   letter-spacing: 2px;
 }
 
+.firewall-arm {
+  min-width: 7.5em;
+  background: linear-gradient(180deg, #2c4a2a, #172915);
+  color: #e3ffe0;
+  font-weight: 700;
+  letter-spacing: 2px;
+}
+
+.firewall-arm:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
 .firewall-step:active,
-.firewall-trip:active {
+.firewall-trip:active,
+.firewall-arm:active {
   transform: translateY(1px);
 }
 
@@ -328,10 +364,13 @@ button.firewall-card {
 
 /* ── calm, and narrow windows ───────────────────────────────────────── */
 
-/* Under reduced motion a packet does not glide: it steps down once a second. */
+/*
+ * Under reduced motion a packet does not glide: it steps down once a second — each step taken as
+ * its second begins, so that it is never drawn higher than it is.
+ */
 :where([data-motion='reduce']) {
   .firewall-track {
-    animation-timing-function: steps(var(--fall-steps), end);
+    animation-timing-function: steps(var(--fall-steps), start);
   }
 
   .firewall-burst {
