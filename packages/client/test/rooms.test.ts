@@ -189,12 +189,12 @@ describe('roomLights — a floor several names label is lit once', () => {
     expect(lit.get('OST')).toEqual({ tiles: east, same: null, brightness: 1 });
   });
 
-  it('lights the Übungshalle’s one hall once under all fourteen of its names', () => {
+  it('lights the Übungshalle’s one hall once under all fifteen of its names', () => {
     const hall = missionMap('uebungshalle');
     const names = [...new Set(hall.labels.map((label) => label.text))];
-    expect(names).toHaveLength(14);
+    expect(names).toHaveLength(15);
     const all = [...lightAll(hall, names).values()].flatMap((room) => keys(room.tiles));
-    // Every tile of the 40 × 33 hall, floor and walls, once — not fourteen times over.
+    // Every tile of the 40 × 33 hall, floor and walls, once — not fifteen times over.
     expect(all).toHaveLength(40 * 33);
     expect(new Set(all).size).toBe(all.length);
     // As bright as a room lit in Blackout, not brighter.

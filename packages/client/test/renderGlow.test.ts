@@ -69,26 +69,6 @@ describe('glow — the coloured light over the darkness', () => {
     return canvas;
   }
 
-  it('lays a running start pulse from one sprite, baking nothing for the spots it passes', () => {
-    const T = 1_700_000_000_000;
-    const tiles = [1, 2, 3, 4].map((x) => ({ x, y: 2 }));
-    const pulse = { sentAt: T, arrivesAt: T + 3000, diesAt: T + 6000, reversed: false };
-    const conduits = [{ puzzleId: 'anlauf', tiles, pulse }];
-    const frame = frameWith({ map: lab({ conduits }), now: T + 1000, time: 1.8 });
-    const before = frameWith({ map: lab(), now: T + 1000, time: 1.8 });
-    drawn(before);
-    const { log } = drawn(frame);
-    expect(poolsOf(frame).map(([name]) => name)).toEqual(poolsOf(before).map(([name]) => name));
-    // A step on, the same: no pool baked for the spot it has reached.
-    drawn({ ...frame, now: T + 2000 });
-    expect(poolsOf(frame).map(([name]) => name)).toEqual(poolsOf(before).map(([name]) => name));
-    // Its glow is a sprite of its amber laid on at whole pixels, its core over it.
-    const sprites = callsOf(log, 'drawImage').filter(([image]) =>
-      String((image as { name?: string }).name ?? '').startsWith('sprite'),
-    );
-    expect(sprites.length).toBeGreaterThan(0);
-  });
-
   it('bakes the core’s orange once where it can see, and lays it on as it pulses', () => {
     const frame = frameWith({ map: lab(), time: 1.8 });
     const { log } = drawn(frame);
@@ -213,5 +193,40 @@ describe('glow — as the world’s light takes its way', () => {
     }
     expect(logOf(under, frame)).toEqual([]);
     expect(callsOf(logOf(draw, frame), 'drawImage').length).toBeGreaterThan(0);
+  });
+});
+
+describe('glow — a start pulse running in its duct', () => {
+  beforeAll(() => {
+    vi.stubGlobal('Path2D', FakePath2D);
+  });
+  afterAll(() => {
+    vi.unstubAllGlobals();
+  });
+
+  function drawn(frame: Frame) {
+    const canvas = fakeCanvas(800, 600);
+    draw(canvas.ctx, frame);
+    return canvas;
+  }
+
+  it('lays a running start pulse from one sprite, baking nothing for the spots it passes', () => {
+    const T = 1_700_000_000_000;
+    const tiles = [1, 2, 3, 4].map((x) => ({ x, y: 2 }));
+    const pulse = { sentAt: T, arrivesAt: T + 3000, diesAt: T + 6000, reversed: false };
+    const conduits = [{ puzzleId: 'anlauf', tiles, pulse }];
+    const frame = frameWith({ map: lab({ conduits }), now: T + 1000, time: 1.8 });
+    const before = frameWith({ map: lab(), now: T + 1000, time: 1.8 });
+    drawn(before);
+    const { log } = drawn(frame);
+    expect(poolsOf(frame).map(([name]) => name)).toEqual(poolsOf(before).map(([name]) => name));
+    // A step on, the same: no pool baked for the spot it has reached.
+    drawn({ ...frame, now: T + 2000 });
+    expect(poolsOf(frame).map(([name]) => name)).toEqual(poolsOf(before).map(([name]) => name));
+    // Its glow is a sprite of its amber laid on at whole pixels, its core over it.
+    const sprites = callsOf(log, 'drawImage').filter(([image]) =>
+      String((image as { name?: string }).name ?? '').startsWith('sprite'),
+    );
+    expect(sprites.length).toBeGreaterThan(0);
   });
 });
