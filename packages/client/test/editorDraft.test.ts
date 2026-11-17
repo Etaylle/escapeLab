@@ -270,7 +270,7 @@ describe('a puzzle’s own fields and penalty, draft ↔ JSON', () => {
 });
 
 describe('draft ↔ JSON: rooms’ kinds and furniture', () => {
-  it('reads each room’s kind, its brightness and every piece of furniture, and writes them back', () => {
+  it('reads each room’s kind, its brightness and all its furniture, and writes them back', () => {
     const blackout = shipped.find(({ name }) => name === 'blackout.json')?.data as {
       map: { labels: unknown[]; decor: unknown[] };
     };

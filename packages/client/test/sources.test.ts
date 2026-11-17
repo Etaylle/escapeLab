@@ -64,7 +64,8 @@ describe('sourcesOf — every coloured light of the frame, one list for both lig
     const dark = frameWith({ map: lab(), time: 10 });
     const desk = (frame: Frame): LightSource | undefined =>
       glowSources(frame).find((s) => s.x === 3.5 && s.colour.join(',') === PHOSPHOR.join(','));
-    const lit = new Map([['SERVERRAUM', { tiles: [], path: {} as Path2D, since: 9.8, brightness: 1 }]]);
+    const serverraum = { tiles: [], path: {} as Path2D, since: 9.8, brightness: 1 };
+    const lit = new Map([['SERVERRAUM', serverraum]]);
     const striking = frameWith({ map: lab(), time: 10, lit, litTiles: new Set(['3,4']) });
     const up = frameWith({ map: lab(), time: 12, lit, litTiles: new Set(['3,4']) });
     expect(desk(dark)?.strength).toBeLessThan(0.1);

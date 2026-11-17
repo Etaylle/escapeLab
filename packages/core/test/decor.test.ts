@@ -224,7 +224,7 @@ describe('decor — solid for every step', () => {
     }
   });
 
-  it('shows the furniture, each room’s kind and its floor’s brightness in every player’s map', () => {
+  it('shows the furniture, each room’s kind and its floor’s brightness in a player’s map', () => {
     const shipped = parseMission(
       JSON.parse(readFileSync(new URL('../../../missions/blackout.json', import.meta.url), 'utf8')),
     );

@@ -142,7 +142,7 @@ export interface DraftLabel {
   y: number;
   /** the kind of room it names; '' for a plain one */
   kind: RoomKind | '';
-  /** how brightly its floor's ceiling lights burn, as the file gives it; left out for a room's own */
+  /** how brightly its floor's ceiling lights burn, as the file gives it; none for a room's own */
   brightness?: number;
 }
 

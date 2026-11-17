@@ -144,7 +144,9 @@ type LabelledMap = {
 };
 
 /** A map as its file has it: doors without a state, and none where it has none. */
-type FileMap = Omit<LabelledMap, 'doors'> & { doors?: Omit<LabelledMap['doors'][number], 'open'>[] };
+type FileMap = Omit<LabelledMap, 'doors'> & {
+  doors?: Omit<LabelledMap['doors'][number], 'open'>[];
+};
 
 /** The map of `missions/<id>.json`, its doors shut (a map without doors leaves them out). */
 function missionMap(id: string): LabelledMap {
@@ -201,7 +203,7 @@ describe('roomLights — a floor several names label is lit once', () => {
     );
   });
 
-  it('lights Blackout’s Flur once, twice as bright, as the Notlicht lights FLUR and ARCHIV', () => {
+  it('lights Blackout’s Flur once, twice as bright, as Notlicht lights FLUR and ARCHIV', () => {
     const lab = missionMap('blackout');
     const lit = lightAll(lab, ['FLUR', 'ARCHIV']);
     expect(lit.get('ARCHIV')).toEqual({ tiles: [], same: 'FLUR', brightness: 1 });
@@ -216,7 +218,9 @@ describe('roomLights — a floor several names label is lit once', () => {
 
 describe('roomLights — how brightly a floor burns', () => {
   it('burns as brightly as the brightest label standing on the floor it lights', () => {
-    const bright = labels.map((label) => (label.text === 'OST' ? { ...label, brightness: 2 } : label));
+    const bright = labels.map((label) =>
+      label.text === 'OST' ? { ...label, brightness: 2 } : label,
+    );
     const map = { tiles, doors, labels: bright };
     expect(roomLights(map, 'OST', new Map()).brightness).toBe(2);
     // Behind the door the west room keeps a room's own; with no door between, one floor burns 2.

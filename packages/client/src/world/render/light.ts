@@ -344,7 +344,9 @@ function roomsPart(frame: Frame): BakePart {
   const { map, kit, lit } = frame;
   const { name, light } = frame.red === 1 ? TINTS[1] : TINTS[0];
   const layer = layerOf(kit, map, light);
-  const of = `${name}|${[...lit.keys()].join('\n')}|${map.tiles.join('/')}`;
+  // Each room by name and brightness: a floor burning brighter on the same tiles bakes anew.
+  const rooms = [...lit].map(([label, room]) => `${label}*${room.brightness}`);
+  const of = `${name}|${rooms.join('\n')}|${map.tiles.join('/')}`;
   const box = bakeBox(map, [...lit.values()].flatMap((room) => room.tiles), []);
   return {
     bake: { name: 'rooms', of, box },

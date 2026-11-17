@@ -461,6 +461,21 @@ describe('light — the darkness over the picture, and what cuts it open', () =>
     expect(again?.canvas).toBe(first?.canvas);
   });
 
+  it('bakes the lit rooms anew as a room’s brightness changes on the same tiles', () => {
+    const lab = new Map([['FLUR', room(2, 'flur')]]);
+    const frame = withKit(overlay, warm, { time: 10, lit: lab });
+    drawn(frame);
+    const pools = (): number =>
+      callsOf(bakeOf(frame, 'rooms').log, 'drawImage').filter((args) => args[0] === warm.canvas)
+        .length;
+    expect(pools()).toBe(1);
+    drawn(frame);
+    expect(pools()).toBe(1);
+    // The same tiles burning twice as bright: baked anew, its pools laid twice.
+    drawn({ ...frame, lit: new Map([['FLUR', { ...room(2, 'flur'), brightness: 2 }]]) });
+    expect(pools()).toBe(3);
+  });
+
   it('keeps the hatch’s glow apart while it grinds open, at the strength of the moment', () => {
     const exit = { lit: lit({ x: 8.5, y: 4.5, glow: 3.2 }, 'hatch'), open: 0.4 };
     const frame = withKit(overlay, warm, { light: lightWith({ exit }), hatch: 0.4 });
