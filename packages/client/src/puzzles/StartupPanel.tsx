@@ -180,9 +180,21 @@ const sentWith = ({ before, after }: StartupChange): boolean =>
 
 // --- the terminal --------------------------------------------------------------------------
 
-/** A gap's value as the script shows it: the number set, or „?" while open. */
-const valueWord = (value: number | null | undefined): string =>
-  value === null || value === undefined ? '?' : String(value);
+/** A gap's value as the script shows it: the number set, in brackets, or „?" while open. */
+const valueWord = (value: number | null): string => (value === null ? '?' : `[${value}]`);
+
+/**
+ * The script's lines as the terminal lists them: every comment on a line of its own, over the
+ * command or the gap it explains, so that no line runs much past sixty characters.
+ */
+export function listed(script: readonly StartupScriptLine[]): StartupScriptLine[] {
+  return script.flatMap((line): StartupScriptLine[] => {
+    if (line.kind === 'comment' || line.comment === null) {
+      return [line];
+    }
+    return [{ kind: 'comment', text: line.comment }, { ...line, comment: null }];
+  });
+}
 
 /** One line of the script: a comment, a command, or a gap with what it holds. */
 function ScriptLine({ line, terminal }: { line: StartupScriptLine; terminal: StartupTerminal }) {
@@ -190,21 +202,15 @@ function ScriptLine({ line, terminal }: { line: StartupScriptLine; terminal: Sta
     return <li className="startup-line startup-line--comment">{`# ${line.text}`}</li>;
   }
   if (line.kind === 'code') {
-    return (
-      <li className="startup-line">
-        {line.text}
-        {line.comment !== null && <span className="startup-comment">{`  # ${line.comment}`}</span>}
-      </li>
-    );
+    return <li className="startup-line">{line.text}</li>;
   }
   const value = terminal.values[line.gap] ?? null;
   return (
     <li className="startup-line" data-gap={line.gap}>
       {`${line.gap} = `}
-      <span className={`startup-value${value === null ? ' startup-value--open' : ''}`}>
+      <span className={`startup-value startup-value--${value === null ? 'open' : 'set'}`}>
         {valueWord(value)}
       </span>
-      <span className="startup-comment">{`  # ${line.comment}`}</span>
     </li>
   );
 }
@@ -213,7 +219,7 @@ function ScriptLine({ line, terminal }: { line: StartupScriptLine; terminal: Sta
 function Script({ terminal }: { terminal: StartupTerminal }) {
   return (
     <ol className="startup-script" aria-label="Anlaufskript">
-      {terminal.script.map((line, i) => (
+      {listed(terminal.script).map((line, i) => (
         <ScriptLine key={i} line={line} terminal={terminal} />
       ))}
     </ol>

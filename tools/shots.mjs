@@ -10986,15 +10986,22 @@ async function captureDuct(audience) {
 /** The startup drill's phone targets, measured short while a device still moved: skipped. */
 const startupUnjudged = (why) => skip('startup (targets)', why);
 
+/** A laptop's smallest window the devices are held to: both parts of the device whole in it. */
+const STARTUP_LAPTOP = { width: 1280, height: 720 };
+
 /**
  * startup-terminal.png and startup-phone-932.png: the live terminal at laptop size with the
- * first stage's script, then on a large phone held sideways (SIZES[4]) — whole, nothing
- * scrolling, every control 44 px —, the live Schaltfeld held the same way on its page, checked
- * without a shot. Both go back to laptop size.
+ * first stage's script; both consoles held to a laptop's 1280×720 — whole, nothing scrolling,
+ * every control in view at 44 px, as the pages are touch screens —; then the terminal on a large
+ * phone held sideways (SIZES[4]) the same way, the live Schaltfeld too, checked without a shot.
+ * Both go back to laptop size.
  */
 async function captureStartupConsoles({ typer, board }) {
   await sleep(1400); // past the panels' fade-in
   await capture(typer.page, 'startup-terminal.png');
+  const laptop = { unjudged: startupUnjudged };
+  await phoneReach(typer, STARTUP_LAPTOP, { ...laptop, label: 'startup terminal 1280' });
+  await phoneReach(board, STARTUP_LAPTOP, { ...laptop, label: 'startup board 1280' });
   await phoneReach(typer, SIZES[4], { shot: 'startup-phone-932.png', unjudged: startupUnjudged });
   await phoneReach(board, SIZES[4], { label: 'startup board 932', unjudged: startupUnjudged });
   for (const { page } of [typer, board]) {

@@ -8,6 +8,12 @@
  * sets on the shared classes it sets two classes deep.
  */
 
+/* Terminal and Schaltfeld side by side want more than a device's usual 680 px: the script's
+   lines of sixty characters at the terminal, the Schaltfeld as wide as it needs. */
+.puzzle-modal.station-modal .panel:has(.startup) {
+  max-width: 1000px;
+}
+
 .startup {
   display: flex;
   flex-direction: column;
@@ -62,6 +68,13 @@
   color: var(--phosphor-dim);
 }
 
+/* A value set into a gap stands in brackets and underlined: told from the script's own text. */
+.startup-value--set {
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 /* A gap still open stands in inverse video until a value is set into it. */
 .startup-value--open {
   padding: 0 4px;
@@ -78,7 +91,7 @@
 
 /* Room for the log's lines, so that the prompt stays put as lines come in. */
 .startup-crt .startup-log {
-  min-height: calc(4 * 1.35em);
+  min-height: calc(3 * 1.35em);
 }
 
 .startup-idle {

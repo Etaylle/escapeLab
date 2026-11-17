@@ -20,6 +20,7 @@ const {
   humVolts,
   idlePlate,
   ladderLit,
+  listed,
   nextStepAt,
   NPM_REPLY,
   promptHint,
@@ -173,7 +174,7 @@ describe('the consoles', () => {
 
   it('shows a value set where the gap was, and that a pulse is off without counting', () => {
     const html = panel(atTerminal({ values: { abgang: 2 }, sent: true }));
-    expect(html).toMatch(/abgang = <span class="startup-value">2<\/span>/);
+    expect(html).toMatch(/abgang = <span class="startup-value startup-value--set">\[2\]<\/span>/);
     expect(html).toContain('IMPULS UNTERWEGS');
     expect(html).not.toMatch(/startup-step--lit/);
   });
@@ -205,6 +206,23 @@ describe('the consoles', () => {
 
   it('shows nothing of the instance away from the consoles', () => {
     expect(panel(seen(null))).toBe('<p class="muted">Dieses Pult ist nicht angeschlossen.</p>');
+  });
+});
+
+describe('the script as listed', () => {
+  it('puts every comment on a line of its own over its line, none past 72 characters', () => {
+    const script = atTerminal().terminal?.script ?? [];
+    const lines = listed(script);
+    expect(lines.filter((line) => line.kind === 'comment').length).toBe(3);
+    expect(lines.every((line) => line.kind === 'comment' || line.comment === null)).toBe(true);
+    const html = panel(atTerminal());
+    const texts = [...html.matchAll(/<li class="startup-line[^"]*"[^>]*>(.*?)<\/li>/g)].map((m) =>
+      (m[1] ?? '').replace(/<[^>]+>/g, ''),
+    );
+    expect(texts.filter((text) => text.length > 72)).toEqual([]);
+    const hint = /^# Last [^:]+: Leuchtbild nach Tabelle 2 des Betriebsbuchs$/;
+    expect(texts.filter((text) => hint.test(text))).toHaveLength(1);
+    expect(texts).toContain('abgang = ?');
   });
 });
 
