@@ -30,7 +30,7 @@
 
 .startup-device {
   display: grid;
-  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: start;
   gap: 14px;
 }
@@ -114,8 +114,8 @@
 .startup-feeders {
   display: grid;
   flex: 1 1 auto;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8px;
+  grid-template-columns: repeat(4, minmax(4.2em, 1fr));
+  gap: 6px;
 }
 
 .startup-feeder {
@@ -286,19 +286,34 @@
     grid-template-columns: minmax(0, 1fr);
   }
 
+  .startup-feeders {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
   .startup-board {
     padding: 8px;
   }
 }
 
 /*
- * A phone held sideways: both parts side by side as on a laptop, the script tight, the log two
- * lines high, the lamps and the ladder a little smaller, so that the device stands in the
- * window's height; every control still a fingertip.
+ * A phone held sideways: the live part alone across the width — the idle one shows nothing to
+ * read —, the script tight, the log two lines high, the lamps and the ladder a little smaller,
+ * so that the device stands in the window's height; every control still a fingertip.
  */
 @media (pointer: coarse) and (orientation: landscape) and (max-height: 500px) {
   .startup-device {
+    grid-template-columns: minmax(0, 1fr);
     gap: 8px;
+  }
+
+  /* The idle part shows nothing to read or press: the live one takes the whole width. */
+  .startup-device > .startup-board--idle,
+  .startup-device > .startup-terminal--idle {
+    display: none;
+  }
+
+  .startup-status {
+    padding-block: 2px;
   }
 
   .startup-crt .startup-log {

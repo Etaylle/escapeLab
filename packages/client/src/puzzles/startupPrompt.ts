@@ -47,20 +47,27 @@ function setting(gap: string | undefined, word: string | undefined): StartupInpu
  */
 export function lineOf(line: string): StartupLine {
   const words = wordsIn(line);
-  const [first = '', second, third, ...more] = words;
+  const [first = ''] = words;
   if (first === 'npm') {
     return { npm: true };
   }
   if ((first === 'zeige' || first === 'start') && words.length === 1) {
     return { input: { cmd: first } };
   }
-  const input =
-    first === 'setze' && more.length === 0
-      ? setting(second, third)
-      : second === '=' && more.length === 0
-        ? setting(first, third)
-        : null;
+  const input = settingIn(words);
   return input === null ? null : { input };
+}
+
+/** A setze in its words — `setze <lücke> <wert>`, or `<lücke> = <wert>` —; null for any other. */
+function settingIn(words: readonly string[]): StartupInput | null {
+  if (words.length !== 3) {
+    return null;
+  }
+  const [first, second, third] = words;
+  if (first === 'setze') {
+    return setting(second, third);
+  }
+  return second === '=' ? setting(first, third) : null;
 }
 
 /**
@@ -71,16 +78,23 @@ export function lineOf(line: string): StartupLine {
  */
 export function completed(line: string, gaps: readonly StartupGap[]): string {
   const [, before = '', word = ''] = /^(.*?)(\S*)$/s.exec(line) ?? [];
-  const said = wordsIn(before);
-  const words: readonly string[] =
-    said.length === 0 ? STARTUP_COMMANDS : said.length === 1 && said[0] === 'setze' ? gaps : [];
-  const fits = words.filter((candidate) => candidate.startsWith(word.toLowerCase()));
+  const fits = wordsAfter(wordsIn(before), gaps).filter((candidate) =>
+    candidate.startsWith(word.toLowerCase()),
+  );
   const [only] = fits;
   if (only === undefined) {
     return line;
   }
   const blank = only === 'setze' || isGap(only) ? ' ' : '';
   return fits.length > 1 ? `${before}${sharedStart(fits)}` : `${before}${only}${blank}`;
+}
+
+/** What the word after `said` may become: a command first, a gap of the script after `setze`. */
+function wordsAfter(said: readonly string[], gaps: readonly StartupGap[]): readonly string[] {
+  if (said.length === 0) {
+    return STARTUP_COMMANDS;
+  }
+  return said.length === 1 && said[0] === 'setze' ? gaps : [];
 }
 
 /** A key of the terminal's bezel: a command, a gap of the script, a feeder's number, or erase. */

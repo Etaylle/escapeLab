@@ -323,7 +323,18 @@ describe.each(CONSOLES)('$name', ({ nodes }) => {
 });
 
 describe('the stylesheet', () => {
-  it('stacks terminal over Schaltfeld on a phone held upright, side by side elsewhere', () => {
+  it('leaves the idle part out on a phone held sideways, the live one across the width', () => {
+    const sideways = SCREENS[2]?.screen ?? { width: 0, height: 0, coarse: true };
+    const laptop = SCREENS[0]?.screen ?? { width: 0, height: 0, coarse: false };
+    const idle = station(atTerminal()).find((n) => n.classes.includes('startup-board--idle'));
+    if (idle === undefined) {
+      throw new Error('no idle Schaltfeld rendered');
+    }
+    expect(sheets.hidden(idle, sideways)).toBe(true);
+    expect(sheets.hidden(idle, laptop)).toBe(false);
+  });
+
+  it('stacks terminal over Schaltfeld on a phone held upright, side by side on a laptop', () => {
     const device = station(atTerminal()).find((n) => n.classes.includes('startup-device'));
     if (device === undefined) {
       throw new Error('no device rendered');
@@ -334,7 +345,7 @@ describe('the stylesheet', () => {
       'minmax(0, 1fr)',
     );
     expect(columns(SCREENS[0]?.screen ?? { width: 0, height: 0, coarse: false })).toBe(
-      'minmax(0, 1.15fr) minmax(0, 1fr)',
+      'minmax(0, 1fr) auto',
     );
   });
 });

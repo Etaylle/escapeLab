@@ -10899,6 +10899,24 @@ function startupTook(player, input) {
   return terminal?.sent === true;
 }
 
+/** `setze <gap> <value>` typed at the prompt, Tab completing the command and the gap. */
+async function typeSetting(page, { gap, value }) {
+  await page.keyboard.type('se', { delay: 40 });
+  await page.keyboard.press('Tab');
+  await page.keyboard.type(gap.slice(0, 1), { delay: 40 });
+  await page.keyboard.press('Tab');
+  await page.keyboard.type(String(value), { delay: 40 });
+}
+
+/** A command put together on the terminal's keys in `modal`: its key, then a gap and a feeder. */
+async function keySetting(modal, input) {
+  await modal.locator(`.servers-key[data-cmd="${input.cmd}"]`).click();
+  if (input.cmd === 'setze') {
+    await modal.locator(`.servers-key[data-gap="${input.gap}"]`).click();
+    await modal.locator(`.startup-key[data-feeder="${input.value}"]`).click();
+  }
+}
+
 /**
  * A command of the plan at `player`'s terminal — `typed`: letter by letter, Tab completing the
  * command and the gap, else put together on the bezel's keys — and Enter or ⏎; it has to show
@@ -10907,27 +10925,17 @@ function startupTook(player, input) {
 async function startupCommand(player, input, typed) {
   const { page } = player;
   const modal = page.locator('.station-modal');
-  if (typed && input.cmd === 'setze') {
-    await page.keyboard.type('se', { delay: 40 });
-    await page.keyboard.press('Tab');
-    await page.keyboard.type(input.gap.slice(0, 1), { delay: 40 });
-    await page.keyboard.press('Tab');
-    await page.keyboard.type(String(input.value), { delay: 40 });
-  } else {
-    await modal.locator(`.servers-key[data-cmd="${input.cmd}"]`).click();
-    if (input.cmd === 'setze') {
-      await modal.locator(`.servers-key[data-gap="${input.gap}"]`).click();
-      await modal.locator(`.startup-key[data-feeder="${input.value}"]`).click();
-    }
-  }
+  await (typed && input.cmd === 'setze' ? typeSetting(page, input) : keySetting(modal, input));
   const line = await modal.locator('.servers-input').inputValue();
   await (typed ? page.keyboard.press('Enter') : modal.locator('.servers-key--enter').click());
   if (!(await until(() => startupTook(player, input), 3000))) {
-    const last = startupView(player)?.terminal?.log.at(-1)?.text ?? 'nothing';
-    throw new Error(`${player.name} sent „${line}", but it did not take: „${last}"`);
+    throw new Error(`${player.name} sent „${line}", but it did not take: „${lastLogged(player)}"`);
   }
   return line;
 }
+
+/** The last line of `player`'s terminal log; „nothing" where it shows none. */
+const lastLogged = (player) => startupView(player)?.terminal?.log.at(-1)?.text ?? 'nothing';
 
 /**
  * The plan's breaker at `player`'s Schaltfeld, closed once the ladder shows the pulse on its

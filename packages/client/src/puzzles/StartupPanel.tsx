@@ -134,19 +134,30 @@ function linesWith(change: StartupChange): StartupLogLine[] {
  * it —; a pulse sent with the terminal's two beeps.
  */
 export function startupSounds(change: StartupChange): void {
-  const { before, after } = change;
-  if ((after.closed?.length ?? 0) > (before.closed?.length ?? 0)) {
+  if (ranUpWith(change)) {
     relayClick();
     stageChime();
-    return;
-  }
-  const failed = linesWith(change).some((line) => line.tag === 'fail');
-  if (failed || (after.last === 'falsch' && before.last !== 'falsch')) {
+  } else if (failedWith(change)) {
     rejectBuzz();
-  } else if (after.terminal?.sent === true && before.terminal?.sent !== true) {
+  } else if (sentWith(change)) {
     okChime();
   }
 }
+
+/** Whether a change ran a stage up: a breaker more stands closed. */
+const ranUpWith = ({ before, after }: StartupChange): boolean =>
+  (after.closed?.length ?? 0) > (before.closed?.length ?? 0);
+
+/** Whether a change failed: a line of the log in FEHL, or the pulse killed by a wrong breaker. */
+function failedWith(change: StartupChange): boolean {
+  const { before, after } = change;
+  const wrong = after.last === 'falsch' && before.last !== 'falsch';
+  return wrong || linesWith(change).some((line) => line.tag === 'fail');
+}
+
+/** Whether a change sent a pulse: the terminal says one is off where it did not. */
+const sentWith = ({ before, after }: StartupChange): boolean =>
+  after.terminal?.sent === true && before.terminal?.sent !== true;
 
 // --- the terminal --------------------------------------------------------------------------
 
@@ -455,6 +466,15 @@ function Lamp({ colour, place }: { colour: LampColour; place: 'oben' | 'unten' }
   );
 }
 
+/** A control lamp of the idle Schaltfeld: its lens dark, nothing engraved to read. */
+function DarkLamp() {
+  return (
+    <span className="startup-lamp-cell">
+      <span className="startup-lamp startup-lamp--aus" aria-hidden="true" />
+    </span>
+  );
+}
+
 /** The LED ladder: a step a second from its foot, the window's steps marked at its top. */
 function Ladder(props: {
   steps: number;
@@ -554,8 +574,8 @@ function IdleBoard({ puzzle }: { puzzle: StartupPuzzle }) {
       <div className="startup-feeders" role="group" aria-label="Abgänge in Ruhe">
         {feeders.map((feeder) => (
           <div key={feeder} className="startup-feeder" data-feeder={feeder}>
-            <Lamp colour="aus" place="oben" />
-            <Lamp colour="aus" place="unten" />
+            <DarkLamp />
+            <DarkLamp />
             <Breaker feeder={feeder} closed={closed.includes(feeder)} onClose={null} />
           </div>
         ))}

@@ -134,24 +134,31 @@ export function playStartupProbe(seed = STARTUP_SEED): { state: GameState; plan:
   let state = manned(seed);
   for (let second = 1; state.currentPuzzleIndex === 0 && second < 600; second++) {
     const at = T0 + 1000 + second * 1000;
-    state = ticked(state, at);
-    const views = { operator: startupOf(state, 'p1'), partner: startupOf(state, 'p2') };
-    const typing = views.operator.role === 'terminal' ? views.operator : views.partner;
-    const board = views.operator.role === 'board' ? views.operator : views.partner;
-    if (plan.stages.at(-1)?.stage !== typing.stage) {
-      plan.stages.push(stageOf(typing, board));
-    }
-    const moves = moduleFor(def.type).solve(def, { ...views, reader: views.operator }, null);
-    for (const move of moves) {
-      const current = plan.stages.at(-1);
-      if (current !== undefined) {
-        noted(current, move);
-      }
-      const playerId = move.by === 'partner' ? 'p2' : 'p1';
-      state = applyAction(state, { type: 'puzzle-input', playerId, at, input: move.input });
-    }
+    state = round(def, ticked(state, at), plan, at);
   }
   return { state, plan };
+}
+
+/**
+ * One second of the crew at the probe at `at`: a new stage noted in `plan` as it opens, the
+ * solver's moves on both consoles' views, each noted and played through the reducer.
+ */
+function round(def: PuzzleDef, state: GameState, plan: StartupPlan, at: number): GameState {
+  const views = { operator: startupOf(state, 'p1'), partner: startupOf(state, 'p2') };
+  const typing = views.operator.role === 'terminal' ? views.operator : views.partner;
+  const board = views.operator.role === 'board' ? views.operator : views.partner;
+  if (plan.stages.at(-1)?.stage !== typing.stage) {
+    plan.stages.push(stageOf(typing, board));
+  }
+  const moves = moduleFor(def.type).solve(def, { ...views, reader: views.operator }, null);
+  const current = plan.stages.at(-1);
+  return moves.reduce((now, move) => {
+    if (current !== undefined) {
+      noted(current, move);
+    }
+    const playerId = move.by === 'partner' ? 'p2' : 'p1';
+    return applyAction(now, { type: 'puzzle-input', playerId, at, input: move.input });
+  }, state);
 }
 
 /** The plan the harness carries: what the probe deals on its pinned seed, stage by stage. */

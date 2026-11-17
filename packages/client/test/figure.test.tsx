@@ -187,6 +187,18 @@ describe('Figure', () => {
     expect(segments.filter((rect) => rect.includes('fill-opacity="0.7"'))).toHaveLength(9);
   });
 
+  it('frames a device it has no drawing for, naming its type, and never throws', () => {
+    for (const of of ['teleporter', 'constructor', '__proto__', '']) {
+      const { html, label } = drawing(of);
+      expect(html).toMatch(/^<svg class="figure" viewBox="0 0 376 140" role="img"/);
+      expect(label).toBe(`Gerät „${of}“, ohne Zeichnung`);
+      expect(html).toContain('stroke-dasharray="5 4"');
+      expect(html).toContain(`>${of}</text>`);
+    }
+  });
+});
+
+describe('Figure of the Anlaufsteuerung', () => {
   it('draws the LED ladder the Anlaufsteuerung’s rules show beside the window’s rules', () => {
     const def = puzzleDefSchema.parse({ type: 'startup', id: 'a', title: 'A' });
     const figures = moduleFor(def.type)
@@ -207,15 +219,5 @@ describe('Figure', () => {
     const steps = html.match(/<rect x="160"[^>]*>/g) ?? [];
     expect(steps).toHaveLength(9);
     expect(steps.filter((rect) => rect.includes('fill-opacity="0.7"'))).toHaveLength(7);
-  });
-
-  it('frames a device it has no drawing for, naming its type, and never throws', () => {
-    for (const of of ['teleporter', 'constructor', '__proto__', '']) {
-      const { html, label } = drawing(of);
-      expect(html).toMatch(/^<svg class="figure" viewBox="0 0 376 140" role="img"/);
-      expect(label).toBe(`Gerät „${of}“, ohne Zeichnung`);
-      expect(html).toContain('stroke-dasharray="5 4"');
-      expect(html).toContain(`>${of}</text>`);
-    }
   });
 });

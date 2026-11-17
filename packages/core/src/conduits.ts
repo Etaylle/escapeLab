@@ -48,8 +48,11 @@ type Tile = readonly [number, number];
 const adjacent = ([ax, ay]: Tile, [bx, by]: Tile): boolean =>
   Math.abs(ax - bx) + Math.abs(ay - by) === 1;
 
+/** A console's spot on the map. */
+type Spot = { x: number; y: number };
+
 /** Whether a tile lies on a console's tile or one of the eight round it. */
-const beside = ([x, y]: Tile, spot: { x: number; y: number }): boolean =>
+const beside = ([x, y]: Tile, spot: Spot): boolean =>
   Math.max(Math.abs(x - spot.x), Math.abs(y - spot.y)) <= 1;
 
 /** The spot of console `side` of the station of `puzzleId`; null where it has none. */
@@ -87,11 +90,15 @@ function endsIssue(map: MapDef, duct: ConduitDef): string | null {
   if (a === null || b === null || first === undefined || last === undefined) {
     return `station "${duct.puzzleId}" needs console a and console b for its duct to join`;
   }
-  const joins = (beside(first, a) && beside(last, b)) || (beside(first, b) && beside(last, a));
-  return joins
+  return joins([first, last], a, b)
     ? null
     : `the duct ends at ${first.join(',')} and ${last.join(',')} — put one end beside ` +
         `console a (${a.x},${a.y}) and the other beside console b (${b.x},${b.y})`;
+}
+
+/** Whether the ends `[first, last]` lie one beside console `a`, the other beside `b`. */
+function joins([first, last]: readonly [Tile, Tile], a: Spot, b: Spot): boolean {
+  return (beside(first, a) && beside(last, b)) || (beside(first, b) && beside(last, a));
 }
 
 /** What is wrong with one duct of the map; null where nothing is. */
