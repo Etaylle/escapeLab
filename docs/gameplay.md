@@ -539,15 +539,15 @@ the Leitstand, the token device in the Wache, the list on a clipboard by the ter
   token is a pure function of the run's seed, the account and the period (`tokenOf`, no TOTP
   library); the periods count from the moment the station came on, and the room ticks it at each
   period's end (`dueAt`), the module harness as well.
-- **The source** holds the whole lookup, dealt anew every run: the list of three accounts, each
-  with its role (one of the four roles stays unheld) and the two doors that role may release —
-  no door to two —, shown under the rules once the station is on, as the maze's walls are, with
-  „Notieren" beside it („Benutzerliste · Konten" on the probe's clipboard), so that a crew of two
-  can carry it to the consoles. The printed page names no role's doors; which account a door
-  needs is only decidable at the list. The device never opens on the account the terminal's
-  first door needs, so a crew that logs in whatever it shows first, without the list, takes an
-  alarm at that door in every run; it brings that account second or third at even odds, so a crew
-  that waits for a later turn instead takes one in about half the runs.
+- **The source** holds the whole lookup, dealt anew every run: the list of three accounts, each with
+  its role (one of the four roles stays unheld) and the two doors that role may release — no door to
+  two —, shown under the rules once the station is on, as the maze's walls are, with „Notieren"
+  beside it („Benutzerliste · Konten" on the probe's clipboard), so that a crew of two can carry it
+  to the consoles. The printed page names no role's doors; which account a door needs is only
+  decidable at the list. The device never opens on the account the terminal's first door needs, so a
+  crew that logs in whatever it shows first, without the list, takes an alarm at that door in every
+  run; it brings that account second or third at even odds, so a crew that waits for a later turn
+  instead takes one in about half the runs.
 - **The rules.** A login opens a session only with its account's token of the period it arrives
   in; the session stays open until the next login. A wrong token is a Fehlquittierung, an alarm;
   the third in a row for an account locks it for `lockSec` (45 s) on the station's clock, as the
@@ -613,7 +613,10 @@ binder, the Laborkennung between them), and with its bay in the Übungshalle.
   the whole page but meets no packet that turns on the sign or on a port pair; that reading
   load, six rules first-match against packets falling for 14 s, is the lab's heaviest. Every
   wave carries a decoy — a packet a rule in play further down would drop, which only the order
-  lets through. The default's three waves take about two minutes on the clock (118 s median
+  lets through: within rules 1, 2, 3 and 6 only a Wartungsnetz packet can be one, caught further
+  down by rule 2 in one wave and rule 6 in the next (a Labornetz decoy would need rule 4). Every
+  second wave also carries a trap: remote ports from the Labornetz over TCP, which rule 3 would let
+  through and rule 2 drops first. The default's three waves take about two minutes on the clock (118 s median
   over 200 seeds for the solver, 98–126 s), the moves never shortening a wave.
 - **A wave** is `packets` packets (5–9, default 7), two or three of them hostile, coming on one
   after another a quarter of a fall apart, each on a line nothing came onto for 0.6 of a fall —
@@ -636,13 +639,14 @@ binder, the Laborkennung between them), and with its bay in the Übungshalle.
   policy lets through is in the Kern once through. A move the clock overtook — the station
   solved, or an alarm raised, by the move's moment — counts for nothing and is refused by none.
 - **Needs two.** A wave runs only while both consoles are manned, and holds — the packets frozen
-  and dimmed where they stand under HALT across the scope — while one stands empty or the run
-  stands still; the status line says „Analysepult unbesetzt · Pakete halten" (or the
-  Sperrpult; „Pakete halten" alone while the run stands still, never that the viewer's own
+  where they stand, the Sperrpult's points dimmed, the Analysepult's cards as readable as ever
+  (marks go on during a hold), HALT over the lines' numbers, never across a card — while one stands
+  empty or the run stands still; the status line says „Analysepult unbesetzt · Pakete halten" (or
+  the Sperrpult; „Pakete halten" alone while the run stands still, never that the viewer's own
   console is empty), and a trip refused then „Am Analysepult steht niemand.", as the other
-  two-console modules word it. The partner LED names who stands at the other console. A crew of three has
-  its third read the policy at the source while B marks; with two, B walks to the policy — the
-  wave holds meanwhile, which is the intended way to read — and may take the rules into the
+  two-console modules word it. The partner LED names who stands at the other console. A crew of
+  three has its third read the policy at the source while B marks; with two, B walks to the policy —
+  the wave holds meanwhile, which is the intended way to read — and may take the rules into the
   notepad with the Notieren beside them.
 
 The module is the first whose station runs on the clock and on its consoles' presence: its
@@ -677,7 +681,9 @@ The walkthrough drills the probe in a Systemcheck run (group `firewall`; `SHOTS_
 leaves it out, Blackout's run logs it as left out), following the pages, never the plan's
 seconds: FREIGABE where a wave waits, a mark on every packet the plan says the policy drops — in
 any wave the run may deal, a called-off one included —, a trip under every ring
-(firewall-policy.png, firewall-phone-932.png, firewall-headers.png, firewall-gate.png).
+(firewall-policy.png, firewall-phone-932.png, firewall-headers.png, firewall-gate.png), and once
+mid-wave the Sperrpult's player walks off: the held Analysepult, every card drawn whole
+(firewall-held.png).
 
 ## Captures in the notepad
 
