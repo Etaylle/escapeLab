@@ -126,8 +126,8 @@ describe('rotation: what the views give of a station out of service', () => {
       }
     }
     const won = JSON.stringify(viewFor(playProbe(probeSeeds().played).state, 'p1'));
-    expect(RESTING.flatMap((id) => secretsOf(freshRun().mission, id)).filter((s) => won.includes(s)))
-      .toEqual([]);
+    const secrets = RESTING.flatMap((id) => secretsOf(freshRun().mission, id));
+    expect(secrets.filter((secret) => won.includes(secret))).toEqual([]);
   });
 
   it('counts a player at its console or its source at no place, with no page and no device', () => {
