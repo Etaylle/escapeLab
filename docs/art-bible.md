@@ -1322,9 +1322,12 @@ The Flur's paired differences change sign from round to round and between two ru
 −2.99): no cost without a duct. The duct itself is baked with the floor and costs no frame. A
 running pulse first cost +0.7 ms paired with 34 bake frames on its first pass along a duct, about
 1.6 ms dearer each: the glow pass baked a clipped pool for every quarter-tile spot. A light that
-moves (`LightSource.moving`) is now laid from one radial sprite where it stands, unclipped over
-its tile and a half (render/glow.ts `layMoving`): no bake frame left, +1.34 ms mean paired (+0.45
-to +2.96 a round) and +0.5 at p95, the sprite's copy added onto the picture and its core. The
+moves (`LightSource.moving`) is now laid from one radial sprite where it stands (render/glow.ts
+`layMoving`): no bake frame left, +1.34 ms mean paired (+0.45 to +2.96 a round) and +0.5 at p95,
+the sprite's copy added onto the picture and its core, measured before review round 1 put it
+under the clip of its spot (clips.ts, a sight worked out once a quarter-tile spot and kept); a
+rerun with the clip at a load of 6 to 10 ranged −12 to +13 ms a round and says nothing, so the
+clip's share is not measured. The
 Übungshalle came +1.55 ms dearer against main where the new bay stands, in five rounds of six,
 the per-pass split in the bay's station, book, desk and their light (objects +1.0, light +0.7,
 darkness +0.6, beacons +0.4); an access bay of main's own in the same place costs as much or more
