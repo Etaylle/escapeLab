@@ -344,13 +344,14 @@ function lastThrough(def: FirewallDef, state: FirewallState): number {
 }
 
 /**
- * The lowest packet on `line` at wave time `t` as a trip finds it: the one longest on it — a
- * hostile one just through still within TRIP_GRACE_MS, whose fault is not judged yet; one the
- * policy lets through is in the Kern once through, as every console shows it. Undefined for none.
+ * The lowest packet on `line` at wave time `t` as a trip finds it: the one longest on it — one
+ * just through still within TRIP_GRACE_MS where it wears a mark, as every honest late trip's
+ * packet does: the grace answers the trip's way to the server, never a question the policy
+ * should answer, so an unmarked packet is in the Kern once through. Undefined for none.
  */
 function lowestOn(def: FirewallDef, state: FirewallState, line: number, t: number) {
   const onLine = (p: FirewallPacket): boolean => {
-    const grace = p.hostile ? TRIP_GRACE_MS : 0;
+    const grace = state.marks.includes(p.id) ? TRIP_GRACE_MS : 0;
     return p.line === line && falling(def, state, p, { t, grace });
   };
   return state.packets.find(onLine);
@@ -405,17 +406,15 @@ function drawnHeader(rule: number, digit: number, rng: Rng): FirewallHeader {
 }
 
 /**
- * A header that `rule` decides (BASE_RULE: the Grundregel) — and that rule `alsoFits` fits too,
- * further down the list, where one is named: a decoy, which a later rule would drop and only the
- * order lets through, or a trap, which a later rule would let through and the order drops.
+ * A header that `rule` decides (BASE_RULE: the Grundregel) — and that `looks` as asked, where it
+ * asks: a decoy, which a later rule would drop and only the order lets through, or a trap.
  * Throws where none comes in DRAW_TRIES draws: the rules leave no such packet.
  */
-function headerFor(rule: number, alsoFits: number | null, digit: number, rng: Rng) {
+function headerFor(rule: number, looks: Slot['looks'], digit: number, rng: Rng) {
   for (let i = 0; i < DRAW_TRIES; i++) {
     const header = drawnHeader(rule, digit, rng);
     const decided = decidingRule(header, digit) === rule;
-    const also = alsoFits === null || FIREWALL_POLICY[alsoFits]?.fits(header, digit) === true;
-    if (decided && also) {
+    if (decided && (looks?.(header) ?? true)) {
       return header;
     }
   }
@@ -448,29 +447,73 @@ function rulesOfWave(state: FirewallState, count: number, hostile: number, wave:
   return { hostiles, decoy, catcher, others };
 }
 
-/**
- * The rule that lets through further down the list than a rule that drops, by that rule: what
- * makes a hostile packet of it a trap — only the order drops it. Rule 2's remote ports over TCP
- * from the Labornetz, which rule 3 would let through.
- */
-const TRAP_PASSES: Readonly<Record<number, number>> = { 1: 2 };
+/** Ports that look like trouble and are none of rule 2's: what a Labornetz trap may carry. */
+const LOOKS_SUSPICIOUS: readonly number[] = [22, 135, 445, 3128, 6667];
 
 /**
- * The slots of a wave as dealt (`rulesOfWave`): each deciding rule, and the rule a decoy or a
- * trap fits besides. Every wave has its decoy; every second one, from the second, a trap too,
- * where the instance plays the rule it needs.
+ * A packet a crew that reads the rules in no order, or only half of them, gets wrong: the rule
+ * that decides it, the rules the instance has to play for it, and what it looks like besides.
+ */
+interface TrapKind {
+  rule: number;
+  needs: readonly number[];
+  looks: (header: FirewallHeader) => boolean;
+}
+
+/** The traps the four simplest rules can set. */
+const TRAPS: readonly TrapKind[] = [
+  // the Labornetz over TCP on a port that looks like trouble: rule 3 lets it through
+  { rule: 2, needs: [2], looks: (h) => LOOKS_SUSPICIOUS.includes(h.port) },
+  // the Labornetz over UDP, looking friendly: rule 3 does not fit, rule 6 drops it
+  { rule: 5, needs: [5], looks: fromLabNet },
+  // the Wartungsnetz on a remote port: rule 1 lets it through before rule 2
+  { rule: 0, needs: [0, 1], looks: (h) => REMOTE_PORTS.includes(h.port) },
+  // the Labornetz over TCP on a remote port: rule 2 drops it before rule 3
+  { rule: 1, needs: [1, 2], looks: (h) => fromLabNet(h) && h.protocol === 'TCP' },
+];
+
+/** What the instance's trap order is drawn from, a stream of its own. */
+const TRAP_STREAM = 0x54524150;
+
+/**
+ * The trap of wave `wave`: the kinds the instance's rules can set, in an order its seed draws,
+ * one a wave in turn — so that one wave's differs from the next where two or more can be set.
+ */
+function trapOf(state: FirewallState, wave: number): TrapKind | undefined {
+  const kinds = TRAPS.filter((kind) => kind.needs.every((rule) => state.exercised.includes(rule)));
+  const order = shuffle(kinds, mulberry32((state.seed ^ TRAP_STREAM) >>> 0));
+  return order[wave % Math.max(1, order.length)];
+}
+
+/** A slot of a wave: the rule that decides its packet, and what that packet has to look like. */
+interface Slot {
+  rule: number;
+  looks: ((header: FirewallHeader) => boolean) | null;
+}
+
+/** `slots` with the one of `rule` — else the first — set to `trap`'s look and rule. */
+function trapped(slots: readonly number[], trap: TrapKind): Slot[] {
+  const at = Math.max(0, slots.indexOf(trap.rule));
+  return slots.map((rule, i) =>
+    i === at ? { rule: trap.rule, looks: trap.looks } : { rule, looks: null },
+  );
+}
+
+/**
+ * The slots of a wave as dealt (`rulesOfWave`): every wave its decoy, caught by the rule
+ * `rulesOfWave` names, and its trap (`trapOf`) in place of a slot of the same verdict.
  */
 function slotsOfWave(state: FirewallState, count: number, hostile: number, wave: number) {
   const { hostiles, decoy, catcher, others } = rulesOfWave(state, count, hostile, wave);
-  const trapRule = hostiles.find((rule) => state.exercised.includes(TRAP_PASSES[rule] ?? -1));
-  const trapped = wave % 2 === 1 && trapRule !== undefined;
-  const trap = trapped ? hostiles.indexOf(trapRule) : -1;
-  const besides = (rule: number, i: number): number | null =>
-    i === trap ? (TRAP_PASSES[rule] ?? null) : null;
+  const trap = trapOf(state, wave);
+  const plain = (rules: readonly number[]): Slot[] => rules.map((rule) => ({ rule, looks: null }));
+  const drops = trap !== undefined && verdictOfRule(trap.rule) === 'sperren';
+  const passes = trap !== undefined && !drops;
+  const caught = (h: FirewallHeader) => FIREWALL_POLICY[catcher]?.fits(h, state.digit) === true;
   return [
-    ...hostiles.map((rule, i) => ({ rule, alsoFits: besides(rule, i) })),
-    { rule: decoy, alsoFits: catcher },
-    ...others.map((rule) => ({ rule, alsoFits: null })),
+    ...(drops ? trapped(hostiles, trap) : plain(hostiles)),
+    { rule: decoy, looks: catcher === undefined ? null : caught },
+    ...(passes ? trapped(others, trap) : plain(others)),
   ];
 }
 
@@ -485,7 +528,7 @@ function lineFor(placed: readonly FirewallPacket[], enterMs: number, fallMs: num
 /**
  * Wave `wave` (0-based) of an instance: `packets` of them, two or three hostile, their deciding
  * rules as `rulesOfWave` deals them in an order of their own, coming on one after the other from
- * FIREWALL_PAUSE_MS on, each on a line nothing came onto for half a fall.
+ * FIREWALL_PAUSE_MS on, each on a line nothing came onto for SAME_LINE_GAP of a fall.
  */
 export function dealWave(def: FirewallDef, state: FirewallState, wave: number): FirewallPacket[] {
   const rng = mulberry32((state.seed + wave * 7919) >>> 0);
@@ -495,7 +538,7 @@ export function dealWave(def: FirewallDef, state: FirewallState, wave: number): 
   const placed: FirewallPacket[] = [];
   let enterMs = FIREWALL_PAUSE_MS;
   for (const [n, slot] of slots.entries()) {
-    const header = headerFor(slot.rule, slot.alsoFits, state.digit, rng);
+    const header = headerFor(slot.rule, slot.looks, state.digit, rng);
     const line = lineFor(placed, enterMs, fallMs, rng);
     const hostileHere = verdictOfRule(slot.rule) === 'sperren';
     placed.push({ id: `${wave + 1}-${n + 1}`, line, enterMs, header, hostile: hostileHere });

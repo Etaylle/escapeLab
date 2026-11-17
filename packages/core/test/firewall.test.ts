@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
   applyAction,
+  moduleFor,
   puzzleDefSchema,
   puzzleDueAt,
   stationKey,
@@ -20,6 +21,7 @@ import {
   FIREWALL_POLICY,
   firewallModule,
   RULES_HEADING,
+  SAME_LINE_GAP,
   TRIP_GRACE_MS,
   fitsADropRule,
   hostileByPolicy,
@@ -190,19 +192,33 @@ describe('the rules in play', () => {
 describe('a wave', () => {
   it(`varies what a default wave teaches of the order, for ${SEEDS} seeds`, () => {
     const fits = (rule: number, h: FirewallHeader) => FIREWALL_POLICY[rule]?.fits(h, 4) === true;
+    const lab = (h: FirewallHeader) => h.source.startsWith('10.4.');
+    // the four traps the simplest rules set, by what decides them and how they look
+    const kinds: [string, (p: FirewallPacket) => boolean][] = [
+      ['lab-tcp', (p) => !p.hostile && lab(p.header) && p.header.protocol === 'TCP'],
+      ['lab-udp', (p) => p.hostile && lab(p.header) && p.header.protocol === 'UDP'],
+      ['service-remote', (p) => !p.hostile && fits(0, p.header) && fits(1, p.header)],
+      ['lab-remote', (p) => p.hostile && lab(p.header) && fits(1, p.header)],
+    ];
+    const seen = new Set<string>();
     for (let seed = 0; seed < SEEDS; seed++) {
       const state = fresh(seed);
-      const [first, second] = [0, 1].map((wave) => dealWave(DEF, state, wave));
+      const waves = [0, 1, 2, 3].map((wave) => dealWave(DEF, state, wave));
+      const [first, second] = waves;
       // the Wartungsnetz's decoy, caught further down by rule 2 in one wave and rule 6 in the next
       const decoy = (wave: FirewallPacket[] = [], by: number) =>
         wave.some((p) => !p.hostile && fits(0, p.header) && fits(by, p.header));
       expect(decoy(first, 1), `seed ${seed}`).toBe(true);
       expect(decoy(second, 5), `seed ${seed}`).toBe(true);
-      // a trap in the second: remote ports from the Labornetz over TCP, which rule 2 drops first
-      const trap = (wave: FirewallPacket[] = []) =>
-        wave.some((p) => p.hostile && fits(1, p.header) && fits(2, p.header));
-      expect(trap(second), `seed ${seed}`).toBe(true);
+      // a trap in every wave, and every kind of trap in the four waves
+      const trapsOf = (wave: FirewallPacket[]) =>
+        kinds.filter(([, is]) => wave.some(is)).map(([name]) => name);
+      const present = waves.map(trapsOf);
+      expect(present.every((names) => names.length > 0), `seed ${seed}`).toBe(true);
+      expect(new Set(present.flat()), `seed ${seed}`).toEqual(new Set(kinds.map(([n]) => n)));
+      present.flat().forEach((name) => seen.add(name));
     }
+    expect(seen.size).toBe(4);
   });
 
   it(`has two or three hostile packets, by the policy, and a decoy, for ${SEEDS} seeds`, () => {
@@ -243,7 +259,9 @@ describe('a wave', () => {
     }
   });
 
-  it(`comes on one after another, half a fall apart on a line, for ${SEEDS} seeds`, () => {
+  it(`comes on one after another, 0.6 of a fall apart on a line, for ${SEEDS} seeds`, () => {
+    // the share the consoles' geometry holds two cards of a line apart by (client firewall.css)
+    expect(SAME_LINE_GAP).toBe(0.6);
     for (let seed = 0; seed < SEEDS; seed++) {
       const { packets } = fresh(seed, defOf({ packets: 9 }));
       expect(packets[0]?.enterMs).toBe(FIREWALL_PAUSE_MS);
@@ -253,7 +271,7 @@ describe('a wave', () => {
         const before = packets.slice(0, i);
         expect(before.every((p) => p.enterMs < packet.enterMs)).toBe(true);
         const sameLine = before.filter((p) => p.line === packet.line);
-        expect(sameLine.every((p) => packet.enterMs - p.enterMs >= FALL_MS / 2)).toBe(true);
+        expect(sameLine.every((p) => packet.enterMs - p.enterMs >= FALL_MS * 0.6)).toBe(true);
       }
     }
   });
@@ -464,16 +482,21 @@ describe('a late trip', () => {
     expect(done.state).toMatchObject({ cleared: 1 });
   });
 
-  it(`still takes a packet just through the Kern line, ${TRIP_GRACE_MS} ms at most`, () => {
-    const state = running(2);
-    const i = state.packets.findIndex((p) => p.hostile);
-    const line = state.packets[i]?.line ?? 0;
-    const lower = state.packets.some((p, j) => j < i && p.line === line);
+  it('still takes a marked packet just through the Kern line, 300 ms at most', () => {
+    const unmarked = running(2);
+    const i = unmarked.packets.findIndex((p) => p.hostile);
+    const line = unmarked.packets[i]?.line ?? 0;
+    const lower = unmarked.packets.some((p, j) => j < i && p.line === line);
     expect(lower, 'the first hostile packet is the first on its line').toBe(false);
+    const state = { ...unmarked, marks: [unmarked.packets[i]?.id ?? ''] };
     // half a slow round trip after the packet reached the line on the server's clock
     const late = moved(state, arrives(state, i) + 200, 'a', { trip: line });
     expect(late.penalty).toBeNull();
     expect(late.state.dropped).toEqual([state.packets[i]?.id]);
+    // unmarked, it is in the Kern once through: the grace answers no question of the policy's
+    const blind = moved(unmarked, arrives(state, i) + 200, 'a', { trip: line });
+    expect(blind.state).toMatchObject({ dropped: [] });
+    expect(blind.state.event).toMatchObject({ kind: 'void' });
     expect(at(state, arrives(state, i) + 200).penalty).toBeNull();
     const tooLate = at(state, arrives(state, i) + 400);
     expect(tooLate.penalty).toBe('Paketfilter: Angriff im Kern');
@@ -515,6 +538,58 @@ describe('a late trip', () => {
     const done = at(dropped, last + 1000, BOTH, def);
     expect(done.solved).toBe(true);
     expect(done.state.event).toMatchObject({ kind: 'done' });
+  });
+});
+
+/**
+ * A Sperrpult on its own, which never marks and trips a line 150 ms after each packet left it,
+ * whenever no other packet is on it — a hostile one would drop in a grace given to every packet,
+ * a harmless one cost nothing —,
+ * pressing the Freigabe for every wave: the waves it cleared, the packets it dropped, its alarms.
+ */
+function graceAlone(seed: number, waves: number) {
+  let state = running(seed);
+  const tally = { cleared: 0, dropped: 0, alarms: 0 };
+  for (let wave = 0; wave < waves; wave++) {
+    const trips = state.packets
+      .map((p) => ({ when: state.startedAt + p.enterMs + FALL_MS + 150, line: p.line, id: p.id }))
+      .sort((p, q) => p.when - q.when);
+    const dealt = state.dealt;
+    for (const { when, line, id } of trips) {
+      const t = when - state.startedAt;
+      const others = state.packets.some(
+        (p) => p.id !== id && p.line === line && p.enterMs <= t && t < p.enterMs + FALL_MS,
+      );
+      if (others) {
+        continue;
+      }
+      const now = at(state, when);
+      tally.alarms += now.penalty === null ? 0 : 1;
+      if (now.state.dealt !== dealt) {
+        state = now.state;
+        break;
+      }
+      const tripped = firewallModule.apply(DEF, now.state, { trip: line }, 'op', ctx(when, 'a'));
+      tally.alarms += tripped.penalty === null ? 0 : 1;
+      tally.dropped += tripped.state.event?.kind === 'drop' ? 1 : 0;
+      state = tripped.state;
+    }
+    const end = at(state, state.startedAt + 120_000);
+    tally.alarms += end.penalty === null ? 0 : 1;
+    tally.cleared = Math.max(tally.cleared, end.state.cleared);
+    const go = state.startedAt + 130_000;
+    state = firewallModule.apply(DEF, at(end.state, go).state, { start: true }, 'op', ctx(go, 'a'))
+      .state;
+  }
+  return tally;
+}
+
+describe('the grace', () => {
+  it('answers no question of the policy: a Sperrpult alone, tripping in it, drops nothing', () => {
+    for (let seed = 0; seed < 100; seed++) {
+      // the bound: in three waves not one packet dropped, not one wave clean, an alarm in each
+      expect(graceAlone(seed, 3), `seed ${seed}`).toEqual({ cleared: 0, dropped: 0, alarms: 3 });
+    }
   });
 });
 
@@ -686,7 +761,58 @@ describe('the Paketfilter through the reducer', () => {
 
 });
 
+/**
+ * The probe on `seed` worked by the solver through the reducer, a second at a time, ticked as the
+ * room ticks it, up to the moment its last wave is clean on the clock — not ticked to it: the
+ * state then, and that moment.
+ */
+function beforeTheSolve(seed: number): { state: GameState; clean: number } {
+  let state = open(seed);
+  for (let second = 2; second < 600; second++) {
+    const at = T0 + second * 1000;
+    const due = puzzleDueAt(state);
+    const station = fw(state);
+    const out = (p: FirewallPacket): boolean => !p.hostile || station.dropped.includes(p.id);
+    const last = station.cleared === 1 && station.packets.every(out);
+    if (last && due !== null) {
+      return { state, clean: due };
+    }
+    state = due !== null && due <= at ? applyAction(state, { type: 'puzzle-tick', at }) : state;
+    const views = { operator: firewallViewOf(state, 'p1'), partner: firewallViewOf(state, 'p2') };
+    const aid = { transcript: [], remainingSec: null, at };
+    const def = state.mission.puzzles[0];
+    if (def === undefined) {
+      break;
+    }
+    const seen = { ...views, reader: views.partner };
+    for (const { by, input } of moduleFor(def.type).solve(def, seen, state.edgework, aid)) {
+      const playerId = by === 'partner' ? 'p2' : 'p1';
+      state = applyAction(state, { type: 'puzzle-input', playerId, at, input });
+    }
+  }
+  throw new Error(`seed ${seed}: the probe's last wave never stood before its clean end`);
+}
+
+/** The open Paketfilter as `playerId` sees it. */
+function firewallViewOf(state: GameState, playerId: string): FirewallView {
+  const view = viewFor(state, playerId).puzzle;
+  if (view?.kind !== 'firewall') {
+    throw new Error(`${playerId} sees no open Paketfilter`);
+  }
+  return view;
+}
+
 describe('the Paketfilter through the reducer, on its own', () => {
+  it('answers a move the clock’s solve overtook with the solve, refusing none', () => {
+    const { state, clean } = beforeTheSolve(3);
+    expect(state.currentPuzzleIndex).toBe(0);
+    const input = { trip: 0 };
+    const late = { type: 'puzzle-input' as const, playerId: 'p1', at: clean + 500, input };
+    const after = applyAction(state, late);
+    expect(after.currentPuzzleIndex).toBe(1);
+    expect(after.penaltySeq).toBe(0);
+  });
+
   it('charges a hostile packet in the Kern on the room’s tick, to nobody', () => {
     const state = open();
     const first = fw(state).packets.findIndex((p) => p.hostile);

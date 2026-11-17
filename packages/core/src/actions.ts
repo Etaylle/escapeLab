@@ -227,13 +227,12 @@ export function applyAction(state: GameState, action: Action): GameState {
 }
 
 /**
- * Whether bringing the station to a move's moment (`clocked`) raised an alarm, solved it or ended
- * the run.
+ * Whether bringing the station to a move's moment (`clocked`) raised an alarm or solved it — the
+ * only ways the clock ends a run there too.
  */
 const overtaken = (state: GameState, clocked: GameState): boolean =>
   clocked.penaltySeq !== state.penaltySeq ||
-  clocked.currentPuzzleIndex !== state.currentPuzzleIndex ||
-  clocked.phase !== state.phase;
+  clocked.currentPuzzleIndex !== state.currentPuzzleIndex;
 
 function reduced(state: GameState, action: Action): GameState {
   switch (action.type) {

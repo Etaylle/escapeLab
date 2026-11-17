@@ -38,9 +38,9 @@
         { "by": "partner", "input": { "mark": "1-3" } },
         { "by": "operator", "input": { "trip": 1 } },
         { "by": "partner", "input": { "mark": "1-5" } },
-        { "by": "operator", "input": { "trip": 0 } },
+        { "by": "operator", "input": { "trip": 3 } },
         { "by": "partner", "input": { "mark": "2-2" } },
-        { "by": "operator", "input": { "trip": 4 } },
+        { "by": "operator", "input": { "trip": 2 } },
         { "by": "partner", "input": { "mark": "2-3" } },
         { "by": "operator", "input": { "trip": 1 } }
       ],

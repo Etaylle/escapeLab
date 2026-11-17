@@ -112,6 +112,20 @@ describe('the Paketfilter on its own', () => {
     }
   });
 
+  it(`takes an alarm in most seeds from a crew that learned half the page, of ${SEEDS}`, () => {
+    // „the Wartungsnetz passes, the rest of UDP drops": rules 1 and 6 alone, no order kept
+    const half: FirewallJudge = (h) => !h.source.startsWith('10.9.') && h.protocol === 'UDP';
+    let alarms = 0;
+    for (let seed = 0; seed < SEEDS; seed++) {
+      try {
+        playInstance(def, seed, crewJudging(half));
+      } catch (error) {
+        alarms += /alarm/.test(String(error)) ? 1 : 0;
+      }
+    }
+    expect(alarms).toBeGreaterThanOrEqual(SEEDS * 0.9);
+  });
+
   it.each(guesses)('takes an alarm in every seed from a crew marking %s', (_name, judge) => {
     for (let seed = 0; seed < SEEDS; seed++) {
       expect(() => playInstance(def, seed, crewJudging(judge)), `seed ${seed}`).toThrow(/alarm/);

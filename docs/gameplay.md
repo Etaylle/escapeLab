@@ -666,7 +666,7 @@ taken out, a blip as one reaches the Kern, a chime for a clean wave; the fault's
 solve's chord are the kit's.
 
 `core/test/firewall.test.ts` holds the policy's first-match rule, the waves (two or three hostile
-by the policy, a decoy in each, the rules exercised, half a fall apart on a line), the clock on a
+by the policy, a decoy in each, the rules exercised, 0.6 of a fall apart on a line), the clock on a
 fake clock with a second's slack at the boundaries, what a trip hits, the one-alarm-per-wave cap,
 the hold while a console stands empty or the server is down, the views (no header at A, no
 packet still to come and no hostility anywhere), the reducer's tick and the probe with its plan
