@@ -5,10 +5,13 @@ import {
   powerRoom,
   roomArea,
   roomFloor,
+  bringsLight,
   roomLights,
+  roomOn,
   roomsComingOn,
   startRoom,
   type RoomLights,
+  type RoomOn,
 } from '../src/world/rooms.js';
 
 /**
@@ -140,11 +143,14 @@ type LabelledMap = {
   labels: { text: string; x: number; y: number; brightness?: number }[];
 };
 
+/** A map as its file has it: doors without a state, and none where it has none. */
+type FileMap = Omit<LabelledMap, 'doors'> & { doors?: Omit<LabelledMap['doors'][number], 'open'>[] };
+
 /** The map of `missions/<id>.json`, its doors shut (a map without doors leaves them out). */
 function missionMap(id: string): LabelledMap {
   const { map } = JSON.parse(
     readFileSync(new URL(`../../../missions/${id}.json`, import.meta.url), 'utf8'),
-  ) as { map: Omit<LabelledMap, 'doors'> & { doors?: Omit<LabelledMap['doors'][number], 'open'>[] } };
+  ) as { map: FileMap };
   return { ...map, doors: (map.doors ?? []).map((door) => ({ ...door, open: false })) };
 }
 
@@ -223,6 +229,44 @@ describe('roomLights — how brightly a floor burns', () => {
     for (const room of ['MASCHINENRAUM', 'SERVERRAUM', 'LABOR', 'REAKTOR']) {
       expect(roomLights(lab, room, new Map()).brightness).toBe(1);
     }
+  });
+});
+
+describe('roomOn — since when a room’s lights are on', () => {
+  /** `room` coming on at `since` over the rooms lit in `lit`, which takes it in. */
+  function on(map: LabelledMap, lit: Map<string, RoomOn>, room: string, since: number): RoomOn {
+    const coming = roomOn(map, room, lit, since);
+    lit.set(room, coming);
+    return coming;
+  }
+
+  it('keeps the first name’s time for a name coming on later on a floor lit already', () => {
+    const lab = missionMap('blackout');
+    const lit = new Map<string, RoomOn>();
+    expect(on(lab, lit, 'FLUR', 3).since).toBe(3);
+    expect(on(lab, lit, 'ARCHIV', 9)).toEqual({ tiles: [], since: 3, brightness: 1 });
+    // A floor lit before the screen looked stays lit since then for its later names too.
+    const long = new Map<string, RoomOn>();
+    on(lab, long, 'FLUR', -Infinity);
+    expect(on(lab, long, 'ARCHIV', 9).since).toBe(-Infinity);
+  });
+
+  it('starts a name on two floors, one lit already, now: its other floor warms up', () => {
+    const both = [...labels, { text: 'OST', x: 2, y: 3 }];
+    const map = { tiles, doors, labels: both };
+    const lit = new Map<string, RoomOn>();
+    on(map, lit, 'WEST', 1);
+    const east = on(map, lit, 'OST', 5);
+    expect(east).toEqual({ tiles: roomArea(map, { x: 6, y: 1 }), since: 5, brightness: 1 });
+  });
+
+  it('brings light — the relay’s click — only where a tile comes on', () => {
+    const lab = missionMap('blackout');
+    const lit = new Map<string, RoomOn>();
+    expect(bringsLight([on(lab, lit, 'FLUR', 3)])).toBe(true);
+    expect(bringsLight([on(lab, lit, 'ARCHIV', 9)])).toBe(false);
+    expect(bringsLight([on(lab, lit, 'ARCHIV', 9), on(lab, lit, 'LABOR', 9)])).toBe(true);
+    expect(bringsLight([])).toBe(false);
   });
 });
 

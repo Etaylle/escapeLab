@@ -111,6 +111,44 @@ export function roomLights(
   return { tiles, same, brightness };
 }
 
+/** A room's lights as they come on (`roomOn`): the client keeps them with a path of their tiles. */
+export interface RoomOn {
+  /** the tiles they add to the rooms lit already: none for a floor lit already */
+  tiles: Spot[];
+  /** since when they are on (sim time): a floor's first name's, where they add no tile */
+  since: number;
+  /** how brightly they burn (`RoomLights`) */
+  brightness: number;
+}
+
+/**
+ * The lights of the room `room` coming on at `since` (sim time) over the rooms lit already
+ * (`lit`, by name): what they add (`roomLights`), and since when they are on. A name that adds
+ * no tile — its floor lit by another name already — is on since that name, so that what stands
+ * there under it (sources.ts `powerAt`) does not warm up a second time. A name with labels on two
+ * floors, one lit already, is on since now, as its other floor warms up from now: a source on
+ * the floor lit before warms up again under that name. No mission names two floors so; the
+ * lights of one name keep one `since`.
+ */
+export function roomOn(
+  map: Pick<MapView, 'tiles' | 'doors' | 'labels'>,
+  room: string,
+  lit: ReadonlyMap<string, { tiles: readonly Spot[]; since: number }>,
+  since: number,
+): RoomOn {
+  const { tiles, same, brightness } = roomLights(map, room, lit);
+  const first = tiles.length === 0 && same !== null ? lit.get(same) : undefined;
+  return { tiles, since: first?.since ?? since, brightness };
+}
+
+/**
+ * Whether rooms coming on (`roomOn`) bring light onto the screen — the relay's click, which
+ * says so: some tile of theirs comes on. Names whose floors were lit already bring none.
+ */
+export function bringsLight(rooms: readonly RoomOn[]): boolean {
+  return rooms.some((room) => room.tiles.length > 0);
+}
+
 /** A room lit whole: its tiles by key, and as runs along their rows. */
 export interface RoomLight {
   keys: ReadonlySet<string>;
