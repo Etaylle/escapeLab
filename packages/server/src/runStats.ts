@@ -1,16 +1,54 @@
 import {
   DIFFICULTIES,
+  poolsOf,
   runSeconds,
   utcDay,
   type DailyStats,
   type Difficulty,
   type DifficultyStats,
   type LeaderEntry,
+  type Mission,
   type MissionStats,
   type RunPlace,
 } from '@escapelab/core';
 import { median } from './runSummary.js';
 import type { LoggedRun } from './store/store.js';
+
+/**
+ * Whether a run stands on the Bestenliste: every reader of the stats — the list, a run's place
+ * on its end card, a mission card's best time and share won, the Tagesschicht's days — counts
+ * the runs this says yes to, and no other. A run it leaves out stays kept and stays in „Meine
+ * Einsätze"; nothing is deleted.
+ */
+export type Ranking = (run: LoggedRun) => boolean;
+
+/** Every run stands on the list: the rule of a server that knows no missions. */
+const everyRun: Ranking = () => true;
+
+/**
+ * Whether `run` names, for every Wechselplatz of the `mission` it played as the mission stands
+ * now, the station it drew there. A mission without one asks nothing. One that has them was
+ * another chain of stations before it got them: a run from then names no draw, was shorter or
+ * longer than any run can be now, and would hold places no crew of today can take.
+ */
+export function namesItsDraw(mission: Pick<Mission, 'puzzles'>, run: LoggedRun): boolean {
+  const drawn: Readonly<Record<string, string>> = run.drawn ?? {};
+  return [...poolsOf(mission.puzzles)].every(([pool, members]) =>
+    members.includes(Object.hasOwn(drawn, pool) ? (drawn[pool] ?? '') : ''),
+  );
+}
+
+/**
+ * The ranking over the missions `known` has now, by id: a run of a mission with a Wechselplatz
+ * counts where it names its draw (`namesItsDraw`); a run of a mission nobody knows any more —
+ * a custom one deleted since — counts as it always did.
+ */
+export function rankingOf(known: () => readonly Mission[]): Ranking {
+  return (run) => {
+    const mission = known().find((each) => each.id === run.missionId);
+    return mission === undefined || namesItsDraw(mission, run);
+  };
+}
 
 /** How many of the fastest won runs each mission keeps by name at each difficulty. */
 export const TOP_RUNS = 10;
@@ -161,28 +199,46 @@ const isDaily = (run: LoggedRun): boolean => run.version === 2 && run.daily === 
  * it is listed with (`unname`) — never counted anew while the server runs. It keeps
  * the time of every won run, for the median and the places, and names only for the TOP_RUNS
  * fastest. The runs of the Tagesschicht rank apart, a board for each UTC day they started on:
- * every crew that day played the same instance.
+ * every crew that day played the same instance. A run the ranking leaves out (`Ranking`) is
+ * kept and counted as kept, and stands on no board.
  */
 export class RunStats {
   private readonly board = new Board();
   /** the Tagesschicht's boards, by the UTC day its runs started on */
   private readonly days = new Map<string, Board>();
   private counted = 0;
+  private offTheBoards = 0;
 
-  /** The stats of `runs`, oldest first. */
-  constructor(runs: Iterable<LoggedRun> = []) {
+  /** The stats of `runs`, oldest first, on the boards as `ranked` says. */
+  constructor(
+    runs: Iterable<LoggedRun> = [],
+    private readonly ranked: Ranking = everyRun,
+  ) {
     for (const run of runs) {
       this.add(run);
     }
   }
 
-  /** How many runs it counts, over every mission, the Tagesschicht's too. */
+  /** How many runs it keeps, over every mission, the Tagesschicht's too, ranked or not. */
   get runs(): number {
     return this.counted;
   }
 
-  /** Counts one more finished run in: on the Tagesschicht's board of its day, or the main one. */
+  /** How many of the runs it keeps stand on no board: the ranking leaves them out. */
+  get unranked(): number {
+    return this.offTheBoards;
+  }
+
+  /**
+   * Counts one more finished run in: on the Tagesschicht's board of its day, or the main one —
+   * on none where the ranking leaves it out.
+   */
   add(run: LoggedRun): void {
+    this.counted += 1;
+    if (!this.ranked(run)) {
+      this.offTheBoards += 1;
+      return;
+    }
     if (isDaily(run)) {
       const day = utcDay(run.startedAt);
       const board = this.days.get(day) ?? new Board();
@@ -191,7 +247,6 @@ export class RunStats {
     } else {
       this.board.add(run);
     }
-    this.counted += 1;
   }
 
   /**

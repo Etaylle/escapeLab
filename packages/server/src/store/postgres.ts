@@ -1,6 +1,6 @@
 import { Prisma, PrismaClient, type Account as AccountRow } from '@prisma/client';
 import { GameError, NO_CREDITS, runSeconds, type Credits, type RunReport } from '@escapelab/core';
-import { RunStats } from '../runStats.js';
+import { RunStats, type Ranking } from '../runStats.js';
 import {
   aliasOf,
   checkSecret,
@@ -459,16 +459,20 @@ export class PostgresStore implements Store {
   /** when the runs kept elsewhere were last looked for; whether a look is under way, or the last */
   private looked = { at: 0, busy: false, done: false };
 
-  private constructor(private readonly clients: Clients<PrismaClient>) {}
+  private constructor(
+    private readonly clients: Clients<PrismaClient>,
+    /** which runs stand on the Bestenliste: every one where none is given */
+    private readonly ranked?: Ranking,
+  ) {}
 
   /**
-   * The store in the database at `url`, its runs counted. Rejects, saying why, where the
-   * database cannot be reached.
+   * The store in the database at `url`, its runs counted — on the Bestenliste as `ranked` says.
+   * Rejects, saying why, where the database cannot be reached.
    */
-  static async open(url: string): Promise<PostgresStore> {
+  static async open(url: string, ranked?: Ranking): Promise<PostgresStore> {
     const pooled = pooledUrl(url);
     const clients = new Clients(() => new PrismaClient({ datasourceUrl: pooled }));
-    const store = new PostgresStore(clients);
+    const store = new PostgresStore(clients, ranked);
     try {
       await clients.current.$connect();
     } catch (err) {
@@ -491,7 +495,7 @@ export class PostgresStore implements Store {
 
   /** The Bestenliste counted afresh from every run kept. */
   private async recount(): Promise<void> {
-    this.index = new RunStats();
+    this.index = new RunStats([], this.ranked);
     this.counted = new Set();
     for (const run of await this.runs()) {
       this.count(run);

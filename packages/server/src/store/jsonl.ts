@@ -3,7 +3,7 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { GameError, type RunReport } from '@escapelab/core';
-import { RunStats } from '../runStats.js';
+import { RunStats, type Ranking } from '../runStats.js';
 import {
   aliasOf,
   checkSecret,
@@ -180,15 +180,15 @@ export class JsonlStore implements Store {
   /**
    * The store over the log at `file`, its runs counted once: each line that holds none is
    * reported and left out, and so is a log that cannot be read — the Bestenliste must never keep
-   * the server from starting.
+   * the server from starting. `ranked` says which of them stand on the Bestenliste.
    */
-  static open(file: string): JsonlStore {
+  static open(file: string, ranked?: Ranking): JsonlStore {
     const { runs, problems } = loadRuns(file);
     for (const problem of problems) {
       console.error(`[escapelab] ${problem} (the Bestenliste leaves it out)`);
     }
     const logged = new Set(runs.flatMap((run) => (run.version === 1 ? [] : [runKeyOf(run)])));
-    return new JsonlStore(file, new RunStats(runs), logged);
+    return new JsonlStore(file, new RunStats(runs, ranked), logged);
   }
 
   async appendRun({ report, passes }: FinishedRun): Promise<void> {

@@ -16,7 +16,7 @@ import {
 } from '@escapelab/core';
 import { apiResponse, serveRuns, statsResponse, type RunsExport } from '../src/api.js';
 import { MissionCatalog } from '../src/missions.js';
-import { RunStats } from '../src/runStats.js';
+import { rankingOf, RunStats } from '../src/runStats.js';
 import { JsonlStore } from '../src/store/jsonl.js';
 import { DAY, reportOf } from './storeContract.js';
 
@@ -249,6 +249,52 @@ function get(url: string, authorization?: string): IncomingMessage {
   const headers = authorization === undefined ? {} : { authorization };
   return { url, method: 'GET', headers } as IncomingMessage;
 }
+
+describe('GET /stats of Blackout, whose chain got a Wechselplatz', () => {
+  // The server's own ranking, over the missions it ships: Blackout's runs count where they
+  // name the station drawn at its Wechselplatz.
+  const ranked = rankingOf(() => shipped.all);
+  const older = reportOf({ seconds: 300, at: DAY });
+  const newer: RunReport = {
+    ...reportOf({ seconds: 540, at: DAY + 1, crew: ['Cleo', 'Dan'] }),
+    drawn: { wechsel: 'signalkette' },
+  };
+  const standing = (stats: RunStats, url: string) =>
+    statsResponse(stats, shipped, url)?.body as MissionStanding;
+
+  it('answers an empty board on the first day: no group, no place, for the card to say nothing', () => {
+    const stats = new RunStats([older], ranked);
+    expect(statsResponse(stats, shipped, '/stats')).toEqual({ status: 200, body: [] });
+    // The mission is known, nobody ranked on it yet: the lobby's card names no best time, and
+    // the end card of a run of the older chain — in flight over the deploy — shows no place.
+    expect(standing(stats, '/stats/blackout')).toEqual({
+      missionId: 'blackout',
+      difficulties: [],
+      place: null,
+    });
+    expect(standing(stats, `/stats/blackout?run=${older.finishedAt}`).place).toBeNull();
+  });
+
+  it('puts the first crew of the new chain first of one, the older run counted nowhere', () => {
+    const stats = new RunStats([older, newer], ranked);
+    const asked = standing(stats, `/stats/blackout?run=${newer.finishedAt}`);
+    expect(asked.place).toEqual({ difficulty: 'normal', place: 1 });
+    expect(asked.difficulties).toMatchObject([
+      { difficulty: 'normal', runs: 1, wins: 1, bestSeconds: 540, top: [{ crew: ['Cleo', 'Dan'] }] },
+    ]);
+    expect(standing(stats, `/stats/blackout?run=${older.finishedAt}`).place).toBeNull();
+  });
+
+  it('ranks a day of the Tagesschicht by the same rule', () => {
+    const daily = (report: RunReport): RunReport => ({ ...report, daily: true });
+    const stats = new RunStats([daily(older), daily(newer)], ranked);
+    const days = statsResponse(stats, shipped, '/stats/daily')?.body as {
+      missions: MissionStats[];
+    }[];
+    expect(days).toHaveLength(1);
+    expect(days[0]?.missions[0]?.difficulties.map((group) => group.runs)).toEqual([1]);
+  });
+});
 
 describe('GET /runs.jsonl', () => {
   const dir = mkdtempSync(join(tmpdir(), 'escapelab-runs-route-'));

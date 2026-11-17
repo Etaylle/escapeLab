@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { Difficulty, RunOutcome, RunReport } from '@escapelab/core';
-import { RunStats, TOP_RUNS } from '../src/runStats.js';
+import { parseMission } from '@escapelab/core';
+import { readFileSync } from 'node:fs';
+import { namesItsDraw, rankingOf, RunStats, TOP_RUNS } from '../src/runStats.js';
 import type { RunReportV1 } from '../src/store/store.js';
 
 /** Noon UTC, so that the day is the same in every time zone the tests run in. */
@@ -206,5 +208,102 @@ describe('the stats index', () => {
     statsOf(stats)?.top[0]?.crew.push('Eindringling');
     statsOf(stats)?.top.pop();
     expect(statsOf(stats)?.top).toEqual([expect.objectContaining({ crew: ['Anna', 'Ben'] })]);
+  });
+});
+
+const shipped = (id: string) =>
+  parseMission(
+    JSON.parse(readFileSync(new URL(`../../../missions/${id}.json`, import.meta.url), 'utf8')),
+  );
+const blackout = shipped('blackout');
+const tutorial = shipped('systemcheck');
+
+/** A run of Blackout's chain of today: it names the station it drew at the Wechselplatz. */
+const drawing = (station: string, parts: Parts): RunReport => ({
+  ...run(parts),
+  drawn: { wechsel: station },
+});
+
+describe('the Bestenliste of a mission whose stations take turns', () => {
+  const ranked = rankingOf(() => [blackout, tutorial]);
+
+  it('asks a run to name its draw: a station of every Wechselplatz the mission has now', () => {
+    expect(namesItsDraw(blackout, drawing('signalkette', { seconds: 500 }))).toBe(true);
+    expect(namesItsDraw(blackout, drawing('notstrom', { seconds: 500 }))).toBe(true);
+    // A run of the chain before the Wechselplatz names none; a version 1 report neither.
+    expect(namesItsDraw(blackout, run({ seconds: 300 }))).toBe(false);
+    expect(namesItsDraw(blackout, oldRun({ seconds: 300 }))).toBe(false);
+    // A station the place does not hold, another pool, a key every object answers to: none.
+    expect(namesItsDraw(blackout, drawing('subsysteme', { seconds: 300 }))).toBe(false);
+    const other = { ...run({ seconds: 300 }), drawn: { funk: 'signalkette' } };
+    expect(namesItsDraw(blackout, other)).toBe(false);
+    const sly = { ...run({ seconds: 300 }), drawn: JSON.parse('{"__proto__":{"wechsel":"notstrom"}}') };
+    expect(namesItsDraw(blackout, sly as RunReport)).toBe(false);
+    // A mission without one asks nothing of its runs.
+    expect(namesItsDraw(tutorial, run({ seconds: 300, mission: 'systemcheck' }))).toBe(true);
+  });
+
+  it('keeps a run of the older chain off every board, and keeps it all the same', () => {
+    const stats = new RunStats(
+      [
+        run({ seconds: 300, at: DAY, crew: ['Alt', 'Älter'] }),
+        oldRun({ seconds: 280, at: DAY + 1 }),
+        run({ seconds: 200, at: DAY + 2, mission: 'systemcheck' }),
+      ],
+      ranked,
+    );
+    expect([stats.runs, stats.unranked]).toEqual([3, 2]);
+    // The first day of the new chain: no board for Blackout yet, no place for the old run.
+    expect(stats.mission('blackout')).toBeNull();
+    expect(stats.placeOf('blackout', DAY)).toBeNull();
+    expect(stats.all().map((mission) => mission.missionId)).toEqual(['systemcheck']);
+    // The first crew of the new chain is first of one, though slower than the old runs.
+    stats.add(drawing('frequenz', { seconds: 520, at: DAY + 3, crew: ['Neu', 'Neuer'] }));
+    expect(stats.placeOf('blackout', DAY + 3)).toEqual({ difficulty: 'normal', place: 1 });
+    expect(statsOf(stats)).toMatchObject({ runs: 1, wins: 1, bestSeconds: 520 });
+    expect(statsOf(stats)?.top.map((entry) => entry.crew)).toEqual([['Neu', 'Neuer']]);
+    expect([stats.runs, stats.unranked]).toEqual([4, 2]);
+  });
+
+  it('ranks the three draws on one board, a lost run counted with them', () => {
+    const stats = new RunStats(
+      [
+        drawing('signalkette', { seconds: 540, at: DAY }),
+        drawing('notstrom', { seconds: 500, at: DAY + 1 }),
+        drawing('frequenz', { seconds: 900, at: DAY + 2, outcome: 'lost:time' }),
+      ],
+      ranked,
+    );
+    expect(statsOf(stats)).toMatchObject({ runs: 3, wins: 2, bestSeconds: 500 });
+    expect(stats.placeOf('blackout', DAY)).toEqual({ difficulty: 'normal', place: 2 });
+    expect(stats.unranked).toBe(0);
+  });
+
+  it('holds the Tagesschicht to the same rule, day by day', () => {
+    const daily = (report: RunReport): RunReport => ({ ...report, daily: true });
+    const stats = new RunStats(
+      [
+        daily(run({ seconds: 300, at: DAY })),
+        daily(drawing('signalkette', { seconds: 560, at: DAY + 1 })),
+      ],
+      ranked,
+    );
+    const [day] = stats.daily();
+    const board = day?.missions.find((mission) => mission.missionId === 'blackout');
+    expect(board?.difficulties.map((d) => [d.runs, d.bestSeconds])).toEqual([[1, 560]]);
+    expect(stats.dailyPlaceOf(day?.day ?? '', 'blackout', DAY)).toBeNull();
+    expect(stats.dailyPlaceOf(day?.day ?? '', 'blackout', DAY + 1)).toMatchObject({ place: 1 });
+  });
+
+  it('counts a run of a mission nobody knows any more as it always did', () => {
+    const stats = new RunStats([run({ seconds: 300, mission: 'custom-weg' })], ranked);
+    expect(stats.unranked).toBe(0);
+    expect(stats.mission('custom-weg')?.difficulties[0]?.runs).toBe(1);
+  });
+
+  it('ranks every run where no ranking is given: a store opened without one', () => {
+    const stats = new RunStats([run({ seconds: 300 })]);
+    expect(statsOf(stats)?.runs).toBe(1);
+    expect(stats.unranked).toBe(0);
   });
 });

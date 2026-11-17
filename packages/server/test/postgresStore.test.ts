@@ -2,6 +2,7 @@ import { connect, createServer, type AddressInfo, type Socket } from 'node:net';
 import { PrismaClient, type Prisma } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, inject, it, vi } from 'vitest';
 import { NO_CREDITS } from '@escapelab/core';
+import type { Ranking } from '../src/runStats.js';
 import { PostgresStore } from '../src/store/postgres.js';
 import { HAS_LOGIN, PassSignedOut, type Store } from '../src/store/store.js';
 import { passFor } from './passes.js';
@@ -28,8 +29,8 @@ let db: PrismaClient;
 /** Every store a test opened: closed after the suite. */
 const opened: Store[] = [];
 
-async function open(): Promise<Store> {
-  const store = await PostgresStore.open(url);
+async function open(ranked?: Ranking): Promise<Store> {
+  const store = await PostgresStore.open(url, ranked);
   opened.push(store);
   return store;
 }
@@ -203,7 +204,10 @@ describe.skipIf(url === '')('the store in Postgres', () => {
     await db.$disconnect();
   });
 
-  storeContract('Postgres', async () => ({ store: await open(), reopen: open }));
+  storeContract('Postgres', async (ranked) => ({
+    store: await open(ranked),
+    reopen: () => open(ranked),
+  }));
 
   describe('Postgres alone', () => {
     it('takes a deleted account’s name and deeds off its runs, the runs standing', async () => {
