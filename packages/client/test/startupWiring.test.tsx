@@ -147,6 +147,8 @@ describe('the terminal’s prompt and keys', () => {
     const { tree, send } = panel('a');
     submit(tree);
     expect(send).not.toHaveBeenCalled();
+    // Nothing to answer either: no „Befehl unbekannt" for a line with nothing in it.
+    expect(replySetter()).not.toHaveBeenCalled();
   });
 
   it('answers npm itself, sending nothing to the server', () => {

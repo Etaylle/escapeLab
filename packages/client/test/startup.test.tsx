@@ -198,6 +198,14 @@ describe('the consoles', () => {
     expect(html).not.toMatch(/data-breaker="\d"[^>]*disabled/);
   });
 
+  it('shows a breaker closed in an earlier stage at this Schaltfeld as closed', () => {
+    const html = panel({ ...atBoard(), closed: [{ console: 'b', feeder: 2 }] });
+    expect(html).toMatch(/startup-breaker startup-breaker--closed" data-breaker="2"/);
+    expect(html.match(/startup-breaker--closed/g)).toHaveLength(1);
+    const elsewhere = panel({ ...atBoard(), closed: [{ console: 'a', feeder: 2 }] });
+    expect(elsewhere).not.toContain('startup-breaker--closed');
+  });
+
   it('shows the audience both live parts, no prompt and no breaker to close', () => {
     const view = { ...atTerminal(), board: atBoard().board, role: null, console: null };
     const html = panel(view);
