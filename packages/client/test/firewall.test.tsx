@@ -12,6 +12,7 @@ import {
   type PuzzleView,
 } from '@escapelab/core';
 import { NotepadContext } from '../src/noting.js';
+import { TEXT_SCALE } from '../src/settings.js';
 import { elementsOf, Sheets, type Screen, type Styled } from './cascade.js';
 import { deviceRun, lcg, mapWith, NO_CLOCK } from './fixtures.js';
 
@@ -371,6 +372,17 @@ describe('the type and the targets on a phone held sideways', () => {
   });
 });
 
+/** The stylesheets read as a page whose settings set the text's scale to `scale`. */
+class ScaledSheets extends Sheets {
+  constructor(private readonly scale: number) {
+    super();
+  }
+
+  override custom(node: Styled, name: string, screen: Screen): string | undefined {
+    return name === '--text-scale' ? String(this.scale) : super.custom(node, name, screen);
+  }
+}
+
 describe('the scope’s geometry', () => {
   const sheets = new Sheets();
   const SCREENS: Screen[] = [
@@ -407,11 +419,18 @@ describe('the scope’s geometry', () => {
     if (lines === undefined || card === undefined) {
       throw new Error('expected the lines and a card');
     }
-    const high = sheets.length(lines, 'height', screen);
-    const item = sheets.length(card, 'min-height', screen);
-    expect(item).toBeGreaterThanOrEqual(44);
-    // two packets of a line come SAME_LINE_GAP of a fall apart, the track the line less a card
-    expect((high - item) * SAME_LINE_GAP).toBeGreaterThanOrEqual(item);
+    // every text size the settings offer (settings.ts TEXT_SCALE)
+    for (const scale of Object.values(TEXT_SCALE)) {
+      const scaled = new ScaledSheets(scale);
+      const high = scaled.length(lines, 'height', screen);
+      const item = scaled.length(card, 'min-height', screen);
+      expect(item, `scale ${scale}`).toBeGreaterThanOrEqual(44);
+      // the card's two lines, 3 px of padding and a marked card's 2 px border over and under
+      const font = scaled.fontSize(card, screen);
+      expect(2 * 1.2 * font + 6 + 4, `scale ${scale}`).toBeLessThanOrEqual(item + 0.01);
+      // two packets of a line come SAME_LINE_GAP of a fall apart, the track the line less a card
+      expect((high - item) * SAME_LINE_GAP, `scale ${scale}`).toBeGreaterThanOrEqual(item - 0.01);
+    }
   });
 
   it('numbers the lines over them, where no card ever covers a number', () => {

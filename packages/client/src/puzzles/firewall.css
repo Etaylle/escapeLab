@@ -12,10 +12,10 @@
   --scope-faint: rgba(185, 230, 255, 0.18);
   --scope-mark: #ffc861;
   /*
-   * The lines' height, and what comes down them: a point here, a card of two lines at the
-   * Analysepult. Two packets of one line come 0.6 of a fall apart at least (core firewall.ts
-   * SAME_LINE_GAP), so the line less a card has to hold a card in 0.6 of its length: 160 px less
-   * 44 leaves 116, of which 0.6 is 70 (a phone's 130 px: 52).
+   * The room the lines are given, and what comes down them: a point here, a card of two lines at
+   * the Analysepult. Two packets of one line come 0.6 of a fall apart at least (core firewall.ts
+   * SAME_LINE_GAP), so the line less a card has to hold a card in 0.6 of its length: the lines
+   * stand 8/3 of a card high at least (`.firewall-lines`), whatever the room and the text's scale.
    */
   --scope-height: clamp(160px, 42vh, 300px);
   --item-h: 22px;
@@ -29,7 +29,8 @@
 }
 
 .firewall--analysis {
-  --item-h: 44px;
+  /* two lines of its type, 3 px of padding and a marked card's 2 px border over and under them */
+  --item-h: max(44px, calc(2.4em + 10px));
 }
 
 .firewall-status {
@@ -64,7 +65,7 @@
   display: grid;
   grid-template-columns: repeat(5, minmax(44px, 1fr));
   gap: 6px;
-  height: var(--scope-height);
+  height: max(var(--scope-height), calc(var(--item-h) * 8 / 3));
 }
 
 .firewall--analysis .firewall-lines,
