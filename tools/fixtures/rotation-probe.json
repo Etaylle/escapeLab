@@ -1,0 +1,117 @@
+{
+  "id": "custom-wechselprobe",
+  "title": "Wechselprobe",
+  "subtitle": "Drei Plätze im Prüfstand; am mittleren ist je Schicht eine von drei Anlagen in Betrieb.",
+  "players": { "min": 2, "max": 2 },
+  "timeLimitSec": 900,
+  "maxAlarms": null,
+  "story": {
+    "intro": "Prüfstand der Forschungsanlage Kaltenbrunn. Am Wechselplatz ist je Schicht eine Anlage in Betrieb, die anderen tragen ihr Schild.",
+    "win": "Alle drei Plätze abgenommen, die Schleuse steht offen.",
+    "lose": "Die Zeit ist um."
+  },
+  "puzzles": [
+    {
+      "type": "keypad",
+      "id": "tastenfeld",
+      "title": "Zeichentastenfeld",
+      "lights": ["PRÜFSTAND"]
+    },
+    {
+      "type": "morse",
+      "id": "funkfeuer",
+      "title": "Funkfeuer",
+      "pool": "wechselplatz",
+      "onSolved": "Funkfeuer steht. Die Schleuse ist frei."
+    },
+    {
+      "type": "signal",
+      "id": "signalkette",
+      "title": "Signalkette",
+      "pool": "wechselplatz",
+      "onSolved": "Signalkette steht. Die Schleuse ist frei."
+    },
+    {
+      "type": "circuit",
+      "id": "notstrom",
+      "title": "Notstromkasten",
+      "pool": "wechselplatz",
+      "onSolved": "Notstrom steht. Die Schleuse ist frei."
+    },
+    {
+      "type": "maze",
+      "id": "leitungsnetz",
+      "title": "Leitungsnetz",
+      "lights": ["SCHLEUSE"]
+    }
+  ],
+  "map": {
+    "tiles": [
+      "#########################",
+      "#...............#.......#",
+      "#...............#.......#",
+      "#.......................#",
+      "#...............#.......#",
+      "#...............#.......#",
+      "#########################"
+    ],
+    "spawns": [
+      { "x": 1, "y": 3 },
+      { "x": 2, "y": 3 }
+    ],
+    "doors": [
+      { "id": "schleuse", "x": 16, "y": 3, "opensBy": { "kind": "puzzle", "puzzleId": "wechselplatz" } }
+    ],
+    "stations": [
+      { "puzzleId": "tastenfeld", "x": 3, "y": 1 },
+      { "puzzleId": "funkfeuer", "x": 6, "y": 1 },
+      { "puzzleId": "signalkette", "x": 9, "y": 1, "console": "a" },
+      { "puzzleId": "signalkette", "x": 14, "y": 5, "console": "b" },
+      { "puzzleId": "notstrom", "x": 12, "y": 1, "console": "a" },
+      { "puzzleId": "notstrom", "x": 5, "y": 5, "console": "b" },
+      { "puzzleId": "leitungsnetz", "x": 20, "y": 1 }
+    ],
+    "manuals": [
+      {
+        "id": "tafel-tastenfeld",
+        "kind": "chart",
+        "label": "ZEICHENTAFEL",
+        "puzzleIds": ["tastenfeld"],
+        "spots": [{ "x": 2, "y": 5 }]
+      },
+      {
+        "id": "buch-funkfeuer",
+        "kind": "book",
+        "label": "FUNKBUCH",
+        "puzzleIds": ["funkfeuer"],
+        "spots": [{ "x": 7, "y": 5 }]
+      },
+      {
+        "id": "buch-signalkette",
+        "kind": "book",
+        "label": "SIGNALBUCH",
+        "puzzleIds": ["signalkette"],
+        "spots": [{ "x": 9, "y": 5 }]
+      },
+      {
+        "id": "buch-notstrom",
+        "kind": "book",
+        "label": "SCHALTBUCH NOTSTROM",
+        "puzzleIds": ["notstrom"],
+        "spots": [{ "x": 11, "y": 5 }]
+      },
+      {
+        "id": "plan-leitungsnetz",
+        "kind": "chart",
+        "label": "SCHALTPLAN",
+        "puzzleIds": ["leitungsnetz"],
+        "spots": [{ "x": 21, "y": 5 }]
+      }
+    ],
+    "edgeworkSign": { "x": 1, "y": 1 },
+    "labels": [
+      { "text": "PRÜFSTAND", "x": 8, "y": 3, "kind": "lab" },
+      { "text": "SCHLEUSE", "x": 20, "y": 3, "kind": "corridor" }
+    ]
+  }
+}

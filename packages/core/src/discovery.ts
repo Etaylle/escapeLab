@@ -1,4 +1,4 @@
-import { armedPuzzleIds } from './map.js';
+import { armedPuzzleIds, stationsOfRun } from './map.js';
 import type { MapDef } from './mission.js';
 import { noteSpot } from './notes.js';
 import type { ConsoleId } from './puzzles/module.js';
@@ -205,7 +205,7 @@ export function findables(state: GameState): Findable[] {
  * before the lights fail, and the way out, once every station is solved.
  */
 export function labLit(state: GameState): boolean {
-  const solved = state.currentPuzzleIndex >= state.mission.puzzles.length;
+  const solved = state.currentPuzzleIndex >= stationsOfRun(state);
   return state.phase === 'playing' && (state.lightsOutAt === null || solved);
 }
 

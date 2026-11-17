@@ -1,5 +1,6 @@
 import { DRONE_ALARM, EMERGENCY_CLEARED, EMERGENCY_MISSED } from './actions.js';
 import type { Difficulty } from './difficulty.js';
+import { stationCount } from './rotation.js';
 import { NO_CREDITS, type Credits, type GameState, type Player, type RunEvent } from './state.js';
 
 /**
@@ -80,10 +81,16 @@ export interface RunReport {
   /** the mission had no hatch: the solve of its last station won the run; left out otherwise */
   noHatch?: true;
   /**
-   * every station of the mission, in the run's order: the mission's — or, where the crew takes
-   * them in any order, the order it solved them in, the rest after
+   * every station of the run, in the run's order: the mission's — or, where the crew takes
+   * them in any order, the order it solved them in, the rest after. Of the stations that take
+   * turns (rotation.ts) only the one the run drew: a station out of service is no station of it
    */
   stations: StationReport[];
+  /**
+   * the station the run had at each Wechselplatz, by the pool's id; left out for a mission
+   * without pools, and by reports written before them
+   */
+  drawn?: Record<string, string>;
   /** emergencies started, and those that ran out before the crew cleared them */
   emergencies: { count: number; failed: number };
   /**
@@ -125,6 +132,7 @@ export function runReport(state: GameState, roomCode: string): RunReport {
     outcome: outcomeOf(state, alarmLimit),
     ...(state.mission.map.exit === undefined ? { noHatch: true as const } : {}),
     stations: stationsOf(state, clockStartOf({ startedAt, lightsOutAt: state.lightsOutAt })),
+    ...(Object.keys(state.drawn).length === 0 ? {} : { drawn: { ...state.drawn } }),
     emergencies: emergenciesOf(state.events),
     notes: { read: state.notesRead.length, total: state.mission.map.notes.length },
     drones: state.mission.map.drones.length,
@@ -226,7 +234,8 @@ function stationsOf(state: GameState, clockStart: number): StationReport[] {
     }
   }
   const solves = state.events.flatMap((event) => (event.kind === 'puzzle' ? [event.at] : []));
-  return state.mission.puzzles.map((def, index) => {
+  const ofRun = state.mission.puzzles.slice(0, stationCount(state.mission.puzzles));
+  return ofRun.map((def, index) => {
     const openedAt = index === 0 ? clockStart : (solves[index - 1] ?? null);
     const solvedAt = solves[index] ?? null;
     const there = located.filter(({ station }) => station === index).map(({ event }) => event);

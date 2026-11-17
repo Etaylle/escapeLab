@@ -4,6 +4,7 @@ import { consoleOf, solvedYet, stationKey, stationUp } from './map.js';
 import type { Mission } from './mission.js';
 import { moduleFor, type PuzzleDef } from './puzzles/index.js';
 import type { ConsoleId } from './puzzles/module.js';
+import { namesStation } from './rotation.js';
 import type { GameState } from './state.js';
 
 /**
@@ -26,23 +27,29 @@ export type Place =
  * Every place of the station of `puzzleId`, in this order: its consoles — a and b, or the one
  * it has —, the manual objects covering it, the plates of the doors that stay open once it is
  * solved (`untilSolved`), and the parts it still needs carried in: those it waits for
- * (`requiredFor`), and the key of a cabinet covering it that no station before it opens.
+ * (`requiredFor`), and the key of a cabinet covering it that no station before it opens. A
+ * door or a part naming the station's pool (rotation.ts) names the station.
  */
 export function placesOf(mission: Pick<Mission, 'puzzles' | 'map'>, puzzleId: string): Place[] {
   const { map, puzzles } = mission;
+  const station = puzzles.find((puzzle) => puzzle.id === puzzleId) ?? { id: puzzleId };
   const consoles = map.stations
     .filter((spot) => spot.puzzleId === puzzleId)
     .map((spot): Place => ({ kind: 'console', console: spot.console ?? 'a' }));
   const sources = map.manuals.filter((manual) => manual.puzzleIds.includes(puzzleId));
   const plates = map.doors.flatMap(({ opensBy }) =>
-    opensBy.kind === 'plate' && opensBy.untilSolved === puzzleId ? [opensBy.plateId] : [],
+    opensBy.kind === 'plate' && namesStation(opensBy.untilSolved, station)
+      ? [opensBy.plateId]
+      : [],
   );
   const firstCovered = (ids: readonly string[]): string | undefined =>
     puzzles.find((puzzle) => ids.includes(puzzle.id))?.id;
   const keys = sources.flatMap(({ needsKey, puzzleIds }) =>
     needsKey !== undefined && firstCovered(puzzleIds) === puzzleId ? [needsKey] : [],
   );
-  const awaited = map.items.filter((item) => item.requiredFor === puzzleId).map((item) => item.id);
+  const awaited = map.items
+    .filter((item) => namesStation(item.requiredFor, station))
+    .map((item) => item.id);
   return [
     ...consoles,
     ...sources.map((manual): Place => ({ kind: 'source', id: manual.id })),

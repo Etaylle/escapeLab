@@ -13,7 +13,17 @@ import { moduleFor, MODULES, type FieldSpec } from '../src/index.js';
  * Keys every def carries, whatever its module: the editor's puzzle form has its own inputs —
  * and keeps `nudges` as the file has them.
  */
-const COMMON = ['type', 'id', 'title', 'hints', 'nudges', 'lights', 'onSolved', 'penaltySec'];
+const COMMON = [
+  'type',
+  'id',
+  'title',
+  'hints',
+  'nudges',
+  'lights',
+  'onSolved',
+  'pool',
+  'penaltySec',
+];
 
 const stations = MODULES.flatMap((m) => (m.type === 'relay' ? [] : [moduleFor(m.type)]));
 

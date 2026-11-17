@@ -1,0 +1,78 @@
+{
+  "mission": "custom-wechselprobe",
+  "pool": "wechselplatz",
+  "played": {
+    "seed": 1,
+    "drawn": "funkfeuer",
+    "outOfService": ["signalkette", "notstrom"],
+    "stations": [
+      {
+        "id": "tastenfeld",
+        "type": "keypad",
+        "title": "Zeichentastenfeld",
+        "opens": {
+          "keys": [
+            { "glyph": "ә", "lit": false },
+            { "glyph": "Я", "lit": false },
+            { "glyph": "æ", "lit": false },
+            { "glyph": "Ұ", "lit": false }
+          ]
+        },
+        "moves": [
+          { "by": "operator", "input": { "keyIndex": 1 } },
+          { "by": "operator", "input": { "keyIndex": 0 } },
+          { "by": "operator", "input": { "keyIndex": 3 } },
+          { "by": "operator", "input": { "keyIndex": 2 } }
+        ],
+        "releaseAt": null
+      },
+      {
+        "id": "funkfeuer",
+        "type": "morse",
+        "title": "Funkfeuer",
+        "opens": { "pattern": "..-. ..- -. -.- .", "dial": 12 },
+        "moves": [
+          { "by": "operator", "input": { "tune": 1 } },
+          { "by": "operator", "input": { "transmit": true } }
+        ],
+        "releaseAt": null
+      },
+      {
+        "id": "leitungsnetz",
+        "type": "maze",
+        "title": "Leitungsnetz",
+        "opens": { "pos": { "x": 2, "y": 5 }, "goal": { "x": 0, "y": 5 } },
+        "moves": [
+          { "by": "operator", "input": { "dir": 1 } },
+          { "by": "operator", "input": { "dir": 0 } },
+          { "by": "operator", "input": { "dir": 0 } },
+          { "by": "operator", "input": { "dir": 1 } },
+          { "by": "operator", "input": { "dir": 2 } },
+          { "by": "operator", "input": { "dir": 2 } },
+          { "by": "operator", "input": { "dir": 1 } },
+          { "by": "operator", "input": { "dir": 0 } },
+          { "by": "operator", "input": { "dir": 0 } },
+          { "by": "operator", "input": { "dir": 0 } },
+          { "by": "operator", "input": { "dir": 0 } },
+          { "by": "operator", "input": { "dir": 3 } },
+          { "by": "operator", "input": { "dir": 3 } },
+          { "by": "operator", "input": { "dir": 3 } },
+          { "by": "operator", "input": { "dir": 2 } },
+          { "by": "operator", "input": { "dir": 3 } },
+          { "by": "operator", "input": { "dir": 0 } },
+          { "by": "operator", "input": { "dir": 0 } },
+          { "by": "operator", "input": { "dir": 3 } },
+          { "by": "operator", "input": { "dir": 2 } },
+          { "by": "operator", "input": { "dir": 2 } },
+          { "by": "operator", "input": { "dir": 2 } },
+          { "by": "operator", "input": { "dir": 2 } },
+          { "by": "operator", "input": { "dir": 1 } },
+          { "by": "operator", "input": { "dir": 2 } },
+          { "by": "operator", "input": { "dir": 3 } }
+        ],
+        "releaseAt": null
+      }
+    ]
+  },
+  "other": { "seed": 5, "drawn": "signalkette", "outOfService": ["funkfeuer", "notstrom"] }
+}
