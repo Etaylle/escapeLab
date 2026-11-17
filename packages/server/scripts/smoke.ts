@@ -1063,6 +1063,9 @@ function nextEmergencyIn(): number {
   return next - since;
 }
 
+/** How long an instruction carried out may take to give way to the next on its holder's view. */
+const ORDER_TAKEN_MS = 2 * 1000;
+
 /** The relay console and the instruction `client`'s view carries now; null without an emergency. */
 const relayOf = (client: TestClient) => client.view?.map?.sabotage?.relay ?? null;
 
@@ -1082,7 +1085,7 @@ async function carryOut(holder: TestClient): Promise<boolean> {
   const before = orderOf(holder);
   const input = { kind: 'set', control: named.control, value: order.value } as const;
   named.owner.send({ kind: 'puzzle-input', input });
-  for (let waited = 0; orderOf(holder) === before && waited < 2000; waited += 10) {
+  for (let waited = 0; orderOf(holder) === before && waited < ORDER_TAKEN_MS; waited += 10) {
     await sleep(10);
   }
   return true;

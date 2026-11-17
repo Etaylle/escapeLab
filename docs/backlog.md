@@ -353,6 +353,15 @@ die Entscheidung.
 - Datenpunkt 2026-11-05, Karte 36×22: Die Skript-Crew gewinnt 462–502 s nach dem Blackout
   (40–43 % von 900 s übrig, davon bis 35 s Warten auf Drohnenlücken); der Harness warnt ab unter
   40 %. Vorschlag: Normal 1000 s (Entspannt/Hart skalieren mit), Entscheidung nach dem Playtest.
+- Datenpunkt 2026-11-17, neue Stationsfolge (B-blackout2: Anlaufsteuerung, Paketfilter,
+  Wechselplatz), je Auslosung ein Lauf der Skript-Crew, lokal bei Last 5–9: Signalkette 607 s
+  (ein Notfall, drei Alarme), Funkpult 652 s (ein Notfall), Notstromkasten 575 s. Der
+  Paketfilter läuft 82 s auf der Uhr (zwei Wellen, `fallSec` 14) — auch für Menschen, während
+  die Signalkette das Skript 33 s kostet; die Folge ist für das Skript rund 100 s länger als
+  die alte. `timeLimitSec` deshalb 1200 (Regel: ≥ 40 % übrig im langsamsten Lauf; 652 s und
+  eine Notiz lassen 44 %). Die Auslosungen liegen 77 s auseinander, davon rund 40 s Warten
+  auf einen Notfall und die Buch-Captures am Aktenschrank: keine Station angepasst. Drei Läufe
+  je Auslosung stehen noch aus (Akku).
 - Studie G-2, Rang 4 (Escape Academy, Escape Simulator): ein Lehrgang ohne Uhr — der erste Lauf
   einer Crew ohne Uhr, dann Übungshalle, Tutorial und Blackout, je Schritt eine neue Idee; die
   Missionen ohne Uhr aus G-2 sind das Werkzeug dafür.
@@ -684,8 +693,14 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   Lauf mit `rules` 4 trifft nur die Regeln 1, 2, 3 und 6, die Laborkennung erst ab 6. Dafür neu
   im Modulvertrag: `elapse`, eine Station auf der Uhr und der Anwesenheit an ihren Pulten.
 - Steht in der Übungshalle (G-2) und in der Probemission `tools/fixtures/firewall-probe.json`,
-  die der Rundgang im Systemcheck spielt (Gruppe `firewall`). In Blackout kommt sie mit dem
-  nächsten Paket des Leads als Tor des Serverraums: ihre Lösung öffnet das Serverschott.
+  die der Rundgang im Systemcheck spielt (Gruppe `firewall`).
+- In Blackout (B-blackout2, 2026-11-17): dritte Station, das Tor des Serverraums. Analysepult
+  (21,9) und Sperrpult (26,9) im Flur östlich des Serverschotts — dort wacht die Flurdrohne
+  nicht neben der Crew auf —, die Richtlinie als Aushang an der Südwand westlich davon, zwei
+  Wellen; die Lösung öffnet das Schott.
+- Offen: Hochkant auf einem Handy (420 px) passt das Analysepult nicht — fünf Leitungen zu je
+  mindestens 100 px, die vierte und fünfte laufen aus dem Gerät. Bewiesen ist das Gerät nur
+  quer (844, 932). Eigenes Paket: Karten in kurzen Zeilen, Leitungen in 1fr unter ~560 px.
 
 ### W-1 Warte-Spiel — Status: wartet · Größe: S
 - Uros' eigenes kleines Canvas-Spiel (Frettchen und Ente) als etwas zum Spielen, während eine
@@ -705,9 +720,12 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   Felder `stages`, `travelSec`, `windowSec`. Die Laborkennung bleibt draußen: eine Nachschlage-
   stelle je Stufe, weniger Lesestoff als die Signalkette.
 - Steht in der Übungshalle und in der Probemission `tools/fixtures/startup-probe.json`, die der
-  Rundgang im Systemcheck spielt (Gruppe `startup`). Platz in Blackout: als zweite Station (der
-  Anlauf des Notstromaggregats, wo heute der Notstromkasten steht) im nächsten Paket des Leads.
-  Der Editor behält Kanäle, zeichnet aber keine.
+  Rundgang im Systemcheck spielt (Gruppe `startup`). Der Editor behält Kanäle, zeichnet aber
+  keine.
+- In Blackout (B-blackout2, 2026-11-17): zweite Station, der Anlauf des Notstromaggregats. Pult A
+  im Maschinenraum hinter der Plattentür, Pult B am Westende des Flurs, der Kanal gerade unter
+  der Wand, das Betriebsbuch im Archiv (hin und zurück von Pult B 6,1 s bzw. 5,4 s). Wer an Pult
+  A steht, ist bis zur Lösung eingeschlossen: Die Tabelle kennt, wer an Pult B steht.
 
 ### B-1 Wechselplatz — Status: im PR (B-rotation) · Größe: M
 - Entscheidung Uros 2026-11-17: Blackout bekommt zwei feste IT-Stationen (Anlaufsteuerung,
@@ -728,6 +746,16 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
 - Offen, bewusst nicht in diesem Paket: Bestenlisten je Auslosung (eine Tafel mischt die
   Auslosungen); die Mitglieder eines Pools müssen in der Datei nicht nebeneinander stehen, weil
   der Schnappschuss die Mission eines Laufs wie eine Datei prüft.
+- In Blackout (B-blackout2, 2026-11-17): der fünfte Platz ist der Pool `wechsel` aus
+  Signalkette, Funkpult und Notstromkasten; er öffnet Reaktortür und Reaktorschott. Die
+  Signalkette und das Funkpult stehen, wo sie standen; der Notstromkasten hängt gleich hinter
+  der Maschinentür, sein Prüfpult im Labor, sein Wartungsbuch im Maschinenraum. Das Klemmbrett
+  liegt jetzt im Schatten eines Pfeilers (8,12 oder 21,12), weil die Signalkette mit beiden
+  Drohnen gespielt wird. Drei Notizen der letzten Schicht erklären den Dienstplan. Seeds: 12
+  Signalkette (Rundgang, Smoke), 56 Funkpult, 93 Notstromkasten.
+- Bestenliste (B-blackout2): Auf einer Mission mit Wechselplatz zählt ein Lauf nur, wenn sein
+  Bericht die Auslosung nennt; ältere Läufe bleiben gespeichert und in „Meine Einsätze", stehen
+  aber auf keiner Tafel (`server/src/runStats.ts`).
 - Nächstes Paket (Lead): Blackout mit dem Wechselplatz neu ketten — notlicht → Anlaufsteuerung
   → Paketfilter (öffnet das Serverschott) → Serverraum → Wechselplatz aus Signalkette, Funkfeuer
   und Notstromkasten (öffnet die Reaktortüren) → reaktorstart.

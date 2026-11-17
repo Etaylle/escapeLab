@@ -10,7 +10,7 @@
     "win": "Schichtbuch: Mit einem tiefen Brummen erwachen die Systeme, Licht flutet das Labor, die Zentrifugen laufen wieder. Die Luke des Notausgangs ist ins Schloss gefallen, die Nachtschicht vollzählig draußen.",
     "lose": "Schichtbuch: Ein letztes Flackern, dann Stille. Die Notversorgung ist ausgefallen, die Proben sind verloren. Das Labor bleibt dunkel bis zur Frühschicht."
   },
-  "timeLimitSec": 900,
+  "timeLimitSec": 1200,
   "intro": {
     "lightsSec": 31.6,
     "place": "Trakt C",

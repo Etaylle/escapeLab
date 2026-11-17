@@ -191,8 +191,10 @@ describe('a first crew in the shipped missions', () => {
       JSON.parse(readFileSync(new URL(`../../../missions/${name}`, import.meta.url), 'utf8')),
     );
 
-  it('gives Blackout fifteen minutes', () => {
-    expect(shipped('blackout.json').timeLimitSec).toBe(900);
+  it('gives Blackout twenty minutes', () => {
+    // Fifteen until its chain got the Anlaufsteuerung, the Paketfilter and the Wechselplatz: the
+    // scripted crew then won 575 to 652 s after the lights went out, and keeps 40 % of this.
+    expect(shipped('blackout.json').timeLimitSec).toBe(1200);
   });
 });
 
