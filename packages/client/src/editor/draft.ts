@@ -101,6 +101,11 @@ export interface DraftPuzzle {
   lights: string[];
   /** '' for none; the form shows the first of several texts (`firstText`) */
   onSolved: Line;
+  /**
+   * the Wechselplatz it shares, by the pool's id: of the puzzles naming the same one a run has
+   * the one its seed draws (core rotation.ts); '' for a station every run has
+   */
+  pool: string;
   /** what a wrong move costs, in seconds; null for the module's own default */
   penaltySec: number | null;
   /**
@@ -345,6 +350,7 @@ export function newPuzzle(type: StationType, taken: Iterable<string>): DraftPuzz
     nudges: [],
     lights: [],
     onSolved: '',
+    pool: '',
     penaltySec: null,
     fields: defaultFields(type),
   };
@@ -429,6 +435,7 @@ function puzzleJson(puzzle: DraftPuzzle): Record<string, unknown> {
     ...(puzzle.nudges.length === 0 ? {} : { nudges: [...puzzle.nudges] }),
     lights: [...puzzle.lights],
     ...given('onSolved', puzzle.onSolved),
+    ...given('pool', puzzle.pool.trim()),
   };
 }
 
@@ -533,6 +540,7 @@ interface LoosePuzzle {
   nudges?: Line[] | undefined;
   lights?: string[] | undefined;
   onSolved?: Line | undefined;
+  pool?: string | undefined;
   penaltySec?: number | undefined;
 }
 
@@ -611,6 +619,7 @@ const COMMON_KEYS: ReadonlySet<string> = new Set([
   'nudges',
   'lights',
   'onSolved',
+  'pool',
   'penaltySec',
 ]);
 
@@ -655,6 +664,7 @@ function puzzleOf(puzzle: LoosePuzzle): DraftPuzzle {
     nudges: [...(puzzle.nudges ?? [])],
     lights: [...(puzzle.lights ?? [])],
     onSolved: puzzle.onSolved ?? '',
+    pool: puzzle.pool ?? '',
     penaltySec: puzzle.penaltySec ?? null,
     fields: fieldsFromJson(fieldSpecs(type), puzzle),
   };

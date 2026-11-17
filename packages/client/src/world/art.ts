@@ -1363,9 +1363,9 @@ function drawConsoleBadge(ctx: CanvasRenderingContext2D, look: StationLook, id: 
 
 /** Anchor: TILE CENTER. A small console/terminal with glowing screen; armed = teal glow
  * (strength follows pulse) and terminal lines; done = dim green check on screen; locked =
- * grey, small lock glyph; out of service = grey, its screen blank, a tag over it. A console of a two-console station carries its letter on a
- * disc, whatever its status. No title: the operator stands right above the console, and
- * the objective bar names the station. */
+ * grey, small lock glyph; out of service = grey, its screen blank, a tag over it. A console
+ * of a two-console station carries its letter on a disc, whatever its status. No title: the
+ * operator stands right above the console, and the objective bar names the station. */
 export function drawStation(ctx: CanvasRenderingContext2D, o: StationOpts): void {
   const look = STATION_LOOKS[o.status];
   const wave = pulseWave(o.pulse);
