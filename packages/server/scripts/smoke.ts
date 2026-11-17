@@ -1063,13 +1063,52 @@ function nextEmergencyIn(): number {
   return next - since;
 }
 
+/** The relay console and the instruction `client`'s view carries now; null without an emergency. */
+const relayOf = (client: TestClient) => client.view?.map?.sabotage?.relay ?? null;
+
+/** What `client` reads out right now, as text; 'null' where it has no instruction. */
+const orderOf = (client: TestClient): string => JSON.stringify(relayOf(client)?.instruction ?? null);
+
+/**
+ * The instruction `holder` reads out is carried out at the console of the player it names;
+ * whether one was — it is waited for until the holder reads another, two seconds at most.
+ */
+async function carryOut(holder: TestClient): Promise<boolean> {
+  const order = relayOf(holder)?.instruction ?? null;
+  const named = order === null ? null : consoleNamed(order);
+  if (order === null || named === null) {
+    return false;
+  }
+  const before = orderOf(holder);
+  const input = { kind: 'set', control: named.control, value: order.value } as const;
+  named.owner.send({ kind: 'puzzle-input', input });
+  for (let waited = 0; orderOf(holder) === before && waited < 2000; waited += 10) {
+    await sleep(10);
+  }
+  return true;
+}
+
+/** Whose relay console an instruction names, and the id of the control there; null for none. */
+function consoleNamed(order: {
+  playerName: string;
+  control: string;
+}): { owner: TestClient; control: string } | null {
+  for (const owner of crew) {
+    const control = relayOf(owner)?.controls.find((each) => each.name === order.control);
+    if (owner.view?.you.name === order.playerName && control !== undefined) {
+      return { owner, control: control.id };
+    }
+  }
+  return null;
+}
+
 /**
  * A relay emergency weathered by the crew: each instruction a console reads out is carried out
  * at the console of the player it names, until the relays hold — cleared, at no cost.
  */
 async function weather(): Promise<void> {
-  const label = crew.map((client) => client.view?.map?.sabotage?.label).find(Boolean);
-  const alarmsBefore = crew[0].view?.penaltySeq ?? 0;
+  const label = crew.map((client) => client.view?.map?.sabotage?.label).find(Boolean) ?? '?';
+  const alarmsBefore = alarmsOf(crew[0]);
   const deadline = Date.now() + emergencies.durationSec * 1000;
   let done = 0;
   while (emergencyOn()) {
@@ -1077,36 +1116,22 @@ async function weather(): Promise<void> {
       fail(`the emergency "${label}" is not cleared after ${emergencies.durationSec} s`);
     }
     for (const holder of crew) {
-      const order = holder.view?.map?.sabotage?.relay?.instruction ?? null;
-      const owner = crew.find((client) => client.view?.you.name === order?.playerName);
-      const control = owner?.view?.map?.sabotage?.relay?.controls.find(
-        (each) => each.name === order?.control,
-      );
-      if (order === null || owner === undefined || control === undefined) {
-        continue;
-      }
-      const before = JSON.stringify(order);
-      owner.send({
-        kind: 'puzzle-input',
-        input: { kind: 'set', control: control.id, value: order.value },
-      });
-      const from = Date.now();
-      while (
-        JSON.stringify(holder.view?.map?.sabotage?.relay?.instruction ?? null) === before &&
-        Date.now() - from < 2000
-      ) {
-        await sleep(10);
-      }
-      done += 1;
+      done += (await carryOut(holder)) ? 1 : 0;
     }
     await sleep(20);
   }
   assert(
-    (crew[0].view?.penaltySeq ?? 0) === alarmsBefore,
+    alarmsOf(crew[0]) === alarmsBefore,
     `the emergency „${label}" weathered: ${done} instructions carried out at the consoles ` +
       'they named, cleared without an alarm',
   );
 }
+
+/** How many alarms `client`'s view counts so far. */
+const alarmsOf = (client: TestClient): number => client.view?.penaltySeq ?? 0;
+
+/** How many stations `client`'s view has solved. */
+const solvedOf = (client: TestClient): number => client.view?.currentPuzzleIndex ?? 0;
 
 /** The longest a station from the Serverraum on takes the walkthrough, walks included, s. */
 const STRETCH_SEC = 75;
@@ -1118,11 +1143,9 @@ const STRETCH_SEC = 75;
  * once `afterSolved` stations are solved.
  */
 async function quietFor(seconds: number): Promise<void> {
-  const solved = crew[0].view?.currentPuzzleIndex ?? 0;
-  if (solved < emergencies.afterSolved || solved >= mission.puzzles.length) {
-    return;
-  }
-  if (!emergencyOn() && nextEmergencyIn() > seconds * 1000) {
+  const solved = solvedOf(crew[0]);
+  const due = solved >= emergencies.afterSolved && solved < mission.puzzles.length;
+  if (!due || (!emergencyOn() && nextEmergencyIn() > seconds * 1000)) {
     return;
   }
   const comes = Date.now() + Math.max(0, nextEmergencyIn()) + 3000;
@@ -1489,25 +1512,36 @@ function startupOf(view: PlayerView | null): StartupView | null {
  * it costs the def's penaltySec, and the value stays in the script.
  */
 async function wrongStart(typer: TestClient, board: TestClient): Promise<void> {
-  const feeders = startupOf(board.view)?.board?.feeders ?? fail('console B shows no Schaltfeld');
-  const faulty =
-    feeders.find((entry) => entry.lamps[0] === 'rot')?.feeder ?? fail('no feeder shows a fault');
+  const faulty = faultyFeeder(board);
   const deadlineBefore = typer.view?.deadlineAt ?? 0;
-  const alarmsBefore = typer.view?.penaltySeq ?? 0;
+  const alarmsBefore = alarmsOf(typer);
   typer.send({ kind: 'puzzle-input', input: { cmd: 'setze', gap: 'abgang', value: faulty } });
-  await typer.until('the gap set', (v) => startupOf(v)?.terminal?.values.abgang === faulty);
+  await typer.until('the gap set', (v) => terminalOf(v)?.values.abgang === faulty);
   typer.send({ kind: 'puzzle-input', input: { cmd: 'start' } });
   const refused = await typer.expectView('sees the alarm after a start with the faulty feeder',
     (v) => v.penaltySeq === alarmsBefore + 1);
-  assert((refused.deadlineAt ?? 0) === deadlineBefore - STARTUP.penaltySec * 1000,
+  assert(refused.deadlineAt === deadlineBefore - STARTUP.penaltySec * 1000,
     `the wrong start cost ${STARTUP.penaltySec}s of deadline`);
   assert(
-    startupOf(refused)?.terminal?.sent === false && startupOf(board.view)?.board?.pulse === null,
+    terminalOf(refused)?.sent === false && boardOf(board.view)?.pulse === null,
     'no pulse went off: the script stands as it was, the ladder dark',
   );
   credit(typer, 'alarms');
   deliberate += 1;
   await board.until('the alarm', (v) => v.penaltySeq === alarmsBefore + 1);
+}
+
+/** The live terminal of the open Anlaufsteuerung as `view` shows it; null where it shows none. */
+const terminalOf = (view: PlayerView | null) => startupOf(view)?.terminal ?? null;
+
+/** The live Schaltfeld of the open Anlaufsteuerung as `view` shows it; null where it shows none. */
+const boardOf = (view: PlayerView | null) => startupOf(view)?.board ?? null;
+
+/** The feeder whose lamps at `board`'s Schaltfeld say it is faulty: red over dark. */
+function faultyFeeder(board: TestClient): number {
+  const feeders = boardOf(board.view)?.feeders ?? fail('console B shows no Schaltfeld');
+  const faulty = feeders.find((entry) => entry.lamps[0] === 'rot');
+  return faulty === undefined ? fail('no feeder shows a fault') : faulty.feeder;
 }
 
 /**
@@ -1572,15 +1606,15 @@ function firewallOf(view: PlayerView | null): FirewallView | null {
  */
 async function waveHolds(gate: TestClient, analysis: TestClient): Promise<void> {
   const atB = CONSOLE_B.get(PAKETFILTER) ?? fail('no spot at the Analysepult');
-  const alarmsBefore = gate.view?.penaltySeq ?? 0;
+  const alarmsBefore = alarmsOf(gate);
   gate.send({ kind: 'puzzle-input', input: { start: true } });
   const released = await gate.until('the first wave released', (v) =>
     firewallOf(v)?.waiting === false);
-  const startedAt = firewallOf(released)?.clock?.startedAt ?? fail('the wave has no clock');
+  const startedAt = waveClock(released).startedAt;
   // Two tiles down the Flur: out of the console's reach.
   await walkTo(analysis, [atB[0], atB[1] + 2]);
   await gate.expectView('the wave holds while the Analysepult stands empty', (v) =>
-    firewallOf(v)?.clock?.heldAt != null && firewallOf(v)?.vacant.includes('b') === true);
+    waveClock(v).heldAt !== null && firewallOf(v)?.vacant.includes('b') === true);
   gate.send({ kind: 'puzzle-input', input: { trip: 0 } });
   const refused = await gate.expect('refusal at the Sperrpult', isError);
   assert(refused.message === 'Am Analysepult steht niemand.',
@@ -1588,11 +1622,16 @@ async function waveHolds(gate: TestClient, analysis: TestClient): Promise<void> 
   await sleep(600);
   await walkTo(analysis, atB);
   const on = await gate.expectView('the wave runs on once both consoles are manned', (v) =>
-    firewallOf(v)?.clock?.heldAt === null && firewallOf(v)?.vacant.length === 0);
+    waveClock(v).heldAt === null && firewallOf(v)?.vacant.length === 0);
   assert(
-    (firewallOf(on)?.clock?.startedAt ?? 0) >= startedAt + 600 && on.penaltySeq === alarmsBefore,
+    waveClock(on).startedAt >= startedAt + 600 && on.penaltySeq === alarmsBefore,
     'the hold moved the wave’s clock on by the time it stood, and cost nothing',
   );
+}
+
+/** The clock of the wave under way as `view`'s console shows it; fails where it shows none. */
+function waveClock(view: PlayerView): { startedAt: number; heldAt: number | null } {
+  return firewallOf(view)?.clock ?? fail('the Paketfilter shows no wave’s clock');
 }
 
 /**

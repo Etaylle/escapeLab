@@ -124,6 +124,9 @@ function stationOf(seed: number, index: number): PuzzleDef {
   return def;
 }
 
+/** The seed of the run `member` plays, as its view of a pinned room says it. */
+const seedOf = (member: Member): number => lastView(member).seed?.run ?? BLACKOUT_SEED;
+
 /** How many rounds of a second a station may take: the Paketfilter's waves run on the clock. */
 const ROUNDS = 240;
 
@@ -138,13 +141,13 @@ const inEmergency = (member: Member): boolean => lastView(member).map?.sabotage 
  * costs its minute — and `operator` switches the station on again.
  */
 function work(room: Room, operator: Member, partner: Member): void {
-  const view = lastView(operator);
-  const index = view.currentPuzzleIndex;
-  const def = stationOf(view.seed?.run ?? BLACKOUT_SEED, index);
+  const index = lastView(operator).currentPuzzleIndex;
+  const def = stationOf(seedOf(operator), index);
   const station = moduleFor(def.type);
   const two = station.consoles === 2;
-  for (let round = 0; round < ROUNDS && lastView(operator).currentPuzzleIndex === index; round++) {
-    if (inEmergency(operator) || lastView(operator).puzzle === null) {
+  const open = (): boolean => lastView(operator).currentPuzzleIndex === index;
+  for (let round = 0; round < ROUNDS && open(); round++) {
+    if (dropped(operator)) {
       sitOut(room, operator);
       continue;
     }
@@ -159,10 +162,14 @@ function work(room: Room, operator: Member, partner: Member): void {
     play(room, station.solve(def, perspectives, edgework, aid), operator, partner);
     vi.advanceTimersByTime(1000);
   }
-  if (lastView(operator).currentPuzzleIndex === index) {
+  if (open()) {
     throw new Error(`${def.title} is not solved after ${ROUNDS} rounds`);
   }
 }
+
+/** Whether an emergency has dropped the station `operator` works: none is open on its view. */
+const dropped = (operator: Member): boolean =>
+  inEmergency(operator) || lastView(operator).puzzle === null;
 
 /** An emergency sat out to its end, then the station it dropped switched on again by `operator`. */
 function sitOut(room: Room, operator: Member): void {
@@ -230,7 +237,7 @@ function serverraum({ room, anna, ben }: BlackoutCrew): void {
  * Notstromkasten with Anna at the box in the Maschinenraum and Ben at the Prüfpult in the Labor.
  */
 function wechselplatz({ room, anna, ben }: BlackoutCrew): void {
-  const drawn = stationOf(lastView(anna).seed?.run ?? BLACKOUT_SEED, 4);
+  const drawn = stationOf(seedOf(anna), 4);
   if (drawn.id === 'signalkette') {
     walk(room, anna, 9, 19);
     walk(room, ben, 29, 9);

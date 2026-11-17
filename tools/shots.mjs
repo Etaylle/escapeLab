@@ -2229,21 +2229,27 @@ function operatorFirst(players) {
     : [...players].sort((a, b) => stepsTo(a.seen, station) - stepsTo(b.seen, station));
 }
 
+/** Whether a source gives pages this run: not one of a station out of service alone. */
+const inService = (manual) => manual.outOfService !== true;
+
 /**
  * The open manual object the crew has come across that a player can walk to soonest, one
- * covering the armed station first.
+ * covering the armed station first, one with pages before a wall chart — never one out of
+ * service this run, which gives no page.
  */
 function nearestManual(seen) {
   const map = seen.view.map;
   const from = tileOf(seen);
   const armed = map.stations.find((s) => s.status === 'armed')?.puzzleId;
   const options = map.manuals
-    .filter((manual) => manual.known && manual.opened)
+    .filter((manual) => manual.known && manual.opened && inService(manual))
     .map((manual) => ({ manual, path: from === null ? null : route(map, from, manual) }))
     .filter((option) => option.path !== null)
     .sort(
       (a, b) =>
         Number(b.manual.puzzleIds.includes(armed)) - Number(a.manual.puzzleIds.includes(armed)) ||
+        // One with pages to turn before a wall chart's one sheet (reading-page2.png).
+        Number(a.manual.kind === 'chart') - Number(b.manual.kind === 'chart') ||
         a.path.length - b.path.length,
     );
   return options[0]?.manual ?? null;
@@ -6562,21 +6568,25 @@ function padPlace(pad, over, width, height) {
 }
 
 /**
- * The open source a player takes notes at: a clipboard first, else the nearest — where it
+ * The open source a player takes notes at: a clipboard first, else the nearest with pages,
+ * else a wall chart — where it
  * lies from the audience's view (`audience`), which places a source before the crew has come
- * across it; null where none is open within the player's reach.
+ * across it; never one out of service this run (Blackout's Klemmbrett, where the Signalkette
+ * rests); null where none is open within the player's reach.
  */
 function sourceToNote(seen, audience) {
   const map = seen.view.map;
   const everything = audience.view?.map ?? map;
   const from = tileOf(seen);
   const options = everything.manuals
-    .filter((manual) => manual.opened)
+    .filter((manual) => manual.opened && inService(manual))
     .map((manual) => ({ manual, path: from === null ? null : route(map, from, manual) }))
     .filter((option) => option.path !== null)
     .sort(
       (a, b) =>
         Number(b.manual.kind === 'clipboard') - Number(a.manual.kind === 'clipboard') ||
+        // Pages before a wall chart's one sheet: the phone held sideways turns them.
+        Number(a.manual.kind === 'chart') - Number(b.manual.kind === 'chart') ||
         a.path.length - b.path.length,
     );
   return options[0]?.manual ?? null;
@@ -11168,6 +11178,19 @@ const cardOpacities = (page) =>
   );
 
 /**
+ * How the held shot goes for `gate`: where its player walks off the Sperrpult to, the shot's
+ * name and the way back to the console — the probe's binder, firewall-held.png and the probe's
+ * console A unless the mission played says otherwise (`shots.away`, `.names`, `.man`).
+ */
+function heldWays(gate, shots) {
+  return {
+    spot: shots.away ?? FIREWALL_MISSION.map.manuals[0].spots[0],
+    shot: shots.names?.held ?? 'firewall-held.png',
+    man: shots.man ?? (() => manFirewall(gate, 'a', 'gate')),
+  };
+}
+
+/**
  * firewall-held.png, once HELD_CARDS cards are on the lines: `gate`'s player steps back from the
  * Sperrpult and walks to the binder, the wave holds, and the Analysepult is shot so — every card
  * drawn whole, the hold's word over the numbers, never across a card; the run fails where a
@@ -11181,8 +11204,7 @@ async function heldShot({ gate, analysis }, shots) {
   shots.held = false;
   await gate.page.keyboard.press('Escape');
   await gate.page.locator('.station-modal').waitFor({ state: 'hidden', timeout: 3000 });
-  // Off the Sperrpult: to the probe's binder, or where the mission played says (`shots.away`).
-  const spot = shots.away ?? FIREWALL_MISSION.map.manuals[0].spots[0];
+  const { spot, shot, man } = heldWays(gate, shots);
   if (!(await walkNear(gate.page, gate.seen, spot))) {
     throw new Error(`${gate.name} found no way off the Sperrpult to ${spot.x},${spot.y}`);
   }
@@ -11191,10 +11213,9 @@ async function heldShot({ gate, analysis }, shots) {
     throw new Error(`${gate.name} left the Sperrpult, but the wave holds not`);
   }
   await sleep(400); // the hold drawn
-  const shot = shots.names?.held ?? 'firewall-held.png';
   await capture(analysis.page, shot);
   await heldVerdict(analysis, shot);
-  await (shots.man ?? (() => manFirewall(gate, 'a', 'gate')))();
+  await man();
   await firewallRuns(gate);
   return true;
 }
@@ -12969,22 +12990,32 @@ const deviceShot = (name) => (groupOn('devices') ? name : null);
 const atDevices = (step) => inGroup('devices', step, step);
 
 /**
- * One stage of Blackout's Anlaufsteuerung as its plan pins it: the stage has to be dealt as
- * pinned — its load at the typing console, its lamps at the other —, its values are set and the
- * script started, and the breaker closes once the pulse stands on the ladder's marked steps
- * (`startupBreaker`). With `shots`, the first stage is caught: the terminal with its values set
- * (anlauf-terminal.png), the pulse in the duct under the Flur on `shots.world`'s page
- * (anlauf-duct.png) and the Schaltfeld with the pulse on its ladder (anlauf-ladder.png).
+ * The typing and the taking console of `stage`, once both pages show it live and dealt as the
+ * plan pins it — its load at the terminal, its lamps at the Schaltfeld; fails naming the seed
+ * where they differ.
  */
-async function anlaufStage({ a, b }, stage, shots) {
+async function anlaufSides({ a, b }, stage) {
   const [typer, board] = stage.types === 'a' ? [a, b] : [b, a];
   const live = () => startupView(typer)?.role === 'terminal' && startupView(board)?.role === 'board';
   if (!(await until(live, CATCH_UP_MS)) || !startupDealt(typer, board, stage)) {
-    const shown = `${startupView(typer)?.terminal?.load} with ${JSON.stringify(
-      startupView(board)?.board?.feeders.map((feeder) => feeder.lamps),
-    )}`;
-    differs(`stage ${stage.stage} of the Anlaufsteuerung`, shown, `${stage.load} with ${JSON.stringify(stage.feeders)}`);
+    const lamps = startupView(board)?.board?.feeders.map((feeder) => feeder.lamps);
+    const shown = `${startupView(typer)?.terminal?.load} with ${JSON.stringify(lamps)}`;
+    const pinned = `${stage.load} with ${JSON.stringify(stage.feeders)}`;
+    differs(`stage ${stage.stage} of the Anlaufsteuerung`, shown, pinned);
   }
+  return { typer, board };
+}
+
+/**
+ * One stage of Blackout's Anlaufsteuerung as its plan pins it: the stage has to be dealt as
+ * pinned (`anlaufSides`), its values are set and the script started, and the breaker closes
+ * once the pulse stands on the ladder's marked steps (`startupBreaker`). With `shots`, the
+ * first stage is caught: the terminal with its values set (anlauf-terminal.png), the pulse in
+ * the duct under the Flur on `shots.world`'s page (anlauf-duct.png) and the Schaltfeld with the
+ * pulse on its ladder (anlauf-ladder.png).
+ */
+async function anlaufStage(crew, stage, shots) {
+  const { typer, board } = await anlaufSides(crew, stage);
   const first = shots !== null && stage.stage === 1;
   // Typed at the prompt where the typing page has keys; on the bezel's keys under a finger.
   const lines = await startupSettings(typer, stage, !(await isTouch(typer.page)));
@@ -12997,7 +13028,8 @@ async function anlaufStage({ a, b }, stage, shots) {
   }
   const shot = first ? deviceShot('anlauf-ladder.png') : null;
   const waited = await atDevices(() => startupBreaker(board, stage.breaker, shot));
-  return `Stufe ${stage.stage}: „${lines.join('", „')}", Schalter ${stage.breaker} nach ${seconds(waited)}`;
+  const set = `„${lines.join('", „')}"`;
+  return `Stufe ${stage.stage}: ${set}, Schalter ${stage.breaker} nach ${seconds(waited)}`;
 }
 
 /** Whether `page` is worked by a finger. */
@@ -13101,6 +13133,33 @@ async function schottOpens(player) {
 }
 
 /**
+ * The crew at Blackout's Paketfilter: the guest walks past the policy on the Flur's south wall,
+ * where the plan lays it, and turns the phone sideways — the Analysepult's five lines of cards
+ * take a phone held so (the module's own proof, 844 and 932 wide): upright at 420 its fourth
+ * and fifth line run out of the device —; both open their panels, which have to be the
+ * Sperrpult and the Analysepult; the guest's device is shot on the phone (devices), the host's
+ * notepad beside the Sperrpult where it is still owed. Returns the phone's size held upright.
+ */
+async function manPaketfilter(host, guest) {
+  const policy = pinnedSource('chart');
+  if (!(await walkNear(guest.page, guest.seen, workSpot(guest, policy)))) {
+    throw new Error(`${guest.name} found no way to the ${policy.label}`);
+  }
+  await foundWherePinned(guest, policy);
+  const upright = guest.page.viewportSize() ?? SIZES[2];
+  await guest.page.setViewportSize({ width: SIZES[3].width, height: SIZES[3].height });
+  await manArmed(host, 'a');
+  await manArmed(guest, 'b');
+  const role = (player) => firewallView(player)?.role ?? null;
+  if (!(await until(() => role(host) === 'gate' && role(guest) === 'analysis', 3000))) {
+    throw new Error(`the Paketfilter's panels say ${role(host)} and ${role(guest)}`);
+  }
+  await inGroup('devices', () => captureDevicePhone(guest, stationSlug(guest)));
+  await payDeviceNoting(host);
+  return { width: upright.width, height: upright.height };
+}
+
+/**
  * Blackout's Paketfilter on the pinned seed: the guest walks past the policy on the Flur's
  * south wall, where the plan lays it, to the Analysepult east of the Schott, the host to the
  * Sperrpult; both open their panels — the guest's phone held sideways shot (devices), the
@@ -13112,23 +13171,7 @@ async function schottOpens(player) {
  * (schott-open.png). Fails unless it solves, or where it took more than one alarm.
  */
 async function playPaketfilter(host, guest) {
-  const policy = pinnedSource('chart');
-  if (!(await walkNear(guest.page, guest.seen, workSpot(guest, policy)))) {
-    throw new Error(`${guest.name} found no way to the ${policy.label}`);
-  }
-  await foundWherePinned(guest, policy);
-  // The Analysepult's five lines of cards take a phone held sideways (the module's own proof,
-  // 844 and 932 wide): upright at 420 its fourth and fifth line run out of the device.
-  const upright = guest.page.viewportSize();
-  await guest.page.setViewportSize({ width: SIZES[3].width, height: SIZES[3].height });
-  await manArmed(host, 'a');
-  await manArmed(guest, 'b');
-  const role = (player) => firewallView(player)?.role ?? null;
-  if (!(await until(() => role(host) === 'gate' && role(guest) === 'analysis', 3000))) {
-    throw new Error(`the Paketfilter's panels say ${role(host)} and ${role(guest)}`);
-  }
-  await inGroup('devices', () => captureDevicePhone(guest, stationSlug(guest)));
-  await payDeviceNoting(host);
+  const upright = await manPaketfilter(host, guest);
   const crew = { gate: host, analysis: guest };
   const alarms = host.seen.view.alarms.count;
   const from = Date.now();
@@ -13151,9 +13194,7 @@ async function playPaketfilter(host, guest) {
       `${solved ? 'solved' : '!! not solved'}, ` +
       (raised === 0 ? 'no alarm' : `!! ${raised} alarm(s)`),
   );
-  if (upright !== null) {
-    await guest.page.setViewportSize(upright);
-  }
+  await guest.page.setViewportSize(upright);
   if (!solved || raised > 1) {
     throw new Error(`the Paketfilter ended ${solved ? 'solved' : 'unsolved'}, ${raised} alarm(s)`);
   }
