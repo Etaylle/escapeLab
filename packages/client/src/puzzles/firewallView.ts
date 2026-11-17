@@ -77,7 +77,7 @@ export function armable(puzzle: FirewallPuzzle, now: number): boolean {
  * and nothing is due.
  */
 export function nextChange(puzzle: FirewallPuzzle, now: number): number | null {
-  const { clock, packets, event } = puzzle;
+  const { clock, packets } = puzzle;
   const unlocks = armLockEnd(puzzle);
   if (unlocks !== null && unlocks > now) {
     return unlocks;
@@ -85,11 +85,20 @@ export function nextChange(puzzle: FirewallPuzzle, now: number): number | null {
   if (clock === null || packets === null || clock.heldAt !== null) {
     return null;
   }
+  const due = runningDue(puzzle, clock, now).filter((at) => at > now);
+  return due.length === 0 ? null : Math.min(...due);
+}
+
+/**
+ * What a running wave shows of its own accord, server epoch ms: every packet on its lines
+ * reaching the Kern, a drop's burst gone, the breath's next whole second before the first packet.
+ */
+function runningDue(puzzle: FirewallPuzzle, clock: Clock, now: number): number[] {
+  const { event, packets } = puzzle;
   const arrivals = onTheLines(puzzle, now).map((b) => clock.startedAt + b.enterMs + puzzle.fallMs);
   const burst = event?.kind === 'drop' ? [event.at + BURST_MS] : [];
-  const breath = packets.length === 0 ? [now + 1000 - (waveMsAt(clock, now) % 1000)] : [];
-  const due = [...arrivals, ...burst, ...breath].filter((at) => at > now);
-  return due.length === 0 ? null : Math.min(...due);
+  const breath = packets?.length === 0 ? [now + 1000 - (waveMsAt(clock, now) % 1000)] : [];
+  return [...arrivals, ...burst, ...breath];
 }
 
 /** A console as the status line names it. */

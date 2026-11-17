@@ -396,6 +396,6 @@ button.firewall-card {
 
   .firewall-scope {
     --pad-top: 6px;
-  padding: var(--pad-top) 8px 4px;
+    padding: var(--pad-top) 8px 4px;
   }
 }

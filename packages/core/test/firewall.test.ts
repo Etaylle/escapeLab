@@ -619,6 +619,11 @@ describe('a mark', () => {
         'Dieses Paket ist nicht in der Leitung.',
       );
     }
+    // the trip's grace is no mark's: 100 ms through, a packet takes none
+    const hostile = state.packets.findIndex((p) => p.hostile);
+    const late = () =>
+      moved(state, arrives(state, hostile) + 100, 'b', { mark: state.packets[hostile]?.id ?? '' });
+    expect(late).toThrow('Dieses Paket ist nicht in der Leitung.');
   });
 });
 
