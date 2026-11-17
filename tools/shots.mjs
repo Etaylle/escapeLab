@@ -10978,7 +10978,7 @@ async function captureDuct(audience) {
   }
   await sleep(Math.max(0, ductPulse(audience).sentAt + 1500 - Date.now()));
   await capture(audience.page, 'startup-duct.png');
-  for (const size of [SIZES[3], SIZES[4]]) {
+  for (const size of [STARTUP_LAPTOP, SIZES[3], SIZES[4]]) {
     await audience.page.setViewportSize({ width: size.width, height: size.height });
     await sleep(300);
     await startupFits(audience, `startup audience ${size.width}`);
