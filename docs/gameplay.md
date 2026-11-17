@@ -589,18 +589,20 @@ solve opening the Serverschott —; it ships with its probe, `tools/fixtures/fir
 („Filterprobe": the Sperrpult in the Leitstand, the Analysepult in the Wache, the policy in a
 binder, the Laborkennung between them), and with its bay in the Übungshalle.
 
-- **Console A, the Sperrpult**, a scope of five lines numbered from the left, running down into
-  the Kern. The packets come down them as plain points — no header anywhere at this console —,
-  a packet marked at console B wearing a ring and a tick (never the colour alone). A gate stands
-  under one line: a tap on a line sets it there, ◀ ▶, ← → or the keys that walk left and right
-  (A D unless rebound) step it; SPERREN trips it, and the server drops the lowest packet on that
-  line at its own moment. FREIGABE starts a waiting wave; space or enter press whichever of the
-  two the wave stands for. The gate is the console's own; only the trip goes to the server,
-  with its line. The lines' numbers stand over the lines, where no packet covers them.
-- **Console B, the Analysepult**, the same scope with the same packets at the same places, each
-  as a card of its header in two lines — the Quelle over port and protocol, „67/UDP", 14 px at
-  least, 44 px high —, a marked card wearing a tick and a heavier border. A tap on a card, or a
-  cursor stepped with ← → and space or enter, sets or takes back its mark. It drops nothing.
+- **Console A, the Sperrpult**, a scope of five lines numbered from the left, running down into the
+  Kern. The packets come down them as plain points — no header anywhere at this console —, a packet
+  marked at console B wearing a ring and a tick (never the colour alone). A gate stands under one
+  line: a tap on a line sets it there, ◀ ▶, ← → or the keys that walk left and right (A D unless
+  rebound) step it; SPERREN trips it, and the server drops the lowest packet on that line at its own
+  moment. FREIGABE starts a waiting wave — never while the Analysepult stands empty, nor in the
+  second after a fault, when space may still be a late trip's —; space or enter press whichever of
+  the two the wave stands for. The gate is the console's own; only the trip goes to the server, with
+  its line. The lines' numbers stand over the lines, where no packet covers them.
+- **Console B, the Analysepult**, the same scope with the same packets at the same places, each as a
+  card of its header in two lines — the Quelle over port and protocol, „67/UDP", 14 px at least, two
+  lines of its type high, 44 px at least, at every text size the settings offer —, a marked card
+  wearing a tick and a heavier border. A tap on a card, or a cursor stepped with ← → and space or
+  enter, sets or takes back its mark. It drops nothing.
 - **The source** is the module's printed page, the Sicherheitsrichtlinie: three networks (Labornetz
   10.4.x.x, Wartungsnetz 10.9.x.x, everything else Fremdnetz) and six numbered rules, the first that
   fits deciding — the Wartungsnetz passes, ports 23 and 3389 are dropped, the Labornetz over TCP
@@ -614,10 +616,14 @@ binder, the Laborkennung between them), and with its bay in the Übungshalle.
   falling for 14 s, is the lab's heaviest. Every wave carries a decoy — a packet a rule in play
   further down would drop, which only the order lets through: within rules 1, 2, 3 and 6 only a
   Wartungsnetz packet can be one, caught further down by rule 2 in one wave and rule 6 in the next
-  (a Labornetz decoy would need rule 4). Every second wave also carries a trap: remote ports from
-  the Labornetz over TCP, which rule 3 would let through and rule 2 drops first. The default's three
-  waves take about two minutes on the clock (118 s median over 200 seeds for the solver, 98–126 s),
-  the moves never shortening a wave.
+  (a Labornetz decoy would need rule 4). Every wave also carries a trap, one of four the simplest
+  rules set, in an order the seed draws, so that one wave's differs from the next: the Labornetz
+  over TCP on a port that looks like trouble (rule 3 passes it), the Labornetz over UDP (rule 6
+  drops it, friendly as it looks), the Wartungsnetz on port 23 or 3389 (rule 1 passes it before rule
+  2) and the Labornetz over TCP on 23 or 3389 (rule 2 drops it before rule 3); a crew that learned
+  only „the Wartungsnetz passes, the rest of UDP drops" takes an alarm in most seeds. The default's
+  three waves take about two minutes on the clock (118 s median over 200 seeds for the solver,
+  98–126 s), the moves never shortening a wave.
 - **A wave** is `packets` packets (5–9, default 7), two or three of them hostile, coming on one
   after another a quarter of a fall apart, each on a line nothing came onto for 0.6 of a fall —
   so that two cards of a line never overlap on the smallest scope, a phone's 130 px —, and each
@@ -634,9 +640,11 @@ binder, the Laborkennung between them), and with its bay in the Übungshalle.
   it off, and the fresh wave waits for the Freigabe, so a crew standing still loses one alarm at
   most, ever (a property test from any moment over ten minutes). A trip that hits nothing is no
   fault. A console draws the packets from its own reading of the server's clock, so a trip lands
-  half a round trip after what was seen: for 300 ms after a hostile packet reaches the Kern line
-  a trip still takes it (`TRIP_GRACE_MS`), and only then is the Kern's fault judged; a packet the
-  policy lets through is in the Kern once through. A move the clock overtook — the station
+  half a round trip after what was seen: for 300 ms after a marked packet reaches the Kern line a
+  trip still takes it (`TRIP_GRACE_MS`), and only then is the Kern's fault judged. The grace is
+  for a mark's honest late trip and nothing else: an unmarked packet is in the Kern once through,
+  so a Sperrpult alone that trips in the grace learns nothing of the policy (a property test: in
+  100 seeds × 3 waves not one packet dropped). A move the clock overtook — the station
   solved, or an alarm raised, by the move's moment — counts for nothing and is refused by none.
 - **Needs two.** A wave runs only while both consoles are manned, and holds — the packets frozen
   where they stand, the Sperrpult's points dimmed, the Analysepult's cards as readable as ever
