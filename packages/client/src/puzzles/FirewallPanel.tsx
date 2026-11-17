@@ -359,8 +359,8 @@ function pressed(puzzle: FirewallPuzzle, trip: () => void, arm: () => void): voi
  * Console a, the Sperrpult: the scope of points, the gate under its lines — set by a tap on a
  * line, stepped by ◀ ▶, ← → or the keys that walk left and right (`useSteps`) —, SPERREN, which
  * trips it, and FREIGABE, which starts a waiting wave; space or enter press the one of the two
- * the wave stands for (`pressed`). The gate is this console's own; only the trip goes to the server, with
- * its line.
+ * the wave stands for (`pressed`). The gate is this console's own; only the trip goes to the
+ * server, with its line.
  */
 function Sperrpult({ puzzle, send }: { puzzle: FirewallPuzzle; send: Send }) {
   const now = useScopeNow(puzzle, true);

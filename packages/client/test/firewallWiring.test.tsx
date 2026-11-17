@@ -227,7 +227,7 @@ describe('the Sperrpult’s controls', () => {
     expect(sent.at(-1)).toEqual({ start: true });
   });
 
-  it('gives no Freigabe on space in the second after a fault, nor with the Analysepult empty', () => {
+  it('gives no Freigabe on space a second after a fault, nor with the Analysepult empty', () => {
     const sent: Input[] = [];
     const fault = { n: 3, kind: 'fault' as const, at: T0 + MID - 500, line: null };
     render({ ...seen('a', true), event: fault }, sent);
