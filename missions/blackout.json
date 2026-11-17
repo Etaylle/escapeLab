@@ -311,7 +311,7 @@
         "text": "Wir sind vom Reaktor zur Luke im Archiv gerannt. Beide Wege sind gleich weit: durchs Labor oder am Serverraum vorbei."
       },
       {
-        "x": 27,
+        "x": 24,
         "y": 8,
         "text": "Dienstplan Wechselplatz: Signalkette, Funkpult, Notstromkasten. Je Nacht hat eine Anlage Dienst, die zwei anderen ruhen."
       },
@@ -321,8 +321,8 @@
         "text": "Das Aggregat läuft nur noch über die Anlaufsteuerung an. Der Notstromkasten hängt seither am Wechselplatz. – Haller"
       },
       {
-        "x": 10,
-        "y": 19,
+        "x": 14,
+        "y": 13,
         "text": "Die Sicherungen der ruhenden Anlagen liegen bei mir im Spind. AUSSER BETRIEB heißt außer Betrieb. – Haller"
       }
     ],

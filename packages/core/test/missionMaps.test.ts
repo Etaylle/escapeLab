@@ -360,26 +360,10 @@ function blackoutWalks(blackout: Mission, plan: BlackoutPlan): [string, number][
     [spot, ...STEPS.map(([dx, dy]) => ({ x: spot.x + dx, y: spot.y + dy }))].find((s) =>
       walkable(map, s.x, s.y),
     ) ?? spot;
-  const opener = (door: (typeof map.doors)[number]): string | undefined =>
-    door.opensBy.kind === 'puzzle' ? door.opensBy.puzzleId : door.opensBy.untilSolved;
-  /** The doors shut with the first `n` stations of the run solved, but those a plate holds. */
-  const run = stationsIn(blackout.puzzles, { [plan.pool]: plan.drawn });
-  const before = (n: number, held: readonly string[] = []): Set<string> => {
-    const solved = new Set(run.slice(0, n).flatMap(refsOf));
-    return new Set(
-      map.doors
-        .filter((d) => !held.includes(d.id) && !solved.has(opener(d) ?? ''))
-        .map((d) => tileKey(d.x, d.y)),
-    );
-  };
-  const plateDoor = map.doors.find((door) => door.opensBy.kind === 'plate')?.id ?? '';
-  const plate = map.plates.find((p) =>
-    map.doors.some((d) => d.opensBy.kind === 'plate' && d.opensBy.plateId === p.id),
-  );
+  const before = shutBefore(blackout, plan);
+  const plateDoors = map.doors.filter((door) => door.opensBy.kind === 'plate').map((d) => d.id);
   const fuse = plan.ersatzsicherung;
-  const key = map.items.find((item) => map.manuals.some((m) => m.needsKey === item.id));
-  const sign = map.edgeworkSign ?? { x: -1, y: -1 };
-  const hatch = map.exit ?? { x: -1, y: -1 };
+  const { plate, key, sign, hatch } = landmarks(map);
   const [lever, reactor] = [at('notlicht'), at('reaktorstart')];
   const [anlaufA, anlaufB] = [at('anlauf', 'a'), at('anlauf', 'b')];
   const [gate, analysis] = [at('paketfilter', 'a'), at('paketfilter', 'b')];
@@ -389,16 +373,16 @@ function blackoutWalks(blackout: Mission, plan: BlackoutPlan): [string, number][
     ['guest to the lever', plan.spawns.guest, lever, before(0)],
     ['the lever to the Betriebsbuch', lever, rulesOf('anlauf'), before(1)],
     ['the Betriebsbuch to the sign', rulesOf('anlauf'), sign, before(1)],
-    ['the sign to the plate', sign, plate ?? sign, before(1)],
-    ['the lever to console A, the plate held', lever, anlaufA, before(1, [plateDoor])],
-    ['the plate to console B', plate ?? sign, anlaufB, before(1)],
+    ['the sign to the plate', sign, plate, before(1)],
+    ['the lever to console A, the plate held', lever, anlaufA, before(1, plateDoors)],
+    ['the plate to console B', plate, anlaufB, before(1)],
     ['console B to the policy', anlaufB, rulesOf('paketfilter'), before(2)],
     ['the policy to the Analysepult', rulesOf('paketfilter'), analysis, before(2)],
     ['console A to the Sperrpult', anlaufA, gate, before(2)],
     ['the Sperrpult to the terminal', gate, terminal, before(3)],
     ['the Analysepult to the locker', analysis, rulesOf('subsysteme'), before(3)],
     ['the locker to the rack', rulesOf('subsysteme'), rack, before(3)],
-    ...wechselWalks(plan.drawn, { at, rulesOf, terminal, rack, key: key ?? rack, before }),
+    ...wechselWalks(plan.drawn, { at, rulesOf, terminal, rack, key, before }),
     ['the fuse to the reactor', fuse.from, fuse.to, before(5)],
   ];
   for (const round of ['LABOR', 'SERVERRAUM']) {
@@ -409,6 +393,44 @@ function blackoutWalks(blackout: Mission, plan: BlackoutPlan): [string, number][
     what,
     walkTiles(map, stand(from), stand(to), doors),
   ]);
+}
+
+/** Nowhere on any map: where a walk to a thing the map lacks is measured to, and fails. */
+const NOWHERE: Spot = { x: -1, y: -1 };
+
+/** The plate that holds a door, the cabinet's key, the sign and the hatch of `map`. */
+function landmarks(map: Mission['map']): { plate: Spot; key: Spot; sign: Spot; hatch: Spot } {
+  const plate = map.plates.find((p) =>
+    map.doors.some((d) => d.opensBy.kind === 'plate' && d.opensBy.plateId === p.id),
+  );
+  const key = map.items.find((item) => map.manuals.some((m) => m.needsKey === item.id));
+  return {
+    plate: plate ?? NOWHERE,
+    key: key ?? NOWHERE,
+    sign: map.edgeworkSign ?? NOWHERE,
+    hatch: map.exit ?? NOWHERE,
+  };
+}
+
+/**
+ * The doors of `blackout` shut with the first `n` stations of `plan`'s run solved, by tile —
+ * but those `held` open by a plate.
+ */
+function shutBefore(
+  blackout: Mission,
+  plan: BlackoutPlan,
+): (n: number, held?: readonly string[]) => Set<string> {
+  const opener = (door: Mission['map']['doors'][number]): string =>
+    (door.opensBy.kind === 'puzzle' ? door.opensBy.puzzleId : door.opensBy.untilSolved) ?? '';
+  const run = stationsIn(blackout.puzzles, { [plan.pool]: plan.drawn });
+  return (n, held = []) => {
+    const solved = new Set(run.slice(0, n).flatMap(refsOf));
+    return new Set(
+      blackout.map.doors
+        .filter((d) => !held.includes(d.id) && !solved.has(opener(d)))
+        .map((d) => tileKey(d.x, d.y)),
+    );
+  };
 }
 
 /** What the walks to and from the Wechselplatz are measured between. */
@@ -563,18 +585,21 @@ describe('mission blackout by design', () => {
     const map = blackout.map;
     const rooms = roomsOf(map);
     const schott = map.doors.find((door) => door.id === 'serverschott');
-    expect(schott?.opensBy).toEqual({ kind: 'puzzle', puzzleId: 'paketfilter' });
+    const policy = map.manuals.find((m) => m.puzzleIds.includes('paketfilter'));
+    if (schott === undefined || policy === undefined) {
+      throw new Error('Blackout needs its Serverschott and the Paketfilter’s policy');
+    }
+    expect(schott.opensBy).toEqual({ kind: 'puzzle', puzzleId: 'paketfilter' });
     const consoles = map.stations.filter((s) => s.puzzleId === 'paketfilter');
     expect(consoles.map((s) => s.console).sort()).toEqual(['a', 'b']);
     for (const spot of consoles) {
       expect(rooms.get(tileKey(spot.x, spot.y)), `console ${spot.console}`).toBe('FLUR');
       // On the Flur's north wall, the Schott's own, a few steps along it.
-      expect(spot.y).toBe((schott?.y ?? 0) + 1);
-      expect(Math.abs(spot.x - (schott?.x ?? 0))).toBeLessThanOrEqual(7);
+      expect(spot.y).toBe(schott.y + 1);
+      expect(Math.abs(spot.x - schott.x)).toBeLessThanOrEqual(7);
     }
-    const policy = map.manuals.find((m) => m.puzzleIds.includes('paketfilter'));
-    expect(policy?.spots.length).toBeGreaterThan(1);
-    for (const spot of policy?.spots ?? []) {
+    expect(policy.spots.length).toBeGreaterThan(1);
+    for (const spot of policy.spots) {
       const where = tileKey(spot.x, spot.y);
       expect(rooms.get(where), `policy at ${where}`).toBe('FLUR');
     }
@@ -827,8 +852,9 @@ describe('mission blackout by design', () => {
     const [byLever, inServers, byHatch, roster, handover, fuses] = spots;
     const near = (a: Spot | null | undefined, b: Spot): number =>
       a == null ? Infinity : Math.hypot(a.x - b.x, a.y - b.y);
-    const roomAt = (spot: Spot | null | undefined): string | undefined =>
-      rooms.get(tileKey(spot?.x ?? -1, spot?.y ?? -1));
+    const keyOf = (spot: Spot | null | undefined): string =>
+      spot == null ? 'nowhere' : tileKey(spot.x, spot.y);
+    const roomAt = (spot: Spot | null | undefined): string | undefined => rooms.get(keyOf(spot));
     expect(map.notes).toHaveLength(6);
     expect(near(byLever, lever)).toBeLessThanOrEqual(2);
     expect(roomAt(inServers)).toBe('SERVERRAUM');
@@ -836,9 +862,9 @@ describe('mission blackout by design', () => {
     // The Wechselplatz in the lab's own words: the duty roster in the Flur by the Paketfilter,
     // where the crew stands before it comes to the place; the hand-over beside the
     // Anlaufsteuerung in the Maschinenraum; Haller's fuses in the Labor.
-    const gate = map.stations.find((s) => s.puzzleId === 'paketfilter' && s.console === 'a');
+    const gate = map.stations.filter((s) => s.puzzleId === 'paketfilter' && s.console === 'a');
     expect(roomAt(roster)).toBe('FLUR');
-    expect(near(roster, gate ?? { x: -9, y: -9 })).toBeLessThanOrEqual(2);
+    expect(gate.map((spot) => near(roster, spot) <= 2)).toEqual([true]);
     expect(roomAt(handover)).toBe('MASCHINENRAUM');
     expect(roomAt(fuses)).toBe('LABOR');
     // No note is read from a door's tile, nor from a tile a source may lie on.
@@ -846,9 +872,13 @@ describe('mission blackout by design', () => {
       ...map.doors.map((d) => tileKey(d.x, d.y)),
       ...map.manuals.flatMap((m) => m.spots.map((s) => tileKey(s.x, s.y))),
     ]);
-    for (const spot of spots) {
-      expect(taken.has(tileKey(spot?.x ?? -1, spot?.y ?? -1)), JSON.stringify(spot)).toBe(false);
-    }
+    expect(spots.map(keyOf).filter((key) => taken.has(key))).toEqual([]);
+    // Nor from a tile at a console — the lever's note alone hangs beside its station —: E there
+    // would read the note, nearer than the console, instead of working it.
+    const consoles = map.stations.filter((s) => s.puzzleId !== 'notlicht');
+    const atConsole = (spot: Spot | null | undefined): boolean =>
+      consoles.some((s) => Math.max(Math.abs(s.x - (spot?.x ?? 99)), Math.abs(s.y - (spot?.y ?? 99))) <= 1);
+    expect(spots.filter(atConsole)).toEqual([]);
     // Every crew can walk up to every note once the lab is open.
     const solved = allSolved(blackout);
     for (const crew of crews(blackout)) {
