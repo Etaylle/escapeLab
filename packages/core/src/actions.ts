@@ -1890,18 +1890,23 @@ function handlePuzzleInput(
   return result.solved ? advance(creditWorkers(next, def, player.id), action.at) : next;
 }
 
-/** The open puzzle and its def while a run is on and not paused; null otherwise. */
-function openPuzzleOf(state: GameState): { def: PuzzleDef; puzzleState: PuzzleState } | null {
+/**
+ * The armed puzzle and its def while a run is on, paused or not: the station up
+ * (`currentPuzzleIndex`, in the run's own order) once it is switched on — its state made by its
+ * own module; null between stations, before the switch-on and outside a run.
+ */
+function armedPuzzleOf(state: GameState): { def: PuzzleDef; puzzleState: PuzzleState } | null {
   const def = state.mission.puzzles[state.currentPuzzleIndex];
-  if (
-    state.phase !== 'playing' ||
-    state.paused !== null ||
-    state.puzzleState === null ||
-    def === undefined
-  ) {
+  const puzzleState = state.puzzleState;
+  if (state.phase !== 'playing' || puzzleState === null || def?.type !== puzzleState.type) {
     return null;
   }
-  return { def, puzzleState: state.puzzleState };
+  return { def, puzzleState };
+}
+
+/** The open puzzle and its def while a run is on and not paused; null otherwise. */
+function openPuzzleOf(state: GameState): { def: PuzzleDef; puzzleState: PuzzleState } | null {
+  return state.paused === null ? armedPuzzleOf(state) : null;
 }
 
 /**
@@ -1928,14 +1933,14 @@ function tickPuzzle(state: GameState, at: number): GameState {
   return aged === undefined || aged === open.puzzleState ? state : { ...state, puzzleState: aged };
 }
 
-/** The open station during a run, paused or not, where its module has an `elapse`; else null. */
+/**
+ * The armed station during a run, paused or not, where its module has an `elapse`; else null —
+ * nothing more to do for any other module, and none before a station is switched on.
+ */
 function elapsingStation(state: GameState) {
-  const def = state.mission.puzzles[state.currentPuzzleIndex];
-  if (state.phase !== 'playing' || state.puzzleState === null || def === undefined) {
-    return null;
-  }
-  const { elapse } = moduleFor(def.type);
-  return elapse === undefined ? null : { def, puzzleState: state.puzzleState, elapse };
+  const armed = armedPuzzleOf(state);
+  const elapse = armed === null ? undefined : moduleFor(armed.def.type).elapse;
+  return armed === null || elapse === undefined ? null : { ...armed, elapse };
 }
 
 /**

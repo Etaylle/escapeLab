@@ -7,7 +7,11 @@ import type { Rng } from '../rng.js';
  * The contract every puzzle type implements. A module owns its type end to
  * end — mission-file shape, runtime state, the inputs a client may send, the
  * place-filtered view, the printed manual and a solver — so adding a type is
- * one file in this folder plus one entry in ./index.ts.
+ * one file in this folder plus one entry in ./index.ts. A station that runs on
+ * the clock adds what is optional: `dueAt`, when the room has to wake it, and
+ * `expire` for what runs out — or `elapse`, where the clock also raises alarms
+ * and holds on who stands at its consoles. The reducer asks a module for none
+ * of them that leaves them out, and for none while its station is not armed.
  */
 
 export interface ManualSection {
