@@ -4,7 +4,13 @@ import { bakeBox } from '../baked.js';
 import { decorGlows, decorVariant, drawDecorGlow } from '../decor.js';
 import { strengthAt } from '../gl/pack.js';
 import { AMBER, lift, rgba } from '../palette.js';
-import { glowSources, lightShown, powerAt, type LightSource } from '../sources.js';
+import {
+  glowSources,
+  lightShown,
+  powerAt,
+  pulseSources,
+  type LightSource,
+} from '../sources.js';
 import { drawWallPropGlow, glows } from '../wallProps.js';
 import * as atmosphere from './atmosphere.js';
 import { layBake } from './bakes.js';
@@ -60,6 +66,7 @@ function drawGlowing(ctx: CanvasRenderingContext2D, frame: Frame, pools: Pools |
     drawPools(ctx, frame, pools);
   }
   drawBeacon(ctx, frame);
+  drawPulseCores(ctx, frame);
   ctx.globalCompositeOperation = 'source-over';
   drawEmissive(ctx, frame);
   profiled(frame.kit, 'atmosphere', ctx, () => atmosphere.draw(ctx, frame));
@@ -122,6 +129,19 @@ function drawBeacon(ctx: CanvasRenderingContext2D, frame: Frame): void {
   ctx.beginPath();
   ctx.arc(x, y, 0.06, 0, Math.PI * 2);
   ctx.fill();
+}
+
+/** How large and bright the start pulse's core shows over its glow, tiles. */
+const PULSE_CORE = { r: 0.09, alpha: 0.9 } as const;
+
+/** The bright core of every start pulse running in a duct, where its glow shows (sources.ts). */
+function drawPulseCores(ctx: CanvasRenderingContext2D, frame: Frame): void {
+  for (const source of pulseSources(frame)) {
+    ctx.fillStyle = rgba(lift(AMBER, 0.5), PULSE_CORE.alpha);
+    ctx.beginPath();
+    ctx.arc(source.x, source.y, PULSE_CORE.r, 0, Math.PI * 2);
+    ctx.fill();
+  }
 }
 
 /** Whether the tile (x, y) lies in the camera's view, a tile's margin kept. */

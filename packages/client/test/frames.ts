@@ -64,6 +64,7 @@ export function lightWith(parts: Partial<FrameLight> = {}): FrameLight {
     shown: () => true,
     powered: () => false,
     crewShown: () => true,
+    inSight: () => true,
     ...parts,
   };
 }
