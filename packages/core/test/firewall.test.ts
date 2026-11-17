@@ -26,6 +26,7 @@ import {
   type FirewallDef,
   type FirewallHeader,
   type FirewallInput,
+  type FirewallPacket,
   type FirewallState,
   type FirewallView,
 } from '../src/puzzles/firewall.js';
@@ -187,6 +188,23 @@ describe('the rules in play', () => {
 });
 
 describe('a wave', () => {
+  it(`varies what a default wave teaches of the order, for ${SEEDS} seeds`, () => {
+    const fits = (rule: number, h: FirewallHeader) => FIREWALL_POLICY[rule]?.fits(h, 4) === true;
+    for (let seed = 0; seed < SEEDS; seed++) {
+      const state = fresh(seed);
+      const [first, second] = [0, 1].map((wave) => dealWave(DEF, state, wave));
+      // the Wartungsnetz's decoy, caught further down by rule 2 in one wave and rule 6 in the next
+      const decoy = (wave: FirewallPacket[] = [], by: number) =>
+        wave.some((p) => !p.hostile && fits(0, p.header) && fits(by, p.header));
+      expect(decoy(first, 1), `seed ${seed}`).toBe(true);
+      expect(decoy(second, 5), `seed ${seed}`).toBe(true);
+      // a trap in the second: remote ports from the Labornetz over TCP, which rule 2 drops first
+      const trap = (wave: FirewallPacket[] = []) =>
+        wave.some((p) => p.hostile && fits(1, p.header) && fits(2, p.header));
+      expect(trap(second), `seed ${seed}`).toBe(true);
+    }
+  });
+
   it(`has two or three hostile packets, by the policy, and a decoy, for ${SEEDS} seeds`, () => {
     for (let seed = 0; seed < SEEDS; seed++) {
       const state = fresh(seed, defOf({ packets: 5 + (seed % 5) }));

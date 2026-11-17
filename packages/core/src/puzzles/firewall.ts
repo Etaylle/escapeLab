@@ -405,16 +405,17 @@ function drawnHeader(rule: number, digit: number, rng: Rng): FirewallHeader {
 }
 
 /**
- * A header that `rule` decides (BASE_RULE: the Grundregel) — and for a decoy, one that one of
- * the rules `caught` drops fits too, further down the list: only the policy's order lets it
- * through. Throws where none comes in DRAW_TRIES draws: the rules leave no such packet.
+ * A header that `rule` decides (BASE_RULE: the Grundregel) — and that rule `alsoFits` fits too,
+ * further down the list, where one is named: a decoy, which a later rule would drop and only the
+ * order lets through, or a trap, which a later rule would let through and the order drops.
+ * Throws where none comes in DRAW_TRIES draws: the rules leave no such packet.
  */
-function headerFor(rule: number, caught: readonly number[] | null, digit: number, rng: Rng) {
+function headerFor(rule: number, alsoFits: number | null, digit: number, rng: Rng) {
   for (let i = 0; i < DRAW_TRIES; i++) {
     const header = drawnHeader(rule, digit, rng);
     const decided = decidingRule(header, digit) === rule;
-    const decoy = caught?.some((drop) => FIREWALL_POLICY[drop]?.fits(header, digit)) ?? true;
-    if (decided && decoy) {
+    const also = alsoFits === null || FIREWALL_POLICY[alsoFits]?.fits(header, digit) === true;
+    if (decided && also) {
       return header;
     }
   }
@@ -440,8 +441,37 @@ function rulesOfWave(state: FirewallState, count: number, hostile: number, wave:
   const hostiles = Array.from({ length: hostile }, (_, i) => at(drops, wave * hostile + i));
   const decoys = passes.filter((rule) => DECOY_DROPS[rule]?.some((drop) => drops.includes(drop)));
   const decoy = at(decoys, wave);
+  // the rule that would drop the decoy further down, a different one wave by wave where it can
+  const catchers = (DECOY_DROPS[decoy] ?? []).filter((drop) => drops.includes(drop));
+  const catcher = at(catchers, wave);
   const others = Array.from({ length: count - hostile - 1 }, (_, i) => at(kinds, wave + i + 1));
-  return { hostiles, decoy, others };
+  return { hostiles, decoy, catcher, others };
+}
+
+/**
+ * The rule that lets through further down the list than a rule that drops, by that rule: what
+ * makes a hostile packet of it a trap — only the order drops it. Rule 2's remote ports over TCP
+ * from the Labornetz, which rule 3 would let through.
+ */
+const TRAP_PASSES: Readonly<Record<number, number>> = { 1: 2 };
+
+/**
+ * The slots of a wave as dealt (`rulesOfWave`): each deciding rule, and the rule a decoy or a
+ * trap fits besides. Every wave has its decoy; every second one, from the second, a trap too,
+ * where the instance plays the rule it needs.
+ */
+function slotsOfWave(state: FirewallState, count: number, hostile: number, wave: number) {
+  const { hostiles, decoy, catcher, others } = rulesOfWave(state, count, hostile, wave);
+  const trapRule = hostiles.find((rule) => state.exercised.includes(TRAP_PASSES[rule] ?? -1));
+  const trapped = wave % 2 === 1 && trapRule !== undefined;
+  const trap = trapped ? hostiles.indexOf(trapRule) : -1;
+  const besides = (rule: number, i: number): number | null =>
+    i === trap ? (TRAP_PASSES[rule] ?? null) : null;
+  return [
+    ...hostiles.map((rule, i) => ({ rule, alsoFits: besides(rule, i) })),
+    { rule: decoy, alsoFits: catcher },
+    ...others.map((rule) => ({ rule, alsoFits: null })),
+  ];
 }
 
 /** The line a packet coming on at `enterMs` takes: one nothing came onto for a while. */
@@ -460,21 +490,12 @@ function lineFor(placed: readonly FirewallPacket[], enterMs: number, fallMs: num
 export function dealWave(def: FirewallDef, state: FirewallState, wave: number): FirewallPacket[] {
   const rng = mulberry32((state.seed + wave * 7919) >>> 0);
   const hostile = 2 + (rng() < 0.5 ? 1 : 0);
-  const { hostiles, decoy, others } = rulesOfWave(state, def.packets, hostile, wave);
-  const drops = exercisedBy(state, 'sperren');
-  const slots = shuffle(
-    [
-      ...hostiles.map((rule) => ({ rule, decoy: false })),
-      { rule: decoy, decoy: true },
-      ...others.map((rule) => ({ rule, decoy: false })),
-    ],
-    rng,
-  );
+  const slots = shuffle(slotsOfWave(state, def.packets, hostile, wave), rng);
   const fallMs = fallMsOf(def);
   const placed: FirewallPacket[] = [];
   let enterMs = FIREWALL_PAUSE_MS;
   for (const [n, slot] of slots.entries()) {
-    const header = headerFor(slot.rule, slot.decoy ? drops : null, state.digit, rng);
+    const header = headerFor(slot.rule, slot.alsoFits, state.digit, rng);
     const line = lineFor(placed, enterMs, fallMs, rng);
     const hostileHere = verdictOfRule(slot.rule) === 'sperren';
     placed.push({ id: `${wave + 1}-${n + 1}`, line, enterMs, header, hostile: hostileHere });
