@@ -204,6 +204,7 @@ export class MissionCatalog {
       hintCostSec: mission.hintCostSec,
       stations: mission.puzzles.map((def, index) => {
         const puzzleModule = moduleFor(def.type);
+        const others = mission.puzzles.filter((p) => p.pool === def.pool && p.id !== def.id);
         return {
           index,
           title: def.title,
@@ -214,6 +215,7 @@ export class MissionCatalog {
           ],
           usesEdgework: puzzleModule.usesEdgework,
           manual: puzzleModule.manual(def),
+          ...(def.pool === undefined ? {} : { takesTurnsWith: others.map((p) => p.title) }),
         };
       }),
     };

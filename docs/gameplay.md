@@ -291,7 +291,9 @@ the lobby's and the cards' station count, the dots on the objective bar, a drone
 (`map.stations`), its sources (`manuals.puzzleIds`), a part only it needs, its `lights`,
 `hints`, `nudges` and `onSolved`. The validation refuses a door that waits for a single member —
 it would stay shut in most runs — and names the pool to use; a pool needs two members at least
-and an id no puzzle has.
+and an id no puzzle has, and may not be called `__proto__`, the one key a snapshot's records
+drop. The draw is read by its own keys alone (`drawnIn`), so a puzzle or a pool called
+`constructor` is what it says.
 
 **Out of service.** A station out of service is never armed and never solved, takes no input
 and has no instance: no view carries its rules, its notes or mission control's lines about it
@@ -300,12 +302,17 @@ player stands). Its console stands dark, a tag hung across it and „AUSSER BETR
 once this player has found it; in sight from afar it already wears the tag (`MapView.stations`:
 status `'out'`, a glimpse's `out`). The E prompt there reads the same and opens nothing; the
 server answers a forged E with „Außer Betrieb.". A source that prints only the rules of
-stations out of service says „Zu einer Anlage außer Betrieb", gives no page and cannot be
-searched or unlocked (`outOfService` on the source); one that also covers a station of the run
+stations out of service wears the same tag card once found, says „Zu einer Anlage außer
+Betrieb." (core `SOURCE_OUT_OF_SERVICE`, the prompt's and the refusal's one text), gives no page
+and cannot be searched or unlocked (`outOfService` on the source); nobody standing at it counts
+as reading; one that also covers a station of the run
 stays as it is and shows only that station's pages. A part only such a station waits for, and
 the key of a cabinet that holds only such rules, are not put out. Neither the goal line, the
 arrows nor the minimap ever show a station out of service or its source, and a player standing
-at one counts at no station. The printable Handbuch prints every member: it knows no seed.
+at one counts at no station. The printable Handbuch prints every member, as it knows no seed,
+and says on each of their pages which machines share the place: „Wechselplatz mit Signalkette,
+Notstromkasten: Je Schicht ist eine dieser Anlagen in Betrieb, die anderen tragen das Schild
+AUSSER BETRIEB." (`MissionManualStation.takesTurnsWith`).
 
 **The validation** proves every run the mission can have: each proof — reach for every crew
 size and choice of spawns, two different players at two consoles, sources and keys — runs once

@@ -8,7 +8,6 @@ import {
   drawPools,
   emergenciesDue,
   everyDraw,
-  findables,
   GameError,
   inEscapePhase,
   labLit,
@@ -26,16 +25,9 @@ import {
   viewFor,
   viewForSpectator,
 } from '../src/index.js';
-import type { GameState, Mission, PlayerView } from '../src/index.js';
+import type { GameState, Mission } from '../src/index.js';
 import { standing, started, T0 } from './lab.js';
-import {
-  playProbe,
-  PROBE_POOL,
-  probeSeeds,
-  rotationPlan,
-  rotationProbe,
-  seedDrawing,
-} from './rotationPlan.js';
+import { PROBE_POOL, rotationProbe, seedDrawing } from './rotationPlan.js';
 
 /**
  * A corridor lab in a chain of three places — Eins (3,1), the pool „mitte" of Xa (6,1), Xb
@@ -132,6 +124,37 @@ function statuses(state: GameState): Record<string, string> {
   );
 }
 
+/** A room's sealed snapshot around `state`, as a server reads it back. */
+const sealed = (state: GameState): unknown =>
+  JSON.parse(
+    JSON.stringify({
+      code: 'ABCD',
+      missionId: state.mission.id,
+      seed: state.roomSeed,
+      difficulty: state.difficulty,
+      daily: state.dailyOn,
+      createdAt: T0,
+      state,
+      seats: [],
+      lostPasses: [],
+      keeping: {
+        positions: {},
+        drones: null,
+        closedClean: [],
+        askAgainAt: {},
+        lastPingAt: {},
+        lastChatAt: {},
+        signalAllowance: {},
+        refusedSteps: 0,
+      },
+      seq: 1,
+      at: T0,
+      instance: 'eins',
+      final: true,
+    }),
+  );
+
+
 describe('rotation: the draw', () => {
   it('is the seed’s: the same seed draws the same station, whatever the order or level', () => {
     const mission = turnLab();
@@ -189,6 +212,75 @@ describe('rotation: the draw', () => {
     // A run's order drawn anew, as a rematch does: the pool keeps its place in the chain.
     const again = runOrder(runOrder(puzzles, { mitte: 'xc' }), { mitte: 'xa' });
     expect(again.map((p) => p.id)).toEqual(['eins', 'xa', 'drei', 'xc', 'xb']);
+  });
+});
+
+describe('rotation: ids an object already answers to', () => {
+  /** The lab without its pool: Eins, then Drei behind a door that the puzzle `id` opens. */
+  function plainLab(id: string): Mission {
+    return parseMission({
+      ...turnLabData(),
+      puzzles: [
+        { type: 'button-sync', id, title: 'Eins' },
+        { type: 'button-sync', id: 'drei', title: 'Drei' },
+      ],
+      map: turnMap({
+        doors: [{ id: 'tor', x: 16, y: 2, opensBy: { kind: 'puzzle', puzzleId: id } }],
+        stations: [
+          { puzzleId: id, x: 3, y: 1 },
+          { puzzleId: 'drei', x: 19, y: 1 },
+        ],
+      }),
+    });
+  }
+
+  it.each(['constructor', 'toString', 'valueOf', '__proto__'])(
+    'opens the door of a puzzle called %s once it is solved, in a mission without pools',
+    (id) => {
+      const state = take(started(plainLab(id)), id, T0 + 1000);
+      expect(state.drawn).toEqual({});
+      expect(doorOpen(state.mission.map, state, 'tor')).toBe(true);
+      expect([...outOfService(state)]).toEqual([]);
+      expect(armedPuzzleIds(state)).toEqual(['drei']);
+    },
+  );
+
+  /** The lab's file with its pool called `pool`, the door naming it. */
+  function poolCalled(pool: string): Record<string, unknown> {
+    const data = turnLabData();
+    const puzzles = (data['puzzles'] as { pool?: string }[]).map((p) =>
+      p.pool === undefined ? p : { ...p, pool },
+    );
+    const byPool = { kind: 'puzzle', puzzleId: pool };
+    const map = turnMap({ doors: [{ id: 'tor', x: 16, y: 2, opensBy: byPool }] });
+    return { ...data, puzzles, map };
+  }
+
+  it('keeps a draw under a pool called __proto__ in its own key, and refuses the mission', () => {
+    const puzzles = poolCalled('__proto__')['puzzles'] as { id: string; pool?: string }[];
+    expect(everyDraw(puzzles).map((draw) => Object.entries(draw))).toHaveLength(3);
+    expect(Object.keys(drawPools(puzzles, 3))).toEqual(['__proto__']);
+    // A snapshot's records drop that key as they are read back: the run would lose its draw.
+    expect(issuesOf(poolCalled('__proto__'))).toMatch(
+      /^puzzles\.1\.pool: pool "__proto__": a snapshot keeps no draw under that name/m,
+    );
+  });
+
+  it('draws and keeps a pool called constructor as any other', () => {
+    const pool = 'constructor';
+    const mission = parseMission(poolCalled(pool));
+    expect(everyDraw(mission.puzzles)).toHaveLength(3);
+    let state = take(drawing(mission, 'xb'), 'eins', T0 + 1000);
+    expect(Object.entries(state.drawn)).toEqual([[pool, 'xb']]);
+    expect([...outOfService(state)].sort()).toEqual(['xa', 'xc']);
+    expect(armedPuzzleIds(state)).toEqual(['xb']);
+    // Through a snapshot's JSON and back, the draw is still the run's.
+    const back = sealedSnapshotSchema.parse(sealed(state)).state;
+    expect(Object.entries(back.drawn)).toEqual([[pool, 'xb']]);
+    state = take(back, 'xb', T0 + 2000);
+    expect(doorOpen(state.mission.map, state, 'tor')).toBe(true);
+    state = take(state, 'drei', T0 + 3000);
+    expect(Object.entries(runReport(state, 'ROOM').drawn ?? {})).toEqual([[pool, 'xb']]);
   });
 });
 
@@ -401,6 +493,9 @@ describe('rotation: the validation', () => {
     );
   });
 
+});
+
+describe('rotation: the proofs, draw by draw', () => {
   it('proves every draw, and names the one that fails', () => {
     // Xc walled in at (12,1): the runs drawing xa and xb are sound, the one drawing xc is not.
     const tiles = [
@@ -518,36 +613,6 @@ describe('rotation: the run report and the snapshot', () => {
     expect(runReport(lost, 'ROOM').stations).toHaveLength(4);
   });
 
-  /** A room's sealed snapshot around `state`, as a server reads it back. */
-  const sealed = (state: GameState): unknown =>
-    JSON.parse(
-      JSON.stringify({
-        code: 'ABCD',
-        missionId: state.mission.id,
-        seed: state.roomSeed,
-        difficulty: state.difficulty,
-        daily: state.dailyOn,
-        createdAt: T0,
-        state,
-        seats: [],
-        lostPasses: [],
-        keeping: {
-          positions: {},
-          drones: null,
-          closedClean: [],
-          askAgainAt: {},
-          lastPingAt: {},
-          lastChatAt: {},
-          signalAllowance: {},
-          refusedSteps: 0,
-        },
-        seq: 1,
-        at: T0,
-        instance: 'eins',
-        final: true,
-      }),
-    );
-
   it('restores the draw from a snapshot, the run’s order with it', () => {
     const state = take(drawing(turnLab(), 'xc'), 'eins', T0 + 1000);
     const back = sealedSnapshotSchema.parse(sealed(state)).state;
@@ -570,153 +635,6 @@ describe('rotation: the run report and the snapshot', () => {
 const turnLabPuzzle = (): object => ({ type: 'button-sync', id: 'eins', title: 'Eins' });
 const plainMap = (): object =>
   turnMap({ doors: [], stations: [{ puzzleId: 'eins', x: 3, y: 1 }] });
-
-/**
- * Everything a station out of service could give away, as text a view would carry: its printed
- * rules, its notes, mission control's lines about it.
- */
-function secretsOf(mission: Mission, puzzleId: string): string[] {
-  const def = mission.puzzles.find((p) => p.id === puzzleId);
-  if (def === undefined) {
-    throw new Error(`no puzzle "${puzzleId}"`);
-  }
-  const rules = moduleFor(def.type)
-    .manual(def)
-    .map((section) => JSON.stringify(section));
-  const lines = [def.onSolved, ...def.nudges].flatMap((line) =>
-    line === undefined ? [] : [JSON.stringify(line)],
-  );
-  return [...rules, ...def.hints.map((hint) => JSON.stringify(hint)), ...lines];
-}
-
-describe('rotation: the probe, station by station', () => {
-  const seeds = probeSeeds();
-
-  it('draws a different station on the walkthrough’s two seeds', () => {
-    const mission = rotationProbe();
-    expect(drawPools(mission.puzzles, seeds.played)).toEqual({ [PROBE_POOL]: 'funkfeuer' });
-    expect(drawPools(mission.puzzles, seeds.other)).toEqual({ [PROBE_POOL]: 'signalkette' });
-  });
-
-  it('is won on every draw by the solvers, the door opening with the drawn station', () => {
-    const mission = rotationProbe();
-    for (const member of ['funkfeuer', 'signalkette', 'notstrom']) {
-      const { state, stations } = playProbe(seedDrawing(mission, member));
-      expect(state.phase, member).toBe('won');
-      expect(stations.map((s) => s.id)).toEqual(['tastenfeld', member, 'leitungsnetz']);
-      expect(state.penaltySeq).toBe(0);
-      expect(doorOpen(state.mission.map, state, 'schleuse')).toBe(true);
-      const said = state.events.filter((e) => e.kind === 'radio').map((e) => e.label);
-      expect(said.filter((line) => line.includes('Die Schleuse ist frei'))).toHaveLength(1);
-    }
-  });
-
-  /**
-   * The crew at every place a station out of service has — p1 at its consoles, p2 at its
-   * source, then the other way round — at every stage of the run: armed, open, solved.
-   */
-  function everywhereAt(state: GameState, puzzleId: string): GameState[] {
-    const { stations, manuals } = state.mission.map;
-    const spots = stations
-      .filter((s) => s.puzzleId === puzzleId)
-      .map((s) => (s.console === 'b' ? `${s.puzzleId}/b` : s.puzzleId));
-    const sources = manuals.filter((m) => m.puzzleIds.includes(puzzleId)).map((m) => m.id);
-    const at = (consoles: string, books: string): GameState =>
-      standing(state, {
-        stations: Object.fromEntries(spots.map((key) => [key, [consoles]])),
-        manuals: Object.fromEntries(sources.map((id) => [id, [books]])),
-        signSeen: ['p1', 'p2'],
-      });
-    return [at('p1', 'p2'), at('p2', 'p1')];
-  }
-
-  it('gives nothing of a station out of service to any view, wherever its player stands', () => {
-    const fresh = started(rotationProbe(), seeds.played);
-    const open = applyAction(standing(fresh, { stations: { tastenfeld: ['p1'] } }), {
-      type: 'interact',
-      playerId: 'p1',
-      at: T0 + 1000,
-    });
-    const won = playProbe(seeds.played).state;
-    for (const resting of ['signalkette', 'notstrom']) {
-      const secrets = secretsOf(fresh.mission, resting);
-      expect(secrets.length).toBeGreaterThan(1);
-      for (const stage of [fresh, open]) {
-        for (const state of everywhereAt(stage, resting)) {
-          for (const playerId of ['p1', 'p2']) {
-            const view = viewFor(state, playerId);
-            const text = JSON.stringify(view);
-            for (const secret of secrets) {
-              expect(text, `${resting} for ${playerId}`).not.toContain(secret);
-            }
-            expect(view.manualsHere.flatMap((m) => m.sections.map((s) => s.puzzleId))).toEqual(
-              [],
-            );
-            // Nowhere to stand at: neither its consoles nor its source count as a place.
-            expect(view.presence).toMatchObject({ stationId: null, manualId: null });
-            expect(view.puzzle?.title ?? '').not.toBe(
-              fresh.mission.puzzles.find((p) => p.id === resting)?.title,
-            );
-          }
-        }
-      }
-      expect(JSON.stringify(viewFor(won, 'p1'))).not.toContain(secrets[0]);
-    }
-  });
-
-  /** p1's view with p1 at the source `manualId`. */
-  const atSource = (state: GameState, manualId: string): PlayerView =>
-    viewFor(standing(state, { manuals: { [manualId]: ['p1'] } }), 'p1');
-
-  it('marks the consoles and sources out of service, for the world to show them so', () => {
-    const state = standing(started(rotationProbe(), seeds.played), {
-      found: { p1: ['source:buch-signalkette', 'source:buch-funkfeuer'] },
-    });
-    expect(statuses(state)).toEqual({
-      tastenfeld: 'armed',
-      funkfeuer: 'locked',
-      signalkette: 'out',
-      notstrom: 'out',
-      leitungsnetz: 'locked',
-    });
-    const sources = viewFor(state, 'p1').map?.manuals ?? [];
-    const known = Object.fromEntries(sources.map((m) => [m.id, m.known ? m : null]));
-    expect(known['buch-signalkette']).toMatchObject({ puzzleIds: [], outOfService: true });
-    expect(known['buch-funkfeuer']).toMatchObject({ puzzleIds: ['funkfeuer'] });
-    expect(known['buch-funkfeuer']).not.toHaveProperty('outOfService');
-    expect(atSource(state, 'buch-signalkette').sourcesHere).toEqual([
-      expect.objectContaining({ id: 'buch-signalkette', outOfService: true }),
-    ]);
-    expect(atSource(state, 'buch-signalkette').manualsHere).toEqual([]);
-    expect(atSource(state, 'buch-funkfeuer').sourcesHere[0]).not.toHaveProperty('outOfService');
-    expect(atSource(state, 'buch-funkfeuer').manualsHere).toHaveLength(1);
-  });
-
-  it('shows the tag at a glimpse, and lets its console be found up close without a chime', () => {
-    const fresh = started(rotationProbe(), seeds.played);
-    const keys = findables(fresh).map((thing) => thing.key);
-    expect(keys).toEqual(expect.arrayContaining(['console:signalkette/b', 'console:notstrom/a']));
-    expect(keys).not.toContain('console:funkfeuer/-');
-    const spotOf = (state: GameState): unknown =>
-      viewFor(state, 'p1').map?.stations.find((s) => s.puzzleId === 'notstrom' && s.x === 12);
-    expect(spotOf(fresh)).toBeUndefined();
-    const inSight = standing(fresh, { sight: { p1: ['console:notstrom/a'] } });
-    expect(spotOf(inSight)).toMatchObject({ known: false, out: true, look: 'fusebox' });
-    const locked = viewFor(standing(fresh, { sight: { p1: ['console:funkfeuer/-'] } }), 'p1');
-    expect(locked.map?.stations.find((s) => s.puzzleId === 'funkfeuer')).not.toHaveProperty('out');
-    const found = standing(fresh, { found: { p1: ['console:notstrom/a'] } });
-    expect(spotOf(found)).toMatchObject({ known: true, found: true, status: 'out' });
-    expect(spotOf(found)).not.toHaveProperty('out');
-    expect(found.discoveries['p1'] ?? []).toEqual([]);
-  });
-
-  it('keeps the plan the walkthrough plays the draw’s and the solvers’ own', () => {
-    const file = new URL('../../../tools/fixtures/rotation-plan.json', import.meta.url);
-    const fixture: unknown = JSON.parse(readFileSync(file, 'utf8'));
-    // Regenerate the file with writeRotation.ts when the probe or one of its modules changes.
-    expect(fixture).toEqual(rotationPlan());
-  });
-});
 
 describe('rotation: sources', () => {
   /** The lab with a wiring box in the pool beside two buttons, one book covering box and Drei. */

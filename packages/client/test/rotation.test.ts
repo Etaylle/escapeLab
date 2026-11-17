@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { Find, MapView } from '@escapelab/core';
-import { drawFusebox, drawLeverBox, drawStation } from '../src/world/art.js';
+import { drawFusebox, drawLeverBox, drawManualObject, drawStation } from '../src/world/art.js';
 import { contextAction } from '../src/world/interact.js';
 import { armedGoal } from '../src/world/known.js';
 import { foundIn, labelAlpha, labelClock, noteLabels } from '../src/world/labelFade.js';
 import { markerTargets } from '../src/world/markers.js';
+import { presenceNear } from '../src/world/presence.js';
+import { sourceLook } from '../src/world/render/looks.js';
 import { objectGlows } from '../src/world/render/darkness.js';
 import { draw as drawHud, minimapGoal, minimapLayout } from '../src/world/render/hud.js';
 import { propLabels } from '../src/world/render/labels.js';
@@ -248,7 +250,7 @@ describe('a station out of service: what E says there', () => {
 
   it('says of a source of one what it belongs to, open or shut, and opens nothing', () => {
     const here = { x: 3.5, y: 3.3 };
-    const said = { kind: 'locked', label: 'Zu einer Anlage außer Betrieb' };
+    const said = { kind: 'locked', label: 'Zu einer Anlage außer Betrieb.' };
     expect(contextAction(lab(), here, 'p1', AT_DEAD_BOOK, false, null)).toMatchObject(said);
     const locker = lab({ manuals: [{ ...deadBook, kind: 'locker', opened: false }] });
     const atLocker = [{ ...AT_DEAD_BOOK[0], kind: 'locker', opened: false }] as const;
@@ -257,5 +259,29 @@ describe('a station out of service: what E says there', () => {
     expect(contextAction(lab(), here, 'p1', [AT_BOOK], false, null)).toMatchObject({
       kind: 'read',
     });
+  });
+});
+
+describe('a source of stations out of service alone', () => {
+  const turns = (log: unknown[]): number => JSON.stringify(log).split('"rotate"').length - 1;
+
+  it('wears the consoles’ tag card once this player has found it, and keeps its name', () => {
+    const frame = frameWith({ map: lab() });
+    expect(sourceLook(frame, deadBook, null)).toMatchObject({ out: true, label: 'SIGNALBUCH' });
+    expect(sourceLook(frame, book({}), null)).toMatchObject({ out: false });
+    const unfound = frameWith({ map: lab(), labels: () => 0 });
+    expect(sourceLook(unfound, deadBook, null)).toMatchObject({ out: false });
+    const drawn = (out: boolean): unknown[] =>
+      recording((ctx) =>
+        drawManualObject(ctx, { kind: 'book', active: false, opened: true, pulse: 0, out }),
+      );
+    expect([turns(drawn(true)), turns(drawn(false))]).toEqual([1, 0]);
+  });
+
+  it('counts nobody standing at it as reading, as the server counts them', () => {
+    const atDeadBook = { x: 3.5, y: 4.5 };
+    expect(presenceNear(lab(), atDeadBook)).toEqual({ stationId: null, manualId: null });
+    const live = lab({ manuals: [book({ id: 'buch-signalkette', x: 3 })] });
+    expect(presenceNear(live, atDeadBook).manualId).toBe('buch-signalkette');
   });
 });

@@ -16302,7 +16302,8 @@ const spotsSaid = (view, puzzleId) => {
 async function openRotationDevice(host, run, station) {
   const spot = host.seen.view.map.stations.find((s) => s.puzzleId === station.id);
   if (spot?.status !== 'armed') {
-    throw new Error(`"${station.title}" is not armed for ${host.name}: ${spot?.status ?? 'unseen'}`);
+    const said = spot?.status ?? 'unseen';
+    throw new Error(`"${station.title}" is not armed for ${host.name}: ${said}`);
   }
   const target = consoleTarget({ ...spot, title: station.title });
   if (!(await walkNear(host.page, host.seen, tileOfTarget(target)))) {

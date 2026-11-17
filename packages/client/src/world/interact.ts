@@ -1,5 +1,6 @@
 import {
   canSee,
+  SOURCE_OUT_OF_SERVICE,
   type KnownPart,
   type KnownSource,
   type KnownStation,
@@ -74,9 +75,6 @@ export function carryLine(label: string): string {
 }
 
 type Source = Pick<SourceHere, 'id' | 'kind' | 'opened' | 'needsKey' | 'outOfService'>;
-
-/** What the prompt at a source says that prints only the rules of stations out of service. */
-export const SOURCE_OUT_OF_SERVICE = 'Zu einer Anlage außer Betrieb';
 
 /** What `playerId` carries right now: an item in their hands, not yet set in its place. */
 export function carriedItem(map: Pick<MapView, 'items'>, playerId: string): KnownPart | undefined {

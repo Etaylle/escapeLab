@@ -65,7 +65,8 @@ describe('a snapshot of the build before', () => {
     expect('drawn' in BUILD_BEFORE.state).toBe(false);
     const opened = open(seal(BUILD_BEFORE, BUILD_BEFORE.code, KEY), BUILD_BEFORE.code, KEY);
     expect(opened.state.drawn).toEqual({});
-    const ids = (state: SealedSnapshot['state']): string[] => state.mission.puzzles.map((p) => p.id);
+    const ids = (state: SealedSnapshot['state']): string[] =>
+      state.mission.puzzles.map((p) => p.id);
     expect(ids(opened.state)).toEqual(ids(BUILD_BEFORE.state));
     expect(opened.state.currentPuzzleIndex).toBe(BUILD_BEFORE.state.currentPuzzleIndex);
   });

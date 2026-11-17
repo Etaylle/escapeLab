@@ -489,6 +489,11 @@ export interface MissionManualStation {
   readAt: string[];
   usesEdgework: boolean;
   manual: ManualSection[];
+  /**
+   * the titles of the stations it takes turns with at its Wechselplatz (core rotation.ts), in
+   * mission order: a run has one of them in service; left out for a station every run has
+   */
+  takesTurnsWith?: string[];
 }
 
 export type ClientMessage = z.infer<typeof clientMessageSchema>;

@@ -32,21 +32,30 @@ export function poolsOf(puzzles: readonly Pooled[]): Map<string, string[]> {
  * the same stations and the Tagesschicht gives every crew the day's.
  */
 export function drawPools(puzzles: readonly Pooled[], seed: number): Draw {
-  const draw: Record<string, string> = {};
-  for (const [pool, members] of poolsOf(puzzles)) {
-    const drawn = pickOf([...members].sort(), seed, `pool:${pool}`);
-    if (drawn !== undefined) {
-      draw[pool] = drawn;
-    }
-  }
-  return draw;
+  // As entries: a pool may be called what an object already has (`__proto__`), and stays a key.
+  return Object.fromEntries(
+    [...poolsOf(puzzles)].flatMap(([pool, members]) => {
+      const drawn = pickOf([...members].sort(), seed, `pool:${pool}`);
+      return drawn === undefined ? [] : [[pool, drawn]];
+    }),
+  );
+}
+
+/**
+ * The station `draw` has for the pool `pool`; undefined for an id that is no pool of the draw —
+ * whatever else an object answers to (`constructor`, `toString`): only the draw's own keys count.
+ */
+export function drawnIn(draw: Draw, pool: string): string | undefined {
+  return Object.hasOwn(draw, pool) ? draw[pool] : undefined;
 }
 
 /** Every draw a mission can have — one for a mission without pools, the empty one. */
 export function everyDraw(puzzles: readonly Pooled[]): Draw[] {
   let draws: Record<string, string>[] = [{}];
   for (const [pool, members] of poolsOf(puzzles)) {
-    draws = draws.flatMap((draw) => members.map((id) => ({ ...draw, [pool]: id })));
+    draws = draws.flatMap((draw) =>
+      members.map((id) => Object.fromEntries([...Object.entries(draw), [pool, id]])),
+    );
   }
   return draws;
 }
@@ -58,7 +67,7 @@ export function stationCount(puzzles: readonly Pooled[]): number {
 
 /** Whether `draw` leaves `puzzle` out of service: it shares a pool, and another was drawn. */
 export function restsIn(draw: Draw, puzzle: Pooled): boolean {
-  const drawn = puzzle.pool === undefined ? undefined : draw[puzzle.pool];
+  const drawn = puzzle.pool === undefined ? undefined : drawnIn(draw, puzzle.pool);
   return drawn !== undefined && drawn !== puzzle.id;
 }
 
@@ -71,7 +80,7 @@ export function restsIn(draw: Draw, puzzle: Pooled): boolean {
 export function runOrder<P extends Pooled>(puzzles: readonly P[], draw: Draw): P[] {
   const placed = new Set<string>();
   const live = puzzles.flatMap((puzzle) => {
-    const drawn = puzzle.pool === undefined ? undefined : draw[puzzle.pool];
+    const drawn = puzzle.pool === undefined ? undefined : drawnIn(draw, puzzle.pool);
     if (puzzle.pool === undefined || drawn === undefined) {
       return [puzzle];
     }
@@ -91,7 +100,7 @@ export function stationsIn<P extends Pooled>(puzzles: readonly P[], draw: Draw):
 
 /** The puzzle `ref` names in a run of `draw`: a pool's drawn station, else the id it is. */
 export function drawnOf(draw: Draw, ref: string): string {
-  return draw[ref] ?? ref;
+  return drawnIn(draw, ref) ?? ref;
 }
 
 /** Whether `ref` — a puzzle's id, or a pool's — names `puzzle`. */

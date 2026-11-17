@@ -216,5 +216,13 @@ describe('the catalog, of a mission with a Wechselplatz', () => {
       'Anlage C',
       'Drei',
     ]);
+    // Each page of the pool names the machines it takes turns with; the others name none.
+    expect(catalog.manual('wechsel')?.stations.map((s) => s.takesTurnsWith)).toEqual([
+      undefined,
+      ['Anlage B', 'Anlage C'],
+      ['Anlage A', 'Anlage C'],
+      ['Anlage A', 'Anlage B'],
+      undefined,
+    ]);
   });
 });

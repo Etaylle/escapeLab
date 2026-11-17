@@ -1954,6 +1954,8 @@ export interface ManualObjectOpts {
    * it, none before; found where left out
    */
   found?: number;
+  /** it prints only the rules of stations out of service: the same tag hangs across it */
+  out?: boolean;
 }
 
 const READ_LABEL = css(lift(READ_BLUE, 0.3));
@@ -2533,12 +2535,18 @@ export function drawManualObject(ctx: CanvasRenderingContext2D, o: ManualObjectO
         break;
     }
     ctx.restore();
-    const at = o.labelAt === undefined ? LABEL_BELOW : o.labelAt;
-    const color = o.active ? READ_LABEL : IDLE_LABEL;
-    if (dressed) drawFoundLabel(ctx, o.label, { at, found, color, text: o.text });
+    if (o.out === true) drawOutTag(ctx);
+    if (dressed) drawManualLabel(ctx, o, found);
   } finally {
     ctx.restore();
   }
+}
+
+/** A manual object's name under it, as far as it is found: brighter where it is active. */
+function drawManualLabel(ctx: CanvasRenderingContext2D, o: ManualObjectOpts, found: number): void {
+  const at = o.labelAt === undefined ? LABEL_BELOW : o.labelAt;
+  const color = o.active ? READ_LABEL : IDLE_LABEL;
+  drawFoundLabel(ctx, o.label, { at, found, color, text: o.text });
 }
 
 /**

@@ -96,7 +96,7 @@ function HintFields({
   ));
 }
 
-function PuzzleForm({ draft, index, validation, onChange, onRemove }: FormProps) {
+export function PuzzleForm({ draft, index, validation, onChange, onRemove }: FormProps) {
   const puzzle = draft.puzzles[index];
   if (puzzle === undefined) {
     return null;

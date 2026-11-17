@@ -622,9 +622,12 @@ function checkOneConsole(issue: MapCheck['issue'], puzzleId: string, spots: Stat
   }
 }
 
+/** The one key a snapshot's records drop as they are read back (zod), so no pool may have it. */
+const UNKEPT_KEY = '__proto__';
+
 /**
  * A pool is a choice: two members at least, under an id no puzzle has — a door naming it means
- * whichever of them the run draws.
+ * whichever of them the run draws — and one a snapshot keeps the draw under.
  */
 function checkPools({ pools, puzzleIds, issueAt }: MapCheck, puzzles: PuzzleDef[]): void {
   puzzles.forEach((puzzle, i) => {
@@ -643,6 +646,12 @@ function checkPools({ pools, puzzleIds, issueAt }: MapCheck, puzzles: PuzzleDef[
       issueAt(
         ['puzzles', i, 'pool'],
         `pool "${puzzle.pool}" is also a puzzle's id — give the pool an id of its own`,
+      );
+    }
+    if (puzzle.pool === UNKEPT_KEY) {
+      issueAt(
+        ['puzzles', i, 'pool'],
+        `pool "${puzzle.pool}": a snapshot keeps no draw under that name — give it another id`,
       );
     }
   });

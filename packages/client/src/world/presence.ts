@@ -32,6 +32,9 @@ export function presenceNear(
     return { stationId: null, manualId: null };
   }
   const station = map.stations.find((s) => isArmed(s) && near(pos, s, PRESENCE_RADIUS));
-  const source = map.manuals.find((m) => m.known && m.opened && near(pos, m, PRESENCE_RADIUS));
+  // A source out of service gives no page: nobody stands reading at it (core `presenceOf`).
+  const source = map.manuals
+    .filter((m) => m.known && m.opened && m.outOfService !== true)
+    .find((m) => near(pos, m, PRESENCE_RADIUS));
   return { stationId: station?.puzzleId ?? null, manualId: source?.id ?? null };
 }
