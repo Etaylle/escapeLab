@@ -539,15 +539,15 @@ the Leitstand, the token device in the Wache, the list on a clipboard by the ter
   token is a pure function of the run's seed, the account and the period (`tokenOf`, no TOTP
   library); the periods count from the moment the station came on, and the room ticks it at each
   period's end (`dueAt`), the module harness as well.
-- **The source** holds the whole lookup, dealt anew every run: the list of three accounts, each with
-  its role (one of the four roles stays unheld) and the two doors that role may release — no door to
-  two —, shown under the rules once the station is on, as the maze's walls are, with „Notieren"
-  beside it („Benutzerliste · Konten" on the probe's clipboard), so that a crew of two can carry it
-  to the consoles. The printed page names no role's doors; which account a door needs is only
-  decidable at the list. The device never opens on the account the terminal's first door needs, so a
-  crew that logs in whatever it shows first, without the list, takes an alarm at that door in every
-  run; it brings that account second or third at even odds, so a crew that waits for a later turn
-  instead takes one in about half the runs.
+- **The source** holds the whole lookup, dealt anew every run: the list of three accounts, each
+  with its role (one of the four roles stays unheld) and the two doors that role may release —
+  no door to two —, shown under the rules once the station is on, as the maze's walls are, with
+  „Notieren" beside it („Benutzerliste · Konten" on the probe's clipboard), so that a crew of two
+  can carry it to the consoles. The printed page names no role's doors; which account a door
+  needs is only decidable at the list. The device never opens on the account the terminal's
+  first door needs, so a crew that logs in whatever it shows first, without the list, takes an
+  alarm at that door in every run; it brings that account second or third at even odds, so a crew
+  that waits for a later turn instead takes one in about half the runs.
 - **The rules.** A login opens a session only with its account's token of the period it arrives
   in; the session stays open until the next login. A wrong token is a Fehlquittierung, an alarm;
   the third in a row for an account locks it for `lockSec` (45 s) on the station's clock, as the
@@ -601,23 +601,23 @@ binder, the Laborkennung between them), and with its bay in the Übungshalle.
   as a card of its header in two lines — the Quelle over port and protocol, „67/UDP", 14 px at
   least, 44 px high —, a marked card wearing a tick and a heavier border. A tap on a card, or a
   cursor stepped with ← → and space or enter, sets or takes back its mark. It drops nothing.
-- **The source** is the module's printed page, the Sicherheitsrichtlinie: three networks
-  (Labornetz 10.4.x.x, Wartungsnetz 10.9.x.x, everything else Fremdnetz) and six numbered rules,
-  the first that fits deciding — the Wartungsnetz passes, ports 23 and 3389 are dropped, the
-  Labornetz over TCP passes, a port ending on the Laborkennung's last digit is dropped, UDP to
-  53 or 67 passes, any other UDP is dropped — and the Grundregel: anything else passes. The same
-  for every seed and state, printable; the headers stand only at console B, what they mean only
-  in the policy. `rules` (3–6, default 4) says how many of the six an instance's packets are
-  decided by, always in one order: the four simplest first — 1, 2, 3 and 6 —, then 5, the name
-  service's exception, and last 4, the Laborkennung's digit. A first run at the default reads
-  the whole page but meets no packet that turns on the sign or on a port pair; that reading
-  load, six rules first-match against packets falling for 14 s, is the lab's heaviest. Every
-  wave carries a decoy — a packet a rule in play further down would drop, which only the order
-  lets through: within rules 1, 2, 3 and 6 only a Wartungsnetz packet can be one, caught further
-  down by rule 2 in one wave and rule 6 in the next (a Labornetz decoy would need rule 4). Every
-  second wave also carries a trap: remote ports from the Labornetz over TCP, which rule 3 would let
-  through and rule 2 drops first. The default's three waves take about two minutes on the clock (118 s median
-  over 200 seeds for the solver, 98–126 s), the moves never shortening a wave.
+- **The source** is the module's printed page, the Sicherheitsrichtlinie: three networks (Labornetz
+  10.4.x.x, Wartungsnetz 10.9.x.x, everything else Fremdnetz) and six numbered rules, the first that
+  fits deciding — the Wartungsnetz passes, ports 23 and 3389 are dropped, the Labornetz over TCP
+  passes, a port ending on the Laborkennung's last digit is dropped, UDP to 53 or 67 passes, any
+  other UDP is dropped — and the Grundregel: anything else passes. The same for every seed and
+  state, printable; the headers stand only at console B, what they mean only in the policy. `rules`
+  (3–6, default 4) says how many of the six an instance's packets are decided by, always in one
+  order: the four simplest first — 1, 2, 3 and 6 —, then 5, the name service's exception, and last
+  4, the Laborkennung's digit. A first run at the default reads the whole page but meets no packet
+  that turns on the sign or on a port pair; that reading load, six rules first-match against packets
+  falling for 14 s, is the lab's heaviest. Every wave carries a decoy — a packet a rule in play
+  further down would drop, which only the order lets through: within rules 1, 2, 3 and 6 only a
+  Wartungsnetz packet can be one, caught further down by rule 2 in one wave and rule 6 in the next
+  (a Labornetz decoy would need rule 4). Every second wave also carries a trap: remote ports from
+  the Labornetz over TCP, which rule 3 would let through and rule 2 drops first. The default's three
+  waves take about two minutes on the clock (118 s median over 200 seeds for the solver, 98–126 s),
+  the moves never shortening a wave.
 - **A wave** is `packets` packets (5–9, default 7), two or three of them hostile, coming on one
   after another a quarter of a fall apart, each on a line nothing came onto for 0.6 of a fall —
   so that two cards of a line never overlap on the smallest scope, a phone's 130 px —, and each
