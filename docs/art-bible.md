@@ -1298,6 +1298,27 @@ window of the walkthrough logs what the light worked out anew meanwhile — a li
 sights a frame and the bakes (render/census.ts) — so that a cache that stops holding shows in
 CI's log before it shows in the frames.
 
+**The Anlaufsteuerung's duct and pulse (I-startup).** On the bench above (rAF with the wall
+clock, Anna pacing, the main thread slowed four times, the Canvas path under the software-GL
+flags, 1440 × 600, six rotated rounds, medians, ms):
+
+| Scene | Work before | Work after | Frames before → after |
+| --- | --- | --- | --- |
+| Blackout's dark Flur, main → branch (no duct) | 11.53, 14.10 | 12.66, 14.00 | 16.8 → 16.8 |
+| The Anlaufprobe's duct, a start pulse running (before: none) | 7.23, 9.60 | 8.94, 10.70 | 16.8 → 16.8 |
+| The Übungshalle, its duct taken out → in | 12.24, 14.60 | 11.83, 15.60 | 16.8 → 16.8 |
+
+The Flur's paired differences change sign from round to round and between two runs (+1.04 to
+−2.99): no cost without a duct. The duct itself is baked with the floor and costs no frame. A
+running pulse costs +0.7 ms paired (+1.2 at p95): it is no steady light, so the glow pass bakes
+its pool anew at each quarter-tile step on its first pass along a duct — 34 frames about 1.6 ms
+dearer —, and a later pulse along the same duct uses the bakes again. The Übungshalle as a whole
+came +1.55 ms dearer against main in five rounds of six; a per-pass split puts it in the new bay
+— its station, book, desk and their light (objects +1.0, light +0.7, darkness +0.6, beacons
++0.4) —, not in the duct: one more station of the hall, as each one is. The noise is large here
+(one build ranged 7 to 15 ms between rounds, under a load of 3 to 12); no WebGL or real-GPU
+measurement was taken. Bench: scratchpad startup/bench/ (bench.ts, run.mjs, prof.mjs).
+
 **What a window measures (M-ciwin).** CI's escape window read 49.9 to 50 ms p95 on both looks in
 three runs, while one client's frame of the scene comes to 16.8 ms on the bench above, its main
 thread slowed four times: the walkthrough's three pages — the host, the guest's phone, the audience

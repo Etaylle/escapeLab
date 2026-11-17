@@ -61,9 +61,14 @@ describe('the duct’s tiles', () => {
   });
 
   it('are dressed with the map, and keep the floor’s marks off them', () => {
-    const frame = frameWith({ map: lab([duct(null)]) });
+    const bare = frameWith({ map: lab([]) });
+    const marked = [...dressedFor(bare.kit.art, bare.map, 'probe').decals.keys()];
+    expect(marked.length).toBeGreaterThan(0);
+    // A duct laid over the marks the bare floor carries: none of them may stay under it.
+    const under = marked.map((i) => ({ x: i % 10, y: Math.floor(i / 10) }));
+    const frame = frameWith({ map: lab([{ puzzleId: 'anlauf', tiles: under, pulse: null }]) });
     const { ducts, decals } = dressedFor(frame.kit.art, frame.map, 'probe');
-    expect(ducts.size).toBe(8);
+    expect(ducts.size).toBe(under.length);
     expect([...decals.keys()].filter((i) => ducts.has(i))).toEqual([]);
   });
 
@@ -88,8 +93,10 @@ describe('the pulse’s spot', () => {
     expect(pulseSpot(duct(), T)).toEqual({ x: 1.5, y: 2.5, arrived: false });
     // Halfway: 3.5 tiles along a path of 7 from tile to tile.
     expect(pulseSpot(duct(), T + 3500)).toEqual({ x: 5, y: 2.5, arrived: false });
-    const just = pulseSpot(duct(), T + 3500 + 100);
-    expect((just?.x ?? 0) - 5).toBeLessThan(PULSE_STEP + 1e-9);
+    // 3.6 tiles along stand at 3.5: a PULSE_STEP at a time.
+    expect(pulseSpot(duct(), T + 3600)).toEqual({ x: 1.5 + 3.5, y: 2.5, arrived: false });
+    expect(pulseSpot(duct(), T + 3750)?.x).toBe(1.5 + 3.75);
+    expect(PULSE_STEP).toBe(0.25);
     expect(pulseSpot(duct(), T + 7000)).toEqual({ x: 8.5, y: 2.5, arrived: true });
     expect(pulseSpot(duct(), T + 9999)).toEqual({ x: 8.5, y: 2.5, arrived: true });
   });

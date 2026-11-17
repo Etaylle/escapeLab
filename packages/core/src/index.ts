@@ -350,6 +350,7 @@ export {
   LOAD_NAMES,
   LOAD_PICTURES,
   pulseTimes,
+  SHOWN_PREFIX,
   STARTUP_GAPS,
   STARTUP_LOADS,
   type LampColour,

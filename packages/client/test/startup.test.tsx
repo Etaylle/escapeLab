@@ -16,8 +16,21 @@ vi.mock('../src/puzzles/sounds.js', async (importOriginal) => {
 });
 
 const sounds = await import('../src/puzzles/sounds.js');
-const { humVolts, ladderLit, nextStepAt, NPM_REPLY, StartupPanel, startupSounds, statusOf } =
-  await import('../src/puzzles/StartupPanel.js');
+const {
+  humVolts,
+  idlePlate,
+  ladderLit,
+  nextStepAt,
+  NPM_REPLY,
+  promptHint,
+  StartupPanel,
+  startupSounds,
+  statusOf,
+} = await import('../src/puzzles/StartupPanel.js');
+
+const fail = (): never => {
+  throw new Error('no terminal');
+};
 const { completed, lineOf, withKey } = await import('../src/puzzles/startupPrompt.js');
 const { heldView } = await import('../src/puzzles/Device.js');
 const { StationModal } = await import('../src/screens/Game.js');
@@ -195,9 +208,31 @@ describe('the consoles', () => {
   });
 });
 
+describe('the prompt’s hint and the Schaltfeld’s plate', () => {
+  const shown = { n: 9, tag: 'info' as const, text: 'zeige: Stufe 1, Kühlkreis, offen: abgang' };
+
+  it('names the typed steps once zeige has answered last, the gaps still open first', () => {
+    const log = atTerminal().terminal?.log ?? [];
+    expect(promptHint(atTerminal().terminal ?? fail())).toBeNull();
+    const after = atTerminal({ log: [...log, shown] });
+    expect(promptHint(after.terminal ?? fail())).toBe('Eingabe: setze abgang <nr> · start');
+    expect(panel(after)).toContain('Eingabe: setze abgang &lt;nr&gt; · start');
+    const set = atTerminal({ log: [...log, shown], values: { abgang: 2 } });
+    expect(promptHint(set.terminal ?? fail())).toBe('Eingabe: start');
+  });
+
+  it('marks the Schaltfeld taking the pulse, and names it on the one at rest', () => {
+    expect(panel(atBoard())).toContain('SCHALTFELD B · AUFGESCHALTET');
+    expect(panel(atTerminal())).toContain('SCHALTFELD A · IN RUHE · AUFGESCHALTET: B');
+    expect(idlePlate({ ...atTerminal(), types: 'b' })).toBe(
+      'SCHALTFELD B · IN RUHE · AUFGESCHALTET: A',
+    );
+  });
+});
+
 describe('the status strip', () => {
   it('says what the Schaltfeld sees of the pulse, and what the last came to', () => {
-    expect(statusOf(atBoard())).toBe('Stufe 1/2 · Schaltfeld aufgeschaltet · Bereit');
+    expect(statusOf(atBoard())).toBe('Stufe 1/2 · Schaltfeld B aufgeschaltet · Bereit');
     expect(statusOf(atBoard({ pulse: { sentAt: NOW, arrived: false } }))).toBe(
       'Stufe 1/2 · Impuls kommt',
     );
@@ -205,7 +240,7 @@ describe('the status strip', () => {
       'Stufe 1/2 · Impuls auf den markierten Stufen',
     );
     expect(statusOf({ ...atBoard(), last: 'verworfen' })).toBe(
-      'Stufe 1/2 · Schaltfeld aufgeschaltet · Impuls verworfen: Schalter vor dem Fenster',
+      'Stufe 1/2 · Schaltfeld B aufgeschaltet · Impuls verworfen: Schalter vor dem Fenster',
     );
   });
 

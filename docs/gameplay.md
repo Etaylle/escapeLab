@@ -593,8 +593,10 @@ Betriebsbuch in the west room), and its bay in the Übungshalle.
   in the odd ones console A's terminal runs the script and console B's Schaltfeld takes the
   pulse, in the even ones the other way round. The part that is not live stands idle and shows
   nothing of the instance: a dark glass („Skript läuft an Pult A"), dark lamps and the breakers
-  closed in earlier stages. A status strip over both says the stage and what the last pulse came
-  to in the device's words.
+  closed in earlier stages. A plate over each Schaltfeld says whether it takes this stage's pulse
+  („SCHALTFELD B · AUFGESCHALTET", amber) or rests and which one does („SCHALTFELD A · IN RUHE ·
+  AUFGESCHALTET: B"), so that in stage 2 nobody waits at the wrong half. A status strip over both
+  says the stage and what the last pulse came to in the device's words.
 - **The script** (`zeige` lists the stage and its open gaps in the log) names the load the stage
   starts — Netzeinspeisung, Notstromschiene, Kühlkreis, Lüftung, Beleuchtung, one of its own each
   stage — and has the gap `abgang`, from stage 2 on also `sperre`. Its comments are the hints:
@@ -602,7 +604,9 @@ Betriebsbuch in the west room), and its bay in the Übungshalle.
   Kontrollleuchte an Schaltfeld A". `setze <lücke> <wert>` (or the script's own `abgang = 2`)
   sets a gap, `start` runs the script; Tab completes a command and, after `setze`, a gap of the
   script; the keys put the same lines together. `npm` and whatever follows it the terminal
-  answers itself, without a fault: „? npm: unbekannter Befehl — AS-86, Baujahr 1986".
+  answers itself, without a fault: „? npm: unbekannter Befehl — AS-86, Baujahr 1986". Once
+  `zeige` has answered last, the line under the prompt names the typed steps the stage still
+  takes: „Eingabe: setze abgang <nr> · start".
 - **The facts and the rule lie apart.** The lamps burn only at the other console's Schaltfeld:
   three feeders show the pictures of three loads, the fourth red over dark, faulty. Which picture
   a load has stands only in the book's Tabelle 2 (grün over dunkel the Netzeinspeisung, gelb over

@@ -323,11 +323,15 @@ function caughtUp(def: StartupDef, state: StartupState, at: number): StartupStat
 const manned = (ctx: PuzzleContext, side: ConsoleId, playerId: string): boolean =>
   ctx.atConsoles[side].some((id) => id !== playerId);
 
+/** What a `zeige` line of the log opens on: the terminal's prompt reads it (client). */
+export const SHOWN_PREFIX = 'zeige: ';
+
 /** `zeige`: the log names the stage, its load and the gaps still open. */
 function shown(state: StartupState): Outcome {
   const open = gapsOf(state.stage).filter((gap) => state.values[gap] === undefined);
   const gaps = open.length === 0 ? 'alle Lücken gesetzt' : `offen: ${open.join(', ')}`;
-  const text = `Stufe ${state.stage + 1}, ${LOAD_NAMES[dealNow(state).load]}: ${gaps}`;
+  const load = LOAD_NAMES[dealNow(state).load];
+  const text = `${SHOWN_PREFIX}Stufe ${state.stage + 1}, ${load}, ${gaps}`;
   return { state: logged(state, [{ tag: 'info', text }]), penalty: null };
 }
 

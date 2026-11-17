@@ -10,6 +10,7 @@ import {
 import {
   FEEDERS,
   LAMP_WORDS,
+  SHOWN_PREFIX,
   type ConsoleId,
   type LampColour,
   type StartupBoard,
@@ -99,6 +100,23 @@ export function nextStepAt(
 export const humVolts = (lit: number): number => 40 + lit * 14;
 
 /**
+ * The hint line under the prompt once `zeige` has answered last: the typed steps the stage
+ * still takes, as the device prints them — `setze <lücke> <nr>` for every gap still open, then
+ * `start`; null while the log's newest line is another.
+ */
+export function promptHint(terminal: StartupTerminal): string | null {
+  const newest = terminal.log.at(-1);
+  if (newest === undefined || !newest.text.startsWith(SHOWN_PREFIX)) {
+    return null;
+  }
+  const open = terminal.gaps.filter((gap) => (terminal.values[gap] ?? null) === null);
+  return `Eingabe: ${[...open.map((gap) => `setze ${gap} <nr>`), 'start'].join(' · ')}`;
+}
+
+/** The console whose Schaltfeld takes this stage's pulse. */
+const armedConsole = (puzzle: StartupPuzzle): ConsoleId => other(puzzle.types);
+
+/**
  * The status strip's words for `puzzle`: the stage, what is live at this console, and what the
  * pulse is doing or came to last.
  */
@@ -109,7 +127,8 @@ export function statusOf(puzzle: StartupPuzzle): string {
   if (puzzle.role === 'board' && board !== null) {
     const pulse = board.pulse;
     if (pulse === null) {
-      return `${head} · Schaltfeld aufgeschaltet · ${lastWords}`;
+      const armed = armedConsole(puzzle).toUpperCase();
+      return `${head} · Schaltfeld ${armed} aufgeschaltet · ${lastWords}`;
     }
     return `${head} · ${pulse.arrived ? 'Impuls auf den markierten Stufen' : 'Impuls kommt'}`;
   }
@@ -335,7 +354,11 @@ function Prompt(props: {
 }
 
 /** Under the prompt: the terminal's own answer to npm or to a line it cannot read, a refusal. */
-function Reply({ reply, refused }: { reply: string | null; refused: Refusal | null }) {
+function Reply(props: { reply: string | null; refused: Refusal | null; hint: string | null }) {
+  const { reply, refused, hint } = props;
+  if (reply === null && refused === null && hint !== null) {
+    return <p className="servers-reply startup-hint">{hint}</p>;
+  }
   if (reply !== null) {
     return (
       <p className="servers-reply" role="status">
@@ -419,7 +442,7 @@ function Terminal(props: {
           label={label}
           hold={hold}
         />
-        <Reply reply={reply} refused={refused} />
+        <Reply reply={reply} refused={refused} hint={promptHint(terminal)} />
       </Glass>
       <div className="servers-bezel">
         <Keys gaps={terminal.gaps} put={put} />
@@ -541,8 +564,10 @@ function Board(props: {
   audible: boolean;
 }) {
   const { puzzle, board, send, audible } = props;
+  const armed = armedConsole(puzzle).toUpperCase();
   return (
     <div className="startup-board">
+      <p className="startup-armed startup-armed--live">{`SCHALTFELD ${armed} · AUFGESCHALTET`}</p>
       <div className="startup-feeders" role="group" aria-label="Abgänge">
         {board.feeders.map(({ feeder, lamps }) => (
           <div key={feeder} className="startup-feeder" data-feeder={feeder}>
@@ -565,12 +590,22 @@ function Board(props: {
 const closedAt = (closed: readonly StartupClosed[] | null, side: ConsoleId | null): number[] =>
   (closed ?? []).filter((entry) => entry.console === side).map((entry) => entry.feeder);
 
+/**
+ * The plate over an idle Schaltfeld: this one rests, and which one the stage's pulse goes to
+ * instead — „SCHALTFELD A · IN RUHE · AUFGESCHALTET: B".
+ */
+export function idlePlate(puzzle: StartupPuzzle): string {
+  const here = puzzle.types.toUpperCase();
+  return `SCHALTFELD ${here} · IN RUHE · AUFGESCHALTET: ${armedConsole(puzzle).toUpperCase()}`;
+}
+
 /** The Schaltfeld of a console whose terminal is live: its lamps dark, its breakers at rest. */
 function IdleBoard({ puzzle }: { puzzle: StartupPuzzle }) {
   const closed = closedAt(puzzle.closed, puzzle.console);
   const feeders = Array.from({ length: FEEDERS }, (_, i) => i + 1);
   return (
     <div className="startup-board startup-board--idle">
+      <p className="startup-armed">{idlePlate(puzzle)}</p>
       <div className="startup-feeders" role="group" aria-label="Abgänge in Ruhe">
         {feeders.map((feeder) => (
           <div key={feeder} className="startup-feeder" data-feeder={feeder}>

@@ -99,6 +99,7 @@
 
 .startup-board {
   display: flex;
+  flex-wrap: wrap;
   align-items: stretch;
   gap: 12px;
   padding: 12px;
@@ -133,6 +134,20 @@
   flex-direction: column;
   align-items: center;
   gap: 2px;
+}
+
+/* The plate over the Schaltfeld: whether it takes this stage's pulse — amber, lit — or rests. */
+.startup-armed {
+  flex: 1 0 100%;
+  margin: 0;
+  color: #9fb0bb;
+  font-size: calc(var(--type-body) * var(--text-scale));
+  letter-spacing: 1px;
+}
+
+.startup-armed--live {
+  color: #ffd27a;
+  text-shadow: 0 0 6px rgba(255, 196, 80, 0.45);
 }
 
 /* A control lamp's lens: dark glass, or burning in its colour with its glow round it. */

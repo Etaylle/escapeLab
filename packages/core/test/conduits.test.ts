@@ -52,6 +52,21 @@ describe('the validation of a duct', () => {
     ]);
   });
 
+  it('turns away a duct at a station of another module', () => {
+    const data = withDuct({ puzzleId: 'kette' }) as {
+      puzzles: object[];
+      map: { stations: object[] };
+    };
+    data.puzzles.push({ type: 'signal', id: 'kette', title: 'Kette' });
+    data.map.stations.push(
+      { puzzleId: 'kette', x: 2, y: 4, console: 'a' },
+      { puzzleId: 'kette', x: 15, y: 4, console: 'b' },
+    );
+    expect(issuesOf(data)).toContainEqual(
+      expect.stringMatching(/^map\.conduits\.0\.puzzleId: .*"kette" is a signal — a duct/),
+    );
+  });
+
   it('turns away a gap, a tile twice and a tile over the void or off the map', () => {
     const gap = issuesOf(withDuct({ tiles: [...row(2, 4, 7), ...row(2, 9, 13)] }));
     expect(gap).toEqual([expect.stringMatching(/tiles 7,2 and 9,2 share no side/)]);

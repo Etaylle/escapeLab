@@ -1,9 +1,10 @@
 import { readFileSync } from 'node:fs';
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import {
   FAULT_PICTURE,
   FEEDERS,
   generateEdgework,
+  LOAD_NAMES,
   LOAD_PICTURES,
   puzzleDefSchema,
   STARTUP_LOADS,
@@ -242,7 +243,9 @@ describe('the terminal', () => {
     expect(thrown(() => send(state, { cmd: 'zeige' }, 'b', T0))).toBe(
       'Dieses Terminal hat in dieser Stufe kein Skript.',
     );
-    expect(send(state, { cmd: 'zeige' }, 'a', T0).state.log.at(-1)?.text).toMatch(/offen: abgang$/);
+    expect(send(state, { cmd: 'zeige' }, 'a', T0).state.log.at(-1)?.text).toBe(
+      'zeige: Stufe 1, ' + LOAD_NAMES[state.stages[0]?.load ?? 'netz'] + ', offen: abgang',
+    );
   });
 
   it('refuses a gap the stage’s script does not have', () => {
@@ -301,8 +304,13 @@ describe('the terminal', () => {
 });
 
 describe('the window', () => {
-  const state = sentAt(fresh(), T0);
-  const feeder = target(state);
+  // Sent before each test, not as the file is collected: a broken deal fails a test, not the file.
+  let state: StartupState;
+  let feeder: number;
+  beforeEach(() => {
+    state = sentAt(fresh(), T0);
+    feeder = target(state);
+  });
   const arrives = T0 + TRAVEL_MS;
   const dies = arrives + WINDOW_MS;
 
