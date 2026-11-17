@@ -202,7 +202,7 @@ the Anlaufsteuerung: the crew passes it before it reaches the consoles.
 **The Anlaufsteuerung behind the plate door.** Whoever works console A is shut in the
 Maschinenraum until the generator runs. The table of lamp pictures lies in the Archiv, and only
 console B's player can walk to it: 6.1 s there and back to the book's farther place, 5.4 s to
-the nearer (a test keeps it within 20 s). So console B's player is the one who knows the table —
+the nearer (a test keeps it within 10 s). So console B's player is the one who knows the table —
 read before, taken into the notepad, or walked to again — in both stages: in stage 1 they read
 their own lamps and say the number for console A to type, in stage 2 console A reads its lamps
 out and they type. `start` waits for both consoles („Am Schaltfeld der Gegenseite steht

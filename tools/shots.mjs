@@ -16114,7 +16114,7 @@ const DANGER_SHOT_TILES = 3.5;
  * Where the danger sense's player starts: by the Flurwache's beat, on the tile nearest to it
  * that the drone never looks at (patrol.mjs `havens`, every door shut as the run starts) — so
  * that it passes within DANGER_SHOT_TILES of a player it does not spot — and on nothing else of
- * the map: no plate, door, console, part or source's place.
+ * the map: no plate, door, console or part, and no source's only place.
  */
 const UNDER_THE_PATROL = (() => {
   const { map } = BLACKOUT;
@@ -16133,7 +16133,9 @@ const UNDER_THE_PATROL = (() => {
   const legs = middles.map((a, i) => [a, middles[(i + 1) % middles.length]]);
   const offBeat = ({ x, y }) =>
     Math.min(...legs.map(([a, b]) => offLeg({ x: x + 0.5, y: y + 0.5 }, a, b)));
-  const spots = map.manuals.flatMap((m) => m.spots);
+  // A source with a place to spare gives one up to the drill's copy (`dangerMission`): the
+  // Flur's havens by the beat are the pillars' shadows, where Blackout lays its Klemmbrett.
+  const spots = map.manuals.flatMap((m) => (m.spots.length > 1 ? [] : m.spots));
   const things = [map.plates, map.doors, map.stations, map.items, spots].flat();
   const taken = new Set(things.map(({ x, y }) => `${x},${y}`));
   const solid = furniture(map);
@@ -16162,6 +16164,13 @@ function dangerMission() {
     map: {
       ...blackout.map,
       spawns: [UNDER_THE_PATROL, blackout.map.spawns[0]],
+      // No source lies where the drill's player starts: it keeps its other places.
+      manuals: blackout.map.manuals.map((manual) => ({
+        ...manual,
+        spots: manual.spots.filter(
+          (spot) => spot.x !== UNDER_THE_PATROL.x || spot.y !== UNDER_THE_PATROL.y,
+        ),
+      })),
       drones: blackout.map.drones.map((drone) => ({ ...drone, activeAfterSolved: 0 })),
     },
   };

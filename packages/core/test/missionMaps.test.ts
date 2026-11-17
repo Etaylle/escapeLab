@@ -562,7 +562,7 @@ describe('mission blackout by design', () => {
     }
   });
 
-  it('keeps the Betriebsbuch a short walk from console B: there and back within 20 s', () => {
+  it('keeps the Betriebsbuch a short walk from console B: there and back within 10 s', () => {
     // Whoever works console A is shut in the Maschinenraum until the generator runs; the lamp
     // pictures' table lies in the Archiv, and only console B's player can walk to it — once
     // before the station, or again for a stage — while the script waits for both consoles.
@@ -576,7 +576,9 @@ describe('mission blackout by design', () => {
     expect(book.spots.length).toBeGreaterThan(1);
     for (const spot of book.spots) {
       const there = walkTiles(map, outside, spot, shut) / WALK_SPEED;
-      expect(2 * there, `the book at ${tileKey(spot.x, spot.y)}`).toBeLessThanOrEqual(20);
+      // 6.1 s and 5.4 s as it lies; a place at the Flur's far end would be 12 s, which the
+      // lead's bound of 20 s would let through — held to half of it.
+      expect(2 * there, `the book at ${tileKey(spot.x, spot.y)}`).toBeLessThanOrEqual(10);
       expect(2 * there).toBeGreaterThan(2);
     }
   });
