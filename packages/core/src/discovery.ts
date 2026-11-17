@@ -1,4 +1,4 @@
-import { armedPuzzleIds, stationsOfRun } from './map.js';
+import { armedPuzzleIds, outOfService, stationsOfRun } from './map.js';
 import type { MapDef } from './mission.js';
 import { noteSpot } from './notes.js';
 import type { ConsoleId } from './puzzles/module.js';
@@ -184,11 +184,12 @@ function consolesAt(spots: readonly StationSpot[]): Findable[] {
 /**
  * Everything this run has to find, in map order: the sources where the run
  * placed them, the notes, the parts lying loose, the consoles of the armed
- * station and the sign.
+ * station — and those of the stations out of service, whose tag is read up close — and the
+ * sign.
  */
 export function findables(state: GameState): Findable[] {
   const { map } = state.mission;
-  const armed = armedPuzzles(state);
+  const armed = new Set([...armedPuzzles(state), ...outOfService(state)]);
   const sign = map.edgeworkSign;
   const signs = sign === undefined ? [] : [findable({ of: 'sign' }, sign.x + 0.5, sign.y + 0.5)];
   return [

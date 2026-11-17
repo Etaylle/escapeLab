@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import type { MapView } from '@escapelab/core';
+import type { Find, MapView } from '@escapelab/core';
 import { drawFusebox, drawLeverBox, drawStation } from '../src/world/art.js';
 import { contextAction } from '../src/world/interact.js';
 import { armedGoal } from '../src/world/known.js';
-import { foundIn } from '../src/world/labelFade.js';
+import { foundIn, labelAlpha, labelClock, noteLabels } from '../src/world/labelFade.js';
 import { markerTargets } from '../src/world/markers.js';
 import { objectGlows } from '../src/world/render/darkness.js';
 import { draw as drawHud, minimapGoal, minimapLayout } from '../src/world/render/hud.js';
@@ -115,6 +115,30 @@ describe('a station out of service: its console in the world', () => {
     expect(texts(frameWith({ map: lab(), labels: () => 0 }))).not.toContain(TAG);
     const locked = lab({ stations: [{ ...outA, status: 'locked' }] });
     expect(texts(frameWith({ map: locked }))).not.toContain(TAG);
+  });
+
+  it('wears its tag where it is only in sight, without the words', () => {
+    const plain: MapView['stations'][number] = {
+      puzzleId: 'signalkette',
+      x: 2,
+      y: 1,
+      seen: true,
+      found: false,
+      known: false,
+    };
+    const tagged: MapView['stations'][number] = { ...plain, out: true };
+    const turnsIn = (station: MapView['stations'][number]): number => {
+      const { ctx, log } = fakeCanvas(800, 600);
+      draw(ctx, frameWith({ map: lab({ stations: [station], manuals: [] }) }));
+      return callsOf(log, 'rotate').length;
+    };
+    expect(turnsIn(tagged) - turnsIn(plain)).toBe(1);
+    // Its words wait for the find, as the screen's label clock has it (labelFade.ts).
+    const map = lab({ stations: [tagged, outB], manuals: [] });
+    const clock = noteLabels(labelClock(1), map, 1, 0, true);
+    const labels = (find: Find): number => labelAlpha(clock, find, 10, false);
+    expect(texts(frameWith({ map, labels })).filter((text) => text === TAG)).toHaveLength(1);
+    expect(foundIn(map)).toEqual([{ of: 'console', puzzleId: 'signalkette', console: 'b' }]);
   });
 
   it('gives its tag a place among the labels, clear of the others', () => {

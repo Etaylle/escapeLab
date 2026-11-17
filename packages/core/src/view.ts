@@ -443,7 +443,14 @@ export interface MapView {
         status: 'done' | 'armed' | 'locked' | 'out';
       } & StationSpotLook &
         Known)
-    | ({ puzzleId: string; x: number; y: number } & StationSpotLook & Glimpse)
+    | ({
+        puzzleId: string;
+        x: number;
+        y: number;
+        /** a tag hangs on it: out of service this run, as its status says once it is known */
+        out?: true;
+      } & StationSpotLook &
+        Glimpse)
   )[];
   /**
    * the manual objects of the run this player can make out: whole where the crew has come
@@ -844,7 +851,7 @@ function stationLook(
 /**
  * Every station spot this viewer can make out: whole the armed station's, the objective every
  * view shares, and a spot the crew has found; of any other only what it is and where, while it
- * is in sight.
+ * is in sight — and the tag on it, where it is out of service.
  */
 function stationsOnMap(state: GameState, viewer: MapViewer): MapView['stations'] {
   const sighting = sightingFor(state, viewer);
@@ -864,7 +871,8 @@ function stationsOnMap(state: GameState, viewer: MapViewer): MapView['stations']
     if (known || status === 'armed') {
       return [{ ...spot, title: def?.title ?? s.puzzleId, status, found, known: true }];
     }
-    return seen ? [{ ...spot, ...GLIMPSE }] : [];
+    const tagged = status === 'out' ? { out: true as const } : {};
+    return seen ? [{ ...spot, ...tagged, ...GLIMPSE }] : [];
   });
 }
 

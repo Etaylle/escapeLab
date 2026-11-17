@@ -8,6 +8,7 @@ import {
   drawPools,
   emergenciesDue,
   everyDraw,
+  findables,
   GameError,
   inEscapePhase,
   labLit,
@@ -651,6 +652,8 @@ describe('rotation: the probe, station by station', () => {
             expect(view.manualsHere.flatMap((m) => m.sections.map((s) => s.puzzleId))).toEqual(
               [],
             );
+            // Nowhere to stand at: neither its consoles nor its source count as a place.
+            expect(view.presence).toMatchObject({ stationId: null, manualId: null });
             expect(view.puzzle?.title ?? '').not.toBe(
               fresh.mission.puzzles.find((p) => p.id === resting)?.title,
             );
@@ -687,6 +690,24 @@ describe('rotation: the probe, station by station', () => {
     expect(atSource(state, 'buch-signalkette').manualsHere).toEqual([]);
     expect(atSource(state, 'buch-funkfeuer').sourcesHere[0]).not.toHaveProperty('outOfService');
     expect(atSource(state, 'buch-funkfeuer').manualsHere).toHaveLength(1);
+  });
+
+  it('shows the tag at a glimpse, and lets its console be found up close without a chime', () => {
+    const fresh = started(rotationProbe(), seeds.played);
+    const keys = findables(fresh).map((thing) => thing.key);
+    expect(keys).toEqual(expect.arrayContaining(['console:signalkette/b', 'console:notstrom/a']));
+    expect(keys).not.toContain('console:funkfeuer/-');
+    const spotOf = (state: GameState): unknown =>
+      viewFor(state, 'p1').map?.stations.find((s) => s.puzzleId === 'notstrom' && s.x === 12);
+    expect(spotOf(fresh)).toBeUndefined();
+    const inSight = standing(fresh, { sight: { p1: ['console:notstrom/a'] } });
+    expect(spotOf(inSight)).toMatchObject({ known: false, out: true, look: 'fusebox' });
+    const locked = viewFor(standing(fresh, { sight: { p1: ['console:funkfeuer/-'] } }), 'p1');
+    expect(locked.map?.stations.find((s) => s.puzzleId === 'funkfeuer')).not.toHaveProperty('out');
+    const found = standing(fresh, { found: { p1: ['console:notstrom/a'] } });
+    expect(spotOf(found)).toMatchObject({ known: true, found: true, status: 'out' });
+    expect(spotOf(found)).not.toHaveProperty('out');
+    expect(found.discoveries['p1'] ?? []).toEqual([]);
   });
 
   it('keeps the plan the walkthrough plays the draw’s and the solvers’ own', () => {

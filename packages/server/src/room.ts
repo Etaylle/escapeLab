@@ -6,6 +6,7 @@ import {
   applyAction,
   armedPuzzleIds,
   armedStations,
+  atStationOutOfService,
   canSee,
   clockCallDueAt,
   consoleFind,
@@ -25,6 +26,7 @@ import {
   noteKey,
   noteSpot,
   nudgeDueAt,
+  OUT_OF_SERVICE,
   phrasesOf,
   puzzleDueAt,
   runReport,
@@ -1683,7 +1685,12 @@ export class Room {
       throw new Error('Hier gibt es nichts zu aktivieren — nur die leuchtende Station.');
     }
     if (!this.stationInReach(playerId)) {
-      throw new Error('Zu weit weg — nur direkt an der leuchtenden Station.');
+      // At a console out of service this run, the device's own tag is the answer.
+      throw new Error(
+        atStationOutOfService(this.state, playerId)
+          ? OUT_OF_SERVICE
+          : 'Zu weit weg — nur direkt an der leuchtenden Station.',
+      );
     }
   }
 

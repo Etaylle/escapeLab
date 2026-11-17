@@ -35,9 +35,9 @@ export function armedGoal(
   return armed[0]?.title ?? null;
 }
 
-/** A station out of service this run, known to the crew: dark, a tag on it, nothing to work. */
+/** A station out of service this run: dark, a tag on it, nothing to work. */
 export function isOut(station: MapStation): boolean {
-  return station.known && station.status === 'out';
+  return statusOf(station) === 'out';
 }
 
 /**
@@ -50,8 +50,11 @@ export function showsUnlit(station: MapStation): boolean {
 
 /**
  * A station spot's status as the view tells it. One merely seen tells none: it stands there
- * as a locked one does.
+ * as a locked one does — or, a tag on it, out of service.
  */
 export function statusOf(station: MapStation): KnownStation['status'] {
-  return station.known ? station.status : 'locked';
+  if (station.known) {
+    return station.status;
+  }
+  return station.out === true ? 'out' : 'locked';
 }
