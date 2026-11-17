@@ -99,13 +99,17 @@ export function darknessDepth(frame: Frame): number {
  * How much of the darkness a tile of a lit room keeps, by the room's
  * label: none once its lights are up, some while they are still coming on,
  * and some again on the escape's alarm lighting. A tile two rooms light
- * keeps what both leave.
+ * keeps what both leave; a room burning twice as bright (`LitRoom`
+ * brightness) leaves what two rooms lit at once would.
  */
 export function roomKeep(frame: Frame): (room: string) => number {
   const [most, least] = ALARM_DIM;
   const alarmDim = frame.red * (most + (least - most) * sirenSwell(frame));
-  return (room) =>
-    1 - roomUp(frame, frame.lit.get(room)?.since ?? -Infinity) * (1 - alarmDim);
+  return (room) => {
+    const lit = frame.lit.get(room);
+    const left = 1 - roomUp(frame, lit?.since ?? -Infinity) * (1 - alarmDim);
+    return left ** (lit?.brightness ?? 1);
+  };
 }
 
 /** How strongly the escape's red lies over the picture, 0 to 1: as far as it turned, swelling. */

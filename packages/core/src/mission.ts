@@ -23,6 +23,11 @@ import {
  */
 
 const coord = z.number().int().nonnegative();
+/**
+ * The most strongly a floor's ceiling lights may burn, as many times a room's own (labels'
+ * `brightness`): twice, as Blackout's Flur and Archiv do.
+ */
+const MAX_BRIGHTNESS = 2;
 const tile = z.object({ x: coord, y: coord });
 
 /** How many emergency lamps a map may have: each is a light the clients draw on every frame. */
@@ -165,7 +170,12 @@ export const mapDefSchema = z.object({
       }),
     )
     .min(1),
-  /** room names: a solved station lights a room by its name; `kind` says how it is dressed */
+  /**
+   * room names: a solved station lights a room by its name; `kind` says how it is dressed.
+   * `brightness` says how strongly the ceiling lights of the floor the label stands on burn once
+   * lit, as many times a room's own: 1 where no label of that floor gives more. A floor several
+   * names label is lit once, whichever of them comes on (client rooms.ts `roomLights`).
+   */
   labels: z
     .array(
       z.object({
@@ -173,6 +183,7 @@ export const mapDefSchema = z.object({
         x: coord,
         y: coord,
         kind: z.enum(ROOM_KINDS).optional(),
+        brightness: z.number().int().min(1).max(MAX_BRIGHTNESS).optional(),
       }),
     )
     .default([]),

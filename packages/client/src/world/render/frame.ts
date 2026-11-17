@@ -76,11 +76,16 @@ export interface OtherAvatar {
   phase: number;
 }
 
-/** A lit room: the tiles its lights reach, as a path in tiles, and the sim time they came on. */
+/**
+ * A lit room: the tiles its lights reach, as a path in tiles, the sim time they came on, and how
+ * brightly they burn — as many times a room's own as its floor's labels say (rooms.ts
+ * `roomLights`): its ceiling lights laid that many times, the darkness it leaves kept as often.
+ */
 export interface LitRoom {
   tiles: { x: number; y: number }[];
   path: Path2D;
   since: number;
+  brightness: number;
 }
 
 /** The room the power lights round you while the lab has it, with its tiles as a path. */

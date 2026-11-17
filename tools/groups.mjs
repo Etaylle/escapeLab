@@ -117,7 +117,7 @@ export const GROUPS = [
     name: 'hall',
     stage: 'drills',
     needs: [],
-    captures: ['hall', 'hall-overview.png', 'hall-won.png', 'hall-*.png'],
+    captures: ['hall', 'hall-player.png', 'hall-overview.png', 'hall-won.png', 'hall-*.png'],
   },
   {
     // The music packs in the settings' „Ton", on a menu page of its own (client MusicSettings.tsx).

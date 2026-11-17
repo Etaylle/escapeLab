@@ -478,8 +478,11 @@ export interface MapView {
   discoveries: Discovery[];
   /** the emergency lamps, on the floor or on a wall beside it; they glow once the lights are out */
   lamps: { x: number; y: number }[];
-  /** room names, each with the kind of room it names, where the mission gives one */
-  labels: { text: string; x: number; y: number; kind?: RoomKind }[];
+  /**
+   * room names, each with the kind of room it names and how brightly its floor's ceiling lights
+   * burn once lit (`Mission` labels' `brightness`), where the mission gives them
+   */
+  labels: { text: string; x: number; y: number; kind?: RoomKind; brightness?: number }[];
   /**
    * the cable ducts in the floor, each with the start pulse running in it now — a light of the
    * world, seen where a figure has sight of it, as the doors are (conduits.ts)
@@ -1074,6 +1077,7 @@ function mapViewFor(state: GameState, viewer: MapViewer): MapView | null {
       x: l.x,
       y: l.y,
       ...(l.kind === undefined ? {} : { kind: l.kind }),
+      ...(l.brightness === undefined ? {} : { brightness: l.brightness }),
     })),
     conduits: conduitsOnMap(state),
     decor: map.decor.map((piece) => ({
