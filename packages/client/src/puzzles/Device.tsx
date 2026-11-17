@@ -459,43 +459,68 @@ function accessDone(last: Extract<PuzzleView, { kind: 'access' }>): PuzzleView {
 }
 
 /**
+ * The Anlaufsteuerung as it stands done: its last stage run up, no pulse left on the ladder or
+ * in the terminal's word.
+ */
+function startupDone(last: Extract<PuzzleView, { kind: 'startup' }>): PuzzleView {
+  const { terminal, board } = last;
+  return {
+    ...last,
+    last: 'angelaufen',
+    terminal: terminal === null ? null : { ...terminal, sent: false },
+    board: board === null ? null : { ...board, pulse: null },
+  };
+}
+
+/** The sync station as it stands done: every press in, no word of an earlier miss. */
+function syncDone(last: Extract<PuzzleView, { kind: 'button-sync' }>): PuzzleView {
+  return {
+    ...last,
+    youPressed: true,
+    partnerPressed: true,
+    pressedCount: last.requiredCount,
+    lastResult: null,
+  };
+}
+
+/** The keypad as it stands done: every key lit. */
+function keypadDone(last: Extract<PuzzleView, { kind: 'keypad' }>): PuzzleView {
+  return last.keys === null
+    ? last
+    : {
+        ...last,
+        keys: last.keys.map((key) => ({ ...key, lit: true })),
+        litCount: last.keys.length,
+      };
+}
+
+/** How a kind of station stands done. */
+type DoneOf<K extends PuzzleView['kind']> = (last: Extract<PuzzleView, { kind: K }>) => PuzzleView;
+
+/** How each kind of station stands done, where it does otherwise than as last seen. */
+const DONE: { [K in PuzzleView['kind']]?: DoneOf<K> } = {
+  'button-sync': syncDone,
+  keypad: keypadDone,
+  signal: (last) => ({ ...last, done: last.length }),
+  servers: serversDone,
+  access: accessDone,
+  startup: startupDone,
+};
+
+/**
  * The station `last` showed, solved by now (`solved` stations), as it stands done: a sync
  * station with every press in and no word of an earlier miss — a main switch with every
  * lever down — a keypad with every key lit, the Signalkette with every sign of its stage
  * in, the Serverraum's table up (`serversDone`), the Zugangskontrolle's doors released
- * (`accessDone`); any other as last seen. Null where it is not solved: only closed, or walked
- * away from.
+ * (`accessDone`), the Anlaufsteuerung's last stage run up (`startupDone`); any other as last
+ * seen (`DONE`). Null where it is not solved: only closed, or walked away from.
  */
 export function heldView(last: PuzzleView, solved: number): PuzzleView | null {
   if (solved <= last.index) {
     return null;
   }
-  switch (last.kind) {
-    case 'button-sync':
-      return {
-        ...last,
-        youPressed: true,
-        partnerPressed: true,
-        pressedCount: last.requiredCount,
-        lastResult: null,
-      };
-    case 'keypad':
-      return last.keys === null
-        ? last
-        : {
-            ...last,
-            keys: last.keys.map((key) => ({ ...key, lit: true })),
-            litCount: last.keys.length,
-          };
-    case 'signal':
-      return { ...last, done: last.length };
-    case 'servers':
-      return serversDone(last);
-    case 'access':
-      return accessDone(last);
-    default:
-      return last;
-  }
+  const done = DONE[last.kind] as ((view: PuzzleView) => PuzzleView) | undefined;
+  return done === undefined ? last : done(last);
 }
 
 /**

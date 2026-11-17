@@ -85,6 +85,10 @@ describe('what set an alarm off', () => {
     const missed = applyAction(started, { type: 'sabotage-expired', at: T0 + 40_000 });
     expect(lastAlarm(missed)?.at).toBe(T0 + 40_000);
     expect(alarmCause(lastAlarm(missed)?.label ?? '')).toBe('Notfall');
+    // an attack the clock let into the Kern: nobody moved, so no Fehlversuch
+    expect(alarmCause('Paketfilter: Angriff im Kern')).toBe('Angriff im Kern');
+    expect(alarmCause('Paketfilter: zulässiges Paket gesperrt')).toBe('Fehlversuch');
+    expect(alarmCause('constructor')).toBe('Fehlversuch');
   });
 
   it('is a wrong move for every other alarm: a station’s, an emergency console’s', () => {

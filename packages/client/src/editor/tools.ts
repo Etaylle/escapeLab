@@ -680,6 +680,7 @@ function removePuzzle(draft: Draft, index: number): Draft {
         ...m,
         puzzleIds: m.puzzleIds.filter((p) => p !== id),
       })),
+      ...ductsWithout(draft.map, id),
     },
   };
 }
@@ -719,8 +720,18 @@ export function retype(draft: Draft, index: number, type: StationType): Draft {
   return {
     ...draft,
     puzzles: replaceAt(draft.puzzles, index, { ...puzzle, type, fields: defaultFields(type) }),
-    map: { ...draft.map, stations: [...others, ...kept] },
+    map: { ...draft.map, stations: [...others, ...kept], ...ductsWithout(draft.map, puzzle.id) },
   };
+}
+
+/**
+ * The map's ducts but those of `puzzleId`, as a part of the map to spread in: none left of a
+ * puzzle removed or given another module, which joins no consoles of an Anlaufsteuerung.
+ */
+function ductsWithout(map: Draft['map'], puzzleId: string): Pick<Draft['map'], 'conduits'> {
+  return map.conduits === undefined
+    ? {}
+    : { conduits: map.conduits.filter((c) => c.puzzleId !== puzzleId) };
 }
 
 // ── renaming ─────────────────────────────────────────────────────────────
@@ -753,6 +764,9 @@ export function rename(
         })),
         manuals: map.manuals.map((m) => ({ ...m, puzzleIds: m.puzzleIds.map(swap) })),
         items: map.items.map((i) => ({ ...i, requiredFor: swap(i.requiredFor) })),
+        ...(map.conduits === undefined
+          ? {}
+          : { conduits: map.conduits.map((c) => ({ ...c, puzzleId: swap(c.puzzleId) })) }),
       },
     };
   }

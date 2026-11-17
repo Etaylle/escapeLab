@@ -166,7 +166,8 @@ function addOver(
 
 /**
  * The lit rooms' light over the darkness: each room's ceiling lights, warm
- * — turning red as the escape's siren sounds — as far as they have come on.
+ * — turning red as the escape's siren sounds — as far as they have come on,
+ * as many times over as the room burns bright (`LitRoom` brightness).
  */
 function overOf(frame: Frame, pools: Pools): Float32Array {
   const { map } = frame;
@@ -179,7 +180,7 @@ function overOf(frame: Frame, pools: Pools): Float32Array {
     const up = roomUp(frame, room.since);
     const tiles = indicesOf(map, room.tiles.map(keyOf));
     for (const tint of tints) {
-      addOver(over, tint.pools, up * tint.share, tiles);
+      addOver(over, tint.pools, up * tint.share * room.brightness, tiles);
     }
   }
   return over;

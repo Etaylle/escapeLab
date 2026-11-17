@@ -1,6 +1,8 @@
 import type { ReactNode } from 'react';
 import {
+  LADDER_FIGURE,
   LEVER_FIGURE,
+  LINES_FIGURE,
   PATTERN_FIGURE,
   SIGNAL_PATTERNS,
   TOKEN_FIGURE,
@@ -815,6 +817,196 @@ function AccessToken() {
   );
 }
 
+/**
+ * The steps of the ladder the drawings show — a default run's six seconds of travel and three
+ * of window — and how many of them are lit.
+ */
+const LADDER = { steps: 9, marked: 3, lit: 7 } as const;
+
+/**
+ * An LED ladder of LADDER.steps steps from its foot at `bottom` up, `step` units a step and
+ * `width` wide, the lowest LADDER.lit glowing, a bracket beside its LADDER.marked marked steps
+ * at the top.
+ */
+function Ladder(props: { x: number; bottom: number; width: number; step: number }) {
+  const { x, bottom, width, step } = props;
+  const top = bottom - LADDER.steps * step;
+  const mark = top + LADDER.marked * step;
+  return (
+    <>
+      {Array.from({ length: LADDER.steps }, (_, i) => (
+        <rect
+          key={i}
+          x={x}
+          y={round(bottom - (i + 1) * step + 1)}
+          width={width}
+          height={round(step - 2)}
+          rx={1}
+          {...(i < LADDER.lit ? GLOW : {})}
+        />
+      ))}
+      <path d={`M${x + width + 4} ${top}h4V${mark}h-4`} strokeWidth={1.4} />
+    </>
+  );
+}
+
+/** A feeder of the Schaltfeld as the drawing of the device shows it: lamps, breaker, number. */
+function Feeder({ x, lit }: { x: number; lit: readonly [boolean, boolean] }) {
+  return (
+    <g>
+      <Lamp x={x} y={30} r={6} lit={lit[0]} />
+      <Lamp x={x} y={52} r={6} lit={lit[1]} />
+      <rect x={x - 9} y={70} width={18} height={30} rx={2} />
+      <path d={`M${x} 92V76`} strokeWidth={3} />
+      <Mark x={x} y={118} size={9}>
+        {String((x - 202) / 30 + 1)}
+      </Mark>
+    </g>
+  );
+}
+
+/** The feeders' lamps as the drawing shows them, from feeder 1: which of each pair burns. */
+const FEEDER_LAMPS: readonly (readonly [boolean, boolean])[] = [
+  [true, false],
+  [true, true],
+  [false, true],
+  [true, false],
+];
+
+/**
+ * The Anlaufsteuerung, one console of the two: on the left the terminal — its glass with the
+ * script's lines, a gap set, and a prompt with its cursor —, on the right the Schaltfeld of four
+ * feeders, each two control lamps over a breaker and its number, and the LED ladder beside them
+ * with its marked steps at the top.
+ */
+function Startup() {
+  return (
+    <>
+      <rect x={8} y={6} width={168} height={128} rx={6} strokeWidth={1.6} />
+      <rect x={16} y={14} width={152} height={112} rx={4} {...TINT} />
+      {[28, 42, 56, 70].map((y, i) => (
+        <Lettering key={y} x={24} y={y} width={[96, 60, 110, 84][i] ?? 60} />
+      ))}
+      <Mark x={24} y={88} anchor="start">
+        abgang = 2
+      </Mark>
+      <Mark x={24} y={114} anchor="start">
+        {'> start'}
+      </Mark>
+      <rect x={70} y={105} width={6} height={11} {...GLOW} />
+      <rect x={184} y={6} width={186} height={128} rx={6} strokeWidth={1.6} />
+      {FEEDER_LAMPS.map((lit, i) => (
+        <Feeder key={i} x={202 + i * 30} lit={lit} />
+      ))}
+      <Ladder x={326} bottom={126} width={22} step={12.4} />
+    </>
+  );
+}
+
+/**
+ * The LED ladder close up, as the rules' second drawing shows it: its steps from the foot, the
+ * pulse lit to the first marked step, and the marked steps at the top bracketed as the window.
+ */
+function StartupLadder() {
+  return (
+    <>
+      <rect x={140} y={4} width={96} height={132} rx={6} strokeWidth={1.6} />
+      <Ladder x={160} bottom={130} width={48} step={13.6} />
+      <Mark x={250} y={34} size={9} anchor="start">
+        FENSTER
+      </Mark>
+      <Mark x={250} y={126} size={9} anchor="start">
+        IMPULS
+      </Mark>
+      <path d="M126 128V20m-4 6l4-6 4 6" strokeWidth={1.4} />
+    </>
+  );
+}
+
+/** The x of line `i` (0–4) of the Paketfilter's five, from `left`, `gap` units apart. */
+const lineX = (left: number, gap: number, i: number): number => left + i * gap;
+
+/**
+ * Five lines running down into the Kern, `gap` apart from `left`, between `top` and `kern`:
+ * the Kern a bar across their feet, lettered KERN.
+ */
+function PacketLines(props: { left: number; gap: number; top: number; kern: number }) {
+  const { left, gap, top, kern } = props;
+  const right = lineX(left, gap, 4);
+  return (
+    <>
+      {[0, 1, 2, 3, 4].map((i) => (
+        <path key={i} d={`M${lineX(left, gap, i)} ${top}V${kern}`} strokeDasharray="2 3" />
+      ))}
+      <rect x={left - 10} y={kern} width={right - left + 20} height={10} rx={2} {...TINT} />
+      <Mark x={(left + right) / 2} y={kern + 8} size={7}>
+        KERN
+      </Mark>
+    </>
+  );
+}
+
+/**
+ * The Paketfilter's two consoles: the Sperrpult with its five lines, a few plain points on them
+ * and the gate over the Kern; the Analysepult with the same lines, each packet a card of three
+ * lines of print.
+ */
+function Firewall() {
+  const cards: [number, number][] = [
+    [0, 30],
+    [2, 64],
+    [3, 40],
+  ];
+  return (
+    <>
+      <Housing x={8} width={150} />
+      <PacketLines left={30} gap={26} top={18} kern={112} />
+      {cards.map(([line, y]) => (
+        <circle key={line} cx={lineX(30, 26, line)} cy={y + 10} r={4} {...GLOW} />
+      ))}
+      <rect x={lineX(30, 26, 2) - 9} y={98} width={18} height={8} rx={1.5} strokeWidth={1.6} />
+      <Housing x={176} width={192} />
+      <PacketLines left={196} gap={38} top={18} kern={112} />
+      {cards.map(([line, y]) => (
+        <g key={line}>
+          <rect x={lineX(196, 38, line) - 16} y={y} width={32} height={22} rx={2} />
+          {[6, 11, 16].map((dy) => (
+            <Lettering key={dy} x={lineX(196, 38, line) - 12} y={y + dy} width={22} />
+          ))}
+        </g>
+      ))}
+    </>
+  );
+}
+
+/**
+ * The Sperrpult's lines close up, as the policy's drawing shows them: five lines numbered from
+ * the left, two points coming down, one of them ringed and ticked as a mark makes it, and the
+ * gate standing over the Kern under the ringed one's line.
+ */
+function FirewallLines() {
+  const left = 98;
+  const gap = 45;
+  return (
+    <>
+      {[0, 1, 2, 3, 4].map((i) => (
+        <Mark key={i} x={lineX(left, gap, i)} y={14} size={9}>
+          {i + 1}
+        </Mark>
+      ))}
+      <PacketLines left={left} gap={gap} top={20} kern={118} />
+      <circle cx={lineX(left, gap, 1)} cy={44} r={5} {...GLOW} />
+      <circle cx={lineX(left, gap, 3)} cy={76} r={5} {...GLOW} />
+      <circle cx={lineX(left, gap, 3)} cy={76} r={10} strokeWidth={1.6} />
+      <path d={`M${lineX(left, gap, 3) + 12} ${70}l3 4l6 -8`} strokeWidth={1.6} />
+      <rect x={lineX(left, gap, 3) - 14} y={102} width={28} height={10} rx={2} strokeWidth={1.8} />
+      <Mark x={lineX(left, gap, 3) + 22} y={110} size={7} anchor="start">
+        SPERRE
+      </Mark>
+    </>
+  );
+}
+
 /** A device without a drawing: an empty frame naming its type, so its pages still print. */
 function Frame({ of }: { of: string }) {
   return (
@@ -835,11 +1027,17 @@ interface Drawing {
 
 /**
  * Every module the core knows has its drawing, and so have the Signalkette's
- * key of patterns, the main switch a sync station may be built as and the
- * Zugangskontrolle's token device close up.
+ * key of patterns, the main switch a sync station may be built as, the
+ * Zugangskontrolle's token device and the Anlaufsteuerung's LED ladder close up, and the
+ * Paketfilter's lines.
  */
 const DRAWINGS: Record<
-  PuzzleDef['type'] | typeof PATTERN_FIGURE | typeof LEVER_FIGURE | typeof TOKEN_FIGURE,
+  | PuzzleDef['type']
+  | typeof PATTERN_FIGURE
+  | typeof LEVER_FIGURE
+  | typeof TOKEN_FIGURE
+  | typeof LADDER_FIGURE
+  | typeof LINES_FIGURE,
   Drawing
 > = {
   wiring: {
@@ -925,11 +1123,36 @@ const DRAWINGS: Record<
       'Tastenreihe, rechts ein Tokengerät mit Kontozeile, Token und Balken',
     draw: Access,
   },
+  firewall: {
+    label:
+      'Sperrpult und Analysepult: links 5 Leitungen mit Punkten zum Kern und einer Sperre ' +
+      'darüber, rechts dieselben 5 Leitungen, jedes Paket eine Karte mit 3 Zeilen',
+    draw: Firewall,
+  },
+  [LINES_FIGURE]: {
+    label:
+      'Leitungen 1 bis 5 bis hinunter zum Kern, 2 Pakete als Punkte, eines mit Ring und ' +
+      'Haken, darunter die Sperre auf seiner Leitung',
+    draw: FirewallLines,
+  },
   [TOKEN_FIGURE]: {
     label:
       'Tokengerät: Anzeige mit der Zeile KONTO meier, dem Token 405 217 in zwei ' +
       'Dreiergruppen und einem Balken aus Segmenten, der bis zum Wechsel abläuft, daneben 17 s',
     draw: AccessToken,
+  },
+  startup: {
+    label:
+      'Terminal und Schaltfeld: links ein Bildschirm mit Skriptzeilen, abgang = 2 und der ' +
+      'Eingabe start, rechts 4 Abgänge mit je 2 Kontrollleuchten über einem Leistungsschalter ' +
+      'und eine LED-Leiter, ihre obersten Stufen markiert',
+    draw: Startup,
+  },
+  [LADDER_FIGURE]: {
+    label:
+      'LED-Leiter: 9 Stufen übereinander, die unteren 7 leuchten, die obersten 3 als FENSTER ' +
+      'markiert, unten der Eingang des Impulses',
+    draw: StartupLadder,
   },
 };
 

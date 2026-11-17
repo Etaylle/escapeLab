@@ -369,6 +369,18 @@ describe('puzzles', () => {
     expect(rename(keyed, 'item', 'teil', 'schluessel').map.manuals[0]?.needsKey).toBe('schluessel');
   });
 
+  it('follows a puzzle’s duct as it is renamed, and drops it with the puzzle or its module', () => {
+    let draft = addPuzzle(room(), 'startup');
+    const id = draft.puzzles[1]?.id ?? '';
+    const duct = { puzzleId: id, tiles: [{ x: 3, y: 4 }, { x: 4, y: 4 }] };
+    draft = { ...draft, map: { ...draft.map, conduits: [duct] } };
+    const renamed = rename(draft, 'puzzle', id, 'anlauf');
+    expect(renamed.map.conduits).toEqual([{ ...duct, puzzleId: 'anlauf' }]);
+    expect(remove(renamed, { kind: 'puzzle', index: 1 }).map.conduits).toEqual([]);
+    expect(retype(renamed, 1, 'signal').map.conduits).toEqual([]);
+    expect(remove(renamed, { kind: 'puzzle', index: 0 }).map.conduits).toHaveLength(1);
+  });
+
   it('moves a puzzle up and down in mission order', () => {
     const draft = addPuzzle(room(), 'maze');
     const order = shiftPuzzle(draft, 1, -1).puzzles.map((p) => p.id);

@@ -86,6 +86,35 @@ export const GROUPS = [
     ],
   },
   {
+    // The Anlaufsteuerung's scratch mission, played in a Systemcheck run as the Zugangskontrolle's.
+    name: 'startup',
+    stage: 'drills',
+    needs: [],
+    captures: [
+      'startup (probe)',
+      'startup-terminal.png',
+      'startup-ladder.png',
+      'startup-duct.png',
+      'startup-phone-932.png',
+      'startup (targets)',
+    ],
+  },
+  {
+    // The Paketfilter's scratch mission, played in a Systemcheck run as the Zugangskontrolle's is.
+    name: 'firewall',
+    stage: 'drills',
+    needs: [],
+    captures: [
+      'firewall (probe)',
+      'firewall-policy.png',
+      'firewall-phone-932.png',
+      'firewall-headers.png',
+      'firewall-gate.png',
+      'firewall-held.png',
+      'firewall (targets)',
+    ],
+  },
+  {
     name: 'three',
     stage: 'drills',
     needs: [],
@@ -103,7 +132,7 @@ export const GROUPS = [
     name: 'hall',
     stage: 'drills',
     needs: [],
-    captures: ['hall', 'hall-overview.png', 'hall-won.png', 'hall-*.png'],
+    captures: ['hall', 'hall-player.png', 'hall-overview.png', 'hall-won.png', 'hall-*.png'],
   },
   {
     // The Wechselplatz's scratch mission on two seeds, in a Systemcheck run.

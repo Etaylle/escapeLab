@@ -140,14 +140,104 @@ function tokenWhenShown(state: GameState, at: number): Made {
   throw new Error('the token device never came round to the account the prompt asks for');
 }
 
+type FirewallView = Extract<PuzzleView, { kind: 'firewall' }>;
+
+/** The open Paketfilter as `playerId` holds it in `state`; null where none is open. */
+function firewallOf(state: GameState, playerId: string): FirewallView | null {
+  const view = viewFor(state, playerId).puzzle;
+  return view?.kind === 'firewall' ? view : null;
+}
+
+/** The packets on their lines at `at`, as `view` shows them: none while the wave stands still. */
+function onTheLines(view: FirewallView | null, at: number): FirewallView['packets'] {
+  if (view?.clock == null || view.clock.heldAt !== null || view.packets === null) {
+    return [];
+  }
+  const t = at - view.clock.startedAt;
+  return view.packets.filter((p) => !p.dropped && p.enterMs <= t && t < p.enterMs + view.fallMs);
+}
+
+/** Whether a mark or a trip of the plan can be made at `at`, as the pages see the Paketfilter. */
+function firewallReady(state: GameState, input: PuzzleInput, at: number): boolean {
+  if ('mark' in input) {
+    return (onTheLines(firewallOf(state, 'p2'), at) ?? []).some((p) => p.id === input.mark);
+  }
+  const line = 'trip' in input ? input.trip : -1;
+  return onTheLines(firewallOf(state, 'p1'), at)?.find((p) => p.line === line)?.marked === true;
+}
+
+/**
+ * A mark or a trip of the plan as the walkthrough makes it, due at `at`: the station ticked a
+ * second at a time until the mark's packet is on the guest's Analysepult, or the lowest packet
+ * on the trip's line wears a ring on the host's Sperrpult — the plan's seconds were the
+ * solver's, on its own clock.
+ */
+function firewallWhenShown(state: GameState, input: PuzzleInput, at: number): Made {
+  let next = state;
+  for (let now = at; now < at + 60_000; now += 1000) {
+    next = ticked(next, now);
+    if (firewallReady(next, input, now)) {
+      return { state: next, at: now, input };
+    }
+  }
+  throw new Error(`the Paketfilter never came round to ${JSON.stringify(input)}`);
+}
+
+/**
+ * The station after its last move, ticked a second at a time until it is solved: the
+ * Paketfilter's last wave is clean as its last packet reaches the Kern. As it stands where the
+ * moves solved it.
+ */
+function solvedByThen(state: GameState, at: number): { state: GameState; at: number } {
+  const index = state.currentPuzzleIndex;
+  let next = state;
+  let now = at;
+  for (; next.currentPuzzleIndex === index && now < at + 60_000; now += 1000) {
+    next = ticked(next, now);
+  }
+  return { state: next, at: now };
+}
+
+type StartupView = Extract<PuzzleView, { kind: 'startup' }>;
+
+/** The live Schaltfeld of an open Anlaufsteuerung, at whichever console it is; null for none. */
+function boardOf(state: GameState): StartupView['board'] {
+  const views = ['p1', 'p2'].map((id) => viewFor(state, id).puzzle);
+  const board = views.find((view) => view?.kind === 'startup' && view.role === 'board');
+  return board?.kind === 'startup' ? board.board : null;
+}
+
+/**
+ * A breaker of the plan as the walkthrough closes it, due at `at`: the station ticked a second at
+ * a time until the Schaltfeld's ladder has the pulse on its marked steps — the plan's moments were
+ * the solver's, on its own clock.
+ */
+function breakerWhenOnLadder(state: GameState, at: number, input: PuzzleInput): Made {
+  for (let now = at; now < at + 60_000; now += 1000) {
+    const next = ticked(state, now);
+    if (boardOf(next)?.pulse?.arrived === true) {
+      return { state: next, at: now, input };
+    }
+  }
+  throw new Error('the pulse never stood on the ladder’s marked steps');
+}
+
 /**
  * The plan's `move` at `station` as the walkthrough makes it, due at `at`: a token once the device
- * shows the account it is for (`tokenWhenShown`), a release once the clock shows its digit, every
- * other move as it stands — the station ticked as the room ticks it up to then.
+ * shows the account it is for (`tokenWhenShown`), a breaker once the pulse stands on the ladder
+ * (`breakerWhenOnLadder`), a release once the clock shows its digit, a mark or a trip once the
+ * Paketfilter's pages allow it (`firewallWhenShown`), every other move as it
+ * stands — the station ticked as the room ticks it up to then.
  */
 function madeAt(state: GameState, move: Move<PuzzleInput>, station: HallStation, at: number): Made {
   if ('token' in move.input) {
     return tokenWhenShown(state, at);
+  }
+  if ('mark' in move.input || 'trip' in move.input) {
+    return firewallWhenShown(state, move.input, at);
+  }
+  if ('breaker' in move.input) {
+    return breakerWhenOnLadder(state, at, move.input);
   }
   const now = momentOf(move, station, at, state.clockFrom ?? T0);
   return { state: ticked(state, now), at: now, input: move.input };
@@ -155,8 +245,9 @@ function madeAt(state: GameState, move: Move<PuzzleInput>, station: HallStation,
 
 /**
  * The plan's `station` worked through the reducer from `at` on, as the walkthrough works it:
- * the crew at its places, p1's E, then every move a second after the one before (`madeAt`).
- * Returns the state after it and the time of its last move.
+ * the crew at its places, p1's E, then every move a second after the one before (`madeAt`), and
+ * the station ticked on to its solve where the clock finishes it (`solvedByThen`). Returns the
+ * state after it and the time of its solve.
  */
 function worked(
   state: GameState,
@@ -175,7 +266,7 @@ function worked(
     now = made.at;
     next = inputs([{ ...move, input: made.input }], now).reduce(applyAction, made.state);
   }
-  return { state: next, at: now };
+  return solvedByThen(next, now + 1000);
 }
 
 describe('the Übungshalle on the walkthrough’s pinned seed', () => {

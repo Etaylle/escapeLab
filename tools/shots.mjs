@@ -11,13 +11,13 @@
  *     node tools/shots.mjs [baseUrl] [outDir]
  *
  * Groups (tools/groups.mjs): every capture, and every label a skip line carries, belongs to one of
- * twenty groups; SHOTS_ONLY and SHOTS_SKIP, each a comma-separated list of their names, pick
+ * twenty-two groups; SHOTS_ONLY and SHOTS_SKIP, each a comma-separated list of their names, pick
  * those a run plays — a quick proof of one part. The drills, each in a room of its own before the
  * walkthrough: editor, art, drones (the danger sense, a drone close by), reconnect, restart, three
  * (Blackout for a crew of three through the Signalkette) — and in a Systemcheck run the
- * Serverraum's scratch mission, devices', the Zugangskontrolle's, access, hall (the
- * Übungshalle played to its won card) and rotation (the Wechselplatz's scratch mission on two
- * seeds). The walkthrough's own stages:
+ * Serverraum's scratch mission, devices', the Zugangskontrolle's, access, the
+ * Anlaufsteuerung's, startup, hall (the Übungshalle played to its won card) and rotation (the
+ * Wechselplatz's scratch mission on two seeds). The walkthrough's own stages:
  * screens (the menu and its sound, the history, the lobby, the run started from it), intro (the
  * opening to blackout.png, the cold open at density 2 with it) and run (the mission to the won
  * card: the lit rooms, the finds, the audience's way in, the escape, the end, and after the won
@@ -270,17 +270,20 @@
  * The Übungshalle's drill (hall), in a Systemcheck run: a room of its own on the seed
  * tools/fixtures/hall-plan.json pins, opened from the menu, is played to the won card, every
  * station type once, with the moves the plan carries (core's test/hallPlan.ts keeps them the
- * solvers' own); the draw and the Laborkennung have to be the plan's. As the briefing ends an
- * audience joins: hall-overview.png is its world, the whole hall lit from the start, every
- * station in its bay — or the run fails. Both walk past the sign; while every station stands
- * armed, a beacon over each console, the host's frames are sampled for information between two
+ * solvers' own); the draw and the Laborkennung have to be the plan's. As the briefing ends,
+ * hall-player.png is the host's own world, lit the way a player's light takes — the run fails
+ * where it burns to a white sheet or lies black (`seeTheHall`) — and an audience joins:
+ * hall-overview.png is its world, the whole hall lit from the start, every station in its bay —
+ * or the run fails. Both walk past the sign; while every station stands armed, a beacon over
+ * each console, the host's frames are sampled for information between two
  * rows of bays (21,13) and the audience's on the whole hall, each log line counting the stations
  * armed and the beacons and books in view. Then, station by station in the
  * plan's order — the host at it alone or at its console A, the guest at console B, both at the
  * one the whole crew presses — the host's device has to open on what the plan pins, is
  * shot as it opens (hall-<type>.png), and the plan's moves are made on the devices as a hand
  * makes them, the button held until the clock counting up shows the plan's digit, a token read
- * off the guest's device as it comes round; every station has to solve without an alarm. The
+ * off the guest's device as it comes round, the Paketfilter followed on its pages, marking what
+ * the plan says its policy drops; every station has to solve without an alarm. The
  * hall has no hatch: its last station wins the run, every station counted, and hall-won.png is
  * the won card — GESCHAFFT on the host's and the audience's, its grade in the words of a run
  * without a clock.
@@ -594,6 +597,38 @@
  * how long the device kept each account waiting. The mission is deleted again
  * whatever happened.
  *
+ * Paketfilter (a Systemcheck run): the editor, opened at /editor?seed=4, imports
+ * tools/fixtures/firewall-probe.json („Filterprobe", custom-filterprobe) and starts its test
+ * run; a second page joins by code, both touch screens. The player nearer console B walks past
+ * the Laborkennung — the plan's serial —, switches the station on at the Analysepult, which has
+ * to stand whole on a large phone held sideways, and goes to the binder; the other takes the
+ * Sperrpult meanwhile: the wave has to hold, the device saying that nobody stands at the
+ * Analysepult, and the Sperrpult has to stand whole on the phone too (firewall-phone-932.png).
+ * The binder shows the Sicherheitsrichtlinie, seven rules (firewall-policy.png). Back at the
+ * Analysepult the crew follows the pages, never the plan's seconds: FREIGABE pressed where a
+ * wave waits; a card tapped where it stands once its packet — one tools/fixtures/firewall-plan.json
+ * says the policy drops, in any wave the run may deal — is on the Analysepult (the cards shot at
+ * a mark, firewall-headers.png), the ring at the Sperrpult awaited (firewall-gate.png at the
+ * first); a line tapped and SPERREN once its lowest packet wears a ring. The station has to
+ * solve, with one alarm at most — a slow runner's late tap, the wave it calls off followed on.
+ * The mission is deleted again whatever happened.
+ *
+ * Anlaufsteuerung (a Systemcheck run): the editor, opened at /editor?seed=5,
+ * imports tools/fixtures/startup-probe.json („Anlaufprobe",
+ * custom-anlaufprobe) and starts its test run; a second page joins by code,
+ * both touch screens, and a third watches as the audience. The player nearer
+ * console B switches the station on at its Schaltfeld, the other takes the
+ * terminal of console A; each stage has to deal what
+ * tools/fixtures/startup-plan.json says. The first value is typed, Tab
+ * completing `setze` and the gap, the rest put together on the keys; before
+ * `start` the terminal is shot at laptop size (startup-terminal.png) and on a
+ * large phone held sideways — whole, nothing scrolling, every control 44 px
+ * (startup-phone-932.png), the Schaltfeld the same —; the audience's world
+ * catches the pulse in the duct (startup-duct.png), and the Schaltfeld its
+ * ladder with the pulse on the marked steps (startup-ladder.png), where the
+ * plan's breaker closes. The second stage swaps the sides; the station has to
+ * solve without an alarm. The mission is deleted again whatever happened.
+ *
  * Wechselplatz (a Systemcheck run): the editor, opened at /editor?seed=<seed>, imports
  * tools/fixtures/rotation-probe.json („Wechselprobe", custom-wechselprobe) — a chain of three
  * places whose middle one is a pool of three stations — and starts its test run, once on each
@@ -712,6 +747,7 @@ import {
   stripVerdict,
   swingVerdict,
 } from './pageclock.mjs';
+import { HALL_WAYS, unworked, waysMatch } from './hallWays.mjs';
 import { percentile } from './percentile.mjs';
 import { decodePng } from './pixeldiff.mjs';
 import {
@@ -10838,6 +10874,878 @@ async function captureAccess() {
   }
 }
 
+// ── the Paketfilter's drill: one page marks by the policy, the other drops what wears a ring ──
+
+/**
+ * The Paketfilter's scratch mission (tools/fixtures/firewall-probe.json, „Filterprobe",
+ * custom-filterprobe) and what its pinned seed deals (firewall-plan.json): the Laborkennung, and
+ * every wave the run may deal — its own and three a fault would call in — with its packets as
+ * the Analysepult shows them and which of them the policy drops. The drill follows its pages,
+ * never the plan's seconds (`followFirewall`). Core's test of the module keeps the plan the
+ * policy's own.
+ */
+const FIREWALL_FILE = fileURLToPath(new URL('fixtures/firewall-probe.json', import.meta.url));
+const FIREWALL_MISSION = JSON.parse(readFileSync(FIREWALL_FILE, 'utf8'));
+const FIREWALL_PLAN = JSON.parse(
+  readFileSync(fileURLToPath(new URL('fixtures/firewall-plan.json', import.meta.url)), 'utf8'),
+);
+
+/** The open Paketfilter as `player`'s page has it; null for none. */
+function firewallView(player) {
+  const puzzle = player.seen.view?.puzzle ?? null;
+  return puzzle?.kind === 'firewall' ? puzzle : null;
+}
+
+/**
+ * The packets on their lines now, as `player`'s view has them, in the order they came on: the
+ * drill's clock is the server's, both run on this machine.
+ */
+function firewallLive(player) {
+  const fw = firewallView(player);
+  if (fw?.clock == null || fw.clock.heldAt !== null || fw.packets === null) {
+    return [];
+  }
+  const t = Date.now() - fw.clock.startedAt;
+  return fw.packets.filter((p) => !p.dropped && p.enterMs <= t && t < p.enterMs + fw.fallMs);
+}
+
+/** The Paketfilter's drill steps, logged under its group's name. */
+const fwSaid = (text) => console.log(`${'firewall'.padEnd(19)}${text}`);
+
+/**
+ * `player` walks to console `letter` of the probe and opens its panel with E — the first E
+ * switches the station on —; the panel has to show its `role`. Throws where it does not.
+ */
+async function manFirewall(player, letter, role) {
+  const spot = player.seen.view.map.stations.find((station) => station.console === letter);
+  if (!(await walkNear(player.page, player.seen, spot))) {
+    throw new Error(`${player.name} found no way to console ${letter} at ${spot.x},${spot.y}`);
+  }
+  const modal = player.page.locator('.station-modal');
+  if (!(await interactUntil(player, modal, consoleTarget(spot)))) {
+    throw new Error(`${player.name} stands at console ${letter}, but no .station-modal`);
+  }
+  if (!(await until(() => firewallView(player)?.role === role, 3000))) {
+    throw new Error(`${player.name}'s console ${letter} shows no ${role}`);
+  }
+}
+
+/** `reader` walks past the Laborkennung; the view has to name the plan's serial then. */
+async function readFirewallSign(reader) {
+  const sign = FIREWALL_MISSION.map.edgeworkSign;
+  if (!(await walkNear(reader.page, reader.seen, sign))) {
+    throw new Error(`${reader.name} found no way to the Laborkennung at ${sign.x},${sign.y}`);
+  }
+  const serial = () => reader.seen.view.edgework?.serial ?? null;
+  const read = await until(() => serial() === FIREWALL_PLAN.serial, CATCH_UP_MS);
+  fwSaid(`${reader.name} reads ${serial()} at the sign${read ? '' : ' !! not the plan’s'}`);
+  if (!read) {
+    fail(`firewall: the sign reads ${serial()}, the plan was made for ${FIREWALL_PLAN.serial}`);
+  }
+}
+
+/**
+ * `reader` steps back from the Analysepult, walks to the binder and opens it on the
+ * Sicherheitsrichtlinie. Returns the open pages. Throws where a walk or the binder fails.
+ */
+async function openFirewallPolicy(reader) {
+  await reader.page.keyboard.press('Escape');
+  await reader.page.locator('.station-modal').waitFor({ state: 'hidden', timeout: 3000 });
+  const [binder] = FIREWALL_MISSION.map.manuals;
+  const [spot] = binder.spots;
+  if (!(await walkNear(reader.page, reader.seen, spot))) {
+    throw new Error(`${reader.name} found no way to the ${binder.label} at ${spot.x},${spot.y}`);
+  }
+  const overlay = reader.page.locator('.reading-modal');
+  const target = sourceTarget({ id: binder.id, label: binder.label, ...spot });
+  if (!(await interactUntil(reader, overlay, target))) {
+    throw new Error(`${reader.name} at the ${binder.label}, but no .reading-modal opened`);
+  }
+  return overlay;
+}
+
+/** The binder turned on to the page that heads the Sicherheitsrichtlinie; whether it shows. */
+async function turnToPolicy(reader, overlay) {
+  const heading = overlay.getByText('Sicherheitsrichtlinie', { exact: true }).first();
+  const shows = () => heading.isVisible().catch(() => false);
+  for (let turn = 0; turn < 6 && !(await shows()); turn++) {
+    await reader.page.keyboard.press('ArrowRight');
+    await sleep(350);
+  }
+  return shows();
+}
+
+/**
+ * The policy's rules as `reader`'s view holds the printed page — under the heading that says how
+ * they are read, straight after the Sicherheitsrichtlinie's —; none where it holds no policy.
+ */
+function policyRules(reader) {
+  const manual = firewallView(reader)?.manual ?? [];
+  const policy = manual.findIndex((part) => part.heading === 'Sicherheitsrichtlinie');
+  const section = policy === -1 ? undefined : manual[policy + 1];
+  return section?.blocks.find((block) => block.kind === 'rules')?.items ?? [];
+}
+
+/**
+ * firewall-policy.png: the binder turned to the Sicherheitsrichtlinie, its heading on the page;
+ * the run fails where the reader's view holds no such list of seven rules, the Grundregel last,
+ * or the binder never shows its heading. The binder is put down after.
+ */
+async function firewallPolicyShot(reader, overlay) {
+  const shown = await turnToPolicy(reader, overlay);
+  await sleep(400); // past the page's turn
+  await capture(reader.page, 'firewall-policy.png');
+  const policy = policyRules(reader);
+  const last = policy.at(-1) ?? '';
+  const whole = shown && policy.length === 7 && last.startsWith('Andernfalls');
+  const why = shown ? '' : ', its heading never on the page';
+  fwSaid(
+    `firewall-policy.png ${reader.name} reads ${policy.length} rules, the last „${last}"` +
+      (whole ? '' : ` !! not the policy${why}`),
+  );
+  if (!whole) {
+    fail(`firewall-policy.png: ${policy.length} rules, the last „${last}", heading shown ${shown}`);
+  }
+  await reader.page.keyboard.press('Escape');
+  await overlay.waitFor({ state: 'hidden', timeout: 3000 });
+}
+
+/** A finger or a mouse on the middle of `locator` as it stands now: a card that keeps moving. */
+async function tapMoving(player, locator) {
+  const box = await locator.boundingBox();
+  if (box === null) {
+    return false;
+  }
+  const [x, y] = [box.x + box.width / 2, box.y + box.height / 2];
+  await player.page.mouse.click(x, y);
+  return true;
+}
+
+/**
+ * A mark: the card of `id` tapped where it stands on `analysis`'s Analysepult, the ring awaited
+ * on `gate`'s Sperrpult — firewall-gate.png at the first. Returns the ms from the view's word to
+ * the ring on the page; null where the packet went through before a tap took (an alarm follows,
+ * and the drill goes on with the fresh wave).
+ */
+async function firewallMark({ gate, analysis }, id, shots) {
+  const card = analysis.page.locator(`.station-modal .firewall-card[data-packet="${id}"]`);
+  await headersShot(analysis, shots);
+  // A tap that missed the moving card is tried again; one that took is never repeated, so that
+  // no second tap takes the mark back.
+  const live = () => firewallLive(analysis).some((p) => p.id === id);
+  for (let tries = 0; tries < 3 && live() && !firewallMarked(gate, id); tries++) {
+    await tapMoving(analysis, card);
+    await until(() => firewallMarked(gate, id), 1500);
+  }
+  if (!firewallMarked(gate, id)) {
+    fwSaid(`!! ${id} went through before ${analysis.name}'s tap took`);
+    return null;
+  }
+  const from = Date.now();
+  const ring = gate.page.locator(`.station-modal .firewall-blip--marked[data-packet="${id}"]`);
+  await ring.waitFor({ timeout: 2000 }).catch(() => undefined);
+  const ms = Date.now() - from;
+  if (shots.gate) {
+    shots.gate = false;
+    await capture(gate.page, 'firewall-gate.png');
+    fwSaid(`firewall-gate.png ${gate.name}'s Sperrpult with ${id} ringed`);
+  }
+  return ms;
+}
+
+/** How many cards the headers' shot waits for on the lines, until the second wave. */
+const HEADERS_CARDS = 3;
+
+/**
+ * firewall-headers.png, before the first mark with HEADERS_CARDS cards on the lines, or before
+ * the first mark of a later wave: the Analysepult with its cards.
+ */
+async function headersShot(analysis, shots) {
+  const cards = await analysis.page.locator('.station-modal .firewall-card').count();
+  const later = (firewallView(analysis)?.wave ?? 1) > 1;
+  if (!shots.headers || (cards < HEADERS_CARDS && !later)) {
+    return;
+  }
+  shots.headers = false;
+  await capture(analysis.page, 'firewall-headers.png');
+  fwSaid(`firewall-headers.png ${analysis.name}'s Analysepult: ${cards} cards on the lines`);
+}
+
+/** Whether `gate`'s view shows packet `id` marked. */
+const firewallMarked = (gate, id) =>
+  firewallView(gate)?.packets?.some((p) => p.id === id && p.marked) === true;
+
+/**
+ * A trip: `line` tapped on `gate`'s Sperrpult — the gate goes there — and SPERREN; its lowest
+ * packet has to drop, or the wave move on. Throws where nothing changes.
+ */
+async function firewallTrip(gate, line) {
+  const id = firewallLive(gate).find((p) => p.line === line)?.id ?? null;
+  const modal = gate.page.locator('.station-modal');
+  const event = firewallView(gate)?.event?.n ?? 0;
+  await modal.locator(`.firewall-line[data-line="${line}"]`).click({ timeout: HALL_MOVE_MS });
+  await modal.locator('.firewall-trip').click({ timeout: HALL_MOVE_MS });
+  const answered = () => (firewallView(gate)?.event?.n ?? Infinity) > event;
+  if (!(await until(answered, 3000))) {
+    throw new Error(`${gate.name} tripped line ${line + 1} (${id}), but the device said nothing`);
+  }
+}
+
+/** The Freigabe: FREIGABE pressed on `gate`'s Sperrpult; the wave has to run then. */
+async function firewallArm(gate) {
+  await gate.page.locator('.station-modal .firewall-arm').click({ timeout: HALL_MOVE_MS });
+  if (!(await until(() => firewallView(gate)?.waiting === false, 3000))) {
+    throw new Error(`${gate.name} pressed FREIGABE, but the wave still waits`);
+  }
+}
+
+/** No shot at all: the hall's Paketfilter, shot as its device opens. */
+const NO_FIREWALL_SHOTS = Object.freeze({ headers: false, gate: false, held: false });
+
+/** How many cards the held shot waits for on the lines. */
+const HELD_CARDS = 2;
+
+/**
+ * How opaque each card of the open device on `page` is drawn, its ancestors' opacity with it:
+ * a card dimmed under a hold reads worse exactly when its person reads at leisure.
+ */
+const cardOpacities = (page) =>
+  page.evaluate(() =>
+    [...document.querySelectorAll('.station-modal .firewall-card')].map((card) => {
+      let opacity = 1;
+      for (let at = card; at !== null; at = at.parentElement) {
+        opacity *= Number(globalThis.getComputedStyle(at).opacity);
+      }
+      return Math.round(opacity * 100) / 100;
+    }),
+  );
+
+/**
+ * firewall-held.png, once HELD_CARDS cards are on the lines: `gate`'s player steps back from the
+ * Sperrpult and walks to the binder, the wave holds, and the Analysepult is shot so — every card
+ * drawn whole, the hold's word over the numbers, never across a card; the run fails where a
+ * card is dimmed or the word lies over one. Then the Sperrpult is manned again and the wave goes
+ * on. Returns whether it did so.
+ */
+async function heldShot({ gate, analysis }, shots) {
+  if (!shots.held || firewallLive(analysis).length < HELD_CARDS) {
+    return false;
+  }
+  shots.held = false;
+  await gate.page.keyboard.press('Escape');
+  await gate.page.locator('.station-modal').waitFor({ state: 'hidden', timeout: 3000 });
+  const [spot] = FIREWALL_MISSION.map.manuals[0].spots;
+  if (!(await walkNear(gate.page, gate.seen, spot))) {
+    throw new Error(`${gate.name} found no way off the Sperrpult to ${spot.x},${spot.y}`);
+  }
+  const vacant = () => (firewallView(analysis)?.vacant ?? []).join() === 'a';
+  if (!(await until(vacant, 3000))) {
+    throw new Error(`${gate.name} left the Sperrpult, but the wave holds not`);
+  }
+  await sleep(400); // the hold drawn
+  await capture(analysis.page, 'firewall-held.png');
+  await heldVerdict(analysis);
+  await manFirewall(gate, 'a', 'gate');
+  await firewallRuns(gate);
+  return true;
+}
+
+/** The held Analysepult judged: every card drawn whole, the word clear of the cards. */
+async function heldVerdict(analysis) {
+  const opacities = await cardOpacities(analysis.page);
+  const clear = await analysis.page.evaluate(() => {
+    const word = document.querySelector('.station-modal .firewall-held')?.getBoundingClientRect();
+    const cards = [...document.querySelectorAll('.station-modal .firewall-card')];
+    const over = (card) => {
+      const box = card.getBoundingClientRect();
+      return word !== undefined && box.top < word.bottom && box.bottom > word.top;
+    };
+    return word !== undefined && !cards.some(over);
+  });
+  const status = (await textOf(analysis.page.locator('.station-modal .firewall-status'))) ?? '';
+  const whole = opacities.length > 0 && opacities.every((o) => o === 1);
+  fwSaid(
+    `firewall-held.png ${analysis.name} held: „${status}", cards drawn at ${opacities.join(', ')}` +
+      `${clear ? ', the word clear of them' : ' !! the word over a card'}`,
+  );
+  if (!whole || !clear || !status.includes('Sperrpult unbesetzt · Pakete halten')) {
+    fail(`firewall-held.png: cards at ${opacities.join(', ')}, word clear ${clear}, „${status}"`);
+  }
+}
+
+/**
+ * One step of the crew at the Paketfilter as its pages stand now: the Freigabe where the wave
+ * waits, both manned; a mark on a packet `hostile` names that is on the Analysepult unmarked; a
+ * trip on a line whose lowest packet wears a ring. Returns whether it did anything, and a mark's
+ * ms to its ring in `rings`.
+ */
+async function firewallStep(crew, hostile, shots, rings) {
+  const { gate, analysis } = crew;
+  if (await heldShot(crew, shots)) {
+    return true;
+  }
+  const fw = firewallView(gate);
+  if (fw?.waiting === true && fw.vacant.length === 0) {
+    await firewallArm(gate);
+    return true;
+  }
+  const mark = firewallLive(analysis).find((p) => hostile.has(p.id) && !p.marked);
+  if (mark !== undefined) {
+    const ms = await firewallMark(crew, mark.id, shots);
+    rings.push(...(ms === null ? [] : [ms]));
+    return true;
+  }
+  const live = firewallLive(gate);
+  const line = [0, 1, 2, 3, 4].find((l) => live.find((p) => p.line === l)?.marked === true);
+  if (line !== undefined) {
+    await firewallTrip(gate, line);
+    return true;
+  }
+  return false;
+}
+
+/** How long the drill follows the Paketfilter at most: its waves and two called off, ms. */
+const FIREWALL_RUN_MS = 240_000;
+
+/**
+ * The crew at the Paketfilter, following its pages to the solve: every step its pages allow
+ * (`firewallStep`), the packets `hostile` names marked — what the policy drops in every wave
+ * the run may deal, a wave called off included —, never on the plan's seconds. Returns whether
+ * it solved and how soon each ring showed after the view's word.
+ */
+async function followFirewall(crew, hostile, shots = NO_FIREWALL_SHOTS) {
+  const index = crew.gate.seen.view.currentPuzzleIndex;
+  const deadline = Date.now() + FIREWALL_RUN_MS;
+  const rings = [];
+  const open = () => crew.gate.seen.view.currentPuzzleIndex === index;
+  while (open() && Date.now() < deadline) {
+    if (!(await firewallStep(crew, hostile, shots, rings))) {
+      await sleep(100);
+    }
+  }
+  return { solved: !open(), rings };
+}
+
+/** The ids of the packets the probe's policy drops, in every wave its plan deals. */
+const FIREWALL_HOSTILE = new Set(
+  FIREWALL_PLAN.waves.flat().flatMap((packet) => (packet.hostile ? [packet.id] : [])),
+);
+
+/**
+ * The probe followed to its solve (`followFirewall`) — the cards shot at a mark, the Sperrpult
+ * at its first ring, the Analysepult held with its cards on the lines (`heldShot`) —; the run
+ * fails unless it solves, or where it took more than one alarm: one a slow runner's late tap
+ * may cost, a called-off wave the drill follows on. The log says how long it took and how soon
+ * each ring showed after the view's word.
+ */
+async function playFirewall(crew) {
+  const alarms = crew.gate.seen.view.alarms.count;
+  const from = Date.now();
+  const shots = { headers: true, gate: true, held: true };
+  const { solved, rings } = await followFirewall(crew, FIREWALL_HOSTILE, shots);
+  const raised = crew.gate.seen.view.alarms.count - alarms;
+  fwSaid(
+    `${rings.length} marks in ${seconds(Date.now() - from)}, rings ` +
+      `${Math.max(0, ...rings)} ms at most after the view: ` +
+      `${solved ? 'solved' : '!! not solved'}, ` +
+      (raised === 0 ? 'no alarm' : `!! ${raised} alarm(s)`),
+  );
+  if (!solved || raised > 1) {
+    fail(`firewall: the drill ended ${solved ? 'solved' : 'unsolved'} with ${raised} alarm(s)`);
+  }
+}
+
+/** The Paketfilter's phone targets, measured short while a device still moved: skipped. */
+const firewallUnjudged = (why) => skip('firewall (targets)', why);
+
+/**
+ * The Paketfilter, proven in a scratch mission of its own, in a Systemcheck run (Blackout says
+ * it leaves it out): imported through the editor at a pinned seed and started as its test run,
+ * the second player joining by code, both on touch screens. The player nearer console B walks
+ * past the Laborkennung and switches the station on at the Analysepult, which is held sideways
+ * on the large phone, and goes to the binder; the other takes the Sperrpult meanwhile — the wave
+ * holds, the device saying so, and the Sperrpult is held sideways too (firewall-phone-932.png) —
+ * while the binder is read on the Sicherheitsrichtlinie (firewall-policy.png). Back at the
+ * Analysepult the crew follows the pages to the solve (`playFirewall`): FREIGABE where a wave
+ * waits, a mark on every packet the policy drops, a trip under every ring — the cards shot at a
+ * mark (firewall-headers.png), the Sperrpult at its first ring (firewall-gate.png). The mission
+ * is deleted again whatever happened.
+ */
+async function captureFirewall() {
+  if (MISSION.toLowerCase() === 'blackout') {
+    skip('firewall (probe)', 'Blackout plays no Paketfilter: its probe plays in a Systemcheck run');
+    return;
+  }
+  const crew = [];
+  try {
+    const from = Date.now();
+    const host = await probePlayer('firewall', 'Anna', true);
+    crew.push(host);
+    const room = { drill: 'firewall', file: FIREWALL_FILE, mission: FIREWALL_MISSION };
+    const code = await openProbeRoom(host, { ...room, seed: FIREWALL_PLAN.seed });
+    const guest = await probePlayer('firewall', 'Ben', true);
+    crew.push(guest);
+    await joinProbeRoom(guest, code);
+    await startRun(host, guest);
+    await sleep(Math.max(0, host.seen.view.startedAt + 4200 - Date.now()));
+    const [gate, analysis] = probeSeats([host, guest]);
+    await readFirewallSign(analysis);
+    await manFirewall(analysis, 'b', 'analysis');
+    await phoneReach(analysis, SIZES[4], { label: 'firewall b 932', unjudged: firewallUnjudged });
+    await analysis.page.setViewportSize({ width: SIZES[0].width, height: SIZES[0].height });
+    const binder = await openFirewallPolicy(analysis);
+    await manFirewall(gate, 'a', 'gate');
+    await firewallHeld(gate);
+    await firewallPolicyShot(analysis, binder);
+    await manFirewall(analysis, 'b', 'analysis');
+    await firewallRuns(gate);
+    await playFirewall({ gate, analysis });
+    fwSaid(`the drill took ${seconds(Date.now() - from)}`);
+  } catch (err) {
+    fwSaid(`!! ${firstLine(err)}`);
+    fail(`firewall: ${firstLine(err)}`);
+  } finally {
+    for (const { context } of crew) {
+      await context.close();
+    }
+    const api = await request.newContext({ baseURL: BASE });
+    const gone = await api.delete(`/missions/custom/${FIREWALL_MISSION.id}`).catch(() => null);
+    fwSaid(`${FIREWALL_MISSION.id} deleted again: ${gone?.status() ?? 'none'}`);
+    await api.dispose();
+  }
+}
+
+/**
+ * firewall-phone-932.png: the Sperrpult manned with the Analysepult empty — its player at the
+ * binder —: the wave has to hold, the device saying whose console stands empty; held sideways on
+ * the large phone, it has to stand whole, nothing scrolling, every control 44 px at least
+ * (`phoneReach`), then back to laptop size.
+ */
+async function firewallHeld(gate) {
+  const status = gate.page.locator('.station-modal .firewall-status');
+  const says = 'Analysepult unbesetzt · Pakete halten';
+  const held = await until(() => (firewallView(gate)?.vacant ?? []).join() === 'b', 3000);
+  const text = (await textOf(status)) ?? '';
+  fwSaid(`${gate.name} at the Sperrpult alone: „${text}"${held ? '' : ' !! not held'}`);
+  if (!held || !text.includes(says)) {
+    fail(`firewall: the Sperrpult alone says „${text}", not that the wave holds`);
+  }
+  await phoneReach(gate, SIZES[4], { shot: 'firewall-phone-932.png', unjudged: firewallUnjudged });
+  await gate.page.setViewportSize({ width: SIZES[0].width, height: SIZES[0].height });
+  await sleep(300);
+}
+
+/** Both consoles manned: the wave has to run. Throws where it holds on. */
+async function firewallRuns(gate) {
+  if (!(await until(() => (firewallView(gate)?.vacant ?? ['?']).length === 0, 3000))) {
+    throw new Error(`both consoles are manned, but the wave holds on at ${gate.name}'s`);
+  }
+}
+
+/**
+ * The Anlaufsteuerung's scratch mission (tools/fixtures/startup-probe.json, „Anlaufprobe",
+ * custom-anlaufprobe) and what its pinned seed deals stage by stage (startup-plan.json): the load
+ * each script starts, the lamps of the Schaltfeld that takes its pulse, the values core's solver
+ * sets and the breaker it closes. The moments are in no plan — they hang on the server's
+ * clock —: the drill closes each breaker once the ladder shows the pulse on its marked steps, as
+ * the player there would. Core's test of the module keeps the plan the solver's own.
+ */
+const STARTUP_FILE = fileURLToPath(new URL('fixtures/startup-probe.json', import.meta.url));
+const STARTUP_MISSION = JSON.parse(readFileSync(STARTUP_FILE, 'utf8'));
+const STARTUP_PLAN = JSON.parse(
+  readFileSync(fileURLToPath(new URL('fixtures/startup-plan.json', import.meta.url)), 'utf8'),
+);
+/** How long the drill waits for a pulse to stand on the ladder's marked steps: its travel, more. */
+const STARTUP_ARRIVAL_MS = 15_000;
+
+/** The open Anlaufsteuerung as `player`'s page has it; null for none. */
+function startupView(player) {
+  const puzzle = player.seen.view?.puzzle ?? null;
+  return puzzle?.kind === 'startup' ? puzzle : null;
+}
+
+/**
+ * `player` walks to console `letter` of the probe and opens its panel with E — at console B the
+ * first E switches the station on — and the panel has to show its live `role` this stage: the
+ * terminal or the board. Throws where it does not.
+ */
+async function manStartup(player, letter, role) {
+  const spot = player.seen.view.map.stations.find((station) => station.console === letter);
+  if (!(await walkNear(player.page, player.seen, spot))) {
+    throw new Error(`${player.name} found no way to console ${letter} at ${spot.x},${spot.y}`);
+  }
+  const modal = player.page.locator('.station-modal');
+  if (!(await interactUntil(player, modal, consoleTarget(spot)))) {
+    throw new Error(`${player.name} stands at console ${letter}, but no .station-modal`);
+  }
+  if (!(await until(() => startupView(player)?.role === role, 3000))) {
+    throw new Error(`${player.name}'s console ${letter} shows no live ${role}`);
+  }
+}
+
+/** Whether `player`'s view shows the plan's `stage` as dealt: its load and its lamps. */
+function startupDealt(typer, board, stage) {
+  const lamps = startupView(board)?.board?.feeders.map((feeder) => feeder.lamps);
+  const load = startupView(typer)?.terminal?.load;
+  return load === stage.load && JSON.stringify(lamps) === JSON.stringify(stage.feeders);
+}
+
+/** The step a command takes as it shows in `player`'s view, or the station's solve. */
+function startupTook(player, input) {
+  const terminal = startupView(player)?.terminal ?? null;
+  if (terminal === null) {
+    return false;
+  }
+  const took = {
+    setze: () => terminal.values[input.gap] === input.value,
+    zeige: () => (terminal.log.at(-1)?.text ?? '').startsWith('zeige:'),
+    start: () => terminal.sent,
+  };
+  return took[input.cmd]();
+}
+
+/** `setze <gap> <value>` typed at the prompt, Tab completing the command and the gap. */
+async function typeSetting(page, { gap, value }) {
+  await page.keyboard.type('se', { delay: 40 });
+  await page.keyboard.press('Tab');
+  await page.keyboard.type(gap.slice(0, 1), { delay: 40 });
+  await page.keyboard.press('Tab');
+  await page.keyboard.type(String(value), { delay: 40 });
+}
+
+/** A command put together on the terminal's keys in `modal`: its key, then a gap and a feeder. */
+async function keySetting(modal, input) {
+  await modal.locator(`.servers-key[data-cmd="${input.cmd}"]`).click();
+  if (input.cmd === 'setze') {
+    await modal.locator(`.servers-key[data-gap="${input.gap}"]`).click();
+    await modal.locator(`.startup-key[data-feeder="${input.value}"]`).click();
+  }
+}
+
+/**
+ * A command of the plan at `player`'s terminal — `typed`: letter by letter, Tab completing the
+ * command and the gap, else put together on the bezel's keys — and Enter or ⏎; it has to show
+ * in the view: the value in its gap, the pulse sent. Returns the line as sent.
+ */
+async function startupCommand(player, input, typed) {
+  const { page } = player;
+  const modal = page.locator('.station-modal');
+  await (typed && input.cmd === 'setze' ? typeSetting(page, input) : keySetting(modal, input));
+  const line = await modal.locator('.servers-input').inputValue();
+  await (typed ? page.keyboard.press('Enter') : modal.locator('.servers-key--enter').click());
+  if (!(await until(() => startupTook(player, input), 3000))) {
+    throw new Error(`${player.name} sent „${line}", but it did not take: „${lastLogged(player)}"`);
+  }
+  return line;
+}
+
+/** The last line of `player`'s terminal log; „nothing" where it shows none. */
+const lastLogged = (player) => startupView(player)?.terminal?.log.at(-1)?.text ?? 'nothing';
+
+/**
+ * The plan's breaker at `player`'s Schaltfeld, closed once the ladder shows the pulse on its
+ * marked steps — the view says so — and the stage has to run up, or the station solve. With
+ * `shot`, the Schaltfeld is caught first, the pulse on the ladder. Returns the seconds waited.
+ */
+async function startupBreaker(player, feeder, shot = null) {
+  const from = Date.now();
+  const index = player.seen.view.currentPuzzleIndex;
+  const stage = startupView(player)?.stage;
+  const onLadder = () => startupView(player)?.board?.pulse?.arrived === true;
+  if (!(await until(onLadder, STARTUP_ARRIVAL_MS))) {
+    throw new Error(`${player.name}'s ladder never showed the pulse on its marked steps`);
+  }
+  if (shot !== null) {
+    await capture(player.page, shot);
+  }
+  await player.page.locator(`.station-modal .startup-breaker[data-breaker="${feeder}"]`).click();
+  const ranUp = () =>
+    player.seen.view.currentPuzzleIndex > index || startupView(player)?.stage !== stage;
+  if (!(await until(ranUp, 3000))) {
+    const last = startupView(player)?.last ?? 'nothing';
+    throw new Error(`${player.name} closed breaker ${feeder}, but the stage stays: ${last}`);
+  }
+  return Date.now() - from;
+}
+
+/** The pulse in the probe's duct as `player`'s view of the map has it; null for none. */
+const ductPulse = (player) => player.seen.view?.map?.conduits?.[0]?.pulse ?? null;
+
+/**
+ * startup-duct.png: the audience's world, the pulse running in the duct between the two rooms —
+ * no panel in its way —, caught a second and a half after its sending; the view has to carry it.
+ */
+async function captureDuct(audience) {
+  if (!(await until(() => ductPulse(audience) !== null, 3000))) {
+    throw new Error("the audience's map carries no pulse in the duct");
+  }
+  await sleep(Math.max(0, ductPulse(audience).sentAt + 1500 - Date.now()));
+  await capture(audience.page, 'startup-duct.png');
+  for (const size of [STARTUP_LAPTOP, SIZES[3], SIZES[4]]) {
+    await audience.page.setViewportSize({ width: size.width, height: size.height });
+    await sleep(300);
+    await startupFits(audience, `startup audience ${size.width}`);
+  }
+  await audience.page.setViewportSize({ width: SIZES[0].width, height: SIZES[0].height });
+  const panel = await audience.page.locator('.station-modal').count();
+  console.log(
+    `startup-duct.png   the audience's world, the pulse in the duct` +
+      (panel === 0 ? '' : ' !! a panel over it'),
+  );
+}
+
+/** The startup drill's phone targets, measured short while a device still moved: skipped. */
+const startupUnjudged = (why) => skip('startup (targets)', why);
+
+/** In the page: the device's frame past the window's top or foot, as a line; none where whole. */
+function panelMisfit() {
+  const frame = document.querySelector('.station-modal .panel')?.getBoundingClientRect();
+  const height = globalThis.innerHeight;
+  const out = frame !== undefined && (frame.top < -1 || frame.bottom > height + 1);
+  return out ? [`panel ${Math.round(frame.top)}..${Math.round(frame.bottom)} in ${height}`] : [];
+}
+
+/** In the page: every script line wider than its row — a clue cut at the glass's edge. */
+function lineMisfits() {
+  return [...document.querySelectorAll('.startup-line')]
+    .filter((line) => line.scrollWidth > line.clientWidth + 1)
+    .map((line) => {
+      const said = line.textContent.trim().slice(0, 30);
+      return `„${said}" ${line.scrollWidth} in ${line.clientWidth}`;
+    });
+}
+
+/** In the page: the log's newest entry and the log's box, where the log shows; null where not. */
+function newestLogged() {
+  const log = document.querySelector('.startup-log');
+  const newest = log?.querySelector('.servers-line:last-child');
+  const box = log?.getBoundingClientRect();
+  // A log left out for the hint under the prompt (a phone held sideways) holds nothing to see.
+  return newest && box && box.height > 0 ? { box, entry: newest.getBoundingClientRect() } : null;
+}
+
+/** In the page: the log's newest entry out of its box, or of no height; none where in view. */
+function logMisfit() {
+  const seen = newestLogged();
+  if (seen === null) {
+    return [];
+  }
+  const { box, entry } = seen;
+  const out = entry.top < box.top - 1 || entry.bottom > box.bottom + 1 || entry.height === 0;
+  return out ? [`newest log entry ${Math.round(entry.top)}..${Math.round(entry.bottom)} cut`] : [];
+}
+
+/**
+ * `player`'s open Anlaufsteuerung held to fit whole at its window's size: its frame within the
+ * window, no script line wider than its row, the log's newest entry in view. Logged; a misfit
+ * fails the run under `label`.
+ */
+async function startupFits(player, label) {
+  const misfits = [
+    ...(await player.page.evaluate(panelMisfit)),
+    ...(await player.page.evaluate(lineMisfits)),
+    // The page has neither helper: both go in as source, the first declared for the second.
+    ...(await player.page.evaluate(`(() => { ${newestLogged}\nreturn (${logMisfit})(); })()`)),
+  ];
+  const said = misfits.length === 0 ? 'whole, every line in its row' : '!!';
+  console.log(
+    `${label.padEnd(18)} ${player.name}: ${said}` +
+      misfits.map((m) => `\n                   !! ${m}`).join(''),
+  );
+  if (misfits.length > 0) {
+    fail(`${label}: ${misfits.join('; ')}`);
+  }
+}
+
+/** A laptop's smallest window the devices are held to: both parts of the device whole in it. */
+const STARTUP_LAPTOP = { width: 1280, height: 720 };
+
+/**
+ * startup-terminal.png and startup-phone-932.png: the live terminal at laptop size with the
+ * first stage's script; both consoles held to a laptop's 1280×720 — whole, nothing scrolling,
+ * every control in view at 44 px, as the pages are touch screens —; then the terminal on a large
+ * phone held sideways (SIZES[4]) the same way, the live Schaltfeld too, checked without a shot.
+ * Both go back to laptop size.
+ */
+async function captureStartupConsoles({ typer, board }) {
+  await sleep(1400); // past the panels' fade-in
+  await capture(typer.page, 'startup-terminal.png');
+  const laptop = { unjudged: startupUnjudged };
+  for (const [player, part] of [[typer, 'terminal'], [board, 'board']]) {
+    await phoneReach(player, STARTUP_LAPTOP, { ...laptop, label: `startup ${part} 1280` });
+    await startupFits(player, `startup ${part} 1280`);
+    await phoneReach(player, SIZES[3], { ...laptop, label: `startup ${part} 844` });
+    await startupFits(player, `startup ${part} 844`);
+  }
+  await phoneReach(typer, SIZES[4], { shot: 'startup-phone-932.png', unjudged: startupUnjudged });
+  await startupFits(typer, 'startup terminal 932');
+  await phoneReach(board, SIZES[4], { label: 'startup board 932', unjudged: startupUnjudged });
+  await startupFits(board, 'startup board 932');
+  for (const { page } of [typer, board]) {
+    await page.setViewportSize({ width: SIZES[0].width, height: SIZES[0].height });
+  }
+  await sleep(300);
+}
+
+/**
+ * `typer`'s terminal held to a phone sideways at 844×390 and 932×430 as it stands — whole, every
+ * line in its row, the newest log entry in view (`startupFits`) —, then back to laptop size.
+ */
+async function startupOnPhones(typer, label) {
+  for (const size of [SIZES[3], SIZES[4]]) {
+    const at = `${label} ${size.width}`;
+    await phoneReach(typer, size, { label: at, unjudged: startupUnjudged });
+    await startupFits(typer, at);
+  }
+  await typer.page.setViewportSize({ width: SIZES[0].width, height: SIZES[0].height });
+  await sleep(300);
+}
+
+/**
+ * A later stage's tallest moments on a phone, made on purpose: `zeige` with both gaps open —
+ * the hint under the prompt naming them —, then a start with a wrong `abgang`, refused with an
+ * alarm, and `zeige` again — the status strip still saying the start was refused. Each held to
+ * both phones (`startupOnPhones`). The refusal is the drill's one alarm.
+ */
+async function startupRefusal(typer, stage) {
+  await startupCommand(typer, { cmd: 'zeige' }, false);
+  await startupOnPhones(typer, `startup stage ${stage.stage} zeige`);
+  const wrong = { ...stage.values, abgang: (stage.values.abgang % 4) + 1 };
+  for (const [gap, value] of Object.entries(wrong)) {
+    await startupCommand(typer, { cmd: 'setze', gap, value }, false);
+  }
+  const modal = typer.page.locator('.station-modal');
+  await modal.locator('.servers-key[data-cmd="start"]').click();
+  await modal.locator('.servers-key--enter').click();
+  const refused = () => startupView(typer)?.terminal?.log.at(-1)?.tag === 'fail';
+  if (!(await until(refused, 3000))) {
+    throw new Error(`${typer.name}'s wrong start was not refused: „${lastLogged(typer)}"`);
+  }
+  await startupCommand(typer, { cmd: 'zeige' }, false);
+  const status = (await textOf(modal.locator('.startup-status'))) ?? '';
+  if (!status.includes('Anlauf verweigert')) {
+    fail(`startup: after zeige the status strip no longer says the start was refused: „${status}"`);
+  }
+  await startupOnPhones(typer, `startup stage ${stage.stage} refused`);
+}
+
+/** The stage's values set at `typer`'s terminal — the first stage's first typed —; the lines. */
+async function startupSettings(typer, stage, first) {
+  const lines = [];
+  for (const [i, [gap, value]] of Object.entries(stage.values).entries()) {
+    lines.push(await startupCommand(typer, { cmd: 'setze', gap, value }, first && i === 0));
+  }
+  return lines;
+}
+
+/**
+ * One stage of the plan at both consoles: its values set and the script started at the typing
+ * console — the first stage's first value typed, the rest on the keys —, the breaker closed at
+ * the other once the pulse stands on the ladder (`startupBreaker`), the first caught there
+ * (startup-ladder.png). In the first the audience catches the pulse in the duct on its way.
+ * Returns the stage as the log says it.
+ */
+async function startupStage(crew, stage, first) {
+  const [typer, board] = stage.types === 'a' ? [crew.a, crew.b] : [crew.b, crew.a];
+  if (!startupDealt(typer, board, stage)) {
+    fail(`startup: seed ${STARTUP_PLAN.seed} deals stage ${stage.stage} unlike startup-plan.json`);
+  }
+  if (!first) {
+    await startupRefusal(typer, stage);
+  }
+  const lines = await startupSettings(typer, stage, first);
+  if (first) {
+    await captureStartupConsoles({ typer, board });
+  }
+  lines.push(await startupCommand(typer, { cmd: 'start' }, false));
+  if (first) {
+    await captureDuct(crew.audience);
+  }
+  const waited = await startupBreaker(board, stage.breaker, first ? 'startup-ladder.png' : null);
+  const after = `Schalter ${stage.breaker} nach ${seconds(waited)}`;
+  return `Stufe ${stage.stage}: „${lines.join('", „')}", ${after}`;
+}
+
+/**
+ * The plan's stages played at both consoles, the sides swapping; the station has to solve on the
+ * last with no alarm but the refusal each later stage makes on purpose (`startupRefusal`). The
+ * log says how long it took and how long each pulse travelled.
+ */
+async function playStartup(crew) {
+  const alarms = crew.a.seen.view.alarms.count;
+  const from = Date.now();
+  const said = [];
+  for (const [i, stage] of STARTUP_PLAN.stages.entries()) {
+    said.push(await startupStage(crew, stage, i === 0));
+  }
+  const solved = await until(() => crew.a.seen.view.currentPuzzleIndex > 0, 3000);
+  const raised = crew.a.seen.view.alarms.count - alarms;
+  const meant = STARTUP_PLAN.stages.length - 1;
+  console.log(
+    `startup            ${said.length} stages in ${seconds(Date.now() - from)} ` +
+      `(${said.join('; ')}): ${solved ? 'solved' : '!! not solved'}, ` +
+      (raised === meant ? `${raised} alarm(s), the refusals meant` : `!! ${raised} alarm(s)`),
+  );
+  if (!solved || raised !== meant) {
+    fail(`startup: the plan ended ${solved ? 'solved' : 'unsolved'} with ${raised} alarm(s)`);
+  }
+}
+
+/**
+ * The Anlaufsteuerung, proven in a scratch mission of its own, in a Systemcheck run as the
+ * Zugangskontrolle is (Blackout says it leaves it out): imported through the editor at a pinned
+ * seed and started as its test run, the second player joining by code, both on touch screens,
+ * and a third page watching as the audience. The player nearer console B switches the station
+ * on at its Schaltfeld, the other takes console A's terminal; the first stage's terminal is shot
+ * at laptop size (startup-terminal.png) and on a large phone held sideways
+ * (startup-phone-932.png, the Schaltfeld checked too), the audience's world with the pulse in the
+ * duct (startup-duct.png) and the Schaltfeld with the pulse on its ladder (startup-ladder.png).
+ * Every stage of the plan is played to the solve. The mission is deleted again whatever happened.
+ */
+async function captureStartup() {
+  if (MISSION.toLowerCase() === 'blackout') {
+    const why = 'Blackout plays no Anlaufsteuerung: its probe plays in a Systemcheck run';
+    skip('startup (probe)', why);
+    return;
+  }
+  const pages = [];
+  const from = Date.now();
+  try {
+    const host = await probePlayer('startup', 'Anna', true);
+    pages.push(host);
+    const room = { drill: 'startup', file: STARTUP_FILE, mission: STARTUP_MISSION };
+    const code = await openProbeRoom(host, { ...room, seed: STARTUP_PLAN.seed });
+    const guest = await probePlayer('startup', 'Ben', true);
+    pages.push(guest);
+    await joinProbeRoom(guest, code);
+    const audience = await probePlayer('startup', 'Zuschauer');
+    pages.push(audience);
+    await audience.page.goto(paged(BASE));
+    await typeName(audience.page, audience.name);
+    await byCode(audience.page, code, true);
+    await startRun(host, guest);
+    // Past the briefing's countdown, as in the walkthrough.
+    await sleep(Math.max(0, host.seen.view.startedAt + 4200 - Date.now()));
+    const [a, b] = probeSeats([host, guest]);
+    await manStartup(b, 'b', 'board');
+    await manStartup(a, 'a', 'terminal');
+    await playStartup({ a, b, audience });
+  } catch (err) {
+    console.log(`startup            !! ${firstLine(err)}`);
+    fail(`startup: ${firstLine(err)}`);
+  } finally {
+    for (const { context } of pages) {
+      await context.close();
+    }
+    const api = await request.newContext({ baseURL: BASE });
+    const gone = await api.delete(`/missions/custom/${STARTUP_MISSION.id}`).catch(() => null);
+    const status = gone?.status() ?? 'none';
+    console.log(`startup            ${STARTUP_MISSION.id} deleted again: ${status}`);
+    console.log(`startup            the drill took ${seconds(Date.now() - from)}`);
+    await api.dispose();
+  }
+}
+
 /** Holds the keys towards (tx, ty) as long as the avatar takes to walk there in a line. */
 async function walkStraight(player, tx, ty) {
   const at = whereIs(player.seen);
@@ -13041,6 +13949,7 @@ async function buttonMove(host, station, { kind }) {
   await page.mouse.up();
 }
 
+
 /** Who makes a move: the host the operator's, the guest the partner's, both the whole crew's. */
 const moversOf = ({ host, guest }, { by }) =>
   by === 'everyone' ? [host, guest] : [by === 'partner' ? guest : host];
@@ -13098,15 +14007,33 @@ async function accessMove({ host, guest }, input) {
 }
 
 /**
+ * A move of the hall's Anlaufsteuerung at its mover's console — the host's console A, the
+ * guest's B —: a command put together on the terminal's keys (`startupCommand`), a breaker closed
+ * once the ladder shows the pulse on its marked steps (`startupBreaker`), not at the plan's moment,
+ * which was the solver's on its own clock.
+ */
+async function startupMove(crew, move) {
+  const [player] = moversOf(crew, move);
+  if ('breaker' in move.input) {
+    await startupBreaker(player, move.input.breaker);
+    return;
+  }
+  await startupCommand(player, move.input, false);
+}
+
+/**
  * The stations whose moves are not a control clicked on their device: the button, held on the
  * clock (`buttonMove`), the Rechnernetz, its commands put together on the terminal's keys and
- * its switches thrown at the rack (`serversMove`), and the Zugangskontrolle (`accessMove`).
+ * its switches thrown at the rack (`serversMove`), the Zugangskontrolle (`accessMove`) and the
+ * Anlaufsteuerung (`startupMove`). The Paketfilter takes no moves one by one: the crew follows
+ * its pages (`followFirewall`).
  */
 const HALL_DRIVERS = {
   button: ({ host }, station, move) => buttonMove(host, station, move.input),
   servers: ({ host, guest }, _station, move) =>
     serversMove({ terminal: host, rack: guest }, move, false),
   access: (crew, _station, move) => accessMove(crew, move.input),
+  startup: (crew, _station, move) => startupMove(crew, move),
 };
 
 /** How the walkthrough makes a move at a station of `type`; null for a type it knows no way of. */
@@ -13115,6 +14042,25 @@ function driverOf(type) {
     return HALL_DRIVERS[type];
   }
   return type in HALL_CONTROLS ? deviceMove : null;
+}
+
+/**
+ * The stations of the hall the crew works by following their pages, not move by move: the
+ * Paketfilter, marking what the plan's `hostile` names (`followFirewall`).
+ */
+const HALL_FOLLOWERS = {
+  firewall: ({ host, guest }, station) =>
+    followFirewall({ gate: host, analysis: guest }, new Set(station.hostile ?? [])),
+};
+
+// The walkthrough's tables are the hall's ways (tools/hallWays.mjs), or it stops as it loads.
+const MISWORKED = waysMatch(HALL_WAYS, {
+  controls: Object.keys(HALL_CONTROLS),
+  drivers: Object.keys(HALL_DRIVERS),
+  followers: Object.keys(HALL_FOLLOWERS),
+});
+if (MISWORKED.length > 0) {
+  throw new Error(`the hall's ways and the walkthrough's tables differ: ${MISWORKED.join('; ')}`);
 }
 
 /** The tile a target stands on: a station's (first) console, or the source itself. */
@@ -13195,6 +14141,22 @@ async function devicesClosed(players, station) {
 }
 
 /**
+ * The plan's moves at a station of the hall, each as its type makes it (`driverOf`) — but where
+ * the crew follows the device's pages to the solve (`HALL_FOLLOWERS`).
+ */
+async function playHallMoves(crew, station) {
+  if (HALL_WAYS[station.type] === 'follow') {
+    await HALL_FOLLOWERS[station.type](crew, station);
+    return;
+  }
+  const drive = driverOf(station.type);
+  for (const move of station.moves) {
+    await drive(crew, station, move);
+    await sleep(120);
+  }
+}
+
+/**
  * A station of the hall as the plan takes it: the crew at its places, the device open
  * (`manHallStation`), what the host's device opens on held to the plan, the device shot as it
  * opens (hall-<type>.png), the plan's moves made (`driverOf`), and the station solved without an
@@ -13210,11 +14172,7 @@ async function playHallStation(crew, station) {
   const shot = `hall-${station.type}.png`;
   await capture(host.page, shot);
   const from = Date.now();
-  const drive = driverOf(station.type);
-  for (const move of station.moves) {
-    await drive(crew, station, move);
-    await sleep(120);
-  }
+  await playHallMoves(crew, station);
   if (!(await until(() => host.seen.view.currentPuzzleIndex > index, 5000))) {
     throw new Error(`the plan's moves are made at "${station.title}", but it did not solve`);
   }
@@ -13335,6 +14293,38 @@ async function watchTheHall(context, code) {
 }
 
 /**
+ * How bright a player's world in the lit hall may be, its canvas's mean luma 0–255 (client
+ * gl/luma.ts): lit once, the host's world at the entrance measured 126 on the M4's GL path, on
+ * the Canvas pass and on CI's SwiftShader alike (2026-11-17). Each of the hall's fourteen names
+ * lighting its one floor again burnt it to a white sheet at 234; the same hall with its lights
+ * never on (`lit` false) lay dark round the crew's lamps at 19, on both paths.
+ */
+const HALL_PLAYER_LUMA_MIN = 70;
+const HALL_PLAYER_LUMA_MAX = 180;
+
+/**
+ * hall-player.png: the host's own world in the hall past the briefing — a player's, on the way
+ * its light takes on this machine (the audience lights the hall another way, whole) — and its
+ * mean luma; the run fails where the world burns to a white sheet (over HALL_PLAYER_LUMA_MAX),
+ * lies dark (under HALL_PLAYER_LUMA_MIN) or the page has no light probe to read it.
+ */
+async function seeTheHall(host) {
+  await framesOf(host.page, 3);
+  await capture(host.page, 'hall-player.png');
+  const light = await lightOf(host.page);
+  const luma = await canvasLuma(host.page);
+  const said = luma === null ? 'no luma read' : `mean luma ${luma.toFixed(0)}`;
+  console.log(
+    `hall-player.png    ${host.name} in the hall on the ${light?.path ?? 'unknown'} path: ${said}` +
+      ` (${HALL_PLAYER_LUMA_MIN} to ${HALL_PLAYER_LUMA_MAX})`,
+  );
+  if (luma === null || luma < HALL_PLAYER_LUMA_MIN || luma > HALL_PLAYER_LUMA_MAX) {
+    const bounds = `${HALL_PLAYER_LUMA_MIN} to ${HALL_PLAYER_LUMA_MAX}`;
+    fail(`hall-player.png: ${host.name}'s world in the lit hall, ${said}, not ${bounds}`);
+  }
+}
+
+/**
  * hall-overview.png's line in the log, from the audience's map: how many of the hall's
  * stations it shows, how many of its rooms lit; the run fails where one is missing.
  */
@@ -13429,10 +14419,10 @@ async function sampleArmedAudience(watcher) {
 async function playHall(crew, watcher) {
   const { host } = crew;
   checkHallDraw(crew);
-  const unknown = HALL_PLAN.stations.filter((station) => driverOf(station.type) === null);
+  const unknown = unworked(HALL_PLAN.stations.map((station) => station.type));
   if (unknown.length > 0) {
-    const types = unknown.map((station) => station.type).join(', ');
-    throw new Error(`the walkthrough knows no way to work ${types}: give HALL_CONTROLS its keys`);
+    const types = unknown.join(', ');
+    throw new Error(`the walkthrough knows no way to work ${types}: give tools/hallWays.mjs it`);
   }
   await passTheSign(crew);
   await sampleArmedHall(host);
@@ -13496,6 +14486,7 @@ async function captureHall() {
     await startRun(host, guest);
     // Past the briefing's countdown, as in the walkthrough.
     await sleep(Math.max(0, host.seen.view.startedAt + 4200 - Date.now()));
+    await seeTheHall(host);
     const audience = await browser.newContext({ viewport: COLD_OPEN });
     contexts.push(audience);
     await playHall({ host, guest }, await watchTheHall(audience, code));
@@ -16536,10 +17527,10 @@ async function captureRotation() {
 /**
  * The drills before the walkthrough, each in a room of its own, by the group each belongs to:
  * the editor, the Serverraum's scratch mission (a Systemcheck run's), the art tour, the danger
- * sense, the reconnect drill, the restart drill, the Zugangskontrolle's scratch mission (a
- * Systemcheck run's), the three drill (a Blackout run's), the Übungshalle (a Systemcheck run's),
- * the Wechselplatz's scratch mission (a Systemcheck run's) and the music packs in the settings, on
- * a menu of their own.
+ * sense, the reconnect drill, the restart drill, the Zugangskontrolle's, the Anlaufsteuerung's
+ * and the Paketfilter's scratch missions (a Systemcheck run's), the three drill (a Blackout
+ * run's), the Übungshalle (a Systemcheck run's), the Wechselplatz's scratch mission (a
+ * Systemcheck run's) and the music packs in the settings, on a menu of their own.
  */
 const DRILLS = [
   ['editor', captureEditor],
@@ -16549,6 +17540,8 @@ const DRILLS = [
   ['reconnect', captureReconnect],
   ['restart', captureRestart],
   ['access', captureAccess],
+  ['startup', captureStartup],
+  ['firewall', captureFirewall],
   ['three', captureThree],
   ['hall', captureHall],
   ['rotation', captureRotation],

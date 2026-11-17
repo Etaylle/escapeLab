@@ -76,11 +76,16 @@ export interface OtherAvatar {
   phase: number;
 }
 
-/** A lit room: the tiles its lights reach, as a path in tiles, and the sim time they came on. */
+/**
+ * A lit room: the tiles its lights reach, as a path in tiles, the sim time they came on, and how
+ * brightly they burn — as many times a room's own as its floor's labels say (rooms.ts
+ * `roomLights`): its ceiling lights laid that many times, the darkness it leaves kept as often.
+ */
 export interface LitRoom {
   tiles: { x: number; y: number }[];
   path: Path2D;
   since: number;
+  brightness: number;
 }
 
 /** The room the power lights round you while the lab has it, with its tiles as a path. */
@@ -130,6 +135,12 @@ export interface FrameLight {
    * power, nobody carries one, so only in your room
    */
   crewShown: (x: number, y: number) => boolean;
+  /**
+   * whether light falls on the tile at (x, y) right now — some lamp of the crew's, a drone's
+   * eye, an emergency lamp, the open hatch, a lit room through a door, your room while the lab
+   * has its power: where a figure has sight; everything for the audience
+   */
+  inSight: (x: number, y: number) => boolean;
 }
 
 /** Where the minimap sits on the canvas, device pixels: its corner, cell and size. */
@@ -235,6 +246,11 @@ export interface Frame {
   time: number;
   /** the wall clock, epoch ms: doors sliding, the hatch, an alarm, the deadline */
   now: number;
+  /**
+   * the server's clock, epoch ms (clock.ts `serverNow`): what the server times itself and every
+   * screen shows alike — a start pulse in its duct
+   */
+  serverNow: number;
   /** the page's clock, ms (performance.now()): pings and chat lines */
   perf: number;
   /** the beat the lab's objects pulse with, 0 to 1 */

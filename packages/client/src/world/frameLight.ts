@@ -157,9 +157,11 @@ export function frameLight(scene: LightScene, powered: boolean, whole: boolean):
     whole || (powered && (spectator || falling.has(`${x},${y}`)));
   const crewShown = (x: number, y: number): boolean =>
     everything || !powered || falling.has(`${Math.floor(x)},${Math.floor(y)}`);
+  const inSight = (x: number, y: number): boolean =>
+    everything || falling.has(`${Math.floor(x)},${Math.floor(y)}`);
   const own = inHands(lamps.own, scene);
   const crew = crewInHands(lamps.crew, scene);
-  return { ...lamps, own, crew, shown, powered: inPower, crewShown };
+  return { ...lamps, own, crew, shown, powered: inPower, crewShown, inSight };
 }
 
 /**

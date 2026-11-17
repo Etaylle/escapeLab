@@ -195,3 +195,68 @@ describe('glow — as the world’s light takes its way', () => {
     expect(callsOf(logOf(draw, frame), 'drawImage').length).toBeGreaterThan(0);
   });
 });
+
+describe('glow — a start pulse running in its duct', () => {
+  beforeAll(() => {
+    vi.stubGlobal('Path2D', FakePath2D);
+  });
+  afterAll(() => {
+    vi.unstubAllGlobals();
+  });
+
+  function drawn(frame: Frame) {
+    const canvas = fakeCanvas(800, 600);
+    draw(canvas.ctx, frame);
+    return canvas;
+  }
+
+  it('lays a running start pulse from one sprite, baking nothing for the spots it passes', () => {
+    const T = 1_700_000_000_000;
+    const tiles = [1, 2, 3, 4].map((x) => ({ x, y: 2 }));
+    const pulse = { sentAt: T, arrivesAt: T + 3000, diesAt: T + 6000, reversed: false };
+    const conduits = [{ puzzleId: 'anlauf', tiles, pulse }];
+    const frame = frameWith({ map: lab({ conduits }), serverNow: T + 1000, time: 1.8 });
+    const before = frameWith({ map: lab(), serverNow: T + 1000, time: 1.8 });
+    drawn(before);
+    const { log } = drawn(frame);
+    expect(poolsOf(frame).map(([name]) => name)).toEqual(poolsOf(before).map(([name]) => name));
+    // Along its whole first pass, a draw every 100 ms: not one bake more than the first draw's.
+    const baked = frame.kit.census.bakes;
+    for (let ms = 1100; ms < 6000; ms += 100) {
+      drawn({ ...frame, serverNow: T + ms });
+    }
+    expect(frame.kit.census.bakes).toBe(baked);
+    // A step on, the same: no pool baked for the spot it has reached.
+    drawn({ ...frame, serverNow: T + 2000 });
+    expect(poolsOf(frame).map(([name]) => name)).toEqual(poolsOf(before).map(([name]) => name));
+    // Its glow is a sprite of its amber laid on at whole pixels, its core over it.
+    const sprites = callsOf(log, 'drawImage').filter(([image]) =>
+      String((image as { name?: string }).name ?? '').startsWith('sprite'),
+    );
+    expect(sprites.length).toBeGreaterThan(0);
+  });
+
+  it('clips its glow where a wall lies within its reach, and spares the clip in the open', () => {
+    const T = 1_700_000_000_000;
+    const pulseOn = (tiles: { x: number; y: number }[]) => [
+      {
+        puzzleId: 'anlauf',
+        tiles,
+        pulse: { sentAt: T, arrivesAt: T + 3000, diesAt: T + 6000, reversed: false },
+      },
+    ];
+    // Beside the lab's walls: the clip of what it sees from its spot.
+    const walled = frameWith({ map: lab({ conduits: pulseOn([{ x: 1, y: 2 }, { x: 2, y: 2 }]) }) });
+    const near = drawn({ ...walled, serverNow: T + 100, time: 1.8 });
+    expect(callsOf(near.log, 'clip').length).toBeGreaterThan(0);
+    // The middle of a hall 15 tiles wide: nothing within its reach to stop it.
+    const hall = mapWith({
+      width: 15,
+      height: 11,
+      tiles: ['#'.repeat(15), ...Array(9).fill(`#${'.'.repeat(13)}#`), '#'.repeat(15)],
+      conduits: pulseOn([{ x: 7, y: 5 }, { x: 8, y: 5 }]),
+    });
+    const open = drawn(frameWith({ map: hall, serverNow: T + 100, time: 1.8 }));
+    expect(callsOf(open.log, 'clip')).toEqual([]);
+  });
+});

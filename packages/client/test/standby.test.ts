@@ -40,7 +40,7 @@ function lab(): MapView {
 function labFrame(parts: Partial<Frame> = {}): Frame {
   const labor = [{ x: 7, y: 3 }];
   const path = new FakePath2D() as unknown as Path2D;
-  const lit = new Map([['LABOR', { tiles: labor, path, since: -Infinity }]]);
+  const lit = new Map([['LABOR', { tiles: labor, path, since: -Infinity, brightness: 1 }]]);
   return frameWith({ map: lab(), lit, litTiles: new Set(['7,3']), ...parts });
 }
 

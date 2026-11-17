@@ -662,13 +662,52 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   der Rundgang im Systemcheck spielt (Gruppe `access`). Offen für N-6: ob und wo die Station in
   Blackout steht — mit zwei Spielenden muss die Liste vor den Pulten gelesen (oder notiert) werden.
 
-### I-2 Firewall-Regelwerk — Status: wartet (Entscheidung Uros) · Größe: L
+### I-2 Firewall-Regelwerk — Status: im PR (I-firewall) · Größe: L
 - Pult A zeigt laufende Pakete (Quelle, Ziel, Port), Pult B bearbeitet die Regelliste, erste
   passende Regel gewinnt, Quelle Sicherheitsrichtlinie. Vorbilder: Hacknet und Uplink (Trace-
   Zähler, sobald man drin ist), Exapunks (Regeln im gedruckten Heft).
 - Dritter Entwurf in Reserve: Datensicherung (Plattenarray, Backup-Katalog, Rotationsplan).
 - Studie G-2, Rang 9 (Operation: Tango): beide Hälften zugleich in Bewegung — Pakete fließen an
   Pult A, während Pult B die Regeln bearbeitet.
+- Entschieden (Uros, 2026-11-17): eine zweite IT-Station mit dem Gefühl eines Automaten, die
+  zwei braucht, und Pult B ruft die Pakete nicht aus, sondern **markiert sie**; die Markierung
+  erscheint als Ring am Pult A. Umgesetzt als Modul `firewall`, „Paketfilter"
+  (`docs/gameplay.md`, „The Paketfilter"): fünf Leitungen in den Kern, Pult A, das Sperrpult,
+  sieht nur Punkte und sperrt mit einer Sperre das unterste Paket einer Leitung, Pult B, das
+  Analysepult, sieht Quelle, Port und Protokoll und markiert; die gedruckte
+  Sicherheitsrichtlinie entscheidet mit der ersten passenden ihrer sechs Regeln, eine liest die
+  Laborkennung. Wellen zu 5–9 Paketen, zwei oder drei davon zu sperren, jede mit einem
+  Lockvogel, den nur die Reihenfolge durchlässt; ein falsch gesperrtes und ein feindliches Paket
+  im Kern sind ein Alarm; die neue Welle wartet wie die erste auf die Freigabe am Sperrpult — eine
+  Crew, die stillsteht, verliert höchstens einen Alarm. Die Welle läuft
+  nur, solange beide Pulte besetzt sind. Felder `waves`, `packets`, `fallSec`, `rules`; ein erster
+  Lauf mit `rules` 4 trifft nur die Regeln 1, 2, 3 und 6, die Laborkennung erst ab 6. Dafür neu
+  im Modulvertrag: `elapse`, eine Station auf der Uhr und der Anwesenheit an ihren Pulten.
+- Steht in der Übungshalle (G-2) und in der Probemission `tools/fixtures/firewall-probe.json`,
+  die der Rundgang im Systemcheck spielt (Gruppe `firewall`). In Blackout kommt sie mit dem
+  nächsten Paket des Leads als Tor des Serverraums: ihre Lösung öffnet das Serverschott.
+
+### W-1 Warte-Spiel — Status: wartet · Größe: S
+- Uros' eigenes kleines Canvas-Spiel (Frettchen und Ente) als etwas zum Spielen, während eine
+  Crew wartet — auf eine Leitung, die zurückkommt, oder auf den Start. Später.
+
+### I-3 Anlaufsteuerung — Status: im PR (I-startup) · Größe: L
+- Uros 2026-11-17: mehr IT, das zwei Menschen braucht und in der Welt passiert — „ein Terminal,
+  wo man Code sieht, der einen Hinweis hat und ausgeführt werden muss, dann läuft die Maschine an
+  und gibt Licht, der andere im anderen Raum muss zur richtigen Zeit etwas Passendes tun".
+  Vorbilder: die Lichtstrahl-Räume von Portal 2 (Koop) und We Were Here, Quadrilateral Cowboy.
+- Umgesetzt als Modul `startup` (`docs/gameplay.md`, „The Anlaufsteuerung"): an beiden Pulten
+  dasselbe Gerät, Terminal und Schaltfeld; die Stufen wechseln die Seiten. Das Skript nennt die
+  Last und hat Lücken (`abgang`, ab Stufe 2 `sperre`), die Leuchten stehen am Schaltfeld der
+  Gegenseite, das Leuchtbild jeder Last in Tabelle 2 des Betriebsbuchs. `start` schickt einen
+  Impuls durch den Kabelkanal im Boden (`map.conduits`), der nach `travelSec` auf den markierten
+  Stufen der Leiter steht; der genannte Leistungsschalter muss im Fenster (`windowSec`) schließen.
+  Felder `stages`, `travelSec`, `windowSec`. Die Laborkennung bleibt draußen: eine Nachschlage-
+  stelle je Stufe, weniger Lesestoff als die Signalkette.
+- Steht in der Übungshalle und in der Probemission `tools/fixtures/startup-probe.json`, die der
+  Rundgang im Systemcheck spielt (Gruppe `startup`). Platz in Blackout: als zweite Station (der
+  Anlauf des Notstromaggregats, wo heute der Notstromkasten steht) im nächsten Paket des Leads.
+  Der Editor behält Kanäle, zeichnet aber keine.
 
 ### B-1 Wechselplatz — Status: im PR (B-rotation) · Größe: M
 - Entscheidung Uros 2026-11-17: Blackout bekommt zwei feste IT-Stationen (Anlaufsteuerung,

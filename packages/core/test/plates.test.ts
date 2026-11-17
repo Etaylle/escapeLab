@@ -87,8 +87,10 @@ describe('the plates in the devices’ heads', () => {
     expect(twoConsoles.map((plate) => plate.type).sort()).toEqual([
       'access',
       'circuit',
+      'firewall',
       'servers',
       'signal',
+      'startup',
     ]);
     for (const b of twoConsoles) {
       const a = plates.find((plate) => plate.type === b.type && plate.console === 'a');

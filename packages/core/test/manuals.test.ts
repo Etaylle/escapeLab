@@ -121,6 +121,10 @@ const VARIANTS: Record<string, object[]> = {
     { doors: 1 },
     { doors: 3 },
   ],
+  startup: [
+    { stages: 3, travelSec: 10, windowSec: 5 },
+    { travelSec: 4, windowSec: 2, penaltySec: 1 },
+  ],
 };
 
 /** Defs, by a label, for the modules that need more than a type, an id and a title. */

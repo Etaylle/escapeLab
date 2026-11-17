@@ -1,5 +1,5 @@
 import type { DronePosition, PartKind, PlayerView, Sight } from '@escapelab/core';
-import { timeLeft } from '../clock.js';
+import { serverNow, timeLeft } from '../clock.js';
 import type { VoiceMesh } from '../voice/mesh.js';
 import type { Alarm } from './alarm.js';
 import { worldText, type WorldText } from './art.js';
@@ -116,6 +116,7 @@ export function assembleFrame(
     pings,
     time: sim.time,
     now,
+    serverNow: serverNow(),
     pulse: (Math.sin(sim.time * 4) + 1) / 2,
     burn: 0.7 + 0.3 * Math.sin(sim.time * 2.4),
     map,

@@ -1,5 +1,6 @@
 import type { FanState } from './anim.js';
 import { newAtlas, spriteKey, type Atlas, type CanvasMaker, type SpriteSpec } from './atlas.js';
+import { ductPieces, type DuctPiece } from './conduits.js';
 import type { Decal } from './decals.js';
 import { dressMap, seedOf, type DressMap, type Dressing } from './dress.js';
 import { newParticles, type Particles } from './particles.js';
@@ -39,6 +40,8 @@ export interface Dressed {
   tiles: (TileSprites | null)[];
   /** the marks on the floors (decals.ts) by the index of the tile each lies on */
   decals: ReadonlyMap<number, readonly Decal[]>;
+  /** the cable ducts' tiles in the floor (conduits.ts), by index */
+  ducts: ReadonlyMap<number, DuctPiece>;
 }
 
 /** The marks of `dressing` by the index of the tile each lies on. */
@@ -131,7 +134,9 @@ function dressKey(map: DressMap, missionId: string): string {
   const fuseBoxes = (map.stations ?? [])
     .filter((s) => s.known && s.look === 'fusebox')
     .map((s) => [s.x, s.y]);
-  const parts = [map.tiles, map.labels, doors, map.lamps, map.decor, plates, exit, fuseBoxes];
+  const ducts = (map.conduits ?? []).map((c) => c.tiles);
+  const things = [map.lamps, map.decor, plates, exit, fuseBoxes, ducts];
+  const parts = [map.tiles, map.labels, doors, ...things];
   return JSON.stringify([missionId, ...parts]);
 }
 
@@ -150,7 +155,12 @@ export function dressedFor(art: ArtKit, map: DressMap, missionId: string): Dress
     return known.dressed;
   }
   const dressing = dressMap(map, seedOf(missionId));
-  const dressed = { dressing, tiles: tileSprites(map, dressing), decals: decalsByTile(dressing) };
+  const dressed = {
+    dressing,
+    tiles: tileSprites(map, dressing),
+    decals: decalsByTile(dressing),
+    ducts: ductPieces(map.conduits ?? [], map.width),
+  };
   art.dressed = { map, key, dressed };
   return dressed;
 }

@@ -48,6 +48,8 @@ export const MODULE_NAMES: Readonly<Record<StationType, { title: string; kind: s
   circuit: { title: 'Sicherungskasten', kind: 'Sicherungskasten' },
   servers: { title: 'Serverraum', kind: 'Serverraum' },
   access: { title: 'Zugangskontrolle', kind: 'Zugangskontrolle' },
+  startup: { title: 'Anlaufsteuerung', kind: 'Anlaufsteuerung' },
+  firewall: { title: 'Paketfilter', kind: 'Paketfilter' },
   'button-sync': { title: 'Synchronschaltung', kind: 'Synchronschaltung' },
 };
 
@@ -147,6 +149,8 @@ export interface DraftLabel {
   y: number;
   /** the kind of room it names; '' for a plain one */
   kind: RoomKind | '';
+  /** how brightly its floor's ceiling lights burn, as the file gives it; none for a room's own */
+  brightness?: number;
 }
 
 /** A piece of furniture: solid, on a floor tile of its own. */
@@ -205,6 +209,12 @@ export interface DraftSabotage {
   extra: Record<string, unknown>;
 }
 
+/** A cable duct joining an Anlaufsteuerung's consoles: its puzzle, its tiles end to end. */
+export interface DraftConduit {
+  puzzleId: string;
+  tiles: Tile[];
+}
+
 export interface DraftMap {
   /** '#' wall, '.' floor, ' ' void; all rows equally long */
   tiles: string[];
@@ -223,6 +233,11 @@ export interface DraftMap {
   sabotage?: DraftSabotage;
   /** emergency lamps, kept as they came: the editor places none */
   lamps?: Tile[];
+  /**
+   * cable ducts, kept as they came and followed by a rename — the editor draws none; the
+   * validator holds them to their consoles
+   */
+  conduits?: DraftConduit[];
 }
 
 export interface Draft {
@@ -459,7 +474,13 @@ function mapJson(map: DraftMap): Record<string, unknown> {
       y: s.y,
       ...given('console', s.console),
     })),
-    labels: map.labels.map((l) => ({ text: l.text, x: l.x, y: l.y, ...given('kind', l.kind) })),
+    labels: map.labels.map((l) => ({
+      text: l.text,
+      x: l.x,
+      y: l.y,
+      ...given('kind', l.kind),
+      ...given('brightness', l.brightness),
+    })),
     decor: map.decor.map((d) => ({
       kind: d.kind,
       x: d.x,
@@ -490,6 +511,14 @@ function mapJson(map: DraftMap): Record<string, unknown> {
     drones: map.drones.map((d) => ({ id: d.id, waypoints: d.waypoints.map(tileJson), ...d.extra })),
     ...(map.sabotage === undefined ? {} : { sabotage: sabotageJson(map.sabotage) }),
     ...(map.lamps === undefined ? {} : { lamps: map.lamps.map(tileJson) }),
+    ...(map.conduits === undefined
+      ? {}
+      : {
+          conduits: map.conduits.map((c) => ({
+            puzzleId: c.puzzleId,
+            tiles: c.tiles.map(({ x, y }) => [x, y]),
+          })),
+        }),
   };
 }
 
@@ -559,7 +588,15 @@ interface LooseMap {
     | undefined;
   plates?: { id: string; x: number; y: number; label?: string | undefined }[] | undefined;
   stations: { puzzleId: string; x: number; y: number; console?: 'a' | 'b' | undefined }[];
-  labels?: { text: string; x: number; y: number; kind?: RoomKind | undefined }[] | undefined;
+  labels?:
+    | {
+        text: string;
+        x: number;
+        y: number;
+        kind?: RoomKind | undefined;
+        brightness?: number | undefined;
+      }[]
+    | undefined;
   decor?: { kind: DecorKind; x: number; y: number; variant?: number | undefined }[] | undefined;
   manuals?:
     | {
@@ -587,6 +624,7 @@ interface LooseMap {
   drones?: { id: string; waypoints: LooseTile[] }[] | undefined;
   sabotage?: { panels?: { id: string; x: number; y: number }[] | undefined } | undefined;
   lamps?: LooseTile[] | undefined;
+  conduits?: { puzzleId: string; tiles: [number, number][] }[] | undefined;
 }
 
 interface LooseMission {
@@ -729,7 +767,13 @@ function listsOf(map: LooseMap): DraftLists {
   return {
     doors: (map.doors ?? []).map(doorOf),
     plates: (map.plates ?? []).map((p) => ({ id: p.id, x: p.x, y: p.y, label: p.label ?? '' })),
-    labels: (map.labels ?? []).map((l) => ({ text: l.text, x: l.x, y: l.y, kind: l.kind ?? '' })),
+    labels: (map.labels ?? []).map((l) => ({
+      text: l.text,
+      x: l.x,
+      y: l.y,
+      kind: l.kind ?? '',
+      ...given('brightness', l.brightness),
+    })),
     decor: (map.decor ?? []).map((d) => ({
       kind: d.kind,
       x: d.x,
@@ -757,6 +801,14 @@ function mapOf(map: LooseMap): DraftMap {
     ...(map.exit === undefined ? {} : { exit: tile(map.exit) }),
     ...(map.sabotage === undefined ? {} : { sabotage: sabotageOf(map.sabotage) }),
     ...(map.lamps === undefined || map.lamps.length === 0 ? {} : { lamps: map.lamps.map(tile) }),
+    ...(map.conduits === undefined || map.conduits.length === 0
+      ? {}
+      : {
+          conduits: map.conduits.map((c) => ({
+            puzzleId: c.puzzleId,
+            tiles: c.tiles.map(([x, y]) => ({ x, y })),
+          })),
+        }),
   };
 }
 

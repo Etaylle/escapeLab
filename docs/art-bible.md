@@ -53,6 +53,13 @@ the picture down to (Camera).
 
 In the dark a material is drawn in `night(colour)`: darker and colder — the flashlight finds
 it, the ceiling lights show it warm. A wall's face takes the light of the room it looks into.
+A floor lights once, whatever its names: where several labels name one floor — Blackout's Flur
+under FLUR and ARCHIV, the Übungshalle's hall under fourteen — its ceiling lights come on with
+the first of them, and the others add nothing (client rooms.ts `roomLights`); added once per name,
+the hall's burnt to a white sheet. How brightly a floor burns is the mission's to say, on its
+labels (`brightness`, 1 or 2, a room's own where left out): its pools laid that many times, the
+darkness kept as by that many rooms. Blackout's Flur and Archiv burn 2, the look they had while
+both names lit them at once.
 
 ## Light rule
 
@@ -334,6 +341,27 @@ in the light of their tile, baked with the floor: at 4× against the figures' an
 the lab lit +0.12 ms, the dark Flur +0.07, the Labor +0.05, within the bench's noise — no work a
 frame. Capture `decals-lab.png`, the Labor's floor with two marks or more and none in anybody's
 way.
+
+## Cable ducts and the start pulse (`conduits.ts`, ductArt.ts)
+
+An Anlaufsteuerung's two consoles are joined by a cable duct in the floor (`map.conduits`), the
+way its start pulse runs: on every floor and door tile of its way a channel of ink, a hair of
+steel round it and a grating of thin steel bars across it, out of the tile's middle by each side
+the duct leaves it, in the light of its tile — palette colours only (INK, STEEL), baked with the
+floor over its marks and under the walls and the furniture (tileCache.ts `drawDucts`), so that it
+costs nothing a frame; under a wall it runs hidden. No floor mark lies on it. While a pulse runs,
+its light travels along the duct at the pulse's speed, a quarter tile a step, from the console
+that sent it toward the one taking it, then waits at the far end through the ladder's window:
+an amber light of the frame (sources.ts `pulseSources`, reach 1.5 tiles, 0.6 strong), a quick
+shallow swell as it runs (240 ms, 0.3 deep) and a slower deeper one as it waits (700 ms, 0.55), a
+slow shallow swell under less motion; the glow pass lays it from one radial sprite under the clip
+of what it sees from its spot, and a bright core of AMBER lifted over it. It shows where light
+falls on its tile now — your lamp, the crew's, an emergency lamp — or its room is lit, and never
+under a wall or a shut door, so the pulse leaving one room is seen there and its arrival in the
+other. Its spot is a pure function of the times every view carries, read on the server's clock
+(`pulseSpot`, `Frame.serverNow`): every screen shows it at the same place. While no pulse runs
+`pulseSources` returns at once with nothing, and nothing more is drawn. Captures `startup-duct.png` (the audience's world, the pulse
+in the duct) and `hall-startup.png`.
 
 ## Graphics 2's references
 
@@ -1278,6 +1306,34 @@ Tried and left: drawing only the lab's things near the camera saved nothing meas
 window of the walkthrough logs what the light worked out anew meanwhile — a line `light`, the
 sights a frame and the bakes (render/census.ts) — so that a cache that stops holding shows in
 CI's log before it shows in the frames.
+
+**The Anlaufsteuerung's duct and pulse (I-startup).** On the bench above (rAF with the wall
+clock, Anna pacing, the main thread slowed four times, the Canvas path under the software-GL
+flags, 1440 × 600, six rotated rounds, medians, ms):
+
+| Scene | Work before | Work after | Frames before → after |
+| --- | --- | --- | --- |
+| Blackout's dark Flur, main → branch (no duct) | 11.53, 14.10 | 12.66, 14.00 | 16.8 → 16.8 |
+| The Anlaufprobe's duct, a start pulse running (before: none), at a load of 2 | 7.38, 9.10 | 7.38, 9.10 | 16.8 → 16.7 |
+| The Übungshalle at (14, 25): an access bay on main → the startup bay | 18.54, 23.20 | 14.10, 19.30 | 33.4 → 16.8 |
+| The Übungshalle, its duct taken out → in | 12.24, 14.60 | 11.83, 15.60 | 16.8 → 16.8 |
+
+The Flur's paired differences change sign from round to round and between two runs (+1.04 to
+−2.99): no cost without a duct. The duct itself is baked with the floor and costs no frame. A
+running pulse first cost +0.7 ms paired with 34 bake frames on its first pass along a duct, about
+1.6 ms dearer each: the glow pass baked a clipped pool for every quarter-tile spot. A light that
+moves (`LightSource.moving`) is now laid from one radial sprite where it stands (render/glow.ts
+`layMoving`), under the clip of what it sees from there only where a wall or a shut door lies
+within its reach (clips.ts `clipNeeded`, a tile scan kept a spot): no bake frame left over six
+rounds, and at a quiet moment (load 1.6 to 2.7) +0.18 ms mean paired (−0.04 to +0.21 a round) and
++0.4 at p95, the sprite's copy added onto the picture and its core. The
+Übungshalle came +1.55 ms dearer against main where the new bay stands, in five rounds of six,
+the per-pass split in the bay's station, book, desk and their light (objects +1.0, light +0.7,
+darkness +0.6, beacons +0.4); an access bay of main's own in the same place costs as much or more
+(the startup bay −1.07 mean paired, five rounds of six): one more bay of the hall, as each one is.
+The noise is large here (one build ranged 7 to 22 ms between rounds, under a load of 2.6 to 12);
+no WebGL or real-GPU measurement was taken. Bench: scratchpad startup/bench/ (bench.ts, run.mjs,
+prof.mjs; `node run.mjs 6 probe`, `node run.mjs 6 bay`).
 
 **What a window measures (M-ciwin).** CI's escape window read 49.9 to 50 ms p95 on both looks in
 three runs, while one client's frame of the scene comes to 16.8 ms on the bench above, its main

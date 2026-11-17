@@ -1,0 +1,495 @@
+/* ══ Anlaufsteuerung: a terminal beside a Schaltfeld ═══════════════════════
+ * StartupPanel.tsx. Both consoles are the same device: a terminal of the
+ * Serverraum's make — it wears styles/servers.css's green screen, prompt,
+ * keys and FUNK key — and a Schaltfeld of dark steel with four feeders,
+ * each two control lamps over a breaker, and an LED ladder whose top steps
+ * are marked. At a console the live part fills the device and the idle one
+ * is a plate's line over it; the audience sees both live parts side by side.
+ * This sheet loads before servers.css, so whatever it sets on the shared
+ * classes it sets two classes deep.
+ */
+
+/* Terminal and Schaltfeld side by side want more than a device's usual 680 px: the script's
+   lines of sixty characters at the terminal, the Schaltfeld as wide as it needs. */
+.puzzle-modal.station-modal .panel:has(.startup) {
+  max-width: 1000px;
+}
+
+.startup {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+/* The device's own word on what the stage and the last pulse came to, in its head's amber. */
+.startup-status {
+  margin: 0;
+  padding: 6px 10px;
+  border-radius: 4px;
+  background: #0d1114;
+  box-shadow: inset 0 0 0 1px #2a343d;
+  color: #ffd27a;
+  font-family: var(--mono);
+  font-size: calc(var(--type-body) * var(--text-scale));
+  letter-spacing: 0.5px;
+}
+
+.startup-device {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+/* The audience: the terminal over the Schaltfeld, as the spectator's column beside the lab is
+   a narrow one. */
+.startup-device--watched {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 14px;
+}
+
+/* ── the terminal ───────────────────────────────────────────────────── */
+
+/* The make, at the head of the status strip. */
+.startup-make {
+  color: #9fb0bb;
+  letter-spacing: 1px;
+}
+
+.startup-script {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.startup-line {
+  white-space: pre;
+}
+
+/* A comment is a clue: it wraps onto a further row rather than lose a word at the glass's edge. */
+.startup-line.startup-line--comment {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* The audience's column beside the lab is narrow: its feeders share what it has. */
+.startup-device--watched .startup-feeders {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+/* The terminal's keys in a column beside its glass, so that the device stays within a laptop's
+   height; under it in a narrow column (below). */
+.servers.startup-terminal {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 15.5rem;
+  align-items: start;
+  gap: 10px;
+}
+
+.startup-terminal > .servers-bezel {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.startup-line--comment,
+.startup-comment {
+  color: var(--phosphor-dim);
+}
+
+/* A value set into a gap stands in brackets and underlined: told from the script's own text. */
+.startup-value--set {
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* A gap still open stands in inverse video until a value is set into it. */
+.startup-value--open {
+  padding: 0 4px;
+  background: var(--phosphor);
+  color: var(--crt-ink);
+  text-shadow: none;
+}
+
+.startup-sent {
+  margin: 0;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+/* The log's last three entries (StartupPanel.tsx), each whole: room for three lines at least,
+   so that the prompt stays put as lines come in. */
+.startup-crt .startup-log {
+  min-height: calc(3 * 1.35em);
+  max-height: none;
+  overflow: visible;
+}
+
+.startup-idle {
+  margin: 0;
+}
+
+/* The keys' legends as large as the glass's words: a fingertip's word. */
+.servers-keyboard .startup-key {
+  font-size: calc(var(--type-body) * var(--text-scale));
+}
+
+/* ── the Schaltfeld ─────────────────────────────────────────────────── */
+
+.startup-board {
+  display: flex;
+  max-width: 36rem;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 6px;
+  background: linear-gradient(180deg, #1d2429, #11161a);
+  box-shadow:
+    inset 0 0 0 1px #050709,
+    inset 0 2px 8px rgba(0, 0, 0, 0.7);
+  color: #d5dde3;
+  font-family: var(--mono);
+}
+
+.startup-feeders {
+  display: grid;
+  flex: 1 1 0;
+  min-width: 0;
+  grid-template-columns: repeat(4, minmax(3.9em, 1fr));
+  gap: 6px;
+}
+
+.startup-feeder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 2px;
+  border-radius: 4px;
+  box-shadow: inset 0 0 0 1px #2a343d;
+}
+
+.startup-lamp-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+/* The plate over the Schaltfeld: whether it takes this stage's pulse — amber, lit — or rests. */
+.startup-armed {
+  flex: 1 0 100%;
+  margin: 0;
+  color: #9fb0bb;
+  font-size: calc(var(--type-body) * var(--text-scale));
+  letter-spacing: 1px;
+}
+
+.startup-armed--live {
+  color: #ffd27a;
+  text-shadow: 0 0 6px rgba(255, 196, 80, 0.45);
+}
+
+/* A control lamp's lens: dark glass, or burning in its colour with its glow round it. */
+.startup-lamp {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #4a535a, #1a1f23 70%);
+  box-shadow:
+    inset 0 0 0 2px #0a0d0f,
+    0 0 0 2px #39434b;
+}
+
+.startup-lamp--gruen {
+  background: radial-gradient(circle at 35% 30%, #c9ffd8, #3ddc6a 55%, #1b7a37);
+  box-shadow:
+    inset 0 0 0 2px #0a0d0f,
+    0 0 0 2px #39434b,
+    0 0 12px rgba(61, 220, 106, 0.7);
+}
+
+.startup-lamp--gelb {
+  background: radial-gradient(circle at 35% 30%, #fff4c4, #ffd23f 55%, #a67c00);
+  box-shadow:
+    inset 0 0 0 2px #0a0d0f,
+    0 0 0 2px #39434b,
+    0 0 12px rgba(255, 210, 63, 0.7);
+}
+
+.startup-lamp--rot {
+  background: radial-gradient(circle at 35% 30%, #ffd0c9, #ff4a3d 55%, #8f1d14);
+  box-shadow:
+    inset 0 0 0 2px #0a0d0f,
+    0 0 0 2px #39434b,
+    0 0 12px rgba(255, 74, 61, 0.7);
+}
+
+/* The colour's word engraved under each lens, so that no colour has to be told by its hue. */
+.startup-lamp-word {
+  color: #9fb0bb;
+  font-size: calc(var(--type-body) * var(--text-scale));
+  line-height: 1.1;
+}
+
+/* A breaker: a lever in its slot, thrown up as it closes; a fingertip wide and high. */
+.startup-breaker {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  width: 100%;
+  min-width: var(--target);
+  min-height: calc(var(--target) + 22px);
+  padding: 4px 0;
+  border: 0;
+  border-radius: 4px;
+  background: linear-gradient(180deg, #0c1013, #1a2026);
+  box-shadow: inset 0 0 0 1px #050709;
+  color: #eef3f6;
+  font-family: var(--mono);
+  cursor: pointer;
+}
+
+.startup-breaker:disabled {
+  cursor: default;
+}
+
+.startup-bat {
+  position: absolute;
+  top: 40px;
+  left: 50%;
+  width: 12px;
+  height: 18px;
+  border-radius: 3px;
+  background: linear-gradient(180deg, #e8edf0, #8b979f);
+  translate: -50% 0;
+  transition: translate 120ms ease-out;
+}
+
+.startup-breaker:active:not(:disabled) .startup-bat,
+.startup-breaker.feel-pressed .startup-bat,
+.startup-breaker--closed .startup-bat {
+  translate: -50% -14px;
+}
+
+.startup-breaker:focus-visible {
+  outline: 2px solid #ffd27a;
+  outline-offset: 2px;
+}
+
+.startup-feeder-no {
+  font-size: calc(var(--type-body) * var(--text-scale));
+  font-weight: 700;
+}
+
+/* The ladder and its window: FENSTER over it, a bracket beside the marked steps, as the book
+   draws it. */
+.startup-ladder-box {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+
+.startup-window-word {
+  color: #ffd27a;
+  font-size: calc(var(--type-body) * var(--text-scale));
+  letter-spacing: 1px;
+}
+
+.startup-ladder-row {
+  display: flex;
+  gap: 4px;
+}
+
+/* The bracket: as tall as the marked steps (10 px and a 3 px gap each), from the ladder's top. */
+.startup-window {
+  width: 6px;
+  height: calc(var(--marked) * var(--pitch, 13px) - 3px);
+  margin-top: 4px;
+  border: 2px solid #ffd27a;
+  border-left: 0;
+}
+
+/* The ladder: a column of LEDs from the foot up, the window's steps framed at its top. */
+.startup-ladder {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: 3px;
+  margin: 0;
+  padding: 4px;
+  border-radius: 4px;
+  background: #0a0d0f;
+  list-style: none;
+}
+
+.startup-step {
+  width: 30px;
+  height: 10px;
+  border-radius: 2px;
+  background: #23292e;
+  transition: background-color 180ms ease-out, box-shadow 180ms ease-out;
+}
+
+.startup-step--marked {
+  box-shadow: 0 0 0 1px #ffd27a;
+}
+
+.startup-step--lit {
+  background: #ffb347;
+  box-shadow: 0 0 6px rgba(255, 179, 71, 0.75);
+}
+
+.startup-step--marked.startup-step--lit {
+  background: #fff1c2;
+  box-shadow:
+    0 0 0 1px #ffd27a,
+    0 0 10px rgba(255, 210, 122, 0.9);
+}
+
+.startup-bezel {
+  justify-content: flex-end;
+}
+
+/* ── calm, and narrow windows ───────────────────────────────────────── */
+
+/* Under reduced motion the ladder steps without easing, and the lever without travel. */
+:where([data-motion='reduce']) {
+  .startup-step,
+  .startup-bat {
+    transition: none;
+  }
+}
+
+/* A phone held upright, or a narrow column: the terminal's keys under its glass. */
+@media (max-width: 560px) {
+  .servers.startup-terminal {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .startup-feeders {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .startup-board {
+    padding: 8px;
+  }
+}
+
+/*
+ * A phone held sideways: the live part alone, the idle part's plate left out — the status
+ * strip names where the script runs —, the script tight, the log two lines high, the lamps
+ * and the ladder a little smaller, so that the device stands in the window's height; every
+ * control still a fingertip.
+ */
+@media (pointer: coarse) and (orientation: landscape) and (max-height: 500px) {
+  .startup-device {
+    gap: 6px;
+  }
+
+  /* The idle part's plate: the status strip says where the script runs already. */
+  .startup-device > .startup-idle {
+    display: none;
+  }
+
+  /* The make and the bezel's lamp give way for room: the device's head names the partner. */
+  .startup-status > .startup-make,
+  .startup-terminal .servers-link {
+    display: none;
+  }
+
+  /* The hint under the prompt on one row: it names the steps, the script holds the clues. */
+  .startup-crt .startup-hint {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* The script set close, its rows still apart: room for a later stage's longer script. */
+  .startup-crt .startup-script {
+    line-height: 1.1;
+  }
+
+  .servers-crt.startup-crt {
+    gap: 3px;
+    padding: 5px 8px;
+  }
+
+  .startup-crt .servers-prompt {
+    padding-top: 2px;
+  }
+
+  /* The script's heading and its line without a comment tell nothing to look up: room. */
+  .startup-script > .startup-line--plain {
+    display: none;
+  }
+
+  .servers.startup-terminal {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  /* A little wider than the Serverraum's, the send key narrower: the commands and the send key
+     on one row, the gaps and the feeders on two. */
+  .servers.startup-terminal > .servers-bezel {
+    width: 16rem;
+  }
+
+  .startup-terminal .servers-key--enter {
+    min-width: 48px;
+  }
+
+  /* While the hint names the steps, the log's newest line gives way to it: the status strip
+     keeps a refusal in view. */
+  .startup-crt:has(.startup-hint) .startup-log {
+    display: none;
+  }
+
+  .startup-terminal .servers-key {
+    min-width: 44px;
+  }
+
+  .startup-status {
+    padding-block: 0;
+  }
+
+  /* The newest entry alone, whole: what the last command came to is always in view. */
+  .startup-crt .startup-log {
+    min-height: 0;
+    max-height: none;
+    overflow: visible;
+  }
+
+  .startup-crt .startup-log > .servers-line:not(:last-child) {
+    display: none;
+  }
+
+  .startup-board {
+    gap: 8px;
+    padding: 6px;
+  }
+
+  .startup-feeder {
+    gap: 3px;
+    padding: 3px 1px;
+  }
+
+  .startup-lamp {
+    width: 20px;
+    height: 20px;
+  }
+
+  .startup-step {
+    height: 5px;
+  }
+
+  .startup-ladder-box {
+    --pitch: 8px;
+  }
+}
