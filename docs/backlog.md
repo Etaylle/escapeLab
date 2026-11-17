@@ -691,6 +691,24 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
 - Uros' eigenes kleines Canvas-Spiel (Frettchen und Ente) als etwas zum Spielen, während eine
   Crew wartet — auf eine Leitung, die zurückkommt, oder auf den Start. Später.
 
+### I-3 Anlaufsteuerung — Status: im PR (I-startup) · Größe: L
+- Uros 2026-11-17: mehr IT, das zwei Menschen braucht und in der Welt passiert — „ein Terminal,
+  wo man Code sieht, der einen Hinweis hat und ausgeführt werden muss, dann läuft die Maschine an
+  und gibt Licht, der andere im anderen Raum muss zur richtigen Zeit etwas Passendes tun".
+  Vorbilder: die Lichtstrahl-Räume von Portal 2 (Koop) und We Were Here, Quadrilateral Cowboy.
+- Umgesetzt als Modul `startup` (`docs/gameplay.md`, „The Anlaufsteuerung"): an beiden Pulten
+  dasselbe Gerät, Terminal und Schaltfeld; die Stufen wechseln die Seiten. Das Skript nennt die
+  Last und hat Lücken (`abgang`, ab Stufe 2 `sperre`), die Leuchten stehen am Schaltfeld der
+  Gegenseite, das Leuchtbild jeder Last in Tabelle 2 des Betriebsbuchs. `start` schickt einen
+  Impuls durch den Kabelkanal im Boden (`map.conduits`), der nach `travelSec` auf den markierten
+  Stufen der Leiter steht; der genannte Leistungsschalter muss im Fenster (`windowSec`) schließen.
+  Felder `stages`, `travelSec`, `windowSec`. Die Laborkennung bleibt draußen: eine Nachschlage-
+  stelle je Stufe, weniger Lesestoff als die Signalkette.
+- Steht in der Übungshalle und in der Probemission `tools/fixtures/startup-probe.json`, die der
+  Rundgang im Systemcheck spielt (Gruppe `startup`). Platz in Blackout: als zweite Station (der
+  Anlauf des Notstromaggregats, wo heute der Notstromkasten steht) im nächsten Paket des Leads.
+  Der Editor behält Kanäle, zeichnet aber keine.
+
 ### S-1 Hauptmenü wie ein Spiel — Status: erledigt (S-menu, Merge 2026-11-13; zwei Review-Runden; Szene 1,07 ms je Frame, Menü-Fenster 16,7 ms p95; vier Musik-Einträge warten auf den Render) · Größe: L
 - Uros 2026-11-12 mit Screenshot: „Das soll besser werden wie echte Spiele, Main Menu." Befund
   im Bild: eine Karte auf leerer Seite, Systemschrift, kein Ton, keine Figuren, ein nativer

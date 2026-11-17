@@ -1,0 +1,69 @@
+{
+  "id": "custom-anlaufprobe",
+  "title": "Anlaufprobe",
+  "subtitle": "Zwei Pulte in zwei Räumen, ein Kabelkanal im Boden, das Betriebsbuch im Westraum.",
+  "players": { "min": 2, "max": 2 },
+  "timeLimitSec": 600,
+  "story": {
+    "intro": "Die Anlaufsteuerung fährt die Hilfsbetriebe stufenweise an: Skript an einem Pult, Leistungsschalter am anderen, der Impuls dazwischen im Bodenkanal.",
+    "win": "Alle Stufen angelaufen, alle sind draußen.",
+    "lose": "Die Zeit ist um."
+  },
+  "puzzles": [
+    {
+      "type": "startup",
+      "id": "anlauf",
+      "title": "Anlaufsteuerung",
+      "travelSec": 10,
+      "windowSec": 5,
+      "hints": [
+        "Schichtführung: Die Last steht im Skript, das Leuchtbild in Tabelle 2, die Leuchten am Schaltfeld der Gegenseite."
+      ],
+      "lights": ["SCHALTRAUM OST"],
+      "onSolved": "Hilfsbetriebe laufen. Beide zum Ausgang."
+    }
+  ],
+  "map": {
+    "tiles": [
+      "###################",
+      "#........#........#",
+      "#........#........#",
+      "#.................#",
+      "#........#........#",
+      "#........#........#",
+      "###################"
+    ],
+    "spawns": [
+      { "x": 2, "y": 3 },
+      { "x": 16, "y": 3 }
+    ],
+    "stations": [
+      { "puzzleId": "anlauf", "x": 4, "y": 1, "console": "a" },
+      { "puzzleId": "anlauf", "x": 13, "y": 1, "console": "b" }
+    ],
+    "manuals": [
+      {
+        "id": "betriebsbuch",
+        "kind": "book",
+        "label": "BETRIEBSBUCH",
+        "puzzleIds": ["anlauf"],
+        "spots": [{ "x": 8, "y": 5 }]
+      }
+    ],
+    "labels": [
+      { "text": "SCHALTRAUM WEST", "x": 4, "y": 4, "kind": "control" },
+      { "text": "SCHALTRAUM OST", "x": 13, "y": 4, "kind": "control" }
+    ],
+    "decor": [
+      { "kind": "desk", "x": 6, "y": 1, "variant": 0 },
+      { "kind": "desk", "x": 15, "y": 1, "variant": 1 }
+    ],
+    "conduits": [
+      {
+        "puzzleId": "anlauf",
+        "tiles": [[4, 2], [5, 2], [6, 2], [7, 2], [8, 2], [9, 2], [10, 2], [11, 2], [12, 2], [13, 2]]
+      }
+    ],
+    "exit": { "x": 17, "y": 5 }
+  }
+}

@@ -114,6 +114,7 @@ const OPENS: Readonly<Partial<Record<PuzzleDef['type'], readonly string[]>>> = {
   circuit: ['wires'],
   servers: ['rows'],
   access: ['terminal'],
+  startup: ['terminal'],
   firewall: ['waves', 'fallMs'],
 };
 

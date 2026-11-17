@@ -1,4 +1,5 @@
 import { dressedFor } from './artKit.js';
+import { pulseSpot } from './conduits.js';
 import { EMERGENCY_GLOW } from './light.js';
 import {
   AMBER,
@@ -19,10 +20,10 @@ import { warmUp } from './rooms.js';
  * (render/light.ts) and the rest over its darkness (render/glow.ts). The
  * emergency lamps' pulsing red while their rooms are dark; the wall
  * screens' phosphor green and the racks' cold blue, faint, in the dark too;
- * the reactor core's pulsing orange; and the amber beacon turning over the
- * hatch through the escape. A light shows where the world shows its spot —
- * seen this run, and while the lab has its power only in the room it
- * lights round you — as objects do. How strongly each burns at a moment,
+ * the reactor core's pulsing orange; the amber beacon turning over the
+ * hatch through the escape; and a start pulse running in a cable duct.
+ * A light shows where the world shows its spot — seen this run, and while the lab has its
+ * power only in the room it lights round you — as objects do. How strongly each burns at a moment,
  * pulse and flicker worked out, is gl/pack.ts's `strengthAt`.
  */
 
@@ -52,6 +53,12 @@ export interface LightSource {
    * (gl/sources.ts). Left out for a light awake
    */
   standby?: number;
+  /**
+   * it moves from frame to frame — a start pulse running in its duct —: the Canvas pass lays its
+   * glow from one sprite where it stands, clipped where a wall or a shut door is near, instead
+   * of baking a pool for each spot (render/glow.ts); left out for a light that stands still
+   */
+  moving?: true;
 }
 
 /** Up to how far a room's power is on for a light in it still to be asleep. */
@@ -217,12 +224,54 @@ function beaconSources(frame: Frame): LightSource[] {
   ];
 }
 
+/** The start pulse's light: amber, flickering as it runs, swelling on the ladder's window. */
+const PULSE_LIGHT = { reach: 1.5, strength: 0.6 } as const;
+const PULSE_RUNNING = { periodMs: 240, depth: 0.3 } as const;
+const PULSE_WAITING = { periodMs: 700, depth: 0.55 } as const;
+/** Where the player asked for less motion: a slow, shallow swell, running or waiting. */
+const PULSE_CALM = { periodMs: 2000, depth: 0.1 } as const;
+
+/** Whether the duct runs hidden at (x, y): under a wall, or a door shut over it. */
+function underCover(map: Frame['map'], x: number, y: number): boolean {
+  const shut = map.doors.some((door) => door.x === x && door.y === y && !door.open);
+  return shut || map.tiles[y]?.charAt(x) === '#';
+}
+
+/**
+ * The start pulses running in the cable ducts (conduits.ts), each where it stands now on the
+ * server's clock — where a figure has sight of its tile, or its room is lit, and never under a
+ * wall or a shut door, where the duct runs hidden: the pulse leaving one room is seen there, its
+ * arrival in the other. None while no pulse runs: the list returns at once.
+ */
+export function pulseSources(frame: Frame): LightSource[] {
+  return frame.map.conduits.flatMap((conduit): LightSource[] => {
+    const spot = pulseSpot(conduit, frame.serverNow);
+    if (spot === null) {
+      return [];
+    }
+    const [x, y] = [Math.floor(spot.x), Math.floor(spot.y)];
+    const seen = frame.light.inSight(x, y) || frame.litTiles.has(`${x},${y}`);
+    if (!seen || underCover(frame.map, x, y)) {
+      return [];
+    }
+    const swell = spot.arrived ? PULSE_WAITING : PULSE_RUNNING;
+    const pulse = { ...(frame.reduced ? PULSE_CALM : swell) };
+    const colour = colourOf(AMBER);
+    return [{ x: spot.x, y: spot.y, colour, ...PULSE_LIGHT, pulse, moving: true }];
+  });
+}
+
 /**
  * The lights besides the emergency lamps: what the Canvas light pass adds
  * over the darkness itself (render/glow.ts) — it draws the lamps already.
  */
 export function glowSources(frame: Frame): LightSource[] {
-  return [...wallSources(frame), ...decorSources(frame), ...beaconSources(frame)];
+  return [
+    ...wallSources(frame),
+    ...decorSources(frame),
+    ...beaconSources(frame),
+    ...pulseSources(frame),
+  ];
 }
 
 /** Every coloured light of this frame: the emergency lamps, then the rest. */

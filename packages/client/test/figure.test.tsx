@@ -2,6 +2,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import {
   DEPENDS_ON,
+  LADDER_FIGURE,
   LEVER_FIGURE,
   LINES_FIGURE,
   MODULES,
@@ -32,6 +33,7 @@ const SAYS: Record<string, RegExp> = {
   circuit: /^Sicherungskasten und Prüfpult: links 5 Kabel.*Zeigerinstrument über 5 Zifferntasten/,
   servers: /^Dienste und Rack: 6 Kästen .*Pfeil von jeder Abhängigkeit.*Rack mit 6 Einschüben/,
   access: /^Terminal und Tokengerät: links ein Bildschirm mit Türliste.*rechts ein Tokengerät/,
+  startup: /^Terminal und Schaltfeld: links ein Bildschirm mit Skriptzeilen.*LED-Leiter/,
   firewall: /^Sperrpult und Analysepult: links 5 Leitungen.*rechts dieselben 5 Leitungen/,
 };
 
@@ -219,5 +221,29 @@ describe('the Paketfilter’s drawings', () => {
     expect(html.match(/stroke-dasharray="2 3"/g)).toHaveLength(5);
     expect(html.match(/<circle [^>]*r="5"/g)).toHaveLength(2);
     expect(html.match(/<circle [^>]*r="10"/g)).toHaveLength(1);
+  });
+});
+
+describe('Figure of the Anlaufsteuerung', () => {
+  it('draws the LED ladder the Anlaufsteuerung’s rules show beside the window’s rules', () => {
+    const def = puzzleDefSchema.parse({ type: 'startup', id: 'a', title: 'A' });
+    const figures = moduleFor(def.type)
+      .manual(def)
+      .flatMap((section) => section.blocks)
+      .filter((block) => block.kind === 'figure');
+    expect(figures).toEqual([
+      { kind: 'figure', of: 'startup', caption: 'Abb. 1 — Terminal und Schaltfeld' },
+      { kind: 'figure', of: LADDER_FIGURE, caption: 'Abb. 2 — LED-Leiter mit Fenster' },
+    ]);
+    const { html, label } = drawing(LADDER_FIGURE);
+    expect(label).toMatch(/^LED-Leiter: 9 Stufen .*die obersten 3 als FENSTER markiert/);
+    expect(html).not.toContain(`>${LADDER_FIGURE}</text>`);
+    expect(html).not.toMatch(/#[0-9a-f]{3,8}\b|rgba?\(/i);
+    const lettering = [...html.matchAll(/<text[^>]*>([^<]*)<\/text>/g)].map((m) => m[1]);
+    expect(lettering).toEqual(['FENSTER', 'IMPULS']);
+    // Nine steps, the lowest seven lit, as the label says.
+    const steps = html.match(/<rect x="160"[^>]*>/g) ?? [];
+    expect(steps).toHaveLength(9);
+    expect(steps.filter((rect) => rect.includes('fill-opacity="0.7"'))).toHaveLength(7);
   });
 });

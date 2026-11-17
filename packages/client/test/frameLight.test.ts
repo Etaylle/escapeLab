@@ -133,6 +133,21 @@ describe('frameLight — the lamps the rest of the crew carry', () => {
     expect(frameLight(alone, false, false).shown(10, 2)).toBe(false);
     expect(frameLight(scene, false, false).shown(10, 2)).toBe(true);
   });
+
+  it('has a tile in sight only while light falls on it, not once it has been seen', () => {
+    const corridor = mapWith({
+      width: 16,
+      height: 5,
+      tiles: ['################', ...Array(3).fill('#..............#'), '################'],
+    });
+    const scene = { ...withBen(14.5, Math.PI), map: corridor };
+    expect(frameLight(scene, false, false).inSight(10, 2)).toBe(true);
+    // Ben gone: the tile stays seen this run, but no light falls on it now.
+    scene.sim.others.clear();
+    const after = frameLight(scene, false, false);
+    expect(after.shown(10, 2)).toBe(true);
+    expect(after.inSight(10, 2)).toBe(false);
+  });
 });
 
 /** Ben standing still at (6.5, 2.5), facing west. */

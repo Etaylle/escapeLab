@@ -1,6 +1,7 @@
 import { bakeBox } from '../baked.js';
 import { rgba } from '../palette.js';
 import type { LightSource } from '../sources.js';
+import type { RadialStops } from './radial.js';
 import type { BakePart } from './bakes.js';
 import { clipOf } from './clips.js';
 import type { Frame } from './frame.js';
@@ -20,6 +21,11 @@ const POOL_STOPS = [
   [0.4, 0.22],
   [1, 0],
 ] as const;
+
+/** A light's glow as the radial sprites take it (radial.ts): its colour at POOL_STOPS. */
+export function poolStops(colour: readonly [number, number, number]): RadialStops {
+  return POOL_STOPS.map(([offset, alpha]) => [offset, colour, alpha] as const);
+}
 
 /** Fills a light's glow round its spot in `g`, tile space, `strength` bright. */
 export function fillPool(g: CanvasRenderingContext2D, source: LightSource, strength: number): void {

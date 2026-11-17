@@ -71,6 +71,11 @@ const LINES = {
     mouse: 'Schreiben oder klicken: login, status, freigeben — Token: Pult B.',
   },
   'access-token': 'Konto und Token ablesen, solange der Balken läuft.',
+  'startup-terminal': {
+    touch: 'Tippen: zeige, setze, start — Leuchten am Gegenpult.',
+    mouse: 'Schreiben: zeige, setze, start — Leuchten am Gegenpult.',
+  },
+  'startup-board': 'Der Schalter zählt nur auf den markierten Stufen der Leiter.',
   'firewall-gate': {
     touch: 'Leitung antippen, SPERREN nimmt deren unterstes Paket heraus.',
     mouse: 'Leitung anklicken, SPERREN nimmt deren unterstes Paket heraus.',
@@ -104,7 +109,7 @@ function deviceOf(puzzle: PuzzleView): Device | null {
   if (puzzle.kind === 'relay') {
     return null;
   }
-  // Only the views of a station with two consoles name the viewer's part (`role`).
+  // A station with two consoles names the part of its console: its view's role.
   return 'role' in puzzle ? partOf(puzzle.kind, puzzle.role) : puzzle.kind;
 }
 

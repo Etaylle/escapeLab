@@ -118,6 +118,15 @@
       ]
     },
     {
+      "type": "startup",
+      "id": "startup",
+      "title": "Anlaufsteuerung",
+      "hints": [
+        "Einweisung: Die Last steht im Skript, das Leuchtbild jeder Last in Tabelle 2, die Leuchten am Schaltfeld der Gegenseite.",
+        "Einweisung: Der Schalter zählt erst, wenn der Impuls auf den markierten Stufen der Leiter steht."
+      ]
+    },
+    {
       "type": "firewall",
       "id": "firewall",
       "title": "Paketfilter",
@@ -184,8 +193,10 @@
       { "puzzleId": "servers", "x": 35, "y": 16, "console": "b" },
       { "puzzleId": "access", "x": 3, "y": 23, "console": "a" },
       { "puzzleId": "access", "x": 8, "y": 23, "console": "b" },
-      { "puzzleId": "firewall", "x": 12, "y": 23, "console": "a" },
-      { "puzzleId": "firewall", "x": 17, "y": 23, "console": "b" }
+      { "puzzleId": "startup", "x": 12, "y": 23, "console": "a" },
+      { "puzzleId": "startup", "x": 17, "y": 23, "console": "b" },
+      { "puzzleId": "firewall", "x": 21, "y": 23, "console": "a" },
+      { "puzzleId": "firewall", "x": 26, "y": 23, "console": "b" }
     ],
     "labels": [
       { "text": "ÜBUNGSHALLE", "x": 20, "y": 29 },
@@ -202,7 +213,8 @@
       { "text": "SICHERUNGSKASTEN · SP-12", "x": 23, "y": 18 },
       { "text": "RECHNERNETZ · RN-6", "x": 32, "y": 18 },
       { "text": "ZUGANGSKONTROLLE · ZK-2", "x": 5, "y": 25 },
-      { "text": "PAKETFILTER · PF-5", "x": 14, "y": 25 }
+      { "text": "ANLAUFSTEUERUNG · AS-86", "x": 14, "y": 25 },
+      { "text": "PAKETFILTER · PF-5", "x": 23, "y": 25 }
     ],
     "decor": [
       { "kind": "desk", "x": 9, "y": 2 },
@@ -218,7 +230,14 @@
       { "kind": "desk", "x": 25, "y": 20 },
       { "kind": "desk", "x": 34, "y": 20 },
       { "kind": "desk", "x": 7, "y": 27 },
-      { "kind": "desk", "x": 16, "y": 27 }
+      { "kind": "desk", "x": 16, "y": 27 },
+      { "kind": "desk", "x": 25, "y": 27 }
+    ],
+    "conduits": [
+      {
+        "puzzleId": "startup",
+        "tiles": [[12, 24], [13, 24], [14, 24], [15, 24], [16, 24], [17, 24]]
+      }
     ],
     "manuals": [
       {
@@ -313,11 +332,18 @@
         "spots": [{ "x": 6, "y": 27 }]
       },
       {
+        "id": "anleitung-startup",
+        "kind": "book",
+        "label": "ANLEITUNG ANLAUFSTEUERUNG",
+        "puzzleIds": ["startup"],
+        "spots": [{ "x": 15, "y": 27 }]
+      },
+      {
         "id": "anleitung-firewall",
         "kind": "book",
         "label": "ANLEITUNG PAKETFILTER",
         "puzzleIds": ["firewall"],
-        "spots": [{ "x": 15, "y": 27 }]
+        "spots": [{ "x": 24, "y": 27 }]
       }
     ],
     "notes": [

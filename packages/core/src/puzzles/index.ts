@@ -14,6 +14,7 @@ import { signalModule } from './signal.js';
 import { circuitModule } from './circuit.js';
 import { serversModule } from './servers.js';
 import { accessModule } from './access.js';
+import { startupModule } from './startup.js';
 import { firewallModule } from './firewall.js';
 
 /**
@@ -35,6 +36,7 @@ const STATION_MODULES = [
   circuitModule,
   serversModule,
   accessModule,
+  startupModule,
   firewallModule,
 ] as const;
 

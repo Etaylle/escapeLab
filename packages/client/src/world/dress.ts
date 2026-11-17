@@ -37,7 +37,7 @@ export type DressMap = Pick<
   MapView,
   'width' | 'height' | 'tiles' | 'labels' | 'doors' | 'lamps' | 'decor'
 > &
-  Partial<Pick<MapView, 'plates' | 'exit' | 'stations'>>;
+  Partial<Pick<MapView, 'plates' | 'exit' | 'stations' | 'conduits'>>;
 
 /** The props hung on a wall's face. */
 export const WALL_PROP_KINDS = [
@@ -475,7 +475,7 @@ function ceilingFans(
 
 /**
  * The marks on the floors of `grid` (decals.ts): clear of the furniture, the doors, the plates,
- * the exit and the lamps; scorch round the fuse boxes the crew knows of.
+ * the exit, the lamps and the cable ducts; scorch round the fuse boxes the crew knows of.
  */
 function floorMarks(
   grid: Grid,
@@ -489,6 +489,7 @@ function floorMarks(
     ...map.lamps.map((lamp) => index(lamp.x, lamp.y)),
     ...(map.plates ?? []).map((plate) => index(plate.x, plate.y)),
     ...(map.exit == null ? [] : [index(map.exit.x, map.exit.y)]),
+    ...(map.conduits ?? []).flatMap((duct) => duct.tiles.map((tile) => index(tile.x, tile.y))),
   ]);
   const fuseBoxes = (map.stations ?? []).filter((s) => s.known && s.look === 'fusebox');
   return decalsOf({

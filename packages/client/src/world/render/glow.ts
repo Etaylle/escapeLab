@@ -4,14 +4,21 @@ import { bakeBox } from '../baked.js';
 import { decorGlows, decorVariant, drawDecorGlow } from '../decor.js';
 import { strengthAt } from '../gl/pack.js';
 import { AMBER, lift, rgba } from '../palette.js';
-import { glowSources, lightShown, powerAt, type LightSource } from '../sources.js';
+import {
+  glowSources,
+  lightShown,
+  powerAt,
+  pulseSources,
+  type LightSource,
+} from '../sources.js';
 import { drawWallPropGlow, glows } from '../wallProps.js';
 import * as atmosphere from './atmosphere.js';
 import { layBake } from './bakes.js';
-import { clipOf, shutKey } from './clips.js';
-import { inTiles, profiled, type Frame } from './frame.js';
+import { clipNeeded, clipOf, shutKey } from './clips.js';
+import { inTiles, profiled, toScreen, type Frame } from './frame.js';
 import { glowsWithLight, onLayer } from './light.js';
-import { fillPool, steadyOf, steadyPart } from './pools.js';
+import { fillPool, poolStops, steadyOf, steadyPart } from './pools.js';
+import { drawRadial } from './radial.js';
 
 /**
  * What glows and moves in the lab — the glowing marks on the walls and the
@@ -60,6 +67,7 @@ function drawGlowing(ctx: CanvasRenderingContext2D, frame: Frame, pools: Pools |
     drawPools(ctx, frame, pools);
   }
   drawBeacon(ctx, frame);
+  drawPulseCores(ctx, frame);
   ctx.globalCompositeOperation = 'source-over';
   drawEmissive(ctx, frame);
   profiled(frame.kit, 'atmosphere', ctx, () => atmosphere.draw(ctx, frame));
@@ -87,9 +95,37 @@ function drawPools(ctx: CanvasRenderingContext2D, frame: Frame, pools: Pools): v
   }
   for (const source of pools.sources.filter((s) => !steady.includes(s))) {
     ctx.globalAlpha = strengthAt(source, frame.time * 1000);
-    layLive(ctx, frame, source, shut);
+    if (source.moving === true) {
+      layMoving(ctx, frame, source, shut);
+    } else {
+      layLive(ctx, frame, source, shut);
+    }
   }
   ctx.globalAlpha = 1;
+}
+
+/**
+ * A moving light's glow where it stands this frame, from one radial sprite of its reach and
+ * colour at whole pixels (radial.ts), under the clip of what it sees from there (clips.ts, kept
+ * a spot) where a wall or a shut door lies within its reach: no bake for each spot it passes,
+ * and no light through a wall or a shut door.
+ */
+function layMoving(
+  ctx: CanvasRenderingContext2D,
+  frame: Frame,
+  source: LightSource,
+  shut: string,
+): void {
+  const [sx, sy] = toScreen(frame, source.x, source.y);
+  const reach = source.reach * frame.camera.scale;
+  ctx.save();
+  if (clipNeeded(frame, source, shut)) {
+    inTiles(ctx, frame);
+    ctx.clip(clipOf(frame, source, shut));
+  }
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  drawRadial(ctx, frame.kit.radials, poolStops(source.colour), [sx, sy, reach], frame);
+  ctx.restore();
 }
 
 /** One turn of the beacon over the hatch, s: its two beams sweep slower than anybody walks. */
@@ -122,6 +158,19 @@ function drawBeacon(ctx: CanvasRenderingContext2D, frame: Frame): void {
   ctx.beginPath();
   ctx.arc(x, y, 0.06, 0, Math.PI * 2);
   ctx.fill();
+}
+
+/** How large and bright the start pulse's core shows over its glow, tiles. */
+const PULSE_CORE = { r: 0.09, alpha: 0.9 } as const;
+
+/** The bright core of every start pulse running in a duct, where its glow shows (sources.ts). */
+function drawPulseCores(ctx: CanvasRenderingContext2D, frame: Frame): void {
+  for (const source of pulseSources(frame)) {
+    ctx.fillStyle = rgba(lift(AMBER, 0.5), PULSE_CORE.alpha);
+    ctx.beginPath();
+    ctx.arc(source.x, source.y, PULSE_CORE.r, 0, Math.PI * 2);
+    ctx.fill();
+  }
 }
 
 /** Whether the tile (x, y) lies in the camera's view, a tile's margin kept. */

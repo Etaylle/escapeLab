@@ -198,10 +198,35 @@ function solvedByThen(state: GameState, at: number): { state: GameState; at: num
   return { state: next, at: now };
 }
 
+type StartupView = Extract<PuzzleView, { kind: 'startup' }>;
+
+/** The live Schaltfeld of an open Anlaufsteuerung, at whichever console it is; null for none. */
+function boardOf(state: GameState): StartupView['board'] {
+  const views = ['p1', 'p2'].map((id) => viewFor(state, id).puzzle);
+  const board = views.find((view) => view?.kind === 'startup' && view.role === 'board');
+  return board?.kind === 'startup' ? board.board : null;
+}
+
+/**
+ * A breaker of the plan as the walkthrough closes it, due at `at`: the station ticked a second at
+ * a time until the Schaltfeld's ladder has the pulse on its marked steps — the plan's moments were
+ * the solver's, on its own clock.
+ */
+function breakerWhenOnLadder(state: GameState, at: number, input: PuzzleInput): Made {
+  for (let now = at; now < at + 60_000; now += 1000) {
+    const next = ticked(state, now);
+    if (boardOf(next)?.pulse?.arrived === true) {
+      return { state: next, at: now, input };
+    }
+  }
+  throw new Error('the pulse never stood on the ladder’s marked steps');
+}
+
 /**
  * The plan's `move` at `station` as the walkthrough makes it, due at `at`: a token once the device
- * shows the account it is for (`tokenWhenShown`), a release once the clock shows its digit, a mark
- * or a trip once the Paketfilter's pages allow it (`firewallWhenShown`), every other move as it
+ * shows the account it is for (`tokenWhenShown`), a breaker once the pulse stands on the ladder
+ * (`breakerWhenOnLadder`), a release once the clock shows its digit, a mark or a trip once the
+ * Paketfilter's pages allow it (`firewallWhenShown`), every other move as it
  * stands — the station ticked as the room ticks it up to then.
  */
 function madeAt(state: GameState, move: Move<PuzzleInput>, station: HallStation, at: number): Made {
@@ -210,6 +235,9 @@ function madeAt(state: GameState, move: Move<PuzzleInput>, station: HallStation,
   }
   if ('mark' in move.input || 'trip' in move.input) {
     return firewallWhenShown(state, move.input, at);
+  }
+  if ('breaker' in move.input) {
+    return breakerWhenOnLadder(state, at, move.input);
   }
   const now = momentOf(move, station, at, state.clockFrom ?? T0);
   return { state: ticked(state, now), at: now, input: move.input };

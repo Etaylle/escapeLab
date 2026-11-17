@@ -64,6 +64,7 @@ export function lightWith(parts: Partial<FrameLight> = {}): FrameLight {
     shown: () => true,
     powered: () => false,
     crewShown: () => true,
+    inSight: () => true,
     ...parts,
   };
 }
@@ -127,6 +128,7 @@ function frameParts(parts: Partial<Frame>): Omit<Frame, 'grid'> {
     steady: true,
     time: 0,
     now: 1_000_000,
+    serverNow: 1_000_000,
     perf: 0,
     pulse: 0.5,
     burn: 0.8,

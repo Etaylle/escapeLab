@@ -39,6 +39,7 @@ export function mapWith(parts: Partial<MapView>): MapView {
     discoveries: [],
     lamps: [],
     labels: [],
+    conduits: [],
     decor: [],
     litRooms: [],
     exit: null,

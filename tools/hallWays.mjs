@@ -21,6 +21,7 @@ export const HALL_WAYS = Object.freeze({
   button: 'driver',
   servers: 'driver',
   access: 'driver',
+  startup: 'driver',
   firewall: 'follow',
 });
 

@@ -14,6 +14,7 @@ import { SignalPanel, signalSounds } from './SignalPanel.js';
 import { CircuitPanel, circuitSounds } from './CircuitPanel.js';
 import { ServersPanel, serversSounds } from './ServersPanel.js';
 import { AccessList, AccessPanel, accessSounds } from './AccessPanel.js';
+import { StartupPanel, startupSounds } from './StartupPanel.js';
 import { FirewallPanel, firewallSounds } from './FirewallPanel.js';
 import type { MissionTime } from '../clock.js';
 import type { Refusal } from '../ws.js';
@@ -69,6 +70,7 @@ export const PANELS: { [K in PuzzleKind]: Panel<K> } = {
   circuit: CircuitPanel,
   servers: ServersPanel,
   access: AccessPanel,
+  startup: StartupPanel,
   firewall: FirewallPanel,
 };
 
@@ -93,6 +95,7 @@ export const SOUNDS: { [K in PuzzleKind]?: ChangeSoundsOf<K> } = {
   circuit: circuitSounds,
   servers: serversSounds,
   access: accessSounds,
+  startup: startupSounds,
   firewall: firewallSounds,
 };
 
