@@ -1,5 +1,13 @@
 import { readFileSync } from 'node:fs';
-import { applyAction, moduleFor, parseMission, stationKey, viewFor } from '../src/index.js';
+import {
+  applyAction,
+  drawPools,
+  moduleFor,
+  parseMission,
+  stationKey,
+  stationsOfRun,
+  viewFor,
+} from '../src/index.js';
 import type {
   Action,
   GameState,
@@ -12,19 +20,34 @@ import type {
   ServerRow,
   ShownSign,
 } from '../src/index.js';
+import { wavesOf, type FirewallPlanPacket } from './firewallPlan.js';
+import { ticked } from './hallPlan.js';
 import { lightsOut, standing, started, T0 } from './lab.js';
+import { noted, stageOf, type StartupPlanStage } from './startupPlan.js';
 
 /**
- * Blackout on the seed the harness pins its room to, played through the
- * reducer the way tools/shots.mjs plays it in two browsers — and what that
- * run deals, station by station, as the harness carries it: Node cannot load
- * core's TypeScript, so tools/fixtures/blackout-plan.json holds this plan,
- * blackoutPlan.test.ts keeps it the solvers' own, and the harness checks
- * every instance in the browser against it before it plays the answer.
- * Player p1 is the host, who joins first; p2 the guest.
+ * Blackout on the seeds the harness pins its rooms to, played through the reducer the way
+ * tools/shots.mjs plays it in two browsers — and what each run deals, station by station, as
+ * the harness carries it: Node cannot load core's TypeScript, so
+ * tools/fixtures/blackout-plan.json holds these plans, blackoutPlan.test.ts keeps them the
+ * solvers' own, and the harness checks every instance in the browser against them before it
+ * plays the answer. Blackout's fifth place is a Wechselplatz (pool `wechsel`): a run has the
+ * Signalkette, the Funkpult or the Notstromkasten there, by its seed. One plan a draw —
+ * `PINNED_SEED`'s, the Signalkette's, is the walkthrough's own; the other two are the shorter
+ * proofs'. The three seeds deal the same start: the host in the Archiv, the guest at the Flur's
+ * west end, the Betriebsbuch, the Spind and the Aushang on the same spots. Player p1 is the
+ * host, who joins first; p2 the guest. Each round is a second on the clock, the open station
+ * ticked as the room ticks it. The Anlaufsteuerung's breakers and the Paketfilter's trips hang
+ * on that clock: the harness makes them by what its pages show, not by the plan's seconds.
  */
 
-export const PINNED_SEED = 5;
+/** The pool of Blackout's fifth place. */
+export const BLACKOUT_POOL = 'wechsel';
+
+/** The seed each draw is played on: the first is the walkthrough's own. */
+export const DRAW_SEEDS = { signalkette: 12, frequenz: 56, notstrom: 93 } as const;
+
+export const PINNED_SEED = DRAW_SEEDS.signalkette;
 
 interface Spot {
   x: number;
@@ -44,20 +67,28 @@ interface SignalStage {
 export interface BlackoutPlan {
   mission: string;
   seed: number;
+  /** the Wechselplatz's pool, the station this seed has there, and the two out of service */
+  pool: string;
+  drawn: string;
+  outOfService: string[];
   /** where the draw puts the host and the guest */
   spawns: { host: Spot; guest: Spot };
   /** where this run lays each source, by its id */
   places: Record<string, Spot>;
   /** the Laborkennung's serial: its last digit says which wire the fuse box's rules name */
   serial: string;
-  /** the fuse box's wires from the top, and each round: what the meter reads, the wire cut */
-  notstrom: { wires: string[]; rounds: { readings: (number | null)[]; cut: number }[] };
-  /** every stage of the Signalkette */
-  signalkette: { stages: SignalStage[] };
+  /** the Anlaufsteuerung stage by stage: the load, the lamps, the values set, the breaker */
+  anlauf: { stages: StartupPlanStage[] };
+  /** every wave the Paketfilter may deal — its own and those a fault calls in */
+  paketfilter: { waves: FirewallPlanPacket[][] };
   /** the terminal's table as it opens, and the moves at the terminal and the rack */
   subsysteme: { rows: ServerRow[]; moves: Move<PuzzleInput>[] };
-  /** the lamp's pattern, where the dial starts, and the steps to turn it (− down, + up) */
-  frequenz: { pattern: string; dial: number; turns: number };
+  /** where the Signalkette has the place: every stage of it */
+  signalkette?: { stages: SignalStage[] };
+  /** where the Funkpult has it: the lamp's pattern, the dial's start, the steps to turn it */
+  frequenz?: { pattern: string; dial: number; turns: number };
+  /** where the Notstromkasten has it: its wires from the top, each round's readings and cut */
+  notstrom?: { wires: string[]; rounds: { readings: (number | null)[]; cut: number }[] };
   /** where the spare fuse lies and where it goes */
   ersatzsicherung: { from: Spot; to: Spot };
   /** the reactor's presses: one from each of the crew within its window */
@@ -68,6 +99,13 @@ export interface BlackoutPlan {
 interface Round {
   views: { operator: PuzzleView; partner: PuzzleView | null };
   moves: Move<PuzzleInput>[];
+}
+
+/** A station as the run played it: its def, as it was dealt, and its rounds. */
+interface Played {
+  def: PuzzleDef;
+  dealt: GameState;
+  rounds: Round[];
 }
 
 const missionsDir = new URL('../../../missions/', import.meta.url);
@@ -132,43 +170,56 @@ function inputs(moves: Move<PuzzleInput>[], at: number): Action[] {
   });
 }
 
+/** One round of the crew at the open station `def` at `at`: the views held, the solver's moves. */
+function roundAt(state: GameState, def: PuzzleDef, at: number): { state: GameState; round: Round } {
+  const atA = viewFor(state, 'p1');
+  const views = { operator: puzzleOf(atA), partner: puzzleOf(viewFor(state, 'p2')) };
+  const two = moduleFor(def.type).consoles === 2;
+  const moves = moduleFor(def.type).solve(
+    def,
+    {
+      operator: views.operator,
+      ...(two ? { partner: views.partner } : {}),
+      reader: views.partner,
+    },
+    atA.edgework,
+    { transcript: [], remainingSec: null, at },
+  );
+  const round = { views: { operator: views.operator, partner: two ? views.partner : null }, moves };
+  return { state: inputs(moves, at).reduce(applyAction, state), round };
+}
+
 /**
  * The whole mission through the reducer on `seed`: both walk past the sign,
- * then every station is worked by its module's solver on the views p1 and
- * p2 hold, a second a round. Returns the state once the hatch opens and
- * every station's rounds.
+ * then every station of the run is worked by its module's solver on the views
+ * p1 and p2 hold, a second a round, the open station ticked as the room ticks
+ * it. Returns the state once the hatch opens and every station as played, in
+ * the run's order.
  */
-export function playBlackout(seed = PINNED_SEED): { state: GameState; rounds: Round[][] } {
-  const mission = blackoutMission();
-  let state = standing(lightsOut(started(mission, seed)), { signSeen: [...CREW] });
-  const rounds: Round[][] = mission.puzzles.map(() => []);
-  for (let round = 1; state.currentPuzzleIndex < mission.puzzles.length && round < 600; round++) {
+export function playBlackout(seed: number = PINNED_SEED): { state: GameState; played: Played[] } {
+  let state = standing(lightsOut(started(blackoutMission(), seed)), { signSeen: [...CREW] });
+  const played: Played[] = [];
+  for (let second = 1; state.currentPuzzleIndex < stationsOfRun(state) && second < 900; second++) {
     const index = state.currentPuzzleIndex;
-    const def = mission.puzzles[index];
+    const def = state.mission.puzzles[index];
     if (def === undefined) {
       break;
     }
-    const at = T0 + round * 1000;
-    state = state.puzzleState === null ? switchOn(state, def, at) : state;
-    const atA = viewFor(state, 'p1');
-    const atB = viewFor(state, 'p2');
-    const views = { operator: puzzleOf(atA), partner: puzzleOf(atB) };
-    const two = moduleFor(def.type).consoles === 2;
-    const moves = moduleFor(def.type).solve(
-      def,
-      {
-        operator: views.operator,
-        ...(two ? { partner: views.partner } : {}),
-        reader: views.partner,
-      },
-      atA.edgework,
-      { transcript: [], remainingSec: null },
-    );
-    const held = { operator: views.operator, partner: two ? views.partner : null };
-    rounds[index]?.push({ views: held, moves });
-    state = inputs(moves, at).reduce(applyAction, state);
+    const at = T0 + second * 1000;
+    if (state.puzzleState === null) {
+      state = switchOn(state, def, at);
+      played.push({ def, dealt: state, rounds: [] });
+    }
+    state = ticked(state, at);
+    // The Paketfilter's last wave is clean on the clock, as its last packet reaches the Kern.
+    if (state.currentPuzzleIndex !== index) {
+      continue;
+    }
+    const next = roundAt(state, def, at);
+    played.at(-1)?.rounds.push(next.round);
+    state = next.state;
   }
-  return { state, rounds };
+  return { state, played };
 }
 
 /** The open puzzle of `round` at console `side`, of the kind `kind`; throws for another. */
@@ -184,8 +235,27 @@ function seen<K extends PuzzleView['kind']>(
   return view as Extract<PuzzleView, { kind: K }>;
 }
 
+/** The Anlaufsteuerung stage by stage: what each opens on, and what the solver sets and closes. */
+function anlaufOf(rounds: Round[]): BlackoutPlan['anlauf'] {
+  const stages: StartupPlanStage[] = [];
+  for (const round of rounds) {
+    const views = [seen(round, 'startup'), seen(round, 'startup', 'partner')];
+    const typing = views.find((view) => view.role === 'terminal');
+    const board = views.find((view) => view.role === 'board');
+    if (typing === undefined || board === undefined) {
+      throw new Error('blackout plan: the Anlaufsteuerung shows no terminal, or no Schaltfeld');
+    }
+    if (stages.at(-1)?.stage !== typing.stage) {
+      stages.push(stageOf(typing, board));
+    }
+    const current = stages.at(-1);
+    round.moves.forEach((move) => current !== undefined && noted(current, move));
+  }
+  return { stages };
+}
+
 /** The fuse box: its wires, and each round the meter's readings and the wire the box cuts. */
-function notstromOf(rounds: Round[]): BlackoutPlan['notstrom'] {
+function notstromOf(rounds: Round[]): NonNullable<BlackoutPlan['notstrom']> {
   const wires = (seen(rounds[0], 'circuit').wires ?? []).map((wire) => wire.colour);
   const cuts = rounds.flatMap((round) => {
     const [move] = round.moves;
@@ -199,7 +269,7 @@ function notstromOf(rounds: Round[]): BlackoutPlan['notstrom'] {
 }
 
 /** Each stage of the Signalkette: the sending console, its sequence, the keys pressed for it. */
-function signalketteOf(rounds: Round[]): BlackoutPlan['signalkette'] {
+function signalketteOf(rounds: Round[]): NonNullable<BlackoutPlan['signalkette']> {
   const stages = rounds.flatMap((round): SignalStage[] => {
     const views = [seen(round, 'signal'), seen(round, 'signal', 'partner')];
     const sender = views.find((view) => view.role === 'sender');
@@ -218,7 +288,7 @@ function subsystemeOf(rounds: Round[]): BlackoutPlan['subsysteme'] {
 }
 
 /** The radio panel: the lamp's pattern, the dial's start, and the turns the solver makes. */
-function frequenzOf(rounds: Round[]): BlackoutPlan['frequenz'] {
+function frequenzOf(rounds: Round[]): NonNullable<BlackoutPlan['frequenz']> {
   const lamp = seen(rounds[0], 'morse');
   const turns = rounds
     .flatMap((round) => round.moves)
@@ -226,9 +296,52 @@ function frequenzOf(rounds: Round[]): BlackoutPlan['frequenz'] {
   return { pattern: lamp.pattern ?? '', dial: lamp.dial, turns };
 }
 
+/** The station of the Wechselplatz as the run played it, under its own id. */
+function wechselOf({
+  def,
+  rounds,
+}: Played): Pick<BlackoutPlan, 'signalkette' | 'frequenz' | 'notstrom'> {
+  switch (def.type) {
+    case 'signal':
+      return { signalkette: signalketteOf(rounds) };
+    case 'morse':
+      return { frequenz: frequenzOf(rounds) };
+    case 'circuit':
+      return { notstrom: notstromOf(rounds) };
+    default:
+      throw new Error(`blackout plan: no plan for a ${def.type} at the Wechselplatz`);
+  }
+}
+
+/** The station of `played` with the id `id`; throws where the run has none. */
+function stationOf(played: Played[], id: string): Played {
+  const station = played.find((entry) => entry.def.id === id);
+  if (station === undefined) {
+    throw new Error(`blackout plan: the run has no station "${id}"`);
+  }
+  return station;
+}
+
+/** Where the spare fuse lies and goes, and the reactor's presses within its window. */
+function finaleOf(
+  mission: Mission,
+  played: Played[],
+): Pick<BlackoutPlan, 'ersatzsicherung' | 'reaktorstart'> {
+  const fuse = mission.map.items.find((item) => item.requiredFor === 'reaktorstart');
+  const reactor = stationOf(played, 'reaktorstart');
+  if (fuse?.deliverTo === undefined || reactor.def.type !== 'button-sync') {
+    throw new Error('blackout plan: the reactor needs its spare fuse and a sync press');
+  }
+  const presses = inputs(reactor.rounds.flatMap((round) => round.moves), T0).length;
+  return {
+    ersatzsicherung: { from: { x: fuse.x, y: fuse.y }, to: { ...fuse.deliverTo } },
+    reaktorstart: { presses, windowMs: reactor.def.windowMs ?? 0 },
+  };
+}
+
 /** Blackout on `seed`, as the harness walks it: who starts where, and every station's answer. */
-export function blackoutPlan(seed = PINNED_SEED): BlackoutPlan {
-  const { state, rounds } = playBlackout(seed);
+export function blackoutPlan(seed: number = PINNED_SEED): BlackoutPlan {
+  const { state, played } = playBlackout(seed);
   const mission = state.mission;
   const spawn = (id: string): Spot => {
     const at = state.players.find((p) => p.id === id)?.spawn;
@@ -237,23 +350,40 @@ export function blackoutPlan(seed = PINNED_SEED): BlackoutPlan {
     }
     return { x: at.x, y: at.y };
   };
-  const fuse = mission.map.items.find((item) => item.requiredFor === 'reaktorstart');
-  const reactor = mission.puzzles.find((p) => p.id === 'reaktorstart');
-  if (fuse?.deliverTo === undefined || reactor?.type !== 'button-sync') {
-    throw new Error('blackout plan: the reactor needs its spare fuse and a sync press');
-  }
-  const presses = inputs((rounds[5] ?? []).flatMap((round) => round.moves), T0).length;
+  const drawn = drawPools(mission.puzzles, seed)[BLACKOUT_POOL] ?? '';
+  const members = mission.puzzles.filter((p) => p.pool === BLACKOUT_POOL).map((p) => p.id);
+  const filter = stationOf(played, 'paketfilter');
   return {
     mission: mission.id,
     seed,
+    pool: BLACKOUT_POOL,
+    drawn,
+    outOfService: members.filter((id) => id !== drawn),
     spawns: { host: spawn('p1'), guest: spawn('p2') },
     places: Object.fromEntries(Object.entries(state.places).map(([id, at]) => [id, { ...at }])),
     serial: state.edgework?.serial ?? '',
-    notstrom: notstromOf(rounds[1] ?? []),
-    signalkette: signalketteOf(rounds[2] ?? []),
-    subsysteme: subsystemeOf(rounds[3] ?? []),
-    frequenz: frequenzOf(rounds[4] ?? []),
-    ersatzsicherung: { from: { x: fuse.x, y: fuse.y }, to: { ...fuse.deliverTo } },
-    reaktorstart: { presses, windowMs: reactor.windowMs ?? 0 },
+    anlauf: anlaufOf(stationOf(played, 'anlauf').rounds),
+    paketfilter: { waves: wavesOf(filter.def, filter.dealt) },
+    subsysteme: subsystemeOf(stationOf(played, 'subsysteme').rounds),
+    ...wechselOf(stationOf(played, drawn)),
+    ...finaleOf(mission, played),
+  };
+}
+
+/** What tools/fixtures/blackout-plan.json holds: the pinned seed, and a plan for every draw. */
+export interface BlackoutPlans {
+  mission: string;
+  /** the seed the walkthrough plays to the won card */
+  pinned: number;
+  /** one plan a draw, the pinned seed's first */
+  runs: BlackoutPlan[];
+}
+
+/** Every draw's plan, as the harness carries them. */
+export function blackoutPlans(): BlackoutPlans {
+  return {
+    mission: blackoutMission().id,
+    pinned: PINNED_SEED,
+    runs: Object.values(DRAW_SEEDS).map((seed) => blackoutPlan(seed)),
   };
 }

@@ -115,8 +115,10 @@ describe('Blackout’s quick chat', () => {
     expect(phrases.filter((phrase) => /Ventil/.test(phrase.text))).toEqual([]);
   });
 
-  it('carries a wire by its number and a service by its name', () => {
-    expect(phrases.map(phraseShown).slice(-2)).toEqual(['Kabel …', 'Dienst …']);
+  it('carries a number — a feeder’s, a line’s, a wire’s — and a service by name', () => {
+    // One number phrase for every station that counts: the Anlaufsteuerung's Abgänge, the
+    // Paketfilter's Leitungen, and the Notstromkasten's Kabel in the nights it has the place.
+    expect(phrases.map(phraseShown).slice(-2)).toEqual(['Nummer …', 'Dienst …']);
     const service = phrases.find((phrase) => phrase.text === 'Dienst {name}');
     expect(service?.names).toEqual(SERVICES.map((name) => name.toUpperCase()));
   });

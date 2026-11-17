@@ -7,10 +7,12 @@ import {
   operatorsOf,
   parseMission,
   placesOf,
+  poolsOf,
   puzzleDefSchema,
   puzzleDueAt,
   readersOf,
   stationKey,
+  stationsOfRun,
   viewFor,
 } from '../src/index.js';
 import type {
@@ -428,7 +430,8 @@ function idleAfter(idle: number, moves: readonly Move<PuzzleInput>[], label: str
  * due; a solver that waits only lets it run, up to MAX_IDLE_SEC rounds in a
  * row. Stops once the last station is solved; getting out is the server's
  * call. Returns the state, and how many of the crew each station put to work
- * as it was switched on (`atWork`).
+ * as it was switched on (`atWork`). A run plays its own stations: one out of service (a pool's
+ * member not drawn) stands after them in the run's order and is never come to.
  */
 function playMission(
   mission: Mission,
@@ -444,7 +447,8 @@ function playMission(
   for (let round = 1; state.phase === 'playing' && round < 1000; round++) {
     const def = state.mission.puzzles[state.currentPuzzleIndex];
     const transcript = transcripts[state.currentPuzzleIndex];
-    if (def === undefined || transcript === undefined) {
+    const ofRun = state.currentPuzzleIndex < stationsOfRun(state);
+    if (def === undefined || transcript === undefined || !ofRun) {
       break;
     }
     const at = T0 + round * 1000;
@@ -487,22 +491,38 @@ const played = [...missions, ...labs()].flatMap((mission) => {
 });
 
 describe.each(played)('mission %s for %i', (_id, size, mission) => {
-  it(`is won through the reducer without an alarm for ${SEEDS} seeds`, () => {
+  it(`is won through the reducer without an alarm for ${SEEDS} seeds, in every draw`, () => {
+    const drawn = new Set<string>();
     for (let seed = 0; seed < SEEDS; seed++) {
       const { state } = playMission(mission, seed, size);
       // The last station unlocks the hatch; getting out is the server's call.
-      expect(state.currentPuzzleIndex, `seed ${seed}`).toBe(mission.puzzles.length);
+      expect(state.currentPuzzleIndex, `seed ${seed}`).toBe(stationsOfRun(state));
       expect(state.penaltySeq, `seed ${seed}`).toBe(0);
+      Object.values(state.drawn).forEach((id) => drawn.add(id));
     }
+    // Every station that takes turns had its runs among the seeds: none is proved by its absence.
+    const members = [...poolsOf(mission.puzzles).values()].flat();
+    expect([...drawn].sort()).toEqual([...members].sort());
   });
 
   it('shows the rules of the first station read at a source to its reader and nobody else', () => {
-    const start = lightsOut(started(mission, 1, T0, size));
-    const crew = start.players.map((p) => p.id);
-    const index = mission.puzzles.findIndex((def) => readAt(mission, def, crew));
-    const def = mission.puzzles[index];
-    if (def === undefined) {
+    // The first seed whose run has such a station: with stations that take turns, a crew of two
+    // may read at the one drawn only (Blackout's Funkpult), and a run's order is its own — a
+    // station out of service stands after the run's and is never read.
+    const runs = Array.from({ length: 50 }, (_, i) => lightsOut(started(mission, i + 1, T0, size)));
+    const readIn = (run: GameState): number =>
+      run.mission.puzzles
+        .slice(0, stationsOfRun(run))
+        .findIndex((station) => readAt(mission, station, run.players.map((p) => p.id)));
+    const start = runs.find((run) => readIn(run) >= 0);
+    if (start === undefined) {
       throw new Error(`${mission.id}: nobody of a crew of ${size} reads at any station`);
+    }
+    const crew = start.players.map((p) => p.id);
+    const index = readIn(start);
+    const def = start.mission.puzzles[index];
+    if (def === undefined) {
+      throw new Error(`${mission.id}: no station ${index}`);
     }
     const state = openStation({ ...start, currentPuzzleIndex: index }, def, T0 + 1000);
     const { reader } = rolesAt(def, crew);
@@ -514,7 +534,8 @@ describe.each(played)('mission %s for %i', (_id, size, mission) => {
   });
 
   it('puts a hand at every place of each station, as far as the crew goes', () => {
-    const wanted = mission.puzzles.map((def) => Math.min(size, handsTaken(mission, def, size)));
-    expect(playMission(mission, 1, size).atWork).toEqual(wanted);
+    const { state, atWork } = playMission(mission, 1, size);
+    const ofRun = state.mission.puzzles.slice(0, stationsOfRun(state));
+    expect(atWork).toEqual(ofRun.map((def) => Math.min(size, handsTaken(mission, def, size))));
   });
 });
