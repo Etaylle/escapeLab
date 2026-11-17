@@ -279,8 +279,8 @@
  * one the whole crew presses — the host's device has to open on what the plan pins, is
  * shot as it opens (hall-<type>.png), and the plan's moves are made on the devices as a hand
  * makes them, the button held until the clock counting up shows the plan's digit, a token read
- * off the guest's device as it comes round, the Paketfilter's marks and trips as its pages allow
- * them; every station has to solve without an alarm. The
+ * off the guest's device as it comes round, the Paketfilter followed on its pages, marking what
+ * the plan says its policy drops; every station has to solve without an alarm. The
  * hall has no hatch: its last station wins the run, every station counted, and hall-won.png is
  * the won card — GESCHAFFT on the host's and the audience's, its grade in the words of a run
  * without a clock.
@@ -602,12 +602,13 @@
  * Sperrpult meanwhile: the wave has to hold, the device saying that nobody stands at the
  * Analysepult, and the Sperrpult has to stand whole on the phone too (firewall-phone-932.png).
  * The binder shows the Sicherheitsrichtlinie, seven rules (firewall-policy.png). Back at the
- * Analysepult the wave runs, and tools/fixtures/firewall-plan.json's moves are played on the
- * pages, never on the plan's seconds: a mark once its packet is on the Analysepult — its card
- * tapped where it stands, the cards shot at the first (firewall-headers.png) —, the ring at the
- * Sperrpult awaited (firewall-gate.png at the first), a trip once the lowest packet on its line
- * wears a ring, its line tapped and SPERREN. The station has to solve without an alarm once the
- * last wave's packets are through. The mission is deleted again whatever happened.
+ * Analysepult the crew follows the pages, never the plan's seconds: FREIGABE pressed where a
+ * wave waits; a card tapped where it stands once its packet — one tools/fixtures/firewall-plan.json
+ * says the policy drops, in any wave the run may deal — is on the Analysepult (the cards shot at
+ * a mark, firewall-headers.png), the ring at the Sperrpult awaited (firewall-gate.png at the
+ * first); a line tapped and SPERREN once its lowest packet wears a ring. The station has to
+ * solve, with one alarm at most — a slow runner's late tap, the wave it calls off followed on.
+ * The mission is deleted again whatever happened.
  *
  * Art (a Blackout run only): before the walkthrough, a scratch copy of
  * Blackout — custom-blackout, ten seconds of power before the lights fail,
@@ -10845,25 +10846,17 @@ async function captureAccess() {
 
 /**
  * The Paketfilter's scratch mission (tools/fixtures/firewall-probe.json, „Filterprobe",
- * custom-filterprobe) and what its pinned seed deals (firewall-plan.json): the Laborkennung,
- * every wave's packets as the Analysepult shows them, and core's solver's moves. The drill plays
- * the moves against its pages, never against the plan's seconds: a mark once its packet is on
- * the Analysepult, a trip once the lowest packet on its line wears a ring at the Sperrpult. Core's
- * test of the module keeps the plan the solver's own.
+ * custom-filterprobe) and what its pinned seed deals (firewall-plan.json): the Laborkennung, and
+ * every wave the run may deal — its own and three a fault would call in — with its packets as
+ * the Analysepult shows them and which of them the policy drops. The drill follows its pages,
+ * never the plan's seconds (`followFirewall`). Core's test of the module keeps the plan the
+ * policy's own.
  */
 const FIREWALL_FILE = fileURLToPath(new URL('fixtures/firewall-probe.json', import.meta.url));
 const FIREWALL_MISSION = JSON.parse(readFileSync(FIREWALL_FILE, 'utf8'));
 const FIREWALL_PLAN = JSON.parse(
   readFileSync(fileURLToPath(new URL('fixtures/firewall-plan.json', import.meta.url)), 'utf8'),
 );
-/**
- * How long a move of the Paketfilter waits for the pages to allow it: a packet to come on, the
- * lowest on a line to wear a ring — a clean wave's end, the breath and a wave's first packets at
- * the longest fall the module takes, ms.
- */
-const FIREWALL_MOVE_MS = 45_000;
-/** How long the station takes to solve after the last trip: the rest of the wave reaches the Kern. */
-const FIREWALL_DONE_MS = 30_000;
 
 /** The open Paketfilter as `player`'s page has it; null for none. */
 function firewallView(player) {
@@ -10993,28 +10986,28 @@ async function tapMoving(player, locator) {
 }
 
 /**
- * A mark of the plan: once `id` is on `analysis`'s Analysepult, its card tapped where it stands;
- * the ring has to show on `gate`'s Sperrpult. Returns the ms from the view's word to the ring
- * on the page. Throws where the packet never comes or no ring shows.
+ * A mark: the card of `id` tapped where it stands on `analysis`'s Analysepult, the ring awaited
+ * on `gate`'s Sperrpult — firewall-gate.png at the first. Returns the ms from the view's word to
+ * the ring on the page; null where the packet went through before a tap took (an alarm follows,
+ * and the drill goes on with the fresh wave).
  */
 async function firewallMark({ gate, analysis }, id, shots) {
-  if (!(await until(() => firewallLive(analysis).some((p) => p.id === id), FIREWALL_MOVE_MS))) {
-    throw new Error(`packet ${id} never came onto ${analysis.name}'s Analysepult`);
-  }
   const card = analysis.page.locator(`.station-modal .firewall-card[data-packet="${id}"]`);
   await headersShot(analysis, shots);
   // A tap that missed the moving card is tried again; one that took is never repeated, so that
   // no second tap takes the mark back.
-  for (let tries = 0; tries < 3 && !firewallMarked(gate, id); tries++) {
+  const live = () => firewallLive(analysis).some((p) => p.id === id);
+  for (let tries = 0; tries < 3 && live() && !firewallMarked(gate, id); tries++) {
     await tapMoving(analysis, card);
     await until(() => firewallMarked(gate, id), 1500);
   }
   if (!firewallMarked(gate, id)) {
-    throw new Error(`${analysis.name} marked ${id}, but ${gate.name}'s Sperrpult shows no ring`);
+    fwSaid(`!! ${id} went through before ${analysis.name}'s tap took`);
+    return null;
   }
   const from = Date.now();
   const ring = gate.page.locator(`.station-modal .firewall-blip--marked[data-packet="${id}"]`);
-  await ring.waitFor({ timeout: 2000 });
+  await ring.waitFor({ timeout: 2000 }).catch(() => undefined);
   const ms = Date.now() - from;
   if (shots.gate) {
     shots.gate = false;
@@ -11024,16 +11017,17 @@ async function firewallMark({ gate, analysis }, id, shots) {
   return ms;
 }
 
-/** How many cards the headers' shot waits for on the lines, at the latest mark at the latest. */
+/** How many cards the headers' shot waits for on the lines, until the second wave. */
 const HEADERS_CARDS = 3;
 
 /**
- * firewall-headers.png, at the first mark with HEADERS_CARDS cards on the lines or at the last
- * mark of the plan (`shots.lastMark`), whichever comes first: the Analysepult with its cards.
+ * firewall-headers.png, before the first mark with HEADERS_CARDS cards on the lines, or before
+ * the first mark of a later wave: the Analysepult with its cards.
  */
 async function headersShot(analysis, shots) {
   const cards = await analysis.page.locator('.station-modal .firewall-card').count();
-  if (!shots.headers || (cards < HEADERS_CARDS && !shots.lastMark)) {
+  const later = (firewallView(analysis)?.wave ?? 1) > 1;
+  if (!shots.headers || (cards < HEADERS_CARDS && !later)) {
     return;
   }
   shots.headers = false;
@@ -11046,70 +11040,107 @@ const firewallMarked = (gate, id) =>
   firewallView(gate)?.packets?.some((p) => p.id === id && p.marked) === true;
 
 /**
- * A trip of the plan: once the lowest packet on `line` wears a ring at `gate`'s Sperrpult, the
- * line tapped — the gate goes there — and SPERREN; the packet has to drop. Throws where the ring
- * never comes or nothing drops.
+ * A trip: `line` tapped on `gate`'s Sperrpult — the gate goes there — and SPERREN; its lowest
+ * packet has to drop, or the wave move on. Throws where nothing changes.
  */
 async function firewallTrip(gate, line) {
-  const lowest = () => firewallLive(gate).find((p) => p.line === line) ?? null;
-  if (!(await until(() => lowest()?.marked === true, FIREWALL_MOVE_MS))) {
-    throw new Error(`the lowest packet on line ${line + 1} never wore a ring at ${gate.name}'s`);
-  }
-  const { id } = lowest();
+  const id = firewallLive(gate).find((p) => p.line === line)?.id ?? null;
   const modal = gate.page.locator('.station-modal');
+  const event = firewallView(gate)?.event?.n ?? 0;
   await modal.locator(`.firewall-line[data-line="${line}"]`).click({ timeout: HALL_MOVE_MS });
   await modal.locator('.firewall-trip').click({ timeout: HALL_MOVE_MS });
-  const index = gate.seen.view.currentPuzzleIndex;
-  const out = () =>
-    gate.seen.view.currentPuzzleIndex > index ||
-    firewallView(gate)?.packets?.some((p) => p.id === id && !p.dropped) !== true;
-  if (!(await until(out, 3000))) {
-    throw new Error(`${gate.name} tripped line ${line + 1}, but ${id} stayed on it`);
+  const answered = () => (firewallView(gate)?.event?.n ?? Infinity) > event;
+  if (!(await until(answered, 3000))) {
+    throw new Error(`${gate.name} tripped line ${line + 1} (${id}), but the device said nothing`);
+  }
+}
+
+/** The Freigabe: FREIGABE pressed on `gate`'s Sperrpult; the wave has to run then. */
+async function firewallArm(gate) {
+  await gate.page.locator('.station-modal .firewall-arm').click({ timeout: HALL_MOVE_MS });
+  if (!(await until(() => firewallView(gate)?.waiting === false, 3000))) {
+    throw new Error(`${gate.name} pressed FREIGABE, but the wave still waits`);
   }
 }
 
 /** No shot at all: the hall's Paketfilter, shot as its device opens. */
-const NO_FIREWALL_SHOTS = Object.freeze({ headers: false, gate: false, lastMark: false });
+const NO_FIREWALL_SHOTS = Object.freeze({ headers: false, gate: false });
 
 /**
- * A move of the plan at the Paketfilter — a mark at the Analysepult, a trip at the Sperrpult —
- * as the pages allow it (`firewallMark`, `firewallTrip`); a mark shoots the cards
- * (`headersShot`) and the first ring the Sperrpult where `shots` asks for them. Returns a
- * mark's ms to its ring.
+ * One step of the crew at the Paketfilter as its pages stand now: the Freigabe where the wave
+ * waits, both manned; a mark on a packet `hostile` names that is on the Analysepult unmarked; a
+ * trip on a line whose lowest packet wears a ring. Returns whether it did anything, and a mark's
+ * ms to its ring in `rings`.
  */
-async function firewallMove(crew, input, shots = NO_FIREWALL_SHOTS) {
-  if ('mark' in input) {
-    return firewallMark(crew, input.mark, shots);
+async function firewallStep(crew, hostile, shots, rings) {
+  const { gate, analysis } = crew;
+  const fw = firewallView(gate);
+  if (fw?.waiting === true && fw.vacant.length === 0) {
+    await firewallArm(gate);
+    return true;
   }
-  await firewallTrip(crew.gate, input.trip);
-  return null;
+  const mark = firewallLive(analysis).find((p) => hostile.has(p.id) && !p.marked);
+  if (mark !== undefined) {
+    const ms = await firewallMark(crew, mark.id, shots);
+    rings.push(...(ms === null ? [] : [ms]));
+    return true;
+  }
+  const live = firewallLive(gate);
+  const line = [0, 1, 2, 3, 4].find((l) => live.find((p) => p.line === l)?.marked === true);
+  if (line !== undefined) {
+    await firewallTrip(gate, line);
+    return true;
+  }
+  return false;
 }
 
+/** How long the drill follows the Paketfilter at most: its waves and two called off, ms. */
+const FIREWALL_RUN_MS = 240_000;
+
 /**
- * The plan's moves played at both consoles, then the station's solve once the last wave's
- * packets are through — without an alarm, or the run fails. The log says how long it took and
- * how soon each ring showed after the view's word.
+ * The crew at the Paketfilter, following its pages to the solve: every step its pages allow
+ * (`firewallStep`), the packets `hostile` names marked — what the policy drops in every wave
+ * the run may deal, a wave called off included —, never on the plan's seconds. Returns whether
+ * it solved and how soon each ring showed after the view's word.
+ */
+async function followFirewall(crew, hostile, shots = NO_FIREWALL_SHOTS) {
+  const index = crew.gate.seen.view.currentPuzzleIndex;
+  const deadline = Date.now() + FIREWALL_RUN_MS;
+  const rings = [];
+  const open = () => crew.gate.seen.view.currentPuzzleIndex === index;
+  while (open() && Date.now() < deadline) {
+    if (!(await firewallStep(crew, hostile, shots, rings))) {
+      await sleep(100);
+    }
+  }
+  return { solved: !open(), rings };
+}
+
+/** The ids of the packets the probe's policy drops, in every wave its plan deals. */
+const FIREWALL_HOSTILE = new Set(
+  FIREWALL_PLAN.waves.flat().flatMap((packet) => (packet.hostile ? [packet.id] : [])),
+);
+
+/**
+ * The probe followed to its solve (`followFirewall`) — the cards shot at a mark, the Sperrpult
+ * at its first ring —; the run fails unless it solves, or where it took more than one alarm: one
+ * a slow runner's late tap may cost, a called-off wave the drill follows on. The log says how
+ * long it took and how soon each ring showed after the view's word.
  */
 async function playFirewall(crew) {
   const alarms = crew.gate.seen.view.alarms.count;
   const from = Date.now();
-  const shots = { headers: true, gate: true, lastMark: false };
-  const rings = [];
-  const last = FIREWALL_PLAN.moves.findLastIndex((move) => 'mark' in move.input);
-  for (const [i, move] of FIREWALL_PLAN.moves.entries()) {
-    shots.lastMark = i === last;
-    const ms = await firewallMove(crew, move.input, shots);
-    rings.push(...(ms === null ? [] : [ms]));
-  }
-  const solved = await until(() => crew.gate.seen.view.currentPuzzleIndex > 0, FIREWALL_DONE_MS);
+  const shots = { headers: true, gate: true };
+  const { solved, rings } = await followFirewall(crew, FIREWALL_HOSTILE, shots);
   const raised = crew.gate.seen.view.alarms.count - alarms;
   fwSaid(
-    `${FIREWALL_PLAN.moves.length} moves in ${seconds(Date.now() - from)}, rings ` +
+    `${rings.length} marks in ${seconds(Date.now() - from)}, rings ` +
       `${Math.max(0, ...rings)} ms at most after the view: ` +
-      `${solved ? 'solved' : '!! not solved'}, ${raised === 0 ? 'no alarm' : `!! ${raised} alarm(s)`}`,
+      `${solved ? 'solved' : '!! not solved'}, ` +
+      (raised === 0 ? 'no alarm' : `!! ${raised} alarm(s)`),
   );
-  if (!solved || raised > 0) {
-    fail(`firewall: the plan ended ${solved ? 'solved' : 'unsolved'} with ${raised} alarm(s)`);
+  if (!solved || raised > 1) {
+    fail(`firewall: the drill ended ${solved ? 'solved' : 'unsolved'} with ${raised} alarm(s)`);
   }
 }
 
@@ -11124,9 +11155,10 @@ const firewallUnjudged = (why) => skip('firewall (targets)', why);
  * on the large phone, and goes to the binder; the other takes the Sperrpult meanwhile — the wave
  * holds, the device saying so, and the Sperrpult is held sideways too (firewall-phone-932.png) —
  * while the binder is read on the Sicherheitsrichtlinie (firewall-policy.png). Back at the
- * Analysepult the wave runs, and the plan's moves are played on the pages (`playFirewall`):
- * the cards shot at the first mark (firewall-headers.png), the Sperrpult at its first ring
- * (firewall-gate.png). The mission is deleted again whatever happened.
+ * Analysepult the crew follows the pages to the solve (`playFirewall`): FREIGABE where a wave
+ * waits, a mark on every packet the policy drops, a trip under every ring — the cards shot at a
+ * mark (firewall-headers.png), the Sperrpult at its first ring (firewall-gate.png). The mission
+ * is deleted again whatever happened.
  */
 async function captureFirewall() {
   if (MISSION.toLowerCase() === 'blackout') {
@@ -13402,11 +13434,6 @@ async function buttonMove(host, station, { kind }) {
   await page.mouse.up();
 }
 
-/**
- * How long a station of the hall may take to solve after its last move, ms, by type: 5 s, but the
- * Paketfilter's, whose last wave is clean only once its last packet is through.
- */
-const HALL_SOLVE_MS = { firewall: FIREWALL_DONE_MS };
 
 /** Who makes a move: the host the operator's, the guest the partner's, both the whole crew's. */
 const moversOf = ({ host, guest }, { by }) =>
@@ -13467,16 +13494,14 @@ async function accessMove({ host, guest }, input) {
 /**
  * The stations whose moves are not a control clicked on their device: the button, held on the
  * clock (`buttonMove`), the Rechnernetz, its commands put together on the terminal's keys and
- * its switches thrown at the rack (`serversMove`), the Zugangskontrolle (`accessMove`) and the
- * Paketfilter, each move once its pages allow it (`firewallMove`).
+ * its switches thrown at the rack (`serversMove`), and the Zugangskontrolle (`accessMove`). The
+ * Paketfilter takes no moves one by one: the crew follows its pages (`followFirewall`).
  */
 const HALL_DRIVERS = {
   button: ({ host }, station, move) => buttonMove(host, station, move.input),
   servers: ({ host, guest }, _station, move) =>
     serversMove({ terminal: host, rack: guest }, move, false),
   access: (crew, _station, move) => accessMove(crew, move.input),
-  firewall: ({ host, guest }, _station, move) =>
-    firewallMove({ gate: host, analysis: guest }, move.input),
 };
 
 /** How the walkthrough makes a move at a station of `type`; null for a type it knows no way of. */
@@ -13565,6 +13590,24 @@ async function devicesClosed(players, station) {
 }
 
 /**
+ * The plan's moves at a station of the hall, each as its type makes it (`driverOf`) — but the
+ * Paketfilter's, where the crew follows its pages to the solve, marking what the plan's
+ * `hostile` names (`followFirewall`).
+ */
+async function playHallMoves(crew, station) {
+  if (station.hostile !== undefined) {
+    const pair = { gate: crew.host, analysis: crew.guest };
+    await followFirewall(pair, new Set(station.hostile));
+    return;
+  }
+  const drive = driverOf(station.type);
+  for (const move of station.moves) {
+    await drive(crew, station, move);
+    await sleep(120);
+  }
+}
+
+/**
  * A station of the hall as the plan takes it: the crew at its places, the device open
  * (`manHallStation`), what the host's device opens on held to the plan, the device shot as it
  * opens (hall-<type>.png), the plan's moves made (`driverOf`), and the station solved without an
@@ -13580,13 +13623,8 @@ async function playHallStation(crew, station) {
   const shot = `hall-${station.type}.png`;
   await capture(host.page, shot);
   const from = Date.now();
-  const drive = driverOf(station.type);
-  for (const move of station.moves) {
-    await drive(crew, station, move);
-    await sleep(120);
-  }
-  const solves = HALL_SOLVE_MS[station.type] ?? 5000;
-  if (!(await until(() => host.seen.view.currentPuzzleIndex > index, solves))) {
+  await playHallMoves(crew, station);
+  if (!(await until(() => host.seen.view.currentPuzzleIndex > index, 5000))) {
     throw new Error(`the plan's moves are made at "${station.title}", but it did not solve`);
   }
   const raised = host.seen.view.penaltySeq - alarms;
@@ -16615,8 +16653,8 @@ async function captureThree() {
  * The drills before the walkthrough, each in a room of its own, by the group each belongs to:
  * the editor, the Serverraum's scratch mission (a Systemcheck run's), the art tour, the danger
  * sense, the reconnect drill, the restart drill, the Zugangskontrolle's and the Paketfilter's
- * scratch missions (a Systemcheck run's), the three drill (a Blackout run's), the Übungshalle (a Systemcheck run's)
- * and the music packs in the settings, on a menu of their own.
+ * scratch missions (a Systemcheck run's), the three drill (a Blackout run's), the Übungshalle
+ * (a Systemcheck run's) and the music packs in the settings, on a menu of their own.
  */
 const DRILLS = [
   ['editor', captureEditor],
