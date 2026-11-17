@@ -335,6 +335,25 @@ the lab lit +0.12 ms, the dark Flur +0.07, the Labor +0.05, within the bench's n
 frame. Capture `decals-lab.png`, the Labor's floor with two marks or more and none in anybody's
 way.
 
+## Cable ducts and the start pulse (`conduits.ts`, ductArt.ts)
+
+An Anlaufsteuerung's two consoles are joined by a cable duct in the floor (`map.conduits`), the
+way its start pulse runs: on every floor and door tile of its way a channel of ink, a hair of
+steel round it and a grating of thin steel bars across it, out of the tile's middle by each side
+the duct leaves it, in the light of its tile — palette colours only (INK, STEEL), baked with the
+floor over its marks and under the walls and the furniture (tileCache.ts `drawDucts`), so that it
+costs nothing a frame; under a wall it runs hidden. No floor mark lies on it. While a pulse runs,
+its light travels along the duct at the pulse's speed, a quarter tile a step, from the console
+that sent it toward the one taking it, then waits at the far end through the ladder's window:
+an amber light of the frame (sources.ts `pulseSources`, reach 1.5 tiles, 0.6 strong), flickering
+as it runs (240 ms, 0.3 deep) and swelling as it waits (700 ms, 0.55), a slow shallow swell under
+less motion; the glow pass lays a bright core of AMBER lifted over it. It shows where light falls
+on its tile now — your lamp, the crew's, an emergency lamp — or its room is lit, so the pulse
+leaving one room is seen there and its arrival in the other. Its spot is a pure function of the
+times every view carries (`pulseSpot`): every screen shows it at the same place. While no pulse
+runs nothing is added to a frame. Captures `startup-duct.png` (the audience's world, the pulse
+in the duct) and `hall-startup.png`.
+
 ## Graphics 2's references
 
 What each game does, and what the lab took from it:

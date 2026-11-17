@@ -636,6 +636,20 @@ already due is dropped, never crammed in late. Closing the panel stops it at onc
 outlet falls to nothing over 5 ms and every source laid stops with it. A solved station's key
 falls silent; its lamp goes on.
 
+## The Anlaufsteuerung's pulse (`puzzles/StartupPanel.tsx`)
+
+The Anlaufsteuerung makes no sound of its own beyond the kit's: a breaker goes down with the
+main switch's lever pull (`data-feel="pull"`), the terminal's keys blip, and a change plays what
+it brought (`startupSounds`) — a stage run up the relay's click as its breaker latches home and
+the stage's chime, a failed line or a wrong breaker the reject buzz (the alarm's klaxon after
+it), a pulse sent the terminal's two OK beeps. At the console taking the pulse, each step its
+ladder lights hums as the Prüfpult's meter does (`voltageHum`, made, not recorded: a sawtooth
+and its octave under a lowpass, 0.8 s, into an outlet at 0.03), its pitch rising a step at a
+time — 40 „volts" and 14 more a step, 141 Hz at the first step of a default run to 309 Hz at its
+ninth —, so that the window is heard coming. One hum a second, each over before the next, two
+oscillators at most: within the audio budget as the meter is. The audience and the idle part
+are silent.
+
 ## A voice on the radio (`radioVoice.ts`, `scripts/voice.ts`)
 
 A cast speaks every line a shipped mission can put on the air, each line by the role its moment
