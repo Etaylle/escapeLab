@@ -459,11 +459,26 @@ function accessDone(last: Extract<PuzzleView, { kind: 'access' }>): PuzzleView {
 }
 
 /**
+ * The Anlaufsteuerung as it stands done: its last stage run up, no pulse left on the ladder or
+ * in the terminal's word.
+ */
+function startupDone(last: Extract<PuzzleView, { kind: 'startup' }>): PuzzleView {
+  const { terminal, board } = last;
+  return {
+    ...last,
+    last: 'angelaufen',
+    terminal: terminal === null ? null : { ...terminal, sent: false },
+    board: board === null ? null : { ...board, pulse: null },
+  };
+}
+
+/**
  * The station `last` showed, solved by now (`solved` stations), as it stands done: a sync
  * station with every press in and no word of an earlier miss — a main switch with every
  * lever down — a keypad with every key lit, the Signalkette with every sign of its stage
  * in, the Serverraum's table up (`serversDone`), the Zugangskontrolle's doors released
- * (`accessDone`); any other as last seen. Null where it is not solved: only closed, or walked
+ * (`accessDone`), the Anlaufsteuerung's last stage run up (`startupDone`); any other as last
+ * seen. Null where it is not solved: only closed, or walked
  * away from.
  */
 export function heldView(last: PuzzleView, solved: number): PuzzleView | null {
@@ -493,6 +508,8 @@ export function heldView(last: PuzzleView, solved: number): PuzzleView | null {
       return serversDone(last);
     case 'access':
       return accessDone(last);
+    case 'startup':
+      return startupDone(last);
     default:
       return last;
   }

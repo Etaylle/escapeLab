@@ -1,0 +1,340 @@
+import { renderToStaticMarkup } from 'react-dom/server';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { ConsoleId, PuzzleView, StartupBoard, StartupTerminal } from '@escapelab/core';
+import { NotepadContext } from '../src/noting.js';
+import { elementsOf, Sheets, type Screen, type Styled } from './cascade.js';
+import { deviceRun, mapWith, NO_CLOCK, stationView } from './fixtures.js';
+
+vi.mock('../src/puzzles/sounds.js', async (importOriginal) => {
+  const real = await importOriginal<Record<string, unknown>>();
+  return Object.fromEntries(
+    Object.entries(real).map(([name, value]) => [
+      name,
+      typeof value === 'function' ? vi.fn() : value,
+    ]),
+  );
+});
+
+const sounds = await import('../src/puzzles/sounds.js');
+const { humVolts, ladderLit, nextStepAt, NPM_REPLY, StartupPanel, startupSounds, statusOf } =
+  await import('../src/puzzles/StartupPanel.js');
+const { completed, lineOf, withKey } = await import('../src/puzzles/startupPrompt.js');
+const { heldView } = await import('../src/puzzles/Device.js');
+const { StationModal } = await import('../src/screens/Game.js');
+
+type Startup = Extract<PuzzleView, { kind: 'startup' }>;
+
+const noop = (): void => undefined;
+const NOW = 1_700_000_000_000;
+
+/** The Anlaufsteuerung as p1 sees it at console `seat` (none: away from it), `fields` set. */
+const seen = (seat: ConsoleId | null, fields: Record<string, unknown> = {}): Startup =>
+  stationView(
+    { type: 'startup', id: 'as', title: 'Anlaufsteuerung', ...fields },
+    seat === null ? { operating: false } : { seat },
+  ) as Startup;
+
+/** The live terminal at console a, with `part` changed. */
+function atTerminal(part: Partial<StartupTerminal> = {}): Startup {
+  const view = seen('a');
+  if (view.terminal === null) {
+    throw new Error('console a shows no terminal in stage 1');
+  }
+  return { ...view, terminal: { ...view.terminal, ...part } };
+}
+
+/** The live Schaltfeld at console b, with `part` changed. */
+function atBoard(part: Partial<StartupBoard> = {}): Startup {
+  const view = seen('b');
+  if (view.board === null) {
+    throw new Error('console b shows no Schaltfeld in stage 1');
+  }
+  return { ...view, board: { ...view.board, ...part } };
+}
+
+const panel = (puzzle: Startup): string =>
+  renderToStaticMarkup(
+    <StartupPanel puzzle={puzzle} change={null} send={noop} mission={NO_CLOCK} />,
+  );
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  vi.useFakeTimers();
+  vi.setSystemTime(NOW);
+});
+
+afterEach(() => {
+  vi.useRealTimers();
+});
+
+describe('the terminal’s prompt', () => {
+  it('reads zeige and start alone, setze with a gap and a feeder, and the script’s own form', () => {
+    expect(lineOf('zeige')).toEqual({ input: { cmd: 'zeige' } });
+    expect(lineOf('  START ')).toEqual({ input: { cmd: 'start' } });
+    expect(lineOf('setze abgang 2')).toEqual({ input: { cmd: 'setze', gap: 'abgang', value: 2 } });
+    expect(lineOf('abgang = 3')).toEqual({ input: { cmd: 'setze', gap: 'abgang', value: 3 } });
+    expect(lineOf('sperre=4')).toEqual({ input: { cmd: 'setze', gap: 'sperre', value: 4 } });
+    for (const line of ['', 'start 2', 'setze abgang', 'setze abgang 5', 'setze abgang 0']) {
+      expect(lineOf(line), line).toBeNull();
+    }
+    expect(lineOf('setze last 2')).toBeNull();
+    expect(lineOf('abgang 2')).toBeNull();
+  });
+
+  it('knows npm only to say it does not know it', () => {
+    expect(lineOf('npm start')).toEqual({ npm: true });
+    expect(lineOf('NPM install anlauf')).toEqual({ npm: true });
+    expect(NPM_REPLY).toBe('? npm: unbekannter Befehl — AS-86, Baujahr 1986');
+  });
+
+  it('completes a command, then a gap of the stage’s script', () => {
+    expect(completed('z', ['abgang'])).toBe('zeige');
+    expect(completed('se', ['abgang'])).toBe('setze ');
+    expect(completed('st', ['abgang'])).toBe('start');
+    expect(completed('s', ['abgang'])).toBe('s');
+    expect(completed('setze a', ['abgang'])).toBe('setze abgang ');
+    expect(completed('setze s', ['abgang'])).toBe('setze s');
+    expect(completed('setze s', ['sperre', 'abgang'])).toBe('setze sperre ');
+    expect(completed('start x', ['abgang'])).toBe('start x');
+  });
+
+  it('puts a key’s word into the line: a command, a gap, a feeder in its place', () => {
+    expect(withKey('setze abgang 2', { cmd: 'start' })).toBe('start');
+    expect(withKey('', { cmd: 'setze' })).toBe('setze ');
+    expect(withKey('setze ', { gap: 'abgang' })).toBe('setze abgang ');
+    expect(withKey('setze abgang ', { feeder: 3 })).toBe('setze abgang 3');
+    expect(withKey('setze abgang 3', { feeder: 1 })).toBe('setze abgang 1');
+    expect(withKey('setze abgang 3', { gap: 'sperre' })).toBe('setze sperre 3');
+    expect(withKey('', { feeder: 2 })).toBe('setze 2');
+    expect(withKey('setze 2', { gap: 'abgang' })).toBe('setze abgang 2');
+    expect(withKey('setze abgang 3', { erase: true })).toBe('setze abgang ');
+  });
+});
+
+describe('the ladder', () => {
+  const pulse = { sentAt: NOW };
+
+  it('lights a step a second from the pulse’s sending, all of them at the most', () => {
+    expect(ladderLit(null, NOW, 9)).toBe(0);
+    expect(ladderLit(pulse, NOW - 5, 9)).toBe(1);
+    expect(ladderLit(pulse, NOW, 9)).toBe(1);
+    expect(ladderLit(pulse, NOW + 999, 9)).toBe(1);
+    expect(ladderLit(pulse, NOW + 1000, 9)).toBe(2);
+    expect(ladderLit(pulse, NOW + 60_000, 9)).toBe(9);
+  });
+
+  it('names the moment the next step lights, none once the ladder is full', () => {
+    expect(nextStepAt(null, NOW, 9)).toBeNull();
+    expect(nextStepAt(pulse, NOW, 9)).toBe(NOW + 1000);
+    expect(nextStepAt(pulse, NOW + 1500, 9)).toBe(NOW + 2000);
+    expect(nextStepAt(pulse, NOW + 8000, 9)).toBeNull();
+  });
+
+  it('hums higher with every step', () => {
+    expect(humVolts(2)).toBeGreaterThan(humVolts(1));
+  });
+
+  it('draws its steps from the foot, the window’s marked at the top, lit as it fills', () => {
+    vi.setSystemTime(NOW + 6500);
+    const html = panel(atBoard({ pulse: { sentAt: NOW, arrived: true } }));
+    const steps = [...html.matchAll(/<li class="(startup-step[^"]*)"/g)].map((m) => m[1] ?? '');
+    // The live ladder, then none: the idle terminal has no ladder.
+    expect(steps).toHaveLength(9);
+    expect(steps.slice(0, 3).every((c) => c.includes('startup-step--marked'))).toBe(true);
+    expect(steps.filter((c) => c.includes('startup-step--lit'))).toHaveLength(7);
+    expect(steps[2]).toContain('startup-step--lit');
+    expect(steps[1]).not.toContain('startup-step--lit');
+  });
+});
+
+describe('the consoles', () => {
+  it('shows the live terminal the script and its gaps, the Schaltfeld beside it dark', () => {
+    const html = panel(atTerminal());
+    expect(html).toContain('AS-86 Anlaufskript, Stufe 1 von 2');
+    expect(html).toMatch(/abgang = <span class="startup-value startup-value--open">\?<\/span>/);
+    expect(html).toContain('Leuchtbild nach Tabelle 2 des Betriebsbuchs');
+    expect(html).not.toMatch(/startup-lamp--(gruen|gelb|rot)/);
+    expect(html).toContain('SCHALTFELD B');
+    expect(html).toContain('<input');
+  });
+
+  it('shows a value set where the gap was, and that a pulse is off without counting', () => {
+    const html = panel(atTerminal({ values: { abgang: 2 }, sent: true }));
+    expect(html).toMatch(/abgang = <span class="startup-value">2<\/span>/);
+    expect(html).toContain('IMPULS UNTERWEGS');
+    expect(html).not.toMatch(/startup-step--lit/);
+  });
+
+  it('shows the live Schaltfeld its lamps with their words, the terminal beside it idle', () => {
+    const view = atBoard();
+    const html = panel(view);
+    const colours = view.board?.feeders.flatMap((f) => f.lamps) ?? [];
+    expect(html.match(/class="startup-lamp startup-lamp--/g)).toHaveLength(8);
+    for (const colour of colours) {
+      expect(html).toContain(`startup-lamp--${colour}`);
+    }
+    expect(html).toContain('Skript läuft an Pult A');
+    expect(html).not.toContain('Anlaufskript');
+    expect(html).not.toContain('<input');
+    expect(html.match(/data-breaker="/g)).toHaveLength(4);
+    expect(html).not.toMatch(/data-breaker="\d"[^>]*disabled/);
+  });
+
+  it('shows the audience both live parts, no prompt and no breaker to close', () => {
+    const view = { ...atTerminal(), board: atBoard().board, role: null, console: null };
+    const html = panel(view);
+    expect(html).toContain('Anlaufskript');
+    expect(html).toMatch(/startup-lamp--(gruen|gelb|rot)/);
+    expect(html).not.toContain('<input');
+    const disabled = /data-breaker="\d" data-feel="pull" aria-label="[^"]*" disabled/g;
+    expect(html.match(disabled)).toHaveLength(4);
+  });
+
+  it('shows nothing of the instance away from the consoles', () => {
+    expect(panel(seen(null))).toBe('<p class="muted">Dieses Pult ist nicht angeschlossen.</p>');
+  });
+});
+
+describe('the status strip', () => {
+  it('says what the Schaltfeld sees of the pulse, and what the last came to', () => {
+    expect(statusOf(atBoard())).toBe('Stufe 1/2 · Schaltfeld aufgeschaltet · Bereit');
+    expect(statusOf(atBoard({ pulse: { sentAt: NOW, arrived: false } }))).toBe(
+      'Stufe 1/2 · Impuls kommt',
+    );
+    expect(statusOf(atBoard({ pulse: { sentAt: NOW, arrived: true } }))).toBe(
+      'Stufe 1/2 · Impuls auf den markierten Stufen',
+    );
+    expect(statusOf({ ...atBoard(), last: 'verworfen' })).toBe(
+      'Stufe 1/2 · Schaltfeld aufgeschaltet · Impuls verworfen: Schalter vor dem Fenster',
+    );
+  });
+
+  it('says at the terminal only that a pulse is off, never where it stands', () => {
+    expect(statusOf(atTerminal())).toBe('Stufe 1/2 · Skript an Pult A · Bereit');
+    expect(statusOf(atTerminal({ sent: true }))).toBe(
+      'Stufe 1/2 · Impuls unterwegs zu Schaltfeld B',
+    );
+    expect(statusOf({ ...atTerminal(), last: 'verfallen' })).toBe(
+      'Stufe 1/2 · Skript an Pult A · Impuls verfallen',
+    );
+  });
+});
+
+describe('what a change sounds like', () => {
+  const change = (before: Startup, after: Startup) => ({ before, after, alarm: false, seq: 1 });
+
+  it('clacks the relay home and chimes as a stage runs up', () => {
+    const before = atBoard();
+    startupSounds(change(before, { ...before, closed: [{ console: 'b', feeder: 2 }] }));
+    expect(sounds.relayClick).toHaveBeenCalledTimes(1);
+    expect(sounds.stageChime).toHaveBeenCalledTimes(1);
+    expect(sounds.rejectBuzz).not.toHaveBeenCalled();
+  });
+
+  it('buzzes a failed line or a wrong breaker, beeps a pulse sent', () => {
+    const before = atTerminal();
+    const log = [...(before.terminal?.log ?? []), { n: 9, tag: 'fail' as const, text: 'x' }];
+    startupSounds(change(before, atTerminal({ log })));
+    expect(sounds.rejectBuzz).toHaveBeenCalledTimes(1);
+    startupSounds(change(atBoard(), { ...atBoard(), last: 'falsch' }));
+    expect(sounds.rejectBuzz).toHaveBeenCalledTimes(2);
+    startupSounds(change(before, atTerminal({ sent: true })));
+    expect(sounds.okChime).toHaveBeenCalledTimes(1);
+    startupSounds(change(atTerminal({ sent: true }), atTerminal({ sent: true })));
+    expect(sounds.okChime).toHaveBeenCalledTimes(1);
+  });
+
+  it('holds the device as it stands done: run up, no pulse left', () => {
+    const held = heldView(atBoard({ pulse: { sentAt: NOW, arrived: true } }), 1);
+    expect(held?.kind === 'startup' ? [held.last, held.board?.pulse] : null).toEqual([
+      'angelaufen',
+      null,
+    ]);
+  });
+});
+
+// --- the type and the targets ------------------------------------------------------------------
+
+const sheets = new Sheets();
+
+const SCREENS: { name: string; screen: Screen; target: number }[] = [
+  { name: 'a laptop’s 1280×720', screen: { width: 1280, height: 720, coarse: false }, target: 36 },
+  { name: 'a phone held upright', screen: { width: 390, height: 844, coarse: true }, target: 44 },
+  { name: 'a phone held sideways', screen: { width: 844, height: 390, coarse: true }, target: 44 },
+];
+
+/** The device as the station modal shows it in a run. */
+function station(puzzle: Startup): Styled[] {
+  return elementsOf(
+    renderToStaticMarkup(
+      <NotepadContext value={{ noteDown: () => true, toggle: noop }}>
+        <StationModal
+          puzzle={puzzle}
+          run={deviceRun()}
+          map={mapWith({})}
+          edgework={null}
+          mission={NO_CLOCK}
+          send={noop}
+          onStepBack={noop}
+        />
+      </NotepadContext>,
+    ),
+  );
+}
+
+const CONTROLS = new Set(['button', 'input']);
+
+/** The px `node` declares at most for any of `properties` on `screen`. */
+function mostOf(node: Styled, properties: string[], screen: Screen): number {
+  const lengths = properties.map((property) => sheets.length(node, property, screen));
+  return Math.max(0, ...lengths.filter((n) => !Number.isNaN(n)));
+}
+
+const CONSOLES = [
+  { name: 'the terminal', nodes: () => station(atTerminal()) },
+  {
+    name: 'the Schaltfeld',
+    nodes: () => station(atBoard({ pulse: { sentAt: NOW, arrived: false } })),
+  },
+];
+
+describe.each(CONSOLES)('$name', ({ nodes }) => {
+  it.each(SCREENS)('makes every control a target on $name', ({ screen, target }) => {
+    const controls = nodes().filter((n) => CONTROLS.has(n.tag) && !sheets.hidden(n, screen));
+    const short = controls.filter(
+      (n) => mostOf(n, ['min-height', 'height', 'line-height'], screen) < target,
+    );
+    expect(short.map((n) => `${n.tag}.${n.classes.join('.')}`)).toEqual([]);
+    const breakers = controls.filter((n) => n.classes.includes('startup-breaker'));
+    expect(breakers.filter((n) => mostOf(n, ['min-width', 'width'], screen) < target)).toEqual([]);
+  });
+
+  it.each(SCREENS)('sets its words at 14 px at least on $name', ({ screen }) => {
+    const words = nodes().filter(
+      (n) =>
+        n.text.trim() !== '' &&
+        !sheets.hidden(n, screen) &&
+        [n, n.parent].some((m) => m?.classes.some((c) => c.startsWith('startup-')) === true),
+    );
+    expect(words.length).toBeGreaterThan(0);
+    const small = words.filter((node) => !(sheets.fontSize(node, screen) >= 14));
+    expect(small.map((n) => `${n.classes.join('.')} ${sheets.fontSize(n, screen)}`)).toEqual([]);
+  });
+});
+
+describe('the stylesheet', () => {
+  it('stacks terminal over Schaltfeld on a phone held upright, side by side elsewhere', () => {
+    const device = station(atTerminal()).find((n) => n.classes.includes('startup-device'));
+    if (device === undefined) {
+      throw new Error('no device rendered');
+    }
+    const columns = (screen: Screen): string | undefined =>
+      sheets.declared(device, 'grid-template-columns', screen)?.value;
+    expect(columns(SCREENS[1]?.screen ?? { width: 0, height: 0, coarse: true })).toBe(
+      'minmax(0, 1fr)',
+    );
+    expect(columns(SCREENS[0]?.screen ?? { width: 0, height: 0, coarse: false })).toBe(
+      'minmax(0, 1.15fr) minmax(0, 1fr)',
+    );
+  });
+});

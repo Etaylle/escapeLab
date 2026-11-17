@@ -145,9 +145,10 @@ describe('a new draft', () => {
   });
 
   it('offers every module that stands at a station, and no relay', () => {
-    expect(STATION_TYPES).toHaveLength(13);
+    expect(STATION_TYPES).toHaveLength(14);
     expect(STATION_TYPES).toContain('servers');
     expect(STATION_TYPES).toContain('access');
+    expect(STATION_TYPES).toContain('startup');
     expect(STATION_TYPES).not.toContain('relay');
   });
 });
@@ -183,6 +184,22 @@ describe('draft ↔ JSON', () => {
       panels: [],
     });
     expect(json.map.lamps).toHaveLength(5);
+  });
+
+  it('keeps the ducts it does not draw, and the validator holds them to their consoles', () => {
+    const hall = shipped.find(({ name }) => name === 'uebungshalle.json')?.data;
+    const draft = loaded(hall);
+    const json = draftToJson(draft) as { map: { conduits: unknown[] } };
+    expect(json.map.conduits).toEqual([
+      { puzzleId: 'startup', tiles: [[12, 24], [13, 24], [14, 24], [15, 24], [16, 24], [17, 24]] },
+    ]);
+    const moved = draft.map.stations.map((s) =>
+      s.puzzleId === 'startup' && s.console === 'b' ? { ...s, x: s.x + 2 } : s,
+    );
+    const checked = checkMission(draftToJson({ ...draft, map: { ...draft.map, stations: moved } }));
+    expect(checked.ok ? [] : checked.issues).toEqual([
+      expect.stringMatching(/^map\.conduits\.0\.tiles: .*beside console b \(19,23\)$/),
+    ]);
   });
 
   it('keeps mission control’s lines the form does not show, and writes the ones it edits', () => {

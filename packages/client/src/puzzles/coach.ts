@@ -71,6 +71,11 @@ const LINES = {
     mouse: 'Schreiben oder klicken: login, status, freigeben — Token: Pult B.',
   },
   'access-token': 'Konto und Token ablesen, solange der Balken läuft.',
+  'startup-terminal': {
+    touch: 'Tippen oder antippen: zeige, setze, start — Leuchten drüben.',
+    mouse: 'Schreiben oder klicken: zeige, setze, start — Leuchten drüben.',
+  },
+  'startup-board': 'Der Schalter zählt nur auf den markierten Stufen der Leiter.',
 } as const satisfies Record<string, Line>;
 
 type Device = keyof typeof LINES;
@@ -97,6 +102,7 @@ function deviceOf(puzzle: PuzzleView): Device | null {
     case 'signal':
     case 'servers':
     case 'access':
+    case 'startup':
       return partOf(puzzle.kind, puzzle.role);
     case 'relay':
       return null;
