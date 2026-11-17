@@ -377,15 +377,20 @@ describe('a mark', () => {
   });
 });
 
-describe('the views', () => {
+/** The first wave 20 s in, its first hostile packet on the lines marked; dealt as a test asks. */
+function markedWave() {
   const state = at(running(3), T0 + 20_000).state;
   const hostile = state.packets
     .slice(0, state.entered)
     .filter((p) => p.hostile)
     .map((p) => p.id);
-  const marked = { ...state, marks: hostile.slice(0, 1) };
+  return { state, hostile, marked: { ...state, marks: hostile.slice(0, 1) } };
+}
+
+describe('the views', () => {
 
   it('show the Sperrpult the packets and their rings, never a header', () => {
+    const { state, hostile, marked } = markedWave();
     const gate = view(marked, AT_STATION);
     expect(gate.role).toBe('gate');
     expect(gate.packets?.length).toBe(state.entered);
@@ -398,6 +403,7 @@ describe('the views', () => {
   });
 
   it('show the Analysepult the same packets with their headers', () => {
+    const { state, marked } = markedWave();
     const analysis = view(marked, AT_CONSOLE_B);
     expect(analysis.role).toBe('analysis');
     expect(analysis.packets?.map((p) => p.header)).toEqual(
@@ -409,6 +415,7 @@ describe('the views', () => {
   });
 
   it('show no packet still to come, and nobody which packet is hostile', () => {
+    const { state, marked } = markedWave();
     for (const viewer of [AT_STATION, AT_CONSOLE_B, AT_BOOK, ELSEWHERE, AUDIENCE]) {
       const wire = JSON.stringify(view(marked, viewer));
       expect(wire).not.toContain('hostile');
@@ -417,6 +424,7 @@ describe('the views', () => {
   });
 
   it('show the policy and everybody away nothing of the instance, the audience the consoles', () => {
+    const { marked } = markedWave();
     for (const viewer of [AT_BOOK, ELSEWHERE]) {
       expect(view(marked, viewer)).toMatchObject({ role: null, packets: null, clock: null });
     }
@@ -430,8 +438,8 @@ describe('the Paketfilter through the reducer', () => {
   const consoleB = stationKey({ puzzleId: 'filter', console: 'b' });
   const both = { stations: { filter: ['p1'], [consoleB]: ['p2'] } };
   /** The station on at T0 + 500, p1 at console a, p2 at b from T0 + 1000. */
-  const open = (): GameState => {
-    const atA = standing(lightsOut(started(mission, 3)), {
+  const open = (seed = 3): GameState => {
+    const atA = standing(lightsOut(started(mission, seed)), {
       stations: { filter: ['p1'] },
       signSeen: ['p1', 'p2'],
     });
@@ -461,6 +469,35 @@ describe('the Paketfilter through the reducer', () => {
     );
     expect(back.paused).toBeNull();
     expect(fw(back)).toMatchObject({ heldAt: null, vacant: [], startedAt: T0 + 31_000 });
+  });
+
+  /**
+   * A run, and a moment just after its first hostile packet reached the Kern with no tick since,
+   * at which a packet the policy lets through is the lowest on its line; null where the seed
+   * deals none.
+   */
+  const lateTrip = (seed: number) => {
+    const state = open(seed);
+    const { packets, startedAt } = fw(state);
+    const fall = 10_000;
+    const hostile = packets.find((p) => p.hostile);
+    const at = startedAt + (hostile?.enterMs ?? 0) + fall + 500;
+    const falling = (p: (typeof packets)[number]) =>
+      startedAt + p.enterMs <= at && at < startedAt + p.enterMs + fall;
+    const line = [0, 1, 2, 3, 4].find((l) => packets.find((p) => p.line === l && falling(p))?.hostile === false);
+    return line === undefined ? null : { state, at, line };
+  };
+
+  it('brings the station to a move’s moment first: the packet in the Kern is the alarm', () => {
+    const late = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(lateTrip).find((found) => found !== null);
+    if (late === undefined || late === null) {
+      throw new Error('no seed deals a packet let through on its line as the first attack lands');
+    }
+    const input = { trip: late.line };
+    const after = applyAction(late.state, { type: 'puzzle-input', playerId: 'p1', at: late.at, input });
+    const alarms = after.events.filter((e) => e.kind === 'penalty').map((e) => e.label);
+    expect(alarms).toEqual(['Paketfilter: Angriff im Kern']);
+    expect(fw(after).event).toMatchObject({ kind: 'void', line: late.line });
   });
 
   it('charges a hostile packet in the Kern on the room’s tick, to nobody', () => {
