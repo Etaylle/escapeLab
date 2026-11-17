@@ -440,8 +440,8 @@
       ],
       "lights": ["MASCHINENRAUM"],
       "onSolved": [
-        "Aggregat läuft, die Maschinenraumtür bleibt offen. Als Nächstes der Paketfilter am Serverschott: zwei Pulte, die Sicherheitsrichtlinie hängt im Flur.",
-        "Die Maschinen laufen an, im Maschinenraum ist Licht. Der Paketfilter vor dem Serverraum braucht beide Pulte, die Richtlinie hängt im Flur."
+        "Aggregat läuft, die Maschinenraumtür bleibt offen. Als Nächstes der Paketfilter am Serverschott: Pulte östlich davon, die Richtlinie hängt westlich an der Südwand.",
+        "Die Maschinen laufen an, im Maschinenraum ist Licht. Der Paketfilter vor dem Serverraum braucht beide Pulte, die Richtlinie hängt westlich vom Schott."
       ]
     },
     {
@@ -450,7 +450,7 @@
       "title": "Paketfilter",
       "nudges": [
         [
-          "Die Sicherheitsrichtlinie zum Paketfilter hängt im Flur, an der Südwand.",
+          "Die Sicherheitsrichtlinie zum Paketfilter hängt im Flur an der Südwand, westlich vom Schott.",
           "Welche Pakete der Filter sperrt, steht in der Sicherheitsrichtlinie, sie hängt im Flur an der Südwand."
         ],
         "Das Analysepult steht im Flur gleich östlich vom Schott zum Serverraum, das Sperrpult ein Stück weiter Richtung Ostende."

@@ -116,9 +116,9 @@ const AWAITING_RENDER: readonly string[] = [
   'Notlicht brennt, ich sehe euch wieder auf meiner Tafel. Weiter mit der Anlaufsteuerung: ' +
     'Betriebsbuch im Archiv, Pulte im Flur und im Maschinenraum.',
   'Aggregat läuft, die Maschinenraumtür bleibt offen. Als Nächstes der Paketfilter am ' +
-    'Serverschott: zwei Pulte, die Sicherheitsrichtlinie hängt im Flur.',
+    'Serverschott: Pulte östlich davon, die Richtlinie hängt westlich an der Südwand.',
   'Die Maschinen laufen an, im Maschinenraum ist Licht. Der Paketfilter vor dem Serverraum ' +
-    'braucht beide Pulte, die Richtlinie hängt im Flur.',
+    'braucht beide Pulte, die Richtlinie hängt westlich vom Schott.',
   'Das Betriebsbuch zur Anlaufsteuerung liegt im Archiv, auf der Ostseite.',
   'Ohne das Betriebsbuch aus dem Archiv sagen die Leuchten am Schaltfeld nichts, es liegt ' +
     'dort auf der Ostseite.',
@@ -126,7 +126,8 @@ const AWAITING_RENDER: readonly string[] = [
     'der Plattentür, einer bleibt auf der Platte.',
   'Die Tür zum Maschinenraum geht nur auf, solange jemand auf der Platte davor steht, ' +
     'dahinter wartet das zweite Pult.',
-  'Die Sicherheitsrichtlinie zum Paketfilter hängt im Flur, an der Südwand.',
+  'Die Sicherheitsrichtlinie zum Paketfilter hängt im Flur an der Südwand, westlich vom ' +
+    'Schott.',
   'Welche Pakete der Filter sperrt, steht in der Sicherheitsrichtlinie, sie hängt im Flur ' +
     'an der Südwand.',
   'Das Analysepult steht im Flur gleich östlich vom Schott zum Serverraum, das Sperrpult ' +

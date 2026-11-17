@@ -540,6 +540,25 @@ describe('mission blackout by design', () => {
     }
   });
 
+  it('keeps the Betriebsbuch a short walk from console B: there and back within 20 s', () => {
+    // Whoever works console A is shut in the Maschinenraum until the generator runs; the lamp
+    // pictures' table lies in the Archiv, and only console B's player can walk to it — once
+    // before the station, or again for a stage — while the script waits for both consoles.
+    const map = blackout.map;
+    const outside = map.stations.find((s) => s.puzzleId === 'anlauf' && s.console === 'b');
+    const book = map.manuals.find((m) => m.puzzleIds.includes('anlauf'));
+    if (outside === undefined || book === undefined) {
+      throw new Error('Blackout needs console B of the Anlaufsteuerung and its book');
+    }
+    const shut = new Set(map.doors.map((d) => tileKey(d.x, d.y)));
+    expect(book.spots.length).toBeGreaterThan(1);
+    for (const spot of book.spots) {
+      const there = walkTiles(map, outside, spot, shut) / WALK_SPEED;
+      expect(2 * there, `the book at ${tileKey(spot.x, spot.y)}`).toBeLessThanOrEqual(20);
+      expect(2 * there).toBeGreaterThan(2);
+    }
+  });
+
   it('stands the Paketfilter before the Serverschott, which its solve opens', () => {
     const map = blackout.map;
     const rooms = roomsOf(map);
