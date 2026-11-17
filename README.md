@@ -400,7 +400,9 @@ auf einem M4 mit 16 GB (14.11.2026, Last 9 bis 17) 772 s:
 | `three` | 92,5 | | | `perf` | 22,8 |
 
 `three` kam danach dazu (M-three): 92,5 s im vollen Rundgang desselben Tages bei Last 7 bis 31,
-75 bis 91 s allein mit `SHOTS_ONLY=three`. `music` (M-packs) spielt nur im Systemcheck: 4,9 s im CI,
+75 bis 91 s allein mit `SHOTS_ONLY=three`. `firewall` (I-firewall) spielt nur im Systemcheck: 71,4 s allein
+mit `SHOTS_ONLY=firewall` bei Last um 4 (17.11.2026), und die Übungshalle braucht an ihrem
+Paketfilter 55,1 s dazu. `music` (M-packs) spielt nur im Systemcheck: 4,9 s im CI,
 9,7 s allein mit `SHOTS_ONLY=music` bei Last um 20.
 
 `SHOTS_ONLY=screens,intro` spielte Blackout in 48 s; jede Gruppe im Lauf zieht die Mission bis
