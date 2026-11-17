@@ -187,17 +187,25 @@ const valueWord = (value: number | null): string => (value === null ? '?' : `[${
  * The script's lines as the terminal lists them: every comment on a line of its own, over the
  * command or the gap it explains, so that no line runs much past sixty characters.
  */
-export function listed(script: readonly StartupScriptLine[]): StartupScriptLine[] {
-  return script.flatMap((line): StartupScriptLine[] => {
-    if (line.kind === 'comment' || line.comment === null) {
+export function listed(script: readonly StartupScriptLine[]): ListedLine[] {
+  return script.flatMap((line): ListedLine[] => {
+    if (line.kind === 'comment') {
       return [line];
     }
-    return [{ kind: 'comment', text: line.comment }, { ...line, comment: null }];
+    const own: ListedLine =
+      line.kind === 'gap' ? { kind: 'gap', gap: line.gap } : { kind: 'code', text: line.text };
+    return line.comment === null ? [own] : [{ kind: 'comment', text: line.comment }, own];
   });
 }
 
+/** A line of the script as listed: a comment, a command or a gap, each on a line of its own. */
+export type ListedLine =
+  | { kind: 'comment'; text: string }
+  | { kind: 'code'; text: string }
+  | { kind: 'gap'; gap: StartupGap };
+
 /** One line of the script: a comment, a command, or a gap with what it holds. */
-function ScriptLine({ line, terminal }: { line: StartupScriptLine; terminal: StartupTerminal }) {
+function ScriptLine({ line, terminal }: { line: ListedLine; terminal: StartupTerminal }) {
   if (line.kind === 'comment') {
     return <li className="startup-line startup-line--comment">{`# ${line.text}`}</li>;
   }

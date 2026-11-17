@@ -214,7 +214,6 @@ describe('the script as listed', () => {
     const script = atTerminal().terminal?.script ?? [];
     const lines = listed(script);
     expect(lines.filter((line) => line.kind === 'comment').length).toBe(3);
-    expect(lines.every((line) => line.kind === 'comment' || line.comment === null)).toBe(true);
     const html = panel(atTerminal());
     const texts = [...html.matchAll(/<li class="startup-line[^"]*"[^>]*>(.*?)<\/li>/g)].map((m) =>
       (m[1] ?? '').replace(/<[^>]+>/g, ''),
