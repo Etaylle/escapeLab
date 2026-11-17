@@ -61,6 +61,15 @@ describe('a snapshot of the build before', () => {
     expect(heard.some((event) => event.speaker !== undefined)).toBe(false);
   });
 
+  it('draws nothing for a room kept before the pools: every station of its run as before', () => {
+    expect('drawn' in BUILD_BEFORE.state).toBe(false);
+    const opened = open(seal(BUILD_BEFORE, BUILD_BEFORE.code, KEY), BUILD_BEFORE.code, KEY);
+    expect(opened.state.drawn).toEqual({});
+    const ids = (state: SealedSnapshot['state']): string[] => state.mission.puzzles.map((p) => p.id);
+    expect(ids(opened.state)).toEqual(ids(BUILD_BEFORE.state));
+    expect(opened.state.currentPuzzleIndex).toBe(BUILD_BEFORE.state.currentPuzzleIndex);
+  });
+
   it('fills in what it kept no word of: nobody on a plate, until the crew is back', () => {
     const presence = BUILD_BEFORE.state.presence as Partial<SealedSnapshot['state']['presence']>;
     expect(presence.plates).toBeUndefined();

@@ -27,11 +27,11 @@ Kooperatives Multiplayer-Escape-Spiel (Studienprojekt, FH-Themengruppe Schefer-W
   Lösung offen. Rätsel mit demselben `pool` teilen sich einen Wechselplatz: Der Start lost je
   Lauf aus dem Seed genau eines aus (`core/src/rotation.ts`), die anderen sind außer Betrieb —
   nie scharf, ohne Instanz in jeder Sicht —, Türen nennen den Pool statt eines Mitglieds, und
-  die Validierung beweist jede mögliche Auslosung. Ein Rätseltyp ist ein Modul unter `core/src/puzzles/<typ>.ts` nach dem Vertrag
-  in `core/src/puzzles/module.ts` (Schema, Zustand, Eingaben, Sicht nach Anwesenheit,
-  gedrucktes Handbuch, `solve`) plus je ein Eintrag in `core/src/puzzles/index.ts` und
-  `client/src/puzzles/index.ts` (Panel). Sonst ändert sich nichts: Reducer und Protokoll kennen
-  nur `puzzle-input`.
+  die Validierung beweist jede mögliche Auslosung. Ein Rätseltyp ist ein Modul unter
+  `core/src/puzzles/<typ>.ts` nach dem Vertrag in `core/src/puzzles/module.ts` (Schema,
+  Zustand, Eingaben, Sicht nach Anwesenheit, gedrucktes Handbuch, `solve`) plus je ein Eintrag
+  in `core/src/puzzles/index.ts` und `client/src/puzzles/index.ts` (Panel). Sonst ändert sich
+  nichts: Reducer und Protokoll kennen nur `puzzle-input`.
 - Das Handbuch eines Moduls (`manual()`) enthält Regeln, nie Antworten, und hängt weder vom Seed
   noch vom Zustand ab — es ist druckbar. Jedes Modul liefert `solve()` über die Sichten von Pult
   und Lese-Objekt; Eigenschaftstests beweisen damit, dass die Crew aus ihren Sichten jede

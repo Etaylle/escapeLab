@@ -271,8 +271,9 @@ than a run is long, and a second run is not the first one again.
 
 **The draw.** The start draws one member per pool from the run's seed and the pool's id alone
 (core `rotation.ts` `drawPools`: `pickOf` over the members sorted by id), whatever order the file
-or a run has them in and at any difficulty: the same seed has the same stations, the
-Tagesschicht gives every crew the day's, and a rematch draws anew from its new seed. The state
+or a run has them in and at any difficulty: the same seed has the same stations. On the
+Tagesschicht every crew of the day therefore plays the same drawn station, as it plays the same
+instance; a rematch draws anew from its new seed. The state
 keeps the draw (`GameState.drawn`, by pool id), and the run's `mission.puzzles` stand in the
 run's order: its own stations first — a pool standing where its first member stands in the
 file, as the drawn one — and the stations out of service after them (`runOrder`), so that
