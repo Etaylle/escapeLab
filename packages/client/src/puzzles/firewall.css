@@ -48,7 +48,9 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
-  padding: 10px 10px 8px;
+  /* the top padding, over which the numbers' row stands and a held scope's word with it */
+  --pad-top: 10px;
+  padding: var(--pad-top) 10px 8px;
   border-radius: 12px;
   background: radial-gradient(ellipse 120% 100% at 50% 30%, #0f2233 0%, #07121c 60%, #03080d 100%);
   box-shadow:
@@ -279,26 +281,31 @@ button.firewall-card {
   text-align: center;
 }
 
-/* The wave held: the packets dim where they stand, HALT across the lines. */
+/*
+ * The wave held: the Sperrpult's points dim where they stand, its word over the lines' numbers at
+ * the scope's head. The Analysepult's cards stay as readable as ever — marks go on during a
+ * hold, and its person reads at leisure then — and no word ever lies across one.
+ */
 .firewall-scope {
   position: relative;
 }
 
-.firewall-scope--held .firewall-track,
-.firewall-scope--held .firewall-card {
+.firewall-scope--held .firewall-blip {
   opacity: 0.45;
 }
 
 .firewall-held {
   position: absolute;
-  top: 40%;
+  /* as high as the numbers' row it covers: their line-height, a 1 px rule over and under it */
+  top: var(--pad-top);
   right: 10px;
   left: 10px;
   margin: 0;
-  padding: 4px 0;
-  border-top: 2px solid var(--scope-mark);
-  border-bottom: 2px solid var(--scope-mark);
-  background: rgba(3, 8, 13, 0.75);
+  padding: 0;
+  line-height: 1.2;
+  border-top: 1px solid var(--scope-mark);
+  border-bottom: 1px solid var(--scope-mark);
+  background: #07121c;
   color: var(--scope-mark);
   font-weight: 700;
   letter-spacing: 8px;
@@ -386,6 +393,7 @@ button.firewall-card {
   }
 
   .firewall-scope {
-    padding: 6px 8px 4px;
+    --pad-top: 6px;
+  padding: var(--pad-top) 8px 4px;
   }
 }

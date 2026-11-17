@@ -487,3 +487,71 @@ describe('the keys a console listens for', () => {
     expect(keysIn(keysOf(['arrowleft', 'a']))).toEqual(keysIn(keysOf(['arrowleft', 'a'])));
   });
 });
+
+describe('the scope held', () => {
+  const sheets = new Sheets();
+  const PHONE: Screen = { width: 844, height: 390, coarse: true };
+
+  /** Console `seat`'s device with the other console empty, as the station modal shows it. */
+  function held(seat: 'a' | 'b'): Styled[] {
+    clockAt(MID);
+    const puzzle = { ...seen(seat, MID, allMarked), vacant: [seat === 'a' ? 'b' : 'a'] as const };
+    return elementsOf(
+      renderToStaticMarkup(
+        <NotepadContext value={{ noteDown: () => true, toggle: noop }}>
+          <StationModal
+            puzzle={{ ...puzzle, vacant: [...puzzle.vacant] }}
+            run={deviceRun()}
+            map={mapWith({})}
+            edgework={null}
+            mission={NO_CLOCK}
+            send={noop}
+            onStepBack={noop}
+          />
+        </NotepadContext>,
+      ),
+    );
+  }
+
+  /** How opaque `node` is drawn: the product of its own opacity and every ancestor's. */
+  function opacityOf(node: Styled): number {
+    let product = 1;
+    for (let at: Styled | null = node; at !== null; at = at.parent) {
+      const won = sheets.declared(at, 'opacity', PHONE)?.value;
+      product *= won === undefined ? 1 : Number(won);
+    }
+    return product;
+  }
+
+  it('keeps every card fully readable while the Analysepult marks at leisure', () => {
+    const cards = held('b').filter((n) => n.classes.includes('firewall-card'));
+    expect(cards.length).toBeGreaterThan(0);
+    expect(cards.map(opacityOf)).toEqual(cards.map(() => 1));
+  });
+
+  it('dims the Sperrpult’s points where they stand', () => {
+    const blips = held('a').filter((n) => n.classes.includes('firewall-blip'));
+    expect(blips.length).toBeGreaterThan(0);
+    expect(blips.map(opacityOf)).toEqual(blips.map(() => 0.45));
+  });
+
+  it('sets its word over the lines’ numbers at the scope’s head, never across a card', () => {
+    const nodes = held('b');
+    const bar = nodes.find((n) => n.classes.includes('firewall-held'));
+    const scope = nodes.find((n) => n.classes.includes('firewall-scope'));
+    if (bar === undefined || scope === undefined) {
+      throw new Error('expected the scope and its word');
+    }
+    expect(bar.text).toBe('HALT');
+    // the bar's top where the numbers' row begins, as high as that row
+    for (const screen of [PHONE, { width: 1280, height: 720, coarse: false }]) {
+      expect(sheets.declared(bar, 'top', screen)?.value).toBe('var(--pad-top)');
+      expect(sheets.declared(scope, 'padding', screen)?.value).toMatch(/^var\(--pad-top\) /);
+    }
+    const numbers = nodes.find((n) => n.classes.includes('firewall-numbers'));
+    const rowHeight = numbers && sheets.declared(numbers, 'line-height', PHONE)?.value;
+    expect(rowHeight).toBe('1.2');
+    expect(sheets.declared(bar, 'line-height', PHONE)?.value).toBe('1.2');
+    expect(sheets.declared(bar, 'padding', PHONE)?.value).toBe('0');
+  });
+});

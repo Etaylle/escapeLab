@@ -215,7 +215,8 @@ const bannerOf = (puzzle: FirewallPuzzle): string | null => {
 /**
  * The scope: the lines' numbers over five lines into the Kern, each line with what `lane` puts
  * on it. A line of the Sperrpult is a key that sets the gate there; the Analysepult's are plain.
- * While the wave stands still the packets dim where they stand under its word (`bannerOf`).
+ * While the wave stands still its word (`bannerOf`) stands over the numbers at the scope's head,
+ * the Sperrpult's points dimmed, the Analysepult's cards as readable as ever.
  */
 function Scope({ lane, puzzle }: { lane: (line: number) => ReactNode; puzzle: FirewallPuzzle }) {
   const banner = bannerOf(puzzle);

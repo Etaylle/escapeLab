@@ -11068,7 +11068,78 @@ async function firewallArm(gate) {
 }
 
 /** No shot at all: the hall's Paketfilter, shot as its device opens. */
-const NO_FIREWALL_SHOTS = Object.freeze({ headers: false, gate: false });
+const NO_FIREWALL_SHOTS = Object.freeze({ headers: false, gate: false, held: false });
+
+/** How many cards the held shot waits for on the lines. */
+const HELD_CARDS = 2;
+
+/**
+ * How opaque each card of the open device on `page` is drawn, its ancestors' opacity with it:
+ * a card dimmed under a hold reads worse exactly when its person reads at leisure.
+ */
+const cardOpacities = (page) =>
+  page.evaluate(() =>
+    [...document.querySelectorAll('.station-modal .firewall-card')].map((card) => {
+      let opacity = 1;
+      for (let at = card; at !== null; at = at.parentElement) {
+        opacity *= Number(globalThis.getComputedStyle(at).opacity);
+      }
+      return Math.round(opacity * 100) / 100;
+    }),
+  );
+
+/**
+ * firewall-held.png, once HELD_CARDS cards are on the lines: `gate`'s player steps back from the
+ * Sperrpult and walks to the binder, the wave holds, and the Analysepult is shot so — every card
+ * drawn whole, the hold's word over the numbers, never across a card; the run fails where a
+ * card is dimmed or the word lies over one. Then the Sperrpult is manned again and the wave goes
+ * on. Returns whether it did so.
+ */
+async function heldShot({ gate, analysis }, shots) {
+  if (!shots.held || firewallLive(analysis).length < HELD_CARDS) {
+    return false;
+  }
+  shots.held = false;
+  await gate.page.keyboard.press('Escape');
+  await gate.page.locator('.station-modal').waitFor({ state: 'hidden', timeout: 3000 });
+  const [spot] = FIREWALL_MISSION.map.manuals[0].spots;
+  if (!(await walkNear(gate.page, gate.seen, spot))) {
+    throw new Error(`${gate.name} found no way off the Sperrpult to ${spot.x},${spot.y}`);
+  }
+  const vacant = () => (firewallView(analysis)?.vacant ?? []).join() === 'a';
+  if (!(await until(vacant, 3000))) {
+    throw new Error(`${gate.name} left the Sperrpult, but the wave holds not`);
+  }
+  await sleep(400); // the hold drawn
+  await capture(analysis.page, 'firewall-held.png');
+  await heldVerdict(analysis);
+  await manFirewall(gate, 'a', 'gate');
+  await firewallRuns(gate);
+  return true;
+}
+
+/** The held Analysepult judged: every card drawn whole, the word clear of the cards. */
+async function heldVerdict(analysis) {
+  const opacities = await cardOpacities(analysis.page);
+  const clear = await analysis.page.evaluate(() => {
+    const word = document.querySelector('.station-modal .firewall-held')?.getBoundingClientRect();
+    const cards = [...document.querySelectorAll('.station-modal .firewall-card')];
+    const over = (card) => {
+      const box = card.getBoundingClientRect();
+      return word !== undefined && box.top < word.bottom && box.bottom > word.top;
+    };
+    return word !== undefined && !cards.some(over);
+  });
+  const status = (await textOf(analysis.page.locator('.station-modal .firewall-status'))) ?? '';
+  const whole = opacities.length > 0 && opacities.every((o) => o === 1);
+  fwSaid(
+    `firewall-held.png ${analysis.name} held: „${status}", cards drawn at ${opacities.join(', ')}` +
+      `${clear ? ', the word clear of them' : ' !! the word over a card'}`,
+  );
+  if (!whole || !clear || !status.includes('Sperrpult unbesetzt · Pakete halten')) {
+    fail(`firewall-held.png: cards at ${opacities.join(', ')}, word clear ${clear}, „${status}"`);
+  }
+}
 
 /**
  * One step of the crew at the Paketfilter as its pages stand now: the Freigabe where the wave
@@ -11078,6 +11149,9 @@ const NO_FIREWALL_SHOTS = Object.freeze({ headers: false, gate: false });
  */
 async function firewallStep(crew, hostile, shots, rings) {
   const { gate, analysis } = crew;
+  if (await heldShot(crew, shots)) {
+    return true;
+  }
   const fw = firewallView(gate);
   if (fw?.waiting === true && fw.vacant.length === 0) {
     await firewallArm(gate);
@@ -11127,14 +11201,15 @@ const FIREWALL_HOSTILE = new Set(
 
 /**
  * The probe followed to its solve (`followFirewall`) — the cards shot at a mark, the Sperrpult
- * at its first ring —; the run fails unless it solves, or where it took more than one alarm: one
- * a slow runner's late tap may cost, a called-off wave the drill follows on. The log says how
- * long it took and how soon each ring showed after the view's word.
+ * at its first ring, the Analysepult held with its cards on the lines (`heldShot`) —; the run
+ * fails unless it solves, or where it took more than one alarm: one a slow runner's late tap
+ * may cost, a called-off wave the drill follows on. The log says how long it took and how soon
+ * each ring showed after the view's word.
  */
 async function playFirewall(crew) {
   const alarms = crew.gate.seen.view.alarms.count;
   const from = Date.now();
-  const shots = { headers: true, gate: true };
+  const shots = { headers: true, gate: true, held: true };
   const { solved, rings } = await followFirewall(crew, FIREWALL_HOSTILE, shots);
   const raised = crew.gate.seen.view.alarms.count - alarms;
   fwSaid(

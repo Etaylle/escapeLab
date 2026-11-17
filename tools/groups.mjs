@@ -96,6 +96,7 @@ export const GROUPS = [
       'firewall-phone-932.png',
       'firewall-headers.png',
       'firewall-gate.png',
+      'firewall-held.png',
       'firewall (targets)',
     ],
   },
