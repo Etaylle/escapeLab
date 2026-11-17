@@ -456,92 +456,97 @@ describe('the scope’s geometry', () => {
     }
   });
 
-  /** The audience's scope, its cards on the lines. */
-  function watched(): Styled[] {
+  it('numbers the lines over them, where no card ever covers a number', () => {
+    const nodes = cards();
+    const numbers = nodes.filter((n) => n.classes.includes('firewall-line-no'));
+    expect(numbers.map((n) => n.text)).toEqual(['1', '2', '3', '4', '5']);
+    expect(numbers.every((n) => n.parent?.classes.includes('firewall-numbers'))).toBe(true);
+  });
+});
+
+describe('the scope on a phone held upright', () => {
+  /** A scope's markup read as elements: console `seat`'s, the audience's for null. */
+  function scope(seat: ConsoleId | null, change?: (s: PuzzleState) => PuzzleState): Styled[] {
     clockAt(MID);
-    return elementsOf(panel(seen(null, MID)));
+    return elementsOf(panel(seen(seat, MID, change)));
   }
 
-  /** The lines and a card among `nodes`. */
-  function scopeOf(nodes: Styled[]): { lines: Styled; card: Styled } {
-    const lines = nodes.find((n) => n.classes.includes('firewall-lines'));
-    const card = nodes.find((n) => n.classes.includes('firewall-card'));
-    if (lines === undefined || card === undefined) {
-      throw new Error('expected the lines and a card');
+  /** The one of `nodes` that wears `name`. */
+  function part(nodes: Styled[], name: string): Styled {
+    const found = nodes.find((n) => n.classes.includes(name));
+    if (found === undefined) {
+      throw new Error(`expected ${name}`);
     }
-    return { lines, card };
+    return found;
   }
 
-  it.each(UPRIGHT)(
-    'holds two cards of four lines on one line of a phone held upright at $width',
-    (screen) => {
-      for (const { lines, card } of [scopeOf(cards()), scopeOf(watched())]) {
-        for (const scale of Object.values(TEXT_SCALE)) {
-          const scaled = new ScaledSheets(scale);
-          const high = scaled.length(lines, 'height', screen);
-          const item = scaled.length(card, 'min-height', screen);
-          expect(item, `scale ${scale}`).toBeGreaterThanOrEqual(44);
-          // four lines at 1.1, 1 px of padding and the 1 px border over and under them
-          const font = scaled.fontSize(card, screen);
-          expect(scaled.declared(card, 'line-height', screen)?.value).toBe('1.1');
-          expect(4 * 1.1 * font + 2 + 2, `scale ${scale}`).toBeLessThanOrEqual(item + 0.01);
-          expect((high - item) * SAME_LINE_GAP, `scale ${scale}`).toBeGreaterThanOrEqual(
-            item - 0.01,
-          );
-        }
-      }
-    },
-  );
-
-  it.each(UPRIGHT)('sets five lines side by side in a window $width wide', (screen) => {
-    const sheets = new Sheets();
-    for (const seat of ['a', 'b'] as const) {
-      clockAt(MID);
-      const nodes = elementsOf(panel(seen(seat, MID)));
-      for (const row of ['firewall-lines', 'firewall-numbers']) {
-        const grid = nodes.find((n) => n.classes.includes(row));
-        if (grid === undefined) {
-          throw new Error(`expected ${row}`);
-        }
-        const columns = sheets.declared(grid, 'grid-template-columns', screen)?.value ?? '';
-        const [, least = ''] = /^repeat\(5, minmax\((.+), 1fr\)\)$/.exec(columns) ?? [];
-        expect(least, columns).not.toBe('');
-        // every text size the settings offer: a line's least width grows with a card's type
-        for (const scale of Object.values(TEXT_SCALE)) {
-          const scaled = new ScaledSheets(scale);
-          const em = scaled.fontSize(grid, screen);
-          const column = lengthOf(least, { screen, em, custom: () => undefined });
-          const gap = scaled.length(grid, 'gap', screen);
-          // the station's frame takes 29 px of each side at these widths (devices.css: the
-          // modal's 10, the panel's 6, the face's 10; firewall.css: the bezel's 8, the scope 8
-          // into it, its own 3): the lines at their least, with their gaps, stand in the rest
-          expect(5 * column + 4 * gap, `${row} ${seat} ${scale}`).toBeLessThanOrEqual(
-            screen.width - 2 * 29,
-          );
-          // a line is a finger wide at least, and a card's holds five figures of its type
-          // (0.602 em each in the device's face), its border and its padding
-          expect(column).toBeGreaterThanOrEqual(seat === 'b' ? 5 * 0.602 * em + 6 : 44);
-          expect(column).toBeGreaterThanOrEqual(44);
-        }
+  it.each(UPRIGHT)('holds two cards of four lines on one line at $width', (screen) => {
+    for (const nodes of [scope('b'), scope(null)]) {
+      const lines = part(nodes, 'firewall-lines');
+      const card = part(nodes, 'firewall-card');
+      for (const scale of Object.values(TEXT_SCALE)) {
+        const scaled = new ScaledSheets(scale);
+        const high = scaled.length(lines, 'height', screen);
+        const item = scaled.length(card, 'min-height', screen);
+        expect(item, `scale ${scale}`).toBeGreaterThanOrEqual(44);
+        // four lines at 1.1, 1 px of padding and the 1 px border over and under them
+        const font = scaled.fontSize(card, screen);
+        expect(scaled.declared(card, 'line-height', screen)?.value).toBe('1.1');
+        expect(4 * 1.1 * font + 2 + 2, `scale ${scale}`).toBeLessThanOrEqual(item + 0.01);
+        expect((high - item) * SAME_LINE_GAP, `scale ${scale}`).toBeGreaterThanOrEqual(item - 0.01);
       }
     }
   });
 
-  it('breaks a card into four lines upright only, the stroke gone, the mark inside its edge', () => {
-    const sheets = new Sheets();
-    const nodes = cards();
-    const part = nodes.find((n) => n.classes.includes('firewall-part'));
-    const stroke = nodes.find((n) => n.classes.includes('firewall-stroke'));
-    clockAt(MID);
-    const marked = elementsOf(panel(seen('b', MID, allMarked))).find((n) =>
-      n.classes.includes('firewall-card--marked'),
-    );
-    if (part === undefined || stroke === undefined || marked === undefined) {
-      throw new Error('expected a part, a stroke and a marked card');
+  /** The least width a line of `grid` is given at text size `scale`, and the gap between two. */
+  function leastLine(grid: Styled, screen: Screen, scale: number) {
+    const scaled = new ScaledSheets(scale);
+    const columns = scaled.declared(grid, 'grid-template-columns', screen)?.value;
+    const least = /^repeat\(5, minmax\((.+), 1fr\)\)$/.exec(String(columns))?.[1];
+    if (least === undefined) {
+      throw new Error(`five lines of a least width expected, not ${columns}`);
     }
+    const em = scaled.fontSize(grid, screen);
+    return {
+      em,
+      column: lengthOf(least, { screen, em, custom: () => undefined }),
+      gap: scaled.length(grid, 'gap', screen),
+    };
+  }
+
+  const ROWS = (['a', 'b'] as const).flatMap((seat) =>
+    ['firewall-lines', 'firewall-numbers'].map((row) => ({ seat, row })),
+  );
+
+  it.each(UPRIGHT)('sets five lines side by side in a window $width wide', (screen) => {
+    for (const { seat, row } of ROWS) {
+      const grid = part(scope(seat), row);
+      // every text size the settings offer: a line's least width grows with a card's type
+      for (const scale of Object.values(TEXT_SCALE)) {
+        const { em, column, gap } = leastLine(grid, screen, scale);
+        // the station's frame takes 29 px of each side at these widths (devices.css: the
+        // modal's 10, the panel's 6, the face's 10; firewall.css: the bezel's 8, the scope 8
+        // into it, its own 3): the lines at their least, with their gaps, stand in the rest
+        expect(5 * column + 4 * gap, `${row} ${seat} ${scale}`).toBeLessThanOrEqual(
+          screen.width - 2 * 29,
+        );
+        // a line is a finger wide at least, and a card's holds five figures of its type
+        // (0.602 em each in the device's face), its border and its padding
+        expect(column).toBeGreaterThanOrEqual(seat === 'b' ? 5 * 0.602 * em + 6 : 44);
+        expect(column).toBeGreaterThanOrEqual(44);
+      }
+    }
+  });
+
+  it('breaks a card into four lines upright only, the stroke gone, the mark in its edge', () => {
+    const sheets = new Sheets();
+    const nodes = scope('b', allMarked);
+    const piece = part(nodes, 'firewall-part');
+    const stroke = part(nodes, 'firewall-stroke');
+    const marked = part(nodes, 'firewall-card--marked');
     const shown = (node: Styled, screen: Screen) => sheets.declared(node, 'display', screen)?.value;
     for (const screen of UPRIGHT) {
-      expect(shown(part, screen)).toBe('block');
+      expect(shown(piece, screen)).toBe('block');
       expect(shown(stroke, screen)).toBe('none');
       // nothing of the mark's room taken from the header's width, its ring inside the border
       expect(sheets.length(marked, 'padding-right', screen)).toBe(2);
@@ -552,16 +557,9 @@ describe('the scope’s geometry', () => {
       { width: 844, height: 390, coarse: true },
     ];
     for (const screen of others) {
-      expect(shown(part, screen)).toBeUndefined();
+      expect(shown(piece, screen)).toBeUndefined();
       expect(shown(stroke, screen)).toBeUndefined();
     }
-  });
-
-  it('numbers the lines over them, where no card ever covers a number', () => {
-    const nodes = cards();
-    const numbers = nodes.filter((n) => n.classes.includes('firewall-line-no'));
-    expect(numbers.map((n) => n.text)).toEqual(['1', '2', '3', '4', '5']);
-    expect(numbers.every((n) => n.parent?.classes.includes('firewall-numbers'))).toBe(true);
   });
 });
 

@@ -9008,6 +9008,9 @@ async function deviceOnPhone(player, slug, size) {
   await phoneReach(player, size, { shot, unjudged: (why) => skip('device-phone (targets)', why) });
 }
 
+/** How a phone whose window is `size` is held. */
+const postureOf = (size) => (size.width < size.height ? 'upright' : 'sideways');
+
 /**
  * The device `player`'s phone has open, held at `size`: the device whole in the window, nothing
  * of it scrolling, every control in view and 44 px at least each way (`deviceReach`), measured
@@ -9026,7 +9029,6 @@ async function phoneReach(player, size, { shot = null, label = shot, unjudged })
     await capture(page, shot);
   }
   const name = label.padEnd(18);
-  const posture = size.width < size.height ? 'upright' : 'sideways';
   if (seen === null) {
     fail(`${label}: no device open on ${player.name}'s phone`);
     console.log(`${name} !! ${player.name}'s phone has no device open`);
@@ -9034,7 +9036,7 @@ async function phoneReach(player, size, { shot = null, label = shot, unjudged })
   }
   const rest = settled.still.length === 0 ? '' : ` — !! ${settled.still.join(', ')} still ran`;
   console.log(
-    `${name} ${player.name}'s phone ${posture} @ ${size.width}x${size.height}: ` +
+    `${name} ${player.name}'s phone ${postureOf(size)} @ ${size.width}x${size.height}: ` +
       `${seen.controls} controls, scrolls ${seen.scroll}px, ${seen.small.length} under 44 px, ` +
       `${seen.cut.length} cut off; measured once settled, ${settled.waited} ms on the page's ` +
       `clock${rest}` +
@@ -11182,53 +11184,59 @@ const FIREWALL_UPRIGHT = [
 ];
 
 /**
- * In the page: what of the Paketfilter's scope in the panel `within` names — the station's, the
- * audience's — does not stand whole in the window: the page's content or the panel scrolling
- * sideways; a
- * line, a number, a card, a tick, the hold's word or the Kern's rule past the window's or the
- * panel's edge; a card or a tick past the line that clips it; a card's printed line cut at the
- * card's edge or set under 14 px; a card under 44 px — each as a line; none where all stands.
+ * In the page: the page's content — under its top bar, whose keys are the menu's matter — or
+ * the panel `within` names scrolling sideways, as a line; none where neither does; that no scope
+ * shows where none does.
  */
-function scopeMisfits(within) {
+function scopeSideways(within) {
   const panel = document.querySelector(within);
-  if (panel === null || panel.querySelector('.firewall-scope') === null) {
+  if (panel?.querySelector('.firewall-scope') == null) {
     return ['no scope shown'];
   }
-  const wide = globalThis.innerWidth;
-  const frame = panel.getBoundingClientRect();
-  const span = (box) => `${Math.round(box.left)}..${Math.round(box.right)}`;
-  // The page under its top bar — the bar's own keys are the menu's matter — and the panel.
   const sideways = [document.querySelector('.content'), panel]
     .filter((box) => box !== null && box.scrollWidth > box.clientWidth + 1)
     .map((box) => `${box.className.split(' ')[0]} ${box.scrollWidth} in ${box.clientWidth}`);
-  const wrong = sideways.length === 0 ? [] : [`scrolls sideways: ${sideways.join(', ')}`];
+  return sideways.length === 0 ? [] : [`scrolls sideways: ${sideways.join(', ')}`];
+}
+
+/**
+ * In the page: every part of the Paketfilter's scope in the panel `within` names — a line, a
+ * number, a card, a tick, the hold's word, the Kern's rule — past the window's or the panel's
+ * edge, or past the line that clips it; each as a line.
+ */
+function scopePartsOut(within) {
+  const panel = document.querySelector(within);
+  const frame = panel?.getBoundingClientRect() ?? { left: 0, right: 0 };
+  const span = (box) => `${Math.round(box.left)}..${Math.round(box.right)}`;
   const parts = ['line', 'line-no', 'card', 'tick', 'held', 'kern'].map((p) => `.firewall-${p}`);
-  for (const part of panel.querySelectorAll(parts.join(', '))) {
+  return [...(panel?.querySelectorAll(parts.join(', ')) ?? [])].flatMap((part) => {
     const box = part.getBoundingClientRect();
     const line = part.closest('.firewall-line')?.getBoundingClientRect() ?? frame;
     const left = Math.max(0, frame.left, line.left);
-    const right = Math.min(wide, frame.right, line.right);
-    if (box.left < left - 1 || box.right > right + 1) {
-      wrong.push(`${part.className.split(' ')[0]} ${span(box)} in ${span({ left, right })}`);
-    }
-  }
-  for (const card of panel.querySelectorAll('.firewall-card')) {
-    const { height } = card.getBoundingClientRect();
-    if (height < 43.5) {
-      wrong.push(`card ${card.dataset.packet} ${Math.round(height)} px high`);
-    }
-    for (const field of card.querySelectorAll('.firewall-field')) {
-      const size = parseFloat(globalThis.getComputedStyle(field).fontSize);
-      const said = field.textContent.trim();
-      if (field.scrollWidth > field.clientWidth + 1) {
-        wrong.push(`„${said}" cut: ${field.scrollWidth} in ${field.clientWidth}`);
-      }
-      if (size < 14) {
-        wrong.push(`„${said}" set ${size} px`);
-      }
-    }
-  }
-  return wrong;
+    const right = Math.min(globalThis.innerWidth, frame.right, line.right);
+    const out = box.left < left - 1 || box.right > right + 1;
+    return out ? [`${part.className.split(' ')[0]} ${span(box)} in ${span({ left, right })}`] : [];
+  });
+}
+
+/**
+ * In the page: every card in the panel `within` names under 44 px high, and every printed line
+ * of a card cut at the card's edge or set under 14 px; each as a line.
+ */
+function scopeCardMisfits(within) {
+  const cards = [...document.querySelectorAll(`${within} .firewall-card`)];
+  const low = cards
+    .filter((card) => card.getBoundingClientRect().height < 43.5)
+    .map((card) => `card ${card.dataset.packet} under 44 px high`);
+  const fields = cards.flatMap((card) => [...card.querySelectorAll('.firewall-field')]);
+  const said = (field) => `„${field.textContent.trim()}"`;
+  const cut = fields
+    .filter((field) => field.scrollWidth > field.clientWidth + 1)
+    .map((field) => `${said(field)} cut: ${field.scrollWidth} in ${field.clientWidth}`);
+  const small = fields
+    .filter((field) => parseFloat(globalThis.getComputedStyle(field).fontSize) < 14)
+    .map((field) => `${said(field)} set under 14 px`);
+  return [...low, ...cut, ...small];
 }
 
 /** The panel the station's device stands in, and the audience's column of them. */
@@ -11236,11 +11244,17 @@ const STATION_PANEL = '.station-modal .panel';
 const AUDIENCE_PANEL = '.spectate-panels .panel';
 
 /**
- * `player`'s Paketfilter held upright at `size`, its scope in the panel `within` judged
- * (`scopeMisfits`): the log says how wide the lines and how high a card stand.
+ * `player`'s Paketfilter held upright at `size`, its scope in the panel `within` judged — nothing
+ * scrolling sideways (`scopeSideways`), every part in the window and on its line
+ * (`scopePartsOut`), every card a finger high with its header whole (`scopeCardMisfits`): the log
+ * says how wide the lines and how high a card stand.
  */
 async function scopeFits(player, size, label, within = STATION_PANEL) {
-  const wrong = await player.page.evaluate(scopeMisfits, within);
+  const wrong = [
+    ...(await player.page.evaluate(scopeSideways, within)),
+    ...(await player.page.evaluate(scopePartsOut, within)),
+    ...(await player.page.evaluate(scopeCardMisfits, within)),
+  ];
   const px = (selector) =>
     player.page.locator(`${within} ${selector}`).evaluateAll((all) => {
       const sizes = all.map((el) => el.getBoundingClientRect());

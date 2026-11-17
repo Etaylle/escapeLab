@@ -776,6 +776,18 @@ binder, the Laborkennung between them), and with its bay in the Übungshalle.
   lines of its type high, 44 px at least, at every text size the settings offer —, a marked card
   wearing a tick and a heavier border. A tap on a card, or a cursor stepped with ← → and space or
   enter, sets or takes back its mark. It drops nothing.
+- **A phone held upright** (a window taller than wide, up to 720 px across; proven from 360 × 640 to
+  430 × 932) keeps the five lines side by side, 58 px each at 360: a card breaks each of its two
+  lines in two — the Quelle's network, the rest of it, the port, the protocol, „141.7" over „.9.98"
+  over „3389" over „TCP", five figures a line at most and nothing left out —, wears its mark inside
+  its own edge and its tick beside the protocol, and a line is never narrower than five figures of
+  the card's type. The scope takes the height the window leaves — 194 px at 640, 340 at 844 and
+  above, never less than 8/3 of a card, so that two cards of a line stay clear at every text size —,
+  the Sperrpult's 140 to 340 px over its keys in two rows under a thumb: ◀ SPERREN ▶, then FREIGABE,
+  the lamp and the talk key. The status line keeps three rows, so that the scope stands where it
+  stood whatever the device says, and the head leaves out the line that says what the console does.
+  The audience's panel breaks its cards the same way. At 360 × 640 with the text size „groß" the
+  Analysepult's frame scrolls 11 px down; nothing runs out sideways.
 - **The source** is the module's printed page, the Sicherheitsrichtlinie: three networks (Labornetz
   10.4.x.x, Wartungsnetz 10.9.x.x, everything else Fremdnetz) and six numbered rules, the first that
   fits deciding — the Wartungsnetz passes, ports 23 and 3389 are dropped, the Labornetz over TCP
@@ -855,7 +867,9 @@ packet still to come and no hostility anywhere), the reducer's tick and the prob
 solver alarm-free over 200 seeds, and crews marking every packet, none, or every reason to drop in
 no order each taking an alarm in all of them; `client/test/firewall.test.tsx` both devices, the
 scope's clock and status line, reduced motion, the sounds, and the type and targets on phones
-held sideways at 844 and 932, and that two cards of a line never overlap there;
+held sideways at 844 and 932 and upright at 360, 390 and 430, and that two cards of a line never
+overlap there, five lines stand side by side in the window and a card breaks into four lines
+upright only;
 `client/test/firewallWiring.test.tsx` presses every control through the components.
 `server/test/firewallRoom.test.ts` lets an idle crew meet the Kern alarm on the room's own timer.
 The walkthrough drills the probe in a Systemcheck run (group `firewall`; `SHOTS_SKIP=firewall`
@@ -864,7 +878,12 @@ seconds: FREIGABE where a wave waits, a mark on every packet the plan says the p
 any wave the run may deal, a called-off one included —, a trip under every ring
 (firewall-policy.png, firewall-phone-932.png, firewall-headers.png, firewall-gate.png), and once
 mid-wave the Sperrpult's player walks off: the held Analysepult, every card drawn whole
-(firewall-held.png).
+(firewall-held.png). Held so, the Analysepult and the page of a third who watches are turned
+upright, 430 × 932 and 360 × 640 — the device whole, nothing scrolling, every key and card 44 px,
+five lines in the window, no header cut, and a card of the fifth line tapped on the smallest takes
+its mark (firewall-phone-upright-b.png, firewall-phone-upright-audience.png); then the
+Analysepult's player walks off in turn and the Sperrpult stands upright the same way, the marked
+point ringed and ticked on its line (firewall-phone-upright-a.png).
 
 ## Captures in the notepad
 
