@@ -144,9 +144,9 @@ describe('where a finding points', () => {
   it('reads the things and tiles a map rule names out of its words', () => {
     const draft = blackout();
     const apart =
-      'map: consoles a and b of station "notstrom" at 1,15 and 2,9 stand 6.1 tiles apart';
+      'map: consoles a and b of station "anlauf" at 1,15 and 2,9 stand 6.1 tiles apart';
     const both = locate(draft, apart);
-    // Console a of the Notstrom-Kasten, after the Notlicht's lever in the list of stations.
+    // Console a of the Anlaufsteuerung, after the Notlicht's lever in the list of stations.
     expect(both.target).toEqual({ kind: 'station', index: 1 });
     expect(both.spots).toEqual([
       { x: 1, y: 15 },

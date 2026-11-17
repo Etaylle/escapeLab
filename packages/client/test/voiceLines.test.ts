@@ -105,9 +105,49 @@ const MS_PER_WORD = { min: 200, max: 900 } as const;
  * last word on the end card, the Funkprobe and a line of the opening silent, the words shown all
  * the same. To be emptied as the render (docs/sound.md) makes them, for every person who says
  * them. Any other line without a recording fails, and so does a line here that every one of them
- * has now. Today the opening's two lines between the Schichtleitung and the Leitstelle (V-3).
+ * has now. Today the twenty lines Blackout's new chain says (B-blackout2): the hand-overs after
+ * the Notlicht, the Anlaufsteuerung, the Serverraum, the Signalkette and the Notstromkasten, two
+ * texts each, and the nudges of the Anlaufsteuerung (four), the Paketfilter (three) and the
+ * Notstromkasten at its new place (three) — each by the three of the Leitstelle.
  */
-const AWAITING_RENDER: readonly string[] = [];
+const AWAITING_RENDER: readonly string[] = [
+  'Notlicht steht, danke. Jetzt das Notstromaggregat: Das Betriebsbuch liegt im Archiv, ein ' +
+    'Pult der Anlaufsteuerung steht im Flur, eins im Maschinenraum.',
+  'Notlicht brennt, ich sehe euch wieder auf meiner Tafel. Weiter mit der Anlaufsteuerung: ' +
+    'Betriebsbuch im Archiv, Pulte im Flur und im Maschinenraum.',
+  'Aggregat läuft, die Maschinenraumtür bleibt offen. Als Nächstes der Paketfilter am ' +
+    'Serverschott: zwei Pulte, die Sicherheitsrichtlinie hängt im Flur.',
+  'Die Maschinen laufen an, im Maschinenraum ist Licht. Der Paketfilter vor dem Serverraum ' +
+    'braucht beide Pulte, die Richtlinie hängt im Flur.',
+  'Das Betriebsbuch zur Anlaufsteuerung liegt im Archiv, auf der Ostseite.',
+  'Ohne das Betriebsbuch aus dem Archiv sagen die Leuchten am Schaltfeld nichts, es liegt ' +
+    'dort auf der Ostseite.',
+  'Ein Pult der Anlaufsteuerung steht am Westende vom Flur, eins im Maschinenraum hinter ' +
+    'der Plattentür, einer bleibt auf der Platte.',
+  'Die Tür zum Maschinenraum geht nur auf, solange jemand auf der Platte davor steht, ' +
+    'dahinter wartet das zweite Pult.',
+  'Die Sicherheitsrichtlinie zum Paketfilter hängt im Flur, an der Südwand.',
+  'Welche Pakete der Filter sperrt, steht in der Sicherheitsrichtlinie, sie hängt im Flur ' +
+    'an der Südwand.',
+  'Das Analysepult steht im Flur gleich östlich vom Schott zum Serverraum, das Sperrpult ' +
+    'ein Stück weiter Richtung Ostende.',
+  'Server laufen, die Labortür ist offen, drinnen fliegt eine Drohne. Von den drei Anlagen ' +
+    'am Wechselplatz hat heute Nacht nur eine Dienst.',
+  'Server oben, Labortür offen, im Labor patrouilliert eine Drohne. Was heute Nacht das ' +
+    'Schild AUSSER BETRIEB trägt, bleibt aus.',
+  'Signalkette steht, die Türen zum Reaktor sind offen. Ohne Ersatzsicherung bleibt er aber ' +
+    'tot.',
+  'Die Signalkette hält, der Reaktor ist offen. Die Ersatzsicherung dafür liegt im Archiv, ' +
+    'bringt sie rüber.',
+  'Der Notstromkasten hält, die Türen zum Reaktor sind offen. Ohne Ersatzsicherung bleibt ' +
+    'er aber tot.',
+  'Die Unterverteilung steht, der Reaktor ist offen. Die Ersatzsicherung dafür liegt im ' +
+    'Archiv, bringt sie rüber.',
+  'Das Wartungsbuch zum Notstromkasten liegt im Maschinenraum.',
+  'Ohne das Wartungsbuch aus dem Maschinenraum ratet ihr am Kasten nur herum.',
+  'Der Notstromkasten hängt im Maschinenraum gleich hinter der Tür, das Prüfpult steht im ' +
+    'Labor an der Südwand.',
+];
 
 const manifest = readManifest();
 const recordings = readdirSync(VOICE_DIR).filter((name) => /\.(m4a|mp3)$/.test(name));
@@ -397,9 +437,10 @@ describe('the lines the script reads', () => {
       });
     }
     const nudges = (blackout?.puzzles ?? []).flatMap((p) => p.nudges ?? []);
-    expect(nudges).toHaveLength(12);
-    // Half of them in a second text that says something of its own, every text a line to record.
-    expect(nudges.flatMap(textsOf)).toHaveLength(18);
+    expect(nudges).toHaveLength(16);
+    // Half of them in a second text that says something of its own, every text a line to record
+    // — the nudges of the three stations that take turns at the Wechselplatz among them.
+    expect(nudges.flatMap(textsOf)).toHaveLength(24);
     for (const text of nudges.flatMap(textsOf)) {
       expect(shippedLines().get(text)?.missions, text).toEqual(['blackout']);
     }
@@ -755,7 +796,7 @@ describe('what a run keeps, and what it makes anew', () => {
       expect(entry.model, entry.text).toBe('eleven_v4');
       expect(modelOf(paid, take)).toBe('eleven_v4');
     }
-    expect(before).toHaveLength(48);
+    expect(before).toHaveLength(43);
     expect(new Set(before)).toEqual(new Set(['helmut']));
   });
 
@@ -808,7 +849,7 @@ describe('what a run keeps, and what it makes anew', () => {
       const take = { text: entry.text, said: entry.text, person: 'helmut', mood };
       return entry.person === 'helmut' && entry.render === renderOf(his, take);
     });
-    expect(before).toHaveLength(48);
+    expect(before).toHaveLength(43);
     const cast = plannedVoice(roster);
     for (const entry of Object.values(manifest.lines)) {
       const said = shippedLines().get(entry.text)?.said ?? entry.text;
@@ -1014,12 +1055,12 @@ describe('the plan of a run (--plan)', () => {
     };
     const helmut = costsOf(kept, done, 'synthetic', undefined, lines)[1];
     expect(helmut).toMatchObject({ slot: 'operator:helmut', make: 0, characters: 0, skip: 3 });
-    // The shipped manifest: 48 of Helmut's takes were made before the paid plan named itself,
+    // The shipped manifest: 43 of Helmut's takes were made before the paid plan named itself,
     // which --fresh makes anew; his others the cast's render made as it would make them.
     const shipped = costsOf(roster, manifest, 'synthetic')[1];
     const unasked = costsOf(roster, manifest, 'none')[1];
-    expect((shipped?.make ?? 0) - (unasked?.make ?? 0)).toBe(48);
-    expect((unasked?.skip ?? 0) - (shipped?.skip ?? 0)).toBe(48);
+    expect((shipped?.make ?? 0) - (unasked?.make ?? 0)).toBe(43);
+    expect((unasked?.skip ?? 0) - (shipped?.skip ?? 0)).toBe(43);
   });
 
   it('prints each person’s line, the kept cast now, the whole cast with every voice kept', () => {
@@ -1093,12 +1134,12 @@ describe('a plain run, and what --fresh would make beside it', () => {
   it('keeps Helmut’s takes of before, and names what --fresh would make anew, with credits', () => {
     const plain = costsOf(roster, manifest, 'none');
     const fresh = costsOf(roster, manifest, 'synthetic');
-    expect(plain.find((cost) => cost.slot === 'operator:helmut')?.skip).toBe(82);
+    expect(plain.find((cost) => cost.slot === 'operator:helmut')?.skip).toBe(72);
     const beside = freshBeside(plain, fresh);
-    expect(beside).toEqual({ lines: 48, characters: 4071 });
+    expect(beside).toEqual({ lines: 43, characters: 3512 });
     expect(planReport(plain, 'none', beside).at(-1)).toBe(
-      'voice: --fresh would make 48 takes anew besides, made before the paid plan named ' +
-        'itself: 4,071 credits, which licence them as the rest (docs/sound.md, „Lizenz")',
+      'voice: --fresh would make 43 takes anew besides, made before the paid plan named ' +
+        'itself: 3,512 credits, which licence them as the rest (docs/sound.md, „Lizenz")',
     );
     // Every voice kept, no design is said; under --fresh, or where it would make nothing more,
     // nothing is said of it.

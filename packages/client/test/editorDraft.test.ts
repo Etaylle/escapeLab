@@ -236,15 +236,29 @@ describe('a puzzle’s own fields and penalty, draft ↔ JSON', () => {
     const draft = loaded(blackout);
     expect(draft.puzzles.map((p) => [p.type, p.penaltySec, p.fields])).toEqual([
       ['button-sync', null, { windowMs: 3500, style: 'lever' }],
-      ['circuit', 30, { wires: { min: 4, max: 6 }, shorts: 3, burnoutSec: 60 }],
-      ['signal', null, { stages: 4, length: 4, legend: true, fleetingFrom: 3, greyFrom: 4 }],
+      ['startup', null, { stages: 2, travelSec: 6, windowSec: 3 }],
+      ['firewall', null, { waves: 2, packets: 7, fallSec: 14, rules: 4 }],
       ['servers', null, { crashed: 4, trap: true }],
+      ['signal', null, { stages: 4, length: 4, legend: true, fleetingFrom: 3, greyFrom: 4 }],
       ['morse', null, {}],
+      ['circuit', 30, { wires: { min: 4, max: 6 }, shorts: 3, burnoutSec: 60 }],
       ['button-sync', null, { windowMs: 3500, style: 'button' }],
     ]);
     const json = draftToJson(draft) as { puzzles: Record<string, unknown>[] };
     expect(json.puzzles[0]).toMatchObject({ type: 'button-sync', style: 'lever' });
-    expect(json.puzzles[1]).toMatchObject({ wires: { min: 4, max: 6 }, penaltySec: 30 });
+    expect(json.puzzles[1]).toMatchObject({ type: 'startup', stages: 2 });
+    expect(json.puzzles[6]).toMatchObject({ wires: { min: 4, max: 6 }, penaltySec: 30 });
+    // The three that take turns keep their Wechselplatz, the stations beside them none.
+    expect(json.puzzles.map((p) => p['pool'])).toEqual([
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      'wechsel',
+      'wechsel',
+      'wechsel',
+      undefined,
+    ]);
     // Left out of the file, the penalty is left to the module: no key, no number.
     expect(json.puzzles[3]).toMatchObject({ type: 'servers', crashed: 4, trap: true });
     expect(json.puzzles[3]).not.toHaveProperty('penaltySec');
@@ -360,7 +374,7 @@ describe('draft ↔ JSON: notes of the last shift', () => {
       map: { notes: unknown[] };
     };
     const draft = loaded(blackout);
-    expect(draft.map.notes).toHaveLength(3);
+    expect(draft.map.notes).toHaveLength(6);
     expect(draft.map.notes[0]).toEqual({ x: 16, y: 8, text: expect.stringMatching(/23:47/) });
     const json = draftToJson(draft) as { map: { notes: unknown[] } };
     expect(json.map.notes).toEqual(blackout.map.notes);

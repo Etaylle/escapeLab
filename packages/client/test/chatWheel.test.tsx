@@ -23,7 +23,7 @@ const blackout = parseMission(
   JSON.parse(readFileSync(new URL('../../../missions/blackout.json', import.meta.url), 'utf8')),
 );
 const phrases = blackout.chat?.phrases ?? [];
-/** Where Blackout's wheel holds „Kabel {n}" and „Dienst {name}", from 0. */
+/** Where Blackout's wheel holds „Nummer {n}" and „Dienst {name}", from 0. */
 const WIRE = 6;
 const SERVICE = 7;
 
@@ -107,7 +107,7 @@ describe('the chat wheel as it shows', () => {
       '4 Brauche eine Ansage!',
       '5 Ich halte die Platte',
       '6 Achtung, Drohne!',
-      '7 Kabel …',
+      '7 Nummer …',
       '8 Dienst …',
     ]);
     expect(html.match(/aria-haspopup="menu"/g)).toHaveLength(2);
@@ -115,10 +115,10 @@ describe('the chat wheel as it shows', () => {
 
   it('shows the second step as the phrase will say it, every value with its digit', () => {
     const wire = wheelAt({ slotOf: WIRE }).html;
-    const step = '<div class="chat-wheel chat-wheel--slot" role="menu" aria-label="Kabel …">';
+    const step = '<div class="chat-wheel chat-wheel--slot" role="menu" aria-label="Nummer …">';
     expect(wire.startsWith(step)).toBe(true);
     expect(wordsOf(wire)).toEqual(
-      ['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((n) => `${n} Kabel ${n}`),
+      ['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((n) => `${n} Nummer ${n}`),
     );
     expect(wordsOf(wheelAt({ slotOf: SERVICE }).html)).toEqual([
       '1 Dienst NETZ',
