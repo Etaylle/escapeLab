@@ -9,7 +9,7 @@ import {
   viewFor,
   viewForSpectator,
 } from '../src/index.js';
-import type { Action, GameState, Mission } from '../src/index.js';
+import type { Action, GameState, Mission, MissionCheck } from '../src/index.js';
 import { canGather, reachability, tileKey } from '../src/reach.js';
 
 /**
@@ -203,6 +203,25 @@ describe('decor — solid for every step', () => {
     ].map(([x = 0, y = 0]) => ({ kind: 'shelf' as const, x, y }));
     const boxedIn = { ...mission.map, decor: around };
     expect(canGather(boxedIn, boxedIn.spawns, new Set(), station)).toBe(false);
+  });
+
+  it('takes a floor’s brightness of 1 or 2 on a label, and refuses 0, 3 or a fraction', () => {
+    const raw = JSON.parse(
+      readFileSync(new URL('../../../missions/blackout.json', import.meta.url), 'utf8'),
+    ) as { map: { labels: { text: string; brightness?: number }[] } };
+    const withArchiv = (brightness: number): MissionCheck => {
+      const labels = raw.map.labels.map((l) => (l.text === 'ARCHIV' ? { ...l, brightness } : l));
+      return checkMission({ ...raw, map: { ...raw.map, labels } });
+    };
+    expect(withArchiv(1).ok).toBe(true);
+    expect(withArchiv(2).ok).toBe(true);
+    for (const wrong of [0, 3, 1.5]) {
+      const checked = withArchiv(wrong);
+      expect(checked.ok).toBe(false);
+      expect(checked.ok ? [] : checked.issues).toEqual([
+        expect.stringMatching(/^map\.labels\.0\.brightness: /),
+      ]);
+    }
   });
 
   it('shows the furniture, each room’s kind and its floor’s brightness in every player’s map', () => {
