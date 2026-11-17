@@ -29,6 +29,44 @@
       "releaseAt": null
     },
     {
+      "id": "startup",
+      "type": "startup",
+      "title": "Anlaufsteuerung",
+      "opens": {
+        "terminal": {
+          "load": "lueftung",
+          "script": [
+            { "kind": "comment", "text": "AS-86 Anlaufskript, Stufe 1 von 2" },
+            { "kind": "code", "text": "lade anlauf.cfg", "comment": null },
+            {
+              "kind": "gap",
+              "gap": "abgang",
+              "comment": "Last Lüftung: Leuchtbild nach Tabelle 2 des Betriebsbuchs"
+            },
+            {
+              "kind": "code",
+              "text": "impuls abgang -> B",
+              "comment": "Leistungsschalter schließt auf den markierten Stufen der Leiter"
+            }
+          ],
+          "gaps": ["abgang"],
+          "values": { "abgang": null },
+          "sent": false,
+          "log": [{ "n": 1, "tag": "info", "text": "Pult A: Skript Stufe 1/2 geladen, Lüftung" }]
+        }
+      },
+      "moves": [
+        { "by": "operator", "input": { "cmd": "setze", "gap": "abgang", "value": 4 } },
+        { "by": "operator", "input": { "cmd": "start" } },
+        { "by": "partner", "input": { "breaker": 4 } },
+        { "by": "partner", "input": { "cmd": "setze", "gap": "sperre", "value": 4 } },
+        { "by": "partner", "input": { "cmd": "setze", "gap": "abgang", "value": 1 } },
+        { "by": "partner", "input": { "cmd": "start" } },
+        { "by": "operator", "input": { "breaker": 1 } }
+      ],
+      "releaseAt": null
+    },
+    {
       "id": "servers",
       "type": "servers",
       "title": "Rechnernetz",

@@ -18,6 +18,8 @@ import { MODULES, moduleFor, type PuzzleDef } from '../src/index.js';
  *   one console    station (1,1), its book (6,1), a desk (7,1), the sign (3,4)
  *   two consoles   console a (1,1), console b (6,1), the book (4,5), a desk (5,5), the sign (3,3)
  *
+ * An Anlaufsteuerung's bay has its cable duct under the row below its consoles, (1,2) to (6,2).
+ *
  * Every book lies more than 4 tiles from each console it serves, so that nobody stands at both,
  * and every station's places stand 4 tiles or more from the next bay's.
  */
@@ -56,6 +58,9 @@ const TWO_CONSOLES: BayPlan = {
   desk: { x: 5, y: 5 },
   sign: { x: 3, y: 3 },
 };
+
+/** The duct of an Anlaufsteuerung's bay, from beside console a to beside console b. */
+const DUCT: readonly Tile[] = [1, 2, 3, 4, 5, 6].map((x) => ({ x, y: 2 }));
 
 /**
  * The notes of the last shift the hall keeps at a station's rules, by module type: how its
@@ -112,6 +117,11 @@ const NOTES: Readonly<Partial<Record<PuzzleDef['type'], readonly string[]>>> = {
     'Einweisung: Erst die Tür am Terminal, dann auf der Benutzerliste das Konto, dessen Rolle ' +
       'sie freigibt.',
     'Einweisung: Den Token erst eingeben, wenn das Tokengerät dieses Konto zeigt.',
+  ],  startup: [
+    'Einweisung: Die Last steht im Skript, das Leuchtbild jeder Last in Tabelle 2, die ' +
+      'Leuchten am Schaltfeld der Gegenseite.',
+    'Einweisung: Der Schalter zählt erst, wenn der Impuls auf den markierten Stufen der ' +
+      'Leiter steht.',
   ],
 };
 
@@ -189,6 +199,10 @@ function bayOf(type: PuzzleDef['type'], n: number) {
       spots: [at(origin, plan.book)],
     },
     desk: { kind: 'desk', ...at(origin, plan.desk) },
+    conduits:
+      type === 'startup'
+        ? [{ puzzleId: type, tiles: DUCT.map((tile) => [origin.x + tile.x, origin.y + tile.y]) }]
+        : [],
     label: { text: `${machine.name.toUpperCase()} · ${machine.type}`, ...at(origin, plan.sign) },
   };
 }
@@ -234,6 +248,7 @@ export function hallMission(): Record<string, unknown> {
       stations: bays.flatMap((bay) => bay.stations),
       labels: [{ text: 'ÜBUNGSHALLE', x: middle, y: entrance }, ...bays.map((bay) => bay.label)],
       decor: bays.map((bay) => bay.desk),
+      conduits: bays.flatMap((bay) => bay.conduits),
       manuals: bays.map((bay) => bay.manual),
       notes: [
         {
