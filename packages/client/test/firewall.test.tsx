@@ -562,15 +562,16 @@ describe('the scope held', () => {
     }
     expect(bar.text).toBe('HALT');
     // the bar's top where the numbers' row begins, as high as that row
+    const value = (node: Styled | undefined, property: string, screen: Screen = PHONE) =>
+      node === undefined ? undefined : sheets.declared(node, property, screen)?.value;
     for (const screen of [PHONE, { width: 1280, height: 720, coarse: false }]) {
-      expect(sheets.declared(bar, 'top', screen)?.value).toBe('var(--pad-top)');
-      expect(sheets.declared(scope, 'padding', screen)?.value).toMatch(/^var\(--pad-top\) /);
+      expect(value(bar, 'top', screen)).toBe('var(--pad-top)');
+      expect(value(scope, 'padding', screen)).toMatch(/^var\(--pad-top\) /);
     }
     const numbers = nodes.find((n) => n.classes.includes('firewall-numbers'));
-    const rowHeight = numbers && sheets.declared(numbers, 'line-height', PHONE)?.value;
-    expect(rowHeight).toBe('1.2');
-    expect(sheets.declared(bar, 'line-height', PHONE)?.value).toBe('1.2');
-    expect(sheets.declared(bar, 'padding', PHONE)?.value).toBe('0');
+    expect(value(numbers, 'line-height')).toBe('1.2');
+    expect(value(bar, 'line-height')).toBe('1.2');
+    expect(value(bar, 'padding')).toBe('0');
   });
 });
 

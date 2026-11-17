@@ -551,29 +551,7 @@ function graceAlone(seed: number, waves: number) {
   let state = running(seed);
   const tally = { cleared: 0, dropped: 0, alarms: 0 };
   for (let wave = 0; wave < waves; wave++) {
-    const trips = state.packets
-      .map((p) => ({ when: state.startedAt + p.enterMs + FALL_MS + 150, line: p.line, id: p.id }))
-      .sort((p, q) => p.when - q.when);
-    const dealt = state.dealt;
-    for (const { when, line, id } of trips) {
-      const t = when - state.startedAt;
-      const others = state.packets.some(
-        (p) => p.id !== id && p.line === line && p.enterMs <= t && t < p.enterMs + FALL_MS,
-      );
-      if (others) {
-        continue;
-      }
-      const now = at(state, when);
-      tally.alarms += now.penalty === null ? 0 : 1;
-      if (now.state.dealt !== dealt) {
-        state = now.state;
-        break;
-      }
-      const tripped = firewallModule.apply(DEF, now.state, { trip: line }, 'op', ctx(when, 'a'));
-      tally.alarms += tripped.penalty === null ? 0 : 1;
-      tally.dropped += tripped.state.event?.kind === 'drop' ? 1 : 0;
-      state = tripped.state;
-    }
+    state = graceTrips(state, tally);
     const end = at(state, state.startedAt + 120_000);
     tally.alarms += end.penalty === null ? 0 : 1;
     tally.cleared = Math.max(tally.cleared, end.state.cleared);
@@ -582,6 +560,32 @@ function graceAlone(seed: number, waves: number) {
       .state;
   }
   return tally;
+}
+
+/** The trips of `graceAlone` in one wave, noted in `tally`: the state once its wave is over. */
+function graceTrips(start: FirewallState, tally: { dropped: number; alarms: number }) {
+  let state = start;
+  const trips = state.packets
+    .map((p) => ({ when: state.startedAt + p.enterMs + FALL_MS + 150, line: p.line, id: p.id }))
+    .sort((p, q) => p.when - q.when);
+  for (const { when, line, id } of trips) {
+    const t = when - state.startedAt;
+    const others = state.packets.some(
+      (p) => p.id !== id && p.line === line && p.enterMs <= t && t < p.enterMs + FALL_MS,
+    );
+    const now = at(state, when);
+    tally.alarms += now.penalty === null ? 0 : 1;
+    if (now.state.dealt !== start.dealt) {
+      return now.state;
+    }
+    if (!others) {
+      const tripped = firewallModule.apply(DEF, now.state, { trip: line }, 'op', ctx(when, 'a'));
+      tally.alarms += tripped.penalty === null ? 0 : 1;
+      tally.dropped += tripped.state.event?.kind === 'drop' ? 1 : 0;
+      state = tripped.state;
+    }
+  }
+  return state;
 }
 
 describe('the grace', () => {
@@ -776,26 +780,36 @@ function beforeTheSolve(seed: number): { state: GameState; clean: number } {
   for (let second = 2; second < 600; second++) {
     const at = T0 + second * 1000;
     const due = puzzleDueAt(state);
-    const station = fw(state);
-    const out = (p: FirewallPacket): boolean => !p.hostile || station.dropped.includes(p.id);
-    const last = station.cleared === 1 && station.packets.every(out);
-    if (last && due !== null) {
+    if (lastWaveOut(fw(state)) && due !== null) {
       return { state, clean: due };
     }
     state = due !== null && due <= at ? applyAction(state, { type: 'puzzle-tick', at }) : state;
-    const views = { operator: firewallViewOf(state, 'p1'), partner: firewallViewOf(state, 'p2') };
-    const aid = { transcript: [], remainingSec: null, at };
-    const def = state.mission.puzzles[0];
-    if (def === undefined) {
-      break;
-    }
-    const seen = { ...views, reader: views.partner };
-    for (const { by, input } of moduleFor(def.type).solve(def, seen, state.edgework, aid)) {
-      const playerId = by === 'partner' ? 'p2' : 'p1';
-      state = applyAction(state, { type: 'puzzle-input', playerId, at, input });
-    }
+    state = solverMoves(state, at);
   }
   throw new Error(`seed ${seed}: the probe's last wave never stood before its clean end`);
+}
+
+/** Whether the probe's last wave has every hostile packet out: its clean end is all that is due. */
+function lastWaveOut(station: FirewallState): boolean {
+  const out = (p: FirewallPacket): boolean => !p.hostile || station.dropped.includes(p.id);
+  return station.cleared === 1 && station.packets.every(out);
+}
+
+/** The solver's moves on the probe's views at `at`, through the reducer. */
+function solverMoves(start: GameState, at: number): GameState {
+  const [def] = start.mission.puzzles;
+  if (def === undefined) {
+    throw new Error('the probe has no station');
+  }
+  const views = { operator: firewallViewOf(start, 'p1'), partner: firewallViewOf(start, 'p2') };
+  const aid = { transcript: [], remainingSec: null, at };
+  const seen = { ...views, reader: views.partner };
+  return moduleFor(def.type)
+    .solve(def, seen, start.edgework, aid)
+    .reduce((state, { by, input }) => {
+      const playerId = by === 'partner' ? 'p2' : 'p1';
+      return applyAction(state, { type: 'puzzle-input', playerId, at, input });
+    }, start);
 }
 
 /** The open Paketfilter as `playerId` sees it. */
