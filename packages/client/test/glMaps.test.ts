@@ -44,7 +44,7 @@ function furnished(x: number) {
 
 /** A lit room of `tiles`, its lights on since `since`. */
 function room(tiles: { x: number; y: number }[], since: number): LitRoom {
-  return { tiles, path: { path: 'room' } as unknown as Path2D, since };
+  return { tiles, path: { path: 'room' } as unknown as Path2D, since, brightness: 1 };
 }
 
 /** The light that is no lamp's in `parts`' frame over the lab. */
@@ -147,6 +147,23 @@ describe('ambientOf — the light that is no lamp’s, a texel a tile', () => {
     // The wall has no pool, and a tile of no lit room none either.
     expect(over[at(5, 1) * 4]).toBe(0);
     expect(over[at(2, 2) * 4]).toBe(0);
+  });
+
+  it('lights a room burning twice as bright as two names lit at once on its floor', () => {
+    const tiles = [{ x: 6, y: 2 }, { x: 7, y: 2 }, { x: 5, y: 2 }];
+    const twice = new Map([['FLUR', { ...room(tiles, 10 - 0.25), brightness: 2 }]]);
+    const both = new Map([
+      ['FLUR', room(tiles, 10 - 0.25)],
+      ['ARCHIV', room(tiles, 10 - 0.25)],
+    ]);
+    // Coming on, and on the escape's alarm lighting coming in: the darkness each leaves and
+    // the light laid over it come out the same, texel for texel.
+    for (const parts of [{ time: 10 }, { time: 12, red: 0.5 }]) {
+      expect(ambient({ ...parts, lit: twice })).toEqual(ambient({ ...parts, lit: both }));
+    }
+    const once = ambient({ time: 12, lit: new Map([['FLUR', room(tiles, -Infinity)]]) });
+    const bright = ambient({ time: 12, lit: twice });
+    expect(bright.over[at(6, 2) * 4]).toBe(2 * (once.over[at(6, 2) * 4] ?? 0));
   });
 
   it('turns a lit room’s light red as the escape’s siren sounds, by its strength', () => {

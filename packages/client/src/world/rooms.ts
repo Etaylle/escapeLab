@@ -69,6 +69,11 @@ export interface RoomLights {
   tiles: Spot[];
   /** the room lit before on whose floor a label of this name stands, the first; null for none */
   same: string | null;
+  /**
+   * how brightly they burn, as many times a room's own: the most any label standing on the
+   * tiles they add gives (`brightness`), 1 where none gives one
+   */
+  brightness: number;
 }
 
 /**
@@ -77,7 +82,8 @@ export interface RoomLights {
  * lights. A floor that several names label — the Übungshalle's one hall under its fourteen,
  * Blackout's Flur under FLUR and ARCHIV — is lit once, by the first of them to come on: each of
  * the others lights nothing more, where adding its ceiling lights again would burn the floor
- * white. `same` names that first room.
+ * white. `same` names that first room. A floor that burns brighter says so on its labels
+ * (`brightness`): Blackout's Flur and Archiv, lit by two names from the start, burn twice.
  */
 export function roomLights(
   map: Pick<MapView, 'tiles' | 'doors' | 'labels'>,
@@ -97,7 +103,12 @@ export function roomLights(
   const tiles = spots
     .filter((spot) => litBefore(spot) === undefined)
     .flatMap((spot) => roomArea(map, spot));
-  return { tiles, same };
+  const added = new Set(tiles.map((tile) => key(tile.x, tile.y)));
+  const brightness = Math.max(
+    1,
+    ...map.labels.filter((label) => added.has(key(label.x, label.y))).map((l) => l.brightness ?? 1),
+  );
+  return { tiles, same, brightness };
 }
 
 /** A room lit whole: its tiles by key, and as runs along their rows. */

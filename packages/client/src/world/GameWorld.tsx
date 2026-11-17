@@ -835,7 +835,7 @@ function warmUpRooms(loop: Loop, map: WorldMap, rooms: readonly string[]): void 
  */
 function lightRoom(loop: Loop, map: WorldMap, room: string, since: number): void {
   const { sim } = loop;
-  const { tiles, same } = roomLights(map, room, sim.lit);
+  const { tiles, same, brightness } = roomLights(map, room, sim.lit);
   const first = same === null || tiles.length > 0 ? undefined : sim.lit.get(same);
   const keys = new Set(tiles.map((tile) => `${tile.x},${tile.y}`));
   const path = new Path2D();
@@ -847,7 +847,7 @@ function lightRoom(loop: Loop, map: WorldMap, room: string, since: number): void
     sim.litTiles.add(key);
     seen.add(key);
   }
-  sim.lit.set(room, { tiles, path, since: first?.since ?? since });
+  sim.lit.set(room, { tiles, path, since: first?.since ?? since, brightness });
 }
 
 /** The pings still showing at `perf`; one this screen has not shown yet blips. */

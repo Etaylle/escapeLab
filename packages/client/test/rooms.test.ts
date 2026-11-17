@@ -137,7 +137,7 @@ describe('litGroups — the lit rooms’ tiles by the rooms that light them', ()
 type LabelledMap = {
   tiles: string[];
   doors: { id: string; x: number; y: number; open: boolean }[];
-  labels: { text: string; x: number; y: number }[];
+  labels: { text: string; x: number; y: number; brightness?: number }[];
 };
 
 /** The map of `missions/<id>.json`, its doors shut (a map without doors leaves them out). */
@@ -163,6 +163,7 @@ describe('roomLights — a floor several names label is lit once', () => {
     expect(roomLights(map, 'WEST', new Map())).toEqual({
       tiles: roomArea(map, { x: 2, y: 1 }),
       same: null,
+      brightness: 1,
     });
   });
 
@@ -170,13 +171,14 @@ describe('roomLights — a floor several names label is lit once', () => {
     const map = { tiles, doors: [], labels };
     const lit = lightAll(map, ['WEST', 'OST']);
     expect(lit.get('WEST')?.tiles).toEqual(roomArea(map, { x: 2, y: 1 }));
-    expect(lit.get('OST')).toEqual({ tiles: [], same: 'WEST' });
+    expect(lit.get('OST')).toEqual({ tiles: [], same: 'WEST', brightness: 1 });
   });
 
   it('keeps two rooms behind a door apart, the wall and door between them lit by both', () => {
     const map = { tiles, doors, labels };
     const lit = lightAll(map, ['WEST', 'OST']);
-    expect(lit.get('OST')).toEqual({ tiles: roomArea(map, { x: 6, y: 1 }), same: null });
+    const east = roomArea(map, { x: 6, y: 1 });
+    expect(lit.get('OST')).toEqual({ tiles: east, same: null, brightness: 1 });
   });
 
   it('lights the Übungshalle’s one hall once under all fourteen of its names', () => {
@@ -187,16 +189,40 @@ describe('roomLights — a floor several names label is lit once', () => {
     // Every tile of the 40 × 33 hall, floor and walls, once — not fourteen times over.
     expect(all).toHaveLength(40 * 33);
     expect(new Set(all).size).toBe(all.length);
+    // As bright as a room lit in Blackout, not brighter.
+    expect([...lightAll(hall, names).values()].map((room) => room.brightness)).toEqual(
+      names.map(() => 1),
+    );
   });
 
-  it('lights Blackout’s Flur once as the Notlicht lights FLUR and ARCHIV', () => {
+  it('lights Blackout’s Flur once, twice as bright, as the Notlicht lights FLUR and ARCHIV', () => {
     const lab = missionMap('blackout');
     const lit = lightAll(lab, ['FLUR', 'ARCHIV']);
-    expect(lit.get('ARCHIV')).toEqual({ tiles: [], same: 'FLUR' });
+    expect(lit.get('ARCHIV')).toEqual({ tiles: [], same: 'FLUR', brightness: 1 });
+    // Two names lit it at once before a floor was lit once: its labels keep that brightness.
+    expect(lit.get('FLUR')?.brightness).toBe(2);
     const flur = lab.labels.filter((label) => label.text === 'FLUR');
     expect(keys(lit.get('FLUR')?.tiles ?? [])).toEqual(
       keys(flur.flatMap((label) => roomArea(lab, label))),
     );
+  });
+});
+
+describe('roomLights — how brightly a floor burns', () => {
+  it('burns as brightly as the brightest label standing on the floor it lights', () => {
+    const bright = labels.map((label) => (label.text === 'OST' ? { ...label, brightness: 2 } : label));
+    const map = { tiles, doors, labels: bright };
+    expect(roomLights(map, 'OST', new Map()).brightness).toBe(2);
+    // Behind the door the west room keeps a room's own; with no door between, one floor burns 2.
+    expect(roomLights(map, 'WEST', new Map()).brightness).toBe(1);
+    expect(roomLights({ ...map, doors: [] }, 'WEST', new Map()).brightness).toBe(2);
+  });
+
+  it('lights Blackout’s other rooms at a room’s own, as one name each lit them', () => {
+    const lab = missionMap('blackout');
+    for (const room of ['MASCHINENRAUM', 'SERVERRAUM', 'LABOR', 'REAKTOR']) {
+      expect(roomLights(lab, room, new Map()).brightness).toBe(1);
+    }
   });
 });
 

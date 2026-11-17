@@ -270,12 +270,19 @@ describe('a puzzle’s own fields and penalty, draft ↔ JSON', () => {
 });
 
 describe('draft ↔ JSON: rooms’ kinds and furniture', () => {
-  it('reads each room’s kind and every piece of furniture, and writes them back', () => {
+  it('reads each room’s kind, its brightness and every piece of furniture, and writes them back', () => {
     const blackout = shipped.find(({ name }) => name === 'blackout.json')?.data as {
       map: { labels: unknown[]; decor: unknown[] };
     };
     const draft = loaded(blackout);
-    expect(draft.map.labels[0]).toEqual({ text: 'ARCHIV', x: 5, y: 3, kind: 'archive' });
+    expect(draft.map.labels[0]).toEqual({
+      text: 'ARCHIV',
+      x: 5,
+      y: 3,
+      kind: 'archive',
+      brightness: 2,
+    });
+    expect(draft.map.labels[1]).toEqual({ text: 'SERVERRAUM', x: 16, y: 4, kind: 'server' });
     // A piece that leaves its look to the tile reads as none; one that names its look, so.
     expect(draft.map.decor.find((d) => d.kind === 'cart')).toEqual({
       kind: 'cart',

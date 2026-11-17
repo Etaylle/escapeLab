@@ -205,7 +205,7 @@ describe('decor — solid for every step', () => {
     expect(canGather(boxedIn, boxedIn.spawns, new Set(), station)).toBe(false);
   });
 
-  it('shows the furniture and each room’s kind in every player’s map', () => {
+  it('shows the furniture, each room’s kind and its floor’s brightness in every player’s map', () => {
     const shipped = parseMission(
       JSON.parse(readFileSync(new URL('../../../missions/blackout.json', import.meta.url), 'utf8')),
     );
@@ -220,6 +220,9 @@ describe('decor — solid for every step', () => {
     const view = viewFor(state, 'p1');
     expect(view.map?.decor).toHaveLength(shipped.map.decor.length);
     expect(view.map?.labels.find((l) => l.text === 'ARCHIV')?.kind).toBe('archive');
+    // The Flur and the Archiv, one floor two names lit at once, burn twice; the Labor its own.
+    expect(view.map?.labels.find((l) => l.text === 'ARCHIV')?.brightness).toBe(2);
+    expect(view.map?.labels.find((l) => l.text === 'LABOR')).not.toHaveProperty('brightness');
     // The Notstrom-Kasten still to come shows only where in sight: the audience sees it all.
     const stations = viewForSpectator(state).map?.stations ?? [];
     const box = stations.find((s) => s.puzzleId === 'notstrom' && s.console === 'a');

@@ -352,7 +352,9 @@ function roomsPart(frame: Frame): BakePart {
       for (const room of lit.values()) {
         g.save();
         g.clip(room.path);
-        drawPools(g, layer, map);
+        for (let i = 0; i < room.brightness; i++) {
+          drawPools(g, layer, map);
+        }
         g.restore();
       }
     },
@@ -373,10 +375,13 @@ function drawRoomsApart(ctx: CanvasRenderingContext2D, frame: Frame): void {
       const layer = layerOf(kit, map, light);
       const box = bakeBox(map, room.tiles, []);
       ctx.globalAlpha = share;
-      layBake(ctx, frame, { name: `room:${label}:${name}`, of: room.path, box }, (g) => {
-        g.clip(room.path);
-        drawPools(g, layer, map);
-      });
+      // A room burning n times as bright is laid n times, as n rooms lit at once would be.
+      for (let i = 0; i < room.brightness; i++) {
+        layBake(ctx, frame, { name: `room:${label}:${name}`, of: room.path, box }, (g) => {
+          g.clip(room.path);
+          drawPools(g, layer, map);
+        });
+      }
     });
   }
   ctx.globalAlpha = 1;
