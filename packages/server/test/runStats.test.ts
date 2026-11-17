@@ -237,8 +237,9 @@ describe('the Bestenliste of a mission whose stations take turns', () => {
     expect(namesItsDraw(blackout, drawing('subsysteme', { seconds: 300 }))).toBe(false);
     const other = { ...run({ seconds: 300 }), drawn: { funk: 'signalkette' } };
     expect(namesItsDraw(blackout, other)).toBe(false);
-    const sly = { ...run({ seconds: 300 }), drawn: JSON.parse('{"__proto__":{"wechsel":"notstrom"}}') };
-    expect(namesItsDraw(blackout, sly as RunReport)).toBe(false);
+    // Only the draw's own keys count: nothing a record inherits names a station.
+    const inherited = Object.create({ wechsel: 'notstrom' }) as Record<string, string>;
+    expect(namesItsDraw(blackout, { ...run({ seconds: 300 }), drawn: inherited })).toBe(false);
     // A mission without one asks nothing of its runs.
     expect(namesItsDraw(tutorial, run({ seconds: 300, mission: 'systemcheck' }))).toBe(true);
   });
