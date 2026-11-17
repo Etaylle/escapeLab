@@ -1,5 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { parseMission, type GameState, type Mission, type ServerMessage } from '@escapelab/core';
+import {
+  parseMission,
+  TRIP_GRACE_MS,
+  type GameState,
+  type Mission,
+  type ServerMessage,
+} from '@escapelab/core';
 import { Room } from '../src/room.js';
 import { pressE, walkTo, type Walker } from './walk.js';
 import { passFor } from './passes.js';
@@ -69,7 +75,10 @@ describe('Room with the Paketfilter', () => {
   beforeEach(() => vi.useFakeTimers());
   afterEach(() => vi.useRealTimers());
 
-  /** Anna at the Sperrpult, Ben at the Analysepult, the station switched on: the wave runs. */
+  /**
+   * Anna at the Sperrpult, Ben at the Analysepult, the station switched on and its first wave
+   * started on the Freigabe: the wave runs.
+   */
   function running(): { room: Room; anna: Player; ben: Player } {
     const room = new Room('TEST', mission);
     const [anna, ben] = ['Anna', 'Ben'].map((name) => {
@@ -87,6 +96,7 @@ describe('Room with the Paketfilter', () => {
     walkTo(room, anna, 5.5, 1.5);
     walkTo(room, ben, 13.5, 1.5);
     pressE(room, anna);
+    room.act(anna.playerId, { kind: 'puzzle-input', input: { start: true } });
     return { room, anna, ben };
   }
 
@@ -95,7 +105,8 @@ describe('Room with the Paketfilter', () => {
     const wave = filterOf(room);
     expect(wave.heldAt).toBeNull();
     const first = wave.packets.find((packet) => packet.hostile);
-    const arrives = wave.startedAt + (first?.enterMs ?? 0) + 14_000;
+    // judged once the grace for a late trip is over
+    const arrives = wave.startedAt + (first?.enterMs ?? 0) + 14_000 + TRIP_GRACE_MS;
     vi.advanceTimersByTime(arrives - Date.now() - 1000);
     expect(alarmsOf(room)).toEqual([]);
     vi.advanceTimersByTime(2000);
@@ -103,9 +114,9 @@ describe('Room with the Paketfilter', () => {
     const logged = gameOf(room).events.find((event) => event.kind === 'penalty');
     expect(logged?.at).toBeGreaterThanOrEqual(arrives);
     expect(logged?.at).toBeLessThan(arrives + 1000);
-    expect(filterOf(room)).toMatchObject({ dealt: 2, startedAt: arrives });
-    // The wave it called off charges nothing more: the fresh one's first packet is 18 s away.
-    vi.advanceTimersByTime(10_000);
+    expect(filterOf(room)).toMatchObject({ dealt: 2, startedAt: arrives, waiting: true });
+    // The fresh wave waits for the Freigabe: a crew standing still loses nothing more.
+    vi.advanceTimersByTime(600_000);
     expect(alarmsOf(room)).toHaveLength(1);
     room.dispose();
   });
