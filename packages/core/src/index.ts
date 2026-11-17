@@ -336,6 +336,14 @@ export {
   type AccessTerminal,
 } from './puzzles/access.js';
 export {
+  FIREWALL_LINES,
+  FIREWALL_PAUSE_MS,
+  LINES_FIGURE,
+  type FirewallBlip,
+  type FirewallEvent,
+  type FirewallHeader,
+} from './puzzles/firewall.js';
+export {
   CHAT_PHRASE_COUNT,
   DEFAULT_CHAT_PHRASES,
   phraseShown,

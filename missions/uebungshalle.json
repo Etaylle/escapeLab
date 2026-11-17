@@ -116,6 +116,17 @@
         "Einweisung: Erst die Tür am Terminal, dann auf der Benutzerliste das Konto, dessen Rolle sie freigibt.",
         "Einweisung: Den Token erst eingeben, wenn das Tokengerät dieses Konto zeigt."
       ]
+    },
+    {
+      "type": "firewall",
+      "id": "firewall",
+      "title": "Paketfilter",
+      "waves": 2,
+      "fallSec": 10,
+      "hints": [
+        "Einweisung: Die Richtlinie von oben lesen; die erste passende Regel gilt, die übrigen nicht.",
+        "Einweisung: Gesperrt wird nur, was am Sperrpult einen Ring trägt."
+      ]
     }
   ],
   "map": {
@@ -172,7 +183,9 @@
       { "puzzleId": "servers", "x": 30, "y": 16, "console": "a" },
       { "puzzleId": "servers", "x": 35, "y": 16, "console": "b" },
       { "puzzleId": "access", "x": 3, "y": 23, "console": "a" },
-      { "puzzleId": "access", "x": 8, "y": 23, "console": "b" }
+      { "puzzleId": "access", "x": 8, "y": 23, "console": "b" },
+      { "puzzleId": "firewall", "x": 12, "y": 23, "console": "a" },
+      { "puzzleId": "firewall", "x": 17, "y": 23, "console": "b" }
     ],
     "labels": [
       { "text": "ÜBUNGSHALLE", "x": 20, "y": 29 },
@@ -188,7 +201,8 @@
       { "text": "SIGNALKETTE · SK-4", "x": 14, "y": 18 },
       { "text": "SICHERUNGSKASTEN · SP-12", "x": 23, "y": 18 },
       { "text": "RECHNERNETZ · RN-6", "x": 32, "y": 18 },
-      { "text": "ZUGANGSKONTROLLE · ZK-2", "x": 5, "y": 25 }
+      { "text": "ZUGANGSKONTROLLE · ZK-2", "x": 5, "y": 25 },
+      { "text": "PAKETFILTER · PF-5", "x": 14, "y": 25 }
     ],
     "decor": [
       { "kind": "desk", "x": 9, "y": 2 },
@@ -203,7 +217,8 @@
       { "kind": "desk", "x": 16, "y": 20 },
       { "kind": "desk", "x": 25, "y": 20 },
       { "kind": "desk", "x": 34, "y": 20 },
-      { "kind": "desk", "x": 7, "y": 27 }
+      { "kind": "desk", "x": 7, "y": 27 },
+      { "kind": "desk", "x": 16, "y": 27 }
     ],
     "manuals": [
       {
@@ -296,6 +311,13 @@
         "label": "ANLEITUNG ZUGANGSKONTROLLE",
         "puzzleIds": ["access"],
         "spots": [{ "x": 6, "y": 27 }]
+      },
+      {
+        "id": "anleitung-firewall",
+        "kind": "book",
+        "label": "ANLEITUNG PAKETFILTER",
+        "puzzleIds": ["firewall"],
+        "spots": [{ "x": 15, "y": 27 }]
       }
     ],
     "notes": [

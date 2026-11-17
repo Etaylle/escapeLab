@@ -107,6 +107,7 @@ const OPENS: Readonly<Partial<Record<PuzzleDef['type'], readonly string[]>>> = {
   circuit: ['wires'],
   servers: ['rows'],
   access: ['terminal'],
+  firewall: ['waves', 'fallMs'],
 };
 
 const CREW = ['p1', 'p2'] as const;
@@ -215,7 +216,7 @@ function roundAt(
   const other = puzzleOf(viewFor(state, 'p2'));
   const two = moduleFor(def.type).consoles === 2;
   const views = { operator, ...(two ? { partner: other } : {}), reader: read ?? other };
-  const aid = { transcript: played.transcript, ...clockAid(state, time) };
+  const aid = { transcript: played.transcript, ...clockAid(state, time), at: time };
   const made = moduleFor(def.type).solve(def, views, viewFor(state, 'p1').edgework, aid);
   if (operator.kind === 'button' && operator.strip !== null) {
     played.releaseAt = releaseDigit(operator.strip);
@@ -242,7 +243,9 @@ function playStation(
   let at = round;
   for (; next.currentPuzzleIndex === index && at < round + 600; at++) {
     const time = T0 + at * 1000;
-    next = roundAt(ticked(next, time), def, time, crew);
+    // The Paketfilter's last wave is clean on the clock, as its last packet reaches the Kern.
+    const due = ticked(next, time);
+    next = due.currentPuzzleIndex === index ? roundAt(due, def, time, crew) : due;
     if (next.penaltySeq > 0) {
       throw new Error(`hall plan: an alarm at "${def.id}" on seed ${next.seed}`);
     }
