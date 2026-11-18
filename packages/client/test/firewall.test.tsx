@@ -557,10 +557,16 @@ describe('the scope on a phone held upright', () => {
   });
 });
 
-/** The share of its type's size a figure of the device's face is wide: SF Mono, Menlo, DejaVu. */
-const FIGURE = 0.602;
+/**
+ * The share of its type's size a figure is wide in the widest face the device's stack resolves
+ * to: SF Mono, which Safari gives for ui-monospace, 0.618 (Menlo and DejaVu Sans Mono 0.602).
+ */
+const FIGURE = 0.62;
 
-/** Console b's scope, or the audience's for null, every card the widest header, `marked`. */
+/**
+ * Console b's scope, or for null the audience's in the frame the audience's page gives it
+ * (Spectate.tsx, PuzzlePanel.tsx), every card the widest header, `marked`.
+ */
 function widest(seat: 'b' | null, marked: boolean): Styled[] {
   clockAt(MID);
   const puzzle = seen(seat, MID);
@@ -569,7 +575,12 @@ function widest(seat: 'b' | null, marked: boolean): Styled[] {
     header: widestHeader(),
     marked,
   }));
-  return elementsOf(panel({ ...puzzle, packets }));
+  const scope = panel({ ...puzzle, packets });
+  const framed =
+    '<div class="spectate-panels"><section class="panel"><div class="read-only">' +
+    `<div class="device device--firewall"><div class="device-face">${scope}</div></div>` +
+    '</div></section></div>';
+  return elementsOf(seat === null ? framed : scope);
 }
 
 const one = (nodes: Styled[], name: string): Styled => {
@@ -592,8 +603,40 @@ function printedLines(nodes: Styled[], sheets: Sheets, screen: Screen): string[]
   });
 }
 
-/** The px a card's line of type has in `nodes` at `wide` px of scope; null: the least line. */
-function roomOf(nodes: Styled[], sheets: Sheets, screen: Screen, wide: number | null) {
+/**
+ * The width the audience's scope has on `screen`, px: its column beside the world — 380 px, a
+ * third of the window at least (ui.css `.spectate-panels`) — or, in a window up to 900 px, the
+ * window less the page's sides; less the panel's border and padding, the device's sides and the
+ * face's. `shrinks`: whether the panel is as narrow as its lines let it be (the strip of panels
+ * under the world there).
+ */
+function audienceScope(nodes: Styled[], sheets: Sheets, screen: Screen) {
+  const both = (node: Styled, box: 'margin' | 'padding'): number => {
+    const { left, right } = sheets.sides(node, box, screen);
+    return (Number.isNaN(left) ? 0 : left) + (Number.isNaN(right) ? 0 : right);
+  };
+  const device = one(nodes, 'device');
+  const round =
+    2 +
+    both(one(nodes, 'panel'), 'padding') +
+    both(device, 'margin') +
+    both(device, 'padding') +
+    both(one(nodes, 'device-face'), 'padding');
+  const shrinks = screen.width <= 900;
+  const column = shrinks ? screen.width - 24 : Math.min(380, 0.34 * screen.width);
+  return { wide: column - round, shrinks };
+}
+
+/**
+ * The px a card's line of type has in `nodes`, the scope `wide` px — as wide as its lines' least
+ * width makes it where it `shrinks` —, and the px the five lines need at their least.
+ */
+function roomOf(
+  nodes: Styled[],
+  sheets: Sheets,
+  screen: Screen,
+  { wide, shrinks }: { wide: number; shrinks: boolean },
+) {
   const lines = one(nodes, 'firewall-lines');
   const card = one(nodes, 'firewall-card');
   const least = /minmax\((.+), 1fr\)/.exec(
@@ -602,17 +645,21 @@ function roomOf(nodes: Styled[], sheets: Sheets, screen: Screen, wide: number | 
   const em = sheets.fontSize(lines, screen);
   const scope = sheets.sides(one(nodes, 'firewall-scope'), 'padding', screen);
   const gap = sheets.length(lines, 'gap', screen);
-  const line =
-    wide === null
-      ? lengthOf(least ?? '', { screen, em, custom: () => undefined })
-      : (wide - scope.left - scope.right - 4 * gap) / 5;
+  const leastLine = lengthOf(least ?? '', { screen, em, custom: () => undefined });
+  const inside = wide - scope.left - scope.right - 4 * gap;
+  const line = shrinks ? leastLine : inside / 5;
   const inset = sheets.length(card, 'left', screen) + sheets.length(card, 'right', screen);
   const padding = sheets.sides(card, 'padding', screen);
   // the card's border is 1 px, marked or not
   expect(sheets.declared(card, 'border-width', screen)).toBeUndefined();
   expect(sheets.declared(card, 'border', screen)?.value).toMatch(/^1px /);
   const tick = sheets.length(one(nodes, 'firewall-tick'), 'right', screen);
-  return { type: line - inset - 2 - padding.left - padding.right, tick, right: padding.right };
+  return {
+    type: line - inset - 2 - padding.left - padding.right,
+    tick,
+    right: padding.right,
+    spare: inside - 5 * leastLine,
+  };
 }
 
 describe('a card holds its header', () => {
@@ -645,25 +692,49 @@ describe('a card holds its header', () => {
   it.each(CASES)(
     'whole at $width px, marked $marked, at console $seat, at every text size',
     ({ screen, wide, marked, seat }) => {
-      // the audience's panel is as narrow as its lines' least width lets it be
       const nodes = widest(seat, true);
       for (const scale of Object.values(TEXT_SCALE)) {
         const sheets = new ScaledSheets(scale);
         const figure = FIGURE * sheets.fontSize(one(nodes, 'firewall-card'), screen);
-        const room = roomOf(nodes, sheets, screen, seat === null ? null : wide);
+        const scope =
+          seat === null ? audienceScope(nodes, sheets, screen) : { wide, shrinks: false };
+        const room = roomOf(nodes, sheets, screen, scope);
+        // the five lines at their least stand in the scope: none past its edge, nor the
+        // audience's panel past the window
+        expect(room.spare, `five lines in the scope at ${scale}`).toBeGreaterThanOrEqual(0);
         const lines = printedLines(marked ? nodes : widest(seat, false), sheets, screen);
         expect(lines.join('').replace('/', '')).toBe('31.14.9.988080TCP');
         for (const line of lines) {
           expect(line.length * figure, `„${line}" at ${scale}`).toBeLessThanOrEqual(room.type);
         }
         // the tick after the last line, a figure wide, clear of it
-        const last = (lines.at(-1) ?? '').length + (marked ? 1 : 0);
-        expect(last * figure + (marked ? room.tick - room.right : 0)).toBeLessThanOrEqual(
-          room.type,
-        );
+        const tick = marked ? figure + room.tick - room.right : 0;
+        expect(String(lines.at(-1)).length * figure + tick).toBeLessThanOrEqual(room.type);
       }
     },
   );
+
+  it('draws the cursor’s outline inside the card, whose line clips what lies outside it', () => {
+    const sheets = new Sheets();
+    const [cursor] = elementsOf(
+      '<div class="firewall firewall--analysis"><div class="firewall-line">' +
+        '<button class="firewall-card firewall-card--cursor"></button></div></div>',
+    ).filter((n) => n.classes.includes('firewall-card--cursor'));
+    const line = elementsOf('<div class="firewall-line"></div>')[0];
+    if (cursor === undefined || line === undefined) {
+      throw new Error('expected a card under the cursor and a line');
+    }
+    for (const { screen } of SCOPES) {
+      expect(sheets.declared(line, 'overflow', screen)?.value).toBe('hidden');
+      const outline = sheets.declared(cursor, 'outline', screen)?.value ?? '';
+      const wide = parseFloat(outline);
+      expect(wide).toBeGreaterThan(0);
+      // the whole stroke within the card's border box, which its line holds whole
+      expect(sheets.length(cursor, 'outline-offset', screen)).toBeLessThanOrEqual(-wide);
+      expect(sheets.length(cursor, 'left', screen)).toBeGreaterThanOrEqual(0);
+      expect(sheets.length(cursor, 'right', screen)).toBeGreaterThanOrEqual(0);
+    }
+  });
 
   it('gives a marked card the room of an unmarked one, its ring and tick inside its edge', () => {
     const sheets = new Sheets();

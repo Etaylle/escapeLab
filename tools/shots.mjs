@@ -11200,22 +11200,36 @@ function scopeSideways(within) {
 }
 
 /**
- * In the page: every part of the Paketfilter's scope in the panel `within` names — a line, a
- * number, a card, a tick, the hold's word, the Kern's rule — past the window's or the panel's
- * edge, or past the line that clips it; each as a line.
+ * In the page: every part of the Paketfilter's scope in the panel `within` names past the box
+ * that holds it, each as a line — the scope past its device, the panel or the window; a line, a
+ * number, the hold's word or the Kern's rule past the scope; a card or a tick past its line.
  */
 function scopePartsOut(within) {
   const panel = document.querySelector(within);
-  const frame = panel?.getBoundingClientRect() ?? { left: 0, right: 0 };
+  const scope = panel?.querySelector('.firewall-scope');
+  if (scope == null) {
+    return [];
+  }
   const span = (box) => `${Math.round(box.left)}..${Math.round(box.right)}`;
-  const parts = ['line', 'line-no', 'card', 'tick', 'held', 'kern'].map((p) => `.firewall-${p}`);
-  return [...(panel?.querySelectorAll(parts.join(', ')) ?? [])].flatMap((part) => {
+  const boundedBy = (boxes) => ({
+    left: Math.max(0, ...boxes.map((box) => box.left)),
+    right: Math.min(globalThis.innerWidth, ...boxes.map((box) => box.right)),
+  });
+  const holderOf = (part) => {
+    const line = part.closest('.firewall-line');
+    if (part === scope) {
+      const device = scope.closest('.device') ?? panel;
+      return boundedBy([device.getBoundingClientRect(), panel.getBoundingClientRect()]);
+    }
+    const holder = line === null || line === part ? scope : line;
+    return boundedBy([holder.getBoundingClientRect(), scope.getBoundingClientRect()]);
+  };
+  const names = ['line', 'line-no', 'card', 'tick', 'held', 'kern'].map((p) => `.firewall-${p}`);
+  return [scope, ...scope.querySelectorAll(names.join(', '))].flatMap((part) => {
     const box = part.getBoundingClientRect();
-    const line = part.closest('.firewall-line')?.getBoundingClientRect() ?? frame;
-    const left = Math.max(0, frame.left, line.left);
-    const right = Math.min(globalThis.innerWidth, frame.right, line.right);
-    const out = box.left < left - 1 || box.right > right + 1;
-    return out ? [`${part.className.split(' ')[0]} ${span(box)} in ${span({ left, right })}`] : [];
+    const held = holderOf(part);
+    const out = box.left < held.left - 1 || box.right > held.right + 1;
+    return out ? [`${part.className.split(' ')[0]} ${span(box)} in ${span(held)}`] : [];
   });
 }
 

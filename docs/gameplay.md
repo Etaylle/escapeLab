@@ -778,20 +778,27 @@ binder, the Laborkennung between them), and with its bay in the Übungshalle.
   the header's room: the widest header a wave can deal (core `widestHeader`, a Quelle of ten
   figures, a port of four) stands whole on every card, marked or not, on every screen and at
   every text size. A tap on a card, or a cursor stepped with ← → and space or
-  enter, sets or takes back its mark. It drops nothing.
+  enter, sets or takes back its mark; the cursor's dashed outline lies inside the card. It drops
+  nothing.
 - **A phone held upright** (a window taller than wide, up to 720 px across; proven from 360 × 640 to
   430 × 932) keeps the five lines side by side, 58 px each at 360: a card breaks each of its two
   lines in two — the Quelle's network, the rest of it, the port, the protocol, „141.7" over „.9.98"
   over „3389" over „TCP", five figures a line at most and nothing left out —, wears its mark inside
   its own edge and its tick beside the protocol, and a line is never narrower than five figures of
-  the card's type. The scope takes the height the window leaves — 194 px at 640, 340 at 844 and
-  above, never less than 8/3 of a card, so that two cards of a line stay clear at every text size —,
-  the Sperrpult's 140 to 340 px over its keys in two rows under a thumb: ◀ SPERREN ▶, then FREIGABE,
-  the lamp and the talk key. The status line keeps three rows, so that the scope stands where it
-  stood whatever the device says, and the head leaves out the line that says what the console does.
-  The audience's panel, a narrow column on every screen, sets its cards in four lines everywhere.
-  At 360 × 640 with the text size „groß" the
-  Analysepult's frame scrolls 11 px down; nothing runs out sideways.
+  the card's type in the widest face its stack resolves to (SF Mono, 0.618 em a figure). The scope
+  takes the height the window leaves, a notch and a home bar counted out — 194 px at 640, 340 at 844
+  and above, never less than 8/3 of a card, so that two cards of a line stay clear at every text
+  size —, the Sperrpult's 130 to 340 px over its keys in two rows under a thumb: ◀ SPERREN ▶, then
+  FREIGABE, the lamp and the talk key. The status line keeps three rows, so that the scope stands
+  where it stood whatever the device says, and the head leaves out the line that says what the
+  console does; a window under 700 px high has a slimmer bezel besides, and stands whole at 360 ×
+  640 with the largest text as well.
+- **The audience's panel** is a narrow column on every screen — 380 px beside the world, a third of
+  the window at least, 317 px on a large phone held sideways; under the world in a window up to 900
+  px — and sets its cards in four lines everywhere: its device is a window there, hardly a bezel,
+  reaching into the panel's sides, so that the five lines stand in their scope and the widest header
+  whole at every text size. On a phone that strip of panels is 113 to 227 px high (68 px held
+  sideways at 844 × 390) and scrolls: the scope, 262 to 304 px, never stands whole in it.
 - **The source** is the module's printed page, the Sicherheitsrichtlinie: three networks (Labornetz
   10.4.x.x, Wartungsnetz 10.9.x.x, everything else Fremdnetz) and six numbered rules, the first that
   fits deciding — the Wartungsnetz passes, ports 23 and 3389 are dropped, the Labornetz over TCP

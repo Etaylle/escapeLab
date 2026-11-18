@@ -433,12 +433,17 @@ const NUMBER = String.raw`(-?\d*\.?\d+)(px|dvh|vh|vw|em|rem|cqw|cqh|%)?`;
 const FUNCTION = String.raw`(calc|min|max|clamp|var)\(`;
 const TOKEN = new RegExp(String.raw`\s*(?:${NUMBER}|${FUNCTION}|(--[\w-]+)|([-+*/(),]))`, 'y');
 
-function tokens(value: string): string[] {
+/** `value` on a screen without notch or bars: every env() its fallback. */
+const withoutInsets = (value: string): string =>
+  value.replace(/env\([\w-]+,\s*([^(),]+)\)/g, '$1').trim();
+
+function tokens(given: string): string[] {
+  const value = withoutInsets(given);
   const out: string[] = [];
   TOKEN.lastIndex = 0;
-  while (TOKEN.lastIndex < value.trim().length) {
+  while (TOKEN.lastIndex < value.length) {
     const at = TOKEN.lastIndex;
-    const match = TOKEN.exec(value.trim());
+    const match = TOKEN.exec(value);
     if (match === null) {
       throw new Error(`no reading of "${value}" at ${at}`);
     }
