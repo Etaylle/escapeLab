@@ -774,7 +774,10 @@ binder, the Laborkennung between them), and with its bay in the Übungshalle.
 - **Console B, the Analysepult**, the same scope with the same packets at the same places, each as a
   card of its header in two lines — the Quelle over port and protocol, „67/UDP", 14 px at least, two
   lines of its type high, 44 px at least, at every text size the settings offer —, a marked card
-  wearing a tick and a heavier border. A tap on a card, or a cursor stepped with ← → and space or
+  wearing a ring inside its edge and a tick after the protocol, so that the mark takes nothing of
+  the header's room: the widest header a wave can deal (core `widestHeader`, a Quelle of ten
+  figures, a port of four) stands whole on every card, marked or not, on every screen and at
+  every text size. A tap on a card, or a cursor stepped with ← → and space or
   enter, sets or takes back its mark. It drops nothing.
 - **A phone held upright** (a window taller than wide, up to 720 px across; proven from 360 × 640 to
   430 × 932) keeps the five lines side by side, 58 px each at 360: a card breaks each of its two
@@ -786,7 +789,8 @@ binder, the Laborkennung between them), and with its bay in the Übungshalle.
   the Sperrpult's 140 to 340 px over its keys in two rows under a thumb: ◀ SPERREN ▶, then FREIGABE,
   the lamp and the talk key. The status line keeps three rows, so that the scope stands where it
   stood whatever the device says, and the head leaves out the line that says what the console does.
-  The audience's panel breaks its cards the same way. At 360 × 640 with the text size „groß" the
+  The audience's panel, a narrow column on every screen, sets its cards in four lines everywhere.
+  At 360 × 640 with the text size „groß" the
   Analysepult's frame scrolls 11 px down; nothing runs out sideways.
 - **The source** is the module's printed page, the Sicherheitsrichtlinie: three networks (Labornetz
   10.4.x.x, Wartungsnetz 10.9.x.x, everything else Fremdnetz) and six numbered rules, the first that
@@ -869,7 +873,9 @@ no order each taking an alarm in all of them; `client/test/firewall.test.tsx` bo
 scope's clock and status line, reduced motion, the sounds, and the type and targets on phones
 held sideways at 844 and 932 and upright at 360, 390 and 430, and that two cards of a line never
 overlap there, five lines stand side by side in the window and a card breaks into four lines
-upright only;
+upright only, the audience's everywhere, and that the widest header fits its card — marked and
+unmarked, on the laptops, the phones sideways and upright, at every text size (a test that reads
+the scope's width at each screen as the drill measures it);
 `client/test/firewallWiring.test.tsx` presses every control through the components.
 `server/test/firewallRoom.test.ts` lets an idle crew meet the Kern alarm on the room's own timer.
 The walkthrough drills the probe in a Systemcheck run (group `firewall`; `SHOTS_SKIP=firewall`
@@ -883,7 +889,9 @@ upright, 430 × 932 and 360 × 640 — the device whole, nothing scrolling, ever
 five lines in the window, no header cut, and a card of the fifth line tapped on the smallest takes
 its mark (firewall-phone-upright-b.png, firewall-phone-upright-audience.png); then the
 Analysepult's player walks off in turn and the Sperrpult stands upright the same way, the marked
-point ringed and ticked on its line (firewall-phone-upright-a.png).
+point ringed and ticked on its line (firewall-phone-upright-a.png). The marked card is held to the
+phones sideways and the laptop as well, no line of any card wider than its box
+(firewall-marked-844.png, firewall-marked.png), and the audience's panel at laptop size.
 
 ## Captures in the notepad
 

@@ -30,7 +30,7 @@
 }
 
 .firewall--analysis {
-  /* two lines of its type, 3 px of padding and a marked card's 2 px border over and under them */
+  /* two lines of its type, 3 px of padding and the border over and under them, 2 px to spare */
   --item-h: max(44px, calc(2.4em + 10px));
 }
 
@@ -69,9 +69,18 @@
   height: var(--scope-height);
 }
 
+/*
+ * The Analysepult's lines take all the width the scope has — a card holds the longest Quelle a
+ * wave can deal, ten figures, at the largest text (firewall.test.tsx, „a card holds its header").
+ */
+.firewall--analysis .firewall-scope {
+  padding-inline: 6px;
+}
+
 .firewall--analysis .firewall-lines,
 .firewall--analysis .firewall-numbers {
   grid-template-columns: repeat(5, minmax(100px, 1fr));
+  gap: 4px;
 }
 
 /* The lines' numbers, over the lines: no packet coming down ever covers one. */
@@ -193,14 +202,14 @@ button.firewall-line {
 .firewall-card {
   position: absolute;
   top: 0;
-  right: 3px;
-  left: 3px;
+  right: 1px;
+  left: 1px;
   display: flex;
   flex-direction: column;
   justify-content: center;
   min-height: var(--item-h);
   margin: 0;
-  padding: 3px 6px;
+  padding: 3px 2px;
   border: 1px solid var(--scope-dim);
   border-radius: 5px;
   background: #0b1a28;
@@ -225,24 +234,25 @@ button.firewall-card {
   color: var(--scope-dim);
 }
 
-.firewall-card--marked {
+/*
+ * A marked card wears its tick and a ring inside its edge, never the colour alone — nothing of
+ * the header's width is the mark's: the tick stands after the protocol, at the card's foot, and
+ * the ring where the line's own edge cuts nothing of it. It keeps both under the pointer or the
+ * finger that set it: a touch screen holds a key's hover until the next tap.
+ */
+.firewall-card--marked,
+button.firewall-card--marked:hover:not(:disabled) {
   border-color: var(--scope-mark);
   box-shadow:
-    0 0 0 2px var(--scope-mark),
-    0 0 10px rgba(255, 200, 97, 0.5);
+    inset 0 0 0 2px var(--scope-mark),
+    inset 0 0 8px rgba(255, 200, 97, 0.5);
 }
 
 .firewall-card .firewall-tick {
-  top: 50%;
-  right: 6px;
+  top: auto;
+  right: 4px;
+  bottom: 4px;
   left: auto;
-  transform: translateY(-50%);
-}
-
-/* A marked card wears its tick and a heavier border, never the colour alone. */
-.firewall-card--marked {
-  padding-right: 20px;
-  border-width: 2px;
 }
 
 .firewall-card--cursor {
@@ -315,6 +325,11 @@ button.firewall-card {
   pointer-events: none;
 }
 
+.firewall--analysis .firewall-held {
+  right: 6px;
+  left: 6px;
+}
+
 /* ── the bezel ──────────────────────────────────────────────────────── */
 
 .firewall-bezel {
@@ -367,8 +382,50 @@ button.firewall-card {
   transform: translateY(1px);
 }
 
+/*
+ * A card in four lines, where a line is too narrow for two: each of its lines broken in two
+ * (FirewallPanel.tsx `HeaderLines`) — the Quelle's network, the rest of it, the port, the
+ * protocol, five figures a line at most and nothing left out —, a line never narrower than five
+ * figures of its type. The audience's panel is a narrow column on every screen and always sets
+ * its cards so; the Analysepult does on a phone held upright (below, the same rules).
+ */
+.firewall--watched {
+  /* four lines of its type at 1.1, 1 px of padding and the 1 px border over and under them */
+  --item-h: max(44px, calc(4.4em + 4px));
+  --scope-fit: calc(var(--item-h) * 8 / 3 + 1px);
+}
+
 .firewall--watched .firewall-lines {
-  --scope-height: clamp(140px, 32vh, 240px);
+  /* never less than two cards of a line need: 8/3 of a card, as above */
+  --scope-height: max(var(--scope-fit), clamp(140px, 32vh, 240px));
+}
+
+.firewall--watched .firewall-lines,
+.firewall--watched .firewall-numbers {
+  grid-template-columns: repeat(5, minmax(max(44px, calc(3.1em + 6px)), 1fr));
+  gap: 3px;
+}
+
+.firewall--watched .firewall-card {
+  right: 0;
+  left: 0;
+  padding: 1px 2px;
+  line-height: 1.1;
+  white-space: normal;
+}
+
+/* A part too wide for a card — a face wider than the device's own — wraps, never cut. */
+.firewall--watched .firewall-part {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.firewall--watched .firewall-stroke {
+  display: none;
+}
+
+.firewall--watched .firewall-card .firewall-tick {
+  bottom: 2px;
 }
 
 /* ── calm, and narrow windows ───────────────────────────────────────── */
@@ -401,13 +458,11 @@ button.firewall-card {
 }
 
 /*
- * A phone held upright, 360 to 430 px wide: the five lines share the window's width, some 60 px
- * each at 360, so the Analysepult's card breaks each of its two lines in two (FirewallPanel.tsx
- * `HeaderLines`) — the Quelle's network, the rest of it, the port, the protocol, at most five
- * figures a line and nothing left out — and wears its mark inside its own edge, the tick beside
- * the protocol. The room is in the height: the scope takes what the window leaves once the
- * Laborkennung, the device's head, its keys and the tabs under it have theirs (--scope-rest),
- * and never less than two cards of a line need (8/3 of a card, as above).
+ * A phone held upright, 360 to 430 px wide: the five lines share the window's width, some 58 px
+ * each at 360, so the Analysepult sets its cards in four lines as the audience's panel does
+ * (above, the same rules). The room is in the height: the scope takes what the window leaves
+ * once the Laborkennung, the device's head, its keys and the tabs under it have theirs
+ * (--scope-rest), and never less than two cards of a line need (8/3 of a card, as above).
  */
 @media (orientation: portrait) and (max-width: 720px) {
   .firewall {
@@ -427,16 +482,11 @@ button.firewall-card {
   }
 
   .firewall--analysis {
-    /* four lines of its type at 1.1, 1 px of padding and the 1 px border over and under them */
     --item-h: max(44px, calc(4.4em + 4px));
     --scope-fit: calc(var(--item-h) * 8 / 3 + 1px);
     --scope-height: max(var(--scope-fit), min(calc(100dvh - var(--scope-rest)), 340px));
     /* round the Analysepult's lines at 360 px, its one row of keys with it: 435 px */
     --scope-rest: calc(376px + 70px * var(--text-scale));
-  }
-
-  .firewall--watched .firewall-lines {
-    --scope-height: max(var(--scope-fit), clamp(140px, 32vh, 240px));
   }
 
   /*
@@ -451,10 +501,17 @@ button.firewall-card {
     display: none;
   }
 
-  .firewall-scope {
+  .firewall-scope,
+  .firewall--analysis .firewall-scope {
     --pad-top: 6px;
     margin-inline: -8px;
     padding: var(--pad-top) 3px 4px;
+  }
+
+  .firewall-held,
+  .firewall--analysis .firewall-held {
+    right: 3px;
+    left: 3px;
   }
 
   .firewall-lines,
@@ -463,18 +520,13 @@ button.firewall-card {
     gap: 3px;
   }
 
-  /* A card's line holds five figures of its type whatever the room: 3.1em, its edge and padding. */
   .firewall--analysis .firewall-lines,
   .firewall--analysis .firewall-numbers {
     grid-template-columns: repeat(5, minmax(max(44px, calc(3.1em + 6px)), 1fr));
+    gap: 3px;
   }
 
-  .firewall-held {
-    right: 3px;
-    left: 3px;
-  }
-
-  .firewall-card {
+  .firewall--analysis .firewall-card {
     right: 0;
     left: 0;
     padding: 1px 2px;
@@ -482,35 +534,17 @@ button.firewall-card {
     white-space: normal;
   }
 
-  /* A part too wide for a card — a face wider than the device's own — wraps, never cut. */
-  .firewall-part {
+  .firewall--analysis .firewall-part {
     display: block;
     overflow-wrap: anywhere;
   }
 
-  .firewall-stroke {
+  .firewall--analysis .firewall-stroke {
     display: none;
   }
 
-  /*
-   * The mark inside the card's edge, where the line's own edge cuts nothing of it — and kept
-   * under the finger that set it: a touch screen holds a key's hover until the next tap.
-   */
-  .firewall-card--marked,
-  button.firewall-card--marked:hover:not(:disabled) {
-    padding-right: 2px;
-    border-width: 1px;
-    border-color: var(--scope-mark);
-    box-shadow:
-      inset 0 0 0 2px var(--scope-mark),
-      inset 0 0 8px rgba(255, 200, 97, 0.5);
-  }
-
-  .firewall-card .firewall-tick {
-    top: auto;
-    right: 4px;
+  .firewall--analysis .firewall-card .firewall-tick {
     bottom: 2px;
-    transform: none;
   }
 
   .firewall-card--cursor {
@@ -532,4 +566,3 @@ button.firewall-card {
     padding-inline: 8px;
   }
 }
-

@@ -7,6 +7,7 @@ import {
   SAME_LINE_GAP,
   moduleFor,
   puzzleDefSchema,
+  widestHeader,
   type ConsoleId,
   type PuzzleState,
   type PuzzleView,
@@ -531,34 +532,148 @@ describe('the scope on a phone held upright', () => {
           screen.width - 2 * 29,
         );
         // a line is a finger wide at least, and a card's holds five figures of its type
-        // (0.602 em each in the device's face), its border and its padding
-        expect(column).toBeGreaterThanOrEqual(seat === 'b' ? 5 * 0.602 * em + 6 : 44);
+        // (FIGURE), its border and its padding
+        expect(column).toBeGreaterThanOrEqual(seat === 'b' ? 5 * FIGURE * em + 6 : 44);
         expect(column).toBeGreaterThanOrEqual(44);
       }
     }
   });
 
-  it('breaks a card into four lines upright only, the stroke gone, the mark in its edge', () => {
+  it('breaks a console’s card into four lines upright only, the audience’s everywhere', () => {
     const sheets = new Sheets();
-    const nodes = scope('b', allMarked);
-    const piece = part(nodes, 'firewall-part');
-    const stroke = part(nodes, 'firewall-stroke');
-    const marked = part(nodes, 'firewall-card--marked');
-    const shown = (node: Styled, screen: Screen) => sheets.declared(node, 'display', screen)?.value;
-    for (const screen of UPRIGHT) {
-      expect(shown(piece, screen)).toBe('block');
-      expect(shown(stroke, screen)).toBe('none');
-      // nothing of the mark's room taken from the header's width, its ring inside the border
-      expect(sheets.length(marked, 'padding-right', screen)).toBe(2);
-      expect(sheets.declared(marked, 'box-shadow', screen)?.value).toMatch(/^inset /);
-    }
+    const shown = (nodes: Styled[], name: string, screen: Screen) =>
+      sheets.declared(part(nodes, name), 'display', screen)?.value;
     const others: Screen[] = [
       { width: 1280, height: 720, coarse: false },
       { width: 844, height: 390, coarse: true },
     ];
-    for (const screen of others) {
-      expect(shown(piece, screen)).toBeUndefined();
-      expect(shown(stroke, screen)).toBeUndefined();
+    for (const screen of [...UPRIGHT, ...others]) {
+      const stacked = UPRIGHT.includes(screen);
+      expect(shown(scope('b'), 'firewall-part', screen)).toBe(stacked ? 'block' : undefined);
+      expect(shown(scope('b'), 'firewall-stroke', screen)).toBe(stacked ? 'none' : undefined);
+      expect(shown(scope(null), 'firewall-part', screen)).toBe('block');
+      expect(shown(scope(null), 'firewall-stroke', screen)).toBe('none');
+    }
+  });
+});
+
+/** The share of its type's size a figure of the device's face is wide: SF Mono, Menlo, DejaVu. */
+const FIGURE = 0.602;
+
+/** Console b's scope, or the audience's for null, every card the widest header, `marked`. */
+function widest(seat: 'b' | null, marked: boolean): Styled[] {
+  clockAt(MID);
+  const puzzle = seen(seat, MID);
+  const packets = (puzzle.packets ?? []).map((blip) => ({
+    ...blip,
+    header: widestHeader(),
+    marked,
+  }));
+  return elementsOf(panel({ ...puzzle, packets }));
+}
+
+const one = (nodes: Styled[], name: string): Styled => {
+  const found = nodes.find((n) => n.classes.includes(name));
+  if (found === undefined) {
+    throw new Error(`expected ${name}`);
+  }
+  return found;
+};
+
+/** The lines a card of `nodes` prints on `screen`: each field, or each part where they stack. */
+function printedLines(nodes: Styled[], sheets: Sheets, screen: Screen): string[] {
+  const card = one(nodes, 'firewall-card');
+  const fields = nodes.filter((n) => n.classes.includes('firewall-field') && n.parent === card);
+  const shown = (n: Styled) => sheets.declared(n, 'display', screen)?.value;
+  return fields.flatMap((field) => {
+    const pieces = nodes.filter((n) => n.parent === field && shown(n) !== 'none');
+    const stacked = pieces.some((n) => shown(n) === 'block');
+    return stacked ? pieces.map((n) => n.text) : [pieces.map((n) => n.text).join('')];
+  });
+}
+
+/** The px a card's line of type has in `nodes` at `wide` px of scope; null: the least line. */
+function roomOf(nodes: Styled[], sheets: Sheets, screen: Screen, wide: number | null) {
+  const lines = one(nodes, 'firewall-lines');
+  const card = one(nodes, 'firewall-card');
+  const least = /minmax\((.+), 1fr\)/.exec(
+    sheets.declared(lines, 'grid-template-columns', screen)?.value ?? '',
+  )?.[1];
+  const em = sheets.fontSize(lines, screen);
+  const scope = sheets.sides(one(nodes, 'firewall-scope'), 'padding', screen);
+  const gap = sheets.length(lines, 'gap', screen);
+  const line =
+    wide === null
+      ? lengthOf(least ?? '', { screen, em, custom: () => undefined })
+      : (wide - scope.left - scope.right - 4 * gap) / 5;
+  const inset = sheets.length(card, 'left', screen) + sheets.length(card, 'right', screen);
+  const padding = sheets.sides(card, 'padding', screen);
+  // the card's border is 1 px, marked or not
+  expect(sheets.declared(card, 'border-width', screen)).toBeUndefined();
+  expect(sheets.declared(card, 'border', screen)?.value).toMatch(/^1px /);
+  const tick = sheets.length(one(nodes, 'firewall-tick'), 'right', screen);
+  return { type: line - inset - 2 - padding.left - padding.right, tick, right: padding.right };
+}
+
+describe('a card holds its header', () => {
+  /**
+   * Every screen the drill holds the device to, with the scope's width there as the drill's
+   * pages measure it, px: the station's frame is the kit's (devices.css), which no sheet read
+   * here lays out.
+   */
+  const SCOPES: { screen: Screen; wide: number }[] = [
+    { screen: { width: 1280, height: 720, coarse: false }, wide: 588 },
+    { screen: { width: 1440, height: 820, coarse: false }, wide: 588 },
+    { screen: { width: 844, height: 390, coarse: true }, wide: 560 },
+    { screen: { width: 932, height: 430, coarse: true }, wide: 648 },
+    { screen: { width: 360, height: 640, coarse: true }, wide: 308 },
+    { screen: { width: 390, height: 844, coarse: true }, wide: 338 },
+    { screen: { width: 430, height: 932, coarse: true }, wide: 378 },
+  ];
+
+  it('reads the widest header off the generator: ten figures of Quelle, four of port', () => {
+    const { source, port, protocol } = widestHeader();
+    expect([source.length, String(port).length, protocol.length]).toEqual([10, 4, 3]);
+  });
+
+  const CASES = SCOPES.flatMap((at) =>
+    ([false, true] as const).flatMap((marked) =>
+      (['b', null] as const).map((seat) => ({ ...at, marked, seat, width: at.screen.width })),
+    ),
+  );
+
+  it.each(CASES)(
+    'whole at $width px, marked $marked, at console $seat, at every text size',
+    ({ screen, wide, marked, seat }) => {
+      // the audience's panel is as narrow as its lines' least width lets it be
+      const nodes = widest(seat, true);
+      for (const scale of Object.values(TEXT_SCALE)) {
+        const sheets = new ScaledSheets(scale);
+        const figure = FIGURE * sheets.fontSize(one(nodes, 'firewall-card'), screen);
+        const room = roomOf(nodes, sheets, screen, seat === null ? null : wide);
+        const lines = printedLines(marked ? nodes : widest(seat, false), sheets, screen);
+        expect(lines.join('').replace('/', '')).toBe('31.14.9.988080TCP');
+        for (const line of lines) {
+          expect(line.length * figure, `„${line}" at ${scale}`).toBeLessThanOrEqual(room.type);
+        }
+        // the tick after the last line, a figure wide, clear of it
+        const last = (lines.at(-1) ?? '').length + (marked ? 1 : 0);
+        expect(last * figure + (marked ? room.tick - room.right : 0)).toBeLessThanOrEqual(
+          room.type,
+        );
+      }
+    },
+  );
+
+  it('gives a marked card the room of an unmarked one, its ring and tick inside its edge', () => {
+    const sheets = new Sheets();
+    for (const { screen } of SCOPES) {
+      const marked = one(widest('b', true), 'firewall-card--marked');
+      const plain = one(widest('b', false), 'firewall-card');
+      expect(sheets.sides(marked, 'padding', screen)).toEqual(
+        sheets.sides(plain, 'padding', screen),
+      );
+      expect(sheets.declared(marked, 'box-shadow', screen)?.value).toMatch(/^inset /);
     }
   });
 });

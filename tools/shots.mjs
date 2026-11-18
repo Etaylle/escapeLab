@@ -11284,8 +11284,9 @@ async function laptopAgain(player) {
  * the smallest (FIREWALL_UPRIGHT) — the device whole, nothing scrolling, every control and card
  * 44 px (`phoneReach`), the five lines side by side in the window and no header cut
  * (`scopeFits`). On the smallest a card is tapped where it stands, the rightmost the policy
- * drops, and the shot shows its ring and tick. Returns the id marked; null where the tap took
- * on none.
+ * drops, and the shot shows its ring and tick; the marked card is then held to the phones
+ * sideways and the laptop (`markedElsewhere`). Returns the id marked; null where the tap took on
+ * none.
  */
 async function uprightAnalysis(analysis) {
   let marked = null;
@@ -11301,17 +11302,36 @@ async function uprightAnalysis(analysis) {
     await phoneReach(analysis, size, { shot, label, unjudged: firewallUnjudged });
     await scopeFits(analysis, size, label);
   }
-  await laptopAgain(analysis);
+  await markedElsewhere(analysis);
   return marked;
 }
 
 /**
- * firewall-phone-upright-audience.png: the audience's page on the phones held upright while the
- * wave holds — its scope of cards in the window, five lines side by side, no header cut, the
- * page not scrolling sideways (`scopeFits`) —, shot on the smallest with the scope in view.
+ * firewall-marked-844.png and firewall-marked.png: the held Analysepult with its marked card on
+ * the phones held sideways and back at laptop size — the mark takes nothing of a header's room:
+ * no card's line cut, on any of them (`scopeFits`).
+ */
+async function markedElsewhere(analysis) {
+  for (const size of [SIZES[3], SIZES[4]]) {
+    const shot = size === SIZES[3] ? 'firewall-marked-844.png' : null;
+    const label = `firewall b ${size.width} marked`;
+    await phoneReach(analysis, size, { shot, label, unjudged: firewallUnjudged });
+    await scopeFits(analysis, size, label);
+  }
+  await laptopAgain(analysis);
+  await scopeFits(analysis, SIZES[0], 'firewall b laptop marked');
+  await capture(analysis.page, 'firewall-marked.png');
+}
+
+/**
+ * firewall-phone-upright-audience.png: the audience's page at laptop size and on the phones held
+ * upright while the wave holds — its scope of cards in its panel, five lines side by side, no
+ * header cut, the page not scrolling sideways (`scopeFits`) —, shot on the smallest phone with
+ * the scope in view.
  */
 async function uprightAudience(audience) {
   const scope = audience.page.locator(`${AUDIENCE_PANEL} .firewall-scope`);
+  await scopeFits(audience, SIZES[0], 'firewall audience laptop', AUDIENCE_PANEL);
   for (const size of FIREWALL_UPRIGHT) {
     await audience.page.setViewportSize(size);
     await sleep(300);

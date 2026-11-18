@@ -114,6 +114,8 @@ export const GROUPS = [
       'firewall-phone-upright-a.png',
       'firewall-phone-upright-b.png',
       'firewall-phone-upright-audience.png',
+      'firewall-marked-844.png',
+      'firewall-marked.png',
       'firewall (targets)',
     ],
   },
