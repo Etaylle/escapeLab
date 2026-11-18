@@ -9,7 +9,7 @@ EscapeLab ist ein kooperatives Browser-Escape-Spiel: Zwei bis drei Personen an g
 - Stationen haben bis zu zwei Pulte an verschiedenen Orten, jedes zeigt nur seinen Teil der Maschine. Die Regeln liegen anderswo, im Handbuch, Spind oder Aktenschrank.
 - Wer am Pult steht, bedient es, auch allein; nur Stationen mit zwei Pulten und solche für die ganze Crew brauchen mehrere zugleich. Abgesprochen wird per Sprachchat.
 - Fehler kosten Zeit. Gewonnen ist, wenn alle Stationen gelöst sind und die ganze Crew den Notausgang erreicht.
-- Referenz ist „Blackout im Labor“: 2 bis 3 Spielende, 1200 s auf Normal, 36×22 Felder, sechs Stationen je Lauf (Notlicht-Hebel, Anlaufsteuerung, Paketfilter, Serverraum, ein Wechselplatz mit Signalkette, Funk oder Notstromkasten, Reaktorstart).
+- Referenz ist „Blackout im Labor“: 2 bis 3 Spielende, 960 s auf Normal, 36×22 Felder, sechs Stationen je Lauf (Notlicht-Hebel, Anlaufsteuerung, Paketfilter, Serverraum, ein Wechselplatz mit Signalkette, Funk oder Notstromkasten, Reaktorstart).
 
 Quellen: README.md, docs/srs.md, missions/*.json.
 
@@ -80,7 +80,7 @@ Quellen: docs/foundation-audit.md (Nachträge), docs/backlog.md, docs/art-bible.
 Backlog: 20 von 24 Punkten erledigt.
 
 - **Zweiter Playtest** (nur lokal): Auswertung von `runs.jsonl`. Von 7 protokollierten Läufen mit Menschen (20.–26.10., vor den Fixes) wurde keiner gewonnen; das 3,5-s-Fenster mit Countdown ist gebaut, seine Wirkung ungemessen.
-- **Zeitbudget** (wartet auf Daten): Die Skript-Crew gewinnt mit der neuen Stationsfolge 575 bis 652 s nach dem Blackout (je Auslosung ein Lauf, 2026-11-17) und lässt 44 bis 50 % der 1200 s übrig; mit der alten Folge waren es 462 bis 502 s von 900 s. Vorschlag: 1000 s; Ziel: Erstspieler schaffen Station 2 in 5 Minuten.
+- **Zeitbudget** (wartet auf Daten): Die Skript-Crew gewinnt mit der neuen Stationsfolge 542 bis 578 s nach dem Blackout (je Auslosung ein Lauf, 2026-11-18) und lässt 38 bis 39 % der 960 s übrig; die alte Folge lag zuletzt bei 554 s und 34 % von 900 s (Cloud-CI), am 2026-11-05 bei 462 bis 502 s. Vorschlag: 1000 s; Ziel: Erstspieler schaffen Station 2 in 5 Minuten.
 - **Leerlauf zu zweit** (wartet auf Entscheidung): Im Audit wartet eine Figur 7,7 s am Reaktor; Optionen: die nächste Quelle vorab lesen oder eine Nebenaufgabe.
 - **Nächster Schritt:** zweiter Playtest, danach beide Entscheidungen.
 

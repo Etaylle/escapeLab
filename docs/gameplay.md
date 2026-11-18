@@ -177,9 +177,9 @@ Names fade in over 300 ms; a find that matters gets its caption, a chime at most
 | --- | --- | --- | --- | --- |
 | 1 | Notlicht (lever, whole crew) | the Flur's middle (15,9) | none | lights Flur and Archiv |
 | 2 | Anlaufsteuerung (`startup`, 2 stages) | console A in the Maschinenraum (1,15) behind the plate door, console B at the Flur's west end (2,9), the duct between them under the wall | the Betriebsbuch in the Archiv | the generator runs: lights the Maschinenraum, its door stays open |
-| 3 | Paketfilter (`firewall`, 4 rules, 2 waves) | Analysepult (21,9) and Sperrpult (26,9) in the Flur east of the Serverschott | the Aushang on the Flur's south wall, west of the Schott | opens the Serverschott, lights the Serverraum; the Flur's drone wakes |
-| 4 | Serverraum (`servers`) | terminal and rack in the Serverraum | the Spind there | opens the Labortür, lights the Labor; the Labor's drone wakes |
-| 5 | the **Wechselplatz** (pool `wechsel`): one of three, by the seed | Signalkette: console A at the Flur's east end (28,9), B in the Maschinenraum (9,20) · Funkpult in the Labor (11,20) · Notstromkasten: box inside the Maschinenraum's door (6,14), meter in the Labor (15,20) | Klemmbrett in the Flur · Aktenschrank in the Labor, its key in the Serverraum · Wartungsbuch in the Maschinenraum | opens both doors of the reactor, lights it |
+| 3 | Paketfilter (`firewall`, 4 rules, one wave of 9 packets) | Analysepult (21,9) and Sperrpult (26,9) in the Flur east of the Serverschott | the RICHTLINIE on the Flur's south wall, west of the Schott | opens the Serverschott, lights the Serverraum |
+| 4 | Serverraum (`servers`) | terminal and rack in the Serverraum | the Spind there | opens the Labortür, lights the Labor; both drones wake |
+| 5 | the **Wechselplatz** (pool `wechsel`): one of three, by the seed | Signalkette: console A in the Flur's east corner (29,9), B in the Maschinenraum (9,20) · Funkpult in the Labor (11,20) · Notstromkasten: box inside the Maschinenraum's door (6,14), meter in the Labor (15,20) | Klemmbrett in the Flur · Aktenschrank in the Labor, its key in the Serverraum · Wartungsbuch in the Maschinenraum | opens both doors of the reactor, lights it |
 | 6 | Reaktor-Neustart (button, whole crew) | the reactor's east wall | none; the spare fuse from the Archiv | the hatch opens |
 
 The two stations of the Wechselplatz a run does not have stand dark with the tag „AUSSER
@@ -187,17 +187,24 @@ BETRIEB", and so do their sources (Stations that take turns, below): the box han
 the Maschinenraum's door, the Funkpult and the meter along the Labor's south wall, console A of
 the Signalkette at the Flur's east end — each on a way the crew walks anyway. Three notes of the
 last shift say so in the lab's words: the duty roster beside the Sperrpult („Dienstplan
-Wechselplatz: …"), Haller's hand-over in the Maschinenraum, his fuses in the Labor. The light
-travels room by room in every draw: Flur and Archiv, Maschinenraum, Serverraum, Labor, Reaktor
-(`core/test/coldOpen.test.ts`). The drones wake as before, after three and four stations, the
-emergencies after three.
+Wechselplatz: …"), Haller's hand-over in the Maschinenraum, and his note in the Labor that the
+Aktenschrank's key hangs in the Serverraum over the rack — true in every draw, read before the
+Funkpult's first nudge names it. The light travels room by room in every draw: Flur and Archiv,
+Maschinenraum, Serverraum, Labor, Reaktor (`core/test/coldOpen.test.ts`). Both drones wake
+once four stations are solved, with the Serverraum; the emergencies after three.
 
-**Why the Paketfilter's consoles stand east of the Schott.** The Flur's drone sleeps at the
-west end of its beat (10,11) until the Paketfilter is solved; a console is out of its sight or
-more than twice its reach away as it wakes (`core/test/missionMaps.test.ts`). At (21,9) and
-(26,9) the crew has some four seconds before it comes by, the open Schott two steps and the
-camera plate one step from the Analysepult. The policy hangs west of the Schott, on the way from
-the Anlaufsteuerung: the crew passes it before it reaches the consoles.
+**Nobody is caught for having solved a station.** After any solve, in every draw, a crew that
+stays where it stood at that station's consoles — anywhere within a console's reach — is seen
+by no drone, not in the next ten seconds and not on any later round of the beats
+(`server/test/blackoutParked.test.ts`, on the room's own patrol code). The level does it, not
+the engine: both drones sleep until the Serverraum is solved, whose consoles lie inside the room
+and out of their sight; the Paketfilter's consoles in the Flur are worked before any drone is
+out; and every console of the Wechselplatz stands where no beat looks — console A of the
+Signalkette in the Flur's east corner (29,9), a tile past the Flurwache's reach from the east
+end of its beat. Once the Flurwache flies, the camera plate at the Schott (20,9) holds it still
+for whoever crosses the Flur. The walkthrough stands still at the Paketfilter's consoles twelve
+seconds after its solve as the proof in the browser. The policy hangs west of the Schott, on
+the way from the Anlaufsteuerung: the crew passes it before it reaches the consoles.
 
 **The Anlaufsteuerung behind the plate door.** Whoever works console A is shut in the
 Maschinenraum until the generator runs. The table of lamp pictures lies in the Archiv, and only
@@ -215,7 +222,7 @@ Flur's drone never looks at (`tools/patrol.test.mjs`).
 **The seeds.** `core/test/blackoutPlan.ts` pins a seed for each draw — 12 the Signalkette, the
 walkthrough's and the smoke's own; 56 the Funkpult; 93 the Notstromkasten — and all three deal
 the same start: Anna in the Archiv, Ben at the Flur's west end, the Betriebsbuch at (8,1), the
-Aushang at (17,12), the Spind at (16,2). `tools/fixtures/blackout-plan.json` carries a plan for
+Richtlinie at (17,12), the Spind at (16,2). `tools/fixtures/blackout-plan.json` carries a plan for
 each, written anew by `node --import tsx ../core/test/writeBlackout.ts` from `packages/server`.
 
 **The walks.** An avatar walks 4.2 tiles a second, 5.46 sprinting (core `map.ts`). Blackout's
@@ -235,17 +242,17 @@ console B:
 | Anlaufsteuerung | Ben | the Laborkennung → the plate | 11.7 | 2.8 |
 | Anlaufsteuerung | Anna | the lever → console A, the plate held | 17.7 | 4.2 |
 | Anlaufsteuerung | Ben | the plate → console B | 6.2 | 1.5 |
-| Paketfilter | Ben | console B → the Aushang | 16.2 | 3.9 |
-| Paketfilter | Ben | the Aushang → the Analysepult | 5.2 | 1.2 |
+| Paketfilter | Ben | console B → the Richtlinie | 16.2 | 3.9 |
+| Paketfilter | Ben | the Richtlinie → the Analysepult | 5.2 | 1.2 |
 | Paketfilter | Anna | console A → the Sperrpult | 28.7 | 6.8 |
 | Serverraum | Anna | the Sperrpult → the terminal | 18.8 | 4.5 |
 | Serverraum | Ben | the Analysepult → the locker | 12.0 | 2.9 |
 | Serverraum | Ben | the locker → the rack | 6.4 | 1.5 |
 | Signalkette | Ben | the rack → the Klemmbrett | 19.8 | 4.7 |
-| Signalkette | Ben | the Klemmbrett → console A | 21.8 | 5.2 |
+| Signalkette | Ben | the Klemmbrett → console A | 22.8 | 5.4 |
 | Signalkette | Anna | the terminal → console B | 36.7 | 8.7 |
 | Signalkette | Anna | console B → the spare fuse | 18.7 | 4.4 |
-| Signalkette | Ben | console A → the reactor | 33.2 | 7.9 |
+| Signalkette | Ben | console A → the reactor | 34.2 | 8.2 |
 | Funkpult | Ben | the rack → the key | 3.0 | 0.7 |
 | Funkpult | Ben | the key → the cabinet | 36.5 | 8.7 |
 | Funkpult | Anna | the terminal → the radio | 39.3 | 9.4 |
@@ -397,8 +404,8 @@ issue ends with the draw it holds for: „— in a run with pool "wechselplatz" 
 the version stays 2, as for every field added since) and lists the stations of the run alone.
 The Bestenliste keeps one board a mission and difficulty: runs of different
 draws stand on it together, so a board mixes stations of unequal length — worth a board per
-draw only once the spread shows (Blackout's three lay 575 to 652 s apart for the script crew,
-one run each, most of it the harness's own captures and an emergency waited for). A snapshot keeps the draw; one from before
+draw only once the spread shows (Blackout's three lay 36 s apart for the script crew, 542 to
+578 s, one run each). A snapshot keeps the draw; one from before
 the pools has none and restores as before — a run in flight over the deploy that gave its
 mission a pool plays its old chain to the end (`server/test/snapshotFixture.test.ts`).
 
@@ -486,11 +493,11 @@ every shipped mission and lab:
 | --- | --- | --- | --- |
 | Notlicht | the main switch, for the whole crew | 3 | all three throw their lever together; the plate says „NUR ZU DRITT" |
 | Anlaufsteuerung | Pult A (Maschinenraum), Pult B (Flur), the Betriebsbuch, the plate HALTEN | 4 | one reads the book first and works console B, one holds HALTEN, one works console A |
-| Paketfilter | the Sperrpult (A), the Analysepult (B), the Aushang | 3 | two at the consoles, the third reads the policy off the wall and calls the rule |
-| Serverraum | the terminal (A), the rack (B), the Spind | 3 | two at the consoles, the third searches the locker and reads; the camera plate holds the Flur's drone still |
+| Paketfilter | the Sperrpult (A), the Analysepult (B), the Richtlinie | 3 | two at the consoles, the third reads the policy off the wall and calls the rule |
+| Serverraum | the terminal (A), the rack (B), the Spind | 3 | two at the consoles, the third searches the locker and reads; no drone is out yet |
 | Wechselplatz: Signalkette | Pult A, Pult B, the Klemmbrett | 3 | two at the consoles, the third reads the legend at the clipboard |
-| Wechselplatz: Frequenz-Abgleich | the radio desk, the Aktenschrank, its key | 3 | one at the radio, one reading the cabinet, the third fetching the key — and the fuse for the reactor |
-| Wechselplatz: Notstrom-Kasten | Pult A (the box), Pult B (the meter), the Wartungsbuch | 3 | one cuts at the box, one measures, the third reads the book in the Maschinenraum |
+| Wechselplatz: Funkpult | the radio desk, the Aktenschrank, its key | 3 | one at the radio, one reading the cabinet, the third fetching the key — and the fuse for the reactor |
+| Wechselplatz: Notstromkasten | Pult A (the box), Pult B (the meter), the Wartungsbuch | 3 | one cuts at the box, one measures, the third reads the book in the Maschinenraum |
 | Reaktor-Neustart | the switch, for the whole crew; the SICHERUNG | 4 | the third carries the fuse in, then all three press |
 
 The module tests play every mission for every crew size from `players.min` to `players.max`
@@ -522,7 +529,7 @@ Nothing moves. For a crew of two nothing changes (`client/test/hands.test.tsx`).
 **The drill.** The walkthrough's three drill (`SHOTS_ONLY=three`, 80 s on a laptop) plays
 Blackout for Anna, Ben and Cleo in a room of its own on the plan's seed: all three throw the main
 switch (three-lever.png); Ben reads the Betriebsbuch while Cleo holds HALTEN, Anna and Ben run
-the Anlaufsteuerung up (three-plate.png, Cleo's screen); Cleo reads the Aushang while Anna and
+the Anlaufsteuerung up (three-plate.png, Cleo's screen); Cleo reads the Richtlinie while Anna and
 Ben stand at the Paketfilter's consoles (three-hands.png, Anna's screen; three-reader.png;
 three-phone-932.png, Cleo's phone) — the Paketfilter itself is the walkthrough's own run's.
 Then Cleo and Ben give their seats up from the menu, the run is called off, and Anna leaves the
@@ -849,8 +856,8 @@ person can drop them, only the other can tell which are hostile — and says so 
 not by calling them out. After Operation: Tango's agent and hacker, Hacknet's and Uplink's
 traces, and Among Us's short tactile tasks; a design of the lab's own — five lines and a gate,
 plain points and header cards, no arcade formation, sprite or sound. Soft real time: slow
-packets, whole lines, generous windows; the talk and the marks decide, not reflexes. Blackout has it as the Serverraum's gate, its third station, two waves whose solve opens the
-Serverschott (Walking Blackout's lab, above); its probe is `tools/fixtures/firewall-probe.json`
+packets, whole lines, generous windows; the talk and the marks decide, not reflexes. Blackout has it as the Serverraum's gate, its third station, one wave of nine packets whose
+solve opens the Serverschott (Walking Blackout's lab, above); its probe is `tools/fixtures/firewall-probe.json`
 („Filterprobe": the Sperrpult in the Leitstand, the Analysepult in the Wache, the policy in a
 binder, the Laborkennung between them), and with its bay in the Übungshalle.
 

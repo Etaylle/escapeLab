@@ -353,15 +353,20 @@ die Entscheidung.
 - Datenpunkt 2026-11-05, Karte 36×22: Die Skript-Crew gewinnt 462–502 s nach dem Blackout
   (40–43 % von 900 s übrig, davon bis 35 s Warten auf Drohnenlücken); der Harness warnt ab unter
   40 %. Vorschlag: Normal 1000 s (Entspannt/Hart skalieren mit), Entscheidung nach dem Playtest.
-- Datenpunkt 2026-11-17, neue Stationsfolge (B-blackout2: Anlaufsteuerung, Paketfilter,
-  Wechselplatz), je Auslosung ein Lauf der Skript-Crew, lokal bei Last 5–9: Signalkette 607 s
-  (ein Notfall, drei Alarme), Funkpult 652 s (ein Notfall), Notstromkasten 575 s. Der
-  Paketfilter läuft 82 s auf der Uhr (zwei Wellen, `fallSec` 14) — auch für Menschen, während
-  die Signalkette das Skript 33 s kostet; die Folge ist für das Skript rund 100 s länger als
-  die alte. `timeLimitSec` deshalb 1200 (Regel: ≥ 40 % übrig im langsamsten Lauf; 652 s und
-  eine Notiz lassen 44 %). Die Auslosungen liegen 77 s auseinander, davon rund 40 s Warten
-  auf einen Notfall und die Buch-Captures am Aktenschrank: keine Station angepasst. Drei Läufe
-  je Auslosung stehen noch aus (Akku).
+- Datenpunkt 2026-11-18, neue Stationsfolge (B-blackout2: Anlaufsteuerung, Paketfilter,
+  Wechselplatz), je Auslosung ein Lauf der Skript-Crew, lokal bei Last 3–5: Signalkette 542 s,
+  Funkpult 577 s, Notstromkasten 578 s nach dem Blackout — 36 s auseinander, keine Station
+  angepasst. Auf der Uhr des Reducers (reines Spiel, `core`): Anlaufsteuerung 14 s,
+  Paketfilter 48–52 s (eine Welle, neun Pakete, `fallSec` 14; zwei Wellen zu fünf wären
+  57–67 s, drei zu sieben 77–83 s), Serverraum 4–6 s, Wechselplatz 1–8 s. Im Rundgang kostet
+  die zweite Station 279–293 s, davon 13 s Spiel: der Rest sind die Captures des Harness
+  (Menüs, Lesen, Notiz, Stupser) — und 12 s am Paketfilter sind der Stehbeweis nach der Lösung.
+  `timeLimitSec` 960: der Lauf lässt 38–39 % übrig. Die 40-%-Regel verfehlt schon main mit der
+  alten Folge, seit die Capture-Blöcke gewachsen sind (Cloud-CI auf 32ba492: Sieg nach 554 s,
+  34 % von 900 s; die neue Folge dort auf 73475d5: 569 s, 37 % von 960 s). Die Folge ist
+  damit für das Skript 15 s länger als die alte, 12 davon der Stehbeweis. Offen: die Regel am
+  reinen Spiel messen statt am Capture-Lauf, oder die Uhr nach dem Playtest setzen (Vorschlag
+  von 2026-11-05: 1000 s).
 - Studie G-2, Rang 4 (Escape Academy, Escape Simulator): ein Lehrgang ohne Uhr — der erste Lauf
   einer Crew ohne Uhr, dann Übungshalle, Tutorial und Blackout, je Schritt eine neue Idee; die
   Missionen ohne Uhr aus G-2 sind das Werkzeug dafür.
@@ -376,6 +381,24 @@ die Entscheidung.
   nach der Signalkette hat zwei Plätze, Pult und Buch; acht Testdateien bauen auf ihm. Nicht
   gepatcht: nach dem Playtest entscheiden, ob die Prototypen eine Hand mehr bekommen (Platte bis
   zur Lösung, Teil, zweite Quelle) oder ihre Crew kleiner wird.
+
+### N-7 Ein Notfall wirft den Fortschritt der offenen Station weg — Status: offen (Entscheidung Uros) · Größe: M
+
+- Absicht, kein Versehen: `startSabotage` (core `actions.ts`) setzt `puzzleState` auf `null`,
+  seit es Notfälle gibt (aa184f7). `puzzleState` ist zugleich „die Station ist an": Ohne ihn
+  zeigt keine Sicht ein Panel, die Uhr der Station (`dueAt`) ruht, die Drohnen-Deckung
+  (`headsDown`) entfällt. Nach dem Notfall schaltet E die Station neu ein — mit neuer Instanz.
+- Seit B-blackout2 trifft das den Wechselplatz: Die Signalkette verliert bis zu vier Stufen,
+  die Anlaufsteuerung eine, der Paketfilter seine Welle (Notfälle beginnen nach drei Stationen).
+- Fortschritt behalten kostet mehr als eine Zeile: ein zweites Feld im Zustand (ruhende
+  Instanz) samt Snapshot-Schema und Default für alte Snapshots; jedes Modul mit absoluten
+  Zeiten im Zustand muss sie um die Notfalldauer verschieben können (Paketfilter-Welle,
+  Impuls der Anlaufsteuerung, Token der Zugangskontrolle, flüchtige Zeichen der Signalkette,
+  Fenster des Hebels) — ein neuer optionaler Vertragspunkt `resume(def, state, pausedMs)` mit
+  Eigenschaftstests je Modul; dazu Sichten, Bericht (Stationszeiten) und der Smoke. Kleiner
+  Schnitt, falls gewünscht: nur die Stufe behalten (`stage`-Feld der Module mit Stufen), die
+  Instanz der Stufe neu auslosen — braucht denselben Vertragspunkt, aber keine Zeitverschiebung.
+- Vorbild: Among Us wirft Aufgaben bei Sabotage nicht zurück; Keep Talking kennt keine Pause.
 
 ## Betrieb und Verbindung (2026-11-12)
 
@@ -694,10 +717,11 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   im Modulvertrag: `elapse`, eine Station auf der Uhr und der Anwesenheit an ihren Pulten.
 - Steht in der Übungshalle (G-2) und in der Probemission `tools/fixtures/firewall-probe.json`,
   die der Rundgang im Systemcheck spielt (Gruppe `firewall`).
-- In Blackout (B-blackout2, 2026-11-17): dritte Station, das Tor des Serverraums. Analysepult
-  (21,9) und Sperrpult (26,9) im Flur östlich des Serverschotts — dort wacht die Flurdrohne
-  nicht neben der Crew auf —, die Richtlinie als Aushang an der Südwand westlich davon, zwei
-  Wellen; die Lösung öffnet das Schott.
+- In Blackout (B-blackout2, 2026-11-18): dritte Station, das Tor des Serverraums. Analysepult
+  (21,9) und Sperrpult (26,9) im Flur östlich des Serverschotts, die RICHTLINIE an der Südwand
+  westlich davon, eine Welle mit neun Paketen (48 bis 52 s auf der Uhr, Lesedruck wie der
+  Modul-Standard: der Abstand der Pakete hängt nur an `fallSec`); die Lösung öffnet das Schott.
+  Beide Drohnen schlafen, bis der Serverraum gelöst ist: Am Paketfilter wird niemand erfasst.
 - Offen: Hochkant auf einem Handy (420 px) passt das Analysepult nicht — fünf Leitungen zu je
   mindestens 100 px, die vierte und fünfte laufen aus dem Gerät. Bewiesen ist das Gerät nur
   quer (844, 932). Eigenes Paket: Karten in kurzen Zeilen, Leitungen in 1fr unter ~560 px.

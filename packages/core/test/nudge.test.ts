@@ -192,8 +192,9 @@ describe('a first crew in the shipped missions', () => {
     );
 
   it('gives Blackout sixteen minutes', () => {
-    // Fifteen until its chain got the Anlaufsteuerung, the Paketfilter and the Wechselplatz: the
-    // Paketfilter runs one wave there, so that the scripted crew keeps 40 % of this clock.
+    // Fifteen until its chain got the Anlaufsteuerung, the Paketfilter and the Wechselplatz. The
+    // scripted crew wins 542 to 578 s after the lights went out and keeps 38 % of this — more
+    // than the old chain kept of its fifteen (34 %, docs/backlog.md N-6).
     expect(shipped('blackout.json').timeLimitSec).toBe(960);
   });
 });

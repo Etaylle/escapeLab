@@ -19,7 +19,7 @@ verschlossenen Raum und kommt nur mit Hilfe heraus) und Doppelschicht (4 Spieler
 getrennten Flügeln** — die Regeln jeder Station liegen im anderen Flügel, und erst der
 Druckausgleich öffnet die Schleuse dazwischen).
 
-**Blackout im Labor** (2–3 Spieler, 20 Minuten auf *Normal*): ein Labor von 36 × 22 Feldern, die
+**Blackout im Labor** (2–3 Spieler, 16 Minuten auf *Normal*): ein Labor von 36 × 22 Feldern, die
 Räume etwa 9 × 7 groß als Ring — Archiv, Flur, Serverraum, Ost-Flur, Reaktor, Süd-Flur, Labor,
 Maschinenraum und zurück in den Flur; die Flure vier Felder breit, die Hauptwege durch zwei Felder
 breite Durchgänge, nur die Türen, die Geräte sind, ein Feld breit. Die Crew startet getrennt und
@@ -31,16 +31,16 @@ Mitte des Flurs, dann die Stationen in Reihenfolge:
    Laborkennung daneben. Ein Pult tippt das Startskript, das andere schließt den
    Leistungsschalter, wenn der Impuls auf der Leiter steht; nach jeder Stufe wechseln die Seiten.
 2. *Paketfilter* (`firewall`): Analysepult und Sperrpult im Flur östlich des Serverschotts, die
-   Sicherheitsrichtlinie als Aushang an der Südwand westlich davon; zwei saubere Wellen öffnen
-   das Schott.
+   RICHTLINIE an der Südwand westlich davon; eine saubere Welle von neun Paketen öffnet das
+   Schott. Bis der Serverraum läuft, fliegt keine Drohne.
 3. *Serverraum* (`servers`): Terminal und Rack an zwei Pulten im Raum hinter dem Schott, die
    Regeln im Spind dort.
 4. Der *Wechselplatz*: Je Lauf ist eine von drei Anlagen in Betrieb, der Seed lost sie aus; die
    beiden anderen tragen das Schild „AUSSER BETRIEB". *Signalkette* (`signal` mit Legende): Pult
-   A am Ostende des Flurs, Pult B im Maschinenraum, die Legende auf dem Klemmbrett im Flur; ab
+   A in der Ostecke des Flurs, Pult B im Maschinenraum, die Legende auf dem Klemmbrett im Flur; ab
    Stufe 3 zeigt das sendende Pult die Zeichen nacheinander, in der letzten ohne Farbe.
-   *Frequenz-Abgleich* (`morse`): Pult im Labor, die Tabellen im Aktenschrank, dessen Schlüssel
-   im Serverraum liegt. *Notstrom-Kasten* (`circuit`): Sicherungskasten gleich hinter der
+   *Funkpult* (`morse`): Pult im Labor, die Tabellen im Aktenschrank, dessen Schlüssel
+   im Serverraum liegt. *Notstromkasten* (`circuit`): Sicherungskasten gleich hinter der
    Maschinentür, Prüfpult im Labor, die Regeln im Wartungsbuch im Maschinenraum; nach jedem
    Schnitt wird neu gemessen.
 5. *Reaktor-Neustart* (`button-sync`): erst mit der Ersatzsicherung aus dem Archiv; die ganze

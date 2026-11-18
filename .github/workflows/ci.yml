@@ -52,11 +52,11 @@ jobs:
     # 2 more since the three drill (a crew of three to the Signalkette, 75 s on a runner),
     # Systemcheck up to 8, 3 more since the Übungshalle's drill (189 s in CI) and 5 s since the
     # music drill (4.9 s in CI), its step now given 20 for three drills to come (below). Blackout's
-    # new chain (17.11.2026: Anlaufsteuerung, Paketfilter, Wechselplatz) plays some 130 s longer —
-    # the Paketfilter's two waves alone run 82 s on the server's clock, the win comes 607 s after
-    # the blackout where it came 462 to 502 — and takes eight captures more: 15:11 locally at a
-    # load of 3 to 4 (901 s in its groups), a slow runner's third more 20:15. Its step is given
-    # 23: setup (11 at most), 23 and 20 minutes of the two steps fit into the job's 56.
+    # new chain (18.11.2026: Anlaufsteuerung, Paketfilter, Wechselplatz) takes eleven captures
+    # more and stands 12 s at the Paketfilter after its solve: 17:13 in CI with two waves
+    # (01a8754), 14:27 locally with one at a load of 3 to 5 (863 s in its groups), a slow runner's
+    # third more 22:57. Its step is given 23: setup (11 at most), 23 and 20 minutes of the two
+    # steps fit into the job's 56.
     timeout-minutes: 56
     defaults:
       run:
