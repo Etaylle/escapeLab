@@ -92,6 +92,20 @@ export function standAsIn(room: Room, from: Room, walker: Walker): void {
   inRoom.set(walker.playerId, stood);
 }
 
+/**
+ * `walker` stands at `at` in `room`'s run: where a snapshot kept them, for a room taken up again
+ * whose crew never walked in a room of this test. The next walk sets out from there.
+ */
+export function standAt(room: Room, walker: Walker, at: Spot): void {
+  const run = latestView(walker).startedAt;
+  if (run === null) {
+    throw new Error('nobody stands anywhere before the run has begun');
+  }
+  const inRoom = walked.get(room) ?? new Map<string, { run: number; at: Spot }>();
+  walked.set(room, inRoom);
+  inRoom.set(walker.playerId, { run, at: { x: at.x, y: at.y } });
+}
+
 /** E pressed by `walker` where its walks left it, as a client sends it with the press. */
 export function pressE(room: Room, walker: Walker): void {
   room.interact(walker.playerId, standingOf(room, walker), Date.now());

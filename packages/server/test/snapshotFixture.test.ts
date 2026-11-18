@@ -3,11 +3,15 @@ import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SealedSnapshot } from '@escapelab/core';
 import { MissionCatalog } from '../src/missions.js';
+import { Room } from '../src/room.js';
 import { HANDOVER_MS, RoomManager } from '../src/roomManager.js';
 import { open, roomKey, seal } from '../src/seal.js';
 import { serveSockets } from '../src/sockets.js';
+import type { FinishedRun } from '../src/store/store.js';
+import { lastView, playToTheHatch, rejoin, type Member } from './blackout.js';
 import { FakeServer, joinedOf, type FakeSocket } from './line.js';
 import { passFor } from './passes.js';
+import { standAt } from './walk.js';
 
 const KEY = roomKey({ ROOM_SECRET: 'abcd'.repeat(16) }).key;
 const missions = new MissionCatalog(fileURLToPath(new URL('../../../missions', import.meta.url)));
@@ -91,6 +95,33 @@ describe('a snapshot of the build before', () => {
     vi.advanceTimersByTime(HANDOVER_MS);
     expect(anna.view).toMatchObject({ phase: 'playing', pausedAt: null });
     expect(anna.view.away.map((member) => member.name)).toEqual(['Ben']);
+  });
+
+  it('is won on its old chain: the Serverraum, the Funkpult, the reactor, the hatch', () => {
+    // A run in flight at a deploy keeps the mission it began with: Blackout before its
+    // Wechselplatz, the Notstromkasten second, the Signalkette before the Serverschott.
+    const opened = open(seal(BUILD_BEFORE, BUILD_BEFORE.code, KEY), BUILD_BEFORE.code, KEY);
+    const reports: FinishedRun[] = [];
+    const room = Room.restore(opened, Date.now(), { onRunFinished: (run) => reports.push(run) });
+    const [anna, ben] = ['Anna', 'Ben'].map((name) => rejoin(room, { name })) as [Member, Member];
+    for (const member of [anna, ben]) {
+      const stood = opened.keeping.positions[member.playerId];
+      expect(stood, member.name).toBeDefined();
+      standAt(room, member, stood ?? { x: 0, y: 0 });
+    }
+    const chain = ['notlicht', 'notstrom', 'signalkette', 'subsysteme', 'frequenz', 'reaktorstart'];
+    expect(opened.state.mission.puzzles.map((p) => p.id)).toEqual(chain);
+    expect(lastView(anna)).toMatchObject({ phase: 'playing', currentPuzzleIndex: 3 });
+    // Its emergency runs out, then the three stations it had left and the way out.
+    playToTheHatch({ room, anna, ben });
+    expect(lastView(anna).phase).toBe('won');
+    expect(reports.map(({ report }) => [report.outcome, report.missionId])).toEqual([
+      ['won', 'blackout'],
+    ]);
+    expect(reports[0]?.report.stations.map((s) => s.puzzleId)).toEqual(chain);
+    // No draw: its report names none, and so stands on no board of the new chain's.
+    expect(reports[0]?.report.drawn ?? {}).toEqual({});
+    room.dispose();
   });
 
   it('lets keys this build does not know pass through, wherever they stand', () => {
