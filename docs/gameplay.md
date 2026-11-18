@@ -219,12 +219,15 @@ out and they type. `start` waits for both consoles („Am Schaltfeld der Gegense
 niemand."). With three, the third reads the book or holds the plate.
 
 **The Klemmbrett past the patrol's reach.** The Signalkette is worked with both patrols out,
-so its clipboard lies at (6,12) or (5,12): on the Flur's south wall at its west end, and the
-Flurwache's beat ends at (13,10) — three tiles further east than before —, so that nobody
-within the clipboard's reach is in its cone, though five tiles from the guest's start the lamp
-does not find it from there. The Aktenschrank lies at (12,16) or (11,15) for the same reason:
-its places beside the Laborwache's beat, (18,14) and (18,20), put its reader in that drone's
-eye four seconds after the solve (`tools/patrol.test.mjs`, the parked test).
+so its clipboard lies at (4,12) or (3,12): on the Flur's south wall at its west end, where
+nobody within its reach is in the Flurwache's cone — the beat is main's, turning at (10,10),
+and its look ends at x = 6. So near the guest's start the lamp finds it in the first second;
+the crew passes it on the way to the Maschinentür. The Aktenschrank lies at (12,16) or (11,15)
+for the same reason: its places beside the Laborwache's beat, (18,14) and (18,20), put its
+reader in that drone's eye four seconds after the solve (`tools/patrol.test.mjs`, the parked
+test). A drone keeps the look it arrived with while it stands on a waypoint; until 18.11.2026
+it looked east there for two ticks, whichever way it had come, and caught whoever it had just
+passed (`server/test/drones.test.ts`).
 
 **The seeds.** `core/test/blackoutPlan.ts` pins a seed for each draw — 12 the Signalkette, the
 walkthrough's and the smoke's own; 56 the Funkpult; 93 the Notstromkasten — and all three deal
@@ -255,8 +258,8 @@ console B:
 | Serverraum | Anna | the Sperrpult → the terminal | 18.8 | 4.5 |
 | Serverraum | Ben | the Analysepult → the locker | 12.0 | 2.9 |
 | Serverraum | Ben | the locker → the rack | 6.4 | 1.5 |
-| Signalkette | Ben | the rack → the Klemmbrett | 21.2 | 5.1 |
-| Signalkette | Ben | the Klemmbrett → console A | 24.2 | 5.8 |
+| Signalkette | Ben | the rack → the Klemmbrett | 23.2 | 5.5 |
+| Signalkette | Ben | the Klemmbrett → console A | 26.2 | 6.2 |
 | Signalkette | Anna | the terminal → console B | 36.7 | 8.7 |
 | Signalkette | Anna | console B → the spare fuse | 18.7 | 4.4 |
 | Signalkette | Ben | console A → the reactor | 34.2 | 8.2 |
@@ -413,7 +416,7 @@ The Bestenliste keeps one board a mission and difficulty: runs of different
 draws stand on it together, so a board mixes stations of unequal length — worth a board per
 draw only once the spread shows (Blackout's three lay 39 s apart for the script crew). The clock
 is set by that crew: it keeps at least 40 % of it in its slowest draw, measured without capture
-groups (`SHOTS_ONLY=run`) — 300 to 339 s after the lights went out, 63 to 69 % of Blackout's
+groups (`SHOTS_ONLY=run`) — 290 to 339 s after the lights went out, 63 to 70 % of Blackout's
 960 s left; the capture run keeps 38 to 39 % and is no measure, main's old chain stood at 34 %
 of 900 s by it. A snapshot keeps the draw; one from before
 the pools has none and restores as before — a run in flight over the deploy that gave its

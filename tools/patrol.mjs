@@ -142,8 +142,8 @@ export function headings(beat, at) {
  * A drone flown on from `at` towards waypoint `target` of `beat` ({
  * waypoints, speed }) for `seconds`, tick by tick as the server steps it: a
  * point every DRONE_TICK_S with the time since `at`. As on the server, a
- * drone that reaches a waypoint looks east there (atan2(0, 0)) until it
- * turns for the next.
+ * drone that reaches a waypoint keeps the look it came with until it sets
+ * out for the next.
  */
 export function flyOn(beat, at, target, seconds) {
   const points = beat.waypoints.map(middleOf);
@@ -159,9 +159,9 @@ export function flyOn(beat, at, target, seconds) {
       continue;
     }
     const step = Math.min(dist, beat.speed * DRONE_TICK_S);
+    facing = Math.atan2(goal.y - y, goal.x - x);
     x += ((goal.x - x) / dist) * step;
     y += ((goal.y - y) / dist) * step;
-    facing = Math.atan2(goal.y - y, goal.x - x);
   }
   return track;
 }
@@ -265,7 +265,7 @@ export function spottedOn(path, flying, sight, { delay = 0, hold = 0, pace = RUN
 
 /**
  * Every point of a beat as a drone flies it, a tenth of a tile apart, facing
- * its way; and each waypoint looking east, as it does there for a tick.
+ * its way — on a waypoint the way it came, as it stands there for a tick.
  */
 function beatPoints(beat) {
   const points = beat.waypoints.map(middleOf);
@@ -273,12 +273,11 @@ function beatPoints(beat) {
     const a = points[(t - 1 + points.length) % points.length];
     const facing = Math.atan2(b.y - a.y, b.x - a.x);
     const n = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / 0.1));
-    const along = Array.from({ length: n + 1 }, (_, i) => ({
+    return Array.from({ length: n + 1 }, (_, i) => ({
       x: a.x + ((b.x - a.x) * i) / n,
       y: a.y + ((b.y - a.y) * i) / n,
       facing,
     }));
-    return [...along, { x: b.x, y: b.y, facing: 0 }];
   });
 }
 

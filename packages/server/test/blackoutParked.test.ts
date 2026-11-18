@@ -15,7 +15,8 @@ import {
 /**
  * A crew that has just solved a station and stays where it stood is not caught for it: after
  * every solve of every draw, nobody standing anywhere a console of that station is worked from,
- * or its rules are read from, is seen by a drone — not in the ten seconds that follow, nor on any later round of the beats.
+ * or its rules are read from, is seen by a drone — not in the ten seconds that follow, nor on
+ * any later round of the beats.
  * The level sees to it, not the engine: both drones sleep until the Serverraum is solved, whose
  * consoles lie out of their sight, and every console after it stands where no beat looks.
  */

@@ -111,9 +111,11 @@ export class DronePatrol {
         continue;
       }
       const stepLen = Math.min(dist, drone.speed * dt);
+      // It looks the way it flies: read before the step, since the step that lands on the
+      // waypoint leaves no way to it, and a drone standing there keeps the look it came with.
+      self.facing = Math.atan2(ty - self.y, tx - self.x);
       self.x += ((tx - self.x) / dist) * stepLen;
       self.y += ((ty - self.y) / dist) * stepLen;
-      self.facing = Math.atan2(ty - self.y, tx - self.x);
     }
   }
 

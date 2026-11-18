@@ -195,7 +195,7 @@
         "kind": "clipboard",
         "label": "KLEMMBRETT",
         "puzzleIds": ["signalkette"],
-        "spots": [{ "x": 6, "y": 12 }, { "x": 5, "y": 12 }]
+        "spots": [{ "x": 4, "y": 12 }, { "x": 3, "y": 12 }]
       },
       {
         "id": "spind",
@@ -365,10 +365,10 @@
       {
         "id": "flurwache",
         "waypoints": [
-          { "x": 13, "y": 11 },
+          { "x": 10, "y": 11 },
           { "x": 23, "y": 11 },
           { "x": 23, "y": 10 },
-          { "x": 13, "y": 10 }
+          { "x": 10, "y": 10 }
         ],
         "speed": 1.7,
         "range": 4.5,

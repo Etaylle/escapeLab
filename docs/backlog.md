@@ -791,8 +791,8 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   Signalkette, Funkpult und Notstromkasten; er öffnet Reaktortür und Reaktorschott. Die
   Signalkette und das Funkpult stehen, wo sie standen; der Notstromkasten hängt gleich hinter
   der Maschinentür, sein Prüfpult im Labor, sein Wartungsbuch im Maschinenraum. Das Klemmbrett
-  liegt jetzt am Westende des Flurs (6,12 oder 5,12), der Aktenschrank in der Nordwestecke des
-  Labors (12,16 oder 11,15), und die Flurwache wendet schon bei (13,10): Wer im Umkreis einer
+  liegt jetzt am Westende des Flurs (4,12 oder 3,12), der Aktenschrank in der Nordwestecke des
+  Labors (12,16 oder 11,15); die Bahn der Flurwache ist die von main: Wer im Umkreis einer
   Quelle der eben gelösten Station steht, wird von keiner Drohne erfasst. Drei Notizen der letzten Schicht erklären den Dienstplan. Seeds: 12
   Signalkette (Rundgang, Smoke), 56 Funkpult, 93 Notstromkasten.
 - Bestenliste (B-blackout2): Auf einer Mission mit Wechselplatz zählt ein Lauf nur, wenn sein

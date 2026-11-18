@@ -104,12 +104,14 @@ describe('headings and flyOn — the server’s patrol foretold', () => {
     assert.ok(back > 0 && track[back].x < 6.5);
   });
 
-  it('looks east on a waypoint, whichever way it came', () => {
+  it('keeps on a waypoint the look it came with, as the server’s drone does', () => {
+    // Flown south to (3,3): standing there it looks south still, not east (server drones.ts,
+    // which read the look off the step just taken until 18.11.2026 — atan2(0, 0)).
     const corner = { waypoints: tiles([3, 1], [3, 3], [1, 3]), speed: 1.25 };
     const track = flyOn(corner, { x: 3.5, y: 1.5, facing: Math.PI / 2 }, 1, 3);
     const there = track.filter((at) => near(at.x, 3.5) && near(at.y, 3.5));
-    assert.ok(there.length > 0);
-    assert.ok(there.every((at) => at.facing === 0));
+    assert.ok(there.length > 1);
+    assert.ok(there.every((at) => near(at.facing, Math.PI / 2)));
   });
 
   it('gives a flight for every waypoint a drone may be heading for', () => {
