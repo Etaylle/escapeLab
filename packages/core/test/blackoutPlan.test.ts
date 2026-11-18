@@ -99,7 +99,7 @@ describe('Blackout on the harness’s seeds', () => {
     const start = ({ spawns, places }: BlackoutPlan): unknown => ({
       spawns,
       book: places['buch-archiv'],
-      policy: places['aushang'],
+      policy: places['richtlinie'],
       locker: places['spind'],
     });
     for (const run of others) {

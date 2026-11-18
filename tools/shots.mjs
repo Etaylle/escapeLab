@@ -878,7 +878,7 @@ const HALL_MISSION = JSON.parse(
  *   test/blackoutPlan.ts `DRAW_SEEDS`; 56 the Funkpult, 93 the Notstromkasten, the same start):
  *   Anna starts in the Archiv by the sign (3,3; sign.png, once she
  *   has skipped the opening), Ben at the Flur's west end (1,12); the book lies
- *   at (8,1), the Aushang at (17,12), the Klemmbrett at (8,12), the locker at (16,2),
+ *   at (8,1), the Richtlinie at (17,12), the Klemmbrett at (8,12), the locker at (16,2),
  *   the cabinet at (18,14), out of service. With the power on, Anna's step into the Archiv
  *   lights it round her while Ben watches the opening on (cold-open.png).
  *   Nobody starts behind a door: both walk up to the lever in the middle of
@@ -13147,6 +13147,8 @@ async function manPaketfilter(host, guest) {
   }
   await foundWherePinned(guest, policy);
   const upright = guest.page.viewportSize() ?? SIZES[2];
+  // Sideways for now: this line goes, and the guest plays the Analysepult upright, once main
+  // has the upright device (F-firewall-upright) and is merged in here.
   await guest.page.setViewportSize({ width: SIZES[3].width, height: SIZES[3].height });
   await manArmed(host, 'a');
   await manArmed(guest, 'b');
@@ -13168,7 +13170,8 @@ async function manPaketfilter(host, guest) {
  * every packet the plan says the policy drops, a trip under every ring — the Analysepult's
  * cards shot at a mark (filter-headers.png), the Sperrpult at its first ring (filter-gate.png),
  * and once the host steps off it, the wave held (filter-held.png). Then the Schott opens
- * (schott-open.png). Fails unless it solves, or where it took more than one alarm.
+ * (schott-open.png) and both stay at their consoles, unseen (`parkedUnseen`). Fails unless it
+ * solves, or where it took more than one alarm.
  */
 async function playPaketfilter(host, guest) {
   const upright = await manPaketfilter(host, guest);
@@ -13199,11 +13202,35 @@ async function playPaketfilter(host, guest) {
     throw new Error(`the Paketfilter ended ${solved ? 'solved' : 'unsolved'}, ${raised} alarm(s)`);
   }
   await schottOpens(host);
-  // The Flur's patrol wakes with this solve and flies past the Analysepult some four seconds
-  // on: its player steps through the open Schott at once, as the Leitstelle's line says.
-  const schott = mapOf(guest).doors.find((door) => door.id === 'serverschott');
-  if (!(await standOn(guest, { x: schott.x, y: schott.y - 1 }))) {
-    throw new Error(`${guest.name} found no way through the open Serverschott`);
+  await parkedUnseen([host, guest], 'the Paketfilter');
+}
+
+/** How long a crew stays where it stood at a station it has just solved, ms. */
+const PARKED_MS = 12_000;
+
+/**
+ * `players` stay where they stand at the consoles of the station just solved (`where`), a good
+ * ten seconds: no alarm may come of it, and nobody moves. Both patrols sleep until the
+ * Serverraum is solved, so a crew looking at the open Schott from the Paketfilter's consoles is
+ * not caught for having solved it.
+ */
+async function parkedUnseen(players, where) {
+  const [first] = players;
+  const alarms = first.seen.view.alarms.count;
+  const stood = players.map((player) => tileOf(player.seen));
+  await sleep(PARKED_MS);
+  const raised = first.seen.view.alarms.count - alarms;
+  const moved = players.filter((player, i) => {
+    const now = tileOf(player.seen);
+    return now?.x !== stood[i]?.x || now?.y !== stood[i]?.y;
+  });
+  console.log(
+    `parked             ${players.map((p) => p.name).join(' and ')} stood ` +
+      `${seconds(PARKED_MS)} at ${where} after its solve: ` +
+      (raised === 0 ? 'no alarm' : `!! ${raised} alarm(s)`),
+  );
+  if (raised > 0 || moved.length > 0) {
+    fail(`parked at ${where}: ${raised} alarm(s), ${moved.map((p) => p.name).join(', ')} moved`);
   }
 }
 
@@ -17290,7 +17317,7 @@ async function captureMusicPacks() {
 // Archiv first while Cleo stands on the plate HALTEN; Anna walks through the door it holds to
 // console A, Ben to console B — three-plate.png, Cleo's screen: the hands line „Cleo: HALTEN ·
 // Anna: Pult A · Ben: Pult B", the door held — and its stages are run up as the plan pins them.
-// Paketfilter: Cleo walks to the Aushang, Anna to the Sperrpult, Ben to the Analysepult —
+// Paketfilter: Cleo walks to the Richtlinie, Anna to the Sperrpult, Ben to the Analysepult —
 // three-hands.png, Anna's screen naming all three; three-reader.png, Cleo's screen with the
 // policy open while A and B are manned; three-phone-932.png, Cleo's page as a large phone held
 // sideways, her own job alone as the row's chip. Then Cleo and Ben give their seats
@@ -17527,7 +17554,7 @@ async function threeAtThePaketfilter(drill) {
     throw new Error(`Cleo found no way to the ${policy.label}`);
   }
   await foundWherePinned(cleo, policy);
-  const job = 'Cleo: Aushang';
+  const job = 'Cleo: Richtlinie';
   const all = `Anna: Pult A · Ben: Pult B · ${job}`;
   await handsShot(anna, 'three-hands.png', '.stage-hands', all, () =>
     capture(anna.page, 'three-hands.png'),

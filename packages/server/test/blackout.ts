@@ -1,10 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { vi } from 'vitest';
 import {
-  drawPools,
   moduleFor,
   parseMission,
-  runOrder,
   type CrewPass,
   type Mission,
   type Move,
@@ -114,18 +112,17 @@ function play(room: Room, moves: Move<PuzzleInput>[], operator: Member, partner:
   }
 }
 
-/** The station a run on `seed` has in the `index`-th place of its own order. */
-function stationOf(seed: number, index: number): PuzzleDef {
-  const { puzzles } = blackoutMission();
-  const def = runOrder(puzzles, drawPools(puzzles, seed))[index];
+/**
+ * The station `room`'s run has in the `index`-th place of its own order — of the mission the
+ * room plays, which for a room taken up again from an older snapshot is the one it began with.
+ */
+function stationOf(room: Room, index: number): PuzzleDef {
+  const def = room.snapshot().state.mission.puzzles[index];
   if (def === undefined) {
-    throw new Error(`Blackout has no station ${index + 1}`);
+    throw new Error(`the run has no station ${index + 1}`);
   }
   return def;
 }
-
-/** The seed of the run `member` plays, as its view of a pinned room says it. */
-const seedOf = (member: Member): number => lastView(member).seed?.run ?? BLACKOUT_SEED;
 
 /** How many rounds of a second a station may take: the Paketfilter's waves run on the clock. */
 const ROUNDS = 240;
@@ -142,7 +139,7 @@ const inEmergency = (member: Member): boolean => lastView(member).map?.sabotage 
  */
 function work(room: Room, operator: Member, partner: Member): void {
   const index = lastView(operator).currentPuzzleIndex;
-  const def = stationOf(seedOf(operator), index);
+  const def = stationOf(room, index);
   const station = moduleFor(def.type);
   const two = station.consoles === 2;
   const open = (): boolean => lastView(operator).currentPuzzleIndex === index;
@@ -181,6 +178,14 @@ function sitOut(room: Room, operator: Member): void {
   }
 }
 
+/** `operator` switches the station beside them on, any emergency that has the lab sat out first. */
+function switchOn(room: Room, operator: Member): void {
+  for (let second = 0; second < 120 && inEmergency(operator); second++) {
+    vi.advanceTimersByTime(1000);
+  }
+  pressE(room, operator);
+}
+
 /** How long Ben reads the policy before the Paketfilter's first wave, ms (`blackoutMidway`). */
 const POLICY_READ_MS = 20_000;
 
@@ -190,9 +195,9 @@ const POLICY_READ_MS = 20_000;
  * for Anna, then at console B of the Anlaufsteuerung in the Flur while she works console A
  * inside; Anna at the Sperrpult and Ben at the Analysepult of the Paketfilter, once he has read
  * its policy; then Ben walks to the Flur's east end and Anna fetches the fuse from the Archiv.
- * The Flur's patrol is out from then on, and the run's emergencies are due: the first moment
- * for one, 100 s in, lies behind the run by then (the read policy sees to it), so the next
- * comes with the schedule's second, a good two minutes on.
+ * The run's emergencies are due from then on: the first moment for one, 100 s in, lies behind
+ * the run by then (the read policy sees to it), so the next comes with the schedule's second,
+ * a good two minutes on. The drones sleep until the Serverraum is solved.
  */
 export function blackoutMidway(
   onRunFinished?: RunListener,
@@ -223,10 +228,10 @@ export function blackoutMidway(
 }
 
 /** The Serverraum from `blackoutMidway` on: Anna at the terminal, Ben at the rack. */
-function serverraum({ room, anna, ben }: BlackoutCrew): void {
+export function serverraum({ room, anna, ben }: BlackoutCrew): void {
   walk(room, anna, 12, 4);
   walk(room, ben, 20, 4);
-  pressE(room, anna);
+  switchOn(room, anna);
   work(room, anna, ben);
 }
 
@@ -236,12 +241,12 @@ function serverraum({ room, anna, ben }: BlackoutCrew): void {
  * with Anna at it and Ben at the cabinet he unlocked with the key from the Serverraum; the
  * Notstromkasten with Anna at the box in the Maschinenraum and Ben at the Prüfpult in the Labor.
  */
-function wechselplatz({ room, anna, ben }: BlackoutCrew): void {
-  const drawn = stationOf(seedOf(anna), 4);
+export function wechselplatz({ room, anna, ben }: BlackoutCrew): void {
+  const drawn = stationOf(room, 4);
   if (drawn.id === 'signalkette') {
     walk(room, anna, 9, 19);
     walk(room, ben, 29, 9);
-    pressE(room, ben);
+    switchOn(room, ben);
     work(room, ben, anna);
     return;
   }
@@ -253,13 +258,36 @@ function wechselplatz({ room, anna, ben }: BlackoutCrew): void {
     walk(room, ben, cabinet.x, cabinet.y);
     pressE(room, ben);
     walk(room, anna, 12, 20);
-    pressE(room, anna);
+    switchOn(room, anna);
     work(room, anna, ben);
     return;
   }
   walk(room, anna, 6, 15);
   walk(room, ben, 15, 19);
+  switchOn(room, anna);
+  work(room, anna, ben);
+}
+
+/**
+ * Blackout with its Serverraum solved too, four stations in: both drones are out from then on,
+ * the Flurwache on its beat along the Flur, and the Labortür stands open.
+ */
+export function blackoutPatrolled(
+  onRunFinished?: RunListener,
+  seed: number = BLACKOUT_SEED,
+): BlackoutCrew {
+  const crew = blackoutMidway(onRunFinished, seed);
+  serverraum(crew);
+  return crew;
+}
+
+/** The reactor: the fuse Anna carries set into it, then its two levers thrown together. */
+export function reaktor({ room, anna, ben }: BlackoutCrew): void {
+  walk(room, anna, 34, 14);
   pressE(room, anna);
+  walk(room, anna, 33, 16);
+  walk(room, ben, 34, 17);
+  switchOn(room, anna);
   work(room, anna, ben);
 }
 
@@ -272,12 +300,7 @@ export function playToTheHatch(crew: BlackoutCrew): void {
   const { room, anna, ben } = crew;
   serverraum(crew);
   wechselplatz(crew);
-  walk(room, anna, 34, 14);
-  pressE(room, anna);
-  walk(room, anna, 33, 16);
-  walk(room, ben, 34, 17);
-  pressE(room, anna);
-  work(room, anna, ben);
+  reaktor(crew);
   walk(room, anna, 1, 1);
   walk(room, ben, 1, 1);
 }

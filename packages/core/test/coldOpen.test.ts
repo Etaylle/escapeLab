@@ -698,8 +698,8 @@ describe('Blackout opens on its lever', () => {
     }
   });
 
-  it('wakes its drones and emergencies one station later than before the lever came', () => {
-    expect(blackout.map.drones.map((d) => d.activeAfterSolved)).toEqual([3, 4]);
+  it('wakes both drones with the Serverraum, the emergencies with the Paketfilter', () => {
+    expect(blackout.map.drones.map((d) => d.activeAfterSolved)).toEqual([4, 4]);
     expect(blackout.map.sabotage?.afterSolved).toBe(3);
     expect(blackout.map.lamps).toHaveLength(5);
   });

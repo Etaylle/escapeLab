@@ -583,6 +583,22 @@ describe('mission blackout by design', () => {
     }
   });
 
+  it('opens each door by its own place in the chain', () => {
+    expect(blackout.map.doors.map((door) => [door.id, door.opensBy])).toEqual([
+      ['maschinentuer', { kind: 'plate', plateId: 'flurplatte', untilSolved: 'anlauf' }],
+      ['serverschott', { kind: 'puzzle', puzzleId: 'paketfilter' }],
+      ['labortuer', { kind: 'puzzle', puzzleId: 'subsysteme' }],
+      ['reaktortuer', { kind: 'puzzle', puzzleId: 'wechsel' }],
+      ['reaktorschott', { kind: 'puzzle', puzzleId: 'wechsel' }],
+    ]);
+  });
+
+  it('leaves three notes of the last shift at each station that came with the new chain', () => {
+    const hints = (id: string): number =>
+      blackout.puzzles.find((p) => p.id === id)?.hints.length ?? 0;
+    expect(['anlauf', 'paketfilter', 'subsysteme', 'signalkette'].map(hints)).toEqual([3, 3, 3, 3]);
+  });
+
   it('stands the Paketfilter before the Serverschott, which its solve opens', () => {
     const map = blackout.map;
     const rooms = roomsOf(map);
@@ -813,7 +829,7 @@ describe('mission blackout by design', () => {
         activeAfterSolved,
       ]),
     ).toEqual([
-      ['flurwache', 1.7, 4.5, 26, 15, 3],
+      ['flurwache', 1.7, 4.5, 26, 15, 4],
       ['laborwache', 1.3, 4, 30, 15, 4],
     ]);
     expect(flur.frozenByPlate).toBe('kameraplatte');
@@ -908,7 +924,7 @@ describe('mission blackout by design', () => {
       expect.stringMatching(/durchs Labor oder am Serverraum vorbei/),
       expect.stringMatching(/^Dienstplan Wechselplatz: Signalkette, Funkpult, Notstromkasten\./),
       expect.stringMatching(/Anlaufsteuerung.*Wechselplatz/),
-      expect.stringMatching(/AUSSER BETRIEB/),
+      expect.stringMatching(/^Aktenschrank im Labor: Schlüssel im Serverraum über dem Rack\./),
     ]);
   });
 

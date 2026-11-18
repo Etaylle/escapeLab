@@ -35,7 +35,7 @@ import { noted, stageOf, type StartupPlanStage } from './startupPlan.js';
  * Signalkette, the Funkpult or the Notstromkasten there, by its seed. One plan a draw —
  * `PINNED_SEED`'s, the Signalkette's, is the walkthrough's own; the other two are the shorter
  * proofs'. The three seeds deal the same start: the host in the Archiv, the guest at the Flur's
- * west end, the Betriebsbuch, the Spind and the Aushang on the same spots. Player p1 is the
+ * west end, the Betriebsbuch, the Spind and the Richtlinie on the same spots. Player p1 is the
  * host, who joins first; p2 the guest. Each round is a second on the clock, the open station
  * ticked as the room ticks it. The Anlaufsteuerung's breakers and the Paketfilter's trips hang
  * on that clock: the harness makes them by what its pages show, not by the plan's seconds.

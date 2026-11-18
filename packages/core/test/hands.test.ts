@@ -42,7 +42,7 @@ describe('the places of a station', () => {
     expect(placesOf(blackout, 'paketfilter')).toEqual([
       { kind: 'console', console: 'a' },
       { kind: 'console', console: 'b' },
-      { kind: 'source', id: 'aushang' },
+      { kind: 'source', id: 'richtlinie' },
     ]);
     expect(placesOf(blackout, 'notstrom')).toEqual([
       { kind: 'console', console: 'a' },
@@ -312,8 +312,10 @@ describe('what the hands carry', () => {
   });
 
   it('name no source or part nobody has found, at any of Blackout\'s stations', () => {
-    const unfound =
-      /aktenschrank|schluessel|spind|klemmbrett|buch-archiv|aushang|wartungsbuch|ersatzsicherung/;
+    const hidden = ['aktenschrank', 'schluessel', 'spind', 'klemmbrett', 'buch-archiv'];
+    const unfound = new RegExp(
+      [...hidden, 'richtlinie', 'wartungsbuch', 'ersatzsicherung'].join('|'),
+    );
     for (const def of blackout.puzzles) {
       const state = atStation(def.id);
       expect(state.mission.puzzles[state.currentPuzzleIndex]?.id).toBe(def.id);

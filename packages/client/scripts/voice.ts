@@ -1326,7 +1326,45 @@ async function main(fresh: Fresh): Promise<void> {
     const entry = manifest.lines[id];
     return entry === undefined ? [] : [[id, entry] as const];
   });
-  finish({ lines: Object.fromEntries(kept) }, todo.length);
+  finish({ lines: Object.fromEntries([...keptForOldRuns(before), ...kept]) }, todo.length);
+}
+
+/**
+ * Lines no shipped mission says any more that a run in flight still does: a room taken up again
+ * from its snapshot plays the mission it started with, and its radio speaks that mission's
+ * lines. Blackout's chain before the Wechselplatz (B-blackout2) said these twelve; their
+ * recordings stay until no snapshot of that chain can be taken up any more — the next package
+ * drops them.
+ */
+export const OLD_RUN_LINES: readonly string[] = [
+  'Notlicht steht, danke. Jetzt der Notstrom: Die Anleitung dafür hängt im Archiv, der Kasten ' +
+    'ist im Maschinenraum, das Prüfpult im Flur.',
+  'Notlicht brennt, ich sehe euch wieder auf meiner Tafel. Weiter mit dem Notstrom: Anleitung ' +
+    'im Archiv, Kasten im Maschinenraum, Prüfpult im Flur.',
+  'Die Anleitung zum Notstrom hängt im Archiv, auf der Ostseite.',
+  'Ohne die Anleitung aus dem Archiv ratet ihr am Kasten nur herum, sie steht dort auf der ' +
+    'Ostseite.',
+  'Das Prüfpult steht am Westende vom Flur, der Kasten im Maschinenraum hinter der Plattentür, ' +
+    'einer bleibt auf der Platte.',
+  'Die Tür zum Maschinenraum geht nur auf, solange jemand auf der Platte davor steht, dahinter ' +
+    'wartet der Kasten.',
+  'Notstrom läuft, die Tür zum Maschinenraum bleibt offen. Als Nächstes die Signalkette: ein ' +
+    'Pult im Flur, eins im Maschinenraum.',
+  'Der Notstrom hält, die Maschinenraumtür bleibt jetzt offen. Für die Signalkette liegt ein ' +
+    'Klemmbrett im Flur, gearbeitet wird an zwei Pulten.',
+  'Schott zum Serverraum ist offen, drinnen Terminal und Rack. Die Drohne ist wach, die ' +
+    'Kameraplatte davor legt sie still.',
+  'Das Schott zum Serverraum ist auf, die Unterlagen liegen im Spind darin. Die Kameraplatte ' +
+    'davor hält die Drohne an.',
+  'Server laufen, die Labortür ist offen, drinnen fliegt eine Drohne. Den Aktenschrank im ' +
+    'Labor öffnet nur der Schlüssel.',
+  'Server oben, Labortür offen, im Labor patrouilliert eine Drohne. Den Schlüssel zum ' +
+    'Aktenschrank holt ihr noch aus dem Serverraum.',
+];
+
+/** The takes in `before` of the lines a run in flight still says: a render keeps them. */
+export function keptForOldRuns(before: Manifest): [string, Manifest['lines'][string]][] {
+  return Object.entries(before.lines).filter(([, entry]) => OLD_RUN_LINES.includes(entry.text));
 }
 
 /** Writes the final list, drops every recording it does not name, says what it holds. */

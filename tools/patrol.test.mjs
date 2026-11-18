@@ -306,9 +306,11 @@ describe('Blackout’s patrols, as the walkthrough plays its plans past them', (
     }
   });
 
-  it('watches the way into the Serverraum and the south way to the reactor', () => {
+  it('sleeps till the Serverraum is solved, then watches the way out of it and the south way', () => {
+    // Nobody is caught at the Paketfilter's consoles in the Flur, nor on the way in.
+    assert.deepEqual(stage(3).drones, []);
     const schott = map.doors.find((door) => door.id === 'serverschott');
-    const flur = havens(stage(3).drones, stage(3).sight);
+    const flur = havens(stage(4).drones, stage(4).sight);
     // The Flur's middle in front of the Serverschott, and the camera plate beside it.
     assert.equal(flur.has(`${schott.x},${schott.y + 1}`), false);
     const plate = map.plates.find((p) => p.id === 'kameraplatte');

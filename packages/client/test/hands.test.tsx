@@ -134,7 +134,7 @@ describe('the hands line', () => {
     const fuse = state.items['ersatzsicherung'] ?? { x: 0, y: 0, carriedBy: null, delivered: false };
     const carrying = { ...state, items: { ...state.items, ersatzsicherung: { ...fuse, carriedBy: 'p3' } } };
     expect(lineOf(carrying, 'p3')).toBe(
-      'Cleo: SICHERUNG holen · Anna: Frequenz-Abgleich · Ben: frei',
+      'Cleo: SICHERUNG holen · Anna: Funkpult · Ben: frei',
     );
   });
 

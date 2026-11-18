@@ -16,8 +16,8 @@
  * console B in the Flur — a start with the faulty feeder costs an alarm, each
  * pulse's breaker closes on the server's clock, and once the generator runs the
  * Maschinenraum door stays open for good; at the Paketfilter Ben reads the policy,
- * the wave holds while he steps off the Analysepult, and its two waves are cleared
- * on the clock. At a
+ * the wave holds while he steps off the Analysepult, and is cleared on the clock —
+ * no drone is out before the Serverraum is solved. At a
  * station with one console whoever is fewer steps from it works it and the
  * other reads at the source that covers it. It streams client-authoritative
  * positions along BFS paths, each walk once no drone watches its way, as a
@@ -188,10 +188,10 @@ function consoleOf(index: number, side?: 'a' | 'b'): { x: number; y: number } {
  * console A, where it has two — and beside its console B, out of both drones' eye.
  */
 const AT_THE_WECHSELPLATZ: Readonly<Record<string, () => { a: Tile; b: Tile | null }>> = {
-  // east of console A of the Signalkette, at the Flur's east end, where the Flur drone never
+  // below console A of the Signalkette, in the Flur's east corner, where the Flur drone never
   // looks; above its console B, in the Maschinenraum
   signal: () => ({
-    a: besides(consoleOf(WECHSEL, 'a'), 1, 0, 'beside console A of the Signalkette'),
+    a: besides(consoleOf(WECHSEL, 'a'), 0, 1, 'below console A of the Signalkette'),
     b: besides(consoleOf(WECHSEL, 'b'), 0, -1, 'above console B of the Signalkette'),
   }),
   // east of the radio panel, off the Labor drone's line
@@ -1024,26 +1024,6 @@ async function fetchFuse(): Promise<void> {
   }
 }
 
-/** How near the west end of its beat the Flur drone has to be before the camera plate is taken. */
-const FAR_WEST_TILES = 3;
-
-/**
- * `holder` takes the camera plate in front of the Serverschott once the Flur drone patrols the
- * west end of its beat, far from the plate and the Schott: it stands still out there while the
- * plate is held, and stepping off the plate into the Schott the holder stays out of its eye.
- */
-async function holdTheCameraPlate(holder: TestClient): Promise<void> {
-  const westEnd = Math.min(...flurDrone.waypoints.map((w) => w.x)) + 0.5;
-  const deadline = Date.now() + 30_000;
-  while ((holder.drones[flurDrone.id]?.x ?? Infinity) > westEnd + FAR_WEST_TILES) {
-    if (Date.now() > deadline) {
-      fail(`${holder.label}: the Flur drone never came round to its west end in 30 s`);
-    }
-    await sleep(50);
-  }
-  await walkTo(holder, CAMERA);
-}
-
 // --- emergencies -------------------------------------------------------------
 
 const emergencies = mission.map.sabotage ?? fail('Blackout has no emergencies');
@@ -1070,7 +1050,8 @@ const ORDER_TAKEN_MS = 2 * 1000;
 const relayOf = (client: TestClient) => client.view?.map?.sabotage?.relay ?? null;
 
 /** What `client` reads out right now, as text; 'null' where it has no instruction. */
-const orderOf = (client: TestClient): string => JSON.stringify(relayOf(client)?.instruction ?? null);
+const orderOf = (client: TestClient): string =>
+  JSON.stringify(relayOf(client)?.instruction ?? null);
 
 /**
  * The instruction `holder` reads out is carried out at the console of the player it names;
@@ -1467,6 +1448,8 @@ async function readTheLeverNote(): Promise<void> {
     'the audience sees every note of the last shift as an object');
 }
 
+/** How much of what the crew sees a station left open says of itself, in characters. */
+const STILL_OPEN_CHARS = 1500;
 /** How long a station that runs on the server's clock may take here, in seconds. */
 const ON_THE_CLOCK_SEC = 240;
 
@@ -1483,7 +1466,11 @@ async function solveOnTheClock(index: number): Promise<void> {
     crew.every((client) => (client.view?.currentPuzzleIndex ?? 0) > index);
   while (!solved()) {
     if (Date.now() > deadline) {
-      fail(`station ${index + 1} is still open after ${ON_THE_CLOCK_SEC} s on the clock`);
+      const seen = JSON.stringify(crew.map((client) => client.view?.puzzle ?? null));
+      fail(
+        `station ${index + 1} is still open after ${ON_THE_CLOCK_SEC} s on the clock, the ` +
+          `crew seeing ${seen.slice(0, STILL_OPEN_CHARS)}`,
+      );
     }
     // A view of the solve may be on its way to one of the two: no station to look at then.
     if (crew.some((client) => client.view?.puzzle?.index !== index)) {
@@ -1563,7 +1550,8 @@ async function runStartup(a: TestClient, b: TestClient): Promise<void> {
     return startup?.role === 'terminal' && startup.types === 'a' && startup.terminal !== null &&
       startup.board === null && v.puzzle?.manual === null;
   });
-  await b.expectView('console B takes the pulse: four feeders’ lamps, no script, no rules', (v) => {
+  const takesPulse = 'console B takes the pulse: four feeders’ lamps, no script, no rules';
+  await b.expectView(takesPulse, (v) => {
     const startup = startupOf(v);
     return startup?.role === 'board' && startup.board?.feeders.length === 4 &&
       startup.board.pulse === null && startup.terminal === null && v.puzzle?.manual === null;
@@ -1581,7 +1569,10 @@ async function runStartup(a: TestClient, b: TestClient): Promise<void> {
       .map(({ raw }) => raw)
       .join('\n');
   assert(!stageOne(a, from.a).includes('"feeders":['), 'in stage 1 no lamp ever reached console A');
-  assert(!stageOne(b, from.b).includes('"script":['), 'in stage 1 the script never reached console B');
+  assert(
+    !stageOne(b, from.b).includes('"script":['),
+    'in stage 1 the script never reached console B',
+  );
   const swapped = viewsSince(b, from.b).some(({ view }) =>
     startupOf(view)?.stage === 2 && startupOf(view)?.role === 'terminal');
   assert(swapped, 'in stage 2 console B typed and console A took the pulse');
@@ -2035,10 +2026,8 @@ function assertTerminalAndRackApart(
 
 /**
  * Station 4, the Serverraum, at two consoles in the room behind the
- * bulkhead: `terminal` holds the Flur drone still from the camera plate
- * while `rack` crosses the Flur to the locker, then steps off it to console
- * A and switches it on, so that whoever works it is out of the drone's eye;
- * `rack` searches the locker and reads the rules there, then takes the rack.
+ * bulkhead: `rack` walks to the locker, `terminal` to console A and switches
+ * it on; `rack` searches the locker and reads the rules there, then takes the rack.
  * The terminal shows the table with its codes and no LED, the rack its
  * switches and LEDs and no code, neither the rules; the audience sees all.
  * Mid-solve the rack drops and resumes; the solver then brings every service
@@ -2046,10 +2035,8 @@ function assertTerminalAndRackApart(
  */
 async function runServers(terminal: TestClient, rack: TestClient): Promise<void> {
   const locker = sourceOf(SUBSYSTEME);
-  // The drone woken by the Paketfilter patrols the Flur in front of the Schott: the terminal's
-  // player holds it still from the camera plate while the rack's crosses to the locker.
-  await holdTheCameraPlate(terminal);
-  await crossFrozen(rack, placeOf(locker.id), flurDrone.id);
+  // No drone is out yet: both sleep until this room is solved, the crew inside it.
+  await walkTo(rack, placeOf(locker.id));
   await bring(terminal, STAND[SUBSYSTEME] ?? fail('no spot at the terminal'), rack);
   const fromTerminal = terminal.raw.length;
   await switchOn(terminal, SUBSYSTEME);
@@ -2270,7 +2257,13 @@ const empty = await anna.expect(
 );
 assert(empty.rooms.length === 0, 'lobby browser is empty before any room exists');
 
-anna.send({ kind: 'create-room', name: 'Anna', pass: anna.pass, missionId: 'blackout', seed: SEED });
+anna.send({
+  kind: 'create-room',
+  name: 'Anna',
+  pass: anna.pass,
+  missionId: 'blackout',
+  seed: SEED,
+});
 const annaJoined = await anna.seated();
 await anna.expectView('sees the lobby', (v) => v.phase === 'lobby');
 
@@ -2491,8 +2484,8 @@ const litAfter = (solvedCount: number): string =>
 
 /**
  * After station `solved`: back on the map with one more room lit, and
- * security waking up in stages — the Flur drone after station 3, the Labor
- * drone after 4.
+ * security asleep until the Serverraum is solved — both drones wake with it,
+ * the crew out of their sight inside the room.
  */
 async function backOnTheMap(solved: number): Promise<void> {
   const [watcher] = crew;
@@ -2505,15 +2498,11 @@ async function backOnTheMap(solved: number): Promise<void> {
       `station ${solved} lit another room: ${litAfter(solved)}`,
     );
   }
-  if (solved <= PAKETFILTER) {
+  if (solved <= SUBSYSTEME) {
     // Any positions message arriving after the view above was sent after the solve.
     const stale = watcher.positions;
     await watcher.untilPositions('a fresh positions message', (p) => p !== stale);
     assert(streamedDrones(watcher) === '', `no drone patrols after station ${solved}`);
-  } else if (solved === PAKETFILTER + 1) {
-    await watcher.untilPositions('only the Flur drone patrols', () =>
-      streamedDrones(watcher) === 'flurwache');
-    console.log('✓ only the Flur drone patrols after the Paketfilter');
   } else if (solved === SUBSYSTEME + 1) {
     await watcher.untilPositions('both drones patrol', () =>
       streamedDrones(watcher) === 'flurwache,laborwache');
@@ -3950,8 +3939,8 @@ rmSync(runsDir, { recursive: true, force: true });
 console.log(
   '\nSmoke test passed: Blackout with its power on until the lights went out, the ' +
     'Notlicht\'s lever, a note of the last shift, drawn spawns and sources, streamed movement, ' +
-    'plates, a door that stays open, the Notstrom-Kasten, the Signalkette and the Serverraum ' +
-    'at two consoles, the locker, the key, the camera plate, reconnect, the hatch\'s ' +
+    'plates, a door that stays open, the Anlaufsteuerung, the Paketfilter and the Serverraum ' +
+    'at two consoles, the station of the Wechselplatz, the camera plate, reconnect, the hatch\'s ' +
     'checklist, a drop on the way out that ends nothing, penalties and credits; then ' +
     'the tutorial, its lever springing back on the clock, and on into Blackout; then a crew ' +
     'of three going on without the one away, his return, a seat taken over by its name once ' +
