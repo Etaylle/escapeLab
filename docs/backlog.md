@@ -226,8 +226,8 @@ die Entscheidung.
 
 ### H-5 Die Flucht des Rundgangs streift die Laborwache — Status: offen · Größe: S
 
-- Beobachtet 2026-11-18 in Läufen ohne Capture-Gruppen (`SHOTS_ONLY=run`): In 2 von 12 Läufen
-  der neuen Stationsfolge (beide auf den Seeds 56 und 93, 2 von 8; Seed 12: 0 von 4) erfasst die
+- Beobachtet 2026-11-18 in Läufen ohne Capture-Gruppen (`SHOTS_ONLY=run`): In 2 von 11 Läufen
+  der neuen Stationsfolge (beide auf den Seeds 56 und 93, 2 von 8; Seed 12: 0 von 3) erfasst die
   Laborwache Anna auf der Flucht bei (21,8|16,6), genau als die Drohne bei (18,15) nach Osten
   wendet. main, verschränkt gemessen: 0 von 6 — aber mit einem einzigen Seed, dessen Lauf jedes
   Mal auf 0,3 s gleich endet (242,3 s), also immer mit derselben Phase der Drohne.
@@ -379,8 +379,9 @@ die Entscheidung.
   `timeLimitSec` 960. Die Regel (Entscheidung 2026-11-18): Die Skript-Crew behält im
   langsamsten Lauf mindestens 40 % der Uhr, gemessen ohne Capture-Gruppen (`SHOTS_ONLY=run`:
   nur die 15 Aufnahmen des Laufs selbst, die meisten nach dem Sieg). So gemessen gewinnt sie
-  nach 336 s (Signalkette), 300 s (Funkpult) und 337–339 s (Notstromkasten) und behält 63 bis
-  69 % von 960 s. Der Capture-Lauf lässt 38–39 % übrig und taugt nicht als Maß: Mit ihm lag
+  nach 334–336 s (Signalkette), 290–300 s (Funkpult) und 337–339 s (Notstromkasten) und behält
+  63 bis 70 % von 960 s; main mit der alten Folge, gleich gemessen: 242 s, 73 % von 900 s — die
+  neue Folge ist für das Skript also 48 bis 97 s länger. Der Capture-Lauf lässt 38–39 % übrig und taugt nicht als Maß: Mit ihm lag
   schon main mit der alten Folge bei 34 % von 900 s (Cloud-CI auf 32ba492, Sieg nach 554 s; die
   neue Folge dort auf 73475d5: 569 s, 37 %), seit die Capture-Blöcke gewachsen sind.
 - Studie G-2, Rang 4 (Escape Academy, Escape Simulator): ein Lehrgang ohne Uhr — der erste Lauf
