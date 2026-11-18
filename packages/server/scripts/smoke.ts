@@ -1450,6 +1450,8 @@ async function readTheLeverNote(): Promise<void> {
 
 /** How much of what the crew sees a station left open says of itself, in characters. */
 const STILL_OPEN_CHARS = 1500;
+/** Longer than this between two looks of the loop, ms, and the machine was not running it. */
+const LOOK_GAP_MS = 5 * 1000;
 /** How long a station that runs on the server's clock may take here, in seconds. */
 const ON_THE_CLOCK_SEC = 240;
 
@@ -1462,18 +1464,23 @@ const ON_THE_CLOCK_SEC = 240;
 async function solveOnTheClock(index: number): Promise<void> {
   const def = mission.puzzles[index] ?? fail(`blackout has no station ${index + 1}`);
   const deadline = Date.now() + ON_THE_CLOCK_SEC * 1000;
+  const [watcher] = crew;
+  const alarmsBefore = alarmsOf(watcher);
+  // What the loop did, for the line that says why a station stayed open.
+  const rounds = { played: 0, waited: 0, unseen: 0, gaps: 0 };
+  let looked = Date.now();
   const solved = (): boolean =>
     crew.every((client) => (client.view?.currentPuzzleIndex ?? 0) > index);
   while (!solved()) {
+    // A look long after the last: the machine slept or stood still, not the station.
+    rounds.gaps += Date.now() - looked > LOOK_GAP_MS ? 1 : 0;
+    looked = Date.now();
     if (Date.now() > deadline) {
-      const seen = JSON.stringify(crew.map((client) => client.view?.puzzle ?? null));
-      fail(
-        `station ${index + 1} is still open after ${ON_THE_CLOCK_SEC} s on the clock, the ` +
-          `crew seeing ${seen.slice(0, STILL_OPEN_CHARS)}`,
-      );
+      fail(stillOpen(index, rounds, alarmsOf(watcher) - alarmsBefore));
     }
     // A view of the solve may be on its way to one of the two: no station to look at then.
     if (crew.some((client) => client.view?.puzzle?.index !== index)) {
+      rounds.unseen += 1;
       await sleep(50);
       continue;
     }
@@ -1481,12 +1488,42 @@ async function solveOnTheClock(index: number): Promise<void> {
     const aid = { transcript: [], remainingSec, at: Date.now() };
     const moves = moduleFor(def.type).solve(def, views, edgework, aid);
     if (moves.length > 0) {
+      rounds.played += 1;
       await play(moves, index);
     } else {
+      rounds.waited += 1;
       await sleep(250);
     }
   }
+  // The solver plays by the rules at the sources: a fault here is the smoke's own, or the clock's.
+  assert(alarmsOf(watcher) === alarmsBefore,
+    `the solver cleared station ${index + 1} on the clock without an alarm`);
   console.log(`✓ the solver cleared station ${index + 1} from the views alone, on the clock`);
+}
+
+/**
+ * Why a station on the clock stayed open, as far as the smoke can tell: whether the loop itself
+ * stood still (a laptop asleep on battery failed two runs this way, 17. and 18.11.2026); how
+ * often it played moves, waited for the clock, or found a console without the station on its
+ * view; the alarms it took meanwhile — every fault calls a wave or a pulse off —; and what the
+ * crew sees.
+ */
+function stillOpen(
+  index: number,
+  rounds: { played: number; waited: number; unseen: number; gaps: number },
+  alarms: number,
+): string {
+  const seen = JSON.stringify(crew.map((client) => client.view?.puzzle ?? null));
+  const slept =
+    rounds.gaps === 0
+      ? ''
+      : ` — ${rounds.gaps} time(s) the loop stood over ${LOOK_GAP_MS / 1000} s between two ` +
+        'looks: the machine slept or stalled (pmset -g log), the station is not at fault';
+  return (
+    `station ${index + 1} is still open after ${ON_THE_CLOCK_SEC} s on the clock${slept}: ` +
+    `${rounds.played} rounds with moves, ${rounds.waited} waiting, ${rounds.unseen} with a ` +
+    `console not showing it, ${alarms} alarm(s); the crew sees ${seen.slice(0, STILL_OPEN_CHARS)}`
+  );
 }
 
 type StartupView = Extract<PuzzleView, { kind: 'startup' }>;
@@ -1689,6 +1726,25 @@ async function playCircuit(by: Move<PuzzleInput>['by'], what: string): Promise<v
  * meter's readings are gone.
  */
 async function shortTheBox(box: TestClient, meter: TestClient): Promise<void> {
+  const wrong = wholeWireUnnamed(box);
+  const deadlineBefore = box.view?.deadlineAt ?? 0;
+  // Both patrols are out by now: an alarm of theirs may come between, and costs time as well.
+  const alarmsBefore = alarmsOf(box);
+  box.send({ kind: 'puzzle-input', input: { cut: wrong } });
+  const shorted = await box.expectView('sees the alarm after a wrong cut', (v) =>
+    v.penaltySeq > alarmsBefore && circuitOf(v)?.lastResult === 'short');
+  assert((shorted.deadlineAt ?? 0) <= deadlineBefore - CIRCUIT.penaltySec * 1000,
+    `the short cost ${CIRCUIT.penaltySec}s of deadline`);
+  assert(circuitOf(shorted)?.wires?.every((wire) => !wire.cut) === true,
+    'the short rewired the box: every wire whole again');
+  await meter.expectView('sees the readings cleared by the short', (v) =>
+    v.penaltySeq > alarmsBefore && readingsCleared(v));
+  credit(box, 'alarms');
+  deliberate += 1;
+}
+
+/** A whole wire of `box` the rules do not name next, one wire cut already: the wrong one to cut. */
+function wholeWireUnnamed(box: TestClient): number {
   const [right] = nextMoves(WECHSEL);
   const named = right?.by === 'operator' && 'cut' in right.input ? right.input.cut : null;
   const wires = circuitOf(box.view)?.wires ?? fail(`${box.label}: the box shows no wires`);
@@ -1697,23 +1753,13 @@ async function shortTheBox(box: TestClient, meter: TestClient): Promise<void> {
     fail('the rules name no wire, or no other whole wire is left to cut wrongly');
   }
   assert(wires.some((wire) => wire.cut), 'a wire is cut before the short');
-  const deadlineBefore = box.view?.deadlineAt ?? 0;
-  // Both patrols are out by now: an alarm of theirs may come between, and costs time as well.
-  const alarmsBefore = box.view?.penaltySeq ?? 0;
-  box.send({ kind: 'puzzle-input', input: { cut: wrong } });
-  const shorted = await box.expectView('sees the alarm after a wrong cut', (v) =>
-    v.penaltySeq > alarmsBefore && circuitOf(v)?.lastResult === 'short');
-  assert((shorted.deadlineAt ?? 0) <= deadlineBefore - CIRCUIT.penaltySec * 1000,
-    `the short cost ${CIRCUIT.penaltySec}s of deadline`);
-  assert(circuitOf(shorted)?.wires?.every((wire) => !wire.cut) === true,
-    'the short rewired the box: every wire whole again');
-  await meter.expectView('sees the readings cleared by the short', (v) => {
-    const circuit = circuitOf(v);
-    return v.penaltySeq > alarmsBefore && circuit?.readings?.every((r) => r === null) === true &&
-      circuit.probed === null;
-  });
-  credit(box, 'alarms');
-  deliberate += 1;
+  return wrong;
+}
+
+/** Whether the meter on `view` has no reading left and no wire under its probe. */
+function readingsCleared(view: PlayerView): boolean {
+  const circuit = circuitOf(view);
+  return circuit?.readings?.every((r) => r === null) === true && circuit.probed === null;
 }
 
 /**
@@ -1822,18 +1868,24 @@ async function signalMissteps(a: TestClient, b: TestClient): Promise<void> {
 
   b.send({ kind: 'puzzle-input', input: { key: first } });
   await b.until('one sign taken', (v) => signalOf(v)?.done === 1);
-  const wrong = { row: (second.row % 4) + 1, shape: second.shape };
+  await wrongKeyAtB(a, b, { row: (second.row % 4) + 1, shape: second.shape });
+}
+
+/** The deliberate wrong key at console B: it costs the def's penaltySec and the stage's signs. */
+async function wrongKeyAtB(
+  a: TestClient,
+  b: TestClient,
+  wrong: { row: number; shape: string },
+): Promise<void> {
   const deadlineBefore = b.view?.deadlineAt ?? 0;
   // Both patrols are out by now: an alarm of theirs may come between, and costs time as well.
-  const alarmsBefore = b.view?.penaltySeq ?? 0;
+  const alarmsBefore = alarmsOf(b);
   b.send({ kind: 'puzzle-input', input: { key: wrong } });
   const afterPenalty = await b.expectView('sees the alarm after a wrong key', (v) =>
     v.penaltySeq > alarmsBefore && signalOf(v)?.lastResult === 'wrong');
-  assert(
-    (afterPenalty.deadlineAt ?? 0) <= deadlineBefore - SIGNAL.penaltySec * 1000 &&
-      signalOf(afterPenalty)?.done === 0,
-    `the wrong key cost ${SIGNAL.penaltySec}s of deadline and started the stage over`,
-  );
+  const cost = (afterPenalty.deadlineAt ?? 0) <= deadlineBefore - SIGNAL.penaltySec * 1000;
+  assert(cost && signalOf(afterPenalty)?.done === 0,
+    `the wrong key cost ${SIGNAL.penaltySec}s of deadline and started the stage over`);
   credit(b, 'alarms');
   deliberate += 1;
   await a.until('the alarm', (v) => v.penaltySeq > alarmsBefore);

@@ -13170,8 +13170,7 @@ async function manPaketfilter(host, guest) {
  * every packet the plan says the policy drops, a trip under every ring — the Analysepult's
  * cards shot at a mark (filter-headers.png), the Sperrpult at its first ring (filter-gate.png),
  * and once the host steps off it, the wave held (filter-held.png). Then the Schott opens
- * (schott-open.png) and both stay at their consoles, unseen (`parkedUnseen`). Fails unless it
- * solves, or where it took more than one alarm.
+ * (schott-open.png). Fails unless it solves, or where it took more than one alarm.
  */
 async function playPaketfilter(host, guest) {
   const upright = await manPaketfilter(host, guest);
@@ -13202,7 +13201,6 @@ async function playPaketfilter(host, guest) {
     throw new Error(`the Paketfilter ended ${solved ? 'solved' : 'unsolved'}, ${raised} alarm(s)`);
   }
   await schottOpens(host);
-  await parkedUnseen([host, guest], 'the Paketfilter');
 }
 
 /** How long a crew stays where it stood at a station it has just solved, ms. */
@@ -13210,27 +13208,31 @@ const PARKED_MS = 12_000;
 
 /**
  * `players` stay where they stand at the consoles of the station just solved (`where`), a good
- * ten seconds: no alarm may come of it, and nobody moves. Both patrols sleep until the
- * Serverraum is solved, so a crew looking at the open Schott from the Paketfilter's consoles is
- * not caught for having solved it.
+ * ten seconds: no drone may catch them for it, and nobody moves. Played after the Serverraum,
+ * whose solve wakes both patrols — the one moment a crew still at its consoles meets drones it
+ * has not seen fly; server test/blackoutParked.test.ts holds every console and source of every
+ * draw to the same, this is its proof in the browser.
  */
 async function parkedUnseen(players, where) {
-  const [first] = players;
-  const alarms = first.seen.view.alarms.count;
+  const caught = sightings.count;
   const stood = players.map((player) => tileOf(player.seen));
   await sleep(PARKED_MS);
-  const raised = first.seen.view.alarms.count - alarms;
+  const raised = sightings.count - caught;
+  const patrols = Object.keys(players[0].seen.drones ?? {}).length;
   const moved = players.filter((player, i) => {
     const now = tileOf(player.seen);
     return now?.x !== stood[i]?.x || now?.y !== stood[i]?.y;
   });
   console.log(
     `parked             ${players.map((p) => p.name).join(' and ')} stood ` +
-      `${seconds(PARKED_MS)} at ${where} after its solve: ` +
-      (raised === 0 ? 'no alarm' : `!! ${raised} alarm(s)`),
+      `${seconds(PARKED_MS)} at ${where} after its solve, ${patrols} drone(s) out: ` +
+      (raised === 0 ? 'unseen' : `!! caught ${raised} time(s)`),
   );
-  if (raised > 0 || moved.length > 0) {
-    fail(`parked at ${where}: ${raised} alarm(s), ${moved.map((p) => p.name).join(', ')} moved`);
+  if (raised > 0 || moved.length > 0 || patrols === 0) {
+    fail(
+      `parked at ${where}: caught ${raised} time(s), ${patrols} drone(s) out, ` +
+        `${moved.map((p) => p.name).join(', ') || 'nobody'} moved`,
+    );
   }
 }
 
@@ -13352,6 +13354,9 @@ async function playWechselplatz(host, guest) {
  * drone sighting as it comes (`watchSightings`), and how long the run took
  * from the blackout to the win.
  */
+/** Which of `playBlackoutToTheEnd`'s steps is the Serverraum: its solve wakes the drones. */
+const SERVERRAUM_STEP = 2;
+
 async function playBlackoutToTheEnd(host, guest, watcher) {
   relayCrew.push(host, guest);
   const stopWatching = watchSightings([host, guest]);
@@ -13364,10 +13369,13 @@ async function playBlackoutToTheEnd(host, guest, watcher) {
       () => playWechselplatz(host, guest),
       () => playReaktor(host, guest),
     ];
-    for (const station of stations) {
+    for (const [i, station] of stations.entries()) {
       await station();
       // The next step plans its walks from both pages' views: both have to show this solve.
       await viewsCaughtUp([host, guest]);
+      if (i === SERVERRAUM_STEP) {
+        await parkedUnseen([host, guest], 'the Serverraum');
+      }
     }
     await runForTheHatch(host, guest);
     await inGroup('devices', relayLeftOut);

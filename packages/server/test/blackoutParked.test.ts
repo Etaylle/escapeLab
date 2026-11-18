@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { drawPools, patrollingDrones, runOrder, walkable } from '@escapelab/core';
+import { canSee, drawPools, patrollingDrones, runOrder, walkable } from '@escapelab/core';
 import type { GameState, MapDef } from '@escapelab/core';
 import { DronePatrol } from '../src/drones.js';
 import {
@@ -14,8 +14,8 @@ import {
 
 /**
  * A crew that has just solved a station and stays where it stood is not caught for it: after
- * every solve of every draw, nobody standing anywhere a console of that station is worked from
- * is seen by a drone — not in the ten seconds that follow, nor on any later round of the beats.
+ * every solve of every draw, nobody standing anywhere a console of that station is worked from,
+ * or its rules are read from, is seen by a drone — not in the ten seconds that follow, nor on any later round of the beats.
  * The level sees to it, not the engine: both drones sleep until the Serverraum is solved, whose
  * consoles lie out of their sight, and every console after it stands where no beat looks.
  */
@@ -29,27 +29,45 @@ const TICK_S = 0.08;
 /** Both beats flown round more than once, s: the Laborwache's takes 20 s, the Flurwache's 17. */
 const BEATS_S = 45;
 
+/** No door shut: a wall alone hides a place from a console here. */
+const NONE: ReadonlySet<string> = new Set();
+
 interface Point {
   x: number;
   y: number;
 }
 
-/** Every place on a half-tile grid a console of `puzzleId` is worked from. */
-function workedFrom(map: MapDef, puzzleId: string): Point[] {
+/**
+ * Every place on a half-tile grid within a console's or a source's reach of the tile `spot`,
+ * in sight of it: nobody stands at a place through a wall (room.ts `facesConsole`).
+ */
+function around(map: MapDef, spot: Point): Point[] {
   const points: Point[] = [];
-  for (const spot of map.stations.filter((s) => s.puzzleId === puzzleId)) {
-    const [cx, cy] = [spot.x + 0.5, spot.y + 0.5];
-    for (let x = cx - 1.5; x <= cx + 1.5; x += 0.5) {
-      for (let y = cy - 1.5; y <= cy + 1.5; y += 0.5) {
-        const near = Math.hypot(x - cx, y - cy) <= AT_CONSOLE;
-        if (near && walkable(map, Math.floor(x), Math.floor(y))) {
-          points.push({ x, y });
-        }
+  const [cx, cy] = [spot.x + 0.5, spot.y + 0.5];
+  const seen = (x: number, y: number): boolean => canSee(map, { x, y }, { x: cx, y: cy }, NONE);
+  for (let x = cx - 1.5; x <= cx + 1.5; x += 0.5) {
+    for (let y = cy - 1.5; y <= cy + 1.5; y += 0.5) {
+      const near = Math.hypot(x - cx, y - cy) <= AT_CONSOLE;
+      if (near && walkable(map, Math.floor(x), Math.floor(y)) && seen(x, y)) {
+        points.push({ x, y });
       }
     }
   }
   return points;
 }
+
+/** Every place a console of `puzzleId` is worked from. */
+const workedFrom = (map: MapDef, puzzleId: string): Point[] =>
+  map.stations.filter((s) => s.puzzleId === puzzleId).flatMap((spot) => around(map, spot));
+
+/**
+ * Every place the rules of `puzzleId` are read from: at each source that covers it, on every
+ * place a seed may lay that source — not this run's alone.
+ */
+const readFrom = (map: MapDef, puzzleId: string): Point[] =>
+  map.manuals
+    .filter((manual) => manual.puzzleIds.includes(puzzleId))
+    .flatMap((manual) => manual.spots.flatMap((spot) => around(map, spot)));
 
 /** The first of `points` a drone catches somebody on within `seconds` of `state`, if any. */
 function caughtAt(state: GameState, points: readonly Point[], seconds: number): string | null {
@@ -110,6 +128,10 @@ describe('a crew parked at the station it has just solved', () => {
       const points = workedFrom(mission.map, solved?.id ?? '');
       expect(points.length, solved?.id).toBeGreaterThanOrEqual(6);
       expect(caughtAt(state, points, BEATS_S), solved?.id).toBeNull();
+      // Whoever read its rules for the crew stays at the source as well.
+      const reading = readFrom(mission.map, solved?.id ?? '');
+      expect(reading.length > 0, solved?.id).toBe(solved?.type !== 'button-sync');
+      expect(caughtAt(state, reading, BEATS_S), `reading for ${solved?.id}`).toBeNull();
     });
   });
 

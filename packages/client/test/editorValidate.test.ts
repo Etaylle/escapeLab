@@ -156,7 +156,7 @@ describe('where a finding points', () => {
     const cabinet = locate(draft, carry);
     expect(cabinet.target).toEqual({ kind: 'item', index: 1 });
     expect(cabinet.spots).toContainEqual({ x: 21, y: 1 });
-    expect(cabinet.spots).toContainEqual({ x: 18, y: 20 });
+    expect(cabinet.spots).toContainEqual({ x: 12, y: 16 });
     const nowhere = locate(draft, 'players: min must not be above max');
     expect(nowhere).toEqual({ target: null, spots: [] });
   });

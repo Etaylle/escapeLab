@@ -195,7 +195,7 @@
         "kind": "clipboard",
         "label": "KLEMMBRETT",
         "puzzleIds": ["signalkette"],
-        "spots": [{ "x": 8, "y": 12 }, { "x": 21, "y": 12 }]
+        "spots": [{ "x": 6, "y": 12 }, { "x": 5, "y": 12 }]
       },
       {
         "id": "spind",
@@ -209,7 +209,7 @@
         "kind": "cabinet",
         "label": "AKTENSCHRANK",
         "puzzleIds": ["frequenz"],
-        "spots": [{ "x": 18, "y": 14 }, { "x": 18, "y": 20 }, { "x": 11, "y": 15 }],
+        "spots": [{ "x": 12, "y": 16 }, { "x": 11, "y": 15 }],
         "needsKey": "schluessel"
       },
       {
@@ -365,10 +365,10 @@
       {
         "id": "flurwache",
         "waypoints": [
-          { "x": 10, "y": 11 },
+          { "x": 13, "y": 11 },
           { "x": 23, "y": 11 },
           { "x": 23, "y": 10 },
-          { "x": 10, "y": 10 }
+          { "x": 13, "y": 10 }
         ],
         "speed": 1.7,
         "range": 4.5,

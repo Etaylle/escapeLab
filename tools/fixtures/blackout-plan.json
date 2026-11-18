@@ -12,9 +12,9 @@
       "places": {
         "buch-archiv": { "x": 8, "y": 1 },
         "richtlinie": { "x": 17, "y": 12 },
-        "klemmbrett": { "x": 8, "y": 12 },
+        "klemmbrett": { "x": 6, "y": 12 },
         "spind": { "x": 16, "y": 2 },
-        "aktenschrank": { "x": 18, "y": 14 },
+        "aktenschrank": { "x": 12, "y": 16 },
         "wartungsbuch": { "x": 3, "y": 19 }
       },
       "serial": "LTEPL-3",
@@ -349,7 +349,7 @@
       "places": {
         "buch-archiv": { "x": 8, "y": 1 },
         "richtlinie": { "x": 17, "y": 12 },
-        "klemmbrett": { "x": 8, "y": 12 },
+        "klemmbrett": { "x": 6, "y": 12 },
         "spind": { "x": 16, "y": 2 },
         "aktenschrank": { "x": 11, "y": 15 },
         "wartungsbuch": { "x": 3, "y": 19 }
@@ -638,9 +638,9 @@
       "places": {
         "buch-archiv": { "x": 8, "y": 1 },
         "richtlinie": { "x": 17, "y": 12 },
-        "klemmbrett": { "x": 21, "y": 12 },
+        "klemmbrett": { "x": 5, "y": 12 },
         "spind": { "x": 16, "y": 2 },
-        "aktenschrank": { "x": 18, "y": 20 },
+        "aktenschrank": { "x": 11, "y": 15 },
         "wartungsbuch": { "x": 7, "y": 18 }
       },
       "serial": "WC6XN-5",

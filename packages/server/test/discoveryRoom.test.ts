@@ -302,17 +302,17 @@ describe('a room where things are found on the way, each chiming for its finder'
     // south-east, the book on its lectern to the north-east and the note on the north wall stay
     // unfound, the room lit or not.
     expect(found(anna)).toEqual(['sign']);
-    // Ben at the Flur's west end, facing east: the clipboard 7 tiles down the south wall, before
-    // the buttress (9,12), lies beyond his lamp's reach; console B of the Anlaufsteuerung up the
+    // Ben at the Flur's west end, facing east: the clipboard 5 tiles down the south wall, beside
+    // the plate, lies beyond his lamp's reach; console B of the Anlaufsteuerung up the
     // west end is no find before its station is armed.
     expect(lastView(ben).map?.manuals.find((m) => m.id === 'klemmbrett')).toMatchObject({
-      x: 8,
+      x: 6,
       y: 12,
     });
     expect(found(ben)).toEqual([]);
     // Ben walks along the south wall till the clipboard lies 2.8 tiles ahead: his lamp finds it
     // 600 ms on.
-    walkTo(room, ben, 5.7, 12.5);
+    walkTo(room, ben, 3.7, 12.5);
     vi.advanceTimersByTime(599);
     expect(found(ben)).toEqual([]);
     vi.advanceTimersByTime(1);

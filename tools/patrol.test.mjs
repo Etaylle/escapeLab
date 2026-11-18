@@ -294,15 +294,21 @@ describe('Blackout’s patrols, as the walkthrough plays its plans past them', (
     }
   });
 
-  it('lays the Signalkette’s clipboard in a pillar’s shadow, wherever a seed puts it', () => {
-    // The Signalkette is worked with both patrols out: every spot its clipboard may lie on is a
-    // haven of the Flur, though the Flur's patrol flies past it.
+  it('lays the clipboard and the cabinet where no patrol looks, wherever a seed puts them', () => {
+    // Both are read with both patrols out: every spot one may lie on is a haven, and so is
+    // every tile beside it a reader may stand on (the server's blackoutParked test holds the
+    // whole reach to it) — the clipboard at the Flur's west end, past the Flurwache's reach.
     const { sight, drones } = stage(4, 'signalkette');
     const safe = havens(drones, sight);
-    const clipboard = map.manuals.find((manual) => manual.puzzleIds.includes('signalkette'));
-    assert.ok(clipboard.spots.length > 1);
-    for (const spot of clipboard.spots) {
-      assert.equal(safe.has(`${spot.x},${spot.y}`), true, `${spot.x},${spot.y} is watched`);
+    for (const station of ['signalkette', 'frequenz']) {
+      const source = map.manuals.find((manual) => manual.puzzleIds.includes(station));
+      assert.ok(source.spots.length > 1);
+      for (const spot of source.spots) {
+        for (const [dx, dy] of [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          const [x, y] = [spot.x + dx, spot.y + dy];
+          assert.equal(!walkable(x, y) || safe.has(`${x},${y}`), true, `${x},${y} is watched`);
+        }
+      }
     }
   });
 
