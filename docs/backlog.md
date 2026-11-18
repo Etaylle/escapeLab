@@ -361,12 +361,13 @@ die Entscheidung.
   57–67 s, drei zu sieben 77–83 s), Serverraum 4–6 s, Wechselplatz 1–8 s. Im Rundgang kostet
   die zweite Station 279–293 s, davon 13 s Spiel: der Rest sind die Captures des Harness
   (Menüs, Lesen, Notiz, Stupser) — und 12 s am Paketfilter sind der Stehbeweis nach der Lösung.
-  `timeLimitSec` 960: der Lauf lässt 38–39 % übrig. Die 40-%-Regel verfehlt schon main mit der
-  alten Folge, seit die Capture-Blöcke gewachsen sind (Cloud-CI auf 32ba492: Sieg nach 554 s,
-  34 % von 900 s; die neue Folge dort auf 73475d5: 569 s, 37 % von 960 s). Die Folge ist
-  damit für das Skript 15 s länger als die alte, 12 davon der Stehbeweis. Offen: die Regel am
-  reinen Spiel messen statt am Capture-Lauf, oder die Uhr nach dem Playtest setzen (Vorschlag
-  von 2026-11-05: 1000 s).
+  `timeLimitSec` 960. Die Regel (Entscheidung 2026-11-18): Die Skript-Crew behält im
+  langsamsten Lauf mindestens 40 % der Uhr, gemessen ohne Capture-Gruppen (`SHOTS_ONLY=run`:
+  nur die 15 Aufnahmen des Laufs selbst, die meisten nach dem Sieg). So gemessen gewinnt sie
+  nach 336 s (Signalkette), 300 s (Funkpult) und 337–339 s (Notstromkasten) und behält 63 bis
+  69 % von 960 s. Der Capture-Lauf lässt 38–39 % übrig und taugt nicht als Maß: Mit ihm lag
+  schon main mit der alten Folge bei 34 % von 900 s (Cloud-CI auf 32ba492, Sieg nach 554 s; die
+  neue Folge dort auf 73475d5: 569 s, 37 %), seit die Capture-Blöcke gewachsen sind.
 - Studie G-2, Rang 4 (Escape Academy, Escape Simulator): ein Lehrgang ohne Uhr — der erste Lauf
   einer Crew ohne Uhr, dann Übungshalle, Tutorial und Blackout, je Schritt eine neue Idee; die
   Missionen ohne Uhr aus G-2 sind das Werkzeug dafür.
@@ -774,8 +775,9 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   Signalkette, Funkpult und Notstromkasten; er öffnet Reaktortür und Reaktorschott. Die
   Signalkette und das Funkpult stehen, wo sie standen; der Notstromkasten hängt gleich hinter
   der Maschinentür, sein Prüfpult im Labor, sein Wartungsbuch im Maschinenraum. Das Klemmbrett
-  liegt jetzt im Schatten eines Pfeilers (8,12 oder 21,12), weil die Signalkette mit beiden
-  Drohnen gespielt wird. Drei Notizen der letzten Schicht erklären den Dienstplan. Seeds: 12
+  liegt jetzt am Westende des Flurs (6,12 oder 5,12), der Aktenschrank in der Nordwestecke des
+  Labors (12,16 oder 11,15), und die Flurwache wendet schon bei (13,10): Wer im Umkreis einer
+  Quelle der eben gelösten Station steht, wird von keiner Drohne erfasst. Drei Notizen der letzten Schicht erklären den Dienstplan. Seeds: 12
   Signalkette (Rundgang, Smoke), 56 Funkpult, 93 Notstromkasten.
 - Bestenliste (B-blackout2): Auf einer Mission mit Wechselplatz zählt ein Lauf nur, wenn sein
   Bericht die Auslosung nennt; ältere Läufe bleiben gespeichert und in „Meine Einsätze", stehen

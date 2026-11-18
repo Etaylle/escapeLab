@@ -194,17 +194,20 @@ Maschinenraum, Serverraum, Labor, Reaktor (`core/test/coldOpen.test.ts`). Both d
 once four stations are solved, with the Serverraum; the emergencies after three.
 
 **Nobody is caught for having solved a station.** After any solve, in every draw, a crew that
-stays where it stood at that station's consoles — anywhere within a console's reach — is seen
-by no drone, not in the next ten seconds and not on any later round of the beats
+stays where it stood — anywhere within reach of one of that station's consoles, or of a source
+that holds its rules, on every place a seed may lay that source — is seen by no drone, not in
+the next ten seconds and not on any later round of the beats
 (`server/test/blackoutParked.test.ts`, on the room's own patrol code). The level does it, not
-the engine: both drones sleep until the Serverraum is solved, whose consoles lie inside the room
-and out of their sight; the Paketfilter's consoles in the Flur are worked before any drone is
-out; and every console of the Wechselplatz stands where no beat looks — console A of the
-Signalkette in the Flur's east corner (29,9), a tile past the Flurwache's reach from the east
-end of its beat. Once the Flurwache flies, the camera plate at the Schott (20,9) holds it still
-for whoever crosses the Flur. The walkthrough stands still at the Paketfilter's consoles twelve
-seconds after its solve as the proof in the browser. The policy hangs west of the Schott, on
-the way from the Anlaufsteuerung: the crew passes it before it reaches the consoles.
+the engine: both drones sleep until the Serverraum is solved, whose consoles and locker lie
+inside the room and out of their sight; the Paketfilter's consoles in the Flur are worked
+before any drone is out; and every console and source of the Wechselplatz stands where no beat
+looks — console A of the Signalkette in the Flur's east corner (29,9), a tile past the
+Flurwache's reach from the east end of its beat; the Klemmbrett at the Flur's west end; the
+Aktenschrank in the Labor's north-west corner. Once the Flurwache flies, the camera plate at
+the Schott (20,9) holds it still for whoever crosses the Flur. The walkthrough stands still in
+the Serverraum twelve seconds after its solve, the moment the drones wake, as the proof in the
+browser. The policy hangs west of the Schott, on the way from the Anlaufsteuerung: the crew
+passes it before it reaches the consoles.
 
 **The Anlaufsteuerung behind the plate door.** Whoever works console A is shut in the
 Maschinenraum until the generator runs. The table of lamp pictures lies in the Archiv, and only
@@ -215,9 +218,13 @@ their own lamps and say the number for console A to type, in stage 2 console A r
 out and they type. `start` waits for both consoles („Am Schaltfeld der Gegenseite steht
 niemand."). With three, the third reads the book or holds the plate.
 
-**The Klemmbrett in a pillar's shadow.** The Signalkette is worked with both patrols out, so
-its clipboard lies at (8,12) or (21,12): on the Flur's south wall beside a pillar, tiles the
-Flur's drone never looks at (`tools/patrol.test.mjs`).
+**The Klemmbrett past the patrol's reach.** The Signalkette is worked with both patrols out,
+so its clipboard lies at (6,12) or (5,12): on the Flur's south wall at its west end, and the
+Flurwache's beat ends at (13,10) — three tiles further east than before —, so that nobody
+within the clipboard's reach is in its cone, though five tiles from the guest's start the lamp
+does not find it from there. The Aktenschrank lies at (12,16) or (11,15) for the same reason:
+its places beside the Laborwache's beat, (18,14) and (18,20), put its reader in that drone's
+eye four seconds after the solve (`tools/patrol.test.mjs`, the parked test).
 
 **The seeds.** `core/test/blackoutPlan.ts` pins a seed for each draw — 12 the Signalkette, the
 walkthrough's and the smoke's own; 56 the Funkpult; 93 the Notstromkasten — and all three deal
@@ -248,8 +255,8 @@ console B:
 | Serverraum | Anna | the Sperrpult → the terminal | 18.8 | 4.5 |
 | Serverraum | Ben | the Analysepult → the locker | 12.0 | 2.9 |
 | Serverraum | Ben | the locker → the rack | 6.4 | 1.5 |
-| Signalkette | Ben | the rack → the Klemmbrett | 19.8 | 4.7 |
-| Signalkette | Ben | the Klemmbrett → console A | 22.8 | 5.4 |
+| Signalkette | Ben | the rack → the Klemmbrett | 21.2 | 5.1 |
+| Signalkette | Ben | the Klemmbrett → console A | 24.2 | 5.8 |
 | Signalkette | Anna | the terminal → console B | 36.7 | 8.7 |
 | Signalkette | Anna | console B → the spare fuse | 18.7 | 4.4 |
 | Signalkette | Ben | console A → the reactor | 34.2 | 8.2 |
@@ -404,8 +411,11 @@ issue ends with the draw it holds for: „— in a run with pool "wechselplatz" 
 the version stays 2, as for every field added since) and lists the stations of the run alone.
 The Bestenliste keeps one board a mission and difficulty: runs of different
 draws stand on it together, so a board mixes stations of unequal length — worth a board per
-draw only once the spread shows (Blackout's three lay 36 s apart for the script crew, 542 to
-578 s, one run each). A snapshot keeps the draw; one from before
+draw only once the spread shows (Blackout's three lay 39 s apart for the script crew). The clock
+is set by that crew: it keeps at least 40 % of it in its slowest draw, measured without capture
+groups (`SHOTS_ONLY=run`) — 300 to 339 s after the lights went out, 63 to 69 % of Blackout's
+960 s left; the capture run keeps 38 to 39 % and is no measure, main's old chain stood at 34 %
+of 900 s by it. A snapshot keeps the draw; one from before
 the pools has none and restores as before — a run in flight over the deploy that gave its
 mission a pool plays its old chain to the end (`server/test/snapshotFixture.test.ts`).
 

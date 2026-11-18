@@ -13142,7 +13142,9 @@ async function schottOpens(player) {
  */
 async function manPaketfilter(host, guest) {
   const policy = pinnedSource('chart');
-  if (!(await walkNear(guest.page, guest.seen, workSpot(guest, policy)))) {
+  // Onto the tile beside it: a tile short of that the policy lies at the edge of what is found
+  // in passing, and whether the lamp falls on it hangs on the last step's direction.
+  if (!(await standOn(guest, workSpot(guest, policy)))) {
     throw new Error(`${guest.name} found no way to the ${policy.label}`);
   }
   await foundWherePinned(guest, policy);

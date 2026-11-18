@@ -80,7 +80,7 @@ Quellen: docs/foundation-audit.md (Nachträge), docs/backlog.md, docs/art-bible.
 Backlog: 20 von 24 Punkten erledigt.
 
 - **Zweiter Playtest** (nur lokal): Auswertung von `runs.jsonl`. Von 7 protokollierten Läufen mit Menschen (20.–26.10., vor den Fixes) wurde keiner gewonnen; das 3,5-s-Fenster mit Countdown ist gebaut, seine Wirkung ungemessen.
-- **Zeitbudget** (wartet auf Daten): Die Skript-Crew gewinnt mit der neuen Stationsfolge 542 bis 578 s nach dem Blackout (je Auslosung ein Lauf, 2026-11-18) und lässt 38 bis 39 % der 960 s übrig; die alte Folge lag zuletzt bei 554 s und 34 % von 900 s (Cloud-CI), am 2026-11-05 bei 462 bis 502 s. Vorschlag: 1000 s; Ziel: Erstspieler schaffen Station 2 in 5 Minuten.
+- **Zeitbudget** (wartet auf Daten): Die Skript-Crew gewinnt mit der neuen Stationsfolge ohne Capture-Gruppen 300 bis 339 s nach dem Blackout (je Auslosung ein Lauf, 2026-11-18) und behält 63 bis 69 % der 960 s; die Regel verlangt 40 %. Der Capture-Lauf lässt 38 bis 39 % übrig, die alte Folge lag mit ihm zuletzt bei 34 % von 900 s (Cloud-CI). Vorschlag: 1000 s; Ziel: Erstspieler schaffen Station 2 in 5 Minuten.
 - **Leerlauf zu zweit** (wartet auf Entscheidung): Im Audit wartet eine Figur 7,7 s am Reaktor; Optionen: die nächste Quelle vorab lesen oder eine Nebenaufgabe.
 - **Nächster Schritt:** zweiter Playtest, danach beide Entscheidungen.
 
