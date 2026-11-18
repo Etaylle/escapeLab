@@ -13020,11 +13020,11 @@ async function anlaufStage(crew, stage, shots) {
   // Typed at the prompt where the typing page has keys; on the bezel's keys under a finger.
   const lines = await startupSettings(typer, stage, !(await isTouch(typer.page)));
   if (first) {
-    await atDevices(() => capture(typer.page, 'anlauf-terminal.png'));
+    await inGroup('devices', () => capture(typer.page, 'anlauf-terminal.png'));
   }
   lines.push(await startupCommand(typer, { cmd: 'start' }, false));
   if (first) {
-    await atDevices(() => anlaufDuct(typer, shots.world));
+    await inGroup('devices', () => anlaufDuct(typer, shots.world));
   }
   const shot = first ? deviceShot('anlauf-ladder.png') : null;
   const waited = await atDevices(() => startupBreaker(board, stage.breaker, shot));
@@ -13121,7 +13121,7 @@ async function schottOpens(player) {
   await player.page.locator('.station-modal').waitFor({ state: 'hidden', timeout: CATCH_UP_MS });
   const schott = () => mapOf(player).doors.find((door) => door.id === 'serverschott');
   const open = await until(() => schott()?.open === true, 3000);
-  await atDevices(() => capture(player.page, 'schott-open.png'));
+  await inGroup('devices', () => capture(player.page, 'schott-open.png'));
   const lit = mapOf(player).litRooms ?? [];
   console.log(
     `schott-open.png    ${player.name}: the Serverschott ${open ? 'open' : '!! shut'}, lit ` +
@@ -13258,7 +13258,7 @@ async function captureResting(player) {
   await sleep(600); // the camera settles, the tag's words are up
   const tags = await tagsOnScreen(player.page);
   const opened = await pressOpensDevice(player);
-  await atDevices(() => capture(player.page, 'out-of-service.png'));
+  await inGroup('devices', () => capture(player.page, 'out-of-service.png'));
   console.log(
     `out-of-service.png ${player.name} at the console of "${spot.puzzleId}" at ${spot.x},${spot.y}: ` +
       `${out ? 'out of service on the map' : '!! not told out'}, ${tags} tag(s) ` +
