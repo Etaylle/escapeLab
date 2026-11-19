@@ -14,6 +14,7 @@ import {
 } from '../src/demo/host.js';
 import { MissionCatalog } from '../src/missions.js';
 import { RoomManager } from '../src/roomManager.js';
+import { rankingOf } from '../src/runStats.js';
 import { DEMO_WATCH_ONLY, serveSockets } from '../src/sockets.js';
 import { JsonlStore } from '../src/store/jsonl.js';
 import { recordRuns } from '../src/store/store.js';
@@ -68,7 +69,7 @@ function demoOn(seeds: number[] = SEEDS): DemoHost {
 /** A server's sockets with their rooms and `host`'s demo room; every run kept in a log in `dir`. */
 function serverWith(host: DemoHost) {
   const file = join(dir, 'runs.jsonl');
-  const store = JsonlStore.open(file, () => true);
+  const store = JsonlStore.open(file, rankingOf(() => shipped.all));
   const manager = new RoomManager(recordRuns(store).record);
   const line = new FakeServer();
   serveSockets(line, { catalog: shipped, manager, demo: host });
@@ -142,7 +143,9 @@ describe('the demo room’s runs', () => {
     expect(won.phase).toBe('won');
     expect(host.counts()).toMatchObject({ running: false, won: 1, lost: 0 });
     expect(existsSync(file)).toBe(false);
-    expect(store.stats().runs).toBe(0);
+    // On neither board, the live one and the archive's, and on none of nobody's.
+    const { runs, archived, unranked } = store.stats();
+    expect([runs, archived, unranked]).toEqual([0, 0, 0]);
     // The Auswertung stands some twenty seconds; then the next run starts by itself.
     vi.advanceTimersByTime(15_000);
     expect(seenBy(watcher).phase).toBe('won');

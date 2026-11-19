@@ -1113,7 +1113,8 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   60: 89 MB und 3,0 %, 654 kB/s hinaus. QR-Codes (Menü, Lobby, Publikum) folgen im selben Branch.
 - Auf dem quer gehaltenen Handy steht „Demo" nicht im Menü (sieben Punkte füllen 390 px Höhe, wie
   bisher ohne „Einstellungen"); dorthin führt der Link, und hochkant steht der Punkt da.
-- Offen: Die 23 Sprechtexte warten weiter auf Uros' Render; die Demo fügt keinen hinzu.
+- Die Demo fügt keinen Sprechtext hinzu; die 23 Texte der neuen Kette hat Uros am 2026-11-19
+  gerendert (V-takes).
 
 ## Nur lokal
 
