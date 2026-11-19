@@ -52,6 +52,7 @@ export {
   clockCallDueAt,
   crewOf,
   EMERGENCY_CLEARED,
+  EMERGENCY_MISSED,
   FIRST_WAIT_MS,
   heirOf,
   inEscapePhase,

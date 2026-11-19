@@ -222,6 +222,13 @@ export interface GameState {
    */
   picked: boolean;
   puzzleState: PuzzleState | null;
+  /**
+   * the open station's state while an emergency runs: put by as the emergency started — the
+   * station takes no input and its clock stands still, `puzzleState` null as between stations —
+   * and back on the consoles as it ends, through its module's `resume` (actions.ts
+   * `backFromRest`); null outside an emergency, and in one that met no station switched on
+   */
+  resting: PuzzleState | null;
   /** PRNG seed for this run; set by start-mission */
   seed: number | null;
   /**
@@ -407,6 +414,7 @@ export function initialState(
     currentPuzzleIndex: 0,
     picked: false,
     puzzleState: null,
+    resting: null,
     seed: null,
     roomSeed,
     dailyOn: false,

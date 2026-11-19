@@ -261,7 +261,8 @@ lässt sich oben rechts abschalten; neben dem Raumcode zählt ein Chip, wie viel
 **Gefahren unterwegs:** **Wachdrohnen** patrouillieren feste Routen und leuchten einen sichtbaren
 Sichtkegel aus — wer hineinläuft, verliert Zeit (Sichtlinie zählt; wer am offenen Pult arbeitet
 oder dessen Regeln liest, ist sicher). Hält jemand eine Kamera-Platte, hängt ihre Drohne still. Dazu schlagen **Notfälle** zu: Mitten im Lauf fällt die Kühlung aus, das offene Rätsel
-bricht ab, und alle Notventile müssen gleichzeitig besetzt werden — je ein Spieler pro Ventil, an
+ruht — sein Stand bleibt, nur was gerade auf einer Uhr lief, verfällt ohne Alarm —, und alle
+Notventile müssen gleichzeitig besetzt werden — je ein Spieler pro Ventil, an
 entgegengesetzten Enden der Karte.
 
 **Spielwelt:** Alle Missionen spielen in einer gerenderten Top-Down-Laborwelt

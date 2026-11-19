@@ -273,7 +273,10 @@
  * and every sighting logged as it comes. A relay
  * emergency is weathered from both pages, each instruction carried out at
  * the console it names, and a station that has to stay open is opened only
- * once the next emergency will not cut it short. Then both run for the
+ * once the next emergency will not cut it short — but the Signalkette, where one is due
+ * within its step and leaves time for a stage: it is opened, its first stage played, and it
+ * rests through the emergency (rest-goal.png: the goal line naming it as resting) to come back
+ * on that stage (rest-kept.png), or the run fails. Then both run for the
  * hatch round the loop, and escape.png, pullback.png, won.png, end.png and
  * won-phone.png come from Blackout as they do from the Systemcheck; the log
  * says how long the win took from the blackout, what was left on the clock
@@ -747,6 +750,7 @@ import {
 } from './groups.mjs';
 import { lightWorkText } from './lightwork.mjs';
 import { drawnText, fadeOf, fadeVerdict, meanLuma, midway } from './panelfade.mjs';
+import { movesTaken } from './planleft.mjs';
 import { beamLight, beamPatches, beamVerdict } from './beamcheck.mjs';
 import { changedShare, sweepOf, sweepVerdict } from './sweep.mjs';
 import {
@@ -5834,10 +5838,11 @@ async function manBothConsoles(players) {
  * pressed are the pinned ones: at consoles with the legend a key is a row and
  * a shape, which only the printed legend ties to a sign. Where `walkthrough`,
  * the walkthrough's own shots come at its stages (`stageShots`); a drill
- * takes none of them. Throws with the step that failed, naming the seed where
- * a stage differs from its pin.
+ * takes none of them. `afterFirst`, where given, runs once the first stage is through and the
+ * roles are swapped, and has to leave both panels open. Throws with the step that failed,
+ * naming the seed where a stage differs from its pin.
  */
-async function solveSignal(crew, title, pinned = null, walkthrough = true) {
+async function solveSignal(crew, title, pinned = null, walkthrough = true, afterFirst) {
   const roleOf = (player) => player.seen.view.puzzle?.role ?? null;
   const roles = () => crew.map((p) => `${p.name} ${roleOf(p)}`).join(', ');
   await until(() => crew.every((p) => roleOf(p) !== null), 3000);
@@ -5895,6 +5900,14 @@ async function solveSignal(crew, title, pinned = null, walkthrough = true) {
     }
     console.log(`${line} through, roles swapped`);
     [sending, pressing] = [pressing, sending];
+    await afterStage(stage, afterFirst);
+  }
+}
+
+/** What a Signalkette's caller has to do once its first stage is through, where it has. */
+async function afterStage(stage, afterFirst) {
+  if (stage === 1 && afterFirst != null) {
+    await afterFirst();
   }
 }
 
@@ -12922,26 +12935,35 @@ async function playServerraum(host, guest) {
   await sneakTo(guest, atConsole(guest, 'b'), 3);
   const crew = { terminal: host, rack: guest };
   const role = (player) => player.seen.view.puzzle?.role ?? null;
+  const { moves } = BLACKOUT_PLAN.subsysteme;
   await pastEmergencies(async () => {
     await openPanel(host, 'a');
     await openPanel(guest, 'b');
     if (!(await until(() => role(host) === 'terminal' && role(guest) === 'rack', 3000))) {
       throw new Error(`the Serverraum's panels say ${role(host)} and ${role(guest)}`);
     }
-    const rows = host.seen.view.puzzle?.rows ?? null;
-    await inGroup('devices', () => captureServersConsoles(crew));
-    await inGroup('devices', () => captureDevicePhone(guest, stationSlug(guest)));
-    if (JSON.stringify(rows) !== JSON.stringify(BLACKOUT_PLAN.subsysteme.rows)) {
-      differs('terminal table', tableSaid(rows), tableSaid(BLACKOUT_PLAN.subsysteme.rows));
+    // After an emergency the station is back with what was done at it: a second try reads
+    // from the terminal's log how far the plan has come (planleft.mjs) and goes on with the
+    // rest — the table and its shots are the untouched station's.
+    const taken = movesTaken(moves, host.seen.view.puzzle?.log ?? []);
+    if (taken === 0) {
+      const rows = host.seen.view.puzzle?.rows ?? null;
+      await inGroup('devices', () => captureServersConsoles(crew));
+      await inGroup('devices', () => captureDevicePhone(guest, stationSlug(guest)));
+      if (JSON.stringify(rows) !== JSON.stringify(BLACKOUT_PLAN.subsysteme.rows)) {
+        differs('terminal table', tableSaid(rows), tableSaid(BLACKOUT_PLAN.subsysteme.rows));
+      }
     }
     await clearOfDrones(guest, 9);
-    await playServers(crew, BLACKOUT_PLAN.subsysteme.moves, 'terminal-typing.png');
+    const shot = taken === 0 ? 'terminal-typing.png' : null;
+    await playServers(crew, moves.slice(taken), shot);
   });
 }
 
 /**
- * A step of a station that an emergency may drop: run once more after the
- * emergency is weathered — the station opens on the same instance again.
+ * A step of a station that an emergency may cut short: run once more after the
+ * emergency is weathered — the station is back on its consoles with what was done at it
+ * (core state.ts `resting`), so a step takes it up from where it stands.
  * Throws what the second try throws, or the first where no emergency came.
  */
 async function pastEmergencies(step) {
@@ -13256,15 +13278,20 @@ async function playFrequenz(host, guest) {
   await sneakTo(host, atConsole(host, null));
   await clearOfEmergencies(host, 25);
   const index = host.seen.view.currentPuzzleIndex;
+  // After an emergency the panel is back as the dial stood: a second try finds it wherever
+  // the first left it, and turns what is left.
+  let dialFits = (dial) => dial === pin.dial;
   await pastEmergencies(async () => {
     await openPanel(host, null);
     const lamp = host.seen.view.puzzle;
-    if (lamp?.pattern !== pin.pattern || lamp?.dial !== pin.dial) {
+    if (lamp?.pattern !== pin.pattern || !dialFits(lamp?.dial)) {
       const shown = `${lamp?.pattern} at step ${lamp?.dial}`;
       differs('radio panel', shown, `${pin.pattern} at ${pin.dial}`);
     }
-    const knob = pin.turns < 0 ? 'Frequenz runter' : 'Frequenz hoch';
-    for (let i = 0; i < Math.abs(pin.turns); i++) {
+    dialFits = () => true;
+    const left = pin.dial + pin.turns - lamp.dial;
+    const knob = left < 0 ? 'Frequenz runter' : 'Frequenz hoch';
+    for (let i = 0; i < Math.abs(left); i++) {
       const button = host.page.locator(`.station-modal button[aria-label="${knob}"]`);
       await button.click({ timeout: 3000 });
       await sleep(150);
@@ -13686,19 +13713,117 @@ async function playSignalkette(host, guest) {
   const title = armedAt(host, 'a').title;
   await sneakTo(guest, atConsole(guest, 'a'));
   await sneakTo(host, atConsole(host, 'b'));
-  await clearOfEmergencies(host, 75);
+  const due = nextEmergencyIn(host.seen);
+  const rests = groupOn('devices') && due >= REST_NOTICE_SEC && due <= 75;
+  if (!rests) {
+    await clearOfEmergencies(host, 75);
+    const why = `the next emergency was due in ${due.toFixed(1)} s as the crew reached "${title}"`;
+    await inGroup('devices', () => restLeftOut(`${why}: no stage fits before it, or none came`));
+  }
   await openPanel(guest, 'a');
   await inGroup('devices', () => captureDevicePhone(guest, stationSlug(guest)));
   await openPanel(host, 'b');
-  await solveSignal([host, guest], title, BLACKOUT_PLAN.signalkette.stages);
+  const resting = () => inGroup('devices', () => restThroughEmergency(host, guest, title));
+  const rest = rests ? resting : null;
+  await solveSignal([host, guest], title, BLACKOUT_PLAN.signalkette.stages, true, rest);
+}
+
+/**
+ * How long before an emergency the Signalkette is still opened for a first stage, s: its two
+ * panels, the phone's shot and four signs take ten at most, under load twice that.
+ */
+const REST_NOTICE_SEC = 30;
+
+/** What the goal line says after the title of a station resting through an emergency (client). */
+const RESTING_GOAL = 'ruht — Stand gehalten';
+
+/** A run whose Signalkette met no emergency with a stage through says what it leaves out. */
+function restLeftOut(why) {
+  skip('rest-goal.png', why);
+  skip('rest-kept.png', why);
+}
+
+/**
+ * rest-goal.png, rest-kept.png: the Signalkette, its first stage through, rests through the
+ * emergency that is due — waited for with the station on, where the walkthrough else waits
+ * before it is. While the relay consoles are up the goal line has to name the station as
+ * resting, its progress held (rest-goal.png, `host`'s page); once the emergency is weathered E
+ * has to open both panels again without switching anything on, on the stage the crew had
+ * reached, nothing of it pressed and no alarm raised (rest-kept.png). The run fails where the
+ * station came back otherwise; an emergency that never came leaves both shots out.
+ */
+async function restThroughEmergency(host, guest, title) {
+  const stage = host.seen.view.puzzle?.stage ?? null;
+  const alarms = host.seen.view.alarms.count;
+  const due = nextEmergencyIn(host.seen);
+  const wait = `due in ${due.toFixed(1)} s`;
+  console.log(`emergency          ${wait}: "${title}" stays on at stage ${stage}`);
+  if (!(await until(() => emergencyOn(host.seen), (due + 6) * 1000))) {
+    restLeftOut(`no emergency came within ${(due + 6).toFixed(1)} s of stage ${stage}`);
+    return;
+  }
+  const shot = Date.now();
+  const named = await restingGoalShot(host, title);
+  const weathered = Date.now();
+  await weather();
+  const back = Date.now();
+  await openPanel(guest, 'a');
+  await openPanel(host, 'b');
+  const kept = await keptShot(host, title, { stage, alarms });
+  // What the rest costs the run: the two shots and the panels opened a second time.
+  const cost = weathered - shot + (Date.now() - back);
+  console.log(`rest               the shots and both panels opened again: ${seconds(cost)}`);
+  if (!named || !kept) {
+    fail(`rest: "${title}" named resting ${named}, back as it stood ${kept}`);
+  }
+}
+
+/**
+ * rest-goal.png: `host`'s page in the emergency, the goal line naming the station of `title`
+ * as resting with its progress held. Returns whether it does.
+ */
+async function restingGoalShot(host, title) {
+  const goal = host.page.locator('.stage-goal h1');
+  const said = `${title} ${RESTING_GOAL}`;
+  const named = await untilAsync(async () => (await goal.textContent()) === said, 3000);
+  const shown = await goal.textContent();
+  await sleep(400); // the station's panel has faded from under the relay console
+  await capture(host.page, 'rest-goal.png');
+  console.log(
+    `rest-goal.png      ${host.name}'s goal line in the emergency: „${shown}"` +
+      (named ? '' : ` !! not „${said}"`),
+  );
+  return named;
+}
+
+/**
+ * rest-kept.png: `host`'s panel open again after the emergency. Returns whether the station
+ * stands as `before` it: on its stage, nothing of the stage pressed, no alarm more.
+ */
+async function keptShot(host, title, before) {
+  await capture(host.page, 'rest-kept.png');
+  const { stage, done } = host.seen.view.puzzle ?? {};
+  const raised = host.seen.view.alarms.count - before.alarms;
+  const kept = stage === before.stage && done === 0 && raised === 0;
+  console.log(
+    `rest-kept.png      "${title}" after the emergency: stage ${stage}, ${done} sign(s) in, ` +
+      `${raised} alarm(s) — ${kept ? 'kept' : `!! it stood at stage ${before.stage}`}`,
+  );
+  return kept;
 }
 
 /** The play of each station Blackout's Wechselplatz can have, by its id. */
 const WECHSEL_PLAYS = {
   signalkette: (host, guest) => playSignalkette(host, guest),
-  frequenz: (host, guest) => playFrequenz(host, guest),
-  notstrom: (host, guest) => playNotstrom(host, guest),
+  frequenz: (host, guest) => otherThanSignalkette(() => playFrequenz(host, guest)),
+  notstrom: (host, guest) => otherThanSignalkette(() => playNotstrom(host, guest)),
 };
+
+/** A draw without the Signalkette says that its rest through an emergency is left out. */
+async function otherThanSignalkette(play) {
+  await inGroup('devices', () => restLeftOut('this draw has no Signalkette to rest'));
+  await play();
+}
 
 /**
  * Blackout's Wechselplatz on the run's seed: the host first walks up to a console out of

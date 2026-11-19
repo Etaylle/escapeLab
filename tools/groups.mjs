@@ -270,6 +270,9 @@ export const GROUPS = [
       'filter-held.png',
       'schott-open.png',
       'out-of-service.png',
+      // The Signalkette resting through an emergency, its first stage kept.
+      'rest-goal.png',
+      'rest-kept.png',
     ],
   },
   {
