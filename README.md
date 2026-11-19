@@ -31,17 +31,17 @@ Mitte des Flurs, dann die Stationen in Reihenfolge:
    Laborkennung daneben. Ein Pult tippt das Startskript, das andere schließt den
    Leistungsschalter, wenn der Impuls auf der Leiter steht; nach jeder Stufe wechseln die Seiten.
 2. *Paketfilter* (`firewall`): Analysepult und Sperrpult im Flur östlich des Serverschotts, die
-   RICHTLINIE an der Südwand westlich davon; eine saubere Welle von neun Paketen öffnet das
+   RICHTLINIE an der Südwand westlich davon; eine saubere Welle von sieben Paketen öffnet das
    Schott. Bis der Serverraum läuft, fliegt keine Drohne.
 3. *Serverraum* (`servers`): Terminal und Rack an zwei Pulten im Raum hinter dem Schott, die
    Regeln im Spind dort.
 4. Der *Wechselplatz*: Je Lauf ist eine von drei Anlagen in Betrieb, der Seed lost sie aus; die
    beiden anderen tragen das Schild „AUSSER BETRIEB". *Signalkette* (`signal` mit Legende): Pult
-   A in der Ostecke des Flurs, Pult B im Maschinenraum, die Legende auf dem Klemmbrett im Flur; ab
+   A im Archiv an der Tür, Pult B im Maschinenraum, die Legende auf dem Klemmbrett im Flur; ab
    Stufe 3 zeigt das sendende Pult die Zeichen nacheinander, in der letzten ohne Farbe.
    *Funkpult* (`morse`): Pult im Labor, die Tabellen im Aktenschrank, dessen Schlüssel
    im Serverraum liegt. *Notstromkasten* (`circuit`): Sicherungskasten gleich hinter der
-   Maschinentür, Prüfpult im Labor, die Regeln im Wartungsbuch im Maschinenraum; nach jedem
+   Maschinentür, Prüfpult im Labor, die Regeln im Wartungsbuch an der Westwand des Labors; nach jedem
    Schnitt wird neu gemessen.
 5. *Reaktor-Neustart* (`button-sync`): erst mit der Ersatzsicherung aus dem Archiv; die ganze
    Crew drückt gemeinsam. Dann öffnet die Luke im Archiv, und es geht einmal quer durchs Labor

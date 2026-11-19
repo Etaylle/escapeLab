@@ -897,7 +897,7 @@ person can drop them, only the other can tell which are hostile — and says so 
 not by calling them out. After Operation: Tango's agent and hacker, Hacknet's and Uplink's
 traces, and Among Us's short tactile tasks; a design of the lab's own — five lines and a gate,
 plain points and header cards, no arcade formation, sprite or sound. Soft real time: slow
-packets, whole lines, generous windows; the talk and the marks decide, not reflexes. Blackout has it as the Serverraum's gate, its third station, one wave of nine packets whose
+packets, whole lines, generous windows; the talk and the marks decide, not reflexes. Blackout has it as the Serverraum's gate, its third station, one wave of seven packets whose
 solve opens the Serverschott (Walking Blackout's lab, above); its probe is `tools/fixtures/firewall-probe.json`
 („Filterprobe": the Sperrpult in the Leitstand, the Analysepult in the Wache, the policy in a
 binder, the Laborkennung between them), and with its bay in the Übungshalle.
