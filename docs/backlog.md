@@ -1190,9 +1190,13 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   Strom −4 dB. Offen bei Uros, im Hauptcheckout `packages/client`, rund 240 Credits:
   `node --env-file=/Users/uros/Documents/Req.Eng./escapelab/.env.local scripts/sfx.ts --candidates 3 --only bed-reactor,bed-reactor-idle`
   — bis dahin spielen die alten Aufnahmen (`AWAITING_RENDER`).
-- Offen: ein vierter Stamm „overdrive" (Flucht, später Notfall) — als neunter Teil der Partitur
-  über der Kappe von 18.000 Credits je Lauf (rund 20.257 für zwei Takes); erst nach dem Render der
-  Partitur und einem Hören der drei Stämme unter dem neuen Druck neu abwägen (sound.md).
+- Kein vierter Stamm: Uros will stattdessen (2026-11-20) Musik „mit auch Stimmen und etwas
+  hörbarer". Hörbarer ist gebaut: die Stämme +5 dB (−57 → −52 dBFS RMS, über den Betten der
+  einfachen Räume), unter der Leitstelle −12 statt −8 dB (sound.md „How loud the music sits").
+- Offen: die Partitur mit Stimmen (Vorschlag in sound.md „Score"): Summen und Chor ohne Worte in
+  den Stämmen, zwei deutsche Zeilen im Hauptthema und in der Morgendämmerung; dafür muss die
+  Regel des Skripts Liedzeilen in `sung`-Abschnitten zulassen. Danach rendert Uros zwei Takes der
+  Partitur (17.665 Credits).
 
 ## Nur lokal
 

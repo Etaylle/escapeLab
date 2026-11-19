@@ -1292,6 +1292,49 @@ none asks for another: a quiet piece is sparse, its notes held long at the same 
 last minute's double time is a feel at the same tempo — the plan's bar lines, which the loops are
 cut on, hold only where the music keeps them.
 
+**Proposal: the score with voices** (2026-11-20, not yet in the catalog). Uros asked for music
+„mit auch Stimmen und etwas hörbarer"; the second half is built (How loud the music sits, below).
+For the first, the suite keeps everything that makes it the game's own — the night shift in a
+dark research lab, the motif above, A minor and the dawn's C major, 90 bpm, the same sections,
+bars and tails, the stems' 72 s loops on one grid, calm, tense and critical growing by the layers
+that enter — and gives the motif to human voices, so that the one theme is what is remembered. A
+solo female voice and a small choir, never a soloist's showpiece: in the run the voices are
+wordless — a closed hum („mm") in the calm stem, low voices on a held „oh" breathing with the bass
+pulse in the tense one, the full choir on „ah" hammering the motif's leap with the horns in the
+critical one — since words would fight the Leitstelle's lines, the loudspeakers and the German
+texts on screen; wordless voices sit in the speech's range too, which the radio's deeper duck
+(12 dB) answers. The lobby (the crew talks there) and the opening (under the announcement) stay
+without voices. Words only where nobody talks: the main theme sings two original German lines a
+phrase, the female voice over piano and strings, in its second half; the dawn sings once over the
+motif in C major. I disagree with words at „Lights Out": the lost card is read, and a sung line
+over a defeat comes out sentimental — a hum that dies with the pad says it better. No composer,
+game, singer or piece is named to the service, and the lines below quote nothing.
+
+What it takes besides the catalog: the plan's lines are its only switch for words (One
+generation, above), so the script's rule that refuses a lyric (`suite.ts` `LINE`) has to let a
+section marked `sung` carry lyric lines — in German, so with umlauts, where `phrase` takes ASCII
+alone — and `test/suiteScript.test.ts` has to hold words to the sung sections and voices out of
+the lobby and the opening. Every non-sung section names `lyrics` in its own `avoid`, the suite's
+moves from „lyrics" to „lyrics in the run".
+
+| Section | Lines (new or changed) | Styles added | Avoid, changed |
+| --- | --- | --- | --- |
+| suite | — | „a solo female voice and a small wordless chamber choir carry the motif", „one strong, singable melody throughout" | „lyrics" moves into the sections |
+| Main Theme (`sung`) | {felt piano alone states the main motif} · {chamber strings answer the motif} · Die Nacht hält still im Labor, · nur die Lampen wachen noch. · Wer jetzt geht, der kehrt zurück, · wenn das Licht den Morgen findet. · {the piano alone again over a soft held string chord} | „a solo female voice sings the motif in German in the second half, intimate, close to the microphone" | „choir" kept out, „belting", „pop vocals" |
+| Night Shift (calm) | + (mm) | „a small distant choir hums the motif's leap on a closed mm, very soft, now and then" | „voice", „vocals" out; „lyrics", „solo voice" in |
+| Pressure (tense) | + (oh) | „low male voices on a sustained oh, breathing with the bass pulse" | „voice", „vocals" out; „lyrics", „solo voice" in |
+| Last Minute (critical) | + (ah) | „a wordless choir on ah hammers the motif's leap with the horns" | „voice", „vocals" out; „lyrics" in |
+| Lights Out | + (mm) | „a low female hum follows the motif down and dies with the pad" | „voice" out; „lyrics" in |
+| Dawn (`sung`) | {strings carry the motif in C major} · Die Türen offen, der Morgen ist da, · wir gehen hinaus ins Licht. · {a long held C major chord, a true ending} | „the solo female voice sings the motif once in German, warm, at rest" | — |
+
+Budgets: the sections, bars and tails stay, so the suite stays at 490.7 s: two takes 17,665
+credits (`CREDITS_PER_SECOND` 18), under the 18,000 cap a run, and 10.3 MiB of the music
+folder's 11 MiB once kept (the pieces at 160 kbit/s, the two stings beside them). A third take
+passes the cap in one run (26,497 credits); a second run of one take adds it (8,833 credits),
+the account keeping its 40,000 floor. A take is chosen whole, by ear on `/sounds` — its pieces
+are one generation, and a stem of one take crosses badly into a stem of another — so „candidates
+per piece" means two or three takes of the whole suite.
+
 ## Music that breathes (`music.ts`)
 
 Three recorded stems, pieces of the score (Score, above), between which one pressure value from
@@ -1352,8 +1395,8 @@ would keep it (some 1.5 MB of the 1.6 left under 11 MiB once the score is kept),
 too (two stems heard at most, as now). Made on its own as a suite of one section it would cost
 2,592 credits for two takes, but be a generation of its own, not one with the stems it crosses
 into. Either way the music's eight places (`packFile.ts` `SLOTS`) would need a ninth that a pack
-may leave out — every CC pack falling back to its critical piece — outside the Feinwahl. Worth
-weighing again once the score is kept and the three stems have been heard under this pressure. Every alarm the
+may leave out — every CC pack falling back to its critical piece — outside the Feinwahl. Uros
+chose voices and a louder music instead (2026-11-20, the proposal under Score, above). Every alarm the
 music hears brings the alarm's sting with it, two seconds of brass and strings on the effects'
 bus, the music pulled 6 dB down under it.
 
