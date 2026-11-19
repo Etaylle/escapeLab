@@ -19,6 +19,50 @@ export interface Line {
   send(msg: ClientMessage): void;
 }
 
+/**
+ * A seat as the crew has it in hand: what its line heard, and the four things a page does —
+ * step, look, press E, say a word of the game. This is all of it: `handsOf` hands the crew a
+ * frozen object with these names and no other, so that nothing of the room rides along.
+ */
+export interface CrewSeat {
+  readonly view: PlayerView | null;
+  readonly at: Spot;
+  readonly facing: number;
+  readonly drones: Readonly<Record<string, DronePosition>>;
+  readonly dronesAt: number;
+  readonly id: string;
+  readonly name: string;
+  readonly map: MapView;
+  stepTo(to: Spot, moving: boolean): void;
+  lookAt(target: Spot): void;
+  press(): void;
+  say(msg: Said): void;
+}
+
+/** `seat` as the crew has it in hand (`CrewSeat`): frozen, its own names and no other. */
+export function handsOf(seat: Seat): CrewSeat {
+  const read = <K extends keyof Seat>(name: K) => ({ get: () => seat[name], enumerable: true });
+  const hands = Object.defineProperties(
+    {
+      stepTo: (to: Spot, moving: boolean): void => seat.stepTo(to, moving),
+      lookAt: (target: Spot): void => seat.lookAt(target),
+      press: (): void => seat.press(),
+      say: (msg: Said): void => seat.say(msg),
+    },
+    {
+      view: read('view'),
+      at: read('at'),
+      facing: read('facing'),
+      drones: read('drones'),
+      dronesAt: read('dronesAt'),
+      id: read('id'),
+      name: read('name'),
+      map: read('map'),
+    },
+  );
+  return Object.freeze(hands) as CrewSeat;
+}
+
 /** What a seat says of the game, beside where it stands: the messages a room acts on. */
 type Said = Exclude<ClientMessage, { kind: 'pos' | 'interact' }>;
 

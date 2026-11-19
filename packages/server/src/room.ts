@@ -1206,6 +1206,15 @@ export class Room {
     this.rollSeed = roll;
   }
 
+  /**
+   * The run on is lost now, as when its clock runs out: for the demo room's host, whose crew of
+   * machines got stuck (demo/host.ts) — the end card, the report and the next run follow as
+   * after any run lost. Nothing outside a run, or while one stands still.
+   */
+  runOut(): void {
+    this.dispatch({ type: 'time-expired', at: Date.now() });
+  }
+
   /** `heard` is told how many watch whenever one of the audience comes or goes. */
   onAudience(heard: (watching: number) => void): void {
     this.audienceHeard = heard;

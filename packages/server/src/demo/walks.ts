@@ -13,7 +13,7 @@ import {
   type Spot,
 } from './route.js';
 import { pause, type Clock, type Script } from './script.js';
-import type { Seat } from './seat.js';
+import type { CrewSeat as Seat } from './seat.js';
 
 /**
  * How the demo crew walks: at a player's pace, from tile to tile along a shortest way over the

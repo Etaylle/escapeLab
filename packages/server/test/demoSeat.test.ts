@@ -161,6 +161,18 @@ describe('a walk of the demo crew', () => {
     expect(first?.kind === 'pos' ? first.x - back.x : null).toBeCloseTo(WALK_SPEED * 0.08, 6);
   });
 
+  it('takes a tick that hung for seconds as a quarter of one: no figure is flung', () => {
+    const clock = { now: 0 };
+    const { seat } = seated(clock);
+    seat.hear({ kind: 'view', view: viewOf(1000), at: 0 });
+    const walk = new Walks(mission, clock, () => false).to(seat, { x: 9.5, y: 3.5 });
+    walk.next();
+    walk.next();
+    clock.now += 5000;
+    walk.next();
+    expect(seat.at.x - 1.5).toBeCloseTo(WALK_SPEED * 0.25, 6);
+  });
+
   it('finds no way through a shut door', () => {
     const clock = { now: 0 };
     const { seat } = seated(clock);
