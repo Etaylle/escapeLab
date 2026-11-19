@@ -205,6 +205,29 @@ describe('spottedOn — an avatar behind its pace', () => {
     assert.ok(unguarded.length > clear.length);
   });
 
+  it('sees an avatar late all along at a place the one on time has already left', () => {
+    // A corridor with a door south at (8,2): the drone comes east along it, the walker runs
+    // west down it and out through the door. On time it is through before the drone's eye
+    // reaches the door's tile; a second late it still stands in the corridor there.
+    const door = {
+      tiles: ['############', '#..........#', '########.###', '#..........#', '############'],
+      shut: new Set(),
+    };
+    const lane = { waypoints: tiles([1, 1], [10, 1]), speed: 1 };
+    const eastbound = [{ ...watcher, beat: lane, at: { x: 1.5, y: 1.5, facing: 0 } }];
+    const out = tiles([10, 1], [9, 1], [8, 1], [8, 2], [8, 3], [7, 3]);
+    const flying = flights(eastbound, 14);
+    const delay = 1.25;
+    assert.equal(spottedOn(out, flying, door, { delay, late: 0 }), null);
+    const seenAt = spottedOn(out, flying, door, { delay, late: 1 });
+    assert.notEqual(seenAt, null);
+    // Mid-walk, not at the end: the slowest run on time is in the doorway by then, and the
+    // walk's end lies behind the wall, where no allowance for standing longer finds it.
+    const inDoorway = delay + arrivals(out, RUN.tile[1], RUN.corner[1])[3];
+    assert.ok(seenAt > inDoorway, `${seenAt} s, in the doorway at ${inDoorway} s`);
+    assert.equal(spottedOn(out.slice(-1), flying, door, { hold: 14, late: 0 }), null);
+  });
+
   it('foretells a drone setting out east from a waypoint it reached flying south', () => {
     // It stands on (3,1) looking south, as it came, and turns east only as it sets out: whoever
     // stands east of it is in its eye from that tick on, and not before.
