@@ -224,20 +224,16 @@ die Entscheidung.
   Frame-Fenster nennt die 1-Minuten-Last, unter der es lief, die Zusammenfassung die zu Beginn und
   am Ende; kein Budget geändert.
 
-### H-5 Die Flucht des Rundgangs streift die Laborwache — Status: offen · Größe: S
+### H-5 Die Flucht des Rundgangs streift die Laborwache — Status: erledigt (B-blackout2, 43c8aad) · Größe: S
 
 - Beobachtet 2026-11-18 in Läufen ohne Capture-Gruppen (`SHOTS_ONLY=run`): In 2 von 11 Läufen
-  der neuen Stationsfolge (beide auf den Seeds 56 und 93, 2 von 8; Seed 12: 0 von 3) erfasst die
-  Laborwache Anna auf der Flucht bei (21,8|16,6), genau als die Drohne bei (18,15) nach Osten
-  wendet. main, verschränkt gemessen: 0 von 6 — aber mit einem einzigen Seed, dessen Lauf jedes
-  Mal auf 0,3 s gleich endet (242,3 s), also immer mit derselben Phase der Drohne.
-- Ursache, soweit belegt: nicht die Flurwache (sie flog im Flur hinter der Wand, ihr neues
-  Bahnende ändert nur die Ankunftszeit), sondern die Vorhersage des Harness an einer Wende der
-  Laborwache — Bahn und Fluchtweg sind dieselben wie auf main. Die Figur lief 0,3 s außerhalb
-  des vorhergesagten Tempos; an der Wende reicht das.
-- Kosten für eine echte Crew: 15 s und einer von fünf Alarmen, kein Laufende.
-- Zu tun: `tools/patrol.mjs` an Wenden mit dem Blick beider Schenkel rechnen (oder den
-  Zeitzuschlag dort erhöhen) und mit einem Test in `tools/patrol.test.mjs` belegen.
+  erfasste die Laborwache Anna auf der Flucht bei (21,8|16,6), als die Drohne bei (18,15) stand.
+- Ursache: `server/src/drones.ts` las den Blick nach dem Schritt ab; der Schritt, der auf dem
+  Wegpunkt landet, ließ keinen Weg übrig (atan2(0, 0)), und die Drohne sah zwei Ticks lang nach
+  Osten, woher sie auch kam — auf wen sie eben vorbeigeflogen war. Das traf auch echte Crews:
+  15 s und einer von fünf Alarmen. Jetzt behält sie den Blick, mit dem sie ankam
+  (`server/test/drones.test.ts`); `tools/patrol.mjs` rechnet ebenso.
+- Beleg: danach je Seed sechs Läufe ohne Capture-Gruppen bei Last 3–5, 18 von 18 ohne Sichtung.
 
 ### T-9 Tests an der Wanduhr — Status: erledigt (2026-11-13) · Größe: S
 - Zwei Tests lasen die echte Uhr und wurden unter Last rot: `certificate.test.ts` (openssl liest
