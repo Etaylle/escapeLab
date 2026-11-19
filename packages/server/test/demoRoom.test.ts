@@ -17,7 +17,15 @@ import { RoomManager } from '../src/roomManager.js';
 import { DEMO_WATCH_ONLY, serveSockets } from '../src/sockets.js';
 import { JsonlStore } from '../src/store/jsonl.js';
 import { recordRuns } from '../src/store/store.js';
-import { blackoutMission, over, playUntil, seenBy, watch, type Watcher } from './demo.js';
+import {
+  blackoutMission,
+  clockOf,
+  over,
+  playUntil,
+  seenBy,
+  watch,
+  type Watcher,
+} from './demo.js';
 import { FakeServer, type FakeSocket } from './line.js';
 import { passFor } from './passes.js';
 
@@ -145,6 +153,11 @@ describe('the demo room’s runs', () => {
     expect(second.events.map((e) => e.label)).toContain('Funkpult gelöst');
     expect(won.events.map((e) => e.label)).toContain('Signalkette gelöst');
     expect(existsSync(file)).toBe(false);
+    // The run after another is the run a fresh room plays on that seed, to the tick: the one
+    // the crew is proved on (test/demoCrew.test.ts).
+    const alone = playUntil(watch(demoOn([SEEDS[1] ?? 0])), over);
+    expect(clockOf(second)).toBe(clockOf(alone));
+    expect(second.penaltySeq).toBe(0);
   });
 
   it('plays its seeds in turn, round and round', () => {

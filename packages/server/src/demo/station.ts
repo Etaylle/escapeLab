@@ -140,7 +140,8 @@ export function* workStation(def: PuzzleDef, hands: Hands, going: Going): Script
 
 /**
  * The station is not open on both seats' views: while an emergency has the lab, a tick's wait;
- * else the operator's E at it after a moment, then a moment for the panel to come up.
+ * else the operator's E at it after a moment, then a moment for the panel to come up. Throws
+ * where the operator stands at the station no more: the crew takes its places anew.
  */
 function* switchOn(def: PuzzleDef, { operator }: Hands, going: Going): Script {
   if (emergencyOn(operator.view)) {
@@ -149,8 +150,12 @@ function* switchOn(def: PuzzleDef, { operator }: Hands, going: Going): Script {
   }
   yield* pause(going.clock, going.dice.between(PACE.press));
   const view = operator.view;
-  if (view !== null && view.puzzle === null && !emergencyOn(view) && armedOn(view) === def.id) {
-    operator.press();
+  if (view === null || view.puzzle !== null || emergencyOn(view) || armedOn(view) !== def.id) {
+    return;
   }
+  if (view.presence.stationId !== def.id) {
+    throw new Error(`${operator.name} stands at the station of "${def.id}" no more`);
+  }
+  operator.press();
   yield* pause(going.clock, going.dice.between(PACE.look));
 }

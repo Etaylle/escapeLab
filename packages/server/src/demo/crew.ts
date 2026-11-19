@@ -132,6 +132,7 @@ export class DemoCrew {
       this.read.clear();
       this.asked.clear();
       this.orders.clear();
+      this.dice.again();
       this.script = null;
     }
   }
@@ -284,7 +285,7 @@ export class DemoCrew {
   private consoleOf(def: PuzzleDef, console: ConsoleId | null): Spot {
     const spot = consoleOn(this.seats[0].map, def.id, console);
     if (spot === null) {
-      throw new Error(`demo: the view shows no console of "${def.id}"`);
+      throw new Error(`the view shows no console of "${def.id}"`);
     }
     return spot;
   }
@@ -397,7 +398,7 @@ export class DemoCrew {
     );
     const tile = nearestOf(seat.map, tileOf(seat.at), tiles, safe, held);
     if (tile === null) {
-      throw new Error(`demo: ${seat.name} finds no tile to stand on by ${keyOf(thing)}`);
+      throw new Error(`${seat.name} finds no tile to stand on by ${keyOf(thing)}`);
     }
     return tile;
   }
@@ -411,7 +412,7 @@ export class DemoCrew {
     const plateId = door?.opensBy.kind === 'plate' ? door.opensBy.plateId : undefined;
     const plate = this.mission.map.plates.find((p) => p.id === plateId);
     if (plate === undefined) {
-      throw new Error(`demo: no way for ${seat.name} to ${keyOf(goal)}, and no plate opens one`);
+      throw new Error(`no way for ${seat.name} to ${keyOf(goal)}, and no plate opens one`);
     }
     return { x: plate.x, y: plate.y };
   }
@@ -441,7 +442,7 @@ export class DemoCrew {
     yield* pause(this.clock, this.dice.between(PACE.read));
     const pages = seat.view?.manualsHere.flatMap((manual) => manual.sections) ?? [];
     if (!pages.some((page) => page.puzzleId === def.id)) {
-      throw new Error(`demo: ${seat.name} reads nothing of "${def.id}" at ${source.id}`);
+      throw new Error(`${seat.name} reads nothing of "${def.id}" at ${source.id}`);
     }
     this.read.add(def.id);
   }
@@ -463,7 +464,7 @@ export class DemoCrew {
       const target =
         this.sourceAt(source.id) ?? source.spots.find((spot) => !tried.some((t) => same(t, spot)));
       if (target === undefined) {
-        throw new Error(`demo: ${seat.name} did not find ${source.id} where it may lie`);
+        throw new Error(`${seat.name} did not find ${source.id} where it may lie`);
       }
       tried.push(target);
       yield* this.walks.to(seat, atHand(this.tileBy(seat, target), target), HOLD_S);
@@ -491,7 +492,7 @@ export class DemoCrew {
     }
     yield* pause(this.clock, this.dice.between(PACE.look));
     if (!here()) {
-      throw new Error(`demo: ${source.id} at ${keyOf(at)} did not open for ${seat.name}`);
+      throw new Error(`${source.id} at ${keyOf(at)} did not open for ${seat.name}`);
     }
   }
 
@@ -517,7 +518,7 @@ export class DemoCrew {
     seat.press();
     yield* pause(this.clock, this.dice.between(PACE.look));
     if (this.partOn(part).carriedBy !== seat.id) {
-      throw new Error(`demo: ${seat.name} did not take up ${part.id} at ${keyOf(tile)}`);
+      throw new Error(`${seat.name} did not take up ${part.id} at ${keyOf(tile)}`);
     }
   }
 
@@ -534,7 +535,7 @@ export class DemoCrew {
     seat.press();
     yield* pause(this.clock, this.dice.between(PACE.look));
     if (!this.partOn(part).delivered) {
-      throw new Error(`demo: ${part.id} did not go in at ${keyOf(goal)}`);
+      throw new Error(`${part.id} did not go in at ${keyOf(goal)}`);
     }
   }
 
@@ -553,7 +554,7 @@ export class DemoCrew {
     seat.lookAt(middleOf(sign));
     yield* pause(this.clock, this.dice.between(PACE.look));
     if (!known()) {
-      throw new Error(`demo: ${seat.name} did not read the sign at ${keyOf(sign)}`);
+      throw new Error(`${seat.name} did not read the sign at ${keyOf(sign)}`);
     }
   }
 

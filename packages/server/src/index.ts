@@ -15,7 +15,7 @@ import {
 import { AccountDesk } from './accounts.js';
 import { customMissions, serveCustomMissions } from './customMissions.js';
 import { dailySalt } from './dailySalt.js';
-import { DemoHost } from './demo/host.js';
+import { DEMO_CODE, DemoHost } from './demo/host.js';
 import { HEARTBEAT_MS, startHeartbeat } from './heartbeat.js';
 import { iceLogLine, iceServers, type IceSetup } from './iceServers.js';
 import { SignInGuard } from './login.js';
@@ -44,6 +44,8 @@ const MISSIONS_DIR =
   process.env['MISSIONS_DIR'] ?? fileURLToPath(new URL('../../../missions', import.meta.url));
 // An empty RUNS_LOG counts as unset, like an empty RUNS_TOKEN.
 const RUNS_LOG = process.env['RUNS_LOG'] || DEFAULT_RUNS_LOG;
+/** The mission the demo room plays, by id: the one its crew is proved on (test/demoCrew.test.ts). */
+const DEMO_MISSION = 'blackout';
 /** How long the server waits for the runs still being kept before it exits all the same, ms. */
 const KEEPING_MS = 5000;
 // https where packages/server/cert/ (or TLS_CERT and TLS_KEY) holds a pair, else http.
@@ -90,14 +92,16 @@ const manager = new RoomManager(
   instanceId,
 );
 setInterval(() => manager.sweep(), 60_000).unref();
-// The demo room: the server plays the default mission itself, for whoever watches (demo/host.ts).
-const demo = new DemoHost(catalog.default);
+// The demo room: the server plays DEMO_MISSION itself, for whoever watches (demo/host.ts) — none
+// where the missions' folder has no such mission, which the log says.
+const demoMission = catalog.find(DEMO_MISSION);
+const demo = demoMission === undefined ? undefined : new DemoHost(demoMission);
 // What /health says beside the missions: no code, no name, the demo room apart from the rooms.
 const health: Health = {
   rooms: () => manager.counts(),
   uptimeSec: () => Math.floor(process.uptime()),
   version: versionOf(process.env),
-  demo: () => demo.counts(),
+  ...(demo === undefined ? {} : { demo: () => demo.counts() }),
 };
 /** The JSON routes: /health, the missions' and the Bestenliste's; null for any other path. */
 const jsonFor = (url: string): ApiResponse | null =>
@@ -151,7 +155,7 @@ const served = serveSockets(wss, {
   front: frontOf(process.env),
   signIns,
   iceServers: ice.servers,
-  demo,
+  ...(demo === undefined ? {} : { demo }),
 });
 // A socket gone silent is found out and closed, so that the room pauses for its player; the
 // log names the room and the seat of each socket it cuts.
@@ -189,6 +193,11 @@ httpServer.listen(PORT, () => {
   console.log(`[escapelab] Tagesschicht: ${DAILY_SALT_FROM[daily.from]}`);
   console.log(`[escapelab] ${roomKeyLogLine(sealing)}`);
   console.log(`[escapelab] this boot is instance ${instanceId}: its snapshots name it`);
+  const demoSaid =
+    demoMission === undefined
+      ? `none, the missions have no "${DEMO_MISSION}"`
+      : `„${demoMission.title}“, played by the server while somebody watches room ${DEMO_CODE}`;
+  console.log(`[escapelab] demo: ${demoSaid}`);
   if (voiceDesk !== null) {
     console.log(`[escapelab] ALLOW_RECORD=1: POST /voice/:id saves recordings to ${VOICE_DIR}`);
   }

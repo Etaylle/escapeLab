@@ -39,14 +39,20 @@ export function* both(one: Script, other: Script): Script {
 }
 
 /**
- * Numbers that look thrown and are not: the same crew makes the same pauses run after run, so
- * that a run proved on fake timers is the run the demo plays.
+ * Numbers that look thrown and are not: thrown again from `seed` for every run (`again`), the
+ * crew makes the same pauses in the same run, so that a run proved on fake timers is the run the
+ * demo plays.
  */
 export class Dice {
   private state: number;
 
-  constructor(seed: number) {
+  constructor(private readonly seed: number) {
     this.state = seed >>> 0;
+  }
+
+  /** The dice as they were first thrown from: a new run's. */
+  again(): void {
+    this.state = this.seed >>> 0;
   }
 
   /** A number from `min` to `max`. */

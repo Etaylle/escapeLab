@@ -91,7 +91,7 @@ export class Seat {
   get map(): MapView {
     const map = this.view?.map ?? null;
     if (map === null) {
-      throw new Error(`demo: ${this.name || 'a seat'} has no map: no run is on`);
+      throw new Error(`${this.name || 'a seat'} has no map: no run is on`);
     }
     return map;
   }

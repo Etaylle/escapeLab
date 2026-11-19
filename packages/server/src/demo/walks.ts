@@ -69,7 +69,7 @@ export class Walks {
     const tiles = wayOver(groundOf(seat.map), tileOf(seat.at), tileOf(goal));
     if (tiles === null) {
       const from = keyOf(tileOf(seat.at));
-      throw new NoWay(`demo: no way for ${seat.name} from ${from} to ${keyOf(tileOf(goal))}`);
+      throw new NoWay(`no way for ${seat.name} from ${from} to ${keyOf(tileOf(goal))}`);
     }
     return [seat.at, ...tiles.slice(1, -1).map(middleOf), goal];
   }

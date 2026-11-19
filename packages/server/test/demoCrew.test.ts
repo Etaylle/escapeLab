@@ -55,6 +55,34 @@ describe('the demo crew', () => {
     },
   );
 
+  it('stands before the consoles it works, never on one, and never two on a tile', () => {
+    const host = new DemoHost(mission, [DRAW_SEEDS.notstrom]);
+    const consoles = new Set(mission.map.stations.map((spot) => `${spot.x},${spot.y}`));
+    const tileOf = ({ x, y }: { x: number; y: number }): string =>
+      `${Math.floor(x)},${Math.floor(y)}`;
+    let stood: string[] = [];
+    let stations = 0;
+    let working = false;
+    const watcher = watch(host);
+    host.watch((msg) => {
+      if (msg.kind === 'positions') {
+        stood = Object.values(msg.players).map(tileOf);
+      } else if (msg.kind === 'spectator-view') {
+        working = msg.view.phase === 'playing' && msg.view.puzzle !== null;
+      }
+    });
+    playUntil(watcher, (view) => {
+      if (working) {
+        stations += 1;
+        expect(new Set(stood).size, `on ${stood.join(' and ')}`).toBe(2);
+        expect(stood.filter((tile) => consoles.has(tile))).toEqual([]);
+      }
+      return over(view);
+    });
+    host.stop();
+    expect(stations).toBeGreaterThan(1000);
+  });
+
   it('weathers the emergencies its run meets', () => {
     const { view } = runOn(DRAW_SEEDS.signalkette);
     const emergencies = view.events.filter((e) => e.kind === 'sabotage').map((e) => e.label);
@@ -62,6 +90,34 @@ describe('the demo crew', () => {
     expect(emergencies.filter((label) => label === 'Notfall behoben')).toHaveLength(
       emergencies.length / 2,
     );
+  });
+
+  it('drops the rest of a handgrip an emergency cuts into, and takes it up anew after', () => {
+    const complaints: string[] = [];
+    vi.spyOn(console, 'warn').mockImplementation((line: string) => void complaints.push(line));
+    const host = new DemoHost(mission, [DRAW_SEEDS.frequenz]);
+    const watcher = watch(host);
+    // The Funkpult's dial is turned step by step, then the frequency sent: one handgrip.
+    let dial: number | null = null;
+    playUntil(watcher, ({ puzzle }) => {
+      if (puzzle?.kind !== 'morse') {
+        return false;
+      }
+      dial ??= puzzle.dial;
+      return puzzle.dial !== dial;
+    });
+    const before = seenBy(watcher).events.filter((e) => e.kind === 'sabotage').length;
+    // The emergency comes with the dial one step on, as the room starts one when it is due.
+    const room = host.room as unknown as { dispatch: (action: object) => void };
+    room.dispatch({ type: 'sabotage-start', at: Date.now() });
+    expect(seenBy(watcher).map?.sabotage).not.toBeNull();
+    const view = playUntil(watcher, over);
+    host.stop();
+    expect(view.events.filter((e) => e.kind === 'sabotage').length).toBeGreaterThan(before);
+    expect(view.phase).toBe('won');
+    expect(view.penaltySeq).toBe(0);
+    // No move went to a console the emergency had: the room refused the crew nothing.
+    expect(complaints).toEqual([]);
   });
 
   it('wins every seed of the first hundred, every draw among them, with no alarm', async () => {

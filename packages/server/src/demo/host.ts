@@ -100,7 +100,7 @@ function carry(room: Room, playerId: string, msg: ClientMessage): void {
   } else if (forTheGame(msg)) {
     room.act(playerId, msg);
   } else {
-    throw new Error(`demo: a seat of the demo crew does not say "${msg.kind}"`);
+    throw new Error(`a seat of the demo crew does not say "${msg.kind}"`);
   }
 }
 
