@@ -194,12 +194,11 @@ describe('the recorded lines', () => {
     expect(recordings.filter((name) => !named.has(name)), REMEDY).toEqual([]);
   });
 
-  it('keeps the old chains’ thirteen lines, said by no shipped mission, by all three', () => {
-    // A room taken up again from a snapshot of Blackout's chain before the Wechselplatz, or of
-    // its first chain with it, plays that mission on, and its radio says these: a render must
-    // not drop their takes.
+  it('keeps the old chain’s line, said by no shipped mission, by all three', () => {
+    // A room taken up again from a snapshot of Blackout's first chain with the Wechselplatz plays
+    // that mission on, and its radio says this: a render must not drop its takes.
     const kept = keptForOldRuns(manifest);
-    expect(OLD_RUN_LINES).toHaveLength(13);
+    expect(OLD_RUN_LINES).toHaveLength(1);
     for (const text of OLD_RUN_LINES) {
       const sayers = kept.filter(([, entry]) => entry.text === text).map(([id]) => id);
       expect(sayers.sort(), text).toEqual(
@@ -784,7 +783,7 @@ describe('what a run keeps, and what it makes anew', () => {
       expect(entry.model, entry.text).toBe('eleven_v4');
       expect(modelOf(paid, take)).toBe('eleven_v4');
     }
-    expect(before).toHaveLength(48);
+    expect(before).toHaveLength(42);
     expect(new Set(before)).toEqual(new Set(['helmut']));
   });
 
@@ -837,7 +836,7 @@ describe('what a run keeps, and what it makes anew', () => {
       const take = { text: entry.text, said: entry.text, person: 'helmut', mood };
       return entry.person === 'helmut' && entry.render === renderOf(his, take);
     });
-    expect(before).toHaveLength(48);
+    expect(before).toHaveLength(42);
     const cast = plannedVoice(roster);
     for (const entry of Object.values(manifest.lines)) {
       const said = shippedLines().get(entry.text)?.said ?? entry.text;
