@@ -237,7 +237,7 @@ describe('a puzzle’s own fields and penalty, draft ↔ JSON', () => {
     expect(draft.puzzles.map((p) => [p.type, p.penaltySec, p.fields])).toEqual([
       ['button-sync', null, { windowMs: 3500, style: 'lever' }],
       ['startup', null, { stages: 2, travelSec: 6, windowSec: 3 }],
-      ['firewall', null, { waves: 1, packets: 9, fallSec: 14, rules: 4 }],
+      ['firewall', null, { waves: 1, packets: 7, fallSec: 14, rules: 4 }],
       ['servers', null, { crashed: 4, trap: true }],
       ['signal', null, { stages: 4, length: 4, legend: true, fleetingFrom: 3, greyFrom: 4 }],
       ['morse', null, {}],
