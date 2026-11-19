@@ -65,6 +65,19 @@
       "model": "eleven_v4",
       "file": "anlage-db81476a48b2.mp3"
     },
+    "ben-0244a7115c4b": {
+      "text": "Das Analysepult steht im Flur gleich östlich vom Schott zum Serverraum, das Sperrpult ein Stück weiter Richtung Ostende.",
+      "ms": 7393,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "ben",
+      "moment": "nudge",
+      "render": "13bd30cd59fd",
+      "model": "eleven_v4",
+      "file": "ben-0244a7115c4b.mp3"
+    },
     "ben-02ed4d6ee051": {
       "text": "Server laufen, die Labortür ist offen, drinnen fliegt eine Drohne. Den Aktenschrank im Labor öffnet nur der Schlüssel.",
       "ms": 7549,
@@ -131,6 +144,19 @@
       "model": "eleven_v4",
       "file": "ben-075e89ba063b.mp3"
     },
+    "ben-07875b229e60": {
+      "text": "Die Richtlinie zum Paketfilter hängt im Flur an der Südwand, westlich vom Schott.",
+      "ms": 4989,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "ben",
+      "moment": "nudge",
+      "render": "14926d5e544e",
+      "model": "eleven_v4",
+      "file": "ben-07875b229e60.mp3"
+    },
     "ben-1776e2357724": {
       "text": "Die Synchronkalibrierung steht bei den Spulen, ganz im Osten hinter dem offenen Schott.",
       "ms": 4833,
@@ -143,6 +169,19 @@
       "render": "a34a029bfc0a",
       "model": "eleven_v4",
       "file": "ben-1776e2357724.mp3"
+    },
+    "ben-1ad34a8f6e35": {
+      "text": "Welche Pakete der Filter sperrt, steht in der Richtlinie, sie hängt im Flur an der Südwand.",
+      "ms": 5251,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "ben",
+      "moment": "nudge",
+      "render": "7c893545510f",
+      "model": "eleven_v4",
+      "file": "ben-1ad34a8f6e35.mp3"
     },
     "ben-1c32b49724ca": {
       "text": "Notausgang offen, Schleusenmitte. Alle vier hin.",
@@ -222,6 +261,19 @@
       "model": "eleven_v4",
       "file": "ben-271f4a79a98c.mp3"
     },
+    "ben-2aae9743506e": {
+      "text": "Server oben, zwei Drohnen fliegen, die Kameraplatte am Schott hält die im Flur an. Die Anlage, die Dienst hat, öffnet den Reaktor.",
+      "ms": 8359,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "ben",
+      "moment": "solved",
+      "render": "d7c1f58f9b29",
+      "model": "eleven_v4",
+      "file": "ben-2aae9743506e.mp3"
+    },
     "ben-2b3ce9cae36e": {
       "text": "Ich habe die Relais verloren, das müsst ihr von Hand machen. Lest euch jede Anweisung laut vor.",
       "ms": 5486,
@@ -287,6 +339,19 @@
       "render": "baaba7b803ed",
       "model": "eleven_v4",
       "file": "ben-3818bbb52b0a.mp3"
+    },
+    "ben-3c7cf5fdc70c": {
+      "text": "Server laufen, Labortür offen, beide Drohnen sind wach. Ich schalte euch die Anlage auf, die heute Dienst hat, sie öffnet den Reaktor.",
+      "ms": 8202,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "ben",
+      "moment": "solved",
+      "render": "e2a8c50df8fa",
+      "model": "eleven_v4",
+      "file": "ben-3c7cf5fdc70c.mp3"
     },
     "ben-3d87fba381b2": {
       "text": "Notausgang offen, Westende vom Flur. Alle drei hin.",
@@ -381,6 +446,19 @@
       "model": "eleven_v4",
       "file": "ben-4f5494825480.mp3"
     },
+    "ben-5bfb07095bdd": {
+      "text": "Der Notstromkasten ist sicher, der Reaktor ist offen. Die Ersatzsicherung dafür liegt im Archiv, bringt sie rüber.",
+      "ms": 6609,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "ben",
+      "moment": "solved",
+      "render": "d1ffc4530267",
+      "model": "eleven_v4",
+      "file": "ben-5bfb07095bdd.mp3"
+    },
     "ben-5d1ab414fef4": {
       "text": "Reaktor läuft. Der Notausgang ist entriegelt, Nordwestecke beim Archiv. Alle raus, jetzt.",
       "ms": 6191,
@@ -422,6 +500,19 @@
       "model": "eleven_v4",
       "file": "ben-60de97dc17ff.mp3"
     },
+    "ben-632f181af017": {
+      "text": "Ohne das Wartungsbuch aus dem Labor ratet ihr am Kasten nur herum.",
+      "ms": 3971,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "ben",
+      "moment": "nudge",
+      "render": "0cc79da364d4",
+      "model": "eleven_v4",
+      "file": "ben-632f181af017.mp3"
+    },
     "ben-63b85185d3f6": {
       "text": "Tastenfeld im Westflügel, Südostecke. Regeln im Nordosten.",
       "ms": 4754,
@@ -461,6 +552,19 @@
       "render": "16a787604257",
       "model": "eleven_v4",
       "file": "ben-6552b388f95a.mp3"
+    },
+    "ben-665bce69a741": {
+      "text": "Pult A der Signalkette steht im Archiv an der Südwand, Pult B im Maschinenraum in der Südostecke.",
+      "ms": 6426,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "ben",
+      "moment": "nudge",
+      "render": "bd3a39bcf445",
+      "model": "eleven_v4",
+      "file": "ben-665bce69a741.mp3"
     },
     "ben-69b599d72ccd": {
       "text": "Wer am Ostende vom Flur steht: Richtung Westen bis zur Mitte, dort hängt der Hauptschalter.",
@@ -502,6 +606,32 @@
       "render": "22115391da29",
       "model": "eleven_v4",
       "file": "ben-6b1eb79786bd.mp3"
+    },
+    "ben-6d4d7e090922": {
+      "text": "Die Signalkette hält, der Reaktor ist offen. Die Ersatzsicherung dafür liegt im Archiv, bringt sie rüber.",
+      "ms": 6426,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "ben",
+      "moment": "solved",
+      "render": "9f1cbd8ef3db",
+      "model": "eleven_v4",
+      "file": "ben-6d4d7e090922.mp3"
+    },
+    "ben-6fba1e4fc19c": {
+      "text": "Das Schott zum Serverraum ist auf. Terminal und Rack stehen drinnen, die Unterlagen liegen im Spind darin.",
+      "ms": 6426,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "ben",
+      "moment": "solved",
+      "render": "2a0ac3ca75f0",
+      "model": "eleven_v4",
+      "file": "ben-6fba1e4fc19c.mp3"
     },
     "ben-73527b94a56c": {
       "text": "Alle draußen, und die Notzellen hätten noch eine Weile gehalten. Ihr habt den Reaktor zurückgeholt, ohne lange zu suchen. Gute Nacht, Nachtschicht.",
@@ -570,6 +700,19 @@
       "model": "eleven_v4",
       "file": "ben-7cf7ab52533d.mp3"
     },
+    "ben-7da9e42c8da7": {
+      "text": "Das Betriebsbuch zur Anlaufsteuerung liegt im Archiv, auf der Ostseite.",
+      "ms": 4362,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "ben",
+      "moment": "nudge",
+      "render": "54efd08cf126",
+      "model": "eleven_v4",
+      "file": "ben-7da9e42c8da7.mp3"
+    },
     "ben-817d23810d00": {
       "text": "Resonator offen. Station dahinter, durch die Westtür.",
       "ms": 3788,
@@ -582,6 +725,19 @@
       "render": "301c475b4798",
       "model": "eleven_v4",
       "file": "ben-817d23810d00.mp3"
+    },
+    "ben-876fddf4f92c": {
+      "text": "Der Notstromkasten hängt im Maschinenraum gleich hinter der Tür, das Prüfpult steht im Labor an der Südwand.",
+      "ms": 6348,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "ben",
+      "moment": "nudge",
+      "render": "c78996efa0fd",
+      "model": "eleven_v4",
+      "file": "ben-876fddf4f92c.mp3"
     },
     "ben-8849fe962d54": {
       "text": "Das Terminal steht an der Westwand vom Serverraum, das Rack gegenüber an der Ostwand, je einer an jedes.",
@@ -661,6 +817,19 @@
       "render": "e929408772d7",
       "model": "eleven_v4",
       "file": "ben-997eda98f143.mp3"
+    },
+    "ben-99b72b533dda": {
+      "text": "Aggregat läuft, die Maschinenraumtür bleibt offen. Als Nächstes der Paketfilter am Serverschott: Pulte östlich davon, die Richtlinie hängt westlich an der Südwand.",
+      "ms": 10266,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "ben",
+      "moment": "solved",
+      "render": "4c6bb3972877",
+      "model": "eleven_v4",
+      "file": "ben-99b72b533dda.mp3"
     },
     "ben-9dc804d5a806": {
       "text": "Der Hebel für die Initialisierung hängt im Leitstand an der Nordwand, rechts.",
@@ -794,6 +963,19 @@
       "model": "eleven_v4",
       "file": "ben-aa8b2a98cdfa.mp3"
     },
+    "ben-ab5663f1e6be": {
+      "text": "Die Tür zum Maschinenraum geht nur auf, solange jemand auf der Platte davor steht, dahinter wartet das zweite Pult.",
+      "ms": 7001,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "ben",
+      "moment": "nudge",
+      "render": "0442c0423740",
+      "model": "eleven_v4",
+      "file": "ben-ab5663f1e6be.mp3"
+    },
     "ben-aeb80233368a": {
       "text": "Ich hab euch klar auf der Frequenz. Die Ersatzsicherung für den Reaktor liegt im Archiv, bringt sie rüber.",
       "ms": 5721,
@@ -820,6 +1002,19 @@
       "model": "eleven_v4",
       "file": "ben-b026b38b6ad9.mp3"
     },
+    "ben-b0ec22a57992": {
+      "text": "Signalkette steht, die Türen zum Reaktor sind offen. Ohne Ersatzsicherung bleibt er aber tot.",
+      "ms": 6113,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "ben",
+      "moment": "solved",
+      "render": "f21e2c859805",
+      "model": "eleven_v4",
+      "file": "ben-b0ec22a57992.mp3"
+    },
     "ben-b39afab437ff": {
       "text": "Kurze Funkprobe. Alle haben sich gemeldet, ihr kommt sauber bei mir an. Ich bleibe die ganze Nacht auf dieser Frequenz.",
       "ms": 6687,
@@ -834,6 +1029,19 @@
       "model": "eleven_v4",
       "file": "ben-b39afab437ff.mp3"
     },
+    "ben-b613954ef023": {
+      "text": "Das Wartungsbuch zum Notstromkasten liegt im Labor, ein paar Schritte vom Prüfpult entfernt.",
+      "ms": 5486,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "ben",
+      "moment": "nudge",
+      "render": "b29f9cc8103f",
+      "model": "eleven_v4",
+      "file": "ben-b613954ef023.mp3"
+    },
     "ben-b780a958285b": {
       "text": "Ihr seid draußen, mit Sekunden übrig. Der Trakt hat Strom, die Proben sind gerettet, und ich atme hier auch erst mal durch.",
       "ms": 8594,
@@ -847,6 +1055,32 @@
       "render": "edb1345ae5e9",
       "model": "eleven_v4",
       "file": "ben-b780a958285b.mp3"
+    },
+    "ben-ba996ea1f1c9": {
+      "text": "Schott zum Serverraum ist offen, drinnen Terminal und Rack. Die Unterlagen dazu liegen im Spind zwischen den beiden.",
+      "ms": 7079,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "ben",
+      "moment": "solved",
+      "render": "f1f6ae82134a",
+      "model": "eleven_v4",
+      "file": "ben-ba996ea1f1c9.mp3"
+    },
+    "ben-c30a53ba8d33": {
+      "text": "Ohne das Betriebsbuch aus dem Archiv sagen die Leuchten am Schaltfeld nichts, es liegt dort auf der Ostseite.",
+      "ms": 6191,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "ben",
+      "moment": "nudge",
+      "render": "75dd1779a3b3",
+      "model": "eleven_v4",
+      "file": "ben-c30a53ba8d33.mp3"
     },
     "ben-c5745897bc41": {
       "text": "Reaktor ist am Netz, der Notausgang ist auf, Nordwestecke beim Archiv. Raus da, alle zusammen!",
@@ -942,6 +1176,19 @@
       "model": "eleven_v4",
       "file": "ben-d28c73aa87a3.mp3"
     },
+    "ben-d39b0489111f": {
+      "text": "Der Notstromkasten hält, die Türen zum Reaktor sind offen. Ohne Ersatzsicherung bleibt er aber tot.",
+      "ms": 6531,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "ben",
+      "moment": "solved",
+      "render": "c78c18f758cd",
+      "model": "eleven_v4",
+      "file": "ben-d39b0489111f.mp3"
+    },
     "ben-d5e769ffd5cf": {
       "text": "Funkprobe, Nachtschicht. Ich höre euch laut und klar. Bisher eine ruhige Nacht im Trakt, von mir aus kann es losgehen.",
       "ms": 7706,
@@ -981,6 +1228,32 @@
       "render": "16f8f607e165",
       "model": "eleven_v4",
       "file": "ben-da0643d71f10.mp3"
+    },
+    "ben-db3ba526c879": {
+      "text": "Ein Pult der Anlaufsteuerung steht am Westende vom Flur, eins im Maschinenraum hinter der Plattentür.",
+      "ms": 6191,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "ben",
+      "moment": "nudge",
+      "render": "28b7cf4bae7e",
+      "model": "eleven_v4",
+      "file": "ben-db3ba526c879.mp3"
+    },
+    "ben-de0429989062": {
+      "text": "Notlicht steht, danke. Jetzt das Notstromaggregat: Das Betriebsbuch liegt im Archiv, ein Pult der Anlaufsteuerung steht im Flur, eins im Maschinenraum.",
+      "ms": 10449,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "ben",
+      "moment": "solved",
+      "render": "019c3359668a",
+      "model": "eleven_v4",
+      "file": "ben-de0429989062.mp3"
     },
     "ben-e036051a6037": {
       "text": "Druckknopf im Westflügel, Nordseite. Regeln im Nordosten.",
@@ -1036,6 +1309,19 @@
       "model": "eleven_v4",
       "file": "ben-e291391e6b9b.mp3"
     },
+    "ben-e297d62852c5": {
+      "text": "Notlicht brennt, ich sehe euch wieder auf meiner Tafel. Weiter mit der Anlaufsteuerung: Betriebsbuch im Archiv, Pulte im Flur und im Maschinenraum.",
+      "ms": 9169,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "ben",
+      "moment": "solved",
+      "render": "3c942b13f042",
+      "model": "eleven_v4",
+      "file": "ben-e297d62852c5.mp3"
+    },
     "ben-e753b688f370": {
       "text": "Weiter im Pumpenraum, Südost. Regeln wieder im Archiv.",
       "ms": 4362,
@@ -1090,6 +1376,19 @@
       "model": "eleven_v4",
       "file": "ben-f2b0b314349d.mp3"
     },
+    "ben-f351f062cf9f": {
+      "text": "Die Maschinen laufen an, im Maschinenraum ist Licht. Der Paketfilter vor dem Serverraum braucht beide Pulte, die Richtlinie hängt westlich vom Schott.",
+      "ms": 9326,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "ben",
+      "moment": "solved",
+      "render": "4e678608c854",
+      "model": "eleven_v4",
+      "file": "ben-f351f062cf9f.mp3"
+    },
     "ben-f749cb97778b": {
       "text": "Das Schott zum Serverraum ist auf, die Unterlagen liegen im Spind darin. Die Kameraplatte davor hält die Drohne an.",
       "ms": 7001,
@@ -1129,6 +1428,19 @@
       "render": "5203ed568b02",
       "model": "eleven_v4",
       "file": "ben-fe74238e0b28.mp3"
+    },
+    "helmut-0244a7115c4b": {
+      "text": "Das Analysepult steht im Flur gleich östlich vom Schott zum Serverraum, das Sperrpult ein Stück weiter Richtung Ostende.",
+      "ms": 7967,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "helmut",
+      "moment": "nudge",
+      "render": "46cad6e4d181",
+      "model": "eleven_v4",
+      "file": "helmut-0244a7115c4b.mp3"
     },
     "helmut-02ed4d6ee051": {
       "text": "Server laufen, die Labortür ist offen, drinnen fliegt eine Drohne. Den Aktenschrank im Labor öffnet nur der Schlüssel.",
@@ -1196,6 +1508,19 @@
       "model": "eleven_v4",
       "file": "helmut-075e89ba063b.mp3"
     },
+    "helmut-07875b229e60": {
+      "text": "Die Richtlinie zum Paketfilter hängt im Flur an der Südwand, westlich vom Schott.",
+      "ms": 5329,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "helmut",
+      "moment": "nudge",
+      "render": "2dfc4b4e4fad",
+      "model": "eleven_v4",
+      "file": "helmut-07875b229e60.mp3"
+    },
     "helmut-1776e2357724": {
       "text": "Die Synchronkalibrierung steht bei den Spulen, ganz im Osten hinter dem offenen Schott.",
       "ms": 5329,
@@ -1208,6 +1533,19 @@
       "render": "572f16eafd23",
       "model": "eleven_v4",
       "file": "helmut-1776e2357724.mp3"
+    },
+    "helmut-1ad34a8f6e35": {
+      "text": "Welche Pakete der Filter sperrt, steht in der Richtlinie, sie hängt im Flur an der Südwand.",
+      "ms": 5721,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "helmut",
+      "moment": "nudge",
+      "render": "e7d02eebaf7d",
+      "model": "eleven_v4",
+      "file": "helmut-1ad34a8f6e35.mp3"
     },
     "helmut-1c32b49724ca": {
       "text": "Notausgang offen, Schleusenmitte. Alle vier hin.",
@@ -1287,6 +1625,19 @@
       "model": "eleven_v4",
       "file": "helmut-271f4a79a98c.mp3"
     },
+    "helmut-2aae9743506e": {
+      "text": "Server oben, zwei Drohnen fliegen, die Kameraplatte am Schott hält die im Flur an. Die Anlage, die Dienst hat, öffnet den Reaktor.",
+      "ms": 9247,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "helmut",
+      "moment": "solved",
+      "render": "2e8508d8b21d",
+      "model": "eleven_v4",
+      "file": "helmut-2aae9743506e.mp3"
+    },
     "helmut-2b3ce9cae36e": {
       "text": "Ich habe die Relais verloren, das müsst ihr von Hand machen. Lest euch jede Anweisung laut vor.",
       "ms": 5721,
@@ -1352,6 +1703,19 @@
       "render": "34e2879170bc",
       "model": "eleven_v4",
       "file": "helmut-3818bbb52b0a.mp3"
+    },
+    "helmut-3c7cf5fdc70c": {
+      "text": "Server laufen, Labortür offen, beide Drohnen sind wach. Ich schalte euch die Anlage auf, die heute Dienst hat, sie öffnet den Reaktor.",
+      "ms": 8908,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "helmut",
+      "moment": "solved",
+      "render": "936d7b428140",
+      "model": "eleven_v4",
+      "file": "helmut-3c7cf5fdc70c.mp3"
     },
     "helmut-3d87fba381b2": {
       "text": "Notausgang offen, Westende vom Flur. Alle drei hin.",
@@ -1459,6 +1823,19 @@
       "model": "eleven_v4",
       "file": "helmut-559d72aae03f.mp3"
     },
+    "helmut-5bfb07095bdd": {
+      "text": "Der Notstromkasten ist sicher, der Reaktor ist offen. Die Ersatzsicherung dafür liegt im Archiv, bringt sie rüber.",
+      "ms": 7158,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "helmut",
+      "moment": "solved",
+      "render": "75d6809a0302",
+      "model": "eleven_v4",
+      "file": "helmut-5bfb07095bdd.mp3"
+    },
     "helmut-5d1ab414fef4": {
       "text": "Reaktor läuft. Der Notausgang ist entriegelt, Nordwestecke beim Archiv. Alle raus, jetzt.",
       "ms": 6687,
@@ -1500,6 +1877,19 @@
       "model": "eleven_v4",
       "file": "helmut-60de97dc17ff.mp3"
     },
+    "helmut-632f181af017": {
+      "text": "Ohne das Wartungsbuch aus dem Labor ratet ihr am Kasten nur herum.",
+      "ms": 4441,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "helmut",
+      "moment": "nudge",
+      "render": "2fa79f035bcb",
+      "model": "eleven_v4",
+      "file": "helmut-632f181af017.mp3"
+    },
     "helmut-63b85185d3f6": {
       "text": "Tastenfeld im Westflügel, Südostecke. Regeln im Nordosten.",
       "ms": 5251,
@@ -1539,6 +1929,19 @@
       "render": "04dacd590bae",
       "model": "eleven_v4",
       "file": "helmut-6552b388f95a.mp3"
+    },
+    "helmut-665bce69a741": {
+      "text": "Pult A der Signalkette steht im Archiv an der Südwand, Pult B im Maschinenraum in der Südostecke.",
+      "ms": 7001,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "helmut",
+      "moment": "nudge",
+      "render": "75efb441b49d",
+      "model": "eleven_v4",
+      "file": "helmut-665bce69a741.mp3"
     },
     "helmut-69b599d72ccd": {
       "text": "Wer am Ostende vom Flur steht: Richtung Westen bis zur Mitte, dort hängt der Hauptschalter.",
@@ -1580,6 +1983,32 @@
       "render": "514c2d7484ae",
       "model": "eleven_v4",
       "file": "helmut-6b1eb79786bd.mp3"
+    },
+    "helmut-6d4d7e090922": {
+      "text": "Die Signalkette hält, der Reaktor ist offen. Die Ersatzsicherung dafür liegt im Archiv, bringt sie rüber.",
+      "ms": 6766,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "helmut",
+      "moment": "solved",
+      "render": "5b19d88a785d",
+      "model": "eleven_v4",
+      "file": "helmut-6d4d7e090922.mp3"
+    },
+    "helmut-6fba1e4fc19c": {
+      "text": "Das Schott zum Serverraum ist auf. Terminal und Rack stehen drinnen, die Unterlagen liegen im Spind darin.",
+      "ms": 6844,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "helmut",
+      "moment": "solved",
+      "render": "afca367722c2",
+      "model": "eleven_v4",
+      "file": "helmut-6fba1e4fc19c.mp3"
     },
     "helmut-73527b94a56c": {
       "text": "Alle draußen, und die Notzellen hätten noch eine Weile gehalten. Ihr habt den Reaktor zurückgeholt, ohne lange zu suchen. Gute Nacht, Nachtschicht.",
@@ -1648,6 +2077,19 @@
       "model": "eleven_v4",
       "file": "helmut-7cf7ab52533d.mp3"
     },
+    "helmut-7da9e42c8da7": {
+      "text": "Das Betriebsbuch zur Anlaufsteuerung liegt im Archiv, auf der Ostseite.",
+      "ms": 4676,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "helmut",
+      "moment": "nudge",
+      "render": "9526abe94314",
+      "model": "eleven_v4",
+      "file": "helmut-7da9e42c8da7.mp3"
+    },
     "helmut-817d23810d00": {
       "text": "Resonator offen. Station dahinter, durch die Westtür.",
       "ms": 4206,
@@ -1660,6 +2102,19 @@
       "render": "77e86c37f24f",
       "model": "eleven_v4",
       "file": "helmut-817d23810d00.mp3"
+    },
+    "helmut-876fddf4f92c": {
+      "text": "Der Notstromkasten hängt im Maschinenraum gleich hinter der Tür, das Prüfpult steht im Labor an der Südwand.",
+      "ms": 6922,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "helmut",
+      "moment": "nudge",
+      "render": "ca65cc846b93",
+      "model": "eleven_v4",
+      "file": "helmut-876fddf4f92c.mp3"
     },
     "helmut-8849fe962d54": {
       "text": "Das Terminal steht an der Westwand vom Serverraum, das Rack gegenüber an der Ostwand, je einer an jedes.",
@@ -1739,6 +2194,19 @@
       "render": "154b065e0900",
       "model": "eleven_v4",
       "file": "helmut-997eda98f143.mp3"
+    },
+    "helmut-99b72b533dda": {
+      "text": "Aggregat läuft, die Maschinenraumtür bleibt offen. Als Nächstes der Paketfilter am Serverschott: Pulte östlich davon, die Richtlinie hängt westlich an der Südwand.",
+      "ms": 11311,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "helmut",
+      "moment": "solved",
+      "render": "ec56b9418fed",
+      "model": "eleven_v4",
+      "file": "helmut-99b72b533dda.mp3"
     },
     "helmut-9dc804d5a806": {
       "text": "Der Hebel für die Initialisierung hängt im Leitstand an der Nordwand, rechts.",
@@ -1885,6 +2353,19 @@
       "model": "eleven_v4",
       "file": "helmut-aa8b2a98cdfa.mp3"
     },
+    "helmut-ab5663f1e6be": {
+      "text": "Die Tür zum Maschinenraum geht nur auf, solange jemand auf der Platte davor steht, dahinter wartet das zweite Pult.",
+      "ms": 7706,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "helmut",
+      "moment": "nudge",
+      "render": "ce25eaf1b08f",
+      "model": "eleven_v4",
+      "file": "helmut-ab5663f1e6be.mp3"
+    },
     "helmut-aeb80233368a": {
       "text": "Ich hab euch klar auf der Frequenz. Die Ersatzsicherung für den Reaktor liegt im Archiv, bringt sie rüber.",
       "ms": 6348,
@@ -1911,6 +2392,19 @@
       "model": "eleven_v4",
       "file": "helmut-b026b38b6ad9.mp3"
     },
+    "helmut-b0ec22a57992": {
+      "text": "Signalkette steht, die Türen zum Reaktor sind offen. Ohne Ersatzsicherung bleibt er aber tot.",
+      "ms": 6609,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "helmut",
+      "moment": "solved",
+      "render": "5114e347d4fc",
+      "model": "eleven_v4",
+      "file": "helmut-b0ec22a57992.mp3"
+    },
     "helmut-b39afab437ff": {
       "text": "Kurze Funkprobe. Alle haben sich gemeldet, ihr kommt sauber bei mir an. Ich bleibe die ganze Nacht auf dieser Frequenz.",
       "ms": 7079,
@@ -1925,6 +2419,19 @@
       "model": "eleven_v4",
       "file": "helmut-b39afab437ff.mp3"
     },
+    "helmut-b613954ef023": {
+      "text": "Das Wartungsbuch zum Notstromkasten liegt im Labor, ein paar Schritte vom Prüfpult entfernt.",
+      "ms": 5956,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "helmut",
+      "moment": "nudge",
+      "render": "b09132a3dd77",
+      "model": "eleven_v4",
+      "file": "helmut-b613954ef023.mp3"
+    },
     "helmut-b780a958285b": {
       "text": "Ihr seid draußen, mit Sekunden übrig. Der Trakt hat Strom, die Proben sind gerettet, und ich atme hier auch erst mal durch.",
       "ms": 9326,
@@ -1938,6 +2445,32 @@
       "render": "03c35e8779e6",
       "model": "eleven_v4",
       "file": "helmut-b780a958285b.mp3"
+    },
+    "helmut-ba996ea1f1c9": {
+      "text": "Schott zum Serverraum ist offen, drinnen Terminal und Rack. Die Unterlagen dazu liegen im Spind zwischen den beiden.",
+      "ms": 7811,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "helmut",
+      "moment": "solved",
+      "render": "b08ad68e9043",
+      "model": "eleven_v4",
+      "file": "helmut-ba996ea1f1c9.mp3"
+    },
+    "helmut-c30a53ba8d33": {
+      "text": "Ohne das Betriebsbuch aus dem Archiv sagen die Leuchten am Schaltfeld nichts, es liegt dort auf der Ostseite.",
+      "ms": 6687,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "helmut",
+      "moment": "nudge",
+      "render": "061f0e39883a",
+      "model": "eleven_v4",
+      "file": "helmut-c30a53ba8d33.mp3"
     },
     "helmut-c5745897bc41": {
       "text": "Reaktor ist am Netz, der Notausgang ist auf, Nordwestecke beim Archiv. Raus da, alle zusammen!",
@@ -2033,6 +2566,19 @@
       "model": "eleven_v4",
       "file": "helmut-d28c73aa87a3.mp3"
     },
+    "helmut-d39b0489111f": {
+      "text": "Der Notstromkasten hält, die Türen zum Reaktor sind offen. Ohne Ersatzsicherung bleibt er aber tot.",
+      "ms": 7158,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "helmut",
+      "moment": "solved",
+      "render": "343a5fdd53c4",
+      "model": "eleven_v4",
+      "file": "helmut-d39b0489111f.mp3"
+    },
     "helmut-d5e769ffd5cf": {
       "text": "Funkprobe, Nachtschicht. Ich höre euch laut und klar. Bisher eine ruhige Nacht im Trakt, von mir aus kann es losgehen.",
       "ms": 7889,
@@ -2072,6 +2618,32 @@
       "render": "f0276664604b",
       "model": "eleven_v4",
       "file": "helmut-da0643d71f10.mp3"
+    },
+    "helmut-db3ba526c879": {
+      "text": "Ein Pult der Anlaufsteuerung steht am Westende vom Flur, eins im Maschinenraum hinter der Plattentür.",
+      "ms": 6844,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "helmut",
+      "moment": "nudge",
+      "render": "931127754fa4",
+      "model": "eleven_v4",
+      "file": "helmut-db3ba526c879.mp3"
+    },
+    "helmut-de0429989062": {
+      "text": "Notlicht steht, danke. Jetzt das Notstromaggregat: Das Betriebsbuch liegt im Archiv, ein Pult der Anlaufsteuerung steht im Flur, eins im Maschinenraum.",
+      "ms": 12042,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "helmut",
+      "moment": "solved",
+      "render": "50ef4f12c5f4",
+      "model": "eleven_v4",
+      "file": "helmut-de0429989062.mp3"
     },
     "helmut-e036051a6037": {
       "text": "Druckknopf im Westflügel, Nordseite. Regeln im Nordosten.",
@@ -2127,6 +2699,19 @@
       "model": "eleven_v4",
       "file": "helmut-e291391e6b9b.mp3"
     },
+    "helmut-e297d62852c5": {
+      "text": "Notlicht brennt, ich sehe euch wieder auf meiner Tafel. Weiter mit der Anlaufsteuerung: Betriebsbuch im Archiv, Pulte im Flur und im Maschinenraum.",
+      "ms": 10371,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "helmut",
+      "moment": "solved",
+      "render": "6eb3d9962010",
+      "model": "eleven_v4",
+      "file": "helmut-e297d62852c5.mp3"
+    },
     "helmut-e753b688f370": {
       "text": "Weiter im Pumpenraum, Südost. Regeln wieder im Archiv.",
       "ms": 4754,
@@ -2181,6 +2766,19 @@
       "model": "eleven_v4",
       "file": "helmut-f2b0b314349d.mp3"
     },
+    "helmut-f351f062cf9f": {
+      "text": "Die Maschinen laufen an, im Maschinenraum ist Licht. Der Paketfilter vor dem Serverraum braucht beide Pulte, die Richtlinie hängt westlich vom Schott.",
+      "ms": 10031,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "helmut",
+      "moment": "solved",
+      "render": "64eb24e43d7c",
+      "model": "eleven_v4",
+      "file": "helmut-f351f062cf9f.mp3"
+    },
     "helmut-f749cb97778b": {
       "text": "Das Schott zum Serverraum ist auf, die Unterlagen liegen im Spind darin. Die Kameraplatte davor hält die Drohne an.",
       "ms": 7889,
@@ -2220,6 +2818,19 @@
       "render": "f1af88d0c13d",
       "model": "eleven_v4",
       "file": "helmut-fe74238e0b28.mp3"
+    },
+    "laura-0244a7115c4b": {
+      "text": "Das Analysepult steht im Flur gleich östlich vom Schott zum Serverraum, das Sperrpult ein Stück weiter Richtung Ostende.",
+      "ms": 7811,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "laura",
+      "moment": "nudge",
+      "render": "8e4425fdfbe0",
+      "model": "eleven_v4",
+      "file": "laura-0244a7115c4b.mp3"
     },
     "laura-02ed4d6ee051": {
       "text": "Server laufen, die Labortür ist offen, drinnen fliegt eine Drohne. Den Aktenschrank im Labor öffnet nur der Schlüssel.",
@@ -2287,6 +2898,19 @@
       "model": "eleven_v4",
       "file": "laura-075e89ba063b.mp3"
     },
+    "laura-07875b229e60": {
+      "text": "Die Richtlinie zum Paketfilter hängt im Flur an der Südwand, westlich vom Schott.",
+      "ms": 5642,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "laura",
+      "moment": "nudge",
+      "render": "2e57d62edd87",
+      "model": "eleven_v4",
+      "file": "laura-07875b229e60.mp3"
+    },
     "laura-1776e2357724": {
       "text": "Die Synchronkalibrierung steht bei den Spulen, ganz im Osten hinter dem offenen Schott.",
       "ms": 5486,
@@ -2299,6 +2923,19 @@
       "render": "2b3af3351162",
       "model": "eleven_v4",
       "file": "laura-1776e2357724.mp3"
+    },
+    "laura-1ad34a8f6e35": {
+      "text": "Welche Pakete der Filter sperrt, steht in der Richtlinie, sie hängt im Flur an der Südwand.",
+      "ms": 5956,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "laura",
+      "moment": "nudge",
+      "render": "6a863df86c09",
+      "model": "eleven_v4",
+      "file": "laura-1ad34a8f6e35.mp3"
     },
     "laura-1c32b49724ca": {
       "text": "Notausgang offen, Schleusenmitte. Alle vier hin.",
@@ -2378,6 +3015,19 @@
       "model": "eleven_v4",
       "file": "laura-271f4a79a98c.mp3"
     },
+    "laura-2aae9743506e": {
+      "text": "Server oben, zwei Drohnen fliegen, die Kameraplatte am Schott hält die im Flur an. Die Anlage, die Dienst hat, öffnet den Reaktor.",
+      "ms": 8986,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "laura",
+      "moment": "solved",
+      "render": "528223c41e10",
+      "model": "eleven_v4",
+      "file": "laura-2aae9743506e.mp3"
+    },
     "laura-2b3ce9cae36e": {
       "text": "Ich habe die Relais verloren, das müsst ihr von Hand machen. Lest euch jede Anweisung laut vor.",
       "ms": 5564,
@@ -2443,6 +3093,19 @@
       "render": "58a03daa7a9f",
       "model": "eleven_v4",
       "file": "laura-3818bbb52b0a.mp3"
+    },
+    "laura-3c7cf5fdc70c": {
+      "text": "Server laufen, Labortür offen, beide Drohnen sind wach. Ich schalte euch die Anlage auf, die heute Dienst hat, sie öffnet den Reaktor.",
+      "ms": 9404,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "laura",
+      "moment": "solved",
+      "render": "231bcc4f291c",
+      "model": "eleven_v4",
+      "file": "laura-3c7cf5fdc70c.mp3"
     },
     "laura-3d87fba381b2": {
       "text": "Notausgang offen, Westende vom Flur. Alle drei hin.",
@@ -2537,6 +3200,19 @@
       "model": "eleven_v4",
       "file": "laura-4f5494825480.mp3"
     },
+    "laura-5bfb07095bdd": {
+      "text": "Der Notstromkasten ist sicher, der Reaktor ist offen. Die Ersatzsicherung dafür liegt im Archiv, bringt sie rüber.",
+      "ms": 7549,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "laura",
+      "moment": "solved",
+      "render": "eb52699711b0",
+      "model": "eleven_v4",
+      "file": "laura-5bfb07095bdd.mp3"
+    },
     "laura-5d1ab414fef4": {
       "text": "Reaktor läuft. Der Notausgang ist entriegelt, Nordwestecke beim Archiv. Alle raus, jetzt.",
       "ms": 6844,
@@ -2578,6 +3254,19 @@
       "model": "eleven_v4",
       "file": "laura-60de97dc17ff.mp3"
     },
+    "laura-632f181af017": {
+      "text": "Ohne das Wartungsbuch aus dem Labor ratet ihr am Kasten nur herum.",
+      "ms": 4284,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "laura",
+      "moment": "nudge",
+      "render": "db2ef138ede8",
+      "model": "eleven_v4",
+      "file": "laura-632f181af017.mp3"
+    },
     "laura-63b85185d3f6": {
       "text": "Tastenfeld im Westflügel, Südostecke. Regeln im Nordosten.",
       "ms": 5251,
@@ -2617,6 +3306,19 @@
       "render": "9ddbe999197a",
       "model": "eleven_v4",
       "file": "laura-6552b388f95a.mp3"
+    },
+    "laura-665bce69a741": {
+      "text": "Pult A der Signalkette steht im Archiv an der Südwand, Pult B im Maschinenraum in der Südostecke.",
+      "ms": 7158,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "laura",
+      "moment": "nudge",
+      "render": "35a01b9d940b",
+      "model": "eleven_v4",
+      "file": "laura-665bce69a741.mp3"
     },
     "laura-69b599d72ccd": {
       "text": "Wer am Ostende vom Flur steht: Richtung Westen bis zur Mitte, dort hängt der Hauptschalter.",
@@ -2658,6 +3360,32 @@
       "render": "50b704bf650f",
       "model": "eleven_v4",
       "file": "laura-6b1eb79786bd.mp3"
+    },
+    "laura-6d4d7e090922": {
+      "text": "Die Signalkette hält, der Reaktor ist offen. Die Ersatzsicherung dafür liegt im Archiv, bringt sie rüber.",
+      "ms": 6922,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "laura",
+      "moment": "solved",
+      "render": "717e681f65e6",
+      "model": "eleven_v4",
+      "file": "laura-6d4d7e090922.mp3"
+    },
+    "laura-6fba1e4fc19c": {
+      "text": "Das Schott zum Serverraum ist auf. Terminal und Rack stehen drinnen, die Unterlagen liegen im Spind darin.",
+      "ms": 6687,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "laura",
+      "moment": "solved",
+      "render": "1c17f994d181",
+      "model": "eleven_v4",
+      "file": "laura-6fba1e4fc19c.mp3"
     },
     "laura-73527b94a56c": {
       "text": "Alle draußen, und die Notzellen hätten noch eine Weile gehalten. Ihr habt den Reaktor zurückgeholt, ohne lange zu suchen. Gute Nacht, Nachtschicht.",
@@ -2726,6 +3454,19 @@
       "model": "eleven_v4",
       "file": "laura-7cf7ab52533d.mp3"
     },
+    "laura-7da9e42c8da7": {
+      "text": "Das Betriebsbuch zur Anlaufsteuerung liegt im Archiv, auf der Ostseite.",
+      "ms": 4911,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "laura",
+      "moment": "nudge",
+      "render": "1e97d1cac829",
+      "model": "eleven_v4",
+      "file": "laura-7da9e42c8da7.mp3"
+    },
     "laura-817d23810d00": {
       "text": "Resonator offen. Station dahinter, durch die Westtür.",
       "ms": 4284,
@@ -2738,6 +3479,19 @@
       "render": "8435b3599056",
       "model": "eleven_v4",
       "file": "laura-817d23810d00.mp3"
+    },
+    "laura-876fddf4f92c": {
+      "text": "Der Notstromkasten hängt im Maschinenraum gleich hinter der Tür, das Prüfpult steht im Labor an der Südwand.",
+      "ms": 7001,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "laura",
+      "moment": "nudge",
+      "render": "fbe257b2e7b6",
+      "model": "eleven_v4",
+      "file": "laura-876fddf4f92c.mp3"
     },
     "laura-8849fe962d54": {
       "text": "Das Terminal steht an der Westwand vom Serverraum, das Rack gegenüber an der Ostwand, je einer an jedes.",
@@ -2817,6 +3571,19 @@
       "render": "193d1bbbe4e9",
       "model": "eleven_v4",
       "file": "laura-997eda98f143.mp3"
+    },
+    "laura-99b72b533dda": {
+      "text": "Aggregat läuft, die Maschinenraumtür bleibt offen. Als Nächstes der Paketfilter am Serverschott: Pulte östlich davon, die Richtlinie hängt westlich an der Südwand.",
+      "ms": 11154,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "laura",
+      "moment": "solved",
+      "render": "a2269fcaf02e",
+      "model": "eleven_v4",
+      "file": "laura-99b72b533dda.mp3"
     },
     "laura-9dc804d5a806": {
       "text": "Der Hebel für die Initialisierung hängt im Leitstand an der Nordwand, rechts.",
@@ -2950,6 +3717,19 @@
       "model": "eleven_v4",
       "file": "laura-aa8b2a98cdfa.mp3"
     },
+    "laura-ab5663f1e6be": {
+      "text": "Die Tür zum Maschinenraum geht nur auf, solange jemand auf der Platte davor steht, dahinter wartet das zweite Pult.",
+      "ms": 7811,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "laura",
+      "moment": "nudge",
+      "render": "dfdd0ab46a06",
+      "model": "eleven_v4",
+      "file": "laura-ab5663f1e6be.mp3"
+    },
     "laura-aeb80233368a": {
       "text": "Ich hab euch klar auf der Frequenz. Die Ersatzsicherung für den Reaktor liegt im Archiv, bringt sie rüber.",
       "ms": 6034,
@@ -2976,6 +3756,19 @@
       "model": "eleven_v4",
       "file": "laura-b026b38b6ad9.mp3"
     },
+    "laura-b0ec22a57992": {
+      "text": "Signalkette steht, die Türen zum Reaktor sind offen. Ohne Ersatzsicherung bleibt er aber tot.",
+      "ms": 6687,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "laura",
+      "moment": "solved",
+      "render": "25a92391c4bb",
+      "model": "eleven_v4",
+      "file": "laura-b0ec22a57992.mp3"
+    },
     "laura-b39afab437ff": {
       "text": "Kurze Funkprobe. Alle haben sich gemeldet, ihr kommt sauber bei mir an. Ich bleibe die ganze Nacht auf dieser Frequenz.",
       "ms": 7236,
@@ -2990,6 +3783,19 @@
       "model": "eleven_v4",
       "file": "laura-b39afab437ff.mp3"
     },
+    "laura-b613954ef023": {
+      "text": "Das Wartungsbuch zum Notstromkasten liegt im Labor, ein paar Schritte vom Prüfpult entfernt.",
+      "ms": 5799,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "laura",
+      "moment": "nudge",
+      "render": "353042b4e97c",
+      "model": "eleven_v4",
+      "file": "laura-b613954ef023.mp3"
+    },
     "laura-b780a958285b": {
       "text": "Ihr seid draußen, mit Sekunden übrig. Der Trakt hat Strom, die Proben sind gerettet, und ich atme hier auch erst mal durch.",
       "ms": 9247,
@@ -3003,6 +3809,32 @@
       "render": "d312bd863900",
       "model": "eleven_v4",
       "file": "laura-b780a958285b.mp3"
+    },
+    "laura-ba996ea1f1c9": {
+      "text": "Schott zum Serverraum ist offen, drinnen Terminal und Rack. Die Unterlagen dazu liegen im Spind zwischen den beiden.",
+      "ms": 8046,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "laura",
+      "moment": "solved",
+      "render": "36bbb722e864",
+      "model": "eleven_v4",
+      "file": "laura-ba996ea1f1c9.mp3"
+    },
+    "laura-c30a53ba8d33": {
+      "text": "Ohne das Betriebsbuch aus dem Archiv sagen die Leuchten am Schaltfeld nichts, es liegt dort auf der Ostseite.",
+      "ms": 6687,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "laura",
+      "moment": "nudge",
+      "render": "0026c36608e7",
+      "model": "eleven_v4",
+      "file": "laura-c30a53ba8d33.mp3"
     },
     "laura-c5745897bc41": {
       "text": "Reaktor ist am Netz, der Notausgang ist auf, Nordwestecke beim Archiv. Raus da, alle zusammen!",
@@ -3098,6 +3930,19 @@
       "model": "eleven_v4",
       "file": "laura-d28c73aa87a3.mp3"
     },
+    "laura-d39b0489111f": {
+      "text": "Der Notstromkasten hält, die Türen zum Reaktor sind offen. Ohne Ersatzsicherung bleibt er aber tot.",
+      "ms": 7079,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "laura",
+      "moment": "solved",
+      "render": "85a12b758b03",
+      "model": "eleven_v4",
+      "file": "laura-d39b0489111f.mp3"
+    },
     "laura-d5e769ffd5cf": {
       "text": "Funkprobe, Nachtschicht. Ich höre euch laut und klar. Bisher eine ruhige Nacht im Trakt, von mir aus kann es losgehen.",
       "ms": 8124,
@@ -3137,6 +3982,32 @@
       "render": "ac13c5061abf",
       "model": "eleven_v4",
       "file": "laura-da0643d71f10.mp3"
+    },
+    "laura-db3ba526c879": {
+      "text": "Ein Pult der Anlaufsteuerung steht am Westende vom Flur, eins im Maschinenraum hinter der Plattentür.",
+      "ms": 6766,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "laura",
+      "moment": "nudge",
+      "render": "a41e47b50541",
+      "model": "eleven_v4",
+      "file": "laura-db3ba526c879.mp3"
+    },
+    "laura-de0429989062": {
+      "text": "Notlicht steht, danke. Jetzt das Notstromaggregat: Das Betriebsbuch liegt im Archiv, ein Pult der Anlaufsteuerung steht im Flur, eins im Maschinenraum.",
+      "ms": 12042,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "laura",
+      "moment": "solved",
+      "render": "d25b805c61b8",
+      "model": "eleven_v4",
+      "file": "laura-de0429989062.mp3"
     },
     "laura-e036051a6037": {
       "text": "Druckknopf im Westflügel, Nordseite. Regeln im Nordosten.",
@@ -3192,6 +4063,19 @@
       "model": "eleven_v4",
       "file": "laura-e291391e6b9b.mp3"
     },
+    "laura-e297d62852c5": {
+      "text": "Notlicht brennt, ich sehe euch wieder auf meiner Tafel. Weiter mit der Anlaufsteuerung: Betriebsbuch im Archiv, Pulte im Flur und im Maschinenraum.",
+      "ms": 10606,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "laura",
+      "moment": "solved",
+      "render": "cb3a4aef2435",
+      "model": "eleven_v4",
+      "file": "laura-e297d62852c5.mp3"
+    },
     "laura-e753b688f370": {
       "text": "Weiter im Pumpenraum, Südost. Regeln wieder im Archiv.",
       "ms": 4754,
@@ -3245,6 +4129,19 @@
       "render": "65781a6b458b",
       "model": "eleven_v4",
       "file": "laura-f2b0b314349d.mp3"
+    },
+    "laura-f351f062cf9f": {
+      "text": "Die Maschinen laufen an, im Maschinenraum ist Licht. Der Paketfilter vor dem Serverraum braucht beide Pulte, die Richtlinie hängt westlich vom Schott.",
+      "ms": 9796,
+      "missions": [
+        "blackout"
+      ],
+      "role": "operator",
+      "person": "laura",
+      "moment": "solved",
+      "render": "756febc0c3d5",
+      "model": "eleven_v4",
+      "file": "laura-f351f062cf9f.mp3"
     },
     "laura-f749cb97778b": {
       "text": "Das Schott zum Serverraum ist auf, die Unterlagen liegen im Spind darin. Die Kameraplatte davor hält die Drohne an.",
