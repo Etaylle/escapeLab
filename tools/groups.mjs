@@ -117,6 +117,9 @@ export const GROUPS = [
       'firewall-marked-844.png',
       'firewall-marked.png',
       'firewall (targets)',
+      // The Paketfilter resting through an emergency in its second wave, its clean wave kept.
+      'rest-goal.png',
+      'rest-kept.png',
     ],
   },
   {
@@ -287,9 +290,6 @@ export const GROUPS = [
       'filter-held.png',
       'schott-open.png',
       'out-of-service.png',
-      // The Signalkette resting through an emergency, its first stage kept.
-      'rest-goal.png',
-      'rest-kept.png',
     ],
   },
   {

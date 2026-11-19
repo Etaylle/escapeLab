@@ -274,10 +274,8 @@
  * and every sighting logged as it comes. A relay
  * emergency is weathered from both pages, each instruction carried out at
  * the console it names, and a station that has to stay open is opened only
- * once the next emergency will not cut it short — but the Signalkette, where one is due
- * within its step and leaves time for a stage: it is opened, its first stage played, and it
- * rests through the emergency (rest-goal.png: the goal line naming it as resting) to come back
- * on that stage (rest-kept.png), or the run fails. Then both run for the
+ * once the next emergency will not cut it short (a station resting through one is the
+ * Paketfilter drill's matter, rest-goal.png and rest-kept.png). Then both run for the
  * hatch round the loop, and escape.png, pullback.png, won.png, end.png and
  * won-phone.png come from Blackout as they do from the Systemcheck; the log
  * says how long the win took from the blackout, what was left on the clock
@@ -752,18 +750,21 @@ import {
 import { lightWorkText } from './lightwork.mjs';
 import { drawnText, fadeOf, fadeVerdict, meanLuma, midway } from './panelfade.mjs';
 import { movesTaken } from './planleft.mjs';
+import { REST_LEAD_S, restTiming } from './rest.mjs';
 import { beamLight, beamPatches, beamVerdict } from './beamcheck.mjs';
 import { changedShare, sweepOf, sweepVerdict } from './sweep.mjs';
 import {
-  allowanceOffered,
+  allowanceAt,
   arrivals,
   cornersOf,
   flights,
+  gapWithin,
   havens,
+  LOOK_EVERY_S,
   RUN,
   spottedOn,
   LATE_S,
-  LATE_STEPS,
+  STEP_WAIT_S,
   stretchOf,
 } from './patrol.mjs';
 import {
@@ -5840,11 +5841,10 @@ async function manBothConsoles(players) {
  * pressed are the pinned ones: at consoles with the legend a key is a row and
  * a shape, which only the printed legend ties to a sign. Where `walkthrough`,
  * the walkthrough's own shots come at its stages (`stageShots`); a drill
- * takes none of them. `afterFirst`, where given, runs once the first stage is through and the
- * roles are swapped, and has to leave both panels open. Throws with the step that failed,
- * naming the seed where a stage differs from its pin.
+ * takes none of them. Throws with the step that failed, naming the seed where a stage differs
+ * from its pin.
  */
-async function solveSignal(crew, title, pinned = null, walkthrough = true, afterFirst) {
+async function solveSignal(crew, title, pinned = null, walkthrough = true) {
   const roleOf = (player) => player.seen.view.puzzle?.role ?? null;
   const roles = () => crew.map((p) => `${p.name} ${roleOf(p)}`).join(', ');
   await until(() => crew.every((p) => roleOf(p) !== null), 3000);
@@ -5902,14 +5902,6 @@ async function solveSignal(crew, title, pinned = null, walkthrough = true, after
     }
     console.log(`${line} through, roles swapped`);
     [sending, pressing] = [pressing, sending];
-    await afterStage(stage, afterFirst);
-  }
-}
-
-/** What a Signalkette's caller has to do once its first stage is through, where it has. */
-async function afterStage(stage, afterFirst) {
-  if (stage === 1 && afterFirst != null) {
-    await afterFirst();
   }
 }
 
@@ -11191,9 +11183,9 @@ async function tapMoving(player, locator) {
  * the ring on the page; null where the packet went through before a tap took (an alarm follows,
  * and the drill goes on with the fresh wave).
  */
-async function firewallMark({ gate, analysis }, id, shots) {
+async function firewallMark({ gate, analysis }, id, shots, marked) {
   const card = analysis.page.locator(`.station-modal .firewall-card[data-packet="${id}"]`);
-  await headersShot(analysis, shots);
+  await headersShot(analysis, shots, marked);
   // A tap that missed the moving card is tried again; one that took is never repeated, so that
   // no second tap takes the mark back.
   const live = () => firewallLive(analysis).some((p) => p.id === id);
@@ -11218,23 +11210,191 @@ async function firewallMark({ gate, analysis }, id, shots) {
   return ms;
 }
 
+/** How many packets of `wave` (a plan's, first to last) the policy drops: the marks it takes. */
+const hostileIn = (wave = []) => wave.filter((packet) => packet.hostile).length;
+
+/**
+ * A Paketfilter's shots still armed once it is solved fail the run, named: a shot is taken or
+ * skipped with its reason, never lost from the count without a word.
+ */
+function unshot(shots) {
+  const armed = ['headers', 'gate', 'held', 'rest'].filter((kind) => shots[kind]);
+  const names = armed.map((kind) => shots.names?.[kind] ?? FIREWALL_SHOT_NAMES[kind]);
+  if (names.length > 0) {
+    fail(`${names.join(', ')}: armed, and neither taken nor skipped`);
+  }
+}
+
+/** The probe drill's shots by kind, as the run counts them. */
+const FIREWALL_SHOT_NAMES = {
+  headers: 'firewall-headers.png',
+  gate: 'firewall-gate.png',
+  held: 'firewall-held.png',
+  rest: 'rest-goal.png and rest-kept.png',
+};
+
+/**
+ * The probe's second wave timed for its emergency, at the first look at it running while its
+ * rest is still to be shot (`shots.rest`): where the next one would fall more than
+ * REST_INTO_WAVE_S into the wave (rest.mjs `restTiming`), `gate`'s player steps off the
+ * Sperrpult — the wave holds, as it holds for any crew whose Sperrpult stands empty — until
+ * it is REST_LEAD_S away, and back on. Returns whether it held the wave; logs either way.
+ */
+async function heldForRest({ gate }, fw, shots) {
+  const timing = restTimingAt(gate, fw, shots);
+  if (timing === null) {
+    return false;
+  }
+  if (!timing.hold) {
+    fwSaid(`rest: the emergency falls ${timing.intoS.toFixed(1)} s into the second wave`);
+    return false;
+  }
+  const from = Date.now();
+  await holdTillDue(gate, shots);
+  fwSaid(
+    `rest: the second wave held ${seconds(Date.now() - from)} for its emergency, ` +
+      `which would have fallen ${timing.intoS.toFixed(1)} s into it`,
+  );
+  return true;
+}
+
+/** Seconds until the probe's next emergency, on `gate`'s stream. */
+const probeEmergencyIn = (gate) => nextEmergencyIn(gate.seen, FIREWALL_MISSION.map.sabotage);
+
+/**
+ * The second wave's timing for its emergency (rest.mjs `restTiming`) at the first look at it
+ * running while the rest is still to be shot — marked as looked at; null at any other look.
+ */
+function restTimingAt(gate, fw, shots) {
+  const running = fw?.cleared === 1 && fw.waiting === false && fw.clock?.heldAt === null;
+  if (shots.rest !== true || shots.restTimed === true || !running) {
+    return null;
+  }
+  shots.restTimed = true;
+  return restTiming((Date.now() - fw.clock.startedAt) / 1000, probeEmergencyIn(gate));
+}
+
+/** `gate`'s player off the Sperrpult, the wave held, till the emergency is REST_LEAD_S off. */
+async function holdTillDue(gate, shots) {
+  await gate.page.keyboard.press('Escape');
+  const { spot, man } = heldWays(gate, shots);
+  if (!(await walkNear(gate.page, gate.seen, spot))) {
+    throw new Error(`${gate.name} found no way off the Sperrpult to ${spot.x},${spot.y}`);
+  }
+  await until(() => probeEmergencyIn(gate) <= REST_LEAD_S + 2, (probeEmergencyIn(gate) + 5) * 1000);
+  await man();
+  await until(() => probeEmergencyIn(gate) <= REST_LEAD_S, 5000);
+}
+
+/**
+ * An emergency on the crew's pages, weathered at the relay (`weather`): none, false. The one the
+ * second wave was released for (`shots.restTimed`) — the Paketfilter resting in that wave —
+ * takes rest-goal.png as it lands (`restingGoalShot`); after it both consoles are manned again,
+ * and the station has to be back without a switch-on, its clean wave kept, the wave that was in
+ * the air called off for a fresh one that waits, no alarm counted: rest-kept.png, the Sperrpult.
+ * The run fails where it is not so.
+ */
+async function restedThrough(crew, shots) {
+  if (!emergencyOn(crew.gate.seen)) {
+    return false;
+  }
+  if (shots.restTimed === true) {
+    [shots.rest, shots.restTimed] = [false, false];
+    await shootRest(crew);
+  } else {
+    await weather();
+  }
+  return true;
+}
+
+/** rest-goal.png as the emergency lands, then rest-kept.png once it is weathered. */
+async function shootRest({ gate, analysis }) {
+  const alarms = gate.seen.view.alarms.count;
+  const title = FIREWALL_MISSION.puzzles[0].title;
+  const named = await restingGoalShot(gate, title);
+  await weather();
+  for (const player of [analysis, gate]) {
+    // The panel the emergency shut has to be gone before E opens it again.
+    await player.page.locator('.station-modal').waitFor({ state: 'hidden', timeout: 3000 });
+  }
+  await manFirewall(analysis, 'b', 'analysis');
+  await manFirewall(gate, 'a', 'gate');
+  const back = (fw) => fw?.cleared === 1 && fw.waiting === true && fw.packets?.length === 0;
+  const viewKept = (await until(() => back(firewallView(gate)), CATCH_UP_MS)) &&
+    gate.seen.view.alarms.count === alarms;
+  const page = await sperrpultUp(gate);
+  await capture(gate.page, 'rest-kept.png');
+  fwSaid(`rest-kept.png ${gate.name}'s Sperrpult after the emergency: ${page.text}; the view ` +
+    `${keptSaid(gate, alarms)}${viewKept ? '' : ' !! not as it stood'}`);
+  if (!named || !viewKept || !page.kept) {
+    fail(`rest: "${title}" named resting ${named}, back with its clean wave ${viewKept}, ` +
+      `on the page ${page.text}`);
+  }
+}
+
+/** What `gate`'s view says of the Paketfilter after its rest, in words. */
+function keptSaid(gate, alarms) {
+  const fw = firewallView(gate);
+  const raised = gate.seen.view.alarms.count - alarms;
+  return `${fw?.cleared} wave(s) clean, ${fw?.waiting ? 'waiting' : 'running'}, ${raised} alarm(s)`;
+}
+
+/** Every animation in `locator`'s element and under it run out (a fade, a slide). */
+const animationsDone = (locator) =>
+  locator.evaluate((el) =>
+    Promise.all(el.getAnimations({ subtree: true }).map((a) => a.finished.catch(() => undefined))),
+  );
+
+/**
+ * `gate`'s Sperrpult as its page shows it, its panel up and its fade-in run out: whether it waits
+ * for the Freigabe — FREIGABE pressable, no packet on a line — and what it shows, in words.
+ */
+async function sperrpultUp(gate) {
+  const modal = gate.page.locator('.station-modal');
+  const up = await settled(modal.waitFor({ state: 'visible', timeout: 3000 }));
+  if (!up) {
+    return { kept: false, text: 'no panel' };
+  }
+  await animationsDone(modal);
+  const arm = modal.locator('.firewall-arm');
+  const armable = (await arm.isVisible()) && (await arm.isEnabled());
+  const blips = await modal.locator('.firewall-blip').count();
+  const text = `the panel up, FREIGABE ${armable ? 'pressable' : 'not pressable'}, ${blips} ` +
+    'packet(s) on the lines';
+  return { kept: armable && blips === 0, text };
+}
+
 /** How many cards the headers' shot waits for on the lines, until the second wave. */
 const HEADERS_CARDS = 3;
 
 /**
- * firewall-headers.png, before the first mark with HEADERS_CARDS cards on the lines, or before
- * the first mark of a later wave: the Analysepult with its cards.
+ * firewall-headers.png, before the first mark with HEADERS_CARDS cards on the lines, before the
+ * first wave's last mark with what is on the lines then (`marked` marks of `shots.hostile`: a
+ * short wave may never have that many at a mark), or before the first mark of a later wave: the
+ * Analysepult with its cards.
  */
-async function headersShot(analysis, shots) {
+async function headersShot(analysis, shots, marked) {
+  if (!shots.headers) {
+    return;
+  }
   const cards = await analysis.page.locator('.station-modal .firewall-card').count();
-  const later = (firewallView(analysis)?.wave ?? 1) > 1;
-  if (!shots.headers || (cards < HEADERS_CARDS && !later)) {
+  if (!headersDue(analysis, shots, marked, cards)) {
     return;
   }
   shots.headers = false;
   const shot = shots.names?.headers ?? 'firewall-headers.png';
   await capture(analysis.page, shot);
   fwSaid(`${shot} ${analysis.name}'s Analysepult: ${cards} cards on the lines`);
+}
+
+/**
+ * Whether the headers' shot is due with `cards` on the lines and `marked` marks made: enough
+ * cards, a later wave, or the first wave's last mark.
+ */
+function headersDue(analysis, shots, marked, cards) {
+  const later = (firewallView(analysis)?.wave ?? 1) > 1;
+  const last = marked + 1 >= (shots.hostile ?? Infinity);
+  return cards >= HEADERS_CARDS || later || last;
 }
 
 /** Whether `gate`'s view shows packet `id` marked. */
@@ -11640,7 +11800,7 @@ async function firewallStep(crew, hostile, shots, rings) {
   }
   const mark = firewallLive(analysis).find((p) => hostile.has(p.id) && !p.marked);
   if (mark !== undefined) {
-    const ms = await firewallMark(crew, mark.id, shots);
+    const ms = await firewallMark(crew, mark.id, shots, rings.length);
     rings.push(...(ms === null ? [] : [ms]));
     return true;
   }
@@ -11668,6 +11828,13 @@ async function followFirewall(crew, hostile, shots = NO_FIREWALL_SHOTS) {
   const rings = [];
   const open = () => crew.gate.seen.view.currentPuzzleIndex === index;
   while (open() && Date.now() < deadline) {
+    // Before any step of the second wave: its emergency is timed from the first look at it.
+    if (
+      (await restedThrough(crew, shots)) ||
+      (await heldForRest(crew, firewallView(crew.gate), shots))
+    ) {
+      continue;
+    }
     if (!(await firewallStep(crew, hostile, shots, rings))) {
       await sleep(100);
     }
@@ -11690,8 +11857,10 @@ const FIREWALL_HOSTILE = new Set(
 async function playFirewall(crew) {
   const alarms = crew.gate.seen.view.alarms.count;
   const from = Date.now();
-  const shots = { headers: true, gate: true, held: true };
+  const hostile = hostileIn(FIREWALL_PLAN.waves[0]);
+  const shots = { headers: true, gate: true, held: true, rest: true, hostile };
   const { solved, rings } = await followFirewall(crew, FIREWALL_HOSTILE, shots);
+  unshot(shots);
   const raised = crew.gate.seen.view.alarms.count - alarms;
   fwSaid(
     `${rings.length} marks in ${seconds(Date.now() - from)}, rings ` +
@@ -11719,7 +11888,9 @@ const firewallUnjudged = (why) => skip('firewall (targets)', why);
  * (`playFirewall`): FREIGABE where a wave waits, a mark on every packet the policy drops, a trip
  * under every ring — the cards shot at a mark (firewall-headers.png), the Sperrpult at its first
  * ring (firewall-gate.png), both consoles and the audience's page on phones held upright during a
- * hold (`heldShot`). The mission is deleted again whatever happened.
+ * hold (`heldShot`), and the station resting through the probe's emergency, timed into its second
+ * wave (`heldForRest`, `restedThrough`: rest-goal.png, rest-kept.png). The mission is deleted
+ * again whatever happened.
  */
 async function captureFirewall() {
   if (MISSION.toLowerCase() === 'blackout') {
@@ -11754,12 +11925,16 @@ async function captureFirewall() {
     await firewallPolicyShot(analysis, binder);
     await manFirewall(analysis, 'b', 'analysis');
     await firewallRuns(gate);
+    relayCrew.push(gate, analysis);
+    relayPhoneShots = false;
     await playFirewall({ gate, analysis, audience });
     fwSaid(`the drill took ${seconds(Date.now() - from)}`);
   } catch (err) {
     fwSaid(`!! ${firstLine(err)}`);
     fail(`firewall: ${firstLine(err)}`);
   } finally {
+    relayCrew.length = 0;
+    relayPhoneShots = true;
     for (const { context } of crew) {
       await context.close();
     }
@@ -12404,36 +12579,33 @@ function nextRun(player, map, path, hold, { late, behind }) {
 /** What the walks past the drones came to, for the log's line at the end. */
 const sneaking = { walks: 0, waitedMs: 0, ranAnyway: 0, tightest: LATE_S };
 
-/** How long a walk waits for a gap at one allowance before it takes the next smaller, ms. */
-const ALLOWANCE_WAIT_MS = 12_000;
-
-/** The allowance for a late avatar a walk asks of a gap once it has waited `ms` for one, s. */
-function allowanceAfter(ms) {
-  const step = Math.min(LATE_STEPS.length - 1, Math.floor(ms / ALLOWANCE_WAIT_MS));
-  return LATE_STEPS[step];
-}
-
 /**
- * How long a walk that stands waiting for a gap counts as having waited, in ms: `waited` once
- * it has begun; at its first moment without one, the while it would stand out in vain at each
- * allowance wider than the patrols offer the stretch ahead within ALLOWANCE_WAIT_MS (patrol.mjs
- * `allowanceOffered`) — the escape's way through the Süd-Flur never has a gap for a second.
+ * Whether a walk that has just found no gap where it stands would wait for one a second wide
+ * in vain: the patrols, foretold over STEP_WAIT_S, bring none to the stretch ahead (patrol.mjs
+ * `gapWithin`) — the escape's way through the Süd-Flur never has one. The walk then asks 0.7 s
+ * from the start (`allowanceAt`).
  */
-function waitBegun(player, map, path, hold, waited) {
-  if (waited > 0) {
-    return waited;
-  }
+function secondVain(player, map, path, hold) {
   const sight = { tiles: map.tiles, shut: shutOn(map) };
   const { drones, age } = dronesOn(player.seen);
   const stretch = stretchOf(path, havensOn(drones, sight));
   const stand = stretch.length === path.length ? hold : SETTLE_S;
-  const within = ALLOWANCE_WAIT_MS / 1000;
   const run = arrivals(stretch, RUN.tile[1], RUN.corner[1]).at(-1) + RUN.corner[1];
   const delay = age + REACTION_S;
-  const flying = flights(drones, delay + within + LATE_S + run + stand + 0.5);
-  const steps = LATE_STEPS;
-  const offered = allowanceOffered(stretch, flying, sight, { delay, hold: stand, within, steps });
-  return steps.indexOf(offered) * ALLOWANCE_WAIT_MS;
+  const flying = flights(drones, delay + STEP_WAIT_S + LATE_S + run + stand + 0.5);
+  const gap = { delay, hold: stand, within: STEP_WAIT_S, late: LATE_S };
+  return !gapWithin(stretch, flying, sight, gap);
+}
+
+/**
+ * A walk that finds no gap where it stands waits a look's while: `waited` on by that, and at
+ * its first moment whether a second is vain there (`secondVain`).
+ */
+async function waitOn(player, map, path, hold, waited) {
+  const vain = waited.ms === 0 ? secondVain(player, map, path, hold) : waited.vain;
+  await sleep(LOOK_EVERY_S * 1000);
+  sneaking.waitedMs += LOOK_EVERY_S * 1000;
+  return { ms: waited.ms + LOOK_EVERY_S * 1000, vain };
 }
 
 /** `player`'s map; throws, saying how the run stands, where its view has none. */
@@ -12459,8 +12631,9 @@ function mapOf(player) {
 async function sneakTo(player, target, hold = 1.2) {
   const since = Date.now();
   let late = false;
-  // How long it has waited where it stands for a gap: the allowance steps down with it.
-  let waitedHere = 0;
+  // How long it has waited where it stands for a gap, ms, and whether a second is vain there:
+  // the allowance steps down with it (patrol.mjs `allowanceAt`).
+  let waited = { ms: 0, vain: false };
   sneaking.walks += 1;
   for (;;) {
     await weather();
@@ -12485,17 +12658,14 @@ async function sneakTo(player, target, hold = 1.2) {
           `${target.x},${target.y}`,
       );
     }
-    const behind = allowanceAfter(waitedHere);
+    const behind = allowanceAt(waited.ms / 1000, waited.vain);
     const run = nextRun(player, map, path, hold, { late, behind });
     if (run === null) {
-      waitedHere = waitBegun(player, map, path, hold, waitedHere);
-      await sleep(60);
-      sneaking.waitedMs += 60;
-      waitedHere += 60;
+      waited = await waitOn(player, map, path, hold, waited);
       continue;
     }
     sneaking.tightest = Math.min(sneaking.tightest, late ? 0 : behind);
-    waitedHere = 0;
+    waited = { ms: 0, vain: false };
     await runPath(player, run);
   }
 }
@@ -12616,6 +12786,24 @@ async function carryOut(owner, holder, order) {
   return true;
 }
 
+/**
+ * Whether a relay emergency's phone shot is taken (device-phone-relay.png): Blackout's crew's;
+ * the Paketfilter drill's crew, at the relay meanwhile, takes none.
+ */
+let relayPhoneShots = true;
+
+/** device-phone-relay.png of each of `relayCrew` whose relay console is up, where it is taken. */
+async function relayPhones() {
+  if (!relayPhoneShots) {
+    return;
+  }
+  for (const player of relayCrew) {
+    if (await player.page.locator('.relay-modal').isVisible()) {
+      await inGroup('devices', () => captureDevicePhone(player, 'relay'));
+    }
+  }
+}
+
 /** The emergencies the walkthrough weathered, for the log's line at the end. */
 const emergencies = { weathered: 0, missed: 0 };
 
@@ -12641,8 +12829,8 @@ function emergencyEnd(seen) {
 /**
  * A relay emergency weathered from both pages: each player's instruction is
  * carried out at the console of the player it names, round after round,
- * until it is over. Nothing while none is on, or outside Blackout's
- * walkthrough. Logs how it went.
+ * until it is over, the relay device's phone shot taken on the way (`relayPhones`). Nothing
+ * while none is on, or where no crew is at the relay. Logs how it went.
  */
 async function weather() {
   if (relayCrew.length === 0 || !relayCrew.some((p) => emergencyOn(p.seen))) {
@@ -12650,11 +12838,7 @@ async function weather() {
   }
   const from = Date.now();
   const label = relayCrew.find((p) => emergencyOn(p.seen))?.seen.view.map.sabotage.label;
-  for (const player of relayCrew) {
-    if (await player.page.locator('.relay-modal').isVisible()) {
-      await inGroup('devices', () => captureDevicePhone(player, 'relay'));
-    }
-  }
+  await relayPhones();
   while (relayCrew.some((p) => emergencyOn(p.seen)) && Date.now() - from < 70_000) {
     let acted = false;
     for (const holder of relayCrew) {
@@ -12686,8 +12870,7 @@ async function weather() {
  * the first `firstAfterSec` after the lights went out, then every
  * `everySec`; Infinity while none can come, or one is on.
  */
-function nextEmergencyIn(seen) {
-  const sabotage = BLACKOUT.map.sabotage;
+function nextEmergencyIn(seen, sabotage = BLACKOUT.map.sabotage) {
   const view = seen.view;
   const solved = view.currentPuzzleIndex;
   if (emergencyOn(seen) || solved < sabotage.afterSolved || solved >= view.puzzleCount) {
@@ -13629,11 +13812,13 @@ async function playPaketfilter(host, guest) {
     gate: on,
     held: on,
     names: { headers: 'filter-headers.png', gate: 'filter-gate.png', held: 'filter-held.png' },
+    hostile: hostileIn(BLACKOUT_PLAN.paketfilter.waves[0]),
     // Three tiles along the wall: out of the Sperrpult's reach, and back.
     away: { x: gateAt.x + 3, y: gateAt.y + 1 },
     man: () => manArmed(host, 'a'),
   };
   const { solved, rings } = await atDevices(() => followFirewall(crew, FILTER_HOSTILE, shots));
+  unshot(shots);
   const raised = host.seen.view.alarms.count - alarms;
   console.log(
     `paketfilter        ${rings.length} marks in ${seconds(Date.now() - from)}, rings ` +
@@ -13748,70 +13933,15 @@ async function playSignalkette(host, guest) {
   const title = armedAt(host, 'a').title;
   await sneakTo(guest, atConsole(guest, 'a'));
   await sneakTo(host, atConsole(host, 'b'));
-  const due = nextEmergencyIn(host.seen);
-  const rests = groupOn('devices') && due >= REST_NOTICE_SEC && due <= 75;
-  if (!rests) {
-    await clearOfEmergencies(host, 75, 15);
-    const why = `the next emergency was due in ${due.toFixed(1)} s as the crew reached "${title}"`;
-    await inGroup('devices', () => restLeftOut(`${why}: no stage fits before it, or none came`));
-  }
+  await clearOfEmergencies(host, 75, 15);
   await openPanel(guest, 'a');
   await inGroup('devices', () => captureDevicePhone(guest, stationSlug(guest)));
   await openPanel(host, 'b');
-  const resting = () => inGroup('devices', () => restThroughEmergency(host, guest, title));
-  const rest = rests ? resting : null;
-  await solveSignal([host, guest], title, BLACKOUT_PLAN.signalkette.stages, true, rest);
+  await solveSignal([host, guest], title, BLACKOUT_PLAN.signalkette.stages);
 }
-
-/**
- * How long before an emergency the Signalkette is still opened for a first stage, s: its two
- * panels, the phone's shot and four signs take ten at most, under load twice that.
- */
-const REST_NOTICE_SEC = 30;
 
 /** What the goal line says after the title of a station resting through an emergency (client). */
 const RESTING_GOAL = 'ruht — Stand gehalten';
-
-/** A run whose Signalkette met no emergency with a stage through says what it leaves out. */
-function restLeftOut(why) {
-  skip('rest-goal.png', why);
-  skip('rest-kept.png', why);
-}
-
-/**
- * rest-goal.png, rest-kept.png: the Signalkette, its first stage through, rests through the
- * emergency that is due — waited for with the station on, where the walkthrough else waits
- * before it is. While the relay consoles are up the goal line has to name the station as
- * resting, its progress held (rest-goal.png, `host`'s page); once the emergency is weathered E
- * has to open both panels again without switching anything on, on the stage the crew had
- * reached, nothing of it pressed and no alarm raised (rest-kept.png). The run fails where the
- * station came back otherwise; an emergency that never came leaves both shots out.
- */
-async function restThroughEmergency(host, guest, title) {
-  const stage = host.seen.view.puzzle?.stage ?? null;
-  const alarms = host.seen.view.alarms.count;
-  const due = nextEmergencyIn(host.seen);
-  const wait = `due in ${due.toFixed(1)} s`;
-  console.log(`emergency          ${wait}: "${title}" stays on at stage ${stage}`);
-  if (!(await until(() => emergencyOn(host.seen), (due + 6) * 1000))) {
-    restLeftOut(`no emergency came within ${(due + 6).toFixed(1)} s of stage ${stage}`);
-    return;
-  }
-  const shot = Date.now();
-  const named = await restingGoalShot(host, title);
-  const weathered = Date.now();
-  await weather();
-  const back = Date.now();
-  await openPanel(guest, 'a');
-  await openPanel(host, 'b');
-  const kept = await keptShot(host, title, { stage, alarms });
-  // What the rest costs the run: the two shots and the panels opened a second time.
-  const cost = weathered - shot + (Date.now() - back);
-  console.log(`rest               the shots and both panels opened again: ${seconds(cost)}`);
-  if (!named || !kept) {
-    fail(`rest: "${title}" named resting ${named}, back as it stood ${kept}`);
-  }
-}
 
 /**
  * rest-goal.png: `host`'s page in the emergency, the goal line naming the station of `title`
@@ -13822,7 +13952,12 @@ async function restingGoalShot(host, title) {
   const said = `${title} ${RESTING_GOAL}`;
   const named = await untilAsync(async () => (await goal.textContent()) === said, 3000);
   const shown = await goal.textContent();
-  await sleep(400); // the station's panel has faded from under the relay console
+  // The relay console up over the world, its own fade run out; the station's panel gone.
+  const relay = host.page.locator('.relay-modal');
+  await relay.waitFor({ state: 'visible', timeout: 3000 }).catch(() => undefined);
+  await animationsDone(relay).catch(() => undefined);
+  await host.page.locator('.station-modal').waitFor({ state: 'hidden', timeout: 3000 })
+    .catch(() => undefined);
   await capture(host.page, 'rest-goal.png');
   console.log(
     `rest-goal.png      ${host.name}'s goal line in the emergency: „${shown}"` +
@@ -13831,34 +13966,12 @@ async function restingGoalShot(host, title) {
   return named;
 }
 
-/**
- * rest-kept.png: `host`'s panel open again after the emergency. Returns whether the station
- * stands as `before` it: on its stage, nothing of the stage pressed, no alarm more.
- */
-async function keptShot(host, title, before) {
-  await capture(host.page, 'rest-kept.png');
-  const { stage, done } = host.seen.view.puzzle ?? {};
-  const raised = host.seen.view.alarms.count - before.alarms;
-  const kept = stage === before.stage && done === 0 && raised === 0;
-  console.log(
-    `rest-kept.png      "${title}" after the emergency: stage ${stage}, ${done} sign(s) in, ` +
-      `${raised} alarm(s) — ${kept ? 'kept' : `!! it stood at stage ${before.stage}`}`,
-  );
-  return kept;
-}
-
 /** The play of each station Blackout's Wechselplatz can have, by its id. */
 const WECHSEL_PLAYS = {
   signalkette: (host, guest) => playSignalkette(host, guest),
-  frequenz: (host, guest) => otherThanSignalkette(() => playFrequenz(host, guest)),
-  notstrom: (host, guest) => otherThanSignalkette(() => playNotstrom(host, guest)),
+  frequenz: (host, guest) => playFrequenz(host, guest),
+  notstrom: (host, guest) => playNotstrom(host, guest),
 };
-
-/** A draw without the Signalkette says that its rest through an emergency is left out. */
-async function otherThanSignalkette(play) {
-  await inGroup('devices', () => restLeftOut('this draw has no Signalkette to rest'));
-  await play();
-}
 
 /**
  * Blackout's Wechselplatz on the run's seed: the host first walks up to a console out of

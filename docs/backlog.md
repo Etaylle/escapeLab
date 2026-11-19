@@ -235,6 +235,17 @@ die Entscheidung.
   (`server/test/drones.test.ts`); `tools/patrol.mjs` rechnet ebenso.
 - Beleg: danach je Seed sechs Läufe ohne Capture-Gruppen bei Last 3–5, 18 von 18 ohne Sichtung.
 
+### H-7 Jede Capture eines Laufs genommen oder mit Grund ausgelassen — Status: offen · Größe: M
+
+- Mit sieben Paketen verlor Seed 93 filter-headers.png ohne Zeile und ohne Fehler (Review
+  B-blackout3, 2026-11-19). Seither scheitert ein Lauf, in dem eine Aufnahme des Paketfilters
+  am Ende noch scharf steht (`unshot`), aber nur dort. Allgemein hieße das: jeder Name, den
+  `tools/groups.mjs` für eine laufende Gruppe führt, steht am Ende als genommen oder als
+  ausgelassen mit Namen da. Dafür müssten die Gruppen je Mission sagen, was sie dort nehmen —
+  heute führen sie Blackouts und den Systemcheck zusammen, und ein Blackout-Lauf lässt die
+  Übungshalle mit einer Zeile `hall` aus, nicht mit jeder ihrer Aufnahmen; dazu Platzhalter wie
+  `console-*.png`. Mehr als eine Stunde; nach dem Playtest.
+
 ### H-6 Die Flucht des Rundgangs wartet zwölf Sekunden zu viel — Status: erledigt (B-blackout3, 2026-11-19) · Größe: S
 
 - Der Rundgang verlangt an jeder Strecke erst eine Lücke für eine um 1 s verspätete Figur und
@@ -243,10 +254,17 @@ die Entscheidung.
   umsonst (ohne Capture-Gruppen 17 bis 28 s je Lauf). Zu tun: je Strecke vorab rechnen, welche
   Stufe die Bahnen überhaupt hergeben, und mit ihr beginnen.
 - Umgesetzt: Findet ein Gang keine Lücke, rechnet er einmal über die vorhergesagten Flüge der
-  nächsten 12 s, welche Stufe überhaupt eine bringt (`allowanceOffered`), und beginnt sein Warten
-  dort; die Stufen und ihre 12 s bleiben. `tools/patrol.test.mjs` hält fest, dass die Strecke
-  durch den Süd-Flur in keiner Phase der Laborwache eine Lücke für 1 s hat und meist eine für
-  0,7 s. Die Flucht ohne Capture-Gruppen: 51,9 s auf main, 35,9 s mit dem Paket (Seed 12).
+  nächsten 12 s, ob eine Lücke für 1 s überhaupt kommt (`gapWithin`). Kommt keine, verlangt er
+  0,7 s vom Start an, und zwar so lange, wie main sie verlangt hätte: bis Sekunde 24, dann
+  0,4 s (`allowanceAt`). Kein Gang wird damit enger als auf main; `tools/patrol.test.mjs` hält
+  das über die Phasen der Drohnen für die Flucht durch den Süd-Flur, den Weg zurück zum Reaktor
+  und den Flur in beiden Richtungen fest, ebenso dass die Flucht in keiner Phase eine Lücke für
+  1 s hat und dort im Mittel weniger als halb so lange wartet. Eine erste Fassung begann gleich
+  bei der Stufe, die die nächsten 12 s brachten, und fiel danach nach 12 s auf 0,4 s: Sie ging
+  manche Strecke enger als main (Review 2026-11-19), und unter Last sah eine Drohne Seed 12.
+  So, drei Läufe Seed 12 ohne Capture-Gruppen neben einer Suite in Schleife (Last 6 bis 34),
+  abwechselnd mit main: keine Sichtung, der knappste Gang mit 0,7 s Spielraum wie auf main, die
+  Flucht 43,5–44,0 s gegen 51,5–56,3 s, der Sieg nach 304–305 s gegen 310–314 s.
 
 ### T-9 Tests an der Wanduhr — Status: erledigt (2026-11-13) · Größe: S
 - Zwei Tests lasen die echte Uhr und wurden unter Last rot: `certificate.test.ts` (openssl liest
@@ -437,13 +455,15 @@ die Entscheidung.
   | 5 | Funkpult 35 (G 6–7) | Signalkette 40–41 (G 4) | Funkpult 51–52 (G 9–10) | Notstromkasten 54 (G 8) | Signalkette 43 (G 5) | Funkpult 48–49 (G 4) | Notstromkasten 49 (G 5–6) |
   | 6 | Reaktor 40–41 (G 9–10) | 41–50 (E 0–8, G 5–7) | 48–49 (G 15) | 44–45 (G 15–16) | 55–56 (G 18) | 50 (G 17–18) | 34–35 (G 7) |
   | Flucht | 40–42 (G 3–4) | 56–57 (G 19) | 56–58 (G 19–21) | 59 (G 22) | 46–47 (G 10) | 47–48 (G 10) | 42 (G 5–6) |
-  | Sieg | 243 (G 33) | 299–309 (G 28–30) | 321–322 (G 44–45) | 324–325 (G 45–46) | 304–308 (G 32–33) | 304–306 (G 31–32) | 282 (G 17) |
+  | Sieg | 243 (G 33) | 299–309 (G 28–30) | 321–322 (G 44–45) | 324–325 (G 45–46) | 304–308 (G 32–33) | 304–306 (G 31–32) | 282–302 (G 17; im Review einmal E 6) |
 
   Der Rundgang der alten Folge lässt keiner verspäteten Figur Spielraum; ohne G gerechnet liegt
   sie bei 210 s, das Paket bei 265 bis 273 s. Der Rest sind die Uhren von Paketfilter (41 bis
-  43 s) und Anlaufsteuerung (13 bis 15 s), die die Stationen der alten Folge nicht hatten. Kein
-  Lauf des Pakets wartet mehr auf einen Notfall (E 0). Die drei Auslosungen liegen 26 s
-  auseinander (Ziel 30 s); 300 s hält nur Seed 93, 12 und 56 liegen 4 bis 8 s darüber, fast
+  43 s) und Anlaufsteuerung (13 bis 15 s), die die Stationen der alten Folge nicht hatten. Am
+  Reaktor kann der Rundgang noch auf den Notfall bei 250 s warten (im Review auf Seed 93 6,2 s:
+  299 s statt 282). Die abwechselnde Reihe des Reviews (2026-11-19) gab dem Paket 299 bis 307 s,
+  main 310 bis 326 s. Die drei Auslosungen liegen 282 bis 308 s, 26 s auseinander (Ziel 30 s);
+  300 s hält Seed 93 meist (282 bis 302 s), 12 und 56 liegen 4 bis 8 s darüber, fast
   ganz im Weg zum Reaktor, in den der Notfall bei 250 s fällt — auf Seed 12 auch der längere Weg
   vom Archiv dorthin, den das gerechte Pult A kostet. Die Anlaufsteuerung bleibt (Entscheidung
   2026-11-19: ihre Plätze nennen Texte, die auf das Rendern warten). Die sieben Pakete bleiben:
@@ -815,7 +835,8 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
 - In Blackout (B-blackout2, 2026-11-18): dritte Station, das Tor des Serverraums. Analysepult
   (21,9) und Sperrpult (26,9) im Flur östlich des Serverschotts, die RICHTLINIE an der Südwand
   westlich davon, eine Welle mit neun Paketen (48 bis 52 s auf der Uhr, Lesedruck wie der
-  Modul-Standard: der Abstand der Pakete hängt nur an `fallSec`); die Lösung öffnet das Schott.
+  Modul-Standard: der Abstand der Pakete hängt nur an `fallSec`), seit B-blackout3
+  (2026-11-19) mit sieben (41 bis 43 s); die Lösung öffnet das Schott.
   Beide Drohnen schlafen, bis der Serverraum gelöst ist: Am Paketfilter wird niemand erfasst.
 - Hochkant auf dem Handy: erledigt mit F-firewall-upright (Merge 2026-11-19); in Blackouts
   Rundgang spielt der Gast das Analysepult hochkant (420 × 760).
@@ -867,7 +888,8 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
 - In Blackout (B-blackout2, 2026-11-17): der fünfte Platz ist der Pool `wechsel` aus
   Signalkette, Funkpult und Notstromkasten; er öffnet Reaktortür und Reaktorschott. Die
   Signalkette und das Funkpult stehen, wo sie standen; der Notstromkasten hängt gleich hinter
-  der Maschinentür, sein Prüfpult im Labor, sein Wartungsbuch im Maschinenraum. Das Klemmbrett
+  der Maschinentür, sein Prüfpult im Labor, sein Wartungsbuch im Maschinenraum (seit
+  B-blackout3 an der Westwand des Labors, Pult A der Signalkette im Archiv). Das Klemmbrett
   liegt jetzt am Westende des Flurs (4,12 oder 3,12), der Aktenschrank in der Nordwestecke des
   Labors (12,16 oder 11,15); die Bahn der Flurwache ist die von main: Wer im Umkreis einer
   Quelle der eben gelösten Station steht, wird von keiner Drohne erfasst. Drei Notizen der letzten Schicht erklären den Dienstplan. Seeds: 12
