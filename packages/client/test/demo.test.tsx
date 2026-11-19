@@ -76,18 +76,17 @@ describe('„Demo" in the main menu', () => {
     expect(wipe.shutter).toHaveBeenCalledTimes(1);
   });
 
-  it('fits a laptop’s low window, and leaves a phone held sideways its seven items', () => {
+  it('stays on a phone held sideways, where the editor, the QR code and the settings go', () => {
     const menu = css('styles/menu.css');
-    const low = menu.slice(menu.indexOf('@media (min-width: 900px) and (max-height: 800px) {'));
-    expect(low.slice(0, low.indexOf('\n}\n'))).toMatch(
-      /\.menu-list \.menu-item \{\s*min-height: 44px;/,
-    );
     const sideways = menu.slice(
       menu.indexOf('@media (orientation: landscape) and (max-height: 500px) {'),
     );
     const hidden = (item: string): string => `li:has\\(> \\.menu-item\\[data-item='${item}'\\]\\)`;
-    const list = ['settings', 'demo', 'qr'].map(hidden).join(',\\s*\\.menu-list ');
+    const list = ['settings', 'editor', 'qr'].map(hidden).join(',\\s*\\.menu-list ');
     expect(sideways).toMatch(new RegExp(`${list} \\{\\s*display: none;`));
+    expect(menu).not.toContain("data-item='demo'");
+    // Seven of the ten are left: what a window 390 px high holds at 44 px each.
+    expect(menuItems(true).filter((item) => !['settings', 'editor', 'qr'].includes(item))).toHaveLength(7);
   });
 
   it('leads nowhere while the line is down', () => {

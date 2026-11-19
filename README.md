@@ -112,7 +112,8 @@ derselbe Weg als Link ist `/?demo=1` (für einen QR-Code), „Zuschauen beenden"
 Menü (`docs/gameplay.md`, „Die Demo"). Eine offene Demo-Seite fragt alle vier Minuten `/health`
 ab und hält so einen Server wach, der ohne Anfragen einschläft (Render Free: 15 Minuten); nach
 einem Neustart oder Verbindungsabbruch ist sie von selbst wieder im Publikum. Auf einem quer
-gehaltenen Handy fehlen *Demo* und *QR-Code* wie die Einstellungen: Die Spalte ist dort zu kurz.
+gehaltenen Handy fehlen *Editor*, *QR-Code* und die Einstellungen (sieben Punkte füllen 390 px
+Höhe); *Demo* bleibt, denn Gäste kommen mit dem Handy.
 *QR-Code* zeigt die Adresse der Seite groß als QR-Code (schwarz auf
 weiß, ohne fremden Dienst, auch offline), in der Lobby öffnet „QR" neben dem Raumcode den
 Einladungslink als Code, und neben der Demo steht die Adresse klein zum Mitnehmen

@@ -467,21 +467,6 @@
   }
 }
 
-/* ── a laptop's low window ──────────────────────────────────────────────── */
-
-/* 720 to 768 px high, as a small laptop's window is: ten items a fingertip high fit it, no
-   scroll, the title a little nearer the bar and the menu a little nearer the title. */
-@media (min-width: 900px) and (max-height: 800px) {
-  .menu {
-    row-gap: 12px;
-    padding-top: 16px;
-  }
-
-  .menu-list .menu-item {
-    min-height: 44px;
-  }
-}
-
 /* ── a phone held upright ───────────────────────────────────────────────── */
 
 /* One column: the title, the menu under it, a panel over the menu. */
@@ -558,13 +543,13 @@
   }
 
   /*
-   * Eight items a fingertip high each run past a window 390 px high, and seven fit it: the
-   * settings go from the column, as the gear in the bar right over it opens them, the demo,
-   * which its link leads to and a phone held upright offers, and the site's QR code, which a
-   * phone shows upright.
+   * Seven items a fingertip high fit a window 390 px high, and the menu has ten: the settings
+   * go from the column, as the gear in the bar right over it opens them, the editor, a tool for
+   * a wider window, and the site's QR code, which a phone shows upright. The demo stays: a
+   * visitor comes by phone.
    */
   .menu-list li:has(> .menu-item[data-item='settings']),
-  .menu-list li:has(> .menu-item[data-item='demo']),
+  .menu-list li:has(> .menu-item[data-item='editor']),
   .menu-list li:has(> .menu-item[data-item='qr']) {
     display: none;
   }

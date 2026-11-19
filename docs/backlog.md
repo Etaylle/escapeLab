@@ -1067,8 +1067,12 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   Raumcode der Lobby (Einladungslink, 286 px), klein neben der Demo (132 px, „Zum Mitnehmen");
   eigener Encoder ohne Abhängigkeit (`client/src/qr.ts`: Bytes, Stufe M, Versionen 1–6), im Test
   von einem eigenen Leser zurückgelesen, die drei Aufnahmen von macOS Vision dekodiert.
-- Auf dem quer gehaltenen Handy steht „Demo" nicht im Menü (sieben Punkte füllen 390 px Höhe, wie
-  bisher ohne „Einstellungen"); dorthin führt der Link, und hochkant steht der Punkt da.
+- Auf dem quer gehaltenen Handy stehen sieben Punkte (390 px Höhe): „Demo" bleibt, „Editor",
+  „QR-Code" und „Einstellungen" fehlen dort. Unter dem Titel steht „Hochschule Campus Wien ·
+  Master Software Design and Engineering"; der Absatz unter dem Menü ist entfallen.
+- Aus dem Review: Ein abgewiesener Start, Rematch oder Rückweg in die Lobby ändert nichts mehr am
+  Raum (vorher leerte er die Positionen, die Crew stand still); das Publikum wird an der Tür für
+  alles außer Zuschauen und Mithören abgewiesen; ein Seed wird nur für einen echten Start gezogen.
 - Offen: Die 23 Sprechtexte warten weiter auf Uros' Render; die Demo fügt keinen hinzu.
 
 ## Nur lokal

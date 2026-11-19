@@ -18099,7 +18099,8 @@ async function demoFromMenu(context) {
 /**
  * demo-audience-phone.png and demo-audience-phone-932.png: a phone that asks for less motion
  * comes by the demo's link and stands in the audience at once, upright and turned sideways;
- * upright again, „Zuschauen beenden" leads back to the menu, „Demo" among its items.
+ * there „Zuschauen beenden" leads back to the menu, „Demo" among the items a phone held sideways
+ * keeps.
  */
 async function demoByLink(context) {
   const page = await openPage(context, 'demo phone');
@@ -18115,8 +18116,6 @@ async function demoByLink(context) {
   await sleep(600);
   const turned = await demoAudienceShot(page, 'demo-audience-phone-932.png', '932x430', true);
   wrong.push(...turned);
-  // Upright again: a phone held sideways has no room for „Demo" in its menu (menu.css).
-  await page.setViewportSize(SIZES[2]);
   const stop = page.locator('.spectate-foot button', { hasText: 'Zuschauen beenden' });
   await stop.scrollIntoViewIfNeeded();
   await stop.tap();

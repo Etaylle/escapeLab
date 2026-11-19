@@ -1348,15 +1348,14 @@ spends and the menu puts back.
 „Demo" in the main menu, after „Offene Runden", and the link `/?demo=1` (the stand's QR code) lead
 straight into the audience of the demo room: no name, no account, no code. The link is read once as
 the page comes up and taken off the address at once (`client/src/demoLink.ts`), so that no invite
-link copies it and a reload after „Zuschauen beenden" finds the menu. A phone held sideways has no
-room for the item in its menu's column, as it has none for „Einstellungen": there the link leads
-into the demo, and held upright the item stands. The audience is the one every room has, with the
-label „Demo" beside the mission's name — on every window, a phone's too — and on a wide window one
-line under it, „Vorführbetrieb: Die Anlage fährt diesen Einsatz selbst."; the crew stands along the
-foot as always: „HCW Bachelor" and „HCW Master" (Uros's names for the two), each with what it is
-doing (am Pult A, liest, hält die Platte, trägt die Sicherung). Under a finger the foot's two ways,
-„Crew mithören" and „Zuschauen beenden", are 44 px tall. Whoever joins mid-run sees the run as it
-stands.
+link copies it and a reload after „Zuschauen beenden" finds the menu. A phone held sideways keeps
+the item in its menu's column — seven fit 390 px, and there the editor, „QR-Code" and
+„Einstellungen" go instead. The audience is the one every room has, with the label „Demo" beside
+the mission's name — on every window, a phone's too — and on a wide window one line under it,
+„Vorführbetrieb: Die Anlage fährt diesen Einsatz selbst."; the crew stands along the foot as
+always: „HCW Bachelor" and „HCW Master" (Uros's names for the two), each with what it is doing (am
+Pult A, liest, hält die Platte, trägt die Sicherung). Under a finger the foot's two ways, „Crew
+mithören" and „Zuschauen beenden", are 44 px tall. Whoever joins mid-run sees the run as it stands.
 
 **It keeps its server awake, and comes back by itself.** A page that only watches sends nothing
 over HTTP — its socket carries everything — and a host that puts an instance to sleep counts

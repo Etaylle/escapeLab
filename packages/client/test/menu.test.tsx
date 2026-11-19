@@ -3,7 +3,6 @@ import { isValidElement, type ReactElement, type ReactNode } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { MissionInfo, Seat } from '@escapelab/core';
-import { WORLD, offVoice } from '../../core/test/voice.js';
 import { startPad, type PadProbe } from '../src/input/padRuntime.js';
 import { forgetProfile, keepProfile, lastColor, lastName, PASS_KEY } from '../src/pass.js';
 import { DIALOGS } from '../src/input/focus.js';
