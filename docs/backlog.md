@@ -824,8 +824,13 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   Quelle der eben gelösten Station steht, wird von keiner Drohne erfasst. Drei Notizen der letzten Schicht erklären den Dienstplan. Seeds: 12
   Signalkette (Rundgang, Smoke), 56 Funkpult, 93 Notstromkasten.
 - Bestenliste (B-blackout2): Auf einer Mission mit Wechselplatz zählt ein Lauf nur, wenn sein
-  Bericht die Auslosung nennt; ältere Läufe bleiben gespeichert und in „Meine Einsätze", stehen
-  aber auf keiner Tafel (`server/src/runStats.ts`).
+  Bericht die Auslosung nennt; ältere Läufe bleiben gespeichert und in „Meine Einsätze".
+- Frühere Anlage (S-archive, Entscheidung Uros 2026-11-19: die alte Bestzeit einer Crew darf
+  nicht verschwinden): Läufe ohne Auslosung stehen auf einer eigenen Tafel „Frühere Anlage"
+  unter der laufenden, nach denselben Regeln, auch je Tag der Tagesschicht; „Meine Einsätze"
+  markiert sie so. Eine Regel (`boardOf`): laufende Tafel, Archiv oder keine. Nichts migriert
+  oder gelöscht. Offen: eine dritte Kette erkennt die Regel nicht (Kettennummer in Mission und
+  Bericht wäre der kleinste Schritt).
 - Nächstes Paket (Lead): Blackout mit dem Wechselplatz neu ketten — notlicht → Anlaufsteuerung
   → Paketfilter (öffnet das Serverschott) → Serverraum → Wechselplatz aus Signalkette, Funkfeuer
   und Notstromkasten (öffnet die Reaktortüren) → reaktorstart.
