@@ -105,12 +105,37 @@ export const ONE_PASS = 'Diese Verbindung gehört schon einem anderen Dienstausw
 
 /**
  * What a socket came in as: the address its new accounts count against, the pass it showed
- * first, and when it changed the accounts in the last minute.
+ * first, when it changed the accounts in the last minute, when it joined an audience in the
+ * last minute (`WATCHES_PER_MINUTE`), and the refusals the log has already said of it.
  */
 interface Door {
   address: string;
   pass: string | null;
   changes: number[];
+  watches: number[];
+  logged: Set<string>;
+}
+
+/**
+ * How many times a minute a socket may join an audience: a page that watches, leaves and
+ * watches again makes a handful; each join tells everybody in the room how many watch, so a
+ * socket that asks without end is told to wait instead.
+ */
+export const WATCHES_PER_MINUTE = 12;
+
+/** What a socket is told that asks for an audience oftener than that. */
+// voice: interface — the door's refusal, not the lab's
+export const TOO_MANY_WATCHES = 'Nicht so schnell — gleich noch einmal.';
+
+/** Whether the socket of `door` may join an audience once more now, counted. */
+function mayWatch(door: Door | undefined): boolean {
+  if (door === undefined) {
+    return true;
+  }
+  const now = Date.now();
+  door.watches = door.watches.filter((at) => now - at < 60_000);
+  door.watches.push(now);
+  return door.watches.length <= WATCHES_PER_MINUTE;
 }
 
 /** Each socket's door (`Door`), from the request that opened it. */
@@ -322,7 +347,7 @@ export function serveSockets(server: SocketServer, lab: Lab): Served {
     let session: Session | null = null;
     sessions.set(socket, () => session);
     const address = addressOf(lab, request, noteForwarded);
-    doors.set(socket, { address, pass: null, changes: [] });
+    doors.set(socket, { address, pass: null, changes: [], watches: [], logged: new Set() });
     if (lab.iceServers !== undefined) {
       send(socket, { kind: 'ice-servers', servers: lab.iceServers });
     }
@@ -394,20 +419,36 @@ function refuse(
 ): void {
   const message =
     err instanceof GameError || err instanceof Error ? err.message : 'Unbekannter Fehler.';
-  logRefusal(session, msg, message);
+  logRefusal(doors.get(socket), session, msg, message);
   const refusal: Extract<ServerMessage, { kind: 'error' }> = { kind: 'error', message };
   send(socket, msg === null ? refusal : { ...refusal, of: msg.kind });
 }
 
 /** Logs the refusal of `msg` with its `reason`, where the log names it (`LOGGED_REFUSALS`). */
-function logRefusal(session: Session | null, msg: ClientMessage | null, reason: string): void {
+function logRefusal(
+  door: Door | undefined,
+  session: Session | null,
+  msg: ClientMessage | null,
+  reason: string,
+): void {
   if (msg === null || !LOGGED_REFUSALS.has(msg.kind)) {
     return;
   }
+  const line = `${refusedWhere(session, msg)} refused, ${reason}`;
+  // Said once for a socket: one that asks the same again and again fills no log.
+  const logged = door?.logged ?? new Set<string>();
+  if (!logged.has(line)) {
+    logged.add(line);
+    console.log(`[escapelab] ${line}`);
+  }
+}
+
+/** Where `msg` was refused and by whom, as the log names it: `room QX7R: join-room as Anna`. */
+function refusedWhere(session: Session | null, msg: ClientMessage): string {
   const code = 'code' in msg ? msg.code.toUpperCase() : session?.room.code;
   const where = code === undefined ? 'no room' : `room ${code}`;
   const by = 'name' in msg ? ` as ${msg.name}` : session === null ? '' : ` by ${session.who()}`;
-  console.log(`[escapelab] ${where}: ${msg.kind}${by} refused, ${reason}`);
+  return `${where}: ${msg.kind}${by}`;
 }
 
 function send(socket: PlayerSocket, msg: ServerMessage): void {
@@ -498,13 +539,55 @@ function handleMessage(
   }
   // A seat that went to another socket takes nothing from this one any more.
   const held = session !== null && session.holds() ? session : null;
-  if (fromTheMenu(msg)) {
-    return atTheMenu(socket, requireSession(held), msg);
-  }
   // What the page streams supersedes itself: from no seat it goes nowhere, unanswered.
-  return held === null && msg.kind === 'pos'
-    ? null
-    : inRoom(lab, socket, requireSession(held), msg);
+  if (held === null && msg.kind === 'pos') {
+    return null;
+  }
+  return fromTheRoom(lab, socket, requireSession(held), msg);
+}
+
+/** A message of session `s` that is none of the door's: the audience's, the menu's, a seat's. */
+function fromTheRoom(
+  lab: Lab,
+  socket: PlayerSocket,
+  s: Session,
+  msg: Exclude<ClientMessage, AtTheDoor>,
+): Session | null {
+  if (s.pass === null) {
+    return fromTheAudience(socket, s, msg);
+  }
+  return fromTheMenu(msg) ? atTheMenu(socket, s, msg) : inRoom(lab, socket, s, msg);
+}
+
+/** What an audience connection is told that would do what only a seat of the crew does. */
+export const AUDIENCE_WATCHES =
+  // voice: interface — the door's refusal, not the lab's, names the crew
+  'Das Publikum schaut zu: Geschaltet wird nur von einem Platz der Crew.';
+
+/**
+ * A message of an audience connection (session `s`) that is none of the door's: it listens in
+ * on the crew (`rtc`), goes to the main menu (`to-menu`) — and whatever its page streams or
+ * marks as a seat's page would, where it stands or its menu, goes nowhere, unanswered. Anything
+ * else — a move, a start, a way back to the lobby, a mission picked — is refused here, before
+ * any of the room's code runs: the audience watches.
+ */
+function fromTheAudience(
+  socket: PlayerSocket,
+  s: Session,
+  msg: Exclude<ClientMessage, AtTheDoor>,
+): Session | null {
+  switch (msg.kind) {
+    case 'rtc':
+      s.room.relaySignal(s.playerId, msg.to, msg.signal);
+      return s;
+    case 'to-menu':
+      return atTheMenu(socket, s, msg);
+    case 'pos':
+    case 'pause-menu':
+      return s;
+    default:
+      throw new GameError(AUDIENCE_WATCHES);
+  }
 }
 
 /**
@@ -1046,6 +1129,10 @@ function whereAmI(
   });
 }
 
+/** Whether `session` is an audience connection on `room`. */
+const watches = (session: Session, room: Room): boolean =>
+  session.pass === null && session.room === room;
+
 /**
  * The audience connection a socket opens on the room `code` — the demo room by its own code
  * (`Lab.demo`): the session it had let go of.
@@ -1053,6 +1140,14 @@ function whereAmI(
 function watch(lab: Lab, socket: PlayerSocket, session: Session | null, code: string): Session {
   const demo = isDemo(code) ? lab.demo : undefined;
   const room = demo === undefined ? lab.manager.get(code) : demo.room;
+  // A socket that watches this room already goes on watching it: nothing is attached anew,
+  // and nobody is told anything.
+  if (session !== null && watches(session, room)) {
+    return session;
+  }
+  if (!mayWatch(doors.get(socket))) {
+    throw new GameError(TOO_MANY_WATCHES);
+  }
   const listener = (m: ServerMessage): void => send(socket, m);
   // An audience connection goes by its spectator id: voice signals reach it by that. The demo
   // may be full, which refuses the watch: the session the socket had lets go only after.

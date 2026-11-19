@@ -10,7 +10,7 @@ import {
 import { ASK_AGAIN_MS, Room } from '../src/room.js';
 import { RoomManager } from '../src/roomManager.js';
 import { SeatBook } from '../src/seats.js';
-import { serveSockets } from '../src/sockets.js';
+import { AUDIENCE_WATCHES, serveSockets } from '../src/sockets.js';
 import { FakeServer, joinedOf, type FakeSocket } from './line.js';
 import { passFor } from './passes.js';
 
@@ -460,7 +460,7 @@ describe('a seat taken over by its name (Jackbox), let in by the crew', () => {
     expect(audience.heard.at(-1)).toEqual({
       kind: 'error',
       of: 'takeover-answer',
-      message: 'Über eine Übernahme entscheidet nur, wer im Einsatz verbunden ist.',
+      message: AUDIENCE_WATCHES,
     });
     expect(phone.heard.at(-1)).toMatchObject({ kind: 'takeover-pending' });
     expect(anna.view.takeovers).toHaveLength(1);

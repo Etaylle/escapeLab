@@ -27,7 +27,7 @@ import {
   type Spot,
 } from './route.js';
 import { both, Dice, pause, until, type Clock, type Script } from './script.js';
-import type { Seat } from './seat.js';
+import type { CrewSeat as Seat } from './seat.js';
 import { PACE, workStation, type Hands } from './station.js';
 import { Walks } from './walks.js';
 

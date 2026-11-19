@@ -1206,6 +1206,15 @@ export class Room {
     this.rollSeed = roll;
   }
 
+  /**
+   * The run on is lost now, as when its clock runs out: for the demo room's host, whose crew of
+   * machines got stuck (demo/host.ts) — the end card, the report and the next run follow as
+   * after any run lost. Nothing outside a run, or while one stands still.
+   */
+  runOut(): void {
+    this.dispatch({ type: 'time-expired', at: Date.now() });
+  }
+
   /** `heard` is told how many watch whenever one of the audience comes or goes. */
   onAudience(heard: (watching: number) => void): void {
     this.audienceHeard = heard;
@@ -1288,7 +1297,7 @@ export class Room {
     }
     // Every member of the crew stands on a spot from the moment the run is
     // seeded; a position for anyone else has nothing to step from.
-    const from = this.positions.get(playerId);
+    const from = this.standingOf(playerId);
     if (from === undefined) {
       return;
     }
@@ -1309,6 +1318,28 @@ export class Room {
     this.reconcilePresence();
     this.checkEscape();
     this.schedulePositionsBroadcast();
+  }
+
+  /**
+   * Where the room has `playerId` standing. A member of the run's crew it has standing nowhere
+   * — which no run leaves anybody — stands on the spawn they drew again, never where their page
+   * says, and the log says so: the steps of a figure the room lost would otherwise go nowhere
+   * without a word, and its run with them. Undefined for anybody else.
+   */
+  private standingOf(playerId: string): RelayedPosition | undefined {
+    const stands = this.positions.get(playerId);
+    const spawn = this.state.players.find((player) => player.id === playerId)?.spawn ?? null;
+    if (stands !== undefined || spawn === null) {
+      return stands;
+    }
+    const at = { x: spawn.x + 0.5, y: spawn.y + 0.5, facing: 0, moving: false, t: null };
+    const stood = { ...at, rt: Date.now() };
+    this.positions.set(playerId, stood);
+    console.warn(
+      `[escapelab] room ${this.code}: ${this.nameOf(playerId)} stood nowhere in the run, ` +
+        'back on the spawn they drew',
+    );
+    return stood;
   }
 
   /**
@@ -1344,19 +1375,9 @@ export class Room {
         // The Tagesschicht needs no ALLOW_SEED: its seed is the day's, the same for every room.
         this.dispatch({ type: 'set-daily', playerId, daily: msg.daily });
         break;
-      case 'start-mission': {
-        const at = Date.now();
-        this.dispatch({
-          type: 'start-mission',
-          playerId,
-          at,
-          seed: this.rollSeed(),
-          ...this.dailyAt(at),
-        });
-        this.next = null;
-        this.seedPositions();
+      case 'start-mission':
+        this.startRun('start-mission', playerId);
         break;
-      }
       case 'puzzle-input':
         this.dispatch({ type: 'puzzle-input', playerId, at: Date.now(), input: msg.input });
         break;
@@ -1369,11 +1390,14 @@ export class Room {
       case 'drop-item':
         this.dropCarried(playerId);
         break;
-      case 'back-to-lobby':
+      case 'back-to-lobby': {
+        // Worked out before anything is let go of: a way back the core refuses leaves the run be.
+        const next = applyAction(this.state, { type: 'back-to-lobby', playerId });
         this.positions.clear();
-        this.dispatch({ type: 'back-to-lobby', playerId });
+        this.settle(next, 'back-to-lobby');
         this.next = null;
         break;
+      }
       case 'rematch':
         this.startRematch(playerId);
         break;
@@ -1419,18 +1443,34 @@ export class Room {
 
   /** The next run, started by `playerId`: of the mission the host's yes named, if it named one. */
   private startRematch(playerId: string): void {
-    this.positions.clear();
-    const next = this.next;
+    this.startRun('rematch', playerId, this.next);
+  }
+
+  /**
+   * A run started by `playerId` — the room's first (`start-mission`) or its next (`rematch`, of
+   * `mission` where the host's yes named one) — tried before anything is touched: a start the
+   * core refuses leaves the room as it stood, where everybody stands included, and rolls no
+   * seed — a room that plays a list of seeds (`seedsFrom`) skips none for it.
+   */
+  private startRun(
+    type: 'start-mission' | 'rematch',
+    playerId: string,
+    mission: Mission | null = null,
+  ): void {
     const at = Date.now();
-    this.dispatch({
-      type: 'rematch',
-      playerId,
-      at,
-      seed: this.rollSeed(),
-      ...this.dailyAt(at),
-      ...(next === null ? {} : { mission: next }),
-    });
+    const started = (seed: number): GameState => {
+      const run = { playerId, at, seed, ...this.dailyAt(at) };
+      return applyAction(
+        this.state,
+        type === 'rematch' && mission !== null ? { type, ...run, mission } : { type, ...run },
+      );
+    };
+    // The core refuses a start whatever its seed: only one that goes through rolls its own.
+    started(0);
+    const next = started(this.rollSeed());
+    this.positions.clear();
     this.next = null;
+    this.settle(next, type);
     this.seedPositions();
   }
 

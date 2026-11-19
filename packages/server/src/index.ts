@@ -44,7 +44,7 @@ const MISSIONS_DIR =
   process.env['MISSIONS_DIR'] ?? fileURLToPath(new URL('../../../missions', import.meta.url));
 // An empty RUNS_LOG counts as unset, like an empty RUNS_TOKEN.
 const RUNS_LOG = process.env['RUNS_LOG'] || DEFAULT_RUNS_LOG;
-/** The mission the demo room plays, by id: the one its crew is proved on (test/demoCrew.test.ts). */
+/** The mission the demo room plays, by id: the one its crew is proved on (demoCrew.test.ts). */
 const DEMO_MISSION = 'blackout';
 /** How long the server waits for the runs still being kept before it exits all the same, ms. */
 const KEEPING_MS = 5000;
@@ -190,11 +190,7 @@ httpServer.listen(PORT, () => {
   console.log(`[escapelab] Tagesschicht: ${DAILY_SALT_FROM[daily.from]}`);
   console.log(`[escapelab] ${roomKeyLogLine(sealing)}`);
   console.log(`[escapelab] this boot is instance ${instanceId}: its snapshots name it`);
-  const demoSaid =
-    demoMission === undefined
-      ? `none, the missions have no "${DEMO_MISSION}"`
-      : `„${demoMission.title}“, played by the server while somebody watches room ${DEMO_CODE}`;
-  console.log(`[escapelab] demo: ${demoSaid}`);
+  console.log(`[escapelab] demo: ${demoLogLine()}`);
   if (voiceDesk !== null) {
     console.log(`[escapelab] ALLOW_RECORD=1: POST /voice/:id saves recordings to ${VOICE_DIR}`);
   }
@@ -209,6 +205,13 @@ httpServer.listen(PORT, () => {
     console.log('[escapelab] kein Client-Build gefunden — im Dev-Modus läuft Vite auf 5173');
   }
 });
+
+/** What the start-up log says of the demo room: the mission it plays, or that it plays none. */
+function demoLogLine(): string {
+  return demoMission === undefined
+    ? `none, the missions have no "${DEMO_MISSION}"`
+    : `„${demoMission.title}“, played by the server while somebody watches room ${DEMO_CODE}`;
+}
 
 /** The voice's ICE servers (iceServers.ts); the process exits 1, saying why, for a wrong list. */
 function iceOrExit(): IceSetup {

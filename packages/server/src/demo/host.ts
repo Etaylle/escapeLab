@@ -8,12 +8,13 @@ import {
   type ClientMessage,
   type CrewPass,
   type Mission,
+  type PlayerView,
   type ServerMessage,
 } from '@escapelab/core';
 import { GAME_KINDS, Room, type GameMessage } from '../room.js';
 import type { FinishedRun } from '../store/store.js';
 import { DemoCrew } from './crew.js';
-import { Seat, type Line } from './seat.js';
+import { handsOf, Seat, type CrewSeat, type Line } from './seat.js';
 
 /**
  * The demo room: one room the server plays itself, for whoever wants to watch. Two seats of a
@@ -34,6 +35,16 @@ const TICK_MS = 80;
 
 /** How long the room plays on with nobody watching before it is closed, ms. */
 export const DEMO_IDLE_MS = 60_000;
+
+/**
+ * How long a run may go without getting on — no station solved, no hatch opened, no end —
+ * before its host gives it up, ms: the longest a station takes a crew that plays is under two
+ * minutes, an emergency in it included.
+ */
+export const DEMO_STALL_MS = 240_000;
+
+/** How many times in a row the crew may start over, getting nowhere, before the run is given up. */
+export const DEMO_COMPLAINTS = 30;
 
 /** How many may watch the demo at once. */
 export const DEMO_MAX_WATCHING = 150;
@@ -104,6 +115,15 @@ function carry(room: Room, playerId: string, msg: ClientMessage): void {
   }
 }
 
+/** How far a run is, as `view` has it: its phase, its start, the station up, the hatch. */
+function farOf(view: PlayerView | null): string {
+  if (view === null) {
+    return '';
+  }
+  const hatch = view.map?.exit?.open === true ? 'open' : 'shut';
+  return [view.phase, view.startedAt, view.currentPuzzleIndex, hatch].join('|');
+}
+
 /**
  * What stands between a seat and the room: each message that goes up to the room or down to the
  * seat passes it, and what it hands back goes on. A test copies each, and notes what was said.
@@ -119,6 +139,12 @@ const PLAIN: Wire = { up: (msg) => msg, down: (msg) => msg };
 export class DemoHost {
   private live: Room;
   private crew: DemoCrew;
+  /** the crew's seats as it has them in hand: the watchdog reads how far the run is off them */
+  private seats: readonly [CrewSeat, CrewSeat];
+  /** how far the run was when it last got on, and when that was (epoch ms): `watchdog` */
+  private gotOn = { as: '', at: 0 };
+  /** how many times the crew has started over since the run last got on */
+  private complaints = 0;
   private ticking: NodeJS.Timeout | null = null;
   private closing: NodeJS.Timeout | null = null;
   /** the runs the demo started so far: the next plays the next of its seeds */
@@ -137,7 +163,7 @@ export class DemoHost {
     private readonly wire: Wire = PLAIN,
   ) {
     this.mission = scaleMission(mission, 'normal');
-    [this.live, this.crew] = this.open();
+    [this.live, this.crew, this.seats] = this.open();
   }
 
   /** The demo room as it stands now: another one after it was closed for nobody watching. */
@@ -146,11 +172,14 @@ export class DemoHost {
   }
 
   /** A fresh room in its lobby, the crew's two seats in it on their lines. */
-  private open(): [Room, DemoCrew] {
+  private open(): [Room, DemoCrew, readonly [CrewSeat, CrewSeat]] {
     const room = new Room(DEMO_CODE, this.mission, (run) => this.ran(run));
     room.seedsFrom(() => this.nextSeed());
     room.onAudience((watching) => this.watched(watching));
-    const complain = (why: string): void => console.warn(`[escapelab] demo: ${why}`);
+    const complain = (why: string): void => {
+      this.complaints += 1;
+      console.warn(`[escapelab] demo: ${why}`);
+    };
     const seats = DEMO_NAMES.map((name) => {
       const { playerId } = room.join(name, mintPass());
       const line: Line = {
@@ -165,9 +194,37 @@ export class DemoHost {
       };
       const seat = new Seat(line, complain);
       room.attach(playerId, (msg) => seat.hear(this.wire.down(msg)));
-      return seat;
-    }) as [Seat, Seat];
-    return [room, new DemoCrew(this.mission, seats, complain)];
+      return handsOf(seat);
+    }) as [CrewSeat, CrewSeat];
+    return [room, new DemoCrew(this.mission, seats, complain), seats];
+  }
+
+  /**
+   * The crew's next step, and a look at how its run gets on: one that has not got on for
+   * DEMO_STALL_MS, or whose crew has started over DEMO_COMPLAINTS times in a row, is given up —
+   * lost as by its clock (`Room.runOut`), counted, and the next seed follows after the
+   * Auswertung as after any run. Without it a crew that is stuck would stand for the rest of the
+   * mission's sixteen minutes, saying so every other second.
+   */
+  private tick(now: number): void {
+    this.crew.tick(now);
+    const view = this.seats[0].view;
+    const as = farOf(view);
+    if (as !== this.gotOn.as) {
+      this.gotOn = { as, at: now };
+      this.complaints = 0;
+    }
+    const stuck = now - this.gotOn.at > DEMO_STALL_MS || this.complaints >= DEMO_COMPLAINTS;
+    if (view?.phase === 'playing' && stuck) {
+      const waited = ((now - this.gotOn.at) / 1000).toFixed(0);
+      console.warn(
+        `[escapelab] demo: the run got no further for ${waited} s ` +
+          `(${this.complaints} starts over): given up, the next follows`,
+      );
+      this.gotOn = { as, at: now };
+      this.complaints = 0;
+      this.live.runOut();
+    }
   }
 
   /** The seed of the run starting now: the next of the demo's list. */
@@ -215,20 +272,20 @@ export class DemoHost {
   /** The crew takes its steps from now on. */
   private play(): void {
     if (this.ticking === null) {
-      this.ticking = setInterval(() => this.crew.tick(Date.now()), TICK_MS);
+      this.ticking = setInterval(() => this.tick(Date.now()), TICK_MS);
       this.ticking.unref();
     }
   }
 
-  /** Nobody watches any more: the room is let go, and a fresh one stands in its lobby. */
+  /**
+   * Nobody has watched for DEMO_IDLE_MS: the room is let go, and a fresh one stands in its
+   * lobby. Whoever comes to watch meanwhile calls this off (`watched`).
+   */
   private close(): void {
     this.closing = null;
-    if (this.live.watching > 0) {
-      return;
-    }
     this.stop();
     console.log('[escapelab] demo: nobody watches, the room rests until somebody does');
-    [this.live, this.crew] = this.open();
+    [this.live, this.crew, this.seats] = this.open();
   }
 
   /** The crew's steps stop, and every timer of the room with them. */
