@@ -9,7 +9,6 @@ import {
   clockTension,
   CROSSFADE_S,
   DRONE_PUSH,
-  DRONE_TILES,
   EMERGENCY_PUSH,
   FALL_PER_S,
   layersFor,
@@ -81,9 +80,10 @@ describe('the pressure the music follows', () => {
     expect(pressureOf({ ...calm, stationClock: 0 })).toBe(STATION_PUSH);
     expect(pressureOf({ ...calm, stationClock: 1 })).toBeCloseTo(0.65, 9);
     expect(pressureOf({ ...calm, stationClock: 0.5 })).toBeCloseTo(0.55, 9);
-    // A drone awake close by, and none an inch further.
-    expect(pressureOf({ ...calm, droneTiles: DRONE_TILES })).toBe(DRONE_PUSH);
-    expect(pressureOf({ ...calm, droneTiles: DRONE_TILES + 0.01 })).toBe(0);
+    // A drone awake within four tiles, and none an inch further.
+    expect(pressureOf({ ...calm, droneTiles: 4 })).toBe(DRONE_PUSH);
+    expect(pressureOf({ ...calm, droneTiles: 4.01 })).toBe(0);
+    expect(DRONE_PUSH).toBeGreaterThanOrEqual(0.35); // the tense stem on its own
     // The way through the stations: up to a quarter, under the tense stem's way out (0.3).
     expect(pressureOf({ ...calm, progress: 1 })).toBe(PROGRESS_RISE);
     expect(PROGRESS_RISE).toBeLessThan(0.3);
@@ -94,6 +94,7 @@ describe('the pressure the music follows', () => {
   });
 
   it('holds a push PUSH_HOLD_MS once it is over, then falls back FALL_PER_S a second', () => {
+    expect(PUSH_HOLD_MS).toBe(8000);
     let mood = moodAt(moodFrom(0), 0.5, false, 0);
     expect(mood.pressure).toBe(0.5);
     const look = (asked: number, until: number): void => {
