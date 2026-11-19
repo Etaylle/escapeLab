@@ -58,7 +58,7 @@ describe('the demo crew', () => {
 });
 
 describe('the demo crew at work', () => {
-  it('stands before the consoles it works, never on one, and never two on a tile', () => {
+  it('stands before the consoles it works and walks round them, never two on a tile', () => {
     const host = new DemoHost(mission, [DRAW_SEEDS.notstrom]);
     const consoles = new Set(mission.map.stations.map((spot) => `${spot.x},${spot.y}`));
     const tileOf = ({ x, y }: { x: number; y: number }): string =>
@@ -75,10 +75,11 @@ describe('the demo crew at work', () => {
       }
     });
     playUntil(watcher, (view) => {
+      // Nobody walks over a console either: every way leads round them.
+      expect(stood.filter((tile) => consoles.has(tile))).toEqual([]);
       if (working) {
         stations += 1;
         expect(new Set(stood).size, `on ${stood.join(' and ')}`).toBe(2);
-        expect(stood.filter((tile) => consoles.has(tile))).toEqual([]);
       }
       return over(view);
     });

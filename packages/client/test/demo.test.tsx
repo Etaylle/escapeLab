@@ -74,6 +74,21 @@ describe('„Demo" in the main menu', () => {
     expect(wipe.shutter).toHaveBeenCalledTimes(1);
   });
 
+  it('fits a laptop’s low window, and leaves a phone held sideways its seven items', () => {
+    const menu = css('styles/menu.css');
+    const low = menu.slice(menu.indexOf('@media (min-width: 900px) and (max-height: 760px) {'));
+    expect(low.slice(0, low.indexOf('\n}\n'))).toMatch(
+      /\.menu-list \.menu-item \{\s*min-height: 44px;/,
+    );
+    const sideways = menu.slice(
+      menu.indexOf('@media (orientation: landscape) and (max-height: 500px) {'),
+    );
+    const hidden = (item: string): string => `li:has\\(> \\.menu-item\\[data-item='${item}'\\]\\)`;
+    expect(sideways).toMatch(
+      new RegExp(`${hidden('settings')},\\s*\\.menu-list ${hidden('demo')} \\{\\s*display: none;`),
+    );
+  });
+
   it('leads nowhere while the line is down', () => {
     const send = vi.fn();
     const taken = vi.fn();

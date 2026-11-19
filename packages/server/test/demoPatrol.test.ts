@@ -57,6 +57,17 @@ describe('a way over the map', () => {
     expect(wayOver(groundOf(mapOf(true)), { x: 1, y: 1 }, { x: 5, y: 1 })).toBeNull();
   });
 
+  it('goes round a console where it can, over it where nothing else leads on', () => {
+    const map = mapOf(true);
+    const round = new Set(['8,1', '9,3']);
+    // The corridor is one tile wide: the way east leads over the console in it.
+    const over = wayOver(groundOf(map, new Set(), round), { x: 6, y: 1 }, { x: 10, y: 1 });
+    expect(over?.map(keyOf)).toEqual(['6,1', '7,1', '8,1', '9,1', '10,1']);
+    // A way may end on such a tile: the thing there is what the walk is for.
+    const onto = wayOver(groundOf(map, new Set(), round), { x: 7, y: 3 }, { x: 9, y: 3 });
+    expect(onto?.map(keyOf)).toEqual(['7,3', '8,3', '9,3']);
+  });
+
   it('stops at a shut door, unless it is taken as held open', () => {
     const shut = mapOf(false);
     expect(wayOver(groundOf(shut), { x: 5, y: 3 }, { x: 7, y: 3 })).toBeNull();

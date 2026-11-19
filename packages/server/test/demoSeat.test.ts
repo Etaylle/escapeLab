@@ -38,7 +38,7 @@ const DRONE = {
   activeAfterSolved: 0,
 } as MapDef['drones'][number];
 
-const mission = { map: { drones: [DRONE] } } as unknown as Mission;
+const mission = { map: { drones: [DRONE], stations: [], manuals: [] } } as unknown as Mission;
 
 /** The view of a run begun at `startedAt`, the seat's spawn at (1,3), the door open or shut. */
 function viewOf(startedAt: number, doorOpen = true): PlayerView {

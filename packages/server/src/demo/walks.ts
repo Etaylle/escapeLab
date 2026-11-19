@@ -37,13 +37,18 @@ export class NoWay extends Error {}
 export class Walks {
   /** the havens worked out so far, by the drones they are from and the doors shut */
   private readonly havensBy = new Map<string, Set<string>>();
+  /** the tiles a walk goes round: where the mission's consoles stand and its sources may lie */
+  private readonly round: ReadonlySet<string>;
 
   /** `emergency` says whether one has the lab: the drones spot nobody while it lasts. */
   constructor(
     private readonly mission: Mission,
     private readonly clock: Clock,
     private readonly emergency: () => boolean,
-  ) {}
+  ) {
+    const { stations, manuals } = mission.map;
+    this.round = new Set([...stations, ...manuals.flatMap((source) => source.spots)].map(keyOf));
+  }
 
   /**
    * `seat` walks to the point `goal`, where it will stand in the open for `hold` s — until it is
@@ -61,17 +66,23 @@ export class Walks {
 
   /** Whether a way leads `seat` to the tile of `goal`, the doors as they stand. */
   reaches(seat: Seat, goal: Spot): boolean {
-    return wayOver(groundOf(seat.map), tileOf(seat.at), tileOf(goal)) !== null;
+    return this.tilesTo(seat, goal) !== null;
   }
 
   /** The points of `seat`'s way to `goal`: where it stands, the tiles' middles, the goal. */
   private wayOf(seat: Seat, goal: Spot): Spot[] {
-    const tiles = wayOver(groundOf(seat.map), tileOf(seat.at), tileOf(goal));
+    const tiles = this.tilesTo(seat, goal);
     if (tiles === null) {
       const from = keyOf(tileOf(seat.at));
       throw new NoWay(`no way for ${seat.name} from ${from} to ${keyOf(tileOf(goal))}`);
     }
     return [seat.at, ...tiles.slice(1, -1).map(middleOf), goal];
+  }
+
+  /** The tiles of `seat`'s way to `goal`, round the consoles and the sources; null for none. */
+  private tilesTo(seat: Seat, goal: Spot): Spot[] | null {
+    const ground = groundOf(seat.map, new Set(), this.round);
+    return wayOver(ground, tileOf(seat.at), tileOf(goal));
   }
 
   /** What sight goes by on `seat`'s map as it stands. */

@@ -17753,7 +17753,7 @@ async function captureMusicPacks() {
 //
 // In a Systemcheck run, on pages of its own: a laptop's menu with „Demo" in the focus
 // (menu-demo.png); the item pressed leads into the demo room's audience with no name and no
-// code, and once one of its crew stands at a console demo-audience.png is taken — the line that
+// code, and once both of its crew stand at a console demo-audience.png is taken — the line that
 // the plant plays by itself, both machines along the foot, what each is doing. Then a phone that
 // asks for less motion comes by the demo's link, /?demo=1: straight into the audience, the link
 // gone from the address (demo-audience-phone.png), turned sideways (demo-audience-phone-932.png),
@@ -17819,8 +17819,8 @@ async function demoAudienceShot(page, shot, size, touch = false) {
 
 /**
  * menu-demo.png and demo-audience.png: „Demo" in the laptop's menu, a target of a finger's
- * height, pressed — no name typed, no code — leads into the audience, where one of the crew
- * stands at a console within a minute.
+ * height, pressed — no name typed, no code — leads into the audience, where both of the crew
+ * stand at a console within a minute.
  */
 async function demoFromMenu(context) {
   const page = await openPage(context, 'demo');
@@ -17834,9 +17834,9 @@ async function demoFromMenu(context) {
   console.log(`menu-demo.png      „Demo" in the focus, ${height} px tall`);
   await item.click();
   await page.locator('.spectate').waitFor({ timeout: 10_000 });
-  const working = () => document.querySelector('.spectate-foot .presence-pult') !== null;
+  const working = () => document.querySelectorAll('.spectate-foot .presence-pult').length === 2;
   await page.waitForFunction(working, null, { timeout: 60_000 });
-  await sleep(600); // the world drawn round the two at the switch
+  await sleep(1500); // both come to rest before the switch, the world drawn round them
   const wrong = await demoAudienceShot(page, 'demo-audience.png', '1440x820');
   await overflow(page, 'demo audience @ 1440x820');
   return [...wrong, ...wrongOf([[height < DEMO_TARGET_PX, `„Demo" is ${height} px tall`]])];
@@ -17845,7 +17845,7 @@ async function demoFromMenu(context) {
 /**
  * demo-audience-phone.png and demo-audience-phone-932.png: a phone that asks for less motion
  * comes by the demo's link and stands in the audience at once, upright and turned sideways;
- * „Zuschauen beenden" leads back to the menu, „Demo" among its items.
+ * upright again, „Zuschauen beenden" leads back to the menu, „Demo" among its items.
  */
 async function demoByLink(context) {
   const page = await openPage(context, 'demo phone');
@@ -17861,6 +17861,8 @@ async function demoByLink(context) {
   await sleep(600);
   const turned = await demoAudienceShot(page, 'demo-audience-phone-932.png', '932x430', true);
   wrong.push(...turned);
+  // Upright again: a phone held sideways has no room for „Demo" in its menu (menu.css).
+  await page.setViewportSize(SIZES[2]);
   const stop = page.locator('.spectate-foot button', { hasText: 'Zuschauen beenden' });
   await stop.scrollIntoViewIfNeeded();
   await stop.tap();

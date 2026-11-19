@@ -35,20 +35,30 @@ export function shutOn(map: MapView): Set<string> {
 }
 
 /**
- * The ground a walk goes over: the map, the tiles shut to it (doors, by key) and the tiles it
- * keeps off though they are floor — a camera plate, which would hold a drone still.
+ * The ground a walk goes over: the map, the tiles shut to it (doors, by key), the tiles it
+ * keeps off though they are floor — a camera plate, which would hold a drone still — and the
+ * tiles it goes round where another way leads on: a console's, a source's, which nobody walks
+ * over who can walk past.
  */
 export interface Ground {
   map: MapView;
   shut: ReadonlySet<string>;
   off: ReadonlySet<string>;
+  round: ReadonlySet<string>;
 }
 
-/** The ground of `map` as it stands; the doors of `held` (by id) taken as open. */
-export function groundOf(map: MapView, held: ReadonlySet<string> = new Set()): Ground {
+/**
+ * The ground of `map` as it stands; the doors of `held` (by id) taken as open, the tiles of
+ * `round` (by key) gone round.
+ */
+export function groundOf(
+  map: MapView,
+  held: ReadonlySet<string> = new Set(),
+  round: ReadonlySet<string> = new Set(),
+): Ground {
   const shut = map.doors.filter((door) => !door.open && !held.has(door.id)).map(keyOf);
   const off = map.plates.filter((plate) => plate.freezesDrone).map(keyOf);
-  return { map, shut: new Set(shut), off: new Set(off) };
+  return { map, shut: new Set(shut), off: new Set(off), round };
 }
 
 /** Whether a figure can stand on `tile` of `ground`. */
@@ -58,10 +68,20 @@ export function free(ground: Ground, tile: Spot): boolean {
 }
 
 /**
- * The tiles of a shortest way over `ground` from `from` to `to`, both included; null where none
- * leads there. The tile it starts on never stops it: a door may have shut on whoever stands in it.
+ * The tiles of a shortest way over `ground` from `from` to `to`, both included: round the tiles
+ * the ground goes round where such a way leads there, over them where none does; null where no
+ * way leads there at all. The tile it starts on never stops it: a door may have shut on whoever
+ * stands in it.
  */
 export function wayOver(ground: Ground, from: Spot, to: Spot): Spot[] | null {
+  const over = (tile: Spot): boolean => free(ground, tile);
+  const past = (tile: Spot): boolean =>
+    over(tile) && (!ground.round.has(keyOf(tile)) || (tile.x === to.x && tile.y === to.y));
+  return (ground.round.size > 0 ? shortest(from, to, past) : null) ?? shortest(from, to, over);
+}
+
+/** The tiles of a shortest way from `from` to `to` over the tiles `open` lets through. */
+function shortest(from: Spot, to: Spot, open: (tile: Spot) => boolean): Spot[] | null {
   const cameFrom = new Map<string, Spot | null>([[keyOf(from), null]]);
   const queue: Spot[] = [from];
   // A for…of over an array also visits what is pushed onto it while it runs.
@@ -70,7 +90,7 @@ export function wayOver(ground: Ground, from: Spot, to: Spot): Spot[] | null {
       return traced(cameFrom, tile);
     }
     for (const next of besides(tile)) {
-      if (!cameFrom.has(keyOf(next)) && free(ground, next)) {
+      if (!cameFrom.has(keyOf(next)) && open(next)) {
         cameFrom.set(keyOf(next), tile);
         queue.push(next);
       }
