@@ -1,6 +1,7 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { isDailyDay, type MissionStanding, type MissionStats } from '@escapelab/core';
+import type { DemoCounts } from './demo/host.js';
 import type { MissionCatalog } from './missions.js';
 import type { RoomCounts } from './roomManager.js';
 import type { RunStats } from './runStats.js';
@@ -23,6 +24,8 @@ export interface Health {
   uptimeSec: () => number;
   /** the build it runs (`versionOf`) */
   version: string;
+  /** the demo room by count, apart from the rooms (demo/host.ts); unset where it plays none */
+  demo?: () => DemoCounts;
 }
 
 /** The build a server runs: the commit Render deployed (RENDER_GIT_COMMIT), else 'dev'. */
@@ -34,7 +37,8 @@ export function versionOf(env: NodeJS.ProcessEnv): string {
 /**
  * GET /health: the server is up, its missions by id, its rooms by count — the runs on, those
  * paused, the players and the audience on the line — how long it has run and the build it
- * runs. It names nobody. Null for any other path.
+ * runs; and apart from the rooms, which never count it, the demo room the server plays itself
+ * (`demo`, null where it plays none). It names nobody. Null for any other path.
  */
 export function healthResponse(
   catalog: MissionCatalog,
@@ -50,6 +54,7 @@ export function healthResponse(
       ok: true,
       missions: catalog.all.map((m) => m.id),
       rooms: health.rooms(),
+      demo: health.demo?.() ?? null,
       uptimeSec: health.uptimeSec(),
       version: health.version,
     },

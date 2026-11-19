@@ -15,6 +15,7 @@ import { choosingNow, menuLab, watchChoosing } from './world/menu/places.js';
 import { menuSoundProbe, wantMenuSound, type MenuPlace } from './world/menuSound.js';
 import { radioCheckProbe } from './world/radioCheck.js';
 import {
+  DEMO_CODE,
   difficultyInfos,
   type AccountView,
   type Difficulty,
@@ -517,6 +518,7 @@ function Screens(props: ScreenProps) {
         pingsRef={conn.pings}
         chatsRef={conn.chats}
         leaveRoom={conn.leaveRoom}
+        demo={conn.roomCode === DEMO_CODE}
       />
     );
   }

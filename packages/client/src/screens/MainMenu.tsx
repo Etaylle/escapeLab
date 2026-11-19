@@ -7,6 +7,7 @@ export type MenuItemId =
   | 'missions'
   | 'join'
   | 'rounds'
+  | 'demo'
   | 'handbook'
   | 'history'
   | 'myruns'
@@ -18,6 +19,7 @@ export const MENU_LABELS: Readonly<Record<MenuItemId, string>> = {
   missions: 'Einsatz starten',
   join: 'Beitreten',
   rounds: 'Offene Runden',
+  demo: 'Demo',
   handbook: 'Handbuch',
   history: 'Bestenliste',
   myruns: 'Meine Einsätze',
@@ -34,14 +36,16 @@ export function opensPanel(item: MenuItemId): item is PanelId {
 }
 
 /**
- * The menu's items in order, top to bottom: the account's runs beside the Bestenliste, the
- * editor where the page offers one.
+ * The menu's items in order, top to bottom: the ways into a round, then the demo the plant plays
+ * by itself, to be watched; the account's runs beside the Bestenliste, the editor where the page
+ * offers one.
  */
 export function menuItems(editor: boolean): MenuItemId[] {
   return [
     'missions',
     'join',
     'rounds',
+    'demo',
     'handbook',
     'history',
     'myruns',

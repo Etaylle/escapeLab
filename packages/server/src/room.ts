@@ -430,6 +430,10 @@ export class Room {
   private readonly seenOnLine = new Set<string>();
   /** epoch ms since the room has had no connected players, null while occupied */
   emptySince: number | null = null;
+  /** rolls the seed of each run that is not pinned or the day's (`seedsFrom`) */
+  private rollSeed: () => number = () => randomInt(2 ** 31);
+  /** hears how many watch, whenever one comes or goes; null for nobody (`onAudience`) */
+  private audienceHeard: ((watching: number) => void) | null = null;
 
   /**
    * `seed` pins the room's runs for a repeatable test: run n plays seed + n. `mission` comes
@@ -1193,6 +1197,20 @@ export class Room {
     };
   }
 
+  /**
+   * The room's runs take their seeds from `roll` from now on, in place of chance: the demo
+   * room's, which plays a list of its own (demo/host.ts). A room pinned to a seed, and the
+   * Tagesschicht, go by theirs as before.
+   */
+  seedsFrom(roll: () => number): void {
+    this.rollSeed = roll;
+  }
+
+  /** `heard` is told how many watch whenever one of the audience comes or goes. */
+  onAudience(heard: (watching: number) => void): void {
+    this.audienceHeard = heard;
+  }
+
   /** How many watch, as the room tells it (`audience`). */
   private audienceMessage(): ServerMessage {
     return { kind: 'audience', code: this.code, count: this.spectators.size };
@@ -1204,6 +1222,7 @@ export class Room {
     for (const listener of this.audience) {
       listener(message);
     }
+    this.audienceHeard?.(this.spectators.size);
   }
 
   /**
@@ -1331,7 +1350,7 @@ export class Room {
           type: 'start-mission',
           playerId,
           at,
-          seed: randomInt(2 ** 31),
+          seed: this.rollSeed(),
           ...this.dailyAt(at),
         });
         this.next = null;
@@ -1407,7 +1426,7 @@ export class Room {
       type: 'rematch',
       playerId,
       at,
-      seed: randomInt(2 ** 31),
+      seed: this.rollSeed(),
       ...this.dailyAt(at),
       ...(next === null ? {} : { mission: next }),
     });

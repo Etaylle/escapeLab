@@ -1,14 +1,16 @@
 import { useEffect, useRef, useState, type RefObject } from 'react';
-import type {
-  AccountView,
-  ClientMessage,
-  CrewPass,
-  MissionInfo,
-  MissionStats,
-  RoomSummary,
-  Seat,
+import {
+  DEMO_CODE,
+  type AccountView,
+  type ClientMessage,
+  type CrewPass,
+  type MissionInfo,
+  type MissionStats,
+  type RoomSummary,
+  type Seat,
 } from '@escapelab/core';
 import { formatLeft } from '../clock.js';
+import { takeDemoLink } from '../demoLink.js';
 import { useNow } from '../hooks.js';
 import { crewPass, lastColor, lastName } from '../pass.js';
 import { dropSnapshot, resumeOf } from '../snapshots.js';
@@ -80,6 +82,9 @@ interface Props {
 }
 
 const REFRESH_MS = 2500;
+
+/** The demo room watched: what „Demo" and the demo's link ask the server for. */
+const WATCH_DEMO: ClientMessage = { kind: 'spectate', code: DEMO_CODE };
 
 /** The line under the game's title, in the world's voice: the sign at the plant's gate. */
 export const MENU_SUBTITLE = 'Forschungsanlage Kaltenbrunn · Zutritt nur mit Dienstausweis';
@@ -292,6 +297,20 @@ function useDoor(send: Props['send'], connected: boolean): void {
 }
 
 /**
+ * A page that came by the demo's link (demoLink.ts) asks for the demo room as its first menu's
+ * line is up — once, and not while the card's way back waits for its room (`waiting`).
+ */
+function useDemoLink(send: Props['send'], connected: boolean, waiting: boolean): void {
+  useEffect(() => {
+    if (connected && !waiting && takeDemoLink()) {
+      send(WATCH_DEMO);
+    }
+    // `send` is stable for the lifetime of the connection.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [connected, waiting]);
+}
+
+/**
  * The panel the menu opens on as it comes up: „Beitreten" for the page's invite, its code
  * filled in — the first menu of the page alone (MenuPanels.tsx `arrivesOnInvite`).
  */
@@ -353,10 +372,13 @@ function useChoosing(panel: PanelId | null): void {
 
 /**
  * The menu left for a page of its own (`open`) by item `item`, after the hero's beat: the lab's
- * doors before the editor, the short shutter before every other page (DoorWipe.tsx).
+ * doors before the editor, the short shutter before every other page (DoorWipe.tsx). The demo
+ * is asked for at once: the doors close over the menu as its room comes, as for any room.
  */
 export function leaveFor(item: MenuItemId, open: () => void): void {
-  if (item === 'editor') {
+  if (item === 'demo') {
+    open();
+  } else if (item === 'editor') {
     doorsThen(open, true);
   } else {
     shutterThen(open, true);
@@ -380,6 +402,17 @@ export function pickOf(
     setTaken({ at: performance.now(), toward: page !== undefined });
     if (page !== undefined) leaveFor(item, page);
   };
+}
+
+/**
+ * The way „Demo" leads off the menu: into the audience of the demo room, asked for on the line
+ * — none while the line is down.
+ */
+export function demoWay(
+  send: Props['send'],
+  connected: boolean,
+): Partial<Record<MenuItemId, () => void>> {
+  return connected ? { demo: () => send(WATCH_DEMO) } : {};
 }
 
 /**
@@ -456,9 +489,13 @@ export function JoinScreen(props: Props) {
   const waiting = waitingOf(seat, restoring);
   const bound = boundTo(seat, waiting);
   useDoor(send, connected);
+  useDemoLink(send, connected, waiting !== null);
   const field = { typed: name, onName: props.onName };
   const section = { send, connected, name: name.trim(), field, blocked: bound !== null };
-  const pages = pagesOf(props, pickedMission(missions, props.picked));
+  const pages = {
+    ...pagesOf(props, pickedMission(missions, props.picked)),
+    ...demoWay(send, connected),
+  };
   const [taken, setTaken] = useState<Taken | null>(null);
   const card = seat !== null && (
     <BoundCard

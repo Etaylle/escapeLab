@@ -19,6 +19,7 @@ import {
   type Tries,
 } from './accounts.js';
 import { MISSED_PINGS, SILENT_MS, type CutReason } from './heartbeat.js';
+import { DEMO_CODE, type DemoHost } from './demo/host.js';
 import type { SignInGuard } from './login.js';
 import type { MissionCatalog } from './missions.js';
 import { readAddress, type Front, type Sender } from './rateLimiter.js';
@@ -67,7 +68,16 @@ export interface Lab {
   signIns?: Pick<SignInGuard, 'refusal' | 'take'>;
   /** the ICE servers each socket is told first thing (iceServers.ts); nothing told where unset */
   iceServers?: IceServer[];
+  /** the demo room the server plays itself, to be watched by its code (demo/host.ts); none unset */
+  demo?: Pick<DemoHost, 'watch' | 'room'>;
 }
+
+/** Whether `code` is the demo room's, which is no room of the manager's. */
+const isDemo = (code: string): boolean => code.toUpperCase() === DEMO_CODE;
+
+/** What a join by the demo room's code is told: nobody sits down there. */
+export const DEMO_WATCH_ONLY =
+  'In der Vorführung spielt die Anlage selbst. Zuschauen geht über „Demo“ im Hauptmenü.';
 
 /**
  * New accounts a minute an address may make (`Lab.accountsMade`): a lecture behind one address,
@@ -1036,12 +1046,19 @@ function whereAmI(
   });
 }
 
-/** The audience connection a socket opens on the room `code`: the session it had let go of. */
+/**
+ * The audience connection a socket opens on the room `code` — the demo room by its own code
+ * (`Lab.demo`): the session it had let go of.
+ */
 function watch(lab: Lab, socket: PlayerSocket, session: Session | null, code: string): Session {
-  const room = lab.manager.get(code);
+  const demo = isDemo(code) ? lab.demo : undefined;
+  const room = demo === undefined ? lab.manager.get(code) : demo.room;
+  const listener = (m: ServerMessage): void => send(socket, m);
+  // An audience connection goes by its spectator id: voice signals reach it by that. The demo
+  // may be full, which refuses the watch: the session the socket had lets go only after.
+  const { spectatorId, detach } =
+    demo === undefined ? room.attachSpectator(listener) : demo.watch(listener);
   session?.detach();
-  // An audience connection goes by its spectator id: voice signals reach it by that.
-  const { spectatorId, detach } = room.attachSpectator((m) => send(socket, m));
   const who = (): string => 'a spectator';
   return { room, playerId: spectatorId, pass: null, who, holds: () => true, detach };
 }
@@ -1076,6 +1093,9 @@ function takeSeat(
   msg: Extract<ClientMessage, { kind: 'create-room' | 'join-room' }>,
 ): Session | null {
   if (msg.kind === 'join-room') {
+    if (isDemo(msg.code) && lab.demo !== undefined) {
+      throw new GameError(DEMO_WATCH_ONLY);
+    }
     const room = lab.manager.get(msg.code);
     lab.manager.checkWay(msg.pass, room);
     if (room.seatOf(msg.pass) === null && room.phase === 'playing' && room.hasSeat(msg.name)) {
