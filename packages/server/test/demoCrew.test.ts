@@ -197,6 +197,7 @@ describe('the demo crew has no hand on the room', () => {
     const files = readdirSync(dir).filter((file) => file !== 'host.ts');
     expect(files.sort()).toEqual([
       'crew.ts',
+      'director.ts',
       'patrol.ts',
       'places.ts',
       'route.ts',

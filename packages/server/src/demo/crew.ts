@@ -1,6 +1,7 @@
 import {
   moduleFor,
   type ConsoleId,
+  type DemoDoing,
   type MapDef,
   type Mission,
   type PlayerView,
@@ -70,6 +71,9 @@ const relayOn = (seat: Seat): RelayView | null => seat.view?.map?.sabotage?.rela
 const same = (a: Spot | undefined, b: Spot | undefined): boolean =>
   a !== undefined && b !== undefined && a.x === b.x && a.y === b.y;
 
+/** What a seat does that nothing else is said of: it stands and waits. */
+const IDLE: DemoDoing = { what: 'idle', sourceId: null };
+
 /** How long a figure stands in the open where it works a thing before it is in cover or off, s. */
 const HOLD_S = 2.5;
 
@@ -88,6 +92,8 @@ export class DemoCrew {
   private readonly asked = new Map<Seat, Spot>();
   /** when each instruction of an emergency is carried out, by what it says */
   private readonly orders = new Map<string, number>();
+  /** what each seat is doing now, as its script says it (`doing`) */
+  private readonly doings = new Map<Seat, DemoDoing>();
 
   /** `complain` hears what went wrong, for the log: the crew starts over from where it stands. */
   constructor(
@@ -96,6 +102,40 @@ export class DemoCrew {
     private readonly complain: (why: string) => void = () => undefined,
   ) {
     this.walks = new Walks(mission, this.clock, () => emergencyOn(this.view));
+  }
+
+  /**
+   * What `seat` is doing now — walking, carrying, reading at a source, at a console — as the
+   * crew's script has it: the demo's director cuts by it (director.ts), and the audience reads it.
+   */
+  doing(seat: Seat): DemoDoing {
+    return this.doings.get(seat) ?? IDLE;
+  }
+
+  /** `seat` does `what` for as long as `script` runs, then what it did before. */
+  private *as<T>(
+    seat: Seat,
+    what: DemoDoing['what'],
+    script: Script<T>,
+    sourceId: string | null = null,
+  ): Script<T> {
+    const before = this.doings.get(seat);
+    this.doings.set(seat, { what, sourceId });
+    try {
+      return yield* script;
+    } finally {
+      if (before === undefined) {
+        this.doings.delete(seat);
+      } else {
+        this.doings.set(seat, before);
+      }
+    }
+  }
+
+  /** Both of the crew do `what` for as long as `script` runs. */
+  private bothAs(what: DemoDoing['what'], script: Script): Script {
+    const [a, b] = this.seats;
+    return this.as(a, what, this.as(b, what, script));
   }
 
   /** The crew's next moment, at `now` (epoch ms): a step of each of its figures, a move, a wait. */
@@ -114,6 +154,7 @@ export class DemoCrew {
     } catch (err) {
       this.script = null;
       this.asked.clear();
+      this.doings.clear();
       this.idleUntil = now + PACE.againMs;
       this.complain(err instanceof Error ? err.message : String(err));
     }
@@ -134,6 +175,7 @@ export class DemoCrew {
       this.orders.clear();
       this.dice.again();
       this.script = null;
+      this.doings.clear();
     }
   }
 
@@ -175,9 +217,9 @@ export class DemoCrew {
   /** In a run: the opening sat through, the station up taken, or the way out. */
   private *playOn(view: PlayerView): Script {
     if (!view.lights.out) {
-      yield* this.opening();
+      yield* this.bothAs('intro', this.opening());
     } else if (view.map?.exit?.open === true) {
-      yield* this.escape(view.map.exit);
+      yield* this.bothAs('escape', this.escape(view.map.exit));
     } else {
       const armed = armedOn(view);
       const def = this.mission.puzzles.find((puzzle) => puzzle.id === armed);
@@ -212,7 +254,11 @@ export class DemoCrew {
     const [one, other] = this.castFor(def);
     yield* both(this.settle(one, other), this.settle(other, one));
     const hands: Hands = { operator: one.seat, partner: other.seat };
-    yield* workStation(def, hands, { clock: this.clock, dice: this.dice });
+    const work = workStation(def, hands, { clock: this.clock, dice: this.dice });
+    // Who stayed at the source reads on while the other works the console.
+    const reads = other.stays === true ? (this.sourceFor(def)?.id ?? null) : null;
+    const partner = this.as(other.seat, reads === null ? 'operate' : 'read', work, reads);
+    yield* this.as(one.seat, 'operate', partner);
   }
 
   /** The source that prints the rules of `def`'s station; undefined where none does. */
@@ -328,7 +374,10 @@ export class DemoCrew {
    */
   private errandsFor(def: PuzzleDef, seat: Seat): (() => Script)[] {
     const parts = this.mission.map.items.filter((item) => item.requiredFor === def.id);
-    return [() => this.readSign(seat), ...parts.map((part) => () => this.carryIn(seat, part))];
+    return [
+      () => this.as(seat, 'sign', this.readSign(seat)),
+      ...parts.map((part) => () => this.as(seat, 'carry', this.carryIn(seat, part))),
+    ];
   }
 
   /**
@@ -346,7 +395,7 @@ export class DemoCrew {
     while (me.tile === null || other.tile === null) {
       yield* this.holding(me);
       if (me.tile === null) {
-        yield* this.takePlace(me, other);
+        yield* this.as(me.seat, 'walk', this.takePlace(me, other));
       } else {
         yield;
       }
@@ -361,8 +410,9 @@ export class DemoCrew {
     const plate = this.asked.get(me.seat);
     if (plate !== undefined) {
       me.tile = null;
-      yield* this.walks.to(me.seat, middleOf(plate));
-      yield* until(() => !same(this.asked.get(me.seat), plate));
+      const held = until(() => !same(this.asked.get(me.seat), plate));
+      yield* this.as(me.seat, 'walk', this.walks.to(me.seat, middleOf(plate)));
+      yield* this.as(me.seat, 'plate', held);
     }
   }
 
@@ -435,16 +485,21 @@ export class DemoCrew {
   private *study(seat: Seat, source: Source, def: PuzzleDef): Script {
     const key = this.mission.map.items.find((item) => item.id === source.needsKey);
     if (key !== undefined && !this.opened(source)) {
-      yield* this.take(seat, key);
+      yield* this.as(seat, 'carry', this.take(seat, key));
     }
-    const at = yield* this.lookFor(seat, source);
-    yield* this.open(seat, source, at);
-    yield* pause(this.clock, this.dice.between(PACE.read));
+    const at = yield* this.as(seat, 'walk', this.lookFor(seat, source));
+    yield* this.as(seat, 'read', this.readAt(seat, source, at), source.id);
     const pages = seat.view?.manualsHere.flatMap((manual) => manual.sections) ?? [];
     if (!pages.some((page) => page.puzzleId === def.id)) {
       throw new Error(`${seat.name} reads nothing of "${def.id}" at ${source.id}`);
     }
     this.read.add(def.id);
+  }
+
+  /** `seat`, standing by `source` on the tile `at`, opens it where it is shut and reads a while. */
+  private *readAt(seat: Seat, source: Source, at: Spot): Script {
+    yield* this.open(seat, source, at);
+    yield* pause(this.clock, this.dice.between(PACE.read));
   }
 
   /** Whether the crew knows `source` to stand open. */

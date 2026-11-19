@@ -5,6 +5,7 @@ import {
   type AccountView,
   type ClientMessage,
   type CrewPass,
+  type DemoPin,
   type IceServer,
   type Mission,
   type ServerMessage,
@@ -299,6 +300,11 @@ interface Session {
    * the room pausing while they are away; an audience connection simply leaves
    */
   detach: (end?: LineEnd) => void;
+  /**
+   * pins what the connection is shown of the demo room (demo/host.ts `DemoWatch`): the demo
+   * room's audience has it, and nobody else
+   */
+  pin?: (pin: DemoPin) => void;
 }
 
 /**
@@ -564,6 +570,17 @@ function fromTheRoom(
   return fromTheMenu(msg) ? atTheMenu(socket, s, msg) : inRoom(lab, socket, s, msg);
 }
 
+/** What a connection is told that asks for the demo's pictures where no demo plays. */
+export const DEMO_PIN_ONLY = 'Die Bildregie gibt es nur in der Vorführung.';
+
+/** The connection of `s` pins what it is shown of the demo; refused in every other room. */
+function pinDemo(s: Session, pin: DemoPin): void {
+  if (s.pin === undefined) {
+    throw new GameError(DEMO_PIN_ONLY);
+  }
+  s.pin(pin);
+}
+
 /** What an audience connection is told that would do what only a seat of the crew does. */
 export const AUDIENCE_WATCHES =
   // voice: interface — the door's refusal, not the lab's, names the crew
@@ -589,6 +606,9 @@ function fromTheAudience(
       return atTheMenu(socket, s, msg);
     case 'pos':
     case 'pause-menu':
+      return s;
+    case 'demo-pin':
+      pinDemo(s, msg.pin);
       return s;
     default:
       throw new GameError(AUDIENCE_WATCHES);
@@ -1139,6 +1159,25 @@ const watches = (session: Session, room: Room): boolean =>
   session.pass === null && session.room === room;
 
 /**
+ * A session of the audience of `room` on `listener`: the demo room's — `demo`'s own — with the
+ * pin of what it is shown, any other room's without.
+ */
+function audienceOf(
+  room: Room,
+  demo: Lab['demo'],
+  listener: (msg: ServerMessage) => void,
+): Session {
+  const who = (): string => 'a spectator';
+  const holds = (): boolean => true;
+  if (demo === undefined) {
+    const { spectatorId: playerId, detach } = room.attachSpectator(listener);
+    return { room, playerId, pass: null, who, holds, detach };
+  }
+  const { spectatorId: playerId, detach, pin } = demo.watch(listener);
+  return { room, playerId, pass: null, who, holds, detach, pin };
+}
+
+/**
  * The audience connection a socket opens on the room `code` — the demo room by its own code
  * (`Lab.demo`): the session it had let go of.
  */
@@ -1156,11 +1195,9 @@ function watch(lab: Lab, socket: PlayerSocket, session: Session | null, code: st
   const listener = (m: ServerMessage): void => send(socket, m);
   // An audience connection goes by its spectator id: voice signals reach it by that. The demo
   // may be full, which refuses the watch: the session the socket had lets go only after.
-  const { spectatorId, detach } =
-    demo === undefined ? room.attachSpectator(listener) : demo.watch(listener);
+  const next = audienceOf(room, demo, listener);
   session?.detach();
-  const who = (): string => 'a spectator';
-  return { room, playerId: spectatorId, pass: null, who, holds: () => true, detach };
+  return next;
 }
 
 /**
@@ -1297,6 +1334,9 @@ function inRoom(
     case 'interact':
     case 'pos':
       step(socket, s, msg);
+      return s;
+    case 'demo-pin':
+      pinDemo(s, msg.pin);
       return s;
     default:
       toTheOthers(s, msg);
