@@ -748,6 +748,7 @@ import { drawnText, fadeOf, fadeVerdict, meanLuma, midway } from './panelfade.mj
 import { beamLight, beamPatches, beamVerdict } from './beamcheck.mjs';
 import { changedShare, sweepOf, sweepVerdict } from './sweep.mjs';
 import {
+  allowanceOffered,
   arrivals,
   cornersOf,
   flights,
@@ -12324,6 +12325,29 @@ function allowanceAfter(ms) {
   return LATE_STEPS[step];
 }
 
+/**
+ * How long a walk that stands waiting for a gap counts as having waited, in ms: `waited` once
+ * it has begun; at its first moment without one, the while it would stand out in vain at each
+ * allowance wider than the patrols offer the stretch ahead within ALLOWANCE_WAIT_MS (patrol.mjs
+ * `allowanceOffered`) — the escape's way through the Süd-Flur never has a gap for a second.
+ */
+function waitBegun(player, map, path, hold, waited) {
+  if (waited > 0) {
+    return waited;
+  }
+  const sight = { tiles: map.tiles, shut: shutOn(map) };
+  const { drones, age } = dronesOn(player.seen);
+  const stretch = stretchOf(path, havensOn(drones, sight));
+  const stand = stretch.length === path.length ? hold : SETTLE_S;
+  const within = ALLOWANCE_WAIT_MS / 1000;
+  const run = arrivals(stretch, RUN.tile[1], RUN.corner[1]).at(-1) + RUN.corner[1];
+  const delay = age + REACTION_S;
+  const flying = flights(drones, delay + within + LATE_S + run + stand + 0.5);
+  const steps = LATE_STEPS;
+  const offered = allowanceOffered(stretch, flying, sight, { delay, hold: stand, within, steps });
+  return steps.indexOf(offered) * ALLOWANCE_WAIT_MS;
+}
+
 /** `player`'s map; throws, saying how the run stands, where its view has none. */
 function mapOf(player) {
   const view = player.seen.view;
@@ -12376,6 +12400,7 @@ async function sneakTo(player, target, hold = 1.2) {
     const behind = allowanceAfter(waitedHere);
     const run = nextRun(player, map, path, hold, { late, behind });
     if (run === null) {
+      waitedHere = waitBegun(player, map, path, hold, waitedHere);
       await sleep(60);
       sneaking.waitedMs += 60;
       waitedHere += 60;

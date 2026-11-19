@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { describe, it } from 'node:test';
 import { URL } from 'node:url';
 import {
+  allowanceOffered,
   arrivals,
   canSee,
   cornersOf,
@@ -239,6 +240,29 @@ describe('spottedOn — an avatar behind its pace', () => {
   });
 });
 
+describe('allowanceOffered — the widest gap a walk may wait for', () => {
+  const beat = { waypoints: tiles([1, 2], [10, 2]), speed: 1 };
+  // Two tiles short of the west end, flying at the crossing: it turns there and flies off east.
+  const coming = [{ ...watcher, beat, at: { x: 3.5, y: 2.5, facing: Math.PI } }];
+  const crossing = tiles([2, 1], [2, 2], [2, 3]);
+  const flying = flights(coming, 30);
+  const steps = [1, 0.7, 0];
+
+  it('takes the widest allowance that has a gap within the while', () => {
+    // Watched now, a gap for 0.7 s late within two seconds, for a second late within five.
+    assert.notEqual(spottedOn(crossing, flying, HALL, { late: 0 }), null);
+    const within = (s) => allowanceOffered(crossing, flying, HALL, { within: s, steps });
+    assert.deepEqual([0, 2, 5].map(within), [0, 0.7, 1]);
+  });
+
+  it('falls back on the smallest where none has a gap', () => {
+    // Standing in the drone's way for good: no allowance has a clear moment.
+    const inTheWay = tiles([5, 2]);
+    const steps = [1, 0.7, 0.4];
+    assert.equal(allowanceOffered(inTheWay, flying, HALL, { hold: 30, within: 5, steps }), 0.4);
+  });
+});
+
 describe('havens and stretches', () => {
   const corridor = [{ ...watcher, beat: { waypoints: tiles([1, 1], [8, 1]), speed: 1 } }];
 
@@ -396,5 +420,27 @@ describe('Blackout’s patrols, as the walkthrough plays its plans past them', (
     const door = map.doors.find((d) => d.id === 'reaktortuer');
     const corridor = [0, 1, 2, 3].map((dx) => `${door.x - 1 - dx},${door.y}`);
     assert.deepEqual(corridor.filter((tile) => south.has(tile)), []);
+  });
+
+  it('gives the escape through the Süd-Flur no gap for a second late, at any phase', () => {
+    // The escape's one watched stretch, from the reactor's door to the Labor's haven (H-6): the
+    // walk begins its wait at 0.7 s there instead of standing twelve seconds for a second.
+    const { sight, drones } = stage(6);
+    const safe = havens(drones, sight);
+    const stretch = tiles(
+      [26, 17], [25, 17], [24, 17], [23, 17], [22, 17], [22, 16], [21, 16], [20, 16], [19, 16],
+      [18, 16], [17, 16], [16, 16], [15, 16], [14, 16], [13, 16],
+    );
+    assert.deepEqual(stretchOf(stretch, safe), stretch);
+    const start = (drone) => ({ x: drone.beat.waypoints[0].x + 0.5, y: drone.beat.waypoints[0].y + 0.5 });
+    const phases = (drone) =>
+      flyOn(drone.beat, { ...start(drone), facing: 0 }, 1, 20).filter((_, i) => i % 5 === 0);
+    const [flur, labor] = drones;
+    const offered = phases(labor).map((at) => {
+      const flying = flights([{ ...flur, at: { ...start(flur), facing: 0 } }, { ...labor, at }], 30);
+      return allowanceOffered(stretch, flying, sight, { hold: 0.3, within: 12, steps: LATE_STEPS });
+    });
+    assert.equal(offered.includes(1), false);
+    assert.ok(offered.filter((late) => late === 0.7).length > offered.length / 2, `${offered}`);
   });
 });
