@@ -258,7 +258,9 @@ the probe's clock says (tools/sweep.mjs).
 As in Enter the Gungeon, depth is the y-sort a painter needs: a figure walking behind a shelf,
 a rack, a locker, the cabinet or a server pillar shows only its upper part, the tall thing drawn
 again over it, cut to the part where it hides it — only where somebody stands behind one, so
-nothing costs a frame where nobody does. The name tags go over everything, the drones fly over
+nothing costs a frame where nobody does. The name tags go over everything — and none over
+another: where two figures stand so close that their tags would cross, the tag drawn later hangs a line higher (`tagLifts`; measured only while
+two stand within eight tiles across and a tile and a half down) —, the drones fly over
 everything, their shadows and the figures' stay on the floor; walking and sight are unchanged.
 Cost at 4× against the beacons: two figures behind the Archiv's shelves +0.28 ms, behind the
 server racks in the dark +0.30, the escape by the hatch +0.21, the dark Flur +0.11. Capture
