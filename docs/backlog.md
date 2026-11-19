@@ -436,6 +436,9 @@ die Entscheidung.
   verfällt ohne Alarm (Vertragspunkt `resume(def, state, at)`; Tabelle je Modul in
   `docs/gameplay.md`, „An emergency and the open station"). Anders als unten skizziert verschiebt
   kein Modul Zeiten um die Notfalldauer: Unterwegs-Zustände werden abgesagt, nicht eingefroren.
+- Bewusst so: Ein zu sperrendes Paket, das zwischen dem letzten Tick des Raums und dem Beginn
+  des Notfalls den Kern erreicht, verfällt mit seiner Welle ohne Alarm. Die Zugangskontrolle
+  läuft auf der Wanduhr weiter: Tokenperioden rücken vor, abgelaufene Sperren sind danach gelöst.
 - Vorher (Analyse, bleibt als Begründung stehen):
 - Absicht, kein Versehen: `startSabotage` (core `actions.ts`) setzt `puzzleState` auf `null`,
   seit es Notfälle gibt (aa184f7). `puzzleState` ist zugleich „die Station ist an": Ohne ihn

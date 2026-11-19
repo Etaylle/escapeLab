@@ -1010,7 +1010,9 @@ export const firewallModule: PuzzleModule<FirewallDef, FirewallState, FirewallIn
     /**
      * The clean waves stay counted; a wave in the air is called off without a fault for a fresh
      * one, which waits for the Freigabe key as after a fault — no report of it: the device said
-     * nothing. A wave that waited already waits on.
+     * nothing. A wave that waited already waits on. A hostile packet that reached the Kern
+     * between the room's last tick and the emergency's start goes with its wave, uncharged: the
+     * reducer puts the station by as it last stood, without bringing it to that moment first.
      */
     resume(def, state, at) {
       return state.waiting ? state : nextWave(def, state, at, true);
