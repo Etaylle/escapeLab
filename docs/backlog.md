@@ -418,6 +418,40 @@ die Entscheidung.
   trägt die 12 s des Stehbeweises im Serverraum: Signalkette 93 s statt 21 s (ihr Pult A am
   Ostende des Flurs, das Klemmbrett am Westende, die Flurwache dazwischen), Notstromkasten 88 s
   statt 50 s. Der Serverraum ist dafür 21 s kürzer: Vor ihm fliegt keine Drohne mehr.
+- Datenpunkt 2026-11-19 (B-blackout3), ehrlich gemessen: Vor jedem Schritt, den er mit Captures
+  auf 25 bis 75 s schätzt, stand der Rundgang auch ohne Capture-Gruppen bis zum Notfall bei 250 s
+  still (Seed 12: 51 bis 56 s Leerlauf, dann vier Stufen der Signalkette in 5 s; Seed 93: 33 s).
+  Seit dem Paket fragt ein Lauf ohne Capture-Gruppe die nackte Länge des Schritts, gut dreimal
+  die längste gemessene (`clearOfEmergencies`); kein Notfall schneidet dabei eine Station. Das
+  Paket: Pult A der Signalkette im Archiv statt am Ostende des Flurs, das Wartungsbuch an der
+  Westwand des Labors, der Paketfilter mit sieben statt neun Paketen, die Flucht ohne die 12 s
+  aus H-6. Je Seed drei Läufe; Zelle: Sekunden, darin E (Leerlauf vor dem Notfall) und G (Warten
+  auf Drohnenlücken), wo nicht null:
+
+  | Platz | alte Folge (28bc1cd, Seed 5) | main 12 | main 56 | main 93 | Paket 12 | Paket 56 | Paket 93 |
+  | --- | --- | --- | --- | --- | --- | --- | --- |
+  | 1 | Notlicht 17 | 17 | 17 | 17 | 17–18 | 17 | 17 |
+  | 2 | Notstromkasten 50 | Anlauf 60–62 | 60–61 | 61 | 61–65 | 60–61 | 60 |
+  | 3 | Signalkette 21 | Paketfilter 68 | 69 | 72–73 | 62 | 64 | 62–63 |
+  | 4 | Serverraum 38–39 (G 13) | 18 | 18 | 17–18 | 18–19 | 18 | 18 |
+  | 5 | Funkpult 35 (G 6–7) | Signalkette 40–41 (G 4) | Funkpult 51–52 (G 9–10) | Notstromkasten 54 (G 8) | Signalkette 43 (G 5) | Funkpult 48–49 (G 4) | Notstromkasten 49 (G 5–6) |
+  | 6 | Reaktor 40–41 (G 9–10) | 41–50 (E 0–8, G 5–7) | 48–49 (G 15) | 44–45 (G 15–16) | 55–56 (G 18) | 50 (G 17–18) | 34–35 (G 7) |
+  | Flucht | 40–42 (G 3–4) | 56–57 (G 19) | 56–58 (G 19–21) | 59 (G 22) | 46–47 (G 10) | 47–48 (G 10) | 42 (G 5–6) |
+  | Sieg | 243 (G 33) | 299–309 (G 28–30) | 321–322 (G 44–45) | 324–325 (G 45–46) | 304–308 (G 32–33) | 304–306 (G 31–32) | 282 (G 17) |
+
+  Der Rundgang der alten Folge lässt keiner verspäteten Figur Spielraum; ohne G gerechnet liegt
+  sie bei 210 s, das Paket bei 265 bis 273 s. Der Rest sind die Uhren von Paketfilter (41 bis
+  43 s) und Anlaufsteuerung (13 bis 15 s), die die Stationen der alten Folge nicht hatten. Kein
+  Lauf des Pakets wartet mehr auf einen Notfall (E 0). Die drei Auslosungen liegen 26 s
+  auseinander (Ziel 30 s); 300 s hält nur Seed 93, 12 und 56 liegen 4 bis 8 s darüber, fast
+  ganz im Weg zum Reaktor, in den der Notfall bei 250 s fällt — auf Seed 12 auch der längere Weg
+  vom Archiv dorthin, den das gerechte Pult A kostet. Die Anlaufsteuerung bleibt (Entscheidung
+  2026-11-19: ihre Plätze nennen Texte, die auf das Rendern warten). Die sieben Pakete bleiben:
+  Jede Auslosung läge auch mit sieben mehr als 30 s über der alten Folge, neun kosten nach der
+  Zeile des Paketfilters 6 bis 9 s mehr. Verworfen, weil das Skript stockte oder die Maschine
+  überlastet war (Lauf außerhalb des Tempos um 1,4 bis 12,2 s, Last 15 bis 131): Paket 12 einmal
+  (324 s, dabei eine Sichtung am Schott nach 12 s Stillstand), Paket 93 einmal (328 s), main 56
+  einmal (439 s), main 93 einmal (339 s), alte Folge einmal (288 s).
 - Studie G-2, Rang 4 (Escape Academy, Escape Simulator): ein Lehrgang ohne Uhr — der erste Lauf
   einer Crew ohne Uhr, dann Übungshalle, Tutorial und Blackout, je Schritt eine neue Idee; die
   Missionen ohne Uhr aus G-2 sind das Werkzeug dafür.
