@@ -2,6 +2,7 @@ import type { PartKind, PlayerView } from '@escapelab/core';
 import { DRONE_MARK_MS } from '../alarm.js';
 import {
   drawNameTag,
+  nameTagBox,
   drawHeldSheet,
   drawScientist,
   drawVoiceRing,
@@ -102,14 +103,72 @@ function drawCrew(ctx: CanvasRenderingContext2D, frame: Frame): Standing[] {
   return crew;
 }
 
-/** The crew's name tags over everything they stand among: no shelf hides a name. */
+/** A name tag as it would hang: its middle across and its foot, its width and a line's height. */
+export interface TagBox {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/**
+ * How far each of `tags`, in the order they are drawn, steps up so that none lies across
+ * another, in tiles: a tag that would cross one drawn before it — two figures side by side at a
+ * station, their names wider than the gap between them — hangs a line higher, and higher again
+ * while it still crosses one. Whoever stands alone keeps their tag where it was.
+ */
+export function tagLifts(tags: readonly TagBox[]): number[] {
+  const lifts: number[] = [];
+  tags.forEach((tag, i) => {
+    const crosses = (lift: number): boolean =>
+      tags.slice(0, i).some((before, j) => {
+        const apart = Math.abs(tag.y - lift - (before.y - (lifts[j] ?? 0)));
+        const across = Math.abs(tag.x - before.x) < (tag.width + before.width) / 2;
+        return across && apart < Math.max(tag.height, before.height) - SAME_LINE;
+      });
+    let lift = 0;
+    while (crosses(lift)) {
+      lift += tag.height;
+    }
+    lifts.push(lift);
+  });
+  return lifts;
+}
+
+/** Two tags whose feet lie this near a line apart hang a line apart: no step is taken twice. */
+const SAME_LINE = 1e-6;
+
+/** Figures this near each other, across and down the picture, may have their tags cross, tiles. */
+const TAGS_NEAR = { across: 8, down: 1.5 };
+
+/** Whether any two of `crew` stand near enough for their name tags to cross (`TAGS_NEAR`). */
+function tagsMayCross(crew: readonly Standing[]): boolean {
+  return crew.some((one, i) =>
+    crew.slice(0, i).some(
+      (other) =>
+        Math.abs(one.spot.x - other.spot.x) < TAGS_NEAR.across &&
+        Math.abs(one.spot.y - other.spot.y) < TAGS_NEAR.down,
+    ),
+  );
+}
+
+/**
+ * The crew's name tags over everything they stand among: no shelf hides a name, and no name
+ * another — where two stand close, the tag drawn later hangs a line higher (`tagLifts`). The
+ * tags are measured only then: a crew spread over the lab costs a frame nothing more.
+ */
 function drawNames(ctx: CanvasRenderingContext2D, crew: readonly Standing[]): void {
-  for (const { spot, look } of crew) {
+  const lifts = tagsMayCross(crew)
+    ? tagLifts(
+        crew.map(({ spot, look }) => ({ x: spot.x, y: spot.y, ...nameTagBox(ctx, look) })),
+      )
+    : [];
+  crew.forEach(({ spot, look }, i) => {
     ctx.save();
-    ctx.translate(spot.x, spot.y + 0.3);
+    ctx.translate(spot.x, spot.y + 0.3 - (lifts[i] ?? 0));
     drawNameTag(ctx, look);
     ctx.restore();
-  }
+  });
 }
 
 /** The drones' shadows on the floor, under the crew. */

@@ -3,6 +3,7 @@ import type { DronePosition, PartKind } from '@escapelab/core';
 import {
   drawHeldSheet,
   drawNameTag,
+  nameTagBox,
   drawScientist,
   drawVoiceRing,
   HELD_SCALE,
@@ -22,7 +23,14 @@ import {
   drawDroneCone,
   drawDroneShadow,
 } from '../src/world/hazards.js';
-import { crewPose, draw, groundAt, heldItem } from '../src/world/render/actors.js';
+import {
+  crewPose,
+  draw,
+  groundAt,
+  heldItem,
+  tagLifts,
+  type TagBox,
+} from '../src/world/render/actors.js';
 import { FALLBACK_COLOR, type Frame, type OtherAvatar } from '../src/world/render/frame.js';
 import { callsOf, drawnAt, fakeCanvas, FakePath2D, recording, strip } from './fakeCanvas.js';
 import { frameWith, lightWith, lit, player } from './frames.js';
@@ -159,6 +167,59 @@ describe('actors — drones and the crew, in tile space', () => {
     const bodies = [order.indexOf('4.2,2.4'), order.indexOf('2.5,2.8')];
     const tags = [order.lastIndexOf('4.2,2.4'), order.lastIndexOf('2.5,2.8')];
     expect(Math.min(...tags)).toBeGreaterThan(Math.max(...bodies));
+  });
+
+  it('hangs the later of two tags a line higher where the two would cross', () => {
+    // The audience's view of two at a main switch, two tiles apart: no figure of its own.
+    const wide = [player('p1', 'HCW Bachelor', '#2dd4bf'), player('p2', 'HCW Master', '#f472b6')];
+    const at = (rx: number, ry: number): OtherAvatar => ({ ...ben, x: rx, y: ry, rx, ry });
+    const close = new Map([
+      ['p1', at(14.5, 9.5)],
+      ['p2', at(16.5, 9.5)],
+    ]);
+    const tagsAt = (others: Map<string, OtherAvatar>): string[] => {
+      const frame = frameWith({ others, players: wide, spectator: true });
+      const order = callsOf(drawn(frame), 'translate').map(([x, y]) => `${x},${y}`);
+      // Each figure's feet are moved to twice: its body first, its tag after all the bodies.
+      return order.slice(-others.size);
+    };
+    const [first, second = ''] = tagsAt(close);
+    expect(first).toBe('14.5,9.8');
+    // A line of the name's own size higher, at whatever zoom the frame draws its text.
+    const lifted = 9.8 - Number(second.split(',')[1]);
+    expect(second.startsWith('16.5,')).toBe(true);
+    expect(lifted).toBeGreaterThan(0.1);
+    expect(lifted).toBeLessThan(0.5);
+    expect(nameTagBox(fakeCanvas().ctx, { name: 'HCW Master' }).height).toBeGreaterThan(0.2);
+    // Far enough apart across, or down the picture, each tag hangs where it always did.
+    const apart = new Map([
+      ['p1', at(14.5, 9.5)],
+      ['p2', at(24.5, 9.5)],
+    ]);
+    expect(tagsAt(apart)).toEqual(['14.5,9.8', '24.5,9.8']);
+    const below = new Map([
+      ['p1', at(14.5, 9.5)],
+      ['p2', at(15.5, 12.5)],
+    ]);
+    expect(tagsAt(below)).toEqual(['14.5,9.8', '15.5,12.8']);
+  });
+
+  it('steps a tag up past every tag it would cross, and leaves the rest be', () => {
+    const tag = (x: number, y: number, width = 3): TagBox => ({ x, y, width, height: 0.3 });
+    expect(tagLifts([tag(0, 5), tag(2, 5), tag(4, 5)])).toEqual([0, 0.3, 0]);
+    expect(tagLifts([tag(0, 5), tag(1, 5), tag(2, 5)])).toEqual([0, 0.3, 0.6]);
+    expect(tagLifts([tag(0, 5), tag(3.5, 5)])).toEqual([0, 0]);
+    expect(tagLifts([tag(0, 5), tag(1, 5.4)])).toEqual([0, 0]);
+    // A tag a little further down the picture than its neighbour's steps up over it.
+    expect(tagLifts([tag(0, 5), tag(1, 5.2)])).toEqual([0, 0.6]);
+    expect(tagLifts([])).toEqual([]);
+  });
+
+  it('measures no tag while nobody stands near anybody', () => {
+    const far = new Map([['p2', { ...ben, rx: 20.5, ry: 2.1 }]]);
+    expect(callsOf(drawn(frameWith({ others: far, players })), 'measureText')).toEqual([]);
+    const near = new Map([['p2', ben]]);
+    expect(callsOf(drawn(frameWith({ others: near, players })), 'measureText')).toHaveLength(2);
   });
 
   it('casts the drones’ shadows on the floor under the crew, the drones over it', () => {
