@@ -521,7 +521,7 @@ function lineOf(conn: Connection): GameLine {
  * plays its end (world/finale.ts) — the same screen, so that the world goes on
  * — and opens the end screen after.
  */
-function Screens(props: ScreenProps) {
+export function Screens(props: ScreenProps) {
   const { conn, finale } = props;
   if (conn.spectatorView !== null) {
     return (
