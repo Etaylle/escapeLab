@@ -154,6 +154,19 @@ export const GROUPS = [
     captures: ['settings-music.png'],
   },
   {
+    // The demo room the server plays itself, watched from the menu and by its link.
+    name: 'demo',
+    stage: 'drills',
+    needs: [],
+    captures: [
+      'demo',
+      'menu-demo.png',
+      'demo-audience.png',
+      'demo-audience-phone.png',
+      'demo-audience-phone-932.png',
+    ],
+  },
+  {
     name: 'screens',
     stage: 'lobby',
     needs: [],

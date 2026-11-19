@@ -11,13 +11,14 @@
  *     node tools/shots.mjs [baseUrl] [outDir]
  *
  * Groups (tools/groups.mjs): every capture, and every label a skip line carries, belongs to one of
- * twenty-two groups; SHOTS_ONLY and SHOTS_SKIP, each a comma-separated list of their names, pick
+ * twenty-three groups; SHOTS_ONLY and SHOTS_SKIP, each a comma-separated list of their names, pick
  * those a run plays — a quick proof of one part. The drills, each in a room of its own before the
  * walkthrough: editor, art, drones (the danger sense, a drone close by), reconnect, restart, three
  * (Blackout for a crew of three as far as the Paketfilter) — and in a Systemcheck run the
  * Serverraum's scratch mission, devices', the Zugangskontrolle's, access, the
- * Anlaufsteuerung's, startup, hall (the Übungshalle played to its won card) and rotation (the
- * Wechselplatz's scratch mission on two seeds). The walkthrough's own stages:
+ * Anlaufsteuerung's, startup, hall (the Übungshalle played to its won card), rotation (the
+ * Wechselplatz's scratch mission on two seeds) and demo (the room the server plays itself,
+ * watched from the menu and by its link). The walkthrough's own stages:
  * screens (the menu and its sound, the history, the lobby, the run started from it), intro (the
  * opening to blackout.png, the cold open at density 2 with it) and run (the mission to the won
  * card: the lit rooms, the finds, the audience's way in, the escape, the end, and after the won
@@ -17748,6 +17749,162 @@ async function captureMusicPacks() {
   }
 }
 
+// ── the demo drill: the room the server plays itself (server demo/host.ts) ──────────────────
+//
+// In a Systemcheck run, on pages of its own: a laptop's menu with „Demo" in the focus
+// (menu-demo.png); the item pressed leads into the demo room's audience with no name and no
+// code, and once one of its crew stands at a console demo-audience.png is taken — the line that
+// the plant plays by itself, both machines along the foot, what each is doing. Then a phone that
+// asks for less motion comes by the demo's link, /?demo=1: straight into the audience, the link
+// gone from the address (demo-audience-phone.png), turned sideways (demo-audience-phone-932.png),
+// and „Zuschauen beenden" leads back to the menu. The run fails where any of it is not so.
+
+/** The line over the demo room's audience (client screens/Spectate.tsx `DEMO_LINE`). */
+const DEMO_LINE =
+  'Vorführbetrieb: Die Anlage fährt diesen Einsatz selbst, an den Pulten stehen zwei Automaten.';
+
+/** The smallest the demo's words may be, and the smallest a finger's target, CSS px. */
+const DEMO_TEXT_PX = 14;
+const DEMO_TARGET_PX = 44;
+
+/** What the demo room's audience shows, read in the page (whole, as page.evaluate takes it). */
+function demoAudienceShown() {
+  const line = document.querySelector('.demo-line');
+  const box = line?.getBoundingClientRect();
+  const doc = document.documentElement;
+  const foot = [...document.querySelectorAll('.spectate-foot .players li')];
+  return {
+    line: line?.textContent ?? null,
+    linePx: line === null ? 0 : Number.parseFloat(globalThis.getComputedStyle(line).fontSize),
+    lineIn: box !== undefined && box.left >= 0 && box.right <= doc.clientWidth + 1,
+    crew: foot.map((li) => li.textContent.trim()),
+    atConsole: foot.filter((li) => li.querySelector('.presence-pult') !== null).length,
+    ways: [...document.querySelectorAll('.spectate-foot button.link')].map((button) =>
+      Math.round(button.getBoundingClientRect().height),
+    ),
+    sideways: doc.scrollWidth - doc.clientWidth,
+    address: globalThis.location.search,
+  };
+}
+
+/**
+ * What is wrong with the demo room's audience as `shown` has it (`demoAudienceShown`); under a
+ * finger (`touch`) its ways out and in have to be a fingertip tall.
+ */
+function demoFaults(shown, touch) {
+  const small = touch ? shown.ways.filter((height) => height < DEMO_TARGET_PX) : [];
+  return wrongOf([
+    [small.length > 0, `ways along the foot ${small.join(', ')} px tall`],
+    [shown.ways.length === 0, 'no way out along the foot'],
+    [shown.line !== DEMO_LINE, `the line reads „${shown.line}"`],
+    [shown.linePx < DEMO_TEXT_PX, `the line is ${shown.linePx} px`],
+    [!shown.lineIn, 'the line runs out of the window'],
+    [shown.crew.length !== 2, `${shown.crew.length} of the crew along the foot`],
+    [shown.sideways > 1, `the page runs ${shown.sideways} px out sideways`],
+    [shown.address.includes('demo'), `the address kept „${shown.address}"`],
+  ]);
+}
+
+/** `shot` of the demo room's audience on `page`, a touch screen's or not, logged and judged. */
+async function demoAudienceShot(page, shot, size, touch = false) {
+  await capture(page, shot);
+  const shown = await page.evaluate(demoAudienceShown);
+  console.log(
+    `${shot.padEnd(19)}@ ${size}: „${shown.line}" at ${shown.linePx} px; ` +
+      `${shown.crew.join(' · ')}; ${shown.atConsole} at a console; ` +
+      `ways along the foot ${shown.ways.join(', ')} px tall`,
+  );
+  return demoFaults(shown, touch).map((fault) => `${shot}: ${fault}`);
+}
+
+/**
+ * menu-demo.png and demo-audience.png: „Demo" in the laptop's menu, a target of a finger's
+ * height, pressed — no name typed, no code — leads into the audience, where one of the crew
+ * stands at a console within a minute.
+ */
+async function demoFromMenu(context) {
+  const page = await openPage(context, 'demo');
+  page.on('pageerror', (e) => console.log('[demo error]', e.message));
+  await page.goto(traced(BASE));
+  const item = page.locator('.menu-item', { hasText: 'Demo' });
+  await item.waitFor({ timeout: 10_000 });
+  await item.focus();
+  await capture(page, 'menu-demo.png');
+  const height = Math.round((await item.boundingBox())?.height ?? 0);
+  console.log(`menu-demo.png      „Demo" in the focus, ${height} px tall`);
+  await item.click();
+  await page.locator('.spectate').waitFor({ timeout: 10_000 });
+  const working = () => document.querySelector('.spectate-foot .presence-pult') !== null;
+  await page.waitForFunction(working, null, { timeout: 60_000 });
+  await sleep(600); // the world drawn round the two at the switch
+  const wrong = await demoAudienceShot(page, 'demo-audience.png', '1440x820');
+  await overflow(page, 'demo audience @ 1440x820');
+  return [...wrong, ...wrongOf([[height < DEMO_TARGET_PX, `„Demo" is ${height} px tall`]])];
+}
+
+/**
+ * demo-audience-phone.png and demo-audience-phone-932.png: a phone that asks for less motion
+ * comes by the demo's link and stands in the audience at once, upright and turned sideways;
+ * „Zuschauen beenden" leads back to the menu, „Demo" among its items.
+ */
+async function demoByLink(context) {
+  const page = await openPage(context, 'demo phone');
+  page.on('pageerror', (e) => console.log('[demo phone error]', e.message));
+  const link = new URL(traced(BASE));
+  link.searchParams.set('demo', '1');
+  await page.goto(link.href);
+  await page.locator('.spectate .demo-line').waitFor({ timeout: 10_000 });
+  await sleep(600);
+  const upright = `${SIZES[2].width}x${SIZES[2].height}`;
+  const wrong = await demoAudienceShot(page, 'demo-audience-phone.png', upright, true);
+  await page.setViewportSize({ width: 932, height: 430 });
+  await sleep(600);
+  const turned = await demoAudienceShot(page, 'demo-audience-phone-932.png', '932x430', true);
+  wrong.push(...turned);
+  const stop = page.locator('.spectate-foot button', { hasText: 'Zuschauen beenden' });
+  await stop.scrollIntoViewIfNeeded();
+  await stop.tap();
+  const back = page.locator('.menu-item', { hasText: 'Demo' });
+  const menu = await back.waitFor({ timeout: 10_000 }).then(
+    () => true,
+    () => false,
+  );
+  const led = menu ? 'the menu, „Demo" in it' : '!! no menu';
+  console.log(`demo               „Zuschauen beenden": ${led}`);
+  return [...wrong, ...wrongOf([[!menu, '„Zuschauen beenden" led to no menu']])];
+}
+
+/**
+ * The demo drill (above), in a Systemcheck run — Blackout's skips it, for it needs no mission of
+ * the walkthrough's: the server's own demo room plays for its two pages.
+ */
+async function captureDemo() {
+  if (MISSION.toLowerCase() === 'blackout') {
+    skip('demo', 'the demo room needs no mission: its drill plays in a Systemcheck run');
+    return;
+  }
+  const from = Date.now();
+  const laptop = await browser.newContext({ viewport: SIZES[0] });
+  const phone = await browser.newContext({
+    viewport: SIZES[2],
+    hasTouch: true,
+    reducedMotion: 'reduce',
+  });
+  try {
+    const wrong = [...(await demoFromMenu(laptop)), ...(await demoByLink(phone))];
+    console.log(`demo               the drill took ${seconds(Date.now() - from)}`);
+    if (wrong.length > 0) {
+      fail(`demo: ${wrong.join(', ')}`);
+    }
+  } catch (err) {
+    console.log(`demo               !! ${firstLine(err)}`);
+    fail(`demo: ${firstLine(err)}`);
+  } finally {
+    await laptop.close();
+    await phone.close();
+  }
+}
+
 // ── the three drill: Blackout for a crew of three (backlog M-1) ─────────────────────────────
 //
 // A room of its own after the restart drill, pinned to the plan's seed: Anna opens Blackout,
@@ -18374,7 +18531,8 @@ async function captureRotation() {
  * sense, the reconnect drill, the restart drill, the Zugangskontrolle's, the Anlaufsteuerung's
  * and the Paketfilter's scratch missions (a Systemcheck run's), the three drill (a Blackout
  * run's), the Übungshalle (a Systemcheck run's), the Wechselplatz's scratch mission (a
- * Systemcheck run's) and the music packs in the settings, on a menu of their own.
+ * Systemcheck run's), the music packs in the settings, on a menu of their own, and the demo room
+ * the server plays itself, watched from the menu and by its link (a Systemcheck run's).
  */
 const DRILLS = [
   ['editor', captureEditor],
@@ -18390,6 +18548,7 @@ const DRILLS = [
   ['hall', captureHall],
   ['rotation', captureRotation],
   ['music', captureMusicPacks],
+  ['demo', captureDemo],
 ];
 
 /**

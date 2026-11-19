@@ -37,15 +37,16 @@ export function consoleOn(map: MapView, puzzleId: string, console: ConsoleId | n
 export const emergencyOn = (view: PlayerView | null): boolean => view?.map?.sabotage != null;
 
 /**
- * The tiles to stand on beside the thing on `target`, the best first: one of `safe` (by key)
- * before any other, one beside it before the tile itself.
+ * The tiles to stand on by the thing on `target`: the free ones beside it, those of `safe` (by
+ * key) first — and the thing's own tile only where none beside it is free: nobody stands on a
+ * console that has room before it.
  */
 export function tilesBy(ground: Ground, target: Spot, safe: ReadonlySet<string>): Spot[] {
-  const rank = (tile: Spot): number =>
-    (safe.has(keyOf(tile)) ? 0 : 2) + (tile.x === target.x && tile.y === target.y ? 1 : 0);
-  return [...besides(target), target]
-    .filter((tile) => free(ground, tile))
-    .sort((a, b) => rank(a) - rank(b));
+  const beside = besides(target).filter((tile) => free(ground, tile));
+  const rank = (tile: Spot): number => (safe.has(keyOf(tile)) ? 0 : 1);
+  return beside.length > 0
+    ? beside.sort((a, b) => rank(a) - rank(b))
+    : [target].filter((tile) => free(ground, tile));
 }
 
 /** How many steps a shortest way from `from` to `to` over `ground` takes; Infinity for none. */

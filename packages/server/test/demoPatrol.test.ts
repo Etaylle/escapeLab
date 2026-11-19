@@ -76,7 +76,11 @@ describe('a place to stand', () => {
   it('is a free tile beside the thing, a haven before any other, the nearest of those', () => {
     const map = mapOf(true);
     const tiles = tilesBy(groundOf(map), { x: 4, y: 3 }, new Set(['5,3']));
-    expect(tiles.map(keyOf)).toEqual(['5,3', '3,3', '4,3']);
+    expect(tiles.map(keyOf)).toEqual(['5,3', '3,3']);
+    // On the thing's own tile only where nothing beside it is free: the plate's is off limits.
+    expect(tilesBy(groundOf(map), { x: 3, y: 1 }, new Set()).map(keyOf)).toEqual(['4,1', '2,1']);
+    // The shelf boxes the room's west corner in: whoever uses a thing there stands on its tile.
+    expect(tilesBy(groundOf(map), { x: 1, y: 3 }, new Set()).map(keyOf)).toEqual(['1,3']);
     expect(nearestOf(map, { x: 3, y: 3 }, tiles, new Set())).toEqual({ x: 3, y: 3 });
     expect(nearestOf(map, { x: 3, y: 3 }, tiles, new Set(['5,3']))).toEqual({ x: 5, y: 3 });
   });

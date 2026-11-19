@@ -1368,7 +1368,7 @@ button.link:hover {
 /* The demo room's line under the mission's name: the plant plays by itself. */
 .demo-line {
   margin: 6px 0 0;
-  max-width: 62ch;
+  max-width: 100ch;
   color: var(--text);
   font-size: calc(14px * var(--text-scale));
   line-height: 1.4;
@@ -1411,6 +1411,16 @@ button.link:hover {
   gap: 18px;
   flex-wrap: wrap;
   margin-top: 16px;
+}
+
+/* Under a finger the audience's ways — to listen in, to leave — are a fingertip tall. */
+@media (pointer: coarse) {
+  .spectate-foot button.link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 44px;
+  }
 }
 
 /* Where each crew member stands and what they hold, in the colours the world uses for it. */

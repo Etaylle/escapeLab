@@ -57,6 +57,8 @@ interface Place {
   first: (() => Script)[];
   /** the tile it stands on, once it has taken its place */
   tile: Spot | null;
+  /** the tile it is on its way to, to stand on: the other of the crew takes another */
+  bound?: Spot;
   /** it stays where what it did first left it: reading at the source */
   stays?: true;
 }
@@ -364,12 +366,14 @@ export class DemoCrew {
   }
 
   /**
-   * `me` walks to its place by its thing, a tile `other` does not stand on; where a door a plate
-   * opens stands shut in the way, `other` is asked onto the plate and the walk waits a tick.
+   * `me` walks to its place by its thing, a tile `other` neither stands on nor is bound for; where
+   * a door a plate opens stands shut in the way, `other` is asked onto the plate and the walk
+   * waits a tick.
    */
   private *takePlace(me: Place, other: Place): Script {
     const { seat, thing } = me;
-    const tile = this.tileBy(seat, thing, other.tile);
+    const tile = this.tileBy(seat, thing, other.tile ?? other.bound ?? null);
+    me.bound = tile;
     if (this.walks.reaches(seat, tile)) {
       yield* this.walks.to(seat, middleOf(tile), HOLD_S);
       seat.lookAt(middleOf(thing));
