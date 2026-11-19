@@ -17373,7 +17373,8 @@ function ownedRunsLog() {
   if (process.env.RUNS_LOG) {
     return process.env.RUNS_LOG;
   }
-  const file = join(OUT, 'runs.jsonl');
+  // Absolute: the server runs from packages/server, and OUT may be relative to the run's folder.
+  const file = resolve(OUT, 'runs.jsonl');
   if (!existsSync(file)) {
     const lines = ARCHIVE_RUNS.map((run) => `${JSON.stringify(archiveReport(run))}\n`);
     writeFileSync(file, lines.join(''));
