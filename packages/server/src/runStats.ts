@@ -309,13 +309,18 @@ export class RunStats {
     if (board === 'archive') {
       this.onTheArchive += 1;
     }
-    let shelf = this.main;
-    if (isDaily(run)) {
-      const day = utcDay(run.startedAt);
-      shelf = this.days.get(day) ?? new Shelf();
-      this.days.set(day, shelf);
+    this.shelfOf(run).board(board).add(run);
+  }
+
+  /** The shelf `run` goes on: its Tagesschicht day's, made with the day's first run, or main. */
+  private shelfOf(run: LoggedRun): Shelf {
+    if (!isDaily(run)) {
+      return this.main;
     }
-    shelf.board(board).add(run);
+    const day = utcDay(run.startedAt);
+    const shelf = this.days.get(day) ?? new Shelf();
+    this.days.set(day, shelf);
+    return shelf;
   }
 
   /**
