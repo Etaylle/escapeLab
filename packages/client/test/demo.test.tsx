@@ -213,7 +213,7 @@ describe('the demo room’s audience', () => {
 
 describe('the demo room’s audience keeping its server awake', () => {
   it('asks /health every four minutes, whatever becomes of a request, until it stops', async () => {
-    vi.useFakeTimers();
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'setTimeout', 'clearTimeout'] });
     const asked: string[] = [];
     const page = {
       fetch: (address: string, init: { cache: 'no-store' }) => {
@@ -223,9 +223,16 @@ describe('the demo room’s audience keeping its server awake', () => {
       setInterval: (run: () => void, ms: number) => setInterval(run, ms),
       clearInterval: (timer: never) => clearInterval(timer),
     };
+    const unhandled: unknown[] = [];
+    const note = (why: unknown): void => void unhandled.push(why);
+    process.on('unhandledRejection', note);
     const stop = keepAwake(page);
     expect(asked).toEqual([]);
     await vi.advanceTimersByTimeAsync(KEEP_AWAKE_MS * 3);
+    // The first ask failed, the line down: it fails quietly, nothing left unhandled.
+    await new Promise((resolve) => setImmediate(resolve));
+    process.off('unhandledRejection', note);
+    expect(unhandled).toEqual([]);
     expect(asked).toEqual(Array.from({ length: 3 }, () => '/health no-store'));
     // Well inside the quarter of an hour after which a sleeping host puts its instance down.
     expect(KEEP_AWAKE_MS).toBeLessThanOrEqual(5 * 60_000);

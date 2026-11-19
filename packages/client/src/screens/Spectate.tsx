@@ -52,7 +52,10 @@ export const DEMO_LINE = 'Vorführbetrieb: Die Anlage fährt diesen Einsatz selb
  * takes the game along on their own device. A wide window's alone (ui.css): a phone is the
  * device already.
  */
-function DemoQr() {
+function DemoQr({ shown }: { shown: boolean }) {
+  if (!shown) {
+    return null;
+  }
   const address = siteAddress();
   return (
     <section className="panel demo-qr">
@@ -175,7 +178,7 @@ function SpectatePanels({ view, demo }: { view: SpectatorView; demo: boolean }) 
           ),
       )}
 
-      {demo && <DemoQr />}
+      <DemoQr shown={demo} />
       <section className="panel spectate-log">
         <div className="panel-label">// Einsatzprotokoll</div>
         {feed.length === 0 ? (
@@ -203,7 +206,8 @@ function SpectateFoot({
   view,
   positionsRef,
   leaveRoom,
-}: Pick<Props, 'view' | 'positionsRef' | 'leaveRoom'>) {
+  demo,
+}: Pick<Props, 'view' | 'positionsRef' | 'leaveRoom'> & { demo: boolean }) {
   const speaking = useVoice()?.state.speaking;
   return (
     <div className="spectate-foot">
@@ -219,7 +223,8 @@ function SpectateFoot({
           </li>
         ))}
       </ul>
-      <ListenToggle />
+      {/* The demo's crew are machines: nobody speaks, so there is nothing to listen in on. */}
+      {!demo && <ListenToggle />}
       <button className="link" onClick={leaveRoom}>
         <Icon name="exit" /> Zuschauen beenden
       </button>
@@ -271,7 +276,8 @@ export function SpectateScreen({
   leaveRoom,
   demo,
 }: Props) {
-  useKeepAwake(demo === true);
+  const watchesDemo = demo === true;
+  useKeepAwake(watchesDemo);
   // The audience sees the lights fail too, unless it came in after.
   const darkSince = useDarkSince(view.lights, view.startedAt);
 
@@ -325,7 +331,12 @@ export function SpectateScreen({
         <SpectatePanels view={view} demo={demo === true} />
       </div>
 
-      <SpectateFoot view={view} positionsRef={positionsRef} leaveRoom={leaveRoom} />
+      <SpectateFoot
+        view={view}
+        positionsRef={positionsRef}
+        leaveRoom={leaveRoom}
+        demo={watchesDemo}
+      />
       {ending !== null && <FinaleVeil ending={ending.ending} since={ending.since} />}
     </div>
   );

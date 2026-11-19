@@ -17998,14 +17998,17 @@ const DEMO_BACK_MS = 45_000;
 function demoAudienceShown() {
   const doc = document.documentElement;
   const view = globalThis;
+  const nothing = { text: null, px: 0, inside: false };
   const said = (selector) => {
     const element = document.querySelector(selector);
-    const box = element?.getBoundingClientRect();
-    const shown = box !== undefined && box.width > 0 && box.height > 0;
+    const box = element === null ? { width: 0, height: 0 } : element.getBoundingClientRect();
+    if (box.width * box.height === 0) {
+      return nothing;
+    }
     return {
-      text: shown ? element.innerText.trim() : null,
-      px: shown ? Number.parseFloat(view.getComputedStyle(element).fontSize) : 0,
-      inside: shown && box.left >= 0 && box.right <= doc.clientWidth + 1 && box.top >= 0,
+      text: element.innerText.trim(),
+      px: Number.parseFloat(view.getComputedStyle(element).fontSize),
+      inside: [box.left, box.top, doc.clientWidth + 1 - box.right].every((gap) => gap >= 0),
     };
   };
   const foot = [...document.querySelectorAll('.spectate-foot .players li')];
@@ -18036,7 +18039,8 @@ function demoFaults(shown, phone) {
   const named = DEMO_NAMES.every((name, i) => shown.crew[i]?.startsWith(name) === true);
   return wrongOf([
     [small.length > 0, `ways along the foot ${small.join(', ')} px tall`],
-    [shown.ways.length === 0, 'no way out along the foot'],
+    // „Zuschauen beenden" alone: nobody speaks in the demo, so nothing offers to listen in.
+    [shown.ways.length !== 1, `${shown.ways.length} ways along the foot, not the way out alone`],
     [label.text !== DEMO_LABEL, `the label reads „${label.text}"`],
     [label.px < DEMO_TEXT_PX || !label.inside, `the label at ${label.px} px, in: ${label.inside}`],
     [!phone && line.text !== DEMO_LINE, `the line reads „${line.text}"`],
@@ -19301,6 +19305,11 @@ async function audienceJoins(anna, ben, code) {
   await sleep(1200);
   await capture(page, 'spectate.png');
   await overflow(page, 'spectate @ 1440x820');
+  // A crew's room is no demo: neither its label nor its QR code stands over this audience.
+  const demoMarks = await page.locator('.demo-label, .demo-line, .demo-qr').count();
+  if (demoMarks > 0) {
+    fail(`spectate.png: ${demoMarks} of the demo room's marks over a crew's audience`);
+  }
   await inGroup('voice', () => listenIn(page, [anna, ben]));
   await inGroup('graphics', () => captureDpr2(code));
   return { page, seen };
