@@ -49,7 +49,8 @@ export type ContextAction = (
   /**
    * a thing E does nothing at, the prompt saying why: a locked cabinet without its key in hand
    * names what is missing; a station out of service this run reads its tag, and a source that
-   * prints only such a station's rules says so
+   * prints only such a station's rules says so; a station resting through an emergency says
+   * until when (RESTING_PROMPT)
    */
   | { kind: 'locked'; label: string; x: number; y: number }
 ) & { subject: Subject };
@@ -73,6 +74,12 @@ export function promptText(action: ContextAction, keyboard: boolean): string {
 export function carryLine(label: string): string {
   return `📦 ${label} — [${glyph('drop')}] ablegen`;
 }
+
+/**
+ * What the console of a station says that was switched on and rests through the emergency that
+ * runs (core view.ts `resting`): E does nothing there until it is over.
+ */
+export const RESTING_PROMPT = 'Ruht, bis der Notfall behoben ist';
 
 type Source = Pick<SourceHere, 'id' | 'kind' | 'opened' | 'needsKey' | 'outOfService'>;
 
@@ -259,9 +266,12 @@ export function contextAction(
   }
   for (const station of stations) {
     const { x, y } = station;
-    const subject: Subject = { of: 'station', x, y };
+    const at = { x: x + 0.5, y: y - 0.55, subject: { of: 'station', x, y } as const };
     candidates.push({
-      action: { kind: 'operate', label: 'Bedienen', x: x + 0.5, y: y - 0.55, subject },
+      action:
+        station.resting === true
+          ? { kind: 'locked', label: RESTING_PROMPT, ...at }
+          : { kind: 'operate', label: 'Bedienen', ...at },
       d: dist(x + 0.5, y + 0.5),
     });
   }

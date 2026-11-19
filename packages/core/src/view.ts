@@ -442,6 +442,12 @@ export interface MapView {
          * (rotation.ts): dark for the whole run, with nothing to switch on
          */
         status: 'done' | 'armed' | 'locked' | 'out';
+        /**
+         * the station was switched on and rests through the emergency that runs (state.ts
+         * `resting`): its consoles take nothing until it is over, then it goes on from where
+         * it stood — nothing of its instance comes with it
+         */
+        resting?: true;
       } & StationSpotLook &
         Known)
     | ({
@@ -878,7 +884,10 @@ function stationsOnMap(state: GameState, viewer: MapViewer): MapView['stations']
       ...(look === null ? {} : { look }),
     };
     if (known || status === 'armed') {
-      return [{ ...spot, title: def?.title ?? s.puzzleId, status, found, known: true }];
+      const rests = state.resting !== null && index === state.currentPuzzleIndex;
+      const title = def?.title ?? s.puzzleId;
+      const resting = rests ? { resting: true as const } : {};
+      return [{ ...spot, title, status, ...resting, found, known: true }];
     }
     return seen ? [{ ...spot, ...tagOf(status), ...GLIMPSE }] : [];
   });
