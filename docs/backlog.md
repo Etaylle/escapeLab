@@ -371,7 +371,7 @@ die Entscheidung.
   Paketfilter 48–52 s (eine Welle, neun Pakete, `fallSec` 14; zwei Wellen zu fünf wären
   57–67 s, drei zu sieben 77–83 s), Serverraum 4–6 s, Wechselplatz 1–8 s. Im Rundgang kostet
   die zweite Station 279–293 s, davon 13 s Spiel: der Rest sind die Captures des Harness
-  (Menüs, Lesen, Notiz, Stupser) — und 12 s am Paketfilter sind der Stehbeweis nach der Lösung.
+  (Menüs, Lesen, Notiz, Stupser) — und 12 s nach dem Serverraum sind der Stehbeweis.
   `timeLimitSec` 960. Die Regel (Entscheidung 2026-11-18): Die Skript-Crew behält im
   langsamsten Lauf mindestens 40 % der Uhr, gemessen ohne Capture-Gruppen (`SHOTS_ONLY=run`:
   nur die 15 Aufnahmen des Laufs selbst, die meisten nach dem Sieg). So gemessen gewinnt sie
