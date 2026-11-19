@@ -35,7 +35,8 @@ function ruleOf(sheet: string, selector: string): string {
 /** A page at `address`: its location, and every address its history was given since. */
 function pageAt(address: string) {
   const url = new URL(address, 'https://escapelab.test');
-  const location = { pathname: url.pathname, search: url.search, hash: url.hash };
+  const { origin, pathname, search, hash } = url;
+  const location = { origin, pathname, search, hash };
   const replaced: string[] = [];
   const history = {
     state: null,
@@ -77,7 +78,7 @@ describe('„Demo" in the main menu', () => {
 
   it('fits a laptop’s low window, and leaves a phone held sideways its seven items', () => {
     const menu = css('styles/menu.css');
-    const low = menu.slice(menu.indexOf('@media (min-width: 900px) and (max-height: 760px) {'));
+    const low = menu.slice(menu.indexOf('@media (min-width: 900px) and (max-height: 800px) {'));
     expect(low.slice(0, low.indexOf('\n}\n'))).toMatch(
       /\.menu-list \.menu-item \{\s*min-height: 44px;/,
     );
@@ -85,9 +86,8 @@ describe('„Demo" in the main menu', () => {
       menu.indexOf('@media (orientation: landscape) and (max-height: 500px) {'),
     );
     const hidden = (item: string): string => `li:has\\(> \\.menu-item\\[data-item='${item}'\\]\\)`;
-    expect(sideways).toMatch(
-      new RegExp(`${hidden('settings')},\\s*\\.menu-list ${hidden('demo')} \\{\\s*display: none;`),
-    );
+    const list = ['settings', 'demo', 'qr'].map(hidden).join(',\\s*\\.menu-list ');
+    expect(sideways).toMatch(new RegExp(`${list} \\{\\s*display: none;`));
   });
 
   it('leads nowhere while the line is down', () => {
@@ -158,8 +158,9 @@ const LOBBY = {
   map: null,
 } as unknown as SpectatorView;
 
-/** The audience's screen on `LOBBY`, of the demo room or of any other. */
+/** The audience's screen on `LOBBY`, of the demo room or of any other, on the site's page. */
 function audience(demo: boolean): string {
+  pageAt('/');
   return renderToStaticMarkup(
     <SpectateScreen
       view={LOBBY}
@@ -182,8 +183,11 @@ describe('the demo room’s audience', () => {
     expect(html).toContain('HCW Bachelor');
     expect(html).toContain('HCW Master');
     expect(html).toContain('Zuschauen beenden');
-    // Any other room's audience has neither.
-    expect(audience(false)).not.toContain('demo-l');
+    // The site's address beside it as a small QR code, to take the game along.
+    expect(html).toContain('<section class="panel demo-qr"><svg class="qr"');
+    expect(html).toContain('// Zum Mitnehmen</div><p class="qr-address">escapelab.test</p>');
+    // Any other room's audience has none of it.
+    expect(audience(false)).not.toContain('demo-');
   });
 
   it('says both at 14 px by the text size set, the line in the world’s voice', () => {

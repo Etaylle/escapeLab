@@ -1365,6 +1365,112 @@ button.link:hover {
   gap: 12px;
 }
 
+/* ── QR codes (screens/QrCode.tsx) ──────────────────────────────────────── */
+
+/* Black on white whatever the palette, square, as large as its box. */
+.qr {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 6px;
+}
+
+/* The menu's: its panel takes the stage whole, the title's rows too, and the code is as large as
+   the window lets it be with its head, its line and the address — to be read from a step away. */
+.menu-panel.menu-panel--qr {
+  grid-area: 1 / 1 / -1 / -1;
+}
+
+.qr-large {
+  width: min(100%, 100vh - 320px, 480px);
+  margin: 14px auto 12px;
+}
+
+/* The address under a code, for whoever types it. */
+.qr-address {
+  margin: 0;
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: calc(16px * var(--text-scale));
+  letter-spacing: 0.04em;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+/* A lobby's invite: the chip beside the room's code, and its sheet under the bar. */
+.invite-qr-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 4px 12px;
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+  background: rgba(9, 14, 19, 0.9);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 14px;
+  letter-spacing: 1px;
+  cursor: pointer;
+}
+
+.invite-qr-chip:hover,
+.invite-qr-chip[aria-expanded='true'] {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* Under a finger the chip is a fingertip tall. */
+@media (pointer: coarse) {
+  .invite-qr-chip {
+    min-height: 44px;
+  }
+}
+
+.invite-qr-sheet {
+  position: fixed;
+  top: 68px;
+  left: 50%;
+  z-index: 70;
+  width: min(320px, calc(100vw - 32px));
+  padding: 16px;
+  transform: translateX(-50%);
+  border: 1px solid var(--line-2);
+  border-radius: 14px;
+  background: rgba(9, 14, 19, 0.97);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+  cursor: pointer;
+}
+
+.invite-qr-room {
+  margin: 12px 0 4px;
+  font-size: calc(14px * var(--text-scale));
+  text-align: center;
+}
+
+/* The demo's: small beside the run's report, on a wide window alone. */
+.demo-qr {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.demo-qr .qr {
+  flex: none;
+  width: 132px;
+}
+
+.demo-qr .qr-address {
+  margin-top: 6px;
+  font-size: calc(14px * var(--text-scale));
+  text-align: left;
+}
+
+@media (max-width: 900px), (max-height: 500px) {
+  .demo-qr {
+    display: none;
+  }
+}
+
 /* The demo room's label beside the mission's name: always there while the demo is watched. */
 .demo-label {
   display: inline-block;

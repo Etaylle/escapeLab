@@ -9,6 +9,7 @@ import {
   type ReactNode,
   type Ref,
 } from 'react';
+import { InviteQr, inviteLink } from './screens/QrCode.js';
 import { traceRequested } from './world/frameTrace.js';
 import { endThemeProbe } from './world/endTheme.js';
 import { choosingNow, menuLab, watchChoosing } from './world/menu/places.js';
@@ -103,7 +104,16 @@ const COPY_SAYS: Readonly<Record<CopyState, { icon: IconName; text: string }>> =
  * room, and says whether that worked. Beside it, muted, the seed a tester
  * pinned the room to, where one is given.
  */
-export function RoomCode({ code, seed = null }: { code: string; seed?: number | null }) {
+export function RoomCode({
+  code,
+  seed = null,
+  qr = false,
+}: {
+  code: string;
+  seed?: number | null;
+  /** a lobby's: the invite stands beside the code as a QR code as well (screens/QrCode.tsx) */
+  qr?: boolean;
+}) {
   const [copy, setCopy] = useState<CopyState>('idle');
   useEffect(() => {
     if (copy === 'idle') {
@@ -113,7 +123,7 @@ export function RoomCode({ code, seed = null }: { code: string; seed?: number | 
     return () => clearTimeout(timer);
   }, [copy]);
 
-  const invite = `${window.location.origin}${window.location.pathname}?room=${code}`;
+  const invite = inviteLink(code);
   const copyLink = (): void => {
     // Without a secure origin, as on a LAN address, the browser has no clipboard.
     if (navigator.clipboard === undefined) {
@@ -136,6 +146,7 @@ export function RoomCode({ code, seed = null }: { code: string; seed?: number | 
           <Icon name={says.icon} /> {says.text}
         </span>
       </button>
+      {qr && <InviteQr code={code} />}
       {seed !== null && <span className="muted room-seed">Seed {seed}</span>}
     </>
   );
@@ -162,16 +173,18 @@ interface RoomChipsProps {
   seed: number | null;
   /** how many watch the room (ws.ts `watching`); nobody where it is not given */
   watching?: number | undefined;
+  /** the room stands in its lobby: its invite as a QR code beside the code */
+  lobby?: boolean | undefined;
 }
 
 /** The room's code and how many watch it, as the bar's chips; nothing off any room. */
-function RoomChips({ code, seed, watching }: RoomChipsProps) {
+function RoomChips({ code, seed, watching, lobby }: RoomChipsProps) {
   if (code === null) {
     return null;
   }
   return (
     <>
-      <RoomCode code={code} seed={seed} />
+      <RoomCode code={code} seed={seed} qr={lobby === true} />
       <WatchingChip count={watching ?? 0} />
     </>
   );
@@ -194,6 +207,8 @@ interface TopBarProps {
   menu?: boolean;
   /** how many watch the room (ws.ts `watching`): a chip beside its code */
   watching?: number;
+  /** the room stands in its lobby: its invite as a QR code beside the code */
+  lobby?: boolean;
   /** a menu stands over the screens (menuLayer.ts `anyOpen`): the bar takes nothing meanwhile */
   covered?: boolean;
   /** the pass's account off any room, where the bar shows it (BarAccount.tsx); else null */
@@ -221,7 +236,7 @@ export function TopBar(props: TopBarProps) {
       <span className="logo">
         <Icon name="hex" /> <span className="logo-word">ESCAPELAB</span>
       </span>
-      <RoomChips code={roomCode} seed={seed} watching={props.watching} />
+      <RoomChips code={roomCode} seed={seed} watching={props.watching} lobby={props.lobby} />
       {toEditor !== null && (
         <button className="topbar-editor" aria-label="Zurück zum Editor" onClick={toEditor}>
           <span className="topbar-editor-way">Zurück zum </span>Editor
@@ -964,6 +979,7 @@ function AppBar(props: {
       inRoom={layer.phase !== null}
       menu={props.menu}
       watching={conn.watching}
+      lobby={conn.view?.phase === 'lobby'}
       covered={props.covered}
       account={props.account}
     />

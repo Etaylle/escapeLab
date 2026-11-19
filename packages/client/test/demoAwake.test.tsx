@@ -53,6 +53,7 @@ const LOBBY = {
 
 /** The audience's screen shown, of the demo room or another; then taken down again. */
 function shown(demo: boolean): void {
+  vi.stubGlobal('window', { location: { origin: 'https://escapelab.test', pathname: '/' } });
   renderToStaticMarkup(
     <SpectateScreen
       view={LOBBY}
@@ -69,6 +70,7 @@ function shown(demo: boolean): void {
 }
 
 afterEach(() => {
+  vi.unstubAllGlobals();
   awake.kept = 0;
   awake.stopped = 0;
 });

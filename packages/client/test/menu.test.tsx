@@ -150,6 +150,7 @@ describe('the menu', () => {
       'Beitreten',
       'Offene Runden',
       'Demo',
+      'QR-Code',
       'Handbuch',
       'Bestenliste',
       'Meine Einsätze',

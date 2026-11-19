@@ -6,8 +6,8 @@ walks of Blackout's lab, stations in any order, runs without a clock and the Üb
 first win at the stations the whole crew presses, a crew of three, the Erfolge, the Tagesschicht,
 the picture of a run, the danger sense, the Serverraum's cabling diagram, typing at its terminal,
 the Zugangskontrolle, the Anlaufsteuerung, the Paketfilter, an emergency and the open station,
-what the notepad takes down, what happens when a line drops, and the demo room the server plays
-itself. Code:
+what the notepad takes down, what happens when a line drops, the demo room the server plays
+itself, and the QR codes that hand the game on to another device. Code:
 `packages/client/src/input/` (bindings, controller, prompts), `client/src/achievements.ts` and
 `screens/{Plaques,ShareButton,ControlSettings}.tsx`,
 `screens/shareCard.ts`, `world/{labelFade,finds,danger,ChatWheel}.ts(x)`,
@@ -1411,3 +1411,26 @@ in all. A small hosted instance's share of a slower core is a tenth of one: thre
 nothing to it, sixty are about what it has. One of the audience is sent some 0.5 views a second of
 12 kB and 7.5 position messages of 0.5 kB — 6 to 10 kB a second, about 4 MB a run — so sixty take
 about 0.5 MB a second out of the server: the line, not the processor, is what an audience costs.
+
+## QR-Codes: onto another device
+
+Three places hand the game on to a phone or a tablet by a QR code, each worked out in the page
+(`client/src/qr.ts`, `screens/QrCode.tsx`): no service is asked and nothing is loaded, so the codes
+show offline and the page's content policy stays as it is. „QR-Code" in the main menu, after
+„Demo", opens the panel „Zutritt per QR-Code": the site's own address (`location.origin`) as a code
+480 px a side on a laptop — as large as the window lets it be — with the address as text under it,
+to be read off the screen from a step or two away. In a lobby the chip „QR" beside the room's code
+opens a sheet under the bar with the invite link as a code, 286 px a side, „Einladung in Raum QX7R"
+and the link under it: the link the chip „Link" copies, which leads into the join step with the
+code filled in; the chip or a click on the sheet shuts it. And beside the demo room's report on a
+wide window stands the site's address small, 132 px, under „Zum Mitnehmen". A phone held sideways
+has neither the menu's item nor the demo's small code.
+
+A code is black on white whatever the palette, with the four light modules a reader wants round it
+inside its own white, its edges sharp at every size (an SVG, a module a unit). The encoder writes
+bytes at error correction level M in versions 1 to 6 — 106 bytes at most, which an address and an
+invite link stay far under; a longer text shows no code. Its tests read every code back with a
+reader of their own (the format in both places, the mask, each block's Reed–Solomon check, the
+bytes) and hold the Reed–Solomon codewords to the textbook's; the walkthrough's menu-qr.png,
+lobby-qr.png and demo-audience.png were each read back by macOS's own detector (Vision) as the
+address they carry.

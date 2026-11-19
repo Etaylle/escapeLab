@@ -15,6 +15,7 @@ import type { KnownPositions } from '../world/movement.js';
 import type { ChatLine, MapPing } from '../world/render/frame.js';
 import { RelayConsole } from '../puzzles/RelayPanel.js';
 import { PuzzlePanel } from './PuzzlePanel.js';
+import { addressText, QrCode, siteAddress } from './QrCode.js';
 import { Manual } from './Manual.js';
 import { EdgeworkChip } from './EdgeworkChip.js';
 import { awayFor, CreditsTable, CrewDot, crewTags, CrewTags, type CrewTag } from './Crew.js';
@@ -45,6 +46,24 @@ export const DEMO_LABEL = 'Demo';
  * runs the mission by itself. A wide window's alone: on a phone the label says it.
  */
 export const DEMO_LINE = 'Vorführbetrieb: Die Anlage fährt diesen Einsatz selbst.';
+
+/**
+ * The site's address as a small QR code beside the demo: whoever watches at a stand's laptop
+ * takes the game along on their own device. A wide window's alone (ui.css): a phone is the
+ * device already.
+ */
+function DemoQr() {
+  const address = siteAddress();
+  return (
+    <section className="panel demo-qr">
+      <QrCode text={address} label={`QR-Code der Adresse ${addressText(address)}`} />
+      <div>
+        <div className="panel-label">// Zum Mitnehmen</div>
+        <p className="qr-address">{addressText(address)}</p>
+      </div>
+    </section>
+  );
+}
 
 /** The demo room's audience keeps its server awake for as long as it watches (keepAwake.ts). */
 function useKeepAwake(demo: boolean): void {
@@ -99,7 +118,7 @@ export function audienceRunOf(view: SpectatorView): DeviceRun {
  * once the run is over, who did what — any relay consoles in an emergency,
  * and the run report as it grows.
  */
-function SpectatePanels({ view }: { view: SpectatorView }) {
+function SpectatePanels({ view, demo }: { view: SpectatorView; demo: boolean }) {
   const noop = (): void => undefined;
   const feed = view.events.slice(-14).reverse();
   const over = view.phase === 'won' || view.phase === 'lost';
@@ -156,6 +175,7 @@ function SpectatePanels({ view }: { view: SpectatorView }) {
           ),
       )}
 
+      {demo && <DemoQr />}
       <section className="panel spectate-log">
         <div className="panel-label">// Einsatzprotokoll</div>
         {feed.length === 0 ? (
@@ -302,7 +322,7 @@ export function SpectateScreen({
           )}
         </div>
 
-        <SpectatePanels view={view} />
+        <SpectatePanels view={view} demo={demo === true} />
       </div>
 
       <SpectateFoot view={view} positionsRef={positionsRef} leaveRoom={leaveRoom} />

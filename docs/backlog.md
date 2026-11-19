@@ -1046,7 +1046,11 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   fragt alle 4 min `/health` ab (hält Render Free wach) und ist nach Neustart oder Abbruch ohne
   Neuladen wieder im Publikum (Probe: Server unter der Seite getötet, 3,4 s nach dem Start zurück).
   Serverprozess auf dem M4: 0 Zuschauende 45 MB und 0,05 % eines Kerns, 3: 58 MB und 0,8 %,
-  60: 89 MB und 3,0 %, 654 kB/s hinaus. QR-Codes (Menü, Lobby, Publikum) folgen im selben Branch.
+  60: 89 MB und 3,0 %, 654 kB/s hinaus.
+- QR-Codes (Uros, 2026-11-19): Menüpunkt „QR-Code" (Adresse der Seite, 480 px), „QR" neben dem
+  Raumcode der Lobby (Einladungslink, 286 px), klein neben der Demo (132 px, „Zum Mitnehmen");
+  eigener Encoder ohne Abhängigkeit (`client/src/qr.ts`: Bytes, Stufe M, Versionen 1–6), im Test
+  von einem eigenen Leser zurückgelesen, die drei Aufnahmen von macOS Vision dekodiert.
 - Auf dem quer gehaltenen Handy steht „Demo" nicht im Menü (sieben Punkte füllen 390 px Höhe, wie
   bisher ohne „Einstellungen"); dorthin führt der Link, und hochkant steht der Punkt da.
 - Offen: Die 23 Sprechtexte warten weiter auf Uros' Render; die Demo fügt keinen hinzu.

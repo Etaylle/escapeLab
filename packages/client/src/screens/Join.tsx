@@ -25,6 +25,7 @@ import {
   inviteArrived,
   JoinPanel,
   MissionPanel,
+  QrPanel,
   pickedMission,
   RoundsPanel,
   type SectionProps,
@@ -459,6 +460,9 @@ function Panels({
   if (panel === 'join') {
     const takeover = props.takeover ?? null;
     return <JoinPanel {...section} takeover={takeover} waiting={waiting} onClose={close} />;
+  }
+  if (panel === 'qr') {
+    return <QrPanel onClose={close} />;
   }
   if (panel === 'rounds') {
     return (
