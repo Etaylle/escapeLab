@@ -754,6 +754,7 @@ import { movesTaken } from './planleft.mjs';
 import { beamLight, beamPatches, beamVerdict } from './beamcheck.mjs';
 import { changedShare, sweepOf, sweepVerdict } from './sweep.mjs';
 import {
+  allowanceOffered,
   arrivals,
   cornersOf,
   flights,
@@ -12412,6 +12413,29 @@ function allowanceAfter(ms) {
   return LATE_STEPS[step];
 }
 
+/**
+ * How long a walk that stands waiting for a gap counts as having waited, in ms: `waited` once
+ * it has begun; at its first moment without one, the while it would stand out in vain at each
+ * allowance wider than the patrols offer the stretch ahead within ALLOWANCE_WAIT_MS (patrol.mjs
+ * `allowanceOffered`) — the escape's way through the Süd-Flur never has a gap for a second.
+ */
+function waitBegun(player, map, path, hold, waited) {
+  if (waited > 0) {
+    return waited;
+  }
+  const sight = { tiles: map.tiles, shut: shutOn(map) };
+  const { drones, age } = dronesOn(player.seen);
+  const stretch = stretchOf(path, havensOn(drones, sight));
+  const stand = stretch.length === path.length ? hold : SETTLE_S;
+  const within = ALLOWANCE_WAIT_MS / 1000;
+  const run = arrivals(stretch, RUN.tile[1], RUN.corner[1]).at(-1) + RUN.corner[1];
+  const delay = age + REACTION_S;
+  const flying = flights(drones, delay + within + LATE_S + run + stand + 0.5);
+  const steps = LATE_STEPS;
+  const offered = allowanceOffered(stretch, flying, sight, { delay, hold: stand, within, steps });
+  return steps.indexOf(offered) * ALLOWANCE_WAIT_MS;
+}
+
 /** `player`'s map; throws, saying how the run stands, where its view has none. */
 function mapOf(player) {
   const view = player.seen.view;
@@ -12464,6 +12488,7 @@ async function sneakTo(player, target, hold = 1.2) {
     const behind = allowanceAfter(waitedHere);
     const run = nextRun(player, map, path, hold, { late, behind });
     if (run === null) {
+      waitedHere = waitBegun(player, map, path, hold, waitedHere);
       await sleep(60);
       sneaking.waitedMs += 60;
       waitedHere += 60;
@@ -12676,13 +12701,23 @@ function nextEmergencyIn(seen) {
 }
 
 /**
- * Before a step of about `seconds` that an emergency must not cut short:
- * where the next one is due before it would be done, wait for it and
- * weather it first.
+ * Whether this run plays its mission with no capture group beside the run itself
+ * (SHOTS_ONLY=run): the capture-free measure of a mission's length (backlog N-6).
  */
-async function clearOfEmergencies(player, seconds) {
+const CAPTURE_FREE = PLAN.on.size === 1 && PLAN.on.has('run');
+
+/**
+ * Before a step of about `seconds` that an emergency must not cut short —
+ * `bare` s in a capture-free run, whose step takes none of its shots —
+ * where the next one is due before it would be done, wait for it and
+ * weather it first. The bare lengths are some three times the longest such
+ * a step took (19.11.2026: Serverraum 5.2 s, Signalkette 5.0, Notstromkasten
+ * 3.6, reactor 2.4, Funkpult 1.5): a capture-free run no longer stands idle
+ * for an emergency it would be done before.
+ */
+async function clearOfEmergencies(player, seconds, bare = seconds) {
   const due = nextEmergencyIn(player.seen);
-  if (due > seconds) {
+  if (due > (CAPTURE_FREE ? bare : seconds)) {
     return;
   }
   console.log(`emergency          due in ${due.toFixed(1)} s: waited for it before the next step`);
@@ -12931,7 +12966,7 @@ async function playServerraum(host, guest) {
   await sneakTo(guest, workSpot(guest, locker));
   await foundWherePinned(guest, locker);
   await readLocker(guest, locker, host);
-  await clearOfEmergencies(host, 55);
+  await clearOfEmergencies(host, 55, 15);
   await sneakTo(guest, atConsole(guest, 'b'), 3);
   const crew = { terminal: host, rack: guest };
   const role = (player) => player.seen.view.puzzle?.role ?? null;
@@ -13276,7 +13311,7 @@ async function playFrequenz(host, guest) {
   }
   await inGroup('reading', () => captureMorseBook(guest, atCabinet));
   await sneakTo(host, atConsole(host, null));
-  await clearOfEmergencies(host, 25);
+  await clearOfEmergencies(host, 25, 8);
   const index = host.seen.view.currentPuzzleIndex;
   // After an emergency the panel is back as the dial stood: a second try finds it wherever
   // the first left it, and turns what is left.
@@ -13351,7 +13386,7 @@ async function playReaktor(host, guest) {
     `fuse               ${host.name} carried the fuse from ${lies.x},${lies.y} to ` +
       `${pin.to.x},${pin.to.y} and put it in`,
   );
-  await clearOfEmergencies(host, 25);
+  await clearOfEmergencies(host, 25, 8);
   const onPhone = () => inGroup('devices', () => captureDevicePhone(guest, stationSlug(guest)));
   await pastEmergencies(() => pressLastSync([host, guest], onPhone));
 }
@@ -13682,7 +13717,7 @@ async function captureResting(player) {
 
 /**
  * The Notstromkasten where the run has it at its Wechselplatz: the guest walks to the
- * Wartungsbuch in the Maschinenraum, where the plan lays it, and on to the meter in the Labor,
+ * Wartungsbuch in the Labor, where the plan lays it, and on to the meter a few steps on,
  * the host to the fuse box inside the Maschinenraum's door, both past the patrols; clear of the
  * next emergency they open their panels, the meter measures every wire once — the needle's
  * swing shot (meter-swing.png) — and the box is cut as the plan pins it (`cutAsPinned`).
@@ -13694,7 +13729,7 @@ async function playNotstrom(host, guest) {
   await foundWherePinned(guest, lies);
   await sneakTo(host, atConsole(host, 'a'));
   await sneakTo(guest, atConsole(guest, 'b'));
-  await clearOfEmergencies(host, 45);
+  await clearOfEmergencies(host, 45, 12);
   const title = armedAt(host, 'a').title;
   await openPanel(host, 'a');
   await openPanel(guest, 'b');
@@ -13705,7 +13740,7 @@ async function playNotstrom(host, guest) {
 
 /**
  * The Signalkette where the run has it at its Wechselplatz, both patrols out: the guest walks
- * past them to console A at the Flur's east end, the host to console B in the Maschinenraum
+ * past them to console A in the Archiv, the host to console B in the Maschinenraum
  * (`atConsole`, each from haven to haven); clear of the next emergency they open their panels
  * and work it as the plan pins it (`solveSignal`).
  */
@@ -13716,7 +13751,7 @@ async function playSignalkette(host, guest) {
   const due = nextEmergencyIn(host.seen);
   const rests = groupOn('devices') && due >= REST_NOTICE_SEC && due <= 75;
   if (!rests) {
-    await clearOfEmergencies(host, 75);
+    await clearOfEmergencies(host, 75, 15);
     const why = `the next emergency was due in ${due.toFixed(1)} s as the crew reached "${title}"`;
     await inGroup('devices', () => restLeftOut(`${why}: no stage fits before it, or none came`));
   }

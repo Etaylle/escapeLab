@@ -237,7 +237,7 @@ export function serverraum({ room, anna, ben }: BlackoutCrew): void {
 
 /**
  * The station the run has at its Wechselplatz, the Labortür open: the Signalkette with Ben at
- * console A at the Flur's east end and Anna at console B in the Maschinenraum; the Funkpult
+ * console A in the Archiv and Anna at console B in the Maschinenraum; the Funkpult
  * with Anna at it and Ben at the cabinet he unlocked with the key from the Serverraum; the
  * Notstromkasten with Anna at the box in the Maschinenraum and Ben at the Prüfpult in the Labor.
  */
@@ -245,7 +245,7 @@ export function wechselplatz({ room, anna, ben }: BlackoutCrew): void {
   const drawn = stationOf(room, 4);
   if (drawn.id === 'signalkette') {
     walk(room, anna, 9, 19);
-    walk(room, ben, 29, 9);
+    walk(room, ben, 7, 6);
     switchOn(room, ben);
     work(room, ben, anna);
     return;

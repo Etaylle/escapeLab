@@ -177,15 +177,16 @@ Names fade in over 300 ms; a find that matters gets its caption, a chime at most
 | --- | --- | --- | --- | --- |
 | 1 | Notlicht (lever, whole crew) | the Flur's middle (15,9) | none | lights Flur and Archiv |
 | 2 | Anlaufsteuerung (`startup`, 2 stages) | console A in the Maschinenraum (1,15) behind the plate door, console B at the Flur's west end (2,9), the duct between them under the wall | the Betriebsbuch in the Archiv | the generator runs: lights the Maschinenraum, its door stays open |
-| 3 | Paketfilter (`firewall`, 4 rules, one wave of 9 packets) | Analysepult (21,9) and Sperrpult (26,9) in the Flur east of the Serverschott | the RICHTLINIE on the Flur's south wall, west of the Schott | opens the Serverschott, lights the Serverraum |
+| 3 | Paketfilter (`firewall`, 4 rules, one wave of 7 packets) | Analysepult (21,9) and Sperrpult (26,9) in the Flur east of the Serverschott | the RICHTLINIE on the Flur's south wall, west of the Schott | opens the Serverschott, lights the Serverraum |
 | 4 | Serverraum (`servers`) | terminal and rack in the Serverraum | the Spind there | opens the Labortür, lights the Labor; both drones wake |
-| 5 | the **Wechselplatz** (pool `wechsel`): one of three, by the seed | Signalkette: console A in the Flur's east corner (29,9), B in the Maschinenraum (9,20) · Funkpult in the Labor (11,20) · Notstromkasten: box inside the Maschinenraum's door (6,14), meter in the Labor (15,20) | Klemmbrett in the Flur · Aktenschrank in the Labor, its key in the Serverraum · Wartungsbuch in the Maschinenraum | opens both doors of the reactor, lights it |
+| 5 | the **Wechselplatz** (pool `wechsel`): one of three, by the seed | Signalkette: console A in the Archiv by its door (7,7), B in the Maschinenraum (9,20) · Funkpult in the Labor (11,20) · Notstromkasten: box inside the Maschinenraum's door (6,14), meter in the Labor (15,20) | Klemmbrett at the Flur's west end · Aktenschrank in the Labor, its key in the Serverraum · Wartungsbuch on the Labor's west wall | opens both doors of the reactor, lights it |
 | 6 | Reaktor-Neustart (button, whole crew) | the reactor's east wall | none; the spare fuse from the Archiv | the hatch opens |
 
 The two stations of the Wechselplatz a run does not have stand dark with the tag „AUSSER
 BETRIEB", and so do their sources (Stations that take turns, below): the box hangs right inside
-the Maschinenraum's door, the Funkpult and the meter along the Labor's south wall, console A of
-the Signalkette at the Flur's east end — each on a way the crew walks anyway. Three notes of the
+the Maschinenraum's door, the Funkpult and the meter along the Labor's south wall, the
+Wartungsbuch on its west wall by the door from the Maschinenraum, console A of the Signalkette
+in the Archiv beside its door, where Anna starts — each on a way the crew walks anyway. Three notes of the
 last shift say so in the lab's words: the duty roster beside the Sperrpult („Dienstplan
 Wechselplatz: …"), Haller's hand-over in the Maschinenraum, and his note in the Labor that the
 Aktenschrank's key hangs in the Serverraum over the rack — true in every draw, read before the
@@ -201,9 +202,9 @@ the next ten seconds and not on any later round of the beats
 the engine: both drones sleep until the Serverraum is solved, whose consoles and locker lie
 inside the room and out of their sight; the Paketfilter's consoles in the Flur are worked
 before any drone is out; and every console and source of the Wechselplatz stands where no beat
-looks — console A of the Signalkette in the Flur's east corner (29,9), a tile past the
-Flurwache's reach from the east end of its beat; the Klemmbrett at the Flur's west end; the
-Aktenschrank in the Labor's north-west corner. Once the Flurwache flies, the camera plate at
+looks — console A of the Signalkette in the Archiv (7,7), behind the wall; the Klemmbrett at
+the Flur's west end; the Aktenschrank and the Wartungsbuch in the Labor's west part, out of the
+Laborwache's eye. Once the Flurwache flies, the camera plate at
 the Schott (20,9) holds it still for whoever crosses the Flur. The walkthrough stands still in
 the Serverraum twelve seconds after its solve, the moment the drones wake, as the proof in the
 browser. The policy hangs west of the Schott, on the way from the Anlaufsteuerung: the crew
@@ -222,7 +223,13 @@ niemand."). With three, the third reads the book or holds the plate.
 so its clipboard lies at (4,12) or (3,12): on the Flur's south wall at its west end, where
 nobody within its reach is in the Flurwache's cone — the beat is main's, turning at (10,10),
 and its look ends at x = 6. So near the guest's start the lamp finds it in the first second;
-the crew passes it on the way to the Maschinentür. The Aktenschrank lies at (12,16) or (11,15)
+the crew passes it on the way to the Maschinentür. Console A stands a short walk from it, in
+the Archiv by its door (7,7), 1.8 s away and out of reach of it: its reader crosses the watched
+Flur once on the way from the Serverraum, as the Funkpult's reader does, where until
+19.11.2026 console A stood at the Flur's east end and the reader crossed the whole Flur twice
+with both drones out. The Notstromkasten's Wartungsbuch lies at (11,18) or (11,19), on the
+Labor's west wall, 1.2 s from the Prüfpult whose player needs it, where it lay in the
+Maschinenraum's far corner before. The Aktenschrank lies at (12,16) or (11,15)
 for the same reason: its places beside the Laborwache's beat, (18,14) and (18,20), put its
 reader in that drone's eye four seconds after the solve (`tools/patrol.test.mjs`, the parked
 test). A drone keeps the look it arrived with while it stands on a waypoint; until 18.11.2026
@@ -259,17 +266,17 @@ console B:
 | Serverraum | Ben | the Analysepult → the locker | 12.0 | 2.9 |
 | Serverraum | Ben | the locker → the rack | 6.4 | 1.5 |
 | Signalkette | Ben | the rack → the Klemmbrett | 23.2 | 5.5 |
-| Signalkette | Ben | the Klemmbrett → console A | 26.2 | 6.2 |
+| Signalkette | Ben | the Klemmbrett → console A | 7.4 | 1.8 |
 | Signalkette | Anna | the terminal → console B | 36.7 | 8.7 |
 | Signalkette | Anna | console B → the spare fuse | 18.7 | 4.4 |
-| Signalkette | Ben | console A → the reactor | 34.2 | 8.2 |
+| Signalkette | Ben | console A → the reactor | 41.1 | 9.8 |
 | Funkpult | Ben | the rack → the key | 3.0 | 0.7 |
 | Funkpult | Ben | the key → the cabinet | 36.5 | 8.7 |
 | Funkpult | Anna | the terminal → the radio | 39.3 | 9.4 |
 | Funkpult | Anna | the radio → the spare fuse | 21.2 | 5.1 |
 | Funkpult | Ben | the cabinet → the reactor | 24.2 | 5.8 |
-| Notstromkasten | Ben | the rack → the Wartungsbuch | 29.1 | 6.9 |
-| Notstromkasten | Ben | the Wartungsbuch → the meter | 10.8 | 2.6 |
+| Notstromkasten | Ben | the rack → the Wartungsbuch | 33.5 | 8.0 |
+| Notstromkasten | Ben | the Wartungsbuch → the meter | 5.0 | 1.2 |
 | Notstromkasten | Anna | the terminal → the box | 30.1 | 7.2 |
 | Notstromkasten | Anna | the box → the spare fuse | 12.0 | 2.9 |
 | Notstromkasten | Ben | the meter → the reactor | 22.1 | 5.3 |
@@ -278,9 +285,10 @@ console B:
 | Escape | both | the reactor → the hatch, by the Serverraum | 49.1 | 11.7 |
 
 Each walks a plan in 50 to 56 s, the escape by the Labor included — Anna 54.3 s with the
-Signalkette, 55.7 with the Funkpult, 51.3 with the Notstromkasten; Ben 53.3, 50.7 and 50.3 —
+Signalkette, 55.7 with the Funkpult, 51.3 with the Notstromkasten; Ben 52.6, 50.7 and 50.0 —
 where the chain before the Wechselplatz took Anna 55.5 and Ben 53.9: the walk to the Paketfilter
-came in, the Signalkette's long way to the Flur's east end went out of two draws in three. Both ways out are 52 steps on the grid, as the last shift's
+came in, the Signalkette's long way to the Flur's east end went out of two draws in three, and
+since 19.11.2026 out of the third. Both ways out are 52 steps on the grid, as the last shift's
 note by the hatch says; counted the eight ways, the Labor's is a tile shorter. Every start lies
 3.6 to 4 s from the lever.
 
@@ -414,12 +422,12 @@ issue ends with the draw it holds for: „— in a run with pool "wechselplatz" 
 the version stays 2, as for every field added since) and lists the stations of the run alone.
 The Bestenliste keeps one board a mission and difficulty: runs of different
 draws stand on it together, so a board mixes stations of unequal length — worth a board per
-draw only once the spread shows (Blackout's three lay 39 s apart for the script crew). The clock
+draw only once the spread shows (Blackout's three lay 26 s apart for the script crew). The clock
 is set by that crew: it keeps at least 40 % of it in its slowest draw, measured without capture
-groups (`SHOTS_ONLY=run`) — 310 to 365 s after the lights went out, 62 to 68 % of Blackout's
-960 s left, its walks past the drones waiting for a gap an avatar a second late still passes
-(290 to 339 s before they did); the capture run keeps 38 to 39 % and is no measure, main's old chain stood at 34 %
-of 900 s by it. A snapshot keeps the draw; one from before
+groups (`SHOTS_ONLY=run`) — 282 to 308 s after the lights went out, 68 to 71 % of Blackout's
+960 s left, its walks past the drones waiting for a gap an avatar a second late still passes,
+and no step standing idle for an emergency it would be done before (backlog N-6); the capture
+run is no measure, main's old chain stood at 34 % of 900 s by it. A snapshot keeps the draw; one from before
 the pools has none and restores as before — a run in flight over the deploy that gave its
 mission a pool plays its old chain to the end (`server/test/snapshotFixture.test.ts`).
 

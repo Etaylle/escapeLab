@@ -901,19 +901,19 @@ voice that a library voice costs nothing to keep and a design its text, and ever
 role once one is kept; then the kept cast's sum and the whole cast's, every voice kept; and for a
 plain run what `--fresh` would make beside it. It assumes the paid plan the account holds, which
 a render reads off it. A plain render keeps every take there and makes what is missing — Helmut's
-42 takes of 2026-10-25 of lines still shipped with them; `--fresh` makes those anew besides,
-which settles their licence (Lizenz, below). Today's `--plan` (2026-11-18, after Blackout's
-chain got the Anlaufsteuerung, the Paketfilter and its Wechselplatz: 22 new texts of the
-Leitstelle; the twelve texts only the old chain said keep their 36 recordings, see below):
+41 takes of 2026-10-25 of lines still shipped with them; `--fresh` makes those anew besides,
+which settles their licence (Lizenz, below). Today's `--plan` (2026-11-19, after Blackout's
+chain got the Anlaufsteuerung, the Paketfilter and its Wechselplatz: 23 new texts of the
+Leitstelle; the thirteen texts only an older chain said keep their 39 recordings, see below):
 
 | | Made, kept | To make, plain |
 | --- | --- | --- |
 | Durchsage | 5 lines | none |
-| Helmut | 70 lines | 22 lines, 2,437 credits |
-| Laura, Ben | 68 lines each | 22 lines each, 2,437 credits each |
+| Helmut | 69 lines | 23 lines, 2,559 credits |
+| Laura, Ben | 67 lines each | 23 lines each, 2,559 credits each |
 | Mila | 13 lines | none |
-| the render, plain | | 66 lines, 7,311 credits |
-| `--fresh` besides | | 42 takes, 3,393 credits |
+| the render, plain | | 69 lines, 7,677 credits |
+| `--fresh` besides | | 41 takes, 3,301 credits |
 
 A further operator costs one render of the Leitstelle's lines: 7,917 credits for its 80 lines of
 2026-11-15 — ninety since Blackout's new chain, some 500 credits more —,
@@ -923,15 +923,18 @@ anew, every credit again.
 
 **The render.** The agents write the lines and may not spend the account's credits: a line they
 add awaits the owner, the voice test listing the texts (`AWAITING_RENDER`, to be emptied as they
-come for everyone who says them) — today the 22 texts of Blackout's new chain (B-blackout2):
-the hand-overs after the Notlicht, the Anlaufsteuerung, the Paketfilter, the Serverraum, the
-Signalkette and the Notstromkasten, and the nudges of the Anlaufsteuerung, the Paketfilter and
-the Notstromkasten. Every nudge of the Signalkette and the Funkpult is as before: their
-recordings stay. **Lines of a run in flight:** a room taken up again from a snapshot plays the
-mission it began with, so the twelve texts only Blackout's old chain said (`OLD_RUN_LINES` in
-`scripts/voice.ts`: its hand-overs after the Notlicht, the Notstromkasten, the Signalkette and
-the Serverraum, and the Notstromkasten's four nudges) keep their 36 recordings, a render leaves
-them alone, and the voice test holds them to the list; the next package drops them. Meanwhile
+come for everyone who says them) — today the 23 texts of Blackout's new chain (B-blackout2,
+B-blackout3): the hand-overs after the Notlicht, the Anlaufsteuerung, the Paketfilter, the
+Serverraum, the Signalkette and the Notstromkasten, the nudges of the Anlaufsteuerung, the
+Paketfilter and the Notstromkasten, and the Signalkette's nudge for its consoles, since console
+A stands in the Archiv. Every other nudge of the Signalkette and the Funkpult's are as before:
+their recordings stay. **Lines of a run in flight:** a room taken up again from a snapshot plays
+the mission it began with, so the thirteen texts only an older chain of Blackout said
+(`OLD_RUN_LINES` in `scripts/voice.ts`: the hand-overs after the Notlicht, the Notstromkasten,
+the Signalkette and the Serverraum and the Notstromkasten's four nudges of the chain before the
+Wechselplatz, and the Signalkette's nudge with console A at the Flur's east end) keep their 39
+recordings, a render leaves them alone, and the voice test holds them to the list; the next
+package drops them. Meanwhile
 the objective bar and the Einsatzprotokoll show their words, and what is heard depends on where
 they come: the radio's lines on the bar key the radio's chirp, as every line without a recording
 does; the plant's message, the last word on the end card, the Funkprobe and a line of the opening
@@ -959,7 +962,7 @@ the commands that give them one — `--replace` in them where takes of theirs ar
 cut short goes on where it stopped. An argument the script does not take is refused before anything
 runs, whatever its shape, with the list of the switches it takes, so `--plna`, `-plan` or a bare
 `plan` never falls through to a render. The plain run keeps Helmut's 43 takes of 2026-10-25;
-`--fresh` on the paid plan makes them anew besides — 3,393 credits —
+`--fresh` on the paid plan makes them anew besides — 3,301 credits —
 which licences them as the rest (Lizenz, below), and so does a new voice for Helmut, kept with
 `--replace` (`--keep operator:helmut=5KvpaGteYkNayiswuX2h --replace` keeps „Helmut - Distinctive and
 Authentic"). After the render the voice test names the `intro.lightsSec` the announcement's new
@@ -1940,7 +1943,7 @@ licence is used.
 | The score: 8 pieces cut from one suite, `score` | `public/music/packs/nachtschicht/*.m4a` | Eleven Music, `music_v2_5`, a composition plan | awaits the user's render | as the music; once kept, it replaces the pieces of the row above but for the stings |
 | 32 pieces in four music packs: `yalciner`, `cheremisinov`, `macleod`, `zhelanov` | `public/music/packs/<pack>/*.m4a` | İlker Yalçıner, Sergey Cheremisinov, Lee Rosevere, Rafael Krux, Kevin MacLeod, Alexandr Zhelanov; from OpenGameArt, the Free Music Archive, incompetech and FreePD's archive on Hugging Face | fetched, cut and levelled 2026-11-14 | CC BY 4.0 with the attribution each pack carries; Alexandr Zhelanov's „Behind the Universe" CC BY 3.0, Rafael Krux's „Cornfield Chase" CC0 (below) |
 | The opening's cue | `public/intro/title.mp3` | Eleven Music | 2026-10-26 | as the music; the score's `title` plays in its place once kept |
-| 260 recordings of the cast: 48 by Helmut of before, 47 of the Leitstelle and the opening's first line; the rest by the cast's library voices; 36 of them of the twelve texts only a run of Blackout's old chain still says; 22 texts of Blackout's new chain awaiting their render by the three of the Leitstelle | `public/voice/` | ElevenLabs text to speech: the library voices of the owner's pick (casting.json) | 48 on 2026-10-25, the rest on 2026-11-15 | see below |
+| 260 recordings of the cast: 48 by Helmut of before, 47 of the Leitstelle and the opening's first line; the rest by the cast's library voices; 39 of them of the thirteen texts only a run of an older chain of Blackout still says; 23 texts of Blackout's new chain awaiting their render by the three of the Leitstelle | `public/voice/` | ElevenLabs text to speech: the library voices of the owner's pick (casting.json) | 48 on 2026-10-25, the rest on 2026-11-15 | see below |
 | Kalam, the notepad's hand | `public/fonts/` | Indian Type Foundry, 2014 | shipped since 2026-11-01 | SIL Open Font License 1.1, its text beside it |
 | Michroma, the title's face | `public/fonts/` | Vernon Adams, 2011 | shipped since 2026-11-13 | SIL Open Font License 1.1, its text beside it |
 | Caveat, the last shift's hand | Google Fonts, loaded by the page | Pablo Impallari | not shipped | SIL Open Font License 1.1 |

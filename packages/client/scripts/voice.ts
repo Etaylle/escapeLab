@@ -1332,9 +1332,10 @@ async function main(fresh: Fresh): Promise<void> {
 /**
  * Lines no shipped mission says any more that a run in flight still does: a room taken up again
  * from its snapshot plays the mission it started with, and its radio speaks that mission's
- * lines. Blackout's chain before the Wechselplatz (B-blackout2) said these twelve; their
- * recordings stay until no snapshot of that chain can be taken up any more — the next package
- * drops them.
+ * lines. Blackout's chain before the Wechselplatz (B-blackout2) said the first twelve, and its
+ * first chain with the Wechselplatz the last, the Signalkette's nudge with console A at the
+ * Flur's east end (B-blackout3 moved it into the Archiv); their recordings stay until no
+ * snapshot of those chains can be taken up any more — the next package drops them.
  */
 export const OLD_RUN_LINES: readonly string[] = [
   'Notlicht steht, danke. Jetzt der Notstrom: Die Anleitung dafür hängt im Archiv, der Kasten ' +
@@ -1360,6 +1361,8 @@ export const OLD_RUN_LINES: readonly string[] = [
     'Labor öffnet nur der Schlüssel.',
   'Server oben, Labortür offen, im Labor patrouilliert eine Drohne. Den Schlüssel zum ' +
     'Aktenschrank holt ihr noch aus dem Serverraum.',
+  'Pult A der Signalkette steht am Ostende vom Flur, Pult B im Maschinenraum in der ' +
+    'Südostecke.',
 ];
 
 /** The takes in `before` of the lines a run in flight still says: a render keeps them. */

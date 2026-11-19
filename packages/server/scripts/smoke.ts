@@ -232,10 +232,10 @@ function consoleOf(index: number, side?: 'a' | 'b'): { x: number; y: number } {
  * console A, where it has two — and beside its console B, out of both drones' eye.
  */
 const AT_THE_WECHSELPLATZ: Readonly<Record<string, () => { a: Tile; b: Tile | null }>> = {
-  // below console A of the Signalkette, in the Flur's east corner, where the Flur drone never
-  // looks; above its console B, in the Maschinenraum
+  // above console A of the Signalkette, in the Archiv, behind the Flur's wall; above its
+  // console B, in the Maschinenraum
   signal: () => ({
-    a: besides(consoleOf(WECHSEL, 'a'), 0, 1, 'below console A of the Signalkette'),
+    a: besides(consoleOf(WECHSEL, 'a'), 0, -1, 'above console A of the Signalkette'),
     b: besides(consoleOf(WECHSEL, 'b'), 0, -1, 'above console B of the Signalkette'),
   }),
   // east of the radio panel, off the Labor drone's line
@@ -1202,7 +1202,7 @@ const PAST_THE_PLATE_TILES = 0.6;
  * `holder` takes the camera plate from inside the Serverschott once the Flur drone has just flown
  * past it eastward, short of its turn: held there it looks away from the whole Flur west of it,
  * and still does as the holder steps off the plate and walks west — so one of the crew crosses
- * the Flur's whole length to its east end meanwhile, and the holder gets away after.
+ * from the Serverraum to the Flur's west end meanwhile, and the holder gets away after.
  */
 async function holdTheCameraPlateFromBehind(holder: TestClient): Promise<void> {
   await walkTo(holder, INSIDE_THE_SCHOTT);
@@ -2300,22 +2300,23 @@ function assertKeptApart(windows: ReadonlyMap<number, OpenWindow>): void {
 
 /**
  * The station the run has at its Wechselplatz, the Labortür open and both patrols out. The
- * Signalkette: console A at the Flur's east end and console B in the Maschinenraum, its legend
- * on the Klemmbrett in the Flur, which whoever takes console A passes on the way, crossing the
- * Flur's length while the other holds the camera plate. The Funkpult
+ * Signalkette: console A in the Archiv and console B in the Maschinenraum, its legend on the
+ * Klemmbrett at the Flur's west end, which whoever takes console A reads on the way, crossing
+ * the Flur from the Serverraum while the other holds the camera plate. The Funkpult
  * in the Labor: its tables in the cabinet the Serverraum's key opens. The Notstromkasten: the
  * fuse box inside the Maschinenraum's door and the meter in the Labor, its rules in the
- * Wartungsbuch in the Maschinenraum, which whoever takes the meter reads first.
+ * Wartungsbuch on the Labor's west wall, which whoever takes the meter reads first.
  */
 async function atTheWechselplatz(): Promise<void> {
   await quietFor(STRETCH_SEC);
   const [a, b] = crew;
   if (DRAWN === 'signal') {
-    await bring(a, placeOf(sourceOf(WECHSEL).id), b);
-    // Console A stands at the Flur's far end, the whole patrol between: `b` holds the Flur's
-    // drone still from the camera plate while `a` crosses, then walks to console B behind it.
+    // The Klemmbrett lies at the Flur's west end, the patrol between it and the Serverraum: `b`
+    // holds the Flur's drone still from the camera plate while `a` crosses to it, then `a` walks
+    // on to console A in the Archiv and `b` to console B behind it.
     await holdTheCameraPlateFromBehind(b);
-    await crossFrozen(a, STAND[WECHSEL] ?? fail('no spot at console A'), flurDrone.id);
+    await crossFrozen(a, placeOf(sourceOf(WECHSEL).id), flurDrone.id);
+    await bring(a, STAND[WECHSEL] ?? fail('no spot at console A'), b);
     await bring(b, CONSOLE_B.get(WECHSEL) ?? fail('no spot at console B'), a);
     await runSignal(a, b);
   } else if (DRAWN === 'morse') {
