@@ -183,6 +183,9 @@ describe('a walk of the demo crew', () => {
     expect(() => run(walks.to(seat, { x: 9.5, y: 3.5 }), clock, 1)).toThrow(NoWay);
   });
 
+});
+
+describe('a walk of the demo crew among the drones', () => {
   it('waits on its haven while the drone looks down the corridor, then sets out', () => {
     const clock = { now: 0 };
     const { seat } = seated(clock);

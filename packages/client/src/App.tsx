@@ -950,6 +950,13 @@ export function heroLeaves(
   return doorsGoing(doors) && placeOf(live) === 'lobby';
 }
 
+/** The run the bar names: the one watched, or the room's own once it has left its lobby. */
+function runningOf(conn: Connection) {
+  return (
+    conn.spectatorView ?? (conn.view !== null && conn.view.phase !== 'lobby' ? conn.view : null)
+  );
+}
+
 /**
  * The top bar as the app draws it (TopBar) over the connection `conn`: the running mission —
  * the lobby names its own as its headline, so naming it twice there would be noise —, the seed a
@@ -965,8 +972,7 @@ function AppBar(props: {
   covered: boolean;
 }) {
   const { conn, layer } = props;
-  const running =
-    conn.spectatorView ?? (conn.view !== null && conn.view.phase !== 'lobby' ? conn.view : null);
+  const running = runningOf(conn);
   const pinnedTo = conn.view?.phase === 'lobby' ? (conn.view.seed?.room ?? null) : null;
   return (
     <TopBar

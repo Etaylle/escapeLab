@@ -17918,33 +17918,36 @@ async function captureMusicPacks() {
   }
 }
 
-/** How large a QR code is on its page, read in the page (whole, as page.evaluate takes it). */
+/**
+ * How large a QR code is on its page, read in the page (whole, as page.evaluate takes it); null
+ * where `selector` shows no code.
+ */
 function qrShown(selector) {
+  const around = document.querySelector(selector);
   const code = document.querySelector(`${selector} svg.qr`);
-  const box = code?.getBoundingClientRect();
+  if (around === null || code === null) {
+    return null;
+  }
   const doc = document.documentElement;
-  const view = globalThis.getComputedStyle;
+  const box = code.getBoundingClientRect();
+  const fill = (part) => globalThis.getComputedStyle(code.querySelector(part)).fill;
+  const low = (rect) => rect.bottom > doc.clientHeight + 1;
+  const out = (rect) => rect.left < 0 || rect.top < 0 || rect.right > doc.clientWidth + 1;
+  const line = document.querySelector(`${selector} .qr-address`);
+  const modules = () => Number(code.getAttribute('viewBox')?.split(' ')[2] ?? 0);
   return {
-    side: box === undefined ? 0 : Math.round(Math.min(box.width, box.height)),
-    square: box !== undefined && Math.abs(box.width - box.height) < 1,
-    inside:
-      box !== undefined &&
-      box.left >= 0 &&
-      box.top >= 0 &&
-      box.right <= doc.clientWidth + 1 &&
-      box.bottom <= doc.clientHeight + 1,
-    modules: Number(code?.getAttribute('viewBox')?.split(' ')[2] ?? 0),
-    ground: code === null ? null : view(code.querySelector('rect')).fill,
-    ink: code === null ? null : view(code.querySelector('path')).fill,
-    label: code?.getAttribute('aria-label') ?? null,
-    address: document.querySelector(`${selector} .qr-address`)?.textContent ?? null,
+    side: Math.round(Math.min(box.width, box.height)),
+    square: Math.abs(box.width - box.height) < 1,
+    inside: !out(box) && !low(box),
+    modules: modules(),
+    ground: fill('rect'),
+    ink: fill('path'),
+    address: line?.textContent ?? null,
     // The address under the code shows whole: nothing of the code's box scrolls away.
-    cut: (() => {
-      const around = document.querySelector(selector);
-      const text = document.querySelector(`${selector} .qr-address`)?.getBoundingClientRect();
-      const scrolls = around === null || around.scrollHeight > around.clientHeight + 1;
-      return scrolls || text === undefined || text.bottom > doc.clientHeight + 1;
-    })(),
+    cut:
+      around.scrollHeight > around.clientHeight + 1 ||
+      line === null ||
+      low(line.getBoundingClientRect()),
   };
 }
 
@@ -17955,6 +17958,10 @@ function qrShown(selector) {
 async function qrShot(page, shot, selector, { least, address }) {
   await capture(page, shot);
   const shown = await page.evaluate(qrShown, selector);
+  if (shown === null) {
+    fail(`${shot}: no QR code under ${selector}`);
+    return;
+  }
   const module = shown.modules === 0 ? 0 : shown.side / shown.modules;
   console.log(
     `${shot.padEnd(19)}the code ${shown.side} px a side, ${shown.modules} modules with its quiet ` +
@@ -18080,25 +18087,39 @@ function demoAudienceShown() {
  * label alone; a wide window reads the line as well.
  */
 function demoFaults(shown, phone) {
-  const small = phone ? shown.ways.filter((height) => height < DEMO_TARGET_PX) : [];
-  const { label, line } = shown;
+  const { label } = shown;
   const named = DEMO_NAMES.every((name, i) => shown.crew[i]?.startsWith(name) === true);
   return wrongOf([
-    [small.length > 0, `ways along the foot ${small.join(', ')} px tall`],
+    ...(phone ? demoPhoneFaults(shown) : demoWideFaults(shown)),
     // „Zuschauen beenden" alone: nobody speaks in the demo, so nothing offers to listen in.
     [shown.ways.length !== 1, `${shown.ways.length} ways along the foot, not the way out alone`],
     [label.text !== DEMO_LABEL, `the label reads „${label.text}"`],
     [label.px < DEMO_TEXT_PX || !label.inside, `the label at ${label.px} px, in: ${label.inside}`],
-    [!phone && line.text !== DEMO_LINE, `the line reads „${line.text}"`],
-    [!phone && (line.px < DEMO_TEXT_PX || !line.inside), `the line at ${line.px} px`],
-    [phone && line.text !== null, 'the line crowds the phone’s head'],
-    [phone && shown.world[1] < 200, `the world is ${shown.world.join('x')} px`],
     [shown.panelsOut, 'a panel runs out of the window sideways'],
-    [phone ? shown.qr !== 0 : shown.qr < 120, `the site’s QR code is ${shown.qr} px a side`],
     [!named || !shown.crewInside, `the crew along the foot: ${shown.crew.join(' · ')}`],
     [shown.sideways > 1, `the page runs ${shown.sideways} px out sideways`],
     [shown.address.includes('demo'), `the address kept „${shown.address}"`],
   ]);
+}
+
+/** What may be wrong with the demo room's audience on a phone alone, each with its words. */
+function demoPhoneFaults(shown) {
+  const small = shown.ways.filter((height) => height < DEMO_TARGET_PX);
+  return [
+    [small.length > 0, `ways along the foot ${small.join(', ')} px tall`],
+    [shown.line.text !== null, 'the line crowds the phone’s head'],
+    [shown.world[1] < 200, `the world is ${shown.world.join('x')} px`],
+    [shown.qr !== 0, `the site’s QR code is ${shown.qr} px a side`],
+  ];
+}
+
+/** What may be wrong with it in a wide window alone, each with its words. */
+function demoWideFaults({ line, qr }) {
+  return [
+    [line.text !== DEMO_LINE, `the line reads „${line.text}"`],
+    [line.px < DEMO_TEXT_PX || !line.inside, `the line at ${line.px} px`],
+    [qr < 120, `the site’s QR code is ${qr} px a side`],
+  ];
 }
 
 /** `shot` of the demo room's audience on `page`, a phone's or not, logged and judged. */

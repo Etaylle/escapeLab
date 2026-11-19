@@ -170,27 +170,6 @@ describe('the menu', () => {
     expect(menuStep(0, 'ArrowDown', 0)).toBeNull();
   });
 
-  it('says nothing under its items but what the install and the HTTPS hint say', () => {
-    stubWindow();
-    const html = menu();
-    expect(html).toContain('</nav><div class="menu-quiet">');
-    expect(html).not.toContain('menu-lead');
-    expect(readFileSync(new URL('src/styles/menu.css', CLIENT), 'utf8')).not.toContain('menu-lead');
-  });
-
-  it('carries the game’s title and where it comes from under it, in two parts round a dot', () => {
-    stubWindow();
-    const html = menu();
-    expect(html).toMatch(/<h1 class="menu-title( phosphor-title)?">ESCAPELAB<\/h1>/);
-    expect(MENU_SUBTITLE).toBe('Hochschule Campus Wien · Master Software Design and Engineering');
-    expect(html).toContain(
-      '<p class="menu-sub"><span>Hochschule Campus Wien ·</span> ' +
-        '<span>Master Software Design and Engineering</span></p>',
-    );
-    // Each part keeps to a line: a narrow window breaks at the dot, never inside a part.
-    expect(menuRule('.menu-sub span')).toContain('display: inline-block;');
-  });
-
   it('counts the rooms open beside „Offene Runden", and says nothing without any', () => {
     stubWindow();
     expect(menu(null, 2)).toContain('Offene Runden</span><span class="menu-count">2</span>');
@@ -278,6 +257,29 @@ function elementsIn(node: ReactNode): ReactElement[] {
 
 /** What a pointer coming over an item hands its handler: the item, to focus or not. */
 type PointerOver = (event: { currentTarget: { focus: () => void } }) => void;
+
+describe('the menu’s head and foot', () => {
+  it('says nothing under its items but what the install and the HTTPS hint say', () => {
+    stubWindow();
+    const html = menu();
+    expect(html).toContain('</nav><div class="menu-quiet">');
+    expect(html).not.toContain('menu-lead');
+    expect(readFileSync(new URL('src/styles/menu.css', CLIENT), 'utf8')).not.toContain('menu-lead');
+  });
+
+  it('carries the game’s title and where it comes from under it, in two parts round a dot', () => {
+    stubWindow();
+    const html = menu();
+    expect(html).toMatch(/<h1 class="menu-title( phosphor-title)?">ESCAPELAB<\/h1>/);
+    expect(MENU_SUBTITLE).toBe('Hochschule Campus Wien · Master Software Design and Engineering');
+    expect(html).toContain(
+      '<p class="menu-sub"><span>Hochschule Campus Wien ·</span> ' +
+        '<span>Master Software Design and Engineering</span></p>',
+    );
+    // Each part keeps to a line: a narrow window breaks at the dot, never inside a part.
+    expect(menuRule('.menu-sub span')).toContain('display: inline-block;');
+  });
+});
 
 describe('the menu’s arrow keys', () => {
   it('step over an item the layout hides, as a phone held sideways hides the settings', () => {
