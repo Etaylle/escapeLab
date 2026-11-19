@@ -748,6 +748,15 @@ function useColdOpen(view: PlayerView, cut: boolean, hudBack: number | null): Co
  */
 export const RESTING_GOAL = 'ruht — Stand gehalten';
 
+/**
+ * The goal while no station is open: the one resting through an emergency, said so, else the
+ * armed one (`armedGoal`); null where none is armed.
+ */
+function waitingGoal(view: PlayerView, map: MapView): string | null {
+  const resting = restingTitle(map);
+  return resting === null ? armedGoal(view, map) : `${resting} ${RESTING_GOAL}`;
+}
+
 /** The goal line: the station up, the way out, what the crew still has to bring. */
 interface Goal {
   title: string;
@@ -775,16 +784,13 @@ function goalOf(view: PlayerView, map: MapView, self: Point): Goal {
     forNow.length === 0 ? null : `${forNow.map((i) => i.label).join(', ')} fehlt noch`,
     forLater.length === 0 ? null : `${forLater.map((i) => i.label).join(', ')} mitnehmen`,
   ].filter((line): line is string => line !== null);
-  const resting = restingTitle(map);
   return {
     title:
       view.puzzle !== null
         ? view.puzzle.title
         : out
           ? 'NOTAUSGANG ENTRIEGELT'
-          : resting !== null
-            ? `${resting} ${RESTING_GOAL}`
-            : (armedGoal(view, map) ?? 'Alle Stationen erledigt'),
+          : (waitingGoal(view, map) ?? 'Alle Stationen erledigt'),
     exitCall: view.puzzle === null && out,
     missing: out || errands.length === 0 ? null : errands.join(' · '),
     hands: handsLine(view, map),

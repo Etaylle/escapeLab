@@ -92,7 +92,7 @@ describe('the Paketfilter back from an emergency', () => {
   };
   const move = (state: FirewallState, at: number, console: ConsoleId, input: FirewallInput) =>
     firewallModule.apply(def, elapsed(state, at).state, input, 'op', ctx(at, console)).state;
-  /** The first wave started at T0, a hostile packet of it dropped as it falls: a wave in the air. */
+  /** The first wave started at T0, a hostile packet of it dropped as it falls: one in the air. */
   const inTheAir = (seed: number): FirewallState => {
     const running = move(firewallModule.init(def, mulberry32(seed), ctx(T0)), T0, 'a', {
       start: true,

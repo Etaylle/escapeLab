@@ -85,7 +85,7 @@ function second(state: GameState, at: number): GameState {
     }, now);
 }
 
-/** The crew at the station a second at a time from `from` (s after T0) until `done` or the solve. */
+/** The crew at the station, a second at a time from `from` (s after T0), to `done` or the solve. */
 function worked(
   state: GameState,
   from: number,
@@ -211,7 +211,11 @@ describe('the Anlaufsteuerung after an emergency', () => {
   const su = (state: GameState): StartupState => state.puzzleState as StartupState;
   /** Stage 1 run up, stage 2's gaps set and its pulse on the way. */
   const pulseOut = (seed: number) =>
-    worked(manned(anlauf, seed), 1, (s) => s.type === 'startup' && s.stage === 1 && s.pulse !== null);
+    worked(
+      manned(anlauf, seed),
+      1,
+      (s) => s.type === 'startup' && s.stage === 1 && s.pulse !== null,
+    );
 
   it('keeps the stage run up and the gaps filled; the pulse lapses without an alarm', () => {
     const { state, sec } = pulseOut(5);
@@ -240,5 +244,113 @@ describe('the Anlaufsteuerung after an emergency', () => {
       expect(end.currentPuzzleIndex, `seed ${seed}`).toBe(1);
       expect(alarmsOf(end), `seed ${seed}`).toEqual([]);
     }
+  });
+});
+
+/**
+ * A corridor of three stations the whole crew presses — Eins (3,1), Zwei (7,1), Drei (11,1) —
+ * with an emergency at two valves (2,2) (12,2); `changes` made to its file.
+ */
+function pressLab(changes: Record<string, unknown>): Mission {
+  const station = (id: string, title: string) => ({ type: 'button-sync', id, title });
+  return parseMission({
+    id: 'ruhe',
+    title: 'Ruhe',
+    players: { min: 2, max: 2 },
+    story: { intro: 'i', win: 'w', lose: 'l' },
+    timeLimitSec: 600,
+    puzzles: [station('eins', 'Eins'), station('zwei', 'Zwei'), station('drei', 'Drei')],
+    map: {
+      tiles: ['################', '#..............#', '#..............#', '################'],
+      spawns: [
+        { x: 1, y: 1 },
+        { x: 1, y: 2 },
+      ],
+      stations: [
+        { puzzleId: 'eins', x: 3, y: 1 },
+        { puzzleId: 'zwei', x: 7, y: 1 },
+        { puzzleId: 'drei', x: 11, y: 1 },
+      ],
+      exit: { x: 14, y: 2 },
+      sabotage: {
+        label: 'KÜHLUNG AUSGEFALLEN',
+        afterSolved: 0,
+        panels: [
+          { id: 'links', x: 2, y: 2 },
+          { id: 'rechts', x: 12, y: 2 },
+        ],
+      },
+    },
+    ...changes,
+  });
+}
+
+/**
+ * Both of the crew at the station of `puzzleId`, p1 switching it on and pressing: one press of
+ * two in, then an emergency from second 5 to second 30.
+ */
+function halfPressed(mission: Mission, puzzleId: string, seed: number) {
+  const there = standing(lightsOut(started(mission, seed)), {
+    stations: { [puzzleId]: ['p1', 'p2'] },
+  });
+  const on = applyAction(there, { type: 'interact', playerId: 'p1', at: T0 + 500 });
+  const press = (playerId: string, sec: number): Action => ({
+    type: 'puzzle-input',
+    playerId,
+    at: T0 + sec * 1000,
+    input: { press: true },
+  });
+  const resting = [press('p1', 1), start(5)].reduce(applyAction, on);
+  return { resting, back: applyAction(resting, cleared(30)), press };
+}
+
+/** The ids of the stations armed on the audience's map, each with whether it rests. */
+const armedOn = (state: GameState): [string, boolean][] =>
+  (viewForSpectator(state).map?.stations ?? []).flatMap((s): [string, boolean][] =>
+    s.known && s.status === 'armed' ? [[s.puzzleId, s.resting === true]] : [],
+  );
+
+describe('the station that rests, in free order', () => {
+  const { resting, back, press } = halfPressed(pressLab({ order: 'free' }), 'zwei', 3);
+
+  it('is the one the crew picked: the pick stands through the emergency', () => {
+    expect([resting.picked, back.picked]).toEqual([true, true]);
+    expect(armedOn(resting)).toEqual([['zwei', true]]);
+    expect(armedOn(back)).toEqual([['zwei', false]]);
+    expect(back.puzzleState).toMatchObject({ pressed: { p1: T0 + 1000 }, expired: [] });
+  });
+
+  it('is solved by the press that was missing, and the rest stands for the next pick', () => {
+    const solved = applyAction(back, press('p2', 31));
+    expect(solved.currentPuzzleIndex).toBe(1);
+    expect(solved.events.filter((e) => e.kind === 'puzzle').map((e) => e.label)).toEqual([
+      'Zwei gelöst',
+    ]);
+    expect(armedOn(solved).map(([id]) => id)).toEqual(['eins', 'drei']);
+  });
+});
+
+describe('the station that rests, at a Wechselplatz', () => {
+  const pooled = pressLab({
+    puzzles: ['eins', 'zwei', 'drei'].map((id) => ({
+      type: 'button-sync',
+      id,
+      title: id,
+      pool: 'platz',
+    })),
+  });
+
+  it('is the one the seed drew, whichever that is, for 30 seeds', () => {
+    const drawn = new Set<string>();
+    for (let seed = 0; seed < 30; seed++) {
+      const id = started(pooled, seed).drawn['platz'] ?? '';
+      drawn.add(id);
+      const { resting, back, press } = halfPressed(pooled, id, seed);
+      expect(armedOn(resting), `seed ${seed}`).toEqual([[id, true]]);
+      expect(back.puzzleState, `seed ${seed}`).toMatchObject({ pressed: { p1: T0 + 1000 } });
+      // the run's one station: the missing press wins it, nothing of it lost to the emergency
+      expect(applyAction(back, press('p2', 31)).currentPuzzleIndex, `seed ${seed}`).toBe(1);
+    }
+    expect([...drawn].sort()).toEqual(['drei', 'eins', 'zwei']);
   });
 });

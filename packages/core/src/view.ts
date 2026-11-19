@@ -884,14 +884,16 @@ function stationsOnMap(state: GameState, viewer: MapViewer): MapView['stations']
       ...(look === null ? {} : { look }),
     };
     if (known || status === 'armed') {
-      const rests = state.resting !== null && index === state.currentPuzzleIndex;
       const title = def?.title ?? s.puzzleId;
-      const resting = rests ? { resting: true as const } : {};
-      return [{ ...spot, title, status, ...resting, found, known: true }];
+      return [{ ...spot, title, status, ...restingAt(state, index), found, known: true }];
     }
     return seen ? [{ ...spot, ...tagOf(status), ...GLIMPSE }] : [];
   });
 }
+
+/** What a map says of the station `index` where it rests through the emergency that runs. */
+const restingAt = (state: GameState, index: number): { resting?: true } =>
+  state.resting !== null && index === state.currentPuzzleIndex ? { resting: true } : {};
 
 /** What a glimpse tells of a station's status: the tag on one out of service, else nothing. */
 const tagOf = (status: KnownStation['status']): { out?: true } =>

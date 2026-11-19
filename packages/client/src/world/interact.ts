@@ -81,6 +81,15 @@ export function carryLine(label: string): string {
  */
 export const RESTING_PROMPT = 'Ruht, bis der Notfall behoben ist';
 
+/** E at a console of the armed station: work it — or, while it rests, only the word on it. */
+function stationAction(station: KnownStation): ContextAction {
+  const { x, y } = station;
+  const at = { x: x + 0.5, y: y - 0.55, subject: { of: 'station', x, y } as const };
+  return station.resting === true
+    ? { kind: 'locked', label: RESTING_PROMPT, ...at }
+    : { kind: 'operate', label: 'Bedienen', ...at };
+}
+
 type Source = Pick<SourceHere, 'id' | 'kind' | 'opened' | 'needsKey' | 'outOfService'>;
 
 /** What `playerId` carries right now: an item in their hands, not yet set in its place. */
@@ -266,14 +275,7 @@ export function contextAction(
   }
   for (const station of stations) {
     const { x, y } = station;
-    const at = { x: x + 0.5, y: y - 0.55, subject: { of: 'station', x, y } as const };
-    candidates.push({
-      action:
-        station.resting === true
-          ? { kind: 'locked', label: RESTING_PROMPT, ...at }
-          : { kind: 'operate', label: 'Bedienen', ...at },
-      d: dist(x + 0.5, y + 0.5),
-    });
+    candidates.push({ action: stationAction(station), d: dist(x + 0.5, y + 0.5) });
   }
   candidates.push(...outOfServiceActions(map, self, dist));
   const locked = (candidate: { action: ContextAction }): number =>
