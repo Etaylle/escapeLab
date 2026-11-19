@@ -13648,7 +13648,8 @@ async function playSignalkette(host, guest) {
   await openPanel(guest, 'a');
   await inGroup('devices', () => captureDevicePhone(guest, stationSlug(guest)));
   await openPanel(host, 'b');
-  const rest = rests ? () => restThroughEmergency(host, guest, title) : null;
+  const resting = () => inGroup('devices', () => restThroughEmergency(host, guest, title));
+  const rest = rests ? resting : null;
   await solveSignal([host, guest], title, BLACKOUT_PLAN.signalkette.stages, true, rest);
 }
 
@@ -13686,11 +13687,17 @@ async function restThroughEmergency(host, guest, title) {
     restLeftOut(`no emergency came within ${(due + 6).toFixed(1)} s of stage ${stage}`);
     return;
   }
+  const shot = Date.now();
   const named = await restingGoalShot(host, title);
+  const weathered = Date.now();
   await weather();
+  const back = Date.now();
   await openPanel(guest, 'a');
   await openPanel(host, 'b');
   const kept = await keptShot(host, title, { stage, alarms });
+  // What the rest costs the run: the two shots and the panels opened a second time.
+  const cost = weathered - shot + (Date.now() - back);
+  console.log(`rest               the shots and both panels opened again: ${seconds(cost)}`);
   if (!named || !kept) {
     fail(`rest: "${title}" named resting ${named}, back as it stood ${kept}`);
   }
@@ -13705,6 +13712,7 @@ async function restingGoalShot(host, title) {
   const said = `${title} ${RESTING_GOAL}`;
   const named = await untilAsync(async () => (await goal.textContent()) === said, 3000);
   const shown = await goal.textContent();
+  await sleep(400); // the station's panel has faded from under the relay console
   await capture(host.page, 'rest-goal.png');
   console.log(
     `rest-goal.png      ${host.name}'s goal line in the emergency: „${shown}"` +
