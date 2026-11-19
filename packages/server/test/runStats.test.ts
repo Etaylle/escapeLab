@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Difficulty, RunOutcome, RunReport } from '@escapelab/core';
 import { parseMission } from '@escapelab/core';
 import { readFileSync } from 'node:fs';
-import { namesItsDraw, rankingOf, RunStats, TOP_RUNS } from '../src/runStats.js';
+import { boardOf, boardsLine, rankingOf, RunStats, TOP_RUNS } from '../src/runStats.js';
 import type { RunReportV1 } from '../src/store/store.js';
 
 /** Noon UTC, so that the day is the same in every time zone the tests run in. */
@@ -226,44 +226,86 @@ const drawing = (station: string, parts: Parts): RunReport => ({
 
 describe('the Bestenliste of a mission whose stations take turns', () => {
   const ranked = rankingOf(() => [blackout, tutorial]);
+  /** One mission's archive at one difficulty: the runs of its earlier chain. */
+  const archiveOf = (stats: RunStats, mission = 'blackout') =>
+    stats.mission(mission)?.archive?.find((d) => d.difficulty === 'normal');
 
-  it('asks a run to name its draw: a station of every Wechselplatz the mission has now', () => {
-    expect(namesItsDraw(blackout, drawing('signalkette', { seconds: 500 }))).toBe(true);
-    expect(namesItsDraw(blackout, drawing('notstrom', { seconds: 500 }))).toBe(true);
-    // A run of the chain before the Wechselplatz names none; a version 1 report neither.
-    expect(namesItsDraw(blackout, run({ seconds: 300 }))).toBe(false);
-    expect(namesItsDraw(blackout, oldRun({ seconds: 300 }))).toBe(false);
-    // A station the place does not hold, another pool, a key every object answers to: none.
-    expect(namesItsDraw(blackout, drawing('subsysteme', { seconds: 300 }))).toBe(false);
-    const other = { ...run({ seconds: 300 }), drawn: { funk: 'signalkette' } };
-    expect(namesItsDraw(blackout, other)).toBe(false);
-    // Only the draw's own keys count: nothing a record inherits names a station.
-    const inherited = Object.create({ wechsel: 'notstrom' }) as Record<string, string>;
-    expect(namesItsDraw(blackout, { ...run({ seconds: 300 }), drawn: inherited })).toBe(false);
+  it('puts a run on the live board where it names a station of every Wechselplatz now', () => {
+    expect(boardOf(blackout, drawing('signalkette', { seconds: 500 }))).toBe('live');
+    expect(boardOf(blackout, drawing('notstrom', { seconds: 500 }))).toBe('live');
     // A mission without one asks nothing of its runs.
-    expect(namesItsDraw(tutorial, run({ seconds: 300, mission: 'systemcheck' }))).toBe(true);
+    expect(boardOf(tutorial, run({ seconds: 300, mission: 'systemcheck' }))).toBe('live');
   });
 
-  it('keeps a run of the older chain off every board, and keeps it all the same', () => {
+  it('puts a run that names no draw on the archive: the chain before the Wechselplatz', () => {
+    expect(boardOf(blackout, run({ seconds: 300 }))).toBe('archive');
+    expect(boardOf(blackout, oldRun({ seconds: 300 }))).toBe('archive');
+    // Only the draw's own keys count: an empty draw, or one with inherited keys alone, names none.
+    expect(boardOf(blackout, { ...run({ seconds: 300 }), drawn: {} })).toBe('archive');
+    const inherited = Object.create({ wechsel: 'notstrom' }) as Record<string, string>;
+    expect(boardOf(blackout, { ...run({ seconds: 300 }), drawn: inherited })).toBe('archive');
+  });
+
+  it('puts a run that names a draw the mission no longer holds on no board at all', () => {
+    // A station the place does not hold, another pool: a chain neither of today nor of before.
+    expect(boardOf(blackout, drawing('subsysteme', { seconds: 300 }))).toBe('none');
+    const other = { ...run({ seconds: 300 }), drawn: { funk: 'signalkette' } };
+    expect(boardOf(blackout, other)).toBe('none');
+  });
+
+  it('ranks the older chain among itself on the archive, never on the live board', () => {
     const stats = new RunStats(
       [
         run({ seconds: 300, at: DAY, crew: ['Alt', 'Älter'] }),
         oldRun({ seconds: 280, at: DAY + 1 }),
-        run({ seconds: 200, at: DAY + 2, mission: 'systemcheck' }),
+        run({ seconds: 320, at: DAY + 2, outcome: 'lost:time' }),
+        run({ seconds: 200, at: DAY + 3, mission: 'systemcheck' }),
       ],
       ranked,
     );
-    expect([stats.runs, stats.unranked]).toEqual([3, 2]);
-    // The first day of the new chain: no board for Blackout yet, no place for the old run.
-    expect(stats.mission('blackout')).toBeNull();
+    expect([stats.runs, stats.archived, stats.unranked]).toEqual([4, 3, 0]);
+    // The first day of the new chain: nothing on Blackout's live board, no place for an old run.
+    expect(stats.mission('blackout')?.difficulties).toEqual([]);
     expect(stats.placeOf('blackout', DAY)).toBeNull();
-    expect(stats.all().map((mission) => mission.missionId)).toEqual(['systemcheck']);
+    expect(stats.all().map((mission) => mission.missionId)).toEqual(['blackout', 'systemcheck']);
+    // On the archive, by the same rules: time, the lost run counted, the nameless one first.
+    expect(archiveOf(stats)).toMatchObject({ runs: 3, wins: 2, bestSeconds: 280 });
+    expect(archiveOf(stats)?.top.map((entry) => entry.crew)).toEqual([[], ['Alt', 'Älter']]);
     // The first crew of the new chain is first of one, though slower than the old runs.
-    stats.add(drawing('frequenz', { seconds: 520, at: DAY + 3, crew: ['Neu', 'Neuer'] }));
-    expect(stats.placeOf('blackout', DAY + 3)).toEqual({ difficulty: 'normal', place: 1 });
+    stats.add(drawing('frequenz', { seconds: 520, at: DAY + 4, crew: ['Neu', 'Neuer'] }));
+    expect(stats.placeOf('blackout', DAY + 4)).toEqual({ difficulty: 'normal', place: 1 });
     expect(statsOf(stats)).toMatchObject({ runs: 1, wins: 1, bestSeconds: 520 });
     expect(statsOf(stats)?.top.map((entry) => entry.crew)).toEqual([['Neu', 'Neuer']]);
-    expect([stats.runs, stats.unranked]).toEqual([4, 2]);
+    // And never on the archive.
+    expect(archiveOf(stats)).toMatchObject({ runs: 3, wins: 2, bestSeconds: 280 });
+    expect([stats.runs, stats.archived]).toEqual([5, 3]);
+  });
+
+  it('gives a mission without runs of an earlier chain no archive in its answer', () => {
+    const stats = new RunStats(
+      [drawing('signalkette', { seconds: 540 }), run({ seconds: 200, mission: 'systemcheck' })],
+      ranked,
+    );
+    expect(stats.mission('blackout')).not.toHaveProperty('archive');
+    expect(stats.mission('systemcheck')).not.toHaveProperty('archive');
+    expect(stats.all().some((mission) => 'archive' in mission)).toBe(false);
+    expect(stats.archived).toBe(0);
+  });
+
+  it('keeps a run on no board out of both, and keeps it all the same', () => {
+    const stats = new RunStats([drawing('subsysteme', { seconds: 300 })], ranked);
+    expect([stats.runs, stats.archived, stats.unranked]).toEqual([1, 0, 1]);
+    expect(stats.mission('blackout')).toBeNull();
+  });
+
+  it('takes a deleted name off the board the run stands on', () => {
+    const older = run({ seconds: 300, at: DAY, crew: ['Alt', 'Weg'] });
+    const newer = drawing('notstrom', { seconds: 500, at: DAY + 1, crew: ['Neu', 'Weg'] });
+    const stats = new RunStats([older, newer], ranked);
+    stats.unname(older, 'Weg');
+    stats.unname(newer, 'Weg');
+    expect(archiveOf(stats)?.top.map((entry) => entry.crew)).toEqual([['Alt']]);
+    expect(statsOf(stats)?.top.map((entry) => entry.crew)).toEqual([['Neu']]);
   });
 
   it('ranks the three draws on one board, a lost run counted with them', () => {
@@ -277,34 +319,60 @@ describe('the Bestenliste of a mission whose stations take turns', () => {
     );
     expect(statsOf(stats)).toMatchObject({ runs: 3, wins: 2, bestSeconds: 500 });
     expect(stats.placeOf('blackout', DAY)).toEqual({ difficulty: 'normal', place: 2 });
-    expect(stats.unranked).toBe(0);
+    expect([stats.archived, stats.unranked]).toEqual([0, 0]);
   });
 
-  it('holds the Tagesschicht to the same rule, day by day', () => {
+  it('holds the Tagesschicht to the same rule, day by day: an archive of its own', () => {
     const daily = (report: RunReport): RunReport => ({ ...report, daily: true });
     const stats = new RunStats(
       [
         daily(run({ seconds: 300, at: DAY })),
         daily(drawing('signalkette', { seconds: 560, at: DAY + 1 })),
+        // A day before the Wechselplatz: its runs all of the older chain.
+        daily(run({ seconds: 310, at: DAY - 86_400_000 })),
+        // Off the Tagesschicht: on the main archive, not the day's.
+        run({ seconds: 290, at: DAY + 2 }),
       ],
       ranked,
     );
-    const [day] = stats.daily();
+    const [day, before] = stats.daily();
     const board = day?.missions.find((mission) => mission.missionId === 'blackout');
     expect(board?.difficulties.map((d) => [d.runs, d.bestSeconds])).toEqual([[1, 560]]);
+    expect(board?.archive?.map((d) => [d.runs, d.bestSeconds])).toEqual([[1, 300]]);
     expect(stats.dailyPlaceOf(day?.day ?? '', 'blackout', DAY)).toBeNull();
     expect(stats.dailyPlaceOf(day?.day ?? '', 'blackout', DAY + 1)).toMatchObject({ place: 1 });
+    // The day before stays listed, its board empty, its archive holding its run.
+    expect(before?.missions).toMatchObject([{ missionId: 'blackout', difficulties: [] }]);
+    expect(before?.missions[0]?.archive?.map((d) => d.bestSeconds)).toEqual([310]);
+    expect(archiveOf(stats)?.bestSeconds).toBe(290);
   });
 
   it('counts a run of a mission nobody knows any more as it always did', () => {
     const stats = new RunStats([run({ seconds: 300, mission: 'custom-weg' })], ranked);
-    expect(stats.unranked).toBe(0);
+    expect([stats.archived, stats.unranked]).toEqual([0, 0]);
     expect(stats.mission('custom-weg')?.difficulties[0]?.runs).toBe(1);
   });
 
-  it('ranks every run where no ranking is given: a store opened without one', () => {
+  it('ranks every run live where no ranking is given: a store opened without one', () => {
     const stats = new RunStats([run({ seconds: 300 })]);
     expect(statsOf(stats)?.runs).toBe(1);
-    expect(stats.unranked).toBe(0);
+    expect(stats.mission('blackout')).not.toHaveProperty('archive');
+    expect([stats.archived, stats.unranked]).toEqual([0, 0]);
+  });
+
+  it('says in the start-up log how many runs stand on an archive, and on none', () => {
+    expect(boardsLine(new RunStats([run({ seconds: 300 })]))).toBe('the 1 runs kept so far');
+    const stats = new RunStats(
+      [
+        run({ seconds: 300 }),
+        drawing('subsysteme', { seconds: 300 }),
+        drawing('notstrom', { seconds: 400 }),
+      ],
+      ranked,
+    );
+    expect(boardsLine(stats)).toBe(
+      "the 3 runs kept so far, 1 of them on an archive: runs of a mission's earlier chain" +
+        ', 1 on no board: they name a draw the mission no longer holds',
+    );
   });
 });

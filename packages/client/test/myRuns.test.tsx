@@ -26,6 +26,7 @@ function run(parts: Partial<AccountRun> = {}): AccountRun {
     crew: ['Anna', 'Ben'],
     seat: 0,
     rank: 'A',
+    board: 'live',
     ...parts,
   };
 }
