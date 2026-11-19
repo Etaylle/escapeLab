@@ -243,10 +243,17 @@ die Entscheidung.
   umsonst (ohne Capture-Gruppen 17 bis 28 s je Lauf). Zu tun: je Strecke vorab rechnen, welche
   Stufe die Bahnen überhaupt hergeben, und mit ihr beginnen.
 - Umgesetzt: Findet ein Gang keine Lücke, rechnet er einmal über die vorhergesagten Flüge der
-  nächsten 12 s, welche Stufe überhaupt eine bringt (`allowanceOffered`), und beginnt sein Warten
-  dort; die Stufen und ihre 12 s bleiben. `tools/patrol.test.mjs` hält fest, dass die Strecke
-  durch den Süd-Flur in keiner Phase der Laborwache eine Lücke für 1 s hat und meist eine für
-  0,7 s. Die Flucht ohne Capture-Gruppen: 51,9 s auf main, 35,9 s mit dem Paket (Seed 12).
+  nächsten 12 s, ob eine Lücke für 1 s überhaupt kommt (`gapWithin`). Kommt keine, verlangt er
+  0,7 s vom Start an, und zwar so lange, wie main sie verlangt hätte: bis Sekunde 24, dann
+  0,4 s (`allowanceAt`). Kein Gang wird damit enger als auf main; `tools/patrol.test.mjs` hält
+  das über die Phasen der Drohnen für die Flucht durch den Süd-Flur, den Weg zurück zum Reaktor
+  und den Flur in beiden Richtungen fest, ebenso dass die Flucht in keiner Phase eine Lücke für
+  1 s hat und dort im Mittel weniger als halb so lange wartet. Eine erste Fassung begann gleich
+  bei der Stufe, die die nächsten 12 s brachten, und fiel danach nach 12 s auf 0,4 s: Sie ging
+  manche Strecke enger als main (Review 2026-11-19), und unter Last sah eine Drohne Seed 12.
+  So, drei Läufe Seed 12 ohne Capture-Gruppen neben einer Suite in Schleife (Last 6 bis 34),
+  abwechselnd mit main: keine Sichtung, der knappste Gang mit 0,7 s Spielraum wie auf main, die
+  Flucht 43,5–44,0 s gegen 51,5–56,3 s, der Sieg nach 304–305 s gegen 310–314 s.
 
 ### T-9 Tests an der Wanduhr — Status: erledigt (2026-11-13) · Größe: S
 - Zwei Tests lasen die echte Uhr und wurden unter Last rot: `certificate.test.ts` (openssl liest
@@ -815,7 +822,8 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
 - In Blackout (B-blackout2, 2026-11-18): dritte Station, das Tor des Serverraums. Analysepult
   (21,9) und Sperrpult (26,9) im Flur östlich des Serverschotts, die RICHTLINIE an der Südwand
   westlich davon, eine Welle mit neun Paketen (48 bis 52 s auf der Uhr, Lesedruck wie der
-  Modul-Standard: der Abstand der Pakete hängt nur an `fallSec`); die Lösung öffnet das Schott.
+  Modul-Standard: der Abstand der Pakete hängt nur an `fallSec`), seit B-blackout3
+  (2026-11-19) mit sieben (41 bis 43 s); die Lösung öffnet das Schott.
   Beide Drohnen schlafen, bis der Serverraum gelöst ist: Am Paketfilter wird niemand erfasst.
 - Hochkant auf dem Handy: erledigt mit F-firewall-upright (Merge 2026-11-19); in Blackouts
   Rundgang spielt der Gast das Analysepult hochkant (420 × 760).
@@ -867,7 +875,8 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
 - In Blackout (B-blackout2, 2026-11-17): der fünfte Platz ist der Pool `wechsel` aus
   Signalkette, Funkpult und Notstromkasten; er öffnet Reaktortür und Reaktorschott. Die
   Signalkette und das Funkpult stehen, wo sie standen; der Notstromkasten hängt gleich hinter
-  der Maschinentür, sein Prüfpult im Labor, sein Wartungsbuch im Maschinenraum. Das Klemmbrett
+  der Maschinentür, sein Prüfpult im Labor, sein Wartungsbuch im Maschinenraum (seit
+  B-blackout3 an der Westwand des Labors, Pult A der Signalkette im Archiv). Das Klemmbrett
   liegt jetzt am Westende des Flurs (4,12 oder 3,12), der Aktenschrank in der Nordwestecke des
   Labors (12,16 oder 11,15); die Bahn der Flurwache ist die von main: Wer im Umkreis einer
   Quelle der eben gelösten Station steht, wird von keiner Drohne erfasst. Drei Notizen der letzten Schicht erklären den Dienstplan. Seeds: 12
