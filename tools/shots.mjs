@@ -17384,9 +17384,9 @@ function ownedRunsLog() {
 
 /**
  * Starts the server the run owns (SHOTS_SERVER) on BASE's port, its log appended to server.log
- * and its runs kept in `ownedRunsLog` under OUT; resolves once it answers /health, and throws where it has not within SERVER_UP_MS
- * or ended meanwhile — or where another server answers there already, one the run would only
- * think it owns.
+ * and its runs kept in `ownedRunsLog` under OUT; resolves once it answers /health, and throws
+ * where it has not within SERVER_UP_MS or ended meanwhile — or where another server answers
+ * there already, one the run would only think it owns.
  */
 async function startServer() {
   mkdirSync(OUT, { recursive: true });

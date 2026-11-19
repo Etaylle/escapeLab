@@ -404,7 +404,8 @@ describe('the board of an earlier chain, „Frühere Anlage"', () => {
         'Diese Zeiten liefen noch auf der früheren Anlage.</p>',
     );
     expect(old).toContain('<div><dt>Beste Zeit</dt><dd>5:00</dd></div>');
-    const crews = rowsOf(old ?? '').map((row) => /leader-(?:crew|nameless)">([^<]+)/.exec(row)?.[1]);
+    const crew = /leader-(?:crew|nameless)">([^<]+)/;
+    const crews = rowsOf(old ?? '').map((row) => crew.exec(row)?.[1]);
     expect(crews).toEqual(['Alt, Älter', 'ohne Namen (2)']);
     expect(old).not.toContain('Neu');
   });

@@ -325,14 +325,14 @@ export class RunStats {
 
   /**
    * `name` off the crew of `run` wherever the Bestenliste lists it by its crew (`TOP_RUNS`): its
-   * account was deleted. The run keeps its place, its time and its count.
+   * account was deleted. The run keeps its place, its time and its count. Off both boards of
+   * its shelf: the ranking it was counted under may differ from today's — a custom mission saved
+   * again with a Wechselplatz while the server runs — and the name has to leave wherever it is.
    */
   unname(run: LoggedRun, name: string): void {
-    const board = this.ranked(run);
     const shelf = isDaily(run) ? this.days.get(utcDay(run.startedAt)) : this.main;
-    if (board !== 'none') {
-      shelf?.board(board).unname(run, name);
-    }
+    shelf?.board('live').unname(run, name);
+    shelf?.board('archive').unname(run, name);
   }
 
   /** Every mission with a run off the Tagesschicht, by id. */

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { Difficulty, RunOutcome, RunReport } from '@escapelab/core';
+import type { Difficulty, RunBoard, RunOutcome, RunReport } from '@escapelab/core';
 import { parseMission } from '@escapelab/core';
 import { readFileSync } from 'node:fs';
 import { boardOf, boardsLine, rankingOf, RunStats, TOP_RUNS } from '../src/runStats.js';
@@ -306,6 +306,20 @@ describe('the Bestenliste of a mission whose stations take turns', () => {
     stats.unname(newer, 'Weg');
     expect(archiveOf(stats)?.top.map((entry) => entry.crew)).toEqual([['Alt']]);
     expect(statsOf(stats)?.top.map((entry) => entry.crew)).toEqual([['Neu']]);
+  });
+
+  it('takes a deleted name off the run whose board changed since it was counted', () => {
+    // A custom mission saved again with a Wechselplatz while the server runs: its run, counted
+    // live, would be ranked on the archive now — and the name still has to leave the list.
+    let now: RunBoard = 'live';
+    const stats = new RunStats([], () => now);
+    const counted = run({ seconds: 300, mission: 'custom-x', crew: ['Anna', 'Weg'] });
+    stats.add(counted);
+    now = 'archive';
+    stats.unname(counted, 'Weg');
+    expect(stats.mission('custom-x')?.difficulties[0]?.top.map((entry) => entry.crew)).toEqual([
+      ['Anna'],
+    ]);
   });
 
   it('ranks the three draws on one board, a lost run counted with them', () => {

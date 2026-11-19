@@ -848,6 +848,10 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   Bericht übernommen; ein Lauf, dessen Kette nicht die der Mission ist, kommt aufs Archiv, je
   Kette eine Tafel. Ohne Migration: Ein fehlendes `chain` gilt als 1 (Blackout ohne Pool), die
   heutige Blackout-Datei sagt 2, und die Läufe mit Auslosung ohne Nummer sind die der Kette 2.
+- Markierung in „Meine Einsätze" (offen, kosmetisch; Review S-archive 2026-11-19): Sie folgt der
+  Rangregel von jetzt (`accounts.ts`, `stats.boardOf`), die Tafeln der beim Zählen. Wird eine
+  eigene Mission zur Laufzeit mit Wechselplatz neu gespeichert, kann ein Lauf bis zum Neustart
+  „Frühere Anlage" heißen und doch auf der laufenden Tafel stehen (oder umgekehrt).
 - Nächstes Paket (Lead): Blackout mit dem Wechselplatz neu ketten — notlicht → Anlaufsteuerung
   → Paketfilter (öffnet das Serverschott) → Serverraum → Wechselplatz aus Signalkette, Funkfeuer
   und Notstromkasten (öffnet die Reaktortüren) → reaktorstart.
