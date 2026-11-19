@@ -12613,13 +12613,23 @@ function nextEmergencyIn(seen) {
 }
 
 /**
- * Before a step of about `seconds` that an emergency must not cut short:
- * where the next one is due before it would be done, wait for it and
- * weather it first.
+ * Whether this run plays its mission with no capture group beside the run itself
+ * (SHOTS_ONLY=run): the capture-free measure of a mission's length (backlog N-6).
  */
-async function clearOfEmergencies(player, seconds) {
+const CAPTURE_FREE = PLAN.on.size === 1 && PLAN.on.has('run');
+
+/**
+ * Before a step of about `seconds` that an emergency must not cut short —
+ * `bare` s in a capture-free run, whose step takes none of its shots —
+ * where the next one is due before it would be done, wait for it and
+ * weather it first. The bare lengths are some three times the longest such
+ * a step took (19.11.2026: Serverraum 5.2 s, Signalkette 5.0, Notstromkasten
+ * 3.6, reactor 2.4, Funkpult 1.5): a capture-free run no longer stands idle
+ * for an emergency it would be done before.
+ */
+async function clearOfEmergencies(player, seconds, bare = seconds) {
   const due = nextEmergencyIn(player.seen);
-  if (due > seconds) {
+  if (due > (CAPTURE_FREE ? bare : seconds)) {
     return;
   }
   console.log(`emergency          due in ${due.toFixed(1)} s: waited for it before the next step`);
@@ -12868,7 +12878,7 @@ async function playServerraum(host, guest) {
   await sneakTo(guest, workSpot(guest, locker));
   await foundWherePinned(guest, locker);
   await readLocker(guest, locker, host);
-  await clearOfEmergencies(host, 55);
+  await clearOfEmergencies(host, 55, 15);
   await sneakTo(guest, atConsole(guest, 'b'), 3);
   const crew = { terminal: host, rack: guest };
   const role = (player) => player.seen.view.puzzle?.role ?? null;
@@ -13204,7 +13214,7 @@ async function playFrequenz(host, guest) {
   }
   await inGroup('reading', () => captureMorseBook(guest, atCabinet));
   await sneakTo(host, atConsole(host, null));
-  await clearOfEmergencies(host, 25);
+  await clearOfEmergencies(host, 25, 8);
   const index = host.seen.view.currentPuzzleIndex;
   await pastEmergencies(async () => {
     await openPanel(host, null);
@@ -13274,7 +13284,7 @@ async function playReaktor(host, guest) {
     `fuse               ${host.name} carried the fuse from ${lies.x},${lies.y} to ` +
       `${pin.to.x},${pin.to.y} and put it in`,
   );
-  await clearOfEmergencies(host, 25);
+  await clearOfEmergencies(host, 25, 8);
   const onPhone = () => inGroup('devices', () => captureDevicePhone(guest, stationSlug(guest)));
   await pastEmergencies(() => pressLastSync([host, guest], onPhone));
 }
@@ -13617,7 +13627,7 @@ async function playNotstrom(host, guest) {
   await foundWherePinned(guest, lies);
   await sneakTo(host, atConsole(host, 'a'));
   await sneakTo(guest, atConsole(guest, 'b'));
-  await clearOfEmergencies(host, 45);
+  await clearOfEmergencies(host, 45, 12);
   const title = armedAt(host, 'a').title;
   await openPanel(host, 'a');
   await openPanel(guest, 'b');
@@ -13636,7 +13646,7 @@ async function playSignalkette(host, guest) {
   const title = armedAt(host, 'a').title;
   await sneakTo(guest, atConsole(guest, 'a'));
   await sneakTo(host, atConsole(host, 'b'));
-  await clearOfEmergencies(host, 75);
+  await clearOfEmergencies(host, 75, 15);
   await openPanel(guest, 'a');
   await inGroup('devices', () => captureDevicePhone(guest, stationSlug(guest)));
   await openPanel(host, 'b');
