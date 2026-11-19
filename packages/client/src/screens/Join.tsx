@@ -87,15 +87,22 @@ const REFRESH_MS = 2500;
 /** The demo room watched: what „Demo" and the demo's link ask the server for. */
 const WATCH_DEMO: ClientMessage = { kind: 'spectate', code: DEMO_CODE };
 
-/** The line under the game's title, in the world's voice: the sign at the plant's gate. */
-export const MENU_SUBTITLE = 'Forschungsanlage Kaltenbrunn · Zutritt nur mit Dienstausweis';
 /**
- * The line under the menu's items: how the game is played, in the plant's words — the machine
- * at the console, the rules in the book, and nothing solved but together, by voice.
+ * The line under the game's title: where the game comes from — the university and its study
+ * programme, whose name is English — in two parts round a middle dot. A narrow window breaks the
+ * line at the dot, never inside a part while the part fits a line (menu.css).
  */
-export const MENU_LEAD =
-  'Am Pult die Maschine, im Buch die Regeln — gelöst wird nur gemeinsam, per Stimme, ' +
-  'ein Gerät je Kopf, Rücken an Rücken.';
+export const MENU_SUBTITLE = 'Hochschule Campus Wien · Master Software Design and Engineering';
+
+/** The subtitle's parts, each kept whole on its line, the dot with the first. */
+function MenuSubtitle() {
+  const [first = '', second = ''] = MENU_SUBTITLE.split(' · ');
+  return (
+    <p className="menu-sub">
+      <span>{first} ·</span> <span>{second}</span>
+    </p>
+  );
+}
 
 /** What the device kept of its account: the name and the colour its next account starts with. */
 export interface KeptProfile {
@@ -514,7 +521,7 @@ export function JoinScreen(props: Props) {
     <div className="menu" ref={root}>
       <header className="menu-head">
         <h1 className={comesOn ? 'menu-title phosphor-title' : 'menu-title'}>ESCAPELAB</h1>
-        <p className="menu-sub">{MENU_SUBTITLE}</p>
+        <MenuSubtitle />
       </header>
       <MenuHero
         name={name}
@@ -532,7 +539,6 @@ export function JoinScreen(props: Props) {
           rooms={rooms.length}
           onPick={pickOf(pages, take, setTaken)}
         />
-        <p className="menu-lead">{MENU_LEAD}</p>
         {bound !== null && <p className="bound-line">{boundLine(bound)}</p>}
         <div className="menu-quiet">
           <InstallOffer />

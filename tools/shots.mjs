@@ -7695,7 +7695,6 @@ function heroRoom() {
     canvas: box('.menu-hero:not([hidden])'),
     clear: {
       menu: box('.menu-body'),
-      lead: box('.menu-lead'),
       title: box('.menu-head'),
       panel: box('.menu-panel'),
     },
@@ -7806,14 +7805,14 @@ async function heroNarrow(page) {
 }
 
 /**
- * The menu's quiet lines over the scene on `page` as it stands — the sign under the title and the
- * line under the items: each one's text made clear, its box shot, and its colour laid over each
+ * The menu's quiet line over the scene on `page` as it stands — where the game comes from, under
+ * the title: its text made clear, its box shot, and its colour laid over each
  * pixel behind it (contrast.mjs `lineContrast`); fails the run where a line lies out of the window
  * or under TEXT_CONTRAST at any pixel. The drift moves the lab behind them: this is one moment of
  * it (docs/art-bible.md, The menu, has the whole drift measured).
  */
 async function checkMenuLines(page, label) {
-  for (const line of ['.menu-sub', '.menu-lead']) {
+  for (const line of ['.menu-sub']) {
     const el = page.locator(line).first();
     const box = await el.boundingBox();
     const view = page.viewportSize();

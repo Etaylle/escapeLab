@@ -23,10 +23,10 @@ const SCREENS: { name: string; screen: Screen }[] = [
   { name: 'a laptop', screen: { width: 1440, height: 820, coarse: false } },
 ];
 
-/** The menu's stage as the join screen lays it out, its two quiet lines in it. */
+/** The menu's stage as the join screen lays it out, its quiet line under the title in it. */
 const MENU =
-  '<div class="menu"><div class="menu-head"><p class="menu-sub">Zutritt nur mit Dienstausweis</p>' +
-  '</div><div class="menu-body"><p class="menu-lead">Am Pult die Maschine</p></div></div>';
+  '<div class="menu"><div class="menu-head"><p class="menu-sub">Hochschule Campus Wien</p>' +
+  '</div><div class="menu-body"></div></div>';
 
 /** WCAG 2.2's relative luminance of a colour written #rrggbb. */
 function luminance(hex: string): number {
@@ -44,11 +44,11 @@ function lineOf(nodes: readonly Styled[], name: string): Styled {
   return found;
 }
 
-describe.each(SCREENS)('the menu’s quiet lines on $name', ({ screen }) => {
+describe.each(SCREENS)('the menu’s quiet line on $name', ({ screen }) => {
   const sheets = new Sheets();
   const nodes = elementsOf(MENU);
 
-  it.each(['menu-sub', 'menu-lead'])('set %s in a colour of 4.5:1 over the lab at night', (name) => {
+  it.each(['menu-sub'])('set %s in a colour of 4.5:1 over the lab at night', (name) => {
     const colour = sheets.declared(lineOf(nodes, name), 'color', screen)?.value ?? '';
     expect(colour).toMatch(/^#[0-9a-f]{6}$/);
     const contrast = (luminance(colour) + 0.05) / (LIGHTEST_BEHIND + 0.05);

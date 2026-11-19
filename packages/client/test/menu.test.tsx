@@ -10,7 +10,6 @@ import { DIALOGS } from '../src/input/focus.js';
 import {
   focusMenu,
   JoinScreen,
-  MENU_LEAD,
   MENU_SUBTITLE,
   pagesOf,
   panelOnArrival,
@@ -172,22 +171,25 @@ describe('the menu', () => {
     expect(menuStep(0, 'ArrowDown', 0)).toBeNull();
   });
 
-  it('says under its items how the game is played: at the console and the book, by voice', () => {
+  it('says nothing under its items but what the install and the HTTPS hint say', () => {
     stubWindow();
     const html = menu();
-    const items = html.indexOf('</nav>');
-    expect(html.indexOf(`<p class="menu-lead">${MENU_LEAD}</p>`)).toBeGreaterThan(items);
-    expect(MENU_LEAD).toMatch(/per Stimme/);
-    expect(MENU_LEAD).toMatch(/Rücken an Rücken/);
-    expect(offVoice([MENU_LEAD], WORLD)).toEqual([]);
+    expect(html).toContain('</nav><div class="menu-quiet">');
+    expect(html).not.toContain('menu-lead');
+    expect(readFileSync(new URL('src/styles/menu.css', CLIENT), 'utf8')).not.toContain('menu-lead');
   });
 
-  it('carries the game’s title and a line of the world under it', () => {
+  it('carries the game’s title and where it comes from under it, in two parts round a dot', () => {
     stubWindow();
     const html = menu();
     expect(html).toMatch(/<h1 class="menu-title( phosphor-title)?">ESCAPELAB<\/h1>/);
-    expect(html).toContain(`<p class="menu-sub">${MENU_SUBTITLE}</p>`);
-    expect(offVoice([MENU_SUBTITLE], WORLD)).toEqual([]);
+    expect(MENU_SUBTITLE).toBe('Hochschule Campus Wien · Master Software Design and Engineering');
+    expect(html).toContain(
+      '<p class="menu-sub"><span>Hochschule Campus Wien ·</span> ' +
+        '<span>Master Software Design and Engineering</span></p>',
+    );
+    // Each part keeps to a line: a narrow window breaks at the dot, never inside a part.
+    expect(menuRule('.menu-sub span')).toContain('display: inline-block;');
   });
 
   it('counts the rooms open beside „Offene Runden", and says nothing without any', () => {
@@ -410,10 +412,6 @@ describe('the menu under the pointer', () => {
     const sizes = [...sheet.matchAll(/font-size: (\d+(?:\.\d+)?)px;/g)].map((m) => Number(m[1]));
     expect(sizes.length).toBeGreaterThan(8);
     expect(sizes.filter((px) => px < 12)).toEqual([]);
-    // The lead line under the items in the title's face, spaced, at the floor itself.
-    const lead = menuRule('.menu-lead');
-    expect(lead).toContain('font-family: var(--display);');
-    expect(lead).toContain('font-size: 12px;');
   });
 });
 
