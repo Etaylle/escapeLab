@@ -1,5 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { barOf, CROSSFADE_S, MUSIC_LEVEL, type Tension } from '../src/world/music.js';
+import {
+  barOf,
+  CROSSFADE_S,
+  MUSIC_LEVEL,
+  STEM_DWELL_MS,
+  type Tension,
+} from '../src/world/music.js';
 import { MIN_FADE_MS, type PackFile } from '../src/world/packFile.js';
 import {
   fakeGraph,
@@ -84,6 +90,10 @@ const tension = (over: Partial<Tension> = {}): Tension => ({
   alarms: 0,
   escaping: false,
   ending: null,
+  emergency: false,
+  stationClock: null,
+  droneTiles: Infinity,
+  progress: 0,
   ...over,
 });
 
@@ -185,6 +195,7 @@ describe('a pack’s stems in a run', () => {
     await fetchIn();
     const ctx = lastContext();
     music.setTension(tension());
+    vi.setSystemTime(Date.now() + STEM_DWELL_MS); // the calm stem has had its time
     ctx.currentTime = 15.3;
     music.setTension(tension({ left: 200 }));
     music.setTension(tension({ left: 200 }));
@@ -576,6 +587,7 @@ describe('a pack’s stems as they change hands', () => {
     const at = 10.3 + 25 * BAR;
     ctx.currentTime = at - 0.5;
     music.setTension(tension());
+    vi.setSystemTime(Date.now() + STEM_DWELL_MS); // the calm stem has had its time
     ctx.currentTime = at + 4.1;
     music.setTension(tension({ left: 200 }));
     music.setTension(tension({ left: 200 }));

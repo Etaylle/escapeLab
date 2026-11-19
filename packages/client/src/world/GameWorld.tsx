@@ -67,6 +67,7 @@ import { filmed, type IntroCue } from './intro/sequence.js';
 import { runsOf } from './light.js';
 import { positionsOf, type KnownPositions, type Spot } from './movement.js';
 import { MUSIC_AFTER_CLICK_MS, musicProbe, setTension, stopMusic, type Tension } from './music.js';
+import { signalsOf } from './pressureSignals.js';
 import { worldNews } from './news.js';
 import { pingAhead } from './padPing.js';
 import { renderRadio, voiceProbe } from './radioVoice.js';
@@ -799,12 +800,15 @@ function hearTheLab(loop: Loop): void {
 
 /**
  * What the music follows (music.ts): the run, from 2 s after the blackout's click, the clock,
- * the alarms, the escape, the end.
+ * the alarms, the escape, the end, and what this player's view and the drones say of the run
+ * (pressureSignals.ts) — the seat's own, where this screen watches one.
  */
 function tensionOf(loop: Loop, map: WorldMap): Tension {
   const { view, darkSince, finale } = loop.live.current;
-  const left = timeLeft(view);
+  const serverNow = clock.now();
+  const left = timeLeft(view, serverNow);
   return {
+    ...signalsOf(view, loop.sim.self, loop.drones.current, serverNow),
     run: view.startedAt,
     startAt: darkSince === null ? null : darkSince + REVEAL_MS + MUSIC_AFTER_CLICK_MS,
     left: left === null ? Infinity : left / 1000,
