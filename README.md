@@ -675,7 +675,11 @@ Start-Log in einer Zeile:
 `store: Postgres at DATABASE_URL: …` oder `store: run log …, accounts in memory until the server
 stops (no DATABASE_URL)`.
 
-- **Neon nicht erreichbar.** Dann scheitert schon die Migration, mit `Error: P1001: Can't reach
+- **Neon nicht erreichbar.** Weil Neons Free-Compute nach 5 Minuten ohne Abfrage schläft und
+  zum Aufwachen Sekunden braucht, versucht der Server die Migration bei P1001 (und nur dann)
+  bis zu viermal, nach Pausen von 2, 4 und 8 s, je Versuch eine Zeile
+  `[escapelab] migrate: attempt … of 4: …` — insgesamt deutlich unter 45 s. Antwortet Neon auch
+  beim vierten Mal nicht, scheitert die Migration, mit `Error: P1001: Can't reach
   database server at …` und `not started: the migrations did not apply (P1001)`, und der Server
   startet nicht. Eine alte Instanz, die weiterspielt, gibt es nur bei einem Deploy, weil Render
   erst auf eine gesunde neue umschaltet. Bei einem Neustart oder wenn der Free-Plan aus dem

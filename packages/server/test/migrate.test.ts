@@ -4,7 +4,14 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PrismaClient } from '@prisma/client';
 import { afterAll, afterEach, beforeAll, describe, expect, inject, it, vi } from 'vitest';
-import { defaultDirectUrl, migrate, shownLines, type RunCli } from '../src/store/migrate.js';
+import {
+  defaultDirectUrl,
+  migrate,
+  runPrisma,
+  shownLines,
+  type CliRun,
+  type RunCli,
+} from '../src/store/migrate.js';
 import { openStore, readyStore, type ReadySteps, type Store } from '../src/store/store.js';
 import { inSchema } from './postgresSetup.js';
 
@@ -113,6 +120,67 @@ describe('the migrations as the server applies them', () => {
     await expect(migrate({}, silent)).rejects.toThrow('the migrations did not apply (exit code 1)');
   });
 
+  describe('a database waking from its pause (P1001)', () => {
+    const UNREACHABLE = {
+      code: 1,
+      output: "Error: P1001: Can't reach database server at `ep-quiet-lab.neon.tech:5432`\n",
+    };
+    /** The CLI answering `answers` in turn, the pauses between its runs kept, no time passing. */
+    const scripted = (answers: CliRun[]) => {
+      const run = vi.fn<RunCli>(async () => answers.shift() ?? { code: 0, output: UP_TO_DATE });
+      const waited: number[] = [];
+      const wait = async (ms: number): Promise<void> => {
+        waited.push(ms);
+      };
+      return { run, wait, waited };
+    };
+    const logged = (said: { mock: { calls: unknown[][] } }): string[] =>
+      said.mock.calls.map(([line]) => String(line));
+    const attemptLines = (said: { mock: { calls: unknown[][] } }): string[] =>
+      logged(said).filter((line) => line.includes(' attempt '));
+
+    it('tries again with a growing pause, one line each attempt, then applies', async () => {
+      const said = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+      const cli = scripted([UNREACHABLE, UNREACHABLE]);
+      await migrate({}, cli.run, cli.wait);
+      expect(cli.run).toHaveBeenCalledTimes(3);
+      expect(cli.waited).toEqual([2_000, 4_000]);
+      expect(attemptLines(said)).toEqual([
+        '[escapelab] migrate: attempt 1 of 4: database not reachable (P1001), again in 2 s',
+        '[escapelab] migrate: attempt 2 of 4: database not reachable (P1001), again in 4 s',
+        '[escapelab] migrate: attempt 3 of 4: applied',
+      ]);
+      expect(logged(said)).toContain('[escapelab] migrate: No pending migrations to apply.');
+    });
+
+    it('fails as before once the last attempt cannot reach it either', async () => {
+      const said = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+      const cli = scripted([UNREACHABLE, UNREACHABLE, UNREACHABLE, UNREACHABLE, UNREACHABLE]);
+      await expect(migrate({}, cli.run, cli.wait)).rejects.toThrow(
+        'the migrations did not apply (P1001), as the migrate lines above say',
+      );
+      expect(cli.run).toHaveBeenCalledTimes(4);
+      expect(cli.waited).toEqual([2_000, 4_000, 8_000]);
+      expect(attemptLines(said).at(-1)).toBe(
+        '[escapelab] migrate: attempt 4 of 4: database not reachable (P1001), giving up',
+      );
+      expect(logged(said).at(-1)).toBe(
+        "[escapelab] migrate: Error: P1001: Can't reach database server at `<host>`",
+      );
+    });
+
+    it('does not try again on any other failure', async () => {
+      const said = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+      for (const output of ['Error: P3009\nmigrate found failed migrations\n', 'Error: P1000\n']) {
+        const cli = scripted([{ code: 1, output }]);
+        await expect(migrate({}, cli.run, cli.wait)).rejects.toThrow('did not apply (P');
+        expect(cli.run).toHaveBeenCalledTimes(1);
+        expect(cli.waited).toEqual([]);
+      }
+      expect(attemptLines(said)).toEqual([]);
+    });
+  });
+
   it('shows no database URL, whatever the CLI said', () => {
     const said = 'Error: P1013: The provided database string is invalid: postgresql://a:b@db/lab x';
     expect(shownLines(said)).toEqual([
@@ -145,7 +213,9 @@ describe('the migrations as the server applies them', () => {
     // Nobody listens on port 1: the CLI as the server runs it fails at once.
     const nowhere = 'postgresql://anna@127.0.0.1:1/lab';
     const env = { ...process.env, DATABASE_URL: nowhere, DATABASE_URL_UNPOOLED: nowhere };
-    await expect(migrate(env)).rejects.toThrow('the migrations did not apply (P1001)');
+    await expect(migrate(env, runPrisma, async () => undefined)).rejects.toThrow(
+      'the migrations did not apply (P1001)',
+    );
     const lines = said.mock.calls.map(([line]) => String(line));
     expect(lines).toContain(
       "[escapelab] migrate: Error: P1001: Can't reach database server at `<host>`",
