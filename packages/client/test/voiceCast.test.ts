@@ -407,13 +407,13 @@ describe('a new voice over takes the person has (--replace)', () => {
 
   it('finds the takes a voice made of each person, and what making them anew costs', () => {
     const his = staleTakes(manifest, 'helmut');
-    expect(his).toHaveLength(82);
-    expect(remakeCharacters(his)).toBe(8055);
+    expect(his).toHaveLength(93);
+    expect(remakeCharacters(his)).toBe(9200);
     // Each person's takes are their own: the plant's five — two of the opening, its three
-    // messages — and Laura's 80; nobody of the roster's, none.
+    // messages — and Laura's 91; nobody of the roster's, none.
     const plant = staleTakes(manifest, 'anlage');
     expect([plant.length, remakeCharacters(plant)]).toEqual([5, 357]);
-    expect(staleTakes(manifest, 'laura')).toHaveLength(80);
+    expect(staleTakes(manifest, 'laura')).toHaveLength(91);
     expect(staleTakes(manifest, 'nobody')).toEqual([]);
     // A person's own recording is no voice's: it stays whatever voice is kept.
     // (His first take of a line a mission ships: the old chain's are kept for runs in flight.)
@@ -429,7 +429,7 @@ describe('a new voice over takes the person has (--replace)', () => {
   it('refuses, before asking anything, to make takes stale without --replace', () => {
     const his = staleTakes(manifest, 'helmut');
     expect(() => refuseStale(helmut, other, his, false)).toThrow(
-      'voice: Helmut has 82 takes by the voice they have now, 8,055 characters to make anew in ' +
+      'voice: Helmut has 93 takes by the voice they have now, 9,200 characters to make anew in ' +
         'another — keep it all the same with --replace, which drops them for the next render ' +
         'to make: pnpm --filter @escapelab/client voice --keep operator:helmut=' +
         '5KvpaGteYkNayiswuX2h --replace',
@@ -449,7 +449,7 @@ describe('a new voice over takes the person has (--replace)', () => {
     expect(Object.keys(left.lines)).toHaveLength(Object.keys(manifest.lines).length - 5);
     expect(Object.values(left.lines).some((entry) => entry.person === 'anlage')).toBe(false);
     expect(files.filter((file) => existsSync(file))).toEqual([]);
-    expect(staleTakes(left, 'helmut')).toHaveLength(82);
+    expect(staleTakes(left, 'helmut')).toHaveLength(93);
   });
 });
 
