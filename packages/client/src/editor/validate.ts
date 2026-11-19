@@ -247,8 +247,9 @@ function notes(draft: Draft, shapeBroken: boolean): Finding[] {
 
 /**
  * Runs every check on the draft. `now` is the clock the duration is taken
- * with; Blackout's map takes a few ms, well under the 200 the editor allows
- * itself before the check would have to leave the main thread.
+ * with; Blackout takes about 40 ms on a laptop — every draw of its Wechselplatz
+ * proved whole, some 13 ms each —, under the 200 the editor allows itself
+ * before the check would have to leave the main thread.
  */
 export function validateDraft(
   draft: Draft,

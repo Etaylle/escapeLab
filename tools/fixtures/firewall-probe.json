@@ -60,6 +60,14 @@
       { "kind": "desk", "x": 15, "y": 1, "variant": 1 }
     ],
     "edgeworkSign": { "x": 10, "y": 3 },
-    "exit": { "x": 17, "y": 5 }
+    "exit": { "x": 17, "y": 5 },
+    "sabotage": {
+      "mode": "relay",
+      "label": "KÜHLKREISLAUF — RELAIS VON HAND",
+      "firstAfterSec": 70,
+      "everySec": 60,
+      "required": 2,
+      "afterSolved": 0
+    }
   }
 }

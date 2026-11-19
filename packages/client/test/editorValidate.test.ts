@@ -17,6 +17,56 @@ function blackout(): Draft {
   return loaded.draft;
 }
 
+/** Blackout's Wechselplatz: three stations, each proved as a run's own. */
+const DRAWS = 3;
+/** How much more than its draws Blackout's proof may cost against one draw's: never twice. */
+const DRAW_SLACK = 1.5;
+
+/**
+ * Blackout with the Signalkette alone at its Wechselplatz: no pool, the doors opened by it, the
+ * Funkpult, the Notstromkasten and their sources, the cabinet's key and its note gone.
+ */
+function oneDraw(): Draft {
+  const data = JSON.parse(
+    readFileSync(new URL('../../../missions/blackout.json', import.meta.url), 'utf8'),
+  ) as BlackoutFile;
+  const gone = new Set(['frequenz', 'notstrom']);
+  const map = data.map;
+  const single = {
+    ...data,
+    puzzles: data.puzzles
+      .filter((p) => !gone.has(p.id))
+      .map((puzzle) => ({ ...puzzle, pool: undefined })),
+    map: {
+      ...map,
+      stations: map.stations.filter((s) => !gone.has(s.puzzleId)),
+      manuals: map.manuals.filter((m) => !m.puzzleIds.every((id) => gone.has(id))),
+      items: map.items.filter((item) => item.id !== 'schluessel'),
+      doors: map.doors.map((door) =>
+        door.opensBy.puzzleId === 'wechsel'
+          ? { ...door, opensBy: { ...door.opensBy, puzzleId: 'signalkette' } }
+          : door,
+      ),
+    },
+  };
+  const loaded = draftFromJson(single);
+  if (!loaded.ok) {
+    throw new Error(loaded.problems.join('; '));
+  }
+  return loaded.draft;
+}
+
+/** The parts of Blackout's file `oneDraw` takes apart. */
+interface BlackoutFile {
+  puzzles: { id: string; pool?: string }[];
+  map: {
+    stations: { puzzleId: string }[];
+    manuals: { puzzleIds: string[] }[];
+    items: { id: string }[];
+    doors: { opensBy: { puzzleId?: string } }[];
+  };
+}
+
 /** The harness's probe: a 7 × 5 room, then whatever `steps` place in it. */
 function probe(...steps: [PlacingTool, Tile][]): Draft {
   let draft = newDraft();
@@ -58,12 +108,25 @@ describe('the validator', () => {
     ]);
   });
 
-  it('proves Blackout sound, reachability and all, well within 200 ms', () => {
-    const draft = blackout();
-    validateDraft(draft);
-    const run = validateDraft(draft);
-    expect(run.findings).toEqual([]);
-    expect(run.ms).toBeLessThan(200);
+  it('proves Blackout sound, its three draws costing as three draws, not more', () => {
+    // Blackout proves each draw of its Wechselplatz whole (core mission.ts `checkSolvable`): its
+    // cost has to stay linear in the draws — three times Blackout with the Signalkette alone,
+    // which validates the same lab with one draw. Both are timed in this process, interleaved,
+    // the least of five runs each, so a runner five times slower than a laptop proves the same
+    // ratio; about 40 ms against 13 on a laptop (the editor's 200 ms budget: validate.ts).
+    const full = blackout();
+    const single = oneDraw();
+    expect(validateDraft(full).findings).toEqual([]);
+    expect(validateDraft(single).findings).toEqual([]);
+    const [fullMs, singleMs] = [[] as number[], [] as number[]];
+    for (let i = 0; i < 5; i++) {
+      fullMs.push(validateDraft(full).ms);
+      singleMs.push(validateDraft(single).ms);
+    }
+    const ratio = Math.min(...fullMs) / Math.min(...singleMs);
+    expect(ratio, `${fullMs.join(', ')} ms against ${singleMs.join(', ')} ms`).toBeLessThan(
+      DRAWS * DRAW_SLACK,
+    );
   });
 
   it('runs the reachability proofs: a door nobody can open is caught, at its station', () => {

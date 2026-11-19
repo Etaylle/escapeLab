@@ -88,7 +88,7 @@ describe('Blackout in a room, whichever station has its Wechselplatz', () => {
     const resting = members.filter((member) => member !== id);
     expect(state.mission.puzzles.slice(6).map((p) => p.id).sort()).toEqual([...resting].sort());
     // Ben, his hands free, walks up to a console at rest: the Notstromkasten's box inside the
-    // Maschinentür, or console A of the Signalkette at the Flur's east end.
+    // Maschinentür, or console A of the Signalkette in the Archiv.
     const [x, y, puzzleId] = RESTING_CONSOLE[id];
     walkTo(room, ben, x + 0.5, y + 0.5);
     expect(() => pressE(room, ben)).toThrow('Außer Betrieb.');

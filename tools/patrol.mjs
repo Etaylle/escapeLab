@@ -42,12 +42,14 @@ export const RUN = { tile: [0.235, 0.26], corner: [0.1, 0.5] };
  */
 export const LATE_S = 1;
 /**
- * The allowances a walk waits for in turn, each for a while before the next smaller: the
+ * The allowances a walk waits for in turn, each for STEP_WAIT_S before the next smaller: the
  * widest gap the patrols leave is taken, and a stretch that has none that wide is still run.
- * A walk begins at the widest one the patrols offer within that while (`allowanceOffered`), so
- * that it does not stand out a wait for a gap that never comes.
+ * Where the patrols bring no gap for a second within that while, the walk asks 0.7 s from the
+ * start (`allowanceAt`), and the escape's way through the Süd-Flur stops standing it out (H-6).
  */
 export const LATE_STEPS = [LATE_S, 0.7, 0.4];
+/** How long a walk waits for a gap at one allowance before it takes the next smaller, in s. */
+export const STEP_WAIT_S = 12;
 
 const keyOf = (x, y) => `${x},${y}`;
 const middleOf = (tile) => ({ x: tile.x + 0.5, y: tile.y + 0.5 });
@@ -285,26 +287,34 @@ export function spottedOn(
   return null;
 }
 
-/** How finely `allowanceOffered` looks along the moments a walker may set off at, in s. */
-const OFFER_STEP_S = 0.1;
+/** How often a walk waiting for a gap looks again, in s (shots.mjs `sneakTo`). */
+export const LOOK_EVERY_S = 0.06;
 
 /**
- * The widest of `steps` (allowances for a late avatar, widest first, as LATE_STEPS) the drones
- * of `flying` leave a walker on `path` at all: the first for which some moment to set off,
- * `delay` s from now or up to `within` s later, is clear (`spottedOn` with that allowance), the
- * walker standing at the end `hold` s; the last of `steps` where none is. `flying` has to
- * cover `delay + within` and the run after it.
+ * Whether the drones of `flying` leave a walker on `path` a moment to set off with `late` s to
+ * spare (`spottedOn`): `delay` s from now or later, up to `within` s on, looked at as often as a
+ * waiting walk looks; the walker stands at the end `hold` s. `flying` has to cover
+ * `delay + within` and the run after it.
  */
-export function allowanceOffered(path, flying, sight, { delay = 0, hold = 0, within, steps }) {
-  const clearWithin = (late) => {
-    for (let wait = 0; wait <= within; wait += OFFER_STEP_S) {
-      if (spottedOn(path, flying, sight, { delay: delay + wait, hold, late }) === null) {
-        return true;
-      }
+export function gapWithin(path, flying, sight, { delay = 0, hold = 0, within, late }) {
+  for (let wait = 0; wait <= within; wait += LOOK_EVERY_S) {
+    if (spottedOn(path, flying, sight, { delay: delay + wait, hold, late }) === null) {
+      return true;
     }
-    return false;
-  };
-  return steps.find(clearWithin) ?? steps.at(-1);
+  }
+  return false;
+}
+
+/**
+ * The allowance a walk asks of a gap once it has waited `waited` s for one: each of LATE_STEPS
+ * for STEP_WAIT_S, then the next smaller — but 0.7 s from the start where a second is `vain`,
+ * no gap that wide coming in the first STEP_WAIT_S (`gapWithin`): the walk does not stand that
+ * while out for nothing, and still asks 0.7 s as long as it would have, the 0.4 s at the same
+ * moment.
+ */
+export function allowanceAt(waited, vain) {
+  const step = Math.min(LATE_STEPS.length - 1, Math.floor(waited / STEP_WAIT_S));
+  return LATE_STEPS[vain && step === 0 ? 1 : step];
 }
 
 /**
