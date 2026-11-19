@@ -126,7 +126,8 @@ erhellt. Jeder Menüpunkt hat in Blackouts Labor einen eigenen Raum, zu dem die 
 Darüberfahren langsam schwenkt (`docs/art-bible.md`, „The menu's places"): *Einsatz starten* (die
 Missionskarten, „Runde eröffnen"), *Beitreten*, *Offene Runden*, *Demo*, *Handbuch*,
 *Bestenliste*, *Meine Einsätze*, *Editor* und *Einstellungen* — mit der Maus, der Tastatur (Pfeile,
-Enter, Esc) oder dem Controller (Steuerkreuz, A, B). Oben in der Leiste steht das Konto des Browsers: der Kopf der
+Enter, Esc) oder dem Controller (Steuerkreuz, A, B). Oben in der Leiste steht das Konto des
+Browsers: der Kopf der
 eigenen Figur in ihrer Farbe, der Name und, wo Platz ist, wie viele Einsätze das Konto gespielt hat;
 ein Klick öffnet „Konto" in den Einstellungen, am Handy steht nur der Kopf. Den Namen tragen die
 Panels ein, die einen Platz nehmen (*Einsatz starten*, *Beitreten*, *Offene Runden*), und „Konto" —
