@@ -829,8 +829,15 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   nicht verschwinden): Läufe ohne Auslosung stehen auf einer eigenen Tafel „Frühere Anlage"
   unter der laufenden, nach denselben Regeln, auch je Tag der Tagesschicht; „Meine Einsätze"
   markiert sie so. Eine Regel (`boardOf`): laufende Tafel, Archiv oder keine. Nichts migriert
-  oder gelöscht. Offen: eine dritte Kette erkennt die Regel nicht (Kettennummer in Mission und
-  Bericht wäre der kleinste Schritt).
+  oder gelöscht.
+- Kettennummer (offen, mit dem nächsten Umbau einer ausgelieferten Kette; Lead 2026-11-19):
+  `boardOf` trennt nur die Kette ohne Wechselplatz von der heutigen. Bei einem weiteren Umbau
+  wird die Regel blind: Bleiben die Stationen des Pools, landen die Läufe der neuen Kette mit
+  den heutigen auf der laufenden Tafel; ändern sie sich, stehen die heutigen Läufe auf keiner
+  Tafel („Außer Wertung"). Kleinster Schritt: eine ganze Zahl `chain` in der Mission, in den
+  Bericht übernommen; ein Lauf, dessen Kette nicht die der Mission ist, kommt aufs Archiv, je
+  Kette eine Tafel. Ohne Migration: Ein fehlendes `chain` gilt als 1 (Blackout ohne Pool), die
+  heutige Blackout-Datei sagt 2, und die Läufe mit Auslosung ohne Nummer sind die der Kette 2.
 - Nächstes Paket (Lead): Blackout mit dem Wechselplatz neu ketten — notlicht → Anlaufsteuerung
   → Paketfilter (öffnet das Serverschott) → Serverraum → Wechselplatz aus Signalkette, Funkfeuer
   und Notstromkasten (öffnet die Reaktortüren) → reaktorstart.
