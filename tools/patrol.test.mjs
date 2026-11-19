@@ -13,6 +13,8 @@ import {
   headings,
   progressAt,
   spots,
+  LATE_S,
+  RUN,
   spottedOn,
   stretchOf,
 } from './patrol.mjs';
@@ -168,6 +170,47 @@ describe('spottedOn — a run past a drone', () => {
     const path = tiles([2, 1], [2, 2], [2, 3]);
     assert.equal(spottedOn(path, flights(westbound, 6), HALL, { delay: 0 }), null);
     assert.notEqual(spottedOn(path, flights(westbound, 6), HALL, { delay: 3 }), null);
+  });
+});
+
+describe('spottedOn — an avatar behind its pace', () => {
+  const beat = { waypoints: tiles([1, 2], [10, 2]), speed: 1 };
+  const westbound = [{ ...watcher, beat, at: { x: 9.5, y: 2.5, facing: Math.PI } }];
+  const crossing = tiles([2, 1], [2, 2], [2, 3]);
+
+  it('allows for one a second and a half late', () => {
+    assert.equal(LATE_S, 1.5);
+  });
+
+  it('calls no run clear that an avatar a second late would be seen on', () => {
+    const flying = flights(westbound, 12);
+    const clear = [];
+    for (let delay = 0; delay <= 6; delay += 0.1) {
+      if (spottedOn(crossing, flying, HALL, { delay }) !== null) {
+        continue;
+      }
+      clear.push(delay);
+      // Late by a second at the start, and late by a second on the slowest pace all along.
+      assert.equal(spottedOn(crossing, flying, HALL, { delay: delay + 1, late: 0 }), null);
+      const slower = { tile: [RUN.tile[1], RUN.tile[1] + 0.1], corner: [RUN.corner[1], 0.7] };
+      assert.equal(spottedOn(crossing, flying, HALL, { delay, late: 0, pace: slower }), null);
+    }
+    // Some moments are clear, and without the allowance more would be called so: it bites.
+    assert.ok(clear.length > 0);
+    const unguarded = Array.from({ length: 61 }, (_, i) => i / 10).filter(
+      (delay) => spottedOn(crossing, flying, HALL, { delay, late: 0 }) === null,
+    );
+    assert.ok(unguarded.length > clear.length);
+  });
+
+  it('foretells a drone setting out east from a waypoint it reached flying south', () => {
+    // It stands on (3,1) looking south, as it came, and turns east only as it sets out: whoever
+    // stands east of it is in its eye from that tick on, and not before.
+    const corner = { waypoints: tiles([3, 3], [3, 1], [9, 1]), speed: 1 };
+    const standing = [{ ...watcher, beat: corner, at: { x: 3.5, y: 1.5, facing: -Math.PI / 2 } }];
+    const east = tiles([6, 1]);
+    const seenAt = spottedOn(east, flights(standing, 3), HALL, { hold: 3, late: 0 });
+    assert.ok(seenAt !== null && seenAt > 0 && seenAt <= 3 * 0.08);
   });
 });
 

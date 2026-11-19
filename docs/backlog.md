@@ -405,8 +405,8 @@ die Entscheidung.
   einer Crew ohne Uhr, dann Übungshalle, Tutorial und Blackout, je Schritt eine neue Idee; die
   Missionen ohne Uhr aus G-2 sind das Werkzeug dafür.
 - Plätze je Station (M-three, `core/test/hands.test.ts`), gegen die größte Crew der Mission:
-  Blackout hat zu dritt überall genug (Notlicht 3, Notstrom 4, Signalkette 3, Subsysteme 3,
-  Frequenz 3, Reaktorstart 4). Die Kettenreaktion (Crew von drei) gibt fünf von sechs Stationen
+  Blackout hat zu dritt überall genug (Notlicht 3, Anlaufsteuerung 4, Paketfilter 3,
+  Serverraum 3, am Wechselplatz Signalkette 3, Funkpult 3, Notstromkasten 3, Reaktorstart 4). Die Kettenreaktion (Crew von drei) gibt fünf von sechs Stationen
   nur zwei Plätze, Pult und Handbuch: Lastverteilung, Kühlkreislauf, Freigabecode,
   Resonanz-Dämpfung und Leitungsnetz je 2, Synchron-Abschaltung 4; ihre drei Plattentüren halten
   ohne `untilSolved` und zählen nicht. Die Doppelschicht (Crew von vier): Notstrom-Brücken,

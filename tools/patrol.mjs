@@ -32,6 +32,13 @@ const PLACE_SLACK = 0.25;
  * and the slowest it takes.
  */
 export const RUN = { tile: [0.235, 0.26], corner: [0.1, 0.5] };
+/**
+ * How far behind its slowest run an avatar may fall all the same, in s: a page on a loaded
+ * machine holds a key or a stop longer than it should. The walkthrough's own count of runs
+ * „outside the pace foretold" showed 0.2 to 0.4 s on a laptop and 0.7 s on a CI runner, where
+ * it cost a sighting (cloud run 44414620875); twice that and a little.
+ */
+export const LATE_S = 1.5;
 
 const keyOf = (x, y) => `${x},${y}`;
 const middleOf = (tile) => ({ x: tile.x + 0.5, y: tile.y + 0.5 });
@@ -235,20 +242,26 @@ export function pointOn(path, s) {
  * The first moment, in s from now, a drone of `flying` (from `flights`) may
  * spot a walker who waits `delay` s where `path` starts, runs it at `pace`
  * and stands at its end for `hold` s more — anywhere between where its
- * fastest and its slowest run would have it; null for none.
+ * fastest run would have it and where its slowest would, `late` s behind
+ * at that; null for none.
  */
-export function spottedOn(path, flying, sight, { delay = 0, hold = 0, pace = RUN } = {}) {
+export function spottedOn(
+  path,
+  flying,
+  sight,
+  { delay = 0, hold = 0, pace = RUN, late = LATE_S } = {},
+) {
   const fast = arrivals(path, pace.tile[0], pace.corner[0]);
   const slow = arrivals(path, pace.tile[1], pace.corner[1]);
   const last = path.length - 1;
-  const end = delay + slow[last] + pace.corner[1] + hold;
+  const end = delay + late + slow[last] + pace.corner[1] + hold;
   for (const { drone, track } of flying) {
     for (const at of track) {
       if (at.time > end) {
         break;
       }
       const t = at.time - delay;
-      const from = Math.max(0, progressAt(slow, t) - PLACE_SLACK);
+      const from = Math.max(0, progressAt(slow, t - late) - PLACE_SLACK);
       const to = t <= 0 ? 0 : Math.min(last, progressAt(fast, t) + PLACE_SLACK);
       for (let s = from; ; s = Math.min(to, s + ALONG_PATH)) {
         if (spots(drone, at, pointOn(path, s), sight)) {
