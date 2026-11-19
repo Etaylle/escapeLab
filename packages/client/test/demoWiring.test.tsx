@@ -46,8 +46,8 @@ vi.mock('../src/screens/MainMenu.js', async (importOriginal) => ({
 
 vi.mock('../src/screens/Spectate.js', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
-  SpectateScreen: (props: { demo?: boolean }) => {
-    stage.demo.push(props.demo === true ? 'the demo’s audience' : 'an audience');
+  SpectateScreen: () => {
+    stage.demo.push('an audience');
     return null;
   },
 }));

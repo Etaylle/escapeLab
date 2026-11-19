@@ -533,7 +533,7 @@ function Audience(props: { view: SpectatorView; conn: Connection; finale: Finale
     leaveRoom: conn.leaveRoom,
   };
   if (conn.roomCode !== DEMO_CODE) {
-    return <SpectateScreen {...world} demo={false} />;
+    return <SpectateScreen {...world} />;
   }
   const { demo: feed, send, listen } = conn;
   return <DemoScreen {...world} feed={feed} send={send} listen={listen} line={lineOf(conn)} />;

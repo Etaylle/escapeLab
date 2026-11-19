@@ -980,6 +980,26 @@ function profilePasses(kit: RenderKit): (() => void) | null {
   });
 }
 
+/**
+ * The page's probes on this world (`?trace=1`, `?profile=1`): its frames, its picture, its
+ * passes — and how to take them off. A silent picture over a world that is heard leaves them to
+ * that world.
+ */
+function probeWorld(loop: Loop): { traced: Traced | null; drop: () => void } {
+  if (loop.silent) {
+    return { traced: null, drop: () => undefined };
+  }
+  const traced = traceFrames(loop);
+  const graphics = traceGraphics(loop);
+  const profiled = profilePasses(loop.kit);
+  const drop = (): void => {
+    traced?.drop();
+    graphics?.();
+    profiled?.();
+  };
+  return { traced, drop };
+}
+
 /** Every sound of the lab that goes on by itself, stopped: a world that was heard goes. */
 function stopLabSounds(): void {
   stopAmbience();
@@ -1048,10 +1068,8 @@ function useWorldLoop({ props, refs, live, alarm, setWheel, setControlsReach }: 
       closed: () => undefined,
     });
     const posTimer = streamPositions(sim, watches, (msg) => live.current.send(msg));
-    const traced = traceFrames(loop);
-    const tracedGraphics = traceGraphics(loop);
-    const profiled = profilePasses(kit);
-    const stop = runFrames(loop, traced);
+    const probes = probeWorld(loop);
+    const stop = runFrames(loop, probes.traced);
     const ears = setInterval(() => hearTheLab(loop), HEAR_MS);
     return () => {
       stop();
@@ -1064,9 +1082,7 @@ function useWorldLoop({ props, refs, live, alarm, setWheel, setControlsReach }: 
       if (!loop.silent) {
         stopLabSounds();
       }
-      traced?.drop();
-      tracedGraphics?.();
-      profiled?.();
+      probes.drop();
       dropLight(kit);
       refs.simRef.current = null;
       refs.interactRef.current = null;
@@ -1331,6 +1347,7 @@ function useWorld(props: Props): WorldState {
   }, [inputLocked, live]);
   const tip = useWorldTip(view, station, !plays(props), holdTips, finale);
   const silent = props.silent === true;
+  const heard = silent ? { escapeSince: null, finale: null } : { escapeSince, finale };
   usePowerHum(darkSince, live, silent);
   // The world answers an alarm (alarm.ts): the klaxon while the run goes on — the alarm that
   // ends it has the ending's own sound, and an open device sounds its own horn instead — the
@@ -1342,8 +1359,8 @@ function useWorld(props: Props): WorldState {
   });
   const alarmRef = useLatest(alarm);
   const alarmClass = useAlarmClasses(alarm, reduced);
-  useEscapeSounds(silent ? null : escapeSince, view.phase === 'playing' && finale === null);
-  useFinaleSounds(silent ? null : finale);
+  useEscapeSounds(heard.escapeSince, view.phase === 'playing' && finale === null);
+  useFinaleSounds(heard.finale);
   const refs = { canvasRef, controlsRef, simRef, interactRef, dropRef };
   useWorldLoop({ props, refs, live, alarm: alarmRef, setWheel, setControlsReach });
   useWheelEscape(wheel !== null, setWheel, live);

@@ -341,10 +341,11 @@ export class DemoHost {
     this.told = said;
     this.shot = shot;
     for (const viewer of this.viewers.values()) {
-      viewer.tell({ kind: 'demo-shot', shot, at: now });
+      // The seat's view first, then the word that it is on air: no page shows an old view of it.
       if (this.cut.onAir !== before && this.follows(viewer)) {
         this.show(viewer);
       }
+      viewer.tell({ kind: 'demo-shot', shot, at: now });
     }
   }
 
@@ -425,10 +426,10 @@ export class DemoHost {
     // The director looks before the newcomer is on the list: it is told once, right here.
     this.directAt(at);
     viewers.set(spectatorId, viewer);
+    this.show(viewer);
     if (this.shot !== null) {
       listener({ kind: 'demo-shot', shot: this.shot, at });
     }
-    this.show(viewer);
     return {
       spectatorId,
       detach: () => {

@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -11,6 +12,9 @@ import {
 } from '@escapelab/core';
 import { WORLD, offVoice } from '../../core/test/voice.js';
 import {
+  CUT_FADE_MS,
+  DEMO_LABEL,
+  DEMO_LINE,
   DemoScreen,
   doingLine,
   keptPin,
@@ -126,10 +130,13 @@ describe('the picture a viewer of the demo is shown', () => {
     expect(picture.doing).toEqual(seat === 'p1' ? what('read', 'buch') : what('operate'));
   });
 
-  it('is the whole lab alone before any seat’s view came, and while the crew is in its lobby', () => {
+  it('is the whole lab alone before any seat’s view came, and in the room’s lobby', () => {
     const none = { seat: null, doing: what('idle'), lab: true };
     expect(pictureOf('regie', { shot: null, views: {} }, PLAYING)).toEqual(none);
     expect(pictureOf('one', { shot: shot('p1'), views: {} }, PLAYING)).toEqual(none);
+    // A seat just pinned, its view not come yet: the seat heard so far stays up meanwhile.
+    const waiting = pictureOf('two', { shot: shot('p1'), views: { p1: ANNA } }, PLAYING);
+    expect(waiting).toEqual({ seat: ANNA, doing: what('read', 'buch'), lab: false });
     expect(pictureOf('regie', feed('p1'), { phase: 'lobby' })).toEqual(none);
     const lobby: DemoFeed = { ...feed('p1'), views: { p1: { ...ANNA, phase: 'lobby' } } };
     expect(pictureOf('regie', lobby, PLAYING)).toEqual(none);
@@ -224,10 +231,12 @@ function demo(given: DemoFeed, view: SpectatorView = AUDIENCE, kept: DemoPin | n
   const session = new Map<string, string>(kept === null ? [] : [['escapelab.demoPin', kept]]);
   vi.stubGlobal('sessionStorage', storage(session));
   vi.stubGlobal('window', {
+    location: { origin: 'https://escapelab.test', pathname: '/' },
     matchMedia: () => ({ matches: false }),
     addEventListener: noop,
     removeEventListener: noop,
   });
+  vi.stubGlobal('fetch', () => Promise.resolve());
   const html = renderToStaticMarkup(
     <DemoScreen
       view={view}
@@ -290,14 +299,18 @@ describe('the demo’s screen', () => {
 
   it('offers the four pictures as buttons, the one chosen pressed, and the way out', () => {
     const { html } = demo(feed('p1'), AUDIENCE, 'two');
-    const buttons = [...html.matchAll(/<button type="button" class="(demo-pin[^"]*)" aria-pressed="(true|false)">([^<]+)</g)];
-    expect(buttons.map(([, , pressed, label]) => `${label}:${pressed}`)).toEqual([
+    const button =
+      /<button type="button" class="demo-pin[^"]*" aria-pressed="(true|false)">([^<]+)</g;
+    expect([...html.matchAll(button)].map(([, pressed, label]) => `${label}:${pressed}`)).toEqual([
       'Regie:false',
       'Spieler 1:false',
       'Spieler 2:true',
       'Übersicht:false',
     ]);
-    expect(html).toContain('Zuschauen beenden</button>');
+    expect(html).toContain(
+      '<button class="link demo-leave" aria-label="Zuschauen beenden">',
+    );
+    expect(html).toContain('<span class="demo-leave-text">Zuschauen beenden</span></button>');
     // Pinned to the second seat, that one is shown whoever is on air.
     expect((stage.games[0]?.view as PlayerView).you.id).toBe('p2');
     expect(html).toContain('<strong>Ben</strong> · am Pult</p>');
@@ -325,6 +338,17 @@ describe('the demo’s screen', () => {
     expect(keptPin()).toBe('regie');
   });
 
+  it('says of itself what it is: the label, the plant’s line, the site’s address', () => {
+    const { html } = demo(feed('p1'));
+    expect(html).toContain(`<span class="demo-label">${DEMO_LABEL}</span>`);
+    expect(html).toContain(`<aside class="demo-side"><p class="demo-line">${DEMO_LINE}</p>`);
+    expect(html).toContain('<section class="demo-qr"><svg class="qr"');
+    expect(html).toContain('// Zum Mitnehmen</div><p class="qr-address">escapelab.test</p>');
+    expect(DEMO_LABEL).toBe('Demo');
+    expect(DEMO_LINE).toBe('Vorführbetrieb: Die Anlage fährt diesen Einsatz selbst.');
+    expect(offVoice([DEMO_LINE], WORLD)).toEqual([]);
+  });
+
   it('shows what one of the crew tells the other as a subtitle, in that one’s colour', () => {
     const caption = { by: 'p2', text: 'Erst messen, dann schneiden.' };
     const { html } = demo(feed('p1', { caption }));
@@ -333,5 +357,84 @@ describe('the demo’s screen', () => {
         '„Erst messen, dann schneiden.“</p>',
     );
     expect(demo(feed('p1')).html).not.toContain('demo-caption');
+  });
+});
+
+describe('the demo’s screen as the stylesheet lays it out', () => {
+  const sheet = readFileSync(new URL('../src/styles/demo.css', import.meta.url), 'utf8');
+  /** The body of the first rule of the sheet whose selector line is `selector`. */
+  const rule = (selector: string, from = sheet): string => {
+    const at = from.indexOf(`\n${selector} {`);
+    expect(at, selector).toBeGreaterThanOrEqual(0);
+    return from.slice(from.indexOf('{', at) + 1, from.indexOf('}', at));
+  };
+  /** The block of the sheet that opens with `media`, to its end. */
+  const block = (media: string): string => {
+    const at = sheet.indexOf(`\n${media} {\n`);
+    expect(at, media).toBeGreaterThan(0);
+    return sheet.slice(at, sheet.indexOf('\n}\n', at));
+  };
+  const PHONE = '@media (max-width: 560px), (orientation: landscape) and (max-height: 500px)';
+
+  it('makes every way a fingertip tall and wide, and every word 14 px by the size set', () => {
+    for (const target of ['.demo-pin', '.demo-leave']) {
+      expect(rule(target), target).toMatch(/min-width: 44px;\s*min-height: 44px;/);
+    }
+    for (const small of ['.demo-pin', '.demo-label', '.demo-line', '.demo-qr .qr-address']) {
+      expect(rule(small), small).toContain('font-size: calc(14px * var(--text-scale));');
+    }
+    for (const large of ['.demo-onair', '.demo-caption', '.demo-wait']) {
+      expect(rule(large), large).toContain('font-size: calc(16px * var(--text-scale));');
+    }
+  });
+
+  it('keeps what a seat’s screen lays over the window inside the picture’s frame', () => {
+    expect(rule('.demo-picture')).toContain('transform: translateZ(0);');
+    expect(rule('.demo-picture')).toContain('overflow: hidden;');
+    expect(rule('.demo-picture .puzzle-modal .panel')).toContain('max-height: 100%;');
+    // The subtitle and the fading picture lie over all of it, and take no finger.
+    for (const over of ['.demo-caption', '.demo-fade']) {
+      expect(rule(over), over).toContain('pointer-events: none;');
+    }
+  });
+
+  it('shows no control of a seat watched: no way to put down, no notepad, info or menu', () => {
+    const hidden = ['put-down', 'device-step-back', 'device-tabs', 'hud-info', 'book-nav button'];
+    const list = hidden.map((control) => `.demo .${control}`).join(',\n');
+    expect(sheet).toContain(`${list} {\n  display: none;`);
+  });
+
+  it('hides the seat’s screen under the whole lab, and keeps it in the page', () => {
+    expect(rule('.demo--lab .demo-seat')).toMatch(/^\s*visibility: hidden;\s*$/);
+    expect(rule('.demo-lab')).toContain('position: absolute;');
+    expect(rule('.demo-lab')).toContain('inset: 0;');
+  });
+
+  it('cuts with a fade of 400 ms, and plainly for whoever asked for less motion', () => {
+    expect(CUT_FADE_MS).toBe(400);
+    expect(rule('.demo-fade--on')).toContain('animation: demo-out 400ms ease-out;');
+    expect(rule('.demo-lab')).toContain('animation: demo-in 400ms ease-out;');
+    const calm = ":where([data-motion='reduce'])";
+    expect(sheet).toContain(`${calm} .demo-lab,\n${calm} .demo-fade--on {\n  animation: none;`);
+  });
+
+  it('gives a phone the whole window, upright or sideways: no top bar, the way out an icon', () => {
+    const phone = block(PHONE);
+    expect(phone).toMatch(/\.app:has\(\.demo\) > \.topbar \{\s*display: none;/);
+    expect(phone).toMatch(/\.demo-sound \{\s*display: contents;/);
+    expect(phone).toMatch(/\.demo-leave-text \{\s*display: none;/);
+    // Off a phone the sound's switch is the top bar's.
+    expect(rule('.demo-sound')).toMatch(/^\s*display: none;\s*$/);
+    // Upright the choice of picture takes a row of its own, across the window.
+    const upright = block('@media (max-width: 560px)');
+    expect(upright).toMatch(/\.demo-pins \{\s*flex: 1 1 100%;/);
+    expect(upright).toMatch(/\.demo-pin \{\s*flex: 1 1 auto;/);
+  });
+
+  it('stands its line and the QR code beside the picture only where there is room', () => {
+    expect(rule('.demo-qr .qr')).toContain('width: 146px;');
+    expect(block('@media (max-width: 1100px), (max-height: 600px)')).toMatch(
+      /\.demo-side \{\s*display: none;/,
+    );
   });
 });

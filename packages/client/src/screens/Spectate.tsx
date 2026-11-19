@@ -1,8 +1,6 @@
 import type { PlayerPosition, DronePosition, SpectatorView } from '@escapelab/core';
-import { useEffect } from 'react';
 import { clockText, serverNow } from '../clock.js';
 import { useServerNow } from '../hooks.js';
-import { keepAwake } from '../keepAwake.js';
 import type { DeviceRun } from '../puzzles/Device.js';
 import { pressingWord } from '../puzzles/syncPress.js';
 import { reportLine } from '../radio.js';
@@ -15,7 +13,6 @@ import type { KnownPositions } from '../world/movement.js';
 import type { ChatLine, MapPing } from '../world/render/frame.js';
 import { RelayConsole } from '../puzzles/RelayPanel.js';
 import { PuzzlePanel } from './PuzzlePanel.js';
-import { addressText, QrCode, siteAddress } from './QrCode.js';
 import { Manual } from './Manual.js';
 import { EdgeworkChip } from './EdgeworkChip.js';
 import { awayFor, CreditsTable, CrewDot, crewTags, CrewTags, type CrewTag } from './Crew.js';
@@ -34,43 +31,6 @@ interface Props {
   pingsRef: React.MutableRefObject<MapPing[]>;
   chatsRef: React.MutableRefObject<ChatLine[]>;
   leaveRoom: () => void;
-  /** the room watched is the demo room, which the server plays itself: one line says so */
-  demo?: boolean;
-}
-
-/** The label in the head of the demo room's audience: what is watched here is the demo. */
-export const DEMO_LABEL = 'Demo';
-
-/**
- * The line under the mission's name there, in the plant's words: nobody plays here, the plant
- * runs the mission by itself. A wide window's alone: on a phone the label says it.
- */
-export const DEMO_LINE = 'Vorführbetrieb: Die Anlage fährt diesen Einsatz selbst.';
-
-/**
- * The site's address as a small QR code beside the demo: whoever watches at a stand's laptop
- * takes the game along on their own device. A wide window's alone (ui.css): a phone is the
- * device already.
- */
-function DemoQr({ shown }: { shown: boolean }) {
-  if (!shown) {
-    return null;
-  }
-  const address = siteAddress();
-  return (
-    <section className="panel demo-qr">
-      <QrCode text={address} label={`QR-Code der Adresse ${addressText(address)}`} />
-      <div>
-        <div className="panel-label">// Zum Mitnehmen</div>
-        <p className="qr-address">{addressText(address)}</p>
-      </div>
-    </section>
-  );
-}
-
-/** The demo room's audience keeps its server awake for as long as it watches (keepAwake.ts). */
-function useKeepAwake(demo: boolean): void {
-  useEffect(() => (demo ? keepAwake() : undefined), [demo]);
 }
 
 /** Run time of an event as mm:ss, the way a match log reads, from the run's clock's start. */
@@ -121,7 +81,7 @@ export function audienceRunOf(view: SpectatorView): DeviceRun {
  * once the run is over, who did what — any relay consoles in an emergency,
  * and the run report as it grows.
  */
-function SpectatePanels({ view, demo }: { view: SpectatorView; demo: boolean }) {
+function SpectatePanels({ view }: { view: SpectatorView }) {
   const noop = (): void => undefined;
   const feed = view.events.slice(-14).reverse();
   const over = view.phase === 'won' || view.phase === 'lost';
@@ -178,7 +138,6 @@ function SpectatePanels({ view, demo }: { view: SpectatorView; demo: boolean }) 
           ),
       )}
 
-      <DemoQr shown={demo} />
       <section className="panel spectate-log">
         <div className="panel-label">// Einsatzprotokoll</div>
         {feed.length === 0 ? (
@@ -206,8 +165,7 @@ function SpectateFoot({
   view,
   positionsRef,
   leaveRoom,
-  demo,
-}: Pick<Props, 'view' | 'positionsRef' | 'leaveRoom'> & { demo: boolean }) {
+}: Pick<Props, 'view' | 'positionsRef' | 'leaveRoom'>) {
   const speaking = useVoice()?.state.speaking;
   return (
     <div className="spectate-foot">
@@ -223,8 +181,7 @@ function SpectateFoot({
           </li>
         ))}
       </ul>
-      {/* The demo's crew are machines: nobody speaks, so there is nothing to listen in on. */}
-      {!demo && <ListenToggle />}
+      <ListenToggle />
       <button className="link" onClick={leaveRoom}>
         <Icon name="exit" /> Zuschauen beenden
       </button>
@@ -232,12 +189,8 @@ function SpectateFoot({
   );
 }
 
-/**
- * The head over the audience's screen: the mission watched and its difficulty — over the demo
- * room with its label beside the name (`DEMO_LABEL`) and the line that the plant plays by itself
- * (`DEMO_LINE`) — and the run's clock and count.
- */
-function SpectateHead({ view, demo }: { view: SpectatorView; demo: boolean }) {
+/** The head over the audience's screen: the mission watched, its difficulty, the run's clock. */
+function SpectateHead({ view }: { view: SpectatorView }) {
   // The mission's clock on the server's, standing still while the run is paused (clock.ts):
   // the time left, or the time run where the mission has no clock.
   const shown = clockText(view, useServerNow(250));
@@ -245,11 +198,7 @@ function SpectateHead({ view, demo }: { view: SpectatorView; demo: boolean }) {
     <div className="spectate-head">
       <div>
         <span className="kicker">ZUSCHAUERMODUS · {view.difficulty}</span>
-        <h1>
-          {view.missionTitle}
-          {demo && <span className="demo-label">{DEMO_LABEL}</span>}
-        </h1>
-        {demo && <p className="demo-line">{DEMO_LINE}</p>}
+        <h1>{view.missionTitle}</h1>
       </div>
       <div className="spectate-stats">
         {shown !== null && view.phase === 'playing' && <span className="countdown">{shown}</span>}
@@ -274,10 +223,7 @@ export function SpectateScreen({
   pingsRef,
   chatsRef,
   leaveRoom,
-  demo,
 }: Props) {
-  const watchesDemo = demo === true;
-  useKeepAwake(watchesDemo);
   // The audience sees the lights fail too, unless it came in after.
   const darkSince = useDarkSince(view.lights, view.startedAt);
 
@@ -289,7 +235,7 @@ export function SpectateScreen({
 
   return (
     <div className="spectate">
-      <SpectateHead view={view} demo={demo === true} />
+      <SpectateHead view={view} />
 
       {view.phase === 'lobby' && (
         <div className="banner-result">Die Crew ist noch in der Lobby …</div>
@@ -328,15 +274,10 @@ export function SpectateScreen({
           )}
         </div>
 
-        <SpectatePanels view={view} demo={demo === true} />
+        <SpectatePanels view={view} />
       </div>
 
-      <SpectateFoot
-        view={view}
-        positionsRef={positionsRef}
-        leaveRoom={leaveRoom}
-        demo={watchesDemo}
-      />
+      <SpectateFoot view={view} positionsRef={positionsRef} leaveRoom={leaveRoom} />
       {ending !== null && <FinaleVeil ending={ending.ending} since={ending.since} />}
     </div>
   );

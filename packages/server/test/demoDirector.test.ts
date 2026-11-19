@@ -354,9 +354,10 @@ describe('the demo’s feed', () => {
     const seat = shot?.kind === 'demo-shot' ? shot.shot.onAir : null;
     expect(seat).not.toBeNull();
     expect(view).toMatchObject({ kind: 'demo-view', seat, view: { you: { id: seat } } });
-    // The view comes with the cut, in the same breath: no picture waits for the seat's next.
+    // The view comes with the cut, just before the word of it: no picture waits for the
+    // seat's next view, and none shows an old one.
     const cut = heard.findIndex((msg) => msg.kind === 'demo-shot' && msg.shot.onAir === seat);
-    expect(heard[cut + 1]).toMatchObject({ kind: 'demo-view', seat });
+    expect(heard[cut - 1]).toMatchObject({ kind: 'demo-view', seat });
     expect(view?.kind === 'demo-view' && view.view.you.name).toBe('HCW Bachelor');
     host.stop();
   });

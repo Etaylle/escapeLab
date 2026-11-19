@@ -13,6 +13,7 @@ import type { Connection, DemoFeed } from '../ws.js';
 import type { Finale } from '../world/finale.js';
 import type { KnownPositions } from '../world/movement.js';
 import type { ChatLine, MapPing } from '../world/render/frame.js';
+import { keepAwake } from '../keepAwake.js';
 import { useReducedMotion } from '../settings.js';
 import { useDarkSince } from '../world/coldOpen.js';
 import { GameWorld } from '../world/GameWorld.js';
@@ -20,7 +21,9 @@ import { EndScreen, TitleCard, titleCardOf } from './End.js';
 import { GameScreen, type Watch } from './Game.js';
 import { Icon } from './Icon.js';
 import type { GameLine } from './Line.js';
-import { DEMO_LABEL, spectatorAsPlayerView } from './Spectate.js';
+import { SoundSwitch } from './SoundSwitch.js';
+import { addressText, QrCode, siteAddress } from './QrCode.js';
+import { spectatorAsPlayerView } from './Spectate.js';
 
 /**
  * The demo room as its audience sees it: the game as one of its crew has it — that seat's own
@@ -44,6 +47,39 @@ interface Props {
   leaveRoom: () => void;
 }
 
+/** The label on the demo room's audience: what is watched here is the demo. */
+export const DEMO_LABEL = 'Demo';
+
+/**
+ * What the demo says of itself beside the picture, in the plant's words: nobody plays here, the
+ * plant runs the mission by itself. A wide window's alone: on a phone the label says it.
+ */
+export const DEMO_LINE = 'Vorführbetrieb: Die Anlage fährt diesen Einsatz selbst.';
+
+/**
+ * Beside the picture on a wide window (demo.css): the demo's line, and the site's address as a
+ * small QR code — whoever watches at a stand's laptop takes the game along on their own device.
+ * A phone is the device already.
+ */
+function DemoSide() {
+  const address = siteAddress();
+  return (
+    <aside className="demo-side">
+      <p className="demo-line">{DEMO_LINE}</p>
+      <section className="demo-qr">
+        <QrCode text={address} label={`QR-Code der Adresse ${addressText(address)}`} />
+        <div className="panel-label">// Zum Mitnehmen</div>
+        <p className="qr-address">{addressText(address)}</p>
+      </section>
+    </aside>
+  );
+}
+
+/** The demo room's audience keeps its server awake for as long as it watches (keepAwake.ts). */
+function useKeepAwake(): void {
+  useEffect(() => keepAwake(), []);
+}
+
 /** What the choice of one's own picture calls each (`DemoPin`). */
 export const PIN_LABELS: Record<DemoPin, string> = {
   regie: 'Regie',
@@ -53,6 +89,9 @@ export const PIN_LABELS: Record<DemoPin, string> = {
   two: 'Spieler 2',
   overview: 'Übersicht',
 };
+
+/** The way out of the demo's audience, as every audience's is called. */
+export const LEAVE_LABEL = 'Zuschauen beenden';
 
 /** What the line under the picture says of the whole lab from above. */
 export const OVERVIEW_LINE = 'Übersicht · die ganze Anlage';
@@ -152,10 +191,16 @@ function LowerThird({
         {line.name !== null && ' · '}
         {line.text}
       </p>
+      <div className="demo-ways">
+        {/* On a phone the demo has the whole window: the sound's switch stands here (demo.css). */}
+        <span className="demo-sound">
+          <SoundSwitch menu={false} />
+        </span>
+        <button className="link demo-leave" aria-label={LEAVE_LABEL} onClick={leaveRoom}>
+          <Icon name="exit" /> <span className="demo-leave-text">{LEAVE_LABEL}</span>
+        </button>
+      </div>
       <PinChoice pin={pin} choose={choose} />
-      <button className="link demo-leave" onClick={leaveRoom}>
-        <Icon name="exit" /> Zuschauen beenden
-      </button>
     </div>
   );
 }
@@ -326,19 +371,29 @@ function seatView(
   return sent === undefined || sent.phase === 'lobby' || view.phase === 'lobby' ? null : sent;
 }
 
+/**
+ * The seat whose view is up for a viewer who chose `pin`, by player id: the one `seatShown` — or,
+ * while that one's view is still on its way, just pinned, the seat heard so far (`ear`).
+ */
+function seatUp(pin: DemoPin, feed: DemoFeed, view: Pick<SpectatorView, 'phase'>): string | null {
+  const asked = seatShown(pin, feed.shot);
+  return seatView(asked, feed, view) === null ? (feed.shot?.ear ?? null) : asked;
+}
+
 /** The picture of a viewer who chose `pin`, by the demo's `feed` and the audience's `view`. */
 export function pictureOf(
   pin: DemoPin,
   feed: DemoFeed,
   view: Pick<SpectatorView, 'phase'>,
 ): Picture {
-  const shown = seatShown(pin, feed.shot);
+  const { shot } = feed;
+  const shown = seatUp(pin, feed, view);
   const seat = seatView(shown, feed, view);
-  if (shown === null || seat === null) {
+  if (shot === null || shown === null || seat === null) {
     return { seat: null, doing: IDLE, lab: true };
   }
-  const lab = pin === 'overview' || (pin === 'regie' && feed.shot?.onAir === null);
-  return { seat, doing: feed.shot?.doing[shown] ?? IDLE, lab };
+  const lab = pin === 'overview' || (pin === 'regie' && shot.onAir === null);
+  return { seat, doing: shot.doing[shown] ?? IDLE, lab };
 }
 
 /** `to` laid exactly over `from` inside the frame both stand in, `from`'s picture drawn on it. */
@@ -404,6 +459,7 @@ function usePin(send: Props['send'], up: boolean): [DemoPin, (pin: DemoPin) => v
 
 export function DemoScreen(props: Props) {
   const { view, feed } = props;
+  useKeepAwake();
   const [pin, choose] = usePin(props.send, props.line.status === 'open');
   const { seat, doing, lab } = pictureOf(pin, feed, view);
   const fade = useRef<HTMLCanvasElement>(null);
@@ -425,15 +481,18 @@ export function DemoScreen(props: Props) {
       : { name: seat.you.name, text: doingLine(seat, doing) };
   return (
     <div className={lab ? 'demo demo--lab' : 'demo demo--seat'}>
-      <div className="demo-picture">
-        {seat !== null && (
-          <div className="demo-seat" ref={seatBox}>
-            <SeatScreen seat={seat} watch={{ doing, covered: lab }} game={props} />
-          </div>
-        )}
-        {lab && <LabPicture game={props} leaving={snap} />}
-        <canvas className="demo-fade" ref={fade} aria-hidden="true" />
-        <Caption view={view} shot={feed.shot} />
+      <div className="demo-main">
+        <div className="demo-picture">
+          {seat !== null && (
+            <div className="demo-seat" ref={seatBox}>
+              <SeatScreen seat={seat} watch={{ doing, covered: lab }} game={props} />
+            </div>
+          )}
+          {lab && <LabPicture game={props} leaving={snap} />}
+          <canvas className="demo-fade" ref={fade} aria-hidden="true" />
+          <Caption view={view} shot={feed.shot} />
+        </div>
+        <DemoSide />
       </div>
       <LowerThird line={line} pin={pin} choose={choose} leaveRoom={props.leaveRoom} />
     </div>
