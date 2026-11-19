@@ -11184,9 +11184,9 @@ async function tapMoving(player, locator) {
  * the ring on the page; null where the packet went through before a tap took (an alarm follows,
  * and the drill goes on with the fresh wave).
  */
-async function firewallMark({ gate, analysis }, id, shots) {
+async function firewallMark({ gate, analysis }, id, shots, marked) {
   const card = analysis.page.locator(`.station-modal .firewall-card[data-packet="${id}"]`);
-  await headersShot(analysis, shots);
+  await headersShot(analysis, shots, marked);
   // A tap that missed the moving card is tried again; one that took is never repeated, so that
   // no second tap takes the mark back.
   const live = () => firewallLive(analysis).some((p) => p.id === id);
@@ -11198,7 +11198,6 @@ async function firewallMark({ gate, analysis }, id, shots) {
     fwSaid(`!! ${id} went through before ${analysis.name}'s tap took`);
     return null;
   }
-  shots.marks = (shots.marks ?? 0) + 1;
   const from = Date.now();
   const ring = gate.page.locator(`.station-modal .firewall-blip--marked[data-packet="${id}"]`);
   await ring.waitFor({ timeout: 2000 }).catch(() => undefined);
@@ -11239,35 +11238,53 @@ const FIREWALL_SHOT_NAMES = {
  * The probe's second wave timed for its emergency, at the first look at it running while its
  * rest is still to be shot (`shots.rest`): where the next one would fall more than
  * REST_INTO_WAVE_S into the wave (rest.mjs `restTiming`), `gate`'s player steps off the
- * Sperrpult — the wave holds, as it holds for any crew whose Sperrpult stands empty — until it is
- * REST_LEAD_S away, and back on. Returns whether it held the wave; logs either way.
+ * Sperrpult — the wave holds, as it holds for any crew whose Sperrpult stands empty — until
+ * it is REST_LEAD_S away, and back on. Returns whether it held the wave; logs either way.
  */
 async function heldForRest({ gate }, fw, shots) {
-  const running = fw?.cleared === 1 && fw.waiting === false && fw.clock?.heldAt === null;
-  if (shots.rest !== true || shots.restTimed === true || !running) {
+  const timing = restTimingAt(gate, fw, shots);
+  if (timing === null) {
     return false;
   }
-  shots.restTimed = true;
-  const due = () => nextEmergencyIn(gate.seen, FIREWALL_MISSION.map.sabotage);
-  const timing = restTiming((Date.now() - fw.clock.startedAt) / 1000, due());
   if (!timing.hold) {
     fwSaid(`rest: the emergency falls ${timing.intoS.toFixed(1)} s into the second wave`);
     return false;
   }
   const from = Date.now();
-  await gate.page.keyboard.press('Escape');
-  const { spot, man } = heldWays(gate, shots);
-  if (!(await walkNear(gate.page, gate.seen, spot))) {
-    throw new Error(`${gate.name} found no way off the Sperrpult to ${spot.x},${spot.y}`);
-  }
-  await until(() => due() <= REST_LEAD_S + 2, (due() + 5) * 1000);
-  await man();
-  await until(() => due() <= REST_LEAD_S, 5000);
+  await holdTillDue(gate, shots);
   fwSaid(
     `rest: the second wave held ${seconds(Date.now() - from)} for its emergency, ` +
       `which would have fallen ${timing.intoS.toFixed(1)} s into it`,
   );
   return true;
+}
+
+/** Seconds until the probe's next emergency, on `gate`'s stream. */
+const probeEmergencyIn = (gate) => nextEmergencyIn(gate.seen, FIREWALL_MISSION.map.sabotage);
+
+/**
+ * The second wave's timing for its emergency (rest.mjs `restTiming`) at the first look at it
+ * running while the rest is still to be shot — marked as looked at; null at any other look.
+ */
+function restTimingAt(gate, fw, shots) {
+  const running = fw?.cleared === 1 && fw.waiting === false && fw.clock?.heldAt === null;
+  if (shots.rest !== true || shots.restTimed === true || !running) {
+    return null;
+  }
+  shots.restTimed = true;
+  return restTiming((Date.now() - fw.clock.startedAt) / 1000, probeEmergencyIn(gate));
+}
+
+/** `gate`'s player off the Sperrpult, the wave held, till the emergency is REST_LEAD_S off. */
+async function holdTillDue(gate, shots) {
+  await gate.page.keyboard.press('Escape');
+  const { spot, man } = heldWays(gate, shots);
+  if (!(await walkNear(gate.page, gate.seen, spot))) {
+    throw new Error(`${gate.name} found no way off the Sperrpult to ${spot.x},${spot.y}`);
+  }
+  await until(() => probeEmergencyIn(gate) <= REST_LEAD_S + 2, (probeEmergencyIn(gate) + 5) * 1000);
+  await man();
+  await until(() => probeEmergencyIn(gate) <= REST_LEAD_S, 5000);
 }
 
 /**
@@ -11278,19 +11295,25 @@ async function heldForRest({ gate }, fw, shots) {
  * the air called off for a fresh one that waits, no alarm counted: rest-kept.png, the Sperrpult.
  * The run fails where it is not so.
  */
-async function restedThrough({ gate, analysis }, shots) {
-  if (!emergencyOn(gate.seen)) {
+async function restedThrough(crew, shots) {
+  if (!emergencyOn(crew.gate.seen)) {
     return false;
   }
-  if (shots.restTimed !== true) {
-    await weather({ phone: false });
-    return true;
+  if (shots.restTimed === true) {
+    [shots.rest, shots.restTimed] = [false, false];
+    await shootRest(crew);
+  } else {
+    await weather();
   }
-  [shots.rest, shots.restTimed] = [false, false];
+  return true;
+}
+
+/** rest-goal.png as the emergency lands, then rest-kept.png once it is weathered. */
+async function shootRest({ gate, analysis }) {
   const alarms = gate.seen.view.alarms.count;
   const title = FIREWALL_MISSION.puzzles[0].title;
   const named = await restingGoalShot(gate, title);
-  await weather({ phone: false });
+  await weather();
   for (const player of [analysis, gate]) {
     // The panel the emergency shut has to be gone before E opens it again.
     await player.page.locator('.station-modal').waitFor({ state: 'hidden', timeout: 3000 });
@@ -11302,15 +11325,19 @@ async function restedThrough({ gate, analysis }, shots) {
     gate.seen.view.alarms.count === alarms;
   const page = await sperrpultUp(gate);
   await capture(gate.page, 'rest-kept.png');
-  const fw = firewallView(gate);
   fwSaid(`rest-kept.png ${gate.name}'s Sperrpult after the emergency: ${page.text}; the view ` +
-    `${fw?.cleared} wave(s) clean, ${fw?.waiting ? 'waiting' : 'running'}, ` +
-    `${gate.seen.view.alarms.count - alarms} alarm(s)${viewKept ? '' : ' !! not as it stood'}`);
+    `${keptSaid(gate, alarms)}${viewKept ? '' : ' !! not as it stood'}`);
   if (!named || !viewKept || !page.kept) {
     fail(`rest: "${title}" named resting ${named}, back with its clean wave ${viewKept}, ` +
       `on the page ${page.text}`);
   }
-  return true;
+}
+
+/** What `gate`'s view says of the Paketfilter after its rest, in words. */
+function keptSaid(gate, alarms) {
+  const fw = firewallView(gate);
+  const raised = gate.seen.view.alarms.count - alarms;
+  return `${fw?.cleared} wave(s) clean, ${fw?.waiting ? 'waiting' : 'running'}, ${raised} alarm(s)`;
 }
 
 /** Every animation in `locator`'s element and under it run out (a fade, a slide). */
@@ -11343,21 +11370,32 @@ const HEADERS_CARDS = 3;
 
 /**
  * firewall-headers.png, before the first mark with HEADERS_CARDS cards on the lines, before the
- * first wave's last mark with what is on the lines then (`shots.marks` of `shots.hostile`: a
+ * first wave's last mark with what is on the lines then (`marked` marks of `shots.hostile`: a
  * short wave may never have that many at a mark), or before the first mark of a later wave: the
  * Analysepult with its cards.
  */
-async function headersShot(analysis, shots) {
+async function headersShot(analysis, shots, marked) {
+  if (!shots.headers) {
+    return;
+  }
   const cards = await analysis.page.locator('.station-modal .firewall-card').count();
-  const later = (firewallView(analysis)?.wave ?? 1) > 1;
-  const last = (shots.marks ?? 0) + 1 >= (shots.hostile ?? Infinity);
-  if (!shots.headers || (cards < HEADERS_CARDS && !later && !last)) {
+  if (!headersDue(analysis, shots, marked, cards)) {
     return;
   }
   shots.headers = false;
   const shot = shots.names?.headers ?? 'firewall-headers.png';
   await capture(analysis.page, shot);
   fwSaid(`${shot} ${analysis.name}'s Analysepult: ${cards} cards on the lines`);
+}
+
+/**
+ * Whether the headers' shot is due with `cards` on the lines and `marked` marks made: enough
+ * cards, a later wave, or the first wave's last mark.
+ */
+function headersDue(analysis, shots, marked, cards) {
+  const later = (firewallView(analysis)?.wave ?? 1) > 1;
+  const last = marked + 1 >= (shots.hostile ?? Infinity);
+  return cards >= HEADERS_CARDS || later || last;
 }
 
 /** Whether `gate`'s view shows packet `id` marked. */
@@ -11761,13 +11799,9 @@ async function firewallStep(crew, hostile, shots, rings) {
     await firewallArm(gate);
     return true;
   }
-  // Before any mark of the second wave: its emergency is timed from its first look.
-  if (await heldForRest(crew, fw, shots)) {
-    return true;
-  }
   const mark = firewallLive(analysis).find((p) => hostile.has(p.id) && !p.marked);
   if (mark !== undefined) {
-    const ms = await firewallMark(crew, mark.id, shots);
+    const ms = await firewallMark(crew, mark.id, shots, rings.length);
     rings.push(...(ms === null ? [] : [ms]));
     return true;
   }
@@ -11795,7 +11829,11 @@ async function followFirewall(crew, hostile, shots = NO_FIREWALL_SHOTS) {
   const rings = [];
   const open = () => crew.gate.seen.view.currentPuzzleIndex === index;
   while (open() && Date.now() < deadline) {
-    if (await restedThrough(crew, shots)) {
+    // Before any step of the second wave: its emergency is timed from the first look at it.
+    if (
+      (await restedThrough(crew, shots)) ||
+      (await heldForRest(crew, firewallView(crew.gate), shots))
+    ) {
       continue;
     }
     if (!(await firewallStep(crew, hostile, shots, rings))) {
@@ -11889,6 +11927,7 @@ async function captureFirewall() {
     await manFirewall(analysis, 'b', 'analysis');
     await firewallRuns(gate);
     relayCrew.push(gate, analysis);
+    relayPhoneShots = false;
     await playFirewall({ gate, analysis, audience });
     fwSaid(`the drill took ${seconds(Date.now() - from)}`);
   } catch (err) {
@@ -11896,6 +11935,7 @@ async function captureFirewall() {
     fail(`firewall: ${firstLine(err)}`);
   } finally {
     relayCrew.length = 0;
+    relayPhoneShots = true;
     for (const { context } of crew) {
       await context.close();
     }
@@ -12747,6 +12787,24 @@ async function carryOut(owner, holder, order) {
   return true;
 }
 
+/**
+ * Whether a relay emergency's phone shot is taken (device-phone-relay.png): Blackout's crew's;
+ * the Paketfilter drill's crew, at the relay meanwhile, takes none.
+ */
+let relayPhoneShots = true;
+
+/** device-phone-relay.png of each of `relayCrew` whose relay console is up, where it is taken. */
+async function relayPhones() {
+  if (!relayPhoneShots) {
+    return;
+  }
+  for (const player of relayCrew) {
+    if (await player.page.locator('.relay-modal').isVisible()) {
+      await inGroup('devices', () => captureDevicePhone(player, 'relay'));
+    }
+  }
+}
+
 /** The emergencies the walkthrough weathered, for the log's line at the end. */
 const emergencies = { weathered: 0, missed: 0 };
 
@@ -12772,21 +12830,16 @@ function emergencyEnd(seen) {
 /**
  * A relay emergency weathered from both pages: each player's instruction is
  * carried out at the console of the player it names, round after round,
- * until it is over — the relay device's phone shot taken on the way where `phone` (the
- * Paketfilter drill's crew takes none: device-phone-relay.png is Blackout's). Nothing while
- * none is on, or where no crew is at the relay. Logs how it went.
+ * until it is over, the relay device's phone shot taken on the way (`relayPhones`). Nothing
+ * while none is on, or where no crew is at the relay. Logs how it went.
  */
-async function weather({ phone = true } = {}) {
+async function weather() {
   if (relayCrew.length === 0 || !relayCrew.some((p) => emergencyOn(p.seen))) {
     return;
   }
   const from = Date.now();
   const label = relayCrew.find((p) => emergencyOn(p.seen))?.seen.view.map.sabotage.label;
-  for (const player of relayCrew) {
-    if (phone && (await player.page.locator('.relay-modal').isVisible())) {
-      await inGroup('devices', () => captureDevicePhone(player, 'relay'));
-    }
-  }
+  await relayPhones();
   while (relayCrew.some((p) => emergencyOn(p.seen)) && Date.now() - from < 70_000) {
     let acted = false;
     for (const holder of relayCrew) {

@@ -415,7 +415,7 @@ describe('Blackout’s patrols, as the walkthrough plays its plans past them', (
     }
   });
 
-  it('sleeps till the Serverraum is solved, then watches the way out of it and the south way', () => {
+  it('sleeps till the Serverraum is solved, then watches the way out of it, and the south', () => {
     // Nobody is caught at the Paketfilter's consoles in the Flur, nor on the way in.
     assert.deepEqual(stage(3).drones, []);
     const schott = map.doors.find((door) => door.id === 'serverschott');

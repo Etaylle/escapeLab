@@ -235,6 +235,17 @@ die Entscheidung.
   (`server/test/drones.test.ts`); `tools/patrol.mjs` rechnet ebenso.
 - Beleg: danach je Seed sechs Läufe ohne Capture-Gruppen bei Last 3–5, 18 von 18 ohne Sichtung.
 
+### H-7 Jede Capture eines Laufs genommen oder mit Grund ausgelassen — Status: offen · Größe: M
+
+- Mit sieben Paketen verlor Seed 93 filter-headers.png ohne Zeile und ohne Fehler (Review
+  B-blackout3, 2026-11-19). Seither scheitert ein Lauf, in dem eine Aufnahme des Paketfilters
+  am Ende noch scharf steht (`unshot`), aber nur dort. Allgemein hieße das: jeder Name, den
+  `tools/groups.mjs` für eine laufende Gruppe führt, steht am Ende als genommen oder als
+  ausgelassen mit Namen da. Dafür müssten die Gruppen je Mission sagen, was sie dort nehmen —
+  heute führen sie Blackouts und den Systemcheck zusammen, und ein Blackout-Lauf lässt die
+  Übungshalle mit einer Zeile `hall` aus, nicht mit jeder ihrer Aufnahmen; dazu Platzhalter wie
+  `console-*.png`. Mehr als eine Stunde; nach dem Playtest.
+
 ### H-6 Die Flucht des Rundgangs wartet zwölf Sekunden zu viel — Status: erledigt (B-blackout3, 2026-11-19) · Größe: S
 
 - Der Rundgang verlangt an jeder Strecke erst eine Lücke für eine um 1 s verspätete Figur und
