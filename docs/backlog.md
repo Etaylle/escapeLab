@@ -377,9 +377,30 @@ die Entscheidung.
   nur die 15 Aufnahmen des Laufs selbst, die meisten nach dem Sieg). So gemessen gewinnt sie
   nach 334–336 s (Signalkette), 290–300 s (Funkpult) und 337–339 s (Notstromkasten) und behält
   63 bis 70 % von 960 s; main mit der alten Folge, gleich gemessen: 242 s, 73 % von 900 s — die
-  neue Folge ist für das Skript also 48 bis 97 s länger. Der Capture-Lauf lässt 38–39 % übrig und taugt nicht als Maß: Mit ihm lag
-  schon main mit der alten Folge bei 34 % von 900 s (Cloud-CI auf 32ba492, Sieg nach 554 s; die
-  neue Folge dort auf 73475d5: 569 s, 37 %), seit die Capture-Blöcke gewachsen sind.
+  neue Folge ist für das Skript also 48 bis 97 s länger. Der Capture-Lauf lässt 38–39 % übrig
+  und taugt nicht als Maß: Mit ihm lag schon main mit der alten Folge bei 34 % von 900 s
+  (Cloud-CI auf 32ba492, Sieg nach 554 s), seit die Capture-Blöcke gewachsen sind.
+- Wo die 48 bis 97 s liegen (ohne Capture-Gruppen, 2026-11-19; Sekunden vom Öffnen der Station
+  bis zu ihrer Lösung, der Weg dorthin eingerechnet; je Seed sechs Läufe, auf 1 s gleich):
+
+  | Platz | main (alte Folge) | Seed 12 | Seed 56 | Seed 93 |
+  | --- | --- | --- | --- | --- |
+  | 1 | Notlicht 17 | Notlicht 17 | Notlicht 17 | Notlicht 17 |
+  | 2 | Notstromkasten 50 | Anlaufsteuerung 61 | Anlaufsteuerung 61 | Anlaufsteuerung 61 |
+  | 3 | Signalkette 21 | Paketfilter 68 | Paketfilter 69 | Paketfilter 72 |
+  | 4 | Serverraum 39 | Serverraum 18 | Serverraum 18 | Serverraum 17 |
+  | 5 | Funkpult 35 | Signalkette 93 | Funkpult 45 | Notstromkasten 88 |
+  | 6 | Reaktor 41 | Reaktor 38 | Reaktor 44 | Reaktor 43 |
+  | Sieg (mit Flucht) | 242 | 334 | 289 | 337 |
+
+  Zwei Gründe, beide ablesbar. Erstens laufen Paketfilter und Anlaufsteuerung auf einer Uhr
+  (48–52 s und 14 s auf der Uhr des Reducers, für das Skript wie für Menschen), während die
+  Stationen, an deren Platz sie stehen, das Skript fast nichts kosten und Menschen Minuten des
+  Lesens: Die Zeit des Skripts überzeichnet das Wachstum für eine echte Crew. Zweitens wird der
+  Wechselplatz jetzt mit beiden Drohnen gespielt, nach dem ersten Notfall, und sein Abschnitt
+  trägt die 12 s des Stehbeweises im Serverraum: Signalkette 93 s statt 21 s (ihr Pult A am
+  Ostende des Flurs, das Klemmbrett am Westende, die Flurwache dazwischen), Notstromkasten 88 s
+  statt 50 s. Der Serverraum ist dafür 21 s kürzer: Vor ihm fliegt keine Drohne mehr.
 - Studie G-2, Rang 4 (Escape Academy, Escape Simulator): ein Lehrgang ohne Uhr — der erste Lauf
   einer Crew ohne Uhr, dann Übungshalle, Tutorial und Blackout, je Schritt eine neue Idee; die
   Missionen ohne Uhr aus G-2 sind das Werkzeug dafür.
