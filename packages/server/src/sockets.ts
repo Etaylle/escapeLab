@@ -124,7 +124,6 @@ interface Door {
 export const WATCHES_PER_MINUTE = 12;
 
 /** What a socket is told that asks for an audience oftener than that. */
-// voice: interface — the door's refusal, not the lab's
 export const TOO_MANY_WATCHES = 'Nicht so schnell — gleich noch einmal.';
 
 /** Whether the socket of `door` may join an audience once more now, counted. */
