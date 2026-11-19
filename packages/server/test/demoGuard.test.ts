@@ -15,7 +15,12 @@ import {
 import { handsOf, Seat, type CrewSeat } from '../src/demo/seat.js';
 import { MissionCatalog } from '../src/missions.js';
 import { RoomManager } from '../src/roomManager.js';
-import { serveSockets, TOO_MANY_WATCHES, WATCHES_PER_MINUTE } from '../src/sockets.js';
+import {
+  LOGGED_PER_SOCKET,
+  serveSockets,
+  TOO_MANY_WATCHES,
+  WATCHES_PER_MINUTE,
+} from '../src/sockets.js';
 import { blackoutMission, over, playUntil, seenBy, watch } from './demo.js';
 import { FakeServer, joinedOf, type FakeSocket } from './line.js';
 import { passFor } from './passes.js';
@@ -54,7 +59,7 @@ describe('a run of the demo that is lost', () => {
     host.stop();
   });
 
-  it('is given up where its crew gets no further, long before the clock, and the next is won', () => {
+  it('is given up where its crew gets no further, long before the clock; the next is won', () => {
     const warned: string[] = [];
     vi.spyOn(console, 'warn').mockImplementation((line: string) => void warned.push(line));
     // The first run's moves at the consoles never reach the room: its crew stands at the switch.
@@ -67,7 +72,7 @@ describe('a run of the demo that is lost', () => {
     const watcher = watch(host);
     const lost = playUntil(watcher, over);
     expect(lost.phase).toBe('lost');
-    // Four minutes after it last got on — its start — not sixteen after the lights went out.
+    // Five minutes after it last got on — its start — not sixteen after the lights went out.
     const ran = ((lost.finishedAt ?? 0) - (lost.startedAt ?? 0)) / 1000;
     expect(ran).toBeGreaterThan(DEMO_STALL_MS / 1000);
     expect(ran).toBeLessThan(DEMO_STALL_MS / 1000 + 60);
@@ -78,6 +83,38 @@ describe('a run of the demo that is lost', () => {
     const won = playUntil(watcher, over);
     expect(won.phase).toBe('won');
     expect(host.counts()).toMatchObject({ won: 1, lost: 1 });
+    host.stop();
+  });
+
+  it('counts its crew’s starts over anew from each station on: a run that gets on is kept', () => {
+    const warned: string[] = [];
+    vi.spyOn(console, 'warn').mockImplementation((line: string) => void warned.push(line));
+    // Twenty moves at the consoles are lost before the first station, twenty after it.
+    const part = Math.ceil((DEMO_COMPLAINTS * 2) / 3);
+    const lost = [0, 0];
+    let station = 0;
+    const wire: Wire = {
+      up: (msg) => {
+        const stage = Math.min(station, 1);
+        if (msg.kind !== 'puzzle-input' || (lost[stage] ?? 0) >= part) {
+          return msg;
+        }
+        lost[stage] = (lost[stage] ?? 0) + 1;
+        return { kind: 'puzzle-input', input: 'unsinn' };
+      },
+      down: (msg) => {
+        station = msg.kind === 'view' ? msg.view.currentPuzzleIndex : station;
+        return msg;
+      },
+    };
+    const host = new DemoHost(mission, [12], wire);
+    const won = playUntil(watch(host), over);
+    expect(lost).toEqual([part, part]);
+    expect(warned.filter((line) => line.includes('refused')).length).toBeGreaterThan(
+      DEMO_COMPLAINTS,
+    );
+    expect(warned.filter((line) => line.includes('given up'))).toEqual([]);
+    expect(won.phase).toBe('won');
     host.stop();
   });
 
@@ -150,7 +187,7 @@ describe('an audience that asks again and again', () => {
     host.stop();
   });
 
-  it('is told to wait once it has joined audiences twelve times in a minute, and then again', () => {
+  it('is told to wait once it has joined audiences twelve times in a minute', () => {
     const host = new DemoHost(mission, [12]);
     const { line, manager, anna, code } = served(host);
     const hopper = line.connect();
@@ -194,7 +231,26 @@ describe('an audience that asks again and again', () => {
     expect(zoe.heard.length).toBeGreaterThan(before);
     expect(manager.get(code).watching).toBe(1);
     const said = logged.mock.calls.map(([text]) => String(text));
-    expect(said.filter((text) => text.includes('spectate') && text.includes('refused'))).toHaveLength(1);
+    const refusals = said.filter((text) => text.includes('spectate') && text.includes('refused'));
+    expect(refusals).toHaveLength(1);
+    manager.get(code).dispose();
+    host.stop();
+  });
+
+  it('fills no log under ever new names: its refusals are logged twenty times in all', () => {
+    const logged = vi.mocked(console.log);
+    const host = new DemoHost(mission, [12]);
+    const { line, manager, code } = served(host);
+    const stranger = line.connect();
+    for (let i = 0; i < 500; i++) {
+      stranger.say({ kind: 'join-room', code: 'NONE', name: `Gast ${i}`, pass: passFor('Zoe') });
+    }
+    expect(errors(stranger)).toHaveLength(500);
+    const said = logged.mock.calls.map(([text]) => String(text));
+    const refused = said.filter((text) => text.includes(' refused, '));
+    expect(refused).toHaveLength(LOGGED_PER_SOCKET);
+    expect(refused.at(-1)).toContain('the socket’s last refusal logged');
+    expect(refused.at(0)).not.toContain('last refusal');
     manager.get(code).dispose();
     host.stop();
   });
@@ -263,7 +319,9 @@ describe('a crew that starts over', () => {
         items: [],
         exit: null,
         sabotage: null,
-        stations: [{ puzzleId: 'notlicht', x: 1, y: 1, console: 'a', known: true, status: 'armed' }],
+        stations: [
+          { puzzleId: 'notlicht', x: 1, y: 1, console: 'a', known: true, status: 'armed' },
+        ],
       },
     };
     const complaints: string[] = [];

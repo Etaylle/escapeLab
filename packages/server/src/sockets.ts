@@ -124,7 +124,6 @@ interface Door {
 export const WATCHES_PER_MINUTE = 12;
 
 /** What a socket is told that asks for an audience oftener than that. */
-// voice: interface — the door's refusal, not the lab's
 export const TOO_MANY_WATCHES = 'Nicht so schnell — gleich noch einmal.';
 
 /** Whether the socket of `door` may join an audience once more now, counted. */
@@ -424,6 +423,9 @@ function refuse(
   send(socket, msg === null ? refusal : { ...refusal, of: msg.kind });
 }
 
+/** How many different refusals the log names for one socket, at the most. */
+export const LOGGED_PER_SOCKET = 20;
+
 /** Logs the refusal of `msg` with its `reason`, where the log names it (`LOGGED_REFUSALS`). */
 function logRefusal(
   door: Door | undefined,
@@ -435,12 +437,15 @@ function logRefusal(
     return;
   }
   const line = `${refusedWhere(session, msg)} refused, ${reason}`;
-  // Said once for a socket: one that asks the same again and again fills no log.
+  // Said once for a socket: one that asks the same again and again fills no log. One that asks
+  // under ever new names is logged LOGGED_PER_SOCKET times, and the socket keeps no more lines.
   const logged = door?.logged ?? new Set<string>();
-  if (!logged.has(line)) {
-    logged.add(line);
-    console.log(`[escapelab] ${line}`);
+  if (logged.has(line) || logged.size >= LOGGED_PER_SOCKET) {
+    return;
   }
+  logged.add(line);
+  const last = logged.size === LOGGED_PER_SOCKET ? ' — the socket’s last refusal logged' : '';
+  console.log(`[escapelab] ${line}${last}`);
 }
 
 /** Where `msg` was refused and by whom, as the log names it: `room QX7R: join-room as Anna`. */
