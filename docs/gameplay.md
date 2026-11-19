@@ -901,7 +901,8 @@ plain points and header cards, no arcade formation, sprite or sound. Soft real t
 packets, whole lines, generous windows; the talk and the marks decide, not reflexes. Blackout has it as the Serverraum's gate, its third station, one wave of seven packets whose
 solve opens the Serverschott (Walking Blackout's lab, above); its probe is `tools/fixtures/firewall-probe.json`
 („Filterprobe": the Sperrpult in the Leitstand, the Analysepult in the Wache, the policy in a
-binder, the Laborkennung between them), and with its bay in the Übungshalle.
+binder, the Laborkennung between them, a relay emergency 70 s after the start and every 60 s
+after), and with its bay in the Übungshalle.
 
 - **Console A, the Sperrpult**, a scope of five lines numbered from the left, running down into the
   Kern. The packets come down them as plain points — no header anywhere at this console —, a packet
@@ -1077,8 +1078,13 @@ each module to its row; `rest.test.ts` and the server's `restRoom.test.ts` play 
 and the Anlaufsteuerung through an emergency in the reducer and in a room on its timers; the
 smoke lets an emergency fall into the second wave of an open Paketfilter over real sockets, in a
 scratch mission of its own (`smoke.ts` `restProbe`, „Ruheprobe", about a minute); the
-walkthrough rests Blackout's Signalkette, where its emergency is due within the station's step,
-with a stage through (rest-goal.png, rest-kept.png — left out with the reason where none is). A
+walkthrough's Paketfilter drill in a Systemcheck run times the probe's emergency into its second
+wave — where it would fall more than 12 s into it, the Sperrpult's player steps off, the wave
+holds, and steps back on two seconds before it — and shoots the goal line resting (rest-goal.png)
+and the Sperrpult back with its clean wave, waiting, no alarm counted (rest-kept.png): about 5 s
+more for the drill (98 to 101 s in three runs in a row, 90 to 101 s on main).
+Blackout's own emergencies come 86 to 100 s from its Signalkette, so the drill is where the
+harness sets the schedule. A
 snapshot taken in an emergency carries the resting station; one of a build before has none and
 restores as it did. Pools, free order and the Tagesschicht need nothing of their own: the
 resting station is the one up (`currentPuzzleIndex`) — the one drawn at a Wechselplatz, the one
