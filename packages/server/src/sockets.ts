@@ -114,6 +114,8 @@ interface Door {
   pass: string | null;
   changes: number[];
   watches: number[];
+  /** when the socket last changed its picture of the demo, epoch ms (`mayPin`) */
+  pins: number[];
   logged: Set<string>;
 }
 
@@ -136,6 +138,24 @@ function mayWatch(door: Door | undefined): boolean {
   door.watches = door.watches.filter((at) => now - at < 60_000);
   door.watches.push(now);
   return door.watches.length <= WATCHES_PER_MINUTE;
+}
+
+/**
+ * How many times a minute a socket may change what it is shown of the demo: a viewer stepping
+ * through the pictures makes a few; each change sends a seat's whole view, so one that flips
+ * without end is told to wait (TOO_MANY_WATCHES).
+ */
+export const PINS_PER_MINUTE = 30;
+
+/** Whether the socket of `door` may change its picture of the demo once more now, counted. */
+function mayPin(door: Door | undefined): boolean {
+  if (door === undefined) {
+    return true;
+  }
+  const now = Date.now();
+  door.pins = door.pins.filter((at) => now - at < 60_000);
+  door.pins.push(now);
+  return door.pins.length <= PINS_PER_MINUTE;
 }
 
 /** Each socket's door (`Door`), from the request that opened it. */
@@ -352,7 +372,7 @@ export function serveSockets(server: SocketServer, lab: Lab): Served {
     let session: Session | null = null;
     sessions.set(socket, () => session);
     const address = addressOf(lab, request, noteForwarded);
-    doors.set(socket, { address, pass: null, changes: [], watches: [], logged: new Set() });
+    doors.set(socket, { address, pass: null, changes: [], watches: [], pins: [], logged: new Set() });
     if (lab.iceServers !== undefined) {
       send(socket, { kind: 'ice-servers', servers: lab.iceServers });
     }
@@ -573,10 +593,16 @@ function fromTheRoom(
 /** What a connection is told that asks for the demo's pictures where no demo plays. */
 export const DEMO_PIN_ONLY = 'Die Bildregie gibt es nur in der Vorführung.';
 
-/** The connection of `s` pins what it is shown of the demo; refused in every other room. */
-function pinDemo(s: Session, pin: DemoPin): void {
+/**
+ * The connection of `s` on `socket` pins what it is shown of the demo; refused in every other
+ * room, and where it changes its picture oftener than PINS_PER_MINUTE.
+ */
+function pinDemo(socket: PlayerSocket, s: Session, pin: DemoPin): void {
   if (s.pin === undefined) {
     throw new GameError(DEMO_PIN_ONLY);
+  }
+  if (!mayPin(doors.get(socket))) {
+    throw new GameError(TOO_MANY_WATCHES);
   }
   s.pin(pin);
 }
@@ -608,7 +634,7 @@ function fromTheAudience(
     case 'pause-menu':
       return s;
     case 'demo-pin':
-      pinDemo(s, msg.pin);
+      pinDemo(socket, s, msg.pin);
       return s;
     default:
       throw new GameError(AUDIENCE_WATCHES);
@@ -1336,7 +1362,7 @@ function inRoom(
       step(socket, s, msg);
       return s;
     case 'demo-pin':
-      pinDemo(s, msg.pin);
+      pinDemo(socket, s, msg.pin);
       return s;
     default:
       toTheOthers(s, msg);

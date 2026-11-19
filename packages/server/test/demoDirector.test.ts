@@ -22,7 +22,12 @@ import { SAID_MS } from '../src/demo/crew.js';
 import { DemoHost } from '../src/demo/host.js';
 import { MissionCatalog } from '../src/missions.js';
 import { RoomManager } from '../src/roomManager.js';
-import { DEMO_PIN_ONLY, serveSockets } from '../src/sockets.js';
+import {
+  DEMO_PIN_ONLY,
+  PINS_PER_MINUTE,
+  serveSockets,
+  TOO_MANY_WATCHES,
+} from '../src/sockets.js';
 import { blackoutMission } from './demo.js';
 import { FakeServer, joinedOf, type FakeSocket } from './line.js';
 import { passFor } from './passes.js';
@@ -537,6 +542,21 @@ describe('a seat’s own view and every other room', () => {
     viewer.say({ kind: 'demo-pin', pin: 'two' });
     const [sent] = viewer.heard;
     expect(sent).toMatchObject({ kind: 'demo-view', view: { you: { name: 'HCW Master' } } });
+    // It may step through the pictures, thirty times a minute; flipped oftener, it is told to
+    // wait and sent nothing — and may again a minute on.
+    viewer.heard.length = 0;
+    for (let i = 0; i < 40; i++) {
+      viewer.say({ kind: 'demo-pin', pin: i % 2 === 0 ? 'one' : 'two' });
+    }
+    const waits = viewer.heard.filter((msg) => msg.kind === 'error');
+    expect(viewsIn(viewer.heard)).toHaveLength(PINS_PER_MINUTE - 1);
+    expect(waits.map((msg) => msg.kind === 'error' && msg.message)).toEqual(
+      Array.from({ length: 41 - PINS_PER_MINUTE }, () => TOO_MANY_WATCHES),
+    );
+    vi.advanceTimersByTime(61_000);
+    viewer.heard.length = 0;
+    viewer.say({ kind: 'demo-pin', pin: 'two' });
+    expect(viewsIn(viewer.heard)).toHaveLength(1);
     // Off to a crew's room, the same socket is sent no seat's view any more.
     viewer.say({ kind: 'spectate', code });
     viewer.heard.length = 0;
