@@ -9,7 +9,7 @@ import {
 } from '@escapelab/core';
 import { armedOn, emergencyOn } from './places.js';
 import { pause, type Clock, type Dice, type Script } from './script.js';
-import type { Seat } from './seat.js';
+import type { CrewSeat as Seat } from './seat.js';
 
 /**
  * A station worked by the demo crew: switched on with E, then move by move as its module's
