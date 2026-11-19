@@ -82,19 +82,75 @@ export function shownLines(output: string): string[] {
     );
 }
 
+/** A pause of `ms` milliseconds. */
+export type Wait = (ms: number) => Promise<void>;
+
+const sleep: Wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * The pauses before each further attempt where the database cannot be reached (P1001), ms: a
+ * Neon compute suspended after 5 idle minutes takes seconds to wake, and the CLI's first
+ * connection may time out meanwhile. Four attempts, 14 s of pauses — with the CLI's own up to
+ * ~5 s per attempt well under 45 s in all, so a start from sleep stays a short one.
+ */
+const UNREACHABLE_PAUSES_MS = [2_000, 4_000, 8_000];
+
+/** The only failure worth another attempt: the database server could not be reached. */
+const UNREACHABLE = 'P1001';
+
+/** Prisma's error code in what the CLI said, or the exit code where it named none. */
+const errorOf = ({ code, output }: CliRun): string =>
+  /\bP\d{4}\b/.exec(output)?.[0] ?? `exit code ${code ?? 'none'}`;
+
+/** How an attempt ended, as its line says: `error` null where the migrations applied. */
+const outcomeOf = (error: string | null): string => {
+  if (error === null) {
+    return 'applied';
+  }
+  return error === UNREACHABLE ? 'database not reachable (P1001)' : error;
+};
+
+/** What the migrations' log says, line by line. */
+const said = (line: string): void => console.log(`[escapelab] migrate: ${line}`);
+
+/**
+ * The last attempt's end: its line (`outcome`) where it is not the first, the CLI's lines, and
+ * the rejection where the migrations did not apply.
+ */
+function lastAttempt(result: CliRun, error: string | null, attempt: number, outcome: string): void {
+  if (attempt > 1) {
+    said(error === null ? outcome : `${outcome}, giving up`);
+  }
+  shownLines(result.output).forEach(said);
+  if (error !== null) {
+    throw new Error(`the migrations did not apply (${error}), as the migrate lines above say`);
+  }
+}
+
 /**
  * The database's migrations applied (`prisma migrate deploy`), what the CLI said logged line by
- * line (`shownLines`). Rejects, naming Prisma's error code — P3009 for a migration that broke
- * off, P1001 for a database that cannot be reached (README, „Hosting auf Render") — where they
- * did not apply.
+ * line (`shownLines`). Where the database cannot be reached (P1001) — a Neon compute waking —
+ * it tries again after each of UNREACHABLE_PAUSES_MS, one line per attempt, the CLI's lines of
+ * the last attempt only. Rejects, naming Prisma's error code — P3009 for a migration that broke
+ * off at once, P1001 after the last attempt (README, „Hosting auf Render") — where they did not
+ * apply.
  */
-export async function migrate(env: NodeJS.ProcessEnv, run: RunCli = runPrisma): Promise<void> {
-  const { code, output } = await run(['migrate', 'deploy'], env);
-  for (const line of shownLines(output)) {
-    console.log(`[escapelab] migrate: ${line}`);
-  }
-  if (code !== 0) {
-    const error = /\bP\d{4}\b/.exec(output)?.[0] ?? `exit code ${code ?? 'none'}`;
-    throw new Error(`the migrations did not apply (${error}), as the migrate lines above say`);
+export async function migrate(
+  env: NodeJS.ProcessEnv,
+  run: RunCli = runPrisma,
+  wait: Wait = sleep,
+): Promise<void> {
+  const attempts = UNREACHABLE_PAUSES_MS.length + 1;
+  for (let attempt = 1; ; attempt += 1) {
+    const result = await run(['migrate', 'deploy'], env);
+    const error = result.code === 0 ? null : errorOf(result);
+    const pause = error === UNREACHABLE ? UNREACHABLE_PAUSES_MS[attempt - 1] : undefined;
+    const outcome = `attempt ${attempt} of ${attempts}: ${outcomeOf(error)}`;
+    if (pause === undefined) {
+      lastAttempt(result, error, attempt, outcome);
+      return;
+    }
+    said(`${outcome}, again in ${pause / 1000} s`);
+    await wait(pause);
   }
 }
