@@ -53,13 +53,15 @@ pnpm --filter client sfx -- --candidates 2 --only score  # two takes of the whol
 pnpm --filter client sfx -- --keep score=2               # its take 2 kept whole, cut in pieces
 ```
 
-**Awaiting a render.** Nine entries await a render by the user — the agents that write the
+**Awaiting a render.** Eleven entries await a render by the user — the agents that write the
 catalog may not spend the account's credits, the permission system holds any paid request back —
 and the game plays meanwhile what there is. The facility's hum, whose three takes of 2026-11-13
 came back near silent, has no recording, and the menu plays without it. The
 score's eight pieces play the recordings the stems, the menu's theme and the end cards' themes had
 before it, their manifest entries made from the older requests; the lobby plays the menu's theme
 at its weight, the opening its older cue (`public/intro/`), until a take of the score is kept.
+The reactor hall's two beds, asked for anew on 2026-11-19, play their older takes (Rooms you can
+hear, below).
 `test/sampleManifest.test.ts` names them in its title — `AWAITING_RENDER`, to be emptied once they
 are made — and fails for any other entry without a recording of its own, made from its request as
 it stands. The score's render and keep are under „Takes und Auswahl" (below); the hum's:
@@ -472,7 +474,7 @@ played a little faster or slower each time.
 | archive | `bed-archive` −8 dB: soft air through a duct | a drip every 7–12 s |
 | corridor | `bed-corridor` −2 dB: vent hum and duct air | a clank far down the corridor every 20–40 s |
 | lab | `bed-lab` −3 dB: a fridge's compressor, a fume hood, bubbling every 10–25 s | a creak now and then |
-| reactor | `bed-reactor`: the containment hum | `bed-reactor-idle`: the core's rumble, a throb on its beat |
+| reactor | `bed-reactor` −4 dB: duct air and coolant flow, an uneven pump pulse | `bed-reactor-idle`: the core's rumble, a throb on its beat |
 | control | `bed-control` −3 dB: console hum, screens' whine, a relay's tick every second | a creak now and then |
 | plain | `bed-plain` −3 dB: ventilation and a 55 Hz building hum | a far clank, or a creak a third of the time, every 7–15 s |
 
@@ -492,6 +494,32 @@ warm-up (`rooms.ts` `warmUp`, dips and all); a room lit before the
 screen looked comes back at once. A run won powers every room again. The reactor's throb,
 which swells for a third of a second, comes that much before the top of the core's light, 2.4 s
 apart on the simulation's clock.
+
+**The reactor hall, asked for anew** (2026-11-19). Its powered bed was the annoying one: asked
+for as „a steady deep containment hum at 110 Hz", it came back as a steady sub-bass drone — 86 %
+of its power under 90 Hz, broad between 40 and 70 Hz, its loudness swinging 0.9 dB over 0.25 s
+windows, a line at 178 Hz standing 13 dB over its neighbours, no 110 Hz line at all — at the level
+of the server room once its idle bed, played beneath it in the hall itself, is added. The idle
+bed's 94 Hz line stands 14 dB over its neighbours, a pitch the ear locks onto. Both prompts now
+ask for a broad, slowly moving machine-room texture — duct air and coolant flow, an uneven pump
+pulse, metal settling far off, energy held back — with no steady tone, no pitched hum and nothing
+high or sharp; the powered layer plays at −4 dB, a dB under the lab, the control room and the
+plain rooms, for the idle layer under it. The throb on the core's beat (75–85 Hz, 1.5 s, every
+2.4 s) stays: it is the light's pulse made heard, and a metronome only where the drone under it
+had no motion of its own — to be judged again once the new beds are in. Until the user renders
+them (Awaiting a render, above) both play their older takes, the powered one at its new level:
+
+```sh
+# packages/client — offline, no key: 2 beds, 3 takes each, about 240 credits
+node scripts/sfx.ts --dry-run --candidates 3 --only bed-reactor,bed-reactor-idle
+node --env-file=/Users/uros/Documents/Req.Eng./escapelab/.env.local scripts/sfx.ts \
+  --candidates 3 --only bed-reactor,bed-reactor-idle
+```
+
+The run keeps of each bed the take `PICK` picks and leaves all six in the temporary folder it
+names (`afplay <folder>/<file>.mp3` plays one); the kept one plays on `/sounds` at the game's
+level, „Räume und Schleifen". `--keep` keeps music takes only: a different candidate of a bed is
+had by running the bed again (`--candidates 3 --only bed-reactor`, 120 credits).
 
 ### The room's answer (`reverb.ts`)
 
@@ -1282,8 +1310,49 @@ code.
 
 The pressure follows the clock — the tension curve the lab always had, 0 while half the time
 or more is left and rising to 1 at the end, and at least 0.8 in the last minute — adds 0.15
-for 20 s with every alarm, and stays at 0.8 at least in the escape. A stem goes only a little
-under its threshold before it leaves, so a wavering pressure never flips it. Every alarm the
+for 20 s with every alarm, and stays at 0.8 at least in the escape. Since 2026-11-19 it follows
+the run besides, as this player's own view and the drones show it (`pressureSignals.ts`): +0.8
+while an emergency runs (the critical stem on its own); +0.45 while a station's own clock runs
+at this player's console — the Paketfilter's wave falling, the Anlaufsteuerung's pulse on its
+way to the ladder at the console that takes it, a Synchrontaster press waiting in its window,
+the token's period at the Zugangskontrolle's device — and up to 0.2 more as that clock runs out
+where the view gives its end (the wave's does not); +0.35 while a drone awake flies within four
+tiles; and up to 0.25 with the stations solved, so that the last stations sit higher than the
+first, under the tense stem's way out. A push comes in at once; once it is over the pressure
+stays where it was for 8 s, then falls 0.04 a second (`moodAt`). A stem goes only a little under
+its threshold before it leaves, so a wavering pressure never flips it, and it stays on at least
+8 s from its change — the critical one excepted, which comes at once. A quiet stretch — walking,
+reading at a source with nothing running — falls back to calm. Each player's music is their
+own: the one reading at a source while the wave falls at the console hears the calmer one. The
+demo's player view plays the seat it watches, so its music follows that seat; the audience
+stands nowhere and hears no music, as before.
+
+What that comes to was measured on the demo crew's runs (`server/test/tensionTrace.test.ts`
+records each seat's signals on the fake clock into `client/test/tensionTraces.json`, and proves
+the file is what the crew plays; `UPDATE_TRACES=1` writes it anew; `client/test/stemTimeline.ts`
+turns it into the stems on air, bar by bar). Shares of a winning Blackout run, the two seats:
+
+| Run | Before: calm / tense / critical | After: calm / tense / critical | Changes |
+| --- | --- | --- | --- |
+| seed 12, 379 s | 95 / 0 / 5 % | 56 / 32 / 12 %, 53 / 34 / 12 % | 13, 11 |
+| seed 56, 351 s | 94 / 0 / 6 % | 44 / 43 / 13 %, 49 / 38 / 13 % | 13, 12 |
+| seed 93, 362 s | 95 / 0 / 5 % | 52 / 36 / 11 %, 52 / 35 / 12 % | 13, 10 |
+| seed 56, a slow crew, 662 s, 2 alarms | 92 / 5 / 4 % | 46 / 33 / 21 %, 47 / 37 / 16 % | 15, 15 |
+
+Before, only the escape left the calm stem; after, every stem plays 8 s or more but where the
+critical one cuts in on the next bar. The demo crew weathers an emergency in 12 s; a crew that
+takes its 45 s hears more of the critical stem.
+
+**A fourth stem, not made.** An `overdrive` stem above the critical one — its material with
+driving drums and a distorted bass line, for the escape and an emergency late in the run — was
+weighed and left: as a ninth section of the score (27 bars, 72 s) it would raise the score's two
+takes from 17,665 to about 20,257 credits, past the music's cap of 18,000 a run; the music folder
+would keep it (some 1.5 MB of the 1.6 left under 11 MiB once the score is kept), the loop budget
+too (two stems heard at most, as now). Made on its own as a suite of one section it would cost
+2,592 credits for two takes, but be a generation of its own, not one with the stems it crosses
+into. Either way the music's eight places (`packFile.ts` `SLOTS`) would need a ninth that a pack
+may leave out — every CC pack falling back to its critical piece — outside the Feinwahl. Worth
+weighing again once the score is kept and the three stems have been heard under this pressure. Every alarm the
 music hears brings the alarm's sting with it, two seconds of brass and strings on the effects'
 bus, the music pulled 6 dB down under it.
 

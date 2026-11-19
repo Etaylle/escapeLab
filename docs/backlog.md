@@ -1176,6 +1176,24 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   `100vh − 140px`), `?room=` nimmt höchstens zehn Zeichen, je ein Test für den Chip nur in der
   Lobby und für das QR-Panel des Menüs.
 
+### M-tension Musik, die mit dem Geschehen wächst; ein Reaktor, der nicht dröhnt — Status: im PR (M-tension) · Größe: M
+- Anlass (Uros, 2026-11-19): die Musik soll „mehr" werden, wenn es heiß wird, wie in einem
+  Actionspiel; der Klang des Reaktors nervt.
+- Gemessen an den Läufen der Demo-Crew (Seeds 12/56/93, je Sitz): bisher 94–95 % ruhig, die
+  Spannung nie, die Not nur in der Flucht. Jetzt drückt der eigene Blick des Spielers den Druck
+  (`pressureSignals.ts`): Notfall +0,8, die Uhr einer Station am eigenen Pult +0,45 bis +0,65,
+  eine wache Drohne in vier Feldern +0,35, die gelösten Stationen bis +0,25; ein Stoß hält 8 s
+  und fällt dann 0,04/s, ein Stamm bleibt 8 s (außer der kritische kommt). Ergebnis: ruhig
+  44–56 %, Spannung 32–43 %, Not 11–13 %, 10–13 Wechsel (Tabelle in sound.md „Music that
+  breathes"); die Spur liegt in `client/test/tensionTraces.json`, ein Servertest prüft sie.
+- Reaktorhalle: beide Betten neu angefragt (kein stehender Ton, keine Tonhöhe), das Bett mit
+  Strom −4 dB. Offen bei Uros, im Hauptcheckout `packages/client`, rund 240 Credits:
+  `node --env-file=/Users/uros/Documents/Req.Eng./escapelab/.env.local scripts/sfx.ts --candidates 3 --only bed-reactor,bed-reactor-idle`
+  — bis dahin spielen die alten Aufnahmen (`AWAITING_RENDER`).
+- Offen: ein vierter Stamm „overdrive" (Flucht, später Notfall) — als neunter Teil der Partitur
+  über der Kappe von 18.000 Credits je Lauf (rund 20.257 für zwei Takes); erst nach dem Render der
+  Partitur und einem Hören der drei Stämme unter dem neuen Druck neu abwägen (sound.md).
+
 ## Nur lokal
 
 ### L-1 Aufnahmen rendern — Status: erledigt (2026-11-04, ec0ef9c + 031cb7a)
