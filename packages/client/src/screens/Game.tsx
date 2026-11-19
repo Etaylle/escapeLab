@@ -105,7 +105,15 @@ interface Props {
    * pages lie over the world as its player would have them. Such a screen is read-only: it takes
    * no key and no finger, offers no control, and nothing it shows sends anything.
    */
-  watch?: DemoDoing;
+  watch?: Watch;
+}
+
+/** A seat watched (`Props.watch`). */
+export interface Watch {
+  /** what the seat is doing: its console's panel, its source's pages lie over the world by it */
+  doing: DemoDoing;
+  /** the whole lab is shown over this screen: it is heard on, and draws nothing */
+  covered: boolean;
 }
 
 /** Sends nothing: what a watched screen hands every control it shows. */
@@ -533,11 +541,12 @@ export function stillOpen(opened: Opened, wasEmergency: boolean, emergency: bool
  * What is open over the world: what this player opened (`mine`) — or, on a seat watched
  * (`Props.watch`), what that seat is doing: its console's panel, its source's pages.
  */
-export function openedBy(mine: Opened, watch: DemoDoing | undefined): Opened {
+export function openedBy(mine: Opened, watch: Watch | undefined): Opened {
   if (watch === undefined) {
     return mine;
   }
-  return { ...NOTHING_OPEN, operating: watch.what === 'operate', readingId: watch.sourceId };
+  const { what, sourceId } = watch.doing;
+  return { ...NOTHING_OPEN, operating: what === 'operate', readingId: sourceId };
 }
 
 /**
@@ -565,7 +574,7 @@ function useHand(props: Props): { watched: boolean; send: Props['send']; offer: 
  */
 function useOpened(
   view: PlayerView,
-  watch?: DemoDoing,
+  watch?: Watch,
 ): {
   station: PuzzleView | null;
   reading: ManualHere | null;
@@ -1475,6 +1484,7 @@ function RunWorld({
       chatsRef={game.chatsRef}
       spectator={false}
       watched={game.watch !== undefined}
+      covered={game.watch?.covered === true}
       darkSince={coldOpen.darkSince}
       finale={finale === null ? null : { ending: finale.ending, since: finale.since }}
       station={station}

@@ -196,6 +196,7 @@ describe('the demo crew has no hand on the room', () => {
     const dir = new URL('../src/demo/', import.meta.url);
     const files = readdirSync(dir).filter((file) => file !== 'host.ts');
     expect(files.sort()).toEqual([
+      'caption.ts',
       'crew.ts',
       'director.ts',
       'patrol.ts',

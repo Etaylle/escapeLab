@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   DEMO_CODE,
   DEMO_PINS,
+  moduleFor,
   type DemoDoing,
   type DemoShot,
   type ServerMessage,
@@ -16,6 +17,8 @@ import {
   type Cut,
   type Scene,
 } from '../src/demo/director.js';
+import { captionFrom, WORKSHOP } from '../src/demo/caption.js';
+import { SAID_MS } from '../src/demo/crew.js';
 import { DemoHost } from '../src/demo/host.js';
 import { MissionCatalog } from '../src/missions.js';
 import { RoomManager } from '../src/roomManager.js';
@@ -132,6 +135,29 @@ describe('the director’s table: the scene, and what it puts on air', () => {
   });
 });
 
+describe('what a reader passes on', () => {
+  const p = (text: string) => ({ kind: 'p' as const, text });
+  const rules = (...items: string[]) => ({ kind: 'rules' as const, items });
+
+  it('is the workshop’s first note, before any rule; a rule where the workshop left none', () => {
+    const betrieb = { heading: 'Betrieb', blocks: [p('Zwei Pulte.'), rules('Wenn A, dann B.')] };
+    const workshop = { heading: WORKSHOP, blocks: [p('Erst messen.'), p('Dann schneiden.')] };
+    expect(captionFrom([betrieb, workshop])).toBe('Erst messen.');
+    expect(captionFrom([betrieb])).toBe('Wenn A, dann B.');
+    expect(captionFrom([{ heading: 'Aufbau', blocks: [p('Ein Pult.')] }])).toBeNull();
+    expect(captionFrom([])).toBeNull();
+  });
+
+  it('is a sentence every one of Blackout’s manuals prints, whatever the seed', () => {
+    for (const def of mission.puzzles) {
+      const manual = moduleFor(def.type).manual(def);
+      const said = captionFrom(manual);
+      expect(said, def.id).not.toBeNull();
+      expect(JSON.stringify(manual)).toContain(JSON.stringify(said));
+    }
+  });
+});
+
 /** What a viewer of a whole run saw of it: each cut, and what was on air at each station. */
 interface Watched {
   phase: string;
@@ -142,6 +168,8 @@ interface Watched {
    * the seconds one of the crew read to the other at the console: `2 read to`
    */
   shown: Record<string, number>;
+  /** what one of the crew told the other, by station up: the words, and how long they stood, s */
+  said: Record<number, { text: string; by: 0 | 1; long: number }>;
   /** the bytes sent this viewer, by kind of message, and the run's length, s */
   bytes: Record<string, number>;
   seconds: number;
@@ -173,6 +201,15 @@ function take(msg: ServerMessage, seen: Seen, watched: Watched): void {
   }
 }
 
+/** A tick of the run counted for what is said under the picture during it. */
+function countSaid({ shot, index, ids }: Seen, said: Watched['said']): void {
+  const caption = shot?.caption ?? null;
+  if (caption !== null) {
+    const by = ids[0] === caption.by ? 0 : 1;
+    said[index] = { text: caption.text, by, long: (said[index]?.long ?? 0) + 0.08 };
+  }
+}
+
 /** A tick of the run counted for what is on air during it: `2 read`, `4 overview`. */
 function count({ shot, phase, index }: Seen, shown: Watched['shown']): void {
   if (shot === null || phase !== 'playing') {
@@ -194,12 +231,13 @@ function watchRun(seed: number): Watched {
   const heard: ServerMessage[] = [];
   host.watch((msg) => heard.push(msg));
   const seen: Seen = { phase: 'lobby', index: 0, ids: [], shot: null };
-  const watched: Watched = { phase: 'lobby', shots: [], shown: {}, bytes: {}, seconds: 0 };
+  const watched: Watched = { phase: 'lobby', shots: [], shown: {}, said: {}, bytes: {}, seconds: 0 };
   const over = (): boolean => seen.phase === 'won' || seen.phase === 'lost';
   // To the run's end and five seconds of its Auswertung.
   for (let tick = 0, after = 0; tick < 15_000 && after < 60; tick++) {
     heard.splice(0).forEach((msg) => take(msg, seen, watched));
     count(seen, watched.shown);
+    countSaid(seen, watched.said);
     after += over() ? 1 : 0;
     vi.advanceTimersByTime(80);
   }
@@ -210,6 +248,12 @@ function watchRun(seed: number): Watched {
     shot.long = (watched.shots[i + 1]?.at ?? watched.seconds) - shot.at;
   });
   return watched;
+}
+
+/** What a reader passes on of the station `id`: off its module's manual, as printed. */
+function captionOf(id: string): string | null {
+  const def = mission.puzzles.find((puzzle) => puzzle.id === id);
+  return def === undefined ? null : captionFrom(moduleFor(def.type).manual(def));
 }
 
 /** The stations of Blackout whose rules lie at a source, by their place in the run. */
@@ -257,10 +301,25 @@ describe('a whole run as the director cuts it', () => {
     const readTo = run.shown['4 read to'] ?? 0;
     expect(readTo > 15).toBe(seed === 56);
     expect(readTo === 0).toBe(seed !== 56);
+    // Whoever read a station's rules passes a sentence of them on, word for word, for nine
+    // seconds: of that station's manual, and of no other.
+    const drawn = { 12: 'signalkette', 56: 'frequenz', 93: 'notstrom' }[seed] ?? '';
+    const read = ['anlauf', 'paketfilter', 'subsysteme', drawn];
+    expect(Object.keys(run.said).map(Number)).toEqual(WITH_A_SOURCE);
+    WITH_A_SOURCE.forEach((index, i) => {
+      const said = run.said[index];
+      expect(said?.text, read[i]).toBe(captionOf(read[i] ?? ''));
+      expect(said?.long).toBeGreaterThan(SAID_MS / 1000 - 0.5);
+      expect(said?.long).toBeLessThan(SAID_MS / 1000 + 0.5);
+    });
+    expect(run.said[1]?.text).toBe(
+      'Das Terminal zählt nicht mit: Am Skriptpult verrät nur das Licht im Bodenkanal, ' +
+        'wie weit der Impuls ist.',
+    );
     // The seat's view costs a viewer about as much again as the audience's own.
     const perSecond = (kind: string): number => (run.bytes[kind] ?? 0) / run.seconds / 1000;
-    expect(perSecond('demo-view')).toBeLessThan(perSecond('spectator-view'));
-    expect(perSecond('demo-view')).toBeLessThan(6);
+    expect(perSecond('demo-view')).toBeLessThan(perSecond('spectator-view') * 1.2);
+    expect(perSecond('demo-view')).toBeLessThan(8);
     expect(perSecond('demo-shot')).toBeLessThan(0.1);
   });
 });
@@ -285,7 +344,9 @@ describe('the demo’s feed', () => {
     host.watch((msg) => heard.push(msg));
     const first = heard.find((msg) => msg.kind === 'demo-shot');
     expect(first).toMatchObject({ kind: 'demo-shot', shot: { onAir: null, caption: null } });
-    expect(viewsIn(heard)).toEqual([]);
+    // The lobby from above: the first seat's view comes all the same, for the page's sound.
+    const ear = first?.kind === 'demo-shot' ? first.shot.ear : '';
+    expect(viewsIn(heard)).toEqual([ear]);
     run(4);
     // The run started: the opening on the first seat, its own view with it.
     const shot = heard.filter((msg) => msg.kind === 'demo-shot').at(-1);
@@ -318,7 +379,7 @@ describe('the demo’s feed', () => {
     again.stop();
   });
 
-  it('sends a viewer the seat it pinned, whatever is on air, and none for the whole lab', () => {
+  it('sends a viewer the seat it pinned, whatever is on air; for the lab, the seat on air', () => {
     const host = new DemoHost(mission, [12]);
     const heard: ServerMessage[] = [];
     const watch = host.watch((msg) => heard.push(msg));
@@ -333,10 +394,12 @@ describe('the demo’s feed', () => {
     run(60);
     expect(new Set(viewsIn(heard))).toEqual(new Set([two]));
     heard.length = 0;
+    // The whole lab pinned: the picture needs no seat, the sound does — the director's seats.
     watch.pin('overview');
-    run(60);
-    expect(viewsIn(heard)).toEqual([]);
+    run(120);
+    expect(new Set(viewsIn(heard))).toEqual(new Set([one, two]));
     expect(kinds(heard).has('demo-shot')).toBe(true);
+    heard.length = 0;
     watch.pin('one');
     run(30);
     expect(new Set(viewsIn(heard))).toEqual(new Set([one]));

@@ -8,6 +8,7 @@ import {
   type PuzzleDef,
   type RelayView,
 } from '@escapelab/core';
+import { captionFrom } from './caption.js';
 import {
   armedOn,
   atHand,
@@ -74,6 +75,9 @@ const same = (a: Spot | undefined, b: Spot | undefined): boolean =>
 /** What a seat does that nothing else is said of: it stands and waits. */
 const IDLE: DemoDoing = { what: 'idle', sourceId: null };
 
+/** How long what one of the crew told the other stays to be read, ms. */
+export const SAID_MS = 9000;
+
 /** How long a figure stands in the open where it works a thing before it is in cover or off, s. */
 const HOLD_S = 2.5;
 
@@ -92,6 +96,8 @@ export class DemoCrew {
   private readonly asked = new Map<Seat, Spot>();
   /** when each instruction of an emergency is carried out, by what it says */
   private readonly orders = new Map<string, number>();
+  /** what one of the crew last told the other, and when (the crew's clock) */
+  private told: { by: Seat; text: string; at: number } | null = null;
   /** what each seat is doing now, as its script says it (`doing`) */
   private readonly doings = new Map<Seat, DemoDoing>();
 
@@ -110,6 +116,15 @@ export class DemoCrew {
    */
   doing(seat: Seat): DemoDoing {
     return this.doings.get(seat) ?? IDLE;
+  }
+
+  /**
+   * What one of the crew tells the other at `now`, to be read under the picture: a sentence of
+   * the rules it has just read (caption.ts), for SAID_MS; null while nobody says anything.
+   */
+  saying(now: number): { by: string; text: string } | null {
+    const told = this.told;
+    return told !== null && now - told.at < SAID_MS ? { by: told.by.id, text: told.text } : null;
   }
 
   /** `seat` does `what` for as long as `script` runs, then what it did before. */
@@ -176,6 +191,7 @@ export class DemoCrew {
       this.dice.again();
       this.script = null;
       this.doings.clear();
+      this.told = null;
     }
   }
 
@@ -490,10 +506,14 @@ export class DemoCrew {
     const at = yield* this.as(seat, 'walk', this.lookFor(seat, source));
     yield* this.as(seat, 'read', this.readAt(seat, source, at), source.id);
     const pages = seat.view?.manualsHere.flatMap((manual) => manual.sections) ?? [];
-    if (!pages.some((page) => page.puzzleId === def.id)) {
+    const page = pages.find((each) => each.puzzleId === def.id);
+    if (page === undefined) {
       throw new Error(`${seat.name} reads nothing of "${def.id}" at ${source.id}`);
     }
     this.read.add(def.id);
+    // Read, it is passed on: what a crew would call across, the audience reads.
+    const text = captionFrom(page.manual);
+    this.told = text === null ? null : { by: seat, text, at: this.clock.now };
   }
 
   /** `seat`, standing by `source` on the tile `at`, opens it where it is shut and reads a while. */

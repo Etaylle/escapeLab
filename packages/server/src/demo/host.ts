@@ -171,6 +171,8 @@ export class DemoHost {
   private viewers = new Map<string, Viewer>();
   /** what the director has on air; null before its first cut */
   private cut: Cut | null = null;
+  /** the seat last on air, by its place in the crew: the lab is heard from where it stands */
+  private ear: 0 | 1 = 0;
   /** what the audience was last told is on air, and that as it was sent */
   private shot: DemoShot | null = null;
   private told = '';
@@ -325,10 +327,12 @@ export class DemoHost {
     const before = this.cut?.onAir;
     this.cut = direct(scene, this.cut);
     const [a, b] = scene.seats;
+    this.ear = this.cut.onAir === b.id ? 1 : this.cut.onAir === a.id ? 0 : this.ear;
     const shot: DemoShot = {
       onAir: this.cut.onAir,
+      ear: scene.seats[this.ear].id,
       doing: { [a.id]: a.doing, [b.id]: b.doing },
-      caption: null,
+      caption: this.crew.saying(now),
     };
     const said = JSON.stringify(shot);
     if (said === this.told) {
@@ -338,19 +342,25 @@ export class DemoHost {
     this.shot = shot;
     for (const viewer of this.viewers.values()) {
       viewer.tell({ kind: 'demo-shot', shot, at: now });
-      if (this.cut.onAir !== before && viewer.pin === 'regie') {
+      if (this.cut.onAir !== before && this.follows(viewer)) {
         this.show(viewer);
       }
     }
   }
 
-  /** The seat `viewer` is shown, by its player id: the one it pinned, or the one on air. */
-  private shownTo(viewer: Viewer): string | null {
-    if (viewer.pin === 'overview') {
-      return null;
-    }
-    if (viewer.pin === 'regie') {
-      return this.cut?.onAir ?? null;
+  /** Whether `viewer` pinned no seat: it is sent the seat the director has on air, or had. */
+  private follows(viewer: Viewer): boolean {
+    return viewer.pin === 'regie' || viewer.pin === 'overview';
+  }
+
+  /**
+   * The seat whose view `viewer` is sent, by its player id: the one it pinned, else the one on
+   * air — and while the whole lab is on air, or pinned, the seat last on air (`ear`), by whose
+   * view the page keeps its sound.
+   */
+  private shownTo(viewer: Viewer): string {
+    if (this.follows(viewer)) {
+      return this.cut?.onAir ?? this.seats[this.ear].id;
     }
     return this.seats[viewer.pin === 'one' ? 0 : 1].id;
   }
@@ -359,7 +369,7 @@ export class DemoHost {
   private show(viewer: Viewer): void {
     const id = this.shownTo(viewer);
     const view = this.seats.find((seat) => seat.id === id)?.view ?? null;
-    if (id !== null && view !== null) {
+    if (view !== null) {
       viewer.tell({ kind: 'demo-view', seat: id, view, at: Date.now() });
     }
   }
@@ -411,9 +421,10 @@ export class DemoHost {
     const { spectatorId, detach } = this.live.attachSpectator(listener);
     const viewer: Viewer = { tell: listener, pin: 'regie' };
     const viewers = this.viewers;
-    viewers.set(spectatorId, viewer);
     const at = Date.now();
+    // The director looks before the newcomer is on the list: it is told once, right here.
     this.directAt(at);
+    viewers.set(spectatorId, viewer);
     if (this.shot !== null) {
       listener({ kind: 'demo-shot', shot: this.shot, at });
     }

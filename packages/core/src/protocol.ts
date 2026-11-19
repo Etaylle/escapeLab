@@ -105,10 +105,13 @@ export type DemoPin = (typeof DEMO_PINS)[number];
 /**
  * What the demo has on air, the same for everybody who watches: the seat whose own view the
  * director shows (`onAir`, a player id) or the whole lab (null), what each of the crew is doing,
- * and what one of them tells the other, if anything, to be read under the picture.
+ * and what one of them tells the other, if anything, to be read under the picture. While the
+ * whole lab is on air the view of one seat keeps coming all the same (`ear`, the seat last on
+ * air): the lab is heard from where that seat stands.
  */
 export interface DemoShot {
   onAir: string | null;
+  ear: string;
   doing: Record<string, DemoDoing>;
   caption: { by: string; text: string } | null;
 }
@@ -628,8 +631,8 @@ export type ServerMessage =
    */
   | { kind: 'demo-shot'; shot: DemoShot; at: number }
   /**
-   * the demo room alone, to its audience: the own view of the seat this connection is shown —
-   * the one on air, or the one it pinned. The demo's crew are the server's own machines: no
+   * the demo room alone, to its audience: the own view of the seat this connection is shown or
+   * hears the lab by — the one on air (`DemoShot.ear` while none is), or the one it pinned. The demo's crew are the server's own machines: no
    * person's view is given away by it, and no other room ever sends one (server demo/host.ts).
    */
   | { kind: 'demo-view'; seat: string; view: PlayerView; at: number }

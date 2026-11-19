@@ -32,6 +32,7 @@ import {
   emergencyOver,
   footstep,
   graphCensus,
+  hushed,
   klaxon,
   lightsOnClick,
   lockerOpen,
@@ -155,6 +156,16 @@ interface Props {
   holdTips: boolean;
   /** a menu stands over the world (menuLayer.ts): the keys are the menu's, the world hears none */
   menuOver?: boolean;
+  /**
+   * the world is on and heard, and something covers its picture — the demo's whole lab over the
+   * seat it is heard from —: it steps and listens on, and draws no frame
+   */
+  covered?: boolean;
+  /**
+   * the world is a picture over another world that is heard (`covered`): it starts no sound and
+   * stops none — not a door, not the hum, not the music as it goes
+   */
+  silent?: boolean;
   /** opens the info panel, which owns the briefing and the key list */
   onToggleInfo: () => void;
   /** E at a manual object the server counts this player at: reading needs no message */
@@ -183,6 +194,8 @@ interface Live extends Latest {
   station: PuzzleView | null;
   /** a menu stands over the world: it hears no key (`worldHears`) */
   menuOver: boolean;
+  /** the world's picture is covered: no frame is drawn (`Props.covered`) */
+  covered: boolean;
   /** where the quick chat's wheel stands: what the digits say (ChatWheel.tsx) */
   wheel: Wheel;
   send: (msg: ClientMessage) => void;
@@ -200,6 +213,8 @@ interface Loop extends FrameSource {
   pings: React.MutableRefObject<MapPing[]>;
   /** the sound systems this page's query switched off (`?audio-off=`) */
   soundOff: ReadonlySet<SoundSystem>;
+  /** the world starts and stops no sound (`Props.silent`) */
+  silent: boolean;
   /** the frame drawn last, for the walkthrough's probe of the glow; null before the first */
   drawn: Frame | null;
 }
@@ -262,8 +277,15 @@ function useLatest<T>(value: T): React.MutableRefObject<T> {
  * fail with the picture (coldOpen.ts) — under reduced motion with no flicker to arc in —
  * and where it lands in the dark, the hum just ends.
  */
-function usePowerHum(darkSince: number | null, live: React.MutableRefObject<Live>): void {
+function usePowerHum(
+  darkSince: number | null,
+  live: React.MutableRefObject<Live>,
+  silent: boolean,
+): void {
   useEffect(() => {
+    if (silent) {
+      return;
+    }
     if (darkSince === null) {
       startPowerHum();
       return;
@@ -274,7 +296,7 @@ function usePowerHum(darkSince: number | null, live: React.MutableRefObject<Live
     } else {
       stopPowerHum();
     }
-  }, [darkSince, live]);
+  }, [darkSince, live, silent]);
 }
 
 /** E's part of the world (press.ts) as the loop has it now. */
@@ -618,8 +640,13 @@ function runFrames(loop: Loop, traced: Traced | null): () => void {
     frames += 1;
     const map = loop.live.current.view.map;
     if (map !== null) {
-      step(loop, dt, now, map);
-      if (drawsFrame(frames, { locked: loop.live.current.locked, spectator: loop.spectator })) {
+      if (loop.silent) {
+        hushed(() => step(loop, dt, now, map));
+      } else {
+        step(loop, dt, now, map);
+      }
+      const { locked, covered } = loop.live.current;
+      if (!covered && drawsFrame(frames, { locked, spectator: loop.spectator })) {
         render(loop, map);
         traced?.work.record(loop.kit.census);
       }
@@ -953,6 +980,15 @@ function profilePasses(kit: RenderKit): (() => void) | null {
   });
 }
 
+/** Every sound of the lab that goes on by itself, stopped: a world that was heard goes. */
+function stopLabSounds(): void {
+  stopAmbience();
+  stopMusic();
+  stopSpatial();
+  stopDanger();
+  stopPowerHum();
+}
+
 /**
  * The world's life from mount to unmount: the canvas and its kit, the
  * simulation, the listeners, the position stream and the frame loop.
@@ -997,6 +1033,7 @@ function useWorldLoop({ props, refs, live, alarm, setWheel, setControlsReach }: 
       clips: new WeakMap(),
       texts: { s: 0, dpr: 0, scale: 0, styles: worldText(48, 1) },
       soundOff,
+      silent: props.silent === true,
       drawn: null,
     };
     refs.interactRef.current = () => tryInteract(loop);
@@ -1024,11 +1061,9 @@ function useWorldLoop({ props, refs, live, alarm, setWheel, setControlsReach }: 
       insets.disconnect();
       unlisten?.();
       unping?.();
-      stopAmbience();
-      stopMusic();
-      stopSpatial();
-      stopDanger();
-      stopPowerHum();
+      if (!loop.silent) {
+        stopLabSounds();
+      }
       traced?.drop();
       tracedGraphics?.();
       profiled?.();
@@ -1274,6 +1309,7 @@ function useWorld(props: Props): WorldState {
     darkSince,
     locked: inputLocked,
     menuOver: props.menuOver === true,
+    covered: props.covered === true,
     station,
     wheel,
     finale,
@@ -1294,19 +1330,20 @@ function useWorld(props: Props): WorldState {
     }
   }, [inputLocked, live]);
   const tip = useWorldTip(view, station, !plays(props), holdTips, finale);
-  usePowerHum(darkSince, live);
+  const silent = props.silent === true;
+  usePowerHum(darkSince, live, silent);
   // The world answers an alarm (alarm.ts): the klaxon while the run goes on — the alarm that
   // ends it has the ending's own sound, and an open device sounds its own horn instead — the
   // strobe and the shake, the drones' marks.
   const alarm = useAlarm(view.penaltySeq, () => {
-    if (worldHornDue(live.current.view.phase, live.current.station != null)) {
+    if (!silent && worldHornDue(live.current.view.phase, live.current.station != null)) {
       klaxon();
     }
   });
   const alarmRef = useLatest(alarm);
   const alarmClass = useAlarmClasses(alarm, reduced);
-  useEscapeSounds(escapeSince, view.phase === 'playing' && finale === null);
-  useFinaleSounds(finale);
+  useEscapeSounds(silent ? null : escapeSince, view.phase === 'playing' && finale === null);
+  useFinaleSounds(silent ? null : finale);
   const refs = { canvasRef, controlsRef, simRef, interactRef, dropRef };
   useWorldLoop({ props, refs, live, alarm: alarmRef, setWheel, setControlsReach });
   useWheelEscape(wheel !== null, setWheel, live);

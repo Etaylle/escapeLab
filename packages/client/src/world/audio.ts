@@ -793,8 +793,26 @@ function createEngine(): Engine | null {
   }
 }
 
+/** How many silent stretches run now (`hushed`): nothing starts to sound inside one. */
+let hush = 0;
+
+/**
+ * `work` done without a sound: nothing it would start — a door, a step, a chime — sounds. A
+ * world that only shows a picture over another that is heard runs its frames in it (GameWorld
+ * `silent`).
+ */
+export function hushed<T>(work: () => T): T {
+  hush += 1;
+  try {
+    return work();
+  } finally {
+    hush -= 1;
+  }
+}
+
 /** The engine when it can play right now; otherwise null, after nudging a resume. */
 function runningEngine(): Engine | null {
+  if (hush > 0) return null;
   const audio = getEngine();
   if (audio === null) return null;
   if (audio.ctx.state === 'running') return audio;

@@ -15,22 +15,134 @@
   min-height: 0;
 }
 
+/*
+ * The picture's frame: what a seat's screen lays over the whole window — a console's panel, a
+ * book, the veil of a run's end — stays inside it (a transform makes it their frame), clear of
+ * the line under it.
+ */
 .demo-picture {
   position: relative;
   flex: 1;
   min-height: 0;
   display: flex;
+  overflow: hidden;
+  border-radius: 10px;
+  transform: translateZ(0);
 }
 
-.demo-picture > .game,
-.demo-picture > .spectate,
-.demo-picture > .demo-end {
+.demo-seat {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+}
+
+.demo-seat > .game,
+.demo-seat > .demo-end {
   flex: 1;
   min-width: 0;
 }
 
 .demo-end {
   overflow-y: auto;
+}
+
+/* Under the whole lab the seat's screen is heard on, and not seen. */
+.demo--lab .demo-seat {
+  visibility: hidden;
+}
+
+/* The whole lab from above, over the seat's screen. */
+.demo-lab {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  background: var(--bg);
+  animation: demo-in 400ms ease-out;
+}
+
+.demo-lab .world-wrap {
+  flex: 1;
+  min-height: 0;
+  margin-top: 0;
+}
+
+.demo-lab .world-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.demo-lab .title-card,
+.demo-wait {
+  margin: auto;
+}
+
+.demo-wait {
+  color: var(--text);
+  font-size: calc(16px * var(--text-scale));
+}
+
+/* A cut: the picture that goes fades out over the one that comes (Demo.tsx `useCrossFade`). */
+.demo-fade {
+  position: absolute;
+  z-index: 5;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.demo-fade--on {
+  animation: demo-out 400ms ease-out;
+}
+
+/* What one of the crew tells the other: a subtitle at the picture's foot, over all of it. */
+.demo-caption {
+  position: absolute;
+  z-index: 6;
+  left: 50%;
+  bottom: 12px;
+  width: max-content;
+  max-width: min(72ch, calc(100% - 24px));
+  margin: 0;
+  padding: 8px 14px;
+  transform: translateX(-50%);
+  border-radius: 8px;
+  background: rgba(4, 8, 12, 0.88);
+  color: var(--text);
+  font-size: calc(16px * var(--text-scale));
+  line-height: 1.35;
+  text-align: center;
+  pointer-events: none;
+}
+
+@keyframes demo-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes demo-out {
+  from {
+    opacity: 1;
+  }
+
+  to {
+    opacity: 0;
+  }
+}
+
+:where([data-motion='reduce']) .demo-lab {
+  animation: none;
+}
+
+/*
+ * A seat watched offers no control: not the ways to put a sheet down or step back, not the
+ * notepad, the info and the menu of its strip, not the arrows of its book.
+ */
+.demo .put-down,
+.demo .hud-info,
+.demo .book-nav button {
+  display: none;
 }
 
 /* The line under the picture: the label, who is on air, the choice, the way out. */
@@ -91,9 +203,4 @@
   align-items: center;
   gap: 6px;
   min-height: 44px;
-}
-
-/* The lab from above stands in the demo's frame: its own way out is the line's. */
-.demo .spectate-foot button.link {
-  display: none;
 }
