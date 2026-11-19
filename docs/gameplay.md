@@ -1433,7 +1433,8 @@ laptop ← and → step through them, round and round, and 1 to 4 pick one. The 
 window's alone, kept for the session (`sessionStorage`) — through the loop's next run and a line
 lost — and told the server on every line that comes up (`demo-pin`), which sends a window the view
 of the one seat it is shown, never both. A crew's room refuses the ask: „Die Bildregie gibt es nur
-in der Vorführung."
+in der Vorführung." A socket that changes its picture more than thirty times a minute
+is told „Nicht so schnell — gleich noch einmal."
 
 **A change of picture** — the viewer's, or the director's — is a cross-fade of 400 ms: the picture
 that goes is kept on a canvas over the one that comes and fades out; whoever asked for less motion
