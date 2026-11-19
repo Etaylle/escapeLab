@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import {
+  DEMO_CODE,
   GameError,
   poolsOf,
   drawPools,
@@ -23,8 +24,7 @@ import { Seat, type Line } from './seat.js';
  * timer, until the next of the audience comes — who sees a run from its start.
  */
 
-/** The demo room's code: no room the manager opens has an O in its code (roomManager.ts). */
-export const DEMO_CODE = 'DEMO';
+export { DEMO_CODE };
 
 /** The names of the demo crew's two seats: machines of the lab, nobody's name. */
 export const DEMO_NAMES = ['Automat A', 'Automat B'] as const;

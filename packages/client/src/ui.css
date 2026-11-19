@@ -1365,6 +1365,15 @@ button.link:hover {
   gap: 12px;
 }
 
+/* The demo room's line under the mission's name: the plant plays by itself. */
+.demo-line {
+  margin: 6px 0 0;
+  max-width: 62ch;
+  color: var(--text);
+  font-size: calc(14px * var(--text-scale));
+  line-height: 1.4;
+}
+
 .world-canvas--wide {
   height: min(54vh, 520px);
 }

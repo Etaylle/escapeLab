@@ -31,7 +31,17 @@ interface Props {
   pingsRef: React.MutableRefObject<MapPing[]>;
   chatsRef: React.MutableRefObject<ChatLine[]>;
   leaveRoom: () => void;
+  /** the room watched is the demo room, which the server plays itself: one line says so */
+  demo?: boolean;
 }
+
+/**
+ * The line over the demo room's audience, in the plant's words: nobody plays here, the plant
+ * runs the mission by itself, and the two at the consoles are its machines.
+ */
+export const DEMO_LINE =
+  'Vorführbetrieb: Die Anlage fährt diesen Einsatz selbst, ' +
+  'an den Pulten stehen zwei Automaten.';
 
 /** Run time of an event as mm:ss, the way a match log reads, from the run's clock's start. */
 function elapsed(startedAt: number | null, at: number): string {
@@ -190,6 +200,31 @@ function SpectateFoot({
 }
 
 /**
+ * The head over the audience's screen: the mission watched and its difficulty — over the demo
+ * room, the line that the plant plays by itself (`DEMO_LINE`) — and the run's clock and count.
+ */
+function SpectateHead({ view, demo }: { view: SpectatorView; demo: boolean }) {
+  // The mission's clock on the server's, standing still while the run is paused (clock.ts):
+  // the time left, or the time run where the mission has no clock.
+  const shown = clockText(view, useServerNow(250));
+  return (
+    <div className="spectate-head">
+      <div>
+        <span className="kicker">ZUSCHAUERMODUS · {view.difficulty}</span>
+        <h1>{view.missionTitle}</h1>
+        {demo && <p className="demo-line">{DEMO_LINE}</p>}
+      </div>
+      <div className="spectate-stats">
+        {shown !== null && view.phase === 'playing' && <span className="countdown">{shown}</span>}
+        <span className="pill">
+          {view.currentPuzzleIndex}/{view.puzzleCount} Stationen · {view.penaltySeq} Alarme
+        </span>
+      </div>
+    </div>
+  );
+}
+
+/**
  * Audience view: the whole lab revealed, plus the open station from every
  * side. The run's end plays in the world as for the crew, and its title card
  * takes the world's place after.
@@ -202,10 +237,8 @@ export function SpectateScreen({
   pingsRef,
   chatsRef,
   leaveRoom,
+  demo,
 }: Props) {
-  // The mission's clock on the server's, standing still while the run is paused (clock.ts):
-  // the time left, or the time run where the mission has no clock.
-  const shown = clockText(view, useServerNow(250));
   // The audience sees the lights fail too, unless it came in after.
   const darkSince = useDarkSince(view.lights, view.startedAt);
 
@@ -217,18 +250,7 @@ export function SpectateScreen({
 
   return (
     <div className="spectate">
-      <div className="spectate-head">
-        <div>
-          <span className="kicker">ZUSCHAUERMODUS · {view.difficulty}</span>
-          <h1>{view.missionTitle}</h1>
-        </div>
-        <div className="spectate-stats">
-          {shown !== null && view.phase === 'playing' && <span className="countdown">{shown}</span>}
-          <span className="pill">
-            {view.currentPuzzleIndex}/{view.puzzleCount} Stationen · {view.penaltySeq} Alarme
-          </span>
-        </div>
-      </div>
+      <SpectateHead view={view} demo={demo === true} />
 
       {view.phase === 'lobby' && (
         <div className="banner-result">Die Crew ist noch in der Lobby …</div>

@@ -68,6 +68,13 @@ export const iceServersSchema = z.array(iceServerSchema).max(8);
 
 export type IceServer = z.infer<typeof iceServerSchema>;
 
+/**
+ * The code of the demo room, which a server plays itself for whoever watches (server
+ * demo/host.ts): watched by this code, joined by nobody. No room a server opens has an O in its
+ * code, so none ever has this one.
+ */
+export const DEMO_CODE = 'DEMO';
+
 /** The largest seed a room can be pinned to: a seed is 32 bits wide, as the PRNG takes it. */
 export const SEED_MAX = 0xffff_ffff;
 

@@ -149,6 +149,7 @@ describe('the menu', () => {
       'Einsatz starten',
       'Beitreten',
       'Offene Runden',
+      'Demo',
       'Handbuch',
       'Bestenliste',
       'Meine Einsätze',

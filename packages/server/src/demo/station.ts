@@ -29,7 +29,7 @@ type Span = readonly [number, number];
  * next run, and how long the crew waits before it starts over after something went wrong.
  */
 export const PACE = {
-  lobbyMs: 4000,
+  lobbyMs: 2500,
   introMs: 12_000,
   press: [1000, 2000] as Span,
   input: [3000, 5200] as Span,

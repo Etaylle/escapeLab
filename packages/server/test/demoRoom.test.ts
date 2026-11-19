@@ -123,7 +123,10 @@ describe('the demo room', () => {
     expect(manager.list()).toEqual([]);
   });
 
-  it('keeps its runs out of the run log and the Bestenliste, and plays the next seed after', () => {
+});
+
+describe('the demo room’s runs', () => {
+  it('stay out of the run log and the Bestenliste, and the next seed is played after', () => {
     const host = demoOn();
     const { line, file, store } = serverWith(host);
     const watcher = watching(line);
@@ -190,7 +193,10 @@ describe('the demo room', () => {
     expect(said.filter((line) => line.includes('plays seed 12'))).toHaveLength(2);
   });
 
-  it('lets a hundred and fifty watch, and tells the next that it is full', () => {
+});
+
+describe('the demo room’s audience', () => {
+  it('is a hundred and fifty at most, and the next is told that it is full', () => {
     const host = demoOn();
     const { line } = serverWith(host);
     for (let i = 0; i < DEMO_MAX_WATCHING; i++) {
