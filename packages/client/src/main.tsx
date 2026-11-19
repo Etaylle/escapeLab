@@ -2,6 +2,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App.js';
+import { readDemoLink } from './demoLink.js';
 import { newDraft } from './editor/draft.js';
 import { bootEditor, sessionStore, workOf, type EditorBoot } from './editor/session.js';
 import { registerServiceWorker, watchInstallOffer } from './pwa.js';
@@ -43,6 +44,8 @@ import './styles/interaction.css';
 // The player's volumes, text size and motion apply before the first frame (settings.ts).
 startSettings();
 watchInstallOffer();
+// The demo's link is read off the address, and taken off it, before anything copies the address.
+readDemoLink();
 // The worker caches the build; `vite` serves none, and a worker would stand in its way.
 if (import.meta.env.PROD) {
   registerServiceWorker();

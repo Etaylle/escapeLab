@@ -73,6 +73,7 @@ import { fileURLToPath } from 'node:url';
 import { PrismaClient } from '@prisma/client';
 import WebSocket from 'ws';
 import {
+  DEMO_CODE,
   canSee,
   drawPools,
   FIND_REACH,
@@ -2462,6 +2463,35 @@ await zoe.untilSpectator('sees where everybody stands', (v) =>
   v.players.every((p) =>
     JSON.stringify(p.presence) ===
       JSON.stringify(crew.find((client) => client.playerId === p.id)?.view?.presence)));
+
+// The demo room is up beside the rooms: watched by its code with no name and no pass, its crew
+// of two starts a run for whoever watches, and /health counts it apart from the rooms.
+const visitor = new TestClient('visitor');
+await visitor.open();
+visitor.send({ kind: 'spectate', code: DEMO_CODE });
+const demo = await visitor.expect(
+  'the demo room’s view',
+  (m): m is Extract<ServerMessage, { kind: 'spectator-view' }> => m.kind === 'spectator-view',
+);
+assert(
+  demo.code === DEMO_CODE && demo.view.players.length === 2 && demo.view.missionId === mission.id,
+  `the demo room shows its crew of two: ${demo.view.players.map((p) => p.name).join(', ')}`,
+);
+await visitor.untilSpectator('sees the demo crew start a run', (v) => v.phase === 'playing');
+const healthRes = await fetch(`http://localhost:${PORT}/health`);
+const health = (await healthRes.json()) as {
+  rooms: { running: number; spectators: number };
+  demo: { running: boolean; spectators: number } | null;
+};
+assert(
+  health.demo?.running === true && health.demo.spectators === 1,
+  '/health names the demo room apart: a run on, one watching',
+);
+assert(
+  health.rooms.running === 1 && health.rooms.spectators === 1,
+  '/health counts the crew’s run and its one spectator, the demo room’s among neither',
+);
+visitor.close();
 
 // The sign goes to whoever walks up to it; a source to whoever has it within two tiles in
 // sight, or long enough in the cone of the lamp they face east with from their spawn — each

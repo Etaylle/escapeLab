@@ -90,7 +90,7 @@ keine Grenze.
 
 **Startseite:** Ein Hauptmenü wie in einem Spiel, über dem beleuchteten Labor der gewählten
 Mission, das langsam vorbeizieht: *Einsatz starten* (die Missionskarten, „Runde eröffnen"),
-*Beitreten*, *Offene Runden*, *Handbuch*, *Bestenliste*, *Meine Einsätze*, *Editor* und
+*Beitreten*, *Offene Runden*, *Demo*, *Handbuch*, *Bestenliste*, *Meine Einsätze*, *Editor* und
 *Einstellungen* — mit der Maus, der Tastatur (Pfeile, Enter, Esc) oder dem Controller
 (Steuerkreuz, A, B). Oben rechts steht das Profil, das Konto des Browsers: Name, Farbe, die eigene
 Figur, die winkt, sobald der Name sich ändert, und wie viele Einsätze das Konto gespielt hat. Das
@@ -104,7 +104,15 @@ wiederherstellen ([`docs/accounts.md`](docs/accounts.md)).
 *Offene Runden* listet jede Runde mit Kartenvorschau, Mission, Schwierigkeit, ihrer Crew als
 Figuren und den freien Plätzen — ein Klick auf *Beitreten* genügt, niemand muss einen Code
 weitergeben. Laufende Runden erscheinen ebenfalls, dort führt der Knopf zum Zuschauen. Unter
-*Beitreten* bleibt ein Code-Feld für direkte Verabredungen, daneben *Zuschauen*. Bindet ein
+*Beitreten* bleibt ein Code-Feld für direkte Verabredungen, daneben *Zuschauen*. *Demo* führt
+ohne Namen, Konto und Code ins Publikum des Vorführraums, den der Server selbst spielt: „HCW
+Bachelor" und „HCW Master" fahren Blackout von der Eröffnung bis zur Luke, Lauf um Lauf, solange
+jemand zusieht;
+derselbe Weg als Link ist `/?demo=1` (für einen QR-Code), „Zuschauen beenden" führt zurück ins
+Menü (`docs/gameplay.md`, „Die Demo"). Eine offene Demo-Seite fragt alle vier Minuten `/health`
+ab und hält so einen Server wach, der ohne Anfragen einschläft (Render Free: 15 Minuten); nach
+einem Neustart oder Verbindungsabbruch ist sie von selbst wieder im Publikum. Auf einem quer
+gehaltenen Handy fehlt der Punkt wie die Einstellungen: Für beide ist die Spalte dort zu kurz. Bindet ein
 laufender Einsatz den Dienstausweis, steht seine Karte als erster Menüpunkt da. In die Lobby
 und zurück geht es durch die Schiebetüren des Labors; ab dem ersten Klick oder Tastendruck
 spielen Titelthema und Anlagenbrummen, in der Lobby leiser weiter. Die Endkarte spielt nach
@@ -119,9 +127,10 @@ vorzuhören, darunter die Nennungen, die ihre Lizenzen verlangen (`docs/sound.md
 das langsam vorbeizieht; rechts steht die eigene Figur mit der Handlampe, deren Kegel das Labor
 erhellt. Jeder Menüpunkt hat in Blackouts Labor einen eigenen Raum, zu dem die Kamera beim
 Darüberfahren langsam schwenkt (`docs/art-bible.md`, „The menu's places"): *Einsatz starten* (die
-Missionskarten, „Runde eröffnen"), *Beitreten*, *Offene Runden*, *Handbuch*, *Bestenliste*, *Meine
-Einsätze*, *Editor* und *Einstellungen* — mit der Maus, der Tastatur (Pfeile, Enter, Esc) oder dem
-Controller (Steuerkreuz, A, B). Oben in der Leiste steht das Konto des Browsers: der Kopf der
+Missionskarten, „Runde eröffnen"), *Beitreten*, *Offene Runden*, *Demo*, *Handbuch*,
+*Bestenliste*, *Meine Einsätze*, *Editor* und *Einstellungen* — mit der Maus, der Tastatur (Pfeile,
+Enter, Esc) oder dem Controller (Steuerkreuz, A, B). Oben in der Leiste steht das Konto des
+Browsers: der Kopf der
 eigenen Figur in ihrer Farbe, der Name und, wo Platz ist, wie viele Einsätze das Konto gespielt hat;
 ein Klick öffnet „Konto" in den Einstellungen, am Handy steht nur der Kopf. Den Namen tragen die
 Panels ein, die einen Platz nehmen (*Einsatz starten*, *Beitreten*, *Offene Runden*), und „Konto" —
@@ -371,7 +380,7 @@ beginnt mit vier Läufen von Blackouts früherer Kette: Die Bestenliste zeigt si
 Anlage" (history-archive.png).
 
 **Nur ein Teil des Rundgangs (Gruppen):** Jede Aufnahme des Rundgangs gehört zu genau einer von
-zweiundzwanzig Gruppen (`tools/groups.mjs`); `SHOTS_ONLY=screens,intro` spielt nur diese,
+dreiundzwanzig Gruppen (`tools/groups.mjs`); `SHOTS_ONLY=screens,intro` spielt nur diese,
 `SHOTS_SKIP=perf` alle außer diesen — der schnelle Beweis eines Teils. Vor dem Rundgang laufen die
 Proben, jede in einem Raum für sich: `editor`, `art`, `drones` (Gefahrensinn und eine Drohne aus der
 Nähe), `reconnect`, `restart` und `three` (Blackout zu dritt bis zum Paketfilter, die Zielzeile mit
@@ -379,9 +388,13 @@ jeder Hand: `three-lever`, `three-plate`, `three-hands`, `three-reader`, `three-
 Systemcheck nennt sie im Log als ausgelassen) — im Systemcheck dazu die Probe des Serverraums, die
 zu `devices` gehört, die der Zugangskontrolle, `access`, die der Anlaufsteuerung, `startup`, die des
 Paketfilters, `firewall`, `hall` (die Übungshalle bis zur Siegerkarte), `rotation` (die
-Wechselprobe auf zwei Seeds, siehe unten) und `music` (die Musikpakete
+Wechselprobe auf zwei Seeds, siehe unten), `music` (die Musikpakete
 in den Einstellungen auf einer eigenen Menüseite: ein anderes Paket hörbar, Vorhören, nach dem
-Neuladen behalten); Blackout nennt alle sieben im Log als ausgelassen. Der Rundgang selbst: `screens`
+Neuladen behalten) und `demo` (der Vorführraum: „Demo" im Menü eines Laptops, das Publikum mit
+dem Schild „Demo" und beiden Figuren, dann ein Handy über `/?demo=1`, hochkant und quer, zurück
+ins Menü, und der Server unter der zuschauenden Seite getötet und neu gestartet: sie ist ohne
+Neuladen wieder im Publikum); Blackout nennt alle acht im Log als ausgelassen. Der Rundgang
+selbst: `screens`
 (Menü und sein Ton, Bestenliste, Lobby, der Start aus ihr), `intro` (die Eröffnung bis
 `blackout.png`) und `run` (die Mission bis zur Siegerkarte, nach dem gewonnenen Systemcheck die
 Einsätze des Kontos, sein Kennwort, die Anmeldung auf einem zweiten Gerät, der Kontowechsel und sein
@@ -419,7 +432,9 @@ s:
 75 bis 91 s allein mit `SHOTS_ONLY=three`. `firewall` (I-firewall) spielt nur im Systemcheck: 71,4 s allein
 mit `SHOTS_ONLY=firewall` bei Last um 4 (17.11.2026), und die Übungshalle braucht an ihrem
 Paketfilter 55,1 s dazu. `music` (M-packs) spielt nur im Systemcheck: 4,9 s im CI,
-9,7 s allein mit `SHOTS_ONLY=music` bei Last um 20.
+9,7 s allein mit `SHOTS_ONLY=music` bei Last um 20. `demo` (D-demo) spielt nur im Systemcheck:
+31,1 s allein mit `SHOTS_ONLY=demo` bei Last um 6 (19.11.2026), davon rund 19 s Warten, bis beide
+Figuren am Hauptschalter stehen, und 8 s für den Neustart des Servers.
 
 `rotation` (B-rotation) spielt nur im Systemcheck: Die Probemission
 `tools/fixtures/rotation-probe.json` („Wechselprobe") hat an ihrem mittleren Platz einen
@@ -575,7 +590,9 @@ Betrieb:
   mitgebrachten Schnappschuss wieder her, und sobald zurück ist, wer beim Deploy verbunden war,
   läuft die Uhr dort weiter, wo sie stand; wer schon vorher getrennt war, bleibt es wie zuvor.
   Auto-Deploy bleibt an, also ist jeder Push auf `main` ein Deploy; wer pusht, sieht
-  in `/health` (`rooms.running`, `rooms.players`), ob gerade gespielt wird. Ein neues Feld im
+  in `/health` (`rooms.running`, `rooms.players`), ob gerade gespielt wird — der Vorführraum
+  zählt dort nicht mit, er steht für sich unter `demo` (`running`, `spectators`, `won`, `lost`).
+  Ein neues Feld im
   Spielzustand braucht im Schnappschuss-Schema (`packages/core/src/snapshot.ts`) einen Vorgabewert,
   sonst verwirft der neue Build die Schnappschüsse des alten, und der Deploy beendet jeden laufenden
   Einsatz; dann schlägt der Test fehl, der einen Schnappschuss des Builds davor öffnet

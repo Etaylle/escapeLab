@@ -6,7 +6,8 @@ walks of Blackout's lab, stations in any order, runs without a clock and the Üb
 first win at the stations the whole crew presses, a crew of three, the Erfolge, the Tagesschicht,
 the picture of a run, the danger sense, the Serverraum's cabling diagram, typing at its terminal,
 the Zugangskontrolle, the Anlaufsteuerung, the Paketfilter, an emergency and the open station,
-what the notepad takes down and what happens when a line drops. Code:
+what the notepad takes down, what happens when a line drops, and the demo room the server plays
+itself. Code:
 `packages/client/src/input/` (bindings, controller, prompts), `client/src/achievements.ts` and
 `screens/{Plaques,ShareButton,ControlSettings}.tsx`,
 `screens/shareCard.ts`, `world/{labelFade,finds,danger,ChatWheel}.ts(x)`,
@@ -21,7 +22,7 @@ what the notepad takes down and what happens when a line drops. Code:
 `puzzles/startup.ts`, `conduits.ts`, `puzzles/firewall.ts`,
 `puzzles/buttonSync.ts` and `actions.ts` (a line that drops, the maintenance, `takeUp`,
 `hasClock`, `clocked`), the hall in `test/hall.ts`; in the server `room.ts`, `seats.ts`,
-`heartbeat.ts`.
+`heartbeat.ts`, `demo/` (the demo room and its crew).
 
 ## Controls
 
@@ -1349,3 +1350,91 @@ den Raum."
 **The back button.** In a run the browser's back button opens the pause menu instead of leaving
 the page: the run keeps a history entry of its own (`historyGuard.ts`), which a press of back
 spends and the menu puts back.
+
+## Die Demo: the room the server plays itself
+
+„Demo" in the main menu, after „Offene Runden", and the link `/?demo=1` (the stand's QR code) lead
+straight into the audience of the demo room: no name, no account, no code. The link is read once as
+the page comes up and taken off the address at once (`client/src/demoLink.ts`), so that no invite
+link copies it and a reload after „Zuschauen beenden" finds the menu. A phone held sideways has no
+room for the item in its menu's column, as it has none for „Einstellungen": there the link leads
+into the demo, and held upright the item stands. The audience is the one every room has, with the
+label „Demo" beside the mission's name — on every window, a phone's too — and on a wide window one
+line under it, „Vorführbetrieb: Die Anlage fährt diesen Einsatz selbst."; the crew stands along the
+foot as always: „HCW Bachelor" and „HCW Master" (Uros's names for the two), each with what it is
+doing (am Pult A, liest, hält die Platte, trägt die Sicherung). Under a finger the foot's two ways,
+„Crew mithören" and „Zuschauen beenden", are 44 px tall. Whoever joins mid-run sees the run as it
+stands.
+
+**It keeps its server awake, and comes back by itself.** A page that only watches sends nothing
+over HTTP — its socket carries everything — and a host that puts an instance to sleep counts
+requests (Render's free plan: 15 minutes without one). So the demo's audience asks `/health` every
+4 minutes for as long as it watches (`client/src/keepAwake.ts`), a request that fails left be.
+Where the server restarts or the line drops, the page's line comes back as every page's does —
+again after 1 s, 2 s, 4 s, at most 10 s apart (`line.ts`) — and asks for the demo room's audience
+again, with no reload: killed and started again under a watching page, the server had the page back
+in the audience 3.4 s after it was up (the walkthrough's demo drill does it in every Systemcheck
+run that owns its server).
+
+**The room** (`server/src/demo/host.ts`) has the code `DEMO` (core `DEMO_CODE`; no room a server
+opens has an O in its code) and is none of the manager's rooms: no list shows it, nobody joins it
+(„In der Vorführung spielt die Anlage selbst. Zuschauen geht über „Demo“ im Hauptmenü."), no pass
+resumes into it, the sweep never closes it, and its runs go to no store — not the run log, not
+Postgres, so not the Bestenliste, „Meine Einsätze", the Erfolge or the Tagesschicht, which it never
+plays. `/health` counts it apart: `demo: { running, spectators, won, lost }`, and `rooms.running`
+stays what the crews' rooms make it. It plays Blackout on normal. At most 150 watch at once; the
+next is told „Die Vorführung ist voll besetzt. In ein paar Minuten ist wieder ein Platz frei." The
+cap is one for everybody, not one an address: a lecture hall behind one address watches whole.
+
+**It plays while somebody watches.** The first of the audience finds the room in its lobby; 2.5 s
+later the run starts, the opening stands 12 s with the lights on, and the lights go out. After the
+won card the Auswertung stands 20 s, then both say yes and the next run starts by itself. The runs
+take their seeds from a list (`demoSeeds`): of the seeds 0 to 99, one for each station of the
+Wechselplatz in turn — Signalkette, Funkpult, Notstromkasten — 93 runs before the list comes round.
+Once nobody has watched for a minute the room is closed and a fresh one stands in its lobby with no
+timer running; the next of the audience sees a run from its start. After a deploy or a restart the
+demo is simply there again: nothing of it is kept.
+
+**The crew** (`demo/crew.ts`) is two seats on lines as a page's socket has one: all they do is say
+what a page says — `pos`, `interact`, `puzzle-input`, `open-source`, `intro-done`, `set-ready`,
+`start-mission` — and all they know came over their lines, beside the mission as its file has it:
+where the consoles stand, on which spots a source may lie, where a part lies and goes, the patrols'
+beats — what a crew that knows its lab knows. Where a source lies this run, which doors stand open,
+every instance and every drone's place come from the two views alone; a station is worked by its
+module's `solve` on what the two seats see, the moves it gives together made in a row. Nothing in
+the crew's files names a room or the game (a test reads their imports), and a test plays a run over
+lines that carry copies.
+
+**It plays as people do.** It walks at a player's 4.2 tiles a second, from tile to tile, round the
+consoles and the sources on its way, and stands before a console, never on it. Who is nearer reads
+the rules at their source first — a locker searched, the Aktenschrank's key fetched and the cabinet
+unlocked — for 14 to 20 s; the other carries in what the station waits for (the Ersatzsicherung,
+when the Reaktor is up, as mission control says it then) and reads the Laborkennung off its sign
+where nobody started at it. A door a plate holds is held by the one while the other walks through.
+E comes 1 to 2 s after a figure has taken its place, 3 to 5.2 s lie between two inputs, the two
+presses of a lever 0.25 to 0.6 s apart. An emergency's instruction is carried out 3 to 4.6 s after
+it came up; the handgrip an emergency cuts into is dropped and taken up anew after it, the station
+switched on again. The pauses are thrown from the same dice in every run, so that the run a seed
+plays is the run the tests prove.
+
+**Past the drones** (`demo/walks.ts`, `demo/patrol.ts`) it goes as the walkthrough's crew does
+(`tools/patrol.mjs`): from haven to haven — the tiles no drone ever looks at —, each stretch
+between taken in one go once no flight foretold from the stream would have a cone on it, with 0.4
+tiles and 5° of margin on the room's rule and 0.35 s on its own pace. It never runs for it: a walk
+waits for its gap, 2 to 53 s of a run in all. In an emergency the drones spot nobody, and see again
+the moment it is over: a walk that stands on a haven then waits it out there.
+
+**What a run comes to.** Over the seeds 0 to 99 on fake timers every run is won with no alarm and
+no hint, one emergency or two weathered in each: the Funkpult's runs take 5.3 to 6.7 min on the
+clock, the Signalkette's 6.5 to 7.1, the Notstromkasten's 6.3 to 7.6, of the mission's 16. In real
+time the three seeds of the draws (12, 56, 93) came to 410, 343 and 380 s, on fake timers to 407,
+343 and 379 s. A run is lost only by the clock or the alarm limit, which a crew that careful does
+not come near; a server that hangs for seconds may cost it a sighting.
+
+**What watching costs.** The server's process on an M4, measured over two and a half minutes each
+(2026-11-19): with nobody watching 45 MB and 0.05 % of a core — the demo room in its lobby runs no
+timer —, with three watching 58 MB and 0.8 %, with sixty 89 MB and 3.0 %, sending 654 kB a second
+in all. A small hosted instance's share of a slower core is a tenth of one: three watching are
+nothing to it, sixty are about what it has. One of the audience is sent some 0.5 views a second of
+12 kB and 7.5 position messages of 0.5 kB — 6 to 10 kB a second, about 4 MB a run — so sixty take
+about 0.5 MB a second out of the server: the line, not the processor, is what an audience costs.

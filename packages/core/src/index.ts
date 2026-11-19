@@ -287,6 +287,7 @@ export {
   rtcSignalSchema,
   RTC_SIGNAL_MAX,
   RESTART_CLOSE,
+  DEMO_CODE,
   SEED_MAX,
   SNAPSHOT_EVERY_MS,
   SNAPSHOT_LIVE_MS,

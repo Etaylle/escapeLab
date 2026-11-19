@@ -1075,6 +1075,37 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   zugleich auf dem Server, 32 warten, eine Adresse hält höchstens die Hälfte der Plätze
   (`docs/accounts.md`, „Sign in"). Google (K-1b) bleibt zuletzt.
 
+### D-1 Demo: die Anlage spielt Blackout selbst — Status: im PR (D-demo) · Größe: L
+- Anlass (Uros, 2026-11-19): Stand am Tag der offenen Tür mit zwei Laptops und QR-Codes; wer
+  nicht spielen will, soll sehen, wie das Spiel aussieht und gespielt wird, ohne dass auf den
+  Laptops etwas gestartet wird.
+- „Demo" im Hauptmenü (nach „Offene Runden") und der Link `/?demo=1` führen ohne Namen, Konto und
+  Code ins Publikum des Vorführraums (Code `DEMO`), den der Server selbst spielt
+  (`server/src/demo/`): „HCW Bachelor" und „HCW Master" an eigenen Leitungen, die nur sagen, was
+  eine Seite sagt
+  (`pos`, `interact`, `puzzle-input` …), und nur wissen, was ihre zwei Sichten und die
+  Missionsdatei hergeben; jede Station löst `solve()` des Moduls über diese Sichten. Gehen im
+  Spielertempo, Quelle erst lesen, Eingaben im Abstand von 3 bis 5,2 s, an den Drohnen vorbei von
+  Zuflucht zu Zuflucht wie die Crew des Rundgangs, der Notfall am Relais beantwortet.
+- Schleife: 20 s Auswertung, dann der nächste Seed aus einer Liste von 93 (Seeds 0–99, reihum
+  Signalkette, Funkpult, Notstromkasten). Schaut eine Minute niemand zu, wird der Raum
+  geschlossen und wartet ohne Timer in der Lobby; nach einem Deploy ist er einfach wieder da.
+- Getrennt: kein Raum des Managers (keine Liste, kein Beitritt, kein Wiedereintritt), Läufe in
+  keinem Speicher (weder Laufprotokoll noch Postgres, also weder Bestenliste noch „Meine
+  Einsätze" noch Erfolge noch Tagesschicht); `/health` nennt ihn für sich (`demo`),
+  `rooms.running` bleibt davon unberührt. Höchstens 150 Zuschauende.
+- Beweis: 100 Seeds auf falschen Timern gewonnen ohne Alarm (5,3 bis 7,6 min auf der Uhr), die
+  drei Seeds der Auslosungen in Echtzeit auf 3 s gleich; Rundgang-Probe `demo` (vier Aufnahmen,
+  23 s); Smoke prüft Raum, Sicht und `/health`; `docs/gameplay.md`, „Die Demo".
+- Zusatz (Uros, 2026-11-19): Im Kopf des Publikums steht das Schild „Demo"; die offene Seite
+  fragt alle 4 min `/health` ab (hält Render Free wach) und ist nach Neustart oder Abbruch ohne
+  Neuladen wieder im Publikum (Probe: Server unter der Seite getötet, 3,4 s nach dem Start zurück).
+  Serverprozess auf dem M4: 0 Zuschauende 45 MB und 0,05 % eines Kerns, 3: 58 MB und 0,8 %,
+  60: 89 MB und 3,0 %, 654 kB/s hinaus. QR-Codes (Menü, Lobby, Publikum) folgen im selben Branch.
+- Auf dem quer gehaltenen Handy steht „Demo" nicht im Menü (sieben Punkte füllen 390 px Höhe, wie
+  bisher ohne „Einstellungen"); dorthin führt der Link, und hochkant steht der Punkt da.
+- Offen: Die 23 Sprechtexte warten weiter auf Uros' Render; die Demo fügt keinen hinzu.
+
 ## Nur lokal
 
 ### L-1 Aufnahmen rendern — Status: erledigt (2026-11-04, ec0ef9c + 031cb7a)
