@@ -1395,9 +1395,9 @@ timer running; the next of the audience sees a run from its start. After a deplo
 demo is simply there again: nothing of it is kept.
 
 **What keeps it going.** A run that is lost — by its clock, or by its alarms — is counted as lost
-and the next follows after the Auswertung as after a win. A run that gets no further for four
-minutes (no station solved, no hatch opened), or whose crew has started over thirty times in a row,
-is given up by its host: lost as by its clock (`Room.runOut`), said once in the log, and the next
+and the next follows after the Auswertung as after a win. A run that gets no further for five
+minutes (no station solved, no hatch opened — a healthy crew's longest stretch is 157 s, 191 s
+on hanging lines), or whose crew has started over thirty times since it last got on, is given up by its host: lost as by its clock (`Room.runOut`), said once in the log, and the next
 seed follows — without that a stuck crew would stand for the rest of the sixteen minutes. Nothing
 the audience sends reaches the room: an audience connection may watch, listen in on a crew and
 leave, and every other word of a seat's — a start, a rematch, the way back to the lobby, a move, a
@@ -1405,7 +1405,8 @@ ping, a quick chat — is refused at the door („Das Publikum schaut zu: Gescha
 Platz der Crew."), in every room. A start, a rematch or a way back the room refuses changes nothing
 of it, and rolls no seed. A socket that asks for the audience it is in already goes on watching,
 nobody told anything; one that joins audiences more than twelve times a minute is told „Nicht so
-schnell — gleich noch einmal.", and the log says a refusal once a socket. In the demo „Crew
+schnell — gleich noch einmal.", and the log says a refusal once a socket, twenty different ones
+of a socket at the most. In the demo „Crew
 mithören" is not offered: nobody speaks there.
 
 **On a phone** the audience's page — the demo's and every room's — scrolls down when held upright:
