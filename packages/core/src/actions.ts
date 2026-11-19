@@ -1712,9 +1712,13 @@ function startSabotage(state: GameState, action: { at: number }): GameState {
  */
 function backFromRest(state: GameState, at: number): GameState {
   const { resting } = state;
+  if (resting === null) {
+    return { ...state, sabotage: null };
+  }
+  // The station up cannot change while an emergency runs: nothing is solved or picked in one.
   const def = state.mission.puzzles[state.currentPuzzleIndex];
-  if (resting === null || def?.type !== resting.type) {
-    return { ...state, sabotage: null, resting: null };
+  if (def === undefined) {
+    throw new Error(`mission "${state.mission.id}": a station rests, but none is up`);
   }
   const puzzleState = moduleFor(def.type).resume?.(def, resting, at) ?? resting;
   return { ...state, sabotage: null, resting: null, puzzleState };

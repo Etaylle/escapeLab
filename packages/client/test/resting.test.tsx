@@ -131,6 +131,19 @@ describe('the console of a station that rests', () => {
     expect(here(armed)).toMatchObject({ kind: 'operate', label: 'Bedienen' });
   });
 
+  it('reads „Bedienen" again once the emergency is over, and E opens the device', () => {
+    const console = { x: 4.5, y: 2.2 };
+    const prompt = (actions: Action[]) => {
+      const view = anna(actions);
+      const map = view.map ?? mapWith({});
+      const action = contextAction(map, console, view.you.id, [], view.puzzle !== null, null);
+      return action === null ? null : [action.kind, promptText(action, false)];
+    };
+    expect(prompt([...begun, on, emergency])).toEqual(['locked', RESTING_PROMPT]);
+    expect(prompt([...begun, on, emergency, over])).toEqual(['operate', 'Bedienen']);
+    expect(anna([...begun, on, emergency, over]).puzzle?.kind).toBe('firewall');
+  });
+
   it('is told from the server’s view: both consoles of the resting station, nothing of it', () => {
     const view = anna([...begun, on, emergency]);
     const spots = view.map?.stations ?? [];

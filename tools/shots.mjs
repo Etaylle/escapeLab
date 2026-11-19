@@ -748,6 +748,7 @@ import {
 } from './groups.mjs';
 import { lightWorkText } from './lightwork.mjs';
 import { drawnText, fadeOf, fadeVerdict, meanLuma, midway } from './panelfade.mjs';
+import { movesTaken } from './planleft.mjs';
 import { beamLight, beamPatches, beamVerdict } from './beamcheck.mjs';
 import { changedShare, sweepOf, sweepVerdict } from './sweep.mjs';
 import {
@@ -10520,15 +10521,14 @@ async function captureServersSolved(player) {
  * A plan's moves played at both consoles, move by move, ~150 ms apart — the
  * first command typed at the prompt (`typeCommand`, caught as `typingShot`
  * where one is named), the rest put together on the keys — and the station
- * solved by the last move, without an alarm. `onMove`, where given, hears of every move the
- * station took.
+ * solved by the last move, without an alarm.
  */
-async function playServers(crew, moves = SERVERS_PLAN.moves, typingShot = null, onMove) {
+async function playServers(crew, moves = SERVERS_PLAN.moves, typingShot = null) {
   const { terminal } = crew;
   const index = terminal.seen.view.currentPuzzleIndex;
   const alarms = terminal.seen.view.alarms.count;
   const from = Date.now();
-  const said = await playMoves(crew, moves, typingShot, onMove);
+  const said = await playMoves(crew, moves, typingShot);
   const shot = await inGroup('devices', () => captureServersSolved(terminal));
   const took = Date.now() - from;
   const solved = await until(() => terminal.seen.view.currentPuzzleIndex > index, 3000);
@@ -10546,15 +10546,14 @@ async function playServers(crew, moves = SERVERS_PLAN.moves, typingShot = null, 
 
 /**
  * The plan's `moves` at both consoles of `crew`, ~150 ms apart, the first command typed at the
- * prompt (`serversMove`, caught as `typingShot` where one is named), `onMove` told of each as
- * the station has taken it. Returns the moves as the log says them.
+ * prompt (`serversMove`, caught as `typingShot` where one is named). Returns the moves as the
+ * log says them.
  */
-async function playMoves(crew, moves, typingShot, onMove = () => undefined) {
+async function playMoves(crew, moves, typingShot) {
   const said = [];
   for (const move of moves) {
     const typed = move.by === 'operator' && !said.some((line) => line.startsWith('A '));
     said.push(await serversMove(crew, move, typed, typed ? typingShot : null));
-    onMove();
     if (said.length < moves.length) {
       await sleep(150);
     }
@@ -12862,16 +12861,17 @@ async function playServerraum(host, guest) {
   const crew = { terminal: host, rack: guest };
   const role = (player) => player.seen.view.puzzle?.role ?? null;
   const { moves } = BLACKOUT_PLAN.subsysteme;
-  // The plan's moves the station has taken: after an emergency it is back with them done, and
-  // a second try goes on with the rest — the table and its shots are the untouched station's.
-  let made = 0;
   await pastEmergencies(async () => {
     await openPanel(host, 'a');
     await openPanel(guest, 'b');
     if (!(await until(() => role(host) === 'terminal' && role(guest) === 'rack', 3000))) {
       throw new Error(`the Serverraum's panels say ${role(host)} and ${role(guest)}`);
     }
-    if (made === 0) {
+    // After an emergency the station is back with what was done at it: a second try reads
+    // from the terminal's log how far the plan has come (planleft.mjs) and goes on with the
+    // rest — the table and its shots are the untouched station's.
+    const taken = movesTaken(moves, host.seen.view.puzzle?.log ?? []);
+    if (taken === 0) {
       const rows = host.seen.view.puzzle?.rows ?? null;
       await inGroup('devices', () => captureServersConsoles(crew));
       await inGroup('devices', () => captureDevicePhone(guest, stationSlug(guest)));
@@ -12880,8 +12880,8 @@ async function playServerraum(host, guest) {
       }
     }
     await clearOfDrones(guest, 9);
-    const shot = made === 0 ? 'terminal-typing.png' : null;
-    await playServers(crew, moves.slice(made), shot, () => (made += 1));
+    const shot = taken === 0 ? 'terminal-typing.png' : null;
+    await playServers(crew, moves.slice(taken), shot);
   });
 }
 
