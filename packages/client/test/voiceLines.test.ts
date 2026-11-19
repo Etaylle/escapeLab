@@ -107,57 +107,10 @@ const MS_PER_WORD = { min: 200, max: 900 } as const;
  * last word on the end card, the Funkprobe and a line of the opening silent, the words shown all
  * the same. To be emptied as the render (docs/sound.md) makes them, for every person who says
  * them. Any other line without a recording fails, and so does a line here that every one of them
- * has now. Today the 23 lines Blackout's new chain says (B-blackout2, B-blackout3): the
- * hand-overs after the Notlicht, the Anlaufsteuerung, the Paketfilter, the Serverraum, the
- * Signalkette and the Notstromkasten, two texts each, and the nudges of the Anlaufsteuerung
- * (four), the Paketfilter (three), the Notstromkasten at its new place with its Wartungsbuch in
- * the Labor (three) and the Signalkette's with console A in the Archiv (one) — each by the
- * three of the Leitstelle.
+ * has now. Empty since the owner's render of 2026-11-19 made the 23 texts of Blackout's new chain
+ * (B-blackout2, B-blackout3) for the three of the Leitstelle.
  */
-const AWAITING_RENDER: readonly string[] = [
-  'Notlicht steht, danke. Jetzt das Notstromaggregat: Das Betriebsbuch liegt im Archiv, ein ' +
-    'Pult der Anlaufsteuerung steht im Flur, eins im Maschinenraum.',
-  'Notlicht brennt, ich sehe euch wieder auf meiner Tafel. Weiter mit der Anlaufsteuerung: ' +
-    'Betriebsbuch im Archiv, Pulte im Flur und im Maschinenraum.',
-  'Aggregat läuft, die Maschinenraumtür bleibt offen. Als Nächstes der Paketfilter am ' +
-    'Serverschott: Pulte östlich davon, die Richtlinie hängt westlich an der Südwand.',
-  'Die Maschinen laufen an, im Maschinenraum ist Licht. Der Paketfilter vor dem Serverraum ' +
-    'braucht beide Pulte, die Richtlinie hängt westlich vom Schott.',
-  'Das Betriebsbuch zur Anlaufsteuerung liegt im Archiv, auf der Ostseite.',
-  'Ohne das Betriebsbuch aus dem Archiv sagen die Leuchten am Schaltfeld nichts, es liegt ' +
-    'dort auf der Ostseite.',
-  'Ein Pult der Anlaufsteuerung steht am Westende vom Flur, eins im Maschinenraum hinter ' +
-    'der Plattentür.',
-  'Die Tür zum Maschinenraum geht nur auf, solange jemand auf der Platte davor steht, ' +
-    'dahinter wartet das zweite Pult.',
-  'Die Richtlinie zum Paketfilter hängt im Flur an der Südwand, westlich vom Schott.',
-  'Welche Pakete der Filter sperrt, steht in der Richtlinie, sie hängt im Flur an der ' +
-    'Südwand.',
-  'Das Analysepult steht im Flur gleich östlich vom Schott zum Serverraum, das Sperrpult ' +
-    'ein Stück weiter Richtung Ostende.',
-  'Schott zum Serverraum ist offen, drinnen Terminal und Rack. Die Unterlagen dazu liegen im ' +
-    'Spind zwischen den beiden.',
-  'Das Schott zum Serverraum ist auf. Terminal und Rack stehen drinnen, die Unterlagen ' +
-    'liegen im Spind darin.',
-  'Server laufen, Labortür offen, beide Drohnen sind wach. Ich schalte euch die Anlage auf, ' +
-    'die heute Dienst hat, sie öffnet den Reaktor.',
-  'Server oben, zwei Drohnen fliegen, die Kameraplatte am Schott hält die im Flur an. Die ' +
-    'Anlage, die Dienst hat, öffnet den Reaktor.',
-  'Signalkette steht, die Türen zum Reaktor sind offen. Ohne Ersatzsicherung bleibt er aber ' +
-    'tot.',
-  'Die Signalkette hält, der Reaktor ist offen. Die Ersatzsicherung dafür liegt im Archiv, ' +
-    'bringt sie rüber.',
-  'Der Notstromkasten hält, die Türen zum Reaktor sind offen. Ohne Ersatzsicherung bleibt ' +
-    'er aber tot.',
-  'Der Notstromkasten ist sicher, der Reaktor ist offen. Die Ersatzsicherung dafür liegt im ' +
-    'Archiv, bringt sie rüber.',
-  'Das Wartungsbuch zum Notstromkasten liegt im Labor, ein paar Schritte vom Prüfpult entfernt.',
-  'Ohne das Wartungsbuch aus dem Labor ratet ihr am Kasten nur herum.',
-  'Der Notstromkasten hängt im Maschinenraum gleich hinter der Tür, das Prüfpult steht im ' +
-    'Labor an der Südwand.',
-  'Pult A der Signalkette steht im Archiv an der Südwand, Pult B im Maschinenraum in der ' +
-    'Südostecke.',
-];
+const AWAITING_RENDER: readonly string[] = [];
 
 const manifest = readManifest();
 const recordings = readdirSync(VOICE_DIR).filter((name) => /\.(m4a|mp3)$/.test(name));
@@ -241,12 +194,11 @@ describe('the recorded lines', () => {
     expect(recordings.filter((name) => !named.has(name)), REMEDY).toEqual([]);
   });
 
-  it('keeps the old chains’ thirteen lines, said by no shipped mission, by all three', () => {
-    // A room taken up again from a snapshot of Blackout's chain before the Wechselplatz, or of
-    // its first chain with it, plays that mission on, and its radio says these: a render must
-    // not drop their takes.
+  it('keeps the old chain’s line, said by no shipped mission, by all three', () => {
+    // A room taken up again from a snapshot of Blackout's first chain with the Wechselplatz plays
+    // that mission on, and its radio says this: a render must not drop its takes.
     const kept = keptForOldRuns(manifest);
-    expect(OLD_RUN_LINES).toHaveLength(13);
+    expect(OLD_RUN_LINES).toHaveLength(1);
     for (const text of OLD_RUN_LINES) {
       const sayers = kept.filter(([, entry]) => entry.text === text).map(([id]) => id);
       expect(sayers.sort(), text).toEqual(
@@ -831,7 +783,7 @@ describe('what a run keeps, and what it makes anew', () => {
       expect(entry.model, entry.text).toBe('eleven_v4');
       expect(modelOf(paid, take)).toBe('eleven_v4');
     }
-    expect(before).toHaveLength(48);
+    expect(before).toHaveLength(42);
     expect(new Set(before)).toEqual(new Set(['helmut']));
   });
 
@@ -884,7 +836,7 @@ describe('what a run keeps, and what it makes anew', () => {
       const take = { text: entry.text, said: entry.text, person: 'helmut', mood };
       return entry.person === 'helmut' && entry.render === renderOf(his, take);
     });
-    expect(before).toHaveLength(48);
+    expect(before).toHaveLength(42);
     const cast = plannedVoice(roster);
     for (const entry of Object.values(manifest.lines)) {
       const said = shippedLines().get(entry.text)?.said ?? entry.text;
@@ -1170,7 +1122,7 @@ describe('a plain run, and what --fresh would make beside it', () => {
   it('keeps Helmut’s takes of before, and names what --fresh would make anew, with credits', () => {
     const plain = costsOf(roster, manifest, 'none');
     const fresh = costsOf(roster, manifest, 'synthetic');
-    expect(plain.find((cost) => cost.slot === 'operator:helmut')?.skip).toBe(69);
+    expect(plain.find((cost) => cost.slot === 'operator:helmut')?.skip).toBe(92);
     const beside = freshBeside(plain, fresh);
     expect(beside).toEqual({ lines: 41, characters: 3301 });
     expect(planReport(plain, 'none', beside).at(-1)).toBe(
