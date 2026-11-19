@@ -1,0 +1,652 @@
+/* ══ the break-room machine ═══════════════════════════════════════════════════
+ * arcade/Machine.tsx and its parts, in the chunk the machine comes in. The frame is the plant's
+ * look — the menu's near-black panel, its hairline, Michroma for the machine's name and nowhere
+ * else —, the screen inside it the game's own: its night ground, its mint and orange, its mono.
+ * Over everything while it stands open; while a game runs the field is the page, as large as the
+ * window lets it be, the HUD beside it on a wide window and over it on an upright one. Nothing
+ * blurs what lies behind it; under reduced motion nothing slides.
+ */
+
+.arcade {
+  --arcade-ground: #080d11;
+  --arcade-mint: #bcecc7;
+  --arcade-orange: #ffad65;
+  --arcade-text: #f1f3d9;
+  --arcade-muted: #a0afa0;
+  position: fixed;
+  inset: 0;
+  z-index: 63;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px)
+    env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
+  background: #090e13;
+  color: var(--arcade-text);
+  font-family: var(--mono);
+  font-size: calc(14px * var(--text-scale, 1));
+}
+
+.arcade button {
+  min-height: 44px;
+  padding: 8px 14px;
+  border: 1px solid var(--line-2);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--arcade-mint);
+  font-family: var(--mono);
+  font-size: calc(14px * var(--text-scale, 1));
+  cursor: pointer;
+}
+
+.arcade button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.arcade button:focus-visible {
+  outline: 2px solid var(--arcade-orange);
+  outline-offset: 3px;
+}
+
+.arcade-kicker {
+  color: var(--arcade-orange);
+  letter-spacing: 0.14em;
+  font-size: calc(14px * var(--text-scale, 1));
+}
+
+/* The head: the machine's name in the plant's face, the HUD, the machine's buttons. */
+.arcade-hud {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 20px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--line-2);
+}
+
+.arcade-name h1 {
+  margin: 2px 0 0;
+  font-family: var(--display);
+  font-size: calc(18px * var(--text-scale, 1));
+  font-weight: 400;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text);
+}
+
+.arcade-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 22px;
+  margin: 0;
+}
+
+.arcade-stats dt {
+  color: #93ad9a;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+}
+
+.arcade-stats small {
+  color: #758e7d;
+  font-size: inherit;
+}
+
+.arcade-stats dd {
+  margin: 2px 0 0;
+  font-size: calc(22px * var(--text-scale, 1));
+  letter-spacing: 0.1em;
+  color: var(--arcade-mint);
+}
+
+.arcade-stats .arcade-score {
+  color: var(--arcade-text);
+}
+
+.arcade-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* The stage: the field as large as it fits, the machine's menu beside it. */
+.arcade-stage {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  min-height: 0;
+  padding: 8px;
+  overflow: auto;
+}
+
+.arcade-field {
+  position: relative;
+  aspect-ratio: 800 / 680;
+  width: min(100%, 720px);
+  background: var(--arcade-ground);
+  border: 1px solid var(--line-2);
+}
+
+.arcade-field canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+}
+
+.arcade--playing .arcade-stage {
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  container-type: size;
+}
+
+.arcade--playing .arcade-field {
+  width: min(100cqw, calc(100cqh * 800 / 680));
+}
+
+/* While a game runs only the numbers and the buttons stay: the field takes the rest. */
+.arcade--playing .arcade-name {
+  display: none;
+}
+
+.arcade--playing .arcade-hud {
+  padding: 6px 10px;
+}
+
+.arcade--playing .arcade-buttons button {
+  padding: 8px 10px;
+}
+
+/* Upright, by touch: the HUD, the field and the buttons together at the bottom, in reach. */
+@media (max-aspect-ratio: 3/2) {
+  .arcade--touch {
+    grid-template-rows: minmax(0, 1fr) auto auto auto;
+  }
+
+  .arcade--touch .arcade-hud {
+    grid-row: 2;
+  }
+
+  .arcade--touch .arcade-stage {
+    grid-row: 3;
+    display: block;
+    container-type: normal;
+  }
+
+  .arcade--touch .arcade-field {
+    width: 100%;
+  }
+
+  .arcade--touch .arcade-touch {
+    grid-row: 4;
+  }
+}
+
+/* A wide window: the HUD down the field's left, the buttons down its right. */
+@media (min-aspect-ratio: 3/2) {
+  .arcade--playing {
+    grid-template-columns:
+      minmax(150px, 1fr) min(calc(100vw - 340px), calc((100svh - 16px) * 800 / 680))
+      minmax(150px, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+  }
+
+  .arcade--playing .arcade-hud {
+    display: contents;
+  }
+
+  .arcade--playing .arcade-stats,
+  .arcade--playing .arcade-buttons {
+    flex-direction: column;
+    flex-wrap: nowrap;
+    gap: 14px;
+    padding: 12px;
+    align-self: start;
+  }
+
+  .arcade--playing .arcade-stats {
+    grid-column: 1;
+    grid-row: 1;
+    justify-self: end;
+  }
+
+  .arcade--playing .arcade-buttons {
+    grid-column: 3;
+    grid-row: 1;
+    justify-self: start;
+  }
+
+  .arcade--playing .arcade-buttons button {
+    width: 150px;
+    text-align: left;
+  }
+
+  .arcade--playing .arcade-stage {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .arcade--touch .arcade-touch {
+    position: fixed;
+    left: 8px;
+    right: 8px;
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 12px);
+    padding: 0;
+    pointer-events: none;
+  }
+
+  .arcade--touch .arcade-touch button {
+    pointer-events: auto;
+    width: 72px;
+    height: 72px;
+    flex: none;
+  }
+
+  .arcade--touch .arcade-touch .arcade-fire {
+    width: 104px;
+    margin-left: auto;
+  }
+}
+
+/* The machine's menu beside its attract screen. */
+.arcade-menu {
+  display: grid;
+  gap: 10px;
+  width: min(100%, 340px);
+  padding: 16px;
+  border: 1px solid var(--line-2);
+  border-radius: 6px;
+  background: #0d141b;
+}
+
+.arcade-segments {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.arcade-segments legend {
+  margin-bottom: 6px;
+  color: var(--text);
+}
+
+.arcade-segments > div {
+  display: flex;
+  gap: 4px;
+}
+
+.arcade-segments button {
+  flex: 1;
+  color: #b5c4b8;
+}
+
+.arcade-segments button[aria-pressed='true'],
+.arcade-tabs button[aria-selected='true'] {
+  background: #c1e5b7;
+  border-color: #c1e5b7;
+  color: #192d1c;
+  font-weight: 700;
+}
+
+.arcade-copy,
+.arcade-hint {
+  margin: 0;
+  color: var(--arcade-muted);
+  line-height: 1.5;
+}
+
+.arcade .arcade-primary {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  min-height: 48px;
+  background: var(--arcade-mint);
+  border-color: var(--arcade-mint);
+  color: #122c20;
+  font-weight: 700;
+}
+
+.arcade-menu-foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* Over the field: the combo and the boosts, the wave's banner, the cards. */
+.arcade-chips {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  pointer-events: none;
+}
+
+.arcade-chip {
+  padding: 4px 8px;
+  border: 1px solid #2b3a31;
+  border-radius: 4px;
+  background: #0e1714cc;
+  color: #9ab59f;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+.arcade-chip--hot {
+  background: var(--arcade-orange);
+  border-color: var(--arcade-orange);
+  color: #122c20;
+}
+
+.arcade-boost {
+  --left: 1;
+  background: linear-gradient(90deg, #ffffff26 calc(var(--left) * 100%), #0e1714cc 0);
+}
+
+.arcade-boost--spread {
+  color: #ffad45;
+  border-color: #ffad45;
+}
+
+.arcade-boost--shield {
+  color: #64efd3;
+  border-color: #64efd3;
+}
+
+.arcade-boost--slow {
+  color: #b69af4;
+  border-color: #b69af4;
+}
+
+.arcade-banner {
+  position: absolute;
+  top: 54%;
+  left: 50%;
+  display: grid;
+  gap: 6px;
+  width: min(92%, 520px);
+  padding: 12px 16px;
+  border: 1px solid #57725e;
+  border-radius: 8px;
+  background: #0e1714e6;
+  text-align: center;
+  pointer-events: none;
+  transform: translateX(-50%);
+  animation: arcade-banner 2.6s ease-out both;
+}
+
+.arcade-banner strong {
+  font: 700 clamp(18px, 3vw, 30px) Impact, 'Arial Black', sans-serif;
+  letter-spacing: 0.04em;
+  color: var(--arcade-mint);
+}
+
+@keyframes arcade-banner {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -12px);
+  }
+  12%,
+  80% {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, 0);
+  }
+}
+
+.arcade-overlay {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 8px;
+  background: #07110cd9;
+}
+
+.arcade-card {
+  display: grid;
+  gap: 8px;
+  width: min(100%, 380px);
+  max-height: 100%;
+  overflow-y: auto;
+  padding: 20px;
+  border: 1px solid #57725e;
+  border-radius: 8px;
+  background: #14231f;
+  text-align: center;
+}
+
+.arcade-card h2 {
+  margin: 4px 0;
+  color: var(--arcade-mint);
+  font-size: calc(26px * var(--text-scale, 1));
+}
+
+.arcade-card p {
+  margin: 0 0 6px;
+  color: #b9c7ba;
+  line-height: 1.7;
+  white-space: pre-line;
+}
+
+.arcade-card .arcade-stats-line {
+  padding-top: 8px;
+  border-top: 1px solid #2b3a31;
+  color: var(--arcade-orange);
+}
+
+.arcade-card .arcade-quiet {
+  border-color: transparent;
+}
+
+/* The touch buttons under the field. */
+.arcade-touch {
+  display: flex;
+  gap: 10px;
+  padding: 0 8px 10px;
+  touch-action: none;
+}
+
+.arcade-touch button {
+  flex: 1;
+  min-height: 60px;
+  background: #304838;
+  border-color: #5d7961;
+  color: var(--arcade-text);
+  font-size: calc(20px * var(--text-scale, 1));
+  user-select: none;
+  touch-action: none;
+}
+
+.arcade-touch .arcade-fire {
+  flex: 2;
+  background: #bddeb3;
+  color: #1d3423;
+  font-weight: 700;
+}
+
+/* The Info over the machine. */
+.arcade-info {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  padding: 12px;
+  background: #07110ce6;
+}
+
+.arcade-info-card {
+  width: min(100%, 640px);
+  max-height: calc(100svh - 24px);
+  overflow-y: auto;
+  padding: 18px 20px 22px;
+  border: 1px solid var(--line-2);
+  border-radius: 8px;
+  background: rgba(9, 14, 19, 0.97);
+}
+
+.arcade-info-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.arcade-info-head h2 {
+  margin: 0;
+  font-family: var(--display);
+  font-size: calc(18px * var(--text-scale, 1));
+  font-weight: 400;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.arcade-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 14px 0 16px;
+  padding: 4px;
+  border: 1px solid #314336;
+  border-radius: 5px;
+  background: #0e1913;
+}
+
+.arcade-tabs button {
+  flex: 1 1 auto;
+  border-color: transparent;
+  color: #b5c4b8;
+}
+
+.arcade-panel h3 {
+  margin: 8px 0;
+  font-size: calc(22px * var(--text-scale, 1));
+  color: var(--arcade-text);
+}
+
+.arcade-panel h3 em {
+  color: var(--arcade-mint);
+  font-style: normal;
+}
+
+.arcade-panel p {
+  color: var(--arcade-muted);
+  line-height: 1.6;
+}
+
+.arcade-keys {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 6px 0;
+}
+
+.arcade-keys kbd {
+  padding: 4px 7px;
+  border: 1px solid #3e5142;
+  border-bottom-width: 2px;
+  border-radius: 3px;
+  font-family: var(--mono);
+}
+
+.arcade-guide-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+}
+
+.arcade-guide-row b {
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+.arcade-icon {
+  width: 52px;
+  flex: none;
+  font-weight: 700;
+  color: var(--arcade-mint);
+}
+
+.arcade-icon.purple {
+  color: #b69af4;
+}
+
+.arcade-icon.green {
+  color: #76bca3;
+}
+
+.arcade-icon.yellow {
+  color: #ffe17c;
+}
+
+.arcade-icon.orange {
+  color: var(--arcade-orange);
+}
+
+.arcade-panel .arcade-guide-note {
+  margin: 10px 0 0;
+  padding-top: 10px;
+  border-top: 1px dashed #37493a;
+  color: var(--arcade-orange);
+  letter-spacing: 0.1em;
+}
+
+.arcade-slider,
+.arcade-check {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+}
+
+.arcade-slider span {
+  width: 72px;
+}
+
+.arcade-slider input {
+  flex: 1;
+  min-height: 44px;
+  accent-color: var(--arcade-mint);
+}
+
+.arcade-check input {
+  width: 22px;
+  height: 22px;
+  accent-color: var(--arcade-mint);
+}
+
+.arcade-records {
+  padding: 6px 0;
+}
+
+.arcade-records span {
+  display: block;
+  color: var(--arcade-mint);
+}
+
+:where([data-motion='reduce']) {
+  .arcade-banner {
+    animation: arcade-calm 2.6s linear both;
+  }
+}
+
+@keyframes arcade-calm {
+  0%,
+  100% {
+    opacity: 0;
+  }
+  8%,
+  85% {
+    opacity: 1;
+  }
+}
