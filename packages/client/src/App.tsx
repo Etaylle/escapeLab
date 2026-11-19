@@ -620,11 +620,22 @@ function useStage(conn: Connection, finale: Finale | null): boolean {
   const playing =
     (conn.view?.phase === 'playing' && conn.view.map !== null) || (conn.view !== null && ending);
   useRunScreen(playing);
-  return (
-    conn.view?.phase === 'lobby' ||
-    playing ||
-    (conn.spectatorView !== null && (conn.spectatorView.map !== null || ending))
-  );
+  return conn.view?.phase === 'lobby' || playing || audienceStage(conn, ending);
+}
+
+/**
+ * Whether the window belongs to the room an audience watches: a run on, or its end playing —
+ * and the demo room's always, whose screen keeps its line under the picture through the lobby
+ * and the Auswertung too.
+ */
+export function audienceStage(
+  conn: Pick<Connection, 'spectatorView' | 'roomCode'>,
+  ending: boolean,
+): boolean {
+  if (conn.spectatorView === null) {
+    return false;
+  }
+  return conn.roomCode === DEMO_CODE || conn.spectatorView.map !== null || ending;
 }
 
 /**

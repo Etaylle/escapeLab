@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DEMO_CODE, type ClientMessage, type MissionInfo, type Seat } from '@escapelab/core';
-import { Screens } from '../src/App.js';
+import { audienceStage, Screens } from '../src/App.js';
 import { PASS_KEY } from '../src/pass.js';
 import { JoinScreen } from '../src/screens/Join.js';
 import type { MenuItemId } from '../src/screens/MainMenu.js';
@@ -190,6 +190,20 @@ describe('the audience’s screen as the app shows it', () => {
 vi.mock('react-dom/client', () => ({
   createRoot: () => ({ render: () => void stage.boot.push('render') }),
 }));
+
+describe('the window while an audience watches', () => {
+  const watchingRoom = (roomCode: string, map: unknown) =>
+    ({ spectatorView: { map }, roomCode }) as unknown as Connection;
+
+  it('is the demo’s whole, through its lobby and its Auswertung; a room’s for its run alone', () => {
+    expect(audienceStage(watchingRoom(DEMO_CODE, null), false)).toBe(true);
+    expect(audienceStage(watchingRoom('QX7R', null), false)).toBe(false);
+    expect(audienceStage(watchingRoom('QX7R', {}), false)).toBe(true);
+    expect(audienceStage(watchingRoom('QX7R', null), true)).toBe(true);
+    const nobody = { spectatorView: null, roomCode: DEMO_CODE } as unknown as Connection;
+    expect(audienceStage(nobody, true)).toBe(false);
+  });
+});
 
 describe('the page as it comes up', () => {
   it('reads the demo’s link off the address before the editor reads the address', async () => {
