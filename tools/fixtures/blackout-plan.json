@@ -15,7 +15,7 @@
         "klemmbrett": { "x": 4, "y": 12 },
         "spind": { "x": 16, "y": 2 },
         "aktenschrank": { "x": 12, "y": 16 },
-        "wartungsbuch": { "x": 3, "y": 19 }
+        "wartungsbuch": { "x": 11, "y": 18 }
       },
       "serial": "LTEPL-3",
       "anlauf": {
@@ -304,7 +304,7 @@
         "klemmbrett": { "x": 4, "y": 12 },
         "spind": { "x": 16, "y": 2 },
         "aktenschrank": { "x": 11, "y": 15 },
-        "wartungsbuch": { "x": 3, "y": 19 }
+        "wartungsbuch": { "x": 11, "y": 18 }
       },
       "serial": "ZA48T-6",
       "anlauf": {
@@ -545,7 +545,7 @@
         "klemmbrett": { "x": 3, "y": 12 },
         "spind": { "x": 16, "y": 2 },
         "aktenschrank": { "x": 11, "y": 15 },
-        "wartungsbuch": { "x": 7, "y": 18 }
+        "wartungsbuch": { "x": 11, "y": 19 }
       },
       "serial": "WC6XN-5",
       "anlauf": {

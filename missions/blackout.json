@@ -168,7 +168,7 @@
       { "puzzleId": "paketfilter", "x": 21, "y": 9, "console": "b" },
       { "puzzleId": "subsysteme", "x": 11, "y": 4, "console": "a" },
       { "puzzleId": "subsysteme", "x": 21, "y": 4, "console": "b" },
-      { "puzzleId": "signalkette", "x": 29, "y": 9, "console": "a" },
+      { "puzzleId": "signalkette", "x": 7, "y": 7, "console": "a" },
       { "puzzleId": "signalkette", "x": 9, "y": 20, "console": "b" },
       { "puzzleId": "frequenz", "x": 11, "y": 20 },
       { "puzzleId": "notstrom", "x": 6, "y": 14, "console": "a" },
@@ -217,7 +217,7 @@
         "kind": "book",
         "label": "WARTUNGSBUCH",
         "puzzleIds": ["notstrom"],
-        "spots": [{ "x": 3, "y": 19 }, { "x": 7, "y": 18 }]
+        "spots": [{ "x": 11, "y": 18 }, { "x": 11, "y": 19 }]
       }
     ],
     "edgeworkSign": { "x": 2, "y": 3 },
@@ -502,7 +502,7 @@
           "Das Klemmbrett zur Signalkette liegt im Flur, an der Südwand.",
           "Auf dem Klemmbrett im Flur steht, wie die Signalkette zu lesen ist, es liegt an der Südwand."
         ],
-        "Pult A der Signalkette steht am Ostende vom Flur, Pult B im Maschinenraum in der Südostecke."
+        "Pult A der Signalkette steht im Archiv an der Südwand, Pult B im Maschinenraum in der Südostecke."
       ],
       "stages": 4,
       "length": 4,
@@ -545,8 +545,8 @@
       "pool": "wechsel",
       "nudges": [
         [
-          "Das Wartungsbuch zum Notstromkasten liegt im Maschinenraum.",
-          "Ohne das Wartungsbuch aus dem Maschinenraum ratet ihr am Kasten nur herum."
+          "Das Wartungsbuch zum Notstromkasten liegt im Labor, ein paar Schritte vom Prüfpult entfernt.",
+          "Ohne das Wartungsbuch aus dem Labor ratet ihr am Kasten nur herum."
         ],
         "Der Notstromkasten hängt im Maschinenraum gleich hinter der Tür, das Prüfpult steht im Labor an der Südwand."
       ],

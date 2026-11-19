@@ -388,13 +388,14 @@ describe('Blackout’s patrols, as the walkthrough plays its plans past them', (
     }
   });
 
-  it('lays the clipboard and the cabinet where no patrol looks, wherever a seed puts them', () => {
-    // Both are read with both patrols out: every spot one may lie on is a haven, and so is
+  it('lays the clipboard, the cabinet and the book where no patrol looks, on any seed', () => {
+    // All three are read with both patrols out: every spot one may lie on is a haven, and so is
     // every tile beside it a reader may stand on (the server's blackoutParked test holds the
-    // whole reach to it) — the clipboard at the Flur's west end, past the Flurwache's reach.
+    // whole reach to it) — the clipboard at the Flur's west end, past the Flurwache's reach,
+    // the cabinet and the Wartungsbuch in the Labor's west part, out of the Laborwache's.
     const { sight, drones } = stage(4, 'signalkette');
     const safe = havens(drones, sight);
-    for (const station of ['signalkette', 'frequenz']) {
+    for (const station of ['signalkette', 'frequenz', 'notstrom']) {
       const source = map.manuals.find((manual) => manual.puzzleIds.includes(station));
       assert.ok(source.spots.length > 1);
       for (const spot of source.spots) {
