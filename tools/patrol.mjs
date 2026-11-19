@@ -44,6 +44,8 @@ export const LATE_S = 1;
 /**
  * The allowances a walk waits for in turn, each for a while before the next smaller: the
  * widest gap the patrols leave is taken, and a stretch that has none that wide is still run.
+ * A walk begins at the widest one the patrols offer within that while (`allowanceOffered`), so
+ * that it does not stand out a wait for a gap that never comes.
  */
 export const LATE_STEPS = [LATE_S, 0.7, 0.4];
 
@@ -281,6 +283,28 @@ export function spottedOn(
     }
   }
   return null;
+}
+
+/** How finely `allowanceOffered` looks along the moments a walker may set off at, in s. */
+const OFFER_STEP_S = 0.1;
+
+/**
+ * The widest of `steps` (allowances for a late avatar, widest first, as LATE_STEPS) the drones
+ * of `flying` leave a walker on `path` at all: the first for which some moment to set off,
+ * `delay` s from now or up to `within` s later, is clear (`spottedOn` with that allowance), the
+ * walker standing at the end `hold` s; the last of `steps` where none is. `flying` has to
+ * cover `delay + within` and the run after it.
+ */
+export function allowanceOffered(path, flying, sight, { delay = 0, hold = 0, within, steps }) {
+  const clearWithin = (late) => {
+    for (let wait = 0; wait <= within; wait += OFFER_STEP_S) {
+      if (spottedOn(path, flying, sight, { delay: delay + wait, hold, late }) === null) {
+        return true;
+      }
+    }
+    return false;
+  };
+  return steps.find(clearWithin) ?? steps.at(-1);
 }
 
 /**

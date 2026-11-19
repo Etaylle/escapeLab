@@ -36,8 +36,8 @@ const statuses = (member: Member): Record<string, string> =>
 /** Beside a console out of service in each draw: the tile to stand on, and whose it is. */
 const RESTING_CONSOLE: Readonly<Record<keyof typeof DRAW_SEEDS, [number, number, string]>> = {
   signalkette: [6, 15, 'notstrom'],
-  frequenz: [29, 9, 'signalkette'],
-  notstrom: [29, 9, 'signalkette'],
+  frequenz: [7, 6, 'signalkette'],
+  notstrom: [7, 6, 'signalkette'],
 };
 
 /** The key the snapshot below is sealed under. */

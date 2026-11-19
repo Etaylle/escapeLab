@@ -466,7 +466,7 @@ function wechselWalks(drawn: string, ways: WechselWays): Leg[] {
   }
   const [a, b] = [at(drawn, 'a'), at(drawn, 'b')];
   // The Signalkette's console B stands in the Maschinenraum, nearer the terminal's side of the
-  // Flur's west end; the guest takes its console A at the Flur's east end, as before.
+  // Flur's west end; the guest takes its console A in the Archiv, past the Klemmbrett.
   const [hosts, guests] = drawn === 'signalkette' ? [b, a] : [a, b];
   return [
     ['the rack to the rules', rack, rules, before(4)],
