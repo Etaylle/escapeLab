@@ -935,8 +935,9 @@ with console A at the Flur's east end (`OLD_RUN_LINES` in `scripts/voice.ts`; th
 main on 2026-11-19 at 18:10), keeps its three recordings until 2026-11-20 evening: a render leaves
 them alone, and the voice test holds them to the list; the next package drops them. The twelve
 texts of the chain before the Wechselplatz (left main 2026-11-19 at 03:48) and their 36
-recordings went on 2026-11-20, a day on; a room of that chain taken up again would hear them as
-any line without a recording, the radio's chirp and the words. In the main
+recordings went within that day, by choice: a room of that chain taken up again hears its four
+hand-overs and four nudges as any line without a recording, the radio's chirp and the words. In
+the main
 checkout, whose `.env.local` holds the key — never printed — in this order:
 
 ```sh

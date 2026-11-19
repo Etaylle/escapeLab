@@ -1336,7 +1336,8 @@ async function main(fresh: Fresh): Promise<void> {
  * console A at the Flur's east end, until B-blackout3 moved the console into the Archiv (on main
  * 2026-11-19 18:10); its recordings stay until no snapshot of that chain can be taken up any
  * more, a day after that chain left the server. The twelve texts of the chain before it
- * (until B-blackout2, on main 2026-11-19 03:48) went once its last snapshot was a day old.
+ * (until B-blackout2, on main 2026-11-19 03:48) went within that day: a room of that chain taken
+ * up again hears its four hand-overs and four nudges as the radio's chirp, their words shown.
  */
 export const OLD_RUN_LINES: readonly string[] = [
   'Pult A der Signalkette steht am Ostende vom Flur, Pult B im Maschinenraum in der ' +
