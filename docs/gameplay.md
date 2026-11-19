@@ -5,8 +5,8 @@ controls on keys and on a controller, the quick chat, the station's intercom, fi
 walks of Blackout's lab, stations in any order, runs without a clock and the Übungshalle, the
 first win at the stations the whole crew presses, a crew of three, the Erfolge, the Tagesschicht,
 the picture of a run, the danger sense, the Serverraum's cabling diagram, typing at its terminal,
-the Zugangskontrolle, the Anlaufsteuerung, the Paketfilter, what the notepad takes down and what
-happens when a line drops. Code:
+the Zugangskontrolle, the Anlaufsteuerung, the Paketfilter, an emergency and the open station,
+what the notepad takes down and what happens when a line drops. Code:
 `packages/client/src/input/` (bindings, controller, prompts), `client/src/achievements.ts` and
 `screens/{Plaques,ShareButton,ControlSettings}.tsx`,
 `screens/shareCard.ts`, `world/{labelFade,finds,danger,ChatWheel}.ts(x)`,
@@ -1023,6 +1023,49 @@ phones sideways and the laptop as well, no line of any card wider than its box
 Blackout's own walkthrough follows its Paketfilter the same way, the guest's phone held upright
 at the Analysepult (filter-headers.png, filter-gate.png, filter-held.png), and shoots the
 Serverschott as the solve opens it (schott-open.png).
+
+## An emergency and the open station
+
+An emergency (Notfall) interrupts whatever the crew does, but it no longer throws the open
+station away: a crew keeps what it has earned there (backlog N-7; Among Us sets no task back for
+a sabotage either). While the emergency runs the station **rests** (`GameState.resting`, core
+`actions.ts` `startSabotage`): it is off every view — no panel, nothing of its instance for
+anybody, the audience included —, takes no input („Gerade ist keine Station in Betrieb.") and no
+switch-on („Gesperrt, bis der Notfall behoben ist."), and its clock stands still: the room arms
+no tick for it (`puzzleDueAt`). The map says of its consoles that it rests (`resting` on the
+station's spots): the prompt there reads „Ruht, bis der Notfall behoben ist" and E does nothing,
+and the goal line names it — „Paketfilter ruht — Stand gehalten". The cover a working station
+gives against the drones is off meanwhile, as it always was in an emergency.
+
+As the emergency ends — cleared or run out — the station is back on its consoles at once, with
+no second switch-on (E opens its panel), through its module's optional `resume(def, state, at)`
+(`puzzles/module.ts`; left out, the state comes back as it was). What was done is done; what was
+under way on a clock is called off without an alarm, a fault or a solve:
+
+| Module | Kept | Called off |
+| --- | --- | --- |
+| Paketfilter | the clean waves | the wave in the air: a fresh one waits for FREIGABE, no report |
+| Anlaufsteuerung | stages run up, the script's filled gaps | the pulse: „Impuls verfallen", the script starts again |
+| Zugangskontrolle | doors released, the session, a login asked for, the misses | nothing — the token device stands at the period of the moment, a lock that ran out meanwhile is lifted |
+| Synchrontaster, Hebel | every press where none runs out | presses in their window, nobody told „verfallen" |
+| Knopf | its face and strip | a held button springs back |
+| every other module | its whole state: stages, switches, wires, the dial, the maze's place | nothing: it holds no moment |
+
+A module with a clock (`dueAt`, `elapse`) has to have a `resume`: `core/test/resume.test.ts`
+walks the registry, plays every module to its solve through two rests on 100 seeds, and holds
+each module to its row; `rest.test.ts` and the server's `restRoom.test.ts` play the Paketfilter
+and the Anlaufsteuerung through an emergency in the reducer and in a room on its timers; the
+smoke lets an emergency fall into the second wave of an open Paketfilter over real sockets, in a
+scratch mission of its own (`smoke.ts` `restProbe`, „Ruheprobe", about a minute); the
+walkthrough rests Blackout's Signalkette, where its emergency is due within the station's step,
+with a stage through (rest-goal.png, rest-kept.png — left out with the reason where none is). A
+snapshot taken in an emergency carries the resting station; one of a build before has none and
+restores as it did. Pools, free order and the Tagesschicht need nothing of their own: the
+resting station is the one up (`currentPuzzleIndex`) — the one drawn at a Wechselplatz, the one
+picked in free order, whose pick stands through the emergency — and a seed changes nothing in it.
+Two things the rule does not do: a hostile packet that reached the Kern between the room's last
+tick and the emergency's start goes with its wave uncharged, and the Zugangskontrolle's locks
+run on the wall clock through the emergency rather than standing still.
 
 ## Captures in the notepad
 

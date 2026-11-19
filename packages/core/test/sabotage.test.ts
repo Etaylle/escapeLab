@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { applyAction, initialState, parseMission, radioLines, viewFor } from '../src/index.js';
+import {
+  applyAction,
+  initialState,
+  parseMission,
+  radioLines,
+  viewFor,
+  viewForSpectator,
+} from '../src/index.js';
 import type { Action, GameState, Mission } from '../src/index.js';
 
 /** Two chambers with an emergency valve in each, plus two stations. */
@@ -80,9 +87,30 @@ describe('sabotage emergencies', () => {
     expect(state.puzzleState).not.toBeNull();
     state = applyAction(state, { type: 'sabotage-start', at: T0 + 1000 });
     expect(state.puzzleState).toBeNull();
-    // The station stays armed, so the puzzle can be restarted afterwards.
+    // The station stays armed and rests: it goes on afterwards, and no other station does.
     const station = viewFor(state, 'p2').map?.stations[0];
     expect(station?.known === true ? station.status : null).toBe('armed');
+    const spots = viewForSpectator(state).map?.stations ?? [];
+    expect(spots.map((s) => [s.puzzleId, s.known && s.resting === true])).toEqual([
+      ['first', true],
+      ['second', false],
+    ]);
+  });
+
+  it('puts the open puzzle back as the emergency is cleared: E has nothing to switch on', () => {
+    const open = applyAction(playing(), { type: 'interact', playerId: 'p2', at: T0 + 500 });
+    const over = run(
+      [
+        { type: 'sabotage-start', at: T0 + 1000 },
+        { type: 'sabotage-cleared', at: T0 + 9000 },
+      ],
+      open,
+    );
+    expect(over.puzzleState).toEqual(open.puzzleState);
+    expect(viewForSpectator(over).map?.stations.some((s) => s.known && s.resting)).toBe(false);
+    expect(() => applyAction(over, { type: 'interact', playerId: 'p2', at: T0 + 9500 })).toThrow(
+      'Die Station läuft schon.',
+    );
   });
 
   it('blocks station activation while the emergency runs', () => {

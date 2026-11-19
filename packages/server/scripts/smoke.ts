@@ -44,7 +44,12 @@
  * alone springs back on the room's clock, its owner told and nothing
  * charged, before both throw theirs within the window; on the end screen a
  * guest's or an unknown choice of the next mission is refused, and the
- * host's yes naming Blackout opens it, with the power on. Last a crew of
+ * host's yes naming Blackout opens it, with the power on. A third crew plays
+ * the Ruheprobe, the Paketfilter's scratch mission with an emergency of its own:
+ * the emergency falls into the open station's second wave, the station rests
+ * through it — off both views, nothing of it in any message — and is back
+ * without a switch-on, its clean wave kept, the wave in the air replaced by one
+ * waiting for the Freigabe, no alarm counted; the run is won. Last a crew of
  * three plays Blackout: Finn's line drops for 70 s and the run goes on, the
  * others going on without him once the minute is over, and he is back on his
  * pass, counted in at once; Gus's line drops and a phone asks for his seat by
@@ -60,7 +65,7 @@
  */
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createInterface } from 'node:readline';
@@ -130,6 +135,45 @@ const SEED = Number(process.env['SMOKE_SEED'] ?? 12);
 const runsDir = mkdtempSync(join(tmpdir(), 'escapelab-smoke-'));
 const RUNS_LOG = join(runsDir, 'logs', 'runs.jsonl');
 process.env['RUNS_LOG'] = RUNS_LOG;
+
+/** The Paketfilter of the Ruheprobe: the fewest packets and the shortest fall, two waves. */
+const REST_PACKETS = 5;
+const REST_FALL_SEC = 8;
+/** The Ruheprobe's emergencies: the first this long after its start, then one every so long. */
+const REST_FIRST_SEC = 40;
+const REST_EVERY_SEC = 60;
+/** How many instructions carried out clear an emergency of the Ruheprobe. */
+const REST_ORDERS = 2;
+/**
+ * The Ruheprobe: the Paketfilter's scratch mission (tools/fixtures/firewall-probe.json) with a
+ * relay emergency that comes while its one station is open — in Blackout none comes before the
+ * Serverraum. A station rests through it and comes back with what was done (`restProbe`). The
+ * server reads it as a custom mission, from a folder that goes with the run log's.
+ */
+const restFile = (() => {
+  const url = new URL('../../../tools/fixtures/firewall-probe.json', import.meta.url);
+  const probe = JSON.parse(readFileSync(url, 'utf8'));
+  const [filter] = probe.puzzles;
+  const sabotage = {
+    mode: 'relay',
+    label: 'KÜHLKREISLAUF — RELAIS VON HAND',
+    firstAfterSec: REST_FIRST_SEC,
+    everySec: REST_EVERY_SEC,
+    required: REST_ORDERS,
+    afterSolved: 0,
+  };
+  return {
+    ...probe,
+    id: 'custom-ruheprobe',
+    title: 'Ruheprobe',
+    puzzles: [{ ...filter, waves: 2, packets: REST_PACKETS, fallSec: REST_FALL_SEC }],
+    map: { ...probe.map, sabotage },
+  };
+})();
+const customDir = join(runsDir, 'custom');
+mkdirSync(customDir);
+writeFileSync(join(customDir, `${restFile.id}.json`), JSON.stringify(restFile));
+process.env['CUSTOM_MISSIONS_DIR'] = customDir;
 await import('../src/index.js');
 
 const missionFile = parseMission(
@@ -1057,9 +1101,9 @@ const orderOf = (client: TestClient): string =>
  * The instruction `holder` reads out is carried out at the console of the player it names;
  * whether one was — it is waited for until the holder reads another, two seconds at most.
  */
-async function carryOut(holder: TestClient): Promise<boolean> {
+async function carryOut(holder: TestClient, team: readonly TestClient[]): Promise<boolean> {
   const order = relayOf(holder)?.instruction ?? null;
-  const named = order === null ? null : consoleNamed(order);
+  const named = order === null ? null : consoleNamed(order, team);
   if (order === null || named === null) {
     return false;
   }
@@ -1073,11 +1117,11 @@ async function carryOut(holder: TestClient): Promise<boolean> {
 }
 
 /** Whose relay console an instruction names, and the id of the control there; null for none. */
-function consoleNamed(order: {
-  playerName: string;
-  control: string;
-}): { owner: TestClient; control: string } | null {
-  for (const owner of crew) {
+function consoleNamed(
+  order: { playerName: string; control: string },
+  team: readonly TestClient[],
+): { owner: TestClient; control: string } | null {
+  for (const owner of team) {
     const control = relayOf(owner)?.controls.find((each) => each.name === order.control);
     if (owner.view?.you.name === order.playerName && control !== undefined) {
       return { owner, control: control.id };
@@ -1086,21 +1130,27 @@ function consoleNamed(order: {
   return null;
 }
 
+/** Whether an emergency has `team`'s lab. */
+const emergencyIn = (team: readonly TestClient[]): boolean =>
+  team.some((client) => client.view?.map?.sabotage != null);
+
 /**
- * A relay emergency weathered by the crew: each instruction a console reads out is carried out
- * at the console of the player it names, until the relays hold — cleared, at no cost.
+ * A relay emergency weathered by the crew of `lab`: each instruction a console reads out is
+ * carried out at the console of the player it names, until the relays hold — cleared, at no cost.
  */
-async function weather(): Promise<void> {
+async function weather(lab: Lab): Promise<void> {
+  const { crew } = lab;
+  const { durationSec } = lab.mission.map.sabotage ?? fail(`${lab.mission.id}: no emergencies`);
   const label = crew.map((client) => client.view?.map?.sabotage?.label).find(Boolean) ?? '?';
   const alarmsBefore = alarmsOf(crew[0]);
-  const deadline = Date.now() + emergencies.durationSec * 1000;
+  const deadline = Date.now() + durationSec * 1000;
   let done = 0;
-  while (emergencyOn()) {
+  while (emergencyIn(crew)) {
     if (Date.now() > deadline) {
-      fail(`the emergency "${label}" is not cleared after ${emergencies.durationSec} s`);
+      fail(`the emergency "${label}" is not cleared after ${durationSec} s`);
     }
     for (const holder of crew) {
-      done += (await carryOut(holder)) ? 1 : 0;
+      done += (await carryOut(holder, crew)) ? 1 : 0;
     }
     await sleep(20);
   }
@@ -1137,7 +1187,7 @@ async function quietFor(seconds: number): Promise<void> {
     await sleep(100);
   }
   if (emergencyOn()) {
-    await weather();
+    await weather(blackoutLab());
   }
 }
 
@@ -3068,6 +3118,230 @@ for (const client of tutorialLab.crew) {
   client.close();
 }
 
+// --- a station rests through an emergency, and comes back with what was done ----------
+
+const restMission = parseMission(restFile);
+/** The seed the Ruheprobe's room is pinned to: the Paketfilter's probe's own. */
+const REST_SEED = 4;
+/**
+ * The longest a wave of the Ruheprobe takes to its clean end, s: the breath before its first
+ * packet (FIREWALL_PAUSE_MS), four gaps of 0.32 of a fall at most, and the last packet's fall —
+ * 22.3 s; the shortest is 19 s.
+ */
+const REST_WAVE_MAX_SEC = 23;
+/**
+ * How far into the second wave the emergency is to fall, s, counted from the longest first
+ * wave: 7 to 11 s into it — its first packets on the lines, none at the Kern before 12 s.
+ */
+const REST_INTO_WAVE_SEC = 7;
+/** How long before its emergency the Ruheprobe's first wave is released, ms. */
+const REST_LEAD_MS = (REST_WAVE_MAX_SEC + REST_INTO_WAVE_SEC) * 1000;
+/** How exactly the release keeps that lead, ms: a later moment waits for the next emergency. */
+const REST_SLOT_MS = 500;
+/** How long before the emergency the crew's hands come off the consoles, ms: no move meets it. */
+const HANDS_OFF_MS = 600;
+
+/**
+ * How long until the schedule of `lab`'s room has its next emergency, ms: `firstAfterSec` after
+ * its lights went out, then every `everySec` (server room.ts `reconcileSabotage`).
+ */
+function emergencyDueIn(lab: Lab): number {
+  const [watcher] = lab.crew;
+  const { firstAfterSec, everySec } =
+    lab.mission.map.sabotage ?? fail(`${lab.mission.id}: no emergencies`);
+  const since = Date.now() - (watcher.view?.lights.outAt ?? fail('the lights are not out'));
+  const [first, every] = [firstAfterSec * 1000, everySec * 1000];
+  return (since < first ? first : Math.ceil((since - first) / every) * every + first) - since;
+}
+
+/** A room for the Ruheprobe on its pinned seed: Hana opens it, Ivo joins, Hana starts. */
+async function openRestProbe(): Promise<Lab> {
+  const hana = new TestClient('hana');
+  const ivo = new TestClient('ivo');
+  await hana.open();
+  await ivo.open();
+  const room = { name: 'Hana', pass: hana.pass, missionId: restMission.id, seed: REST_SEED };
+  hana.send({ kind: 'create-room', ...room });
+  const { code } = await hana.seated();
+  ivo.send({ kind: 'join-room', code, name: 'Ivo', pass: ivo.pass });
+  await ivo.seated();
+  ivo.send({ kind: 'set-ready', ready: true });
+  await hana.until('Ivo says yes', (v) => v.players.some((p) => p.name === 'Ivo' && p.ready));
+  hana.send({ kind: 'start-mission' });
+  for (const client of [hana, ivo]) {
+    await client.until('the Ruheprobe under way', (v) => v.phase === 'playing' && v.lights.out);
+    await client.ensureSelf();
+  }
+  return { mission: restMission, crew: [hana, ivo] };
+}
+
+/**
+ * The solver's moves at the one station of `lab`, on the server's clock and from the views
+ * alone, four looks a second, until `stop` holds; fails where it does not within the time a
+ * station on the clock gets.
+ */
+async function onTheClockUntil(lab: Lab, stop: () => boolean, what: string): Promise<void> {
+  const def = lab.mission.puzzles[0] ?? fail(`${lab.mission.id} has no station`);
+  const deadline = Date.now() + ON_THE_CLOCK_SEC * 1000;
+  while (!stop()) {
+    if (Date.now() > deadline) {
+      fail(`${lab.mission.id}: ${what} did not come within ${ON_THE_CLOCK_SEC} s`);
+    }
+    if (lab.crew.some((client) => client.view?.puzzle?.index !== 0)) {
+      await sleep(50);
+      continue;
+    }
+    const { views, edgework, remainingSec } = crewSees(0, lab);
+    const aid = { transcript: [], remainingSec, at: Date.now() };
+    const moves = moduleFor(def.type).solve(def, views, edgework, aid);
+    if (moves.length > 0) {
+      await play(moves, 0, lab);
+    } else {
+      await sleep(250);
+    }
+  }
+}
+
+/**
+ * The first wave released REST_LEAD_MS before the next emergency, so that the emergency falls
+ * into the second: an emergency that comes first — the crew was slow to its consoles — is
+ * weathered with the wave still waiting, and the one after it is taken.
+ */
+async function releaseBeforeEmergency(lab: Lab): Promise<void> {
+  const [gate] = lab.crew;
+  for (let due = emergencyDueIn(lab); due > REST_LEAD_MS || due < REST_LEAD_MS - REST_SLOT_MS; ) {
+    if (emergencyIn(lab.crew)) {
+      await weather(lab);
+    }
+    await sleep(20);
+    due = emergencyDueIn(lab);
+  }
+  gate.send({ kind: 'puzzle-input', input: { start: true } });
+  await gate.expectView('the first wave released, its emergency a wave and a bit away', (v) =>
+    firewallOf(v)?.waiting === false);
+}
+
+/** Whether the Paketfilter runs its second wave: one clean behind it, packets on the lines. */
+const midSecondWave = (filter: FirewallView): boolean =>
+  filter.cleared === 1 && !filter.waiting && filter.clock?.heldAt === null &&
+  (filter.packets?.length ?? 0) > 0;
+
+/** Whether the Paketfilter waits for the Freigabe with one clean wave and no packet on a line. */
+const waitsAfresh = (filter: FirewallView | null): boolean =>
+  filter?.cleared === 1 && filter.waiting && filter.packets?.length === 0;
+
+/** How many of the map's consoles `view` tells resting through an emergency: all, none, some. */
+function consolesRest(view: PlayerView): 'all' | 'none' | 'some' {
+  const spots = view.map?.stations ?? [];
+  const resting = spots.filter((spot) => spot.known && spot.resting === true).length;
+  if (resting === 0) {
+    return 'none';
+  }
+  return resting === spots.length ? 'all' : 'some';
+}
+
+/** Whether a message carries the Paketfilter or a packet's header. */
+const carriesStation = (frame: string): boolean =>
+  frame.includes('"kind":"firewall"') || frame.includes('"protocol":"');
+
+/** What `client` received while an emergency had its lab: every message naming one. */
+const framesInEmergency = (client: TestClient, from: number): string[] =>
+  client.raw.slice(from).filter((frame) => frame.includes('"sabotage":{'));
+
+/**
+ * The emergency falls into the open Paketfilter, its first wave clean and packets of the second
+ * on the lines: on both views the station is gone and its consoles rest, and nothing of its
+ * instance comes with any message while the emergency is on. Returns the station as the
+ * Sperrpult last showed it, and the alarms then.
+ */
+async function restsThroughEmergency(lab: Lab): Promise<{ before: FirewallView; alarms: number }> {
+  const [gate] = lab.crew;
+  const from = lab.crew.map((client) => client.raw.length);
+  const before = firewallOf(gate.view) ?? fail('the Sperrpult shows no Paketfilter');
+  const alarms = alarmsOf(gate);
+  assert(
+    midSecondWave(before),
+    `the emergency meets a clean wave and ${before.packets?.length} packet(s) of the next ` +
+      'on the lines, the wave running',
+  );
+  for (const client of lab.crew) {
+    await client.expectView('the emergency: no station on the view, its consoles resting', (v) =>
+      v.map?.sabotage != null && v.puzzle === null && consolesRest(v) === 'all');
+  }
+  await weather(lab);
+  const during = lab.crew.flatMap((client, i) => framesInEmergency(client, from[i] ?? 0));
+  assert(
+    during.length > 0 && !during.some(carriesStation),
+    `none of the ${during.length} messages of the emergency carried the station or a packet`,
+  );
+  return { before, alarms };
+}
+
+/**
+ * After the emergency the station is back on both consoles without a switch-on — E there has
+ * nothing to switch on —, its clean wave kept, the wave that was in the air gone for a fresh
+ * one that waits for the Freigabe, and no alarm counted for it.
+ */
+async function backWithItsProgress(lab: Lab, before: FirewallView, alarms: number): Promise<void> {
+  const [gate, analysis] = lab.crew;
+  const inTheAir = before.packets?.map((packet) => packet.id) ?? [];
+  for (const client of lab.crew) {
+    await client.expectView('the Paketfilter back without a switch-on: a clean wave, waiting',
+      (v) => waitsAfresh(firewallOf(v)) && consolesRest(v) === 'none');
+  }
+  assert(alarmsOf(gate) === alarms, 'the wave the emergency called off cost no alarm');
+  gate.pressE();
+  const refused = await gate.expect('refusal of a second switch-on', isError);
+  assert(refused.message === 'Die Station läuft schon.', 'E finds the station running');
+  gate.send({ kind: 'puzzle-input', input: { start: true } });
+  const fresh = await analysis.expectView('a fresh wave on the lines after the Freigabe', (v) =>
+    (firewallOf(v)?.packets?.length ?? 0) > 0);
+  const now = firewallOf(fresh)?.packets?.map((packet) => packet.id) ?? [];
+  assert(now.every((id) => !inTheAir.includes(id)),
+    `the wave in the air (${inTheAir.join(', ')}) was replaced: ${now.join(', ')} comes on`);
+}
+
+/**
+ * The Ruheprobe: both walk to their consoles — Ivo past the Laborkennung —, the Paketfilter is
+ * switched on, an emergency falls into its second wave (`restsThroughEmergency`), the station
+ * comes back with its clean wave (`backWithItsProgress`), the solver clears what is left
+ * without an alarm, and both get out by the hatch: the run is won.
+ */
+async function restProbe(): Promise<void> {
+  const began = Date.now();
+  const lab = await openRestProbe();
+  const [gate, analysis] = lab.crew;
+  const [a, b] = restMission.map.stations;
+  const sign = restMission.map.edgeworkSign;
+  const hatch = restMission.map.exit;
+  if (a === undefined || b === undefined || sign === undefined || hatch === undefined) {
+    fail('the Ruheprobe should have two consoles, the Laborkennung and a hatch');
+  }
+  await walkTo(gate, [a.x, a.y + 1]);
+  await walkTo(analysis, [sign.x, sign.y]);
+  await walkTo(analysis, [b.x, b.y + 1]);
+  await switchOn(gate, 0);
+  await releaseBeforeEmergency(lab);
+  const comes = (): boolean => emergencyIn(lab.crew) || emergencyDueIn(lab) < HANDS_OFF_MS;
+  await onTheClockUntil(lab, comes, 'the emergency');
+  const { before, alarms } = await restsThroughEmergency(lab);
+  await backWithItsProgress(lab, before, alarms);
+  const solved = (): boolean => lab.crew.every((client) => solvedOf(client) > 0);
+  await onTheClockUntil(lab, solved, 'the solve');
+  assert(alarmsOf(gate) === alarms, 'the solver cleared the rested Paketfilter without an alarm');
+  for (const client of lab.crew) {
+    await walkTo(client, [hatch.x, hatch.y]);
+  }
+  for (const client of lab.crew) {
+    await client.expectView('won the Ruheprobe', (v) => v.phase === 'won');
+    client.close();
+  }
+  const took = ((Date.now() - began) / 1000).toFixed(1);
+  console.log(`✓ the Ruheprobe, from its room's opening to the won run: ${took} s`);
+}
+
+await restProbe();
+
 // --- a crew of three: one away, the others on without them, and back ------------------
 
 /** A crew of three in Blackout, its room's code: Eva opened it, Finn and Gus joined. */
@@ -3995,7 +4269,8 @@ console.log(
     'plates, a door that stays open, the Anlaufsteuerung, the Paketfilter and the Serverraum ' +
     'at two consoles, the station of the Wechselplatz, the camera plate, reconnect, the hatch\'s ' +
     'checklist, a drop on the way out that ends nothing, penalties and credits; then ' +
-    'the tutorial, its lever springing back on the clock, and on into Blackout; then a crew ' +
+    'the tutorial, its lever springing back on the clock, and on into Blackout; then a ' +
+    'Paketfilter resting through an emergency and back with its clean wave; then a crew ' +
     'of three going on without the one away, his return, a seat taken over by its name once ' +
     'the crew let the phone in, and ' +
     'seats given up till the run is called off; then a server restarting mid-run, SIGTERM ' +

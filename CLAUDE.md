@@ -33,7 +33,8 @@ Kooperatives Multiplayer-Escape-Spiel (Studienprojekt, FH-Themengruppe Schefer-W
   in `core/src/puzzles/index.ts` und `client/src/puzzles/index.ts` (Panel). Sonst ändert sich
   nichts: Das Protokoll kennt nur `puzzle-input`; der Reducer kennt daneben nur die Uhr der
   scharfen Station — `dueAt` mit `expire` oder `elapse` (Pakete, die fallen, solange beide Pulte
-  besetzt sind), beides optional —, die der Raum zum fälligen Zeitpunkt weckt (`puzzle-tick`).
+  besetzt sind), beides optional —, die der Raum zum fälligen Zeitpunkt weckt (`puzzle-tick`);
+  im Notfall ruht die Station mit ihrem Stand und kommt über `resume` zurück.
 - Das Handbuch eines Moduls (`manual()`) enthält Regeln, nie Antworten, und hängt weder vom Seed
   noch vom Zustand ab — es ist druckbar. Jedes Modul liefert `solve()` über die Sichten von Pult
   und Lese-Objekt; Eigenschaftstests beweisen damit, dass die Crew aus ihren Sichten jede

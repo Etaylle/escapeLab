@@ -65,6 +65,14 @@ describe('a snapshot of the build before', () => {
     expect(heard.some((event) => event.speaker !== undefined)).toBe(false);
   });
 
+  it('rests no station in a room kept before stations rested through an emergency', () => {
+    expect('resting' in BUILD_BEFORE.state).toBe(false);
+    expect(BUILD_BEFORE.state.sabotage).not.toBeNull();
+    const opened = open(seal(BUILD_BEFORE, BUILD_BEFORE.code, KEY), BUILD_BEFORE.code, KEY);
+    expect(opened.state.resting).toBeNull();
+    expect(opened.state.puzzleState).toBeNull();
+  });
+
   it('draws nothing for a room kept before the pools: every station of its run as before', () => {
     expect('drawn' in BUILD_BEFORE.state).toBe(false);
     const opened = open(seal(BUILD_BEFORE, BUILD_BEFORE.code, KEY), BUILD_BEFORE.code, KEY);

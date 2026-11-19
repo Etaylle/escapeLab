@@ -314,6 +314,12 @@ function loadedLine(def: StartupDef, stage: number, deal: StartupStage): Omit<St
 
 // --- the moves -----------------------------------------------------------------------------
 
+/** The pulse gone unanswered: off the line, the log and both status strips saying so. */
+function lapsed(state: StartupState): StartupState {
+  const dead = { ...state, pulse: null, last: 'verfallen' as const };
+  return logged(dead, [{ tag: 'info', text: 'Impuls verfallen' }]);
+}
+
 /** `state` at `at`: a pulse on the ladder's marked steps by then, or dead after them. */
 function caughtUp(def: StartupDef, state: StartupState, at: number): StartupState {
   const { pulse } = state;
@@ -322,8 +328,7 @@ function caughtUp(def: StartupDef, state: StartupState, at: number): StartupStat
   }
   const { arrivesAt, diesAt } = pulseTimes(def, pulse);
   if (at >= diesAt + PULSE_GRACE_MS) {
-    const dead = { ...state, pulse: null, last: 'verfallen' as const };
-    return logged(dead, [{ tag: 'info', text: 'Impuls verfallen' }]);
+    return lapsed(state);
   }
   const arrived = at >= arrivesAt && !pulse.arrived;
   return arrived ? { ...state, pulse: { ...pulse, arrived: true } } : state;
@@ -697,6 +702,14 @@ export const startupModule: PuzzleModule<StartupDef, StartupState, StartupInput,
 
   expire(def, state, at) {
     return caughtUp(def, state, at);
+  },
+
+  /**
+   * The stages run up and the values in the script's gaps stay; a pulse on its way dies as one
+   * that ran out on the ladder — „Impuls verfallen", no alarm —, and the script starts again.
+   */
+  resume(_def, state) {
+    return state.pulse === null ? state : lapsed(state);
   },
 
   view(def, state, viewer) {

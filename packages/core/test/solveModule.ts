@@ -24,6 +24,8 @@ const START_SEC = 600;
  * periods (60 s) after it left it, one second more where the period turned as the login went in.
  */
 export const MAX_IDLE_SEC = 150;
+/** How long an emergency a harness run rests through takes, as a mission's by default. */
+export const REST_SEC = 45;
 /**
  * One player at the station — at console a where it has two, with a second
  * player at console b — and one at a manual object that covers it.
@@ -106,11 +108,18 @@ export type Solver = ReturnType<typeof moduleFor>['solve'];
  * the crew moves, and when the solver waits it runs on a second and the
  * solver is asked again; a station that runs on its consoles' presence is brought to every
  * moment as the reducer brings it (`elapse`), both consoles manned. A test may hand in another
- * crew's `solver` in place of the module's. Throws on an alarm, on a partner
+ * crew's `solver` in place of the module's, and rounds before which the station rests through
+ * an emergency of REST_SEC seconds (`restBefore`): it comes back through the module's `resume`
+ * as the reducer brings it back, the crew's transcript going on. Throws on an alarm, on a partner
  * move at a station with one console, on MAX_IDLE_SEC seconds without a
  * move and on running out of moves. Returns the number of moves taken.
  */
-export function playInstance(def: PuzzleDef, seed: number, solver?: Solver): number {
+export function playInstance(
+  def: PuzzleDef,
+  seed: number,
+  solver?: Solver,
+  restBefore: readonly number[] = [],
+): number {
   const puzzleModule = moduleFor(def.type);
   const solve = solver ?? puzzleModule.solve;
   type View = ReturnType<typeof puzzleModule.view>;
@@ -173,8 +182,13 @@ export function playInstance(def: PuzzleDef, seed: number, solver?: Solver): num
   const signRead = puzzleModule.usesEdgework ? edgework : null;
   let moves = 0;
   let idle = 0;
+  let rested = 0;
   for (let round = 1; moves < MAX_MOVES; round++) {
-    const at = T0 + round * 1000;
+    if (restBefore.includes(round)) {
+      rested += REST_SEC * 1000;
+      state = puzzleModule.resume?.(def, state, T0 + (round - 1) * 1000 + rested) ?? state;
+    }
+    const at = T0 + round * 1000 + rested;
     state = tickedAt(def, state, at);
     if (elapsed(at)) {
       return moves;

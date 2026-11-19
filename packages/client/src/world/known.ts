@@ -35,6 +35,15 @@ export function armedGoal(
   return armed[0]?.title ?? null;
 }
 
+/**
+ * The title of the station that rests through the emergency that runs — switched on before it,
+ * back with what the crew had done there after it (core view.ts `resting`); null while none
+ * does.
+ */
+export function restingTitle(map: Pick<MapView, 'stations'>): string | null {
+  return map.stations.filter(isArmed).find((station) => station.resting === true)?.title ?? null;
+}
+
 /** A station out of service this run: dark, a tag on it, nothing to work. */
 export function isOut(station: MapStation): boolean {
   return statusOf(station) === 'out';
