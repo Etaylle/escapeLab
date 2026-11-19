@@ -1310,6 +1310,80 @@ button.link:hover {
 }
 
 /*
+ * A phone held upright: the audience's page scrolls down — the world in the lab's own shape, then
+ * the panels one under the other, each whole and as wide as the window; nothing scrolls sideways.
+ */
+@media (max-width: 560px) {
+  .content--stage:has(> .spectate) {
+    overflow-y: auto;
+  }
+
+  .content--stage .spectate {
+    height: auto;
+  }
+
+  .content--stage .spectate-body {
+    flex: none;
+  }
+
+  .content--stage .spectate-world {
+    flex: none;
+    height: 62vw;
+  }
+
+  .content--stage .spectate-panels {
+    flex-direction: column;
+    max-height: none;
+    overflow: visible;
+  }
+}
+
+/*
+ * A phone held sideways: the world takes the window's height under a head of one line, the
+ * panels stand beside it in a column of their own that scrolls, as on a wide window.
+ */
+@media (orientation: landscape) and (max-height: 500px) {
+  .content--stage .spectate {
+    gap: 6px;
+  }
+
+  .content--stage .spectate-head {
+    align-items: center;
+  }
+
+  .content--stage .spectate-head .kicker {
+    display: none;
+  }
+
+  .content--stage .spectate-head h1 {
+    margin: 0;
+    font-size: 18px;
+  }
+
+  .content--stage .spectate-stats .countdown {
+    padding: 2px 10px;
+    font-size: 20px;
+  }
+
+  .content--stage .spectate-body {
+    flex-direction: row;
+  }
+
+  .content--stage .spectate-panels {
+    width: min(300px, 38vw);
+    flex: none;
+    flex-direction: column;
+    max-height: none;
+    overflow-y: auto;
+  }
+
+  .content--stage .spectate-foot {
+    gap: 4px 14px;
+    margin-top: 0;
+  }
+}
+
+/*
  * Match log. The panel column has room left over once the player panels are
  * placed, and a running feed is what an audience actually reads between
  * moves — so the ticker lives here instead of as one line in the footer.

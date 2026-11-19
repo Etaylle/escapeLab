@@ -18023,6 +18023,17 @@ function demoAudienceShown() {
     ),
     sideways: doc.scrollWidth - doc.clientWidth,
     address: view.location.search,
+    // The world's box, and whether any panel beside or under it runs or scrolls out sideways.
+    world: (() => {
+      const box = document.querySelector('.spectate-world')?.getBoundingClientRect();
+      return box === undefined ? [0, 0] : [Math.round(box.width), Math.round(box.height)];
+    })(),
+    panelsOut: [...document.querySelectorAll('.spectate-panels .panel')]
+      .filter((panel) => panel.getClientRects().length > 0)
+      .some((panel) => {
+        const box = panel.getBoundingClientRect();
+        return box.left < 0 || box.right > doc.clientWidth + 1;
+      }),
     // The site's small QR code beside the run's report: its side, 0 where the window shows none.
     qr: Math.round(document.querySelector('.demo-qr svg.qr')?.getBoundingClientRect().width ?? 0),
   };
@@ -18046,6 +18057,8 @@ function demoFaults(shown, phone) {
     [!phone && line.text !== DEMO_LINE, `the line reads „${line.text}"`],
     [!phone && (line.px < DEMO_TEXT_PX || !line.inside), `the line at ${line.px} px`],
     [phone && line.text !== null, 'the line crowds the phone’s head'],
+    [phone && shown.world[1] < 200, `the world is ${shown.world.join('x')} px`],
+    [shown.panelsOut, 'a panel runs out of the window sideways'],
     [phone ? shown.qr !== 0 : shown.qr < 120, `the site’s QR code is ${shown.qr} px a side`],
     [!named || !shown.crewInside, `the crew along the foot: ${shown.crew.join(' · ')}`],
     [shown.sideways > 1, `the page runs ${shown.sideways} px out sideways`],
@@ -18060,7 +18073,8 @@ async function demoAudienceShot(page, shot, size, phone = false) {
   console.log(
     `${shot.padEnd(19)}@ ${size}: label „${shown.label.text}" at ${shown.label.px} px, line ` +
       `„${shown.line.text ?? 'none'}"; ${shown.crew.join(' · ')}; ${shown.atConsole} at a ` +
-      `console; ways along the foot ${shown.ways.join(', ')} px tall; QR ${shown.qr} px`,
+      `console; ways along the foot ${shown.ways.join(', ')} px tall; QR ${shown.qr} px; ` +
+      `the world ${shown.world.join('x')} px`,
   );
   return demoFaults(shown, phone).map((fault) => `${shot}: ${fault}`);
 }

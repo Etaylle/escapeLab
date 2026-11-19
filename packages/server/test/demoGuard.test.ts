@@ -54,7 +54,7 @@ describe('a run of the demo that is lost', () => {
     host.stop();
   });
 
-  it('is given up where its crew gets no further, long before the clock, and the next is won', () => {
+  it('is given up where its crew gets no further, long before the clock; the next is won', () => {
     const warned: string[] = [];
     vi.spyOn(console, 'warn').mockImplementation((line: string) => void warned.push(line));
     // The first run's moves at the consoles never reach the room: its crew stands at the switch.
@@ -150,7 +150,7 @@ describe('an audience that asks again and again', () => {
     host.stop();
   });
 
-  it('is told to wait once it has joined audiences twelve times in a minute, and then again', () => {
+  it('is told to wait once it has joined audiences twelve times in a minute', () => {
     const host = new DemoHost(mission, [12]);
     const { line, manager, anna, code } = served(host);
     const hopper = line.connect();
@@ -194,7 +194,8 @@ describe('an audience that asks again and again', () => {
     expect(zoe.heard.length).toBeGreaterThan(before);
     expect(manager.get(code).watching).toBe(1);
     const said = logged.mock.calls.map(([text]) => String(text));
-    expect(said.filter((text) => text.includes('spectate') && text.includes('refused'))).toHaveLength(1);
+    const refusals = said.filter((text) => text.includes('spectate') && text.includes('refused'));
+    expect(refusals).toHaveLength(1);
     manager.get(code).dispose();
     host.stop();
   });
@@ -263,7 +264,9 @@ describe('a crew that starts over', () => {
         items: [],
         exit: null,
         sabotage: null,
-        stations: [{ puzzleId: 'notlicht', x: 1, y: 1, console: 'a', known: true, status: 'armed' }],
+        stations: [
+          { puzzleId: 'notlicht', x: 1, y: 1, console: 'a', known: true, status: 'armed' },
+        ],
       },
     };
     const complaints: string[] = [];

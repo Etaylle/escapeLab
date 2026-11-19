@@ -86,7 +86,8 @@ describe('„Demo" in the main menu', () => {
     expect(sideways).toMatch(new RegExp(`${list} \\{\\s*display: none;`));
     expect(menu).not.toContain("data-item='demo'");
     // Seven of the ten are left: what a window 390 px high holds at 44 px each.
-    expect(menuItems(true).filter((item) => !['settings', 'editor', 'qr'].includes(item))).toHaveLength(7);
+    const gone = ['settings', 'editor', 'qr'];
+    expect(menuItems(true).filter((item) => !gone.includes(item))).toHaveLength(7);
   });
 
   it('leads nowhere while the line is down', () => {
@@ -208,6 +209,43 @@ describe('the demo room’s audience', () => {
     const narrow = sheet.slice(at, sheet.indexOf('\n}\n', at));
     expect(narrow).toMatch(/\.demo-line \{\s*display: none;/);
     expect(narrow).not.toContain('.demo-label');
+  });
+});
+
+describe('the audience on a phone', () => {
+  const sheet = css('ui.css');
+  /** The block of the sheet that opens with `media`, to its end. */
+  const block = (media: string): string => {
+    const at = sheet.indexOf(`${media} {\n  .content--stage`);
+    expect(at, media).toBeGreaterThan(0);
+    return sheet.slice(at, sheet.indexOf('\n}\n', at));
+  };
+
+  it('scrolls down when held upright: the world in the lab’s shape, the panels under it', () => {
+    const upright = block('@media (max-width: 560px)');
+    expect(upright).toMatch(/\.content--stage:has\(> \.spectate\) \{\s*overflow-y: auto;/);
+    expect(upright).toMatch(/\.spectate-world \{\s*flex: none;\s*height: 62vw;/);
+    expect(upright).toMatch(
+      /\.spectate-panels \{\s*flex-direction: column;\s*max-height: none;\s*overflow: visible;/,
+    );
+  });
+
+  it('stands the panels beside the world when held sideways, under a head of one line', () => {
+    const sideways = block('@media (orientation: landscape) and (max-height: 500px)');
+    expect(sideways).toMatch(/\.spectate-head \.kicker \{\s*display: none;/);
+    expect(sideways).toMatch(/\.spectate-body \{\s*flex-direction: row;/);
+    expect(sideways).toMatch(/\.spectate-panels \{\s*width: min\(300px, 38vw\);/);
+    // After the narrow window's rule, which it takes back for a phone held sideways.
+    const held = '@media (orientation: landscape) and (max-height: 500px) {\n  .content--stage';
+    const narrow = '@media (max-width: 900px) {\n  .content--stage .spectate-body';
+    expect(sheet.indexOf(held)).toBeGreaterThan(sheet.indexOf(narrow));
+  });
+
+  it('cuts no name under a figure of the end card: a long one breaks into lines', () => {
+    const name = ruleOf(css('styles/finale.css'), '.end-mate-name');
+    expect(name).toContain('overflow-wrap: break-word;');
+    expect(name).not.toContain('ellipsis');
+    expect(name).not.toContain('nowrap');
   });
 });
 
