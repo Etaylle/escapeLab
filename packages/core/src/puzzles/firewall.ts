@@ -396,6 +396,21 @@ function addressIn(head: string, rng: Rng): string {
 /** The heads of every address a header may carry. */
 const HEADS: readonly string[] = [LAB_NET, SERVICE_NET, ...FOREIGN_HEADS];
 
+/**
+ * The widest header a wave can deal, part by part: the longest address of any network — its
+ * numbers at their highest —, the longest port, the longest protocol. What a card has to hold.
+ */
+export function widestHeader(): FirewallHeader {
+  const longest = <T>(items: readonly T[]): T =>
+    items.reduce((wide, item) => (String(item).length > String(wide).length ? item : wide));
+  const highest: Rng = () => 1 - Number.EPSILON;
+  return {
+    source: longest(HEADS.map((head) => addressIn(head, highest))),
+    port: longest(PORTS),
+    protocol: longest(FIREWALL_PROTOCOLS),
+  };
+}
+
 /** A header drawn at random in the shape of the packets `rule` decides (BASE_RULE: any). */
 function drawnHeader(rule: number, digit: number, rng: Rng): FirewallHeader {
   const shape = FIREWALL_POLICY[rule]?.shape ?? {};

@@ -24,6 +24,7 @@ import {
   SAME_LINE_GAP,
   TRIP_GRACE_MS,
   fitsADropRule,
+  widestHeader,
   hostileByPolicy,
   type FirewallDef,
   type FirewallHeader,
@@ -186,6 +187,28 @@ describe('the rules in play', () => {
       );
       expect(decided.filter((rule) => rule === 3 || rule === 4), `seed ${seed}`).toEqual([]);
     }
+  });
+});
+
+describe('the widest header', () => {
+  it(`deals no header wider than the widest it names, part by part, for ${SEEDS} seeds`, () => {
+    const widest = widestHeader();
+    expect(widest).toEqual({ source: '31.14.9.98', port: 8080, protocol: 'TCP' });
+    const seen = { source: 0, port: 0, protocol: 0 };
+    for (let seed = 0; seed < SEEDS; seed++) {
+      const state = fresh(seed);
+      for (const { header } of [0, 1, 2, 3].flatMap((wave) => dealWave(DEF, state, wave))) {
+        seen.source = Math.max(seen.source, header.source.length);
+        seen.port = Math.max(seen.port, String(header.port).length);
+        seen.protocol = Math.max(seen.protocol, header.protocol.length);
+      }
+    }
+    // as wide as the widest, and never wider
+    expect(seen).toEqual({
+      source: widest.source.length,
+      port: String(widest.port).length,
+      protocol: widest.protocol.length,
+    });
   });
 });
 
