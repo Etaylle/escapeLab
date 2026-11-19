@@ -1112,7 +1112,8 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
 - Aus dem Review: Ein abgewiesener Start, Rematch oder Rückweg in die Lobby ändert nichts mehr am
   Raum (vorher leerte er die Positionen, die Crew stand still); das Publikum wird an der Tür für
   alles außer Zuschauen und Mithören abgewiesen; ein Seed wird nur für einen echten Start gezogen.
-- Offen: Die 23 Sprechtexte warten weiter auf Uros' Render; die Demo fügt keinen hinzu.
+- Die Demo fügt keinen Sprechtext hinzu; die 23 Texte der neuen Kette hat Uros am 2026-11-19
+  gerendert (V-takes).
 
 ## Nur lokal
 
