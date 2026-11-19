@@ -65,7 +65,8 @@ const WORLD = {
 
 /** The audience's screen shown, the demo room's own or another room's; then taken down again. */
 function shown(demo: boolean): void {
-  vi.stubGlobal('window', { location: { origin: 'https://escapelab.test', pathname: '/' } });
+  const location = { origin: 'https://escapelab.test', pathname: '/' };
+  vi.stubGlobal('window', { location, addEventListener: noop, removeEventListener: noop });
   vi.stubGlobal('sessionStorage', { getItem: () => null, setItem: noop });
   renderToStaticMarkup(
     demo ? (

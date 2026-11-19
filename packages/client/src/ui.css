@@ -1515,6 +1515,13 @@ button.link:hover {
   cursor: pointer;
 }
 
+/* On a low window — a phone held sideways — the code leaves room for the two lines under it. */
+.invite-qr-sheet .qr {
+  display: block;
+  max-width: calc(100vh - 140px);
+  margin: 0 auto;
+}
+
 .invite-qr-room {
   margin: 12px 0 4px;
   font-size: calc(14px * var(--text-scale));

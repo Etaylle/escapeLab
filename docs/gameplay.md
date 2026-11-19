@@ -1379,8 +1379,8 @@ and 600 high) has a column beside the picture: „Vorführbetrieb: Die Anlage f�
 selbst." and the site's address as a QR code, „Zum Mitnehmen" (146 px a side). Whoever joins
 mid-run sees the run as it stands.
 
-**The director** (`server/src/demo/director.ts`) decides what is on air, on the server, the same
-for every window that watches — two laptops at a stand and every phone show one picture. It is a
+**The director** (`server/src/demo/director.ts`) is what „Regie" follows: it decides what is on
+air, on the server, the same for every window that chose it. It is a
 pure function of how the run stands, what each seat is doing as its script says it
 (`DemoCrew.doing`: idle, intro, walk, carry, sign, plate, read, operate, escape) and who made the
 last move, and it holds the picture on air for a minimum: a seat 6 s, the whole lab 5 s. Its rules,
@@ -1425,18 +1425,22 @@ messen." A manual is rules, never an instance's answer, so the sentence is true 
 two switches the whole crew throws (Notlicht, Reaktorstart) have no source, and nothing is said at
 them. What a solver did with a rule is not said: `solve()` gives moves, not reasons.
 
-**One's own picture.** Four buttons in the line, each 44 px: „Regie" (the director's cut, the
-default), „Spieler 1", „Spieler 2", „Übersicht". The choice is this window's alone, kept for the
-session (`sessionStorage`), and told the server (`demo-pin`), which sends a window the view of the
-seat it pinned — one seat's view at a time, never both. A crew's room refuses the ask: „Die
-Bildregie gibt es nur in der Vorführung."
+**One perspective, and the viewer picks** — as a shooter's spectator mode does. Whoever comes sees
+the first seat's own screen, from the opening to the Auswertung. A switcher in the line, always
+there, offers four pictures, each button 44 px: „HCW Bachelor" · „HCW Master" (the seats, by the
+names of who sits on them) · „Übersicht" · „Regie" (the director's cut between the three). On a
+laptop ← and → step through them, round and round, and 1 to 4 pick one. The choice is this
+window's alone, kept for the session (`sessionStorage`) — through the loop's next run and a line
+lost — and told the server on every line that comes up (`demo-pin`), which sends a window the view
+of the one seat it is shown, never both. A crew's room refuses the ask: „Die Bildregie gibt es nur
+in der Vorführung."
 
-**A cut** is a cross-fade of 400 ms: the picture that goes is kept on a canvas over the one that
-comes and fades out; whoever asked for less motion gets a plain swap. The seat's screen is never
-taken down for a cut: from seat to seat its view is swapped under it — the camera stands on the
-other figure at once, and what that seat had found before is no news on this screen —, and the
-whole lab is a picture laid over it (`GameWorld` `silent`), under which the seat's world goes on
-without drawing (`covered`).
+**A change of picture** — the viewer's, or the director's — is a cross-fade of 400 ms: the picture
+that goes is kept on a canvas over the one that comes and fades out; whoever asked for less motion
+gets a plain swap. The seat's screen is never taken down for a cut: from seat to seat its view is
+swapped under it — the camera stands on the other figure at once, and what that seat had found
+before is no news on this screen —, and the whole lab is a picture laid over it (`GameWorld`
+`silent`), under which the seat's world goes on without drawing (`covered`).
 
 **Sound** is the sound of the seat on air, as its player would hear it: the beds of the rooms round
 it, steps, doors, the radio's lines, alarms, the music. It follows a cut from seat to seat because

@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import {
   DEMO_CODE,
+  DEMO_PIN_DEFAULT,
   GameError,
   poolsOf,
   drawPools,
@@ -420,7 +421,7 @@ export class DemoHost {
       throw new GameError(DEMO_FULL);
     }
     const { spectatorId, detach } = this.live.attachSpectator(listener);
-    const viewer: Viewer = { tell: listener, pin: 'regie' };
+    const viewer: Viewer = { tell: listener, pin: DEMO_PIN_DEFAULT };
     const viewers = this.viewers;
     const at = Date.now();
     // The director looks before the newcomer is on the list: it is told once, right here.

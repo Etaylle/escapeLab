@@ -446,7 +446,7 @@ export function pagesOf(
 }
 
 /** The panel open over the menu, if any. */
-function Panels({
+export function Panels({
   panel,
   close,
   section,

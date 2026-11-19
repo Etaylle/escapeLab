@@ -166,7 +166,7 @@ export const GROUPS = [
       'menu-demo.png',
       'demo-player.png',
       'demo-overview.png',
-      'demo-cut.png',
+      'demo-switch.png',
       'demo-phone.png',
       'demo-phone-932.png',
     ],

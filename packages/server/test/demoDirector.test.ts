@@ -265,7 +265,7 @@ function count({ shot, phase, index }: Seen, shown: Watched['shown']): void {
 function watchRun(seed: number): Watched {
   const host = new DemoHost(mission, [seed]);
   const heard: ServerMessage[] = [];
-  host.watch((msg) => heard.push(msg));
+  host.watch((msg) => heard.push(msg)).pin('regie');
   const seen: Seen = { phase: 'lobby', index: 0, ids: [], shot: null };
   const counted = { shown: {}, said: {}, deaf: 0, bytes: {}, seconds: 0 };
   const watched: Watched = { phase: 'lobby', shots: [], ...counted };
@@ -380,12 +380,13 @@ describe('the demo’s feed', () => {
   it('tells a viewer at once what is on air, and sends it the seat’s view as it is cut to', () => {
     const host = new DemoHost(mission, [12]);
     const heard: ServerMessage[] = [];
-    host.watch((msg) => heard.push(msg));
+    const watch = host.watch((msg) => heard.push(msg));
     const first = heard.find((msg) => msg.kind === 'demo-shot');
     expect(first).toMatchObject({ kind: 'demo-shot', shot: { onAir: null, caption: null } });
-    // The lobby from above: the first seat's view comes all the same, for the page's sound.
+    // Whoever comes is shown the first seat, whatever is on air: its view comes at once.
     const ear = first?.kind === 'demo-shot' ? first.shot.ear : '';
     expect(viewsIn(heard)).toEqual([ear]);
+    watch.pin('regie');
     run(4);
     // The run started: the opening on the first seat, its own view with it.
     const shot = heard.filter((msg) => msg.kind === 'demo-shot').at(-1);
@@ -447,6 +448,19 @@ describe('the demo’s feed', () => {
     watch.pin('regie');
     run(120);
     expect(new Set(viewsIn(heard))).toEqual(new Set([one, two]));
+    host.stop();
+  });
+
+  it('shows whoever chose nothing the first seat, whoever is on air', () => {
+    const host = new DemoHost(mission, [12]);
+    const heard: ServerMessage[] = [];
+    host.watch((msg) => heard.push(msg));
+    run(150);
+    const shots = heard.flatMap((msg) => (msg.kind === 'demo-shot' ? [msg.shot] : []));
+    const [first, second] = Object.keys(shots.at(-1)?.doing ?? {});
+    // The director had the second seat on air meanwhile; this viewer was sent the first alone.
+    expect(shots.some((shot) => shot.onAir === second)).toBe(true);
+    expect(new Set(viewsIn(heard))).toEqual(new Set([first]));
     host.stop();
   });
 

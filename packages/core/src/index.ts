@@ -290,6 +290,7 @@ export {
   DEMO_CODE,
   DEMO_DOINGS,
   DEMO_PINS,
+  DEMO_PIN_DEFAULT,
   type DemoDoing,
   type DemoPin,
   type DemoShot,

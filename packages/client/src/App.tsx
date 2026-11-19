@@ -986,7 +986,7 @@ function runningOf(conn: Connection) {
  * the lobby names its own as its headline, so naming it twice there would be noise —, the seed a
  * tester pinned the lobby to (?seed=), the way back to the editor, and off any room the account.
  */
-function AppBar(props: {
+export function AppBar(props: {
   conn: Connection;
   layer: MenuLayer;
   menus: ShutteredMenus;

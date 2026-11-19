@@ -1145,7 +1145,7 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   nur er: seine Crew sind Maschinen des Servers, kein Mensch spielt nach ihrer Sicht; ein Test
   findet auf der Leitung des Publikums eines Crew-Raums keine Sicht eines Platzes.
 - Regie auf dem Server (`server/src/demo/director.ts`), für alle Fenster gleich, reine Funktion
-  als Regeltabelle: Lobby von oben; Eröffnung und Auswertung auf Platz 1; Fluchtweg und 5 s nach
+  als Regeltabelle, im Umschalter als „Regie" wählbar: Lobby von oben; Eröffnung und Auswertung auf Platz 1; Fluchtweg und 5 s nach
   einer gelösten Station von oben; wer liest oder ein Pult bedient, ist im Bild (an zwei Pulten,
   wer zuletzt geschaltet hat); Wege unter Drohnen von oben; sonst Platz 1. Ein Platz bleibt
   mindestens 6 s, die Übersicht 5 s. Gemessen (Seeds 12/56/93): 34/27/38 Schnitte, Übersicht
@@ -1153,8 +1153,9 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
 - Client (`screens/Demo.tsx`): der Spielbildschirm des Platzes, nur zum Ansehen (`GameScreen`
   `watch`, `GameWorld` `watched`: Figur folgt den Positionen des Raums, keine Taste, kein
   Finger, kein Controller, nichts wird gesendet, keine Bedienelemente); darunter eine Zeile mit
-  „Demo", wer im Bild ist und was er tut, den vier Bildern „Regie", „Spieler 1", „Spieler 2",
-  „Übersicht" (je 44 px, für die Sitzung gemerkt) und „Zuschauen beenden". Schnitt als
+  „Demo", wessen Sicht es ist und was er tut, dem Umschalter „HCW Bachelor" · „HCW Master" ·
+  „Übersicht" · „Regie" (je 44 px; ←/→ und 1–4 auf dem Laptop; für die Sitzung gemerkt, Vorgabe
+  Platz 1, wie der Zuschauermodus eines Shooters) und „Zuschauen beenden". Wechsel als
   Überblendung von 400 ms, bei reduzierter Bewegung hart.
 - Untertitel: Wer die Regeln einer Station gelesen hat, gibt einen Satz ihres Handbuchs
   wörtlich weiter (erste Notiz „Aus der Werkstatt", sonst die erste Regel), neun Sekunden lang;
@@ -1171,6 +1172,9 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   Einspeisung und des Nur-Ansehens; Rundgang-Probe `demo` (sechs Aufnahmen, 39 s: die Seite mit
   den Tasten des Spiels bedrängt, sendet nichts; Musik läuft durch jeden Schnitt); Smoke prüft die
   Sicht des festgestellten Platzes und die Ablehnung im Crew-Raum.
+- Aus dem Review von D-1 mitgenommen: das QR-Blatt der Lobby passt quer aufs Handy (Code höchstens
+  `100vh − 140px`), `?room=` nimmt höchstens zehn Zeichen, je ein Test für den Chip nur in der
+  Lobby und für das QR-Panel des Menüs.
 
 ## Nur lokal
 

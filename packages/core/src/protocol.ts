@@ -98,9 +98,15 @@ export interface DemoDoing {
   sourceId: string | null;
 }
 
-/** What a viewer of the demo may pin its own screen to: the director's cut, a seat, the lab. */
-export const DEMO_PINS = ['regie', 'one', 'two', 'overview'] as const;
+/**
+ * What a viewer of the demo may have on its own screen, in the order its switcher offers them:
+ * the first seat's own view (what everybody starts on), the second's, the whole lab, or the
+ * director's cut between the three.
+ */
+export const DEMO_PINS = ['one', 'two', 'overview', 'regie'] as const;
 export type DemoPin = (typeof DEMO_PINS)[number];
+/** What a viewer of the demo is shown until it chooses otherwise: the first seat's own view. */
+export const DEMO_PIN_DEFAULT: DemoPin = 'one';
 
 /**
  * What the demo has on air, the same for everybody who watches: the seat whose own view the

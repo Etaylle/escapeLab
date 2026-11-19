@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
+  DEMO_PIN_DEFAULT,
   DEMO_PINS,
   type ClientMessage,
   type DemoDoing,
@@ -80,15 +81,30 @@ function useKeepAwake(): void {
   useEffect(() => keepAwake(), []);
 }
 
-/** What the choice of one's own picture calls each (`DemoPin`). */
-export const PIN_LABELS: Record<DemoPin, string> = {
-  regie: 'Regie',
-  // voice: interface — the choice's own labels name the seats, as Uros asked (2026-11-19)
-  one: 'Spieler 1',
-  // voice: interface — as above
-  two: 'Spieler 2',
-  overview: 'Übersicht',
-};
+/** What the switcher calls the whole lab and the director's cut; a seat goes by its name. */
+export const PIN_LABELS = { overview: 'Übersicht', regie: 'Regie' } as const;
+
+/** What the switcher calls `pin`: a seat by the name of who sits on it, as `view` lists them. */
+export function pinLabel(pin: DemoPin, view: Pick<SpectatorView, 'players'>): string {
+  if (pin === 'overview' || pin === 'regie') {
+    return PIN_LABELS[pin];
+  }
+  const index = pin === 'one' ? 0 : 1;
+  return view.players[index]?.name ?? `Platz ${index + 1}`;
+}
+
+/**
+ * The picture a key picks, `pin` being up: ← and → step through the switcher's choices, round
+ * and round, 1 to 4 pick one; null for any other key.
+ */
+export function pinByKey(key: string, pin: DemoPin): DemoPin | null {
+  const step = { ArrowLeft: -1, ArrowRight: 1 }[key];
+  if (step !== undefined) {
+    const at = DEMO_PINS.indexOf(pin) + step + DEMO_PINS.length;
+    return DEMO_PINS[at % DEMO_PINS.length] ?? null;
+  }
+  return DEMO_PINS[['1', '2', '3', '4'].indexOf(key)] ?? null;
+}
 
 /** The way out of the demo's audience, as every audience's is called. */
 export const LEAVE_LABEL = 'Zuschauen beenden';
@@ -116,9 +132,9 @@ const PIN_KEY = 'escapelab.demoPin';
 export function keptPin(): DemoPin {
   try {
     const kept = sessionStorage.getItem(PIN_KEY);
-    return DEMO_PINS.find((pin) => pin === kept) ?? 'regie';
+    return DEMO_PINS.find((pin) => pin === kept) ?? DEMO_PIN_DEFAULT;
   } catch {
-    return 'regie';
+    return DEMO_PIN_DEFAULT;
   }
 }
 
@@ -153,7 +169,15 @@ function consoleOfTwo(view: PlayerView): string | null {
 }
 
 /** The viewer's own choice of picture: four buttons, the one chosen pressed. */
-function PinChoice({ pin, choose }: { pin: DemoPin; choose: (pin: DemoPin) => void }) {
+function PinChoice({
+  pin,
+  choose,
+  view,
+}: {
+  pin: DemoPin;
+  choose: (pin: DemoPin) => void;
+  view: SpectatorView;
+}) {
   return (
     <div className="demo-pins" role="group" aria-label="Bild wählen">
       {DEMO_PINS.map((each) => (
@@ -164,7 +188,7 @@ function PinChoice({ pin, choose }: { pin: DemoPin; choose: (pin: DemoPin) => vo
           aria-pressed={each === pin}
           onClick={() => choose(each)}
         >
-          {PIN_LABELS[each]}
+          {pinLabel(each, view)}
         </button>
       ))}
     </div>
@@ -177,7 +201,9 @@ function LowerThird({
   pin,
   choose,
   leaveRoom,
+  view,
 }: {
+  view: SpectatorView;
   line: { name: string | null; text: string };
   pin: DemoPin;
   choose: (pin: DemoPin) => void;
@@ -200,7 +226,7 @@ function LowerThird({
           <Icon name="exit" /> <span className="demo-leave-text">{LEAVE_LABEL}</span>
         </button>
       </div>
-      <PinChoice pin={pin} choose={choose} />
+      <PinChoice pin={pin} choose={choose} view={view} />
     </div>
   );
 }
@@ -436,12 +462,15 @@ function useCrossFade(
   );
 }
 
-/** The pin a viewer chose, kept for the session, and told the server on every line (`demo-pin`). */
+/**
+ * The picture a viewer chose, kept for the session — through the loop's next run and a line
+ * lost — and told the server on every line that comes up (`demo-pin`); the keys step through
+ * the choices (`pinByKey`).
+ */
 function usePin(send: Props['send'], up: boolean): [DemoPin, (pin: DemoPin) => void] {
   const [pin, setPin] = useState<DemoPin>(keptPin);
-  // A line that just came up follows the director until it hears otherwise.
   useEffect(() => {
-    if (up && pin !== 'regie') {
+    if (up) {
       send({ kind: 'demo-pin', pin });
     }
     // `send` is stable for the connection's life.
@@ -450,10 +479,18 @@ function usePin(send: Props['send'], up: boolean): [DemoPin, (pin: DemoPin) => v
   const choose = (next: DemoPin): void => {
     keepPin(next);
     setPin(next);
-    if (next === 'regie' && up) {
-      send({ kind: 'demo-pin', pin: next });
-    }
   };
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => {
+      const next = e.altKey || e.ctrlKey || e.metaKey ? null : pinByKey(e.key, pin);
+      if (next !== null) {
+        e.preventDefault();
+        choose(next);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [pin]);
   return [pin, choose];
 }
 
@@ -494,7 +531,13 @@ export function DemoScreen(props: Props) {
         </div>
         <DemoSide />
       </div>
-      <LowerThird line={line} pin={pin} choose={choose} leaveRoom={props.leaveRoom} />
+      <LowerThird
+        view={view}
+        line={line}
+        pin={pin}
+        choose={choose}
+        leaveRoom={props.leaveRoom}
+      />
     </div>
   );
 }

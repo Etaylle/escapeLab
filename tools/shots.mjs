@@ -18131,8 +18131,8 @@ async function captureLobbyQr(page, code) {
 // the game as a player has it, read-only — over the line that names who is on air, the choice of
 // picture and the way out, the demo's line and the site's QR code beside it. The page is then
 // poked as a player would play — keys, a click into the picture — and sends nothing for it.
-// „Übersicht" pins the whole lab (demo-overview.png), „Spieler 2" the second seat, the cut held
-// halfway through its fade (demo-cut.png); the music that plays under the first picture plays on
+// „Übersicht" picks the whole lab (demo-overview.png), „HCW Master" the second seat, the cut held
+// halfway through its fade (demo-switch.png); the music that plays under the first picture plays on
 // under each. Then a phone that asks for less motion comes by the demo's link, /?demo=1:
 // straight onto the demo's screen, the link gone from the address (demo-phone.png), turned
 // sideways (demo-phone-932.png) — the whole window the demo's, no top bar — and the way out leads
@@ -18145,7 +18145,7 @@ const DEMO_LABEL = 'DEMO';
 const DEMO_LINE = 'Vorführbetrieb: Die Anlage fährt diesen Einsatz selbst.';
 const DEMO_OVERVIEW = 'Übersicht · die ganze Anlage';
 /** The pictures a viewer may pin, as the buttons name them. */
-const DEMO_PINS = ['Regie', 'Spieler 1', 'Spieler 2', 'Übersicht'];
+const DEMO_PINS = ['HCW Bachelor', 'HCW Master', 'Übersicht', 'Regie'];
 /** The demo crew's names (server demo/host.ts `DEMO_NAMES`). */
 const DEMO_NAMES = ['HCW Bachelor', 'HCW Master'];
 
@@ -18382,8 +18382,8 @@ async function demoMusic(page, ms) {
 }
 
 /**
- * demo-overview.png and demo-cut.png: „Übersicht" pins the whole lab over the seat's screen;
- * „Spieler 2" cuts to the second seat, the cut held halfway through its fade for the picture.
+ * demo-overview.png and demo-switch.png: „Übersicht" pins the whole lab over the seat's screen;
+ * „HCW Master" cuts to the second seat, the cut held halfway through its fade for the picture.
  * The music that played under the first picture plays on under both: no cut stops it. Back to
  * the director's cut after.
  */
@@ -18394,7 +18394,7 @@ async function demoPictures(page, sent) {
   await sleep(900); // the lab faded in
   const lab = await demoShot(page, 'demo-overview.png', { size: '1440x820' }, (shown) => [
     [!shown.lab || shown.onAir.text !== DEMO_OVERVIEW, `on air: „${shown.onAir.text}"`],
-    [!shown.pins[3]?.pressed, '„Übersicht" is not the pin pressed'],
+    [!shown.pins[2]?.pressed, '„Übersicht" is not the pin pressed'],
     [shown.streams < before, `the music fell from ${before} streams to ${shown.streams}`],
   ]);
   // The fade held in its middle: the lab's last picture half gone over the seat's screen.
@@ -18403,26 +18403,30 @@ async function demoPictures(page, sent) {
       '.demo-fade--on { animation-play-state: paused !important; ' +
       'animation-delay: -200ms !important; }',
   });
-  await demoPin(page, 'Spieler 2', false);
+  await demoPin(page, 'HCW Master', false);
   await page.locator('.demo-fade--on').waitFor({ state: 'attached', timeout: 5000 });
   await sleep(300);
-  const cut = await demoShot(page, 'demo-cut.png', { size: '1440x820' }, (shown) => [
+  const cut = await demoShot(page, 'demo-switch.png', { size: '1440x820' }, (shown) => [
     [shown.lab || !demoNames(shown, 1), `on air: „${shown.onAir.text}"`],
     [!(shown.fade > 0.2 && shown.fade < 0.8), `the fading picture stands at ${shown.fade}`],
     [shown.streams < before, `the music fell from ${before} streams to ${shown.streams}`],
   ]);
   await hold.evaluate((style) => style.remove());
-  await demoPin(page, 'Regie', false).catch(() => undefined);
+  // The keys step through the pictures as a spectator's do: ← from the second seat to the first.
+  await page.keyboard.press('ArrowLeft');
+  await sleep(400);
+  const first = await page.locator('.demo-pin[aria-pressed="true"]').innerText();
   const pinned = sent.filter((kind) => kind === 'demo-pin').length;
   console.log(
-    `demo               pinned the lab, the second seat, the director again: ${pinned} pins ` +
+    `demo               picked the lab, the second seat, and by ← „${first}": ${pinned} pins ` +
       `sent; the music on ${before} streams before, ${cut.shown.streams} after`,
   );
   return [
     ...lab.wrong,
     ...cut.wrong,
     ...wrongOf([
-      [pinned !== 3, `${pinned} pins sent, not three`],
+      [first !== DEMO_PINS[0], `← led to „${first}"`],
+      [pinned !== 4, `${pinned} pins sent, not the first seat's and three more`],
       [!quiet && before === 0, 'no music played under the seat’s screen'],
     ]),
   ];
@@ -18440,8 +18444,8 @@ async function demoByLink(context) {
   link.searchParams.set('demo', '1');
   await page.goto(link.href);
   await page.locator('.demo .demo-label').waitFor({ timeout: 10_000 });
-  // A seat's own screen: the director's, or the first seat's where the lab is on air.
-  await demoPin(page, 'Spieler 1', false);
+  // Whoever comes is shown the first seat's own screen.
+  await page.locator('.demo--seat').waitFor({ timeout: 10_000 });
   await sleep(800);
   const upright = `${SIZES[2].width}x${SIZES[2].height}`;
   const seat = (shown) => [[shown.lab || !demoNames(shown, 0), `on air: „${shown.onAir.text}"`]];

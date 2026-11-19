@@ -23,6 +23,8 @@ import {
   OVERVIEW_LINE,
   PIN_LABELS,
   pictureOf,
+  pinByKey,
+  pinLabel,
   seatShown,
 } from '../src/screens/Demo.js';
 import { demoFeedWith, type DemoFeed } from '../src/ws.js';
@@ -196,15 +198,10 @@ describe('the line under the picture', () => {
       expect(doingLine(BEN, what(doing))).toBe(line);
     }
     const said = [...lines.map(([, line]) => line), OVERVIEW_LINE, LOBBY_LINE];
-    expect(offVoice(said, WORLD)).toEqual([]);
+    expect(offVoice([...said, ...Object.values(PIN_LABELS)], WORLD)).toEqual([]);
     expect(OVERVIEW_LINE).toBe('Übersicht · die ganze Anlage');
     expect(LOBBY_LINE).toBe('Schichtwechsel: Der nächste Einsatz beginnt gleich.');
-    expect(PIN_LABELS).toEqual({
-      regie: 'Regie',
-      one: 'Spieler 1',
-      two: 'Spieler 2',
-      overview: 'Übersicht',
-    });
+    expect(PIN_LABELS).toEqual({ overview: 'Übersicht', regie: 'Regie' });
   });
 });
 
@@ -258,7 +255,7 @@ function demo(given: DemoFeed, view: SpectatorView = AUDIENCE, kept: DemoPin | n
 
 describe('the demo’s screen', () => {
   it('shows the seat on air on its own screen, and says under it who that is', () => {
-    const { html, sent } = demo(feed('p1'));
+    const { html, sent } = demo(feed('p1'), AUDIENCE, 'regie');
     expect(html).toContain('<div class="demo demo--seat">');
     expect(html).toContain('<span class="demo-label">Demo</span>');
     expect(html).toContain('<strong>Anna</strong> · liest: Betriebsbuch</p>');
@@ -271,11 +268,11 @@ describe('the demo’s screen', () => {
     expect(game).toMatchObject({ watch: { doing: what('read', 'buch'), covered: false } });
     expect((game?.view as PlayerView).you.id).toBe('p1');
     (game?.send as (msg: ClientMessage) => void)({ kind: 'drop-item' });
-    expect(sent).toEqual([]);
+    expect(sent).toEqual([{ kind: 'demo-pin', pin: 'regie' }]);
   });
 
   it('lays the whole lab over the seat last on air, which is heard on under it', () => {
-    const { html } = demo(feed(null, { ear: 'p2' }));
+    const { html } = demo(feed(null, { ear: 'p2' }), AUDIENCE, 'regie');
     expect(html).toContain('<div class="demo demo--lab">');
     expect(html).toContain(`<p class="demo-onair" aria-live="polite">${OVERVIEW_LINE}</p>`);
     const [seat] = stage.games;
@@ -304,11 +301,12 @@ describe('the line under the demo’s picture, and a viewer’s own choice', () 
     const { html } = demo(feed('p1'), AUDIENCE, 'two');
     const button =
       /<button type="button" class="demo-pin[^"]*" aria-pressed="(true|false)">([^<]+)</g;
+    // The seats by the names of who sits on them, then the whole lab, then the director's cut.
     expect([...html.matchAll(button)].map(([, pressed, label]) => `${label}:${pressed}`)).toEqual([
-      'Regie:false',
-      'Spieler 1:false',
-      'Spieler 2:true',
+      'Anna:false',
+      'Ben:true',
       'Übersicht:false',
+      'Regie:false',
     ]);
     expect(html).toContain(
       '<button class="link demo-leave" aria-label="Zuschauen beenden">',
@@ -319,13 +317,29 @@ describe('the line under the demo’s picture, and a viewer’s own choice', () 
     expect(html).toContain('<strong>Ben</strong> · am Pult</p>');
   });
 
-  it('tells the server the picture kept for the session — and nothing for the director’s', () => {
+  it('tells the server the picture as its line comes up: the one kept, else the first seat', () => {
     expect(demo(feed('p1'), AUDIENCE, 'two').sent).toEqual([{ kind: 'demo-pin', pin: 'two' }]);
-    expect(demo(feed('p1'), AUDIENCE, 'overview').sent).toEqual([
-      { kind: 'demo-pin', pin: 'overview' },
+    expect(demo(feed('p1'), AUDIENCE, 'regie').sent).toEqual([{ kind: 'demo-pin', pin: 'regie' }]);
+    expect(demo(feed('p2')).sent).toEqual([{ kind: 'demo-pin', pin: 'one' }]);
+    // Whoever chose nothing sees the first seat, whoever the director has on air.
+    expect((stage.games.at(-1)?.view as PlayerView).you.id).toBe('p1');
+  });
+
+  it('steps through the pictures by the arrows, round and round, and picks one by 1 to 4', () => {
+    expect(DEMO_PINS).toEqual(['one', 'two', 'overview', 'regie']);
+    expect(DEMO_PINS.map((pin) => pinByKey('ArrowRight', pin))).toEqual([
+      'two',
+      'overview',
+      'regie',
+      'one',
     ]);
-    expect(demo(feed('p1')).sent).toEqual([]);
-    expect(demo(feed('p1'), AUDIENCE, 'regie').sent).toEqual([]);
+    expect(pinByKey('ArrowLeft', 'one')).toBe('regie');
+    expect(['1', '2', '3', '4'].map((key) => pinByKey(key, 'regie'))).toEqual([...DEMO_PINS]);
+    expect(['5', '0', 'a', 'Enter', ' '].map((key) => pinByKey(key, 'one'))).toEqual(
+      Array.from({ length: 5 }, () => null),
+    );
+    expect(pinLabel('one', AUDIENCE)).toBe('Anna');
+    expect(pinLabel('two', { players: [] })).toBe('Platz 2');
   });
 
   it('keeps the choice for the session, and takes nothing else for one', () => {
@@ -334,11 +348,11 @@ describe('the line under the demo’s picture, and a viewer’s own choice', () 
       expect(keptPin()).toBe(pin);
     }
     vi.stubGlobal('sessionStorage', storage(new Map([['escapelab.demoPin', 'three']])));
-    expect(keptPin()).toBe('regie');
+    expect(keptPin()).toBe('one');
     vi.stubGlobal('sessionStorage', storage(new Map()));
-    expect(keptPin()).toBe('regie');
+    expect(keptPin()).toBe('one');
     vi.unstubAllGlobals();
-    expect(keptPin()).toBe('regie');
+    expect(keptPin()).toBe('one');
   });
 
   it('says of itself what it is: the label, the plant’s line, the site’s address', () => {
