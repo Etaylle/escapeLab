@@ -55,6 +55,9 @@ describe('the demo crew', () => {
     },
   );
 
+});
+
+describe('the demo crew at work', () => {
   it('stands before the consoles it works, never on one, and never two on a tile', () => {
     const host = new DemoHost(mission, [DRAW_SEEDS.notstrom]);
     const consoles = new Set(mission.map.stations.map((spot) => `${spot.x},${spot.y}`));
@@ -120,6 +123,9 @@ describe('the demo crew', () => {
     expect(complaints).toEqual([]);
   });
 
+});
+
+describe('the demo crew over its hundred seeds', () => {
   it('wins every seed of the first hundred, every draw among them, with no alarm', async () => {
     const drawn = new Set<string>();
     const clocks: number[] = [];

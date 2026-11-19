@@ -171,7 +171,7 @@ describe('a walk of the demo crew', () => {
     expect(() => run(walks.to(seat, { x: 9.5, y: 3.5 }), clock, 1)).toThrow(NoWay);
   });
 
-  it('waits on its haven while the drone looks down the corridor, and sets out once it is by', () => {
+  it('waits on its haven while the drone looks down the corridor, then sets out', () => {
     const clock = { now: 0 };
     const { seat } = seated(clock);
     seat.hear({ kind: 'view', view: viewOf(1000), at: 0 });
