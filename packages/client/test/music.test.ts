@@ -351,8 +351,8 @@ describe('the music as it plays', () => {
     m.setTension(tension());
     await fetchIn();
     const ctx = lastContext();
-    // A stem's RMS (−20 dBFS after its gain) lands 26 dB under the effects' level.
-    expect(20 * Math.log10((MUSIC_LEVEL * 0.1) / EFFECTS_LEVEL)).toBeCloseTo(-26, 9);
+    // A stem's RMS (−20 dBFS after its gain) lands 21 dB under the effects' level.
+    expect(20 * Math.log10((MUSIC_LEVEL * 0.1) / EFFECTS_LEVEL)).toBeCloseTo(-21, 9);
     expect(ctx.all<FakeGain>('gain').some((g) => g.gain.value === MUSIC_LEVEL)).toBe(true);
     // Every stem's file fetched once as it starts, none of them decoded.
     const files = fetched.filter((url) => url.endsWith('.mp3'));

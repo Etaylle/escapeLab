@@ -19,8 +19,8 @@
  * stacked on one another never clip; Web Audio raises everything after it by a makeup gain worked
  * out from those settings (`limiterMakeup`), which the trim takes back, so the mix under the
  * threshold plays as loud as before. Ducking (`duck`): mission control's voice pulls the music
- * 8 dB and the beds 4 dB down, the klaxon and the siren pull the music 6 dB down, a preview the
- * music 24 dB; where several pull at once the deepest holds. A bus goes down over DUCK_ATTACK_S and
+ * 12 dB and the beds 4 dB down, the crew's voices the music 8 dB, the klaxon and the siren the
+ * music 6 dB, a preview the music 24 dB; where several pull at once the deepest holds. A bus goes down over DUCK_ATTACK_S and
  * comes back over DUCK_RELEASE_S, in straight lines on the audio clock (`duckKnots`, pure).
  */
 
@@ -166,7 +166,7 @@ export type Depths = Readonly<Partial<Record<DuckSource, number>>>;
 
 /** How far the sources pull the music and the beds down, dB. */
 export const DUCK_DB: Readonly<Record<'music' | 'ambience', Depths>> = {
-  music: { voice: -8, alarm: -6, siren: -6, crew: -8, preview: -24 },
+  music: { voice: -12, alarm: -6, siren: -6, crew: -8, preview: -24 },
   ambience: { voice: -4, crew: -4 },
 };
 /** A bus goes down over this long, s… */
