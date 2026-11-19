@@ -6,6 +6,7 @@ import type { Grade } from './grade.js';
 import { MAX_NOTES } from './notes.js';
 import type { ManualSection } from './puzzles/module.js';
 import type { RunOutcome } from './report.js';
+import type { RunBoard } from './runStats.js';
 import type { Phase } from './state.js';
 import type { PlayerView, SpectatorView } from './view.js';
 
@@ -427,6 +428,8 @@ export interface AccountRun {
   seat: number;
   /** the grade of a run won (grade.ts); null for a run lost */
   rank: Grade['rank'] | null;
+  /** the board it stands on: a run of the mission's earlier chain on its „Frühere Anlage" */
+  board: RunBoard;
 }
 
 /** One row in the lobby browser. */

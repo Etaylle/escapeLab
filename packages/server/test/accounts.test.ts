@@ -1,8 +1,8 @@
-import { mkdtempSync } from 'node:fs';
+import { mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { achievementsOf, utcDay } from '@escapelab/core';
+import { achievementsOf, parseMission, utcDay } from '@escapelab/core';
 import {
   AccountDesk,
   accountRunOf,
@@ -12,10 +12,14 @@ import {
   WRONG_LOGIN,
 } from '../src/accounts.js';
 import { DeriveQueue } from '../src/login.js';
+import { rankingOf } from '../src/runStats.js';
 import { JsonlStore } from '../src/store/jsonl.js';
 import { LoginTaken, type Profile, type RunReportV1 } from '../src/store/store.js';
 import { passFor } from './passes.js';
 import { DAY, finished, reportOf } from './storeContract.js';
+
+/** Blackout's mission file, with its Wechselplatz. */
+const BLACKOUT = new URL('../../../missions/blackout.json', import.meta.url);
 
 /** A desk over a store of its own: the run log in a folder of its own, the accounts in memory. */
 function desk(): { desk: AccountDesk; store: JsonlStore } {
@@ -30,7 +34,10 @@ afterEach(() => {
 describe('a run as „Meine Einsätze" lists it', () => {
   it('has the seat, the time on the clock and the grade the end screen gave', () => {
     // 300 s of 900 with one alarm and no note: an A.
-    const run = accountRunOf({ run: reportOf({ crew: ['Cleo', 'Anna'], at: DAY }), seat: 1 });
+    const run = accountRunOf(
+      { run: reportOf({ crew: ['Cleo', 'Anna'], at: DAY }), seat: 1 },
+      'live',
+    );
     expect(run).toEqual({
       missionId: 'blackout',
       difficulty: 'normal',
@@ -41,12 +48,13 @@ describe('a run as „Meine Einsätze" lists it', () => {
       crew: ['Cleo', 'Anna'],
       seat: 1,
       rank: 'A',
+      board: 'live',
     });
   });
 
   it('names the Tagesschicht’s day, gives a lost run no grade, and an old report no names', () => {
     const daily = { ...reportOf({ outcome: 'lost:alarms' }), daily: true as const };
-    expect(accountRunOf({ run: daily, seat: 0 })).toMatchObject({
+    expect(accountRunOf({ run: daily, seat: 0 }, 'live')).toMatchObject({
       daily: utcDay(daily.startedAt),
       outcome: 'lost:alarms',
       rank: null,
@@ -55,7 +63,7 @@ describe('a run as „Meine Einsätze" lists it', () => {
     const old: Record<string, unknown> = { ...reportOf(), version: 1 };
     delete old['crew'];
     delete old['roomCode'];
-    expect(accountRunOf({ run: old as RunReportV1, seat: 0 }).crew).toEqual([]);
+    expect(accountRunOf({ run: old as RunReportV1, seat: 0 }, 'archive').crew).toEqual([]);
   });
 });
 
@@ -89,6 +97,26 @@ describe('the desk', () => {
       blackout: Object.fromEntries(earned.map((id) => [id, DAY])),
     });
     expect((await accounts.runsOf(pass)).runs.map((run) => run.finishedAt)).toEqual([DAY]);
+  });
+
+  it('names the board the Bestenliste puts each run on: an earlier chain’s archive', async () => {
+    // Blackout's Wechselplatz: a run that names its draw is live, one that names none was played
+    // on the chain before it.
+    const blackout = parseMission(JSON.parse(readFileSync(BLACKOUT, 'utf8')));
+    const file = join(mkdtempSync(join(tmpdir(), 'escapelab-desk-')), 'runs.jsonl');
+    const store = JsonlStore.open(file, rankingOf(() => [blackout]));
+    const accounts = new AccountDesk(store);
+    const pass = passFor('Anna');
+    await accounts.arrive(pass, { displayName: 'Anna', colour: null });
+    await store.appendRun(finished({ at: DAY }, ['Anna', null]));
+    const drawing = finished({ at: DAY + 1 }, ['Anna', null]);
+    const drawn = { wechsel: 'frequenz' };
+    await store.appendRun({ ...drawing, report: { ...drawing.report, drawn } });
+    const { runs } = await accounts.runsOf(pass);
+    expect(runs.map((run) => [run.finishedAt, run.board])).toEqual([
+      [DAY + 1, 'live'],
+      [DAY, 'archive'],
+    ]);
   });
 
   it(`lists the newest ${MY_RUNS} runs of an account, and counts them all`, async () => {

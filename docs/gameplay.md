@@ -432,17 +432,36 @@ the pools has none and restores as before — a run in flight over the deploy th
 mission a pool plays its old chain to the end (`server/test/snapshotFixture.test.ts`).
 
 **Which runs rank.** A mission that gets a Wechselplatz was another chain of stations before:
-its older runs were shorter or longer than any run can be now. So on a mission with pools a
-run stands on the boards only where its report names its draw — a station of every pool the
-mission has now (server `runStats.ts` `namesItsDraw`, `rankingOf`); a mission without pools
-asks nothing. One rule for every reader of the stats: the Bestenliste, „Platz x von n" on the
-end card, the best time and share won on the lobby's and the join screen's cards, and each day
-of the Tagesschicht. A run left out is deleted nowhere: it stays in the store, in `GET
-/runs.jsonl` and in „Meine Einsätze", whose rows show a run's own grade and no place. On the
-first day of a new chain the board is empty and reads so: the cards name no best time, the
-Bestenliste lists the mission once its first run is in, and the first crew to win stands „Platz
-1 von 1 Lauf"; a run of the older chain that ends after the deploy gets its end card without a
-place. The start-up log says how many runs stand off the boards.
+its older runs were shorter or longer than any run can be now. So one rule — server
+`runStats.ts` `boardOf`, through `rankingOf` — puts every run on one of three boards: on a
+mission without pools, live; on one with pools, live where its report names, for every pool,
+a station the pool holds now; on the mission's archive, „Frühere Anlage", where it names no
+draw at all (the chain before the pools, `drawn` left out); on none where it names a draw the
+mission no longer holds (a chain neither of today nor of before). A mission nobody knows any
+more counts live, as it always did. The live board is the one every reader of the stats
+counts: the Bestenliste, „Platz x von n" on the end card, the best time and share won on the
+lobby's and the join screen's cards. The archive is ranked by the same rules among the runs of
+that chain alone and places nobody: `GET /stats` and `GET /stats/:mission` carry it as
+`archive` beside a mission's `difficulties`, left out for a mission without such runs, and each
+day of the Tagesschicht has one of its own (`GET /stats/daily`), so that a day from before the
+pools stays listed with its runs. The Bestenliste page shows it under the live board, set off
+by a double rule, „Frühere Anlage · Normal" over the line „Das Labor wurde umgebaut. Diese
+Zeiten liefen noch auf der früheren Anlage." and its totals and fastest crews; at a difficulty
+nobody ran on it, „Auf dieser Stufe ist auf der früheren Anlage niemand gelaufen." On the
+Tagesschicht's tab it stands under its mission's board of the day, named with the mission and
+the day, and alone on a day that has nothing else. A run is deleted nowhere: every one stays in
+the store, in `GET /runs.jsonl` and in „Meine Einsätze", whose rows show a run's own grade and no
+place, and mark a run of the archive „· Frühere Anlage" and one on no board „· Außer Wertung"
+after its difficulty (`AccountRun.board`, the server's rule again). On the first day of a new
+chain the live board is empty and reads so: the cards name no best time, the first crew to win
+stands „Platz 1 von 1 Lauf", and a run of the older chain that ends after the deploy gets its
+end card without a place. The start-up log says how many runs stand on an archive and how many
+on none. The rule tells today's chain from the one before the pools, not a third from today's:
+a rebuild that keeps the pool's stations would rank its runs on the live board with today's,
+one that changes them would put today's on no board. That would take a chain number in the
+mission and its report; there is none yet. The walkthrough's own server starts its run log
+with four runs of Blackout's older chain (`ARCHIVE_RUNS`), and the host shoots the archive under
+Blackout's board (history-archive.png), measured on a phone upright and sideways.
 
 **In Blackout.** Its fifth place is the pool `wechsel` of the Signalkette, the Funkpult and
 the Notstromkasten (Walking Blackout's lab, above): core wins every draw by the solvers for two

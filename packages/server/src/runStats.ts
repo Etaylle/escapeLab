@@ -9,45 +9,69 @@ import {
   type LeaderEntry,
   type Mission,
   type MissionStats,
+  type RunBoard,
   type RunPlace,
 } from '@escapelab/core';
 import { median } from './runSummary.js';
 import type { LoggedRun } from './store/store.js';
 
 /**
- * Whether a run stands on the Bestenliste: every reader of the stats — the list, a run's place
+ * Which board a run stands on (`RunBoard`): every reader of the stats — the list, a run's place
  * on its end card, a mission card's best time and share won, the Tagesschicht's days — counts
- * the runs this says yes to, and no other. A run it leaves out stays kept and stays in „Meine
- * Einsätze"; nothing is deleted.
+ * the runs this puts on the live board, and no other. A run on the archive stands on its
+ * mission's „Frühere Anlage", ranked among the runs of that chain alone; one on none stands
+ * nowhere. Every run stays kept and stays in „Meine Einsätze"; nothing is deleted.
  */
-export type Ranking = (run: LoggedRun) => boolean;
+export type Ranking = (run: LoggedRun) => RunBoard;
 
-/** Every run stands on the list: the rule of a server that knows no missions. */
-const everyRun: Ranking = () => true;
+/** Every run stands on the live board: the rule of a server that knows no missions. */
+const everyRun: Ranking = () => 'live';
 
 /**
- * Whether `run` names, for every Wechselplatz of the `mission` it played as the mission stands
- * now, the station it drew there. A mission without one asks nothing. One that has them was
- * another chain of stations before it got them: a run from then names no draw, was shorter or
- * longer than any run can be now, and would hold places no crew of today can take.
+ * The board of `run` of the `mission` it played, as the mission stands now. A mission without a
+ * Wechselplatz asks nothing: live. One that has them was another chain of stations before it got
+ * them: a run that names, for every pool, a station the pool holds now is live; a run that names
+ * no draw at all was played on that earlier chain — shorter or longer than any run can be now —
+ * and goes on its archive; a run that names a draw the mission no longer holds was neither, and
+ * stands on none.
  */
-export function namesItsDraw(mission: Pick<Mission, 'puzzles'>, run: LoggedRun): boolean {
+export function boardOf(mission: Pick<Mission, 'puzzles'>, run: LoggedRun): RunBoard {
+  const pools = [...poolsOf(mission.puzzles)];
   const drawn: Readonly<Record<string, string>> = run.drawn ?? {};
-  return [...poolsOf(mission.puzzles)].every(([pool, members]) =>
+  if (pools.length === 0) {
+    return 'live';
+  }
+  if (Object.keys(drawn).length === 0) {
+    return 'archive';
+  }
+  const named = pools.every(([pool, members]) =>
     members.includes(Object.hasOwn(drawn, pool) ? (drawn[pool] ?? '') : ''),
   );
+  return named ? 'live' : 'none';
 }
 
 /**
  * The ranking over the missions `known` has now, by id: a run of a mission with a Wechselplatz
- * counts where it names its draw (`namesItsDraw`); a run of a mission nobody knows any more —
- * a custom one deleted since — counts as it always did.
+ * goes where `boardOf` says; a run of a mission nobody knows any more — a custom one deleted
+ * since — counts as it always did, live.
  */
 export function rankingOf(known: () => readonly Mission[]): Ranking {
   return (run) => {
     const mission = known().find((each) => each.id === run.missionId);
-    return mission === undefined || namesItsDraw(mission, run);
+    return mission === undefined ? 'live' : boardOf(mission, run);
   };
+}
+
+/**
+ * What the start-up log says of the boards: „the 40 runs kept so far, 12 of them on an archive:
+ * runs of a mission's earlier chain" — and how many stand on none, where any do.
+ */
+export function boardsLine({ runs, archived, unranked }: RunStats): string {
+  const archive =
+    archived === 0 ? '' : `, ${archived} of them on an archive: runs of a mission's earlier chain`;
+  const none =
+    unranked === 0 ? '' : `, ${unranked} on no board: they name a draw the mission no longer holds`;
+  return `the ${runs} runs kept so far${archive}${none}`;
 }
 
 /** How many of the fastest won runs each mission keeps by name at each difficulty. */
@@ -160,23 +184,18 @@ class Board {
     this.missions.get(run.missionId)?.get(run.difficulty)?.unname(run.finishedAt, name);
   }
 
-  all(): MissionStats[] {
-    return [...this.missions.keys()]
-      .sort()
-      .flatMap((missionId) => this.mission(missionId) ?? []);
+  /** The ids of the missions with a run on it. */
+  ids(): string[] {
+    return [...this.missions.keys()];
   }
 
-  mission(missionId: string): MissionStats | null {
+  /** One mission's difficulties on it, easiest first; null before its first run. */
+  difficulties(missionId: string): DifficultyStats[] | null {
     const tallies = this.missions.get(missionId);
     if (tallies === undefined) {
       return null;
     }
-    return {
-      missionId,
-      difficulties: DIFFICULTIES.flatMap(
-        (difficulty) => tallies.get(difficulty)?.stats(difficulty) ?? [],
-      ),
-    };
+    return DIFFICULTIES.flatMap((difficulty) => tallies.get(difficulty)?.stats(difficulty) ?? []);
   }
 
   placeOf(missionId: string, finishedAt: number): RunPlace | null {
@@ -190,6 +209,42 @@ class Board {
   }
 }
 
+/**
+ * The boards of one set of runs — the main list, or one day of the Tagesschicht: the live one,
+ * and the archive of the runs of a mission's earlier chain, ranked apart. Only the live one
+ * places a run.
+ */
+class Shelf {
+  private readonly boards: Record<'live' | 'archive', Board> = {
+    live: new Board(),
+    archive: new Board(),
+  };
+
+  board(which: 'live' | 'archive'): Board {
+    return this.boards[which];
+  }
+
+  /** Every mission with a run on either board, by id. */
+  all(): MissionStats[] {
+    const ids = new Set([...this.boards.live.ids(), ...this.boards.archive.ids()]);
+    return [...ids].sort().flatMap((missionId) => this.mission(missionId) ?? []);
+  }
+
+  /** One mission, its archive where it has one; null before its first run on either board. */
+  mission(missionId: string): MissionStats | null {
+    const live = this.boards.live.difficulties(missionId);
+    const archive = this.boards.archive.difficulties(missionId);
+    if (live === null && archive === null) {
+      return null;
+    }
+    return { missionId, difficulties: live ?? [], ...(archive === null ? {} : { archive }) };
+  }
+
+  placeOf(missionId: string, finishedAt: number): RunPlace | null {
+    return this.boards.live.placeOf(missionId, finishedAt);
+  }
+}
+
 /** Whether a logged run played the Tagesschicht: only version 2 reports can say so. */
 const isDaily = (run: LoggedRun): boolean => run.version === 2 && run.daily === true;
 
@@ -198,15 +253,16 @@ const isDaily = (run: LoggedRun): boolean => run.version === 2 && run.daily === 
  * server starts, then kept up to date run by run, a deleted account's name taken off the runs
  * it is listed with (`unname`) — never counted anew while the server runs. It keeps
  * the time of every won run, for the median and the places, and names only for the TOP_RUNS
- * fastest. The runs of the Tagesschicht rank apart, a board for each UTC day they started on:
- * every crew that day played the same instance. A run the ranking leaves out (`Ranking`) is
- * kept and counted as kept, and stands on no board.
+ * fastest. The runs of the Tagesschicht rank apart, a shelf for each UTC day they started on:
+ * every crew that day played the same instance. The ranking (`Ranking`) puts each run on the
+ * live board of its shelf, on its archive, or on none; every run is kept and counted as kept.
  */
 export class RunStats {
-  private readonly board = new Board();
-  /** the Tagesschicht's boards, by the UTC day its runs started on */
-  private readonly days = new Map<string, Board>();
+  private readonly main = new Shelf();
+  /** the Tagesschicht's shelves, by the UTC day its runs started on */
+  private readonly days = new Map<string, Shelf>();
   private counted = 0;
+  private onTheArchive = 0;
   private offTheBoards = 0;
 
   /** The stats of `runs`, oldest first, on the boards as `ranked` says. */
@@ -219,9 +275,14 @@ export class RunStats {
     }
   }
 
-  /** How many runs it keeps, over every mission, the Tagesschicht's too, ranked or not. */
+  /** How many runs it keeps, over every mission, the Tagesschicht's too, on a board or not. */
   get runs(): number {
     return this.counted;
+  }
+
+  /** How many of the runs it keeps stand on an archive: runs of a mission's earlier chain. */
+  get archived(): number {
+    return this.onTheArchive;
   }
 
   /** How many of the runs it keeps stand on no board: the ranking leaves them out. */
@@ -229,48 +290,67 @@ export class RunStats {
     return this.offTheBoards;
   }
 
+  /** The board `run` stands on, by the ranking it was counted with: „Meine Einsätze" says it. */
+  boardOf(run: LoggedRun): RunBoard {
+    return this.ranked(run);
+  }
+
   /**
-   * Counts one more finished run in: on the Tagesschicht's board of its day, or the main one —
-   * on none where the ranking leaves it out.
+   * Counts one more finished run in: on the shelf of its Tagesschicht's day, or the main one —
+   * on the board of it the ranking says, or on none.
    */
   add(run: LoggedRun): void {
     this.counted += 1;
-    if (!this.ranked(run)) {
+    const board = this.ranked(run);
+    if (board === 'none') {
       this.offTheBoards += 1;
       return;
     }
-    if (isDaily(run)) {
-      const day = utcDay(run.startedAt);
-      const board = this.days.get(day) ?? new Board();
-      board.add(run);
-      this.days.set(day, board);
-    } else {
-      this.board.add(run);
+    if (board === 'archive') {
+      this.onTheArchive += 1;
     }
+    this.shelfOf(run).board(board).add(run);
+  }
+
+  /** The shelf `run` goes on: its Tagesschicht day's, made with the day's first run, or main. */
+  private shelfOf(run: LoggedRun): Shelf {
+    if (!isDaily(run)) {
+      return this.main;
+    }
+    const day = utcDay(run.startedAt);
+    const shelf = this.days.get(day) ?? new Shelf();
+    this.days.set(day, shelf);
+    return shelf;
   }
 
   /**
    * `name` off the crew of `run` wherever the Bestenliste lists it by its crew (`TOP_RUNS`): its
-   * account was deleted. The run keeps its place, its time and its count.
+   * account was deleted. The run keeps its place, its time and its count. Off both boards of
+   * its shelf: the ranking it was counted under may differ from today's — a custom mission saved
+   * again with a Wechselplatz while the server runs — and the name has to leave wherever it is.
    */
   unname(run: LoggedRun, name: string): void {
-    const board = isDaily(run) ? this.days.get(utcDay(run.startedAt)) : this.board;
-    board?.unname(run, name);
+    const shelf = isDaily(run) ? this.days.get(utcDay(run.startedAt)) : this.main;
+    shelf?.board('live').unname(run, name);
+    shelf?.board('archive').unname(run, name);
   }
 
   /** Every mission with a run off the Tagesschicht, by id. */
   all(): MissionStats[] {
-    return this.board.all();
+    return this.main.all();
   }
 
   /** One mission off the Tagesschicht, difficulties easiest first; null before its first run. */
   mission(missionId: string): MissionStats | null {
-    return this.board.mission(missionId);
+    return this.main.mission(missionId);
   }
 
-  /** Where the won run of `missionId` that finished at `finishedAt` stands; null when none did. */
+  /**
+   * Where the won run of `missionId` that finished at `finishedAt` stands on the live board; null
+   * when none did there.
+   */
   placeOf(missionId: string, finishedAt: number): RunPlace | null {
-    return this.board.placeOf(missionId, finishedAt);
+    return this.main.placeOf(missionId, finishedAt);
   }
 
   /** The Tagesschicht's last DAILY_DAYS days with runs, the newest first. */
@@ -287,7 +367,7 @@ export class RunStats {
     return this.days.get(day)?.mission(missionId) ?? null;
   }
 
-  /** Where a won run of the Tagesschicht of `day` stands among that day's; null when none did. */
+  /** Where a won run of the Tagesschicht of `day` stands on that day's live board; null if none. */
   dailyPlaceOf(day: string, missionId: string, finishedAt: number): RunPlace | null {
     return this.days.get(day)?.placeOf(missionId, finishedAt) ?? null;
   }

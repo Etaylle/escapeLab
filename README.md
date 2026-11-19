@@ -366,6 +366,9 @@ auf die keine Drohne je blickt —, jede Strecke erst, wenn kein Kegel sie triff
 steht im Log. Mit `SHOTS_SERVER=packages/server/src/index.ts` startet der Rundgang den Server
 selbst, wie die CI, und probt mitten in einem Einsatz den Neustart: SIGTERM, die Karte
 „WARTUNG · Der Server startet neu" auf jeder Seite, und nach dem Neustart alle zurück im Einsatz.
+Sein Laufprotokoll liegt dann im Ausgabeordner (`runs.jsonl`, außer `RUNS_LOG` ist gesetzt) und
+beginnt mit vier Läufen von Blackouts früherer Kette: Die Bestenliste zeigt sie unter „Frühere
+Anlage" (history-archive.png).
 
 **Nur ein Teil des Rundgangs (Gruppen):** Jede Aufnahme des Rundgangs gehört zu genau einer von
 zweiundzwanzig Gruppen (`tools/groups.mjs`); `SHOTS_ONLY=screens,intro` spielt nur diese,

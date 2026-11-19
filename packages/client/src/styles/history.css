@@ -231,6 +231,21 @@
   white-space: nowrap;
 }
 
+/*
+ * The board of a mission's earlier chain, under its live one: set off by a
+ * double rule, its line saying why it stands apart.
+ */
+.history-archive {
+  margin-top: 22px;
+  border-top: 3px double var(--line-2);
+}
+
+.history-archive-note {
+  margin: 0 0 10px;
+  font-size: 14px;
+  color: var(--muted);
+}
+
 /* ── „Meine Einsätze": the account's runs (screens/MyRuns.tsx) ───────────── */
 
 /* The mission and, under it, its difficulty and the Tagesschicht's day. */

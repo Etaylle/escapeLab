@@ -176,7 +176,9 @@
  *
  * On the way, both open the Bestenliste from the menu (history.png,
  * history-phone.png): measured like the menu, at 1280×720 too, and on
- * the phone for running out sideways. The host's lobby, with its strip of
+ * the phone for running out sideways; where the run owns its server, whose run log it starts
+ * with runs of Blackout's chain before the Wechselplatz, the host opens Blackout's tab and its
+ * „Frühere Anlage" under the live board (history-archive.png). The host's lobby, with its strip of
  * mission cards, is captured on a phone held sideways as well
  * (lobby-landscape.png). Once the sign is read, the guest's phone is turned
  * sideways and the HUD's Info button has to lie whole inside the window —
@@ -720,7 +722,7 @@
 import { Buffer } from 'node:buffer';
 import { spawn } from 'node:child_process';
 import { createHash, randomBytes } from 'node:crypto';
-import { createWriteStream, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { createWriteStream, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { loadavg } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath, URL } from 'node:url';
@@ -1672,6 +1674,79 @@ async function captureHistory(page, shot, open = pressHistory) {
   }
   await clickText(page, 'Zurück');
   await page.locator('.menu-item').first().waitFor({ timeout: 10_000 });
+}
+
+/** What history-archive.png has to show: its heading, its line, and its crews in their order. */
+const ARCHIVE_SHOWS = {
+  heading: 'Frühere Anlage · Normal',
+  note: 'Das Labor wurde umgebaut. Diese Zeiten liefen noch auf der früheren Anlage.',
+  crews: ['Ada, Bo', 'Cem, Dana', 'Eli, Fe'],
+};
+
+/** In the page: the archive's heading, line, crews and the line's type size; null for none. */
+function archiveShown() {
+  const board = document.querySelector('.history-archive');
+  if (board === null) {
+    return null;
+  }
+  const note = board.querySelector('.history-archive-note');
+  return {
+    heading: board.querySelector('h2')?.textContent ?? '',
+    note: note?.textContent ?? '',
+    noteSize: note === null ? 0 : parseFloat(globalThis.getComputedStyle(note).fontSize),
+    crews: [...board.querySelectorAll('tbody th')].map((th) => th.textContent),
+  };
+}
+
+/**
+ * history-archive.png: the Bestenliste on Blackout's tab, its „Frühere Anlage" — the runs of the
+ * chain before the Wechselplatz the owned server's log starts with (ARCHIVE_RUNS) — scrolled into
+ * view under the live board; then the page on a phone upright and sideways, nothing running out
+ * sideways. Skipped where the run owns no server, whose log it could start; fails where the board
+ * is missing there or shows other than ARCHIVE_SHOWS.
+ */
+async function captureArchive(page) {
+  if (SERVER_ENTRY === null || process.env.RUNS_LOG) {
+    const why = 'the run keeps no run log of its own (SHOTS_SERVER unset, or RUNS_LOG set)';
+    skip('history-archive.png', why);
+    return;
+  }
+  await pressHistory(page);
+  await page.locator('.history-tab', { hasText: 'Blackout im Labor' }).click();
+  const board = page.locator('.history-archive');
+  if (!(await board.waitFor({ timeout: 10_000 }).then(() => true, () => false))) {
+    fail('history-archive.png: Blackout\'s Bestenliste shows no „Frühere Anlage"');
+    await clickText(page, 'Zurück');
+    return;
+  }
+  await board.scrollIntoViewIfNeeded();
+  await sleep(300);
+  await capture(page, 'history-archive.png');
+  const shown = await page.evaluate(archiveShown);
+  const before = page.viewportSize();
+  const over = [];
+  for (const { width, height } of [SIZES[2], SIZES[3]]) {
+    await page.setViewportSize({ width, height });
+    await sleep(300);
+    over.push(await sideways(page, '.content'));
+  }
+  await page.setViewportSize(before);
+  await sleep(300);
+  await clickText(page, 'Zurück');
+  await page.locator('.menu-item').first().waitFor({ timeout: 10_000 });
+  const wrong =
+    shown.heading !== ARCHIVE_SHOWS.heading ||
+    shown.note !== ARCHIVE_SHOWS.note ||
+    shown.crews.join(' | ') !== ARCHIVE_SHOWS.crews.join(' | ') ||
+    shown.noteSize < 14 ||
+    over.some((px) => px > 0);
+  console.log(
+    `history-archive.png "${shown.heading}", crews ${shown.crews.join(' | ')}, ` +
+      `line ${shown.noteSize}px, phone ${over.map((px) => `+${px}px`).join(' / ')} sideways`,
+  );
+  if (wrong) {
+    fail(`history-archive.png: ${JSON.stringify(shown)}, ${over.join('/')}px sideways on a phone`);
+  }
 }
 
 /**
@@ -17290,10 +17365,63 @@ async function healthy(api) {
 }
 
 /**
+ * Runs of Blackout's chain before the Wechselplatz, as the run log kept them: their reports name
+ * no draw, so the Bestenliste ranks them on the mission's „Frühere Anlage" alone
+ * (history-archive.png). Won on normal by three crews in November 2026, and one lost.
+ */
+const ARCHIVE_RUNS = [
+  { crew: ['Ada', 'Bo'], seconds: 412, outcome: 'won', at: Date.UTC(2026, 10, 10, 18) },
+  { crew: ['Cem', 'Dana'], seconds: 455, outcome: 'won', at: Date.UTC(2026, 10, 11, 18) },
+  { crew: ['Eli', 'Fe'], seconds: 498, outcome: 'won', at: Date.UTC(2026, 10, 12, 18) },
+  { crew: ['Gus', 'Hel'], seconds: 900, outcome: 'lost:time', at: Date.UTC(2026, 10, 12, 19) },
+];
+
+/** One of ARCHIVE_RUNS as a report the server's run log takes (server store.ts `isLoggedRun`). */
+function archiveReport({ crew, seconds, outcome, at }) {
+  const start = at - seconds * 1000;
+  return {
+    version: 2,
+    missionId: 'blackout',
+    roomCode: 'ALT1',
+    difficulty: 'normal',
+    timeLimitSec: 900,
+    alarmLimit: 5,
+    crewSize: crew.length,
+    crew,
+    spawns: {},
+    startedAt: start,
+    lightsOutAt: start,
+    finishedAt: at,
+    outcome,
+    stations: [],
+    emergencies: { count: 0, failed: 0 },
+    penalties: [],
+    credits: {},
+  };
+}
+
+/**
+ * The run log the owned server keeps, RUNS_LOG where the run's environment names one, else
+ * runs.jsonl under OUT: started there the first time with ARCHIVE_RUNS, and kept over a restart.
+ */
+function ownedRunsLog() {
+  if (process.env.RUNS_LOG) {
+    return process.env.RUNS_LOG;
+  }
+  // Absolute: the server runs from packages/server, and OUT may be relative to the run's folder.
+  const file = resolve(OUT, 'runs.jsonl');
+  if (!existsSync(file)) {
+    const lines = ARCHIVE_RUNS.map((run) => `${JSON.stringify(archiveReport(run))}\n`);
+    writeFileSync(file, lines.join(''));
+  }
+  return file;
+}
+
+/**
  * Starts the server the run owns (SHOTS_SERVER) on BASE's port, its log appended to server.log
- * under OUT; resolves once it answers /health, and throws where it has not within SERVER_UP_MS
- * or ended meanwhile — or where another server answers there already, one the run would only
- * think it owns.
+ * and its runs kept in `ownedRunsLog` under OUT; resolves once it answers /health, and throws
+ * where it has not within SERVER_UP_MS or ended meanwhile — or where another server answers
+ * there already, one the run would only think it owns.
  */
 async function startServer() {
   mkdirSync(OUT, { recursive: true });
@@ -17305,7 +17433,14 @@ async function startServer() {
   const log = createWriteStream(join(OUT, 'server.log'), { flags: 'a' });
   const child = spawn(process.execPath, args, {
     cwd: SERVER_DIR,
-    env: { ...process.env, PORT: port, ALLOW_SEED: '1', TLS: 'off', ROOM_SECRET },
+    env: {
+      ...process.env,
+      PORT: port,
+      ALLOW_SEED: '1',
+      TLS: 'off',
+      ROOM_SECRET,
+      RUNS_LOG: ownedRunsLog(),
+    },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   child.stdout.pipe(log, { end: false });
@@ -18523,6 +18658,7 @@ async function hostOpensRound() {
   // The menu, its music as the music's manifest lists it (`captureMenu` returns the list).
   const musicList = await inGroup('screens', () => captureMenu(host));
   await inGroup('screens', () => captureHistory(host, 'history.png', heldClick));
+  await inGroup('screens', () => captureArchive(host));
   await openMissionRound(host);
   // The lobby's music, its own piece where it is listed (checked as the run starts).
   const lobbySound = await inGroup('screens', () => lobbySoundOf(host, musicList));

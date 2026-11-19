@@ -128,6 +128,7 @@ export type {
   LeaderEntry,
   MissionStanding,
   MissionStats,
+  RunBoard,
   RunPlace,
 } from './runStats.js';
 export {
