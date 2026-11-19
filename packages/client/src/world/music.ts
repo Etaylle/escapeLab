@@ -31,6 +31,7 @@ import {
 } from './musicPacks.js';
 import { holdMusic, musicFrom } from './musicTurn.js';
 import { crossfadePeriod } from './packFile.js';
+import type { PressureSignals } from './pressureSignals.js';
 import {
   MUSIC_BASE,
   musicEntry,
@@ -52,8 +53,12 @@ import {
  *
  * The pressure follows the clock (the tension curve the lab always had: nothing in the first
  * half, then rising to 1 as it runs out — and at least 0.8 in the last minute), every alarm
- * (+0.15 for 20 s, each answered by the alarm's sting on the effects' bus) and the escape (at
- * least 0.8). No music while the lab has its power: it starts under the blackout 2 s after the
+ * (+0.15 for 20 s, each answered by the alarm's sting on the effects' bus), the escape (at
+ * least 0.8) and what this player's own view says of the run (pressureSignals.ts): an emergency
+ * running, a station's clock running at this player's console, a drone awake close by, and how
+ * far the crew is through its stations. A push comes in at once; once it is over the pressure
+ * stays PUSH_HOLD_MS and then falls back FALL_PER_S a second, and a stem stays on at least
+ * STEM_DWELL_MS unless the critical one comes (`moodAt`). No music while the lab has its power: it starts under the blackout 2 s after the
  * click, and its first bar is where its bars are counted from. A change of stem waits for the
  * next bar: the stem coming in starts from its beginning on it and crosses with the one going
  * over CROSSFADE_S — at once where the stems go round by crossfades, whose bars nobody counts. A
@@ -93,6 +98,21 @@ export const ALARM_PUSH = 0.15;
 export const ALARM_HOLD_MS = 20_000;
 /** The pressure in the escape, at least; in the last minute, at least as much. */
 export const ESCAPE_FLOOR = 0.8;
+/** What an emergency adds while it runs: the critical stem on its own. */
+export const EMERGENCY_PUSH = 0.8;
+/** What a station's clock running at this player's console adds, and what more as it runs out. */
+export const STATION_PUSH = 0.45;
+export const STATION_URGENCY = 0.2;
+/** What a drone awake within DRONE_TILES of this player adds. */
+export const DRONE_PUSH = 0.35;
+export const DRONE_TILES = 4;
+/** What the crew's way through its stations adds, at its end: under the tense stem's way out. */
+export const PROGRESS_RISE = 0.25;
+/** How long the pressure stays where a push had it once the push is over, ms; how fast it falls. */
+export const PUSH_HOLD_MS = 8000;
+export const FALL_PER_S = 0.04;
+/** How long a stem stays on at least, ms, unless the critical one comes. */
+export const STEM_DWELL_MS = 8000;
 /** A bar of the stems, in beats. */
 export const BEATS_PER_BAR = 4;
 /** The score's tempo, beats a minute: a piece on bars whose entry names none goes round at it. */
@@ -108,7 +128,7 @@ export const SETTLED_S = 1;
 /** How far ahead a pass's element is told when to start, s. */
 const READY_S = 1;
 /** How far ahead a change of stem is laid on its bar, at the least, s: its timer must make it. */
-const PREPARE_S = 0.3;
+export const PREPARE_S = 0.3;
 /** The tense stem comes in at PRESSURE_ON and goes below PRESSURE_OFF; the critical as well. */
 const PRESSURE_ON = 0.35;
 const PRESSURE_OFF = 0.3;
@@ -149,22 +169,80 @@ export function clockTension(left: number, budget: number): number {
   return Math.min(1, Math.max(0, 1 - left / (Math.max(1, budget) * 0.5)));
 }
 
+/** What the run adds to the pressure besides its clock, its alarms and the escape (`pressureOf`). */
+export function pushOf(signals: PressureSignals): number {
+  const { emergency, stationClock, droneTiles, progress } = signals;
+  const station = stationClock === null ? 0 : STATION_PUSH + STATION_URGENCY * stationClock;
+  const drone = droneTiles <= DRONE_TILES ? DRONE_PUSH : 0;
+  return (emergency ? EMERGENCY_PUSH : 0) + station + drone + PROGRESS_RISE * progress;
+}
+
 /**
- * The pressure, 0 to 1: the clock's tension — at least ESCAPE_FLOOR and rising to 1 in the last
- * minute — at least ESCAPE_FLOOR in the escape, and ALARM_PUSH more for each of the `alarms`
- * that came in the last ALARM_HOLD_MS.
+ * The pressure the run asks for now, 0 to 1: the clock's tension — at least ESCAPE_FLOOR and
+ * rising to 1 in the last minute — at least ESCAPE_FLOOR in the escape, ALARM_PUSH more for each
+ * of the `alarms` that came in the last ALARM_HOLD_MS, and what the run's signals add (`pushOf`).
  */
-export function pressureOf(input: {
-  left: number;
-  budget: number;
-  alarms: number;
-  escaping: boolean;
-}): number {
+export function pressureOf(
+  input: { left: number; budget: number; alarms: number; escaping: boolean } & PressureSignals,
+): number {
   const { left, budget, alarms, escaping } = input;
   const run = 1 - Math.max(0, left) / LAST_MINUTE_S;
   const lastMinute = left < LAST_MINUTE_S ? ESCAPE_FLOOR + (1 - ESCAPE_FLOOR) * run : 0;
   const floor = Math.max(clockTension(left, budget), lastMinute, escaping ? ESCAPE_FLOOR : 0);
-  return Math.min(1, floor + ALARM_PUSH * alarms);
+  return Math.min(1, floor + ALARM_PUSH * alarms + pushOf(input));
+}
+
+/**
+ * Where the music's pressure stands and which layers it has in: the pressure, when a push last
+ * had it there and when it was last looked at, and since when the stem the layers play is on
+ * (epoch ms each).
+ */
+export interface Mood {
+  readonly pressure: number;
+  readonly heldAt: number;
+  readonly at: number;
+  readonly layers: Layers;
+  readonly since: number;
+}
+
+/** The music's mood as it starts at `at` (epoch ms): no pressure, no layer in, the calm stem's. */
+export const moodFrom = (at: number): Mood => ({
+  pressure: 0,
+  heldAt: at,
+  at,
+  layers: { calm: false, pressure: false, last: false },
+  since: at,
+});
+
+/**
+ * The pressure at `now` from `was`, the run asking for `asked`: up at once, else where it was
+ * until PUSH_HOLD_MS after the last push, then falling FALL_PER_S a second, never below `asked`.
+ */
+function heldPressure(was: Mood, asked: number, now: number): number {
+  const falling = Math.max(was.at, was.heldAt + PUSH_HOLD_MS);
+  if (asked >= was.pressure || now <= falling) return Math.max(asked, was.pressure);
+  return Math.max(asked, was.pressure - (FALL_PER_S * (now - falling)) / 1000);
+}
+
+/**
+ * The mood at `now` (epoch ms) from `was`, the run asking for the pressure `asked` and the siren
+ * sounding or not: the pressure held (`heldPressure`), the layers it has in (`layersFor`) — but
+ * the stem on stays until it has played STEM_DWELL_MS, unless the critical one comes.
+ */
+export function moodAt(was: Mood, asked: number, siren: boolean, now: number): Mood {
+  const pressure = heldPressure(was, asked, now);
+  const wanted = layersFor(pressure, siren, was.layers);
+  const before = stemFor(was.layers);
+  const stem = stemFor(wanted);
+  const early = stem !== before && stem !== 'critical' && now - was.since < STEM_DWELL_MS;
+  const layers = early ? { ...was.layers, calm: !siren } : wanted;
+  return {
+    pressure,
+    heldAt: asked >= was.pressure ? now : was.heldAt,
+    at: now,
+    layers,
+    since: stemFor(layers) === before ? was.since : now,
+  };
 }
 
 /**
@@ -252,8 +330,8 @@ export function barsOf(entry: Pick<MusicPiece, 'bpm' | 'crossfade'>): number | n
   return entry.crossfade === undefined ? (entry.bpm ?? SCORE_BPM) : null;
 }
 
-/** The music's input, ten times a second (GameWorld.tsx). */
-export interface Tension {
+/** The music's input, ten times a second (GameWorld.tsx), with the run's signals (`pushOf`). */
+export interface Tension extends PressureSignals {
   /** the run, by its start: a new run starts the music over */
   readonly run: number | null;
   /** from when the music may play, epoch ms: 2 s after the click; null while the power is on */
@@ -356,7 +434,8 @@ interface Music {
   grid: Grid | null;
   layers: Layers;
   siren: boolean;
-  pressure: number;
+  /** the pressure and the layers it asks for, as they stand (`moodAt`) */
+  mood: Mood;
   /** the run's alarms counted so far, and when the recent ones came in, epoch ms */
   alarms: number;
   readonly alarmsAt: number[];
@@ -435,7 +514,7 @@ function startMusic(input: Tension, startAt: number): Music | null {
     grid: null,
     layers: NO_LAYERS,
     siren: false,
-    pressure: 0,
+    mood: moodFrom(Date.now()),
     alarms: input.alarms,
     alarmsAt: [],
     ended: false,
@@ -494,8 +573,9 @@ function follow(m: Music, input: Tension): void {
   if (input.alarms > m.alarms) alarmSting();
   for (; m.alarms < input.alarms; m.alarms++) m.alarmsAt.push(now);
   while ((m.alarmsAt[0] ?? now) <= now - ALARM_HOLD_MS) m.alarmsAt.shift();
-  m.pressure = pressureOf({ ...input, alarms: m.alarmsAt.length });
-  const layers = layersFor(m.pressure, input.escaping, m.layers);
+  const asked = pressureOf({ ...input, alarms: m.alarmsAt.length });
+  m.mood = moodAt(m.mood, asked, input.escaping, now);
+  const { layers } = m.mood;
   const was = m.layers;
   const changed =
     layers.calm !== was.calm || layers.pressure !== was.pressure || layers.last !== was.last;
@@ -828,7 +908,7 @@ export function musicProbe(): MusicProbe {
     calm: at('calm'),
     pressure: Math.min(1, at('tense') + at('critical')),
     last: at('critical'),
-    level: m.pressure,
+    level: m.mood.pressure,
     streams,
     lateMs: Math.round(m.late * 1000 * 10) / 10,
     lagMs: Math.round(m.lag * 1000 * 10) / 10,

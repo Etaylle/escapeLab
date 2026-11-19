@@ -8,14 +8,24 @@ import {
   BEATS_PER_BAR,
   clockTension,
   CROSSFADE_S,
+  DRONE_PUSH,
+  EMERGENCY_PUSH,
+  FALL_PER_S,
   layersFor,
   loopPeriod,
+  moodAt,
+  moodFrom,
   MUSIC_LEVEL,
   nextBar,
   passPeriod,
   pressureOf,
+  PROGRESS_RISE,
+  PUSH_HOLD_MS,
+  pushOf,
   SEAM_LEAD_BARS,
   SEAM_S,
+  STATION_PUSH,
+  STEM_DWELL_MS,
   stemFor,
   STING_LEVEL,
   type Layers,
@@ -33,8 +43,11 @@ import {
 } from './fakeGraph.js';
 import { elements, fakeMedia, type FakeAudio } from './fakeMedia.js';
 import { loadedSamples, serveSamples, type Served } from './fakeSamples.js';
+import { RUNS, sharesOf, stemTimeline } from './stemTimeline.js';
 
 const NONE: Layers = { calm: false, pressure: false, last: false };
+/** Nothing of the run's signals: no emergency, no station clock, no drone, no station solved. */
+const QUIET = { emergency: false, stationClock: null, droneTiles: Infinity, progress: 0 };
 const BAR = barOf(90);
 
 describe('the pressure the music follows', () => {
@@ -47,7 +60,7 @@ describe('the pressure the music follows', () => {
   });
 
   it('is at least 0.8 in the last minute and in the escape, and rises with every alarm', () => {
-    const calm = { left: 600, budget: 660, alarms: 0, escaping: false };
+    const calm = { left: 600, budget: 660, alarms: 0, escaping: false, ...QUIET };
     expect(pressureOf(calm)).toBe(0);
     expect(pressureOf({ ...calm, left: 61, budget: 420 })).toBeCloseTo(1 - 61 / 210, 9);
     expect(pressureOf({ ...calm, left: 59, budget: 420 })).toBeCloseTo(0.8 + 0.2 / 60, 9);
@@ -55,6 +68,80 @@ describe('the pressure the music follows', () => {
     expect(pressureOf({ ...calm, escaping: true })).toBe(0.8);
     expect(pressureOf({ ...calm, alarms: 2 })).toBeCloseTo(0.3, 9);
     expect(pressureOf({ ...calm, alarms: 2, escaping: true })).toBe(1);
+  });
+
+  it('is pushed by what the run does besides its clock, each term on its own', () => {
+    const calm = { left: 600, budget: 660, alarms: 0, escaping: false, ...QUIET };
+    expect(pushOf(QUIET)).toBe(0);
+    // An emergency running has the critical stem on its own.
+    expect(EMERGENCY_PUSH).toBe(0.8);
+    expect(pressureOf({ ...calm, emergency: true })).toBe(0.8);
+    // A station's clock at this player's console: the tense stem, more as it runs out.
+    expect(pressureOf({ ...calm, stationClock: 0 })).toBe(STATION_PUSH);
+    expect(pressureOf({ ...calm, stationClock: 1 })).toBeCloseTo(0.65, 9);
+    expect(pressureOf({ ...calm, stationClock: 0.5 })).toBeCloseTo(0.55, 9);
+    // A drone awake within four tiles, and none an inch further.
+    expect(pressureOf({ ...calm, droneTiles: 4 })).toBe(DRONE_PUSH);
+    expect(pressureOf({ ...calm, droneTiles: 4.01 })).toBe(0);
+    expect(DRONE_PUSH).toBeGreaterThanOrEqual(0.35); // the tense stem on its own
+    // The way through the stations: up to a quarter, under the tense stem's way out (0.3).
+    expect(pressureOf({ ...calm, progress: 1 })).toBe(PROGRESS_RISE);
+    expect(PROGRESS_RISE).toBeLessThan(0.3);
+    expect(pressureOf({ ...calm, progress: 0.5, droneTiles: 1 })).toBeCloseTo(0.475, 9);
+    // Together they add up, and never beyond 1; the clock's floors stay as they were.
+    expect(pressureOf({ ...calm, emergency: true, stationClock: 1, progress: 1 })).toBe(1);
+    expect(pressureOf({ ...calm, left: 30, budget: 660, progress: 0.4 })).toBeCloseTo(1, 9);
+  });
+
+  it('holds a push PUSH_HOLD_MS once it is over, then falls back FALL_PER_S a second', () => {
+    expect(PUSH_HOLD_MS).toBe(8000);
+    let mood = moodAt(moodFrom(0), 0.5, false, 0);
+    expect(mood.pressure).toBe(0.5);
+    const look = (asked: number, until: number): void => {
+      for (let t = mood.at + 100; t <= until; t += 100) mood = moodAt(mood, asked, false, t);
+    };
+    look(0, PUSH_HOLD_MS - 100);
+    expect(mood.pressure).toBe(0.5);
+    look(0, PUSH_HOLD_MS + 5000);
+    expect(mood.pressure).toBeCloseTo(0.5 - FALL_PER_S * 5, 9);
+    expect(FALL_PER_S).toBe(0.04);
+    // It falls no lower than the run asks, and a new push lifts it at once and holds anew.
+    look(0.4, PUSH_HOLD_MS + 8000);
+    expect(mood.pressure).toBe(0.4);
+    mood = moodAt(mood, 0.6, false, mood.at + 100);
+    expect(mood.pressure).toBe(0.6);
+    const pushed = mood.at;
+    look(0, pushed + PUSH_HOLD_MS - 100);
+    expect(mood.pressure).toBe(0.6);
+    // A quiet stretch brings it all the way back, and the calm stem with it.
+    look(0, pushed + 60_000);
+    expect(mood.pressure).toBe(0);
+    expect(stemFor(mood.layers)).toBe('calm');
+  });
+
+  it('keeps a stem on STEM_DWELL_MS, unless the critical one comes', () => {
+    expect(STEM_DWELL_MS).toBe(8000);
+    let mood = moodAt(moodFrom(0), 0, false, 0);
+    // The tense stem waits for the calm's eight seconds from the music's start…
+    mood = moodAt(mood, 0.5, false, 3000);
+    expect(stemFor(mood.layers)).toBe('calm');
+    mood = moodAt(mood, 0.5, false, STEM_DWELL_MS);
+    expect(stemFor(mood.layers)).toBe('tense');
+    expect(mood.since).toBe(STEM_DWELL_MS);
+    // …the critical one does not wait for the tense's…
+    mood = moodAt(mood, 0.9, false, STEM_DWELL_MS + 1000);
+    expect(stemFor(mood.layers)).toBe('critical');
+    // …and back down waits for the critical's own eight seconds, the hysteresis kept.
+    const critical = mood.since;
+    mood = { ...mood, pressure: 0.5, heldAt: -Infinity };
+    mood = moodAt(mood, 0.5, false, critical + STEM_DWELL_MS - 100);
+    expect(stemFor(mood.layers)).toBe('critical');
+    mood = moodAt(mood, 0.5, false, critical + STEM_DWELL_MS);
+    expect(stemFor(mood.layers)).toBe('tense');
+    mood = { ...mood, pressure: 0.31, heldAt: -Infinity, since: -Infinity };
+    expect(stemFor(moodAt(mood, 0.31, false, mood.at + 100).layers)).toBe('tense');
+    // The siren takes the calm away at once, whatever stem waits.
+    expect(moodAt(mood, 0, true, mood.at + 100).layers.calm).toBe(false);
   });
 
   it('brings a layer in at its threshold and lets it go only a little under it', () => {
@@ -175,6 +262,10 @@ const tension = (over: Partial<Tension> = {}): Tension => ({
   alarms: 0,
   escaping: false,
   ending: null,
+  emergency: false,
+  stationClock: null,
+  droneTiles: Infinity,
+  progress: 0,
   ...over,
 });
 
@@ -195,6 +286,59 @@ const outOf = (ctx: FakeContext, element: FakeAudio | undefined): FakeGain => {
 /** A stem's bus, which its fade moves: the gain its elements' levels feed. */
 const busOf = (ctx: FakeContext, element: FakeAudio | undefined): FakeGain =>
   outOf(ctx, element).outputs[0] as FakeGain;
+
+describe('the stems over a whole run, from the demo crew’s recorded traces', () => {
+  /** The shares the music aims at in a winning run, each stem's from and to, ± two points. */
+  const AIM = { calm: [0.35, 0.55], tense: [0.3, 0.45], critical: [0.1, 0.25] } as const;
+  const SLACK = 0.02;
+
+  it('has four runs, two seats each, every one won', () => {
+    expect(RUNS.map((run) => run.name)).toEqual([
+      'seed 12',
+      'seed 56',
+      'seed 93',
+      'seed 56, a slow crew',
+    ]);
+    expect(RUNS.flatMap((run) => run.seats.map((seat) => seat.ending))).toEqual(
+      Array.from({ length: 8 }, () => 'won'),
+    );
+  });
+
+  it('spends a winning run on all three stems, in the shares aimed at', () => {
+    for (const run of RUNS) {
+      for (const seat of run.seats) {
+        const shares = sharesOf(stemTimeline(run, seat));
+        for (const stem of ['calm', 'tense', 'critical'] as const) {
+          const [from, to] = AIM[stem];
+          expect(shares[stem], `${run.name}: ${stem}`).toBeGreaterThanOrEqual(from - SLACK);
+          expect(shares[stem], `${run.name}: ${stem}`).toBeLessThanOrEqual(to + SLACK);
+        }
+      }
+    }
+  });
+
+  it('changes stem four times or more, each stem on for 8 s but where the critical cuts in', () => {
+    for (const run of RUNS) {
+      for (const seat of run.seats) {
+        const stretches = stemTimeline(run, seat);
+        expect(stretches.length, run.name).toBeGreaterThanOrEqual(5);
+        stretches.slice(0, -1).forEach((stretch, i) => {
+          const cut = stretches[i + 1]?.stem === 'critical';
+          const least = (cut ? barOf(90) * 1000 : STEM_DWELL_MS) - 1;
+          expect(stretch.to - stretch.from, `${run.name}: ${i}`).toBeGreaterThanOrEqual(least);
+        });
+      }
+    }
+  });
+
+  it('is each player’s own: the two seats of a run hear it differently', () => {
+    const differs = RUNS.some((run) => {
+      const [a, b] = run.seats.map((seat) => JSON.stringify(stemTimeline(run, seat)));
+      return a !== b;
+    });
+    expect(differs).toBe(true);
+  });
+});
 
 describe('the music as it plays', () => {
   beforeEach(stage);
@@ -282,6 +426,7 @@ describe('the music as it plays', () => {
     await fetchIn();
     const ctx = lastContext();
     m.setTension(tension());
+    vi.setSystemTime(Date.now() + STEM_DWELL_MS); // the calm stem has had its time
     ctx.currentTime = 15.3;
     m.setTension(tension({ left: 200 })); // 1 − 200/330: pressure ≈ 0.39
     m.setTension(tension({ left: 200 }));
