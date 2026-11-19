@@ -229,7 +229,7 @@
  * Anlaufsteuerung's stages, each load and its lamps, the first value typed (anlauf-terminal.png),
  * the pulse in the duct under the Flur from the audience (anlauf-duct.png) and on the ladder's
  * marked steps (anlauf-ladder.png); the Paketfilter followed on its pages, the guest's phone
- * held sideways at the Analysepult — FREIGABE, a mark on every packet the plan says the policy
+ * held upright at the Analysepult — FREIGABE, a mark on every packet the plan says the policy
  * drops, a trip under every ring (filter-headers.png, filter-gate.png), the wave held once the
  * host steps off the Sperrpult (filter-held.png) — and the Serverschott as its solve opens it
  * (schott-open.png); then, past the Serverraum, the station the seed draws at the Wechselplatz
@@ -610,20 +610,25 @@
  * whatever happened.
  *
  * Paketfilter (a Systemcheck run): the editor, opened at /editor?seed=4, imports
- * tools/fixtures/firewall-probe.json („Filterprobe", custom-filterprobe) and starts its test
- * run; a second page joins by code, both touch screens. The player nearer console B walks past
- * the Laborkennung — the plan's serial —, switches the station on at the Analysepult, which has
- * to stand whole on a large phone held sideways, and goes to the binder; the other takes the
+ * tools/fixtures/firewall-probe.json („Filterprobe", custom-filterprobe) and starts its test run;
+ * a second page joins by code, both touch screens. The player nearer console B walks past the
+ * Laborkennung — the plan's serial —, switches the station on at the Analysepult, which has to
+ * stand whole on a large phone held sideways, and goes to the binder; the other takes the
  * Sperrpult meanwhile: the wave has to hold, the device saying that nobody stands at the
- * Analysepult, and the Sperrpult has to stand whole on the phone too (firewall-phone-932.png).
- * The binder shows the Sicherheitsrichtlinie, seven rules (firewall-policy.png). Back at the
- * Analysepult the crew follows the pages, never the plan's seconds: FREIGABE pressed where a
- * wave waits; a card tapped where it stands once its packet — one tools/fixtures/firewall-plan.json
- * says the policy drops, in any wave the run may deal — is on the Analysepult (the cards shot at
- * a mark, firewall-headers.png), the ring at the Sperrpult awaited (firewall-gate.png at the
- * first); a line tapped and SPERREN once its lowest packet wears a ring. The station has to
- * solve, with one alarm at most — a slow runner's late tap, the wave it calls off followed on.
- * The mission is deleted again whatever happened.
+ * Analysepult, and the Sperrpult has to stand whole on the phone too (firewall-phone-932.png). The
+ * binder shows the Sicherheitsrichtlinie, seven rules (firewall-policy.png). Back at the
+ * Analysepult the crew follows the pages, never the plan's seconds: FREIGABE pressed where a wave
+ * waits; a card tapped where it stands once its packet — one tools/fixtures/firewall-plan.json
+ * says the policy drops, in any wave the run may deal — is on the Analysepult (the cards shot at a
+ * mark, firewall-headers.png), the ring at the Sperrpult awaited (firewall-gate.png at the first);
+ * a line tapped and SPERREN once its lowest packet wears a ring. With two cards on the lines each
+ * console steps back once and the wave holds (firewall-held.png): the Analysepult, the audience's
+ * page — a third joins by code to watch — and the Sperrpult are held upright then, 430×932 and
+ * 360×640 — whole, nothing scrolling, every key and card 44 px, five lines side by side in the
+ * window, no header cut; a card of the rightmost line tapped on the smallest has to take its mark,
+ * its point ringed and ticked at the Sperrpult (firewall-phone-upright-b, -audience, -a.png). The
+ * station has to solve, with one alarm at most — a slow runner's late tap, the wave it calls off
+ * followed on. The mission is deleted again whatever happened.
  *
  * Anlaufsteuerung (a Systemcheck run): the editor, opened at /editor?seed=5,
  * imports tools/fixtures/startup-probe.json („Anlaufprobe",
@@ -9060,6 +9065,9 @@ async function deviceOnPhone(player, slug, size) {
   await phoneReach(player, size, { shot, unjudged: (why) => skip('device-phone (targets)', why) });
 }
 
+/** How a phone whose window is `size` is held. */
+const postureOf = (size) => (size.width < size.height ? 'upright' : 'sideways');
+
 /**
  * The device `player`'s phone has open, held at `size`: the device whole in the window, nothing
  * of it scrolling, every control in view and 44 px at least each way (`deviceReach`), measured
@@ -9085,7 +9093,7 @@ async function phoneReach(player, size, { shot = null, label = shot, unjudged })
   }
   const rest = settled.still.length === 0 ? '' : ` — !! ${settled.still.join(', ')} still ran`;
   console.log(
-    `${name} ${player.name}'s phone sideways @ ${size.width}x${size.height}: ` +
+    `${name} ${player.name}'s phone ${postureOf(size)} @ ${size.width}x${size.height}: ` +
       `${seen.controls} controls, scrolls ${seen.scroll}px, ${seen.small.length} under 44 px, ` +
       `${seen.cut.length} cut off; measured once settled, ${settled.waited} ms on the page's ` +
       `clock${rest}` +
@@ -10966,6 +10974,16 @@ function firewallLive(player) {
   return fw.packets.filter((p) => !p.dropped && p.enterMs <= t && t < p.enterMs + fw.fallMs);
 }
 
+/** The packets standing on their lines while `player`'s wave is held; none while it runs. */
+function firewallStanding(player) {
+  const fw = firewallView(player);
+  if (fw?.clock == null || fw.clock.heldAt === null || fw.packets === null) {
+    return [];
+  }
+  const t = fw.clock.heldAt - fw.clock.startedAt;
+  return fw.packets.filter((p) => !p.dropped && p.enterMs <= t && t < p.enterMs + fw.fallMs);
+}
+
 /** The Paketfilter's drill steps, logged under its group's name. */
 const fwSaid = (text) => console.log(`${'firewall'.padEnd(19)}${text}`);
 
@@ -11196,10 +11214,14 @@ function heldWays(gate, shots) {
  * firewall-held.png, once HELD_CARDS cards are on the lines: `gate`'s player steps back from the
  * Sperrpult and walks to the binder, the wave holds, and the Analysepult is shot so — every card
  * drawn whole, the hold's word over the numbers, never across a card; the run fails where a
- * card is dimmed or the word lies over one. Then the Sperrpult is manned again and the wave goes
- * on. Returns whether it did so.
+ * card is dimmed or the word lies over one. Held so, the Analysepult and the audience's page are
+ * turned upright (`uprightAnalysis`, `uprightAudience`). Then the Sperrpult is manned again, the
+ * wave goes on, and the Analysepult's player steps back in turn for the Sperrpult upright
+ * (`uprightGate`) — where the crew has an audience, as the drill's has; Blackout's run, which
+ * names its own shot, way off and way back (`heldWays`), takes the held shot alone. Returns
+ * whether it did so.
  */
-async function heldShot({ gate, analysis }, shots) {
+async function heldShot({ gate, analysis, audience }, shots) {
   if (!shots.held || firewallLive(analysis).length < HELD_CARDS) {
     return false;
   }
@@ -11217,9 +11239,275 @@ async function heldShot({ gate, analysis }, shots) {
   await sleep(400); // the hold drawn
   await capture(analysis.page, shot);
   await heldVerdict(analysis, shot);
+  if (audience === undefined) {
+    // Blackout's own run: the device upright is the drill's matter in the Systemcheck run.
+    await man();
+    await firewallRuns(gate);
+    return true;
+  }
+  const from = Date.now();
+  const marked = await uprightAnalysis(analysis);
+  await uprightAudience(audience);
+  const back = Date.now();
   await man();
   await firewallRuns(gate);
+  const again = Date.now();
+  await uprightGate({ gate, analysis }, marked);
+  fwSaid(`the phones held upright took ${seconds(Date.now() - again + back - from)} of the drill`);
   return true;
+}
+
+/** The upright phones the Paketfilter has to stand whole on: the largest, then the smallest. */
+const FIREWALL_UPRIGHT = [
+  { width: 430, height: 932 },
+  { width: 360, height: 640 },
+];
+
+/**
+ * In the page: the page's content — under its top bar, whose keys are the menu's matter — or
+ * the panel `within` names scrolling sideways, as a line; none where neither does; that no scope
+ * shows where none does.
+ */
+function scopeSideways(within) {
+  const panel = document.querySelector(within);
+  if (panel?.querySelector('.firewall-scope') == null) {
+    return ['no scope shown'];
+  }
+  const sideways = [document.querySelector('.content'), panel]
+    .filter((box) => box !== null && box.scrollWidth > box.clientWidth + 1)
+    .map((box) => `${box.className.split(' ')[0]} ${box.scrollWidth} in ${box.clientWidth}`);
+  return sideways.length === 0 ? [] : [`scrolls sideways: ${sideways.join(', ')}`];
+}
+
+/**
+ * In the page: every part of the Paketfilter's scope in the panel `within` names past the box
+ * that holds it, each as a line — the scope past its device, the panel or the window; a line, a
+ * number, the hold's word or the Kern's rule past the scope; a card or a tick past its line.
+ */
+function scopePartsOut(within) {
+  const panel = document.querySelector(within);
+  const scope = panel?.querySelector('.firewall-scope');
+  if (scope == null) {
+    return [];
+  }
+  const span = (box) => `${Math.round(box.left)}..${Math.round(box.right)}`;
+  const boundedBy = (boxes) => ({
+    left: Math.max(0, ...boxes.map((box) => box.left)),
+    right: Math.min(globalThis.innerWidth, ...boxes.map((box) => box.right)),
+  });
+  const holderOf = (part) => {
+    const line = part.closest('.firewall-line');
+    if (part === scope) {
+      const device = scope.closest('.device') ?? panel;
+      return boundedBy([device.getBoundingClientRect(), panel.getBoundingClientRect()]);
+    }
+    const holder = line === null || line === part ? scope : line;
+    return boundedBy([holder.getBoundingClientRect(), scope.getBoundingClientRect()]);
+  };
+  const names = ['line', 'line-no', 'card', 'tick', 'held', 'kern'].map((p) => `.firewall-${p}`);
+  return [scope, ...scope.querySelectorAll(names.join(', '))].flatMap((part) => {
+    const box = part.getBoundingClientRect();
+    const held = holderOf(part);
+    const out = box.left < held.left - 1 || box.right > held.right + 1;
+    return out ? [`${part.className.split(' ')[0]} ${span(box)} in ${span(held)}`] : [];
+  });
+}
+
+/**
+ * In the page: every card in the panel `within` names under 44 px high, and every printed line
+ * of a card cut at the card's edge or set under 14 px; each as a line.
+ */
+function scopeCardMisfits(within) {
+  const cards = [...document.querySelectorAll(`${within} .firewall-card`)];
+  const low = cards
+    .filter((card) => card.getBoundingClientRect().height < 43.5)
+    .map((card) => `card ${card.dataset.packet} under 44 px high`);
+  const fields = cards.flatMap((card) => [...card.querySelectorAll('.firewall-field')]);
+  const said = (field) => `„${field.textContent.trim()}"`;
+  const cut = fields
+    .filter((field) => field.scrollWidth > field.clientWidth + 1)
+    .map((field) => `${said(field)} cut: ${field.scrollWidth} in ${field.clientWidth}`);
+  const small = fields
+    .filter((field) => parseFloat(globalThis.getComputedStyle(field).fontSize) < 14)
+    .map((field) => `${said(field)} set under 14 px`);
+  return [...low, ...cut, ...small];
+}
+
+/** The panel the station's device stands in, and the audience's column of them. */
+const STATION_PANEL = '.station-modal .panel';
+const AUDIENCE_PANEL = '.spectate-panels .panel';
+
+/**
+ * `player`'s Paketfilter held upright at `size`, its scope in the panel `within` judged — nothing
+ * scrolling sideways (`scopeSideways`), every part in the window and on its line
+ * (`scopePartsOut`), every card a finger high with its header whole (`scopeCardMisfits`): the log
+ * says how wide the lines and how high a card stand.
+ */
+async function scopeFits(player, size, label, within = STATION_PANEL) {
+  const wrong = [
+    ...(await player.page.evaluate(scopeSideways, within)),
+    ...(await player.page.evaluate(scopePartsOut, within)),
+    ...(await player.page.evaluate(scopeCardMisfits, within)),
+  ];
+  const px = (selector) =>
+    player.page.locator(`${within} ${selector}`).evaluateAll((all) => {
+      const sizes = all.map((el) => el.getBoundingClientRect());
+      return sizes.map(({ width, height }) => `${Math.round(width)}×${Math.round(height)}`);
+    });
+  const [line = 'none'] = await px('.firewall-line');
+  const cards = [...new Set(await px('.firewall-card'))].join(', ');
+  fwSaid(
+    `${label} @ ${size.width}x${size.height}: five lines of ${line} px` +
+      (cards === '' ? '' : `, cards of ${cards} px`) +
+      (wrong.length === 0 ? ': the scope whole' : '') +
+      wrong.map((w) => `\n${''.padEnd(19)}!! ${w}`).join(''),
+  );
+  if (wrong.length > 0) {
+    fail(`${label} @ ${size.width}: ${wrong.join('; ')}`);
+  }
+}
+
+/** A console of the Paketfilter back at laptop size after a phone's. */
+async function laptopAgain(player) {
+  await player.page.setViewportSize({ width: SIZES[0].width, height: SIZES[0].height });
+  await sleep(300);
+}
+
+/**
+ * firewall-phone-upright-b.png: the held Analysepult on a phone held upright, the largest and
+ * the smallest (FIREWALL_UPRIGHT) — the device whole, nothing scrolling, every control and card
+ * 44 px (`phoneReach`), the five lines side by side in the window and no header cut
+ * (`scopeFits`). On the smallest a card is tapped where it stands, the rightmost the policy
+ * drops, and the shot shows its ring and tick; the marked card is then held to the phones
+ * sideways and the laptop (`markedElsewhere`). Returns the id marked; null where the tap took on
+ * none.
+ */
+async function uprightAnalysis(analysis) {
+  let marked = null;
+  for (const size of FIREWALL_UPRIGHT) {
+    const smallest = size === FIREWALL_UPRIGHT.at(-1);
+    await analysis.page.setViewportSize(size);
+    await sleep(300);
+    if (smallest) {
+      marked = await markUpright(analysis);
+    }
+    const shot = smallest ? 'firewall-phone-upright-b.png' : null;
+    const label = `firewall b ${size.width}`;
+    await phoneReach(analysis, size, { shot, label, unjudged: firewallUnjudged });
+    await scopeFits(analysis, size, label);
+  }
+  await markedElsewhere(analysis);
+  return marked;
+}
+
+/**
+ * firewall-marked-844.png and firewall-marked.png: the held Analysepult with its marked card on
+ * the phones held sideways and back at laptop size — the mark takes nothing of a header's room:
+ * no card's line cut, on any of them (`scopeFits`).
+ */
+async function markedElsewhere(analysis) {
+  for (const size of [SIZES[3], SIZES[4]]) {
+    const shot = size === SIZES[3] ? 'firewall-marked-844.png' : null;
+    const label = `firewall b ${size.width} marked`;
+    await phoneReach(analysis, size, { shot, label, unjudged: firewallUnjudged });
+    await scopeFits(analysis, size, label);
+  }
+  await laptopAgain(analysis);
+  await scopeFits(analysis, SIZES[0], 'firewall b laptop marked');
+  await capture(analysis.page, 'firewall-marked.png');
+}
+
+/**
+ * firewall-phone-upright-audience.png: the audience's page at laptop size and on the phones held
+ * upright while the wave holds — its scope of cards in its panel, five lines side by side, no
+ * header cut, the page not scrolling sideways (`scopeFits`) —, shot on the smallest phone with
+ * the scope in view.
+ */
+async function uprightAudience(audience) {
+  const scope = audience.page.locator(`${AUDIENCE_PANEL} .firewall-scope`);
+  await scopeFits(audience, SIZES[0], 'firewall audience laptop', AUDIENCE_PANEL);
+  for (const size of FIREWALL_UPRIGHT) {
+    await audience.page.setViewportSize(size);
+    await sleep(300);
+    await scopeFits(audience, size, `firewall audience ${size.width}`, AUDIENCE_PANEL);
+  }
+  if ((await scope.count()) > 0) {
+    await scope.evaluate((el) => el.scrollIntoView({ block: 'center' }));
+    await sleep(200);
+  }
+  await capture(audience.page, 'firewall-phone-upright-audience.png');
+  await laptopAgain(audience);
+}
+
+/**
+ * A mark on the phone held upright: the rightmost card on `analysis`'s lines that the policy
+ * drops, tapped where it stands — the wave is held —; the view has to show it marked. Returns
+ * its id, or null (the run fails) where no such card stands or the tap did not take.
+ */
+async function markUpright(analysis) {
+  const hostile = firewallStanding(analysis).filter(
+    (p) => FIREWALL_HOSTILE.has(p.id) && !p.marked,
+  );
+  const [target] = hostile.sort((p, q) => q.line - p.line);
+  if (target === undefined) {
+    fail('firewall-phone-upright-b.png: no card of a hostile packet on the held lines to mark');
+    return null;
+  }
+  const card = `.station-modal .firewall-card[data-packet="${target.id}"]`;
+  await tapMoving(analysis, analysis.page.locator(card));
+  const took = await until(() => firewallMarked(analysis, target.id), 1500);
+  fwSaid(
+    `${analysis.name} taps ${target.id} on line ${target.line + 1}, the phone upright: ` +
+      (took ? 'marked' : '!! no mark'),
+  );
+  if (!took) {
+    fail(`firewall-phone-upright-b.png: the tap on ${target.id}, line ${target.line + 1}, missed`);
+  }
+  return took ? target.id : null;
+}
+
+/** In the page: whether packet `id`'s point wears its ring and its tick whole on its line. */
+function ringShown(id) {
+  const marked = `.station-modal .firewall-blip--marked[data-packet="${id}"]`;
+  const blip = document.querySelector(marked);
+  const tick = blip?.querySelector('.firewall-tick')?.getBoundingClientRect();
+  const line = blip?.closest('.firewall-line')?.getBoundingClientRect();
+  return tick !== undefined && tick.left >= line.left - 1 && tick.right <= line.right + 1;
+}
+
+/**
+ * firewall-phone-upright-a.png: the Analysepult's player steps back and walks to the binder,
+ * the wave holds, and the Sperrpult is held upright, the largest phone and the smallest — the
+ * device whole, nothing scrolling, every key 44 px and in the window, the lines side by side,
+ * the point of `marked` ringed and ticked whole on its line. Then the Analysepult is manned
+ * again and the wave goes on.
+ */
+async function uprightGate({ gate, analysis }, marked) {
+  await analysis.page.keyboard.press('Escape');
+  await analysis.page.locator('.station-modal').waitFor({ state: 'hidden', timeout: 3000 });
+  const [spot] = FIREWALL_MISSION.map.manuals[0].spots;
+  if (!(await walkNear(analysis.page, analysis.seen, spot))) {
+    throw new Error(`${analysis.name} found no way off the Analysepult to ${spot.x},${spot.y}`);
+  }
+  if (!(await until(() => (firewallView(gate)?.vacant ?? []).join() === 'b', 3000))) {
+    throw new Error(`${analysis.name} left the Analysepult, but the wave holds not`);
+  }
+  for (const size of FIREWALL_UPRIGHT) {
+    const smallest = size === FIREWALL_UPRIGHT.at(-1);
+    const shot = smallest ? 'firewall-phone-upright-a.png' : null;
+    const label = `firewall a ${size.width}`;
+    await phoneReach(gate, size, { shot, label, unjudged: firewallUnjudged });
+    await scopeFits(gate, size, label);
+    const ring = marked !== null && (await gate.page.evaluate(ringShown, marked));
+    const shown = ring ? 'ringed and ticked on its line' : '!! shows no whole ring and tick';
+    fwSaid(`${label}: ${marked} ${shown}`);
+    if (!ring) {
+      fail(`${label}: the ring and tick of ${marked} do not stand whole on the line`);
+    }
+  }
+  await laptopAgain(gate);
+  await manFirewall(analysis, 'b', 'analysis');
+  await firewallRuns(gate);
 }
 
 /** The held Analysepult judged: every card drawn whole, the word clear of the cards. */
@@ -11331,17 +11619,18 @@ async function playFirewall(crew) {
 const firewallUnjudged = (why) => skip('firewall (targets)', why);
 
 /**
- * The Paketfilter, proven in a scratch mission of its own, in a Systemcheck run (Blackout says
- * it leaves it out): imported through the editor at a pinned seed and started as its test run,
- * the second player joining by code, both on touch screens. The player nearer console B walks
- * past the Laborkennung and switches the station on at the Analysepult, which is held sideways
- * on the large phone, and goes to the binder; the other takes the Sperrpult meanwhile — the wave
- * holds, the device saying so, and the Sperrpult is held sideways too (firewall-phone-932.png) —
- * while the binder is read on the Sicherheitsrichtlinie (firewall-policy.png). Back at the
- * Analysepult the crew follows the pages to the solve (`playFirewall`): FREIGABE where a wave
- * waits, a mark on every packet the policy drops, a trip under every ring — the cards shot at a
- * mark (firewall-headers.png), the Sperrpult at its first ring (firewall-gate.png). The mission
- * is deleted again whatever happened.
+ * The Paketfilter, proven in a scratch mission of its own, in a Systemcheck run (Blackout says it
+ * leaves it out): imported through the editor at a pinned seed and started as its test run, the
+ * second player joining by code, both on touch screens, a third watching as the audience. The
+ * player nearer console B walks past the Laborkennung and switches the station on at the
+ * Analysepult, which is held sideways on the large phone, and goes to the binder; the other takes
+ * the Sperrpult meanwhile — the wave holds, the device saying so, and the Sperrpult is held
+ * sideways too (firewall-phone-932.png) — while the binder is read on the Sicherheitsrichtlinie
+ * (firewall-policy.png). Back at the Analysepult the crew follows the pages to the solve
+ * (`playFirewall`): FREIGABE where a wave waits, a mark on every packet the policy drops, a trip
+ * under every ring — the cards shot at a mark (firewall-headers.png), the Sperrpult at its first
+ * ring (firewall-gate.png), both consoles and the audience's page on phones held upright during a
+ * hold (`heldShot`). The mission is deleted again whatever happened.
  */
 async function captureFirewall() {
   if (MISSION.toLowerCase() === 'blackout') {
@@ -11358,6 +11647,11 @@ async function captureFirewall() {
     const guest = await probePlayer('firewall', 'Ben', true);
     crew.push(guest);
     await joinProbeRoom(guest, code);
+    const audience = await probePlayer('firewall', 'Zuschauer', true);
+    crew.push(audience);
+    await audience.page.goto(paged(BASE));
+    await typeName(audience.page, audience.name);
+    await byCode(audience.page, code, true);
     await startRun(host, guest);
     await sleep(Math.max(0, host.seen.view.startedAt + 4200 - Date.now()));
     const [gate, analysis] = probeSeats([host, guest]);
@@ -11371,7 +11665,7 @@ async function captureFirewall() {
     await firewallPolicyShot(analysis, binder);
     await manFirewall(analysis, 'b', 'analysis');
     await firewallRuns(gate);
-    await playFirewall({ gate, analysis });
+    await playFirewall({ gate, analysis, audience });
     fwSaid(`the drill took ${seconds(Date.now() - from)}`);
   } catch (err) {
     fwSaid(`!! ${firstLine(err)}`);
@@ -13152,11 +13446,10 @@ async function schottOpens(player) {
 
 /**
  * The crew at Blackout's Paketfilter: the guest walks past the policy on the Flur's south wall,
- * where the plan lays it, and turns the phone sideways — the Analysepult's five lines of cards
- * take a phone held so (the module's own proof, 844 and 932 wide): upright at 420 its fourth
- * and fifth line run out of the device —; both open their panels, which have to be the
- * Sperrpult and the Analysepult; the guest's device is shot on the phone (devices), the host's
- * notepad beside the Sperrpult where it is still owed. Returns the phone's size held upright.
+ * where the plan lays it, the phone held upright as it has been all run — the Analysepult
+ * stands whole on a phone so (F-firewall-upright) —; both open their panels, which have to be
+ * the Sperrpult and the Analysepult; the guest's device is shot on the phone held sideways
+ * too (devices), the host's notepad beside the Sperrpult where it is still owed.
  */
 async function manPaketfilter(host, guest) {
   const policy = pinnedSource('chart');
@@ -13166,10 +13459,6 @@ async function manPaketfilter(host, guest) {
     throw new Error(`${guest.name} found no way to the ${policy.label}`);
   }
   await foundWherePinned(guest, policy);
-  const upright = guest.page.viewportSize() ?? SIZES[2];
-  // Sideways for now: this line goes, and the guest plays the Analysepult upright, once main
-  // has the upright device (F-firewall-upright) and is merged in here.
-  await guest.page.setViewportSize({ width: SIZES[3].width, height: SIZES[3].height });
   await manArmed(host, 'a');
   await manArmed(guest, 'b');
   const role = (player) => firewallView(player)?.role ?? null;
@@ -13178,14 +13467,13 @@ async function manPaketfilter(host, guest) {
   }
   await inGroup('devices', () => captureDevicePhone(guest, stationSlug(guest)));
   await payDeviceNoting(host);
-  return { width: upright.width, height: upright.height };
 }
 
 /**
  * Blackout's Paketfilter on the pinned seed: the guest walks past the policy on the Flur's
  * south wall, where the plan lays it, to the Analysepult east of the Schott, the host to the
- * Sperrpult; both open their panels — the guest's phone held sideways shot (devices), the
- * host's notepad beside the Sperrpult where it is still owed (`payDeviceNoting`) — and the crew
+ * Sperrpult; both open their panels — the guest's phone, upright, shot sideways too
+ * (devices), the host's notepad beside the Sperrpult where it is still owed (`payDeviceNoting`) — and the crew
  * follows its pages to the solve (`followFirewall`): FREIGABE where a wave waits, a mark on
  * every packet the plan says the policy drops, a trip under every ring — the Analysepult's
  * cards shot at a mark (filter-headers.png), the Sperrpult at its first ring (filter-gate.png),
@@ -13193,7 +13481,7 @@ async function manPaketfilter(host, guest) {
  * (schott-open.png). Fails unless it solves, or where it took more than one alarm.
  */
 async function playPaketfilter(host, guest) {
-  const upright = await manPaketfilter(host, guest);
+  await manPaketfilter(host, guest);
   const crew = { gate: host, analysis: guest };
   const alarms = host.seen.view.alarms.count;
   const from = Date.now();
@@ -13216,7 +13504,6 @@ async function playPaketfilter(host, guest) {
       `${solved ? 'solved' : '!! not solved'}, ` +
       (raised === 0 ? 'no alarm' : `!! ${raised} alarm(s)`),
   );
-  await guest.page.setViewportSize(upright);
   if (!solved || raised > 1) {
     throw new Error(`the Paketfilter ended ${solved ? 'solved' : 'unsolved'}, ${raised} alarm(s)`);
   }

@@ -759,9 +759,8 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   westlich davon, eine Welle mit neun Paketen (48 bis 52 s auf der Uhr, Lesedruck wie der
   Modul-Standard: der Abstand der Pakete hängt nur an `fallSec`); die Lösung öffnet das Schott.
   Beide Drohnen schlafen, bis der Serverraum gelöst ist: Am Paketfilter wird niemand erfasst.
-- Offen: Hochkant auf einem Handy (420 px) passt das Analysepult nicht — fünf Leitungen zu je
-  mindestens 100 px, die vierte und fünfte laufen aus dem Gerät. Bewiesen ist das Gerät nur
-  quer (844, 932). Eigenes Paket: Karten in kurzen Zeilen, Leitungen in 1fr unter ~560 px.
+- Hochkant auf dem Handy: erledigt mit F-firewall-upright (Merge 2026-11-19); in Blackouts
+  Rundgang spielt der Gast das Analysepult hochkant (420 × 760).
 
 ### W-1 Warte-Spiel — Status: wartet · Größe: S
 - Uros' eigenes kleines Canvas-Spiel (Frettchen und Ente) als etwas zum Spielen, während eine

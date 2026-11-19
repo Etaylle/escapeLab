@@ -387,6 +387,7 @@ export {
   LINES_FIGURE,
   SAME_LINE_GAP,
   TRIP_GRACE_MS,
+  widestHeader,
   type FirewallBlip,
   type FirewallEvent,
   type FirewallHeader,
