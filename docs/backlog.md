@@ -444,13 +444,15 @@ die Entscheidung.
   | 5 | Funkpult 35 (G 6–7) | Signalkette 40–41 (G 4) | Funkpult 51–52 (G 9–10) | Notstromkasten 54 (G 8) | Signalkette 43 (G 5) | Funkpult 48–49 (G 4) | Notstromkasten 49 (G 5–6) |
   | 6 | Reaktor 40–41 (G 9–10) | 41–50 (E 0–8, G 5–7) | 48–49 (G 15) | 44–45 (G 15–16) | 55–56 (G 18) | 50 (G 17–18) | 34–35 (G 7) |
   | Flucht | 40–42 (G 3–4) | 56–57 (G 19) | 56–58 (G 19–21) | 59 (G 22) | 46–47 (G 10) | 47–48 (G 10) | 42 (G 5–6) |
-  | Sieg | 243 (G 33) | 299–309 (G 28–30) | 321–322 (G 44–45) | 324–325 (G 45–46) | 304–308 (G 32–33) | 304–306 (G 31–32) | 282 (G 17) |
+  | Sieg | 243 (G 33) | 299–309 (G 28–30) | 321–322 (G 44–45) | 324–325 (G 45–46) | 304–308 (G 32–33) | 304–306 (G 31–32) | 282–302 (G 17; im Review einmal E 6) |
 
   Der Rundgang der alten Folge lässt keiner verspäteten Figur Spielraum; ohne G gerechnet liegt
   sie bei 210 s, das Paket bei 265 bis 273 s. Der Rest sind die Uhren von Paketfilter (41 bis
-  43 s) und Anlaufsteuerung (13 bis 15 s), die die Stationen der alten Folge nicht hatten. Kein
-  Lauf des Pakets wartet mehr auf einen Notfall (E 0). Die drei Auslosungen liegen 26 s
-  auseinander (Ziel 30 s); 300 s hält nur Seed 93, 12 und 56 liegen 4 bis 8 s darüber, fast
+  43 s) und Anlaufsteuerung (13 bis 15 s), die die Stationen der alten Folge nicht hatten. Am
+  Reaktor kann der Rundgang noch auf den Notfall bei 250 s warten (im Review auf Seed 93 6,2 s:
+  299 s statt 282). Die abwechselnde Reihe des Reviews (2026-11-19) gab dem Paket 299 bis 307 s,
+  main 310 bis 326 s. Die drei Auslosungen liegen 282 bis 308 s, 26 s auseinander (Ziel 30 s);
+  300 s hält Seed 93 meist (282 bis 302 s), 12 und 56 liegen 4 bis 8 s darüber, fast
   ganz im Weg zum Reaktor, in den der Notfall bei 250 s fällt — auf Seed 12 auch der längere Weg
   vom Archiv dorthin, den das gerechte Pult A kostet. Die Anlaufsteuerung bleibt (Entscheidung
   2026-11-19: ihre Plätze nennen Texte, die auf das Rendern warten). Die sieben Pakete bleiben:

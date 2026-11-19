@@ -539,7 +539,7 @@ every shipped mission and lab:
 | Serverraum | the terminal (A), the rack (B), the Spind | 3 | two at the consoles, the third searches the locker and reads; no drone is out yet |
 | Wechselplatz: Signalkette | Pult A, Pult B, the Klemmbrett | 3 | two at the consoles, the third reads the legend at the clipboard |
 | Wechselplatz: Funkpult | the radio desk, the Aktenschrank, its key | 3 | one at the radio, one reading the cabinet, the third fetching the key — and the fuse for the reactor |
-| Wechselplatz: Notstromkasten | Pult A (the box), Pult B (the meter), the Wartungsbuch | 3 | one cuts at the box, one measures, the third reads the book in the Maschinenraum |
+| Wechselplatz: Notstromkasten | Pult A (the box), Pult B (the meter), the Wartungsbuch | 3 | one cuts at the box, one measures, the third reads the Wartungsbuch on the Labor's west wall |
 | Reaktor-Neustart | the switch, for the whole crew; the SICHERUNG | 4 | the third carries the fuse in, then all three press |
 
 The module tests play every mission for every crew size from `players.min` to `players.max`
@@ -1081,8 +1081,9 @@ scratch mission of its own (`smoke.ts` `restProbe`, „Ruheprobe", about a minut
 walkthrough's Paketfilter drill in a Systemcheck run times the probe's emergency into its second
 wave — where it would fall more than 12 s into it, the Sperrpult's player steps off, the wave
 holds, and steps back on two seconds before it — and shoots the goal line resting (rest-goal.png)
-and the Sperrpult back with its clean wave, waiting, no alarm counted (rest-kept.png): about 5 s
-more for the drill (98 to 101 s in three runs in a row, 90 to 101 s on main).
+and the Sperrpult back with its clean wave, waiting, no alarm counted (rest-kept.png): about 8 s
+more for the drill (98 to 101 s in local runs, 90 to 101 s on main; 8 s against main's cloud
+run).
 Blackout's own emergencies come 86 to 100 s from its Signalkette, so the drill is where the
 harness sets the schedule. A
 snapshot taken in an emergency carries the resting station; one of a build before has none and
