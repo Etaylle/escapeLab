@@ -707,7 +707,7 @@
   {
     "id": "bed-reactor",
     "kind": "bed",
-    "prompt": "Reactor hall ambience: a steady deep containment hum at 110 Hz with a soft electrical drone, in a large steel hall, constant.",
+    "prompt": "Reactor hall machine room recorded close at full level: a deep, broad wash of air moving through wide steel ducts and coolant rushing through heavy pipes, a soft irregular pulse of pumps far below that never keeps one beat, now and then distant metal settling with a dull knock, great energy held back. Dense, dark and slowly shifting, with no steady tone, no pitched hum and nothing high or sharp.",
     "durationSeconds": 10,
     "loop": true,
     "target": { "measure": "rms", "dbfs": -20 },
@@ -743,7 +743,7 @@
   {
     "id": "bed-reactor-idle",
     "kind": "bed",
-    "prompt": "A reactor hall during a blackout: a very deep rumble from the core, faint metallic groans and the hiss of residual cooling, ominous, constant.",
+    "prompt": "A reactor hall during a blackout recorded at full level: the core's deep, uneven rumble rising and sinking slowly, residual coolant hissing softly through cooling pipes, faint metallic groans far off as the steel settles, ominous and dark. Dense and constant, with no steady tone, no pitched hum and nothing high or sharp.",
     "durationSeconds": 10,
     "loop": true,
     "target": { "measure": "rms", "dbfs": -20 },
