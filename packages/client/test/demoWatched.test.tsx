@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { RelayedPosition } from '@escapelab/core';
-import { GameWorld } from '../src/world/GameWorld.js';
+import { GameWorld, selfStep } from '../src/world/GameWorld.js';
 import { newSim, walk, watchSelf, type Sim } from '../src/world/sim.js';
 import { mapWith } from './fixtures.js';
 import { TILES } from './frames.js';
@@ -83,6 +83,34 @@ describe('a seat watched in the simulation', () => {
     Object.assign(sim.self, { x: 3, y: 3 });
     frame(sim, {}, 'a', 1016);
     expect(sim.self).toMatchObject({ x: 3, y: 3 });
+  });
+});
+
+describe('a frame of the world’s own figure', () => {
+  /** Thirty frames of a world on Anna's view, the key to walk east held; where she ends up. */
+  function walked(watched: boolean): number {
+    const sim = newSim(0);
+    const view = playingView({ startedAt: RUN, map: MAP });
+    const players = { [view.you.id]: at(4.5, 3.5, false, 1000) };
+    const loop = {
+      sim,
+      live: { current: { view, locked: false, intro: null } },
+      positions: { current: { run: RUN, players } },
+      spectator: false,
+      watched,
+    } as unknown as Parameters<typeof selfStep>[0];
+    for (let i = 0; i < 30; i++) {
+      sim.keys.add('right');
+      selfStep(loop, MAP, 1 / 60, 1000 + i * 16);
+    }
+    return sim.self.x;
+  }
+
+  it('walks a seat played by its keys, and a seat watched by no key at all', () => {
+    vi.stubGlobal('navigator', { getGamepads: () => [] });
+    // Played: half a second east, as far as the room lets a step it has not heard of go.
+    expect(walked(false)).toBeGreaterThan(4.6);
+    expect(walked(true)).toBe(4.5);
   });
 });
 

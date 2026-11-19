@@ -1539,12 +1539,16 @@ time the three seeds of the draws (12, 56, 93) came to 410, 343 and 380 s, on fa
 not come near; a server that hangs for seconds may cost it a sighting.
 
 **What watching costs.** The server's process on an M4, measured over two and a half minutes each
-(2026-11-19): with nobody watching 45 MB and 0.05 % of a core — the demo room in its lobby runs no
-timer —, with three watching 58 MB and 0.8 %, with sixty 89 MB and 3.0 %, sending 654 kB a second
-in all. A small hosted instance's share of a slower core is a tenth of one: three watching are
-nothing to it, sixty are about what it has. One of the audience is sent some 0.5 views a second of
-12 kB and 7.5 position messages of 0.5 kB — 6 to 10 kB a second, about 4 MB a run — so sixty take
-about 0.5 MB a second out of the server: the line, not the processor, is what an audience costs.
+(2026-11-19, with the seat's view on the feed): with three watching 79 MB and 1.4 % of a core, with
+sixty 96 MB and 3.2 %, sending 1.0 MB a second in all, with a hundred and fifty — the cap — 83 MB
+(115 at its peak) and 6.4 %, sending 2.7 MB a second. Before the seat's view sixty cost 89 MB,
+3.0 % and 654 kB a second: the processor hardly notices, the line carries half as much again. One
+of the audience is sent 16 to 18 kB a second: the audience's view (6 to 7 kB — some 0.5 views a
+second of 12 kB), the view of one seat (6.6 to 7.5 kB; one in five of a seat's views shows nothing
+new and is not sent), the positions (1.4 to 4.3 kB) and the word of what is on air (0.05 kB). A
+small hosted instance's share of a slower core is a tenth of one: sixty watching are about what it
+has, and a hundred and fifty take 2.7 MB a second out of its line — the line, not the processor,
+is what an audience costs.
 
 ## QR-Codes: onto another device
 

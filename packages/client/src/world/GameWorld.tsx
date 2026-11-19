@@ -669,7 +669,7 @@ function step(loop: Loop, dt: number, now: number, map: WorldMap): void {
   const run = view.startedAt;
   // The crew REMOTE_DELAY_MS in the past, where their samples put them (trail.ts).
   const drawnAt = serverAt(now) - REMOTE_DELAY_MS;
-  const sound = loop.watched === true ? watchSeat(loop, map, drawnAt) : walkSelf(loop, map, dt);
+  const sound = selfStep(loop, map, dt, drawnAt);
   sim.selfAt = now;
   if (!spectator && loop.watched !== true) {
     pressWhenInReach(pressWorld(loop), performance.now());
@@ -694,20 +694,28 @@ function step(loop: Loop, dt: number, now: number, map: WorldMap): void {
   sim.time += dt;
 }
 
+/** What a frame's step of this screen's own figure goes by: the loop's parts it reads. */
+type Walker = Pick<Loop, 'sim' | 'live' | 'positions' | 'spectator' | 'watched'>;
+
+/**
+ * The frame's step of the figure this screen stands for: a seat watched goes where the room has
+ * it as of `at` (`watchSeat`), whatever key is held; a seat played walks by its keys.
+ */
+export function selfStep(loop: Walker, map: WorldMap, dt: number, at: number): WalkSound | null {
+  return loop.watched === true ? watchSeat(loop, map, at) : walkSelf(loop, map, dt);
+}
+
 /**
  * The frame's walk of a seat watched (`Props.watched`): where the room has it, a moment ago as
  * the rest of the crew is drawn; another seat on air is a first look at the lab — what that
  * seat had found before is no news on this screen (`firstLook`).
  */
-function watchSeat(loop: Loop, map: WorldMap, at: number): WalkSound | null {
+function watchSeat(loop: Walker, map: WorldMap, at: number): WalkSound | null {
   const { sim } = loop;
   const view = loop.live.current.view;
   if (sim.watching !== null && sim.watching !== view.you.id) {
     sim.seen = null;
   }
-  sim.pad = NO_STEER;
-  sim.keys.clear();
-  sim.held = false;
   const seat = { youId: view.you.id, run: view.startedAt };
   return watchSelf(sim, loop.positions.current, map, seat, at);
 }
@@ -716,7 +724,7 @@ function watchSeat(loop: Loop, map: WorldMap, at: number): WalkSound | null {
  * The frame's walk of this screen's own avatar, by the keys and the controller — none for the
  * audience, whose camera stands over the middle of the lab.
  */
-function walkSelf(loop: Loop, map: WorldMap, dt: number): WalkSound | null {
+function walkSelf(loop: Walker, map: WorldMap, dt: number): WalkSound | null {
   const { sim, spectator } = loop;
   const view = loop.live.current.view;
   if (spectator) {

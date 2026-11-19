@@ -170,7 +170,10 @@ interface Watched {
   shown: Record<string, number>;
   /** what one of the crew told the other, by station up: the words, and how long they stood, s */
   said: Record<number, { text: string; by: 0 | 1; long: number }>;
-  /** shots whose `ear` is not the seat on air — or, under the whole lab, the seat last on air */
+  /**
+   * shots whose `ear` is not the seat on air — or, under the whole lab, the seat last on air —
+   * and views sent under the whole lab that are not that seat's
+   */
   deaf: number;
   /** the bytes sent this viewer, by kind of message, and the run's length, s */
   bytes: Record<string, number>;
@@ -185,23 +188,50 @@ interface Seen {
   shot: DemoShot | null;
 }
 
+/**
+ * Whether the seat's view `msg` is none the lab is heard by while the whole lab is on air:
+ * neither the view of the seat last on air nor the one that comes just before the word of a cut
+ * to its seat (`next`).
+ */
+function strayView(msg: ServerMessage, shot: DemoShot | null, next?: ServerMessage): boolean {
+  if (msg.kind !== 'demo-view' || shot === null || shot.onAir !== null) {
+    return false;
+  }
+  const cutTo = next?.kind === 'demo-shot' ? next.shot.onAir : null;
+  return msg.seat !== shot.ear && msg.seat !== cutTo;
+}
+
+/** Adds `by` to what `tally` has under `key`. */
+function add(tally: Record<string, number>, key: string, by: number): void {
+  tally[key] = (tally[key] ?? 0) + by;
+}
+
+/** The place in the crew `ids` of the seat `id`; null for the whole lab. */
+const placeOf = (ids: readonly string[], id: string | null): 0 | 1 | null =>
+  id === null ? null : ids[0] === id ? 0 : 1;
+
+/** A word of what is on air, as a viewer takes it: a cut noted, the seat it is heard by checked. */
+function takeShot(shot: DemoShot, seen: Seen, watched: Watched): void {
+  const before = seen.shot;
+  const last = before === null ? seen.ids[0] : (before.onAir ?? before.ear);
+  watched.deaf += shot.ear === (shot.onAir ?? last) ? 0 : 1;
+  if (before === null || shot.onAir !== before.onAir) {
+    const at = (Date.now() - T0) / 1000;
+    watched.shots.push({ onAir: placeOf(seen.ids, shot.onAir), at, long: 0, phase: seen.phase });
+  }
+  seen.shot = shot;
+}
+
 /** `msg` as a viewer takes it: the run's state off the audience's view, each cut noted. */
-function take(msg: ServerMessage, seen: Seen, watched: Watched): void {
-  watched.bytes[msg.kind] = (watched.bytes[msg.kind] ?? 0) + JSON.stringify(msg).length;
+function take(msg: ServerMessage, seen: Seen, watched: Watched, next?: ServerMessage): void {
+  watched.deaf += strayView(msg, seen.shot, next) ? 1 : 0;
+  add(watched.bytes, msg.kind, JSON.stringify(msg).length);
   if (msg.kind === 'spectator-view') {
     seen.phase = msg.view.phase;
     seen.index = msg.view.currentPuzzleIndex;
     seen.ids = msg.view.players.map((player) => player.id);
   } else if (msg.kind === 'demo-shot') {
-    const { onAir, ear } = msg.shot;
-    const last = seen.shot === null ? seen.ids[0] : (seen.shot.onAir ?? seen.shot.ear);
-    watched.deaf += ear === (onAir ?? last) ? 0 : 1;
-    if (seen.shot === null || onAir !== seen.shot.onAir) {
-      const seat = onAir === null ? null : seen.ids[0] === onAir ? 0 : 1;
-      const at = (Date.now() - T0) / 1000;
-      watched.shots.push({ onAir: seat, at, long: 0, phase: seen.phase });
-    }
-    seen.shot = msg.shot;
+    takeShot(msg.shot, seen, watched);
   }
 }
 
@@ -214,18 +244,20 @@ function countSaid({ shot, index, ids }: Seen, said: Watched['said']): void {
   }
 }
 
+/** What the seat on air in `shot` is doing; `overview` for the whole lab. */
+const onAirDoing = (shot: DemoShot): string =>
+  shot.onAir === null ? 'overview' : (shot.doing[shot.onAir]?.what ?? 'idle');
+
 /** A tick of the run counted for what is on air during it: `2 read`, `4 overview`. */
 function count({ shot, phase, index }: Seen, shown: Watched['shown']): void {
   if (shot === null || phase !== 'playing') {
     return;
   }
-  const what = shot.onAir === null ? 'overview' : (shot.doing[shot.onAir]?.what ?? 'idle');
-  const key = `${index} ${what}`;
-  shown[key] = (shown[key] ?? 0) + 0.08;
+  add(shown, `${index} ${onAirDoing(shot)}`, 0.08);
   // One reads to the other who works: counted apart, whoever is on air.
-  const crew = Object.values(shot.doing).map((doing) => doing.what).sort().join('+');
-  if (crew === 'operate+read') {
-    shown[`${index} read to`] = (shown[`${index} read to`] ?? 0) + 0.08;
+  const crew = Object.values(shot.doing).map((doing) => doing.what);
+  if (crew.sort().join('+') === 'operate+read') {
+    add(shown, `${index} read to`, 0.08);
   }
 }
 
@@ -240,7 +272,7 @@ function watchRun(seed: number): Watched {
   const over = (): boolean => seen.phase === 'won' || seen.phase === 'lost';
   // To the run's end and five seconds of its Auswertung.
   for (let tick = 0, after = 0; tick < 15_000 && after < 60; tick++) {
-    heard.splice(0).forEach((msg) => take(msg, seen, watched));
+    heard.splice(0).forEach((msg, i, all) => take(msg, seen, watched, all[i + 1]));
     count(seen, watched.shown);
     countSaid(seen, watched.said);
     after += over() ? 1 : 0;

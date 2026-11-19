@@ -297,6 +297,9 @@ describe('the demo’s screen', () => {
     expect(labStage({ ...AUDIENCE, phase: 'won' }, null)).toBe('card');
   });
 
+});
+
+describe('the line under the demo’s picture, and a viewer’s own choice', () => {
   it('offers the four pictures as buttons, the one chosen pressed, and the way out', () => {
     const { html } = demo(feed('p1'), AUDIENCE, 'two');
     const button =

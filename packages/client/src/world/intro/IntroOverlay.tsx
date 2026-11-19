@@ -103,17 +103,25 @@ function useTapToSkip(): boolean {
   return coarse && !padUsed;
 }
 
+/** What the lower bar offers at `now`: the skip, once it can be asked for; null before. */
+function hintOf(cue: IntroCue, now: number, view: PlayerView, touch: boolean): string | null {
+  return hintShown(cue, now) ? skipLine(view, touch) : null;
+}
+
 /** The run's opening over the world on this screen; `skip` skips it where it can be skipped. */
 export function IntroOverlay({
   cue,
   view,
   skip,
-  watched = false,
+  watched,
 }: {
   cue: IntroCue;
   view: PlayerView;
   skip: () => void;
-  /** the opening is watched, not played (screens/Demo.tsx): nothing skips it, no line offers to */
+  /**
+   * the opening is watched, not played (screens/Demo.tsx): no line offers the skip — and none
+   * comes: its screen is inert, and the game's keys are deaf
+   */
   watched?: boolean;
 }) {
   const now = useNow(DRAW_MS);
@@ -133,9 +141,7 @@ export function IntroOverlay({
       className={classesOf(cue, phase)}
       onPointerDown={(e) => {
         e.preventDefault();
-        if (!watched) {
-          skip();
-        }
+        skip();
       }}
     >
       {black > 0 && <div className="intro-black" style={{ opacity: black }} />}
@@ -144,7 +150,7 @@ export function IntroOverlay({
         <Bars
           shown={barsIn(cue, now)}
           subtitle={subtitle}
-          hint={!watched && hintShown(cue, now) ? skipLine(view, touch) : null}
+          hint={watched === true ? null : hintOf(cue, now, view, touch)}
         />
       )}
       {title > 0 && (
