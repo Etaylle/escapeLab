@@ -108,10 +108,13 @@ export function IntroOverlay({
   cue,
   view,
   skip,
+  watched = false,
 }: {
   cue: IntroCue;
   view: PlayerView;
   skip: () => void;
+  /** the opening is watched, not played (screens/Demo.tsx): nothing skips it, no line offers to */
+  watched?: boolean;
 }) {
   const now = useNow(DRAW_MS);
   const touch = useTapToSkip();
@@ -130,7 +133,9 @@ export function IntroOverlay({
       className={classesOf(cue, phase)}
       onPointerDown={(e) => {
         e.preventDefault();
-        skip();
+        if (!watched) {
+          skip();
+        }
       }}
     >
       {black > 0 && <div className="intro-black" style={{ opacity: black }} />}
@@ -139,7 +144,7 @@ export function IntroOverlay({
         <Bars
           shown={barsIn(cue, now)}
           subtitle={subtitle}
-          hint={hintShown(cue, now) ? skipLine(view, touch) : null}
+          hint={!watched && hintShown(cue, now) ? skipLine(view, touch) : null}
         />
       )}
       {title > 0 && (

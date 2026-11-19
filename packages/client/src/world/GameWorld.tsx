@@ -97,6 +97,8 @@ import {
   followServer,
   newSim,
   walk,
+  watchSelf,
+  type WalkSound,
   type Sim,
 } from './sim.js';
 import { doorMoved, HEAR_EVERY_S, hearCrew, spatialProbe, stopSpatial } from './spatial.js';
@@ -129,6 +131,12 @@ interface Props {
   /** audience view: whole map revealed, no controls, no own avatar */
   spectator: boolean;
   /**
+   * the view is a seat's that this screen watches and does not play — the demo's audience on
+   * the own view of one of its crew —: the avatar goes where the room has that seat, and the
+   * world takes no key, no finger and no controller, offers no control and sends nothing
+   */
+  watched?: boolean;
+  /**
    * when the lights went out on this screen, epoch ms (coldOpen.ts
    * `useDarkSince`): the cold open runs from there; null while the power is on
    */
@@ -159,6 +167,16 @@ interface Props {
   /** hears the server as it speaks (ws.ts): E's answers; none for the audience, who press none */
   listen?: Connection['listen'];
 }
+
+/**
+ * Whether this screen plays the seat it shows — and so has the world's controls, streams where
+ * it stands and reads the world's tips: not the audience, nor a screen that watches a seat.
+ */
+const plays = (props: Pick<Props, 'spectator' | 'watched'>): boolean =>
+  !props.spectator && props.watched !== true;
+
+/** Whether this screen shows a seat it does not play (`Props.watched`). */
+const watchesSeat = (props: Pick<Props, 'watched'>): boolean => props.watched === true;
 
 /** The latest of what the world's loop and its listeners read, as the component last rendered. */
 interface Live extends Latest {
@@ -622,24 +640,11 @@ function step(loop: Loop, dt: number, now: number, map: WorldMap): void {
   // Spectators own no avatar, so every streamed position is "someone else".
   const youId = spectator ? '' : view.you.id;
   const run = view.startedAt;
-  if (spectator) {
-    sim.cam.x = map.width / 2;
-    sim.cam.y = map.height / 2;
-    // The audience steers nothing.
-    sim.pad = NO_STEER;
-  } else {
-    followServer(sim, loop.positions.current, map, youId, run);
-    // A controller steers as the keys do (input/padRuntime.ts).
-    sim.pad = padSteer();
-  }
-  // The opening holds the avatar where the run put it: no step, no position going out.
-  sim.held = heldBack(loop.live.current);
-  if (sim.held) {
-    sim.keys.clear();
-  }
-  const sound = walk(sim, map, dt, loop.live.current.locked || sim.held);
+  // The crew REMOTE_DELAY_MS in the past, where their samples put them (trail.ts).
+  const drawnAt = serverAt(now) - REMOTE_DELAY_MS;
+  const sound = loop.watched === true ? watchSeat(loop, map, drawnAt) : walkSelf(loop, map, dt);
   sim.selfAt = now;
-  if (!spectator) {
+  if (!spectator && loop.watched !== true) {
     pressWhenInReach(pressWorld(loop), performance.now());
   }
   if (sound === 'bump') {
@@ -647,8 +652,6 @@ function step(loop: Loop, dt: number, now: number, map: WorldMap): void {
   } else if (sound !== null) {
     footstep(sound === 'sprint');
   }
-  // The crew REMOTE_DELAY_MS in the past, where their samples put them (trail.ts).
-  const drawnAt = serverAt(now) - REMOTE_DELAY_MS;
   followOthers(sim, positionsOf(loop.positions.current, run), youId, drawnAt);
   slideDoors(sim, map, spectator ? null : sim.self);
   if (map !== sim.seen) {
@@ -662,6 +665,49 @@ function step(loop: Loop, dt: number, now: number, map: WorldMap): void {
     follow(sim, dt, loop.insets.top, loop.live.current.reduced);
   }
   sim.time += dt;
+}
+
+/**
+ * The frame's walk of a seat watched (`Props.watched`): where the room has it, a moment ago as
+ * the rest of the crew is drawn; another seat on air is a first look at the lab — what that
+ * seat had found before is no news on this screen (`firstLook`).
+ */
+function watchSeat(loop: Loop, map: WorldMap, at: number): WalkSound | null {
+  const { sim } = loop;
+  const view = loop.live.current.view;
+  if (sim.watching !== null && sim.watching !== view.you.id) {
+    sim.seen = null;
+  }
+  sim.pad = NO_STEER;
+  sim.keys.clear();
+  sim.held = false;
+  const seat = { youId: view.you.id, run: view.startedAt };
+  return watchSelf(sim, loop.positions.current, map, seat, at);
+}
+
+/**
+ * The frame's walk of this screen's own avatar, by the keys and the controller — none for the
+ * audience, whose camera stands over the middle of the lab.
+ */
+function walkSelf(loop: Loop, map: WorldMap, dt: number): WalkSound | null {
+  const { sim, spectator } = loop;
+  const view = loop.live.current.view;
+  if (spectator) {
+    sim.cam.x = map.width / 2;
+    sim.cam.y = map.height / 2;
+    // The audience steers nothing.
+    sim.pad = NO_STEER;
+  } else {
+    followServer(sim, loop.positions.current, map, view.you.id, view.startedAt);
+    // A controller steers as the keys do (input/padRuntime.ts).
+    sim.pad = padSteer();
+  }
+  // The opening holds the avatar where the run put it: no step, no position going out.
+  sim.held = heldBack(loop.live.current);
+  if (sim.held) {
+    sim.keys.clear();
+  }
+  return walk(sim, map, dt, loop.live.current.locked || sim.held);
 }
 
 /**
@@ -939,6 +985,7 @@ function useWorldLoop({ props, refs, live, alarm, setWheel, setControlsReach }: 
       kit,
       sim,
       spectator: props.spectator,
+      watched: watchesSeat(props),
       touchPad,
       insets,
       live,
@@ -954,14 +1001,16 @@ function useWorldLoop({ props, refs, live, alarm, setWheel, setControlsReach }: 
     };
     refs.interactRef.current = () => tryInteract(loop);
     refs.dropRef.current = () => dropItem(loop);
-    // An audience connection watches only: no controls, no position stream.
-    const unlisten = props.spectator ? null : listen(loop, setWheel);
-    const unping = props.spectator ? null : onPadPing(() => padPing(loop));
+    // An audience connection watches only, and so does a screen on a seat it does not play:
+    // no controls, no position stream.
+    const watches = !plays(props);
+    const unlisten = watches ? null : listen(loop, setWheel);
+    const unping = watches ? null : onPadPing(() => padPing(loop));
     const unhear = props.listen?.({
       message: (msg) => hearAnswer(sim.presses, msg, performance.now()),
       closed: () => undefined,
     });
-    const posTimer = streamPositions(sim, props.spectator, (msg) => live.current.send(msg));
+    const posTimer = streamPositions(sim, watches, (msg) => live.current.send(msg));
     const traced = traceFrames(loop);
     const tracedGraphics = traceGraphics(loop);
     const profiled = profilePasses(kit);
@@ -1205,7 +1254,7 @@ interface WorldState {
  * GameWorld renders from, in the order React keeps the hooks.
  */
 function useWorld(props: Props): WorldState {
-  const { view, spectator, darkSince, inputLocked, holdTips } = props;
+  const { view, darkSince, inputLocked, holdTips } = props;
   const finale = props.finale ?? null;
   const station = props.station ?? null;
   const [wheel, setWheel] = useState<Wheel>(null);
@@ -1244,7 +1293,7 @@ function useWorld(props: Props): WorldState {
       simRef.current?.keys.clear();
     }
   }, [inputLocked, live]);
-  const tip = useWorldTip(view, station, spectator, holdTips, finale);
+  const tip = useWorldTip(view, station, !plays(props), holdTips, finale);
   usePowerHum(darkSince, live);
   // The world answers an alarm (alarm.ts): the klaxon while the run goes on — the alarm that
   // ends it has the ending's own sound, and an open device sounds its own horn instead — the
@@ -1280,6 +1329,7 @@ function RedEdge({ view, ending }: { view: PlayerView; ending: boolean }) {
 
 export function GameWorld(props: Props) {
   const { spectator } = props;
+  const played = plays(props);
   const { refs, live, tip, alarmClass, wheel, setWheel, controlsReach } = useWorld(props);
   const [writing, setWriting] = useState(false);
   // One box over the world's foot at a time: the field shuts the quick chat's wheel.
@@ -1297,7 +1347,7 @@ export function GameWorld(props: Props) {
         className={`world-canvas ${spectator ? 'world-canvas--wide' : ''}`}
       />
       {!spectator && <RedEdge view={props.view} ending={props.finale != null} />}
-      {!spectator && <NoLink players={props.view.players} />}
+      {played && <NoLink players={props.view.players} />}
       {tip !== null && (
         // Just above the control cluster, wherever it reaches: never on the
         // avatar under the objective bar, nor on the minimap.
@@ -1305,7 +1355,7 @@ export function GameWorld(props: Props) {
           {tip.text}
         </div>
       )}
-      {!spectator && (
+      {played && (
         <WorldControls
           refs={refs}
           live={live}
@@ -1322,7 +1372,7 @@ export function GameWorld(props: Props) {
           onMove={(move) => moveWheel(props.send, setWheel, move)}
         />
       )}
-      {!spectator && (
+      {played && (
         <WorldChat
           players={props.view.players}
           send={props.send}

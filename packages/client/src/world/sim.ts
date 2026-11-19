@@ -62,6 +62,11 @@ export interface Sim {
   /** the run `self` was placed for, by its `startedAt`; null before the first frame */
   run: number | null;
   self: { x: number; y: number; facing: number; moving: boolean };
+  /**
+   * the seat `self` stands for where this screen watches a seat and plays none (`watchSelf`), by
+   * its player id; null on a player's own screen
+   */
+  watching: string | null;
   /** when `self` was true: the frame it was walked in, on the page's timeline (performance.now) */
   selfAt: number;
   /** what this client streamed lately: its own steps coming back are no correction */
@@ -142,6 +147,7 @@ export function newSim(topCss: number): Sim {
   return {
     run: null,
     self: { x: 0, y: 0, facing: 0, moving: false },
+    watching: null,
     selfAt: 0,
     streamed: [],
     serverSpot: null,
@@ -211,6 +217,59 @@ export function followServer(
   if (back !== null) {
     Object.assign(sim.self, back);
   }
+}
+
+/**
+ * A seat watched, not played — the demo's audience on the own view of one of its crew —: `self`
+ * is where that seat's samples put it at `at` (server time, as `followOthers` draws every other
+ * figure), and no key walks it. A new run, or another seat on air (`youId`), stands the camera
+ * on it at once. Returns the frame's footfall, if any.
+ */
+export function watchSelf(
+  sim: Sim,
+  known: KnownPositions,
+  map: WorldMap,
+  seat: { youId: string; run: number | null },
+  at: number,
+): WalkSound | null {
+  const { youId, run } = seat;
+  const fresh = sim.run !== run || sim.watching !== youId;
+  const drawn = seatDrawn(sim, positionsOf(known, run)[youId], youId, at);
+  if (drawn === null && !fresh) {
+    return null;
+  }
+  const facing = sim.self.facing;
+  const spot = drawn ?? { ...startingSpot(known, youId, map, run), facing, moving: false };
+  const covered = Math.hypot(spot.x - sim.self.x, spot.y - sim.self.y);
+  const { x, y, moving } = spot;
+  Object.assign(sim.self, { x, y, moving, facing: spot.facing });
+  if (fresh) {
+    sim.others.delete(youId);
+    Object.assign(sim, { run, watching: youId, room: null, lead: { x: 0, y: 0 }, pushing: false });
+    sim.cam.x = x;
+    sim.cam.y = y;
+    return null;
+  }
+  return moving && covered > 0 ? gaitOf(sim, covered, false) : null;
+}
+
+/**
+ * Where the samples of the seat `youId` put it at `at`, `pos` being the room's latest word on
+ * it (taken into its trail); null while the room has said nothing of it.
+ */
+function seatDrawn(
+  sim: Sim,
+  pos: RelayedPosition | undefined,
+  youId: string,
+  at: number,
+): Pick<RelayedPosition, 'x' | 'y' | 'facing' | 'moving'> | null {
+  if (pos === undefined) {
+    return null;
+  }
+  const trail = sim.trails.get(youId) ?? newTrail();
+  sim.trails.set(youId, trail);
+  hear(trail, pos);
+  return drawnAt(trail, at) ?? pos;
 }
 
 /** The tiles the four corners of an avatar's body at (x, y) stand on, as [x, y]. */

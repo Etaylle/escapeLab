@@ -3,6 +3,7 @@ import type {
   AccountView,
   ClientMessage,
   CrewPass,
+  DemoShot,
   DronePosition,
   LoginDone,
   PlayerView,
@@ -106,6 +107,26 @@ export interface Restoring {
   comeback?: true;
 }
 
+/**
+ * What the demo room sends its audience beside the audience's view (server demo/host.ts): what
+ * is on air, and the own view of each seat this connection was sent, by player id — the seat on
+ * air, or the one pinned.
+ */
+export interface DemoFeed {
+  shot: DemoShot | null;
+  views: Record<string, PlayerView>;
+}
+
+/** The demo's feed after `msg` of it. */
+export function demoFeedWith(
+  feed: DemoFeed,
+  msg: Extract<ServerMessage, { kind: 'demo-shot' | 'demo-view' }>,
+): DemoFeed {
+  return msg.kind === 'demo-shot'
+    ? { ...feed, shot: msg.shot }
+    : { ...feed, views: { ...feed.views, [msg.seat]: msg.view } };
+}
+
 export interface Connection {
   /** socket status; the game itself lives in `view` */
   status: LineStatus;
@@ -114,6 +135,8 @@ export interface Connection {
   view: PlayerView | null;
   /** set instead of `view` when this connection is watching, not playing */
   spectatorView: SpectatorView | null;
+  /** the demo room's feed, while this connection watches it (`DemoFeed`) */
+  demo: DemoFeed;
   /** this device's ask for a seat by its name while the crew has not answered it; null for none */
   takeover: Takeover | null;
   /** the room the join screen's card went back to, while the server waits to take it up again */
@@ -238,6 +261,8 @@ export interface Page {
   setTakeover: (takeover: Takeover | null) => void;
   setRestoring: (restoring: Restoring | null) => void;
   setWatching: (count: number) => void;
+  /** a message of the demo's feed came (`DemoFeed`) */
+  noteDemo: (msg: Extract<ServerMessage, { kind: 'demo-shot' | 'demo-view' }>) => void;
   setError: (message: string) => void;
   refuse: (message: string, of: ClientMessage['kind'] | null) => void;
   /** an answer to an ask of a login came (`LoginNews`) */
@@ -418,9 +443,17 @@ function startOver(next: CrewPass, account: AccountView | null, page: Page): voi
   page.startOver();
 }
 
-/** Takes in what the world streams past React: where everybody stands, the pings, the chat. */
+/**
+ * Takes in what the world streams past React: where everybody stands, the pings, the chat — and
+ * the demo room's feed, which React does render (`DemoFeed`).
+ */
 function streamNews(msg: ServerMessage, page: Page): void {
   switch (msg.kind) {
+    case 'demo-shot':
+    case 'demo-view':
+      clock.stamped(msg.at);
+      page.noteDemo(msg);
+      break;
     case 'positions':
       page.positions.current = { run: msg.run, players: msg.players };
       page.drones.current = msg.drones;
@@ -813,6 +846,7 @@ type Shown = Pick<
   Connection,
   | 'view'
   | 'spectatorView'
+  | 'demo'
   | 'takeover'
   | 'restoring'
   | 'rooms'
@@ -843,6 +877,7 @@ function usePage(): { shown: Shown; page: Page; clearError: () => void } {
   const [restoring, setRestoring] = useState<Restoring | null>(null);
   const [roomCode, setRoomCode] = useState<string | null>(roomOfTab);
   const [watching, setWatching] = useState(0);
+  const [demo, setDemo] = useState<DemoFeed>({ shot: null, views: {} });
   const [error, setError] = useState<string | null>(null);
   const [refusal, setRefusal] = useState<Refusal | null>(null);
   const [login, setLogin] = useState<LoginNews | null>(null);
@@ -862,6 +897,7 @@ function usePage(): { shown: Shown; page: Page; clearError: () => void } {
     setTakeover,
     setRestoring,
     setWatching,
+    noteDemo: (msg) => setDemo((feed) => demoFeedWith(feed, msg)),
     setError,
     refuse: (message, of) => setRefusal((last) => ({ seq: (last?.seq ?? 0) + 1, message, of })),
     noteLogin: (done) => setLogin((last) => ({ seq: (last?.seq ?? 0) + 1, done })),
@@ -874,7 +910,7 @@ function usePage(): { shown: Shown; page: Page; clearError: () => void } {
   };
   const shown = { view, spectatorView, takeover, restoring, rooms, seat, account, myRuns, login };
   return {
-    shown: { ...shown, roomCode, watching, error, refusal },
+    shown: { ...shown, roomCode, watching, demo, error, refusal },
     page,
     clearError: () => setError(null),
   };

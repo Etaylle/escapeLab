@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useReducer, useRef } from 'react';
 import type { ClientMessage, PlayerView } from '@escapelab/core';
 import { typing } from '../../hooks.js';
+import { keysDeaf } from '../../input/deaf.js';
 import { usePause } from '../../menuLayer.js';
 import { addProbes } from '../../probes.js';
 import { traceRequested } from '../frameTrace.js';
@@ -196,6 +197,7 @@ function useSkipKey(kept: React.MutableRefObject<{ cue: IntroCue | null }>, skip
   covered.current = usePause().open;
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
+      if (keysDeaf()) return;
       if (!skipKey(e, covered.current) || skipAt(kept.current.cue, Date.now()) === null) return;
       e.preventDefault();
       e.stopImmediatePropagation();

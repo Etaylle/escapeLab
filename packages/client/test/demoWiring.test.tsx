@@ -11,7 +11,7 @@ import { storage } from './page.js';
 
 /**
  * The demo's wiring, where the screens hand its parts on: the menu's „Demo" reaching the line,
- * the link taken by the first menu, the label on the demo room's audience alone, the link read as
+ * the link taken by the first menu, the demo's own screen for the demo room alone, the link read as
  * the page comes up, and the audience's ways tall enough for a finger. Each screen is rendered as
  * the app renders it, its effects run as the page runs them.
  */
@@ -47,7 +47,15 @@ vi.mock('../src/screens/MainMenu.js', async (importOriginal) => ({
 vi.mock('../src/screens/Spectate.js', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   SpectateScreen: (props: { demo?: boolean }) => {
-    stage.demo.push(props.demo);
+    stage.demo.push(props.demo === true ? 'the demo’s audience' : 'an audience');
+    return null;
+  },
+}));
+
+vi.mock('../src/screens/Demo.js', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  DemoScreen: (props: { feed: unknown }) => {
+    stage.demo.push(props.feed);
     return null;
   },
 }));
@@ -160,19 +168,22 @@ describe('the start screen and the demo', () => {
   });
 });
 
+/** The demo's feed as a connection keeps it. */
+const FEED = { shot: null, views: {} };
+
 /** The app's screen for a connection that watches the room `roomCode`. */
 function watching(roomCode: string): unknown[] {
-  const conn = { spectatorView: {}, roomCode } as unknown as Connection;
+  const conn = { spectatorView: {}, roomCode, demo: FEED } as unknown as Connection;
   const props = { conn, finale: null } as unknown as Parameters<typeof Screens>[0];
   renderToStaticMarkup(<Screens {...props} />);
   return stage.demo.splice(0);
 }
 
 describe('the audience’s screen as the app shows it', () => {
-  it('is the demo’s for the demo room, and for no other', () => {
-    expect(watching(DEMO_CODE)).toEqual([true]);
-    expect(watching('QX7R')).toEqual([false]);
-    expect(watching('DEMO2')).toEqual([false]);
+  it('is the demo’s own, with its feed, for the demo room — and for no other', () => {
+    expect(watching(DEMO_CODE)).toEqual([FEED]);
+    expect(watching('QX7R')).toEqual(['an audience']);
+    expect(watching('DEMO2')).toEqual(['an audience']);
   });
 });
 

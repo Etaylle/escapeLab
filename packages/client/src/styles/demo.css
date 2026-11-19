@@ -1,0 +1,99 @@
+/*
+ * The demo room's audience (screens/Demo.tsx): the picture on air — a seat's own screen, or the
+ * whole lab — over the line that says who is on air, and the viewer's own choice of picture.
+ */
+
+.demo {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.content--stage .demo {
+  height: 100%;
+  min-height: 0;
+}
+
+.demo-picture {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
+.demo-picture > .game,
+.demo-picture > .spectate,
+.demo-picture > .demo-end {
+  flex: 1;
+  min-width: 0;
+}
+
+.demo-end {
+  overflow-y: auto;
+}
+
+/* The line under the picture: the label, who is on air, the choice, the way out. */
+.demo-third {
+  flex: none;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  padding: 6px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg-2);
+}
+
+.demo-third .demo-label {
+  margin-left: 0;
+}
+
+.demo-onair {
+  flex: 1 1 16ch;
+  margin: 0;
+  color: var(--text);
+  font-size: calc(16px * var(--text-scale));
+  line-height: 1.3;
+}
+
+.demo-onair strong {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.demo-pins {
+  display: flex;
+  gap: 6px;
+}
+
+.demo-pin {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: calc(14px * var(--text-scale));
+  cursor: pointer;
+}
+
+.demo-pin--on {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.demo-leave {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+}
+
+/* The lab from above stands in the demo's frame: its own way out is the line's. */
+.demo .spectate-foot button.link {
+  display: none;
+}
