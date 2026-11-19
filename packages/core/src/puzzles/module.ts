@@ -10,8 +10,9 @@ import type { Rng } from '../rng.js';
  * one file in this folder plus one entry in ./index.ts. A station that runs on
  * the clock adds what is optional: `dueAt`, when the room has to wake it, and
  * `expire` for what runs out — or `elapse`, where the clock also raises alarms
- * and holds on who stands at its consoles. The reducer asks a module for none
- * of them that leaves them out, and for none while its station is not armed.
+ * and holds on who stands at its consoles —, and `resume` for how it comes back from an
+ * emergency. The reducer asks a module for none of them that leaves them out, and for none
+ * while its station is not armed.
  */
 
 export interface ManualSection {
@@ -336,6 +337,16 @@ export interface PuzzleModule<
    * runs on the clock, or only what `expire` drops.
    */
   elapse?(def: Def, state: State, ctx: PuzzleContext): ApplyResult<State>;
+  /**
+   * The station as it comes back at `at` from an emergency it rested through — no input taken,
+   * no clock run, its state kept (state.ts `resting`): everything the crew had done is done, and
+   * whatever was under way on the clock is called off without an alarm, a fault or a solve — a
+   * wave in the air, a pulse in the duct, a press in its window —, so that the station waits at
+   * its last safe point. `state` itself where nothing was under way. Left out where the state
+   * holds no moment and nothing in flight: the station comes back as it was. A module with a
+   * clock (`dueAt`, `elapse`) has to have it.
+   */
+  resume?(def: Def, state: State, at: number): State;
   /** place-filtered projection — THE place where asymmetry is enforced for this module */
   view(def: Def, state: State, viewer: Viewer, ctx: ViewContext): View;
   /**

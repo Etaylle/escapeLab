@@ -196,6 +196,8 @@ const gameStateSchema = z.looseObject({
   // Snapshots from before free order carry no pick: their runs are chains, which never pick.
   picked: z.boolean().default(false),
   puzzleState: typed<PuzzleState>().nullable(),
+  // A snapshot of a build before stations rested through an emergency: none rests in it.
+  resting: typed<PuzzleState>().nullable().default(null),
   seed: z.number().nullable(),
   roomSeed: z.number().nullable(),
   dailyOn: z.boolean(),

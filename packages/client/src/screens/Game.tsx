@@ -52,7 +52,7 @@ import { IntroOverlay } from '../world/intro/IntroOverlay.js';
 import { airFrom, cutIn, hudBackAt, hudHeld, type IntroCue } from '../world/intro/sequence.js';
 import { useIntro, type Intro } from '../world/intro/useIntro.js';
 import { coversArmed } from '../world/interact.js';
-import { armedGoal, isArmed, known } from '../world/known.js';
+import { armedGoal, isArmed, known, restingTitle } from '../world/known.js';
 import { dueParts } from '../world/markers.js';
 import { startingSpot, type KnownPositions } from '../world/movement.js';
 import { airNotice } from '../world/onAir.js';
@@ -742,6 +742,21 @@ function useColdOpen(view: PlayerView, cut: boolean, hudBack: number | null): Co
   return { darkSince, dark, intro, flashUntil, gates };
 }
 
+/**
+ * What the goal line says after the title of a station resting through an emergency: it is not
+ * lost, and what was done at it stands.
+ */
+export const RESTING_GOAL = 'ruht — Stand gehalten';
+
+/**
+ * The goal while no station is open: the one resting through an emergency, said so, else the
+ * armed one (`armedGoal`); null where none is armed.
+ */
+function waitingGoal(view: PlayerView, map: MapView): string | null {
+  const resting = restingTitle(map);
+  return resting === null ? armedGoal(view, map) : `${resting} ${RESTING_GOAL}`;
+}
+
 /** The goal line: the station up, the way out, what the crew still has to bring. */
 interface Goal {
   title: string;
@@ -775,7 +790,7 @@ function goalOf(view: PlayerView, map: MapView, self: Point): Goal {
         ? view.puzzle.title
         : out
           ? 'NOTAUSGANG ENTRIEGELT'
-          : (armedGoal(view, map) ?? 'Alle Stationen erledigt'),
+          : (waitingGoal(view, map) ?? 'Alle Stationen erledigt'),
     exitCall: view.puzzle === null && out,
     missing: out || errands.length === 0 ? null : errands.join(' · '),
     hands: handsLine(view, map),

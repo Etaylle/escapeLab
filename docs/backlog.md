@@ -428,8 +428,18 @@ die Entscheidung.
   gepatcht: nach dem Playtest entscheiden, ob die Prototypen eine Hand mehr bekommen (Platte bis
   zur Lösung, Teil, zweite Quelle) oder ihre Crew kleiner wird.
 
-### N-7 Ein Notfall wirft den Fortschritt der offenen Station weg — Status: offen (Entscheidung Uros) · Größe: M
+### N-7 Ein Notfall wirft den Fortschritt der offenen Station weg — Status: im PR (N-resume) · Größe: M
 
+- Entscheidung Uros 2026-11-19: Die Crew behält, was sie sich erarbeitet hat. Die offene Station
+  ruht im Notfall (`GameState.resting`), nimmt nichts an, ihre Uhr steht; danach ist sie ohne
+  zweites Einschalten wieder da. Was erledigt war, bleibt; was auf einer Uhr unterwegs war,
+  verfällt ohne Alarm (Vertragspunkt `resume(def, state, at)`; Tabelle je Modul in
+  `docs/gameplay.md`, „An emergency and the open station"). Anders als unten skizziert verschiebt
+  kein Modul Zeiten um die Notfalldauer: Unterwegs-Zustände werden abgesagt, nicht eingefroren.
+- Bewusst so: Ein zu sperrendes Paket, das zwischen dem letzten Tick des Raums und dem Beginn
+  des Notfalls den Kern erreicht, verfällt mit seiner Welle ohne Alarm. Die Zugangskontrolle
+  läuft auf der Wanduhr weiter: Tokenperioden rücken vor, abgelaufene Sperren sind danach gelöst.
+- Vorher (Analyse, bleibt als Begründung stehen):
 - Absicht, kein Versehen: `startSabotage` (core `actions.ts`) setzt `puzzleState` auf `null`,
   seit es Notfälle gibt (aa184f7). `puzzleState` ist zugleich „die Station ist an": Ohne ihn
   zeigt keine Sicht ein Panel, die Uhr der Station (`dueAt`) ruht, die Drohnen-Deckung
