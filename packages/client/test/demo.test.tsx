@@ -175,7 +175,7 @@ function audience(demo: boolean): string {
 }
 
 describe('the demo room’s audience', () => {
-  it('is labelled „Demo" beside the mission’s name, over a line that the plant plays itself', () => {
+  it('is labelled „Demo" beside the mission’s name, over a line of the plant’s', () => {
     const html = audience(true);
     expect(html).toContain(`Blackout im Labor<span class="demo-label">${DEMO_LABEL}</span></h1>`);
     expect(html).toContain(`<p class="demo-line">${DEMO_LINE}</p>`);

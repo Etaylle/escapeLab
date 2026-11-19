@@ -1026,7 +1026,8 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   Laptops etwas gestartet wird.
 - „Demo" im Hauptmenü (nach „Offene Runden") und der Link `/?demo=1` führen ohne Namen, Konto und
   Code ins Publikum des Vorführraums (Code `DEMO`), den der Server selbst spielt
-  (`server/src/demo/`): „HCW Bachelor" und „HCW Master" an eigenen Leitungen, die nur sagen, was eine Seite sagt
+  (`server/src/demo/`): „HCW Bachelor" und „HCW Master" an eigenen Leitungen, die nur sagen, was
+  eine Seite sagt
   (`pos`, `interact`, `puzzle-input` …), und nur wissen, was ihre zwei Sichten und die
   Missionsdatei hergeben; jede Station löst `solve()` des Moduls über diese Sichten. Gehen im
   Spielertempo, Quelle erst lesen, Eingaben im Abstand von 3 bis 5,2 s, an den Drohnen vorbei von

@@ -106,12 +106,13 @@ Figuren und den freien Plätzen — ein Klick auf *Beitreten* genügt, niemand m
 weitergeben. Laufende Runden erscheinen ebenfalls, dort führt der Knopf zum Zuschauen. Unter
 *Beitreten* bleibt ein Code-Feld für direkte Verabredungen, daneben *Zuschauen*. *Demo* führt
 ohne Namen, Konto und Code ins Publikum des Vorführraums, den der Server selbst spielt: „HCW
-Bachelor" und „HCW Master" fahren Blackout von der Eröffnung bis zur Luke, Lauf um Lauf, solange jemand zusieht;
+Bachelor" und „HCW Master" fahren Blackout von der Eröffnung bis zur Luke, Lauf um Lauf, solange
+jemand zusieht;
 derselbe Weg als Link ist `/?demo=1` (für einen QR-Code), „Zuschauen beenden" führt zurück ins
 Menü (`docs/gameplay.md`, „Die Demo"). Eine offene Demo-Seite fragt alle vier Minuten `/health`
 ab und hält so einen Server wach, der ohne Anfragen einschläft (Render Free: 15 Minuten); nach
-einem Neustart oder Verbindungsabbruch ist sie von selbst wieder im Publikum. Auf einem quer gehaltenen Handy fehlt der Punkt wie die
-Einstellungen: Für beide ist die Spalte dort zu kurz. Bindet ein
+einem Neustart oder Verbindungsabbruch ist sie von selbst wieder im Publikum. Auf einem quer
+gehaltenen Handy fehlt der Punkt wie die Einstellungen: Für beide ist die Spalte dort zu kurz. Bindet ein
 laufender Einsatz den Dienstausweis, steht seine Karte als erster Menüpunkt da. In die Lobby
 und zurück geht es durch die Schiebetüren des Labors; ab dem ersten Klick oder Tastendruck
 spielen Titelthema und Anlagenbrummen, in der Lobby leiser weiter. Die Endkarte spielt nach
@@ -389,7 +390,8 @@ in den Einstellungen auf einer eigenen Menüseite: ein anderes Paket hörbar, Vo
 Neuladen behalten) und `demo` (der Vorführraum: „Demo" im Menü eines Laptops, das Publikum mit
 dem Schild „Demo" und beiden Figuren, dann ein Handy über `/?demo=1`, hochkant und quer, zurück
 ins Menü, und der Server unter der zuschauenden Seite getötet und neu gestartet: sie ist ohne
-Neuladen wieder im Publikum); Blackout nennt alle acht im Log als ausgelassen. Der Rundgang selbst: `screens`
+Neuladen wieder im Publikum); Blackout nennt alle acht im Log als ausgelassen. Der Rundgang
+selbst: `screens`
 (Menü und sein Ton, Bestenliste, Lobby, der Start aus ihr), `intro` (die Eröffnung bis
 `blackout.png`) und `run` (die Mission bis zur Siegerkarte, nach dem gewonnenen Systemcheck die
 Einsätze des Kontos, sein Kennwort, die Anmeldung auf einem zweiten Gerät, der Kontowechsel und sein
