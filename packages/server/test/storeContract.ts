@@ -18,6 +18,7 @@ import {
   type SeatPass,
   type Store,
 } from '../src/store/store.js';
+import type { Ranking } from '../src/runStats.js';
 import { passFor } from './passes.js';
 
 /**
@@ -141,8 +142,17 @@ async function accountOfPass(store: Store, name: string): Promise<string | null>
   return (await store.findByIdentity(identityOf(name)))?.id ?? null;
 }
 
-/** Runs the contract against the store `open` opens, under `name`. */
-export function storeContract(name: string, open: () => Promise<Opened>): void {
+/** A ranking that keeps the runs of `mission` off the boards, as an older chain's are kept. */
+const without =
+  (mission: string): Ranking =>
+  (run) =>
+    run.missionId !== mission;
+
+/**
+ * Runs the contract against the store `open` opens, under `name` — its Bestenliste ranking
+ * every run, or the runs the ranking handed to `open` says.
+ */
+export function storeContract(name: string, open: (ranked?: Ranking) => Promise<Opened>): void {
   describe(`${name}: the runs`, () => {
     it('hands every run back whole, the oldest first', async () => {
       const { store } = await open();
@@ -184,6 +194,30 @@ export function storeContract(name: string, open: () => Promise<Opened>): void {
       const again = await reopen();
       expect(again.stats().runs).toBe(3);
       expect(counted(again)).toEqual(counted(store));
+    });
+  });
+
+  describe(`${name}: runs the ranking leaves out`, () => {
+    it('keeps them whole and in their crew’s runs, on no board, now and when opened anew', async () => {
+      const { store, reopen } = await open(without('blackout'));
+      await withAccounts(store, ['Anna', 'Ben']);
+      const old = finished({ at: DAY, seconds: 300 }, ['Anna', 'Ben']);
+      const ranked = finished({ mission: 'systemcheck', at: DAY + 1 }, ['Anna', 'Ben']);
+      await store.appendRun(old);
+      await store.appendRun(ranked);
+      for (const each of [store, await reopen()]) {
+        const stats = each.stats();
+        expect([stats.runs, stats.unranked]).toEqual([2, 1]);
+        expect(stats.mission('blackout')).toBeNull();
+        expect(stats.placeOf('blackout', DAY)).toBeNull();
+        expect(stats.all().map((mission) => mission.missionId)).toEqual(['systemcheck']);
+        // Nothing is deleted: the run is kept.
+        expect(await each.runs()).toEqual([old.report, ranked.report]);
+      }
+      // And it stays among the runs of whoever played it („Meine Einsätze").
+      const anna = (await store.findByIdentity(identityOf('Anna')))?.id ?? '';
+      const hers = await store.runsOfAccount(anna, 10);
+      expect(hers.runs.map(({ run }) => run.missionId)).toEqual(['systemcheck', 'blackout']);
     });
   });
 

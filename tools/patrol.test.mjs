@@ -13,6 +13,9 @@ import {
   headings,
   progressAt,
   spots,
+  LATE_S,
+  LATE_STEPS,
+  RUN,
   spottedOn,
   stretchOf,
 } from './patrol.mjs';
@@ -104,12 +107,14 @@ describe('headings and flyOn — the server’s patrol foretold', () => {
     assert.ok(back > 0 && track[back].x < 6.5);
   });
 
-  it('looks east on a waypoint, whichever way it came', () => {
+  it('keeps on a waypoint the look it came with, as the server’s drone does', () => {
+    // Flown south to (3,3): standing there it looks south still, not east (server drones.ts,
+    // which read the look off the step just taken until 18.11.2026 — atan2(0, 0)).
     const corner = { waypoints: tiles([3, 1], [3, 3], [1, 3]), speed: 1.25 };
     const track = flyOn(corner, { x: 3.5, y: 1.5, facing: Math.PI / 2 }, 1, 3);
     const there = track.filter((at) => near(at.x, 3.5) && near(at.y, 3.5));
-    assert.ok(there.length > 0);
-    assert.ok(there.every((at) => at.facing === 0));
+    assert.ok(there.length > 1);
+    assert.ok(there.every((at) => near(at.facing, Math.PI / 2)));
   });
 
   it('gives a flight for every waypoint a drone may be heading for', () => {
@@ -169,6 +174,71 @@ describe('spottedOn — a run past a drone', () => {
   });
 });
 
+describe('spottedOn — an avatar behind its pace', () => {
+  const beat = { waypoints: tiles([1, 2], [10, 2]), speed: 1 };
+  const westbound = [{ ...watcher, beat, at: { x: 9.5, y: 2.5, facing: Math.PI } }];
+  const crossing = tiles([2, 1], [2, 2], [2, 3]);
+
+  it('allows for one a second late, then for less where no gap is that wide', () => {
+    assert.equal(LATE_S, 1);
+    assert.deepEqual(LATE_STEPS, [1, 0.7, 0.4]);
+  });
+
+  it('calls no run clear that an avatar a second late would be seen on', () => {
+    const flying = flights(westbound, 12);
+    const clear = [];
+    for (let delay = 0; delay <= 6; delay += 0.1) {
+      if (spottedOn(crossing, flying, HALL, { delay }) !== null) {
+        continue;
+      }
+      clear.push(delay);
+      // Late by a second at the start, and late by a second on the slowest pace all along.
+      assert.equal(spottedOn(crossing, flying, HALL, { delay: delay + 1, late: 0 }), null);
+      const slower = { tile: [RUN.tile[1], RUN.tile[1] + 0.1], corner: [RUN.corner[1], 0.7] };
+      assert.equal(spottedOn(crossing, flying, HALL, { delay, late: 0, pace: slower }), null);
+    }
+    // Some moments are clear, and without the allowance more would be called so: it bites.
+    assert.ok(clear.length > 0);
+    const unguarded = Array.from({ length: 61 }, (_, i) => i / 10).filter(
+      (delay) => spottedOn(crossing, flying, HALL, { delay, late: 0 }) === null,
+    );
+    assert.ok(unguarded.length > clear.length);
+  });
+
+  it('sees an avatar late all along at a place the one on time has already left', () => {
+    // A corridor with a door south at (8,2): the drone comes east along it, the walker runs
+    // west down it and out through the door. On time it is through before the drone's eye
+    // reaches the door's tile; a second late it still stands in the corridor there.
+    const door = {
+      tiles: ['############', '#..........#', '########.###', '#..........#', '############'],
+      shut: new Set(),
+    };
+    const lane = { waypoints: tiles([1, 1], [10, 1]), speed: 1 };
+    const eastbound = [{ ...watcher, beat: lane, at: { x: 1.5, y: 1.5, facing: 0 } }];
+    const out = tiles([10, 1], [9, 1], [8, 1], [8, 2], [8, 3], [7, 3]);
+    const flying = flights(eastbound, 14);
+    const delay = 1.25;
+    assert.equal(spottedOn(out, flying, door, { delay, late: 0 }), null);
+    const seenAt = spottedOn(out, flying, door, { delay, late: 1 });
+    assert.notEqual(seenAt, null);
+    // Mid-walk, not at the end: the slowest run on time is in the doorway by then, and the
+    // walk's end lies behind the wall, where no allowance for standing longer finds it.
+    const inDoorway = delay + arrivals(out, RUN.tile[1], RUN.corner[1])[3];
+    assert.ok(seenAt > inDoorway, `${seenAt} s, in the doorway at ${inDoorway} s`);
+    assert.equal(spottedOn(out.slice(-1), flying, door, { hold: 14, late: 0 }), null);
+  });
+
+  it('foretells a drone setting out east from a waypoint it reached flying south', () => {
+    // It stands on (3,1) looking south, as it came, and turns east only as it sets out: whoever
+    // stands east of it is in its eye from that tick on, and not before.
+    const corner = { waypoints: tiles([3, 3], [3, 1], [9, 1]), speed: 1 };
+    const standing = [{ ...watcher, beat: corner, at: { x: 3.5, y: 1.5, facing: -Math.PI / 2 } }];
+    const east = tiles([6, 1]);
+    const seenAt = spottedOn(east, flights(standing, 3), HALL, { hold: 3, late: 0 });
+    assert.ok(seenAt !== null && seenAt > 0 && seenAt <= 3 * 0.08);
+  });
+});
+
 describe('havens and stretches', () => {
   const corridor = [{ ...watcher, beat: { waypoints: tiles([1, 1], [8, 1]), speed: 1 } }];
 
@@ -196,17 +266,32 @@ describe('havens and stretches', () => {
   });
 });
 
-describe('Blackout’s patrols, as the walkthrough plays its pinned plan past them', () => {
+describe('Blackout’s patrols, as the walkthrough plays its plans past them', () => {
   const read = (path) => JSON.parse(readFileSync(new URL(path, import.meta.url), 'utf8'));
   const { map, puzzles } = read('../missions/blackout.json');
-  const plan = read('fixtures/blackout-plan.json');
+  const plans = read('fixtures/blackout-plan.json').runs;
   const decor = new Set(map.decor.map((piece) => `${piece.x},${piece.y}`));
   const walkable = (x, y) => map.tiles[y]?.[x] === '.' && !decor.has(`${x},${y}`);
   const opener = ({ opensBy }) =>
     opensBy.kind === 'puzzle' ? opensBy.puzzleId : opensBy.untilSolved;
-  /** The doors shut and the drones awake while station `index` (0 the first) is up. */
-  function stage(index) {
-    const solved = puzzles.slice(0, index).map((puzzle) => puzzle.id);
+  /**
+   * The stations of a run that draws `drawn` at the Wechselplatz, in the run's order: the pool
+   * stands where its first member stands in the file, as the drawn one.
+   */
+  function runOf(drawn) {
+    const first = puzzles.findIndex((puzzle) => puzzle.pool !== undefined);
+    return puzzles
+      .map((puzzle, i) => (i === first ? puzzles.find((p) => p.id === drawn) : puzzle))
+      .filter((puzzle, i) => i === first || puzzle.pool === undefined);
+  }
+  /**
+   * The doors shut and the drones awake while station `index` (0 the first) of the run drawing
+   * `drawn` is up: a door opens with the station it names, or with the pool that station has.
+   */
+  function stage(index, drawn = plans[0].drawn) {
+    const solved = runOf(drawn)
+      .slice(0, index)
+      .flatMap((puzzle) => [puzzle.id, puzzle.pool]);
     const shut = new Set(
       map.doors.filter((door) => !solved.includes(opener(door))).map((d) => `${d.x},${d.y}`),
     );
@@ -218,35 +303,90 @@ describe('Blackout’s patrols, as the walkthrough plays its pinned plan past th
   const station = (puzzleId, console) =>
     map.stations.find((s) => s.puzzleId === puzzleId && s.console === console);
   const key = map.items.find((item) => map.manuals.some((m) => m.needsKey === item.id));
+  /** Where the plan works and reads at the station `plan` has at the Wechselplatz. */
+  const wechselOf = (plan) =>
+    ({
+      signalkette: {
+        'console A': station('signalkette', 'a'),
+        'console B': station('signalkette', 'b'),
+        clipboard: plan.places.klemmbrett,
+      },
+      frequenz: { radio: station('frequenz'), cabinet: plan.places.aktenschrank, key },
+      notstrom: {
+        box: station('notstrom', 'a'),
+        meter: station('notstrom', 'b'),
+        book: plan.places.wartungsbuch,
+      },
+    })[plan.drawn];
+
+  it('takes the run’s stations in the run’s order, whichever the Wechselplatz has', () => {
+    const drawn = plans.map((plan) => plan.drawn).sort();
+    assert.deepEqual(drawn, ['frequenz', 'notstrom', 'signalkette']);
+    for (const plan of plans) {
+      assert.deepEqual(
+        runOf(plan.drawn).map((puzzle) => puzzle.id),
+        ['notlicht', 'anlauf', 'paketfilter', 'subsysteme', plan.drawn, 'reaktorstart'],
+      );
+    }
+    // The reactor's doors open with the Wechselplatz, not before.
+    const reactor = map.doors.find((door) => door.id === 'reaktortuer');
+    for (const plan of plans) {
+      assert.equal(stage(4, plan.drawn).sight.shut.has(`${reactor.x},${reactor.y}`), true);
+      assert.equal(stage(5, plan.drawn).sight.shut.has(`${reactor.x},${reactor.y}`), false);
+    }
+  });
 
   it('lets the crew work each station from the Serverraum on from a haven, and fetch parts', () => {
-    // Where the plan works, reads and fetches while each station is up: the Serverraum (3), the
-    // Frequenz (4), the reactor (5).
-    const places = [
-      [3, { terminal: station('subsysteme', 'a'), rack: station('subsysteme', 'b') }],
-      [3, { locker: plan.places.spind }],
-      [4, { radio: station('frequenz'), cabinet: plan.places.aktenschrank, key }],
-      [5, { reactor: station('reaktorstart'), ...plan.ersatzsicherung }],
-    ];
-    for (const [index, spots] of places) {
-      const { sight, drones } = stage(index);
-      const safe = havens(drones, sight);
-      for (const [what, spot] of Object.entries(spots)) {
-        const round = [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]].map(([dx, dy]) => ({
-          x: spot.x + dx,
-          y: spot.y + dy,
-        }));
-        assert.ok(
-          round.some((t) => walkable(t.x, t.y) && safe.has(`${t.x},${t.y}`)),
-          `no haven by the ${what} at ${spot.x},${spot.y} while station ${index + 1} is up`,
-        );
+    // Where each plan works, reads and fetches while each station is up: the Serverraum (3), the
+    // station its seed draws at the Wechselplatz (4), the reactor (5).
+    for (const plan of plans) {
+      const places = [
+        [3, { terminal: station('subsysteme', 'a'), rack: station('subsysteme', 'b') }],
+        [3, { locker: plan.places.spind }],
+        [4, wechselOf(plan)],
+        [5, { reactor: station('reaktorstart'), ...plan.ersatzsicherung }],
+      ];
+      for (const [index, spots] of places) {
+        const { sight, drones } = stage(index, plan.drawn);
+        const safe = havens(drones, sight);
+        for (const [what, spot] of Object.entries(spots)) {
+          const round = [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]].map(([dx, dy]) => ({
+            x: spot.x + dx,
+            y: spot.y + dy,
+          }));
+          assert.ok(
+            round.some((t) => walkable(t.x, t.y) && safe.has(`${t.x},${t.y}`)),
+            `no haven by the ${what} at ${spot.x},${spot.y} while station ${index + 1} is up ` +
+              `(seed ${plan.seed}, ${plan.drawn})`,
+          );
+        }
       }
     }
   });
 
-  it('watches the way into the Serverraum and the south way to the reactor', () => {
+  it('lays the clipboard and the cabinet where no patrol looks, wherever a seed puts them', () => {
+    // Both are read with both patrols out: every spot one may lie on is a haven, and so is
+    // every tile beside it a reader may stand on (the server's blackoutParked test holds the
+    // whole reach to it) — the clipboard at the Flur's west end, past the Flurwache's reach.
+    const { sight, drones } = stage(4, 'signalkette');
+    const safe = havens(drones, sight);
+    for (const station of ['signalkette', 'frequenz']) {
+      const source = map.manuals.find((manual) => manual.puzzleIds.includes(station));
+      assert.ok(source.spots.length > 1);
+      for (const spot of source.spots) {
+        for (const [dx, dy] of [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          const [x, y] = [spot.x + dx, spot.y + dy];
+          assert.equal(!walkable(x, y) || safe.has(`${x},${y}`), true, `${x},${y} is watched`);
+        }
+      }
+    }
+  });
+
+  it('sleeps till the Serverraum is solved, then watches the way out of it and the south way', () => {
+    // Nobody is caught at the Paketfilter's consoles in the Flur, nor on the way in.
+    assert.deepEqual(stage(3).drones, []);
     const schott = map.doors.find((door) => door.id === 'serverschott');
-    const flur = havens(stage(3).drones, stage(3).sight);
+    const flur = havens(stage(4).drones, stage(4).sight);
     // The Flur's middle in front of the Serverschott, and the camera plate beside it.
     assert.equal(flur.has(`${schott.x},${schott.y + 1}`), false);
     const plate = map.plates.find((p) => p.id === 'kameraplatte');

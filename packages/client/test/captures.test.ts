@@ -29,7 +29,7 @@ import { noteRoom } from '../src/screens/PinnedNote.js';
 
 /**
  * The capture templates on the real Blackout: its four sources as their rules print, the
- * Serverraum's terminal and the Laborkennung as the seed the walkthrough pins (5) deals them —
+ * Serverraum's terminal and the Laborkennung as the seed the walkthrough pins (12) deals them —
  * the plan of tools/fixtures/blackout-plan.json — and the notes of the last shift as written.
  * Every capture holds the exact data a player needs there and nothing else, in twelve lines at
  * most with its head.
@@ -43,10 +43,19 @@ function missionOf(file: string): Mission {
 
 const blackout = missionOf('blackout.json');
 
-/** The seed-5 plan the walkthrough carries: the terminal's table, the serial. */
-const plan = JSON.parse(
-  readFileSync(new URL('../../../tools/fixtures/blackout-plan.json', import.meta.url), 'utf8'),
-) as { seed: number; serial: string; subsysteme: { rows: ServerRow[] } };
+/** A run of the plans the walkthrough carries: its seed, the terminal's table, the serial. */
+interface PlannedRun {
+  seed: number;
+  serial: string;
+  subsysteme: { rows: ServerRow[] };
+}
+
+/** The plan of the walkthrough's own seed, the first of the file's runs: seed 12. */
+const [plan = { seed: -1, serial: '', subsysteme: { rows: [] } }] = (
+  JSON.parse(
+    readFileSync(new URL('../../../tools/fixtures/blackout-plan.json', import.meta.url), 'utf8'),
+  ) as { runs: PlannedRun[] }
+).runs;
 
 /** Blackout started on the plan's seed by Anna and Ben, as the walkthrough starts it. */
 function started(): GameState {
@@ -131,9 +140,9 @@ describe('the Signalkette’s legend captured at Blackout’s Klemmbrett', () =>
 });
 
 describe('captures of Blackout’s sources, as their rules print', () => {
-  it('takes the Notstrom’s rules in the Handbuch as numbered lines, word for word', () => {
-    const capture = captureOf('buch-archiv', 'Schnittfolge');
-    expect(capture.head).toBe('Handbuch · Schnittfolge');
+  it('takes the Notstrom’s rules in the Wartungsbuch as numbered lines, word for word', () => {
+    const capture = captureOf('wartungsbuch', 'Schnittfolge');
+    expect(capture.head).toBe('Wartungsbuch · Schnittfolge');
     expect(capture.form).toBe('text');
     expect(capture.lines).toEqual([
       '1. Wenn die Laborkennung gerade endet, wird jeweils das Kabel mit der höchsten ' +
@@ -222,23 +231,23 @@ describe('captures of Blackout’s sources, as their rules print', () => {
 });
 
 describe('captures of what the seed deals', () => {
-  it('takes the terminal’s table as it opens on seed 5: Dienst, Status, Strom, Braucht', () => {
+  it('takes the terminal’s table as it opens on seed 12: Dienst, Status, Strom, Braucht', () => {
     const station = stationOf(blackout, 'subsysteme');
     const capture = captureAt(TERMINAL, terminalTaken(station, plan.subsysteme.rows));
     expect(shown(capture)).toEqual([
       'Terminal · Dienste',
       'Dienst  Status      Strom  Braucht',
-      'NETZ    RUNNING     AN     —',
-      'DNS     RUNNING     AN     NETZ',
-      'DB      FEHLER E23  AN     NETZ',
-      'AUTH    FEHLER E11  AUS    NETZ, DNS',
-      'WEB     FEHLER E42  AUS    AUTH, DB',
+      'NETZ    FEHLER E23  AUS    —',
+      'DNS     FEHLER E11  AUS    NETZ',
+      'DB      FEHLER E42  AN     NETZ',
+      'AUTH    RUNNING     AN     NETZ, DNS',
+      'WEB     RUNNING     AN     AUTH, DB',
       'MAIL    FEHLER E50  AN     AUTH, DNS',
     ]);
     expect(capture.form).toBe('table');
   });
 
-  it('takes the Laborkennung seed 5 deals as one line: serial, control lamps, cells', () => {
+  it('takes the Laborkennung seed 12 deals as one line: serial, control lamps, cells', () => {
     const { edgework } = started();
     if (edgework === null) {
       throw new Error('Blackout dealt no Laborkennung');
@@ -246,7 +255,7 @@ describe('captures of what the seed deals', () => {
     expect(edgework.serial).toBe(plan.serial);
     expect(shown(captureAt(SIGN, edgeworkTaken(edgework)))).toEqual([
       'Schild · Laborkennung',
-      'UZKM9-8 · CAR aus, SIG an, NSA aus · 4 Notstromzellen',
+      'LTEPL-3 · NSA aus, BOB an, CAR aus · 2 Notstromzellen',
     ]);
   });
 });
@@ -281,6 +290,9 @@ describe('captures of the notes of the last shift', () => {
       'FLUR',
       'SERVERRAUM',
       'ARCHIV',
+      'FLUR',
+      'MASCHINENRAUM',
+      'LABOR',
     ]);
     const [first] = blackout.map.notes;
     const capture = captureAt(

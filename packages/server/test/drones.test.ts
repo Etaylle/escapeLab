@@ -168,6 +168,30 @@ describe('DronePatrol', () => {
     expect(pos?.x).toBeLessThan(3.5);
   });
 
+  it('keeps the look it arrived with while it stands on a waypoint', () => {
+    // East to (3,2), back west to (1,2): on the tick that lands on a waypoint and the one it
+    // takes to turn there the drone moves nowhere — and must not look east, where it does not
+    // fly, at whoever it has just passed.
+    const drones = patrol();
+    const state = playing();
+    const looks: { x: number; facing: number }[] = [];
+    for (let tick = 0; tick < 70; tick++) {
+      drones.step(state, 0.08);
+      const at = drones.runtimeOf()['wache'];
+      looks.push({ x: at?.x ?? 0, facing: at?.facing ?? 0 });
+    }
+    const turned = looks.findIndex((look, i) => i > 0 && look.x < (looks[i - 1]?.x ?? 0));
+    const back = looks.findIndex((look, i) => i > turned && look.x > (looks[i - 1]?.x ?? 0));
+    expect(turned).toBeGreaterThan(0);
+    expect(back).toBeGreaterThan(turned + 20);
+    // Flying west, landing on (1,2) and standing there: west all along.
+    const west = looks.slice(turned, back).map((look) => look.facing);
+    expect(new Set(west)).toEqual(new Set([Math.PI]));
+    // And east again only as it sets out east; before the turn at (3,2), east all along.
+    expect(looks[back]?.facing).toBe(0);
+    expect(new Set(looks.slice(0, turned).map((look) => look.facing))).toEqual(new Set([0]));
+  });
+
   it('spots a player straight ahead inside the cone', () => {
     const drones = patrol();
     const events = drones.detect(playing(), at(3.5, 2.5), T0);

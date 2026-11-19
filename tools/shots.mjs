@@ -14,7 +14,7 @@
  * twenty-two groups; SHOTS_ONLY and SHOTS_SKIP, each a comma-separated list of their names, pick
  * those a run plays — a quick proof of one part. The drills, each in a room of its own before the
  * walkthrough: editor, art, drones (the danger sense, a drone close by), reconnect, restart, three
- * (Blackout for a crew of three through the Signalkette) — and in a Systemcheck run the
+ * (Blackout for a crew of three as far as the Paketfilter) — and in a Systemcheck run the
  * Serverraum's scratch mission, devices', the Zugangskontrolle's, access, the
  * Anlaufsteuerung's, startup, hall (the Übungshalle played to its won card) and rotation (the
  * Wechselplatz's scratch mission on two seeds). The walkthrough's own stages:
@@ -58,10 +58,12 @@
  * Where the station after it has two consoles, each takes one and
  * both panels are captured; a Signalkette, as in the Systemcheck, they work
  * from both sides until it solves too.
- * Where the first station has two consoles, as Blackout's Notstrom-Kasten,
- * the guest holds the plate door for the host on the way to console A where
- * needed, then both consoles are captured and the meter measures every wire
- * once; nothing is cut. The first reading that moves the needle is shot
+ * Where the first station has two consoles, or the one after the lever, as Blackout's
+ * Anlaufsteuerung, the guest holds the plate door for the host on the way to console A where
+ * needed, then both consoles are captured; at a terminal worked by keys the notepad beside
+ * the device waits for that player's next device (`devicePadOwed`). At a fuse box — Blackout's
+ * Notstromkasten, in a run whose seed draws it at the Wechselplatz — the meter measures every
+ * wire once before anything is cut. The first reading that moves the needle is shot
  * with its swing held 60 ms in by the page — the needle's own transition
  * paused there as it begins, so that a shot coming late under load still
  * shows it on its way — and the page has to say the needle swung, stood still
@@ -224,8 +226,18 @@
  * answers tools/fixtures/blackout-plan.json carries (core's
  * test/blackoutPlan.ts keeps them the solvers' own), each instance checked
  * against them first — the run fails naming the seed where one differs: the
- * Notstrom-Kasten's wires, serial and readings round by round and its cuts,
- * every stage of the Signalkette at consoles with the legend (a key a row
+ * Anlaufsteuerung's stages, each load and its lamps, the first value typed (anlauf-terminal.png),
+ * the pulse in the duct under the Flur from the audience (anlauf-duct.png) and on the ladder's
+ * marked steps (anlauf-ladder.png); the Paketfilter followed on its pages, the guest's phone
+ * held upright at the Analysepult — FREIGABE, a mark on every packet the plan says the policy
+ * drops, a trip under every ring (filter-headers.png, filter-gate.png), the wave held once the
+ * host steps off the Sperrpult (filter-held.png) — and the Serverschott as its solve opens it
+ * (schott-open.png); then, past the Serverraum, the station the seed draws at the Wechselplatz
+ * — on the pinned seed the Signalkette, on SHOTS_SEED=56 the Funkpult, on 93 the Notstromkasten
+ * with its wires, serial, readings and cuts (meter-swing.png there) — the host first walking up
+ * to a console out of service this run (out-of-service.png: its tag on the page, E opening
+ * nothing); for the Signalkette
+ * every stage at consoles with the legend (a key a row
  * and a shape; the deliberate wrong one gives figure-flinch.png) — its last
  * one without colour, the sending console's device shot as it starts in the
  * host's window (signal-grey.png) and with that window held as a large phone
@@ -242,16 +254,16 @@
  * sheet to its last line on every page and past its edge on none) and held
  * upright, the notepad's drawer down and then up under the frame
  * (book-phone-notepad.png: the same, the drawer along the foot),
- * the radio panel's lamp and dial, the spare fuse carried from the Archiv to
- * the reactor and the reactor pressed together. Every device the guest's
- * phone opens on the way — the lever, the meter, console A of the
- * Signalkette, the rack, the reactor and the relay console where an
+ * (where the Funkpult has the place) the radio panel's lamp and dial; the spare fuse carried
+ * from the Archiv to the reactor and the reactor pressed together. Every device the guest's
+ * phone opens on the way — the lever, console B of the Anlaufsteuerung, the Analysepult, the
+ * rack, its console of the Wechselplatz's station, the reactor and the relay console where an
  * emergency comes — is also shot with the phone held sideways
  * (device-phone-<station>.png): the device whole in the window, nothing of
  * it scrolling, every control in view and 44 px at least each way once the
  * device's opening has ended on the page's clock — the
  * first of them on a large phone too (device-phone-932-<station>.png) — or the
- * run fails. From the Signalkette on the
+ * run fails. From the Paketfilter's solve on the
  * drones are awake: every walk goes from haven to haven past them — the
  * tiles no drone ever looks at — as a crew times its run past a patrol:
  * their flights foretold from the positions stream as the server steps them
@@ -742,6 +754,8 @@ import {
   havens,
   RUN,
   spottedOn,
+  LATE_S,
+  LATE_STEPS,
   stretchOf,
 } from './patrol.mjs';
 import {
@@ -867,25 +881,27 @@ const HALL_MISSION = JSON.parse(
  * what its draw left out. Found by printing the core's draw of a crew of two
  * for seeds 1…50 and replaying the steps below that depend on it, in a room:
  *
- * - Blackout 5: Anna starts in the Archiv by the sign (3,3; sign.png, once she
+ * - Blackout 12, which draws the Signalkette at the Wechselplatz (core
+ *   test/blackoutPlan.ts `DRAW_SEEDS`; 56 the Funkpult, 93 the Notstromkasten, the same start):
+ *   Anna starts in the Archiv by the sign (3,3; sign.png, once she
  *   has skipped the opening), Ben at the Flur's west end (1,12); the book lies
- *   at (8,1), the Klemmbrett at (11,12) west of the lever, the locker at (16,2),
- *   the cabinet at (11,15). With the power on, Anna's step into the Archiv
+ *   at (8,1), the Richtlinie at (17,12), the Klemmbrett at (8,12), the locker at (16,2),
+ *   the cabinet at (18,14), out of service. With the power on, Anna's step into the Archiv
  *   lights it round her while Ben watches the opening on (cold-open.png).
  *   Nobody starts behind a door: both walk up to the lever in the middle of
  *   the Flur (lever.png). Then Ben reads the book (reading), holds the plate
- *   for Anna on her way to console A of the Notstrom-Kasten, works console B
+ *   for Anna on her way to console A of the Anlaufsteuerung, works console B
  *   and asks for the notes (console-*, hint-*). The map grew twice — to 27×17,
  *   then to 36×22 — and kept three spawns in this order — Archiv, the Flur's
  *   west end, its east end (29,12) — and as many spots for every source, so
- *   seeds draw as before. Anna and Ben by seed: 1 Flur west and Archiv, 3 Flur
- *   east and Archiv, 5 Archiv and Flur west, 7 Flur west and Flur east, 8
+ *   the spawns draw as before. Anna and Ben by seed: 1 Flur west and Archiv, 3 Flur
+ *   east and Archiv, 5 and 12 Archiv and Flur west, 7 Flur west and Flur east, 8
  *   Archiv and Flur east, 9 Flur east and Flur west.
  * - Systemcheck 1: the usual, Ben by the first station and the sign works it,
  *   Anna by the locker reads it.
  */
 const SEEDS = new Map([
-  ['blackout', 5],
+  ['blackout', 12],
   ['systemcheck', 1],
 ]);
 const SEED = seedFor(process.env.SHOTS_SEED, SEEDS.get(MISSION.toLowerCase()));
@@ -2220,21 +2236,27 @@ function operatorFirst(players) {
     : [...players].sort((a, b) => stepsTo(a.seen, station) - stepsTo(b.seen, station));
 }
 
+/** Whether a source gives pages this run: not one of a station out of service alone. */
+const inService = (manual) => manual.outOfService !== true;
+
 /**
  * The open manual object the crew has come across that a player can walk to soonest, one
- * covering the armed station first.
+ * covering the armed station first, one with pages before a wall chart — never one out of
+ * service this run, which gives no page.
  */
 function nearestManual(seen) {
   const map = seen.view.map;
   const from = tileOf(seen);
   const armed = map.stations.find((s) => s.status === 'armed')?.puzzleId;
   const options = map.manuals
-    .filter((manual) => manual.known && manual.opened)
+    .filter((manual) => manual.known && manual.opened && inService(manual))
     .map((manual) => ({ manual, path: from === null ? null : route(map, from, manual) }))
     .filter((option) => option.path !== null)
     .sort(
       (a, b) =>
         Number(b.manual.puzzleIds.includes(armed)) - Number(a.manual.puzzleIds.includes(armed)) ||
+        // One with pages to turn before a wall chart's one sheet (reading-page2.png).
+        Number(a.manual.kind === 'chart') - Number(b.manual.kind === 'chart') ||
         a.path.length - b.path.length,
     );
   return options[0]?.manual ?? null;
@@ -5366,11 +5388,42 @@ async function shootConsoles(crew, seats, title, kind) {
   await capturePlates(seats, title);
 }
 
-/** device-notepad.png, device-notepad-phone.png: the notepad beside each open device of `crew`. */
+/**
+ * The players whose device-notepad.png is still owed: their first open device was a terminal,
+ * whose prompt takes every key — N types there, and only a finger has the notepad's tab. The
+ * next device of theirs without a prompt pays it (`payDeviceNoting`).
+ */
+const devicePadOwed = new Set();
+
+/** Whether `page`'s open device has a prompt that holds the keyboard, and no finger's tab. */
+async function promptHoldsKeys(page) {
+  const touch = await page.evaluate(() => globalThis.matchMedia('(pointer: coarse)').matches);
+  return !touch && (await page.locator('.station-modal .servers-input').count()) > 0;
+}
+
+/**
+ * device-notepad.png, device-notepad-phone.png: the notepad beside each open device of `crew` —
+ * at a terminal worked by keys it is owed until that player's next device (`devicePadOwed`).
+ */
 async function notingAtDevices(crew) {
   for (const player of crew) {
     const phone = (player.page.viewportSize()?.width ?? 0) <= 560;
-    await captureDeviceNoting(player, phone ? 'device-notepad-phone.png' : 'device-notepad.png');
+    if (await promptHoldsKeys(player.page)) {
+      devicePadOwed.add(player);
+      console.log(
+        `device-notepad.png ${player.name}: a terminal, its prompt takes N — taken at the next ` +
+          'device without one',
+      );
+    } else {
+      await captureDeviceNoting(player, phone ? 'device-notepad-phone.png' : 'device-notepad.png');
+    }
+  }
+}
+
+/** device-notepad.png where `player` still owes it, at the device open now (`notingAtDevices`). */
+async function payDeviceNoting(player) {
+  if (devicePadOwed.delete(player)) {
+    await inGroup('reading', () => captureDeviceNoting(player, 'device-notepad.png'));
   }
 }
 
@@ -6522,21 +6575,25 @@ function padPlace(pad, over, width, height) {
 }
 
 /**
- * The open source a player takes notes at: a clipboard first, else the nearest — where it
+ * The open source a player takes notes at: a clipboard first, else the nearest with pages,
+ * else a wall chart — where it
  * lies from the audience's view (`audience`), which places a source before the crew has come
- * across it; null where none is open within the player's reach.
+ * across it; never one out of service this run (Blackout's Klemmbrett, where the Signalkette
+ * rests); null where none is open within the player's reach.
  */
 function sourceToNote(seen, audience) {
   const map = seen.view.map;
   const everything = audience.view?.map ?? map;
   const from = tileOf(seen);
   const options = everything.manuals
-    .filter((manual) => manual.opened)
+    .filter((manual) => manual.opened && inService(manual))
     .map((manual) => ({ manual, path: from === null ? null : route(map, from, manual) }))
     .filter((option) => option.path !== null)
     .sort(
       (a, b) =>
         Number(b.manual.kind === 'clipboard') - Number(a.manual.kind === 'clipboard') ||
+        // Pages before a wall chart's one sheet: the phone held sideways turns them.
+        Number(a.manual.kind === 'chart') - Number(b.manual.kind === 'chart') ||
         a.path.length - b.path.length,
     );
   return options[0]?.manual ?? null;
@@ -11065,8 +11122,9 @@ async function firewallMark({ gate, analysis }, id, shots) {
   const ms = Date.now() - from;
   if (shots.gate) {
     shots.gate = false;
-    await capture(gate.page, 'firewall-gate.png');
-    fwSaid(`firewall-gate.png ${gate.name}'s Sperrpult with ${id} ringed`);
+    const shot = shots.names?.gate ?? 'firewall-gate.png';
+    await capture(gate.page, shot);
+    fwSaid(`${shot} ${gate.name}'s Sperrpult with ${id} ringed`);
   }
   return ms;
 }
@@ -11085,8 +11143,9 @@ async function headersShot(analysis, shots) {
     return;
   }
   shots.headers = false;
-  await capture(analysis.page, 'firewall-headers.png');
-  fwSaid(`firewall-headers.png ${analysis.name}'s Analysepult: ${cards} cards on the lines`);
+  const shot = shots.names?.headers ?? 'firewall-headers.png';
+  await capture(analysis.page, shot);
+  fwSaid(`${shot} ${analysis.name}'s Analysepult: ${cards} cards on the lines`);
 }
 
 /** Whether `gate`'s view shows packet `id` marked. */
@@ -11139,13 +11198,28 @@ const cardOpacities = (page) =>
   );
 
 /**
+ * How the held shot goes for `gate`: where its player walks off the Sperrpult to, the shot's
+ * name and the way back to the console — the probe's binder, firewall-held.png and the probe's
+ * console A unless the mission played says otherwise (`shots.away`, `.names`, `.man`).
+ */
+function heldWays(gate, shots) {
+  return {
+    spot: shots.away ?? FIREWALL_MISSION.map.manuals[0].spots[0],
+    shot: shots.names?.held ?? 'firewall-held.png',
+    man: shots.man ?? (() => manFirewall(gate, 'a', 'gate')),
+  };
+}
+
+/**
  * firewall-held.png, once HELD_CARDS cards are on the lines: `gate`'s player steps back from the
  * Sperrpult and walks to the binder, the wave holds, and the Analysepult is shot so — every card
  * drawn whole, the hold's word over the numbers, never across a card; the run fails where a
  * card is dimmed or the word lies over one. Held so, the Analysepult and the audience's page are
  * turned upright (`uprightAnalysis`, `uprightAudience`). Then the Sperrpult is manned again, the
  * wave goes on, and the Analysepult's player steps back in turn for the Sperrpult upright
- * (`uprightGate`). Returns whether it did so.
+ * (`uprightGate`) — where the crew has an audience, as the drill's has; Blackout's run, which
+ * names its own shot, way off and way back (`heldWays`), takes the held shot alone. Returns
+ * whether it did so.
  */
 async function heldShot({ gate, analysis, audience }, shots) {
   if (!shots.held || firewallLive(analysis).length < HELD_CARDS) {
@@ -11154,7 +11228,7 @@ async function heldShot({ gate, analysis, audience }, shots) {
   shots.held = false;
   await gate.page.keyboard.press('Escape');
   await gate.page.locator('.station-modal').waitFor({ state: 'hidden', timeout: 3000 });
-  const [spot] = FIREWALL_MISSION.map.manuals[0].spots;
+  const { spot, shot, man } = heldWays(gate, shots);
   if (!(await walkNear(gate.page, gate.seen, spot))) {
     throw new Error(`${gate.name} found no way off the Sperrpult to ${spot.x},${spot.y}`);
   }
@@ -11163,13 +11237,19 @@ async function heldShot({ gate, analysis, audience }, shots) {
     throw new Error(`${gate.name} left the Sperrpult, but the wave holds not`);
   }
   await sleep(400); // the hold drawn
-  await capture(analysis.page, 'firewall-held.png');
-  await heldVerdict(analysis);
+  await capture(analysis.page, shot);
+  await heldVerdict(analysis, shot);
+  if (audience === undefined) {
+    // Blackout's own run: the device upright is the drill's matter in the Systemcheck run.
+    await man();
+    await firewallRuns(gate);
+    return true;
+  }
   const from = Date.now();
   const marked = await uprightAnalysis(analysis);
   await uprightAudience(audience);
   const back = Date.now();
-  await manFirewall(gate, 'a', 'gate');
+  await man();
   await firewallRuns(gate);
   const again = Date.now();
   await uprightGate({ gate, analysis }, marked);
@@ -11431,7 +11511,7 @@ async function uprightGate({ gate, analysis }, marked) {
 }
 
 /** The held Analysepult judged: every card drawn whole, the word clear of the cards. */
-async function heldVerdict(analysis) {
+async function heldVerdict(analysis, shot = 'firewall-held.png') {
   const opacities = await cardOpacities(analysis.page);
   const clear = await analysis.page.evaluate(() => {
     const word = document.querySelector('.station-modal .firewall-held')?.getBoundingClientRect();
@@ -11445,11 +11525,11 @@ async function heldVerdict(analysis) {
   const status = (await textOf(analysis.page.locator('.station-modal .firewall-status'))) ?? '';
   const whole = opacities.length > 0 && opacities.every((o) => o === 1);
   fwSaid(
-    `firewall-held.png ${analysis.name} held: „${status}", cards drawn at ${opacities.join(', ')}` +
+    `${shot} ${analysis.name} held: „${status}", cards drawn at ${opacities.join(', ')}` +
       `${clear ? ', the word clear of them' : ' !! the word over a card'}`,
   );
   if (!whole || !clear || !status.includes('Sperrpult unbesetzt · Pakete halten')) {
-    fail(`firewall-held.png: cards at ${opacities.join(', ')}, word clear ${clear}, „${status}"`);
+    fail(`${shot}: cards at ${opacities.join(', ')}, word clear ${clear}, „${status}"`);
   }
 }
 
@@ -11554,7 +11634,7 @@ const firewallUnjudged = (why) => skip('firewall (targets)', why);
  */
 async function captureFirewall() {
   if (MISSION.toLowerCase() === 'blackout') {
-    skip('firewall (probe)', 'Blackout plays no Paketfilter: its probe plays in a Systemcheck run');
+    skip('firewall (probe)', 'Blackout plays its own Paketfilter: the probe plays in a Systemcheck run');
     return;
   }
   const crew = [];
@@ -11990,7 +12070,7 @@ async function playStartup(crew) {
  */
 async function captureStartup() {
   if (MISSION.toLowerCase() === 'blackout') {
-    const why = 'Blackout plays no Anlaufsteuerung: its probe plays in a Systemcheck run';
+    const why = 'Blackout plays its own Anlaufsteuerung: the probe plays in a Systemcheck run';
     skip('startup (probe)', why);
     return;
   }
@@ -12063,9 +12143,17 @@ async function standOn(player, tile) {
  * carried; the walkthrough checks each instance in the browser against it
  * before it plays the answer, and fails naming the seed where one differs.
  */
-const BLACKOUT_PLAN = JSON.parse(
+const BLACKOUT_PLANS = JSON.parse(
   readFileSync(fileURLToPath(new URL('fixtures/blackout-plan.json', import.meta.url)), 'utf8'),
 );
+/**
+ * The plan of this run's seed: one of the three the file carries, a seed for each station
+ * Blackout's Wechselplatz can have — the pinned one's, the Signalkette's, for any other seed,
+ * which the walkthrough then does not play out (`playPinnedOut`).
+ */
+const BLACKOUT_PLAN =
+  BLACKOUT_PLANS.runs.find((run) => run.seed === SEED) ??
+  BLACKOUT_PLANS.runs.find((run) => run.seed === BLACKOUT_PLANS.pinned);
 
 /** How long a walk past the drones waits for a gap before it runs anyway, in ms. */
 const SNEAK_GIVE_UP_MS = 45_000;
@@ -12199,9 +12287,10 @@ function refugeFrom(map, here, safe, unseen) {
  * foretold from the stream, would spot it on the way — nor at the end of
  * `path` for `hold` s; or, caught out in the open with that stretch watched,
  * the way to a haven it can reach unseen (`refugeFrom`); null to wait where
- * it is. `late`, it runs the stretch whatever the drones do.
+ * it is. `late`, it runs the stretch whatever the drones do; `behind` is how far behind its
+ * slowest pace the avatar may fall and stay unseen, in s (patrol.mjs LATE_STEPS).
  */
-function nextRun(player, map, path, hold, late) {
+function nextRun(player, map, path, hold, { late, behind }) {
   const sight = { tiles: map.tiles, shut: shutOn(map) };
   const { drones, age } = dronesOn(player.seen);
   const safe = havensOn(drones, sight);
@@ -12212,8 +12301,8 @@ function nextRun(player, map, path, hold, late) {
   const unseen = (way, stand) => {
     const run = arrivals(way, RUN.tile[1], RUN.corner[1]).at(-1) + RUN.corner[1];
     const delay = age + REACTION_S;
-    const flying = flights(drones, delay + run + stand + 0.5);
-    return spottedOn(way, flying, sight, { delay, hold: stand }) === null;
+    const flying = flights(drones, delay + behind + run + stand + 0.5);
+    return spottedOn(way, flying, sight, { delay, hold: stand, late: behind }) === null;
   };
   const arrives = stretch.length === path.length;
   if (unseen(stretch, arrives ? hold : SETTLE_S)) {
@@ -12224,7 +12313,16 @@ function nextRun(player, map, path, hold, late) {
 }
 
 /** What the walks past the drones came to, for the log's line at the end. */
-const sneaking = { walks: 0, waitedMs: 0, ranAnyway: 0 };
+const sneaking = { walks: 0, waitedMs: 0, ranAnyway: 0, tightest: LATE_S };
+
+/** How long a walk waits for a gap at one allowance before it takes the next smaller, ms. */
+const ALLOWANCE_WAIT_MS = 12_000;
+
+/** The allowance for a late avatar a walk asks of a gap once it has waited `ms` for one, s. */
+function allowanceAfter(ms) {
+  const step = Math.min(LATE_STEPS.length - 1, Math.floor(ms / ALLOWANCE_WAIT_MS));
+  return LATE_STEPS[step];
+}
 
 /** `player`'s map; throws, saying how the run stands, where its view has none. */
 function mapOf(player) {
@@ -12249,6 +12347,8 @@ function mapOf(player) {
 async function sneakTo(player, target, hold = 1.2) {
   const since = Date.now();
   let late = false;
+  // How long it has waited where it stands for a gap: the allowance steps down with it.
+  let waitedHere = 0;
   sneaking.walks += 1;
   for (;;) {
     await weather();
@@ -12273,12 +12373,16 @@ async function sneakTo(player, target, hold = 1.2) {
           `${target.x},${target.y}`,
       );
     }
-    const run = nextRun(player, map, path, hold, late);
+    const behind = allowanceAfter(waitedHere);
+    const run = nextRun(player, map, path, hold, { late, behind });
     if (run === null) {
       await sleep(60);
       sneaking.waitedMs += 60;
+      waitedHere += 60;
       continue;
     }
+    sneaking.tightest = Math.min(sneaking.tightest, late ? 0 : behind);
+    waitedHere = 0;
     await runPath(player, run);
   }
 }
@@ -12295,7 +12399,7 @@ async function clearOfDrones(player, seconds) {
     const map = mapOf(player);
     const sight = { tiles: map.tiles, shut: shutOn(map) };
     const { drones, age } = dronesOn(player.seen);
-    const flying = flights(drones, age + seconds + RUN.corner[1] + 0.5);
+    const flying = flights(drones, age + LATE_S + seconds + RUN.corner[1] + 0.5);
     const here = [tileOf(player.seen)];
     if (spottedOn(here, flying, sight, { delay: age, hold: seconds }) === null) {
       return;
@@ -12648,25 +12752,6 @@ async function measureRound(meter, box, round, r) {
 }
 
 /**
- * The Notstrom-Kasten to the end, as the pinned seed wires it: both walk back to their console
- * and open it — the meter's phone held sideways shot on the way (devices) — and the box is cut
- * as the plan pins it (`cutAsPinned`).
- */
-async function finishNotstrom(box, meter) {
-  for (const [player, side] of [
-    [box, 'a'],
-    [meter, 'b'],
-  ]) {
-    if (!(await walkNear(player.page, player.seen, armedAt(player, side)))) {
-      throw new Error(`${player.name} found no way back to console ${side} of the fuse box`);
-    }
-    await openPanel(player, side);
-  }
-  await inGroup('devices', () => captureDevicePhone(meter, stationSlug(meter)));
-  await cutAsPinned(box, meter);
-}
-
-/**
  * The open fuse box's wires from the top and the Laborkennung's serial, as the box's and the
  * meter's views show them; fails naming the seed where either is not what the plan pins.
  */
@@ -12710,26 +12795,6 @@ async function cutAsPinned(box, meter) {
       `${pin.rounds.map((round) => round.cut + 1).join(', ')} of ${wires} (serial ` +
       `${serial}, seed ${SEED}): solved`,
   );
-}
-
-/**
- * Both walk to their console of the Signalkette — the guest beside console A
- * at the Flur's east end, where the Flur drone does not look as it wakes, the
- * host beside console B in the Maschinenraum (`atConsole`) — open their panels
- * and work it as the plan pins it (`solveSignal`).
- */
-async function playSignalkette(host, guest) {
-  const title = armedAt(host, 'a').title;
-  if (!(await standOn(guest, atConsole(guest, 'a')))) {
-    throw new Error(`${guest.name} found no way to console A of "${title}"`);
-  }
-  if (!(await standOn(host, atConsole(host, 'b')))) {
-    throw new Error(`${host.name} found no way to console B of "${title}"`);
-  }
-  await openPanel(guest, 'a');
-  await inGroup('devices', () => captureDevicePhone(guest, stationSlug(guest)));
-  await openPanel(host, 'b');
-  await solveSignal([host, guest], title, BLACKOUT_PLAN.signalkette.stages);
 }
 
 /**
@@ -13230,33 +13295,394 @@ function relayLeftOut() {
   }
 }
 
+/** The shot `name` where the run plays devices, else none: a step takes it or leaves it out. */
+const deviceShot = (name) => (groupOn('devices') ? name : null);
+
+/** A step that may take a devices' shot, run under that group's gate where it is on. */
+const atDevices = (step) => inGroup('devices', step, step);
+
+/**
+ * The typing and the taking console of `stage`, once both pages show it live and dealt as the
+ * plan pins it — its load at the terminal, its lamps at the Schaltfeld; fails naming the seed
+ * where they differ.
+ */
+async function anlaufSides({ a, b }, stage) {
+  const [typer, board] = stage.types === 'a' ? [a, b] : [b, a];
+  const live = () => startupView(typer)?.role === 'terminal' && startupView(board)?.role === 'board';
+  if (!(await until(live, CATCH_UP_MS)) || !startupDealt(typer, board, stage)) {
+    const lamps = startupView(board)?.board?.feeders.map((feeder) => feeder.lamps);
+    const shown = `${startupView(typer)?.terminal?.load} with ${JSON.stringify(lamps)}`;
+    const pinned = `${stage.load} with ${JSON.stringify(stage.feeders)}`;
+    differs(`stage ${stage.stage} of the Anlaufsteuerung`, shown, pinned);
+  }
+  return { typer, board };
+}
+
+/**
+ * One stage of Blackout's Anlaufsteuerung as its plan pins it: the stage has to be dealt as
+ * pinned (`anlaufSides`), its values are set and the script started, and the breaker closes
+ * once the pulse stands on the ladder's marked steps (`startupBreaker`). With `shots`, the
+ * first stage is caught: the terminal with its values set (anlauf-terminal.png), the pulse in
+ * the duct under the Flur on `shots.world`'s page (anlauf-duct.png) and the Schaltfeld with the
+ * pulse on its ladder (anlauf-ladder.png).
+ */
+async function anlaufStage(crew, stage, shots) {
+  const { typer, board } = await anlaufSides(crew, stage);
+  const first = shots !== null && stage.stage === 1;
+  // Typed at the prompt where the typing page has keys; on the bezel's keys under a finger.
+  const lines = await startupSettings(typer, stage, !(await isTouch(typer.page)));
+  if (first) {
+    await inGroup('devices', () => capture(typer.page, 'anlauf-terminal.png'));
+  }
+  lines.push(await startupCommand(typer, { cmd: 'start' }, false));
+  if (first) {
+    await inGroup('devices', () => anlaufDuct(typer, shots.world));
+  }
+  const shot = first ? deviceShot('anlauf-ladder.png') : null;
+  const waited = await atDevices(() => startupBreaker(board, stage.breaker, shot));
+  const set = `„${lines.join('", „')}"`;
+  return `Stufe ${stage.stage}: ${set}, Schalter ${stage.breaker} nach ${seconds(waited)}`;
+}
+
+/** Whether `page` is worked by a finger. */
+const isTouch = (page) => page.evaluate(() => globalThis.matchMedia('(pointer: coarse)').matches);
+
+/**
+ * anlauf-duct.png: the pulse in the duct between the Flur's console and the Maschinenraum's, on
+ * `world` — a page with no panel over its world, the audience's —, a second and a half after it
+ * was sent; `typer`'s view of the map has to carry it, as every view does.
+ */
+async function anlaufDuct(typer, world) {
+  if (!(await until(() => ductPulse(typer) !== null, 3000))) {
+    throw new Error(`${typer.name}'s map carries no pulse in the duct`);
+  }
+  const pulse = ductPulse(typer);
+  await sleep(Math.max(0, pulse.sentAt + 1500 - Date.now()));
+  await capture(world, 'anlauf-duct.png');
+  const lit = (await world.evaluate(() => globalThis.__escapelab?.conduits ?? null)) ?? 'unprobed';
+  console.log(
+    `anlauf-duct.png    the audience's world ${seconds(Date.now() - pulse.sentAt)} after the ` +
+      `start, the pulse on its way to console ${pulse.reversed ? 'A' : 'B'} ` +
+      `(the page's probe: ${JSON.stringify(lit)})`,
+  );
+}
+
+/**
+ * Blackout's Anlaufsteuerung played as the plan pins it at both consoles, already open: every
+ * stage (`anlaufStage`), the sides swapping, until it solves — without an alarm.
+ */
+async function playAnlauf(crew, shots = null) {
+  const index = crew.a.seen.view.currentPuzzleIndex;
+  const alarms = crew.a.seen.view.alarms.count;
+  const from = Date.now();
+  const said = [];
+  for (const stage of BLACKOUT_PLAN.anlauf.stages) {
+    said.push(await anlaufStage(crew, stage, shots));
+  }
+  if (!(await until(() => solvedPast(crew.a, index), 5000))) {
+    throw new Error('every pinned stage ran up, but the Anlaufsteuerung did not solve');
+  }
+  const raised = crew.a.seen.view.alarms.count - alarms;
+  console.log(
+    `anlauf             ${said.length} stages in ${seconds(Date.now() - from)} (${said.join('; ')}, ` +
+      `seed ${SEED}): solved` + (raised === 0 ? '' : ` !! ${raised} alarm(s)`),
+  );
+  if (raised > 0) {
+    fail(`anlauf: the plan's stages raised ${raised} alarm(s)`);
+  }
+}
+
+/**
+ * The Anlaufsteuerung to the end, as the pinned seed deals it: both walk back to their console
+ * and open it — the guest's phone held sideways shot on the way (devices) — and its stages are
+ * played as the plan pins them (`playAnlauf`), the first caught at the terminal, in the duct and
+ * on the ladder.
+ */
+async function finishAnlauf(a, b, world) {
+  for (const [player, side] of [
+    [a, 'a'],
+    [b, 'b'],
+  ]) {
+    if (!(await walkNear(player.page, player.seen, armedAt(player, side)))) {
+      throw new Error(`${player.name} found no way back to console ${side} of the Anlaufsteuerung`);
+    }
+    await openPanel(player, side);
+  }
+  await inGroup('devices', () => captureDevicePhone(b, stationSlug(b)));
+  await playAnlauf({ a, b }, { world });
+}
+
+/** The ids of the packets the policy drops in every wave Blackout's Paketfilter may deal. */
+const FILTER_HOSTILE = new Set(
+  BLACKOUT_PLAN.paketfilter.waves.flat().flatMap((packet) => (packet.hostile ? [packet.id] : [])),
+);
+
+/** `player` walks up to console `side` of the armed station and opens its panel; throws if not. */
+async function manArmed(player, side) {
+  if (!(await walkNear(player.page, player.seen, armedAt(player, side)))) {
+    throw new Error(`${player.name} found no way to console ${side} of the armed station`);
+  }
+  await openPanel(player, side);
+}
+
+/**
+ * schott-open.png: the Serverschott as the Paketfilter's solve opens it, on `player`'s page once
+ * its device has closed itself — the view has to show the door open and the Serverraum lit.
+ */
+async function schottOpens(player) {
+  await player.page.locator('.station-modal').waitFor({ state: 'hidden', timeout: CATCH_UP_MS });
+  const schott = () => mapOf(player).doors.find((door) => door.id === 'serverschott');
+  const open = await until(() => schott()?.open === true, 3000);
+  await inGroup('devices', () => capture(player.page, 'schott-open.png'));
+  const lit = mapOf(player).litRooms ?? [];
+  console.log(
+    `schott-open.png    ${player.name}: the Serverschott ${open ? 'open' : '!! shut'}, lit ` +
+      `${lit.join(', ')}`,
+  );
+  if (!open || !lit.includes('SERVERRAUM')) {
+    fail(`schott-open.png: the Schott ${open ? 'open' : 'shut'}, lit ${lit.join(', ')}`);
+  }
+}
+
+/**
+ * The crew at Blackout's Paketfilter: the guest walks past the policy on the Flur's south wall,
+ * where the plan lays it, the phone held upright as it has been all run — the Analysepult
+ * stands whole on a phone so (F-firewall-upright) —; both open their panels, which have to be
+ * the Sperrpult and the Analysepult; the guest's device is shot on the phone held sideways
+ * too (devices), the host's notepad beside the Sperrpult where it is still owed.
+ */
+async function manPaketfilter(host, guest) {
+  const policy = pinnedSource('chart');
+  // Onto the tile beside it: a tile short of that the policy lies at the edge of what is found
+  // in passing, and whether the lamp falls on it hangs on the last step's direction.
+  if (!(await standOn(guest, workSpot(guest, policy)))) {
+    throw new Error(`${guest.name} found no way to the ${policy.label}`);
+  }
+  await foundWherePinned(guest, policy);
+  await manArmed(host, 'a');
+  await manArmed(guest, 'b');
+  const role = (player) => firewallView(player)?.role ?? null;
+  if (!(await until(() => role(host) === 'gate' && role(guest) === 'analysis', 3000))) {
+    throw new Error(`the Paketfilter's panels say ${role(host)} and ${role(guest)}`);
+  }
+  await inGroup('devices', () => captureDevicePhone(guest, stationSlug(guest)));
+  await payDeviceNoting(host);
+}
+
+/**
+ * Blackout's Paketfilter on the pinned seed: the guest walks past the policy on the Flur's
+ * south wall, where the plan lays it, to the Analysepult east of the Schott, the host to the
+ * Sperrpult; both open their panels — the guest's phone, upright, shot sideways too
+ * (devices), the host's notepad beside the Sperrpult where it is still owed (`payDeviceNoting`) — and the crew
+ * follows its pages to the solve (`followFirewall`): FREIGABE where a wave waits, a mark on
+ * every packet the plan says the policy drops, a trip under every ring — the Analysepult's
+ * cards shot at a mark (filter-headers.png), the Sperrpult at its first ring (filter-gate.png),
+ * and once the host steps off it, the wave held (filter-held.png). Then the Schott opens
+ * (schott-open.png). Fails unless it solves, or where it took more than one alarm.
+ */
+async function playPaketfilter(host, guest) {
+  await manPaketfilter(host, guest);
+  const crew = { gate: host, analysis: guest };
+  const alarms = host.seen.view.alarms.count;
+  const from = Date.now();
+  const gateAt = armedAt(host, 'a');
+  const on = groupOn('devices');
+  const shots = {
+    headers: on,
+    gate: on,
+    held: on,
+    names: { headers: 'filter-headers.png', gate: 'filter-gate.png', held: 'filter-held.png' },
+    // Three tiles along the wall: out of the Sperrpult's reach, and back.
+    away: { x: gateAt.x + 3, y: gateAt.y + 1 },
+    man: () => manArmed(host, 'a'),
+  };
+  const { solved, rings } = await atDevices(() => followFirewall(crew, FILTER_HOSTILE, shots));
+  const raised = host.seen.view.alarms.count - alarms;
+  console.log(
+    `paketfilter        ${rings.length} marks in ${seconds(Date.now() - from)}, rings ` +
+      `${Math.max(0, ...rings)} ms at most after the view (seed ${SEED}): ` +
+      `${solved ? 'solved' : '!! not solved'}, ` +
+      (raised === 0 ? 'no alarm' : `!! ${raised} alarm(s)`),
+  );
+  if (!solved || raised > 1) {
+    throw new Error(`the Paketfilter ended ${solved ? 'solved' : 'unsolved'}, ${raised} alarm(s)`);
+  }
+  await schottOpens(host);
+}
+
+/** How long a crew stays where it stood at a station it has just solved, ms. */
+const PARKED_MS = 12_000;
+
+/**
+ * `players` stay where they stand at the consoles of the station just solved (`where`), a good
+ * ten seconds: no drone may catch them for it, and nobody moves. Played after the Serverraum,
+ * whose solve wakes both patrols — the one moment a crew still at its consoles meets drones it
+ * has not seen fly; server test/blackoutParked.test.ts holds every console and source of every
+ * draw to the same, this is its proof in the browser.
+ */
+async function parkedUnseen(players, where) {
+  const caught = sightings.count;
+  const stood = players.map((player) => tileOf(player.seen));
+  await sleep(PARKED_MS);
+  const raised = sightings.count - caught;
+  const patrols = Object.keys(players[0].seen.drones ?? {}).length;
+  const moved = players.filter((player, i) => {
+    const now = tileOf(player.seen);
+    return now?.x !== stood[i]?.x || now?.y !== stood[i]?.y;
+  });
+  console.log(
+    `parked             ${players.map((p) => p.name).join(' and ')} stood ` +
+      `${seconds(PARKED_MS)} at ${where} after its solve, ${patrols} drone(s) out: ` +
+      (raised === 0 ? 'unseen' : `!! caught ${raised} time(s)`),
+  );
+  if (raised > 0 || moved.length > 0 || patrols === 0) {
+    fail(
+      `parked at ${where}: caught ${raised} time(s), ${patrols} drone(s) out, ` +
+        `${moved.map((p) => p.name).join(', ') || 'nobody'} moved`,
+    );
+  }
+}
+
+/**
+ * out-of-service.png: `player` walks up to a console of a station out of service this run — the
+ * one of `BLACKOUT_PLAN.outOfService` nearest its way — past the patrols; its tag's words have
+ * to stand under it on the page, the view has to tell it out, and E there has to open nothing.
+ */
+async function captureResting(player) {
+  const resting = BLACKOUT.map.stations.filter((spot) =>
+    BLACKOUT_PLAN.outOfService.includes(spot.puzzleId));
+  const here = tileOf(player.seen);
+  const far = (spot) => Math.abs(spot.x - here.x) + Math.abs(spot.y - here.y);
+  const safe = havensOn(patrolsAround(player), { tiles: mapOf(player).tiles, shut: shutOn(mapOf(player)) });
+  // One in the Maschinenraum or the Flur's havens before one a patrol looks at.
+  const watched = (spot) => (safe.has(`${workSpot(player, spot).x},${workSpot(player, spot).y}`) ? 0 : 1);
+  const [spot] = [...resting].sort((one, other) => watched(one) - watched(other) || far(one) - far(other));
+  if (spot === undefined) {
+    throw new Error('the plan names no station out of service');
+  }
+  await sneakTo(player, workSpot(player, spot));
+  const told = () =>
+    mapOf(player).stations.find((s) => s.x === spot.x && s.y === spot.y)?.status === 'out';
+  const out = await until(told, CATCH_UP_MS);
+  await sleep(600); // the camera settles, the tag's words are up
+  const tags = await tagsOnScreen(player.page);
+  const opened = await pressOpensDevice(player);
+  await inGroup('devices', () => capture(player.page, 'out-of-service.png'));
+  console.log(
+    `out-of-service.png ${player.name} at the console of "${spot.puzzleId}" at ${spot.x},${spot.y}: ` +
+      `${out ? 'out of service on the map' : '!! not told out'}, ${tags} tag(s) ` +
+      `„${OUT_OF_SERVICE_TAG}" on screen, E ${opened ? '!! opened a device' : 'opens nothing'}`,
+  );
+  if (!out || tags === 0 || opened) {
+    fail(`out-of-service.png: told out ${out}, ${tags} tag(s), E opened ${opened}`);
+  }
+}
+
+/**
+ * The Notstromkasten where the run has it at its Wechselplatz: the guest walks to the
+ * Wartungsbuch in the Maschinenraum, where the plan lays it, and on to the meter in the Labor,
+ * the host to the fuse box inside the Maschinenraum's door, both past the patrols; clear of the
+ * next emergency they open their panels, the meter measures every wire once — the needle's
+ * swing shot (meter-swing.png) — and the box is cut as the plan pins it (`cutAsPinned`).
+ */
+async function playNotstrom(host, guest) {
+  const book = BLACKOUT.map.manuals.find((manual) => manual.puzzleIds.includes('notstrom'));
+  const lies = { id: book.id, label: book.label, ...BLACKOUT_PLAN.places[book.id] };
+  await sneakTo(guest, workSpot(guest, lies));
+  await foundWherePinned(guest, lies);
+  await sneakTo(host, atConsole(host, 'a'));
+  await sneakTo(guest, atConsole(guest, 'b'));
+  await clearOfEmergencies(host, 45);
+  const title = armedAt(host, 'a').title;
+  await openPanel(host, 'a');
+  await openPanel(guest, 'b');
+  await inGroup('devices', () => captureDevicePhone(guest, stationSlug(guest)));
+  await inGroup('devices', () => measureEveryWire(guest, title));
+  await cutAsPinned(host, guest);
+}
+
+/**
+ * The Signalkette where the run has it at its Wechselplatz, both patrols out: the guest walks
+ * past them to console A at the Flur's east end, the host to console B in the Maschinenraum
+ * (`atConsole`, each from haven to haven); clear of the next emergency they open their panels
+ * and work it as the plan pins it (`solveSignal`).
+ */
+async function playSignalkette(host, guest) {
+  const title = armedAt(host, 'a').title;
+  await sneakTo(guest, atConsole(guest, 'a'));
+  await sneakTo(host, atConsole(host, 'b'));
+  await clearOfEmergencies(host, 75);
+  await openPanel(guest, 'a');
+  await inGroup('devices', () => captureDevicePhone(guest, stationSlug(guest)));
+  await openPanel(host, 'b');
+  await solveSignal([host, guest], title, BLACKOUT_PLAN.signalkette.stages);
+}
+
+/** The play of each station Blackout's Wechselplatz can have, by its id. */
+const WECHSEL_PLAYS = {
+  signalkette: (host, guest) => playSignalkette(host, guest),
+  frequenz: (host, guest) => playFrequenz(host, guest),
+  notstrom: (host, guest) => playNotstrom(host, guest),
+};
+
+/**
+ * Blackout's Wechselplatz on the run's seed: the host first walks up to a console out of
+ * service this run (out-of-service.png), then the station the seed draws is played as its plan
+ * pins it, and the reactor's two doors have to stand open after.
+ */
+async function playWechselplatz(host, guest) {
+  const drawn = BLACKOUT_PLAN.drawn;
+  const armed = armedAt(host, drawn === 'frequenz' ? null : 'a');
+  if (armed.puzzleId !== drawn) {
+    differs('station at the Wechselplatz', armed.puzzleId, drawn);
+  }
+  await captureResting(host);
+  await WECHSEL_PLAYS[drawn](host, guest);
+  await viewsCaughtUp([host, guest]);
+  const doors = ['reaktortuer', 'reaktorschott'].map((id) => mapOf(host).doors.find((d) => d.id === id));
+  const open = doors.every((door) => door?.open === true);
+  console.log(
+    `wechselplatz       „${armed.title}" in service (seed ${SEED}), ` +
+      `${BLACKOUT_PLAN.outOfService.join(' and ')} out of it: solved, the reactor's doors ` +
+      (open ? 'open' : '!! shut'),
+  );
+  if (!open) {
+    throw new Error(`"${armed.title}" is solved, but the reactor's doors stay shut`);
+  }
+}
+
 /**
  * Blackout from the end of the station step to the won card, on its pinned
- * seed: the Notstrom-Kasten finished, the Signalkette, the Serverraum, the
- * radio panel, the spare fuse and the reactor — each instance checked
+ * seed: the Anlaufsteuerung finished, the Paketfilter, the Serverraum, the
+ * station the seed draws at the Wechselplatz, the spare fuse and the reactor — each instance checked
  * against the plan before its answer is played — past the patrols and
  * through the emergencies; then the escape round the loop and the win
  * (escape.png, pullback.png, won.png, end.png, won-phone.png). Logs each
  * drone sighting as it comes (`watchSightings`), and how long the run took
  * from the blackout to the win.
  */
+/** Which of `playBlackoutToTheEnd`'s steps is the Serverraum: its solve wakes the drones. */
+const SERVERRAUM_STEP = 2;
+
 async function playBlackoutToTheEnd(host, guest, watcher) {
   relayCrew.push(host, guest);
   const stopWatching = watchSightings([host, guest]);
   try {
     await guest.page.setViewportSize(SIZES[2]);
-    const pair = { box: host, meter: guest };
     const stations = [
-      () => finishNotstrom(pair.box, pair.meter),
-      () => playSignalkette(host, guest),
+      () => finishAnlauf(host, guest, watcher),
+      () => playPaketfilter(host, guest),
       () => playServerraum(host, guest),
-      () => playFrequenz(host, guest),
+      () => playWechselplatz(host, guest),
       () => playReaktor(host, guest),
     ];
-    for (const station of stations) {
+    for (const [i, station] of stations.entries()) {
       await station();
       // The next step plans its walks from both pages' views: both have to show this solve.
       await viewsCaughtUp([host, guest]);
+      if (i === SERVERRAUM_STEP) {
+        await parkedUnseen([host, guest], 'the Serverraum');
+      }
     }
     await runForTheHatch(host, guest);
     await inGroup('devices', relayLeftOut);
@@ -13270,7 +13696,8 @@ async function playBlackoutToTheEnd(host, guest, watcher) {
     `blackout           won ${seconds(finishedAt - lights.outAt)} after the lights went out, ` +
       `${clockLeft(deadlineAt - finishedAt, BLACKOUT.timeLimitSec)}, ${penaltySeq} alarm(s), ` +
       `${sightings.count} of them drones; ${sneaking.walks} walks past the drones, ` +
-      `${seconds(sneaking.waitedMs)} waited for a gap, ${sneaking.ranAnyway} run without one; ` +
+      `${seconds(sneaking.waitedMs)} waited for a gap, ${sneaking.ranAnyway} run without one, ` +
+      `the tightest taken with ${sneaking.tightest} s to spare for a late avatar; ` +
       `${running.runs} runs, ${running.outside} outside the pace foretold ` +
       `(by up to ${seconds(running.worstS * 1000)}), a stop ` +
       `${running.stopS.map((s) => s.toFixed(2)).join('–')} s; ` +
@@ -15502,8 +15929,8 @@ function reportSprint(name, run, sprint, walk) {
 // pad-quickchat.png  the quick chat the controller's ▶ opened in the world, its first phrase in
 //   the focus and its button naming ▶; ▼ and A have to say the second phrase and shut it, and ◀
 //   has to ping the floor within two tiles of the host
-// chat-slot.png  Blackout's wheel on the second step of „Kabel …", „Kabel 3" in the focus: A has
-//   to send it filled in, the guest hear „Kabel 3" and the host's HUD strip show it; C, the
+// chat-slot.png  Blackout's wheel on the second step of „Nummer …", „Nummer 3" in the focus: A has
+//   to send it filled in, the guest hear „Nummer 3" and the host's HUD strip show it; C, the
 //   digit of „Dienst …" and 2 have to say „Dienst DNS" — a mission without such phrases skips it
 // console-plate.png  the heads of a two-console station's devices, one over the other: each has
 //   to engrave what the view says its machine does, the two apart — or the run fails
@@ -15844,10 +16271,10 @@ async function sayByKeys(player, place) {
 
 /**
  * chat-slot.png: Blackout's quick chat carries a station's data. The walkthrough's controller
- * opens the wheel with ▶, ▼ walks down to „Kabel …" and A opens its second step, the first
- * value in the focus; ▶ ▶ moves to „Kabel 3", which is shot, and A says it: the host's page has
- * to send the phrase's place with „3", the guest has to hear „Kabel 3" from the host, and the
- * host's HUD strip has to show „Anna: Kabel 3" unless a radio line holds it. Then the keys do
+ * opens the wheel with ▶, ▼ walks down to „Nummer …" and A opens its second step, the first
+ * value in the focus; ▶ ▶ moves to „Nummer 3", which is shot, and A says it: the host's page has
+ * to send the phrase's place with „3", the guest has to hear „Nummer 3" from the host, and the
+ * host's HUD strip has to show „Anna: Nummer 3" unless a radio line holds it. Then the keys do
  * the same for „Dienst …": C, its digit, 2 — „Dienst DNS". A mission without such phrases skips
  * it; anything else that goes wrong fails the run.
  */
@@ -15886,10 +16313,10 @@ async function captureChatSlot(player, other) {
   const said = seen.sent.slice(sentBefore).find((msg) => msg.kind === 'chat');
   const me = seen.view?.you?.id;
   const heard = await until(
-    () => other.seen.heard.some((line) => line.playerId === me && line.text === 'Kabel 3'),
+    () => other.seen.heard.some((line) => line.playerId === me && line.text === 'Nummer 3'),
     3000,
   );
-  const shown = `${player.name}: Kabel 3`;
+  const shown = `${player.name}: Nummer 3`;
   const strip = await hudLineOnceIt(page, shown, 5000);
   // The strip carries the newer of the last chat line and the run's last line: one the run
   // said after the chat — the mission control's hint, as a longer walkthrough may meet it —
@@ -15906,7 +16333,7 @@ async function captureChatSlot(player, other) {
       `${onPhrase}, A ${stepped ? 'opened the second step' : '!! opened no second step'}, ` +
       `${firstValue} in the focus, ▶▶ to ${onValue}; A sent ${JSON.stringify(said ?? null)}` +
       `${shut ? ', the wheel shut' : ' !! the wheel still open'}; ${other.name} heard ` +
-      `${heard ? '„Kabel 3"' : '!! nothing'}; the HUD strip "${strip ?? '(on the air)'}"` +
+      `${heard ? '„Nummer 3"' : '!! nothing'}; the HUD strip "${strip ?? '(on the air)'}"` +
       `${strip !== shown && newer ? ', a line of the run newer than the chat' : ''}; ` +
       `keys sent ${JSON.stringify(keyed)}, ${other.name} heard ` +
       `${keyedHeard ? '„Dienst DNS"' : '!! nothing'}`,
@@ -15919,7 +16346,7 @@ async function captureChatSlot(player, other) {
     onValue !== 3 && `▶▶ came to ${onValue}`,
     (said?.phrase !== wire || said?.value !== '3') && `A sent ${JSON.stringify(said)}`,
     !shut && 'the wheel stayed open',
-    !heard && `${other.name} never heard „Kabel 3"`,
+    !heard && `${other.name} never heard „Nummer 3"`,
     strip !== null && strip !== shown && !newer && `the HUD strip read "${strip}"`,
     (keyed?.phrase !== service || keyed?.value !== 'DNS') &&
       `the keys sent ${JSON.stringify(keyed)}`,
@@ -16030,7 +16457,7 @@ const DANGER_SHOT_TILES = 3.5;
  * Where the danger sense's player starts: by the Flurwache's beat, on the tile nearest to it
  * that the drone never looks at (patrol.mjs `havens`, every door shut as the run starts) — so
  * that it passes within DANGER_SHOT_TILES of a player it does not spot — and on nothing else of
- * the map: no plate, door, console, part or source's place.
+ * the map: no plate, door, console or part, and no source's only place.
  */
 const UNDER_THE_PATROL = (() => {
   const { map } = BLACKOUT;
@@ -16049,7 +16476,9 @@ const UNDER_THE_PATROL = (() => {
   const legs = middles.map((a, i) => [a, middles[(i + 1) % middles.length]]);
   const offBeat = ({ x, y }) =>
     Math.min(...legs.map(([a, b]) => offLeg({ x: x + 0.5, y: y + 0.5 }, a, b)));
-  const spots = map.manuals.flatMap((m) => m.spots);
+  // A source with a place to spare gives one up to the drill's copy (`dangerMission`): the
+  // Flur's havens by the beat are the pillars' shadows, where Blackout lays its Klemmbrett.
+  const spots = map.manuals.flatMap((m) => (m.spots.length > 1 ? [] : m.spots));
   const things = [map.plates, map.doors, map.stations, map.items, spots].flat();
   const taken = new Set(things.map(({ x, y }) => `${x},${y}`));
   const solid = furniture(map);
@@ -16078,6 +16507,13 @@ function dangerMission() {
     map: {
       ...blackout.map,
       spawns: [UNDER_THE_PATROL, blackout.map.spawns[0]],
+      // No source lies where the drill's player starts: it keeps its other places.
+      manuals: blackout.map.manuals.map((manual) => ({
+        ...manual,
+        spots: manual.spots.filter(
+          (spot) => spot.x !== UNDER_THE_PATROL.x || spot.y !== UNDER_THE_PATROL.y,
+        ),
+      })),
       drones: blackout.map.drones.map((drone) => ({ ...drone, activeAfterSolved: 0 })),
     },
   };
@@ -17193,14 +17629,14 @@ async function captureMusicPacks() {
 // Ben and Cleo join and say yes, all three skip the opening — Anna in the Archiv, Ben at the
 // Flur's west end, Cleo at its east end. Notlicht: all three walk to the main switch and open
 // its panel — three-lever.png, Anna's: a lamp lit over each of the three levers, the plate
-// saying „NUR ZU DRITT" — and throw together. Notstrom: Ben reads the book in the Archiv first
-// while Cleo stands on the plate HALTEN; Anna walks through the door it holds to the box, Ben to
-// the meter — three-plate.png, Cleo's screen: the hands line „Cleo: HALTEN · Anna: Pult A · Ben:
-// Pult B", the door held — and the box is cut as the plan pins it. Signalkette: Cleo walks to
-// the clipboard, Anna to console A, Ben to console B — three-hands.png, Anna's screen naming all
-// three; three-reader.png, Cleo's screen with the clipboard's rules open while A and B are
-// manned; three-phone-932.png, Cleo's page as a large phone held sideways, her own job alone as
-// the row's chip — and the chain is worked as the plan pins it. Then Cleo and Ben give their seats
+// saying „NUR ZU DRITT" — and throw together. Anlaufsteuerung: Ben reads the Betriebsbuch in the
+// Archiv first while Cleo stands on the plate HALTEN; Anna walks through the door it holds to
+// console A, Ben to console B — three-plate.png, Cleo's screen: the hands line „Cleo: HALTEN ·
+// Anna: Pult A · Ben: Pult B", the door held — and its stages are run up as the plan pins them.
+// Paketfilter: Cleo walks to the Richtlinie, Anna to the Sperrpult, Ben to the Analysepult —
+// three-hands.png, Anna's screen naming all three; three-reader.png, Cleo's screen with the
+// policy open while A and B are manned; three-phone-932.png, Cleo's page as a large phone held
+// sideways, her own job alone as the row's chip. Then Cleo and Ben give their seats
 // up from the menu, the run is called off on Anna's page, and Anna leaves the room. Each hands
 // shot has to say its words whole in the window, at the HUD's smallest size or more, the phone's
 // row its rules too (`capturePhoneGame`); the lever and the reader are held to what lever.png
@@ -17355,11 +17791,12 @@ async function toConsoles(seats) {
 }
 
 /**
- * The Notstrom for three: Ben reads the book first while Cleo stands on the plate that holds
- * the Maschinenraum's door; Anna walks through it to the box, Ben to the meter — three-plate.png
- * on Cleo's page, the door held — and the box is cut as the plan pins it (`cutAsPinned`).
+ * The Anlaufsteuerung for three: Ben reads the Betriebsbuch first while Cleo stands on the plate
+ * that holds the Maschinenraum's door; Anna walks through it to console A, Ben to console B —
+ * three-plate.png on Cleo's page, the door held — and its stages are played as the plan pins
+ * them (`playAnlauf`).
  */
-async function threeAtTheNotstrom({ anna, ben, cleo, crew }) {
+async function threeAtTheAnlauf({ anna, ben, cleo, crew }) {
   await viewsCaughtUp(crew);
   const plate = mapOf(cleo).plates.find((p) => !p.freezesDrone);
   const door = BLACKOUT.map.doors.find((d) => d.opensBy.plateId === plate?.id);
@@ -17381,14 +17818,14 @@ async function threeAtTheNotstrom({ anna, ben, cleo, crew }) {
   }
   await openPanel(anna, 'a');
   await openPanel(ben, 'b');
-  await cutAsPinned(anna, ben);
+  await playAnlauf({ a: anna, b: ben });
   await panelsClosed(crew);
 }
 
 /**
- * three-reader.png: Cleo opens the clipboard's rules while Anna and Ben stand at consoles A and
+ * three-reader.png: Cleo opens the policy's sheet while Anna and Ben stand at consoles A and
  * B — her view has to name them there — held to what reading.png is: no page running past its
- * sheet, the panel not running out sideways; then she puts them down.
+ * sheet, the panel not running out sideways; then she puts it down.
  */
 async function captureThreeReader({ anna, ben, cleo }, clipboard) {
   const overlay = cleo.page.locator('.reading-modal');
@@ -17414,42 +17851,38 @@ async function captureThreeReader({ anna, ben, cleo }, clipboard) {
 }
 
 /**
- * The Signalkette for three: Cleo walks to the clipboard, Anna to console A, Ben to console B —
- * three-hands.png on Anna's page, three-reader.png, three-phone-932.png on Cleo's held as a phone
- * — and the chain is worked as the plan pins it, without the walkthrough's alarm.
+ * The Paketfilter for three: Cleo walks to the policy on the Flur's wall, Anna to the Sperrpult,
+ * Ben to the Analysepult — three-hands.png on Anna's page, three-reader.png, three-phone-932.png
+ * on Cleo's held as a phone. The station is left unplayed: the walkthrough's own run plays it.
  */
-async function threeAtTheSignalkette(drill) {
+async function threeAtThePaketfilter(drill) {
   const { anna, ben, cleo, crew } = drill;
   await viewsCaughtUp(crew);
-  const clipboard = pinnedSource('clipboard');
-  const title = armedAt(anna, 'a').title;
-  const [atClipboard] = await Promise.all([
-    standOn(cleo, workSpot(cleo, clipboard)),
+  const policy = pinnedSource('chart');
+  const [atPolicy] = await Promise.all([
+    standOn(cleo, workSpot(cleo, policy)),
     toConsoles([
       [anna, 'a'],
       [ben, 'b'],
     ]),
   ]);
-  if (!atClipboard) {
-    throw new Error(`Cleo found no way to the ${clipboard.label}`);
+  if (!atPolicy) {
+    throw new Error(`Cleo found no way to the ${policy.label}`);
   }
-  await foundWherePinned(cleo, clipboard);
-  const job = 'Cleo: Klemmbrett';
+  await foundWherePinned(cleo, policy);
+  const job = 'Cleo: Richtlinie';
   const all = `Anna: Pult A · Ben: Pult B · ${job}`;
   await handsShot(anna, 'three-hands.png', '.stage-hands', all, () =>
     capture(anna.page, 'three-hands.png'),
   );
   // The reader's shot before the phone's: a page once held as a phone may keep its finger's
   // look (pointer: coarse, the joystick) in a window's capture after.
-  await captureThreeReader(drill, clipboard);
+  await captureThreeReader(drill, policy);
   await asLargePhone(cleo.page, () =>
     handsShot(cleo, 'three-phone-932.png', '.hands-chip', job, () =>
       capturePhoneGame(cleo.page, 'three-phone-932.png', "Cleo's phone sideways"),
     ),
   );
-  await openPanel(anna, 'a');
-  await openPanel(ben, 'b');
-  await solveSignal([anna, ben], title, BLACKOUT_PLAN.signalkette.stages, false);
 }
 
 /**
@@ -17484,7 +17917,7 @@ async function threeGiveUp({ anna, ben, cleo }) {
 }
 
 /**
- * The three drill (see above): Blackout for three through the Signalkette on the plan's seed,
+ * The three drill (see above): Blackout for three as far as the Paketfilter on the plan's seed,
  * the room given up after. Skipped for any other mission or seed; the contexts closed whatever
  * happened.
  */
@@ -17503,8 +17936,8 @@ async function captureThree() {
     const drill = await threeCrew();
     contexts.push(...drill.crew.map(({ context }) => context));
     await threeAtTheLever(drill);
-    await threeAtTheNotstrom(drill);
-    await threeAtTheSignalkette(drill);
+    await threeAtTheAnlauf(drill);
+    await threeAtThePaketfilter(drill);
     await threeGiveUp(drill);
   } catch (err) {
     console.log(`three              !! ${firstLine(err)}`);
@@ -17781,7 +18214,7 @@ async function rotationToTheEnd(crew, run) {
  */
 async function captureRotation() {
   if (MISSION.toLowerCase() === 'blackout') {
-    skip('rotation', 'Blackout has no Wechselplatz: its probe plays in a Systemcheck run');
+    skip('rotation', 'Blackout plays its own Wechselplatz: the probe plays in a Systemcheck run');
     return;
   }
   const from = Date.now();

@@ -102,7 +102,7 @@ function ticked(state: GameState, at: number): GameState {
 }
 
 /** The plan's entry for the stage the views show, as it opens. */
-function stageOf(view: StartupView, board: StartupView): StartupPlanStage {
+export function stageOf(view: StartupView, board: StartupView): StartupPlanStage {
   const terminal = view.terminal;
   const feeders = board.board?.feeders.map((entry) => entry.lamps) ?? [];
   if (terminal === null) {
@@ -113,7 +113,7 @@ function stageOf(view: StartupView, board: StartupView): StartupPlanStage {
 }
 
 /** What `move` adds to the plan's stage: a value set into a gap, or the breaker closed. */
-function noted(stage: StartupPlanStage, move: Move<PuzzleInput>): void {
+export function noted(stage: StartupPlanStage, move: Move<PuzzleInput>): void {
   const { input } = move;
   if ('breaker' in input) {
     stage.breaker = input.breaker;

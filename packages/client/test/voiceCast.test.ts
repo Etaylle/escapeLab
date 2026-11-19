@@ -416,7 +416,8 @@ describe('a new voice over takes the person has (--replace)', () => {
     expect(staleTakes(manifest, 'laura')).toHaveLength(80);
     expect(staleTakes(manifest, 'nobody')).toEqual([]);
     // A person's own recording is no voice's: it stays whatever voice is kept.
-    const [id = '', take] = his[0] ?? [];
+    // (His first take of a line a mission ships: the old chain's are kept for runs in flight.)
+    const [id = '', take] = his.find(([, each]) => shippedLines().has(each.text)) ?? [];
     const line = shippedLines().get(take?.text ?? '');
     const byHand = { file: take?.file ?? '', source: 'human' } as const;
     const said = line === undefined ? [] : [entryOf(line.said, 1000, line, 'helmut', byHand)];

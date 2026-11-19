@@ -33,11 +33,21 @@ function handsAt(mission: Mission): Record<string, number> {
 
 describe('the places of a station', () => {
   it('are its consoles, the sources covering it, the plates it holds, the parts it needs', () => {
-    expect(placesOf(blackout, 'notstrom')).toEqual([
+    expect(placesOf(blackout, 'anlauf')).toEqual([
       { kind: 'console', console: 'a' },
       { kind: 'console', console: 'b' },
       { kind: 'source', id: 'buch-archiv' },
       { kind: 'plate', id: 'flurplatte' },
+    ]);
+    expect(placesOf(blackout, 'paketfilter')).toEqual([
+      { kind: 'console', console: 'a' },
+      { kind: 'console', console: 'b' },
+      { kind: 'source', id: 'richtlinie' },
+    ]);
+    expect(placesOf(blackout, 'notstrom')).toEqual([
+      { kind: 'console', console: 'a' },
+      { kind: 'console', console: 'b' },
+      { kind: 'source', id: 'wartungsbuch' },
     ]);
     expect(placesOf(blackout, 'frequenz')).toEqual([
       { kind: 'console', console: 'a' },
@@ -72,12 +82,16 @@ describe('the places of a station', () => {
 
 describe('a place for every hand', () => {
   it('Blackout: every station puts a crew of three to work at once', () => {
+    // Every station the lab holds, the three that take turns at the Wechselplatz included:
+    // whichever a run draws, the third hand has a place.
     expect(handsAt(blackout)).toEqual({
       notlicht: 3,
-      notstrom: 4,
-      signalkette: 3,
+      anlauf: 4,
+      paketfilter: 3,
       subsysteme: 3,
+      signalkette: 3,
       frequenz: 3,
+      notstrom: 3,
       reaktorstart: 4,
     });
   });
@@ -133,13 +147,23 @@ describe('a place for every hand', () => {
   });
 });
 
+/** A seed for each station of Blackout's Wechselplatz (blackoutPlan.ts `DRAW_SEEDS`). */
+const SEED_DRAWING: Readonly<Record<string, number>> = {
+  signalkette: 12,
+  frequenz: 56,
+  notstrom: 93,
+};
+
 /**
- * Blackout for a crew of `size` on the harness's seed, its lights out, the crew moved on to the
- * station of `puzzleId` as if every one before it were solved.
+ * Blackout for a crew of `size`, its lights out, the crew moved on to the station of `puzzleId`
+ * as if every one before it were solved — on a seed that draws it, where it is one of the
+ * Wechselplatz's, else on the Signalkette's.
  */
 function atStation(puzzleId: string, size = 3): GameState {
-  const state = lightsOut(started(blackout, 5, T0, size));
-  return { ...state, currentPuzzleIndex: blackout.puzzles.findIndex((p) => p.id === puzzleId) };
+  const seed = SEED_DRAWING[puzzleId] ?? 12;
+  const state = lightsOut(started(blackout, seed, T0, size));
+  const index = state.mission.puzzles.findIndex((p) => p.id === puzzleId);
+  return { ...state, currentPuzzleIndex: index };
 }
 
 /** The hands as `p1`'s view tells them. */
@@ -156,7 +180,7 @@ const B = { kind: 'console', console: 'b' } as const;
 describe('the hands at the station in front of the crew', () => {
   it('are left out for a crew of two, before the lights go out, and once no station is up', () => {
     expect(handsIn(atStation('notlicht', 2))).toBeUndefined();
-    expect(handsIn(started(blackout, 5, T0, 3))).toBeUndefined();
+    expect(handsIn(started(blackout, 12, T0, 3))).toBeUndefined();
     expect(handsIn(atStation('notlicht'))).toBeDefined();
     const over = applyAction(atStation('notlicht'), { type: 'time-expired', at: T0 + 2_000_000 });
     expect(handsIn(over)).toBeUndefined();
@@ -184,16 +208,17 @@ describe('the hands at the station in front of the crew', () => {
     expect(handsIn(two)?.open).toEqual([A]);
   });
 
-  it('name the box, the meter and the plate held at the Notstrom, the book once it is known', () => {
+  it('name both consoles and the plate held at the Anlaufsteuerung, the book once known', () => {
     const where = {
-      stations: { notstrom: ['p1'], 'notstrom/b': ['p2'] },
+      stations: { anlauf: ['p1'], 'anlauf/b': ['p2'] },
       plates: { flurplatte: ['p3'] },
     };
-    const manned = standing(atStation('notstrom'), where);
+    const manned = standing(atStation('anlauf'), where);
     expect(heldIn(manned)).toEqual({ p1: A, p2: B, p3: { kind: 'plate', id: 'flurplatte' } });
     // Nobody has come across the book yet: no place to name.
     expect(handsIn(manned)?.open).toEqual([]);
-    const found = standing(atStation('notstrom'), { ...where, found: { p2: ['source:buch-archiv'] } });
+    const bookFound = { ...where, found: { p2: ['source:buch-archiv'] } };
+    const found = standing(atStation('anlauf'), bookFound);
     expect(handsIn(found)?.open).toEqual([{ kind: 'source', id: 'buch-archiv' }]);
     const reading = standing(found, { stations: where.stations, manuals: { 'buch-archiv': ['p3'] } });
     expect(heldIn(reading)).toMatchObject({ p3: { kind: 'source', id: 'buch-archiv' } });
@@ -201,7 +226,7 @@ describe('the hands at the station in front of the crew', () => {
   });
 
   it('name whoever is away only where their avatar holds a plate or a part still', () => {
-    const away = applyAction(atStation('notstrom'), lineDrops('p3', T0 + 1000));
+    const away = applyAction(atStation('anlauf'), lineDrops('p3', T0 + 1000));
     expect(heldIn(away)).toEqual({ p1: null, p2: null });
     const holding = standing(away, { plates: { flurplatte: ['p3'] } });
     const plate = { kind: 'plate', id: 'flurplatte' };
@@ -209,10 +234,10 @@ describe('the hands at the station in front of the crew', () => {
   });
 
   it('take a plate that holds a door not open for good, or a drone, as a job — no other', () => {
-    // At the Signalkette the Maschinenraum's door is open for good; the camera plate holds a drone.
-    const idle = standing(atStation('signalkette'), { plates: { flurplatte: ['p3'] } });
+    // At the Serverraum the Maschinenraum's door is open for good; the camera plate holds a drone.
+    const idle = standing(atStation('subsysteme'), { plates: { flurplatte: ['p3'] } });
     expect(heldIn(idle)).toMatchObject({ p3: null });
-    const camera = standing(atStation('signalkette'), { plates: { kameraplatte: ['p3'] } });
+    const camera = standing(atStation('subsysteme'), { plates: { kameraplatte: ['p3'] } });
     expect(heldIn(camera)).toMatchObject({ p3: { kind: 'plate', id: 'kameraplatte' } });
   });
 
@@ -287,9 +312,14 @@ describe('what the hands carry', () => {
   });
 
   it('name no source or part nobody has found, at any of Blackout\'s stations', () => {
-    const unfound = /aktenschrank|schluessel|spind|klemmbrett|buch-archiv|ersatzsicherung/;
+    const hidden = ['aktenschrank', 'schluessel', 'spind', 'klemmbrett', 'buch-archiv'];
+    const unfound = new RegExp(
+      [...hidden, 'richtlinie', 'wartungsbuch', 'ersatzsicherung'].join('|'),
+    );
     for (const def of blackout.puzzles) {
       const state = atStation(def.id);
+      expect(state.mission.puzzles[state.currentPuzzleIndex]?.id).toBe(def.id);
+      expect(state.currentPuzzleIndex, def.id).toBeLessThan(6);
       for (const id of ['p1', 'p2', 'p3']) {
         const hands = JSON.stringify(viewFor(state, id).hands ?? null);
         expect(hands, `${def.id} ${id}`).not.toMatch(unfound);

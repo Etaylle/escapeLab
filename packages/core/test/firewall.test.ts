@@ -170,6 +170,30 @@ describe('the Sicherheitsrichtlinie', () => {
   });
 });
 
+describe('the printed page on the waves', () => {
+  const printed = (waves: number): string =>
+    JSON.stringify(firewallModule.manual(defOf({ waves })));
+
+  it('reads true of one wave: it waits for the Freigabe, and no next one follows', () => {
+    const page = printed(1);
+    expect(page).toContain('Es kommt eine Welle zu sieben Paketen');
+    expect(page).toContain('sie wartet auf Freigabe. Ist sie sauber, ist der Kern frei.');
+    expect(page).not.toContain('folgt die nächste');
+  });
+
+  it.each([2, 3, 4])('reads true of %i waves: the first waits, the next follows', (waves) => {
+    const page = printed(waves);
+    const count = ['zwei', 'drei', 'vier'][waves - 2];
+    expect(page).toContain('Die erste wartet auf Freigabe');
+    expect(page).toContain(`folgt die nächste von selbst; nach ${count} sauberen ist der Kern`);
+    expect(page).not.toContain('eine Welle zu');
+  });
+
+  it.each([1, 2, 3, 4])('says of %i wave(s) that a wave called off waits again', (waves) => {
+    expect(printed(waves)).toContain('ab; die neue Welle wartet auf Freigabe.');
+  });
+});
+
 describe('the rules in play', () => {
   it('are by default the four simplest: 1, 2, 3 and 6; then 5; the Laborkennung’s 4 last', () => {
     const inPlay = (rules: number) => fresh(1, defOf({ rules })).exercised.map((r) => r + 1);

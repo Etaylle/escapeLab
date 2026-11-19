@@ -18,9 +18,10 @@ import {
   viewFor,
   viewForSpectator,
 } from '../src/index.js';
-import type { GameState, MapView, Mission } from '../src/index.js';
+import type { GameState, MapView, Mission, PuzzleDef } from '../src/index.js';
 import { buttonSyncModule } from '../src/puzzles/buttonSync.js';
 import { canGather, crewsOf, tileKey, type Spot } from '../src/reach.js';
+import { drawInWords, everyDraw, stationsIn } from '../src/rotation.js';
 import { everyConsole, lightsOut, lineBack, lineDrops, standing, started, T0 } from './lab.js';
 
 /**
@@ -647,15 +648,7 @@ describe('Blackout opens on its lever', () => {
     }
   });
 
-  it('lights the Flur and the Archiv first, then each time the room the next step lies in', () => {
-    expect(blackout.puzzles.map((p) => p.lights)).toEqual([
-      ['FLUR', 'ARCHIV'],
-      ['MASCHINENRAUM'],
-      ['SERVERRAUM'],
-      ['LABOR'],
-      ['REAKTOR'],
-      [],
-    ]);
+  it('lights the Flur and the Archiv first, then a room more a solve, in every draw', () => {
     const map = blackout.map;
     // The Archiv opens on the Flur through an archway, no door: the Flur's light floods it,
     // and the lever names both — the book the first-timer needs next lies there.
@@ -663,28 +656,50 @@ describe('Blackout opens on its lever', () => {
       map.labels.find((l) => l.text === text) ?? { x: -1, y: -1 };
     const flur = label('FLUR');
     expect(roomOf(map, label('ARCHIV')).has(tileKey(flur.x, flur.y))).toBe(true);
-    expect(map.manuals.find((m) => m.puzzleIds.includes('notstrom'))?.spots.every(
+    expect(map.manuals.find((m) => m.puzzleIds.includes('anlauf'))?.spots.every(
       (spot) => roomOf(map, label('ARCHIV')).has(tileKey(spot.x, spot.y)),
     )).toBe(true);
-    for (const [i, def] of blackout.puzzles.slice(0, -1).entries()) {
-      const next = blackout.puzzles[i + 1];
-      const lit = map.labels
-        .filter((label) => def.lights.includes(label.text))
-        .flatMap((label) => [...roomOf(map, label)]);
-      const spots = [
-        ...map.stations.filter((s) => s.puzzleId === next?.id),
-        ...map.manuals.filter((m) => next !== undefined && m.puzzleIds.includes(next.id))
-          .flatMap((m) => m.spots),
-      ];
-      expect(
-        spots.some((s) => lit.includes(tileKey(s.x, s.y))),
-        `${def.id} lights nothing the next station needs`,
-      ).toBe(true);
+    const litBy = (def: PuzzleDef): string[] =>
+      map.labels
+        .filter((room) => def.lights.includes(room.text))
+        .flatMap((room) => [...roomOf(map, room)]);
+    const draws = everyDraw(blackout.puzzles);
+    expect(draws).toHaveLength(3);
+    for (const draw of draws) {
+      const run = stationsIn(blackout.puzzles, draw);
+      // The light travels through the lab room by room, whichever station has the Wechselplatz.
+      expect(run.map((p) => p.lights), drawInWords(draw)).toEqual([
+        ['FLUR', 'ARCHIV'],
+        ['MASCHINENRAUM'],
+        ['SERVERRAUM'],
+        ['LABOR'],
+        ['REAKTOR'],
+        [],
+      ]);
+      const lit = new Set<string>();
+      for (const [i, def] of run.slice(0, -1).entries()) {
+        const fresh = litBy(def).filter((tile) => !lit.has(tile));
+        expect(fresh.length, `${def.id} lights no room that was dark`).toBeGreaterThan(0);
+        fresh.forEach((tile) => lit.add(tile));
+        const next = run[i + 1];
+        const spots = [
+          ...map.stations.filter((s) => s.puzzleId === next?.id),
+          ...map.manuals.filter((m) => next !== undefined && m.puzzleIds.includes(next.id))
+            .flatMap((m) => m.spots),
+        ];
+        // Something of the next station — a console, a place its rules may lie — stands in the
+        // light by then: the Anlaufsteuerung lights the Maschinenraum it started, and the
+        // Paketfilter after it waits in the Flur, lit since the lever.
+        expect(
+          spots.some((s) => lit.has(tileKey(s.x, s.y))),
+          `${next?.id} stands wholly in the dark after ${def.id} (${drawInWords(draw)})`,
+        ).toBe(true);
+      }
     }
   });
 
-  it('wakes its drones and emergencies one station later than before the lever came', () => {
-    expect(blackout.map.drones.map((d) => d.activeAfterSolved)).toEqual([3, 4]);
+  it('wakes both drones with the Serverraum, the emergencies with the Paketfilter', () => {
+    expect(blackout.map.drones.map((d) => d.activeAfterSolved)).toEqual([4, 4]);
     expect(blackout.map.sabotage?.afterSolved).toBe(3);
     expect(blackout.map.lamps).toHaveLength(5);
   });

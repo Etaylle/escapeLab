@@ -777,17 +777,26 @@ const BUILD =
   'eine Welle scharf schaltet. Pult B, das Analysepult, zeigt dieselben Pakete mit Quelle, ' +
   'Port und Protokoll und markiert sie; ein markiertes Paket trägt am Sperrpult einen Ring.';
 
-/** Betrieb: the waves, a packet's fall, the faults and their cost, the end. */
+/**
+ * Betrieb: the waves, a packet's fall, the faults and their cost, the end — true of one wave as
+ * of four: the first waits for the Freigabe, each after a clean one follows on its own, and one
+ * called off on a fault waits again.
+ */
 function operationText(def: FirewallDef): string {
-  const waves = spelled(def.waves);
+  const fall = `jedes ${def.fallSec} Sekunden unterwegs`;
+  const course =
+    def.waves === 1
+      ? `Es kommt eine Welle zu ${spelled(def.packets)} Paketen, ${fall}; sie wartet auf ` +
+        'Freigabe. Ist sie sauber, ist der Kern frei. '
+      : `Je Welle kommen ${spelled(def.packets)} Pakete, ${fall}. Die erste wartet auf ` +
+        'Freigabe, nach einer sauberen folgt die nächste von selbst; nach ' +
+        `${spelled(def.waves)} sauberen ist der Kern frei. `;
   return (
-    `Die Pakete kommen in Wellen zu ${spelled(def.packets)}, jedes ${def.fallSec} Sekunden ` +
-    'unterwegs; nach einer sauberen Welle folgt die nächste von selbst. Sauber ist eine Welle, ' +
-    'wenn jedes zu sperrende Paket draußen ist und jedes andere im Kern. Ein gesperrtes Paket, ' +
-    'das passieren durfte, und ein zu sperrendes im Kern sind Fehlquittierungen: Die ' +
-    `Überwachung meldet Alarm und zieht ${costOf(def.penaltySec)} ab; die neue Welle wartet ` +
-    'auf Freigabe. Nach ' +
-    `${def.waves === 1 ? 'einer sauberen Welle' : `${waves} sauberen Wellen`} ist der Kern frei.`
+    course +
+    'Sauber ist eine Welle, wenn jedes zu sperrende Paket draußen ist und jedes andere im ' +
+    'Kern. Ein gesperrtes Paket, das passieren durfte, und ein zu sperrendes im Kern sind ' +
+    `Fehlquittierungen: Die Überwachung meldet Alarm und zieht ${costOf(def.penaltySec)} ab; ` +
+    'die neue Welle wartet auf Freigabe.'
   );
 }
 

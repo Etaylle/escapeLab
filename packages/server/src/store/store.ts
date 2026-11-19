@@ -7,7 +7,7 @@ import {
   type RunOutcome,
   type RunReport,
 } from '@escapelab/core';
-import type { RunStats } from '../runStats.js';
+import type { Ranking, RunStats } from '../runStats.js';
 import { defaultDirectUrl, migrate } from './migrate.js';
 
 /**
@@ -302,22 +302,27 @@ export function isLoggedRun(value: unknown): value is LoggedRun {
 /**
  * The store the environment names: Postgres at DATABASE_URL — an empty one counts as unset —
  * else the run log at `runsLog` with the accounts in memory. Rejects where the database cannot
- * be reached: a server that would lose what it ought to keep does not start.
+ * be reached: a server that would lose what it ought to keep does not start. `ranked` says
+ * which of its runs stand on the Bestenliste (runStats.ts `Ranking`): every one where left out.
  */
-export async function openStore(env: NodeJS.ProcessEnv, runsLog: string): Promise<Store> {
+export async function openStore(
+  env: NodeJS.ProcessEnv,
+  runsLog: string,
+  ranked?: Ranking,
+): Promise<Store> {
   const url = env['DATABASE_URL'];
   if (url === undefined || url === '') {
     const { JsonlStore } = await import('./jsonl.js');
-    return JsonlStore.open(runsLog);
+    return JsonlStore.open(runsLog, ranked);
   }
   const { PostgresStore } = await import('./postgres.js');
-  return PostgresStore.open(url);
+  return PostgresStore.open(url, ranked);
 }
 
 /** What readying the store takes: the migrations applied, then the store opened. */
 export interface ReadySteps {
   migrate: (env: NodeJS.ProcessEnv) => Promise<void>;
-  open: (env: NodeJS.ProcessEnv, runsLog: string) => Promise<Store>;
+  open: (env: NodeJS.ProcessEnv, runsLog: string, ranked?: Ranking) => Promise<Store>;
 }
 
 /**
@@ -331,12 +336,13 @@ export async function readyStore(
   env: NodeJS.ProcessEnv,
   runsLog: string,
   steps: ReadySteps = { migrate, open: openStore },
+  ranked?: Ranking,
 ): Promise<Store> {
   if ((env['DATABASE_URL'] ?? '') !== '') {
     defaultDirectUrl(env);
     await steps.migrate(env);
   }
-  return steps.open(env, runsLog);
+  return steps.open(env, runsLog, ranked);
 }
 
 /** What the server hands every finished run to (room.ts `RunListener`), and how it waits. */

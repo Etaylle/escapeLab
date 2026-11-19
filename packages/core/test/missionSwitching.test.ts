@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { applyAction, initialState, parseMission, viewFor } from '../src/index.js';
+import { applyAction, initialState, parseMission, stationCount, viewFor } from '../src/index.js';
 import type { Action, GameState, Mission } from '../src/index.js';
 
 const blackout: Mission = parseMission(
@@ -81,7 +81,8 @@ describe('mission switching & stats', () => {
   });
 
   it('validates the three shipped missions', () => {
-    expect(blackout.puzzles).toHaveLength(6);
+    expect(blackout.puzzles).toHaveLength(8);
+    expect(stationCount(blackout.puzzles)).toBe(6);
     expect(tutorial.players).toEqual({ min: 2, max: 2 });
     expect(kettenreaktion.players).toEqual({ min: 3, max: 3 });
     expect(kettenreaktion.puzzles.some((p) => p.type === 'simon')).toBe(true);

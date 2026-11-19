@@ -77,9 +77,12 @@ beforeEach(() => {
 
 const linesOf = (file: string): string[] => readFileSync(file, 'utf8').trimEnd().split('\n');
 
-storeContract('the run log with the accounts in memory', async () => {
+storeContract('the run log with the accounts in memory', async (ranked) => {
   const file = join(mkdtempSync(join(tmpdir(), 'escapelab-store-')), 'runs.jsonl');
-  return { store: JsonlStore.open(file), reopen: async () => JsonlStore.open(file) };
+  return {
+    store: JsonlStore.open(file, ranked),
+    reopen: async () => JsonlStore.open(file, ranked),
+  };
 });
 
 describe('appendLine', () => {

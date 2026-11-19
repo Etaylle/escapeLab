@@ -242,7 +242,9 @@ const CABINET_SPOTS = (cabinet?.spots ?? []).map((spot) => tileKey(spot.x, spot.
 
 describe('sight in Blackout', () => {
   it('has the cabinet spots in the Labor this test is about', () => {
-    expect(CABINET_SPOTS).toEqual(['18,14', '18,20', '11,15']);
+    // Both in the Labor's north-west corner, where neither patrol looks (server
+    // test/blackoutParked.test.ts) and out of the Funkpult's reach.
+    expect(CABINET_SPOTS).toEqual(['12,16', '11,15']);
   });
 
   it('hides the Labor cabinet from console B in the Maschinenraum, doors shut or open', () => {
@@ -258,7 +260,7 @@ describe('sight in Blackout', () => {
     }
   });
 
-  it('shows the Labor a step in from its door; its pillar hides the cabinet from beside it', () => {
+  it('shows the Labor a step in from its door; its pillar hides the cabinet from behind it', () => {
     const door = blackout.doors.find((d) => d.id === 'labortuer');
     expect(door).toMatchObject({ x: 10, y: 17 });
     const labor = new Set([...blackoutDoors].filter((key) => key !== '10,17'));
@@ -268,11 +270,12 @@ describe('sight in Blackout', () => {
         .map((spot) => tileKey(spot.x, spot.y));
     expect(seenFrom(middle(11, 17))).toEqual(CABINET_SPOTS);
     // In the doorway the wall beside it hides the spot round the corner, by the west wall.
-    expect(seenFrom(middle(10, 17))).toEqual(['18,14', '18,20']);
-    // The pillar (15,17): right above it, it hides the spot by the south wall; right below it,
-    // the one by the north wall.
-    expect(seenFrom(middle(15, 16))).toEqual(['18,14', '11,15']);
-    expect(seenFrom(middle(15, 18))).toEqual(['18,20', '11,15']);
+    expect(seenFrom(middle(10, 17))).toEqual(['12,16']);
+    // The pillar (15,17) and the benches south of it: right above it both spots show, from
+    // behind it neither, and from the Labor's east wall on its row only the one by the hood.
+    expect(seenFrom(middle(15, 16))).toEqual(CABINET_SPOTS);
+    expect(seenFrom(middle(16, 17))).toEqual([]);
+    expect(seenFrom(middle(18, 17))).toEqual(['11,15']);
   });
 
   // A look costs about 0.1 ms here; the budget is loose enough for a loaded

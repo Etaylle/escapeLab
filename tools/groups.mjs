@@ -260,6 +260,15 @@ export const GROUPS = [
       'meter-swing.png',
       'device-solved.png',
       'signal-grey*.png',
+      // Blackout's Anlaufsteuerung, Paketfilter and Wechselplatz, in its own lab.
+      'anlauf-terminal.png',
+      'anlauf-duct.png',
+      'anlauf-ladder.png',
+      'filter-headers.png',
+      'filter-gate.png',
+      'filter-held.png',
+      'schott-open.png',
+      'out-of-service.png',
     ],
   },
   {

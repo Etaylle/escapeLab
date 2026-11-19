@@ -6,7 +6,13 @@ import {
   type ServerMessage,
 } from '@escapelab/core';
 import { Room } from '../src/room.js';
-import { blackoutMidway, blackoutMission, lastView, rejoin, type Member } from './blackout.js';
+import {
+  blackoutMission,
+  blackoutPatrolled,
+  lastView,
+  rejoin,
+  type Member,
+} from './blackout.js';
 import { passFor } from './passes.js';
 import { standAsIn, walkTo } from './walk.js';
 
@@ -35,7 +41,7 @@ describe('a room’s snapshot', () => {
   });
 
   it('keeps a run mid-way through Blackout whole, and takes it up again as it stood', () => {
-    const { room, anna, ben } = blackoutMidway();
+    const { room, anna, ben } = blackoutPatrolled();
     // Everything else the room keeps, once each: a ping, a quick-chat line, a voice signal and a
     // step refused; Ben's tab closed and back, a phone's ask for his seat turned away meanwhile.
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
@@ -64,7 +70,7 @@ describe('a room’s snapshot', () => {
     }
     expect(keeping.closedClean).toEqual([ben.playerId]);
     expect(Object.keys(keeping.askAgainAt)).toEqual([`${ben.playerId}:${phone.id}`]);
-    expect(state.currentPuzzleIndex).toBe(3);
+    expect(state.currentPuzzleIndex).toBe(4);
     expect(state.items['ersatzsicherung']?.carriedBy).toBe(anna.playerId);
     expect(state.sabotage).toBeNull();
     expect(emergenciesDue(state)).toBe(true);
@@ -128,7 +134,7 @@ interface Crew {
  * snapshot was taken and the crew was back.
  */
 function twins() {
-  const { room, anna, ben } = blackoutMidway();
+  const { room, anna, ben } = blackoutPatrolled();
   vi.advanceTimersByTime(2000);
   const at = Date.now();
   const before = lastView(anna);
@@ -176,13 +182,19 @@ describe('a room taken up again from its snapshot', () => {
     const round = (n: number): number => Math.round(n * 100) / 100;
     expect(patrolOf(was)).toEqual([round(stood.x), round(stood.y)]);
     expect(patrolOf(now)).toEqual(patrolOf(was));
-    // On together: the patrol flies on, the first emergency comes, Ben walks a few tiles.
-    for (const [step, x] of [[500, 28], [20_000, 27], [30_000, 26]] as const) {
+    // On together: the patrol flies on, Ben walks a few tiles — and so on until the run's next
+    // emergency comes, a good two minutes after the Paketfilter by the schedule.
+    const onTogether = (step: number, x: number): void => {
       vi.advanceTimersByTime(step);
       walkTo(was.room, was.ben, x + 0.5, 9.5);
       walkTo(now.room, now.ben, x + 0.5, 9.5);
       expect(views(now)).toEqual(views(was));
       expect(lastPositions(now.anna).drones).toEqual(lastPositions(was.anna).drones);
+    };
+    onTogether(500, 28);
+    onTogether(20_000, 27);
+    for (let i = 0; i < 20 && lastView(was.anna).map?.sabotage == null; i++) {
+      onTogether(10_000, 26 + (i % 2));
     }
     const emergencies = lastView(now.anna).events.filter((e) => e.kind === 'sabotage');
     expect(emergencies.map((e) => e.label)).toEqual(['Notfall: KÜHLKREISLAUF — RELAIS VON HAND']);
@@ -192,7 +204,7 @@ describe('a room taken up again from its snapshot', () => {
   });
 
   it('waits for whoever is not back a minute from the moment it was taken up again', () => {
-    const { room } = blackoutMidway();
+    const { room } = blackoutPatrolled();
     const at = Date.now();
     const kept = room.snapshot(at);
     room.dispose();
@@ -218,7 +230,7 @@ describe('a room taken up again from its snapshot', () => {
   });
 
   it('goes on once whoever was on the line is back, a seat away before staying as it was', () => {
-    const { room, anna, ben } = blackoutMidway();
+    const { room, anna, ben } = blackoutPatrolled();
     ben.detach();
     const dropAt = Date.now();
     vi.advanceTimersByTime(5000);

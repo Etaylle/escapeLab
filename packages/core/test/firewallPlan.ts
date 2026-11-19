@@ -122,10 +122,10 @@ function ticked(state: GameState, at: number): GameState {
  * Every wave the run on `state` may deal, as the module deals it: the def's own and SPARE_WAVES
  * more, a fault calling the next one in.
  */
-function wavesOf(def: PuzzleDef, state: GameState): FirewallPlanPacket[][] {
+export function wavesOf(def: PuzzleDef, state: GameState): FirewallPlanPacket[][] {
   const station = state.puzzleState;
   if (def.type !== 'firewall' || station?.type !== 'firewall') {
-    throw new Error('firewall probe: no Paketfilter armed to deal its waves');
+    throw new Error(`firewall plan: no Paketfilter armed at "${def.id}" to deal its waves`);
   }
   return Array.from({ length: def.waves + SPARE_WAVES }, (_, wave) =>
     dealWave(def, station, wave).map(({ id, line, header, hostile }) => ({

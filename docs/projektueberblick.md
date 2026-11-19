@@ -9,7 +9,7 @@ EscapeLab ist ein kooperatives Browser-Escape-Spiel: Zwei bis drei Personen an g
 - Stationen haben bis zu zwei Pulte an verschiedenen Orten, jedes zeigt nur seinen Teil der Maschine. Die Regeln liegen anderswo, im Handbuch, Spind oder Aktenschrank.
 - Wer am Pult steht, bedient es, auch allein; nur Stationen mit zwei Pulten und solche für die ganze Crew brauchen mehrere zugleich. Abgesprochen wird per Sprachchat.
 - Fehler kosten Zeit. Gewonnen ist, wenn alle Stationen gelöst sind und die ganze Crew den Notausgang erreicht.
-- Referenz ist „Blackout im Labor“: 2 bis 3 Spielende, 900 s auf Normal, 36×22 Felder, sechs Stationen (Notlicht-Hebel, Notstrom, Signalkette, Serverraum, Funk, Reaktorstart).
+- Referenz ist „Blackout im Labor“: 2 bis 3 Spielende, 960 s auf Normal, 36×22 Felder, sechs Stationen je Lauf (Notlicht-Hebel, Anlaufsteuerung, Paketfilter, Serverraum, ein Wechselplatz mit Signalkette, Funk oder Notstromkasten, Reaktorstart).
 
 Quellen: README.md, docs/srs.md, missions/*.json.
 
@@ -80,7 +80,7 @@ Quellen: docs/foundation-audit.md (Nachträge), docs/backlog.md, docs/art-bible.
 Backlog: 20 von 24 Punkten erledigt.
 
 - **Zweiter Playtest** (nur lokal): Auswertung von `runs.jsonl`. Von 7 protokollierten Läufen mit Menschen (20.–26.10., vor den Fixes) wurde keiner gewonnen; das 3,5-s-Fenster mit Countdown ist gebaut, seine Wirkung ungemessen.
-- **Zeitbudget** (wartet auf Daten): Die Skript-Crew gewinnt 462 bis 502 s nach dem Blackout und lässt 40 bis 43 % der 900 s übrig. Vorschlag: 1000 s; Ziel: Erstspieler schaffen Station 2 in 5 Minuten.
+- **Zeitbudget** (wartet auf Daten): Die Skript-Crew gewinnt mit der neuen Stationsfolge ohne Capture-Gruppen 310 bis 365 s nach dem Blackout (2026-11-19) und behält 62 bis 68 % der 960 s; die Regel verlangt 40 %. Der Capture-Lauf lässt 38 bis 39 % übrig, die alte Folge lag mit ihm zuletzt bei 34 % von 900 s (Cloud-CI). Vorschlag: 1000 s; Ziel: Erstspieler schaffen Station 2 in 5 Minuten.
 - **Leerlauf zu zweit** (wartet auf Entscheidung): Im Audit wartet eine Figur 7,7 s am Reaktor; Optionen: die nächste Quelle vorab lesen oder eine Nebenaufgabe.
 - **Nächster Schritt:** zweiter Playtest, danach beide Entscheidungen.
 

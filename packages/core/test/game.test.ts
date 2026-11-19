@@ -7,6 +7,7 @@ import {
   initialState,
   moduleFor,
   parseMission,
+  runOrder,
   stationKey,
   viewFor,
 } from '../src/index.js';
@@ -468,7 +469,10 @@ describe('on to the next mission', () => {
     const over = wonAndConfirmed();
     const next = onTo(over, blackout);
     expect(next.phase).toBe('playing');
-    expect(next.mission).toBe(blackout);
+    // Blackout as the run takes it: the station its seed draws at the Wechselplatz in the chain,
+    // the two out of service after it.
+    expect(next.mission).toEqual({ ...blackout, puzzles: runOrder(blackout.puzzles, next.drawn) });
+    expect(Object.keys(next.drawn)).toEqual(['wechsel']);
     expect([next.difficulty, next.runs]).toEqual([over.difficulty, over.runs + 1]);
     expect(next.players.map((p) => p.id)).toEqual(['p1', 'p2']);
     const onASpawn = (p: GameState['players'][number]): boolean =>

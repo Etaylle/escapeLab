@@ -24,13 +24,20 @@ const blackout = scaleMission(
   'normal',
 );
 
-/** Blackout on the harness's seed for `names` — p1, p2, … — its lights out. */
-function blackoutFor(names: string[]): GameState {
+/** A seed for each station of Blackout's Wechselplatz (core test/blackoutPlan.ts). */
+const SEED_DRAWING: Readonly<Record<string, number>> = {
+  signalkette: 12,
+  frequenz: 56,
+  notstrom: 93,
+};
+
+/** Blackout on `seed` — the harness's draws the Signalkette — for `names`, its lights out. */
+function blackoutFor(names: string[], seed = 12): GameState {
   const ids = names.map((_, i) => `p${i + 1}`);
   const actions: Action[] = [
     ...names.map((name, i): Action => ({ type: 'player-join', playerId: ids[i] ?? '', name })),
     ...ids.slice(1).map((playerId): Action => ({ type: 'set-ready', playerId, ready: true })),
-    { type: 'start-mission', playerId: 'p1', at: T0, seed: 5 },
+    { type: 'start-mission', playerId: 'p1', at: T0, seed },
     { type: 'lights-out', at: T0 + 5000 },
   ];
   return actions.reduce(applyAction, initialState(blackout));
@@ -41,11 +48,12 @@ type Standing = Partial<Omit<Extract<Action, { type: 'set-presence' }>, 'type' |
 
 /**
  * Anna (p1), Ben (p2) and Cleo (p3) at Blackout's station `puzzleId` — as if every one before
- * it were solved — standing as `where` says.
+ * it were solved, in a run that has it — standing as `where` says.
  */
 function three(puzzleId: string, where: Standing = {}): GameState {
-  const state = blackoutFor(['Anna', 'Ben', 'Cleo']);
-  const at = { ...state, currentPuzzleIndex: blackout.puzzles.findIndex((p) => p.id === puzzleId) };
+  const state = blackoutFor(['Anna', 'Ben', 'Cleo'], SEED_DRAWING[puzzleId]);
+  const index = state.mission.puzzles.findIndex((p) => p.id === puzzleId);
+  const at = { ...state, currentPuzzleIndex: index };
   return applyAction(at, {
     type: 'set-presence',
     stations: {},
@@ -92,18 +100,20 @@ describe('the hands line', () => {
   });
 
   it('names the places nobody holds beside a hand without one: the book once it is known', () => {
-    const manned = { stations: { notstrom: ['p1'], 'notstrom/b': ['p2'] } };
-    expect(lineOf(three('notstrom', manned), 'p3')).toBe(
+    const manned = { stations: { anlauf: ['p1'], 'anlauf/b': ['p2'] } };
+    expect(lineOf(three('anlauf', manned), 'p3')).toBe(
       'Cleo: frei — HALTEN · Anna: Pult A · Ben: Pult B',
     );
-    const known = three('notstrom', { ...manned, found: { p2: ['source:buch-archiv'] } });
-    expect(lineOf(known, 'p3')).toBe('Cleo: frei — Handbuch, HALTEN · Anna: Pult A · Ben: Pult B');
-    const held = three('notstrom', { ...manned, plates: { flurplatte: ['p3'] } });
+    const known = three('anlauf', { ...manned, found: { p2: ['source:buch-archiv'] } });
+    expect(lineOf(known, 'p3')).toBe(
+      'Cleo: frei — Betriebsbuch, HALTEN · Anna: Pult A · Ben: Pult B',
+    );
+    const held = three('anlauf', { ...manned, plates: { flurplatte: ['p3'] } });
     expect(lineOf(held, 'p1')).toBe('Anna: Pult A · Ben: Pult B · Cleo: HALTEN');
   });
 
   it('names the open places once, beside the first hand without a place', () => {
-    const one = three('notstrom', { stations: { 'notstrom/b': ['p2'] } });
+    const one = three('anlauf', { stations: { 'anlauf/b': ['p2'] } });
     expect(lineOf(one, 'p3')).toBe('Cleo: frei — Pult A, HALTEN · Anna: frei · Ben: Pult B');
     expect(lineOf(one, 'p2')).toBe('Ben: Pult B · Anna: frei — Pult A, HALTEN · Cleo: frei');
   });
@@ -124,7 +134,7 @@ describe('the hands line', () => {
     const fuse = state.items['ersatzsicherung'] ?? { x: 0, y: 0, carriedBy: null, delivered: false };
     const carrying = { ...state, items: { ...state.items, ersatzsicherung: { ...fuse, carriedBy: 'p3' } } };
     expect(lineOf(carrying, 'p3')).toBe(
-      'Cleo: SICHERUNG holen · Anna: Frequenz-Abgleich · Ben: frei',
+      'Cleo: SICHERUNG holen · Anna: Funkpult · Ben: frei',
     );
   });
 
@@ -137,7 +147,7 @@ describe('the hands line', () => {
   it('speaks in the world’s voice: names and devices, nobody addressed or ordered', () => {
     const lines = [
       lineOf(three('signalkette', SIGNALKETTE), 'p3'),
-      lineOf(three('notstrom', { found: { p2: ['source:buch-archiv'] } }), 'p1'),
+      lineOf(three('anlauf', { found: { p2: ['source:buch-archiv'] } }), 'p1'),
       lineOf(three('notlicht'), 'p2'),
     ].filter((line): line is string => line !== undefined);
     expect(lines).toHaveLength(3);

@@ -6,11 +6,11 @@
   "daily": true,
   "players": { "min": 2, "max": 3 },
   "story": {
-    "intro": "Schichtbuch, 23:47 Uhr: ein Knall, dann Dunkelheit — nur die Notbeleuchtung glimmt rot. Die Nachtschicht ist quer durchs Labor verstreut, die Betriebsunterlagen auch: Handbuch, Klemmbrett, Spind, Aktenschrank. An den Pulten steht keine Betriebsregel, höchstens ein Netzplan; die Regeln liegen bei den Unterlagen. Allein bleibt das Labor dunkel.",
+    "intro": "Schichtbuch, 23:47 Uhr: ein Knall, dann Dunkelheit — nur die Notbeleuchtung glimmt rot. Die Nachtschicht ist quer durchs Labor verstreut, die Betriebsunterlagen auch: Betriebsbuch, Richtlinie, Spind, Aktenschrank. An den Pulten steht keine Betriebsregel, höchstens ein Netzplan; die Regeln liegen bei den Unterlagen. Allein bleibt das Labor dunkel.",
     "win": "Schichtbuch: Mit einem tiefen Brummen erwachen die Systeme, Licht flutet das Labor, die Zentrifugen laufen wieder. Die Luke des Notausgangs ist ins Schloss gefallen, die Nachtschicht vollzählig draußen.",
     "lose": "Schichtbuch: Ein letztes Flackern, dann Stille. Die Notversorgung ist ausgefallen, die Proben sind verloren. Das Labor bleibt dunkel bis zur Frühschicht."
   },
-  "timeLimitSec": 900,
+  "timeLimitSec": 960,
   "intro": {
     "lightsSec": 31.6,
     "place": "Trakt C",
@@ -115,7 +115,7 @@
       { "text": "Brauche eine Ansage!" },
       { "text": "Ich halte die Platte" },
       { "text": "Achtung, Drohne!" },
-      { "text": "Kabel {n}" },
+      { "text": "Nummer {n}" },
       { "text": "Dienst {name}", "names": ["NETZ", "DNS", "DB", "AUTH", "WEB", "MAIL"] }
     ]
   },
@@ -150,11 +150,11 @@
       { "x": 29, "y": 12 }
     ],
     "doors": [
-      { "id": "maschinentuer", "x": 5, "y": 13, "opensBy": { "kind": "plate", "plateId": "flurplatte", "untilSolved": "notstrom" } },
-      { "id": "serverschott", "x": 19, "y": 8, "opensBy": { "kind": "puzzle", "puzzleId": "signalkette" } },
+      { "id": "maschinentuer", "x": 5, "y": 13, "opensBy": { "kind": "plate", "plateId": "flurplatte", "untilSolved": "anlauf" } },
+      { "id": "serverschott", "x": 19, "y": 8, "opensBy": { "kind": "puzzle", "puzzleId": "paketfilter" } },
       { "id": "labortuer", "x": 10, "y": 17, "opensBy": { "kind": "puzzle", "puzzleId": "subsysteme" } },
-      { "id": "reaktortuer", "x": 25, "y": 17, "opensBy": { "kind": "puzzle", "puzzleId": "frequenz" } },
-      { "id": "reaktorschott", "x": 32, "y": 13, "opensBy": { "kind": "puzzle", "puzzleId": "frequenz" } }
+      { "id": "reaktortuer", "x": 25, "y": 17, "opensBy": { "kind": "puzzle", "puzzleId": "wechsel" } },
+      { "id": "reaktorschott", "x": 32, "y": 13, "opensBy": { "kind": "puzzle", "puzzleId": "wechsel" } }
     ],
     "plates": [
       { "id": "flurplatte", "x": 7, "y": 12, "label": "HALTEN" },
@@ -162,29 +162,40 @@
     ],
     "stations": [
       { "puzzleId": "notlicht", "x": 15, "y": 9 },
-      { "puzzleId": "notstrom", "x": 1, "y": 15, "console": "a" },
-      { "puzzleId": "notstrom", "x": 2, "y": 9, "console": "b" },
-      { "puzzleId": "signalkette", "x": 28, "y": 9, "console": "a" },
-      { "puzzleId": "signalkette", "x": 9, "y": 20, "console": "b" },
+      { "puzzleId": "anlauf", "x": 1, "y": 15, "console": "a" },
+      { "puzzleId": "anlauf", "x": 2, "y": 9, "console": "b" },
+      { "puzzleId": "paketfilter", "x": 26, "y": 9, "console": "a" },
+      { "puzzleId": "paketfilter", "x": 21, "y": 9, "console": "b" },
       { "puzzleId": "subsysteme", "x": 11, "y": 4, "console": "a" },
       { "puzzleId": "subsysteme", "x": 21, "y": 4, "console": "b" },
+      { "puzzleId": "signalkette", "x": 29, "y": 9, "console": "a" },
+      { "puzzleId": "signalkette", "x": 9, "y": 20, "console": "b" },
       { "puzzleId": "frequenz", "x": 11, "y": 20 },
+      { "puzzleId": "notstrom", "x": 6, "y": 14, "console": "a" },
+      { "puzzleId": "notstrom", "x": 15, "y": 20, "console": "b" },
       { "puzzleId": "reaktorstart", "x": 34, "y": 16 }
     ],
     "manuals": [
       {
         "id": "buch-archiv",
         "kind": "book",
-        "label": "HANDBUCH",
-        "puzzleIds": ["notstrom"],
+        "label": "BETRIEBSBUCH",
+        "puzzleIds": ["anlauf"],
         "spots": [{ "x": 8, "y": 1 }, { "x": 9, "y": 3 }]
+      },
+      {
+        "id": "richtlinie",
+        "kind": "chart",
+        "label": "RICHTLINIE",
+        "puzzleIds": ["paketfilter"],
+        "spots": [{ "x": 13, "y": 12 }, { "x": 17, "y": 12 }]
       },
       {
         "id": "klemmbrett",
         "kind": "clipboard",
         "label": "KLEMMBRETT",
         "puzzleIds": ["signalkette"],
-        "spots": [{ "x": 11, "y": 12 }, { "x": 24, "y": 12 }]
+        "spots": [{ "x": 4, "y": 12 }, { "x": 3, "y": 12 }]
       },
       {
         "id": "spind",
@@ -198,8 +209,15 @@
         "kind": "cabinet",
         "label": "AKTENSCHRANK",
         "puzzleIds": ["frequenz"],
-        "spots": [{ "x": 18, "y": 14 }, { "x": 18, "y": 20 }, { "x": 11, "y": 15 }],
+        "spots": [{ "x": 12, "y": 16 }, { "x": 11, "y": 15 }],
         "needsKey": "schluessel"
+      },
+      {
+        "id": "wartungsbuch",
+        "kind": "book",
+        "label": "WARTUNGSBUCH",
+        "puzzleIds": ["notstrom"],
+        "spots": [{ "x": 3, "y": 19 }, { "x": 7, "y": 18 }]
       }
     ],
     "edgeworkSign": { "x": 2, "y": 3 },
@@ -291,6 +309,27 @@
         "x": 2,
         "y": 0,
         "text": "Wir sind vom Reaktor zur Luke im Archiv gerannt. Beide Wege sind gleich weit: durchs Labor oder am Serverraum vorbei."
+      },
+      {
+        "x": 24,
+        "y": 8,
+        "text": "Dienstplan Wechselplatz: Signalkette, Funkpult, Notstromkasten. Je Nacht hat eine Anlage Dienst, die zwei anderen ruhen."
+      },
+      {
+        "x": 3,
+        "y": 13,
+        "text": "Das Aggregat läuft nur noch über die Anlaufsteuerung an. Der Notstromkasten hängt seither am Wechselplatz. – Haller"
+      },
+      {
+        "x": 14,
+        "y": 13,
+        "text": "Aktenschrank im Labor: Schlüssel im Serverraum über dem Rack. Nur in Nächten, in denen das Funkpult Dienst hat. – Haller"
+      }
+    ],
+    "conduits": [
+      {
+        "puzzleId": "anlauf",
+        "tiles": [[2, 10], [2, 11], [2, 12], [2, 13], [2, 14], [2, 15]]
       }
     ],
     "exit": { "x": 1, "y": 1 },
@@ -335,7 +374,7 @@
         "range": 4.5,
         "halfAngleDeg": 26,
         "penaltySec": 15,
-        "activeAfterSolved": 3,
+        "activeAfterSolved": 4,
         "frozenByPlate": "kameraplatte"
       },
       {
@@ -375,62 +414,58 @@
       "windowMs": 3500,
       "lights": ["FLUR", "ARCHIV"],
       "onSolved": [
-        "Notlicht steht, danke. Jetzt der Notstrom: Die Anleitung dafür hängt im Archiv, der Kasten ist im Maschinenraum, das Prüfpult im Flur.",
-        "Notlicht brennt, ich sehe euch wieder auf meiner Tafel. Weiter mit dem Notstrom: Anleitung im Archiv, Kasten im Maschinenraum, Prüfpult im Flur."
+        "Notlicht steht, danke. Jetzt das Notstromaggregat: Das Betriebsbuch liegt im Archiv, ein Pult der Anlaufsteuerung steht im Flur, eins im Maschinenraum.",
+        "Notlicht brennt, ich sehe euch wieder auf meiner Tafel. Weiter mit der Anlaufsteuerung: Betriebsbuch im Archiv, Pulte im Flur und im Maschinenraum."
       ]
     },
     {
-      "type": "circuit",
-      "id": "notstrom",
-      "title": "Notstrom-Kasten",
+      "type": "startup",
+      "id": "anlauf",
+      "title": "Anlaufsteuerung",
       "nudges": [
         [
-          "Die Anleitung zum Notstrom hängt im Archiv, auf der Ostseite.",
-          "Ohne die Anleitung aus dem Archiv ratet ihr am Kasten nur herum, sie steht dort auf der Ostseite."
+          "Das Betriebsbuch zur Anlaufsteuerung liegt im Archiv, auf der Ostseite.",
+          "Ohne das Betriebsbuch aus dem Archiv sagen die Leuchten am Schaltfeld nichts, es liegt dort auf der Ostseite."
         ],
         [
-          "Das Prüfpult steht am Westende vom Flur, der Kasten im Maschinenraum hinter der Plattentür, einer bleibt auf der Platte.",
-          "Die Tür zum Maschinenraum geht nur auf, solange jemand auf der Platte davor steht, dahinter wartet der Kasten."
+          "Ein Pult der Anlaufsteuerung steht am Westende vom Flur, eins im Maschinenraum hinter der Plattentür.",
+          "Die Tür zum Maschinenraum geht nur auf, solange jemand auf der Platte davor steht, dahinter wartet das zweite Pult."
         ]
       ],
-      "wires": { "min": 4, "max": 6 },
-      "shorts": 3,
-      "penaltySec": 30,
+      "stages": 2,
       "hints": [
-        "Werkstatt: Der Kasten zeigt nur Farben, das Prüfpult nur Spannungen. Nach jedem Schnitt alle Kabel neu messen.",
-        "Nachtschicht: Bei ungerader Kennung immer das Kabel mit der kleinsten Spannung über 0 V, das hat Haller so eingestellt."
+        "Schichtführung: Die Last steht im Skript, das Leuchtbild dazu in Tabelle 2, die Leuchten am Schaltfeld der Gegenseite.",
+        "Haller: Vier von fünf Leuchtbildern tragen Gelb. Erst beide Leuchten eines Abgangs zusammen sagen, was dran hängt.",
+        "Werkstatt: Der Schalter schließt erst, wenn der Impuls auf den markierten Stufen steht. Zu früh verwirft ihn die Leiter."
       ],
       "lights": ["MASCHINENRAUM"],
       "onSolved": [
-        "Notstrom läuft, die Tür zum Maschinenraum bleibt offen. Als Nächstes die Signalkette: ein Pult im Flur, eins im Maschinenraum.",
-        "Der Notstrom hält, die Maschinenraumtür bleibt jetzt offen. Für die Signalkette liegt ein Klemmbrett im Flur, gearbeitet wird an zwei Pulten."
+        "Aggregat läuft, die Maschinenraumtür bleibt offen. Als Nächstes der Paketfilter am Serverschott: Pulte östlich davon, die Richtlinie hängt westlich an der Südwand.",
+        "Die Maschinen laufen an, im Maschinenraum ist Licht. Der Paketfilter vor dem Serverraum braucht beide Pulte, die Richtlinie hängt westlich vom Schott."
       ]
     },
     {
-      "type": "signal",
-      "id": "signalkette",
-      "title": "Signalkette",
+      "type": "firewall",
+      "id": "paketfilter",
+      "title": "Paketfilter",
       "nudges": [
         [
-          "Das Klemmbrett zur Signalkette liegt im Flur, an der Südwand.",
-          "Auf dem Klemmbrett im Flur steht, wie die Signalkette zu lesen ist, es liegt an der Südwand."
+          "Die Richtlinie zum Paketfilter hängt im Flur an der Südwand, westlich vom Schott.",
+          "Welche Pakete der Filter sperrt, steht in der Richtlinie, sie hängt im Flur an der Südwand."
         ],
-        "Pult A der Signalkette steht am Ostende vom Flur, Pult B im Maschinenraum in der Südostecke."
+        "Das Analysepult steht im Flur gleich östlich vom Schott zum Serverraum, das Sperrpult ein Stück weiter Richtung Ostende."
       ],
-      "stages": 4,
-      "length": 4,
-      "legend": true,
-      "fleetingFrom": 3,
-      "greyFrom": 4,
+      "waves": 1,
+      "packets": 9,
       "hints": [
-        "Frühschicht: Jedes Pult quittiert nach seiner eigenen Spalte der Legende. Verwechselt gibt es Alarm.",
-        "Haller: Ab Stufe 3 zeigt die Anzeige jedes Zeichen nur kurz. Erst mitschreiben, dann quittieren.",
-        "Frühschicht: In der letzten Stufe ist die Anzeige farblos, nur das Muster bleibt. Die Farbe dazu steht in der Legende."
+        "Admin: Die Regeln gelten von oben nach unten, die erste passende entscheidet. Was darunter steht, zählt dann nicht.",
+        "Frühschicht: Das Analysepult markiert, das Sperrpult sperrt nur, was einen Ring trägt. Ohne Ring geht es in den Kern.",
+        "Admin: Ein Paket kann nach Ärger aussehen und doch durchdürfen. Die Reihenfolge der Regeln lesen, nicht nur den Port."
       ],
       "lights": ["SERVERRAUM"],
       "onSolved": [
-        "Schott zum Serverraum ist offen, drinnen Terminal und Rack. Die Drohne ist wach, die Kameraplatte davor legt sie still.",
-        "Das Schott zum Serverraum ist auf, die Unterlagen liegen im Spind darin. Die Kameraplatte davor hält die Drohne an."
+        "Schott zum Serverraum ist offen, drinnen Terminal und Rack. Die Unterlagen dazu liegen im Spind zwischen den beiden.",
+        "Das Schott zum Serverraum ist auf. Terminal und Rack stehen drinnen, die Unterlagen liegen im Spind darin."
       ]
     },
     {
@@ -453,14 +488,43 @@
       ],
       "lights": ["LABOR"],
       "onSolved": [
-        "Server laufen, die Labortür ist offen, drinnen fliegt eine Drohne. Den Aktenschrank im Labor öffnet nur der Schlüssel.",
-        "Server oben, Labortür offen, im Labor patrouilliert eine Drohne. Den Schlüssel zum Aktenschrank holt ihr noch aus dem Serverraum."
+        "Server laufen, Labortür offen, beide Drohnen sind wach. Ich schalte euch die Anlage auf, die heute Dienst hat, sie öffnet den Reaktor.",
+        "Server oben, zwei Drohnen fliegen, die Kameraplatte am Schott hält die im Flur an. Die Anlage, die Dienst hat, öffnet den Reaktor."
+      ]
+    },
+    {
+      "type": "signal",
+      "id": "signalkette",
+      "title": "Signalkette",
+      "pool": "wechsel",
+      "nudges": [
+        [
+          "Das Klemmbrett zur Signalkette liegt im Flur, an der Südwand.",
+          "Auf dem Klemmbrett im Flur steht, wie die Signalkette zu lesen ist, es liegt an der Südwand."
+        ],
+        "Pult A der Signalkette steht am Ostende vom Flur, Pult B im Maschinenraum in der Südostecke."
+      ],
+      "stages": 4,
+      "length": 4,
+      "legend": true,
+      "fleetingFrom": 3,
+      "greyFrom": 4,
+      "hints": [
+        "Frühschicht: Jedes Pult quittiert nach seiner eigenen Spalte der Legende. Verwechselt gibt es Alarm.",
+        "Haller: Ab Stufe 3 zeigt die Anzeige jedes Zeichen nur kurz. Erst mitschreiben, dann quittieren.",
+        "Frühschicht: In der letzten Stufe ist die Anzeige farblos, nur das Muster bleibt. Die Farbe dazu steht in der Legende."
+      ],
+      "lights": ["REAKTOR"],
+      "onSolved": [
+        "Signalkette steht, die Türen zum Reaktor sind offen. Ohne Ersatzsicherung bleibt er aber tot.",
+        "Die Signalkette hält, der Reaktor ist offen. Die Ersatzsicherung dafür liegt im Archiv, bringt sie rüber."
       ]
     },
     {
       "type": "morse",
       "id": "frequenz",
-      "title": "Frequenz-Abgleich",
+      "title": "Funkpult",
+      "pool": "wechsel",
       "nudges": [
         "Der Schlüssel zum Aktenschrank liegt im Serverraum, in der Nordostecke über dem Rack.",
         "Das Funkpult steht im Labor in der Südwestecke, der Aktenschrank im selben Raum."
@@ -472,6 +536,31 @@
       "onSolved": [
         "Frequenz steht, ich höre euch klar. Der Reaktor ist offen, ohne Ersatzsicherung bleibt er aber tot.",
         "Ich hab euch klar auf der Frequenz. Die Ersatzsicherung für den Reaktor liegt im Archiv, bringt sie rüber."
+      ]
+    },
+    {
+      "type": "circuit",
+      "id": "notstrom",
+      "title": "Notstromkasten",
+      "pool": "wechsel",
+      "nudges": [
+        [
+          "Das Wartungsbuch zum Notstromkasten liegt im Maschinenraum.",
+          "Ohne das Wartungsbuch aus dem Maschinenraum ratet ihr am Kasten nur herum."
+        ],
+        "Der Notstromkasten hängt im Maschinenraum gleich hinter der Tür, das Prüfpult steht im Labor an der Südwand."
+      ],
+      "wires": { "min": 4, "max": 6 },
+      "shorts": 3,
+      "penaltySec": 30,
+      "hints": [
+        "Werkstatt: Der Kasten zeigt nur Farben, das Prüfpult nur Spannungen. Nach jedem Schnitt alle Kabel neu messen.",
+        "Nachtschicht: Bei ungerader Kennung immer das Kabel mit der kleinsten Spannung über 0 V, das hat Haller so eingestellt."
+      ],
+      "lights": ["REAKTOR"],
+      "onSolved": [
+        "Der Notstromkasten hält, die Türen zum Reaktor sind offen. Ohne Ersatzsicherung bleibt er aber tot.",
+        "Der Notstromkasten ist sicher, der Reaktor ist offen. Die Ersatzsicherung dafür liegt im Archiv, bringt sie rüber."
       ]
     },
     {

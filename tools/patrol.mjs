@@ -32,6 +32,20 @@ const PLACE_SLACK = 0.25;
  * and the slowest it takes.
  */
 export const RUN = { tile: [0.235, 0.26], corner: [0.1, 0.5] };
+/**
+ * How far behind its slowest run an avatar may fall all the same, in s: a page on a loaded
+ * machine holds a key or a stop longer than it should. The walkthrough's own count of runs
+ * „outside the pace foretold" showed 0.2 to 0.4 s on a laptop, 0.8 s beside a looping suite
+ * and 0.7 s on a CI runner, where it cost a sighting (cloud run 44414620875). Not more: the
+ * stretch of the escape through the Süd-Flur has a clear moment in 10 % of the patrols'
+ * phases with none, in 3 % with 0.7 s and in none with a second (the walk steps down, LATE_STEPS).
+ */
+export const LATE_S = 1;
+/**
+ * The allowances a walk waits for in turn, each for a while before the next smaller: the
+ * widest gap the patrols leave is taken, and a stretch that has none that wide is still run.
+ */
+export const LATE_STEPS = [LATE_S, 0.7, 0.4];
 
 const keyOf = (x, y) => `${x},${y}`;
 const middleOf = (tile) => ({ x: tile.x + 0.5, y: tile.y + 0.5 });
@@ -142,8 +156,8 @@ export function headings(beat, at) {
  * A drone flown on from `at` towards waypoint `target` of `beat` ({
  * waypoints, speed }) for `seconds`, tick by tick as the server steps it: a
  * point every DRONE_TICK_S with the time since `at`. As on the server, a
- * drone that reaches a waypoint looks east there (atan2(0, 0)) until it
- * turns for the next.
+ * drone that reaches a waypoint keeps the look it came with until it sets
+ * out for the next.
  */
 export function flyOn(beat, at, target, seconds) {
   const points = beat.waypoints.map(middleOf);
@@ -159,9 +173,9 @@ export function flyOn(beat, at, target, seconds) {
       continue;
     }
     const step = Math.min(dist, beat.speed * DRONE_TICK_S);
+    facing = Math.atan2(goal.y - y, goal.x - x);
     x += ((goal.x - x) / dist) * step;
     y += ((goal.y - y) / dist) * step;
-    facing = Math.atan2(goal.y - y, goal.x - x);
   }
   return track;
 }
@@ -235,20 +249,26 @@ export function pointOn(path, s) {
  * The first moment, in s from now, a drone of `flying` (from `flights`) may
  * spot a walker who waits `delay` s where `path` starts, runs it at `pace`
  * and stands at its end for `hold` s more — anywhere between where its
- * fastest and its slowest run would have it; null for none.
+ * fastest run would have it and where its slowest would, `late` s behind
+ * at that; null for none.
  */
-export function spottedOn(path, flying, sight, { delay = 0, hold = 0, pace = RUN } = {}) {
+export function spottedOn(
+  path,
+  flying,
+  sight,
+  { delay = 0, hold = 0, pace = RUN, late = LATE_S } = {},
+) {
   const fast = arrivals(path, pace.tile[0], pace.corner[0]);
   const slow = arrivals(path, pace.tile[1], pace.corner[1]);
   const last = path.length - 1;
-  const end = delay + slow[last] + pace.corner[1] + hold;
+  const end = delay + late + slow[last] + pace.corner[1] + hold;
   for (const { drone, track } of flying) {
     for (const at of track) {
       if (at.time > end) {
         break;
       }
       const t = at.time - delay;
-      const from = Math.max(0, progressAt(slow, t) - PLACE_SLACK);
+      const from = Math.max(0, progressAt(slow, t - late) - PLACE_SLACK);
       const to = t <= 0 ? 0 : Math.min(last, progressAt(fast, t) + PLACE_SLACK);
       for (let s = from; ; s = Math.min(to, s + ALONG_PATH)) {
         if (spots(drone, at, pointOn(path, s), sight)) {
@@ -265,7 +285,7 @@ export function spottedOn(path, flying, sight, { delay = 0, hold = 0, pace = RUN
 
 /**
  * Every point of a beat as a drone flies it, a tenth of a tile apart, facing
- * its way; and each waypoint looking east, as it does there for a tick.
+ * its way — on a waypoint the way it came, as it stands there for a tick.
  */
 function beatPoints(beat) {
   const points = beat.waypoints.map(middleOf);
@@ -273,12 +293,11 @@ function beatPoints(beat) {
     const a = points[(t - 1 + points.length) % points.length];
     const facing = Math.atan2(b.y - a.y, b.x - a.x);
     const n = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / 0.1));
-    const along = Array.from({ length: n + 1 }, (_, i) => ({
+    return Array.from({ length: n + 1 }, (_, i) => ({
       x: a.x + ((b.x - a.x) * i) / n,
       y: a.y + ((b.y - a.y) * i) / n,
       facing,
     }));
-    return [...along, { x: b.x, y: b.y, facing: 0 }];
   });
 }
 

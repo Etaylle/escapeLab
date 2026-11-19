@@ -15,7 +15,7 @@ import { passFor } from './passes.js';
  * Blackout: spawns in the Archiv and at either end of the Flur; the lights go
  * out once the intro is over, and the crew throws the lever of the Notlicht in
  * the middle of the Flur. The Flur plate holds the Maschinenraum door;
- * console A of the Notstrom-Kasten stands in the Maschinenraum against its
+ * console A of the Anlaufsteuerung stands in the Maschinenraum against its
  * west wall. Seeds 1 and 28 both start Anna at the west end of the Flur and
  * Ben in the Archiv.
  */
@@ -23,7 +23,7 @@ const blackout: Mission = parseMission(
   JSON.parse(readFileSync(new URL('../../../missions/blackout.json', import.meta.url), 'utf8')),
 );
 const lever = blackout.map.stations.find((s) => s.puzzleId === 'notlicht') ?? { x: 0, y: 0 };
-const box = blackout.map.stations.find((s) => s.puzzleId === 'notstrom' && s.console === 'a');
+const box = blackout.map.stations.find((s) => s.puzzleId === 'anlauf' && s.console === 'a');
 const plate = blackout.map.plates.find((p) => p.id === 'flurplatte') ?? { x: 0, y: 0 };
 
 function collector(): { messages: ServerMessage[]; listen: (m: ServerMessage) => void } {
@@ -62,10 +62,10 @@ function startedIn(manager: RoomManager, seed: number | null) {
 /**
  * What the seed of a room's first run decided, as the room hands it out:
  * where Anna and Ben start, where the audience sees the sources lie, the
- * edgework, and the fuse box Anna switches on beside console A, as the
- * audience sees all of it. Before that the lights go out and the two throw
- * the lever; then Ben stands on the Flur plate, which holds the Maschinenraum
- * door for Anna on her way to the fuse box.
+ * edgework, the station the run has at its Wechselplatz, and the Anlaufsteuerung
+ * Anna switches on beside console A, as the audience sees all of it. Before
+ * that the lights go out and the two throw the lever; then Ben stands on the
+ * Flur plate, which holds the Maschinenraum door for Anna on her way to it.
  */
 function firstRunOf(manager: RoomManager, seed: number) {
   const { room, anna, ben } = startedIn(manager, seed);
@@ -79,18 +79,20 @@ function firstRunOf(manager: RoomManager, seed: number) {
   for (const player of [anna, ben]) {
     room.act(player.playerId, { kind: 'puzzle-input', input: { press: true } });
   }
-  // Ben on the plate; Anna through the door it holds, to the tile east of the fuse box.
+  // Ben on the plate; Anna through the door it holds, to the tile east of console A.
   walkTo(room, ben, plate.x + 0.5, plate.y + 0.5);
   walkTo(room, anna, (box?.x ?? 0) + 1.5, (box?.y ?? 0) + 0.5);
   pressE(room, anna);
-  const fuseBox = lastSpectatorView(audience.messages).puzzle;
+  const startup = lastSpectatorView(audience.messages).puzzle;
+  const { drawn } = room.snapshot().state;
   room.dispose();
   return {
     seed: lastView(anna.messages).seed,
     spawns: [anna, ben].map(({ messages }) => lastView(messages).map?.yourSpawn),
     places: start.map?.manuals.map(({ id, x, y }) => ({ id, x, y })),
     edgework: start.edgework,
-    box: fuseBox,
+    drawn,
+    box: startup,
   };
 }
 
@@ -108,7 +110,8 @@ describe('a room pinned to a seed', () => {
     const manager = new RoomManager(undefined, seedsAllowed({ ALLOW_SEED: '1' }));
     const first = firstRunOf(manager, 1);
     expect(first.seed).toEqual({ room: 1, run: 1 });
-    expect(first.box?.kind).toBe('circuit');
+    expect(first.box?.kind).toBe('startup');
+    expect(first.drawn).toEqual({ wechsel: 'signalkette' });
     expect(firstRunOf(manager, 1)).toEqual(first);
     expect(log).toHaveBeenCalledWith(expect.stringMatching(/pinned to seed 1\b/));
   });

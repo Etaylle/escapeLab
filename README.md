@@ -9,7 +9,8 @@ neue Missionen brauchen keinen Code.
 (`morse`), der Knopf (`button`), unsichtbares Labyrinth (`maze`), Synchron-Knöpfe (`button-sync`),
 Signalkette an zwei Pulten (`signal`), Sicherungskasten und Prüfpult an zwei Pulten (`circuit`),
 Serverraum mit Terminal und Rack an zwei Pulten (`servers`), Zugangskontrolle mit Terminal und
-Tokengerät an zwei Pulten (`access`), Paketfilter mit Sperrpult und Analysepult (`firewall`).
+Tokengerät an zwei Pulten (`access`), Paketfilter mit Sperrpult und Analysepult (`firewall`),
+Anlaufsteuerung mit Skript, Kabelkanal und Leistungsschalter an zwei Pulten (`startup`).
 Layouts/Codes sind pro Partie zufällig (seeded, deterministisch replaybar), Fehler kosten
 Countdown-Zeit. **Missionen:** Tutorial (2 Spieler), Blackout im Labor (2–3 Spieler, 5 Rätsel),
 die Übungshalle (2–3 Spieler, jede Station der Anlage einmal mit ihren Regeln daneben, in
@@ -18,29 +19,38 @@ verschlossenen Raum und kommt nur mit Hilfe heraus) und Doppelschicht (4 Spieler
 getrennten Flügeln** — die Regeln jeder Station liegen im anderen Flügel, und erst der
 Druckausgleich öffnet die Schleuse dazwischen).
 
-**Blackout im Labor** (2–3 Spieler, 15 Minuten auf *Normal*): ein Labor von 36 × 22 Feldern, die
+**Blackout im Labor** (2–3 Spieler, 16 Minuten auf *Normal*): ein Labor von 36 × 22 Feldern, die
 Räume etwa 9 × 7 groß als Ring — Archiv, Flur, Serverraum, Ost-Flur, Reaktor, Süd-Flur, Labor,
 Maschinenraum und zurück in den Flur; die Flure vier Felder breit, die Hauptwege durch zwei Felder
 breite Durchgänge, nur die Türen, die Geräte sind, ein Feld breit. Die Crew startet getrennt und
 außer Sicht (Archiv, beide Enden des Flurs) und wirft zuerst gemeinsam den Notlicht-Hebel in der
 Mitte des Flurs, dann die Stationen in Reihenfolge:
 
-1. *Notstrom-Kasten* (`circuit`): Sicherungskasten im Maschinenraum hinter der Plattentür,
-   Prüfpult im Flur davor; die Regeln im Handbuch im Archiv, die Laborkennung daneben. Nach
-   jedem Schnitt wird neu gemessen, ein Fehlschnitt verdrahtet den Kasten neu.
-2. *Signalkette* (`signal` mit Legende): Pult A im Flur, Pult B im Maschinenraum, die Legende
-   auf dem Klemmbrett; ab Stufe 3 zeigt das sendende Pult die Zeichen nacheinander, in der
-   letzten Stufe ohne Farbe, nur mit ihrem Muster, das die Legende einer Farbe zuordnet.
+1. *Anlaufsteuerung* (`startup`): Pult A im Maschinenraum hinter der Plattentür, Pult B im Flur
+   davor, der Kabelkanal dazwischen unter der Wand; das Betriebsbuch im Archiv, die
+   Laborkennung daneben. Ein Pult tippt das Startskript, das andere schließt den
+   Leistungsschalter, wenn der Impuls auf der Leiter steht; nach jeder Stufe wechseln die Seiten.
+2. *Paketfilter* (`firewall`): Analysepult und Sperrpult im Flur östlich des Serverschotts, die
+   RICHTLINIE an der Südwand westlich davon; eine saubere Welle von neun Paketen öffnet das
+   Schott. Bis der Serverraum läuft, fliegt keine Drohne.
 3. *Serverraum* (`servers`): Terminal und Rack an zwei Pulten im Raum hinter dem Schott, die
    Regeln im Spind dort.
-4. *Frequenz-Abgleich* (`morse`): Pult im Labor, die Tabellen im Aktenschrank, dessen Schlüssel
-   im Serverraum liegt.
+4. Der *Wechselplatz*: Je Lauf ist eine von drei Anlagen in Betrieb, der Seed lost sie aus; die
+   beiden anderen tragen das Schild „AUSSER BETRIEB". *Signalkette* (`signal` mit Legende): Pult
+   A in der Ostecke des Flurs, Pult B im Maschinenraum, die Legende auf dem Klemmbrett im Flur; ab
+   Stufe 3 zeigt das sendende Pult die Zeichen nacheinander, in der letzten ohne Farbe.
+   *Funkpult* (`morse`): Pult im Labor, die Tabellen im Aktenschrank, dessen Schlüssel
+   im Serverraum liegt. *Notstromkasten* (`circuit`): Sicherungskasten gleich hinter der
+   Maschinentür, Prüfpult im Labor, die Regeln im Wartungsbuch im Maschinenraum; nach jedem
+   Schnitt wird neu gemessen.
 5. *Reaktor-Neustart* (`button-sync`): erst mit der Ersatzsicherung aus dem Archiv; die ganze
    Crew drückt gemeinsam. Dann öffnet die Luke im Archiv, und es geht einmal quer durchs Labor
    hinaus — durchs Labor oder am Serverraum vorbei, beide Wege gleich lang.
 
-Drei **Notizen der letzten Schicht** hängen frei lesbar im Labor — am Hebel, im Serverraum und an
-der Luke (`map.notes`): Sie erzählen, was in der Nacht geschah, und lösen nichts.
+Sechs **Notizen der letzten Schicht** hängen frei lesbar im Labor — am Hebel, im Serverraum und an
+der Luke, dazu der Dienstplan des Wechselplatzes beim Sperrpult und zwei Zettel von Haller im
+Maschinenraum und im Labor (`map.notes`): Sie erzählen, was in der Nacht geschah und warum zwei
+Anlagen ruhen, und lösen nichts.
 
 **Serverraum** (`servers`): Pult A ist ein Terminal mit Statustabelle,
 Fehlercodes, Protokoll und Befehlszeile (`start`, `restart`, `status` — tippen oder antippen),
@@ -267,7 +277,7 @@ aus `packages/client/audio/catalog.json`, siehe `docs/sound.md`).
 
 **Neue Missionen** sind reine JSON-Dateien in `missions/`. `packages/core/test/missionMaps.test.ts`
 prüft jede davon automatisch: gleiche Zeilenlängen, alles auf Bodenfeldern, eine Station pro
-Rätsel — bei einem Rätsel mit zwei Pulten (Notstrom-Kasten, Signalkette, Serverraum) je eine für
+Rätsel — bei einem Rätsel mit zwei Pulten (Anlaufsteuerung, Paketfilter, Serverraum) je eine für
 Pult A und Pult B, mehr als vier Felder auseinander — und per Flutfüllung mit den echten
 Tür-Regeln, dass die Stationen in Reihenfolge erreichbar sind (in freier Reihenfolge jede schon
 ohne eine gelöste) und am Ende **alle** den Notausgang erreichen können — nur eine Mission in
@@ -275,7 +285,7 @@ freier Reihenfolge darf ohne enden, dann gewinnt die letzte Station den Lauf. Di
 (`missions/uebungshalle.json`) entsteht aus der Modulliste: Nach einem neuen Modul schreibt
 `node --import tsx ../core/test/writeHall.ts` (aus `packages/server`) sie samt Harness-Plan neu.
 Eine Plattentür kann mit `untilSolved` ein Rätsel nennen: Ist es gelöst, bleibt
-sie auch ohne Platte offen (Blackout: die Maschinenraumtür nach dem Notstrom). An jeder Station mit
+sie auch ohne Platte offen (Blackout: die Maschinenraumtür nach der Anlaufsteuerung). An jeder Station mit
 einem Pult muss außerdem — wohin ihre Regeln auch ausgelost werden — einer am Pult stehen können,
 während ein anderer sie zugleich liest, und an jeder mit zwei Pulten müssen zwei Verschiedene
 zugleich an beiden stehen können.
@@ -360,7 +370,7 @@ selbst, wie die CI, und probt mitten in einem Einsatz den Neustart: SIGTERM, die
 zweiundzwanzig Gruppen (`tools/groups.mjs`); `SHOTS_ONLY=screens,intro` spielt nur diese,
 `SHOTS_SKIP=perf` alle außer diesen — der schnelle Beweis eines Teils. Vor dem Rundgang laufen die
 Proben, jede in einem Raum für sich: `editor`, `art`, `drones` (Gefahrensinn und eine Drohne aus der
-Nähe), `reconnect`, `restart` und `three` (Blackout zu dritt bis zur Signalkette, die Zielzeile mit
+Nähe), `reconnect`, `restart` und `three` (Blackout zu dritt bis zum Paketfilter, die Zielzeile mit
 jeder Hand: `three-lever`, `three-plate`, `three-hands`, `three-reader`, `three-phone-932`; der
 Systemcheck nennt sie im Log als ausgelassen) — im Systemcheck dazu die Probe des Serverraums, die
 zu `devices` gehört, die der Zugangskontrolle, `access`, die der Anlaufsteuerung, `startup`, die des

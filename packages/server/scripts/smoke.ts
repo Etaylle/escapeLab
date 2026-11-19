@@ -7,11 +7,17 @@
  * station armed — until both have seen enough of its opening and skip it,
  * one after the other: the lights go out at the second skip; then both
  * throw the Notlicht's main switch in the Flur together: every spawn has an
- * open way to it. The Notstrom-Kasten and the Signalkette
- * are worked at two consoles at once, Anna at console A and Ben at console B: Ben reads
- * the Handbuch and walks past the Laborkennung first, then lets Anna into
- * the Maschinenraum to the fuse box and measures at the meter in the Flur —
- * once the box is safe, the Maschinenraum door stays open for good. At a
+ * open way to it. The room is pinned to a seed (SMOKE_SEED, 12 unless set), which
+ * says which station the run has at its Wechselplatz: 12 the Signalkette, 56 the
+ * Funkpult, 93 the Notstromkasten — the smoke plays whichever the seed draws. The
+ * Anlaufsteuerung and the Paketfilter are worked at two consoles at once, Anna at
+ * console A and Ben at console B: Ben reads the Betriebsbuch and walks past the
+ * Laborkennung first, then lets Anna into the Maschinenraum to console A and takes
+ * console B in the Flur — a start with the faulty feeder costs an alarm, each
+ * pulse's breaker closes on the server's clock, and once the generator runs the
+ * Maschinenraum door stays open for good; at the Paketfilter Ben reads the policy,
+ * the wave holds while he steps off the Analysepult, and is cleared on the clock —
+ * no drone is out before the Serverraum is solved. At a
  * station with one console whoever is fewer steps from it works it and the
  * other reads at the source that covers it. It streams client-authoritative
  * positions along BFS paths, each walk once no drone watches its way, as a
@@ -20,9 +26,11 @@
  * Archiv to the reactor (across the Flur while the camera plate holds its
  * drone, taken while that drone patrols the Ost-Flur), solves every station
  * with its module's solver on the views of whoever stands at it — at either
- * console — and whoever reads its rules (plus one deliberate short and one
- * wrong key), has an input turned away while the reader steps off from the
- * radio panel's rules, and survives a mid-game reconnect. On the way out —
+ * console — and whoever reads its rules (plus a deliberate wrong start, and at
+ * the Wechselplatz a wrong key at the Signalkette or a short at the
+ * Notstromkasten), has an input turned away while the reader steps off from the
+ * radio panel's rules where the Funkpult has the place, and survives a mid-game
+ * reconnect. On the way out —
  * by the Labor's way across the lab to the hatch in the Archiv — the hatch
  * says when it opened, and the views of the crew and the audience tick off
  * whoever stands on it; the one still on the way drops there, and the run
@@ -61,6 +69,7 @@ import { PrismaClient } from '@prisma/client';
 import WebSocket from 'ws';
 import {
   canSee,
+  drawPools,
   FIND_REACH,
   FIRST_WAIT_MS,
   inCone,
@@ -74,7 +83,9 @@ import {
   POWER_OUT,
   SNAPSHOT_EVERY_MS,
   SNAPSHOT_LIVE_MS,
+  runOrder,
   SPRINT_FACTOR,
+  stationCount,
   STEP_MARGIN,
   TOKENS,
   UPDATES_PER_SECOND,
@@ -107,27 +118,48 @@ const PORT = Number(process.env['SMOKE_PORT'] ?? 3102);
 process.env['PORT'] = String(PORT);
 // The smoke talks ws://, even where packages/server/cert/ would make the server speak https.
 process.env['TLS'] = 'off';
+// The first room is pinned to a seed, which the server takes only where it is allowed to.
+process.env['ALLOW_SEED'] = '1';
+/**
+ * The seed of the first room: it says which station the run has at Blackout's Wechselplatz —
+ * 12 the Signalkette (core test/blackoutPlan.ts `DRAW_SEEDS`), 56 the Funkpult, 93 the
+ * Notstromkasten.
+ */
+const SEED = Number(process.env['SMOKE_SEED'] ?? 12);
 // Finished runs go to a log in a folder of their own, which the server has to make first.
 const runsDir = mkdtempSync(join(tmpdir(), 'escapelab-smoke-'));
 const RUNS_LOG = join(runsDir, 'logs', 'runs.jsonl');
 process.env['RUNS_LOG'] = RUNS_LOG;
 await import('../src/index.js');
 
-const mission = parseMission(
+const missionFile = parseMission(
   JSON.parse(readFileSync(new URL('../../../missions/blackout.json', import.meta.url), 'utf8')),
 );
+/** What the pinned seed draws: the station the run has at each Wechselplatz, by its pool. */
+const DRAW = drawPools(missionFile.puzzles, SEED);
+/**
+ * Blackout as the pinned run plays it: its stations in the run's order, the one its seed draws
+ * at the Wechselplatz among them, the two out of service left out.
+ */
+const mission: Mission = {
+  ...missionFile,
+  puzzles: runOrder(missionFile.puzzles, DRAW).slice(0, stationCount(missionFile.puzzles)),
+};
 
 type Tile = [number, number];
 
 const key = (x: number, y: number): string => `${x},${y}`;
 
-/** Blackout's stations, by their index in the mission. */
+/** Blackout's stations, by their index in the run. */
 const NOTLICHT = 0;
-const NOTSTROM = 1;
-const SIGNALKETTE = 2;
+const ANLAUF = 1;
+const PAKETFILTER = 2;
 const SUBSYSTEME = 3;
-const FREQUENZ = 4;
+/** The Wechselplatz: the Signalkette, the Funkpult or the Notstromkasten, by the seed. */
+const WECHSEL = 4;
 const REAKTOR = 5;
+/** The module of the station the run has at the Wechselplatz. */
+const DRAWN = mission.puzzles[WECHSEL]?.type ?? 'none';
 
 /** A tile of Blackout's map `dx`, `dy` from `spot`, which has to be floor no furniture takes. */
 function besides(spot: { x: number; y: number }, dx: number, dy: number, what: string): Tile {
@@ -151,28 +183,48 @@ function consoleOf(index: number, side?: 'a' | 'b'): { x: number; y: number } {
  * Where each station is worked from, read from the mission: a floor tile within reach of it —
  * of console A, where it has two — out of the drones' eye where they patrol by then.
  */
+/**
+ * Where the station at the Wechselplatz is worked from, by its module: beside its console —
+ * console A, where it has two — and beside its console B, out of both drones' eye.
+ */
+const AT_THE_WECHSELPLATZ: Readonly<Record<string, () => { a: Tile; b: Tile | null }>> = {
+  // below console A of the Signalkette, in the Flur's east corner, where the Flur drone never
+  // looks; above its console B, in the Maschinenraum
+  signal: () => ({
+    a: besides(consoleOf(WECHSEL, 'a'), 0, 1, 'below console A of the Signalkette'),
+    b: besides(consoleOf(WECHSEL, 'b'), 0, -1, 'above console B of the Signalkette'),
+  }),
+  // east of the radio panel, off the Labor drone's line
+  morse: () => ({ a: besides(consoleOf(WECHSEL), 1, 0, 'beside the radio panel'), b: null }),
+  // below the fuse box inside the Maschinenraum's door; above the meter in the Labor
+  circuit: () => ({
+    a: besides(consoleOf(WECHSEL, 'a'), 0, 1, 'below the fuse box'),
+    b: besides(consoleOf(WECHSEL, 'b'), 0, -1, 'above the meter'),
+  }),
+};
+const wechselSpots = (AT_THE_WECHSELPLATZ[DRAWN] ?? fail(`no spots for a ${DRAWN}`))();
 const STAND: Tile[] = [
   // on the Notlicht's lever, in the middle of the Flur
   besides(consoleOf(NOTLICHT), 0, 0, 'at the lever'),
-  // east of the fuse box, console A of the Notstrom-Kasten, in the Maschinenraum
-  besides(consoleOf(NOTSTROM, 'a'), 1, 0, 'beside the fuse box'),
-  // east of console A of the Signalkette, at the Flur's east end, where the Flur drone never looks
-  besides(consoleOf(SIGNALKETTE, 'a'), 1, 0, 'beside console A of the Signalkette'),
+  // east of console A of the Anlaufsteuerung, in the Maschinenraum
+  besides(consoleOf(ANLAUF, 'a'), 1, 0, 'beside console A of the Anlaufsteuerung'),
+  // below the Sperrpult, console A of the Paketfilter, east of the Serverschott
+  besides(consoleOf(PAKETFILTER, 'a'), 0, 1, 'below the Sperrpult'),
   // below the terminal, console A of the Serverraum
   besides(consoleOf(SUBSYSTEME, 'a'), 0, 1, 'below the terminal'),
-  // east of the radio panel, off the Labor drone's line
-  besides(consoleOf(FREQUENZ), 1, 0, 'beside the radio panel'),
+  wechselSpots.a,
   // below the reactor's switch
   besides(consoleOf(REAKTOR), 0, 1, 'below the reactor'),
 ];
 /** Beside console B of the stations worked at two consoles, by station index. */
 const CONSOLE_B = new Map<number, Tile>([
-  // east of the meter, at the Flur's west end
-  [NOTSTROM, besides(consoleOf(NOTSTROM, 'b'), 1, 0, 'beside the meter')],
-  // above console B of the Signalkette, in the Maschinenraum
-  [SIGNALKETTE, besides(consoleOf(SIGNALKETTE, 'b'), 0, -1, 'above console B of the Signalkette')],
+  // east of console B of the Anlaufsteuerung, at the Flur's west end
+  [ANLAUF, besides(consoleOf(ANLAUF, 'b'), 1, 0, 'beside console B of the Anlaufsteuerung')],
+  // below the Analysepult, beside the Serverschott
+  [PAKETFILTER, besides(consoleOf(PAKETFILTER, 'b'), 0, 1, 'below the Analysepult')],
   // above the rack
   [SUBSYSTEME, besides(consoleOf(SUBSYSTEME, 'b'), 0, -1, 'above the rack')],
+  ...(wechselSpots.b === null ? [] : ([[WECHSEL, wechselSpots.b]] as [number, Tile][])),
 ]);
 /** The Laborkennung, in the Archiv. */
 const sign = mission.map.edgeworkSign ?? fail('Blackout has no sign');
@@ -211,11 +263,11 @@ const EXIT: Tile = [exitAt.x, exitAt.y];
 const fuseSlot =
   mission.map.items.find((i) => i.id === FUSE_ID)?.deliverTo ?? fail('the fuse goes nowhere');
 const FUSE_SLOT: Tile = [fuseSlot.x, fuseSlot.y];
-/** The Maschinenraum door: held by its plate until the Notstrom-Kasten is solved, then open. */
+/** The Maschinenraum door: held by its plate until the Anlaufsteuerung is solved, then open. */
 const lastingDoor =
   mission.map.doors.find(
-    (d) => d.opensBy.kind === 'plate' && d.opensBy.untilSolved === mission.puzzles[NOTSTROM]?.id,
-  ) ?? fail('Blackout has no plate door that the Notstrom-Kasten opens for good');
+    (d) => d.opensBy.kind === 'plate' && d.opensBy.untilSolved === mission.puzzles[ANLAUF]?.id,
+  ) ?? fail('Blackout has no plate door that the Anlaufsteuerung opens for good');
 const lastingPlate =
   lastingDoor.opensBy.kind === 'plate' ? lastingDoor.opensBy.plateId : fail('no plate door');
 
@@ -230,12 +282,14 @@ function sourceOf(index: number): { id: string; label: string } {
 
 /**
  * What only the station shows, and a line only its printed rules hold, for
- * the station one player works and another reads: 5. (The stations worked at
- * two consoles keep them apart in `runCircuit`, `runSignal` and `runServers`.)
+ * the station one player works and another reads: the Funkpult, where the run has it. (The
+ * stations worked at two consoles keep them apart in `runStartup`, `runFirewall`, `runCircuit`,
+ * `runSignal` and `runServers`.)
  */
-const SECRETS = [
-  { index: FREQUENZ, instance: '"pattern":"', rules: 'keine 2 Wörter der Frequenztabelle' },
-];
+const SECRETS =
+  DRAWN === 'morse'
+    ? [{ index: WECHSEL, instance: '"pattern":"', rules: 'keine 2 Wörter der Frequenztabelle' }]
+    : [];
 
 function fail(message: string): never {
   console.error(`✗ ${message}`);
@@ -875,16 +929,21 @@ async function takeConsoles(index: number, a: TestClient, b: TestClient): Promis
 }
 
 /**
- * Before the Notstrom-Kasten opens, `reader` reads its rules in the
- * Handbuch and walks past the Laborkennung, whose serial the rules read.
+ * Before station `index` opens, `reader` reads its rules at the source that holds them, where
+ * the run laid it.
  */
-async function readUp(reader: TestClient, helper: TestClient): Promise<void> {
-  const book = sourceOf(NOTSTROM);
+async function readUp(index: number, reader: TestClient, helper: TestClient): Promise<void> {
+  const def = mission.puzzles[index] ?? fail(`blackout has no station ${index + 1}`);
+  const book = sourceOf(index);
   await bring(reader, placeOf(book.id), helper);
   const covers = (m: PlayerView['manualsHere'][number]): boolean =>
-    m.id === book.id && m.sections.some((s) => s.puzzleId === CIRCUIT.id);
-  await reader.expectView(`reads the rules of the ${CIRCUIT.title} in the ${book.label}`, (v) =>
+    m.id === book.id && m.sections.some((s) => s.puzzleId === def.id);
+  await reader.expectView(`reads the rules of the ${def.title} in the ${book.label}`, (v) =>
     v.manualsHere.some(covers));
+}
+
+/** `reader` walks past the Laborkennung, whose serial the Paketfilter's policy reads. */
+async function pastTheSign(reader: TestClient, helper: TestClient): Promise<void> {
   await bring(reader, BY_THE_SIGN, helper);
   await reader.expectView('has the Laborkennung', (v) => v.edgework !== null);
 }
@@ -934,7 +993,7 @@ async function openSource(client: TestClient, manualId: string, find: string): P
  * there.
  */
 async function unlockCabinet(): Promise<void> {
-  const cabinet = sourceOf(FREQUENZ);
+  const cabinet = sourceOf(WECHSEL);
   const keyAt = itemTile(KEY_ID);
   const [carrier, helper] = closerTo(keyAt);
   await bring(carrier, keyAt, helper);
@@ -965,22 +1024,154 @@ async function fetchFuse(): Promise<void> {
   }
 }
 
-/** How near the west end of its beat the Flur drone has to be before the camera plate is taken. */
-const FAR_WEST_TILES = 3;
+// --- emergencies -------------------------------------------------------------
+
+const emergencies = mission.map.sabotage ?? fail('Blackout has no emergencies');
+
+/** Whether an emergency has the lab: every station stands locked until it is over. */
+const emergencyOn = (): boolean => crew.some((client) => client.view?.map?.sabotage != null);
 
 /**
- * `holder` takes the camera plate in front of the Serverschott once the Flur drone patrols the
- * west end of its beat, far from the plate and the Schott: it stands still out there while the
- * plate is held, and stepping off the plate into the Schott the holder stays out of its eye.
+ * How long until the room's schedule has its next emergency, ms: `firstAfterSec` after the
+ * lights went out, then every `everySec` (server room.ts `reconcileSabotage`).
  */
-async function holdTheCameraPlate(holder: TestClient): Promise<void> {
-  const westEnd = Math.min(...flurDrone.waypoints.map((w) => w.x)) + 0.5;
-  const deadline = Date.now() + 30_000;
-  while ((holder.drones[flurDrone.id]?.x ?? Infinity) > westEnd + FAR_WEST_TILES) {
-    if (Date.now() > deadline) {
-      fail(`${holder.label}: the Flur drone never came round to its west end in 30 s`);
+function nextEmergencyIn(): number {
+  const since = Date.now() - lightsOutAt;
+  const first = emergencies.firstAfterSec * 1000;
+  const every = emergencies.everySec * 1000;
+  const next = since < first ? first : Math.ceil((since - first) / every) * every + first;
+  return next - since;
+}
+
+/** How long an instruction carried out may take to give way to the next on its holder's view. */
+const ORDER_TAKEN_MS = 2 * 1000;
+
+/** The relay console and the instruction `client`'s view carries now; null without an emergency. */
+const relayOf = (client: TestClient) => client.view?.map?.sabotage?.relay ?? null;
+
+/** What `client` reads out right now, as text; 'null' where it has no instruction. */
+const orderOf = (client: TestClient): string =>
+  JSON.stringify(relayOf(client)?.instruction ?? null);
+
+/**
+ * The instruction `holder` reads out is carried out at the console of the player it names;
+ * whether one was — it is waited for until the holder reads another, two seconds at most.
+ */
+async function carryOut(holder: TestClient): Promise<boolean> {
+  const order = relayOf(holder)?.instruction ?? null;
+  const named = order === null ? null : consoleNamed(order);
+  if (order === null || named === null) {
+    return false;
+  }
+  const before = orderOf(holder);
+  const input = { kind: 'set', control: named.control, value: order.value } as const;
+  named.owner.send({ kind: 'puzzle-input', input });
+  for (let waited = 0; orderOf(holder) === before && waited < ORDER_TAKEN_MS; waited += 10) {
+    await sleep(10);
+  }
+  return true;
+}
+
+/** Whose relay console an instruction names, and the id of the control there; null for none. */
+function consoleNamed(order: {
+  playerName: string;
+  control: string;
+}): { owner: TestClient; control: string } | null {
+  for (const owner of crew) {
+    const control = relayOf(owner)?.controls.find((each) => each.name === order.control);
+    if (owner.view?.you.name === order.playerName && control !== undefined) {
+      return { owner, control: control.id };
     }
-    await sleep(50);
+  }
+  return null;
+}
+
+/**
+ * A relay emergency weathered by the crew: each instruction a console reads out is carried out
+ * at the console of the player it names, until the relays hold — cleared, at no cost.
+ */
+async function weather(): Promise<void> {
+  const label = crew.map((client) => client.view?.map?.sabotage?.label).find(Boolean) ?? '?';
+  const alarmsBefore = alarmsOf(crew[0]);
+  const deadline = Date.now() + emergencies.durationSec * 1000;
+  let done = 0;
+  while (emergencyOn()) {
+    if (Date.now() > deadline) {
+      fail(`the emergency "${label}" is not cleared after ${emergencies.durationSec} s`);
+    }
+    for (const holder of crew) {
+      done += (await carryOut(holder)) ? 1 : 0;
+    }
+    await sleep(20);
+  }
+  assert(
+    alarmsOf(crew[0]) === alarmsBefore,
+    `the emergency „${label}" weathered: ${done} instructions carried out at the consoles ` +
+      'they named, cleared without an alarm',
+  );
+}
+
+/** How many alarms `client`'s view counts so far. */
+const alarmsOf = (client: TestClient): number => client.view?.penaltySeq ?? 0;
+
+/** How many stations `client`'s view has solved. */
+const solvedOf = (client: TestClient): number => client.view?.currentPuzzleIndex ?? 0;
+
+/** The longest a station from the Serverraum on takes the walkthrough, walks included, s. */
+const STRETCH_SEC = 75;
+
+/**
+ * Before a stretch of the run that an emergency must not cut short — a station open, a client
+ * off the line — which takes `seconds` at most: an emergency that is on is weathered, and one
+ * the schedule has within the stretch is waited for and weathered first. Emergencies come only
+ * once `afterSolved` stations are solved.
+ */
+async function quietFor(seconds: number): Promise<void> {
+  const solved = solvedOf(crew[0]);
+  const due = solved >= emergencies.afterSolved && solved < mission.puzzles.length;
+  if (!due || (!emergencyOn() && nextEmergencyIn() > seconds * 1000)) {
+    return;
+  }
+  const comes = Date.now() + Math.max(0, nextEmergencyIn()) + 3000;
+  while (!emergencyOn() && Date.now() < comes) {
+    await sleep(100);
+  }
+  if (emergencyOn()) {
+    await weather();
+  }
+}
+
+const serverschott =
+  mission.map.doors.find((d) => d.id === 'serverschott') ?? fail('Blackout has no Serverschott');
+/** Just inside the Serverschott: out of the Flur drone's eye, three steps from the camera plate. */
+const INSIDE_THE_SCHOTT: Tile = besides(serverschott, 0, -1, 'inside the Serverschott');
+/** How far past the camera plate the Flur drone has to have flown before it is held from behind. */
+const PAST_THE_PLATE_TILES = 0.6;
+
+/**
+ * `holder` takes the camera plate from inside the Serverschott once the Flur drone has just flown
+ * past it eastward, short of its turn: held there it looks away from the whole Flur west of it,
+ * and still does as the holder steps off the plate and walks west — so one of the crew crosses
+ * the Flur's whole length to its east end meanwhile, and the holder gets away after.
+ */
+async function holdTheCameraPlateFromBehind(holder: TestClient): Promise<void> {
+  await walkTo(holder, INSIDE_THE_SCHOTT);
+  const eastEnd = Math.max(...flurDrone.waypoints.map((w) => w.x)) + 0.5;
+  const justPast = (): boolean => {
+    const drone = holder.drones[flurDrone.id];
+    return (
+      drone !== undefined &&
+      Math.cos(drone.facing) > 0.9 &&
+      drone.x > CAMERA[0] + 0.5 + PAST_THE_PLATE_TILES &&
+      drone.x < eastEnd - 2 * TURNING_TILES
+    );
+  };
+  const deadline = Date.now() + 60_000;
+  while (!justPast()) {
+    if (Date.now() > deadline) {
+      fail(`${holder.label}: the Flur drone never flew east past the camera plate in a minute`);
+    }
+    await sleep(20);
   }
   await walkTo(holder, CAMERA);
 }
@@ -988,25 +1179,38 @@ async function holdTheCameraPlate(holder: TestClient): Promise<void> {
 // --- puzzle solvers ----------------------------------------------------------
 
 const leverDef = mission.puzzles[NOTLICHT];
-const circuitDef = mission.puzzles[NOTSTROM];
-const signalDef = mission.puzzles[SIGNALKETTE];
+const startupDef = mission.puzzles[ANLAUF];
+const firewallDef = mission.puzzles[PAKETFILTER];
 const serversDef = mission.puzzles[SUBSYSTEME];
-const morseDef = mission.puzzles[FREQUENZ];
+const wechselDef = mission.puzzles[WECHSEL];
 if (
   leverDef?.type !== 'button-sync' ||
   leverDef.style !== 'lever' ||
-  circuitDef?.type !== 'circuit' ||
-  signalDef?.type !== 'signal' ||
-  !signalDef.legend ||
+  startupDef?.type !== 'startup' ||
+  firewallDef?.type !== 'firewall' ||
   serversDef?.type !== 'servers' ||
-  morseDef?.type !== 'morse'
+  wechselDef?.pool === undefined ||
+  mission.puzzles.length !== REAKTOR + 1
 ) {
-  fail('blackout.json should run the lever, circuit, signal with its legend, servers, morse, sync');
+  fail('blackout.json should run the lever, startup, firewall, servers, its Wechselplatz, sync');
 }
-// Narrowed re-bindings: closures below keep the precise puzzle types.
-const CIRCUIT = circuitDef;
-const SIGNAL = signalDef;
+/** Each station of the file's that the Wechselplatz can have, by its module. */
+const poolDef = <T extends Mission['puzzles'][number]['type']>(
+  type: T,
+): Extract<Mission['puzzles'][number], { type: T }> =>
+  (missionFile.puzzles.find((def) => def.type === type && def.pool === wechselDef.pool) as
+    | Extract<Mission['puzzles'][number], { type: T }>
+    | undefined) ?? fail(`Blackout's Wechselplatz has no ${type}`);
+// Narrowed re-bindings: closures below keep the precise puzzle types. The Notstromkasten and the
+// Signalkette are the file's, whichever of the pool this run has in service.
+const STARTUP = startupDef;
+const FIREWALL = firewallDef;
+const CIRCUIT = poolDef('circuit');
+const SIGNAL = poolDef('signal');
 const SERVERS = serversDef;
+if (!SIGNAL.legend || missionFile.puzzles.every((def) => def.type !== 'morse')) {
+  fail('Blackout’s Wechselplatz should hold the Signalkette with its legend and the Funkpult');
+}
 
 type Transcript = SolveAid<PuzzleInput, PuzzleView>['transcript'];
 
@@ -1244,6 +1448,262 @@ async function readTheLeverNote(): Promise<void> {
     'the audience sees every note of the last shift as an object');
 }
 
+/** How much of what the crew sees a station left open says of itself, in characters. */
+const STILL_OPEN_CHARS = 1500;
+/** Longer than this between two looks of the loop, ms, and the machine was not running it. */
+const LOOK_GAP_MS = 5 * 1000;
+/** How long a station that runs on the server's clock may take here, in seconds. */
+const ON_THE_CLOCK_SEC = 240;
+
+/**
+ * A station whose moves wait for the server's clock — the Anlaufsteuerung's pulse, the
+ * Paketfilter's packets — from the views alone: the solver is asked four times a second with
+ * the moment, and every move it makes is sent from the console it names; a moment without a
+ * move is waited out. The Paketfilter's last wave is clean on the clock, with no move at all.
+ */
+async function solveOnTheClock(index: number): Promise<void> {
+  const def = mission.puzzles[index] ?? fail(`blackout has no station ${index + 1}`);
+  const deadline = Date.now() + ON_THE_CLOCK_SEC * 1000;
+  const [watcher] = crew;
+  const alarmsBefore = alarmsOf(watcher);
+  // What the loop did, for the line that says why a station stayed open.
+  const rounds = { played: 0, waited: 0, unseen: 0, gaps: 0 };
+  let looked = Date.now();
+  const solved = (): boolean =>
+    crew.every((client) => (client.view?.currentPuzzleIndex ?? 0) > index);
+  while (!solved()) {
+    // A look long after the last: the machine slept or stood still, not the station.
+    rounds.gaps += Date.now() - looked > LOOK_GAP_MS ? 1 : 0;
+    looked = Date.now();
+    if (Date.now() > deadline) {
+      fail(stillOpen(index, rounds, alarmsOf(watcher) - alarmsBefore));
+    }
+    // A view of the solve may be on its way to one of the two: no station to look at then.
+    if (crew.some((client) => client.view?.puzzle?.index !== index)) {
+      rounds.unseen += 1;
+      await sleep(50);
+      continue;
+    }
+    const { views, edgework, remainingSec } = crewSees(index);
+    const aid = { transcript: [], remainingSec, at: Date.now() };
+    const moves = moduleFor(def.type).solve(def, views, edgework, aid);
+    if (moves.length > 0) {
+      rounds.played += 1;
+      await play(moves, index);
+    } else {
+      rounds.waited += 1;
+      await sleep(250);
+    }
+  }
+  // The solver plays by the rules at the sources: a fault here is the smoke's own, or the clock's.
+  assert(alarmsOf(watcher) === alarmsBefore,
+    `the solver cleared station ${index + 1} on the clock without an alarm`);
+  console.log(`✓ the solver cleared station ${index + 1} from the views alone, on the clock`);
+}
+
+/**
+ * Why a station on the clock stayed open, as far as the smoke can tell: whether the loop itself
+ * stood still (a laptop asleep on battery failed two runs this way, 17. and 18.11.2026); how
+ * often it played moves, waited for the clock, or found a console without the station on its
+ * view; the alarms it took meanwhile — every fault calls a wave or a pulse off —; and what the
+ * crew sees.
+ */
+function stillOpen(
+  index: number,
+  rounds: { played: number; waited: number; unseen: number; gaps: number },
+  alarms: number,
+): string {
+  const seen = JSON.stringify(crew.map((client) => client.view?.puzzle ?? null));
+  const slept =
+    rounds.gaps === 0
+      ? ''
+      : ` — ${rounds.gaps} time(s) the loop stood over ${LOOK_GAP_MS / 1000} s between two ` +
+        'looks: the machine slept or stalled (pmset -g log), the station is not at fault';
+  return (
+    `station ${index + 1} is still open after ${ON_THE_CLOCK_SEC} s on the clock${slept}: ` +
+    `${rounds.played} rounds with moves, ${rounds.waited} waiting, ${rounds.unseen} with a ` +
+    `console not showing it, ${alarms} alarm(s); the crew sees ${seen.slice(0, STILL_OPEN_CHARS)}`
+  );
+}
+
+type StartupView = Extract<PuzzleView, { kind: 'startup' }>;
+
+/** The Anlaufsteuerung as `view` shows it; null where it is not open. */
+function startupOf(view: PlayerView | null): StartupView | null {
+  return view?.puzzle?.kind === 'startup' ? view.puzzle : null;
+}
+
+/**
+ * The deliberate wrong start, in stage 1: console A's script is given the feeder whose lamps
+ * say it is faulty — red over dark at console B's Schaltfeld — and started. No pulse goes off:
+ * it costs the def's penaltySec, and the value stays in the script.
+ */
+async function wrongStart(typer: TestClient, board: TestClient): Promise<void> {
+  const faulty = faultyFeeder(board);
+  const deadlineBefore = typer.view?.deadlineAt ?? 0;
+  const alarmsBefore = alarmsOf(typer);
+  typer.send({ kind: 'puzzle-input', input: { cmd: 'setze', gap: 'abgang', value: faulty } });
+  await typer.until('the gap set', (v) => terminalOf(v)?.values.abgang === faulty);
+  typer.send({ kind: 'puzzle-input', input: { cmd: 'start' } });
+  const refused = await typer.expectView('sees the alarm after a start with the faulty feeder',
+    (v) => v.penaltySeq === alarmsBefore + 1);
+  assert(refused.deadlineAt === deadlineBefore - STARTUP.penaltySec * 1000,
+    `the wrong start cost ${STARTUP.penaltySec}s of deadline`);
+  assert(
+    terminalOf(refused)?.sent === false && boardOf(board.view)?.pulse === null,
+    'no pulse went off: the script stands as it was, the ladder dark',
+  );
+  credit(typer, 'alarms');
+  deliberate += 1;
+  await board.until('the alarm', (v) => v.penaltySeq === alarmsBefore + 1);
+}
+
+/** The live terminal of the open Anlaufsteuerung as `view` shows it; null where it shows none. */
+const terminalOf = (view: PlayerView | null) => startupOf(view)?.terminal ?? null;
+
+/** The live Schaltfeld of the open Anlaufsteuerung as `view` shows it; null where it shows none. */
+const boardOf = (view: PlayerView | null) => startupOf(view)?.board ?? null;
+
+/** The feeder whose lamps at `board`'s Schaltfeld say it is faulty: red over dark. */
+function faultyFeeder(board: TestClient): number {
+  const feeders = boardOf(board.view)?.feeders ?? fail('console B shows no Schaltfeld');
+  const faulty = feeders.find((entry) => entry.lamps[0] === 'rot');
+  return faulty === undefined ? fail('no feeder shows a fault') : faulty.feeder;
+}
+
+/**
+ * Station 2, the Anlaufsteuerung, worked at two consoles at once: `a` at console A in the
+ * Maschinenraum, `b` at console B in the Flur, which switches it on. In stage 1 console A's
+ * terminal runs the script and shows no lamp, console B's Schaltfeld the lamps and no script,
+ * neither the rules; the audience sees all. After the deliberate wrong start the solver sets
+ * the feeder the book's table names, starts, and closes its breaker once the pulse stands on
+ * the ladder's marked steps, on the server's clock; then the sides swap for stage 2.
+ */
+async function runStartup(a: TestClient, b: TestClient): Promise<void> {
+  const from = { a: a.raw.length, b: b.raw.length };
+  await switchOn(b, ANLAUF);
+  await a.expectView('console A types stage 1: the script, no lamp, no rules', (v) => {
+    const startup = startupOf(v);
+    return startup?.role === 'terminal' && startup.types === 'a' && startup.terminal !== null &&
+      startup.board === null && v.puzzle?.manual === null;
+  });
+  const takesPulse = 'console B takes the pulse: four feeders’ lamps, no script, no rules';
+  await b.expectView(takesPulse, (v) => {
+    const startup = startupOf(v);
+    return startup?.role === 'board' && startup.board?.feeders.length === 4 &&
+      startup.board.pulse === null && startup.terminal === null && v.puzzle?.manual === null;
+  });
+  const live = await zoe.untilSpectator('sees the script, the lamps and the rules at once', (v) =>
+    v.puzzle?.kind === 'startup' && v.puzzle.terminal !== null && v.puzzle.board !== null &&
+      v.puzzle.manual !== null);
+  assert(live.puzzle?.kind === 'startup', 'the audience watches the Anlaufsteuerung');
+  await wrongStart(a, b);
+  await solveOnTheClock(ANLAUF);
+  // Stage 1 never showed console A a lamp nor console B the script; stage 2 swapped them.
+  const stageOne = (client: TestClient, since: number): string =>
+    viewsSince(client, since)
+      .filter(({ view }) => startupOf(view)?.stage === 1)
+      .map(({ raw }) => raw)
+      .join('\n');
+  assert(!stageOne(a, from.a).includes('"feeders":['), 'in stage 1 no lamp ever reached console A');
+  assert(
+    !stageOne(b, from.b).includes('"script":['),
+    'in stage 1 the script never reached console B',
+  );
+  const swapped = viewsSince(b, from.b).some(({ view }) =>
+    startupOf(view)?.stage === 2 && startupOf(view)?.role === 'terminal');
+  assert(swapped, 'in stage 2 console B typed and console A took the pulse');
+  const rules = 'Leuchtbild';
+  const sawRules = [a.raw.slice(from.a), b.raw.slice(from.b)].some((log) =>
+    log.some((line) => line.includes('"manual":[') && line.includes(rules)));
+  assert(!sawRules, 'the printed table never reached either console');
+  // The Anlaufsteuerung counts for both consoles, whichever closed the last breaker.
+  credit(a, 'operated');
+  credit(b, 'operated');
+  await backOnTheMap(ANLAUF + 1);
+}
+
+type FirewallView = Extract<PuzzleView, { kind: 'firewall' }>;
+
+/** The Paketfilter as `view` shows it; null where it is not open. */
+function firewallOf(view: PlayerView | null): FirewallView | null {
+  return view?.puzzle?.kind === 'firewall' ? view.puzzle : null;
+}
+
+/**
+ * The wave holds while a console stands empty: `analysis` steps off the Analysepult right after
+ * the Freigabe, both views say the wave stands still and which console is empty, and it runs on
+ * once the console is manned again — no packet lost meanwhile, no alarm.
+ */
+async function waveHolds(gate: TestClient, analysis: TestClient): Promise<void> {
+  const atB = CONSOLE_B.get(PAKETFILTER) ?? fail('no spot at the Analysepult');
+  const alarmsBefore = alarmsOf(gate);
+  gate.send({ kind: 'puzzle-input', input: { start: true } });
+  const released = await gate.until('the first wave released', (v) =>
+    firewallOf(v)?.waiting === false);
+  const startedAt = waveClock(released).startedAt;
+  // Two tiles down the Flur: out of the console's reach.
+  await walkTo(analysis, [atB[0], atB[1] + 2]);
+  await gate.expectView('the wave holds while the Analysepult stands empty', (v) =>
+    waveClock(v).heldAt !== null && firewallOf(v)?.vacant.includes('b') === true);
+  gate.send({ kind: 'puzzle-input', input: { trip: 0 } });
+  const refused = await gate.expect('refusal at the Sperrpult', isError);
+  assert(refused.message === 'Am Analysepult steht niemand.',
+    'a trip while the Analysepult stands empty is turned away');
+  await sleep(600);
+  await walkTo(analysis, atB);
+  const on = await gate.expectView('the wave runs on once both consoles are manned', (v) =>
+    waveClock(v).heldAt === null && firewallOf(v)?.vacant.length === 0);
+  assert(
+    waveClock(on).startedAt >= startedAt + 600 && on.penaltySeq === alarmsBefore,
+    'the hold moved the wave’s clock on by the time it stood, and cost nothing',
+  );
+}
+
+/** The clock of the wave under way as `view`'s console shows it; fails where it shows none. */
+function waveClock(view: PlayerView): { startedAt: number; heldAt: number | null } {
+  return firewallOf(view)?.clock ?? fail('the Paketfilter shows no wave’s clock');
+}
+
+/**
+ * Station 3, the Paketfilter, worked at two consoles at once: `gate` at the Sperrpult (console
+ * A), `analysis` at the Analysepult (console B), once it has read the policy and walked past
+ * the Laborkennung. The Sperrpult shows the packets as points and no header, the Analysepult
+ * their headers, neither the policy; the audience sees all, and nobody which packet is
+ * hostile. The first wave waits for the Freigabe; the wave holds while a console stands empty;
+ * then the solver marks at the Analysepult what the policy drops and trips the gate under
+ * every ring, wave after wave on the server's clock, until the Schott opens.
+ */
+async function runFirewall(gate: TestClient, analysis: TestClient): Promise<void> {
+  const from = { gate: gate.raw.length, analysis: analysis.raw.length };
+  await switchOn(gate, PAKETFILTER);
+  await gate.expectView('console A is the Sperrpult: the wave waiting, no rules', (v) =>
+    firewallOf(v)?.role === 'gate' && firewallOf(v)?.waiting === true &&
+      firewallOf(v)?.waves === FIREWALL.waves && v.puzzle?.manual === null);
+  await analysis.expectView('console B is the Analysepult: no rules', (v) =>
+    firewallOf(v)?.role === 'analysis' && v.puzzle?.manual === null);
+  const live = await zoe.untilSpectator('sees the Paketfilter and its policy at once', (v) =>
+    v.puzzle?.kind === 'firewall' && v.puzzle.manual !== null);
+  assert(live.puzzle?.kind === 'firewall', 'the audience watches the Paketfilter');
+  await waveHolds(gate, analysis);
+  await solveOnTheClock(PAKETFILTER);
+  const atGate = gate.raw.slice(from.gate).join('\n');
+  const atAnalysis = analysis.raw.slice(from.analysis).join('\n');
+  assert(atAnalysis.includes('"protocol":"'), 'the Analysepult showed the packets’ headers');
+  assert(!atGate.includes('"protocol":"'), 'no header ever reached the Sperrpult');
+  const everyLog = [atGate, atAnalysis, zoe.raw.join('\n')];
+  assert(everyLog.every((log) => !log.includes('"hostile"')),
+    'which packet is hostile reached nobody, the audience neither');
+  assert(
+    !atGate.includes('"manual":[{') && !atAnalysis.includes('"manual":[{'),
+    'the policy never reached either console while the station was open',
+  );
+  // The Paketfilter counts for both consoles, whichever move came last.
+  credit(gate, 'operated');
+  credit(analysis, 'operated');
+  await backOnTheMap(PAKETFILTER + 1);
+}
+
 type CircuitView = Extract<PuzzleView, { kind: 'circuit' }>;
 
 /** The Notstrom-Kasten as `view` shows it; null where it is not open. */
@@ -1253,10 +1713,10 @@ function circuitOf(view: PlayerView | null): CircuitView | null {
 
 /** The solver's next moves at the Notstrom-Kasten, every one of them from the side `by`. */
 async function playCircuit(by: Move<PuzzleInput>['by'], what: string): Promise<void> {
-  const moves = nextMoves(NOTSTROM);
+  const moves = nextMoves(WECHSEL);
   assert(moves.length > 0 && moves.every((move) => move.by === by),
     `${what}: ${moves.length} move(s), all from the ${by === 'partner' ? 'meter' : 'box'}`);
-  await play(moves, NOTSTROM);
+  await play(moves, WECHSEL);
 }
 
 /**
@@ -1266,7 +1726,26 @@ async function playCircuit(by: Move<PuzzleInput>['by'], what: string): Promise<v
  * meter's readings are gone.
  */
 async function shortTheBox(box: TestClient, meter: TestClient): Promise<void> {
-  const [right] = nextMoves(NOTSTROM);
+  const wrong = wholeWireUnnamed(box);
+  const deadlineBefore = box.view?.deadlineAt ?? 0;
+  // Both patrols are out by now: an alarm of theirs may come between, and costs time as well.
+  const alarmsBefore = alarmsOf(box);
+  box.send({ kind: 'puzzle-input', input: { cut: wrong } });
+  const shorted = await box.expectView('sees the alarm after a wrong cut', (v) =>
+    v.penaltySeq > alarmsBefore && circuitOf(v)?.lastResult === 'short');
+  assert((shorted.deadlineAt ?? 0) <= deadlineBefore - CIRCUIT.penaltySec * 1000,
+    `the short cost ${CIRCUIT.penaltySec}s of deadline`);
+  assert(circuitOf(shorted)?.wires?.every((wire) => !wire.cut) === true,
+    'the short rewired the box: every wire whole again');
+  await meter.expectView('sees the readings cleared by the short', (v) =>
+    v.penaltySeq > alarmsBefore && readingsCleared(v));
+  credit(box, 'alarms');
+  deliberate += 1;
+}
+
+/** A whole wire of `box` the rules do not name next, one wire cut already: the wrong one to cut. */
+function wholeWireUnnamed(box: TestClient): number {
+  const [right] = nextMoves(WECHSEL);
   const named = right?.by === 'operator' && 'cut' in right.input ? right.input.cut : null;
   const wires = circuitOf(box.view)?.wires ?? fail(`${box.label}: the box shows no wires`);
   const wrong = wires.findIndex((wire, i) => !wire.cut && i !== named);
@@ -1274,20 +1753,13 @@ async function shortTheBox(box: TestClient, meter: TestClient): Promise<void> {
     fail('the rules name no wire, or no other whole wire is left to cut wrongly');
   }
   assert(wires.some((wire) => wire.cut), 'a wire is cut before the short');
-  const deadlineBefore = box.view?.deadlineAt ?? 0;
-  box.send({ kind: 'puzzle-input', input: { cut: wrong } });
-  const shorted = await box.expectView('sees the alarm after a wrong cut', (v) =>
-    v.penaltySeq === 1 && circuitOf(v)?.lastResult === 'short');
-  assert((shorted.deadlineAt ?? 0) === deadlineBefore - CIRCUIT.penaltySec * 1000,
-    `the short cost ${CIRCUIT.penaltySec}s of deadline`);
-  assert(circuitOf(shorted)?.wires?.every((wire) => !wire.cut) === true,
-    'the short rewired the box: every wire whole again');
-  await meter.expectView('sees the readings cleared by the short', (v) => {
-    const circuit = circuitOf(v);
-    return v.penaltySeq === 1 && circuit?.readings?.every((r) => r === null) === true &&
-      circuit.probed === null;
-  });
-  credit(box, 'alarms');
+  return wrong;
+}
+
+/** Whether the meter on `view` has no reading left and no wire under its probe. */
+function readingsCleared(view: PlayerView): boolean {
+  const circuit = circuitOf(view);
+  return circuit?.readings?.every((r) => r === null) === true && circuit.probed === null;
 }
 
 /**
@@ -1304,7 +1776,7 @@ async function solveCircuit(box: TestClient, meter: TestClient): Promise<void> {
   await playCircuit('operator', 'the box cuts the wire the rules name');
   await playCircuit('partner', 'the meter measures again after the cut');
   await shortTheBox(box, meter);
-  await solveStation(NOTSTROM);
+  await solveStation(WECHSEL);
 }
 
 /**
@@ -1326,14 +1798,14 @@ function assertBoxAndMeterApart(
 }
 
 /**
- * Station 1, the Notstrom-Kasten, worked at two consoles at once: `box` at
- * the fuse box (console A), `meter` at the meter (console B), and the meter
+ * The Notstrom-Kasten, where the run has it at its Wechselplatz, worked at two consoles at
+ * once: `box` at the fuse box (console A), `meter` at the meter (console B), and the meter
  * switches it on. The box shows the wires and no voltage, the meter a
  * reading per wire and no colour, neither the rules; the audience sees all.
  */
 async function runCircuit(box: TestClient, meter: TestClient): Promise<void> {
   const from = { box: box.raw.length, meter: meter.raw.length };
-  await switchOn(meter, NOTSTROM);
+  await switchOn(meter, WECHSEL);
   const boxView = await box.expectView('console A shows the box: wires, no voltage, no rules',
     (v) => {
       const circuit = circuitOf(v);
@@ -1362,7 +1834,7 @@ async function runCircuit(box: TestClient, meter: TestClient): Promise<void> {
   // The Notstrom-Kasten counts for both consoles, whichever cut last.
   credit(box, 'operated');
   credit(meter, 'operated');
-  await backOnTheMap(NOTSTROM + 1);
+  await backOnTheMap(WECHSEL + 1);
 }
 
 type SignalView = Extract<PuzzleView, { kind: 'signal' }>;
@@ -1385,7 +1857,7 @@ function keyAtB(move: Move<PuzzleInput> | undefined): { row: number; shape: stri
  * over.
  */
 async function signalMissteps(a: TestClient, b: TestClient): Promise<void> {
-  const [first, second] = nextMoves(SIGNALKETTE).map(keyAtB);
+  const [first, second] = nextMoves(WECHSEL).map(keyAtB);
   if (first == null || second == null) {
     fail('the solver presses no two keys at console B in stage 1');
   }
@@ -1396,18 +1868,27 @@ async function signalMissteps(a: TestClient, b: TestClient): Promise<void> {
 
   b.send({ kind: 'puzzle-input', input: { key: first } });
   await b.until('one sign taken', (v) => signalOf(v)?.done === 1);
-  const wrong = { row: (second.row % 4) + 1, shape: second.shape };
+  await wrongKeyAtB(a, b, { row: (second.row % 4) + 1, shape: second.shape });
+}
+
+/** The deliberate wrong key at console B: it costs the def's penaltySec and the stage's signs. */
+async function wrongKeyAtB(
+  a: TestClient,
+  b: TestClient,
+  wrong: { row: number; shape: string },
+): Promise<void> {
   const deadlineBefore = b.view?.deadlineAt ?? 0;
+  // Both patrols are out by now: an alarm of theirs may come between, and costs time as well.
+  const alarmsBefore = alarmsOf(b);
   b.send({ kind: 'puzzle-input', input: { key: wrong } });
   const afterPenalty = await b.expectView('sees the alarm after a wrong key', (v) =>
-    v.penaltySeq === 2 && signalOf(v)?.lastResult === 'wrong');
-  assert(
-    (afterPenalty.deadlineAt ?? 0) === deadlineBefore - SIGNAL.penaltySec * 1000 &&
-      signalOf(afterPenalty)?.done === 0,
-    `the wrong key cost ${SIGNAL.penaltySec}s of deadline and started the stage over`,
-  );
+    v.penaltySeq > alarmsBefore && signalOf(v)?.lastResult === 'wrong');
+  const cost = (afterPenalty.deadlineAt ?? 0) <= deadlineBefore - SIGNAL.penaltySec * 1000;
+  assert(cost && signalOf(afterPenalty)?.done === 0,
+    `the wrong key cost ${SIGNAL.penaltySec}s of deadline and started the stage over`);
   credit(b, 'alarms');
-  await a.until('the alarm', (v) => v.penaltySeq === 2);
+  deliberate += 1;
+  await a.until('the alarm', (v) => v.penaltySeq > alarmsBefore);
 }
 
 /** Every view `client` received since its log ran to `from`, as the wire carried it. */
@@ -1489,14 +1970,15 @@ function assertGrey(consoles: { client: TestClient; from: number }[]): void {
 }
 
 /**
- * Station 2, the Signalkette, worked at two consoles at once: `a` stands at
+ * The Signalkette, where the run has it at its Wechselplatz, worked at two consoles at once:
+ * `a` stands at
  * console A, `b` at console B, and B switches it on. Console A sends stage 1
  * and B takes it, then the direction swaps with every stage. Nobody is left
  * to read the Klemmbrett; each console says whether it sends or takes.
  */
 async function runSignal(a: TestClient, b: TestClient): Promise<void> {
   const from = { a: a.raw.length, b: b.raw.length };
-  await switchOn(b, SIGNALKETTE);
+  await switchOn(b, WECHSEL);
   const atA = await a.expectView('console A sends stage 1, all signs at once, no rules', (v) =>
     signalOf(v)?.role === 'sender' && signalOf(v)?.fleeting === false && v.puzzle?.manual === null);
   const atB = await b.expectView('console B takes it: twelve keys, no sequence, no rules', (v) =>
@@ -1511,12 +1993,12 @@ async function runSignal(a: TestClient, b: TestClient): Promise<void> {
   await signalMissteps(a, b);
 
   // Stage 1 from the views alone, pressed at console B; then the direction swaps.
-  await play(nextMoves(SIGNALKETTE), SIGNALKETTE);
+  await play(nextMoves(WECHSEL), WECHSEL);
   await b.expectView('stage 2: console B sends now', (v) =>
     signalOf(v)?.stage === 2 && signalOf(v)?.role === 'sender');
   await a.expectView('stage 2: console A takes now', (v) =>
     signalOf(v)?.stage === 2 && signalOf(v)?.role === 'receiver');
-  await solveStation(SIGNALKETTE);
+  await solveStation(WECHSEL);
   assertConsolesApart(b, from.b, { sends, takes });
   assertFleeting([
     { client: a, from: from.a },
@@ -1529,7 +2011,7 @@ async function runSignal(a: TestClient, b: TestClient): Promise<void> {
   // The Signalkette counts for both consoles, whichever pressed last.
   credit(a, 'operated');
   credit(b, 'operated');
-  await backOnTheMap(SIGNALKETTE + 1);
+  await backOnTheMap(WECHSEL + 1);
 }
 
 type ServersView = Extract<PuzzleView, { kind: 'servers' }>;
@@ -1596,10 +2078,8 @@ function assertTerminalAndRackApart(
 
 /**
  * Station 4, the Serverraum, at two consoles in the room behind the
- * bulkhead: `terminal` holds the Flur drone still from the camera plate
- * while `rack` crosses the Flur to the locker, then steps off it to console
- * A and switches it on, so that whoever works it is out of the drone's eye;
- * `rack` searches the locker and reads the rules there, then takes the rack.
+ * bulkhead: `rack` walks to the locker, `terminal` to console A and switches
+ * it on; `rack` searches the locker and reads the rules there, then takes the rack.
  * The terminal shows the table with its codes and no LED, the rack its
  * switches and LEDs and no code, neither the rules; the audience sees all.
  * Mid-solve the rack drops and resumes; the solver then brings every service
@@ -1607,10 +2087,8 @@ function assertTerminalAndRackApart(
  */
 async function runServers(terminal: TestClient, rack: TestClient): Promise<void> {
   const locker = sourceOf(SUBSYSTEME);
-  // The drone woken by the Signalkette patrols the Flur in front of the Schott: the terminal's
-  // player holds it still from the camera plate while the rack's crosses to the locker.
-  await holdTheCameraPlate(terminal);
-  await crossFrozen(rack, placeOf(locker.id), flurDrone.id);
+  // No drone is out yet: both sleep until this room is solved, the crew inside it.
+  await walkTo(rack, placeOf(locker.id));
   await bring(terminal, STAND[SUBSYSTEME] ?? fail('no spot at the terminal'), rack);
   const fromTerminal = terminal.raw.length;
   await switchOn(terminal, SUBSYSTEME);
@@ -1646,7 +2124,7 @@ async function solveMorse(op: TestClient, rd: TestClient): Promise<void> {
   await op.expectView('stands at the blinking lamp', (v) =>
     v.puzzle?.kind === 'morse' && v.puzzle.pattern !== null && v.puzzle.manual === null);
   await readerStepsAway(op, rd);
-  await solveStation(FREQUENZ);
+  await solveStation(WECHSEL);
 }
 
 const labortuer =
@@ -1669,8 +2147,8 @@ const AWAY_FROM_THE_CABINET: Tile = besides(labortuer, -2, 0, 'west of the Labor
  * reader walks back to the cabinet for the rest.
  */
 async function readerStepsAway(op: TestClient, rd: TestClient): Promise<void> {
-  const cabinet = sourceOf(FREQUENZ);
-  const [move] = nextMoves(FREQUENZ);
+  const cabinet = sourceOf(WECHSEL);
+  const [move] = nextMoves(WECHSEL);
   if (move === undefined) {
     fail('the solver has no first move at the radio panel');
   }
@@ -1684,7 +2162,7 @@ async function readerStepsAway(op: TestClient, rd: TestClient): Promise<void> {
   op.send({ kind: 'puzzle-input', input: move.input });
   await op.expectView('takes the move with nobody else at the station or its rules', (v) =>
     v.penaltySeq === before.penaltySeq &&
-    (v.currentPuzzleIndex > FREQUENZ || (v.puzzle?.kind === 'morse' && v.puzzle.dial !== dial)));
+    (v.currentPuzzleIndex > WECHSEL || (v.puzzle?.kind === 'morse' && v.puzzle.dial !== dial)));
   for (const to of [LABOR_CORNER, placeOf(cabinet.id)]) {
     await walkTo(rd, to);
   }
@@ -1770,10 +2248,48 @@ function assertKeptApart(windows: ReadonlyMap<number, OpenWindow>): void {
   }
 }
 
+/**
+ * The station the run has at its Wechselplatz, the Labortür open and both patrols out. The
+ * Signalkette: console A at the Flur's east end and console B in the Maschinenraum, its legend
+ * on the Klemmbrett in the Flur, which whoever takes console A passes on the way, crossing the
+ * Flur's length while the other holds the camera plate. The Funkpult
+ * in the Labor: its tables in the cabinet the Serverraum's key opens. The Notstromkasten: the
+ * fuse box inside the Maschinenraum's door and the meter in the Labor, its rules in the
+ * Wartungsbuch in the Maschinenraum, which whoever takes the meter reads first.
+ */
+async function atTheWechselplatz(): Promise<void> {
+  await quietFor(STRETCH_SEC);
+  const [a, b] = crew;
+  if (DRAWN === 'signal') {
+    await bring(a, placeOf(sourceOf(WECHSEL).id), b);
+    // Console A stands at the Flur's far end, the whole patrol between: `b` holds the Flur's
+    // drone still from the camera plate while `a` crosses, then walks to console B behind it.
+    await holdTheCameraPlateFromBehind(b);
+    await crossFrozen(a, STAND[WECHSEL] ?? fail('no spot at console A'), flurDrone.id);
+    await bring(b, CONSOLE_B.get(WECHSEL) ?? fail('no spot at console B'), a);
+    await runSignal(a, b);
+  } else if (DRAWN === 'morse') {
+    await unlockCabinet();
+    const atRadio = await takePlaces(WECHSEL);
+    await runStation(WECHSEL, atRadio, () => solveMorse(atRadio.op, atRadio.rd));
+  } else if (DRAWN === 'circuit') {
+    await readUp(WECHSEL, b, a);
+    await takeConsoles(WECHSEL, a, b);
+    await runCircuit(a, b);
+  } else {
+    fail(`the smoke has no play for a ${DRAWN} at the Wechselplatz`);
+  }
+}
+
 // --- credits -----------------------------------------------------------------
+
+/** When the lights went out, epoch ms: the room's emergencies keep their schedule from it. */
+let lightsOutAt = Infinity;
 
 /** What the walkthrough did, by player id: what the end screen has to credit. */
 const tally = new Map<string, Credits>();
+/** The alarms the walkthrough set off on purpose so far. */
+let deliberate = 0;
 
 function credit(client: TestClient, what: keyof Credits): void {
   const id = client.playerId ?? fail(`${client.label}: no playerId`);
@@ -1793,7 +2309,13 @@ const empty = await anna.expect(
 );
 assert(empty.rooms.length === 0, 'lobby browser is empty before any room exists');
 
-anna.send({ kind: 'create-room', name: 'Anna', pass: anna.pass, missionId: 'blackout' });
+anna.send({
+  kind: 'create-room',
+  name: 'Anna',
+  pass: anna.pass,
+  missionId: 'blackout',
+  seed: SEED,
+});
 const annaJoined = await anna.seated();
 await anna.expectView('sees the lobby', (v) => v.phase === 'lobby');
 
@@ -1945,16 +2467,17 @@ assert(
   'a second ping within the cooldown is dropped',
 );
 
-// Quick chat reaches the whole crew as said: Blackout's phrase for a wire, its number filled in.
-const wirePhrase = mission.chat?.phrases.findIndex((phrase) => phrase.text === 'Kabel {n}') ?? -1;
-assert(wirePhrase >= 0, 'Blackout’s quick chat names a wire by its number');
+// Quick chat reaches the whole crew as said: Blackout's phrase for a number — a feeder's, a
+// line's, a wire's — filled in.
+const wirePhrase = mission.chat?.phrases.findIndex((phrase) => phrase.text === 'Nummer {n}') ?? -1;
+assert(wirePhrase >= 0, 'Blackout’s quick chat carries a number');
 anna.send({ kind: 'chat', phrase: wirePhrase, value: '3' });
 const said = await ben.expect(
   'chat arrives',
   (m): m is Extract<ServerMessage, { kind: 'chat' }> => m.kind === 'chat',
 );
 assert(
-  said.playerId === annaJoined.playerId && said.text === 'Kabel 3',
+  said.playerId === annaJoined.playerId && said.text === 'Nummer 3',
   'quick chat is broadcast with its sender and the phrase as said, its slot filled in',
 );
 
@@ -2013,8 +2536,8 @@ const litAfter = (solvedCount: number): string =>
 
 /**
  * After station `solved`: back on the map with one more room lit, and
- * security waking up in stages — the Flur drone after station 3, the Labor
- * drone after 4.
+ * security asleep until the Serverraum is solved — both drones wake with it,
+ * the crew out of their sight inside the room.
  */
 async function backOnTheMap(solved: number): Promise<void> {
   const [watcher] = crew;
@@ -2027,15 +2550,11 @@ async function backOnTheMap(solved: number): Promise<void> {
       `station ${solved} lit another room: ${litAfter(solved)}`,
     );
   }
-  if (solved <= SIGNALKETTE) {
+  if (solved <= SUBSYSTEME) {
     // Any positions message arriving after the view above was sent after the solve.
     const stale = watcher.positions;
     await watcher.untilPositions('a fresh positions message', (p) => p !== stale);
     assert(streamedDrones(watcher) === '', `no drone patrols after station ${solved}`);
-  } else if (solved === SIGNALKETTE + 1) {
-    await watcher.untilPositions('only the Flur drone patrols', () =>
-      streamedDrones(watcher) === 'flurwache');
-    console.log('✓ only the Flur drone patrols after the Signalkette');
   } else if (solved === SUBSYSTEME + 1) {
     await watcher.untilPositions('both drones patrol', () =>
       streamedDrones(watcher) === 'flurwache,laborwache');
@@ -2057,6 +2576,7 @@ ben.send({ kind: 'intro-done' });
 // the first station is armed and mission control speaks.
 const dark = await crew[0].expectView('the lights go out', (v) => v.lights.out);
 const outAt = dark.lights.outAt ?? fail('the lights went out at no moment');
+lightsOutAt = outAt;
 const outIn = outAt - (dark.startedAt ?? outAt);
 assert(outAt >= skippedAt && outIn < intro.lightsSec * 1000,
   `the lights went out ${(outIn / 1000).toFixed(1)} s into the run, as the second of the crew ` +
@@ -2079,37 +2599,53 @@ await readTheLeverNote();
 // takes it — a burst after lag included — while no drone patrols yet.
 await sprintTheFlur(crew[1]);
 
-// Station 2: the Notstrom-Kasten, the fuse box in the Maschinenraum and the meter in the Flur,
-// its rules in the book in the Archiv. Ben reads them and the Laborkennung, then lets Anna in.
-const [atBox, atMeter] = crew;
-await readUp(atMeter, atBox);
-await takeConsoles(NOTSTROM, atBox, atMeter);
-await runCircuit(atBox, atMeter);
+// Station 2: the Anlaufsteuerung, console A in the Maschinenraum and console B in the Flur, its
+// rules in the Betriebsbuch in the Archiv. Ben reads them and the Laborkennung, then lets Anna in.
+const [atA, atB] = crew;
+await readUp(ANLAUF, atB, atA);
+await pastTheSign(atB, atA);
+await takeConsoles(ANLAUF, atA, atB);
+await runStartup(atA, atB);
 // Its plate held the Maschinenraum door so far; from now on the door stands open by itself.
 await crew[0].expectView(`"${lastingDoor.id}" stays open with nobody on its plate`, (v) =>
   v.map?.doors.find((d) => d.id === lastingDoor.id)?.open === true &&
   v.map.plates.find((p) => p.id === lastingPlate)?.pressed === false);
 
-// Station 3: the Signalkette, console A in the Flur and console B in the Maschinenraum; on the
-// way to console A, Anna passes the Klemmbrett with the legend, wherever the run laid it.
-const [atA, atB] = crew;
-await bring(atA, placeOf(sourceOf(SIGNALKETTE).id), atB);
-await takeConsoles(SIGNALKETTE, atA, atB);
-await runSignal(atA, atB);
+// Station 3: the Paketfilter, both consoles in the Flur east of the Serverschott, its policy
+// pinned up on the Flur's south wall. Ben reads it, then takes the Analysepult.
+await readUp(PAKETFILTER, atB, atA);
+await takeConsoles(PAKETFILTER, atA, atB);
+await runFirewall(atA, atB);
+await crew[0].expectView('the Serverschott stands open', (v) =>
+  v.map?.doors.find((d) => d.id === 'serverschott')?.open === true);
 
 // Station 4: the Serverraum, its terminal and its rack apart in the room behind the bulkhead,
 // its rules in the locker there, which has to be searched. Anna takes the terminal; Ben, who
-// walked past the Laborkennung before the Notstrom-Kasten, reads in the locker and takes the
+// walked past the Laborkennung before the Anlaufsteuerung, reads in the locker and takes the
 // rack, and drops and resumes there.
 const locker = sourceOf(SUBSYSTEME);
+// The emergencies are due from here on, by the room's schedule: none may cut a station short.
+await quietFor(STRETCH_SEC);
 await runServers(atA, atB);
 
-// Station 5: the radio panel in the Labor, its tables in the cabinet the Serverraum key opens.
-await unlockCabinet();
-const atRadio = await takePlaces(FREQUENZ);
-await runStation(FREQUENZ, atRadio, () => solveMorse(atRadio.op, atRadio.rd));
+// Station 5: the Wechselplatz, the station this run's seed draws; the other two stand out of
+// service, each console found by the crew wearing its tag.
+const outOfService = missionFile.puzzles.filter(
+  (def) => def.pool !== undefined && def.id !== mission.puzzles[WECHSEL]?.id,
+);
+assert(
+  outOfService.length === 2 &&
+    crew.every((client) =>
+      (client.view?.map?.stations ?? [])
+        .filter((station) => outOfService.some((def) => def.id === station.puzzleId))
+        .every((station) => !station.known || station.status === 'out'),
+    ),
+  `${outOfService.map((def) => def.title).join(' and ')} stand out of service this run`,
+);
+await atTheWechselplatz();
 
 // Station 6: the reactor, dead until the spare fuse is in; the whole crew presses.
+await quietFor(STRETCH_SEC);
 await fetchFuse();
 await switchOn(crew[0], REAKTOR);
 await solveSync();
@@ -2118,11 +2654,14 @@ await backOnTheMap(mission.puzzles.length);
 // --- escape finale: everyone to the hatch before the clock runs out --------
 const unlocked = await crew[0].expectView('exit hatch is open', (v) =>
   v.map?.exit?.open === true);
-const unknown = mission.map.manuals
+// Every source of a station of the run: one of a station out of service may lie off the way.
+const inService = mission.map.manuals.filter((m) =>
+  m.puzzleIds.some((id) => mission.puzzles.some((def) => def.id === id)));
+const unknown = inService
   .filter((m) => unlocked.map?.manuals.some((seen) => seen.id === m.id && seen.known) !== true)
   .map((m) => `${m.id} at ${placeOf(m.id).join(',')}`);
 const missed = unknown.length > 0 ? ` (not ${unknown.join(', ')})` : '';
-assert(unknown.length === 0, `the crew has found every source on the way${missed}`);
+assert(unknown.length === 0, `the crew has found every source of its run on the way${missed}`);
 assert(unlocked.map?.litRooms.join(',') === litAfter(mission.puzzles.length),
   `the reactor lit the last room: ${litAfter(mission.puzzles.length)}`);
 const unlockedAt = unlocked.events.find((e) => e.kind === 'escape')?.at;
@@ -2159,13 +2698,18 @@ for (const to of [OUT_OF_THE_LABOR, EXIT]) {
 const won = await first.expectView('won the mission', (v) => v.phase === 'won');
 await last.expectView('won the mission', (v) => v.phase === 'won');
 assert(/erwachen die Systeme/.test(won.storyText), 'win story is shown');
-// At least the wrong cut and the wrong sign; patrolling drones may add more.
-assert(won.penaltySeq >= 2,
-  `both deliberate penalties were counted, ${won.penaltySeq} alarms in all`);
+// At least the wrong start, and the wrong key or the wrong cut where the Signalkette or the
+// Notstromkasten has the Wechselplatz; patrolling drones may add more.
+assert(deliberate === (DRAWN === 'morse' ? 1 : 2) && won.penaltySeq >= deliberate,
+  `the ${deliberate} deliberate alarm(s) were counted, ${won.penaltySeq} alarms in all`);
+const finds = [
+  `Spind durchsucht: ${locker.label}`,
+  ...(DRAWN === 'morse' ? [`Schrank aufgeschlossen: ${sourceOf(WECHSEL).label}`] : []),
+];
 assert(
   won.events.filter((e) => e.kind === 'find').map((e) => e.label).join(' · ') ===
-    `Spind durchsucht: ${locker.label} · Schrank aufgeschlossen: ${sourceOf(FREQUENZ).label}`,
-  'the run report holds the searched locker and the unlocked cabinet',
+    finds.join(' · '),
+  `the run report holds what the crew opened: ${finds.join(', ')}`,
 );
 assertKeptApart(openWindows);
 reportWalks();
@@ -2196,7 +2740,7 @@ for (const client of crew) {
 const workedAt = (def: (typeof mission.puzzles)[number]): number =>
   moduleFor(def.type).consoles ?? 1;
 assert(summed('operated') === mission.puzzles.reduce((sum, def) => sum + workedAt(def), 0),
-  'every station is credited to whoever worked it, the Signalkette to both consoles');
+  'every station is credited to whoever worked it, one of two consoles to both');
 assert(summed('alarms') === won.penaltySeq, 'every alarm is credited to whoever set it off');
 
 // The won run left one line in the run log: its report, which names the crew and nobody's id.
@@ -2239,8 +2783,14 @@ assert(
 );
 assert(
   report.penalties.reduce((sum, p) => sum + p.count, 0) === won.penaltySeq &&
-    report.stations.reduce((sum, s) => sum + s.alarms, 0) >= 2,
-  'the run report has every alarm by its cause, the two deliberate ones at their stations',
+    report.stations.reduce((sum, s) => sum + s.alarms, 0) >= deliberate &&
+    (report.stations[ANLAUF]?.alarms ?? 0) >= 1,
+  'the run report has every alarm by its cause, the deliberate ones at their stations',
+);
+assert(
+  JSON.stringify(report.drawn) === JSON.stringify(DRAW) &&
+    report.stations[WECHSEL]?.puzzleId === DRAW[wechselDef.pool ?? ''],
+  `the run report names the station drawn at the Wechselplatz: ${JSON.stringify(report.drawn)}`,
 );
 const crewNames = won.players.map((p) => p.name);
 assert(
@@ -3441,8 +3991,8 @@ rmSync(runsDir, { recursive: true, force: true });
 console.log(
   '\nSmoke test passed: Blackout with its power on until the lights went out, the ' +
     'Notlicht\'s lever, a note of the last shift, drawn spawns and sources, streamed movement, ' +
-    'plates, a door that stays open, the Notstrom-Kasten, the Signalkette and the Serverraum ' +
-    'at two consoles, the locker, the key, the camera plate, reconnect, the hatch\'s ' +
+    'plates, a door that stays open, the Anlaufsteuerung, the Paketfilter and the Serverraum ' +
+    'at two consoles, the station of the Wechselplatz, the camera plate, reconnect, the hatch\'s ' +
     'checklist, a drop on the way out that ends nothing, penalties and credits; then ' +
     'the tutorial, its lever springing back on the clock, and on into Blackout; then a crew ' +
     'of three going on without the one away, his return, a seat taken over by its name once ' +

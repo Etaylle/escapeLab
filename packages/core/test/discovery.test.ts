@@ -6,6 +6,7 @@ import {
   findKey,
   lookAround,
   shutDoors,
+  stationsOfRun,
   viewFor,
   viewForSpectator,
   type Find,
@@ -203,15 +204,23 @@ describe('what a run has to find', () => {
   });
 
   it('lists only the armed station’s consoles: none while the lights burn or all is done', () => {
-    const consoles = (state: GameState) =>
+    // The consoles out of service are found at any time, for the tag across them (rotation.ts).
+    const resting = ['console:signalkette/a', 'console:signalkette/b', 'console:frequenz/-'];
+    const every = (state: GameState) =>
       findables(state)
         .filter((thing) => thing.find.of === 'console')
         .map((thing) => thing.key);
+    const consoles = (state: GameState) => every(state).filter((key) => !resting.includes(key));
+    expect(every(started(blackoutMission(), 5))).toEqual(resting);
     expect(consoles(started(blackoutMission(), 5))).toEqual([]);
     expect(consoles(blackout())).toEqual(['console:notlicht/-']);
-    const notstrom = { ...blackout(), currentPuzzleIndex: 1 };
-    expect(consoles(notstrom)).toEqual(['console:notstrom/a', 'console:notstrom/b']);
-    const done = { ...blackout(), currentPuzzleIndex: blackout().mission.puzzles.length };
+    const anlauf = { ...blackout(), currentPuzzleIndex: 1 };
+    expect(consoles(anlauf)).toEqual(['console:anlauf/a', 'console:anlauf/b']);
+    // The Wechselplatz: the station this seed draws, none of the two out of service.
+    const wechsel = { ...blackout(), currentPuzzleIndex: 4 };
+    expect(wechsel.drawn).toEqual({ wechsel: 'notstrom' });
+    expect(consoles(wechsel)).toEqual(['console:notstrom/a', 'console:notstrom/b']);
+    const done = { ...blackout(), currentPuzzleIndex: stationsOfRun(blackout()) };
     expect(consoles(done)).toEqual([]);
   });
 
@@ -268,7 +277,9 @@ describe('a room the power lights', () => {
       const view = map(state);
       expect(view?.manuals.length).toBe(mission.map.manuals.length);
       expect(view?.notes.length).toBe(mission.map.notes.length);
-      expect(view?.items.length).toBe(mission.map.items.length);
+      // The cabinet's key is not put out in a run whose Funkpult is out of service, as here.
+      expect(view?.items.map((item) => item.id)).toEqual(['ersatzsicherung']);
+      expect(mission.map.items.map((item) => item.id)).toEqual(['ersatzsicherung', 'schluessel']);
       const things = [...(view?.manuals ?? []), ...(view?.notes ?? [])];
       expect(things.every((m) => !m.known && m.seen)).toBe(true);
       expect(JSON.stringify(view?.manuals)).not.toMatch(/label|puzzleIds|needsKey/);
@@ -281,7 +292,7 @@ describe('a room the power lights', () => {
     const dark = blackout();
     expect([map(dark)?.manuals, map(dark)?.notes, map(dark)?.items]).toEqual([[], [], []]);
     // Every station solved, the way out open: the lab lights up whole again.
-    glimpsedAll({ ...dark, currentPuzzleIndex: mission.puzzles.length });
+    glimpsedAll({ ...dark, currentPuzzleIndex: stationsOfRun(dark) });
   });
 
   it('finds nothing for a player one or two steps in but what the same two rules find', () => {

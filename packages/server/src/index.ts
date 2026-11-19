@@ -26,6 +26,7 @@ import { onSignal } from './shutdown.js';
 import { ACCOUNT_CHANGES_PER_SOCKET, ACCOUNTS_MADE_PER_MINUTE, serveSockets } from './sockets.js';
 import { StaticSite } from './static.js';
 import { DEFAULT_RUNS_LOG } from './store/jsonl.js';
+import { rankingOf } from './runStats.js';
 import { readyStore, recordRuns, type Store } from './store/store.js';
 import { serveTakes, takesAllowed, TakesShelf } from './takes.js';
 import { createWebServer, lanUrls, tlsLogLine, tlsSetup } from './tls.js';
@@ -176,8 +177,10 @@ httpServer.listen(PORT, () => {
     ? 'GET /runs.jsonl takes RUNS_TOKEN'
     : 'RUNS_TOKEN unset: no download';
   console.log(`[escapelab] store: ${store.description}`);
-  const kept = store.stats().runs;
-  console.log(`[escapelab] GET /stats ranks the ${kept} runs kept so far (${download})`);
+  const { runs: kept, unranked } = store.stats();
+  const off =
+    unranked === 0 ? '' : `, ${unranked} of them off the boards: runs of a mission's older chain`;
+  console.log(`[escapelab] GET /stats ranks the ${kept} runs kept so far${off} (${download})`);
   console.log(`[escapelab] Tagesschicht: ${DAILY_SALT_FROM[daily.from]}`);
   console.log(`[escapelab] ${roomKeyLogLine(sealing)}`);
   console.log(`[escapelab] this boot is instance ${instanceId}: its snapshots name it`);
@@ -212,7 +215,7 @@ function iceOrExit(): IceSetup {
  */
 async function storeOrExit(): Promise<Store> {
   try {
-    return await readyStore(process.env, RUNS_LOG);
+    return await readyStore(process.env, RUNS_LOG, undefined, rankingOf(() => catalog.all));
   } catch (err) {
     const why = err instanceof Error ? err.message : String(err);
     console.error(`[escapelab] not started: ${why}`);

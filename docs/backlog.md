@@ -224,6 +224,25 @@ die Entscheidung.
   Frame-Fenster nennt die 1-Minuten-Last, unter der es lief, die Zusammenfassung die zu Beginn und
   am Ende; kein Budget geändert.
 
+### H-5 Die Flucht des Rundgangs streift die Laborwache — Status: erledigt (B-blackout2, 43c8aad) · Größe: S
+
+- Beobachtet 2026-11-18 in Läufen ohne Capture-Gruppen (`SHOTS_ONLY=run`): In 2 von 11 Läufen
+  erfasste die Laborwache Anna auf der Flucht bei (21,8|16,6), als die Drohne bei (18,15) stand.
+- Ursache: `server/src/drones.ts` las den Blick nach dem Schritt ab; der Schritt, der auf dem
+  Wegpunkt landet, ließ keinen Weg übrig (atan2(0, 0)), und die Drohne sah zwei Ticks lang nach
+  Osten, woher sie auch kam — auf wen sie eben vorbeigeflogen war. Das traf auch echte Crews:
+  15 s und einer von fünf Alarmen. Jetzt behält sie den Blick, mit dem sie ankam
+  (`server/test/drones.test.ts`); `tools/patrol.mjs` rechnet ebenso.
+- Beleg: danach je Seed sechs Läufe ohne Capture-Gruppen bei Last 3–5, 18 von 18 ohne Sichtung.
+
+### H-6 Die Flucht des Rundgangs wartet zwölf Sekunden zu viel — Status: offen · Größe: S
+
+- Der Rundgang verlangt an jeder Strecke erst eine Lücke für eine um 1 s verspätete Figur und
+  steigt nach je 12 s auf 0,7 s und 0,4 s ab (`tools/patrol.mjs` `LATE_STEPS`). Die 14 Felder
+  der Flucht durch den Süd-Flur haben mit 1 s nie eine Lücke: Dort wartet er die 12 s jedes Mal
+  umsonst (ohne Capture-Gruppen 17 bis 28 s je Lauf). Zu tun: je Strecke vorab rechnen, welche
+  Stufe die Bahnen überhaupt hergeben, und mit ihr beginnen.
+
 ### T-9 Tests an der Wanduhr — Status: erledigt (2026-11-13) · Größe: S
 - Zwei Tests lasen die echte Uhr und wurden unter Last rot: `certificate.test.ts` (openssl liest
   seine Uhr zweimal, ein Lauf über eine Sekundengrenze machte aus 825 Tagen 825,00001; jetzt
@@ -353,12 +372,53 @@ die Entscheidung.
 - Datenpunkt 2026-11-05, Karte 36×22: Die Skript-Crew gewinnt 462–502 s nach dem Blackout
   (40–43 % von 900 s übrig, davon bis 35 s Warten auf Drohnenlücken); der Harness warnt ab unter
   40 %. Vorschlag: Normal 1000 s (Entspannt/Hart skalieren mit), Entscheidung nach dem Playtest.
+- Datenpunkt 2026-11-18, neue Stationsfolge (B-blackout2: Anlaufsteuerung, Paketfilter,
+  Wechselplatz), je Auslosung ein Lauf der Skript-Crew, lokal bei Last 3–5: Signalkette 542 s,
+  Funkpult 577 s, Notstromkasten 578 s nach dem Blackout — 36 s auseinander, keine Station
+  angepasst. Auf der Uhr des Reducers (reines Spiel, `core`): Anlaufsteuerung 14 s,
+  Paketfilter 48–52 s (eine Welle, neun Pakete, `fallSec` 14; zwei Wellen zu fünf wären
+  57–67 s, drei zu sieben 77–83 s), Serverraum 4–6 s, Wechselplatz 1–8 s. Im Rundgang kostet
+  die zweite Station 279–293 s, davon 13 s Spiel: der Rest sind die Captures des Harness
+  (Menüs, Lesen, Notiz, Stupser) — und 12 s nach dem Serverraum sind der Stehbeweis.
+  `timeLimitSec` 960. Die Regel (Entscheidung 2026-11-18): Die Skript-Crew behält im
+  langsamsten Lauf mindestens 40 % der Uhr, gemessen ohne Capture-Gruppen (`SHOTS_ONLY=run`:
+  nur die 15 Aufnahmen des Laufs selbst, die meisten nach dem Sieg). So gemessen gewinnt sie
+  nach 334–336 s (Signalkette), 290–300 s (Funkpult) und 337–339 s (Notstromkasten) und behält
+  63 bis 70 % von 960 s; main mit der alten Folge, gleich gemessen: 242 s, 73 % von 900 s — die
+  neue Folge ist für das Skript also 48 bis 97 s länger. Seit 2026-11-19 wartet der Rundgang
+  auf Lücken, die auch eine um 1 s verspätete Figur noch durchlassen (auf der Flucht durch den
+  Süd-Flur 0,7 s: mehr lässt die Laborwache nie): Damit gewinnt das Skript nach 350 s (Seed 12),
+  310 s (56) und 365 s (93) statt 333, 290 und 337 s, das Mehr fast ganz auf der Flucht; es
+  behält 62 bis 68 %, die Regel hält. Der Capture-Lauf lässt 38–39 % übrig
+  und taugt nicht als Maß: Mit ihm lag schon main mit der alten Folge bei 34 % von 900 s
+  (Cloud-CI auf 32ba492, Sieg nach 554 s), seit die Capture-Blöcke gewachsen sind.
+- Wo die 48 bis 97 s liegen (ohne Capture-Gruppen, 2026-11-19; Sekunden vom Öffnen der Station
+  bis zu ihrer Lösung, der Weg dorthin eingerechnet; je Seed sechs Läufe, auf 1 s gleich):
+
+  | Platz | main (alte Folge) | Seed 12 | Seed 56 | Seed 93 |
+  | --- | --- | --- | --- | --- |
+  | 1 | Notlicht 17 | Notlicht 17 | Notlicht 17 | Notlicht 17 |
+  | 2 | Notstromkasten 50 | Anlaufsteuerung 61 | Anlaufsteuerung 61 | Anlaufsteuerung 61 |
+  | 3 | Signalkette 21 | Paketfilter 68 | Paketfilter 69 | Paketfilter 72 |
+  | 4 | Serverraum 39 | Serverraum 18 | Serverraum 18 | Serverraum 17 |
+  | 5 | Funkpult 35 | Signalkette 93 | Funkpult 45 | Notstromkasten 88 |
+  | 6 | Reaktor 41 | Reaktor 38 | Reaktor 44 | Reaktor 43 |
+  | Sieg (mit Flucht) | 242 | 334 | 289 | 337 |
+
+  Zwei Gründe, beide ablesbar. Erstens laufen Paketfilter und Anlaufsteuerung auf einer Uhr
+  (48–52 s und 14 s auf der Uhr des Reducers, für das Skript wie für Menschen), während die
+  Stationen, an deren Platz sie stehen, das Skript fast nichts kosten und Menschen Minuten des
+  Lesens: Die Zeit des Skripts überzeichnet das Wachstum für eine echte Crew. Zweitens wird der
+  Wechselplatz jetzt mit beiden Drohnen gespielt, nach dem ersten Notfall, und sein Abschnitt
+  trägt die 12 s des Stehbeweises im Serverraum: Signalkette 93 s statt 21 s (ihr Pult A am
+  Ostende des Flurs, das Klemmbrett am Westende, die Flurwache dazwischen), Notstromkasten 88 s
+  statt 50 s. Der Serverraum ist dafür 21 s kürzer: Vor ihm fliegt keine Drohne mehr.
 - Studie G-2, Rang 4 (Escape Academy, Escape Simulator): ein Lehrgang ohne Uhr — der erste Lauf
   einer Crew ohne Uhr, dann Übungshalle, Tutorial und Blackout, je Schritt eine neue Idee; die
   Missionen ohne Uhr aus G-2 sind das Werkzeug dafür.
 - Plätze je Station (M-three, `core/test/hands.test.ts`), gegen die größte Crew der Mission:
-  Blackout hat zu dritt überall genug (Notlicht 3, Notstrom 4, Signalkette 3, Subsysteme 3,
-  Frequenz 3, Reaktorstart 4). Die Kettenreaktion (Crew von drei) gibt fünf von sechs Stationen
+  Blackout hat zu dritt überall genug (Notlicht 3, Anlaufsteuerung 4, Paketfilter 3,
+  Serverraum 3, am Wechselplatz Signalkette 3, Funkpult 3, Notstromkasten 3, Reaktorstart 4). Die Kettenreaktion (Crew von drei) gibt fünf von sechs Stationen
   nur zwei Plätze, Pult und Handbuch: Lastverteilung, Kühlkreislauf, Freigabecode,
   Resonanz-Dämpfung und Leitungsnetz je 2, Synchron-Abschaltung 4; ihre drei Plattentüren halten
   ohne `untilSolved` und zählen nicht. Die Doppelschicht (Crew von vier): Notstrom-Brücken,
@@ -367,6 +427,24 @@ die Entscheidung.
   nach der Signalkette hat zwei Plätze, Pult und Buch; acht Testdateien bauen auf ihm. Nicht
   gepatcht: nach dem Playtest entscheiden, ob die Prototypen eine Hand mehr bekommen (Platte bis
   zur Lösung, Teil, zweite Quelle) oder ihre Crew kleiner wird.
+
+### N-7 Ein Notfall wirft den Fortschritt der offenen Station weg — Status: offen (Entscheidung Uros) · Größe: M
+
+- Absicht, kein Versehen: `startSabotage` (core `actions.ts`) setzt `puzzleState` auf `null`,
+  seit es Notfälle gibt (aa184f7). `puzzleState` ist zugleich „die Station ist an": Ohne ihn
+  zeigt keine Sicht ein Panel, die Uhr der Station (`dueAt`) ruht, die Drohnen-Deckung
+  (`headsDown`) entfällt. Nach dem Notfall schaltet E die Station neu ein — mit neuer Instanz.
+- Seit B-blackout2 trifft das den Wechselplatz: Die Signalkette verliert bis zu vier Stufen,
+  die Anlaufsteuerung eine, der Paketfilter seine Welle (Notfälle beginnen nach drei Stationen).
+- Fortschritt behalten kostet mehr als eine Zeile: ein zweites Feld im Zustand (ruhende
+  Instanz) samt Snapshot-Schema und Default für alte Snapshots; jedes Modul mit absoluten
+  Zeiten im Zustand muss sie um die Notfalldauer verschieben können (Paketfilter-Welle,
+  Impuls der Anlaufsteuerung, Token der Zugangskontrolle, flüchtige Zeichen der Signalkette,
+  Fenster des Hebels) — ein neuer optionaler Vertragspunkt `resume(def, state, pausedMs)` mit
+  Eigenschaftstests je Modul; dazu Sichten, Bericht (Stationszeiten) und der Smoke. Kleiner
+  Schnitt, falls gewünscht: nur die Stufe behalten (`stage`-Feld der Module mit Stufen), die
+  Instanz der Stufe neu auslosen — braucht denselben Vertragspunkt, aber keine Zeitverschiebung.
+- Vorbild: Among Us wirft Aufgaben bei Sabotage nicht zurück; Keep Talking kennt keine Pause.
 
 ## Betrieb und Verbindung (2026-11-12)
 
@@ -684,8 +762,14 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   Lauf mit `rules` 4 trifft nur die Regeln 1, 2, 3 und 6, die Laborkennung erst ab 6. Dafür neu
   im Modulvertrag: `elapse`, eine Station auf der Uhr und der Anwesenheit an ihren Pulten.
 - Steht in der Übungshalle (G-2) und in der Probemission `tools/fixtures/firewall-probe.json`,
-  die der Rundgang im Systemcheck spielt (Gruppe `firewall`). In Blackout kommt sie mit dem
-  nächsten Paket des Leads als Tor des Serverraums: ihre Lösung öffnet das Serverschott.
+  die der Rundgang im Systemcheck spielt (Gruppe `firewall`).
+- In Blackout (B-blackout2, 2026-11-18): dritte Station, das Tor des Serverraums. Analysepult
+  (21,9) und Sperrpult (26,9) im Flur östlich des Serverschotts, die RICHTLINIE an der Südwand
+  westlich davon, eine Welle mit neun Paketen (48 bis 52 s auf der Uhr, Lesedruck wie der
+  Modul-Standard: der Abstand der Pakete hängt nur an `fallSec`); die Lösung öffnet das Schott.
+  Beide Drohnen schlafen, bis der Serverraum gelöst ist: Am Paketfilter wird niemand erfasst.
+- Hochkant auf dem Handy: erledigt mit F-firewall-upright (Merge 2026-11-19); in Blackouts
+  Rundgang spielt der Gast das Analysepult hochkant (420 × 760).
 
 ### W-1 Warte-Spiel — Status: wartet · Größe: S
 - Uros' eigenes kleines Canvas-Spiel (Frettchen und Ente) als etwas zum Spielen, während eine
@@ -705,9 +789,12 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   Felder `stages`, `travelSec`, `windowSec`. Die Laborkennung bleibt draußen: eine Nachschlage-
   stelle je Stufe, weniger Lesestoff als die Signalkette.
 - Steht in der Übungshalle und in der Probemission `tools/fixtures/startup-probe.json`, die der
-  Rundgang im Systemcheck spielt (Gruppe `startup`). Platz in Blackout: als zweite Station (der
-  Anlauf des Notstromaggregats, wo heute der Notstromkasten steht) im nächsten Paket des Leads.
-  Der Editor behält Kanäle, zeichnet aber keine.
+  Rundgang im Systemcheck spielt (Gruppe `startup`). Der Editor behält Kanäle, zeichnet aber
+  keine.
+- In Blackout (B-blackout2, 2026-11-17): zweite Station, der Anlauf des Notstromaggregats. Pult A
+  im Maschinenraum hinter der Plattentür, Pult B am Westende des Flurs, der Kanal gerade unter
+  der Wand, das Betriebsbuch im Archiv (hin und zurück von Pult B 6,1 s bzw. 5,4 s). Wer an Pult
+  A steht, ist bis zur Lösung eingeschlossen: Die Tabelle kennt, wer an Pult B steht.
 
 ### B-1 Wechselplatz — Status: im PR (B-rotation) · Größe: M
 - Entscheidung Uros 2026-11-17: Blackout bekommt zwei feste IT-Stationen (Anlaufsteuerung,
@@ -728,6 +815,17 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
 - Offen, bewusst nicht in diesem Paket: Bestenlisten je Auslosung (eine Tafel mischt die
   Auslosungen); die Mitglieder eines Pools müssen in der Datei nicht nebeneinander stehen, weil
   der Schnappschuss die Mission eines Laufs wie eine Datei prüft.
+- In Blackout (B-blackout2, 2026-11-17): der fünfte Platz ist der Pool `wechsel` aus
+  Signalkette, Funkpult und Notstromkasten; er öffnet Reaktortür und Reaktorschott. Die
+  Signalkette und das Funkpult stehen, wo sie standen; der Notstromkasten hängt gleich hinter
+  der Maschinentür, sein Prüfpult im Labor, sein Wartungsbuch im Maschinenraum. Das Klemmbrett
+  liegt jetzt am Westende des Flurs (4,12 oder 3,12), der Aktenschrank in der Nordwestecke des
+  Labors (12,16 oder 11,15); die Bahn der Flurwache ist die von main: Wer im Umkreis einer
+  Quelle der eben gelösten Station steht, wird von keiner Drohne erfasst. Drei Notizen der letzten Schicht erklären den Dienstplan. Seeds: 12
+  Signalkette (Rundgang, Smoke), 56 Funkpult, 93 Notstromkasten.
+- Bestenliste (B-blackout2): Auf einer Mission mit Wechselplatz zählt ein Lauf nur, wenn sein
+  Bericht die Auslosung nennt; ältere Läufe bleiben gespeichert und in „Meine Einsätze", stehen
+  aber auf keiner Tafel (`server/src/runStats.ts`).
 - Nächstes Paket (Lead): Blackout mit dem Wechselplatz neu ketten — notlicht → Anlaufsteuerung
   → Paketfilter (öffnet das Serverschott) → Serverraum → Wechselplatz aus Signalkette, Funkfeuer
   und Notstromkasten (öffnet die Reaktortüren) → reaktorstart.
