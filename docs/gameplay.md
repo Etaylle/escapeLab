@@ -1386,6 +1386,27 @@ Once nobody has watched for a minute the room is closed and a fresh one stands i
 timer running; the next of the audience sees a run from its start. After a deploy or a restart the
 demo is simply there again: nothing of it is kept.
 
+**What keeps it going.** A run that is lost — by its clock, or by its alarms — is counted as lost
+and the next follows after the Auswertung as after a win. A run that gets no further for four
+minutes (no station solved, no hatch opened), or whose crew has started over thirty times in a row,
+is given up by its host: lost as by its clock (`Room.runOut`), said once in the log, and the next
+seed follows — without that a stuck crew would stand for the rest of the sixteen minutes. Nothing
+the audience sends reaches the room: an audience connection may watch, listen in on a crew and
+leave, and every other word of a seat's — a start, a rematch, the way back to the lobby, a move, a
+ping, a quick chat — is refused at the door („Das Publikum schaut zu: Geschaltet wird nur von einem
+Platz der Crew."), in every room. A start, a rematch or a way back the room refuses changes nothing
+of it, and rolls no seed. A socket that asks for the audience it is in already goes on watching,
+nobody told anything; one that joins audiences more than twelve times a minute is told „Nicht so
+schnell — gleich noch einmal.", and the log says a refusal once a socket. In the demo „Crew
+mithören" is not offered: nobody speaks there.
+
+**On a phone** the audience's page — the demo's and every room's — scrolls down when held upright:
+the world in the lab's own shape (62 % of the window's width high), then the panels one under the
+other, each as wide as the window, nothing scrolling sideways. Held sideways the head is one line,
+the world takes the height under it and the panels stand beside it in a column of their own. A name
+too wide for its figure on the end card breaks into lines and is never cut. What stays: the whole
+lab on a window 360 px across is small, and its labels crowd the figures.
+
 **The crew** (`demo/crew.ts`) is two seats on lines as a page's socket has one: all they do is say
 what a page says — `pos`, `interact`, `puzzle-input`, `open-source`, `intro-done`, `set-ready`,
 `start-mission` — and all they know came over their lines, beside the mission as its file has it:
