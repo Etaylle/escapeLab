@@ -505,7 +505,7 @@ function handleMessage(
   return fromTheRoom(lab, socket, requireSession(held), msg);
 }
 
-/** A message of the session `s` that is none of the door's: the audience's, the menu's, a seat's. */
+/** A message of session `s` that is none of the door's: the audience's, the menu's, a seat's. */
 function fromTheRoom(
   lab: Lab,
   socket: PlayerSocket,
