@@ -754,15 +754,17 @@ import { movesTaken } from './planleft.mjs';
 import { beamLight, beamPatches, beamVerdict } from './beamcheck.mjs';
 import { changedShare, sweepOf, sweepVerdict } from './sweep.mjs';
 import {
-  allowanceOffered,
+  allowanceAt,
   arrivals,
   cornersOf,
   flights,
+  gapWithin,
   havens,
+  LOOK_EVERY_S,
   RUN,
   spottedOn,
   LATE_S,
-  LATE_STEPS,
+  STEP_WAIT_S,
   stretchOf,
 } from './patrol.mjs';
 import {
@@ -12404,36 +12406,33 @@ function nextRun(player, map, path, hold, { late, behind }) {
 /** What the walks past the drones came to, for the log's line at the end. */
 const sneaking = { walks: 0, waitedMs: 0, ranAnyway: 0, tightest: LATE_S };
 
-/** How long a walk waits for a gap at one allowance before it takes the next smaller, ms. */
-const ALLOWANCE_WAIT_MS = 12_000;
-
-/** The allowance for a late avatar a walk asks of a gap once it has waited `ms` for one, s. */
-function allowanceAfter(ms) {
-  const step = Math.min(LATE_STEPS.length - 1, Math.floor(ms / ALLOWANCE_WAIT_MS));
-  return LATE_STEPS[step];
-}
-
 /**
- * How long a walk that stands waiting for a gap counts as having waited, in ms: `waited` once
- * it has begun; at its first moment without one, the while it would stand out in vain at each
- * allowance wider than the patrols offer the stretch ahead within ALLOWANCE_WAIT_MS (patrol.mjs
- * `allowanceOffered`) — the escape's way through the Süd-Flur never has a gap for a second.
+ * Whether a walk that has just found no gap where it stands would wait for one a second wide
+ * in vain: the patrols, foretold over STEP_WAIT_S, bring none to the stretch ahead (patrol.mjs
+ * `gapWithin`) — the escape's way through the Süd-Flur never has one. The walk then asks 0.7 s
+ * from the start (`allowanceAt`).
  */
-function waitBegun(player, map, path, hold, waited) {
-  if (waited > 0) {
-    return waited;
-  }
+function secondVain(player, map, path, hold) {
   const sight = { tiles: map.tiles, shut: shutOn(map) };
   const { drones, age } = dronesOn(player.seen);
   const stretch = stretchOf(path, havensOn(drones, sight));
   const stand = stretch.length === path.length ? hold : SETTLE_S;
-  const within = ALLOWANCE_WAIT_MS / 1000;
   const run = arrivals(stretch, RUN.tile[1], RUN.corner[1]).at(-1) + RUN.corner[1];
   const delay = age + REACTION_S;
-  const flying = flights(drones, delay + within + LATE_S + run + stand + 0.5);
-  const steps = LATE_STEPS;
-  const offered = allowanceOffered(stretch, flying, sight, { delay, hold: stand, within, steps });
-  return steps.indexOf(offered) * ALLOWANCE_WAIT_MS;
+  const flying = flights(drones, delay + STEP_WAIT_S + LATE_S + run + stand + 0.5);
+  const gap = { delay, hold: stand, within: STEP_WAIT_S, late: LATE_S };
+  return !gapWithin(stretch, flying, sight, gap);
+}
+
+/**
+ * A walk that finds no gap where it stands waits a look's while: `waited` on by that, and at
+ * its first moment whether a second is vain there (`secondVain`).
+ */
+async function waitOn(player, map, path, hold, waited) {
+  const vain = waited.ms === 0 ? secondVain(player, map, path, hold) : waited.vain;
+  await sleep(LOOK_EVERY_S * 1000);
+  sneaking.waitedMs += LOOK_EVERY_S * 1000;
+  return { ms: waited.ms + LOOK_EVERY_S * 1000, vain };
 }
 
 /** `player`'s map; throws, saying how the run stands, where its view has none. */
@@ -12459,8 +12458,9 @@ function mapOf(player) {
 async function sneakTo(player, target, hold = 1.2) {
   const since = Date.now();
   let late = false;
-  // How long it has waited where it stands for a gap: the allowance steps down with it.
-  let waitedHere = 0;
+  // How long it has waited where it stands for a gap, ms, and whether a second is vain there:
+  // the allowance steps down with it (patrol.mjs `allowanceAt`).
+  let waited = { ms: 0, vain: false };
   sneaking.walks += 1;
   for (;;) {
     await weather();
@@ -12485,17 +12485,14 @@ async function sneakTo(player, target, hold = 1.2) {
           `${target.x},${target.y}`,
       );
     }
-    const behind = allowanceAfter(waitedHere);
+    const behind = allowanceAt(waited.ms / 1000, waited.vain);
     const run = nextRun(player, map, path, hold, { late, behind });
     if (run === null) {
-      waitedHere = waitBegun(player, map, path, hold, waitedHere);
-      await sleep(60);
-      sneaking.waitedMs += 60;
-      waitedHere += 60;
+      waited = await waitOn(player, map, path, hold, waited);
       continue;
     }
     sneaking.tightest = Math.min(sneaking.tightest, late ? 0 : behind);
-    waitedHere = 0;
+    waited = { ms: 0, vain: false };
     await runPath(player, run);
   }
 }
