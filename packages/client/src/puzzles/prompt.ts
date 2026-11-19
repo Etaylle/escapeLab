@@ -1,5 +1,4 @@
 import { claimKeys, typing } from '../hooks.js';
-import { keysDeaf } from '../input/deaf.js';
 import { inputDevice } from '../input/device.js';
 import { menuScope } from '../input/focus.js';
 
@@ -84,7 +83,7 @@ export function holdKeys(field: HTMLElement, type: (text: string) => void): () =
   keepFocus(field);
   const release = claimKeys();
   const onKey = (e: KeyboardEvent): void => {
-    if (keysDeaf() || !strayKey(e, typing(), coveredOver(field))) {
+    if (!strayKey(e, typing(), coveredOver(field))) {
       return;
     }
     e.preventDefault();

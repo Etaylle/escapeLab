@@ -196,3 +196,79 @@ describe('the game’s keys while a screen only shows a game', () => {
     expect(keysDeaf()).toBe(false);
   });
 });
+
+describe('the opening’s skip while a screen only shows a game', () => {
+  const caught = { onKey: null as ((e: unknown) => void) | null };
+  const space = {
+    key: ' ',
+    repeat: false,
+    altKey: false,
+    ctrlKey: false,
+    metaKey: false,
+    preventDefault: () => undefined,
+    stopImmediatePropagation: () => undefined,
+  };
+
+  beforeEach(() => {
+    vi.resetModules();
+    vi.doMock('react', async (importOriginal) => ({
+      ...(await importOriginal<Record<string, unknown>>()),
+      useRef: <T,>(value: T) => ({ current: value }),
+      useEffect: (effect: () => void) => void effect(),
+    }));
+    vi.doMock('../src/menuLayer.js', () => ({ usePause: () => ({ open: false }) }));
+    vi.stubGlobal('document', { activeElement: null });
+    vi.stubGlobal('window', {
+      addEventListener: (_type: string, onKey: (e: unknown) => void) => {
+        caught.onKey = onKey;
+      },
+      removeEventListener: () => undefined,
+    });
+  });
+
+  afterEach(() => {
+    vi.doUnmock('react');
+    vi.doUnmock('../src/menuLayer.js');
+  });
+
+  it('is nobody’s: Space skips a player’s opening, and none that is watched', async () => {
+    const { useSkipKey } = await import('../src/world/intro/useIntro.js');
+    const { useDeafKeys } = await import('../src/input/deaf.js');
+    // An intro five seconds in, nobody having skipped: Space would skip it.
+    const since = Date.now() - 5000;
+    const cue = { since, lightsSec: 29.1, skippedAt: null, outAt: null, closing: false };
+    let skipped = 0;
+    useSkipKey({ current: { cue } }, () => {
+      skipped += 1;
+    });
+    caught.onKey?.(space);
+    expect(skipped).toBe(1);
+    useDeafKeys(true);
+    caught.onKey?.(space);
+    expect(skipped).toBe(1);
+  });
+});
+
+describe('a stretch without a sound', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('starts nothing: a step inside it is not heard, one after it is — after a throw too', async () => {
+    const { fakeAudio, freshAudio, started } = await import('./fakeAudio.js');
+    fakeAudio();
+    const audio = await freshAudio();
+    audio.footstep();
+    const heard = started.length;
+    expect(heard).toBeGreaterThan(0);
+    expect(audio.hushed(() => (audio.footstep(), 'done'))).toBe('done');
+    expect(started).toHaveLength(heard);
+    expect(() =>
+      audio.hushed(() => {
+        throw new Error('a frame went wrong');
+      }),
+    ).toThrow('a frame went wrong');
+    audio.footstep();
+    expect(started.length).toBeGreaterThan(heard);
+  });
+});

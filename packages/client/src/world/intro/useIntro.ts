@@ -190,7 +190,10 @@ function useOpeningSound(
  * Space skips the opening where it can be skipped; nothing else hears that press then. Under a
  * menu (menuLayer.ts `usePause`) Space is the menu's, and the opening plays on.
  */
-function useSkipKey(kept: React.MutableRefObject<{ cue: IntroCue | null }>, skip: () => void) {
+export function useSkipKey(
+  kept: React.MutableRefObject<{ cue: IntroCue | null }>,
+  skip: () => void,
+): void {
   const latest = useRef(skip);
   latest.current = skip;
   const covered = useRef(false);

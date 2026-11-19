@@ -11,7 +11,7 @@ import type {
 } from '@escapelab/core';
 import { clockText, clockTime, formatLeft, type MissionTime } from '../clock.js';
 import { useKeys, useNow, useServerNow } from '../hooks.js';
-import { keysDeaf, useDeafKeys } from '../input/deaf.js';
+import { useDeafKeys } from '../input/deaf.js';
 import { withCapture } from '../notes.js';
 import { NotepadContext, NotingPlace, placeName, type NotepadHand } from '../noting.js';
 import {
@@ -742,7 +742,7 @@ function useEscape(onEscape: () => void): void {
   handler.current = onEscape;
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape' && !keysDeaf()) {
+      if (e.key === 'Escape') {
         handler.current();
       }
     };

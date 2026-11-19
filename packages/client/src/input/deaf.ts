@@ -2,10 +2,12 @@ import { useEffect } from 'react';
 
 /**
  * A screen that shows a game and plays none — the demo's audience on the own view of one of its
- * crew (screens/Demo.tsx) — makes the game's keys deaf for as long as it stands: the notepad's,
- * the keys that put a sheet down, Esc over a panel, the opening's skip, a console's prompt. What
- * listens for a key of the game asks `keysDeaf()` as the key comes; the page's own keys — the
- * menu's, the demo's — never ask.
+ * crew (screens/Demo.tsx) — makes the game's keys deaf for as long as it stands: the notepad's
+ * and the keys that put a sheet down (hooks.ts `useKeys`), and the opening's skip. What listens
+ * for such a key asks `keysDeaf()` as the key comes. The rest needs no asking: the world of a
+ * seat watched listens for no key at all, a console's prompt takes none inside an inert screen,
+ * and Esc finds nothing of the screen's own to close — it opens the page's menu, as over any
+ * audience's screen.
  */
 
 let screens = 0;

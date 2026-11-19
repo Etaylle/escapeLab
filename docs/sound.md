@@ -1316,7 +1316,9 @@ the critical stem carries the last minute.
 - A recording sounds the same every time but for its speed: a step varies over three takes and
   ±5 % in speed, a sporadic sound of a room up to 15 %; its place follows a partner ten times
   a second while it sounds.
-- The audience hears no beds and no reverb.
+- The audience hears no beds and no reverb. The demo's is the exception: it hears the lab as
+  the seat on air does (`docs/gameplay.md`, „Die Demo"), that seat's screen making the sound as a
+  player's does; the whole lab's picture over it is silent (`audio.ts` `hushed`).
 - A short sound that finds no room in the budget is not played; a placed one beyond 12 tiles is
   not started at all.
 - An effect asked for in the lobby's first seconds, before the rest of the effects have come, is

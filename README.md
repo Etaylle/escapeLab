@@ -105,13 +105,17 @@ wiederherstellen ([`docs/accounts.md`](docs/accounts.md)).
 Figuren und den freien Plätzen — ein Klick auf *Beitreten* genügt, niemand muss einen Code
 weitergeben. Laufende Runden erscheinen ebenfalls, dort führt der Knopf zum Zuschauen. Unter
 *Beitreten* bleibt ein Code-Feld für direkte Verabredungen, daneben *Zuschauen*. *Demo* führt
-ohne Namen, Konto und Code ins Publikum des Vorführraums, den der Server selbst spielt: „HCW
-Bachelor" und „HCW Master" fahren Blackout von der Eröffnung bis zur Luke, Lauf um Lauf, solange
-jemand zusieht;
-derselbe Weg als Link ist `/?demo=1` (für einen QR-Code), „Zuschauen beenden" führt zurück ins
-Menü (`docs/gameplay.md`, „Die Demo"). Eine offene Demo-Seite fragt alle vier Minuten `/health`
-ab und hält so einen Server wach, der ohne Anfragen einschläft (Render Free: 15 Minuten); nach
-einem Neustart oder Verbindungsabbruch ist sie von selbst wieder im Publikum. Auf einem quer
+ohne Namen, Konto und Code in den Vorführraum, den der Server selbst spielt: „HCW Bachelor" und
+„HCW Master" fahren Blackout von der Eröffnung bis zur Luke, Lauf um Lauf, solange jemand
+zusieht. Zu sehen ist das Spiel, wie es ein Crewmitglied hat — dessen eigener Bildschirm mit Welt,
+Ziel, Pult und Buch, nur zum Ansehen —, von einer Regie auf dem Server geschnitten: wer liest oder
+ein Pult bedient, ist im Bild, dazwischen die ganze Anlage von oben; alle Fenster zeigen dasselbe.
+Unter dem Bild steht, wer zu sehen ist und was er tut, und was der Leser einer Regel weitergibt,
+erscheint als Untertitel. *Regie*, *Spieler 1*, *Spieler 2* und *Übersicht* stellen das eigene
+Fenster fest. Derselbe Weg als Link ist `/?demo=1` (für einen QR-Code), „Zuschauen beenden"
+führt zurück ins Menü (`docs/gameplay.md`, „Die Demo"). Eine offene Demo-Seite fragt alle vier
+Minuten `/health` ab und hält so einen Server wach, der ohne Anfragen einschläft (Render Free:
+15 Minuten); nach einem Neustart oder Verbindungsabbruch ist sie von selbst wieder da. Auf einem quer
 gehaltenen Handy fehlen *Editor*, *QR-Code* und die Einstellungen (sieben Punkte füllen 390 px
 Höhe); *Demo* bleibt, denn Gäste kommen mit dem Handy.
 *QR-Code* zeigt die Adresse der Seite groß als QR-Code (schwarz auf
@@ -395,10 +399,12 @@ zu `devices` gehört, die der Zugangskontrolle, `access`, die der Anlaufsteuerun
 Paketfilters, `firewall`, `hall` (die Übungshalle bis zur Siegerkarte), `rotation` (die
 Wechselprobe auf zwei Seeds, siehe unten), `music` (die Musikpakete
 in den Einstellungen auf einer eigenen Menüseite: ein anderes Paket hörbar, Vorhören, nach dem
-Neuladen behalten) und `demo` (der Vorführraum: „Demo" im Menü eines Laptops, das Publikum mit
-dem Schild „Demo" und beiden Figuren, dann ein Handy über `/?demo=1`, hochkant und quer, zurück
-ins Menü, und der Server unter der zuschauenden Seite getötet und neu gestartet: sie ist ohne
-Neuladen wieder im Publikum); Blackout nennt alle acht im Log als ausgelassen. Der Rundgang
+Neuladen behalten) und `demo` (der Vorführraum: „Demo" im Menü eines Laptops, der Bildschirm
+des Platzes im Bild, mit den Tasten des Spiels und einem Klick bedrängt, ohne dass die Seite
+etwas sendet, die ganze Anlage und ein Schnitt mitten in der Überblendung, die Musik läuft dabei
+durch; dann ein Handy über `/?demo=1`, hochkant und quer, zurück ins Menü, und der Server unter
+der zuschauenden Seite getötet und neu gestartet: sie ist ohne Neuladen wieder da); Blackout
+nennt alle acht im Log als ausgelassen. Der Rundgang
 selbst: `screens`
 (Menü und sein Ton, Bestenliste, Lobby, der Start aus ihr), `intro` (die Eröffnung bis
 `blackout.png`) und `run` (die Mission bis zur Siegerkarte, nach dem gewonnenen Systemcheck die

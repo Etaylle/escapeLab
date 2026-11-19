@@ -170,6 +170,8 @@ interface Watched {
   shown: Record<string, number>;
   /** what one of the crew told the other, by station up: the words, and how long they stood, s */
   said: Record<number, { text: string; by: 0 | 1; long: number }>;
+  /** shots whose `ear` is not the seat on air — or, under the whole lab, the seat last on air */
+  deaf: number;
   /** the bytes sent this viewer, by kind of message, and the run's length, s */
   bytes: Record<string, number>;
   seconds: number;
@@ -191,7 +193,9 @@ function take(msg: ServerMessage, seen: Seen, watched: Watched): void {
     seen.index = msg.view.currentPuzzleIndex;
     seen.ids = msg.view.players.map((player) => player.id);
   } else if (msg.kind === 'demo-shot') {
-    const { onAir } = msg.shot;
+    const { onAir, ear } = msg.shot;
+    const last = seen.shot === null ? seen.ids[0] : (seen.shot.onAir ?? seen.shot.ear);
+    watched.deaf += ear === (onAir ?? last) ? 0 : 1;
     if (seen.shot === null || onAir !== seen.shot.onAir) {
       const seat = onAir === null ? null : seen.ids[0] === onAir ? 0 : 1;
       const at = (Date.now() - T0) / 1000;
@@ -231,7 +235,8 @@ function watchRun(seed: number): Watched {
   const heard: ServerMessage[] = [];
   host.watch((msg) => heard.push(msg));
   const seen: Seen = { phase: 'lobby', index: 0, ids: [], shot: null };
-  const watched: Watched = { phase: 'lobby', shots: [], shown: {}, said: {}, bytes: {}, seconds: 0 };
+  const counted = { shown: {}, said: {}, deaf: 0, bytes: {}, seconds: 0 };
+  const watched: Watched = { phase: 'lobby', shots: [], ...counted };
   const over = (): boolean => seen.phase === 'won' || seen.phase === 'lost';
   // To the run's end and five seconds of its Auswertung.
   for (let tick = 0, after = 0; tick < 15_000 && after < 60; tick++) {
@@ -281,6 +286,8 @@ describe('a whole run as the director cuts it', () => {
     }
     expect(inRun.length).toBeGreaterThanOrEqual(20);
     expect(inRun.length).toBeLessThanOrEqual(45);
+    // The lab is always heard from the seat on air, and under the whole lab from the last one.
+    expect(run.deaf).toBe(0);
     // Both seats are seen, and the whole lab for a tenth to a third of the run.
     const seconds = (onAir: 0 | 1 | null): number =>
       inRun.filter((shot) => shot.onAir === onAir).reduce((sum, shot) => sum + shot.long, 0);
