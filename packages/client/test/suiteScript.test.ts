@@ -9,6 +9,7 @@ import {
   isSuite,
   keepTake,
   keptFiles,
+  LYRIC,
   noisyTakes,
   optionsOf,
   pieceFileOf,
@@ -305,6 +306,18 @@ describe('a suite in the catalog', () => {
     for (const lyric of ['I walk the halls alone', '(Hello)', '{open', '']) {
       expect(withSection({ lines: [lyric] }), lyric).toEqual([
         expect.stringMatching(/^test-a: a line is neither a direction in braces nor a wordless/),
+      ]);
+    }
+    // A line of German lyric only in a section marked sung, which has to sing one.
+    const verse = ['{piano}', 'Die Türen offen, der Morgen ist da,', 'wir gehen ins Licht.'];
+    expect(withSection({ lines: verse })).toHaveLength(1);
+    expect(withSection({ sung: true, lines: verse })).toEqual([]);
+    expect(withSection({ sung: true, lines: ['{piano}', '(aah)'] })).toEqual([
+      'test-a: sung has to be true, and a sung section has to have a line of its lyric',
+    ]);
+    for (const line of ['{piano', '(Hallo)', 'zwei: Punkte', '']) {
+      expect(withSection({ sung: true, lines: ['Die Nacht', line] }), line).toEqual([
+        expect.stringMatching(/^test-a: a line is neither .* nor a line of German lyric/),
       ]);
     }
     // Thirty lines at most, its name in brackets among them.
@@ -822,14 +835,28 @@ describe('the score in the catalog', () => {
     }
   });
 
-  it('sings no word: a wordless voice in the main theme and at dawn alone, none in the run', () => {
-    const voiced = SCORE.sections.filter((each) => each.lines.some((line) => line.startsWith('(')));
-    expect(voiced.map((each) => each.id)).toEqual(['menu-theme', 'end-won']);
-    for (const id of ['menu-theme', 'end-won']) expect(said(id)).toMatch(/wordless female voice/);
-    for (const id of ['lobby', 'title', 'calm', 'tense', 'critical', 'end-lost']) {
-      expect(sections.get(id)?.avoid, id).toContain('voice');
+  it('sings words in the main theme and at dawn alone, the run’s voices wordless', () => {
+    const sung = SCORE.sections.filter((each) => each.sung === true);
+    expect(sung.map((each) => each.id)).toEqual(['menu-theme', 'end-won']);
+    for (const id of ['menu-theme', 'end-won']) {
+      expect(said(id)).toMatch(/solo female voice sings the motif .*in german/);
+      expect(sections.get(id)?.lines.filter((line) => LYRIC.test(line)).length, id).toBeGreaterThan(1);
     }
-    expect(SCORE.avoid).toEqual(expect.arrayContaining(['lyrics', 'spoken words']));
+    // The run's stems and the lost card: a hum, an „oh", an „ah" — no word, no soloist.
+    const wordless = { calm: '(mm)', tense: '(oh)', critical: '(ah)', 'end-lost': '(mm)' };
+    for (const [id, voice] of Object.entries(wordless)) {
+      expect(sections.get(id)?.lines, id).toContain(voice);
+      expect(sections.get(id)?.avoid, id).toContain('lyrics');
+    }
+    expect(said('calm')).toMatch(/choir hums/);
+    expect(said('critical')).toMatch(/wordless choir/);
+    // Where the crew talks and the loudspeakers announce: no voice at all.
+    for (const id of ['lobby', 'title']) {
+      expect(sections.get(id)?.avoid, id).toEqual(expect.arrayContaining(['voice', 'lyrics']));
+      expect(sections.get(id)?.lines.some((line) => line.startsWith('(')), id).toBe(false);
+    }
+    expect(SCORE.avoid).toEqual(expect.arrayContaining(['spoken words', 'choir singing words']));
+    expect(SCORE.avoid).not.toContain('lyrics');
   });
 
   it('keeps drums out of the menu, the lobby, the opening and the endings', () => {
