@@ -51,8 +51,13 @@ export interface SuiteSection {
   readonly key?: string;
   /** how much of the motif it plays: the chunk is told of that much, and no more */
   readonly motif: MotifPart;
-  /** its lines: directions in braces, a wordless voice's sounds in parentheses; no lyrics */
+  /**
+   * its lines: directions in braces, a wordless voice's sounds in parentheses, and — where it is
+   * `sung` — the lines of its lyric, in German
+   */
   readonly lines: readonly string[];
+  /** it sings words: the only sections whose lines may be a lyric's */
+  readonly sung?: true;
   readonly styles: readonly string[];
   readonly avoid: readonly string[];
   /** where the game plays it: "src/<file>#<symbol>" */

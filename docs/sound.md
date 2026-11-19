@@ -1203,9 +1203,9 @@ the lobby and the dawn the whole, the opening and the lights going out the first
 stems the cell alone, which the calm stem breaks into fragments, the tense stem's ostinato is built
 from and the last minute hammers — no chunk is told to play a melody its section avoids. The motif
 is shared by construction: one request, one generation, every chunk told the same cell and played on
-from the chunk before. A wordless voice — a solo female voice on an open „ah", written as a voice's
-sound in parentheses and never as a word — carries the answering phrase once in the main theme and
-sings the motif once more at dawn; nowhere else.
+from the chunk before. Human voices carry it besides (The voices, below): a solo female voice sings
+it in German in the main theme and at dawn, and a small choir hums, breathes and calls it without
+words in the run.
 
 **The pieces**, in the order of the plan, which is the order a crew hears them; a loop's bars that
 go round, and its tail of three:
@@ -1232,11 +1232,11 @@ asking three times for 90 bpm. A loop's section is written three bars longer tha
 the game catches a next pass up in, and the bars its 3 s seam crosses in, with a second to spare
 (suite.ts `tailBars`) — and is told to stay steady to its last bar and to come back to its opening;
 the cut keeps the tail, and the game loops on the bars the manifest names. What never appears: words
-of any kind, drums in the menu, the lobby, the opening, the calm stem and the endings, a voice in
-the run, an electric guitar, a drop, a change of tempo, sound effects (the suite's and each
-section's `avoid`). `test/suiteScript.test.ts` holds the catalog to all of it: the order, the
-lengths, the stems' grid, the key, the tempo and the motif in every chunk, the voice where it
-belongs and nowhere else, the drums kept out.
+outside the main theme and the dawn, a voice in the lobby and the opening, drums in the menu, the
+lobby, the opening, the calm stem and the endings, an electric guitar, a drop, a change of tempo,
+sound effects (the suite's and each section's `avoid`). `test/suiteScript.test.ts` holds the
+catalog to all of it: the order, the lengths, the stems' grid, the key, the tempo and the motif in
+every chunk, the words and the voices where they belong and nowhere else, the drums kept out.
 
 **What Expedition 33 showed, and what was not taken.** Its music is remembered as music, not as
 background: a melody comes back, piano and a few strings carry the feeling, a voice without words
@@ -1282,7 +1282,9 @@ setting the tone of the whole (ElevenLabs' API reference and its guide „Compos
 2026-11). The main theme comes first, the fullest statement of the motif, so that its tone sets
 the rest. A plan takes no switch for the instrumental as a prompt does (`force_instrumental`):
 here the lines are the switch, and the catalog's rules refuse any line that is neither a
-direction nor a voice's sounds. Eleven Music's overview page still names 5 minutes for a song;
+direction nor a voice's sounds — but in a section marked `sung`, where a line may be a line of
+its German lyric (sfx.ts `LYRIC`: letters with umlauts and ß, a verse's punctuation, no braces or
+parentheses), and which has to sing one. Eleven Music's overview page still names 5 minutes for a song;
 the score's 491 s keep within the 10 minutes the composition plans name. A plan of that length
 takes the service some two to four minutes to compose, so the script waits up to 15 for it
 (sfx.ts `SUITE_TIMEOUT_S`), where the SDK would give up after 4. Should the service refuse the
@@ -1292,40 +1294,34 @@ none asks for another: a quiet piece is sparse, its notes held long at the same 
 last minute's double time is a feel at the same tempo — the plan's bar lines, which the loops are
 cut on, hold only where the music keeps them.
 
-**Proposal: the score with voices** (2026-11-20, not yet in the catalog). Uros asked for music
-„mit auch Stimmen und etwas hörbarer"; the second half is built (How loud the music sits, below).
-For the first, the suite keeps everything that makes it the game's own — the night shift in a
-dark research lab, the motif above, A minor and the dawn's C major, 90 bpm, the same sections,
-bars and tails, the stems' 72 s loops on one grid, calm, tense and critical growing by the layers
-that enter — and gives the motif to human voices, so that the one theme is what is remembered. A
-solo female voice and a small choir, never a soloist's showpiece: in the run the voices are
-wordless — a closed hum („mm") in the calm stem, low voices on a held „oh" breathing with the bass
-pulse in the tense one, the full choir on „ah" hammering the motif's leap with the horns in the
-critical one — since words would fight the Leitstelle's lines, the loudspeakers and the German
-texts on screen; wordless voices sit in the speech's range too, which the radio's deeper duck
-(12 dB) answers. The lobby (the crew talks there) and the opening (under the announcement) stay
-without voices. Words only where nobody talks: the main theme sings two original German lines a
-phrase, the female voice over piano and strings, in its second half; the dawn sings once over the
-motif in C major. I disagree with words at „Lights Out": the lost card is read, and a sung line
-over a defeat comes out sentimental — a hum that dies with the pad says it better. No composer,
-game, singer or piece is named to the service, and the lines below quote nothing.
-
-What it takes besides the catalog: the plan's lines are its only switch for words (One
-generation, above), so the script's rule that refuses a lyric (`suite.ts` `LINE`) has to let a
-section marked `sung` carry lyric lines — in German, so with umlauts, where `phrase` takes ASCII
-alone — and `test/suiteScript.test.ts` has to hold words to the sung sections and voices out of
-the lobby and the opening. Every non-sung section names `lyrics` in its own `avoid`, the suite's
-moves from „lyrics" to „lyrics in the run".
+**The voices** (2026-11-20). Uros asked for music „mit auch Stimmen und etwas hörbarer"; the
+second half is the level (How loud the music sits, below). For the first, the suite keeps
+everything that makes it the game's own — the night shift in a dark research lab, the motif above,
+A minor and the dawn's C major, 90 bpm, the same sections, bars and tails, the stems' 72 s loops
+on one grid, calm, tense and critical growing by the layers that enter — and gives the motif to
+human voices, so that the one theme is what is remembered: a solo female voice and a small choir,
+never a soloist's showpiece. In the run the voices are wordless — a closed hum („mm") in the calm
+stem, low voices on a held „oh" breathing with the bass pulse in the tense one, the choir on „ah"
+hammering the motif's leap with the horns in the critical one — since words would fight the
+Leitstelle's lines, the loudspeakers and the German texts on screen; wordless voices sit in the
+speech's range too, which the radio's deeper duck (12 dB) answers. The lobby (the crew talks
+there) and the opening (under the announcement) stay without voices. Words only where nobody
+talks: the main theme sings two lines a phrase of its own German in its second half, the dawn two
+over the motif in C major. „Lights Out" sings no word — the lost card is read, and a sung line over
+a defeat comes out sentimental — but a low hum that follows the motif down and dies with the pad.
+No composer, game, singer or piece is named to the service, and the lines quote nothing. The
+catalog's changes against the score before, section by section:
 
 | Section | Lines (new or changed) | Styles added | Avoid, changed |
 | --- | --- | --- | --- |
 | suite | — | „a solo female voice and a small wordless chamber choir carry the motif", „one strong, singable melody throughout" | „lyrics" moves into the sections |
 | Main Theme (`sung`) | {felt piano alone states the main motif} · {chamber strings answer the motif} · Die Nacht hält still im Labor, · nur die Lampen wachen noch. · Wer jetzt geht, der kehrt zurück, · wenn das Licht den Morgen findet. · {the piano alone again over a soft held string chord} | „a solo female voice sings the motif in German in the second half, intimate, close to the microphone" | „choir" kept out, „belting", „pop vocals" |
+| Interlude, Opening | — (no voice) | — | „lyrics" in |
 | Night Shift (calm) | + (mm) | „a small distant choir hums the motif's leap on a closed mm, very soft, now and then" | „voice", „vocals" out; „lyrics", „solo voice" in |
 | Pressure (tense) | + (oh) | „low male voices on a sustained oh, breathing with the bass pulse" | „voice", „vocals" out; „lyrics", „solo voice" in |
-| Last Minute (critical) | + (ah) | „a wordless choir on ah hammers the motif's leap with the horns" | „voice", „vocals" out; „lyrics" in |
-| Lights Out | + (mm) | „a low female hum follows the motif down and dies with the pad" | „voice" out; „lyrics" in |
-| Dawn (`sung`) | {strings carry the motif in C major} · Die Türen offen, der Morgen ist da, · wir gehen hinaus ins Licht. · {a long held C major chord, a true ending} | „the solo female voice sings the motif once in German, warm, at rest" | — |
+| Last Minute (critical) | + (ah) | „a wordless choir on ah hammers the motif's leap with the horns" | „voice", „vocals" out; „lyrics", „solo voice" in |
+| Lights Out | + (mm) | „a low female hum follows the motif down and dies with the pad" | „voice", „vocals" out; „lyrics", „choir" in |
+| Dawn (`sung`) | {strings carry the motif into the major} · Die Türen offen, der Morgen ist da, · wir gehen hinaus ins Licht. · {a long held final chord} | „the solo female voice sings the motif once in German, warm, at rest" | — |
 
 Budgets: the sections, bars and tails stay, so the suite stays at 490.7 s: two takes 17,665
 credits (`CREDITS_PER_SECOND` 18), under the 18,000 cap a run, and 10.3 MiB of the music
@@ -1334,6 +1330,16 @@ passes the cap in one run (26,497 credits); a second run of one take adds it (8,
 the account keeping its 40,000 floor. A take is chosen whole, by ear on `/sounds` — its pieces
 are one generation, and a stem of one take crosses badly into a stem of another — so „candidates
 per piece" means two or three takes of the whole suite.
+
+**Comparing two takes.** On `/sounds` under „Partitur" each take stands as a row with its pieces
+in the plan's order. Take them piece by piece across the takes, not take by take: the main theme
+of take 1, then of take 2 — are the German words understood, is the voice close and plain, no
+belting? —; then the three stems of one take one after the other, calm, tense, critical, and the
+same of the other — does a word slip into the run, does the choir stay under the piano and the
+horns, does each stem hold its pulse to its last bar (amber in its line: it would fail the game's
+recordings)? —; then the two endings. Keep the take whose stems are right even where the other's
+main theme is lovelier: the stems are heard for the whole of every run, the theme in the menu.
+„Diesen Take wählen" shows the command that keeps it whole.
 
 ## Music that breathes (`music.ts`)
 

@@ -794,11 +794,12 @@
       "a research facility at night, lonely and nocturnal",
       "impressionist harmony with added ninths and suspensions",
       "emotional, intimate, cinematic",
+      "a solo female voice and a small wordless chamber choir carry the motif",
+      "one strong, singable melody throughout",
       "steady tempo, no rubato",
       "great production quality"
     ],
     "avoid": [
-      "lyrics",
       "spoken words",
       "rap",
       "pop vocals",
@@ -821,21 +822,25 @@
         "bars": 32,
         "loop": true,
         "motif": "whole",
+        "sung": true,
         "lines": [
           "{felt piano alone states the main motif}",
           "{chamber strings answer the motif}",
-          "(aah)",
+          "Die Nacht hält still im Labor,",
+          "nur die Lampen wachen noch.",
+          "Wer jetzt geht, der kehrt zurück,",
+          "wenn das Licht den Morgen findet.",
           "{the piano alone again over a soft held string chord}"
         ],
         "styles": [
           "main title theme, the fullest statement of the motif",
           "felt piano states the motif alone, then chamber strings answer it",
-          "a solo wordless female voice sings the answering phrase once, softly, in the second half",
+          "a solo female voice sings the motif in German in the second half, intimate and close",
           "a faint analog synth pad underneath, slightly cold against the warm piano",
           "a gentle swell from piano to mezzo-forte and back",
           "the last bars return to the opening bars, ready to loop"
         ],
-        "avoid": ["drums", "percussion", "choir", "fade out", "big ending"],
+        "avoid": ["drums", "percussion", "choir", "belting", "pop vocals", "fade out", "big ending"],
         "usedBy": ["src/world/menuSound.ts#THEME"]
       },
       {
@@ -853,7 +858,16 @@
           "quiet and steady throughout, a room where people wait",
           "the last bars return to the opening bars, ready to loop"
         ],
-        "avoid": ["drums", "percussion", "voice", "vocals", "crescendo", "climax", "fade out"],
+        "avoid": [
+          "drums",
+          "percussion",
+          "voice",
+          "vocals",
+          "lyrics",
+          "crescendo",
+          "climax",
+          "fade out"
+        ],
         "usedBy": ["src/world/menuSound.ts#LOBBY"]
       },
       {
@@ -870,7 +884,15 @@
           "leaves room for a voice speaking over it",
           "ends on an open, unresolved chord that hangs"
         ],
-        "avoid": ["drums", "percussion", "voice", "vocals", "full arrangement", "crescendo"],
+        "avoid": [
+          "drums",
+          "percussion",
+          "voice",
+          "vocals",
+          "lyrics",
+          "full arrangement",
+          "crescendo"
+        ],
         "usedBy": ["src/world/intro/cue.ts#TITLE"]
       },
       {
@@ -879,19 +901,20 @@
         "bars": 24,
         "loop": true,
         "motif": "cell",
-        "lines": ["{fragments of the motif in the dark}"],
+        "lines": ["{fragments of the motif in the dark}", "(mm)"],
         "styles": [
           "the motif broken into fragments: its opening leap alone, with long pauses",
           "felt piano in the low middle register",
           "a dark analog synth pad and a soft muted synth bass note on every bar",
+          "a small distant choir hums the motif's leap on a closed mm, very soft, now and then",
           "uneasy, quiet, suspended",
           "steady intensity from the first bar to the last, made to loop"
         ],
         "avoid": [
           "drums",
           "percussion",
-          "voice",
-          "vocals",
+          "lyrics",
+          "solo voice",
           "the full melody",
           "crescendo",
           "ending",
@@ -905,16 +928,25 @@
         "bars": 24,
         "loop": true,
         "motif": "cell",
-        "lines": ["{a pulsing ostinato built from the motif}"],
+        "lines": ["{a pulsing ostinato built from the motif}", "(oh)"],
         "styles": [
           "a plucked analog synth ostinato in eighth notes built from the motif's first notes",
           "a muted bass pulse on every beat",
           "low sustained strings",
           "light ticking percussion like a clock",
+          "low male voices on a sustained oh, breathing with the bass pulse",
           "the piano answers with the motif in the low register",
           "building pressure, yet steady from the first bar to the last, made to loop"
         ],
-        "avoid": ["voice", "vocals", "heavy drums", "drum fills", "drop", "ending", "fade out"],
+        "avoid": [
+          "lyrics",
+          "solo voice",
+          "heavy drums",
+          "drum fills",
+          "drop",
+          "ending",
+          "fade out"
+        ],
         "usedBy": ["src/world/music.ts#STEMS"]
       },
       {
@@ -923,16 +955,17 @@
         "bars": 24,
         "loop": true,
         "motif": "cell",
-        "lines": ["{the motif hammered by horns and strings}"],
+        "lines": ["{the motif hammered by horns and strings}", "(ah)"],
         "styles": [
           "urgent and driving, a double-time feel at the same tempo",
           "pounding low cinematic drums",
           "a string ostinato in sixteenth notes",
           "a pulsing analog synth bass",
           "horns and strings hammer the motif's opening leap",
+          "a wordless choir on ah hammers the motif's leap with the horns",
           "steady high intensity from the first bar to the last, made to loop"
         ],
-        "avoid": ["voice", "vocals", "breakdown", "ending", "fade out"],
+        "avoid": ["lyrics", "solo voice", "breakdown", "ending", "fade out"],
         "usedBy": ["src/world/music.ts#STEMS"]
       },
       {
@@ -941,15 +974,16 @@
         "bars": 15,
         "loop": false,
         "motif": "phrase",
-        "lines": ["{the music breaks off}", "{low piano, the motif in long held notes}"],
+        "lines": ["{the music breaks off}", "{low piano, the motif in long held notes}", "(mm)"],
         "styles": [
           "the motif sunk into the low register of the piano, heavy, long held notes at the same tempo",
           "a bowed double bass drone",
           "the analog pad dims like lights failing",
+          "a low female hum follows the motif down and dies with the pad",
           "desolate and very quiet",
           "fades into silence at the end"
         ],
-        "avoid": ["drums", "percussion", "voice", "vocals", "major key", "brass", "crescendo"],
+        "avoid": ["drums", "percussion", "lyrics", "choir", "major key", "brass", "crescendo"],
         "usedBy": ["src/world/endTheme.ts#THEMES", "src/screens/End.tsx#TitleCard"]
       },
       {
@@ -959,15 +993,17 @@
         "loop": false,
         "key": "C major",
         "motif": "whole",
+        "sung": true,
         "lines": [
           "{strings carry the motif into the major}",
-          "(aah)",
+          "Die Türen offen, der Morgen ist da,",
+          "wir gehen hinaus ins Licht.",
           "{a long held final chord}"
         ],
         "styles": [
           "the motif resolved into the major key, hopeful and warm",
           "warm chamber strings carry the melody",
-          "the wordless female voice sings the motif once more",
+          "the solo female voice sings the motif once in German, warm, at rest",
           "flowing piano arpeggios like first light",
           "the analog pad turns warm",
           "grows a little, then comes to rest on a long sustained C major chord",

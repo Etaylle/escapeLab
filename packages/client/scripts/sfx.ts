@@ -405,11 +405,20 @@ const motifKept = (motif: unknown): boolean =>
 
 /**
  * A line of a section: a direction in braces („{solo cello answers}"), or a wordless voice's
- * sounds in parentheses („(aah)") — never a lyric.
+ * sounds in parentheses („(aah)") — and, in a section marked `sung` alone, a line of its lyric:
+ * German words, umlauts and ß among them, with the punctuation of a verse, no brace, no
+ * parenthesis (`LYRIC`).
  */
 const LINE = /^(?:\{[^{}]+\}|\([a-z ,-]+\))$/;
+export const LYRIC = /^[A-Za-zÄÖÜäöüß][A-Za-zÄÖÜäöüß ,.!?'-]*$/;
 const lineKept = (line: unknown): boolean =>
   phrase(line, PLAN_LIMITS.lineChars) && LINE.test(String(line));
+/** Whether `line` is a line of a lyric: German words, a verse's punctuation, not too long. */
+const lyricKept = (line: unknown): boolean =>
+  typeof line === 'string' && line.length <= PLAN_LIMITS.lineChars && LYRIC.test(line);
+/** Whether each of `section`'s lines is kept: a lyric's only where the section is sung. */
+const linesKept = (section: SuiteSection): boolean =>
+  section.lines.every((line) => lineKept(line) || (section.sung === true && lyricKept(line)));
 const within = (value: number, [least, most]: readonly [number, number]): boolean =>
   value >= least && value <= most;
 
@@ -451,10 +460,15 @@ const SECTION_RULES: readonly Rule<SuiteSection>[] = [
     (c) => `${c.id}: its motif has to be ${MOTIF_PARTS.join(', ')}: how much of it it plays`,
   ],
   [
-    (c) => Array.isArray(c.lines) && c.lines.length < PLAN_LIMITS.lines && c.lines.every(lineKept),
+    (c) => Array.isArray(c.lines) && c.lines.length < PLAN_LIMITS.lines && linesKept(c),
     (c) =>
       `${c.id}: a line is neither a direction in braces nor a wordless voice's sounds in ` +
-      `parentheses, or there are ${PLAN_LIMITS.lines} lines with its name`,
+      `parentheses${c.sung === true ? ' nor a line of German lyric' : ''}, or there are ` +
+      `${PLAN_LIMITS.lines} lines with its name`,
+  ],
+  [
+    (c) => c.sung === undefined || (c.sung === true && c.lines.some(lyricKept)),
+    (c) => `${c.id}: sung has to be true, and a sung section has to have a line of its lyric`,
   ],
   [
     (c) => styles(c.styles) && styles(c.avoid),
