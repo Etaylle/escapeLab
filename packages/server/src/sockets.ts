@@ -498,13 +498,54 @@ function handleMessage(
   }
   // A seat that went to another socket takes nothing from this one any more.
   const held = session !== null && session.holds() ? session : null;
-  if (fromTheMenu(msg)) {
-    return atTheMenu(socket, requireSession(held), msg);
-  }
   // What the page streams supersedes itself: from no seat it goes nowhere, unanswered.
-  return held === null && msg.kind === 'pos'
-    ? null
-    : inRoom(lab, socket, requireSession(held), msg);
+  if (held === null && msg.kind === 'pos') {
+    return null;
+  }
+  return fromTheRoom(lab, socket, requireSession(held), msg);
+}
+
+/** A message of the session `s` that is none of the door's: the audience's, the menu's, a seat's. */
+function fromTheRoom(
+  lab: Lab,
+  socket: PlayerSocket,
+  s: Session,
+  msg: Exclude<ClientMessage, AtTheDoor>,
+): Session | null {
+  if (s.pass === null) {
+    return fromTheAudience(socket, s, msg);
+  }
+  return fromTheMenu(msg) ? atTheMenu(socket, s, msg) : inRoom(lab, socket, s, msg);
+}
+
+/** What an audience connection is told that would do what only a seat of the crew does. */
+export const AUDIENCE_WATCHES =
+  'Das Publikum schaut zu: Geschaltet wird nur von einem Platz der Crew.';
+
+/**
+ * A message of an audience connection (session `s`) that is none of the door's: it listens in
+ * on the crew (`rtc`), goes to the main menu (`to-menu`) — and whatever its page streams or
+ * marks as a seat's page would, where it stands or its menu, goes nowhere, unanswered. Anything
+ * else — a move, a start, a way back to the lobby, a mission picked — is refused here, before
+ * any of the room's code runs: the audience watches.
+ */
+function fromTheAudience(
+  socket: PlayerSocket,
+  s: Session,
+  msg: Exclude<ClientMessage, AtTheDoor>,
+): Session | null {
+  switch (msg.kind) {
+    case 'rtc':
+      s.room.relaySignal(s.playerId, msg.to, msg.signal);
+      return s;
+    case 'to-menu':
+      return atTheMenu(socket, s, msg);
+    case 'pos':
+    case 'pause-menu':
+      return s;
+    default:
+      throw new GameError(AUDIENCE_WATCHES);
+  }
 }
 
 /**
