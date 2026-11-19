@@ -38,10 +38,11 @@ export const DEMO_IDLE_MS = 60_000;
 
 /**
  * How long a run may go without getting on — no station solved, no hatch opened, no end —
- * before its host gives it up, ms: the longest a station takes a crew that plays is under two
- * minutes, an emergency in it included.
+ * before its host gives it up, ms. Over the demo's hundred seeds the longest a crew that plays
+ * goes without getting on is 157 s, 191 s where its lines hang for 8 s every minute: five
+ * minutes leave it well over a minute and a half.
  */
-export const DEMO_STALL_MS = 240_000;
+export const DEMO_STALL_MS = 300_000;
 
 /** How many times in a row the crew may start over, getting nowhere, before the run is given up. */
 export const DEMO_COMPLAINTS = 30;

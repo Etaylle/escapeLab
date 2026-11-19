@@ -74,6 +74,11 @@ describe('a run’s crew and what the room refuses of it', () => {
     expect(warned.mock.calls.flat().join(' ')).toContain('Anna stood nowhere in the run');
     // Nobody who is no seat of the run stands anywhere for a position sent.
     room.updatePosition('nobody', run, { x: 3.5, y: 3.5, facing: 0, moving: false });
+    const near = { x: spawn.x + 0.6, y: spawn.y + 0.5 };
+    room.updatePosition(anna.playerId, run, { ...near, facing: 0, moving: true });
+    const told = anna.messages.length;
+    vi.advanceTimersByTime(100);
+    expect(anna.messages.slice(told).some((msg) => msg.kind === 'positions')).toBe(true);
     expect(Object.keys(stoodOn(anna.messages))).not.toContain('nobody');
     room.dispose();
   });
@@ -117,14 +122,17 @@ describe('the audience at the door', () => {
     const manager = new RoomManager(undefined, true);
     serveSockets(line, { catalog: shipped, manager });
     const [anna, ben] = ['Anna', 'Ben'].map(() => line.connect()) as [FakeSocket, FakeSocket];
-    anna.say({ kind: 'create-room', name: 'Anna', pass: passFor('Anna'), missionId: 'blackout' });
+    // The seed pinned: the spawns and all the run draws are the same every time.
+    const pass = passFor('Anna');
+    anna.say({ kind: 'create-room', name: 'Anna', pass, missionId: 'blackout', seed: 12 });
     const { code } = joinedOf(anna);
     ben.say({ kind: 'join-room', code, name: 'Ben', pass: passFor('Ben') });
     ben.say({ kind: 'set-ready', ready: true });
     anna.say({ kind: 'start-mission' });
     const run = anna.view.startedAt ?? 0;
     const spawn = anna.view.map?.yourSpawn ?? { x: 0, y: 0 };
-    const step = { x: spawn.x + 0.8, y: spawn.y + 0.5 };
+    // Both of Anna's steps stay on the tile she starts on, whatever lies beside it.
+    const step = { x: spawn.x + 0.6, y: spawn.y + 0.5 };
     anna.say({ kind: 'pos', run, ...step, facing: 0, moving: true, t: 1 });
     const zoe = line.connect();
     zoe.say({ kind: 'spectate', code });
@@ -140,9 +148,10 @@ describe('the audience at the door', () => {
     expect(anna.view).toMatchObject({ phase: 'playing', startedAt: run });
     expect(JSON.stringify(anna.view)).toBe(before);
     // Anna walks on from where she stood.
-    anna.say({ kind: 'pos', run, x: step.x + 0.3, y: step.y, facing: 0, moving: true, t: 3 });
+    const on = { x: spawn.x + 0.7, y: step.y };
+    anna.say({ kind: 'pos', run, ...on, facing: 0, moving: true, t: 3 });
     vi.advanceTimersByTime(100);
-    expect(stoodOn(anna.heard)[anna.view.you.id]).toMatchObject({ x: step.x + 0.3, y: step.y });
+    expect(stoodOn(anna.heard)[anna.view.you.id]).toMatchObject(on);
     expect(refusals(anna)).toEqual([]);
     manager.get(code).dispose();
   });
