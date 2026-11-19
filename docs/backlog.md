@@ -235,13 +235,18 @@ die Entscheidung.
   (`server/test/drones.test.ts`); `tools/patrol.mjs` rechnet ebenso.
 - Beleg: danach je Seed sechs Läufe ohne Capture-Gruppen bei Last 3–5, 18 von 18 ohne Sichtung.
 
-### H-6 Die Flucht des Rundgangs wartet zwölf Sekunden zu viel — Status: offen · Größe: S
+### H-6 Die Flucht des Rundgangs wartet zwölf Sekunden zu viel — Status: erledigt (B-blackout3, 2026-11-19) · Größe: S
 
 - Der Rundgang verlangt an jeder Strecke erst eine Lücke für eine um 1 s verspätete Figur und
   steigt nach je 12 s auf 0,7 s und 0,4 s ab (`tools/patrol.mjs` `LATE_STEPS`). Die 14 Felder
   der Flucht durch den Süd-Flur haben mit 1 s nie eine Lücke: Dort wartet er die 12 s jedes Mal
   umsonst (ohne Capture-Gruppen 17 bis 28 s je Lauf). Zu tun: je Strecke vorab rechnen, welche
   Stufe die Bahnen überhaupt hergeben, und mit ihr beginnen.
+- Umgesetzt: Findet ein Gang keine Lücke, rechnet er einmal über die vorhergesagten Flüge der
+  nächsten 12 s, welche Stufe überhaupt eine bringt (`allowanceOffered`), und beginnt sein Warten
+  dort; die Stufen und ihre 12 s bleiben. `tools/patrol.test.mjs` hält fest, dass die Strecke
+  durch den Süd-Flur in keiner Phase der Laborwache eine Lücke für 1 s hat und meist eine für
+  0,7 s. Die Flucht ohne Capture-Gruppen: 51,9 s auf main, 35,9 s mit dem Paket (Seed 12).
 
 ### T-9 Tests an der Wanduhr — Status: erledigt (2026-11-13) · Größe: S
 - Zwei Tests lasen die echte Uhr und wurden unter Last rot: `certificate.test.ts` (openssl liest
