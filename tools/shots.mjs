@@ -750,6 +750,7 @@ import {
 import { lightWorkText } from './lightwork.mjs';
 import { drawnText, fadeOf, fadeVerdict, meanLuma, midway } from './panelfade.mjs';
 import { movesTaken } from './planleft.mjs';
+import { REST_LEAD_S, restTiming } from './rest.mjs';
 import { beamLight, beamPatches, beamVerdict } from './beamcheck.mjs';
 import { changedShare, sweepOf, sweepVerdict } from './sweep.mjs';
 import {
@@ -11234,18 +11235,11 @@ const FIREWALL_SHOT_NAMES = {
   rest: 'rest-goal.png and rest-kept.png',
 };
 
-/** How soon after the probe's held second wave runs again its emergency is to fall, s. */
-const REST_LEAD_S = 2;
-/**
- * How far into the probe's second wave its emergency may fall, by the wave's own clock, s: its
- * first packets on the lines, the wave far from its end (each packet falls ten seconds).
- */
-const REST_INTO_WAVE_S = 12;
-
 /**
  * The probe's second wave timed for its emergency, at the first look at it running while its
- * rest is still to be shot (`shots.rest`): where the next one falls more than REST_INTO_WAVE_S
- * into the wave, `gate`'s player steps off the Sperrpult — the wave holds — until it is
+ * rest is still to be shot (`shots.rest`): where the next one would fall more than
+ * REST_INTO_WAVE_S into the wave (rest.mjs `restTiming`), `gate`'s player steps off the
+ * Sperrpult — the wave holds, as it holds for any crew whose Sperrpult stands empty — until it is
  * REST_LEAD_S away, and back on. Returns whether it held the wave; logs either way.
  */
 async function heldForRest({ gate }, fw, shots) {
@@ -11255,9 +11249,9 @@ async function heldForRest({ gate }, fw, shots) {
   }
   shots.restTimed = true;
   const due = () => nextEmergencyIn(gate.seen, FIREWALL_MISSION.map.sabotage);
-  const into = (Date.now() - fw.clock.startedAt) / 1000 + due();
-  if (into <= REST_INTO_WAVE_S) {
-    fwSaid(`rest: the emergency falls ${into.toFixed(1)} s into the second wave`);
+  const timing = restTiming((Date.now() - fw.clock.startedAt) / 1000, due());
+  if (!timing.hold) {
+    fwSaid(`rest: the emergency falls ${timing.intoS.toFixed(1)} s into the second wave`);
     return false;
   }
   const from = Date.now();
@@ -11269,7 +11263,10 @@ async function heldForRest({ gate }, fw, shots) {
   await until(() => due() <= REST_LEAD_S + 2, (due() + 5) * 1000);
   await man();
   await until(() => due() <= REST_LEAD_S, 5000);
-  fwSaid(`rest: the second wave held ${seconds(Date.now() - from)} for its emergency`);
+  fwSaid(
+    `rest: the second wave held ${seconds(Date.now() - from)} for its emergency, ` +
+      `which would have fallen ${timing.intoS.toFixed(1)} s into it`,
+  );
   return true;
 }
 
@@ -11294,20 +11291,51 @@ async function restedThrough({ gate, analysis }, shots) {
   const title = FIREWALL_MISSION.puzzles[0].title;
   const named = await restingGoalShot(gate, title);
   await weather({ phone: false });
+  for (const player of [analysis, gate]) {
+    // The panel the emergency shut has to be gone before E opens it again.
+    await player.page.locator('.station-modal').waitFor({ state: 'hidden', timeout: 3000 });
+  }
   await manFirewall(analysis, 'b', 'analysis');
   await manFirewall(gate, 'a', 'gate');
   const back = (fw) => fw?.cleared === 1 && fw.waiting === true && fw.packets?.length === 0;
-  const kept = (await until(() => back(firewallView(gate)), CATCH_UP_MS)) &&
+  const viewKept = (await until(() => back(firewallView(gate)), CATCH_UP_MS)) &&
     gate.seen.view.alarms.count === alarms;
+  const page = await sperrpultUp(gate);
   await capture(gate.page, 'rest-kept.png');
   const fw = firewallView(gate);
-  fwSaid(`rest-kept.png ${gate.name}'s Sperrpult after the emergency: ${fw?.cleared} wave(s) ` +
-    `clean, ${fw?.waiting ? 'waiting' : 'running'}, ${gate.seen.view.alarms.count - alarms} ` +
-    `alarm(s)${kept ? '' : ' !! not as it stood'}`);
-  if (!named || !kept) {
-    fail(`rest: "${title}" named resting ${named}, back with its clean wave ${kept}`);
+  fwSaid(`rest-kept.png ${gate.name}'s Sperrpult after the emergency: ${page.text}; the view ` +
+    `${fw?.cleared} wave(s) clean, ${fw?.waiting ? 'waiting' : 'running'}, ` +
+    `${gate.seen.view.alarms.count - alarms} alarm(s)${viewKept ? '' : ' !! not as it stood'}`);
+  if (!named || !viewKept || !page.kept) {
+    fail(`rest: "${title}" named resting ${named}, back with its clean wave ${viewKept}, ` +
+      `on the page ${page.text}`);
   }
   return true;
+}
+
+/** Every animation in `locator`'s element and under it run out (a fade, a slide). */
+const animationsDone = (locator) =>
+  locator.evaluate((el) =>
+    Promise.all(el.getAnimations({ subtree: true }).map((a) => a.finished.catch(() => undefined))),
+  );
+
+/**
+ * `gate`'s Sperrpult as its page shows it, its panel up and its fade-in run out: whether it waits
+ * for the Freigabe — FREIGABE pressable, no packet on a line — and what it shows, in words.
+ */
+async function sperrpultUp(gate) {
+  const modal = gate.page.locator('.station-modal');
+  const up = await settled(modal.waitFor({ state: 'visible', timeout: 3000 }));
+  if (!up) {
+    return { kept: false, text: 'no panel' };
+  }
+  await animationsDone(modal);
+  const arm = modal.locator('.firewall-arm');
+  const armable = (await arm.isVisible()) && (await arm.isEnabled());
+  const blips = await modal.locator('.firewall-blip').count();
+  const text = `the panel up, FREIGABE ${armable ? 'pressable' : 'not pressable'}, ${blips} ` +
+    'packet(s) on the lines';
+  return { kept: armable && blips === 0, text };
 }
 
 /** How many cards the headers' shot waits for on the lines, until the second wave. */
@@ -13872,7 +13900,12 @@ async function restingGoalShot(host, title) {
   const said = `${title} ${RESTING_GOAL}`;
   const named = await untilAsync(async () => (await goal.textContent()) === said, 3000);
   const shown = await goal.textContent();
-  await sleep(400); // the station's panel has faded from under the relay console
+  // The relay console up over the world, its own fade run out; the station's panel gone.
+  const relay = host.page.locator('.relay-modal');
+  await relay.waitFor({ state: 'visible', timeout: 3000 }).catch(() => undefined);
+  await animationsDone(relay).catch(() => undefined);
+  await host.page.locator('.station-modal').waitFor({ state: 'hidden', timeout: 3000 })
+    .catch(() => undefined);
   await capture(host.page, 'rest-goal.png');
   console.log(
     `rest-goal.png      ${host.name}'s goal line in the emergency: „${shown}"` +
