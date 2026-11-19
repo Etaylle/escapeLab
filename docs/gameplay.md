@@ -1329,12 +1329,14 @@ spends and the menu puts back.
 „Demo" in the main menu, after „Offene Runden", and the link `/?demo=1` (the stand's QR code) lead
 straight into the audience of the demo room: no name, no account, no code. The link is read once as
 the page comes up and taken off the address at once (`client/src/demoLink.ts`), so that no invite
-link copies it and a reload after „Zuschauen beenden" finds the menu. The audience is the one every
-room has, with one line under the mission's name — „Vorführbetrieb: Die Anlage fährt diesen Einsatz
-selbst, an den Pulten stehen zwei Automaten." — and the crew along the foot as always: „Automat A"
-and „Automat B", each with what it is doing (am Pult A, liest, hält die Platte, trägt die
-Sicherung). Under a finger the foot's two ways, „Crew mithören" and „Zuschauen beenden", are 44 px
-tall. Whoever joins mid-run sees the run as it stands.
+link copies it and a reload after „Zuschauen beenden" finds the menu. A phone held sideways has no
+room for the item in its menu's column, as it has none for „Einstellungen": there the link leads
+into the demo, and held upright the item stands. The audience is the one every room has, with one
+line under the mission's name — „Vorführbetrieb: Die Anlage fährt diesen Einsatz selbst, an den
+Pulten stehen zwei Automaten." — and the crew along the foot as always: „Automat A" and „Automat
+B", each with what it is doing (am Pult A, liest, hält die Platte, trägt die Sicherung). Under a
+finger the foot's two ways, „Crew mithören" and „Zuschauen beenden", are 44 px tall. Whoever joins
+mid-run sees the run as it stands.
 
 **The room** (`server/src/demo/host.ts`) has the code `DEMO` (core `DEMO_CODE`; no room a server
 opens has an O in its code) and is none of the manager's rooms: no list shows it, nobody joins it
@@ -1365,30 +1367,31 @@ module's `solve` on what the two seats see, the moves it gives together made in 
 the crew's files names a room or the game (a test reads their imports), and a test plays a run over
 lines that carry copies.
 
-**It plays as people do.** It walks at a player's 4.2 tiles a second, from tile to tile, and stands
-before a console, never on it. Who is nearer reads the rules at their source first — a locker
-searched, the Aktenschrank's key fetched and the cabinet unlocked — for 14 to 20 s; the other
-carries in what the station waits for (the Ersatzsicherung, when the Reaktor is up, as mission
-control says it then) and reads the Laborkennung off its sign where nobody started at it. A door a
-plate holds is held by the one while the other walks through. E comes 1 to 2 s after a figure has
-taken its place, 3 to 5.2 s lie between two inputs, the two presses of a lever 0.25 to 0.6 s apart.
-An emergency's instruction is carried out 3 to 4.6 s after it came up; the handgrip an emergency
-cuts into is dropped and taken up anew after it, the station switched on again. The pauses are
-thrown from the same dice in every run, so that the run a seed plays is the run the tests prove.
+**It plays as people do.** It walks at a player's 4.2 tiles a second, from tile to tile, round the
+consoles and the sources on its way, and stands before a console, never on it. Who is nearer reads
+the rules at their source first — a locker searched, the Aktenschrank's key fetched and the cabinet
+unlocked — for 14 to 20 s; the other carries in what the station waits for (the Ersatzsicherung,
+when the Reaktor is up, as mission control says it then) and reads the Laborkennung off its sign
+where nobody started at it. A door a plate holds is held by the one while the other walks through.
+E comes 1 to 2 s after a figure has taken its place, 3 to 5.2 s lie between two inputs, the two
+presses of a lever 0.25 to 0.6 s apart. An emergency's instruction is carried out 3 to 4.6 s after
+it came up; the handgrip an emergency cuts into is dropped and taken up anew after it, the station
+switched on again. The pauses are thrown from the same dice in every run, so that the run a seed
+plays is the run the tests prove.
 
 **Past the drones** (`demo/walks.ts`, `demo/patrol.ts`) it goes as the walkthrough's crew does
 (`tools/patrol.mjs`): from haven to haven — the tiles no drone ever looks at —, each stretch
 between taken in one go once no flight foretold from the stream would have a cone on it, with 0.4
 tiles and 5° of margin on the room's rule and 0.35 s on its own pace. It never runs for it: a walk
-waits for its gap, 7 to 50 s of a run in all. In an emergency the drones spot nobody, and see again
+waits for its gap, 2 to 53 s of a run in all. In an emergency the drones spot nobody, and see again
 the moment it is over: a walk that stands on a haven then waits it out there.
 
 **What a run comes to.** Over the seeds 0 to 99 on fake timers every run is won with no alarm and
-no hint, one emergency weathered in each: the Funkpult's runs take 5.3 to 6.6 min on the clock, the
-Signalkette's 6.5 to 7.2, the Notstromkasten's 6.2 to 7.4, of the mission's 16. In real time the
-three seeds of the draws (12, 56, 93) came to 404, 340 and 372 s, as on fake timers to within 4 s.
-A run is lost only by the clock or the alarm limit, which a crew that careful does not come near; a
-server that hangs for seconds may cost it a sighting.
+no hint, one emergency or two weathered in each: the Funkpult's runs take 5.3 to 6.7 min on the
+clock, the Signalkette's 6.5 to 7.1, the Notstromkasten's 6.3 to 7.6, of the mission's 16. In real
+time the three seeds of the draws (12, 56, 93) came to 410, 343 and 380 s, on fake timers to 407,
+343 and 379 s. A run is lost only by the clock or the alarm limit, which a crew that careful does
+not come near; a server that hangs for seconds may cost it a sighting.
 
 **What watching costs.** A whole run with sixty watching costs 0.7 s of one core on an M4: the
 game, the crew and every view serialised for each socket. One of the audience is sent some 0.5

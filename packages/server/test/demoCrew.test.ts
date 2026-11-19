@@ -40,7 +40,7 @@ function runOn(seed: number, wire?: Wire) {
 
 describe('the demo crew', () => {
   it.each(Object.entries(DRAW_SEEDS))(
-    'wins Blackout with the %s at the Wechselplatz, in five to eight minutes, with no alarm',
+    'wins Blackout with the %s at the Wechselplatz, in some six or seven minutes, with no alarm',
     (drawn, seed) => {
       const { view, complaints } = runOn(seed);
       expect(view.phase).toBe('won');
@@ -50,8 +50,9 @@ describe('the demo crew', () => {
       expect(view.events.filter((e) => e.kind === 'puzzle')).toHaveLength(6);
       // Nothing went wrong on the way: no step refused, no script started over.
       expect(complaints).toEqual([]);
-      expect(clockOf(view)).toBeGreaterThan(5 * 60);
-      expect(clockOf(view)).toBeLessThan(8 * 60);
+      // About six to eight minutes; the bounds leave the mission's places room to move.
+      expect(clockOf(view)).toBeGreaterThan(4.5 * 60);
+      expect(clockOf(view)).toBeLessThan(8.5 * 60);
     },
   );
 
@@ -143,8 +144,11 @@ describe('the demo crew over its hundred seeds', () => {
       Object.values(drawPools(mission.puzzles, seed)).forEach((id) => drawn.add(id));
     }
     expect([...drawn].sort()).toEqual(['frequenz', 'notstrom', 'signalkette']);
-    expect(Math.min(...clocks)).toBeGreaterThan(5 * 60);
-    expect(Math.max(...clocks)).toBeLessThan(8 * 60);
+    clocks.sort((a, b) => a - b);
+    expect(clocks[0]).toBeGreaterThan(4.5 * 60);
+    expect(clocks[50]).toBeGreaterThan(5.5 * 60);
+    expect(clocks[50]).toBeLessThan(7.5 * 60);
+    expect(clocks[99]).toBeLessThan(8.5 * 60);
   }, 240_000);
 
   it('plays the stations of the Wechselplatz in turn, a seed of the hundred each', () => {

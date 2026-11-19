@@ -108,7 +108,8 @@ weitergeben. Laufende Runden erscheinen ebenfalls, dort führt der Knopf zum Zus
 ohne Namen, Konto und Code ins Publikum des Vorführraums, den der Server selbst spielt: zwei
 Automaten fahren Blackout von der Eröffnung bis zur Luke, Lauf um Lauf, solange jemand zusieht;
 derselbe Weg als Link ist `/?demo=1` (für einen QR-Code), „Zuschauen beenden" führt zurück ins
-Menü (`docs/gameplay.md`, „Die Demo"). Bindet ein
+Menü (`docs/gameplay.md`, „Die Demo"). Auf einem quer gehaltenen Handy fehlt der Punkt wie die
+Einstellungen: Für beide ist die Spalte dort zu kurz. Bindet ein
 laufender Einsatz den Dienstausweis, steht seine Karte als erster Menüpunkt da. In die Lobby
 und zurück geht es durch die Schiebetüren des Labors; ab dem ersten Klick oder Tastendruck
 spielen Titelthema und Anlagenbrummen, in der Lobby leiser weiter. Die Endkarte spielt nach
@@ -124,8 +125,8 @@ das langsam vorbeizieht; rechts steht die eigene Figur mit der Handlampe, deren 
 erhellt. Jeder Menüpunkt hat in Blackouts Labor einen eigenen Raum, zu dem die Kamera beim
 Darüberfahren langsam schwenkt (`docs/art-bible.md`, „The menu's places"): *Einsatz starten* (die
 Missionskarten, „Runde eröffnen"), *Beitreten*, *Offene Runden*, *Demo*, *Handbuch*,
-*Bestenliste*, *Meine Einsätze*, *Editor* und *Einstellungen* — mit der Maus, der Tastatur (Pfeile, Enter, Esc) oder dem
-Controller (Steuerkreuz, A, B). Oben in der Leiste steht das Konto des Browsers: der Kopf der
+*Bestenliste*, *Meine Einsätze*, *Editor* und *Einstellungen* — mit der Maus, der Tastatur (Pfeile,
+Enter, Esc) oder dem Controller (Steuerkreuz, A, B). Oben in der Leiste steht das Konto des Browsers: der Kopf der
 eigenen Figur in ihrer Farbe, der Name und, wo Platz ist, wie viele Einsätze das Konto gespielt hat;
 ein Klick öffnet „Konto" in den Einstellungen, am Handy steht nur der Kopf. Den Namen tragen die
 Panels ein, die einen Platz nehmen (*Einsatz starten*, *Beitreten*, *Offene Runden*), und „Konto" —
@@ -423,8 +424,8 @@ s:
 mit `SHOTS_ONLY=firewall` bei Last um 4 (17.11.2026), und die Übungshalle braucht an ihrem
 Paketfilter 55,1 s dazu. `music` (M-packs) spielt nur im Systemcheck: 4,9 s im CI,
 9,7 s allein mit `SHOTS_ONLY=music` bei Last um 20. `demo` (D-demo) spielt nur im Systemcheck:
-21,8 s allein mit `SHOTS_ONLY=demo` bei Last um 4 (19.11.2026), davon rund 17 s Warten, bis der
-erste Automat am Hauptschalter steht.
+23,2 s allein mit `SHOTS_ONLY=demo` bei Last um 5 (19.11.2026), davon rund 19 s Warten, bis beide
+Automaten am Hauptschalter stehen.
 
 `rotation` (B-rotation) spielt nur im Systemcheck: Die Probemission
 `tools/fixtures/rotation-probe.json` („Wechselprobe") hat an ihrem mittleren Platz einen

@@ -1038,9 +1038,11 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   keinem Speicher (weder Laufprotokoll noch Postgres, also weder Bestenliste noch „Meine
   Einsätze" noch Erfolge noch Tagesschicht); `/health` nennt ihn für sich (`demo`),
   `rooms.running` bleibt davon unberührt. Höchstens 150 Zuschauende.
-- Beweis: 100 Seeds auf falschen Timern gewonnen ohne Alarm (5,3 bis 7,4 min auf der Uhr), die
-  drei Seeds der Auslosungen in Echtzeit auf 4 s gleich; Rundgang-Probe `demo` (vier Aufnahmen,
-  21,8 s); Smoke prüft Raum, Sicht und `/health`; `docs/gameplay.md`, „Die Demo".
+- Beweis: 100 Seeds auf falschen Timern gewonnen ohne Alarm (5,3 bis 7,6 min auf der Uhr), die
+  drei Seeds der Auslosungen in Echtzeit auf 3 s gleich; Rundgang-Probe `demo` (vier Aufnahmen,
+  23 s); Smoke prüft Raum, Sicht und `/health`; `docs/gameplay.md`, „Die Demo".
+- Auf dem quer gehaltenen Handy steht „Demo" nicht im Menü (sieben Punkte füllen 390 px Höhe, wie
+  bisher ohne „Einstellungen"); dorthin führt der Link, und hochkant steht der Punkt da.
 - Offen: Die 23 Sprechtexte warten weiter auf Uros' Render; die Demo fügt keinen hinzu.
 
 ## Nur lokal
