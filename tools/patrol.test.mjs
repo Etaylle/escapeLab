@@ -14,6 +14,7 @@ import {
   progressAt,
   spots,
   LATE_S,
+  LATE_STEPS,
   RUN,
   spottedOn,
   stretchOf,
@@ -178,8 +179,9 @@ describe('spottedOn — an avatar behind its pace', () => {
   const westbound = [{ ...watcher, beat, at: { x: 9.5, y: 2.5, facing: Math.PI } }];
   const crossing = tiles([2, 1], [2, 2], [2, 3]);
 
-  it('allows for one a second and a half late', () => {
-    assert.equal(LATE_S, 1.5);
+  it('allows for one a second late, then for less where no gap is that wide', () => {
+    assert.equal(LATE_S, 1);
+    assert.deepEqual(LATE_STEPS, [1, 0.7, 0.4]);
   });
 
   it('calls no run clear that an avatar a second late would be seen on', () => {

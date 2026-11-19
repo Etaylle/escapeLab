@@ -417,7 +417,8 @@ draws stand on it together, so a board mixes stations of unequal length — wort
 draw only once the spread shows (Blackout's three lay 39 s apart for the script crew). The clock
 is set by that crew: it keeps at least 40 % of it in its slowest draw, measured without capture
 groups (`SHOTS_ONLY=run`) — 290 to 339 s after the lights went out, 63 to 70 % of Blackout's
-960 s left; the capture run keeps 38 to 39 % and is no measure, main's old chain stood at 34 %
+960 s left, and some 17 s more since its walks past the drones wait for a gap an avatar a
+second late still passes (350 s on the Signalkette's seed); the capture run keeps 38 to 39 % and is no measure, main's old chain stood at 34 %
 of 900 s by it. A snapshot keeps the draw; one from before
 the pools has none and restores as before — a run in flight over the deploy that gave its
 mission a pool plays its old chain to the end (`server/test/snapshotFixture.test.ts`).

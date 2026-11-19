@@ -749,6 +749,8 @@ import {
   havens,
   RUN,
   spottedOn,
+  LATE_S,
+  LATE_STEPS,
   stretchOf,
 } from './patrol.mjs';
 import {
@@ -11991,9 +11993,10 @@ function refugeFrom(map, here, safe, unseen) {
  * foretold from the stream, would spot it on the way — nor at the end of
  * `path` for `hold` s; or, caught out in the open with that stretch watched,
  * the way to a haven it can reach unseen (`refugeFrom`); null to wait where
- * it is. `late`, it runs the stretch whatever the drones do.
+ * it is. `late`, it runs the stretch whatever the drones do; `behind` is how far behind its
+ * slowest pace the avatar may fall and stay unseen, in s (patrol.mjs LATE_STEPS).
  */
-function nextRun(player, map, path, hold, late) {
+function nextRun(player, map, path, hold, { late, behind }) {
   const sight = { tiles: map.tiles, shut: shutOn(map) };
   const { drones, age } = dronesOn(player.seen);
   const safe = havensOn(drones, sight);
@@ -12004,8 +12007,8 @@ function nextRun(player, map, path, hold, late) {
   const unseen = (way, stand) => {
     const run = arrivals(way, RUN.tile[1], RUN.corner[1]).at(-1) + RUN.corner[1];
     const delay = age + REACTION_S;
-    const flying = flights(drones, delay + run + stand + 0.5);
-    return spottedOn(way, flying, sight, { delay, hold: stand }) === null;
+    const flying = flights(drones, delay + behind + run + stand + 0.5);
+    return spottedOn(way, flying, sight, { delay, hold: stand, late: behind }) === null;
   };
   const arrives = stretch.length === path.length;
   if (unseen(stretch, arrives ? hold : SETTLE_S)) {
@@ -12016,7 +12019,16 @@ function nextRun(player, map, path, hold, late) {
 }
 
 /** What the walks past the drones came to, for the log's line at the end. */
-const sneaking = { walks: 0, waitedMs: 0, ranAnyway: 0 };
+const sneaking = { walks: 0, waitedMs: 0, ranAnyway: 0, tightest: LATE_S };
+
+/** How long a walk waits for a gap at one allowance before it takes the next smaller, ms. */
+const ALLOWANCE_WAIT_MS = 12_000;
+
+/** The allowance for a late avatar a walk asks of a gap once it has waited `ms` for one, s. */
+function allowanceAfter(ms) {
+  const step = Math.min(LATE_STEPS.length - 1, Math.floor(ms / ALLOWANCE_WAIT_MS));
+  return LATE_STEPS[step];
+}
 
 /** `player`'s map; throws, saying how the run stands, where its view has none. */
 function mapOf(player) {
@@ -12041,6 +12053,8 @@ function mapOf(player) {
 async function sneakTo(player, target, hold = 1.2) {
   const since = Date.now();
   let late = false;
+  // How long it has waited where it stands for a gap: the allowance steps down with it.
+  let waitedHere = 0;
   sneaking.walks += 1;
   for (;;) {
     await weather();
@@ -12065,12 +12079,16 @@ async function sneakTo(player, target, hold = 1.2) {
           `${target.x},${target.y}`,
       );
     }
-    const run = nextRun(player, map, path, hold, late);
+    const behind = allowanceAfter(waitedHere);
+    const run = nextRun(player, map, path, hold, { late, behind });
     if (run === null) {
       await sleep(60);
       sneaking.waitedMs += 60;
+      waitedHere += 60;
       continue;
     }
+    sneaking.tightest = Math.min(sneaking.tightest, late ? 0 : behind);
+    waitedHere = 0;
     await runPath(player, run);
   }
 }
@@ -12087,7 +12105,7 @@ async function clearOfDrones(player, seconds) {
     const map = mapOf(player);
     const sight = { tiles: map.tiles, shut: shutOn(map) };
     const { drones, age } = dronesOn(player.seen);
-    const flying = flights(drones, age + seconds + RUN.corner[1] + 0.5);
+    const flying = flights(drones, age + LATE_S + seconds + RUN.corner[1] + 0.5);
     const here = [tileOf(player.seen)];
     if (spottedOn(here, flying, sight, { delay: age, hold: seconds }) === null) {
       return;
@@ -13391,7 +13409,8 @@ async function playBlackoutToTheEnd(host, guest, watcher) {
     `blackout           won ${seconds(finishedAt - lights.outAt)} after the lights went out, ` +
       `${clockLeft(deadlineAt - finishedAt, BLACKOUT.timeLimitSec)}, ${penaltySeq} alarm(s), ` +
       `${sightings.count} of them drones; ${sneaking.walks} walks past the drones, ` +
-      `${seconds(sneaking.waitedMs)} waited for a gap, ${sneaking.ranAnyway} run without one; ` +
+      `${seconds(sneaking.waitedMs)} waited for a gap, ${sneaking.ranAnyway} run without one, ` +
+      `the tightest taken with ${sneaking.tightest} s to spare for a late avatar; ` +
       `${running.runs} runs, ${running.outside} outside the pace foretold ` +
       `(by up to ${seconds(running.worstS * 1000)}), a stop ` +
       `${running.stopS.map((s) => s.toFixed(2)).join('–')} s; ` +

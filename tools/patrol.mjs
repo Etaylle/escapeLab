@@ -35,10 +35,17 @@ export const RUN = { tile: [0.235, 0.26], corner: [0.1, 0.5] };
 /**
  * How far behind its slowest run an avatar may fall all the same, in s: a page on a loaded
  * machine holds a key or a stop longer than it should. The walkthrough's own count of runs
- * „outside the pace foretold" showed 0.2 to 0.4 s on a laptop and 0.7 s on a CI runner, where
- * it cost a sighting (cloud run 44414620875); twice that and a little.
+ * „outside the pace foretold" showed 0.2 to 0.4 s on a laptop, 0.8 s beside a looping suite
+ * and 0.7 s on a CI runner, where it cost a sighting (cloud run 44414620875). Not more: the
+ * stretch of the escape through the Süd-Flur has a clear moment in 10 % of the patrols'
+ * phases with none, in 3 % with 0.7 s and in none with a second (the walk steps down, LATE_STEPS).
  */
-export const LATE_S = 1.5;
+export const LATE_S = 1;
+/**
+ * The allowances a walk waits for in turn, each for a while before the next smaller: the
+ * widest gap the patrols leave is taken, and a stretch that has none that wide is still run.
+ */
+export const LATE_STEPS = [LATE_S, 0.7, 0.4];
 
 const keyOf = (x, y) => `${x},${y}`;
 const middleOf = (tile) => ({ x: tile.x + 0.5, y: tile.y + 0.5 });
