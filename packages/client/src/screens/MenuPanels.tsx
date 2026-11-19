@@ -21,6 +21,7 @@ import { CrewFigure } from './CrewFigure.js';
 import { Icon } from './Icon.js';
 import { MapThumb } from './MapThumb.js';
 import { pauseClock } from './Pause.js';
+import { addressText, QrCode, siteAddress } from './QrCode.js';
 
 /**
  * The menu's panels (screens/Join.tsx): each slides over the menu as a dialog of its own, its
@@ -593,6 +594,28 @@ export function JoinPanel({ takeover, waiting, onClose, ...section }: JoinPanelP
       </div>
       {takeover !== null && <TakeoverWait takeover={takeover} />}
       {name === '' && <p className="muted">{NAME_MISSING}</p>}
+    </MenuPanel>
+  );
+}
+
+/** What the QR panel says over its code, in the plant's words. */
+export const QR_PANEL_LINE =
+  'Handy oder Tablet auf den Code richten: Er führt an die Pforte der Anlage.';
+
+/**
+ * „QR-Code": the site's own address as a large QR code — black on white, as large as the panel
+ * lets it be, to be read off a laptop's screen from a step or two away — and the address as
+ * text under it, for whoever types it.
+ */
+export function QrPanel({ onClose }: { onClose: () => void }) {
+  const address = siteAddress();
+  return (
+    <MenuPanel title="Zutritt per QR-Code" className="menu-panel--qr" onClose={onClose}>
+      <p className="muted">{QR_PANEL_LINE}</p>
+      <div className="qr-large">
+        <QrCode text={address} label={`QR-Code der Adresse ${addressText(address)}`} />
+      </div>
+      <p className="qr-address">{addressText(address)}</p>
     </MenuPanel>
   );
 }

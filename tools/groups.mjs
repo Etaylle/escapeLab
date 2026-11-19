@@ -175,6 +175,7 @@ export const GROUPS = [
     needs: [],
     captures: [
       'menu.png',
+      'menu-qr.png',
       'menu-hero.png',
       'menu-hero-hover.png',
       'menu-place-handbook.png',
@@ -195,6 +196,7 @@ export const GROUPS = [
       'lobby-title.png',
       'lobby-first.png',
       'lobby-host.png',
+      'lobby-qr.png',
       'daily.png',
       'menu-phone.png',
       'menu-phone-932.png',

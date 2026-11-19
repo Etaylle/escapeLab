@@ -17,6 +17,7 @@ export interface Spot {
  * Blackout's lab (missions/blackout.json), a room for each item: „Einsatz starten" the Reaktor's
  * core, „Beitreten" the Flur at the Serverschott, „Offene Runden" the Ost-Flur's console hall —
  * the lab's Leitstand —, „Demo" the Flur's west end, where a night's first walk begins,
+ * „QR-Code" the hatch in the Archiv's corner, the lab's way in and out,
  * „Handbuch" the Archiv's shelves with the book, „Bestenliste" the
  * Süd-Flur's notice board, „Meine Einsätze" the Serverraum's lockers, „Editor" the Labor's
  * benches — its workshop —, „Einstellungen" the Maschinenraum's panel.
@@ -26,6 +27,7 @@ const BLACKOUT: Readonly<Record<string, Spot>> = {
   join: { x: 19.5, y: 10 },
   rounds: { x: 28.5, y: 7 },
   demo: { x: 6.5, y: 10.5 },
+  qr: { x: 1.5, y: 1.5 },
   handbook: { x: 5.5, y: 3.5 },
   history: { x: 22.5, y: 17 },
   myruns: { x: 16.5, y: 4.5 },

@@ -1003,6 +1003,14 @@ export function drawNameTag(
   }
 }
 
+/** How much room a figure's name tag takes, its halo included, in tiles (`textBox`). */
+export function nameTagBox(
+  ctx: CanvasRenderingContext2D,
+  o: Pick<ScientistOpts, 'name' | 'text'>,
+): { width: number; height: number } {
+  return textBox(ctx, o.name, (o.text ?? TILE_TEXT).name);
+}
+
 // ---- Floor and wall textures ---------------------------------------------------------
 
 /** The size of the floor and wall textures the editor's brushes show, in pixels. */

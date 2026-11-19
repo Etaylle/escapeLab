@@ -8,6 +8,7 @@ export type MenuItemId =
   | 'join'
   | 'rounds'
   | 'demo'
+  | 'qr'
   | 'handbook'
   | 'history'
   | 'myruns'
@@ -20,6 +21,7 @@ export const MENU_LABELS: Readonly<Record<MenuItemId, string>> = {
   join: 'Beitreten',
   rounds: 'Offene Runden',
   demo: 'Demo',
+  qr: 'QR-Code',
   handbook: 'Handbuch',
   history: 'Bestenliste',
   myruns: 'Meine Einsätze',
@@ -28,17 +30,17 @@ export const MENU_LABELS: Readonly<Record<MenuItemId, string>> = {
 };
 
 /** The items that open a panel of the menu's own (screens/MenuPanels.tsx), the rest a page. */
-export type PanelId = Extract<MenuItemId, 'missions' | 'join' | 'rounds'>;
+export type PanelId = Extract<MenuItemId, 'missions' | 'join' | 'rounds' | 'qr'>;
 
 /** Whether `item` opens a panel over the menu. */
 export function opensPanel(item: MenuItemId): item is PanelId {
-  return item === 'missions' || item === 'join' || item === 'rounds';
+  return item === 'missions' || item === 'join' || item === 'rounds' || item === 'qr';
 }
 
 /**
  * The menu's items in order, top to bottom: the ways into a round, then the demo the plant plays
- * by itself, to be watched; the account's runs beside the Bestenliste, the editor where the page
- * offers one.
+ * by itself, to be watched, and the site's address as a QR code for another device; the account's
+ * runs beside the Bestenliste, the editor where the page offers one.
  */
 export function menuItems(editor: boolean): MenuItemId[] {
   return [
@@ -46,6 +48,7 @@ export function menuItems(editor: boolean): MenuItemId[] {
     'join',
     'rounds',
     'demo',
+    'qr',
     'handbook',
     'history',
     'myruns',

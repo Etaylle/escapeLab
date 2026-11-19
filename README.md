@@ -90,8 +90,8 @@ keine Grenze.
 
 **Startseite:** Ein Hauptmenü wie in einem Spiel, über dem beleuchteten Labor der gewählten
 Mission, das langsam vorbeizieht: *Einsatz starten* (die Missionskarten, „Runde eröffnen"),
-*Beitreten*, *Offene Runden*, *Demo*, *Handbuch*, *Bestenliste*, *Meine Einsätze*, *Editor* und
-*Einstellungen* — mit der Maus, der Tastatur (Pfeile, Enter, Esc) oder dem Controller
+*Beitreten*, *Offene Runden*, *Demo*, *QR-Code*, *Handbuch*, *Bestenliste*, *Meine Einsätze*,
+*Editor* und *Einstellungen* — mit der Maus, der Tastatur (Pfeile, Enter, Esc) oder dem Controller
 (Steuerkreuz, A, B). Oben rechts steht das Profil, das Konto des Browsers: Name, Farbe, die eigene
 Figur, die winkt, sobald der Name sich ändert, und wie viele Einsätze das Konto gespielt hat. Das
 Konto bewahrt Name, Farbe, Erfolge und Läufe über Neustarts und Deploys hinweg; *Meine
@@ -112,7 +112,12 @@ derselbe Weg als Link ist `/?demo=1` (für einen QR-Code), „Zuschauen beenden"
 Menü (`docs/gameplay.md`, „Die Demo"). Eine offene Demo-Seite fragt alle vier Minuten `/health`
 ab und hält so einen Server wach, der ohne Anfragen einschläft (Render Free: 15 Minuten); nach
 einem Neustart oder Verbindungsabbruch ist sie von selbst wieder im Publikum. Auf einem quer
-gehaltenen Handy fehlt der Punkt wie die Einstellungen: Für beide ist die Spalte dort zu kurz. Bindet ein
+gehaltenen Handy fehlen *Editor*, *QR-Code* und die Einstellungen (sieben Punkte füllen 390 px
+Höhe); *Demo* bleibt, denn Gäste kommen mit dem Handy.
+*QR-Code* zeigt die Adresse der Seite groß als QR-Code (schwarz auf
+weiß, ohne fremden Dienst, auch offline), in der Lobby öffnet „QR" neben dem Raumcode den
+Einladungslink als Code, und neben der Demo steht die Adresse klein zum Mitnehmen
+(`docs/gameplay.md`, „QR-Codes"). Bindet ein
 laufender Einsatz den Dienstausweis, steht seine Karte als erster Menüpunkt da. In die Lobby
 und zurück geht es durch die Schiebetüren des Labors; ab dem ersten Klick oder Tastendruck
 spielen Titelthema und Anlagenbrummen, in der Lobby leiser weiter. Die Endkarte spielt nach
@@ -127,7 +132,7 @@ vorzuhören, darunter die Nennungen, die ihre Lizenzen verlangen (`docs/sound.md
 das langsam vorbeizieht; rechts steht die eigene Figur mit der Handlampe, deren Kegel das Labor
 erhellt. Jeder Menüpunkt hat in Blackouts Labor einen eigenen Raum, zu dem die Kamera beim
 Darüberfahren langsam schwenkt (`docs/art-bible.md`, „The menu's places"): *Einsatz starten* (die
-Missionskarten, „Runde eröffnen"), *Beitreten*, *Offene Runden*, *Demo*, *Handbuch*,
+Missionskarten, „Runde eröffnen"), *Beitreten*, *Offene Runden*, *Demo*, *QR-Code*, *Handbuch*,
 *Bestenliste*, *Meine Einsätze*, *Editor* und *Einstellungen* — mit der Maus, der Tastatur (Pfeile,
 Enter, Esc) oder dem Controller (Steuerkreuz, A, B). Oben in der Leiste steht das Konto des
 Browsers: der Kopf der

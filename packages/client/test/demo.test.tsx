@@ -35,7 +35,8 @@ function ruleOf(sheet: string, selector: string): string {
 /** A page at `address`: its location, and every address its history was given since. */
 function pageAt(address: string) {
   const url = new URL(address, 'https://escapelab.test');
-  const location = { pathname: url.pathname, search: url.search, hash: url.hash };
+  const { origin, pathname, search, hash } = url;
+  const location = { origin, pathname, search, hash };
   const replaced: string[] = [];
   const history = {
     state: null,
@@ -75,19 +76,18 @@ describe('„Demo" in the main menu', () => {
     expect(wipe.shutter).toHaveBeenCalledTimes(1);
   });
 
-  it('fits a laptop’s low window, and leaves a phone held sideways its seven items', () => {
+  it('stays on a phone held sideways, where the editor, the QR code and the settings go', () => {
     const menu = css('styles/menu.css');
-    const low = menu.slice(menu.indexOf('@media (min-width: 900px) and (max-height: 760px) {'));
-    expect(low.slice(0, low.indexOf('\n}\n'))).toMatch(
-      /\.menu-list \.menu-item \{\s*min-height: 44px;/,
-    );
     const sideways = menu.slice(
       menu.indexOf('@media (orientation: landscape) and (max-height: 500px) {'),
     );
     const hidden = (item: string): string => `li:has\\(> \\.menu-item\\[data-item='${item}'\\]\\)`;
-    expect(sideways).toMatch(
-      new RegExp(`${hidden('settings')},\\s*\\.menu-list ${hidden('demo')} \\{\\s*display: none;`),
-    );
+    const list = ['settings', 'editor', 'qr'].map(hidden).join(',\\s*\\.menu-list ');
+    expect(sideways).toMatch(new RegExp(`${list} \\{\\s*display: none;`));
+    expect(menu).not.toContain("data-item='demo'");
+    // Seven of the ten are left: what a window 390 px high holds at 44 px each.
+    const gone = ['settings', 'editor', 'qr'];
+    expect(menuItems(true).filter((item) => !gone.includes(item))).toHaveLength(7);
   });
 
   it('leads nowhere while the line is down', () => {
@@ -158,8 +158,9 @@ const LOBBY = {
   map: null,
 } as unknown as SpectatorView;
 
-/** The audience's screen on `LOBBY`, of the demo room or of any other. */
+/** The audience's screen on `LOBBY`, of the demo room or of any other, on the site's page. */
 function audience(demo: boolean): string {
+  pageAt('/');
   return renderToStaticMarkup(
     <SpectateScreen
       view={LOBBY}
@@ -182,8 +183,11 @@ describe('the demo room’s audience', () => {
     expect(html).toContain('HCW Bachelor');
     expect(html).toContain('HCW Master');
     expect(html).toContain('Zuschauen beenden');
-    // Any other room's audience has neither.
-    expect(audience(false)).not.toContain('demo-l');
+    // The site's address beside it as a small QR code, to take the game along.
+    expect(html).toContain('<section class="panel demo-qr"><svg class="qr"');
+    expect(html).toContain('// Zum Mitnehmen</div><p class="qr-address">escapelab.test</p>');
+    // Any other room's audience has none of it.
+    expect(audience(false)).not.toContain('demo-');
   });
 
   it('says both at 14 px by the text size set, the line in the world’s voice', () => {
@@ -208,9 +212,46 @@ describe('the demo room’s audience', () => {
   });
 });
 
+describe('the audience on a phone', () => {
+  const sheet = css('ui.css');
+  /** The block of the sheet that opens with `media`, to its end. */
+  const block = (media: string): string => {
+    const at = sheet.indexOf(`${media} {\n  .content--stage`);
+    expect(at, media).toBeGreaterThan(0);
+    return sheet.slice(at, sheet.indexOf('\n}\n', at));
+  };
+
+  it('scrolls down when held upright: the world in the lab’s shape, the panels under it', () => {
+    const upright = block('@media (max-width: 560px)');
+    expect(upright).toMatch(/\.content--stage:has\(> \.spectate\) \{\s*overflow-y: auto;/);
+    expect(upright).toMatch(/\.spectate-world \{\s*flex: none;\s*height: 62vw;/);
+    expect(upright).toMatch(
+      /\.spectate-panels \{\s*flex-direction: column;\s*max-height: none;\s*overflow: visible;/,
+    );
+  });
+
+  it('stands the panels beside the world when held sideways, under a head of one line', () => {
+    const sideways = block('@media (orientation: landscape) and (max-height: 500px)');
+    expect(sideways).toMatch(/\.spectate-head \.kicker \{\s*display: none;/);
+    expect(sideways).toMatch(/\.spectate-body \{\s*flex-direction: row;/);
+    expect(sideways).toMatch(/\.spectate-panels \{\s*width: min\(300px, 38vw\);/);
+    // After the narrow window's rule, which it takes back for a phone held sideways.
+    const held = '@media (orientation: landscape) and (max-height: 500px) {\n  .content--stage';
+    const narrow = '@media (max-width: 900px) {\n  .content--stage .spectate-body';
+    expect(sheet.indexOf(held)).toBeGreaterThan(sheet.indexOf(narrow));
+  });
+
+  it('cuts no name under a figure of the end card: a long one breaks into lines', () => {
+    const name = ruleOf(css('styles/finale.css'), '.end-mate-name');
+    expect(name).toContain('overflow-wrap: break-word;');
+    expect(name).not.toContain('ellipsis');
+    expect(name).not.toContain('nowrap');
+  });
+});
+
 describe('the demo room’s audience keeping its server awake', () => {
   it('asks /health every four minutes, whatever becomes of a request, until it stops', async () => {
-    vi.useFakeTimers();
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'setTimeout', 'clearTimeout'] });
     const asked: string[] = [];
     const page = {
       fetch: (address: string, init: { cache: 'no-store' }) => {
@@ -220,9 +261,16 @@ describe('the demo room’s audience keeping its server awake', () => {
       setInterval: (run: () => void, ms: number) => setInterval(run, ms),
       clearInterval: (timer: never) => clearInterval(timer),
     };
+    const unhandled: unknown[] = [];
+    const note = (why: unknown): void => void unhandled.push(why);
+    process.on('unhandledRejection', note);
     const stop = keepAwake(page);
     expect(asked).toEqual([]);
     await vi.advanceTimersByTimeAsync(KEEP_AWAKE_MS * 3);
+    // The first ask failed, the line down: it fails quietly, nothing left unhandled.
+    await new Promise((resolve) => setImmediate(resolve));
+    process.off('unhandledRejection', note);
+    expect(unhandled).toEqual([]);
     expect(asked).toEqual(Array.from({ length: 3 }, () => '/health no-store'));
     // Well inside the quarter of an hour after which a sleeping host puts its instance down.
     expect(KEEP_AWAKE_MS).toBeLessThanOrEqual(5 * 60_000);

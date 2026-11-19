@@ -258,7 +258,9 @@ the probe's clock says (tools/sweep.mjs).
 As in Enter the Gungeon, depth is the y-sort a painter needs: a figure walking behind a shelf,
 a rack, a locker, the cabinet or a server pillar shows only its upper part, the tall thing drawn
 again over it, cut to the part where it hides it — only where somebody stands behind one, so
-nothing costs a frame where nobody does. The name tags go over everything, the drones fly over
+nothing costs a frame where nobody does. The name tags go over everything — and none over
+another: where two figures stand so close that their tags would cross, the tag drawn later hangs a line higher (`tagLifts`; measured only while
+two stand within eight tiles across and a tile and a half down) —, the drones fly over
 everything, their shadows and the figures' stay on the floor; walking and sight are unchanged.
 Cost at 4× against the beacons: two figures behind the Archiv's shelves +0.28 ms, behind the
 server racks in the dark +0.30, the escape by the hatch +0.21, the dark Flur +0.11. Capture
@@ -545,24 +547,22 @@ the page preloads it; Eurostile, Microgramma and the system's sans stand in wher
 stands in the phosphor's white with a green glow, spaced wide as a film's title is (0.2 em), up to
 64 px on a wide screen, and comes on as a phosphor screen does, once a page load (intro.css
 `phosphor-title`); under it one thin line of the world, in the light mono, spaced wider still and
-softer than the title's white: „Forschungsanlage Kaltenbrunn · Zutritt nur mit Dienstausweis". The
+softer than the title's white: „Hochschule Campus Wien · Master Software Design and Engineering",
+where the game comes from; a narrow window breaks it at the dot, never inside a part. The
 menu stands one item under the next in the title's face, upper case: Einsatz starten, Beitreten,
 Offene Runden, Handbuch, Bestenliste, Editor, Einstellungen. The item lit — moved to by the arrows,
 a controller's D-pad or a click — is the focus itself: a rail of the beam's warm light on its left
 (`--beam`, the lamp's tungsten), that light behind it, its label a step to the right, as if the
 hero's lamp had found it; the keyboard's focus rings it as well, as every control's (Interface). The
 pointer only brightens the item it is over, over 0.4 s, and moves no focus, so that a name being
-typed keeps it. Under the items one quiet line, in the title's face at the 12-px floor and spaced,
-says how the game is played: „Am Pult die Maschine, im Buch die Regeln — gelöst wird nur gemeinsam,
-per Stimme, ein Gerät je Kopf, Rücken an Rücken." Where the vignette's dark does not reach under
-them — an upright phone, a tablet, a narrower window — both quiet lines lie over the lab, and each
-holds 4.5:1 (WCAG 2.2) against the lightest pixel of it at night: the sign in #d0c5b2, the line in
-#b4c3cf, a step lighter than the panels' muted grey, in which the line fell to 2.79:1 over the lab
-at night on an upright phone and 3.96:1 at 1024 × 768, to 1.0 over the lab lit. Measured with the
+typed keeps it. Nothing stands under the items but the install offer and the HTTPS hint (the line
+that said how the game is played went, 2026-11-19). Where the vignette's dark does not reach under
+it — an upright phone, a tablet, a narrower window — the line under the title lies over the lab,
+and holds 4.5:1 (WCAG 2.2) against the lightest pixel of it at night, in #d0c5b2. Measured with the
 text made clear, every 750 ms across the drift's 30 s, in ten windows from 360 × 740 to 1440 × 820
-and the phones held sideways, the line stood at 5.24:1 at the least (420 × 760) and the sign at
-5.07:1 (932 × 430); the walkthrough measures both at menu.png, menu-hero-1024.png and menu-phone.png
-and fails a line under 4.5:1 at any pixel (shots.mjs `checkMenuLines`). From 1600 px across the
+and the phones held sideways, it stood at 5.07:1 at the least (932 × 430); the walkthrough measures
+it at menu.png, menu-hero-1024.png and menu-phone.png and fails it under 4.5:1 at any pixel
+(shots.mjs `checkMenuLines`). From 1600 px across the
 column is wider and its items a step larger, 16.5 px, so that the menu holds its own beside a taller
 hero. Nothing of the menu is set under 12 px. A run that binds the pass stands first and lit, in a
 panel's frame — 14 px corners, the `--line-2` hairline — its head in the title's face, the items
@@ -642,6 +642,7 @@ middle at .5):
 | Beitreten | the Flur at the Serverschott, the lab's gate | 19.5, 10 |
 | Offene Runden | the Ost-Flur's console hall, the lab's Leitstand | 28.5, 7 |
 | Demo | the Flur's west end, where a night's first walk begins | 6.5, 10.5 |
+| QR-Code | the hatch in the Archiv's corner, the lab's way in and out | 1.5, 1.5 |
 | Handbuch | the Archiv's shelves and its book | 5.5, 3.5 |
 | Bestenliste | the Süd-Flur's notice board | 22.5, 17 |
 | Meine Einsätze | the Serverraum's lockers | 16.5, 4.5 |
@@ -776,7 +777,7 @@ the figure up, held out to the visor's height toward the menu, the lens and the 
 run's tile in a window as tall (viewport.ts `tileCss`), as the drift frames a lab that fills the
 window; a lab too small to fill it the drift zooms in on until it covers the window (drift.ts
 `sceneShot`), and the hero does not grow with that zoom — and to the room the stage leaves
-it — across, from the menu's column (its items, the run's card, the lead line) and from the widest
+it — across, from the menu's column (its items, the run's card) and from the widest
 panel once the hero has stepped half a tile aside for it, to the stage's right edge or the window's
 safe area, 12 px clear of each; down, from under the stage's padding at its top to the floor that
 the stage's padding or a home bar leaves. Its feet stand five sixths across the stage, in the

@@ -6,8 +6,8 @@ walks of Blackout's lab, stations in any order, runs without a clock and the Üb
 first win at the stations the whole crew presses, a crew of three, the Erfolge, the Tagesschicht,
 the picture of a run, the danger sense, the Serverraum's cabling diagram, typing at its terminal,
 the Zugangskontrolle, the Anlaufsteuerung, the Paketfilter, an emergency and the open station,
-what the notepad takes down, what happens when a line drops, and the demo room the server plays
-itself. Code:
+what the notepad takes down, what happens when a line drops, the demo room the server plays
+itself, and the QR codes that hand the game on to another device. Code:
 `packages/client/src/input/` (bindings, controller, prompts), `client/src/achievements.ts` and
 `screens/{Plaques,ShareButton,ControlSettings}.tsx`,
 `screens/shareCard.ts`, `world/{labelFade,finds,danger,ChatWheel}.ts(x)`,
@@ -1363,15 +1363,14 @@ spends and the menu puts back.
 „Demo" in the main menu, after „Offene Runden", and the link `/?demo=1` (the stand's QR code) lead
 straight into the audience of the demo room: no name, no account, no code. The link is read once as
 the page comes up and taken off the address at once (`client/src/demoLink.ts`), so that no invite
-link copies it and a reload after „Zuschauen beenden" finds the menu. A phone held sideways has no
-room for the item in its menu's column, as it has none for „Einstellungen": there the link leads
-into the demo, and held upright the item stands. The audience is the one every room has, with the
-label „Demo" beside the mission's name — on every window, a phone's too — and on a wide window one
-line under it, „Vorführbetrieb: Die Anlage fährt diesen Einsatz selbst."; the crew stands along the
-foot as always: „HCW Bachelor" and „HCW Master" (Uros's names for the two), each with what it is
-doing (am Pult A, liest, hält die Platte, trägt die Sicherung). Under a finger the foot's two ways,
-„Crew mithören" and „Zuschauen beenden", are 44 px tall. Whoever joins mid-run sees the run as it
-stands.
+link copies it and a reload after „Zuschauen beenden" finds the menu. A phone held sideways keeps
+the item in its menu's column — seven fit 390 px, and there the editor, „QR-Code" and
+„Einstellungen" go instead. The audience is the one every room has, with the label „Demo" beside
+the mission's name — on every window, a phone's too — and on a wide window one line under it,
+„Vorführbetrieb: Die Anlage fährt diesen Einsatz selbst."; the crew stands along the foot as
+always: „HCW Bachelor" and „HCW Master" (Uros's names for the two), each with what it is doing (am
+Pult A, liest, hält die Platte, trägt die Sicherung). Under a finger the foot's two ways, „Crew
+mithören" and „Zuschauen beenden", are 44 px tall. Whoever joins mid-run sees the run as it stands.
 
 **It keeps its server awake, and comes back by itself.** A page that only watches sends nothing
 over HTTP — its socket carries everything — and a host that puts an instance to sleep counts
@@ -1401,6 +1400,28 @@ Wechselplatz in turn — Signalkette, Funkpult, Notstromkasten — 93 runs befor
 Once nobody has watched for a minute the room is closed and a fresh one stands in its lobby with no
 timer running; the next of the audience sees a run from its start. After a deploy or a restart the
 demo is simply there again: nothing of it is kept.
+
+**What keeps it going.** A run that is lost — by its clock, or by its alarms — is counted as lost
+and the next follows after the Auswertung as after a win. A run that gets no further for five
+minutes (no station solved, no hatch opened — a healthy crew's longest stretch is 157 s, 191 s
+on hanging lines), or whose crew has started over thirty times since it last got on, is given up by its host: lost as by its clock (`Room.runOut`), said once in the log, and the next
+seed follows — without that a stuck crew would stand for the rest of the sixteen minutes. Nothing
+the audience sends reaches the room: an audience connection may watch, listen in on a crew and
+leave, and every other word of a seat's — a start, a rematch, the way back to the lobby, a move, a
+ping, a quick chat — is refused at the door („Das Publikum schaut zu: Geschaltet wird nur von einem
+Platz der Crew."), in every room. A start, a rematch or a way back the room refuses changes nothing
+of it, and rolls no seed. A socket that asks for the audience it is in already goes on watching,
+nobody told anything; one that joins audiences more than twelve times a minute is told „Nicht so
+schnell — gleich noch einmal.", and the log says a refusal once a socket, twenty different ones
+of a socket at the most. In the demo „Crew
+mithören" is not offered: nobody speaks there.
+
+**On a phone** the audience's page — the demo's and every room's — scrolls down when held upright:
+the world in the lab's own shape (62 % of the window's width high), then the panels one under the
+other, each as wide as the window, nothing scrolling sideways. Held sideways the head is one line,
+the world takes the height under it and the panels stand beside it in a column of their own. A name
+too wide for its figure on the end card breaks into lines and is never cut. What stays: the whole
+lab on a window 360 px across is small, and its labels crowd the figures.
 
 **The crew** (`demo/crew.ts`) is two seats on lines as a page's socket has one: all they do is say
 what a page says — `pos`, `interact`, `puzzle-input`, `open-source`, `intro-done`, `set-ready`,
@@ -1445,3 +1466,26 @@ in all. A small hosted instance's share of a slower core is a tenth of one: thre
 nothing to it, sixty are about what it has. One of the audience is sent some 0.5 views a second of
 12 kB and 7.5 position messages of 0.5 kB — 6 to 10 kB a second, about 4 MB a run — so sixty take
 about 0.5 MB a second out of the server: the line, not the processor, is what an audience costs.
+
+## QR-Codes: onto another device
+
+Three places hand the game on to a phone or a tablet by a QR code, each worked out in the page
+(`client/src/qr.ts`, `screens/QrCode.tsx`): no service is asked and nothing is loaded, so the codes
+show offline and the page's content policy stays as it is. „QR-Code" in the main menu, after
+„Demo", opens the panel „Zutritt per QR-Code": the site's own address (`location.origin`) as a code
+480 px a side on a laptop — as large as the window lets it be — with the address as text under it,
+to be read off the screen from a step or two away. In a lobby the chip „QR" beside the room's code
+opens a sheet under the bar with the invite link as a code, 286 px a side, „Einladung in Raum QX7R"
+and the link under it: the link the chip „Link" copies, which leads into the join step with the
+code filled in; the chip or a click on the sheet shuts it. And beside the demo room's report on a
+wide window stands the site's address small, 132 px, under „Zum Mitnehmen". A phone held sideways
+has neither the menu's item nor the demo's small code.
+
+A code is black on white whatever the palette, with the four light modules a reader wants round it
+inside its own white, its edges sharp at every size (an SVG, a module a unit). The encoder writes
+bytes at error correction level M in versions 1 to 6 — 106 bytes at most, which an address and an
+invite link stay far under; a longer text shows no code. Its tests read every code back with a
+reader of their own (the format in both places, the mask, each block's Reed–Solomon check, the
+bytes) and hold the Reed–Solomon codewords to the textbook's; the walkthrough's menu-qr.png,
+lobby-qr.png and demo-audience.png were each read back by macOS's own detector (Vision) as the
+address they carry.

@@ -7688,7 +7688,6 @@ function heroRoom() {
     canvas: box('.menu-hero:not([hidden])'),
     clear: {
       menu: box('.menu-body'),
-      lead: box('.menu-lead'),
       title: box('.menu-head'),
       panel: box('.menu-panel'),
     },
@@ -7799,14 +7798,14 @@ async function heroNarrow(page) {
 }
 
 /**
- * The menu's quiet lines over the scene on `page` as it stands — the sign under the title and the
- * line under the items: each one's text made clear, its box shot, and its colour laid over each
+ * The menu's quiet line over the scene on `page` as it stands — where the game comes from, under
+ * the title: its text made clear, its box shot, and its colour laid over each
  * pixel behind it (contrast.mjs `lineContrast`); fails the run where a line lies out of the window
  * or under TEXT_CONTRAST at any pixel. The drift moves the lab behind them: this is one moment of
  * it (docs/art-bible.md, The menu, has the whole drift measured).
  */
 async function checkMenuLines(page, label) {
-  for (const line of ['.menu-sub', '.menu-lead']) {
+  for (const line of ['.menu-sub']) {
     const el = page.locator(line).first();
     const box = await el.boundingBox();
     const view = page.viewportSize();
@@ -18032,6 +18031,98 @@ async function captureMusicPacks() {
   }
 }
 
+/**
+ * How large a QR code is on its page, read in the page (whole, as page.evaluate takes it); null
+ * where `selector` shows no code.
+ */
+function qrShown(selector) {
+  const around = document.querySelector(selector);
+  const code = document.querySelector(`${selector} svg.qr`);
+  if (around === null || code === null) {
+    return null;
+  }
+  const doc = document.documentElement;
+  const box = code.getBoundingClientRect();
+  const fill = (part) => globalThis.getComputedStyle(code.querySelector(part)).fill;
+  const low = (rect) => rect.bottom > doc.clientHeight + 1;
+  const out = (rect) => rect.left < 0 || rect.top < 0 || rect.right > doc.clientWidth + 1;
+  const line = document.querySelector(`${selector} .qr-address`);
+  const modules = () => Number(code.getAttribute('viewBox')?.split(' ')[2] ?? 0);
+  return {
+    side: Math.round(Math.min(box.width, box.height)),
+    square: Math.abs(box.width - box.height) < 1,
+    inside: !out(box) && !low(box),
+    modules: modules(),
+    ground: fill('rect'),
+    ink: fill('path'),
+    address: line?.textContent ?? null,
+    // The address under the code shows whole: nothing of the code's box scrolls away.
+    cut:
+      around.scrollHeight > around.clientHeight + 1 ||
+      line === null ||
+      low(line.getBoundingClientRect()),
+  };
+}
+
+/**
+ * `shot` of the QR code under `selector` on `page`, logged and judged: black on white, square,
+ * whole in the window, `least` px a side at the least, `address` as text under it.
+ */
+async function qrShot(page, shot, selector, { least, address }) {
+  await capture(page, shot);
+  const shown = await page.evaluate(qrShown, selector);
+  if (shown === null) {
+    fail(`${shot}: no QR code under ${selector}`);
+    return;
+  }
+  const module = shown.modules === 0 ? 0 : shown.side / shown.modules;
+  console.log(
+    `${shot.padEnd(19)}the code ${shown.side} px a side, ${shown.modules} modules with its quiet ` +
+      `zone (${module.toFixed(1)} px each), ${shown.ink} on ${shown.ground}; „${shown.address}"`,
+  );
+  const wrong = wrongOf([
+    [shown.side < least || !shown.square, `the code is ${shown.side} px a side`],
+    [!shown.inside, 'the code runs out of the window'],
+    [shown.cut, 'the code’s box scrolls, or the address under it is cut off'],
+    [shown.ground !== 'rgb(255, 255, 255)' || shown.ink !== 'rgb(0, 0, 0)', 'not black on white'],
+    [shown.address !== address, `the address reads „${shown.address}"`],
+  ]);
+  if (wrong.length > 0) {
+    fail(`${shot}: ${wrong.join(', ')}`);
+  }
+}
+
+/** The page's address as a line under a code reads it: without its scheme. */
+const addressOf = (url) => url.replace(/^https?:\/\//, '');
+
+/**
+ * menu-qr.png: „QR-Code" in the menu opens its panel — the site's own address as a code large
+ * enough to read off the screen from a step or two away, the address as text under it — and
+ * „Zurück" shuts it.
+ */
+async function captureMenuQr(page) {
+  await openMenuPanel(page, 'QR-Code');
+  const address = addressOf(new URL(BASE).origin);
+  await qrShot(page, 'menu-qr.png', '.menu-panel--qr', { least: 400, address });
+  await closeMenuPanel(page);
+}
+
+/**
+ * lobby-qr.png: the chip „QR" beside the lobby's code opens the invite as a code — the link that
+ * leads into the join step, the room's code in it — and a click on the sheet shuts it.
+ */
+async function captureLobbyQr(page, code) {
+  await page.locator('.invite-qr-chip').click();
+  const sheet = page.locator('.invite-qr-sheet');
+  await sheet.waitFor({ timeout: 5000 });
+  const address = `${addressOf(new URL(BASE).origin)}/?room=${code}`;
+  await qrShot(page, 'lobby-qr.png', '.invite-qr-sheet', { least: 260, address });
+  await sheet.click();
+  if ((await sheet.count()) > 0) {
+    fail('lobby-qr.png: a click on the sheet left it open');
+  }
+}
+
 // ── the demo drill: the room the server plays itself (server demo/host.ts) ──────────────────
 //
 // In a Systemcheck run, on pages of its own: a laptop's menu with „Demo" in the focus
@@ -18062,14 +18153,17 @@ const DEMO_BACK_MS = 45_000;
 function demoAudienceShown() {
   const doc = document.documentElement;
   const view = globalThis;
+  const nothing = { text: null, px: 0, inside: false };
   const said = (selector) => {
     const element = document.querySelector(selector);
-    const box = element?.getBoundingClientRect();
-    const shown = box !== undefined && box.width > 0 && box.height > 0;
+    const box = element === null ? { width: 0, height: 0 } : element.getBoundingClientRect();
+    if (box.width * box.height === 0) {
+      return nothing;
+    }
     return {
-      text: shown ? element.innerText.trim() : null,
-      px: shown ? Number.parseFloat(view.getComputedStyle(element).fontSize) : 0,
-      inside: shown && box.left >= 0 && box.right <= doc.clientWidth + 1 && box.top >= 0,
+      text: element.innerText.trim(),
+      px: Number.parseFloat(view.getComputedStyle(element).fontSize),
+      inside: [box.left, box.top, doc.clientWidth + 1 - box.right].every((gap) => gap >= 0),
     };
   };
   const foot = [...document.querySelectorAll('.spectate-foot .players li')];
@@ -18084,6 +18178,19 @@ function demoAudienceShown() {
     ),
     sideways: doc.scrollWidth - doc.clientWidth,
     address: view.location.search,
+    // The world's box, and whether any panel beside or under it runs or scrolls out sideways.
+    world: (() => {
+      const box = document.querySelector('.spectate-world')?.getBoundingClientRect();
+      return box === undefined ? [0, 0] : [Math.round(box.width), Math.round(box.height)];
+    })(),
+    panelsOut: [...document.querySelectorAll('.spectate-panels .panel')]
+      .filter((panel) => panel.getClientRects().length > 0)
+      .some((panel) => {
+        const box = panel.getBoundingClientRect();
+        return box.left < 0 || box.right > doc.clientWidth + 1;
+      }),
+    // The site's small QR code beside the run's report: its side, 0 where the window shows none.
+    qr: Math.round(document.querySelector('.demo-qr svg.qr')?.getBoundingClientRect().width ?? 0),
   };
 }
 
@@ -18093,21 +18200,39 @@ function demoAudienceShown() {
  * label alone; a wide window reads the line as well.
  */
 function demoFaults(shown, phone) {
-  const small = phone ? shown.ways.filter((height) => height < DEMO_TARGET_PX) : [];
-  const { label, line } = shown;
+  const { label } = shown;
   const named = DEMO_NAMES.every((name, i) => shown.crew[i]?.startsWith(name) === true);
   return wrongOf([
-    [small.length > 0, `ways along the foot ${small.join(', ')} px tall`],
-    [shown.ways.length === 0, 'no way out along the foot'],
+    ...(phone ? demoPhoneFaults(shown) : demoWideFaults(shown)),
+    // „Zuschauen beenden" alone: nobody speaks in the demo, so nothing offers to listen in.
+    [shown.ways.length !== 1, `${shown.ways.length} ways along the foot, not the way out alone`],
     [label.text !== DEMO_LABEL, `the label reads „${label.text}"`],
     [label.px < DEMO_TEXT_PX || !label.inside, `the label at ${label.px} px, in: ${label.inside}`],
-    [!phone && line.text !== DEMO_LINE, `the line reads „${line.text}"`],
-    [!phone && (line.px < DEMO_TEXT_PX || !line.inside), `the line at ${line.px} px`],
-    [phone && line.text !== null, 'the line crowds the phone’s head'],
+    [shown.panelsOut, 'a panel runs out of the window sideways'],
     [!named || !shown.crewInside, `the crew along the foot: ${shown.crew.join(' · ')}`],
     [shown.sideways > 1, `the page runs ${shown.sideways} px out sideways`],
     [shown.address.includes('demo'), `the address kept „${shown.address}"`],
   ]);
+}
+
+/** What may be wrong with the demo room's audience on a phone alone, each with its words. */
+function demoPhoneFaults(shown) {
+  const small = shown.ways.filter((height) => height < DEMO_TARGET_PX);
+  return [
+    [small.length > 0, `ways along the foot ${small.join(', ')} px tall`],
+    [shown.line.text !== null, 'the line crowds the phone’s head'],
+    [shown.world[1] < 200, `the world is ${shown.world.join('x')} px`],
+    [shown.qr !== 0, `the site’s QR code is ${shown.qr} px a side`],
+  ];
+}
+
+/** What may be wrong with it in a wide window alone, each with its words. */
+function demoWideFaults({ line, qr }) {
+  return [
+    [line.text !== DEMO_LINE, `the line reads „${line.text}"`],
+    [line.px < DEMO_TEXT_PX || !line.inside, `the line at ${line.px} px`],
+    [qr < 120, `the site’s QR code is ${qr} px a side`],
+  ];
 }
 
 /** `shot` of the demo room's audience on `page`, a phone's or not, logged and judged. */
@@ -18117,7 +18242,8 @@ async function demoAudienceShot(page, shot, size, phone = false) {
   console.log(
     `${shot.padEnd(19)}@ ${size}: label „${shown.label.text}" at ${shown.label.px} px, line ` +
       `„${shown.line.text ?? 'none'}"; ${shown.crew.join(' · ')}; ${shown.atConsole} at a ` +
-      `console; ways along the foot ${shown.ways.join(', ')} px tall`,
+      `console; ways along the foot ${shown.ways.join(', ')} px tall; QR ${shown.qr} px; ` +
+      `the world ${shown.world.join('x')} px`,
   );
   return demoFaults(shown, phone).map((fault) => `${shot}: ${fault}`);
 }
@@ -18160,7 +18286,8 @@ async function demoFromMenu(context) {
 /**
  * demo-audience-phone.png and demo-audience-phone-932.png: a phone that asks for less motion
  * comes by the demo's link and stands in the audience at once, upright and turned sideways;
- * upright again, „Zuschauen beenden" leads back to the menu, „Demo" among its items.
+ * there „Zuschauen beenden" leads back to the menu, „Demo" among the items a phone held sideways
+ * keeps.
  */
 async function demoByLink(context) {
   const page = await openPage(context, 'demo phone');
@@ -18176,8 +18303,6 @@ async function demoByLink(context) {
   await sleep(600);
   const turned = await demoAudienceShot(page, 'demo-audience-phone-932.png', '932x430', true);
   wrong.push(...turned);
-  // Upright again: a phone held sideways has no room for „Demo" in its menu (menu.css).
-  await page.setViewportSize(SIZES[2]);
   const stop = page.locator('.spectate-foot button', { hasText: 'Zuschauen beenden' });
   await stop.scrollIntoViewIfNeeded();
   await stop.tap();
@@ -19004,6 +19129,7 @@ async function hostOpensRound() {
   await host.locator('.menu-item').first().waitFor({ timeout: 10_000 });
   // The menu, its music as the music's manifest lists it (`captureMenu` returns the list).
   const musicList = await inGroup('screens', () => captureMenu(host));
+  await inGroup('screens', () => captureMenuQr(host));
   await inGroup('screens', () => captureHistory(host, 'history.png', heldClick));
   await inGroup('screens', () => captureArchive(host));
   await openMissionRound(host);
@@ -19017,6 +19143,7 @@ async function hostOpensRound() {
   await inGroup('screens', () => captureFirstRun(host, hostSeen));
   await pickNormal(host, hostSeen);
   await inGroup('screens', () => capture(host, 'lobby-host.png'));
+  await inGroup('screens', () => captureLobbyQr(host, code));
   await inGroup('screens', () => captureDaily(host, hostSeen));
   return { host, hostSeen, code, lobbySound };
 }
@@ -19361,6 +19488,11 @@ async function audienceJoins(anna, ben, code) {
   await sleep(1200);
   await capture(page, 'spectate.png');
   await overflow(page, 'spectate @ 1440x820');
+  // A crew's room is no demo: neither its label nor its QR code stands over this audience.
+  const demoMarks = await page.locator('.demo-label, .demo-line, .demo-qr').count();
+  if (demoMarks > 0) {
+    fail(`spectate.png: ${demoMarks} of the demo room's marks over a crew's audience`);
+  }
   await inGroup('voice', () => listenIn(page, [anna, ben]));
   await inGroup('graphics', () => captureDpr2(code));
   return { page, seen };
